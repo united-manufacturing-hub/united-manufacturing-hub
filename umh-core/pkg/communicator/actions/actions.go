@@ -213,19 +213,10 @@ func HandleActionMessage(instanceUUID uuid.UUID, payload models.ActionMessagePay
 		return
 	}
 
-	// Check if payload contains a state field and is a deploy protocol converter action. If yes, log any errors via Sentry
+	// Check if payload contains a DFC with a state field and is an EditProtocolConverter action.
+	// If yes, log any errors via Sentry.
 	// TODO: This can be removed once the "Write flows" feature is fully implemented
-	var state string
-	if m, ok := payload.ActionPayload.(map[string]interface{}); ok {
-		if s, ok := m["state"]; ok {
-			if str, ok := s.(string); ok {
-				state = str
-			} else {
-				log.Errorf("Invalid state type: %v", s)
-			}
-		}
-	}
-	isLogToSentry := state != "" && payload.ActionType == models.EditProtocolConverter
+	isLogToSentry := payload.ActionType == models.EditProtocolConverter && payloadHasDFCState(payload.ActionPayload)
 
 	SendActionReply(instanceUUID, sender, payload.ActionUUID, models.ActionExecuting, "Parsing action payload", outboundChannel, payload.ActionType)
 	// Parse the action payload
@@ -510,4 +501,25 @@ func GetFirstMessageFromMap(msg map[string]interface{}) interface{} {
 	}
 
 	return nil
+}
+
+// payloadHasDFCState checks whether the action payload contains a "state" field
+// inside either "readDFC" or "writeDFC".
+// helper function for determining if a DFC state field should be logged to Sentry.
+// TODO: Remove this function once the "Write flows" feature is fully implemented.
+func payloadHasDFCState(actionPayload any) bool {
+	m, ok := actionPayload.(map[string]any)
+	if !ok {
+		return false
+	}
+	for _, key := range []string{"readDFC", "writeDFC"} {
+		if dfc, ok := m[key]; ok {
+			if dfcMap, ok := dfc.(map[string]any); ok {
+				if _, ok := dfcMap["state"]; ok {
+					return true
+				}
+			}
+		}
+	}
+	return false
 }

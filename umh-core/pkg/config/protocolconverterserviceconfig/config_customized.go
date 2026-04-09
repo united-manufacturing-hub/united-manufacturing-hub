@@ -50,8 +50,8 @@ func (c ProtocolConverterServiceConfigSpec) GetDFCReadServiceConfig() dataflowco
 func (c ProtocolConverterServiceConfigSpec) GetDFCWriteServiceConfig() dataflowcomponentserviceconfig.DataflowComponentServiceConfig {
 	dfcWriteConfig := c.Config.DataflowComponentWriteServiceConfig
 
-	// Only append UNS input if there's an output config
-	if len(dfcWriteConfig.BenthosConfig.Output) > 0 {
+	// Only append UNS input if there's an output config and no input has been set by the user
+	if len(dfcWriteConfig.BenthosConfig.Output) > 0 && len(dfcWriteConfig.BenthosConfig.Input) == 0 {
 		dfcWriteConfig.BenthosConfig.Input = map[string]any{
 			"uns": map[string]any{
 				"consumer_group": "{{ .internal.bridged_by }}", // use bridged_by as consumer group
