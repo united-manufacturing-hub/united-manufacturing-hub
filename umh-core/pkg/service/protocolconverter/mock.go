@@ -652,11 +652,12 @@ func (m *MockProtocolConverterService) EvaluateDFCDesiredStates(protConvName str
 	// Find and update read DFC config
 	for i, config := range m.dfcConfigs {
 		if config.Name == underlyingReadName {
-			if protocolConverterDesiredState == "stopped" || !connectionConfirmedUp {
+			switch {
+			case protocolConverterDesiredState == "stopped" || !connectionConfirmedUp:
 				m.dfcConfigs[i].DesiredFSMState = dfcfsm.OperationalStateStopped
-			} else if readDFCDesiredState == "stopped" {
+			case readDFCDesiredState == "stopped":
 				m.dfcConfigs[i].DesiredFSMState = dfcfsm.OperationalStateStopped
-			} else {
+			default:
 				// Only start the DFC, if it has been configured and connection is up
 				if len(m.dfcConfigs[i].DataFlowComponentServiceConfig.BenthosConfig.Input) > 0 {
 					m.dfcConfigs[i].DesiredFSMState = dfcfsm.OperationalStateActive
@@ -672,11 +673,12 @@ func (m *MockProtocolConverterService) EvaluateDFCDesiredStates(protConvName str
 	// Find and update write DFC config
 	for i, config := range m.dfcConfigs {
 		if config.Name == underlyingWriteName {
-			if protocolConverterDesiredState == "stopped" || !connectionConfirmedUp {
+			switch {
+			case protocolConverterDesiredState == "stopped" || !connectionConfirmedUp:
 				m.dfcConfigs[i].DesiredFSMState = dfcfsm.OperationalStateStopped
-			} else if writeDFCDesiredState == "stopped" {
+			case writeDFCDesiredState == "stopped":
 				m.dfcConfigs[i].DesiredFSMState = dfcfsm.OperationalStateStopped
-			} else {
+			default:
 				// Only start the DFC, if it has been configured and connection is up
 				if len(m.dfcConfigs[i].DataFlowComponentServiceConfig.BenthosConfig.Output) > 0 {
 					m.dfcConfigs[i].DesiredFSMState = dfcfsm.OperationalStateActive
