@@ -100,16 +100,16 @@ type ProtocolConverterServiceConfigRuntime struct {
 //
 // Spec → (render) → Runtime → FSM.
 type ProtocolConverterServiceConfigSpec struct {
-	Variables   variables.VariableBundle               `yaml:"variables,omitempty"`
-	Location    map[string]string                      `yaml:"location,omitempty"`
-	TemplateRef string                                 `yaml:"templateRef,omitempty"`
-	Config      ProtocolConverterServiceConfigTemplate `yaml:"config,omitempty"`
+	Variables   variables.VariableBundle `yaml:"variables,omitempty"`
+	Location    map[string]string        `yaml:"location,omitempty"`
+	TemplateRef string                   `yaml:"templateRef,omitempty"`
 	// ReadDFCDesiredState overrides the desired state for the read DFC ("active" or "stopped").
 	// When empty, the overall protocol converter desired state is used.
 	ReadDFCDesiredState string `yaml:"readDFCDesiredState,omitempty"`
 	// WriteDFCDesiredState overrides the desired state for the write DFC ("active" or "stopped").
 	// When empty, the overall protocol converter desired state is used.
-	WriteDFCDesiredState string `yaml:"writeDFCDesiredState,omitempty"`
+	WriteDFCDesiredState string                                 `yaml:"writeDFCDesiredState,omitempty"`
+	Config               ProtocolConverterServiceConfigTemplate `yaml:"config,omitempty"`
 }
 
 // Equal checks if two ProtocolConverterServiceConfigs are equal.
