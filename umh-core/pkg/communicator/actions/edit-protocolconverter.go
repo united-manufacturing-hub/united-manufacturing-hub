@@ -1107,8 +1107,12 @@ func (a *EditProtocolConverterAction) dfcPayloadDiffers(
 	deployedConfig dataflowcomponentserviceconfig.DataflowComponentServiceConfig,
 	deployedState string,
 ) bool {
-	// State change counts as a diff.
-	if incomingState != "" && incomingState != deployedState {
+	// State change counts as a diff, but only when both sides are populated.
+	// On freshly upgraded systems the deployed config may not have the
+	// ReadDFCDesiredState/WriteDFCDesiredState fields yet (they unmarshal to "").
+	// Treating "" != "active" as a diff would force an unnecessary redeploy
+	// on every first edit after upgrade.
+	if incomingState != "" && deployedState != "" && incomingState != deployedState {
 		return true
 	}
 
