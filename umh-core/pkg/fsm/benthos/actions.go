@@ -787,19 +787,21 @@ func (b *BenthosInstance) IsBenthosMetricsErrorFree() (bool, string) {
 //	degraded – true when degraded, false when still healthy.
 //	reason   – empty when degraded is false; otherwise the first failure cause.
 func (b *BenthosInstance) IsBenthosDegraded(currentTime time.Time, logWindow time.Duration, currentTick uint64) (bool, string) {
-	// Same order as during starting phase
 	running, reason := b.IsBenthosS6Running()
 	if !running {
 		return true, reason
 	}
 
-	loaded, reason := b.IsBenthosConfigLoaded()
-	if !loaded {
-		return true, reason
-	}
-
-	logsFine, reason := b.IsBenthosLogsFine(currentTime, logWindow)
-	if !logsFine {
+	// Use the same validation as the starting path
+	// (IsBenthosRunningForSomeTimeWithoutErrors) instead of the weaker
+	// IsBenthosConfigLoaded + IsBenthosLogsFine combination.  This ensures
+	// that after a process restart (e.g. config change while degraded) the
+	// full 10-second uptime + clean-logs + clean-metrics check must pass
+	// before recovery, matching the starting_waiting_for_service_to_remain_running
+	// gate.  Without this the degraded → idle transition fires at ~5 s,
+	// skipping error detection for the new config.
+	stableRun, reason := b.IsBenthosRunningForSomeTimeWithoutErrors(currentTime, logWindow)
+	if !stableRun {
 		return true, reason
 	}
 
