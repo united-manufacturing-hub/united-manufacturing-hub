@@ -329,6 +329,7 @@ func (v *Validator) validateFieldCombinations(field config.Field, path string, e
 	hasPayloadShape := field.PayloadShape != ""
 	hasRefModel := field.ModelRef != nil
 	hasSubfields := len(field.Subfields) > 0
+	hasRelational := field.Relational != nil
 
 	// Cannot have both _payloadshape and _refModel
 	if hasPayloadShape && hasRefModel {
@@ -345,6 +346,28 @@ func (v *Validator) validateFieldCombinations(field config.Field, path string, e
 			Message: "field cannot have both subfields and _refModel",
 		})
 	}
+
+	// _inline cannot coexist with _payloadshape or _refModel
+	if hasRelational && hasPayloadShape {
+		*errors = append(*errors, ValidationError{
+			Path:    path,
+			Message: "field cannot have both _inline and _payloadshape",
+		})
+	}
+
+	if hasRelational && hasRefModel {
+		*errors = append(*errors, ValidationError{
+			Path:    path,
+			Message: "field cannot have both _inline and _refModel",
+		})
+	}
+
+	if hasRelational && hasSubfields {
+		*errors = append(*errors, ValidationError{
+			Path:    path,
+			Message: "field with _inline cannot have subfields",
+		})
+	}
 }
 
 // isLeafNode determines if a field is a leaf node (has no subfields)
@@ -358,23 +381,34 @@ func (v *Validator) isLeafNode(field config.Field) bool {
 func (v *Validator) validateLeafNode(field config.Field, path string, errors *[]ValidationError) {
 	hasPayloadShape := field.PayloadShape != ""
 	hasRefModel := field.ModelRef != nil
+	hasRelational := field.Relational != nil
 
-	// Determine leaf node type
-	if hasRefModel && !hasPayloadShape {
+	if hasRefModel && !hasPayloadShape && !hasRelational {
 		// SubModel node: ONLY contain _refModel
 		return
 	}
 
-	if hasPayloadShape && !hasRefModel {
-		// Regular leaf node with _payloadshape
+	if hasPayloadShape && !hasRefModel && !hasRelational {
+		// Regular leaf node with _payloadshape (timeseries)
 		return
 	}
 
-	// If neither _payloadshape nor _refModel is present
-	if !hasPayloadShape && !hasRefModel {
+	if hasRelational && !hasPayloadShape && !hasRefModel {
+		// Relational data leaf — validate it has at least one field
+		if len(field.Relational.Fields) == 0 {
+			*errors = append(*errors, ValidationError{
+				Path:    path,
+				Message: "_inline must have at least one field",
+			})
+		}
+
+		return
+	}
+
+	if !hasPayloadShape && !hasRefModel && !hasRelational {
 		*errors = append(*errors, ValidationError{
 			Path:    path,
-			Message: "leaf nodes must contain _payloadshape",
+			Message: "leaf nodes must contain _payloadshape, _inline, or _refModel",
 		})
 	}
 }
