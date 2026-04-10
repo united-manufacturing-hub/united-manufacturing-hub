@@ -24,6 +24,8 @@ import (
 var AppVersion = constants.DefaultAppVersion
 
 // GetAppVersion returns the current application version string.
+// The returned value is always v-prefixed (e.g., "v0.2.9", "v0.2.10-pre.1").
+// In local development builds, it defaults to "v0.0.0-dev".
 func GetAppVersion() string {
 	return AppVersion
 }

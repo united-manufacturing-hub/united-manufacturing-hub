@@ -80,7 +80,7 @@ MEMORY = 4096m
 CPUS = 2
 
 # Determine version based on git
-VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "0.0.0-dev")
+VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "v0.0.0-dev")
 
 install:
 	sudo chown vscode:vscode data || true
