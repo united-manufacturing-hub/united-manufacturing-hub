@@ -158,9 +158,9 @@ type Dfc struct {
 	Name               *string        `json:"name"`
 	UUID               string         `json:"uuid"`
 	Health             *Health        `json:"health"`
-	ReadFlowHealth     *Health        `json:"readFlowHealth"`  // Health of the read (source) data flow, only for protocol-converter type
-	WriteFlowHealth    *Health        `json:"writeFlowHealth"` // Health of the write (sink) data flow, only for protocol-converter type
-	Type               DfcType        `json:"dfcType"`         // Type of the DFC
+	ReadFlowHealth     *Health        `json:"readFlowHealth,omitempty"`  // Health of the read (source) data flow, only for protocol-converter type
+	WriteFlowHealth    *Health        `json:"writeFlowHealth,omitempty"` // Health of the write (sink) data flow, only for protocol-converter type
+	Type               DfcType        `json:"dfcType"`                   // Type of the DFC
 	Metrics            *DfcMetrics    `json:"metrics"`
 	Bridge             *DfcBridgeInfo `json:"bridge,omitempty"` // Additional info for data-bridge type
 	// For 'protocol-converter' type, this array contains exactly one connection.

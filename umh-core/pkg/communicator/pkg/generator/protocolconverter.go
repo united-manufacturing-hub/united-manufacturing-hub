@@ -204,9 +204,11 @@ func buildProtocolConverterAsDfc(
 		}
 	}
 
-	dfc.Metrics = &models.DfcMetrics{
-		AvgInputThroughputPerMinuteInMsgSec:  avgReadThroughput,
-		AvgOutputThroughputPerMinuteInMsgSec: avgWriteThroughput,
+	if avgReadThroughput > 0 || avgWriteThroughput > 0 {
+		dfc.Metrics = &models.DfcMetrics{
+			AvgInputThroughputPerMinuteInMsgSec:  avgReadThroughput,
+			AvgOutputThroughputPerMinuteInMsgSec: avgWriteThroughput,
+		}
 	}
 
 	return dfc, nil
@@ -223,7 +225,7 @@ func getProtocolConverterStatusMessage(state string, statusReason string, connec
 		baseMessage = "Protocol converter is active and processing data"
 	case protocolconverter.OperationalStateIdle:
 		baseMessage = "Protocol converter is idle"
-	case dataflowcomponent.OperationalStateStopped:
+	case protocolconverter.OperationalStateStopped:
 		baseMessage = "Protocol converter is stopped"
 	case protocolconverter.OperationalStateDegradedConnection:
 		baseMessage = "Protocol converter connection is degraded"
