@@ -173,8 +173,7 @@ func (a *EditProtocolConverterAction) Parse(payload interface{}) error {
 	}
 
 	// Determine dfcType by comparing incoming DFC configs against what is
-	// currently deployed. Only DFCs that actually differ need to be stopped
-	// and restarted.
+	// currently deployed. Only DFCs that actually differ need redeployment.
 	a.dfcType = a.deriveDFCType()
 
 	if pcPayload.TemplateInfo != nil {
@@ -1069,9 +1068,15 @@ func (a *EditProtocolConverterAction) deriveDFCType() DFCType {
 
 	// Connection IP/PORT changes affect all DFCs since they use {{ .IP }}/{{ .PORT }} templates.
 	// So if a change is detected, all present DFCs need redeploy.
+	// Use comma-ok map lookups: if IP/PORT keys are absent (e.g. PCs created
+	// before these variables were standard), skip the connection-change check
+	// rather than treating it as changed. Without this, fmt.Sprint(nil) returns
+	// "<nil>" which never equals any real value, forcing a spurious redeploy.
 	deployedVars := currentPC.ProtocolConverterServiceConfig.Variables.User
-	connectionChanged := fmt.Sprint(deployedVars["IP"]) != a.connectionIP ||
-		fmt.Sprint(deployedVars["PORT"]) != a.connectionPort
+	deployedIP, ipOk := deployedVars["IP"]
+	deployedPort, portOk := deployedVars["PORT"]
+	connectionChanged := ipOk && portOk &&
+		(fmt.Sprint(deployedIP) != a.connectionIP || fmt.Sprint(deployedPort) != a.connectionPort)
 	if connectionChanged {
 		a.actionLogger.Debugf("Connection changed (IP or PORT), all present DFCs need redeploy")
 		return dfcTypeFromPresence(hasRead, hasWrite)
