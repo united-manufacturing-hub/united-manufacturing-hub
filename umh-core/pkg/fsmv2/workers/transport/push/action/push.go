@@ -73,7 +73,13 @@ func (a *PushAction) Execute(ctx context.Context, depsAny any) error {
 
 		metrics.SetGauge(depspkg.GaugePendingMessages, float64(pushDeps.PendingMessageCount()))
 
-		return err
+		if err != nil || len(remaining) > 0 {
+			if ctx.Err() == nil {
+				a.drainChannelToPending(pushDeps, metrics)
+			}
+
+			return err
+		}
 	}
 
 	// Phase 2: Drain and batch-push new messages
@@ -182,7 +188,11 @@ func (a *PushAction) retryPending(ctx context.Context, t transport.Transport, pu
 	authenticatedUUID := pushDeps.GetAuthenticatedUUID()
 
 	for i, msg := range pending {
-		if msg != nil && authenticatedUUID != "" {
+		if msg == nil {
+			continue // protects t.Push below from nil dereference
+		}
+
+		if authenticatedUUID != "" {
 			msg.InstanceUUID = authenticatedUUID
 		}
 
@@ -225,6 +235,41 @@ func (a *PushAction) retryPending(ctx context.Context, t transport.Transport, pu
 	}
 
 	return nil, nil
+}
+
+// drainChannelToPending exists to prevent outbound channel overflow when
+// pending retry cannot make progress.
+//
+// Example: MC is unreachable. Every tick, retryPending returns a transient
+// error and Phase 2 never runs. New status messages keep arriving on the
+// outbound channel. Without this rescue, the channel fills to capacity,
+// subscribers drop messages, and MC shows the instance as offline even
+// though it is healthy (ENG-4741).
+func (a *PushAction) drainChannelToPending(pushDeps snapshot.PushDependencies, metrics *depspkg.MetricsRecorder) {
+	outChan := pushDeps.GetOutboundChan()
+
+	var drained []*transport.UMHMessage
+
+drainLoop:
+	for {
+		select {
+		case msg, ok := <-outChan:
+			if !ok {
+				break drainLoop
+			}
+
+			if msg != nil {
+				drained = append(drained, msg)
+			}
+		default:
+			break drainLoop
+		}
+	}
+
+	if len(drained) > 0 {
+		pushDeps.StorePendingMessages(drained)
+		metrics.SetGauge(depspkg.GaugePendingMessages, float64(pushDeps.PendingMessageCount()))
+	}
 }
 
 // isRecoverableByParent returns true for persistent error types where the

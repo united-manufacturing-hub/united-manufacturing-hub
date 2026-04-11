@@ -6,6 +6,10 @@
 
 - Previously, a Flow only exposed a single health and throughput metric. Starting with this version, umh-core exposes separate throughput metrics and health status for read and write flows.
 
+### Preview: FSMv2 Communicator
+
+- Previously, healthy instances could appear offline in Management Console when earlier status messages failed to send. New status messages now continue to reach Management Console while previous ones are being retried. Only affects instances with `USE_FSMV2_TRANSPORT=true`
+
 ## [0.44.15]
 
 Fix issue when redeploying a bridge.
