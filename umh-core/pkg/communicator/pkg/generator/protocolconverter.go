@@ -22,6 +22,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/connection"
+	dataflowcomponent "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/dataflowcomponent"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/nmap"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/protocolconverter"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
@@ -147,6 +148,23 @@ func buildProtocolConverterAsDfc(
 		isInitialized = true
 	}
 
+	readDesiredState := observed.ObservedProtocolConverterSpecConfig.ReadDFCDesiredState
+	if readDesiredState == "" {
+		readDesiredState = instance.DesiredState
+	}
+	writeDesiredState := observed.ObservedProtocolConverterSpecConfig.WriteDFCDesiredState
+	if writeDesiredState == "" {
+		writeDesiredState = instance.DesiredState
+	}
+	readFlowHealth := buildDFCFlowHealth(
+		observed.ServiceInfo.DataflowComponentReadFSMState,
+		readDesiredState,
+	)
+	writeFlowHealth := buildDFCFlowHealth(
+		observed.ServiceInfo.DataflowComponentWriteFSMState,
+		writeDesiredState,
+	)
+
 	dfc := models.Dfc{
 		Type:        models.DfcTypeProtocolConverter,
 		UUID:        uuid.String(),
@@ -158,6 +176,8 @@ func buildProtocolConverterAsDfc(
 			DesiredState:  instance.DesiredState,
 			Category:      healthCat,
 		},
+		ReadFlowHealth:  readFlowHealth,
+		WriteFlowHealth: writeFlowHealth,
 		// Metrics are added below
 		Metrics: nil,
 		// Bridge info is not applicable for protocol converters
@@ -165,17 +185,31 @@ func buildProtocolConverterAsDfc(
 		IsInitialized: isInitialized,
 	}
 
-	// ---- metrics --------------------------------------------------------
 	svcInfo := observed.ServiceInfo
-	if m := svcInfo.DataflowComponentReadObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosMetrics.MetricsState; m != nil &&
-		m.Input.LastCount > 0 {
-		avgThroughput := m.Input.MessagesPerTick / constants.DefaultTickerTime.Seconds()
-		if instance.DesiredState == protocolconverter.OperationalStateStopped ||
-			observed.ObservedProtocolConverterSpecConfig.ReadDFCDesiredState == protocolconverter.OperationalStateStopped {
-			avgThroughput = 0
+	avgReadThroughput := 0.0
+	avgWriteThroughput := 0.0
+	if readMetrics := svcInfo.DataflowComponentReadObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosMetrics.MetricsState; readMetrics != nil &&
+		readMetrics.Input.LastCount > 0 {
+		avgReadThroughput = readMetrics.Input.MessagesPerTick / constants.DefaultTickerTime.Seconds()
+		if instance.DesiredState == dataflowcomponent.OperationalStateStopped ||
+			observed.ObservedProtocolConverterSpecConfig.ReadDFCDesiredState == dataflowcomponent.OperationalStateStopped {
+			avgReadThroughput = 0
 		}
+	}
+
+	if writeMetrics := svcInfo.DataflowComponentWriteObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosMetrics.MetricsState; writeMetrics != nil &&
+		writeMetrics.Output.LastCount > 0 {
+		avgWriteThroughput = writeMetrics.Output.MessagesPerTick / constants.DefaultTickerTime.Seconds()
+		if instance.DesiredState == dataflowcomponent.OperationalStateStopped ||
+			observed.ObservedProtocolConverterSpecConfig.WriteDFCDesiredState == dataflowcomponent.OperationalStateStopped {
+			avgWriteThroughput = 0
+		}
+	}
+
+	if avgReadThroughput > 0 || avgWriteThroughput > 0 {
 		dfc.Metrics = &models.DfcMetrics{
-			AvgInputThroughputPerMinuteInMsgSec: avgThroughput,
+			AvgInputThroughputPerMinuteInMsgSec:  avgReadThroughput,
+			AvgOutputThroughputPerMinuteInMsgSec: avgWriteThroughput,
 		}
 	}
 
@@ -266,6 +300,55 @@ func getProtocolConverterStatusMessage(state string, statusReason string, connec
 	}
 
 	return baseMessage + connectionSuffix + " - " + statusReason
+}
+
+// buildDFCFlowHealth creates a Health for an individual read or write data flow component.
+// Returns nil if the flow has no FSM state (i.e., it is not configured).
+func buildDFCFlowHealth(fsmState string, desiredState string) *models.Health {
+	if fsmState == "" {
+		return nil
+	}
+
+	return &models.Health{
+		Message:       getDFCFlowStatusMessage(fsmState),
+		ObservedState: fsmState,
+		DesiredState:  desiredState,
+		Category:      getDFCHealthCategory(fsmState),
+	}
+}
+
+// getDFCFlowStatusMessage returns a human-readable status message for a DFC flow state.
+func getDFCFlowStatusMessage(state string) string {
+	switch state {
+	case dataflowcomponent.OperationalStateActive:
+		return "Flow is active and processing data"
+	case dataflowcomponent.OperationalStateIdle:
+		return "Flow is idle"
+	case dataflowcomponent.OperationalStateStopped:
+		return "Flow is stopped"
+	case dataflowcomponent.OperationalStateStopping:
+		return "Flow is stopping"
+	case dataflowcomponent.OperationalStateStarting:
+		return "Flow is starting"
+	case dataflowcomponent.OperationalStateStartingFailed:
+		return "Flow failed to start"
+	case dataflowcomponent.OperationalStateDegraded:
+		return "Flow is degraded"
+	default:
+		return "Flow state: " + state
+	}
+}
+
+// getDFCHealthCategory maps a DFC FSM state to a HealthCategory.
+func getDFCHealthCategory(state string) models.HealthCategory {
+	switch state {
+	case dataflowcomponent.OperationalStateActive, dataflowcomponent.OperationalStateIdle:
+		return models.Active
+	case dataflowcomponent.OperationalStateDegraded, dataflowcomponent.OperationalStateStartingFailed:
+		return models.Degraded
+	default:
+		return models.Neutral
+	}
 }
 
 // getHealthCategoryFromState converts a FSM state string to models.HealthCategory.
