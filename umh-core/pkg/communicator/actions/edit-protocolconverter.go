@@ -154,41 +154,28 @@ func (a *EditProtocolConverterAction) Parse(payload interface{}) error {
 	a.protocolConverterUUID = *pcPayload.UUID
 	a.name = pcPayload.Name
 
-	// Determine which DFC(s) are being updated and convert to CDFCPayload.
-	switch {
-	case pcPayload.ReadDFC != nil && pcPayload.WriteDFC != nil:
-		a.dfcType = DFCTypeBoth
+	// Parse each DFC side independently.
+	if pcPayload.ReadDFC != nil {
 		readPayload := dfcToPayload(pcPayload.ReadDFC)
-		writePayload := dfcToPayload(pcPayload.WriteDFC)
 		a.readDFCPayload = &readPayload
-		a.writeDFCPayload = &writePayload
+		a.readDFCState = pcPayload.ReadDFC.State
 		if pcPayload.ReadDFC.IgnoreErrors != nil {
 			a.ignoreHealthCheck = *pcPayload.ReadDFC.IgnoreErrors
 		}
+	}
+	if pcPayload.WriteDFC != nil {
+		writePayload := dfcToPayload(pcPayload.WriteDFC)
+		a.writeDFCPayload = &writePayload
+		a.writeDFCState = pcPayload.WriteDFC.State
 		if pcPayload.WriteDFC.IgnoreErrors != nil {
 			a.ignoreHealthCheck = a.ignoreHealthCheck || *pcPayload.WriteDFC.IgnoreErrors
 		}
-		a.readDFCState = pcPayload.ReadDFC.State
-		a.writeDFCState = pcPayload.WriteDFC.State
-	case pcPayload.ReadDFC != nil:
-		a.dfcType = DFCTypeRead
-		readPayload := dfcToPayload(pcPayload.ReadDFC)
-		a.readDFCPayload = &readPayload
-		if pcPayload.ReadDFC.IgnoreErrors != nil {
-			a.ignoreHealthCheck = *pcPayload.ReadDFC.IgnoreErrors
-		}
-		a.readDFCState = pcPayload.ReadDFC.State
-	case pcPayload.WriteDFC != nil:
-		a.dfcType = DFCTypeWrite
-		writePayload := dfcToPayload(pcPayload.WriteDFC)
-		a.writeDFCPayload = &writePayload
-		if pcPayload.WriteDFC.IgnoreErrors != nil {
-			a.ignoreHealthCheck = *pcPayload.WriteDFC.IgnoreErrors
-		}
-		a.writeDFCState = pcPayload.WriteDFC.State
-	default:
-		a.dfcType = DFCTypeEmpty
 	}
+
+	// Determine dfcType by comparing incoming DFC configs against what is
+	// currently deployed. Only DFCs that actually differ need redeployment.
+	a.dfcType = a.deriveDFCType()
+
 	if pcPayload.TemplateInfo != nil {
 		a.vb = pcPayload.TemplateInfo.Variables
 	} else {
@@ -299,7 +286,6 @@ func (a *EditProtocolConverterAction) Execute() (interface{}, map[string]interfa
 	// Store the atomic edit UUID for use in rollback operations
 	a.atomicEditUUID = atomicEditUUID
 
-	// Persist the configuration changes
 	oldConfig, err := a.persistConfig(atomicEditUUID, newSpec)
 	if err != nil {
 		errorMsg := fmt.Sprintf("Failed to persist configuration changes: %v", err)
@@ -652,6 +638,7 @@ func (a *EditProtocolConverterAction) awaitRollout(pcConfig config.ProtocolConve
 
 					switch desiredPCState {
 					case protocolconverter.OperationalStateActive:
+
 						hasReachedDesiredState = slices.Contains(
 							[]string{
 								protocolconverter.OperationalStateActive,
@@ -749,6 +736,7 @@ func (a *EditProtocolConverterAction) awaitRollout(pcConfig config.ProtocolConve
 
 				switch desiredPCState {
 				case protocolconverter.OperationalStateActive:
+
 					hasReachedDesiredState = slices.Contains(
 						[]string{
 							protocolconverter.OperationalStateActive,
@@ -790,6 +778,7 @@ func (a *EditProtocolConverterAction) awaitRollout(pcConfig config.ProtocolConve
 
 				// send the benthos logs to the user; for DFCTypeBoth, prefer write logs since
 				// read logs are also included below via the merged slice.
+
 				switch a.dfcType {
 				case DFCTypeWrite, DFCTypeBoth:
 					logs = pcSnapshot.ServiceInfo.DataflowComponentWriteObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosLogs
@@ -800,6 +789,7 @@ func (a *EditProtocolConverterAction) awaitRollout(pcConfig config.ProtocolConve
 				// only send the logs that have not been sent yet
 				if len(logs) > len(lastLogs) {
 					lastLogs = SendLimitedLogs(logs, lastLogs, a.instanceUUID, a.userEmail, a.actionUUID, a.outboundChannel, models.EditProtocolConverter, remainingSeconds)
+
 				}
 
 				// CheckBenthosLogLinesForConfigErrors is used to detect fatal configuration errors that would cause
@@ -1041,6 +1031,118 @@ func extractInjectFromRawYAML(rawYAML *models.CommonDataFlowComponentRawYamlConf
 	return rawYAML.Data
 }
 
+// deriveDFCType compares the incoming DFC payloads against the currently
+// deployed config and returns a DFCType that only includes the sides that
+// actually differ. If no config is deployed yet (first edit) or the config
+// cannot be read, it falls back to payload presence.
+func (a *EditProtocolConverterAction) deriveDFCType() DFCType {
+	hasRead := a.readDFCPayload != nil
+	hasWrite := a.writeDFCPayload != nil
+
+	if !hasRead && !hasWrite {
+		return DFCTypeEmpty
+	}
+
+	// Try to fetch the current config for diff comparison.
+	ctx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
+	defer cancel()
+
+	currentConfig, err := a.configManager.GetConfig(ctx, 0)
+	if err != nil {
+		a.actionLogger.Debugf("Cannot read current config for diff, falling back to payload presence: %v", err)
+		return dfcTypeFromPresence(hasRead, hasWrite)
+	}
+
+	// Find the protocol converter in the current config.
+	var currentPC *config.ProtocolConverterConfig
+	for i, pc := range currentConfig.ProtocolConverter {
+		if dataflowcomponentserviceconfig.GenerateUUIDFromName(pc.Name) == a.protocolConverterUUID {
+			currentPC = &currentConfig.ProtocolConverter[i]
+			break
+		}
+	}
+	if currentPC == nil {
+		a.actionLogger.Debugf("Protocol converter %s not found in current config, falling back to payload presence", a.protocolConverterUUID)
+		return dfcTypeFromPresence(hasRead, hasWrite)
+	}
+
+	// Connection IP/PORT changes affect all DFCs since they use {{ .IP }}/{{ .PORT }} templates.
+	// So if a change is detected, all present DFCs need redeploy.
+	// Use comma-ok map lookups: if IP/PORT keys are absent (e.g. PCs created
+	// before these variables were standard), skip the connection-change check
+	// rather than treating it as changed. Without this, fmt.Sprint(nil) returns
+	// "<nil>" which never equals any real value, forcing a spurious redeploy.
+	deployedVars := currentPC.ProtocolConverterServiceConfig.Variables.User
+	deployedIP, ipOk := deployedVars["IP"]
+	deployedPort, portOk := deployedVars["PORT"]
+	connectionChanged := ipOk && portOk &&
+		(fmt.Sprint(deployedIP) != a.connectionIP || fmt.Sprint(deployedPort) != a.connectionPort)
+	if connectionChanged {
+		a.actionLogger.Debugf("Connection changed (IP or PORT), all present DFCs need redeploy")
+		return dfcTypeFromPresence(hasRead, hasWrite)
+	}
+
+	// Check if read or write payload is different from the deployed config.
+	readChanged := hasRead && a.dfcPayloadDiffers(*a.readDFCPayload, a.readDFCState,
+		currentPC.ProtocolConverterServiceConfig.Config.DataflowComponentReadServiceConfig,
+		currentPC.ProtocolConverterServiceConfig.ReadDFCDesiredState)
+	writeChanged := hasWrite && a.dfcPayloadDiffers(*a.writeDFCPayload, a.writeDFCState,
+		currentPC.ProtocolConverterServiceConfig.Config.DataflowComponentWriteServiceConfig,
+		currentPC.ProtocolConverterServiceConfig.WriteDFCDesiredState)
+
+	derived := dfcTypeFromPresence(readChanged, writeChanged)
+	a.actionLogger.Debugf("Derived dfcType=%s (readChanged=%v, writeChanged=%v)", derived, readChanged, writeChanged)
+
+	return derived
+}
+
+// dfcPayloadDiffers checks whether an incoming DFC payload differs from the
+// persisted config in config.yaml. This is intentionally simpler than
+// compareSingleDFCConfig, which compares rendered templates against runtime
+// observed state from the FSM snapshot. Here we only need to know whether the
+// user sent something new relative to what is already on disk.
+func (a *EditProtocolConverterAction) dfcPayloadDiffers(
+	payload models.CDFCPayload,
+	incomingState string,
+	deployedConfig dataflowcomponentserviceconfig.DataflowComponentServiceConfig,
+	deployedState string,
+) bool {
+	// State change counts as a diff, but only when both sides are populated.
+	// On freshly upgraded systems the deployed config may not have the
+	// ReadDFCDesiredState/WriteDFCDesiredState fields yet (they unmarshal to "").
+	// Treating "" != "active" as a diff would force an unnecessary redeploy
+	// on every first edit after upgrade.
+	if incomingState != "" && deployedState != "" && incomingState != deployedState {
+		return true
+	}
+
+	incomingBenthos, err := CreateBenthosConfigFromCDFCPayload(payload, a.name)
+	if err != nil {
+		a.actionLogger.Debugf("Cannot build benthos config for diff, treating as changed: %v", err)
+		return true
+	}
+
+	incomingDFCConfig := dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+		BenthosConfig: incomingBenthos,
+	}
+
+	return !deployedConfig.Equal(incomingDFCConfig)
+}
+
+// dfcTypeFromPresence returns a DFCType based on boolean flags for read/write.
+func dfcTypeFromPresence(read, write bool) DFCType {
+	switch {
+	case read && write:
+		return DFCTypeBoth
+	case read:
+		return DFCTypeRead
+	case write:
+		return DFCTypeWrite
+	default:
+		return DFCTypeEmpty
+	}
+}
+
 // getUserEmail implements the Action interface by returning the user email associated with this action.
 func (a *EditProtocolConverterAction) getUserEmail() string {
 	return a.userEmail
@@ -1107,4 +1209,3 @@ func validateProtocolConverterDFC(dfc *models.ProtocolConverterDFC, label string
 	}
 	return nil
 }
-
