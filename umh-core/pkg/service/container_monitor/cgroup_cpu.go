@@ -17,7 +17,6 @@ package container_monitor
 import (
 	"context"
 	"fmt"
-	"os"
 	"strconv"
 	"strings"
 
@@ -99,10 +98,7 @@ func (c *ContainerMonitorService) getCgroupCPUInfo(ctx context.Context) (*CPUCgr
 	// Read cpu.max for quota/period
 	cpuMaxPath := "/sys/fs/cgroup/cpu.max"
 
-	// TODO paralellize with stadnard approach with errgroups both of the ReadFiles
-	// potentially even using the filesystem package for it
-
-	cpuMaxData, err := os.ReadFile(cpuMaxPath)
+	cpuMaxData, err := c.fs.ReadFile(ctx, cpuMaxPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read cpu.max: %w", err)
 	}
@@ -119,8 +115,11 @@ func (c *ContainerMonitorService) getCgroupCPUInfo(ctx context.Context) (*CPUCgr
 	// Read cpu.stat for throttling information
 	cpuStatPath := "/sys/fs/cgroup/cpu.stat"
 
-	cpuStatData, err := os.ReadFile(cpuStatPath)
+	cpuStatData, err := c.fs.ReadFile(ctx, cpuStatPath)
 	if err != nil {
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
 		// cpu.stat might not exist in all environments
 		c.logger.Debugf("Could not read cpu.stat: %v", err)
 

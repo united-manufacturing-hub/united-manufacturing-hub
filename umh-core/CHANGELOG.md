@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## [0.44.15]
+
+Fix issue when redeploying a bridge.
+
+### Fixes
+
+- Previously, if a read flow had a stale error, a new deployment would always fail, even if the current state is healthy. Now, we first always stop the flow, redeploy it and only check the current state, not any stale states.
+
 ## [0.44.14]
 
 ### Improvements

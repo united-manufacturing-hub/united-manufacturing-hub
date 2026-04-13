@@ -432,7 +432,7 @@ var _ = Describe("DataFlowComponentService", func() {
 
 		It("should start DFCs only when StartDFC is called", func() {
 			// Start the DFCs
-			err := service.StartDFC(ctx, mockSvcRegistry.GetFileSystem(), protConvName)
+			err := service.StartDFC(ctx, mockSvcRegistry.GetFileSystem(), protConvName, "active", "stopped")
 			Expect(err).NotTo(HaveOccurred())
 
 			// Verify the DFC desired state was changed based on config
@@ -457,7 +457,7 @@ var _ = Describe("DataFlowComponentService", func() {
 			Expect(err).To(MatchError(ErrServiceNotExist))
 
 			// Try to start DFC for non-existent protocolConverter
-			err = service.StartDFC(ctx, mockSvcRegistry.GetFileSystem(), "non-existent")
+			err = service.StartDFC(ctx, mockSvcRegistry.GetFileSystem(), "non-existent", "active", "stopped")
 			Expect(err).To(MatchError(ErrServiceNotExist))
 
 			// Try to stop a non-existent protocolConverter
@@ -629,7 +629,7 @@ var _ = Describe("DataFlowComponentService", func() {
 			mockConnService.ReconcileManagerError = mockError
 
 			// Second reconcile - now that the instance exists, it will try to reconcile it
-			err, reconciled = testService.ReconcileManager(ctx, mockSvcRegistry, fsm.SystemSnapshot{Tick: tick+1, SnapshotTime: time.Now()})
+			err, reconciled = testService.ReconcileManager(ctx, mockSvcRegistry, fsm.SystemSnapshot{Tick: tick + 1, SnapshotTime: time.Now()})
 
 			// Assert
 			Expect(err).ToNot(HaveOccurred()) // it should not return an error

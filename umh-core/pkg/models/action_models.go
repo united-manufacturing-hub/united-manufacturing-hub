@@ -762,10 +762,14 @@ type ProtocolConverterConnection struct {
 }
 
 type ProtocolConverterDFC struct {
-	Pipeline     CommonDataFlowComponentPipelineConfig `json:"pipeline"               mapstructure:"pipeline"               yaml:"pipeline"`
-	IgnoreErrors *bool                                 `json:"ignoreErrors,omitempty" mapstructure:"ignoreErrors,omitempty" yaml:"ignoreErrors,omitempty"`
-	RawYAML      *CommonDataFlowComponentRawYamlConfig `json:"rawYAML,omitempty"      mapstructure:"rawYAML,omitempty"      yaml:"rawYAML,omitempty"`
-	Inputs       CommonDataFlowComponentInputConfig    `json:"inputs"                 mapstructure:"inputs"                 yaml:"inputs"`
+	Pipeline     CommonDataFlowComponentPipelineConfig  `json:"pipeline"               mapstructure:"pipeline"               yaml:"pipeline"`
+	IgnoreErrors *bool                                  `json:"ignoreErrors,omitempty" mapstructure:"ignoreErrors,omitempty" yaml:"ignoreErrors,omitempty"`
+	RawYAML      *CommonDataFlowComponentRawYamlConfig  `json:"rawYAML,omitempty"      mapstructure:"rawYAML,omitempty"      yaml:"rawYAML,omitempty"`
+	// State is the desired state for this specific DFC ("active" or "stopped").
+	// When empty, the overall protocol converter state is used.
+	State   string                                 `json:"state,omitempty"        mapstructure:"state,omitempty"        yaml:"state,omitempty"`
+	Inputs  CommonDataFlowComponentInputConfig     `json:"inputs"                 mapstructure:"inputs"                 yaml:"inputs"`
+	Outputs CommonDataFlowComponentOutputConfig    `json:"outputs"                mapstructure:"outputs"                yaml:"outputs"`
 }
 
 type ProtocolConverterVariable struct {
@@ -786,9 +790,8 @@ type ProtocolConverter struct {
 	WriteDFC     *ProtocolConverterDFC          `json:"writeDFC"`
 	TemplateInfo *ProtocolConverterTemplateInfo `json:"templateInfo"`
 	Meta         *ProtocolConverterMeta         `json:"meta"`
-	Name         string                         `binding:"required"     json:"name"`
-	State        string                         `json:"state,omitempty"`
-	Connection   ProtocolConverterConnection    `json:"connection"`
+	Name       string                      `binding:"required" json:"name"`
+	Connection ProtocolConverterConnection `json:"connection"`
 }
 
 type ProtocolConverterMeta struct {

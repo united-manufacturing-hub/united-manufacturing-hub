@@ -160,8 +160,8 @@ func (p *ProtocolConverterInstance) StartConnectionInstance(ctx context.Context,
 func (p *ProtocolConverterInstance) StartDFCInstance(ctx context.Context, filesystemService filesystem.Service) error {
 	p.baseFSMInstance.GetLogger().Debugf("Starting Action: Starting flows for bridge %s ...", p.baseFSMInstance.GetID())
 
-	// Start the DFC components with conditional evaluation
-	err := p.service.StartDFC(ctx, filesystemService, p.baseFSMInstance.GetID())
+	// Start the DFC components with conditional evaluation, honouring per-DFC state overrides.
+	err := p.service.StartDFC(ctx, filesystemService, p.baseFSMInstance.GetID(), p.specConfig.ReadDFCDesiredState, p.specConfig.WriteDFCDesiredState)
 	if err != nil {
 		return fmt.Errorf("failed to start flows for bridge %s: %w", p.baseFSMInstance.GetID(), err)
 	}
@@ -362,26 +362,28 @@ func (p *ProtocolConverterInstance) UpdateObservedStateOfInstance(ctx context.Co
 			}
 
 			p.baseFSMInstance.GetLogger().Debugf("config updated")
-
-			// UNIQUE BEHAVIOR: Re-evaluate DFC desired states after config changes
-			// This is different from other FSMs which set desired states once and don't change them.
-			// Protocol converters must re-evaluate because:
-			// 1. DFC configs may transition from empty -> populated as templates are rendered
-			// 2. Empty DFCs should remain stopped, populated DFCs should be started
-			// 3. This ensures we don't start broken Benthos instances with empty configs
-			if p.baseFSMInstance.GetDesiredFSMState() == OperationalStateActive {
-				p.baseFSMInstance.GetLogger().Debugf("re-evaluating flow desired states and will be active")
-
-				err := p.service.EvaluateDFCDesiredStates(p.baseFSMInstance.GetID(), "active", p.baseFSMInstance.GetCurrentFSMState()) // NOTE: Hardcoded to avoid circular import
-				if err != nil {
-					p.baseFSMInstance.GetLogger().Debugf("Failed to re-evaluate flow states after config update: %v", err)
-					// Don't fail the entire update - this is a best-effort re-evaluation
-				} else {
-					p.baseFSMInstance.GetLogger().Debugf("Re-evaluated flow desired states after config update")
-				}
-			}
 		} else {
 			p.baseFSMInstance.GetLogger().Debugf("Config differences detected but service does not exist yet, skipping update")
+		}
+	}
+
+	// UNIQUE BEHAVIOR: Always re-evaluate DFC desired states when the PC is active.
+	// This is different from other FSMs which set desired states once and don't change them.
+	// Protocol converters must re-evaluate every tick because:
+	// 1. DFC configs may transition from empty -> populated as templates are rendered.
+	// 2. Empty DFCs should remain stopped; populated DFCs should be started.
+	// 3. Per-DFC desired state overrides (ReadDFCDesiredState/WriteDFCDesiredState) must be
+	//    applied even when only the state changed and the Benthos config stayed the same —
+	//    ConfigsEqualRuntime does not include those fields, so the block above would not fire.
+	if p.baseFSMInstance.GetDesiredFSMState() == OperationalStateActive {
+		if p.service.ServiceExists(ctx, services.GetFileSystem(), p.baseFSMInstance.GetID()) {
+			p.baseFSMInstance.GetLogger().Debugf("re-evaluating flow desired states")
+
+			err := p.service.EvaluateDFCDesiredStates(p.baseFSMInstance.GetID(), "active", p.baseFSMInstance.GetCurrentFSMState(), p.specConfig.ReadDFCDesiredState, p.specConfig.WriteDFCDesiredState) // NOTE: Hardcoded to avoid circular import
+			if err != nil {
+				p.baseFSMInstance.GetLogger().Debugf("Failed to re-evaluate flow states: %v", err)
+				// Don't fail the entire update - this is a best-effort re-evaluation
+			}
 		}
 	}
 
@@ -435,43 +437,99 @@ func (p *ProtocolConverterInstance) IsRedpandaHealthy() (bool, string) {
 	return false, statusReason
 }
 
-// IsDFCHealthy checks whether the underlying DFC is healthy
-// so either idle or active
+// IsDFCHealthy checks whether the underlying DFCs are healthy.
+// A DFC is considered healthy when it is active/idle, intentionally stopped
+// (ReadDFCDesiredState/WriteDFCDesiredState == "stopped"), or has no configuration
+// (nothing deployed means nothing to check).
 //
 // It returns:
 //
-//	ok     – true when the DFC is healthy, false otherwise.
-//	reason – empty when ok is true; otherwise a explanation
+//	ok     – true when all relevant DFCs are healthy, false otherwise.
+//	reason – empty when ok is true; otherwise an explanation.
 func (p *ProtocolConverterInstance) IsDFCHealthy() (bool, string) {
-	if p.ObservedState.ServiceInfo.DataflowComponentReadFSMState == dataflowfsm.OperationalStateIdle || p.ObservedState.ServiceInfo.DataflowComponentReadFSMState == dataflowfsm.OperationalStateActive {
+	readState := p.ObservedState.ServiceInfo.DataflowComponentReadFSMState
+	writeState := p.ObservedState.ServiceInfo.DataflowComponentWriteFSMState
+
+	readRunning := readState == dataflowfsm.OperationalStateIdle || readState == dataflowfsm.OperationalStateActive
+	writeRunning := writeState == dataflowfsm.OperationalStateIdle || writeState == dataflowfsm.OperationalStateActive
+
+	// Intentionally stopped counts as healthy
+	readIntentionallyStopped := p.specConfig.ReadDFCDesiredState == OperationalStateStopped
+	writeIntentionallyStopped := p.specConfig.WriteDFCDesiredState == OperationalStateStopped
+
+	readHasConfig := len(p.specConfig.Config.DataflowComponentReadServiceConfig.BenthosConfig.Input) > 0
+	writeHasConfig := len(p.specConfig.Config.DataflowComponentWriteServiceConfig.BenthosConfig.Output) > 0
+
+	readHealthy := readRunning || readIntentionallyStopped || !readHasConfig
+	writeHealthy := writeRunning || writeIntentionallyStopped || !writeHasConfig
+
+	if readHealthy && writeHealthy {
 		return true, ""
 	}
 
-	statusReason := p.ObservedState.ServiceInfo.DataflowComponentReadObservedState.ServiceInfo.StatusReason
+	if !readHealthy {
+		statusReason := p.ObservedState.ServiceInfo.DataflowComponentReadObservedState.ServiceInfo.StatusReason
+		if statusReason == "" {
+			statusReason = "flow health status unknown"
+		}
+
+		return false, statusReason
+	}
+
+	statusReason := p.ObservedState.ServiceInfo.DataflowComponentWriteObservedState.ServiceInfo.StatusReason
 	if statusReason == "" {
 		statusReason = "flow health status unknown"
 	}
 
-	// TODO: check the write DFC as well
 	return false, statusReason
 }
 
-// safeBenthosMetrics safely extracts Benthos metrics from the observed state,
-// returning a zero-value metrics struct if any part of the chain is nil.
+// areBothDFCsIntentionallyStopped returns true when both the read and write DFC
+// desired states are set to stopped and at least one of them has a config deployed.
+func (p *ProtocolConverterInstance) areBothDFCsIntentionallyStopped() bool {
+	if p.specConfig.ReadDFCDesiredState != OperationalStateStopped ||
+		p.specConfig.WriteDFCDesiredState != OperationalStateStopped {
+		return false
+	}
+	readHasConfig := len(p.specConfig.Config.DataflowComponentReadServiceConfig.BenthosConfig.Input) > 0
+	writeHasConfig := len(p.specConfig.Config.DataflowComponentWriteServiceConfig.BenthosConfig.Output) > 0
+	return readHasConfig || writeHasConfig
+}
+
+// stateOrNotExisting returns the state string, or "not existing" if empty.
+func stateOrNotExisting(state string) string {
+	if state == "" {
+		return "not existing"
+	}
+	return state
+}
+
+// connectionMetrics holds aggregated connection up/lost counters for a single direction.
+type connectionMetrics struct {
+	ConnectionUp   int64
+	ConnectionLost int64
+}
+
+// isActive returns true when more connections have come up than have been lost.
+func (m connectionMetrics) isActive() bool {
+	return m.ConnectionUp-m.ConnectionLost > 0
+}
+
+// safeBenthosMetricsFrom safely extracts Benthos metrics from a DFC observed state,
+// returning zero-value metrics if any part of the chain is nil.
 // This prevents panics during startup or error conditions when the full
 // observedState structure may not be populated yet.
-func (p *ProtocolConverterInstance) safeBenthosMetrics() (input, output struct{ ConnectionUp, ConnectionLost int64 }) {
-	// Return zero values if the MetricsState pointer is nil (this is the only field that can actually be nil)
-	if p.ObservedState.ServiceInfo.DataflowComponentReadObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosMetrics.MetricsState == nil {
+func safeBenthosMetricsFrom(obs dataflowfsm.DataflowComponentObservedState) (input, output connectionMetrics) {
+	if obs.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosMetrics.MetricsState == nil {
 		return
 	}
 
-	metrics := p.ObservedState.ServiceInfo.DataflowComponentReadObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosMetrics.Metrics
+	metrics := obs.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosMetrics.Metrics
 
-	return struct{ ConnectionUp, ConnectionLost int64 }{
+	return connectionMetrics{
 			ConnectionUp:   metrics.Input.ConnectionUp,
 			ConnectionLost: metrics.Input.ConnectionLost,
-		}, struct{ ConnectionUp, ConnectionLost int64 }{
+		}, connectionMetrics{
 			ConnectionUp:   metrics.Output.ConnectionUp,
 			ConnectionLost: metrics.Output.ConnectionLost,
 		}
@@ -488,30 +546,47 @@ func (p *ProtocolConverterInstance) safeBenthosMetrics() (input, output struct{ 
 //	ok     – true when there is an issue, false otherwise.
 //	reason – empty when ok is true; otherwise a explanation
 func (p *ProtocolConverterInstance) IsOtherDegraded() (bool, string) {
-	// TODO: check the write DFC as well
-
-	// Check for case 1.1
-	if p.ObservedState.ServiceInfo.DataflowComponentReadFSMState == dataflowfsm.OperationalStateActive &&
-		p.ObservedState.ServiceInfo.RedpandaFSMState == redpandafsm.OperationalStateIdle {
-		return true, "flow is active, but redpanda is idle"
+	// dfcCheck holds the per-DFC data needed for degradation checks.
+	// For a read DFC: kafkaMetrics = output (→ Kafka), deviceMetrics = input (← device).
+	// For a write DFC: kafkaMetrics = input (← Kafka), deviceMetrics = output (→ device).
+	type dfcCheck struct {
+		label         string
+		fsmState      string
+		kafkaMetrics  connectionMetrics
+		deviceMetrics connectionMetrics
 	}
 
-	// Safely extract Benthos metrics to avoid nil pointer panics
-	inputMetrics, outputMetrics := p.safeBenthosMetrics()
+	readInput, readOutput := safeBenthosMetricsFrom(p.ObservedState.ServiceInfo.DataflowComponentReadObservedState)
+	writeInput, writeOutput := safeBenthosMetricsFrom(p.ObservedState.ServiceInfo.DataflowComponentWriteObservedState)
 
-	// Check for case 2
-	isBenthosOutputActive := outputMetrics.ConnectionUp-outputMetrics.ConnectionLost > 0 // if the amount of connection losts is bigger than the amount of connection ups, the output is not active
-	if (p.ObservedState.ServiceInfo.RedpandaFSMState == redpandafsm.OperationalStateIdle ||
-		p.ObservedState.ServiceInfo.RedpandaFSMState == redpandafsm.OperationalStateActive) &&
-		!isBenthosOutputActive {
-		return true, fmt.Sprintf("Redpanda is %s, but the flow has no output active (connection up: %d, connection lost: %d)", p.ObservedState.ServiceInfo.RedpandaFSMState, outputMetrics.ConnectionUp, outputMetrics.ConnectionLost)
+	checks := []dfcCheck{
+		{"read flow", p.ObservedState.ServiceInfo.DataflowComponentReadFSMState, readOutput, readInput},
+		{"write flow", p.ObservedState.ServiceInfo.DataflowComponentWriteFSMState, writeInput, writeOutput},
 	}
 
-	// Check for case 3
-	isBenthosInputActive := inputMetrics.ConnectionUp-inputMetrics.ConnectionLost > 0 // if the amount of connection losts is bigger than the amount of connection ups, the input is not active
-	if p.ObservedState.ServiceInfo.ConnectionFSMState != connectionfsm.OperationalStateUp &&
-		isBenthosInputActive {
-		return true, fmt.Sprintf("Connection is %s, but the flow has input active (connection up: %d, connection lost: %d)", p.ObservedState.ServiceInfo.ConnectionFSMState, inputMetrics.ConnectionUp, inputMetrics.ConnectionLost)
+	for _, c := range checks {
+
+		// Case 1: DFC active but redpanda idle
+		if c.fsmState == dataflowfsm.OperationalStateActive &&
+			p.ObservedState.ServiceInfo.RedpandaFSMState == redpandafsm.OperationalStateIdle {
+			return true, c.label + " is active, but redpanda is idle"
+		}
+
+		// Case 2: redpanda up but DFC's kafka-side connection not active
+		if (p.ObservedState.ServiceInfo.RedpandaFSMState == redpandafsm.OperationalStateIdle ||
+			p.ObservedState.ServiceInfo.RedpandaFSMState == redpandafsm.OperationalStateActive) &&
+			c.fsmState == dataflowfsm.OperationalStateActive &&
+			!c.kafkaMetrics.isActive() {
+			return true, fmt.Sprintf("Redpanda is %s, but the %s has no kafka-side connection active (connection up: %d, connection lost: %d)",
+				p.ObservedState.ServiceInfo.RedpandaFSMState, c.label, c.kafkaMetrics.ConnectionUp, c.kafkaMetrics.ConnectionLost)
+		}
+
+		// Case 3: connection down but DFC's device-side connection active
+		if p.ObservedState.ServiceInfo.ConnectionFSMState != connectionfsm.OperationalStateUp &&
+			c.deviceMetrics.isActive() {
+			return true, fmt.Sprintf("Connection is %s, but the %s has device-side connection active (connection up: %d, connection lost: %d)",
+				p.ObservedState.ServiceInfo.ConnectionFSMState, c.label, c.deviceMetrics.ConnectionUp, c.deviceMetrics.ConnectionLost)
+		}
 	}
 
 	return false, ""
@@ -525,17 +600,14 @@ func (p *ProtocolConverterInstance) IsOtherDegraded() (bool, string) {
 //	ok     – true when the DFC is active, false otherwise.
 //	reason – empty when ok is true; otherwise a explanation
 func (p *ProtocolConverterInstance) IsDataflowComponentWithProcessingActivity() (bool, string) {
-	// TODO: check the write DFC as well
-	if p.ObservedState.ServiceInfo.DataflowComponentReadFSMState == dataflowfsm.OperationalStateActive {
+	readState := p.ObservedState.ServiceInfo.DataflowComponentReadFSMState
+	writeState := p.ObservedState.ServiceInfo.DataflowComponentWriteFSMState
+
+	if readState == dataflowfsm.OperationalStateActive || writeState == dataflowfsm.OperationalStateActive {
 		return true, ""
 	}
 
-	dfcState := p.ObservedState.ServiceInfo.DataflowComponentReadFSMState
-	if dfcState == "" {
-		dfcState = "not existing"
-	}
-
-	return false, "flow is " + dfcState
+	return false, fmt.Sprintf("read flow is %s, write flow is %s", stateOrNotExisting(readState), stateOrNotExisting(writeState))
 }
 
 // IsProtocolConverterStopped checks whether the ProtocolConverter is stopped
@@ -546,23 +618,21 @@ func (p *ProtocolConverterInstance) IsDataflowComponentWithProcessingActivity() 
 //	ok     – true when the ProtocolConverter is stopped, false otherwise.
 //	reason – empty when ok is true; otherwise a service‑provided explanation
 func (p *ProtocolConverterInstance) IsProtocolConverterStopped() (bool, string) {
-	// TODO: check the write DFC as well
-	if p.ObservedState.ServiceInfo.ConnectionFSMState == connectionfsm.OperationalStateStopped &&
-		p.ObservedState.ServiceInfo.DataflowComponentReadFSMState == dataflowfsm.OperationalStateStopped {
+	connStopped := p.ObservedState.ServiceInfo.ConnectionFSMState == connectionfsm.OperationalStateStopped
+	readStopped := p.ObservedState.ServiceInfo.DataflowComponentReadFSMState == dataflowfsm.OperationalStateStopped
+	writeStopped := p.ObservedState.ServiceInfo.DataflowComponentWriteFSMState == dataflowfsm.OperationalStateStopped
+
+	writeHasConfig := len(p.specConfig.Config.DataflowComponentWriteServiceConfig.BenthosConfig.Output) > 0
+	writeEffectivelyStopped := writeStopped || !writeHasConfig
+
+	if connStopped && readStopped && writeEffectivelyStopped {
 		return true, ""
 	}
 
-	connState := p.ObservedState.ServiceInfo.ConnectionFSMState
-	if connState == "" {
-		connState = "not existing"
-	}
-
-	dfcState := p.ObservedState.ServiceInfo.DataflowComponentReadFSMState
-	if dfcState == "" {
-		dfcState = "not existing"
-	}
-
-	return false, fmt.Sprintf("connection is %s, flow is %s", connState, dfcState)
+	return false, fmt.Sprintf("connection is %s, read flow is %s, write flow is %s",
+		stateOrNotExisting(p.ObservedState.ServiceInfo.ConnectionFSMState),
+		stateOrNotExisting(p.ObservedState.ServiceInfo.DataflowComponentReadFSMState),
+		stateOrNotExisting(p.ObservedState.ServiceInfo.DataflowComponentWriteFSMState))
 }
 
 // IsDFCExisting checks whether either the read or write DFC is existing

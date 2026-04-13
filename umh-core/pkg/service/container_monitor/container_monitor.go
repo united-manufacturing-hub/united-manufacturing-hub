@@ -263,39 +263,41 @@ func (c *ContainerMonitorService) getCPUMetrics(ctx context.Context) (*models.CP
 
 	// Get cgroup info for throttling and limits
 	cgroupInfo, cgroupErr := c.getCgroupCPUInfo(ctx)
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
 
 	// Default to Active health
 	category := models.Active
 	message := "CPU utilization normal"
 
-	// Compute windowed throttle ratio (replaces cumulative ratio from cgroup)
-	var windowedRatio float64
-	var isThrottled bool
+	// Compute windowed throttle ratio; skip entirely on cgroup read failure to preserve wasThrottled state
+	var (
+		windowedRatio float64
+		isThrottled   bool
+	)
 	if cgroupErr == nil && cgroupInfo != nil {
 		windowedRatio, isThrottled = c.updateThrottleWindow(cgroupInfo)
-		// Override the cumulative values with windowed values
 		cgroupInfo.ThrottleRatio = windowedRatio
 		cgroupInfo.IsThrottled = isThrottled
+
+		if isThrottled && !c.wasThrottled {
+			c.logger.Warnf("CPU throttling detected: %.1f%% of periods throttled", cgroupInfo.ThrottleRatio*100)
+		}
+		c.wasThrottled = isThrottled
 	}
 
-	if usagePercent >= constants.CPUHighThresholdPercent || isThrottled {
+	switch {
+	case usagePercent >= constants.CPUHighThresholdPercent || isThrottled:
 		category = models.Degraded
-
 		if isThrottled && cgroupInfo != nil {
 			message = fmt.Sprintf("CPU throttled (%.1f%% periods throttled)", cgroupInfo.ThrottleRatio*100)
 		} else {
 			message = "CPU utilization critical"
 		}
-	} else if usagePercent >= constants.CPUMediumThresholdPercent {
-		// Warning level but not degraded
+	case usagePercent >= constants.CPUMediumThresholdPercent:
 		message = "CPU utilization warning"
 	}
-
-	// Log only on false→true transition to avoid flooding stdout
-	if isThrottled && !c.wasThrottled && cgroupInfo != nil {
-		c.logger.Warnf("CPU throttling detected: %.1f%% of periods throttled", cgroupInfo.ThrottleRatio*100)
-	}
-	c.wasThrottled = isThrottled
 
 	cpuStat := &models.CPU{
 		Health: &models.Health{
@@ -380,6 +382,9 @@ func (c *ContainerMonitorService) updateThrottleWindow(cgroupInfo *CPUCgroupInfo
 func (c *ContainerMonitorService) getRawCPUMetrics(ctx context.Context) (usageMCores float64, coreCount int, usagePercent float64, err error) {
 	// Try to get cgroup info first for accurate container limits
 	cgroupInfo, cgroupErr := c.getCgroupCPUInfo(ctx)
+	if ctx.Err() != nil {
+		return 0, 0, 0, ctx.Err()
+	}
 
 	// Get actual CPU usage
 	usagePercentages, err := cpu.PercentWithContext(ctx, 0, false)
@@ -427,6 +432,9 @@ func (c *ContainerMonitorService) getMemoryMetrics(ctx context.Context) (*models
 
 	// Try cgroup values: prefer container-aware limits over host values
 	cgroupInfo, cgroupErr := c.getCgroupMemoryInfo(ctx)
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
 	if cgroupErr == nil {
 		usedBytes = uint64(cgroupInfo.CurrentBytes)
 		if !cgroupInfo.Unlimited && cgroupInfo.LimitBytes > 0 {

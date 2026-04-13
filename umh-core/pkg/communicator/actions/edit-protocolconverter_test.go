@@ -232,7 +232,7 @@ var _ = Describe("EditProtocolConverter", func() {
 			Expect(err.Error()).To(ContainSubstring("failed to parse protocol converter payload"))
 		})
 
-		It("should default state to 'active' when not provided", func() {
+		It("should default DFC type to empty when no DFCs provided", func() {
 			payload := map[string]interface{}{
 				"name": pcName,
 				"connection": map[string]interface{}{
@@ -240,32 +240,36 @@ var _ = Describe("EditProtocolConverter", func() {
 					"port": 80,
 				},
 				"uuid": pcUUID.String(),
-				// No state field provided
 			}
 
 			err := action.Parse(payload)
 			Expect(err).NotTo(HaveOccurred())
 
-			// Verify that state defaults to "active"
-			Expect(action.GetState()).To(Equal("active"))
+			Expect(action.GetDFCType()).To(Equal("empty"))
 		})
 
-		It("should preserve explicit 'stopped' state", func() {
+		It("should preserve explicit 'stopped' state on read DFC", func() {
 			payload := map[string]interface{}{
 				"name": pcName,
 				"connection": map[string]interface{}{
 					"ip":   "wttr.in",
 					"port": 80,
 				},
-				"uuid":  pcUUID.String(),
-				"state": "stopped",
+				"uuid": pcUUID.String(),
+				"readDFC": map[string]interface{}{
+					"inputs": map[string]interface{}{
+						"data": "input:\n  http_client:\n    url: 'http://example.com'",
+						"type": "yaml",
+					},
+					"pipeline": map[string]interface{}{},
+					"state":    "stopped",
+				},
 			}
 
 			err := action.Parse(payload)
 			Expect(err).NotTo(HaveOccurred())
 
-			// Verify that state is preserved as "stopped"
-			Expect(action.GetState()).To(Equal("stopped"))
+			Expect(action.GetDFCType()).To(Equal("read"))
 		})
 	})
 
@@ -326,7 +330,7 @@ var _ = Describe("EditProtocolConverter", func() {
 
 			err = action.Validate()
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("invalid dataflow component configuration"))
+			Expect(err.Error()).To(ContainSubstring("invalid read DFC configuration"))
 		})
 	})
 
