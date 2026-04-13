@@ -73,6 +73,10 @@ func (a *PushAction) Execute(ctx context.Context, depsAny any) error {
 
 		metrics.SetGauge(depspkg.GaugePendingMessages, float64(pushDeps.PendingMessageCount()))
 
+		// Drain outbound into pending on transient/recoverable failure so the
+		// channel does not fill up across ticks while pending keeps failing
+		// (ENG-4741). Skipped when ctx is canceled — the messages survive in
+		// the channel until the next tick.
 		if err != nil || len(remaining) > 0 {
 			if ctx.Err() == nil {
 				a.drainChannelToPending(pushDeps, metrics)
@@ -82,7 +86,8 @@ func (a *PushAction) Execute(ctx context.Context, depsAny any) error {
 		}
 	}
 
-	// Phase 2: Drain and batch-push new messages
+	// Phase 2: Drain and batch-push new messages.
+	// Only reached when Phase 1 cleared all pending successfully.
 	outChan := pushDeps.GetOutboundChan()
 	if outChan == nil {
 		return errors.New("outbound channel is nil")
@@ -173,12 +178,15 @@ drainLoop:
 //  1. Context canceled (pre-push) → return remaining messages immediately.
 //  2. Push fails, context expired during push → return remaining with
 //     cancellation error.
-//  3. Recoverable by parent (auth failure, proxy block, etc.) → return
+//  3. Transient error (network, server, rate limit, channel full) → return
+//     remaining with nil error. The caller drains the outbound channel into
+//     pending so it does not fill up while the transport recovers (ENG-4741).
+//  4. Recoverable by parent (auth failure, proxy block, etc.) → return
 //     remaining messages with error so the parent triggers re-authentication
 //     or transport reset.
-//  4. Poison message (unrecoverable) → log SentryWarn, drop the message,
+//  5. Poison message (unrecoverable) → log SentryWarn, drop the message,
 //     continue to next.
-//  5. Success → record metrics, continue.
+//  6. Success → record metrics, continue.
 //
 // Returns (nil, nil) when all messages are sent successfully. Otherwise
 // returns the unsent tail of pending so the caller can buffer them for
@@ -206,6 +214,8 @@ func (a *PushAction) retryPending(ctx context.Context, t transport.Transport, pu
 			errType, retryAfter := httpTransport.ExtractErrorType(err)
 			pushDeps.RecordTypedError(errType, retryAfter)
 			metrics.IncrementCounter(httpTransport.CounterForErrorType(errType), 1)
+			metrics.IncrementCounter(depspkg.CounterPushOps, 1)
+			metrics.IncrementCounter(depspkg.CounterPushFailures, 1)
 
 			if ctx.Err() != nil {
 				return pending[i:], fmt.Errorf("context canceled during retry: %w", ctx.Err())
@@ -219,6 +229,10 @@ func (a *PushAction) retryPending(ctx context.Context, t transport.Transport, pu
 				return pending[i:], fmt.Errorf("pending retry failed (recoverable by parent): %w", err)
 			}
 
+			// Poison drop. Includes ErrorTypeUnknown — non-classifiable
+			// errors are dropped rather than retried indefinitely so a
+			// truly broken message cannot block the retry queue. Visible
+			// via SentryWarn + CounterMessagesDropped.
 			pushDeps.GetLogger().SentryWarn(depspkg.FeatureForWorker(pushDeps.GetWorkerType()), pushDeps.GetHierarchyPath(), "dropping_poison_message",
 				depspkg.String("errorType", errType.String()),
 				depspkg.Err(err),

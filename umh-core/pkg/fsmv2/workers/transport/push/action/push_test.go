@@ -17,6 +17,7 @@ package action_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -205,10 +206,10 @@ func (m *mockPushDeps) GetAuthenticatedUUID() string {
 
 var _ = Describe("PushAction", func() {
 	var (
-		act           *action.PushAction
-		mockDeps      *mockPushDeps
-		mockTrans     *mockTransport
-		outboundBi    chan *transport.UMHMessage
+		act        *action.PushAction
+		mockDeps   *mockPushDeps
+		mockTrans  *mockTransport
+		outboundBi chan *transport.UMHMessage
 	)
 
 	BeforeEach(func() {
@@ -506,6 +507,13 @@ var _ = Describe("PushAction", func() {
 
 			Expect(outboundBi).To(HaveLen(0), "channel must be drained even when retry has transient error")
 			Expect(mockDeps.PendingMessageCount()).To(Equal(4), "remaining pending (2) + drained channel (2)")
+
+			// FIFO contract: failed pending (older) must come before drained
+			// channel messages (newer) so the next tick retries them in order.
+			Expect(mockDeps.pendingMessages[0].Content).To(Equal("pending2"))
+			Expect(mockDeps.pendingMessages[1].Content).To(Equal("pending3"))
+			Expect(mockDeps.pendingMessages[2].Content).To(Equal("channel-msg1"))
+			Expect(mockDeps.pendingMessages[3].Content).To(Equal("channel-msg2"))
 		})
 
 		It("should drain channel to pending when retry hits parent-recoverable error", func() {
@@ -544,10 +552,10 @@ var _ = Describe("PushAction", func() {
 			outboundBi <- &transport.UMHMessage{Content: "channel-msg2"}
 
 			var phase2Msgs []*transport.UMHMessage
-			callCount := 0
 			mockTrans.pushFunc = func(_ context.Context, _ string, msgs []*transport.UMHMessage) error {
-				callCount++
-				if callCount > 2 {
+				// Phase 2 is the only call that batches > 1 message
+				// (Phase 1 retries pending one-at-a-time).
+				if len(msgs) > 1 {
 					phase2Msgs = msgs
 				}
 				return nil
@@ -640,13 +648,81 @@ var _ = Describe("PushAction", func() {
 				}
 			}
 
-			initialTypedErrors := len(mockDeps.recordTypedErrorCalls)
-			initialSuccesses := mockDeps.recordSuccessCalls
-
 			_ = act.Execute(context.Background(), mockDeps)
 
-			Expect(mockDeps.recordTypedErrorCalls).To(HaveLen(initialTypedErrors+1), "only 1 RecordTypedError from the retry push, none from channel drain")
-			Expect(mockDeps.recordSuccessCalls).To(Equal(initialSuccesses), "no RecordSuccess from channel drain")
+			Expect(mockDeps.recordTypedErrorCalls).To(HaveLen(1), "only 1 RecordTypedError from the retry push, none from channel drain")
+			Expect(mockDeps.recordSuccessCalls).To(Equal(0), "no RecordSuccess from channel drain")
+		})
+
+		It("should prevent channel overflow across multiple ticks of sustained pending failure", func() {
+			// Regression test for ENG-4741. Without drainChannelToPending,
+			// Phase 1's early return left the outbound channel undrained
+			// every tick. After ~50 ticks (channel cap 100, ~2 msgs/tick)
+			// the channel filled, subscribers dropped messages, and the
+			// instance appeared offline in Management Console.
+			//
+			// With the fix, drainChannelToPending rescues the channel each
+			// tick. This test guards against a future refactor that puts
+			// the drain behind a first-tick-only condition.
+			mockDeps.pendingMessages = []*transport.UMHMessage{
+				{Content: "initial-pending"},
+			}
+
+			mockTrans.pushFunc = func(_ context.Context, _ string, _ []*transport.UMHMessage) error {
+				return &httpTransport.TransportError{
+					Type:    httpTransport.ErrorTypeNetwork,
+					Message: "connection refused",
+				}
+			}
+
+			const ticks = 10
+			const messagesPerTick = 5
+
+			for tick := 0; tick < ticks; tick++ {
+				for j := 0; j < messagesPerTick; j++ {
+					outboundBi <- &transport.UMHMessage{Content: fmt.Sprintf("tick%d-msg%d", tick, j)}
+				}
+
+				err := act.Execute(context.Background(), mockDeps)
+				Expect(err).NotTo(HaveOccurred(), "transient error should be suppressed at tick %d", tick)
+
+				Expect(outboundBi).To(HaveLen(0), "channel must be drained on tick %d (would overflow without ENG-4741 fix)", tick)
+			}
+
+			// Pending grew by messagesPerTick per tick (drain rescued the
+			// channel) plus the original failed retry that keeps coming back.
+			Expect(mockDeps.PendingMessageCount()).To(BeNumerically(">=", ticks*messagesPerTick),
+				"pending should grow by drained channel messages each tick")
+		})
+
+		It("should increment push ops metrics on pending retry failure", func() {
+			// Verifies that retryPending failure increments CounterPushOps
+			// and CounterPushFailures, matching Phase 2 metric semantics.
+			mockDeps.pendingMessages = []*transport.UMHMessage{
+				{Content: "msg1"},
+				{Content: "msg2"},
+			}
+
+			callCount := 0
+			mockTrans.pushFunc = func(_ context.Context, _ string, _ []*transport.UMHMessage) error {
+				callCount++
+				if callCount == 2 {
+					return &httpTransport.TransportError{
+						Type:    httpTransport.ErrorTypeNetwork,
+						Message: "connection refused",
+					}
+				}
+				return nil
+			}
+
+			err := act.Execute(context.Background(), mockDeps)
+			Expect(err).NotTo(HaveOccurred())
+
+			drained := mockDeps.metricsRecorder.Drain()
+			Expect(drained.Counters[string(deps.CounterPushOps)]).To(Equal(int64(2)), "1 success + 1 failure both count as ops")
+			Expect(drained.Counters[string(deps.CounterPushSuccess)]).To(Equal(int64(1)))
+			Expect(drained.Counters[string(deps.CounterPushFailures)]).To(Equal(int64(1)))
+			Expect(drained.Counters[string(deps.CounterNetworkErrorsTotal)]).To(Equal(int64(1)))
 		})
 	})
 
