@@ -210,6 +210,7 @@ func (a *PushAction) retryPending(ctx context.Context, t transport.Transport, pu
 		default:
 		}
 
+		pushStart := time.Now()
 		if err := t.Push(ctx, jwtToken, []*transport.UMHMessage{msg}); err != nil {
 			errType, retryAfter := httpTransport.ExtractErrorType(err)
 			pushDeps.RecordTypedError(errType, retryAfter)
@@ -229,10 +230,18 @@ func (a *PushAction) retryPending(ctx context.Context, t transport.Transport, pu
 				return pending[i:], fmt.Errorf("pending retry failed (recoverable by parent): %w", err)
 			}
 
-			// Poison drop. Includes ErrorTypeUnknown — non-classifiable
-			// errors are dropped rather than retried indefinitely so a
-			// truly broken message cannot block the retry queue. Visible
-			// via SentryWarn + CounterMessagesDropped.
+			// Architecture decision: drop poison messages instead of retrying.
+			//
+			// ErrorTypeUnknown (unclassifiable) and ErrorTypeInstanceDeleted
+			// (terminal) reach this branch. There is no per-message retry
+			// counter in the system — preserving these would retry every tick
+			// until transport reset (5 consecutive errors) wipes the entire
+			// pending buffer, losing all messages instead of just the bad one.
+			//
+			// If ExtractErrorType misses a new infrastructure error, the fix
+			// is adding the type to IsTransient() or isRecoverableByParent(),
+			// not retrying unknowns here. SentryWarn fires on every drop so
+			// a spike is visible in Sentry.
 			pushDeps.GetLogger().SentryWarn(depspkg.FeatureForWorker(pushDeps.GetWorkerType()), pushDeps.GetHierarchyPath(), "dropping_poison_message",
 				depspkg.String("errorType", errType.String()),
 				depspkg.Err(err),
@@ -242,10 +251,13 @@ func (a *PushAction) retryPending(ctx context.Context, t transport.Transport, pu
 			continue
 		}
 
+		pushLatency := time.Since(pushStart)
 		pushDeps.RecordSuccess()
 		metrics.IncrementCounter(depspkg.CounterPushOps, 1)
 		metrics.IncrementCounter(depspkg.CounterPushSuccess, 1)
 		metrics.IncrementCounter(depspkg.CounterMessagesPushed, 1)
+		metrics.IncrementCounter(depspkg.CounterBytesPushed, int64(len(msg.InstanceUUID)+len(msg.Content)+len(msg.Email)))
+		metrics.SetGauge(depspkg.GaugeLastPushLatencyMs, float64(pushLatency.Milliseconds()))
 	}
 
 	return nil, nil
