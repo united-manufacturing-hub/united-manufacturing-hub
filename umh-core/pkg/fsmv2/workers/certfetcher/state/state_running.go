@@ -38,31 +38,31 @@ type RunningState struct {
 
 // Next checks if a fetch is due and emits FetchCertsAction if so.
 func (s *RunningState) Next(snapAny any) fsmv2.NextResult[any, any] {
-	snap := helpers.ConvertSnapshot[snapshot.CertFetcherObservedState, *snapshot.CertFetcherDesiredState](snapAny)
+	snap := fsmv2.ConvertWorkerSnapshot[snapshot.CertFetcherConfig, snapshot.CertFetcherStatus](snapAny)
 
-	if snap.Desired.IsShutdownRequested() {
+	if snap.IsShutdownRequested {
 		return fsmv2.Result[any, any](&StoppedState{}, fsmv2.SignalNone, nil, "shutdown requested")
 	}
 
-	if !snap.Observed.HasSubHandler {
+	if !snap.Status.HasSubHandler {
 		return fsmv2.Result[any, any](&StoppedState{}, fsmv2.SignalNone, nil, "sub handler lost")
 	}
 
-	if snap.Observed.ConsecutiveErrors >= DegradedThreshold {
+	if snap.Status.ConsecutiveErrors >= DegradedThreshold {
 		return fsmv2.Result[any, any](&DegradedState{}, fsmv2.SignalNone, nil,
-			fmt.Sprintf("degrading: %d consecutive errors", snap.Observed.ConsecutiveErrors))
+			fmt.Sprintf("degrading: %d consecutive errors", snap.Status.ConsecutiveErrors))
 	}
 
-	timeSinceLastFetch := snap.Observed.CollectedAt.Sub(snap.Observed.LastFetchAt)
-	if timeSinceLastFetch >= FetchInterval || (snap.Observed.LastFetchAt.IsZero() && timeSinceLastFetch >= 10*time.Second) {
-		return fsmv2.Result[any, any](s, fsmv2.SignalNone, &action.FetchCertsAction{},
+	timeSinceLastFetch := snap.CollectedAt.Sub(snap.Status.LastFetchAt)
+	if timeSinceLastFetch >= FetchInterval || (snap.Status.LastFetchAt.IsZero() && timeSinceLastFetch >= 10*time.Second) {
+		return fsmv2.Result[any, any](s, fsmv2.SignalNone, fsmv2.WrapAction[snapshot.CertFetcherDeps](&action.FetchCertsAction{}),
 			fmt.Sprintf("fetching: %d subscribers, last fetch %s ago",
-				snap.Observed.SubscriberCount, timeSinceLastFetch.Round(time.Second)))
+				snap.Status.SubscriberCount, timeSinceLastFetch.Round(time.Second)))
 	}
 
 	return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil,
 		fmt.Sprintf("idle: next fetch in %s, %d subscribers",
-			(FetchInterval-timeSinceLastFetch).Round(time.Second), snap.Observed.SubscriberCount))
+			(FetchInterval-timeSinceLastFetch).Round(time.Second), snap.Status.SubscriberCount))
 }
 
 func (s *RunningState) String() string {

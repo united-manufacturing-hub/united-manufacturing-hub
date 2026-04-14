@@ -20,6 +20,12 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/certfetcher/snapshot"
 )
 
+const workerType = "certfetcher"
+
+func init() {
+	fsmv2.RegisterInitialState(workerType, &StoppedState{})
+}
+
 // StoppedState is the initial state of the cert fetcher worker.
 type StoppedState struct {
 	helpers.StoppedBase
@@ -27,13 +33,13 @@ type StoppedState struct {
 
 // Next transitions to Running when SubHandler is available.
 func (s *StoppedState) Next(snapAny any) fsmv2.NextResult[any, any] {
-	snap := helpers.ConvertSnapshot[snapshot.CertFetcherObservedState, *snapshot.CertFetcherDesiredState](snapAny)
+	snap := fsmv2.ConvertWorkerSnapshot[snapshot.CertFetcherConfig, snapshot.CertFetcherStatus](snapAny)
 
-	if snap.Desired.IsShutdownRequested() {
+	if snap.IsShutdownRequested {
 		return fsmv2.Result[any, any](s, fsmv2.SignalNeedsRemoval, nil, "shutdown requested")
 	}
 
-	if snap.Observed.HasSubHandler {
+	if snap.Status.HasSubHandler {
 		return fsmv2.Result[any, any](&RunningState{}, fsmv2.SignalNone, nil, "sub handler available, starting")
 	}
 

@@ -40,19 +40,18 @@ type CertFetcherDependencies struct {
 }
 
 // NewCertFetcherDependencies creates dependencies for the cert fetcher worker.
+// The baseDeps parameter must be the pointer returned by WorkerBase.InitBase.
 func NewCertFetcherDependencies(
 	subHandler gatekeeper.SubHandler,
 	certHandler certificatehandler.Handler,
-	identity deps.Identity,
-	logger deps.FSMLogger,
-	stateReader deps.StateReader,
+	baseDeps *deps.BaseDependencies,
 ) (*CertFetcherDependencies, error) {
 	if certHandler == nil {
 		return nil, errors.New("certHandler must not be nil")
 	}
 
 	return &CertFetcherDependencies{
-		BaseDependencies: deps.NewBaseDependencies(logger, stateReader, identity),
+		BaseDependencies: baseDeps,
 		subHandler:       subHandler,
 		certHandler:      certHandler,
 	}, nil
@@ -102,7 +101,7 @@ func (d *CertFetcherDependencies) FetchAllCerts(ctx context.Context) error {
 		}
 		err := d.certHandler.FetchAndStore(ctx, email)
 		if err != nil {
-			d.GetLogger().SentryError(deps.FeatureForWorker(d.GetWorkerType()), d.GetHierarchyPath(), err, "cert_fetch_failed",
+			d.GetLogger().SentryError(deps.FeatureGatekeeper, d.GetHierarchyPath(), err, "cert_fetch_failed",
 				deps.String("email", email))
 			lastErr = err
 		}

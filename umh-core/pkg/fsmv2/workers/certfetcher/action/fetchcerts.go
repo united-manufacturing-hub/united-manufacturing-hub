@@ -17,7 +17,6 @@ package action
 
 import (
 	"context"
-	"errors"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/certfetcher/snapshot"
 )
@@ -26,16 +25,11 @@ import (
 type FetchCertsAction struct{}
 
 // Execute fetches certificates for all active subscribers.
-func (a *FetchCertsAction) Execute(ctx context.Context, depsAny any) error {
+func (a *FetchCertsAction) Execute(ctx context.Context, d snapshot.CertFetcherDeps) error {
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
 	default:
-	}
-
-	d, ok := depsAny.(snapshot.CertFetcherDeps)
-	if !ok {
-		return errors.New("invalid dependencies type: expected CertFetcherDeps")
 	}
 
 	return d.FetchAllCerts(ctx)

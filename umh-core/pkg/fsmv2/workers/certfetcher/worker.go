@@ -20,19 +20,18 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"time"
+	"reflect"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/certfetcher/snapshot"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/certfetcher/state"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/gatekeeper"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/gatekeeper/certificatehandler"
+
+	// Blank import to trigger state init() registration.
+	_ "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/certfetcher/state"
 )
 
 // lazySubHandler resolves the SubHandler lazily via a provider callback.
@@ -57,9 +56,8 @@ var _ fsmv2.Worker = (*CertFetcherWorker)(nil)
 
 // CertFetcherWorker fetches certificates for active subscribers.
 type CertFetcherWorker struct {
-	*helpers.BaseWorker[*CertFetcherDependencies]
-	logger   deps.FSMLogger
-	identity deps.Identity
+	fsmv2.WorkerBase[CertFetcherConfig, CertFetcherStatus]
+	deps *CertFetcherDependencies
 }
 
 // NewCertFetcherWorker creates a new cert fetcher worker.
@@ -75,26 +73,31 @@ func NewCertFetcherWorker(
 	}
 
 	if identity.WorkerType == "" {
-		workerType, err := storage.DeriveWorkerType[snapshot.CertFetcherObservedState]()
-		if err != nil {
-			return nil, fmt.Errorf("failed to derive worker type: %w", err)
-		}
 		identity.WorkerType = workerType
 	}
 
-	d, err := NewCertFetcherDependencies(subHandler, certHandler, identity, logger, stateReader)
+	w := &CertFetcherWorker{}
+	bd := w.InitBase(identity, logger, stateReader)
+
+	d, err := NewCertFetcherDependencies(subHandler, certHandler, bd)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create dependencies: %w", err)
 	}
 
-	return &CertFetcherWorker{
-		BaseWorker: helpers.NewBaseWorker(d),
-		identity:   identity,
-		logger:     logger,
-	}, nil
+	w.deps = d
+
+	return w, nil
+}
+
+// GetDependenciesAny returns the custom CertFetcherDependencies.
+// Overrides WorkerBase's default which returns *BaseDependencies.
+func (w *CertFetcherWorker) GetDependenciesAny() any {
+	return w.deps
 }
 
 // CollectObservedState snapshots the cert fetcher state.
+// Returns NewObservation -- the collector handles CollectedAt, framework metrics,
+// action history, and metric accumulation automatically after COS returns.
 func (w *CertFetcherWorker) CollectObservedState(ctx context.Context, _ fsmv2.DesiredState) (fsmv2.ObservedState, error) {
 	select {
 	case <-ctx.Done():
@@ -102,7 +105,7 @@ func (w *CertFetcherWorker) CollectObservedState(ctx context.Context, _ fsmv2.De
 	default:
 	}
 
-	d := w.GetDependencies()
+	d := w.deps
 	emails := d.Subscribers()
 
 	cachedCount := 0
@@ -112,54 +115,20 @@ func (w *CertFetcherWorker) CollectObservedState(ctx context.Context, _ fsmv2.De
 		}
 	}
 
-	observed := snapshot.CertFetcherObservedState{
-		CollectedAt:       time.Now(),
+	return fsmv2.NewObservation(CertFetcherStatus{
 		ConsecutiveErrors: d.ConsecutiveErrors(),
 		SubscriberCount:   len(emails),
 		CachedCertCount:   cachedCount,
 		LastFetchAt:       d.LastFetchAt(),
 		HasSubHandler:     d.HasSubHandler(),
-	}
-
-	if fm := d.GetFrameworkState(); fm != nil {
-		observed.Metrics.Framework = *fm
-	}
-
-	observed.LastActionResults = d.GetActionHistory()
-
-	return observed, nil
+	}), nil
 }
 
-// DeriveDesiredState returns running state (standalone worker, always wants to run).
-func (w *CertFetcherWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, error) {
-	if spec == nil {
-		return &snapshot.CertFetcherDesiredState{
-			BaseDesiredState: config.BaseDesiredState{State: config.DesiredStateRunning},
-		}, nil
-	}
-
-	userSpec, ok := spec.(config.UserSpec)
-	if !ok {
-		return nil, fmt.Errorf("invalid spec type: expected UserSpec, got %T", spec)
-	}
-
-	leafDesired, err := config.DeriveLeafState[config.BaseUserSpec](userSpec)
-	if err != nil {
-		return nil, err
-	}
-
-	return &snapshot.CertFetcherDesiredState{
-		BaseDesiredState: leafDesired.BaseDesiredState,
-	}, nil
-}
-
-// GetInitialState returns the stopped state.
-func (w *CertFetcherWorker) GetInitialState() fsmv2.State[any, any] {
-	return &state.StoppedState{}
-}
+const workerType = "certfetcher"
 
 func init() {
-	if err := factory.RegisterWorkerType[snapshot.CertFetcherObservedState, *snapshot.CertFetcherDesiredState](
+	if err := factory.RegisterWorkerAndSupervisorFactoryByType(
+		workerType,
 		func(id deps.Identity, logger deps.FSMLogger, stateReader deps.StateReader, extraDeps map[string]any) fsmv2.Worker {
 			certHandlerRaw, ok := extraDeps["certHandler"]
 			if !ok || certHandlerRaw == nil {
@@ -188,10 +157,18 @@ func init() {
 			return worker
 		},
 		func(cfg interface{}) interface{} {
-			return supervisor.NewSupervisor[snapshot.CertFetcherObservedState, *snapshot.CertFetcherDesiredState](
+			return supervisor.NewSupervisor[fsmv2.Observation[CertFetcherStatus], *fsmv2.WrappedDesiredState[CertFetcherConfig]](
 				cfg.(supervisor.Config))
 		},
 	); err != nil {
 		panic(fmt.Sprintf("failed to register certfetcher worker: %v", err))
+	}
+
+	// Register with CSE TypeRegistry for storage.
+	observedType := reflect.TypeOf(fsmv2.Observation[CertFetcherStatus]{})
+	desiredType := reflect.TypeOf(fsmv2.WrappedDesiredState[CertFetcherConfig]{})
+
+	if err := storage.GlobalRegistry().RegisterWorkerType(workerType, observedType, desiredType); err != nil {
+		panic(fmt.Sprintf("failed to register certfetcher CSE types: %v", err))
 	}
 }

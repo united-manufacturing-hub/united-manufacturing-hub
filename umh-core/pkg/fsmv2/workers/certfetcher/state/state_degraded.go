@@ -34,26 +34,26 @@ type DegradedState struct {
 
 // Next recovers to Running when errors clear, otherwise retries with backoff.
 func (s *DegradedState) Next(snapAny any) fsmv2.NextResult[any, any] {
-	snap := helpers.ConvertSnapshot[snapshot.CertFetcherObservedState, *snapshot.CertFetcherDesiredState](snapAny)
+	snap := fsmv2.ConvertWorkerSnapshot[snapshot.CertFetcherConfig, snapshot.CertFetcherStatus](snapAny)
 
-	if snap.Desired.IsShutdownRequested() {
+	if snap.IsShutdownRequested {
 		return fsmv2.Result[any, any](&StoppedState{}, fsmv2.SignalNone, nil, "shutdown requested")
 	}
 
-	if snap.Observed.ConsecutiveErrors == 0 {
+	if snap.Status.ConsecutiveErrors == 0 {
 		return fsmv2.Result[any, any](&RunningState{}, fsmv2.SignalNone, nil, "errors cleared, recovering")
 	}
 
-	timeSinceLastFetch := snap.Observed.CollectedAt.Sub(snap.Observed.LastFetchAt)
+	timeSinceLastFetch := snap.CollectedAt.Sub(snap.Status.LastFetchAt)
 	if timeSinceLastFetch >= DegradedBackoff {
-		return fsmv2.Result[any, any](s, fsmv2.SignalNone, &action.FetchCertsAction{},
+		return fsmv2.Result[any, any](s, fsmv2.SignalNone, fsmv2.WrapAction[snapshot.CertFetcherDeps](&action.FetchCertsAction{}),
 			fmt.Sprintf("degraded retry: %d errors, last fetch %s ago",
-				snap.Observed.ConsecutiveErrors, timeSinceLastFetch.Round(time.Second)))
+				snap.Status.ConsecutiveErrors, timeSinceLastFetch.Round(time.Second)))
 	}
 
 	return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil,
 		fmt.Sprintf("degraded backoff: %d errors, retry in %s",
-			snap.Observed.ConsecutiveErrors, (DegradedBackoff-timeSinceLastFetch).Round(time.Second)))
+			snap.Status.ConsecutiveErrors, (DegradedBackoff-timeSinceLastFetch).Round(time.Second)))
 }
 
 func (s *DegradedState) String() string {
