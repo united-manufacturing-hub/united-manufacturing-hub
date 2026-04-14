@@ -1286,6 +1286,115 @@ agent:
 			})
 		})
 
+		Describe("multi-write backup sequence (Daniel H scenario)", func() {
+			// Reproduces the bug found during config backup testing with Daniel Helmersson
+			// on 2026-03-05: after startup writes a backup, the first MC-pushed config change
+			// creates no new backup because dedup compares pre-write config (unchanged) against
+			// the startup backup and skips.
+			//
+			// Sequence:
+			//   1. Startup: writeConfig(A) → backup of A created
+			//   2. MC change: writeConfig(B) → createConfigBackup reads A (pre-write),
+			//      dedup sees A == startup backup A → SKIPS. Then writes B to config.yaml.
+			//   3. Result: config.yaml = B, only backup = A. No backup of B exists.
+
+			It("should create a backup of the new config after each write", func() {
+				// Stateful mini-filesystem: tracks actual file contents across calls
+				files := map[string][]byte{}
+				backupFiles := []string{} // tracks backup filenames in order
+
+				initialConfig := []byte("agent:\n  metricsPort: 8080\n  releaseChannel: stable\n  location:\n    0: test\n")
+				files[DefaultConfigPath] = initialConfig
+
+				mockFS.WithFileExistsFunc(func(ctx context.Context, path string) (bool, error) {
+					_, ok := files[path]
+					return ok, nil
+				})
+
+				mockFS.WithReadFileFunc(func(ctx context.Context, path string) ([]byte, error) {
+					if data, ok := files[path]; ok {
+						return data, nil
+					}
+					return nil, fmt.Errorf("file not found: %s", path)
+				})
+
+				mockFS.WithWriteFileFunc(func(ctx context.Context, path string, data []byte, perm os.FileMode) error {
+					captured := make([]byte, len(data))
+					copy(captured, data)
+					files[path] = captured
+					if strings.HasPrefix(path, constants.ConfigBackupDir+"/") {
+						backupFiles = append(backupFiles, path)
+					}
+					return nil
+				})
+
+				mockFS.WithReadDirFunc(func(ctx context.Context, path string) ([]os.DirEntry, error) {
+					if path != constants.ConfigBackupDir {
+						return nil, nil
+					}
+					var entries []os.DirEntry
+					for _, name := range backupFiles {
+						entries = append(entries, newMockDirEntry(filepath.Base(name), false))
+					}
+					return entries, nil
+				})
+
+				mockFS.WithEnsureDirectoryFunc(func(ctx context.Context, path string) error {
+					return nil
+				})
+
+				mockFS.WithStatFunc(func(ctx context.Context, path string) (os.FileInfo, error) {
+					return mockFS.NewMockFileInfo(filepath.Base(path), 100, 0644, time.Now(), false), nil
+				})
+
+				mockFS.WithRemoveFunc(func(ctx context.Context, path string) error {
+					delete(files, path)
+					return nil
+				})
+
+				// Step 1: Startup writes config (same content, applies env overrides).
+				// writeConfig calls createConfigBackup BEFORE writing.
+				startupConfig := FullConfig{}
+				startupConfig.Agent.MetricsPort = 8080
+				startupConfig.Agent.Location = map[int]string{0: "test"}
+				startupConfig.Agent.ReleaseChannel = ReleaseChannelStable
+
+				err := configManager.writeConfig(ctx, startupConfig)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(backupFiles).To(HaveLen(1), "startup should create one backup")
+
+				startupBackupContent := files[backupFiles[0]]
+				Expect(startupBackupContent).To(Equal(initialConfig),
+					"startup backup should contain the initial config")
+
+				// Step 2: MC pushes a config change (different content).
+				// This is where Daniel changed timeBetweenRequests from 300→303.
+				mcConfig := FullConfig{}
+				mcConfig.Agent.MetricsPort = 9090 // changed value
+				mcConfig.Agent.Location = map[int]string{0: "test"}
+				mcConfig.Agent.ReleaseChannel = ReleaseChannelStable
+
+				err = configManager.writeConfig(ctx, mcConfig)
+				Expect(err).NotTo(HaveOccurred())
+
+				// THE BUG: with current code, backupFiles still has length 1 because
+				// createConfigBackup read config.yaml (still = initial content at pre-write time),
+				// compared it to the startup backup (same content), and skipped.
+				//
+				// EXPECTED: after writing mcConfig, there should be a backup containing it.
+				// Find any backup that contains the new config's metricsPort: 9090.
+				var foundNewBackup bool
+				for _, path := range backupFiles {
+					if strings.Contains(string(files[path]), "9090") {
+						foundNewBackup = true
+						break
+					}
+				}
+				Expect(foundNewBackup).To(BeTrue(),
+					"after MC config change, a backup containing the new config (metricsPort: 9090) should exist")
+			})
+		})
+
 		Describe("getLatestBackupContent", func() {
 			Context("when backup directory is empty", func() {
 				BeforeEach(func() {
