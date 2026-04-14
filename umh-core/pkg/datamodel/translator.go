@@ -209,9 +209,9 @@ func (t *Translator) extractVirtualPaths(
 			continue
 		}
 
-		// If this field has _inline, synthesize an anonymous payload shape
+		// If this field has _relational, synthesize an anonymous payload shape
 		if field.Relational != nil {
-			syntheticName := "__inline_" + fieldPath + "__"
+			syntheticName := "__relational_" + fieldPath + "__"
 			if pathsByShape[syntheticName] == nil {
 				pathsByShape[syntheticName] = make([]string, 0, 4)
 			}
@@ -290,9 +290,9 @@ func (t *Translator) extractVirtualPathsWithReferences(
 			continue
 		}
 
-		// Handle _inline fields (inline relational data)
+		// Handle _relational fields (inline relational data)
 		if field.Relational != nil {
-			syntheticName := "__inline_" + fieldPath + "__"
+			syntheticName := "__relational_" + fieldPath + "__"
 			if pathsByShape[syntheticName] == nil {
 				pathsByShape[syntheticName] = make([]string, 0, 4)
 			}

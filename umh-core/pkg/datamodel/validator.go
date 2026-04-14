@@ -347,25 +347,25 @@ func (v *Validator) validateFieldCombinations(field config.Field, path string, e
 		})
 	}
 
-	// _inline cannot coexist with _payloadshape or _refModel
+	// _relational cannot coexist with _payloadshape or _refModel
 	if hasRelational && hasPayloadShape {
 		*errors = append(*errors, ValidationError{
 			Path:    path,
-			Message: "field cannot have both _inline and _payloadshape",
+			Message: "field cannot have both _relational and _payloadshape",
 		})
 	}
 
 	if hasRelational && hasRefModel {
 		*errors = append(*errors, ValidationError{
 			Path:    path,
-			Message: "field cannot have both _inline and _refModel",
+			Message: "field cannot have both _relational and _refModel",
 		})
 	}
 
 	if hasRelational && hasSubfields {
 		*errors = append(*errors, ValidationError{
 			Path:    path,
-			Message: "field with _inline cannot have subfields",
+			Message: "field with _relational cannot have subfields",
 		})
 	}
 }
@@ -398,7 +398,7 @@ func (v *Validator) validateLeafNode(field config.Field, path string, errors *[]
 		if len(field.Relational.Fields) == 0 {
 			*errors = append(*errors, ValidationError{
 				Path:    path,
-				Message: "_inline must have at least one field",
+				Message: "_relational must have at least one field",
 			})
 		}
 
@@ -408,7 +408,7 @@ func (v *Validator) validateLeafNode(field config.Field, path string, errors *[]
 	if !hasPayloadShape && !hasRefModel && !hasRelational {
 		*errors = append(*errors, ValidationError{
 			Path:    path,
-			Message: "leaf nodes must contain _payloadshape, _inline, or _refModel",
+			Message: "leaf nodes must contain _payloadshape, _relational, or _refModel",
 		})
 	}
 }
