@@ -648,9 +648,11 @@ var _ = Describe("PushAction", func() {
 				}
 			}
 
-			_ = act.Execute(context.Background(), mockDeps)
+			err := act.Execute(context.Background(), mockDeps)
+			Expect(err).NotTo(HaveOccurred())
 
 			Expect(mockDeps.recordTypedErrorCalls).To(HaveLen(1), "only 1 RecordTypedError from the retry push, none from channel drain")
+			Expect(mockDeps.recordErrorCalls).To(Equal(0), "no RecordError from channel drain")
 			Expect(mockDeps.recordSuccessCalls).To(Equal(0), "no RecordSuccess from channel drain")
 		})
 

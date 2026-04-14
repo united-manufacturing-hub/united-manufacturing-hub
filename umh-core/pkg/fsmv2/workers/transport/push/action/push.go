@@ -212,11 +212,13 @@ func (a *PushAction) retryPending(ctx context.Context, t transport.Transport, pu
 
 		pushStart := time.Now()
 		if err := t.Push(ctx, jwtToken, []*transport.UMHMessage{msg}); err != nil {
+			pushLatency := time.Since(pushStart)
 			errType, retryAfter := httpTransport.ExtractErrorType(err)
 			pushDeps.RecordTypedError(errType, retryAfter)
 			metrics.IncrementCounter(httpTransport.CounterForErrorType(errType), 1)
 			metrics.IncrementCounter(depspkg.CounterPushOps, 1)
 			metrics.IncrementCounter(depspkg.CounterPushFailures, 1)
+			metrics.SetGauge(depspkg.GaugeLastPushLatencyMs, float64(pushLatency.Milliseconds()))
 
 			if ctx.Err() != nil {
 				return pending[i:], fmt.Errorf("context canceled during retry: %w", ctx.Err())
