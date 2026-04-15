@@ -1352,8 +1352,9 @@ agent:
 					return nil
 				})
 
-				// Step 1: Startup writes config (same content, applies env overrides).
-				// writeConfig calls createConfigBackup BEFORE writing.
+				// Step 1: Startup writes config. Post-fix, createConfigBackup runs
+				// AFTER WriteFile, so the backup captures the newly written (marshaled)
+				// content, not the pre-write file content.
 				startupConfig := FullConfig{}
 				startupConfig.Agent.MetricsPort = 8080
 				startupConfig.Agent.Location = map[int]string{0: "test"}
@@ -1364,8 +1365,8 @@ agent:
 				Expect(backupFiles).To(HaveLen(1), "startup should create one backup")
 
 				startupBackupContent := files[backupFiles[0]]
-				Expect(startupBackupContent).To(Equal(initialConfig),
-					"startup backup should contain the initial config")
+				Expect(string(startupBackupContent)).To(ContainSubstring("metricsPort: 8080"),
+					"startup backup should contain the startup metricsPort value")
 
 				// Step 2: MC pushes a config change (different content).
 				// This is where Daniel changed timeBetweenRequests from 300→303.
@@ -1377,12 +1378,9 @@ agent:
 				err = configManager.writeConfig(ctx, mcConfig)
 				Expect(err).NotTo(HaveOccurred())
 
-				// THE BUG: with current code, backupFiles still has length 1 because
-				// createConfigBackup read config.yaml (still = initial content at pre-write time),
-				// compared it to the startup backup (same content), and skipped.
-				//
-				// EXPECTED: after writing mcConfig, there should be a backup containing it.
-				// Find any backup that contains the new config's metricsPort: 9090.
+				// Post-fix: createConfigBackup runs AFTER WriteFile, so the backup
+				// captures the newly written content. A backup containing the new
+				// metricsPort: 9090 value must exist.
 				var foundNewBackup bool
 				for _, path := range backupFiles {
 					if strings.Contains(string(files[path]), "9090") {
