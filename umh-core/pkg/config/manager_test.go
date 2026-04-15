@@ -1284,6 +1284,88 @@ agent:
 				}
 				Expect(configWrites).NotTo(BeEmpty())
 			})
+
+			// ENG-4464 regression guard: createConfigBackup runs AFTER WriteFile,
+			// so it should NOT be called when WriteFile fails. Verifies the
+			// spec's "no backup I/O on failure path" invariant.
+			It("should NOT create a backup when WriteFile fails in writeConfig", func() {
+				mockFS.WithWriteFileFunc(func(ctx context.Context, path string, data []byte, perm os.FileMode) error {
+					writeFileCalls = append(writeFileCalls, path)
+					if !strings.HasPrefix(path, constants.ConfigBackupDir) {
+						return errors.New("disk full")
+					}
+					return nil
+				})
+
+				config := FullConfig{}
+				config.Agent.MetricsPort = 9090
+				config.Agent.Location = map[int]string{0: "test"}
+				config.Agent.ReleaseChannel = ReleaseChannelStable
+
+				err := configManager.writeConfig(ctx, config)
+				Expect(err).To(HaveOccurred())
+
+				backupWrites := filterBackupDirPaths(writeFileCalls)
+				Expect(backupWrites).To(BeEmpty(),
+					"when WriteFile fails, createConfigBackup must not run (post-fix ordering)")
+			})
+
+			// ENG-4464 regression guard: after the fix, dedup still prevents
+			// backup spam when identical content is written twice in a row.
+			It("should skip backup when writeConfig is called twice with identical content", func() {
+				files := map[string][]byte{}
+				backupFiles := []string{}
+
+				mockFS.WithFileExistsFunc(func(ctx context.Context, path string) (bool, error) {
+					_, ok := files[path]
+					return ok, nil
+				})
+				mockFS.WithReadFileFunc(func(ctx context.Context, path string) ([]byte, error) {
+					if data, ok := files[path]; ok {
+						return data, nil
+					}
+					return nil, fmt.Errorf("file not found: %s", path)
+				})
+				mockFS.WithWriteFileFunc(func(ctx context.Context, path string, data []byte, perm os.FileMode) error {
+					captured := make([]byte, len(data))
+					copy(captured, data)
+					files[path] = captured
+					if strings.HasPrefix(path, constants.ConfigBackupDir+"/") {
+						backupFiles = append(backupFiles, path)
+					}
+					return nil
+				})
+				mockFS.WithReadDirFunc(func(ctx context.Context, path string) ([]os.DirEntry, error) {
+					if path != constants.ConfigBackupDir {
+						return nil, nil
+					}
+					var entries []os.DirEntry
+					for _, name := range backupFiles {
+						entries = append(entries, newMockDirEntry(filepath.Base(name), false))
+					}
+					return entries, nil
+				})
+				mockFS.WithEnsureDirectoryFunc(func(ctx context.Context, path string) error { return nil })
+				mockFS.WithStatFunc(func(ctx context.Context, path string) (os.FileInfo, error) {
+					return mockFS.NewMockFileInfo(filepath.Base(path), 100, 0644, time.Now(), false), nil
+				})
+				mockFS.WithRemoveFunc(func(ctx context.Context, path string) error {
+					delete(files, path)
+					return nil
+				})
+
+				config := FullConfig{}
+				config.Agent.MetricsPort = 8080
+				config.Agent.Location = map[int]string{0: "test"}
+				config.Agent.ReleaseChannel = ReleaseChannelStable
+
+				Expect(configManager.writeConfig(ctx, config)).To(Succeed())
+				Expect(backupFiles).To(HaveLen(1), "first write should create a backup")
+
+				Expect(configManager.writeConfig(ctx, config)).To(Succeed())
+				Expect(backupFiles).To(HaveLen(1),
+					"second write with identical content should be deduped (no new backup)")
+			})
 		})
 
 		Describe("multi-write backup sequence (Daniel H scenario)", func() {
