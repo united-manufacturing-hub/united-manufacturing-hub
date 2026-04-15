@@ -632,10 +632,10 @@ type ModelRef struct {
 }
 
 type Field struct {
-	ModelRef     *ModelRef          `yaml:"_refModel,omitempty"`     // this is a special field that is used to reference another data model to be used as a type for this field
-	Subfields    map[string]Field   `yaml:",inline"`                 // subfields of the field (allow recursive definition of fields)
-	PayloadShape string             `yaml:"_payloadshape,omitempty"` // payload shape reference for timeseries data
-	Relational   *RelationalShape   `yaml:"_relational,omitempty"` // inline relational data definition
+	ModelRef     *ModelRef        `yaml:"_refModel,omitempty"`     // this is a special field that is used to reference another data model to be used as a type for this field
+	Relational   *RelationalShape `yaml:"_relational,omitempty"`   // inline relational data definition
+	Subfields    map[string]Field `yaml:",inline"`                 // subfields of the field (allow recursive definition of fields)
+	PayloadShape string           `yaml:"_payloadshape,omitempty"` // payload shape reference for timeseries data
 }
 
 // RelationalShape defines inline relational data fields within a data model.
