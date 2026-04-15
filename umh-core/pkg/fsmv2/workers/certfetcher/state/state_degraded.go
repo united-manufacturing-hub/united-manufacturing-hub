@@ -20,6 +20,7 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
+	certfetcher "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/certfetcher"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/certfetcher/action"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/certfetcher/snapshot"
 )
@@ -33,8 +34,9 @@ type DegradedState struct {
 }
 
 // Next recovers to Running when errors clear, otherwise retries with backoff.
+// NOTE: generics [any, any] - to discuss
 func (s *DegradedState) Next(snapAny any) fsmv2.NextResult[any, any] {
-	snap := fsmv2.ConvertWorkerSnapshot[snapshot.CertFetcherConfig, snapshot.CertFetcherStatus](snapAny)
+	snap := fsmv2.ConvertWorkerSnapshot[certfetcher.CertFetcherConfig, certfetcher.CertFetcherStatus](snapAny)
 
 	if snap.IsShutdownRequested {
 		return fsmv2.Result[any, any](&StoppedState{}, fsmv2.SignalNone, nil, "shutdown requested")

@@ -26,6 +26,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/gatekeeper/certificatehandler"
 )
 
+// NOTE: put subHandler to the gatekeepers interface and use FetchAllCerts there, also can receive the SentryErrors from there
 // CertFetcherDependencies holds the cert fetcher's runtime dependencies.
 type CertFetcherDependencies struct {
 	*deps.BaseDependencies

@@ -14,10 +14,18 @@
 
 package certfetcher
 
-import "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/certfetcher/snapshot"
+import "time"
 
-// Re-export from snapshot to avoid import cycles (state -> snapshot, certfetcher -> snapshot).
-type (
-	CertFetcherConfig = snapshot.CertFetcherConfig
-	CertFetcherStatus = snapshot.CertFetcherStatus
-)
+// CertFetcherConfig holds user-provided configuration for the cert fetcher worker.
+// Empty because certfetcher has no user-configurable fields.
+type CertFetcherConfig struct{}
+
+// CertFetcherStatus holds runtime observation data for the cert fetcher worker.
+type CertFetcherStatus struct {
+	LastFetchAt time.Time `json:"last_fetch_at,omitempty"`
+
+	ConsecutiveErrors int  `json:"consecutive_errors"`
+	SubscriberCount   int  `json:"subscriber_count"`
+	CachedCertCount   int  `json:"cached_cert_count"`
+	HasSubHandler     bool `json:"has_sub_handler"`
+}

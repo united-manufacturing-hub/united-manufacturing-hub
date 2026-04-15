@@ -18,30 +18,16 @@ package snapshot
 import (
 	"context"
 	"crypto/x509"
-	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 )
 
-// CertFetcherDeps defines the dependency interface for the cert fetcher worker.
+// CertFetcherDeps defines the dependency interface for the cert fetcher action.
+// Lives in snapshot package to break import cycle: action → snapshot, certfetcher → action.
 type CertFetcherDeps interface {
 	deps.Dependencies
 	Subscribers() []string
 	FetchAllCerts(ctx context.Context) error
 	Certificate(email string) *x509.Certificate
 	HasSubHandler() bool
-}
-
-// CertFetcherConfig holds the user-provided configuration for the cert fetcher worker.
-// Empty because certfetcher has no user-configurable fields.
-type CertFetcherConfig struct{}
-
-// CertFetcherStatus holds the runtime observation data for the cert fetcher worker.
-type CertFetcherStatus struct {
-	LastFetchAt time.Time `json:"last_fetch_at,omitempty"`
-
-	ConsecutiveErrors int  `json:"consecutive_errors"`
-	SubscriberCount   int  `json:"subscriber_count"`
-	CachedCertCount   int  `json:"cached_cert_count"`
-	HasSubHandler     bool `json:"has_sub_handler"`
 }

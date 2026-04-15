@@ -17,7 +17,7 @@ package state
 import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/certfetcher/snapshot"
+	certfetcher "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/certfetcher"
 )
 
 const workerType = "certfetcher"
@@ -33,7 +33,7 @@ type StoppedState struct {
 
 // Next transitions to Running when SubHandler is available.
 func (s *StoppedState) Next(snapAny any) fsmv2.NextResult[any, any] {
-	snap := fsmv2.ConvertWorkerSnapshot[snapshot.CertFetcherConfig, snapshot.CertFetcherStatus](snapAny)
+	snap := fsmv2.ConvertWorkerSnapshot[certfetcher.CertFetcherConfig, certfetcher.CertFetcherStatus](snapAny)
 
 	if snap.IsShutdownRequested {
 		return fsmv2.Result[any, any](s, fsmv2.SignalNeedsRemoval, nil, "shutdown requested")

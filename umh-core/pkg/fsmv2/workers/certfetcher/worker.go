@@ -29,9 +29,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/gatekeeper"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/gatekeeper/certificatehandler"
-
-	// Blank import to trigger state init() registration.
-	_ "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/certfetcher/state"
 )
 
 // lazySubHandler resolves the SubHandler lazily via a provider callback.
@@ -126,6 +123,7 @@ func (w *CertFetcherWorker) CollectObservedState(ctx context.Context, _ fsmv2.De
 
 const workerType = "certfetcher"
 
+// NOTE: boilerplate + confusing registration, maybe rewrite by myself to make it look easier (new lines)
 func init() {
 	if err := factory.RegisterWorkerAndSupervisorFactoryByType(
 		workerType,
@@ -165,6 +163,7 @@ func init() {
 	}
 
 	// Register with CSE TypeRegistry for storage.
+	// NOTE: ???
 	observedType := reflect.TypeOf(fsmv2.Observation[CertFetcherStatus]{})
 	desiredType := reflect.TypeOf(fsmv2.WrappedDesiredState[CertFetcherConfig]{})
 
