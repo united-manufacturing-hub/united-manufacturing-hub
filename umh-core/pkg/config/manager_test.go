@@ -1286,15 +1286,12 @@ agent:
 			})
 
 			// ENG-4464 regression guard: createConfigBackup runs AFTER WriteFile,
-			// so it should NOT be called when WriteFile fails. Verifies the
-			// spec's "no backup I/O on failure path" invariant.
+			// so it must not be called when WriteFile fails. If a future refactor
+			// reorders the calls, this test catches it.
 			It("should NOT create a backup when WriteFile fails in writeConfig", func() {
 				mockFS.WithWriteFileFunc(func(ctx context.Context, path string, data []byte, perm os.FileMode) error {
 					writeFileCalls = append(writeFileCalls, path)
-					if !strings.HasPrefix(path, constants.ConfigBackupDir) {
-						return errors.New("disk full")
-					}
-					return nil
+					return errors.New("disk full")
 				})
 
 				config := FullConfig{}
@@ -1303,6 +1300,23 @@ agent:
 				config.Agent.ReleaseChannel = ReleaseChannelStable
 
 				err := configManager.writeConfig(ctx, config)
+				Expect(err).To(HaveOccurred())
+
+				backupWrites := filterBackupDirPaths(writeFileCalls)
+				Expect(backupWrites).To(BeEmpty(),
+					"when WriteFile fails, createConfigBackup must not run (post-fix ordering)")
+			})
+
+			// ENG-4464 regression guard: same invariant for the
+			// WriteYAMLConfigFromString code path.
+			It("should NOT create a backup when WriteFile fails in WriteYAMLConfigFromString", func() {
+				mockFS.WithWriteFileFunc(func(ctx context.Context, path string, data []byte, perm os.FileMode) error {
+					writeFileCalls = append(writeFileCalls, path)
+					return errors.New("disk full")
+				})
+
+				validYAML := "agent:\n  metricsPort: 9090\n  releaseChannel: stable\n  location:\n    0: test\n"
+				err := configManager.WriteYAMLConfigFromString(ctx, validYAML, "")
 				Expect(err).To(HaveOccurred())
 
 				backupWrites := filterBackupDirPaths(writeFileCalls)
@@ -1368,13 +1382,13 @@ agent:
 			})
 		})
 
-		Describe("multi-write backup sequence (Daniel H scenario)", func() {
-			// Reproduces the bug found during config backup testing with Daniel Helmersson
-			// on 2026-03-05: after startup writes a backup, the first MC-pushed config change
-			// creates no new backup because dedup compares pre-write config (unchanged) against
-			// the startup backup and skips.
+		Describe("multi-write backup sequence (ENG-4464 dedup-before-write bug)", func() {
+			// Reproduces the dedup-before-write bug: after startup writes a backup,
+			// the first MC-pushed config change creates no new backup because dedup
+			// compares pre-write config (unchanged) against the startup backup and
+			// skips.
 			//
-			// Sequence:
+			// Sequence (pre-fix behavior):
 			//   1. Startup: writeConfig(A) → backup of A created
 			//   2. MC change: writeConfig(B) → createConfigBackup reads A (pre-write),
 			//      dedup sees A == startup backup A → SKIPS. Then writes B to config.yaml.
@@ -1451,7 +1465,7 @@ agent:
 					"startup backup should contain the startup metricsPort value")
 
 				// Step 2: MC pushes a config change (different content).
-				// This is where Daniel changed timeBetweenRequests from 300→303.
+				// Simulates the first MC-pushed config change after startup.
 				mcConfig := FullConfig{}
 				mcConfig.Agent.MetricsPort = 9090 // changed value
 				mcConfig.Agent.Location = map[int]string{0: "test"}
