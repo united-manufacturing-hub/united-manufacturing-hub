@@ -206,6 +206,19 @@ func (t *Translator) extractVirtualPaths(
 			}
 
 			pathsByShape[field.PayloadShape] = append(pathsByShape[field.PayloadShape], fieldPath)
+			continue
+		}
+
+		// If this field has _relational, synthesize an anonymous payload shape
+		if field.Relational != nil {
+			syntheticName := "__relational_" + fieldPath + "__"
+			if pathsByShape[syntheticName] == nil {
+				pathsByShape[syntheticName] = make([]string, 0, 4)
+			}
+
+			pathsByShape[syntheticName] = append(pathsByShape[syntheticName], fieldPath)
+			payloadShapes[syntheticName] = *field.Relational
+			continue
 		}
 
 		// If this field has subfields, recurse into them
@@ -274,6 +287,19 @@ func (t *Translator) extractVirtualPathsWithReferences(
 			}
 
 			pathsByShape[field.PayloadShape] = append(pathsByShape[field.PayloadShape], fieldPath)
+			continue
+		}
+
+		// Handle _relational fields (inline relational data)
+		if field.Relational != nil {
+			syntheticName := "__relational_" + fieldPath + "__"
+			if pathsByShape[syntheticName] == nil {
+				pathsByShape[syntheticName] = make([]string, 0, 4)
+			}
+
+			pathsByShape[syntheticName] = append(pathsByShape[syntheticName], fieldPath)
+			payloadShapes[syntheticName] = *field.Relational
+			continue
 		}
 
 		// Handle subfields

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### New Features
+
+- Data models now support a new `_relational` field type for defining flat relational data alongside timeseries fields. Each inline field contains named columns with a type (`string`, `number`). This is mutually exclusive with `_payloadshape` and `_refModel` on the same field
+
 ### Improvements
 
 - Previously, a Flow only exposed a single health and throughput metric. Starting with this version, umh-core exposes separate throughput metrics and health status for read and write flows.

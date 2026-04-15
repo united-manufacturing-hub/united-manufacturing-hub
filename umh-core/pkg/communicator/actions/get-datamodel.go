@@ -228,6 +228,7 @@ func (a *GetDataModelAction) convertConfigFieldsToModelsFields(configFields map[
 			PayloadShape: configField.PayloadShape,
 			ModelRef:     modelsModelRef,
 			Subfields:    subfields,
+			Relational:   configRelationalToModels(configField.Relational),
 		}
 	}
 
