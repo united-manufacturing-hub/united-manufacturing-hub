@@ -584,8 +584,6 @@ func (m *FileConfigManager) writeConfig(ctx context.Context, config FullConfig) 
 		return ctx.Err()
 	}
 
-	m.createConfigBackup(ctx)
-
 	// Create the directory if it doesn't exist
 	dir := filepath.Dir(m.configPath)
 	if err := m.fsService.EnsureDirectory(ctx, dir); err != nil {
@@ -608,6 +606,11 @@ func (m *FileConfigManager) writeConfig(ctx context.Context, config FullConfig) 
 	if err := m.fsService.WriteFile(ctx, m.configPath, data, 0666); err != nil {
 		return fmt.Errorf("failed to write config file: %w", err)
 	}
+
+	// Back up the newly written config. Must run after WriteFile so the backup
+	// captures the new content; running before would cause dedup to skip when
+	// pre-write config matches the latest backup (ENG-4464).
+	m.createConfigBackup(ctx)
 
 	// get the file stats for the config file
 	fileStats, err := m.fsService.Stat(ctx, m.configPath)
@@ -1135,8 +1138,6 @@ func (m *FileConfigManager) WriteYAMLConfigFromString(ctx context.Context, confi
 		}
 	}
 
-	m.createConfigBackup(ctx)
-
 	// Create the directory if it doesn't exist
 	dir := filepath.Dir(m.configPath)
 	if err := m.fsService.EnsureDirectory(ctx, dir); err != nil {
@@ -1147,6 +1148,11 @@ func (m *FileConfigManager) WriteYAMLConfigFromString(ctx context.Context, confi
 	if err := m.fsService.WriteFile(ctx, m.configPath, []byte(configStr), 0666); err != nil {
 		return fmt.Errorf("failed to write config file: %w", err)
 	}
+
+	// Back up the newly written config. Must run after WriteFile so the backup
+	// captures the new content; running before would cause dedup to skip when
+	// pre-write config matches the latest backup (ENG-4464).
+	m.createConfigBackup(ctx)
 
 	// Get the file stats for the config file to update cache with new mod time
 	fileStats, err := m.fsService.Stat(ctx, m.configPath)
