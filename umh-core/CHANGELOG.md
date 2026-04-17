@@ -4,6 +4,7 @@
 
 ### Improvements
 
+- The FSMv2 communicator is now enabled by default. Previously, enterprise networks with firewalls that dropped idle connections could leave instances appearing offline in the Management Console until the container was restarted. The new communicator uses separate connections for status and commands, so a dropped pull connection no longer prevents heartbeats from reaching the backend, and it recovers automatically when the connection comes back. The memory cleanup routine it depends on is also on by default. To roll back, set `USE_FSMV2_TRANSPORT=false` and `USE_FSMV2_MEMORY_CLEANUP=false`.
 - Updated Go dependencies, includes security fixes for OIDC and JOSE authentication libraries
 
 ## [0.44.16]

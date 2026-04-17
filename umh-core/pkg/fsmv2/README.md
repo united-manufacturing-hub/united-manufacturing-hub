@@ -318,17 +318,19 @@ docker run -d \
 |----------|----------|-------------|
 | `AUTH_TOKEN` | Yes | Authentication token from Management Console |
 | `API_URL` | Yes | Backend relay server URL (e.g., `https://management.umh.app`) |
-| `USE_FSMV2_TRANSPORT` | No | Set to `true` to enable FSMv2 communicator |
-| `USE_FSMV2_MEMORY_CLEANUP` | No | Set to `true` to enable FSMv2 memory cleanup (persistence worker) |
-| `USE_FSMV2_PROTOCOL_CONVERTER` | No | Set to `true` to enable FSMv2 protocol converter |
+| `USE_FSMV2_TRANSPORT` | No | Enables the FSMv2 communicator. Defaults to `true`. Set to `false` to fall back to the legacy communicator |
+| `USE_FSMV2_MEMORY_CLEANUP` | No | Enables the FSMv2 memory cleanup (persistence worker). Defaults to `true`. Set to `false` to disable |
+| `USE_FSMV2_PROTOCOL_CONVERTER` | No | Set to `true` to enable FSMv2 protocol converter. Defaults to `false` |
 
 ### Disabling FSMv2 Features
 
-To revert to the legacy behavior, set the corresponding flag to `false` or omit it (defaults to `false`):
+`USE_FSMV2_TRANSPORT` and `USE_FSMV2_MEMORY_CLEANUP` default to `true`. To revert to the legacy communicator, set the corresponding flag to `false`:
 
 ```bash
 -e USE_FSMV2_TRANSPORT=false
 ```
+
+`USE_FSMV2_PROTOCOL_CONVERTER` defaults to `false`; omit it or set it to `false` to keep the legacy behavior.
 
 ### Verifying FSMv2 Communicator
 

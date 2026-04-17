@@ -118,14 +118,14 @@ func main() {
 	// FSMv2 feature flags: read directly from env vars, not persisted to config.yaml.
 	// These bypass the config manager intentionally — they are temporary migration flags
 	// that will be replaced when the config manager becomes an FSMv2 worker.
-	v, err := env.GetAsBool("USE_FSMV2_TRANSPORT", false, false)
+	v, err := env.GetAsBool("USE_FSMV2_TRANSPORT", false, true)
 	if err != nil {
 		log.Warnf("Failed to parse USE_FSMV2_TRANSPORT: %v", err)
 	}
 
 	configData.Agent.UseFSMv2Transport = v
 
-	v, err = env.GetAsBool("USE_FSMV2_MEMORY_CLEANUP", false, false)
+	v, err = env.GetAsBool("USE_FSMV2_MEMORY_CLEANUP", false, true)
 	if err != nil {
 		log.Warnf("Failed to parse USE_FSMV2_MEMORY_CLEANUP: %v", err)
 	}
