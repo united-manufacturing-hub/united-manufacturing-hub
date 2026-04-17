@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## [0.44.16]
+
+Adds relational field type, per-direction flow metrics, config backup with post-write fix, and retry-resilient status delivery for FSMv2.
+
 ### New Features
 
 - Data models now support a new `_relational` field type for defining flat relational data alongside timeseries fields. Each inline field contains named columns with a type (`string`, `number`). This is mutually exclusive with `_payloadshape` and `_refModel` on the same field
