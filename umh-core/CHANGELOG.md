@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Improvements
+
+- Updated Go dependencies, includes security fixes for OIDC and JOSE authentication libraries
+
 ## [0.44.16]
 
 Adds relational field type, per-direction flow metrics, config backup with post-write fix, and retry-resilient status delivery for FSMv2.
