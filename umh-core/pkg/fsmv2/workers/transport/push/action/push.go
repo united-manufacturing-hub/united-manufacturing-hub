@@ -73,10 +73,21 @@ func (a *PushAction) Execute(ctx context.Context, depsAny any) error {
 
 		metrics.SetGauge(depspkg.GaugePendingMessages, float64(pushDeps.PendingMessageCount()))
 
-		return err
+		// Drain outbound into pending on transient/recoverable failure so the
+		// channel does not fill up across ticks while pending keeps failing
+		// (ENG-4741). Skipped when ctx is canceled — the messages survive in
+		// the channel until the next tick.
+		if err != nil || len(remaining) > 0 {
+			if ctx.Err() == nil {
+				a.drainChannelToPending(pushDeps, metrics)
+			}
+
+			return err
+		}
 	}
 
-	// Phase 2: Drain and batch-push new messages
+	// Phase 2: Drain and batch-push new messages.
+	// Only reached when Phase 1 cleared all pending successfully.
 	outChan := pushDeps.GetOutboundChan()
 	if outChan == nil {
 		return errors.New("outbound channel is nil")
@@ -167,12 +178,15 @@ drainLoop:
 //  1. Context canceled (pre-push) → return remaining messages immediately.
 //  2. Push fails, context expired during push → return remaining with
 //     cancellation error.
-//  3. Recoverable by parent (auth failure, proxy block, etc.) → return
+//  3. Transient error (network, server, rate limit, channel full) → return
+//     remaining with nil error. The caller drains the outbound channel into
+//     pending so it does not fill up while the transport recovers (ENG-4741).
+//  4. Recoverable by parent (auth failure, proxy block, etc.) → return
 //     remaining messages with error so the parent triggers re-authentication
 //     or transport reset.
-//  4. Poison message (unrecoverable) → log SentryWarn, drop the message,
+//  5. Poison message (unrecoverable) → log SentryWarn, drop the message,
 //     continue to next.
-//  5. Success → record metrics, continue.
+//  6. Success → record metrics, continue.
 //
 // Returns (nil, nil) when all messages are sent successfully. Otherwise
 // returns the unsent tail of pending so the caller can buffer them for
@@ -182,7 +196,11 @@ func (a *PushAction) retryPending(ctx context.Context, t transport.Transport, pu
 	authenticatedUUID := pushDeps.GetAuthenticatedUUID()
 
 	for i, msg := range pending {
-		if msg != nil && authenticatedUUID != "" {
+		if msg == nil {
+			continue // protects t.Push below from nil dereference
+		}
+
+		if authenticatedUUID != "" {
 			msg.InstanceUUID = authenticatedUUID
 		}
 
@@ -192,10 +210,15 @@ func (a *PushAction) retryPending(ctx context.Context, t transport.Transport, pu
 		default:
 		}
 
+		pushStart := time.Now()
 		if err := t.Push(ctx, jwtToken, []*transport.UMHMessage{msg}); err != nil {
+			pushLatency := time.Since(pushStart)
 			errType, retryAfter := httpTransport.ExtractErrorType(err)
 			pushDeps.RecordTypedError(errType, retryAfter)
 			metrics.IncrementCounter(httpTransport.CounterForErrorType(errType), 1)
+			metrics.IncrementCounter(depspkg.CounterPushOps, 1)
+			metrics.IncrementCounter(depspkg.CounterPushFailures, 1)
+			metrics.SetGauge(depspkg.GaugeLastPushLatencyMs, float64(pushLatency.Milliseconds()))
 
 			if ctx.Err() != nil {
 				return pending[i:], fmt.Errorf("context canceled during retry: %w", ctx.Err())
@@ -209,6 +232,18 @@ func (a *PushAction) retryPending(ctx context.Context, t transport.Transport, pu
 				return pending[i:], fmt.Errorf("pending retry failed (recoverable by parent): %w", err)
 			}
 
+			// Architecture decision: drop poison messages instead of retrying.
+			//
+			// ErrorTypeUnknown (unclassifiable) and ErrorTypeInstanceDeleted
+			// (terminal) reach this branch. There is no per-message retry
+			// counter in the system — preserving these would retry every tick
+			// until transport reset (5 consecutive errors) wipes the entire
+			// pending buffer, losing all messages instead of just the bad one.
+			//
+			// If ExtractErrorType misses a new infrastructure error, the fix
+			// is adding the type to IsTransient() or isRecoverableByParent(),
+			// not retrying unknowns here. SentryWarn fires on every drop so
+			// a spike is visible in Sentry.
 			pushDeps.GetLogger().SentryWarn(depspkg.FeatureForWorker(pushDeps.GetWorkerType()), pushDeps.GetHierarchyPath(), "dropping_poison_message",
 				depspkg.String("errorType", errType.String()),
 				depspkg.Err(err),
@@ -218,13 +253,51 @@ func (a *PushAction) retryPending(ctx context.Context, t transport.Transport, pu
 			continue
 		}
 
+		pushLatency := time.Since(pushStart)
 		pushDeps.RecordSuccess()
 		metrics.IncrementCounter(depspkg.CounterPushOps, 1)
 		metrics.IncrementCounter(depspkg.CounterPushSuccess, 1)
 		metrics.IncrementCounter(depspkg.CounterMessagesPushed, 1)
+		metrics.IncrementCounter(depspkg.CounterBytesPushed, int64(len(msg.InstanceUUID)+len(msg.Content)+len(msg.Email)))
+		metrics.SetGauge(depspkg.GaugeLastPushLatencyMs, float64(pushLatency.Milliseconds()))
 	}
 
 	return nil, nil
+}
+
+// drainChannelToPending exists to prevent outbound channel overflow when
+// pending retry cannot make progress.
+//
+// Example: MC is unreachable. Every tick, retryPending returns a transient
+// error and Phase 2 never runs. New status messages keep arriving on the
+// outbound channel. Without this rescue, the channel fills to capacity,
+// subscribers drop messages, and MC shows the instance as offline even
+// though it is healthy (ENG-4741).
+func (a *PushAction) drainChannelToPending(pushDeps snapshot.PushDependencies, metrics *depspkg.MetricsRecorder) {
+	outChan := pushDeps.GetOutboundChan()
+
+	var drained []*transport.UMHMessage
+
+drainLoop:
+	for {
+		select {
+		case msg, ok := <-outChan:
+			if !ok {
+				break drainLoop
+			}
+
+			if msg != nil {
+				drained = append(drained, msg)
+			}
+		default:
+			break drainLoop
+		}
+	}
+
+	if len(drained) > 0 {
+		pushDeps.StorePendingMessages(drained)
+		metrics.SetGauge(depspkg.GaugePendingMessages, float64(pushDeps.PendingMessageCount()))
+	}
 }
 
 // isRecoverableByParent returns true for persistent error types where the

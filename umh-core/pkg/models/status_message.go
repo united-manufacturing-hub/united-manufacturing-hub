@@ -158,7 +158,9 @@ type Dfc struct {
 	Name               *string        `json:"name"`
 	UUID               string         `json:"uuid"`
 	Health             *Health        `json:"health"`
-	Type               DfcType        `json:"dfcType"` // Type of the DFC
+	ReadFlowHealth     *Health        `json:"readFlowHealth,omitempty"`  // Health of the read (source) data flow, only for protocol-converter type
+	WriteFlowHealth    *Health        `json:"writeFlowHealth,omitempty"` // Health of the write (sink) data flow, only for protocol-converter type
+	Type               DfcType        `json:"dfcType"`                   // Type of the DFC
 	Metrics            *DfcMetrics    `json:"metrics"`
 	Bridge             *DfcBridgeInfo `json:"bridge,omitempty"` // Additional info for data-bridge type
 	// For 'protocol-converter' type, this array contains exactly one connection.
@@ -171,7 +173,8 @@ type Dfc struct {
 }
 
 type DfcMetrics struct {
-	AvgInputThroughputPerMinuteInMsgSec float64 `json:"avgInputThroughputPerMinuteInMsgSec"` // Messages per second, averaged over a minute
+	AvgInputThroughputPerMinuteInMsgSec  float64 `json:"avgInputThroughputPerMinuteInMsgSec"` // Messages per second, averaged over a minute
+	AvgOutputThroughputPerMinuteInMsgSec float64 `json:"avgOutputThroughputPerMinuteInMsgSec"`
 }
 
 // Connection represents a connection to an external system and only exists within a DFC.

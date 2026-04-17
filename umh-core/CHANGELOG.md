@@ -2,6 +2,27 @@
 
 ## Unreleased
 
+## [0.44.16]
+
+Adds relational field type, per-direction flow metrics, config backup with post-write fix, and retry-resilient status delivery for FSMv2.
+
+### New Features
+
+- Data models now support a new `_relational` field type for defining flat relational data alongside timeseries fields. Each inline field contains named columns with a type (`string`, `number`). This is mutually exclusive with `_payloadshape` and `_refModel` on the same field
+
+### Improvements
+
+- Previously, a Flow only exposed a single health and throughput metric. Starting with this version, umh-core exposes separate throughput metrics and health status for read and write flows.
+
+### Preview: Config Backup
+
+- `ENABLE_CONFIG_BACKUP=true` saves a timestamped copy of `config.yaml` to `/data/config-backups/` every time umh-core writes the config (Management Console actions, and startup after a manual edit). umh-core keeps the 100 most recent backups and deletes older ones. Use these to roll back a bad config
+- Fixed: the first config change after a restart was not backed up, because the pre-write file matched the latest backup and the duplicate check skipped it. Backups now run after the write. One caveat: the most recent backup mirrors the most recent write, so to recover the state from before a bad write, use the second-most-recent backup
+
+### Preview: FSMv2 Communicator
+
+- Previously, healthy instances could appear offline in Management Console when earlier status messages failed to send. New status messages now continue to reach Management Console while previous ones are being retried. Only affects instances with `USE_FSMV2_TRANSPORT=true`
+
 ## [0.44.15]
 
 Fix issue when redeploying a bridge.
