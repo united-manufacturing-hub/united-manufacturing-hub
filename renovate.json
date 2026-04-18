@@ -1,7 +1,7 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": ["config:recommended"],
-  "labels": ["skip-changelog-guard"],
+  "labels": ["dependencies", "skip-changelog-guard"],
   "commitMessagePrefix": "[renovate]chore(deps):",
   "includePaths": ["umh-core/**"],
   "enabledManagers": ["dockerfile", "gomod"],
@@ -53,6 +53,18 @@
       "matchUpdateTypes": ["major"],
       "groupName": "Dockerfile dependencies (major)",
       "groupSlug": "dockerfile-deps-major"
+    },
+    {
+      "matchManagers": ["gomod"],
+      "matchDepNames": ["go"],
+      "versioning": "semver",
+      "rangeStrategy": "bump"
+    },
+    {
+      "matchManagers": ["gomod", "dockerfile"],
+      "matchPackageNames": ["go", "golang"],
+      "groupName": "Go version",
+      "groupSlug": "go-version"
     }
   ]
 }
