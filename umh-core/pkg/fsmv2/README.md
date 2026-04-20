@@ -310,7 +310,6 @@ docker run -d \
   -e API_URL=https://management.umh.app \
   -e USE_FSMV2_TRANSPORT=true \
   -e USE_FSMV2_MEMORY_CLEANUP=true \
-  -e USE_FSMV2_PROTOCOL_CONVERTER=true \
   umh-core:latest
 ```
 
@@ -320,7 +319,6 @@ docker run -d \
 | `API_URL` | Yes | Backend relay server URL (e.g., `https://management.umh.app`) |
 | `USE_FSMV2_TRANSPORT` | No | Enables the FSMv2 communicator. Defaults to `true`. Set to `false` to fall back to the legacy communicator |
 | `USE_FSMV2_MEMORY_CLEANUP` | No | Enables the FSMv2 memory cleanup (persistence worker). Defaults to `true`. Set to `false` to disable |
-| `USE_FSMV2_PROTOCOL_CONVERTER` | No | Enables the FSMv2 protocol converter. Defaults to `false`. Set to `true` to enable |
 
 ### Disabling FSMv2 Features
 
@@ -329,8 +327,6 @@ docker run -d \
 ```bash
 -e USE_FSMV2_TRANSPORT=false
 ```
-
-`USE_FSMV2_PROTOCOL_CONVERTER` defaults to `false`; omit it or set it to `false` to keep the legacy behavior.
 
 ### Verifying FSMv2 Communicator
 
