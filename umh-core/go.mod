@@ -1,6 +1,6 @@
 module github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core
 
-go 1.26.1
+go 1.26.2
 
 require (
 	github.com/99designs/gqlgen v0.17.89
