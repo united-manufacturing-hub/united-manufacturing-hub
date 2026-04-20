@@ -16,23 +16,19 @@ package certfetcher
 
 import (
 	"context"
-	"crypto/x509"
 	"errors"
 	"sync"
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/gatekeeper"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/gatekeeper/certificatehandler"
 )
 
-// NOTE: put subHandler to the gatekeepers interface and use FetchAllCerts there, also can receive the SentryErrors from there
 // CertFetcherDependencies holds the cert fetcher's runtime dependencies.
 type CertFetcherDependencies struct {
 	*deps.BaseDependencies
 
 	certHandler certificatehandler.Handler
-	subHandler  gatekeeper.SubHandler
 
 	lastFetchAt       time.Time
 	consecutiveErrors int
@@ -41,9 +37,7 @@ type CertFetcherDependencies struct {
 }
 
 // NewCertFetcherDependencies creates dependencies for the cert fetcher worker.
-// The baseDeps parameter must be the pointer returned by WorkerBase.InitBase.
 func NewCertFetcherDependencies(
-	subHandler gatekeeper.SubHandler,
 	certHandler certificatehandler.Handler,
 	baseDeps *deps.BaseDependencies,
 ) (*CertFetcherDependencies, error) {
@@ -53,73 +47,25 @@ func NewCertFetcherDependencies(
 
 	return &CertFetcherDependencies{
 		BaseDependencies: baseDeps,
-		subHandler:       subHandler,
 		certHandler:      certHandler,
 	}, nil
 }
 
-// HasSubHandler returns true if the subscriber handler is available.
-func (d *CertFetcherDependencies) HasSubHandler() bool {
-	d.mu.RLock()
-	sh := d.subHandler
-	d.mu.RUnlock()
-
-	if sh == nil {
-		return false
-	}
-
-	// Check if the lazy handler's underlying provider is ready
-	lazy, ok := sh.(*lazySubHandler)
-	if ok {
-		return lazy.IsReady()
-	}
-
-	return true
+// HasSubHandler delegates to cert handler.
+// CertHandler returns the certificate handler.
+func (d *CertFetcherDependencies) CertHandler() certificatehandler.Handler {
+	return d.certHandler
 }
 
-// Subscribers returns the list of active subscriber emails.
-func (d *CertFetcherDependencies) Subscribers() []string {
-	d.mu.RLock()
-	sh := d.subHandler
-	d.mu.RUnlock()
-	if sh == nil {
-		return nil
-	}
-	return sh.Subscribers()
-}
-
-// FetchAllCerts iterates all active subscribers and fetches their certificates.
+// FetchAllCerts delegates to cert handler, then tracks success/failure.
 func (d *CertFetcherDependencies) FetchAllCerts(ctx context.Context) error {
-	emails := d.Subscribers()
-	if len(emails) == 0 {
-		return nil
-	}
-
-	var lastErr error
-	for _, email := range emails {
-		if ctx.Err() != nil {
-			return ctx.Err()
-		}
-		err := d.certHandler.FetchAndStore(ctx, email)
-		if err != nil {
-			d.GetLogger().SentryError(deps.FeatureGatekeeper, d.GetHierarchyPath(), err, "cert_fetch_failed",
-				deps.String("email", email))
-			lastErr = err
-		}
-	}
-
-	if lastErr != nil {
+	err := d.certHandler.FetchAllCerts(ctx)
+	if err != nil {
 		d.RecordFetchError()
-		return lastErr
+		return err
 	}
-
 	d.RecordFetchSuccess()
 	return nil
-}
-
-// Certificate delegates to the cert handler.
-func (d *CertFetcherDependencies) Certificate(email string) *x509.Certificate {
-	return d.certHandler.Certificate(email)
 }
 
 // RecordFetchSuccess records a successful fetch cycle.

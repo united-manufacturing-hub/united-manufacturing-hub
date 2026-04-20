@@ -20,9 +20,8 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
-	certfetcher "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/certfetcher"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/certfetcher"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/certfetcher/action"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/certfetcher/snapshot"
 )
 
 // DegradedBackoff is the wait time between retries in degraded state.
@@ -48,7 +47,7 @@ func (s *DegradedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 
 	timeSinceLastFetch := snap.CollectedAt.Sub(snap.Status.LastFetchAt)
 	if timeSinceLastFetch >= DegradedBackoff {
-		return fsmv2.Result[any, any](s, fsmv2.SignalNone, fsmv2.WrapAction[snapshot.CertFetcherDeps](&action.FetchCertsAction{}),
+		return fsmv2.Result[any, any](s, fsmv2.SignalNone, fsmv2.WrapAction[*certfetcher.CertFetcherDependencies](&action.FetchCertsAction{}),
 			fmt.Sprintf("degraded retry: %d errors, last fetch %s ago",
 				snap.Status.ConsecutiveErrors, timeSinceLastFetch.Round(time.Second)))
 	}

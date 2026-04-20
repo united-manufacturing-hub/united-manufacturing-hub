@@ -32,6 +32,11 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/gatekeeper/validator"
 )
 
+// SubHandler provides access to the list of active subscribers.
+type SubHandler interface {
+	Subscribers() []string
+}
+
 // UserCertificateEndpoint is the Management Console API endpoint for user certificates.
 const UserCertificateEndpoint = "/v2/instance/user/certificate"
 
@@ -50,9 +55,10 @@ type certificateBundle struct {
 
 // CertHandler implements Handler with an in-memory cache and Management Console API fetching.
 type CertHandler struct {
-	validator validator.Validator
-	rootCA    *x509.Certificate
-	userCerts map[string]*certificateBundle
+	validator  validator.Validator
+	subHandler SubHandler
+	rootCA     *x509.Certificate
+	userCerts  map[string]*certificateBundle
 
 	log             *zap.SugaredLogger
 	encryptedRootCA string
@@ -135,9 +141,54 @@ func (h *CertHandler) RootCA() *x509.Certificate {
 	return h.rootCA
 }
 
-// FetchAndStore fetches the certificate for a single user from the Management Console API
+// SetSubHandler sets the subscriber handler for resolving who to fetch certs for.
+func (h *CertHandler) SetSubHandler(sh SubHandler) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.subHandler = sh
+}
+
+// HasSubHandler returns true if the subscriber handler is available.
+func (h *CertHandler) HasSubHandler() bool {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	return h.subHandler != nil
+}
+
+// Subscribers returns the list of active subscriber emails.
+func (h *CertHandler) Subscribers() []string {
+	h.mu.RLock()
+	sh := h.subHandler
+	h.mu.RUnlock()
+	if sh == nil {
+		return nil
+	}
+	return sh.Subscribers()
+}
+
+// FetchAllCerts fetches certificates for all active subscribers.
+func (h *CertHandler) FetchAllCerts(ctx context.Context) error {
+	emails := h.Subscribers()
+	if len(emails) == 0 {
+		return nil
+	}
+	var lastErr error
+	for _, email := range emails {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		err := h.fetchAndStore(ctx, email)
+		if err != nil {
+			h.log.Warnw("cert fetch failed", "email", email, "error", err)
+			lastErr = err
+		}
+	}
+	return lastErr
+}
+
+// fetchAndStore fetches the certificate for a single user from the Management Console API
 // and stores it in the cache.
-func (h *CertHandler) FetchAndStore(ctx context.Context, email string) error {
+func (h *CertHandler) fetchAndStore(ctx context.Context, email string) error {
 	h.mu.RLock()
 	jwt := h.jwt
 	h.mu.RUnlock()

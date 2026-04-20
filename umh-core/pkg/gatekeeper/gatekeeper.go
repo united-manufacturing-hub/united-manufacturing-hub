@@ -31,11 +31,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
 )
 
-// SubHandler provides access to the list of active subscribers.
-type SubHandler interface {
-	Subscribers() []string
-}
-
 // Gatekeeper sits between FSMv2 transport and Router, handling protocol detection,
 // encryption, compression, and permission validation.
 type Gatekeeper struct {

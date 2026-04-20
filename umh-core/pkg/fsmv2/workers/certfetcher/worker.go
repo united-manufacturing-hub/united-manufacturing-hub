@@ -27,27 +27,8 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/gatekeeper"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/gatekeeper/certificatehandler"
 )
-
-// lazySubHandler resolves the SubHandler lazily via a provider callback.
-type lazySubHandler struct {
-	provider func() gatekeeper.SubHandler
-}
-
-func (l *lazySubHandler) Subscribers() []string {
-	sh := l.provider()
-	if sh == nil {
-		return nil
-	}
-	return sh.Subscribers()
-}
-
-// IsReady returns true when the underlying subscriber handler is available.
-func (l *lazySubHandler) IsReady() bool {
-	return l.provider() != nil
-}
 
 var _ fsmv2.Worker = (*CertFetcherWorker)(nil)
 
@@ -62,7 +43,6 @@ func NewCertFetcherWorker(
 	identity deps.Identity,
 	logger deps.FSMLogger,
 	stateReader deps.StateReader,
-	subHandler gatekeeper.SubHandler,
 	certHandler certificatehandler.Handler,
 ) (*CertFetcherWorker, error) {
 	if logger == nil {
@@ -76,25 +56,21 @@ func NewCertFetcherWorker(
 	w := &CertFetcherWorker{}
 	bd := w.InitBase(identity, logger, stateReader)
 
-	d, err := NewCertFetcherDependencies(subHandler, certHandler, bd)
+	d, err := NewCertFetcherDependencies(certHandler, bd)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create dependencies: %w", err)
 	}
 
 	w.deps = d
-
 	return w, nil
 }
 
 // GetDependenciesAny returns the custom CertFetcherDependencies.
-// Overrides WorkerBase's default which returns *BaseDependencies.
 func (w *CertFetcherWorker) GetDependenciesAny() any {
 	return w.deps
 }
 
 // CollectObservedState snapshots the cert fetcher state.
-// Returns NewObservation -- the collector handles CollectedAt, framework metrics,
-// action history, and metric accumulation automatically after COS returns.
 func (w *CertFetcherWorker) CollectObservedState(ctx context.Context, _ fsmv2.DesiredState) (fsmv2.ObservedState, error) {
 	select {
 	case <-ctx.Done():
@@ -103,27 +79,30 @@ func (w *CertFetcherWorker) CollectObservedState(ctx context.Context, _ fsmv2.De
 	}
 
 	d := w.deps
-	emails := d.Subscribers()
+	ch := d.CertHandler()
+	emails := ch.Subscribers()
 
 	cachedCount := 0
 	for _, email := range emails {
-		if d.Certificate(email) != nil {
+		if ch.Certificate(email) != nil {
 			cachedCount++
 		}
 	}
+
+	// set metrics for potential later exposure on the UI
+	d.MetricsRecorder().IncrementCounter("cached_certs", int64(cachedCount))
 
 	return fsmv2.NewObservation(CertFetcherStatus{
 		ConsecutiveErrors: d.ConsecutiveErrors(),
 		SubscriberCount:   len(emails),
 		CachedCertCount:   cachedCount,
 		LastFetchAt:       d.LastFetchAt(),
-		HasSubHandler:     d.HasSubHandler(),
+		HasSubHandler:     ch.HasSubHandler(),
 	}), nil
 }
 
 const workerType = "certfetcher"
 
-// NOTE: boilerplate + confusing registration, maybe rewrite by myself to make it look easier (new lines)
 func init() {
 	if err := factory.RegisterWorkerAndSupervisorFactoryByType(
 		workerType,
@@ -137,17 +116,7 @@ func init() {
 				panic("certHandler must implement certificatehandler.Handler")
 			}
 
-			// SubHandler resolved lazily via provider callback.
-			var subHandler gatekeeper.SubHandler
-			if provider, ok := extraDeps["subHandlerProvider"]; ok && provider != nil {
-				providerFn, ok := provider.(func() gatekeeper.SubHandler)
-				if !ok {
-					panic("subHandlerProvider must be func() gatekeeper.SubHandler")
-				}
-				subHandler = &lazySubHandler{provider: providerFn}
-			}
-
-			worker, err := NewCertFetcherWorker(id, logger, stateReader, subHandler, certHandler)
+			worker, err := NewCertFetcherWorker(id, logger, stateReader, certHandler)
 			if err != nil {
 				panic(fmt.Sprintf("failed to create certfetcher worker: %v", err))
 			}
@@ -162,8 +131,6 @@ func init() {
 		panic(fmt.Sprintf("failed to register certfetcher worker: %v", err))
 	}
 
-	// Register with CSE TypeRegistry for storage.
-	// NOTE: ???
 	observedType := reflect.TypeOf(fsmv2.Observation[CertFetcherStatus]{})
 	desiredType := reflect.TypeOf(fsmv2.WrappedDesiredState[CertFetcherConfig]{})
 

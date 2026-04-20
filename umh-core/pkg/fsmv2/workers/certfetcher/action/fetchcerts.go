@@ -18,14 +18,14 @@ package action
 import (
 	"context"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/certfetcher/snapshot"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/certfetcher"
 )
 
 // FetchCertsAction fetches certificates for all active subscribers.
 type FetchCertsAction struct{}
 
 // Execute fetches certificates for all active subscribers.
-func (a *FetchCertsAction) Execute(ctx context.Context, d snapshot.CertFetcherDeps) error {
+func (a *FetchCertsAction) Execute(ctx context.Context, d *certfetcher.CertFetcherDependencies) error {
 	select {
 	case <-ctx.Done():
 		return ctx.Err()

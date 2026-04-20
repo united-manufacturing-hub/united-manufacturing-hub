@@ -106,7 +106,7 @@ func (s *Handler) GetSubscribers() []string {
 }
 
 // Subscribers returns the list of active subscriber emails.
-// Implements gatekeeper.SubHandler interface.
+// Implements certificatehandler.SubHandler interface.
 func (s *Handler) Subscribers() []string {
 	return s.GetSubscribers()
 }

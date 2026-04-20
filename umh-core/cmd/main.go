@@ -506,11 +506,13 @@ func enableFSMv2BackendConnection(
 	communicator.SetChannelProvider(channelAdapter)
 	transportWorker.SetChannelProvider(channelAdapter)
 
+	var certHandler *certificatehandler.CertHandler
+
 	// Gatekeeper setup (behind feature flag)
 	if configData.Agent.UseGatekeeper {
 		logger.Info("Gatekeeper enabled (feature flag)")
 		inboundRaw, outboundRaw := channelAdapter.RawChannels()
-		certHandler := certificatehandler.NewHandler(
+		certHandler = certificatehandler.NewHandler(
 			validator.NewValidator(logger),
 			"", // JWT set after auth via polling
 			configData.Agent.APIURL,
@@ -594,13 +596,6 @@ children:
 	}
 	if configData.Agent.UseGatekeeper {
 		fsmv2Deps["certHandler"] = communicationState.Gatekeeper.CertificateHandler()
-		fsmv2Deps["subHandlerProvider"] = func() gatekeeper.SubHandler {
-			sh := communicationState.GetSubscriberHandler()
-			if sh == nil {
-				return nil
-			}
-			return sh
-		}
 	}
 	if configData.Agent.UseFSMv2MemoryCleanup {
 		fsmv2Deps["store"] = store
@@ -644,6 +639,7 @@ children:
 			nil, // no legacy FSMv2 channel when gatekeeper is active
 			communicationState.Gatekeeper.VerifiedOutboundChan(), // Gatekeeper mode: write MessageWithSender
 		)
+		certHandler.SetSubHandler(communicationState.SubscriberHandler)
 	} else {
 		communicationState.InitialiseAndStartSubscriberHandler(
 			5*time.Minute, // TTL: time until subscriber considered dead
