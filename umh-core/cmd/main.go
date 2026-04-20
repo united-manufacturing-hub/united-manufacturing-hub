@@ -120,9 +120,15 @@ func main() {
 	// GetAsBool with required=false never returns an error (silently falls back
 	// to the default on parse failure); see ENG-4809 for the signature fix.
 	transportEnabled, _ := env.GetAsBool("USE_FSMV2_TRANSPORT", false, true)
-	configData.Agent.UseFSMv2Transport = transportEnabled
-
 	memoryCleanupEnabled, _ := env.GetAsBool("USE_FSMV2_MEMORY_CLEANUP", false, true)
+
+	// Memory cleanup is required whenever transport is on; running transport
+	// without cleanup reintroduces the unbounded state-growth risk (ENG-4292).
+	if transportEnabled {
+		memoryCleanupEnabled = true
+	}
+
+	configData.Agent.UseFSMv2Transport = transportEnabled
 	configData.Agent.UseFSMv2MemoryCleanup = memoryCleanupEnabled
 
 	protocolConverterEnabled, _ := env.GetAsBool("USE_FSMV2_PROTOCOL_CONVERTER", false, false)
