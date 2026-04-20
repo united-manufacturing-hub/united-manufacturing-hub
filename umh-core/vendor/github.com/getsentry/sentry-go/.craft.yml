@@ -1,15 +1,19 @@
-minVersion: 2.14.0
+minVersion: 2.24.1
 changelog:
   policy: auto
 versioning:
   policy: auto
 artifactProvider:
   name: none
+preReleaseCommand: bash scripts/bump-version.sh
 targets:
   - name: github
     tagPrefix: v
   - name: github
     tagPrefix: otel/v
+    tagOnly: true
+  - name: github
+    tagPrefix: otel/otlp/v
     tagOnly: true
   - name: github
     tagPrefix: echo/v
