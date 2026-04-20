@@ -165,6 +165,14 @@ func buildProtocolConverterAsDfc(
 		writeDesiredState,
 	)
 
+	var bridge *models.DfcBridgeInfo
+	readPipeline := observed.ObservedProtocolConverterRuntimeConfig.DataflowComponentReadServiceConfig.BenthosConfig.Pipeline
+	if contracts := extractDataContractsFromPipeline(readPipeline); len(contracts) > 0 {
+		bridge = &models.DfcBridgeInfo{
+			DataContracts: contracts,
+		}
+	}
+
 	dfc := models.Dfc{
 		Type:        models.DfcTypeProtocolConverter,
 		UUID:        uuid.String(),
@@ -179,9 +187,8 @@ func buildProtocolConverterAsDfc(
 		ReadFlowHealth:  readFlowHealth,
 		WriteFlowHealth: writeFlowHealth,
 		// Metrics are added below
-		Metrics: nil,
-		// Bridge info is not applicable for protocol converters
-		Bridge:        nil,
+		Metrics:       nil,
+		Bridge:        bridge,
 		IsInitialized: isInitialized,
 	}
 
