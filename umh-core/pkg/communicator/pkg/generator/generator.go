@@ -292,6 +292,7 @@ func (s *StatusCollectorType) GenerateStatusMessage(ctx context.Context, isBoots
 					"protocol-converter-metrics",
 					"stream-processor-ignore-health-check",
 					"disable-read-flow",
+					"bridge-populates-data-contracts",
 				},
 			},
 		},
