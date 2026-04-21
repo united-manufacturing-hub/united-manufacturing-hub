@@ -9,6 +9,7 @@
 - FSMv2 push worker migrated to `register.Worker` with typed `TDeps = *PushDependencies`. The `extraDeps["transport_deps"]` read is replaced by a call to `transport.ChildDeps()` inside the constructor, completing the typed parent→child dep seam for push. Internal framework change only; no user-facing API.
 - FSMv2 pull worker migrated to `register.Worker` with typed `TDeps = *PullDependencies`. The `extraDeps["transport_deps"]` read is replaced by a call to `transport.ChildDeps()` inside the constructor, completing the typed parent→child dep seam for pull. Internal framework change only; no user-facing API.
 - FSMv2 persistence worker switched from an `extraDeps["store"]` factory read to a typed `persistence.SetStore` / `persistence.Store()` package-level singleton (mirroring `transport.ChildDeps`). `cmd/main.go` publishes the triangular store via `SetStore`; the worker factory consumes it via `Store()`. `NewPersistenceWorker` now takes `*PersistenceDependencies` in the TDeps slot. Internal framework change only; no user-facing API.
+- Removed dead `channelProvider` / `onAuthSuccessCallback` keys from the fsmv2Deps map in `cmd/main.go` (PR2 C6.5). No functional change -- these keys had no readers.
 
 ### Improvements
 
