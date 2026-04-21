@@ -61,7 +61,7 @@ func newRegTestWorker(id deps.Identity, logger deps.FSMLogger, sr deps.StateRead
 }
 
 func (w *regTestWorker) CollectObservedState(_ context.Context, _ fsmv2.DesiredState) (fsmv2.ObservedState, error) {
-	return w.WrapStatus(regTestStatus{}), nil
+	return fsmv2.NewObservation(regTestStatus{}), nil
 }
 
 var _ = Describe("register.Worker", func() {
