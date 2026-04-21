@@ -33,16 +33,16 @@ func (s *DegradedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 
 	// 1. Check shutdown
 	if snap.IsShutdownRequested {
-		return fsmv2.Result[any, any](&StoppedState{}, fsmv2.SignalNone, nil, "Shutdown requested, transitioning to stopped")
+		return fsmv2.Transition(&StoppedState{}, fsmv2.SignalNone, nil, "Shutdown requested, transitioning to stopped")
 	}
 
 	// 2. Check if mood has recovered (no longer "sad")
 	if snap.Status.Mood != "sad" {
-		return fsmv2.Result[any, any](&RunningState{}, fsmv2.SignalNone, nil, "Mood recovered, transitioning to running")
+		return fsmv2.Transition(&RunningState{}, fsmv2.SignalNone, nil, "Mood recovered, transitioning to running")
 	}
 
 	// 3. Stay degraded
-	return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil, "Mood is still sad")
+	return fsmv2.Transition(s, fsmv2.SignalNone, nil, "Mood is still sad")
 }
 
 // String returns the state name for logging and metrics.

@@ -32,19 +32,19 @@ func (s *TryingToStartState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := helpers.ConvertSnapshot[snapshot.ExampleparentObservedState, *snapshot.ExampleparentDesiredState](snapAny)
 
 	if snap.Desired.IsShutdownRequested() {
-		return fsmv2.Result[any, any](&TryingToStopState{}, fsmv2.SignalNone, nil, "Shutdown requested, transitioning to TryingToStop")
+		return fsmv2.Transition(&TryingToStopState{}, fsmv2.SignalNone, nil, "Shutdown requested, transitioning to TryingToStop")
 	}
 
 	if snap.Observed.ID == "" {
-		return fsmv2.Result[any, any](s, fsmv2.SignalNone, &action.StartAction{}, "ID not set, executing StartAction")
+		return fsmv2.Transition(s, fsmv2.SignalNone, &action.StartAction{}, "ID not set, executing StartAction")
 	}
 
 	// All children must be running (healthy > 0, unhealthy == 0) before transitioning.
 	if snap.Observed.ChildrenHealthy > 0 && snap.Observed.ChildrenUnhealthy == 0 {
-		return fsmv2.Result[any, any](&RunningState{}, fsmv2.SignalNone, nil, "All children healthy, transitioning to Running")
+		return fsmv2.Transition(&RunningState{}, fsmv2.SignalNone, nil, "All children healthy, transitioning to Running")
 	}
 
-	return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil, "Waiting for all children to become healthy")
+	return fsmv2.Transition(s, fsmv2.SignalNone, nil, "Waiting for all children to become healthy")
 }
 
 func (s *TryingToStartState) String() string {

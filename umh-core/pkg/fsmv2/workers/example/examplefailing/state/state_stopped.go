@@ -29,14 +29,14 @@ func (s *StoppedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := helpers.ConvertSnapshot[snapshot.ExamplefailingObservedState, *snapshot.ExamplefailingDesiredState](snapAny)
 
 	if snap.Desired.IsShutdownRequested() {
-		return fsmv2.Result[any, any](s, fsmv2.SignalNeedsRemoval, nil, "shutdown requested, signaling removal")
+		return fsmv2.Transition(s, fsmv2.SignalNeedsRemoval, nil, "shutdown requested, signaling removal")
 	}
 
 	if snap.Observed.ShouldBeRunning() {
-		return fsmv2.Result[any, any](&TryingToConnectState{}, fsmv2.SignalNone, nil, "worker should be running, transitioning to connect")
+		return fsmv2.Transition(&TryingToConnectState{}, fsmv2.SignalNone, nil, "worker should be running, transitioning to connect")
 	}
 
-	return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil, "worker is stopped, no connection")
+	return fsmv2.Transition(s, fsmv2.SignalNone, nil, "worker is stopped, no connection")
 }
 
 func (s *StoppedState) String() string {

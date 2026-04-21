@@ -28,15 +28,15 @@ func (s *StoppedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := helpers.ConvertSnapshot[snapshot.ExampleslowObservedState, *snapshot.ExampleslowDesiredState](snapAny)
 
 	if snap.Desired.IsShutdownRequested() {
-		return fsmv2.Result[any, any](s, fsmv2.SignalNeedsRemoval, nil, "shutdown requested, needs removal")
+		return fsmv2.Transition(s, fsmv2.SignalNeedsRemoval, nil, "shutdown requested, needs removal")
 	}
 
 	// ParentMappedState is injected into Observed.DesiredState by collector.
 	if snap.Observed.ShouldBeRunning() {
-		return fsmv2.Result[any, any](&TryingToConnectState{}, fsmv2.SignalNone, nil, "should be running, transitioning to trying to connect")
+		return fsmv2.Transition(&TryingToConnectState{}, fsmv2.SignalNone, nil, "should be running, transitioning to trying to connect")
 	}
 
-	return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil, "slow worker is stopped, no connection")
+	return fsmv2.Transition(s, fsmv2.SignalNone, nil, "slow worker is stopped, no connection")
 }
 
 func (s *StoppedState) String() string {

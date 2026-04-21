@@ -30,10 +30,10 @@ func (s *TryingToStopState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := helpers.ConvertSnapshot[snapshot.ExamplefailingObservedState, *snapshot.ExamplefailingDesiredState](snapAny)
 
 	if snap.Observed.ConnectionHealth == "no connection" {
-		return fsmv2.Result[any, any](&StoppedState{}, fsmv2.SignalNone, nil, "disconnected successfully")
+		return fsmv2.Transition(&StoppedState{}, fsmv2.SignalNone, nil, "disconnected successfully")
 	}
 
-	return fsmv2.Result[any, any](s, fsmv2.SignalNone, &action.DisconnectAction{}, "attempting to disconnect cleanly")
+	return fsmv2.Transition(s, fsmv2.SignalNone, &action.DisconnectAction{}, "attempting to disconnect cleanly")
 }
 
 func (s *TryingToStopState) String() string {

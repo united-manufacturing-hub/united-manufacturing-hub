@@ -512,7 +512,7 @@ func extractResultArgs(expr ast.Expr) (state, action ast.Expr) {
 		}
 	}
 
-	if funcName != "Result" || len(callExpr.Args) < 3 {
+	if (funcName != "Result" && funcName != "Transition") || len(callExpr.Args) < 3 {
 		return nil, nil
 	}
 
@@ -545,7 +545,7 @@ func extractResultArgsWithSignal(expr ast.Expr) (state, signal, action ast.Expr)
 		}
 	}
 
-	if funcName != "Result" || len(callExpr.Args) < 3 {
+	if (funcName != "Result" && funcName != "Transition") || len(callExpr.Args) < 3 {
 		return nil, nil, nil
 	}
 
@@ -851,7 +851,7 @@ func checkTryingToStatesReturnActions(filename string) []Violation {
 				}
 			}
 
-			if funcName != "Result" {
+			if funcName != "Result" && funcName != "Transition" {
 				return true
 			}
 

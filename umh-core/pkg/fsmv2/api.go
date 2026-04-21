@@ -198,6 +198,9 @@ func Result[TSnapshot any, TDeps any](
 // wrong signatures) cause a panic with a diagnostic message — this is a
 // programmer error, not a runtime condition.
 //
+// Prefer Action[any] for hot-path actions to avoid reflection cost in the
+// auto-wrap path (see pre-c7-reflection-benchmark.md for measurements).
+//
 // Usage:
 //
 //	return fsmv2.Transition(s, fsmv2.SignalNone, nil, "Worker is stopped")

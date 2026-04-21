@@ -30,16 +30,16 @@ func (s *TryingToConnectState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := helpers.ConvertSnapshot[snapshot.ExamplefailingObservedState, *snapshot.ExamplefailingDesiredState](snapAny)
 
 	if snap.Observed.IsStopRequired() {
-		return fsmv2.Result[any, any](&TryingToStopState{}, fsmv2.SignalNone, nil, "stop required, transitioning to stop state")
+		return fsmv2.Transition(&TryingToStopState{}, fsmv2.SignalNone, nil, "stop required, transitioning to stop state")
 	}
 
 	if snap.Observed.RestartAfterFailures > 0 &&
 		snap.Observed.ConnectAttempts >= snap.Observed.RestartAfterFailures {
-		return fsmv2.Result[any, any](s, fsmv2.SignalNeedsRestart, nil, "max connection attempts reached, signaling restart")
+		return fsmv2.Transition(s, fsmv2.SignalNeedsRestart, nil, "max connection attempts reached, signaling restart")
 	}
 
 	if snap.Observed.ConnectionHealth == "healthy" {
-		return fsmv2.Result[any, any](&ConnectedState{}, fsmv2.SignalNone, nil, "connection established successfully")
+		return fsmv2.Transition(&ConnectedState{}, fsmv2.SignalNone, nil, "connection established successfully")
 	}
 
 	// Check if we should delay before retrying (recovery delay after failure).
@@ -48,11 +48,11 @@ func (s *TryingToConnectState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	// Without an action, observations only happen every 1 second (DefaultObservationInterval),
 	// which could cause the parent to miss the unhealthy window during recovery delay.
 	if snap.Observed.RecoveryDelayActive {
-		return fsmv2.Result[any, any](s, fsmv2.SignalNone, &action.TriggerObservationAction{},
+		return fsmv2.Transition(s, fsmv2.SignalNone, &action.TriggerObservationAction{},
 			"waiting for recovery delay (triggering observation)")
 	}
 
-	return fsmv2.Result[any, any](s, fsmv2.SignalNone, &action.ConnectAction{}, "attempting to establish connection")
+	return fsmv2.Transition(s, fsmv2.SignalNone, &action.ConnectAction{}, "attempting to establish connection")
 }
 
 func (s *TryingToConnectState) String() string {

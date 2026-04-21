@@ -46,11 +46,11 @@ func (s *ConnectedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := helpers.ConvertSnapshot[snapshot.ExamplefailingObservedState, *snapshot.ExamplefailingDesiredState](snapAny)
 
 	if snap.Observed.IsStopRequired() {
-		return fsmv2.Result[any, any](&TryingToStopState{}, fsmv2.SignalNone, nil, "stop required, transitioning to stop state")
+		return fsmv2.Transition(&TryingToStopState{}, fsmv2.SignalNone, nil, "stop required, transitioning to stop state")
 	}
 
 	if snap.Observed.ConnectionHealth == "no connection" {
-		return fsmv2.Result[any, any](&DisconnectedState{}, fsmv2.SignalNone, nil, "connection lost unexpectedly")
+		return fsmv2.Transition(&DisconnectedState{}, fsmv2.SignalNone, nil, "connection lost unexpectedly")
 	}
 
 	// Simulate failures: stay healthy for a deterministic wall-clock duration, then disconnect.
@@ -65,15 +65,15 @@ func (s *ConnectedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	if snap.Observed.ShouldFail && !snap.Observed.AllCyclesComplete {
 		timeInStateMs := snap.Observed.Metrics.Framework.TimeInCurrentStateMs
 		if timeInStateMs >= healthyDurationMsBeforeNextCycle {
-			return fsmv2.Result[any, any](&TriggeringNextCycleState{}, fsmv2.SignalNone, nil, "reached healthy duration threshold, triggering next failure cycle")
+			return fsmv2.Transition(&TriggeringNextCycleState{}, fsmv2.SignalNone, nil, "reached healthy duration threshold, triggering next failure cycle")
 		}
 
 		// Use TriggerObservationAction to trigger immediate observation (even though we use wall-clock
 		// time for the transition decision). This ensures parent observes child health promptly.
-		return fsmv2.Result[any, any](s, fsmv2.SignalNone, &action.TriggerObservationAction{}, "waiting for healthy duration, triggering observation")
+		return fsmv2.Transition(s, fsmv2.SignalNone, &action.TriggerObservationAction{}, "waiting for healthy duration, triggering observation")
 	}
 
-	return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil, "connected and ready, no action needed")
+	return fsmv2.Transition(s, fsmv2.SignalNone, nil, "connected and ready, no action needed")
 }
 
 func (s *ConnectedState) String() string {

@@ -32,10 +32,10 @@ func (s *TryingToStopState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	// Child worker is "stopped" when connection health shows not healthy (disconnected)
 	// After DisconnectAction executes and collector runs, ConnectionHealth will show "no connection"
 	if snap.Observed.ConnectionHealth != "healthy" {
-		return fsmv2.Result[any, any](&StoppedState{}, fsmv2.SignalNone, nil, "Disconnection complete, child stopped")
+		return fsmv2.Transition(&StoppedState{}, fsmv2.SignalNone, nil, "Disconnection complete, child stopped")
 	}
 
-	return fsmv2.Result[any, any](s, fsmv2.SignalNone, &action.DisconnectAction{}, "Closing connections gracefully")
+	return fsmv2.Transition(s, fsmv2.SignalNone, &action.DisconnectAction{}, "Closing connections gracefully")
 }
 
 func (s *TryingToStopState) String() string {

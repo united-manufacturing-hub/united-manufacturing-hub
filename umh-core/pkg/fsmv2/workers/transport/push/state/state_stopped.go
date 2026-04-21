@@ -36,15 +36,15 @@ func (s *StoppedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := fsmv2.ConvertWorkerSnapshot[push_pkg.PushConfig, push_pkg.PushStatus](snapAny)
 
 	if snap.IsShutdownRequested {
-		return fsmv2.Result[any, any](s, fsmv2.SignalNeedsRemoval, nil, "shutdown requested, signaling removal")
+		return fsmv2.Transition(s, fsmv2.SignalNeedsRemoval, nil, "shutdown requested, signaling removal")
 	}
 
 	if snap.ParentMappedState == config.DesiredStateRunning {
-		return fsmv2.Result[any, any](&RunningState{}, fsmv2.SignalNone, nil,
+		return fsmv2.Transition(&RunningState{}, fsmv2.SignalNone, nil,
 			fmt.Sprintf("parent mapped state is %q, transitioning to Running", snap.ParentMappedState))
 	}
 
-	return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil,
+	return fsmv2.Transition(s, fsmv2.SignalNone, nil,
 		fmt.Sprintf("stopped, parent mapped state is %q", snap.ParentMappedState))
 }
 

@@ -28,14 +28,14 @@ func (s *ConnectedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := helpers.ConvertSnapshot[snapshot.ExampleslowObservedState, *snapshot.ExampleslowDesiredState](snapAny)
 
 	if snap.Observed.IsStopRequired() {
-		return fsmv2.Result[any, any](&TryingToStopState{}, fsmv2.SignalNone, nil, "stop required, transitioning to trying to stop")
+		return fsmv2.Transition(&TryingToStopState{}, fsmv2.SignalNone, nil, "stop required, transitioning to trying to stop")
 	}
 
 	if snap.Observed.ConnectionHealth == "no connection" {
-		return fsmv2.Result[any, any](&DisconnectedState{}, fsmv2.SignalNone, nil, "connection lost, transitioning to disconnected")
+		return fsmv2.Transition(&DisconnectedState{}, fsmv2.SignalNone, nil, "connection lost, transitioning to disconnected")
 	}
 
-	return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil, "active connection established")
+	return fsmv2.Transition(s, fsmv2.SignalNone, nil, "active connection established")
 }
 
 func (s *ConnectedState) String() string {

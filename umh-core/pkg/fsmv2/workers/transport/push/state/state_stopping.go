@@ -33,7 +33,7 @@ func (s *StoppingState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	// Cleanup hook: add resource cleanup actions here in the future.
 	// Self-return is valid during cleanup but MUST carry an action — never nil.
 
-	return fsmv2.Result[any, any](&StoppedState{}, fsmv2.SignalNone, nil,
+	return fsmv2.Transition(&StoppedState{}, fsmv2.SignalNone, nil,
 		fmt.Sprintf("stop complete: shutdown=%t, parentState=%s",
 			snap.IsShutdownRequested, snap.ParentMappedState))
 }
