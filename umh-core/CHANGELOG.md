@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Internal
+
+- FSMv2 `register.Worker` now takes a third type parameter `TDeps` (`register.Worker[TConfig, TStatus, TDeps]`). Workers with no custom dependencies use the new `register.NoDeps` alias. Per-worker `WorkerType` constants are now unexported (`workerType`). Affects in-tree framework code only; no user-facing API.
+
 ### Improvements
 
 - Previously, a Flow only exposed a single health and throughput metric. Starting with this version, umh-core exposes separate throughput metrics and health status for read and write flows.

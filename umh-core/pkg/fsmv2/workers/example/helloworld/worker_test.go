@@ -22,6 +22,7 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/register"
 	hello_world "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/helloworld"
 	_ "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/helloworld/state"
 )
@@ -39,7 +40,7 @@ var _ = Describe("HelloworldWorker", func() {
 	Describe("NewHelloworldWorker", func() {
 		It("should create worker successfully", func() {
 			identity := deps.Identity{ID: "test-worker", WorkerType: "helloworld"}
-			w, err := hello_world.NewHelloworldWorker(identity, logger, nil)
+			w, err := hello_world.NewHelloworldWorker(identity, logger, nil, register.NoDeps{})
 
 			Expect(err).NotTo(HaveOccurred())
 			Expect(w).NotTo(BeNil())
@@ -47,7 +48,7 @@ var _ = Describe("HelloworldWorker", func() {
 
 		It("should fail with nil logger", func() {
 			identity := deps.Identity{ID: "test-worker", WorkerType: "helloworld"}
-			w, err := hello_world.NewHelloworldWorker(identity, nil, nil)
+			w, err := hello_world.NewHelloworldWorker(identity, nil, nil, register.NoDeps{})
 
 			Expect(err).To(HaveOccurred())
 			Expect(w).To(BeNil())
@@ -59,7 +60,7 @@ var _ = Describe("HelloworldWorker", func() {
 		BeforeEach(func() {
 			identity := deps.Identity{ID: "test-worker", WorkerType: "helloworld"}
 			var err error
-			worker, err = hello_world.NewHelloworldWorker(identity, logger, nil)
+			worker, err = hello_world.NewHelloworldWorker(identity, logger, nil, register.NoDeps{})
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -89,7 +90,7 @@ var _ = Describe("HelloworldWorker", func() {
 		BeforeEach(func() {
 			identity := deps.Identity{ID: "test-worker", WorkerType: "helloworld"}
 			var err error
-			worker, err = hello_world.NewHelloworldWorker(identity, logger, nil)
+			worker, err = hello_world.NewHelloworldWorker(identity, logger, nil, register.NoDeps{})
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -105,7 +106,7 @@ var _ = Describe("HelloworldWorker", func() {
 		BeforeEach(func() {
 			identity := deps.Identity{ID: "test-worker", WorkerType: "helloworld"}
 			var err error
-			worker, err = hello_world.NewHelloworldWorker(identity, logger, nil)
+			worker, err = hello_world.NewHelloworldWorker(identity, logger, nil, register.NoDeps{})
 			Expect(err).NotTo(HaveOccurred())
 		})
 

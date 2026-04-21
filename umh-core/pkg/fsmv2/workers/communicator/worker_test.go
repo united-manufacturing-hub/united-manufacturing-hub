@@ -27,6 +27,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	fsmv2types "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	depspkg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/register"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/state"
 	httpTransport "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport/http"
@@ -80,7 +81,7 @@ func TestCommunicator(t *testing.T) {
 // createCommunicatorWorker creates a CommunicatorWorker using the new WorkerBase API.
 func createCommunicatorWorker(id string, logger depspkg.FSMLogger, sr depspkg.StateReader) *communicator.CommunicatorWorker {
 	identity := depspkg.Identity{ID: id, WorkerType: "communicator", Name: id}
-	w, err := communicator.NewCommunicatorWorker(identity, logger, sr)
+	w, err := communicator.NewCommunicatorWorker(identity, logger, sr, register.NoDeps{})
 	Expect(err).ToNot(HaveOccurred())
 
 	return w.(*communicator.CommunicatorWorker)

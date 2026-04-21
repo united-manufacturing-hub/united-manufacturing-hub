@@ -131,7 +131,7 @@ New workers should use `WorkerBase[TConfig, TStatus]` instead of the legacy 7-fi
 - **`ConvertWorkerSnapshot[TConfig, TStatus]`** — entry-point type assertion in states
 - **`ExtractConfig[TConfig](desired)`** — typed config access in `CollectObservedState`
 - **`WrapAction[TDeps]`** — adapts typed actions to `Action[any]`
-- **`register.Worker[TConfig, TStatus]`** — one-line registration (factory + supervisor + CSE types)
+- **`register.Worker[TConfig, TStatus, TDeps]`** — one-line registration (factory + supervisor + CSE types). Use `register.NoDeps` for zero-dep workers.
 
 **Architecture validators** accept both APIs: `ConvertWorkerSnapshot` and `ConvertSnapshot` are valid entry points; `snap.IsShutdownRequested` (field) and `snap.Desired.IsShutdownRequested()` (method) are valid shutdown checks.
 
