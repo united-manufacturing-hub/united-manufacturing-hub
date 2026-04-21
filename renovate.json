@@ -3,7 +3,7 @@
   "extends": ["config:recommended", "helpers:pinGitHubActionDigests"],
   "labels": ["dependencies", "skip-changelog-guard"],
   "commitMessagePrefix": "[renovate]chore(deps):",
-  "includePaths": ["umh-core/**"],
+  "includePaths": ["umh-core/**", ".github/**"],
   "enabledManagers": ["dockerfile", "gomod", "github-actions"],
   "postUpdateOptions": ["gomodTidy", "gomodVendor", "gomodUpdateImportPaths"],
   "minimumReleaseAge": "7 days",
