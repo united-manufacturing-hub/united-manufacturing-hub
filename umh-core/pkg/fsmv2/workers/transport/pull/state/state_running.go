@@ -37,27 +37,27 @@ func (s *RunningState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := fsmv2.ConvertWorkerSnapshot[pull_pkg.PullConfig, pull_pkg.PullStatus](snapAny)
 
 	if snap.ShouldStop() {
-		return fsmv2.Result[any, any](&StoppingState{}, fsmv2.SignalNone, nil,
-			fmt.Sprintf("stop required: shutdown=%t, parentState=%s", snap.IsShutdownRequested, snap.ParentMappedState), nil)
+		return fsmv2.Transition(&StoppingState{}, fsmv2.SignalNone, nil,
+			fmt.Sprintf("stop required: shutdown=%t, parentState=%s", snap.IsShutdownRequested, snap.ParentMappedState))
 	}
 
 	if snap.Status.ConsecutiveErrors >= errorDegradedThreshold {
-		return fsmv2.Result[any, any](&DegradedState{}, fsmv2.SignalNone, nil,
-			fmt.Sprintf("degrading: %d consecutive errors (threshold=%d)", snap.Status.ConsecutiveErrors, errorDegradedThreshold), nil)
+		return fsmv2.Transition(&DegradedState{}, fsmv2.SignalNone, nil,
+			fmt.Sprintf("degrading: %d consecutive errors (threshold=%d)", snap.Status.ConsecutiveErrors, errorDegradedThreshold))
 	}
 
 	if snap.Status.PendingMessageCount >= pendingDegradedThreshold {
-		return fsmv2.Result[any, any](&DegradedState{}, fsmv2.SignalNone, nil,
+		return fsmv2.Transition(&DegradedState{}, fsmv2.SignalNone, nil,
 			fmt.Sprintf("degrading: %d pending messages (threshold=%d)",
 				snap.Status.PendingMessageCount, pendingDegradedThreshold), nil)
 	}
 
 	if snap.Status.HasTransport && snap.Status.HasValidToken {
-		return fsmv2.Result[any, any](s, fsmv2.SignalNone, &action.PullAction{}, "pulling messages (transport and token available)", nil)
+		return fsmv2.Transition(s, fsmv2.SignalNone, &action.PullAction{}, "pulling messages (transport and token available)")
 	}
 
-	return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil,
-		fmt.Sprintf("waiting: hasTransport=%t, hasValidToken=%t", snap.Status.HasTransport, snap.Status.HasValidToken), nil)
+	return fsmv2.Transition(s, fsmv2.SignalNone, nil,
+		fmt.Sprintf("waiting: hasTransport=%t, hasValidToken=%t", snap.Status.HasTransport, snap.Status.HasValidToken))
 }
 
 func (s *RunningState) String() string {

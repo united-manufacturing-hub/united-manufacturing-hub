@@ -38,7 +38,7 @@ func (s *StoppingState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	// Cleanup hook: add resource cleanup here if needed.
 	// Self-return during cleanup MUST carry an action — never nil.
 
-	return fsmv2.Result[any, any](&StoppedState{}, fsmv2.SignalNone, nil,
+	return fsmv2.Transition(&StoppedState{}, fsmv2.SignalNone, nil,
 		fmt.Sprintf("stop complete: children healthy=%d, unhealthy=%d",
 			snap.ChildrenHealthy, snap.ChildrenUnhealthy), nil)
 }
