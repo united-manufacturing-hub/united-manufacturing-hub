@@ -163,8 +163,9 @@ func ValidateCustomDataFlowComponentPayload(payload models.CDFCPayload, validate
 		}
 	}
 
-	// Validate pipeline
-	if len(payload.Pipeline) == 0 {
+	// Validate pipeline. Write DFCs (validateInput=false) may have an empty pipeline
+	// when acting as a passthrough. Read DFCs and stand-alone DFCs always require processors.
+	if validateInput && len(payload.Pipeline) == 0 {
 		return errors.New("missing required field pipeline.processors")
 	}
 

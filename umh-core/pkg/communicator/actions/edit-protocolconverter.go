@@ -435,9 +435,14 @@ func (a *EditProtocolConverterAction) applyMutation(readBenthosConfig, writeBent
 		instanceToModify.ProtocolConverterServiceConfig.Config.DataflowComponentWriteServiceConfig = writeDFCServiceConfig
 	}
 
-	// Extract UMH_TOPICS from write DFC payload (sent as top-level field by frontend)
-	if a.writeDFCPayload != nil && len(a.writeDFCPayload.UMHTopics) > 0 {
-		instanceToModify.ProtocolConverterServiceConfig.Variables.User["UMH_TOPICS"] = a.writeDFCPayload.UMHTopics
+	// Persist UMH_TOPICS from write DFC payload. An explicit empty slice clears the key
+	// so that stale topics do not remain when the user removes all subscriptions.
+	if a.writeDFCPayload != nil {
+		if len(a.writeDFCPayload.UMHTopics) > 0 {
+			instanceToModify.ProtocolConverterServiceConfig.Variables.User["UMH_TOPICS"] = a.writeDFCPayload.UMHTopics
+		} else {
+			delete(instanceToModify.ProtocolConverterServiceConfig.Variables.User, "UMH_TOPICS")
+		}
 	}
 
 	// Add the connection details to the template
@@ -1197,6 +1202,9 @@ func validateDFCPayloadAndState(payload *models.CDFCPayload, state string, label
 		if err := ValidateCustomDataFlowComponentPayload(*payload, validateInput, false); err != nil {
 			return fmt.Errorf("invalid %s DFC configuration: %w", label, err)
 		}
+		if label == "write" && len(payload.UMHTopics) == 0 {
+			return errors.New("write DFC requires at least one UMH topic (umh_topics)")
+		}
 	}
 	if state != "" {
 		if err := ValidateDataFlowComponentState(state); err != nil {
@@ -1222,6 +1230,9 @@ func validateProtocolConverterDFC(dfc *models.ProtocolConverterDFC, label string
 	validateInput := label != "write"
 	if err := ValidateCustomDataFlowComponentPayload(payload, validateInput, false); err != nil {
 		return fmt.Errorf("invalid %s DFC configuration: %w", label, err)
+	}
+	if label == "write" && len(dfc.UMHTopics) == 0 {
+		return errors.New("write DFC requires at least one UMH topic (umh_topics)")
 	}
 	return nil
 }

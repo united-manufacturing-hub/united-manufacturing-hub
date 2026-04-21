@@ -270,6 +270,12 @@ func (a *GetProtocolConverterAction) Execute() (interface{}, map[string]interfac
 				specConfig := observedState.ObservedProtocolConverterSpecConfig
 				if specConfig.Variables.User != nil {
 					for key, value := range specConfig.Variables.User {
+						// UMH_TOPICS is an internal write-DFC field, not a user-editable
+						// template variable. It is returned via writeDFC.UMHTopics instead.
+						if key == "UMH_TOPICS" {
+							continue
+						}
+
 						variables = append(variables, models.ProtocolConverterVariable{
 							Label: key,
 							Value: value,
