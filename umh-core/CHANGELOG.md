@@ -6,6 +6,7 @@
 
 - FSMv2 `register.Worker` now takes a third type parameter `TDeps` (`register.Worker[TConfig, TStatus, TDeps]`). Workers with no custom dependencies use the new `register.NoDeps` alias. Per-worker `WorkerType` constants are now unexported (`workerType`). Affects in-tree framework code only; no user-facing API.
 - FSMv2 transport worker migrated to `register.Worker` with typed `TDeps = *TransportDependencies`. Parent→child deps sharing moved from `extraDeps["transport_deps"]` to package-level `transport.SetChildDeps` / `transport.ChildDeps` singleton, mirroring the existing `ChannelProvider` pattern. Internal framework change only; no user-facing API.
+- FSMv2 push worker migrated to `register.Worker` with typed `TDeps = *PushDependencies`. The `extraDeps["transport_deps"]` read is replaced by a call to `transport.ChildDeps()` inside the constructor, completing the typed parent→child dep seam for push. Internal framework change only; no user-facing API.
 
 ### Improvements
 
