@@ -31,13 +31,13 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/register"
 )
 
-// WorkerType is the registered type name for this worker.
-const WorkerType = "helloworld"
+// workerType is the registered type name for this worker.
+const workerType = "helloworld"
 
 // HelloworldWorker implements the FSMv2 Worker interface using the WorkerBase API.
 type HelloworldWorker struct {
 	deps *HelloworldDependencies
-	fsmv2.WorkerBase[HelloworldConfig, HelloworldStatus]
+	fsmv2.WorkerBase[HelloworldConfig, HelloworldStatus, register.NoDeps]
 }
 
 // NewHelloworldWorker creates a new helloworld worker with the standard framework dependencies.
@@ -98,5 +98,5 @@ func readMoodFile(path string) string {
 }
 
 func init() {
-	register.Worker[HelloworldConfig, HelloworldStatus](WorkerType, NewHelloworldWorker)
+	register.Worker[HelloworldConfig, HelloworldStatus, register.NoDeps](workerType, NewHelloworldWorker)
 }

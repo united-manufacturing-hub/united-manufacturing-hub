@@ -53,13 +53,13 @@ import (
 	httpTransport "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport/http"
 )
 
-// WorkerType is the registered type name for this worker.
-const WorkerType = "communicator"
+// workerType is the registered type name for this worker.
+const workerType = "communicator"
 
 // CommunicatorWorker implements the FSMv2 Worker interface using the WorkerBase API.
 type CommunicatorWorker struct {
 	deps *CommunicatorDependencies
-	fsmv2.WorkerBase[CommunicatorConfig, CommunicatorStatus]
+	fsmv2.WorkerBase[CommunicatorConfig, CommunicatorStatus, register.NoDeps]
 }
 
 // NewCommunicatorWorker creates a new communicator worker with the standard framework dependencies.
@@ -120,5 +120,5 @@ func (w *CommunicatorWorker) CollectObservedState(_ context.Context, _ fsmv2.Des
 }
 
 func init() {
-	register.Worker[CommunicatorConfig, CommunicatorStatus](WorkerType, NewCommunicatorWorker)
+	register.Worker[CommunicatorConfig, CommunicatorStatus, register.NoDeps](workerType, NewCommunicatorWorker)
 }
