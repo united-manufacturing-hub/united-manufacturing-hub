@@ -17,6 +17,7 @@ package fsmv2
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
@@ -187,9 +188,15 @@ func Result[TSnapshot any, TDeps any](
 // type parameters when returning from Next(), reducing boilerplate.
 //
 // The action argument is `any` so that typed Action[TDeps] values can be
-// passed without a caller-visible WrapAction. PR1 C3 adds the auto-wrap case;
-// until then this function accepts nil or Action[any] only — other types
-// panic with a descriptive message pointing at C3.
+// passed without a caller-visible WrapAction. The function accepts:
+//   - nil: no action
+//   - Action[any]: passed through unchanged (fast path)
+//   - Action[TDeps] for any concrete TDeps: auto-wrapped via reflection
+//     so Execute asserts deps into TDeps before delegating
+//
+// Values that don't structurally match an Action (missing Execute/Name or
+// wrong signatures) cause a panic with a diagnostic message — this is a
+// programmer error, not a runtime condition.
 //
 // Usage:
 //
@@ -208,11 +215,99 @@ func Transition(
 	case Action[any]:
 		wrapped = a
 	default:
-		panic(fmt.Sprintf("fsmv2.Transition: unsupported action type %T; "+
-			"PR1 C3 adds auto-wrap for typed Action[TDeps]", a))
+		wrapped = wrapTypedAction(a)
 	}
 
 	return Result[any, any](state, signal, wrapped, reason)
+}
+
+// reflectedAction adapts an Action[TDeps] for some concrete TDeps into an
+// Action[any]. The adapter asserts deps into TDeps via reflection before
+// delegating to the inner action's Execute method.
+type reflectedAction struct {
+	execute func(ctx context.Context, deps any) error
+	name    string
+}
+
+// Execute delegates to the reflection-built closure.
+func (r *reflectedAction) Execute(ctx context.Context, deps any) error {
+	return r.execute(ctx, deps)
+}
+
+// Name returns the cached name captured at wrap time.
+func (r *reflectedAction) Name() string { return r.name }
+
+// wrapTypedAction builds an Action[any] adapter for a typed Action[TDeps]
+// discovered via reflection. Panics if the value does not structurally match
+// an Action interface (Execute(context.Context, TDeps) error + Name() string).
+func wrapTypedAction(action any) Action[any] {
+	v := reflect.ValueOf(action)
+	if !v.IsValid() {
+		panic(fmt.Sprintf("fsmv2.Transition auto-wrap: action is nil or invalid; "+
+			"requires Execute(context.Context, TDeps) error and Name() string (got %T)", action))
+	}
+
+	if v.Kind() == reflect.Ptr && v.IsNil() {
+		panic(fmt.Sprintf("fsmv2.Transition auto-wrap: typed nil action (%T)", action))
+	}
+
+	execMethod := v.MethodByName("Execute")
+	nameMethod := v.MethodByName("Name")
+
+	if !execMethod.IsValid() || !nameMethod.IsValid() {
+		panic(fmt.Sprintf("fsmv2.Transition auto-wrap: action of type %T is not a valid Action[TDeps] — "+
+			"requires Execute(context.Context, TDeps) error and Name() string", action))
+	}
+
+	// Validate Execute signature: func(context.Context, <TDeps>) error.
+	execType := execMethod.Type()
+	ctxType := reflect.TypeOf((*context.Context)(nil)).Elem()
+	errType := reflect.TypeOf((*error)(nil)).Elem()
+	if execType.NumIn() != 2 || execType.NumOut() != 1 ||
+		!execType.In(0).Implements(ctxType) ||
+		!execType.Out(0).Implements(errType) {
+		panic(fmt.Sprintf("fsmv2.Transition auto-wrap: action of type %T has wrong Execute signature %s — "+
+			"requires Execute(context.Context, TDeps) error", action, execType))
+	}
+
+	// Validate Name signature: func() string.
+	nameType := nameMethod.Type()
+	stringType := reflect.TypeOf("")
+	if nameType.NumIn() != 0 || nameType.NumOut() != 1 || nameType.Out(0) != stringType {
+		panic(fmt.Sprintf("fsmv2.Transition auto-wrap: action of type %T has wrong Name signature %s — "+
+			"requires Name() string", action, nameType))
+	}
+
+	expectedDepsType := execType.In(1)
+	cachedName := nameMethod.Call(nil)[0].String()
+
+	return &reflectedAction{
+		name: cachedName,
+		execute: func(ctx context.Context, deps any) error {
+			depsVal := reflect.ValueOf(deps)
+			if !depsVal.IsValid() {
+				// nil deps: only valid if expectedDepsType is nilable (ptr, iface, map, chan, func, slice).
+				switch expectedDepsType.Kind() {
+				case reflect.Ptr, reflect.Interface, reflect.Map, reflect.Chan, reflect.Func, reflect.Slice:
+					depsVal = reflect.Zero(expectedDepsType)
+				default:
+					return fmt.Errorf("fsmv2.Transition auto-wrap: nil deps not assignable to %s (action %q)",
+						expectedDepsType, cachedName)
+				}
+			} else if !depsVal.Type().AssignableTo(expectedDepsType) {
+				return fmt.Errorf("fsmv2.Transition auto-wrap: deps type %T not assignable to %s (action %q)",
+					deps, expectedDepsType, cachedName)
+			} else {
+				depsVal = depsVal.Convert(expectedDepsType)
+			}
+
+			out := execMethod.Call([]reflect.Value{reflect.ValueOf(ctx), depsVal})
+			if errIface := out[0].Interface(); errIface != nil {
+				return errIface.(error)
+			}
+			return nil
+		},
+	}
 }
 
 // Worker is the business logic interface that developers implement.
