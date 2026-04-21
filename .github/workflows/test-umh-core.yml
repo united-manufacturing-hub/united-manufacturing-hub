@@ -184,7 +184,8 @@ jobs:
           mkdir -p merged-reports
           go install github.com/nezorflame/junit-merger@v1.0.0
 
-          $(go env GOPATH)/bin/junit-merger -o merged-reports/combined-test-report.xml test-reports/**/*.xml
+          XML_FILES=$(find test-reports -name "*.xml" -type f | tr '\n' ' ')
+          $(go env GOPATH)/bin/junit-merger -o merged-reports/combined-test-report.xml $XML_FILES
 
       - name: Add consolidated report to PR
         uses: ctrf-io/github-test-reporter@024bc4b64d997ca9da86833c6b9548c55c620e40 # v1.0.26
