@@ -318,10 +318,9 @@ func renderConfig(
 
 	// Inject umh_topics into write DFC input after template rendering.
 	// []string values can't be rendered via text/template, so we set them directly.
+	// UMH_TOPICS presence is guaranteed by BuildRuntimeConfig above.
 	if unsInput, ok := write.BenthosConfig.Input["uns"].(map[string]any); ok {
-		if umhTopics, ok := scope["UMH_TOPICS"]; ok {
-			unsInput["umh_topics"] = umhTopics
-		}
+		unsInput["umh_topics"] = scope["UMH_TOPICS"]
 	}
 
 	return protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime{

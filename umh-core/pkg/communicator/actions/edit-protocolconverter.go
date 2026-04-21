@@ -461,10 +461,16 @@ func (a *EditProtocolConverterAction) applyMutation(readBenthosConfig, writeBent
 
 	instanceToModify.ProtocolConverterServiceConfig.Location = locationMap
 
-	// Update the connection details of the protocol converter (IP and PORT variables)
+	// Update the connection details of the protocol converter (IP and PORT variables).
+	// Only overwrite when non-empty: an edit that omits connection details should
+	// preserve the existing values rather than blanking them out.
 	if instanceToModify.ProtocolConverterServiceConfig.Variables.User != nil {
-		instanceToModify.ProtocolConverterServiceConfig.Variables.User["IP"] = a.connectionIP
-		instanceToModify.ProtocolConverterServiceConfig.Variables.User["PORT"] = a.connectionPort
+		if a.connectionIP != "" {
+			instanceToModify.ProtocolConverterServiceConfig.Variables.User["IP"] = a.connectionIP
+		}
+		if a.connectionPort != "" && a.connectionPort != "0" {
+			instanceToModify.ProtocolConverterServiceConfig.Variables.User["PORT"] = a.connectionPort
+		}
 	}
 
 	// Only update the per-DFC desired states if the user provided new values.
@@ -1104,11 +1110,12 @@ func (a *EditProtocolConverterAction) deriveDFCType() DFCType {
 
 	if hasWrite && !writeChanged {
 		deployedTopics, _ := toStringSlice(deployedVars["UMH_TOPICS"])
-		if !equalStringSlices(deployedTopics, a.writeDFCPayload.UMHTopics) {
+		if !equalTopicSets(deployedTopics, a.writeDFCPayload.UMHTopics) {
 			writeChanged = true
 		}
 	}
 	derived := dfcTypeFromPresence(readChanged, writeChanged)
+	a.actionLogger.Debugf("Derived dfcType=%s (readChanged=%v, writeChanged=%v)", derived, readChanged, writeChanged)
 
 	return derived
 }
@@ -1237,15 +1244,3 @@ func validateProtocolConverterDFC(dfc *models.ProtocolConverterDFC, label string
 	return nil
 }
 
-// equalStringSlices reports whether two string slices have identical content + order.
-func equalStringSlices(a, b []string) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := range a {
-		if a[i] != b[i] {
-			return false
-		}
-	}
-	return true
-}

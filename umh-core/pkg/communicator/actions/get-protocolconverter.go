@@ -177,23 +177,6 @@ func determineProtocol(readDFC *models.ProtocolConverterDFC) string {
 
 // buildProtocolConverterDFCFromConfig converts a dataflow component service config
 // into the models.ProtocolConverterDFC format expected by the API using the shared function.
-// toStringSlice converts an any value to []string, handling both []string and []any from YAML unmarshal.
-func toStringSlice(v any) ([]string, bool) {
-	switch typed := v.(type) {
-	case []string:
-		return typed, true
-	case []any:
-		result := make([]string, 0, len(typed))
-		for _, item := range typed {
-			if s, ok := item.(string); ok {
-				result = append(result, s)
-			}
-		}
-		return result, len(result) == len(typed)
-	}
-	return nil, false
-}
-
 func buildProtocolConverterDFCFromConfig(dfcConfig dataflowcomponentserviceconfig.DataflowComponentServiceConfig, a *GetProtocolConverterAction) (*models.ProtocolConverterDFC, error) {
 	if len(dfcConfig.BenthosConfig.Input) == 0 && len(dfcConfig.BenthosConfig.Output) == 0 {
 		// No DFC configuration present
@@ -206,12 +189,16 @@ func buildProtocolConverterDFCFromConfig(dfcConfig dataflowcomponentserviceconfi
 		return nil, err
 	}
 
-	// Convert the common payload to ProtocolConverterDFC format
+	// Convert the common payload to ProtocolConverterDFC format.
+	// Only populate Inputs when the config has an input block — write DFCs have
+	// auto-generated input and should not expose it to the frontend.
 	dfc := &models.ProtocolConverterDFC{
-		Inputs:   commonPayload.CDFCProperties.Inputs,
 		Pipeline: commonPayload.CDFCProperties.Pipeline,
 		Outputs:  commonPayload.CDFCProperties.Outputs,
 		RawYAML:  commonPayload.CDFCProperties.RawYAML,
+	}
+	if len(dfcConfig.BenthosConfig.Input) > 0 {
+		dfc.Inputs = commonPayload.CDFCProperties.Inputs
 	}
 
 	return dfc, nil

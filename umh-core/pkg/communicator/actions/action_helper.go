@@ -16,6 +16,8 @@ package actions
 
 import (
 	"fmt"
+	"slices"
+	"sort"
 	"sync"
 
 	"github.com/google/uuid"
@@ -92,6 +94,42 @@ func SendLimitedLogs(
 // RemainingPrefixSec formats d (assumed ≤20 s) as "[left: NN s] ".
 func RemainingPrefixSec(dSeconds int) string {
 	return fmt.Sprintf("[left: %02d s] ", dSeconds) // fixed 15-rune prefix
+}
+
+// toStringSlice converts an any value to []string, handling the three forms that
+// UMH_TOPICS can take depending on how it was stored or reloaded from YAML:
+//   - []string: stored directly from a write DFC payload
+//   - []any: produced by yaml.v3 unmarshal of a sequence into map[string]any
+//   - string: yaml.v3 collapses a single-element sequence to a scalar on reload
+func toStringSlice(v any) ([]string, bool) {
+	switch typed := v.(type) {
+	case []string:
+		return typed, true
+	case []any:
+		result := make([]string, 0, len(typed))
+		for _, item := range typed {
+			if s, ok := item.(string); ok {
+				result = append(result, s)
+			}
+		}
+		return result, len(result) == len(typed)
+	case string:
+		return []string{typed}, true
+	}
+	return nil, false
+}
+
+// equalTopicSets reports whether two UMH topic slices contain the same topics
+// regardless of order. Topics are semantically a set; order is not significant.
+func equalTopicSets(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	aCopy := slices.Clone(a)
+	bCopy := slices.Clone(b)
+	sort.Strings(aCopy)
+	sort.Strings(bCopy)
+	return slices.Equal(aCopy, bCopy)
 }
 
 // High-level label for one-off (non-polling) messages.
