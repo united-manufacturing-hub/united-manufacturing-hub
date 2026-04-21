@@ -88,9 +88,9 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity deps.Identity, work
 		return fmt.Errorf("failed to collect initial observed state: %w", err)
 	}
 
-	// If COS returned a NewObservation (zero CollectedAt), set it now.
-	// AddWorker bypasses the collector, so we must set CollectedAt here
-	// to prevent the freshness checker from declaring the observation stale.
+	// Set CollectedAt if unset. AddWorker bypasses the collector's
+	// wrapNewObservation, so we must set it here to prevent the freshness
+	// checker from declaring the observation stale.
 	if observed.GetTimestamp().IsZero() {
 		if setter, ok := observed.(interface{ SetCollectedAt(time.Time) fsmv2.ObservedState }); ok {
 			observed = setter.SetCollectedAt(time.Now())

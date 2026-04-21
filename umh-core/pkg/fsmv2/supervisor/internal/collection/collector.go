@@ -437,11 +437,9 @@ func (c *Collector[TObserved]) collectAndSaveObservedState(ctx context.Context) 
 		return err
 	}
 
-	// Post-COS framework wrapping for NewObservation-based workers.
-	// Gate: zero CollectedAt means NewObservation (not WrapStatus).
-	if observed.GetTimestamp().IsZero() {
-		observed = c.wrapNewObservation(ctx, observed)
-	}
+	// Post-COS framework wrapping: fill CollectedAt, framework metrics,
+	// action history, and accumulated worker metrics.
+	observed = c.wrapNewObservation(ctx, observed)
 
 	// Inject FSM state via callback to preserve "Collector-only writes ObservedState" boundary
 	if c.config.StateProvider != nil {
@@ -564,12 +562,10 @@ type baseDepsAccessor interface {
 	MetricsRecorder() *deps.MetricsRecorder
 }
 
-// wrapNewObservation fills framework fields on a NewObservation-based ObservedState.
-// Called only when the zero-time gate fires (CollectedAt is zero), meaning the
-// developer used NewObservation instead of WrapStatus/WrapStatusAccumulated.
-//
-// Steps: set CollectedAt, inject framework metrics + action history,
-// accumulate worker metrics (load previous from CSE, drain recorder, merge).
+// wrapNewObservation fills framework fields on the ObservedState returned by
+// CollectObservedState. Steps: set CollectedAt, inject framework metrics +
+// action history, accumulate worker metrics (load previous from CSE, drain
+// recorder, merge).
 func (c *Collector[TObserved]) wrapNewObservation(ctx context.Context, observed fsmv2.ObservedState) fsmv2.ObservedState {
 	// Step 1: Set CollectedAt to now.
 	if setter, ok := observed.(interface {

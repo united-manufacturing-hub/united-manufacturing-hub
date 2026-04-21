@@ -47,7 +47,7 @@ type NoDeps = struct{}
 // The workerType string is the canonical name used in config YAML and CSE storage.
 //
 // Workers registered via this function MUST use WorkerBase[TConfig, TStatus] and
-// return w.WrapStatus(status) from CollectObservedState. Workers with custom
+// return fsmv2.NewObservation(status) from CollectObservedState. Workers with custom
 // ObservedState types or that need parent-injected extraDeps must use
 // factory.RegisterWorkerType directly.
 //
