@@ -22,7 +22,6 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	fsmv2config "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
@@ -34,6 +33,8 @@ import (
 	persistencepkg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
 )
 
+const workerType = "persistence"
+
 const (
 	DefaultCompactionInterval  = 5 * time.Minute
 	DefaultRetentionWindow     = 1 * time.Hour
@@ -44,25 +45,36 @@ type PersistenceWorker struct {
 	*helpers.BaseWorker[*PersistenceDependencies]
 }
 
+// NewPersistenceWorker creates a new persistence worker. If the typed
+// dependencies argument is non-nil, it is used as-is (its Store field must be
+// non-nil). When nil, the constructor builds default dependencies from the
+// package-level Store() singleton populated by cmd/main.go via SetStore. This
+// replaces the prior extraDeps["store"] seam with a typed plumbing path.
+// Returns fsmv2.Worker to align with the register.Worker constructor
+// signature used by transport/push/pull.
 func NewPersistenceWorker(
 	identity deps.Identity,
-	store storage.TriangularStoreInterface,
 	logger deps.FSMLogger,
 	stateReader deps.StateReader,
-) (*PersistenceWorker, error) {
+	dependencies *PersistenceDependencies,
+) (fsmv2.Worker, error) {
 	if identity.WorkerType == "" {
-		workerType, err := storage.DeriveWorkerType[snapshot.PersistenceObservedState]()
-		if err != nil {
-			return nil, fmt.Errorf("failed to derive worker type: %w", err)
-		}
-
 		identity.WorkerType = workerType
 	}
 
-	d := NewPersistenceDependencies(store, deps.DefaultScheduler{}, logger, stateReader, identity)
+	if dependencies == nil {
+		store := Store()
+		if store == nil {
+			return nil, errors.New("persistence worker requires a store via persistence.SetStore(); cmd/main.go must publish the store before the application supervisor starts")
+		}
+
+		dependencies = NewPersistenceDependencies(store, deps.DefaultScheduler{}, logger, stateReader, identity)
+	} else if dependencies.GetStore() == nil {
+		return nil, errors.New("persistence worker: dependencies.Store must not be nil")
+	}
 
 	return &PersistenceWorker{
-		BaseWorker: helpers.NewBaseWorker(d),
+		BaseWorker: helpers.NewBaseWorker(dependencies),
 	}, nil
 }
 
@@ -212,15 +224,18 @@ func (w *PersistenceWorker) GetInitialState() fsmv2.State[any, any] {
 	return &state.StoppedState{}
 }
 
+// init registers the persistence worker via factory.RegisterWorkerType. The
+// factory closure obtains the triangular store from the persistence.Store()
+// package-level singleton (populated by cmd/main.go via SetStore), replacing
+// the prior extraDeps["store"] seam with a typed plumbing path. Persistence
+// retains the legacy 2-generic factory registration rather than register.Worker
+// because its CSE types (PersistenceObservedState / PersistenceDesiredState)
+// are custom and not the Observation[Status] / WrappedDesiredState[Config]
+// pair that register.Worker hardcodes.
 func init() {
 	if err := factory.RegisterWorkerType[snapshot.PersistenceObservedState, *snapshot.PersistenceDesiredState](
-		func(id deps.Identity, logger deps.FSMLogger, stateReader deps.StateReader, params map[string]any) fsmv2.Worker {
-			store, ok := params["store"].(storage.TriangularStoreInterface)
-			if !ok || store == nil {
-				panic("persistence worker factory: 'store' parameter must be a TriangularStoreInterface")
-			}
-
-			worker, err := NewPersistenceWorker(id, store, logger, stateReader)
+		func(id deps.Identity, logger deps.FSMLogger, stateReader deps.StateReader, _ map[string]any) fsmv2.Worker {
+			worker, err := NewPersistenceWorker(id, logger, stateReader, nil)
 			if err != nil {
 				panic(fmt.Sprintf("failed to create persistence worker: %v", err))
 			}
