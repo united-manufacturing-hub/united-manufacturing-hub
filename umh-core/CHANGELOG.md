@@ -1,10 +1,14 @@
 # Changelog
 
 ## Unreleased
-
+ 
 ### Improvements
 
 - Updated Go dependencies, includes security fixes for OIDC and JOSE authentication libraries
+
+### Preview: Disable Read Flows
+
+- Supports extracting metrics for write flows for bridges.
 
 ## [0.44.16]
 
