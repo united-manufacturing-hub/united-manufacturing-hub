@@ -194,11 +194,13 @@ func BuildRuntimeConfig(
 	}
 
 	vb.Internal["bridged_by"] = config.GenerateBridgedBy(config.ComponentTypeProtocolConverter, nodeName, pcName)
-	if locationPath == "" {
-		vb.Internal["umh_topic"] = "umh.v1.*"
-	} else {
-		vb.Internal["umh_topic"] = "umh.v1." + locationPath + ".*"
 
+	// UMH_TOPICS is required in user variables when write DFC is configured
+	if len(spec.Config.DataflowComponentWriteServiceConfig.BenthosConfig.Output) > 0 {
+		if _, ok := vb.User["UMH_TOPICS"]; !ok {
+			return protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime{},
+				fmt.Errorf("required variable UMH_TOPICS not set in user variables. user variables: %v", vb.User)
+		}
 	}
 
 	//----------------------------------------------------------------------
@@ -312,6 +314,14 @@ func renderConfig(
 	write, err := config.RenderTemplate(spec.GetDFCWriteServiceConfig(), scope)
 	if err != nil {
 		return protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime{}, err
+	}
+
+	// Inject umh_topics into write DFC input after template rendering.
+	// []string values can't be rendered via text/template, so we set them directly.
+	if unsInput, ok := write.BenthosConfig.Input["uns"].(map[string]any); ok {
+		if umhTopics, ok := scope["UMH_TOPICS"]; ok {
+			unsInput["umh_topics"] = umhTopics
+		}
 	}
 
 	return protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime{

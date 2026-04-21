@@ -26,6 +26,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/nmapserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/protocolconverterserviceconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/variables"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	connectionservicefsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/connection"
@@ -89,12 +90,15 @@ func CreateProtocolConverterTestConfig(name string, desiredState string) config.
 			DesiredFSMState: desiredState,
 		},
 		ProtocolConverterServiceConfig: protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
+			Variables: variables.VariableBundle{
+				User: map[string]any{
+					"UMH_TOPICS": []string{"umh.v1.test.*"},
+				},
+			},
 			Config: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
-				DataflowComponentReadServiceConfig: goodDataflowComponentReadConfig,
-				// ignoring write DFC for now as I get otherwise the error message of
-				// failed to build runtime config: template: pc:5:36: executing "pc" at <.internal.umh_topic>: map has no entry for key "umh_topic"
-				// DataflowComponentWriteServiceConfig: goodDataflowComponentWriteConfig,
-				ConnectionServiceConfig: goodConnectionServiceConfig,
+				DataflowComponentReadServiceConfig:  goodDataflowComponentReadConfig,
+				DataflowComponentWriteServiceConfig: goodDataflowComponentWriteConfig,
+				ConnectionServiceConfig:             goodConnectionServiceConfig,
 			},
 		},
 	}
@@ -109,12 +113,14 @@ func CreateProtocolConverterTestConfigWithMissingDfc(name string, desiredState s
 			DesiredFSMState: desiredState,
 		},
 		ProtocolConverterServiceConfig: protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
+			Variables: variables.VariableBundle{
+				User: map[string]any{
+					"UMH_TOPICS": []string{"umh.v1.test.*"},
+				},
+			},
 			Config: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
 				DataflowComponentReadServiceConfig: missingDataflowComponentConfig,
-				// ignoring write DFC for now as I get otherwise the error message of
-				// failed to build runtime config: template: pc:5:36: executing "pc" at <.internal.umh_topic>: map has no entry for key "umh_topic"
-				// DataflowComponentWriteServiceConfig: goodDataflowComponentWriteConfig,
-				ConnectionServiceConfig: goodConnectionServiceConfig,
+				ConnectionServiceConfig:            goodConnectionServiceConfig,
 			},
 		},
 	}
@@ -136,12 +142,15 @@ func CreateProtocolConverterTestConfigWithInvalidPort(name string, desiredState 
 			DesiredFSMState: desiredState,
 		},
 		ProtocolConverterServiceConfig: protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
+			Variables: variables.VariableBundle{
+				User: map[string]any{
+					"UMH_TOPICS": []string{"umh.v1.test.*"},
+				},
+			},
 			Config: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
-				DataflowComponentReadServiceConfig: goodDataflowComponentReadConfig,
-				// ignoring write DFC for now as I get otherwise the error message of
-				// failed to build runtime config: template: pc:5:36: executing "pc" at <.internal.umh_topic>: map has no entry for key "umh_topic"
-				// DataflowComponentWriteServiceConfig: goodDataflowComponentWriteConfig,
-				ConnectionServiceConfig: invalidConnectionServiceConfig,
+				DataflowComponentReadServiceConfig:  goodDataflowComponentReadConfig,
+				DataflowComponentWriteServiceConfig: goodDataflowComponentWriteConfig,
+				ConnectionServiceConfig:             invalidConnectionServiceConfig,
 			},
 		},
 	}
@@ -164,24 +173,21 @@ func SetupProtocolConverterServiceState(
 // ConfigureProtocolConverterServiceConfig configures the mock service with a default ProtocolConverter config
 func ConfigureProtocolConverterServiceConfig(mockService *protocolconvertersvc.MockProtocolConverterService) {
 	mockService.GetConfigResult = protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime{
-		DataflowComponentReadServiceConfig: goodDataflowComponentReadConfig,
-		// TODO: add write DFC config
-		// DataflowComponentWriteServiceConfig: goodDataflowComponentWriteConfig,
-		ConnectionServiceConfig: goodConnectionServiceConfigRuntime,
+		DataflowComponentReadServiceConfig:  goodDataflowComponentReadConfig,
+		DataflowComponentWriteServiceConfig: goodDataflowComponentWriteConfig,
+		ConnectionServiceConfig:             goodConnectionServiceConfigRuntime,
 	}
 }
 
 func ConfigureProtocolConverterServiceConfigWithMissingDfc(mockService *protocolconvertersvc.MockProtocolConverterService) {
 	mockService.GetConfigResult = protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime{
-		DataflowComponentReadServiceConfig: missingDataflowComponentConfig,
-		// TODO: add write DFC config
-		// DataflowComponentWriteServiceConfig: missingDataflowComponentConfig,
-		ConnectionServiceConfig: goodConnectionServiceConfigRuntime,
+		DataflowComponentReadServiceConfig:  missingDataflowComponentConfig,
+		DataflowComponentWriteServiceConfig: missingDataflowComponentConfig,
+		ConnectionServiceConfig:             goodConnectionServiceConfigRuntime,
 	}
 }
 
 // TransitionToProtocolConverterState is a helper to configure a service for a given high-level state
-// TODO: add write DFC state
 func TransitionToProtocolConverterState(mockService *protocolconvertersvc.MockProtocolConverterService, serviceName string, state string) {
 	switch state {
 	case protocolconverterfsm.OperationalStateStopped:

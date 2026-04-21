@@ -177,8 +177,25 @@ func determineProtocol(readDFC *models.ProtocolConverterDFC) string {
 
 // buildProtocolConverterDFCFromConfig converts a dataflow component service config
 // into the models.ProtocolConverterDFC format expected by the API using the shared function.
+// toStringSlice converts an any value to []string, handling both []string and []any from YAML unmarshal.
+func toStringSlice(v any) ([]string, bool) {
+	switch typed := v.(type) {
+	case []string:
+		return typed, true
+	case []any:
+		result := make([]string, 0, len(typed))
+		for _, item := range typed {
+			if s, ok := item.(string); ok {
+				result = append(result, s)
+			}
+		}
+		return result, len(result) == len(typed)
+	}
+	return nil, false
+}
+
 func buildProtocolConverterDFCFromConfig(dfcConfig dataflowcomponentserviceconfig.DataflowComponentServiceConfig, a *GetProtocolConverterAction) (*models.ProtocolConverterDFC, error) {
-	if len(dfcConfig.BenthosConfig.Input) == 0 {
+	if len(dfcConfig.BenthosConfig.Input) == 0 && len(dfcConfig.BenthosConfig.Output) == 0 {
 		// No DFC configuration present
 		return nil, nil
 	}
@@ -318,10 +335,10 @@ func (a *GetProtocolConverterAction) Execute() (interface{}, map[string]interfac
 					}
 				}
 
-				// Build WriteDFC if present
+				// Build WriteDFC if present (check output since input is auto-generated)
 				var writeDFC *models.ProtocolConverterDFC
 
-				if writeDFCConfig := specConfig.Config.DataflowComponentWriteServiceConfig; len(writeDFCConfig.BenthosConfig.Input) > 0 {
+				if writeDFCConfig := specConfig.Config.DataflowComponentWriteServiceConfig; len(writeDFCConfig.BenthosConfig.Output) > 0 {
 					var err error
 
 					writeDFC, err = buildProtocolConverterDFCFromConfig(writeDFCConfig, a)
@@ -334,6 +351,12 @@ func (a *GetProtocolConverterAction) Execute() (interface{}, map[string]interfac
 
 					if writeDFC != nil {
 						writeDFC.State = specConfig.WriteDFCDesiredState
+						// Populate UMHTopics from user variables for the frontend
+						if umhTopics, ok := specConfig.Variables.User["UMH_TOPICS"]; ok {
+							if topics, ok := toStringSlice(umhTopics); ok {
+								writeDFC.UMHTopics = topics
+							}
+						}
 					}
 				}
 

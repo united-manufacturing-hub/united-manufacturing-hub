@@ -50,12 +50,13 @@ func (c ProtocolConverterServiceConfigSpec) GetDFCReadServiceConfig() dataflowco
 func (c ProtocolConverterServiceConfigSpec) GetDFCWriteServiceConfig() dataflowcomponentserviceconfig.DataflowComponentServiceConfig {
 	dfcWriteConfig := c.Config.DataflowComponentWriteServiceConfig
 
-	// Only append UNS input if there's an output config and no input has been set by the user
-	if len(dfcWriteConfig.BenthosConfig.Output) > 0 && len(dfcWriteConfig.BenthosConfig.Input) == 0 {
+	// Always enforce UNS input — user must not supply their own input config.
+	// consumer_group is resolved via template; umh_topics is injected post-render
+	// in renderConfig because []string can't be rendered via text/template.
+	if len(dfcWriteConfig.BenthosConfig.Output) > 0 {
 		dfcWriteConfig.BenthosConfig.Input = map[string]any{
 			"uns": map[string]any{
-				"consumer_group": "{{ .internal.bridged_by }}", // use bridged_by as consumer group
-				"umh_topic":      "{{ .internal.umh_topic }}",  // this needs to come from some value set by the user
+				"consumer_group": "{{ .internal.bridged_by }}",
 			},
 		}
 	}

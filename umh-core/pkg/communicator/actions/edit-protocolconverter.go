@@ -172,10 +172,6 @@ func (a *EditProtocolConverterAction) Parse(payload interface{}) error {
 		}
 	}
 
-	// Determine dfcType by comparing incoming DFC configs against what is
-	// currently deployed. Only DFCs that actually differ need redeployment.
-	a.dfcType = a.deriveDFCType()
-
 	if pcPayload.TemplateInfo != nil {
 		a.vb = pcPayload.TemplateInfo.Variables
 	} else {
@@ -189,6 +185,11 @@ func (a *EditProtocolConverterAction) Parse(payload interface{}) error {
 
 	a.connectionPort = strconv.Itoa(int(pcPayload.Connection.Port))
 	a.connectionIP = pcPayload.Connection.IP
+
+	// Determine dfcType by comparing incoming DFC configs against what is
+	// currently deployed. Only DFCs that actually differ need redeployment.
+	// Must run AFTER connectionPort/IP assigned since deriveDFCType reads them.
+	a.dfcType = a.deriveDFCType()
 
 	a.actionLogger.Debugf("Parsed EditProtocolConverter action payload: uuid=%s, name=%s, dfcType=%s, readDFCState=%s, writeDFCState=%s",
 		a.protocolConverterUUID, a.name, a.dfcType, a.readDFCState, a.writeDFCState)
@@ -432,6 +433,11 @@ func (a *EditProtocolConverterAction) applyMutation(readBenthosConfig, writeBent
 		}
 		a.desiredWriteDFCConfig = writeDFCServiceConfig
 		instanceToModify.ProtocolConverterServiceConfig.Config.DataflowComponentWriteServiceConfig = writeDFCServiceConfig
+	}
+
+	// Extract UMH_TOPICS from write DFC payload (sent as top-level field by frontend)
+	if a.writeDFCPayload != nil && len(a.writeDFCPayload.UMHTopics) > 0 {
+		instanceToModify.ProtocolConverterServiceConfig.Variables.User["UMH_TOPICS"] = a.writeDFCPayload.UMHTopics
 	}
 
 	// Add the connection details to the template
@@ -1001,10 +1007,11 @@ func (a *EditProtocolConverterAction) renderDesiredDFCConfig(pcSnapshot *protoco
 // dfcToPayload converts a ProtocolConverterDFC to the internal CDFCPayload representation.
 func dfcToPayload(dfc *models.ProtocolConverterDFC) models.CDFCPayload {
 	return models.CDFCPayload{
-		Inputs:   models.DfcDataConfig{Data: dfc.Inputs.Data, Type: dfc.Inputs.Type},
-		Pipeline: convertPipelineToMap(dfc.Pipeline),
-		Outputs:  models.DfcDataConfig{Data: dfc.Outputs.Data, Type: dfc.Outputs.Type},
-		Inject:   extractInjectFromRawYAML(dfc.RawYAML),
+		Inputs:    models.DfcDataConfig{Data: dfc.Inputs.Data, Type: dfc.Inputs.Type},
+		Pipeline:  convertPipelineToMap(dfc.Pipeline),
+		Outputs:   models.DfcDataConfig{Data: dfc.Outputs.Data, Type: dfc.Outputs.Type},
+		Inject:    extractInjectFromRawYAML(dfc.RawYAML),
+		UMHTopics: dfc.UMHTopics,
 	}
 }
 
@@ -1090,8 +1097,13 @@ func (a *EditProtocolConverterAction) deriveDFCType() DFCType {
 		currentPC.ProtocolConverterServiceConfig.Config.DataflowComponentWriteServiceConfig,
 		currentPC.ProtocolConverterServiceConfig.WriteDFCDesiredState)
 
+	if hasWrite && !writeChanged {
+		deployedTopics, _ := toStringSlice(deployedVars["UMH_TOPICS"])
+		if !equalStringSlices(deployedTopics, a.writeDFCPayload.UMHTopics) {
+			writeChanged = true
+		}
+	}
 	derived := dfcTypeFromPresence(readChanged, writeChanged)
-	a.actionLogger.Debugf("Derived dfcType=%s (readChanged=%v, writeChanged=%v)", derived, readChanged, writeChanged)
 
 	return derived
 }
@@ -1180,7 +1192,9 @@ func (a *EditProtocolConverterAction) GetDFCType() string {
 // validateDFCPayloadAndState validates a pre-parsed CDFCPayload and its state string.
 func validateDFCPayloadAndState(payload *models.CDFCPayload, state string, label string) error {
 	if payload != nil {
-		if err := ValidateCustomDataFlowComponentPayload(*payload, false); err != nil {
+		// For write DFCs, skip input validation since input is auto-generated
+		validateInput := label != "write"
+		if err := ValidateCustomDataFlowComponentPayload(*payload, validateInput, false); err != nil {
 			return fmt.Errorf("invalid %s DFC configuration: %w", label, err)
 		}
 	}
@@ -1204,8 +1218,23 @@ func validateProtocolConverterDFC(dfc *models.ProtocolConverterDFC, label string
 		}
 	}
 	payload := dfcToPayload(dfc)
-	if err := ValidateCustomDataFlowComponentPayload(payload, false); err != nil {
+	// For write DFCs, skip input validation since input is auto-generated
+	validateInput := label != "write"
+	if err := ValidateCustomDataFlowComponentPayload(payload, validateInput, false); err != nil {
 		return fmt.Errorf("invalid %s DFC configuration: %w", label, err)
 	}
 	return nil
+}
+
+// equalStringSlices reports whether two string slices have identical content + order.
+func equalStringSlices(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
 }

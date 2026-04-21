@@ -138,14 +138,18 @@ func ParseCustomDataFlowComponent(payload interface{}) (models.CDFCPayload, erro
 }
 
 // ValidateCustomDataFlowComponentPayload validates the structure and YAML content of a CDFCPayload.
-func ValidateCustomDataFlowComponentPayload(payload models.CDFCPayload, validateOutput bool) error {
+// validateInput should be false for write DFCs where input is auto-generated.
+// validateOutput should be false for read DFCs where output is auto-generated.
+func ValidateCustomDataFlowComponentPayload(payload models.CDFCPayload, validateInput bool, validateOutput bool) error {
 	// Validate input fields
-	if payload.Inputs.Type == "" {
-		return errors.New("missing required field inputs.type")
-	}
+	if validateInput {
+		if payload.Inputs.Type == "" {
+			return errors.New("missing required field inputs.type")
+		}
 
-	if payload.Inputs.Data == "" {
-		return errors.New("missing required field inputs.data")
+		if payload.Inputs.Data == "" {
+			return errors.New("missing required field inputs.data")
+		}
 	}
 
 	// Validate output fields
