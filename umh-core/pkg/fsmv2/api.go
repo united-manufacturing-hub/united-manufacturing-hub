@@ -16,6 +16,7 @@ package fsmv2
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
@@ -179,6 +180,39 @@ func Result[TSnapshot any, TDeps any](
 		Action: action,
 		Reason: reason,
 	}
+}
+
+// Transition is a non-generic convenience wrapper around Result for worker
+// state files. It lets state implementations drop the explicit [any, any]
+// type parameters when returning from Next(), reducing boilerplate.
+//
+// The action argument is `any` so that typed Action[TDeps] values can be
+// passed without a caller-visible WrapAction. PR1 C3 adds the auto-wrap case;
+// until then this function accepts nil or Action[any] only — other types
+// panic with a descriptive message pointing at C3.
+//
+// Usage:
+//
+//	return fsmv2.Transition(s, fsmv2.SignalNone, nil, "Worker is stopped")
+//	return fsmv2.Transition(&RunningState{}, fsmv2.SignalNone, &MyAction{}, reason)
+func Transition(
+	state State[any, any],
+	signal Signal,
+	action any,
+	reason string,
+) NextResult[any, any] {
+	var wrapped Action[any]
+	switch a := action.(type) {
+	case nil:
+		// wrapped stays nil
+	case Action[any]:
+		wrapped = a
+	default:
+		panic(fmt.Sprintf("fsmv2.Transition: unsupported action type %T; "+
+			"PR1 C3 adds auto-wrap for typed Action[TDeps]", a))
+	}
+
+	return Result[any, any](state, signal, wrapped, reason)
 }
 
 // Worker is the business logic interface that developers implement.
