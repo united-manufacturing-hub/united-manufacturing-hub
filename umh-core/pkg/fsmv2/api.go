@@ -236,6 +236,9 @@ func Result[TSnapshot any, TDeps any](
 // not managing children. Parents that have migrated to renderChildren pass
 // the rendered slice. See NextResult.Children godoc for migration semantics.
 //
+// Prefer Action[any] for hot-path actions to avoid reflection cost in the
+// auto-wrap path (see pre-c7-reflection-benchmark.md for measurements).
+//
 // Usage:
 //
 //	return fsmv2.Transition(s, fsmv2.SignalNone, nil, "Worker is stopped", nil)

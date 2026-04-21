@@ -567,7 +567,7 @@ children:
 
 	// Initialize Router for FSMv2 mode:
 	// 1. Create write-only Pusher (writes to channel, FSMv2 handles HTTP)
-	// 2. Set LoginResponse with placeholder UUID (will be updated by onAuthSuccessCallback)
+	// 2. Set LoginResponse with placeholder UUID (replaced when TransportWorker.ObservedState.AuthenticatedUUID is observed below)
 	// 3. Initialize SubscriberHandler (generates status messages)
 	// 4. Start Router (processes inbound messages, generates status via Subscriber)
 	communicationState.InitializeWriteOnlyPusher(placeholderUUID)

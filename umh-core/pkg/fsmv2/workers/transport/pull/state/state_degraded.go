@@ -35,12 +35,12 @@ func (s *DegradedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := fsmv2.ConvertWorkerSnapshot[pull_pkg.PullConfig, pull_pkg.PullStatus](snapAny)
 
 	if snap.ShouldStop() {
-		return fsmv2.Result[any, any](&StoppingState{}, fsmv2.SignalNone, nil,
-			fmt.Sprintf("stop required: shutdown=%t, parentState=%s", snap.IsShutdownRequested, snap.ParentMappedState), nil)
+		return fsmv2.Transition(&StoppingState{}, fsmv2.SignalNone, nil,
+			fmt.Sprintf("stop required: shutdown=%t, parentState=%s", snap.IsShutdownRequested, snap.ParentMappedState))
 	}
 
 	if snap.Status.ConsecutiveErrors == 0 && snap.Status.PendingMessageCount < pendingDegradedThreshold {
-		return fsmv2.Result[any, any](&RunningState{}, fsmv2.SignalNone, nil,
+		return fsmv2.Transition(&RunningState{}, fsmv2.SignalNone, nil,
 			fmt.Sprintf("recovering to Running: consecutiveErrors=0, pendingMessages=%d (threshold=%d)",
 				snap.Status.PendingMessageCount, pendingDegradedThreshold), nil)
 	}
@@ -60,18 +60,18 @@ func (s *DegradedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 		}
 
 		if shouldWait {
-			return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil,
+			return fsmv2.Transition(s, fsmv2.SignalNone, nil,
 				fmt.Sprintf("degraded (%d errors, %d pending), backoff %s",
 					snap.Status.ConsecutiveErrors, snap.Status.PendingMessageCount,
 					backoffDelay.Round(time.Second)), nil)
 		}
 
-		return fsmv2.Result[any, any](s, fsmv2.SignalNone, &action.PullAction{},
+		return fsmv2.Transition(s, fsmv2.SignalNone, &action.PullAction{},
 			fmt.Sprintf("degraded (%d consecutive errors, %d pending), still pulling",
 				snap.Status.ConsecutiveErrors, snap.Status.PendingMessageCount), nil)
 	}
 
-	return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil,
+	return fsmv2.Transition(s, fsmv2.SignalNone, nil,
 		fmt.Sprintf("degraded (%d consecutive errors, %d pending), waiting: hasTransport=%t, hasValidToken=%t",
 			snap.Status.ConsecutiveErrors, snap.Status.PendingMessageCount,
 			snap.Status.HasTransport, snap.Status.HasValidToken), nil)

@@ -32,18 +32,17 @@ func (s *TryingToStartState) Next(snapAny any) fsmv2.NextResult[any, any] {
 
 	// 1. Check shutdown first
 	if snap.IsShutdownRequested {
-		return fsmv2.Result[any, any](&StoppedState{}, fsmv2.SignalNone, nil, "Shutdown requested, transitioning to stopped", nil)
+		return fsmv2.Transition(&StoppedState{}, fsmv2.SignalNone, nil, "Shutdown requested, transitioning to stopped")
 	}
 
 	// 2. Check if action has already completed (observe the effect)
 	// This makes the state machine resilient to action replay
 	if snap.Status.HelloSaid {
-		return fsmv2.Result[any, any](&RunningState{}, fsmv2.SignalNone, nil, "Hello has been said, transitioning to running", nil)
+		return fsmv2.Transition(&RunningState{}, fsmv2.SignalNone, nil, "Hello has been said, transitioning to running")
 	}
 
 	// 3. Emit action and stay in this state
-	// The action will set HelloSaid=true, which we'll observe next tick
-	return fsmv2.Result[any, any](s, fsmv2.SignalNone,
+	return fsmv2.Transition(s, fsmv2.SignalNone,
 		fsmv2.SimpleAction[*hello_world.HelloworldDependencies](hello_world.SayHelloActionName, hello_world.SayHello),
 		"Saying hello to the world", nil)
 }
