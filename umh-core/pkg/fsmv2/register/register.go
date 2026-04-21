@@ -28,23 +28,30 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
 )
 
+// NoDeps is a type alias for struct{}, used as the TDeps parameter for workers
+// that require no custom dependencies beyond the standard framework deps
+// (Identity, FSMLogger, StateReader).
+type NoDeps = struct{}
+
 // Worker registers a worker type with the framework.
 // TConfig is the developer's configuration type.
 // TStatus is the developer's status/observation type.
+// TDeps is passed to the constructor for workers that need custom dependencies
+// beyond framework ones. Use register.NoDeps for zero-dep workers. The framework
+// forwards the zero value of TDeps to the constructor today; typed extraction
+// from extraDeps is not yet wired. Pointer-TDeps constructors should therefore
+// treat nil as the only value they will receive until extraction lands.
 // The workerType string is the canonical name used in config YAML and CSE storage.
-//
-// Constructor receives only the standard framework dependencies (identity, logger, stateReader).
-// Workers that require parent-injected dependencies via the extraDeps mechanism
-// (e.g., transport push/pull children) must use factory.RegisterWorkerType directly.
 //
 // Workers registered via this function MUST use WorkerBase[TConfig, TStatus] and
 // return w.WrapStatus(status) from CollectObservedState. Workers with custom
-// ObservedState types must use factory.RegisterWorkerType directly.
+// ObservedState types or that need parent-injected extraDeps must use
+// factory.RegisterWorkerType directly.
 //
 // Panics on field name collision or duplicate worker type (fail-fast at init time).
-func Worker[TConfig any, TStatus any](
+func Worker[TConfig any, TStatus any, TDeps any](
 	workerType string,
-	constructor func(deps.Identity, deps.FSMLogger, deps.StateReader) (fsmv2.Worker, error),
+	constructor func(deps.Identity, deps.FSMLogger, deps.StateReader, TDeps) (fsmv2.Worker, error),
 ) {
 	if workerType == "" {
 		panic("register.Worker: workerType must be non-empty")
@@ -61,7 +68,8 @@ func Worker[TConfig any, TStatus any](
 
 	// Step 2: Wrap constructor to match existing factory signature.
 	wrappedFactory := func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader, _ map[string]any) fsmv2.Worker {
-		w, err := constructor(id, logger, sr)
+		var zero TDeps
+		w, err := constructor(id, logger, sr, zero)
 		if err != nil {
 			panic(fmt.Sprintf("register.Worker(%q): constructor failed for %s: %v", workerType, id.String(), err))
 		}

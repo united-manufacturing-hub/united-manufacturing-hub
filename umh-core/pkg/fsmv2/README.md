@@ -119,7 +119,7 @@ Worker API v2 reduces a minimal worker from ~662 SLOC / 7 files to ~50 SLOC / 1 
 ```go
 // Registration (replaces init() + factory wiring + supervisor factory + CSE type registry)
 func init() {
-    register.Worker[MyConfig, MyStatus]("myworker", NewMyWorker)
+    register.Worker[MyConfig, MyStatus, register.NoDeps]("myworker", NewMyWorker)
 }
 
 // Worker struct (replaces separate dependencies, observed state, desired state files)
