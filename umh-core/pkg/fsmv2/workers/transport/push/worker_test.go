@@ -45,9 +45,11 @@ var _ = Describe("PushWorker", func() {
 		identity = depspkg.Identity{ID: "test-push", Name: "Test Push"}
 		transport.SetChannelProvider(newTestChannelProvider())
 		parentDeps = createParentDeps(logger)
+		transport.SetChildDeps(parentDeps)
 	})
 
 	AfterEach(func() {
+		transport.ClearChildDeps()
 		transport.ClearChannelProvider()
 	})
 
@@ -59,29 +61,34 @@ var _ = Describe("PushWorker", func() {
 
 	Describe("NewPushWorker", func() {
 		It("should create a worker with valid args", func() {
-			var err error
-			worker, err = push.NewPushWorker(identity, logger, nil, parentDeps)
+			w, err := push.NewPushWorker(identity, logger, nil, nil)
 			Expect(err).ToNot(HaveOccurred())
+			Expect(w).NotTo(BeNil())
+			var ok bool
+			worker, ok = w.(*push.PushWorker)
+			Expect(ok).To(BeTrue())
 			Expect(worker).NotTo(BeNil())
 		})
 
 		It("should reject nil logger", func() {
-			_, err := push.NewPushWorker(identity, nil, nil, parentDeps)
+			_, err := push.NewPushWorker(identity, nil, nil, nil)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("logger"))
 		})
 
-		It("should reject nil parentDeps", func() {
+		It("should reject missing parent transport ChildDeps", func() {
+			transport.ClearChildDeps()
 			_, err := push.NewPushWorker(identity, logger, nil, nil)
 			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("transport.ChildDeps()"))
 		})
 	})
 
 	Describe("CollectObservedState", func() {
 		BeforeEach(func() {
-			var err error
-			worker, err = push.NewPushWorker(identity, logger, nil, parentDeps)
+			w, err := push.NewPushWorker(identity, logger, nil, nil)
 			Expect(err).ToNot(HaveOccurred())
+			worker = w.(*push.PushWorker)
 		})
 
 		It("should return observed state (NewObservation with zero timestamp for collector)", func() {
@@ -165,9 +172,9 @@ var _ = Describe("PushWorker", func() {
 
 	Describe("DeriveDesiredState", func() {
 		BeforeEach(func() {
-			var err error
-			worker, err = push.NewPushWorker(identity, logger, nil, parentDeps)
+			w, err := push.NewPushWorker(identity, logger, nil, nil)
 			Expect(err).ToNot(HaveOccurred())
+			worker = w.(*push.PushWorker)
 		})
 
 		It("should return running state for nil spec", func() {
@@ -227,9 +234,9 @@ var _ = Describe("PushWorker", func() {
 
 	Describe("GetInitialState", func() {
 		BeforeEach(func() {
-			var err error
-			worker, err = push.NewPushWorker(identity, logger, nil, parentDeps)
+			w, err := push.NewPushWorker(identity, logger, nil, nil)
 			Expect(err).ToNot(HaveOccurred())
+			worker = w.(*push.PushWorker)
 		})
 
 		It("should return StoppedState", func() {
@@ -249,6 +256,27 @@ var _ = Describe("PushWorker", func() {
 			workerOnly, supervisorOnly := factory.ValidateRegistryConsistency()
 			Expect(workerOnly).NotTo(ContainElement("push"))
 			Expect(supervisorOnly).NotTo(ContainElement("push"))
+		})
+
+		It("should read parent deps from transport.ChildDeps() when instantiated via factory", func() {
+			factoryIdentity := depspkg.Identity{ID: "factory-push", Name: "Factory Push", WorkerType: "push"}
+
+			w, err := factory.NewWorkerByType("push", factoryIdentity, logger, nil, map[string]any{})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(w).NotTo(BeNil())
+
+			pw, ok := w.(*push.PushWorker)
+			Expect(ok).To(BeTrue())
+			Expect(pw).NotTo(BeNil())
+
+			// The constructed worker must reflect the parent deps seeded via SetChildDeps
+			// in BeforeEach (parentDeps has a mockTransport attached, so HasTransport is true).
+			ctx := context.Background()
+			observed, err := pw.CollectObservedState(ctx, nil)
+			Expect(err).ToNot(HaveOccurred())
+			typedObs, ok := observed.(fsmv2.Observation[push.PushStatus])
+			Expect(ok).To(BeTrue())
+			Expect(typedObs.Status.HasTransport).To(BeTrue())
 		})
 	})
 })
