@@ -18,15 +18,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"reflect"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/register"
 
 	transport_pkg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport"
 )
@@ -45,19 +42,27 @@ type PullWorker struct {
 }
 
 // NewPullWorker creates a new PullWorker in Stopped state.
-// parentDeps must not be nil — the pull worker delegates auth and transport to the parent.
+// The TDeps parameter is accepted to match register.Worker's constructor
+// signature but is currently ignored; parent transport deps are obtained
+// from the transport.ChildDeps() singleton populated by the transport
+// worker's constructor.
 func NewPullWorker(
 	identity deps.Identity,
 	logger deps.FSMLogger,
 	stateReader deps.StateReader,
-	parentDeps *transport_pkg.TransportDependencies,
-) (*PullWorker, error) {
+	_ *PullDependencies,
+) (fsmv2.Worker, error) {
 	if logger == nil {
 		return nil, errors.New("logger must not be nil")
 	}
 
 	if identity.WorkerType == "" {
 		identity.WorkerType = workerType
+	}
+
+	parentDeps := transport_pkg.ChildDeps()
+	if parentDeps == nil {
+		return nil, errors.New("pull worker requires parent transport deps via transport.ChildDeps(); transport worker must be registered/constructed first")
 	}
 
 	dependencies, err := NewPullDependencies(parentDeps, identity, logger, stateReader)
@@ -140,39 +145,10 @@ func (w *PullWorker) GetInitialState() fsmv2.State[any, any] {
 	return s
 }
 
+// init registers the pull worker via the generic register.Worker helper with
+// typed TDeps = *PullDependencies. Parent transport deps are consumed via the
+// transport.ChildDeps() singleton populated by the transport worker during its
+// own factory init, replacing the prior extraDeps["transport_deps"] seam.
 func init() {
-	if err := factory.RegisterWorkerAndSupervisorFactoryByType(
-		workerType,
-		func(id deps.Identity, logger deps.FSMLogger, stateReader deps.StateReader, extraDeps map[string]any) fsmv2.Worker {
-			parentDepsRaw, ok := extraDeps["transport_deps"]
-			if !ok {
-				panic("pull worker requires transport_deps in extraDeps")
-			}
-
-			parentDeps, ok := parentDepsRaw.(*transport_pkg.TransportDependencies)
-			if !ok {
-				panic("transport_deps must be *TransportDependencies")
-			}
-
-			worker, err := NewPullWorker(id, logger, stateReader, parentDeps)
-			if err != nil {
-				panic(fmt.Sprintf("failed to create pull worker: %v", err))
-			}
-
-			return worker
-		},
-		func(cfg interface{}) interface{} {
-			return supervisor.NewSupervisor[fsmv2.Observation[PullStatus], *fsmv2.WrappedDesiredState[PullConfig]](
-				cfg.(supervisor.Config))
-		},
-	); err != nil {
-		panic(fmt.Sprintf("failed to register pull worker: %v", err))
-	}
-
-	observedType := reflect.TypeOf(fsmv2.Observation[PullStatus]{})
-	desiredType := reflect.TypeOf(fsmv2.WrappedDesiredState[PullConfig]{})
-
-	if err := storage.GlobalRegistry().RegisterWorkerType(workerType, observedType, desiredType); err != nil {
-		panic(fmt.Sprintf("failed to register pull CSE types: %v", err))
-	}
+	register.Worker[PullConfig, PullStatus, *PullDependencies](workerType, NewPullWorker)
 }
