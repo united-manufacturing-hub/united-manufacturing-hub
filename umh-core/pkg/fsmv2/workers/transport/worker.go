@@ -51,14 +51,10 @@ import (
 	"fmt"
 	"time"
 
-	"reflect"
-
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/register"
 )
 
 // defaultAuthenticateTimeout is the fallback timeout for authentication when not specified in config.
@@ -78,11 +74,16 @@ type TransportWorker struct {
 
 // NewTransportWorker creates a new Transport worker.
 // Returns an error if required dependencies are missing.
+// Matches the signature required by register.Worker: the TDeps parameter
+// is accepted but ignored; the worker builds its own deps from the
+// package-level ChannelProvider singleton and publishes them via
+// SetChildDeps for push/pull children to consume.
 func NewTransportWorker(
 	identity deps.Identity,
 	logger deps.FSMLogger,
 	stateReader deps.StateReader,
-) (*TransportWorker, error) {
+	_ *TransportDependencies,
+) (fsmv2.Worker, error) {
 	if logger == nil {
 		return nil, errors.New("logger must not be nil")
 	}
@@ -96,6 +97,11 @@ func NewTransportWorker(
 
 	// Create dependencies (will panic if ChannelProvider not set)
 	w.deps = NewTransportDependencies(nil, logger, stateReader, identity)
+	if w.deps == nil {
+		return nil, errors.New("NewTransportDependencies returned nil")
+	}
+
+	SetChildDeps(w.deps)
 
 	// Validation hook: required fields when running.
 	// When all fields are empty (nil spec startup path), skip validation —
@@ -167,43 +173,12 @@ func (w *TransportWorker) CollectObservedState(ctx context.Context, _ fsmv2.Desi
 
 const workerType = "transport"
 
-// init registers the transport worker and supervisor factory.
-// Uses factory.RegisterWorkerAndSupervisorFactoryByType (explicit workerType) instead of
-// factory.RegisterWorkerType (derived from type name) because Observation[TransportStatus]
-// doesn't match the legacy "FooObservedState" naming convention.
+// init registers the transport worker via the generic register.Worker helper
+// with typed TDeps = *TransportDependencies. Parent→child deps sharing is
+// handled by the transport.SetChildDeps / ChildDeps singleton in child_deps.go
+// rather than the untyped extraDeps map.
 func init() {
-	// Step 1: Register worker + supervisor factories.
-	if err := factory.RegisterWorkerAndSupervisorFactoryByType(
-		workerType,
-		// Worker factory function
-		func(id deps.Identity, logger deps.FSMLogger, stateReader deps.StateReader, extraDeps map[string]any) fsmv2.Worker {
-			worker, err := NewTransportWorker(id, logger, stateReader)
-			if err != nil {
-				panic(fmt.Sprintf("failed to create transport worker (id=%s, name=%s): %v. "+
-					"Ensure ChannelProvider is set before supervisor starts.",
-					id.ID, id.Name, err))
-			}
-
-			extraDeps["transport_deps"] = worker.deps
-
-			return worker
-		},
-		// Supervisor factory function
-		func(cfg interface{}) interface{} {
-			return supervisor.NewSupervisor[fsmv2.Observation[TransportStatus], *fsmv2.WrappedDesiredState[TransportConfig]](
-				cfg.(supervisor.Config))
-		},
-	); err != nil {
-		panic(fmt.Sprintf("failed to register transport worker: %v", err))
-	}
-
-	// Step 2: Register with CSE TypeRegistry for storage.
-	observedType := reflect.TypeOf(fsmv2.Observation[TransportStatus]{})
-	desiredType := reflect.TypeOf(fsmv2.WrappedDesiredState[TransportConfig]{})
-
-	if err := storage.GlobalRegistry().RegisterWorkerType(workerType, observedType, desiredType); err != nil {
-		panic(fmt.Sprintf("failed to register transport CSE types: %v", err))
-	}
+	register.Worker[TransportConfig, TransportStatus, *TransportDependencies](workerType, NewTransportWorker)
 }
 
 // makePushChildSpec creates the ChildSpec for the PushWorker child.

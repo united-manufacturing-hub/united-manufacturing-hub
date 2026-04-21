@@ -62,14 +62,14 @@ var _ = Describe("TransportWorker", func() {
 	Describe("NewTransportWorker", func() {
 		Context("dependency validation", func() {
 			It("should create a worker with valid dependencies", func() {
-				var err error
-				worker, err = transport.NewTransportWorker(identity, logger, nil)
+				w, err := transport.NewTransportWorker(identity, logger, nil, nil)
 				Expect(err).ToNot(HaveOccurred())
-				Expect(worker).NotTo(BeNil())
+				Expect(w).NotTo(BeNil())
+				worker = w.(*transport.TransportWorker)
 			})
 
 			It("should reject nil logger", func() {
-				_, err := transport.NewTransportWorker(identity, nil, nil)
+				_, err := transport.NewTransportWorker(identity, nil, nil, nil)
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("logger"))
 			})
@@ -78,9 +78,9 @@ var _ = Describe("TransportWorker", func() {
 
 	Describe("CollectObservedState", func() {
 		BeforeEach(func() {
-			var err error
-			worker, err = transport.NewTransportWorker(identity, logger, nil)
+			w, err := transport.NewTransportWorker(identity, logger, nil, nil)
 			Expect(err).ToNot(HaveOccurred())
+			worker = w.(*transport.TransportWorker)
 		})
 
 		It("should return observed state (NewObservation with zero timestamp for collector)", func() {
@@ -144,9 +144,9 @@ var _ = Describe("TransportWorker", func() {
 
 	Describe("DeriveDesiredState", func() {
 		BeforeEach(func() {
-			var err error
-			worker, err = transport.NewTransportWorker(identity, logger, nil)
+			w, err := transport.NewTransportWorker(identity, logger, nil, nil)
 			Expect(err).ToNot(HaveOccurred())
+			worker = w.(*transport.TransportWorker)
 		})
 
 		Context("nil spec handling", func() {
@@ -364,9 +364,9 @@ authToken: "test-token"`,
 
 	Describe("GetInitialState", func() {
 		BeforeEach(func() {
-			var err error
-			worker, err = transport.NewTransportWorker(identity, logger, nil)
+			w, err := transport.NewTransportWorker(identity, logger, nil, nil)
 			Expect(err).ToNot(HaveOccurred())
+			worker = w.(*transport.TransportWorker)
 		})
 
 		It("should return StoppedState", func() {
@@ -396,9 +396,9 @@ authToken: "test-token"`,
 		It("should use pointer receiver for all Worker methods", func() {
 			// This is enforced at compile time by the interface implementation,
 			// but we verify by testing that methods work on a pointer
-			var err error
-			worker, err = transport.NewTransportWorker(identity, logger, nil)
+			w, err := transport.NewTransportWorker(identity, logger, nil, nil)
 			Expect(err).ToNot(HaveOccurred())
+			worker = w.(*transport.TransportWorker)
 
 			// All these should work with pointer receiver
 			ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
