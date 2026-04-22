@@ -9,6 +9,7 @@
   "minimumReleaseAge": "7 days",
   "timezone": "Europe/Berlin",
   "schedule": ["* * * * 0"],
+  "separateMajorMinor": false,
   "packageRules": [
     {
       "matchManagers": ["github-actions"],
@@ -22,60 +23,15 @@
       "enabled": true
     },
     {
-      "matchManagers": ["gomod"],
-      "matchUpdateTypes": [
-        "minor",
-        "patch",
-        "pin",
-        "digest",
-        "pinDigest",
-        "rollback",
-        "bump",
-        "replacement",
-        "lockFileMaintenance"
-      ],
-      "groupName": "Go dependencies (non-major)",
-      "groupSlug": "go-deps-non-major"
-    },
-    {
-      "matchManagers": ["gomod"],
-      "matchUpdateTypes": ["major"],
-      "groupName": "Go dependencies (major)",
-      "groupSlug": "go-deps-major"
-    },
-    {
-      "matchManagers": ["dockerfile"],
-      "matchUpdateTypes": [
-        "minor",
-        "patch",
-        "pin",
-        "digest",
-        "pinDigest",
-        "rollback",
-        "bump",
-        "replacement",
-        "lockFileMaintenance"
-      ],
-      "groupName": "Dockerfile dependencies (non-major)",
-      "groupSlug": "dockerfile-deps-non-major"
-    },
-    {
-      "matchManagers": ["dockerfile"],
-      "matchUpdateTypes": ["major"],
-      "groupName": "Dockerfile dependencies (major)",
-      "groupSlug": "dockerfile-deps-major"
-    },
-    {
-      "matchManagers": ["gomod"],
-      "matchDepNames": ["go"],
-      "versioning": "semver",
-      "rangeStrategy": "bump"
-    },
-    {
       "matchManagers": ["gomod", "dockerfile"],
-      "matchPackageNames": ["go", "golang"],
-      "groupName": "Go version",
-      "groupSlug": "go-version"
+      "groupName": "All dependencies",
+      "groupSlug": "all-deps"
+    },
+    {
+      "description": "Bump go directive in go.mod",
+      "matchDepNames": ["go"],
+      "matchManagers": ["gomod"],
+      "rangeStrategy": "bump"
     }
   ]
 }
