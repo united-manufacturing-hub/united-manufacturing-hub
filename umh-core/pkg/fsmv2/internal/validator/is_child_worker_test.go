@@ -39,7 +39,6 @@ func TestIsChildWorkerDetectsKnownChildWorkers(t *testing.T) {
 	knownChildren := []string{
 		filepath.Join(fsmv2Root, "workers", "example", "examplechild"),
 		filepath.Join(fsmv2Root, "workers", "example", "examplefailing"),
-		filepath.Join(fsmv2Root, "workers", "example", "examplepanic"),
 		filepath.Join(fsmv2Root, "workers", "example", "exampleslow"),
 		filepath.Join(fsmv2Root, "workers", "transport", "push"),
 		filepath.Join(fsmv2Root, "workers", "transport", "pull"),
