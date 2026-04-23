@@ -12,16 +12,64 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Package snapshot holds the persistence worker's Config and Status value
+// types plus the PersistenceDependencies interface consumed by actions. It
+// exists as a separate leaf package so the state sub-package can depend on
+// these types without introducing an import cycle with the worker package.
+//
+// Post-PR2-C9 the persistence worker uses fsmv2.Observation[PersistenceStatus]
+// and *fsmv2.WrappedDesiredState[PersistenceConfig]; the underlying value
+// types are defined here and re-exported from the worker package as type
+// aliases for caller convenience.
 package snapshot
 
 import (
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 )
+
+// PersistenceConfig holds the user-provided configuration for the persistence worker.
+// Embeds BaseUserSpec to support the StateGetter interface, allowing
+// WorkerBase.DeriveDesiredState to extract the desired state from the "state"
+// YAML field.
+type PersistenceConfig struct {
+	config.BaseUserSpec `yaml:",inline"`
+	CompactionInterval  time.Duration `json:"compactionInterval"  yaml:"compactionInterval"`
+	RetentionWindow     time.Duration `json:"retentionWindow"     yaml:"retentionWindow"`
+	MaintenanceInterval time.Duration `json:"maintenanceInterval" yaml:"maintenanceInterval"`
+}
+
+// PersistenceStatus holds the runtime observation data for the persistence worker.
+// Framework fields (CollectedAt, State, LastActionResults, MetricsEmbedder,
+// ShutdownRequested, children counts) are carried by fsmv2.Observation[PersistenceStatus]
+// and are not duplicated here.
+type PersistenceStatus struct {
+	// LastCompactionAt records the most recent successful compaction timestamp.
+	LastCompactionAt time.Time `json:"last_compaction_at"`
+	// LastMaintenanceAt records the most recent successful maintenance timestamp.
+	LastMaintenanceAt time.Time `json:"last_maintenance_at"`
+	// ConsecutiveActionErrors counts how many action attempts have failed in a row.
+	ConsecutiveActionErrors int `json:"consecutive_action_errors"`
+	// IsPreferredMaintenanceWindow reports whether the current time is a
+	// preferred maintenance window (weekend + low-traffic hour).
+	IsPreferredMaintenanceWindow bool `json:"is_preferred_maintenance_window"`
+	// IsAcceptableMaintenanceWindow reports whether the current time is an
+	// acceptable maintenance window (low-traffic hour).
+	IsAcceptableMaintenanceWindow bool `json:"is_acceptable_maintenance_window"`
+}
+
+// IsLastActionHealthy returns true if ConsecutiveActionErrors is zero.
+func (s PersistenceStatus) IsLastActionHealthy() bool {
+	return s.ConsecutiveActionErrors == 0
+}
+
+// IsHealthy returns true if the worker is operating normally.
+func (s PersistenceStatus) IsHealthy() bool {
+	return s.IsLastActionHealthy()
+}
 
 // PersistenceDependencies is the dependencies interface for persistence actions (avoids import cycles).
 type PersistenceDependencies interface {
@@ -31,65 +79,4 @@ type PersistenceDependencies interface {
 	GetScheduler() deps.Scheduler
 	SetLastCompactionAt(time.Time)
 	SetLastMaintenanceAt(time.Time)
-}
-
-// PersistenceDesiredState represents the target configuration for the persistence worker.
-type PersistenceDesiredState struct {
-	config.BaseDesiredState
-
-	CompactionInterval  time.Duration `json:"compactionInterval"`
-	RetentionWindow     time.Duration `json:"retentionWindow"`
-	MaintenanceInterval time.Duration `json:"maintenanceInterval"`
-}
-
-var _ fsmv2.DesiredState = (*PersistenceDesiredState)(nil)
-
-// PersistenceObservedState represents the current state of the persistence worker.
-type PersistenceObservedState struct {
-	CollectedAt       time.Time `json:"collected_at"`
-	LastCompactionAt  time.Time `json:"last_compaction_at"`
-	LastMaintenanceAt time.Time `json:"last_maintenance_at"`
-
-	State string `json:"state"`
-
-	LastActionResults []deps.ActionResult `json:"last_action_results,omitempty"`
-
-	PersistenceDesiredState `json:",inline"`
-
-	deps.MetricsEmbedder `json:",inline"`
-
-	ConsecutiveActionErrors int `json:"consecutive_action_errors"`
-
-	IsPreferredMaintenanceWindow  bool `json:"is_preferred_maintenance_window"`
-	IsAcceptableMaintenanceWindow bool `json:"is_acceptable_maintenance_window"`
-}
-
-// IsLastActionHealthy returns true if ConsecutiveActionErrors is zero.
-func (o PersistenceObservedState) IsLastActionHealthy() bool {
-	return o.ConsecutiveActionErrors == 0
-}
-
-// IsHealthy returns true if the worker is operating normally.
-func (o PersistenceObservedState) IsHealthy() bool {
-	return o.IsLastActionHealthy()
-}
-
-func (o PersistenceObservedState) GetObservedDesiredState() fsmv2.DesiredState {
-	return &o.PersistenceDesiredState
-}
-
-func (o PersistenceObservedState) GetTimestamp() time.Time {
-	return o.CollectedAt
-}
-
-func (o PersistenceObservedState) SetState(s string) fsmv2.ObservedState {
-	o.State = s
-
-	return o
-}
-
-func (o PersistenceObservedState) SetShutdownRequested(v bool) fsmv2.ObservedState {
-	o.ShutdownRequested = v
-
-	return o
 }

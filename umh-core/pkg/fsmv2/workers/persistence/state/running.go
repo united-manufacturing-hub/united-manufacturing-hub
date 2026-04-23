@@ -25,14 +25,14 @@ type RunningState struct {
 }
 
 func (s *RunningState) Next(snapAny any) fsmv2.NextResult[any, any] {
-	snap := helpers.ConvertSnapshot[snapshot.PersistenceObservedState, *snapshot.PersistenceDesiredState](snapAny)
+	snap := fsmv2.ConvertWorkerSnapshot[snapshot.PersistenceConfig, snapshot.PersistenceStatus](snapAny)
 
-	if snap.Desired.IsShutdownRequested() {
-		return fsmv2.Result[any, any](&ShuttingDownState{}, fsmv2.SignalNone, nil, "Shutdown requested")
+	if snap.IsShutdownRequested {
+		return fsmv2.Transition(&ShuttingDownState{}, fsmv2.SignalNone, nil, "Shutdown requested")
 	}
 
-	if !snap.Observed.IsHealthy() {
-		return fsmv2.Result[any, any](&RunningDegradedState{}, fsmv2.SignalNone, nil, "Action failed, entering degraded state")
+	if !snap.Status.IsHealthy() {
+		return fsmv2.Transition(&RunningDegradedState{}, fsmv2.SignalNone, nil, "Action failed, entering degraded state")
 	}
 
 	return emitActionIfDue(s, snap)
