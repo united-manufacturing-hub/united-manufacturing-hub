@@ -191,11 +191,7 @@ func (s *TryingToStartState) Next(snapAny any) fsmv2.NextResult[any, any] {
 }
 ```
 
-`fsmv2.Transition` is the recommended return shape. It is a non-generic alias for `fsmv2.Result[any, any]` that also auto-wraps typed `Action[TDeps]` values into the internal `Action[any]` envelope, so state files no longer need a caller-visible `WrapAction` adapter.
-
-> **Deprecated — removed in PR3**
->
-> The older `fsmv2.Result[any, any](...)` return and the `fsmv2.WrapAction[TDeps](&MyAction{})` wrapper are still present for in-flight migrations but will be deleted in PR3 to shrink the API surface. Do not write new code against them.
+`fsmv2.Transition` is the recommended return shape. It is a non-generic alias for `fsmv2.Result[any, any]` that also auto-wraps typed `Action[TDeps]` values into the internal `Action[any]` envelope, so state files pass typed actions directly (no caller-visible adapter required).
 
 ### State transitions: observation-driven
 

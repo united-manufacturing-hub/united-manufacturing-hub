@@ -86,11 +86,7 @@ func (s *RunningState) Next(snapAny any) fsmv2.NextResult[any, any] {
 }
 ```
 
-`fsmv2.Transition` is the canonical return shape for state files. It is a non-generic alias for `fsmv2.Result[any, any]` that also accepts typed `Action[TDeps]` values directly.
-
-> **Deprecated — removed in PR3**
->
-> `fsmv2.Result[any, any](...)` and the `fsmv2.WrapAction[TDeps](&MyAction{})` wrapper remain as a compat seam for workers still mid-migration but will be deleted in PR3. New state files must use `fsmv2.Transition` + direct `&MyAction{}` construction.
+`fsmv2.Transition` is the canonical return shape for state files. It is a non-generic alias for `fsmv2.Result[any, any]` that also accepts typed `Action[TDeps]` values directly. State files use `fsmv2.Transition` + direct `&MyAction{}` construction — the framework auto-wraps typed actions via reflection.
 
 ## Reason Strings in State Transitions
 
@@ -140,8 +136,9 @@ New workers should use `WorkerBase[TConfig, TStatus]` instead of the legacy 7-fi
 - **`WorkerSnapshot[TConfig, TStatus]`** — typed snapshot for state `Next()` methods
 - **`ConvertWorkerSnapshot[TConfig, TStatus]`** — entry-point type assertion in states
 - **`ExtractConfig[TConfig](desired)`** — typed config access in `CollectObservedState`
-- **`WrapAction[TDeps]`** — *(deprecated, removed in PR3)* adapts typed actions to `Action[any]`. Prefer passing `&MyAction{}` directly to `fsmv2.Transition` — the framework auto-wraps via reflection.
 - **`register.Worker[TConfig, TStatus, TDeps]`** — one-line registration (factory + supervisor + CSE types). Use `register.NoDeps` for zero-dep workers.
+
+Pass typed actions (`&MyAction{}`) directly to `fsmv2.Transition` — the framework auto-wraps them into `Action[any]` via reflection. No caller-visible adapter is needed.
 
 **Architecture validators** accept both APIs: `ConvertWorkerSnapshot` and `ConvertSnapshot` are valid entry points; `snap.IsShutdownRequested` (field) and `snap.Desired.IsShutdownRequested()` (method) are valid shutdown checks.
 

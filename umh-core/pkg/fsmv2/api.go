@@ -188,7 +188,7 @@ func Result[TSnapshot any, TDeps any](
 // type parameters when returning from Next(), reducing boilerplate.
 //
 // The action argument is `any` so that typed Action[TDeps] values can be
-// passed without a caller-visible WrapAction. The function accepts:
+// passed directly without a caller-visible wrapper. The function accepts:
 //   - nil: no action
 //   - Action[any]: passed through unchanged (fast path)
 //   - Action[TDeps] for any concrete TDeps: auto-wrapped via reflection
