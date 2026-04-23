@@ -355,6 +355,85 @@ var _ = Describe("DeployProtocolConverter", func() {
 			stateMocker.Stop()
 		})
 
+		It("should store UMH_TOPICS in user variables when deploying with write DFC", func() {
+			topics := []interface{}{"umh.v1.factory.*", "umh.v1.plant.*"}
+			payload := map[string]any{
+				"name": pcName,
+				"connection": map[string]any{
+					"ip":   pcIP,
+					"port": pcPort,
+				},
+				"location": pcLocation,
+				"writeDFC": map[string]any{
+					"outputs": map[string]any{
+						"data": "output:\n  stdout: {}",
+						"type": "stdout",
+					},
+					"pipeline": map[string]any{},
+					"umh_topics": topics,
+				},
+			}
+
+			err := action.Parse(payload)
+			Expect(err).NotTo(HaveOccurred())
+
+			mockConfig.ResetCalls()
+			err = stateMocker.Start()
+			Expect(err).NotTo(HaveOccurred())
+
+			_, metadata, err := action.Execute()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(metadata).To(BeNil())
+
+			stateMocker.Stop()
+
+			Expect(mockConfig.AtomicAddProtocolConverterCalled).To(BeTrue())
+			Expect(mockConfig.Config.ProtocolConverter).To(HaveLen(1))
+
+			addedPC := mockConfig.Config.ProtocolConverter[0]
+			Expect(addedPC.ProtocolConverterServiceConfig.Variables.User).To(HaveKey("UMH_TOPICS"))
+			Expect(addedPC.ProtocolConverterServiceConfig.Variables.User["UMH_TOPICS"]).To(ConsistOf(
+				"umh.v1.factory.*",
+				"umh.v1.plant.*",
+			))
+		})
+
+		It("should set WriteDFCDesiredState when deploying with write DFC", func() {
+			payload := map[string]any{
+				"name": pcName,
+				"connection": map[string]any{
+					"ip":   pcIP,
+					"port": pcPort,
+				},
+				"location": pcLocation,
+				"writeDFC": map[string]any{
+					"outputs": map[string]any{
+						"data": "output:\n  stdout: {}",
+						"type": "stdout",
+					},
+					"pipeline": map[string]any{},
+					"umh_topics": []interface{}{"umh.v1.factory.*"},
+					"state":      "stopped",
+				},
+			}
+
+			err := action.Parse(payload)
+			Expect(err).NotTo(HaveOccurred())
+
+			mockConfig.ResetCalls()
+			err = stateMocker.Start()
+			Expect(err).NotTo(HaveOccurred())
+
+			_, metadata, err := action.Execute()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(metadata).To(BeNil())
+
+			stateMocker.Stop()
+
+			addedPC := mockConfig.Config.ProtocolConverter[0]
+			Expect(addedPC.ProtocolConverterServiceConfig.WriteDFCDesiredState).To(Equal("stopped"))
+		})
+
 		It("should preserve array variables in TemplateInfo for template expansion", func() {
 			// Payload with complex array variables (e.g., AddressMappings from CSV)
 			addressMappings := []map[string]any{

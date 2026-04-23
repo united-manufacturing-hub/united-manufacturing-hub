@@ -1249,4 +1249,3 @@ func validateProtocolConverterDFC(dfc *models.ProtocolConverterDFC, label string
 	}
 	return nil
 }
-

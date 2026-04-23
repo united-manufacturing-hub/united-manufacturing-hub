@@ -248,6 +248,56 @@ var _ = Describe("EditProtocolConverter", func() {
 			Expect(action.GetDFCType()).To(Equal("empty"))
 		})
 
+		It("should parse both read and write DFCs as DFCTypeBoth", func() {
+			payload := map[string]interface{}{
+				"name": pcName,
+				"uuid": pcUUID.String(),
+				"readDFC": map[string]interface{}{
+					"inputs": map[string]interface{}{
+						"data": "input:\n  http_client:\n    url: 'http://example.com'",
+						"type": "http_client",
+					},
+					"pipeline": map[string]interface{}{
+						"processors": map[string]interface{}{},
+					},
+				},
+				"writeDFC": map[string]interface{}{
+					"outputs": map[string]interface{}{
+						"data": "output:\n  stdout: {}",
+						"type": "stdout",
+					},
+					"pipeline": map[string]interface{}{},
+					"umh_topics": []interface{}{"umh.v1.factory.*"},
+				},
+			}
+
+			err := action.Parse(payload)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(action.GetDFCType()).To(Equal("both"))
+		})
+
+		It("should parse write DFC with umh_topics", func() {
+			payload := map[string]interface{}{
+				"name": pcName,
+				"uuid": pcUUID.String(),
+				"writeDFC": map[string]interface{}{
+					"outputs": map[string]interface{}{
+						"data": "output:\n  stdout: {}",
+						"type": "stdout",
+					},
+					"pipeline": map[string]interface{}{},
+					"umh_topics": []interface{}{"umh.v1.factory.*", "umh.v1.plant.*"},
+				},
+			}
+
+			err := action.Parse(payload)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(action.GetDFCType()).To(Equal("write"))
+
+			parsedPayload := action.GetParsedPayload()
+			Expect(parsedPayload.UMHTopics).To(ConsistOf("umh.v1.factory.*", "umh.v1.plant.*"))
+		})
+
 		It("should preserve explicit 'stopped' state on read DFC", func() {
 			payload := map[string]interface{}{
 				"name": pcName,
@@ -308,6 +358,66 @@ var _ = Describe("EditProtocolConverter", func() {
 			err := action.Validate()
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("missing or invalid protocol converter UUID"))
+		})
+
+		It("should validate write DFC without explicit inputs (auto-generated)", func() {
+			payload := map[string]interface{}{
+				"name": pcName,
+				"uuid": pcUUID.String(),
+				"writeDFC": map[string]interface{}{
+					"outputs": map[string]interface{}{
+						"data": "output:\n  stdout: {}",
+						"type": "stdout",
+					},
+					"pipeline": map[string]interface{}{},
+					"umh_topics": []interface{}{"umh.v1.factory.*"},
+				},
+			}
+
+			err := action.Parse(payload)
+			Expect(err).NotTo(HaveOccurred())
+
+			err = action.Validate()
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("should pass validation for write DFC state-only change without umh_topics", func() {
+			payload := map[string]interface{}{
+				"name": pcName,
+				"uuid": pcUUID.String(),
+				"writeDFC": map[string]interface{}{
+					"state": "stopped",
+					// no outputs, no umh_topics — state-only change
+				},
+			}
+
+			err := action.Parse(payload)
+			Expect(err).NotTo(HaveOccurred())
+
+			err = action.Validate()
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("should return error when write DFC has no umh_topics", func() {
+			payload := map[string]interface{}{
+				"name": pcName,
+				"uuid": pcUUID.String(),
+				"writeDFC": map[string]interface{}{
+					"outputs": map[string]interface{}{
+						"data": "output:\n  stdout: {}",
+						"type": "stdout",
+					},
+					"pipeline": map[string]interface{}{},
+					// no umh_topics
+				},
+			}
+
+			err := action.Parse(payload)
+			Expect(err).NotTo(HaveOccurred())
+
+			err = action.Validate()
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("umh_topics"))
 		})
 
 		It("should return error for invalid DFC configuration", func() {
@@ -416,6 +526,348 @@ var _ = Describe("EditProtocolConverter", func() {
 
 			// verify that the templateRef is set
 			Expect(updatedPC.ProtocolConverterServiceConfig.TemplateRef).To(Equal(pcName))
+		})
+
+		It("should store UMH_TOPICS in user variables when adding write DFC", func() {
+			topics := []interface{}{"umh.v1.factory.line-1.*", "umh.v1.factory.line-2.*"}
+			payload := map[string]interface{}{
+				"name": pcName,
+				"uuid": pcUUID.String(),
+				"writeDFC": map[string]interface{}{
+					"outputs": map[string]interface{}{
+						"data": "output:\n  stdout: {}",
+						"type": "stdout",
+					},
+					"pipeline": map[string]interface{}{},
+					"umh_topics": topics,
+				},
+			}
+
+			err := action.Parse(payload)
+			Expect(err).NotTo(HaveOccurred())
+
+			err = action.Validate()
+			Expect(err).NotTo(HaveOccurred())
+
+			err = stateMocker.Start()
+			Expect(err).NotTo(HaveOccurred())
+
+			_, metadata, err := action.Execute()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(metadata).To(BeNil())
+
+			stateMocker.Stop()
+
+			// Verify UMH_TOPICS stored in user variables
+			ctx := context.Background()
+			updatedConfig, err := mockConfig.GetConfig(ctx, 0)
+			Expect(err).NotTo(HaveOccurred())
+
+			var updatedPC *config.ProtocolConverterConfig
+			for i, pc := range updatedConfig.ProtocolConverter {
+				if pc.Name == pcName {
+					updatedPC = &updatedConfig.ProtocolConverter[i]
+					break
+				}
+			}
+			Expect(updatedPC).NotTo(BeNil())
+			Expect(updatedPC.ProtocolConverterServiceConfig.Variables.User).To(HaveKey("UMH_TOPICS"))
+			Expect(updatedPC.ProtocolConverterServiceConfig.Variables.User["UMH_TOPICS"]).To(ConsistOf(
+				"umh.v1.factory.line-1.*",
+				"umh.v1.factory.line-2.*",
+			))
+		})
+
+		Context("when protocol converter already has both DFCs configured", func() {
+			// overwrite the BeforeEach config with one that has both DFCs populated
+			BeforeEach(func() {
+				existingReadInput := map[string]interface{}{
+					"http_client": map[string]interface{}{
+						"url": "http://original.example.com",
+					},
+				}
+				existingWriteOutput := map[string]interface{}{
+					"stdout": map[string]interface{}{},
+				}
+
+				mockConfig.Config.ProtocolConverter[0].ProtocolConverterServiceConfig.Config.DataflowComponentReadServiceConfig = dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+					BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
+						Input: existingReadInput,
+					},
+				}
+				mockConfig.Config.ProtocolConverter[0].ProtocolConverterServiceConfig.Config.DataflowComponentWriteServiceConfig = dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+					BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
+						Output: existingWriteOutput,
+					},
+				}
+				mockConfig.Config.ProtocolConverter[0].ProtocolConverterServiceConfig.Variables.User["UMH_TOPICS"] = []string{"umh.v1.factory.*"}
+
+				stateMocker = actions.NewStateMocker(mockConfig)
+				stateMocker.Tick()
+				action = actions.NewEditProtocolConverterAction(userEmail, actionUUID, instanceUUID, outboundChannel, mockConfig, nil)
+			})
+
+			It("should not change read DFC when only write DFC is edited", Label("write-dfc", "isolation"), func() {
+				newTopics := []interface{}{"umh.v1.plant.*"}
+				payload := map[string]interface{}{
+					"name": pcName,
+					"uuid": pcUUID.String(),
+					"writeDFC": map[string]interface{}{
+						"outputs": map[string]interface{}{
+							"data": "output:\n  kafka:\n    addresses: [localhost:9092]",
+							"type": "kafka",
+						},
+						"pipeline":    map[string]interface{}{},
+						"umh_topics": newTopics,
+					},
+				}
+
+				err := action.Parse(payload)
+				Expect(err).NotTo(HaveOccurred())
+				err = action.Validate()
+				Expect(err).NotTo(HaveOccurred())
+
+				err = stateMocker.Start()
+				Expect(err).NotTo(HaveOccurred())
+				_, _, err = action.Execute()
+				Expect(err).NotTo(HaveOccurred())
+				stateMocker.Stop()
+
+				ctx := context.Background()
+				updatedConfig, err := mockConfig.GetConfig(ctx, 0)
+				Expect(err).NotTo(HaveOccurred())
+
+				var updatedPC *config.ProtocolConverterConfig
+				for i, pc := range updatedConfig.ProtocolConverter {
+					if pc.Name == pcName {
+						updatedPC = &updatedConfig.ProtocolConverter[i]
+						break
+					}
+				}
+				Expect(updatedPC).NotTo(BeNil())
+
+				// Write DFC output must have changed — parsed YAML wraps in outer "output" key
+				writeOutput := updatedPC.ProtocolConverterServiceConfig.Config.DataflowComponentWriteServiceConfig.BenthosConfig.Output
+				Expect(writeOutput).To(HaveKey("output"))
+				Expect(writeOutput["output"]).To(HaveKey("kafka"))
+
+				// Read DFC input must be untouched — initial config set directly without wrapper
+				readInput := updatedPC.ProtocolConverterServiceConfig.Config.DataflowComponentReadServiceConfig.BenthosConfig.Input
+				Expect(readInput).To(HaveKey("http_client"))
+				Expect(readInput["http_client"]).To(HaveKeyWithValue("url", "http://original.example.com"))
+			})
+
+			It("should not change write DFC when only read DFC is edited", Label("write-dfc", "isolation"), func() {
+				payload := map[string]interface{}{
+					"name": pcName,
+					"uuid": pcUUID.String(),
+					"readDFC": map[string]interface{}{
+						"inputs": map[string]interface{}{
+							"data": "input:\n  http_client:\n    url: http://updated.example.com",
+							"type": "http_client",
+						},
+						"pipeline": map[string]interface{}{
+							"processors": map[string]interface{}{
+								"0": map[string]interface{}{
+									"type": "bloblang",
+									"data": "bloblang: |-\n  root = content()",
+								},
+							},
+						},
+					},
+				}
+
+				err := action.Parse(payload)
+				Expect(err).NotTo(HaveOccurred())
+				err = action.Validate()
+				Expect(err).NotTo(HaveOccurred())
+
+				err = stateMocker.Start()
+				Expect(err).NotTo(HaveOccurred())
+				_, _, err = action.Execute()
+				Expect(err).NotTo(HaveOccurred())
+				stateMocker.Stop()
+
+				ctx := context.Background()
+				updatedConfig, err := mockConfig.GetConfig(ctx, 0)
+				Expect(err).NotTo(HaveOccurred())
+
+				var updatedPC *config.ProtocolConverterConfig
+				for i, pc := range updatedConfig.ProtocolConverter {
+					if pc.Name == pcName {
+						updatedPC = &updatedConfig.ProtocolConverter[i]
+						break
+					}
+				}
+				Expect(updatedPC).NotTo(BeNil())
+
+				// Read DFC input must have changed — parsed YAML wraps in outer "input" key
+				readInput := updatedPC.ProtocolConverterServiceConfig.Config.DataflowComponentReadServiceConfig.BenthosConfig.Input
+				Expect(readInput).To(HaveKey("input"))
+				Expect(readInput["input"]).To(HaveKey("http_client"))
+				Expect(readInput["input"].(map[string]interface{})["http_client"]).To(HaveKeyWithValue("url", "http://updated.example.com"))
+
+				// Write DFC output must be untouched — initial config set directly without wrapper
+				writeOutput := updatedPC.ProtocolConverterServiceConfig.Config.DataflowComponentWriteServiceConfig.BenthosConfig.Output
+				Expect(writeOutput).To(HaveKey("stdout"))
+
+				// UMH_TOPICS must be untouched
+				Expect(updatedPC.ProtocolConverterServiceConfig.Variables.User["UMH_TOPICS"]).To(ConsistOf("umh.v1.factory.*"))
+			})
+		})
+
+		Context("when starting and stopping individual DFCs", func() {
+			// Minimal valid read DFC payload reused across several tests below.
+			// The pipeline has one bloblang processor so read-DFC validation passes.
+			minimalReadDFCPayload := func(state string) map[string]interface{} {
+				return map[string]interface{}{
+					"inputs": map[string]interface{}{
+						"data": "input:\n  http_client:\n    url: 'http://example.com'",
+						"type": "http_client",
+					},
+					"pipeline": map[string]interface{}{
+						"processors": map[string]interface{}{
+							"0": map[string]interface{}{
+								"type": "bloblang",
+								"data": "bloblang: root = content()",
+							},
+						},
+					},
+					"state": state,
+				}
+			}
+
+			// Minimal write DFC payload: no inputs, pipeline, or umh_topics needed for
+			// a state-only change. UMH_TOPICS is only required when output config is present.
+			minimalWriteDFCPayload := func(state string) map[string]interface{} {
+				return map[string]interface{}{
+					"state": state,
+				}
+			}
+
+			// getUpdatedPC is a helper that runs Parse+Validate+Execute and returns the
+			// saved protocol converter config, asserting no error along the way.
+			runEdit := func(payloadMap map[string]interface{}) *config.ProtocolConverterConfig {
+				err := action.Parse(payloadMap)
+				ExpectWithOffset(1, err).NotTo(HaveOccurred())
+				err = action.Validate()
+				ExpectWithOffset(1, err).NotTo(HaveOccurred())
+
+				err = stateMocker.Start()
+				ExpectWithOffset(1, err).NotTo(HaveOccurred())
+				_, _, err = action.Execute()
+				ExpectWithOffset(1, err).NotTo(HaveOccurred())
+				stateMocker.Stop()
+
+				ctx := context.Background()
+				updatedConfig, err := mockConfig.GetConfig(ctx, 0)
+				ExpectWithOffset(1, err).NotTo(HaveOccurred())
+
+				for i, pc := range updatedConfig.ProtocolConverter {
+					if pc.Name == pcName {
+						return &updatedConfig.ProtocolConverter[i]
+					}
+				}
+				Fail("protocol converter not found after execute")
+				return nil
+			}
+
+			BeforeEach(func() {
+				// Both DFCs are present and explicitly set to "active" so that
+				// dfcPayloadDiffers can use the state-diff short-circuit path.
+				mockConfig.Config.ProtocolConverter[0].ProtocolConverterServiceConfig.Config.DataflowComponentReadServiceConfig = dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+					BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
+						Input: map[string]interface{}{"http_client": map[string]interface{}{"url": "http://example.com"}},
+					},
+				}
+				mockConfig.Config.ProtocolConverter[0].ProtocolConverterServiceConfig.Config.DataflowComponentWriteServiceConfig = dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+					BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
+						Output: map[string]interface{}{"stdout": map[string]interface{}{}},
+					},
+				}
+				mockConfig.Config.ProtocolConverter[0].ProtocolConverterServiceConfig.Variables.User["UMH_TOPICS"] = []string{"umh.v1.factory.*"}
+				mockConfig.Config.ProtocolConverter[0].ProtocolConverterServiceConfig.ReadDFCDesiredState = "active"
+				mockConfig.Config.ProtocolConverter[0].ProtocolConverterServiceConfig.WriteDFCDesiredState = "active"
+
+				stateMocker = actions.NewStateMocker(mockConfig)
+				stateMocker.Tick()
+				action = actions.NewEditProtocolConverterAction(userEmail, actionUUID, instanceUUID, outboundChannel, mockConfig, nil)
+			})
+
+			It("should stop read DFC only", Label("disable-bridges"), func() {
+				pc := runEdit(map[string]interface{}{
+					"name": pcName,
+					"uuid": pcUUID.String(),
+					"readDFC": minimalReadDFCPayload("stopped"),
+				})
+
+				Expect(pc.ProtocolConverterServiceConfig.ReadDFCDesiredState).To(Equal("stopped"))
+				Expect(pc.ProtocolConverterServiceConfig.WriteDFCDesiredState).To(Equal("active"))
+			})
+
+			It("should start read DFC from stopped", Label("disable-bridges"), func() {
+				mockConfig.Config.ProtocolConverter[0].ProtocolConverterServiceConfig.ReadDFCDesiredState = "stopped"
+
+				pc := runEdit(map[string]interface{}{
+					"name": pcName,
+					"uuid": pcUUID.String(),
+					"readDFC": minimalReadDFCPayload("active"),
+				})
+
+				Expect(pc.ProtocolConverterServiceConfig.ReadDFCDesiredState).To(Equal("active"))
+				Expect(pc.ProtocolConverterServiceConfig.WriteDFCDesiredState).To(Equal("active"))
+			})
+
+			It("should stop write DFC only", Label("disable-bridges"), func() {
+				pc := runEdit(map[string]interface{}{
+					"name":     pcName,
+					"uuid":     pcUUID.String(),
+					"writeDFC": minimalWriteDFCPayload("stopped"),
+				})
+
+				Expect(pc.ProtocolConverterServiceConfig.WriteDFCDesiredState).To(Equal("stopped"))
+				Expect(pc.ProtocolConverterServiceConfig.ReadDFCDesiredState).To(Equal("active"))
+			})
+
+			It("should start write DFC from stopped", Label("disable-bridges"), func() {
+				mockConfig.Config.ProtocolConverter[0].ProtocolConverterServiceConfig.WriteDFCDesiredState = "stopped"
+
+				pc := runEdit(map[string]interface{}{
+					"name":     pcName,
+					"uuid":     pcUUID.String(),
+					"writeDFC": minimalWriteDFCPayload("active"),
+				})
+
+				Expect(pc.ProtocolConverterServiceConfig.WriteDFCDesiredState).To(Equal("active"))
+				Expect(pc.ProtocolConverterServiceConfig.ReadDFCDesiredState).To(Equal("active"))
+			})
+
+			It("should stop both DFCs simultaneously", Label("disable-bridges"), func() {
+				pc := runEdit(map[string]interface{}{
+					"name":     pcName,
+					"uuid":     pcUUID.String(),
+					"readDFC":  minimalReadDFCPayload("stopped"),
+					"writeDFC": minimalWriteDFCPayload("stopped"),
+				})
+
+				Expect(pc.ProtocolConverterServiceConfig.ReadDFCDesiredState).To(Equal("stopped"))
+				Expect(pc.ProtocolConverterServiceConfig.WriteDFCDesiredState).To(Equal("stopped"))
+			})
+
+			It("should start both DFCs simultaneously", Label("disable-bridges"), func() {
+				mockConfig.Config.ProtocolConverter[0].ProtocolConverterServiceConfig.ReadDFCDesiredState = "stopped"
+				mockConfig.Config.ProtocolConverter[0].ProtocolConverterServiceConfig.WriteDFCDesiredState = "stopped"
+
+				pc := runEdit(map[string]interface{}{
+					"name":     pcName,
+					"uuid":     pcUUID.String(),
+					"readDFC":  minimalReadDFCPayload("active"),
+					"writeDFC": minimalWriteDFCPayload("active"),
+				})
+
+				Expect(pc.ProtocolConverterServiceConfig.ReadDFCDesiredState).To(Equal("active"))
+				Expect(pc.ProtocolConverterServiceConfig.WriteDFCDesiredState).To(Equal("active"))
+			})
 		})
 
 		It("should handle protocol converter not found error", func() {
