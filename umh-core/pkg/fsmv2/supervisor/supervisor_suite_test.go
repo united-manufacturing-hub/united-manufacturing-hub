@@ -77,7 +77,7 @@ func registerTestWorkerFactories() {
 	for _, workerType := range workerTypes {
 		wt := workerType
 		// Register worker factory
-		err := factory.RegisterFactoryByType(wt, func(identity deps.Identity, _ deps.FSMLogger, _ deps.StateReader, _ map[string]any) fsmv2.Worker {
+		err := factory.RegisterFactoryByType(wt, func(identity deps.Identity, _ deps.FSMLogger, _ deps.StateReader) fsmv2.Worker {
 			return &supervisor.TestWorkerWithType{
 				Worker:     supervisor.TestWorker{},
 				WorkerType: wt,

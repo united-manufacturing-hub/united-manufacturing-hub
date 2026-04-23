@@ -84,7 +84,7 @@ var _ = Describe("register.Worker", func() {
 			ID:         "test-1",
 			Name:       "test",
 			WorkerType: "regtest",
-		}, nopLogger, nil, nil)
+		}, nopLogger, nil)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(worker).NotTo(BeNil())
 	})
@@ -143,7 +143,7 @@ var _ = Describe("register.Worker", func() {
 				ID:         "err-1",
 				Name:       "err-test",
 				WorkerType: "regtest-errconstructor",
-			}, nopLogger, nil, nil)
+			}, nopLogger, nil)
 		}).To(PanicWith(And(
 			ContainSubstring("constructor failed"),
 			ContainSubstring("err-1"),
@@ -163,7 +163,7 @@ var _ = Describe("register.Worker", func() {
 				ID:         "nil-1",
 				Name:       "nil-test",
 				WorkerType: "regtest-nilworker",
-			}, nopLogger, nil, nil)
+			}, nopLogger, nil)
 		}).To(PanicWith(And(
 			ContainSubstring("returned nil worker"),
 			ContainSubstring("nil-1"),
@@ -194,7 +194,7 @@ var _ = Describe("register.Worker", func() {
 			ID:         "tdeps-1",
 			Name:       "tdeps-test",
 			WorkerType: "regtest-tdeps",
-		}, nopLogger, nil, nil)
+		}, nopLogger, nil)
 
 		Expect(err).NotTo(HaveOccurred())
 		Expect(worker).NotTo(BeNil())
@@ -202,7 +202,7 @@ var _ = Describe("register.Worker", func() {
 		Expect(capturedDeps).To(Equal(regTestDeps{}))
 	})
 
-	It("accepts pointer TDeps and passes typed nil to constructor (transitional until extraDeps extraction lands)", func() {
+	It("accepts pointer TDeps and passes typed nil to constructor", func() {
 		type regTestPtrDeps *struct{ X int }
 
 		var capturedDeps regTestPtrDeps
@@ -224,7 +224,7 @@ var _ = Describe("register.Worker", func() {
 			ID:         "ptrdeps-1",
 			Name:       "ptrdeps-test",
 			WorkerType: "regtest-ptrdeps",
-		}, nopLogger, nil, nil)
+		}, nopLogger, nil)
 
 		Expect(err).NotTo(HaveOccurred())
 		Expect(worker).NotTo(BeNil())
@@ -252,7 +252,7 @@ var _ = Describe("register.Worker", func() {
 			ID:         "nodeps-1",
 			Name:       "nodeps-test",
 			WorkerType: "regtest-nodeps-alias",
-		}, nopLogger, nil, nil)
+		}, nopLogger, nil)
 
 		Expect(err).NotTo(HaveOccurred())
 		Expect(worker).NotTo(BeNil())

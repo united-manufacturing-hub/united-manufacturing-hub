@@ -27,7 +27,7 @@ import (
 )
 
 var (
-	registry   = make(map[string]func(deps.Identity, deps.FSMLogger, deps.StateReader, map[string]any) fsmv2.Worker)
+	registry   = make(map[string]func(deps.Identity, deps.FSMLogger, deps.StateReader) fsmv2.Worker)
 	registryMu sync.RWMutex
 
 	// Uses interface{} to avoid circular imports between factory and supervisor packages.
@@ -37,7 +37,7 @@ var (
 
 // RegisterFactoryByType adds a worker type to the global registry using a runtime string type.
 // For worker package initialization, use RegisterFactory[TObserved, TDesired]() instead.
-func RegisterFactoryByType(workerType string, factoryFunc func(deps.Identity, deps.FSMLogger, deps.StateReader, map[string]any) fsmv2.Worker) error {
+func RegisterFactoryByType(workerType string, factoryFunc func(deps.Identity, deps.FSMLogger, deps.StateReader) fsmv2.Worker) error {
 	if workerType == "" {
 		return errors.New("worker type cannot be empty")
 	}
@@ -61,7 +61,7 @@ func RegisterFactoryByType(workerType string, factoryFunc func(deps.Identity, de
 // RegisterFactory adds a worker type to the global registry using compile-time type parameters.
 // The workerType is derived from the TObserved type parameter.
 func RegisterFactory[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState](
-	factoryFunc func(deps.Identity, deps.FSMLogger, deps.StateReader, map[string]any) fsmv2.Worker,
+	factoryFunc func(deps.Identity, deps.FSMLogger, deps.StateReader) fsmv2.Worker,
 ) error {
 	workerType, err := storage.DeriveWorkerType[TObserved]()
 	if err != nil {
@@ -121,7 +121,7 @@ func RegisterSupervisorFactoryByType(workerType string, factoryFunc func(interfa
 
 // NewWorkerByType creates a worker instance by runtime string type name.
 // For compile-time type-safe creation, use GetFactory[TObserved, TDesired]() instead.
-func NewWorkerByType(workerType string, identity deps.Identity, logger deps.FSMLogger, stateReader deps.StateReader, deps map[string]any) (fsmv2.Worker, error) {
+func NewWorkerByType(workerType string, identity deps.Identity, logger deps.FSMLogger, stateReader deps.StateReader) (fsmv2.Worker, error) {
 	if workerType == "" {
 		return nil, errors.New("worker type cannot be empty")
 	}
@@ -136,7 +136,7 @@ func NewWorkerByType(workerType string, identity deps.Identity, logger deps.FSML
 		return nil, errors.New("unknown worker type")
 	}
 
-	return factoryFunc(identity, logger, stateReader, deps), nil
+	return factoryFunc(identity, logger, stateReader), nil
 }
 
 // NewSupervisorByType creates a supervisor for the given worker type.
@@ -163,7 +163,7 @@ func NewSupervisorByType(workerType string, config interface{}) (interface{}, er
 func ResetRegistry() {
 	registryMu.Lock()
 
-	registry = make(map[string]func(deps.Identity, deps.FSMLogger, deps.StateReader, map[string]any) fsmv2.Worker)
+	registry = make(map[string]func(deps.Identity, deps.FSMLogger, deps.StateReader) fsmv2.Worker)
 
 	registryMu.Unlock()
 
@@ -188,7 +188,7 @@ func ListRegisteredTypes() []string {
 }
 
 // GetFactory retrieves a worker factory by compile-time type parameters.
-func GetFactory[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState]() (func(deps.Identity, deps.FSMLogger, deps.StateReader, map[string]any) fsmv2.Worker, bool, error) {
+func GetFactory[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState]() (func(deps.Identity, deps.FSMLogger, deps.StateReader) fsmv2.Worker, bool, error) {
 	workerType, err := storage.DeriveWorkerType[TObserved]()
 	if err != nil {
 		return nil, false, fmt.Errorf("failed to derive worker type: %w", err)
@@ -200,32 +200,6 @@ func GetFactory[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState]() (f
 	factoryFunc, exists := registry[workerType]
 
 	return factoryFunc, exists, nil
-}
-
-// RegisterWorkerAndSupervisorFactoryByType registers both worker and supervisor factories.
-// Not atomic: rolls back worker registration if supervisor registration fails.
-func RegisterWorkerAndSupervisorFactoryByType(
-	workerType string,
-	workerFactory func(deps.Identity, deps.FSMLogger, deps.StateReader, map[string]any) fsmv2.Worker,
-	supervisorFactory func(interface{}) interface{},
-) error {
-	if workerType == "" {
-		return errors.New("worker type cannot be empty")
-	}
-
-	if err := RegisterFactoryByType(workerType, workerFactory); err != nil {
-		return fmt.Errorf("failed to register worker factory: %w", err)
-	}
-
-	if err := RegisterSupervisorFactoryByType(workerType, supervisorFactory); err != nil {
-		registryMu.Lock()
-		delete(registry, workerType)
-		registryMu.Unlock()
-
-		return fmt.Errorf("failed to register supervisor factory: %w", err)
-	}
-
-	return nil
 }
 
 // ValidateRegistryConsistency checks for mismatches between worker and supervisor registries.

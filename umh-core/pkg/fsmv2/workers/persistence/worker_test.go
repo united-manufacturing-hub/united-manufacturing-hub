@@ -318,7 +318,7 @@ var _ = Describe("PersistenceWorker", func() {
 		It("should consume store from register.GetDeps when instantiated via factory", func() {
 			factoryIdentity := deps.Identity{ID: "factory-persistence", Name: "Factory Persistence", WorkerType: "persistence"}
 
-			w, err := factory.NewWorkerByType("persistence", factoryIdentity, logger, nil, map[string]any{})
+			w, err := factory.NewWorkerByType("persistence", factoryIdentity, logger, nil)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(w).NotTo(BeNil())
 

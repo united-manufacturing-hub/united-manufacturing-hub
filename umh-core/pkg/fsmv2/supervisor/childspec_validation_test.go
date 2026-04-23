@@ -42,13 +42,13 @@ var _ = Describe("ChildSpec Validation Integration", func() {
 		logger = deps.NewNopFSMLogger()
 		basicStore = memory.NewInMemoryStore()
 
-		_ = factory.RegisterFactoryByType("valid_child", func(id deps.Identity, _ deps.FSMLogger, _ deps.StateReader, _ map[string]any) fsmv2.Worker {
+		_ = factory.RegisterFactoryByType("valid_child", func(id deps.Identity, _ deps.FSMLogger, _ deps.StateReader) fsmv2.Worker {
 			return &validChildSpecMockWorker{
 				identity:     id,
 				initialState: &mockState{},
 			}
 		})
-		_ = factory.RegisterFactoryByType("another_child", func(id deps.Identity, _ deps.FSMLogger, _ deps.StateReader, _ map[string]any) fsmv2.Worker {
+		_ = factory.RegisterFactoryByType("another_child", func(id deps.Identity, _ deps.FSMLogger, _ deps.StateReader) fsmv2.Worker {
 			return &validChildSpecMockWorker{
 				identity:     id,
 				initialState: &mockState{},
