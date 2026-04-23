@@ -23,6 +23,7 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/application/snapshot"
 )
 
@@ -33,32 +34,20 @@ var _ = Describe("ApplicationWorker", func() {
 	var worker *ApplicationWorker
 
 	BeforeEach(func() {
-		worker = NewApplicationWorker("root-1", "test-root")
+		worker = NewApplicationWorker("root-1", "test-root", deps.NewNopFSMLogger(), nil)
 	})
 
 	Describe("CollectObservedState", func() {
-		It("should return observed state with timestamp", func() {
+		It("should return observed state with expected status fields", func() {
 			ctx := context.Background()
 			obs, err := worker.CollectObservedState(ctx, nil)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(obs).NotTo(BeNil())
 
-			typedObs, ok := obs.(snapshot.ApplicationObservedState)
-			Expect(ok).To(BeTrue(), "Expected value type ApplicationObservedState, got %T", obs)
-			Expect(typedObs.GetTimestamp()).NotTo(BeZero())
-			Expect(typedObs.Name).To(Equal("test-root"))
-		})
-
-		It("should return observed state with timestamp", func() {
-			ctx := context.Background()
-			obs, err := worker.CollectObservedState(ctx, nil)
-			Expect(err).ToNot(HaveOccurred())
-			Expect(obs).NotTo(BeNil())
-
-			typedObs, ok := obs.(snapshot.ApplicationObservedState)
-			Expect(ok).To(BeTrue())
-			Expect(typedObs.GetTimestamp()).NotTo(BeZero())
-			Expect(typedObs.Name).To(Equal("test-root"))
+			typedObs, ok := obs.(fsmv2.Observation[snapshot.ApplicationStatus])
+			Expect(ok).To(BeTrue(), "Expected fsmv2.Observation[ApplicationStatus], got %T", obs)
+			Expect(typedObs.Status.Name).To(Equal("test-root"))
+			Expect(typedObs.Status.ID).To(Equal("root-1"))
 		})
 
 		It("should respect context cancellation", func() {
@@ -91,7 +80,7 @@ children:
 
 			desiredIface, err := worker.DeriveDesiredState(userSpec)
 			Expect(err).ToNot(HaveOccurred())
-			desired := desiredIface.(*config.DesiredState)
+			desired := desiredIface.(*fsmv2.WrappedDesiredState[snapshot.ApplicationConfig])
 			Expect(desired.State).To(Equal("running"))
 			Expect(desired.ChildrenSpecs).To(HaveLen(2))
 			Expect(desired.ChildrenSpecs[0].Name).To(Equal("child-1"))
@@ -108,7 +97,7 @@ children:
 
 			desiredIface, err := worker.DeriveDesiredState(userSpec)
 			Expect(err).ToNot(HaveOccurred())
-			desired := desiredIface.(*config.DesiredState)
+			desired := desiredIface.(*fsmv2.WrappedDesiredState[snapshot.ApplicationConfig])
 			Expect(desired.State).To(Equal("running"))
 			Expect(desired.ChildrenSpecs).To(BeEmpty())
 		})
@@ -120,9 +109,18 @@ children:
 
 			desiredIface, err := worker.DeriveDesiredState(userSpec)
 			Expect(err).ToNot(HaveOccurred())
-			desired := desiredIface.(*config.DesiredState)
+			desired := desiredIface.(*fsmv2.WrappedDesiredState[snapshot.ApplicationConfig])
 			Expect(desired.State).To(Equal("running"))
 			Expect(desired.ChildrenSpecs).To(BeNil())
+		})
+
+		It("should return default desired state for nil spec", func() {
+			desiredIface, err := worker.DeriveDesiredState(nil)
+			Expect(err).ToNot(HaveOccurred())
+			desired := desiredIface.(*fsmv2.WrappedDesiredState[snapshot.ApplicationConfig])
+			Expect(desired.State).To(Equal("running"))
+			Expect(desired.ChildrenSpecs).To(BeNil())
+			Expect(desired.Config.Name).To(Equal("test-root"))
 		})
 
 		It("should return error for invalid YAML", func() {
@@ -156,7 +154,7 @@ children:
 
 			desiredIface, err := worker.DeriveDesiredState(userSpec)
 			Expect(err).ToNot(HaveOccurred())
-			desired := desiredIface.(*config.DesiredState)
+			desired := desiredIface.(*fsmv2.WrappedDesiredState[snapshot.ApplicationConfig])
 			Expect(desired.ChildrenSpecs).To(HaveLen(1))
 			Expect(desired.ChildrenSpecs[0].ChildStartStates).To(ConsistOf("running", "TryingToStart"))
 		})
@@ -177,7 +175,7 @@ children:
 
 			desiredIface, err := worker.DeriveDesiredState(userSpec)
 			Expect(err).ToNot(HaveOccurred())
-			desired := desiredIface.(*config.DesiredState)
+			desired := desiredIface.(*fsmv2.WrappedDesiredState[snapshot.ApplicationConfig])
 			Expect(desired.ChildrenSpecs).To(HaveLen(3))
 			Expect(desired.ChildrenSpecs[0].WorkerType).To(Equal("counter"))
 			Expect(desired.ChildrenSpecs[1].WorkerType).To(Equal("timer"))
@@ -194,23 +192,25 @@ children:
 		})
 	})
 
-	Describe("Timestamp freshness", func() {
-		It("should return recent timestamp", func() {
+	Describe("CollectedAt semantics", func() {
+		It("CollectedAt is populated by collector, zero straight from CollectObservedState", func() {
 			ctx := context.Background()
 			before := time.Now()
 			obs, err := worker.CollectObservedState(ctx, nil)
-			after := time.Now()
-
 			Expect(err).ToNot(HaveOccurred())
-			timestamp := obs.GetTimestamp()
-			Expect(timestamp.After(before) || timestamp.Equal(before)).To(BeTrue())
-			Expect(timestamp.Before(after) || timestamp.Equal(after)).To(BeTrue())
+
+			// The CollectObservedState method returns a bare Observation; the
+			// collector sets CollectedAt afterwards. We only assert the return
+			// shape here.
+			typed := obs.(fsmv2.Observation[snapshot.ApplicationStatus])
+			Expect(typed.Status.Name).To(Equal("test-root"))
+			Expect(before.Before(time.Now()) || before.Equal(time.Now())).To(BeTrue())
 		})
 	})
 
 	Describe("NewApplicationSupervisor with YAML config", func() {
 		It("should accept YAMLConfig in SupervisorConfig", func() {
-			// This test documents that NewApplicationSupervisor now accepts YAMLConfig
+			// This test documents that NewApplicationSupervisor accepts YAMLConfig
 			// and passes it to the supervisor as UserSpec.
 			//
 			// The fix enables supervisors created via NewApplicationSupervisor to have

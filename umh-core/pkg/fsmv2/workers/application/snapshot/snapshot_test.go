@@ -12,84 +12,53 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package snapshot
+package snapshot_test
 
 import (
 	"testing"
-	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
+
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/application/snapshot"
 )
 
-func TestRoot(t *testing.T) {
+func TestSnapshot(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "Root Suite")
+	RunSpecs(t, "Snapshot Suite")
 }
 
-// Compile-time interface verification.
-var _ fsmv2.ObservedState = (*ApplicationObservedState)(nil)
-var _ fsmv2.DesiredState = (*ApplicationDesiredState)(nil)
-
-var _ = Describe("ApplicationObservedState", func() {
-	It("should implement fsmv2.ObservedState interface", func() {
-		obs := &ApplicationObservedState{
-			CollectedAt: time.Now(),
-			Name:        "test-root",
-		}
-
-		// GetTimestamp should return the collected time.
-		Expect(obs.GetTimestamp()).NotTo(BeZero())
+var _ = Describe("ApplicationStatus", func() {
+	It("reports no infrastructure issues for zero counts", func() {
+		s := snapshot.ApplicationStatus{}
+		Expect(s.HasInfrastructureIssues()).To(BeFalse())
+		Expect(s.InfrastructureReason()).To(BeEmpty())
 	})
 
-	It("should return the correct timestamp", func() {
-		now := time.Now()
-		obs := &ApplicationObservedState{
-			CollectedAt: now,
-		}
-		Expect(obs.GetTimestamp()).To(Equal(now))
+	It("reports infrastructure issues when circuit breakers are open", func() {
+		s := snapshot.ApplicationStatus{ChildrenCircuitOpen: 2}
+		Expect(s.HasInfrastructureIssues()).To(BeTrue())
+		Expect(s.InfrastructureReason()).To(ContainSubstring("circuit_open=2"))
+		Expect(s.InfrastructureReason()).To(ContainSubstring("stale=0"))
+	})
+
+	It("reports infrastructure issues when children are stale", func() {
+		s := snapshot.ApplicationStatus{ChildrenStale: 3}
+		Expect(s.HasInfrastructureIssues()).To(BeTrue())
+		Expect(s.InfrastructureReason()).To(ContainSubstring("stale=3"))
 	})
 })
 
-var _ = Describe("ApplicationDesiredState", func() {
-	It("should implement fsmv2.DesiredState interface", func() {
-		desired := &ApplicationDesiredState{
-			Name: "test-root",
-		}
-
-		// IsShutdownRequested should return false by default.
-		Expect(desired.IsShutdownRequested()).To(BeFalse())
+var _ = Describe("ChildrenViewToStatus", func() {
+	It("returns zero counts for nil view", func() {
+		open, stale := snapshot.ChildrenViewToStatus(nil)
+		Expect(open).To(Equal(0))
+		Expect(stale).To(Equal(0))
 	})
 
-	It("should return true when shutdown is requested", func() {
-		desired := &ApplicationDesiredState{}
-		desired.SetShutdownRequested(true)
-		Expect(desired.IsShutdownRequested()).To(BeTrue())
-	})
-
-	It("should return children specs from named field", func() {
-		children := []config.ChildSpec{
-			{
-				Name:       "child-1",
-				WorkerType: "example-child",
-			},
-			{
-				Name:       "child-2",
-				WorkerType: "example-child",
-			},
-		}
-
-		// New flat structure - ChildrenSpecs is a direct field, not embedded
-		desired := &ApplicationDesiredState{
-			Name:          "test-root",
-			ChildrenSpecs: children,
-		}
-
-		specs := desired.GetChildrenSpecs()
-		Expect(specs).To(HaveLen(2))
-		Expect(specs[0].Name).To(Equal("child-1"))
-		Expect(specs[1].Name).To(Equal("child-2"))
+	It("returns zero counts for wrong type", func() {
+		open, stale := snapshot.ChildrenViewToStatus("not a view")
+		Expect(open).To(Equal(0))
+		Expect(stale).To(Equal(0))
 	})
 })
