@@ -17,13 +17,11 @@ package persistence
 import (
 	"context"
 	"errors"
-	"fmt"
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/register"
 	persistencepkg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
 
 	// Blank import for side effects: registers the "Stopped" initial state
@@ -36,7 +34,12 @@ import (
 	_ "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/persistence/state"
 )
 
-const workerType = "persistence"
+// WorkerTypeName is the canonical worker-type identifier for the persistence
+// worker, used in config YAML, CSE storage, and the register.SetDeps key at
+// cmd/main.go.
+const WorkerTypeName = "persistence"
+
+const workerType = WorkerTypeName
 
 const (
 	DefaultCompactionInterval  = 5 * time.Minute
@@ -54,11 +57,22 @@ type PersistenceWorker struct {
 	deps *PersistenceDependencies
 }
 
-// NewPersistenceWorker creates a new persistence worker. If the typed
-// dependencies argument is non-nil, it is used as-is (its Store field must be
-// non-nil). When nil, the constructor builds default dependencies from the
-// package-level Store() singleton populated by cmd/main.go via SetStore. This
-// replaces the prior extraDeps["store"] seam with a typed plumbing path.
+// NewPersistenceWorker creates a new persistence worker. The dependencies
+// parameter carries the triangular store published by cmd/main.go via
+// register.SetDeps; the register.Worker factory closure forwards it here.
+//
+// Three supported shapes for dependencies:
+//
+//   - nil: the constructor falls back to the persistence.Store() singleton for
+//     backward compatibility until C13 removes the singleton. Errors if the
+//     singleton is also unset.
+//   - seed (built via NewStoreOnlyDependencies): the constructor extracts the
+//     store and builds full deps with this worker's identity/logger/stateReader.
+//     This is the path taken by cmd/main.go → register.SetDeps → factory closure.
+//   - fully built (via NewPersistenceDependencies): the constructor uses the
+//     value as-is, preserving the pre-existing direct-injection contract used
+//     by tests.
+//
 // Returns fsmv2.Worker to align with the constructor signature used by
 // transport/push/pull.
 func NewPersistenceWorker(
@@ -71,14 +85,22 @@ func NewPersistenceWorker(
 		identity.WorkerType = workerType
 	}
 
-	if dependencies == nil {
+	switch {
+	case dependencies == nil:
 		store := Store()
 		if store == nil {
-			return nil, errors.New("persistence worker requires a store via persistence.SetStore(); cmd/main.go must publish the store before the application supervisor starts")
+			return nil, errors.New("persistence worker requires a store via register.SetDeps or persistence.SetStore(); cmd/main.go must publish the store before the application supervisor starts")
 		}
 
 		dependencies = NewPersistenceDependencies(store, deps.DefaultScheduler{}, logger, stateReader, identity)
-	} else if dependencies.GetStore() == nil {
+	case dependencies.BaseDependencies == nil:
+		store := dependencies.GetStore()
+		if store == nil {
+			return nil, errors.New("persistence worker: seed dependencies.Store must not be nil")
+		}
+
+		dependencies = NewPersistenceDependencies(store, deps.DefaultScheduler{}, logger, stateReader, identity)
+	case dependencies.GetStore() == nil:
 		return nil, errors.New("persistence worker: dependencies.Store must not be nil")
 	}
 
@@ -180,32 +202,14 @@ func (w *PersistenceWorker) CollectObservedState(ctx context.Context, _ fsmv2.De
 	}), nil
 }
 
-// init registers the persistence worker via factory.RegisterWorkerAndSupervisorFactoryByType.
-// The factory closure obtains the triangular store from the persistence.Store()
-// package-level singleton (populated by cmd/main.go via SetStore), replacing
-// the prior extraDeps["store"] seam with a typed plumbing path.
-//
-// Persistence retains the factory-based registration path (rather than
-// register.Worker) until PR2 C10 completes the register.Worker migration. This
-// commit is a type-shape refactor only.
+// init registers the persistence worker via the generic register.Worker helper
+// with typed TDeps = *PersistenceDependencies. Parent wiring at cmd/main.go
+// publishes the store via register.SetDeps[*PersistenceDependencies] before
+// the application supervisor starts; the factory closure then forwards the
+// seed deps to NewPersistenceWorker. When nothing has been published (e.g.
+// older test paths), the constructor falls back to the persistence.Store()
+// singleton — preserving backward compatibility until C13 removes the
+// singleton entirely.
 func init() {
-	workerFactory := func(id deps.Identity, logger deps.FSMLogger, stateReader deps.StateReader, _ map[string]any) fsmv2.Worker {
-		worker, err := NewPersistenceWorker(id, logger, stateReader, nil)
-		if err != nil {
-			panic(fmt.Sprintf("failed to create persistence worker: %v", err))
-		}
-
-		return worker
-	}
-
-	supervisorFactory := func(cfg interface{}) interface{} {
-		return supervisor.NewSupervisor[
-			fsmv2.Observation[PersistenceStatus],
-			*fsmv2.WrappedDesiredState[PersistenceConfig],
-		](cfg.(supervisor.Config))
-	}
-
-	if err := factory.RegisterWorkerAndSupervisorFactoryByType(workerType, workerFactory, supervisorFactory); err != nil {
-		panic(fmt.Sprintf("failed to register persistence worker: %v", err))
-	}
+	register.Worker[PersistenceConfig, PersistenceStatus, *PersistenceDependencies](WorkerTypeName, NewPersistenceWorker)
 }

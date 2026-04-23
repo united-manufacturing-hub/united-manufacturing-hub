@@ -42,6 +42,7 @@ import (
 	topicbrowserfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/topicbrowser"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/examples"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/register"
 	fsmv2sentry "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/sentry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/application"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator"
@@ -537,11 +538,17 @@ children:
 
 	fsmv2Deps := map[string]any{}
 	if configData.Agent.UseFSMv2MemoryCleanup {
-		// Publish the triangular store via the typed persistence.SetStore
-		// singleton. The persistence worker factory consumes it via
-		// persistence.Store() during construction, replacing the prior
-		// extraDeps["store"] seam.
-		persistenceWorker.SetStore(store)
+		// Publish the triangular store via register.SetDeps, keyed by the
+		// persistence worker-type name. The register.Worker factory closure
+		// at persistence.init() reads this seed via GetDeps during worker
+		// construction and rebuilds full dependencies with the per-worker
+		// identity/logger/stateReader. Replaces the prior persistence.SetStore
+		// singleton call; the singleton itself remains in place until C13
+		// removes it.
+		register.SetDeps[*persistenceWorker.PersistenceDependencies](
+			persistenceWorker.WorkerTypeName,
+			persistenceWorker.NewStoreOnlyDependencies(store),
+		)
 	}
 
 	appSup, err := application.NewApplicationSupervisor(application.SupervisorConfig{
