@@ -12,79 +12,59 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Package snapshot holds the exampleparent worker's Config and Status value
+// types. It exists as a separate leaf package so the state sub-package can
+// depend on these types without introducing an import cycle with the worker
+// package.
+//
+// Post-PR3-C3 the exampleparent worker uses fsmv2.Observation[ExampleparentStatus]
+// and *fsmv2.WrappedDesiredState[ExampleparentConfig]; the underlying value
+// types are defined here and re-exported from the worker package as type
+// aliases for caller convenience.
 package snapshot
 
 import (
-	"time"
-
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 )
 
-// ExampleparentSnapshot represents a point-in-time view of the parent worker state.
-type ExampleparentSnapshot struct {
-	Desired  *ExampleparentDesiredState
-	Identity deps.Identity
-	Observed ExampleparentObservedState
+// ExampleparentConfig holds the user-provided configuration for the parent
+// worker. Embeds BaseUserSpec to support the StateGetter interface, allowing
+// WorkerBase.DeriveDesiredState to extract the desired state from the "state"
+// YAML field.
+//
+// ChildrenCount, ChildWorkerType and ChildConfig are parsed from the parent's
+// UserSpec.Config template and consumed by the child-spec factory to declare
+// the desired children set.
+type ExampleparentConfig struct {
+	config.BaseUserSpec `yaml:",inline"`
+
+	// ChildWorkerType is the registered worker type to use for spawned children.
+	// Defaults to "examplechild" when empty.
+	ChildWorkerType string `json:"child_worker_type" yaml:"child_worker_type"`
+
+	// ChildConfig is the UserSpec.Config template handed to each spawned child.
+	// When empty the factory falls back to a built-in address/device template.
+	ChildConfig string `json:"child_config" yaml:"child_config"`
+
+	// ChildrenCount is the number of children to spawn. Zero means no children.
+	ChildrenCount int `json:"children_count" yaml:"children_count"`
 }
 
-// ExampleparentDesiredState represents the target configuration for the parent worker.
-type ExampleparentDesiredState struct {
-	config.BaseDesiredState
-	ChildCount int `json:"ChildCount"`
+// GetChildWorkerType returns the configured child worker type, defaulting to
+// "examplechild" when the field is empty.
+func (c *ExampleparentConfig) GetChildWorkerType() string {
+	if c.ChildWorkerType == "" {
+		return "examplechild"
+	}
+
+	return c.ChildWorkerType
 }
 
-// ShouldBeRunning returns true if the parent should be in a running state.
-func (s *ExampleparentDesiredState) ShouldBeRunning() bool {
-	return !s.ShutdownRequested
-}
-
-// ExampleparentObservedState represents the current state of the parent worker.
-type ExampleparentObservedState struct {
-	CollectedAt time.Time `json:"collected_at"`
-
-	ID string `json:"id"`
-
-	State string `json:"state"`
-
-	// Supervisor injects action history into deps; workers read via GetActionHistory().
-	LastActionResults []deps.ActionResult `json:"last_action_results,omitempty"`
-
-	ExampleparentDesiredState `json:",inline"`
-
-	deps.MetricsEmbedder `json:",inline"`
-
-	ChildrenHealthy   int `json:"children_healthy"`
-	ChildrenUnhealthy int `json:"children_unhealthy"`
-}
-
-func (o ExampleparentObservedState) GetTimestamp() time.Time {
-	return o.CollectedAt
-}
-
-func (o ExampleparentObservedState) GetObservedDesiredState() fsmv2.DesiredState {
-	return &o.ExampleparentDesiredState
-}
-
-// SetState sets the FSM state name on this observed state.
-func (o ExampleparentObservedState) SetState(s string) fsmv2.ObservedState {
-	o.State = s
-
-	return o
-}
-
-// SetShutdownRequested sets the shutdown requested status on this observed state.
-func (o ExampleparentObservedState) SetShutdownRequested(v bool) fsmv2.ObservedState {
-	o.ShutdownRequested = v
-
-	return o
-}
-
-// SetChildrenCounts sets the children health counts on this observed state.
-func (o ExampleparentObservedState) SetChildrenCounts(healthy, unhealthy int) fsmv2.ObservedState {
-	o.ChildrenHealthy = healthy
-	o.ChildrenUnhealthy = unhealthy
-
-	return o
-}
+// ExampleparentStatus holds the runtime observation data for the parent worker.
+// Framework fields (CollectedAt, State, LastActionResults, MetricsEmbedder,
+// ShutdownRequested, children counts) are carried by
+// fsmv2.Observation[ExampleparentStatus] and are not duplicated here. The
+// parent worker has no worker-specific status fields of its own — its state
+// machine decides transitions purely from framework-level children health
+// counts and the parent-mapped state.
+type ExampleparentStatus struct{}

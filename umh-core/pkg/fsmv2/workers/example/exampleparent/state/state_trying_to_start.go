@@ -21,7 +21,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleparent/snapshot"
 )
 
-// TryingToStartState represents the state while loading config and spawning children.
+// TryingToStartState represents the state while spawning children.
 // Children with ChildStartStates containing "TryingToStart" will have desired state "running".
 // Waits for all children to become healthy before transitioning to RunningState.
 type TryingToStartState struct {
@@ -29,22 +29,18 @@ type TryingToStartState struct {
 }
 
 func (s *TryingToStartState) Next(snapAny any) fsmv2.NextResult[any, any] {
-	snap := helpers.ConvertSnapshot[snapshot.ExampleparentObservedState, *snapshot.ExampleparentDesiredState](snapAny)
+	snap := fsmv2.ConvertWorkerSnapshot[snapshot.ExampleparentConfig, snapshot.ExampleparentStatus](snapAny)
 
-	if snap.Desired.IsShutdownRequested() {
-		return fsmv2.Transition(&TryingToStopState{}, fsmv2.SignalNone, nil, "Shutdown requested, transitioning to TryingToStop")
-	}
-
-	if snap.Observed.ID == "" {
-		return fsmv2.Transition(s, fsmv2.SignalNone, &action.StartAction{}, "ID not set, executing StartAction")
+	if snap.IsShutdownRequested {
+		return fsmv2.Transition(&TryingToStopState{}, fsmv2.SignalNone, nil, "shutdown requested, transitioning to TryingToStop")
 	}
 
 	// All children must be running (healthy > 0, unhealthy == 0) before transitioning.
-	if snap.Observed.ChildrenHealthy > 0 && snap.Observed.ChildrenUnhealthy == 0 {
-		return fsmv2.Transition(&RunningState{}, fsmv2.SignalNone, nil, "All children healthy, transitioning to Running")
+	if snap.ChildrenHealthy > 0 && snap.ChildrenUnhealthy == 0 {
+		return fsmv2.Transition(&RunningState{}, fsmv2.SignalNone, nil, "all children healthy, transitioning to Running")
 	}
 
-	return fsmv2.Transition(s, fsmv2.SignalNone, nil, "Waiting for all children to become healthy")
+	return fsmv2.Transition(s, fsmv2.SignalNone, &action.StartAction{}, "waiting for children to become healthy, running StartAction")
 }
 
 func (s *TryingToStartState) String() string {

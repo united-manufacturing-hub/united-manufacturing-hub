@@ -526,42 +526,20 @@ func verifyTemplateRenderingWorks(store storage.TriangularStoreInterface) {
 	GinkgoWriter.Printf("to convert UserSpec.Config template + Variables into rendered config.\n")
 }
 
-// extractUserNamespaceVariables returns the user-namespace variables from a
-// parent Desired state's originalUserSpec. Parent workers not yet migrated to
-// WorkerBase still serialize the legacy DesiredState shape that carries
-// originalUserSpec.variables.user verbatim.
+// extractUserNamespaceVariables returns an empty map.
+//
+// Post-PR3-C3, the parent worker uses WrappedDesiredState[ExampleparentConfig]
+// which, by PURE_DERIVE, does not carry originalUserSpec. Parent user variables
+// (IP, PORT, CONNECTION_NAME) are pre-merged into each child's
+// childrenSpecs[i].userSpec.variables.user by the child-spec factory, so the
+// inherited keys are already visible there.
+//
+// The helper is retained so call sites do not need to branch — it returns an
+// empty map and callers rely on extractChildSpecUserVariables for the merged
+// variables seen by the supervisor at spawn.
 func extractUserNamespaceVariables(desired map[string]any) (map[string]any, error) {
-	originalUserSpec, hasSpec := desired["originalUserSpec"]
-	if !hasSpec {
-		return nil, fmt.Errorf("missing originalUserSpec field, got keys: %v", getMapKeys(desired))
-	}
-
-	userSpecMap, ok := originalUserSpec.(map[string]any)
-	if !ok {
-		return nil, fmt.Errorf("originalUserSpec should be map[string]any, got: %T", originalUserSpec)
-	}
-
-	variables, hasVars := userSpecMap["variables"]
-	if !hasVars {
-		return map[string]any{}, nil
-	}
-
-	varsMap, ok := variables.(map[string]any)
-	if !ok {
-		return nil, fmt.Errorf("variables should be map[string]any, got: %T", variables)
-	}
-
-	userVars, hasUser := varsMap["user"]
-	if !hasUser {
-		return map[string]any{}, nil
-	}
-
-	userVarsMap, ok := userVars.(map[string]any)
-	if !ok {
-		return nil, fmt.Errorf("variables.user should be map[string]any, got: %T", userVars)
-	}
-
-	return userVarsMap, nil
+	_ = desired
+	return map[string]any{}, nil
 }
 
 // extractChildrenSpecs returns the raw child specs (as map[string]any) from a

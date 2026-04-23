@@ -33,6 +33,12 @@ type WorkerSnapshot[TConfig any, TStatus any] struct {
 	Identity            deps.Identity
 	ParentMappedState   string
 	LastActionResults   []deps.ActionResult
+	// FrameworkMetrics carries supervisor-provided metrics such as
+	// TimeInCurrentStateMs, StartupCount, and StateTransitionsTotal.
+	// Populated from the underlying Observation[TStatus].Metrics.Framework
+	// so state files can make time-gated decisions without reaching into
+	// the raw observation type.
+	FrameworkMetrics    deps.FrameworkMetrics
 	ChildrenHealthy     int
 	ChildrenUnhealthy   int
 	IsShutdownRequested bool
@@ -71,6 +77,7 @@ func ConvertWorkerSnapshot[TConfig any, TStatus any](snapAny any) WorkerSnapshot
 		ParentMappedState:   obs.ParentMappedState,
 		CollectedAt:         obs.CollectedAt,
 		LastActionResults:   obs.LastActionResults,
+		FrameworkMetrics:    obs.Metrics.Framework,
 		ChildrenHealthy:     obs.ChildrenHealthy,
 		ChildrenUnhealthy:   obs.ChildrenUnhealthy,
 		ChildrenView:        obs.ChildrenView,

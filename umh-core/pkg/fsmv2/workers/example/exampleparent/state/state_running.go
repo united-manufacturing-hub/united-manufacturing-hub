@@ -32,22 +32,22 @@ type RunningState struct {
 }
 
 func (s *RunningState) Next(snapAny any) fsmv2.NextResult[any, any] {
-	snap := helpers.ConvertSnapshot[snapshot.ExampleparentObservedState, *snapshot.ExampleparentDesiredState](snapAny)
+	snap := fsmv2.ConvertWorkerSnapshot[snapshot.ExampleparentConfig, snapshot.ExampleparentStatus](snapAny)
 
-	if snap.Desired.IsShutdownRequested() {
-		return fsmv2.Transition(&TryingToStopState{}, fsmv2.SignalNone, nil, "Shutdown requested, transitioning to TryingToStop")
+	if snap.IsShutdownRequested {
+		return fsmv2.Transition(&TryingToStopState{}, fsmv2.SignalNone, nil, "shutdown requested, transitioning to TryingToStop")
 	}
 
-	if snap.Observed.ChildrenUnhealthy > 0 {
-		return fsmv2.Transition(&DegradedState{}, fsmv2.SignalNone, nil, "Some children are unhealthy, transitioning to Degraded")
+	if snap.ChildrenUnhealthy > 0 {
+		return fsmv2.Transition(&DegradedState{}, fsmv2.SignalNone, nil, "some children are unhealthy, transitioning to Degraded")
 	}
 
-	elapsed := time.Duration(snap.Observed.Metrics.Framework.TimeInCurrentStateMs) * time.Millisecond
+	elapsed := time.Duration(snap.FrameworkMetrics.TimeInCurrentStateMs) * time.Millisecond
 	if elapsed >= RunningDuration {
-		return fsmv2.Transition(&TryingToStopState{}, fsmv2.SignalNone, nil, "Running duration elapsed, transitioning to TryingToStop")
+		return fsmv2.Transition(&TryingToStopState{}, fsmv2.SignalNone, nil, "running duration elapsed, transitioning to TryingToStop")
 	}
 
-	return fsmv2.Transition(s, fsmv2.SignalNone, nil, "All children healthy and running")
+	return fsmv2.Transition(s, fsmv2.SignalNone, nil, "all children healthy and running")
 }
 
 func (s *RunningState) String() string {

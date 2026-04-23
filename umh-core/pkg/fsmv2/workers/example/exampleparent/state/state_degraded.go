@@ -26,17 +26,17 @@ type DegradedState struct {
 }
 
 func (s *DegradedState) Next(snapAny any) fsmv2.NextResult[any, any] {
-	snap := helpers.ConvertSnapshot[snapshot.ExampleparentObservedState, *snapshot.ExampleparentDesiredState](snapAny)
+	snap := fsmv2.ConvertWorkerSnapshot[snapshot.ExampleparentConfig, snapshot.ExampleparentStatus](snapAny)
 
-	if snap.Desired.IsShutdownRequested() {
-		return fsmv2.Transition(&TryingToStopState{}, fsmv2.SignalNone, nil, "Shutdown requested, transitioning to TryingToStop")
+	if snap.IsShutdownRequested {
+		return fsmv2.Transition(&TryingToStopState{}, fsmv2.SignalNone, nil, "shutdown requested, transitioning to TryingToStop")
 	}
 
-	if snap.Observed.ChildrenUnhealthy == 0 {
-		return fsmv2.Transition(&RunningState{}, fsmv2.SignalNone, nil, "All children now healthy, transitioning to Running")
+	if snap.ChildrenUnhealthy == 0 {
+		return fsmv2.Transition(&RunningState{}, fsmv2.SignalNone, nil, "all children now healthy, transitioning to Running")
 	}
 
-	return fsmv2.Transition(s, fsmv2.SignalNone, nil, "Some children are unhealthy")
+	return fsmv2.Transition(s, fsmv2.SignalNone, nil, "some children are unhealthy")
 }
 
 func (s *DegradedState) String() string {

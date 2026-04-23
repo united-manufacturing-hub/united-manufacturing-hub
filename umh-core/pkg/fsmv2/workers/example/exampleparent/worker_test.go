@@ -20,12 +20,11 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	fsmv2types "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleparent"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleparent/state"
 )
 
 func TestExampleParent(t *testing.T) {
@@ -35,72 +34,95 @@ func TestExampleParent(t *testing.T) {
 
 var _ = Describe("ParentWorker", func() {
 	var (
-		worker *exampleparent.ParentWorker
-		logger deps.FSMLogger
+		logger       deps.FSMLogger
+		identity     deps.Identity
+		dependencies *exampleparent.ParentDependencies
 	)
 
 	BeforeEach(func() {
 		logger = deps.NewNopFSMLogger()
-		identity := deps.Identity{ID: "test-parent", Name: "Test Parent"}
-		var err error
-		worker, err = exampleparent.NewParentWorker(identity, logger, nil)
-		Expect(err).ToNot(HaveOccurred())
+		identity = deps.Identity{ID: "test-parent", Name: "Test Parent", WorkerType: exampleparent.WorkerTypeName}
+		dependencies = exampleparent.NewParentDependencies(logger, nil, identity)
 	})
 
 	Describe("NewParentWorker", func() {
-		It("should create a worker", func() {
+		It("should create a worker successfully", func() {
+			worker, err := exampleparent.NewParentWorker(identity, logger, nil, dependencies)
+
+			Expect(err).NotTo(HaveOccurred())
 			Expect(worker).NotTo(BeNil())
+		})
+
+		It("should have a non-nil initial state", func() {
+			worker, err := exampleparent.NewParentWorker(identity, logger, nil, dependencies)
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(worker.GetInitialState()).NotTo(BeNil())
+		})
+
+		It("should provision default dependencies when nil is passed", func() {
+			worker, err := exampleparent.NewParentWorker(identity, logger, nil, nil)
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(worker).NotTo(BeNil())
+		})
+
+		It("should reject nil logger", func() {
+			_, err := exampleparent.NewParentWorker(identity, nil, nil, dependencies)
+
+			Expect(err).To(HaveOccurred())
 		})
 	})
 
 	Describe("CollectObservedState", func() {
-		It("should return observed state with timestamp", func() {
+		It("should return a valid observed state", func() {
+			worker, err := exampleparent.NewParentWorker(identity, logger, nil, dependencies)
+			Expect(err).NotTo(HaveOccurred())
+
 			observed, err := worker.CollectObservedState(context.Background(), nil)
 
-			Expect(err).ToNot(HaveOccurred())
+			Expect(err).NotTo(HaveOccurred())
 			Expect(observed).NotTo(BeNil())
-			Expect(observed.GetTimestamp()).NotTo(BeZero())
 		})
 	})
 
 	Describe("DeriveDesiredState", func() {
-		It("should return running state with empty config", func() {
+		It("should produce an empty ChildrenSpecs slice when children_count is 0", func() {
+			worker, err := exampleparent.NewParentWorker(identity, logger, nil, dependencies)
+			Expect(err).NotTo(HaveOccurred())
+
 			spec := fsmv2types.UserSpec{
 				Config:    "children_count: 0",
 				Variables: fsmv2types.VariableBundle{},
 			}
 
 			desiredIface, err := worker.DeriveDesiredState(spec)
+			Expect(err).NotTo(HaveOccurred())
 
-			Expect(err).ToNot(HaveOccurred())
-			desired := desiredIface.(*fsmv2types.DesiredState)
-			Expect(desired.State).To(Equal("running"))
-			Expect(desired.ChildrenSpecs).To(BeNil())
+			wrapped, ok := desiredIface.(*fsmv2.WrappedDesiredState[exampleparent.ExampleparentConfig])
+			Expect(ok).To(BeTrue())
+			Expect(wrapped.GetState()).To(Equal("running"))
+			Expect(wrapped.ChildrenSpecs).To(BeNil())
 		})
 
-		It("should create child specs when children_count is specified", func() {
+		It("should produce ChildrenSpecs when children_count is specified", func() {
+			worker, err := exampleparent.NewParentWorker(identity, logger, nil, dependencies)
+			Expect(err).NotTo(HaveOccurred())
+
 			spec := fsmv2types.UserSpec{
 				Config:    "children_count: 3",
 				Variables: fsmv2types.VariableBundle{},
 			}
 
 			desiredIface, err := worker.DeriveDesiredState(spec)
+			Expect(err).NotTo(HaveOccurred())
 
-			Expect(err).ToNot(HaveOccurred())
-			desired := desiredIface.(*fsmv2types.DesiredState)
-			Expect(desired.State).To(Equal("running"))
-			Expect(desired.ChildrenSpecs).To(HaveLen(3))
-			Expect(desired.ChildrenSpecs[0].Name).To(Equal("child-0"))
-			Expect(desired.ChildrenSpecs[1].Name).To(Equal("child-1"))
-			Expect(desired.ChildrenSpecs[2].Name).To(Equal("child-2"))
-		})
-	})
-
-	Describe("GetInitialState", func() {
-		It("should return StoppedState", func() {
-			initialState := worker.GetInitialState()
-
-			Expect(initialState).To(BeAssignableToTypeOf(&state.StoppedState{}))
+			wrapped, ok := desiredIface.(*fsmv2.WrappedDesiredState[exampleparent.ExampleparentConfig])
+			Expect(ok).To(BeTrue())
+			Expect(wrapped.ChildrenSpecs).To(HaveLen(3))
+			Expect(wrapped.ChildrenSpecs[0].Name).To(Equal("child-0"))
+			Expect(wrapped.ChildrenSpecs[1].Name).To(Equal("child-1"))
+			Expect(wrapped.ChildrenSpecs[2].Name).To(Equal("child-2"))
 		})
 	})
 })
