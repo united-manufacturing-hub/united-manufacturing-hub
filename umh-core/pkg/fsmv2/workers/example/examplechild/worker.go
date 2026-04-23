@@ -17,69 +17,87 @@ package example_child
 import (
 	"context"
 	"errors"
-	"fmt"
-	"time"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplechild/snapshot"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplechild/state"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/register"
+
+	// Blank import for side effects: registers the "Stopped" initial state
+	// via fsmv2.RegisterInitialState in state/state_stopped.go init(). WorkerBase's
+	// GetInitialState looks up the state from the registry, so the state
+	// package must be loaded whenever the worker is imported — otherwise the
+	// registry lookup returns nil and the supervisor panics at first tick.
+	// This import is safe because state/ depends on snapshot/ (not on the
+	// worker package), so no import cycle is introduced.
+	_ "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplechild/state"
 )
 
-// ChildWorker implements the FSM v2 Worker interface for resource management.
+// WorkerTypeName is the canonical worker-type identifier for the examplechild
+// worker, used in config YAML and CSE storage.
+const WorkerTypeName = "examplechild"
+
+const workerType = WorkerTypeName
+
+// Compile-time interface check: ChildWorker implements fsmv2.Worker.
+var _ fsmv2.Worker = (*ChildWorker)(nil)
+
+// ChildWorker implements the FSM Worker interface for the example child
+// worker. Its lifecycle is orchestrated by the parent via ChildStartStates.
 type ChildWorker struct {
-	connection Connection
-	*helpers.BaseWorker[*ExamplechildDependencies]
-	logger   deps.FSMLogger
-	identity deps.Identity
+	fsmv2.WorkerBase[ExamplechildConfig, ExamplechildStatus]
+	deps *ExamplechildDependencies
 }
 
-// NewChildWorker creates a new example child worker.
+// NewChildWorker creates a new example child worker. The dependencies
+// parameter is optional: when nil the constructor provisions a
+// DefaultConnectionPool and builds fresh dependencies around the framework
+// logger/stateReader/identity. Tests pass fully-built dependencies directly
+// to exercise the worker with a custom ConnectionPool.
+//
+// Returns fsmv2.Worker to align with the register.Worker constructor contract
+// used by transport/push/pull and persistence.
 func NewChildWorker(
 	identity deps.Identity,
-	connectionPool ConnectionPool,
 	logger deps.FSMLogger,
 	stateReader deps.StateReader,
-) (*ChildWorker, error) {
-	if connectionPool == nil {
-		return nil, errors.New("connectionPool must not be nil")
-	}
-
+	dependencies *ExamplechildDependencies,
+) (fsmv2.Worker, error) {
 	if logger == nil {
 		return nil, errors.New("logger must not be nil")
 	}
 
 	if identity.WorkerType == "" {
-		workerType, err := storage.DeriveWorkerType[snapshot.ExamplechildObservedState]()
-		if err != nil {
-			return nil, fmt.Errorf("failed to derive worker type: %w", err)
-		}
-
 		identity.WorkerType = workerType
 	}
 
-	dependencies := NewExamplechildDependencies(connectionPool, logger, stateReader, identity)
-
-	conn, err := connectionPool.Acquire()
-	if err != nil {
-		logger.SentryWarn(deps.FeatureExamples, identity.HierarchyPath, "initial_connection_failed",
-			deps.Err(err))
+	if dependencies == nil {
+		dependencies = NewExamplechildDependencies(&DefaultConnectionPool{}, logger, stateReader, identity)
+	} else if dependencies.GetConnectionPool() == nil {
+		return nil, errors.New("connectionPool must not be nil")
 	}
 
-	return &ChildWorker{
-		BaseWorker: helpers.NewBaseWorker(dependencies),
-		identity:   identity,
-		logger:     logger,
-		connection: conn,
-	}, nil
+	w := &ChildWorker{deps: dependencies}
+	w.InitBase(identity, logger, stateReader)
+
+	return w, nil
 }
 
-// CollectObservedState returns the current observed state of the child worker.
+// GetDependencies returns the typed examplechild dependencies.
+// Used by tests and by external callers that need to observe worker state.
+func (w *ChildWorker) GetDependencies() *ExamplechildDependencies {
+	return w.deps
+}
+
+// GetDependenciesAny returns the custom ExamplechildDependencies.
+// Overrides WorkerBase's default which returns *BaseDependencies.
+// Required by architecture test: custom deps must be visible to the supervisor.
+func (w *ChildWorker) GetDependenciesAny() any {
+	return w.deps
+}
+
+// CollectObservedState snapshots the current connection health. Returns
+// fsmv2.NewObservation — the collector handles CollectedAt, framework metrics,
+// action history, and metric accumulation automatically after COS returns.
 func (w *ChildWorker) CollectObservedState(ctx context.Context, _ fsmv2.DesiredState) (fsmv2.ObservedState, error) {
 	select {
 	case <-ctx.Done():
@@ -87,80 +105,21 @@ func (w *ChildWorker) CollectObservedState(ctx context.Context, _ fsmv2.DesiredS
 	default:
 	}
 
-	deps := w.GetDependencies()
-
 	connectionHealth := "no connection"
-
-	if deps.IsConnected() {
+	if w.deps.IsConnected() {
 		connectionHealth = "healthy"
 	}
 
-	observed := snapshot.ExamplechildObservedState{
-		ID:               w.identity.ID,
-		CollectedAt:      time.Now(),
+	return fsmv2.NewObservation(ExamplechildStatus{
 		ConnectionHealth: connectionHealth,
-	}
-
-	if fm := deps.GetFrameworkState(); fm != nil {
-		observed.Metrics.Framework = *fm
-	}
-
-	observed.LastActionResults = deps.GetActionHistory()
-
-	return observed, nil
+	}), nil
 }
 
-// DeriveDesiredState determines what state the child worker should be in.
-// Templates are rendered here; production workers store checksums for drift detection.
-func (w *ChildWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, error) {
-	if spec == nil {
-		return &config.DesiredState{
-			BaseDesiredState: config.BaseDesiredState{State: config.DesiredStateRunning},
-			OriginalUserSpec: nil,
-		}, nil
-	}
-
-	userSpec, ok := spec.(config.UserSpec)
-	if !ok {
-		return nil, fmt.Errorf("invalid spec type: expected UserSpec, got %T", spec)
-	}
-
-	renderedConfig, err := config.RenderConfigTemplate(userSpec.Config, userSpec.Variables)
-	if err != nil {
-		return nil, fmt.Errorf("template rendering failed: %w", err)
-	}
-
-	renderedSpec := config.UserSpec{
-		Config:    renderedConfig,
-		Variables: userSpec.Variables,
-	}
-
-	desired, err := config.DeriveLeafState[ChildUserSpec](renderedSpec)
-	if err != nil {
-		return nil, err
-	}
-
-	return &desired, nil
-}
-
-// GetInitialState returns the state the FSM should start in.
-func (w *ChildWorker) GetInitialState() fsmv2.State[any, any] {
-	return &state.StoppedState{}
-}
-
+// init registers the examplechild worker via the generic register.Worker
+// helper with typed TDeps = *ExamplechildDependencies. Callers that want to
+// inject a custom ConnectionPool can publish deps via register.SetDeps before
+// the supervisor starts; otherwise the constructor provisions a
+// DefaultConnectionPool.
 func init() {
-	if err := factory.RegisterWorkerType[snapshot.ExamplechildObservedState, *snapshot.ExamplechildDesiredState](
-		func(id deps.Identity, logger deps.FSMLogger, stateReader deps.StateReader, _ map[string]any) fsmv2.Worker {
-			pool := &DefaultConnectionPool{}
-			worker, _ := NewChildWorker(id, pool, logger, stateReader)
-
-			return worker
-		},
-		func(cfg interface{}) interface{} {
-			return supervisor.NewSupervisor[snapshot.ExamplechildObservedState, *snapshot.ExamplechildDesiredState](
-				cfg.(supervisor.Config))
-		},
-	); err != nil {
-		panic(err)
-	}
+	register.Worker[ExamplechildConfig, ExamplechildStatus, *ExamplechildDependencies](WorkerTypeName, NewChildWorker)
 }

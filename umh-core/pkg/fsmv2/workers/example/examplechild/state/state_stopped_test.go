@@ -27,16 +27,19 @@ import (
 
 // makeChildSnapshot constructs an examplechild snapshot for state-machine
 // behavioral tests. parentMappedState mirrors what the supervisor's
-// MappedParentStateProvider injects each tick.
+// MappedParentStateProvider injects each tick. Post-PR3-C2 the worker uses
+// fsmv2.Observation[ExamplechildStatus] + *fsmv2.WrappedDesiredState[ExamplechildConfig];
+// the snapshot envelope carries those typed values so ConvertWorkerSnapshot
+// produces a usable WorkerSnapshot for state.Next.
 func makeChildSnapshot(parentMappedState string, shutdownRequested bool) fsmv2.Snapshot {
-	desired := &snapshot.ExamplechildDesiredState{
-		ParentMappedState: parentMappedState,
+	desired := &fsmv2.WrappedDesiredState[snapshot.ExamplechildConfig]{
 		BaseDesiredState: config.BaseDesiredState{
 			ShutdownRequested: shutdownRequested,
 		},
 	}
-	observed := snapshot.ExamplechildObservedState{
-		ExamplechildDesiredState: *desired,
+	observed := fsmv2.Observation[snapshot.ExamplechildStatus]{
+		ParentMappedState: parentMappedState,
+		ShutdownRequested: shutdownRequested,
 	}
 
 	return fsmv2.Snapshot{

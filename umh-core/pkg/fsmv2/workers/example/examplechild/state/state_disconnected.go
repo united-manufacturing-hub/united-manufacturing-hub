@@ -15,7 +15,10 @@
 package state
 
 import (
+	"fmt"
+
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplechild/snapshot"
 )
@@ -26,14 +29,15 @@ type DisconnectedState struct {
 }
 
 func (s *DisconnectedState) Next(snapAny any) fsmv2.NextResult[any, any] {
-	snap := helpers.ConvertSnapshot[snapshot.ExamplechildObservedState, *snapshot.ExamplechildDesiredState](snapAny)
+	snap := fsmv2.ConvertWorkerSnapshot[snapshot.ExamplechildConfig, snapshot.ExamplechildStatus](snapAny)
 
-	if snap.Observed.ShouldStop() {
-		return fsmv2.Transition(&TryingToStopState{}, fsmv2.SignalNone, nil, "Stop required, initiating shutdown", nil)
+	if snap.ShouldStop() {
+		return fsmv2.Transition(&TryingToStopState{}, fsmv2.SignalNone, nil,
+			fmt.Sprintf("stop required: shutdown=%t, parentState=%s", snap.IsShutdownRequested, snap.ParentMappedState), nil)
 	}
 
-	if !snap.Observed.ShouldStop() {
-		return fsmv2.Transition(&TryingToConnectState{}, fsmv2.SignalNone, nil, "Attempting to reconnect", nil)
+	if snap.ParentMappedState == config.DesiredStateRunning {
+		return fsmv2.Transition(&TryingToConnectState{}, fsmv2.SignalNone, nil, "parent wants running, attempting reconnection", nil)
 	}
 
 	// The catch-all return below is logically dead code: the two branches above
@@ -43,7 +47,7 @@ func (s *DisconnectedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	// semantic — see PR2 cascade pattern memory #3 (validator-syntactic vs
 	// migration-semantic). Collapsing to 2 branches would trip the validator
 	// even though the simplification is behavior-preserving.
-	return fsmv2.Transition(s, fsmv2.SignalNone, nil, "Connection lost, will retry", nil)
+	return fsmv2.Transition(s, fsmv2.SignalNone, nil, "connection lost, will retry", nil)
 }
 
 func (s *DisconnectedState) String() string {

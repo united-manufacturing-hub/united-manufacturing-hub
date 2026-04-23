@@ -15,11 +15,17 @@
 package example_child
 
 import (
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplechild/snapshot"
 )
 
-// ChildUserSpec defines the typed configuration for the child worker.
-// This is parsed from the UserSpec.Config YAML/JSON string.
-type ChildUserSpec struct {
-	config.BaseUserSpec // Provides State field with GetState() defaulting to "running"
-}
+// ExamplechildConfig re-exports snapshot.ExamplechildConfig so callers can use
+// example_child.ExamplechildConfig without pulling in the snapshot leaf
+// package directly. The underlying type lives in snapshot to allow the state
+// sub-package (which the worker imports for init-only side effects) to
+// reference Config/Status without creating an import cycle with the worker
+// package.
+type ExamplechildConfig = snapshot.ExamplechildConfig
+
+// ExamplechildStatus re-exports snapshot.ExamplechildStatus for the same
+// reason as ExamplechildConfig.
+type ExamplechildStatus = snapshot.ExamplechildStatus
