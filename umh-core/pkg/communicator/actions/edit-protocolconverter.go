@@ -1209,7 +1209,10 @@ func validateDFCPayloadAndState(payload *models.CDFCPayload, state string, label
 		if err := ValidateCustomDataFlowComponentPayload(*payload, validateInput, false); err != nil {
 			return fmt.Errorf("invalid %s DFC configuration: %w", label, err)
 		}
-		if label == "write" && len(payload.UMHTopics) == 0 {
+		// UMH_TOPICS is only required when the payload carries actual output config.
+		// A state-only change (no Outputs.Data) skips this check; the FSM's
+		// BuildRuntimeConfig enforces the requirement when it renders the write DFC.
+		if label == "write" && len(payload.Outputs.Data) > 0 && len(payload.UMHTopics) == 0 {
 			return errors.New("write DFC requires at least one UMH topic (umh_topics)")
 		}
 	}
@@ -1238,7 +1241,7 @@ func validateProtocolConverterDFC(dfc *models.ProtocolConverterDFC, label string
 	if err := ValidateCustomDataFlowComponentPayload(payload, validateInput, false); err != nil {
 		return fmt.Errorf("invalid %s DFC configuration: %w", label, err)
 	}
-	if label == "write" && len(dfc.UMHTopics) == 0 {
+	if label == "write" && len(dfc.Outputs.Data) > 0 && len(dfc.UMHTopics) == 0 {
 		return errors.New("write DFC requires at least one UMH topic (umh_topics)")
 	}
 	return nil
