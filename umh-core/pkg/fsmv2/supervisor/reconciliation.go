@@ -1527,8 +1527,7 @@ func (s *Supervisor[TObserved, TDesired]) reconcileChildren(specs []config.Child
 
 			// Use factory to create worker instance with un-enriched logger
 			// Important: Pass baseLogger to prevent duplicate "worker" fields
-			// Use mergedDeps to include both parent and child-specific dependencies
-			childWorker, err := factory.NewWorkerByType(spec.WorkerType, childIdentity, s.baseLogger, s.store, mergedDeps)
+			childWorker, err := factory.NewWorkerByType(spec.WorkerType, childIdentity, s.baseLogger, s.store)
 			if err != nil {
 				s.logger.SentryError(deps.FeatureFSMv2, childPath, err, "child_worker_creation_failed",
 					deps.String("child_name", spec.Name),

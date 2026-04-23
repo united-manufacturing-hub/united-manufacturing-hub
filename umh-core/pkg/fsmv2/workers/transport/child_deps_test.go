@@ -66,7 +66,7 @@ var _ = Describe("Transport ChildDeps singleton", func() {
 			identity := deps.Identity{ID: "factory-transport", Name: "Factory Transport", WorkerType: "transport"}
 			logger := deps.NewNopFSMLogger()
 
-			w, err := factory.NewWorkerByType("transport", identity, logger, nil, map[string]any{})
+			w, err := factory.NewWorkerByType("transport", identity, logger, nil)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(w).NotTo(BeNil())
 

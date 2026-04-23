@@ -41,7 +41,7 @@ var _ = Describe("Incremental Spec Validation", func() {
 		logger = deps.NewNopFSMLogger()
 		basicStore = memory.NewInMemoryStore()
 
-		_ = factory.RegisterFactoryByType("incremental_child", func(id deps.Identity, _ deps.FSMLogger, _ deps.StateReader, _ map[string]any) fsmv2.Worker {
+		_ = factory.RegisterFactoryByType("incremental_child", func(id deps.Identity, _ deps.FSMLogger, _ deps.StateReader) fsmv2.Worker {
 			return &incrementalValidationMockWorker{
 				identity:     id,
 				initialState: &mockState{},

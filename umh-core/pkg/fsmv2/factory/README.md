@@ -58,29 +58,6 @@ Benefits:
 - Rolls back on partial failure
 - Prevents mismatched keys
 
-### `RegisterWorkerAndSupervisorFactoryByType`
-
-Use when you need an explicit type string:
-
-```go
-func init() {
-    workerType, _ := storage.DeriveWorkerType[snapshot.ExamplepanicObservedState]()
-
-    err := factory.RegisterWorkerAndSupervisorFactoryByType(
-        workerType,
-        func(id fsmv2.Identity, logger deps.FSMLogger) fsmv2.Worker {
-            return NewPanicWorker(id, logger, nil)
-        },
-        func(raw interface{}) interface{} {
-            return supervisor.NewSupervisor[*snapshot.ExamplepanicObservedState, *snapshot.ExamplepanicDesiredState](raw)
-        },
-    )
-    if err != nil {
-        panic(err)
-    }
-}
-```
-
 ### Low-level functions (tests only)
 
 Individual registration functions for testing:

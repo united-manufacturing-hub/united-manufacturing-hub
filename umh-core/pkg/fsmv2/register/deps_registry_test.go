@@ -212,7 +212,7 @@ var _ = Describe("register deps registry", func() {
 				ID:         "dr-factory-1",
 				Name:       "dr-factory-1",
 				WorkerType: workerType,
-			}, nopLogger, nil, nil)
+			}, nopLogger, nil)
 
 			Expect(err).NotTo(HaveOccurred())
 			Expect(w).NotTo(BeNil())
@@ -245,7 +245,7 @@ var _ = Describe("register deps registry", func() {
 				ID:         "dr-factory-nil-1",
 				Name:       "dr-factory-nil-1",
 				WorkerType: workerType,
-			}, nopLogger, nil, nil)
+			}, nopLogger, nil)
 
 			Expect(err).NotTo(HaveOccurred())
 			Expect(w).NotTo(BeNil())

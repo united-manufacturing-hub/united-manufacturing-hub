@@ -278,7 +278,7 @@ var _ = Describe("PullWorker", func() {
 		It("should read parent deps from transport.ChildDeps() when instantiated via factory", func() {
 			factoryIdentity := depspkg.Identity{ID: "factory-pull", Name: "Factory Pull", WorkerType: "pull"}
 
-			w, err := factory.NewWorkerByType("pull", factoryIdentity, logger, nil, map[string]any{})
+			w, err := factory.NewWorkerByType("pull", factoryIdentity, logger, nil)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(w).NotTo(BeNil())
 
