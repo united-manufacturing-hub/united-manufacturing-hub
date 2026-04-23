@@ -15,6 +15,8 @@
 package state
 
 import (
+	"fmt"
+
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplefailing/action"
@@ -43,27 +45,28 @@ type ConnectedState struct {
 }
 
 func (s *ConnectedState) Next(snapAny any) fsmv2.NextResult[any, any] {
-	snap := helpers.ConvertSnapshot[snapshot.ExamplefailingObservedState, *snapshot.ExamplefailingDesiredState](snapAny)
+	snap := fsmv2.ConvertWorkerSnapshot[snapshot.ExamplefailingConfig, snapshot.ExamplefailingStatus](snapAny)
 
-	if snap.Observed.ShouldStop() {
-		return fsmv2.Transition(&TryingToStopState{}, fsmv2.SignalNone, nil, "stop required, transitioning to stop state", nil)
+	if snap.ShouldStop() {
+		return fsmv2.Transition(&TryingToStopState{}, fsmv2.SignalNone, nil,
+			fmt.Sprintf("stop required: shutdown=%t, parentState=%s", snap.IsShutdownRequested, snap.ParentMappedState), nil)
 	}
 
-	if snap.Observed.ConnectionHealth == "no connection" {
+	if snap.Status.ConnectionHealth == "no connection" {
 		return fsmv2.Transition(&DisconnectedState{}, fsmv2.SignalNone, nil, "connection lost unexpectedly", nil)
 	}
 
 	// Simulate failures: stay healthy for a deterministic wall-clock duration, then disconnect.
-	// Using TimeInCurrentStateMs (from framework metrics) ensures timing is independent of
-	// tick frequency or goroutine scheduling variations.
+	// Using FrameworkMetrics.TimeInCurrentStateMs ensures timing is independent of tick frequency
+	// or goroutine scheduling variations.
 	//
 	// IMPORTANT: We return a TriggerObservationAction even though we use wall-clock
 	// time for the transition decision. The action triggers immediate observation via the
 	// collector's OnActionComplete callback, which is crucial for parent supervisors to observe
 	// this child as healthy. Without an action, observations only happen every 1 second
 	// (DefaultObservationInterval), which could cause the parent to miss the healthy window.
-	if snap.Observed.ShouldFail && !snap.Observed.AllCyclesComplete {
-		timeInStateMs := snap.Observed.Metrics.Framework.TimeInCurrentStateMs
+	if snap.Status.ShouldFail && !snap.Status.AllCyclesComplete {
+		timeInStateMs := snap.FrameworkMetrics.TimeInCurrentStateMs
 		if timeInStateMs >= healthyDurationMsBeforeNextCycle {
 			return fsmv2.Transition(&TriggeringNextCycleState{}, fsmv2.SignalNone, nil, "reached healthy duration threshold, triggering next failure cycle", nil)
 		}
