@@ -15,7 +15,10 @@
 package state
 
 import (
+	"fmt"
+
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleslow/snapshot"
 )
@@ -25,15 +28,15 @@ type DisconnectedState struct {
 }
 
 func (s *DisconnectedState) Next(snapAny any) fsmv2.NextResult[any, any] {
-	snap := helpers.ConvertSnapshot[snapshot.ExampleslowObservedState, *snapshot.ExampleslowDesiredState](snapAny)
+	snap := fsmv2.ConvertWorkerSnapshot[snapshot.ExampleslowConfig, snapshot.ExampleslowStatus](snapAny)
 
-	// ParentMappedState is injected into Observed.DesiredState by collector.
-	if snap.Observed.IsStopRequired() {
-		return fsmv2.Transition(&TryingToStopState{}, fsmv2.SignalNone, nil, "stop required, transitioning to trying to stop")
+	if snap.IsStopRequired() {
+		return fsmv2.Transition(&TryingToStopState{}, fsmv2.SignalNone, nil,
+			fmt.Sprintf("stop required: shutdown=%t, parentState=%s", snap.IsShutdownRequested, snap.ParentMappedState))
 	}
 
-	if snap.Observed.ShouldBeRunning() {
-		return fsmv2.Transition(&TryingToConnectState{}, fsmv2.SignalNone, nil, "should be running, attempting reconnection")
+	if snap.ParentMappedState == config.DesiredStateRunning {
+		return fsmv2.Transition(&TryingToConnectState{}, fsmv2.SignalNone, nil, "parent wants running, attempting reconnection")
 	}
 
 	return fsmv2.Transition(s, fsmv2.SignalNone, nil, "connection lost, will retry")
