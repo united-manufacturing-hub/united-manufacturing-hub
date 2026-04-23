@@ -110,20 +110,18 @@ fmt.Sprintf("sync recovering: %d consecutive errors (%s), backoff %s",
 
 ## Factory Registration
 
-Workers register in `init()` with both worker and supervisor factories:
+Workers register in `init()` via `register.Worker[TConfig, TStatus, TDeps]`, which wires the factory, supervisor, and CSE type registry in one call. Use `register.NoDeps` for zero-dep workers:
 
 ```go
 func init() {
-    if err := factory.RegisterWorkerType[ObservedState, *DesiredState](
-        workerFactory,
-        supervisorFactory,
-    ); err != nil {
-        panic(err)
-    }
+    register.Worker[Config, Status, register.NoDeps](
+        "myworker",
+        NewMyWorker,
+    )
 }
 ```
 
-The folder name must match the worker type (e.g., `transport/` for type `"transport"`).
+The folder name must match the worker type string (e.g., `transport/` for `"transport"`).
 
 ## Worker API v2 (WorkerBase)
 

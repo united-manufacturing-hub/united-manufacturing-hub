@@ -50,7 +50,7 @@ var _ = Describe("WorkerFactory", func() {
 		factory.ResetRegistry()
 	})
 
-	Describe("RegisterWorkerType", func() {
+	Describe("RegisterFactoryByType", func() {
 		DescribeTable("should handle registration scenarios",
 			func(workerType string, setupFunc func(), wantErr bool, errContains string) {
 				if setupFunc != nil {
