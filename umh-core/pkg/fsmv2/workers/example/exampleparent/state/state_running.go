@@ -32,7 +32,7 @@ type RunningState struct {
 }
 
 func (s *RunningState) Next(snapAny any) fsmv2.NextResult[any, any] {
-	snap := helpers.ConvertSnapshot[snapshot.ExampleparentObservedState, *snapshot.ExampleparentDesiredState](snapAny)
+	snap := fsmv2.ConvertWorkerSnapshot[snapshot.ExampleparentConfig, snapshot.ExampleparentStatus](snapAny)
 
 	if snap.Desired.IsShutdownRequested() {
 		return fsmv2.Transition(&TryingToStopState{}, fsmv2.SignalNone, nil, "Shutdown requested, transitioning to TryingToStop", nil)
@@ -44,7 +44,7 @@ func (s *RunningState) Next(snapAny any) fsmv2.NextResult[any, any] {
 		return fsmv2.Transition(&DegradedState{}, fsmv2.SignalNone, nil, "Some children are unhealthy, transitioning to Degraded", children)
 	}
 
-	elapsed := time.Duration(snap.Observed.Metrics.Framework.TimeInCurrentStateMs) * time.Millisecond
+	elapsed := time.Duration(snap.FrameworkMetrics.TimeInCurrentStateMs) * time.Millisecond
 	if elapsed >= RunningDuration {
 		return fsmv2.Transition(&TryingToStopState{}, fsmv2.SignalNone, nil, "Running duration elapsed, transitioning to TryingToStop", children)
 	}

@@ -7,7 +7,7 @@ The factory package provides registration mechanisms for FSM v2 workers and supe
 Worker types are **derived from Go type names**, not manually specified.
 
 ```text
-ExampleparentObservedState → "exampleparent"
+ExamplefailingObservedState → "examplefailing"
 ApplicationObservedState → "application"
 ```
 
@@ -36,14 +36,14 @@ Registers both factories atomically with automatic type derivation:
 
 ```go
 func init() {
-    // Worker type is automatically derived from ExampleparentObservedState → "exampleparent"
-    if err := factory.RegisterWorkerType[snapshot.ExampleparentObservedState, *snapshot.ExampleparentDesiredState](
+    // Worker type is automatically derived from ExamplefailingObservedState → "examplefailing"
+    if err := factory.RegisterWorkerType[snapshot.ExamplefailingObservedState, *snapshot.ExamplefailingDesiredState](
         func(id fsmv2.Identity, logger deps.FSMLogger) fsmv2.Worker {
-            worker, _ := NewParentWorker(id, logger, nil)
+            worker, _ := NewFailingWorker(id, logger, nil)
             return worker
         },
         func(cfg interface{}) interface{} {
-            return supervisor.NewSupervisor[snapshot.ExampleparentObservedState, *snapshot.ExampleparentDesiredState](
+            return supervisor.NewSupervisor[snapshot.ExamplefailingObservedState, *snapshot.ExamplefailingDesiredState](
                 cfg.(supervisor.Config))
         },
     ); err != nil {
@@ -64,15 +64,15 @@ Use when you need an explicit type string:
 
 ```go
 func init() {
-    workerType, _ := storage.DeriveWorkerType[snapshot.ExampleparentObservedState]()
+    workerType, _ := storage.DeriveWorkerType[snapshot.ExamplefailingObservedState]()
 
     err := factory.RegisterWorkerAndSupervisorFactoryByType(
         workerType,
         func(id fsmv2.Identity, logger deps.FSMLogger) fsmv2.Worker {
-            return NewParentWorker(id, logger, nil)
+            return NewFailingWorker(id, logger, nil)
         },
         func(raw interface{}) interface{} {
-            return supervisor.NewSupervisor[*snapshot.ExampleparentObservedState, *snapshot.ExampleparentDesiredState](raw)
+            return supervisor.NewSupervisor[*snapshot.ExamplefailingObservedState, *snapshot.ExamplefailingDesiredState](raw)
         },
     )
     if err != nil {
@@ -121,8 +121,8 @@ Architecture tests in `architecture_test.go` enforce this.
 
 | Folder | Type Name | Derived Worker Type | Valid? |
 |--------|-----------|---------------------|--------|
-| `exampleparent` | `ExampleparentObservedState` | `"exampleparent"` | Yes |
-| `example-parent` | ??? | Cannot match | **No** |
+| `examplefailing` | `ExamplefailingObservedState` | `"examplefailing"` | Yes |
+| `example-failing` | ??? | Cannot match | **No** |
 
 If you create a folder `foo`, your types must be named `FooObservedState` and `FooDesiredState`.
 
@@ -132,25 +132,25 @@ If you create a folder `foo`, your types must be named `FooObservedState` and `F
 
 **Wrong:**
 ```go
-// supervisor.go derives "parent" from ParentObservedState
-_ = factory.RegisterSupervisorFactoryByType("parent", ...)
+// supervisor.go derives "failing" from FailingObservedState
+_ = factory.RegisterSupervisorFactoryByType("failing", ...)
 
-// worker.go uses explicit string "example-parent"
-_ = factory.RegisterFactoryByType("example-parent", ...)
+// worker.go uses explicit string "example-failing"
+_ = factory.RegisterFactoryByType("example-failing", ...)
 ```
 
-**Result:** `no supervisor factory registered for worker type: example-parent`
+**Result:** `no supervisor factory registered for worker type: example-failing`
 
 **Fix:** Use `RegisterWorkerType[TObserved, TDesired]()` which derives the key automatically.
 
 ### Hyphenated folder names
 
-**Wrong:** Folder `example-parent` with type `ExampleparentObservedState`
-- Derived type: `"exampleparent"`
-- Expected by code: `"example-parent"`
+**Wrong:** Folder `example-failing` with type `ExamplefailingObservedState`
+- Derived type: `"examplefailing"`
+- Expected by code: `"example-failing"`
 - Architecture test: **FAILS**
 
-**Fix:** Rename folder to match derived type (`exampleparent`), or use underscores/no separators in folder name.
+**Fix:** Rename folder to match derived type (`examplefailing`), or use underscores/no separators in folder name.
 
 ### Type name doesn't match folder
 

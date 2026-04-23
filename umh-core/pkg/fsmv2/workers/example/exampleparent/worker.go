@@ -17,56 +17,92 @@ package exampleparent
 import (
 	"context"
 	"errors"
-	"fmt"
-	"time"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleparent/snapshot"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleparent/state"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/register"
+
+	// Blank import for side effects: registers the "Stopped" initial state
+	// via fsmv2.RegisterInitialState in state/state_stopped.go init(). WorkerBase's
+	// GetInitialState looks up the state from the registry, so the state
+	// package must be loaded whenever the worker is imported — otherwise the
+	// registry lookup returns nil and the supervisor panics at first tick.
+	// This import is safe because state/ depends on snapshot/ (not on the
+	// worker package), so no import cycle is introduced.
+	_ "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleparent/state"
 )
 
-// ParentWorker implements the FSM v2 Worker interface for parent-child relationships.
+// WorkerTypeName is the canonical worker-type identifier for the exampleparent
+// worker, used in config YAML and CSE storage.
+const WorkerTypeName = "exampleparent"
+
+const workerType = WorkerTypeName
+
+// Compile-time interface check: ParentWorker implements fsmv2.Worker.
+var _ fsmv2.Worker = (*ParentWorker)(nil)
+
+// ParentWorker implements the FSM Worker interface for the exampleparent
+// worker. Children are emitted by RenderChildren (children.go) from each
+// state.Next return; the supervisor reconciles the actual child set against
+// the canonical children-set per PR2 P2.4 NextResult.Children semantics.
 type ParentWorker struct {
-	*helpers.BaseWorker[*ParentDependencies]
-	logger   deps.FSMLogger
-	identity deps.Identity
+	fsmv2.WorkerBase[ExampleparentConfig, ExampleparentStatus]
+	deps *ParentDependencies
 }
 
-// NewParentWorker creates a new example parent worker.
+// NewParentWorker creates a new exampleparent worker. The dependencies
+// parameter is optional: when nil the constructor provisions fresh
+// ParentDependencies around the framework logger/stateReader/identity.
+//
+// Returns fsmv2.Worker to align with the register.Worker constructor contract
+// used by transport/push/pull and the other example workers.
 func NewParentWorker(
 	identity deps.Identity,
 	logger deps.FSMLogger,
 	stateReader deps.StateReader,
-) (*ParentWorker, error) {
+	dependencies *ParentDependencies,
+) (fsmv2.Worker, error) {
 	if logger == nil {
 		return nil, errors.New("logger must not be nil")
 	}
 
 	if identity.WorkerType == "" {
-		workerType, err := storage.DeriveWorkerType[snapshot.ExampleparentObservedState]()
-		if err != nil {
-			return nil, fmt.Errorf("failed to derive worker type: %w", err)
-		}
-
 		identity.WorkerType = workerType
 	}
 
-	dependencies := NewParentDependencies(logger, stateReader, identity)
+	if dependencies == nil {
+		dependencies = NewParentDependencies(logger, stateReader, identity)
+	}
 
-	return &ParentWorker{
-		BaseWorker: helpers.NewBaseWorker(dependencies),
-		identity:   identity,
-		logger:     logger,
-	}, nil
+	w := &ParentWorker{deps: dependencies}
+	w.InitBase(identity, logger, stateReader)
+
+	// Children are emitted by the canonical RenderChildren in children.go,
+	// invoked from each state.Next via WorkerSnapshot[ExampleparentConfig,
+	// ExampleparentStatus]. The supervisor reads the resulting children set
+	// from NextResult.Children (PR2 P2.4 discriminator). The supervisor then
+	// merges config.Merge(parentUserSpec.Variables, spec.UserSpec.Variables)
+	// at spawn time; per-child DEVICE_ID is injected by RenderChildren.
+	return w, nil
 }
 
-// CollectObservedState returns the current observed state of the parent worker.
+// GetDependencies returns the typed parent dependencies. Used by tests and by
+// external callers that need to observe worker state.
+func (w *ParentWorker) GetDependencies() *ParentDependencies {
+	return w.deps
+}
+
+// GetDependenciesAny returns the custom ParentDependencies. Overrides
+// WorkerBase's default which returns *BaseDependencies. Required by the
+// architecture test: custom deps must be visible to the supervisor.
+func (w *ParentWorker) GetDependenciesAny() any {
+	return w.deps
+}
+
+// CollectObservedState snapshots the parent's runtime state. The parent has no
+// worker-specific status fields — the state machine drives transitions from
+// framework-level children health counts and parent-mapped state, both of
+// which the collector injects automatically after COS returns.
 func (w *ParentWorker) CollectObservedState(ctx context.Context, _ fsmv2.DesiredState) (fsmv2.ObservedState, error) {
 	select {
 	case <-ctx.Done():
@@ -74,99 +110,27 @@ func (w *ParentWorker) CollectObservedState(ctx context.Context, _ fsmv2.Desired
 	default:
 	}
 
-	deps := w.GetDependencies()
-	tracker := deps.GetStateTracker()
-
-	stateReader := deps.GetStateReader()
+	// Track state changes so dependencies.StateTracker can expose
+	// time-in-state to any test hook that consumes it. The supervisor
+	// separately records state transitions for framework metrics.
+	stateReader := w.deps.GetStateReader()
 	if stateReader != nil {
-		var previousObserved snapshot.ExampleparentObservedState
+		var previous fsmv2.Observation[ExampleparentStatus]
 
-		err := stateReader.LoadObservedTyped(ctx, w.identity.WorkerType, w.identity.ID, &previousObserved)
-		if err == nil && previousObserved.State != "" {
-			// Record state change - resets timer if state changed
-			tracker.RecordStateChange(previousObserved.State)
+		err := stateReader.LoadObservedTyped(ctx, w.Identity().WorkerType, w.Identity().ID, &previous)
+		if err == nil && previous.State != "" {
+			w.deps.GetStateTracker().RecordStateChange(previous.State)
 		}
 	}
 
-	observed := snapshot.ExampleparentObservedState{
-		ID:          w.identity.ID,
-		CollectedAt: time.Now(),
-	}
-
-	if fm := deps.GetFrameworkState(); fm != nil {
-		observed.Metrics.Framework = *fm
-	}
-
-	observed.LastActionResults = deps.GetActionHistory()
-
-	return observed, nil
+	return fsmv2.NewObservation(ExampleparentStatus{}), nil
 }
 
-// DeriveDesiredState determines what state the parent worker should be in.
-// Must be PURE - only uses the spec parameter, never dependencies.
-func (w *ParentWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, error) {
-	if spec == nil {
-		// Byte-equivalent with canonical RenderChildren(nil) = []ChildSpec{}.
-		// Pre-PR2-boundary this branch returned nil; PR2 boundary cleanup
-		// flipped to []ChildSpec{} so the DDS path emits the same authoritative
-		// "zero children right now" sentinel as the canonical path. Closes the
-		// G11 DDS-vs-canonical divergence (PR2 boundary DA finding).
-		return &config.DesiredState{
-			BaseDesiredState: config.BaseDesiredState{State: config.DesiredStateRunning},
-			ChildrenSpecs:    []config.ChildSpec{},
-			OriginalUserSpec: nil,
-		}, nil
-	}
-
-	parentSpec, err := config.ParseUserSpec[ParentUserSpec](spec)
-	if err != nil {
-		return nil, err
-	}
-
-	if parentSpec.ChildrenCount == 0 {
-		// Same byte-equivalence with canonical RenderChildren as the spec==nil
-		// branch above. If a user shrinks ChildrenCount from N>0 to 0, the
-		// supervisor needs an explicit non-nil [] sentinel to despawn existing
-		// children authoritatively; nil here would re-route through fallback
-		// and leak the prior tick's children-set on parents whose mirror also
-		// returns nil (option-a, exampleparent).
-		return &config.DesiredState{
-			BaseDesiredState: config.BaseDesiredState{State: parentSpec.GetState()},
-			ChildrenSpecs:    []config.ChildSpec{},
-			OriginalUserSpec: spec,
-		}, nil
-	}
-
-	// RenderChildren (children.go) is the canonical children-set emitter and
-	// the single source of truth for ChildSpec construction; called here so
-	// the legacy DDS path and the P2.2 renderChildren-in-state.Next migration
-	// remain bit-for-bit identical.
-	childrenSpecs := RenderChildren(&parentSpec)
-
-	return &config.DesiredState{
-		BaseDesiredState: config.BaseDesiredState{State: parentSpec.GetState()},
-		ChildrenSpecs:    childrenSpecs,
-		OriginalUserSpec: spec,
-	}, nil
-}
-
-// GetInitialState returns the state the FSM should start in.
-func (w *ParentWorker) GetInitialState() fsmv2.State[any, any] {
-	return &state.StoppedState{}
-}
-
+// init registers the exampleparent worker via the generic register.Worker
+// helper with typed TDeps = *ParentDependencies. Callers that want to inject
+// custom dependencies can publish them via register.SetDeps before the
+// supervisor starts; otherwise the constructor provisions fresh
+// ParentDependencies.
 func init() {
-	if err := factory.RegisterWorkerType[snapshot.ExampleparentObservedState, *snapshot.ExampleparentDesiredState](
-		func(id deps.Identity, logger deps.FSMLogger, stateReader deps.StateReader, _ map[string]any) fsmv2.Worker {
-			worker, _ := NewParentWorker(id, logger, stateReader)
-
-			return worker
-		},
-		func(cfg interface{}) interface{} {
-			return supervisor.NewSupervisor[snapshot.ExampleparentObservedState, *snapshot.ExampleparentDesiredState](
-				cfg.(supervisor.Config))
-		},
-	); err != nil {
-		panic(err)
-	}
+	register.Worker[ExampleparentConfig, ExampleparentStatus, *ParentDependencies](WorkerTypeName, NewParentWorker)
 }

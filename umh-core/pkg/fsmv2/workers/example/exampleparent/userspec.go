@@ -15,22 +15,17 @@
 package exampleparent
 
 import (
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleparent/snapshot"
 )
 
-// ParentUserSpec defines the typed configuration for the parent worker.
-type ParentUserSpec struct {
-	config.BaseUserSpec
-	ChildWorkerType string `json:"child_worker_type" yaml:"child_worker_type"` // Optional: defaults to "examplechild"
-	ChildConfig     string `json:"child_config"      yaml:"child_config"`      // Optional: config to pass to children
-	ChildrenCount   int    `json:"children_count"    yaml:"children_count"`
-}
+// ExampleparentConfig re-exports snapshot.ExampleparentConfig so callers can
+// use exampleparent.ExampleparentConfig without pulling in the snapshot leaf
+// package directly. The underlying type lives in snapshot to allow the state
+// sub-package (which the worker imports for init-only side effects) to
+// reference Config/Status without creating an import cycle with the worker
+// package.
+type ExampleparentConfig = snapshot.ExampleparentConfig
 
-// GetChildWorkerType returns the configured child worker type, defaulting to "examplechild".
-func (s *ParentUserSpec) GetChildWorkerType() string {
-	if s.ChildWorkerType == "" {
-		return "examplechild"
-	}
-
-	return s.ChildWorkerType
-}
+// ExampleparentStatus re-exports snapshot.ExampleparentStatus for the same
+// reason as ExampleparentConfig.
+type ExampleparentStatus = snapshot.ExampleparentStatus

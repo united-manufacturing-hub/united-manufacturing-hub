@@ -42,6 +42,7 @@ import (
 	applicationsnapshot "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/application/snapshot"
 	communicatorworker "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator"
 	exampleparentworker "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleparent"
+	exampleparentsnapshot "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleparent/snapshot"
 	transportworker "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport"
 )
 
@@ -934,10 +935,9 @@ var _ = Describe("FSMv2 Architecture Validation — P1.8 Foundation Cap", func()
 				mirrorPath:    filepath.Join(getFsmv2Dir(), "workers", "application", "state", "render_children.go"),
 			},
 			{
-				name:            "exampleparent",
-				canonicalPath:   filepath.Join(getFsmv2Dir(), "workers", "example", "exampleparent", "children.go"),
-				mirrorPath:      filepath.Join(getFsmv2Dir(), "workers", "example", "exampleparent", "state", "render_children.go"),
-				migrationWindow: true,
+				name:          "exampleparent",
+				canonicalPath: filepath.Join(getFsmv2Dir(), "workers", "example", "exampleparent", "children.go"),
+				mirrorPath:    filepath.Join(getFsmv2Dir(), "workers", "example", "exampleparent", "state", "render_children.go"),
 			},
 			{
 				name:          "communicator",
@@ -1362,9 +1362,14 @@ func parentRenderers() []parentRendererFixture {
 		{
 			name: "exampleparent",
 			render: func() []config.ChildSpec {
-				return exampleparentworker.RenderChildren(&exampleparentworker.ParentUserSpec{
-					ChildrenCount:   2,
-					ChildWorkerType: "examplechild",
+				return exampleparentworker.RenderChildren(fsmv2.WorkerSnapshot[exampleparentsnapshot.ExampleparentConfig, exampleparentsnapshot.ExampleparentStatus]{
+					Desired: fsmv2.WrappedDesiredState[exampleparentsnapshot.ExampleparentConfig]{
+						BaseDesiredState: config.BaseDesiredState{State: config.DesiredStateRunning},
+						Config: exampleparentsnapshot.ExampleparentConfig{
+							ChildrenCount:   2,
+							ChildWorkerType: "examplechild",
+						},
+					},
 				})
 			},
 		},

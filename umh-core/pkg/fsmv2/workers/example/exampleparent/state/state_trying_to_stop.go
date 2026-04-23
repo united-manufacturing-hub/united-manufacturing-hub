@@ -29,20 +29,18 @@ type TryingToStopState struct {
 }
 
 func (s *TryingToStopState) Next(snapAny any) fsmv2.NextResult[any, any] {
-	snap := helpers.ConvertSnapshot[snapshot.ExampleparentObservedState, *snapshot.ExampleparentDesiredState](snapAny)
+	snap := fsmv2.ConvertWorkerSnapshot[snapshot.ExampleparentConfig, snapshot.ExampleparentStatus](snapAny)
 
 	children := RenderChildren(snap)
-
-	if snap.Observed.ID == "" {
-		return fsmv2.Transition(s, fsmv2.SignalNone, &action.StopAction{}, "ID not set, executing StopAction", children)
-	}
 
 	// All children must be stopped before transitioning.
 	if snap.Observed.ChildrenHealthy == 0 && snap.Observed.ChildrenUnhealthy == 0 {
 		return fsmv2.Transition(&StoppedState{}, fsmv2.SignalNone, nil, "All children stopped, transitioning to Stopped", children)
 	}
 
-	return fsmv2.Transition(s, fsmv2.SignalNone, nil, "Gracefully stopping all children", children)
+	// Self-return WITH an action (StopAction) — ValidateStoppingStateNoCatchAllSelfReturn
+	// forbids self-return with nil in a stopping base. StopAction drives children down.
+	return fsmv2.Transition(s, fsmv2.SignalNone, &action.StopAction{}, "Gracefully stopping all children", children)
 }
 
 func (s *TryingToStopState) String() string {

@@ -25,6 +25,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/examples"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/integration"
@@ -1134,7 +1135,7 @@ var _ = Describe("MetricsHolder Type Assertion", func() {
 		workers := getWorkersFromStore(store)
 		Expect(workers).NotTo(BeEmpty(), "Should have workers in store")
 
-		var parentObs snapshot.ExampleparentObservedState
+		var parentObs fsmv2.Observation[snapshot.ExampleparentStatus]
 		var foundParent bool
 		for _, w := range workers {
 			if w.WorkerType == "exampleparent" {

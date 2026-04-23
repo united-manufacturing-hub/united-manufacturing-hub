@@ -22,11 +22,11 @@
 //
 // Example usage:
 //
-//	supervisor := NewSupervisor[ExampleparentObservedState, *ExampleparentDesiredState](config)
+//	supervisor := NewSupervisor[ExamplefailingObservedState, *ExamplefailingDesiredState](config)
 //	supervisor.AddWorker(identity, worker)
 //
 // Worker types are automatically derived from the observed state type name:
-//   - ExampleparentObservedState -> "exampleparent"
+//   - ExamplefailingObservedState -> "examplefailing"
 //   - ContainerObservedState -> "container"
 //
 // # Architecture Constraints

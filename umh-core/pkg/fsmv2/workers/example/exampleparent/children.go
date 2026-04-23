@@ -17,41 +17,46 @@ package exampleparent
 import (
 	"fmt"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleparent/snapshot"
 )
 
-// defaultChildConfig is the fallback YAML used when ParentUserSpec.ChildConfig
-// is empty. Kept as a package-level constant so RenderChildren and the legacy
-// DeriveDesiredState body share a single source of truth for the default.
+// defaultChildConfig is the fallback YAML used when ExampleparentConfig.ChildConfig
+// is empty.
 const defaultChildConfig = `address: {{ .IP }}:{{ .PORT }}
 device: {{ .DEVICE_ID }}`
 
 // RenderChildren is the parent's children-set emitter for the example parent
-// worker. Pure function of the parsed ParentUserSpec: same input yields the
+// worker. Pure function of the typed WorkerSnapshot: same input yields the
 // same ChildSpec values (and ChildSpec.Hash output) across repeated calls
 // (idempotency property exercised by P1.8 architecture test #7).
+//
+// State.Next calls this from each transition; the supervisor consumes the
+// resulting children set via NextResult.Children (PR2 P2.4 discriminator).
 //
 // Per §4-C LOCKED, Enabled MUST be set explicitly to true; the F4⊕G1 trap
 // detector in P1.8 architecture test #13 (registry walk, layer 2) catches
 // forgotten-Enabled in renderChildren bodies.
 //
-// State.Next will adopt this emitter when P2.2 wires renderChildren into the
-// state-machine return path; until then DeriveDesiredState calls this helper
-// to populate ChildrenSpecs.
-func RenderChildren(spec *ParentUserSpec) []config.ChildSpec {
-	if spec == nil || spec.ChildrenCount == 0 {
+// Reads spec inputs from snap.Desired.Config (the typed ExampleparentConfig)
+// and the parent's user-namespace variables from snap.Desired.OriginalUserSpec
+// where available; child-specific DEVICE_ID is injected here.
+func RenderChildren(snap fsmv2.WorkerSnapshot[snapshot.ExampleparentConfig, snapshot.ExampleparentStatus]) []config.ChildSpec {
+	cfg := snap.Desired.Config
+	if cfg.ChildrenCount == 0 {
 		return []config.ChildSpec{}
 	}
 
-	childrenSpecs := make([]config.ChildSpec, spec.ChildrenCount)
-	childWorkerType := spec.GetChildWorkerType()
+	childrenSpecs := make([]config.ChildSpec, cfg.ChildrenCount)
+	childWorkerType := cfg.GetChildWorkerType()
 
-	childConfig := spec.ChildConfig
+	childConfig := cfg.ChildConfig
 	if childConfig == "" {
 		childConfig = defaultChildConfig
 	}
 
-	for i := range spec.ChildrenCount {
+	for i := range cfg.ChildrenCount {
 		childVariables := config.VariableBundle{
 			User: map[string]any{
 				"DEVICE_ID": fmt.Sprintf("device-%d", i),

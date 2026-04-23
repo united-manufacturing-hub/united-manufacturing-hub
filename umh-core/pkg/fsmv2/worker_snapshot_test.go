@@ -117,6 +117,34 @@ var _ = Describe("ConvertWorkerSnapshot", func() {
 		Expect(snap.Desired.IsShutdownRequested()).To(Equal(snap.IsShutdownRequested))
 	})
 
+	It("copies FrameworkMetrics from observed state", func() {
+		obs := fsmv2.Observation[workerTestStatus]{
+			CollectedAt: now,
+			Status:      workerTestStatus{Reachable: true},
+		}
+		obs.Metrics.Framework = deps.FrameworkMetrics{
+			TimeInCurrentStateMs:  12000,
+			StateTransitionsTotal: 5,
+			StartupCount:          2,
+		}
+
+		wds := &fsmv2.WrappedDesiredState[workerTestConfig]{
+			BaseDesiredState: config.BaseDesiredState{State: config.DesiredStateRunning},
+		}
+
+		raw := fsmv2.Snapshot{
+			Observed: obs,
+			Desired:  wds,
+			Identity: identity,
+		}
+
+		snap := fsmv2.ConvertWorkerSnapshot[workerTestConfig, workerTestStatus](raw)
+
+		Expect(snap.FrameworkMetrics.TimeInCurrentStateMs).To(Equal(int64(12000)))
+		Expect(snap.FrameworkMetrics.StateTransitionsTotal).To(Equal(int64(5)))
+		Expect(snap.FrameworkMetrics.StartupCount).To(Equal(int64(2)))
+	})
+
 	It("panics with descriptive message on non-Snapshot input", func() {
 		Expect(func() {
 			fsmv2.ConvertWorkerSnapshot[workerTestConfig, workerTestStatus]("not-a-snapshot")
