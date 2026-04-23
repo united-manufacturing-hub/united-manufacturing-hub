@@ -558,23 +558,27 @@ type MyDesiredState struct {
 WHY: Every worker type needs both a worker factory (creates Worker instances) and
 a supervisor factory (creates Supervisor instances). If only one is registered,
 the FSM system will panic at runtime when trying to create the missing component.
-Use RegisterWorkerType[TObserved, TDesired]() to register both atomically.`,
+Use register.Worker[TConfig, TStatus, TDeps]() to register both atomically
+(it registers factory, supervisor, and CSE types in one call).`,
 		CorrectCode: `func init() {
-    err := factory.RegisterWorkerType[snapshot.MyObservedState, *snapshot.MyDesiredState](
-        func(id deps.Identity, logger deps.FSMLogger, _ deps.StateReader, _ map[string]any) fsmv2.Worker {
-            worker, _ := NewMyWorker(id, logger)
-            return worker
-        },
-        func(cfg interface{}) interface{} {
-            return supervisor.NewSupervisor[snapshot.MyObservedState, *snapshot.MyDesiredState](
-                cfg.(supervisor.Config))
-        },
+    // One-line registration: factory + supervisor + CSE types.
+    // Use register.NoDeps for zero-dep workers.
+    register.Worker[Config, Status, register.NoDeps](
+        "myworker",
+        NewMyWorker,
     )
-    if err != nil {
-        panic(err)
-    }
+}
+
+// Constructor signature matches register.Worker expectation:
+func NewMyWorker(
+    id deps.Identity,
+    logger deps.FSMLogger,
+    sr deps.StateReader,
+    _ register.NoDeps,
+) (fsmv2.Worker, error) {
+    return &MyWorker{/* ... */}, nil
 }`,
-		ReferenceFile: "factory/worker_factory.go:451-461",
+		ReferenceFile: "pkg/fsmv2/register/register.go",
 	},
 	"DYNAMIC_ERROR_MESSAGE": {
 		Name: "Static Error Messages for Sentry Grouping",

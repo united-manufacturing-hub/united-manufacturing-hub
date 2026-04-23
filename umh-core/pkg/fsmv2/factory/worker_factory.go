@@ -228,20 +228,6 @@ func RegisterWorkerAndSupervisorFactoryByType(
 	return nil
 }
 
-// RegisterWorkerType registers both worker and supervisor factories using compile-time type parameters.
-// Preferred API: provides type safety and automatic worker type derivation.
-func RegisterWorkerType[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState](
-	workerFactory func(deps.Identity, deps.FSMLogger, deps.StateReader, map[string]any) fsmv2.Worker,
-	supervisorFactory func(interface{}) interface{},
-) error {
-	workerType, err := storage.DeriveWorkerType[TObserved]()
-	if err != nil {
-		return fmt.Errorf("failed to derive worker type: %w", err)
-	}
-
-	return RegisterWorkerAndSupervisorFactoryByType(workerType, workerFactory, supervisorFactory)
-}
-
 // ValidateRegistryConsistency checks for mismatches between worker and supervisor registries.
 // Returns worker types without supervisors, and supervisor types without workers.
 func ValidateRegistryConsistency() (workerOnly []string, supervisorOnly []string) {
