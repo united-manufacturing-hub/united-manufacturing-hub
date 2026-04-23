@@ -127,7 +127,7 @@ type MyWorker struct {
     fsmv2.WorkerBase[MyConfig, MyStatus]
 }
 
-func NewMyWorker(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader) (fsmv2.Worker, error) {
+func NewMyWorker(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader, _ register.NoDeps) (fsmv2.Worker, error) {
     w := &MyWorker{}
     w.InitBase(id, logger, sr)
     return w, nil

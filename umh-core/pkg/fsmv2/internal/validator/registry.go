@@ -518,20 +518,16 @@ func (o *MyObservedState) SetState(s string) {
 		Name: "Folder Name Must Match Worker Type",
 		Why: `Worker folder names must exactly match the derived worker type.
 WHY: The factory registration system uses type names to derive worker types:
-"ExamplechildObservedState" → "examplechild". If the folder is named differently (e.g., "example-child"),
+"ExampleparentObservedState" → "exampleparent". If the folder is named differently (e.g., "example-parent"),
 it creates confusion and enables registration mismatches where supervisor factory
-registers as "examplechild" but worker factory registers manually as "example-child".
+registers as "exampleparent" but worker factory registers manually as "example-parent".
 Go type names cannot contain hyphens, so hyphenated folder names can NEVER match.`,
-		CorrectCode: `// Folder "examplechild" with type ExamplechildObservedState → worker type "examplechild" ✓
-workers/example/examplechild/snapshot/snapshot.go:
-    type ExamplechildObservedState struct { ... }
-
-// Folder "exampleparent" with type ExampleparentObservedState → "exampleparent" ✓
+		CorrectCode: `// Folder "exampleparent" with type ExampleparentObservedState → worker type "exampleparent" ✓
 workers/example/exampleparent/snapshot/snapshot.go:
     type ExampleparentObservedState struct { ... }
 
-// WRONG: Folder "example-child" can never match (hyphens invalid in Go types)`,
-		ReferenceFile: "workers/example/examplechild/snapshot/snapshot.go",
+// WRONG: Folder "example-parent" can never match (hyphens invalid in Go types)`,
+		ReferenceFile: "workers/example/exampleparent/snapshot/snapshot.go",
 	},
 	"DEPENDENCIES_IN_DESIRED_STATE": {
 		Name: "Dependencies Not Allowed in DesiredState",

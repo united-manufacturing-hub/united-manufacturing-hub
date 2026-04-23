@@ -7,9 +7,8 @@ The factory package provides registration mechanisms for FSM v2 workers and supe
 Worker types are **derived from Go type names**, not manually specified.
 
 ```text
-ExamplechildObservedState    → "examplechild"
-ApplicationObservedState → "application"
 ExampleparentObservedState → "exampleparent"
+ApplicationObservedState → "application"
 ```
 
 **Derivation rules:**
@@ -37,14 +36,14 @@ Registers both factories atomically with automatic type derivation:
 
 ```go
 func init() {
-    // Worker type is automatically derived from ExamplechildObservedState → "examplechild"
-    if err := factory.RegisterWorkerType[snapshot.ExamplechildObservedState, *snapshot.ExamplechildDesiredState](
+    // Worker type is automatically derived from ExampleparentObservedState → "exampleparent"
+    if err := factory.RegisterWorkerType[snapshot.ExampleparentObservedState, *snapshot.ExampleparentDesiredState](
         func(id fsmv2.Identity, logger deps.FSMLogger) fsmv2.Worker {
-            worker, _ := NewChildWorker(id, pool, logger)
+            worker, _ := NewParentWorker(id, logger, nil)
             return worker
         },
         func(cfg interface{}) interface{} {
-            return supervisor.NewSupervisor[snapshot.ExamplechildObservedState, *snapshot.ExamplechildDesiredState](
+            return supervisor.NewSupervisor[snapshot.ExampleparentObservedState, *snapshot.ExampleparentDesiredState](
                 cfg.(supervisor.Config))
         },
     ); err != nil {
@@ -65,15 +64,15 @@ Use when you need an explicit type string:
 
 ```go
 func init() {
-    workerType, _ := storage.DeriveWorkerType[snapshot.ExamplechildObservedState]()
+    workerType, _ := storage.DeriveWorkerType[snapshot.ExampleparentObservedState]()
 
     err := factory.RegisterWorkerAndSupervisorFactoryByType(
         workerType,
         func(id fsmv2.Identity, logger deps.FSMLogger) fsmv2.Worker {
-            return NewChildWorker(id, logger)
+            return NewParentWorker(id, logger, nil)
         },
         func(raw interface{}) interface{} {
-            return supervisor.NewSupervisor[*snapshot.ExamplechildObservedState, *snapshot.ExamplechildDesiredState](raw)
+            return supervisor.NewSupervisor[*snapshot.ExampleparentObservedState, *snapshot.ExampleparentDesiredState](raw)
         },
     )
     if err != nil {
@@ -122,9 +121,8 @@ Architecture tests in `architecture_test.go` enforce this.
 
 | Folder | Type Name | Derived Worker Type | Valid? |
 |--------|-----------|---------------------|--------|
-| `examplechild` | `ExamplechildObservedState` | `"examplechild"` | Yes |
 | `exampleparent` | `ExampleparentObservedState` | `"exampleparent"` | Yes |
-| `example-child` | ??? | Cannot match | **No** |
+| `example-parent` | ??? | Cannot match | **No** |
 
 If you create a folder `foo`, your types must be named `FooObservedState` and `FooDesiredState`.
 
@@ -147,12 +145,12 @@ _ = factory.RegisterFactoryByType("example-parent", ...)
 
 ### Hyphenated folder names
 
-**Wrong:** Folder `example-child` with type `ExamplechildObservedState`
-- Derived type: `"examplechild"`
-- Expected by code: `"example-child"`
+**Wrong:** Folder `example-parent` with type `ExampleparentObservedState`
+- Derived type: `"exampleparent"`
+- Expected by code: `"example-parent"`
 - Architecture test: **FAILS**
 
-**Fix:** Rename folder to match derived type (`examplechild`), or use underscores/no separators in folder name.
+**Fix:** Rename folder to match derived type (`exampleparent`), or use underscores/no separators in folder name.
 
 ### Type name doesn't match folder
 

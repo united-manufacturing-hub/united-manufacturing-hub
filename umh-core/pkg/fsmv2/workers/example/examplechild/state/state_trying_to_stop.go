@@ -27,15 +27,13 @@ type TryingToStopState struct {
 }
 
 func (s *TryingToStopState) Next(snapAny any) fsmv2.NextResult[any, any] {
-	snap := helpers.ConvertSnapshot[snapshot.ExamplechildObservedState, *snapshot.ExamplechildDesiredState](snapAny)
+	snap := fsmv2.ConvertWorkerSnapshot[snapshot.ExamplechildConfig, snapshot.ExamplechildStatus](snapAny)
 
-	// Child worker is "stopped" when connection health shows not healthy (disconnected)
-	// After DisconnectAction executes and collector runs, ConnectionHealth will show "no connection"
-	if snap.Observed.ConnectionHealth != "healthy" {
-		return fsmv2.Transition(&StoppedState{}, fsmv2.SignalNone, nil, "Disconnection complete, child stopped")
+	if snap.Status.ConnectionHealth != "healthy" {
+		return fsmv2.Transition(&StoppedState{}, fsmv2.SignalNone, nil, "disconnection complete, child stopped")
 	}
 
-	return fsmv2.Transition(s, fsmv2.SignalNone, &action.DisconnectAction{}, "Closing connections gracefully")
+	return fsmv2.Transition(s, fsmv2.SignalNone, &action.DisconnectAction{}, "closing connections gracefully")
 }
 
 func (s *TryingToStopState) String() string {

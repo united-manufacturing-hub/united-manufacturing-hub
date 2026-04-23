@@ -794,7 +794,7 @@ Worker API v2 replaces the 7-file pattern with a single-file approach using gene
 4. **Simplify CollectObservedState** — use `fsmv2.ExtractConfig[TConfig](desired)` for config access, return `fsmv2.NewObservation(TStatus{...})` (the collector handles CollectedAt, framework metrics, action history, and metric accumulation automatically)
 5. **Delete DeriveDesiredState and GetInitialState** — provided by WorkerBase (override only if needed)
 6. **Update states** — use `fsmv2.ConvertWorkerSnapshot[TConfig, TStatus](snapAny)` and `snap.IsShutdownRequested` field access
-7. **Replace registration** — single `register.Worker[TConfig, TStatus]("type", constructor)` call
+7. **Replace registration** — single `register.Worker[TConfig, TStatus, register.NoDeps]("type", constructor)` call (use `register.NoDeps` for zero-dep workers; workers needing parent-injected extraDeps keep using `factory.RegisterWorkerType` directly until typed extraction lands)
 8. **Delete snapshot/, dependencies.go, userspec.go** — no longer needed
 9. **Implement capability interfaces** on your worker struct if needed (ActionProvider, ChildSpecProvider, etc.)
 

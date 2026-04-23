@@ -15,6 +15,8 @@
 package state
 
 import (
+	"fmt"
+
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplechild/action"
@@ -27,18 +29,18 @@ type TryingToConnectState struct {
 }
 
 func (s *TryingToConnectState) Next(snapAny any) fsmv2.NextResult[any, any] {
-	snap := helpers.ConvertSnapshot[snapshot.ExamplechildObservedState, *snapshot.ExamplechildDesiredState](snapAny)
+	snap := fsmv2.ConvertWorkerSnapshot[snapshot.ExamplechildConfig, snapshot.ExamplechildStatus](snapAny)
 
-	if snap.Observed.IsStopRequired() {
-		return fsmv2.Transition(&TryingToStopState{}, fsmv2.SignalNone, nil, "Stop required, initiating shutdown")
+	if snap.IsStopRequired() {
+		return fsmv2.Transition(&TryingToStopState{}, fsmv2.SignalNone, nil,
+			fmt.Sprintf("stop required: shutdown=%t, parentState=%s", snap.IsShutdownRequested, snap.ParentMappedState))
 	}
 
-	// Collector populates ConnectionHealth from dependencies.IsConnected()
-	if snap.Observed.ConnectionHealth == "healthy" {
-		return fsmv2.Transition(&ConnectedState{}, fsmv2.SignalNone, nil, "Connection established successfully")
+	if snap.Status.ConnectionHealth == "healthy" {
+		return fsmv2.Transition(&ConnectedState{}, fsmv2.SignalNone, nil, "connection healthy, transitioning to connected")
 	}
 
-	return fsmv2.Transition(s, fsmv2.SignalNone, &action.ConnectAction{}, "Attempting to establish connection")
+	return fsmv2.Transition(s, fsmv2.SignalNone, &action.ConnectAction{}, "attempting to establish connection")
 }
 
 func (s *TryingToConnectState) String() string {

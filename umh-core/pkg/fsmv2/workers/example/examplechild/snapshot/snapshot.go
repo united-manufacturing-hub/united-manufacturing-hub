@@ -12,97 +12,44 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Package snapshot holds the examplechild worker's Config and Status value
+// types plus the ExamplechildDependencies interface consumed by actions. It
+// exists as a separate leaf package so the state sub-package can depend on
+// these types without introducing an import cycle with the worker package.
+//
+// Post-PR3-C2 the examplechild worker uses fsmv2.Observation[ExamplechildStatus]
+// and *fsmv2.WrappedDesiredState[ExamplechildConfig]; the underlying value
+// types are defined here and re-exported from the worker package as type
+// aliases for caller convenience.
 package snapshot
 
 import (
-	"time"
-
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 )
 
-// ExamplechildDependencies interface to avoid import cycles.
+// ExamplechildConfig holds the user-provided configuration for the child worker.
+// Embeds BaseUserSpec to support the StateGetter interface, allowing
+// WorkerBase.DeriveDesiredState to extract the desired state from the "state"
+// YAML field. The child worker has no additional config fields — its lifecycle
+// is driven entirely by the parent's ChildStartStates mapping.
+type ExamplechildConfig struct {
+	config.BaseUserSpec `yaml:",inline"`
+}
+
+// ExamplechildStatus holds the runtime observation data for the child worker.
+// Framework fields (CollectedAt, State, LastActionResults, MetricsEmbedder,
+// ShutdownRequested, children counts) are carried by
+// fsmv2.Observation[ExamplechildStatus] and are not duplicated here.
+type ExamplechildStatus struct {
+	ConnectionHealth string `json:"connection_health"`
+	ConnectAttempts  int    `json:"connect_attempts"`
+}
+
+// ExamplechildDependencies is the dependencies interface for examplechild
+// actions (avoids import cycles between action/ and the worker package).
 type ExamplechildDependencies interface {
 	deps.Dependencies
 	SetConnected(connected bool)
 	IsConnected() bool
-}
-
-// ExamplechildSnapshot represents a point-in-time view of the child worker state.
-type ExamplechildSnapshot struct {
-	Desired  *ExamplechildDesiredState
-	Identity deps.Identity
-	Observed ExamplechildObservedState
-}
-
-// ExamplechildDesiredState represents the target configuration for the child worker.
-type ExamplechildDesiredState struct {
-	// ParentMappedState derives from parent's ChildStartStates; injected via MappedParentStateProvider.
-	ParentMappedState string `json:"parent_mapped_state"`
-	config.BaseDesiredState
-}
-
-// ShouldBeRunning returns true if the child should be in a running/connected state.
-func (s *ExamplechildDesiredState) ShouldBeRunning() bool {
-	if s.ShutdownRequested {
-		return false
-	}
-
-	return s.ParentMappedState == config.DesiredStateRunning
-}
-
-// ExamplechildObservedState represents the current state of the child worker.
-type ExamplechildObservedState struct {
-	CollectedAt time.Time `json:"collected_at"`
-
-	LastError error `json:"last_error,omitempty"`
-
-	ExamplechildDesiredState `json:",inline"`
-
-	ID string `json:"id"`
-
-	State            string `json:"state"` // Observed lifecycle state (e.g., "running_connected")
-	ConnectionHealth string `json:"connection_health"`
-
-	// LastActionResults contains the action history from the last collection cycle (supervisor-managed).
-	LastActionResults []deps.ActionResult `json:"last_action_results,omitempty"`
-
-	deps.MetricsEmbedder `json:",inline"`
-
-	ConnectAttempts int `json:"connect_attempts"`
-}
-
-func (o ExamplechildObservedState) GetTimestamp() time.Time {
-	return o.CollectedAt
-}
-
-func (o ExamplechildObservedState) GetObservedDesiredState() fsmv2.DesiredState {
-	return &o.ExamplechildDesiredState
-}
-
-// SetState sets the FSM state name on this observed state.
-func (o ExamplechildObservedState) SetState(s string) fsmv2.ObservedState {
-	o.State = s
-
-	return o
-}
-
-// SetShutdownRequested sets the shutdown requested status on this observed state.
-func (o ExamplechildObservedState) SetShutdownRequested(v bool) fsmv2.ObservedState {
-	o.ShutdownRequested = v
-
-	return o
-}
-
-// SetParentMappedState sets the parent's mapped state on this observed state.
-func (o ExamplechildObservedState) SetParentMappedState(state string) fsmv2.ObservedState {
-	o.ParentMappedState = state
-
-	return o
-}
-
-// IsStopRequired reports whether the child needs to stop.
-func (o ExamplechildObservedState) IsStopRequired() bool {
-	return o.IsShutdownRequested() || !o.ShouldBeRunning()
 }
