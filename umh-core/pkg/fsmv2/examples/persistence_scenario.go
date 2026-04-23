@@ -20,10 +20,10 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/application"
 	persistenceWorker "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/persistence"
-	persistencesnapshot "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/persistence/snapshot"
 )
 
 type PersistenceRunConfig struct {
@@ -145,7 +145,7 @@ children:
 
 		loadCtx := context.Background()
 
-		var observed persistencesnapshot.PersistenceObservedState
+		var observed fsmv2.Observation[persistenceWorker.PersistenceStatus]
 		if loadErr := store.LoadObservedTyped(loadCtx, "persistence", "persistence-001", &observed); loadErr != nil {
 			if !errors.Is(loadErr, context.Canceled) {
 				logger.SentryWarn(deps.FeatureExamples, "", "failed to load persistence observed state",
@@ -155,9 +155,9 @@ children:
 			workerMetrics := observed.GetWorkerMetrics()
 			result.CompactionCycles = workerMetrics.Counters[string(deps.CounterCompactionCyclesTotal)]
 			result.MaintenanceCycles = workerMetrics.Counters[string(deps.CounterMaintenanceCyclesTotal)]
-			result.LastCompactionAt = observed.LastCompactionAt
-			result.LastMaintenanceAt = observed.LastMaintenanceAt
-			result.Healthy = observed.IsHealthy()
+			result.LastCompactionAt = observed.Status.LastCompactionAt
+			result.LastMaintenanceAt = observed.Status.LastMaintenanceAt
+			result.Healthy = observed.Status.IsHealthy()
 		}
 
 		close(done)
