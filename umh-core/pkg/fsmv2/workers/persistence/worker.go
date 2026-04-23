@@ -61,11 +61,8 @@ type PersistenceWorker struct {
 // parameter carries the triangular store published by cmd/main.go via
 // register.SetDeps; the register.Worker factory closure forwards it here.
 //
-// Three supported shapes for dependencies:
+// Two supported shapes for dependencies:
 //
-//   - nil: the constructor falls back to the persistence.Store() singleton for
-//     backward compatibility until C13 removes the singleton. Errors if the
-//     singleton is also unset.
 //   - seed (built via NewStoreOnlyDependencies): the constructor extracts the
 //     store and builds full deps with this worker's identity/logger/stateReader.
 //     This is the path taken by cmd/main.go → register.SetDeps → factory closure.
@@ -87,12 +84,7 @@ func NewPersistenceWorker(
 
 	switch {
 	case dependencies == nil:
-		store := Store()
-		if store == nil {
-			return nil, errors.New("persistence worker requires a store via register.SetDeps or persistence.SetStore(); cmd/main.go must publish the store before the application supervisor starts")
-		}
-
-		dependencies = NewPersistenceDependencies(store, deps.DefaultScheduler{}, logger, stateReader, identity)
+		return nil, errors.New("persistence worker requires a store via register.SetDeps[*PersistenceDependencies]; cmd/main.go must publish the store before the application supervisor starts")
 	case dependencies.BaseDependencies == nil:
 		store := dependencies.GetStore()
 		if store == nil {
@@ -206,10 +198,8 @@ func (w *PersistenceWorker) CollectObservedState(ctx context.Context, _ fsmv2.De
 // with typed TDeps = *PersistenceDependencies. Parent wiring at cmd/main.go
 // publishes the store via register.SetDeps[*PersistenceDependencies] before
 // the application supervisor starts; the factory closure then forwards the
-// seed deps to NewPersistenceWorker. When nothing has been published (e.g.
-// older test paths), the constructor falls back to the persistence.Store()
-// singleton — preserving backward compatibility until C13 removes the
-// singleton entirely.
+// seed deps to NewPersistenceWorker. If nothing has been published the
+// constructor returns an error — there is no singleton fallback.
 func init() {
 	register.Worker[PersistenceConfig, PersistenceStatus, *PersistenceDependencies](WorkerTypeName, NewPersistenceWorker)
 }

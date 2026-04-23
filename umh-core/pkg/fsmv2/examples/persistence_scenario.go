@@ -22,6 +22,7 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/register"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/application"
 	persistenceWorker "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/persistence"
 )
@@ -87,10 +88,13 @@ func RunPersistenceScenario(ctx context.Context, cfg PersistenceRunConfig) *Pers
 
 	store := SetupStore(logger)
 
-	// Publish the triangular store via the typed persistence.SetStore
-	// singleton so the persistence worker factory can consume it via
-	// persistence.Store() during construction.
-	persistenceWorker.SetStore(store)
+	// Publish the triangular store via the typed deps registry so the
+	// persistence worker factory closure can consume it via register.GetDeps
+	// during construction. Mirrors cmd/main.go's wiring.
+	register.SetDeps[*persistenceWorker.PersistenceDependencies](
+		persistenceWorker.WorkerTypeName,
+		persistenceWorker.NewStoreOnlyDependencies(store),
+	)
 
 	yamlConfig := `
 children:

@@ -12,6 +12,7 @@
 - Removed dead `channelProvider` / `onAuthSuccessCallback` keys from the fsmv2Deps map in `cmd/main.go` (PR2 C6.5). No functional change -- these keys had no readers.
 - Swept `fsmv2.Result[any, any]` → `fsmv2.Transition` and dropped `fsmv2.WrapAction` wrappers across PR2-migrated workers (helloworld, communicator, transport/push/pull, examples). Persistence + application pending PR2.5 refactor. PR2 C7.
 - FSMv2 application worker migrated to `register.Worker` with `TDeps = register.NoDeps`, dropping the legacy `factory.RegisterWorkerAndSupervisorFactoryByType` path. The zero-value fallback in the deps registry means no `register.SetDeps` wiring is needed at `cmd/main.go`. `WorkerTypeName` is now exported to mirror the persistence pattern. Internal framework change only; no user-facing API. PR2 C12.
+- FSMv2 persistence worker's `persistence.SetStore` / `persistence.Store` / `persistence.ClearStore` package-level singleton (plus its backing variable and mutex) removed. All callers now publish the triangular store through the typed `register.SetDeps[*PersistenceDependencies]` registry wired up in PR2 C10. Internal framework change only; no user-facing API. PR2 C13.
 
 ### Improvements
 

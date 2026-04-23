@@ -25,6 +25,7 @@ import (
 	fsmv2config "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/register"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/persistence"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/persistence/state"
 )
@@ -40,11 +41,14 @@ var _ = Describe("PersistenceWorker", func() {
 		logger = deps.NewNopFSMLogger()
 		identity = deps.Identity{ID: "test-id", Name: "test-persistence"}
 		store = &mockTriangularStore{}
-		persistence.SetStore(store)
+		register.SetDeps[*persistence.PersistenceDependencies](
+			persistence.WorkerTypeName,
+			persistence.NewStoreOnlyDependencies(store),
+		)
 	})
 
 	AfterEach(func() {
-		persistence.ClearStore()
+		register.ClearDeps(persistence.WorkerTypeName)
 	})
 
 	getPersistenceWorker := func(w any) *persistence.PersistenceWorker {
@@ -54,18 +58,17 @@ var _ = Describe("PersistenceWorker", func() {
 	}
 
 	Describe("NewPersistenceWorker", func() {
-		It("should create a worker successfully when Store() singleton is populated", func() {
-			w, err := persistence.NewPersistenceWorker(identity, logger, nil, nil)
+		It("should create a worker successfully from seed dependencies", func() {
+			w, err := persistence.NewPersistenceWorker(identity, logger, nil, persistence.NewStoreOnlyDependencies(store))
 			Expect(err).NotTo(HaveOccurred())
 			Expect(w).NotTo(BeNil())
 			Expect(getPersistenceWorker(w)).NotTo(BeNil())
 		})
 
-		It("should error when nil deps and Store() singleton is not populated", func() {
-			persistence.ClearStore()
+		It("should error when dependencies are nil", func() {
 			_, err := persistence.NewPersistenceWorker(identity, logger, nil, nil)
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("persistence.SetStore"))
+			Expect(err.Error()).To(ContainSubstring("register.SetDeps"))
 		})
 
 		It("should accept non-nil typed dependencies directly", func() {
@@ -77,7 +80,7 @@ var _ = Describe("PersistenceWorker", func() {
 
 		It("should default WorkerType to 'persistence' when empty", func() {
 			id := deps.Identity{ID: "test-id", Name: "test-persistence"}
-			w, err := persistence.NewPersistenceWorker(id, logger, nil, nil)
+			w, err := persistence.NewPersistenceWorker(id, logger, nil, persistence.NewStoreOnlyDependencies(store))
 			Expect(err).NotTo(HaveOccurred())
 			pw := getPersistenceWorker(w)
 			Expect(pw.GetDependencies().GetWorkerType()).To(Equal("persistence"))
@@ -86,7 +89,7 @@ var _ = Describe("PersistenceWorker", func() {
 
 	Describe("CollectObservedState", func() {
 		It("should return valid observed state", func() {
-			w, err := persistence.NewPersistenceWorker(identity, logger, nil, nil)
+			w, err := persistence.NewPersistenceWorker(identity, logger, nil, persistence.NewStoreOnlyDependencies(store))
 			Expect(err).NotTo(HaveOccurred())
 
 			worker := getPersistenceWorker(w)
@@ -102,7 +105,7 @@ var _ = Describe("PersistenceWorker", func() {
 		})
 
 		It("should return error when context is cancelled", func() {
-			w, err := persistence.NewPersistenceWorker(identity, logger, nil, nil)
+			w, err := persistence.NewPersistenceWorker(identity, logger, nil, persistence.NewStoreOnlyDependencies(store))
 			Expect(err).NotTo(HaveOccurred())
 
 			worker := getPersistenceWorker(w)
@@ -115,7 +118,7 @@ var _ = Describe("PersistenceWorker", func() {
 
 		Context("ConsecutiveActionErrors computation", func() {
 			It("should increment on failure", func() {
-				w, err := persistence.NewPersistenceWorker(identity, logger, nil, nil)
+				w, err := persistence.NewPersistenceWorker(identity, logger, nil, persistence.NewStoreOnlyDependencies(store))
 				Expect(err).NotTo(HaveOccurred())
 
 				worker := getPersistenceWorker(w)
@@ -132,7 +135,7 @@ var _ = Describe("PersistenceWorker", func() {
 			})
 
 			It("should reset on success", func() {
-				w, err := persistence.NewPersistenceWorker(identity, logger, nil, nil)
+				w, err := persistence.NewPersistenceWorker(identity, logger, nil, persistence.NewStoreOnlyDependencies(store))
 				Expect(err).NotTo(HaveOccurred())
 
 				worker := getPersistenceWorker(w)
@@ -151,7 +154,7 @@ var _ = Describe("PersistenceWorker", func() {
 			})
 
 			It("should preserve count on empty drain (no action results)", func() {
-				w, err := persistence.NewPersistenceWorker(identity, logger, nil, nil)
+				w, err := persistence.NewPersistenceWorker(identity, logger, nil, persistence.NewStoreOnlyDependencies(store))
 				Expect(err).NotTo(HaveOccurred())
 
 				worker := getPersistenceWorker(w)
@@ -180,7 +183,7 @@ var _ = Describe("PersistenceWorker", func() {
 		})
 
 		It("should pick up timestamps set by actions", func() {
-			w, err := persistence.NewPersistenceWorker(identity, logger, nil, nil)
+			w, err := persistence.NewPersistenceWorker(identity, logger, nil, persistence.NewStoreOnlyDependencies(store))
 			Expect(err).NotTo(HaveOccurred())
 
 			worker := getPersistenceWorker(w)
@@ -200,7 +203,7 @@ var _ = Describe("PersistenceWorker", func() {
 
 	Describe("DeriveDesiredState", func() {
 		It("should return defaults with State running for nil spec", func() {
-			w, err := persistence.NewPersistenceWorker(identity, logger, nil, nil)
+			w, err := persistence.NewPersistenceWorker(identity, logger, nil, persistence.NewStoreOnlyDependencies(store))
 			Expect(err).NotTo(HaveOccurred())
 
 			worker := getPersistenceWorker(w)
@@ -215,7 +218,7 @@ var _ = Describe("PersistenceWorker", func() {
 		})
 
 		It("should return error for invalid spec type", func() {
-			w, err := persistence.NewPersistenceWorker(identity, logger, nil, nil)
+			w, err := persistence.NewPersistenceWorker(identity, logger, nil, persistence.NewStoreOnlyDependencies(store))
 			Expect(err).NotTo(HaveOccurred())
 
 			worker := getPersistenceWorker(w)
@@ -224,7 +227,7 @@ var _ = Describe("PersistenceWorker", func() {
 		})
 
 		It("should parse custom intervals from spec", func() {
-			w, err := persistence.NewPersistenceWorker(identity, logger, nil, nil)
+			w, err := persistence.NewPersistenceWorker(identity, logger, nil, persistence.NewStoreOnlyDependencies(store))
 			Expect(err).NotTo(HaveOccurred())
 
 			worker := getPersistenceWorker(w)
@@ -243,7 +246,7 @@ var _ = Describe("PersistenceWorker", func() {
 		})
 
 		It("should apply defaults for unspecified fields", func() {
-			w, err := persistence.NewPersistenceWorker(identity, logger, nil, nil)
+			w, err := persistence.NewPersistenceWorker(identity, logger, nil, persistence.NewStoreOnlyDependencies(store))
 			Expect(err).NotTo(HaveOccurred())
 
 			worker := getPersistenceWorker(w)
@@ -261,7 +264,7 @@ var _ = Describe("PersistenceWorker", func() {
 		})
 
 		It("should return defaults for empty Config string", func() {
-			w, err := persistence.NewPersistenceWorker(identity, logger, nil, nil)
+			w, err := persistence.NewPersistenceWorker(identity, logger, nil, persistence.NewStoreOnlyDependencies(store))
 			Expect(err).NotTo(HaveOccurred())
 
 			worker := getPersistenceWorker(w)
@@ -278,7 +281,7 @@ var _ = Describe("PersistenceWorker", func() {
 		})
 
 		It("should return error for invalid YAML", func() {
-			w, err := persistence.NewPersistenceWorker(identity, logger, nil, nil)
+			w, err := persistence.NewPersistenceWorker(identity, logger, nil, persistence.NewStoreOnlyDependencies(store))
 			Expect(err).NotTo(HaveOccurred())
 
 			worker := getPersistenceWorker(w)
@@ -291,7 +294,7 @@ var _ = Describe("PersistenceWorker", func() {
 
 	Describe("GetInitialState", func() {
 		It("should return StoppedState", func() {
-			w, err := persistence.NewPersistenceWorker(identity, logger, nil, nil)
+			w, err := persistence.NewPersistenceWorker(identity, logger, nil, persistence.NewStoreOnlyDependencies(store))
 			Expect(err).NotTo(HaveOccurred())
 
 			worker := getPersistenceWorker(w)
@@ -312,7 +315,7 @@ var _ = Describe("PersistenceWorker", func() {
 			Expect(supervisorOnly).NotTo(ContainElement("persistence"))
 		})
 
-		It("should consume store from persistence.Store() singleton when instantiated via factory", func() {
+		It("should consume store from register.GetDeps when instantiated via factory", func() {
 			factoryIdentity := deps.Identity{ID: "factory-persistence", Name: "Factory Persistence", WorkerType: "persistence"}
 
 			w, err := factory.NewWorkerByType("persistence", factoryIdentity, logger, nil, map[string]any{})
