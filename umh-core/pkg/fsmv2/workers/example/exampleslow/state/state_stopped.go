@@ -16,23 +16,29 @@ package state
 
 import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleslow/snapshot"
 )
+
+func init() {
+	fsmv2.RegisterInitialState("exampleslow", &StoppedState{})
+}
 
 type StoppedState struct {
 	helpers.StoppedBase
 }
 
 func (s *StoppedState) Next(snapAny any) fsmv2.NextResult[any, any] {
-	snap := helpers.ConvertSnapshot[snapshot.ExampleslowObservedState, *snapshot.ExampleslowDesiredState](snapAny)
+	snap := fsmv2.ConvertWorkerSnapshot[snapshot.ExampleslowConfig, snapshot.ExampleslowStatus](snapAny)
 
-	if snap.Desired.IsShutdownRequested() {
+	if snap.IsShutdownRequested {
 		return fsmv2.Transition(s, fsmv2.SignalNeedsRemoval, nil, "shutdown requested, needs removal", nil)
 	}
 
-	if !snap.Observed.ShouldStop() {
-		return fsmv2.Transition(&TryingToConnectState{}, fsmv2.SignalNone, nil, "should be running, transitioning to trying to connect", nil)
+	// ParentMappedState is injected into the observation by the collector.
+	if snap.ParentMappedState == config.DesiredStateRunning {
+		return fsmv2.Transition(&TryingToConnectState{}, fsmv2.SignalNone, nil, "parent wants running, transitioning to trying to connect", nil)
 	}
 
 	return fsmv2.Transition(s, fsmv2.SignalNone, nil, "slow worker is stopped, no connection", nil)

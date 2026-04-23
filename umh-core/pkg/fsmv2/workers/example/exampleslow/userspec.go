@@ -15,11 +15,17 @@
 package example_slow
 
 import (
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleslow/snapshot"
 )
 
-// ExampleslowUserSpec defines the typed configuration for the slow worker.
-type ExampleslowUserSpec struct {
-	config.BaseUserSpec
-	DelaySeconds int `yaml:"delaySeconds"`
-}
+// ExampleslowConfig re-exports snapshot.ExampleslowConfig so callers can use
+// example_slow.ExampleslowConfig without pulling in the snapshot leaf package
+// directly. The underlying type lives in snapshot to allow the state
+// sub-package (which the worker imports for init-only side effects) to
+// reference Config/Status without creating an import cycle with the worker
+// package.
+type ExampleslowConfig = snapshot.ExampleslowConfig
+
+// ExampleslowStatus re-exports snapshot.ExampleslowStatus for the same reason
+// as ExampleslowConfig.
+type ExampleslowStatus = snapshot.ExampleslowStatus
