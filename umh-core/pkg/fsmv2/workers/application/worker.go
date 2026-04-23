@@ -28,7 +28,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/register"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/application/snapshot"
 
@@ -42,7 +42,13 @@ import (
 	_ "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/application/state"
 )
 
-const workerType = "application"
+// WorkerTypeName is the canonical worker-type identifier for the application
+// worker, used in config YAML and CSE storage. Exported to mirror the
+// persistence worker's pattern and allow cmd/main.go callers to reference it
+// without hardcoding the string.
+const WorkerTypeName = "application"
+
+const workerType = WorkerTypeName
 
 // Compile-time interface check: ApplicationWorker implements fsmv2.Worker.
 var _ fsmv2.Worker = (*ApplicationWorker)(nil)
@@ -199,28 +205,24 @@ func NewApplicationSupervisor(cfg SupervisorConfig) (*supervisor.Supervisor[fsmv
 	return sup, nil
 }
 
-// init registers the application worker with the factory for automatic
-// creation via factory.NewWorkerByType(). Uses
-// RegisterWorkerAndSupervisorFactoryByType with the explicit "application"
-// string because TObserved is now the generic fsmv2.Observation[TStatus],
-// which storage.DeriveWorkerType cannot name-derive.
+// init registers the application worker via the generic register.Worker helper
+// with TDeps = register.NoDeps. The application worker takes no custom
+// dependencies beyond the standard framework (Identity, FSMLogger,
+// StateReader), so GetDeps returns the Go-native zero value and no
+// register.SetDeps wiring is needed at cmd/main.go.
 //
-// Application retains the factory-based registration path (rather than
-// register.Worker) until PR2 C12 completes the register.Worker migration.
-// This commit is a type-shape refactor only.
+// The factory closure ignores the zero-value NoDeps and constructs the
+// worker with just id/name/logger/stateReader, matching the existing
+// NewApplicationWorker signature introduced in C11.
 func init() {
-	workerFactory := func(id deps.Identity, logger deps.FSMLogger, stateReader deps.StateReader, _ map[string]any) fsmv2.Worker {
-		return NewApplicationWorker(id.ID, id.Name, logger, stateReader)
-	}
-
-	supervisorFactory := func(cfg interface{}) interface{} {
-		return supervisor.NewSupervisor[
-			fsmv2.Observation[snapshot.ApplicationStatus],
-			*fsmv2.WrappedDesiredState[snapshot.ApplicationConfig],
-		](cfg.(supervisor.Config))
-	}
-
-	if err := factory.RegisterWorkerAndSupervisorFactoryByType(workerType, workerFactory, supervisorFactory); err != nil {
-		panic(fmt.Sprintf("failed to register ApplicationWorker: %v", err))
-	}
+	register.Worker[snapshot.ApplicationConfig, snapshot.ApplicationStatus, register.NoDeps](
+		WorkerTypeName,
+		func(id deps.Identity, logger deps.FSMLogger, stateReader deps.StateReader, _ register.NoDeps) (fsmv2.Worker, error) {
+			w := NewApplicationWorker(id.ID, id.Name, logger, stateReader)
+			if w == nil {
+				return nil, fmt.Errorf("NewApplicationWorker returned nil for id=%q name=%q", id.ID, id.Name)
+			}
+			return w, nil
+		},
+	)
 }
