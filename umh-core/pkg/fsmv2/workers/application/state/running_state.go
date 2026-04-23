@@ -26,18 +26,23 @@ type RunningState struct {
 }
 
 func (s *RunningState) Next(snapAny any) fsmv2.NextResult[any, any] {
-	snap := helpers.ConvertSnapshot[snapshot.ApplicationObservedState, *snapshot.ApplicationDesiredState](snapAny)
+	snap := fsmv2.ConvertWorkerSnapshot[snapshot.ApplicationConfig, snapshot.ApplicationStatus](snapAny)
 
-	if snap.Desired.IsShutdownRequested() {
-		return fsmv2.Result[any, any](&StoppedState{}, fsmv2.SignalNone, nil, "Shutdown requested", nil)
+	if snap.IsShutdownRequested {
+		return fsmv2.Transition(&StoppedState{}, fsmv2.SignalNone, nil, "Shutdown requested")
 	}
 
-	// Check for infrastructure issues (circuit open OR stale children)
-	if snap.Observed.HasInfrastructureIssues() {
-		return fsmv2.Result[any, any](&DegradedState{}, fsmv2.SignalNone, nil, snap.Observed.InfrastructureReason(), nil)
+	circuitOpen, stale := snapshot.ChildrenViewToStatus(snap.ChildrenView)
+	status := snapshot.ApplicationStatus{
+		ChildrenCircuitOpen: circuitOpen,
+		ChildrenStale:       stale,
 	}
 
-	return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil, "Application supervisor is running and managing children", nil)
+	if status.HasInfrastructureIssues() {
+		return fsmv2.Transition(&DegradedState{}, fsmv2.SignalNone, nil, status.InfrastructureReason())
+	}
+
+	return fsmv2.Transition(s, fsmv2.SignalNone, nil, "Application supervisor is running and managing children")
 }
 
 func (s *RunningState) String() string {
