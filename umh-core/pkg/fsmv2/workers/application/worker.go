@@ -31,8 +31,21 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/application/snapshot"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/application/state"
+
+	// Blank import for side effects: registers the initial state via
+	// fsmv2.RegisterInitialState in state/stopped_state.go init(). WorkerBase's
+	// GetInitialState looks up the state from the registry, so the state
+	// package must be loaded whenever the worker is imported — otherwise the
+	// registry lookup returns nil and the supervisor panics at first tick.
+	// This import is safe because state/ depends on snapshot/ (not on the
+	// worker package), so no import cycle is introduced.
+	_ "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/application/state"
 )
+
+const workerType = "application"
+
+// Compile-time interface check: ApplicationWorker implements fsmv2.Worker.
+var _ fsmv2.Worker = (*ApplicationWorker)(nil)
 
 // ApplicationWorker is a generic application worker that parses YAML configuration
 // to dynamically discover and create child workers. It doesn't hardcode child
@@ -42,23 +55,42 @@ import (
 // passes through ChildrenSpecs from the YAML config without knowing about
 // specific child implementations.
 type ApplicationWorker struct {
+	fsmv2.WorkerBase[snapshot.ApplicationConfig, snapshot.ApplicationStatus]
 	id   string
 	name string
 }
 
-// NewApplicationWorker creates a new application worker.
-func NewApplicationWorker(id, name string) *ApplicationWorker {
+// NewApplicationWorker creates a new application worker. Returns nil when
+// id or name is empty — callers must surface that as a construction error.
+// A nil logger is replaced with a no-op logger so unit tests can construct
+// workers without wiring a full logger stack; production callers should pass
+// the supervisor's configured logger.
+func NewApplicationWorker(id, name string, logger deps.FSMLogger, stateReader deps.StateReader) *ApplicationWorker {
 	if id == "" || name == "" {
 		return nil
 	}
 
-	return &ApplicationWorker{
+	if logger == nil {
+		logger = deps.NewNopFSMLogger()
+	}
+
+	w := &ApplicationWorker{
 		id:   id,
 		name: name,
 	}
+	w.InitBase(deps.Identity{
+		ID:         id,
+		Name:       name,
+		WorkerType: workerType,
+	}, logger, stateReader)
+
+	return w
 }
 
-// CollectObservedState returns the current observed state of the application supervisor.
+// CollectObservedState returns the current observed state of the application
+// supervisor. Returns fsmv2.NewObservation — the collector fills CollectedAt,
+// framework metrics, action history, ChildrenView, and children counts
+// automatically after COS returns.
 func (w *ApplicationWorker) CollectObservedState(ctx context.Context, _ fsmv2.DesiredState) (fsmv2.ObservedState, error) {
 	select {
 	case <-ctx.Done():
@@ -66,14 +98,10 @@ func (w *ApplicationWorker) CollectObservedState(ctx context.Context, _ fsmv2.De
 	default:
 	}
 
-	return snapshot.ApplicationObservedState{
-		ID:          w.id,
-		CollectedAt: time.Now(),
-		Name:        w.name,
-		ApplicationDesiredState: snapshot.ApplicationDesiredState{
-			Name: w.name,
-		},
-	}, nil
+	return fsmv2.NewObservation(snapshot.ApplicationStatus{
+		ID:   w.id,
+		Name: w.name,
+	}), nil
 }
 
 // childrenConfig is the structure for parsing children from YAML.
@@ -81,12 +109,17 @@ type childrenConfig struct {
 	Children []config.ChildSpec `yaml:"children"`
 }
 
-// DeriveDesiredState parses the YAML configuration to extract children specifications.
+// DeriveDesiredState parses the YAML configuration to extract children
+// specifications and wraps the result in *fsmv2.WrappedDesiredState so it
+// satisfies the WorkerBase TConfig/TStatus shape while preserving the
+// application worker's passthrough children semantics.
 func (w *ApplicationWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, error) {
+	cfg := snapshot.ApplicationConfig{Name: w.name}
+
 	if spec == nil {
-		return &config.DesiredState{
-			BaseDesiredState: config.BaseDesiredState{State: "running"},
-			ChildrenSpecs:    nil,
+		return &fsmv2.WrappedDesiredState[snapshot.ApplicationConfig]{
+			BaseDesiredState: config.BaseDesiredState{State: config.DesiredStateRunning},
+			Config:           cfg,
 		}, nil
 	}
 
@@ -102,18 +135,15 @@ func (w *ApplicationWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredS
 		}
 	}
 
-	return &config.DesiredState{
-		BaseDesiredState: config.BaseDesiredState{State: "running"},
+	return &fsmv2.WrappedDesiredState[snapshot.ApplicationConfig]{
+		BaseDesiredState: config.BaseDesiredState{State: config.DesiredStateRunning},
+		Config:           cfg,
 		ChildrenSpecs:    childrenCfg.Children,
 	}, nil
 }
 
-// GetInitialState returns the starting state for this application worker.
-func (w *ApplicationWorker) GetInitialState() fsmv2.State[any, any] {
-	return &state.RunningState{}
-}
-
-// GetDependenciesAny implements fsmv2.DependencyProvider.
+// GetDependenciesAny implements fsmv2.DependencyProvider. The application
+// worker has no typed dependencies today, so it returns nil.
 func (w *ApplicationWorker) GetDependenciesAny() any {
 	return nil
 }
@@ -132,19 +162,17 @@ type SupervisorConfig struct {
 
 // NewApplicationSupervisor creates a supervisor with an application worker already added.
 // Child workers are created automatically via reconcileChildren() based on ChildrenSpecs.
-func NewApplicationSupervisor(cfg SupervisorConfig) (*supervisor.Supervisor[snapshot.ApplicationObservedState, *snapshot.ApplicationDesiredState], error) {
+func NewApplicationSupervisor(cfg SupervisorConfig) (*supervisor.Supervisor[fsmv2.Observation[snapshot.ApplicationStatus], *fsmv2.WrappedDesiredState[snapshot.ApplicationConfig]], error) {
 	tickInterval := cfg.TickInterval
 	if tickInterval == 0 {
 		tickInterval = 100 * time.Millisecond
 	}
 
-	appWorkerType, err := storage.DeriveWorkerType[snapshot.ApplicationObservedState]()
-	if err != nil {
-		return nil, fmt.Errorf("failed to derive worker type: %w", err)
-	}
-
-	sup := supervisor.NewSupervisor[snapshot.ApplicationObservedState, *snapshot.ApplicationDesiredState](supervisor.Config{
-		WorkerType:         appWorkerType,
+	sup := supervisor.NewSupervisor[
+		fsmv2.Observation[snapshot.ApplicationStatus],
+		*fsmv2.WrappedDesiredState[snapshot.ApplicationConfig],
+	](supervisor.Config{
+		WorkerType:         workerType,
 		Store:              cfg.Store,
 		Logger:             cfg.Logger,
 		TickInterval:       tickInterval,
@@ -156,14 +184,14 @@ func NewApplicationSupervisor(cfg SupervisorConfig) (*supervisor.Supervisor[snap
 	appIdentity := deps.Identity{
 		ID:            cfg.ID,
 		Name:          cfg.Name,
-		WorkerType:    appWorkerType,
-		HierarchyPath: fmt.Sprintf("%s(%s)", cfg.ID, appWorkerType),
+		WorkerType:    workerType,
+		HierarchyPath: fmt.Sprintf("%s(%s)", cfg.ID, workerType),
 	}
 
-	appWorker := NewApplicationWorker(cfg.ID, cfg.Name)
+	appWorker := NewApplicationWorker(cfg.ID, cfg.Name, cfg.Logger, nil)
 
 	// Application workers need explicit AddWorker; child workers are created via reconcileChildren
-	err = sup.AddWorker(appIdentity, appWorker)
+	err := sup.AddWorker(appIdentity, appWorker)
 	if err != nil {
 		return nil, err
 	}
@@ -171,17 +199,28 @@ func NewApplicationSupervisor(cfg SupervisorConfig) (*supervisor.Supervisor[snap
 	return sup, nil
 }
 
-// init registers the application worker with the factory for automatic creation via factory.NewWorkerByType().
+// init registers the application worker with the factory for automatic
+// creation via factory.NewWorkerByType(). Uses
+// RegisterWorkerAndSupervisorFactoryByType with the explicit "application"
+// string because TObserved is now the generic fsmv2.Observation[TStatus],
+// which storage.DeriveWorkerType cannot name-derive.
+//
+// Application retains the factory-based registration path (rather than
+// register.Worker) until PR2 C12 completes the register.Worker migration.
+// This commit is a type-shape refactor only.
 func init() {
-	if err := factory.RegisterWorkerType[snapshot.ApplicationObservedState, *snapshot.ApplicationDesiredState](
-		func(id deps.Identity, _ deps.FSMLogger, _ deps.StateReader, _ map[string]any) fsmv2.Worker {
-			return NewApplicationWorker(id.ID, id.Name)
-		},
-		func(cfg interface{}) interface{} {
-			return supervisor.NewSupervisor[snapshot.ApplicationObservedState, *snapshot.ApplicationDesiredState](
-				cfg.(supervisor.Config))
-		},
-	); err != nil {
+	workerFactory := func(id deps.Identity, logger deps.FSMLogger, stateReader deps.StateReader, _ map[string]any) fsmv2.Worker {
+		return NewApplicationWorker(id.ID, id.Name, logger, stateReader)
+	}
+
+	supervisorFactory := func(cfg interface{}) interface{} {
+		return supervisor.NewSupervisor[
+			fsmv2.Observation[snapshot.ApplicationStatus],
+			*fsmv2.WrappedDesiredState[snapshot.ApplicationConfig],
+		](cfg.(supervisor.Config))
+	}
+
+	if err := factory.RegisterWorkerAndSupervisorFactoryByType(workerType, workerFactory, supervisorFactory); err != nil {
 		panic(fmt.Sprintf("failed to register ApplicationWorker: %v", err))
 	}
 }

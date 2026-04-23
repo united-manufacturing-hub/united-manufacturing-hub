@@ -12,117 +12,94 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package snapshot provides snapshot state types for the application worker.
+// Package snapshot holds the application worker's Config and Status value
+// types. It exists as a separate leaf package so the state sub-package can
+// depend on these types without introducing an import cycle with the worker
+// package.
+//
+// Post-PR2-C11 the application worker uses fsmv2.Observation[ApplicationStatus]
+// and *fsmv2.WrappedDesiredState[ApplicationConfig]; the underlying value
+// types are defined here and re-exported from the worker package as type
+// aliases for caller convenience.
 package snapshot
 
 import (
 	"fmt"
-	"time"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 )
 
-// ApplicationObservedState represents the observed state for an application supervisor.
-type ApplicationObservedState struct {
-	CollectedAt time.Time `json:"collected_at"`
-	ID          string    `json:"id"`
-	Name        string    `json:"name"`
+// ApplicationConfig holds the user-provided configuration for the application
+// supervisor. It carries the supervisor's logical Name; ChildrenSpecs flow
+// directly through WrappedDesiredState (populated by the worker's custom
+// DeriveDesiredState from the children: YAML block) rather than living on
+// TConfig, since the application worker's passthrough model already handles
+// them separately from user config.
+type ApplicationConfig struct {
+	config.BaseUserSpec `yaml:",inline"`
 
-	State string `json:"state"` // Observed lifecycle state (e.g., "running_connected")
+	// Name is the identifier for this application supervisor.
+	Name string `json:"name" yaml:"name"`
+}
 
-	// DeployedDesiredState is what was last deployed to this application.
-	ApplicationDesiredState `json:",inline"`
-
-	deps.MetricsEmbedder `json:",inline"`
-
-	// Infrastructure health from ChildrenView (depth=1, direct children only)
-	ChildrenHealthy     int `json:"children_healthy"`
-	ChildrenUnhealthy   int `json:"children_unhealthy"`
+// ApplicationStatus holds the runtime observation data for the application
+// supervisor. Framework fields (CollectedAt, State, LastActionResults,
+// MetricsEmbedder, ShutdownRequested, ChildrenHealthy, ChildrenUnhealthy,
+// ChildrenView) are carried by fsmv2.Observation[ApplicationStatus] and are
+// not duplicated here.
+//
+// ChildrenCircuitOpen and ChildrenStale are populated by the state layer from
+// the ChildrenView provided by the collector, so they can be inspected during
+// State.Next() for health-based transitions.
+type ApplicationStatus struct {
+	// ID is the identifier of this application supervisor instance.
+	ID string `json:"id"`
+	// Name mirrors ApplicationConfig.Name for observability.
+	Name string `json:"name"`
+	// ChildrenCircuitOpen is the count of children with circuit breaker open.
 	ChildrenCircuitOpen int `json:"children_circuit_open"`
-	ChildrenStale       int `json:"children_stale"`
+	// ChildrenStale is the count of children whose observations are older than
+	// the stale threshold.
+	ChildrenStale int `json:"children_stale"`
 }
 
-// GetTimestamp returns the time when this observed state was collected.
-func (o ApplicationObservedState) GetTimestamp() time.Time {
-	return o.CollectedAt
+// HasInfrastructureIssues returns true if any children have circuit breaker
+// open or stale observations.
+func (s ApplicationStatus) HasInfrastructureIssues() bool {
+	return s.ChildrenCircuitOpen > 0 || s.ChildrenStale > 0
 }
 
-// GetObservedDesiredState returns the desired state that was actually deployed.
-func (o ApplicationObservedState) GetObservedDesiredState() fsmv2.DesiredState {
-	return &o.ApplicationDesiredState
-}
-
-// SetState sets the FSM state name on this observed state.
-// Called by Collector when StateProvider callback is configured.
-func (o ApplicationObservedState) SetState(s string) fsmv2.ObservedState {
-	o.State = s
-
-	return o
-}
-
-// SetShutdownRequested sets the shutdown requested status on this observed state.
-// Called by Collector when ShutdownRequestedProvider callback is configured.
-func (o ApplicationObservedState) SetShutdownRequested(v bool) fsmv2.ObservedState {
-	o.ShutdownRequested = v
-
-	return o
-}
-
-// SetChildrenView sets the children infrastructure health from the supervisor's ChildrenView.
-// Called by Collector when ChildrenViewProvider callback is configured.
-func (o ApplicationObservedState) SetChildrenView(view any) fsmv2.ObservedState {
-	cv, ok := view.(config.ChildrenView)
-	if !ok {
-		return o
-	}
-
-	o.ChildrenHealthy, o.ChildrenUnhealthy = cv.Counts()
-	o.ChildrenCircuitOpen = 0
-	o.ChildrenStale = 0
-
-	// Count infrastructure issues from children
-	for _, child := range cv.List() {
-		if child.IsCircuitOpen {
-			o.ChildrenCircuitOpen++
-		}
-
-		if child.IsStale {
-			o.ChildrenStale++
-		}
-	}
-
-	return o
-}
-
-// HasInfrastructureIssues returns true if any children have circuit breaker open or stale observations.
-func (o ApplicationObservedState) HasInfrastructureIssues() bool {
-	return o.ChildrenCircuitOpen > 0 || o.ChildrenStale > 0
-}
-
-// InfrastructureReason returns a dynamic reason string for infrastructure issues.
-func (o ApplicationObservedState) InfrastructureReason() string {
-	if !o.HasInfrastructureIssues() {
+// InfrastructureReason returns a dynamic reason string for infrastructure
+// issues. Returns an empty string when there are no issues.
+func (s ApplicationStatus) InfrastructureReason() string {
+	if !s.HasInfrastructureIssues() {
 		return ""
 	}
 
 	return fmt.Sprintf("infrastructure degraded: circuit_open=%d, stale=%d",
-		o.ChildrenCircuitOpen, o.ChildrenStale)
+		s.ChildrenCircuitOpen, s.ChildrenStale)
 }
 
-// ApplicationDesiredState represents the desired state for an application supervisor.
-type ApplicationDesiredState struct {
-	config.BaseDesiredState `json:",inline"`
+// ChildrenViewToStatus derives ChildrenCircuitOpen and ChildrenStale counts
+// from a ChildrenView. Returns zeroed counts if the view is nil or not the
+// expected type. Callers pass the ChildrenView from WorkerSnapshot so state
+// transitions can observe per-tick infrastructure health without mutating
+// ObservedState.
+func ChildrenViewToStatus(view any) (circuitOpen, stale int) {
+	cv, ok := view.(config.ChildrenView)
+	if !ok || cv == nil {
+		return 0, 0
+	}
 
-	// Name is the identifier for this application supervisor.
-	Name string `json:"name"`
+	for _, child := range cv.List() {
+		if child.IsCircuitOpen {
+			circuitOpen++
+		}
 
-	// ChildrenSpecs declares the children this application supervisor should manage.
-	ChildrenSpecs []config.ChildSpec `json:"childrenSpecs,omitempty"`
-}
+		if child.IsStale {
+			stale++
+		}
+	}
 
-// GetChildrenSpecs returns the children specifications.
-func (d *ApplicationDesiredState) GetChildrenSpecs() []config.ChildSpec {
-	return d.ChildrenSpecs
+	return circuitOpen, stale
 }
