@@ -15,7 +15,10 @@
 package state
 
 import (
+	"fmt"
+
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplefailing/snapshot"
 )
@@ -26,14 +29,15 @@ type DisconnectedState struct {
 }
 
 func (s *DisconnectedState) Next(snapAny any) fsmv2.NextResult[any, any] {
-	snap := helpers.ConvertSnapshot[snapshot.ExamplefailingObservedState, *snapshot.ExamplefailingDesiredState](snapAny)
+	snap := fsmv2.ConvertWorkerSnapshot[snapshot.ExamplefailingConfig, snapshot.ExamplefailingStatus](snapAny)
 
-	if snap.Observed.IsStopRequired() {
-		return fsmv2.Transition(&TryingToStopState{}, fsmv2.SignalNone, nil, "stop required, transitioning to stop state")
+	if snap.IsStopRequired() {
+		return fsmv2.Transition(&TryingToStopState{}, fsmv2.SignalNone, nil,
+			fmt.Sprintf("stop required: shutdown=%t, parentState=%s", snap.IsShutdownRequested, snap.ParentMappedState))
 	}
 
-	if snap.Observed.ShouldBeRunning() {
-		return fsmv2.Transition(&TryingToConnectState{}, fsmv2.SignalNone, nil, "worker should be running, attempting to reconnect")
+	if snap.ParentMappedState == config.DesiredStateRunning {
+		return fsmv2.Transition(&TryingToConnectState{}, fsmv2.SignalNone, nil, "parent wants running, attempting to reconnect")
 	}
 
 	return fsmv2.Transition(s, fsmv2.SignalNone, nil, "connection lost, waiting for reconnect conditions")

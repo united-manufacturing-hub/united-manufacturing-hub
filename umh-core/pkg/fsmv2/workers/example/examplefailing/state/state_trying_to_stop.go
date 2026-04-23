@@ -27,9 +27,9 @@ type TryingToStopState struct {
 }
 
 func (s *TryingToStopState) Next(snapAny any) fsmv2.NextResult[any, any] {
-	snap := helpers.ConvertSnapshot[snapshot.ExamplefailingObservedState, *snapshot.ExamplefailingDesiredState](snapAny)
+	snap := fsmv2.ConvertWorkerSnapshot[snapshot.ExamplefailingConfig, snapshot.ExamplefailingStatus](snapAny)
 
-	if snap.Observed.ConnectionHealth == "no connection" {
+	if snap.Status.ConnectionHealth == "no connection" {
 		return fsmv2.Transition(&StoppedState{}, fsmv2.SignalNone, nil, "disconnected successfully")
 	}
 

@@ -22,11 +22,11 @@
 //
 // Example usage:
 //
-//	supervisor := NewSupervisor[ExamplefailingObservedState, *ExamplefailingDesiredState](config)
+//	supervisor := NewSupervisor[ExamplepanicObservedState, *ExamplepanicDesiredState](config)
 //	supervisor.AddWorker(identity, worker)
 //
 // Worker types are automatically derived from the observed state type name:
-//   - ExamplefailingObservedState -> "examplefailing"
+//   - ExamplepanicObservedState -> "examplepanic"
 //   - ContainerObservedState -> "container"
 //
 // # Architecture Constraints

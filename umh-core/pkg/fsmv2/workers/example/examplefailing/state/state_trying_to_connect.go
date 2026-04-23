@@ -15,6 +15,8 @@
 package state
 
 import (
+	"fmt"
+
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplefailing/action"
@@ -27,18 +29,19 @@ type TryingToConnectState struct {
 }
 
 func (s *TryingToConnectState) Next(snapAny any) fsmv2.NextResult[any, any] {
-	snap := helpers.ConvertSnapshot[snapshot.ExamplefailingObservedState, *snapshot.ExamplefailingDesiredState](snapAny)
+	snap := fsmv2.ConvertWorkerSnapshot[snapshot.ExamplefailingConfig, snapshot.ExamplefailingStatus](snapAny)
 
-	if snap.Observed.IsStopRequired() {
-		return fsmv2.Transition(&TryingToStopState{}, fsmv2.SignalNone, nil, "stop required, transitioning to stop state")
+	if snap.IsStopRequired() {
+		return fsmv2.Transition(&TryingToStopState{}, fsmv2.SignalNone, nil,
+			fmt.Sprintf("stop required: shutdown=%t, parentState=%s", snap.IsShutdownRequested, snap.ParentMappedState))
 	}
 
-	if snap.Observed.RestartAfterFailures > 0 &&
-		snap.Observed.ConnectAttempts >= snap.Observed.RestartAfterFailures {
+	if snap.Status.RestartAfterFailures > 0 &&
+		snap.Status.ConnectAttempts >= snap.Status.RestartAfterFailures {
 		return fsmv2.Transition(s, fsmv2.SignalNeedsRestart, nil, "max connection attempts reached, signaling restart")
 	}
 
-	if snap.Observed.ConnectionHealth == "healthy" {
+	if snap.Status.ConnectionHealth == "healthy" {
 		return fsmv2.Transition(&ConnectedState{}, fsmv2.SignalNone, nil, "connection established successfully")
 	}
 
@@ -47,7 +50,7 @@ func (s *TryingToConnectState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	// IMPORTANT: Return an action to trigger observation, which keeps the child visible to the parent.
 	// Without an action, observations only happen every 1 second (DefaultObservationInterval),
 	// which could cause the parent to miss the unhealthy window during recovery delay.
-	if snap.Observed.RecoveryDelayActive {
+	if snap.Status.RecoveryDelayActive {
 		return fsmv2.Transition(s, fsmv2.SignalNone, &action.TriggerObservationAction{},
 			"waiting for recovery delay (triggering observation)")
 	}
