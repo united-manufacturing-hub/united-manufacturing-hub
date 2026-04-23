@@ -40,6 +40,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/redpanda"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/streamprocessor"
 	topicbrowserfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/topicbrowser"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/examples"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/register"
@@ -48,7 +49,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator"
 	persistenceWorker "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/persistence"
 	transportWorker "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport"
-	transportSnapshot "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/snapshot"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
@@ -600,18 +600,18 @@ children:
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
-				var observed transportSnapshot.TransportObservedState
+				var observed fsmv2.Observation[transportWorker.TransportStatus]
 
 				err := store.LoadObservedTyped(ctx, "transport", "transport-001", &observed)
 				if err != nil {
 					continue
 				}
 
-				if observed.AuthenticatedUUID != "" && observed.AuthenticatedUUID != placeholderUUID {
+				if observed.Status.AuthenticatedUUID != "" && observed.Status.AuthenticatedUUID != placeholderUUID {
 					logger.Infow("Detected real UUID from TransportWorker ObservedState, updating LoginResponse",
-						"realUUID", observed.AuthenticatedUUID,
+						"realUUID", observed.Status.AuthenticatedUUID,
 						"placeholderUUID", placeholderUUID)
-					communicationState.SetLoginResponseForFSMv2(observed.AuthenticatedUUID)
+					communicationState.SetLoginResponseForFSMv2(observed.Status.AuthenticatedUUID)
 
 					return
 				}
