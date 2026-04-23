@@ -38,9 +38,12 @@ type NoDeps = struct{}
 // TStatus is the developer's status/observation type.
 // TDeps is passed to the constructor for workers that need custom dependencies
 // beyond framework ones. Use register.NoDeps for zero-dep workers. The framework
-// forwards the zero value of TDeps to the constructor today; typed extraction
-// from extraDeps is not yet wired. Pointer-TDeps constructors should therefore
-// treat nil as the only value they will receive until extraction lands.
+// consults the package-level deps registry at construction time via
+// GetDeps[TDeps](workerType). Parent wiring publishes typed deps by calling
+// SetDeps[TDeps](workerType, deps) before factory.NewWorkerByType runs.
+// Workers that never publish deps (e.g. those relying on per-package singletons
+// like transport.ChildDeps or persistence.Store) receive the Go-native zero
+// value of TDeps, preserving the pre-registry nil-forward contract.
 // The workerType string is the canonical name used in config YAML and CSE storage.
 //
 // Workers registered via this function MUST use WorkerBase[TConfig, TStatus] and
@@ -67,9 +70,14 @@ func Worker[TConfig any, TStatus any, TDeps any](
 	}
 
 	// Step 2: Wrap constructor to match existing factory signature.
+	// The closure consults the package-level deps registry (SetDeps/GetDeps)
+	// at construction time. If nothing was published for this worker type,
+	// GetDeps returns the Go-native zero value of TDeps, preserving the
+	// pre-C8 nil-forward contract for singleton-backed workers
+	// (transport/push/pull/persistence).
 	wrappedFactory := func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader, _ map[string]any) fsmv2.Worker {
-		var zero TDeps
-		w, err := constructor(id, logger, sr, zero)
+		typedDeps := GetDeps[TDeps](workerType)
+		w, err := constructor(id, logger, sr, typedDeps)
 		if err != nil {
 			panic(fmt.Sprintf("register.Worker(%q): constructor failed for %s: %v", workerType, id.String(), err))
 		}
