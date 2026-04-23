@@ -198,8 +198,10 @@ func Result[TSnapshot any, TDeps any](
 // wrong signatures) cause a panic with a diagnostic message — this is a
 // programmer error, not a runtime condition.
 //
-// Prefer Action[any] for hot-path actions to avoid reflection cost in the
-// auto-wrap path (see pre-c7-reflection-benchmark.md for measurements).
+// Prefer Action[any] over Transition for hot-path actions to avoid the
+// ~8.5% reflection auto-wrap overhead measured by BenchmarkReflectAutoWrap
+// (see pre-c7-reflection-benchmark.md). For state-machine orchestration
+// callbacks this overhead is negligible.
 //
 // Usage:
 //
