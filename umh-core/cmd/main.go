@@ -542,9 +542,7 @@ children:
 		// persistence worker-type name. The register.Worker factory closure
 		// at persistence.init() reads this seed via GetDeps during worker
 		// construction and rebuilds full dependencies with the per-worker
-		// identity/logger/stateReader. Replaces the prior persistence.SetStore
-		// singleton call; the singleton itself remains in place until C13
-		// removes it.
+		// identity/logger/stateReader.
 		register.SetDeps[*persistenceWorker.PersistenceDependencies](
 			persistenceWorker.WorkerTypeName,
 			persistenceWorker.NewStoreOnlyDependencies(store),
