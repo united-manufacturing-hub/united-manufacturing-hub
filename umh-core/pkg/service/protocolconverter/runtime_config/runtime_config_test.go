@@ -168,6 +168,115 @@ var _ = Describe("BuildRuntimeConfig", func() {
 		})
 	})
 
+	Describe("Write DFC UMH_TOPICS validation and injection", func() {
+		// Helper to create a basic connection config
+		createConnectionConfig := func() connectionserviceconfig.ConnectionServiceConfigTemplate {
+			return connectionserviceconfig.ConnectionServiceConfigTemplate{
+				NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
+					Target: "127.0.0.1",
+					Port:   "8080",
+				},
+			}
+		}
+
+		It("should succeed with default UMH_TOPICS when write DFC has Output but UMH_TOPICS not set", func() {
+			testSpec := protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
+				Config: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
+					ConnectionServiceConfig: createConnectionConfig(),
+					DataflowComponentWriteServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+						BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
+							Output: map[string]any{
+								"stdout": map[string]any{},
+							},
+						},
+					},
+				},
+			}
+			// No UMH_TOPICS in variables — default should be injected
+
+			result, err := runtime_config.BuildRuntimeConfig(testSpec, agentLocation, globalVars, nodeName, pcName)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result).NotTo(BeZero())
+
+			// The default fallback topic must appear in the write DFC's uns input.
+			writeInput := result.DataflowComponentWriteServiceConfig.BenthosConfig.Input
+			Expect(writeInput).To(HaveKey("uns"))
+			unsInput, ok := writeInput["uns"].(map[string]any)
+			Expect(ok).To(BeTrue(), "uns input should be a map")
+			Expect(unsInput).To(HaveKey("umh_topics"))
+			Expect(unsInput["umh_topics"]).To(Equal([]string{"TOPIC_NOT_SET_BY_USER"}))
+		})
+
+		It("should succeed when write DFC has Output and UMH_TOPICS is set", func() {
+			testSpec := protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
+				Config: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
+					ConnectionServiceConfig: createConnectionConfig(),
+					DataflowComponentWriteServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+						BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
+							Output: map[string]any{
+								"stdout": map[string]any{},
+							},
+						},
+					},
+				},
+				Variables: variables.VariableBundle{
+					User: map[string]any{
+						"UMH_TOPICS": []string{"umh.v1.enterprise.site.*"},
+					},
+				},
+			}
+
+			result, err := runtime_config.BuildRuntimeConfig(testSpec, agentLocation, globalVars, nodeName, pcName)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result).NotTo(BeZero())
+		})
+
+		It("should inject UMH_TOPICS into write DFC uns input after rendering", func() {
+			topics := []string{"umh.v1.factory.line-1.*", "umh.v1.factory.line-2.*"}
+			testSpec := protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
+				Config: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
+					ConnectionServiceConfig: createConnectionConfig(),
+					DataflowComponentWriteServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+						BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
+							Output: map[string]any{
+								"stdout": map[string]any{},
+							},
+						},
+					},
+				},
+				Variables: variables.VariableBundle{
+					User: map[string]any{
+						"UMH_TOPICS": topics,
+					},
+				},
+			}
+
+			result, err := runtime_config.BuildRuntimeConfig(testSpec, agentLocation, globalVars, nodeName, pcName)
+			Expect(err).NotTo(HaveOccurred())
+
+			// After rendering, UMH_TOPICS must be in write DFC's uns input
+			writeInput := result.DataflowComponentWriteServiceConfig.BenthosConfig.Input
+			Expect(writeInput).To(HaveKey("uns"))
+			unsInput, ok := writeInput["uns"].(map[string]any)
+			Expect(ok).To(BeTrue(), "uns input should be a map")
+			Expect(unsInput).To(HaveKey("umh_topics"))
+			Expect(unsInput["umh_topics"]).To(Equal(topics))
+		})
+
+		It("should not require UMH_TOPICS when write DFC is empty", func() {
+			testSpec := protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
+				Config: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
+					ConnectionServiceConfig: createConnectionConfig(),
+					// Write DFC with no Output configured
+					DataflowComponentWriteServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{},
+				},
+			}
+
+			_, err := runtime_config.BuildRuntimeConfig(testSpec, agentLocation, globalVars, nodeName, pcName)
+			Expect(err).NotTo(HaveOccurred())
+		})
+	})
+
 	Describe("Downsampler injection", func() {
 		// Helper function to create a basic connection config for tests
 		createConnectionConfig := func() connectionserviceconfig.ConnectionServiceConfigTemplate {
