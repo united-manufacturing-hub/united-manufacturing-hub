@@ -90,7 +90,7 @@ package examples
 // Used in logs, metrics, and for referencing the worker.
 //
 // ### workerType (string, required)
-// The registered worker type. Must match a worker registered via RegisterWorkerType().
+// The registered worker type. Must match a worker registered via register.Worker.
 // Worker types are auto-registered via blank imports (see below).
 //
 // ### location (array, optional)
@@ -125,13 +125,14 @@ package examples
 //
 //	import (
 //	    _ "github.com/.../fsmv2/workers/example/exampleparent"
-//	    _ "github.com/.../fsmv2/workers/example/example-child"
+//	    _ "github.com/.../fsmv2/workers/example/examplechild"
 //	)
 //
-// Each worker package has an init() function that calls RegisterWorkerType():
+// Each worker package has an init() function that calls register.Worker:
 //
 //	func init() {
-//	    factory.RegisterWorkerType("parent", &ParentWorker{})
+//	    register.Worker[ParentConfig, ParentStatus, register.NoDeps](
+//	        "exampleparent", NewParentWorker)
 //	}
 //
 // The blank import (_) ensures the package's init() runs, registering the worker
@@ -146,33 +147,40 @@ package examples
 //	package myworker
 //
 //	import (
-//	    "github.com/.../fsmv2/worker"
-//	    "github.com/.../fsmv2/factory"
+//	    "github.com/.../fsmv2"
+//	    "github.com/.../fsmv2/deps"
+//	    "github.com/.../fsmv2/register"
 //	)
 //
 //	type MyWorker struct {
-//	    worker.BaseWorker
+//	    fsmv2.WorkerBase[MyConfig, MyStatus]
 //	}
 //
 // ## 2. Register Worker Type
 //
 //	func init() {
-//	    factory.RegisterWorkerType("myworker", &MyWorker{})
+//	    register.Worker[MyConfig, MyStatus, register.NoDeps](
+//	        "myworker", NewMyWorker)
 //	}
 //
-// ## 3. Define UserSpec
+// ## 3. Define TConfig and TStatus
 //
-//	type MyWorkerUserSpec struct {
-//	    Setting1 string `json:"setting1" yaml:"setting1"`
-//	    Setting2 int    `json:"setting2" yaml:"setting2"`
+//	type MyConfig struct {
+//	    config.BaseUserSpec `yaml:",inline"`
+//	    Setting1 string `yaml:"setting1" json:"setting1"`
+//	    Setting2 int    `yaml:"setting2" json:"setting2"`
 //	}
 //
-// ## 4. Implement Worker Interface
+//	type MyStatus struct {
+//	    ObservedValue int `json:"observedValue"`
+//	}
 //
-// Workers must implement:
-//   - ParseUserSpec(config string) (interface{}, error)
-//   - GetChildSpecs(userSpec interface{}) ([]config.ChildSpec, error)
-//   - Lifecycle methods (Start, Stop, etc.)
+// ## 4. Implement CollectObservedState
+//
+// WorkerBase provides DeriveDesiredState and GetInitialState automatically.
+// The worker only needs to implement CollectObservedState — use
+// fsmv2.ExtractConfig[TConfig] for typed config access and return
+// fsmv2.NewObservation(status).
 //
 // ## 5. Use in Scenario
 //

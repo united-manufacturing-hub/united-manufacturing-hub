@@ -20,14 +20,14 @@
 //
 // # Type Safety with Generics
 //
-// Example usage:
+// Example usage (Worker API v2 / register.Worker):
 //
-//	supervisor := NewSupervisor[ExamplepanicObservedState, *ExamplepanicDesiredState](config)
+//	supervisor := NewSupervisor[fsmv2.Observation[ExamplechildStatus], *fsmv2.WrappedDesiredState[ExamplechildConfig]](config)
 //	supervisor.AddWorker(identity, worker)
 //
-// Worker types are automatically derived from the observed state type name:
-//   - ExamplepanicObservedState -> "examplepanic"
-//   - ContainerObservedState -> "container"
+// In practice, worker packages do not construct supervisors directly — register.Worker
+// wires the auto-generated supervisor factory at init time. The worker type string
+// is the canonical name (e.g. "examplechild"), and the folder name must match.
 //
 // # Architecture Constraints
 //

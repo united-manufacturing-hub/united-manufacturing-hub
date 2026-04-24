@@ -157,13 +157,16 @@ The collector loads the previous observed state from CSE, drains the recorder, a
 
 ## Graceful Shutdown Cascading
 
-Each supervisor level has a `DefaultGracefulShutdownTimeout` of 5 seconds. For nested supervisors (parent-child workers), timeouts cascade:
+Each supervisor level has a `DefaultGracefulShutdownTimeout` of 5 seconds. For nested supervisors (parent-child workers), timeouts cascade, one `DefaultGracefulShutdownTimeout` per level:
 
 | Nesting Level | Total Timeout |
 |---------------|---------------|
 | 1 (single worker) | 5s |
 | 2 (parent + child) | 10s |
 | 3 (grandparent + parent + child) | 15s |
+| 4 (app + mid-tier + parent + child) | 20s |
+
+Real-world example: the communicator stack is 4 levels (app → communicator → transport → push/pull), so shutdown budgets up to 20s before the root context is cancelled.
 
 **Test implications**: When testing shutdown scenarios with parent-child workers, allow sufficient time:
 

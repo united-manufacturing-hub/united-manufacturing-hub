@@ -17,7 +17,7 @@ The application worker coordinates a complete system with lifecycle management, 
 ```
 application/
 ├── snapshot/           # State snapshot types
-│   ├── snapshot.go    # ApplicationObservedState and ApplicationDesiredState
+│   ├── snapshot.go    # ApplicationConfig (TConfig) and ApplicationStatus (TStatus)
 │   └── snapshot_test.go
 ├── worker.go          # ApplicationWorker implementation and factory registration
 ├── worker_test.go     # Unit tests
@@ -77,52 +77,54 @@ children:
 
 ## Factory registration
 
-The application worker registers itself with the factory on import:
+The application worker registers itself via `register.Worker` in its own `init()`:
+
+```go
+func init() {
+    register.Worker[ApplicationConfig, ApplicationStatus, register.NoDeps](
+        "application", NewApplicationWorker)
+}
+```
+
+Callers pick it up with a blank import:
 
 ```go
 import _ "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/application"
 ```
 
-Create the application worker dynamically:
+Create the application worker dynamically via the factory:
 
 ```go
-worker := factory.NewWorkerByType(identity, workerType)
+worker, err := factory.NewWorkerByType(workerType, identity, logger, stateReader)
 supervisor := factory.NewSupervisorByType(supervisorCfg, workerType)
 ```
 
 ## State types
 
-### ApplicationObservedState
+Post-migration to Worker API v2, the application worker uses the framework's
+generic wrappers rather than named observed/desired state structs:
 
-Represents the observed state for an application supervisor:
+- Observed state: `fsmv2.Observation[snapshot.ApplicationStatus]`
+- Desired state: `*fsmv2.WrappedDesiredState[snapshot.ApplicationConfig]`
+
+### ApplicationStatus
+
+Runtime observation data (framework fields like CollectedAt, State, ChildrenCounts
+are carried by `fsmv2.Observation[ApplicationStatus]` and are not duplicated here):
 
 ```go
-type ApplicationObservedState struct {
-    CollectedAt             time.Time `json:"collected_at"`
-    ID                      string    `json:"id"`
-    Name                    string    `json:"name"`
-    State                   string    `json:"state"`
-    ApplicationDesiredState           `json:",inline"`
-    deps.MetricsEmbedder              `json:",inline"`
-    // Infrastructure health from ChildrenView
-    ChildrenHealthy         int       `json:"children_healthy"`
-    ChildrenUnhealthy       int       `json:"children_unhealthy"`
-    ChildrenCircuitOpen     int       `json:"children_circuit_open"`
-    ChildrenStale           int       `json:"children_stale"`
+type ApplicationStatus struct {
+    Name                string `json:"name"`
+    ChildrenCircuitOpen int    `json:"children_circuit_open"`
+    ChildrenStale       int    `json:"children_stale"`
 }
 ```
 
-### ApplicationDesiredState
+### ApplicationConfig
 
-Represents the desired state with child specifications:
-
-```go
-type ApplicationDesiredState struct {
-    config.BaseDesiredState `json:",inline"`  // Embeds State and ShutdownRequested
-    Name          string                       `json:"name"`
-    ChildrenSpecs []config.ChildSpec           `json:"childrenSpecs,omitempty"`
-}
-```
+User-provided configuration (the Worker API v2 TConfig; see `snapshot/snapshot.go`
+for the canonical definition, including the `ChildrenSpecs` field used by the
+passthrough pattern).
 
 ## Testing
 
@@ -152,10 +154,11 @@ The application supervisor can manage any registered worker type as children wit
 
 ### Factory integration
 
-The application worker registers both:
+The application worker registers both factories atomically via
+`register.Worker[ApplicationConfig, ApplicationStatus, register.NoDeps]`:
 
 - **Worker factory**: Creates `ApplicationWorker` instances
-- **Supervisor factory**: Creates `Supervisor[ApplicationObservedState, *ApplicationDesiredState]` instances
+- **Supervisor factory**: Creates `Supervisor[fsmv2.Observation[ApplicationStatus], *fsmv2.WrappedDesiredState[ApplicationConfig]]` instances
 
 Dynamic creation works without compile-time dependencies on specific child types.
 
