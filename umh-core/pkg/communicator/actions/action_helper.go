@@ -96,11 +96,11 @@ func RemainingPrefixSec(dSeconds int) string {
 	return fmt.Sprintf("[left: %02d s] ", dSeconds) // fixed 15-rune prefix
 }
 
-// toStringSlice converts an any value to []string, handling the three forms that
-// UMH_TOPICS can take depending on how it was stored or reloaded from YAML:
-//   - []string: stored directly from a write DFC payload
-//   - []any: produced by yaml.v3 unmarshal of a sequence into map[string]any
-//   - string: yaml.v3 collapses a single-element sequence to a scalar on reload
+// toStringSlice converts an any value to []string. UMH_TOPICS can appear in
+// three forms depending on how it was stored or reloaded:
+//   - []string: from DFC payload and in-memory, before any YAML round-trip
+//   - []any: array of any when loading via yaml.v3 unmarshaling from config
+//   - string: single element from YAML round-trip
 func toStringSlice(v any) ([]string, bool) {
 	switch typed := v.(type) {
 	case []string:
@@ -119,8 +119,8 @@ func toStringSlice(v any) ([]string, bool) {
 	return nil, false
 }
 
-// equalTopicSets reports whether two UMH topic slices contain the same topics
-// regardless of order. Topics are semantically a set; order is not significant.
+// equalTopicSets reports whether two UMH_TOPICS slices contain the same elements
+// regardless of order.
 func equalTopicSets(a, b []string) bool {
 	if len(a) != len(b) {
 		return false

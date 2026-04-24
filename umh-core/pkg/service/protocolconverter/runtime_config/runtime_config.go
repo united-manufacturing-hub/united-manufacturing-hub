@@ -198,8 +198,7 @@ func BuildRuntimeConfig(
 	// UMH_TOPICS is required in user variables when write DFC is configured
 	if len(spec.Config.DataflowComponentWriteServiceConfig.BenthosConfig.Output) > 0 {
 		if _, ok := vb.User["UMH_TOPICS"]; !ok {
-			return protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime{},
-				fmt.Errorf("required variable UMH_TOPICS not set in user variables. user variables: %v", vb.User)
+			vb.User["UMH_TOPICS"] = []string{"umh.v1.topic_not_set_by_user"}
 		}
 	}
 
