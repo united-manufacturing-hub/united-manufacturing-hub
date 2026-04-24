@@ -195,23 +195,19 @@
 //
 // ## Factory registration
 //
-// Workers register with the factory in their package's init() function:
+// Workers register with the factory in their package's init() function via
+// register.Worker, which wires the worker factory, auto-generated supervisor
+// factory, and CSE type registry in a single call:
 //
 //	func init() {
-//	    if err := factory.RegisterWorkerType[snapshot.MyObserved, *snapshot.MyDesired](
-//	        func(id fsmv2.Identity, logger deps.FSMLogger) fsmv2.Worker {
-//	            return NewMyWorker(id, logger)
-//	        },
-//	        func(cfg interface{}) interface{} {
-//	            return supervisor.NewSupervisor[snapshot.MyObserved, *snapshot.MyDesired](
-//	                cfg.(supervisor.Config))
-//	        },
-//	    ); err != nil {
-//	        panic(err)
-//	    }
+//	    register.Worker[MyConfig, MyStatus, register.NoDeps](
+//	        "myworker", NewMyWorker)
 //	}
 //
-// The worker type is derived from the ObservedState struct name (MyObserved → "my").
+// Use register.NoDeps for zero-dep workers. Workers needing custom dependencies
+// parameterize register.Worker with their dep struct and receive it in the
+// constructor's final argument. The worker type string is the canonical name
+// used in config YAML and CSE storage; the folder name must match it.
 // See factory/README.md for naming conventions and common mistakes.
 //
 // ## Parent-child visibility

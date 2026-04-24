@@ -26,7 +26,7 @@
 //   - examplechild/ - Child worker with states, actions, and dependencies
 //   - examplefailing/ - Worker that simulates failures (for testing retry logic)
 //   - exampleslow/ - Worker with slow operations (for testing timeouts)
-//   - examplepanic/ - Worker that panics (for testing panic recovery)
+//   - helloworld/ - Minimal canonical reference worker (WorkerBase API, zero-dep)
 //
 // # Directory structure
 //
@@ -66,13 +66,15 @@
 //  2. Register the worker in init():
 //
 //     func init() {
-//     factory.RegisterWorkerType[snapshot.MyworkerObservedState, *snapshot.MyworkerDesiredState](
-//     workerFactory, supervisorFactory)
+//     register.Worker[MyworkerConfig, MyworkerStatus, register.NoDeps](
+//     "myworker", NewMyworkerWorker)
 //     }
 //
-//  3. Copy from examplechild/ as a starting point.
+//  3. Copy from helloworld/ for a zero-dep baseline, or examplechild/ for a
+//     full example with states, actions, and custom dependencies.
 //
-// See factory/README.md for worker type derivation rules.
+// See factory/README.md for worker type derivation rules and helloworld/README.md
+// for the canonical mini-worker reference.
 //
 // # Patterns demonstrated
 //

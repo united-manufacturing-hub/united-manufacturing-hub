@@ -781,7 +781,7 @@ Worker API v2 replaces the 7-file pattern with a single-file approach using gene
 | `snapshot/snapshot.go` with ObservedState, DesiredState, Snapshot structs | `Observation[TStatus]`, `WrappedDesiredState[TConfig]`, `WorkerSnapshot[TConfig, TStatus]` |
 | `worker.go` with `CollectObservedState`, `DeriveDesiredState`, `GetInitialState` | Only `CollectObservedState` required; others provided by `WorkerBase` |
 | `dependencies.go` with custom deps struct | `deps.Identity`, `deps.FSMLogger`, `deps.StateReader` passed to constructor |
-| `init()` with `factory.RegisterWorkerType[...]` + supervisor factory | `register.Worker[TConfig, TStatus, TDeps]("type", constructor)` (use `register.NoDeps` for zero-dep workers) |
+| `init()` with manual worker factory + supervisor factory + CSE `TypeRegistry` registrations | `register.Worker[TConfig, TStatus, TDeps]("type", constructor)` (use `register.NoDeps` for zero-dep workers) |
 | `helpers.ConvertSnapshot[Obs, *Des](snapAny)` in states | `fsmv2.ConvertWorkerSnapshot[TConfig, TStatus](snapAny)` in states |
 | `snap.Desired.IsShutdownRequested()` method call | `snap.IsShutdownRequested` field access |
 | Manual `SetState`, `SetShutdownRequested`, `SetChildrenCounts` in ObservedState | Automatic via collector duck-typing on `Observation` |
@@ -794,7 +794,7 @@ Worker API v2 replaces the 7-file pattern with a single-file approach using gene
 4. **Simplify CollectObservedState** — use `fsmv2.ExtractConfig[TConfig](desired)` for config access, return `fsmv2.NewObservation(TStatus{...})` (the collector handles CollectedAt, framework metrics, action history, and metric accumulation automatically)
 5. **Delete DeriveDesiredState and GetInitialState** — provided by WorkerBase (override only if needed)
 6. **Update states** — use `fsmv2.ConvertWorkerSnapshot[TConfig, TStatus](snapAny)` and `snap.IsShutdownRequested` field access
-7. **Replace registration** — single `register.Worker[TConfig, TStatus, register.NoDeps]("type", constructor)` call (use `register.NoDeps` for zero-dep workers; workers needing parent-injected extraDeps keep using `factory.RegisterWorkerType` directly until typed extraction lands)
+7. **Replace registration** — single `register.Worker[TConfig, TStatus, TDeps]("type", constructor)` call. Use `register.NoDeps` for zero-dep workers; workers needing custom dependencies parameterize `TDeps` with their dep struct and receive it in the constructor's final argument (see `register/register.go` for the `SetDeps`/`GetDeps` handoff contract)
 8. **Delete snapshot/, dependencies.go, userspec.go** — no longer needed
 9. **Implement capability interfaces** on your worker struct if needed (ActionProvider, ChildSpecProvider, etc.)
 
