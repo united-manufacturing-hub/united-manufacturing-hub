@@ -633,7 +633,7 @@ var _ = Describe("UMH Container Integration", Ordered, Label("integration"), fun
 			cfg := builder.BuildYAML()
 			Expect(writeConfigFile(cfg, getContainerName())).To(Succeed())
 
-			By("Waiting for the metrics endpoint to be healthy")
+			By("Waiting for the metrics endpoint to be healthy and reconcile histogram to appear")
 			Eventually(func() bool {
 				ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 				defer cancel()
@@ -651,9 +651,18 @@ var _ = Describe("UMH Container Integration", Ordered, Label("integration"), fun
 					}
 				}()
 
-				return resp.StatusCode == http.StatusOK
+				if resp.StatusCode != http.StatusOK {
+					return false
+				}
+
+				body, err := io.ReadAll(resp.Body)
+				if err != nil {
+					return false
+				}
+
+				return strings.Contains(string(body), "umh_core_reconcile_duration_milliseconds")
 			}, 20*time.Second, 1*time.Second).Should(BeTrue(),
-				"Metrics endpoint should be healthy")
+				"Metrics endpoint should contain reconcile histogram")
 
 			By("Verifying the system is stable for 30 seconds")
 			startTime := time.Now()
