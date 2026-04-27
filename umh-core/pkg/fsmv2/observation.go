@@ -180,7 +180,7 @@ func (o Observation[TStatus]) MarshalJSON() ([]byte, error) {
 		return nil, fmt.Errorf("marshal framework fields: %w", err)
 	}
 
-	var merged map[string]json.RawMessage
+	merged := make(map[string]json.RawMessage)
 	if err := json.Unmarshal(fwBytes, &merged); err != nil {
 		return nil, fmt.Errorf("unmarshal framework fields to map: %w", err)
 	}
