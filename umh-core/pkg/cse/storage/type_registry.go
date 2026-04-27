@@ -31,6 +31,10 @@ func GlobalRegistry() *TypeRegistry {
 		globalRegistry = NewTypeRegistry()
 	})
 
+	if globalRegistry == nil {
+		panic("storage.GlobalRegistry: globalRegistry is nil after Once.Do")
+	}
+
 	return globalRegistry
 }
 
