@@ -28,10 +28,13 @@ import (
 // StreamProcessorsFromSnapshot converts an optional ManagerSnapshot — potentially
 // holding **many** stream processor instances — into a slice of models.Dfc with type "stream-processor".
 //
-// If mgr is nil or no instance could be converted, an empty slice is
-// returned.
+// The dataContracts argument is used to populate Bridge.DataContracts for each
+// stream processor by matching its Config.Model against each contract's data
+// model reference. If mgr is nil or no instance could be converted, an empty
+// slice is returned.
 func StreamProcessorsFromSnapshot(
 	mgr fsm.ManagerSnapshot,
+	dataContracts []models.DataContract,
 	log *zap.SugaredLogger,
 ) []models.Dfc {
 	if mgr == nil {
@@ -41,7 +44,7 @@ func StreamProcessorsFromSnapshot(
 	var out []models.Dfc
 
 	for _, inst := range mgr.GetInstances() {
-		if sp, err := buildStreamProcessorAsDfc(*inst); err == nil {
+		if sp, err := buildStreamProcessorAsDfc(*inst, dataContracts); err == nil {
 			out = append(out, sp)
 		}
 	}
@@ -53,6 +56,7 @@ func StreamProcessorsFromSnapshot(
 // with type "stream-processor". It returns an error when the observed state cannot be interpreted.
 func buildStreamProcessorAsDfc(
 	instance fsm.FSMInstanceSnapshot,
+	dataContracts []models.DataContract,
 ) (models.Dfc, error) {
 	observed, ok := instance.LastObservedState.(*streamprocessor.ObservedStateSnapshot)
 	if !ok || observed == nil {
@@ -83,6 +87,15 @@ func buildStreamProcessorAsDfc(
 		Category:      healthCat,
 	}
 
+	spModel := observed.ObservedRuntimeConfig.Model
+
+	var bridge *models.DfcBridgeInfo
+	if contracts := contractsForModel(dataContracts, spModel.Name, spModel.Version); len(contracts) > 0 {
+		bridge = &models.DfcBridgeInfo{
+			DataContracts: contracts,
+		}
+	}
+
 	// Create DFC with stream processor type
 	dfc := models.Dfc{
 		Name:          &instance.ID,
@@ -91,6 +104,7 @@ func buildStreamProcessorAsDfc(
 		Type:          models.DfcTypeStreamProcessor,
 		Metrics:       nil,
 		Connections:   []models.Connection{}, // Stream processors don't have direct connections
+		Bridge:        bridge,
 		IsInitialized: true,
 	}
 
@@ -104,4 +118,21 @@ func buildStreamProcessorAsDfc(
 	}
 
 	return dfc, nil
+}
+
+// contractsForModel returns the names of every data contract referencing the
+// supplied data model, preserving the order of the provided slice.
+func contractsForModel(dataContracts []models.DataContract, modelName, modelVersion string) []string {
+	if modelName == "" {
+		return nil
+	}
+
+	var names []string
+	for _, dc := range dataContracts {
+		if dc.DataModel.Name == modelName && dc.DataModel.Version == modelVersion {
+			names = append(names, dc.Name)
+		}
+	}
+
+	return names
 }

@@ -214,7 +214,7 @@ func (s *StatusCollectorType) GenerateStatusMessage(ctx context.Context, isBoots
 	// --- stream processors (multiple instances) as DFCs --------------------------
 	streamProcessorMgr, ok := fsm.FindManager(snapshot, constants.StreamProcessorManagerName)
 	if ok {
-		streamProcessorDfcs := StreamProcessorsFromSnapshot(streamProcessorMgr, s.logger)
+		streamProcessorDfcs := StreamProcessorsFromSnapshot(streamProcessorMgr, dataContractData, s.logger)
 		dfcData = append(dfcData, streamProcessorDfcs...)
 	}
 

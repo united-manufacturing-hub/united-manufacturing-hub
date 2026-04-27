@@ -81,6 +81,9 @@ func DataModelsFromConfig(ctx context.Context, configManager config.ConfigManage
 }
 
 // DataContractsFromConfig extracts data contracts from the configuration and converts them to status message format.
+//
+// The Flows field reports how many stream processors reference the contract's
+// data model (matched by Name and Version).
 func DataContractsFromConfig(ctx context.Context, configManager config.ConfigManager, logger *zap.SugaredLogger) ([]models.DataContract, error) {
 	fullConfig, err := configManager.GetConfig(ctx, 0)
 	if err != nil {
@@ -104,11 +107,27 @@ func DataContractsFromConfig(ctx context.Context, configManager config.ConfigMan
 		dataContractData[i] = models.DataContract{
 			Name:      dataContract.Name,
 			DataModel: dataModelRef,
-			Flows:     0, // Set to 0 for now (TODO: add flows)
+			Flows:     countStreamProcessorsForModel(fullConfig.StreamProcessor, dataModelRef),
 		}
 	}
 
 	return dataContractData, nil
+}
+
+func countStreamProcessorsForModel(sps []config.StreamProcessorConfig, model models.DataContractRef) int {
+	if model.Name == "" {
+		return 0
+	}
+
+	count := 0
+	for _, sp := range sps {
+		spModel := sp.StreamProcessorServiceConfig.Config.Model
+		if spModel.Name == model.Name && spModel.Version == model.Version {
+			count++
+		}
+	}
+
+	return count
 }
 
 // parseVersionNumber parses a version string (e.g., "v1", "v2") to an integer.
