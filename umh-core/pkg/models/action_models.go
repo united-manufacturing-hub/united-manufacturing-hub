@@ -590,13 +590,21 @@ const (
 	MetricValueTypeBoolean MetricValueType = "boolean"
 )
 
+type MetricOriginType string
+
+const (
+	MetricOriginTypeRead  MetricOriginType = "read"
+	MetricOriginTypeWrite MetricOriginType = "write"
+)
+
 // Metric represents a single metric value, agnostic of the resource type.
 type Metric struct {
-	ValueType     MetricValueType `json:"value_type"`
-	Value         any             `json:"value"`
-	ComponentType string          `json:"component_type"`
-	Path          string          `json:"path"`
-	Name          string          `json:"name"`
+	ValueType     MetricValueType  `json:"value_type"`
+	Value         any              `json:"value"`
+	ComponentType string           `json:"component_type"`
+	Path          string           `json:"path"`
+	Name          string           `json:"name"`
+	ValueOrigin   MetricOriginType `json:"value_origin,omitempty"`
 }
 
 // GetMetricsResponse contains the metrics yielded by the `get-metrics` action.
@@ -773,14 +781,14 @@ type ProtocolConverterConnection struct {
 }
 
 type ProtocolConverterDFC struct {
-	Pipeline     CommonDataFlowComponentPipelineConfig  `json:"pipeline"               mapstructure:"pipeline"               yaml:"pipeline"`
-	IgnoreErrors *bool                                  `json:"ignoreErrors,omitempty" mapstructure:"ignoreErrors,omitempty" yaml:"ignoreErrors,omitempty"`
-	RawYAML      *CommonDataFlowComponentRawYamlConfig  `json:"rawYAML,omitempty"      mapstructure:"rawYAML,omitempty"      yaml:"rawYAML,omitempty"`
+	Pipeline     CommonDataFlowComponentPipelineConfig `json:"pipeline"               mapstructure:"pipeline"               yaml:"pipeline"`
+	IgnoreErrors *bool                                 `json:"ignoreErrors,omitempty" mapstructure:"ignoreErrors,omitempty" yaml:"ignoreErrors,omitempty"`
+	RawYAML      *CommonDataFlowComponentRawYamlConfig `json:"rawYAML,omitempty"      mapstructure:"rawYAML,omitempty"      yaml:"rawYAML,omitempty"`
 	// State is the desired state for this specific DFC ("active" or "stopped").
 	// When empty, the overall protocol converter state is used.
-	State   string                                 `json:"state,omitempty"        mapstructure:"state,omitempty"        yaml:"state,omitempty"`
-	Inputs  CommonDataFlowComponentInputConfig     `json:"inputs"                 mapstructure:"inputs"                 yaml:"inputs"`
-	Outputs CommonDataFlowComponentOutputConfig    `json:"outputs"                mapstructure:"outputs"                yaml:"outputs"`
+	State   string                              `json:"state,omitempty"        mapstructure:"state,omitempty"        yaml:"state,omitempty"`
+	Inputs  CommonDataFlowComponentInputConfig  `json:"inputs"                 mapstructure:"inputs"                 yaml:"inputs"`
+	Outputs CommonDataFlowComponentOutputConfig `json:"outputs"                mapstructure:"outputs"                yaml:"outputs"`
 }
 
 type ProtocolConverterVariable struct {
@@ -801,8 +809,8 @@ type ProtocolConverter struct {
 	WriteDFC     *ProtocolConverterDFC          `json:"writeDFC"`
 	TemplateInfo *ProtocolConverterTemplateInfo `json:"templateInfo"`
 	Meta         *ProtocolConverterMeta         `json:"meta"`
-	Name       string                      `binding:"required" json:"name"`
-	Connection ProtocolConverterConnection `json:"connection"`
+	Name         string                         `binding:"required" json:"name"`
+	Connection   ProtocolConverterConnection    `json:"connection"`
 }
 
 type ProtocolConverterMeta struct {
