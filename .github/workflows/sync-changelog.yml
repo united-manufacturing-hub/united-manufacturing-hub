@@ -90,7 +90,7 @@ jobs:
 
       - name: Generate GitHub App token
         id: app-token
-        uses: actions/create-github-app-token@29824e69f54612133e76f7eaac726eef6c875baf # v2
+        uses: actions/create-github-app-token@1b10c78c7865c340bc4f6099eb2f838309f1e8c3 # v3
         with:
           app-id: ${{ secrets.CHANGELOG_SYNC_APP_ID }}
           private-key: ${{ secrets.CHANGELOG_SYNC_APP_PK }}
@@ -104,9 +104,9 @@ jobs:
           path: changelog-app
 
       - name: Setup Node.js
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
-          node-version: '20'
+          node-version: '24'
 
       - name: Install dependencies
         working-directory: changelog-app
@@ -145,7 +145,7 @@ jobs:
       - name: Create Pull Request
         if: github.event.inputs.dry_run != 'true'
         id: create-pr
-        uses: peter-evans/create-pull-request@22a9089034f40e5a961c8808d113e2c98fb63676 # v7
+        uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8
         with:
           token: ${{ steps.app-token.outputs.token }}
           path: changelog-app
