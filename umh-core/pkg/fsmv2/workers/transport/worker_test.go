@@ -120,7 +120,7 @@ var _ = Describe("TransportWorker", func() {
 			workerDeps.SetFailedAuthConfig("failed-token", "https://failed-relay.example.com", "failed-uuid")
 
 			ctx := context.Background()
-			observed, err := worker.CollectObservedState(ctx)
+			observed, err := worker.CollectObservedState(ctx, nil)
 
 			Expect(err).ToNot(HaveOccurred())
 			typedObs, ok := observed.(snapshot.TransportObservedState)
@@ -132,7 +132,7 @@ var _ = Describe("TransportWorker", func() {
 
 		It("should return empty FailedAuthConfig when none is set", func() {
 			ctx := context.Background()
-			observed, err := worker.CollectObservedState(ctx)
+			observed, err := worker.CollectObservedState(ctx, nil)
 
 			Expect(err).ToNot(HaveOccurred())
 			typedObs, ok := observed.(snapshot.TransportObservedState)
