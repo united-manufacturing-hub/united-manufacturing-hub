@@ -22,6 +22,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 )
 
@@ -251,6 +252,15 @@ func (o Observation[TStatus]) GetTimestamp() time.Time {
 // observation was collected. Injected by the collector via SetObservedDesiredState.
 func (o Observation[TStatus]) GetObservedDesiredState() DesiredState {
 	return o.observedDesiredState
+}
+
+// LifecyclePhase classifies the observation's State string into one of the
+// six canonical config.LifecyclePhase constants (PhaseUnknown, PhaseStopped,
+// PhaseStarting, PhaseRunningHealthy, PhaseRunningDegraded, PhaseStopping).
+// Convenience wrapper around config.ParseLifecyclePhase so state files can
+// branch on the phase without reaching into the config package directly.
+func (o Observation[TStatus]) LifecyclePhase() config.LifecyclePhase {
+	return config.ParseLifecyclePhase(o.State)
 }
 
 // ---------------------------------------------------------------------------

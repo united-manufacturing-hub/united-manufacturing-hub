@@ -102,6 +102,12 @@ var _ = Describe("ConvertWorkerSnapshot", func() {
 		Expect(snap.ChildrenUnhealthy).To(Equal(1))
 		Expect(snap.ChildrenView).To(Equal("mock-view"))
 		Expect(snap.IsShutdownRequested).To(BeTrue())
+
+		// Parity: nested shape mirrors the deprecated flat aliases. Locks the
+		// dual-population invariant before P3.0 deletes the flats.
+		Expect(snap.Observed.ParentMappedState).To(Equal(snap.ParentMappedState))
+		Expect(snap.Observed.LastActionResults).To(Equal(snap.LastActionResults))
+		Expect(snap.Desired.IsShutdownRequested()).To(Equal(snap.IsShutdownRequested))
 	})
 
 	It("panics with descriptive message on non-Snapshot input", func() {
