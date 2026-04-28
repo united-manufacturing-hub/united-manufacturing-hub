@@ -195,6 +195,9 @@ func BuildRuntimeConfig(
 
 	vb.Internal["bridged_by"] = config.GenerateBridgedBy(config.ComponentTypeProtocolConverter, nodeName, pcName)
 
+	// TODO(ENG-4856): This default exists because UMH_TOPICS lives in Variables.User
+	// instead of a typed config block. A typed field would have a proper zero value.
+	// Remove once UMH_TOPICS moves to typed config in the FSMv2 bridge migration.
 	// UMH_TOPICS is required in user variables when write DFC is configured
 	if len(spec.Config.DataflowComponentWriteServiceConfig.BenthosConfig.Output) > 0 {
 		if _, ok := vb.User["UMH_TOPICS"]; !ok {
@@ -315,6 +318,10 @@ func renderConfig(
 		return protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime{}, err
 	}
 
+	// TODO(ENG-4856): This post-render injection exists because UMH_TOPICS is stored in
+	// Variables.User (an untyped map) rather than a typed config field. text/template
+	// can't render []string, so we inject it manually after rendering. Remove once
+	// UMH_TOPICS moves to a typed config block in the FSMv2 bridge migration.
 	// Inject umh_topics into write DFC input after template rendering.
 	// []string values can't be rendered via text/template, so we set them directly.
 	// UMH_TOPICS presence is guaranteed by BuildRuntimeConfig above.

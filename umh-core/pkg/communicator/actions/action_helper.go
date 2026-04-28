@@ -96,6 +96,11 @@ func RemainingPrefixSec(dSeconds int) string {
 	return fmt.Sprintf("[left: %02d s] ", dSeconds) // fixed 15-rune prefix
 }
 
+// TODO(ENG-4856): toStringSlice exists because UMH_TOPICS is stored in Variables.User
+// (map[string]any) instead of a typed []string field. The three-form conversion handles
+// YAML round-trip type drift that a typed field would prevent. Remove once UMH_TOPICS
+// moves to a typed config block in the FSMv2 bridge migration.
+//
 // toStringSlice converts an any value to []string. UMH_TOPICS can appear in
 // three forms depending on how it was stored or reloaded:
 //   - []string: from DFC payload and in-memory, before any YAML round-trip

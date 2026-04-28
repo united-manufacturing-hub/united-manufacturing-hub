@@ -257,6 +257,10 @@ func (a *GetProtocolConverterAction) Execute() (interface{}, map[string]interfac
 				specConfig := observedState.ObservedProtocolConverterSpecConfig
 				if specConfig.Variables.User != nil {
 					for key, value := range specConfig.Variables.User {
+						// TODO(ENG-4856): This filter exists because UMH_TOPICS is stored in
+						// Variables.User alongside real user template variables. A typed field
+						// would not need filtering here. Remove once UMH_TOPICS moves to a
+						// typed config block in the FSMv2 bridge migration.
 						// UMH_TOPICS is an internal write-DFC field, not a user-editable
 						// template variable. It is returned via writeDFC.UMHTopics instead.
 						if key == "UMH_TOPICS" {

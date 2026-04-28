@@ -435,6 +435,9 @@ func (a *EditProtocolConverterAction) applyMutation(readBenthosConfig, writeBent
 		instanceToModify.ProtocolConverterServiceConfig.Config.DataflowComponentWriteServiceConfig = writeDFCServiceConfig
 	}
 
+	// TODO(ENG-4856): UMH_TOPICS is a typed field stored in Variables.User as a workaround
+	// because the bridge config has no typed block for it yet. Remove this persist block
+	// once UMH_TOPICS moves to a typed config field in the FSMv2 bridge migration.
 	// Persist UMH_TOPICS from write DFC payload. An explicit empty slice clears the key
 	// so that stale topics do not remain when the user removes all subscriptions.
 	if a.writeDFCPayload != nil {
