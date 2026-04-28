@@ -231,25 +231,30 @@
 //
 // Pattern 2: Full visibility (for inspecting individual children)
 //
-//	func (o MyObservedState) SetChildrenView(view any) fsmv2.ObservedState {
-//	    if cv, ok := view.(config.ChildrenView); ok {
-//	        healthy, unhealthy := cv.Counts()
-//	        o.ChildrenHealthy = healthy
-//	        o.ChildrenUnhealthy = unhealthy
-//	        // Can also use: cv.List(), cv.Get(name), cv.AllHealthy(), cv.AllStopped()
-//	    }
+//	func (o MyObservedState) SetChildrenView(view config.ChildrenView) fsmv2.ObservedState {
+//	    o.ChildrenHealthy = view.HealthyCount
+//	    o.ChildrenUnhealthy = view.UnhealthyCount
+//	    // Can also use: view.List(), view.Get(name), view.AllHealthy, view.AllStopped
 //	    return o
 //	}
 //
-// ChildrenView interface provides:
-//   - List() []ChildInfo: All children with state info
-//   - Get(name string) *ChildInfo: Single child by name
-//   - Counts() (healthy, unhealthy int): Aggregate health counts
-//   - AllHealthy() bool: True if all children healthy
-//   - AllStopped() bool: True if all children stopped
+// ChildrenView struct provides:
+//   - Children []ChildInfo: All children with state info
+//   - List() []ChildInfo: Same as Children, kept for migration compatibility
+//   - Get(name string) (ChildInfo, bool): Single child by name
+//   - HealthyCount / UnhealthyCount: Aggregate health counts
+//   - AllHealthy / AllOperational / AllStopped: Aggregate predicate flags
 //
 // ChildInfo provides read-only info about each child:
-//   - Name, WorkerType, StateName, StateReason, IsHealthy, ErrorMsg, HierarchyPath
+//   - Name, WorkerType, StateName, StateReason, IsHealthy, ErrorMsg, HierarchyPath, Phase
+//
+// StateName is display-only (raw form like "Connected" or "TryingToConnect").
+// Phase (config.LifecyclePhase) is the canonical predicate source — it is
+// populated from the child's cached lifecycle phase and is what
+// NewChildrenView's aggregate predicates (HealthyCount, AllHealthy,
+// AllOperational, AllStopped) read. Do NOT recompute predicates from StateName;
+// the prefix-only ParseLifecyclePhase parser cannot classify production raw
+// state names and would silently mis-aggregate.
 //
 // See workers/example/exampleparent/snapshot/snapshot.go for the simple counts pattern.
 // See config/childspec.go for ChildrenView and ChildInfo definitions.

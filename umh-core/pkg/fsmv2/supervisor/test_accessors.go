@@ -183,3 +183,10 @@ func (s *Supervisor[TObserved, TDesired]) TestSetPendingRemovalFlag(childName st
 func (s *Supervisor[TObserved, TDesired]) TestSetStarted(value bool) {
 	s.started.Store(value)
 }
+
+// TestBuildChildrenView exposes buildChildrenView for testing the
+// supervisor-side children-view assembly path (deterministic ordering, empty
+// map handling, Phase plumbing). DO NOT USE in production code.
+func TestBuildChildrenView(children map[string]SupervisorInterface) config.ChildrenView {
+	return buildChildrenView(children)
+}

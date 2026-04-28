@@ -23,6 +23,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 )
 
@@ -85,7 +86,7 @@ var _ = Describe("Observation", func() {
 			Expect(ok).To(BeTrue(), "must satisfy SetChildrenCounts duck-type")
 
 			_, ok = obs.(interface {
-				SetChildrenView(any) fsmv2.ObservedState
+				SetChildrenView(config.ChildrenView) fsmv2.ObservedState
 			})
 			Expect(ok).To(BeTrue(), "must satisfy SetChildrenView duck-type")
 
@@ -201,17 +202,20 @@ var _ = Describe("Observation", func() {
 			var asAny fsmv2.ObservedState = obs
 
 			setter, ok := asAny.(interface {
-				SetChildrenView(any) fsmv2.ObservedState
+				SetChildrenView(config.ChildrenView) fsmv2.ObservedState
 			})
 			Expect(ok).To(BeTrue(), "must satisfy collector SetChildrenView duck-type")
 
-			mockView := "test-children-view"
+			mockView := config.NewChildrenView([]config.ChildInfo{
+				{Name: "child-1", StateName: "Connected", Phase: config.PhaseRunningHealthy, IsHealthy: true},
+			})
 			result := setter.SetChildrenView(mockView)
 			typed := result.(fsmv2.Observation[TestStatus])
 			Expect(typed.ChildrenView).To(Equal(mockView))
+			Expect(typed.ChildrenView.HealthyCount).To(Equal(1))
 
 			// Original unchanged.
-			Expect(obs.ChildrenView).To(BeNil())
+			Expect(obs.ChildrenView).To(Equal(config.ChildrenView{}))
 		})
 
 		It("SetObservedDesiredState matches expected pattern and returns modified copy", func() {
@@ -496,6 +500,10 @@ var _ = Describe("DetectFieldCollisions", func() {
 		Metrics string `json:"metrics"`
 	}
 
+	type ChildrenViewCollision struct {
+		ChildrenView string `json:"childrenView"`
+	}
+
 	type SkippedField struct {
 		InternalOnly string `json:"-"`
 		Reachable    bool   `json:"reachable"`
@@ -522,6 +530,13 @@ var _ = Describe("DetectFieldCollisions", func() {
 		err := fsmv2.DetectFieldCollisions[MetricsCollision]()
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("metrics"))
+	})
+
+	It("returns error when TStatus has 'childrenView' field colliding with framework", func() {
+		err := fsmv2.DetectFieldCollisions[ChildrenViewCollision]()
+		Expect(err).To(HaveOccurred(),
+			"ChildrenView is now a serialized framework field; TStatus declaring 'childrenView' must be rejected (CHANGE-6)")
+		Expect(err.Error()).To(ContainSubstring("childrenView"))
 	})
 
 	It("skips fields with json:\"-\" tag", func() {

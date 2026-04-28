@@ -480,7 +480,8 @@ func (w *MyWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, err
 **Accessing children**:
 - `ChildrenView.List()` - all children with state info
 - `ChildrenView.Get(name)` - single child by name
-- `ChildrenView.AllHealthy()` / `AllStopped()` - aggregate checks
+- `ChildrenView.AllHealthy` / `ChildrenView.AllStopped` / `ChildrenView.AllOperational` - pre-computed aggregate predicates (struct fields, not methods)
+- `ChildrenView.HealthyCount` / `ChildrenView.UnhealthyCount` - pre-computed aggregate counts
 - `StateReader.LoadObservedTyped()` - query child state from parent
 
 ### FrameworkMetrics (auto-injected)

@@ -53,6 +53,11 @@ type GracefulShutdowner interface {
 // Workers that implement this interface receive the complete children
 // supervisor view each tick, enabling extraction of circuit breaker state,
 // stale counts, and other detailed child information beyond aggregate counts.
+//
+// SetChildrenView returns the updated ObservedState because it is invoked on
+// value receivers (the collector treats ObservedState as immutable and
+// re-assigns the returned value), matching every other Set* method on
+// Observation.
 type ChildrenViewConsumer interface {
-	SetChildrenView(view any)
+	SetChildrenView(view config.ChildrenView) ObservedState
 }

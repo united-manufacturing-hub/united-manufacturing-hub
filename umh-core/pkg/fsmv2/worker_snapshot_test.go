@@ -72,6 +72,12 @@ var _ = Describe("ConvertWorkerSnapshot", func() {
 		actionResults := []deps.ActionResult{
 			{ActionType: "connect", Success: true, Timestamp: now},
 		}
+		mockView := config.NewChildrenView([]config.ChildInfo{
+			{Name: "alpha", StateName: "Connected", Phase: config.PhaseRunningHealthy, IsHealthy: true},
+			{Name: "beta", StateName: "Connected", Phase: config.PhaseRunningHealthy, IsHealthy: true},
+			{Name: "gamma", StateName: "Connected", Phase: config.PhaseRunningHealthy, IsHealthy: true},
+			{Name: "delta", StateName: "TryingToConnect", Phase: config.PhaseStarting},
+		})
 		obs := fsmv2.Observation[workerTestStatus]{
 			CollectedAt:       now,
 			Status:            workerTestStatus{Reachable: true},
@@ -79,7 +85,7 @@ var _ = Describe("ConvertWorkerSnapshot", func() {
 			LastActionResults: actionResults,
 			ChildrenHealthy:   3,
 			ChildrenUnhealthy: 1,
-			ChildrenView:      "mock-view",
+			ChildrenView:      mockView,
 		}
 
 		wds := &fsmv2.WrappedDesiredState[workerTestConfig]{
@@ -100,13 +106,14 @@ var _ = Describe("ConvertWorkerSnapshot", func() {
 		Expect(snap.LastActionResults[0].ActionType).To(Equal("connect"))
 		Expect(snap.ChildrenHealthy).To(Equal(3))
 		Expect(snap.ChildrenUnhealthy).To(Equal(1))
-		Expect(snap.ChildrenView).To(Equal("mock-view"))
+		Expect(snap.ChildrenView).To(Equal(mockView))
 		Expect(snap.IsShutdownRequested).To(BeTrue())
 
 		// Parity: nested shape mirrors the deprecated flat aliases. Locks the
 		// dual-population invariant before P3.0 deletes the flats.
 		Expect(snap.Observed.ParentMappedState).To(Equal(snap.ParentMappedState))
 		Expect(snap.Observed.LastActionResults).To(Equal(snap.LastActionResults))
+		Expect(snap.Observed.ChildrenView).To(Equal(snap.ChildrenView))
 		Expect(snap.Desired.IsShutdownRequested()).To(Equal(snap.IsShutdownRequested))
 	})
 

@@ -62,7 +62,7 @@ type WorkerSnapshot[TConfig any, TStatus any] struct {
 	// Deprecated: use Desired.Config. Retained for migration compatibility.
 	Config TConfig
 	// Deprecated: use Observed.ChildrenView. Retained for migration compatibility.
-	ChildrenView any
+	ChildrenView config.ChildrenView
 	// Deprecated: use Observed.ParentMappedState. Retained for migration compatibility.
 	ParentMappedState string
 	// Deprecated: use Observed.LastActionResults. Retained for migration compatibility.

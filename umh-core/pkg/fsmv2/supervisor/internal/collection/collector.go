@@ -26,6 +26,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/internal/panicutil"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/metrics"
@@ -61,9 +62,19 @@ type CollectorConfig[TObserved any] struct {
 	Logger                    deps.FSMLogger
 	StateProvider             func() string                       // Returns current FSM state name (injected by supervisor)
 	ShutdownRequestedProvider func() bool                         // Returns current shutdown requested status (injected by supervisor)
-	ChildrenCountsProvider    func() (healthy int, unhealthy int) // Returns children health counts (injected by supervisor for parent workers)
+	// ChildrenCountsProvider returns the per-tick (healthy, unhealthy) counts.
+	// Retained for workers that satisfy SetChildrenCounts but not SetChildrenView;
+	// new code should consume the richer ChildrenView and read view.HealthyCount /
+	// view.UnhealthyCount instead. The two providers carry redundant data by
+	// construction (NewChildrenView derives counts from the same per-child Phase
+	// the supervisor reports here), so satisfying both setters is harmless.
+	ChildrenCountsProvider    func() (healthy int, unhealthy int)
 	MappedParentStateProvider func() string                       // Returns mapped state from parent's StateMapping (injected by supervisor for child workers)
-	ChildrenViewProvider      func() any                          // Returns config.ChildrenView for parent workers to inspect children (injected by supervisor)
+	// ChildrenViewProvider returns the full ChildrenView snapshot for parent
+	// workers that need per-child detail. Counts are also exposed on the view
+	// (view.HealthyCount / view.UnhealthyCount) so workers consuming the view
+	// can ignore ChildrenCountsProvider.
+	ChildrenViewProvider func() config.ChildrenView
 	// FrameworkMetricsProvider returns current framework metrics from supervisor.
 	// Called BEFORE collection to inject into worker dependencies.
 	// The provider captures workerCtx and acquires RLock when called (thread-safe).
@@ -475,7 +486,9 @@ func (c *Collector[TObserved]) collectAndSaveObservedState(ctx context.Context) 
 	// Inject children view so parent workers can inspect individual child states
 	if c.config.ChildrenViewProvider != nil {
 		childrenView := c.config.ChildrenViewProvider()
-		if setter, ok := observed.(interface{ SetChildrenView(any) fsmv2.ObservedState }); ok {
+		if setter, ok := observed.(interface {
+			SetChildrenView(config.ChildrenView) fsmv2.ObservedState
+		}); ok {
 			observed = setter.SetChildrenView(childrenView)
 		}
 	}

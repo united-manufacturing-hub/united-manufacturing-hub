@@ -72,18 +72,14 @@ func (o ApplicationObservedState) SetShutdownRequested(v bool) fsmv2.ObservedSta
 
 // SetChildrenView sets the children infrastructure health from the supervisor's ChildrenView.
 // Called by Collector when ChildrenViewProvider callback is configured.
-func (o ApplicationObservedState) SetChildrenView(view any) fsmv2.ObservedState {
-	cv, ok := view.(config.ChildrenView)
-	if !ok {
-		return o
-	}
-
-	o.ChildrenHealthy, o.ChildrenUnhealthy = cv.Counts()
+func (o ApplicationObservedState) SetChildrenView(view config.ChildrenView) fsmv2.ObservedState {
+	o.ChildrenHealthy = view.HealthyCount
+	o.ChildrenUnhealthy = view.UnhealthyCount
 	o.ChildrenCircuitOpen = 0
 	o.ChildrenStale = 0
 
 	// Count infrastructure issues from children
-	for _, child := range cv.List() {
+	for _, child := range view.List() {
 		if child.IsCircuitOpen {
 			o.ChildrenCircuitOpen++
 		}

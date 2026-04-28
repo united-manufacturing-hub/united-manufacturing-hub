@@ -710,7 +710,7 @@ port: 1`}
 
 		It("does not satisfy ChildrenViewConsumer", func() {
 			_, ok := any(wb).(interface {
-				SetChildrenView(view any)
+				SetChildrenView(view config.ChildrenView) fsmv2.ObservedState
 			})
 			Expect(ok).To(BeFalse(), "WorkerBase must not satisfy ChildrenViewConsumer (L5)")
 		})

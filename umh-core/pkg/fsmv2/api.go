@@ -148,7 +148,7 @@ type State[TSnapshot any, TDeps any] interface {
 	// The supervisor uses this to:
 	//   - Construct the observed state name: phase.Prefix() + lowercase(String())
 	//   - Classify child health: phase.IsHealthy(), phase.IsOperational()
-	//   - Enable ChildrenManager methods: AllHealthy(), Counts()
+	//   - Enable ChildrenView aggregates: AllHealthy, AllOperational, Counts()
 	//
 	// Lifecycle phases:
 	//   - PhaseStopped:         stopped                → neutral health

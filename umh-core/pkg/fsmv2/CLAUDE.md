@@ -140,7 +140,7 @@ New workers should use `WorkerBase[TConfig, TStatus]` instead of the legacy 7-fi
 - `ChildSpecProvider` — `ChildSpecs() []config.ChildSpec`
 - `MetricsProvider` — `Metrics() []prometheus.Collector`
 - `GracefulShutdowner` — `Shutdown(ctx context.Context) error`
-- `ChildrenViewConsumer` — `SetChildrenView(view any)`
+- `ChildrenViewConsumer` — `SetChildrenView(view config.ChildrenView) ObservedState`
 
 **L5 invariant**: `WorkerBase` must NEVER implement optional capability interfaces. Only the concrete worker struct should implement them.
 

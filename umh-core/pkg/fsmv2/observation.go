@@ -125,8 +125,16 @@ func NewObservation[TStatus any](status TStatus) ObservedState {
 type Observation[TStatus any] struct {
 	// CollectedAt is when this observation was taken.
 	CollectedAt time.Time `json:"collected_at"`
-	// ChildrenView provides runtime access to child state (not persisted).
-	ChildrenView any `json:"-"`
+	// ChildrenView is the per-tick snapshot of children state for parent
+	// workers. The value round-trips through CSE storage between the collector
+	// goroutine and the reconciler goroutine, so the field MUST stay JSON-
+	// serializable (Design Intent §13). Do NOT add `omitempty`: the field
+	// must serialise even for childless leaf workers so CSE round-trip stays
+	// stable across ticks (a leaf that omits the key flips on/off in deltas
+	// when later promoted to a parent). Same architectural reason as the
+	// JWTToken / AuthToken `json:"-"` pushback in PR #2399 — accept the
+	// modest storage cost (~6.5 KB per instance) for delta-sync stability.
+	ChildrenView config.ChildrenView `json:"childrenView"`
 	// Status is the developer's business data. Flattened to top level via custom MarshalJSON.
 	Status TStatus `json:"-"`
 	// observedDesiredState is the desired state reference for ObservedState interface.
@@ -150,8 +158,14 @@ type Observation[TStatus any] struct {
 
 // observationFrameworkFields is the shared alias type used by MarshalJSON and UnmarshalJSON
 // to serialize/deserialize framework fields without triggering recursive custom marshal.
+//
+// All Observation framework fields that participate in JSON serialization MUST
+// be mirrored here. DetectFieldCollisions iterates this struct's JSON tags to
+// reject TStatus types whose own JSON tags would collide with framework
+// fields, so omitting an entry here would silently allow a collision.
 type observationFrameworkFields struct {
 	CollectedAt       time.Time           `json:"collected_at"`
+	ChildrenView      config.ChildrenView `json:"childrenView"`
 	State             string              `json:"state"`
 	ParentMappedState string              `json:"parent_mapped_state"`
 	LastActionResults []deps.ActionResult `json:"last_action_results,omitempty"`
@@ -166,6 +180,7 @@ type observationFrameworkFields struct {
 func (o Observation[TStatus]) MarshalJSON() ([]byte, error) {
 	fw := observationFrameworkFields{
 		CollectedAt:       o.CollectedAt,
+		ChildrenView:      o.ChildrenView,
 		State:             o.State,
 		ShutdownRequested: o.ShutdownRequested,
 		ParentMappedState: o.ParentMappedState,
@@ -218,6 +233,7 @@ func (o *Observation[TStatus]) UnmarshalJSON(data []byte) error {
 	}
 
 	o.CollectedAt = fw.CollectedAt
+	o.ChildrenView = fw.ChildrenView
 	o.State = fw.State
 	o.ShutdownRequested = fw.ShutdownRequested
 	o.ParentMappedState = fw.ParentMappedState
@@ -306,8 +322,8 @@ func (o Observation[TStatus]) SetChildrenCounts(healthy, unhealthy int) Observed
 
 // SetChildrenView sets the runtime children view. Matches collector pattern:
 //
-//	interface{ SetChildrenView(any) fsmv2.ObservedState }
-func (o Observation[TStatus]) SetChildrenView(v any) ObservedState {
+//	interface{ SetChildrenView(config.ChildrenView) fsmv2.ObservedState }
+func (o Observation[TStatus]) SetChildrenView(v config.ChildrenView) ObservedState {
 	o.ChildrenView = v
 
 	return o

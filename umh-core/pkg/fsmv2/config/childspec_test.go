@@ -376,3 +376,241 @@ state: stopped
 		})
 	})
 })
+
+var _ = Describe("ChildInfo JSON dual-read", func() {
+	It("unmarshals legacy PascalCase JSON into camelCase fields", func() {
+		legacy := []byte(`{
+			"Name": "child-1",
+			"WorkerType": "mqtt_client",
+			"StateName": "running_healthy_connected",
+			"StateReason": "all good",
+			"ErrorMsg": "",
+			"HierarchyPath": "app.parent.child-1",
+			"IsHealthy": true,
+			"IsStale": false,
+			"IsCircuitOpen": false
+		}`)
+
+		var info config.ChildInfo
+		Expect(json.Unmarshal(legacy, &info)).To(Succeed())
+
+		Expect(info.Name).To(Equal("child-1"))
+		Expect(info.WorkerType).To(Equal("mqtt_client"))
+		Expect(info.StateName).To(Equal("running_healthy_connected"))
+		Expect(info.StateReason).To(Equal("all good"))
+		Expect(info.HierarchyPath).To(Equal("app.parent.child-1"))
+		Expect(info.IsHealthy).To(BeTrue())
+	})
+
+	It("unmarshals new camelCase JSON", func() {
+		modern := []byte(`{
+			"name": "child-2",
+			"workerType": "modbus_client",
+			"stateName": "trying_to_start_dialing",
+			"stateReason": "waiting for handshake",
+			"errorMsg": "timeout",
+			"hierarchyPath": "app.parent.child-2",
+			"isHealthy": false,
+			"isStale": true,
+			"isCircuitOpen": true
+		}`)
+
+		var info config.ChildInfo
+		Expect(json.Unmarshal(modern, &info)).To(Succeed())
+
+		Expect(info.Name).To(Equal("child-2"))
+		Expect(info.WorkerType).To(Equal("modbus_client"))
+		Expect(info.StateName).To(Equal("trying_to_start_dialing"))
+		Expect(info.ErrorMsg).To(Equal("timeout"))
+		Expect(info.IsStale).To(BeTrue())
+		Expect(info.IsCircuitOpen).To(BeTrue())
+	})
+
+	It("round-trips legacy PascalCase JSON to camelCase JSON without losing data", func() {
+		legacy := []byte(`{
+			"Name": "child-3",
+			"WorkerType": "opcua_client",
+			"StateName": "running_degraded_polling",
+			"StateReason": "partial connection",
+			"ErrorMsg": "intermittent",
+			"HierarchyPath": "app.parent.child-3",
+			"IsHealthy": false,
+			"IsStale": false,
+			"IsCircuitOpen": false
+		}`)
+
+		var info config.ChildInfo
+		Expect(json.Unmarshal(legacy, &info)).To(Succeed())
+
+		out, err := json.Marshal(info)
+		Expect(err).ToNot(HaveOccurred())
+
+		// Re-emitted JSON uses the new camelCase form.
+		Expect(string(out)).To(ContainSubstring(`"name":"child-3"`))
+		Expect(string(out)).To(ContainSubstring(`"workerType":"opcua_client"`))
+		Expect(string(out)).To(ContainSubstring(`"stateName":"running_degraded_polling"`))
+
+		// PascalCase tags must not reappear: decode the JSON and check that no
+		// top-level PascalCase keys exist. Substring scans are brittle because
+		// the substring "Name" can occur inside other tag names like "stateName".
+		var keyed map[string]json.RawMessage
+		Expect(json.Unmarshal(out, &keyed)).To(Succeed())
+
+		for _, legacyKey := range []string{
+			"Name", "WorkerType", "StateName", "StateReason",
+			"ErrorMsg", "HierarchyPath", "IsHealthy", "IsStale", "IsCircuitOpen",
+		} {
+			Expect(keyed).NotTo(HaveKey(legacyKey),
+				"legacy PascalCase tag %q must not appear in re-emitted JSON", legacyKey)
+		}
+
+		// Re-decoded data matches the original logical content.
+		var roundTrip config.ChildInfo
+		Expect(json.Unmarshal(out, &roundTrip)).To(Succeed())
+		Expect(roundTrip).To(Equal(info))
+	})
+
+	It("merges mixed legacy + camelCase fields without losing either", func() {
+		mixed := []byte(`{
+			"name": "child-mixed",
+			"WorkerType": "kafka_consumer",
+			"stateName": "Connected",
+			"phase": 3,
+			"IsHealthy": true,
+			"isStale": true
+		}`)
+
+		var info config.ChildInfo
+		Expect(json.Unmarshal(mixed, &info)).To(Succeed())
+
+		Expect(info.Name).To(Equal("child-mixed"), "camelCase 'name' must win when present")
+		Expect(info.WorkerType).To(Equal("kafka_consumer"),
+			"PascalCase 'WorkerType' must fill in when camelCase omits the field")
+		Expect(info.StateName).To(Equal("Connected"))
+		Expect(info.Phase).To(Equal(config.PhaseRunningHealthy),
+			"camelCase 'phase' decodes into the cached LifecyclePhase")
+		Expect(info.IsHealthy).To(BeTrue(),
+			"legacy 'IsHealthy: true' must not be lost when camelCase form is absent")
+		Expect(info.IsStale).To(BeTrue())
+	})
+
+	It("camelCase bool 'false' does NOT override legacy bool 'true' (locks asymmetric merge)", func() {
+		// Documents the LOCKED design: the merge is asymmetric on purpose.
+		// camelCase wins when its value is non-zero; the zero value (false) is
+		// indistinguishable from "field absent" so the legacy form fills in.
+		// A future maintainer who "fixes" this asymmetry must understand the
+		// tradeoff before changing UnmarshalJSON: legacy writers emitting
+		// IsHealthy=true must not be silently downgraded to false by newer
+		// readers that omit the camelCase field.
+		raw := []byte(`{"isHealthy": false, "IsHealthy": true, "isStale": false, "IsStale": true, "isCircuitOpen": false, "IsCircuitOpen": true}`)
+
+		var info config.ChildInfo
+		Expect(json.Unmarshal(raw, &info)).To(Succeed())
+		Expect(info.IsHealthy).To(BeTrue(),
+			"camelCase false must NOT override legacy true — zero-value-fallback is the LOCKED contract")
+		Expect(info.IsStale).To(BeTrue(),
+			"same precedence rule applies to IsStale")
+		Expect(info.IsCircuitOpen).To(BeTrue(),
+			"same precedence rule applies to IsCircuitOpen")
+	})
+})
+
+var _ = Describe("ChildrenView aggregate predicates (LOCKED §4-B)", func() {
+	It("empty children slice yields all-true predicates and zero counts (locks short-circuit)", func() {
+		v := config.NewChildrenView(nil)
+		Expect(v.AllHealthy).To(BeTrue())
+		Expect(v.AllOperational).To(BeTrue())
+		Expect(v.AllStopped).To(BeTrue())
+		Expect(v.HealthyCount).To(Equal(0))
+		Expect(v.UnhealthyCount).To(Equal(0))
+	})
+
+	It("classifies a single PhaseRunningHealthy child", func() {
+		v := config.NewChildrenView([]config.ChildInfo{
+			{Name: "a", StateName: "Connected", Phase: config.PhaseRunningHealthy, IsHealthy: true},
+		})
+		Expect(v.HealthyCount).To(Equal(1))
+		Expect(v.UnhealthyCount).To(Equal(0))
+		Expect(v.AllHealthy).To(BeTrue())
+		Expect(v.AllOperational).To(BeTrue())
+		Expect(v.AllStopped).To(BeFalse())
+	})
+
+	It("classifies a child by Phase even when StateName is a raw worker state name", func() {
+		// Regression guard for the ParseLifecyclePhase(StateName) bug:
+		// production children carry raw state names like "Connected" that the
+		// prefix-based parser cannot classify, so predicates must read the
+		// cached Phase field that the supervisor populates.
+		v := config.NewChildrenView([]config.ChildInfo{
+			{Name: "a", StateName: "Connected", Phase: config.PhaseRunningHealthy, IsHealthy: true},
+		})
+		Expect(v.HealthyCount).To(Equal(1), "Phase field must drive classification, not StateName parsing")
+		Expect(v.AllHealthy).To(BeTrue())
+	})
+
+	It("treats Healthy + Degraded children as Operational but not AllHealthy", func() {
+		v := config.NewChildrenView([]config.ChildInfo{
+			{Name: "a", StateName: "Connected", Phase: config.PhaseRunningHealthy, IsHealthy: true},
+			{Name: "b", StateName: "Reconnecting", Phase: config.PhaseRunningDegraded, IsHealthy: false},
+		})
+		Expect(v.HealthyCount).To(Equal(1))
+		Expect(v.UnhealthyCount).To(Equal(1),
+			"PhaseRunningDegraded contributes to UnhealthyCount per ChildrenManager.Counts semantics")
+		Expect(v.AllHealthy).To(BeFalse())
+		Expect(v.AllOperational).To(BeTrue(), "Healthy + Degraded both qualify as Operational")
+		Expect(v.AllStopped).To(BeFalse())
+	})
+
+	It("classifies a single PhaseStopped child as AllStopped (and neither healthy nor unhealthy)", func() {
+		v := config.NewChildrenView([]config.ChildInfo{
+			{Name: "a", StateName: "Stopped", Phase: config.PhaseStopped, IsHealthy: false},
+		})
+		Expect(v.HealthyCount).To(Equal(0))
+		Expect(v.UnhealthyCount).To(Equal(0),
+			"PhaseStopped is neutral: contributes to neither healthy nor unhealthy count")
+		Expect(v.AllHealthy).To(BeFalse())
+		Expect(v.AllOperational).To(BeFalse())
+		Expect(v.AllStopped).To(BeTrue())
+	})
+
+	It("treats PhaseUnknown as unhealthy (locks iota-zero classification)", func() {
+		// Phase is the iota zero-value, so legacy snapshots that omit "phase"
+		// (and any future ChildInfo decoded with Phase explicitly unset)
+		// arrive as PhaseUnknown. The aggregate predicates must classify
+		// PhaseUnknown as unhealthy — it is not Running*, not Stopped, not
+		// Operational. This spec also locks the iota ordering itself: a future
+		// reorder that swaps PhaseUnknown with PhaseStopped would silently
+		// flip these aggregates (legacy unknown children counted as Stopped),
+		// and this test would catch the swap.
+		v := config.NewChildrenView([]config.ChildInfo{
+			{Name: "a", StateName: "", Phase: config.PhaseUnknown, IsHealthy: false},
+		})
+		Expect(v.HealthyCount).To(Equal(0),
+			"PhaseUnknown does not contribute to HealthyCount")
+		Expect(v.UnhealthyCount).To(Equal(1),
+			"PhaseUnknown counts as unhealthy — neither Running* nor Stopped")
+		Expect(v.AllHealthy).To(BeFalse())
+		Expect(v.AllOperational).To(BeFalse(),
+			"PhaseUnknown is not Operational")
+		Expect(v.AllStopped).To(BeFalse(),
+			"PhaseUnknown is not Stopped — locks iota ordering against accidental reorder")
+	})
+})
+
+var _ = Describe("ChildrenView nil-children normalisation", func() {
+	It("emits children:[] (not children:null) so CSE delta-sync is stable", func() {
+		v := config.NewChildrenView(nil)
+		out, err := json.Marshal(v)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(string(out)).To(ContainSubstring(`"children":[]`),
+			"nil children slice must serialise as an empty JSON array, not null")
+		Expect(string(out)).NotTo(ContainSubstring(`"children":null`))
+	})
+
+	It("preserves an explicitly empty slice through serialisation", func() {
+		v := config.NewChildrenView([]config.ChildInfo{})
+		out, err := json.Marshal(v)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(string(out)).To(ContainSubstring(`"children":[]`))
+	})
+})
