@@ -279,7 +279,7 @@ func verifyChildrenReceivedMergedVariablesFromStore(store storage.TriangularStor
 	// child.Desired["originalUserSpec"]; that key no longer exists. Skip
 	// pending a future P-step that exposes child variables through a typed
 	// path (e.g. surfacing them on the typed VariableBundle JSON form).
-	Skip("pending pr1_issues #7: child variable verification needs typed-wire reconstruction path now that OriginalUserSpec is json:\"-\" (§4-D / §17). Also blocked on extractUserSpec time.Time assertion bug; see issue #7.")
+	Skip("pending broader integration-scenario coverage of parent→child inheritance + template rendering through the wire path. NOTE: P1.8 added a typed-wire schema-stability test at variables_typed_wire_test.go (TestVariablesInternalTypedWireReconstruction) that closes the schema concern from pr1_issues #7. This Skip remains for the broader end-to-end coverage gap — also still blocked on extractUserSpec time.Time assertion bug at line 554.")
 	workers := getWorkersFromStore(store)
 
 	// Find parent and children
