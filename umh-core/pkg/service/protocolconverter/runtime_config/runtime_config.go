@@ -199,9 +199,11 @@ func BuildRuntimeConfig(
 	// instead of a typed config block. A typed field would have a proper zero value.
 	// Remove once UMH_TOPICS moves to typed config in the FSMv2 bridge migration.
 	// UMH_TOPICS is required in user variables when write DFC is configured
+	// We usually catch this in the frontend, but user could bypass it through config.yaml
 	if len(spec.Config.DataflowComponentWriteServiceConfig.BenthosConfig.Output) > 0 {
 		if _, ok := vb.User["UMH_TOPICS"]; !ok {
-			vb.User["UMH_TOPICS"] = []string{"umh.v1.topic_not_set_by_user"}
+			// UMH_TOPICS is not set by the frontend. Set value here and which will throw error in deployment
+			vb.User["UMH_TOPICS"] = []string{"TOPIC_NOT_SET_BY_USER"}
 		}
 	}
 

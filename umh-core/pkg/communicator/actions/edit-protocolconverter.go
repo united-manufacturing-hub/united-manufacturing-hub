@@ -1213,7 +1213,7 @@ func validateDFCPayloadAndState(payload *models.CDFCPayload, state string, label
 			return fmt.Errorf("invalid %s DFC configuration: %w", label, err)
 		}
 		// UMH_TOPICS is only required when the payload carries actual output config.
-		// A state-only change (no Outputs.Data) skips this check; the FSM's
+		// A state-only change (enable/disable with payload.Outputs.Data == 0) skips this check; the FSM's
 		// BuildRuntimeConfig enforces the requirement when it renders the write DFC.
 		if label == "write" && len(payload.Outputs.Data) > 0 && len(payload.UMHTopics) == 0 {
 			return errors.New("write DFC requires at least one UMH topic (umh_topics)")
