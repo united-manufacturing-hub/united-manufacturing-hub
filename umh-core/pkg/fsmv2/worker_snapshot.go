@@ -37,18 +37,17 @@ type WorkerSnapshot[TConfig any, TStatus any] struct {
 	// Observed.CollectedAt; kept top-level for direct access by persistence
 	// helpers and consumers that don't need the rest of the observation.
 	CollectedAt time.Time
+
+	// Deprecated: use Observed.Status. Retained for migration compatibility.
+	Status TStatus
+	// Deprecated: use Desired.Config. Retained for migration compatibility.
+	Config TConfig
 	// Identity carries the worker's identity (ID, Name, WorkerType,
 	// HierarchyPath). Stays top-level — it is wire-format identity, not a
 	// property of the observation, and lives on the raw Snapshot envelope.
 	Identity deps.Identity
-	// Observed is the full typed observation captured by the supervisor on
-	// this tick. Use Observed.Status for developer business data and
-	// Observed.LifecyclePhase() / Observed.State for FSM state introspection.
-	// Treat Observed and the deprecated mirror fields as read-only; the
-	// framework does not observe writes back, and shared slice/map/pointer
-	// mutations (e.g. on LastActionResults, ChildrenView's children slice)
-	// may corrupt supervisor state during the migration window.
-	Observed Observation[TStatus]
+	// Deprecated: use Observed.ParentMappedState. Retained for migration compatibility.
+	ParentMappedState string
 	// Desired is the wrapped desired state (BaseDesiredState + TConfig +
 	// ChildrenSpecs). Use Desired.Config for typed config and
 	// Desired.IsShutdownRequested() for the merged shutdown signal.
@@ -57,21 +56,23 @@ type WorkerSnapshot[TConfig any, TStatus any] struct {
 	// mutations may corrupt supervisor state during the migration window.
 	Desired WrappedDesiredState[TConfig]
 
-	// Deprecated: use Observed.Status. Retained for migration compatibility.
-	Status TStatus
-	// Deprecated: use Desired.Config. Retained for migration compatibility.
-	Config TConfig
-	// Deprecated: use Observed.ChildrenView. Retained for migration compatibility.
-	ChildrenView config.ChildrenView
-	// Deprecated: use Observed.ParentMappedState. Retained for migration compatibility.
-	ParentMappedState string
 	// Deprecated: use Observed.LastActionResults. Retained for migration compatibility.
 	LastActionResults []deps.ActionResult
+	// Deprecated: use Observed.ChildrenView. Retained for migration compatibility.
+	ChildrenView config.ChildrenView
 	// Deprecated: use Observed.Metrics.Framework (the canonical path is one
 	// level deeper than the other aliases because Metrics is reached through
 	// the anonymous deps.MetricsEmbedder embed on Observation; see
 	// observation.go:141). Retained for migration compatibility.
 	FrameworkMetrics deps.FrameworkMetrics
+	// Observed is the full typed observation captured by the supervisor on
+	// this tick. Use Observed.Status for developer business data and
+	// Observed.LifecyclePhase() / Observed.State for FSM state introspection.
+	// Treat Observed and the deprecated mirror fields as read-only; the
+	// framework does not observe writes back, and shared slice/map/pointer
+	// mutations (e.g. on LastActionResults, ChildrenView's children slice)
+	// may corrupt supervisor state during the migration window.
+	Observed Observation[TStatus]
 	// Deprecated: use Observed.ChildrenHealthy. Retained for migration compatibility.
 	ChildrenHealthy int
 	// Deprecated: use Observed.ChildrenUnhealthy. Retained for migration compatibility.

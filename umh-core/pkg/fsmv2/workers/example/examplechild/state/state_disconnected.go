@@ -29,17 +29,17 @@ func (s *DisconnectedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := helpers.ConvertSnapshot[snapshot.ExamplechildObservedState, *snapshot.ExamplechildDesiredState](snapAny)
 
 	if snap.Observed.IsStopRequired() {
-		return fsmv2.Result[any, any](&TryingToStopState{}, fsmv2.SignalNone, nil, "Stop required, initiating shutdown")
+		return fsmv2.Result[any, any](&TryingToStopState{}, fsmv2.SignalNone, nil, "Stop required, initiating shutdown", nil)
 	}
 
 	// Only attempt reconnection if desired state wants us running.
 	// Check via Observed since ParentMappedState is injected by collector into the
 	// embedded DesiredState within ObservedState.
 	if snap.Observed.ShouldBeRunning() {
-		return fsmv2.Result[any, any](&TryingToConnectState{}, fsmv2.SignalNone, nil, "Attempting to reconnect")
+		return fsmv2.Result[any, any](&TryingToConnectState{}, fsmv2.SignalNone, nil, "Attempting to reconnect", nil)
 	}
 
-	return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil, "Connection lost, will retry")
+	return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil, "Connection lost, will retry", nil)
 }
 
 func (s *DisconnectedState) String() string {

@@ -38,7 +38,7 @@ func (s *AuthFailedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := helpers.ConvertSnapshot[snapshot.TransportObservedState, *snapshot.TransportDesiredState](snapAny)
 
 	if snap.Desired.IsShutdownRequested() {
-		return fsmv2.Result[any, any](&StoppingState{}, fsmv2.SignalNone, nil, "Shutdown requested, transitioning to Stopping")
+		return fsmv2.Result[any, any](&StoppingState{}, fsmv2.SignalNone, nil, "Shutdown requested, transitioning to Stopping", nil)
 	}
 
 	// FailedAuthConfig is guaranteed populated here because only permanent errors
@@ -51,12 +51,12 @@ func (s *AuthFailedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	if tokenChanged || relayChanged || uuidChanged {
 		return fsmv2.Result[any, any](&StartingState{}, fsmv2.SignalNone, nil,
 			fmt.Sprintf("config changed (token=%t, relay=%t, uuid=%t), retrying auth",
-				tokenChanged, relayChanged, uuidChanged))
+				tokenChanged, relayChanged, uuidChanged), nil)
 	}
 
 	return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil,
 		fmt.Sprintf("auth failed (%s), waiting for config change",
-			snap.Observed.LastErrorType))
+			snap.Observed.LastErrorType), nil)
 }
 
 // String returns the state name derived from the type.

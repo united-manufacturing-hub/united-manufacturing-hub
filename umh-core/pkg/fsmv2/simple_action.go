@@ -30,8 +30,8 @@ func SimpleAction[TDeps any](name string, fn func(ctx context.Context, deps TDep
 }
 
 type simpleAction[TDeps any] struct {
-	name string
 	fn   func(ctx context.Context, deps TDeps) error
+	name string
 }
 
 func (a *simpleAction[TDeps]) Execute(ctx context.Context, depsAny any) error {

@@ -76,7 +76,7 @@ var _ = Describe("InitialStateRegistry", func() {
 type testStoppedState struct{}
 
 func (s *testStoppedState) Next(_ any) fsmv2.NextResult[any, any] {
-	return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil, "Stopped")
+	return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil, "Stopped", nil)
 }
 
 func (s *testStoppedState) String() string {

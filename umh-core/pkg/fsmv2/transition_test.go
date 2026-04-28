@@ -95,19 +95,20 @@ var _ = Describe("Transition", func() {
 	It("returns a NextResult with matching fields for a simple transition", func() {
 		state := &fakeTransitionState{}
 
-		result := fsmv2.Transition(state, fsmv2.SignalNone, nil, "reason")
+		result := fsmv2.Transition(state, fsmv2.SignalNone, nil, "reason", nil)
 
 		Expect(result.State).To(BeIdenticalTo(state))
 		Expect(result.Signal).To(Equal(fsmv2.SignalNone))
 		Expect(result.Action).To(BeNil())
 		Expect(result.Reason).To(Equal("reason"))
+		Expect(result.Children).To(BeNil())
 	})
 
 	It("propagates the action instance through to NextResult", func() {
 		state := &fakeTransitionState{}
 		action := &fakeTransitionAction{name: "noop"}
 
-		result := fsmv2.Transition(state, fsmv2.SignalNone, action, "with-action")
+		result := fsmv2.Transition(state, fsmv2.SignalNone, action, "with-action", nil)
 
 		Expect(result.Action).To(BeIdenticalTo(action))
 	})
@@ -115,7 +116,7 @@ var _ = Describe("Transition", func() {
 	It("propagates SignalNeedsRestart to NextResult", func() {
 		state := &fakeTransitionState{}
 
-		result := fsmv2.Transition(state, fsmv2.SignalNeedsRestart, nil, "restart")
+		result := fsmv2.Transition(state, fsmv2.SignalNeedsRestart, nil, "restart", nil)
 
 		Expect(result.Signal).To(Equal(fsmv2.SignalNeedsRestart))
 	})
@@ -124,7 +125,7 @@ var _ = Describe("Transition", func() {
 		state := &fakeTransitionState{}
 
 		Expect(func() {
-			fsmv2.Transition(state, fsmv2.SignalNone, 42, "wrong-type")
+			fsmv2.Transition(state, fsmv2.SignalNone, 42, "wrong-type", nil)
 		}).To(PanicWith(And(
 			ContainSubstring("fsmv2.Transition auto-wrap"),
 			ContainSubstring("int"),
@@ -135,7 +136,7 @@ var _ = Describe("Transition", func() {
 		state := &fakeTransitionState{}
 
 		Expect(func() {
-			fsmv2.Transition(state, fsmv2.SignalNone, &fakeNonAction{}, "no-methods")
+			fsmv2.Transition(state, fsmv2.SignalNone, &fakeNonAction{}, "no-methods", nil)
 		}).To(PanicWith(And(
 			ContainSubstring("fsmv2.Transition auto-wrap"),
 			ContainSubstring("fakeNonAction"),
@@ -151,7 +152,7 @@ var _ = Describe("Transition", func() {
 			called:     &called,
 		}
 
-		result := fsmv2.Transition(state, fsmv2.SignalNone, action, "typed-ok")
+		result := fsmv2.Transition(state, fsmv2.SignalNone, action, "typed-ok", nil)
 
 		Expect(result.Action).NotTo(BeNil())
 		Expect(result.Action.Name()).To(Equal("typed"))
@@ -169,7 +170,7 @@ var _ = Describe("Transition", func() {
 			returnError: sentinel,
 		}
 
-		result := fsmv2.Transition(state, fsmv2.SignalNone, action, "typed-err")
+		result := fsmv2.Transition(state, fsmv2.SignalNone, action, "typed-err", nil)
 
 		err := result.Action.Execute(context.Background(), fakeTypedDeps{})
 		Expect(err).To(MatchError(sentinel))
@@ -180,7 +181,7 @@ var _ = Describe("Transition", func() {
 		called := false
 		action := &fakeTypedAction{name: "typed-mismatch", called: &called}
 
-		result := fsmv2.Transition(state, fsmv2.SignalNone, action, "deps-mismatch")
+		result := fsmv2.Transition(state, fsmv2.SignalNone, action, "deps-mismatch", nil)
 
 		err := result.Action.Execute(context.Background(), 42)
 		Expect(err).To(HaveOccurred())
@@ -194,7 +195,7 @@ var _ = Describe("Transition", func() {
 		var a *fakeTypedAction = nil
 
 		Expect(func() {
-			fsmv2.Transition(state, fsmv2.SignalNone, a, "typed-nil")
+			fsmv2.Transition(state, fsmv2.SignalNone, a, "typed-nil", nil)
 		}).To(PanicWith(And(
 			ContainSubstring("typed nil action"),
 			ContainSubstring("fakeTypedAction"),
@@ -206,7 +207,7 @@ var _ = Describe("Transition", func() {
 		sawNil := false
 		action := &fakePtrDepsAction{name: "ptr-deps", sawNil: &sawNil}
 
-		result := fsmv2.Transition(state, fsmv2.SignalNone, action, "ptr-nil-ok")
+		result := fsmv2.Transition(state, fsmv2.SignalNone, action, "ptr-nil-ok", nil)
 
 		err := result.Action.Execute(context.Background(), nil)
 		Expect(err).NotTo(HaveOccurred())
@@ -217,7 +218,7 @@ var _ = Describe("Transition", func() {
 		state := &fakeTransitionState{}
 		action := &fakeIntDepsAction{name: "int-deps"}
 
-		result := fsmv2.Transition(state, fsmv2.SignalNone, action, "int-nil-fail")
+		result := fsmv2.Transition(state, fsmv2.SignalNone, action, "int-nil-fail", nil)
 
 		err := result.Action.Execute(context.Background(), nil)
 		Expect(err).To(HaveOccurred())

@@ -41,11 +41,11 @@ func (s *StoppedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 
 	// 1. Check shutdown first
 	if snap.Desired.IsShutdownRequested() {
-		return fsmv2.Result[any, any](s, fsmv2.SignalNeedsRemoval, nil, "Shutdown requested, signaling removal")
+		return fsmv2.Result[any, any](s, fsmv2.SignalNeedsRemoval, nil, "Shutdown requested, signaling removal", nil)
 	}
 
 	// 2. Start running
-	return fsmv2.Result[any, any](&TryingToStartState{}, fsmv2.SignalNone, nil, "Starting worker")
+	return fsmv2.Result[any, any](&TryingToStartState{}, fsmv2.SignalNone, nil, "Starting worker", nil)
 }
 
 // String returns the state name for logging and metrics.

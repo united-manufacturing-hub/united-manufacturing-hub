@@ -50,8 +50,8 @@ var legacyResultSymbols = map[string]struct{}{
 // rendered using the alias actually used in the source file (e.g. "fsmv2.Result"
 // or "v2.Result").
 type LegacyResultCall struct {
-	Pos    token.Position
 	Symbol string
+	Pos    token.Position
 }
 
 // FindLegacyResultCalls scans the parsed Go AST of a single file and returns

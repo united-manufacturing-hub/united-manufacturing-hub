@@ -30,15 +30,15 @@ func (s *DegradedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := helpers.ConvertSnapshot[snapshot.ApplicationObservedState, *snapshot.ApplicationDesiredState](snapAny)
 
 	if snap.Desired.IsShutdownRequested() {
-		return fsmv2.Result[any, any](&StoppedState{}, fsmv2.SignalNone, nil, "Shutdown requested")
+		return fsmv2.Result[any, any](&StoppedState{}, fsmv2.SignalNone, nil, "Shutdown requested", nil)
 	}
 
 	// Recovered when no infrastructure issues remain
 	if !snap.Observed.HasInfrastructureIssues() {
-		return fsmv2.Result[any, any](&RunningState{}, fsmv2.SignalNone, nil, "Recovered from infrastructure issues")
+		return fsmv2.Result[any, any](&RunningState{}, fsmv2.SignalNone, nil, "Recovered from infrastructure issues", nil)
 	}
 
-	return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil, snap.Observed.InfrastructureReason())
+	return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil, snap.Observed.InfrastructureReason(), nil)
 }
 
 func (s *DegradedState) String() string {

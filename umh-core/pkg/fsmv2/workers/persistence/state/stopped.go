@@ -28,10 +28,10 @@ func (s *StoppedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := helpers.ConvertSnapshot[snapshot.PersistenceObservedState, *snapshot.PersistenceDesiredState](snapAny)
 
 	if snap.Desired.IsShutdownRequested() {
-		return fsmv2.Result[any, any](s, fsmv2.SignalNeedsRemoval, nil, "Persistence worker stopped and shutdown requested")
+		return fsmv2.Result[any, any](s, fsmv2.SignalNeedsRemoval, nil, "Persistence worker stopped and shutdown requested", nil)
 	}
 
-	return fsmv2.Result[any, any](&TryingToStartState{}, fsmv2.SignalNone, nil, "Starting persistence worker")
+	return fsmv2.Result[any, any](&TryingToStartState{}, fsmv2.SignalNone, nil, "Starting persistence worker", nil)
 }
 
 func (s *StoppedState) String() string {

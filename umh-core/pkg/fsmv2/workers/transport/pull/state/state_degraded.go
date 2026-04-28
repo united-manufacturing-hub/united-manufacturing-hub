@@ -36,13 +36,13 @@ func (s *DegradedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 
 	if snap.Observed.IsStopRequired() {
 		return fsmv2.Result[any, any](&StoppingState{}, fsmv2.SignalNone, nil,
-			fmt.Sprintf("stop required: shutdown=%t, parentState(observed)=%s", snap.Desired.IsShutdownRequested(), snap.Observed.ParentMappedState))
+			fmt.Sprintf("stop required: shutdown=%t, parentState(observed)=%s", snap.Desired.IsShutdownRequested(), snap.Observed.ParentMappedState), nil)
 	}
 
 	if snap.Observed.ConsecutiveErrors == 0 && snap.Observed.PendingMessageCount < pendingDegradedThreshold {
 		return fsmv2.Result[any, any](&RunningState{}, fsmv2.SignalNone, nil,
 			fmt.Sprintf("recovering to Running: consecutiveErrors=0, pendingMessages=%d (threshold=%d)",
-				snap.Observed.PendingMessageCount, pendingDegradedThreshold))
+				snap.Observed.PendingMessageCount, pendingDegradedThreshold), nil)
 	}
 
 	if snap.Observed.HasTransport && snap.Observed.HasValidToken {
@@ -63,18 +63,18 @@ func (s *DegradedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 			return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil,
 				fmt.Sprintf("degraded (%d errors, %d pending), backoff %s",
 					snap.Observed.ConsecutiveErrors, snap.Observed.PendingMessageCount,
-					backoffDelay.Round(time.Second)))
+					backoffDelay.Round(time.Second)), nil)
 		}
 
 		return fsmv2.Result[any, any](s, fsmv2.SignalNone, &action.PullAction{},
 			fmt.Sprintf("degraded (%d consecutive errors, %d pending), still pulling",
-				snap.Observed.ConsecutiveErrors, snap.Observed.PendingMessageCount))
+				snap.Observed.ConsecutiveErrors, snap.Observed.PendingMessageCount), nil)
 	}
 
 	return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil,
 		fmt.Sprintf("degraded (%d consecutive errors, %d pending), waiting: hasTransport=%t, hasValidToken=%t",
 			snap.Observed.ConsecutiveErrors, snap.Observed.PendingMessageCount,
-			snap.Observed.HasTransport, snap.Observed.HasValidToken))
+			snap.Observed.HasTransport, snap.Observed.HasValidToken), nil)
 }
 
 func (s *DegradedState) String() string {

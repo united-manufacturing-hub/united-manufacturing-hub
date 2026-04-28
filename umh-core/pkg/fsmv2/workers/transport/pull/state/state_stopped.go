@@ -32,16 +32,16 @@ func (s *StoppedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := helpers.ConvertSnapshot[snapshot.PullObservedState, *snapshot.PullDesiredState](snapAny)
 
 	if snap.Desired.IsShutdownRequested() {
-		return fsmv2.Result[any, any](s, fsmv2.SignalNeedsRemoval, nil, "shutdown requested, signaling removal")
+		return fsmv2.Result[any, any](s, fsmv2.SignalNeedsRemoval, nil, "shutdown requested, signaling removal", nil)
 	}
 
 	if snap.Observed.ShouldBeRunning() {
 		return fsmv2.Result[any, any](&RunningState{}, fsmv2.SignalNone, nil,
-			fmt.Sprintf("parent mapped state is %q, transitioning to Running", snap.Observed.ParentMappedState))
+			fmt.Sprintf("parent mapped state is %q, transitioning to Running", snap.Observed.ParentMappedState), nil)
 	}
 
 	return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil,
-		fmt.Sprintf("stopped, parent mapped state is %q", snap.Observed.ParentMappedState))
+		fmt.Sprintf("stopped, parent mapped state is %q", snap.Observed.ParentMappedState), nil)
 }
 
 func (s *StoppedState) String() string {

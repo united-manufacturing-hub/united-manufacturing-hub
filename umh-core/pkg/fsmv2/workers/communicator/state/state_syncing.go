@@ -39,18 +39,18 @@ func (s *SyncingState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := helpers.ConvertSnapshot[snapshot.CommunicatorObservedState, *snapshot.CommunicatorDesiredState](snapAny)
 
 	if snap.Desired.IsShutdownRequested() {
-		return fsmv2.Result[any, any](&StoppedState{}, fsmv2.SignalNone, nil, "Shutdown requested during sync")
+		return fsmv2.Result[any, any](&StoppedState{}, fsmv2.SignalNone, nil, "Shutdown requested during sync", nil)
 	}
 
 	if !snap.Observed.IsSyncHealthy() {
 		return fsmv2.Result[any, any](&RecoveringState{}, fsmv2.SignalNone, nil,
 			fmt.Sprintf("children unhealthy: healthy=%d, unhealthy=%d",
-				snap.Observed.ChildrenHealthy, snap.Observed.ChildrenUnhealthy))
+				snap.Observed.ChildrenHealthy, snap.Observed.ChildrenUnhealthy), nil)
 	}
 
 	return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil,
 		fmt.Sprintf("syncing: healthy=%d, unhealthy=%d",
-			snap.Observed.ChildrenHealthy, snap.Observed.ChildrenUnhealthy))
+			snap.Observed.ChildrenHealthy, snap.Observed.ChildrenUnhealthy), nil)
 }
 
 func (s *SyncingState) String() string {

@@ -88,7 +88,7 @@ func (t *TestState) Next(snapshot any) fsmv2.NextResult[any, any] {
 		reason = t.name
 	}
 
-	return fsmv2.Result[any, any](t, fsmv2.SignalNone, nil, reason)
+	return fsmv2.Result[any, any](t, fsmv2.SignalNone, nil, reason, nil)
 }
 
 func (t *TestState) String() string {

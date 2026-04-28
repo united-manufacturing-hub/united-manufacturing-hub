@@ -35,26 +35,26 @@ func (s *RunningState) Next(snapAny any) fsmv2.NextResult[any, any] {
 
 	if snap.Observed.IsStopRequired() {
 		return fsmv2.Result[any, any](&StoppingState{}, fsmv2.SignalNone, nil,
-			fmt.Sprintf("stop required: shutdown=%t, parentState(observed)=%s", snap.Desired.IsShutdownRequested(), snap.Observed.ParentMappedState))
+			fmt.Sprintf("stop required: shutdown=%t, parentState(observed)=%s", snap.Desired.IsShutdownRequested(), snap.Observed.ParentMappedState), nil)
 	}
 
 	if snap.Observed.ConsecutiveErrors >= 3 {
 		return fsmv2.Result[any, any](&DegradedState{}, fsmv2.SignalNone, nil,
-			fmt.Sprintf("degrading: %d consecutive errors", snap.Observed.ConsecutiveErrors))
+			fmt.Sprintf("degrading: %d consecutive errors", snap.Observed.ConsecutiveErrors), nil)
 	}
 
 	if snap.Observed.PendingMessageCount >= pendingDegradedThreshold {
 		return fsmv2.Result[any, any](&DegradedState{}, fsmv2.SignalNone, nil,
 			fmt.Sprintf("degrading: %d pending messages (threshold=%d)",
-				snap.Observed.PendingMessageCount, pendingDegradedThreshold))
+				snap.Observed.PendingMessageCount, pendingDegradedThreshold), nil)
 	}
 
 	if snap.Observed.HasTransport && snap.Observed.HasValidToken {
-		return fsmv2.Result[any, any](s, fsmv2.SignalNone, &action.PushAction{}, "pushing messages (transport and token available)")
+		return fsmv2.Result[any, any](s, fsmv2.SignalNone, &action.PushAction{}, "pushing messages (transport and token available)", nil)
 	}
 
 	return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil,
-		fmt.Sprintf("waiting: hasTransport=%t, hasValidToken=%t", snap.Observed.HasTransport, snap.Observed.HasValidToken))
+		fmt.Sprintf("waiting: hasTransport=%t, hasValidToken=%t", snap.Observed.HasTransport, snap.Observed.HasValidToken), nil)
 }
 
 func (s *RunningState) String() string {

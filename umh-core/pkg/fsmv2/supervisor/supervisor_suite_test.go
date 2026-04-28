@@ -179,7 +179,7 @@ type mockState struct {
 
 func (m *mockState) Next(snapshot any) fsmv2.NextResult[any, any] {
 	if m.nextState == nil {
-		return fsmv2.Result[any, any](m, fsmv2.SignalNone, nil, "mock state")
+		return fsmv2.Result[any, any](m, fsmv2.SignalNone, nil, "mock state", nil)
 	}
 
 	reason := m.reason
@@ -187,7 +187,7 @@ func (m *mockState) Next(snapshot any) fsmv2.NextResult[any, any] {
 		reason = "mock state"
 	}
 
-	return fsmv2.Result[any, any](m.nextState, m.signal, m.action, reason)
+	return fsmv2.Result[any, any](m.nextState, m.signal, m.action, reason, nil)
 }
 
 func (m *mockState) String() string { return "MockState" }

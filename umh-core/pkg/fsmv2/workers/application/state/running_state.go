@@ -29,15 +29,15 @@ func (s *RunningState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := helpers.ConvertSnapshot[snapshot.ApplicationObservedState, *snapshot.ApplicationDesiredState](snapAny)
 
 	if snap.Desired.IsShutdownRequested() {
-		return fsmv2.Result[any, any](&StoppedState{}, fsmv2.SignalNone, nil, "Shutdown requested")
+		return fsmv2.Result[any, any](&StoppedState{}, fsmv2.SignalNone, nil, "Shutdown requested", nil)
 	}
 
 	// Check for infrastructure issues (circuit open OR stale children)
 	if snap.Observed.HasInfrastructureIssues() {
-		return fsmv2.Result[any, any](&DegradedState{}, fsmv2.SignalNone, nil, snap.Observed.InfrastructureReason())
+		return fsmv2.Result[any, any](&DegradedState{}, fsmv2.SignalNone, nil, snap.Observed.InfrastructureReason(), nil)
 	}
 
-	return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil, "Application supervisor is running and managing children")
+	return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil, "Application supervisor is running and managing children", nil)
 }
 
 func (s *RunningState) String() string {

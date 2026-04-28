@@ -29,17 +29,17 @@ func (s *TryingToStartState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := helpers.ConvertSnapshot[snapshot.PersistenceObservedState, *snapshot.PersistenceDesiredState](snapAny)
 
 	if snap.Desired.IsShutdownRequested() {
-		return fsmv2.Result[any, any](&StoppedState{}, fsmv2.SignalNone, nil, "Shutdown requested during startup")
+		return fsmv2.Result[any, any](&StoppedState{}, fsmv2.SignalNone, nil, "Shutdown requested during startup", nil)
 	}
 
 	for _, result := range snap.Observed.LastActionResults {
 		if result.ActionType == action.NewRunMaintenanceAction().Name() && result.Success {
-			return fsmv2.Result[any, any](&RunningState{}, fsmv2.SignalNone, nil, "Startup maintenance completed")
+			return fsmv2.Result[any, any](&RunningState{}, fsmv2.SignalNone, nil, "Startup maintenance completed", nil)
 		}
 	}
 
 	return fsmv2.Result[any, any](s, fsmv2.SignalNone,
-		action.NewRunMaintenanceAction(), "Running startup maintenance")
+		action.NewRunMaintenanceAction(), "Running startup maintenance", nil)
 }
 
 func (s *TryingToStartState) String() string {

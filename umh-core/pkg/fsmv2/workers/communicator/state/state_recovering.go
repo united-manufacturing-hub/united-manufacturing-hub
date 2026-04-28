@@ -33,18 +33,18 @@ func (s *RecoveringState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := helpers.ConvertSnapshot[snapshot.CommunicatorObservedState, *snapshot.CommunicatorDesiredState](snapAny)
 
 	if snap.Desired.IsShutdownRequested() {
-		return fsmv2.Result[any, any](&StoppedState{}, fsmv2.SignalNone, nil, "Shutdown requested during recovering state")
+		return fsmv2.Result[any, any](&StoppedState{}, fsmv2.SignalNone, nil, "Shutdown requested during recovering state", nil)
 	}
 
 	if snap.Observed.IsSyncHealthy() {
 		return fsmv2.Result[any, any](&SyncingState{}, fsmv2.SignalNone, nil,
 			fmt.Sprintf("recovered: healthy=%d, unhealthy=%d",
-				snap.Observed.ChildrenHealthy, snap.Observed.ChildrenUnhealthy))
+				snap.Observed.ChildrenHealthy, snap.Observed.ChildrenUnhealthy), nil)
 	}
 
 	return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil,
 		fmt.Sprintf("recovering: healthy=%d, unhealthy=%d",
-			snap.Observed.ChildrenHealthy, snap.Observed.ChildrenUnhealthy))
+			snap.Observed.ChildrenHealthy, snap.Observed.ChildrenUnhealthy), nil)
 }
 
 func (s *RecoveringState) String() string {

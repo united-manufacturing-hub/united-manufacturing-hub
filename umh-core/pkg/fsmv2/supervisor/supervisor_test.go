@@ -150,7 +150,7 @@ func (m *mockState) String() string {
 }
 
 func (m *mockState) Next(_ any) fsmv2.NextResult[any, any] {
-	return fsmv2.Result[any, any](m, fsmv2.SignalNone, nil, m.reason)
+	return fsmv2.Result[any, any](m, fsmv2.SignalNone, nil, m.reason, nil)
 }
 
 func (m *mockState) LifecyclePhase() config.LifecyclePhase { return config.PhaseRunningHealthy }
@@ -370,6 +370,10 @@ var _ = Describe("Supervisor Internal", func() {
 				WorkerType: "parent",
 			}
 
+			// TODO(P2.x): set Enabled: true once the Enabled→ShutdownRequested
+			// reducer lands. The DDS path bypasses P1.8's renderChildren
+			// architecture test, so this fixture would silently stop its
+			// child without an explicit Enabled.
 			childSpecs := []config.ChildSpec{
 				{
 					Name:             "child-1",
@@ -420,6 +424,10 @@ var _ = Describe("Supervisor Internal", func() {
 				WorkerType: "parent",
 			}
 
+			// TODO(P2.x): set Enabled: true once the Enabled→ShutdownRequested
+			// reducer lands. The DDS path bypasses P1.8's renderChildren
+			// architecture test, so this fixture would silently stop its
+			// child without an explicit Enabled.
 			childSpecs := []config.ChildSpec{
 				{
 					Name:             "child-1",
@@ -468,6 +476,10 @@ var _ = Describe("Supervisor Internal", func() {
 				WorkerType: "parent",
 			}
 
+			// TODO(P2.x): set Enabled: true once the Enabled→ShutdownRequested
+			// reducer lands. The DDS path bypasses P1.8's renderChildren
+			// architecture test, so this fixture would silently stop its
+			// child without an explicit Enabled.
 			childSpecs := []config.ChildSpec{
 				{
 					Name:             "child-1",
@@ -524,6 +536,10 @@ var _ = Describe("Supervisor Internal", func() {
 				WorkerType: "parent",
 			}
 
+			// TODO(P2.x): set Enabled: true on each child once the
+			// Enabled→ShutdownRequested reducer lands. The DDS path bypasses
+			// P1.8's renderChildren architecture test, so these fixtures would
+			// silently stop their children without explicit Enabled.
 			childSpecs := []config.ChildSpec{
 				{
 					Name:             "child-1",
@@ -598,6 +614,10 @@ var _ = Describe("Supervisor Internal", func() {
 				WorkerType: "parent",
 			}
 
+			// TODO(P2.x): set Enabled: true once the Enabled→ShutdownRequested
+			// reducer lands. The DDS path bypasses P1.8's renderChildren
+			// architecture test, so this fixture would silently stop its
+			// child without an explicit Enabled.
 			childSpecs := []config.ChildSpec{
 				{
 					Name:             "child-1",
@@ -646,6 +666,10 @@ var _ = Describe("Supervisor Internal", func() {
 				WorkerType: "parent",
 			}
 
+			// TODO(P2.x): set Enabled: true once the Enabled→ShutdownRequested
+			// reducer lands. The DDS path bypasses P1.8's renderChildren
+			// architecture test, so this fixture would silently stop its
+			// child without an explicit Enabled.
 			childSpecs := []config.ChildSpec{
 				{
 					Name:             "child-1",

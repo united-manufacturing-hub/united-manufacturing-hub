@@ -126,6 +126,35 @@ type NextResult[TSnapshot any, TDeps any] struct {
 	// Example: "sync degraded: 5 consecutive errors (authentication_failure)"
 	Reason string
 
+	// Children is the parent's intended children-set for this tick. Parents
+	// emit children via this field so renderChildren is part of state.Next();
+	// the supervisor reads it post-tick and reconciles spawn / despawn /
+	// config-update against its own children registry. (Design Intent §16
+	// convergence-by-default; §17 explicit wire-format compatibility; Spec
+	// §2.10 children-set design.)
+	//
+	// Discriminator (Go-level, unambiguous):
+	//   - nil sentinel       → "no opinion" — supervisor falls back to legacy
+	//                          DDS-derived children (SetChildSpecsFactory).
+	//   - non-nil (any len)  → "use this exact set" — including the explicit
+	//                          empty form []config.ChildSpec{} which means
+	//                          "I am a parent and I want zero children right
+	//                          now." The supervisor will despawn any children
+	//                          not in the set.
+	//
+	// CSE JSON round-trip note: nil and [] collapse ambiguously across some
+	// JSON encoders. The discriminator above is enforced at the Go API
+	// boundary (state.Next return value) BEFORE serialization, never after.
+	// State authors should construct the explicit empty slice when they mean
+	// "no children" and reserve nil for "no opinion" / unmigrated paths.
+	//
+	// Migration window: P1.5 introduces the field only — the supervisor does
+	// not yet read it. Passing a non-nil Children slice has no effect until
+	// P2.4 wires the reconciliation discriminator. Legacy parents that set
+	// ChildSpecs via DeriveDesiredState continue to work until P2.1 retires
+	// SetChildSpecsFactory.
+	Children []config.ChildSpec
+
 	// Signal indicates framework-level events (shutdown, restart, etc.).
 	Signal Signal
 }
@@ -163,23 +192,30 @@ type State[TSnapshot any, TDeps any] interface {
 // Result creates a NextResult with the given components.
 // This is a convenience function to reduce boilerplate when returning from Next().
 //
+// The children argument is the parent's intended children-set for this tick.
+// Pass nil (the common case during the P1 migration window) when the state is
+// not managing children. Parents that have migrated to renderChildren pass the
+// rendered slice. See NextResult.Children godoc for migration semantics.
+//
 // Usage:
 //
-//	return fsmv2.Result(s, fsmv2.SignalNone, nil, "Worker is stopped")
+//	return fsmv2.Result(s, fsmv2.SignalNone, nil, "Worker is stopped", nil)
 //
 //	reason := fmt.Sprintf("degraded: %d errors (%s)", errors, errorType)
-//	return fsmv2.Result(&DegradedState{}, fsmv2.SignalNone, nil, reason)
+//	return fsmv2.Result(&DegradedState{}, fsmv2.SignalNone, nil, reason, nil)
 func Result[TSnapshot any, TDeps any](
 	state State[TSnapshot, TDeps],
 	signal Signal,
 	action Action[TDeps],
 	reason string,
+	children []config.ChildSpec,
 ) NextResult[TSnapshot, TDeps] {
 	return NextResult[TSnapshot, TDeps]{
-		State:  state,
-		Signal: signal,
-		Action: action,
-		Reason: reason,
+		State:    state,
+		Signal:   signal,
+		Action:   action,
+		Reason:   reason,
+		Children: children,
 	}
 }
 
@@ -195,18 +231,24 @@ func Result[TSnapshot any, TDeps any](
 //     so Execute asserts deps into TDeps before delegating
 //
 // Values that don't structurally match an Action (missing Execute/Name or
-// wrong signatures) cause a panic with a diagnostic message — this is a
+// wrong signatures) cause a panic with a diagnostic message; this is a
 // programmer error, not a runtime condition.
+//
+// The children argument is the parent's intended children-set for this tick.
+// Pass nil (the common case during the P1 migration window) when the state is
+// not managing children. Parents that have migrated to renderChildren pass
+// the rendered slice. See NextResult.Children godoc for migration semantics.
 //
 // Usage:
 //
-//	return fsmv2.Transition(s, fsmv2.SignalNone, nil, "Worker is stopped")
-//	return fsmv2.Transition(&RunningState{}, fsmv2.SignalNone, &MyAction{}, reason)
+//	return fsmv2.Transition(s, fsmv2.SignalNone, nil, "Worker is stopped", nil)
+//	return fsmv2.Transition(&RunningState{}, fsmv2.SignalNone, &MyAction{}, reason, nil)
 func Transition(
 	state State[any, any],
 	signal Signal,
 	action any,
 	reason string,
+	children []config.ChildSpec,
 ) NextResult[any, any] {
 	var wrapped Action[any]
 	switch a := action.(type) {
@@ -218,7 +260,7 @@ func Transition(
 		wrapped = wrapTypedAction(a)
 	}
 
-	return Result[any, any](state, signal, wrapped, reason)
+	return Result[any, any](state, signal, wrapped, reason, children)
 }
 
 // reflectedAction adapts an Action[TDeps] for some concrete TDeps into an

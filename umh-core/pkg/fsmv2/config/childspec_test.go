@@ -297,6 +297,45 @@ var _ = Describe("ChildSpec Hash", func() {
 				Expect(string(c)).To(MatchRegexp("[0-9a-f]"))
 			}
 		})
+
+		It("should produce different hashes when Enabled flips", func() {
+			specEnabled := config.ChildSpec{
+				Name:       "child-1",
+				WorkerType: "mqtt_connection",
+				UserSpec:   config.UserSpec{Config: "config"},
+				Enabled:    true,
+			}
+
+			specDisabled := config.ChildSpec{
+				Name:       "child-1",
+				WorkerType: "mqtt_connection",
+				UserSpec:   config.UserSpec{Config: "config"},
+				Enabled:    false,
+			}
+
+			hashEnabled, errA := specEnabled.Hash()
+			Expect(errA).NotTo(HaveOccurred())
+			hashDisabled, errB := specDisabled.Hash()
+			Expect(errB).NotTo(HaveOccurred())
+			Expect(hashEnabled).NotTo(Equal(hashDisabled),
+				"Enabled flip must change the hash so dependent caches re-validate the child spec")
+		})
+
+		It("Clone preserves Enabled in the hash", func() {
+			spec := config.ChildSpec{
+				Name:       "child-1",
+				WorkerType: "mqtt_connection",
+				UserSpec:   config.UserSpec{Config: "config"},
+				Enabled:    true,
+			}
+
+			origHash, errOrig := spec.Hash()
+			Expect(errOrig).NotTo(HaveOccurred())
+			cloneHash, errClone := spec.Clone().Hash()
+			Expect(errClone).NotTo(HaveOccurred())
+			Expect(cloneHash).To(Equal(origHash),
+				"Clone copies Enabled (value type), so the cloned hash matches the original")
+		})
 	})
 })
 

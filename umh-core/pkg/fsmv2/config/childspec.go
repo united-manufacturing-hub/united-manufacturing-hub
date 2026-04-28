@@ -225,6 +225,23 @@ type ChildSpec struct {
 	Name             string         `json:"name"                       yaml:"name"`                       // Unique name for this child (within parent scope)
 	WorkerType       string         `json:"workerType"                 yaml:"workerType"`                 // Type of worker to create (registered worker factory key)
 	ChildStartStates []string       `json:"childStartStates,omitempty" yaml:"childStartStates,omitempty"` // Parent FSM states where child should run (empty = always run)
+
+	// Enabled is the parent's per-tick enable signal for this child. true = run,
+	// false = stop. The zero value (§4-C LOCKED) is false: ChildSpec literals that
+	// omit Enabled produce a stopped child. Parents that want a running child must
+	// explicitly set Enabled: true in their renderChildren body. The "forgot
+	// Enabled: true" trap is caught by the P1.8 architecture test
+	// TestRenderChildrenEmitsExplicitEnabled, which un-gates atomically when
+	// renderChildren lands in P2.1.
+	//
+	// Supervisor will reduce Enabled to the child's BaseDesiredState.ShutdownRequested
+	// at P2.x (Enabled=true => ShutdownRequested=false; Enabled=false =>
+	// ShutdownRequested=true). P1.5 introduces the field only — no live reducer
+	// reads it yet; setting Enabled has no runtime effect until P2.x wires the
+	// reduction. Children read snap.Desired.IsShutdownRequested() (or the legacy
+	// snap.IsStopRequired() during the migration window); they will never read
+	// Enabled directly. (Design Intent §4 no-Parent-references-in-children.)
+	Enabled bool `json:"enabled" yaml:"enabled"`
 }
 
 // Clone creates a deep copy of the ChildSpec.
@@ -254,8 +271,11 @@ func (c ChildSpec) Clone() ChildSpec {
 // This is used by the supervisor to detect when a ChildSpec has changed,
 // enabling incremental validation (only re-validate specs whose hash changed).
 //
-// The hash is computed from all relevant fields: Name, WorkerType, UserSpec,
-// ChildStartStates, and Dependencies (excluding any unexported fields).
+// The hash is computed from the comparable spec fields: Name, WorkerType,
+// Enabled, UserSpec, and ChildStartStates. Dependencies are intentionally
+// excluded — they hold runtime objects (channels, mutex-protected values)
+// that cannot be meaningfully hashed and whose churn does not require
+// re-validation. Unexported fields are also excluded.
 //
 // Returns a hex-encoded FNV-1a 64-bit hash string (16 characters) and an error
 // if Variables cannot be marshaled to JSON.
@@ -268,6 +288,20 @@ func (c ChildSpec) Hash() (string, error) {
 	h.Write([]byte(c.Name))
 	h.Write([]byte{0}) // separator
 	h.Write([]byte(c.WorkerType))
+	h.Write([]byte{0}) // separator
+
+	// Hash Enabled (single value byte: 1 for true, 0 for false) so flipping
+	// the per-tick enable signal changes the hash and triggers re-validation
+	// downstream. The trailing zero byte is the field separator (matching the
+	// pattern above) — not the value, which is the byte already written. The
+	// value byte and separator byte are distinct writes intentionally so that
+	// Enabled=false (value 0) is still distinguishable from omission via the
+	// position of the separator that always follows.
+	if c.Enabled {
+		h.Write([]byte{1})
+	} else {
+		h.Write([]byte{0})
+	}
 	h.Write([]byte{0}) // separator
 
 	// Hash UserSpec (config string + variables)

@@ -29,14 +29,14 @@ func (s *TryingToConnectState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := helpers.ConvertSnapshot[snapshot.ExamplepanicObservedState, *snapshot.ExamplepanicDesiredState](snapAny)
 
 	if snap.Observed.IsStopRequired() {
-		return fsmv2.Result[any, any](&TryingToStopState{}, fsmv2.SignalNone, nil, "Stop required, transitioning to TryingToStop")
+		return fsmv2.Result[any, any](&TryingToStopState{}, fsmv2.SignalNone, nil, "Stop required, transitioning to TryingToStop", nil)
 	}
 
 	if snap.Observed.ConnectionHealth == "healthy" {
-		return fsmv2.Result[any, any](&ConnectedState{}, fsmv2.SignalNone, nil, "Connection healthy, transitioning to Connected")
+		return fsmv2.Result[any, any](&ConnectedState{}, fsmv2.SignalNone, nil, "Connection healthy, transitioning to Connected", nil)
 	}
 
-	return fsmv2.Result[any, any](s, fsmv2.SignalNone, &action.ConnectAction{}, "Attempting to establish connection")
+	return fsmv2.Result[any, any](s, fsmv2.SignalNone, &action.ConnectAction{}, "Attempting to establish connection", nil)
 }
 
 func (s *TryingToConnectState) String() string {

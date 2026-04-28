@@ -972,7 +972,7 @@ func checkExhaustiveTransitionCoverage(filename string) []Violation {
 				File:    filename,
 				Line:    pos.Line,
 				Type:    "MISSING_CATCHALL_RETURN",
-				Message: "Next() should end with catch-all: fsmv2.Result(s, fsmv2.SignalNone, nil, reason)",
+				Message: "Next() should end with catch-all: fsmv2.Result(s, fsmv2.SignalNone, nil, reason, nil)",
 			})
 		}
 
