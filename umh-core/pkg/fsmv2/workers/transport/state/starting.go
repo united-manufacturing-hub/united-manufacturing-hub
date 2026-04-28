@@ -40,7 +40,7 @@ func (s *StartingState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := fsmv2.ConvertWorkerSnapshot[transport_pkg.TransportConfig, transport_pkg.TransportStatus](snapAny)
 
 	if snap.IsShutdownRequested {
-		return fsmv2.Transition(&StoppingState{}, fsmv2.SignalNone, nil, "Shutdown requested, transitioning to Stopping")
+		return fsmv2.Transition(&StoppingState{}, fsmv2.SignalNone, nil, "Shutdown requested, transitioning to Stopping", nil)
 	}
 
 	// If we don't have a valid token, authenticate (with backoff on repeated failures)
@@ -75,12 +75,12 @@ func (s *StartingState) Next(snapAny any) fsmv2.NextResult[any, any] {
 			snap.Config.Timeout,
 		)
 
-		return fsmv2.Transition(s, fsmv2.SignalNone, authAction, "No valid token, authenticating with relay")
+		return fsmv2.Transition(s, fsmv2.SignalNone, authAction, "No valid token, authenticating with relay", nil)
 	}
 
 	// Authenticated — transition to Running. Children start via ChildStartStates
 	// once parent enters Running; RunningState handles unhealthy children.
-	return fsmv2.Transition(&RunningState{}, fsmv2.SignalNone, nil, "Authenticated, transitioning to Running")
+	return fsmv2.Transition(&RunningState{}, fsmv2.SignalNone, nil, "Authenticated, transitioning to Running", nil)
 }
 
 // isPermanentAuthError returns true for error types that indicate a configuration

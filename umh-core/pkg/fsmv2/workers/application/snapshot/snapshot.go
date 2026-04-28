@@ -81,13 +81,12 @@ func (s ApplicationStatus) InfrastructureReason() string {
 }
 
 // ChildrenViewToStatus derives ChildrenCircuitOpen and ChildrenStale counts
-// from a ChildrenView. Returns zeroed counts if the view is nil or not the
-// expected type. Callers pass the ChildrenView from WorkerSnapshot so state
-// transitions can observe per-tick infrastructure health without mutating
-// ObservedState.
+// from a ChildrenView. Returns zeroed counts if the view is not the expected
+// type. Callers pass the ChildrenView from WorkerSnapshot so state transitions
+// can observe per-tick infrastructure health without mutating ObservedState.
 func ChildrenViewToStatus(view any) (circuitOpen, stale int) {
 	cv, ok := view.(config.ChildrenView)
-	if !ok || cv == nil {
+	if !ok {
 		return 0, 0
 	}
 

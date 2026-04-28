@@ -38,10 +38,10 @@ func (s *StoppedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := fsmv2.ConvertWorkerSnapshot[snapshot.ApplicationConfig, snapshot.ApplicationStatus](snapAny)
 
 	if snap.IsShutdownRequested {
-		return fsmv2.Transition(s, fsmv2.SignalNeedsRemoval, nil, "Application supervisor is stopped and shutdown requested")
+		return fsmv2.Transition(s, fsmv2.SignalNeedsRemoval, nil, "Application supervisor is stopped and shutdown requested", nil)
 	}
 
-	return fsmv2.Transition(s, fsmv2.SignalNone, nil, "Application supervisor is stopped")
+	return fsmv2.Transition(s, fsmv2.SignalNone, nil, "Application supervisor is stopped", nil)
 }
 
 func (s *StoppedState) String() string {

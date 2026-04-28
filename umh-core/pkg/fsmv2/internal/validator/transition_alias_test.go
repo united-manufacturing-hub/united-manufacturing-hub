@@ -32,7 +32,7 @@ var _ = Describe("FindLegacyResultCalls (TransitionAlias matcher)", func() {
 import "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 
 func Next() any {
-	return fsmv2.Result[any, any](nil, fsmv2.SignalNone, nil, "reason")
+	return fsmv2.Result[any, any](nil, fsmv2.SignalNone, nil, "reason", nil)
 }
 `
 
@@ -95,7 +95,7 @@ func Next() any {
 import "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 
 func Next() any {
-	return fsmv2.Transition(nil, fsmv2.SignalNone, nil, "reason")
+	return fsmv2.Transition(nil, fsmv2.SignalNone, nil, "reason", nil)
 }
 `
 
@@ -114,7 +114,7 @@ func Next() any {
 import "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 
 func Next() any {
-	return fsmv2.Result(nil, fsmv2.SignalNone, nil, "reason")
+	return fsmv2.Result(nil, fsmv2.SignalNone, nil, "reason", nil)
 }
 `
 
@@ -152,7 +152,7 @@ func Print() {
 import "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 
 func Next() any {
-	_ = fsmv2.Result[any, any](nil, fsmv2.SignalNone, nil, "first")
+	_ = fsmv2.Result[any, any](nil, fsmv2.SignalNone, nil, "first", nil)
 	_ = fsmv2.WrapAction[struct{}](nil)
 	return nil
 }

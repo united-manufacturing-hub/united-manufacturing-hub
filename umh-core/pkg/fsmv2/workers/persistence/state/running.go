@@ -28,11 +28,11 @@ func (s *RunningState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := fsmv2.ConvertWorkerSnapshot[snapshot.PersistenceConfig, snapshot.PersistenceStatus](snapAny)
 
 	if snap.IsShutdownRequested {
-		return fsmv2.Transition(&ShuttingDownState{}, fsmv2.SignalNone, nil, "Shutdown requested")
+		return fsmv2.Transition(&ShuttingDownState{}, fsmv2.SignalNone, nil, "Shutdown requested", nil)
 	}
 
 	if !snap.Status.IsHealthy() {
-		return fsmv2.Transition(&RunningDegradedState{}, fsmv2.SignalNone, nil, "Action failed, entering degraded state")
+		return fsmv2.Transition(&RunningDegradedState{}, fsmv2.SignalNone, nil, "Action failed, entering degraded state", nil)
 	}
 
 	return emitActionIfDue(s, snap)
