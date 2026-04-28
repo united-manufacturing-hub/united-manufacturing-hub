@@ -32,6 +32,15 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
+
+	// Parent worker packages — imported by name (not blank) because Test #5,
+	// #7, #8 and #13 layer 2 call each parent's exported RenderChildren to
+	// validate the convention introduced in P2.1.
+	applicationworker "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/application"
+	applicationsnapshot "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/application/snapshot"
+	communicatorworker "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator"
+	exampleparentworker "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleparent"
+	transportworker "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport"
 )
 
 // P1.8 — foundation-cap architecture tests. Each spec anchors a Design
@@ -223,11 +232,129 @@ var _ = Describe("FSMv2 Architecture Validation — P1.8 Foundation Cap", func()
 	})
 
 	// =====================================================================
-	// Test 5 — TestParentRenderChildrenEmitsNonNil (GATED → P2.1)
+	// Test 5 — TestParentRenderChildrenEmitsNonNil (un-gated at P2.1)
 	// =====================================================================
-	Describe("Parent renderChildren emits non-nil []ChildSpec{} (GATED P2.1)", func() {
+	Describe("Parent renderChildren emits non-nil []ChildSpec{}", func() {
 		It("every parent worker's renderChildren returns non-nil []ChildSpec", func() {
-			Skip("pending P2.1: renderChildren convention not yet introduced; un-gates atomically with P2.1 dispatch per §4-E LOCKED")
+			fixtures := parentRenderers()
+			Expect(fixtures).NotTo(BeEmpty(),
+				"parentRenderers() must enumerate every production parent worker; "+
+					"the architecture invariant relies on the registry being exhaustive (P2.1)")
+
+			for _, fx := range fixtures {
+				specs := fx.render()
+				Expect(specs).NotTo(BeNil(),
+					"parent %q renderChildren returned nil; the convention is to return "+
+						"an explicit []ChildSpec{} (possibly empty) so the supervisor's "+
+						"NextResult.Children discriminator can distinguish 'no opinion' "+
+						"(nil sentinel) from 'use this exact set' (non-nil). See the "+
+						"NextResult.Children godoc in fsmv2/api.go for the discriminator "+
+						"contract.",
+					fx.name)
+			}
+		})
+
+		// Registry-exhaustiveness meta-test (added in P2.1 iter-2 per DA
+		// per-step adversarial pass): a future parent worker added in PR2/PR3
+		// without a fixture entry would silently bypass Layer 2 coverage of
+		// the F4⊕G1 trap. AST-walk the workers/ tree for top-level
+		// `func RenderChildren` declarations and assert the per-package set
+		// matches the parentRenderers() fixture name set. If a new worker
+		// adds RenderChildren without a corresponding fixture, this test
+		// fails with the missing worker's package name.
+		It("parentRenderers() registry covers every worker package that defines RenderChildren", func() {
+			workersDir := filepath.Join(getFsmv2Dir(), "workers")
+
+			// AST-walk: find top-level `func RenderChildren(...)` decls.
+			// Map from package directory basename → worker source file path.
+			discovered := map[string]string{}
+
+			err := filepath.Walk(workersDir, func(path string, info os.FileInfo, walkErr error) error {
+				if walkErr != nil {
+					return walkErr
+				}
+				if info.IsDir() {
+					return nil
+				}
+				if !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
+					return nil
+				}
+
+				fset := token.NewFileSet()
+				file, perr := parser.ParseFile(fset, path, nil, parser.ParseComments)
+				if perr != nil {
+					// Surface parse failures rather than silent skip
+					// (consistent with Test 11's discipline).
+					return fmt.Errorf("parse %s: %w", path, perr)
+				}
+
+				for _, decl := range file.Decls {
+					fn, ok := decl.(*ast.FuncDecl)
+					if !ok {
+						continue
+					}
+					// Top-level (non-method) func with name RenderChildren.
+					if fn.Recv != nil {
+						continue
+					}
+					if fn.Name == nil || fn.Name.Name != "RenderChildren" {
+						continue
+					}
+
+					pkgDir := filepath.Base(filepath.Dir(path))
+					if existing, dup := discovered[pkgDir]; dup {
+						Fail(fmt.Sprintf(
+							"package %q has multiple RenderChildren declarations (first at %s, second at %s); "+
+								"convention is one RenderChildren per parent package",
+							pkgDir, existing, path))
+					}
+					discovered[pkgDir] = path
+				}
+
+				return nil
+			})
+			Expect(err).NotTo(HaveOccurred(), "walking workers directory")
+
+			// Map fixtures to their package basenames. Fixture names use
+			// human-readable identifiers (e.g., "transport", "communicator")
+			// chosen to match the basename of their worker package.
+			fixtureNames := map[string]bool{}
+			for _, fx := range parentRenderers() {
+				fixtureNames[fx.name] = true
+			}
+
+			// Check 1: every discovered RenderChildren has a fixture.
+			var missing []string
+			for pkg := range discovered {
+				if !fixtureNames[pkg] {
+					missing = append(missing, pkg)
+				}
+			}
+			Expect(missing).To(BeEmpty(),
+				"worker package(s) define RenderChildren but parentRenderers() has no fixture entry — "+
+					"these workers silently bypass Layer 2 of the F4⊕G1 trap detector. "+
+					"Add a fixture in parentRenderers() for each missing package: %v\n"+
+					"Source files: %v",
+				missing, discovered)
+
+			// Check 2: every fixture corresponds to a real RenderChildren.
+			// Catches the inverse drift (fixture for a package whose
+			// RenderChildren was renamed/moved) — fixture would be a no-op
+			// and miss real production literals.
+			var stale []string
+			for name := range fixtureNames {
+				if _, found := discovered[name]; !found {
+					stale = append(stale, name)
+				}
+			}
+			Expect(stale).To(BeEmpty(),
+				"parentRenderers() has fixture(s) for package(s) that no longer define RenderChildren: %v",
+				stale)
+
+			// Sanity: at least one production RenderChildren must exist (catches a
+			// regression where all renderers got accidentally deleted).
+			Expect(discovered).NotTo(BeEmpty(),
+				"no top-level RenderChildren found anywhere in workers/ — F4⊕G1 detector has nothing to anchor against")
 		})
 	})
 
@@ -241,20 +368,63 @@ var _ = Describe("FSMv2 Architecture Validation — P1.8 Foundation Cap", func()
 	})
 
 	// =====================================================================
-	// Test 7 — TestRenderChildrenIsIdempotent (GATED → P2.1)
+	// Test 7 — TestRenderChildrenIsIdempotent (un-gated at P2.1)
 	// =====================================================================
-	Describe("renderChildren is idempotent across ticks (GATED P2.1)", func() {
+	Describe("renderChildren is idempotent across ticks", func() {
 		It("calling renderChildren twice with the same snapshot yields ChildSpec.Hash equality", func() {
-			Skip("pending P2.1: renderChildren convention not yet introduced; un-gates atomically with P2.1 per §4-E LOCKED")
+			fixtures := parentRenderers()
+			Expect(fixtures).NotTo(BeEmpty())
+
+			for _, fx := range fixtures {
+				first := fx.render()
+				second := fx.render()
+				Expect(len(first)).To(Equal(len(second)),
+					"parent %q renderChildren returned different slice lengths across two calls — non-deterministic emitter (Design Intent §16 convergence-by-default)", fx.name)
+
+				for i := range first {
+					hashA, errA := first[i].Hash()
+					hashB, errB := second[i].Hash()
+					Expect(errA).NotTo(HaveOccurred(), "parent %q child[%d] Hash error on first call", fx.name, i)
+					Expect(errB).NotTo(HaveOccurred(), "parent %q child[%d] Hash error on second call", fx.name, i)
+					Expect(hashA).To(Equal(hashB),
+						"parent %q child[%d] (Name=%q) hash differs across calls — renderChildren must be idempotent (Design Intent §16; P1.8 architecture test 7)",
+						fx.name, i, first[i].Name)
+				}
+			}
 		})
 	})
 
 	// =====================================================================
-	// Test 8 — TestNoTemplatesInChildSpec (GATED → P2.1)
+	// Test 8 — TestNoTemplatesInChildSpec (un-gated at P2.1)
 	// =====================================================================
-	Describe("renderChildren never emits template strings inside ChildSpec (GATED P2.1)", func() {
-		It("emitted ChildSpec fields contain neither '{{' nor '}}'", func() {
-			Skip("pending P2.1: renderChildren convention not yet introduced; un-gates atomically with P2.1 per §4-E LOCKED")
+	Describe("renderChildren never emits template strings inside ChildSpec", func() {
+		It("emitted ChildSpec.Name and WorkerType contain neither '{{' nor '}}'", func() {
+			// UserSpec.Config legitimately contains template markers (children
+			// re-render their own templates downstream). The check covers only
+			// the ChildSpec identity fields whose values are addressed by the
+			// supervisor before any template render happens — Name and
+			// WorkerType. ChildStartStates entries are also identity-level.
+			fixtures := parentRenderers()
+			Expect(fixtures).NotTo(BeEmpty())
+
+			for _, fx := range fixtures {
+				for i, spec := range fx.render() {
+					Expect(spec.Name).NotTo(ContainSubstring("{{"),
+						"parent %q child[%d].Name contains template marker — must be resolved before emission", fx.name, i)
+					Expect(spec.Name).NotTo(ContainSubstring("}}"),
+						"parent %q child[%d].Name contains template marker — must be resolved before emission", fx.name, i)
+					Expect(spec.WorkerType).NotTo(ContainSubstring("{{"),
+						"parent %q child[%d].WorkerType contains template marker — must be resolved before emission", fx.name, i)
+					Expect(spec.WorkerType).NotTo(ContainSubstring("}}"),
+						"parent %q child[%d].WorkerType contains template marker — must be resolved before emission", fx.name, i)
+					for j, st := range spec.ChildStartStates {
+						Expect(st).NotTo(ContainSubstring("{{"),
+							"parent %q child[%d].ChildStartStates[%d] contains template marker — must be resolved before emission", fx.name, i, j)
+						Expect(st).NotTo(ContainSubstring("}}"),
+							"parent %q child[%d].ChildStartStates[%d] contains template marker — must be resolved before emission", fx.name, i, j)
+					}
+				}
+			}
 		})
 	})
 
@@ -469,7 +639,7 @@ var _ = Describe("FSMv2 Architecture Validation — P1.8 Foundation Cap", func()
 	// Test 13 — TestRenderChildrenEmitsExplicitEnabled (F4⊕G1 trap)
 	// =====================================================================
 	//
-	// This test has TWO layers with different gating:
+	// This test has TWO complementary layers, both un-gated:
 	//
 	//   1. Helper meta-test (UN-GATED, ships in P1.8): exercises the
 	//      validateAllEnabled() detector against synthetic ChildSpec
@@ -480,30 +650,33 @@ var _ = Describe("FSMv2 Architecture Validation — P1.8 Foundation Cap", func()
 	//      time: see .execution/P1.8/test_13_failure_injection.txt for
 	//      the PASS-FAIL-PASS round trip on a no-op stub of the helper.
 	//
-	//   2. Registry walk (GATED, pending P2.1): when P2.1 introduces
-	//      renderChildren on real worker types, the test body extends to
-	//      walk the worker registry, call renderChildren on each parent,
-	//      and feed the emitted ChildSpec lists through validateAllEnabled.
-	//      That extension lands as a P2.1 fold, atomic with the
-	//      renderChildren convention itself. Layer 2's gate is captured
-	//      by Test 5 (TestParentRenderChildrenEmitsNonNil) which is
-	//      Skip'd "pending P2.1" — the same un-gate event ships layer 2
-	//      of this test.
+	//   2. Registry walk (UN-GATED at P2.1): walks the parent worker
+	//      registry, calls RenderChildren on each, feeds the emitted
+	//      ChildSpec lists through validateAllEnabled. Catches forgotten-
+	//      Enabled in production renderChildren bodies. Failure-injection
+	//      verified at P2.1 ship time: see
+	//      .execution/P2.1/test_13_layer2_failure_injection.txt for the
+	//      PASS-FAIL-PASS round trip on a deliberate violation in
+	//      transport/children.go (push child literal).
+	//
+	// The two layers are complementary: Layer 1 anchors the detector
+	// mechanism, Layer 2 anchors the integration against production
+	// literals. Both must keep passing across cascade evolution; any
+	// drift in either is the F4⊕G1 trap re-emerging.
+	//
+	// Test 5 (ParentRenderChildrenEmitsNonNil), Test 7
+	// (RenderChildrenIsIdempotent), and Test 8 (NoTemplatesInChildSpec)
+	// also un-gated at P2.1 — they share the parentRenderers() registry
+	// fixture and exercise complementary RenderChildren invariants.
+	// Test 6 (RenderChildrenCalledAtTopOfStateNext) remains gated
+	// pending P2.2 (state.Next-side wiring is the next step).
 	Describe("renderChildren emits ChildSpec with Enabled set explicitly (F4⊕G1 trap)", func() {
 		It("validateAllEnabled accepts explicit Enabled:true and rejects forgotten Enabled (zero-value false)", func() {
-			// F4⊕G1 trap: Enabled default-false × ShouldStop collapse means
-			// a developer who forgets `Enabled: true` in renderChildren
-			// produces a stopped child silently. This spec exercises the
-			// validateAllEnabled detector against synthetic fixtures so the
-			// detector itself is locked against regression. Layer 2 (real
-			// worker-registry walk) lands at P2.1 atomic with the
-			// renderChildren convention. Per §4-E LOCKED enumeration, this
-			// test is NOT in the gated list (#5/#6/#7/#8/#12); the helper
-			// meta-test ships active in P1.8 because it does not depend on
-			// renderChildren existing. Failure-injection verified at P1.8
-			// ship time (see .execution/P1.8/test_13_failure_injection.txt
-			// for the PASS-FAIL-PASS round trip on a no-op stub of the
-			// helper).
+			// Layer 1 — helper meta-test (un-gated since P1.8). Locks the
+			// validateAllEnabled detector against regression — e.g. a
+			// future "simplification" that no-ops the helper. Operates on
+			// synthetic ChildSpec fixtures and does not depend on
+			// renderChildren existing on real workers.
 
 			// Positive path: explicit Enabled: true → no error.
 			Expect(validateAllEnabled([]config.ChildSpec{
@@ -518,6 +691,38 @@ var _ = Describe("FSMv2 Architecture Validation — P1.8 Foundation Cap", func()
 			Expect(err.Error()).To(ContainSubstring("Enabled=false"))
 			Expect(err.Error()).To(ContainSubstring("buggy"))
 			Expect(err.Error()).To(ContainSubstring("F4⊕G1"))
+		})
+
+		It("every parent worker's RenderChildren emits Enabled:true on every spec (registry walk, layer 2)", func() {
+			// Layer 2 — registry walk (un-gated at P2.1). Walks every
+			// production parent worker, calls its exported RenderChildren
+			// on a representative snapshot, and feeds the emitted
+			// ChildSpec slice through validateAllEnabled. This is the
+			// detector that catches a developer forgetting `Enabled: true`
+			// in a renderChildren body — the F4⊕G1 trap proper.
+			//
+			// Failure-injection re-verified at P2.1 ship time:
+			// .execution/P2.1/test_13_layer2_failure_injection.txt
+			// records the PASS-FAIL-PASS round trip after dropping
+			// `Enabled: true` from one site (transport push) and
+			// restoring it.
+			fixtures := parentRenderers()
+			Expect(fixtures).NotTo(BeEmpty(),
+				"parentRenderers() must enumerate every production parent worker; "+
+					"the registry walk relies on the registry being exhaustive (P2.1)")
+
+			for _, fx := range fixtures {
+				specs := fx.render()
+				Expect(specs).NotTo(BeNil(), "parent %q renderChildren returned nil — see Test 5", fx.name)
+				if len(specs) == 0 {
+					// Empty children-set is a valid 'I am a parent and I want
+					// zero children right now' signal; nothing to validate.
+					continue
+				}
+				err := validateAllEnabled(specs)
+				Expect(err).NotTo(HaveOccurred(),
+					"parent %q RenderChildren violates §4-C LOCKED (forgotten Enabled: true): %v", fx.name, err)
+			}
 		})
 	})
 
@@ -578,6 +783,83 @@ func validateAllEnabled(specs []config.ChildSpec) error {
 		}
 	}
 	return nil
+}
+
+// parentRendererFixture pairs a parent worker name with a closure that
+// invokes that worker's exported RenderChildren on a representative
+// snapshot. Test #5/7/8/13-layer-2 walk this list to exercise the
+// renderChildren convention against every production parent.
+type parentRendererFixture struct {
+	name   string
+	render func() []config.ChildSpec
+}
+
+// parentRenderers returns the registry of parent-worker renderChildren
+// fixtures. Each fixture builds a typed snapshot the parent's RenderChildren
+// expects and invokes it. Adding a new parent worker means adding a fixture
+// here; the test #5/7/8/13-layer-2 walks pick it up automatically.
+//
+// The fixtures intentionally exercise the non-empty-children path so
+// validateAllEnabled has at least one ChildSpec to inspect (catches the
+// forgotten-Enabled trap). The empty-input branches (nil-spec startup) are
+// covered separately by each parent's own unit tests.
+func parentRenderers() []parentRendererFixture {
+	return []parentRendererFixture{
+		{
+			name: "communicator",
+			render: func() []config.ChildSpec {
+				return communicatorworker.RenderChildren(fsmv2.WorkerSnapshot[communicatorworker.CommunicatorConfig, communicatorworker.CommunicatorStatus]{
+					Desired: fsmv2.WrappedDesiredState[communicatorworker.CommunicatorConfig]{
+						BaseDesiredState: config.BaseDesiredState{State: config.DesiredStateRunning},
+						ChildrenSpecs: []config.ChildSpec{{
+							Name:       "transport",
+							WorkerType: "transport",
+							UserSpec:   config.UserSpec{Config: "relayURL: https://example.com"},
+						}},
+					},
+				})
+			},
+		},
+		{
+			name: "transport",
+			render: func() []config.ChildSpec {
+				return transportworker.RenderChildren(fsmv2.WorkerSnapshot[transportworker.TransportConfig, transportworker.TransportStatus]{
+					Desired: fsmv2.WrappedDesiredState[transportworker.TransportConfig]{
+						BaseDesiredState: config.BaseDesiredState{State: config.DesiredStateRunning},
+						ChildrenSpecs: []config.ChildSpec{{
+							Name:       "push",
+							WorkerType: "push",
+							UserSpec:   config.UserSpec{Config: "relayURL: https://example.com"},
+						}},
+					},
+				})
+			},
+		},
+		{
+			name: "exampleparent",
+			render: func() []config.ChildSpec {
+				return exampleparentworker.RenderChildren(&exampleparentworker.ParentUserSpec{
+					ChildrenCount:   2,
+					ChildWorkerType: "examplechild",
+				})
+			},
+		},
+		{
+			name: "application",
+			render: func() []config.ChildSpec {
+				return applicationworker.RenderChildren(fsmv2.WorkerSnapshot[applicationsnapshot.ApplicationConfig, applicationsnapshot.ApplicationStatus]{
+					Desired: fsmv2.WrappedDesiredState[applicationsnapshot.ApplicationConfig]{
+						BaseDesiredState: config.BaseDesiredState{State: config.DesiredStateRunning},
+						ChildrenSpecs: []config.ChildSpec{{
+							Name:       "child-a",
+							WorkerType: "examplechild",
+							UserSpec:   config.UserSpec{Config: "device: x"},
+						}},
+					},
+				})
+			},
+		},
+	}
 }
 
 // isStdlibImport returns true when the given file imports the stdlib package

@@ -118,9 +118,7 @@ func (w *ParentWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState,
 		return nil, err
 	}
 
-	childrenCount := parentSpec.ChildrenCount
-
-	if childrenCount == 0 {
+	if parentSpec.ChildrenCount == 0 {
 		return &config.DesiredState{
 			BaseDesiredState: config.BaseDesiredState{State: parentSpec.GetState()},
 			ChildrenSpecs:    nil,
@@ -128,34 +126,11 @@ func (w *ParentWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState,
 		}, nil
 	}
 
-	childrenSpecs := make([]config.ChildSpec, childrenCount)
-	childWorkerType := parentSpec.GetChildWorkerType()
-
-	for i := range childrenCount {
-		childVariables := config.VariableBundle{
-			User: map[string]any{
-				"DEVICE_ID": fmt.Sprintf("device-%d", i),
-			},
-		}
-
-		var childConfig string
-		if parentSpec.ChildConfig != "" {
-			childConfig = parentSpec.ChildConfig
-		} else {
-			childConfig = `address: {{ .IP }}:{{ .PORT }}
-device: {{ .DEVICE_ID }}`
-		}
-
-		childrenSpecs[i] = config.ChildSpec{
-			Name:       fmt.Sprintf("child-%d", i),
-			WorkerType: childWorkerType,
-			UserSpec: config.UserSpec{
-				Config:    childConfig,
-				Variables: childVariables,
-			},
-			ChildStartStates: []string{"TryingToStart", "Running"},
-		}
-	}
+	// RenderChildren (children.go) is the canonical children-set emitter and
+	// the single source of truth for ChildSpec construction; called here so
+	// the legacy DDS path and the P2.2 renderChildren-in-state.Next migration
+	// remain bit-for-bit identical.
+	childrenSpecs := RenderChildren(&parentSpec)
 
 	return &config.DesiredState{
 		BaseDesiredState: config.BaseDesiredState{State: parentSpec.GetState()},

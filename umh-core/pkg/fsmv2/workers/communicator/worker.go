@@ -79,12 +79,17 @@ func NewCommunicatorWorker(id deps.Identity, logger deps.FSMLogger, sr deps.Stat
 		return nil
 	})
 
+	// Legacy DDS-path factory: kept until P2.5 retires SetChildSpecsFactory.
+	// Enabled is set explicitly to true here for parity with RenderChildren
+	// (see children.go) so behavior matches whether the supervisor reads via
+	// the legacy path or the post-P2.4 NextResult.Children discriminator.
 	w.SetChildSpecsFactory(func(_ CommunicatorConfig, spec config.UserSpec) []config.ChildSpec {
 		return []config.ChildSpec{{
 			Name:             "transport",
 			WorkerType:       "transport",
 			UserSpec:         spec,
 			ChildStartStates: []string{"Syncing", "Recovering"},
+			Enabled:          true,
 		}}
 	})
 
