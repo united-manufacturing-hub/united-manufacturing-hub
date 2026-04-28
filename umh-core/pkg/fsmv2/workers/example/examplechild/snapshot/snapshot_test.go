@@ -63,7 +63,7 @@ var _ = Describe("ExamplechildDesiredState", func() {
 	})
 })
 
-var _ = Describe("ExamplechildObservedState.IsStopRequired", func() {
+var _ = Describe("ExamplechildObservedState.ShouldStop", func() {
 	DescribeTable("should correctly determine stop requirement",
 		func(shutdownRequested bool, parentMappedState string, want bool) {
 			obs := snapshot.ExamplechildObservedState{
@@ -73,7 +73,7 @@ var _ = Describe("ExamplechildObservedState.IsStopRequired", func() {
 			}
 			obs.ExamplechildDesiredState.SetShutdownRequested(shutdownRequested)
 
-			Expect(obs.IsStopRequired()).To(Equal(want))
+			Expect(obs.ShouldStop()).To(Equal(want))
 		},
 		Entry("returns true when shutdown requested", true, "running", true),
 		Entry("returns true when parent mapped state is stopped", false, "stopped", true),

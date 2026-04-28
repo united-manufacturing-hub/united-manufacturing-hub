@@ -102,7 +102,7 @@ func (o ExamplechildObservedState) SetParentMappedState(state string) fsmv2.Obse
 	return o
 }
 
-// IsStopRequired reports whether the child needs to stop.
-func (o ExamplechildObservedState) IsStopRequired() bool {
+// ShouldStop reports whether the child needs to stop.
+func (o ExamplechildObservedState) ShouldStop() bool {
 	return o.IsShutdownRequested() || !o.ShouldBeRunning()
 }

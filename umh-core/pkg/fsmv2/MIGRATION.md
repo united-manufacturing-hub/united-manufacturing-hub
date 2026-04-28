@@ -161,7 +161,7 @@ func (s *TryingToStartState) Next(snapAny any) (fsmv2.State[any, any], fsmv2.Sig
     snap := helpers.ConvertSnapshot[MyObservedState, *MyDesiredState](snapAny)
 
     // Check shutdown first
-    if snap.Observed.IsStopRequired() {
+    if snap.Observed.ShouldStop() {
         return &TryingToStopState{}, fsmv2.SignalNone, nil
     }
 
@@ -363,7 +363,7 @@ func (s *RunningState) Next(snapAny any) (fsmv2.State[any, any], fsmv2.Signal, f
     snap := helpers.ConvertSnapshot[MyObservedState, *MyDesiredState](snapAny)
 
     // Check shutdown first (equivalent to leave callback)
-    if snap.Observed.IsStopRequired() {
+    if snap.Observed.ShouldStop() {
         return &TryingToStopState{}, fsmv2.SignalNone, nil
     }
 

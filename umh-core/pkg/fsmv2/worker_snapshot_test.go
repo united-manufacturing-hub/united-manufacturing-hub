@@ -146,26 +146,26 @@ var _ = Describe("ConvertWorkerSnapshot", func() {
 	})
 })
 
-var _ = Describe("IsStopRequired", func() {
+var _ = Describe("ShouldStop", func() {
 	It("returns true when IsShutdownRequested is true", func() {
 		snap := fsmv2.WorkerSnapshot[workerTestConfig, workerTestStatus]{
 			IsShutdownRequested: true,
 		}
-		Expect(snap.IsStopRequired()).To(BeTrue())
+		Expect(snap.ShouldStop()).To(BeTrue())
 	})
 
 	It("returns true when ParentMappedState is stopped", func() {
 		snap := fsmv2.WorkerSnapshot[workerTestConfig, workerTestStatus]{
 			ParentMappedState: "stopped",
 		}
-		Expect(snap.IsStopRequired()).To(BeTrue())
+		Expect(snap.ShouldStop()).To(BeTrue())
 	})
 
 	It("returns false when neither condition is met", func() {
 		snap := fsmv2.WorkerSnapshot[workerTestConfig, workerTestStatus]{
 			ParentMappedState: "running",
 		}
-		Expect(snap.IsStopRequired()).To(BeFalse())
+		Expect(snap.ShouldStop()).To(BeFalse())
 	})
 
 	It("returns false when ParentMappedState is empty (root worker)", func() {
@@ -173,7 +173,7 @@ var _ = Describe("IsStopRequired", func() {
 			IsShutdownRequested: false,
 			ParentMappedState:   "",
 		}
-		Expect(snap.IsStopRequired()).To(BeFalse())
+		Expect(snap.ShouldStop()).To(BeFalse())
 	})
 
 	It("returns true when both conditions are met", func() {
@@ -181,7 +181,7 @@ var _ = Describe("IsStopRequired", func() {
 			IsShutdownRequested: true,
 			ParentMappedState:   "stopped",
 		}
-		Expect(snap.IsStopRequired()).To(BeTrue())
+		Expect(snap.ShouldStop()).To(BeTrue())
 	})
 })
 

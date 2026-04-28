@@ -131,7 +131,7 @@ func (o PushObservedState) SetParentMappedState(state string) fsmv2.ObservedStat
 	return o
 }
 
-// IsStopRequired reports whether the push worker needs to stop.
-func (o PushObservedState) IsStopRequired() bool {
+// ShouldStop reports whether the push worker needs to stop.
+func (o PushObservedState) ShouldStop() bool {
 	return o.IsShutdownRequested() || !o.ShouldBeRunning()
 }

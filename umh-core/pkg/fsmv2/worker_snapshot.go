@@ -81,18 +81,33 @@ type WorkerSnapshot[TConfig any, TStatus any] struct {
 	IsShutdownRequested bool
 }
 
-// IsStopRequired returns true when the worker should transition to stopped.
+// ShouldStop returns true when the worker should transition to stopped.
 // Covers both explicit shutdown requests and parent-driven stop signals.
 //
 // Body reads BOTH signals (user shutdown OR parent-mapped state == stopped)
 // via the deprecated flat aliases. Both branches are required during the
 // migration window — pre-migration parents still write ParentMappedState
-// without setting IsShutdownRequested. The body adapts to nested accessors
-// (Desired.IsShutdownRequested() and Observed.ParentMappedState) when the
-// flat aliases are removed; the OR clause itself collapses to the shutdown
-// branch only after ParentMappedState is fully retired and parents merge
-// their stop intent into the shutdown signal.
-func (s WorkerSnapshot[TConfig, TStatus]) IsStopRequired() bool {
+// without setting IsShutdownRequested.
+//
+// Phase ordering of downstream evolution:
+//   - At P3.0 (flat aliases removed): the body is REWRITTEN atomically with
+//     the alias deletion to read nested accessors instead — i.e. the body
+//     becomes `s.Desired.IsShutdownRequested() || s.Observed.ParentMappedState
+//     == config.DesiredStateStopped`. The body migration MUST land in the
+//     same commit as the flat-field deletion; shipping the deletion alone
+//     would break the build because the current body reads s.IsShutdownRequested
+//     and s.ParentMappedState directly. The method itself is NOT deleted at
+//     P3.0 — callers across worker state files continue to invoke ShouldStop().
+//   - At P3.7 (ParentMappedState fully retired and parents merge their stop
+//     intent into the shutdown signal): the OR clause collapses to the
+//     shutdown branch only — i.e. the body simplifies to
+//     `s.Desired.IsShutdownRequested()`. Simplification BEFORE P3.7 would
+//     drop the parent-driven stop signal during the dual-shape window and
+//     break unmigrated parent → child shutdown propagation.
+//
+// See cascade risk register CHANGE-1 for the full rationale and the
+// dual-shape-window blast radius.
+func (s WorkerSnapshot[TConfig, TStatus]) ShouldStop() bool {
 	return s.IsShutdownRequested || s.ParentMappedState == config.DesiredStateStopped
 }
 

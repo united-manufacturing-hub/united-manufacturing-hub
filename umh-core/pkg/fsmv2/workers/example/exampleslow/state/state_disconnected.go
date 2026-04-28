@@ -28,7 +28,7 @@ func (s *DisconnectedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := helpers.ConvertSnapshot[snapshot.ExampleslowObservedState, *snapshot.ExampleslowDesiredState](snapAny)
 
 	// ParentMappedState is injected into Observed.DesiredState by collector.
-	if snap.Observed.IsStopRequired() {
+	if snap.Observed.ShouldStop() {
 		return fsmv2.Result[any, any](&TryingToStopState{}, fsmv2.SignalNone, nil, "stop required, transitioning to trying to stop", nil)
 	}
 

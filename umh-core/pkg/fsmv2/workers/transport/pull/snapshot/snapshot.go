@@ -125,7 +125,7 @@ func (o PullObservedState) SetParentMappedState(state string) fsmv2.ObservedStat
 	return o
 }
 
-// IsStopRequired reports whether the pull worker needs to stop.
-func (o PullObservedState) IsStopRequired() bool {
+// ShouldStop reports whether the pull worker needs to stop.
+func (o PullObservedState) ShouldStop() bool {
 	return o.IsShutdownRequested() || !o.ShouldBeRunning()
 }

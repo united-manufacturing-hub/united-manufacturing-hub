@@ -33,7 +33,7 @@ type DegradedState struct {
 func (s *DegradedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := helpers.ConvertSnapshot[snapshot.PushObservedState, *snapshot.PushDesiredState](snapAny)
 
-	if snap.Observed.IsStopRequired() {
+	if snap.Observed.ShouldStop() {
 		return fsmv2.Result[any, any](&StoppingState{}, fsmv2.SignalNone, nil,
 			fmt.Sprintf("stop required: shutdown=%t, parentState(observed)=%s", snap.Desired.IsShutdownRequested(), snap.Observed.ParentMappedState), nil)
 	}

@@ -238,8 +238,9 @@ type ChildSpec struct {
 	// at P2.x (Enabled=true => ShutdownRequested=false; Enabled=false =>
 	// ShutdownRequested=true). P1.5 introduces the field only — no live reducer
 	// reads it yet; setting Enabled has no runtime effect until P2.x wires the
-	// reduction. Children read snap.Desired.IsShutdownRequested() (or the legacy
-	// snap.IsStopRequired() during the migration window); they will never read
+	// reduction. Children read snap.Desired.IsShutdownRequested() (or the
+	// dual-shape snap.ShouldStop() reader, which still reads the deprecated
+	// flat aliases during the migration window); they will never read
 	// Enabled directly. (Design Intent §4 no-Parent-references-in-children.)
 	Enabled bool `json:"enabled" yaml:"enabled"`
 }

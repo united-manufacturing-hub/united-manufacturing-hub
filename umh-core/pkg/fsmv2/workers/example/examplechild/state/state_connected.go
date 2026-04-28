@@ -28,7 +28,7 @@ type ConnectedState struct {
 func (s *ConnectedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := helpers.ConvertSnapshot[snapshot.ExamplechildObservedState, *snapshot.ExamplechildDesiredState](snapAny)
 
-	if snap.Observed.IsStopRequired() {
+	if snap.Observed.ShouldStop() {
 		return fsmv2.Result[any, any](&TryingToStopState{}, fsmv2.SignalNone, nil, "Stop required, initiating shutdown", nil)
 	}
 

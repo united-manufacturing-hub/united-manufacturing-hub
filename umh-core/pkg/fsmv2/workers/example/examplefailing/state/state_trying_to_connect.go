@@ -29,7 +29,7 @@ type TryingToConnectState struct {
 func (s *TryingToConnectState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := helpers.ConvertSnapshot[snapshot.ExamplefailingObservedState, *snapshot.ExamplefailingDesiredState](snapAny)
 
-	if snap.Observed.IsStopRequired() {
+	if snap.Observed.ShouldStop() {
 		return fsmv2.Result[any, any](&TryingToStopState{}, fsmv2.SignalNone, nil, "stop required, transitioning to stop state", nil)
 	}
 

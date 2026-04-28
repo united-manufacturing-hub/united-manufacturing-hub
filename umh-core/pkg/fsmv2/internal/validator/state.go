@@ -185,7 +185,7 @@ func checkShutdownCheckFirst(filename string) []Violation {
 			// Old API: method call like snap.Desired.IsShutdownRequested()
 			if callExpr, ok := condNode.(*ast.CallExpr); ok {
 				if selExpr, ok := callExpr.Fun.(*ast.SelectorExpr); ok {
-					if selExpr.Sel.Name == "IsShutdownRequested" || selExpr.Sel.Name == "IsStopRequired" {
+					if selExpr.Sel.Name == "IsShutdownRequested" || selExpr.Sel.Name == "ShouldStop" {
 						isShutdownCheck = true
 
 						return false
@@ -226,8 +226,8 @@ func checkShutdownCheckFirst(filename string) []Violation {
 	return violations
 }
 
-// ValidateChildWorkersIsStopRequired checks that child workers use IsStopRequired() not IsShutdownRequested().
-func ValidateChildWorkersIsStopRequired(baseDir string) []Violation {
+// ValidateChildWorkersUseShouldStop checks that child workers use ShouldStop() not IsShutdownRequested().
+func ValidateChildWorkersUseShouldStop(baseDir string) []Violation {
 	var violations []Violation
 
 	workersDir := filepath.Join(baseDir, "workers")
@@ -255,17 +255,17 @@ func ValidateChildWorkersIsStopRequired(baseDir string) []Violation {
 			}
 
 			subWorkerDir := filepath.Join(workerDir, subEntry.Name())
-			violations = append(violations, checkChildWorkerIsStopRequired(subWorkerDir)...)
+			violations = append(violations, checkChildWorkerUseShouldStop(subWorkerDir)...)
 		}
 
-		violations = append(violations, checkChildWorkerIsStopRequired(workerDir)...)
+		violations = append(violations, checkChildWorkerUseShouldStop(workerDir)...)
 	}
 
 	return violations
 }
 
-// checkChildWorkerIsStopRequired checks a single worker directory.
-func checkChildWorkerIsStopRequired(workerDir string) []Violation {
+// checkChildWorkerUseShouldStop checks a single worker directory.
+func checkChildWorkerUseShouldStop(workerDir string) []Violation {
 	var violations []Violation
 
 	if !isChildWorker(workerDir) {
@@ -289,11 +289,11 @@ func checkChildWorkerIsStopRequired(workerDir string) []Violation {
 			continue
 		}
 
-		if !checkFirstConditionalUsesIsStopRequired(stateFile) {
+		if !checkFirstConditionalUsesShouldStop(stateFile) {
 			violations = append(violations, Violation{
 				File:    stateFile,
-				Type:    "CHILD_MUST_USE_IS_STOP_REQUIRED",
-				Message: "Child worker state uses IsShutdownRequested() instead of IsStopRequired()",
+				Type:    "CHILD_MUST_USE_SHOULD_STOP",
+				Message: "Child worker state uses IsShutdownRequested() instead of ShouldStop()",
 			})
 		}
 	}
@@ -301,20 +301,71 @@ func checkChildWorkerIsStopRequired(workerDir string) []Violation {
 	return violations
 }
 
-// isChildWorker checks if a worker has IsStopRequired() method in its snapshot.
+// isChildWorker checks if a worker is a child worker by scanning its state files
+// for parent-state-driven stop logic. A worker is treated as a child when any of
+// its state/*.go files reference ParentMappedState or call ShouldStop().
+//
+// The previous heuristic scanned snapshot/snapshot.go for the literal
+// "IsStopRequired()" string, which became vacuous after the P1.5b rename and
+// was already broken before that (worker observed-state methods live in
+// snapshot.go but their callers live in state/*.go; the rule we care about
+// is "do state files use the parent-aware stop check").
+//
+// Known limitations:
+//
+//   - Comment / string-literal false positives. The substring scan via
+//     bytes.Contains matches occurrences inside Go comments and string
+//     literals, not just live identifier references. A state/*.go file that
+//     mentions "ParentMappedState" or "ShouldStop()" only inside an
+//     explanatory comment would be classified as a child worker even if it
+//     never calls the symbol. Today no such case exists in-tree (verified
+//     by the meta-test in is_child_worker_test.go), but a future contributor
+//     adding a long doc-comment mentioning the symbols could trip the
+//     classifier. AST-based scanning would harden against this.
+//
+//   - Future-child false negatives. A future child worker that uses neither
+//     `ParentMappedState` nor `ShouldStop()` — for example, one that reads
+//     only `snap.Desired.IsShutdownRequested()` from the nested form — would
+//     be misclassified as a non-child by this heuristic. The
+//     ValidateChildWorkersUseShouldStop rule would then silently skip it.
+//     Mitigation candidate (deferred to P2.x): scan for the
+//     `SetParentMappedState` collector-contract method, which any
+//     parent-aware child must declare and which cannot be satisfied via the
+//     nested form alone.
 func isChildWorker(workerDir string) bool {
-	snapshotFile := filepath.Join(workerDir, "snapshot", "snapshot.go")
+	stateDir := filepath.Join(workerDir, "state")
 
-	content, err := os.ReadFile(snapshotFile)
+	entries, err := os.ReadDir(stateDir)
 	if err != nil {
 		return false
 	}
 
-	return strings.Contains(string(content), "IsStopRequired()")
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+
+		name := entry.Name()
+		if !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
+			continue
+		}
+
+		content, err := os.ReadFile(filepath.Join(stateDir, name))
+		if err != nil {
+			continue
+		}
+
+		if strings.Contains(string(content), "ParentMappedState") ||
+			strings.Contains(string(content), "ShouldStop()") {
+			return true
+		}
+	}
+
+	return false
 }
 
-// checkFirstConditionalUsesIsStopRequired parses state file and checks first if condition.
-func checkFirstConditionalUsesIsStopRequired(filename string) bool {
+// checkFirstConditionalUsesShouldStop parses state file and checks first if condition.
+func checkFirstConditionalUsesShouldStop(filename string) bool {
 	fset := token.NewFileSet()
 
 	node, err := parser.ParseFile(fset, filename, nil, parser.ParseComments)
@@ -322,7 +373,7 @@ func checkFirstConditionalUsesIsStopRequired(filename string) bool {
 		return true // Be permissive on parse errors
 	}
 
-	usesIsStopRequired := false
+	usesShouldStop := false
 
 	ast.Inspect(node, func(n ast.Node) bool {
 		funcDecl, ok := n.(*ast.FuncDecl)
@@ -339,8 +390,8 @@ func checkFirstConditionalUsesIsStopRequired(filename string) bool {
 				ast.Inspect(ifStmt.Cond, func(condNode ast.Node) bool {
 					if callExpr, ok := condNode.(*ast.CallExpr); ok {
 						if selExpr, ok := callExpr.Fun.(*ast.SelectorExpr); ok {
-							if selExpr.Sel.Name == "IsStopRequired" {
-								usesIsStopRequired = true
+							if selExpr.Sel.Name == "ShouldStop" {
+								usesShouldStop = true
 
 								return false
 							}
@@ -357,7 +408,7 @@ func checkFirstConditionalUsesIsStopRequired(filename string) bool {
 		return true
 	})
 
-	return usesIsStopRequired
+	return usesShouldStop
 }
 
 // isConvertSnapshotCall checks if a call expression is ConvertSnapshot or ConvertWorkerSnapshot.

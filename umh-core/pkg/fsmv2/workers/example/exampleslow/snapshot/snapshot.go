@@ -98,7 +98,7 @@ func (o ExampleslowObservedState) SetParentMappedState(state string) fsmv2.Obser
 	return o
 }
 
-// IsStopRequired returns true if shutdown is requested or parent no longer wants child running.
-func (o ExampleslowObservedState) IsStopRequired() bool {
+// ShouldStop returns true if shutdown is requested or parent no longer wants child running.
+func (o ExampleslowObservedState) ShouldStop() bool {
 	return o.IsShutdownRequested() || !o.ShouldBeRunning()
 }
