@@ -32,8 +32,7 @@ func (s *StoppedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 		return fsmv2.Transition(s, fsmv2.SignalNeedsRemoval, nil, "Shutdown requested", nil)
 	}
 
-	// ParentMappedState is injected by collector into Observed.DesiredState
-	if snap.Observed.ShouldBeRunning() {
+	if !snap.Observed.ShouldStop() {
 		return fsmv2.Transition(&TryingToConnectState{}, fsmv2.SignalNone, nil, "Child should be running, attempting to connect", nil)
 	}
 

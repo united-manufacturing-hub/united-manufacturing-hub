@@ -32,10 +32,7 @@ func (s *DisconnectedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 		return fsmv2.Transition(&TryingToStopState{}, fsmv2.SignalNone, nil, "Stop required, initiating shutdown", nil)
 	}
 
-	// Only attempt reconnection if desired state wants us running.
-	// Check via Observed since ParentMappedState is injected by collector into the
-	// embedded DesiredState within ObservedState.
-	if snap.Observed.ShouldBeRunning() {
+	if !snap.Observed.ShouldStop() {
 		return fsmv2.Transition(&TryingToConnectState{}, fsmv2.SignalNone, nil, "Attempting to reconnect", nil)
 	}
 

@@ -31,8 +31,7 @@ func (s *StoppingState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := fsmv2.ConvertWorkerSnapshot[pull_pkg.PullConfig, pull_pkg.PullStatus](snapAny)
 
 	return fsmv2.Transition(&StoppedState{}, fsmv2.SignalNone, nil,
-		fmt.Sprintf("stop complete: shutdown=%t, parentState=%s",
-			snap.IsShutdownRequested, snap.ParentMappedState), nil)
+		fmt.Sprintf("stop complete: shutdown=%t", snap.ShouldStop()), nil)
 }
 
 func (s *StoppingState) String() string {

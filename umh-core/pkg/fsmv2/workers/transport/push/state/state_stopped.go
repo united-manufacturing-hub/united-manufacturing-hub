@@ -15,10 +15,7 @@
 package state
 
 import (
-	"fmt"
-
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
 	push_pkg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/push"
 )
@@ -39,13 +36,13 @@ func (s *StoppedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 		return fsmv2.Transition(s, fsmv2.SignalNeedsRemoval, nil, "shutdown requested, signaling removal", nil)
 	}
 
-	if snap.ParentMappedState == config.DesiredStateRunning {
+	if !snap.ShouldStop() {
 		return fsmv2.Transition(&RunningState{}, fsmv2.SignalNone, nil,
-			fmt.Sprintf("parent mapped state is %q, transitioning to Running", snap.ParentMappedState), nil)
+			"parent requests running, transitioning to Running", nil)
 	}
 
 	return fsmv2.Transition(s, fsmv2.SignalNone, nil,
-		fmt.Sprintf("stopped, parent mapped state is %q", snap.ParentMappedState), nil)
+		"stopped, awaiting parent run signal", nil)
 }
 
 func (s *StoppedState) String() string {
