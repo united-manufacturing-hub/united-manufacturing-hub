@@ -40,12 +40,12 @@ func (s *RunningState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := fsmv2.ConvertWorkerSnapshot[transport_pkg.TransportConfig, transport_pkg.TransportStatus](snapAny)
 
 	if snap.IsShutdownRequested {
-		return fsmv2.Transition(&StoppingState{}, fsmv2.SignalNone, nil, "Shutdown requested, transitioning to Stopping")
+		return fsmv2.Transition(&StoppingState{}, fsmv2.SignalNone, nil, "Shutdown requested, transitioning to Stopping", nil)
 	}
 
 	// If token is expired, need to re-authenticate
 	if snap.Status.IsTokenExpired() {
-		return fsmv2.Transition(&StartingState{}, fsmv2.SignalNone, nil, "Token expired, transitioning to Starting for re-authentication")
+		return fsmv2.Transition(&StartingState{}, fsmv2.SignalNone, nil, "Token expired, transitioning to Starting for re-authentication", nil)
 	}
 
 	// Proactive night re-auth: if token would expire during business hours, re-auth at 3 AM
@@ -58,10 +58,10 @@ func (s *RunningState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	// If any children are unhealthy, transition to degraded
 	if snap.ChildrenUnhealthy > 0 {
 		return fsmv2.Transition(&DegradedState{}, fsmv2.SignalNone, nil,
-			fmt.Sprintf("children unhealthy (%d), transitioning to Degraded", snap.ChildrenUnhealthy))
+			fmt.Sprintf("children unhealthy (%d), transitioning to Degraded", snap.ChildrenUnhealthy), nil)
 	}
 
-	return fsmv2.Transition(s, fsmv2.SignalNone, nil, "All children healthy, transport running")
+	return fsmv2.Transition(s, fsmv2.SignalNone, nil, "All children healthy, transport running", nil)
 }
 
 // ShouldProactivelyReauth returns true if the token would expire during business

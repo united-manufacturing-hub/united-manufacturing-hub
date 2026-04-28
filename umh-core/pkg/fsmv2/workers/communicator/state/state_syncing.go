@@ -39,7 +39,7 @@ func (s *SyncingState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := fsmv2.ConvertWorkerSnapshot[communicator.CommunicatorConfig, communicator.CommunicatorStatus](snapAny)
 
 	if snap.IsShutdownRequested {
-		return fsmv2.Transition(&StoppedState{}, fsmv2.SignalNone, nil, "Shutdown requested during sync")
+		return fsmv2.Transition(&StoppedState{}, fsmv2.SignalNone, nil, "Shutdown requested during sync", nil)
 	}
 
 	if snap.ChildrenHealthy == 0 || snap.ChildrenUnhealthy > 0 {

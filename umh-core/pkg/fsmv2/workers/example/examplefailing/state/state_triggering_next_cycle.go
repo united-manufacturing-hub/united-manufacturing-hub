@@ -31,18 +31,18 @@ func (s *TriggeringNextCycleState) Next(snapAny any) fsmv2.NextResult[any, any] 
 	snap := helpers.ConvertSnapshot[snapshot.ExamplefailingObservedState, *snapshot.ExamplefailingDesiredState](snapAny)
 
 	if snap.Observed.ShouldStop() {
-		return fsmv2.Transition(&TryingToStopState{}, fsmv2.SignalNone, nil, "stop required, transitioning to stop state")
+		return fsmv2.Transition(&TryingToStopState{}, fsmv2.SignalNone, nil, "stop required, transitioning to stop state", nil)
 	}
 
 	if snap.Observed.ConnectionHealth == "healthy" {
-		return fsmv2.Transition(s, fsmv2.SignalNone, &action.DisconnectAction{}, "disconnecting to trigger next failure cycle")
+		return fsmv2.Transition(s, fsmv2.SignalNone, &action.DisconnectAction{}, "disconnecting to trigger next failure cycle", nil)
 	}
 
 	if snap.Observed.ConnectionHealth == "no connection" {
-		return fsmv2.Transition(&DisconnectedState{}, fsmv2.SignalNone, nil, "cycle triggered, connection lost")
+		return fsmv2.Transition(&DisconnectedState{}, fsmv2.SignalNone, nil, "cycle triggered, connection lost", nil)
 	}
 
-	return fsmv2.Transition(s, fsmv2.SignalNone, nil, "waiting for disconnect to complete")
+	return fsmv2.Transition(s, fsmv2.SignalNone, nil, "waiting for disconnect to complete", nil)
 }
 
 func (s *TriggeringNextCycleState) String() string {

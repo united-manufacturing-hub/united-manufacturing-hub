@@ -29,7 +29,7 @@ func (s *RunningState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := fsmv2.ConvertWorkerSnapshot[snapshot.ApplicationConfig, snapshot.ApplicationStatus](snapAny)
 
 	if snap.IsShutdownRequested {
-		return fsmv2.Transition(&StoppedState{}, fsmv2.SignalNone, nil, "Shutdown requested")
+		return fsmv2.Transition(&StoppedState{}, fsmv2.SignalNone, nil, "Shutdown requested", nil)
 	}
 
 	circuitOpen, stale := snapshot.ChildrenViewToStatus(snap.ChildrenView)
@@ -39,10 +39,10 @@ func (s *RunningState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	}
 
 	if status.HasInfrastructureIssues() {
-		return fsmv2.Transition(&DegradedState{}, fsmv2.SignalNone, nil, status.InfrastructureReason())
+		return fsmv2.Transition(&DegradedState{}, fsmv2.SignalNone, nil, status.InfrastructureReason(), nil)
 	}
 
-	return fsmv2.Transition(s, fsmv2.SignalNone, nil, "Application supervisor is running and managing children")
+	return fsmv2.Transition(s, fsmv2.SignalNone, nil, "Application supervisor is running and managing children", nil)
 }
 
 func (s *RunningState) String() string {

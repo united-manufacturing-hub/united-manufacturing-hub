@@ -36,14 +36,14 @@ func (s *StoppedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := fsmv2.ConvertWorkerSnapshot[transport_pkg.TransportConfig, transport_pkg.TransportStatus](snapAny)
 
 	if snap.IsShutdownRequested {
-		return fsmv2.Transition(s, fsmv2.SignalNeedsRemoval, nil, "Shutdown requested, signaling removal")
+		return fsmv2.Transition(s, fsmv2.SignalNeedsRemoval, nil, "Shutdown requested, signaling removal", nil)
 	}
 
 	if snap.Config.GetState() == config.DesiredStateRunning {
-		return fsmv2.Transition(&StartingState{}, fsmv2.SignalNone, nil, "Desired state is running, transitioning to Starting")
+		return fsmv2.Transition(&StartingState{}, fsmv2.SignalNone, nil, "Desired state is running, transitioning to Starting", nil)
 	}
 
-	return fsmv2.Transition(s, fsmv2.SignalNone, nil, "Transport is stopped, waiting for running request")
+	return fsmv2.Transition(s, fsmv2.SignalNone, nil, "Transport is stopped, waiting for running request", nil)
 }
 
 // String returns the state name derived from the type.

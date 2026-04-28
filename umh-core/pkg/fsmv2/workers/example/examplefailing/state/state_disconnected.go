@@ -29,14 +29,14 @@ func (s *DisconnectedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := helpers.ConvertSnapshot[snapshot.ExamplefailingObservedState, *snapshot.ExamplefailingDesiredState](snapAny)
 
 	if snap.Observed.ShouldStop() {
-		return fsmv2.Transition(&TryingToStopState{}, fsmv2.SignalNone, nil, "stop required, transitioning to stop state")
+		return fsmv2.Transition(&TryingToStopState{}, fsmv2.SignalNone, nil, "stop required, transitioning to stop state", nil)
 	}
 
 	if snap.Observed.ShouldBeRunning() {
-		return fsmv2.Transition(&TryingToConnectState{}, fsmv2.SignalNone, nil, "worker should be running, attempting to reconnect")
+		return fsmv2.Transition(&TryingToConnectState{}, fsmv2.SignalNone, nil, "worker should be running, attempting to reconnect", nil)
 	}
 
-	return fsmv2.Transition(s, fsmv2.SignalNone, nil, "connection lost, waiting for reconnect conditions")
+	return fsmv2.Transition(s, fsmv2.SignalNone, nil, "connection lost, waiting for reconnect conditions", nil)
 }
 
 func (s *DisconnectedState) String() string {

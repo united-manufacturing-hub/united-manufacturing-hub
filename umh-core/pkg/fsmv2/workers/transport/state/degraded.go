@@ -35,12 +35,12 @@ func (s *DegradedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := fsmv2.ConvertWorkerSnapshot[transport_pkg.TransportConfig, transport_pkg.TransportStatus](snapAny)
 
 	if snap.IsShutdownRequested {
-		return fsmv2.Transition(&StoppingState{}, fsmv2.SignalNone, nil, "Shutdown requested, transitioning to Stopping")
+		return fsmv2.Transition(&StoppingState{}, fsmv2.SignalNone, nil, "Shutdown requested, transitioning to Stopping", nil)
 	}
 
 	// If token is expired, need to re-authenticate (mirrors RunningState)
 	if snap.Status.IsTokenExpired() {
-		return fsmv2.Transition(&StartingState{}, fsmv2.SignalNone, nil, "Token expired, transitioning to Starting for re-authentication")
+		return fsmv2.Transition(&StartingState{}, fsmv2.SignalNone, nil, "Token expired, transitioning to Starting for re-authentication", nil)
 	}
 
 	// Nuclear fallback: reset transport on prolonged child failures
@@ -52,7 +52,7 @@ func (s *DegradedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 
 	// If all children are now healthy, transition back to Running
 	if snap.ChildrenUnhealthy == 0 {
-		return fsmv2.Transition(&RunningState{}, fsmv2.SignalNone, nil, "All children now healthy, transitioning to Running")
+		return fsmv2.Transition(&RunningState{}, fsmv2.SignalNone, nil, "All children now healthy, transitioning to Running", nil)
 	}
 
 	return fsmv2.Transition(s, fsmv2.SignalNone, nil,
