@@ -29,13 +29,8 @@ import (
 )
 
 type ObservedState struct {
-	CollectedAt time.Time          `json:"collectedAt"`
-	Desired     fsmv2.DesiredState `json:"-"`
-	ID          string             `json:"id"`
-}
-
-func (t *ObservedState) GetObservedDesiredState() fsmv2.DesiredState {
-	return t.Desired
+	CollectedAt time.Time `json:"collectedAt"`
+	ID          string    `json:"id"`
 }
 
 func (t *ObservedState) GetTimestamp() time.Time {
@@ -86,7 +81,6 @@ func (m *Worker) CollectObservedState(ctx context.Context, _ fsmv2.DesiredState)
 	return &ObservedState{
 		ID:          "test-worker",
 		CollectedAt: time.Now(),
-		Desired:     &DesiredState{},
 	}, nil
 }
 
@@ -123,7 +117,6 @@ func (m *WorkerWithType) CollectObservedState(ctx context.Context, _ fsmv2.Desir
 	return &ObservedState{
 		ID:          m.WorkerType + "-worker",
 		CollectedAt: time.Now(),
-		Desired:     &DesiredState{},
 	}, nil
 }
 
@@ -203,7 +196,6 @@ func CreateObservedStateWithID(id string) *ObservedState {
 	return &ObservedState{
 		ID:          id,
 		CollectedAt: time.Now(),
-		Desired:     &DesiredState{},
 	}
 }
 

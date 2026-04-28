@@ -220,7 +220,7 @@ func (u UserSpec) Clone() UserSpec {
 //	    },
 //	}
 type ChildSpec struct {
-	Dependencies     map[string]any `json:"dependencies,omitempty"     yaml:"dependencies,omitempty"`     // Additional deps to merge with parent's deps (child overrides parent)
+	Dependencies     map[string]any `json:"-"                          yaml:"-"`                          // Runtime channels and interfaces; not serializable. Inherited from parent at supervisor merge time (see ChildSpec.Hash godoc).
 	UserSpec         UserSpec       `json:"userSpec"                   yaml:"userSpec"`                   // Raw user config (input to DeriveDesiredState)
 	Name             string         `json:"name"                       yaml:"name"`                       // Unique name for this child (within parent scope)
 	WorkerType       string         `json:"workerType"                 yaml:"workerType"`                 // Type of worker to create (registered worker factory key)
@@ -644,7 +644,7 @@ func (v ChildrenView) Counts() (healthy, unhealthy int) {
 //	    ChildrenSpecs:    nil,                                        // Children removed during shutdown
 //	}
 type DesiredState struct {
-	OriginalUserSpec interface{}      `json:"originalUserSpec,omitempty" yaml:"-"` // Captures the input that produced this DesiredState (for debugging/traceability)
+	OriginalUserSpec interface{}      `json:"-"                          yaml:"-"` // Captures the input that produced this DesiredState (for debugging/traceability); not serialized (would emit untyped any over the wire per §17).
 	BaseDesiredState `yaml:",inline"` // Provides State, ShutdownRequested fields and methods (GetState, IsShutdownRequested, SetShutdownRequested)
 	ChildrenSpecs    []ChildSpec      `json:"childrenSpecs,omitempty"    yaml:"childrenSpecs,omitempty"` // Declarative specification of child workers
 }

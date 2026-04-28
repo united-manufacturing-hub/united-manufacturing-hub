@@ -106,10 +106,6 @@ type mockObservedState struct {
 	timestamp time.Time
 }
 
-func (m *mockObservedState) GetObservedDesiredState() fsmv2.DesiredState {
-	return &mockDesiredState{}
-}
-
 func (m *mockObservedState) GetTimestamp() time.Time {
 	return m.timestamp
 }

@@ -46,7 +46,6 @@ var _ = Describe("Triangular Store Bug", func() {
 			observed: &mockObservedState{
 				ID:          "worker1",
 				CollectedAt: time.Now(),
-				Desired:     &mockDesiredState{},
 			},
 		}
 

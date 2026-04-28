@@ -171,20 +171,11 @@ func (a *SlowAction) WasExecuted() bool {
 }
 
 type MockObservedState struct {
-	timestamp    time.Time
-	desiredState fsmv2.DesiredState
+	timestamp time.Time
 }
 
 func (m *MockObservedState) GetTimestamp() time.Time {
 	return m.timestamp
-}
-
-func (m *MockObservedState) GetObservedDesiredState() fsmv2.DesiredState {
-	if m.desiredState != nil {
-		return m.desiredState
-	}
-
-	return &MockDesiredState{}
 }
 
 type MockDesiredState struct {

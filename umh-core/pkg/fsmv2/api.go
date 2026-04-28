@@ -65,9 +65,6 @@ const (
 
 // ObservedState represents the actual state gathered from monitoring the system.
 type ObservedState interface {
-	// GetObservedDesiredState returns the desired state that is actually deployed.
-	GetObservedDesiredState() DesiredState
-
 	// GetTimestamp returns the time when this observed state was collected,
 	// used for staleness checks.
 	GetTimestamp() time.Time

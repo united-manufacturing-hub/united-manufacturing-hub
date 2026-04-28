@@ -42,10 +42,6 @@ var _ = Describe("ApplicationObservedState", func() {
 
 		// GetTimestamp should return the collected time.
 		Expect(obs.GetTimestamp()).NotTo(BeZero())
-
-		// GetObservedDesiredState should return the deployed desired state.
-		desired := obs.GetObservedDesiredState()
-		Expect(desired).NotTo(BeNil())
 	})
 
 	It("should return the correct timestamp", func() {

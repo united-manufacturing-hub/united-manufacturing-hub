@@ -89,11 +89,6 @@ var _ = Describe("Observation", func() {
 				SetChildrenView(config.ChildrenView) fsmv2.ObservedState
 			})
 			Expect(ok).To(BeTrue(), "must satisfy SetChildrenView duck-type")
-
-			_, ok = obs.(interface {
-				SetObservedDesiredState(fsmv2.DesiredState) fsmv2.ObservedState
-			})
-			Expect(ok).To(BeTrue(), "must satisfy SetObservedDesiredState duck-type")
 		})
 	})
 
@@ -104,25 +99,6 @@ var _ = Describe("Observation", func() {
 				CollectedAt: ts,
 			}
 			Expect(obs.GetTimestamp()).To(Equal(ts))
-		})
-
-		It("GetObservedDesiredState returns the injected desired state", func() {
-			obs := fsmv2.Observation[TestStatus]{}
-
-			// Before injection, should return nil.
-			Expect(obs.GetObservedDesiredState()).To(BeNil())
-
-			// After injection via SetObservedDesiredState.
-			mockDesired := &mockDesiredState{}
-			var asAny fsmv2.ObservedState = obs
-			setter, ok := asAny.(interface {
-				SetObservedDesiredState(fsmv2.DesiredState) fsmv2.ObservedState
-			})
-			Expect(ok).To(BeTrue())
-
-			result := setter.SetObservedDesiredState(mockDesired)
-			typed := result.(fsmv2.Observation[TestStatus])
-			Expect(typed.GetObservedDesiredState()).To(Equal(mockDesired))
 		})
 	})
 
@@ -218,23 +194,6 @@ var _ = Describe("Observation", func() {
 			Expect(obs.ChildrenView).To(Equal(config.ChildrenView{}))
 		})
 
-		It("SetObservedDesiredState matches expected pattern and returns modified copy", func() {
-			obs := fsmv2.Observation[TestStatus]{}
-			var asAny fsmv2.ObservedState = obs
-
-			setter, ok := asAny.(interface {
-				SetObservedDesiredState(fsmv2.DesiredState) fsmv2.ObservedState
-			})
-			Expect(ok).To(BeTrue(), "must satisfy SetObservedDesiredState duck-type")
-
-			mockDesired := &mockDesiredState{}
-			result := setter.SetObservedDesiredState(mockDesired)
-			typed := result.(fsmv2.Observation[TestStatus])
-			Expect(typed.GetObservedDesiredState()).To(Equal(mockDesired))
-
-			// Original unchanged.
-			Expect(obs.GetObservedDesiredState()).To(BeNil())
-		})
 	})
 
 	Describe("Collector setter methods", func() {

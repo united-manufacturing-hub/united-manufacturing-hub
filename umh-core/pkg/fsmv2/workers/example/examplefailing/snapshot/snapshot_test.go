@@ -36,17 +36,6 @@ var _ = Describe("ExamplefailingObservedState", func() {
 		})
 	})
 
-	Describe("GetObservedDesiredState", func() {
-		It("should return a non-nil desired state", func() {
-			observed := snapshot.ExamplefailingObservedState{
-				CollectedAt: time.Now(),
-				State:       "running_connected",
-			}
-
-			desired := observed.GetObservedDesiredState()
-			Expect(desired).NotTo(BeNil())
-		})
-	})
 })
 
 var _ = Describe("ExamplefailingDesiredState", func() {

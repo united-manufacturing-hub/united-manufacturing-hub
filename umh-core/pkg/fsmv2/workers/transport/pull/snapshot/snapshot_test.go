@@ -35,18 +35,6 @@ var _ = Describe("PullObservedState", func() {
 		})
 	})
 
-	Describe("GetObservedDesiredState", func() {
-		It("should return a pointer to the embedded desired state", func() {
-			observed := snapshot.PullObservedState{
-				CollectedAt: time.Now(),
-				State:       "running",
-			}
-
-			desired := observed.GetObservedDesiredState()
-			Expect(desired).NotTo(BeNil())
-		})
-	})
-
 	Describe("SetState", func() {
 		It("should return an updated observed state with the new state", func() {
 			observed := snapshot.PullObservedState{

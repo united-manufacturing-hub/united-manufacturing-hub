@@ -99,7 +99,6 @@ func benchmarkSupervisorTick(b *testing.B, workerCount int) {
 			observed: &mockObservedState{
 				ID:          workerID,
 				CollectedAt: time.Now(),
-				Desired:     &mockDesiredState{},
 			},
 		}
 
@@ -191,7 +190,6 @@ func BenchmarkTickLoopWithSlowWorker(b *testing.B) {
 		observed: &mockObservedState{
 			ID:          slowWorkerID,
 			CollectedAt: time.Now(),
-			Desired:     &mockDesiredState{},
 		},
 	}
 
@@ -212,7 +210,6 @@ func BenchmarkTickLoopWithSlowWorker(b *testing.B) {
 			observed: &mockObservedState{
 				ID:          workerID,
 				CollectedAt: time.Now(),
-				Desired:     &mockDesiredState{},
 			},
 		}
 
@@ -260,7 +257,6 @@ func BenchmarkTickLoopConcurrentActions(b *testing.B) {
 			observed: &mockObservedState{
 				ID:          workerID,
 				CollectedAt: time.Now(),
-				Desired:     &mockDesiredState{},
 			},
 		}
 
@@ -344,7 +340,6 @@ func BenchmarkObservationCollectionSingle(b *testing.B) {
 		observed: &mockObservedState{
 			ID:          workerID,
 			CollectedAt: time.Now(),
-			Desired:     &mockDesiredState{},
 		},
 	}
 
@@ -404,7 +399,6 @@ func benchmarkObservationCollectionN(b *testing.B, workerCount int) {
 			observed: &mockObservedState{
 				ID:          workerID,
 				CollectedAt: time.Now(),
-				Desired:     &mockDesiredState{},
 			},
 		}
 

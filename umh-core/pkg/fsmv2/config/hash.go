@@ -26,11 +26,19 @@ import (
 //
 // The hash is computed from:
 //   - Config string (hashed directly)
-//   - Variables.User and Variables.Global (serialized as sorted JSON for determinism)
+//   - The full Variables bundle, serialized as sorted JSON (deterministic
+//     because Go's JSON marshaler sorts map keys; the typed
+//     VariablesInternal struct serializes in field order)
 //
-// Variables.Internal is excluded (via json:"-" tag) because Internal contains
-// only supervisor-assigned constants (workerID, parentID) that are set once
-// at supervisor creation and never change.
+// Variables.Internal IS included in the hash (the JSON tag is "internal"
+// post-P1.5c, not "-"), but per-worker hash determinism is preserved
+// because Internal contains supervisor-assigned identity (WorkerID,
+// ParentID, CreatedAt, BridgedBy) that is fixed at supervisor creation
+// and never changes for that worker. The cache is per-worker rather than
+// shared across workers — each worker's UserSpec → DesiredState mapping
+// gets its own cache entry, which is correct because Internal carries
+// per-worker identity that DeriveDesiredState may legitimately consume
+// (e.g. via templates that reference {{ .internal.id }}).
 //
 // Cache behavior: DeriveDesiredState is called when Config or Variables change.
 // If neither changes, the cached result is reused.

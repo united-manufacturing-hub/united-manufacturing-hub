@@ -515,7 +515,6 @@ func (w *panickingWorker) CollectObservedState(ctx context.Context, _ fsmv2.Desi
 	return &testutil.ObservedState{
 		ID:          "panic-worker",
 		CollectedAt: time.Now(),
-		Desired:     &testutil.DesiredState{},
 	}, nil
 }
 

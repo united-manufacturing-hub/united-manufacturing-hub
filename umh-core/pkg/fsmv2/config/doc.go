@@ -39,10 +39,20 @@
 //   - Use case: Shared settings across all workers
 //
 // Internal Namespace:
-//   - Contains: Runtime metadata (timestamps, derived values, system state)
-//   - Template access: Prefixed {{ .internal.timestamp }}
-//   - Serialization: NO (runtime-only, not persisted)
-//   - Use case: Values that shouldn't be saved to config
+//   - Contains: Supervisor-injected identity (worker ID, parent ID,
+//     creation timestamp, bridge-source label) — typed VariablesInternal
+//     struct, not a free-form map
+//   - Template access: Prefixed {{ .internal.id }}, {{ .internal.parent_id }},
+//     {{ .internal.created_at }}, {{ .internal.bridged_by }}
+//   - Serialization: JSON YES (json:"internal", camelCase wire tags per
+//     §4-D LOCKED for codegen cleanliness; round-trips through CSE storage
+//     between supervisor goroutines per Design Intent §13/§14). YAML NO
+//     (yaml:"-" — users do not author Internal; supervisor injects it at
+//     reconciliation time)
+//   - Use case: identity / structural desired state injected by the system,
+//     not user-authored. Templates read it via the Flatten map's snake_case
+//     keys; the JSON wire vocabulary uses camelCase. Wire tags and flatten
+//     keys are independent.
 //
 // # User variable flattening
 //
@@ -54,31 +64,43 @@
 //	bundle := VariableBundle{
 //	    User:     map[string]any{"IP": "192.168.1.100"},
 //	    Global:   map[string]any{"cluster": "prod"},
-//	    Internal: map[string]any{"timestamp": time.Now()},
+//	    Internal: VariablesInternal{WorkerID: "worker-42", CreatedAt: time.Now()},
 //	}
 //
 //	flat := bundle.Flatten()
-//	// flat["IP"] = "192.168.1.100"           (top-level)
-//	// flat["global"]["cluster"] = "prod"     (nested)
-//	// flat["internal"]["timestamp"] = ...    (nested)
+//	// flat["IP"] = "192.168.1.100"               (top-level)
+//	// flat["global"]["cluster"] = "prod"         (nested)
+//	// flat["internal"]["id"] = "worker-42"       (nested, typed struct)
+//	// flat["internal"]["created_at"] = time.Time (nested, typed struct)
 //
 // Template usage:
 //
-//	{{ .IP }}                  // User variable (flattened)
-//	{{ .global.cluster }}      // Global variable (nested)
-//	{{ .internal.timestamp }}  // Internal variable (nested)
+//	{{ .IP }}                   // User variable (flattened)
+//	{{ .global.cluster }}       // Global variable (nested)
+//	{{ .internal.id }}          // Internal identity field (typed struct)
+//	{{ .internal.created_at }}  // Internal creation time (typed struct)
 //
 // # Internal variable serialization
 //
-// Internal variables use json:"-" yaml:"-" tags because they contain
-// runtime-only values (timestamps, system state) that are computed fresh
-// each run. Saving them would produce stale data on next load.
+// Internal carries the typed VariablesInternal struct (yaml:"-",
+// json:"internal"). Per §4-D LOCKED, the JSON form round-trips through CSE
+// storage between supervisor goroutines (Design Intent §13/§14). YAML
+// serialization is suppressed because users do not author Internal — the
+// supervisor injects identity at reconciliation time.
 //
-// # map[string]any design
+// # map[string]any design (User and Global only)
 //
-// VariableBundle uses map[string]any because users define arbitrary config
-// fields in YAML. A typed struct would require code changes for each new
-// variable. Go templates validate variable existence and type at render time.
+// VariableBundle.User and VariableBundle.Global use map[string]any because
+// users define arbitrary config fields in YAML. A typed struct would
+// require code changes for each new variable. Go templates validate
+// variable existence and type at render time.
+//
+// VariableBundle.Internal is the typed exception: it is a VariablesInternal
+// struct, not a map, because Internal is supervisor-injected identity
+// (fixed shape, fixed field names) rather than user-authored arbitrary
+// data. Per Design Intent §13/§4-D LOCKED, the typed struct codegens
+// cleanly to TypeScript and avoids the `Record<string, unknown>` surface
+// that bare map[string]any produces.
 //
 // # ChildSpec and hierarchical composition
 //

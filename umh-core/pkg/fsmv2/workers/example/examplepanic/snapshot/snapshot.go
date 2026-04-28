@@ -91,10 +91,6 @@ func (o ExamplepanicObservedState) GetTimestamp() time.Time {
 	return o.CollectedAt
 }
 
-func (o ExamplepanicObservedState) GetObservedDesiredState() fsmv2.DesiredState {
-	return &o.ExamplepanicDesiredState
-}
-
 // SetState sets the FSM state name, called by Collector via StateProvider callback.
 func (o ExamplepanicObservedState) SetState(s string) fsmv2.ObservedState {
 	o.State = s

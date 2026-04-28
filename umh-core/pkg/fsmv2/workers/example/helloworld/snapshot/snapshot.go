@@ -83,12 +83,6 @@ func (o HelloworldObservedState) GetTimestamp() time.Time {
 	return o.CollectedAt
 }
 
-// GetObservedDesiredState returns the desired state embedded in this observation.
-// Required by fsmv2.ObservedState interface for shutdown handling.
-func (o HelloworldObservedState) GetObservedDesiredState() fsmv2.DesiredState {
-	return &o.HelloworldDesiredState
-}
-
 // SetState sets the FSM state name on this observed state.
 // Required by fsmv2.ObservedState interface.
 func (o HelloworldObservedState) SetState(s string) fsmv2.ObservedState {

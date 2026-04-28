@@ -49,11 +49,6 @@ func (o ApplicationObservedState) GetTimestamp() time.Time {
 	return o.CollectedAt
 }
 
-// GetObservedDesiredState returns the desired state that was actually deployed.
-func (o ApplicationObservedState) GetObservedDesiredState() fsmv2.DesiredState {
-	return &o.ApplicationDesiredState
-}
-
 // SetState sets the FSM state name on this observed state.
 // Called by Collector when StateProvider callback is configured.
 func (o ApplicationObservedState) SetState(s string) fsmv2.ObservedState {

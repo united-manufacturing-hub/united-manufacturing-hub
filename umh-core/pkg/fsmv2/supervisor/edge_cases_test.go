@@ -241,7 +241,6 @@ var _ = Describe("Edge Cases", func() {
 				obs := &mockObservedState{
 					ID:          identity.ID,
 					CollectedAt: oldTimestamp,
-					Desired:     &mockDesiredState{},
 				}
 				_, err = mockStore.SaveObserved(context.Background(), "container", identity.ID, obs)
 				Expect(err).ToNot(HaveOccurred())
@@ -293,7 +292,6 @@ var _ = Describe("Edge Cases", func() {
 				obs := &mockObservedState{
 					ID:          identity.ID,
 					CollectedAt: oldTimestamp,
-					Desired:     &mockDesiredState{},
 				}
 				_, err = mockStore.SaveObserved(context.Background(), "container", identity.ID, obs)
 				Expect(err).ToNot(HaveOccurred())
@@ -339,7 +337,6 @@ var _ = Describe("Edge Cases", func() {
 				obs := &mockObservedState{
 					ID:          identity.ID,
 					CollectedAt: time.Now(),
-					Desired:     &mockDesiredState{},
 				}
 				_, err = mockStore.SaveObserved(context.Background(), "container", identity.ID, obs)
 				Expect(err).ToNot(HaveOccurred())
@@ -552,7 +549,6 @@ var _ = Describe("Edge Cases", func() {
 				obs := &mockObservedState{
 					ID:          identity.ID,
 					CollectedAt: oldTimestamp,
-					Desired:     &mockDesiredState{},
 				}
 				_, err = mockStore.SaveObserved(context.Background(), "container", identity.ID, obs)
 				Expect(err).ToNot(HaveOccurred())
@@ -630,9 +626,6 @@ type alternateObservedState struct {
 }
 
 func (a *alternateObservedState) GetTimestamp() time.Time { return a.timestamp }
-func (a *alternateObservedState) GetObservedDesiredState() fsmv2.DesiredState {
-	return &mockDesiredState{}
-}
 
 var _ = Describe("Type Safety (Invariant I16)", func() {
 	Describe("ObservedState type validation", func() {

@@ -24,7 +24,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
@@ -718,10 +717,10 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) (err error) 
 
 	userSpecWithVars.Variables.Global = globalVarsCopy
 
-	userSpecWithVars.Variables.Internal = map[string]any{
-		FieldID:                firstWorkerID,
-		storage.FieldCreatedAt: s.createdAt,
-		FieldParentID:          s.parentID,
+	userSpecWithVars.Variables.Internal = config.VariablesInternal{
+		WorkerID:  firstWorkerID,
+		ParentID:  s.parentID,
+		CreatedAt: s.createdAt,
 	}
 
 	userVarCount := len(userSpecWithVars.Variables.User)

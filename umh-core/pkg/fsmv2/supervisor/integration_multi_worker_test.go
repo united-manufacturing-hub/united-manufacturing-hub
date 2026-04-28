@@ -41,13 +41,13 @@ var _ = Describe("Multi-Worker Integration", func() {
 			identity3 := deps.Identity{ID: "worker3", Name: "Worker 3"}
 
 			worker1 := &mockWorker{
-				observed: &mockObservedState{ID: "worker1", CollectedAt: time.Now(), Desired: &mockDesiredState{}},
+				observed: &mockObservedState{ID: "worker1", CollectedAt: time.Now()},
 			}
 			worker2 := &mockWorker{
-				observed: &mockObservedState{ID: "worker2", CollectedAt: time.Now(), Desired: &mockDesiredState{}},
+				observed: &mockObservedState{ID: "worker2", CollectedAt: time.Now()},
 			}
 			worker3 := &mockWorker{
-				observed: &mockObservedState{ID: "worker3", CollectedAt: time.Now(), Desired: &mockDesiredState{}},
+				observed: &mockObservedState{ID: "worker3", CollectedAt: time.Now()},
 			}
 
 			Expect(s.AddWorker(identity1, worker1)).To(Succeed())
@@ -87,13 +87,13 @@ var _ = Describe("Multi-Worker Integration", func() {
 			identity3 := deps.Identity{ID: "worker3", Name: "Worker 3"}
 
 			worker1 := &mockWorker{
-				observed: &mockObservedState{ID: "worker1", CollectedAt: time.Now(), Desired: &mockDesiredState{}},
+				observed: &mockObservedState{ID: "worker1", CollectedAt: time.Now()},
 			}
 			worker2 := &mockWorker{
-				observed: &mockObservedState{ID: "worker2", CollectedAt: time.Now(), Desired: &mockDesiredState{}},
+				observed: &mockObservedState{ID: "worker2", CollectedAt: time.Now()},
 			}
 			worker3 := &mockWorker{
-				observed: &mockObservedState{ID: "worker3", CollectedAt: time.Now(), Desired: &mockDesiredState{}},
+				observed: &mockObservedState{ID: "worker3", CollectedAt: time.Now()},
 			}
 
 			Expect(s.AddWorker(identity1, worker1)).To(Succeed())
@@ -136,7 +136,7 @@ var _ = Describe("Multi-Worker Integration", func() {
 				for range 10 {
 					identity := deps.Identity{ID: "concurrent1", Name: "Concurrent Worker 1"}
 					worker := &mockWorker{
-						observed: &mockObservedState{ID: "concurrent1", CollectedAt: time.Now(), Desired: &mockDesiredState{}},
+						observed: &mockObservedState{ID: "concurrent1", CollectedAt: time.Now()},
 					}
 					_ = s.AddWorker(identity, worker)
 					time.Sleep(5 * time.Millisecond)
@@ -150,7 +150,7 @@ var _ = Describe("Multi-Worker Integration", func() {
 				for range 10 {
 					identity := deps.Identity{ID: "concurrent2", Name: "Concurrent Worker 2"}
 					worker := &mockWorker{
-						observed: &mockObservedState{ID: "concurrent2", CollectedAt: time.Now(), Desired: &mockDesiredState{}},
+						observed: &mockObservedState{ID: "concurrent2", CollectedAt: time.Now()},
 					}
 					_ = s.AddWorker(identity, worker)
 					time.Sleep(5 * time.Millisecond)
@@ -181,10 +181,10 @@ var _ = Describe("Multi-Worker Integration", func() {
 			identity2 := deps.Identity{ID: "worker2", Name: "Worker 2"}
 
 			worker1 := &mockWorker{
-				observed: &mockObservedState{ID: "worker1", CollectedAt: time.Now(), Desired: &mockDesiredState{}},
+				observed: &mockObservedState{ID: "worker1", CollectedAt: time.Now()},
 			}
 			worker2 := &mockWorker{
-				observed: &mockObservedState{ID: "worker2", CollectedAt: time.Now(), Desired: &mockDesiredState{}},
+				observed: &mockObservedState{ID: "worker2", CollectedAt: time.Now()},
 			}
 
 			Expect(s.AddWorker(identity1, worker1)).To(Succeed())

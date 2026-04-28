@@ -76,10 +76,6 @@ func (o ExampleslowObservedState) GetTimestamp() time.Time {
 	return o.CollectedAt
 }
 
-func (o ExampleslowObservedState) GetObservedDesiredState() fsmv2.DesiredState {
-	return &o.ExampleslowDesiredState
-}
-
 func (o ExampleslowObservedState) SetState(s string) fsmv2.ObservedState {
 	o.State = s
 

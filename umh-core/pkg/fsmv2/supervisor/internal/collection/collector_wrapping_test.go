@@ -41,11 +41,9 @@ type testWrappingObservedState struct {
 	State         string                `json:"state"`
 	Metrics       deps.MetricsContainer `json:"metrics,omitempty"`
 	ActionResults []deps.ActionResult   `json:"last_action_results,omitempty"`
-	desired       fsmv2.DesiredState
 }
 
-func (o testWrappingObservedState) GetTimestamp() time.Time              { return o.CollectedAt }
-func (o testWrappingObservedState) GetObservedDesiredState() fsmv2.DesiredState { return o.desired }
+func (o testWrappingObservedState) GetTimestamp() time.Time { return o.CollectedAt }
 
 func (o testWrappingObservedState) SetCollectedAt(t time.Time) fsmv2.ObservedState {
 	o.CollectedAt = t
@@ -64,11 +62,6 @@ func (o testWrappingObservedState) SetActionHistory(h []deps.ActionResult) fsmv2
 
 func (o testWrappingObservedState) SetWorkerMetrics(m deps.Metrics) fsmv2.ObservedState {
 	o.Metrics.Worker = m
-	return o
-}
-
-func (o testWrappingObservedState) SetObservedDesiredState(d fsmv2.DesiredState) fsmv2.ObservedState {
-	o.desired = d
 	return o
 }
 

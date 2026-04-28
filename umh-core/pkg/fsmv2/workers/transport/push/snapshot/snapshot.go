@@ -106,10 +106,6 @@ func (o PushObservedState) GetTimestamp() time.Time {
 	return o.CollectedAt
 }
 
-func (o PushObservedState) GetObservedDesiredState() fsmv2.DesiredState {
-	return &o.PushDesiredState
-}
-
 // SetState sets the FSM state name on this observed state.
 func (o PushObservedState) SetState(s string) fsmv2.ObservedState {
 	o.State = s

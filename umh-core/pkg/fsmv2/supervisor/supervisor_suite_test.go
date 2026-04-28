@@ -100,13 +100,8 @@ func registerTestWorkerFactories() {
 }
 
 type mockObservedState struct {
-	ID          string             `json:"id"`
-	CollectedAt time.Time          `json:"collectedAt"`
-	Desired     fsmv2.DesiredState `json:"-"`
-}
-
-func (m *mockObservedState) GetObservedDesiredState() fsmv2.DesiredState {
-	return m.Desired
+	ID          string    `json:"id"`
+	CollectedAt time.Time `json:"collectedAt"`
 }
 
 func (m *mockObservedState) GetTimestamp() time.Time {
@@ -154,7 +149,6 @@ func (m *mockWorker) CollectObservedState(ctx context.Context, _ fsmv2.DesiredSt
 	return &mockObservedState{
 		ID:          "test-worker",
 		CollectedAt: time.Now(),
-		Desired:     &mockDesiredState{},
 	}, nil
 }
 
@@ -470,7 +464,6 @@ func createMockObservedStateWithID(id string) *mockObservedState {
 	return &mockObservedState{
 		ID:          id,
 		CollectedAt: time.Now(),
-		Desired:     &mockDesiredState{},
 	}
 }
 

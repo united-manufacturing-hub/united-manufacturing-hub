@@ -137,9 +137,6 @@ type Observation[TStatus any] struct {
 	ChildrenView config.ChildrenView `json:"childrenView"`
 	// Status is the developer's business data. Flattened to top level via custom MarshalJSON.
 	Status TStatus `json:"-"`
-	// observedDesiredState is the desired state reference for ObservedState interface.
-	// Populated by the collector via SetObservedDesiredState after CollectObservedState returns.
-	observedDesiredState DesiredState
 	// State is the current FSM state name (set by supervisor via SetState).
 	State string `json:"state"`
 	// ParentMappedState is the desired state mapped from the parent's current state.
@@ -264,12 +261,6 @@ func (o Observation[TStatus]) GetTimestamp() time.Time {
 	return o.CollectedAt
 }
 
-// GetObservedDesiredState returns the desired state that was active when this
-// observation was collected. Injected by the collector via SetObservedDesiredState.
-func (o Observation[TStatus]) GetObservedDesiredState() DesiredState {
-	return o.observedDesiredState
-}
-
 // LifecyclePhase classifies the observation's State string into one of the
 // six canonical config.LifecyclePhase constants (PhaseUnknown, PhaseStopped,
 // PhaseStarting, PhaseRunningHealthy, PhaseRunningDegraded, PhaseStopping).
@@ -325,14 +316,6 @@ func (o Observation[TStatus]) SetChildrenCounts(healthy, unhealthy int) Observed
 //	interface{ SetChildrenView(config.ChildrenView) fsmv2.ObservedState }
 func (o Observation[TStatus]) SetChildrenView(v config.ChildrenView) ObservedState {
 	o.ChildrenView = v
-
-	return o
-}
-
-// SetObservedDesiredState injects the desired state reference for GetObservedDesiredState.
-// Called by the collector after CollectObservedState returns.
-func (o Observation[TStatus]) SetObservedDesiredState(d DesiredState) ObservedState {
-	o.observedDesiredState = d
 
 	return o
 }

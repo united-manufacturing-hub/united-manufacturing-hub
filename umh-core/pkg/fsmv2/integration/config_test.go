@@ -15,6 +15,8 @@
 package integration_test
 
 import (
+	"time"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
@@ -24,6 +26,7 @@ import (
 var _ = Describe("Phase 0.5 Integration Tests", func() {
 	Describe("Scenario 1: Variable Flattening", func() {
 		It("should promote User variables to top-level and nest Global and Internal", func() {
+			ts := time.Date(2025, 11, 4, 10, 0, 0, 0, time.UTC)
 			bundle := config.VariableBundle{
 				User: map[string]any{
 					"IP":   "192.168.1.100",
@@ -33,9 +36,9 @@ var _ = Describe("Phase 0.5 Integration Tests", func() {
 					"api_endpoint": "https://api.example.com",
 					"cluster_id":   "cluster-123",
 				},
-				Internal: map[string]any{
-					"id":        "worker-456",
-					"timestamp": "2025-11-04T10:00:00Z",
+				Internal: config.VariablesInternal{
+					WorkerID:  "worker-456",
+					CreatedAt: ts,
 				},
 			}
 
@@ -52,7 +55,7 @@ var _ = Describe("Phase 0.5 Integration Tests", func() {
 			internalMap, ok := flattened["internal"].(map[string]any)
 			Expect(ok).To(BeTrue())
 			Expect(internalMap["id"]).To(Equal("worker-456"))
-			Expect(internalMap["timestamp"]).To(Equal("2025-11-04T10:00:00Z"))
+			Expect(internalMap["created_at"]).To(Equal(ts))
 		})
 	})
 
@@ -189,8 +192,8 @@ internal_id: {{ .internal.id }}`
 				Global: map[string]any{
 					"api_endpoint": "https://api.example.com",
 				},
-				Internal: map[string]any{
-					"id": "worker-789",
+				Internal: config.VariablesInternal{
+					WorkerID: "worker-789",
 				},
 			}
 

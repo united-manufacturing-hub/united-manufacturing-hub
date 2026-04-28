@@ -31,10 +31,6 @@ type testObserved struct {
 	Timestamp time.Time
 }
 
-func (t testObserved) GetObservedDesiredState() fsmv2.DesiredState {
-	return &testDesired{}
-}
-
 func (t testObserved) GetTimestamp() time.Time {
 	return t.Timestamp
 }
@@ -53,10 +49,6 @@ func (t *testDesired) GetState() string {
 
 type wrongObserved struct {
 	Value string
-}
-
-func (w wrongObserved) GetObservedDesiredState() fsmv2.DesiredState {
-	return &testDesired{}
 }
 
 func (w wrongObserved) GetTimestamp() time.Time {

@@ -255,44 +255,6 @@ var _ = Describe("Collector", func() {
 		})
 	})
 
-	Context("when observed state supports SetObservedDesiredState", func() {
-		It("should inject desired state via duck-typing", func() {
-			injected := &atomic.Bool{}
-			obs := &desiredInjectionObserved{
-				ID:           "test-worker",
-				CollectedAt:  time.Now(),
-				injectedFlag: injected,
-			}
-			worker := &desiredInjectionWorker{observed: obs}
-
-			collector := collection.NewCollector[*desiredInjectionObserved](collection.CollectorConfig[*desiredInjectionObserved]{
-				Worker:              worker,
-				Identity:            supervisor.TestIdentity(),
-				Store:               supervisor.CreateTestTriangularStore(),
-				Logger:              deps.NewNopFSMLogger(),
-				ObservationInterval: 50 * time.Millisecond,
-				ObservationTimeout:  3 * time.Second,
-				DesiredStateProvider: func() fsmv2.DesiredState {
-					return &config.DesiredState{BaseDesiredState: config.BaseDesiredState{State: "running"}}
-				},
-			})
-
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
-
-			err := collector.Start(ctx)
-			Expect(err).NotTo(HaveOccurred())
-
-			Eventually(func() bool {
-				return injected.Load()
-			}, 2*time.Second, 50*time.Millisecond).Should(BeTrue(),
-				"collector should call SetObservedDesiredState on observed state")
-
-			cancel()
-			time.Sleep(100 * time.Millisecond)
-		})
-	})
-
 	Context("when context is cancelled during collection", func() {
 		It("should stop gracefully and mark as not running", func() {
 			worker := &supervisor.TestWorker{Observed: supervisor.CreateTestObservedStateWithID("test-worker")}
@@ -385,44 +347,44 @@ var _ = Describe("Collector", func() {
 			}, 2*time.Second, 50*time.Millisecond).Should(BeFalse())
 		})
 	})
+
+	Describe("typed desired-state handoff (post-P1.5c)", func() {
+		It("passes DesiredStateProvider's typed value into CollectObservedState verbatim", func() {
+			// Locks the contract that replaced the pre-P1.5c duck-typed
+			// observedDesiredState injection: the collector must pass the
+			// same typed DesiredState pointer the DesiredStateProvider
+			// returned to CollectObservedState, so workers can ExtractConfig
+			// from it without a separate plumbing path.
+			expected := &config.DesiredState{BaseDesiredState: config.BaseDesiredState{State: "running"}}
+			cosCalled := &atomic.Bool{}
+			worker := &desiredCapturingWorker{called: cosCalled}
+
+			collector := collection.NewCollector[supervisor.TestObservedState](collection.CollectorConfig[supervisor.TestObservedState]{
+				Worker:               worker,
+				Identity:             supervisor.TestIdentity(),
+				Store:                supervisor.CreateTestTriangularStore(),
+				Logger:               deps.NewNopFSMLogger(),
+				ObservationInterval:  50 * time.Millisecond,
+				ObservationTimeout:   3 * time.Second,
+				DesiredStateProvider: func() fsmv2.DesiredState { return expected },
+			})
+
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
+			Expect(collector.Start(ctx)).To(Succeed())
+
+			Eventually(func() bool { return cosCalled.Load() }, 2*time.Second, 25*time.Millisecond).Should(BeTrue())
+
+			got := worker.gotDesired.Load()
+			Expect(got).NotTo(BeNil(), "collector must pass non-nil typed DesiredState into CollectObservedState")
+			gotTyped, ok := got.(fsmv2.DesiredState)
+			Expect(ok).To(BeTrue(), "captured value must satisfy fsmv2.DesiredState; collector must not box-and-unbox the type")
+			Expect(gotTyped).To(BeIdenticalTo(fsmv2.DesiredState(expected)),
+				"collector must hand the worker the same DesiredState pointer the provider returned")
+		})
+	})
 })
-
-// desiredInjectionObserved is a test observed state that tracks whether
-// SetObservedDesiredState was called by the collector.
-type desiredInjectionObserved struct {
-	CollectedAt  time.Time    `json:"collectedAt"`
-	ID           string       `json:"id"`
-	injectedFlag *atomic.Bool // shared with test for race-safe verification
-}
-
-func (o *desiredInjectionObserved) GetTimestamp() time.Time { return o.CollectedAt }
-
-func (o *desiredInjectionObserved) GetObservedDesiredState() fsmv2.DesiredState { return nil }
-
-func (o *desiredInjectionObserved) SetObservedDesiredState(desired fsmv2.DesiredState) fsmv2.ObservedState {
-	if o.injectedFlag != nil {
-		o.injectedFlag.Store(true)
-	}
-
-	return o
-}
-
-// desiredInjectionWorker returns a desiredInjectionObserved from CollectObservedState.
-type desiredInjectionWorker struct {
-	observed *desiredInjectionObserved
-}
-
-func (w *desiredInjectionWorker) CollectObservedState(_ context.Context, _ fsmv2.DesiredState) (fsmv2.ObservedState, error) {
-	return w.observed, nil
-}
-
-func (w *desiredInjectionWorker) DeriveDesiredState(_ interface{}) (fsmv2.DesiredState, error) {
-	return &config.DesiredState{BaseDesiredState: config.BaseDesiredState{State: "running"}}, nil
-}
-
-func (w *desiredInjectionWorker) GetInitialState() fsmv2.State[any, any] {
-	return &supervisor.TestState{}
-}
 
 type testCollectorWithHangingLoop struct {
 	collection.Collector[supervisor.TestObservedState]
@@ -475,6 +437,32 @@ func (w *cosTrackingWorker) CollectObservedState(_ context.Context, _ fsmv2.Desi
 	w.called.Store(true)
 
 	return supervisor.CreateTestObservedStateWithID("cos-tracking"), nil
+}
+
+// desiredCapturingWorker records the typed DesiredState pointer value the
+// collector passes into CollectObservedState. Used by the typed-handoff
+// regression spec — replaces the duck-typed observedDesiredState injection
+// test that was removed in P1.5c Row 1. Locks the contract that the
+// collector hands the worker the same DesiredState the DesiredStateProvider
+// produced, so the worker can ExtractConfig from it directly.
+type desiredCapturingWorker struct {
+	gotDesired atomic.Value // holds fsmv2.DesiredState
+	called     *atomic.Bool
+}
+
+func (w *desiredCapturingWorker) CollectObservedState(_ context.Context, desired fsmv2.DesiredState) (fsmv2.ObservedState, error) {
+	w.gotDesired.Store(desired)
+	w.called.Store(true)
+
+	return supervisor.CreateTestObservedStateWithID("desired-capture"), nil
+}
+
+func (w *desiredCapturingWorker) DeriveDesiredState(_ interface{}) (fsmv2.DesiredState, error) {
+	return &config.DesiredState{BaseDesiredState: config.BaseDesiredState{State: "running"}}, nil
+}
+
+func (w *desiredCapturingWorker) GetInitialState() fsmv2.State[any, any] {
+	return &supervisor.TestState{}
 }
 
 func (w *cosTrackingWorker) DeriveDesiredState(_ interface{}) (fsmv2.DesiredState, error) {

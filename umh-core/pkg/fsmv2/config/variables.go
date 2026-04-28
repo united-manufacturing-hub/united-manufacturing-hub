@@ -14,7 +14,7 @@
 
 package config
 
-// No imports needed - pure Go code with type-preserving deep copy
+import "time"
 
 // VariableBundle provides three-tier namespace structure for FSMv2 variables.
 //
@@ -53,11 +53,20 @@ package config
 //   - Purpose: Distinguish fleet-wide settings from worker-specific variables
 //
 // Internal Namespace:
-//   - Contains: Runtime metadata (id, timestamps, bridged_by)
-//   - Template access: Nested ({{ .internal.id }}, {{ .internal.timestamp }})
-//   - Serialization: NO (runtime-only, not persisted)
-//   - Source: FSM runtime, system-generated metadata
-//   - Purpose: Metadata that exists during execution but shouldn't be saved
+//   - Contains: Framework-injected identity/structural desired state
+//     (worker ID, parent ID, creation timestamp, optional bridged-by tag).
+//   - Template access: Nested ({{ .internal.id }}, {{ .internal.created_at }})
+//   - Serialization: YES on JSON (round-trips through CSE storage between
+//     collector and reconciler goroutines per Design Intent §13/§14); NO on
+//     YAML (users do not author this — supervisor injects it).
+//   - Source: FSM runtime, system-generated metadata.
+//   - Purpose: Identity carried alongside the rest of desired state.
+//
+// Why typed (not map[string]any): per §4-D LOCKED, Internal carries
+// identity/structural desired state that the supervisor injects. Typing the
+// struct codegens cleanly to TypeScript (vs the "any leak" Record<string,
+// unknown> a bare map produces, see §17), and makes ChildSpec.Hash output
+// deterministic across map-iteration orderings.
 type VariableBundle struct {
 	// User contains user-defined variables, parent state variables, and computed values.
 	// Variables in this namespace are accessible at top-level in templates ({{ .varname }}).
@@ -69,15 +78,54 @@ type VariableBundle struct {
 	// This namespace is serialized to YAML/JSON and persisted with state/config.
 	Global map[string]any `json:"global,omitempty" yaml:"global,omitempty"`
 
-	// Internal contains runtime metadata like worker IDs, timestamps, and bridging info.
-	// Variables in this namespace require explicit prefix ({{ .internal.varname }}).
-	// This namespace is NOT serialized (yaml:"-" json:"-") and exists only at runtime.
-	Internal map[string]any `json:"-" yaml:"-"`
+	// Internal carries framework-injected identity (worker ID, parent ID,
+	// creation timestamp, optional bridged-by tag). The field round-trips
+	// through CSE storage as part of the observation document so JSON
+	// serialization is required; YAML is suppressed because users do not
+	// author this content.
+	Internal VariablesInternal `json:"internal" yaml:"-"`
 }
 
-// Flatten returns a map with User variables promoted to top-level and Global/Internal nested.
-// Template syntax uses User variables where User variables are accessible as {{ .varname }}
-// while Global and Internal require explicit prefixes ({{ .global.varname }}, {{ .internal.varname }}).
+// VariablesInternal is the framework-injected identity / structural desired
+// state for a worker. Unlike User and Global variables that the user authors,
+// Internal is populated by the supervisor at injection time
+// (reconciliation.go) and round-trips through CSE storage as part of the
+// observation document.
+//
+// The JSON tags preserve the historical wire keys (id, parent_id, created_at,
+// bridged_by) so existing CSE documents remain decodable through the
+// transition; the Go field names follow Go conventions (PascalCase). Per §17,
+// keeping the wire shape stable avoids a delta-storm against pre-P1.5c
+// observation documents.
+type VariablesInternal struct {
+	// WorkerID is the unique worker identifier. Always populated by the
+	// supervisor injector. Templates read it as {{ .internal.id }} via the
+	// flatten map; the JSON wire tag is camelCase per §4-D LOCKED so the
+	// codegened TypeScript surface stays idiomatic.
+	WorkerID string `json:"workerID"            yaml:"-"`
+
+	// ParentID is the parent supervisor's worker ID. Empty for root
+	// supervisors. Templates read it as {{ .internal.parent_id }} via the
+	// flatten map; JSON wire is camelCase per §4-D LOCKED.
+	ParentID string `json:"parentID,omitempty"  yaml:"-"`
+
+	// BridgedBy carries the optional bridge-source label used by tests and
+	// some adapter pathways. Empty for the common case. Templates read it
+	// as {{ .internal.bridged_by }} via the flatten map; JSON wire is
+	// camelCase per §4-D LOCKED.
+	BridgedBy string `json:"bridgedBy,omitempty" yaml:"-"`
+
+	// CreatedAt is the supervisor-recorded creation time of the worker
+	// document, mirroring CSE storage's createdAt field. Templates read it
+	// as {{ .internal.created_at }} via the flatten map; JSON wire is
+	// camelCase per §4-D LOCKED.
+	CreatedAt time.Time `json:"createdAt"           yaml:"-"`
+}
+
+// Flatten returns a map with User variables promoted to top-level and
+// Global/Internal nested. User variables flatten to top-level
+// ({{ .varname }}); Global and Internal require explicit prefixes
+// ({{ .global.varname }}, {{ .internal.varname }}).
 //
 // Example:
 //
@@ -106,11 +154,41 @@ func (v VariableBundle) Flatten() map[string]any {
 		result["global"] = v.Global
 	}
 
-	if v.Internal != nil {
-		result["internal"] = v.Internal
-	}
+	result["internal"] = v.Internal.flatten()
 
 	return result
+}
+
+// flatten projects VariablesInternal into the map-shaped form the templating
+// layer expects ({{ .internal.id }}, {{ .internal.parent_id }}, etc.). Note
+// the deliberate snake_case keys here (`id`, `parent_id`, `bridged_by`,
+// `created_at`) — they preserve the existing template vocabulary while the
+// JSON wire tags use camelCase per §4-D LOCKED. Wire tags and flatten keys
+// are independent.
+//
+// Required fields (`id`, `created_at`) are always emitted; the supervisor
+// injector guarantees non-zero values before template rendering, so a
+// missing `id` here would indicate an invariant violation upstream rather
+// than a template error.
+//
+// Optional fields (`parent_id`, `bridged_by`) are omitted when empty so
+// that referencing them in templates surfaces an explicit missing-key
+// error rather than a silent empty-string substitution.
+func (i VariablesInternal) flatten() map[string]any {
+	m := map[string]any{
+		"id":         i.WorkerID,
+		"created_at": i.CreatedAt,
+	}
+
+	if i.ParentID != "" {
+		m["parent_id"] = i.ParentID
+	}
+
+	if i.BridgedBy != "" {
+		m["bridged_by"] = i.BridgedBy
+	}
+
+	return m
 }
 
 // VariableOverride tracks when a child variable overrides a parent variable.
@@ -248,7 +326,11 @@ func deepCloneValue(v any) any {
 
 // Clone creates a deep copy of the VariableBundle.
 // All maps are deeply copied (including nested structures) to prevent shared references.
-// Internal is NOT copied (regenerated per-worker by supervisor).
+// Internal is reset to its zero-value VariablesInternal{} on the clone — the
+// supervisor injects per-worker identity at reconciliation time, so a clone
+// inherits no parent identity. This is implicit in the body (the function
+// only assigns User and Global; the un-assigned Internal field gets the
+// zero value of the new VariableBundle).
 func (v VariableBundle) Clone() VariableBundle {
 	clone := VariableBundle{}
 

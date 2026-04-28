@@ -46,7 +46,6 @@ func NewCachingTestWorker(identity deps.Identity) *CachingTestWorker {
 		return &testutil.ObservedState{
 			ID:          identity.ID,
 			CollectedAt: time.Now(),
-			Desired:     &testutil.DesiredState{},
 		}, nil
 	}
 

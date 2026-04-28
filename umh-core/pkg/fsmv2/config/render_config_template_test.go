@@ -15,6 +15,8 @@
 package config_test
 
 import (
+	"time"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
@@ -74,18 +76,20 @@ var _ = Describe("RenderConfigTemplate", func() {
 
 	Describe("Internal variables nested under 'internal'", func() {
 		It("should access Internal variables under 'internal' prefix ({{ .internal.id }})", func() {
+			ts := time.Date(2025, 1, 13, 10, 0, 0, 0, time.UTC)
 			vars := config.VariableBundle{
-				Internal: map[string]any{
-					"id":        "worker-abc-123",
-					"timestamp": 1234567890,
+				Internal: config.VariablesInternal{
+					WorkerID:  "worker-abc-123",
+					CreatedAt: ts,
 				},
 			}
-			tmpl := "worker_id: {{ .internal.id }}, ts: {{ .internal.timestamp }}"
+			tmpl := "worker_id: {{ .internal.id }}, ts: {{ .internal.created_at }}"
 
 			result, err := config.RenderConfigTemplate(tmpl, vars)
 
 			Expect(err).NotTo(HaveOccurred())
-			Expect(result).To(Equal("worker_id: worker-abc-123, ts: 1234567890"))
+			Expect(result).To(ContainSubstring("worker_id: worker-abc-123"))
+			Expect(result).To(ContainSubstring("2025-01-13"))
 		})
 	})
 
@@ -133,8 +137,8 @@ var _ = Describe("RenderConfigTemplate", func() {
 				Global: map[string]any{
 					"api_endpoint": "https://api.example.com",
 				},
-				Internal: map[string]any{
-					"id": "worker-xyz",
+				Internal: config.VariablesInternal{
+					WorkerID: "worker-xyz",
 				},
 			}
 			tmpl := `{
@@ -167,9 +171,9 @@ var _ = Describe("RenderConfigTemplate", func() {
 					"kafka_broker": "localhost:9092",
 					"environment":  "production",
 				},
-				Internal: map[string]any{
-					"id":         "bridge-12345",
-					"created_at": "2025-01-13T10:00:00Z",
+				Internal: config.VariablesInternal{
+					WorkerID:  "bridge-12345",
+					CreatedAt: time.Date(2025, 1, 13, 10, 0, 0, 0, time.UTC),
 				},
 			}
 			tmpl := `input:
@@ -196,7 +200,7 @@ output:
 			Expect(result).To(ContainSubstring(`topic: "umh.v1.enterprise.site.area.modbus-plc"`))
 			Expect(result).To(ContainSubstring(`# Bridge ID: bridge-12345`))
 			Expect(result).To(ContainSubstring(`# Environment: production`))
-			Expect(result).To(ContainSubstring(`# Created: 2025-01-13T10:00:00Z`))
+			Expect(result).To(ContainSubstring(`# Created: 2025-01-13`))
 		})
 
 		It("should handle repeated variable usage in template", func() {
