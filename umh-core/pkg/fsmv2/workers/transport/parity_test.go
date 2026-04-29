@@ -160,4 +160,61 @@ authToken: "test-token-parity"`,
 				i, legacy[i].Name, rendered[i].Name)
 		}
 	})
+
+	// Variables-populated case (P2.6 / pr2_issues #12). The supervisor-cutover
+	// discriminator must remain bit-equal under realistic templating shapes:
+	// production specs ship with both Config (a YAML body) AND Variables (the
+	// per-tag substitution bundle). Hashing both legacy and rendered ChildSpec
+	// must therefore round-trip through ChildSpec.Hash with the Variables
+	// bundle intact. If RenderChildren ever drops Variables silently, this
+	// test fails before P3.x retires the discriminator.
+	It("Hash-equality on a Variables-populated spec (P2.6 expansion)", func() {
+		identity := deps.Identity{ID: "parity-transport-vars", Name: "Parity Transport Vars"}
+		logger := deps.NewNopFSMLogger()
+
+		w, err := transport.NewTransportWorker(identity, logger, nil, nil)
+		Expect(err).NotTo(HaveOccurred())
+
+		varsSpec := config.UserSpec{
+			Config: `relayURL: "https://relay.example.com"
+instanceUUID: "test-uuid-vars"
+authToken: "test-token-vars"`,
+			Variables: config.VariableBundle{
+				User: map[string]any{
+					"IP":   "192.168.1.100",
+					"PORT": "502",
+				},
+			},
+		}
+
+		desired, err := w.DeriveDesiredState(varsSpec)
+		Expect(err).NotTo(HaveOccurred())
+
+		provider, ok := desired.(config.ChildSpecProvider)
+		Expect(ok).To(BeTrue())
+
+		legacy := provider.GetChildrenSpecs()
+
+		snap := fsmv2.WorkerSnapshot[transport.TransportConfig, transport.TransportStatus]{
+			Desired: fsmv2.WrappedDesiredState[transport.TransportConfig]{
+				BaseDesiredState: config.BaseDesiredState{State: config.DesiredStateRunning},
+				ChildrenSpecs:    legacy,
+			},
+		}
+		rendered := transport.RenderChildren(snap)
+
+		Expect(rendered).To(HaveLen(len(legacy)),
+			"Variables-populated parity: DDS=%d rendered=%d", len(legacy), len(rendered))
+
+		for i := range legacy {
+			lhash, lerr := legacy[i].Hash()
+			Expect(lerr).NotTo(HaveOccurred(), "hashing legacy[%d] with Variables", i)
+			rhash, rerr := rendered[i].Hash()
+			Expect(rerr).NotTo(HaveOccurred(), "hashing rendered[%d] with Variables", i)
+
+			Expect(rhash).To(Equal(lhash),
+				"Variables-populated parity violation on spec[%d] (Variables=%v vs %v)",
+				i, legacy[i].UserSpec.Variables, rendered[i].UserSpec.Variables)
+		}
+	})
 })

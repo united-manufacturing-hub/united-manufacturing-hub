@@ -18,12 +18,67 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplechild/snapshot"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplechild/state"
 )
 
-var _ = Describe("StoppedState", func() {
-	It("should compile and instantiate", func() {
-		s := &state.StoppedState{}
-		Expect(s).NotTo(BeNil())
+// makeChildSnapshot constructs an examplechild snapshot for state-machine
+// behavioral tests. parentMappedState mirrors what the supervisor's
+// MappedParentStateProvider injects each tick.
+func makeChildSnapshot(parentMappedState string, shutdownRequested bool) fsmv2.Snapshot {
+	desired := &snapshot.ExamplechildDesiredState{
+		ParentMappedState: parentMappedState,
+		BaseDesiredState: config.BaseDesiredState{
+			ShutdownRequested: shutdownRequested,
+		},
+	}
+	observed := snapshot.ExamplechildObservedState{
+		ExamplechildDesiredState: *desired,
+	}
+
+	return fsmv2.Snapshot{
+		Observed: observed,
+		Desired:  desired,
+		Identity: deps.Identity{ID: "test-child", Name: "child", WorkerType: "examplechild"},
+	}
+}
+
+var _ = Describe("StoppedState (examplechild)", func() {
+	var s *state.StoppedState
+
+	BeforeEach(func() {
+		s = &state.StoppedState{}
+	})
+
+	It("should return PhaseStopped LifecyclePhase", func() {
+		Expect(s.LifecyclePhase()).To(Equal(config.PhaseStopped))
+	})
+
+	It("signals NeedsRemoval when shutdown is requested", func() {
+		snap := makeChildSnapshot(config.DesiredStateRunning, true)
+		result := s.Next(snap)
+		Expect(result.Signal).To(Equal(fsmv2.SignalNeedsRemoval))
+		Expect(result.State).To(BeAssignableToTypeOf(&state.StoppedState{}))
+	})
+
+	It("transitions to TryingToConnect when parent wants children running", func() {
+		snap := makeChildSnapshot(config.DesiredStateRunning, false)
+		result := s.Next(snap)
+		Expect(result.State).To(BeAssignableToTypeOf(&state.TryingToConnectState{}))
+		Expect(result.Signal).To(Equal(fsmv2.SignalNone))
+	})
+
+	It("stays Stopped when parent is not running", func() {
+		snap := makeChildSnapshot(config.DesiredStateStopped, false)
+		result := s.Next(snap)
+		Expect(result.State).To(BeAssignableToTypeOf(&state.StoppedState{}))
+		Expect(result.Signal).To(Equal(fsmv2.SignalNone))
+	})
+
+	It("returns a stable String() name", func() {
+		Expect(s.String()).To(Equal("Stopped"))
 	})
 })
