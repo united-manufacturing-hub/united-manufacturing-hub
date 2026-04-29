@@ -16,6 +16,8 @@ package actions
 
 import (
 	"fmt"
+	"slices"
+	"sort"
 	"sync"
 
 	"github.com/google/uuid"
@@ -92,6 +94,47 @@ func SendLimitedLogs(
 // RemainingPrefixSec formats d (assumed ≤20 s) as "[left: NN s] ".
 func RemainingPrefixSec(dSeconds int) string {
 	return fmt.Sprintf("[left: %02d s] ", dSeconds) // fixed 15-rune prefix
+}
+
+// TODO(ENG-4856): toStringSlice exists because UMH_TOPICS is stored in Variables.User
+// (map[string]any) instead of a typed []string field. The three-form conversion handles
+// YAML round-trip type drift that a typed field would prevent. Remove once UMH_TOPICS
+// moves to a typed config block in the FSMv2 bridge migration.
+//
+// toStringSlice converts an any value to []string. UMH_TOPICS can appear in
+// three forms depending on how it was stored or reloaded:
+//   - []string: from DFC payload and in-memory, before any YAML round-trip
+//   - []any: array of any when loading via yaml.v3 unmarshaling from config
+//   - string: single element from YAML round-trip
+func toStringSlice(v any) ([]string, bool) {
+	switch typed := v.(type) {
+	case []string:
+		return typed, true
+	case []any:
+		result := make([]string, 0, len(typed))
+		for _, item := range typed {
+			if s, ok := item.(string); ok {
+				result = append(result, s)
+			}
+		}
+		return result, len(result) == len(typed)
+	case string:
+		return []string{typed}, true
+	}
+	return nil, false
+}
+
+// equalTopicSets reports whether two UMH_TOPICS slices contain the same elements
+// regardless of order.
+func equalTopicSets(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	aCopy := slices.Clone(a)
+	bCopy := slices.Clone(b)
+	sort.Strings(aCopy)
+	sort.Strings(bCopy)
+	return slices.Equal(aCopy, bCopy)
 }
 
 // High-level label for one-off (non-polling) messages.
