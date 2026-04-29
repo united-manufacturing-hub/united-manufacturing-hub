@@ -29,7 +29,7 @@ import (
 )
 
 // ExamplechildConfig holds the user-provided configuration for the child worker.
-// Embeds BaseUserSpec to support the StateGetter interface, allowing
+// Embeds BaseUserSpec to expose GetState() for WorkerBase.DeriveDesiredState, allowing
 // WorkerBase.DeriveDesiredState to extract the desired state from the "state"
 // YAML field. The child worker has no additional config fields — its lifecycle
 // is driven by the parent's Enabled field.

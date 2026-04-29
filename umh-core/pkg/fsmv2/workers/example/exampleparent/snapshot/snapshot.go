@@ -28,7 +28,7 @@ import (
 )
 
 // ExampleparentConfig holds the user-provided configuration for the parent
-// worker. Embeds BaseUserSpec to support the StateGetter interface, allowing
+// worker. Embeds BaseUserSpec to expose GetState() for WorkerBase.DeriveDesiredState, allowing
 // WorkerBase.DeriveDesiredState to extract the desired state from the "state"
 // YAML field.
 //

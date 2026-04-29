@@ -31,7 +31,7 @@ import (
 )
 
 // ExamplefailingConfig holds the user-provided configuration for the failing
-// worker. Embeds BaseUserSpec to support the StateGetter interface, allowing
+// worker. Embeds BaseUserSpec to expose GetState() for WorkerBase.DeriveDesiredState, allowing
 // WorkerBase.DeriveDesiredState to extract the desired state from the "state"
 // YAML field. Configured values are synced into the runtime dependencies via
 // the worker's SetPostParseHook closure so actions can observe them.
