@@ -27,12 +27,11 @@ type DisconnectedState struct {
 func (s *DisconnectedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := helpers.ConvertSnapshot[snapshot.ExampleslowObservedState, *snapshot.ExampleslowDesiredState](snapAny)
 
-	// ParentMappedState is injected into Observed.DesiredState by collector.
 	if snap.Observed.ShouldStop() {
 		return fsmv2.Transition(&TryingToStopState{}, fsmv2.SignalNone, nil, "stop required, transitioning to trying to stop", nil)
 	}
 
-	if snap.Observed.ShouldBeRunning() {
+	if !snap.Observed.ShouldStop() {
 		return fsmv2.Transition(&TryingToConnectState{}, fsmv2.SignalNone, nil, "should be running, attempting reconnection", nil)
 	}
 
