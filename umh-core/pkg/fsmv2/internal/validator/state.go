@@ -182,7 +182,7 @@ func checkShutdownCheckFirst(filename string) []Violation {
 		isShutdownCheck := false
 
 		ast.Inspect(firstIfStmt.Cond, func(condNode ast.Node) bool {
-			// Old API: method call like snap.Desired.IsShutdownRequested()
+			// Accepts method calls: snap.Desired.IsShutdownRequested() or snap.ShouldStop()
 			if callExpr, ok := condNode.(*ast.CallExpr); ok {
 				if selExpr, ok := callExpr.Fun.(*ast.SelectorExpr); ok {
 					if selExpr.Sel.Name == "IsShutdownRequested" || selExpr.Sel.Name == "ShouldStop" {
@@ -190,15 +190,6 @@ func checkShutdownCheckFirst(filename string) []Violation {
 
 						return false
 					}
-				}
-			}
-
-			// New API: field access like snap.IsShutdownRequested
-			if selExpr, ok := condNode.(*ast.SelectorExpr); ok {
-				if selExpr.Sel.Name == "IsShutdownRequested" {
-					isShutdownCheck = true
-
-					return false
 				}
 			}
 

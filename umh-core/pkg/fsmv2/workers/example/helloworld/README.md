@@ -76,7 +76,7 @@ files and shows how to add each capability.
                                    shutdown
 ```
 
-Every state checks `snap.IsShutdownRequested` first and returns to `Stopped`
+Every state checks `snap.Desired.IsShutdownRequested()` first and returns to `Stopped`
 when it is true; the catch-all returns to the current state with no action.
 
 ## Control-loop mapping
@@ -149,7 +149,7 @@ Each state file defines a state struct embedding the appropriate helper base
 (e.g. `helpers.StoppedBase`, `helpers.RunningHealthyBase`), implements
 `Next(snapAny)`, and returns either a transition or an action via
 `fsmv2.Transition(...)`. The first conditional is always
-`snap.IsShutdownRequested`.
+`snap.Desired.IsShutdownRequested()`.
 
 Change it when: you add states, transitions, or per-state business logic.
 `StoppingState` must always progress (never self-return with `nil` — CI

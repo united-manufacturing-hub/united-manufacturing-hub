@@ -138,7 +138,7 @@ New workers should use `WorkerBase[TConfig, TStatus]` instead of the legacy 7-fi
 
 Pass typed actions (`&MyAction{}`) directly to `fsmv2.Transition` — the framework auto-wraps them into `Action[any]` via reflection. No caller-visible adapter is needed.
 
-**Architecture validators** accept both APIs: `ConvertWorkerSnapshot` and `ConvertSnapshot` are valid entry points; `snap.IsShutdownRequested` (field) and `snap.Desired.IsShutdownRequested()` (method) are valid shutdown checks.
+**Architecture validators** accept both APIs: `ConvertWorkerSnapshot` and `ConvertSnapshot` are valid entry points; `snap.Desired.IsShutdownRequested()` is the valid shutdown check.
 
 **Capability interfaces** (optional, detected via type assertion on first instantiation):
 - `ActionProvider` — `Actions() map[string]Action[any]`

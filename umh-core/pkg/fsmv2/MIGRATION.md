@@ -125,7 +125,7 @@ func (s *StoppedState) Next(snapAny any) (fsmv2.State[any, any], fsmv2.Signal, f
     }
 
     // Transition to TryingToStart when desired state is running
-    if snap.Observed.ShouldBeRunning() {
+    if !snap.Desired.IsShutdownRequested() {
         return &TryingToStartState{}, fsmv2.SignalNone, nil
     }
 
@@ -161,7 +161,7 @@ func (s *TryingToStartState) Next(snapAny any) (fsmv2.State[any, any], fsmv2.Sig
     snap := helpers.ConvertSnapshot[MyObservedState, *MyDesiredState](snapAny)
 
     // Check shutdown first
-    if snap.Observed.ShouldStop() {
+    if snap.Desired.IsShutdownRequested() {
         return &TryingToStopState{}, fsmv2.SignalNone, nil
     }
 
@@ -319,7 +319,7 @@ func (s *StoppedState) Next(snapAny any) (fsmv2.State[any, any], fsmv2.Signal, f
         return s, fsmv2.SignalNeedsRemoval, nil
     }
 
-    if snap.Observed.ShouldBeRunning() {
+    if !snap.Desired.IsShutdownRequested() {
         return &TryingToStartState{}, fsmv2.SignalNone, nil
     }
 
@@ -363,7 +363,7 @@ func (s *RunningState) Next(snapAny any) (fsmv2.State[any, any], fsmv2.Signal, f
     snap := helpers.ConvertSnapshot[MyObservedState, *MyDesiredState](snapAny)
 
     // Check shutdown first (equivalent to leave callback)
-    if snap.Observed.ShouldStop() {
+    if snap.Desired.IsShutdownRequested() {
         return &TryingToStopState{}, fsmv2.SignalNone, nil
     }
 
@@ -783,7 +783,7 @@ Worker API v2 replaces the 7-file pattern with a single-file approach using gene
 | `dependencies.go` with custom deps struct | `deps.Identity`, `deps.FSMLogger`, `deps.StateReader` passed to constructor |
 | `init()` with manual worker factory + supervisor factory + CSE `TypeRegistry` registrations | `register.Worker[TConfig, TStatus, TDeps]("type", constructor)` (use `register.NoDeps` for zero-dep workers) |
 | `helpers.ConvertSnapshot[Obs, *Des](snapAny)` in states | `fsmv2.ConvertWorkerSnapshot[TConfig, TStatus](snapAny)` in states |
-| `snap.Desired.IsShutdownRequested()` method call | `snap.IsShutdownRequested` field access |
+| `snap.Desired.IsShutdownRequested()` on custom `DesiredState` | `snap.Desired.IsShutdownRequested()` on `WorkerSnapshot` |
 | Manual `SetState`, `SetShutdownRequested`, `SetChildrenCounts` in ObservedState | Automatic via collector duck-typing on `Observation` |
 
 ### Migration steps
@@ -793,7 +793,7 @@ Worker API v2 replaces the 7-file pattern with a single-file approach using gene
 3. **Replace constructor** — call `w.InitBase(id, logger, sr)` instead of manual dependency wiring
 4. **Simplify CollectObservedState** — use `fsmv2.ExtractConfig[TConfig](desired)` for config access, return `fsmv2.NewObservation(TStatus{...})` (the collector handles CollectedAt, framework metrics, action history, and metric accumulation automatically)
 5. **Delete DeriveDesiredState and GetInitialState** — provided by WorkerBase (override only if needed)
-6. **Update states** — use `fsmv2.ConvertWorkerSnapshot[TConfig, TStatus](snapAny)` and `snap.IsShutdownRequested` field access
+6. **Update states** — use `fsmv2.ConvertWorkerSnapshot[TConfig, TStatus](snapAny)` and `snap.Desired.IsShutdownRequested()` method call
 7. **Replace registration** — single `register.Worker[TConfig, TStatus, TDeps]("type", constructor)` call. Use `register.NoDeps` for zero-dep workers; workers needing custom dependencies parameterize `TDeps` with their dep struct and receive it in the constructor's final argument (see `register/register.go` for the `SetDeps`/`GetDeps` handoff contract)
 8. **Delete snapshot/, dependencies.go, userspec.go** — no longer needed
 9. **Implement capability interfaces** on your worker struct if needed (ActionProvider, ChildSpecProvider, etc.)

@@ -32,7 +32,7 @@ type StoppingState struct {
 func (s *StoppingState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := fsmv2.ConvertWorkerSnapshot[transport_pkg.TransportConfig, transport_pkg.TransportStatus](snapAny)
 
-	if snap.Desired.IsShutdownRequested() { // architecture invariant: shutdown check must be first conditional
+	if snap.Desired.IsShutdownRequested() { //nolint:gocritic // architecture invariant: shutdown check must be first conditional
 	}
 
 	children := transport_pkg.RenderChildren(snap)
