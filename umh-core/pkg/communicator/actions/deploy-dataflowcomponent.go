@@ -182,7 +182,7 @@ func (a *DeployDataflowComponentAction) Validate() error {
 
 	// For custom type, validate the payload structure using shared function
 	if a.metaType == "custom" {
-		if err := ValidateCustomDataFlowComponentPayload(a.payload, true); err != nil {
+		if err := ValidateCustomDataFlowComponentPayload(a.payload, true, true); err != nil {
 			return err
 		}
 	}
