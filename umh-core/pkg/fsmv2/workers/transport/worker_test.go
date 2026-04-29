@@ -29,6 +29,26 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/state"
 )
 
+// snapshotForSpec builds a typed WorkerSnapshot fixture matching the shape
+// state.Next consumes. RenderChildren is the canonical children-set emitter
+// invoked at the top of state.Next (P2.2 wiring); calling it directly mirrors
+// the architecture-test fixture in architecture_p1_8_test.go's
+// parentRenderers() and is the post-P2.4 authoritative path. The snapshot's
+// Desired.ChildrenSpecs[0].UserSpec is what transport.snapshotUserSpec reads
+// to thread the parent's raw spec into both push and pull children.
+func snapshotForSpec(spec fsmv2types.UserSpec) fsmv2.WorkerSnapshot[transport.TransportConfig, transport.TransportStatus] {
+	return fsmv2.WorkerSnapshot[transport.TransportConfig, transport.TransportStatus]{
+		Desired: fsmv2.WrappedDesiredState[transport.TransportConfig]{
+			BaseDesiredState: fsmv2types.BaseDesiredState{State: fsmv2types.DesiredStateRunning},
+			ChildrenSpecs: []fsmv2types.ChildSpec{{
+				Name:       "push",
+				WorkerType: "push",
+				UserSpec:   spec,
+			}},
+		},
+	}
+}
+
 // Note: mockChannelProvider is defined in dependencies_test.go (same package)
 // and is reused here via newTestChannelProvider()
 
@@ -159,17 +179,14 @@ var _ = Describe("TransportWorker", func() {
 				Expect(desired.GetState()).To(Equal("running"))
 			})
 
-			It("should include PushWorker ChildrenSpecs even with nil spec", func() {
-				desired, err := worker.DeriveDesiredState(nil)
-				Expect(err).ToNot(HaveOccurred())
+			It("should include PushWorker children via RenderChildren even with nil spec", func() {
+				children := transport.RenderChildren(snapshotForSpec(fsmv2types.UserSpec{}))
 
-				transportDesired, ok := desired.(*fsmv2.WrappedDesiredState[transport.TransportConfig])
-				Expect(ok).To(BeTrue())
-				Expect(transportDesired.ChildrenSpecs).To(HaveLen(2))
-				Expect(transportDesired.ChildrenSpecs[0].Name).To(Equal("push"))
-				Expect(transportDesired.ChildrenSpecs[0].WorkerType).To(Equal("push"))
-				Expect(transportDesired.ChildrenSpecs[1].Name).To(Equal("pull"))
-				Expect(transportDesired.ChildrenSpecs[1].WorkerType).To(Equal("pull"))
+				Expect(children).To(HaveLen(2))
+				Expect(children[0].Name).To(Equal("push"))
+				Expect(children[0].WorkerType).To(Equal("push"))
+				Expect(children[1].Name).To(Equal("pull"))
+				Expect(children[1].WorkerType).To(Equal("pull"))
 			})
 		})
 
@@ -196,7 +213,7 @@ authToken: "test-token"`,
 				Expect(transportDesired.Config.AuthToken).To(Equal("test-token"))
 			})
 
-			It("should include PushWorker ChildrenSpecs", func() {
+			It("should include PushWorker children via RenderChildren", func() {
 				spec := fsmv2types.UserSpec{
 					Config: `relayURL: "https://relay.example.com"
 instanceUUID: "test-uuid"
@@ -204,19 +221,15 @@ authToken: "test-token"`,
 					Variables: fsmv2types.VariableBundle{},
 				}
 
-				desired, err := worker.DeriveDesiredState(spec)
-				Expect(err).ToNot(HaveOccurred())
+				children := transport.RenderChildren(snapshotForSpec(spec))
+				Expect(children).To(HaveLen(2))
 
-				transportDesired, ok := desired.(*fsmv2.WrappedDesiredState[transport.TransportConfig])
-				Expect(ok).To(BeTrue())
-				Expect(transportDesired.ChildrenSpecs).To(HaveLen(2))
-
-				pushSpec := transportDesired.ChildrenSpecs[0]
+				pushSpec := children[0]
 				Expect(pushSpec.Name).To(Equal("push"))
 				Expect(pushSpec.WorkerType).To(Equal("push"))
 				Expect(pushSpec.ChildStartStates).To(ConsistOf("Running", "Degraded"))
 
-				pullSpec := transportDesired.ChildrenSpecs[1]
+				pullSpec := children[1]
 				Expect(pullSpec.Name).To(Equal("pull"))
 				Expect(pullSpec.WorkerType).To(Equal("pull"))
 				Expect(pullSpec.ChildStartStates).To(ConsistOf("Running", "Degraded"))

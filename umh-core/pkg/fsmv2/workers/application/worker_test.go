@@ -82,11 +82,15 @@ children:
 			Expect(err).ToNot(HaveOccurred())
 			desired := desiredIface.(*fsmv2.WrappedDesiredState[snapshot.ApplicationConfig])
 			Expect(desired.State).To(Equal("running"))
-			Expect(desired.ChildrenSpecs).To(HaveLen(2))
-			Expect(desired.ChildrenSpecs[0].Name).To(Equal("child-1"))
-			Expect(desired.ChildrenSpecs[0].WorkerType).To(Equal("example-child"))
-			Expect(desired.ChildrenSpecs[1].Name).To(Equal("child-2"))
-			Expect(desired.ChildrenSpecs[1].WorkerType).To(Equal("example-child"))
+
+			children := RenderChildren(fsmv2.WorkerSnapshot[snapshot.ApplicationConfig, snapshot.ApplicationStatus]{
+				Desired: *desired,
+			})
+			Expect(children).To(HaveLen(2))
+			Expect(children[0].Name).To(Equal("child-1"))
+			Expect(children[0].WorkerType).To(Equal("example-child"))
+			Expect(children[1].Name).To(Equal("child-2"))
+			Expect(children[1].WorkerType).To(Equal("example-child"))
 		})
 
 		It("should handle empty children array", func() {
@@ -99,7 +103,16 @@ children:
 			Expect(err).ToNot(HaveOccurred())
 			desired := desiredIface.(*fsmv2.WrappedDesiredState[snapshot.ApplicationConfig])
 			Expect(desired.State).To(Equal("running"))
-			Expect(desired.ChildrenSpecs).To(BeEmpty())
+
+			children := RenderChildren(fsmv2.WorkerSnapshot[snapshot.ApplicationConfig, snapshot.ApplicationStatus]{
+				Desired: *desired,
+			})
+			// Per discriminator semantics (api.go:140-153), application's
+			// RenderChildren returns a non-nil empty slice for the no-children
+			// case so the supervisor treats it as "use this exact (empty) set"
+			// rather than falling back to legacy DDS.
+			Expect(children).To(BeEmpty())
+			Expect(children).NotTo(BeNil())
 		})
 
 		It("should handle empty config", func() {
@@ -111,7 +124,16 @@ children:
 			Expect(err).ToNot(HaveOccurred())
 			desired := desiredIface.(*fsmv2.WrappedDesiredState[snapshot.ApplicationConfig])
 			Expect(desired.State).To(Equal("running"))
-			Expect(desired.ChildrenSpecs).To(BeNil())
+
+			children := RenderChildren(fsmv2.WorkerSnapshot[snapshot.ApplicationConfig, snapshot.ApplicationStatus]{
+				Desired: *desired,
+			})
+			// Empty config -> non-nil empty slice from RenderChildren (see
+			// children.go: src nil/zero-len -> []ChildSpec{}). Discriminator
+			// semantics (api.go:140-153): nil = legacy DDS fallback,
+			// non-nil empty = "use this exact (empty) set".
+			Expect(children).To(BeEmpty())
+			Expect(children).NotTo(BeNil())
 		})
 
 		It("should return default desired state for nil spec", func() {
@@ -119,8 +141,14 @@ children:
 			Expect(err).ToNot(HaveOccurred())
 			desired := desiredIface.(*fsmv2.WrappedDesiredState[snapshot.ApplicationConfig])
 			Expect(desired.State).To(Equal("running"))
-			Expect(desired.ChildrenSpecs).To(BeNil())
 			Expect(desired.Config.Name).To(Equal("test-root"))
+
+			children := RenderChildren(fsmv2.WorkerSnapshot[snapshot.ApplicationConfig, snapshot.ApplicationStatus]{
+				Desired: *desired,
+			})
+			// nil spec startup -> non-nil empty slice from RenderChildren.
+			Expect(children).To(BeEmpty())
+			Expect(children).NotTo(BeNil())
 		})
 
 		It("should return error for invalid YAML", func() {
@@ -155,8 +183,12 @@ children:
 			desiredIface, err := worker.DeriveDesiredState(userSpec)
 			Expect(err).ToNot(HaveOccurred())
 			desired := desiredIface.(*fsmv2.WrappedDesiredState[snapshot.ApplicationConfig])
-			Expect(desired.ChildrenSpecs).To(HaveLen(1))
-			Expect(desired.ChildrenSpecs[0].ChildStartStates).To(ConsistOf("running", "TryingToStart"))
+
+			children := RenderChildren(fsmv2.WorkerSnapshot[snapshot.ApplicationConfig, snapshot.ApplicationStatus]{
+				Desired: *desired,
+			})
+			Expect(children).To(HaveLen(1))
+			Expect(children[0].ChildStartStates).To(ConsistOf("running", "TryingToStart"))
 		})
 
 		It("should handle mixed worker types", func() {
@@ -176,10 +208,14 @@ children:
 			desiredIface, err := worker.DeriveDesiredState(userSpec)
 			Expect(err).ToNot(HaveOccurred())
 			desired := desiredIface.(*fsmv2.WrappedDesiredState[snapshot.ApplicationConfig])
-			Expect(desired.ChildrenSpecs).To(HaveLen(3))
-			Expect(desired.ChildrenSpecs[0].WorkerType).To(Equal("counter"))
-			Expect(desired.ChildrenSpecs[1].WorkerType).To(Equal("timer"))
-			Expect(desired.ChildrenSpecs[2].WorkerType).To(Equal("example-child"))
+
+			children := RenderChildren(fsmv2.WorkerSnapshot[snapshot.ApplicationConfig, snapshot.ApplicationStatus]{
+				Desired: *desired,
+			})
+			Expect(children).To(HaveLen(3))
+			Expect(children[0].WorkerType).To(Equal("counter"))
+			Expect(children[1].WorkerType).To(Equal("timer"))
+			Expect(children[2].WorkerType).To(Equal("example-child"))
 		})
 	})
 
