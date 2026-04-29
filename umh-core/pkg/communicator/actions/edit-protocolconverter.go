@@ -96,9 +96,9 @@ type EditProtocolConverterAction struct {
 	// Runtime observation for health checks
 	systemSnapshotManager *fsm.SnapshotManager
 
-	actionLogger *zap.SugaredLogger
-	fsmLogger    deps.FSMLogger
-	userEmail    string
+	actionLogger   *zap.SugaredLogger
+	fsmLogger      deps.FSMLogger
+	userEmail      string
 	name           string // protocol converter name (optional for updates)
 	dfcType        DFCType
 	connectionPort string
@@ -250,7 +250,8 @@ func (a *EditProtocolConverterAction) Execute() (interface{}, map[string]interfa
 			errorMsg := fmt.Sprintf("Failed to create read DFC Benthos configuration: %v", buildErr)
 			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
 				errorMsg, a.outboundChannel, models.EditProtocolConverter)
-			a.fsmLogger.SentryError(deps.FeatureDisableReadFlows, "", buildErr, "edit_protocol_converter_read_benthos_config_failed")
+			a.fsmLogger.SentryError(deps.FeatureDisableReadFlows, "", buildErr, "edit_protocol_converter_read_benthos_config_failed",
+				deps.String("readDFCPayload", fmt.Sprintf("%+v", a.readDFCPayload)))
 
 			return nil, nil, fmt.Errorf("%s", errorMsg)
 		}
@@ -263,7 +264,8 @@ func (a *EditProtocolConverterAction) Execute() (interface{}, map[string]interfa
 			errorMsg := fmt.Sprintf("Failed to create write DFC Benthos configuration: %v", buildErr)
 			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
 				errorMsg, a.outboundChannel, models.EditProtocolConverter)
-			a.fsmLogger.SentryError(deps.FeatureDisableReadFlows, "", buildErr, "edit_protocol_converter_write_benthos_config_failed")
+			a.fsmLogger.SentryError(deps.FeatureDisableReadFlows, "", buildErr, "edit_protocol_converter_write_benthos_config_failed",
+				deps.String("writeDFCPayload", fmt.Sprintf("%+v", a.writeDFCPayload)))
 
 			return nil, nil, fmt.Errorf("%s", errorMsg)
 		}
@@ -286,7 +288,8 @@ func (a *EditProtocolConverterAction) Execute() (interface{}, map[string]interfa
 		errorMsg := fmt.Sprintf("Failed to apply configuration mutation: %v", err)
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
 			errorMsg, a.outboundChannel, models.EditProtocolConverter)
-		a.fsmLogger.SentryError(deps.FeatureDisableReadFlows, "", err, "edit_protocol_converter_apply_mutation_failed")
+		a.fsmLogger.SentryError(deps.FeatureDisableReadFlows, "", err, "edit_protocol_converter_apply_mutation_failed",
+			deps.String("new pcConfig", newSpec.String()))
 
 		return nil, nil, fmt.Errorf("%s", errorMsg)
 	}
@@ -299,7 +302,9 @@ func (a *EditProtocolConverterAction) Execute() (interface{}, map[string]interfa
 		errorMsg := fmt.Sprintf("Failed to persist configuration changes: %v", err)
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
 			errorMsg, a.outboundChannel, models.EditProtocolConverter)
-		a.fsmLogger.SentryError(deps.FeatureDisableReadFlows, "", err, "edit_protocol_converter_persist_config_failed")
+		a.fsmLogger.SentryError(deps.FeatureDisableReadFlows, "", err, "edit_protocol_converter_persist_config_failed",
+			deps.String("new pcConfig", newSpec.String()),
+			deps.String("old pcConfig", oldConfig.String()))
 
 		return nil, nil, fmt.Errorf("%s", errorMsg)
 	}
@@ -311,7 +316,9 @@ func (a *EditProtocolConverterAction) Execute() (interface{}, map[string]interfa
 			errorMsg := fmt.Sprintf("Failed during rollout: %v", err)
 			SendActionReplyV2(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
 				errorMsg, errCode, nil, a.outboundChannel, models.EditProtocolConverter, nil)
-			a.fsmLogger.SentryError(deps.FeatureDisableReadFlows, "", err, "edit_protocol_converter_rollout_failed")
+			a.fsmLogger.SentryError(deps.FeatureDisableReadFlows, "", err, "edit_protocol_converter_rollout_failed",
+				deps.String("new pcConfig", newSpec.String()),
+				deps.String("old pcConfig", oldConfig.String()))
 
 			return nil, nil, fmt.Errorf("%s", errorMsg)
 		}
@@ -581,12 +588,16 @@ func (a *EditProtocolConverterAction) awaitRollout(pcConfig config.ProtocolConve
 			if err != nil {
 				a.actionLogger.Errorf("Failed to rollback to previous configuration: %v", err)
 				stateMessage := fmt.Sprintf("Protocol converter '%s' edit timeout reached. It did not become %s in time. Rolling back to previous configuration failed: %v", a.name, desiredPCState, err)
-				a.fsmLogger.SentryError(deps.FeatureDisableReadFlows, "", err, "edit_protocol_converter_rollback_failed")
+				a.fsmLogger.SentryError(deps.FeatureDisableReadFlows, "", err, "edit_protocol_converter_rollback_failed",
+					deps.String("pcConfig", pcConfig.String()))
 
 				return models.ErrRetryRollbackTimeout, fmt.Errorf("%s", stateMessage)
 			} else {
 				stateMessage := fmt.Sprintf("Protocol converter '%s' edit timeout reached. It did not become %s in time. Rolled back to previous configuration", a.name, desiredPCState)
-				a.fsmLogger.SentryWarn(deps.FeatureDisableReadFlows, "", "edit_protocol_converter_rollback_on_timeout")
+				a.fsmLogger.SentryWarn(deps.FeatureDisableReadFlows, "", "edit_protocol_converter_rollback_on_timeout",
+					deps.String("pcConfig", pcConfig.String()),
+					deps.String("desiredPCState", desiredPCState),
+				)
 
 				return models.ErrRetryRollbackTimeout, fmt.Errorf("%s", stateMessage)
 			}
@@ -846,12 +857,14 @@ func (a *EditProtocolConverterAction) awaitRollout(pcConfig config.ProtocolConve
 					_, err := a.configManager.AtomicEditProtocolConverter(ctx, a.atomicEditUUID, pcConfig)
 					if err != nil {
 						a.actionLogger.Errorf("failed to roll back protocol converter %s: %v", a.name, err)
-						a.fsmLogger.SentryError(deps.FeatureDisableReadFlows, "", err, "edit_protocol_converter_config_error_rollback_failed")
+						a.fsmLogger.SentryError(deps.FeatureDisableReadFlows, "", err, "edit_protocol_converter_config_error_rollback_failed",
+							deps.String("pcConfig", pcConfig.String()))
 
 						return models.ErrConfigFileInvalid, fmt.Errorf("protocol converter '%s' has invalid configuration but could not be rolled back: %w. Please check your logs and consider manually restoring the previous configuration", a.name, err)
 					}
 
-					a.fsmLogger.SentryWarn(deps.FeatureDisableReadFlows, "", "edit_protocol_converter_config_error_rolled_back")
+					a.fsmLogger.SentryWarn(deps.FeatureDisableReadFlows, "", "edit_protocol_converter_config_error_rolled_back",
+						deps.String("pcConfig", pcConfig.String()))
 
 					return models.ErrConfigFileInvalid, fmt.Errorf("protocol converter '%s' was rolled back to its previous configuration due to configuration errors. Please check the component logs, fix the configuration issues, and try editing again", a.name)
 				}
