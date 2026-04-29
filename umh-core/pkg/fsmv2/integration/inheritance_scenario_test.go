@@ -289,7 +289,7 @@ func verifyChildrenReceivedMergedVariablesFromStore(store storage.TriangularStor
 	// child.Desired["originalUserSpec"]; that key no longer exists. Skip
 	// pending a future P-step that exposes child variables through a typed
 	// path (e.g. surfacing them on the typed VariableBundle JSON form).
-	Skip("pending broader integration-scenario coverage of parent→child inheritance + template rendering through the wire path. NOTE: P1.8 added a typed-wire schema-stability test at variables_typed_wire_test.go (TestVariablesInternalTypedWireReconstruction) that closes the schema concern from pr1_issues #7. This Skip remains for the broader end-to-end coverage gap — also still blocked on extractUserSpec time.Time assertion bug at line 554.")
+	Skip("pending broader integration-scenario coverage of parent→child inheritance + template rendering through the wire path. NOTE: P1.8 added a typed-wire schema-stability test at variables_typed_wire_test.go (TestVariablesInternalTypedWireReconstruction) that closes the schema concern from pr1_issues #7. This Skip remains for the broader end-to-end coverage gap — child.Desired[\"originalUserSpec\"] key no longer exists post-§17 (json:\"-\"); needs typed-wire reconstruction path.")
 	workers := getWorkersFromStore(store)
 
 	// Find parent and children
@@ -442,7 +442,7 @@ func verifyTemplateRenderingWorks(store storage.TriangularStoreInterface) {
 	// P1.5c §17: Same rationale as verifyChildrenReceivedMergedVariablesFromStore.
 	// This helper reconstructs UserSpec from child.Desired["originalUserSpec"],
 	// which is no longer JSON-serialized.
-	Skip("pending pr1_issues #7: child UserSpec reconstruction needs typed-wire path now that OriginalUserSpec is json:\"-\" (§4-D / §17). Also blocked on extractUserSpec time.Time assertion bug; see issue #7.")
+	Skip("pending pr1_issues #7: child UserSpec reconstruction needs typed-wire path now that OriginalUserSpec is json:\"-\" (§4-D / §17). child.Desired[\"originalUserSpec\"] key no longer exists post-§17.")
 	workers := getWorkersFromStore(store)
 
 	var parentWorker *examples.WorkerSnapshot
