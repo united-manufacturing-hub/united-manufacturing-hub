@@ -26,16 +26,17 @@ import (
 //
 // The transport parent always emits two children — push and pull — that run
 // whenever the parent is in Running or Degraded. Including Degraded prevents
-// the oscillation loop documented on makePushChildSpec/makePullChildSpec.
+// the oscillation loop where a child stops on parent degradation (caused by
+// the child being unhealthy), the parent recovers (no unhealthy children),
+// the child restarts, and the cycle repeats.
 //
 // Per §4-C LOCKED, Enabled MUST be set explicitly to true; the F4⊕G1 trap
 // detector in P1.8 architecture test #13 (registry walk, layer 2) catches
 // forgotten-Enabled in renderChildren bodies.
 //
-// State.Next will adopt this emitter when P2.2 wires renderChildren into the
-// state-machine return path; until then the legacy SetChildSpecsFactory still
-// feeds the supervisor (with Enabled: true set defensively at the factory
-// site for parity, see worker.go).
+// State.Next emits this set via NextResult.Children (wired in P2.2 and made
+// authoritative for the supervisor in P2.4); the legacy DDS-derived path was
+// retired in P2.5.
 func RenderChildren(snap fsmv2.WorkerSnapshot[TransportConfig, TransportStatus]) []config.ChildSpec {
 	rawSpec := snapshotUserSpec(snap)
 
@@ -58,9 +59,9 @@ func RenderChildren(snap fsmv2.WorkerSnapshot[TransportConfig, TransportStatus])
 }
 
 // snapshotUserSpec extracts the children's UserSpec source from the parent
-// snapshot. The transport's existing factory carries the parent's raw spec
-// fields (Config + Variables) into both children unchanged. Falls back to
-// zero-value UserSpec on the nil-spec startup path.
+// snapshot. Both children inherit the parent's raw spec fields (Config +
+// Variables) unchanged. Falls back to zero-value UserSpec on the nil-spec
+// startup path.
 func snapshotUserSpec(snap fsmv2.WorkerSnapshot[TransportConfig, TransportStatus]) config.UserSpec {
 	if len(snap.Desired.ChildrenSpecs) > 0 {
 		return snap.Desired.ChildrenSpecs[0].UserSpec

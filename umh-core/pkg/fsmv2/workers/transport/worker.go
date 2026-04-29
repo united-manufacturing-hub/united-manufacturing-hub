@@ -128,11 +128,6 @@ func NewTransportWorker(
 		return nil
 	})
 
-	// Child specs factory: Push and Pull children
-	w.SetChildSpecsFactory(func(_ TransportConfig, rawSpec config.UserSpec) []config.ChildSpec {
-		return append(makePushChildSpec(rawSpec), makePullChildSpec(rawSpec)...)
-	})
-
 	return w, nil
 }
 
@@ -181,41 +176,3 @@ func init() {
 	register.Worker[TransportConfig, TransportStatus, *TransportDependencies](workerType, NewTransportWorker)
 }
 
-// makePushChildSpec creates the ChildSpec for the PushWorker child.
-// PushWorker runs when TransportWorker is in "Running" or "Degraded" states.
-// Including "Degraded" prevents an oscillation loop where Push stops on parent
-// degradation (caused by Push being unhealthy), parent recovers (no unhealthy children),
-// Push restarts, and the cycle repeats.
-//
-// Enabled is set explicitly to true here for parity with RenderChildren
-// (see children.go), per §4-C LOCKED zero-value-false: a parent that wants
-// the child running must set Enabled: true on every emission path.
-func makePushChildSpec(parentSpec config.UserSpec) []config.ChildSpec {
-	return []config.ChildSpec{
-		{
-			Name:             "push",
-			WorkerType:       "push",
-			UserSpec:         config.UserSpec{Config: parentSpec.Config, Variables: parentSpec.Variables},
-			ChildStartStates: []string{"Running", "Degraded"},
-			Enabled:          true,
-		},
-	}
-}
-
-// makePullChildSpec creates the ChildSpec for the PullWorker child.
-// PullWorker runs when TransportWorker is in "Running" or "Degraded" states,
-// mirroring PushWorker's lifecycle to prevent the same oscillation issue.
-//
-// Enabled is set explicitly to true here for parity with RenderChildren
-// (see children.go), per §4-C LOCKED zero-value-false.
-func makePullChildSpec(parentSpec config.UserSpec) []config.ChildSpec {
-	return []config.ChildSpec{
-		{
-			Name:             "pull",
-			WorkerType:       "pull",
-			UserSpec:         config.UserSpec{Config: parentSpec.Config, Variables: parentSpec.Variables},
-			ChildStartStates: []string{"Running", "Degraded"},
-			Enabled:          true,
-		},
-	}
-}

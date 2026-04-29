@@ -79,9 +79,10 @@ var _ = Describe("ParentWorker", func() {
 			// Per P2.2 option (a) decision, exampleparent's canonical
 			// RenderChildren takes *ParentUserSpec (not the WorkerSnapshot
 			// shape used by the other parents); the state-package mirror is
-			// runtime-only (returns nil to defer to legacy DDS during the
-			// migration window). Tests exercise the canonical path directly
-			// so they survive P2.5's removal of SetChildSpecsFactory.
+			// runtime-only (returns nil to defer to the DDS-derived
+			// ChildrenSpecs path that the supervisor still consults for
+			// exampleparent post-P2.5). Tests exercise the canonical path
+			// directly.
 			children := exampleparent.RenderChildren(&exampleparent.ParentUserSpec{ChildrenCount: 0})
 			// ChildrenCount == 0 -> non-nil empty slice (children.go:42-44).
 			Expect(children).To(BeEmpty())

@@ -31,7 +31,9 @@
 // This package uses the WorkerBase[TConfig, TStatus] API with custom overrides:
 //   - Custom CollectObservedState: builds status from deps, returns NewObservation (collector handles metric accumulation)
 //   - Post-parse hook: applies timeout default
-//   - ChildSpecFactory: produces TransportWorker child specs
+//   - state.Next emits TransportWorker child specs via NextResult.Children
+//     (canonical RenderChildren in children.go; state-package mirror feeds the
+//     supervisor's authoritative children-set discriminator)
 //
 // # States and Transitions
 //
@@ -47,7 +49,6 @@ import (
 	"errors"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/register"
 	httpTransport "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport/http"
@@ -77,20 +78,6 @@ func NewCommunicatorWorker(id deps.Identity, logger deps.FSMLogger, sr deps.Stat
 			cfg.Timeout = httpTransport.LongPollingDuration + httpTransport.LongPollingBuffer
 		}
 		return nil
-	})
-
-	// Legacy DDS-path factory: kept until P2.5 retires SetChildSpecsFactory.
-	// Enabled is set explicitly to true here for parity with RenderChildren
-	// (see children.go) so behavior matches whether the supervisor reads via
-	// the legacy path or the post-P2.4 NextResult.Children discriminator.
-	w.SetChildSpecsFactory(func(_ CommunicatorConfig, spec config.UserSpec) []config.ChildSpec {
-		return []config.ChildSpec{{
-			Name:             "transport",
-			WorkerType:       "transport",
-			UserSpec:         spec,
-			ChildStartStates: []string{"Syncing", "Recovering"},
-			Enabled:          true,
-		}}
 	})
 
 	return w, nil
