@@ -41,8 +41,9 @@ import (
 //
 // Correct lifecycle control:
 //   - ShutdownRequested: Inherited from this type. Set by supervisor for graceful shutdown.
-//     For child workers, the supervisor also sets ShutdownRequested=true when the parent sets
-//     ChildSpec.Enabled=false (P3.7: Enabled→ShutdownRequested reducer).
+//     For child workers, the supervisor calls RequestShutdown() when the child is removed from
+//     the parent's ChildSpec list (DeriveDesiredState return). ChildSpec.Enabled has no live
+//     runtime effect yet — the Enabled→ShutdownRequested reducer is deferred to a future step.
 //
 // Correct ShouldBeRunning() implementations (same for root and child workers post-P3.7):
 //

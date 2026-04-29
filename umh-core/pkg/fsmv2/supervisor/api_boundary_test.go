@@ -148,7 +148,6 @@ var _ = Describe("Supervisor API Boundary", func() {
 		It("should NOT export hierarchical composition methods", func() {
 			internalMethods := []string{
 				"reconcileChildren",
-				"applyStateMapping",
 				"UpdateUserSpec",
 			}
 
