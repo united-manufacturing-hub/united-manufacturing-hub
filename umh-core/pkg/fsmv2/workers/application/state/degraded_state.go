@@ -33,6 +33,8 @@ func (s *DegradedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 		return fsmv2.Transition(&StoppedState{}, fsmv2.SignalNone, nil, "Shutdown requested", nil)
 	}
 
+	children := RenderChildren(snap)
+
 	circuitOpen, stale := snapshot.ChildrenViewToStatus(snap.ChildrenView)
 	status := snapshot.ApplicationStatus{
 		ChildrenCircuitOpen: circuitOpen,
@@ -40,10 +42,10 @@ func (s *DegradedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	}
 
 	if !status.HasInfrastructureIssues() {
-		return fsmv2.Transition(&RunningState{}, fsmv2.SignalNone, nil, "Recovered from infrastructure issues", nil)
+		return fsmv2.Transition(&RunningState{}, fsmv2.SignalNone, nil, "Recovered from infrastructure issues", children)
 	}
 
-	return fsmv2.Transition(s, fsmv2.SignalNone, nil, status.InfrastructureReason(), nil)
+	return fsmv2.Transition(s, fsmv2.SignalNone, nil, status.InfrastructureReason(), children)
 }
 
 func (s *DegradedState) String() string {

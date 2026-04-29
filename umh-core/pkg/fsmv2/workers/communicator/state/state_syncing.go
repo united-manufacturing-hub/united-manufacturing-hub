@@ -42,15 +42,17 @@ func (s *SyncingState) Next(snapAny any) fsmv2.NextResult[any, any] {
 		return fsmv2.Transition(&StoppedState{}, fsmv2.SignalNone, nil, "Shutdown requested during sync", nil)
 	}
 
+	children := communicator.RenderChildren(snap)
+
 	if snap.ChildrenHealthy == 0 || snap.ChildrenUnhealthy > 0 {
 		return fsmv2.Transition(&RecoveringState{}, fsmv2.SignalNone, nil,
 			fmt.Sprintf("children unhealthy: healthy=%d, unhealthy=%d",
-				snap.ChildrenHealthy, snap.ChildrenUnhealthy), nil)
+				snap.ChildrenHealthy, snap.ChildrenUnhealthy), children)
 	}
 
 	return fsmv2.Transition(s, fsmv2.SignalNone, nil,
 		fmt.Sprintf("syncing: healthy=%d, unhealthy=%d",
-			snap.ChildrenHealthy, snap.ChildrenUnhealthy), nil)
+			snap.ChildrenHealthy, snap.ChildrenUnhealthy), children)
 }
 
 func (s *SyncingState) String() string {

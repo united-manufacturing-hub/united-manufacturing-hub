@@ -267,6 +267,15 @@ var _ = Describe("FSMv2 Architecture Validation — P1.8 Foundation Cap", func()
 
 			// AST-walk: find top-level `func RenderChildren(...)` decls.
 			// Map from package directory basename → worker source file path.
+			//
+			// State-package mirrors are skipped: at P2.2, application and
+			// exampleparent introduce state-package-local RenderChildren
+			// helpers (state/render_children.go) to break the parent-package →
+			// state-package import cycle introduced when state.Next started
+			// invoking renderChildren (P1.8 architecture test #6 convention).
+			// The mirrors are NOT the canonical emitter — the registry walk
+			// validates the canonical worker-package emitter, which is the
+			// ground truth that the renderChildren contract is anchored to.
 			discovered := map[string]string{}
 
 			err := filepath.Walk(workersDir, func(path string, info os.FileInfo, walkErr error) error {
@@ -277,6 +286,11 @@ var _ = Describe("FSMv2 Architecture Validation — P1.8 Foundation Cap", func()
 					return nil
 				}
 				if !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
+					return nil
+				}
+				// Skip state-package mirrors (see comment above on the cycle-
+				// break rationale).
+				if filepath.Base(filepath.Dir(path)) == "state" {
 					return nil
 				}
 
@@ -359,11 +373,97 @@ var _ = Describe("FSMv2 Architecture Validation — P1.8 Foundation Cap", func()
 	})
 
 	// =====================================================================
-	// Test 6 — TestRenderChildrenCalledAtTopOfStateNext (GATED → P2.2)
+	// Test 6 — TestRenderChildrenCalledAtTopOfStateNext (un-gated at P2.2)
 	// =====================================================================
-	Describe("renderChildren is invoked at top of every parent state.Next (GATED P2.2)", func() {
+	Describe("renderChildren is invoked at top of every parent state.Next", func() {
+		// AST-walk: every parent worker's state/ directory. For each state
+		// file's Next() method, find the first non-shutdown statement and
+		// assert it is a call to a function whose name matches RenderChildren
+		// (case-sensitive — the canonical name).
+		//
+		// Heuristic for "non-shutdown statement":
+		//   - The shutdown check is the canonical idiom
+		//     `if <X>IsShutdownRequested<Y> { return ... }` where the
+		//     conditional reads (with optional method-call/selector chain)
+		//     IsShutdownRequested() OR the IsShutdownRequested boolean field.
+		//   - We accept the leading variable declaration for the typed
+		//     snapshot conversion (`snap := ...ConvertSnapshot...` or
+		//     `snap := ...ConvertWorkerSnapshot...`) — that is a typed
+		//     entry point, not state-machine logic.
+		//   - We accept ONE leading shutdown-check-and-return `if` block
+		//     before the renderChildren call. Workers that omit the
+		//     shutdown-check (e.g. exampleparent TryingToStop) must call
+		//     renderChildren as the FIRST non-snapshot-conversion statement.
+		//   - Empty if-body shutdown markers (the transport StoppingState
+		//     pattern: `if snap.IsShutdownRequested {}` with no body) are
+		//     also accepted as a no-op shutdown sentinel.
+		//
+		// Failure messages cite file:line and the offending first statement
+		// kind / name.
 		It("AST: first non-shutdown statement in parent state.Next calls renderChildren", func() {
-			Skip("pending P2.2: renderChildren-in-state.Next convention not yet introduced; un-gates atomically with P2.2 per §4-E LOCKED")
+			parentStateDirs := []string{
+				filepath.Join(getFsmv2Dir(), "workers", "communicator", "state"),
+				filepath.Join(getFsmv2Dir(), "workers", "transport", "state"),
+				filepath.Join(getFsmv2Dir(), "workers", "example", "exampleparent", "state"),
+				filepath.Join(getFsmv2Dir(), "workers", "application", "state"),
+			}
+
+			var violations []string
+			anyChecked := 0
+
+			for _, dir := range parentStateDirs {
+				entries, derr := os.ReadDir(dir)
+				Expect(derr).NotTo(HaveOccurred(), "reading parent state dir %s", dir)
+
+				for _, entry := range entries {
+					if entry.IsDir() {
+						continue
+					}
+					name := entry.Name()
+					if !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
+						continue
+					}
+					// Skip non-state files (base.go, doc.go, render_children.go).
+					if name == "base.go" || name == "doc.go" || name == "render_children.go" {
+						continue
+					}
+
+					path := filepath.Join(dir, name)
+					fset := token.NewFileSet()
+					file, perr := parser.ParseFile(fset, path, nil, parser.ParseComments)
+					Expect(perr).NotTo(HaveOccurred(), "parse %s", path)
+
+					for _, decl := range file.Decls {
+						fn, ok := decl.(*ast.FuncDecl)
+						if !ok {
+							continue
+						}
+						if fn.Recv == nil {
+							continue
+						}
+						if fn.Name == nil || fn.Name.Name != "Next" {
+							continue
+						}
+						if fn.Body == nil {
+							continue
+						}
+
+						anyChecked++
+
+						violation := checkStateNextRendersChildren(fn, fset, path)
+						if violation != "" {
+							violations = append(violations, violation)
+						}
+					}
+				}
+			}
+
+			Expect(anyChecked).To(BeNumerically(">", 0),
+				"no parent state.Next methods discovered — Test #6 has nothing to anchor against; "+
+					"check parentStateDirs against the worker layout")
+			Expect(violations).To(BeEmpty(),
+				"parent state.Next bodies must invoke renderChildren as the first non-shutdown statement (P2.2 §4-E LOCKED, Design Intent §16):\n%s",
+				strings.Join(violations, "\n"))
 		})
 	})
 
@@ -668,8 +768,9 @@ var _ = Describe("FSMv2 Architecture Validation — P1.8 Foundation Cap", func()
 	// (RenderChildrenIsIdempotent), and Test 8 (NoTemplatesInChildSpec)
 	// also un-gated at P2.1 — they share the parentRenderers() registry
 	// fixture and exercise complementary RenderChildren invariants.
-	// Test 6 (RenderChildrenCalledAtTopOfStateNext) remains gated
-	// pending P2.2 (state.Next-side wiring is the next step).
+	// Test 6 (RenderChildrenCalledAtTopOfStateNext) un-gated at P2.2 once
+	// every parent state.Next started invoking renderChildren as the first
+	// non-shutdown statement (see Describe block above).
 	Describe("renderChildren emits ChildSpec with Enabled set explicitly (F4⊕G1 trap)", func() {
 		It("validateAllEnabled accepts explicit Enabled:true and rejects forgotten Enabled (zero-value false)", func() {
 			// Layer 1 — helper meta-test (un-gated since P1.8). Locks the
@@ -770,6 +871,187 @@ var _ = Describe("FSMv2 Architecture Validation — P1.8 Foundation Cap", func()
 		})
 	})
 })
+
+// checkStateNextRendersChildren validates that the given parent state.Next
+// FuncDecl's first non-shutdown statement calls a function named
+// RenderChildren. Returns an empty string on success or a violation message
+// citing file:line.
+//
+// Acceptance order in the body:
+//  1. Optional snapshot-conversion assignment: `snap := <selector>(snapAny)`
+//     where the called identifier is ConvertSnapshot or ConvertWorkerSnapshot
+//     (matches the helper meta-test's recognized entry-point conversions in
+//     pkg/fsmv2/internal/validator/state.go isConvertSnapshotCall).
+//  2. Optional ONE leading shutdown-check `if` block: condition references
+//     IsShutdownRequested (as a method call or struct field, anywhere in the
+//     boolean expression). Body may be empty (StoppingState marker pattern)
+//     or contain a return statement (the canonical exit-to-stopping idiom).
+//  3. The next statement MUST be either a direct call expression
+//     `RenderChildren(...)` or an assignment whose RHS is a call expression
+//     to RenderChildren — i.e. `children := RenderChildren(snap)` is the
+//     canonical idiom.
+func checkStateNextRendersChildren(fn *ast.FuncDecl, fset *token.FileSet, path string) string {
+	stmts := fn.Body.List
+	idx := 0
+
+	// 1. Skip leading snapshot-conversion assignment.
+	if idx < len(stmts) {
+		if isSnapshotConversionAssign(stmts[idx]) {
+			idx++
+		}
+	}
+
+	// 2. Skip optional leading shutdown-check `if` block.
+	if idx < len(stmts) {
+		if ifStmt, ok := stmts[idx].(*ast.IfStmt); ok {
+			if condReferencesShutdown(ifStmt.Cond) {
+				idx++
+			}
+		}
+	}
+
+	// 3. The next statement must be a RenderChildren call.
+	if idx >= len(stmts) {
+		pos := fset.Position(fn.Pos())
+		return fmt.Sprintf("%s:%d Next() body has no statement after the shutdown check; expected a renderChildren invocation", path, pos.Line)
+	}
+
+	stmt := stmts[idx]
+	if stmtCallsRenderChildren(stmt) {
+		return ""
+	}
+
+	pos := fset.Position(stmt.Pos())
+	return fmt.Sprintf("%s:%d first non-shutdown statement in Next() is %T (%s); expected `children := RenderChildren(snap)` or equivalent call to RenderChildren", path, pos.Line, stmt, snippetForStmt(stmt))
+}
+
+// isSnapshotConversionAssign returns true for the canonical entry-point
+// snapshot conversion at the top of a state.Next body. Matches:
+//
+//	snap := helpers.ConvertSnapshot[...](snapAny)
+//	snap := fsmv2.ConvertWorkerSnapshot[...](snapAny)
+func isSnapshotConversionAssign(stmt ast.Stmt) bool {
+	assign, ok := stmt.(*ast.AssignStmt)
+	if !ok {
+		return false
+	}
+	if len(assign.Rhs) != 1 {
+		return false
+	}
+	call, ok := assign.Rhs[0].(*ast.CallExpr)
+	if !ok {
+		return false
+	}
+	name := callFunName(call)
+	return name == "ConvertSnapshot" || name == "ConvertWorkerSnapshot"
+}
+
+// condReferencesShutdown returns true if the boolean expression mentions
+// IsShutdownRequested (as a method call or struct field) anywhere in its
+// subtree. Accepts the canonical idioms `snap.IsShutdownRequested`,
+// `snap.Desired.IsShutdownRequested()`, etc.
+func condReferencesShutdown(expr ast.Expr) bool {
+	found := false
+	ast.Inspect(expr, func(n ast.Node) bool {
+		ident, ok := n.(*ast.Ident)
+		if !ok {
+			return true
+		}
+		if ident.Name == "IsShutdownRequested" {
+			found = true
+			return false
+		}
+		return true
+	})
+	return found
+}
+
+// stmtCallsRenderChildren returns true if the given statement is a direct
+// call to RenderChildren OR an assignment whose RHS is a call expression
+// whose called function identifier is RenderChildren. The renderChildren
+// emitter may live in the worker package or in a state-package mirror (see
+// architecture comment on the registry-walk skip in Test 5b layer 2); both
+// cases boil down to a CallExpr whose Fun resolves to the identifier
+// RenderChildren, so we match by callee identifier name only.
+func stmtCallsRenderChildren(stmt ast.Stmt) bool {
+	switch s := stmt.(type) {
+	case *ast.AssignStmt:
+		for _, rhs := range s.Rhs {
+			if call, ok := rhs.(*ast.CallExpr); ok {
+				if callFunName(call) == "RenderChildren" {
+					return true
+				}
+			}
+		}
+	case *ast.ExprStmt:
+		if call, ok := s.X.(*ast.CallExpr); ok {
+			if callFunName(call) == "RenderChildren" {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// callFunName returns the rightmost identifier of a CallExpr's Fun
+// expression. Handles both unqualified `Foo(...)` and qualified
+// `pkg.Foo(...)` calls.
+func callFunName(call *ast.CallExpr) string {
+	switch fn := call.Fun.(type) {
+	case *ast.Ident:
+		return fn.Name
+	case *ast.SelectorExpr:
+		if fn.Sel != nil {
+			return fn.Sel.Name
+		}
+	case *ast.IndexExpr:
+		// Generic call like Foo[T](...) — recurse into X.
+		if id, ok := fn.X.(*ast.Ident); ok {
+			return id.Name
+		}
+		if sel, ok := fn.X.(*ast.SelectorExpr); ok {
+			if sel.Sel != nil {
+				return sel.Sel.Name
+			}
+		}
+	case *ast.IndexListExpr:
+		// Generic call like Foo[T1, T2](...).
+		if id, ok := fn.X.(*ast.Ident); ok {
+			return id.Name
+		}
+		if sel, ok := fn.X.(*ast.SelectorExpr); ok {
+			if sel.Sel != nil {
+				return sel.Sel.Name
+			}
+		}
+	}
+	return ""
+}
+
+// snippetForStmt returns a short textual hint about the statement for
+// failure-message diagnostics. Best-effort; renders the first identifier
+// it finds.
+func snippetForStmt(stmt ast.Stmt) string {
+	var label string
+	ast.Inspect(stmt, func(n ast.Node) bool {
+		if label != "" {
+			return false
+		}
+		switch v := n.(type) {
+		case *ast.CallExpr:
+			label = callFunName(v) + "(...)"
+			return false
+		case *ast.Ident:
+			label = v.Name
+			return false
+		}
+		return true
+	})
+	if label == "" {
+		label = "(unknown)"
+	}
+	return label
+}
 
 // validateAllEnabled is the F4⊕G1 trap detector. It walks a list of ChildSpec
 // values (as a parent's renderChildren would emit) and returns an error for

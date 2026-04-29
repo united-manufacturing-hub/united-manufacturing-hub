@@ -41,6 +41,8 @@ func (s *AuthFailedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 		return fsmv2.Transition(&StoppingState{}, fsmv2.SignalNone, nil, "Shutdown requested, transitioning to Stopping", nil)
 	}
 
+	children := transport_pkg.RenderChildren(snap)
+
 	// FailedAuthConfig is guaranteed populated here because only permanent errors
 	// (which call SetFailedAuthConfig via the !IsTransient() guard in authenticate.go)
 	// reach AuthFailedState via isPermanentAuthError().
@@ -51,12 +53,12 @@ func (s *AuthFailedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	if tokenChanged || relayChanged || uuidChanged {
 		return fsmv2.Transition(&StartingState{}, fsmv2.SignalNone, nil,
 			fmt.Sprintf("config changed (token=%t, relay=%t, uuid=%t), retrying auth",
-				tokenChanged, relayChanged, uuidChanged), nil)
+				tokenChanged, relayChanged, uuidChanged), children)
 	}
 
 	return fsmv2.Transition(s, fsmv2.SignalNone, nil,
 		fmt.Sprintf("auth failed (%s), waiting for config change",
-			snap.Status.LastErrorType), nil)
+			snap.Status.LastErrorType), children)
 }
 
 // String returns the state name derived from the type.
