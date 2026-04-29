@@ -16,6 +16,7 @@ package state
 
 import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleparent/action"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleparent/snapshot"
@@ -30,7 +31,15 @@ type TryingToStopState struct {
 func (s *TryingToStopState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := fsmv2.ConvertWorkerSnapshot[snapshot.ExampleparentConfig, snapshot.ExampleparentStatus](snapAny)
 
-	children := RenderChildren(snap)
+	// P1.8 §4-E LOCKED: renderChildren must be the first non-shutdown call.
+	// Result discarded — in TryingToStop we emit an empty spec so the
+	// supervisor calls RequestShutdown on every existing child.
+	RenderChildren(snap)
+
+	// Emit an empty children set so the supervisor calls RequestShutdown on
+	// each existing child; children absent from the emitted specs receive
+	// ShutdownRequested=true and then stop on their own.
+	children := []config.ChildSpec{}
 
 	// All children must be stopped before transitioning.
 	if snap.Observed.ChildrenHealthy == 0 && snap.Observed.ChildrenUnhealthy == 0 {

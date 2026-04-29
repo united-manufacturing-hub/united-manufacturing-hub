@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleparent/snapshot"
 )
@@ -50,10 +51,13 @@ func (s *StoppedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	// every observation and surfaced on the typed WorkerSnapshot.
 	elapsed := time.Duration(snap.Observed.Metrics.Framework.TimeInCurrentStateMs) * time.Millisecond
 	if elapsed >= StoppedWaitDuration {
+		// Hand the children to TryingToStart so the supervisor creates them.
 		return fsmv2.Transition(&TryingToStartState{}, fsmv2.SignalNone, nil, "Wait duration elapsed, transitioning to TryingToStart", children)
 	}
 
-	return fsmv2.Transition(s, fsmv2.SignalNone, nil, "Parent is stopped, no children spawned", children)
+	// While stopped, emit an empty spec so no children are created yet.
+	// Children are only spawned once the parent moves to TryingToStart.
+	return fsmv2.Transition(s, fsmv2.SignalNone, nil, "Parent is stopped, no children spawned", []config.ChildSpec{})
 }
 
 func (s *StoppedState) String() string {

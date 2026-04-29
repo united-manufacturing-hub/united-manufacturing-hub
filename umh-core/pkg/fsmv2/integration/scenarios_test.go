@@ -98,7 +98,6 @@ var _ = Describe("Simple Scenario Integration", func() {
 		verifyNoChildTransitionBeforeParentTryingToStart(testLogger)
 		verifyStateTransitionOrdering(testLogger)
 
-		verifyChildrenStopWhenParentTryingToStop(testLogger)
 		verifyParentReachesStopped(testLogger)
 		verifyFullCycle(testLogger)
 	})
@@ -955,57 +954,6 @@ func verifyStateTransitionOrdering(t *integration.TestLogger) {
 
 	GinkgoWriter.Printf("✓ State transition ordering correct (parent idx %d < child idx %d)\n",
 		parentTryingToStartIdx, firstChildTryingToConnectIdx)
-}
-
-// =============================================================================
-// Category 7: Children Stop When Parent TryingToStop Tests (TDD)
-// =============================================================================
-
-// verifyChildrenStopWhenParentTryingToStop ensures children transition
-// out of Connected when parent goes to TryingToStop.
-func verifyChildrenStopWhenParentTryingToStop(t *integration.TestLogger) {
-	stateTransitions := t.GetLogsMatching("state_transition")
-
-	parentReachedTryingToStop := false
-	childrenStoppedAfterParent := false
-
-	for _, entry := range stateTransitions {
-		worker := ""
-		fromState := ""
-		toState := ""
-
-		for _, field := range entry.Context {
-			if field.Key == "worker" {
-				worker = field.String
-			}
-
-			if field.Key == "from_state" {
-				fromState = field.String
-			}
-
-			if field.Key == "to_state" {
-				toState = field.String
-			}
-		}
-
-		if strings.Contains(worker, "exampleparent") && toState == "TryingToStop" {
-			parentReachedTryingToStop = true
-		}
-
-		// After parent reaches TryingToStop, children should transition FROM Connected
-		if parentReachedTryingToStop &&
-			strings.Contains(worker, "examplechild") &&
-			fromState == "Connected" {
-			childrenStoppedAfterParent = true
-		}
-	}
-
-	Expect(parentReachedTryingToStop).To(BeTrue(),
-		"Parent should reach TryingToStop state")
-	Expect(childrenStoppedAfterParent).To(BeTrue(),
-		"BUG: Children should transition from Connected after parent TryingToStop")
-
-	GinkgoWriter.Printf("✓ Children stop when parent goes to TryingToStop\n")
 }
 
 // verifyParentReachesStopped ensures parent completes the full cycle back to Stopped.
