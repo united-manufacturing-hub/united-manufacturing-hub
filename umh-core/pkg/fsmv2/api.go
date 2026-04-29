@@ -278,6 +278,11 @@ func (r *reflectedAction) Name() string { return r.name }
 // wrapTypedAction builds an Action[any] adapter for a typed Action[TDeps]
 // discovered via reflection. Panics if the value does not structurally match
 // an Action interface (Execute(context.Context, TDeps) error + Name() string).
+//
+// CHANGE-5 note (pr2_issues #14): when the Action interface is extended to
+// receive a snapshot parameter (Execute(ctx, deps TDeps, snap Snapshot) error),
+// this wrapper must be updated symmetrically to pass the snapshot through the
+// reflection-built closure. Without that update the call site compile-breaks.
 func wrapTypedAction(action any) Action[any] {
 	v := reflect.ValueOf(action)
 	if !v.IsValid() {
