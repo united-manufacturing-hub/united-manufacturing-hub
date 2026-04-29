@@ -95,10 +95,9 @@ func main() {
 
 	// Config backup feature flag: must be set before LoadConfigWithEnvOverrides,
 	// which writes config on startup and should back up the pre-write state.
-	configBackupEnabled, err := env.GetAsBool("ENABLE_CONFIG_BACKUP", false, false)
-	if err != nil {
-		log.Warnf("Failed to parse ENABLE_CONFIG_BACKUP: %v", err)
-	}
+	// GetAsBool with required=false never returns an error (silently falls back
+	// to the default on parse failure); see ENG-4809 for the signature fix.
+	configBackupEnabled, _ := env.GetAsBool("ENABLE_CONFIG_BACKUP", false, false)
 
 	configManager.SetConfigBackupEnabled(configBackupEnabled)
 
@@ -118,26 +117,22 @@ func main() {
 	// FSMv2 feature flags: read directly from env vars, not persisted to config.yaml.
 	// These bypass the config manager intentionally — they are temporary migration flags
 	// that will be replaced when the config manager becomes an FSMv2 worker.
-	v, err := env.GetAsBool("USE_FSMV2_TRANSPORT", false, false)
-	if err != nil {
-		log.Warnf("Failed to parse USE_FSMV2_TRANSPORT: %v", err)
+	// GetAsBool with required=false never returns an error (silently falls back
+	// to the default on parse failure); see ENG-4809 for the signature fix.
+	transportEnabled, _ := env.GetAsBool("USE_FSMV2_TRANSPORT", false, true)
+	memoryCleanupEnabled, _ := env.GetAsBool("USE_FSMV2_MEMORY_CLEANUP", false, true)
+
+	// Memory cleanup is required whenever transport is on; running transport
+	// without cleanup reintroduces the unbounded state-growth risk (ENG-4292).
+	if transportEnabled {
+		memoryCleanupEnabled = true
 	}
 
-	configData.Agent.UseFSMv2Transport = v
+	configData.Agent.UseFSMv2Transport = transportEnabled
+	configData.Agent.UseFSMv2MemoryCleanup = memoryCleanupEnabled
 
-	v, err = env.GetAsBool("USE_FSMV2_MEMORY_CLEANUP", false, false)
-	if err != nil {
-		log.Warnf("Failed to parse USE_FSMV2_MEMORY_CLEANUP: %v", err)
-	}
-
-	configData.Agent.UseFSMv2MemoryCleanup = v
-
-	v, err = env.GetAsBool("USE_FSMV2_PROTOCOL_CONVERTER", false, false)
-	if err != nil {
-		log.Warnf("Failed to parse USE_FSMV2_PROTOCOL_CONVERTER: %v", err)
-	}
-
-	configData.Agent.UseFSMv2ProtocolConverter = v
+	protocolConverterEnabled, _ := env.GetAsBool("USE_FSMV2_PROTOCOL_CONVERTER", false, false)
+	configData.Agent.UseFSMv2ProtocolConverter = protocolConverterEnabled
 
 	featureUsage := &models.FeatureUsage{
 		ConfigBackupEnabled:           configBackupEnabled,

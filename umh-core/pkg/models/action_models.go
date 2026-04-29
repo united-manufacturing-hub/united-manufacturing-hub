@@ -36,7 +36,9 @@ type CDFCPayload struct {
 	Outputs         DfcDataConfig            `json:"outputs"`
 	Inject          string                   `json:"inject"`
 	BenthosImageTag string                   `json:"benthosImageTag"`
-	IgnoreErrors    bool                     `json:"ignoreErrors"`
+	// UMHTopics is used by write DFCs — UNS topic regexes to subscribe to.
+	UMHTopics    []string `json:"umh_topics,omitempty"`
+	IgnoreErrors bool     `json:"ignoreErrors"`
 }
 
 type DfcDataConfig struct {
@@ -786,9 +788,13 @@ type ProtocolConverterDFC struct {
 	RawYAML      *CommonDataFlowComponentRawYamlConfig `json:"rawYAML,omitempty"      mapstructure:"rawYAML,omitempty"      yaml:"rawYAML,omitempty"`
 	// State is the desired state for this specific DFC ("active" or "stopped").
 	// When empty, the overall protocol converter state is used.
-	State   string                              `json:"state,omitempty"        mapstructure:"state,omitempty"        yaml:"state,omitempty"`
-	Inputs  CommonDataFlowComponentInputConfig  `json:"inputs"                 mapstructure:"inputs"                 yaml:"inputs"`
-	Outputs CommonDataFlowComponentOutputConfig `json:"outputs"                mapstructure:"outputs"                yaml:"outputs"`
+	State string `json:"state,omitempty" mapstructure:"state,omitempty" yaml:"state,omitempty"`
+	// Inputs is used by read DFCs (user-supplied input config).
+	Inputs CommonDataFlowComponentInputConfig `json:"inputs,omitempty" mapstructure:"inputs,omitempty" yaml:"inputs,omitempty"`
+	// Outputs is used by both read and write DFCs (user-supplied output config).
+	Outputs CommonDataFlowComponentOutputConfig `json:"outputs,omitempty" mapstructure:"outputs,omitempty" yaml:"outputs,omitempty"`
+	// UMHTopics is used by write DFCs — UNS topic regexes to subscribe to. Auto-injected into input config.
+	UMHTopics []string `json:"umh_topics,omitempty" mapstructure:"umh_topics,omitempty" yaml:"umh_topics,omitempty"`
 }
 
 type ProtocolConverterVariable struct {

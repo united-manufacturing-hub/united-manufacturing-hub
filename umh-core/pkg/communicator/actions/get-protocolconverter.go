@@ -178,7 +178,7 @@ func determineProtocol(readDFC *models.ProtocolConverterDFC) string {
 // buildProtocolConverterDFCFromConfig converts a dataflow component service config
 // into the models.ProtocolConverterDFC format expected by the API using the shared function.
 func buildProtocolConverterDFCFromConfig(dfcConfig dataflowcomponentserviceconfig.DataflowComponentServiceConfig, a *GetProtocolConverterAction) (*models.ProtocolConverterDFC, error) {
-	if len(dfcConfig.BenthosConfig.Input) == 0 {
+	if len(dfcConfig.BenthosConfig.Input) == 0 && len(dfcConfig.BenthosConfig.Output) == 0 {
 		// No DFC configuration present
 		return nil, nil
 	}
@@ -189,12 +189,16 @@ func buildProtocolConverterDFCFromConfig(dfcConfig dataflowcomponentserviceconfi
 		return nil, err
 	}
 
-	// Convert the common payload to ProtocolConverterDFC format
+	// Convert the common payload to ProtocolConverterDFC format.
+	// Only populate Inputs when the config has an input block — write DFCs have
+	// auto-generated input and should not expose it to the frontend.
 	dfc := &models.ProtocolConverterDFC{
-		Inputs:   commonPayload.CDFCProperties.Inputs,
 		Pipeline: commonPayload.CDFCProperties.Pipeline,
 		Outputs:  commonPayload.CDFCProperties.Outputs,
 		RawYAML:  commonPayload.CDFCProperties.RawYAML,
+	}
+	if len(dfcConfig.BenthosConfig.Input) > 0 {
+		dfc.Inputs = commonPayload.CDFCProperties.Inputs
 	}
 
 	return dfc, nil
@@ -253,6 +257,16 @@ func (a *GetProtocolConverterAction) Execute() (interface{}, map[string]interfac
 				specConfig := observedState.ObservedProtocolConverterSpecConfig
 				if specConfig.Variables.User != nil {
 					for key, value := range specConfig.Variables.User {
+						// TODO(ENG-4856): This filter exists because UMH_TOPICS is stored in
+						// Variables.User alongside real user template variables. A typed field
+						// would not need filtering here. Remove once UMH_TOPICS moves to a
+						// typed config block in the FSMv2 bridge migration.
+						// UMH_TOPICS is an internal write-DFC field, not a user-editable
+						// template variable. It is returned via writeDFC.UMHTopics instead.
+						if key == "UMH_TOPICS" {
+							continue
+						}
+
 						variables = append(variables, models.ProtocolConverterVariable{
 							Label: key,
 							Value: value,
@@ -318,10 +332,10 @@ func (a *GetProtocolConverterAction) Execute() (interface{}, map[string]interfac
 					}
 				}
 
-				// Build WriteDFC if present
+				// Build WriteDFC if present (check output since input is auto-generated)
 				var writeDFC *models.ProtocolConverterDFC
 
-				if writeDFCConfig := specConfig.Config.DataflowComponentWriteServiceConfig; len(writeDFCConfig.BenthosConfig.Input) > 0 {
+				if writeDFCConfig := specConfig.Config.DataflowComponentWriteServiceConfig; len(writeDFCConfig.BenthosConfig.Output) > 0 {
 					var err error
 
 					writeDFC, err = buildProtocolConverterDFCFromConfig(writeDFCConfig, a)
@@ -334,6 +348,12 @@ func (a *GetProtocolConverterAction) Execute() (interface{}, map[string]interfac
 
 					if writeDFC != nil {
 						writeDFC.State = specConfig.WriteDFCDesiredState
+						// Populate UMHTopics from user variables for the frontend
+						if umhTopics, ok := specConfig.Variables.User["UMH_TOPICS"]; ok {
+							if topics, ok := toStringSlice(umhTopics); ok {
+								writeDFC.UMHTopics = topics
+							}
+						}
 					}
 				}
 

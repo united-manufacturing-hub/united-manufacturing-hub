@@ -194,11 +194,17 @@ func BuildRuntimeConfig(
 	}
 
 	vb.Internal["bridged_by"] = config.GenerateBridgedBy(config.ComponentTypeProtocolConverter, nodeName, pcName)
-	if locationPath == "" {
-		vb.Internal["umh_topic"] = "umh.v1.*"
-	} else {
-		vb.Internal["umh_topic"] = "umh.v1." + locationPath + ".*"
 
+	// TODO(ENG-4856): This default exists because UMH_TOPICS lives in Variables.User
+	// instead of a typed config block. A typed field would have a proper zero value.
+	// Remove once UMH_TOPICS moves to typed config in the FSMv2 bridge migration.
+	// UMH_TOPICS is required in user variables when write DFC is configured
+	// We usually catch this in the frontend, but user could bypass it through config.yaml
+	if len(spec.Config.DataflowComponentWriteServiceConfig.BenthosConfig.Output) > 0 {
+		if _, ok := vb.User["UMH_TOPICS"]; !ok {
+			// UMH_TOPICS is not set by the frontend. Set value here and which will throw error in deployment
+			vb.User["UMH_TOPICS"] = []string{"TOPIC_NOT_SET_BY_USER"}
+		}
 	}
 
 	//----------------------------------------------------------------------
@@ -312,6 +318,21 @@ func renderConfig(
 	write, err := config.RenderTemplate(spec.GetDFCWriteServiceConfig(), scope)
 	if err != nil {
 		return protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime{}, err
+	}
+
+	// TODO(ENG-4856): This post-render injection exists because UMH_TOPICS is stored in
+	// Variables.User (an untyped map) rather than a typed config field. text/template
+	// can't render []string, so we inject it manually after rendering. Remove once
+	// UMH_TOPICS moves to a typed config block in the FSMv2 bridge migration.
+	// Inject umh_topics into write DFC input after template rendering.
+	// []string values can't be rendered via text/template, so we set them directly.
+	// UMH_TOPICS presence is guaranteed by BuildRuntimeConfig above.
+	//
+	// The Input["uns"] assertion always succeeds when Output is non-empty:
+	// GetDFCWriteServiceConfig unconditionally sets Input["uns"] whenever
+	// len(Output) > 0 — the same gate that guards the UMH_TOPICS default block above.
+	if unsInput, ok := write.BenthosConfig.Input["uns"].(map[string]any); ok {
+		unsInput["umh_topics"] = scope["UMH_TOPICS"]
 	}
 
 	return protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime{

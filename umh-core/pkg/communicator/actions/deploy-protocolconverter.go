@@ -251,6 +251,11 @@ func (a *DeployProtocolConverterAction) createProtocolConverterConfig() (config.
 	userVars["IP"] = a.payload.Connection.IP                                     // Keep IP as string
 	userVars["PORT"] = strconv.FormatUint(uint64(a.payload.Connection.Port), 10) // Convert port to string
 
+	// Extract UMH_TOPICS from write DFC payload if provided
+	if a.payload.WriteDFC != nil && len(a.payload.WriteDFC.UMHTopics) > 0 {
+		userVars["UMH_TOPICS"] = a.payload.WriteDFC.UMHTopics
+	}
+
 	variableBundle := variables.VariableBundle{
 		User: userVars,
 	}
@@ -285,6 +290,7 @@ func (a *DeployProtocolConverterAction) createProtocolConverterConfig() (config.
 		if err != nil {
 			return config.ProtocolConverterConfig{}, fmt.Errorf("failed to create write DFC benthos config: %w", err)
 		}
+
 		template.DataflowComponentWriteServiceConfig = dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
 			BenthosConfig: benthosConfig,
 		}

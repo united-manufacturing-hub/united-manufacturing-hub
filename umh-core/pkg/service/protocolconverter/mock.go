@@ -23,10 +23,13 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/protocolconverterserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
+	benthosfsmmanager "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos"
 	connfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/connection"
 	dfcfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/dataflowcomponent"
 	nmapfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/nmap"
 	redpandafsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/redpanda"
+	benthosservice "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos_monitor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/connection"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/dataflowcomponent"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
@@ -244,7 +247,7 @@ func BuildProtocolConverterServiceInfo(
 		},
 		DataflowComponentWriteFSMState: flags.DfcFSMWriteState,
 		DataflowComponentWriteObservedState: dfcfsm.DataflowComponentObservedState{
-			ServiceInfo: dataflowcomponent.ServiceInfo{}, // TODO: Add write DFC support
+			ServiceInfo: buildDFCServiceInfo(flags.DfcFSMWriteState),
 		},
 		ConnectionFSMState: flags.ConnectionFSMState,
 		ConnectionObservedState: connfsm.ConnectionObservedState{
@@ -257,6 +260,40 @@ func BuildProtocolConverterServiceInfo(
 					HealthCheck: redpandasvc.HealthCheck{
 						IsReady: flags.IsRedpandaRunning,
 						IsLive:  flags.IsRedpandaRunning,
+					},
+				},
+			},
+		},
+	}
+}
+
+// buildDFCServiceInfo constructs a dataflowcomponent.ServiceInfo with Benthos metrics
+// that match the given DFC FSM state. Both Input and Output ConnectionUp are 1 only
+// when the DFC is active, preventing false-positives in IsOtherDegraded Cases 2 and 3.
+func buildDFCServiceInfo(fsmState string) dataflowcomponent.ServiceInfo {
+	isActive := fsmState == dfcfsm.OperationalStateActive
+	var connectionUp int64
+	if isActive {
+		connectionUp = 1
+	}
+	return dataflowcomponent.ServiceInfo{
+		BenthosFSMState: fsmState,
+		BenthosObservedState: benthosfsmmanager.BenthosObservedState{
+			ServiceInfo: benthosservice.ServiceInfo{
+				BenthosStatus: benthosservice.BenthosStatus{
+					BenthosMetrics: benthos_monitor.BenthosMetrics{
+						MetricsState: &benthos_monitor.BenthosMetricsState{
+							IsActive: isActive,
+						},
+						Metrics: benthos_monitor.Metrics{
+							Input: benthos_monitor.InputMetrics{
+								ConnectionUp:   connectionUp,
+								ConnectionLost: 0,
+							},
+							Output: benthos_monitor.OutputMetrics{
+								ConnectionUp: connectionUp,
+							},
+						},
 					},
 				},
 			},
