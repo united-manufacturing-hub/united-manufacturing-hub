@@ -29,13 +29,16 @@ Parent workers declare children in their state `Next()` method via `NextResult.C
 
 ```go
 func (s *RunningState) Next(snapAny any) fsmv2.NextResult[any, any] {
-    snap := helpers.ConvertWorkerSnapshot[ParentConfig, ParentStatus](snapAny)
+    snap := fsmv2.ConvertWorkerSnapshot[ParentConfig, ParentStatus](snapAny)
     children := RenderChildren(snap)
-    // ... shutdown check, business logic ...
+    if snap.Desired.IsShutdownRequested() {
+        return fsmv2.Transition(&StoppingState{}, fsmv2.SignalNone, nil, "shutdown requested", nil)
+    }
+    // ... business logic ...
     return fsmv2.Transition(s, fsmv2.SignalNone, nil, "running", children)
 }
 
-func RenderChildren(snap WorkerSnapshot[ParentConfig, ParentStatus]) []config.ChildSpec {
+func RenderChildren(snap fsmv2.WorkerSnapshot[ParentConfig, ParentStatus]) []config.ChildSpec {
     return []config.ChildSpec{
         {Name: "child1", WorkerType: "childworker", Enabled: true, ...},
     }
