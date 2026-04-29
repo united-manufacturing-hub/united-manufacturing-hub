@@ -36,9 +36,9 @@ type CDFCPayload struct {
 	Outputs         DfcDataConfig            `json:"outputs"`
 	Inject          string                   `json:"inject"`
 	BenthosImageTag string                   `json:"benthosImageTag"`
-	IgnoreErrors    bool                     `json:"ignoreErrors"`
 	// UMHTopics is used by write DFCs — UNS topic regexes to subscribe to.
-	UMHTopics []string `json:"umh_topics,omitempty"`
+	UMHTopics    []string `json:"umh_topics,omitempty"`
+	IgnoreErrors bool     `json:"ignoreErrors"`
 }
 
 type DfcDataConfig struct {
