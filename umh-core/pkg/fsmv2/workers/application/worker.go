@@ -123,9 +123,20 @@ func (w *ApplicationWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredS
 	cfg := snapshot.ApplicationConfig{Name: w.name}
 
 	if spec == nil {
+		// Byte-equivalent with canonical RenderChildren on the empty case:
+		// canonical returns []ChildSpec{}, so the DDS path emits the same
+		// authoritative "zero children right now" sentinel here. Pre-PR2-
+		// boundary this branch left ChildrenSpecs as the zero value (nil),
+		// producing a divergence with the canonical path that was
+		// operationally moot today (state.Next mirror always emits non-nil
+		// for application; the discriminator at reconciliation.go never
+		// falls through to the DDS path in normal operation) but still a
+		// drift the PR2 boundary closes for symmetry with the discriminator
+		// nil-vs-empty contract.
 		return &fsmv2.WrappedDesiredState[snapshot.ApplicationConfig]{
 			BaseDesiredState: config.BaseDesiredState{State: config.DesiredStateRunning},
 			Config:           cfg,
+			ChildrenSpecs:    []config.ChildSpec{},
 		}, nil
 	}
 

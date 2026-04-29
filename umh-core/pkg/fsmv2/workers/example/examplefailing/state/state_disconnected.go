@@ -36,6 +36,13 @@ func (s *DisconnectedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 		return fsmv2.Transition(&TryingToConnectState{}, fsmv2.SignalNone, nil, "worker should be running, attempting to reconnect", nil)
 	}
 
+	// The catch-all return below is logically dead code: the two branches above
+	// (`ShouldStop()` and `!ShouldStop()`) partition the boolean's domain
+	// completely. We keep the canonical 3-branch FSM idiom anyway because the
+	// architecture validator's MISSING_CATCHALL_RETURN check is syntactic, not
+	// semantic — see PR2 cascade pattern memory #3 (validator-syntactic vs
+	// migration-semantic). Collapsing to 2 branches would trip the validator
+	// even though the simplification is behavior-preserving.
 	return fsmv2.Transition(s, fsmv2.SignalNone, nil, "connection lost, waiting for reconnect conditions", nil)
 }
 

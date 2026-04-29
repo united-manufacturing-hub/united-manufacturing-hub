@@ -106,9 +106,14 @@ func (w *ParentWorker) CollectObservedState(ctx context.Context, _ fsmv2.Desired
 // Must be PURE - only uses the spec parameter, never dependencies.
 func (w *ParentWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, error) {
 	if spec == nil {
+		// Byte-equivalent with canonical RenderChildren(nil) = []ChildSpec{}.
+		// Pre-PR2-boundary this branch returned nil; PR2 boundary cleanup
+		// flipped to []ChildSpec{} so the DDS path emits the same authoritative
+		// "zero children right now" sentinel as the canonical path. Closes the
+		// G11 DDS-vs-canonical divergence (PR2 boundary DA finding).
 		return &config.DesiredState{
 			BaseDesiredState: config.BaseDesiredState{State: config.DesiredStateRunning},
-			ChildrenSpecs:    nil,
+			ChildrenSpecs:    []config.ChildSpec{},
 			OriginalUserSpec: nil,
 		}, nil
 	}
@@ -119,9 +124,15 @@ func (w *ParentWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState,
 	}
 
 	if parentSpec.ChildrenCount == 0 {
+		// Same byte-equivalence with canonical RenderChildren as the spec==nil
+		// branch above. If a user shrinks ChildrenCount from N>0 to 0, the
+		// supervisor needs an explicit non-nil [] sentinel to despawn existing
+		// children authoritatively; nil here would re-route through fallback
+		// and leak the prior tick's children-set on parents whose mirror also
+		// returns nil (option-a, exampleparent).
 		return &config.DesiredState{
 			BaseDesiredState: config.BaseDesiredState{State: parentSpec.GetState()},
-			ChildrenSpecs:    nil,
+			ChildrenSpecs:    []config.ChildSpec{},
 			OriginalUserSpec: spec,
 		}, nil
 	}

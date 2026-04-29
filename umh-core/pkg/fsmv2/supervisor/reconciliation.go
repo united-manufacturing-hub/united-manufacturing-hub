@@ -863,6 +863,34 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) (err error) 
 	// the two cases and would either silently despawn legacy parents
 	// (collapse-to-empty) or silently zero-child migrated parents
 	// (collapse-to-fallback).
+	//
+	// PR2 boundary caveat (pr2_issues #13 — action-gating staleness):
+	// During action-gating ticks (tickWorker early-returns before writing
+	// lastRenderedChildren), this discriminator reads the PRIOR tick's
+	// rendered set. Pre-P2.4, the legacy DDS path always reflected the
+	// CURRENT desired.ChildrenSpecs. Behavioural delta: parent UserSpec
+	// Variables changes during action-gating cause one-tick stale Variables
+	// in transport children for ~10-100ms (single tick cadence). Resolves
+	// automatically on the next non-gated tick. Bounded, intentional, and
+	// not a correctness issue — child eventually converges.
+	//
+	// PR2 boundary caveat (pr2_issues #8 — empty-string ParentMappedState):
+	// Migrated state files use `!ShouldStop()` as a start-check. The
+	// FRAMEWORK ShouldStop body (worker_snapshot.go) is
+	// `IsShutdownRequested || ParentMappedState == "stopped"` and returns
+	// FALSE for empty-string ParentMappedState — so `!ShouldStop()` returns
+	// TRUE (fail-OPEN start). The pre-migration form `== DesiredStateRunning`
+	// returned FALSE for empty string (fail-SAFE stay-stopped). Production
+	// today is safe via the applyStateMapping() ordering invariant
+	// (reconciliation.go:913 runs before child tick at :925 — empty-string
+	// PMS cannot reach a child Next() in normal operation). The migrated
+	// code has no defense if that ordering is ever broken — exactly the F7
+	// premature-start failure mode the cascade is meant to prevent. Note
+	// the asymmetry: workers with a worker-local ShouldStop override (e.g.
+	// examplechild's snapshot.ShouldStop = `IsShutdownRequested ||
+	// !ShouldBeRunning`) fail-SAFE on empty string. transport / communicator
+	// inherit the framework body and so inherit the fail-OPEN polarity.
+	// Proper fix is harmonization at framework level (P3.x scope).
 	var childrenSpecs []config.ChildSpec
 
 	s.mu.RLock()
