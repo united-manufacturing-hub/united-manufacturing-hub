@@ -21,9 +21,8 @@ import (
 	"time"
 
 	depspkg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport"
-	httpTransport "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport/http"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/pull/snapshot"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/types"
 )
 
 // PullActionName identifies the pull action in FSM action results.
@@ -150,9 +149,9 @@ func (a *PullAction) Execute(ctx context.Context, depsAny any) error {
 	pullLatency := time.Since(pullStart)
 
 	if err != nil {
-		errType, retryAfter := httpTransport.ExtractErrorType(err)
+		errType, retryAfter := types.ExtractErrorType(err)
 		pullDeps.RecordTypedError(errType, retryAfter)
-		metrics.IncrementCounter(httpTransport.CounterForErrorType(errType), 1)
+		metrics.IncrementCounter(types.CounterForErrorType(errType), 1)
 
 		metrics.IncrementCounter(depspkg.CounterPullOps, 1)
 		metrics.IncrementCounter(depspkg.CounterPullFailures, 1)
@@ -211,7 +210,7 @@ func (a *PullAction) Execute(ctx context.Context, depsAny any) error {
 	return nil
 }
 
-func (a *PullAction) deliverToChannel(ctx context.Context, inChan chan<- *transport.UMHMessage, messages []*transport.UMHMessage) []*transport.UMHMessage {
+func (a *PullAction) deliverToChannel(ctx context.Context, inChan chan<- *types.UMHMessage, messages []*types.UMHMessage) []*types.UMHMessage {
 	for i, msg := range messages {
 		if msg == nil {
 			continue

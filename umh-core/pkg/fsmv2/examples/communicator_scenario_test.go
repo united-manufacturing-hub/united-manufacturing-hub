@@ -25,8 +25,8 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/examples"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/testutil"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport"
 	transportWorker "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/types"
 )
 
 var _ = Describe("Communicator Scenario", func() {
@@ -94,7 +94,7 @@ var _ = Describe("Communicator Scenario", func() {
 		It("pushes outbound messages via channel provider", func() {
 			result := examples.RunCommunicatorScenario(ctx, examples.CommunicatorRunConfig{
 				Duration: 2 * time.Second,
-				InitialOutboundMessages: []*transport.UMHMessage{{
+				InitialOutboundMessages: []*types.UMHMessage{{
 					InstanceUUID: "test-instance",
 					Content:      "status-update",
 				}},
@@ -109,11 +109,11 @@ var _ = Describe("Communicator Scenario", func() {
 		It("handles both pull and push in same run", func() {
 			result := examples.RunCommunicatorScenario(ctx, examples.CommunicatorRunConfig{
 				Duration: 2 * time.Second,
-				InitialPullMessages: []*transport.UMHMessage{{
+				InitialPullMessages: []*types.UMHMessage{{
 					InstanceUUID: "test-instance",
 					Content:      "inbound-message",
 				}},
-				InitialOutboundMessages: []*transport.UMHMessage{{
+				InitialOutboundMessages: []*types.UMHMessage{{
 					InstanceUUID: "test-instance",
 					Content:      "outbound-message",
 				}},
@@ -266,7 +266,7 @@ var _ = Describe("TestChannelProvider", func() {
 		provider := examples.NewTestChannelProvider(10)
 
 		// Queue a message via outbound
-		testMsg := &transport.UMHMessage{Content: "test-message"}
+		testMsg := &types.UMHMessage{Content: "test-message"}
 		provider.QueueOutbound(testMsg)
 
 		// Get channels and read from outbound
@@ -280,8 +280,8 @@ var _ = Describe("TestChannelProvider", func() {
 		inbound, _ := provider.GetChannels("test-worker")
 
 		// Send messages to inbound
-		inbound <- &transport.UMHMessage{Content: "msg1"}
-		inbound <- &transport.UMHMessage{Content: "msg2"}
+		inbound <- &types.UMHMessage{Content: "msg1"}
+		inbound <- &types.UMHMessage{Content: "msg2"}
 
 		// Drain
 		messages := provider.DrainInbound()

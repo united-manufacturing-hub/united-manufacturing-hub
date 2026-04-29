@@ -22,10 +22,9 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps/retry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps/retry/failurerate"
-	communicator_transport "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport"
-	httpTransport "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport/http"
 	transport_pkg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/push/snapshot"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/types"
 )
 
 const maxPendingMessages = 1000
@@ -36,11 +35,11 @@ type PushDependencies struct {
 	*deps.BaseDependencies
 	parentDeps              *transport_pkg.TransportDependencies
 	failureRate             *failurerate.Tracker
-	pendingMessages         []*communicator_transport.UMHMessage
+	pendingMessages         []*types.UMHMessage
 	errorMu                 sync.RWMutex
 	pendingMu               sync.RWMutex
 	lastSeenResetGeneration uint64
-	lastErrorType           httpTransport.ErrorType
+	lastErrorType           types.ErrorType
 }
 
 func NewPushDependencies(parentDeps *transport_pkg.TransportDependencies, identity deps.Identity, logger deps.FSMLogger, stateReader deps.StateReader) (*PushDependencies, error) {
@@ -51,15 +50,15 @@ func NewPushDependencies(parentDeps *transport_pkg.TransportDependencies, identi
 	return &PushDependencies{
 		BaseDependencies: deps.NewBaseDependencies(logger, stateReader, identity),
 		parentDeps:       parentDeps,
-		failureRate: failurerate.New(transport_pkg.ChildFailureRateConfig),
+		failureRate:      failurerate.New(transport_pkg.ChildFailureRateConfig),
 	}, nil
 }
 
-func (d *PushDependencies) GetOutboundChan() <-chan *communicator_transport.UMHMessage {
+func (d *PushDependencies) GetOutboundChan() <-chan *types.UMHMessage {
 	return d.parentDeps.GetOutboundChan()
 }
 
-func (d *PushDependencies) GetTransport() communicator_transport.Transport {
+func (d *PushDependencies) GetTransport() types.Transport {
 	return d.parentDeps.GetTransport()
 }
 
@@ -71,7 +70,7 @@ func (d *PushDependencies) GetAuthenticatedUUID() string {
 	return d.parentDeps.GetAuthenticatedUUID()
 }
 
-func (d *PushDependencies) RecordTypedError(errType httpTransport.ErrorType, retryAfter time.Duration) {
+func (d *PushDependencies) RecordTypedError(errType types.ErrorType, retryAfter time.Duration) {
 	d.errorMu.Lock()
 	d.lastErrorType = errType
 	d.errorMu.Unlock()
@@ -112,13 +111,13 @@ func (d *PushDependencies) GetConsecutiveErrors() int {
 	return d.RetryTracker().ConsecutiveErrors()
 }
 
-func (d *PushDependencies) GetLastErrorType() httpTransport.ErrorType {
+func (d *PushDependencies) GetLastErrorType() types.ErrorType {
 	d.errorMu.RLock()
 	defer d.errorMu.RUnlock()
 	return d.lastErrorType
 }
 
-func (d *PushDependencies) StorePendingMessages(msgs []*communicator_transport.UMHMessage) {
+func (d *PushDependencies) StorePendingMessages(msgs []*types.UMHMessage) {
 	d.pendingMu.Lock()
 	defer d.pendingMu.Unlock()
 
@@ -136,7 +135,7 @@ func (d *PushDependencies) StorePendingMessages(msgs []*communicator_transport.U
 	}
 }
 
-func (d *PushDependencies) DrainPendingMessages() []*communicator_transport.UMHMessage {
+func (d *PushDependencies) DrainPendingMessages() []*types.UMHMessage {
 	d.pendingMu.Lock()
 	defer d.pendingMu.Unlock()
 

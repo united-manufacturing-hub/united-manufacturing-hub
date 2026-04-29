@@ -22,7 +22,7 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
-	httpTransport "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport/http"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/types"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/snapshot"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/state"
 )
@@ -32,11 +32,11 @@ func makeSnapshot(shutdownRequested bool, desiredState string, jwtToken string, 
 	return makeSnapshotFull(shutdownRequested, desiredState, jwtToken, jwtExpiry, childrenHealthy, childrenUnhealthy, 0, 0)
 }
 
-func makeSnapshotFull(shutdownRequested bool, desiredState string, jwtToken string, jwtExpiry time.Time, childrenHealthy, childrenUnhealthy int, consecutiveErrors int, lastErrorType httpTransport.ErrorType) fsmv2.Snapshot {
+func makeSnapshotFull(shutdownRequested bool, desiredState string, jwtToken string, jwtExpiry time.Time, childrenHealthy, childrenUnhealthy int, consecutiveErrors int, lastErrorType types.ErrorType) fsmv2.Snapshot {
 	return makeSnapshotWithBackoff(shutdownRequested, desiredState, jwtToken, jwtExpiry, childrenHealthy, childrenUnhealthy, consecutiveErrors, lastErrorType, time.Time{}, 0)
 }
 
-func makeSnapshotWithBackoff(shutdownRequested bool, desiredState string, jwtToken string, jwtExpiry time.Time, childrenHealthy, childrenUnhealthy int, consecutiveErrors int, lastErrorType httpTransport.ErrorType, lastAuthAttemptAt time.Time, lastRetryAfter time.Duration) fsmv2.Snapshot {
+func makeSnapshotWithBackoff(shutdownRequested bool, desiredState string, jwtToken string, jwtExpiry time.Time, childrenHealthy, childrenUnhealthy int, consecutiveErrors int, lastErrorType types.ErrorType, lastAuthAttemptAt time.Time, lastRetryAfter time.Duration) fsmv2.Snapshot {
 	desired := &snapshot.TransportDesiredState{
 		BaseDesiredState: config.BaseDesiredState{
 			State:             desiredState,
@@ -87,7 +87,7 @@ func makeAuthFailedSnapshot(authToken, relayURL, instanceUUID string, shutdownRe
 	}
 	observed := snapshot.TransportObservedState{
 		CollectedAt:   time.Now(),
-		LastErrorType: httpTransport.ErrorTypeInvalidToken,
+		LastErrorType: types.ErrorTypeInvalidToken,
 		FailedAuthConfig: snapshot.FailedAuthConfig{
 			AuthToken:    authToken,
 			RelayURL:     relayURL,
@@ -103,7 +103,7 @@ func makeAuthFailedSnapshot(authToken, relayURL, instanceUUID string, shutdownRe
 func makeAuthFailedStartingSnapshot(
 	desiredToken, desiredRelay, desiredUUID string,
 	failedToken, failedRelay, failedUUID string,
-	consecutiveErrors int, lastErrorType httpTransport.ErrorType,
+	consecutiveErrors int, lastErrorType types.ErrorType,
 ) fsmv2.Snapshot {
 	desired := &snapshot.TransportDesiredState{
 		BaseDesiredState: config.BaseDesiredState{State: config.DesiredStateRunning},
@@ -222,7 +222,7 @@ var _ = Describe("TransportWorker States", func() {
 		It("should wait for backoff before retrying auth after failure", func() {
 			snap := makeSnapshotWithBackoff(
 				false, config.DesiredStateRunning, "", time.Time{}, 0, 0,
-				3, httpTransport.ErrorTypeNetwork,
+				3, types.ErrorTypeNetwork,
 				time.Now(), // last attempt just now
 				0,
 			)
@@ -250,7 +250,7 @@ var _ = Describe("TransportWorker States", func() {
 		It("should dispatch auth when backoff has expired", func() {
 			snap := makeSnapshotWithBackoff(
 				false, config.DesiredStateRunning, "", time.Time{}, 0, 0,
-				1, httpTransport.ErrorTypeNetwork,
+				1, types.ErrorTypeNetwork,
 				time.Now().Add(-5*time.Second), // attempt was 5s ago, backoff for 1 error = 2s
 				0,
 			)
@@ -265,7 +265,7 @@ var _ = Describe("TransportWorker States", func() {
 			snap := makeAuthFailedStartingSnapshot(
 				"test-auth-token", "https://relay.test.com", "test-uuid",
 				"test-auth-token", "https://relay.test.com", "test-uuid",
-				1, httpTransport.ErrorTypeInvalidToken)
+				1, types.ErrorTypeInvalidToken)
 			result := s.Next(snap)
 
 			Expect(result.State).To(BeAssignableToTypeOf(&state.AuthFailedState{}))
@@ -277,7 +277,7 @@ var _ = Describe("TransportWorker States", func() {
 			snap := makeAuthFailedStartingSnapshot(
 				"test-auth-token", "https://relay.test.com", "test-uuid",
 				"test-auth-token", "https://relay.test.com", "test-uuid",
-				1, httpTransport.ErrorTypeInstanceDeleted)
+				1, types.ErrorTypeInstanceDeleted)
 			result := s.Next(snap)
 
 			Expect(result.State).To(BeAssignableToTypeOf(&state.AuthFailedState{}))
@@ -288,7 +288,7 @@ var _ = Describe("TransportWorker States", func() {
 		It("should NOT transition to AuthFailed on transient Network error", func() {
 			snap := makeSnapshotWithBackoff(
 				false, config.DesiredStateRunning, "", time.Time{}, 0, 0,
-				3, httpTransport.ErrorTypeNetwork,
+				3, types.ErrorTypeNetwork,
 				time.Now().Add(-10*time.Minute), // well past any backoff
 				0,
 			)
@@ -302,7 +302,7 @@ var _ = Describe("TransportWorker States", func() {
 		It("should NOT transition to AuthFailed on transient ServerError", func() {
 			snap := makeSnapshotWithBackoff(
 				false, config.DesiredStateRunning, "", time.Time{}, 0, 0,
-				3, httpTransport.ErrorTypeServerError,
+				3, types.ErrorTypeServerError,
 				time.Now().Add(-10*time.Minute),
 				0,
 			)
@@ -315,7 +315,7 @@ var _ = Describe("TransportWorker States", func() {
 		It("should respect Retry-After from server", func() {
 			snap := makeSnapshotWithBackoff(
 				false, config.DesiredStateRunning, "", time.Time{}, 0, 0,
-				1, httpTransport.ErrorTypeServerError,
+				1, types.ErrorTypeServerError,
 				time.Now(), // just attempted
 				60*time.Second,
 			)
@@ -337,7 +337,7 @@ var _ = Describe("TransportWorker States", func() {
 			observed := snapshot.TransportObservedState{
 				CollectedAt:       time.Now(),
 				ConsecutiveErrors: 3,
-				LastErrorType:     httpTransport.ErrorTypeNetwork,
+				LastErrorType:     types.ErrorTypeNetwork,
 				LastAuthAttemptAt: time.Now(),
 			}
 
@@ -555,7 +555,7 @@ var _ = Describe("TransportWorker States", func() {
 		It("should dispatch ResetTransportAction when ShouldResetTransport triggers", func() {
 			validExpiry := time.Now().Add(1 * time.Hour)
 			// 5 consecutive network errors = ShouldResetTransport returns true
-			snap := makeSnapshotFull(false, config.DesiredStateRunning, "valid-token", validExpiry, 1, 1, 5, httpTransport.ErrorTypeNetwork)
+			snap := makeSnapshotFull(false, config.DesiredStateRunning, "valid-token", validExpiry, 1, 1, 5, types.ErrorTypeNetwork)
 			result := s.Next(snap)
 
 			Expect(result.State).To(BeAssignableToTypeOf(&state.DegradedState{}))
@@ -566,7 +566,7 @@ var _ = Describe("TransportWorker States", func() {
 		It("should NOT dispatch ResetTransportAction when below threshold", func() {
 			validExpiry := time.Now().Add(1 * time.Hour)
 			// 3 consecutive network errors = ShouldResetTransport returns false
-			snap := makeSnapshotFull(false, config.DesiredStateRunning, "valid-token", validExpiry, 1, 1, 3, httpTransport.ErrorTypeNetwork)
+			snap := makeSnapshotFull(false, config.DesiredStateRunning, "valid-token", validExpiry, 1, 1, 3, types.ErrorTypeNetwork)
 			result := s.Next(snap)
 
 			Expect(result.State).To(BeAssignableToTypeOf(&state.DegradedState{}))
@@ -575,7 +575,7 @@ var _ = Describe("TransportWorker States", func() {
 
 		It("should dispatch ResetTransportAction for server errors at 10 consecutive", func() {
 			validExpiry := time.Now().Add(1 * time.Hour)
-			snap := makeSnapshotFull(false, config.DesiredStateRunning, "valid-token", validExpiry, 1, 1, 10, httpTransport.ErrorTypeServerError)
+			snap := makeSnapshotFull(false, config.DesiredStateRunning, "valid-token", validExpiry, 1, 1, 10, types.ErrorTypeServerError)
 			result := s.Next(snap)
 
 			Expect(result.State).To(BeAssignableToTypeOf(&state.DegradedState{}))
@@ -683,7 +683,7 @@ var _ = Describe("TransportWorker States", func() {
 					InstanceUUID: "test-uuid",
 				},
 				ConsecutiveErrors:  3,
-				LastErrorType:      httpTransport.ErrorTypeInvalidToken,
+				LastErrorType:      types.ErrorTypeInvalidToken,
 			}
 			result := s.Next(fsmv2.Snapshot{Observed: observed, Desired: desired})
 
@@ -709,7 +709,7 @@ var _ = Describe("TransportWorker States", func() {
 					InstanceUUID: "test-uuid",
 				},
 				ConsecutiveErrors:  3,
-				LastErrorType:      httpTransport.ErrorTypeInvalidToken,
+				LastErrorType:      types.ErrorTypeInvalidToken,
 			}
 			result := s.Next(fsmv2.Snapshot{Observed: observed, Desired: desired})
 
@@ -734,7 +734,7 @@ var _ = Describe("TransportWorker States", func() {
 					InstanceUUID: "test-uuid",
 				},
 				ConsecutiveErrors:  3,
-				LastErrorType:      httpTransport.ErrorTypeInstanceDeleted,
+				LastErrorType:      types.ErrorTypeInstanceDeleted,
 			}
 			result := s.Next(fsmv2.Snapshot{Observed: observed, Desired: desired})
 
@@ -753,7 +753,7 @@ var _ = Describe("TransportWorker States", func() {
 			observed := snapshot.TransportObservedState{
 				CollectedAt:       time.Now(),
 				ConsecutiveErrors: 3,
-				LastErrorType:     httpTransport.ErrorTypeInvalidToken,
+				LastErrorType:     types.ErrorTypeInvalidToken,
 				// FailedAuth* fields all empty (zero values) — simulates fresh deps
 			}
 			result := s.Next(fsmv2.Snapshot{Observed: observed, Desired: desired})
@@ -775,7 +775,7 @@ var _ = Describe("TransportWorker States", func() {
 		It("should enter AuthFailed when config unchanged and permanent error present", func() {
 			snap := makeAuthFailedStartingSnapshot("old-token", "https://relay.test.com", "test-uuid",
 				"old-token", "https://relay.test.com", "test-uuid",
-				1, httpTransport.ErrorTypeInvalidToken)
+				1, types.ErrorTypeInvalidToken)
 			result := s.Next(snap)
 
 			Expect(result.State).To(BeAssignableToTypeOf(&state.AuthFailedState{}))
@@ -786,7 +786,7 @@ var _ = Describe("TransportWorker States", func() {
 		It("should dispatch auth when config changed despite stale permanent error", func() {
 			snap := makeAuthFailedStartingSnapshot("new-token", "https://relay.test.com", "test-uuid",
 				"old-token", "https://relay.test.com", "test-uuid",
-				3, httpTransport.ErrorTypeInvalidToken)
+				3, types.ErrorTypeInvalidToken)
 			result := s.Next(snap)
 
 			Expect(result.State).To(BeAssignableToTypeOf(&state.StartingState{}))

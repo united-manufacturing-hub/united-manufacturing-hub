@@ -22,10 +22,9 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps/retry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps/retry/failurerate"
-	communicator_transport "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport"
-	httpTransport "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport/http"
 	transport_pkg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/pull/snapshot"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/types"
 )
 
 // maxPendingMessages caps the pending buffer to prevent unbounded memory growth
@@ -41,12 +40,12 @@ type PullDependencies struct {
 	*deps.BaseDependencies
 	parentDeps              *transport_pkg.TransportDependencies
 	failureRate             *failurerate.Tracker
-	pendingMessages         []*communicator_transport.UMHMessage
+	pendingMessages         []*types.UMHMessage
 	errorMu                 sync.RWMutex
 	pendingMu               sync.RWMutex
 	backpressureMu          sync.RWMutex
 	lastSeenResetGeneration uint64
-	lastErrorType           httpTransport.ErrorType
+	lastErrorType           types.ErrorType
 	backpressured           bool
 }
 
@@ -59,11 +58,11 @@ func NewPullDependencies(parentDeps *transport_pkg.TransportDependencies, identi
 	return &PullDependencies{
 		BaseDependencies: deps.NewBaseDependencies(logger, stateReader, identity),
 		parentDeps:       parentDeps,
-		failureRate: failurerate.New(transport_pkg.ChildFailureRateConfig),
+		failureRate:      failurerate.New(transport_pkg.ChildFailureRateConfig),
 	}, nil
 }
 
-func (d *PullDependencies) GetInboundChan() chan<- *communicator_transport.UMHMessage {
+func (d *PullDependencies) GetInboundChan() chan<- *types.UMHMessage {
 	return d.parentDeps.GetInboundChan()
 }
 
@@ -71,7 +70,7 @@ func (d *PullDependencies) GetInboundChanStats() (capacity int, length int) {
 	return d.parentDeps.GetInboundChanStats()
 }
 
-func (d *PullDependencies) GetTransport() communicator_transport.Transport {
+func (d *PullDependencies) GetTransport() types.Transport {
 	return d.parentDeps.GetTransport()
 }
 
@@ -79,7 +78,7 @@ func (d *PullDependencies) GetJWTToken() string {
 	return d.parentDeps.GetJWTToken()
 }
 
-func (d *PullDependencies) RecordTypedError(errType httpTransport.ErrorType, retryAfter time.Duration) {
+func (d *PullDependencies) RecordTypedError(errType types.ErrorType, retryAfter time.Duration) {
 	d.errorMu.Lock()
 	d.lastErrorType = errType
 	d.errorMu.Unlock()
@@ -120,7 +119,7 @@ func (d *PullDependencies) GetConsecutiveErrors() int {
 	return d.RetryTracker().ConsecutiveErrors()
 }
 
-func (d *PullDependencies) GetLastErrorType() httpTransport.ErrorType {
+func (d *PullDependencies) GetLastErrorType() types.ErrorType {
 	d.errorMu.RLock()
 	defer d.errorMu.RUnlock()
 	return d.lastErrorType
@@ -129,7 +128,7 @@ func (d *PullDependencies) GetLastErrorType() httpTransport.ErrorType {
 // StorePendingMessages appends messages to the pending buffer for retry on the next tick.
 // Nil messages are filtered out. If the buffer exceeds maxPendingMessages, the oldest
 // messages are dropped.
-func (d *PullDependencies) StorePendingMessages(msgs []*communicator_transport.UMHMessage) {
+func (d *PullDependencies) StorePendingMessages(msgs []*types.UMHMessage) {
 	d.pendingMu.Lock()
 	defer d.pendingMu.Unlock()
 
@@ -148,7 +147,7 @@ func (d *PullDependencies) StorePendingMessages(msgs []*communicator_transport.U
 }
 
 // DrainPendingMessages returns all pending messages and clears the buffer.
-func (d *PullDependencies) DrainPendingMessages() []*communicator_transport.UMHMessage {
+func (d *PullDependencies) DrainPendingMessages() []*types.UMHMessage {
 	d.pendingMu.Lock()
 	defer d.pendingMu.Unlock()
 

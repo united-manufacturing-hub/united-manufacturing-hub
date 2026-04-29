@@ -21,8 +21,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps/retry"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport"
-	httpTransport "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport/http"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/types"
 )
 
 // TransportDependencies is the dependencies interface for transport actions (avoids import cycles).
@@ -31,8 +30,8 @@ type TransportDependencies interface {
 	MetricsRecorder() *deps.MetricsRecorder
 
 	// Transport management
-	GetTransport() transport.Transport
-	SetTransport(t transport.Transport)
+	GetTransport() types.Transport
+	SetTransport(t types.Transport)
 
 	// JWT token management
 	SetJWT(token string, expiry time.Time)
@@ -42,11 +41,11 @@ type TransportDependencies interface {
 	// Error tracking for intelligent backoff
 	RecordError()
 	RecordSuccess()
-	RecordTypedError(errType httpTransport.ErrorType, retryAfter time.Duration)
-	RecordAuthError(errType httpTransport.ErrorType, retryAfter time.Duration)
+	RecordTypedError(errType types.ErrorType, retryAfter time.Duration)
+	RecordAuthError(errType types.ErrorType, retryAfter time.Duration)
 	GetConsecutiveErrors() int
 	GetPersistentAuthErrorCount() int
-	GetLastErrorType() httpTransport.ErrorType
+	GetLastErrorType() types.ErrorType
 	GetLastRetryAfter() time.Duration
 
 	// Auth attempt tracking
@@ -187,7 +186,7 @@ type TransportObservedState struct {
 	ConsecutiveErrors int `json:"consecutive_errors"`
 
 	// LastErrorType tracks the most recent error type for ShouldResetTransport evaluation.
-	LastErrorType httpTransport.ErrorType `json:"last_error_type"`
+	LastErrorType types.ErrorType `json:"last_error_type"`
 
 	// LastRetryAfter holds the server-suggested retry delay from the most recent error (for backoff).
 	LastRetryAfter time.Duration `json:"last_retry_after,omitempty"`

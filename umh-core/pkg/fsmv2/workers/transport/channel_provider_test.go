@@ -18,7 +18,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	transportpkg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/types"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport"
 )
 
@@ -102,14 +102,14 @@ var _ = Describe("Channel Provider", func() {
 
 // MockChannelProvider implements transport.ChannelProvider for testing.
 type MockChannelProvider struct {
-	inbound  chan<- *transportpkg.UMHMessage
-	outbound <-chan *transportpkg.UMHMessage
+	inbound  chan<- *types.UMHMessage
+	outbound <-chan *types.UMHMessage
 }
 
 // NewMockChannelProvider creates a mock channel provider with buffered channels.
 func NewMockChannelProvider() *MockChannelProvider {
-	inboundBi := make(chan *transportpkg.UMHMessage, 100)
-	outboundBi := make(chan *transportpkg.UMHMessage, 100)
+	inboundBi := make(chan *types.UMHMessage, 100)
+	outboundBi := make(chan *types.UMHMessage, 100)
 
 	return &MockChannelProvider{
 		inbound:  inboundBi,
@@ -118,8 +118,8 @@ func NewMockChannelProvider() *MockChannelProvider {
 }
 
 func (m *MockChannelProvider) GetChannels(_ string) (
-	inbound chan<- *transportpkg.UMHMessage,
-	outbound <-chan *transportpkg.UMHMessage,
+	inbound chan<- *types.UMHMessage,
+	outbound <-chan *types.UMHMessage,
 ) {
 	return m.inbound, m.outbound
 }

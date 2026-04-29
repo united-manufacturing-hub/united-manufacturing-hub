@@ -19,7 +19,7 @@ import (
 	"math"
 	"time"
 
-	httpTransport "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport/http"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/types"
 )
 
 const (
@@ -49,7 +49,7 @@ func CalculateDelay(consecutiveErrors int) time.Duration {
 }
 
 // CalculateDelayForErrorType returns backoff based on error type. Retry-After header overrides default strategy.
-func CalculateDelayForErrorType(errType httpTransport.ErrorType, consecutiveErrors int, retryAfter time.Duration) time.Duration {
+func CalculateDelayForErrorType(errType types.ErrorType, consecutiveErrors int, retryAfter time.Duration) time.Duration {
 	if retryAfter > 0 {
 		return retryAfter
 	}
@@ -57,15 +57,15 @@ func CalculateDelayForErrorType(errType httpTransport.ErrorType, consecutiveErro
 	return calculateDefaultDelay(errType, consecutiveErrors)
 }
 
-func calculateDefaultDelay(errType httpTransport.ErrorType, consecutiveErrors int) time.Duration {
+func calculateDefaultDelay(errType types.ErrorType, consecutiveErrors int) time.Duration {
 	switch errType {
-	case httpTransport.ErrorTypeCloudflareChallenge, httpTransport.ErrorTypeProxyBlock:
+	case types.ErrorTypeCloudflareChallenge, types.ErrorTypeProxyBlock:
 		return 60 * time.Second
 
-	case httpTransport.ErrorTypeInvalidToken:
+	case types.ErrorTypeInvalidToken:
 		return 60 * time.Second
 
-	case httpTransport.ErrorTypeBackendRateLimit:
+	case types.ErrorTypeBackendRateLimit:
 		delays := []time.Duration{30 * time.Second, 60 * time.Second, 120 * time.Second, 300 * time.Second}
 
 		idx := consecutiveErrors - 1
@@ -79,13 +79,13 @@ func calculateDefaultDelay(errType httpTransport.ErrorType, consecutiveErrors in
 
 		return delays[idx]
 
-	case httpTransport.ErrorTypeServerError, httpTransport.ErrorTypeNetwork:
+	case types.ErrorTypeServerError, types.ErrorTypeNetwork:
 		return CalculateDelay(consecutiveErrors)
 
-	case httpTransport.ErrorTypeInstanceDeleted:
+	case types.ErrorTypeInstanceDeleted:
 		return 5 * time.Minute
 
-	case httpTransport.ErrorTypeChannelFull:
+	case types.ErrorTypeChannelFull:
 		// Short backoff to allow channel to drain
 		return 5 * time.Second
 
@@ -95,21 +95,21 @@ func calculateDefaultDelay(errType httpTransport.ErrorType, consecutiveErrors in
 }
 
 // ShouldStopRetrying always returns false; the communicator never gives up.
-func ShouldStopRetrying(_ httpTransport.ErrorType, _ int) bool {
+func ShouldStopRetrying(_ types.ErrorType, _ int) bool {
 	return false
 }
 
 // ShouldResetTransport returns true when connection pool flush may help recover from errors.
 // Network errors reset every 5 consecutive errors; server/Cloudflare errors every 10.
-func ShouldResetTransport(errType httpTransport.ErrorType, consecutiveErrors int) bool {
+func ShouldResetTransport(errType types.ErrorType, consecutiveErrors int) bool {
 	if consecutiveErrors == 0 {
 		return false
 	}
 
 	switch errType {
-	case httpTransport.ErrorTypeNetwork:
+	case types.ErrorTypeNetwork:
 		return consecutiveErrors%TransportResetThreshold == 0
-	case httpTransport.ErrorTypeServerError, httpTransport.ErrorTypeCloudflareChallenge:
+	case types.ErrorTypeServerError, types.ErrorTypeCloudflareChallenge:
 		return consecutiveErrors%(TransportResetThreshold*2) == 0
 	default:
 		return false

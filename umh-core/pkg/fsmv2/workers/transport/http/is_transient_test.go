@@ -18,22 +18,22 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	httpTransport "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/http"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/types"
 )
 
 var _ = Describe("IsTransient", func() {
 	DescribeTable("classifies all ErrorType values",
-		func(errType httpTransport.ErrorType, expected bool) {
+		func(errType types.ErrorType, expected bool) {
 			Expect(errType.IsTransient()).To(Equal(expected))
 		},
-		Entry("Unknown is persistent", httpTransport.ErrorTypeUnknown, false),
-		Entry("CloudflareChallenge is persistent", httpTransport.ErrorTypeCloudflareChallenge, false),
-		Entry("InvalidToken is persistent", httpTransport.ErrorTypeInvalidToken, false),
-		Entry("InstanceDeleted is persistent", httpTransport.ErrorTypeInstanceDeleted, false),
-		Entry("ProxyBlock is persistent", httpTransport.ErrorTypeProxyBlock, false),
-		Entry("Network is transient", httpTransport.ErrorTypeNetwork, true),
-		Entry("ServerError is transient", httpTransport.ErrorTypeServerError, true),
-		Entry("ChannelFull is transient", httpTransport.ErrorTypeChannelFull, true),
-		Entry("BackendRateLimit is transient", httpTransport.ErrorTypeBackendRateLimit, true),
+		Entry("Unknown is persistent", types.ErrorTypeUnknown, false),
+		Entry("CloudflareChallenge is persistent", types.ErrorTypeCloudflareChallenge, false),
+		Entry("InvalidToken is persistent", types.ErrorTypeInvalidToken, false),
+		Entry("InstanceDeleted is persistent", types.ErrorTypeInstanceDeleted, false),
+		Entry("ProxyBlock is persistent", types.ErrorTypeProxyBlock, false),
+		Entry("Network is transient", types.ErrorTypeNetwork, true),
+		Entry("ServerError is transient", types.ErrorTypeServerError, true),
+		Entry("ChannelFull is transient", types.ErrorTypeChannelFull, true),
+		Entry("BackendRateLimit is transient", types.ErrorTypeBackendRateLimit, true),
 	)
 })

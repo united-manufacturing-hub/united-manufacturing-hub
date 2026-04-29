@@ -21,9 +21,9 @@ import (
 	"time"
 
 	depspkg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport"
-	httpTransport "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport/http"
+	transporthttp "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/http"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/snapshot"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/types"
 )
 
 const (
@@ -87,11 +87,11 @@ func (a *AuthenticateAction) Execute(ctx context.Context, depsAny any) error {
 	}
 
 	if deps.GetTransport() == nil {
-		newTransport := httpTransport.NewHTTPTransport(a.RelayURL, a.Timeout)
+		newTransport := transporthttp.NewHTTPTransport(a.RelayURL, a.Timeout)
 		deps.SetTransport(newTransport)
 	}
 
-	authReq := transport.AuthRequest{
+	authReq := types.AuthRequest{
 		InstanceUUID: a.InstanceUUID,
 		Email:        a.AuthToken, // Email field matches backend API JSON contract; carries auth token
 	}
@@ -110,14 +110,14 @@ func (a *AuthenticateAction) Execute(ctx context.Context, depsAny any) error {
 		// Note: unlike push/pull (which only suppress transient errors), auth suppresses
 		// ALL classified TransportErrors because persistent auth errors are handled via
 		// snapshot-based state transitions (AuthFailedState), not error propagation.
-		var transportErr *httpTransport.TransportError
+		var transportErr *types.TransportError
 		if !errors.As(err, &transportErr) {
 			return err
 		}
 
 		errType, retryAfter := transportErr.Type, transportErr.RetryAfter
 		deps.RecordAuthError(errType, retryAfter)
-		deps.MetricsRecorder().IncrementCounter(httpTransport.CounterForErrorType(errType), 1)
+		deps.MetricsRecorder().IncrementCounter(types.CounterForErrorType(errType), 1)
 
 		// Store the config that caused the failure so AuthFailedState can detect config changes.
 		if !errType.IsTransient() {

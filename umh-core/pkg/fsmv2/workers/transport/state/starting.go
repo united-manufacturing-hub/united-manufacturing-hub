@@ -21,9 +21,9 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/backoff"
-	httpTransport "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport/http"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/action"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/snapshot"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/types"
 )
 
 // StartingState represents the state where the transport worker is authenticating.
@@ -91,9 +91,9 @@ func (s *StartingState) Next(snapAny any) fsmv2.NextResult[any, any] {
 // not config problems). Only InvalidToken and InstanceDeleted warrant parking in
 // AuthFailedState. SetFailedAuthConfig in the action uses the broader !IsTransient()
 // guard so that config changes also skip backoff for those error types.
-func isPermanentAuthError(errType httpTransport.ErrorType) bool {
-	return errType == httpTransport.ErrorTypeInvalidToken ||
-		errType == httpTransport.ErrorTypeInstanceDeleted
+func isPermanentAuthError(errType types.ErrorType) bool {
+	return errType == types.ErrorTypeInvalidToken ||
+		errType == types.ErrorTypeInstanceDeleted
 }
 
 // authConfigChanged returns true if the current desired auth config differs from the

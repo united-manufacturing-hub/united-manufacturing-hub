@@ -22,28 +22,28 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/testutil"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/types"
 	transportWorker "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport"
 )
 
-// TransportTestChannelProvider implements transport.ChannelProvider for test scenarios.
+// TransportTestChannelProvider implements types.ChannelProvider for test scenarios.
 type TransportTestChannelProvider struct {
-	inbound  chan *transport.UMHMessage
-	outbound chan *transport.UMHMessage
+	inbound  chan *types.UMHMessage
+	outbound chan *types.UMHMessage
 }
 
 // NewTransportTestChannelProvider creates a test channel provider with buffered channels.
 func NewTransportTestChannelProvider(bufferSize int) *TransportTestChannelProvider {
 	return &TransportTestChannelProvider{
-		inbound:  make(chan *transport.UMHMessage, bufferSize),
-		outbound: make(chan *transport.UMHMessage, bufferSize),
+		inbound:  make(chan *types.UMHMessage, bufferSize),
+		outbound: make(chan *types.UMHMessage, bufferSize),
 	}
 }
 
 // GetChannels returns the inbound (pulled from HTTP) and outbound (to push) channels.
 func (p *TransportTestChannelProvider) GetChannels(_ string) (
-	chan<- *transport.UMHMessage,
-	<-chan *transport.UMHMessage,
+	chan<- *types.UMHMessage,
+	<-chan *types.UMHMessage,
 ) {
 	return p.inbound, p.outbound
 }
@@ -54,18 +54,18 @@ func (p *TransportTestChannelProvider) GetInboundStats(_ string) (capacity int, 
 }
 
 // GetInboundChan returns the inbound channel for reading received messages from the worker.
-func (p *TransportTestChannelProvider) GetInboundChan() <-chan *transport.UMHMessage {
+func (p *TransportTestChannelProvider) GetInboundChan() <-chan *types.UMHMessage {
 	return p.inbound
 }
 
 // QueueOutbound queues a message for the worker to push.
-func (p *TransportTestChannelProvider) QueueOutbound(msg *transport.UMHMessage) {
+func (p *TransportTestChannelProvider) QueueOutbound(msg *types.UMHMessage) {
 	p.outbound <- msg
 }
 
 // DrainInbound reads all available messages from the inbound channel (non-blocking).
-func (p *TransportTestChannelProvider) DrainInbound() []*transport.UMHMessage {
-	var messages []*transport.UMHMessage
+func (p *TransportTestChannelProvider) DrainInbound() []*types.UMHMessage {
+	var messages []*types.UMHMessage
 
 drainLoop:
 	for {
@@ -89,8 +89,8 @@ type TransportRunConfig struct {
 	Logger                  deps.FSMLogger             // If nil, creates a no-op logger
 	MockServer              *testutil.MockRelayServer // If nil, creates and manages internally; caller closes if provided
 	AuthToken               string                    // Defaults to "test-auth-token"
-	InitialPullMessages     []*transport.UMHMessage   // Messages queued for transport to pull
-	InitialOutboundMessages []*transport.UMHMessage   // Messages queued for worker to push
+	InitialPullMessages     []*types.UMHMessage   // Messages queued for transport to pull
+	InitialOutboundMessages []*types.UMHMessage   // Messages queued for worker to push
 	Duration                time.Duration             // 0 = run until context cancelled; negative = error
 	TickInterval            time.Duration             // Defaults to 100ms
 }
@@ -100,8 +100,8 @@ type TransportRunResult struct {
 	Error             error                   // Non-nil if scenario setup failed
 	Done              <-chan struct{}         // Closes when scenario completes
 	Shutdown          func()                  // Triggers graceful shutdown
-	ReceivedMessages  []*transport.UMHMessage // Messages pulled from HTTP (nil for HTTP-only tests)
-	PushedMessages    []*transport.UMHMessage // Messages pushed to HTTP
+	ReceivedMessages  []*types.UMHMessage // Messages pulled from HTTP (nil for HTTP-only tests)
+	PushedMessages    []*types.UMHMessage // Messages pushed to HTTP
 	ConsecutiveErrors int                     // Final consecutive error count from mock server
 	AuthCallCount     int                     // Auth endpoint calls (>1 indicates re-auth)
 }

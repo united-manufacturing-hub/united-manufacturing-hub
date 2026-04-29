@@ -24,58 +24,60 @@ import (
 
 	depspkg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	httpTransport "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/http"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/types"
 )
 
 var _ = Describe("ExtractErrorType", func() {
 	It("extracts type and RetryAfter from a TransportError", func() {
 		inner := errors.New("rate limited")
 		transportErr := httpTransport.NewTransportErrorForTest(
-			httpTransport.ErrorTypeBackendRateLimit, 429, "rate limited", 30*time.Second, inner,
+			types.ErrorTypeBackendRateLimit, 429, "rate limited", 30*time.Second, inner,
 		)
 
-		errType, retryAfter := httpTransport.ExtractErrorType(transportErr)
-		Expect(errType).To(Equal(httpTransport.ErrorTypeBackendRateLimit))
+		errType, retryAfter := types.ExtractErrorType(transportErr)
+		Expect(errType).To(Equal(types.ErrorTypeBackendRateLimit))
 		Expect(retryAfter).To(Equal(30 * time.Second))
 	})
 
 	It("extracts type from a wrapped TransportError", func() {
 		inner := errors.New("server error")
 		transportErr := httpTransport.NewTransportErrorForTest(
-			httpTransport.ErrorTypeServerError, 500, "server error", 0, inner,
+			types.ErrorTypeServerError, 500, "server error", 0, inner,
 		)
 		wrapped := fmt.Errorf("operation failed: %w", transportErr)
 
-		errType, retryAfter := httpTransport.ExtractErrorType(wrapped)
-		Expect(errType).To(Equal(httpTransport.ErrorTypeServerError))
+		errType, retryAfter := types.ExtractErrorType(wrapped)
+		Expect(errType).To(Equal(types.ErrorTypeServerError))
 		Expect(retryAfter).To(BeZero())
 	})
 
 	It("defaults to ErrorTypeUnknown for non-TransportError", func() {
 		plainErr := errors.New("connection refused")
 
-		errType, retryAfter := httpTransport.ExtractErrorType(plainErr)
-		Expect(errType).To(Equal(httpTransport.ErrorTypeUnknown))
+		errType, retryAfter := types.ExtractErrorType(plainErr)
+		Expect(errType).To(Equal(types.ErrorTypeUnknown))
 		Expect(retryAfter).To(BeZero())
 	})
 })
 
 var _ = Describe("CounterForErrorType", func() {
 	DescribeTable("maps each ErrorType to its Prometheus counter",
-		func(errType httpTransport.ErrorType, expected depspkg.CounterName) {
-			Expect(httpTransport.CounterForErrorType(errType)).To(Equal(expected))
+		func(errType types.ErrorType, expected depspkg.CounterName) {
+			Expect(types.CounterForErrorType(errType)).To(Equal(expected))
 		},
-		Entry("CloudflareChallenge", httpTransport.ErrorTypeCloudflareChallenge, depspkg.CounterCloudflareErrorsTotal),
-		Entry("BackendRateLimit", httpTransport.ErrorTypeBackendRateLimit, depspkg.CounterBackendRateLimitErrorsTotal),
-		Entry("InvalidToken", httpTransport.ErrorTypeInvalidToken, depspkg.CounterAuthFailuresTotal),
-		Entry("InstanceDeleted", httpTransport.ErrorTypeInstanceDeleted, depspkg.CounterInstanceDeletedTotal),
-		Entry("ServerError", httpTransport.ErrorTypeServerError, depspkg.CounterServerErrorsTotal),
-		Entry("ProxyBlock", httpTransport.ErrorTypeProxyBlock, depspkg.CounterProxyBlockErrorsTotal),
-		Entry("Network", httpTransport.ErrorTypeNetwork, depspkg.CounterNetworkErrorsTotal),
-		Entry("Unknown defaults to network", httpTransport.ErrorTypeUnknown, depspkg.CounterNetworkErrorsTotal),
+		Entry("CloudflareChallenge", types.ErrorTypeCloudflareChallenge, depspkg.CounterCloudflareErrorsTotal),
+		Entry("BackendRateLimit", types.ErrorTypeBackendRateLimit, depspkg.CounterBackendRateLimitErrorsTotal),
+		Entry("InvalidToken", types.ErrorTypeInvalidToken, depspkg.CounterAuthFailuresTotal),
+		Entry("InstanceDeleted", types.ErrorTypeInstanceDeleted, depspkg.CounterInstanceDeletedTotal),
+		Entry("ServerError", types.ErrorTypeServerError, depspkg.CounterServerErrorsTotal),
+		Entry("ProxyBlock", types.ErrorTypeProxyBlock, depspkg.CounterProxyBlockErrorsTotal),
+		Entry("Network", types.ErrorTypeNetwork, depspkg.CounterNetworkErrorsTotal),
+		Entry("ChannelFull defaults to network", types.ErrorTypeChannelFull, depspkg.CounterNetworkErrorsTotal),
+		Entry("Unknown defaults to network", types.ErrorTypeUnknown, depspkg.CounterNetworkErrorsTotal),
 	)
 
 	It("defaults to network counter for out-of-range ErrorType", func() {
-		outOfRange := httpTransport.ErrorType(999)
-		Expect(httpTransport.CounterForErrorType(outOfRange)).To(Equal(depspkg.CounterNetworkErrorsTotal))
+		outOfRange := types.ErrorType(999)
+		Expect(types.CounterForErrorType(outOfRange)).To(Equal(depspkg.CounterNetworkErrorsTotal))
 	})
 })

@@ -81,7 +81,7 @@
 // # Integration
 //
 // Error classification (ErrorType, IsTransient) lives in the
-// communicator/transport/http package. Rate tracking lives in this package.
+// workers/transport/types package. Rate tracking lives in this package.
 // Push and pull dependencies each hold a *[Tracker] and call
 // [Tracker.RecordOutcome] after every real HTTP operation (success or
 // failure). Idle ticks — where no HTTP request was made — must NOT record

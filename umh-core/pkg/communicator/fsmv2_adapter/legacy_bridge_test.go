@@ -25,7 +25,7 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/fsmv2_adapter"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/types"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 )
 
@@ -141,7 +141,7 @@ var _ = Describe("LegacyChannelBridge", func() {
 
 			fsmIn, _ := bridge.GetChannels("test")
 			testUUID := "550e8400-e29b-41d4-a716-446655440000"
-			fsmIn <- &transport.UMHMessage{
+			fsmIn <- &types.UMHMessage{
 				InstanceUUID: testUUID,
 				Content:      "test-content",
 				Email:        "test@example.com",
@@ -207,7 +207,7 @@ var _ = Describe("LegacyChannelBridge", func() {
 			done := make(chan struct{})
 			go func() {
 				for range cap(fsmIn) + 1 {
-					fsmIn <- &transport.UMHMessage{Content: "test"}
+					fsmIn <- &types.UMHMessage{Content: "test"}
 				}
 				close(done)
 			}()
@@ -252,7 +252,7 @@ var _ = Describe("LegacyChannelBridge", func() {
 			bridge.Start(ctx)
 
 			fsmIn, _ := bridge.GetChannels("test")
-			fsmIn <- &transport.UMHMessage{
+			fsmIn <- &types.UMHMessage{
 				InstanceUUID: "invalid-uuid",
 				Content:      "test",
 			}
@@ -274,7 +274,7 @@ var _ = Describe("LegacyChannelBridge", func() {
 			fsmIn, _ := bridge.GetChannels("test")
 			testUUID := "550e8400-e29b-41d4-a716-446655440000"
 			testTraceID := "11111111-2222-3333-4444-555555555555"
-			fsmIn <- &transport.UMHMessage{
+			fsmIn <- &types.UMHMessage{
 				InstanceUUID: testUUID,
 				Content:      "test-content",
 				Email:        "test@example.com",
@@ -358,7 +358,7 @@ var _ = Describe("LegacyChannelBridge", func() {
 
 			fsmIn, _ := bridge.GetChannels("test")
 			testUUID := "550e8400-e29b-41d4-a716-446655440000"
-			fsmIn <- &transport.UMHMessage{
+			fsmIn <- &types.UMHMessage{
 				InstanceUUID: testUUID,
 				Content:      "test-content",
 				Email:        "test@example.com",
@@ -397,7 +397,7 @@ var _ = Describe("LegacyChannelBridge", func() {
 			}
 
 			for _, tc := range testCases {
-				fsmIn <- &transport.UMHMessage{
+				fsmIn <- &types.UMHMessage{
 					InstanceUUID: tc.uuid,
 					Content:      tc.content,
 					Email:        tc.email,
