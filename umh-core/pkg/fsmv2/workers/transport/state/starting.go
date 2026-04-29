@@ -39,42 +39,42 @@ type StartingState struct {
 func (s *StartingState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := fsmv2.ConvertWorkerSnapshot[transport_pkg.TransportConfig, transport_pkg.TransportStatus](snapAny)
 
-	if snap.IsShutdownRequested {
+	if snap.Desired.IsShutdownRequested() {
 		return fsmv2.Transition(&StoppingState{}, fsmv2.SignalNone, nil, "Shutdown requested, transitioning to Stopping", nil)
 	}
 
 	children := transport_pkg.RenderChildren(snap)
 
 	// If we don't have a valid token, authenticate (with backoff on repeated failures)
-	if !snap.Status.HasValidToken() {
-		configChanged := authConfigChanged(&snap.Config, snap.Status)
+	if !snap.Observed.Status.HasValidToken() {
+		configChanged := authConfigChanged(&snap.Desired.Config, snap.Observed.Status)
 
 		// Apply error handling only when config hasn't changed since last attempt.
 		// If config changed, stale errors and backoff are irrelevant — go straight to auth dispatch.
-		if !configChanged && snap.Status.ConsecutiveErrors > 0 && !snap.Status.LastAuthAttemptAt.IsZero() {
-			if isPermanentAuthError(snap.Status.LastErrorType) {
+		if !configChanged && snap.Observed.Status.ConsecutiveErrors > 0 && !snap.Observed.Status.LastAuthAttemptAt.IsZero() {
+			if isPermanentAuthError(snap.Observed.Status.LastErrorType) {
 				return fsmv2.Transition(&AuthFailedState{}, fsmv2.SignalNone, nil,
 					fmt.Sprintf("permanent auth failure (%s after %d errors), entering AuthFailed",
-						snap.Status.LastErrorType, snap.Status.ConsecutiveErrors), children)
+						snap.Observed.Status.LastErrorType, snap.Observed.Status.ConsecutiveErrors), children)
 			}
 
 			delay := backoff.CalculateDelayForErrorType(
-				snap.Status.LastErrorType,
-				snap.Status.ConsecutiveErrors,
-				snap.Status.LastRetryAfter,
+				snap.Observed.Status.LastErrorType,
+				snap.Observed.Status.ConsecutiveErrors,
+				snap.Observed.Status.LastRetryAfter,
 			)
-			if time.Since(snap.Status.LastAuthAttemptAt) < delay {
+			if time.Since(snap.Observed.Status.LastAuthAttemptAt) < delay {
 				return fsmv2.Transition(s, fsmv2.SignalNone, nil,
 					fmt.Sprintf("auth backoff: %d errors (%s), delay %s",
-						snap.Status.ConsecutiveErrors, snap.Status.LastErrorType, delay.Round(time.Second)), children)
+						snap.Observed.Status.ConsecutiveErrors, snap.Observed.Status.LastErrorType, delay.Round(time.Second)), children)
 			}
 		}
 
 		authAction := action.NewAuthenticateAction(
-			snap.Config.RelayURL,
-			snap.Config.InstanceUUID,
-			snap.Config.AuthToken,
-			snap.Config.Timeout,
+			snap.Desired.Config.RelayURL,
+			snap.Desired.Config.InstanceUUID,
+			snap.Desired.Config.AuthToken,
+			snap.Desired.Config.Timeout,
 		)
 
 		return fsmv2.Transition(s, fsmv2.SignalNone, authAction, "No valid token, authenticating with relay", children)

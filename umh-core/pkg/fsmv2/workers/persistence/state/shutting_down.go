@@ -28,7 +28,7 @@ type ShuttingDownState struct {
 func (s *ShuttingDownState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := fsmv2.ConvertWorkerSnapshot[snapshot.PersistenceConfig, snapshot.PersistenceStatus](snapAny)
 
-	for _, result := range snap.LastActionResults {
+	for _, result := range snap.Observed.LastActionResults {
 		if result.ActionType == action.NewRunMaintenanceAction().Name() && result.Success {
 			return fsmv2.Transition(&StoppedState{}, fsmv2.SignalNone, nil, "Shutdown maintenance completed", nil)
 		}

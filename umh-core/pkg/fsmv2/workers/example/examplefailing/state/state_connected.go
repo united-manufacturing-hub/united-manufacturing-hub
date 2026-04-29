@@ -49,10 +49,10 @@ func (s *ConnectedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 
 	if snap.ShouldStop() {
 		return fsmv2.Transition(&TryingToStopState{}, fsmv2.SignalNone, nil,
-			fmt.Sprintf("stop required: shutdown=%t, parentState=%s", snap.IsShutdownRequested, snap.ParentMappedState), nil)
+			fmt.Sprintf("stop required: shutdown=%t, parentState=%s", snap.Desired.IsShutdownRequested(), snap.Observed.ParentMappedState), nil)
 	}
 
-	if snap.Status.ConnectionHealth == "no connection" {
+	if snap.Observed.Status.ConnectionHealth == "no connection" {
 		return fsmv2.Transition(&DisconnectedState{}, fsmv2.SignalNone, nil, "connection lost unexpectedly", nil)
 	}
 
@@ -65,8 +65,8 @@ func (s *ConnectedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	// collector's OnActionComplete callback, which is crucial for parent supervisors to observe
 	// this child as healthy. Without an action, observations only happen every 1 second
 	// (DefaultObservationInterval), which could cause the parent to miss the healthy window.
-	if snap.Status.ShouldFail && !snap.Status.AllCyclesComplete {
-		timeInStateMs := snap.FrameworkMetrics.TimeInCurrentStateMs
+	if snap.Observed.Status.ShouldFail && !snap.Observed.Status.AllCyclesComplete {
+		timeInStateMs := snap.Observed.Metrics.Framework.TimeInCurrentStateMs
 		if timeInStateMs >= healthyDurationMsBeforeNextCycle {
 			return fsmv2.Transition(&TriggeringNextCycleState{}, fsmv2.SignalNone, nil, "reached healthy duration threshold, triggering next failure cycle", nil)
 		}

@@ -32,12 +32,12 @@ type StoppedState struct {
 func (s *StoppedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := fsmv2.ConvertWorkerSnapshot[snapshot.ExampleslowConfig, snapshot.ExampleslowStatus](snapAny)
 
-	if snap.IsShutdownRequested {
+	if snap.Desired.IsShutdownRequested() {
 		return fsmv2.Transition(s, fsmv2.SignalNeedsRemoval, nil, "shutdown requested, needs removal", nil)
 	}
 
 	// ParentMappedState is injected into the observation by the collector.
-	if snap.ParentMappedState == config.DesiredStateRunning {
+	if snap.Observed.ParentMappedState == config.DesiredStateRunning {
 		return fsmv2.Transition(&TryingToConnectState{}, fsmv2.SignalNone, nil, "parent wants running, transitioning to trying to connect", nil)
 	}
 

@@ -48,7 +48,7 @@ func (s *StoppedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	// Wait StoppedWaitDuration before transitioning. The supervisor tracks
 	// time-in-state via FrameworkMetrics.TimeInCurrentStateMs, injected into
 	// every observation and surfaced on the typed WorkerSnapshot.
-	elapsed := time.Duration(snap.FrameworkMetrics.TimeInCurrentStateMs) * time.Millisecond
+	elapsed := time.Duration(snap.Observed.Metrics.Framework.TimeInCurrentStateMs) * time.Millisecond
 	if elapsed >= StoppedWaitDuration {
 		return fsmv2.Transition(&TryingToStartState{}, fsmv2.SignalNone, nil, "Wait duration elapsed, transitioning to TryingToStart", children)
 	}

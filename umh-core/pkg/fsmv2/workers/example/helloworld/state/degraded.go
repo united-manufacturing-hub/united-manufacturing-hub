@@ -32,12 +32,12 @@ func (s *DegradedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := fsmv2.ConvertWorkerSnapshot[hello_world.HelloworldConfig, hello_world.HelloworldStatus](snapAny)
 
 	// 1. Check shutdown
-	if snap.IsShutdownRequested {
+	if snap.Desired.IsShutdownRequested() {
 		return fsmv2.Transition(&StoppedState{}, fsmv2.SignalNone, nil, "Shutdown requested, transitioning to stopped", nil)
 	}
 
 	// 2. Check if mood has recovered (no longer "sad")
-	if snap.Status.Mood != "sad" {
+	if snap.Observed.Status.Mood != "sad" {
 		return fsmv2.Transition(&RunningState{}, fsmv2.SignalNone, nil, "Mood recovered, transitioning to running", nil)
 	}
 

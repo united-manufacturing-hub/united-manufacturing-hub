@@ -33,15 +33,15 @@ func (s *TryingToConnectState) Next(snapAny any) fsmv2.NextResult[any, any] {
 
 	if snap.ShouldStop() {
 		return fsmv2.Transition(&TryingToStopState{}, fsmv2.SignalNone, nil,
-			fmt.Sprintf("stop required: shutdown=%t, parentState=%s", snap.IsShutdownRequested, snap.ParentMappedState), nil)
+			fmt.Sprintf("stop required: shutdown=%t, parentState=%s", snap.Desired.IsShutdownRequested(), snap.Observed.ParentMappedState), nil)
 	}
 
-	if snap.Status.RestartAfterFailures > 0 &&
-		snap.Status.ConnectAttempts >= snap.Status.RestartAfterFailures {
+	if snap.Observed.Status.RestartAfterFailures > 0 &&
+		snap.Observed.Status.ConnectAttempts >= snap.Observed.Status.RestartAfterFailures {
 		return fsmv2.Transition(s, fsmv2.SignalNeedsRestart, nil, "max connection attempts reached, signaling restart", nil)
 	}
 
-	if snap.Status.ConnectionHealth == "healthy" {
+	if snap.Observed.Status.ConnectionHealth == "healthy" {
 		return fsmv2.Transition(&ConnectedState{}, fsmv2.SignalNone, nil, "connection established successfully", nil)
 	}
 
@@ -50,7 +50,7 @@ func (s *TryingToConnectState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	// IMPORTANT: Return an action to trigger observation, which keeps the child visible to the parent.
 	// Without an action, observations only happen every 1 second (DefaultObservationInterval),
 	// which could cause the parent to miss the unhealthy window during recovery delay.
-	if snap.Status.RecoveryDelayActive {
+	if snap.Observed.Status.RecoveryDelayActive {
 		return fsmv2.Transition(s, fsmv2.SignalNone, &action.TriggerObservationAction{},
 			"waiting for recovery delay (triggering observation)", nil)
 	}

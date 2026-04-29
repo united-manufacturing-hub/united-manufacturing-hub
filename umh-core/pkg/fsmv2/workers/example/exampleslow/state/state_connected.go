@@ -31,10 +31,10 @@ func (s *ConnectedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 
 	if snap.ShouldStop() {
 		return fsmv2.Transition(&TryingToStopState{}, fsmv2.SignalNone, nil,
-			fmt.Sprintf("stop required: shutdown=%t, parentState=%s", snap.IsShutdownRequested, snap.ParentMappedState), nil)
+			fmt.Sprintf("stop required: shutdown=%t, parentState=%s", snap.Desired.IsShutdownRequested(), snap.Observed.ParentMappedState), nil)
 	}
 
-	if snap.Status.ConnectionHealth == "no connection" {
+	if snap.Observed.Status.ConnectionHealth == "no connection" {
 		return fsmv2.Transition(&DisconnectedState{}, fsmv2.SignalNone, nil, "connection lost, transitioning to disconnected", nil)
 	}
 

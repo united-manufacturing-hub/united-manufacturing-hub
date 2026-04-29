@@ -38,40 +38,40 @@ func (s *DegradedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 			fmt.Sprintf("stop required: shutdown=%t", snap.ShouldStop()), nil)
 	}
 
-	if snap.Status.ConsecutiveErrors == 0 {
+	if snap.Observed.Status.ConsecutiveErrors == 0 {
 		return fsmv2.Transition(&RunningState{}, fsmv2.SignalNone, nil, "errors cleared (consecutiveErrors=0), recovering to Running", nil)
 	}
 
-	if snap.Status.HasTransport && snap.Status.HasValidToken {
+	if snap.Observed.Status.HasTransport && snap.Observed.Status.HasValidToken {
 		backoffDelay := backoff.CalculateDelayForErrorType(
-			snap.Status.LastErrorType,
-			snap.Status.ConsecutiveErrors,
-			snap.Status.LastRetryAfter,
+			snap.Observed.Status.LastErrorType,
+			snap.Observed.Status.ConsecutiveErrors,
+			snap.Observed.Status.LastRetryAfter,
 		)
 
 		shouldWait := false
-		if snap.Status.LastRetryAfter > 0 && !snap.Status.LastErrorAt.IsZero() {
-			shouldWait = time.Since(snap.Status.LastErrorAt) < snap.Status.LastRetryAfter
-		} else if !snap.Status.DegradedEnteredAt.IsZero() {
-			shouldWait = time.Since(snap.Status.DegradedEnteredAt) < backoffDelay
+		if snap.Observed.Status.LastRetryAfter > 0 && !snap.Observed.Status.LastErrorAt.IsZero() {
+			shouldWait = time.Since(snap.Observed.Status.LastErrorAt) < snap.Observed.Status.LastRetryAfter
+		} else if !snap.Observed.Status.DegradedEnteredAt.IsZero() {
+			shouldWait = time.Since(snap.Observed.Status.DegradedEnteredAt) < backoffDelay
 		}
 
 		if shouldWait {
 			return fsmv2.Transition(s, fsmv2.SignalNone, nil,
 				fmt.Sprintf("degraded (%d errors, %d pending), backoff %s",
-					snap.Status.ConsecutiveErrors, snap.Status.PendingMessageCount,
+					snap.Observed.Status.ConsecutiveErrors, snap.Observed.Status.PendingMessageCount,
 					backoffDelay.Round(time.Second)), nil)
 		}
 
 		return fsmv2.Transition(s, fsmv2.SignalNone, &action.PushAction{},
 			fmt.Sprintf("degraded (%d consecutive errors, %d pending), still pushing",
-				snap.Status.ConsecutiveErrors, snap.Status.PendingMessageCount), nil)
+				snap.Observed.Status.ConsecutiveErrors, snap.Observed.Status.PendingMessageCount), nil)
 	}
 
 	return fsmv2.Transition(s, fsmv2.SignalNone, nil,
 		fmt.Sprintf("degraded (%d consecutive errors, %d pending), waiting: hasTransport=%t, hasValidToken=%t",
-			snap.Status.ConsecutiveErrors, snap.Status.PendingMessageCount,
-			snap.Status.HasTransport, snap.Status.HasValidToken), nil)
+			snap.Observed.Status.ConsecutiveErrors, snap.Observed.Status.PendingMessageCount,
+			snap.Observed.Status.HasTransport, snap.Observed.Status.HasValidToken), nil)
 }
 
 func (s *DegradedState) String() string {

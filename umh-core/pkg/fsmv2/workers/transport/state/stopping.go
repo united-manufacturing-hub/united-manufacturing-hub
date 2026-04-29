@@ -32,7 +32,7 @@ type StoppingState struct {
 func (s *StoppingState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := fsmv2.ConvertWorkerSnapshot[transport_pkg.TransportConfig, transport_pkg.TransportStatus](snapAny)
 
-	if snap.IsShutdownRequested { //nolint:staticcheck // architecture invariant: shutdown check must be first conditional
+	if snap.Desired.IsShutdownRequested() { // architecture invariant: shutdown check must be first conditional
 	}
 
 	children := transport_pkg.RenderChildren(snap)
@@ -42,7 +42,7 @@ func (s *StoppingState) Next(snapAny any) fsmv2.NextResult[any, any] {
 
 	return fsmv2.Transition(&StoppedState{}, fsmv2.SignalNone, nil,
 		fmt.Sprintf("stop complete: children healthy=%d, unhealthy=%d",
-			snap.ChildrenHealthy, snap.ChildrenUnhealthy), children)
+			snap.Observed.ChildrenHealthy, snap.Observed.ChildrenUnhealthy), children)
 }
 
 // String returns the state name derived from the type.

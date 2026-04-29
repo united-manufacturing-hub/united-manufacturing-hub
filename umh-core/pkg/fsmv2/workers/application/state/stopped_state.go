@@ -37,7 +37,7 @@ type StoppedState struct {
 func (s *StoppedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := fsmv2.ConvertWorkerSnapshot[snapshot.ApplicationConfig, snapshot.ApplicationStatus](snapAny)
 
-	if snap.IsShutdownRequested {
+	if snap.Desired.IsShutdownRequested() {
 		return fsmv2.Transition(s, fsmv2.SignalNeedsRemoval, nil, "Application supervisor is stopped and shutdown requested", nil)
 	}
 

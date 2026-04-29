@@ -37,7 +37,7 @@ type AuthFailedState struct {
 func (s *AuthFailedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := fsmv2.ConvertWorkerSnapshot[transport_pkg.TransportConfig, transport_pkg.TransportStatus](snapAny)
 
-	if snap.IsShutdownRequested {
+	if snap.Desired.IsShutdownRequested() {
 		return fsmv2.Transition(&StoppingState{}, fsmv2.SignalNone, nil, "Shutdown requested, transitioning to Stopping", nil)
 	}
 
@@ -46,9 +46,9 @@ func (s *AuthFailedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	// FailedAuthConfig is guaranteed populated here because only permanent errors
 	// (which call SetFailedAuthConfig via the !IsTransient() guard in authenticate.go)
 	// reach AuthFailedState via isPermanentAuthError().
-	tokenChanged := snap.Config.AuthToken != snap.Status.FailedAuthConfig.AuthToken
-	relayChanged := snap.Config.RelayURL != snap.Status.FailedAuthConfig.RelayURL
-	uuidChanged := snap.Config.InstanceUUID != snap.Status.FailedAuthConfig.InstanceUUID
+	tokenChanged := snap.Desired.Config.AuthToken != snap.Observed.Status.FailedAuthConfig.AuthToken
+	relayChanged := snap.Desired.Config.RelayURL != snap.Observed.Status.FailedAuthConfig.RelayURL
+	uuidChanged := snap.Desired.Config.InstanceUUID != snap.Observed.Status.FailedAuthConfig.InstanceUUID
 
 	if tokenChanged || relayChanged || uuidChanged {
 		return fsmv2.Transition(&StartingState{}, fsmv2.SignalNone, nil,
@@ -58,7 +58,7 @@ func (s *AuthFailedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 
 	return fsmv2.Transition(s, fsmv2.SignalNone, nil,
 		fmt.Sprintf("auth failed (%s), waiting for config change",
-			snap.Status.LastErrorType), children)
+			snap.Observed.Status.LastErrorType), children)
 }
 
 // String returns the state name derived from the type.
