@@ -30,7 +30,7 @@ import (
 //	        return nil, err
 //	    }
 //	    // Use parsed.Field1, parsed.Field2, etc.
-//	    return &fsmv2.WrappedDesiredState[MyConfig]{Config: cfg}, nil
+//	    return &fsmv2.WrappedDesiredState[MyConfig]{Config: parsed}, nil
 //	}
 //
 // For nil specs (used during initialization), returns zero value of T.

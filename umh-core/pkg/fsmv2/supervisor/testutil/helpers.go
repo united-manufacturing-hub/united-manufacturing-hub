@@ -38,8 +38,7 @@ func (t *ObservedState) GetTimestamp() time.Time {
 }
 
 type DesiredState struct {
-	State       string `json:"state"`
-	ShutdownReq bool   `json:"ShutdownRequested"`
+	ShutdownReq bool `json:"ShutdownRequested"`
 }
 
 func (t *DesiredState) IsShutdownRequested() bool {
@@ -48,14 +47,6 @@ func (t *DesiredState) IsShutdownRequested() bool {
 
 func (t *DesiredState) SetShutdownRequested(requested bool) {
 	t.ShutdownReq = requested
-}
-
-func (t *DesiredState) GetState() string {
-	if t.State == "" {
-		return "running"
-	}
-
-	return t.State
 }
 
 type Worker struct {

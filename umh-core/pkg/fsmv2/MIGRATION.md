@@ -848,13 +848,13 @@ Old CSE records may contain `{"state":"stopped","ShutdownRequested":false,...}`.
 
 `MigrateP3_5dDesiredState` (in `supervisor/migration/p3_5d_desired_state.go`) detects `"state":"stopped"` and rewrites the document to set `ShutdownRequested:true`, preserving intent. Workers with `"state":"running"` are unaffected — `ShutdownRequested:false` is already the correct zero value.
 
-The supervisor calls this migration lazily on every reconciliation tick when loading DesiredState from CSE. Once the supervisor writes the migrated form back, the document is permanently upgraded.
+`TriangularStore.LoadDesiredTyped` calls this migration lazily whenever a desired-state document is loaded from CSE storage, covering all six call sites automatically. Once the migrated form is written back, the document is permanently upgraded and subsequent loads are a fast no-op.
 
 ### Rolling-upgrade (HA) constraint
 
 **Upgrade is safe.** Old code writes JSON with a `"state"` key; new code runs `MigrateP3_5dDesiredState` and handles both `"stopped"` and `"running"` values correctly. Workers remain in their intended state across the upgrade.
 
-**Rollback is NOT safe** without additional steps. Once new code writes `DesiredState` JSON without the `"state"` key, old code reading that document calls `GetState()` which returns `""` (empty) → interprets it as `"running"`. Stopped workers would start. To roll back safely: restore a pre-upgrade CSE snapshot before switching back to old code.
+**Rollback is NOT safe** without additional steps. Once new code writes `DesiredState` JSON without the `"state"` key, old code reading that document calls `GetState()` which returns `"running"` (the default when the State field is absent), so stopped workers would start. To roll back safely: restore a pre-upgrade CSE snapshot before switching back to old code.
 
 See `supervisor/migration/p3_5d_desired_state.go` for the full migration logic and rollback semantics.
 

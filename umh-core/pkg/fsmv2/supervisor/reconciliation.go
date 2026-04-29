@@ -30,7 +30,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/internal/panicutil"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/metrics"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/migration"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
 )
 
@@ -131,22 +130,6 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 		s.logger.SentryError(deps.FeatureFSMv2, workerCtx.identity.HierarchyPath, err, "observed_state_load_failed")
 
 		return fmt.Errorf("failed to load typed observed state: %w", err)
-	}
-
-	// P3.5d lazy migration: promote "state":"stopped" → ShutdownRequested:true in
-	// stored desired-state documents, preserving operator intent across the P3.5d
-	// schema change that removed BaseDesiredState.State.
-	// Runs once per tick; after the first successful save the "state" key is gone
-	// and MigrateP3_5dDesiredState returns changed=false immediately (idempotent).
-	if rawDesired, rawErr := s.store.LoadDesired(ctx, s.workerType, workerID); rawErr == nil {
-		if rawJSON, marshalErr := json.Marshal(rawDesired); marshalErr == nil {
-			if migratedJSON, changed, migrateErr := migration.MigrateP3_5dDesiredState(rawJSON); changed && migrateErr == nil {
-				var migratedMap map[string]interface{}
-				if unmarshalErr := json.Unmarshal(migratedJSON, &migratedMap); unmarshalErr == nil {
-					_, _ = s.store.SaveDesired(ctx, s.workerType, workerID, persistence.Document(migratedMap))
-				}
-			}
-		}
 	}
 
 	var desired TDesired

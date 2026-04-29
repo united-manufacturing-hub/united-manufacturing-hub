@@ -32,7 +32,7 @@
 // After P3.5d, encoding/json silently drops "state" (unknown field) and leaves
 // ShutdownRequested at its zero value (false). A worker whose user intent was
 // "stopped" would therefore re-enter its running path on the first reconciliation
-// tick after upgrade — a silent state flip.
+// tick after upgrade: a silent state flip.
 //
 // The migration detects "state":"stopped" and promotes it to
 // ShutdownRequested:true, preserving the operator's original intent.
@@ -50,9 +50,10 @@
 // # Rollback constraint
 //
 // Rollback after upgrade is NOT safe without additional steps. Once new code
-// writes DesiredState JSON without "state", old code reads an empty GetState()
-// and interprets it as "running" — stopped workers would start. To roll back
-// safely: restore a pre-upgrade CSE snapshot before switching back to old code.
+// writes DesiredState JSON without "state", old code reads a document with no
+// "state" key, GetState() returns "running" (the default when State field is
+// absent): stopped workers would start. To roll back safely: restore a
+// pre-upgrade CSE snapshot before switching back to old code.
 package migration
 
 import (
@@ -67,8 +68,9 @@ type desiredStateWire struct {
 	ShutdownRequested bool   `json:"ShutdownRequested"`
 }
 
-// MigrateP3_5dDesiredState is applied lazily on every reconciliation tick when
-// the supervisor loads a DesiredState from CSE storage.
+// MigrateP3_5dDesiredState is called lazily by TriangularStore.LoadDesiredTyped
+// whenever a desired-state document is loaded from CSE storage. It covers all
+// six LoadDesiredTyped call sites automatically.
 //
 // If the JSON contains "state":"stopped", the function rewrites the document
 // to set ShutdownRequested:true and removes the "state" key, preserving the
@@ -93,7 +95,7 @@ func MigrateP3_5dDesiredState(desiredStateJSON []byte) (migrated []byte, changed
 		return nil, false, fmt.Errorf("p3_5d migration: failed to parse desired state JSON: %w", err)
 	}
 
-	// "state":"running" (or absent) is fine — ShutdownRequested:false is correct.
+	// "state":"running" (or absent) is fine: ShutdownRequested:false is correct.
 	if wire.State != "stopped" {
 		return nil, false, nil
 	}

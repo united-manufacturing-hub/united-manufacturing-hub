@@ -87,7 +87,7 @@ func (b *BaseDesiredState) SetShutdownRequested(v bool) {
 // with a default of "running" if not specified by the user.
 type BaseUserSpec struct {
 	// State specifies the desired lifecycle state: "running" or "stopped".
-	// Defaults to "running" if empty. Validated in the supervisor after DeriveDesiredState.
+	// Defaults to "running" if empty.
 	State string `json:"state,omitempty" yaml:"state,omitempty"`
 }
 
@@ -552,7 +552,6 @@ func (v ChildrenView) Counts() (healthy, unhealthy int) {
 //	// In parent's DeriveDesiredState():
 //	func (w *ParentWorker) DeriveDesiredState(spec interface{}) (config.DesiredState, error) {
 //	    return config.DesiredState{
-//	        BaseDesiredState: config.BaseDesiredState{State: "running"},
 //	        ChildrenSpecs: []config.ChildSpec{
 //	            {Name: "child-1", WorkerType: "mqtt_client", ...},
 //	            {Name: "child-2", WorkerType: "modbus_client", ...},
@@ -568,7 +567,7 @@ func (v ChildrenView) Counts() (healthy, unhealthy int) {
 //	}
 type DesiredState struct {
 	OriginalUserSpec interface{}      `json:"-"                          yaml:"-"` // Captures the input that produced this DesiredState (for debugging/traceability); not serialized (would emit untyped any over the wire per §17).
-	BaseDesiredState `yaml:",inline"` // Provides State, ShutdownRequested fields and methods (GetState, IsShutdownRequested, SetShutdownRequested)
+	BaseDesiredState `yaml:",inline"` // Provides ShutdownRequested field and methods (IsShutdownRequested, SetShutdownRequested)
 	ChildrenSpecs    []ChildSpec      `json:"childrenSpecs,omitempty"    yaml:"childrenSpecs,omitempty"` // Declarative specification of child workers
 }
 
@@ -606,5 +605,3 @@ func (d *DesiredState) GetChildrenSpecs() []ChildSpec {
 	return d.ChildrenSpecs
 }
 
-// NOTE: GetState() is provided by embedded BaseDesiredState.
-// The BaseDesiredState.State field is the canonical source of truth for lifecycle state.

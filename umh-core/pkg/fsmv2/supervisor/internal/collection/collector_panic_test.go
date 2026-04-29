@@ -58,7 +58,7 @@ var _ = Describe("Collector Panic Recovery", func() {
 				Store:               supervisor.CreateTestTriangularStore(),
 				Logger:              logger,
 				DesiredStateProvider: func() fsmv2.DesiredState {
-					return &supervisor.TestDesiredState{State: "running"}
+					return &supervisor.TestDesiredState{}
 				},
 				ObservationInterval: 50 * time.Millisecond,
 				ObservationTimeout:  1 * time.Second,
@@ -113,7 +113,7 @@ var _ = Describe("Collector Panic Recovery", func() {
 				Store:               supervisor.CreateTestTriangularStore(),
 				Logger:              logger,
 				DesiredStateProvider: func() fsmv2.DesiredState {
-					return &supervisor.TestDesiredState{State: "running"}
+					return &supervisor.TestDesiredState{}
 				},
 				ObservationInterval: 50 * time.Millisecond,
 				ObservationTimeout:  1 * time.Second,
@@ -164,7 +164,7 @@ var _ = Describe("Collector Panic Type Classification", func() {
 			Store:               supervisor.CreateTestTriangularStore(),
 			Logger:              logger,
 			DesiredStateProvider: func() fsmv2.DesiredState {
-				return &supervisor.TestDesiredState{State: "running"}
+				return &supervisor.TestDesiredState{}
 			},
 			ObservationInterval: 50 * time.Millisecond,
 			ObservationTimeout:  1 * time.Second,
@@ -211,7 +211,7 @@ var _ = Describe("Collector Panic Type Classification", func() {
 			Store:               supervisor.CreateTestTriangularStore(),
 			Logger:              logger,
 			DesiredStateProvider: func() fsmv2.DesiredState {
-				return &supervisor.TestDesiredState{State: "running"}
+				return &supervisor.TestDesiredState{}
 			},
 			ObservationInterval: 50 * time.Millisecond,
 			ObservationTimeout:  1 * time.Second,
@@ -259,7 +259,7 @@ var _ = Describe("Collector Double Panic", func() {
 			Store:               supervisor.CreateTestTriangularStore(),
 			Logger:              logger,
 			DesiredStateProvider: func() fsmv2.DesiredState {
-				return &supervisor.TestDesiredState{State: "running"}
+				return &supervisor.TestDesiredState{}
 			},
 			ObservationInterval: 50 * time.Millisecond,
 			ObservationTimeout:  1 * time.Second,
