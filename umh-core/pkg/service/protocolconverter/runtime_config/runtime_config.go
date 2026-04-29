@@ -327,6 +327,10 @@ func renderConfig(
 	// Inject umh_topics into write DFC input after template rendering.
 	// []string values can't be rendered via text/template, so we set them directly.
 	// UMH_TOPICS presence is guaranteed by BuildRuntimeConfig above.
+	//
+	// The Input["uns"] assertion always succeeds when Output is non-empty:
+	// GetDFCWriteServiceConfig unconditionally sets Input["uns"] whenever
+	// len(Output) > 0 — the same gate that guards the UMH_TOPICS default block above.
 	if unsInput, ok := write.BenthosConfig.Input["uns"].(map[string]any); ok {
 		unsInput["umh_topics"] = scope["UMH_TOPICS"]
 	}
