@@ -75,7 +75,17 @@ var _ = Describe("ParentWorker", func() {
 			Expect(err).ToNot(HaveOccurred())
 			desired := desiredIface.(*fsmv2types.DesiredState)
 			Expect(desired.State).To(Equal("running"))
-			Expect(desired.ChildrenSpecs).To(BeNil())
+
+			// Per P2.2 option (a) decision, exampleparent's canonical
+			// RenderChildren takes *ParentUserSpec (not the WorkerSnapshot
+			// shape used by the other parents); the state-package mirror is
+			// runtime-only (returns nil to defer to legacy DDS during the
+			// migration window). Tests exercise the canonical path directly
+			// so they survive P2.5's removal of SetChildSpecsFactory.
+			children := exampleparent.RenderChildren(&exampleparent.ParentUserSpec{ChildrenCount: 0})
+			// ChildrenCount == 0 -> non-nil empty slice (children.go:42-44).
+			Expect(children).To(BeEmpty())
+			Expect(children).NotTo(BeNil())
 		})
 
 		It("should create child specs when children_count is specified", func() {
@@ -89,10 +99,12 @@ var _ = Describe("ParentWorker", func() {
 			Expect(err).ToNot(HaveOccurred())
 			desired := desiredIface.(*fsmv2types.DesiredState)
 			Expect(desired.State).To(Equal("running"))
-			Expect(desired.ChildrenSpecs).To(HaveLen(3))
-			Expect(desired.ChildrenSpecs[0].Name).To(Equal("child-0"))
-			Expect(desired.ChildrenSpecs[1].Name).To(Equal("child-1"))
-			Expect(desired.ChildrenSpecs[2].Name).To(Equal("child-2"))
+
+			children := exampleparent.RenderChildren(&exampleparent.ParentUserSpec{ChildrenCount: 3})
+			Expect(children).To(HaveLen(3))
+			Expect(children[0].Name).To(Equal("child-0"))
+			Expect(children[1].Name).To(Equal("child-1"))
+			Expect(children[2].Name).To(Equal("child-2"))
 		})
 	})
 

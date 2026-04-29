@@ -134,12 +134,15 @@ var _ = Describe("CommunicatorWorker", func() {
 				Expect(desired.IsShutdownRequested()).To(BeFalse())
 			})
 
-			It("should include TransportWorker child spec", func() {
-				desiredIface, err := worker.DeriveDesiredState(nil)
+			It("should include TransportWorker child via RenderChildren", func() {
+				_, err := worker.DeriveDesiredState(nil)
 				Expect(err).NotTo(HaveOccurred())
 
-				desired := desiredIface.(*fsmv2.WrappedDesiredState[communicator.CommunicatorConfig])
-				specs := desired.GetChildrenSpecs()
+				specs := communicator.RenderChildren(fsmv2.WorkerSnapshot[communicator.CommunicatorConfig, communicator.CommunicatorStatus]{
+					Desired: fsmv2.WrappedDesiredState[communicator.CommunicatorConfig]{
+						BaseDesiredState: fsmv2types.BaseDesiredState{State: fsmv2types.DesiredStateRunning},
+					},
+				})
 				Expect(specs).To(HaveLen(1))
 				Expect(specs[0].Name).To(Equal("transport"))
 				Expect(specs[0].WorkerType).To(Equal("transport"))
@@ -171,7 +174,16 @@ state: "running"
 				Expect(desired.Config.Timeout).To(Equal(15 * time.Second))
 				Expect(desired.GetState()).To(Equal("running"))
 
-				specs := desired.GetChildrenSpecs()
+				specs := communicator.RenderChildren(fsmv2.WorkerSnapshot[communicator.CommunicatorConfig, communicator.CommunicatorStatus]{
+					Desired: fsmv2.WrappedDesiredState[communicator.CommunicatorConfig]{
+						BaseDesiredState: fsmv2types.BaseDesiredState{State: fsmv2types.DesiredStateRunning},
+						ChildrenSpecs: []fsmv2types.ChildSpec{{
+							Name:       "transport",
+							WorkerType: "transport",
+							UserSpec:   spec,
+						}},
+					},
+				})
 				Expect(specs).To(HaveLen(1))
 				Expect(specs[0].Name).To(Equal("transport"))
 				Expect(specs[0].WorkerType).To(Equal("transport"))
