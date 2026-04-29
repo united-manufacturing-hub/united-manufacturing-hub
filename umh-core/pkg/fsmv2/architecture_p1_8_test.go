@@ -402,6 +402,21 @@ var _ = Describe("FSMv2 Architecture Validation — P1.8 Foundation Cap", func()
 		//
 		// Failure messages cite file:line and the offending first statement
 		// kind / name.
+		//
+		// Contract caveat (PR2 boundary, pr2_issues #11): the heuristic
+		// detects RenderChildren as a TOP-LEVEL statement only — either an
+		// AssignStmt RHS (`children := RenderChildren(snap)`) or an
+		// ExprStmt (`RenderChildren(snap)` discarded). It does NOT detect
+		// inlined call-argument forms such as
+		// `someWrapper(RenderChildren(snap))` or
+		// `return wrap(RenderChildren(snap))`. Today no parent inlines the
+		// call; if a future contributor inlines it, Test #6 would PASS
+		// vacuously while shipping code that violates the §4-E LOCKED
+		// "renderChildren at top of state.Next" invariant. Inlining
+		// RenderChildren as a function-call argument is therefore forbidden.
+		// If the codebase ever needs that shape, harden the heuristic to
+		// walk CallExpr argument lists for the canonical name first, then
+		// relax the inlining ban.
 		It("AST: first non-shutdown statement in parent state.Next calls renderChildren", func() {
 			parentStateDirs := []string{
 				filepath.Join(getFsmv2Dir(), "workers", "communicator", "state"),
