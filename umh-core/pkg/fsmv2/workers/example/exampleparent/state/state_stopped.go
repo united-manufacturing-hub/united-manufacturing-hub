@@ -39,15 +39,17 @@ func (s *StoppedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 		return fsmv2.Transition(s, fsmv2.SignalNeedsRemoval, nil, "Shutdown requested, signaling removal", nil)
 	}
 
+	children := RenderChildren(snap)
+
 	// Wait StoppedWaitDuration before transitioning. Direct field access required for CSE serializability.
 	if snap.Desired.ShouldBeRunning() {
 		elapsed := time.Duration(snap.Observed.Metrics.Framework.TimeInCurrentStateMs) * time.Millisecond
 		if elapsed >= StoppedWaitDuration {
-			return fsmv2.Transition(&TryingToStartState{}, fsmv2.SignalNone, nil, "Wait duration elapsed, transitioning to TryingToStart", nil)
+			return fsmv2.Transition(&TryingToStartState{}, fsmv2.SignalNone, nil, "Wait duration elapsed, transitioning to TryingToStart", children)
 		}
 	}
 
-	return fsmv2.Transition(s, fsmv2.SignalNone, nil, "Parent is stopped, no children spawned", nil)
+	return fsmv2.Transition(s, fsmv2.SignalNone, nil, "Parent is stopped, no children spawned", children)
 }
 
 func (s *StoppedState) String() string {

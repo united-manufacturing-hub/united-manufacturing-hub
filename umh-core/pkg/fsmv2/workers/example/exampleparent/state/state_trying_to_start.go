@@ -35,16 +35,18 @@ func (s *TryingToStartState) Next(snapAny any) fsmv2.NextResult[any, any] {
 		return fsmv2.Transition(&TryingToStopState{}, fsmv2.SignalNone, nil, "Shutdown requested, transitioning to TryingToStop", nil)
 	}
 
+	children := RenderChildren(snap)
+
 	if snap.Observed.ID == "" {
-		return fsmv2.Transition(s, fsmv2.SignalNone, &action.StartAction{}, "ID not set, executing StartAction", nil)
+		return fsmv2.Transition(s, fsmv2.SignalNone, &action.StartAction{}, "ID not set, executing StartAction", children)
 	}
 
 	// All children must be running (healthy > 0, unhealthy == 0) before transitioning.
 	if snap.Observed.ChildrenHealthy > 0 && snap.Observed.ChildrenUnhealthy == 0 {
-		return fsmv2.Transition(&RunningState{}, fsmv2.SignalNone, nil, "All children healthy, transitioning to Running", nil)
+		return fsmv2.Transition(&RunningState{}, fsmv2.SignalNone, nil, "All children healthy, transitioning to Running", children)
 	}
 
-	return fsmv2.Transition(s, fsmv2.SignalNone, nil, "Waiting for all children to become healthy", nil)
+	return fsmv2.Transition(s, fsmv2.SignalNone, nil, "Waiting for all children to become healthy", children)
 }
 
 func (s *TryingToStartState) String() string {

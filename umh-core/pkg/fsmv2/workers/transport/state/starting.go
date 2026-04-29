@@ -43,6 +43,8 @@ func (s *StartingState) Next(snapAny any) fsmv2.NextResult[any, any] {
 		return fsmv2.Transition(&StoppingState{}, fsmv2.SignalNone, nil, "Shutdown requested, transitioning to Stopping", nil)
 	}
 
+	children := transport_pkg.RenderChildren(snap)
+
 	// If we don't have a valid token, authenticate (with backoff on repeated failures)
 	if !snap.Status.HasValidToken() {
 		configChanged := authConfigChanged(&snap.Config, snap.Status)
@@ -53,7 +55,7 @@ func (s *StartingState) Next(snapAny any) fsmv2.NextResult[any, any] {
 			if isPermanentAuthError(snap.Status.LastErrorType) {
 				return fsmv2.Transition(&AuthFailedState{}, fsmv2.SignalNone, nil,
 					fmt.Sprintf("permanent auth failure (%s after %d errors), entering AuthFailed",
-						snap.Status.LastErrorType, snap.Status.ConsecutiveErrors), nil)
+						snap.Status.LastErrorType, snap.Status.ConsecutiveErrors), children)
 			}
 
 			delay := backoff.CalculateDelayForErrorType(
@@ -64,7 +66,7 @@ func (s *StartingState) Next(snapAny any) fsmv2.NextResult[any, any] {
 			if time.Since(snap.Status.LastAuthAttemptAt) < delay {
 				return fsmv2.Transition(s, fsmv2.SignalNone, nil,
 					fmt.Sprintf("auth backoff: %d errors (%s), delay %s",
-						snap.Status.ConsecutiveErrors, snap.Status.LastErrorType, delay.Round(time.Second)), nil)
+						snap.Status.ConsecutiveErrors, snap.Status.LastErrorType, delay.Round(time.Second)), children)
 			}
 		}
 
@@ -75,12 +77,12 @@ func (s *StartingState) Next(snapAny any) fsmv2.NextResult[any, any] {
 			snap.Config.Timeout,
 		)
 
-		return fsmv2.Transition(s, fsmv2.SignalNone, authAction, "No valid token, authenticating with relay", nil)
+		return fsmv2.Transition(s, fsmv2.SignalNone, authAction, "No valid token, authenticating with relay", children)
 	}
 
 	// Authenticated — transition to Running. Children start via ChildStartStates
 	// once parent enters Running; RunningState handles unhealthy children.
-	return fsmv2.Transition(&RunningState{}, fsmv2.SignalNone, nil, "Authenticated, transitioning to Running", nil)
+	return fsmv2.Transition(&RunningState{}, fsmv2.SignalNone, nil, "Authenticated, transitioning to Running", children)
 }
 
 // isPermanentAuthError returns true for error types that indicate a configuration
