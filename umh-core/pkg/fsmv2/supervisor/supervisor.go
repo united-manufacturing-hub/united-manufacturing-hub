@@ -138,7 +138,7 @@ type Supervisor[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState] stru
 	cachedDesiredState  fsmv2.DesiredState
 	cachedFirstWorkerID atomic.Value // string - cached for GetHierarchyPathUnlocked()
 	workers             map[string]*WorkerContext[TObserved, TDesired]
-	// mu Protects access to workers map, children, childDoneChans, globalVars, and mappedParentState.
+	// mu Protects access to workers map, children, childDoneChans, and globalVars.
 	//
 	// This is a lockmanager.Lock wrapping sync.RWMutex to allow concurrent reads from multiple goroutines
 	// (e.g., GetWorker, ListWorkers) while ensuring exclusive writes when modifying
@@ -176,7 +176,6 @@ type Supervisor[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState] stru
 	noStateMachineLoggedOnce sync.Map
 	userSpec                 config.UserSpec
 	workerType               string
-	mappedParentState string
 	parentID          string
 	lastUserSpecHash  string
 	collectorHealth   CollectorHealth

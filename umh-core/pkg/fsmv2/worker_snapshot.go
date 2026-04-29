@@ -18,7 +18,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 )
 
@@ -54,27 +53,16 @@ type WorkerSnapshot[TConfig any, TStatus any] struct {
 	Observed Observation[TStatus]
 }
 
-// ShouldStop returns true when the worker should transition to stopped.
-// Covers both explicit shutdown requests and parent-driven stop signals.
+// ShouldStop returns true when the worker should stop.
+// Covers the explicit shutdown signal (user stop or parent-driven stop merged by supervisor).
 //
-// Body reads BOTH signals via the nested accessors: s.Desired.IsShutdownRequested()
-// for user shutdown and s.Observed.ParentMappedState for parent-driven stop.
-// The OR-clause must not be simplified until P3.7 when ParentMappedState is
-// fully retired.
-//
-// Phase ordering of downstream evolution:
-//   - P3.0 (this commit): body reads nested accessors (flat fields removed).
-//   - P3.7 (ParentMappedState fully retired and parents merge their stop
-//     intent into the shutdown signal): the OR clause collapses to the
-//     shutdown branch only — i.e. the body simplifies to
-//     `s.Desired.IsShutdownRequested()`. Simplification BEFORE P3.7 would
-//     drop the parent-driven stop signal during the dual-shape window and
-//     break unmigrated parent → child shutdown propagation.
-//
-// See cascade risk register CHANGE-1 for the full rationale and the
-// dual-shape-window blast radius.
+// CHANGE-1 final resolution (P3.7): body simplified to IsShutdownRequested only.
+// The ParentMappedState OR-clause (active from P3.0 through P3.6) is now retired
+// because parents communicate stop intent via BaseDesiredState.ShutdownRequested
+// directly — the supervisor merges parent-disabled intent into ShutdownRequested
+// via ChildSpec.Enabled before the child's reconciliation tick.
 func (s WorkerSnapshot[TConfig, TStatus]) ShouldStop() bool {
-	return s.Desired.IsShutdownRequested() || s.Observed.ParentMappedState == config.DesiredStateStopped
+	return s.Desired.IsShutdownRequested()
 }
 
 // ConvertWorkerSnapshot type-asserts the raw snapshot from State.Next() into a

@@ -81,7 +81,6 @@ var _ = Describe("ConvertWorkerSnapshot", func() {
 		obs := fsmv2.Observation[workerTestStatus]{
 			CollectedAt:       now,
 			Status:            workerTestStatus{Reachable: true},
-			ParentMappedState: "running",
 			LastActionResults: actionResults,
 			ChildrenHealthy:   3,
 			ChildrenUnhealthy: 1,
@@ -101,7 +100,6 @@ var _ = Describe("ConvertWorkerSnapshot", func() {
 
 		snap := fsmv2.ConvertWorkerSnapshot[workerTestConfig, workerTestStatus](raw)
 
-		Expect(snap.Observed.ParentMappedState).To(Equal("running"))
 		Expect(snap.Observed.LastActionResults).To(HaveLen(1))
 		Expect(snap.Observed.LastActionResults[0].ActionType).To(Equal("connect"))
 		Expect(snap.Observed.ChildrenHealthy).To(Equal(3))
@@ -177,43 +175,14 @@ var _ = Describe("ShouldStop", func() {
 		Expect(snap.ShouldStop()).To(BeTrue())
 	})
 
-	It("returns true when ParentMappedState is stopped", func() {
-		snap := fsmv2.WorkerSnapshot[workerTestConfig, workerTestStatus]{
-			Observed: fsmv2.Observation[workerTestStatus]{
-				ParentMappedState: "stopped",
-			},
-		}
-		Expect(snap.ShouldStop()).To(BeTrue())
-	})
-
-	It("returns false when neither condition is met", func() {
-		snap := fsmv2.WorkerSnapshot[workerTestConfig, workerTestStatus]{
-			Observed: fsmv2.Observation[workerTestStatus]{
-				ParentMappedState: "running",
-			},
-		}
+	It("returns false when IsShutdownRequested is false", func() {
+		snap := fsmv2.WorkerSnapshot[workerTestConfig, workerTestStatus]{}
 		Expect(snap.ShouldStop()).To(BeFalse())
 	})
 
-	It("returns false when ParentMappedState is empty (root worker)", func() {
-		snap := fsmv2.WorkerSnapshot[workerTestConfig, workerTestStatus]{
-			Observed: fsmv2.Observation[workerTestStatus]{
-				ParentMappedState: "",
-			},
-		}
+	It("returns false for zero-value snapshot (root worker or uninitialised)", func() {
+		snap := fsmv2.WorkerSnapshot[workerTestConfig, workerTestStatus]{}
 		Expect(snap.ShouldStop()).To(BeFalse())
-	})
-
-	It("returns true when both conditions are met", func() {
-		wds := &fsmv2.WrappedDesiredState[workerTestConfig]{}
-		wds.SetShutdownRequested(true)
-		snap := fsmv2.WorkerSnapshot[workerTestConfig, workerTestStatus]{
-			Desired: *wds,
-			Observed: fsmv2.Observation[workerTestStatus]{
-				ParentMappedState: "stopped",
-			},
-		}
-		Expect(snap.ShouldStop()).To(BeTrue())
 	})
 })
 

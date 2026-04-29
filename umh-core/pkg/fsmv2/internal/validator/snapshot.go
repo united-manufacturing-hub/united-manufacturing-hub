@@ -462,7 +462,7 @@ func checkFolderMatchesWorkerType(filename string) []Violation {
 }
 
 // ValidateNoCustomLifecycleFields checks that DesiredState structs do NOT have custom lifecycle fields.
-// Lifecycle is controlled by BaseDesiredState.ShutdownRequested and ParentMappedState.
+// Lifecycle is controlled by BaseDesiredState.ShutdownRequested only.
 func ValidateNoCustomLifecycleFields(baseDir string) []Violation {
 	var violations []Violation
 
@@ -517,8 +517,7 @@ func checkNoCustomLifecycleFields(filename string) []Violation {
 							Line: pos.Line,
 							Type: "CUSTOM_LIFECYCLE_FIELD",
 							Message: fmt.Sprintf("DesiredState %s has forbidden lifecycle field '%s' - "+
-								"lifecycle is controlled by ShutdownRequested (from BaseDesiredState) "+
-								"and ParentMappedState (for child workers). "+
+								"lifecycle is controlled by ShutdownRequested (from BaseDesiredState) only. "+
 								"Custom lifecycle fields are never populated correctly and break parent-child coordination.",
 								typeSpec.Name.Name, name.Name),
 						})

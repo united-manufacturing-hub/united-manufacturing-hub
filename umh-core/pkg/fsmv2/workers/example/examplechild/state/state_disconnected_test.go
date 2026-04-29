@@ -34,21 +34,15 @@ var _ = Describe("DisconnectedState (examplechild)", func() {
 		Expect(s.LifecyclePhase()).To(Equal(config.PhaseRunningDegraded))
 	})
 
-	It("transitions to TryingToStop when parent stops the child", func() {
-		snap := makeChildSnapshot(config.DesiredStateStopped, false)
+	It("transitions to TryingToStop on shutdown request (shutdown requested or parent-driven stop via supervisor)", func() {
+		snap := makeChildSnapshot(true)
 		result := s.Next(snap)
 		Expect(result.State).To(BeAssignableToTypeOf(&state.TryingToStopState{}))
 		Expect(result.Signal).To(Equal(fsmv2.SignalNone))
 	})
 
-	It("transitions to TryingToStop on shutdown request", func() {
-		snap := makeChildSnapshot(config.DesiredStateRunning, true)
-		result := s.Next(snap)
-		Expect(result.State).To(BeAssignableToTypeOf(&state.TryingToStopState{}))
-	})
-
-	It("transitions to TryingToConnect when parent still wants child running", func() {
-		snap := makeChildSnapshot(config.DesiredStateRunning, false)
+	It("transitions to TryingToConnect when not shutdown (parent wants child running)", func() {
+		snap := makeChildSnapshot(false)
 		result := s.Next(snap)
 		Expect(result.State).To(BeAssignableToTypeOf(&state.TryingToConnectState{}))
 		Expect(result.Signal).To(Equal(fsmv2.SignalNone))

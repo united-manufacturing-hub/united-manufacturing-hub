@@ -22,6 +22,7 @@ import (
 	"go/parser"
 	"go/printer"
 	"go/token"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -148,7 +149,6 @@ var _ = Describe("FSMv2 Architecture Validation — P1.8 Foundation Cap", func()
 				"SetChildrenView":      true,
 				"SetShutdownRequested": true,
 				"SetChildrenCounts":    true,
-				"SetParentMappedState": true,
 			}
 
 			// Locate the collector tick function. The function name has
@@ -738,11 +738,43 @@ var _ = Describe("FSMv2 Architecture Validation — P1.8 Foundation Cap", func()
 	})
 
 	// =====================================================================
-	// Test 12 — TestChildrenDontReferenceParents (GATED → P3.7)
+	// Test 12 — TestChildrenDontReferenceParents (un-gated at P3.7)
 	// =====================================================================
-	Describe("Child workers don't reference parent-side concepts (GATED P3.7)", func() {
+	Describe("Child workers don't reference parent-side concepts", func() {
 		It("AST: child worker state files have no Parent/ParentMappedState references", func() {
-			Skip("pending P3.7: ParentMappedState retirement is the gating event; un-gates atomically with P3.7 per §4-E LOCKED")
+			workersDir := filepath.Join(getFsmv2Dir(), "workers")
+			var violations []string
+
+			err := filepath.WalkDir(workersDir, func(path string, d fs.DirEntry, err error) error {
+				if err != nil {
+					return err
+				}
+				if d.IsDir() {
+					return nil
+				}
+				if !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
+					return nil
+				}
+				// Only check state files (child state/*.go files)
+				if !strings.Contains(path, "/state/") {
+					return nil
+				}
+
+				content, err := os.ReadFile(path)
+				if err != nil {
+					return err
+				}
+
+				if bytes.Contains(content, []byte("ParentMappedState")) {
+					violations = append(violations, path)
+				}
+
+				return nil
+			})
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(violations).To(BeEmpty(),
+				"No child worker state file should reference the deleted ParentMappedState field post-P3.7: %v", violations)
 		})
 	})
 

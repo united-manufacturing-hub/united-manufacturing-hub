@@ -104,8 +104,7 @@ func (w *PushWorker) CollectObservedState(ctx context.Context, _ fsmv2.DesiredSt
 }
 
 // DeriveDesiredState determines the desired state from the provided spec.
-// Child workers always default to running; lifecycle is controlled via ShutdownRequested
-// or ParentMappedState (until P3.7).
+// Child workers always default to running; lifecycle is controlled via ShutdownRequested.
 // Must be PURE — only uses the spec parameter, never dependencies.
 func (w *PushWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, error) {
 	if spec == nil {

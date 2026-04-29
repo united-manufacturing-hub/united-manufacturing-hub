@@ -293,36 +293,30 @@ func checkChildWorkerUseShouldStop(workerDir string) []Violation {
 }
 
 // isChildWorker checks if a worker is a child worker by scanning its state files
-// for parent-state-driven stop logic. A worker is treated as a child when any of
-// its state/*.go files reference ParentMappedState or call ShouldStop().
+// for parent-state-driven stop logic. After P3.7, a worker is treated as a child
+// when any of its state/*.go files call ShouldStop().
 //
-// The previous heuristic scanned snapshot/snapshot.go for the literal
-// "IsStopRequired()" string, which became vacuous after the P1.5b rename and
-// was already broken before that (worker observed-state methods live in
-// snapshot.go but their callers live in state/*.go; the rule we care about
-// is "do state files use the parent-aware stop check").
+// The previous heuristic (pre-P3.7) also scanned for ParentMappedState references.
+// ParentMappedState was retired in P3.7 — the detection signal is now ShouldStop()
+// calls only. Lifecycle for child workers is controlled by
+// BaseDesiredState.ShutdownRequested exclusively.
 //
 // Known limitations:
 //
 //   - Comment / string-literal false positives. The substring scan via
 //     bytes.Contains matches occurrences inside Go comments and string
 //     literals, not just live identifier references. A state/*.go file that
-//     mentions "ParentMappedState" or "ShouldStop()" only inside an
-//     explanatory comment would be classified as a child worker even if it
-//     never calls the symbol. Today no such case exists in-tree (verified
-//     by the meta-test in is_child_worker_test.go), but a future contributor
-//     adding a long doc-comment mentioning the symbols could trip the
-//     classifier. AST-based scanning would harden against this.
+//     mentions "ShouldStop()" only inside an explanatory comment would be
+//     classified as a child worker even if it never calls the symbol.
+//     Today no such case exists in-tree, but a future contributor adding
+//     a long doc-comment mentioning the symbol could trip the classifier.
+//     AST-based scanning would harden against this.
 //
-//   - Future-child false negatives. A future child worker that uses neither
-//     `ParentMappedState` nor `ShouldStop()` — for example, one that reads
-//     only `snap.Desired.IsShutdownRequested()` from the nested form — would
-//     be misclassified as a non-child by this heuristic. The
-//     ValidateChildWorkersUseShouldStop rule would then silently skip it.
-//     Mitigation candidate (deferred to P2.x): scan for the
-//     `SetParentMappedState` collector-contract method, which any
-//     parent-aware child must declare and which cannot be satisfied via the
-//     nested form alone.
+//   - Future-child false negatives. A future child worker that does not call
+//     `ShouldStop()` — for example, one that reads only
+//     `snap.Desired.IsShutdownRequested()` directly — would be misclassified
+//     as a non-child by this heuristic. The ValidateChildWorkersUseShouldStop
+//     rule would then silently skip it.
 func isChildWorker(workerDir string) bool {
 	stateDir := filepath.Join(workerDir, "state")
 
@@ -346,8 +340,7 @@ func isChildWorker(workerDir string) bool {
 			continue
 		}
 
-		if strings.Contains(string(content), "ParentMappedState") ||
-			strings.Contains(string(content), "ShouldStop()") {
+		if strings.Contains(string(content), "ShouldStop()") {
 			return true
 		}
 	}

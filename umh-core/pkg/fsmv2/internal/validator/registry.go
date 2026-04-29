@@ -109,14 +109,14 @@ worker starts an operation right before shutdown is requested.`,
 	"CHILD_MUST_USE_SHOULD_STOP": {
 		Name: "Child Workers Must Use ShouldStop()",
 		Why: `Child workers must check ShouldStop() instead of just IsShutdownRequested().
-WHY: Child workers have TWO shutdown signals:
-1. IsShutdownRequested() - explicit shutdown request
-2. ParentMappedState == "stopped" - parent worker transitioned to stopped state
+WHY: Child workers receive their stop signal via BaseDesiredState.ShutdownRequested,
+which is merged by the supervisor from ChildSpec.Enabled before the child tick.
+ShouldStop() is the canonical accessor that wraps this signal.
 
-Using only IsShutdownRequested() misses parent lifecycle changes, causing
-children to stay running when the parent enters a stopped state.
+Using only IsShutdownRequested() directly is technically equivalent post-P3.7,
+but ShouldStop() is the required idiom for child workers per architecture convention.
 
-ShouldStop() = IsShutdownRequested() || ParentMappedState == config.DesiredStateStopped`,
+ShouldStop() = IsShutdownRequested()`,
 		CorrectCode: `func (s *ChildState) Next(snapAny any) (...) {
     snap := fsmv2.ConvertWorkerSnapshot[MyConfig, MyStatus](snapAny)
     if snap.ShouldStop() {  // NOT snap.Desired.IsShutdownRequested()

@@ -41,20 +41,13 @@ import (
 //
 // Correct lifecycle control:
 //   - ShutdownRequested: Inherited from this type. Set by supervisor for graceful shutdown.
-//   - ParentMappedState: For child workers only. Injected unconditionally as config.DesiredStateRunning
-//     by the supervisor post-P3.5 (ChildStartStates removed). Will track the Enabled field once the
-//     P2.x Enabled→ShutdownRequested reducer lands.
+//     For child workers, the supervisor also sets ShutdownRequested=true when the parent sets
+//     ChildSpec.Enabled=false (P3.7: Enabled→ShutdownRequested reducer).
 //
-// Correct ShouldBeRunning() implementations:
+// Correct ShouldBeRunning() implementations (same for root and child workers post-P3.7):
 //
-//	// Root/leaf workers (no parent):
 //	func (s *MyDesiredState) ShouldBeRunning() bool {
 //	    return !s.ShutdownRequested
-//	}
-//
-//	// Child workers (have parent):
-//	func (s *MyDesiredState) ShouldBeRunning() bool {
-//	    return !s.ShutdownRequested && s.ParentMappedState == config.DesiredStateRunning
 //	}
 //
 // See ValidateNoCustomLifecycleFields in pkg/fsmv2/internal/validator/snapshot.go for enforcement.

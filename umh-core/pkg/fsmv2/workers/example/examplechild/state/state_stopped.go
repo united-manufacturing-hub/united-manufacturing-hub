@@ -16,7 +16,6 @@ package state
 
 import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplechild/snapshot"
 )
@@ -37,10 +36,12 @@ func (s *StoppedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 		return fsmv2.Transition(s, fsmv2.SignalNeedsRemoval, nil, "shutdown requested, needs removal", nil)
 	}
 
-	// ParentMappedState is injected into the observation by the collector.
-	if snap.Observed.ParentMappedState == config.DesiredStateRunning {
+	if !snap.ShouldStop() {
 		return fsmv2.Transition(&TryingToConnectState{}, fsmv2.SignalNone, nil, "parent wants running, transitioning to trying to connect", nil)
 	}
+	// The catch-all return below is logically dead code: the branch above and the first
+	// IsShutdownRequested() branch partition the stop/start domain completely. Kept for the
+	// canonical 3-branch FSM idiom per architecture validator MISSING_CATCHALL_RETURN.
 
 	return fsmv2.Transition(s, fsmv2.SignalNone, nil, "child is stopped, no connection", nil)
 }

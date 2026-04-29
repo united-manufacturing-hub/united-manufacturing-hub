@@ -233,9 +233,6 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity deps.Identity, work
 
 			return healthy, unhealthy
 		},
-		MappedParentStateProvider: func() string {
-			return s.getMappedParentState()
-		},
 		ChildrenViewProvider: func() config.ChildrenView {
 			// Hold the RLock only long enough to snapshot the children map.
 			// buildChildrenView calls multiple per-child accessors (6 per child)
@@ -548,21 +545,6 @@ func (s *Supervisor[TObserved, TDesired]) GetWorkerState(workerID string) (strin
 	return workerCtx.currentState.String(), workerCtx.currentStateReason, nil
 }
 
-// GetMappedParentState returns the mapped parent state for this supervisor.
-// Returns empty string if this supervisor has no parent or no mapping has been applied.
-// This method is primarily used for testing hierarchical state mapping.
-func (s *Supervisor[TObserved, TDesired]) GetMappedParentState() string {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	return s.mappedParentState
-}
-
-// getMappedParentState implements SupervisorInterface.
-func (s *Supervisor[TObserved, TDesired]) getMappedParentState() string {
-	return s.GetMappedParentState()
-}
-
 // isCircuitOpen returns true if any circuit breaker is open for this supervisor.
 // Used by InfrastructureHealthChecker.CheckChildConsistency() to detect unhealthy children.
 func (s *Supervisor[TObserved, TDesired]) isCircuitOpen() bool {
@@ -602,14 +584,6 @@ func (s *Supervisor[TObserved, TDesired]) IsObservationStale() bool {
 	}
 
 	return true
-}
-
-// setMappedParentState implements SupervisorInterface.
-func (s *Supervisor[TObserved, TDesired]) setMappedParentState(state string) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	s.mappedParentState = state
 }
 
 // updateUserSpec implements SupervisorInterface.
@@ -801,7 +775,6 @@ type SupervisorDebugInfo struct {
 	Children            map[string]SupervisorDebugInfo `json:"children,omitempty"`
 	WorkerType          string                         `json:"worker_type"`
 	HierarchyPath       string                         `json:"hierarchy_path"`
-	MappedParentState   string                         `json:"mapped_parent_state,omitempty"`
 	Workers             []WorkerDebugInfo              `json:"workers"`
 	CollectedAtUnixNano int64                          `json:"collected_at_unix_nano"`
 	CircuitOpen         bool                           `json:"circuit_open"`
@@ -821,7 +794,6 @@ func (s *Supervisor[TObserved, TDesired]) GetDebugInfo() interface{} {
 		HierarchyPath:       s.GetHierarchyPathUnlocked(),
 		CircuitOpen:         s.circuitOpen.Load(),
 		PanicCircuitOpen:    s.panicCircuitOpen.Load(),
-		MappedParentState:   s.mappedParentState,
 		CollectedAtUnixNano: time.Now().UnixNano(),
 		Workers:             make([]WorkerDebugInfo, 0, len(s.workers)),
 	}

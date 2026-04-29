@@ -57,8 +57,6 @@ type SupervisorInterface interface {
 	tick(ctx context.Context) error
 	updateUserSpec(spec config.UserSpec)
 	getUserSpec() config.UserSpec
-	getMappedParentState() string
-	setMappedParentState(state string)
 	calculateHierarchySize() int
 	calculateHierarchyDepth() int
 	GetChildren() map[string]SupervisorInterface

@@ -90,7 +90,6 @@ var _ = Describe("Supervisor API Boundary", func() {
 		It("should export testing support methods", func() {
 			publicMethods := []string{
 				"GetChildren",
-				"GetMappedParentState",
 			}
 
 			for _, methodName := range publicMethods {

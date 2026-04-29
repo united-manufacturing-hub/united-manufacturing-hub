@@ -265,7 +265,3 @@ This prevents failure rate dilution: if idle ticks feed phantom "successes" into
 - Self-return WITH an action (e.g., `&FlushAction{}`) is allowed (active cleanup)
 - CI enforced: `ValidateStoppingStateNoCatchAllSelfReturn` in `internal/validator/state.go`
 - See any `state_stopping.go` for the pattern
-
-### Observed vs Desired ParentMappedState
-
-`ParentMappedState` is only populated on the **observed** state (via `SetParentMappedState()`). The **desired** state copy is always empty. Use `snap.Observed.ParentMappedState` in reason strings, never `snap.Desired.ParentMappedState`.

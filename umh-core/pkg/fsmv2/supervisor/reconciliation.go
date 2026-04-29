@@ -860,23 +860,6 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) (err error) 
 	// automatically on the next non-gated tick. Bounded, intentional, and
 	// not a correctness issue — child eventually converges.
 	//
-	// PR2 boundary caveat (pr2_issues #8 — empty-string ParentMappedState):
-	// Migrated state files use `!ShouldStop()` as a start-check. The
-	// FRAMEWORK ShouldStop body (worker_snapshot.go) is
-	// `IsShutdownRequested || ParentMappedState == "stopped"` and returns
-	// FALSE for empty-string ParentMappedState — so `!ShouldStop()` returns
-	// TRUE (fail-OPEN start). The pre-migration form `== DesiredStateRunning`
-	// returned FALSE for empty string (fail-SAFE stay-stopped). Production
-	// today is safe via the applyStateMapping() ordering invariant
-	// (reconciliation.go:913 runs before child tick at :925 — empty-string
-	// PMS cannot reach a child Next() in normal operation). The migrated
-	// code has no defense if that ordering is ever broken — exactly the F7
-	// premature-start failure mode the cascade is meant to prevent. Note
-	// the asymmetry: workers with a worker-local ShouldStop override (e.g.
-	// examplechild's snapshot.ShouldStop = `IsShutdownRequested ||
-	// !ShouldBeRunning`) fail-SAFE on empty string. transport / communicator
-	// inherit the framework body and so inherit the fail-OPEN polarity.
-	// Proper fix is harmonization at framework level (P3.x scope).
 	var childrenSpecs []config.ChildSpec
 
 	s.mu.RLock()
@@ -969,8 +952,6 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) (err error) 
 	if err := s.reconcileChildren(childrenSpecs); err != nil {
 		return fmt.Errorf("failed to reconcile children: %w", err)
 	}
-
-	s.applyStateMapping()
 
 	// Tick children; errors logged but don't fail parent
 	s.mu.RLock()
@@ -1741,36 +1722,3 @@ func (s *Supervisor[TObserved, TDesired]) reconcileChildren(specs []config.Child
 	return nil
 }
 
-func (s *Supervisor[TObserved, TDesired]) applyStateMapping() {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	if len(s.workers) == 0 {
-		return
-	}
-
-	var parentState string
-
-	for _, workerCtx := range s.workers {
-		workerCtx.mu.RLock()
-
-		if workerCtx.currentState != nil {
-			parentState = workerCtx.currentState.String()
-		}
-
-		workerCtx.mu.RUnlock()
-
-		break
-	}
-
-	// Post-P3.5: mapping is unconditional — all children always receive
-	// DesiredStateRunning. parentState is captured for observability (log
-	// correlation) only; it no longer controls the mapped value.
-	for childName, child := range s.children {
-		child.setMappedParentState(config.DesiredStateRunning)
-		s.logTrace("state_mapped",
-			deps.String("child_name", childName),
-			deps.String("parent_state", parentState),
-			deps.String("mapped_state", config.DesiredStateRunning))
-	}
-}

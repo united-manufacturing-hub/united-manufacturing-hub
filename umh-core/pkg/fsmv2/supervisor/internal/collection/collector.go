@@ -68,8 +68,7 @@ type CollectorConfig[TObserved any] struct {
 	// view.UnhealthyCount instead. The two providers carry redundant data by
 	// construction (NewChildrenView derives counts from the same per-child Phase
 	// the supervisor reports here), so satisfying both setters is harmless.
-	ChildrenCountsProvider    func() (healthy int, unhealthy int)
-	MappedParentStateProvider func() string                       // Returns mapped state from parent's StateMapping (injected by supervisor for child workers)
+	ChildrenCountsProvider func() (healthy int, unhealthy int)
 	// ChildrenViewProvider returns the full ChildrenView snapshot for parent
 	// workers that need per-child detail. Counts are also exposed on the view
 	// (view.HealthyCount / view.UnhealthyCount) so workers consuming the view
@@ -468,16 +467,6 @@ func (c *Collector[TObserved]) collectAndSaveObservedState(ctx context.Context) 
 			SetChildrenCounts(int, int) fsmv2.ObservedState
 		}); ok {
 			observed = setter.SetChildrenCounts(healthy, unhealthy)
-		}
-	}
-
-	// Inject mapped parent state so child workers know when to start/stop via StateMapping
-	if c.config.MappedParentStateProvider != nil {
-		mappedState := c.config.MappedParentStateProvider()
-		if setter, ok := observed.(interface {
-			SetParentMappedState(string) fsmv2.ObservedState
-		}); ok {
-			observed = setter.SetParentMappedState(mappedState)
 		}
 	}
 

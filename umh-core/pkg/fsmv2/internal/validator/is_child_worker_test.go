@@ -20,13 +20,10 @@ import (
 )
 
 // TestIsChildWorkerDetectsKnownChildWorkers anchors the isChildWorker heuristic
-// against known child workers in the tree. Before P1.5b CHANGE-4 the heuristic
-// scanned snapshot/snapshot.go for the literal "IsStopRequired()" string, which
-// was already vacuous (worker observed-state methods live in snapshot.go but
-// the rule we care about is "do state files use the parent-aware stop check").
-// The renamed heuristic scans state/*.go for ParentMappedState reads or
-// ShouldStop() calls. This test guards against future regressions to a
-// vacuous form in either direction:
+// against known child workers in the tree. After P3.7, the heuristic scans
+// state/*.go for ShouldStop() calls only — ParentMappedState references were
+// retired in P3.7. This test guards against future regressions to a vacuous
+// form in either direction:
 //   - always-false (the pre-P1.5b bug): positive cases below would fail
 //   - always-true (the symmetric bug): negative cases below would fail
 func TestIsChildWorkerDetectsKnownChildWorkers(t *testing.T) {
