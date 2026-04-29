@@ -842,13 +842,21 @@ if !snap.Desired.IsShutdownRequested() { ... }
 
 If your TConfig embeds `config.BaseUserSpec`, `cfg.GetState()` is still valid — it reads the user-facing `state:` YAML field and is unaffected by this change.
 
+### Why a migration script is required
+
+Old CSE records may contain `{"state":"stopped","ShutdownRequested":false,...}`. After P3.5d, `encoding/json` silently drops the `"state"` key (unknown field) and leaves `ShutdownRequested` at its zero value — `false`. A worker whose operator intent was "stopped" would therefore start running on the first post-upgrade reconciliation tick.
+
+`MigrateP3_5dDesiredState` (in `supervisor/migration/p3_5d_desired_state.go`) detects `"state":"stopped"` and rewrites the document to set `ShutdownRequested:true`, preserving intent. Workers with `"state":"running"` are unaffected — `ShutdownRequested:false` is already the correct zero value.
+
+The supervisor calls this migration lazily on every reconciliation tick when loading DesiredState from CSE. Once the supervisor writes the migrated form back, the document is permanently upgraded.
+
 ### Rolling-upgrade (HA) constraint
 
-**Upgrade is safe.** Old instances write CSE JSON with a `"state"` key; new instances silently drop it (`encoding/json` ignores unknown fields). No data loss.
+**Upgrade is safe.** Old code writes JSON with a `"state"` key; new code runs `MigrateP3_5dDesiredState` and handles both `"stopped"` and `"running"` values correctly. Workers remain in their intended state across the upgrade.
 
-**Rollback is NOT safe** once new code has written a `DesiredState` without `"state"`. Old code reading that JSON sees `GetState()==""` and the old `ValidateDesiredState` block stalls the reconciliation loop. To roll back: clear all CSE `DesiredState` entries before switching back, or restore a pre-upgrade CSE snapshot.
+**Rollback is NOT safe** without additional steps. Once new code writes `DesiredState` JSON without the `"state"` key, old code reading that document calls `GetState()` which returns `""` (empty) → interprets it as `"running"`. Stopped workers would start. To roll back safely: restore a pre-upgrade CSE snapshot before switching back to old code.
 
-See `supervisor/migration/p3_5d_desired_state.go` for the lazy-migration boundary and rollback semantics.
+See `supervisor/migration/p3_5d_desired_state.go` for the full migration logic and rollback semantics.
 
 ## Further Reading
 

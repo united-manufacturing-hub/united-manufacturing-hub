@@ -23,41 +23,96 @@
 // carries a lifecycle-intent field; shutdown is signalled exclusively through
 // IsShutdownRequested().
 //
+// # Why the migration is NOT a no-op
+//
+// Old CSE records may contain:
+//
+//	{"state":"stopped","ShutdownRequested":false,...}
+//
+// After P3.5d, encoding/json silently drops "state" (unknown field) and leaves
+// ShutdownRequested at its zero value (false). A worker whose user intent was
+// "stopped" would therefore re-enter its running path on the first reconciliation
+// tick after upgrade — a silent state flip.
+//
+// The migration detects "state":"stopped" and promotes it to
+// ShutdownRequested:true, preserving the operator's original intent.
+// "state":"running" requires no action; ShutdownRequested:false is already the
+// correct zero value.
+//
 // # Rolling-upgrade (HA) constraint
 //
-// Upgrade is safe. Old instances write CSE JSON that contains a "state" key;
-// new instances read that JSON and silently drop the field because
-// encoding/json ignores unknown keys. No data loss occurs.
+// Upgrade is safe. Old code writes JSON with a "state" key; new code reads that
+// JSON, runs MigrateP3_5dDesiredState, and produces correct behavior. Workers
+// that are already running are unaffected (ShutdownRequested stays false).
+// Workers that are stopped have their intent preserved
+// (ShutdownRequested set to true).
 //
 // # Rollback constraint
 //
-// Rollback is NOT safe once new code has written a DesiredState without the
-// "state" key. Old code reading such JSON sees GetState()==""  and the old
-// ValidateDesiredState block rejects it, stalling the reconciliation loop.
-// To roll back safely: clear all CSE DesiredState entries before switching back
-// to old code, or restore a pre-upgrade CSE snapshot.
+// Rollback after upgrade is NOT safe without additional steps. Once new code
+// writes DesiredState JSON without "state", old code reads an empty GetState()
+// and interprets it as "running" — stopped workers would start. To roll back
+// safely: restore a pre-upgrade CSE snapshot before switching back to old code.
 package migration
+
+import (
+	"encoding/json"
+	"fmt"
+)
+
+// desiredStateWire is a minimal wire representation used for migration only.
+// It reads the legacy "state" field alongside the canonical ShutdownRequested.
+type desiredStateWire struct {
+	State             string `json:"state"`
+	ShutdownRequested bool   `json:"ShutdownRequested"`
+}
 
 // MigrateP3_5dDesiredState is applied lazily on every reconciliation tick when
 // the supervisor loads a DesiredState from CSE storage.
 //
-// The migration is a no-op: Go's encoding/json silently drops the old "state"
-// key when unmarshalling into config.BaseDesiredState (which no longer has that
-// field), so no explicit JSON surgery is required.
-//
-// The function exists to (a) document the migration boundary, (b) serve as a
-// test hook that can be instrumented in integration tests, and (c) reserve the
-// call-site in reconciliation.go for future compensating logic if the rollback
-// constraint above must be relaxed.
+// If the JSON contains "state":"stopped", the function rewrites the document
+// to set ShutdownRequested:true and removes the "state" key, preserving the
+// operator's original lifecycle intent. "state":"running" requires no action.
 //
 // Parameters:
 //   - desiredStateJSON: the raw JSON bytes loaded from CSE for one worker.
 //
 // Returns:
-//   - migrated: always nil (the caller continues with the original bytes).
-//   - changed: always false (no rewrite needed).
-//   - err: always nil.
-func MigrateP3_5dDesiredState(_ []byte) (migrated []byte, changed bool, err error) {
-	// No-op: encoding/json already handles the "state" key removal implicitly.
-	return nil, false, nil
+//   - migrated: rewritten JSON bytes if changed is true; nil otherwise (caller
+//     uses the original bytes).
+//   - changed: true if the document was rewritten (i.e. "state":"stopped" was
+//     found and promoted).
+//   - err: non-nil only if the JSON is malformed and cannot be parsed.
+func MigrateP3_5dDesiredState(desiredStateJSON []byte) (migrated []byte, changed bool, err error) {
+	if len(desiredStateJSON) == 0 {
+		return nil, false, nil
+	}
+
+	var wire desiredStateWire
+	if err := json.Unmarshal(desiredStateJSON, &wire); err != nil {
+		return nil, false, fmt.Errorf("p3_5d migration: failed to parse desired state JSON: %w", err)
+	}
+
+	// "state":"running" (or absent) is fine — ShutdownRequested:false is correct.
+	if wire.State != "stopped" {
+		return nil, false, nil
+	}
+
+	// "state":"stopped" must be promoted to ShutdownRequested:true.
+	// Unmarshal the full document into a generic map so we can remove "state"
+	// and set ShutdownRequested without losing any other fields.
+	var doc map[string]interface{}
+	if err := json.Unmarshal(desiredStateJSON, &doc); err != nil {
+		return nil, false, fmt.Errorf("p3_5d migration: failed to parse desired state document: %w", err)
+	}
+
+	delete(doc, "state")
+	doc["ShutdownRequested"] = true
+
+	out, err := json.Marshal(doc)
+	if err != nil {
+		return nil, false, fmt.Errorf("p3_5d migration: failed to marshal migrated desired state: %w", err)
+	}
+
+	return out, true, nil
 }
