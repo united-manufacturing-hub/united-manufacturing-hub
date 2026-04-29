@@ -31,10 +31,9 @@ import (
 // detector in P1.8 architecture test #13 (registry walk, layer 2) catches
 // forgotten-Enabled in renderChildren bodies.
 //
-// State.Next will adopt this emitter when P2.2 wires renderChildren into the
-// state-machine return path; until then the legacy SetChildSpecsFactory still
-// feeds the supervisor (with Enabled: true set defensively at the factory
-// site for parity).
+// State.Next emits this set via NextResult.Children (wired in P2.2 and made
+// authoritative for the supervisor in P2.4); the legacy DDS-derived path was
+// retired in P2.5.
 func RenderChildren(snap fsmv2.WorkerSnapshot[CommunicatorConfig, CommunicatorStatus]) []config.ChildSpec {
 	return []config.ChildSpec{{
 		Name:             "transport",
@@ -47,9 +46,8 @@ func RenderChildren(snap fsmv2.WorkerSnapshot[CommunicatorConfig, CommunicatorSt
 
 // snapshotUserSpec extracts the transport child's UserSpec from the parent
 // snapshot. The communicator passes its own raw UserSpec through to the
-// transport child unchanged (the existing SetChildSpecsFactory closure does
-// the same). Returns the zero-value UserSpec when no spec is in the snapshot
-// (nil-spec startup path).
+// transport child unchanged. Returns the zero-value UserSpec when no spec
+// is in the snapshot (nil-spec startup path).
 func snapshotUserSpec(snap fsmv2.WorkerSnapshot[CommunicatorConfig, CommunicatorStatus]) config.UserSpec {
 	if len(snap.Desired.ChildrenSpecs) > 0 {
 		return snap.Desired.ChildrenSpecs[0].UserSpec

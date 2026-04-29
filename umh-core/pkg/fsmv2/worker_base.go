@@ -85,6 +85,7 @@ func (w *WorkerBase[TConfig, TStatus, TDeps]) SetChildSpecsFactory(factory func(
 	w.childSpecFactory = factory
 }
 
+
 // Config returns the cached TConfig from the last DeriveDesiredState call.
 // Returns zero-value TConfig before first DDS (BW4).
 func (w *WorkerBase[TConfig, TStatus, TDeps]) Config() TConfig {
@@ -232,7 +233,6 @@ func (w *WorkerBase[TConfig, TStatus, TDeps]) DeriveDesiredState(spec interface{
 			BaseDesiredState: config.BaseDesiredState{State: config.DesiredStateRunning},
 			Config:           cfg,
 		}
-		w.populateChildrenSpecs(wds, cfg, config.UserSpec{})
 
 		return wds, nil
 	}
@@ -275,7 +275,6 @@ func (w *WorkerBase[TConfig, TStatus, TDeps]) DeriveDesiredState(spec interface{
 		BaseDesiredState: config.BaseDesiredState{State: desiredState},
 		Config:           cfg,
 	}
-	w.populateChildrenSpecs(wds, cfg, userSpec)
 
 	return wds, nil
 }
@@ -294,6 +293,7 @@ func (w *WorkerBase[TConfig, TStatus, TDeps]) populateChildrenSpecs(wds *Wrapped
 		wds.ChildrenSpecs = w.childSpecFactory(cfg, spec)
 	}
 }
+
 
 // GetInitialState returns the registered initial state for this worker type.
 // Panics if no state is registered; call fsmv2.RegisterInitialState in
