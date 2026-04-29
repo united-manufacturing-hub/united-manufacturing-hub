@@ -139,6 +139,9 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity deps.Identity, work
 	// shutdown), the store would retain state="" and fail the
 	// verifyObservedStateHasState check. Injecting the registered initial state
 	// here closes that window.
+	// Nil guard: non-WorkerBase Worker implementations (e.g., test mocks) may
+	// return nil from GetInitialState(). In that case, state="" persists until
+	// the first collection tick overwrites it — acceptable for those callers.
 	if initialStateForDoc := worker.GetInitialState(); initialStateForDoc != nil {
 		observedDoc["state"] = initialStateForDoc.String()
 	}

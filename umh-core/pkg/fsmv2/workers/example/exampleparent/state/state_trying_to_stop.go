@@ -34,7 +34,7 @@ func (s *TryingToStopState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	// P1.8 §4-E LOCKED: renderChildren must be the first non-shutdown call.
 	// Result discarded — in TryingToStop we emit an empty spec so the
 	// supervisor calls RequestShutdown on every existing child.
-	RenderChildren(snap)
+	_ = RenderChildren(snap)
 
 	// Emit an empty children set so the supervisor calls RequestShutdown on
 	// each existing child; children absent from the emitted specs receive

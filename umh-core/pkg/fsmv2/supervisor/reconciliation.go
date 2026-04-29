@@ -1670,20 +1670,27 @@ func (s *Supervisor[TObserved, TDesired]) reconcileChildren(specs []config.Child
 			s.logger.Debug("child_shutdown_requesting",
 				deps.String("child_name", name))
 
-			// Mark child as pending removal
-			s.pendingRemoval[name] = true
-
 			child := s.children[name]
 			if child != nil {
-				// Request shutdown - sets ShutdownRequested=true on child's workers
-				// Child continues ticking and will emit SignalNeedsRemoval when ready
+				// Request shutdown first. Only mark pendingRemoval on success so that a
+				// transient CSE error does not permanently strand the child: if we set
+				// pendingRemoval before the call succeeds, Phase 1's guard
+				// (!s.pendingRemoval[name]) would skip this child on every subsequent
+				// tick, preventing retry. Leaving pendingRemoval unset lets Phase 1
+				// retry RequestShutdown naturally on the next tick.
 				ctx := context.Background()
 				if err := child.RequestShutdown(ctx, "removed_from_specs"); err != nil {
 					s.logger.SentryWarn(deps.FeatureFSMv2, s.GetHierarchyPathUnlocked(), "child_shutdown_request_failed",
 						deps.Err(err),
 						deps.String("child_name", name))
+					// Do NOT set pendingRemoval — Phase 1 will retry on the next tick.
+					continue
 				}
 			}
+			// ShutdownRequested is now set on the child's workers (or child was already
+			// absent). Mark as pending removal so Phase 2 can complete the deletion once
+			// all workers emit SignalNeedsRemoval.
+			s.pendingRemoval[name] = true
 			// DON'T delete here - wait for child's workers to complete shutdown
 		}
 	}
@@ -1770,6 +1777,9 @@ func (s *Supervisor[TObserved, TDesired]) applyStateMapping() {
 		break
 	}
 
+	// Post-P3.5: mapping is unconditional — all children always receive
+	// DesiredStateRunning. parentState is captured for observability (log
+	// correlation) only; it no longer controls the mapped value.
 	for childName, child := range s.children {
 		child.setMappedParentState(config.DesiredStateRunning)
 		s.logTrace("state_mapped",

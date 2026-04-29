@@ -41,7 +41,9 @@ import (
 //
 // Correct lifecycle control:
 //   - ShutdownRequested: Inherited from this type. Set by supervisor for graceful shutdown.
-//   - ParentMappedState: For child workers only. Injected by supervisor based on parent's Enabled field.
+//   - ParentMappedState: For child workers only. Injected unconditionally as config.DesiredStateRunning
+//     by the supervisor post-P3.5 (ChildStartStates removed). Will track the Enabled field once the
+//     P2.x Enabled→ShutdownRequested reducer lands.
 //   - State ("running"/"stopped"): From BaseUserSpec.GetState(). Controls whether worker should be running.
 //
 // Correct ShouldBeRunning() implementations:

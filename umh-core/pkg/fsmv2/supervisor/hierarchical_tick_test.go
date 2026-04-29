@@ -312,6 +312,15 @@ var _ = Describe("Hierarchical Tick Propagation (Task 0.6)", func() {
 
 			events := tickLog.GetEvents()
 			Expect(events).To(ContainElement("DeriveDesiredState:parent"))
+
+			// Verify applyStateMapping set the child's mappedParentState to
+			// DesiredStateRunning. A regression (e.g., mapping to "" or "stopped")
+			// would not be caught by the event log check above.
+			children := parentSuper.GetChildren()
+			Expect(children).To(HaveKey("child1"))
+			childDebug, ok := children["child1"].GetDebugInfo().(supervisor.SupervisorDebugInfo)
+			Expect(ok).To(BeTrue(), "GetDebugInfo must return supervisor.SupervisorDebugInfo")
+			Expect(childDebug.MappedParentState).To(Equal(config.DesiredStateRunning))
 		})
 
 		It("should reconcile new children in same tick cycle", func() {

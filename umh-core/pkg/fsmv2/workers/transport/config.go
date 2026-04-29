@@ -88,7 +88,6 @@ type TransportStatus struct {
 // The 9-minute gap is safe by design: when IsTokenExpired triggers here, the parent
 // transitions Running → Starting. Children are always enabled and will continue
 // running while the parent refreshes. The 1-minute child buffer is a safety net for edge cases only.
-// The children's 1-minute buffer is a last-resort safety net for edge cases only.
 func (s TransportStatus) IsTokenExpired() bool {
 	if s.JWTExpiry.IsZero() {
 		return false
