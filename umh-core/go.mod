@@ -1,6 +1,6 @@
 module github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core
 
-go 1.26.1
+go 1.26.2
 
 require (
 	github.com/99designs/gqlgen v0.17.89
@@ -22,7 +22,7 @@ require (
 	github.com/prometheus/client_golang v1.23.2
 	github.com/prometheus/client_model v0.6.2
 	github.com/prometheus/common v0.67.5
-	github.com/prometheus/prometheus v0.311.1
+	github.com/prometheus/prometheus v0.311.2
 	github.com/shirou/gopsutil/v4 v4.26.3
 	github.com/testcontainers/testcontainers-go/modules/redpanda v0.42.0
 	github.com/tiendc/go-deepcopy v1.7.2
