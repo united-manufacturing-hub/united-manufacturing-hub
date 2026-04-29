@@ -31,6 +31,12 @@ import (
 // fsmv2.Observation[ExamplechildStatus] + *fsmv2.WrappedDesiredState[ExamplechildConfig];
 // the snapshot envelope carries those typed values so ConvertWorkerSnapshot
 // produces a usable WorkerSnapshot for state.Next.
+//
+// Population invariant: ConvertWorkerSnapshot reads IsShutdownRequested from
+// the Desired side (BaseDesiredState.ShutdownRequested via
+// WrappedDesiredState.IsShutdownRequested()), and ParentMappedState from the
+// Observed side. So shutdown tests must set ShutdownRequested on Desired only;
+// setting it on Observation would be dead data the conversion ignores.
 func makeChildSnapshot(parentMappedState string, shutdownRequested bool) fsmv2.Snapshot {
 	desired := &fsmv2.WrappedDesiredState[snapshot.ExamplechildConfig]{
 		BaseDesiredState: config.BaseDesiredState{
@@ -39,7 +45,6 @@ func makeChildSnapshot(parentMappedState string, shutdownRequested bool) fsmv2.S
 	}
 	observed := fsmv2.Observation[snapshot.ExamplechildStatus]{
 		ParentMappedState: parentMappedState,
-		ShutdownRequested: shutdownRequested,
 	}
 
 	return fsmv2.Snapshot{

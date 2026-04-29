@@ -895,20 +895,21 @@ var _ = Describe("FSMv2 Architecture Validation — P1.8 Foundation Cap", func()
 	//
 	// Goal: detect drift between the worker-package canonical RenderChildren
 	// emitter and the state-package mirror that exists to break the parent →
-	// state import cycle. Today's matrix:
+	// state import cycle. Today's matrix (post-P3.0 / PR3 C3):
 	//
-	//   - application       → mirror present, byte-equivalent expected
-	//   - exampleparent     → mirror present, migration-window exemption
-	//                         (mirror returns principled nil; canonical body
-	//                         is free to differ during the window)
+	//   - application       → mirror present, byte-equivalent enforced
+	//   - exampleparent     → mirror present, byte-equivalent enforced
+	//                         (PR3 C3 / Option A migrated exampleparent to
+	//                         WorkerSnapshot[Config, Status]; the prior
+	//                         migration-window exemption is gone, so the
+	//                         mirror MUST track the canonical body)
 	//   - communicator      → no mirror needed (no import cycle)
 	//   - transport         → no mirror needed (no import cycle)
 	//
 	// The test fails if (a) a non-exempt mirror diverges from its canonical
-	// body, (b) the exampleparent mirror stops returning principled nil
-	// (would re-introduce the silent-despawn risk the migration-window
-	// exemption is built around), or (c) a registry entry references a
-	// missing canonical/mirror file.
+	// body, (b) a registry entry flagged migrationWindow=true (held over for
+	// future migrations) returns anything other than principled nil, or
+	// (c) a registry entry references a missing canonical/mirror file.
 	//
 	// AST-level approach (not text-diff): parse both files, find the
 	// RenderChildren FuncDecl, render the body via go/printer with a

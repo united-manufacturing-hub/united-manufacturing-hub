@@ -29,14 +29,16 @@ device: {{ .DEVICE_ID }}`
 
 // RenderChildren is the state-package mirror of the canonical
 // workers/example/exampleparent.RenderChildren emitter. The mirror exists to
-// break the package import cycle: the worker package directly references
-// state/StoppedState{} from GetInitialState (worker.go), so state/ cannot
-// import the exampleparent worker package without a cycle.
+// break the package import cycle: the worker package blank-imports state/
+// (which triggers state_stopped.go's init() registration via
+// fsmv2.RegisterInitialState), so state/ cannot import the exampleparent
+// worker package without a cycle.
 //
 // Body MUST be byte-equivalent to the canonical children.go body — Test 14
 // (architecture_p1_8_test.go) enforces this. Both files move together; an
 // edit to one without matching the other would silently produce divergent
-// ChildSpec slices on the state.Next path vs the legacy DDS path.
+// ChildSpec slices on the state.Next path vs the supervisor's
+// ChildSpecProvider fallback path in the discriminator.
 //
 // Per §4-C LOCKED, Enabled MUST be set explicitly to true; the F4⊕G1 trap
 // detector in P1.8 architecture test #13 (registry walk, layer 2) catches

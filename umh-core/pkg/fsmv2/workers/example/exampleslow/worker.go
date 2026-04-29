@@ -36,8 +36,6 @@ import (
 // worker, used in config YAML and CSE storage.
 const WorkerTypeName = "exampleslow"
 
-const workerType = WorkerTypeName
-
 // Compile-time interface check: ExampleslowWorker implements fsmv2.Worker.
 var _ fsmv2.Worker = (*ExampleslowWorker)(nil)
 
@@ -68,7 +66,7 @@ func NewExampleslowWorker(
 	}
 
 	if identity.WorkerType == "" {
-		identity.WorkerType = workerType
+		identity.WorkerType = WorkerTypeName
 	}
 
 	if dependencies == nil {

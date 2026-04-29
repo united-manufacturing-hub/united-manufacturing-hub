@@ -853,10 +853,10 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) (err error) 
 	//         children not in this set.
 	//   - nil sentinel
 	//       → legacy / migration-window — the parent expressed no opinion
-	//         from state.Next (e.g. exampleparent's principled-nil mirror
-	//         while ExampleparentDesiredState does not yet carry the
-	//         ParentUserSpec fields). Fall back to the DDS-derived
-	//         ChildSpecProvider path so teaching children survive.
+	//         from state.Next (e.g. a parent whose state-package mirror
+	//         hasn't been migrated to the canonical WorkerSnapshot shape
+	//         yet and returns principled nil). Fall back to the DDS-derived
+	//         ChildSpecProvider path so legacy children survive.
 	//
 	// IMPORTANT: the discriminator treats nil and []config.ChildSpec{} as
 	// distinct cases. Never use `len(rendered) == 0` here — that collapses

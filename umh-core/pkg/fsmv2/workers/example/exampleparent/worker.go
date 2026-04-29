@@ -21,6 +21,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/register"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
 
 	// Blank import for side effects: registers the "Stopped" initial state
 	// via fsmv2.RegisterInitialState in state/state_stopped.go init(). WorkerBase's
@@ -35,8 +36,6 @@ import (
 // WorkerTypeName is the canonical worker-type identifier for the exampleparent
 // worker, used in config YAML and CSE storage.
 const WorkerTypeName = "exampleparent"
-
-const workerType = WorkerTypeName
 
 // Compile-time interface check: ParentWorker implements fsmv2.Worker.
 var _ fsmv2.Worker = (*ParentWorker)(nil)
@@ -67,7 +66,7 @@ func NewParentWorker(
 	}
 
 	if identity.WorkerType == "" {
-		identity.WorkerType = workerType
+		identity.WorkerType = WorkerTypeName
 	}
 
 	if dependencies == nil {
@@ -113,13 +112,29 @@ func (w *ParentWorker) CollectObservedState(ctx context.Context, _ fsmv2.Desired
 	// Track state changes so dependencies.StateTracker can expose
 	// time-in-state to any test hook that consumes it. The supervisor
 	// separately records state transitions for framework metrics.
+	//
+	// First-tick startup (no prior observation) is the expected ErrNotFound
+	// case; we silently skip the state-tracker update. Other errors
+	// (e.g. JSON deserialization failures, context cancellation, storage
+	// corruption) are logged as warnings but never propagated — COS must
+	// not fail the supervisor tick on a state-tracker bookkeeping miss.
 	stateReader := w.deps.GetStateReader()
 	if stateReader != nil {
 		var previous fsmv2.Observation[ExampleparentStatus]
 
 		err := stateReader.LoadObservedTyped(ctx, w.Identity().WorkerType, w.Identity().ID, &previous)
-		if err == nil && previous.State != "" {
-			w.deps.GetStateTracker().RecordStateChange(previous.State)
+		switch {
+		case err == nil:
+			if previous.State != "" {
+				w.deps.GetStateTracker().RecordStateChange(previous.State)
+			}
+		case errors.Is(err, persistence.ErrNotFound):
+			// Expected on first tick — no prior observation persisted yet.
+		default:
+			w.deps.GetLogger().SentryWarn(deps.FeatureExamples, w.Identity().HierarchyPath,
+				"LoadObservedTyped failed in CollectObservedState",
+				deps.String("worker_id", w.Identity().ID),
+				deps.Err(err))
 		}
 	}
 
