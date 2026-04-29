@@ -15,10 +15,12 @@
 package fsmv2_test
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"go/ast"
 	"go/parser"
+	"go/printer"
 	"go/token"
 	"os"
 	"path/filepath"
@@ -870,7 +872,232 @@ var _ = Describe("FSMv2 Architecture Validation — P1.8 Foundation Cap", func()
 			}
 		})
 	})
+
+	// =====================================================================
+	// Test 14 — Mirror byte-equivalence (P2.4 / pr2_issues #10)
+	// =====================================================================
+	//
+	// Goal: detect drift between the worker-package canonical RenderChildren
+	// emitter and the state-package mirror that exists to break the parent →
+	// state import cycle. Today's matrix:
+	//
+	//   - application       → mirror present, byte-equivalent expected
+	//   - exampleparent     → mirror present, migration-window exemption
+	//                         (mirror returns principled nil; canonical body
+	//                         is free to differ during the window)
+	//   - communicator      → no mirror needed (no import cycle)
+	//   - transport         → no mirror needed (no import cycle)
+	//
+	// The test fails if (a) a non-exempt mirror diverges from its canonical
+	// body, (b) the exampleparent mirror stops returning principled nil
+	// (would re-introduce the silent-despawn risk the migration-window
+	// exemption is built around), or (c) a registry entry references a
+	// missing canonical/mirror file.
+	//
+	// AST-level approach (not text-diff): parse both files, find the
+	// RenderChildren FuncDecl, render the body via go/printer with a
+	// fixed config, then strip selector-package qualifiers on every
+	// `pkg.Ident` (so the canonical's `config.ChildSpec` and a mirror's
+	// hypothetically-aliased reference compare equal). Whitespace and
+	// comments are normalized out by go/printer's TabIndent + zero
+	// flags, leaving load-bearing tokens (literals, field names,
+	// operators) as the only signal.
+	//
+	// Failure-injection: .execution/P2.4/mirror_byteequivalence_failure_injection.txt
+	Describe("RenderChildren state-package mirrors are byte-equivalent to canonical worker bodies (P2.4)", func() {
+		type mirrorEntry struct {
+			name            string
+			canonicalPath   string
+			mirrorPath      string // empty when no mirror exists (no import cycle)
+			migrationWindow bool   // true → mirror must return principled nil only
+		}
+
+		registry := []mirrorEntry{
+			{
+				name:          "application",
+				canonicalPath: filepath.Join(getFsmv2Dir(), "workers", "application", "children.go"),
+				mirrorPath:    filepath.Join(getFsmv2Dir(), "workers", "application", "state", "render_children.go"),
+			},
+			{
+				name:            "exampleparent",
+				canonicalPath:   filepath.Join(getFsmv2Dir(), "workers", "example", "exampleparent", "children.go"),
+				mirrorPath:      filepath.Join(getFsmv2Dir(), "workers", "example", "exampleparent", "state", "render_children.go"),
+				migrationWindow: true,
+			},
+			{
+				name:          "communicator",
+				canonicalPath: filepath.Join(getFsmv2Dir(), "workers", "communicator", "children.go"),
+			},
+			{
+				name:          "transport",
+				canonicalPath: filepath.Join(getFsmv2Dir(), "workers", "transport", "children.go"),
+			},
+		}
+
+		It("each mirror is byte-equivalent to its canonical (or principled-nil if migration-window exempt)", func() {
+			for _, entry := range registry {
+				By(fmt.Sprintf("checking parent %q", entry.name))
+
+				canonicalBody, canErr := normalizedRenderChildrenBody(entry.canonicalPath)
+				Expect(canErr).NotTo(HaveOccurred(),
+					"failed to extract canonical RenderChildren body from %s", entry.canonicalPath)
+
+				if entry.mirrorPath == "" {
+					// No mirror — nothing to compare. Sanity-check that the
+					// canonical exists and is non-empty so a typo in
+					// canonicalPath doesn't silently green-light the entry.
+					Expect(canonicalBody).NotTo(BeEmpty(),
+						"parent %q canonical RenderChildren body is empty — likely a path typo or missing decl",
+						entry.name)
+					continue
+				}
+
+				mirrorBody, mirErr := normalizedRenderChildrenBody(entry.mirrorPath)
+				Expect(mirErr).NotTo(HaveOccurred(),
+					"failed to extract mirror RenderChildren body from %s", entry.mirrorPath)
+
+				if entry.migrationWindow {
+					// Migration-window exemption: the mirror must return
+					// principled nil only (i.e. the body must reduce to a
+					// `return nil` after normalization, possibly preceded by
+					// a `_ = snap` no-op). Anything else either re-introduces
+					// the silent-despawn risk (`return []ChildSpec{}` would
+					// authoritatively zero teaching children once the
+					// supervisor reads NextResult.Children) or starts
+					// emitting children that diverge from the canonical
+					// body without a documented migration path.
+					Expect(isPrincipledNilBody(mirrorBody)).To(BeTrue(),
+						"parent %q is migration-window exempt; its mirror at %s must return principled nil "+
+							"(body reducible to `_ = snap; return nil`). Observed normalized body:\n%s\n\n"+
+							"If this is intentional, the exemption flag in the registry must flip to false "+
+							"and the mirror must be byte-equivalent to the canonical at %s.",
+						entry.name, entry.mirrorPath, mirrorBody, entry.canonicalPath)
+					continue
+				}
+
+				Expect(mirrorBody).To(Equal(canonicalBody),
+					"parent %q: state-package mirror at %s diverges from canonical worker body at %s.\n"+
+						"This is the F4⊕G1-style trap that mirror byte-equivalence guards against — a developer "+
+						"editing one of the two files (e.g. dropping `Enabled: true`) without updating the other "+
+						"would silently produce divergent ChildSpec slices on the state.Next path vs the legacy "+
+						"DDS path. Both files must move together.\n\n"+
+						"Canonical body:\n%s\n\nMirror body:\n%s",
+					entry.name, entry.mirrorPath, entry.canonicalPath, canonicalBody, mirrorBody)
+			}
+		})
+	})
 })
+
+// normalizedRenderChildrenBody parses the Go file at path, finds the
+// top-level `func RenderChildren(...)` declaration, and returns the
+// canonical-form text of its body suitable for byte-equality comparison
+// against another mirror/canonical.
+//
+// Normalization steps:
+//  1. go/printer with TabIndent flag — same whitespace regardless of
+//     gofmt history.
+//  2. Strip selector-package qualifiers on every `pkg.Ident` reference
+//     (e.g. `config.ChildSpec` becomes `ChildSpec`). This lets the test
+//     accept the case where the canonical and mirror use different import
+//     aliases for the same package — only the bare identifier matters
+//     for "do these two functions do the same thing".
+//
+// Returns an error if the file cannot be parsed or if RenderChildren is
+// missing.
+func normalizedRenderChildrenBody(path string) (string, error) {
+	fset := token.NewFileSet()
+	file, err := parser.ParseFile(fset, path, nil, parser.ParseComments)
+	if err != nil {
+		return "", fmt.Errorf("parse %s: %w", path, err)
+	}
+
+	var fn *ast.FuncDecl
+	for _, decl := range file.Decls {
+		fd, ok := decl.(*ast.FuncDecl)
+		if !ok {
+			continue
+		}
+		if fd.Recv != nil {
+			continue
+		}
+		if fd.Name == nil || fd.Name.Name != "RenderChildren" {
+			continue
+		}
+		fn = fd
+		break
+	}
+	if fn == nil || fn.Body == nil {
+		return "", fmt.Errorf("no top-level func RenderChildren found in %s", path)
+	}
+
+	// Strip package qualifiers on every selector. We mutate a copy via
+	// ast.Inspect; rewriting `pkg.Ident` to `Ident` makes the printed
+	// form independent of the alias the importing file chose.
+	ast.Inspect(fn.Body, func(n ast.Node) bool {
+		sel, ok := n.(*ast.SelectorExpr)
+		if !ok {
+			return true
+		}
+		// Only strip when the LHS is a bare identifier (likely a
+		// package alias). Don't touch chained selectors (`x.Y.Z`).
+		if _, ok := sel.X.(*ast.Ident); !ok {
+			return true
+		}
+		// Replace `pkg.Ident` with `Ident` in-place: replacing the
+		// selector node would require parent-walking, so we instead
+		// blank out the X side. The printer renders `.Ident` for an
+		// empty-name X — workaround: we point X at an Ident whose
+		// Name is the empty string AND we remove the leading dot by
+		// returning the Sel as a plain Ident. Easiest: rename X to
+		// the empty string and post-process the printed form.
+		if id, ok := sel.X.(*ast.Ident); ok {
+			id.Name = ""
+		}
+		return true
+	})
+
+	var buf bytes.Buffer
+	pcfg := printer.Config{Mode: printer.TabIndent, Tabwidth: 8}
+	if err := pcfg.Fprint(&buf, fset, fn.Body); err != nil {
+		return "", fmt.Errorf("print %s body: %w", path, err)
+	}
+
+	out := buf.String()
+	// Post-process: with X.Name="" the printer emits `.Ident` — collapse
+	// `.Ident` to `Ident` everywhere so e.g. `config.ChildSpec` (post-
+	// X-blanking ".ChildSpec") and an alias-renamed reference both
+	// reduce to `ChildSpec`. Also collapse runs of whitespace introduced
+	// by the empty-X expression to keep formatting stable.
+	out = strings.ReplaceAll(out, " .", " ")
+	out = strings.ReplaceAll(out, "\t.", "\t")
+	out = strings.ReplaceAll(out, "(.", "(")
+	out = strings.ReplaceAll(out, "[.", "[")
+	out = strings.ReplaceAll(out, ",.", ",")
+	out = strings.ReplaceAll(out, "{.", "{")
+
+	return out, nil
+}
+
+// isPrincipledNilBody returns true when body (already normalized by
+// normalizedRenderChildrenBody) is the canonical principled-nil form
+// recognized by the migration-window exemption: a function body that
+// reduces to `return nil` (with optional preceding no-op `_ = snap`).
+func isPrincipledNilBody(body string) bool {
+	// Tolerant of whitespace + the `_ = snap` line (keeps `snap` referenced
+	// so go vet / unused-parameter linters stay happy).
+	stripped := strings.Join(strings.Fields(body), " ")
+	// Acceptable normalized shapes:
+	//   "{ _ = snap return nil }"
+	//   "{ return nil }"
+	switch stripped {
+	case "{ _ = snap return nil }",
+		"{ return nil }",
+		"{ _ = snap; return nil }",
+		"{ return nil; }":
+		return true
+	}
+	return false
+}
 
 // checkStateNextRendersChildren validates that the given parent state.Next
 // FuncDecl's first non-shutdown statement calls a function named

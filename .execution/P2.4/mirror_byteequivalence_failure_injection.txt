@@ -1,0 +1,126 @@
+P2.4 — Mirror byte-equivalence test failure-injection certificate
+==================================================================
+
+Test under inspection:
+  umh-core/pkg/fsmv2/architecture_p1_8_test.go
+  Describe: "RenderChildren state-package mirrors are byte-equivalent to
+            canonical worker bodies (P2.4)"
+  Spec: "each mirror is byte-equivalent to its canonical (or principled-nil
+         if migration-window exempt)"
+
+Goal of failure injection:
+  Demonstrate the test FAILS — citing the specific divergent file and the
+  load-bearing token that drifted — when the canonical worker-package
+  RenderChildren and its state-package mirror diverge on a hashed
+  ChildSpec field. PASS-FAIL-PASS round trip.
+
+Registry covered by the test:
+  application       — mirror present, byte-equivalent expected (NOT exempt)
+  exampleparent     — mirror present, migration-window exempt (must
+                      return principled nil only)
+  communicator      — no mirror (no import cycle); skipped, canonical
+                      sanity-check only
+  transport         — no mirror (no import cycle); skipped, canonical
+                      sanity-check only
+
+Round trip record
+-----------------
+
+Step 1 — Baseline PASS (no injection)
+  Command: cd umh-core && go test -count=1 -timeout 60s \
+             ./pkg/fsmv2/ \
+             -args -ginkgo.focus="byte-equivalent"
+  Result:  ok  (1 spec PASS)
+  Time:    ~0.22s
+
+Step 2 — Injection: drift application mirror's Enabled field
+  File:    umh-core/pkg/fsmv2/workers/application/state/render_children.go
+  Site:    inside the for-range loop (line ~51)
+  Mutation: changed `child.Enabled = true` to `child.Enabled = false`
+            in the MIRROR only, leaving canonical
+            workers/application/children.go untouched. This is the
+            classic forgotten-Enabled / drifted-Enabled trap that the
+            §4-C LOCKED zero-value-false rule guards against, applied
+            asymmetrically across the canonical/mirror pair — the
+            exact silent-divergence the byte-equivalence test exists to
+            catch.
+
+Step 3 — Injected FAIL
+  Command: same as step 1
+  Result:  FAIL (1 spec FAIL, with normalized canonical body vs mirror
+           body printed inline so the offending line is identifiable
+           at a glance)
+
+  Diagnostic excerpt:
+
+    parent "application": state-package mirror at
+    /Users/jeremytheocharis/umh-git-v2/cascade-pr2/umh-core/pkg/fsmv2/workers/application/state/render_children.go
+    diverges from canonical worker body at
+    /Users/jeremytheocharis/umh-git-v2/cascade-pr2/umh-core/pkg/fsmv2/workers/application/children.go
+
+    Canonical body:
+    {
+      src := Desired.ChildrenSpecs
+      if len(src) == 0 { return [].ChildSpec{} }
+      out := make([].ChildSpec, len(src))
+      for i, child := range src {
+        Enabled = true       <-- canonical
+        out[i] = child
+      }
+      return out
+    }
+
+    Mirror body:
+    {
+      src := Desired.ChildrenSpecs
+      if len(src) == 0 { return [].ChildSpec{} }
+      out := make([].ChildSpec, len(src))
+      for i, child := range src {
+        Enabled = false      <-- mirror diverged
+        out[i] = child
+      }
+      return out
+    }
+
+  Note on normalization: the printed bodies show selector-package
+  qualifiers stripped (e.g. `config.ChildSpec` → `.ChildSpec` →
+  `ChildSpec` after the post-processing pass). This is the AST-level
+  normalization the test applies before comparison; it makes the test
+  robust to import-alias drift while preserving the load-bearing
+  tokens (`true` vs `false`) that the F4⊕G1 trap detector cares about.
+
+Step 4 — Revert and re-verify PASS
+  File:    umh-core/pkg/fsmv2/workers/application/state/render_children.go
+           restored to `child.Enabled = true` (matching canonical).
+  Command: same as step 1
+  Result:  ok  (1 spec PASS)
+  Time:    ~0.22s
+
+Migration-window exemption sanity check
+---------------------------------------
+
+The exampleparent registry entry is flagged migrationWindow=true; its
+mirror is allowed to return principled nil ONLY (`{ _ = snap; return nil }`).
+The exemption is itself tested: if a developer were to "fix" the mirror by
+returning `[]ChildSpec{}` instead of `nil`, the supervisor's P2.4
+discriminator would treat that as "I am a parent and I want zero children
+right now" → silently despawn child-0/child-1/child-2 (the teaching
+children documented in worker_test.go). The test catches that scenario
+because `[]ChildSpec{}` is not in the allow-list of principled-nil shapes
+in isPrincipledNilBody.
+
+Conclusion
+----------
+The mirror byte-equivalence test correctly:
+  1. PASSES on the unmodified P2.4 tip (application mirror byte-
+     equivalent to canonical; exampleparent mirror returns principled
+     nil; communicator/transport skipped because they have no mirror).
+  2. FAILS with file paths + canonical-vs-mirror diff when one of the
+     two files diverges on a load-bearing token.
+  3. Returns to PASS after the divergence is reverted.
+
+The test ships at P2.4 alongside the supervisor cutover. It will remain
+in effect until the state-package mirrors are retired (i.e. when the
+parent → state import cycle is broken via a different mechanism). At
+that point, the registry shrinks but the test stays in place to defend
+against any reintroduced mirror.
