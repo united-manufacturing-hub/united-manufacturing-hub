@@ -187,9 +187,9 @@ type Connection struct {
 }
 
 type DfcBridgeInfo struct {
-	DataContract string `json:"dataContract"` // Contract defining the data format
-	InputType    string `json:"inputType"`    // Type of input data
-	OutputType   string `json:"outputType"`   // Type of output data
+	InputType     string   `json:"inputType"`     // Type of input data
+	OutputType    string   `json:"outputType"`    // Type of output data
+	DataContracts []string `json:"dataContracts"` // Contracts referenced by the bridge's tag-processor
 }
 
 type Redpanda struct {
