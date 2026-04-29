@@ -1517,7 +1517,6 @@ func (s *Supervisor[TObserved, TDesired]) reconcileChildren(specs []config.Child
 			childUserSpec := spec.UserSpec
 			childUserSpec.Variables = config.Merge(s.userSpec.Variables, spec.UserSpec.Variables)
 			child.updateUserSpec(childUserSpec)
-			child.setChildStartStates(spec.ChildStartStates)
 
 			updatedCount++
 		} else {
@@ -1577,7 +1576,6 @@ func (s *Supervisor[TObserved, TDesired]) reconcileChildren(specs []config.Child
 			childUserSpec := spec.UserSpec
 			childUserSpec.Variables = config.Merge(s.userSpec.Variables, spec.UserSpec.Variables)
 			childSupervisor.updateUserSpec(childUserSpec)
-			childSupervisor.setChildStartStates(spec.ChildStartStates)
 			childSupervisor.setParent(s, s.workerType)
 
 			// Compute child's hierarchy path: parent path + child segment
@@ -1773,36 +1771,10 @@ func (s *Supervisor[TObserved, TDesired]) applyStateMapping() {
 	}
 
 	for childName, child := range s.children {
-		mappedState := s.computeMappedState(parentState, child)
-
-		child.setMappedParentState(mappedState)
+		child.setMappedParentState(config.DesiredStateRunning)
 		s.logTrace("state_mapped",
 			deps.String("child_name", childName),
 			deps.String("parent_state", parentState),
-			deps.String("mapped_state", mappedState))
+			deps.String("mapped_state", config.DesiredStateRunning))
 	}
-}
-
-// computeMappedState determines the desired state for a child based on parent's current state.
-//
-// ChildStartStates logic:
-//   - If empty: child always runs (follows parent's DesiredState.State)
-//   - If parentState is in the list: child should run (returns "running")
-//   - Otherwise: child should stop (returns "stopped")
-func (s *Supervisor[TObserved, TDesired]) computeMappedState(parentState string, child SupervisorInterface) string {
-	childStartStates := child.getChildStartStates()
-
-	// Empty ChildStartStates = child always runs (follows parent's desired state)
-	if len(childStartStates) == 0 {
-		return config.DesiredStateRunning
-	}
-
-	// Check if parent state is in the list of states where child should run
-	for _, state := range childStartStates {
-		if state == parentState {
-			return config.DesiredStateRunning
-		}
-	}
-
-	return config.DesiredStateStopped
 }

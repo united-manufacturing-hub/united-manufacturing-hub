@@ -520,8 +520,7 @@ var _ = Describe("FSMv2 Architecture Validation — P1.8 Foundation Cap", func()
 			// UserSpec.Config legitimately contains template markers (children
 			// re-render their own templates downstream). The check covers only
 			// the ChildSpec identity fields whose values are addressed by the
-			// supervisor before any template render happens — Name and
-			// WorkerType. ChildStartStates entries are also identity-level.
+			// supervisor before any template render happens — Name and WorkerType.
 			fixtures := parentRenderers()
 			Expect(fixtures).NotTo(BeEmpty())
 
@@ -535,12 +534,6 @@ var _ = Describe("FSMv2 Architecture Validation — P1.8 Foundation Cap", func()
 						"parent %q child[%d].WorkerType contains template marker — must be resolved before emission", fx.name, i)
 					Expect(spec.WorkerType).NotTo(ContainSubstring("}}"),
 						"parent %q child[%d].WorkerType contains template marker — must be resolved before emission", fx.name, i)
-					for j, st := range spec.ChildStartStates {
-						Expect(st).NotTo(ContainSubstring("{{"),
-							"parent %q child[%d].ChildStartStates[%d] contains template marker — must be resolved before emission", fx.name, i, j)
-						Expect(st).NotTo(ContainSubstring("}}"),
-							"parent %q child[%d].ChildStartStates[%d] contains template marker — must be resolved before emission", fx.name, i, j)
-					}
 				}
 			}
 		})

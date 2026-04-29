@@ -40,7 +40,7 @@ const WorkerTypeName = "examplechild"
 var _ fsmv2.Worker = (*ChildWorker)(nil)
 
 // ChildWorker implements the FSM Worker interface for the example child
-// worker. Its lifecycle is orchestrated by the parent via ChildStartStates.
+// worker. Its lifecycle is orchestrated by the parent via the Enabled field.
 type ChildWorker struct {
 	fsmv2.WorkerBase[ExamplechildConfig, ExamplechildStatus]
 	deps *ExamplechildDependencies

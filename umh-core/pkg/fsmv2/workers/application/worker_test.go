@@ -167,30 +167,6 @@ children:
 			Expect(err.Error()).To(ContainSubstring("invalid spec type"))
 		})
 
-		It("should preserve ChildStartStates in children", func() {
-			yamlConfig := `
-children:
-  - name: "child-1"
-    workerType: "example-child"
-    childStartStates:
-      - "running"
-      - "TryingToStart"
-`
-			userSpec := config.UserSpec{
-				Config: yamlConfig,
-			}
-
-			desiredIface, err := worker.DeriveDesiredState(userSpec)
-			Expect(err).ToNot(HaveOccurred())
-			desired := desiredIface.(*fsmv2.WrappedDesiredState[snapshot.ApplicationConfig])
-
-			children := RenderChildren(fsmv2.WorkerSnapshot[snapshot.ApplicationConfig, snapshot.ApplicationStatus]{
-				Desired: *desired,
-			})
-			Expect(children).To(HaveLen(1))
-			Expect(children[0].ChildStartStates).To(ConsistOf("running", "TryingToStart"))
-		})
-
 		It("should handle mixed worker types", func() {
 			yamlConfig := `
 children:

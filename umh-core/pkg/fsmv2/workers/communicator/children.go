@@ -26,7 +26,7 @@ import (
 // test #7).
 //
 // The communicator parent currently manages a single transport child. The
-// transport child runs whenever the parent is in Syncing or Recovering. Per
+// transport child runs whenever the parent is enabled. Per
 // §4-C LOCKED, Enabled MUST be set explicitly to true; the F4⊕G1 trap
 // detector in P1.8 architecture test #13 (registry walk, layer 2) catches
 // forgotten-Enabled in renderChildren bodies.
@@ -36,11 +36,10 @@ import (
 // retired in P2.5.
 func RenderChildren(snap fsmv2.WorkerSnapshot[CommunicatorConfig, CommunicatorStatus]) []config.ChildSpec {
 	return []config.ChildSpec{{
-		Name:             "transport",
-		WorkerType:       "transport",
-		UserSpec:         snapshotUserSpec(snap),
-		ChildStartStates: []string{"Syncing", "Recovering"},
-		Enabled:          true,
+		Name:       "transport",
+		WorkerType: "transport",
+		UserSpec:   snapshotUserSpec(snap),
+		Enabled:    true,
 	}}
 }
 

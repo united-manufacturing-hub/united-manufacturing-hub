@@ -22,7 +22,6 @@ import (
 )
 
 // TryingToStopState represents the state during graceful shutdown.
-// Children without "TryingToStop" in ChildStartStates will have desired state "stopped".
 // Waits for all children to stop before transitioning to StoppedState.
 type TryingToStopState struct {
 	helpers.StoppingBase

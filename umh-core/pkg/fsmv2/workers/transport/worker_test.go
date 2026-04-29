@@ -227,12 +227,10 @@ authToken: "test-token"`,
 				pushSpec := children[0]
 				Expect(pushSpec.Name).To(Equal("push"))
 				Expect(pushSpec.WorkerType).To(Equal("push"))
-				Expect(pushSpec.ChildStartStates).To(ConsistOf("Running", "Degraded"))
 
 				pullSpec := children[1]
 				Expect(pullSpec.Name).To(Equal("pull"))
 				Expect(pullSpec.WorkerType).To(Equal("pull"))
-				Expect(pullSpec.ChildStartStates).To(ConsistOf("Running", "Degraded"))
 			})
 
 			It("should return stopped state when configured", func() {

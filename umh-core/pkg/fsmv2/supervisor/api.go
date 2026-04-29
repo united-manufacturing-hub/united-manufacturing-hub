@@ -603,29 +603,6 @@ func (s *Supervisor[TObserved, TDesired]) setMappedParentState(state string) {
 	s.mappedParentState = state
 }
 
-// getChildStartStates implements SupervisorInterface.
-func (s *Supervisor[TObserved, TDesired]) getChildStartStates() []string {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	if s.childStartStates == nil {
-		return nil
-	}
-
-	states := make([]string, len(s.childStartStates))
-	copy(states, s.childStartStates)
-
-	return states
-}
-
-// setChildStartStates implements SupervisorInterface.
-func (s *Supervisor[TObserved, TDesired]) setChildStartStates(states []string) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	s.childStartStates = states
-}
-
 // updateUserSpec implements SupervisorInterface.
 func (s *Supervisor[TObserved, TDesired]) updateUserSpec(spec config.UserSpec) {
 	s.mu.Lock()

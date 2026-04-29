@@ -32,7 +32,7 @@ import (
 // Embeds BaseUserSpec to support the StateGetter interface, allowing
 // WorkerBase.DeriveDesiredState to extract the desired state from the "state"
 // YAML field. The child worker has no additional config fields — its lifecycle
-// is driven entirely by the parent's ChildStartStates mapping.
+// is driven by the parent's Enabled field.
 type ExamplechildConfig struct {
 	config.BaseUserSpec `yaml:",inline"`
 }

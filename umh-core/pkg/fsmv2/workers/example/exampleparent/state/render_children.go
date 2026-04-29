@@ -71,8 +71,7 @@ func RenderChildren(snap fsmv2.WorkerSnapshot[snapshot.ExampleparentConfig, snap
 				Config:    childConfig,
 				Variables: childVariables,
 			},
-			ChildStartStates: []string{"TryingToStart", "Running"},
-			Enabled:          true,
+			Enabled: true,
 		}
 	}
 

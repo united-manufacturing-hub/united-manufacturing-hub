@@ -146,7 +146,6 @@ var _ = Describe("CommunicatorWorker", func() {
 				Expect(specs).To(HaveLen(1))
 				Expect(specs[0].Name).To(Equal("transport"))
 				Expect(specs[0].WorkerType).To(Equal("transport"))
-				Expect(specs[0].ChildStartStates).To(ConsistOf("Syncing", "Recovering"))
 			})
 		})
 
@@ -187,7 +186,6 @@ state: "running"
 				Expect(specs).To(HaveLen(1))
 				Expect(specs[0].Name).To(Equal("transport"))
 				Expect(specs[0].WorkerType).To(Equal("transport"))
-				Expect(specs[0].ChildStartStates).To(ConsistOf("Syncing", "Recovering"))
 				Expect(specs[0].UserSpec.Config).To(Equal(spec.Config))
 			})
 

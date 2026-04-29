@@ -22,7 +22,6 @@ import (
 )
 
 // TryingToStartState represents the state while spawning children.
-// Children with ChildStartStates containing "TryingToStart" will have desired state "running".
 // Waits for all children to become healthy before transitioning to RunningState.
 type TryingToStartState struct {
 	helpers.StartingBase

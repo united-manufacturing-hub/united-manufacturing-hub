@@ -176,11 +176,10 @@ type Supervisor[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState] stru
 	noStateMachineLoggedOnce sync.Map
 	userSpec                 config.UserSpec
 	workerType               string
-	mappedParentState        string
-	parentID                 string
-	lastUserSpecHash         string
-	childStartStates         []string
-	collectorHealth          CollectorHealth
+	mappedParentState string
+	parentID          string
+	lastUserSpecHash  string
+	collectorHealth   CollectorHealth
 	metricsWg                sync.WaitGroup
 	tickInterval             time.Duration
 	tickCount                uint64

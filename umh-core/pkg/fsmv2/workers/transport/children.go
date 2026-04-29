@@ -25,10 +25,11 @@ import (
 // (idempotency property exercised by P1.8 architecture test #7).
 //
 // The transport parent always emits two children — push and pull — that run
-// whenever the parent is in Running or Degraded. Including Degraded prevents
-// the oscillation loop where a child stops on parent degradation (caused by
-// the child being unhealthy), the parent recovers (no unhealthy children),
-// the child restarts, and the cycle repeats.
+// whenever the parent is enabled. Children run regardless of the parent's
+// current FSM state, including Degraded, to prevent the oscillation loop
+// where a child stops on parent degradation (caused by the child being
+// unhealthy), the parent recovers (no unhealthy children), the child
+// restarts, and the cycle repeats.
 //
 // Per §4-C LOCKED, Enabled MUST be set explicitly to true; the F4⊕G1 trap
 // detector in P1.8 architecture test #13 (registry walk, layer 2) catches
@@ -42,18 +43,16 @@ func RenderChildren(snap fsmv2.WorkerSnapshot[TransportConfig, TransportStatus])
 
 	return []config.ChildSpec{
 		{
-			Name:             "push",
-			WorkerType:       "push",
-			UserSpec:         config.UserSpec{Config: rawSpec.Config, Variables: rawSpec.Variables},
-			ChildStartStates: []string{"Running", "Degraded"},
-			Enabled:          true,
+			Name:       "push",
+			WorkerType: "push",
+			UserSpec:   config.UserSpec{Config: rawSpec.Config, Variables: rawSpec.Variables},
+			Enabled:    true,
 		},
 		{
-			Name:             "pull",
-			WorkerType:       "pull",
-			UserSpec:         config.UserSpec{Config: rawSpec.Config, Variables: rawSpec.Variables},
-			ChildStartStates: []string{"Running", "Degraded"},
-			Enabled:          true,
+			Name:       "pull",
+			WorkerType: "pull",
+			UserSpec:   config.UserSpec{Config: rawSpec.Config, Variables: rawSpec.Variables},
+			Enabled:    true,
 		},
 	}
 }
