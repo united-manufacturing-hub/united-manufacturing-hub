@@ -25,6 +25,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/hash"
@@ -171,51 +172,70 @@ func newTransportError(statusCode int, body []byte, headers http.Header, baseErr
 }
 
 // HTTPTransport implements HTTP-based communication using umh-core protocol.
+//
+// HTTPTransport publishes httpClient via atomic.Pointer so Push, Pull, and Authenticate
+// can read it concurrently while Reset replaces it without a mutex. Readers Load() a
+// local *http.Client and complete the in-flight call against that captured pointer;
+// subsequent calls observe the pointer from the most recent Store call.
+// CloseIdleConnections on the old client's transport acquires http.Transport's internal
+// idleMu, which is independent of any synchronization on HTTPTransport itself, so there
+// is no deadlock between Reset's cleanup and concurrent Do() calls. Reset publishes the
+// new client before closing idle connections on the old one.
+//
+// HTTPTransport must be created via NewHTTPTransport; a zero-value HTTPTransport is invalid.
 type HTTPTransport struct {
-	httpClient *http.Client
+	// Field order set by betteralign-fix.
+	httpClient atomic.Pointer[http.Client]
 	RelayURL   string
 }
 
 // NewHTTPTransport creates a new HTTP transport.
 // If timeout is 0, defaults to LongPollingDuration (30 seconds).
 // Transport settings match legacy communicator to avoid Cloudflare issues.
+// Connection pooling replaces the legacy DisableKeepAlives setting.
 func NewHTTPTransport(relayURL string, timeout time.Duration) *HTTPTransport {
 	if timeout == 0 {
 		timeout = LongPollingDuration
 	}
 
-	// Connection pooling replaces DisableKeepAlives for better performance (Bug #7 fix)
 	t := &HTTPTransport{
 		RelayURL: relayURL,
-		httpClient: &http.Client{
-			Timeout: timeout,
-			Transport: &http.Transport{
-				// Disable HTTP/2 to match Cloudflare behavior
-				ForceAttemptHTTP2: false,
-				TLSNextProto:      make(map[string]func(authority string, c *tls.Conn) http.RoundTripper),
-				Proxy:             http.ProxyFromEnvironment,
-
-				// Connection pooling (minimal for low-traffic FSMv2)
-				MaxIdleConns:        5, // Total idle connections
-				MaxIdleConnsPerHost: 1, // 1 idle connection to relay endpoint
-				MaxConnsPerHost:     2, // Up to 2 concurrent (auth + pull/push)
-
-				// Dial settings
-				DialContext: (&net.Dialer{
-					Timeout:   30 * time.Second,
-					KeepAlive: 30 * time.Second,
-				}).DialContext,
-
-				// Timeouts
-				IdleConnTimeout:       30 * time.Second, // Match legacy keepAliveTimeout
-				TLSHandshakeTimeout:   10 * time.Second,
-				ResponseHeaderTimeout: 30 * time.Second,
-				ExpectContinueTimeout: 1 * time.Second,
-			},
-		},
 	}
+	t.httpClient.Store(buildHTTPClient(timeout))
 
 	return t
+}
+
+// buildHTTPClient constructs the *http.Client used by NewHTTPTransport and
+// Reset. Both call paths produce a client with identical settings, so this
+// function centralizes the configuration.
+func buildHTTPClient(timeout time.Duration) *http.Client {
+	return &http.Client{
+		Timeout: timeout,
+		Transport: &http.Transport{
+			// Disable HTTP/2 to match Cloudflare behavior
+			ForceAttemptHTTP2: false,
+			TLSNextProto:      make(map[string]func(authority string, c *tls.Conn) http.RoundTripper),
+			Proxy:             http.ProxyFromEnvironment,
+
+			// Connection pooling (minimal for low-traffic FSMv2)
+			MaxIdleConns:        5, // Total idle connections
+			MaxIdleConnsPerHost: 1, // 1 idle connection to relay endpoint
+			MaxConnsPerHost:     2, // Up to 2 concurrent (auth + pull/push)
+
+			// Dial settings
+			DialContext: (&net.Dialer{
+				Timeout:   30 * time.Second,
+				KeepAlive: 30 * time.Second,
+			}).DialContext,
+
+			// Timeouts
+			IdleConnTimeout:       30 * time.Second, // Match legacy keepAliveTimeout
+			TLSHandshakeTimeout:   10 * time.Second,
+			ResponseHeaderTimeout: 30 * time.Second,
+			ExpectContinueTimeout: 1 * time.Second,
+		},
+	}
 }
 
 // Authenticate performs JWT authentication using double-hashed token in Authorization header.
@@ -234,7 +254,8 @@ func (t *HTTPTransport) Authenticate(ctx context.Context, req types.AuthRequest)
 	httpReq.Header.Set("Authorization", "Bearer "+hashedToken)
 	httpReq.Header.Set("Content-Type", "application/json")
 
-	resp, err := t.httpClient.Do(httpReq)
+	client := t.httpClient.Load()
+	resp, err := client.Do(httpReq)
 	if err != nil {
 		return types.AuthResponse{}, &types.TransportError{
 			Type:    types.ErrorTypeNetwork,
@@ -320,7 +341,8 @@ func (t *HTTPTransport) Pull(ctx context.Context, jwtToken string) ([]*types.UMH
 
 	httpReq.AddCookie(&http.Cookie{Name: "token", Value: jwtToken})
 
-	resp, err := t.httpClient.Do(httpReq)
+	client := t.httpClient.Load()
+	resp, err := client.Do(httpReq)
 	if err != nil {
 		return nil, &types.TransportError{
 			Type:    types.ErrorTypeNetwork,
@@ -386,7 +408,8 @@ func (t *HTTPTransport) Push(ctx context.Context, jwtToken string, messages []*t
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.AddCookie(&http.Cookie{Name: "token", Value: jwtToken})
 
-	resp, err := t.httpClient.Do(httpReq)
+	client := t.httpClient.Load()
+	resp, err := client.Do(httpReq)
 	if err != nil {
 		return &types.TransportError{
 			Type:    types.ErrorTypeNetwork,
@@ -408,43 +431,45 @@ func (t *HTTPTransport) Push(ctx context.Context, jwtToken string, messages []*t
 	return nil
 }
 
-// ResetClient resets the HTTP client (closes idle connections).
+// ResetClient closes idle connections on the current HTTP client without
+// replacing it. Safe to call concurrently with Push, Pull, and Authenticate.
+// http.Transport.CloseIdleConnections acquires the transport's internal
+// idleMu, which is independent of any synchronization on HTTPTransport.
 func (t *HTTPTransport) ResetClient() {
-	if tr, ok := t.httpClient.Transport.(*http.Transport); ok {
-		tr.CloseIdleConnections()
+	if c := t.httpClient.Load(); c != nil {
+		// If Transport is not *http.Transport, idle-connection draining is skipped.
+		if tr, ok := c.Transport.(*http.Transport); ok {
+			tr.CloseIdleConnections()
+		}
 	}
 }
 
-// Close closes the transport.
+// Close drains idle connections but does not prevent new requests; callers must
+// cancel the context to stop in-flight and future calls.
 func (t *HTTPTransport) Close() {
 	t.ResetClient()
 }
 
-// Reset recreates the HTTP client to establish fresh connections when retries aren't helping.
+// Reset recreates the HTTP client to establish fresh connections when retries
+// aren't helping. The new client is published atomically; concurrent Push,
+// Pull, and Authenticate either observe the old client (and finish their
+// in-flight call against it) or the new one. Reset is non-blocking. The
+// atomic Store does not wait for in-flight reads.
+// Reset must be called from a single goroutine; the FSMv2 reconciler is the only intended caller.
 func (t *HTTPTransport) Reset() {
-	// Close existing connections
-	t.ResetClient()
+	old := t.httpClient.Load()
 
-	t.httpClient = &http.Client{
-		Timeout: t.httpClient.Timeout,
-		Transport: &http.Transport{
-			ForceAttemptHTTP2: false,
-			TLSNextProto:      make(map[string]func(authority string, c *tls.Conn) http.RoundTripper),
-			Proxy:             http.ProxyFromEnvironment,
+	timeout := LongPollingDuration
+	if old != nil {
+		timeout = old.Timeout
+	}
 
-			MaxIdleConns:        5,
-			MaxIdleConnsPerHost: 1,
-			MaxConnsPerHost:     2,
+	t.httpClient.Store(buildHTTPClient(timeout))
 
-			DialContext: (&net.Dialer{
-				Timeout:   30 * time.Second,
-				KeepAlive: 30 * time.Second,
-			}).DialContext,
-
-			IdleConnTimeout:       30 * time.Second,
-			TLSHandshakeTimeout:   10 * time.Second,
-			ResponseHeaderTimeout: 30 * time.Second,
-			ExpectContinueTimeout: 1 * time.Second,
-		},
+	if old != nil {
+		// If Transport is not *http.Transport, idle-connection draining is skipped.
+		if tr, ok := old.Transport.(*http.Transport); ok {
+			tr.CloseIdleConnections()
+		}
 	}
 }

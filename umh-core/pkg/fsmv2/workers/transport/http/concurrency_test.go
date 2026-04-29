@@ -12,10 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// This spec fails under "go test -race" because Push reads t.httpClient
-// and Reset writes t.httpClient with no synchronization. Without -race
-// the data race is not visible and the spec passes.
-// The race is resolved when httpClient is switched to atomic.Pointer[http.Client].
+// This spec is the regression guard for the atomic.Pointer-based fix
+// in HTTPTransport. It runs concurrent Push and Reset goroutines under
+// the race detector; the test passes only because httpClient is
+// atomic.Pointer[http.Client]. If a future change reverts to a raw
+// pointer (or any non-synchronized field), -race will catch the
+// regression here.
 
 package transport_test
 
@@ -34,9 +36,9 @@ import (
 )
 
 var _ = Describe("HTTPTransport concurrency", func() {
-	It("does not race when Push and Reset run concurrently (RED until atomic.Pointer[http.Client] fix)", func() {
-		// The server always returns 200 OK. The test only checks that the race
-		// detector reports a data race, not that individual requests succeed.
+	// Previously RED under -race; kept as regression guard after the atomic.Pointer fix.
+	It("does not race when Push and Reset run concurrently", func() {
+		// The test checks that no data race occurs under concurrent Push and Reset; the server always returns 200 OK.
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			_, _ = io.Copy(io.Discard, r.Body)
 			w.WriteHeader(http.StatusOK)
@@ -65,7 +67,7 @@ var _ = Describe("HTTPTransport concurrency", func() {
 			}
 		}()
 
-		// Goroutine B calls Reset repeatedly; Reset writes t.httpClient with no synchronization.
+		// Goroutine B calls Reset repeatedly; Reset atomically replaces t.httpClient via atomic.Pointer.Store.
 		go func() {
 			defer wg.Done()
 			for range iterations {
