@@ -23,7 +23,8 @@ import (
 )
 
 // defaultChildConfig is the fallback YAML used when ExampleparentConfig.ChildConfig
-// is empty.
+// is empty. Must stay in sync with the same-named const in children.go — both are
+// governed by the byte-equivalence requirement enforced by Test 14.
 const defaultChildConfig = `address: {{ .IP }}:{{ .PORT }}
 device: {{ .DEVICE_ID }}`
 
