@@ -782,7 +782,7 @@ Worker API v2 replaces the 7-file pattern with a single-file approach using gene
 | `dependencies.go` with custom deps struct | `deps.Identity`, `deps.FSMLogger`, `deps.StateReader` passed to constructor |
 | `init()` with manual worker factory + supervisor factory + CSE `TypeRegistry` registrations | `register.Worker[TConfig, TStatus, TDeps]("type", constructor)` (use `register.NoDeps` for zero-dep workers) |
 | `helpers.ConvertSnapshot[Obs, *Des](snapAny)` in states | `fsmv2.ConvertWorkerSnapshot[TConfig, TStatus](snapAny)` in states |
-| `snap.Desired.IsShutdownRequested()` on custom `DesiredState` | `snap.Desired.IsShutdownRequested()` on `WorkerSnapshot` |
+| `snap.Desired.IsShutdownRequested()` on custom `DesiredState` | `snap.Desired.IsShutdownRequested()` on `WorkerSnapshot` — call syntax unchanged; `snap.Desired` is now `WrappedDesiredState[TConfig]` (promoted from `WorkerBase`); no custom `DesiredState` interface needed |
 | Manual `SetState`, `SetShutdownRequested`, `SetChildrenCounts` in ObservedState | Automatic via collector duck-typing on `Observation` |
 
 ### Migration steps
