@@ -193,7 +193,7 @@ var _ = Describe("Transport Scenario", func() {
 
 ## Error Classification Pattern
 
-9 ErrorTypes exist in `workers/transport/types`. `ShouldStopRetrying` always returns false — classify locally as infrastructure (retry forever) vs non-infrastructure (drop). No retry cap: at 100ms tick rate, even `maxRetries=3` = 300ms, meaning a 1-second network outage drops messages.
+9 `ErrorType` values exist in `workers/transport/types`. `ShouldStopRetrying` always returns false — classify locally as infrastructure (retry forever) vs non-infrastructure (drop). No retry cap: at 100ms tick rate, even `maxRetries=3` = 300ms, meaning a 1-second network outage drops messages.
 
 ## Parent-Level Transport Reset (resetGeneration Pattern)
 

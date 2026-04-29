@@ -31,6 +31,9 @@ const maxPendingMessages = 1000
 
 var _ snapshot.PushDependencies = (*PushDependencies)(nil)
 
+// PushDependencies holds runtime state for the push worker, including a pending-message
+// buffer. It delegates transport, token, and error tracking to the parent
+// TransportDependencies.
 type PushDependencies struct {
 	*deps.BaseDependencies
 	parentDeps              *transport_pkg.TransportDependencies
@@ -42,6 +45,7 @@ type PushDependencies struct {
 	lastErrorType           types.ErrorType
 }
 
+// NewPushDependencies creates a PushDependencies backed by the given parent transport dependencies.
 func NewPushDependencies(parentDeps *transport_pkg.TransportDependencies, identity deps.Identity, logger deps.FSMLogger, stateReader deps.StateReader) (*PushDependencies, error) {
 	if parentDeps == nil {
 		return nil, errors.New("parentDeps must not be nil")
@@ -54,22 +58,29 @@ func NewPushDependencies(parentDeps *transport_pkg.TransportDependencies, identi
 	}, nil
 }
 
+// GetOutboundChan returns the parent's outbound message channel for read access
+// by the push action.
 func (d *PushDependencies) GetOutboundChan() <-chan *types.UMHMessage {
 	return d.parentDeps.GetOutboundChan()
 }
 
+// GetTransport returns the parent's transport implementation.
 func (d *PushDependencies) GetTransport() types.Transport {
 	return d.parentDeps.GetTransport()
 }
 
+// GetJWTToken returns the parent's current JWT token.
 func (d *PushDependencies) GetJWTToken() string {
 	return d.parentDeps.GetJWTToken()
 }
 
+// GetAuthenticatedUUID returns the parent's currently authenticated instance UUID.
 func (d *PushDependencies) GetAuthenticatedUUID() string {
 	return d.parentDeps.GetAuthenticatedUUID()
 }
 
+// RecordTypedError records a typed error for this child, propagates it to the parent
+// transport tracker, and emits a Sentry warning when the failure rate escalates.
 func (d *PushDependencies) RecordTypedError(errType types.ErrorType, retryAfter time.Duration) {
 	d.errorMu.Lock()
 	d.lastErrorType = errType
@@ -98,6 +109,8 @@ func (d *PushDependencies) RecordSuccess() {
 	d.failureRate.RecordOutcome(true)
 }
 
+// RecordError records an unclassified error for this child, propagates it to the
+// parent transport tracker, and emits a Sentry warning when the failure rate escalates.
 func (d *PushDependencies) RecordError() {
 	d.RetryTracker().RecordError()
 	d.parentDeps.RecordError()
@@ -107,16 +120,22 @@ func (d *PushDependencies) RecordError() {
 	}
 }
 
+// GetConsecutiveErrors returns the number of consecutive errors recorded by the
+// child's retry tracker.
 func (d *PushDependencies) GetConsecutiveErrors() int {
 	return d.RetryTracker().ConsecutiveErrors()
 }
 
+// GetLastErrorType returns the most recent error type recorded for this child.
 func (d *PushDependencies) GetLastErrorType() types.ErrorType {
 	d.errorMu.RLock()
 	defer d.errorMu.RUnlock()
 	return d.lastErrorType
 }
 
+// StorePendingMessages appends messages to the pending buffer for retry on the next tick.
+// Nil messages are filtered out. If the buffer exceeds maxPendingMessages, the oldest
+// messages are dropped.
 func (d *PushDependencies) StorePendingMessages(msgs []*types.UMHMessage) {
 	d.pendingMu.Lock()
 	defer d.pendingMu.Unlock()
@@ -135,6 +154,7 @@ func (d *PushDependencies) StorePendingMessages(msgs []*types.UMHMessage) {
 	}
 }
 
+// DrainPendingMessages returns all pending messages and clears the buffer.
 func (d *PushDependencies) DrainPendingMessages() []*types.UMHMessage {
 	d.pendingMu.Lock()
 	defer d.pendingMu.Unlock()
@@ -145,6 +165,7 @@ func (d *PushDependencies) DrainPendingMessages() []*types.UMHMessage {
 	return msgs
 }
 
+// PendingMessageCount returns the number of messages waiting for delivery.
 func (d *PushDependencies) PendingMessageCount() int {
 	d.pendingMu.RLock()
 	defer d.pendingMu.RUnlock()
@@ -152,6 +173,8 @@ func (d *PushDependencies) PendingMessageCount() int {
 	return len(d.pendingMessages)
 }
 
+// IsTokenValid reports whether the JWT token exists and has not expired
+// (with a 1-minute safety buffer).
 func (d *PushDependencies) IsTokenValid() bool {
 	token := d.parentDeps.GetJWTToken()
 	if token == "" {
@@ -168,19 +191,24 @@ func (d *PushDependencies) IsTokenValid() bool {
 	return !time.Now().Add(safetyBuffer).After(expiry)
 }
 
+// GetLastRetryAfter returns the retry-after duration from the most recent error.
 func (d *PushDependencies) GetLastRetryAfter() time.Duration {
 	return d.RetryTracker().LastError().RetryAfter
 }
 
+// GetDegradedEnteredAt returns the timestamp at which the retry tracker entered
+// the degraded state, or the zero time if the child is not currently degraded.
 func (d *PushDependencies) GetDegradedEnteredAt() time.Time {
 	degradedSince, _ := d.RetryTracker().DegradedSince()
 	return degradedSince
 }
 
+// GetLastErrorAt returns the timestamp of the most recent error.
 func (d *PushDependencies) GetLastErrorAt() time.Time {
 	return d.RetryTracker().LastError().OccurredAt
 }
 
+// GetResetGeneration returns the parent's current reset-generation counter.
 func (d *PushDependencies) GetResetGeneration() uint64 {
 	return d.parentDeps.GetResetGeneration()
 }

@@ -62,22 +62,29 @@ func NewPullDependencies(parentDeps *transport_pkg.TransportDependencies, identi
 	}, nil
 }
 
+// GetInboundChan returns the parent's inbound message channel for write access
+// by the pull action.
 func (d *PullDependencies) GetInboundChan() chan<- *types.UMHMessage {
 	return d.parentDeps.GetInboundChan()
 }
 
+// GetInboundChanStats returns the capacity and current length of the inbound channel.
 func (d *PullDependencies) GetInboundChanStats() (capacity int, length int) {
 	return d.parentDeps.GetInboundChanStats()
 }
 
+// GetTransport returns the parent's transport implementation.
 func (d *PullDependencies) GetTransport() types.Transport {
 	return d.parentDeps.GetTransport()
 }
 
+// GetJWTToken returns the parent's current JWT token.
 func (d *PullDependencies) GetJWTToken() string {
 	return d.parentDeps.GetJWTToken()
 }
 
+// RecordTypedError records a typed error for this child, propagates it to the parent
+// transport tracker, and emits a Sentry warning when the failure rate escalates.
 func (d *PullDependencies) RecordTypedError(errType types.ErrorType, retryAfter time.Duration) {
 	d.errorMu.Lock()
 	d.lastErrorType = errType
@@ -106,6 +113,8 @@ func (d *PullDependencies) RecordSuccess() {
 	d.failureRate.RecordOutcome(true)
 }
 
+// RecordError records an unclassified error for this child, propagates it to the
+// parent transport tracker, and emits a Sentry warning when the failure rate escalates.
 func (d *PullDependencies) RecordError() {
 	d.RetryTracker().RecordError()
 	d.parentDeps.RecordError()
@@ -115,10 +124,13 @@ func (d *PullDependencies) RecordError() {
 	}
 }
 
+// GetConsecutiveErrors returns the number of consecutive errors recorded by the
+// child's retry tracker.
 func (d *PullDependencies) GetConsecutiveErrors() int {
 	return d.RetryTracker().ConsecutiveErrors()
 }
 
+// GetLastErrorType returns the most recent error type recorded for this child.
 func (d *PullDependencies) GetLastErrorType() types.ErrorType {
 	d.errorMu.RLock()
 	defer d.errorMu.RUnlock()
@@ -201,19 +213,24 @@ func (d *PullDependencies) IsTokenValid() bool {
 	return !time.Now().Add(safetyBuffer).After(expiry)
 }
 
+// GetLastRetryAfter returns the retry-after duration from the most recent error.
 func (d *PullDependencies) GetLastRetryAfter() time.Duration {
 	return d.RetryTracker().LastError().RetryAfter
 }
 
+// GetDegradedEnteredAt returns the timestamp at which the retry tracker entered
+// the degraded state, or the zero time if the child is not currently degraded.
 func (d *PullDependencies) GetDegradedEnteredAt() time.Time {
 	degradedSince, _ := d.RetryTracker().DegradedSince()
 	return degradedSince
 }
 
+// GetLastErrorAt returns the timestamp of the most recent error.
 func (d *PullDependencies) GetLastErrorAt() time.Time {
 	return d.RetryTracker().LastError().OccurredAt
 }
 
+// GetResetGeneration returns the parent's current reset-generation counter.
 func (d *PullDependencies) GetResetGeneration() uint64 {
 	return d.parentDeps.GetResetGeneration()
 }

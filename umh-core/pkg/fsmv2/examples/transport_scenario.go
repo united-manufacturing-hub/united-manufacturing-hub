@@ -26,7 +26,8 @@ import (
 	transportWorker "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport"
 )
 
-// TransportTestChannelProvider implements types.ChannelProvider for test scenarios.
+// TransportTestChannelProvider implements the ChannelProvider interface from
+// workers/transport for test scenarios.
 type TransportTestChannelProvider struct {
 	inbound  chan *types.UMHMessage
 	outbound chan *types.UMHMessage
