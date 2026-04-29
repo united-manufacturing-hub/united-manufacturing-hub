@@ -44,7 +44,6 @@ import (
 //   - ParentMappedState: For child workers only. Injected unconditionally as config.DesiredStateRunning
 //     by the supervisor post-P3.5 (ChildStartStates removed). Will track the Enabled field once the
 //     P2.x Enabled→ShutdownRequested reducer lands.
-//   - State ("running"/"stopped"): From BaseUserSpec.GetState(). Controls whether worker should be running.
 //
 // Correct ShouldBeRunning() implementations:
 //
@@ -60,8 +59,7 @@ import (
 //
 // See ValidateNoCustomLifecycleFields in pkg/fsmv2/internal/validator/snapshot.go for enforcement.
 type BaseDesiredState struct {
-	State             string `json:"state"             yaml:"state"`             // "stopped" or "running" - desired lifecycle state
-	ShutdownRequested bool   `json:"ShutdownRequested" yaml:"ShutdownRequested"` //nolint:tagliatelle // Match JSON field name for API compatibility
+	ShutdownRequested bool `json:"ShutdownRequested" yaml:"ShutdownRequested"` //nolint:tagliatelle // Match JSON field name for API compatibility
 }
 
 // IsShutdownRequested returns whether shutdown has been requested for this worker.
@@ -73,16 +71,6 @@ func (b *BaseDesiredState) IsShutdownRequested() bool {
 // This satisfies the ShutdownRequestable interface.
 func (b *BaseDesiredState) SetShutdownRequested(v bool) {
 	b.ShutdownRequested = v
-}
-
-// GetState returns the desired lifecycle state.
-// Implements fsmv2.DesiredState interface.
-func (b *BaseDesiredState) GetState() string {
-	if b.State == "" {
-		return DesiredStateRunning
-	}
-
-	return b.State
 }
 
 // BaseUserSpec provides common fields for all user configuration types.

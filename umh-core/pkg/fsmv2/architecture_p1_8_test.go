@@ -1328,7 +1328,7 @@ func parentRenderers() []parentRendererFixture {
 			render: func() []config.ChildSpec {
 				return communicatorworker.RenderChildren(fsmv2.WorkerSnapshot[communicatorworker.CommunicatorConfig, communicatorworker.CommunicatorStatus]{
 					Desired: fsmv2.WrappedDesiredState[communicatorworker.CommunicatorConfig]{
-						BaseDesiredState: config.BaseDesiredState{State: config.DesiredStateRunning},
+						BaseDesiredState: config.BaseDesiredState{},
 						ChildrenSpecs: []config.ChildSpec{{
 							Name:       "transport",
 							WorkerType: "transport",
@@ -1343,7 +1343,7 @@ func parentRenderers() []parentRendererFixture {
 			render: func() []config.ChildSpec {
 				return transportworker.RenderChildren(fsmv2.WorkerSnapshot[transportworker.TransportConfig, transportworker.TransportStatus]{
 					Desired: fsmv2.WrappedDesiredState[transportworker.TransportConfig]{
-						BaseDesiredState: config.BaseDesiredState{State: config.DesiredStateRunning},
+						BaseDesiredState: config.BaseDesiredState{},
 						ChildrenSpecs: []config.ChildSpec{{
 							Name:       "push",
 							WorkerType: "push",
@@ -1358,7 +1358,7 @@ func parentRenderers() []parentRendererFixture {
 			render: func() []config.ChildSpec {
 				return exampleparentworker.RenderChildren(fsmv2.WorkerSnapshot[exampleparentsnapshot.ExampleparentConfig, exampleparentsnapshot.ExampleparentStatus]{
 					Desired: fsmv2.WrappedDesiredState[exampleparentsnapshot.ExampleparentConfig]{
-						BaseDesiredState: config.BaseDesiredState{State: config.DesiredStateRunning},
+						BaseDesiredState: config.BaseDesiredState{},
 						Config: exampleparentsnapshot.ExampleparentConfig{
 							ChildrenCount:   2,
 							ChildWorkerType: "examplechild",
@@ -1372,7 +1372,7 @@ func parentRenderers() []parentRendererFixture {
 			render: func() []config.ChildSpec {
 				return applicationworker.RenderChildren(fsmv2.WorkerSnapshot[applicationsnapshot.ApplicationConfig, applicationsnapshot.ApplicationStatus]{
 					Desired: fsmv2.WrappedDesiredState[applicationsnapshot.ApplicationConfig]{
-						BaseDesiredState: config.BaseDesiredState{State: config.DesiredStateRunning},
+						BaseDesiredState: config.BaseDesiredState{},
 						ChildrenSpecs: []config.ChildSpec{{
 							Name:       "child-a",
 							WorkerType: "examplechild",

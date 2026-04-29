@@ -92,7 +92,7 @@ func (m *internalMockWorker) CollectObservedState(_ context.Context, _ fsmv2.Des
 }
 
 func (m *internalMockWorker) DeriveDesiredState(_ interface{}) (fsmv2.DesiredState, error) {
-	return &config.DesiredState{BaseDesiredState: config.BaseDesiredState{State: "running"}}, nil
+	return &config.DesiredState{BaseDesiredState: config.BaseDesiredState{}}, nil
 }
 
 func (m *internalMockWorker) GetInitialState() fsmv2.State[any, any] {
@@ -168,7 +168,7 @@ func (m *internalMockWorkerWithChildren) CollectObservedState(_ context.Context,
 
 func (m *internalMockWorkerWithChildren) DeriveDesiredState(_ interface{}) (fsmv2.DesiredState, error) {
 	return &config.DesiredState{
-		BaseDesiredState: config.BaseDesiredState{State: "running"},
+		BaseDesiredState: config.BaseDesiredState{},
 		ChildrenSpecs:    m.childrenSpecs,
 	}, nil
 }
@@ -191,7 +191,7 @@ func (m *newObservationMockWorker) CollectObservedState(_ context.Context, _ fsm
 }
 
 func (m *newObservationMockWorker) DeriveDesiredState(_ interface{}) (fsmv2.DesiredState, error) {
-	return &config.DesiredState{BaseDesiredState: config.BaseDesiredState{State: "running"}}, nil
+	return &config.DesiredState{BaseDesiredState: config.BaseDesiredState{}}, nil
 }
 
 func (m *newObservationMockWorker) GetInitialState() fsmv2.State[any, any] {

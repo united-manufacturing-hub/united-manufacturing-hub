@@ -438,61 +438,6 @@ type MyObservedState struct {
 }`,
 		ReferenceFile: "example-child/snapshot/snapshot.go",
 	},
-	"MISSING_STATE_FIELD": {
-		Name: "State Field Required in DesiredState and ObservedState",
-		Why: `Both DesiredState and ObservedState structs must have a State string field.
-WHY: The State field represents the current lifecycle state of the worker (e.g., "running",
-"stopped"). This field is essential for FSM coordination and state tracking. Without it,
-the supervisor cannot determine what state the worker should be in (desired) or what state
-it is currently in (observed). This field enables the FSM to make correct state transition
-decisions.`,
-		CorrectCode: `type MyDesiredState struct {
-    config.BaseDesiredState
-    State string ` + "`json:\"state\"`" + `  // REQUIRED: lifecycle state
-    // Other desired fields...
-}
-
-type MyObservedState struct {
-    CollectedAt time.Time ` + "`json:\"collected_at\"`" + `
-    MyDesiredState ` + "`json:\",inline\"`" + `
-    State string ` + "`json:\"state\"`" + `  // REQUIRED: current state
-    // Other observed fields...
-}`,
-		ReferenceFile: "example-child/snapshot/snapshot.go",
-	},
-	"INVALID_DESIRED_STATE_VALUE": {
-		Name: "DesiredState.State Must Be 'stopped' or 'running'",
-		Why: `DesiredState.State MUST only be "stopped" or "running".
-
-WHY: These represent user INTENT (lifecycle commands), not current state.
-- "running": User wants the component active
-- "stopped": User wants the component inactive
-
-Any other value (like "connected", "starting") confuses DESIRED state
-(what we want) with OBSERVED state (what we have). This causes FSM errors
-and unpredictable behavior.
-
-NOTE: This is validated BOTH at test-time (AST checks in worker.go DeriveDesiredState)
-AND at runtime (user YAML config validation). Runtime errors are user-facing
-and follow UX_STANDARDS.md Error Excellence - provide actionable guidance.`,
-		CorrectCode: `// Correct: use constants in DeriveDesiredState
-return config.DesiredState{
-    State: config.DesiredStateRunning,  // Use constants!
-}
-
-// Also valid: literal strings
-return config.DesiredState{
-    State: "running",  // OK but prefer constants
-}
-
-// WRONG: invalid state values
-return config.DesiredState{
-    State: "connected",  // FSM operational state, not lifecycle intent
-    State: "starting",   // Transitional state, not user intent
-    State: "active",     // Ambiguous, use "running" instead
-}`,
-		ReferenceFile: "workers/example/examplechild/worker.go",
-	},
 	"MISSING_SET_STATE_METHOD": {
 		Name: "ObservedState Must Have SetState Method",
 		Why: `ObservedState types must implement SetState(string) method.

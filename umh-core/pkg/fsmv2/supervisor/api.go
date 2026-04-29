@@ -75,12 +75,6 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity deps.Identity, work
 		return fmt.Errorf("failed to derive initial desired state: %w", err)
 	}
 
-	if valErr := config.ValidateDesiredState(initialDesired.GetState()); valErr != nil {
-		s.logger.SentryError(deps.FeatureFSMv2, identity.HierarchyPath, valErr, "worker_add_validate_desired_failed")
-
-		return fmt.Errorf("failed to derive initial desired state: %w", valErr)
-	}
-
 	observed, err := worker.CollectObservedState(ctx, initialDesired)
 	if err != nil {
 		s.logger.SentryError(deps.FeatureFSMv2, identity.HierarchyPath, err, "worker_add_collect_observed_failed")

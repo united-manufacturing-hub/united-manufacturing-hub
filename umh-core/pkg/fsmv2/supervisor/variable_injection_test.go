@@ -48,14 +48,14 @@ func (t *TestWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, e
 	// Convert interface{} to config.UserSpec for the test function
 	userSpec, ok := spec.(config.UserSpec)
 	if !ok {
-		return &config.DesiredState{BaseDesiredState: config.BaseDesiredState{State: "running"}}, nil
+		return &config.DesiredState{BaseDesiredState: config.BaseDesiredState{}}, nil
 	}
 
 	if t.deriveDesiredStateFunc != nil {
 		return t.deriveDesiredStateFunc(userSpec)
 	}
 
-	return &config.DesiredState{BaseDesiredState: config.BaseDesiredState{State: "running"}}, nil
+	return &config.DesiredState{BaseDesiredState: config.BaseDesiredState{}}, nil
 }
 
 func (t *TestWorker) GetInitialState() fsmv2.State[any, any] {
@@ -196,7 +196,7 @@ var _ = Describe("Variable Injection", func() {
 			testWorker.deriveDesiredStateFunc = func(spec config.UserSpec) (fsmv2.DesiredState, error) {
 				capturedSpec = spec
 
-				return &config.DesiredState{BaseDesiredState: config.BaseDesiredState{State: "running"}}, nil
+				return &config.DesiredState{BaseDesiredState: config.BaseDesiredState{}}, nil
 			}
 
 			err := s.TestTick(ctx)
@@ -213,7 +213,7 @@ var _ = Describe("Variable Injection", func() {
 			testWorker.deriveDesiredStateFunc = func(spec config.UserSpec) (fsmv2.DesiredState, error) {
 				capturedSpec = spec
 
-				return &config.DesiredState{BaseDesiredState: config.BaseDesiredState{State: "running"}}, nil
+				return &config.DesiredState{BaseDesiredState: config.BaseDesiredState{}}, nil
 			}
 
 			err := s.TestTick(ctx)
@@ -232,7 +232,7 @@ var _ = Describe("Variable Injection", func() {
 			testWorker.deriveDesiredStateFunc = func(spec config.UserSpec) (fsmv2.DesiredState, error) {
 				capturedSpec = spec
 
-				return &config.DesiredState{BaseDesiredState: config.BaseDesiredState{State: "running"}}, nil
+				return &config.DesiredState{BaseDesiredState: config.BaseDesiredState{}}, nil
 			}
 
 			err := s.TestTick(ctx)
@@ -284,7 +284,7 @@ var _ = Describe("Variable Injection", func() {
 			testWorker.deriveDesiredStateFunc = func(spec config.UserSpec) (fsmv2.DesiredState, error) {
 				// This will be called during tick, returning a ChildSpec
 				return &config.DesiredState{
-					BaseDesiredState: config.BaseDesiredState{State: "running"},
+					BaseDesiredState: config.BaseDesiredState{},
 					ChildrenSpecs: []config.ChildSpec{
 						{
 							Name:       "test-child",
@@ -342,7 +342,7 @@ var _ = Describe("Variable Injection", func() {
 
 			testWorker.deriveDesiredStateFunc = func(spec config.UserSpec) (fsmv2.DesiredState, error) {
 				return &config.DesiredState{
-					BaseDesiredState: config.BaseDesiredState{State: "running"},
+					BaseDesiredState: config.BaseDesiredState{},
 					ChildrenSpecs: []config.ChildSpec{
 						{
 							Name:       "override-child",
@@ -395,7 +395,7 @@ var _ = Describe("Variable Injection", func() {
 			testWorker.deriveDesiredStateFunc = func(spec config.UserSpec) (fsmv2.DesiredState, error) {
 				capturedSpec = spec
 
-				return &config.DesiredState{BaseDesiredState: config.BaseDesiredState{State: "running"}}, nil
+				return &config.DesiredState{BaseDesiredState: config.BaseDesiredState{}}, nil
 			}
 
 			err := s.TestTick(ctx)
@@ -425,7 +425,7 @@ var _ = Describe("Variable Injection", func() {
 			testWorker.deriveDesiredStateFunc = func(spec config.UserSpec) (fsmv2.DesiredState, error) {
 				capturedSpec = spec
 
-				return &config.DesiredState{BaseDesiredState: config.BaseDesiredState{State: "running"}}, nil
+				return &config.DesiredState{BaseDesiredState: config.BaseDesiredState{}}, nil
 			}
 
 			err := s.TestTick(ctx)

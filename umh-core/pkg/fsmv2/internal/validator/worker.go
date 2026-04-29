@@ -96,7 +96,7 @@ func ValidateNilSpecHandling(baseDir string) []Violation {
 	return violations
 }
 
-// checkNilSpecHandling checks for nil spec check or use of nil-safe helpers (DeriveLeafState, ParseUserSpec).
+// checkNilSpecHandling checks for nil spec check or use of nil-safe helpers (ParseUserSpec).
 func checkNilSpecHandling(filename string) []Violation {
 	var violations []Violation
 
@@ -171,8 +171,7 @@ func checkNilSpecHandling(filename string) []Violation {
 // usesNilSafeHelper checks if the function body uses helpers that handle nil internally.
 func usesNilSafeHelper(body *ast.BlockStmt) bool {
 	nilSafeHelpers := map[string]bool{
-		"DeriveLeafState": true,
-		"ParseUserSpec":   true,
+		"ParseUserSpec": true,
 	}
 
 	found := false
@@ -440,95 +439,6 @@ func checkChildSpecValidation(filename string) []Violation {
 				Message: "DeriveDesiredState() should validate ChildrenSpecs before returning",
 			})
 		}
-
-		return true
-	})
-
-	return violations
-}
-
-// ValidateDeriveDesiredStateReturns checks that DeriveDesiredState returns valid State values ("stopped" or "running").
-func ValidateDeriveDesiredStateReturns(baseDir string) []Violation {
-	var violations []Violation
-
-	workerFiles := FindWorkerFiles(baseDir)
-
-	for _, file := range workerFiles {
-		fileViolations := checkDeriveDesiredStateReturns(file)
-		violations = append(violations, fileViolations...)
-	}
-
-	return violations
-}
-
-// checkDeriveDesiredStateReturns checks that DeriveDesiredState returns valid State values.
-func checkDeriveDesiredStateReturns(filename string) []Violation {
-	var violations []Violation
-
-	fset := token.NewFileSet()
-
-	node, err := parser.ParseFile(fset, filename, nil, parser.ParseComments)
-	if err != nil {
-		return violations
-	}
-
-	validStates := map[string]bool{
-		"stopped": true,
-		"running": true,
-	}
-
-	ast.Inspect(node, func(n ast.Node) bool {
-		funcDecl, ok := n.(*ast.FuncDecl)
-		if !ok || funcDecl.Name.Name != "DeriveDesiredState" {
-			return true
-		}
-
-		ast.Inspect(funcDecl.Body, func(bodyNode ast.Node) bool {
-			retStmt, ok := bodyNode.(*ast.ReturnStmt)
-			if !ok || len(retStmt.Results) == 0 {
-				return true
-			}
-
-			firstResult := retStmt.Results[0]
-
-			var compLit *ast.CompositeLit
-			if unaryExpr, ok := firstResult.(*ast.UnaryExpr); ok {
-				compLit, _ = unaryExpr.X.(*ast.CompositeLit)
-			} else {
-				compLit, _ = firstResult.(*ast.CompositeLit)
-			}
-
-			if compLit == nil {
-				return true
-			}
-
-			for _, elt := range compLit.Elts {
-				kvExpr, ok := elt.(*ast.KeyValueExpr)
-				if !ok {
-					continue
-				}
-
-				keyIdent, ok := kvExpr.Key.(*ast.Ident)
-				if !ok || keyIdent.Name != "State" {
-					continue
-				}
-
-				if basicLit, ok := kvExpr.Value.(*ast.BasicLit); ok && basicLit.Kind == token.STRING {
-					value := strings.Trim(basicLit.Value, `"`)
-					if !validStates[value] {
-						pos := fset.Position(kvExpr.Pos())
-						violations = append(violations, Violation{
-							File:    filename,
-							Line:    pos.Line,
-							Type:    "INVALID_DESIRED_STATE_VALUE",
-							Message: fmt.Sprintf("DeriveDesiredState returns invalid State value %q - must be \"stopped\" or \"running\"", value),
-						})
-					}
-				}
-			}
-
-			return true
-		})
 
 		return true
 	})

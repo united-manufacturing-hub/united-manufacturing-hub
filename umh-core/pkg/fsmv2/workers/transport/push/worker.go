@@ -19,6 +19,8 @@ import (
 	"errors"
 	"fmt"
 
+	"gopkg.in/yaml.v3"
+
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
@@ -102,13 +104,11 @@ func (w *PushWorker) CollectObservedState(ctx context.Context, _ fsmv2.DesiredSt
 }
 
 // DeriveDesiredState determines the desired state from the provided spec.
-// Returns DesiredStateRunning when spec is nil (child workers default to running).
+// Child workers always default to running; lifecycle is controlled via ShutdownRequested.
 // Must be PURE — only uses the spec parameter, never dependencies.
 func (w *PushWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, error) {
 	if spec == nil {
-		return &fsmv2.WrappedDesiredState[PushConfig]{
-			BaseDesiredState: config.BaseDesiredState{State: config.DesiredStateRunning},
-		}, nil
+		return &fsmv2.WrappedDesiredState[PushConfig]{}, nil
 	}
 
 	userSpec, ok := spec.(config.UserSpec)
@@ -121,18 +121,15 @@ func (w *PushWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, e
 		return nil, fmt.Errorf("template rendering failed: %w", err)
 	}
 
-	renderedSpec := config.UserSpec{
-		Config:    renderedConfig,
-		Variables: userSpec.Variables,
-	}
-
-	leafDesired, err := config.DeriveLeafState[PushConfig](renderedSpec)
-	if err != nil {
-		return nil, err
+	var cfg PushConfig
+	if renderedConfig != "" {
+		if err := yaml.Unmarshal([]byte(renderedConfig), &cfg); err != nil {
+			return nil, fmt.Errorf("config unmarshal failed: %w", err)
+		}
 	}
 
 	return &fsmv2.WrappedDesiredState[PushConfig]{
-		BaseDesiredState: leafDesired.BaseDesiredState,
+		Config: cfg,
 	}, nil
 }
 

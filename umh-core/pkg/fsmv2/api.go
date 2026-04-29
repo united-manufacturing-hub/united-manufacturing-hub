@@ -80,10 +80,6 @@ type DesiredState interface {
 	// IsShutdownRequested is set by supervisor to initiate graceful shutdown.
 	// States should check this first in their Next() method.
 	IsShutdownRequested() bool
-
-	// GetState returns the desired lifecycle state ("running", "stopped", etc.).
-	// Used by supervisor to validate state values after DeriveDesiredState.
-	GetState() string
 }
 
 // ShutdownRequestable allows setting the shutdown flag on any DesiredState.

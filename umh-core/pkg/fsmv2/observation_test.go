@@ -373,7 +373,6 @@ var _ = Describe("Observation", func() {
 
 		It("includes ShutdownRequested=false in JSON (not omitted)", func() {
 			obs := fsmv2.Observation[TestStatus]{
-				State:             "stopped",
 				ShutdownRequested: false,
 			}
 
@@ -387,7 +386,6 @@ var _ = Describe("Observation", func() {
 
 		It("includes MetricsEmbedder fields at top level with correct values", func() {
 			obs := fsmv2.Observation[TestStatus]{
-				State: "running",
 			}
 			obs.Status = TestStatus{Reachable: true}
 			obs.Metrics.Framework = deps.FrameworkMetrics{
@@ -419,7 +417,6 @@ var _ = Describe("Observation", func() {
 			}
 
 			obs := fsmv2.Observation[BadStatus]{
-				State: "running",
 			}
 			obs.Status = BadStatus{State: "conflict"}
 
@@ -430,7 +427,6 @@ var _ = Describe("Observation", func() {
 
 		It("returns error when TStatus is not a JSON object", func() {
 			obs := fsmv2.Observation[string]{
-				State: "running",
 			}
 			obs.Status = "not-an-object"
 

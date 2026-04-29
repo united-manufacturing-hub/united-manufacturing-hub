@@ -55,7 +55,6 @@ var _ = Describe("Preferential Maintenance Scheduling", func() {
 			},
 			Desired: &fsmv2.WrappedDesiredState[persistence.PersistenceConfig]{
 				BaseDesiredState: fsmv2config.BaseDesiredState{
-					State: "running",
 				},
 				Config: persistence.PersistenceConfig{
 					CompactionInterval:  5 * time.Minute,
@@ -80,7 +79,6 @@ var _ = Describe("Preferential Maintenance Scheduling", func() {
 				},
 				Desired: &fsmv2.WrappedDesiredState[persistence.PersistenceConfig]{
 					BaseDesiredState: fsmv2config.BaseDesiredState{
-						State: "running",
 					},
 					Config: persistence.PersistenceConfig{
 						CompactionInterval:  5 * time.Minute,
@@ -107,7 +105,6 @@ var _ = Describe("Preferential Maintenance Scheduling", func() {
 				},
 				Desired: &fsmv2.WrappedDesiredState[persistence.PersistenceConfig]{
 					BaseDesiredState: fsmv2config.BaseDesiredState{
-						State: "running",
 					},
 					Config: persistence.PersistenceConfig{
 						CompactionInterval:  5 * time.Minute,
@@ -229,7 +226,6 @@ var _ = Describe("Preferential Maintenance Scheduling", func() {
 				},
 				Desired: &fsmv2.WrappedDesiredState[persistence.PersistenceConfig]{
 					BaseDesiredState: fsmv2config.BaseDesiredState{
-						State: "running",
 					},
 					Config: persistence.PersistenceConfig{
 						CompactionInterval:  5 * time.Minute,

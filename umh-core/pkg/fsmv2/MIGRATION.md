@@ -593,8 +593,7 @@ func (w *ParentWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState,
     }
 
     return &config.DesiredState{
-        BaseDesiredState: config.BaseDesiredState{State: config.DesiredStateRunning},
-        ChildrenSpecs:    children,
+        ChildrenSpecs: children,
     }, nil
 }
 
@@ -804,6 +803,52 @@ Worker API v2 replaces the 7-file pattern with a single-file approach using gene
 - `dependencies.go` — replaced by `deps.Identity` + `deps.FSMLogger` + `deps.StateReader`
 - `userspec.go` — TConfig IS your userspec
 - Factory/supervisor registration boilerplate in `init()`
+
+## P3.5d: BaseDesiredState.State field and DeriveLeafState removed
+
+**PR3 cascade, change P3.5d.** This change removes two previously required fields and helpers:
+
+- `config.BaseDesiredState.State string` — removed from the struct entirely.
+- `DesiredState.GetState() string` — removed from the `fsmv2.DesiredState` interface.
+- `config.DeriveLeafState[T, PT]` — deleted; use `WorkerBase.DeriveDesiredState` or `config.ParseUserSpec` directly.
+- `config.StateGetter` — deleted interface.
+
+### What you must change
+
+**Before (broken after P3.5d):**
+```go
+return &config.DesiredState{
+    BaseDesiredState: config.BaseDesiredState{State: config.DesiredStateRunning},
+    ChildrenSpecs:    children,
+}, nil
+```
+
+**After (correct):**
+```go
+return &config.DesiredState{
+    ChildrenSpecs: children,
+}, nil
+```
+
+If your code calls `desired.GetState()` to decide whether to start a worker, replace it with `!desired.IsShutdownRequested()`:
+
+```go
+// Before
+if snap.Desired.GetState() == config.DesiredStateRunning { ... }
+
+// After
+if !snap.Desired.IsShutdownRequested() { ... }
+```
+
+If your TConfig embeds `config.BaseUserSpec`, `cfg.GetState()` is still valid — it reads the user-facing `state:` YAML field and is unaffected by this change.
+
+### Rolling-upgrade (HA) constraint
+
+**Upgrade is safe.** Old instances write CSE JSON with a `"state"` key; new instances silently drop it (`encoding/json` ignores unknown fields). No data loss.
+
+**Rollback is NOT safe** once new code has written a `DesiredState` without `"state"`. Old code reading that JSON sees `GetState()==""` and the old `ValidateDesiredState` block stalls the reconciliation loop. To roll back: clear all CSE `DesiredState` entries before switching back, or restore a pre-upgrade CSE snapshot.
+
+See `supervisor/migration/p3_5d_desired_state.go` for the lazy-migration boundary and rollback semantics.
 
 ## Further Reading
 

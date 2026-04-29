@@ -336,7 +336,7 @@ func (m *incrementalValidationMockWorker) CollectObservedState(_ context.Context
 
 func (m *incrementalValidationMockWorker) DeriveDesiredState(_ interface{}) (fsmv2.DesiredState, error) {
 	return &config.DesiredState{
-		BaseDesiredState: config.BaseDesiredState{State: "running"},
+		BaseDesiredState: config.BaseDesiredState{},
 		ChildrenSpecs:    m.childSpecs,
 	}, nil
 }
@@ -362,7 +362,7 @@ func (m *dynamicChildSpecMockWorker) CollectObservedState(_ context.Context, _ f
 
 func (m *dynamicChildSpecMockWorker) DeriveDesiredState(_ interface{}) (fsmv2.DesiredState, error) {
 	return &config.DesiredState{
-		BaseDesiredState: config.BaseDesiredState{State: "running"},
+		BaseDesiredState: config.BaseDesiredState{},
 		ChildrenSpecs:    m.childSpecs,
 	}, nil
 }

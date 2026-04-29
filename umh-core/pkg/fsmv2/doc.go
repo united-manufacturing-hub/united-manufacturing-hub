@@ -187,10 +187,6 @@
 //	parsed, err := config.ParseUserSpec[MyConfig](spec)
 //	if err != nil { return config.DesiredState{}, err }
 //
-//	// DeriveLeafState[T] - one-liner for leaf workers (no children)
-//	// Requires MyConfig to implement GetState() string
-//	return config.DeriveLeafState[MyConfig](spec)
-//
 // See config/helpers.go for documentation.
 //
 // ## Factory registration

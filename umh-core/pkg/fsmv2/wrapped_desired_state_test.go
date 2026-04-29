@@ -50,20 +50,6 @@ var _ = Describe("WrappedDesiredState", func() {
 		})
 	})
 
-	Describe("GetState", func() {
-		It("returns the configured state", func() {
-			ds := &fsmv2.WrappedDesiredState[testConfig]{
-				BaseDesiredState: config.BaseDesiredState{State: "stopped"},
-			}
-			Expect(ds.GetState()).To(Equal("stopped"))
-		})
-
-		It("defaults to running when state is empty", func() {
-			ds := &fsmv2.WrappedDesiredState[testConfig]{}
-			Expect(ds.GetState()).To(Equal("running"))
-		})
-	})
-
 	Describe("SetShutdownRequested", func() {
 		It("sets shutdown to true", func() {
 			ds := &fsmv2.WrappedDesiredState[testConfig]{}
@@ -96,7 +82,7 @@ var _ = Describe("WrappedDesiredState", func() {
 	Describe("JSON round-trip", func() {
 		It("round-trips via JSON marshal/unmarshal", func() {
 			original := &fsmv2.WrappedDesiredState[testConfig]{
-				BaseDesiredState: config.BaseDesiredState{State: "running"},
+				BaseDesiredState: config.BaseDesiredState{},
 				Config:           testConfig{Host: "localhost", Port: 8080},
 			}
 			original.SetShutdownRequested(true)
@@ -109,7 +95,6 @@ var _ = Describe("WrappedDesiredState", func() {
 			Expect(restored.Config.Host).To(Equal("localhost"))
 			Expect(restored.Config.Port).To(Equal(8080))
 			Expect(restored.IsShutdownRequested()).To(BeTrue())
-			Expect(restored.GetState()).To(Equal("running"))
 		})
 	})
 

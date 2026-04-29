@@ -48,7 +48,6 @@ var _ = Describe("RunningDegradedState", func() {
 					},
 					Desired: &fsmv2.WrappedDesiredState[persistence.PersistenceConfig]{
 						BaseDesiredState: fsmv2config.BaseDesiredState{
-							State:             "running",
 							ShutdownRequested: true,
 						},
 						Config: persistence.PersistenceConfig{
@@ -78,7 +77,6 @@ var _ = Describe("RunningDegradedState", func() {
 					},
 					Desired: &fsmv2.WrappedDesiredState[persistence.PersistenceConfig]{
 						BaseDesiredState: fsmv2config.BaseDesiredState{
-							State: "running",
 						},
 						Config: persistence.PersistenceConfig{
 							CompactionInterval:  5 * time.Minute,
@@ -109,7 +107,6 @@ var _ = Describe("RunningDegradedState", func() {
 					},
 					Desired: &fsmv2.WrappedDesiredState[persistence.PersistenceConfig]{
 						BaseDesiredState: fsmv2config.BaseDesiredState{
-							State: "running",
 						},
 						Config: persistence.PersistenceConfig{
 							CompactionInterval:  5 * time.Minute,
@@ -141,7 +138,6 @@ var _ = Describe("RunningDegradedState", func() {
 					},
 					Desired: &fsmv2.WrappedDesiredState[persistence.PersistenceConfig]{
 						BaseDesiredState: fsmv2config.BaseDesiredState{
-							State: "running",
 						},
 						Config: persistence.PersistenceConfig{
 							CompactionInterval:  5 * time.Minute,
@@ -172,7 +168,6 @@ var _ = Describe("RunningDegradedState", func() {
 					},
 					Desired: &fsmv2.WrappedDesiredState[persistence.PersistenceConfig]{
 						BaseDesiredState: fsmv2config.BaseDesiredState{
-							State: "running",
 						},
 						Config: persistence.PersistenceConfig{
 							CompactionInterval:  5 * time.Minute,
@@ -203,7 +198,6 @@ var _ = Describe("RunningDegradedState", func() {
 					},
 					Desired: &fsmv2.WrappedDesiredState[persistence.PersistenceConfig]{
 						BaseDesiredState: fsmv2config.BaseDesiredState{
-							State: "running",
 						},
 						Config: persistence.PersistenceConfig{
 							CompactionInterval:  5 * time.Minute,

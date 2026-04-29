@@ -104,7 +104,6 @@ var _ = Describe("ParentWorker", func() {
 			// not from DDS, so wrapped.ChildrenSpecs is nil.
 			wrapped, ok := desiredIface.(*fsmv2.WrappedDesiredState[exampleparent.ExampleparentConfig])
 			Expect(ok).To(BeTrue())
-			Expect(wrapped.GetState()).To(Equal("running"))
 			Expect(wrapped.ChildrenSpecs).To(BeNil())
 
 			// RenderChildren with ChildrenCount == 0 returns non-nil empty
@@ -135,9 +134,8 @@ var _ = Describe("ParentWorker", func() {
 			// WorkerBase produces the typed wrapper; the children-set is
 			// produced by RenderChildren (state.Next path), so verify
 			// independently against the canonical emitter.
-			wrapped, ok := desiredIface.(*fsmv2.WrappedDesiredState[exampleparent.ExampleparentConfig])
+			_, ok := desiredIface.(*fsmv2.WrappedDesiredState[exampleparent.ExampleparentConfig])
 			Expect(ok).To(BeTrue())
-			Expect(wrapped.GetState()).To(Equal("running"))
 
 			snap := fsmv2.WorkerSnapshot[exampleparent.ExampleparentConfig, exampleparent.ExampleparentStatus]{
 				Desired: fsmv2.WrappedDesiredState[exampleparent.ExampleparentConfig]{

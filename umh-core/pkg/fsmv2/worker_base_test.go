@@ -35,7 +35,7 @@ type workerTestConfig struct {
 	Port int    `json:"port" yaml:"port"`
 }
 
-// stateGetterConfig embeds BaseUserSpec so it implements config.StateGetter.
+// configWithUserSpec embeds BaseUserSpec inline alongside custom fields.
 type stateGetterConfig struct {
 	config.BaseUserSpec `yaml:",inline"`
 	Host                string `json:"host" yaml:"host"`
@@ -109,7 +109,6 @@ port: 8080`,
 			ds, err := wb.DeriveDesiredState(nil)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(ds).NotTo(BeNil())
-			Expect(ds.GetState()).To(Equal("running"))
 			Expect(ds.IsShutdownRequested()).To(BeFalse())
 		})
 
@@ -176,7 +175,7 @@ port: {{ .PORT }}`,
 			Expect(err).To(HaveOccurred())
 		})
 
-		It("extracts state from config implementing StateGetter", func() {
+		It("parses YAML into config that embeds BaseUserSpec", func() {
 			sgWb := &fsmv2.WorkerBase[stateGetterConfig, workerTestStatus]{}
 			sgWb.InitBase(identity, mockLogger, mockStateReader)
 
@@ -186,10 +185,10 @@ host: "example.com"`,
 			}
 			ds, err := sgWb.DeriveDesiredState(spec)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(ds.GetState()).To(Equal("stopped"))
 
 			typed := ds.(*fsmv2.WrappedDesiredState[stateGetterConfig])
 			Expect(typed.Config.Host).To(Equal("example.com"))
+			Expect(typed.Config.GetState()).To(Equal("stopped"))
 		})
 
 		It("caches config for subsequent Config() calls", func() {

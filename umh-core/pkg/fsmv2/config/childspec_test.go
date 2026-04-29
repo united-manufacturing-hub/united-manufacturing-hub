@@ -258,7 +258,7 @@ var _ = Describe("DesiredState", func() {
 	Describe("YAML serialization", func() {
 		It("should serialize to YAML correctly", func() {
 			desired := config.DesiredState{
-				BaseDesiredState: config.BaseDesiredState{State: "running"},
+				BaseDesiredState: config.BaseDesiredState{},
 				ChildrenSpecs: []config.ChildSpec{
 					{
 						Name:       "child1",
@@ -272,7 +272,6 @@ var _ = Describe("DesiredState", func() {
 
 			data, err := yaml.Marshal(desired)
 			Expect(err).ToNot(HaveOccurred())
-			Expect(string(data)).To(ContainSubstring("state: running"))
 			Expect(string(data)).To(ContainSubstring("childrenSpecs:"))
 			Expect(string(data)).To(ContainSubstring("name: child1"))
 		})
@@ -294,7 +293,6 @@ childrenSpecs:
 			err := yaml.Unmarshal([]byte(yamlData), &desired)
 
 			Expect(err).ToNot(HaveOccurred())
-			Expect(desired.State).To(Equal("active"))
 			Expect(desired.ChildrenSpecs).To(HaveLen(2))
 			Expect(desired.ChildrenSpecs[0].Name).To(Equal("connection"))
 			Expect(desired.ChildrenSpecs[1].Name).To(Equal("dataflow"))
@@ -308,7 +306,6 @@ state: stopped
 			err := yaml.Unmarshal([]byte(yamlData), &desired)
 
 			Expect(err).ToNot(HaveOccurred())
-			Expect(desired.State).To(Equal("stopped"))
 			Expect(desired.ChildrenSpecs).To(BeEmpty())
 		})
 	})
@@ -316,7 +313,7 @@ state: stopped
 	Describe("ShutdownRequested interface", func() {
 		It("should return false when State is not 'shutdown'", func() {
 			desired := config.DesiredState{
-				BaseDesiredState: config.BaseDesiredState{State: "running"},
+				BaseDesiredState: config.BaseDesiredState{},
 			}
 
 			Expect(desired.IsShutdownRequested()).To(BeFalse())

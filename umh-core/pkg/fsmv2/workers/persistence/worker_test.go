@@ -211,7 +211,6 @@ var _ = Describe("PersistenceWorker", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			d := desired.(*fsmv2.WrappedDesiredState[persistence.PersistenceConfig])
-			Expect(d.GetState()).To(Equal("running"))
 			Expect(d.Config.CompactionInterval).To(Equal(persistence.DefaultCompactionInterval))
 			Expect(d.Config.RetentionWindow).To(Equal(persistence.DefaultRetentionWindow))
 			Expect(d.Config.MaintenanceInterval).To(Equal(persistence.DefaultMaintenanceInterval))
@@ -239,7 +238,6 @@ var _ = Describe("PersistenceWorker", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			d := desired.(*fsmv2.WrappedDesiredState[persistence.PersistenceConfig])
-			Expect(d.GetState()).To(Equal("running"))
 			Expect(d.Config.CompactionInterval).To(Equal(10 * time.Minute))
 			Expect(d.Config.RetentionWindow).To(Equal(48 * time.Hour))
 			Expect(d.Config.MaintenanceInterval).To(Equal(336 * time.Hour))
@@ -274,7 +272,6 @@ var _ = Describe("PersistenceWorker", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			d := desired.(*fsmv2.WrappedDesiredState[persistence.PersistenceConfig])
-			Expect(d.GetState()).To(Equal("running"))
 			Expect(d.Config.CompactionInterval).To(Equal(persistence.DefaultCompactionInterval))
 			Expect(d.Config.RetentionWindow).To(Equal(persistence.DefaultRetentionWindow))
 			Expect(d.Config.MaintenanceInterval).To(Equal(persistence.DefaultMaintenanceInterval))
