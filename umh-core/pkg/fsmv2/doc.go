@@ -174,7 +174,7 @@
 //
 // Key concepts:
 //   - Parent returns ChildrenSpecs in DeriveDesiredState()
-//   - ChildStartStates coordinates child lifecycle (not data passing)
+//   - ChildSpec.Enabled coordinates child lifecycle (not data passing)
 //   - Use VariableBundle for passing data to children
 //
 // See workers/example/exampleparent/worker.go for a complete example.

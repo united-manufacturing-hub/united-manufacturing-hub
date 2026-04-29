@@ -25,16 +25,20 @@ go test ./pkg/fsmv2/... -run "Architecture" -v
 
 ## Parent-Child Worker Pattern
 
-Parent workers orchestrate children via `DeriveDesiredState` - they return `ChildrenSpecs` and the supervisor handles child spawning automatically. Parents don't manually create child workers.
+Parent workers declare children in their state `Next()` method via `NextResult.Children`. The supervisor handles creation, updates, and cleanup automatically. Parents do not manually create child workers.
 
 ```go
-func (w *ParentWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, error) {
-    return &config.DesiredState{
-        BaseDesiredState: config.BaseDesiredState{State: "running"},
-        ChildrenSpecs: []config.ChildSpec{
-            {Name: "child1", WorkerType: "childworker", ...},
-        },
-    }, nil
+func (s *RunningState) Next(snapAny any) fsmv2.NextResult[any, any] {
+    snap := helpers.ConvertWorkerSnapshot[ParentConfig, ParentStatus](snapAny)
+    children := RenderChildren(snap)
+    // ... shutdown check, business logic ...
+    return fsmv2.Transition(s, fsmv2.SignalNone, nil, "running", children)
+}
+
+func RenderChildren(snap WorkerSnapshot[ParentConfig, ParentStatus]) []config.ChildSpec {
+    return []config.ChildSpec{
+        {Name: "child1", WorkerType: "childworker", Enabled: true, ...},
+    }
 }
 ```
 

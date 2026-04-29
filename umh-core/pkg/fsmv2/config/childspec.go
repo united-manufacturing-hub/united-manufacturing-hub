@@ -232,6 +232,14 @@ func (c ChildSpec) Clone() ChildSpec {
 //
 // Returns a hex-encoded FNV-1a 64-bit hash string (16 characters) and an error
 // if Variables cannot be marshaled to JSON.
+//
+// Note: Hash operates on an individual ChildSpec value, not on a slice.
+// When the supervisor receives a []ChildSpec from NextResult.Children, nil
+// and []ChildSpec{} carry different semantics — nil means "no opinion
+// (fall back to legacy DDS path)" while []ChildSpec{} means "authoritative:
+// despawn all children". Never use len(x)==0 to test that distinction —
+// it collapses nil and empty into the same result. See api.go for the
+// canonical nil-vs-empty discriminator block.
 func (c ChildSpec) Hash() (string, error) {
 	h := fnv.New64a()
 

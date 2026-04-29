@@ -110,11 +110,11 @@
 //	    {
 //	        Name:       "mqtt-connection",
 //	        WorkerType: "mqtt_client",
+//	        Enabled:    true,
 //	        UserSpec:   config.UserSpec{Config: "url: tcp://..."},
 //	        Variables: config.VariableBundle{
 //	            User: map[string]any{"URL": "tcp://localhost:1883"},
 //	        },
-//	        ChildStartStates: []string{"Running", "TryingToStart"},
 //	    },
 //	}
 //
@@ -122,26 +122,11 @@
 // how to create them. The supervisor handles creation, deletion, and updates.
 // Children can be added or removed by changing ChildrenSpecs in DeriveDesiredState().
 //
-// # ChildStartStates
-//
-// ChildStartStates specifies which parent FSM states cause the child to run:
-//
-//	ChildStartStates: []string{"Running", "TryingToStart"}
-//	// Child runs when parent is in "Running" or "TryingToStart"
-//	// Child stops when parent is in any other state
-//
-// The child runs if the parent state is in the list, stops otherwise.
-// An empty list means the child always runs.
-//
-// ChildStartStates handles lifecycle coordination, not data passing.
-// Use VariableBundle to pass data from parent to child.
-//
 // # DesiredState and shutdown control
 //
 // DesiredState includes IsShutdownRequested() for graceful shutdown:
 //
 //	type DesiredState struct {
-//	    State            string
 //	    ShutdownRequested bool
 //	    ChildrenSpecs    []ChildSpec
 //	}
