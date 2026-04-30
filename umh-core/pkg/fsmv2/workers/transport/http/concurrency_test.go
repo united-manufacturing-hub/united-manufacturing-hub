@@ -61,6 +61,7 @@ var _ = Describe("HTTPTransport concurrency", func() {
 
 		// Goroutine A calls Push repeatedly; Push reads t.httpClient on every call.
 		go func() {
+			defer GinkgoRecover()
 			defer wg.Done()
 			for range iterations {
 				_ = transport.Push(ctx, "race-token", msgs)
@@ -69,6 +70,7 @@ var _ = Describe("HTTPTransport concurrency", func() {
 
 		// Goroutine B calls Reset repeatedly; Reset atomically replaces t.httpClient via atomic.Pointer.Store.
 		go func() {
+			defer GinkgoRecover()
 			defer wg.Done()
 			for range iterations {
 				transport.Reset()
