@@ -527,17 +527,25 @@ func (m *FileConfigManager) validateConfig(config *FullConfig) []ConfigValidatio
 	return issues
 }
 
-// swapValidationIssues replaces the validation-issues list wholesale.
-// Called only from readAndParseConfig — never from cache hits or the backup write path.
-// This guarantees that fixed configs clear stale issues on the next successful parse.
+// swapValidationIssues replaces the validation-issues list wholesale. Mutex-protected
+// so concurrent GetConfigValidationIssues readers always observe a consistent slice.
+// Callers are readAndParseConfig (read path) and WriteYAMLConfigFromString (write path);
+// cache-hit GetConfig does not call this — see manager.go's FAST PATH — which is the
+// invariant that lets a successful parse decide what the latest issues list is.
+// The cache (cacheConfig + cacheModTime) and the issues list are decoupled by design:
+// they live behind separate mutexes and update independently, since validation runs
+// after parsing whereas the cache stores the parsed result.
 func (m *FileConfigManager) swapValidationIssues(fresh []ConfigValidationIssue) {
 	m.validationIssuesMu.Lock()
 	defer m.validationIssuesMu.Unlock()
 	m.validationIssues = fresh
 }
 
-// GetConfigValidationIssues returns a copy of the validation issues from the most recent parse.
-// Safe to call concurrently with swapValidationIssues.
+// GetConfigValidationIssues returns a defensive copy of the validation issues recorded
+// by the most recent successful parse (read or write path). The returned slice is
+// owned by the caller; mutating it does not affect the manager's internal list.
+// Safe to call concurrently with swapValidationIssues. An empty slice means the
+// last parse passed validation; nil and empty are equivalent here.
 func (m *FileConfigManager) GetConfigValidationIssues() []ConfigValidationIssue {
 	m.validationIssuesMu.RLock()
 	defer m.validationIssuesMu.RUnlock()
@@ -691,10 +699,15 @@ func (m *FileConfigManager) WithConfigPath(configPath string) *FileConfigManager
 //
 // Parameters:
 //   - data: Raw YAML configuration data as bytes
-//   - allowUnknownFields: If true, allows unknown fields in the YAML; if false, rejects them
+//   - ctx: Context for cancellation propagated through templateRef resolution
+//   - allowUnknownFields: If true, allows unknown fields in the YAML; if false, rejects them.
+//     readAndParseConfig passes false (strict); WriteYAMLConfigFromString first tries
+//     false then retries with true to keep YAML anchors working for hand-edited files.
 //   - applyDefaults: If true, defaults nil location to empty map and empty releaseChannel to "stable".
-//     Production callers (readAndParseConfig) pass true. Test callers that round-trip configs
-//     should pass false to preserve the original empty-equals-empty semantics.
+//     The read path (readAndParseConfig) and the cache-update parse inside
+//     WriteYAMLConfigFromString pass true so downstream consumers always see populated
+//     fields; pure-validation parses (the strict pre-write check) and tests that need
+//     to assert original empty-equals-empty semantics pass false.
 //
 // Returns:
 //   - FullConfig: The parsed and processed configuration
