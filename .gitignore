@@ -16,3 +16,4 @@ compass_artifact*
 # Test results
 *.result.txt
 .worktrees/
+.self-review/
