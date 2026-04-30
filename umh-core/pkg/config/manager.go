@@ -495,10 +495,20 @@ func (m *FileConfigManager) readAndParseConfig(ctx context.Context) (FullConfig,
 		return FullConfig{}, "", fmt.Errorf("config file is empty: %s", m.configPath)
 	}
 
-	// Validate that the release channel is one of the allowed enum values.
-	// Empty values are defaulted to "stable" inside ParseConfig (applyDefaults=true) and
-	// never reach this branch — only non-empty typos do. We do NOT call SentryWarn here:
-	// see doc.go for the Sentry-vs-validation policy.
+	m.swapValidationIssues(m.validateConfig(&config))
+
+	// Return both config and raw data for atomic cache update by caller
+	return config, string(data), nil
+}
+
+// validateConfig inspects the parsed config for known invariants and returns
+// a list of validation issues. Side effect: coerces invalid values to safe
+// defaults on the passed-in config (e.g. an unrecognized releaseChannel resets
+// to "stable" so downstream code never branches on the typo). Empty values are
+// defaulted to "stable" inside ParseConfig (applyDefaults=true) and never reach
+// this branch — only non-empty typos do. We do NOT call SentryWarn here: see
+// doc.go for the Sentry-vs-validation policy.
+func (m *FileConfigManager) validateConfig(config *FullConfig) []ConfigValidationIssue {
 	var issues []ConfigValidationIssue
 	if config.Agent.ReleaseChannel != ReleaseChannelNightly &&
 		config.Agent.ReleaseChannel != ReleaseChannelStable &&
@@ -510,10 +520,8 @@ func (m *FileConfigManager) readAndParseConfig(ctx context.Context) (FullConfig,
 		})
 		config.Agent.ReleaseChannel = ReleaseChannelStable
 	}
-	m.swapValidationIssues(issues)
 
-	// Return both config and raw data for atomic cache update by caller
-	return config, string(data), nil
+	return issues
 }
 
 // swapValidationIssues replaces the validation-issues list wholesale.
@@ -1225,6 +1233,13 @@ func (m *FileConfigManager) WriteYAMLConfigFromString(ctx context.Context, confi
 
 		return fmt.Errorf("failed to parse new config for cache update: %w", err)
 	}
+
+	// Re-run validation on the just-written config so that fixing a typo via MC
+	// clears stale issues immediately (and a freshly introduced typo surfaces
+	// without waiting for the next mtime change). validateConfig may coerce
+	// invalid fields on the passed-in struct; the cache stores the coerced copy
+	// so subsequent reads observe the same value as readAndParseConfig.
+	m.swapValidationIssues(m.validateConfig(&newConfig))
 
 	// Update cache with the new config, raw data, and mod time
 	m.cacheMu.Lock()
