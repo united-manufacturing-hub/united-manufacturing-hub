@@ -328,8 +328,10 @@ func (w *WorkerBase[TConfig, TStatus, TDeps]) Logger() deps.FSMLogger {
 // because the collector's FrameworkMetricsSetter duck-types GetDependenciesAny() to
 // find SetFrameworkState, which NoDeps's struct{} zero value does not implement.
 // Before shipping the first NoDeps production worker, ensure either:
-//   (a) the worker uses NewObservation (collector path handles framework metrics), or
-//   (b) the worker's TDeps embeds deps.BaseDependencies so SetFrameworkState is found.
+//   (a) embed deps.BaseDependencies in a thin TDeps wrapper so both the pre-COS
+//       FrameworkMetricsSetter and the post-COS wrapNewObservation paths find
+//       SetFrameworkState, or
+//   (b) extend the collector to handle the NoDeps case explicitly.
 func (w *WorkerBase[TConfig, TStatus, TDeps]) BindDeps(d TDeps) {
 	w.mu.Lock()
 	w.typedDeps = d
@@ -337,7 +339,8 @@ func (w *WorkerBase[TConfig, TStatus, TDeps]) BindDeps(d TDeps) {
 }
 
 // GetDependenciesAny returns the typed deps bound via BindDeps. Satisfies DependencyProvider.
-// Workers do not override this method; they call BindDeps in their constructor instead.
+// New-API workers call BindDeps in their constructor instead of overriding this method.
+// The legacy override pattern remains valid during the PR2 migration window.
 func (w *WorkerBase[TConfig, TStatus, TDeps]) GetDependenciesAny() any {
 	w.mu.RLock()
 	d := w.typedDeps

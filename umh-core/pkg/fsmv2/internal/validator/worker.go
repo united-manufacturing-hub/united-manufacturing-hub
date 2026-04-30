@@ -813,8 +813,8 @@ func checkActionHistoryCopy(filename string) []Violation {
 }
 
 // ValidateGetDependenciesAny checks that new-API workers with custom dependencies
-// override GetDependenciesAny(). WorkerBase's default returns TDeps (the zero value),
-// which is incorrect for workers that have not called BindDeps with their typed deps.
+// are correctly wired: either by overriding GetDependenciesAny() (legacy migration-window
+// pattern) or by calling BindDeps in their constructor (preferred post-P1.1 pattern).
 func ValidateGetDependenciesAny(baseDir string) []Violation {
 	var violations []Violation
 
@@ -860,25 +860,52 @@ func checkGetDependenciesAny(filename string) []Violation {
 		return violations
 	}
 
-	// Accept a BindDeps call anywhere in the file (preferred post-P1.1 pattern).
-	if hasBindDepsCall(node) {
+	// Accept a BindDeps call anywhere in the worker's directory (preferred post-P1.1 pattern).
+	// Scans all .go files in the directory to match hasCustomDependenciesStruct scope.
+	dir := filepath.Dir(filename)
+	if hasBindDepsCallInDir(dir) {
 		return violations
 	}
-
-	// Scan all .go files in the same directory for custom dependency structs.
-	dir := filepath.Dir(filename)
 	if hasCustomDependenciesStruct(dir) {
 		violations = append(violations, Violation{
 			File:    filename,
 			Type:    "MISSING_GET_DEPENDENCIES_ANY_OVERRIDE",
-			Message: fmt.Sprintf("Worker %s has custom Dependencies struct but has not called BindDeps — GetDependenciesAny returns the zero value of TDeps; call BindDeps in the constructor or use register.NoDeps if no custom deps are needed", workerTypeName),
+			Message: fmt.Sprintf("Worker %s has custom Dependencies struct but has not called BindDeps; GetDependenciesAny returns the zero value of TDeps. Call BindDeps in the constructor or use register.NoDeps if no custom deps are needed", workerTypeName),
 		})
 	}
 
 	return violations
 }
 
-// hasBindDepsCall reports whether any function in the file calls BindDeps.
+// hasBindDepsCallInDir reports whether any non-test .go file in dir calls BindDeps.
+// Mirrors hasCustomDependenciesStruct's directory scope so both checks cover the same set of files.
+func hasBindDepsCallInDir(dir string) bool {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return false
+	}
+
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".go") || strings.HasSuffix(entry.Name(), "_test.go") {
+			continue
+		}
+
+		fset := token.NewFileSet()
+
+		node, parseErr := parser.ParseFile(fset, filepath.Join(dir, entry.Name()), nil, 0)
+		if parseErr != nil {
+			continue
+		}
+
+		if hasBindDepsCall(node) {
+			return true
+		}
+	}
+
+	return false
+}
+
+// hasBindDepsCall reports whether any call expression in the parsed file is a BindDeps call.
 func hasBindDepsCall(node *ast.File) bool {
 	found := false
 

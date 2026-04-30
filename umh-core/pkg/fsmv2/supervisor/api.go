@@ -278,7 +278,7 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity deps.Identity, work
 		FrameworkMetricsSetter: func(fm *deps.FrameworkMetrics) {
 			// Must use GetDependenciesAny() (returns any), not GetDependencies() (returns D).
 			// TODO(PR2): NoDeps workers (TDeps = register.NoDeps, i.e. struct{}) return
-			// struct{}{} here, which does not implement SetFrameworkState — so framework
+			// struct{}{} here, which does not implement SetFrameworkState; so framework
 			// telemetry is silently skipped. Resolve before shipping the first NoDeps
 			// production worker (see worker_base.go BindDeps TODO for options).
 			type depsGetter interface {

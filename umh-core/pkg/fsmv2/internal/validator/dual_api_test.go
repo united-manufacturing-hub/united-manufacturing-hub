@@ -210,4 +210,38 @@ func (s *RunningState) Next(snapAny any) NextResult {
 			Expect(violations).To(BeEmpty(), "ConvertSnapshot should still be accepted for old-API workers")
 		})
 	})
+
+	Describe("ValidateGetDependenciesAny accepts BindDeps wiring", func() {
+		It("accepts a worker that calls BindDeps (no GetDependenciesAny override needed)", func() {
+			workerDir := filepath.Join(tmpDir, "workers", "myworker")
+			Expect(os.MkdirAll(workerDir, 0o755)).To(Succeed())
+
+			// Worker file: embeds WorkerBase and calls BindDeps in constructor.
+			workerFile := filepath.Join(workerDir, "worker.go")
+			Expect(os.WriteFile(workerFile, []byte(`package myworker
+
+import "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+
+type MyWorker struct {
+	fsmv2.WorkerBase[MyConfig, MyStatus, any]
+}
+
+func NewMyWorker() *MyWorker {
+	w := &MyWorker{}
+	w.BindDeps(nil)
+	return w
+}
+`), 0o644)).To(Succeed())
+
+			// Dependencies file: defines a custom *Dependencies struct.
+			depsFile := filepath.Join(workerDir, "dependencies.go")
+			Expect(os.WriteFile(depsFile, []byte(`package myworker
+
+type MyDependencies struct{}
+`), 0o644)).To(Succeed())
+
+			violations := validator.ValidateGetDependenciesAny(tmpDir)
+			Expect(violations).To(BeEmpty(), "BindDeps call should satisfy the GetDependenciesAny wiring check")
+		})
+	})
 })

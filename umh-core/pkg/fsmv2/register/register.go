@@ -113,7 +113,9 @@ func Worker[TConfig any, TStatus any, TDeps any](
 // resources (metrics recorders keyed by identity, loggers, state readers).
 // T is the concrete deps type (e.g., *MyDeps).
 //
-// Call GetDepsBuilder to retrieve and invoke the stored builder.
+// The framework retrieves the stored builder via GetDepsBuilder at worker instantiation
+// time. Automatic framework wiring is planned; use BindDeps in the constructor for
+// immediate use.
 //
 // Panics if workerType is empty or builderFn is nil (fail-fast at init time).
 func SetDepsBuilder[T any](workerType string, builderFn func(deps.Identity, deps.FSMLogger, deps.StateReader) T) {
