@@ -21,23 +21,22 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
-	communicator_transport "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport"
-	httpTransport "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport/http"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport"
+	transportpkg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/pull"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/types"
 )
 
 type mockTransport struct{}
 
-func (m *mockTransport) Authenticate(_ context.Context, _ communicator_transport.AuthRequest) (communicator_transport.AuthResponse, error) {
-	return communicator_transport.AuthResponse{}, nil
+func (m *mockTransport) Authenticate(_ context.Context, _ types.AuthRequest) (types.AuthResponse, error) {
+	return types.AuthResponse{}, nil
 }
 
-func (m *mockTransport) Pull(_ context.Context, _ string) ([]*communicator_transport.UMHMessage, error) {
+func (m *mockTransport) Pull(_ context.Context, _ string) ([]*types.UMHMessage, error) {
 	return nil, nil
 }
 
-func (m *mockTransport) Push(_ context.Context, _ string, _ []*communicator_transport.UMHMessage) error {
+func (m *mockTransport) Push(_ context.Context, _ string, _ []*types.UMHMessage) error {
 	return nil
 }
 
@@ -46,13 +45,13 @@ func (m *mockTransport) Close() {}
 func (m *mockTransport) Reset() {}
 
 type mockChannelProvider struct {
-	inbound  chan<- *communicator_transport.UMHMessage
-	outbound <-chan *communicator_transport.UMHMessage
+	inbound  chan<- *types.UMHMessage
+	outbound <-chan *types.UMHMessage
 }
 
 func (m *mockChannelProvider) GetChannels(_ string) (
-	inbound chan<- *communicator_transport.UMHMessage,
-	outbound <-chan *communicator_transport.UMHMessage,
+	inbound chan<- *types.UMHMessage,
+	outbound <-chan *types.UMHMessage,
 ) {
 	return m.inbound, m.outbound
 }
@@ -62,8 +61,8 @@ func (m *mockChannelProvider) GetInboundStats(_ string) (capacity int, length in
 }
 
 func newTestChannelProvider() *mockChannelProvider {
-	inboundBi := make(chan *communicator_transport.UMHMessage, 100)
-	outboundBi := make(chan *communicator_transport.UMHMessage, 100)
+	inboundBi := make(chan *types.UMHMessage, 100)
+	outboundBi := make(chan *types.UMHMessage, 100)
 
 	return &mockChannelProvider{
 		inbound:  inboundBi,
@@ -71,17 +70,17 @@ func newTestChannelProvider() *mockChannelProvider {
 	}
 }
 
-func createParentDeps(logger deps.FSMLogger) *transport.TransportDependencies {
+func createParentDeps(logger deps.FSMLogger) *transportpkg.TransportDependencies {
 	mt := &mockTransport{}
 	identity := deps.Identity{ID: "parent-id", WorkerType: "transport"}
 
-	return transport.NewTransportDependencies(mt, logger, nil, identity)
+	return transportpkg.NewTransportDependencies(mt, logger, nil, identity)
 }
 
-func makeMessages(n int) []*communicator_transport.UMHMessage {
-	msgs := make([]*communicator_transport.UMHMessage, n)
+func makeMessages(n int) []*types.UMHMessage {
+	msgs := make([]*types.UMHMessage, n)
 	for i := range msgs {
-		msgs[i] = &communicator_transport.UMHMessage{}
+		msgs[i] = &types.UMHMessage{}
 	}
 
 	return msgs
@@ -90,19 +89,19 @@ func makeMessages(n int) []*communicator_transport.UMHMessage {
 var _ = Describe("PullDependencies", func() {
 	var (
 		logger     deps.FSMLogger
-		parentDeps *transport.TransportDependencies
+		parentDeps *transportpkg.TransportDependencies
 		identity   deps.Identity
 	)
 
 	BeforeEach(func() {
 		logger = deps.NewNopFSMLogger()
-		transport.SetChannelProvider(newTestChannelProvider())
+		transportpkg.SetChannelProvider(newTestChannelProvider())
 		parentDeps = createParentDeps(logger)
 		identity = deps.Identity{ID: "pull-child-id", WorkerType: "pull"}
 	})
 
 	AfterEach(func() {
-		transport.ClearChannelProvider()
+		transportpkg.ClearChannelProvider()
 	})
 
 	Describe("NewPullDependencies", func() {
@@ -142,7 +141,7 @@ var _ = Describe("PullDependencies", func() {
 		})
 
 		It("should filter nil messages from a mixed slice", func() {
-			msgs := []*communicator_transport.UMHMessage{
+			msgs := []*types.UMHMessage{
 				{Content: "a"},
 				nil,
 				{Content: "b"},
@@ -154,7 +153,7 @@ var _ = Describe("PullDependencies", func() {
 		})
 
 		It("should store nothing when all messages are nil", func() {
-			msgs := []*communicator_transport.UMHMessage{nil, nil, nil}
+			msgs := []*types.UMHMessage{nil, nil, nil}
 			d.StorePendingMessages(msgs)
 			Expect(d.PendingMessageCount()).To(Equal(0))
 		})
@@ -194,7 +193,7 @@ var _ = Describe("PullDependencies", func() {
 		})
 
 		It("should return only non-nil messages after mixed input", func() {
-			msgs := []*communicator_transport.UMHMessage{
+			msgs := []*types.UMHMessage{
 				nil,
 				{Content: "x"},
 				nil,
@@ -362,10 +361,10 @@ var _ = Describe("PullDependencies", func() {
 
 		Describe("RecordTypedError", func() {
 			It("should record on both child and parent", func() {
-				d.RecordTypedError(httpTransport.ErrorTypeBackendRateLimit, 30*time.Second)
+				d.RecordTypedError(types.ErrorTypeBackendRateLimit, 30*time.Second)
 				Expect(d.GetConsecutiveErrors()).To(Equal(1))
 				Expect(parentDeps.GetConsecutiveErrors()).To(Equal(1))
-				Expect(parentDeps.GetLastErrorType()).To(Equal(httpTransport.ErrorTypeBackendRateLimit))
+				Expect(parentDeps.GetLastErrorType()).To(Equal(types.ErrorTypeBackendRateLimit))
 			})
 		})
 
@@ -407,10 +406,10 @@ var _ = Describe("PullDependencies", func() {
 
 		Describe("GetLastErrorType", func() {
 			It("should read from child field", func() {
-				d.RecordTypedError(httpTransport.ErrorTypeNetwork, 0)
-				Expect(d.GetLastErrorType()).To(Equal(httpTransport.ErrorTypeNetwork))
+				d.RecordTypedError(types.ErrorTypeNetwork, 0)
+				Expect(d.GetLastErrorType()).To(Equal(types.ErrorTypeNetwork))
 				d.RecordSuccess()
-				Expect(d.GetLastErrorType()).To(Equal(httpTransport.ErrorType(0)))
+				Expect(d.GetLastErrorType()).To(Equal(types.ErrorType(0)))
 			})
 		})
 
@@ -427,14 +426,14 @@ var _ = Describe("PullDependencies", func() {
 		Describe("GetLastErrorAt", func() {
 			It("should read from child tracker", func() {
 				before := time.Now()
-				d.RecordTypedError(httpTransport.ErrorTypeNetwork, 0)
+				d.RecordTypedError(types.ErrorTypeNetwork, 0)
 				Expect(d.GetLastErrorAt()).To(BeTemporally(">=", before))
 			})
 		})
 
 		Describe("GetLastRetryAfter", func() {
 			It("should read from child tracker", func() {
-				d.RecordTypedError(httpTransport.ErrorTypeBackendRateLimit, 30*time.Second)
+				d.RecordTypedError(types.ErrorTypeBackendRateLimit, 30*time.Second)
 				Expect(d.GetLastRetryAfter()).To(Equal(30 * time.Second))
 			})
 		})

@@ -23,9 +23,9 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
-	httpTransport "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport/http"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/pull/snapshot"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/pull/state"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/types"
 )
 
 func makeSnapshot(
@@ -56,7 +56,7 @@ func makeSnapshotWithBackoff(
 	hasTransport bool,
 	hasValidToken bool,
 	pendingMessageCount int,
-	lastErrorType httpTransport.ErrorType,
+	lastErrorType types.ErrorType,
 	lastRetryAfter time.Duration,
 	degradedEnteredAt time.Time,
 	lastErrorAt time.Time,
@@ -260,7 +260,7 @@ var _ = Describe("DegradedState", func() {
 	It("should stay Degraded and emit PullAction with non-zero errors but low pending count", func() {
 		snap := makeSnapshotWithBackoff(
 			config.DesiredStateRunning, false, 2, true, true, 10,
-			httpTransport.ErrorTypeNetwork, 0,
+			types.ErrorTypeNetwork, 0,
 			time.Now().Add(-30*time.Second),
 			time.Time{},
 		)
@@ -281,7 +281,7 @@ var _ = Describe("DegradedState", func() {
 	It("should wait for backoff before retrying pull in degraded", func() {
 		snap := makeSnapshotWithBackoff(
 			config.DesiredStateRunning, false, 3, true, true, 5,
-			httpTransport.ErrorTypeNetwork, 0,
+			types.ErrorTypeNetwork, 0,
 			time.Now(), // degraded just entered
 			time.Time{},
 		)
@@ -294,7 +294,7 @@ var _ = Describe("DegradedState", func() {
 	It("should dispatch pull when backoff has expired", func() {
 		snap := makeSnapshotWithBackoff(
 			config.DesiredStateRunning, false, 1, true, true, 2,
-			httpTransport.ErrorTypeNetwork, 0,
+			types.ErrorTypeNetwork, 0,
 			time.Now().Add(-10*time.Second), // degraded 10s ago, backoff for 1 error = 2s
 			time.Time{},
 		)
@@ -307,7 +307,7 @@ var _ = Describe("DegradedState", func() {
 	It("should respect Retry-After header in degraded", func() {
 		snap := makeSnapshotWithBackoff(
 			config.DesiredStateRunning, false, 1, true, true, 1,
-			httpTransport.ErrorTypeServerError, 60*time.Second,
+			types.ErrorTypeServerError, 60*time.Second,
 			time.Time{},
 			time.Now(), // error just occurred, Retry-After = 60s
 		)
@@ -320,7 +320,7 @@ var _ = Describe("DegradedState", func() {
 	It("should use DegradedEnteredAt for exponential backoff timing", func() {
 		snap := makeSnapshotWithBackoff(
 			config.DesiredStateRunning, false, 5, true, true, 3,
-			httpTransport.ErrorTypeNetwork, 0,
+			types.ErrorTypeNetwork, 0,
 			time.Now().Add(-1*time.Second), // degraded 1s ago, backoff for 5 errors = 32s
 			time.Time{},
 		)

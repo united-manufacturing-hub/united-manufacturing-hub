@@ -63,8 +63,8 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/snapshot"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/state"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport"
-	httpTransport "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport/http"
+	httpTransport "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/http"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/types"
 )
 
 // CommunicatorWorker implements the FSM v2 Worker interface for channel-based synchronization.
@@ -76,7 +76,7 @@ type CommunicatorWorker struct {
 func NewCommunicatorWorker(
 	id string,
 	name string,
-	transportParam transport.Transport,
+	transportParam types.Transport,
 	logger depspkg.FSMLogger,
 	stateReader depspkg.StateReader,
 ) (*CommunicatorWorker, error) {

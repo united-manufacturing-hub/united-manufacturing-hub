@@ -24,27 +24,26 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport"
-	httpTransport "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport/http"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/push/action"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/types"
 )
 
 type mockTransport struct {
 	pushErr       error
 	pushCallCount int
-	pushedMsgs    []*transport.UMHMessage
-	pushFunc      func(ctx context.Context, jwtToken string, messages []*transport.UMHMessage) error
+	pushedMsgs    []*types.UMHMessage
+	pushFunc      func(ctx context.Context, jwtToken string, messages []*types.UMHMessage) error
 }
 
-func (m *mockTransport) Authenticate(_ context.Context, _ transport.AuthRequest) (transport.AuthResponse, error) {
-	return transport.AuthResponse{}, nil
+func (m *mockTransport) Authenticate(_ context.Context, _ types.AuthRequest) (types.AuthResponse, error) {
+	return types.AuthResponse{}, nil
 }
 
-func (m *mockTransport) Pull(_ context.Context, _ string) ([]*transport.UMHMessage, error) {
+func (m *mockTransport) Pull(_ context.Context, _ string) ([]*types.UMHMessage, error) {
 	return nil, nil
 }
 
-func (m *mockTransport) Push(ctx context.Context, jwtToken string, messages []*transport.UMHMessage) error {
+func (m *mockTransport) Push(ctx context.Context, jwtToken string, messages []*types.UMHMessage) error {
 	m.pushCallCount++
 	m.pushedMsgs = messages
 
@@ -60,8 +59,8 @@ func (m *mockTransport) Close() {}
 func (m *mockTransport) Reset() {}
 
 type mockPushDeps struct {
-	outboundChan    <-chan *transport.UMHMessage
-	transport       transport.Transport
+	outboundChan    <-chan *types.UMHMessage
+	transport       types.Transport
 	jwtToken        string
 	metricsRecorder *deps.MetricsRecorder
 	logger          deps.FSMLogger
@@ -70,9 +69,9 @@ type mockPushDeps struct {
 	recordSuccessCalls    int
 	recordErrorCalls      int
 	consecutiveErrors     int
-	lastErrorType         httpTransport.ErrorType
+	lastErrorType         types.ErrorType
 
-	pendingMessages   []*transport.UMHMessage
+	pendingMessages   []*types.UMHMessage
 	tokenValid        bool
 	resetGeneration   uint64
 	resetCleared      bool
@@ -83,7 +82,7 @@ type mockPushDeps struct {
 }
 
 type typedErrorCall struct {
-	errType    httpTransport.ErrorType
+	errType    types.ErrorType
 	retryAfter time.Duration
 }
 
@@ -115,11 +114,11 @@ func (m *mockPushDeps) GetWorkerType() string {
 	return "push"
 }
 
-func (m *mockPushDeps) GetOutboundChan() <-chan *transport.UMHMessage {
+func (m *mockPushDeps) GetOutboundChan() <-chan *types.UMHMessage {
 	return m.outboundChan
 }
 
-func (m *mockPushDeps) GetTransport() transport.Transport {
+func (m *mockPushDeps) GetTransport() types.Transport {
 	return m.transport
 }
 
@@ -127,7 +126,7 @@ func (m *mockPushDeps) GetJWTToken() string {
 	return m.jwtToken
 }
 
-func (m *mockPushDeps) RecordTypedError(errType httpTransport.ErrorType, retryAfter time.Duration) {
+func (m *mockPushDeps) RecordTypedError(errType types.ErrorType, retryAfter time.Duration) {
 	m.recordTypedErrorCalls = append(m.recordTypedErrorCalls, typedErrorCall{
 		errType:    errType,
 		retryAfter: retryAfter,
@@ -146,7 +145,7 @@ func (m *mockPushDeps) GetConsecutiveErrors() int {
 	return m.consecutiveErrors
 }
 
-func (m *mockPushDeps) GetLastErrorType() httpTransport.ErrorType {
+func (m *mockPushDeps) GetLastErrorType() types.ErrorType {
 	return m.lastErrorType
 }
 
@@ -154,11 +153,11 @@ func (m *mockPushDeps) MetricsRecorder() *deps.MetricsRecorder {
 	return m.metricsRecorder
 }
 
-func (m *mockPushDeps) StorePendingMessages(msgs []*transport.UMHMessage) {
+func (m *mockPushDeps) StorePendingMessages(msgs []*types.UMHMessage) {
 	m.pendingMessages = append(m.pendingMessages, msgs...)
 }
 
-func (m *mockPushDeps) DrainPendingMessages() []*transport.UMHMessage {
+func (m *mockPushDeps) DrainPendingMessages() []*types.UMHMessage {
 	msgs := m.pendingMessages
 	m.pendingMessages = nil
 
@@ -209,13 +208,13 @@ var _ = Describe("PushAction", func() {
 		act        *action.PushAction
 		mockDeps   *mockPushDeps
 		mockTrans  *mockTransport
-		outboundBi chan *transport.UMHMessage
+		outboundBi chan *types.UMHMessage
 	)
 
 	BeforeEach(func() {
 		act = &action.PushAction{}
 		mockTrans = &mockTransport{}
-		outboundBi = make(chan *transport.UMHMessage, 100)
+		outboundBi = make(chan *types.UMHMessage, 100)
 		mockDeps = newMockPushDeps()
 		mockDeps.outboundChan = outboundBi
 		mockDeps.transport = mockTrans
@@ -224,8 +223,8 @@ var _ = Describe("PushAction", func() {
 
 	Describe("Successful push", func() {
 		It("should drain messages, call transport.Push, and record metrics", func() {
-			outboundBi <- &transport.UMHMessage{InstanceUUID: "uuid-1", Content: "msg1", Email: "a@b.com"}
-			outboundBi <- &transport.UMHMessage{InstanceUUID: "uuid-2", Content: "msg2", Email: "c@d.com"}
+			outboundBi <- &types.UMHMessage{InstanceUUID: "uuid-1", Content: "msg1", Email: "a@b.com"}
+			outboundBi <- &types.UMHMessage{InstanceUUID: "uuid-2", Content: "msg2", Email: "c@d.com"}
 
 			err := act.Execute(context.Background(), mockDeps)
 			Expect(err).NotTo(HaveOccurred())
@@ -246,9 +245,9 @@ var _ = Describe("PushAction", func() {
 
 	Describe("Failed push with TransportError", func() {
 		It("should record typed error and suppress transient errors", func() {
-			outboundBi <- &transport.UMHMessage{Content: "msg1"}
-			mockTrans.pushErr = &httpTransport.TransportError{
-				Type:       httpTransport.ErrorTypeServerError,
+			outboundBi <- &types.UMHMessage{Content: "msg1"}
+			mockTrans.pushErr = &types.TransportError{
+				Type:       types.ErrorTypeServerError,
 				Message:    "HTTP 500: server_error",
 				RetryAfter: 30 * time.Second,
 			}
@@ -257,7 +256,7 @@ var _ = Describe("PushAction", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			Expect(mockDeps.recordTypedErrorCalls).To(HaveLen(1))
-			Expect(mockDeps.recordTypedErrorCalls[0].errType).To(Equal(httpTransport.ErrorTypeServerError))
+			Expect(mockDeps.recordTypedErrorCalls[0].errType).To(Equal(types.ErrorTypeServerError))
 			Expect(mockDeps.recordTypedErrorCalls[0].retryAfter).To(Equal(30 * time.Second))
 
 			drained := mockDeps.metricsRecorder.Drain()
@@ -267,9 +266,9 @@ var _ = Describe("PushAction", func() {
 		})
 
 		It("should propagate persistent errors", func() {
-			outboundBi <- &transport.UMHMessage{Content: "msg1"}
-			mockTrans.pushErr = &httpTransport.TransportError{
-				Type:    httpTransport.ErrorTypeInstanceDeleted,
+			outboundBi <- &types.UMHMessage{Content: "msg1"}
+			mockTrans.pushErr = &types.TransportError{
+				Type:    types.ErrorTypeInstanceDeleted,
 				Message: "HTTP 404: instance_deleted",
 			}
 
@@ -281,7 +280,7 @@ var _ = Describe("PushAction", func() {
 
 	Describe("Failed push with non-TransportError", func() {
 		It("should default to ErrorTypeUnknown and propagate as persistent", func() {
-			outboundBi <- &transport.UMHMessage{Content: "msg1"}
+			outboundBi <- &types.UMHMessage{Content: "msg1"}
 			mockTrans.pushErr = errors.New("connection refused")
 
 			err := act.Execute(context.Background(), mockDeps)
@@ -289,7 +288,7 @@ var _ = Describe("PushAction", func() {
 			Expect(err.Error()).To(ContainSubstring("push failed"))
 
 			Expect(mockDeps.recordTypedErrorCalls).To(HaveLen(1))
-			Expect(mockDeps.recordTypedErrorCalls[0].errType).To(Equal(httpTransport.ErrorTypeUnknown))
+			Expect(mockDeps.recordTypedErrorCalls[0].errType).To(Equal(types.ErrorTypeUnknown))
 			Expect(mockDeps.recordTypedErrorCalls[0].retryAfter).To(Equal(time.Duration(0)))
 
 			drained := mockDeps.metricsRecorder.Drain()
@@ -326,7 +325,7 @@ var _ = Describe("PushAction", func() {
 
 	Describe("Nil transport", func() {
 		It("should return error without draining channel", func() {
-			outboundBi <- &transport.UMHMessage{Content: "msg1"}
+			outboundBi <- &types.UMHMessage{Content: "msg1"}
 			mockDeps.transport = nil
 
 			err := act.Execute(context.Background(), mockDeps)
@@ -358,7 +357,7 @@ var _ = Describe("PushAction", func() {
 
 	Describe("Token pre-check", func() {
 		It("should skip push when token is invalid (without draining)", func() {
-			outboundBi <- &transport.UMHMessage{Content: "msg1"}
+			outboundBi <- &types.UMHMessage{Content: "msg1"}
 			mockDeps.tokenValid = false
 
 			err := act.Execute(context.Background(), mockDeps)
@@ -372,8 +371,8 @@ var _ = Describe("PushAction", func() {
 
 	Describe("Pending message retry", func() {
 		It("should store messages in pending on push failure", func() {
-			outboundBi <- &transport.UMHMessage{Content: "msg1"}
-			outboundBi <- &transport.UMHMessage{Content: "msg2"}
+			outboundBi <- &types.UMHMessage{Content: "msg1"}
+			outboundBi <- &types.UMHMessage{Content: "msg2"}
 			mockTrans.pushErr = errors.New("network error")
 
 			err := act.Execute(context.Background(), mockDeps)
@@ -383,10 +382,10 @@ var _ = Describe("PushAction", func() {
 		})
 
 		It("should drain channel via Phase 2 after all pending messages succeed", func() {
-			mockDeps.pendingMessages = []*transport.UMHMessage{
+			mockDeps.pendingMessages = []*types.UMHMessage{
 				{Content: "pending1"},
 			}
-			outboundBi <- &transport.UMHMessage{Content: "new-msg"}
+			outboundBi <- &types.UMHMessage{Content: "new-msg"}
 
 			err := act.Execute(context.Background(), mockDeps)
 			Expect(err).NotTo(HaveOccurred())
@@ -396,7 +395,7 @@ var _ = Describe("PushAction", func() {
 		})
 
 		It("should retry pending one-by-one and drop on non-infrastructure error", func() {
-			mockDeps.pendingMessages = []*transport.UMHMessage{
+			mockDeps.pendingMessages = []*types.UMHMessage{
 				{Content: "good-msg"},
 				{Content: "poison-msg"},
 				{Content: "after-poison"},
@@ -404,11 +403,11 @@ var _ = Describe("PushAction", func() {
 
 			callCount := 0
 			mockTrans.pushErr = nil
-			mockTrans.pushFunc = func(_ context.Context, _ string, msgs []*transport.UMHMessage) error {
+			mockTrans.pushFunc = func(_ context.Context, _ string, msgs []*types.UMHMessage) error {
 				callCount++
 				if callCount == 2 {
-					return &httpTransport.TransportError{
-						Type:    httpTransport.ErrorTypeInstanceDeleted,
+					return &types.TransportError{
+						Type:    types.ErrorTypeInstanceDeleted,
 						Message: "instance deleted",
 					}
 				}
@@ -427,18 +426,18 @@ var _ = Describe("PushAction", func() {
 		})
 
 		It("should suppress transient error during pending retry and retain remaining messages", func() {
-			mockDeps.pendingMessages = []*transport.UMHMessage{
+			mockDeps.pendingMessages = []*types.UMHMessage{
 				{Content: "msg1"},
 				{Content: "msg2"},
 				{Content: "msg3"},
 			}
 
 			callCount := 0
-			mockTrans.pushFunc = func(_ context.Context, _ string, msgs []*transport.UMHMessage) error {
+			mockTrans.pushFunc = func(_ context.Context, _ string, msgs []*types.UMHMessage) error {
 				callCount++
 				if callCount == 2 {
-					return &httpTransport.TransportError{
-						Type:    httpTransport.ErrorTypeNetwork,
+					return &types.TransportError{
+						Type:    types.ErrorTypeNetwork,
 						Message: "connection refused",
 					}
 				}
@@ -453,18 +452,18 @@ var _ = Describe("PushAction", func() {
 		})
 
 		It("should propagate persistent error during pending retry and keep remaining", func() {
-			mockDeps.pendingMessages = []*transport.UMHMessage{
+			mockDeps.pendingMessages = []*types.UMHMessage{
 				{Content: "msg1"},
 				{Content: "msg2"},
 				{Content: "msg3"},
 			}
 
 			callCount := 0
-			mockTrans.pushFunc = func(_ context.Context, _ string, msgs []*transport.UMHMessage) error {
+			mockTrans.pushFunc = func(_ context.Context, _ string, msgs []*types.UMHMessage) error {
 				callCount++
 				if callCount == 2 {
-					return &httpTransport.TransportError{
-						Type:    httpTransport.ErrorTypeInvalidToken,
+					return &types.TransportError{
+						Type:    types.ErrorTypeInvalidToken,
 						Message: "HTTP 401: invalid_token",
 					}
 				}
@@ -482,20 +481,20 @@ var _ = Describe("PushAction", func() {
 
 	Describe("Channel drain during pending retry (ENG-4741)", func() {
 		It("should drain channel to pending when retry hits transient error", func() {
-			mockDeps.pendingMessages = []*transport.UMHMessage{
+			mockDeps.pendingMessages = []*types.UMHMessage{
 				{Content: "pending1"},
 				{Content: "pending2"},
 				{Content: "pending3"},
 			}
-			outboundBi <- &transport.UMHMessage{Content: "channel-msg1"}
-			outboundBi <- &transport.UMHMessage{Content: "channel-msg2"}
+			outboundBi <- &types.UMHMessage{Content: "channel-msg1"}
+			outboundBi <- &types.UMHMessage{Content: "channel-msg2"}
 
 			callCount := 0
-			mockTrans.pushFunc = func(_ context.Context, _ string, _ []*transport.UMHMessage) error {
+			mockTrans.pushFunc = func(_ context.Context, _ string, _ []*types.UMHMessage) error {
 				callCount++
 				if callCount == 2 {
-					return &httpTransport.TransportError{
-						Type:    httpTransport.ErrorTypeNetwork,
+					return &types.TransportError{
+						Type:    types.ErrorTypeNetwork,
 						Message: "connection refused",
 					}
 				}
@@ -517,18 +516,18 @@ var _ = Describe("PushAction", func() {
 		})
 
 		It("should drain channel to pending when retry hits parent-recoverable error", func() {
-			mockDeps.pendingMessages = []*transport.UMHMessage{
+			mockDeps.pendingMessages = []*types.UMHMessage{
 				{Content: "pending1"},
 				{Content: "pending2"},
 			}
-			outboundBi <- &transport.UMHMessage{Content: "channel-msg1"}
+			outboundBi <- &types.UMHMessage{Content: "channel-msg1"}
 
 			callCount := 0
-			mockTrans.pushFunc = func(_ context.Context, _ string, _ []*transport.UMHMessage) error {
+			mockTrans.pushFunc = func(_ context.Context, _ string, _ []*types.UMHMessage) error {
 				callCount++
 				if callCount == 1 {
-					return &httpTransport.TransportError{
-						Type:    httpTransport.ErrorTypeInvalidToken,
+					return &types.TransportError{
+						Type:    types.ErrorTypeInvalidToken,
 						Message: "HTTP 401: invalid_token",
 					}
 				}
@@ -544,15 +543,15 @@ var _ = Describe("PushAction", func() {
 		})
 
 		It("should fall through to Phase 2 when all pending succeed", func() {
-			mockDeps.pendingMessages = []*transport.UMHMessage{
+			mockDeps.pendingMessages = []*types.UMHMessage{
 				{Content: "pending1"},
 				{Content: "pending2"},
 			}
-			outboundBi <- &transport.UMHMessage{Content: "channel-msg1"}
-			outboundBi <- &transport.UMHMessage{Content: "channel-msg2"}
+			outboundBi <- &types.UMHMessage{Content: "channel-msg1"}
+			outboundBi <- &types.UMHMessage{Content: "channel-msg2"}
 
-			var phase2Msgs []*transport.UMHMessage
-			mockTrans.pushFunc = func(_ context.Context, _ string, msgs []*transport.UMHMessage) error {
+			var phase2Msgs []*types.UMHMessage
+			mockTrans.pushFunc = func(_ context.Context, _ string, msgs []*types.UMHMessage) error {
 				// Phase 2 is the only call that batches > 1 message
 				// (Phase 1 retries pending one-at-a-time).
 				if len(msgs) > 1 {
@@ -571,14 +570,14 @@ var _ = Describe("PushAction", func() {
 		})
 
 		It("should not push channel messages when relay is unhealthy", func() {
-			mockDeps.pendingMessages = []*transport.UMHMessage{
+			mockDeps.pendingMessages = []*types.UMHMessage{
 				{Content: "pending1"},
 			}
-			outboundBi <- &transport.UMHMessage{Content: "channel-msg1"}
+			outboundBi <- &types.UMHMessage{Content: "channel-msg1"}
 
-			mockTrans.pushFunc = func(_ context.Context, _ string, _ []*transport.UMHMessage) error {
-				return &httpTransport.TransportError{
-					Type:    httpTransport.ErrorTypeNetwork,
+			mockTrans.pushFunc = func(_ context.Context, _ string, _ []*types.UMHMessage) error {
+				return &types.TransportError{
+					Type:    types.ErrorTypeNetwork,
 					Message: "timeout",
 				}
 			}
@@ -594,13 +593,13 @@ var _ = Describe("PushAction", func() {
 		It("should skip channel drain when context is canceled during retry", func() {
 			ctx, cancel := context.WithCancel(context.Background())
 
-			mockDeps.pendingMessages = []*transport.UMHMessage{
+			mockDeps.pendingMessages = []*types.UMHMessage{
 				{Content: "pending1"},
 				{Content: "pending2"},
 			}
-			outboundBi <- &transport.UMHMessage{Content: "channel-msg1"}
+			outboundBi <- &types.UMHMessage{Content: "channel-msg1"}
 
-			mockTrans.pushFunc = func(_ context.Context, _ string, _ []*transport.UMHMessage) error {
+			mockTrans.pushFunc = func(_ context.Context, _ string, _ []*types.UMHMessage) error {
 				cancel()
 				return nil
 			}
@@ -613,16 +612,16 @@ var _ = Describe("PushAction", func() {
 		})
 
 		It("should drain closed channel without panic", func() {
-			mockDeps.pendingMessages = []*transport.UMHMessage{
+			mockDeps.pendingMessages = []*types.UMHMessage{
 				{Content: "pending1"},
 			}
-			outboundBi <- &transport.UMHMessage{Content: "channel-msg1"}
-			outboundBi <- &transport.UMHMessage{Content: "channel-msg2"}
+			outboundBi <- &types.UMHMessage{Content: "channel-msg1"}
+			outboundBi <- &types.UMHMessage{Content: "channel-msg2"}
 			close(outboundBi)
 
-			mockTrans.pushFunc = func(_ context.Context, _ string, _ []*transport.UMHMessage) error {
-				return &httpTransport.TransportError{
-					Type:    httpTransport.ErrorTypeNetwork,
+			mockTrans.pushFunc = func(_ context.Context, _ string, _ []*types.UMHMessage) error {
+				return &types.TransportError{
+					Type:    types.ErrorTypeNetwork,
 					Message: "timeout",
 				}
 			}
@@ -634,16 +633,16 @@ var _ = Describe("PushAction", func() {
 		})
 
 		It("should not call Record* when draining channel to pending", func() {
-			mockDeps.pendingMessages = []*transport.UMHMessage{
+			mockDeps.pendingMessages = []*types.UMHMessage{
 				{Content: "pending1"},
 			}
-			outboundBi <- &transport.UMHMessage{Content: "channel-msg1"}
-			outboundBi <- &transport.UMHMessage{Content: "channel-msg2"}
-			outboundBi <- &transport.UMHMessage{Content: "channel-msg3"}
+			outboundBi <- &types.UMHMessage{Content: "channel-msg1"}
+			outboundBi <- &types.UMHMessage{Content: "channel-msg2"}
+			outboundBi <- &types.UMHMessage{Content: "channel-msg3"}
 
-			mockTrans.pushFunc = func(_ context.Context, _ string, _ []*transport.UMHMessage) error {
-				return &httpTransport.TransportError{
-					Type:    httpTransport.ErrorTypeNetwork,
+			mockTrans.pushFunc = func(_ context.Context, _ string, _ []*types.UMHMessage) error {
+				return &types.TransportError{
+					Type:    types.ErrorTypeNetwork,
 					Message: "connection refused",
 				}
 			}
@@ -666,13 +665,13 @@ var _ = Describe("PushAction", func() {
 			// With the fix, drainChannelToPending rescues the channel each
 			// tick. This test guards against a future refactor that puts
 			// the drain behind a first-tick-only condition.
-			mockDeps.pendingMessages = []*transport.UMHMessage{
+			mockDeps.pendingMessages = []*types.UMHMessage{
 				{Content: "initial-pending"},
 			}
 
-			mockTrans.pushFunc = func(_ context.Context, _ string, _ []*transport.UMHMessage) error {
-				return &httpTransport.TransportError{
-					Type:    httpTransport.ErrorTypeNetwork,
+			mockTrans.pushFunc = func(_ context.Context, _ string, _ []*types.UMHMessage) error {
+				return &types.TransportError{
+					Type:    types.ErrorTypeNetwork,
 					Message: "connection refused",
 				}
 			}
@@ -682,7 +681,7 @@ var _ = Describe("PushAction", func() {
 
 			for tick := 0; tick < ticks; tick++ {
 				for j := 0; j < messagesPerTick; j++ {
-					outboundBi <- &transport.UMHMessage{Content: fmt.Sprintf("tick%d-msg%d", tick, j)}
+					outboundBi <- &types.UMHMessage{Content: fmt.Sprintf("tick%d-msg%d", tick, j)}
 				}
 
 				err := act.Execute(context.Background(), mockDeps)
@@ -700,17 +699,17 @@ var _ = Describe("PushAction", func() {
 		It("should increment push ops metrics on pending retry failure", func() {
 			// Verifies that retryPending failure increments CounterPushOps
 			// and CounterPushFailures, matching Phase 2 metric semantics.
-			mockDeps.pendingMessages = []*transport.UMHMessage{
+			mockDeps.pendingMessages = []*types.UMHMessage{
 				{Content: "msg1"},
 				{Content: "msg2"},
 			}
 
 			callCount := 0
-			mockTrans.pushFunc = func(_ context.Context, _ string, _ []*transport.UMHMessage) error {
+			mockTrans.pushFunc = func(_ context.Context, _ string, _ []*types.UMHMessage) error {
 				callCount++
 				if callCount == 2 {
-					return &httpTransport.TransportError{
-						Type:    httpTransport.ErrorTypeNetwork,
+					return &types.TransportError{
+						Type:    types.ErrorTypeNetwork,
 						Message: "connection refused",
 					}
 				}
@@ -730,7 +729,7 @@ var _ = Describe("PushAction", func() {
 
 	Describe("Reset generation", func() {
 		It("should clear pending messages when resetGeneration changes", func() {
-			mockDeps.pendingMessages = []*transport.UMHMessage{
+			mockDeps.pendingMessages = []*types.UMHMessage{
 				{Content: "stale1"},
 				{Content: "stale2"},
 			}
@@ -751,7 +750,7 @@ var _ = Describe("PushAction", func() {
 			placeholderUUID := "placeholder-uuid-before-auth"
 			authenticatedUUID := "real-uuid-from-backend-jwt"
 
-			outboundBi <- &transport.UMHMessage{
+			outboundBi <- &types.UMHMessage{
 				InstanceUUID: placeholderUUID,
 				Content:      "status-update",
 				Email:        "user@example.com",
@@ -772,7 +771,7 @@ var _ = Describe("PushAction", func() {
 			placeholderUUID := "placeholder-uuid"
 			authenticatedUUID := "real-authenticated-uuid"
 
-			mockDeps.pendingMessages = []*transport.UMHMessage{
+			mockDeps.pendingMessages = []*types.UMHMessage{
 				{InstanceUUID: placeholderUUID, Content: "pending1"},
 				{InstanceUUID: placeholderUUID, Content: "pending2"},
 			}
@@ -794,7 +793,7 @@ var _ = Describe("PushAction", func() {
 			// different (possibly worse) backend errors.
 			originalUUID := "original-message-uuid"
 
-			outboundBi <- &transport.UMHMessage{
+			outboundBi <- &types.UMHMessage{
 				InstanceUUID: originalUUID,
 				Content:      "status-update",
 				Email:        "user@example.com",

@@ -23,7 +23,7 @@ import (
 
 	depspkg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator"
-	communicator_transport "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/types"
 )
 
 // Test suite is registered in worker_test.go to avoid duplicate RunSpecs
@@ -51,13 +51,13 @@ import (
 
 type mockTransport struct{}
 
-func (m *mockTransport) Authenticate(_ context.Context, _ communicator_transport.AuthRequest) (communicator_transport.AuthResponse, error) {
-	return communicator_transport.AuthResponse{}, nil
+func (m *mockTransport) Authenticate(_ context.Context, _ types.AuthRequest) (types.AuthResponse, error) {
+	return types.AuthResponse{}, nil
 }
-func (m *mockTransport) Pull(_ context.Context, _ string) ([]*communicator_transport.UMHMessage, error) {
+func (m *mockTransport) Pull(_ context.Context, _ string) ([]*types.UMHMessage, error) {
 	return nil, nil
 }
-func (m *mockTransport) Push(_ context.Context, _ string, _ []*communicator_transport.UMHMessage) error {
+func (m *mockTransport) Push(_ context.Context, _ string, _ []*types.UMHMessage) error {
 	return nil
 }
 func (m *mockTransport) Close() {}
@@ -65,13 +65,13 @@ func (m *mockTransport) Reset() {}
 
 // mockChannelProvider implements communicator.ChannelProvider for testing.
 type mockChannelProvider struct {
-	inbound  chan<- *communicator_transport.UMHMessage
-	outbound <-chan *communicator_transport.UMHMessage
+	inbound  chan<- *types.UMHMessage
+	outbound <-chan *types.UMHMessage
 }
 
 func (m *mockChannelProvider) GetChannels(_ string) (
-	inbound chan<- *communicator_transport.UMHMessage,
-	outbound <-chan *communicator_transport.UMHMessage,
+	inbound chan<- *types.UMHMessage,
+	outbound <-chan *types.UMHMessage,
 ) {
 	return m.inbound, m.outbound
 }
@@ -84,8 +84,8 @@ func (m *mockChannelProvider) GetInboundStats(_ string) (capacity int, length in
 // newTestChannelProvider creates a mock channel provider for test setup.
 func newTestChannelProvider() *mockChannelProvider {
 	// Create bidirectional channels, then extract send-only and receive-only
-	inboundBi := make(chan *communicator_transport.UMHMessage, 100)
-	outboundBi := make(chan *communicator_transport.UMHMessage, 100)
+	inboundBi := make(chan *types.UMHMessage, 100)
+	outboundBi := make(chan *types.UMHMessage, 100)
 
 	return &mockChannelProvider{
 		inbound:  inboundBi,
@@ -95,7 +95,7 @@ func newTestChannelProvider() *mockChannelProvider {
 
 var _ = Describe("CommunicatorDependencies", func() {
 	var (
-		mt     communicator_transport.Transport
+		mt     types.Transport
 		logger depspkg.FSMLogger
 	)
 
@@ -454,8 +454,8 @@ var _ = Describe("CommunicatorDependencies", func() {
 
 			Context("when ChannelProvider singleton IS set", func() {
 				It("should NOT panic and create dependencies with channels from singleton", func() {
-					inbound := make(chan<- *communicator_transport.UMHMessage, 10)
-					outbound := make(<-chan *communicator_transport.UMHMessage, 10)
+					inbound := make(chan<- *types.UMHMessage, 10)
+					outbound := make(<-chan *types.UMHMessage, 10)
 					mockProvider := &mockChannelProvider{
 						inbound:  inbound,
 						outbound: outbound,

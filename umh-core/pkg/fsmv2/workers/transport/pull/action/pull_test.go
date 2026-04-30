@@ -22,10 +22,9 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport"
-	httpTransport "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport/http"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/pull/action"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/pull/snapshot"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/types"
 )
 
 var _ snapshot.PullDependencies = (*mockPullDeps)(nil)
@@ -33,15 +32,15 @@ var _ snapshot.PullDependencies = (*mockPullDeps)(nil)
 type mockTransport struct {
 	pullErr       error
 	pullCallCount int
-	pullMessages  []*transport.UMHMessage
-	pullFunc      func(ctx context.Context, jwtToken string) ([]*transport.UMHMessage, error)
+	pullMessages  []*types.UMHMessage
+	pullFunc      func(ctx context.Context, jwtToken string) ([]*types.UMHMessage, error)
 }
 
-func (m *mockTransport) Authenticate(_ context.Context, _ transport.AuthRequest) (transport.AuthResponse, error) {
-	return transport.AuthResponse{}, nil
+func (m *mockTransport) Authenticate(_ context.Context, _ types.AuthRequest) (types.AuthResponse, error) {
+	return types.AuthResponse{}, nil
 }
 
-func (m *mockTransport) Pull(ctx context.Context, jwtToken string) ([]*transport.UMHMessage, error) {
+func (m *mockTransport) Pull(ctx context.Context, jwtToken string) ([]*types.UMHMessage, error) {
 	m.pullCallCount++
 
 	if m.pullFunc != nil {
@@ -51,7 +50,7 @@ func (m *mockTransport) Pull(ctx context.Context, jwtToken string) ([]*transport
 	return m.pullMessages, m.pullErr
 }
 
-func (m *mockTransport) Push(_ context.Context, _ string, _ []*transport.UMHMessage) error {
+func (m *mockTransport) Push(_ context.Context, _ string, _ []*types.UMHMessage) error {
 	return nil
 }
 
@@ -60,12 +59,12 @@ func (m *mockTransport) Close() {}
 func (m *mockTransport) Reset() {}
 
 type mockPullDeps struct {
-	transport       transport.Transport
+	transport       types.Transport
 	jwtToken        string
 	metricsRecorder *deps.MetricsRecorder
 	logger          deps.FSMLogger
 
-	inboundBi    chan *transport.UMHMessage
+	inboundBi    chan *types.UMHMessage
 	chanCapacity int
 	chanLength   int
 
@@ -73,9 +72,9 @@ type mockPullDeps struct {
 	recordSuccessCalls    int
 	recordErrorCalls      int
 	consecutiveErrors     int
-	lastErrorType         httpTransport.ErrorType
+	lastErrorType         types.ErrorType
 
-	pendingMessages   []*transport.UMHMessage
+	pendingMessages   []*types.UMHMessage
 	tokenValid        bool
 	resetGeneration   uint64
 	resetCleared      bool
@@ -87,7 +86,7 @@ type mockPullDeps struct {
 }
 
 type typedErrorCall struct {
-	errType    httpTransport.ErrorType
+	errType    types.ErrorType
 	retryAfter time.Duration
 }
 
@@ -121,7 +120,7 @@ func (m *mockPullDeps) GetStateReader() deps.StateReader {
 	return nil
 }
 
-func (m *mockPullDeps) GetInboundChan() chan<- *transport.UMHMessage {
+func (m *mockPullDeps) GetInboundChan() chan<- *types.UMHMessage {
 	if m.inboundBi == nil {
 		return nil
 	}
@@ -141,7 +140,7 @@ func (m *mockPullDeps) SetBackpressured(v bool) {
 	m.backpressured = v
 }
 
-func (m *mockPullDeps) GetTransport() transport.Transport {
+func (m *mockPullDeps) GetTransport() types.Transport {
 	return m.transport
 }
 
@@ -149,7 +148,7 @@ func (m *mockPullDeps) GetJWTToken() string {
 	return m.jwtToken
 }
 
-func (m *mockPullDeps) RecordTypedError(errType httpTransport.ErrorType, retryAfter time.Duration) {
+func (m *mockPullDeps) RecordTypedError(errType types.ErrorType, retryAfter time.Duration) {
 	m.recordTypedErrorCalls = append(m.recordTypedErrorCalls, typedErrorCall{
 		errType:    errType,
 		retryAfter: retryAfter,
@@ -168,7 +167,7 @@ func (m *mockPullDeps) GetConsecutiveErrors() int {
 	return m.consecutiveErrors
 }
 
-func (m *mockPullDeps) GetLastErrorType() httpTransport.ErrorType {
+func (m *mockPullDeps) GetLastErrorType() types.ErrorType {
 	return m.lastErrorType
 }
 
@@ -176,11 +175,11 @@ func (m *mockPullDeps) MetricsRecorder() *deps.MetricsRecorder {
 	return m.metricsRecorder
 }
 
-func (m *mockPullDeps) StorePendingMessages(msgs []*transport.UMHMessage) {
+func (m *mockPullDeps) StorePendingMessages(msgs []*types.UMHMessage) {
 	m.pendingMessages = append(m.pendingMessages, msgs...)
 }
 
-func (m *mockPullDeps) DrainPendingMessages() []*transport.UMHMessage {
+func (m *mockPullDeps) DrainPendingMessages() []*types.UMHMessage {
 	msgs := m.pendingMessages
 	m.pendingMessages = nil
 
@@ -227,13 +226,13 @@ var _ = Describe("PullAction", func() {
 		act       *action.PullAction
 		mockDeps  *mockPullDeps
 		mockTrans *mockTransport
-		inboundBi chan *transport.UMHMessage
+		inboundBi chan *types.UMHMessage
 	)
 
 	BeforeEach(func() {
 		act = &action.PullAction{}
 		mockTrans = &mockTransport{}
-		inboundBi = make(chan *transport.UMHMessage, 100)
+		inboundBi = make(chan *types.UMHMessage, 100)
 		mockDeps = newMockPullDeps()
 		mockDeps.inboundBi = inboundBi
 		mockDeps.transport = mockTrans
@@ -242,7 +241,7 @@ var _ = Describe("PullAction", func() {
 
 	Describe("Successful pull", func() {
 		It("should pull messages, deliver to inbound channel, and record metrics", func() {
-			mockTrans.pullMessages = []*transport.UMHMessage{
+			mockTrans.pullMessages = []*types.UMHMessage{
 				{InstanceUUID: "uuid-1", Content: "msg1", Email: "a@b.com"},
 				{InstanceUUID: "uuid-2", Content: "msg2", Email: "c@d.com"},
 			}
@@ -266,8 +265,8 @@ var _ = Describe("PullAction", func() {
 
 	Describe("Failed pull with TransportError", func() {
 		It("should record typed error and suppress transient errors", func() {
-			mockTrans.pullErr = &httpTransport.TransportError{
-				Type:       httpTransport.ErrorTypeServerError,
+			mockTrans.pullErr = &types.TransportError{
+				Type:       types.ErrorTypeServerError,
 				Message:    "HTTP 500: server_error",
 				RetryAfter: 30 * time.Second,
 			}
@@ -276,7 +275,7 @@ var _ = Describe("PullAction", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			Expect(mockDeps.recordTypedErrorCalls).To(HaveLen(1))
-			Expect(mockDeps.recordTypedErrorCalls[0].errType).To(Equal(httpTransport.ErrorTypeServerError))
+			Expect(mockDeps.recordTypedErrorCalls[0].errType).To(Equal(types.ErrorTypeServerError))
 			Expect(mockDeps.recordTypedErrorCalls[0].retryAfter).To(Equal(30 * time.Second))
 
 			drained := mockDeps.metricsRecorder.Drain()
@@ -286,8 +285,8 @@ var _ = Describe("PullAction", func() {
 		})
 
 		It("should propagate persistent errors", func() {
-			mockTrans.pullErr = &httpTransport.TransportError{
-				Type:    httpTransport.ErrorTypeInstanceDeleted,
+			mockTrans.pullErr = &types.TransportError{
+				Type:    types.ErrorTypeInstanceDeleted,
 				Message: "HTTP 404: instance_deleted",
 			}
 
@@ -306,7 +305,7 @@ var _ = Describe("PullAction", func() {
 			Expect(err.Error()).To(ContainSubstring("pull failed"))
 
 			Expect(mockDeps.recordTypedErrorCalls).To(HaveLen(1))
-			Expect(mockDeps.recordTypedErrorCalls[0].errType).To(Equal(httpTransport.ErrorTypeUnknown))
+			Expect(mockDeps.recordTypedErrorCalls[0].errType).To(Equal(types.ErrorTypeUnknown))
 			Expect(mockDeps.recordTypedErrorCalls[0].retryAfter).To(Equal(time.Duration(0)))
 
 			drained := mockDeps.metricsRecorder.Drain()
@@ -339,7 +338,7 @@ var _ = Describe("PullAction", func() {
 			// Edge case: Transport returns array containing nil pointers.
 			// The defensive code `if msg == nil { continue }` skips them during delivery.
 			// CounterMessagesPulled uses nonNilCount — only valid messages are counted.
-			mockTrans.pullMessages = []*transport.UMHMessage{
+			mockTrans.pullMessages = []*types.UMHMessage{
 				{InstanceUUID: "uuid-1", Content: "msg1", Email: "a@b.com"},
 				nil,
 				{InstanceUUID: "uuid-2", Content: "msg2", Email: "c@d.com"},
@@ -405,7 +404,7 @@ var _ = Describe("PullAction", func() {
 
 		It("should re-store pending messages and skip delivery when inbound channel is nil", func() {
 			mockDeps.inboundBi = nil
-			mockDeps.pendingMessages = []*transport.UMHMessage{
+			mockDeps.pendingMessages = []*types.UMHMessage{
 				{Content: "pending1"},
 				{Content: "pending2"},
 			}
@@ -463,7 +462,7 @@ var _ = Describe("PullAction", func() {
 			mockDeps.chanLength = 800
 			mockDeps.backpressured = true
 
-			mockTrans.pullMessages = []*transport.UMHMessage{
+			mockTrans.pullMessages = []*types.UMHMessage{
 				{Content: "msg1"},
 			}
 
@@ -508,12 +507,12 @@ var _ = Describe("PullAction", func() {
 
 	Describe("Pending delivery", func() {
 		It("should deliver pending messages before doing new pull", func() {
-			mockDeps.pendingMessages = []*transport.UMHMessage{
+			mockDeps.pendingMessages = []*types.UMHMessage{
 				{Content: "pending1"},
 				{Content: "pending2"},
 			}
 
-			mockTrans.pullMessages = []*transport.UMHMessage{
+			mockTrans.pullMessages = []*types.UMHMessage{
 				{Content: "new-msg"},
 			}
 
@@ -539,10 +538,10 @@ var _ = Describe("PullAction", func() {
 
 	Describe("Pending partial delivery", func() {
 		It("should store remaining messages when channel full during pending delivery", func() {
-			smallChan := make(chan *transport.UMHMessage, 1)
+			smallChan := make(chan *types.UMHMessage, 1)
 			mockDeps.inboundBi = smallChan
 
-			mockDeps.pendingMessages = []*transport.UMHMessage{
+			mockDeps.pendingMessages = []*types.UMHMessage{
 				{Content: "pending1"},
 				{Content: "pending2"},
 				{Content: "pending3"},
@@ -560,7 +559,7 @@ var _ = Describe("PullAction", func() {
 
 	Describe("Reset generation", func() {
 		It("should clear pending messages on parent reset", func() {
-			mockDeps.pendingMessages = []*transport.UMHMessage{
+			mockDeps.pendingMessages = []*types.UMHMessage{
 				{Content: "stale1"},
 				{Content: "stale2"},
 			}
@@ -573,7 +572,7 @@ var _ = Describe("PullAction", func() {
 		})
 
 		It("should clear backpressure on parent reset when capacity recovers", func() {
-			mockDeps.pendingMessages = []*transport.UMHMessage{
+			mockDeps.pendingMessages = []*types.UMHMessage{
 				{Content: "stale1"},
 			}
 			mockDeps.resetCleared = true
@@ -593,15 +592,15 @@ var _ = Describe("PullAction", func() {
 		It("should return ctx.Err() when context cancelled with remaining messages", func() {
 			ctx, cancel := context.WithCancel(context.Background())
 
-			smallChan := make(chan *transport.UMHMessage, 1)
+			smallChan := make(chan *types.UMHMessage, 1)
 			mockDeps.inboundBi = smallChan
 			mockDeps.chanCapacity = 1000
 			mockDeps.chanLength = 0
 
-			mockTrans.pullFunc = func(_ context.Context, _ string) ([]*transport.UMHMessage, error) {
+			mockTrans.pullFunc = func(_ context.Context, _ string) ([]*types.UMHMessage, error) {
 				cancel()
 
-				return []*transport.UMHMessage{
+				return []*types.UMHMessage{
 					{Content: "msg1"},
 					{Content: "msg2"},
 					{Content: "msg3"},
@@ -615,12 +614,12 @@ var _ = Describe("PullAction", func() {
 
 	Describe("Mid-batch channel full", func() {
 		It("should store remaining as pending during phase 4 delivery and return nil", func() {
-			smallChan := make(chan *transport.UMHMessage, 2)
+			smallChan := make(chan *types.UMHMessage, 2)
 			mockDeps.inboundBi = smallChan
 			mockDeps.chanCapacity = 1000
 			mockDeps.chanLength = 0
 
-			mockTrans.pullMessages = []*transport.UMHMessage{
+			mockTrans.pullMessages = []*types.UMHMessage{
 				{Content: "msg1"},
 				{Content: "msg2"},
 				{Content: "msg3"},

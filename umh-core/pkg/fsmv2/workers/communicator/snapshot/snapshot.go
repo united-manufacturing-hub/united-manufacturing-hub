@@ -20,13 +20,13 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/types"
 )
 
 // CommunicatorDependencies is the dependencies interface for communicator actions (avoids import cycles).
 type CommunicatorDependencies interface {
 	deps.Dependencies
-	GetTransport() transport.Transport
+	GetTransport() types.Transport
 	MetricsRecorder() *deps.MetricsRecorder
 }
 
@@ -51,8 +51,8 @@ type CommunicatorDesiredState struct {
 	ChildrenSpecs []config.ChildSpec `json:"childrenSpecs,omitempty"`
 
 	// Messages
-	MessagesToBeSent []transport.UMHMessage `json:"messagesToBeSent,omitempty"`
-	Timeout          time.Duration          `json:"timeout"`
+	MessagesToBeSent []types.UMHMessage `json:"messagesToBeSent,omitempty"`
+	Timeout          time.Duration      `json:"timeout"`
 }
 
 // GetChildrenSpecs returns the children specifications for the communicator worker.

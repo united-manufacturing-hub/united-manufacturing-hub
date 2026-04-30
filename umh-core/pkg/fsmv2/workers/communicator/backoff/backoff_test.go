@@ -22,7 +22,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/backoff"
-	httpTransport "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport/http"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/types"
 )
 
 func TestBackoff(t *testing.T) {
@@ -76,14 +76,14 @@ var _ = Describe("CalculateDelayForErrorType", func() {
 	Context("when error type is ErrorTypeInstanceDeleted", func() {
 		It("should return 5 minute delay regardless of consecutive errors", func() {
 			delay := backoff.CalculateDelayForErrorType(
-				httpTransport.ErrorTypeInstanceDeleted,
+				types.ErrorTypeInstanceDeleted,
 				1,
 				0,
 			)
 			Expect(delay).To(Equal(5 * time.Minute))
 
 			delay = backoff.CalculateDelayForErrorType(
-				httpTransport.ErrorTypeInstanceDeleted,
+				types.ErrorTypeInstanceDeleted,
 				10,
 				0,
 			)
@@ -94,7 +94,7 @@ var _ = Describe("CalculateDelayForErrorType", func() {
 	Context("when error type is ErrorTypeCloudflareChallenge", func() {
 		It("should return 60 second delay", func() {
 			delay := backoff.CalculateDelayForErrorType(
-				httpTransport.ErrorTypeCloudflareChallenge,
+				types.ErrorTypeCloudflareChallenge,
 				1,
 				0,
 			)
@@ -105,7 +105,7 @@ var _ = Describe("CalculateDelayForErrorType", func() {
 	Context("when error type is ErrorTypeProxyBlock", func() {
 		It("should return 60 second delay", func() {
 			delay := backoff.CalculateDelayForErrorType(
-				httpTransport.ErrorTypeProxyBlock,
+				types.ErrorTypeProxyBlock,
 				1,
 				0,
 			)
@@ -116,7 +116,7 @@ var _ = Describe("CalculateDelayForErrorType", func() {
 	Context("when error type is ErrorTypeInvalidToken", func() {
 		It("should return 60 second delay", func() {
 			delay := backoff.CalculateDelayForErrorType(
-				httpTransport.ErrorTypeInvalidToken,
+				types.ErrorTypeInvalidToken,
 				1,
 				0,
 			)
@@ -134,7 +134,7 @@ var _ = Describe("CalculateDelayForErrorType", func() {
 			}
 			for i, expected := range delays {
 				delay := backoff.CalculateDelayForErrorType(
-					httpTransport.ErrorTypeBackendRateLimit,
+					types.ErrorTypeBackendRateLimit,
 					i+1,
 					0,
 				)
@@ -144,7 +144,7 @@ var _ = Describe("CalculateDelayForErrorType", func() {
 
 		It("should cap at 300 seconds for many errors", func() {
 			delay := backoff.CalculateDelayForErrorType(
-				httpTransport.ErrorTypeBackendRateLimit,
+				types.ErrorTypeBackendRateLimit,
 				100,
 				0,
 			)
@@ -155,14 +155,14 @@ var _ = Describe("CalculateDelayForErrorType", func() {
 	Context("when error type is ErrorTypeServerError", func() {
 		It("should use exponential backoff", func() {
 			delay := backoff.CalculateDelayForErrorType(
-				httpTransport.ErrorTypeServerError,
+				types.ErrorTypeServerError,
 				1,
 				0,
 			)
 			Expect(delay).To(Equal(2 * time.Second))
 
 			delay = backoff.CalculateDelayForErrorType(
-				httpTransport.ErrorTypeServerError,
+				types.ErrorTypeServerError,
 				3,
 				0,
 			)
@@ -173,7 +173,7 @@ var _ = Describe("CalculateDelayForErrorType", func() {
 	Context("when error type is ErrorTypeNetwork", func() {
 		It("should use exponential backoff", func() {
 			delay := backoff.CalculateDelayForErrorType(
-				httpTransport.ErrorTypeNetwork,
+				types.ErrorTypeNetwork,
 				2,
 				0,
 			)
@@ -185,7 +185,7 @@ var _ = Describe("CalculateDelayForErrorType", func() {
 		It("should override default delay", func() {
 			retryAfter := 120 * time.Second
 			delay := backoff.CalculateDelayForErrorType(
-				httpTransport.ErrorTypeBackendRateLimit,
+				types.ErrorTypeBackendRateLimit,
 				1,
 				retryAfter,
 			)
@@ -195,7 +195,7 @@ var _ = Describe("CalculateDelayForErrorType", func() {
 		It("should override for any error type", func() {
 			retryAfter := 90 * time.Second
 			delay := backoff.CalculateDelayForErrorType(
-				httpTransport.ErrorTypeServerError,
+				types.ErrorTypeServerError,
 				1,
 				retryAfter,
 			)
@@ -206,14 +206,14 @@ var _ = Describe("CalculateDelayForErrorType", func() {
 
 var _ = Describe("ShouldStopRetrying", func() {
 	It("should always return false", func() {
-		errorTypes := []httpTransport.ErrorType{
-			httpTransport.ErrorTypeNetwork,
-			httpTransport.ErrorTypeServerError,
-			httpTransport.ErrorTypeCloudflareChallenge,
-			httpTransport.ErrorTypeProxyBlock,
-			httpTransport.ErrorTypeInvalidToken,
-			httpTransport.ErrorTypeBackendRateLimit,
-			httpTransport.ErrorTypeInstanceDeleted,
+		errorTypes := []types.ErrorType{
+			types.ErrorTypeNetwork,
+			types.ErrorTypeServerError,
+			types.ErrorTypeCloudflareChallenge,
+			types.ErrorTypeProxyBlock,
+			types.ErrorTypeInvalidToken,
+			types.ErrorTypeBackendRateLimit,
+			types.ErrorTypeInstanceDeleted,
 		}
 		for _, errType := range errorTypes {
 			Expect(backoff.ShouldStopRetrying(errType, 1)).To(BeFalse())
@@ -224,42 +224,42 @@ var _ = Describe("ShouldStopRetrying", func() {
 
 var _ = Describe("ShouldResetTransport", func() {
 	It("should return false when consecutive errors is 0", func() {
-		Expect(backoff.ShouldResetTransport(httpTransport.ErrorTypeNetwork, 0)).To(BeFalse())
+		Expect(backoff.ShouldResetTransport(types.ErrorTypeNetwork, 0)).To(BeFalse())
 	})
 
 	Context("for ErrorTypeNetwork", func() {
 		It("should reset every 5 consecutive errors", func() {
-			Expect(backoff.ShouldResetTransport(httpTransport.ErrorTypeNetwork, 4)).To(BeFalse())
-			Expect(backoff.ShouldResetTransport(httpTransport.ErrorTypeNetwork, 5)).To(BeTrue())
-			Expect(backoff.ShouldResetTransport(httpTransport.ErrorTypeNetwork, 6)).To(BeFalse())
-			Expect(backoff.ShouldResetTransport(httpTransport.ErrorTypeNetwork, 10)).To(BeTrue())
-			Expect(backoff.ShouldResetTransport(httpTransport.ErrorTypeNetwork, 15)).To(BeTrue())
+			Expect(backoff.ShouldResetTransport(types.ErrorTypeNetwork, 4)).To(BeFalse())
+			Expect(backoff.ShouldResetTransport(types.ErrorTypeNetwork, 5)).To(BeTrue())
+			Expect(backoff.ShouldResetTransport(types.ErrorTypeNetwork, 6)).To(BeFalse())
+			Expect(backoff.ShouldResetTransport(types.ErrorTypeNetwork, 10)).To(BeTrue())
+			Expect(backoff.ShouldResetTransport(types.ErrorTypeNetwork, 15)).To(BeTrue())
 		})
 	})
 
 	Context("for ErrorTypeServerError", func() {
 		It("should reset every 10 consecutive errors", func() {
-			Expect(backoff.ShouldResetTransport(httpTransport.ErrorTypeServerError, 5)).To(BeFalse())
-			Expect(backoff.ShouldResetTransport(httpTransport.ErrorTypeServerError, 10)).To(BeTrue())
-			Expect(backoff.ShouldResetTransport(httpTransport.ErrorTypeServerError, 15)).To(BeFalse())
-			Expect(backoff.ShouldResetTransport(httpTransport.ErrorTypeServerError, 20)).To(BeTrue())
+			Expect(backoff.ShouldResetTransport(types.ErrorTypeServerError, 5)).To(BeFalse())
+			Expect(backoff.ShouldResetTransport(types.ErrorTypeServerError, 10)).To(BeTrue())
+			Expect(backoff.ShouldResetTransport(types.ErrorTypeServerError, 15)).To(BeFalse())
+			Expect(backoff.ShouldResetTransport(types.ErrorTypeServerError, 20)).To(BeTrue())
 		})
 	})
 
 	Context("for ErrorTypeCloudflareChallenge", func() {
 		It("should reset every 10 consecutive errors", func() {
-			Expect(backoff.ShouldResetTransport(httpTransport.ErrorTypeCloudflareChallenge, 10)).To(BeTrue())
-			Expect(backoff.ShouldResetTransport(httpTransport.ErrorTypeCloudflareChallenge, 20)).To(BeTrue())
+			Expect(backoff.ShouldResetTransport(types.ErrorTypeCloudflareChallenge, 10)).To(BeTrue())
+			Expect(backoff.ShouldResetTransport(types.ErrorTypeCloudflareChallenge, 20)).To(BeTrue())
 		})
 	})
 
 	Context("for other error types", func() {
 		It("should not trigger transport reset", func() {
-			otherTypes := []httpTransport.ErrorType{
-				httpTransport.ErrorTypeInvalidToken,
-				httpTransport.ErrorTypeBackendRateLimit,
-				httpTransport.ErrorTypeProxyBlock,
-				httpTransport.ErrorTypeInstanceDeleted,
+			otherTypes := []types.ErrorType{
+				types.ErrorTypeInvalidToken,
+				types.ErrorTypeBackendRateLimit,
+				types.ErrorTypeProxyBlock,
+				types.ErrorTypeInstanceDeleted,
 			}
 			for _, errType := range otherTypes {
 				Expect(backoff.ShouldResetTransport(errType, 5)).To(BeFalse())

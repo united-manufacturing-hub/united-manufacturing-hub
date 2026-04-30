@@ -17,12 +17,12 @@ package transport
 import (
 	"sync"
 
-	transportpkg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/types"
 )
 
 // ChannelProvider supplies inbound/outbound channels for transport child workers (PushWorker, PullWorker).
 type ChannelProvider interface {
-	GetChannels(workerID string) (inbound chan<- *transportpkg.UMHMessage, outbound <-chan *transportpkg.UMHMessage)
+	GetChannels(workerID string) (inbound chan<- *types.UMHMessage, outbound <-chan *types.UMHMessage)
 	// GetInboundStats returns the capacity and current length of the inbound channel.
 	// Used by PullWorker to detect backpressure before pulling messages.
 	GetInboundStats(workerID string) (capacity int, length int)

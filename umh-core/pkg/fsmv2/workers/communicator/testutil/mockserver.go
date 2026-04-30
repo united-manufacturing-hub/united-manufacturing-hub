@@ -22,7 +22,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/types"
 )
 
 // MockRelayServer is a mock HTTP server that simulates the relay server for testing.
@@ -33,8 +33,8 @@ type MockRelayServer struct {
 	// Bug #6 fix: Backend returns a specific UUID for the instance
 	backendUUID       string
 	backendName       string
-	pullQueue         []*transport.UMHMessage
-	pushedMsgs        []*transport.UMHMessage
+	pullQueue         []*types.UMHMessage
+	pushedMsgs        []*types.UMHMessage
 	connectionHeaders []string
 	authCalls         int
 	nextError         int
@@ -45,8 +45,8 @@ type MockRelayServer struct {
 // NewMockRelayServer creates and starts a new mock relay server.
 func NewMockRelayServer() *MockRelayServer {
 	m := &MockRelayServer{
-		pullQueue:         make([]*transport.UMHMessage, 0),
-		pushedMsgs:        make([]*transport.UMHMessage, 0),
+		pullQueue:         make([]*types.UMHMessage, 0),
+		pushedMsgs:        make([]*types.UMHMessage, 0),
 		connectionHeaders: make([]string, 0),
 		jwtToken:          "mock-jwt-token-" + time.Now().Format("20060102150405"),
 		// Bug #6 fix: Default backend UUID - different from any placeholder UUID
@@ -128,7 +128,7 @@ func (m *MockRelayServer) handleLogin(w http.ResponseWriter, r *http.Request) {
 	if authHeader == "" {
 		// Fallback: try to read from body (legacy test behavior)
 		// No auth header and no valid body - that's OK for mock, just continue
-		var req transport.AuthRequest
+		var req types.AuthRequest
 
 		_ = json.NewDecoder(r.Body).Decode(&req)
 	}
@@ -171,12 +171,12 @@ func (m *MockRelayServer) handlePull(w http.ResponseWriter, r *http.Request) {
 
 	m.mu.Lock()
 	messages := m.pullQueue
-	m.pullQueue = make([]*transport.UMHMessage, 0) // Clear queue after pull
+	m.pullQueue = make([]*types.UMHMessage, 0) // Clear queue after pull
 	m.mu.Unlock()
 
 	// Use uppercase "UMHMessages" to match real backend
 	payload := struct {
-		UMHMessages []*transport.UMHMessage `json:"UMHMessages"`
+		UMHMessages []*types.UMHMessage `json:"UMHMessages"`
 	}{
 		UMHMessages: messages,
 	}
@@ -195,7 +195,7 @@ func (m *MockRelayServer) handlePush(w http.ResponseWriter, r *http.Request) {
 
 	// Use uppercase "UMHMessages" to match real backend
 	var payload struct {
-		UMHMessages []*transport.UMHMessage `json:"UMHMessages"`
+		UMHMessages []*types.UMHMessage `json:"UMHMessages"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
@@ -221,7 +221,7 @@ func (m *MockRelayServer) Close() {
 }
 
 // QueuePullMessage adds a message to the pull queue.
-func (m *MockRelayServer) QueuePullMessage(msg *transport.UMHMessage) {
+func (m *MockRelayServer) QueuePullMessage(msg *types.UMHMessage) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -229,12 +229,12 @@ func (m *MockRelayServer) QueuePullMessage(msg *transport.UMHMessage) {
 }
 
 // GetPushedMessages returns all messages that were pushed to the server.
-func (m *MockRelayServer) GetPushedMessages() []*transport.UMHMessage {
+func (m *MockRelayServer) GetPushedMessages() []*types.UMHMessage {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	// Return a copy to avoid race conditions
-	result := make([]*transport.UMHMessage, len(m.pushedMsgs))
+	result := make([]*types.UMHMessage, len(m.pushedMsgs))
 	copy(result, m.pushedMsgs)
 
 	return result
@@ -245,7 +245,7 @@ func (m *MockRelayServer) ClearPushedMessages() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	m.pushedMsgs = make([]*transport.UMHMessage, 0)
+	m.pushedMsgs = make([]*types.UMHMessage, 0)
 }
 
 // AuthCallCount returns the number of authentication calls made.

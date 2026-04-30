@@ -24,10 +24,9 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport"
-	httpTransport "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport/http"
 	transportpkg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/action"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/types"
 )
 
 var _ = Describe("AuthenticateAction", func() {
@@ -137,7 +136,7 @@ var _ = Describe("AuthenticateAction", func() {
 			ctx := context.Background()
 			expectedToken := "test-jwt-token-xyz"
 			expectedExpiry := time.Now().Add(24 * time.Hour).Unix()
-			mockTransp.authResponse = transport.AuthResponse{
+			mockTransp.authResponse = types.AuthResponse{
 				Token:     expectedToken,
 				ExpiresAt: expectedExpiry,
 			}
@@ -152,7 +151,7 @@ var _ = Describe("AuthenticateAction", func() {
 			ctx := context.Background()
 			expectedToken := "test-jwt-token-xyz"
 			expectedExpiry := time.Now().Add(24 * time.Hour).Unix()
-			mockTransp.authResponse = transport.AuthResponse{
+			mockTransp.authResponse = types.AuthResponse{
 				Token:     expectedToken,
 				ExpiresAt: expectedExpiry,
 			}
@@ -169,7 +168,7 @@ var _ = Describe("AuthenticateAction", func() {
 		It("should store instance UUID in dependencies after successful authentication", func() {
 			ctx := context.Background()
 			expectedUUID := "backend-instance-uuid-123"
-			mockTransp.authResponse = transport.AuthResponse{
+			mockTransp.authResponse = types.AuthResponse{
 				Token:        "test-token",
 				ExpiresAt:    time.Now().Add(24 * time.Hour).Unix(),
 				InstanceUUID: expectedUUID,
@@ -183,7 +182,7 @@ var _ = Describe("AuthenticateAction", func() {
 
 		It("should handle missing instance UUID gracefully", func() {
 			ctx := context.Background()
-			mockTransp.authResponse = transport.AuthResponse{
+			mockTransp.authResponse = types.AuthResponse{
 				Token:        "test-token",
 				ExpiresAt:    time.Now().Add(24 * time.Hour).Unix(),
 				InstanceUUID: "", // Empty UUID
@@ -201,8 +200,8 @@ var _ = Describe("AuthenticateAction", func() {
 			beforeExec := time.Now()
 
 			// Use a classified TransportError to test timestamp recording
-			mockTransp.authError = &httpTransport.TransportError{
-				Type:    httpTransport.ErrorTypeNetwork,
+			mockTransp.authError = &types.TransportError{
+				Type:    types.ErrorTypeNetwork,
 				Message: "connection refused",
 			}
 			err := act.Execute(ctx, dependencies)
@@ -219,8 +218,8 @@ var _ = Describe("AuthenticateAction", func() {
 
 		It("should suppress auth errors and still record typed error", func() {
 			ctx := context.Background()
-			mockTransp.authError = &httpTransport.TransportError{
-				Type:       httpTransport.ErrorTypeBackendRateLimit,
+			mockTransp.authError = &types.TransportError{
+				Type:       types.ErrorTypeBackendRateLimit,
 				RetryAfter: 30 * time.Second,
 				Message:    "rate limited",
 			}
@@ -228,7 +227,7 @@ var _ = Describe("AuthenticateAction", func() {
 			err := act.Execute(ctx, dependencies)
 			Expect(err).NotTo(HaveOccurred())
 
-			Expect(dependencies.GetLastErrorType()).To(Equal(httpTransport.ErrorTypeBackendRateLimit))
+			Expect(dependencies.GetLastErrorType()).To(Equal(types.ErrorTypeBackendRateLimit))
 		})
 
 		It("should propagate non-TransportError (programming bug)", func() {
@@ -245,8 +244,8 @@ var _ = Describe("AuthenticateAction", func() {
 			// ErrorTypeUnknown TransportErrors represent operational issues (e.g., JSON decode
 			// failure from relay, unrecognized HTTP status). They ARE TransportErrors and should
 			// be tracked and suppressed, unlike plain errors.
-			mockTransp.authError = &httpTransport.TransportError{
-				Type:    httpTransport.ErrorTypeUnknown,
+			mockTransp.authError = &types.TransportError{
+				Type:    types.ErrorTypeUnknown,
 				Message: "failed to decode auth response",
 			}
 
@@ -257,22 +256,22 @@ var _ = Describe("AuthenticateAction", func() {
 
 		It("should suppress wrapped TransportError via errors.As unwrapping", func() {
 			ctx := context.Background()
-			innerErr := &httpTransport.TransportError{
-				Type:    httpTransport.ErrorTypeNetwork,
+			innerErr := &types.TransportError{
+				Type:    types.ErrorTypeNetwork,
 				Message: "connection refused",
 			}
 			mockTransp.authError = fmt.Errorf("auth request failed: %w", innerErr)
 
 			err := act.Execute(ctx, dependencies)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(dependencies.GetLastErrorType()).To(Equal(httpTransport.ErrorTypeNetwork))
+			Expect(dependencies.GetLastErrorType()).To(Equal(types.ErrorTypeNetwork))
 		})
 
 		It("should record success and reset error state on successful auth", func() {
 			ctx := context.Background()
 			// First, simulate a classified error to set error state
-			mockTransp.authError = &httpTransport.TransportError{
-				Type:    httpTransport.ErrorTypeNetwork,
+			mockTransp.authError = &types.TransportError{
+				Type:    types.ErrorTypeNetwork,
 				Message: "connection refused",
 			}
 			_ = act.Execute(ctx, dependencies)
@@ -280,7 +279,7 @@ var _ = Describe("AuthenticateAction", func() {
 
 			// Now succeed
 			mockTransp.authError = nil
-			mockTransp.authResponse = transport.AuthResponse{
+			mockTransp.authResponse = types.AuthResponse{
 				Token:     "test-token",
 				ExpiresAt: time.Now().Add(24 * time.Hour).Unix(),
 			}
@@ -295,8 +294,8 @@ var _ = Describe("AuthenticateAction", func() {
 	Describe("Metrics Recording", func() {
 		It("should increment auth failure counter on transport error", func() {
 			ctx := context.Background()
-			mockTransp.authError = &httpTransport.TransportError{
-				Type:    httpTransport.ErrorTypeInvalidToken,
+			mockTransp.authError = &types.TransportError{
+				Type:    types.ErrorTypeInvalidToken,
 				Message: "invalid credentials",
 			}
 
@@ -311,8 +310,8 @@ var _ = Describe("AuthenticateAction", func() {
 	Describe("SetFailedAuthConfig Plumbing", func() {
 		It("should call SetFailedAuthConfig on permanent error (InvalidToken)", func() {
 			ctx := context.Background()
-			mockTransp.authError = &httpTransport.TransportError{
-				Type:    httpTransport.ErrorTypeInvalidToken,
+			mockTransp.authError = &types.TransportError{
+				Type:    types.ErrorTypeInvalidToken,
 				Message: "invalid credentials",
 			}
 
@@ -327,8 +326,8 @@ var _ = Describe("AuthenticateAction", func() {
 
 		It("should call SetFailedAuthConfig on permanent error (InstanceDeleted)", func() {
 			ctx := context.Background()
-			mockTransp.authError = &httpTransport.TransportError{
-				Type:    httpTransport.ErrorTypeInstanceDeleted,
+			mockTransp.authError = &types.TransportError{
+				Type:    types.ErrorTypeInstanceDeleted,
 				Message: "instance not found",
 			}
 
@@ -343,8 +342,8 @@ var _ = Describe("AuthenticateAction", func() {
 
 		It("should NOT call SetFailedAuthConfig on transient error (Network)", func() {
 			ctx := context.Background()
-			mockTransp.authError = &httpTransport.TransportError{
-				Type:    httpTransport.ErrorTypeNetwork,
+			mockTransp.authError = &types.TransportError{
+				Type:    types.ErrorTypeNetwork,
 				Message: "connection refused",
 			}
 
@@ -359,8 +358,8 @@ var _ = Describe("AuthenticateAction", func() {
 
 		It("should NOT call SetFailedAuthConfig on transient error (ServerError)", func() {
 			ctx := context.Background()
-			mockTransp.authError = &httpTransport.TransportError{
-				Type:    httpTransport.ErrorTypeServerError,
+			mockTransp.authError = &types.TransportError{
+				Type:    types.ErrorTypeServerError,
 				Message: "internal server error",
 			}
 
@@ -377,8 +376,8 @@ var _ = Describe("AuthenticateAction", func() {
 	Describe("Tiered Auth Error Handling", func() {
 		It("should suppress transient auth errors without SentryWarn from action", func() {
 			ctx := context.Background()
-			mockTransp.authError = &httpTransport.TransportError{
-				Type:    httpTransport.ErrorTypeNetwork,
+			mockTransp.authError = &types.TransportError{
+				Type:    types.ErrorTypeNetwork,
 				Message: "connection refused",
 			}
 
@@ -387,14 +386,14 @@ var _ = Describe("AuthenticateAction", func() {
 
 			// Error is tracked but transient errors don't fire SentryWarn from action.
 			// The failurerate.Tracker in RecordAuthError fires after sustained failures.
-			Expect(dependencies.GetLastErrorType()).To(Equal(httpTransport.ErrorTypeNetwork))
+			Expect(dependencies.GetLastErrorType()).To(Equal(types.ErrorTypeNetwork))
 			Expect(dependencies.GetConsecutiveErrors()).To(Equal(1))
 		})
 
 		It("should fire SentryWarn on first occurrence of persistent error (InvalidToken)", func() {
 			ctx := context.Background()
-			mockTransp.authError = &httpTransport.TransportError{
-				Type:    httpTransport.ErrorTypeInvalidToken,
+			mockTransp.authError = &types.TransportError{
+				Type:    types.ErrorTypeInvalidToken,
 				Message: "invalid credentials",
 			}
 
@@ -403,28 +402,28 @@ var _ = Describe("AuthenticateAction", func() {
 
 			// Persistent errors fire SentryWarn("authentication_failed") on first occurrence
 			// (persistentAuthErrorCount == 1) via the !IsTransient() guard.
-			Expect(dependencies.GetLastErrorType()).To(Equal(httpTransport.ErrorTypeInvalidToken))
+			Expect(dependencies.GetLastErrorType()).To(Equal(types.ErrorTypeInvalidToken))
 			Expect(dependencies.GetConsecutiveErrors()).To(Equal(1))
 		})
 
 		It("should fire SentryWarn on first occurrence of persistent error (InstanceDeleted)", func() {
 			ctx := context.Background()
-			mockTransp.authError = &httpTransport.TransportError{
-				Type:    httpTransport.ErrorTypeInstanceDeleted,
+			mockTransp.authError = &types.TransportError{
+				Type:    types.ErrorTypeInstanceDeleted,
 				Message: "instance not found",
 			}
 
 			err := act.Execute(ctx, dependencies)
 			Expect(err).NotTo(HaveOccurred())
 
-			Expect(dependencies.GetLastErrorType()).To(Equal(httpTransport.ErrorTypeInstanceDeleted))
+			Expect(dependencies.GetLastErrorType()).To(Equal(types.ErrorTypeInstanceDeleted))
 			Expect(dependencies.GetConsecutiveErrors()).To(Equal(1))
 		})
 
 		It("should not fire SentryWarn on second persistent error", func() {
 			ctx := context.Background()
-			mockTransp.authError = &httpTransport.TransportError{
-				Type:    httpTransport.ErrorTypeInvalidToken,
+			mockTransp.authError = &types.TransportError{
+				Type:    types.ErrorTypeInvalidToken,
 				Message: "invalid credentials",
 			}
 
@@ -445,8 +444,8 @@ var _ = Describe("AuthenticateAction", func() {
 			identity := deps.Identity{ID: "test-spy", WorkerType: "transport"}
 			spyDeps := transportpkg.NewTransportDependencies(mockTransp, spy, nil, identity)
 
-			mockTransp.authError = &httpTransport.TransportError{
-				Type:    httpTransport.ErrorTypeNetwork,
+			mockTransp.authError = &types.TransportError{
+				Type:    types.ErrorTypeNetwork,
 				Message: "connection refused",
 			}
 
@@ -471,8 +470,8 @@ var _ = Describe("AuthenticateAction", func() {
 			spyDeps := transportpkg.NewTransportDependencies(mockTransp, spy, nil, identity)
 
 			ctx := context.Background()
-			mockTransp.authError = &httpTransport.TransportError{
-				Type:    httpTransport.ErrorTypeNetwork,
+			mockTransp.authError = &types.TransportError{
+				Type:    types.ErrorTypeNetwork,
 				Message: "connection refused",
 			}
 
@@ -500,8 +499,8 @@ var _ = Describe("AuthenticateAction", func() {
 			// Cancel inside Authenticate() to exercise the post-Authenticate ctx.Err() branch,
 			// not the top-of-method guard (which is tested in "Context Cancellation" above).
 			mockTransp.cancelDuringAuth = cancel
-			mockTransp.authError = &httpTransport.TransportError{
-				Type:    httpTransport.ErrorTypeNetwork,
+			mockTransp.authError = &types.TransportError{
+				Type:    types.ErrorTypeNetwork,
 				Message: "connection refused",
 			}
 
@@ -516,12 +515,12 @@ var _ = Describe("AuthenticateAction", func() {
 
 type mockTransport struct {
 	authCallCount    int
-	authResponse     transport.AuthResponse
+	authResponse     types.AuthResponse
 	authError        error
 	cancelDuringAuth context.CancelFunc
 }
 
-func (m *mockTransport) Authenticate(ctx context.Context, req transport.AuthRequest) (transport.AuthResponse, error) {
+func (m *mockTransport) Authenticate(ctx context.Context, req types.AuthRequest) (types.AuthResponse, error) {
 	m.authCallCount++
 
 	if m.cancelDuringAuth != nil {
@@ -529,17 +528,17 @@ func (m *mockTransport) Authenticate(ctx context.Context, req transport.AuthRequ
 	}
 
 	if m.authError != nil {
-		return transport.AuthResponse{}, m.authError
+		return types.AuthResponse{}, m.authError
 	}
 
 	return m.authResponse, nil
 }
 
-func (m *mockTransport) Pull(ctx context.Context, jwtToken string) ([]*transport.UMHMessage, error) {
+func (m *mockTransport) Pull(ctx context.Context, jwtToken string) ([]*types.UMHMessage, error) {
 	return nil, nil
 }
 
-func (m *mockTransport) Push(ctx context.Context, jwtToken string, messages []*transport.UMHMessage) error {
+func (m *mockTransport) Push(ctx context.Context, jwtToken string, messages []*types.UMHMessage) error {
 	return nil
 }
 

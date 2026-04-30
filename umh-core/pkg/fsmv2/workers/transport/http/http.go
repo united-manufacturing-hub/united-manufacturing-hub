@@ -19,7 +19,6 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -29,8 +28,7 @@ import (
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/hash"
-	depspkg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/types"
 )
 
 const (
@@ -39,158 +37,6 @@ const (
 	// LongPollingBuffer is added to action timeout to prevent premature cancellation.
 	LongPollingBuffer = 1 * time.Second
 )
-
-// ErrorType classifies transport-layer HTTP errors into categories that
-// determine how the system responds. Each type maps to a Prometheus counter
-// (via [CounterForErrorType]) and a transient/persistent classification
-// (via [IsTransient]) that controls whether the error propagates to the FSM
-// or is suppressed at the action layer (metrics are still recorded).
-type ErrorType int
-
-const (
-	// ErrorTypeUnknown represents an unclassified error.
-	ErrorTypeUnknown ErrorType = iota
-	// ErrorTypeCloudflareChallenge represents Cloudflare challenge page (429 + HTML "Just a moment").
-	// Persistent: requires network path change or Cloudflare allowlisting.
-	ErrorTypeCloudflareChallenge
-	// ErrorTypeBackendRateLimit represents backend rate limiting (429 + JSON + Retry-After).
-	// Transient: self-resolves after the rate limit window expires.
-	ErrorTypeBackendRateLimit
-	// ErrorTypeInvalidToken represents authentication failure (401/403).
-	// Persistent: requires re-authentication by the parent worker.
-	ErrorTypeInvalidToken
-	// ErrorTypeInstanceDeleted represents instance not found (404).
-	// Persistent: requires instance re-registration or human intervention.
-	ErrorTypeInstanceDeleted
-	// ErrorTypeServerError represents server-side errors (5xx).
-	// Transient: backend recovers on its own.
-	ErrorTypeServerError
-	// ErrorTypeProxyBlock represents proxy block pages (Zscaler, BlueCoat, etc.).
-	// Persistent: requires proxy configuration change.
-	ErrorTypeProxyBlock
-	// ErrorTypeNetwork represents network/connection errors (DNS, TCP, TLS).
-	// Transient: network path recovers on its own.
-	ErrorTypeNetwork
-	// ErrorTypeChannelFull represents inbound channel capacity exceeded.
-	// Transient: resolves as the consumer drains the channel.
-	// Not a transport error per se, but uses the same classification for backoff.
-	ErrorTypeChannelFull
-)
-
-// IsTransient reports whether the error type represents a condition that
-// typically self-resolves without human intervention.
-//
-// Transient: Network, ServerError, ChannelFull, BackendRateLimit.
-// Persistent: everything else (InvalidToken, InstanceDeleted, ProxyBlock,
-// CloudflareChallenge, Unknown).
-//
-// The classification controls error propagation in push and pull actions:
-//   - Transient errors are suppressed (action returns nil). Metrics and
-//     DegradedState are still updated. The failurerate.Tracker monitors
-//     the rolling failure rate; if transient errors dominate the window,
-//     it fires a one-shot SentryWarn escalation.
-//   - Persistent errors propagate to the FSM as errors, triggering state
-//     transitions (recovering, re-authentication) and firing SentryError.
-func (e ErrorType) IsTransient() bool {
-	switch e {
-	case ErrorTypeNetwork, ErrorTypeServerError, ErrorTypeChannelFull, ErrorTypeBackendRateLimit:
-		return true
-	default:
-		return false
-	}
-}
-
-// String returns a human-readable name for the error type.
-func (e ErrorType) String() string {
-	switch e {
-	case ErrorTypeCloudflareChallenge:
-		return "cloudflare_challenge"
-	case ErrorTypeBackendRateLimit:
-		return "backend_rate_limit"
-	case ErrorTypeInvalidToken:
-		return "invalid_token"
-	case ErrorTypeInstanceDeleted:
-		return "instance_deleted"
-	case ErrorTypeServerError:
-		return "server_error"
-	case ErrorTypeProxyBlock:
-		return "proxy_block"
-	case ErrorTypeNetwork:
-		return "network"
-	case ErrorTypeChannelFull:
-		return "channel_full"
-	default:
-		return "unknown"
-	}
-}
-
-// TransportError represents a classified HTTP transport error.
-// It embeds error type information for intelligent backoff strategies.
-type TransportError struct {
-	Err        error
-	Message    string
-	Type       ErrorType
-	StatusCode int
-	RetryAfter time.Duration
-}
-
-// Error implements the error interface.
-func (e *TransportError) Error() string {
-	return e.Message
-}
-
-// Unwrap returns the underlying error.
-func (e *TransportError) Unwrap() error {
-	return e.Err
-}
-
-// Is implements errors.Is() for type-based error comparison (Go 1.13+ idiom).
-func (e *TransportError) Is(target error) bool {
-	t, ok := target.(*TransportError)
-	if !ok {
-		return false
-	}
-
-	return e.Type == t.Type
-}
-
-// ExtractErrorType unwraps a *TransportError from err and returns its ErrorType
-// and RetryAfter duration. If err does not wrap a *TransportError, it returns
-// ErrorTypeUnknown — a persistent type that propagates to the FSM and fires
-// SentryError, ensuring unclassified errors are never silently suppressed.
-func ExtractErrorType(err error) (ErrorType, time.Duration) {
-	var transportErr *TransportError
-	if errors.As(err, &transportErr) {
-		return transportErr.Type, transportErr.RetryAfter
-	}
-
-	return ErrorTypeUnknown, 0
-}
-
-// CounterForErrorType maps an ErrorType to its corresponding Prometheus counter.
-// Unknown and unrecognized types default to CounterNetworkErrorsTotal.
-func CounterForErrorType(t ErrorType) depspkg.CounterName {
-	switch t {
-	case ErrorTypeCloudflareChallenge:
-		return depspkg.CounterCloudflareErrorsTotal
-	case ErrorTypeBackendRateLimit:
-		return depspkg.CounterBackendRateLimitErrorsTotal
-	case ErrorTypeInvalidToken:
-		return depspkg.CounterAuthFailuresTotal
-	case ErrorTypeInstanceDeleted:
-		return depspkg.CounterInstanceDeletedTotal
-	case ErrorTypeServerError:
-		return depspkg.CounterServerErrorsTotal
-	case ErrorTypeProxyBlock:
-		return depspkg.CounterProxyBlockErrorsTotal
-	case ErrorTypeNetwork:
-		return depspkg.CounterNetworkErrorsTotal
-	case ErrorTypeUnknown:
-		return depspkg.CounterNetworkErrorsTotal
-	default:
-		return depspkg.CounterNetworkErrorsTotal
-	}
-}
 
 // isCloudflareChallenge detects Cloudflare challenge pages via headers and body content.
 //
@@ -276,37 +122,37 @@ func parseRetryAfter(headers http.Header) time.Duration {
 
 // classifyError determines error type from HTTP response.
 // Classification order: most specific first (Cloudflare), then general (429), then status codes.
-func classifyError(statusCode int, body []byte, headers http.Header) ErrorType {
+func classifyError(statusCode int, body []byte, headers http.Header) types.ErrorType {
 	// Cloudflare challenge (must check before generic 429)
 	if isCloudflareChallenge(statusCode, headers, body) {
-		return ErrorTypeCloudflareChallenge
+		return types.ErrorTypeCloudflareChallenge
 	}
 	// Proxy block (Zscaler, etc.)
 	if isProxyBlock(body) {
-		return ErrorTypeProxyBlock
+		return types.ErrorTypeProxyBlock
 	}
 	// Backend rate limit
 	if statusCode == http.StatusTooManyRequests {
-		return ErrorTypeBackendRateLimit
+		return types.ErrorTypeBackendRateLimit
 	}
 	// Auth errors
 	if statusCode == http.StatusUnauthorized || statusCode == http.StatusForbidden {
-		return ErrorTypeInvalidToken
+		return types.ErrorTypeInvalidToken
 	}
 	// Instance deleted
 	if statusCode == http.StatusNotFound {
-		return ErrorTypeInstanceDeleted
+		return types.ErrorTypeInstanceDeleted
 	}
 	// Server errors
 	if statusCode >= 500 {
-		return ErrorTypeServerError
+		return types.ErrorTypeServerError
 	}
 
-	return ErrorTypeUnknown
+	return types.ErrorTypeUnknown
 }
 
 // newTransportError creates a classified transport error from an HTTP response.
-func newTransportError(statusCode int, body []byte, headers http.Header, baseErr error) *TransportError {
+func newTransportError(statusCode int, body []byte, headers http.Header, baseErr error) *types.TransportError {
 	errType := classifyError(statusCode, body, headers)
 	retryAfter := parseRetryAfter(headers)
 
@@ -315,7 +161,7 @@ func newTransportError(statusCode int, body []byte, headers http.Header, baseErr
 		msg = fmt.Sprintf("HTTP %d (%s): %s", statusCode, errType.String(), string(body))
 	}
 
-	return &TransportError{
+	return &types.TransportError{
 		Type:       errType,
 		StatusCode: statusCode,
 		Message:    msg,
@@ -373,11 +219,11 @@ func NewHTTPTransport(relayURL string, timeout time.Duration) *HTTPTransport {
 }
 
 // Authenticate performs JWT authentication using double-hashed token in Authorization header.
-func (t *HTTPTransport) Authenticate(ctx context.Context, req transport.AuthRequest) (transport.AuthResponse, error) {
+func (t *HTTPTransport) Authenticate(ctx context.Context, req types.AuthRequest) (types.AuthResponse, error) {
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, t.RelayURL+"/v2/instance/login", nil)
 	if err != nil {
-		return transport.AuthResponse{}, &TransportError{
-			Type:    ErrorTypeNetwork,
+		return types.AuthResponse{}, &types.TransportError{
+			Type:    types.ErrorTypeNetwork,
 			Message: fmt.Sprintf("failed to create auth request: %v", err),
 			Err:     err,
 		}
@@ -390,8 +236,8 @@ func (t *HTTPTransport) Authenticate(ctx context.Context, req transport.AuthRequ
 
 	resp, err := t.httpClient.Do(httpReq)
 	if err != nil {
-		return transport.AuthResponse{}, &TransportError{
-			Type:    ErrorTypeNetwork,
+		return types.AuthResponse{}, &types.TransportError{
+			Type:    types.ErrorTypeNetwork,
 			Message: fmt.Sprintf("auth request failed: %v", err),
 			Err:     err,
 		}
@@ -404,13 +250,13 @@ func (t *HTTPTransport) Authenticate(ctx context.Context, req transport.AuthRequ
 	if resp.StatusCode != http.StatusOK {
 		bodyBytes, readErr := io.ReadAll(resp.Body)
 
-		return transport.AuthResponse{}, newTransportError(resp.StatusCode, bodyBytes, resp.Header, readErr)
+		return types.AuthResponse{}, newTransportError(resp.StatusCode, bodyBytes, resp.Header, readErr)
 	}
 
 	bodyBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return transport.AuthResponse{}, &TransportError{
-			Type:    ErrorTypeNetwork,
+		return types.AuthResponse{}, &types.TransportError{
+			Type:    types.ErrorTypeNetwork,
 			Message: fmt.Sprintf("failed to read auth response body: %v", err),
 			Err:     err,
 		}
@@ -426,8 +272,8 @@ func (t *HTTPTransport) Authenticate(ctx context.Context, req transport.AuthRequ
 			bodyPreview = bodyPreview[:256] + "..."
 		}
 
-		return transport.AuthResponse{}, &TransportError{
-			Type:    ErrorTypeUnknown,
+		return types.AuthResponse{}, &types.TransportError{
+			Type:    types.ErrorTypeUnknown,
 			Message: fmt.Sprintf("failed to decode auth response: %v (body preview: %s)", err, bodyPreview),
 			Err:     err,
 		}
@@ -444,8 +290,8 @@ func (t *HTTPTransport) Authenticate(ctx context.Context, req transport.AuthRequ
 	}
 
 	if jwtToken == "" {
-		return transport.AuthResponse{}, &TransportError{
-			Type:    ErrorTypeInvalidToken,
+		return types.AuthResponse{}, &types.TransportError{
+			Type:    types.ErrorTypeInvalidToken,
 			Message: "no token cookie returned from login",
 		}
 	}
@@ -453,7 +299,7 @@ func (t *HTTPTransport) Authenticate(ctx context.Context, req transport.AuthRequ
 	// Backend doesn't return expiresAt; estimate 23h (refresh before typical 24h JWT expiry)
 	defaultExpiry := time.Now().Add(23 * time.Hour).Unix()
 
-	return transport.AuthResponse{
+	return types.AuthResponse{
 		Token:        jwtToken,
 		ExpiresAt:    defaultExpiry,
 		InstanceUUID: loginResp.UUID,
@@ -462,11 +308,11 @@ func (t *HTTPTransport) Authenticate(ctx context.Context, req transport.AuthRequ
 }
 
 // Pull retrieves messages from the backend (GET /v2/instance/pull).
-func (t *HTTPTransport) Pull(ctx context.Context, jwtToken string) ([]*transport.UMHMessage, error) {
+func (t *HTTPTransport) Pull(ctx context.Context, jwtToken string) ([]*types.UMHMessage, error) {
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, t.RelayURL+"/v2/instance/pull", nil)
 	if err != nil {
-		return nil, &TransportError{
-			Type:    ErrorTypeNetwork,
+		return nil, &types.TransportError{
+			Type:    types.ErrorTypeNetwork,
 			Message: fmt.Sprintf("failed to create pull request: %v", err),
 			Err:     err,
 		}
@@ -476,8 +322,8 @@ func (t *HTTPTransport) Pull(ctx context.Context, jwtToken string) ([]*transport
 
 	resp, err := t.httpClient.Do(httpReq)
 	if err != nil {
-		return nil, &TransportError{
-			Type:    ErrorTypeNetwork,
+		return nil, &types.TransportError{
+			Type:    types.ErrorTypeNetwork,
 			Message: fmt.Sprintf("pull request failed: %v", err),
 			Err:     err,
 		}
@@ -497,10 +343,10 @@ func (t *HTTPTransport) Pull(ctx context.Context, jwtToken string) ([]*transport
 		return nil, newTransportError(resp.StatusCode, bodyBytes, resp.Header, readErr)
 	}
 
-	var payload transport.PullPayload
+	var payload types.PullPayload
 	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
-		return nil, &TransportError{
-			Type:    ErrorTypeUnknown,
+		return nil, &types.TransportError{
+			Type:    types.ErrorTypeUnknown,
 			Message: fmt.Sprintf("failed to decode pull response: %v", err),
 			Err:     err,
 		}
@@ -510,19 +356,19 @@ func (t *HTTPTransport) Pull(ctx context.Context, jwtToken string) ([]*transport
 }
 
 // Push sends messages to the backend (POST /v2/instance/push).
-func (t *HTTPTransport) Push(ctx context.Context, jwtToken string, messages []*transport.UMHMessage) error {
+func (t *HTTPTransport) Push(ctx context.Context, jwtToken string, messages []*types.UMHMessage) error {
 	if len(messages) == 0 {
 		return nil
 	}
 
-	payload := transport.PushPayload{
+	payload := types.PushPayload{
 		UMHMessages: messages,
 	}
 
 	body, err := json.Marshal(payload)
 	if err != nil {
-		return &TransportError{
-			Type:    ErrorTypeUnknown,
+		return &types.TransportError{
+			Type:    types.ErrorTypeUnknown,
 			Message: fmt.Sprintf("failed to marshal push payload: %v", err),
 			Err:     err,
 		}
@@ -530,8 +376,8 @@ func (t *HTTPTransport) Push(ctx context.Context, jwtToken string, messages []*t
 
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, t.RelayURL+"/v2/instance/push", bytes.NewBuffer(body))
 	if err != nil {
-		return &TransportError{
-			Type:    ErrorTypeNetwork,
+		return &types.TransportError{
+			Type:    types.ErrorTypeNetwork,
 			Message: fmt.Sprintf("failed to create push request: %v", err),
 			Err:     err,
 		}
@@ -542,8 +388,8 @@ func (t *HTTPTransport) Push(ctx context.Context, jwtToken string, messages []*t
 
 	resp, err := t.httpClient.Do(httpReq)
 	if err != nil {
-		return &TransportError{
-			Type:    ErrorTypeNetwork,
+		return &types.TransportError{
+			Type:    types.ErrorTypeNetwork,
 			Message: fmt.Sprintf("push request failed: %v", err),
 			Err:     err,
 		}
@@ -564,8 +410,8 @@ func (t *HTTPTransport) Push(ctx context.Context, jwtToken string, messages []*t
 
 // ResetClient resets the HTTP client (closes idle connections).
 func (t *HTTPTransport) ResetClient() {
-	if transport, ok := t.httpClient.Transport.(*http.Transport); ok {
-		transport.CloseIdleConnections()
+	if tr, ok := t.httpClient.Transport.(*http.Transport); ok {
+		tr.CloseIdleConnections()
 	}
 }
 

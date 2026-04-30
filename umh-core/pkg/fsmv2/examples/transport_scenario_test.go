@@ -22,8 +22,8 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/examples"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport"
 	transportWorker "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/types"
 )
 
 const (
@@ -67,7 +67,7 @@ var _ = Describe("Transport Scenario", func() {
 		It("creates PushWorker child and pushes messages", func() {
 			result := examples.RunTransportScenario(ctx, examples.TransportRunConfig{
 				Duration: 3 * time.Second,
-				InitialOutboundMessages: []*transport.UMHMessage{
+				InitialOutboundMessages: []*types.UMHMessage{
 					{InstanceUUID: "test-instance", Content: "msg1"},
 					{InstanceUUID: "test-instance", Content: "msg2"},
 				},
@@ -93,7 +93,7 @@ var _ = Describe("Transport Scenario", func() {
 		It("pushes single queued message", func() {
 			result := examples.RunTransportScenario(ctx, examples.TransportRunConfig{
 				Duration: 3 * time.Second,
-				InitialOutboundMessages: []*transport.UMHMessage{{
+				InitialOutboundMessages: []*types.UMHMessage{{
 					InstanceUUID: "test-instance",
 					Content:      "status-update",
 				}},
@@ -107,7 +107,7 @@ var _ = Describe("Transport Scenario", func() {
 		// It("pulls messages continuously", func() {
 		// 	result := examples.RunTransportScenario(ctx, examples.TransportRunConfig{
 		// 		Duration: 2 * time.Second,
-		// 		InitialPullMessages: []*transport.UMHMessage{{
+		// 		InitialPullMessages: []*types.UMHMessage{{
 		// 			InstanceUUID: "test-instance",
 		// 			Content:      "inbound-message",
 		// 		}},
@@ -206,7 +206,7 @@ var _ = Describe("TransportTestChannelProvider", func() {
 		provider := examples.NewTransportTestChannelProvider(10)
 
 		// Queue a message via outbound
-		testMsg := &transport.UMHMessage{Content: "test-message"}
+		testMsg := &types.UMHMessage{Content: "test-message"}
 		provider.QueueOutbound(testMsg)
 
 		// Get channels and read from outbound
@@ -220,8 +220,8 @@ var _ = Describe("TransportTestChannelProvider", func() {
 		inbound, _ := provider.GetChannels("test-worker")
 
 		// Send messages to inbound
-		inbound <- &transport.UMHMessage{Content: "msg1"}
-		inbound <- &transport.UMHMessage{Content: "msg2"}
+		inbound <- &types.UMHMessage{Content: "msg1"}
+		inbound <- &types.UMHMessage{Content: "msg2"}
 
 		// Drain
 		messages := provider.DrainInbound()
@@ -240,7 +240,7 @@ var _ = Describe("TransportTestChannelProvider", func() {
 		provider := examples.NewTransportTestChannelProvider(10)
 		inbound, _ := provider.GetChannels("test-worker")
 
-		inbound <- &transport.UMHMessage{Content: "msg1"}
+		inbound <- &types.UMHMessage{Content: "msg1"}
 		close(inbound)
 
 		messages := provider.DrainInbound()
