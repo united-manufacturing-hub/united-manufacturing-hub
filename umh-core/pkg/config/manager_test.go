@@ -1551,6 +1551,54 @@ agent:
 	})
 })
 
+var _ = Describe("ParseConfig defaulting", func() {
+	var ctx context.Context
+
+	BeforeEach(func() {
+		ctx = context.Background()
+	})
+
+	It("defaults empty releaseChannel to stable when applyDefaults=true (P1)", func() {
+		yaml := []byte("agent:\n  releaseChannel: \"\"\n")
+		cfg, err := ParseConfig(yaml, ctx, false, true)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(cfg.Agent.ReleaseChannel).To(Equal(ReleaseChannelStable))
+	})
+
+	It("defaults nil Location to empty map when applyDefaults=true (P2)", func() {
+		yaml := []byte("agent: {}\n")
+		cfg, err := ParseConfig(yaml, ctx, false, true)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(cfg.Agent.Location).NotTo(BeNil())
+		Expect(cfg.Agent.Location).To(BeEmpty())
+	})
+
+	It("preserves empty values when applyDefaults=false (P11)", func() {
+		yaml := []byte("agent: {}\n")
+		cfg, err := ParseConfig(yaml, ctx, false, false)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(string(cfg.Agent.ReleaseChannel)).To(BeEmpty())
+		Expect(cfg.Agent.Location).To(BeNil())
+	})
+
+	DescribeTable("ReleaseChannel defaulting fuzz (P4b)",
+		func(input string, expected ReleaseChannel) {
+			yaml := []byte(fmt.Sprintf("agent:\n  releaseChannel: %q\n", input))
+			cfg, err := ParseConfig(yaml, ctx, false, true)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(cfg.Agent.ReleaseChannel).To(Equal(expected))
+		},
+		Entry("empty string", "", ReleaseChannelStable),
+		Entry("single space", " ", ReleaseChannelStable),
+		Entry("multiple spaces", "  ", ReleaseChannelStable),
+		Entry("Stable (capital)", "Stable", ReleaseChannel("Stable")),
+		Entry("STABLE", "STABLE", ReleaseChannel("STABLE")),
+		Entry("nightly", "nightly", ReleaseChannelNightly),
+		Entry("stable", "stable", ReleaseChannelStable),
+		Entry("enterprise", "enterprise", ReleaseChannelEnterprise),
+	)
+})
+
 // filterBackupDirPaths returns only paths that start with the backup directory.
 func filterBackupDirPaths(paths []string) []string {
 	var result []string
