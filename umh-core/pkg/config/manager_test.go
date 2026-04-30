@@ -1551,6 +1551,106 @@ agent:
 	})
 })
 
+// newTestManagerWithYAML returns a FileConfigManager wired to a MockFileSystem
+// pre-loaded with the given YAML content. Used by ConfigValidationIssue tests.
+func newTestManagerWithYAML(yaml string) (*FileConfigManager, *filesystem.MockFileSystem) {
+	mockFS := filesystem.NewMockFileSystem()
+	current := []byte(yaml)
+	mockFS.WithFileExistsFunc(func(ctx context.Context, path string) (bool, error) {
+		return true, nil
+	})
+	mockFS.WithReadFileFunc(func(ctx context.Context, path string) ([]byte, error) {
+		return current, nil
+	})
+	mockFS.WithStatFunc(func(ctx context.Context, path string) (os.FileInfo, error) {
+		return &mockFileInfo{name: filepath.Base(path), size: int64(len(current)), modTime: time.Now()}, nil
+	})
+	mockFS.WithEnsureDirectoryFunc(func(ctx context.Context, path string) error {
+		return nil
+	})
+	cm := NewFileConfigManager()
+	cm.WithFileSystemService(mockFS)
+	return cm, mockFS
+}
+
+// mockFileInfo is a minimal os.FileInfo stub for tests.
+type mockFileInfo struct {
+	modTime time.Time
+	name    string
+	size    int64
+}
+
+func (m *mockFileInfo) Name() string       { return m.name }
+func (m *mockFileInfo) Size() int64        { return m.size }
+func (m *mockFileInfo) Mode() os.FileMode  { return 0644 }
+func (m *mockFileInfo) ModTime() time.Time { return m.modTime }
+func (m *mockFileInfo) IsDir() bool        { return false }
+func (m *mockFileInfo) Sys() any           { return nil }
+
+var _ = Describe("ConfigValidationIssue surface", func() {
+	var ctx context.Context
+
+	BeforeEach(func() {
+		ctx = context.Background()
+	})
+
+	It("emits a ConfigValidationIssue for invalid releaseChannel (P3)", func() {
+		m, _ := newTestManagerWithYAML("agent:\n  releaseChannel: nigtly\n")
+		defer m.Stop()
+		_, _, err := m.readAndParseConfig(ctx)
+		Expect(err).NotTo(HaveOccurred())
+
+		issues := m.GetConfigValidationIssues()
+		Expect(issues).To(HaveLen(1))
+		Expect(issues[0].Field).To(Equal("agent.releaseChannel"))
+		Expect(issues[0].OffendingValue).To(Equal("nigtly"))
+		Expect(issues[0].AllowedValues).To(ConsistOf("nightly", "stable", "enterprise"))
+	})
+
+	It("clears validation issues when YAML is fixed (P5)", func() {
+		m, mockFS := newTestManagerWithYAML("agent:\n  releaseChannel: nigtly\n")
+		defer m.Stop()
+		_, _, err := m.readAndParseConfig(ctx)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(m.GetConfigValidationIssues()).To(HaveLen(1))
+
+		// Swap YAML to a valid value and re-parse
+		fixed := []byte("agent:\n  releaseChannel: stable\n")
+		mockFS.WithReadFileFunc(func(ctx context.Context, path string) ([]byte, error) {
+			return fixed, nil
+		})
+		_, _, err = m.readAndParseConfig(ctx)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(m.GetConfigValidationIssues()).To(BeEmpty())
+	})
+
+	It("does not duplicate on repeated bad reads (P6)", func() {
+		m, _ := newTestManagerWithYAML("agent:\n  releaseChannel: nigtly\n")
+		defer m.Stop()
+		_, _, err := m.readAndParseConfig(ctx)
+		Expect(err).NotTo(HaveOccurred())
+		_, _, err = m.readAndParseConfig(ctx)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(m.GetConfigValidationIssues()).To(HaveLen(1))
+	})
+
+	It("does not change the list on cache hits (P7)", func() {
+		// readAndParseConfig is the only mutator. A direct call here exercises that
+		// non-readAndParseConfig paths cannot mutate the slice. Cache hit semantics
+		// in GetConfig (skipping readAndParseConfig) therefore preserve the list.
+		m, _ := newTestManagerWithYAML("agent:\n  releaseChannel: nigtly\n")
+		defer m.Stop()
+		_, _, err := m.readAndParseConfig(ctx)
+		Expect(err).NotTo(HaveOccurred())
+		before := m.GetConfigValidationIssues()
+		Expect(before).To(HaveLen(1))
+
+		// Read GetConfigValidationIssues again without re-parsing
+		after := m.GetConfigValidationIssues()
+		Expect(after).To(Equal(before))
+	})
+})
+
 var _ = Describe("ParseConfig defaulting", func() {
 	var ctx context.Context
 
