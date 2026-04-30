@@ -200,8 +200,14 @@ type ProtocolConverterConfig struct {
 	hasAnchors bool `yaml:"-"`
 }
 
+// String returns a concise description of the protocol converter config.
 func (d *ProtocolConverterConfig) String() string {
-	return fmt.Sprintf("ProtocolConverterConfig{ProtocolConverterServiceConfig: %v", d.ProtocolConverterServiceConfig)
+	return fmt.Sprintf(
+		"ProtocolConverterConfig{Name:%q, DesiredFSMState:%q, ProtocolConverterServiceConfig:%v}",
+		d.Name,
+		d.DesiredFSMState,
+		d.ProtocolConverterServiceConfig,
+	)
 }
 
 // HasAnchors returns true if the ProtocolConverterConfig has anchors, see templating.go.
