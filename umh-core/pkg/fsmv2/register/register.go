@@ -39,18 +39,19 @@ type NoDeps = struct{}
 // Worker registers a worker type with the framework.
 // TConfig is the developer's configuration type.
 // TStatus is the developer's status/observation type.
+// TDeps is the worker's typed dependency payload; use register.NoDeps for workers with no custom deps.
 // The workerType string is the canonical name used in config YAML and CSE storage.
 //
 // Constructor receives only the standard framework dependencies (identity, logger, stateReader).
 // Workers that require parent-injected dependencies via the extraDeps mechanism
 // (e.g., transport push/pull children) must use factory.RegisterWorkerType directly.
 //
-// Workers registered via this function MUST use WorkerBase[TConfig, TStatus, register.NoDeps]
+// Workers registered via this function MUST use WorkerBase[TConfig, TStatus, TDeps]
 // and return w.WrapStatus(status) from CollectObservedState. Workers with custom
 // ObservedState types must use factory.RegisterWorkerType directly.
 //
 // Panics on field name collision or duplicate worker type (fail-fast at init time).
-func Worker[TConfig any, TStatus any](
+func Worker[TConfig any, TStatus any, TDeps any](
 	workerType string,
 	constructor func(deps.Identity, deps.FSMLogger, deps.StateReader) (fsmv2.Worker, error),
 ) {
