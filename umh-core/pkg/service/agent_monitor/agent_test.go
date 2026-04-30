@@ -401,6 +401,44 @@ var _ = Describe("Agent Monitor Service config validation escalation (P12)", fun
 		Expect(info.HealthMessage).To(BeEmpty())
 	})
 
+	It("validation message wins when location is also empty (P12 ordering)", func() {
+		// When BOTH the nil-location escalation and the config-validation block
+		// fire, the validation block runs last in Status() and overwrites the
+		// (empty) HealthMessage. OverallHealth is already Degraded from the
+		// location escalation, so the categories compose; what we assert is
+		// that the user-actionable validation message wins over the silent
+		// "no location" fallback because we want the user to see why we
+		// degraded, not just that we did.
+		nilLocSnapshot := fsm.SystemSnapshot{
+			CurrentConfig: config.FullConfig{
+				Agent: config.AgentConfig{
+					Location:       nil,
+					ReleaseChannel: config.ReleaseChannelStable,
+				},
+			},
+			SnapshotTime: time.Now(),
+			Tick:         1,
+		}
+		fp := &fakeConfigValidationProvider{issues: []config.ConfigValidationIssue{
+			{
+				Field:          "agent.releaseChannel",
+				OffendingValue: "nigtly",
+				AllowedValues:  []string{"nightly", "stable", "enterprise"},
+			},
+		}}
+		svc := agent_monitor.NewAgentMonitorService(
+			agent_monitor.WithFilesystemService(mockFS),
+			agent_monitor.WithS6Service(mockS6),
+			agent_monitor.WithConfigValidationProvider(fp),
+		)
+
+		info, err := svc.Status(ctx, nilLocSnapshot)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(info.OverallHealth).To(Equal(models.Degraded))
+		Expect(info.HealthMessage).To(ContainSubstring("agent.releaseChannel"))
+		Expect(info.HealthMessage).To(ContainSubstring("nigtly"))
+	})
+
 	It("stays Active when no provider is wired (nil-guard)", func() {
 		svc := agent_monitor.NewAgentMonitorService(
 			agent_monitor.WithFilesystemService(mockFS),
