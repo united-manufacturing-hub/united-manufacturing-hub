@@ -1597,7 +1597,7 @@ var _ = Describe("ConfigValidationIssue surface", func() {
 	It("emits a ConfigValidationIssue for invalid releaseChannel (P3)", func() {
 		m, _ := newTestManagerWithYAML("agent:\n  releaseChannel: nigtly\n")
 		defer m.Stop()
-		_, _, err := m.readAndParseConfig(ctx)
+		cfg, _, err := m.readAndParseConfig(ctx)
 		Expect(err).NotTo(HaveOccurred())
 
 		issues := m.GetConfigValidationIssues()
@@ -1605,7 +1605,24 @@ var _ = Describe("ConfigValidationIssue surface", func() {
 		Expect(issues[0].Field).To(Equal("agent.releaseChannel"))
 		Expect(issues[0].OffendingValue).To(Equal("nigtly"))
 		Expect(issues[0].AllowedValues).To(ConsistOf("nightly", "stable", "enterprise"))
+
+		// After validation, the channel must be coerced to stable so downstream
+		// code (auto-update, dashboards) doesn't branch on the typo.
+		Expect(cfg.Agent.ReleaseChannel).To(Equal(ReleaseChannelStable))
 	})
+
+	DescribeTable("valid releaseChannel values produce no validation issue (P4-readAndParseConfig)",
+		func(channel string) {
+			m, _ := newTestManagerWithYAML(fmt.Sprintf("agent:\n  releaseChannel: %s\n", channel))
+			defer m.Stop()
+			_, _, err := m.readAndParseConfig(ctx)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(m.GetConfigValidationIssues()).To(BeEmpty())
+		},
+		Entry("nightly", "nightly"),
+		Entry("stable", "stable"),
+		Entry("enterprise", "enterprise"),
+	)
 
 	It("clears validation issues when YAML is fixed (P5)", func() {
 		m, mockFS := newTestManagerWithYAML("agent:\n  releaseChannel: nigtly\n")
@@ -1635,19 +1652,80 @@ var _ = Describe("ConfigValidationIssue surface", func() {
 	})
 
 	It("does not change the list on cache hits (P7)", func() {
-		// readAndParseConfig is the only mutator. A direct call here exercises that
-		// non-readAndParseConfig paths cannot mutate the slice. Cache hit semantics
-		// in GetConfig (skipping readAndParseConfig) therefore preserve the list.
-		m, _ := newTestManagerWithYAML("agent:\n  releaseChannel: nigtly\n")
+		// readAndParseConfig is the only reader-path mutator of validationIssues.
+		// We populate via readAndParseConfig, then mutate the issues list out-of-band
+		// (a sentinel value) and seed the cache so a subsequent GetConfig call hits
+		// the FAST PATH. If the cache hit path were to (incorrectly) re-run
+		// swapValidationIssues, our sentinel would be overwritten by the freshly
+		// computed list. Surviving the second call proves cache hits don't mutate.
+		m, mockFS := newTestManagerWithYAML("agent:\n  releaseChannel: nigtly\n")
 		defer m.Stop()
+		fixedMod := time.Unix(1700000000, 0)
+		mockFS.WithStatFunc(func(ctx context.Context, path string) (os.FileInfo, error) {
+			return &mockFileInfo{name: filepath.Base(path), size: int64(len("x")), modTime: fixedMod}, nil
+		})
+
 		_, _, err := m.readAndParseConfig(ctx)
 		Expect(err).NotTo(HaveOccurred())
-		before := m.GetConfigValidationIssues()
-		Expect(before).To(HaveLen(1))
+		Expect(m.GetConfigValidationIssues()).To(HaveLen(1))
 
-		// Read GetConfigValidationIssues again without re-parsing
+		// Seed the cache so GetConfig's FAST PATH triggers (mtime match + non-empty
+		// cached config + cleared error).
+		cfg, _, err := m.readAndParseConfig(ctx)
+		Expect(err).NotTo(HaveOccurred())
+		m.cacheMu.Lock()
+		m.cacheConfig = cfg
+		m.cacheModTime = fixedMod
+		m.cacheError = nil
+		m.cacheMu.Unlock()
+
+		// Mutate the in-memory issues list out-of-band so we can detect a re-run.
+		m.swapValidationIssues([]ConfigValidationIssue{{Field: "marker", OffendingValue: "sentinel"}})
+
+		// Cache hit must not re-run validateConfig.
+		_, err = m.GetConfig(ctx, 0)
+		Expect(err).NotTo(HaveOccurred())
 		after := m.GetConfigValidationIssues()
-		Expect(after).To(Equal(before))
+		Expect(after).To(HaveLen(1))
+		Expect(after[0].Field).To(Equal("marker"))
+	})
+
+	It("WriteYAMLConfigFromString clears stale issues when user fixes the typo via MC (P7-write-clear)", func() {
+		m, mockFS := newTestManagerWithYAML("agent:\n  releaseChannel: nigtly\n")
+		defer m.Stop()
+		// Capture writes so subsequent reads see the new content.
+		mockFS.WithWriteFileFunc(func(ctx context.Context, path string, data []byte, perm os.FileMode) error {
+			mockFS.WithReadFileFunc(func(ctx context.Context, path string) ([]byte, error) { return data, nil })
+			return nil
+		})
+
+		_, _, err := m.readAndParseConfig(ctx)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(m.GetConfigValidationIssues()).To(HaveLen(1))
+
+		err = m.WriteYAMLConfigFromString(ctx, "agent:\n  releaseChannel: stable\n", "")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(m.GetConfigValidationIssues()).To(BeEmpty())
+	})
+
+	It("WriteYAMLConfigFromString flags a freshly-introduced typo (P7-write-flag)", func() {
+		m, mockFS := newTestManagerWithYAML("agent:\n  releaseChannel: stable\n")
+		defer m.Stop()
+		mockFS.WithWriteFileFunc(func(ctx context.Context, path string, data []byte, perm os.FileMode) error {
+			mockFS.WithReadFileFunc(func(ctx context.Context, path string) ([]byte, error) { return data, nil })
+			return nil
+		})
+
+		_, _, err := m.readAndParseConfig(ctx)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(m.GetConfigValidationIssues()).To(BeEmpty())
+
+		err = m.WriteYAMLConfigFromString(ctx, "agent:\n  releaseChannel: nigtly\n", "")
+		Expect(err).NotTo(HaveOccurred())
+		issues := m.GetConfigValidationIssues()
+		Expect(issues).To(HaveLen(1))
+		Expect(issues[0].Field).To(Equal("agent.releaseChannel"))
+		Expect(issues[0].OffendingValue).To(Equal("nigtly"))
 	})
 
 	It("survives concurrent swap+read (P9)", func() {
