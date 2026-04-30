@@ -4,13 +4,13 @@
 
 ### Changed
 
-- Config validation no longer reports user-configuration mistakes to Sentry. Empty `releaseChannel:` and missing `location:` now silently default to `stable` and an empty map. (UMH-CORE-22B, UMH-CORE-22C, ENG-4880)
-- A non-empty invalid `releaseChannel` value (e.g. `nigtly`) flips the agent into a `degraded` health state with a message naming the field, the offending value, and the allowed list. The agent runs on `stable` until the YAML is fixed. (ENG-4880)
+- Config validation no longer reports user-configuration mistakes to Sentry. Empty `releaseChannel:` and missing `location:` now silently default to `stable` and an empty map.
+- A non-empty invalid `releaseChannel` value (e.g. `nigtly`) flips the agent into a degraded health state with a message naming the field, the offending value, and the allowed list. The agent runs on `stable` until the YAML is fixed.
 
 ### Notes
 
 - The wire value of `core.releaseChannel` for the typo case changed from `"n/a"` to `"stable"`. Downstream consumers branching on `"n/a"` should update.
-- Because the agent's `OverallHealth` flips to `degraded` when a typo is present, overall instance health follows. This is intended -- the user's stated intent isn't being honored.
+- Because the agent's `OverallHealth` flips to degraded when a typo is present, overall instance health follows. This is intended: the user's stated intent isn't being honored.
 
 ## [0.44.18]
 
