@@ -2,15 +2,9 @@
 
 ## Unreleased
 
-### Changed
+### Improvements
 
-- Config validation no longer reports user-configuration mistakes to Sentry. Empty `releaseChannel:` and missing `location:` now silently default to `stable` and an empty map.
-- A non-empty invalid `releaseChannel` value (e.g. `nigtly`) flips the agent into a degraded health state with a message naming the field, the offending value, and the allowed list. The agent runs on `stable` until the YAML is fixed.
-
-### Notes
-
-- The wire value of `core.releaseChannel` for the typo case changed from `"n/a"` to `"stable"`. Downstream consumers branching on `"n/a"` should update.
-- Because the agent's `OverallHealth` flips to degraded when a typo is present, overall instance health follows. This is intended: the user's stated intent isn't being honored.
+- When `releaseChannel` in `config.yaml` is set to an invalid value (e.g. `nigtly`), the agent now flags it as degraded in Management Console with the offending value and the allowed options (`nightly`, `stable`, `enterprise`), and runs on `stable` until you fix the YAML. Previously the agent silently fell back without telling you
 
 ## [0.44.18]
 
