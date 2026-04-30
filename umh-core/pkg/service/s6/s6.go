@@ -27,6 +27,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -99,6 +100,40 @@ func (h HealthStatus) String() string {
 		return "bad"
 	default:
 		return "invalid"
+	}
+}
+
+// RecoveryAction is the directive returned by Health(): the service tells
+// callers what to do based on its current state instead of having callers
+// compose policy from low-level signals like artifact presence and directory
+// integrity.
+type RecoveryAction int
+
+const (
+	// ActionOK indicates the service is healthy or has no tracked state to
+	// verify; callers should proceed with normal lifecycle work. ActionOK is
+	// the zero value so MockService{} returns it without explicit setup.
+	ActionOK RecoveryAction = iota
+	// ActionWait indicates a transient condition (I/O error, in-flight removal,
+	// or unknown state); callers should retry on the next tick.
+	ActionWait
+	// ActionRecreate indicates corruption was observed; callers must tear down
+	// and rebuild the service from scratch (typically by returning a permanent
+	// failure to drive HandlePermanentError → ForceRemove).
+	ActionRecreate
+)
+
+// String returns a string representation of the recovery action.
+func (a RecoveryAction) String() string {
+	switch a {
+	case ActionOK:
+		return "ok"
+	case ActionWait:
+		return "wait"
+	case ActionRecreate:
+		return "recreate"
+	default:
+		return fmt.Sprintf("invalid(%d)", int(a))
 	}
 }
 
@@ -193,6 +228,11 @@ type Service interface {
 	// CheckServiceDirectoryIntegrity checks the integrity of the S6 service directory structure
 	// Returns HealthUnknown for I/O errors, HealthOK for intact structure, HealthBad for broken/missing directories
 	CheckServiceDirectoryIntegrity(ctx context.Context, servicePath string, fsService filesystem.Service) HealthStatus
+	// Health returns a recovery directive based on the service's current
+	// tracked state. Callers switch on the result instead of composing policy
+	// from CheckServiceDirectoryIntegrity, artifact presence, and removal
+	// progress separately. See RecoveryAction.
+	Health(ctx context.Context, fsService filesystem.Service) RecoveryAction
 }
 
 // logState is the per-log-file cursor used by GetLogs.
@@ -239,9 +279,15 @@ type logState struct {
 
 // DefaultService is the default implementation of the S6 Service interface.
 type DefaultService struct {
-	logger     *zap.SugaredLogger
-	artifacts  *ServiceArtifacts // cached artifacts for the service
-	logCursors sync.Map          // map[string]*logState (key = abs log path)
+	logger *zap.SugaredLogger
+	// artifacts tracks the files this service created on disk. Lifecycle:
+	// nil before Create or after Remove/ForceRemove succeed; populated by
+	// Create on success. Atomic so the lock-free reader in Health() sees a
+	// consistent pointer while writers run inside withLifecycleGuard.
+	// Clearing artifacts on cleanup is what flips Health() back to ActionOK
+	// after recovery, breaking the post-ForceRemove re-fire loop (ENG-4862).
+	artifacts  atomic.Pointer[ServiceArtifacts]
+	logCursors sync.Map // map[string]*logState (key = abs log path)
 
 	// Lifecycle management with concurrency protection
 	mu sync.Mutex // serializes all state-changing calls
@@ -295,13 +341,14 @@ func (s *DefaultService) Create(ctx context.Context, servicePath string, config 
 				return err
 			}
 
-			s.artifacts = artifacts
+			s.artifacts.Store(artifacts)
 
 			return nil
 		}
 
 		// 2. Directory exists but we have no artifacts → orphaned directory from restart
-		if s.artifacts == nil {
+		current := s.artifacts.Load()
+		if current == nil {
 			s.logger.Debugf("Service %s exists but has no artifacts (orphaned from restart), removing and recreating", servicePath)
 			// Remove the orphaned directory immediately - we can't track what files were created
 			if err := fsService.RemoveAll(ctx, servicePath); err != nil {
@@ -313,13 +360,13 @@ func (s *DefaultService) Create(ctx context.Context, servicePath string, config 
 				return err
 			}
 
-			s.artifacts = artifacts
+			s.artifacts.Store(artifacts)
 
 			return nil
 		}
 
 		// 3. Directory exists and we have artifacts → check health
-		health, err := s.CheckArtifactsHealth(ctx, s.artifacts, fsService)
+		health, err := s.CheckArtifactsHealth(ctx, current, fsService)
 		if err != nil && health != HealthUnknown {
 			return fmt.Errorf("failed to check service health: %w", err)
 		}
@@ -327,16 +374,18 @@ func (s *DefaultService) Create(ctx context.Context, servicePath string, config 
 		if health == HealthBad {
 			s.logger.Debugf("Service %s is unhealthy, removing and recreating", servicePath)
 
-			if err := s.ForceCleanup(ctx, s.artifacts, fsService); err != nil {
+			if err := s.ForceCleanup(ctx, current, fsService); err != nil {
 				return fmt.Errorf("failed to remove unhealthy service: %w", err)
 			}
+
+			s.artifacts.Store(nil)
 
 			artifacts, err := s.CreateArtifacts(ctx, servicePath, config, fsService)
 			if err != nil {
 				return err
 			}
 
-			s.artifacts = artifacts
+			s.artifacts.Store(artifacts)
 
 			return nil
 		}
@@ -357,16 +406,18 @@ func (s *DefaultService) Create(ctx context.Context, servicePath string, config 
 		// 6. Different config → remove and recreate
 		s.logger.Debugf("Service %s config changed, removing and recreating", servicePath)
 
-		if err := s.RemoveArtifacts(ctx, s.artifacts, fsService); err != nil {
+		if err := s.RemoveArtifacts(ctx, current, fsService); err != nil {
 			return fmt.Errorf("failed to remove service for recreation: %w", err)
 		}
+
+		s.artifacts.Store(nil)
 
 		artifacts, err := s.CreateArtifacts(ctx, servicePath, config, fsService)
 		if err != nil {
 			return err
 		}
 
-		s.artifacts = artifacts
+		s.artifacts.Store(artifacts)
 
 		return nil
 	})
@@ -394,15 +445,24 @@ func (s *DefaultService) Remove(ctx context.Context, servicePath string, fsServi
 
 	return s.withLifecycleGuard(func() error {
 		// If we have tracked artifacts, use them for proper removal
-		if s.artifacts != nil && len(s.artifacts.CreatedFiles) > 0 {
-			return s.RemoveArtifacts(ctx, s.artifacts, fsService)
+		current := s.artifacts.Load()
+		if current != nil && len(current.CreatedFiles) > 0 {
+			if err := s.RemoveArtifacts(ctx, current, fsService); err != nil {
+				return err
+			}
+
+			s.artifacts.Store(nil)
+
+			return nil
 		}
 
-		// No tracked files - service is in an inconsistent state
-		// Remove() requires tracked files to work properly
+		// No tracked files - service is in an inconsistent state. Returning the
+		// typed ErrServiceNotExist lets the FSM-layer caller use errors.Is to
+		// treat a no-tracking Remove as success (idempotent), rather than
+		// pattern-matching a string error.
 		s.logger.Debugf("No tracked files for service %s, cannot do tracked removal", servicePath)
 
-		return fmt.Errorf("service %s has no tracked files - use ForceRemove() instead", servicePath)
+		return ErrServiceNotExist
 	})
 }
 
@@ -648,22 +708,86 @@ func (s *DefaultService) CheckServiceDirectoryIntegrity(ctx context.Context, ser
 	// 1. Before Create() is called on a new instance
 	// 2. After agent restart when in-memory tracking is lost
 	// Return HealthUnknown to indicate we need more information
-	if s.artifacts == nil {
+	artifacts := s.artifacts.Load()
+	if artifacts == nil {
 		s.logger.Debugf("No artifacts tracked for service %s - directory integrity unknown", servicePath)
-		
+
 		return HealthUnknown
 	}
-	
+
 	// Delegate to CheckArtifactsHealth which validates all tracked files exist
-	health, err := s.CheckArtifactsHealth(ctx, s.artifacts, fsService)
+	health, err := s.CheckArtifactsHealth(ctx, artifacts, fsService)
 	if err != nil {
 		s.logger.Debugf("Error checking artifacts health for %s: %v", servicePath, err)
 		// CheckArtifactsHealth returns error for context cancellation or nil artifacts
 		// Both cases mean we can't determine health, so return Unknown
 		return HealthUnknown
 	}
-	
+
 	return health
+}
+
+// Health returns a recovery directive based on this service's tracked state.
+// It collapses the three signals callers used to compose by hand
+// (CheckServiceDirectoryIntegrity, artifact presence, in-flight removal) into
+// a single switchable result.
+//
+// Lifecycle invariant:
+//   - artifacts == nil → ActionOK. The service has no tracked state to
+//     verify, which is the steady state both before Create succeeds and
+//     after Remove/ForceRemove succeed. Returning ActionOK in the
+//     post-cleanup case is what stops Health() from re-entering recovery
+//     after ForceRemove flipped the directory away.
+//   - artifacts populated, RemovalProgress != nil → ActionWait. RemoveArtifacts
+//     drains the directory across multiple ticks; CheckArtifactsHealth would
+//     see files vanishing one-by-one and report HealthBad mid-Remove, which
+//     would permanent-error a Remove that is making progress.
+//   - artifacts populated, files present → ActionOK.
+//   - artifacts populated, files missing → ActionRecreate. Corruption is
+//     the wedge condition: tracked files vanished externally while the
+//     service was running.
+//   - artifacts populated, transient I/O error → ActionWait.
+//
+// During Create's recreate paths there is a window between Store(nil) and
+// Store(new artifacts) when a concurrent reader sees nil → ActionOK. That is
+// fine because Create runs under withLifecycleGuard, so any concurrent
+// reader is observing either the pre-Create or the post-Store snapshot — the
+// nil window is invisible to subsequent FSM ticks (the next tick observes
+// the post-Store state and reverts to ActionOK only if the new artifacts
+// are healthy).
+func (s *DefaultService) Health(ctx context.Context, fsService filesystem.Service) RecoveryAction {
+	artifacts := s.artifacts.Load()
+	if artifacts == nil {
+		return ActionOK
+	}
+
+	artifacts.RemovalProgressMu.RLock()
+	inFlightRemoval := artifacts.RemovalProgress != nil
+	artifacts.RemovalProgressMu.RUnlock()
+
+	if inFlightRemoval {
+		return ActionWait
+	}
+
+	health, err := s.CheckArtifactsHealth(ctx, artifacts, fsService)
+	if err != nil {
+		s.logger.Debugf("Health probe error for %s: %v - returning ActionWait", artifacts.ServiceDir, err)
+
+		return ActionWait
+	}
+
+	switch health {
+	case HealthOK:
+		return ActionOK
+	case HealthBad:
+		return ActionRecreate
+	case HealthUnknown:
+		return ActionWait
+	default:
+		s.logger.Errorf("unknown HealthStatus %v from CheckArtifactsHealth for %s - defaulting to ActionWait", health, artifacts.ServiceDir)
+
+		return ActionWait
+	}
 }
 
 // GetConfig gets the actual service config from s6.
@@ -1115,7 +1239,16 @@ func (s *DefaultService) ForceRemove(
 		}
 
 		// Use lifecycle manager for aggressive cleanup
-		return s.ForceCleanup(ctx, artifacts, fsService)
+		if err := s.ForceCleanup(ctx, artifacts, fsService); err != nil {
+			return err
+		}
+
+		// Drop tracking only on success: callers driving recovery via
+		// HandlePermanentError need s.artifacts == nil afterwards so Health()
+		// flips back to ActionOK and the FSM stops re-entering recovery.
+		s.artifacts.Store(nil)
+
+		return nil
 	})
 }
 
@@ -1606,28 +1739,3 @@ func (s *DefaultService) findLatestRotatedFile(entries []string) string {
 	return latestFile
 }
 
-// CheckHealth performs tri-state health check with lifecycle manager:
-// - Uses cached artifacts to avoid repeated path calculations
-// - Implements proper separation of observation from action
-// - Optional s6-svok integration for runtime health verification
-// Returns:
-//   - HealthUnknown: probe failed due to I/O errors, timeouts, etc. - retry next tick
-//   - HealthOK: service directory is healthy and complete
-//   - HealthBad: service directory is definitely broken - triggers FSM transition
-func (s *DefaultService) CheckHealth(ctx context.Context, servicePath string, fsService filesystem.Service) (HealthStatus, error) {
-	// Context already cancelled → Unknown, never Bad
-	if ctx.Err() != nil {
-		return HealthUnknown, ctx.Err()
-	}
-
-	// If we don't have tracked artifacts, the service is in an inconsistent state
-	artifacts := s.artifacts
-	if artifacts == nil || len(artifacts.CreatedFiles) == 0 {
-		s.logger.Debugf("No tracked files for service %s, returning HealthBad", servicePath)
-
-		return HealthBad, nil
-	}
-
-	// Use lifecycle manager for comprehensive health check
-	return s.CheckArtifactsHealth(ctx, artifacts, fsService)
-}

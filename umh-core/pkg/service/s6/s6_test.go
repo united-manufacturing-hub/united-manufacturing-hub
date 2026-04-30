@@ -459,7 +459,7 @@ var _ = Describe("S6 Service", func() {
 
 		It("removes both service and log directory (normal case)", func() {
 			// Simulate a service with tracked files
-			svc.artifacts = &ServiceArtifacts{
+			svc.artifacts.Store(&ServiceArtifacts{
 				ServiceDir: svcPath,
 				LogDir:     logDir,
 				CreatedFiles: []string{
@@ -472,7 +472,7 @@ var _ = Describe("S6 Service", func() {
 					filepath.Join(svcPath, "dependencies.d", "base"),
 					filepath.Join(svcPath, ".complete"),
 				},
-			}
+			})
 
 			err := svc.Remove(ctx, svcPath, mockFS)
 			Expect(err).NotTo(HaveOccurred())
@@ -482,7 +482,7 @@ var _ = Describe("S6 Service", func() {
 
 		It("is successful when only the log dir had to be removed", func() {
 			// Simulate a service with tracked files
-			svc.artifacts = &ServiceArtifacts{
+			svc.artifacts.Store(&ServiceArtifacts{
 				ServiceDir: svcPath,
 				LogDir:     logDir,
 				CreatedFiles: []string{
@@ -495,7 +495,7 @@ var _ = Describe("S6 Service", func() {
 					filepath.Join(svcPath, "dependencies.d", "base"),
 					filepath.Join(svcPath, ".complete"),
 				},
-			}
+			})
 
 			exists.Delete(svcPath) // service dir already gone
 
@@ -506,7 +506,7 @@ var _ = Describe("S6 Service", func() {
 
 		It("is idempotent (everything already gone)", func() {
 			// Simulate a service with tracked files
-			svc.artifacts = &ServiceArtifacts{
+			svc.artifacts.Store(&ServiceArtifacts{
 				ServiceDir: svcPath,
 				LogDir:     logDir,
 				CreatedFiles: []string{
@@ -519,7 +519,7 @@ var _ = Describe("S6 Service", func() {
 					filepath.Join(svcPath, "dependencies.d", "base"),
 					filepath.Join(svcPath, ".complete"),
 				},
-			}
+			})
 
 			exists = sync.Map{} // nothing exists
 
@@ -537,7 +537,7 @@ var _ = Describe("S6 Service", func() {
 
 		It("returns an error when deletion fails", func() {
 			// Simulate a service with tracked files
-			svc.artifacts = &ServiceArtifacts{
+			svc.artifacts.Store(&ServiceArtifacts{
 				ServiceDir: svcPath,
 				LogDir:     logDir,
 				CreatedFiles: []string{
@@ -550,7 +550,7 @@ var _ = Describe("S6 Service", func() {
 					filepath.Join(svcPath, "dependencies.d", "base"),
 					filepath.Join(svcPath, ".complete"),
 				},
-			}
+			})
 
 			boom := errors.New("IO error")
 			mockFS.WithRemoveAllFunc(func(ctx context.Context, path string) error {
