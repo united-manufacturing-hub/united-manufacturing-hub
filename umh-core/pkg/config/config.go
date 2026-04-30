@@ -138,6 +138,16 @@ const (
 	ReleaseChannelEnterprise ReleaseChannel = "enterprise"
 )
 
+// ConfigValidationIssue describes a user-facing config-content problem
+// surfaced via the agent health message. Validators that detect bad
+// values emit one of these instead of calling SentryWarn — see doc.go
+// for policy. Internal type; never on the wire.
+type ConfigValidationIssue struct {
+	Field          string   // dotted path: "agent.releaseChannel"
+	OffendingValue string   // exactly what the user wrote
+	AllowedValues  []string // optional
+}
+
 // S6FSMConfig contains configuration for creating a service.
 type S6FSMConfig struct {
 	// For the FSM
