@@ -33,15 +33,12 @@ var _ = Describe("ChildSpec", func() {
 				UserSpec: config.UserSpec{
 					Config: "mqtt:\n  url: tcp://localhost:1883",
 				},
-				ChildStartStates: []string{"Running", "TryingToStart"},
 			}
 
 			data, err := yaml.Marshal(spec)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(string(data)).To(ContainSubstring("name: connection"))
 			Expect(string(data)).To(ContainSubstring("workerType: mqtt_connection"))
-			Expect(string(data)).To(ContainSubstring("childStartStates:"))
-			Expect(string(data)).To(ContainSubstring("- Running"))
 		})
 
 		It("should deserialize from YAML correctly", func() {
@@ -50,9 +47,6 @@ name: connection
 workerType: mqtt_connection
 userSpec:
   config: "mqtt:\n  url: tcp://localhost:1883"
-childStartStates:
-  - Running
-  - TryingToStart
 `
 			var spec config.ChildSpec
 			err := yaml.Unmarshal([]byte(yamlData), &spec)
@@ -61,22 +55,6 @@ childStartStates:
 			Expect(spec.Name).To(Equal("connection"))
 			Expect(spec.WorkerType).To(Equal("mqtt_connection"))
 			Expect(spec.UserSpec.Config).To(ContainSubstring("tcp://localhost:1883"))
-			Expect(spec.ChildStartStates).To(ConsistOf("Running", "TryingToStart"))
-		})
-
-		It("should handle optional ChildStartStates correctly", func() {
-			yamlData := `
-name: simple-worker
-workerType: basic
-userSpec:
-  config: "simple config"
-`
-			var spec config.ChildSpec
-			err := yaml.Unmarshal([]byte(yamlData), &spec)
-
-			Expect(err).ToNot(HaveOccurred())
-			Expect(spec.Name).To(Equal("simple-worker"))
-			Expect(spec.ChildStartStates).To(BeNil())
 		})
 	})
 
@@ -101,7 +79,6 @@ userSpec:
 var _ = Describe("ChildSpec Clone", func() {
 	Describe("Clone()", func() {
 		It("should create a deep copy that is independent from the original", func() {
-			// Create original ChildSpec with UserSpec and ChildStartStates
 			original := config.ChildSpec{
 				Name:       "original-worker",
 				WorkerType: "mqtt_connection",
@@ -113,51 +90,13 @@ var _ = Describe("ChildSpec Clone", func() {
 						},
 					},
 				},
-				ChildStartStates: []string{"Running", "TryingToStart"},
 			}
 
-			// Clone it
 			cloned := original.Clone()
 
-			// Verify clone has same values
 			Expect(cloned.Name).To(Equal(original.Name))
 			Expect(cloned.WorkerType).To(Equal(original.WorkerType))
 			Expect(cloned.UserSpec.Config).To(Equal(original.UserSpec.Config))
-			Expect(cloned.ChildStartStates).To(Equal(original.ChildStartStates))
-
-			// Modify the clone's ChildStartStates slice
-			cloned.ChildStartStates[0] = "Modified"
-			cloned.ChildStartStates = append(cloned.ChildStartStates, "NewState")
-
-			// Verify the original is NOT affected
-			Expect(original.ChildStartStates).To(Equal([]string{"Running", "TryingToStart"}))
-			Expect(original.ChildStartStates).ToNot(ContainElement("Modified"))
-			Expect(original.ChildStartStates).ToNot(ContainElement("NewState"))
-		})
-
-		It("should handle nil ChildStartStates", func() {
-			original := config.ChildSpec{
-				Name:             "worker-no-states",
-				WorkerType:       "basic",
-				ChildStartStates: nil,
-			}
-
-			cloned := original.Clone()
-
-			Expect(cloned.ChildStartStates).To(BeNil())
-		})
-
-		It("should handle empty ChildStartStates slice", func() {
-			original := config.ChildSpec{
-				Name:             "worker-empty-states",
-				WorkerType:       "basic",
-				ChildStartStates: []string{},
-			}
-
-			cloned := original.Clone()
-
-			Expect(cloned.ChildStartStates).ToNot(BeNil())
-			Expect(cloned.ChildStartStates).To(BeEmpty())
 		})
 	})
 })
@@ -176,7 +115,6 @@ var _ = Describe("ChildSpec Hash", func() {
 						},
 					},
 				},
-				ChildStartStates: []string{"Running", "TryingToStart"},
 			}
 
 			spec2 := config.ChildSpec{
@@ -190,7 +128,6 @@ var _ = Describe("ChildSpec Hash", func() {
 						},
 					},
 				},
-				ChildStartStates: []string{"Running", "TryingToStart"},
 			}
 
 			hash1, err1 := spec1.Hash()
@@ -251,28 +188,6 @@ var _ = Describe("ChildSpec Hash", func() {
 				Name:       "child-1",
 				WorkerType: "mqtt_connection",
 				UserSpec:   config.UserSpec{Config: "config-b"},
-			}
-
-			hash1, err1 := spec1.Hash()
-			Expect(err1).NotTo(HaveOccurred())
-			hash2, err2 := spec2.Hash()
-			Expect(err2).NotTo(HaveOccurred())
-			Expect(hash1).NotTo(Equal(hash2))
-		})
-
-		It("should produce different hashes when ChildStartStates changes", func() {
-			spec1 := config.ChildSpec{
-				Name:             "child-1",
-				WorkerType:       "mqtt_connection",
-				UserSpec:         config.UserSpec{Config: "config"},
-				ChildStartStates: []string{"Running"},
-			}
-
-			spec2 := config.ChildSpec{
-				Name:             "child-1",
-				WorkerType:       "mqtt_connection",
-				UserSpec:         config.UserSpec{Config: "config"},
-				ChildStartStates: []string{"Running", "TryingToStart"},
 			}
 
 			hash1, err1 := spec1.Hash()
@@ -343,7 +258,7 @@ var _ = Describe("DesiredState", func() {
 	Describe("YAML serialization", func() {
 		It("should serialize to YAML correctly", func() {
 			desired := config.DesiredState{
-				BaseDesiredState: config.BaseDesiredState{State: "running"},
+				BaseDesiredState: config.BaseDesiredState{},
 				ChildrenSpecs: []config.ChildSpec{
 					{
 						Name:       "child1",
@@ -357,7 +272,6 @@ var _ = Describe("DesiredState", func() {
 
 			data, err := yaml.Marshal(desired)
 			Expect(err).ToNot(HaveOccurred())
-			Expect(string(data)).To(ContainSubstring("state: running"))
 			Expect(string(data)).To(ContainSubstring("childrenSpecs:"))
 			Expect(string(data)).To(ContainSubstring("name: child1"))
 		})
@@ -379,7 +293,6 @@ childrenSpecs:
 			err := yaml.Unmarshal([]byte(yamlData), &desired)
 
 			Expect(err).ToNot(HaveOccurred())
-			Expect(desired.State).To(Equal("active"))
 			Expect(desired.ChildrenSpecs).To(HaveLen(2))
 			Expect(desired.ChildrenSpecs[0].Name).To(Equal("connection"))
 			Expect(desired.ChildrenSpecs[1].Name).To(Equal("dataflow"))
@@ -393,7 +306,6 @@ state: stopped
 			err := yaml.Unmarshal([]byte(yamlData), &desired)
 
 			Expect(err).ToNot(HaveOccurred())
-			Expect(desired.State).To(Equal("stopped"))
 			Expect(desired.ChildrenSpecs).To(BeEmpty())
 		})
 	})
@@ -401,7 +313,7 @@ state: stopped
 	Describe("ShutdownRequested interface", func() {
 		It("should return false when State is not 'shutdown'", func() {
 			desired := config.DesiredState{
-				BaseDesiredState: config.BaseDesiredState{State: "running"},
+				BaseDesiredState: config.BaseDesiredState{},
 			}
 
 			Expect(desired.IsShutdownRequested()).To(BeFalse())

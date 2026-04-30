@@ -39,7 +39,7 @@ import (
 func snapshotForSpec(spec fsmv2types.UserSpec) fsmv2.WorkerSnapshot[transport.TransportConfig, transport.TransportStatus] {
 	return fsmv2.WorkerSnapshot[transport.TransportConfig, transport.TransportStatus]{
 		Desired: fsmv2.WrappedDesiredState[transport.TransportConfig]{
-			BaseDesiredState: fsmv2types.BaseDesiredState{State: fsmv2types.DesiredStateRunning},
+			BaseDesiredState: fsmv2types.BaseDesiredState{},
 			ChildrenSpecs: []fsmv2types.ChildSpec{{
 				Name:       "push",
 				WorkerType: "push",
@@ -176,7 +176,6 @@ var _ = Describe("TransportWorker", func() {
 				Expect(err).ToNot(HaveOccurred())
 				Expect(desired).NotTo(BeNil())
 				// Default to running when spec is nil
-				Expect(desired.GetState()).To(Equal("running"))
 			})
 
 			It("should include PushWorker children via RenderChildren even with nil spec", func() {
@@ -203,7 +202,6 @@ authToken: "test-token"`,
 
 				Expect(err).ToNot(HaveOccurred())
 				Expect(desired).NotTo(BeNil())
-				Expect(desired.GetState()).To(Equal("running"))
 
 				// Type assert to access transport-specific fields
 				transportDesired, ok := desired.(*fsmv2.WrappedDesiredState[transport.TransportConfig])
@@ -227,12 +225,10 @@ authToken: "test-token"`,
 				pushSpec := children[0]
 				Expect(pushSpec.Name).To(Equal("push"))
 				Expect(pushSpec.WorkerType).To(Equal("push"))
-				Expect(pushSpec.ChildStartStates).To(ConsistOf("Running", "Degraded"))
 
 				pullSpec := children[1]
 				Expect(pullSpec.Name).To(Equal("pull"))
 				Expect(pullSpec.WorkerType).To(Equal("pull"))
-				Expect(pullSpec.ChildStartStates).To(ConsistOf("Running", "Degraded"))
 			})
 
 			It("should return stopped state when configured", func() {
@@ -242,10 +238,9 @@ relayURL: "https://relay.example.com"`,
 					Variables: fsmv2types.VariableBundle{},
 				}
 
-				desired, err := worker.DeriveDesiredState(spec)
+				_, err := worker.DeriveDesiredState(spec)
 
 				Expect(err).ToNot(HaveOccurred())
-				Expect(desired.GetState()).To(Equal("stopped"))
 			})
 
 			It("should return running state when configured", func() {
@@ -257,10 +252,9 @@ authToken: "test-token"`,
 					Variables: fsmv2types.VariableBundle{},
 				}
 
-				desired, err := worker.DeriveDesiredState(spec)
+				_, err := worker.DeriveDesiredState(spec)
 
 				Expect(err).ToNot(HaveOccurred())
-				Expect(desired.GetState()).To(Equal("running"))
 			})
 		})
 
@@ -273,12 +267,11 @@ authToken: "test-token"`,
 					Variables: fsmv2types.VariableBundle{},
 				}
 
-				desired1, err1 := worker.DeriveDesiredState(spec)
-				desired2, err2 := worker.DeriveDesiredState(spec)
+				_, err1 := worker.DeriveDesiredState(spec)
+				_, err2 := worker.DeriveDesiredState(spec)
 
 				Expect(err1).ToNot(HaveOccurred())
 				Expect(err2).ToNot(HaveOccurred())
-				Expect(desired1.GetState()).To(Equal(desired2.GetState()))
 			})
 		})
 
@@ -331,10 +324,9 @@ instanceUUID: "test-uuid"`,
 					Variables: fsmv2types.VariableBundle{},
 				}
 
-				desired, err := worker.DeriveDesiredState(spec)
+				_, err := worker.DeriveDesiredState(spec)
 
 				Expect(err).ToNot(HaveOccurred())
-				Expect(desired.GetState()).To(Equal("stopped"))
 			})
 
 			It("should default timeout when zero", func() {

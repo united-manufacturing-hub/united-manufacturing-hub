@@ -77,7 +77,7 @@ func registerTestWorkerFactories() {
 	for _, workerType := range workerTypes {
 		wt := workerType
 		// Register worker factory
-		err := factory.RegisterFactoryByType(wt, func(identity deps.Identity, _ deps.FSMLogger, _ deps.StateReader, _ map[string]any) fsmv2.Worker {
+		err := factory.RegisterFactoryByType(wt, func(identity deps.Identity, _ deps.FSMLogger, _ deps.StateReader) fsmv2.Worker {
 			return &supervisor.TestWorkerWithType{
 				Worker:     supervisor.TestWorker{},
 				WorkerType: wt,
@@ -153,7 +153,7 @@ func (m *mockWorker) CollectObservedState(ctx context.Context, _ fsmv2.DesiredSt
 }
 
 func (m *mockWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, error) {
-	return &config.DesiredState{BaseDesiredState: config.BaseDesiredState{State: "running"}}, nil
+	return &config.DesiredState{BaseDesiredState: config.BaseDesiredState{}}, nil
 }
 
 func (m *mockWorker) GetInitialState() fsmv2.State[any, any] {

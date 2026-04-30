@@ -22,6 +22,7 @@ import (
 	"go/parser"
 	"go/printer"
 	"go/token"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -42,6 +43,7 @@ import (
 	applicationsnapshot "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/application/snapshot"
 	communicatorworker "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator"
 	exampleparentworker "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleparent"
+	exampleparentsnapshot "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleparent/snapshot"
 	transportworker "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport"
 )
 
@@ -147,7 +149,6 @@ var _ = Describe("FSMv2 Architecture Validation — P1.8 Foundation Cap", func()
 				"SetChildrenView":      true,
 				"SetShutdownRequested": true,
 				"SetChildrenCounts":    true,
-				"SetParentMappedState": true,
 			}
 
 			// Locate the collector tick function. The function name has
@@ -519,8 +520,7 @@ var _ = Describe("FSMv2 Architecture Validation — P1.8 Foundation Cap", func()
 			// UserSpec.Config legitimately contains template markers (children
 			// re-render their own templates downstream). The check covers only
 			// the ChildSpec identity fields whose values are addressed by the
-			// supervisor before any template render happens — Name and
-			// WorkerType. ChildStartStates entries are also identity-level.
+			// supervisor before any template render happens — Name and WorkerType.
 			fixtures := parentRenderers()
 			Expect(fixtures).NotTo(BeEmpty())
 
@@ -534,12 +534,6 @@ var _ = Describe("FSMv2 Architecture Validation — P1.8 Foundation Cap", func()
 						"parent %q child[%d].WorkerType contains template marker — must be resolved before emission", fx.name, i)
 					Expect(spec.WorkerType).NotTo(ContainSubstring("}}"),
 						"parent %q child[%d].WorkerType contains template marker — must be resolved before emission", fx.name, i)
-					for j, st := range spec.ChildStartStates {
-						Expect(st).NotTo(ContainSubstring("{{"),
-							"parent %q child[%d].ChildStartStates[%d] contains template marker — must be resolved before emission", fx.name, i, j)
-						Expect(st).NotTo(ContainSubstring("}}"),
-							"parent %q child[%d].ChildStartStates[%d] contains template marker — must be resolved before emission", fx.name, i, j)
-					}
 				}
 			}
 		})
@@ -744,11 +738,43 @@ var _ = Describe("FSMv2 Architecture Validation — P1.8 Foundation Cap", func()
 	})
 
 	// =====================================================================
-	// Test 12 — TestChildrenDontReferenceParents (GATED → P3.7)
+	// Test 12 — TestChildrenDontReferenceParents (un-gated at P3.7)
 	// =====================================================================
-	Describe("Child workers don't reference parent-side concepts (GATED P3.7)", func() {
+	Describe("Child workers don't reference parent-side concepts", func() {
 		It("AST: child worker state files have no Parent/ParentMappedState references", func() {
-			Skip("pending P3.7: ParentMappedState retirement is the gating event; un-gates atomically with P3.7 per §4-E LOCKED")
+			workersDir := filepath.Join(getFsmv2Dir(), "workers")
+			var violations []string
+
+			err := filepath.WalkDir(workersDir, func(path string, d fs.DirEntry, err error) error {
+				if err != nil {
+					return err
+				}
+				if d.IsDir() {
+					return nil
+				}
+				if !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
+					return nil
+				}
+				// Only check state files (child state/*.go files)
+				if !strings.Contains(path, "/state/") {
+					return nil
+				}
+
+				content, err := os.ReadFile(path)
+				if err != nil {
+					return err
+				}
+
+				if bytes.Contains(content, []byte("ParentMappedState")) {
+					violations = append(violations, path)
+				}
+
+				return nil
+			})
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(violations).To(BeEmpty(),
+				"No child worker state file should reference the deleted ParentMappedState field post-P3.7: %v", violations)
 		})
 	})
 
@@ -894,20 +920,21 @@ var _ = Describe("FSMv2 Architecture Validation — P1.8 Foundation Cap", func()
 	//
 	// Goal: detect drift between the worker-package canonical RenderChildren
 	// emitter and the state-package mirror that exists to break the parent →
-	// state import cycle. Today's matrix:
+	// state import cycle. Today's matrix (post-P3.0 / PR3 C3):
 	//
-	//   - application       → mirror present, byte-equivalent expected
-	//   - exampleparent     → mirror present, migration-window exemption
-	//                         (mirror returns principled nil; canonical body
-	//                         is free to differ during the window)
+	//   - application       → mirror present, byte-equivalent enforced
+	//   - exampleparent     → mirror present, byte-equivalent enforced
+	//                         (PR3 C3 / Option A migrated exampleparent to
+	//                         WorkerSnapshot[Config, Status]; the prior
+	//                         migration-window exemption is gone, so the
+	//                         mirror MUST track the canonical body)
 	//   - communicator      → no mirror needed (no import cycle)
 	//   - transport         → no mirror needed (no import cycle)
 	//
 	// The test fails if (a) a non-exempt mirror diverges from its canonical
-	// body, (b) the exampleparent mirror stops returning principled nil
-	// (would re-introduce the silent-despawn risk the migration-window
-	// exemption is built around), or (c) a registry entry references a
-	// missing canonical/mirror file.
+	// body, (b) a registry entry flagged migrationWindow=true (held over for
+	// future migrations) returns anything other than principled nil, or
+	// (c) a registry entry references a missing canonical/mirror file.
 	//
 	// AST-level approach (not text-diff): parse both files, find the
 	// RenderChildren FuncDecl, render the body via go/printer with a
@@ -934,10 +961,9 @@ var _ = Describe("FSMv2 Architecture Validation — P1.8 Foundation Cap", func()
 				mirrorPath:    filepath.Join(getFsmv2Dir(), "workers", "application", "state", "render_children.go"),
 			},
 			{
-				name:            "exampleparent",
-				canonicalPath:   filepath.Join(getFsmv2Dir(), "workers", "example", "exampleparent", "children.go"),
-				mirrorPath:      filepath.Join(getFsmv2Dir(), "workers", "example", "exampleparent", "state", "render_children.go"),
-				migrationWindow: true,
+				name:          "exampleparent",
+				canonicalPath: filepath.Join(getFsmv2Dir(), "workers", "example", "exampleparent", "children.go"),
+				mirrorPath:    filepath.Join(getFsmv2Dir(), "workers", "example", "exampleparent", "state", "render_children.go"),
 			},
 			{
 				name:          "communicator",
@@ -1334,7 +1360,7 @@ func parentRenderers() []parentRendererFixture {
 			render: func() []config.ChildSpec {
 				return communicatorworker.RenderChildren(fsmv2.WorkerSnapshot[communicatorworker.CommunicatorConfig, communicatorworker.CommunicatorStatus]{
 					Desired: fsmv2.WrappedDesiredState[communicatorworker.CommunicatorConfig]{
-						BaseDesiredState: config.BaseDesiredState{State: config.DesiredStateRunning},
+						BaseDesiredState: config.BaseDesiredState{},
 						ChildrenSpecs: []config.ChildSpec{{
 							Name:       "transport",
 							WorkerType: "transport",
@@ -1349,7 +1375,7 @@ func parentRenderers() []parentRendererFixture {
 			render: func() []config.ChildSpec {
 				return transportworker.RenderChildren(fsmv2.WorkerSnapshot[transportworker.TransportConfig, transportworker.TransportStatus]{
 					Desired: fsmv2.WrappedDesiredState[transportworker.TransportConfig]{
-						BaseDesiredState: config.BaseDesiredState{State: config.DesiredStateRunning},
+						BaseDesiredState: config.BaseDesiredState{},
 						ChildrenSpecs: []config.ChildSpec{{
 							Name:       "push",
 							WorkerType: "push",
@@ -1362,9 +1388,14 @@ func parentRenderers() []parentRendererFixture {
 		{
 			name: "exampleparent",
 			render: func() []config.ChildSpec {
-				return exampleparentworker.RenderChildren(&exampleparentworker.ParentUserSpec{
-					ChildrenCount:   2,
-					ChildWorkerType: "examplechild",
+				return exampleparentworker.RenderChildren(fsmv2.WorkerSnapshot[exampleparentsnapshot.ExampleparentConfig, exampleparentsnapshot.ExampleparentStatus]{
+					Desired: fsmv2.WrappedDesiredState[exampleparentsnapshot.ExampleparentConfig]{
+						BaseDesiredState: config.BaseDesiredState{},
+						Config: exampleparentsnapshot.ExampleparentConfig{
+							ChildrenCount:   2,
+							ChildWorkerType: "examplechild",
+						},
+					},
 				})
 			},
 		},
@@ -1373,7 +1404,7 @@ func parentRenderers() []parentRendererFixture {
 			render: func() []config.ChildSpec {
 				return applicationworker.RenderChildren(fsmv2.WorkerSnapshot[applicationsnapshot.ApplicationConfig, applicationsnapshot.ApplicationStatus]{
 					Desired: fsmv2.WrappedDesiredState[applicationsnapshot.ApplicationConfig]{
-						BaseDesiredState: config.BaseDesiredState{State: config.DesiredStateRunning},
+						BaseDesiredState: config.BaseDesiredState{},
 						ChildrenSpecs: []config.ChildSpec{{
 							Name:       "child-a",
 							WorkerType: "examplechild",

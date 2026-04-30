@@ -15,60 +15,75 @@
 package snapshot_test
 
 import (
-	"time"
-
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplefailing/snapshot"
 )
 
-var _ = Describe("ExamplefailingObservedState", func() {
-	Describe("GetTimestamp", func() {
-		It("should return the CollectedAt timestamp", func() {
-			now := time.Now()
-			observed := snapshot.ExamplefailingObservedState{
-				CollectedAt: now,
-			}
+var _ = Describe("ExamplefailingConfig", func() {
+	It("should expose the embedded BaseUserSpec.GetState default", func() {
+		cfg := &snapshot.ExamplefailingConfig{}
+		Expect(cfg.GetState()).To(Equal("running"))
+	})
 
-			Expect(observed.GetTimestamp()).To(Equal(now))
+	Describe("GetMaxFailures", func() {
+		It("defaults to 3 when unset", func() {
+			cfg := &snapshot.ExamplefailingConfig{}
+			Expect(cfg.GetMaxFailures()).To(Equal(3))
+		})
+
+		It("returns the configured value when positive", func() {
+			cfg := &snapshot.ExamplefailingConfig{MaxFailures: 7}
+			Expect(cfg.GetMaxFailures()).To(Equal(7))
 		})
 	})
 
-})
+	Describe("GetFailureCycles", func() {
+		It("defaults to 1 when unset", func() {
+			cfg := &snapshot.ExamplefailingConfig{}
+			Expect(cfg.GetFailureCycles()).To(Equal(1))
+		})
 
-var _ = Describe("ExamplefailingDesiredState", func() {
-	Describe("ShutdownRequested", func() {
-		DescribeTable("should correctly report shutdown status",
-			func(shutdown bool, want bool) {
-				desired := &snapshot.ExamplefailingDesiredState{}
-				desired.SetShutdownRequested(shutdown)
+		It("returns the configured value when positive", func() {
+			cfg := &snapshot.ExamplefailingConfig{FailureCycles: 4}
+			Expect(cfg.GetFailureCycles()).To(Equal(4))
+		})
+	})
 
-				Expect(desired.IsShutdownRequested()).To(Equal(want))
-			},
-			Entry("not requested", false, false),
-			Entry("requested", true, true),
-		)
+	Describe("GetRestartAfterFailures", func() {
+		It("returns the configured restart threshold (0 = disabled)", func() {
+			cfg := &snapshot.ExamplefailingConfig{}
+			Expect(cfg.GetRestartAfterFailures()).To(Equal(0))
+
+			cfg.RestartAfterFailures = 5
+			Expect(cfg.GetRestartAfterFailures()).To(Equal(5))
+		})
+	})
+
+	Describe("GetRecoveryDelayObservations", func() {
+		It("returns the configured observation delay threshold", func() {
+			cfg := &snapshot.ExamplefailingConfig{}
+			Expect(cfg.GetRecoveryDelayObservations()).To(Equal(0))
+
+			cfg.RecoveryDelayObservations = 2
+			Expect(cfg.GetRecoveryDelayObservations()).To(Equal(2))
+		})
 	})
 })
 
-var _ = Describe("ExamplefailingObservedState.ShouldStop", func() {
-	DescribeTable("should correctly determine stop requirement",
-		func(shutdownRequested bool, parentMappedState string, want bool) {
-			obs := snapshot.ExamplefailingObservedState{
-				ExamplefailingDesiredState: snapshot.ExamplefailingDesiredState{
-					ParentMappedState: parentMappedState,
-				},
-			}
-			obs.ExamplefailingDesiredState.SetShutdownRequested(shutdownRequested)
-
-			Expect(obs.ShouldStop()).To(Equal(want))
-		},
-		Entry("returns true when shutdown requested", true, config.DesiredStateRunning, true),
-		Entry("returns true when parent mapped state is stopped", false, config.DesiredStateStopped, true),
-		Entry("returns true when parent mapped state is empty", false, "", true),
-		Entry("returns false when running and not shutdown requested", false, config.DesiredStateRunning, false),
-		Entry("returns true when both shutdown requested and parent stopped", true, config.DesiredStateStopped, true),
-	)
+var _ = Describe("ExamplefailingStatus", func() {
+	It("should default to zero-valued fields", func() {
+		status := snapshot.ExamplefailingStatus{}
+		Expect(status.ConnectionHealth).To(Equal(""))
+		Expect(status.ConnectAttempts).To(Equal(0))
+		Expect(status.RestartAfterFailures).To(Equal(0))
+		Expect(status.TicksInConnectedState).To(Equal(0))
+		Expect(status.CurrentCycle).To(Equal(0))
+		Expect(status.TotalCycles).To(Equal(0))
+		Expect(status.ObservationsSinceFailure).To(Equal(0))
+		Expect(status.ShouldFail).To(BeFalse())
+		Expect(status.AllCyclesComplete).To(BeFalse())
+		Expect(status.RecoveryDelayActive).To(BeFalse())
+	})
 })

@@ -1,0 +1,1534 @@
+diff --git a/umh-core/pkg/fsmv2/architecture_p1_8_test.go b/umh-core/pkg/fsmv2/architecture_p1_8_test.go
+index 53e3abe6f..34804f9bf 100644
+--- a/umh-core/pkg/fsmv2/architecture_p1_8_test.go
++++ b/umh-core/pkg/fsmv2/architecture_p1_8_test.go
+@@ -520,8 +520,7 @@ var _ = Describe("FSMv2 Architecture Validation — P1.8 Foundation Cap", func()
+ 			// UserSpec.Config legitimately contains template markers (children
+ 			// re-render their own templates downstream). The check covers only
+ 			// the ChildSpec identity fields whose values are addressed by the
+-			// supervisor before any template render happens — Name and
+-			// WorkerType. ChildStartStates entries are also identity-level.
++			// supervisor before any template render happens — Name and WorkerType.
+ 			fixtures := parentRenderers()
+ 			Expect(fixtures).NotTo(BeEmpty())
+ 
+@@ -535,12 +534,6 @@ var _ = Describe("FSMv2 Architecture Validation — P1.8 Foundation Cap", func()
+ 						"parent %q child[%d].WorkerType contains template marker — must be resolved before emission", fx.name, i)
+ 					Expect(spec.WorkerType).NotTo(ContainSubstring("}}"),
+ 						"parent %q child[%d].WorkerType contains template marker — must be resolved before emission", fx.name, i)
+-					for j, st := range spec.ChildStartStates {
+-						Expect(st).NotTo(ContainSubstring("{{"),
+-							"parent %q child[%d].ChildStartStates[%d] contains template marker — must be resolved before emission", fx.name, i, j)
+-						Expect(st).NotTo(ContainSubstring("}}"),
+-							"parent %q child[%d].ChildStartStates[%d] contains template marker — must be resolved before emission", fx.name, i, j)
+-					}
+ 				}
+ 			}
+ 		})
+diff --git a/umh-core/pkg/fsmv2/config/childspec.go b/umh-core/pkg/fsmv2/config/childspec.go
+index 6e232e1a8..3d5a018ab 100644
+--- a/umh-core/pkg/fsmv2/config/childspec.go
++++ b/umh-core/pkg/fsmv2/config/childspec.go
+@@ -41,7 +41,9 @@ import (
+ //
+ // Correct lifecycle control:
+ //   - ShutdownRequested: Inherited from this type. Set by supervisor for graceful shutdown.
+-//   - ParentMappedState: For child workers only. Injected by supervisor from parent's ChildStartStates.
++//   - ParentMappedState: For child workers only. Injected unconditionally as config.DesiredStateRunning
++//     by the supervisor post-P3.5 (ChildStartStates removed). Will track the Enabled field once the
++//     P2.x Enabled→ShutdownRequested reducer lands.
+ //   - State ("running"/"stopped"): From BaseUserSpec.GetState(). Controls whether worker should be running.
+ //
+ // Correct ShouldBeRunning() implementations:
+@@ -159,32 +161,6 @@ func (u UserSpec) Clone() UserSpec {
+ //   - Supervisor handles "how to make it exist"
+ //   - Children run independently in their own FSMs
+ //
+-// # Child Start States
+-//
+-// ChildStartStates coordinates parent state with child lifecycle.
+-//
+-// ChildStartStates specifies which parent FSM states cause children to run.
+-// When the parent is in a listed state, children run. Otherwise, they stop.
+-//
+-// INVARIANT: If a parent state checks ChildrenHealthy/ChildrenUnhealthy to gate
+-// its own transitions, that state MUST be listed in ChildStartStates. Otherwise,
+-// children are mapped to "stopped" and can never satisfy the health check,
+-// creating a permanent deadlock.
+-//
+-// Example use case: Children should only run when parent is in "Running" or "TryingToStart" states.
+-//
+-// Format:
+-//
+-//	ChildStartStates: []string{"Running", "TryingToStart"}
+-//
+-// When to use:
+-// - Parent lifecycle controls child lifecycle (children run only in certain parent states)
+-// - Simple "run when parent is active" patterns
+-//
+-// When not to use:
+-// - Passing data between states (use VariableBundle instead)
+-// - Triggering actions (use signals instead)
+-//
+ // # Dependency Inheritance
+ //
+ // Dependencies are additional deps to merge with parent's deps.
+@@ -199,7 +175,7 @@ func (u UserSpec) Clone() UserSpec {
+ //	    Name:       "mqtt-connection",
+ //	    WorkerType: "mqtt_client",
+ //	    UserSpec:   UserSpec{Config: "url: tcp://localhost:1883"},
+-//	    ChildStartStates: []string{"Running", "TryingToStart"}, // Child runs when parent is active
++//	    Enabled:    true,
+ //	}
+ //
+ // Example - Benthos managing connections and data flows:
+@@ -210,21 +186,20 @@ func (u UserSpec) Clone() UserSpec {
+ //	        Name:       "modbus-connection",
+ //	        WorkerType: "modbus_client",
+ //	        UserSpec:   UserSpec{Config: "address: 192.168.1.100:502"},
+-//	        // Empty ChildStartStates = child always runs (follows parent's DesiredState.State)
++//	        Enabled:    true,
+ //	    },
+ //	    {
+ //	        Name:       "source-flow",
+ //	        WorkerType: "benthos_flow",
+ //	        UserSpec:   UserSpec{Config: "input: {...}"},
+-//	        ChildStartStates: []string{"Running"}, // Child only runs when parent is Running
++//	        Enabled:    true,
+ //	    },
+ //	}
+ type ChildSpec struct {
+-	Dependencies     map[string]any `json:"-"                          yaml:"-"`                          // Runtime channels and interfaces; not serializable. Inherited from parent at supervisor merge time (see ChildSpec.Hash godoc).
+-	UserSpec         UserSpec       `json:"userSpec"                   yaml:"userSpec"`                   // Raw user config (input to DeriveDesiredState)
+-	Name             string         `json:"name"                       yaml:"name"`                       // Unique name for this child (within parent scope)
+-	WorkerType       string         `json:"workerType"                 yaml:"workerType"`                 // Type of worker to create (registered worker factory key)
+-	ChildStartStates []string       `json:"childStartStates,omitempty" yaml:"childStartStates,omitempty"` // Parent FSM states where child should run (empty = always run)
++	Dependencies map[string]any `json:"-"          yaml:"-"`          // Runtime channels and interfaces; not serializable. Inherited from parent at supervisor merge time (see ChildSpec.Hash godoc).
++	UserSpec     UserSpec       `json:"userSpec"   yaml:"userSpec"`   // Raw user config (input to DeriveDesiredState)
++	Name         string         `json:"name"       yaml:"name"`       // Unique name for this child (within parent scope)
++	WorkerType   string         `json:"workerType" yaml:"workerType"` // Type of worker to create (registered worker factory key)
+ 
+ 	// Enabled is the parent's per-tick enable signal for this child. true = run,
+ 	// false = stop. The zero value (§4-C LOCKED) is false: ChildSpec literals that
+@@ -253,11 +228,6 @@ func (c ChildSpec) Clone() ChildSpec {
+ 
+ 	clone.UserSpec = c.UserSpec.Clone()
+ 
+-	if c.ChildStartStates != nil {
+-		clone.ChildStartStates = make([]string, len(c.ChildStartStates))
+-		copy(clone.ChildStartStates, c.ChildStartStates)
+-	}
+-
+ 	if c.Dependencies != nil {
+ 		clone.Dependencies = make(map[string]any, len(c.Dependencies))
+ 		for k, v := range c.Dependencies {
+@@ -273,7 +243,7 @@ func (c ChildSpec) Clone() ChildSpec {
+ // enabling incremental validation (only re-validate specs whose hash changed).
+ //
+ // The hash is computed from the comparable spec fields: Name, WorkerType,
+-// Enabled, UserSpec, and ChildStartStates. Dependencies are intentionally
++// Enabled, and UserSpec. Dependencies are intentionally
+ // excluded — they hold runtime objects (channels, mutex-protected values)
+ // that cannot be meaningfully hashed and whose churn does not require
+ // re-validation. Unexported fields are also excluded.
+@@ -317,47 +287,12 @@ func (c ChildSpec) Hash() (string, error) {
+ 	h.Write(varsBytes)
+ 	h.Write([]byte{0}) // separator
+ 
+-	// Hash ChildStartStates
+-	for _, state := range c.ChildStartStates {
+-		h.Write([]byte(state))
+-		h.Write([]byte{0}) // separator
+-	}
+-
+ 	// Dependencies contain runtime objects (channels, etc.) that can't be meaningfully hashed,
+ 	// so we skip them. Changes to dependencies don't require re-validation anyway.
+ 
+ 	return fmt.Sprintf("%016x", h.Sum64()), nil
+ }
+ 
+-// GetMappedChildState returns the desired state for this child based on the parent's current FSM state.
+-//
+-// Logic:
+-//   - If ChildStartStates is empty: child always runs (returns "running")
+-//   - If parentState is in ChildStartStates: child should run (returns "running")
+-//   - Otherwise: child should stop (returns "stopped")
+-//
+-// Example:
+-//
+-//	spec := ChildSpec{ChildStartStates: []string{"Running", "TryingToStart"}}
+-//	spec.GetMappedChildState("Running")        // returns "running"
+-//	spec.GetMappedChildState("TryingToStop")   // returns "stopped"
+-//	spec.GetMappedChildState("Stopped")        // returns "stopped"
+-//
+-// Note: This replaces the deprecated StateMapping approach with direct state checks.
+-func (c *ChildSpec) GetMappedChildState(parentState string) string {
+-	if len(c.ChildStartStates) == 0 {
+-		return DesiredStateRunning
+-	}
+-
+-	for _, state := range c.ChildStartStates {
+-		if state == parentState {
+-			return DesiredStateRunning
+-		}
+-	}
+-
+-	return DesiredStateStopped
+-}
+-
+ // ChildInfo provides a read-only snapshot of a child worker's current state.
+ // This is used by ChildrenView to give parent workers visibility into their children
+ // without allowing direct modification.
+diff --git a/umh-core/pkg/fsmv2/config/childspec_test.go b/umh-core/pkg/fsmv2/config/childspec_test.go
+index 52bf34c88..bd9159dc9 100644
+--- a/umh-core/pkg/fsmv2/config/childspec_test.go
++++ b/umh-core/pkg/fsmv2/config/childspec_test.go
+@@ -33,15 +33,12 @@ var _ = Describe("ChildSpec", func() {
+ 				UserSpec: config.UserSpec{
+ 					Config: "mqtt:\n  url: tcp://localhost:1883",
+ 				},
+-				ChildStartStates: []string{"Running", "TryingToStart"},
+ 			}
+ 
+ 			data, err := yaml.Marshal(spec)
+ 			Expect(err).ToNot(HaveOccurred())
+ 			Expect(string(data)).To(ContainSubstring("name: connection"))
+ 			Expect(string(data)).To(ContainSubstring("workerType: mqtt_connection"))
+-			Expect(string(data)).To(ContainSubstring("childStartStates:"))
+-			Expect(string(data)).To(ContainSubstring("- Running"))
+ 		})
+ 
+ 		It("should deserialize from YAML correctly", func() {
+@@ -50,9 +47,6 @@ name: connection
+ workerType: mqtt_connection
+ userSpec:
+   config: "mqtt:\n  url: tcp://localhost:1883"
+-childStartStates:
+-  - Running
+-  - TryingToStart
+ `
+ 			var spec config.ChildSpec
+ 			err := yaml.Unmarshal([]byte(yamlData), &spec)
+@@ -61,22 +55,6 @@ childStartStates:
+ 			Expect(spec.Name).To(Equal("connection"))
+ 			Expect(spec.WorkerType).To(Equal("mqtt_connection"))
+ 			Expect(spec.UserSpec.Config).To(ContainSubstring("tcp://localhost:1883"))
+-			Expect(spec.ChildStartStates).To(ConsistOf("Running", "TryingToStart"))
+-		})
+-
+-		It("should handle optional ChildStartStates correctly", func() {
+-			yamlData := `
+-name: simple-worker
+-workerType: basic
+-userSpec:
+-  config: "simple config"
+-`
+-			var spec config.ChildSpec
+-			err := yaml.Unmarshal([]byte(yamlData), &spec)
+-
+-			Expect(err).ToNot(HaveOccurred())
+-			Expect(spec.Name).To(Equal("simple-worker"))
+-			Expect(spec.ChildStartStates).To(BeNil())
+ 		})
+ 	})
+ 
+@@ -101,7 +79,6 @@ userSpec:
+ var _ = Describe("ChildSpec Clone", func() {
+ 	Describe("Clone()", func() {
+ 		It("should create a deep copy that is independent from the original", func() {
+-			// Create original ChildSpec with UserSpec and ChildStartStates
+ 			original := config.ChildSpec{
+ 				Name:       "original-worker",
+ 				WorkerType: "mqtt_connection",
+@@ -113,51 +90,13 @@ var _ = Describe("ChildSpec Clone", func() {
+ 						},
+ 					},
+ 				},
+-				ChildStartStates: []string{"Running", "TryingToStart"},
+ 			}
+ 
+-			// Clone it
+ 			cloned := original.Clone()
+ 
+-			// Verify clone has same values
+ 			Expect(cloned.Name).To(Equal(original.Name))
+ 			Expect(cloned.WorkerType).To(Equal(original.WorkerType))
+ 			Expect(cloned.UserSpec.Config).To(Equal(original.UserSpec.Config))
+-			Expect(cloned.ChildStartStates).To(Equal(original.ChildStartStates))
+-
+-			// Modify the clone's ChildStartStates slice
+-			cloned.ChildStartStates[0] = "Modified"
+-			cloned.ChildStartStates = append(cloned.ChildStartStates, "NewState")
+-
+-			// Verify the original is NOT affected
+-			Expect(original.ChildStartStates).To(Equal([]string{"Running", "TryingToStart"}))
+-			Expect(original.ChildStartStates).ToNot(ContainElement("Modified"))
+-			Expect(original.ChildStartStates).ToNot(ContainElement("NewState"))
+-		})
+-
+-		It("should handle nil ChildStartStates", func() {
+-			original := config.ChildSpec{
+-				Name:             "worker-no-states",
+-				WorkerType:       "basic",
+-				ChildStartStates: nil,
+-			}
+-
+-			cloned := original.Clone()
+-
+-			Expect(cloned.ChildStartStates).To(BeNil())
+-		})
+-
+-		It("should handle empty ChildStartStates slice", func() {
+-			original := config.ChildSpec{
+-				Name:             "worker-empty-states",
+-				WorkerType:       "basic",
+-				ChildStartStates: []string{},
+-			}
+-
+-			cloned := original.Clone()
+-
+-			Expect(cloned.ChildStartStates).ToNot(BeNil())
+-			Expect(cloned.ChildStartStates).To(BeEmpty())
+ 		})
+ 	})
+ })
+@@ -176,7 +115,6 @@ var _ = Describe("ChildSpec Hash", func() {
+ 						},
+ 					},
+ 				},
+-				ChildStartStates: []string{"Running", "TryingToStart"},
+ 			}
+ 
+ 			spec2 := config.ChildSpec{
+@@ -190,7 +128,6 @@ var _ = Describe("ChildSpec Hash", func() {
+ 						},
+ 					},
+ 				},
+-				ChildStartStates: []string{"Running", "TryingToStart"},
+ 			}
+ 
+ 			hash1, err1 := spec1.Hash()
+@@ -260,28 +197,6 @@ var _ = Describe("ChildSpec Hash", func() {
+ 			Expect(hash1).NotTo(Equal(hash2))
+ 		})
+ 
+-		It("should produce different hashes when ChildStartStates changes", func() {
+-			spec1 := config.ChildSpec{
+-				Name:             "child-1",
+-				WorkerType:       "mqtt_connection",
+-				UserSpec:         config.UserSpec{Config: "config"},
+-				ChildStartStates: []string{"Running"},
+-			}
+-
+-			spec2 := config.ChildSpec{
+-				Name:             "child-1",
+-				WorkerType:       "mqtt_connection",
+-				UserSpec:         config.UserSpec{Config: "config"},
+-				ChildStartStates: []string{"Running", "TryingToStart"},
+-			}
+-
+-			hash1, err1 := spec1.Hash()
+-			Expect(err1).NotTo(HaveOccurred())
+-			hash2, err2 := spec2.Hash()
+-			Expect(err2).NotTo(HaveOccurred())
+-			Expect(hash1).NotTo(Equal(hash2))
+-		})
+-
+ 		It("should produce a 16-character hex string", func() {
+ 			spec := config.ChildSpec{
+ 				Name:       "child-1",
+diff --git a/umh-core/pkg/fsmv2/config/childspec_validation.go b/umh-core/pkg/fsmv2/config/childspec_validation.go
+index 83728ca95..c39634fce 100644
+--- a/umh-core/pkg/fsmv2/config/childspec_validation.go
++++ b/umh-core/pkg/fsmv2/config/childspec_validation.go
+@@ -54,23 +54,6 @@ func ValidateChildSpec(spec ChildSpec, registry WorkerTypeChecker) error {
+ 		return fmt.Errorf("child spec validation failed: invalid user spec: %w", err)
+ 	}
+ 
+-	// Validate ChildStartStates
+-	if len(spec.ChildStartStates) > 0 {
+-		seenStates := make(map[string]bool)
+-
+-		for _, state := range spec.ChildStartStates {
+-			if state == "" {
+-				return errors.New("child spec validation failed: ChildStartStates entry cannot be empty")
+-			}
+-
+-			if seenStates[state] {
+-				return errors.New("child spec validation failed: duplicate state in ChildStartStates")
+-			}
+-
+-			seenStates[state] = true
+-		}
+-	}
+-
+ 	return nil
+ }
+ 
+diff --git a/umh-core/pkg/fsmv2/config/childspec_validation_test.go b/umh-core/pkg/fsmv2/config/childspec_validation_test.go
+index cbbbaf18d..956729f13 100644
+--- a/umh-core/pkg/fsmv2/config/childspec_validation_test.go
++++ b/umh-core/pkg/fsmv2/config/childspec_validation_test.go
+@@ -57,20 +57,6 @@ var _ = Describe("ChildSpec Validation", func() {
+ 			Expect(err).NotTo(HaveOccurred())
+ 		})
+ 
+-		It("should pass validation for a ChildSpec with ChildStartStates", func() {
+-			spec := config.ChildSpec{
+-				Name:       "valid-child-with-states",
+-				WorkerType: "test-worker",
+-				UserSpec: config.UserSpec{
+-					Config: "config-data",
+-				},
+-				ChildStartStates: []string{"Running", "TryingToStart"},
+-			}
+-
+-			err := config.ValidateChildSpec(spec, registry)
+-			Expect(err).NotTo(HaveOccurred())
+-		})
+-
+ 		It("should fail when Name is empty", func() {
+ 			spec := config.ChildSpec{
+ 				Name:       "",
+@@ -142,75 +128,6 @@ var _ = Describe("ChildSpec Validation", func() {
+ 			Expect(err.Error()).To(ContainSubstring("invalid user spec"))
+ 		})
+ 
+-		It("should validate even with nil ChildStartStates", func() {
+-			spec := config.ChildSpec{
+-				Name:       "no-states",
+-				WorkerType: "test-worker",
+-				UserSpec: config.UserSpec{
+-					Config: "config",
+-				},
+-				ChildStartStates: nil,
+-			}
+-
+-			err := config.ValidateChildSpec(spec, registry)
+-			Expect(err).NotTo(HaveOccurred())
+-		})
+-
+-		It("should validate with empty ChildStartStates", func() {
+-			spec := config.ChildSpec{
+-				Name:       "empty-states",
+-				WorkerType: "test-worker",
+-				UserSpec: config.UserSpec{
+-					Config: "config",
+-				},
+-				ChildStartStates: []string{},
+-			}
+-
+-			err := config.ValidateChildSpec(spec, registry)
+-			Expect(err).NotTo(HaveOccurred())
+-		})
+-
+-		It("should reject ChildStartStates with empty state name", func() {
+-			spec := config.ChildSpec{
+-				Name:             "test-child",
+-				WorkerType:       "test-worker",
+-				ChildStartStates: []string{"Running", ""},
+-				UserSpec: config.UserSpec{
+-					Config: "config",
+-				},
+-			}
+-			err := config.ValidateChildSpec(spec, registry)
+-			Expect(err).To(HaveOccurred())
+-			Expect(err.Error()).To(ContainSubstring("cannot be empty"))
+-		})
+-
+-		It("should reject ChildStartStates with duplicate state names", func() {
+-			spec := config.ChildSpec{
+-				Name:             "test-child",
+-				WorkerType:       "test-worker",
+-				ChildStartStates: []string{"Running", "Running"},
+-				UserSpec: config.UserSpec{
+-					Config: "config",
+-				},
+-			}
+-			err := config.ValidateChildSpec(spec, registry)
+-			Expect(err).To(HaveOccurred())
+-			Expect(err.Error()).To(ContainSubstring("duplicate"))
+-		})
+-
+-		It("should accept valid ChildStartStates with multiple unique states", func() {
+-			spec := config.ChildSpec{
+-				Name:             "test-child",
+-				WorkerType:       "test-worker",
+-				ChildStartStates: []string{"Running", "TryingToStart", "Degraded"},
+-				UserSpec: config.UserSpec{
+-					Config: "config",
+-				},
+-			}
+-			err := config.ValidateChildSpec(spec, registry)
+-			Expect(err).NotTo(HaveOccurred())
+-		})
+-
+ 		It("should return error for bad worker type", func() {
+ 			spec := config.ChildSpec{
+ 				Name:       "specific-child-name",
+@@ -427,29 +344,6 @@ var _ = Describe("ChildSpec Validation", func() {
+ 			Expect(err.Error()).To(ContainSubstring("duplicate name"))
+ 		})
+ 
+-		It("should pass validation with multiple specs having different ChildStartStates", func() {
+-			specs := []config.ChildSpec{
+-				{
+-					Name:       "child-with-states",
+-					WorkerType: "communicator",
+-					UserSpec: config.UserSpec{
+-						Config: "config",
+-					},
+-					ChildStartStates: []string{"Running"},
+-				},
+-				{
+-					Name:       "child-without-states",
+-					WorkerType: "test-worker",
+-					UserSpec: config.UserSpec{
+-						Config: "config",
+-					},
+-				},
+-			}
+-
+-			err := config.ValidateChildSpecs(specs, registry)
+-			Expect(err).NotTo(HaveOccurred())
+-		})
+-
+ 		It("should fail with proper context when first spec is invalid", func() {
+ 			specs := []config.ChildSpec{
+ 				{
+diff --git a/umh-core/pkg/fsmv2/integration/scenarios_test.go b/umh-core/pkg/fsmv2/integration/scenarios_test.go
+index 261f18ef1..16a39b6c3 100644
+--- a/umh-core/pkg/fsmv2/integration/scenarios_test.go
++++ b/umh-core/pkg/fsmv2/integration/scenarios_test.go
+@@ -98,7 +98,6 @@ var _ = Describe("Simple Scenario Integration", func() {
+ 		verifyNoChildTransitionBeforeParentTryingToStart(testLogger)
+ 		verifyStateTransitionOrdering(testLogger)
+ 
+-		verifyChildrenStopWhenParentTryingToStop(testLogger)
+ 		verifyParentReachesStopped(testLogger)
+ 		verifyFullCycle(testLogger)
+ 	})
+@@ -957,57 +956,6 @@ func verifyStateTransitionOrdering(t *integration.TestLogger) {
+ 		parentTryingToStartIdx, firstChildTryingToConnectIdx)
+ }
+ 
+-// =============================================================================
+-// Category 7: Children Stop When Parent TryingToStop Tests (TDD)
+-// =============================================================================
+-
+-// verifyChildrenStopWhenParentTryingToStop ensures children transition
+-// out of Connected when parent goes to TryingToStop.
+-func verifyChildrenStopWhenParentTryingToStop(t *integration.TestLogger) {
+-	stateTransitions := t.GetLogsMatching("state_transition")
+-
+-	parentReachedTryingToStop := false
+-	childrenStoppedAfterParent := false
+-
+-	for _, entry := range stateTransitions {
+-		worker := ""
+-		fromState := ""
+-		toState := ""
+-
+-		for _, field := range entry.Context {
+-			if field.Key == "worker" {
+-				worker = field.String
+-			}
+-
+-			if field.Key == "from_state" {
+-				fromState = field.String
+-			}
+-
+-			if field.Key == "to_state" {
+-				toState = field.String
+-			}
+-		}
+-
+-		if strings.Contains(worker, "exampleparent") && toState == "TryingToStop" {
+-			parentReachedTryingToStop = true
+-		}
+-
+-		// After parent reaches TryingToStop, children should transition FROM Connected
+-		if parentReachedTryingToStop &&
+-			strings.Contains(worker, "examplechild") &&
+-			fromState == "Connected" {
+-			childrenStoppedAfterParent = true
+-		}
+-	}
+-
+-	Expect(parentReachedTryingToStop).To(BeTrue(),
+-		"Parent should reach TryingToStop state")
+-	Expect(childrenStoppedAfterParent).To(BeTrue(),
+-		"BUG: Children should transition from Connected after parent TryingToStop")
+-
+-	GinkgoWriter.Printf("✓ Children stop when parent goes to TryingToStop\n")
+-}
+-
+ // verifyParentReachesStopped ensures parent completes the full cycle back to Stopped.
+ // IMPORTANT: This verifies the parent cycles BACK to Stopped AFTER reaching Running,
+ // not just that it started in Stopped.
+diff --git a/umh-core/pkg/fsmv2/supervisor/api.go b/umh-core/pkg/fsmv2/supervisor/api.go
+index ee0394682..f3e76c12c 100644
+--- a/umh-core/pkg/fsmv2/supervisor/api.go
++++ b/umh-core/pkg/fsmv2/supervisor/api.go
+@@ -131,6 +131,21 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity deps.Identity, work
+ 
+ 	observedDoc["id"] = identity.ID
+ 
++	// Inject the initial FSM state name so the store never contains state="".
++	// CollectObservedState runs before the collector's StateProvider closure is
++	// wired up, so the Observation struct leaves State="" at this point. The
++	// StateProvider fires on every subsequent collection tick, but if the
++	// scenario ends before the first tick fires (e.g., during the last cycle's
++	// shutdown), the store would retain state="" and fail the
++	// verifyObservedStateHasState check. Injecting the registered initial state
++	// here closes that window.
++	// Nil guard: non-WorkerBase Worker implementations (e.g., test mocks) may
++	// return nil from GetInitialState(). In that case, state="" persists until
++	// the first collection tick overwrites it — acceptable for those callers.
++	if initialStateForDoc := worker.GetInitialState(); initialStateForDoc != nil {
++		observedDoc["state"] = initialStateForDoc.String()
++	}
++
+ 	_, err = s.store.SaveObserved(ctx, s.workerType, identity.ID, observedDoc)
+ 	if err != nil {
+ 		s.logger.SentryError(deps.FeatureFSMv2, identity.HierarchyPath, err, "worker_add_save_observed_failed")
+@@ -603,29 +618,6 @@ func (s *Supervisor[TObserved, TDesired]) setMappedParentState(state string) {
+ 	s.mappedParentState = state
+ }
+ 
+-// getChildStartStates implements SupervisorInterface.
+-func (s *Supervisor[TObserved, TDesired]) getChildStartStates() []string {
+-	s.mu.RLock()
+-	defer s.mu.RUnlock()
+-
+-	if s.childStartStates == nil {
+-		return nil
+-	}
+-
+-	states := make([]string, len(s.childStartStates))
+-	copy(states, s.childStartStates)
+-
+-	return states
+-}
+-
+-// setChildStartStates implements SupervisorInterface.
+-func (s *Supervisor[TObserved, TDesired]) setChildStartStates(states []string) {
+-	s.mu.Lock()
+-	defer s.mu.Unlock()
+-
+-	s.childStartStates = states
+-}
+-
+ // updateUserSpec implements SupervisorInterface.
+ func (s *Supervisor[TObserved, TDesired]) updateUserSpec(spec config.UserSpec) {
+ 	s.mu.Lock()
+diff --git a/umh-core/pkg/fsmv2/supervisor/hierarchical_tick_test.go b/umh-core/pkg/fsmv2/supervisor/hierarchical_tick_test.go
+index f79b206f6..6882b7a1d 100644
+--- a/umh-core/pkg/fsmv2/supervisor/hierarchical_tick_test.go
++++ b/umh-core/pkg/fsmv2/supervisor/hierarchical_tick_test.go
+@@ -263,10 +263,9 @@ var _ = Describe("Hierarchical Tick Propagation (Task 0.6)", func() {
+ 				},
+ 				childrenSpecs: []config.ChildSpec{
+ 					{
+-						Name:             "child1",
+-						WorkerType:       "child",
+-						UserSpec:         config.UserSpec{},
+-						ChildStartStates: []string{"running"},
++						Name:       "child1",
++						WorkerType: "child",
++						UserSpec:   config.UserSpec{},
+ 					},
+ 				},
+ 			}
+@@ -313,6 +312,15 @@ var _ = Describe("Hierarchical Tick Propagation (Task 0.6)", func() {
+ 
+ 			events := tickLog.GetEvents()
+ 			Expect(events).To(ContainElement("DeriveDesiredState:parent"))
++
++			// Verify applyStateMapping set the child's mappedParentState to
++			// DesiredStateRunning. A regression (e.g., mapping to "" or "stopped")
++			// would not be caught by the event log check above.
++			children := parentSuper.GetChildren()
++			Expect(children).To(HaveKey("child1"))
++			childDebug, ok := children["child1"].GetDebugInfo().(supervisor.SupervisorDebugInfo)
++			Expect(ok).To(BeTrue(), "GetDebugInfo must return supervisor.SupervisorDebugInfo")
++			Expect(childDebug.MappedParentState).To(Equal(config.DesiredStateRunning))
+ 		})
+ 
+ 		It("should reconcile new children in same tick cycle", func() {
+diff --git a/umh-core/pkg/fsmv2/supervisor/reconciliation.go b/umh-core/pkg/fsmv2/supervisor/reconciliation.go
+index 218e43558..8c32269f4 100644
+--- a/umh-core/pkg/fsmv2/supervisor/reconciliation.go
++++ b/umh-core/pkg/fsmv2/supervisor/reconciliation.go
+@@ -1517,7 +1517,6 @@ func (s *Supervisor[TObserved, TDesired]) reconcileChildren(specs []config.Child
+ 			childUserSpec := spec.UserSpec
+ 			childUserSpec.Variables = config.Merge(s.userSpec.Variables, spec.UserSpec.Variables)
+ 			child.updateUserSpec(childUserSpec)
+-			child.setChildStartStates(spec.ChildStartStates)
+ 
+ 			updatedCount++
+ 		} else {
+@@ -1577,7 +1576,6 @@ func (s *Supervisor[TObserved, TDesired]) reconcileChildren(specs []config.Child
+ 			childUserSpec := spec.UserSpec
+ 			childUserSpec.Variables = config.Merge(s.userSpec.Variables, spec.UserSpec.Variables)
+ 			childSupervisor.updateUserSpec(childUserSpec)
+-			childSupervisor.setChildStartStates(spec.ChildStartStates)
+ 			childSupervisor.setParent(s, s.workerType)
+ 
+ 			// Compute child's hierarchy path: parent path + child segment
+@@ -1672,20 +1670,27 @@ func (s *Supervisor[TObserved, TDesired]) reconcileChildren(specs []config.Child
+ 			s.logger.Debug("child_shutdown_requesting",
+ 				deps.String("child_name", name))
+ 
+-			// Mark child as pending removal
+-			s.pendingRemoval[name] = true
+-
+ 			child := s.children[name]
+ 			if child != nil {
+-				// Request shutdown - sets ShutdownRequested=true on child's workers
+-				// Child continues ticking and will emit SignalNeedsRemoval when ready
++				// Request shutdown first. Only mark pendingRemoval on success so that a
++				// transient CSE error does not permanently strand the child: if we set
++				// pendingRemoval before the call succeeds, Phase 1's guard
++				// (!s.pendingRemoval[name]) would skip this child on every subsequent
++				// tick, preventing retry. Leaving pendingRemoval unset lets Phase 1
++				// retry RequestShutdown naturally on the next tick.
+ 				ctx := context.Background()
+ 				if err := child.RequestShutdown(ctx, "removed_from_specs"); err != nil {
+ 					s.logger.SentryWarn(deps.FeatureFSMv2, s.GetHierarchyPathUnlocked(), "child_shutdown_request_failed",
+ 						deps.Err(err),
+ 						deps.String("child_name", name))
++					// Do NOT set pendingRemoval — Phase 1 will retry on the next tick.
++					continue
+ 				}
+ 			}
++			// ShutdownRequested is now set on the child's workers (or child was already
++			// absent). Mark as pending removal so Phase 2 can complete the deletion once
++			// all workers emit SignalNeedsRemoval.
++			s.pendingRemoval[name] = true
+ 			// DON'T delete here - wait for child's workers to complete shutdown
+ 		}
+ 	}
+@@ -1772,37 +1777,14 @@ func (s *Supervisor[TObserved, TDesired]) applyStateMapping() {
+ 		break
+ 	}
+ 
++	// Post-P3.5: mapping is unconditional — all children always receive
++	// DesiredStateRunning. parentState is captured for observability (log
++	// correlation) only; it no longer controls the mapped value.
+ 	for childName, child := range s.children {
+-		mappedState := s.computeMappedState(parentState, child)
+-
+-		child.setMappedParentState(mappedState)
++		child.setMappedParentState(config.DesiredStateRunning)
+ 		s.logTrace("state_mapped",
+ 			deps.String("child_name", childName),
+ 			deps.String("parent_state", parentState),
+-			deps.String("mapped_state", mappedState))
++			deps.String("mapped_state", config.DesiredStateRunning))
+ 	}
+ }
+-
+-// computeMappedState determines the desired state for a child based on parent's current state.
+-//
+-// ChildStartStates logic:
+-//   - If empty: child always runs (follows parent's DesiredState.State)
+-//   - If parentState is in the list: child should run (returns "running")
+-//   - Otherwise: child should stop (returns "stopped")
+-func (s *Supervisor[TObserved, TDesired]) computeMappedState(parentState string, child SupervisorInterface) string {
+-	childStartStates := child.getChildStartStates()
+-
+-	// Empty ChildStartStates = child always runs (follows parent's desired state)
+-	if len(childStartStates) == 0 {
+-		return config.DesiredStateRunning
+-	}
+-
+-	// Check if parent state is in the list of states where child should run
+-	for _, state := range childStartStates {
+-		if state == parentState {
+-			return config.DesiredStateRunning
+-		}
+-	}
+-
+-	return config.DesiredStateStopped
+-}
+diff --git a/umh-core/pkg/fsmv2/supervisor/supervisor.go b/umh-core/pkg/fsmv2/supervisor/supervisor.go
+index 0e103e126..4863300e3 100644
+--- a/umh-core/pkg/fsmv2/supervisor/supervisor.go
++++ b/umh-core/pkg/fsmv2/supervisor/supervisor.go
+@@ -176,11 +176,10 @@ type Supervisor[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState] stru
+ 	noStateMachineLoggedOnce sync.Map
+ 	userSpec                 config.UserSpec
+ 	workerType               string
+-	mappedParentState        string
+-	parentID                 string
+-	lastUserSpecHash         string
+-	childStartStates         []string
+-	collectorHealth          CollectorHealth
++	mappedParentState string
++	parentID          string
++	lastUserSpecHash  string
++	collectorHealth   CollectorHealth
+ 	metricsWg                sync.WaitGroup
+ 	tickInterval             time.Duration
+ 	tickCount                uint64
+diff --git a/umh-core/pkg/fsmv2/supervisor/supervisor_test.go b/umh-core/pkg/fsmv2/supervisor/supervisor_test.go
+index 2672f87b7..84297e140 100644
+--- a/umh-core/pkg/fsmv2/supervisor/supervisor_test.go
++++ b/umh-core/pkg/fsmv2/supervisor/supervisor_test.go
+@@ -325,381 +325,6 @@ var _ = Describe("Supervisor Internal", func() {
+ 		})
+ 	})
+ 
+-	Describe("ChildStartStates", func() {
+-		var (
+-			basicStore      *memory.InMemoryStore
+-			triangularStore *storage.TriangularStore
+-		)
+-
+-		BeforeEach(func() {
+-			basicStore = memory.NewInMemoryStore()
+-
+-			Expect(basicStore.CreateCollection(ctx, "parent_identity", nil)).To(Succeed())
+-			Expect(basicStore.CreateCollection(ctx, "parent_desired", nil)).To(Succeed())
+-			Expect(basicStore.CreateCollection(ctx, "parent_observed", nil)).To(Succeed())
+-			Expect(basicStore.CreateCollection(ctx, "child_identity", nil)).To(Succeed())
+-			Expect(basicStore.CreateCollection(ctx, "child_desired", nil)).To(Succeed())
+-			Expect(basicStore.CreateCollection(ctx, "child_observed", nil)).To(Succeed())
+-			Expect(basicStore.CreateCollection(ctx, "mqtt_client_identity", nil)).To(Succeed())
+-			Expect(basicStore.CreateCollection(ctx, "mqtt_client_desired", nil)).To(Succeed())
+-			Expect(basicStore.CreateCollection(ctx, "mqtt_client_observed", nil)).To(Succeed())
+-
+-			triangularStore = storage.NewTriangularStore(basicStore, deps.NewNopFSMLogger())
+-		})
+-
+-		AfterEach(func() {
+-			_ = basicStore.Close(ctx)
+-		})
+-
+-		It("should run child when parent state is in ChildStartStates list", func() {
+-			supervisorCfg := Config{
+-				WorkerType: "parent",
+-				Store:      triangularStore,
+-				Logger:     logger,
+-			}
+-
+-			parent := NewSupervisor[*TestObservedState, *TestDesiredState](supervisorCfg)
+-
+-			identity := deps.Identity{
+-				ID:         "parent-1",
+-				Name:       "Parent Worker",
+-				WorkerType: "parent",
+-			}
+-
+-			// TODO(P2.x): set Enabled: true once the Enabled→ShutdownRequested
+-			// reducer lands. The DDS path bypasses P1.8's renderChildren
+-			// architecture test, so this fixture would silently stop its
+-			// child without an explicit Enabled.
+-			childSpecs := []config.ChildSpec{
+-				{
+-					Name:             "child-1",
+-					WorkerType:       "child",
+-					UserSpec:         config.UserSpec{Config: "url: tcp://localhost:1883"},
+-					ChildStartStates: []string{"active"},
+-				},
+-			}
+-
+-			worker := &internalMockWorkerWithChildren{
+-				identity:      identity,
+-				initialState:  &mockState{name: "active"},
+-				observed:      persistence.Document{"id": "parent-1", "status": "active"},
+-				childrenSpecs: childSpecs,
+-			}
+-
+-			err := parent.AddWorker(identity, worker)
+-			Expect(err).NotTo(HaveOccurred())
+-
+-			err = parent.tick(ctx)
+-			Expect(err).NotTo(HaveOccurred())
+-
+-			children := parent.GetChildren()
+-			Expect(children).To(HaveLen(1))
+-
+-			child, exists := children["child-1"]
+-			Expect(exists).To(BeTrue())
+-
+-			typedChild, ok := child.(*Supervisor[*TestObservedState, *TestDesiredState])
+-			Expect(ok).To(BeTrue())
+-
+-			mappedState := typedChild.GetMappedParentState()
+-			Expect(mappedState).To(Equal("running"))
+-		})
+-
+-		It("should always run child when ChildStartStates is nil", func() {
+-			supervisorCfg := Config{
+-				WorkerType: "parent",
+-				Store:      triangularStore,
+-				Logger:     logger,
+-			}
+-
+-			parent := NewSupervisor[*TestObservedState, *TestDesiredState](supervisorCfg)
+-
+-			identity := deps.Identity{
+-				ID:         "parent-1",
+-				Name:       "Parent Worker",
+-				WorkerType: "parent",
+-			}
+-
+-			// TODO(P2.x): set Enabled: true once the Enabled→ShutdownRequested
+-			// reducer lands. The DDS path bypasses P1.8's renderChildren
+-			// architecture test, so this fixture would silently stop its
+-			// child without an explicit Enabled.
+-			childSpecs := []config.ChildSpec{
+-				{
+-					Name:             "child-1",
+-					WorkerType:       "child",
+-					UserSpec:         config.UserSpec{Config: "url: tcp://localhost:1883"},
+-					ChildStartStates: nil,
+-				},
+-			}
+-
+-			worker := &internalMockWorkerWithChildren{
+-				identity:      identity,
+-				initialState:  &mockState{name: "running"},
+-				observed:      persistence.Document{"id": "parent-1", "status": "running"},
+-				childrenSpecs: childSpecs,
+-			}
+-
+-			err := parent.AddWorker(identity, worker)
+-			Expect(err).NotTo(HaveOccurred())
+-
+-			err = parent.tick(ctx)
+-			Expect(err).NotTo(HaveOccurred())
+-
+-			children := parent.GetChildren()
+-			child, exists := children["child-1"]
+-			Expect(exists).To(BeTrue())
+-
+-			typedChild, ok := child.(*Supervisor[*TestObservedState, *TestDesiredState])
+-			Expect(ok).To(BeTrue())
+-
+-			mappedState := typedChild.GetMappedParentState()
+-			Expect(mappedState).To(Equal("running"))
+-		})
+-
+-		It("should stop child when parent state is not in ChildStartStates list", func() {
+-			supervisorCfg := Config{
+-				WorkerType: "parent",
+-				Store:      triangularStore,
+-				Logger:     logger,
+-			}
+-
+-			parent := NewSupervisor[*TestObservedState, *TestDesiredState](supervisorCfg)
+-
+-			identity := deps.Identity{
+-				ID:         "parent-1",
+-				Name:       "Parent Worker",
+-				WorkerType: "parent",
+-			}
+-
+-			// TODO(P2.x): set Enabled: true once the Enabled→ShutdownRequested
+-			// reducer lands. The DDS path bypasses P1.8's renderChildren
+-			// architecture test, so this fixture would silently stop its
+-			// child without an explicit Enabled.
+-			childSpecs := []config.ChildSpec{
+-				{
+-					Name:             "child-1",
+-					WorkerType:       "child",
+-					UserSpec:         config.UserSpec{Config: "url: tcp://localhost:1883"},
+-					ChildStartStates: []string{"active"},
+-				},
+-			}
+-
+-			worker := &internalMockWorkerWithChildren{
+-				identity:      identity,
+-				initialState:  &mockState{name: "unknown"},
+-				observed:      persistence.Document{"id": "parent-1", "status": "unknown"},
+-				childrenSpecs: childSpecs,
+-			}
+-
+-			err := parent.AddWorker(identity, worker)
+-			Expect(err).NotTo(HaveOccurred())
+-
+-			err = parent.tick(ctx)
+-			Expect(err).NotTo(HaveOccurred())
+-
+-			children := parent.GetChildren()
+-			child, exists := children["child-1"]
+-			Expect(exists).To(BeTrue())
+-
+-			typedChild, ok := child.(*Supervisor[*TestObservedState, *TestDesiredState])
+-			Expect(ok).To(BeTrue())
+-
+-			mappedState := typedChild.GetMappedParentState()
+-			Expect(mappedState).To(Equal("stopped"))
+-		})
+-
+-		It("should handle multiple children with different ChildStartStates", func() {
+-			// Add additional collections for child-2 and child-3
+-			Expect(basicStore.CreateCollection(ctx, "child-2_identity", nil)).To(Succeed())
+-			Expect(basicStore.CreateCollection(ctx, "child-2_desired", nil)).To(Succeed())
+-			Expect(basicStore.CreateCollection(ctx, "child-2_observed", nil)).To(Succeed())
+-			Expect(basicStore.CreateCollection(ctx, "child-3_identity", nil)).To(Succeed())
+-			Expect(basicStore.CreateCollection(ctx, "child-3_desired", nil)).To(Succeed())
+-			Expect(basicStore.CreateCollection(ctx, "child-3_observed", nil)).To(Succeed())
+-
+-			supervisorCfg := Config{
+-				WorkerType: "parent",
+-				Store:      triangularStore,
+-				Logger:     logger,
+-			}
+-
+-			parent := NewSupervisor[*TestObservedState, *TestDesiredState](supervisorCfg)
+-
+-			identity := deps.Identity{
+-				ID:         "parent-1",
+-				Name:       "Parent Worker",
+-				WorkerType: "parent",
+-			}
+-
+-			// TODO(P2.x): set Enabled: true on each child once the
+-			// Enabled→ShutdownRequested reducer lands. The DDS path bypasses
+-			// P1.8's renderChildren architecture test, so these fixtures would
+-			// silently stop their children without explicit Enabled.
+-			childSpecs := []config.ChildSpec{
+-				{
+-					Name:             "child-1",
+-					WorkerType:       "child",
+-					UserSpec:         config.UserSpec{Config: "url: tcp://localhost:1883"},
+-					ChildStartStates: []string{"active"},
+-				},
+-				{
+-					Name:             "child-2",
+-					WorkerType:       "child",
+-					UserSpec:         config.UserSpec{Config: "address: 192.168.1.100:502"},
+-					ChildStartStates: []string{"idle"},
+-				},
+-				{
+-					Name:             "child-3",
+-					WorkerType:       "child",
+-					UserSpec:         config.UserSpec{Config: "endpoint: opc.tcp://localhost:4840"},
+-					ChildStartStates: nil,
+-				},
+-			}
+-
+-			worker := &internalMockWorkerWithChildren{
+-				identity:      identity,
+-				initialState:  &mockState{name: "active"},
+-				observed:      persistence.Document{"id": "parent-1", "status": "active"},
+-				childrenSpecs: childSpecs,
+-			}
+-
+-			err := parent.AddWorker(identity, worker)
+-			Expect(err).NotTo(HaveOccurred())
+-
+-			err = parent.tick(ctx)
+-			Expect(err).NotTo(HaveOccurred())
+-
+-			children := parent.GetChildren()
+-			Expect(children).To(HaveLen(3))
+-
+-			// child-1: ChildStartStates: ["active"], parent is "active" → runs
+-			child1, exists := children["child-1"]
+-			Expect(exists).To(BeTrue())
+-			typedChild1, ok := child1.(*Supervisor[*TestObservedState, *TestDesiredState])
+-			Expect(ok).To(BeTrue())
+-			Expect(typedChild1.GetMappedParentState()).To(Equal("running"))
+-
+-			// child-2: ChildStartStates: ["idle"], parent is "active" → stopped
+-			child2, exists := children["child-2"]
+-			Expect(exists).To(BeTrue())
+-			typedChild2, ok := child2.(*Supervisor[*TestObservedState, *TestDesiredState])
+-			Expect(ok).To(BeTrue())
+-			Expect(typedChild2.GetMappedParentState()).To(Equal("stopped"))
+-
+-			// child-3: ChildStartStates: nil (empty) → always runs
+-			child3, exists := children["child-3"]
+-			Expect(exists).To(BeTrue())
+-			typedChild3, ok := child3.(*Supervisor[*TestObservedState, *TestDesiredState])
+-			Expect(ok).To(BeTrue())
+-			Expect(typedChild3.GetMappedParentState()).To(Equal("running"))
+-		})
+-
+-		It("should always run child when ChildStartStates is empty slice", func() {
+-			supervisorCfg := Config{
+-				WorkerType: "parent",
+-				Store:      triangularStore,
+-				Logger:     logger,
+-			}
+-
+-			parent := NewSupervisor[*TestObservedState, *TestDesiredState](supervisorCfg)
+-
+-			identity := deps.Identity{
+-				ID:         "parent-1",
+-				Name:       "Parent Worker",
+-				WorkerType: "parent",
+-			}
+-
+-			// TODO(P2.x): set Enabled: true once the Enabled→ShutdownRequested
+-			// reducer lands. The DDS path bypasses P1.8's renderChildren
+-			// architecture test, so this fixture would silently stop its
+-			// child without an explicit Enabled.
+-			childSpecs := []config.ChildSpec{
+-				{
+-					Name:             "child-1",
+-					WorkerType:       "mqtt_client",
+-					UserSpec:         config.UserSpec{Config: "url: tcp://localhost:1883"},
+-					ChildStartStates: []string{},
+-				},
+-			}
+-
+-			worker := &internalMockWorkerWithChildren{
+-				identity:      identity,
+-				initialState:  &mockState{name: "running"},
+-				observed:      persistence.Document{"id": "parent-1", "status": "running"},
+-				childrenSpecs: childSpecs,
+-			}
+-
+-			err := parent.AddWorker(identity, worker)
+-			Expect(err).NotTo(HaveOccurred())
+-
+-			err = parent.tick(ctx)
+-			Expect(err).NotTo(HaveOccurred())
+-
+-			children := parent.GetChildren()
+-			child, exists := children["child-1"]
+-			Expect(exists).To(BeTrue())
+-
+-			typedChild, ok := child.(*Supervisor[*TestObservedState, *TestDesiredState])
+-			Expect(ok).To(BeTrue())
+-
+-			mappedState := typedChild.GetMappedParentState()
+-			Expect(mappedState).To(Equal("running"))
+-		})
+-
+-		It("should always run child when ChildStartStates is nil (starting state)", func() {
+-			supervisorCfg := Config{
+-				WorkerType: "parent",
+-				Store:      triangularStore,
+-				Logger:     logger,
+-			}
+-
+-			parent := NewSupervisor[*TestObservedState, *TestDesiredState](supervisorCfg)
+-
+-			identity := deps.Identity{
+-				ID:         "parent-1",
+-				Name:       "Parent Worker",
+-				WorkerType: "parent",
+-			}
+-
+-			// TODO(P2.x): set Enabled: true once the Enabled→ShutdownRequested
+-			// reducer lands. The DDS path bypasses P1.8's renderChildren
+-			// architecture test, so this fixture would silently stop its
+-			// child without an explicit Enabled.
+-			childSpecs := []config.ChildSpec{
+-				{
+-					Name:             "child-1",
+-					WorkerType:       "mqtt_client",
+-					UserSpec:         config.UserSpec{Config: "url: tcp://localhost:1883"},
+-					ChildStartStates: nil,
+-				},
+-			}
+-
+-			worker := &internalMockWorkerWithChildren{
+-				identity:      identity,
+-				initialState:  &mockState{name: "starting"},
+-				observed:      persistence.Document{"id": "parent-1", "status": "starting"},
+-				childrenSpecs: childSpecs,
+-			}
+-
+-			err := parent.AddWorker(identity, worker)
+-			Expect(err).NotTo(HaveOccurred())
+-
+-			err = parent.tick(ctx)
+-			Expect(err).NotTo(HaveOccurred())
+-
+-			children := parent.GetChildren()
+-			child, exists := children["child-1"]
+-			Expect(exists).To(BeTrue())
+-
+-			typedChild, ok := child.(*Supervisor[*TestObservedState, *TestDesiredState])
+-			Expect(ok).To(BeTrue())
+-
+-			mappedState := typedChild.GetMappedParentState()
+-			Expect(mappedState).To(Equal("running"))
+-		})
+-	})
+-
+ 	Describe("AddWorker with NewObservation", func() {
+ 		It("should set CollectedAt when worker returns zero-time observation", func() {
+ 			basicStore := memory.NewInMemoryStore()
+diff --git a/umh-core/pkg/fsmv2/supervisor/types.go b/umh-core/pkg/fsmv2/supervisor/types.go
+index 7f1df84a3..1d71f54aa 100644
+--- a/umh-core/pkg/fsmv2/supervisor/types.go
++++ b/umh-core/pkg/fsmv2/supervisor/types.go
+@@ -57,8 +57,6 @@ type SupervisorInterface interface {
+ 	tick(ctx context.Context) error
+ 	updateUserSpec(spec config.UserSpec)
+ 	getUserSpec() config.UserSpec
+-	getChildStartStates() []string
+-	setChildStartStates(states []string)
+ 	getMappedParentState() string
+ 	setMappedParentState(state string)
+ 	calculateHierarchySize() int
+diff --git a/umh-core/pkg/fsmv2/workers/application/parity_test.go b/umh-core/pkg/fsmv2/workers/application/parity_test.go
+index 070e0ed7a..3c0565b10 100644
+--- a/umh-core/pkg/fsmv2/workers/application/parity_test.go
++++ b/umh-core/pkg/fsmv2/workers/application/parity_test.go
+@@ -72,12 +72,12 @@ var _ = Describe("Application — DDS vs RenderChildren differential parity (P2.
+ 
+ 			Expect(rhash).To(Equal(lhash),
+ 				"%s parity violation on spec[%d]:\n"+
+-					"  legacy   = name=%q workerType=%q startStates=%v enabled=%v userSpec.Config=%q\n"+
+-					"  rendered = name=%q workerType=%q startStates=%v enabled=%v userSpec.Config=%q",
++					"  legacy   = name=%q workerType=%q enabled=%v userSpec.Config=%q\n"+
++					"  rendered = name=%q workerType=%q enabled=%v userSpec.Config=%q",
+ 				label, i,
+-				legacy[i].Name, legacy[i].WorkerType, legacy[i].ChildStartStates,
++				legacy[i].Name, legacy[i].WorkerType,
+ 				legacy[i].Enabled, legacy[i].UserSpec.Config,
+-				rendered[i].Name, rendered[i].WorkerType, rendered[i].ChildStartStates,
++				rendered[i].Name, rendered[i].WorkerType,
+ 				rendered[i].Enabled, rendered[i].UserSpec.Config)
+ 		}
+ 	}
+@@ -87,13 +87,11 @@ var _ = Describe("Application — DDS vs RenderChildren differential parity (P2.
+ children:
+   - name: "child-1"
+     workerType: "example-child"
+-    childStartStates: ["TryingToStart", "Running"]
+     userSpec:
+       config: |
+         value: 10
+   - name: "child-2"
+     workerType: "example-child"
+-    childStartStates: ["TryingToStart", "Running"]
+     userSpec:
+       config: |
+         value: 20
+@@ -132,7 +130,6 @@ children:
+ children:
+   - name: "child-vars"
+     workerType: "example-child"
+-    childStartStates: ["TryingToStart", "Running"]
+     userSpec:
+       config: |
+         endpoint: "{{ .IP }}:{{ .PORT }}"
+diff --git a/umh-core/pkg/fsmv2/workers/application/worker_test.go b/umh-core/pkg/fsmv2/workers/application/worker_test.go
+index 83c6c1bda..e833dd2d6 100644
+--- a/umh-core/pkg/fsmv2/workers/application/worker_test.go
++++ b/umh-core/pkg/fsmv2/workers/application/worker_test.go
+@@ -167,30 +167,6 @@ children:
+ 			Expect(err.Error()).To(ContainSubstring("invalid spec type"))
+ 		})
+ 
+-		It("should preserve ChildStartStates in children", func() {
+-			yamlConfig := `
+-children:
+-  - name: "child-1"
+-    workerType: "example-child"
+-    childStartStates:
+-      - "running"
+-      - "TryingToStart"
+-`
+-			userSpec := config.UserSpec{
+-				Config: yamlConfig,
+-			}
+-
+-			desiredIface, err := worker.DeriveDesiredState(userSpec)
+-			Expect(err).ToNot(HaveOccurred())
+-			desired := desiredIface.(*fsmv2.WrappedDesiredState[snapshot.ApplicationConfig])
+-
+-			children := RenderChildren(fsmv2.WorkerSnapshot[snapshot.ApplicationConfig, snapshot.ApplicationStatus]{
+-				Desired: *desired,
+-			})
+-			Expect(children).To(HaveLen(1))
+-			Expect(children[0].ChildStartStates).To(ConsistOf("running", "TryingToStart"))
+-		})
+-
+ 		It("should handle mixed worker types", func() {
+ 			yamlConfig := `
+ children:
+diff --git a/umh-core/pkg/fsmv2/workers/communicator/children.go b/umh-core/pkg/fsmv2/workers/communicator/children.go
+index 5cd2f7099..dcc2cff79 100644
+--- a/umh-core/pkg/fsmv2/workers/communicator/children.go
++++ b/umh-core/pkg/fsmv2/workers/communicator/children.go
+@@ -26,7 +26,7 @@ import (
+ // test #7).
+ //
+ // The communicator parent currently manages a single transport child. The
+-// transport child runs whenever the parent is in Syncing or Recovering. Per
++// transport child runs whenever the parent is enabled. Per
+ // §4-C LOCKED, Enabled MUST be set explicitly to true; the F4⊕G1 trap
+ // detector in P1.8 architecture test #13 (registry walk, layer 2) catches
+ // forgotten-Enabled in renderChildren bodies.
+@@ -36,11 +36,10 @@ import (
+ // retired in P2.5.
+ func RenderChildren(snap fsmv2.WorkerSnapshot[CommunicatorConfig, CommunicatorStatus]) []config.ChildSpec {
+ 	return []config.ChildSpec{{
+-		Name:             "transport",
+-		WorkerType:       "transport",
+-		UserSpec:         snapshotUserSpec(snap),
+-		ChildStartStates: []string{"Syncing", "Recovering"},
+-		Enabled:          true,
++		Name:       "transport",
++		WorkerType: "transport",
++		UserSpec:   snapshotUserSpec(snap),
++		Enabled:    true,
+ 	}}
+ }
+ 
+diff --git a/umh-core/pkg/fsmv2/workers/communicator/worker_test.go b/umh-core/pkg/fsmv2/workers/communicator/worker_test.go
+index aa0e12d58..d92d778c3 100644
+--- a/umh-core/pkg/fsmv2/workers/communicator/worker_test.go
++++ b/umh-core/pkg/fsmv2/workers/communicator/worker_test.go
+@@ -146,7 +146,6 @@ var _ = Describe("CommunicatorWorker", func() {
+ 				Expect(specs).To(HaveLen(1))
+ 				Expect(specs[0].Name).To(Equal("transport"))
+ 				Expect(specs[0].WorkerType).To(Equal("transport"))
+-				Expect(specs[0].ChildStartStates).To(ConsistOf("Syncing", "Recovering"))
+ 			})
+ 		})
+ 
+@@ -187,7 +186,6 @@ state: "running"
+ 				Expect(specs).To(HaveLen(1))
+ 				Expect(specs[0].Name).To(Equal("transport"))
+ 				Expect(specs[0].WorkerType).To(Equal("transport"))
+-				Expect(specs[0].ChildStartStates).To(ConsistOf("Syncing", "Recovering"))
+ 				Expect(specs[0].UserSpec.Config).To(Equal(spec.Config))
+ 			})
+ 
+diff --git a/umh-core/pkg/fsmv2/workers/example/examplechild/snapshot/snapshot.go b/umh-core/pkg/fsmv2/workers/example/examplechild/snapshot/snapshot.go
+index 7b22b30c2..4b7945036 100644
+--- a/umh-core/pkg/fsmv2/workers/example/examplechild/snapshot/snapshot.go
++++ b/umh-core/pkg/fsmv2/workers/example/examplechild/snapshot/snapshot.go
+@@ -32,7 +32,7 @@ import (
+ // Embeds BaseUserSpec to support the StateGetter interface, allowing
+ // WorkerBase.DeriveDesiredState to extract the desired state from the "state"
+ // YAML field. The child worker has no additional config fields — its lifecycle
+-// is driven entirely by the parent's ChildStartStates mapping.
++// is driven by the parent's Enabled field.
+ type ExamplechildConfig struct {
+ 	config.BaseUserSpec `yaml:",inline"`
+ }
+diff --git a/umh-core/pkg/fsmv2/workers/example/examplechild/worker.go b/umh-core/pkg/fsmv2/workers/example/examplechild/worker.go
+index 2d9346783..97c2064f8 100644
+--- a/umh-core/pkg/fsmv2/workers/example/examplechild/worker.go
++++ b/umh-core/pkg/fsmv2/workers/example/examplechild/worker.go
+@@ -40,7 +40,7 @@ const WorkerTypeName = "examplechild"
+ var _ fsmv2.Worker = (*ChildWorker)(nil)
+ 
+ // ChildWorker implements the FSM Worker interface for the example child
+-// worker. Its lifecycle is orchestrated by the parent via ChildStartStates.
++// worker. Its lifecycle is orchestrated by the parent via the Enabled field.
+ type ChildWorker struct {
+ 	fsmv2.WorkerBase[ExamplechildConfig, ExamplechildStatus]
+ 	deps *ExamplechildDependencies
+diff --git a/umh-core/pkg/fsmv2/workers/example/exampleparent/children.go b/umh-core/pkg/fsmv2/workers/example/exampleparent/children.go
+index 19fdd7a6b..78740a390 100644
+--- a/umh-core/pkg/fsmv2/workers/example/exampleparent/children.go
++++ b/umh-core/pkg/fsmv2/workers/example/exampleparent/children.go
+@@ -70,8 +70,7 @@ func RenderChildren(snap fsmv2.WorkerSnapshot[snapshot.ExampleparentConfig, snap
+ 				Config:    childConfig,
+ 				Variables: childVariables,
+ 			},
+-			ChildStartStates: []string{"TryingToStart", "Running"},
+-			Enabled:          true,
++			Enabled: true,
+ 		}
+ 	}
+ 
+diff --git a/umh-core/pkg/fsmv2/workers/example/exampleparent/state/render_children.go b/umh-core/pkg/fsmv2/workers/example/exampleparent/state/render_children.go
+index 47d157948..f4787a237 100644
+--- a/umh-core/pkg/fsmv2/workers/example/exampleparent/state/render_children.go
++++ b/umh-core/pkg/fsmv2/workers/example/exampleparent/state/render_children.go
+@@ -71,8 +71,7 @@ func RenderChildren(snap fsmv2.WorkerSnapshot[snapshot.ExampleparentConfig, snap
+ 				Config:    childConfig,
+ 				Variables: childVariables,
+ 			},
+-			ChildStartStates: []string{"TryingToStart", "Running"},
+-			Enabled:          true,
++			Enabled: true,
+ 		}
+ 	}
+ 
+diff --git a/umh-core/pkg/fsmv2/workers/example/exampleparent/state/state_stopped.go b/umh-core/pkg/fsmv2/workers/example/exampleparent/state/state_stopped.go
+index e60681025..1f823f7ab 100644
+--- a/umh-core/pkg/fsmv2/workers/example/exampleparent/state/state_stopped.go
++++ b/umh-core/pkg/fsmv2/workers/example/exampleparent/state/state_stopped.go
+@@ -18,6 +18,7 @@ import (
+ 	"time"
+ 
+ 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
++	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
+ 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
+ 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleparent/snapshot"
+ )
+@@ -50,10 +51,13 @@ func (s *StoppedState) Next(snapAny any) fsmv2.NextResult[any, any] {
+ 	// every observation and surfaced on the typed WorkerSnapshot.
+ 	elapsed := time.Duration(snap.Observed.Metrics.Framework.TimeInCurrentStateMs) * time.Millisecond
+ 	if elapsed >= StoppedWaitDuration {
++		// Hand the children to TryingToStart so the supervisor creates them.
+ 		return fsmv2.Transition(&TryingToStartState{}, fsmv2.SignalNone, nil, "Wait duration elapsed, transitioning to TryingToStart", children)
+ 	}
+ 
+-	return fsmv2.Transition(s, fsmv2.SignalNone, nil, "Parent is stopped, no children spawned", children)
++	// While stopped, emit an empty spec so no children are created yet.
++	// Children are only spawned once the parent moves to TryingToStart.
++	return fsmv2.Transition(s, fsmv2.SignalNone, nil, "Parent is stopped, no children spawned", []config.ChildSpec{})
+ }
+ 
+ func (s *StoppedState) String() string {
+diff --git a/umh-core/pkg/fsmv2/workers/example/exampleparent/state/state_trying_to_start.go b/umh-core/pkg/fsmv2/workers/example/exampleparent/state/state_trying_to_start.go
+index c8512428d..11ee2c325 100644
+--- a/umh-core/pkg/fsmv2/workers/example/exampleparent/state/state_trying_to_start.go
++++ b/umh-core/pkg/fsmv2/workers/example/exampleparent/state/state_trying_to_start.go
+@@ -22,7 +22,6 @@ import (
+ )
+ 
+ // TryingToStartState represents the state while spawning children.
+-// Children with ChildStartStates containing "TryingToStart" will have desired state "running".
+ // Waits for all children to become healthy before transitioning to RunningState.
+ type TryingToStartState struct {
+ 	helpers.StartingBase
+diff --git a/umh-core/pkg/fsmv2/workers/example/exampleparent/state/state_trying_to_stop.go b/umh-core/pkg/fsmv2/workers/example/exampleparent/state/state_trying_to_stop.go
+index 90cc4eeb9..5d9ff9769 100644
+--- a/umh-core/pkg/fsmv2/workers/example/exampleparent/state/state_trying_to_stop.go
++++ b/umh-core/pkg/fsmv2/workers/example/exampleparent/state/state_trying_to_stop.go
+@@ -16,13 +16,13 @@ package state
+ 
+ import (
+ 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
++	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
+ 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
+ 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleparent/action"
+ 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleparent/snapshot"
+ )
+ 
+ // TryingToStopState represents the state during graceful shutdown.
+-// Children without "TryingToStop" in ChildStartStates will have desired state "stopped".
+ // Waits for all children to stop before transitioning to StoppedState.
+ type TryingToStopState struct {
+ 	helpers.StoppingBase
+@@ -31,7 +31,15 @@ type TryingToStopState struct {
+ func (s *TryingToStopState) Next(snapAny any) fsmv2.NextResult[any, any] {
+ 	snap := fsmv2.ConvertWorkerSnapshot[snapshot.ExampleparentConfig, snapshot.ExampleparentStatus](snapAny)
+ 
+-	children := RenderChildren(snap)
++	// P1.8 §4-E LOCKED: renderChildren must be the first non-shutdown call.
++	// Result discarded — in TryingToStop we emit an empty spec so the
++	// supervisor calls RequestShutdown on every existing child.
++	_ = RenderChildren(snap)
++
++	// Emit an empty children set so the supervisor calls RequestShutdown on
++	// each existing child; children absent from the emitted specs receive
++	// ShutdownRequested=true and then stop on their own.
++	children := []config.ChildSpec{}
+ 
+ 	// All children must be stopped before transitioning.
+ 	if snap.Observed.ChildrenHealthy == 0 && snap.Observed.ChildrenUnhealthy == 0 {
+diff --git a/umh-core/pkg/fsmv2/workers/transport/children.go b/umh-core/pkg/fsmv2/workers/transport/children.go
+index 736ad4377..3465b0267 100644
+--- a/umh-core/pkg/fsmv2/workers/transport/children.go
++++ b/umh-core/pkg/fsmv2/workers/transport/children.go
+@@ -25,10 +25,11 @@ import (
+ // (idempotency property exercised by P1.8 architecture test #7).
+ //
+ // The transport parent always emits two children — push and pull — that run
+-// whenever the parent is in Running or Degraded. Including Degraded prevents
+-// the oscillation loop where a child stops on parent degradation (caused by
+-// the child being unhealthy), the parent recovers (no unhealthy children),
+-// the child restarts, and the cycle repeats.
++// whenever the parent is enabled. Children run regardless of the parent's
++// current FSM state, including Degraded, to prevent the oscillation loop
++// where a child stops on parent degradation (caused by the child being
++// unhealthy), the parent recovers (no unhealthy children), the child
++// restarts, and the cycle repeats.
+ //
+ // Per §4-C LOCKED, Enabled MUST be set explicitly to true; the F4⊕G1 trap
+ // detector in P1.8 architecture test #13 (registry walk, layer 2) catches
+@@ -42,18 +43,16 @@ func RenderChildren(snap fsmv2.WorkerSnapshot[TransportConfig, TransportStatus])
+ 
+ 	return []config.ChildSpec{
+ 		{
+-			Name:             "push",
+-			WorkerType:       "push",
+-			UserSpec:         config.UserSpec{Config: rawSpec.Config, Variables: rawSpec.Variables},
+-			ChildStartStates: []string{"Running", "Degraded"},
+-			Enabled:          true,
++			Name:       "push",
++			WorkerType: "push",
++			UserSpec:   config.UserSpec{Config: rawSpec.Config, Variables: rawSpec.Variables},
++			Enabled:    true,
+ 		},
+ 		{
+-			Name:             "pull",
+-			WorkerType:       "pull",
+-			UserSpec:         config.UserSpec{Config: rawSpec.Config, Variables: rawSpec.Variables},
+-			ChildStartStates: []string{"Running", "Degraded"},
+-			Enabled:          true,
++			Name:       "pull",
++			WorkerType: "pull",
++			UserSpec:   config.UserSpec{Config: rawSpec.Config, Variables: rawSpec.Variables},
++			Enabled:    true,
+ 		},
+ 	}
+ }
+diff --git a/umh-core/pkg/fsmv2/workers/transport/config.go b/umh-core/pkg/fsmv2/workers/transport/config.go
+index 4730cb565..8ff4e5fe0 100644
+--- a/umh-core/pkg/fsmv2/workers/transport/config.go
++++ b/umh-core/pkg/fsmv2/workers/transport/config.go
+@@ -86,9 +86,8 @@ type TransportStatus struct {
+ // Token buffer architecture: the parent TransportWorker uses a 10-minute buffer (proactive
+ // refresh trigger) while child workers (push/pull) use a 1-minute buffer via IsTokenValid().
+ // The 9-minute gap is safe by design: when IsTokenExpired triggers here, the parent
+-// transitions Running → Starting, which causes children to stop (they are not in ChildStartStates
+-// while the parent is Starting). Children never push or pull during the refresh window.
+-// The children's 1-minute buffer is a last-resort safety net for edge cases only.
++// transitions Running → Starting. Children are always enabled and will continue
++// running while the parent refreshes. The 1-minute child buffer is a safety net for edge cases only.
+ func (s TransportStatus) IsTokenExpired() bool {
+ 	if s.JWTExpiry.IsZero() {
+ 		return false
+diff --git a/umh-core/pkg/fsmv2/workers/transport/state/starting.go b/umh-core/pkg/fsmv2/workers/transport/state/starting.go
+index 3f4f12fdf..9408a99f9 100644
+--- a/umh-core/pkg/fsmv2/workers/transport/state/starting.go
++++ b/umh-core/pkg/fsmv2/workers/transport/state/starting.go
+@@ -28,9 +28,7 @@ import (
+ 
+ // StartingState represents the state where the transport worker is authenticating.
+ // It emits AuthenticateAction to obtain a JWT token from the relay server.
+-// Once authenticated, transitions to RunningState. Children start via ChildStartStates
+-// when the parent enters Running, avoiding a deadlock where children can't become healthy
+-// while the parent waits in Starting.
++// Once authenticated, transitions to RunningState.
+ type StartingState struct {
+ 	helpers.StartingBase
+ }
+@@ -80,8 +78,7 @@ func (s *StartingState) Next(snapAny any) fsmv2.NextResult[any, any] {
+ 		return fsmv2.Transition(s, fsmv2.SignalNone, authAction, "No valid token, authenticating with relay", children)
+ 	}
+ 
+-	// Authenticated — transition to Running. Children start via ChildStartStates
+-	// once parent enters Running; RunningState handles unhealthy children.
++	// Authenticated — transition to Running. RunningState handles unhealthy children.
+ 	return fsmv2.Transition(&RunningState{}, fsmv2.SignalNone, nil, "Authenticated, transitioning to Running", children)
+ }
+ 
+diff --git a/umh-core/pkg/fsmv2/workers/transport/worker_test.go b/umh-core/pkg/fsmv2/workers/transport/worker_test.go
+index 5098adf42..72db0ce84 100644
+--- a/umh-core/pkg/fsmv2/workers/transport/worker_test.go
++++ b/umh-core/pkg/fsmv2/workers/transport/worker_test.go
+@@ -227,12 +227,10 @@ authToken: "test-token"`,
+ 				pushSpec := children[0]
+ 				Expect(pushSpec.Name).To(Equal("push"))
+ 				Expect(pushSpec.WorkerType).To(Equal("push"))
+-				Expect(pushSpec.ChildStartStates).To(ConsistOf("Running", "Degraded"))
+ 
+ 				pullSpec := children[1]
+ 				Expect(pullSpec.Name).To(Equal("pull"))
+ 				Expect(pullSpec.WorkerType).To(Equal("pull"))
+-				Expect(pullSpec.ChildStartStates).To(ConsistOf("Running", "Degraded"))
+ 			})
+ 
+ 			It("should return stopped state when configured", func() {

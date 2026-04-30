@@ -75,12 +75,6 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity deps.Identity, work
 		return fmt.Errorf("failed to derive initial desired state: %w", err)
 	}
 
-	if valErr := config.ValidateDesiredState(initialDesired.GetState()); valErr != nil {
-		s.logger.SentryError(deps.FeatureFSMv2, identity.HierarchyPath, valErr, "worker_add_validate_desired_failed")
-
-		return fmt.Errorf("failed to derive initial desired state: %w", valErr)
-	}
-
 	observed, err := worker.CollectObservedState(ctx, initialDesired)
 	if err != nil {
 		s.logger.SentryError(deps.FeatureFSMv2, identity.HierarchyPath, err, "worker_add_collect_observed_failed")
@@ -88,9 +82,9 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity deps.Identity, work
 		return fmt.Errorf("failed to collect initial observed state: %w", err)
 	}
 
-	// If COS returned a NewObservation (zero CollectedAt), set it now.
-	// AddWorker bypasses the collector, so we must set CollectedAt here
-	// to prevent the freshness checker from declaring the observation stale.
+	// Set CollectedAt if unset. AddWorker bypasses the collector's
+	// wrapNewObservation, so we must set it here to prevent the freshness
+	// checker from declaring the observation stale.
 	if observed.GetTimestamp().IsZero() {
 		if setter, ok := observed.(interface{ SetCollectedAt(time.Time) fsmv2.ObservedState }); ok {
 			observed = setter.SetCollectedAt(time.Now())
@@ -130,6 +124,21 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity deps.Identity, work
 	}
 
 	observedDoc["id"] = identity.ID
+
+	// Inject the initial FSM state name so the store never contains state="".
+	// CollectObservedState runs before the collector's StateProvider closure is
+	// wired up, so the Observation struct leaves State="" at this point. The
+	// StateProvider fires on every subsequent collection tick, but if the
+	// scenario ends before the first tick fires (e.g., during the last cycle's
+	// shutdown), the store would retain state="" and fail the
+	// verifyObservedStateHasState check. Injecting the registered initial state
+	// here closes that window.
+	// Nil guard: non-WorkerBase Worker implementations (e.g., test mocks) may
+	// return nil from GetInitialState(). In that case, state="" persists until
+	// the first collection tick overwrites it — acceptable for those callers.
+	if initialStateForDoc := worker.GetInitialState(); initialStateForDoc != nil {
+		observedDoc["state"] = initialStateForDoc.String()
+	}
 
 	_, err = s.store.SaveObserved(ctx, s.workerType, identity.ID, observedDoc)
 	if err != nil {
@@ -223,9 +232,6 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity deps.Identity, work
 			}
 
 			return healthy, unhealthy
-		},
-		MappedParentStateProvider: func() string {
-			return s.getMappedParentState()
 		},
 		ChildrenViewProvider: func() config.ChildrenView {
 			// Hold the RLock only long enough to snapshot the children map.
@@ -539,21 +545,6 @@ func (s *Supervisor[TObserved, TDesired]) GetWorkerState(workerID string) (strin
 	return workerCtx.currentState.String(), workerCtx.currentStateReason, nil
 }
 
-// GetMappedParentState returns the mapped parent state for this supervisor.
-// Returns empty string if this supervisor has no parent or no mapping has been applied.
-// This method is primarily used for testing hierarchical state mapping.
-func (s *Supervisor[TObserved, TDesired]) GetMappedParentState() string {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	return s.mappedParentState
-}
-
-// getMappedParentState implements SupervisorInterface.
-func (s *Supervisor[TObserved, TDesired]) getMappedParentState() string {
-	return s.GetMappedParentState()
-}
-
 // isCircuitOpen returns true if any circuit breaker is open for this supervisor.
 // Used by InfrastructureHealthChecker.CheckChildConsistency() to detect unhealthy children.
 func (s *Supervisor[TObserved, TDesired]) isCircuitOpen() bool {
@@ -593,37 +584,6 @@ func (s *Supervisor[TObserved, TDesired]) IsObservationStale() bool {
 	}
 
 	return true
-}
-
-// setMappedParentState implements SupervisorInterface.
-func (s *Supervisor[TObserved, TDesired]) setMappedParentState(state string) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	s.mappedParentState = state
-}
-
-// getChildStartStates implements SupervisorInterface.
-func (s *Supervisor[TObserved, TDesired]) getChildStartStates() []string {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	if s.childStartStates == nil {
-		return nil
-	}
-
-	states := make([]string, len(s.childStartStates))
-	copy(states, s.childStartStates)
-
-	return states
-}
-
-// setChildStartStates implements SupervisorInterface.
-func (s *Supervisor[TObserved, TDesired]) setChildStartStates(states []string) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	s.childStartStates = states
 }
 
 // updateUserSpec implements SupervisorInterface.
@@ -815,7 +775,6 @@ type SupervisorDebugInfo struct {
 	Children            map[string]SupervisorDebugInfo `json:"children,omitempty"`
 	WorkerType          string                         `json:"worker_type"`
 	HierarchyPath       string                         `json:"hierarchy_path"`
-	MappedParentState   string                         `json:"mapped_parent_state,omitempty"`
 	Workers             []WorkerDebugInfo              `json:"workers"`
 	CollectedAtUnixNano int64                          `json:"collected_at_unix_nano"`
 	CircuitOpen         bool                           `json:"circuit_open"`
@@ -835,7 +794,6 @@ func (s *Supervisor[TObserved, TDesired]) GetDebugInfo() interface{} {
 		HierarchyPath:       s.GetHierarchyPathUnlocked(),
 		CircuitOpen:         s.circuitOpen.Load(),
 		PanicCircuitOpen:    s.panicCircuitOpen.Load(),
-		MappedParentState:   s.mappedParentState,
 		CollectedAtUnixNano: time.Now().UnixNano(),
 		Workers:             make([]WorkerDebugInfo, 0, len(s.workers)),
 	}

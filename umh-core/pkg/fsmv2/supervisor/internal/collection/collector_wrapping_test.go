@@ -82,7 +82,7 @@ func (w *wrappingTestWorker) CollectObservedState(_ context.Context, _ fsmv2.Des
 }
 
 func (w *wrappingTestWorker) DeriveDesiredState(_ interface{}) (fsmv2.DesiredState, error) {
-	return &config.DesiredState{BaseDesiredState: config.BaseDesiredState{State: "running"}}, nil
+	return &config.DesiredState{BaseDesiredState: config.BaseDesiredState{}}, nil
 }
 
 func (w *wrappingTestWorker) GetInitialState() fsmv2.State[any, any] {
@@ -103,7 +103,7 @@ func (w *wrappingTestWorkerNoDeps) CollectObservedState(_ context.Context, _ fsm
 }
 
 func (w *wrappingTestWorkerNoDeps) DeriveDesiredState(_ interface{}) (fsmv2.DesiredState, error) {
-	return &config.DesiredState{BaseDesiredState: config.BaseDesiredState{State: "running"}}, nil
+	return &config.DesiredState{BaseDesiredState: config.BaseDesiredState{}}, nil
 }
 
 func (w *wrappingTestWorkerNoDeps) GetInitialState() fsmv2.State[any, any] {
@@ -120,7 +120,7 @@ func wrappingTestIdentity(id string) deps.Identity {
 
 func wrappingDesiredProvider() func() fsmv2.DesiredState {
 	return func() fsmv2.DesiredState {
-		return &config.DesiredState{BaseDesiredState: config.BaseDesiredState{State: "running"}}
+		return &config.DesiredState{BaseDesiredState: config.BaseDesiredState{}}
 	}
 }
 
@@ -231,51 +231,6 @@ var _ = Describe("Collector post-COS wrapping", func() {
 		})
 	})
 
-	Context("WrapStatus worker (non-zero CollectedAt)", func() {
-		It("should skip collector wrapping and preserve MetricsRecorder", func() {
-			identity := wrappingTestIdentity("skip-test")
-			store := supervisor.CreateTestTriangularStoreForWorkerType("testwrapping")
-
-			bd := deps.NewBaseDependencies(deps.NewNopFSMLogger(), nil, identity)
-			bd.MetricsRecorder().IncrementCounter("recorder_counter", 5)
-
-			worker := &wrappingTestWorker{
-				baseDeps: bd,
-				observed: testWrappingObservedState{
-					CollectedAt: time.Now(), // Non-zero → wrapping skipped
-					Metrics: deps.MetricsContainer{
-						Worker: deps.Metrics{
-							Counters: map[string]int64{"pre_wrapped": 100},
-						},
-					},
-				},
-			}
-
-			c := collection.NewCollector[testWrappingObservedState](collection.CollectorConfig[testWrappingObservedState]{
-				Worker:              worker,
-				Identity:            identity,
-				Store:               store,
-				Logger:              deps.NewNopFSMLogger(),
-				ObservationInterval: 50 * time.Millisecond,
-				ObservationTimeout:  3 * time.Second,
-				DesiredStateProvider: wrappingDesiredProvider(),
-			})
-
-			err := c.Start(ctx)
-			Expect(err).ToNot(HaveOccurred())
-
-			// Wait for at least one save.
-			Eventually(func() error {
-				var loaded testWrappingObservedState
-				return store.LoadObservedTyped(ctx, "testwrapping", identity.ID, &loaded)
-			}, 2*time.Second, 50*time.Millisecond).Should(Succeed())
-
-			// MetricsRecorder should NOT have been drained by the collector.
-			drained := bd.MetricsRecorder().Drain()
-			Expect(drained.Counters["recorder_counter"]).To(Equal(int64(5)))
-		})
-	})
-
 	Context("Legacy worker (no duck-type setters)", func() {
 		It("should run collection loop without panic", func() {
 			worker := &supervisor.TestWorker{
@@ -296,9 +251,9 @@ var _ = Describe("Collector post-COS wrapping", func() {
 			err := c.Start(ctx)
 			Expect(err).ToNot(HaveOccurred())
 
-			// Let the collector run a few ticks. Legacy workers return
-			// non-zero CollectedAt, so the zero-time gate never fires.
-			// The collector loop must not panic.
+			// Legacy workers lack duck-type setters, so wrapNewObservation
+			// gracefully skips metric injection. The collector loop must
+			// not panic.
 			time.Sleep(200 * time.Millisecond)
 			Expect(c.IsRunning()).To(BeTrue())
 		})

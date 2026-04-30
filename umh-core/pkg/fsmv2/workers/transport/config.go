@@ -22,7 +22,7 @@ import (
 )
 
 // TransportConfig holds the user-provided configuration for the transport worker.
-// Embeds BaseUserSpec to support the StateGetter interface, allowing WorkerBase.DeriveDesiredState
+// Embeds BaseUserSpec to expose GetState() for WorkerBase.DeriveDesiredState,
 // to extract the desired state from the "state" YAML field.
 type TransportConfig struct {
 	config.BaseUserSpec `yaml:",inline"`
@@ -86,9 +86,8 @@ type TransportStatus struct {
 // Token buffer architecture: the parent TransportWorker uses a 10-minute buffer (proactive
 // refresh trigger) while child workers (push/pull) use a 1-minute buffer via IsTokenValid().
 // The 9-minute gap is safe by design: when IsTokenExpired triggers here, the parent
-// transitions Running → Starting, which causes children to stop (they are not in ChildStartStates
-// while the parent is Starting). Children never push or pull during the refresh window.
-// The children's 1-minute buffer is a last-resort safety net for edge cases only.
+// transitions Running → Starting. Children are always enabled and will continue
+// running while the parent refreshes. The 1-minute child buffer is a safety net for edge cases only.
 func (s TransportStatus) IsTokenExpired() bool {
 	if s.JWTExpiry.IsZero() {
 		return false

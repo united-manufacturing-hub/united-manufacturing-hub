@@ -1,22 +1,12 @@
 # FSM v2 factory package
 
-The factory package provides registration mechanisms for FSM v2 workers and supervisors.
+The factory package provides low-level registration mechanisms for FSM v2 workers and supervisors. Most workers register via the high-level [`register.Worker`](../register/register.go) one-liner, which wraps the factory primitives documented here.
 
 ## Worker type derivation
 
-Worker types are **derived from Go type names**, not manually specified.
+Worker types are the string keys stored in config YAML and CSE storage. They are derived automatically from Go type names when using `register.Worker[TConfig, TStatus, TDeps]`: the framework builds `Observation[TStatus]` / `WrappedDesiredState[TConfig]` wrappers internally, and the worker type string is the explicit first argument to `register.Worker`. The folder name must match that string exactly.
 
-```text
-ExamplechildObservedState    → "examplechild"
-ApplicationObservedState → "application"
-ExampleparentObservedState → "exampleparent"
-```
-
-**Derivation rules:**
-1. Strip `ObservedState` or `DesiredState` suffix
-2. Lowercase the result
-
-**Constraint:** Go type names cannot contain hyphens. Worker types like `"example-child"` cannot be derived from any type name, so folder names must match worker types exactly.
+**Constraint:** Go type names cannot contain hyphens. Worker types like `"example-child"` cannot be derived from any type name, so folder names must match worker types exactly (no hyphens).
 
 ## Registries
 
@@ -31,60 +21,27 @@ These are separate because they have different function signatures and the `inte
 
 ## Registration functions
 
-### `RegisterWorkerType` (preferred)
+### `register.Worker` (one-line API, preferred)
 
-Registers both factories atomically with automatic type derivation:
+Defined in the sibling [`register`](../register/) package. Registers worker factory, supervisor factory, and CSE `TypeRegistry` atomically:
 
 ```go
 func init() {
-    // Worker type is automatically derived from ExamplechildObservedState → "examplechild"
-    if err := factory.RegisterWorkerType[snapshot.ExamplechildObservedState, *snapshot.ExamplechildDesiredState](
-        func(id fsmv2.Identity, logger deps.FSMLogger) fsmv2.Worker {
-            worker, _ := NewChildWorker(id, pool, logger)
-            return worker
-        },
-        func(cfg interface{}) interface{} {
-            return supervisor.NewSupervisor[snapshot.ExamplechildObservedState, *snapshot.ExamplechildDesiredState](
-                cfg.(supervisor.Config))
-        },
-    ); err != nil {
-        panic(err)
-    }
+    register.Worker[HelloworldConfig, HelloworldStatus, register.NoDeps](
+        "helloworld", NewHelloworldWorker)
 }
 ```
 
 Benefits:
-- Derives worker type from the generic type parameter
-- Registers both factories atomically
-- Rolls back on partial failure
-- Prevents mismatched keys
+- Single call wires factory + supervisor + CSE types
+- Panics at init time on duplicate or collision (fail-fast)
+- Use `register.NoDeps` for zero-dep workers; parameterize with a struct for typed deps
 
-### `RegisterWorkerAndSupervisorFactoryByType`
+See [`register/register.go`](../register/register.go) for the full contract.
 
-Use when you need an explicit type string:
+### Low-level functions (tests and framework internals only)
 
-```go
-func init() {
-    workerType, _ := storage.DeriveWorkerType[snapshot.ExamplechildObservedState]()
-
-    err := factory.RegisterWorkerAndSupervisorFactoryByType(
-        workerType,
-        func(id fsmv2.Identity, logger deps.FSMLogger) fsmv2.Worker {
-            return NewChildWorker(id, logger)
-        },
-        func(raw interface{}) interface{} {
-            return supervisor.NewSupervisor[*snapshot.ExamplechildObservedState, *snapshot.ExamplechildDesiredState](raw)
-        },
-    )
-    if err != nil {
-        panic(err)
-    }
-}
-```
-
-### Low-level functions (tests only)
-
-Individual registration functions for testing:
+Individual registration functions, used by `register.Worker` internally and by tests that need direct access:
 
 ```go
 // Worker factory registration
@@ -94,7 +51,7 @@ factory.RegisterFactoryByType(workerType, workerFactory)
 factory.RegisterSupervisorFactoryByType(workerType, supervisorFactory)
 ```
 
-**Warning:** Using these in production code can lead to mismatches if different keys are used. The architecture test catches such mismatches.
+**Warning:** Using these directly in production code can lead to mismatches if different keys are used. The architecture test catches such mismatches. Always prefer `register.Worker` in worker packages.
 
 ## Validation functions
 
@@ -116,52 +73,46 @@ supervisorTypes := factory.ListSupervisorTypes()
 
 ## Folder naming convention
 
-**Invariant: Folder name must equal derived worker type.**
+**Invariant: Folder name must equal the worker type string passed to `register.Worker`.**
 
 Architecture tests in `architecture_test.go` enforce this.
 
-| Folder | Type Name | Derived Worker Type | Valid? |
-|--------|-----------|---------------------|--------|
-| `examplechild` | `ExamplechildObservedState` | `"examplechild"` | Yes |
-| `exampleparent` | `ExampleparentObservedState` | `"exampleparent"` | Yes |
-| `example-child` | ??? | Cannot match | **No** |
+| Folder | Type Name | Worker Type | Valid? |
+|--------|-----------|-------------|--------|
+| `helloworld` | `HelloworldConfig` / `HelloworldStatus` | `"helloworld"` | Yes |
+| `example-failing` | any | Cannot match (hyphen) | **No** |
 
-If you create a folder `foo`, your types must be named `FooObservedState` and `FooDesiredState`.
+If you create a folder `foo`, pass `"foo"` to `register.Worker` and name your Go types `FooConfig` / `FooStatus`.
 
 ## Common mistakes
 
 ### Manual string mismatch
 
-**Wrong:**
+**Wrong:** mixing low-level registration functions with inconsistent keys:
 ```go
-// supervisor.go derives "parent" from ParentObservedState
-_ = factory.RegisterSupervisorFactoryByType("parent", ...)
-
-// worker.go uses explicit string "example-parent"
-_ = factory.RegisterFactoryByType("example-parent", ...)
+_ = factory.RegisterSupervisorFactoryByType("failing", ...)
+_ = factory.RegisterFactoryByType("example-failing", ...)
 ```
 
-**Result:** `no supervisor factory registered for worker type: example-parent`
+**Result:** `no supervisor factory registered for worker type: example-failing`
 
-**Fix:** Use `RegisterWorkerType[TObserved, TDesired]()` which derives the key automatically.
+**Fix:** Use `register.Worker[TConfig, TStatus, TDeps]("type", constructor)` which registers both registries with one key.
 
 ### Hyphenated folder names
 
-**Wrong:** Folder `example-child` with type `ExamplechildObservedState`
-- Derived type: `"examplechild"`
-- Expected by code: `"example-child"`
+**Wrong:** Folder `example-failing` with worker type `"example-failing"`
+- Folder contains a hyphen
+- Go type names cannot contain hyphens, so derivation-based conventions break
 - Architecture test: **FAILS**
 
-**Fix:** Rename folder to match derived type (`examplechild`), or use underscores/no separators in folder name.
+**Fix:** Rename folder to drop the hyphen (e.g. `examplefailing`), then pass the same string to `register.Worker`.
 
 ### Type name doesn't match folder
 
-**Wrong:** Folder `myworker` with type `SomethingElseObservedState`
-- Derived type: `"somethingelse"`
-- Folder: `"myworker"`
+**Wrong:** Folder `myworker` with registered type string `"somethingelse"`
 - Architecture test: **FAILS**
 
-**Fix:** Rename type to `MyworkerObservedState` or folder to `somethingelse`.
+**Fix:** Keep folder name, worker type string, and the `<Type>Config` / `<Type>Status` Go type prefix aligned.
 
 ## Architecture tests
 

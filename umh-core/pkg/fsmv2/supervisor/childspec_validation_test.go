@@ -42,13 +42,13 @@ var _ = Describe("ChildSpec Validation Integration", func() {
 		logger = deps.NewNopFSMLogger()
 		basicStore = memory.NewInMemoryStore()
 
-		_ = factory.RegisterFactoryByType("valid_child", func(id deps.Identity, _ deps.FSMLogger, _ deps.StateReader, _ map[string]any) fsmv2.Worker {
+		_ = factory.RegisterFactoryByType("valid_child", func(id deps.Identity, _ deps.FSMLogger, _ deps.StateReader) fsmv2.Worker {
 			return &validChildSpecMockWorker{
 				identity:     id,
 				initialState: &mockState{},
 			}
 		})
-		_ = factory.RegisterFactoryByType("another_child", func(id deps.Identity, _ deps.FSMLogger, _ deps.StateReader, _ map[string]any) fsmv2.Worker {
+		_ = factory.RegisterFactoryByType("another_child", func(id deps.Identity, _ deps.FSMLogger, _ deps.StateReader) fsmv2.Worker {
 			return &validChildSpecMockWorker{
 				identity:     id,
 				initialState: &mockState{},
@@ -602,7 +602,7 @@ func (m *validChildSpecMockWorker) CollectObservedState(_ context.Context, _ fsm
 
 func (m *validChildSpecMockWorker) DeriveDesiredState(_ interface{}) (fsmv2.DesiredState, error) {
 	return &config.DesiredState{
-		BaseDesiredState: config.BaseDesiredState{State: "running"},
+		BaseDesiredState: config.BaseDesiredState{},
 		ChildrenSpecs:    m.childSpecs,
 	}, nil
 }
@@ -633,7 +633,7 @@ func (m *trackedCallOrderMockWorker) DeriveDesiredState(_ interface{}) (fsmv2.De
 	*m.callTracker = append(*m.callTracker, "derive")
 
 	return &config.DesiredState{
-		BaseDesiredState: config.BaseDesiredState{State: "running"},
+		BaseDesiredState: config.BaseDesiredState{},
 		ChildrenSpecs:    m.childSpecs,
 	}, nil
 }

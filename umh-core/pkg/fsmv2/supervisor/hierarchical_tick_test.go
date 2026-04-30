@@ -69,7 +69,7 @@ func (h *hierarchicalWorker) DeriveDesiredState(spec interface{}) (fsmv2.Desired
 	h.logger.Log("DeriveDesiredState:" + h.id)
 
 	return &config.DesiredState{
-		BaseDesiredState: config.BaseDesiredState{State: "running"},
+		BaseDesiredState: config.BaseDesiredState{},
 		ChildrenSpecs:    h.childrenSpecs,
 	}, nil
 }
@@ -263,10 +263,9 @@ var _ = Describe("Hierarchical Tick Propagation (Task 0.6)", func() {
 				},
 				childrenSpecs: []config.ChildSpec{
 					{
-						Name:             "child1",
-						WorkerType:       "child",
-						UserSpec:         config.UserSpec{},
-						ChildStartStates: []string{"running"},
+						Name:       "child1",
+						WorkerType: "child",
+						UserSpec:   config.UserSpec{},
 					},
 				},
 			}
@@ -313,6 +312,12 @@ var _ = Describe("Hierarchical Tick Propagation (Task 0.6)", func() {
 
 			events := tickLog.GetEvents()
 			Expect(events).To(ContainElement("DeriveDesiredState:parent"))
+
+			// Verify that the child supervisor was created during the tick.
+			// Post-P3.7: applyStateMapping is retired; children receive stop intent
+			// via ChildSpec.Enabled → ShutdownRequested, not via MappedParentState.
+			children := parentSuper.GetChildren()
+			Expect(children).To(HaveKey("child1"))
 		})
 
 		It("should reconcile new children in same tick cycle", func() {

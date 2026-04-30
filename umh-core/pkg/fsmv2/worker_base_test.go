@@ -35,7 +35,7 @@ type workerTestConfig struct {
 	Port int    `json:"port" yaml:"port"`
 }
 
-// stateGetterConfig embeds BaseUserSpec so it implements config.StateGetter.
+// configWithUserSpec embeds BaseUserSpec inline alongside custom fields.
 type stateGetterConfig struct {
 	config.BaseUserSpec `yaml:",inline"`
 	Host                string `json:"host" yaml:"host"`
@@ -67,96 +67,6 @@ var _ = Describe("WorkerBase", func() {
 			wb.InitBase(identity, mockLogger, mockStateReader)
 			Expect(wb.Identity()).To(Equal(identity))
 			Expect(wb.Logger()).NotTo(BeNil())
-		})
-	})
-
-	Describe("WrapStatus", func() {
-		It("returns Observation with CollectedAt set and correct Status", func() {
-			wb.InitBase(identity, mockLogger, mockStateReader)
-			before := time.Now()
-			status := workerTestStatus{Reachable: true, LatencyMs: 42}
-
-			obs := wb.WrapStatus(status)
-
-			Expect(obs).NotTo(BeNil())
-			Expect(obs.GetTimestamp()).To(BeTemporally(">=", before))
-			Expect(obs.GetTimestamp()).To(BeTemporally("<=", time.Now()))
-
-			typed, ok := obs.(fsmv2.Observation[workerTestStatus])
-			Expect(ok).To(BeTrue(), "WrapStatus should return Observation[TStatus]")
-			Expect(typed.Status.Reachable).To(BeTrue())
-			Expect(typed.Status.LatencyMs).To(Equal(int64(42)))
-		})
-
-		It("handles uninitialized WorkerBase gracefully (no panic)", func() {
-			uninit := &fsmv2.WorkerBase[workerTestConfig, workerTestStatus]{}
-			status := workerTestStatus{Reachable: false}
-
-			Expect(func() {
-				obs := uninit.WrapStatus(status)
-				Expect(obs).NotTo(BeNil())
-			}).NotTo(Panic())
-		})
-
-		It("copies framework metrics from baseDeps when available", func() {
-			wb.InitBase(identity, mockLogger, mockStateReader)
-
-			status := workerTestStatus{Reachable: true}
-			obs := wb.WrapStatus(status)
-
-			typed, ok := obs.(fsmv2.Observation[workerTestStatus])
-			Expect(ok).To(BeTrue())
-			// Framework metrics are zero since supervisor hasn't injected them,
-			// but the field should exist (not panic).
-			Expect(typed.Metrics.Framework.StateTransitionsTotal).To(Equal(int64(0)))
-		})
-
-		It("drains worker metrics from MetricsRecorder", func() {
-			wb.InitBase(identity, mockLogger, mockStateReader)
-
-			// Record some metrics via baseDeps
-			bd := wb.GetDependenciesAny().(*deps.BaseDependencies)
-			bd.MetricsRecorder().IncrementCounter(deps.CounterPullOps, 5)
-			bd.MetricsRecorder().SetGauge(deps.GaugeConsecutiveErrors, 3.0)
-
-			status := workerTestStatus{Reachable: true}
-			obs := wb.WrapStatus(status)
-
-			typed, ok := obs.(fsmv2.Observation[workerTestStatus])
-			Expect(ok).To(BeTrue())
-			Expect(typed.Metrics.Worker.Counters["pull_ops"]).To(Equal(int64(5)))
-			Expect(typed.Metrics.Worker.Gauges["consecutive_errors"]).To(Equal(3.0))
-
-			// Second WrapStatus should have empty worker metrics (drained)
-			obs2 := wb.WrapStatus(status)
-			typed2 := obs2.(fsmv2.Observation[workerTestStatus])
-			Expect(typed2.Metrics.Worker.Counters).To(BeEmpty())
-			Expect(typed2.Metrics.Worker.Gauges).To(BeEmpty())
-		})
-	})
-
-	Describe("InitBase returns BaseDeps", func() {
-		It("returns the same BaseDependencies that WrapStatus reads from", func() {
-			bd := wb.InitBase(identity, mockLogger, mockStateReader)
-			Expect(bd).NotTo(BeNil())
-
-			bd.MetricsRecorder().IncrementCounter(deps.CounterPullOps, 7)
-
-			obs := wb.WrapStatus(workerTestStatus{Reachable: true})
-			typed := obs.(fsmv2.Observation[workerTestStatus])
-			Expect(typed.Metrics.Worker.Counters["pull_ops"]).To(Equal(int64(7)))
-		})
-
-		It("documents that a separate BaseDependencies is invisible to WrapStatus", func() {
-			wb.InitBase(identity, mockLogger, mockStateReader)
-
-			separate := deps.NewBaseDependencies(mockLogger, mockStateReader, identity)
-			separate.MetricsRecorder().IncrementCounter(deps.CounterPullOps, 99)
-
-			obs := wb.WrapStatus(workerTestStatus{Reachable: true})
-			typed := obs.(fsmv2.Observation[workerTestStatus])
-			Expect(typed.Metrics.Worker.Counters).To(BeEmpty(),
-				"metrics on a separate BaseDependencies must not appear in WrapStatus")
 		})
 	})
 
@@ -199,7 +109,6 @@ port: 8080`,
 			ds, err := wb.DeriveDesiredState(nil)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(ds).NotTo(BeNil())
-			Expect(ds.GetState()).To(Equal("running"))
 			Expect(ds.IsShutdownRequested()).To(BeFalse())
 		})
 
@@ -266,7 +175,7 @@ port: {{ .PORT }}`,
 			Expect(err).To(HaveOccurred())
 		})
 
-		It("extracts state from config implementing StateGetter", func() {
+		It("parses YAML into config that embeds BaseUserSpec", func() {
 			sgWb := &fsmv2.WorkerBase[stateGetterConfig, workerTestStatus]{}
 			sgWb.InitBase(identity, mockLogger, mockStateReader)
 
@@ -276,10 +185,10 @@ host: "example.com"`,
 			}
 			ds, err := sgWb.DeriveDesiredState(spec)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(ds.GetState()).To(Equal("stopped"))
 
 			typed := ds.(*fsmv2.WrappedDesiredState[stateGetterConfig])
 			Expect(typed.Config.Host).To(Equal("example.com"))
+			Expect(typed.Config.GetState()).To(Equal("stopped"))
 		})
 
 		It("caches config for subsequent Config() calls", func() {
@@ -340,140 +249,6 @@ port: 1`}
 			Expect(typed.Config.Host).To(Equal("default-host"))
 		})
 
-	})
-
-	Describe("WrapStatusAccumulated", func() {
-		It("accumulates counters additively with previous state", func() {
-			prevObs := fsmv2.Observation[workerTestStatus]{
-				CollectedAt: time.Now().Add(-time.Second),
-				Status:      workerTestStatus{Reachable: true},
-			}
-			prevObs.Metrics.Worker = deps.Metrics{
-				Counters: map[string]int64{"pull_ops": 10},
-				Gauges:   map[string]float64{},
-			}
-
-			sr := &configurableStateReader{previousState: prevObs}
-			wb.InitBase(identity, mockLogger, sr)
-
-			bd := wb.GetDependenciesAny().(*deps.BaseDependencies)
-			bd.MetricsRecorder().IncrementCounter(deps.CounterPullOps, 5)
-
-			obs := wb.WrapStatusAccumulated(context.Background(), workerTestStatus{Reachable: true})
-
-			typed := obs.(fsmv2.Observation[workerTestStatus])
-			Expect(typed.Metrics.Worker.Counters["pull_ops"]).To(Equal(int64(15)))
-		})
-
-		It("replaces gauges from drain, keeps previous gauges not in drain", func() {
-			prevObs := fsmv2.Observation[workerTestStatus]{
-				CollectedAt: time.Now().Add(-time.Second),
-				Status:      workerTestStatus{},
-			}
-			prevObs.Metrics.Worker = deps.Metrics{
-				Counters: map[string]int64{},
-				Gauges: map[string]float64{
-					"consecutive_errors":   5.0,
-					"last_pull_latency_ms": 100.0,
-				},
-			}
-
-			sr := &configurableStateReader{previousState: prevObs}
-			wb.InitBase(identity, mockLogger, sr)
-
-			bd := wb.GetDependenciesAny().(*deps.BaseDependencies)
-			bd.MetricsRecorder().SetGauge(deps.GaugeConsecutiveErrors, 3.0)
-
-			obs := wb.WrapStatusAccumulated(context.Background(), workerTestStatus{})
-
-			typed := obs.(fsmv2.Observation[workerTestStatus])
-			Expect(typed.Metrics.Worker.Gauges["consecutive_errors"]).To(Equal(3.0))
-			Expect(typed.Metrics.Worker.Gauges["last_pull_latency_ms"]).To(Equal(100.0))
-		})
-
-		It("starts fresh when CSE read fails (no previous state)", func() {
-			sr := &configurableStateReader{err: fmt.Errorf("no state")}
-			wb.InitBase(identity, mockLogger, sr)
-
-			bd := wb.GetDependenciesAny().(*deps.BaseDependencies)
-			bd.MetricsRecorder().IncrementCounter(deps.CounterPullOps, 5)
-			bd.MetricsRecorder().SetGauge(deps.GaugeConsecutiveErrors, 1.0)
-
-			obs := wb.WrapStatusAccumulated(context.Background(), workerTestStatus{Reachable: true})
-
-			typed := obs.(fsmv2.Observation[workerTestStatus])
-			Expect(typed.Metrics.Worker.Counters["pull_ops"]).To(Equal(int64(5)))
-			Expect(typed.Metrics.Worker.Gauges["consecutive_errors"]).To(Equal(1.0))
-		})
-
-		It("handles uninitialized WorkerBase gracefully (no panic)", func() {
-			uninit := &fsmv2.WorkerBase[workerTestConfig, workerTestStatus]{}
-			Expect(func() {
-				obs := uninit.WrapStatusAccumulated(context.Background(), workerTestStatus{})
-				Expect(obs).NotTo(BeNil())
-			}).NotTo(Panic())
-		})
-
-		It("sets CollectedAt and Status correctly", func() {
-			sr := &configurableStateReader{err: fmt.Errorf("no state")}
-			wb.InitBase(identity, mockLogger, sr)
-
-			before := time.Now()
-			status := workerTestStatus{Reachable: true, LatencyMs: 42}
-			obs := wb.WrapStatusAccumulated(context.Background(), status)
-
-			Expect(obs.GetTimestamp()).To(BeTemporally(">=", before))
-			typed := obs.(fsmv2.Observation[workerTestStatus])
-			Expect(typed.Status.Reachable).To(BeTrue())
-			Expect(typed.Status.LatencyMs).To(Equal(int64(42)))
-		})
-
-		It("copies framework metrics from baseDeps", func() {
-			sr := &configurableStateReader{err: fmt.Errorf("no state")}
-			wb.InitBase(identity, mockLogger, sr)
-
-			obs := wb.WrapStatusAccumulated(context.Background(), workerTestStatus{})
-			typed := obs.(fsmv2.Observation[workerTestStatus])
-			Expect(typed.Metrics.Framework.StateTransitionsTotal).To(Equal(int64(0)))
-		})
-
-		It("calls LoadObservedTyped with correct workerType and ID", func() {
-			sr := &configurableStateReader{err: fmt.Errorf("no state")}
-			wb.InitBase(identity, mockLogger, sr)
-
-			_ = wb.WrapStatusAccumulated(context.Background(), workerTestStatus{})
-
-			Expect(sr.called).To(BeTrue())
-			Expect(sr.calledType).To(Equal("test"))
-			Expect(sr.calledID).To(Equal("test-worker-1"))
-		})
-
-		It("handles nil stateReader gracefully", func() {
-			wb.InitBase(identity, mockLogger, nil)
-
-			bd := wb.GetDependenciesAny().(*deps.BaseDependencies)
-			bd.MetricsRecorder().IncrementCounter(deps.CounterPullOps, 3)
-
-			obs := wb.WrapStatusAccumulated(context.Background(), workerTestStatus{})
-
-			typed := obs.(fsmv2.Observation[workerTestStatus])
-			Expect(typed.Metrics.Worker.Counters["pull_ops"]).To(Equal(int64(3)))
-		})
-
-		It("copies action history from baseDeps", func() {
-			sr := &configurableStateReader{err: fmt.Errorf("no state")}
-			wb.InitBase(identity, mockLogger, sr)
-
-			bd := wb.GetDependenciesAny().(*deps.BaseDependencies)
-			bd.SetActionHistory([]deps.ActionResult{
-				{ActionType: "test-action", Success: true},
-			})
-
-			obs := wb.WrapStatusAccumulated(context.Background(), workerTestStatus{})
-			typed := obs.(fsmv2.Observation[workerTestStatus])
-			Expect(typed.LastActionResults).To(HaveLen(1))
-			Expect(typed.LastActionResults[0].ActionType).To(Equal("test-action"))
-		})
 	})
 
 	Describe("GetInitialState", func() {
@@ -563,22 +338,6 @@ port: 1`}
 						default:
 							_ = wb.Config()
 							_ = wb.ConfigReady()
-						}
-					}
-				}()
-			}
-
-			for i := 0; i < 3; i++ {
-				wg.Add(1)
-				go func() {
-					defer wg.Done()
-					defer GinkgoRecover()
-					for {
-						select {
-						case <-stop:
-							return
-						default:
-							_ = wb.WrapStatus(workerTestStatus{})
 						}
 					}
 				}()

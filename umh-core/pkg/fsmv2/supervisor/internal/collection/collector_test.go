@@ -305,7 +305,7 @@ var _ = Describe("Collector", func() {
 						cancelCollector()
 					}
 
-					return &config.DesiredState{BaseDesiredState: config.BaseDesiredState{State: "running"}}
+					return &config.DesiredState{BaseDesiredState: config.BaseDesiredState{}}
 				},
 			})
 
@@ -355,7 +355,7 @@ var _ = Describe("Collector", func() {
 			// same typed DesiredState pointer the DesiredStateProvider
 			// returned to CollectObservedState, so workers can ExtractConfig
 			// from it without a separate plumbing path.
-			expected := &config.DesiredState{BaseDesiredState: config.BaseDesiredState{State: "running"}}
+			expected := &config.DesiredState{BaseDesiredState: config.BaseDesiredState{}}
 			cosCalled := &atomic.Bool{}
 			worker := &desiredCapturingWorker{called: cosCalled}
 
@@ -458,7 +458,7 @@ func (w *desiredCapturingWorker) CollectObservedState(_ context.Context, desired
 }
 
 func (w *desiredCapturingWorker) DeriveDesiredState(_ interface{}) (fsmv2.DesiredState, error) {
-	return &config.DesiredState{BaseDesiredState: config.BaseDesiredState{State: "running"}}, nil
+	return &config.DesiredState{BaseDesiredState: config.BaseDesiredState{}}, nil
 }
 
 func (w *desiredCapturingWorker) GetInitialState() fsmv2.State[any, any] {
@@ -466,7 +466,7 @@ func (w *desiredCapturingWorker) GetInitialState() fsmv2.State[any, any] {
 }
 
 func (w *cosTrackingWorker) DeriveDesiredState(_ interface{}) (fsmv2.DesiredState, error) {
-	return &config.DesiredState{BaseDesiredState: config.BaseDesiredState{State: "running"}}, nil
+	return &config.DesiredState{BaseDesiredState: config.BaseDesiredState{}}, nil
 }
 
 func (w *cosTrackingWorker) GetInitialState() fsmv2.State[any, any] {

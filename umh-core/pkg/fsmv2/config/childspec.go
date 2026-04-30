@@ -41,25 +41,19 @@ import (
 //
 // Correct lifecycle control:
 //   - ShutdownRequested: Inherited from this type. Set by supervisor for graceful shutdown.
-//   - ParentMappedState: For child workers only. Injected by supervisor from parent's ChildStartStates.
-//   - State ("running"/"stopped"): From BaseUserSpec.GetState(). Controls whether worker should be running.
+//     For child workers, the supervisor calls RequestShutdown() when the child is removed from
+//     the parent's ChildSpec list (DeriveDesiredState return). ChildSpec.Enabled has no live
+//     runtime effect yet — the Enabled→ShutdownRequested reducer is deferred to a future step.
 //
-// Correct ShouldBeRunning() implementations:
+// Correct ShouldBeRunning() implementations (same for root and child workers post-P3.7):
 //
-//	// Root/leaf workers (no parent):
 //	func (s *MyDesiredState) ShouldBeRunning() bool {
 //	    return !s.ShutdownRequested
 //	}
 //
-//	// Child workers (have parent):
-//	func (s *MyDesiredState) ShouldBeRunning() bool {
-//	    return !s.ShutdownRequested && s.ParentMappedState == config.DesiredStateRunning
-//	}
-//
 // See ValidateNoCustomLifecycleFields in pkg/fsmv2/internal/validator/snapshot.go for enforcement.
 type BaseDesiredState struct {
-	State             string `json:"state"             yaml:"state"`             // "stopped" or "running" - desired lifecycle state
-	ShutdownRequested bool   `json:"ShutdownRequested" yaml:"ShutdownRequested"` //nolint:tagliatelle // Match JSON field name for API compatibility
+	ShutdownRequested bool `json:"ShutdownRequested" yaml:"ShutdownRequested"` //nolint:tagliatelle // Match JSON field name for API compatibility
 }
 
 // IsShutdownRequested returns whether shutdown has been requested for this worker.
@@ -71,16 +65,6 @@ func (b *BaseDesiredState) IsShutdownRequested() bool {
 // This satisfies the ShutdownRequestable interface.
 func (b *BaseDesiredState) SetShutdownRequested(v bool) {
 	b.ShutdownRequested = v
-}
-
-// GetState returns the desired lifecycle state.
-// Implements fsmv2.DesiredState interface.
-func (b *BaseDesiredState) GetState() string {
-	if b.State == "" {
-		return DesiredStateRunning
-	}
-
-	return b.State
 }
 
 // BaseUserSpec provides common fields for all user configuration types.
@@ -97,7 +81,7 @@ func (b *BaseDesiredState) GetState() string {
 // with a default of "running" if not specified by the user.
 type BaseUserSpec struct {
 	// State specifies the desired lifecycle state: "running" or "stopped".
-	// Defaults to "running" if empty. Validated in the supervisor after DeriveDesiredState.
+	// Defaults to "running" if empty.
 	State string `json:"state,omitempty" yaml:"state,omitempty"`
 }
 
@@ -159,32 +143,6 @@ func (u UserSpec) Clone() UserSpec {
 //   - Supervisor handles "how to make it exist"
 //   - Children run independently in their own FSMs
 //
-// # Child Start States
-//
-// ChildStartStates coordinates parent state with child lifecycle.
-//
-// ChildStartStates specifies which parent FSM states cause children to run.
-// When the parent is in a listed state, children run. Otherwise, they stop.
-//
-// INVARIANT: If a parent state checks ChildrenHealthy/ChildrenUnhealthy to gate
-// its own transitions, that state MUST be listed in ChildStartStates. Otherwise,
-// children are mapped to "stopped" and can never satisfy the health check,
-// creating a permanent deadlock.
-//
-// Example use case: Children should only run when parent is in "Running" or "TryingToStart" states.
-//
-// Format:
-//
-//	ChildStartStates: []string{"Running", "TryingToStart"}
-//
-// When to use:
-// - Parent lifecycle controls child lifecycle (children run only in certain parent states)
-// - Simple "run when parent is active" patterns
-//
-// When not to use:
-// - Passing data between states (use VariableBundle instead)
-// - Triggering actions (use signals instead)
-//
 // # Dependency Inheritance
 //
 // Dependencies are additional deps to merge with parent's deps.
@@ -199,7 +157,7 @@ func (u UserSpec) Clone() UserSpec {
 //	    Name:       "mqtt-connection",
 //	    WorkerType: "mqtt_client",
 //	    UserSpec:   UserSpec{Config: "url: tcp://localhost:1883"},
-//	    ChildStartStates: []string{"Running", "TryingToStart"}, // Child runs when parent is active
+//	    Enabled:    true,
 //	}
 //
 // Example - Benthos managing connections and data flows:
@@ -210,21 +168,20 @@ func (u UserSpec) Clone() UserSpec {
 //	        Name:       "modbus-connection",
 //	        WorkerType: "modbus_client",
 //	        UserSpec:   UserSpec{Config: "address: 192.168.1.100:502"},
-//	        // Empty ChildStartStates = child always runs (follows parent's DesiredState.State)
+//	        Enabled:    true,
 //	    },
 //	    {
 //	        Name:       "source-flow",
 //	        WorkerType: "benthos_flow",
 //	        UserSpec:   UserSpec{Config: "input: {...}"},
-//	        ChildStartStates: []string{"Running"}, // Child only runs when parent is Running
+//	        Enabled:    true,
 //	    },
 //	}
 type ChildSpec struct {
-	Dependencies     map[string]any `json:"-"                          yaml:"-"`                          // Runtime channels and interfaces; not serializable. Inherited from parent at supervisor merge time (see ChildSpec.Hash godoc).
-	UserSpec         UserSpec       `json:"userSpec"                   yaml:"userSpec"`                   // Raw user config (input to DeriveDesiredState)
-	Name             string         `json:"name"                       yaml:"name"`                       // Unique name for this child (within parent scope)
-	WorkerType       string         `json:"workerType"                 yaml:"workerType"`                 // Type of worker to create (registered worker factory key)
-	ChildStartStates []string       `json:"childStartStates,omitempty" yaml:"childStartStates,omitempty"` // Parent FSM states where child should run (empty = always run)
+	Dependencies map[string]any `json:"-"          yaml:"-"`          // Runtime channels and interfaces; not serializable. Inherited from parent at supervisor merge time (see ChildSpec.Hash godoc).
+	UserSpec     UserSpec       `json:"userSpec"   yaml:"userSpec"`   // Raw user config (input to DeriveDesiredState)
+	Name         string         `json:"name"       yaml:"name"`       // Unique name for this child (within parent scope)
+	WorkerType   string         `json:"workerType" yaml:"workerType"` // Type of worker to create (registered worker factory key)
 
 	// Enabled is the parent's per-tick enable signal for this child. true = run,
 	// false = stop. The zero value (§4-C LOCKED) is false: ChildSpec literals that
@@ -253,11 +210,6 @@ func (c ChildSpec) Clone() ChildSpec {
 
 	clone.UserSpec = c.UserSpec.Clone()
 
-	if c.ChildStartStates != nil {
-		clone.ChildStartStates = make([]string, len(c.ChildStartStates))
-		copy(clone.ChildStartStates, c.ChildStartStates)
-	}
-
 	if c.Dependencies != nil {
 		clone.Dependencies = make(map[string]any, len(c.Dependencies))
 		for k, v := range c.Dependencies {
@@ -273,13 +225,21 @@ func (c ChildSpec) Clone() ChildSpec {
 // enabling incremental validation (only re-validate specs whose hash changed).
 //
 // The hash is computed from the comparable spec fields: Name, WorkerType,
-// Enabled, UserSpec, and ChildStartStates. Dependencies are intentionally
+// Enabled, and UserSpec. Dependencies are intentionally
 // excluded — they hold runtime objects (channels, mutex-protected values)
 // that cannot be meaningfully hashed and whose churn does not require
 // re-validation. Unexported fields are also excluded.
 //
 // Returns a hex-encoded FNV-1a 64-bit hash string (16 characters) and an error
 // if Variables cannot be marshaled to JSON.
+//
+// Note: Hash operates on an individual ChildSpec value, not on a slice.
+// When the supervisor receives a []ChildSpec from NextResult.Children, nil
+// and []ChildSpec{} carry different semantics — nil means "no opinion
+// (fall back to legacy DDS path)" while []ChildSpec{} means "authoritative:
+// despawn all children". Never use len(x)==0 to test that distinction —
+// it collapses nil and empty into the same result. See api.go for the
+// canonical nil-vs-empty discriminator block.
 func (c ChildSpec) Hash() (string, error) {
 	h := fnv.New64a()
 
@@ -317,45 +277,10 @@ func (c ChildSpec) Hash() (string, error) {
 	h.Write(varsBytes)
 	h.Write([]byte{0}) // separator
 
-	// Hash ChildStartStates
-	for _, state := range c.ChildStartStates {
-		h.Write([]byte(state))
-		h.Write([]byte{0}) // separator
-	}
-
 	// Dependencies contain runtime objects (channels, etc.) that can't be meaningfully hashed,
 	// so we skip them. Changes to dependencies don't require re-validation anyway.
 
 	return fmt.Sprintf("%016x", h.Sum64()), nil
-}
-
-// GetMappedChildState returns the desired state for this child based on the parent's current FSM state.
-//
-// Logic:
-//   - If ChildStartStates is empty: child always runs (returns "running")
-//   - If parentState is in ChildStartStates: child should run (returns "running")
-//   - Otherwise: child should stop (returns "stopped")
-//
-// Example:
-//
-//	spec := ChildSpec{ChildStartStates: []string{"Running", "TryingToStart"}}
-//	spec.GetMappedChildState("Running")        // returns "running"
-//	spec.GetMappedChildState("TryingToStop")   // returns "stopped"
-//	spec.GetMappedChildState("Stopped")        // returns "stopped"
-//
-// Note: This replaces the deprecated StateMapping approach with direct state checks.
-func (c *ChildSpec) GetMappedChildState(parentState string) string {
-	if len(c.ChildStartStates) == 0 {
-		return DesiredStateRunning
-	}
-
-	for _, state := range c.ChildStartStates {
-		if state == parentState {
-			return DesiredStateRunning
-		}
-	}
-
-	return DesiredStateStopped
 }
 
 // ChildInfo provides a read-only snapshot of a child worker's current state.
@@ -629,7 +554,6 @@ func (v ChildrenView) Counts() (healthy, unhealthy int) {
 //	// In parent's DeriveDesiredState():
 //	func (w *ParentWorker) DeriveDesiredState(spec interface{}) (config.DesiredState, error) {
 //	    return config.DesiredState{
-//	        BaseDesiredState: config.BaseDesiredState{State: "running"},
 //	        ChildrenSpecs: []config.ChildSpec{
 //	            {Name: "child-1", WorkerType: "mqtt_client", ...},
 //	            {Name: "child-2", WorkerType: "modbus_client", ...},
@@ -645,7 +569,7 @@ func (v ChildrenView) Counts() (healthy, unhealthy int) {
 //	}
 type DesiredState struct {
 	OriginalUserSpec interface{}      `json:"-"                          yaml:"-"` // Captures the input that produced this DesiredState (for debugging/traceability); not serialized (would emit untyped any over the wire per §17).
-	BaseDesiredState `yaml:",inline"` // Provides State, ShutdownRequested fields and methods (GetState, IsShutdownRequested, SetShutdownRequested)
+	BaseDesiredState `yaml:",inline"` // Provides ShutdownRequested field and methods (IsShutdownRequested, SetShutdownRequested)
 	ChildrenSpecs    []ChildSpec      `json:"childrenSpecs,omitempty"    yaml:"childrenSpecs,omitempty"` // Declarative specification of child workers
 }
 
@@ -683,5 +607,3 @@ func (d *DesiredState) GetChildrenSpecs() []ChildSpec {
 	return d.ChildrenSpecs
 }
 
-// NOTE: GetState() is provided by embedded BaseDesiredState.
-// The BaseDesiredState.State field is the canonical source of truth for lifecycle state.

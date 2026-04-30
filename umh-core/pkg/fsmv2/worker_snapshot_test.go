@@ -47,7 +47,7 @@ var _ = Describe("ConvertWorkerSnapshot", func() {
 		}
 
 		wds := &fsmv2.WrappedDesiredState[workerTestConfig]{
-			BaseDesiredState: config.BaseDesiredState{State: config.DesiredStateRunning},
+			BaseDesiredState: config.BaseDesiredState{},
 			Config:           workerTestConfig{Host: "10.0.0.1", Port: 502},
 		}
 
@@ -59,13 +59,13 @@ var _ = Describe("ConvertWorkerSnapshot", func() {
 
 		snap := fsmv2.ConvertWorkerSnapshot[workerTestConfig, workerTestStatus](raw)
 
-		Expect(snap.Config.Host).To(Equal("10.0.0.1"))
-		Expect(snap.Config.Port).To(Equal(502))
-		Expect(snap.Status.Reachable).To(BeTrue())
-		Expect(snap.Status.LatencyMs).To(Equal(int64(42)))
+		Expect(snap.Desired.Config.Host).To(Equal("10.0.0.1"))
+		Expect(snap.Desired.Config.Port).To(Equal(502))
+		Expect(snap.Observed.Status.Reachable).To(BeTrue())
+		Expect(snap.Observed.Status.LatencyMs).To(Equal(int64(42)))
 		Expect(snap.Identity).To(Equal(identity))
 		Expect(snap.CollectedAt).To(Equal(now))
-		Expect(snap.IsShutdownRequested).To(BeFalse())
+		Expect(snap.Desired.IsShutdownRequested()).To(BeFalse())
 	})
 
 	It("copies framework fields from observed state", func() {
@@ -81,7 +81,6 @@ var _ = Describe("ConvertWorkerSnapshot", func() {
 		obs := fsmv2.Observation[workerTestStatus]{
 			CollectedAt:       now,
 			Status:            workerTestStatus{Reachable: true},
-			ParentMappedState: "running",
 			LastActionResults: actionResults,
 			ChildrenHealthy:   3,
 			ChildrenUnhealthy: 1,
@@ -89,7 +88,7 @@ var _ = Describe("ConvertWorkerSnapshot", func() {
 		}
 
 		wds := &fsmv2.WrappedDesiredState[workerTestConfig]{
-			BaseDesiredState: config.BaseDesiredState{State: config.DesiredStateRunning},
+			BaseDesiredState: config.BaseDesiredState{},
 		}
 		wds.SetShutdownRequested(true)
 
@@ -101,20 +100,40 @@ var _ = Describe("ConvertWorkerSnapshot", func() {
 
 		snap := fsmv2.ConvertWorkerSnapshot[workerTestConfig, workerTestStatus](raw)
 
-		Expect(snap.ParentMappedState).To(Equal("running"))
-		Expect(snap.LastActionResults).To(HaveLen(1))
-		Expect(snap.LastActionResults[0].ActionType).To(Equal("connect"))
-		Expect(snap.ChildrenHealthy).To(Equal(3))
-		Expect(snap.ChildrenUnhealthy).To(Equal(1))
-		Expect(snap.ChildrenView).To(Equal(mockView))
-		Expect(snap.IsShutdownRequested).To(BeTrue())
+		Expect(snap.Observed.LastActionResults).To(HaveLen(1))
+		Expect(snap.Observed.LastActionResults[0].ActionType).To(Equal("connect"))
+		Expect(snap.Observed.ChildrenHealthy).To(Equal(3))
+		Expect(snap.Observed.ChildrenUnhealthy).To(Equal(1))
+		Expect(snap.Observed.ChildrenView).To(Equal(mockView))
+		Expect(snap.Desired.IsShutdownRequested()).To(BeTrue())
+	})
 
-		// Parity: nested shape mirrors the deprecated flat aliases. Locks the
-		// dual-population invariant before P3.0 deletes the flats.
-		Expect(snap.Observed.ParentMappedState).To(Equal(snap.ParentMappedState))
-		Expect(snap.Observed.LastActionResults).To(Equal(snap.LastActionResults))
-		Expect(snap.Observed.ChildrenView).To(Equal(snap.ChildrenView))
-		Expect(snap.Desired.IsShutdownRequested()).To(Equal(snap.IsShutdownRequested))
+	It("copies FrameworkMetrics from observed state", func() {
+		obs := fsmv2.Observation[workerTestStatus]{
+			CollectedAt: now,
+			Status:      workerTestStatus{Reachable: true},
+		}
+		obs.Metrics.Framework = deps.FrameworkMetrics{
+			TimeInCurrentStateMs:  12000,
+			StateTransitionsTotal: 5,
+			StartupCount:          2,
+		}
+
+		wds := &fsmv2.WrappedDesiredState[workerTestConfig]{
+			BaseDesiredState: config.BaseDesiredState{},
+		}
+
+		raw := fsmv2.Snapshot{
+			Observed: obs,
+			Desired:  wds,
+			Identity: identity,
+		}
+
+		snap := fsmv2.ConvertWorkerSnapshot[workerTestConfig, workerTestStatus](raw)
+
+		Expect(snap.Observed.Metrics.Framework.TimeInCurrentStateMs).To(Equal(int64(12000)))
+		Expect(snap.Observed.Metrics.Framework.StateTransitionsTotal).To(Equal(int64(5)))
+		Expect(snap.Observed.Metrics.Framework.StartupCount).To(Equal(int64(2)))
 	})
 
 	It("panics with descriptive message on non-Snapshot input", func() {
@@ -148,47 +167,29 @@ var _ = Describe("ConvertWorkerSnapshot", func() {
 
 var _ = Describe("ShouldStop", func() {
 	It("returns true when IsShutdownRequested is true", func() {
+		wds := &fsmv2.WrappedDesiredState[workerTestConfig]{}
+		wds.SetShutdownRequested(true)
 		snap := fsmv2.WorkerSnapshot[workerTestConfig, workerTestStatus]{
-			IsShutdownRequested: true,
+			Desired: *wds,
 		}
 		Expect(snap.ShouldStop()).To(BeTrue())
 	})
 
-	It("returns true when ParentMappedState is stopped", func() {
-		snap := fsmv2.WorkerSnapshot[workerTestConfig, workerTestStatus]{
-			ParentMappedState: "stopped",
-		}
-		Expect(snap.ShouldStop()).To(BeTrue())
-	})
-
-	It("returns false when neither condition is met", func() {
-		snap := fsmv2.WorkerSnapshot[workerTestConfig, workerTestStatus]{
-			ParentMappedState: "running",
-		}
+	It("returns false when IsShutdownRequested is false", func() {
+		snap := fsmv2.WorkerSnapshot[workerTestConfig, workerTestStatus]{}
 		Expect(snap.ShouldStop()).To(BeFalse())
 	})
 
-	It("returns false when ParentMappedState is empty (root worker)", func() {
-		snap := fsmv2.WorkerSnapshot[workerTestConfig, workerTestStatus]{
-			IsShutdownRequested: false,
-			ParentMappedState:   "",
-		}
+	It("returns false for zero-value snapshot (root worker or uninitialised)", func() {
+		snap := fsmv2.WorkerSnapshot[workerTestConfig, workerTestStatus]{}
 		Expect(snap.ShouldStop()).To(BeFalse())
-	})
-
-	It("returns true when both conditions are met", func() {
-		snap := fsmv2.WorkerSnapshot[workerTestConfig, workerTestStatus]{
-			IsShutdownRequested: true,
-			ParentMappedState:   "stopped",
-		}
-		Expect(snap.ShouldStop()).To(BeTrue())
 	})
 })
 
 var _ = Describe("ExtractConfig", func() {
 	It("returns typed config from WrappedDesiredState", func() {
 		wds := &fsmv2.WrappedDesiredState[workerTestConfig]{
-			BaseDesiredState: config.BaseDesiredState{State: config.DesiredStateRunning},
+			BaseDesiredState: config.BaseDesiredState{},
 			Config:           workerTestConfig{Host: "192.168.1.100", Port: 8080},
 		}
 

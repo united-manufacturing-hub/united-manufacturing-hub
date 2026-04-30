@@ -80,10 +80,6 @@ type DesiredState interface {
 	// IsShutdownRequested is set by supervisor to initiate graceful shutdown.
 	// States should check this first in their Next() method.
 	IsShutdownRequested() bool
-
-	// GetState returns the desired lifecycle state ("running", "stopped", etc.).
-	// Used by supervisor to validate state values after DeriveDesiredState.
-	GetState() string
 }
 
 // ShutdownRequestable allows setting the shutdown flag on any DesiredState.
@@ -219,7 +215,7 @@ func Result[TSnapshot any, TDeps any](
 // type parameters when returning from Next(), reducing boilerplate.
 //
 // The action argument is `any` so that typed Action[TDeps] values can be
-// passed without a caller-visible WrapAction. The function accepts:
+// passed directly without a caller-visible wrapper. The function accepts:
 //   - nil: no action
 //   - Action[any]: passed through unchanged (fast path)
 //   - Action[TDeps] for any concrete TDeps: auto-wrapped via reflection
@@ -282,6 +278,11 @@ func (r *reflectedAction) Name() string { return r.name }
 // wrapTypedAction builds an Action[any] adapter for a typed Action[TDeps]
 // discovered via reflection. Panics if the value does not structurally match
 // an Action interface (Execute(context.Context, TDeps) error + Name() string).
+//
+// CHANGE-5 note (pr2_issues #14): when the Action interface is extended to
+// receive a snapshot parameter (Execute(ctx, deps TDeps, snap Snapshot) error),
+// this wrapper must be updated symmetrically to pass the snapshot through the
+// reflection-built closure. Without that update the call site compile-breaks.
 func wrapTypedAction(action any) Action[any] {
 	v := reflect.ValueOf(action)
 	if !v.IsValid() {

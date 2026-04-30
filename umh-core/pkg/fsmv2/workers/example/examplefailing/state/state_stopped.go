@@ -20,21 +20,28 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplefailing/snapshot"
 )
 
+func init() {
+	fsmv2.RegisterInitialState("examplefailing", &StoppedState{})
+}
+
 // StoppedState represents the initial state where the failing worker is not connected.
 type StoppedState struct {
 	helpers.StoppedBase
 }
 
 func (s *StoppedState) Next(snapAny any) fsmv2.NextResult[any, any] {
-	snap := helpers.ConvertSnapshot[snapshot.ExamplefailingObservedState, *snapshot.ExamplefailingDesiredState](snapAny)
+	snap := fsmv2.ConvertWorkerSnapshot[snapshot.ExamplefailingConfig, snapshot.ExamplefailingStatus](snapAny)
 
 	if snap.Desired.IsShutdownRequested() {
 		return fsmv2.Transition(s, fsmv2.SignalNeedsRemoval, nil, "shutdown requested, signaling removal", nil)
 	}
 
-	if !snap.Observed.ShouldStop() {
-		return fsmv2.Transition(&TryingToConnectState{}, fsmv2.SignalNone, nil, "worker should be running, transitioning to connect", nil)
+	if !snap.ShouldStop() {
+		return fsmv2.Transition(&TryingToConnectState{}, fsmv2.SignalNone, nil, "parent wants running, transitioning to connect", nil)
 	}
+	// The catch-all return below is logically dead code: the branch above and the first
+	// IsShutdownRequested() branch partition the stop/start domain completely. Kept for the
+	// canonical 3-branch FSM idiom per architecture validator MISSING_CATCHALL_RETURN.
 
 	return fsmv2.Transition(s, fsmv2.SignalNone, nil, "worker is stopped, no connection", nil)
 }

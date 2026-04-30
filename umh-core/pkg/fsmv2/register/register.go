@@ -46,10 +46,13 @@ type NoDeps = struct{}
 // value of TDeps, preserving the pre-registry nil-forward contract.
 // The workerType string is the canonical name used in config YAML and CSE storage.
 //
+// Worker registers the worker factory via factory.RegisterFactoryByType, the
+// auto-generated supervisor factory via factory.RegisterSupervisorFactoryByType,
+// and the observed/desired types with the CSE storage.TypeRegistry so that
+// persisted snapshots can be decoded back into their concrete Go types.
+//
 // Workers registered via this function MUST use WorkerBase[TConfig, TStatus] and
-// return w.WrapStatus(status) from CollectObservedState. Workers with custom
-// ObservedState types or that need parent-injected extraDeps must use
-// factory.RegisterWorkerType directly.
+// return fsmv2.NewObservation(status) from CollectObservedState.
 //
 // Panics on field name collision or duplicate worker type (fail-fast at init time).
 func Worker[TConfig any, TStatus any, TDeps any](
@@ -75,7 +78,7 @@ func Worker[TConfig any, TStatus any, TDeps any](
 	// GetDeps returns the Go-native zero value of TDeps, preserving the
 	// pre-C8 nil-forward contract for singleton-backed workers
 	// (transport/push/pull/persistence).
-	wrappedFactory := func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader, _ map[string]any) fsmv2.Worker {
+	wrappedFactory := func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader) fsmv2.Worker {
 		typedDeps := GetDeps[TDeps](workerType)
 		w, err := constructor(id, logger, sr, typedDeps)
 		if err != nil {
@@ -97,8 +100,15 @@ func Worker[TConfig any, TStatus any, TDeps any](
 	}
 
 	// Step 4: Register with factory (worker + supervisor).
-	// Factory first: if it panics on duplicate, CSE never gets an orphaned entry.
-	if err := factory.RegisterWorkerAndSupervisorFactoryByType(workerType, wrappedFactory, supervisorFactory); err != nil {
+	// Worker factory first so that a duplicate worker type panics before the
+	// supervisor registry is touched. Both registrations panic on error, which
+	// terminates the process before any partial state becomes observable; the
+	// old atomic wrapper's rollback is no longer required.
+	if err := factory.RegisterFactoryByType(workerType, wrappedFactory); err != nil {
+		panic(fmt.Sprintf("register.Worker(%q): %v", workerType, err))
+	}
+
+	if err := factory.RegisterSupervisorFactoryByType(workerType, supervisorFactory); err != nil {
 		panic(fmt.Sprintf("register.Worker(%q): %v", workerType, err))
 	}
 

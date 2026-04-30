@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleparent/snapshot"
 )
@@ -26,6 +27,10 @@ import (
 // Declared as var (not const) to allow test overrides. Production workers should use dependency injection instead.
 var StoppedWaitDuration = 5 * time.Second
 
+func init() {
+	fsmv2.RegisterInitialState("exampleparent", &StoppedState{})
+}
+
 // StoppedState represents the initial state before any children are spawned.
 // It waits for StoppedWaitDuration before transitioning to TryingToStart.
 type StoppedState struct {
@@ -33,7 +38,7 @@ type StoppedState struct {
 }
 
 func (s *StoppedState) Next(snapAny any) fsmv2.NextResult[any, any] {
-	snap := helpers.ConvertSnapshot[snapshot.ExampleparentObservedState, *snapshot.ExampleparentDesiredState](snapAny)
+	snap := fsmv2.ConvertWorkerSnapshot[snapshot.ExampleparentConfig, snapshot.ExampleparentStatus](snapAny)
 
 	if snap.Desired.IsShutdownRequested() {
 		return fsmv2.Transition(s, fsmv2.SignalNeedsRemoval, nil, "Shutdown requested, signaling removal", nil)
@@ -41,15 +46,18 @@ func (s *StoppedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 
 	children := RenderChildren(snap)
 
-	// Wait StoppedWaitDuration before transitioning. Direct field access required for CSE serializability.
-	if snap.Desired.ShouldBeRunning() {
-		elapsed := time.Duration(snap.Observed.Metrics.Framework.TimeInCurrentStateMs) * time.Millisecond
-		if elapsed >= StoppedWaitDuration {
-			return fsmv2.Transition(&TryingToStartState{}, fsmv2.SignalNone, nil, "Wait duration elapsed, transitioning to TryingToStart", children)
-		}
+	// Wait StoppedWaitDuration before transitioning. The supervisor tracks
+	// time-in-state via FrameworkMetrics.TimeInCurrentStateMs, injected into
+	// every observation and surfaced on the typed WorkerSnapshot.
+	elapsed := time.Duration(snap.Observed.Metrics.Framework.TimeInCurrentStateMs) * time.Millisecond
+	if elapsed >= StoppedWaitDuration {
+		// Hand the children to TryingToStart so the supervisor creates them.
+		return fsmv2.Transition(&TryingToStartState{}, fsmv2.SignalNone, nil, "Wait duration elapsed, transitioning to TryingToStart", children)
 	}
 
-	return fsmv2.Transition(s, fsmv2.SignalNone, nil, "Parent is stopped, no children spawned", children)
+	// While stopped, emit an empty spec so no children are created yet.
+	// Children are only spawned once the parent moves to TryingToStart.
+	return fsmv2.Transition(s, fsmv2.SignalNone, nil, "Parent is stopped, no children spawned", []config.ChildSpec{})
 }
 
 func (s *StoppedState) String() string {

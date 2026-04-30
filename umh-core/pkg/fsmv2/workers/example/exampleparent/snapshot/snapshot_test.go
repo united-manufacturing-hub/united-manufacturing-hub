@@ -16,7 +16,6 @@ package snapshot_test
 
 import (
 	"testing"
-	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -29,23 +28,26 @@ func TestSnapshot(t *testing.T) {
 	RunSpecs(t, "Example Parent Snapshot Suite")
 }
 
-var _ = Describe("ExampleparentObservedState", func() {
-	var (
-		observed snapshot.ExampleparentObservedState
-		now      time.Time
-	)
-
-	BeforeEach(func() {
-		now = time.Now()
-		observed = snapshot.ExampleparentObservedState{
-			CollectedAt: now,
-		}
+var _ = Describe("ExampleparentConfig", func() {
+	It("should expose the embedded BaseUserSpec.GetState default", func() {
+		cfg := &snapshot.ExampleparentConfig{}
+		Expect(cfg.GetState()).To(Equal("running"))
 	})
 
-	Describe("GetTimestamp", func() {
-		It("should return the CollectedAt timestamp", func() {
-			timestamp := observed.GetTimestamp()
-			Expect(timestamp).To(Equal(now))
-		})
+	It("should default ChildWorkerType to examplechild", func() {
+		cfg := &snapshot.ExampleparentConfig{}
+		Expect(cfg.GetChildWorkerType()).To(Equal("examplechild"))
+	})
+
+	It("should honour a custom ChildWorkerType", func() {
+		cfg := &snapshot.ExampleparentConfig{ChildWorkerType: "custom"}
+		Expect(cfg.GetChildWorkerType()).To(Equal("custom"))
+	})
+})
+
+var _ = Describe("ExampleparentStatus", func() {
+	It("should be a zero-value struct (framework carries all lifecycle fields)", func() {
+		status := snapshot.ExampleparentStatus{}
+		Expect(status).To(Equal(snapshot.ExampleparentStatus{}))
 	})
 })

@@ -20,23 +20,17 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// StateGetter is implemented by user spec types that embed BaseUserSpec.
-// It allows DeriveLeafState to extract the desired state from parsed config.
-type StateGetter interface {
-	GetState() string
-}
-
 // ParseUserSpec provides type-safe parsing of UserSpec.Config into a typed struct.
 //
 // Usage:
 //
-//	func (w *MyWorker) DeriveDesiredState(spec interface{}) (config.DesiredState, error) {
+//	func (w *MyWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, error) {
 //	    parsed, err := config.ParseUserSpec[MyUserSpec](spec)
 //	    if err != nil {
-//	        return config.DesiredState{}, err
+//	        return nil, err
 //	    }
 //	    // Use parsed.Field1, parsed.Field2, etc.
-//	    return config.DesiredState{BaseDesiredState: BaseDesiredState{State: parsed.GetState()}}, nil
+//	    return &fsmv2.WrappedDesiredState[MyConfig]{Config: parsed}, nil
 //	}
 //
 // For nil specs (used during initialization), returns zero value of T.
@@ -63,43 +57,3 @@ func ParseUserSpec[T any](spec interface{}) (T, error) {
 	return result, nil
 }
 
-// DeriveLeafState parses UserSpec.Config and returns a DesiredState with no children.
-//
-// The type parameter T must have a pointer type *T that implements StateGetter
-// (typically by embedding BaseUserSpec which has pointer receiver methods).
-//
-// Usage:
-//
-//	type MyUserSpec struct {
-//	    config.BaseUserSpec `yaml:",inline"`
-//	    CustomField string  `yaml:"customField"`
-//	}
-//
-//	func (w *MyWorker) DeriveDesiredState(spec interface{}) (config.DesiredState, error) {
-//	    return config.DeriveLeafState[MyUserSpec](spec)
-//	}
-func DeriveLeafState[T any, PT interface {
-	*T
-	StateGetter
-}](spec interface{}) (DesiredState, error) {
-	if spec == nil {
-		return DesiredState{
-			BaseDesiredState: BaseDesiredState{State: DesiredStateRunning},
-			OriginalUserSpec: nil,
-		}, nil
-	}
-
-	parsed, err := ParseUserSpec[T](spec)
-	if err != nil {
-		return DesiredState{}, err
-	}
-
-	// Use pointer to call GetState since BaseUserSpec has pointer receiver
-	ptr := PT(&parsed)
-
-	return DesiredState{
-		BaseDesiredState: BaseDesiredState{State: ptr.GetState()},
-		ChildrenSpecs:    nil,
-		OriginalUserSpec: spec,
-	}, nil
-}

@@ -12,89 +12,45 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Package snapshot holds the exampleslow worker's Config and Status value
+// types plus the ExampleslowDependencies interface consumed by actions. It
+// exists as a separate leaf package so the state sub-package can depend on
+// these types without introducing an import cycle with the worker package.
+//
+// Post-PR3-C1 the exampleslow worker uses fsmv2.Observation[ExampleslowStatus]
+// and *fsmv2.WrappedDesiredState[ExampleslowConfig]; the underlying value
+// types are defined here and re-exported from the worker package as type
+// aliases for caller convenience.
 package snapshot
 
 import (
-	"time"
-
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 )
 
+// ExampleslowConfig holds the user-provided configuration for the slow worker.
+// Embeds BaseUserSpec to expose GetState() for WorkerBase.DeriveDesiredState, allowing
+// WorkerBase.DeriveDesiredState to extract the desired state from the "state"
+// YAML field.
+type ExampleslowConfig struct {
+	config.BaseUserSpec `yaml:",inline"`
+	DelaySeconds        int `json:"delaySeconds" yaml:"delaySeconds"`
+}
+
+// ExampleslowStatus holds the runtime observation data for the slow worker.
+// Framework fields (CollectedAt, State, LastActionResults, MetricsEmbedder,
+// ShutdownRequested, children counts) are carried by fsmv2.Observation[ExampleslowStatus]
+// and are not duplicated here.
+type ExampleslowStatus struct {
+	ConnectionHealth string `json:"connection_health"`
+	ConnectAttempts  int    `json:"connect_attempts"`
+}
+
+// ExampleslowDependencies is the dependencies interface for exampleslow actions (avoids import cycles).
 type ExampleslowDependencies interface {
 	deps.Dependencies
 	SetConnected(connected bool)
 	IsConnected() bool
 	SetDelaySeconds(delaySeconds int)
 	GetDelaySeconds() int
-}
-
-type ExampleslowSnapshot struct {
-	Identity deps.Identity
-	Desired  ExampleslowDesiredState
-	Observed ExampleslowObservedState
-}
-
-type ExampleslowDesiredState struct {
-	// ParentMappedState is the desired state derived from parent's ChildStartStates via state mapping.
-	ParentMappedState string `json:"parent_mapped_state"`
-
-	config.BaseDesiredState
-
-	DelaySeconds int
-}
-
-// ShouldBeRunning returns true if not shutting down and parent wants children to run.
-func (s *ExampleslowDesiredState) ShouldBeRunning() bool {
-	if s.ShutdownRequested {
-		return false
-	}
-
-	return s.ParentMappedState == config.DesiredStateRunning
-}
-
-type ExampleslowObservedState struct {
-	CollectedAt time.Time `json:"collected_at"`
-
-	LastError error  `json:"last_error,omitempty"`
-	ID        string `json:"id"`
-
-	State            string `json:"state"` // Observed lifecycle state (e.g., "running_connected")
-	ConnectionHealth string `json:"connection_health"`
-
-	ExampleslowDesiredState `json:",inline"`
-
-	LastActionResults []deps.ActionResult `json:"last_action_results,omitempty"`
-
-	deps.MetricsEmbedder `json:",inline"` // Framework and worker metrics for Prometheus export
-
-	ConnectAttempts int `json:"connect_attempts"`
-}
-
-func (o ExampleslowObservedState) GetTimestamp() time.Time {
-	return o.CollectedAt
-}
-
-func (o ExampleslowObservedState) SetState(s string) fsmv2.ObservedState {
-	o.State = s
-
-	return o
-}
-
-func (o ExampleslowObservedState) SetShutdownRequested(v bool) fsmv2.ObservedState {
-	o.ShutdownRequested = v
-
-	return o
-}
-
-func (o ExampleslowObservedState) SetParentMappedState(state string) fsmv2.ObservedState {
-	o.ParentMappedState = state
-
-	return o
-}
-
-// ShouldStop returns true if shutdown is requested or parent no longer wants child running.
-func (o ExampleslowObservedState) ShouldStop() bool {
-	return o.IsShutdownRequested() || !o.ShouldBeRunning()
 }

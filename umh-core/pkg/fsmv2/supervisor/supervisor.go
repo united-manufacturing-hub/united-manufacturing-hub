@@ -20,14 +20,14 @@
 //
 // # Type Safety with Generics
 //
-// Example usage:
+// Example usage (Worker API v2 / register.Worker):
 //
-//	supervisor := NewSupervisor[ExampleparentObservedState, *ExampleparentDesiredState](config)
+//	supervisor := NewSupervisor[fsmv2.Observation[ExamplechildStatus], *fsmv2.WrappedDesiredState[ExamplechildConfig]](config)
 //	supervisor.AddWorker(identity, worker)
 //
-// Worker types are automatically derived from the observed state type name:
-//   - ExampleparentObservedState -> "exampleparent"
-//   - ContainerObservedState -> "container"
+// In practice, worker packages do not construct supervisors directly — register.Worker
+// wires the auto-generated supervisor factory at init time. The worker type string
+// is the canonical name (e.g. "examplechild"), and the folder name must match.
 //
 // # Architecture Constraints
 //
@@ -138,7 +138,7 @@ type Supervisor[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState] stru
 	cachedDesiredState  fsmv2.DesiredState
 	cachedFirstWorkerID atomic.Value // string - cached for GetHierarchyPathUnlocked()
 	workers             map[string]*WorkerContext[TObserved, TDesired]
-	// mu Protects access to workers map, children, childDoneChans, globalVars, and mappedParentState.
+	// mu Protects access to workers map, children, childDoneChans, and globalVars.
 	//
 	// This is a lockmanager.Lock wrapping sync.RWMutex to allow concurrent reads from multiple goroutines
 	// (e.g., GetWorker, ListWorkers) while ensuring exclusive writes when modifying
@@ -176,11 +176,9 @@ type Supervisor[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState] stru
 	noStateMachineLoggedOnce sync.Map
 	userSpec                 config.UserSpec
 	workerType               string
-	mappedParentState        string
-	parentID                 string
-	lastUserSpecHash         string
-	childStartStates         []string
-	collectorHealth          CollectorHealth
+	parentID          string
+	lastUserSpecHash  string
+	collectorHealth   CollectorHealth
 	metricsWg                sync.WaitGroup
 	tickInterval             time.Duration
 	tickCount                uint64

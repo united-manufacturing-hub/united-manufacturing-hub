@@ -21,15 +21,14 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleparent/snapshot"
 )
 
-// TryingToStartState represents the state while loading config and spawning children.
-// Children with ChildStartStates containing "TryingToStart" will have desired state "running".
+// TryingToStartState represents the state while spawning children.
 // Waits for all children to become healthy before transitioning to RunningState.
 type TryingToStartState struct {
 	helpers.StartingBase
 }
 
 func (s *TryingToStartState) Next(snapAny any) fsmv2.NextResult[any, any] {
-	snap := helpers.ConvertSnapshot[snapshot.ExampleparentObservedState, *snapshot.ExampleparentDesiredState](snapAny)
+	snap := fsmv2.ConvertWorkerSnapshot[snapshot.ExampleparentConfig, snapshot.ExampleparentStatus](snapAny)
 
 	if snap.Desired.IsShutdownRequested() {
 		return fsmv2.Transition(&TryingToStopState{}, fsmv2.SignalNone, nil, "Shutdown requested, transitioning to TryingToStop", nil)
@@ -37,16 +36,12 @@ func (s *TryingToStartState) Next(snapAny any) fsmv2.NextResult[any, any] {
 
 	children := RenderChildren(snap)
 
-	if snap.Observed.ID == "" {
-		return fsmv2.Transition(s, fsmv2.SignalNone, &action.StartAction{}, "ID not set, executing StartAction", children)
-	}
-
 	// All children must be running (healthy > 0, unhealthy == 0) before transitioning.
 	if snap.Observed.ChildrenHealthy > 0 && snap.Observed.ChildrenUnhealthy == 0 {
 		return fsmv2.Transition(&RunningState{}, fsmv2.SignalNone, nil, "All children healthy, transitioning to Running", children)
 	}
 
-	return fsmv2.Transition(s, fsmv2.SignalNone, nil, "Waiting for all children to become healthy", children)
+	return fsmv2.Transition(s, fsmv2.SignalNone, &action.StartAction{}, "Waiting for children to become healthy, running StartAction", children)
 }
 
 func (s *TryingToStartState) String() string {

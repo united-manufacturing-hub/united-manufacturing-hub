@@ -40,7 +40,7 @@ var _ = Describe("Cascade Scenario Integration", func() {
 		// 25s allows time for two complete failure cycles:
 		// Cycle 1 (startup):
 		// - Parent starts and creates children
-		// - Children wait for ParentMappedState before starting (slight delay)
+		// - Children start once ChildSpec.Enabled is set (supervisor sets ShutdownRequested=false)
 		// - Children fail (3 times each) - Parent stays in TryingToStart (expected)
 		// - Children recover - Parent goes to Running
 		// Cycle 2 (runtime):
@@ -184,9 +184,8 @@ func verifyCascadeChildrenFailed(t *integration.TestLogger) {
 	}
 
 	// Children should fail at least once to verify failure behavior
-	// Note: The exact failure count depends on timing - children wait for
-	// ParentMappedState before starting, which affects how many failures
-	// occur within the test duration. The important thing is that failures DO happen.
+	// Note: The exact failure count depends on timing — children start once
+	// ChildSpec.Enabled is set by the parent. The important thing is that failures DO happen.
 	Expect(childFailures).To(BeNumerically(">=", 1),
 		fmt.Sprintf("Expected children to fail at least once, got %d", childFailures))
 

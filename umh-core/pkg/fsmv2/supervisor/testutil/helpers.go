@@ -38,8 +38,7 @@ func (t *ObservedState) GetTimestamp() time.Time {
 }
 
 type DesiredState struct {
-	State       string `json:"state"`
-	ShutdownReq bool   `json:"ShutdownRequested"`
+	ShutdownReq bool `json:"ShutdownRequested"`
 }
 
 func (t *DesiredState) IsShutdownRequested() bool {
@@ -48,14 +47,6 @@ func (t *DesiredState) IsShutdownRequested() bool {
 
 func (t *DesiredState) SetShutdownRequested(requested bool) {
 	t.ShutdownReq = requested
-}
-
-func (t *DesiredState) GetState() string {
-	if t.State == "" {
-		return "running"
-	}
-
-	return t.State
 }
 
 type Worker struct {
@@ -85,7 +76,7 @@ func (m *Worker) CollectObservedState(ctx context.Context, _ fsmv2.DesiredState)
 }
 
 func (m *Worker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, error) {
-	return &config.DesiredState{BaseDesiredState: config.BaseDesiredState{State: "running"}}, nil
+	return &config.DesiredState{}, nil
 }
 
 func (m *Worker) GetInitialState() fsmv2.State[any, any] {

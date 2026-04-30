@@ -772,20 +772,6 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) (err error) 
 			return fmt.Errorf("failed to derive desired state: %w", err)
 		}
 
-		// Validate DesiredState.State is a valid lifecycle state ("stopped" or "running")
-		// This catches both developer mistakes (hardcoded wrong values) and user config mistakes
-		// Use GetState() method from fsmv2.DesiredState interface
-		if valErr := config.ValidateDesiredState(desired.GetState()); valErr != nil {
-			s.logger.SentryError(deps.FeatureFSMv2, s.GetHierarchyPathUnlocked(), valErr, "invalid_desired_state",
-				deps.String("state", desired.GetState()),
-				deps.WorkerID(firstWorkerID))
-			metrics.RecordTemplateRenderingDuration(s.GetHierarchyPathUnlocked(), "error", templateDuration)
-			metrics.RecordTemplateRenderingError(s.GetHierarchyPathUnlocked(), "invalid_state_value")
-
-			// Don't cache validation errors - will retry next tick
-			return fmt.Errorf("failed to derive desired state: %w", valErr)
-		}
-
 		// Update cache
 		s.mu.Lock()
 		s.lastUserSpecHash = currentHash
@@ -853,10 +839,10 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) (err error) 
 	//         children not in this set.
 	//   - nil sentinel
 	//       → legacy / migration-window — the parent expressed no opinion
-	//         from state.Next (e.g. exampleparent's principled-nil mirror
-	//         while ExampleparentDesiredState does not yet carry the
-	//         ParentUserSpec fields). Fall back to the DDS-derived
-	//         ChildSpecProvider path so teaching children survive.
+	//         from state.Next (e.g. a parent whose state-package mirror
+	//         hasn't been migrated to the canonical WorkerSnapshot shape
+	//         yet and returns principled nil). Fall back to the DDS-derived
+	//         ChildSpecProvider path so legacy children survive.
 	//
 	// IMPORTANT: the discriminator treats nil and []config.ChildSpec{} as
 	// distinct cases. Never use `len(rendered) == 0` here — that collapses
@@ -874,23 +860,6 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) (err error) 
 	// automatically on the next non-gated tick. Bounded, intentional, and
 	// not a correctness issue — child eventually converges.
 	//
-	// PR2 boundary caveat (pr2_issues #8 — empty-string ParentMappedState):
-	// Migrated state files use `!ShouldStop()` as a start-check. The
-	// FRAMEWORK ShouldStop body (worker_snapshot.go) is
-	// `IsShutdownRequested || ParentMappedState == "stopped"` and returns
-	// FALSE for empty-string ParentMappedState — so `!ShouldStop()` returns
-	// TRUE (fail-OPEN start). The pre-migration form `== DesiredStateRunning`
-	// returned FALSE for empty string (fail-SAFE stay-stopped). Production
-	// today is safe via the applyStateMapping() ordering invariant
-	// (reconciliation.go:913 runs before child tick at :925 — empty-string
-	// PMS cannot reach a child Next() in normal operation). The migrated
-	// code has no defense if that ordering is ever broken — exactly the F7
-	// premature-start failure mode the cascade is meant to prevent. Note
-	// the asymmetry: workers with a worker-local ShouldStop override (e.g.
-	// examplechild's snapshot.ShouldStop = `IsShutdownRequested ||
-	// !ShouldBeRunning`) fail-SAFE on empty string. transport / communicator
-	// inherit the framework body and so inherit the fail-OPEN polarity.
-	// Proper fix is harmonization at framework level (P3.x scope).
 	var childrenSpecs []config.ChildSpec
 
 	s.mu.RLock()
@@ -983,8 +952,6 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) (err error) 
 	if err := s.reconcileChildren(childrenSpecs); err != nil {
 		return fmt.Errorf("failed to reconcile children: %w", err)
 	}
-
-	s.applyStateMapping()
 
 	// Tick children; errors logged but don't fail parent
 	s.mu.RLock()
@@ -1517,7 +1484,6 @@ func (s *Supervisor[TObserved, TDesired]) reconcileChildren(specs []config.Child
 			childUserSpec := spec.UserSpec
 			childUserSpec.Variables = config.Merge(s.userSpec.Variables, spec.UserSpec.Variables)
 			child.updateUserSpec(childUserSpec)
-			child.setChildStartStates(spec.ChildStartStates)
 
 			updatedCount++
 		} else {
@@ -1577,7 +1543,6 @@ func (s *Supervisor[TObserved, TDesired]) reconcileChildren(specs []config.Child
 			childUserSpec := spec.UserSpec
 			childUserSpec.Variables = config.Merge(s.userSpec.Variables, spec.UserSpec.Variables)
 			childSupervisor.updateUserSpec(childUserSpec)
-			childSupervisor.setChildStartStates(spec.ChildStartStates)
 			childSupervisor.setParent(s, s.workerType)
 
 			// Compute child's hierarchy path: parent path + child segment
@@ -1608,8 +1573,7 @@ func (s *Supervisor[TObserved, TDesired]) reconcileChildren(specs []config.Child
 
 			// Use factory to create worker instance with un-enriched logger
 			// Important: Pass baseLogger to prevent duplicate "worker" fields
-			// Use mergedDeps to include both parent and child-specific dependencies
-			childWorker, err := factory.NewWorkerByType(spec.WorkerType, childIdentity, s.baseLogger, s.store, mergedDeps)
+			childWorker, err := factory.NewWorkerByType(spec.WorkerType, childIdentity, s.baseLogger, s.store)
 			if err != nil {
 				s.logger.SentryError(deps.FeatureFSMv2, childPath, err, "child_worker_creation_failed",
 					deps.String("child_name", spec.Name),
@@ -1673,20 +1637,27 @@ func (s *Supervisor[TObserved, TDesired]) reconcileChildren(specs []config.Child
 			s.logger.Debug("child_shutdown_requesting",
 				deps.String("child_name", name))
 
-			// Mark child as pending removal
-			s.pendingRemoval[name] = true
-
 			child := s.children[name]
 			if child != nil {
-				// Request shutdown - sets ShutdownRequested=true on child's workers
-				// Child continues ticking and will emit SignalNeedsRemoval when ready
+				// Request shutdown first. Only mark pendingRemoval on success so that a
+				// transient CSE error does not permanently strand the child: if we set
+				// pendingRemoval before the call succeeds, Phase 1's guard
+				// (!s.pendingRemoval[name]) would skip this child on every subsequent
+				// tick, preventing retry. Leaving pendingRemoval unset lets Phase 1
+				// retry RequestShutdown naturally on the next tick.
 				ctx := context.Background()
 				if err := child.RequestShutdown(ctx, "removed_from_specs"); err != nil {
 					s.logger.SentryWarn(deps.FeatureFSMv2, s.GetHierarchyPathUnlocked(), "child_shutdown_request_failed",
 						deps.Err(err),
 						deps.String("child_name", name))
+					// Do NOT set pendingRemoval — Phase 1 will retry on the next tick.
+					continue
 				}
 			}
+			// ShutdownRequested is now set on the child's workers (or child was already
+			// absent). Mark as pending removal so Phase 2 can complete the deletion once
+			// all workers emit SignalNeedsRemoval.
+			s.pendingRemoval[name] = true
 			// DON'T delete here - wait for child's workers to complete shutdown
 		}
 	}
@@ -1751,59 +1722,3 @@ func (s *Supervisor[TObserved, TDesired]) reconcileChildren(specs []config.Child
 	return nil
 }
 
-func (s *Supervisor[TObserved, TDesired]) applyStateMapping() {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	if len(s.workers) == 0 {
-		return
-	}
-
-	var parentState string
-
-	for _, workerCtx := range s.workers {
-		workerCtx.mu.RLock()
-
-		if workerCtx.currentState != nil {
-			parentState = workerCtx.currentState.String()
-		}
-
-		workerCtx.mu.RUnlock()
-
-		break
-	}
-
-	for childName, child := range s.children {
-		mappedState := s.computeMappedState(parentState, child)
-
-		child.setMappedParentState(mappedState)
-		s.logTrace("state_mapped",
-			deps.String("child_name", childName),
-			deps.String("parent_state", parentState),
-			deps.String("mapped_state", mappedState))
-	}
-}
-
-// computeMappedState determines the desired state for a child based on parent's current state.
-//
-// ChildStartStates logic:
-//   - If empty: child always runs (follows parent's DesiredState.State)
-//   - If parentState is in the list: child should run (returns "running")
-//   - Otherwise: child should stop (returns "stopped")
-func (s *Supervisor[TObserved, TDesired]) computeMappedState(parentState string, child SupervisorInterface) string {
-	childStartStates := child.getChildStartStates()
-
-	// Empty ChildStartStates = child always runs (follows parent's desired state)
-	if len(childStartStates) == 0 {
-		return config.DesiredStateRunning
-	}
-
-	// Check if parent state is in the list of states where child should run
-	for _, state := range childStartStates {
-		if state == parentState {
-			return config.DesiredStateRunning
-		}
-	}
-
-	return config.DesiredStateStopped
-}

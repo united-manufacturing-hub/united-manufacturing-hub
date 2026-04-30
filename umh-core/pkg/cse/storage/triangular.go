@@ -29,6 +29,7 @@ import (
 	"github.com/benbjohnson/clock"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/migration"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
 )
 
@@ -365,6 +366,22 @@ func (ts *TriangularStore) LoadDesiredTyped(ctx context.Context, workerType stri
 	doc, ok := result.(persistence.Document)
 	if !ok {
 		return fmt.Errorf("LoadDesired returned %T, cannot deserialize", result)
+	}
+
+	// P3.5d lazy migration: promote "state":"stopped" → ShutdownRequested:true in
+	// stored desired-state documents, preserving operator intent across the schema
+	// change that removed BaseDesiredState.State. Runs at the CSE load boundary so
+	// all six LoadDesiredTyped call sites are covered automatically.
+	// The first tick after upgrade writes the migrated document back; subsequent
+	// ticks find no "state" key and return changed=false immediately (near-zero cost).
+	if rawJSON, marshalErr := json.Marshal(doc); marshalErr == nil {
+		if migratedJSON, changed, migrateErr := migration.MigrateP3_5dDesiredState(rawJSON); changed && migrateErr == nil {
+			var migratedDoc persistence.Document
+			if unmarshalErr := json.Unmarshal(migratedJSON, &migratedDoc); unmarshalErr == nil {
+				_, _ = ts.SaveDesired(ctx, workerType, id, migratedDoc)
+				doc = migratedDoc
+			}
+		}
 	}
 
 	return documentToStruct(doc, dest)

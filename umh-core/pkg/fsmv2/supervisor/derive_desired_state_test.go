@@ -191,11 +191,11 @@ var _ = Describe("DeriveDesiredState saves to store", func() {
 			"SaveDesired (index %d) should be called BEFORE LoadSnapshot (index %d)", saveIdx, loadIdx)
 	})
 
-	It("should save derived state with correct state field", func() {
+	It("should save derived state with correct ShutdownRequested field", func() {
 		var savedState interface{}
 
 		store.saveDesired = func(ctx context.Context, wt string, id string, desired persistence.Document) error {
-			savedState = desired["state"]
+			savedState = desired["ShutdownRequested"]
 			if store.desired[wt] == nil {
 				store.desired[wt] = make(map[string]persistence.Document)
 			}
@@ -227,7 +227,8 @@ var _ = Describe("DeriveDesiredState saves to store", func() {
 			}, nil
 		}
 
-		// Create a simple worker that returns "running" state
+		// Create a simple worker — DeriveDesiredState returns config.DesiredState{BaseDesiredState: config.BaseDesiredState{}}
+		// After P3.5d, BaseDesiredState.State was deleted; the document contains ShutdownRequested (bool) only.
 		worker := &mockWorker{
 			observed: &mockObservedState{
 				ID:          workerID,
@@ -256,7 +257,7 @@ var _ = Describe("DeriveDesiredState saves to store", func() {
 		err = s.TestTick(ctx)
 		Expect(err).ToNot(HaveOccurred())
 
-		// mockWorker.DeriveDesiredState returns config.DesiredState{State: "running"}
-		Expect(savedState).To(Equal("running"))
+		// ShutdownRequested defaults to false; no legacy "state" key present post-P3.5d.
+		Expect(savedState).To(Equal(false))
 	})
 })

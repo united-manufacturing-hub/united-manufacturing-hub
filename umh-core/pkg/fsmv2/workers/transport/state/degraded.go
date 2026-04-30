@@ -34,32 +34,32 @@ type DegradedState struct {
 func (s *DegradedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := fsmv2.ConvertWorkerSnapshot[transport_pkg.TransportConfig, transport_pkg.TransportStatus](snapAny)
 
-	if snap.IsShutdownRequested {
+	if snap.Desired.IsShutdownRequested() {
 		return fsmv2.Transition(&StoppingState{}, fsmv2.SignalNone, nil, "Shutdown requested, transitioning to Stopping", nil)
 	}
 
 	children := transport_pkg.RenderChildren(snap)
 
 	// If token is expired, need to re-authenticate (mirrors RunningState)
-	if snap.Status.IsTokenExpired() {
+	if snap.Observed.Status.IsTokenExpired() {
 		return fsmv2.Transition(&StartingState{}, fsmv2.SignalNone, nil, "Token expired, transitioning to Starting for re-authentication", children)
 	}
 
 	// Nuclear fallback: reset transport on prolonged child failures
-	if backoff.ShouldResetTransport(snap.Status.LastErrorType, snap.Status.ConsecutiveErrors) {
+	if backoff.ShouldResetTransport(snap.Observed.Status.LastErrorType, snap.Observed.Status.ConsecutiveErrors) {
 		return fsmv2.Transition(s, fsmv2.SignalNone, action.NewResetTransportAction(),
 			fmt.Sprintf("resetting transport: %d consecutive errors (type=%d)",
-				snap.Status.ConsecutiveErrors, snap.Status.LastErrorType), children)
+				snap.Observed.Status.ConsecutiveErrors, snap.Observed.Status.LastErrorType), children)
 	}
 
 	// If all children are now healthy, transition back to Running
-	if snap.ChildrenUnhealthy == 0 {
+	if snap.Observed.ChildrenUnhealthy == 0 {
 		return fsmv2.Transition(&RunningState{}, fsmv2.SignalNone, nil, "All children now healthy, transitioning to Running", children)
 	}
 
 	return fsmv2.Transition(s, fsmv2.SignalNone, nil,
 		fmt.Sprintf("degraded: %d unhealthy children, %d consecutive errors",
-			snap.ChildrenUnhealthy, snap.Status.ConsecutiveErrors), children)
+			snap.Observed.ChildrenUnhealthy, snap.Observed.Status.ConsecutiveErrors), children)
 }
 
 // String returns the state name derived from the type.

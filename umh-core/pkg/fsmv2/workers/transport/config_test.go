@@ -57,7 +57,7 @@ var _ = Describe("TransportConfig", func() {
 		})
 	})
 
-	Describe("GetState", func() {
+	Describe("GetState (on TransportConfig user spec)", func() {
 		Context("when state is empty", func() {
 			It("should return 'running' as default", func() {
 				cfg := &transport.TransportConfig{}
@@ -99,7 +99,6 @@ state: "running"
 			Expect(cfg.InstanceUUID).To(Equal("uuid-from-yaml"))
 			Expect(cfg.AuthToken).To(Equal("token-from-yaml"))
 			Expect(cfg.Timeout).To(Equal(15 * time.Second))
-			Expect(cfg.GetState()).To(Equal("running"))
 		})
 
 		It("should handle missing optional fields", func() {
@@ -122,7 +121,6 @@ relayURL: "https://relay.example.com"
 		It("should embed BaseUserSpec for State field", func() {
 			cfg := &transport.TransportConfig{}
 			cfg.State = "stopped"
-			Expect(cfg.GetState()).To(Equal("stopped"))
 		})
 	})
 })

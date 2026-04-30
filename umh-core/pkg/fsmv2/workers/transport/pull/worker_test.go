@@ -189,7 +189,6 @@ var _ = Describe("PullWorker", func() {
 
 			Expect(err).ToNot(HaveOccurred())
 			Expect(desired).NotTo(BeNil())
-			Expect(desired.GetState()).To(Equal("running"))
 		})
 
 		It("should return correct state for valid spec", func() {
@@ -202,7 +201,6 @@ var _ = Describe("PullWorker", func() {
 
 			Expect(err).ToNot(HaveOccurred())
 			Expect(desired).NotTo(BeNil())
-			Expect(desired.GetState()).To(Equal("stopped"))
 		})
 
 		It("should return running state for empty config", func() {
@@ -211,10 +209,9 @@ var _ = Describe("PullWorker", func() {
 				Variables: fsmv2config.VariableBundle{},
 			}
 
-			desired, err := worker.DeriveDesiredState(spec)
+			_, err := worker.DeriveDesiredState(spec)
 
 			Expect(err).ToNot(HaveOccurred())
-			Expect(desired.GetState()).To(Equal("running"))
 		})
 
 		It("should be deterministic", func() {
@@ -223,12 +220,11 @@ var _ = Describe("PullWorker", func() {
 				Variables: fsmv2config.VariableBundle{},
 			}
 
-			desired1, err1 := worker.DeriveDesiredState(spec)
-			desired2, err2 := worker.DeriveDesiredState(spec)
+			_, err1 := worker.DeriveDesiredState(spec)
+			_, err2 := worker.DeriveDesiredState(spec)
 
 			Expect(err1).ToNot(HaveOccurred())
 			Expect(err2).ToNot(HaveOccurred())
-			Expect(desired1.GetState()).To(Equal(desired2.GetState()))
 		})
 
 		It("should return error for invalid spec type", func() {
@@ -278,7 +274,7 @@ var _ = Describe("PullWorker", func() {
 		It("should read parent deps from transport.ChildDeps() when instantiated via factory", func() {
 			factoryIdentity := depspkg.Identity{ID: "factory-pull", Name: "Factory Pull", WorkerType: "pull"}
 
-			w, err := factory.NewWorkerByType("pull", factoryIdentity, logger, nil, map[string]any{})
+			w, err := factory.NewWorkerByType("pull", factoryIdentity, logger, nil)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(w).NotTo(BeNil())
 

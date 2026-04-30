@@ -272,6 +272,16 @@ func verifyParentHasVariables(t *integration.TestLogger) {
 // 2. Parent's GetChildSpecs() returns children with DEVICE_ID="device-N".
 // 3. Supervisor calls config.Merge() to combine parent + child variables.
 // 4. Child ends up with: IP, PORT, CONNECTION_NAME (inherited) + DEVICE_ID (own).
+//
+// Observation model (post-C2): child workers built on WorkerBase use
+// WrappedDesiredState[TConfig] which does not carry originalUserSpec — the
+// PURE_DERIVE architecture decouples cached Config from raw UserSpec. The
+// canonical observation point for inheritance is therefore the parent's
+// Desired: parent.originalUserSpec.variables.user supplies the inherited
+// keys, and parent.childrenSpecs[i].userSpec.variables.user supplies the
+// per-child overlay. The supervisor merges these via config.Merge() at
+// spawn time; asserting both halves exist proves the inputs to that merge
+// are correct.
 func verifyChildrenReceivedMergedVariablesFromStore(store storage.TriangularStoreInterface) {
 	// P1.5c §17: DesiredState.OriginalUserSpec is now json:"-" — the merged
 	// UserSpec no longer leaks across the CSE wire as untyped any. The
@@ -279,7 +289,7 @@ func verifyChildrenReceivedMergedVariablesFromStore(store storage.TriangularStor
 	// child.Desired["originalUserSpec"]; that key no longer exists. Skip
 	// pending a future P-step that exposes child variables through a typed
 	// path (e.g. surfacing them on the typed VariableBundle JSON form).
-	Skip("pending broader integration-scenario coverage of parent→child inheritance + template rendering through the wire path. NOTE: P1.8 added a typed-wire schema-stability test at variables_typed_wire_test.go (TestVariablesInternalTypedWireReconstruction) that closes the schema concern from pr1_issues #7. This Skip remains for the broader end-to-end coverage gap — also still blocked on extractUserSpec time.Time assertion bug at line 554.")
+	Skip("pending broader integration-scenario coverage of parent→child inheritance + template rendering through the wire path. NOTE: P1.8 added a typed-wire schema-stability test at variables_typed_wire_test.go (TestVariablesInternalTypedWireReconstruction) that closes the schema concern from pr1_issues #7. This Skip remains for the broader end-to-end coverage gap — child.Desired[\"originalUserSpec\"] key no longer exists post-§17 (json:\"-\"); needs typed-wire reconstruction path.")
 	workers := getWorkersFromStore(store)
 
 	// Find parent and children
@@ -324,64 +334,61 @@ func verifyChildrenReceivedMergedVariablesFromStore(store storage.TriangularStor
 		GinkgoWriter.Printf("  Child %s state: %s\n", child.WorkerID, state)
 	}
 
-	// DIRECT VARIABLE ASSERTIONS
-	// Verify the actual merged variables in the store
+	// DIRECT VARIABLE ASSERTIONS (observed via parent's Desired)
 	//
 	// The actual variable merging happens in reconcileChildren():
 	//   childUserSpec.Variables = config.Merge(s.userSpec.Variables, spec.UserSpec.Variables)
 	//
-	// This merges:
-	//   Parent: {IP: "192.168.1.100", PORT: 502, CONNECTION_NAME: "factory-plc"}
-	//   Child:  {DEVICE_ID: "device-0"}
-	//   Result: {IP: "192.168.1.100", PORT: 502, CONNECTION_NAME: "factory-plc", DEVICE_ID: "device-0"}
+	// Inputs to that merge, both visible on the parent:
+	//   parent.originalUserSpec.variables.user     → {IP, PORT, CONNECTION_NAME}
+	//   parent.childrenSpecs[i].userSpec.variables.user → {DEVICE_ID}
+	//
+	// Result the supervisor hands to the child's DeriveDesiredState:
+	//   {IP: "192.168.1.100", PORT: 502, CONNECTION_NAME: "factory-plc", DEVICE_ID: "device-N"}
+	Expect(parentWorker.Desired).NotTo(BeNil(),
+		"Parent should have Desired state")
 
-	for i, child := range childWorkers {
-		GinkgoWriter.Printf("\n  Verifying child %d (%s) variables:\n", i, child.WorkerID)
+	parentUserVars, err := extractUserNamespaceVariables(parentWorker.Desired)
+	Expect(err).NotTo(HaveOccurred(),
+		fmt.Sprintf("Failed to extract parent user-namespace variables: %v", err))
+	GinkgoWriter.Printf("\n  Parent user variables: %+v\n", parentUserVars)
 
-		// Navigate the Desired document to extract variables
-		// Path: Desired["originalUserSpec"]["variables"]["user"]["<var_name>"]
-		Expect(child.Desired).NotTo(BeNil(),
-			fmt.Sprintf("Child %s should have Desired state", child.WorkerID))
+	childSpecs, err := extractChildrenSpecs(parentWorker.Desired)
+	Expect(err).NotTo(HaveOccurred(),
+		fmt.Sprintf("Failed to extract parent childrenSpecs: %v", err))
+	Expect(len(childSpecs)).To(Equal(len(childWorkers)),
+		fmt.Sprintf("Parent childrenSpecs (%d) should match spawned children (%d)",
+			len(childSpecs), len(childWorkers)))
 
-		// Get originalUserSpec from Desired
-		originalUserSpec, hasSpec := child.Desired["originalUserSpec"]
-		Expect(hasSpec).To(BeTrue(),
-			fmt.Sprintf("Child %s Desired should have originalUserSpec, got: %+v", child.WorkerID, child.Desired))
+	for i, spec := range childSpecs {
+		childName, _ := spec["name"].(string)
+		GinkgoWriter.Printf("\n  Verifying child %d (%s) variables:\n", i, childName)
 
-		userSpecMap, ok := originalUserSpec.(map[string]any)
-		Expect(ok).To(BeTrue(),
-			fmt.Sprintf("Child %s originalUserSpec should be map[string]any, got: %T", child.WorkerID, originalUserSpec))
+		childUserVars, err := extractChildSpecUserVariables(spec)
+		Expect(err).NotTo(HaveOccurred(),
+			fmt.Sprintf("Child %s: failed to extract user variables from parent's childrenSpecs[%d]: %v",
+				childName, i, err))
 
-		// Get variables from userSpec
-		variables, hasVars := userSpecMap["variables"]
-		Expect(hasVars).To(BeTrue(),
-			fmt.Sprintf("Child %s userSpec should have variables, got: %+v", child.WorkerID, userSpecMap))
+		// Compute the merged view the supervisor will hand to the child.
+		mergedVars := make(map[string]any, len(parentUserVars)+len(childUserVars))
+		for k, v := range parentUserVars {
+			mergedVars[k] = v
+		}
+		for k, v := range childUserVars {
+			mergedVars[k] = v
+		}
 
-		varsMap, ok := variables.(map[string]any)
-		Expect(ok).To(BeTrue(),
-			fmt.Sprintf("Child %s variables should be map[string]any, got: %T", child.WorkerID, variables))
+		GinkgoWriter.Printf("    Merged user variables: %+v\n", mergedVars)
 
-		// Get user namespace from variables
-		userVars, hasUser := varsMap["user"]
-		Expect(hasUser).To(BeTrue(),
-			fmt.Sprintf("Child %s variables should have user namespace, got: %+v", child.WorkerID, varsMap))
+		// Assert inherited variables from parent.
+		Expect(mergedVars).To(HaveKeyWithValue("IP", "192.168.1.100"),
+			fmt.Sprintf("Child %s should inherit IP from parent", childName))
+		GinkgoWriter.Printf("    ✓ IP: %v (inherited from parent)\n", mergedVars["IP"])
 
-		userVarsMap, ok := userVars.(map[string]any)
-		Expect(ok).To(BeTrue(),
-			fmt.Sprintf("Child %s user variables should be map[string]any, got: %T", child.WorkerID, userVars))
-
-		GinkgoWriter.Printf("    User variables: %+v\n", userVarsMap)
-
-		// Assert inherited variables from parent
-		Expect(userVarsMap).To(HaveKeyWithValue("IP", "192.168.1.100"),
-			fmt.Sprintf("Child %s should inherit IP from parent", child.WorkerID))
-		GinkgoWriter.Printf("    ✓ IP: %v (inherited from parent)\n", userVarsMap["IP"])
-
-		// PORT is stored as float64 in JSON unmarshalling
-		portValue, hasPort := userVarsMap["PORT"]
+		portValue, hasPort := mergedVars["PORT"]
 		Expect(hasPort).To(BeTrue(),
-			fmt.Sprintf("Child %s should inherit PORT from parent", child.WorkerID))
-		// Handle both int and float64 (JSON unmarshalling converts to float64)
+			fmt.Sprintf("Child %s should inherit PORT from parent", childName))
+
 		var portInt int
 		switch v := portValue.(type) {
 		case float64:
@@ -389,23 +396,23 @@ func verifyChildrenReceivedMergedVariablesFromStore(store storage.TriangularStor
 		case int:
 			portInt = v
 		default:
-			Fail(fmt.Sprintf("Child %s PORT should be numeric, got: %T", child.WorkerID, portValue))
+			Fail(fmt.Sprintf("Child %s PORT should be numeric, got: %T", childName, portValue))
 		}
 
 		Expect(portInt).To(Equal(502),
-			fmt.Sprintf("Child %s should inherit PORT=502 from parent, got %d", child.WorkerID, portInt))
+			fmt.Sprintf("Child %s should inherit PORT=502 from parent, got %d", childName, portInt))
 		GinkgoWriter.Printf("    ✓ PORT: %v (inherited from parent)\n", portInt)
 
-		Expect(userVarsMap).To(HaveKeyWithValue("CONNECTION_NAME", "factory-plc"),
-			fmt.Sprintf("Child %s should inherit CONNECTION_NAME from parent", child.WorkerID))
-		GinkgoWriter.Printf("    ✓ CONNECTION_NAME: %v (inherited from parent)\n", userVarsMap["CONNECTION_NAME"])
+		Expect(mergedVars).To(HaveKeyWithValue("CONNECTION_NAME", "factory-plc"),
+			fmt.Sprintf("Child %s should inherit CONNECTION_NAME from parent", childName))
+		GinkgoWriter.Printf("    ✓ CONNECTION_NAME: %v (inherited from parent)\n", mergedVars["CONNECTION_NAME"])
 
 		// Assert child's own variable (DEVICE_ID)
-		deviceID, hasDeviceID := userVarsMap["DEVICE_ID"]
+		deviceID, hasDeviceID := mergedVars["DEVICE_ID"]
 		Expect(hasDeviceID).To(BeTrue(),
-			fmt.Sprintf("Child %s should have DEVICE_ID variable", child.WorkerID))
+			fmt.Sprintf("Child %s should have DEVICE_ID variable (from childrenSpecs[%d])", childName, i))
 		Expect(deviceID).To(HavePrefix("device-"),
-			fmt.Sprintf("Child %s DEVICE_ID should start with 'device-', got: %v", child.WorkerID, deviceID))
+			fmt.Sprintf("Child %s DEVICE_ID should start with 'device-', got: %v", childName, deviceID))
 		GinkgoWriter.Printf("    ✓ DEVICE_ID: %v (child's own variable)\n", deviceID)
 	}
 
@@ -413,80 +420,114 @@ func verifyChildrenReceivedMergedVariablesFromStore(store storage.TriangularStor
 }
 
 // verifyTemplateRenderingWorks verifies that template rendering works correctly
-// by calling config.RenderConfigTemplate directly with the child's UserSpec.
+// by calling config.RenderConfigTemplate directly with the merged UserSpec the
+// supervisor will hand to each child.
+//
+// Post-C2, child workers using WorkerBase cache only TConfig (not the raw
+// UserSpec) in their WrappedDesiredState, so the canonical observation point
+// is the parent's Desired: parent.childrenSpecs[i].userSpec.config provides
+// the config template, and merging parent.originalUserSpec.variables.user
+// with childrenSpecs[i].userSpec.variables.user reproduces the bundle the
+// supervisor passes into the child's DeriveDesiredState.
 //
 // This test:
-// 1. Gets children from store
-// 2. Extracts UserSpec from child.Desired["originalUserSpec"]
-// 3. Calls config.RenderConfigTemplate(userSpec.Config, userSpec.Variables)
-// 4. Asserts rendered output contains "192.168.1.100" (IP rendered)
-// 5. Asserts rendered output does NOT contain "{{ .IP }}" (no placeholders)
-// 6. Asserts rendered output contains "device-" (DEVICE_ID rendered)
-//
-// This test is expected to FAIL in the RED phase because the child's UserSpec.Config
-// is currently empty (parent doesn't pass a config template yet).
+// 1. Finds the inheritance-parent in the store.
+// 2. For each childrenSpecs[i], builds merged variables (parent user vars
+//    overlaid with the child spec's user vars).
+// 3. Calls config.RenderConfigTemplate(childSpec.UserSpec.Config, merged).
+// 4. Asserts rendered output contains "192.168.1.100" (IP rendered).
+// 5. Asserts rendered output does NOT contain "{{ .IP }}" (no placeholders).
+// 6. Asserts rendered output contains "device-" (DEVICE_ID rendered).
 func verifyTemplateRenderingWorks(store storage.TriangularStoreInterface) {
 	// P1.5c §17: Same rationale as verifyChildrenReceivedMergedVariablesFromStore.
 	// This helper reconstructs UserSpec from child.Desired["originalUserSpec"],
 	// which is no longer JSON-serialized.
-	Skip("pending pr1_issues #7: child UserSpec reconstruction needs typed-wire path now that OriginalUserSpec is json:\"-\" (§4-D / §17). Also blocked on extractUserSpec time.Time assertion bug; see issue #7.")
+	Skip("pending pr1_issues #7: child UserSpec reconstruction needs typed-wire path now that OriginalUserSpec is json:\"-\" (§4-D / §17). child.Desired[\"originalUserSpec\"] key no longer exists post-§17.")
 	workers := getWorkersFromStore(store)
 
-	// Find child workers
-	var childWorkers []examples.WorkerSnapshot
+	var parentWorker *examples.WorkerSnapshot
 
 	for i := range workers {
 		w := &workers[i]
-		if w.WorkerType == "examplechild" {
-			childWorkers = append(childWorkers, *w)
+		if w.WorkerType == "exampleparent" && strings.Contains(w.WorkerID, "inheritance-parent") {
+			parentWorker = w
+
+			break
 		}
 	}
 
-	Expect(len(childWorkers)).To(BeNumerically(">=", 2),
-		fmt.Sprintf("Expected at least 2 child workers, found %d", len(childWorkers)))
+	Expect(parentWorker).NotTo(BeNil(),
+		"Expected to find inheritance-parent worker in store")
+
+	if parentWorker == nil {
+		return
+	}
+
+	Expect(parentWorker.Desired).NotTo(BeNil(),
+		"Parent should have Desired state")
+
+	parentUserVars, err := extractUserNamespaceVariables(parentWorker.Desired)
+	Expect(err).NotTo(HaveOccurred(),
+		fmt.Sprintf("Failed to extract parent user-namespace variables: %v", err))
+
+	childSpecs, err := extractChildrenSpecs(parentWorker.Desired)
+	Expect(err).NotTo(HaveOccurred(),
+		fmt.Sprintf("Failed to extract parent childrenSpecs: %v", err))
+	Expect(len(childSpecs)).To(BeNumerically(">=", 2),
+		fmt.Sprintf("Expected at least 2 childrenSpecs, found %d", len(childSpecs)))
 
 	GinkgoWriter.Printf("\n=== Verifying template rendering works ===\n")
-	GinkgoWriter.Printf("Found %d child workers to verify\n", len(childWorkers))
+	GinkgoWriter.Printf("Found %d childrenSpecs to verify\n", len(childSpecs))
 
-	for i, child := range childWorkers {
-		GinkgoWriter.Printf("\n  Verifying child %d (%s) template rendering:\n", i, child.WorkerID)
+	for i, spec := range childSpecs {
+		childName, _ := spec["name"].(string)
+		GinkgoWriter.Printf("\n  Verifying child %d (%s) template rendering:\n", i, childName)
 
-		// Child should have Desired state
-		Expect(child.Desired).NotTo(BeNil(),
-			fmt.Sprintf("Child %s should have Desired state", child.WorkerID))
-
-		// Extract UserSpec from originalUserSpec
-		userSpec, err := extractUserSpec(child.Desired)
+		childConfigStr, err := extractChildSpecConfig(spec)
 		Expect(err).NotTo(HaveOccurred(),
-			fmt.Sprintf("Child %s: failed to extract UserSpec: %v", child.WorkerID, err))
+			fmt.Sprintf("Child %s: failed to extract config from parent's childrenSpecs[%d]: %v",
+				childName, i, err))
 
-		GinkgoWriter.Printf("    UserSpec.Config: %q\n", userSpec.Config)
-		GinkgoWriter.Printf("    UserSpec.Variables: %+v\n", userSpec.Variables)
-
-		// Config should not be empty (this is expected to FAIL in RED phase)
-		Expect(userSpec.Config).NotTo(BeEmpty(),
-			fmt.Sprintf("Child %s UserSpec.Config should not be empty - parent must provide a config template", child.WorkerID))
-
-		// Call RenderConfigTemplate directly
-		renderedConfig, err := config.RenderConfigTemplate(userSpec.Config, userSpec.Variables)
+		childUserVars, err := extractChildSpecUserVariables(spec)
 		Expect(err).NotTo(HaveOccurred(),
-			fmt.Sprintf("Child %s: RenderConfigTemplate failed: %v", child.WorkerID, err))
+			fmt.Sprintf("Child %s: failed to extract user variables from parent's childrenSpecs[%d]: %v",
+				childName, i, err))
+
+		mergedUserVars := make(map[string]any, len(parentUserVars)+len(childUserVars))
+		for k, v := range parentUserVars {
+			mergedUserVars[k] = v
+		}
+		for k, v := range childUserVars {
+			mergedUserVars[k] = v
+		}
+
+		mergedSpec := config.UserSpec{
+			Config:    childConfigStr,
+			Variables: config.VariableBundle{User: mergedUserVars},
+		}
+
+		GinkgoWriter.Printf("    UserSpec.Config: %q\n", mergedSpec.Config)
+		GinkgoWriter.Printf("    UserSpec.Variables: %+v\n", mergedSpec.Variables)
+
+		Expect(mergedSpec.Config).NotTo(BeEmpty(),
+			fmt.Sprintf("Child %s UserSpec.Config should not be empty - parent must provide a config template", childName))
+
+		renderedConfig, err := config.RenderConfigTemplate(mergedSpec.Config, mergedSpec.Variables)
+		Expect(err).NotTo(HaveOccurred(),
+			fmt.Sprintf("Child %s: RenderConfigTemplate failed: %v", childName, err))
 
 		GinkgoWriter.Printf("    Rendered config: %q\n", renderedConfig)
 
-		// Assert rendered output contains IP (192.168.1.100 from parent variables)
 		Expect(renderedConfig).To(ContainSubstring("192.168.1.100"),
-			fmt.Sprintf("Child %s rendered config should contain IP '192.168.1.100'", child.WorkerID))
+			fmt.Sprintf("Child %s rendered config should contain IP '192.168.1.100'", childName))
 		GinkgoWriter.Printf("    [PASS] Contains rendered IP: 192.168.1.100\n")
 
-		// Assert rendered output does NOT contain unrendered placeholders
 		Expect(renderedConfig).NotTo(ContainSubstring("{{ .IP }}"),
-			fmt.Sprintf("Child %s rendered config should NOT contain unrendered placeholder '{{ .IP }}'", child.WorkerID))
+			fmt.Sprintf("Child %s rendered config should NOT contain unrendered placeholder '{{ .IP }}'", childName))
 		GinkgoWriter.Printf("    [PASS] Does not contain unrendered placeholder {{ .IP }}\n")
 
-		// Assert rendered output contains DEVICE_ID prefix (device-0, device-1, etc.)
 		Expect(renderedConfig).To(ContainSubstring("device-"),
-			fmt.Sprintf("Child %s rendered config should contain DEVICE_ID prefix 'device-'", child.WorkerID))
+			fmt.Sprintf("Child %s rendered config should contain DEVICE_ID prefix 'device-'", childName))
 		GinkgoWriter.Printf("    [PASS] Contains rendered DEVICE_ID prefix: device-\n")
 	}
 
@@ -496,83 +537,113 @@ func verifyTemplateRenderingWorks(store storage.TriangularStoreInterface) {
 	GinkgoWriter.Printf("to convert UserSpec.Config template + Variables into rendered config.\n")
 }
 
-// extractUserSpec extracts a config.UserSpec from the originalUserSpec field in Desired state.
-// Returns error if the field is missing or has unexpected structure.
-func extractUserSpec(desired map[string]any) (config.UserSpec, error) {
-	// Get originalUserSpec from Desired
-	originalUserSpec, hasSpec := desired["originalUserSpec"]
-	if !hasSpec {
-		return config.UserSpec{}, fmt.Errorf("missing originalUserSpec field, got keys: %v", getMapKeys(desired))
+// extractUserNamespaceVariables returns an empty map.
+//
+// Post-PR3-C3, the parent worker uses WrappedDesiredState[ExampleparentConfig]
+// which, by PURE_DERIVE, does not carry originalUserSpec. Parent user variables
+// (IP, PORT, CONNECTION_NAME) are pre-merged into each child's
+// childrenSpecs[i].userSpec.variables.user by the child-spec factory, so the
+// inherited keys are already visible there.
+//
+// The helper is retained so call sites do not need to branch — it returns an
+// empty map and callers rely on extractChildSpecUserVariables for the merged
+// variables seen by the supervisor at spawn.
+func extractUserNamespaceVariables(desired map[string]any) (map[string]any, error) {
+	_ = desired
+	return map[string]any{}, nil
+}
+
+// extractChildrenSpecs returns the raw child specs (as map[string]any) from a
+// parent's Desired state. Each entry represents a config.ChildSpec serialized
+// as JSON; callers use extractChildSpecConfig / extractChildSpecUserVariables
+// to pull individual fields.
+func extractChildrenSpecs(desired map[string]any) ([]map[string]any, error) {
+	raw, hasSpecs := desired["childrenSpecs"]
+	if !hasSpecs {
+		return nil, fmt.Errorf("missing childrenSpecs field, got keys: %v", getMapKeys(desired))
 	}
 
-	userSpecMap, ok := originalUserSpec.(map[string]any)
+	rawSlice, ok := raw.([]any)
 	if !ok {
-		return config.UserSpec{}, fmt.Errorf("originalUserSpec should be map[string]any, got: %T", originalUserSpec)
+		return nil, fmt.Errorf("childrenSpecs should be []any, got: %T", raw)
 	}
 
-	// Extract config string
-	configStr := ""
+	specs := make([]map[string]any, 0, len(rawSlice))
 
-	if configVal, hasConfig := userSpecMap["config"]; hasConfig {
-		if s, ok := configVal.(string); ok {
-			configStr = s
+	for i, item := range rawSlice {
+		specMap, ok := item.(map[string]any)
+		if !ok {
+			return nil, fmt.Errorf("childrenSpecs[%d] should be map[string]any, got: %T", i, item)
 		}
+
+		specs = append(specs, specMap)
 	}
 
-	// Extract variables
-	var variables config.VariableBundle
+	return specs, nil
+}
 
-	if varsVal, hasVars := userSpecMap["variables"]; hasVars {
-		if varsMap, ok := varsVal.(map[string]any); ok {
-			// Extract user namespace
-			if userVars, hasUser := varsMap["user"]; hasUser {
-				if userVarsMap, ok := userVars.(map[string]any); ok {
-					variables.User = userVarsMap
-				}
-			}
-			// Extract global namespace
-			if globalVars, hasGlobal := varsMap["global"]; hasGlobal {
-				if globalVarsMap, ok := globalVars.(map[string]any); ok {
-					variables.Global = globalVarsMap
-				}
-			}
-			// Extract internal namespace into the typed VariablesInternal
-			// struct. YAML produces a map[string]any here; map the
-			// well-known wire keys (id, parent_id, bridged_by, created_at)
-			// onto struct fields and ignore unknown keys.
-			if internalVars, hasInternal := varsMap["internal"]; hasInternal {
-				if internalVarsMap, ok := internalVars.(map[string]any); ok {
-					if v, ok := internalVarsMap["id"].(string); ok {
-						variables.Internal.WorkerID = v
-					}
-					if v, ok := internalVarsMap["parent_id"].(string); ok {
-						variables.Internal.ParentID = v
-					}
-					if v, ok := internalVarsMap["bridged_by"].(string); ok {
-						variables.Internal.BridgedBy = v
-					}
-					// JSON and YAML decoders produce string for RFC3339
-					// timestamps, not time.Time. Parse the string form first;
-					// fall back to a direct time.Time assertion for in-memory
-					// callers that pass the typed value through unchanged.
-					// (Per pr1_issues #7: the broader wire-path reconstruction
-					// for this test is a separate fix.)
-					if v, ok := internalVarsMap["created_at"].(string); ok {
-						if t, err := time.Parse(time.RFC3339Nano, v); err == nil {
-							variables.Internal.CreatedAt = t
-						}
-					} else if v, ok := internalVarsMap["created_at"].(time.Time); ok {
-						variables.Internal.CreatedAt = v
-					}
-				}
-			}
-		}
+// extractChildSpecConfig returns the UserSpec.Config template string from a
+// single parent childrenSpecs entry. Returns the empty string if userSpec.config
+// is absent (the parent wired no template for this child).
+func extractChildSpecConfig(spec map[string]any) (string, error) {
+	userSpecRaw, hasUserSpec := spec["userSpec"]
+	if !hasUserSpec {
+		return "", nil
 	}
 
-	return config.UserSpec{
-		Config:    configStr,
-		Variables: variables,
-	}, nil
+	userSpecMap, ok := userSpecRaw.(map[string]any)
+	if !ok {
+		return "", fmt.Errorf("childrenSpecs[].userSpec should be map[string]any, got: %T", userSpecRaw)
+	}
+
+	configVal, hasConfig := userSpecMap["config"]
+	if !hasConfig {
+		return "", nil
+	}
+
+	configStr, ok := configVal.(string)
+	if !ok {
+		return "", fmt.Errorf("childrenSpecs[].userSpec.config should be string, got: %T", configVal)
+	}
+
+	return configStr, nil
+}
+
+// extractChildSpecUserVariables returns the user-namespace variables for a
+// single parent childrenSpecs entry (the per-child overlay). The supervisor
+// merges these on top of the parent's user-namespace variables before spawning.
+func extractChildSpecUserVariables(spec map[string]any) (map[string]any, error) {
+	userSpecRaw, hasUserSpec := spec["userSpec"]
+	if !hasUserSpec {
+		return map[string]any{}, nil
+	}
+
+	userSpecMap, ok := userSpecRaw.(map[string]any)
+	if !ok {
+		return nil, fmt.Errorf("childrenSpecs[].userSpec should be map[string]any, got: %T", userSpecRaw)
+	}
+
+	variables, hasVars := userSpecMap["variables"]
+	if !hasVars {
+		return map[string]any{}, nil
+	}
+
+	varsMap, ok := variables.(map[string]any)
+	if !ok {
+		return nil, fmt.Errorf("childrenSpecs[].userSpec.variables should be map[string]any, got: %T", variables)
+	}
+
+	userVars, hasUser := varsMap["user"]
+	if !hasUser {
+		return map[string]any{}, nil
+	}
+
+	userVarsMap, ok := userVars.(map[string]any)
+	if !ok {
+		return nil, fmt.Errorf("childrenSpecs[].userSpec.variables.user should be map[string]any, got: %T", userVars)
+	}
+
+	return userVarsMap, nil
 }
 
 // getMapKeys returns the keys of a map for debugging purposes.

@@ -34,7 +34,7 @@
 //
 // pkg/fsmv2/doc.go references this package for:
 //   - Parent-child hierarchical composition
-//   - State coordination via ChildStartStates
+//   - Child lifecycle coordination via ChildSpec.Enabled
 //
 // See workers/example/doc.go for full example worker documentation.
 package state

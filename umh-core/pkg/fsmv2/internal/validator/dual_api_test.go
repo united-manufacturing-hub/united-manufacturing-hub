@@ -106,33 +106,8 @@ type MyWorker struct {
 		})
 	})
 
-	Describe("ValidateShutdownCheckFirst accepts field access", func() {
-		It("accepts snap.IsShutdownRequested field access as first conditional", func() {
-			// Set up a minimal workers directory structure
-			workerDir := filepath.Join(tmpDir, "workers", "myworker")
-			Expect(os.MkdirAll(workerDir, 0o755)).To(Succeed())
-
-			stateFile := filepath.Join(workerDir, "state_running.go")
-			Expect(os.WriteFile(stateFile, []byte(`package myworker
-
-type RunningState struct{}
-
-func (s *RunningState) Next(snapAny any) NextResult {
-	snap := ConvertWorkerSnapshot[MyConfig, MyStatus](snapAny)
-
-	if snap.IsShutdownRequested {
-		return Result(nil, SignalNone, nil, "shutdown")
-	}
-
-	return Result(s, SignalNone, nil, "running")
-}
-`), 0o644)).To(Succeed())
-
-			violations := validator.ValidateShutdownCheckFirst(tmpDir)
-			Expect(violations).To(BeEmpty(), "field access snap.IsShutdownRequested should be accepted")
-		})
-
-		It("still accepts method call IsShutdownRequested()", func() {
+	Describe("ValidateShutdownCheckFirst accepts method calls", func() {
+		It("accepts method call IsShutdownRequested()", func() {
 			workerDir := filepath.Join(tmpDir, "workers", "myworker")
 			Expect(os.MkdirAll(workerDir, 0o755)).To(Succeed())
 

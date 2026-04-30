@@ -29,28 +29,25 @@ import (
 )
 
 func makeSnapshot(
-	parentMappedState string,
 	shutdownRequested bool,
 	consecutiveErrors int,
 	hasTransport bool,
 	hasValidToken bool,
 ) fsmv2.Snapshot {
-	return makeSnapshotFull(parentMappedState, shutdownRequested, consecutiveErrors, hasTransport, hasValidToken, 0)
+	return makeSnapshotFull(shutdownRequested, consecutiveErrors, hasTransport, hasValidToken, 0)
 }
 
 func makeSnapshotFull(
-	parentMappedState string,
 	shutdownRequested bool,
 	consecutiveErrors int,
 	hasTransport bool,
 	hasValidToken bool,
 	pendingMessageCount int,
 ) fsmv2.Snapshot {
-	return makeSnapshotWithBackoff(parentMappedState, shutdownRequested, consecutiveErrors, hasTransport, hasValidToken, pendingMessageCount, 0, 0, time.Time{}, time.Time{})
+	return makeSnapshotWithBackoff(shutdownRequested, consecutiveErrors, hasTransport, hasValidToken, pendingMessageCount, 0, 0, time.Time{}, time.Time{})
 }
 
 func makeSnapshotWithBackoff(
-	parentMappedState string,
 	shutdownRequested bool,
 	consecutiveErrors int,
 	hasTransport bool,
@@ -68,8 +65,7 @@ func makeSnapshotWithBackoff(
 	}
 
 	observed := fsmv2.Observation[push_pkg.PushStatus]{
-		CollectedAt:       time.Now(),
-		ParentMappedState: parentMappedState,
+		CollectedAt: time.Now(),
 		Status: push_pkg.PushStatus{
 			ConsecutiveErrors:   consecutiveErrors,
 			PendingMessageCount: pendingMessageCount,
@@ -105,22 +101,15 @@ var _ = Describe("StoppedState", func() {
 	})
 
 	It("should signal NeedsRemoval on shutdown", func() {
-		snap := makeSnapshot(config.DesiredStateRunning, true, 0, false, false)
+		snap := makeSnapshot(true, 0, false, false)
 		result := s.Next(snap)
 		Expect(result.Signal).To(Equal(fsmv2.SignalNeedsRemoval))
 	})
 
-	It("should transition to Running when ShouldBeRunning", func() {
-		snap := makeSnapshot(config.DesiredStateRunning, false, 0, false, false)
+	It("should transition to Running when not shutdown (parent enables child via ShutdownRequested=false)", func() {
+		snap := makeSnapshot(false, 0, false, false)
 		result := s.Next(snap)
 		Expect(result.State).To(BeAssignableToTypeOf(&state.RunningState{}))
-	})
-
-	It("should stay Stopped when not ShouldBeRunning", func() {
-		snap := makeSnapshot(config.DesiredStateStopped, false, 0, false, false)
-		result := s.Next(snap)
-		Expect(result.State).To(BeAssignableToTypeOf(&state.StoppedState{}))
-		Expect(result.Signal).To(Equal(fsmv2.SignalNone))
 	})
 
 	It("should return a valid String()", func() {
@@ -139,26 +128,20 @@ var _ = Describe("RunningState", func() {
 		Expect(s.LifecyclePhase()).To(Equal(config.PhaseRunningHealthy))
 	})
 
-	It("should transition to Stopping on ShouldStop (shutdown)", func() {
-		snap := makeSnapshot(config.DesiredStateRunning, true, 0, true, true)
-		result := s.Next(snap)
-		Expect(result.State).To(BeAssignableToTypeOf(&state.StoppingState{}))
-	})
-
-	It("should transition to Stopping on ShouldStop (parent stopped)", func() {
-		snap := makeSnapshot(config.DesiredStateStopped, false, 0, true, true)
+	It("should transition to Stopping on ShouldStop (shutdown requested)", func() {
+		snap := makeSnapshot(true, 0, true, true)
 		result := s.Next(snap)
 		Expect(result.State).To(BeAssignableToTypeOf(&state.StoppingState{}))
 	})
 
 	It("should transition to Degraded on 3+ consecutive errors", func() {
-		snap := makeSnapshot(config.DesiredStateRunning, false, 3, true, true)
+		snap := makeSnapshot(false, 3, true, true)
 		result := s.Next(snap)
 		Expect(result.State).To(BeAssignableToTypeOf(&state.DegradedState{}))
 	})
 
 	It("should stay Running and emit PushAction when less than 3 errors", func() {
-		snap := makeSnapshot(config.DesiredStateRunning, false, 2, true, true)
+		snap := makeSnapshot(false, 2, true, true)
 		result := s.Next(snap)
 		Expect(result.State).To(BeAssignableToTypeOf(&state.RunningState{}))
 		Expect(result.Action).NotTo(BeNil())
@@ -166,7 +149,7 @@ var _ = Describe("RunningState", func() {
 	})
 
 	It("should stay Running and emit PushAction with 0 errors", func() {
-		snap := makeSnapshot(config.DesiredStateRunning, false, 0, true, true)
+		snap := makeSnapshot(false, 0, true, true)
 		result := s.Next(snap)
 		Expect(result.State).To(BeAssignableToTypeOf(&state.RunningState{}))
 		Expect(result.Signal).To(Equal(fsmv2.SignalNone))
@@ -175,7 +158,7 @@ var _ = Describe("RunningState", func() {
 	})
 
 	It("should stay Running with nil action when waiting for transport", func() {
-		snap := makeSnapshot(config.DesiredStateRunning, false, 0, false, true)
+		snap := makeSnapshot(false, 0, false, true)
 		result := s.Next(snap)
 		Expect(result.State).To(BeAssignableToTypeOf(&state.RunningState{}))
 		Expect(result.Signal).To(Equal(fsmv2.SignalNone))
@@ -183,7 +166,7 @@ var _ = Describe("RunningState", func() {
 	})
 
 	It("should stay Running with nil action when waiting for token", func() {
-		snap := makeSnapshot(config.DesiredStateRunning, false, 0, true, false)
+		snap := makeSnapshot(false, 0, true, false)
 		result := s.Next(snap)
 		Expect(result.State).To(BeAssignableToTypeOf(&state.RunningState{}))
 		Expect(result.Signal).To(Equal(fsmv2.SignalNone))
@@ -191,14 +174,14 @@ var _ = Describe("RunningState", func() {
 	})
 
 	It("should transition to Degraded when pending messages exceed threshold", func() {
-		snap := makeSnapshotFull(config.DesiredStateRunning, false, 0, true, true, 100)
+		snap := makeSnapshotFull(false, 0, true, true, 100)
 		result := s.Next(snap)
 		Expect(result.State).To(BeAssignableToTypeOf(&state.DegradedState{}))
 		Expect(result.Reason).To(ContainSubstring("pending"))
 	})
 
 	It("should stay Running when pending messages below threshold", func() {
-		snap := makeSnapshotFull(config.DesiredStateRunning, false, 0, true, true, 99)
+		snap := makeSnapshotFull(false, 0, true, true, 99)
 		result := s.Next(snap)
 		Expect(result.State).To(BeAssignableToTypeOf(&state.RunningState{}))
 		Expect(result.Action).NotTo(BeNil())
@@ -221,19 +204,19 @@ var _ = Describe("DegradedState", func() {
 	})
 
 	It("should transition to Stopping on ShouldStop", func() {
-		snap := makeSnapshot(config.DesiredStateRunning, true, 5, true, true)
+		snap := makeSnapshot(true, 5, true, true)
 		result := s.Next(snap)
 		Expect(result.State).To(BeAssignableToTypeOf(&state.StoppingState{}))
 	})
 
 	It("should recover to Running on 0 errors", func() {
-		snap := makeSnapshot(config.DesiredStateRunning, false, 0, true, true)
+		snap := makeSnapshot(false, 0, true, true)
 		result := s.Next(snap)
 		Expect(result.State).To(BeAssignableToTypeOf(&state.RunningState{}))
 	})
 
 	It("should stay Degraded and emit PushAction with non-zero errors", func() {
-		snap := makeSnapshot(config.DesiredStateRunning, false, 5, true, true)
+		snap := makeSnapshot(false, 5, true, true)
 		result := s.Next(snap)
 		Expect(result.State).To(BeAssignableToTypeOf(&state.DegradedState{}))
 		Expect(result.Signal).To(Equal(fsmv2.SignalNone))
@@ -242,7 +225,7 @@ var _ = Describe("DegradedState", func() {
 	})
 
 	It("should stay Degraded with nil action when waiting for transport or token", func() {
-		snap := makeSnapshot(config.DesiredStateRunning, false, 5, false, false)
+		snap := makeSnapshot(false, 5, false, false)
 		result := s.Next(snap)
 		Expect(result.State).To(BeAssignableToTypeOf(&state.DegradedState{}))
 		Expect(result.Signal).To(Equal(fsmv2.SignalNone))
@@ -251,7 +234,7 @@ var _ = Describe("DegradedState", func() {
 
 	It("should wait for backoff before retrying push in degraded", func() {
 		snap := makeSnapshotWithBackoff(
-			config.DesiredStateRunning, false, 3, true, true, 5,
+			false, 3, true, true, 5,
 			httpTransport.ErrorTypeNetwork, 0,
 			time.Now(), // degraded just entered
 			time.Time{},
@@ -264,7 +247,7 @@ var _ = Describe("DegradedState", func() {
 
 	It("should dispatch push when backoff has expired", func() {
 		snap := makeSnapshotWithBackoff(
-			config.DesiredStateRunning, false, 1, true, true, 2,
+			false, 1, true, true, 2,
 			httpTransport.ErrorTypeNetwork, 0,
 			time.Now().Add(-10*time.Second), // degraded 10s ago, backoff for 1 error = 2s
 			time.Time{},
@@ -277,7 +260,7 @@ var _ = Describe("DegradedState", func() {
 
 	It("should respect Retry-After header in degraded", func() {
 		snap := makeSnapshotWithBackoff(
-			config.DesiredStateRunning, false, 1, true, true, 1,
+			false, 1, true, true, 1,
 			httpTransport.ErrorTypeServerError, 60*time.Second,
 			time.Time{},
 			time.Now(), // error just occurred, Retry-After = 60s
@@ -290,7 +273,7 @@ var _ = Describe("DegradedState", func() {
 
 	It("should use DegradedEnteredAt for exponential backoff timing", func() {
 		snap := makeSnapshotWithBackoff(
-			config.DesiredStateRunning, false, 5, true, true, 3,
+			false, 5, true, true, 3,
 			httpTransport.ErrorTypeNetwork, 0,
 			time.Now().Add(-1*time.Second), // degraded 1s ago, backoff for 5 errors = 32s
 			time.Time{},
@@ -317,20 +300,14 @@ var _ = Describe("StoppingState", func() {
 		Expect(s.LifecyclePhase()).To(Equal(config.PhaseStopping))
 	})
 
-	It("should transition to Stopped when stop is required", func() {
-		snap := makeSnapshot(config.DesiredStateStopped, false, 0, false, false)
-		result := s.Next(snap)
-		Expect(result.State).To(BeAssignableToTypeOf(&state.StoppedState{}))
-	})
-
-	It("should transition to Stopped on shutdown requested", func() {
-		snap := makeSnapshot(config.DesiredStateRunning, true, 0, false, false)
+	It("should transition to Stopped on shutdown requested (stop signal)", func() {
+		snap := makeSnapshot(true, 0, false, false)
 		result := s.Next(snap)
 		Expect(result.State).To(BeAssignableToTypeOf(&state.StoppedState{}))
 	})
 
 	It("should transition to Stopped unconditionally (ENG-4608)", func() {
-		snap := makeSnapshot(config.DesiredStateRunning, false, 0, true, true)
+		snap := makeSnapshot(false, 0, true, true)
 		result := s.Next(snap)
 		Expect(result.State).To(BeAssignableToTypeOf(&state.StoppedState{}))
 		Expect(result.Signal).To(Equal(fsmv2.SignalNone))
@@ -339,23 +316,23 @@ var _ = Describe("StoppingState", func() {
 
 	Describe("stop signal reverted during shutdown", func() {
 		It("should recover when parent transitions back to Running (token re-auth)", func() {
-			snapParentStopped := makeSnapshot(config.DesiredStateStopped, false, 0, true, true)
+			snapParentStopped := makeSnapshot(true, 0, true, true)
 			result := s.Next(snapParentStopped)
 			Expect(result.State).To(BeAssignableToTypeOf(&state.StoppedState{}))
 
 			stopped := result.State.(*state.StoppedState)
-			snapParentRunning := makeSnapshot(config.DesiredStateRunning, false, 0, true, true)
+			snapParentRunning := makeSnapshot(false, 0, true, true)
 			result = stopped.Next(snapParentRunning)
 			Expect(result.State).To(BeAssignableToTypeOf(&state.RunningState{}))
 		})
 
 		It("should recover when shutdown is cancelled mid-stop", func() {
-			snapShutdown := makeSnapshot(config.DesiredStateRunning, true, 0, true, true)
+			snapShutdown := makeSnapshot(true, 0, true, true)
 			result := s.Next(snapShutdown)
 			Expect(result.State).To(BeAssignableToTypeOf(&state.StoppedState{}))
 
 			stopped := result.State.(*state.StoppedState)
-			snapNoShutdown := makeSnapshot(config.DesiredStateRunning, false, 0, true, true)
+			snapNoShutdown := makeSnapshot(false, 0, true, true)
 			result = stopped.Next(snapNoShutdown)
 			Expect(result.State).To(BeAssignableToTypeOf(&state.RunningState{}))
 		})
@@ -363,12 +340,12 @@ var _ = Describe("StoppingState", func() {
 		It("should handle parent flapping between Running and Starting", func() {
 			for i := 0; i < 3; i++ {
 				stopping := &state.StoppingState{}
-				snapStopped := makeSnapshot(config.DesiredStateStopped, false, 0, true, true)
+				snapStopped := makeSnapshot(true, 0, true, true)
 				result := stopping.Next(snapStopped)
 				Expect(result.State).To(BeAssignableToTypeOf(&state.StoppedState{}))
 
 				stopped := result.State.(*state.StoppedState)
-				snapRunning := makeSnapshot(config.DesiredStateRunning, false, 0, true, true)
+				snapRunning := makeSnapshot(false, 0, true, true)
 				result = stopped.Next(snapRunning)
 				Expect(result.State).To(BeAssignableToTypeOf(&state.RunningState{}))
 			}

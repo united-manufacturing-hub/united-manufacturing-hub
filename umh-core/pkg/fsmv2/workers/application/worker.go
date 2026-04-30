@@ -134,9 +134,8 @@ func (w *ApplicationWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredS
 		// drift the PR2 boundary closes for symmetry with the discriminator
 		// nil-vs-empty contract.
 		return &fsmv2.WrappedDesiredState[snapshot.ApplicationConfig]{
-			BaseDesiredState: config.BaseDesiredState{State: config.DesiredStateRunning},
-			Config:           cfg,
-			ChildrenSpecs:    []config.ChildSpec{},
+			Config:        cfg,
+			ChildrenSpecs: []config.ChildSpec{},
 		}, nil
 	}
 
@@ -188,9 +187,8 @@ func (w *ApplicationWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredS
 	}
 
 	return &fsmv2.WrappedDesiredState[snapshot.ApplicationConfig]{
-		BaseDesiredState: config.BaseDesiredState{State: config.DesiredStateRunning},
-		Config:           cfg,
-		ChildrenSpecs:    childrenCfg.Children,
+		Config:        cfg,
+		ChildrenSpecs: childrenCfg.Children,
 	}, nil
 }
 

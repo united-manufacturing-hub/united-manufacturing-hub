@@ -25,16 +25,23 @@ go test ./pkg/fsmv2/... -run "Architecture" -v
 
 ## Parent-Child Worker Pattern
 
-Parent workers orchestrate children via `DeriveDesiredState` - they return `ChildrenSpecs` and the supervisor handles child spawning automatically. Parents don't manually create child workers.
+Parent workers declare children in their state `Next()` method via `NextResult.Children`. The supervisor handles creation, updates, and cleanup automatically. Parents do not manually create child workers.
 
 ```go
-func (w *ParentWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, error) {
-    return &config.DesiredState{
-        BaseDesiredState: config.BaseDesiredState{State: "running"},
-        ChildrenSpecs: []config.ChildSpec{
-            {Name: "child1", WorkerType: "childworker", ...},
-        },
-    }, nil
+func (s *RunningState) Next(snapAny any) fsmv2.NextResult[any, any] {
+    snap := fsmv2.ConvertWorkerSnapshot[ParentConfig, ParentStatus](snapAny)
+    children := RenderChildren(snap)
+    if snap.Desired.IsShutdownRequested() {
+        return fsmv2.Transition(&StoppingState{}, fsmv2.SignalNone, nil, "shutdown requested", nil)
+    }
+    // ... business logic ...
+    return fsmv2.Transition(s, fsmv2.SignalNone, nil, "running", children)
+}
+
+func RenderChildren(snap fsmv2.WorkerSnapshot[ParentConfig, ParentStatus]) []config.ChildSpec {
+    return []config.ChildSpec{
+        {Name: "child1", WorkerType: "childworker", Enabled: true, ...},
+    }
 }
 ```
 
@@ -86,11 +93,7 @@ func (s *RunningState) Next(snapAny any) fsmv2.NextResult[any, any] {
 }
 ```
 
-`fsmv2.Transition` is the canonical return shape for state files. It is a non-generic alias for `fsmv2.Result[any, any]` that also accepts typed `Action[TDeps]` values directly.
-
-> **Deprecated — removed in PR3**
->
-> `fsmv2.Result[any, any](...)` and the `fsmv2.WrapAction[TDeps](&MyAction{})` wrapper remain as a compat seam for workers still mid-migration but will be deleted in PR3. New state files must use `fsmv2.Transition` + direct `&MyAction{}` construction.
+`fsmv2.Transition` is the canonical return shape for state files. It is a non-generic alias for `fsmv2.Result[any, any]` that also accepts typed `Action[TDeps]` values directly. State files use `fsmv2.Transition` + direct `&MyAction{}` construction — the framework auto-wraps typed actions via reflection.
 
 ## Reason Strings in State Transitions
 
@@ -114,20 +117,18 @@ fmt.Sprintf("sync recovering: %d consecutive errors (%s), backoff %s",
 
 ## Factory Registration
 
-Workers register in `init()` with both worker and supervisor factories:
+Workers register in `init()` via `register.Worker[TConfig, TStatus, TDeps]`, which wires the factory, supervisor, and CSE type registry in one call. Use `register.NoDeps` for zero-dep workers:
 
 ```go
 func init() {
-    if err := factory.RegisterWorkerType[ObservedState, *DesiredState](
-        workerFactory,
-        supervisorFactory,
-    ); err != nil {
-        panic(err)
-    }
+    register.Worker[Config, Status, register.NoDeps](
+        "myworker",
+        NewMyWorker,
+    )
 }
 ```
 
-The folder name must match the worker type (e.g., `transport/` for type `"transport"`).
+The folder name must match the worker type string (e.g., `transport/` for `"transport"`).
 
 ## Worker API v2 (WorkerBase)
 
@@ -140,10 +141,11 @@ New workers should use `WorkerBase[TConfig, TStatus]` instead of the legacy 7-fi
 - **`WorkerSnapshot[TConfig, TStatus]`** — typed snapshot for state `Next()` methods
 - **`ConvertWorkerSnapshot[TConfig, TStatus]`** — entry-point type assertion in states
 - **`ExtractConfig[TConfig](desired)`** — typed config access in `CollectObservedState`
-- **`WrapAction[TDeps]`** — *(deprecated, removed in PR3)* adapts typed actions to `Action[any]`. Prefer passing `&MyAction{}` directly to `fsmv2.Transition` — the framework auto-wraps via reflection.
 - **`register.Worker[TConfig, TStatus, TDeps]`** — one-line registration (factory + supervisor + CSE types). Use `register.NoDeps` for zero-dep workers.
 
-**Architecture validators** accept both APIs: `ConvertWorkerSnapshot` and `ConvertSnapshot` are valid entry points; `snap.IsShutdownRequested` (field) and `snap.Desired.IsShutdownRequested()` (method) are valid shutdown checks.
+Pass typed actions (`&MyAction{}`) directly to `fsmv2.Transition` — the framework auto-wraps them into `Action[any]` via reflection. No caller-visible adapter is needed.
+
+**Architecture validators** accept both APIs: `ConvertWorkerSnapshot` and `ConvertSnapshot` are valid entry points; `snap.Desired.IsShutdownRequested()` is the valid shutdown check.
 
 **Capability interfaces** (optional, detected via type assertion on first instantiation):
 - `ActionProvider` — `Actions() map[string]Action[any]`
@@ -156,27 +158,22 @@ New workers should use `WorkerBase[TConfig, TStatus]` instead of the legacy 7-fi
 
 ## Metrics Patterns
 
-Workers record metrics via `deps.MetricsRecorder()`. There are two observation return paths with different metric handling:
+Workers record metrics via `deps.MetricsRecorder()`. Return `fsmv2.NewObservation(status)` from `CollectObservedState` — the collector fills CollectedAt, framework metrics, action history, and accumulated worker metrics automatically after COS returns.
 
-| Return Path | CollectedAt | Metrics Handling | When to Use |
-|-------------|-------------|------------------|-------------|
-| `fsmv2.NewObservation(status)` | Zero (collector sets it) | Collector loads previous from CSE, drains recorder, merges (counters additive, gauges replace) | New workers (preferred) |
-| `w.WrapStatus(status)` | Set by caller | Worker drains recorder in COS, current-tick only | Legacy workers (deprecated) |
-| `w.WrapStatusAccumulated(ctx, status)` | Set by caller | Worker loads CSE + drains + merges in COS | Legacy workers needing cross-tick accumulation (deprecated) |
-
-**The zero-time gate**: The collector checks `observed.GetTimestamp().IsZero()`. If true (NewObservation), it runs post-COS wrapping. If false (WrapStatus/WrapStatusAccumulated), it skips wrapping since the worker already handled it. Both paths coexist safely during migration.
-
-**Drain is destructive**: `MetricsRecorder().Drain()` empties the buffer. Only one path should drain per tick. NewObservation workers must not call Drain() in COS — the collector does it. WrapStatus workers drain in COS — the collector skips it.
+The collector loads the previous observed state from CSE, drains the recorder, and merges (counters additive, gauges replace). Workers must NOT call `MetricsRecorder().Drain()` in COS — the collector does it.
 
 ## Graceful Shutdown Cascading
 
-Each supervisor level has a `DefaultGracefulShutdownTimeout` of 5 seconds. For nested supervisors (parent-child workers), timeouts cascade:
+Each supervisor level has a `DefaultGracefulShutdownTimeout` of 5 seconds. For nested supervisors (parent-child workers), timeouts cascade, one `DefaultGracefulShutdownTimeout` per level:
 
 | Nesting Level | Total Timeout |
 |---------------|---------------|
 | 1 (single worker) | 5s |
 | 2 (parent + child) | 10s |
 | 3 (grandparent + parent + child) | 15s |
+| 4 (app + mid-tier + parent + child) | 20s |
+
+Real-world example: the communicator stack is 4 levels (app → communicator → transport → push/pull), so shutdown budgets up to 20s before the root context is cancelled.
 
 **Test implications**: When testing shutdown scenarios with parent-child workers, allow sufficient time:
 
@@ -275,7 +272,3 @@ This prevents failure rate dilution: if idle ticks feed phantom "successes" into
 - Self-return WITH an action (e.g., `&FlushAction{}`) is allowed (active cleanup)
 - CI enforced: `ValidateStoppingStateNoCatchAllSelfReturn` in `internal/validator/state.go`
 - See any `state_stopping.go` for the pattern
-
-### Observed vs Desired ParentMappedState
-
-`ParentMappedState` is only populated on the **observed** state (via `SetParentMappedState()`). The **desired** state copy is always empty. Use `snap.Observed.ParentMappedState` in reason strings, never `snap.Desired.ParentMappedState`.

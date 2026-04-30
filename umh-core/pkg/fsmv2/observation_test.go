@@ -76,11 +76,6 @@ var _ = Describe("Observation", func() {
 			Expect(ok).To(BeTrue(), "must satisfy SetShutdownRequested duck-type")
 
 			_, ok = obs.(interface {
-				SetParentMappedState(string) fsmv2.ObservedState
-			})
-			Expect(ok).To(BeTrue(), "must satisfy SetParentMappedState duck-type")
-
-			_, ok = obs.(interface {
 				SetChildrenCounts(int, int) fsmv2.ObservedState
 			})
 			Expect(ok).To(BeTrue(), "must satisfy SetChildrenCounts duck-type")
@@ -135,23 +130,6 @@ var _ = Describe("Observation", func() {
 
 			// Original unchanged.
 			Expect(obs.ShutdownRequested).To(BeFalse())
-		})
-
-		It("SetParentMappedState matches collector pattern and returns modified copy", func() {
-			obs := fsmv2.Observation[TestStatus]{}
-			var asAny fsmv2.ObservedState = obs
-
-			setter, ok := asAny.(interface {
-				SetParentMappedState(string) fsmv2.ObservedState
-			})
-			Expect(ok).To(BeTrue(), "must satisfy collector SetParentMappedState duck-type")
-
-			result := setter.SetParentMappedState("running")
-			typed := result.(fsmv2.Observation[TestStatus])
-			Expect(typed.ParentMappedState).To(Equal("running"))
-
-			// Original unchanged.
-			Expect(obs.ParentMappedState).To(BeEmpty())
 		})
 
 		It("SetChildrenCounts matches collector pattern and returns modified copy", func() {
@@ -317,7 +295,6 @@ var _ = Describe("Observation", func() {
 				CollectedAt:       time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
 				State:             "running",
 				ShutdownRequested: true,
-				ParentMappedState: "running",
 				ChildrenHealthy:   3,
 				ChildrenUnhealthy: 1,
 				LastActionResults: []deps.ActionResult{
@@ -350,7 +327,6 @@ var _ = Describe("Observation", func() {
 			Expect(restored.CollectedAt).To(Equal(original.CollectedAt))
 			Expect(restored.State).To(Equal("running"))
 			Expect(restored.ShutdownRequested).To(BeTrue())
-			Expect(restored.ParentMappedState).To(Equal("running"))
 			Expect(restored.ChildrenHealthy).To(Equal(3))
 			Expect(restored.ChildrenUnhealthy).To(Equal(1))
 
@@ -373,7 +349,6 @@ var _ = Describe("Observation", func() {
 
 		It("includes ShutdownRequested=false in JSON (not omitted)", func() {
 			obs := fsmv2.Observation[TestStatus]{
-				State:             "stopped",
 				ShutdownRequested: false,
 			}
 
@@ -387,7 +362,6 @@ var _ = Describe("Observation", func() {
 
 		It("includes MetricsEmbedder fields at top level with correct values", func() {
 			obs := fsmv2.Observation[TestStatus]{
-				State: "running",
 			}
 			obs.Status = TestStatus{Reachable: true}
 			obs.Metrics.Framework = deps.FrameworkMetrics{
@@ -419,7 +393,6 @@ var _ = Describe("Observation", func() {
 			}
 
 			obs := fsmv2.Observation[BadStatus]{
-				State: "running",
 			}
 			obs.Status = BadStatus{State: "conflict"}
 
@@ -430,7 +403,6 @@ var _ = Describe("Observation", func() {
 
 		It("returns error when TStatus is not a JSON object", func() {
 			obs := fsmv2.Observation[string]{
-				State: "running",
 			}
 			obs.Status = "not-an-object"
 

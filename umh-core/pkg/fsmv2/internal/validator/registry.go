@@ -109,17 +109,17 @@ worker starts an operation right before shutdown is requested.`,
 	"CHILD_MUST_USE_SHOULD_STOP": {
 		Name: "Child Workers Must Use ShouldStop()",
 		Why: `Child workers must check ShouldStop() instead of just IsShutdownRequested().
-WHY: Child workers have TWO shutdown signals:
-1. IsShutdownRequested() - explicit shutdown request
-2. !ShouldBeRunning() - parent stopped via ChildStartStates
+WHY: Child workers receive their stop signal via BaseDesiredState.ShutdownRequested,
+which is merged by the supervisor from ChildSpec.Enabled before the child tick.
+ShouldStop() is the canonical accessor that wraps this signal.
 
-Using only IsShutdownRequested() misses parent lifecycle changes, causing
-children to stay running when parent goes to TryingToStop.
+Using only IsShutdownRequested() directly is technically equivalent post-P3.7,
+but ShouldStop() is the required idiom for child workers per architecture convention.
 
-ShouldStop() = IsShutdownRequested() || !ShouldBeRunning()`,
+ShouldStop() = IsShutdownRequested()`,
 		CorrectCode: `func (s *ChildState) Next(snapAny any) (...) {
-    snap := helpers.ConvertSnapshot[...](snapAny)
-    if snap.Observed.ShouldStop() {  // NOT snap.Desired.IsShutdownRequested()
+    snap := fsmv2.ConvertWorkerSnapshot[MyConfig, MyStatus](snapAny)
+    if snap.ShouldStop() {  // NOT snap.Desired.IsShutdownRequested()
         return &TryingToStopState{}, SignalNone, nil
     }
     // Then other logic...
@@ -438,61 +438,6 @@ type MyObservedState struct {
 }`,
 		ReferenceFile: "example-child/snapshot/snapshot.go",
 	},
-	"MISSING_STATE_FIELD": {
-		Name: "State Field Required in DesiredState and ObservedState",
-		Why: `Both DesiredState and ObservedState structs must have a State string field.
-WHY: The State field represents the current lifecycle state of the worker (e.g., "running",
-"stopped"). This field is essential for FSM coordination and state tracking. Without it,
-the supervisor cannot determine what state the worker should be in (desired) or what state
-it is currently in (observed). This field enables the FSM to make correct state transition
-decisions.`,
-		CorrectCode: `type MyDesiredState struct {
-    config.BaseDesiredState
-    State string ` + "`json:\"state\"`" + `  // REQUIRED: lifecycle state
-    // Other desired fields...
-}
-
-type MyObservedState struct {
-    CollectedAt time.Time ` + "`json:\"collected_at\"`" + `
-    MyDesiredState ` + "`json:\",inline\"`" + `
-    State string ` + "`json:\"state\"`" + `  // REQUIRED: current state
-    // Other observed fields...
-}`,
-		ReferenceFile: "example-child/snapshot/snapshot.go",
-	},
-	"INVALID_DESIRED_STATE_VALUE": {
-		Name: "DesiredState.State Must Be 'stopped' or 'running'",
-		Why: `DesiredState.State MUST only be "stopped" or "running".
-
-WHY: These represent user INTENT (lifecycle commands), not current state.
-- "running": User wants the component active
-- "stopped": User wants the component inactive
-
-Any other value (like "connected", "starting") confuses DESIRED state
-(what we want) with OBSERVED state (what we have). This causes FSM errors
-and unpredictable behavior.
-
-NOTE: This is validated BOTH at test-time (AST checks in worker.go DeriveDesiredState)
-AND at runtime (user YAML config validation). Runtime errors are user-facing
-and follow UX_STANDARDS.md Error Excellence - provide actionable guidance.`,
-		CorrectCode: `// Correct: use constants in DeriveDesiredState
-return config.DesiredState{
-    State: config.DesiredStateRunning,  // Use constants!
-}
-
-// Also valid: literal strings
-return config.DesiredState{
-    State: "running",  // OK but prefer constants
-}
-
-// WRONG: invalid state values
-return config.DesiredState{
-    State: "connected",  // FSM operational state, not lifecycle intent
-    State: "starting",   // Transitional state, not user intent
-    State: "active",     // Ambiguous, use "running" instead
-}`,
-		ReferenceFile: "workers/example/examplechild/worker.go",
-	},
 	"MISSING_SET_STATE_METHOD": {
 		Name: "ObservedState Must Have SetState Method",
 		Why: `ObservedState types must implement SetState(string) method.
@@ -517,21 +462,17 @@ func (o *MyObservedState) SetState(s string) {
 	"FOLDER_WORKER_TYPE_MISMATCH": {
 		Name: "Folder Name Must Match Worker Type",
 		Why: `Worker folder names must exactly match the derived worker type.
-WHY: The factory registration system uses type names to derive worker types:
-"ExamplechildObservedState" → "examplechild". If the folder is named differently (e.g., "example-child"),
-it creates confusion and enables registration mismatches where supervisor factory
-registers as "examplechild" but worker factory registers manually as "example-child".
-Go type names cannot contain hyphens, so hyphenated folder names can NEVER match.`,
-		CorrectCode: `// Folder "examplechild" with type ExamplechildObservedState → worker type "examplechild" ✓
-workers/example/examplechild/snapshot/snapshot.go:
-    type ExamplechildObservedState struct { ... }
+WHY: When a worker defines a named *ObservedState type, the validator derives the
+worker type by stripping the "ObservedState" suffix and lowercasing the result:
+"ApplicationObservedState" → "application". The folder must equal that string, or
+the worker cannot be registered consistently (architecture tests fail). Go type
+names cannot contain hyphens, so hyphenated folder names can NEVER match.`,
+		CorrectCode: `// Folder "application" with type ApplicationObservedState → worker type "application" ✓
+workers/application/snapshot/snapshot.go:
+    type ApplicationObservedState struct { ... }
 
-// Folder "exampleparent" with type ExampleparentObservedState → "exampleparent" ✓
-workers/example/exampleparent/snapshot/snapshot.go:
-    type ExampleparentObservedState struct { ... }
-
-// WRONG: Folder "example-child" can never match (hyphens invalid in Go types)`,
-		ReferenceFile: "workers/example/examplechild/snapshot/snapshot.go",
+// WRONG: Folder "my-worker" can never match (hyphens invalid in Go types)`,
+		ReferenceFile: "workers/application/snapshot/snapshot.go",
 	},
 	"DEPENDENCIES_IN_DESIRED_STATE": {
 		Name: "Dependencies Not Allowed in DesiredState",
@@ -562,23 +503,27 @@ type MyDesiredState struct {
 WHY: Every worker type needs both a worker factory (creates Worker instances) and
 a supervisor factory (creates Supervisor instances). If only one is registered,
 the FSM system will panic at runtime when trying to create the missing component.
-Use RegisterWorkerType[TObserved, TDesired]() to register both atomically.`,
+Use register.Worker[TConfig, TStatus, TDeps]() to register both atomically
+(it registers factory, supervisor, and CSE types in one call).`,
 		CorrectCode: `func init() {
-    err := factory.RegisterWorkerType[snapshot.MyObservedState, *snapshot.MyDesiredState](
-        func(id deps.Identity, logger deps.FSMLogger, _ deps.StateReader, _ map[string]any) fsmv2.Worker {
-            worker, _ := NewMyWorker(id, logger)
-            return worker
-        },
-        func(cfg interface{}) interface{} {
-            return supervisor.NewSupervisor[snapshot.MyObservedState, *snapshot.MyDesiredState](
-                cfg.(supervisor.Config))
-        },
+    // One-line registration: factory + supervisor + CSE types.
+    // Use register.NoDeps for zero-dep workers.
+    register.Worker[Config, Status, register.NoDeps](
+        "myworker",
+        NewMyWorker,
     )
-    if err != nil {
-        panic(err)
-    }
+}
+
+// Constructor signature matches register.Worker expectation:
+func NewMyWorker(
+    id deps.Identity,
+    logger deps.FSMLogger,
+    sr deps.StateReader,
+    _ register.NoDeps,
+) (fsmv2.Worker, error) {
+    return &MyWorker{/* ... */}, nil
 }`,
-		ReferenceFile: "factory/worker_factory.go:451-461",
+		ReferenceFile: "pkg/fsmv2/register/register.go",
 	},
 	"DYNAMIC_ERROR_MESSAGE": {
 		Name: "Static Error Messages for Sentry Grouping",

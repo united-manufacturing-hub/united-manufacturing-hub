@@ -50,14 +50,14 @@ var _ = Describe("WorkerFactory", func() {
 		factory.ResetRegistry()
 	})
 
-	Describe("RegisterWorkerType", func() {
+	Describe("RegisterFactoryByType", func() {
 		DescribeTable("should handle registration scenarios",
 			func(workerType string, setupFunc func(), wantErr bool, errContains string) {
 				if setupFunc != nil {
 					setupFunc()
 				}
 
-				factoryFunc := func(id deps.Identity, _ deps.FSMLogger, _ deps.StateReader, _ map[string]any) fsmv2.Worker {
+				factoryFunc := func(id deps.Identity, _ deps.FSMLogger, _ deps.StateReader) fsmv2.Worker {
 					return &mockWorker{identity: id}
 				}
 
@@ -74,7 +74,7 @@ var _ = Describe("WorkerFactory", func() {
 			},
 			Entry("register new worker type", "mqtt_client", nil, false, ""),
 			Entry("register duplicate worker type", "mqtt_client", func() {
-				_ = factory.RegisterFactoryByType("mqtt_client", func(id deps.Identity, _ deps.FSMLogger, _ deps.StateReader, _ map[string]any) fsmv2.Worker {
+				_ = factory.RegisterFactoryByType("mqtt_client", func(id deps.Identity, _ deps.FSMLogger, _ deps.StateReader) fsmv2.Worker {
 					return &mockWorker{identity: id}
 				})
 			}, true, "already registered"),
@@ -84,7 +84,7 @@ var _ = Describe("WorkerFactory", func() {
 
 	Describe("NewWorker", func() {
 		BeforeEach(func() {
-			err := factory.RegisterFactoryByType("test_worker", func(id deps.Identity, _ deps.FSMLogger, _ deps.StateReader, _ map[string]any) fsmv2.Worker {
+			err := factory.RegisterFactoryByType("test_worker", func(id deps.Identity, _ deps.FSMLogger, _ deps.StateReader) fsmv2.Worker {
 				return &mockWorker{identity: id}
 			})
 			Expect(err).NotTo(HaveOccurred())
@@ -92,7 +92,7 @@ var _ = Describe("WorkerFactory", func() {
 
 		DescribeTable("should handle worker creation scenarios",
 			func(workerType string, identity deps.Identity, wantErr bool, errContains string) {
-				worker, err := factory.NewWorkerByType(workerType, identity, deps.NewNopFSMLogger(), nil, nil)
+				worker, err := factory.NewWorkerByType(workerType, identity, deps.NewNopFSMLogger(), nil)
 
 				if wantErr {
 					Expect(err).To(HaveOccurred())
@@ -140,7 +140,7 @@ var _ = Describe("WorkerFactory", func() {
 
 					for j := range numWorkerTypes {
 						workerType := "worker_" + string(rune('A'+j))
-						err := factory.RegisterFactoryByType(workerType, func(id deps.Identity, _ deps.FSMLogger, _ deps.StateReader, _ map[string]any) fsmv2.Worker {
+						err := factory.RegisterFactoryByType(workerType, func(id deps.Identity, _ deps.FSMLogger, _ deps.StateReader) fsmv2.Worker {
 							return &mockWorker{identity: id}
 						})
 						if err != nil {
@@ -167,7 +167,7 @@ var _ = Describe("WorkerFactory", func() {
 		BeforeEach(func() {
 			for i := range 3 {
 				workerType := "concurrent_worker_" + string(rune('A'+i))
-				err := factory.RegisterFactoryByType(workerType, func(id deps.Identity, _ deps.FSMLogger, _ deps.StateReader, _ map[string]any) fsmv2.Worker {
+				err := factory.RegisterFactoryByType(workerType, func(id deps.Identity, _ deps.FSMLogger, _ deps.StateReader) fsmv2.Worker {
 					return &mockWorker{identity: id}
 				})
 				Expect(err).NotTo(HaveOccurred())
@@ -193,7 +193,7 @@ var _ = Describe("WorkerFactory", func() {
 						WorkerType: workerType,
 					}
 
-					worker, err := factory.NewWorkerByType(workerType, identity, deps.NewNopFSMLogger(), nil, nil)
+					worker, err := factory.NewWorkerByType(workerType, identity, deps.NewNopFSMLogger(), nil)
 					if err != nil {
 						errors <- err
 					} else {
@@ -229,7 +229,7 @@ var _ = Describe("WorkerFactory", func() {
 		})
 
 		It("should return single type after one registration", func() {
-			err := factory.RegisterFactoryByType("mqtt_client", func(id deps.Identity, _ deps.FSMLogger, _ deps.StateReader, _ map[string]any) fsmv2.Worker {
+			err := factory.RegisterFactoryByType("mqtt_client", func(id deps.Identity, _ deps.FSMLogger, _ deps.StateReader) fsmv2.Worker {
 				return &mockWorker{identity: id}
 			})
 			Expect(err).NotTo(HaveOccurred())
@@ -244,7 +244,7 @@ var _ = Describe("WorkerFactory", func() {
 			workerTypes := []string{"mqtt_client", "modbus_server", "opcua_client"}
 
 			for _, wt := range workerTypes {
-				err := factory.RegisterFactoryByType(wt, func(id deps.Identity, _ deps.FSMLogger, _ deps.StateReader, _ map[string]any) fsmv2.Worker {
+				err := factory.RegisterFactoryByType(wt, func(id deps.Identity, _ deps.FSMLogger, _ deps.StateReader) fsmv2.Worker {
 					return &mockWorker{identity: id}
 				})
 				Expect(err).NotTo(HaveOccurred())
@@ -259,7 +259,7 @@ var _ = Describe("WorkerFactory", func() {
 		})
 
 		It("should return a copy of the slice", func() {
-			err := factory.RegisterFactoryByType("test_worker", func(id deps.Identity, _ deps.FSMLogger, _ deps.StateReader, _ map[string]any) fsmv2.Worker {
+			err := factory.RegisterFactoryByType("test_worker", func(id deps.Identity, _ deps.FSMLogger, _ deps.StateReader) fsmv2.Worker {
 				return &mockWorker{identity: id}
 			})
 			Expect(err).NotTo(HaveOccurred())
@@ -278,7 +278,7 @@ var _ = Describe("WorkerFactory", func() {
 		It("should handle concurrent calls", func() {
 			for i := range 5 {
 				workerType := "worker_" + string(rune('A'+i))
-				err := factory.RegisterFactoryByType(workerType, func(id deps.Identity, _ deps.FSMLogger, _ deps.StateReader, _ map[string]any) fsmv2.Worker {
+				err := factory.RegisterFactoryByType(workerType, func(id deps.Identity, _ deps.FSMLogger, _ deps.StateReader) fsmv2.Worker {
 					return &mockWorker{identity: id}
 				})
 				Expect(err).NotTo(HaveOccurred())
@@ -307,59 +307,6 @@ var _ = Describe("WorkerFactory", func() {
 		})
 	})
 
-	Describe("RegisterWorkerAndSupervisorFactory", func() {
-		DescribeTable("should handle combined registration scenarios",
-			func(setupRegistry func(), wantErr bool, errContains string, verifyRollback bool) {
-				if setupRegistry != nil {
-					setupRegistry()
-				}
-
-				err := factory.RegisterWorkerAndSupervisorFactoryByType(
-					"test_worker",
-					func(id deps.Identity, _ deps.FSMLogger, _ deps.StateReader, _ map[string]any) fsmv2.Worker {
-						return &mockWorker{identity: id}
-					},
-					func(cfg interface{}) interface{} {
-						return nil
-					},
-				)
-
-				if wantErr {
-					Expect(err).To(HaveOccurred())
-					if errContains != "" {
-						Expect(err.Error()).To(ContainSubstring(errContains))
-					}
-
-					if verifyRollback {
-						types := factory.ListRegisteredTypes()
-						for _, typ := range types {
-							Expect(typ).NotTo(Equal("test_worker"), "Worker factory was not rolled back")
-						}
-					}
-				} else {
-					Expect(err).NotTo(HaveOccurred())
-
-					types := factory.ListRegisteredTypes()
-					Expect(types).To(ContainElement("test_worker"))
-
-					supervisorTypes := factory.ListSupervisorTypes()
-					Expect(supervisorTypes).To(ContainElement("test_worker"))
-				}
-			},
-			Entry("register both worker and supervisor successfully", nil, false, "", false),
-			Entry("fail when worker already registered", func() {
-				_ = factory.RegisterFactoryByType("test_worker", func(id deps.Identity, _ deps.FSMLogger, _ deps.StateReader, _ map[string]any) fsmv2.Worker {
-					return &mockWorker{identity: id}
-				})
-			}, true, "failed to register worker factory", false),
-			Entry("fail when supervisor already registered and rollback worker", func() {
-				_ = factory.RegisterSupervisorFactoryByType("test_worker", func(cfg interface{}) interface{} {
-					return nil
-				})
-			}, true, "failed to register supervisor factory", true),
-		)
-	})
-
 	Describe("ValidateRegistryConsistency", func() {
 		DescribeTable("should detect registry inconsistencies",
 			func(setupRegistry func(), wantWorkerOnly []string, wantSupervisorOnly []string) {
@@ -382,7 +329,7 @@ var _ = Describe("WorkerFactory", func() {
 			}, []string{}, []string{}),
 			Entry("consistent registries", func() {
 				factory.ResetRegistry()
-				_ = factory.RegisterFactoryByType("worker_a", func(id deps.Identity, _ deps.FSMLogger, _ deps.StateReader, _ map[string]any) fsmv2.Worker {
+				_ = factory.RegisterFactoryByType("worker_a", func(id deps.Identity, _ deps.FSMLogger, _ deps.StateReader) fsmv2.Worker {
 					return &mockWorker{identity: id}
 				})
 				_ = factory.RegisterSupervisorFactoryByType("worker_a", func(cfg interface{}) interface{} {
@@ -391,7 +338,7 @@ var _ = Describe("WorkerFactory", func() {
 			}, []string{}, []string{}),
 			Entry("worker registered but not supervisor", func() {
 				factory.ResetRegistry()
-				_ = factory.RegisterFactoryByType("orphan_worker", func(id deps.Identity, _ deps.FSMLogger, _ deps.StateReader, _ map[string]any) fsmv2.Worker {
+				_ = factory.RegisterFactoryByType("orphan_worker", func(id deps.Identity, _ deps.FSMLogger, _ deps.StateReader) fsmv2.Worker {
 					return &mockWorker{identity: id}
 				})
 			}, []string{"orphan_worker"}, []string{}),
@@ -403,13 +350,13 @@ var _ = Describe("WorkerFactory", func() {
 			}, []string{}, []string{"orphan_supervisor"}),
 			Entry("mixed inconsistencies", func() {
 				factory.ResetRegistry()
-				_ = factory.RegisterFactoryByType("consistent", func(id deps.Identity, _ deps.FSMLogger, _ deps.StateReader, _ map[string]any) fsmv2.Worker {
+				_ = factory.RegisterFactoryByType("consistent", func(id deps.Identity, _ deps.FSMLogger, _ deps.StateReader) fsmv2.Worker {
 					return &mockWorker{identity: id}
 				})
 				_ = factory.RegisterSupervisorFactoryByType("consistent", func(cfg interface{}) interface{} {
 					return nil
 				})
-				_ = factory.RegisterFactoryByType("worker_only", func(id deps.Identity, _ deps.FSMLogger, _ deps.StateReader, _ map[string]any) fsmv2.Worker {
+				_ = factory.RegisterFactoryByType("worker_only", func(id deps.Identity, _ deps.FSMLogger, _ deps.StateReader) fsmv2.Worker {
 					return &mockWorker{identity: id}
 				})
 				_ = factory.RegisterSupervisorFactoryByType("supervisor_only", func(cfg interface{}) interface{} {

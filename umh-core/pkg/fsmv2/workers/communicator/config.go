@@ -21,7 +21,7 @@ import (
 )
 
 // CommunicatorConfig holds the user-provided configuration for the communicator worker.
-// Embeds BaseUserSpec to support the StateGetter interface, allowing WorkerBase.DeriveDesiredState
+// Embeds BaseUserSpec to expose GetState() for WorkerBase.DeriveDesiredState,
 // to extract the desired state from the "state" YAML field.
 type CommunicatorConfig struct {
 	config.BaseUserSpec `yaml:",inline"`

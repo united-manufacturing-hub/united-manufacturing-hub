@@ -125,7 +125,7 @@ func (s *StoppedState) Next(snapAny any) (fsmv2.State[any, any], fsmv2.Signal, f
     }
 
     // Transition to TryingToStart when desired state is running
-    if snap.Observed.ShouldBeRunning() {
+    if !snap.Desired.IsShutdownRequested() {
         return &TryingToStartState{}, fsmv2.SignalNone, nil
     }
 
@@ -161,7 +161,7 @@ func (s *TryingToStartState) Next(snapAny any) (fsmv2.State[any, any], fsmv2.Sig
     snap := helpers.ConvertSnapshot[MyObservedState, *MyDesiredState](snapAny)
 
     // Check shutdown first
-    if snap.Observed.ShouldStop() {
+    if snap.Desired.IsShutdownRequested() {
         return &TryingToStopState{}, fsmv2.SignalNone, nil
     }
 
@@ -319,7 +319,7 @@ func (s *StoppedState) Next(snapAny any) (fsmv2.State[any, any], fsmv2.Signal, f
         return s, fsmv2.SignalNeedsRemoval, nil
     }
 
-    if snap.Observed.ShouldBeRunning() {
+    if !snap.Desired.IsShutdownRequested() {
         return &TryingToStartState{}, fsmv2.SignalNone, nil
     }
 
@@ -363,7 +363,7 @@ func (s *RunningState) Next(snapAny any) (fsmv2.State[any, any], fsmv2.Signal, f
     snap := helpers.ConvertSnapshot[MyObservedState, *MyDesiredState](snapAny)
 
     // Check shutdown first (equivalent to leave callback)
-    if snap.Observed.ShouldStop() {
+    if snap.Desired.IsShutdownRequested() {
         return &TryingToStopState{}, fsmv2.SignalNone, nil
     }
 
@@ -593,8 +593,7 @@ func (w *ParentWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState,
     }
 
     return &config.DesiredState{
-        BaseDesiredState: config.BaseDesiredState{State: config.DesiredStateRunning},
-        ChildrenSpecs:    children,
+        ChildrenSpecs: children,
     }, nil
 }
 
@@ -781,9 +780,9 @@ Worker API v2 replaces the 7-file pattern with a single-file approach using gene
 | `snapshot/snapshot.go` with ObservedState, DesiredState, Snapshot structs | `Observation[TStatus]`, `WrappedDesiredState[TConfig]`, `WorkerSnapshot[TConfig, TStatus]` |
 | `worker.go` with `CollectObservedState`, `DeriveDesiredState`, `GetInitialState` | Only `CollectObservedState` required; others provided by `WorkerBase` |
 | `dependencies.go` with custom deps struct | `deps.Identity`, `deps.FSMLogger`, `deps.StateReader` passed to constructor |
-| `init()` with `factory.RegisterWorkerType[...]` + supervisor factory | `register.Worker[TConfig, TStatus, TDeps]("type", constructor)` (use `register.NoDeps` for zero-dep workers) |
+| `init()` with manual worker factory + supervisor factory + CSE `TypeRegistry` registrations | `register.Worker[TConfig, TStatus, TDeps]("type", constructor)` (use `register.NoDeps` for zero-dep workers) |
 | `helpers.ConvertSnapshot[Obs, *Des](snapAny)` in states | `fsmv2.ConvertWorkerSnapshot[TConfig, TStatus](snapAny)` in states |
-| `snap.Desired.IsShutdownRequested()` method call | `snap.IsShutdownRequested` field access |
+| `snap.Desired.IsShutdownRequested()` on custom `DesiredState` | `snap.Desired.IsShutdownRequested()` on `WorkerSnapshot` — call syntax unchanged; `snap.Desired` is now `WrappedDesiredState[TConfig]` (promoted from `WorkerBase`); no custom `DesiredState` interface needed |
 | Manual `SetState`, `SetShutdownRequested`, `SetChildrenCounts` in ObservedState | Automatic via collector duck-typing on `Observation` |
 
 ### Migration steps
@@ -793,8 +792,8 @@ Worker API v2 replaces the 7-file pattern with a single-file approach using gene
 3. **Replace constructor** — call `w.InitBase(id, logger, sr)` instead of manual dependency wiring
 4. **Simplify CollectObservedState** — use `fsmv2.ExtractConfig[TConfig](desired)` for config access, return `fsmv2.NewObservation(TStatus{...})` (the collector handles CollectedAt, framework metrics, action history, and metric accumulation automatically)
 5. **Delete DeriveDesiredState and GetInitialState** — provided by WorkerBase (override only if needed)
-6. **Update states** — use `fsmv2.ConvertWorkerSnapshot[TConfig, TStatus](snapAny)` and `snap.IsShutdownRequested` field access
-7. **Replace registration** — single `register.Worker[TConfig, TStatus]("type", constructor)` call
+6. **Update states** — use `fsmv2.ConvertWorkerSnapshot[TConfig, TStatus](snapAny)` and `snap.Desired.IsShutdownRequested()` method call
+7. **Replace registration** — single `register.Worker[TConfig, TStatus, TDeps]("type", constructor)` call. Use `register.NoDeps` for zero-dep workers; workers needing custom dependencies parameterize `TDeps` with their dep struct and receive it in the constructor's final argument (see `register/register.go` for the `SetDeps`/`GetDeps` handoff contract)
 8. **Delete snapshot/, dependencies.go, userspec.go** — no longer needed
 9. **Implement capability interfaces** on your worker struct if needed (ActionProvider, ChildSpecProvider, etc.)
 
@@ -804,6 +803,60 @@ Worker API v2 replaces the 7-file pattern with a single-file approach using gene
 - `dependencies.go` — replaced by `deps.Identity` + `deps.FSMLogger` + `deps.StateReader`
 - `userspec.go` — TConfig IS your userspec
 - Factory/supervisor registration boilerplate in `init()`
+
+## P3.5d: BaseDesiredState.State field and DeriveLeafState removed
+
+**PR3 cascade, change P3.5d.** This change removes two previously required fields and helpers:
+
+- `config.BaseDesiredState.State string` — removed from the struct entirely.
+- `DesiredState.GetState() string` — removed from the `fsmv2.DesiredState` interface.
+- `config.DeriveLeafState[T, PT]` — deleted; use `WorkerBase.DeriveDesiredState` or `config.ParseUserSpec` directly.
+- `config.StateGetter` — deleted interface.
+
+### What you must change
+
+**Before (broken after P3.5d):**
+```go
+return &config.DesiredState{
+    BaseDesiredState: config.BaseDesiredState{State: config.DesiredStateRunning},
+    ChildrenSpecs:    children,
+}, nil
+```
+
+**After (correct):**
+```go
+return &config.DesiredState{
+    ChildrenSpecs: children,
+}, nil
+```
+
+If your code calls `desired.GetState()` to decide whether to start a worker, replace it with `!desired.IsShutdownRequested()`:
+
+```go
+// Before
+if snap.Desired.GetState() == config.DesiredStateRunning { ... }
+
+// After
+if !snap.Desired.IsShutdownRequested() { ... }
+```
+
+If your TConfig embeds `config.BaseUserSpec`, `cfg.GetState()` is still valid — it reads the user-facing `state:` YAML field and is unaffected by this change.
+
+### Why a migration script is required
+
+Old CSE records may contain `{"state":"stopped","ShutdownRequested":false,...}`. After P3.5d, `encoding/json` silently drops the `"state"` key (unknown field) and leaves `ShutdownRequested` at its zero value — `false`. A worker whose operator intent was "stopped" would therefore start running on the first post-upgrade reconciliation tick.
+
+`MigrateP3_5dDesiredState` (in `supervisor/migration/p3_5d_desired_state.go`) detects `"state":"stopped"` and rewrites the document to set `ShutdownRequested:true`, preserving intent. Workers with `"state":"running"` are unaffected — `ShutdownRequested:false` is already the correct zero value.
+
+`TriangularStore.LoadDesiredTyped` calls this migration lazily whenever a desired-state document is loaded from CSE storage, covering all six call sites automatically. Once the migrated form is written back, the document is permanently upgraded and subsequent loads are a fast no-op.
+
+### Rolling-upgrade (HA) constraint
+
+**Upgrade is safe.** Old code writes JSON with a `"state"` key; new code runs `MigrateP3_5dDesiredState` and handles both `"stopped"` and `"running"` values correctly. Workers remain in their intended state across the upgrade.
+
+**Rollback is NOT safe** without additional steps. Once new code writes `DesiredState` JSON without the `"state"` key, old code reading that document calls `GetState()` which returns `"running"` (the default when the State field is absent), so stopped workers would start. To roll back safely: restore a pre-upgrade CSE snapshot before switching back to old code.
+
+See `supervisor/migration/p3_5d_desired_state.go` for the full migration logic and rollback semantics.
 
 ## Further Reading
 

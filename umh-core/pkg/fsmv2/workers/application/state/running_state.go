@@ -28,13 +28,13 @@ type RunningState struct {
 func (s *RunningState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := fsmv2.ConvertWorkerSnapshot[snapshot.ApplicationConfig, snapshot.ApplicationStatus](snapAny)
 
-	if snap.IsShutdownRequested {
+	if snap.Desired.IsShutdownRequested() {
 		return fsmv2.Transition(&StoppedState{}, fsmv2.SignalNone, nil, "Shutdown requested", nil)
 	}
 
 	children := RenderChildren(snap)
 
-	circuitOpen, stale := snapshot.ChildrenViewToStatus(snap.ChildrenView)
+	circuitOpen, stale := snapshot.ChildrenViewToStatus(snap.Observed.ChildrenView)
 	status := snapshot.ApplicationStatus{
 		ChildrenCircuitOpen: circuitOpen,
 		ChildrenStale:       stale,

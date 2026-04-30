@@ -41,7 +41,7 @@ var _ = Describe("Incremental Spec Validation", func() {
 		logger = deps.NewNopFSMLogger()
 		basicStore = memory.NewInMemoryStore()
 
-		_ = factory.RegisterFactoryByType("incremental_child", func(id deps.Identity, _ deps.FSMLogger, _ deps.StateReader, _ map[string]any) fsmv2.Worker {
+		_ = factory.RegisterFactoryByType("incremental_child", func(id deps.Identity, _ deps.FSMLogger, _ deps.StateReader) fsmv2.Worker {
 			return &incrementalValidationMockWorker{
 				identity:     id,
 				initialState: &mockState{},
@@ -336,7 +336,7 @@ func (m *incrementalValidationMockWorker) CollectObservedState(_ context.Context
 
 func (m *incrementalValidationMockWorker) DeriveDesiredState(_ interface{}) (fsmv2.DesiredState, error) {
 	return &config.DesiredState{
-		BaseDesiredState: config.BaseDesiredState{State: "running"},
+		BaseDesiredState: config.BaseDesiredState{},
 		ChildrenSpecs:    m.childSpecs,
 	}, nil
 }
@@ -362,7 +362,7 @@ func (m *dynamicChildSpecMockWorker) CollectObservedState(_ context.Context, _ f
 
 func (m *dynamicChildSpecMockWorker) DeriveDesiredState(_ interface{}) (fsmv2.DesiredState, error) {
 	return &config.DesiredState{
-		BaseDesiredState: config.BaseDesiredState{State: "running"},
+		BaseDesiredState: config.BaseDesiredState{},
 		ChildrenSpecs:    m.childSpecs,
 	}, nil
 }
