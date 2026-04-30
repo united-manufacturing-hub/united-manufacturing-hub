@@ -61,12 +61,12 @@ func buildAgent(
 		return defaultAgent(), "n/a", "n/a", []models.Version{}, errors.New("invalid observed-state")
 	}
 
-	// Prefer the dynamic HealthMessage when set (e.g. config-validation issues
-	// projected by agent_monitor.Status). Fall back to the canned per-category text
-	// so default Active/Degraded paths look unchanged from the user's perspective.
-	message := snap.ServiceInfoSnapshot.HealthMessage
-	if message == "" {
-		message = getAgentHealthMessage(snap.ServiceInfoSnapshot.OverallHealth)
+	// HealthMessage is only meaningful when the category is non-Active. Producers
+	// set it alongside an Active->Degraded escalation; treating it as authoritative
+	// when the category is Active would let a stale message override a healthy state.
+	message := getAgentHealthMessage(snap.ServiceInfoSnapshot.OverallHealth)
+	if snap.ServiceInfoSnapshot.OverallHealth != models.Active && snap.ServiceInfoSnapshot.HealthMessage != "" {
+		message = snap.ServiceInfoSnapshot.HealthMessage
 	}
 	agent := models.Agent{
 		Location: snap.ServiceInfoSnapshot.Location,
