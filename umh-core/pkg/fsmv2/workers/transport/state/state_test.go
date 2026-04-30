@@ -22,9 +22,9 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/types"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/snapshot"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/state"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/types"
 )
 
 // makeSnapshot creates a test snapshot with the given parameters.
@@ -676,14 +676,14 @@ var _ = Describe("TransportWorker States", func() {
 				Timeout:          30 * time.Second,
 			}
 			observed := snapshot.TransportObservedState{
-				CollectedAt:        time.Now(),
+				CollectedAt: time.Now(),
 				FailedAuthConfig: snapshot.FailedAuthConfig{
 					AuthToken:    "old-auth-token",
 					RelayURL:     "https://relay.test.com",
 					InstanceUUID: "test-uuid",
 				},
-				ConsecutiveErrors:  3,
-				LastErrorType:      types.ErrorTypeInvalidToken,
+				ConsecutiveErrors: 3,
+				LastErrorType:     types.ErrorTypeInvalidToken,
 			}
 			result := s.Next(fsmv2.Snapshot{Observed: observed, Desired: desired})
 
@@ -702,14 +702,14 @@ var _ = Describe("TransportWorker States", func() {
 				Timeout:          30 * time.Second,
 			}
 			observed := snapshot.TransportObservedState{
-				CollectedAt:        time.Now(),
+				CollectedAt: time.Now(),
 				FailedAuthConfig: snapshot.FailedAuthConfig{
 					AuthToken:    "test-auth-token",
 					RelayURL:     "https://relay.test.com",
 					InstanceUUID: "test-uuid",
 				},
-				ConsecutiveErrors:  3,
-				LastErrorType:      types.ErrorTypeInvalidToken,
+				ConsecutiveErrors: 3,
+				LastErrorType:     types.ErrorTypeInvalidToken,
 			}
 			result := s.Next(fsmv2.Snapshot{Observed: observed, Desired: desired})
 
@@ -727,14 +727,14 @@ var _ = Describe("TransportWorker States", func() {
 				Timeout:          30 * time.Second,
 			}
 			observed := snapshot.TransportObservedState{
-				CollectedAt:        time.Now(),
+				CollectedAt: time.Now(),
 				FailedAuthConfig: snapshot.FailedAuthConfig{
 					AuthToken:    "test-auth-token",
 					RelayURL:     "https://relay.test.com",
 					InstanceUUID: "test-uuid",
 				},
-				ConsecutiveErrors:  3,
-				LastErrorType:      types.ErrorTypeInstanceDeleted,
+				ConsecutiveErrors: 3,
+				LastErrorType:     types.ErrorTypeInstanceDeleted,
 			}
 			result := s.Next(fsmv2.Snapshot{Observed: observed, Desired: desired})
 

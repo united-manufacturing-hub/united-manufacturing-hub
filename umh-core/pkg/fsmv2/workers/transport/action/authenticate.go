@@ -21,7 +21,7 @@ import (
 	"time"
 
 	depspkg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
-	transporthttp "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/http"
+	httpTransport "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/http"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/snapshot"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/types"
 )
@@ -87,7 +87,7 @@ func (a *AuthenticateAction) Execute(ctx context.Context, depsAny any) error {
 	}
 
 	if deps.GetTransport() == nil {
-		newTransport := transporthttp.NewHTTPTransport(a.RelayURL, a.Timeout)
+		newTransport := httpTransport.NewHTTPTransport(a.RelayURL, a.Timeout)
 		deps.SetTransport(newTransport)
 	}
 
