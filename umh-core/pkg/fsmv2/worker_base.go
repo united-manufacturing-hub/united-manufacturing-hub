@@ -53,7 +53,7 @@ type WorkerBase[TConfig any, TStatus any, TDeps any] struct {
 
 // InitBase initializes the embedded WorkerBase with framework dependencies.
 // Returns the BaseDependencies instance that WrapStatus reads from. Workers
-// that construct custom dependencies MUST use this returned pointer — do not call
+// that construct custom dependencies MUST use this returned pointer; do not call
 // deps.NewBaseDependencies separately, as a separate instance is invisible to WrapStatus.
 func (w *WorkerBase[TConfig, TStatus, TDeps]) InitBase(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader) *deps.BaseDependencies {
 	bd := deps.NewBaseDependencies(logger, sr, id)
@@ -179,7 +179,7 @@ func (w *WorkerBase[TConfig, TStatus, TDeps]) WrapStatusAccumulated(ctx context.
 	}
 
 	// Step 1: Load previous state FIRST (before drain).
-	// Drain is destructive — if we drain first and the CSE read then fails,
+	// Drain is destructive: if we drain first and the CSE read then fails,
 	// the drained deltas are lost and the cumulative counter resets to zero.
 	var prevWorkerMetrics deps.Metrics
 	if sr := bd.GetStateReader(); sr != nil && ctx.Err() == nil {
@@ -198,7 +198,7 @@ func (w *WorkerBase[TConfig, TStatus, TDeps]) WrapStatusAccumulated(ctx context.
 		prevWorkerMetrics.Gauges = make(map[string]float64)
 	}
 
-	// Step 2: Drain AFTER CSE read — if CSE failed, deltas are still correct.
+	// Step 2: Drain AFTER CSE read; if CSE failed, deltas are still correct.
 	if recorder := bd.MetricsRecorder(); recorder != nil {
 		drained := recorder.Drain()
 		for name, delta := range drained.Counters {
@@ -296,16 +296,16 @@ func (w *WorkerBase[TConfig, TStatus, TDeps]) populateChildrenSpecs(wds *Wrapped
 }
 
 // GetInitialState returns the registered initial state for this worker type.
-// Panics if no state is registered — call fsmv2.RegisterInitialState in
+// Panics if no state is registered; call fsmv2.RegisterInitialState in
 // the state package init() function.
 func (w *WorkerBase[TConfig, TStatus, TDeps]) GetInitialState() State[any, any] {
 	if !w.initialized {
-		panic("WorkerBase.GetInitialState: InitBase was not called — ensure your constructor calls w.InitBase(id, logger, sr)")
+		panic("WorkerBase.GetInitialState: InitBase was not called; ensure your constructor calls w.InitBase(id, logger, sr)")
 	}
 	wt := w.identity.WorkerType
 	s := LookupInitialState(wt)
 	if s == nil {
-		panic(fmt.Sprintf("WorkerBase.GetInitialState: no initial state registered for worker type %q — call fsmv2.RegisterInitialState in your state package init()", wt))
+		panic(fmt.Sprintf("WorkerBase.GetInitialState: no initial state registered for worker type %q; call fsmv2.RegisterInitialState in your state package init()", wt))
 	}
 	return s
 }
@@ -323,6 +323,13 @@ func (w *WorkerBase[TConfig, TStatus, TDeps]) Logger() deps.FSMLogger {
 // BindDeps stores the typed deps payload. Call after InitBase in worker constructors.
 // Workers that have custom typed deps pass their deps struct here; the framework
 // returns it from GetDependenciesAny. Workers using register.NoDeps skip BindDeps.
+//
+// TODO(PR2): NoDeps workers (TDeps = register.NoDeps) get zero framework telemetry
+// because the collector's FrameworkMetricsSetter duck-types GetDependenciesAny() to
+// find SetFrameworkState — which NoDeps's struct{} zero value does not implement.
+// Before shipping the first NoDeps production worker, ensure either:
+//   (a) the worker uses NewObservation (collector path handles framework metrics), or
+//   (b) the worker's TDeps embeds deps.BaseDependencies so SetFrameworkState is found.
 func (w *WorkerBase[TConfig, TStatus, TDeps]) BindDeps(d TDeps) {
 	w.mu.Lock()
 	w.typedDeps = d
@@ -330,7 +337,7 @@ func (w *WorkerBase[TConfig, TStatus, TDeps]) BindDeps(d TDeps) {
 }
 
 // GetDependenciesAny returns the typed deps bound via BindDeps. Satisfies DependencyProvider.
-// Workers no longer need to override this method; they call BindDeps in their constructor.
+// Workers do not override this method; they call BindDeps in their constructor instead.
 func (w *WorkerBase[TConfig, TStatus, TDeps]) GetDependenciesAny() any {
 	w.mu.RLock()
 	d := w.typedDeps

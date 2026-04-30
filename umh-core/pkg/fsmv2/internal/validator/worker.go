@@ -833,7 +833,12 @@ func ValidateGetDependenciesAny(baseDir string) []Violation {
 }
 
 // checkGetDependenciesAny scans a new-API worker directory for custom dependency
-// structs and verifies the worker overrides GetDependenciesAny().
+// structs and verifies the worker is correctly wired via either:
+//   - A manual GetDependenciesAny() override (legacy migration-window pattern), or
+//   - A BindDeps call in the constructor (preferred post-P1.1 pattern).
+//
+// Both patterns are valid. The override pattern exists only during the PR2 migration
+// window; PR2 per-worker commits delete the override and call BindDeps instead.
 func checkGetDependenciesAny(filename string) []Violation {
 	var violations []Violation
 
@@ -850,9 +855,13 @@ func checkGetDependenciesAny(filename string) []Violation {
 		return violations
 	}
 
-	// Check if GetDependenciesAny is explicitly defined on the worker type.
-	hasOverride := hasMethodOnType(node, workerTypeName, "GetDependenciesAny")
-	if hasOverride {
+	// Accept a manual GetDependenciesAny override (legacy pattern).
+	if hasMethodOnType(node, workerTypeName, "GetDependenciesAny") {
+		return violations
+	}
+
+	// Accept a BindDeps call anywhere in the file (preferred post-P1.1 pattern).
+	if hasBindDepsCall(node) {
 		return violations
 	}
 
@@ -862,11 +871,40 @@ func checkGetDependenciesAny(filename string) []Violation {
 		violations = append(violations, Violation{
 			File:    filename,
 			Type:    "MISSING_GET_DEPENDENCIES_ANY_OVERRIDE",
-			Message: fmt.Sprintf("Worker %s has custom Dependencies struct but does not override GetDependenciesAny() — default returns *BaseDependencies", workerTypeName),
+			Message: fmt.Sprintf("Worker %s has custom Dependencies struct but has not called BindDeps — GetDependenciesAny returns the zero value of TDeps; call BindDeps in the constructor or use register.NoDeps if no custom deps are needed", workerTypeName),
 		})
 	}
 
 	return violations
+}
+
+// hasBindDepsCall reports whether any function in the file calls BindDeps.
+func hasBindDepsCall(node *ast.File) bool {
+	found := false
+
+	ast.Inspect(node, func(n ast.Node) bool {
+		if found {
+			return false
+		}
+
+		call, ok := n.(*ast.CallExpr)
+		if !ok {
+			return true
+		}
+
+		sel, ok := call.Fun.(*ast.SelectorExpr)
+		if !ok {
+			return true
+		}
+
+		if sel.Sel.Name == "BindDeps" {
+			found = true
+		}
+
+		return !found
+	})
+
+	return found
 }
 
 // findWorkerBaseStructName returns the name of the struct that embeds WorkerBase,

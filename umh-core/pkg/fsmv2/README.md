@@ -114,17 +114,17 @@ FSMv2 implements the same [observe → compare → actuate](#the-control-loop) p
 
 ### Worker API v2 (reduced boilerplate)
 
-Worker API v2 reduces a minimal worker from ~662 SLOC / 7 files to ~50 SLOC / 1 file using generics. Instead of hand-writing ObservedState, DesiredState, snapshot conversion, and factory registration, you embed `WorkerBase[TConfig, TStatus]` and call `register.Worker`.
+Worker API v2 reduces a minimal worker from ~662 SLOC / 7 files to ~50 SLOC / 1 file using generics. Instead of hand-writing ObservedState, DesiredState, snapshot conversion, and factory registration, you embed `WorkerBase[TConfig, TStatus, TDeps]` and call `register.Worker`.
 
 ```go
 // Registration (replaces init() + factory wiring + supervisor factory + CSE type registry)
 func init() {
-    register.Worker[MyConfig, MyStatus]("myworker", NewMyWorker)
+    register.Worker[MyConfig, MyStatus, register.NoDeps]("myworker", NewMyWorker)
 }
 
 // Worker struct (replaces separate dependencies, observed state, desired state files)
 type MyWorker struct {
-    fsmv2.WorkerBase[MyConfig, MyStatus]
+    fsmv2.WorkerBase[MyConfig, MyStatus, register.NoDeps]
 }
 
 func NewMyWorker(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader) (fsmv2.Worker, error) {

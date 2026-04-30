@@ -121,9 +121,9 @@ The folder name must match the worker type (e.g., `transport/` for type `"transp
 
 ## Worker API v2 (WorkerBase)
 
-New workers should use `WorkerBase[TConfig, TStatus]` instead of the legacy 7-file pattern. Key types:
+New workers should use `WorkerBase[TConfig, TStatus, TDeps]` instead of the legacy 7-file pattern. Key types:
 
-- **`WorkerBase[TConfig, TStatus]`** — embed in your worker struct; provides `InitBase`, `Config()`, `DeriveDesiredState`
+- **`WorkerBase[TConfig, TStatus, TDeps]`** — embed in your worker struct; provides `InitBase`, `Config()`, `DeriveDesiredState`. Use `register.NoDeps` as `TDeps` for workers with no custom deps.
 - **`NewObservation[TStatus](status)`** — preferred constructor for `CollectObservedState` return values; the collector fills CollectedAt, framework metrics, action history, and accumulated worker metrics automatically after COS returns
 - **`Observation[TStatus]`** — flat JSON serialization with framework fields (state, shutdown, children counts)
 - **`WrappedDesiredState[TConfig]`** — promotes `BaseDesiredState` fields alongside TConfig
@@ -131,7 +131,7 @@ New workers should use `WorkerBase[TConfig, TStatus]` instead of the legacy 7-fi
 - **`ConvertWorkerSnapshot[TConfig, TStatus]`** — entry-point type assertion in states
 - **`ExtractConfig[TConfig](desired)`** — typed config access in `CollectObservedState`
 - **`WrapAction[TDeps]`** — adapts typed actions to `Action[any]`
-- **`register.Worker[TConfig, TStatus]`** — one-line registration (factory + supervisor + CSE types)
+- **`register.Worker[TConfig, TStatus, TDeps]`** — one-line registration (factory + supervisor + CSE types)
 
 **Architecture validators** accept both APIs: `ConvertWorkerSnapshot` and `ConvertSnapshot` are valid entry points; `snap.IsShutdownRequested` (field) and `snap.Desired.IsShutdownRequested()` (method) are valid shutdown checks.
 

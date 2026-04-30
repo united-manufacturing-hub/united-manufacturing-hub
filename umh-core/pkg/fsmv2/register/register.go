@@ -105,12 +105,14 @@ func Worker[TConfig any, TStatus any, TDeps any](
 }
 
 // SetDepsBuilder registers a typed deps builder function for workerType.
-// The builder is invoked by the framework to construct fresh typed deps for each
-// worker instance, enabling the supervisor to wire deps without per-worker boilerplate.
+// The builder receives the standard framework deps so workers can wire per-instance
+// resources (metrics recorders keyed by identity, loggers, state readers).
 // T is the concrete deps type (e.g., *MyDeps).
 //
+// Call GetDepsBuilder to retrieve and invoke the stored builder.
+//
 // Panics if workerType is empty or builderFn is nil (fail-fast at init time).
-func SetDepsBuilder[T any](workerType string, builderFn func() T) {
+func SetDepsBuilder[T any](workerType string, builderFn func(deps.Identity, deps.FSMLogger, deps.StateReader) T) {
 	if workerType == "" {
 		panic("register.SetDepsBuilder: workerType must be non-empty")
 	}
@@ -118,19 +120,21 @@ func SetDepsBuilder[T any](workerType string, builderFn func() T) {
 		panic("register.SetDepsBuilder: builderFn must be non-nil")
 	}
 
-	wrapped := func() any { return builderFn() }
+	wrapped := func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader) any {
+		return builderFn(id, logger, sr)
+	}
 	depsBuilderRegistry.Store(workerType, wrapped)
 }
 
 // GetDepsBuilder retrieves the deps builder function for workerType.
 // Returns (nil, false) if no builder was registered for this worker type.
-func GetDepsBuilder(workerType string) (func() any, bool) {
+func GetDepsBuilder(workerType string) (func(deps.Identity, deps.FSMLogger, deps.StateReader) any, bool) {
 	v, ok := depsBuilderRegistry.Load(workerType)
 	if !ok {
 		return nil, false
 	}
 
-	return v.(func() any), true
+	return v.(func(deps.Identity, deps.FSMLogger, deps.StateReader) any), true
 }
 
 // ResetDepsBuilderRegistry clears all registered deps builders.

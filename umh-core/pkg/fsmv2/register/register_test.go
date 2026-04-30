@@ -181,7 +181,7 @@ var _ = Describe("register.SetDepsBuilder", func() {
 	})
 
 	It("stores and retrieves a typed deps builder", func() {
-		register.SetDepsBuilder("sdbt-worker", func() *setDepsBuilderTestDeps {
+		register.SetDepsBuilder("sdbt-worker", func(_ deps.Identity, _ deps.FSMLogger, _ deps.StateReader) *setDepsBuilderTestDeps {
 			return &setDepsBuilderTestDeps{Value: 42}
 		})
 
@@ -189,7 +189,7 @@ var _ = Describe("register.SetDepsBuilder", func() {
 		Expect(ok).To(BeTrue())
 		Expect(builder).NotTo(BeNil())
 
-		result := builder()
+		result := builder(deps.Identity{}, nil, nil)
 		typed, ok := result.(*setDepsBuilderTestDeps)
 		Expect(ok).To(BeTrue())
 		Expect(typed.Value).To(Equal(42))
@@ -201,22 +201,22 @@ var _ = Describe("register.SetDepsBuilder", func() {
 	})
 
 	It("last registration wins for duplicate worker type", func() {
-		register.SetDepsBuilder("sdbt-dup", func() *setDepsBuilderTestDeps {
+		register.SetDepsBuilder("sdbt-dup", func(_ deps.Identity, _ deps.FSMLogger, _ deps.StateReader) *setDepsBuilderTestDeps {
 			return &setDepsBuilderTestDeps{Value: 1}
 		})
-		register.SetDepsBuilder("sdbt-dup", func() *setDepsBuilderTestDeps {
+		register.SetDepsBuilder("sdbt-dup", func(_ deps.Identity, _ deps.FSMLogger, _ deps.StateReader) *setDepsBuilderTestDeps {
 			return &setDepsBuilderTestDeps{Value: 99}
 		})
 
 		builder, ok := register.GetDepsBuilder("sdbt-dup")
 		Expect(ok).To(BeTrue())
-		result := builder().(*setDepsBuilderTestDeps)
+		result := builder(deps.Identity{}, nil, nil).(*setDepsBuilderTestDeps)
 		Expect(result.Value).To(Equal(99))
 	})
 
 	It("panics on empty workerType", func() {
 		Expect(func() {
-			register.SetDepsBuilder("", func() *setDepsBuilderTestDeps {
+			register.SetDepsBuilder("", func(_ deps.Identity, _ deps.FSMLogger, _ deps.StateReader) *setDepsBuilderTestDeps {
 				return &setDepsBuilderTestDeps{}
 			})
 		}).To(PanicWith(ContainSubstring("non-empty")))

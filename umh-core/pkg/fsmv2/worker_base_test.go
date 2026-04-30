@@ -723,7 +723,7 @@ type testBindDeps struct {
 }
 
 var _ = Describe("WorkerBase BindDeps", func() {
-	It("TestWorkerBase_TypedDepsViaBindDeps: GetDependenciesAny returns *testBindDeps after BindDeps", func() {
+	It("returns typed deps via GetDependenciesAny after BindDeps call", func() {
 		identity := deps.Identity{
 			ID:         "binddeps-worker-1",
 			Name:       "binddeps-worker",
