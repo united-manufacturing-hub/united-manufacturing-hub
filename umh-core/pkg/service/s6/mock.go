@@ -83,10 +83,36 @@ type MockService struct {
 	GetLogsCalled                 bool
 	GetStructuredLogsCalled       bool
 
+	// ForceRemoveCallCount records how many times ForceRemove was invoked.
+	// Tests use this to verify recovery dispatch fires exactly once per
+	// corruption event (the post-recovery re-fire bug at the heart of
+	// ENG-4862 manifests as a count above 1 across many ticks).
+	ForceRemoveCallCount int
+
 	ServiceExistsResult bool
 	// New fields for EnsureSupervision
 	MockExists bool
 	ErrorMode  bool
+
+	// MockHealthAction is the value MockService.Health returns. The zero value
+	// is ActionOK, so &MockService{} returns ActionOK without explicit setup.
+	// Tests pin it to ActionRecreate to drive the recovery dispatch and to
+	// ActionWait for transient-pending semantics.
+	//
+	// Create, Remove, and ForceRemove deliberately do NOT auto-mutate this
+	// field. Tests that exercise post-recovery flips must set it explicitly.
+	// This is a deliberate gap relative to DefaultService.Health (where
+	// Store(nil) inside ForceRemove is what flips Health back to ActionOK);
+	// the white-box health_directive_test.go asserts that flip directly. The
+	// integration test simulates the post-recovery reality by setting
+	// MockHealthAction manually.
+	//
+	// Concurrency: MockService.Health and ForceRemove acquire m.mu, but tests
+	// that mutate this field directly do so without the lock (see
+	// healthbad_lifecycle_integration_test.go). That is safe only when the
+	// mock is driven from a single goroutine. Tests that fan reconcile out to
+	// background goroutines must guard mutations with m.mu.Lock().
+	MockHealthAction RecoveryAction
 }
 
 // NewMockService creates a new mock S6 service.
@@ -230,7 +256,11 @@ func (m *MockService) GetS6ConfigFile(ctx context.Context, servicePath string, c
 
 // ForceRemove is a mock method.
 func (m *MockService) ForceRemove(ctx context.Context, servicePath string, filesystemService filesystem.Service) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	m.ForceRemoveCalled = true
+	m.ForceRemoveCallCount++
 	m.ForceRemovePath = servicePath
 
 	return m.ForceRemoveError
@@ -276,7 +306,17 @@ func (m *MockService) CheckServiceDirectoryIntegrity(ctx context.Context, servic
 	if !m.MockExists {
 		return HealthBad
 	}
-	
+
 	// Default to HealthOK
 	return HealthOK
+}
+
+// Health returns the recovery directive pinned by tests. The zero value is
+// ActionOK so &MockService{} returns ActionOK without explicit setup, which
+// keeps existing tests working without modification.
+func (m *MockService) Health(ctx context.Context, fsService filesystem.Service) RecoveryAction {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	return m.MockHealthAction
 }

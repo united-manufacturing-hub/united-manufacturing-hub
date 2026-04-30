@@ -199,6 +199,44 @@ func (s *S6Instance) reconcileStateTransition(ctx context.Context, services serv
 	currentState := s.baseFSMInstance.GetCurrentFSMState()
 	desiredState := s.baseFSMInstance.GetDesiredFSMState()
 
+	// Recovery dispatch: ask the s6 service whether normal lifecycle work can
+	// proceed. Health collapses three previously-scattered signals (artifact
+	// presence, directory integrity, in-flight removal) into one directive.
+	//
+	// ActionRecreate returns a permanent failure that lands at SetError; on
+	// the next tick the error-backoff block (ShouldSkipReconcileBecauseOfError)
+	// at the top of Reconcile sees IsPermanentFailureError and dispatches
+	// HandlePermanentError, which runs ForceRemove and transitions the FSM to
+	// Removed. After ForceRemove succeeds the service clears its artifacts
+	// pointer and Health returns ActionOK on subsequent ticks, so recovery
+	// does not re-fire.
+	//
+	// This single check supersedes the operational-state HealthBad escape
+	// added under ENG-3468/ENG-3473 (and closes the lifecycle gap that
+	// produced ENG-4862). The remaining HealthBad branches in
+	// reconcileTransitionToRunning are now defensive belt-and-suspenders.
+	switch directive := s.service.Health(ctx, services.GetFileSystem()); directive {
+	case s6service.ActionOK:
+		// Healthy — fall through to normal lifecycle/operational dispatch.
+	case s6service.ActionRecreate:
+		s.baseFSMInstance.GetLogger().Errorf(
+			"S6 service %s requires recreation (state=%s)",
+			s.baseFSMInstance.GetID(), currentState,
+		)
+		// reconciled=false because the caller at Reconcile.reconcileStateTransition
+		// discards the boolean when err != nil and the recovery itself happens on
+		// the next tick via HandlePermanentError; reporting "reconciled" would
+		// misrepresent that nothing changed this tick.
+		return fmt.Errorf("%s: directory corrupted in state %s", backoff.PermanentFailureError, currentState), false
+	case s6service.ActionWait:
+		return nil, false
+	default:
+		s.baseFSMInstance.GetLogger().Errorf(
+			"unknown RecoveryAction %v from s6 service Health for %s - falling through to normal dispatch",
+			directive, s.baseFSMInstance.GetID(),
+		)
+	}
+
 	// Handle lifecycle states first - these take precedence over operational states
 	if internal_fsm.IsLifecycleState(currentState) {
 		err, reconciled := s.baseFSMInstance.ReconcileLifecycleStates(ctx, services, currentState, s.CreateInstance, s.RemoveInstance, s.CheckForCreation)
@@ -238,20 +276,11 @@ func (s *S6Instance) reconcileOperationalStates(ctx context.Context, services se
 		metrics.ObserveReconcileTime(metrics.ComponentS6Instance, s.baseFSMInstance.GetID()+".reconcileOperationalStates", time.Since(start))
 	}()
 
-	// Check for directory health issues and trigger force removal if needed
-	// When directory health is bad (corrupted/deleted), we're in an undefined state
-	// and cannot go through normal state transitions. Return a permanent error to
-	// trigger force removal and direct transition to "removed" state.
-	if s.ObservedState.DirectoryHealth == s6service.HealthBad {
-		s.baseFSMInstance.GetLogger().Errorf(
-			"S6 service %s has bad directory integrity - triggering force removal for recreation",
-			s.baseFSMInstance.GetID(),
-		)
-		// Return permanent error to trigger HandlePermanentError which will:
-		// 1. Call ForceRemove to clean up everything including orphaned symlinks
-		// 2. Transition FSM directly to "removed" state
-		return fmt.Errorf("%s: directory corrupted or deleted", backoff.PermanentFailureError), true
-	}
+	// Operational HealthBad escape replaced by the top-level Health() dispatch
+	// in reconcileStateTransition. The remaining HealthBad branches in this
+	// function (skip-stop, consider-stopped) are now structurally unreachable
+	// when corruption is observed, but kept as defensive belt-and-suspenders
+	// pending follow-up cleanup once the recovery directive bakes one release.
 
 	switch desiredState {
 	case OperationalStateRunning:

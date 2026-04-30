@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Fixes
+
+- A bridge whose underlying service directory got corrupted at runtime previously stayed in a starting state until umh-core was restarted or replaced with a different bridge name. umh-core now detects the corruption and recovers the bridge automatically.
+
 ## [0.44.18]
 
 Enables FSMv2 communicator by default.
