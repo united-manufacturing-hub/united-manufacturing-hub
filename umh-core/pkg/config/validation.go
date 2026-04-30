@@ -14,7 +14,11 @@
 
 package config
 
-import "errors"
+import (
+	"errors"
+	"fmt"
+	"strings"
+)
 
 // ValidateComponentName validates that a component name contains only valid characters
 // and is not empty. Valid characters are letters (a-z, A-Z), numbers (0-9), underscores (_) and hyphens (-).
@@ -34,4 +38,25 @@ func ValidateComponentName(name string) error {
 	}
 
 	return nil
+}
+
+// FormatConfigValidationMessage projects validation issues into the
+// agent health message string. Pure function. Returns empty when no issues.
+func FormatConfigValidationMessage(issues []ConfigValidationIssue) string {
+	if len(issues) == 0 {
+		return ""
+	}
+	if len(issues) == 1 {
+		i := issues[0]
+		msg := fmt.Sprintf("Invalid %s value %q", i.Field, i.OffendingValue)
+		if len(i.AllowedValues) > 0 {
+			msg += ". Allowed: " + strings.Join(i.AllowedValues, ", ")
+		}
+		return msg + "."
+	}
+	parts := make([]string, len(issues))
+	for n, i := range issues {
+		parts[n] = fmt.Sprintf("%s=%q", i.Field, i.OffendingValue)
+	}
+	return fmt.Sprintf("%d configuration issues: %s", len(issues), strings.Join(parts, "; "))
 }
