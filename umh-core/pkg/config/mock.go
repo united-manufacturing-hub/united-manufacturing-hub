@@ -1225,11 +1225,11 @@ func (m *MockConfigManager) WriteYAMLConfigFromString(ctx context.Context, confi
 	}
 
 	// First parse the config with strict validation to detect syntax errors and schema problems
-	parsedConfig, err := ParseConfig([]byte(config), ctx, false)
+	parsedConfig, err := ParseConfig([]byte(config), ctx, false, false)
 	if err != nil {
 		// If strict parsing fails, try again with allowUnknownFields=true
 		// This allows YAML anchors and other custom fields
-		parsedConfig, err = ParseConfig([]byte(config), ctx, true)
+		parsedConfig, err = ParseConfig([]byte(config), ctx, true, false)
 		if err != nil {
 			return fmt.Errorf("failed to parse config: %w", err)
 		}

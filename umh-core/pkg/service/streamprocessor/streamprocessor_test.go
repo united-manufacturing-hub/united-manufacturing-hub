@@ -417,7 +417,7 @@ var _ = Describe("StreamProcessorService", func() {
 
 			// Use the config manager's parseConfig function to properly handle templates and anchors
 			ctx := context.Background()
-			fullConfig, err := config.ParseConfig(data, ctx, true) // Allow unknown fields for template handling
+			fullConfig, err := config.ParseConfig(data, ctx, true, false) // Allow unknown fields for template handling
 			Expect(err).NotTo(HaveOccurred(), "Failed to parse example config")
 
 			// Extract the first stream processor (pump-processor)
