@@ -158,11 +158,18 @@ type FileConfigManager struct {
 
 	cacheConfig FullConfig // struct obtained from that file
 
+	// validationIssues holds the results of the last config-content validation pass.
+	// Always swapped wholesale (never appended to) by readAndParseConfig — see swapValidationIssues.
+	validationIssues []ConfigValidationIssue
+
 	// ---------- in-memory cache (read-only after RLock) ----------
 	cacheMu sync.RWMutex // guards the two fields below
 
 	// ---------- background refresh state ----------
 	refreshMu sync.Mutex // prevents concurrent background refreshes
+
+	// validationIssuesMu guards validationIssues.
+	validationIssuesMu sync.RWMutex
 
 	// backupCount tracks the number of config backups created since startup.
 	backupCount atomic.Uint64
@@ -496,6 +503,25 @@ func (m *FileConfigManager) readAndParseConfig(ctx context.Context) (FullConfig,
 	return config, string(data), nil
 }
 
+// swapValidationIssues replaces the validation-issues list wholesale.
+// Called only from readAndParseConfig — never from cache hits or the backup write path.
+// This guarantees that fixed configs clear stale issues on the next successful parse.
+func (m *FileConfigManager) swapValidationIssues(fresh []ConfigValidationIssue) {
+	m.validationIssuesMu.Lock()
+	defer m.validationIssuesMu.Unlock()
+	m.validationIssues = fresh
+}
+
+// GetConfigValidationIssues returns a copy of the validation issues from the most recent parse.
+// Safe to call concurrently with swapValidationIssues.
+func (m *FileConfigManager) GetConfigValidationIssues() []ConfigValidationIssue {
+	m.validationIssuesMu.RLock()
+	defer m.validationIssuesMu.RUnlock()
+	out := make([]ConfigValidationIssue, len(m.validationIssues))
+	copy(out, m.validationIssues)
+	return out
+}
+
 // FileConfigManagerWithBackoff wraps a FileConfigManager and implements backoff for GetConfig errors.
 type FileConfigManagerWithBackoff struct {
 	// The wrapped file config manager
@@ -553,6 +579,12 @@ func (m *FileConfigManagerWithBackoff) SetConfigBackupEnabled(enabled bool) {
 // GetBackupCount returns the number of config backups created since startup.
 func (m *FileConfigManagerWithBackoff) GetBackupCount() uint64 {
 	return m.configManager.GetBackupCount()
+}
+
+// GetConfigValidationIssues delegates to the wrapped FileConfigManager.
+// Returns a copy of the validation issues from the most recent parse.
+func (m *FileConfigManagerWithBackoff) GetConfigValidationIssues() []ConfigValidationIssue {
+	return m.configManager.GetConfigValidationIssues()
 }
 
 // GetBackupCount returns the number of config backups created since startup.
