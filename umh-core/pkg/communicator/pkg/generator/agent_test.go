@@ -74,6 +74,27 @@ var _ = Describe("buildAgent (P13)", func() {
 		Expect(agent.Health.Message).To(Equal("Agent operating normally"))
 	})
 
+	It("ignores HealthMessage when category is Active (guards against stale message)", func() {
+		snap := &agentfsm.AgentObservedStateSnapshot{
+			ServiceInfoSnapshot: agentsvc.ServiceInfo{
+				OverallHealth: models.Active,
+				HealthMessage: "ignore me — stale Degraded message",
+				Release:       &models.Release{Channel: "stable", Version: "1.0.0"},
+			},
+		}
+		instance := fsm.FSMInstanceSnapshot{
+			ID:                "Core",
+			CurrentState:      "active",
+			DesiredState:      "active",
+			LastObservedState: snap,
+		}
+
+		agent, _, _, _, err := buildAgent(instance, log)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(agent.Health).NotTo(BeNil())
+		Expect(agent.Health.Message).To(Equal("Agent operating normally"))
+	})
+
 	It("falls back to canned message when HealthMessage is empty (Degraded)", func() {
 		snap := &agentfsm.AgentObservedStateSnapshot{
 			ServiceInfoSnapshot: agentsvc.ServiceInfo{
