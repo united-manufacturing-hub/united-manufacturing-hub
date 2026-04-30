@@ -225,3 +225,35 @@ var _ = Describe("ValidateComponentName", func() {
 		})
 	})
 })
+
+var _ = Describe("FormatConfigValidationMessage (P8)", func() {
+	It("returns empty string for no issues", func() {
+		Expect(config.FormatConfigValidationMessage(nil)).To(Equal(""))
+		Expect(config.FormatConfigValidationMessage([]config.ConfigValidationIssue{})).To(Equal(""))
+	})
+
+	It("formats a single issue with allowed values", func() {
+		issue := config.ConfigValidationIssue{
+			Field:          "agent.releaseChannel",
+			OffendingValue: "nigtly",
+			AllowedValues:  []string{"nightly", "stable", "enterprise"},
+		}
+		msg := config.FormatConfigValidationMessage([]config.ConfigValidationIssue{issue})
+		Expect(msg).To(Equal(`Invalid agent.releaseChannel value "nigtly". Allowed: nightly, stable, enterprise.`))
+	})
+
+	It("formats a single issue without allowed values", func() {
+		issue := config.ConfigValidationIssue{Field: "agent.foo", OffendingValue: "bar"}
+		msg := config.FormatConfigValidationMessage([]config.ConfigValidationIssue{issue})
+		Expect(msg).To(Equal(`Invalid agent.foo value "bar".`))
+	})
+
+	It("formats multiple issues with count + semicolons", func() {
+		issues := []config.ConfigValidationIssue{
+			{Field: "agent.releaseChannel", OffendingValue: "nigtly"},
+			{Field: "agent.foo", OffendingValue: "bar"},
+		}
+		msg := config.FormatConfigValidationMessage(issues)
+		Expect(msg).To(Equal(`2 configuration issues: agent.releaseChannel="nigtly"; agent.foo="bar"`))
+	})
+})
