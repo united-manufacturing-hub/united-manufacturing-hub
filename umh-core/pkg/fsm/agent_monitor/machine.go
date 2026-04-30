@@ -32,8 +32,18 @@ import (
 )
 
 // NewAgentInstance creates a new AgentInstance with the standard transitions.
-func NewAgentInstance(config config.AgentMonitorConfig) *AgentInstance {
-	return NewAgentInstanceWithService(config, agent_monitor.NewAgentMonitorService(agent_monitor.WithFilesystemService(filesystem.NewDefaultService()), agent_monitor.WithS6Service(s6.NewDefaultService())))
+// configValidationProvider may be nil for tests; production passes the singleton
+// FileConfigManagerWithBackoff so config-validation issues escalate the agent
+// to Degraded with a dynamic health message.
+func NewAgentInstance(config config.AgentMonitorConfig, configValidationProvider agent_monitor.ConfigValidationProvider) *AgentInstance {
+	opts := []agent_monitor.AgentMonitorServiceOption{
+		agent_monitor.WithFilesystemService(filesystem.NewDefaultService()),
+		agent_monitor.WithS6Service(s6.NewDefaultService()),
+	}
+	if configValidationProvider != nil {
+		opts = append(opts, agent_monitor.WithConfigValidationProvider(configValidationProvider))
+	}
+	return NewAgentInstanceWithService(config, agent_monitor.NewAgentMonitorService(opts...))
 }
 
 // NewAgentInstanceWithService creates a new AgentInstance with a custom monitor service.

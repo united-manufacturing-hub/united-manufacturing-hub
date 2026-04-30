@@ -61,10 +61,17 @@ func buildAgent(
 		return defaultAgent(), "n/a", "n/a", []models.Version{}, errors.New("invalid observed-state")
 	}
 
+	// HealthMessage is only meaningful when the category is non-Active. Producers
+	// set it alongside an Active->Degraded escalation; treating it as authoritative
+	// when the category is Active would let a stale message override a healthy state.
+	message := getAgentHealthMessage(snap.ServiceInfoSnapshot.OverallHealth)
+	if snap.ServiceInfoSnapshot.OverallHealth != models.Active && snap.ServiceInfoSnapshot.HealthMessage != "" {
+		message = snap.ServiceInfoSnapshot.HealthMessage
+	}
 	agent := models.Agent{
 		Location: snap.ServiceInfoSnapshot.Location,
 		Health: &models.Health{
-			Message:       getAgentHealthMessage(snap.ServiceInfoSnapshot.OverallHealth),
+			Message:       message,
 			ObservedState: instance.CurrentState,
 			DesiredState:  instance.DesiredState,
 			Category:      snap.ServiceInfoSnapshot.OverallHealth,

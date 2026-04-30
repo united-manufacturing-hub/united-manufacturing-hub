@@ -644,3 +644,4 @@ func (w *writeFailingMockConfigManager) AtomicDeleteStreamProcessor(ctx context.
 func (w *writeFailingMockConfigManager) GetBackupCount() uint64 {
 	return 0
 }
+

@@ -62,6 +62,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
+	agentmonitorsvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/agent_monitor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/starvationchecker"
@@ -116,13 +117,22 @@ func NewControlLoop(configManager config.ConfigManager) *ControlLoop {
 		sentry.ReportIssuef(sentry.IssueTypeFatal, log, "Failed to create service registry: %s", err)
 	}
 
+	// agent_monitor only needs the narrow ConfigValidationProvider surface, not
+	// the full ConfigManager interface. Concrete types (FileConfigManager,
+	// FileConfigManagerWithBackoff) satisfy it structurally; mocks intentionally
+	// don't, and pass nil so agent_monitor falls back to its no-validation path.
+	var validationProvider agentmonitorsvc.ConfigValidationProvider
+	if cvp, ok := configManager.(agentmonitorsvc.ConfigValidationProvider); ok {
+		validationProvider = cvp
+	}
+
 	// Create the managers
 	managers := []fsm.FSMManager[any]{
 		s6.NewS6Manager(constants.DefaultManagerName),
 		benthos.NewBenthosManager(constants.DefaultManagerName),
 		container.NewContainerManager(constants.DefaultManagerName),
 		redpanda.NewRedpandaManager(constants.DefaultManagerName),
-		agent_monitor.NewAgentManager(constants.DefaultManagerName),
+		agent_monitor.NewAgentManager(constants.DefaultManagerName, validationProvider),
 		nmap.NewNmapManager(constants.DefaultManagerName),
 		dataflowcomponent.NewDataflowComponentManager(constants.DefaultManagerName),
 		connection.NewConnectionManager(constants.DefaultManagerName),

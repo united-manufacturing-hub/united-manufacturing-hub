@@ -42,6 +42,14 @@ type IAgentMonitorService interface {
 	GetFilesystemService() filesystem.Service
 }
 
+// ConfigValidationProvider is the surface AgentMonitorService needs to check for
+// config-content validation issues. Implemented by *config.FileConfigManagerWithBackoff.
+// When issues are present, Status flips OverallHealth to Degraded and projects them
+// into HealthMessage so the existing MC alert renders the user-facing detail.
+type ConfigValidationProvider interface {
+	GetConfigValidationIssues() []config.ConfigValidationIssue
+}
+
 // ServiceInfo contains both raw metrics and health assessments.
 type ServiceInfo struct {
 	// General: Location, Latency, Agent Logs, Agent Metrics
@@ -50,6 +58,11 @@ type ServiceInfo struct {
 	AgentMetrics map[string]interface{} `json:"agentMetrics,omitempty"`
 	// Release: Channel, Version, Supported Feature
 	Release *models.Release `json:"release"`
+
+	// HealthMessage carries a dynamic agent-health message — typically a projection of
+	// ConfigValidationIssues. Empty for the default "operating normally" / canned-message
+	// path; non-empty when readers should prefer this over the canned text.
+	HealthMessage string `json:"healthMessage,omitempty"`
 
 	// AgentLogs contains the structured s6 log entries emitted by the
 	// agent service.
@@ -104,11 +117,12 @@ func (si *ServiceInfo) CopyAgentLogs(src []s6.LogEntry) error {
 
 // AgentMonitorService implements the Service interface.
 type AgentMonitorService struct {
-	lastCollectedAt time.Time
-	fs              filesystem.Service
-	s6Service       s6.Service
-	logger          *zap.SugaredLogger
-	instanceName    string
+	lastCollectedAt          time.Time
+	fs                       filesystem.Service
+	s6Service                s6.Service
+	logger                   *zap.SugaredLogger
+	configValidationProvider ConfigValidationProvider
+	instanceName             string
 }
 
 // NewAgentMonitorService creates a new agent monitor service instance.
@@ -140,6 +154,14 @@ func WithS6Service(s6Service s6.Service) AgentMonitorServiceOption {
 func WithFilesystemService(fs filesystem.Service) AgentMonitorServiceOption {
 	return func(s *AgentMonitorService) {
 		s.fs = fs
+	}
+}
+
+// WithConfigValidationProvider injects a provider used by Status to surface
+// config-content validation issues as a degraded agent health state.
+func WithConfigValidationProvider(p ConfigValidationProvider) AgentMonitorServiceOption {
+	return func(s *AgentMonitorService) {
+		s.configValidationProvider = p
 	}
 }
 
@@ -210,6 +232,16 @@ func (c *AgentMonitorService) Status(ctx context.Context, systemSnapshot fsm.Sys
 	}
 
 	status.Release = release
+
+	// Surface config-content validation issues as a degraded agent state with a
+	// dynamic message. The user is the one who can fix the offending YAML; we
+	// route this through the existing health channel rather than Sentry.
+	if c.configValidationProvider != nil {
+		if issues := c.configValidationProvider.GetConfigValidationIssues(); len(issues) > 0 {
+			status.OverallHealth = models.Degraded
+			status.HealthMessage = config.FormatConfigValidationMessage(issues)
+		}
+	}
 
 	return status, nil
 }

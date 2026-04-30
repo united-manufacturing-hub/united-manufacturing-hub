@@ -113,6 +113,13 @@ type ConfigManager interface {
 	// GetBackupCount returns the number of config backups created since startup.
 	GetBackupCount() uint64
 
+	// GetConfigValidationIssues is intentionally NOT on this interface. The
+	// narrow surface lives at agent_monitor.ConfigValidationProvider, which
+	// FileConfigManager and FileConfigManagerWithBackoff satisfy structurally.
+	// Keeping it off ConfigManager prevents unrelated mocks from having to
+	// stub it out, and signals that callers needing validation issues should
+	// depend on the narrow provider type.
+
 	// TODO: Add AtomicUnlinkFromTemplate method
 	// AtomicUnlinkFromTemplate converts a templated configuration (using YAML anchors/aliases)
 	// to an inline template configuration, making it UI-editable while preserving all
@@ -156,16 +163,23 @@ type FileConfigManager struct {
 
 	cacheRawConfig string
 
+	// validationIssues holds the results of the last config-content validation pass.
+	// Always swapped wholesale (never appended to) by readAndParseConfig — see swapValidationIssues.
+	validationIssues []ConfigValidationIssue
+
 	cacheConfig FullConfig // struct obtained from that file
+
+	// backupCount tracks the number of config backups created since startup.
+	backupCount atomic.Uint64
 
 	// ---------- in-memory cache (read-only after RLock) ----------
 	cacheMu sync.RWMutex // guards the two fields below
 
+	// validationIssuesMu guards validationIssues.
+	validationIssuesMu sync.RWMutex
+
 	// ---------- background refresh state ----------
 	refreshMu sync.Mutex // prevents concurrent background refreshes
-
-	// backupCount tracks the number of config backups created since startup.
-	backupCount atomic.Uint64
 
 	// backupEnabled controls whether config backups are created before writes.
 	backupEnabled bool
@@ -467,7 +481,7 @@ func (m *FileConfigManager) readAndParseConfig(ctx context.Context) (FullConfig,
 		return FullConfig{}, "", ctx.Err()
 	}
 
-	config, err := ParseConfig(data, ctx, false)
+	config, err := ParseConfig(data, ctx, false, true)
 	if err != nil {
 		return FullConfig{}, "", fmt.Errorf("failed to parse config file: %w", err)
 	}
@@ -484,25 +498,60 @@ func (m *FileConfigManager) readAndParseConfig(ctx context.Context) (FullConfig,
 		return FullConfig{}, "", fmt.Errorf("config file is empty: %s", m.configPath)
 	}
 
-	// Validate the location map
-	// This ensures downstream code doesn't panic when trying to access the location map
-	if config.Agent.Location == nil {
-		m.logger.SentryWarn(deps.FeatureFSMv1ConfigManager, configManagerHierarchyPath,
-			"config_missing_location_map", deps.String("path", m.configPath))
-
-		config.Agent.Location = make(map[int]string)
-	}
-
-	// Validate that the release channel is valid
-	// This prevent weird values from being set by the user
-	if config.Agent.ReleaseChannel != ReleaseChannelNightly && config.Agent.ReleaseChannel != ReleaseChannelStable && config.Agent.ReleaseChannel != ReleaseChannelEnterprise {
-		m.logger.SentryWarn(deps.FeatureFSMv1ConfigManager, configManagerHierarchyPath,
-			"config_invalid_release_channel", deps.String("release_channel", string(config.Agent.ReleaseChannel)))
-		config.Agent.ReleaseChannel = "n/a"
-	}
+	m.swapValidationIssues(m.validateConfig(&config))
 
 	// Return both config and raw data for atomic cache update by caller
 	return config, string(data), nil
+}
+
+// validateConfig inspects the parsed config for known invariants and returns
+// a list of validation issues. Side effect: coerces invalid values to safe
+// defaults on the passed-in config (e.g. an unrecognized releaseChannel resets
+// to "stable" so downstream code never branches on the typo). Empty values are
+// defaulted to "stable" inside ParseConfig (applyDefaults=true) and never reach
+// this branch — only non-empty typos do. We do NOT call SentryWarn here: see
+// doc.go for the Sentry-vs-validation policy.
+func (m *FileConfigManager) validateConfig(config *FullConfig) []ConfigValidationIssue {
+	var issues []ConfigValidationIssue
+	if config.Agent.ReleaseChannel != ReleaseChannelNightly &&
+		config.Agent.ReleaseChannel != ReleaseChannelStable &&
+		config.Agent.ReleaseChannel != ReleaseChannelEnterprise {
+		issues = append(issues, ConfigValidationIssue{
+			Field:          "agent.releaseChannel",
+			OffendingValue: string(config.Agent.ReleaseChannel),
+			AllowedValues:  []string{"nightly", "stable", "enterprise"},
+		})
+		config.Agent.ReleaseChannel = ReleaseChannelStable
+	}
+
+	return issues
+}
+
+// swapValidationIssues replaces the validation-issues list wholesale. Mutex-protected
+// so concurrent GetConfigValidationIssues readers always observe a consistent slice.
+// Callers are readAndParseConfig (read path) and WriteYAMLConfigFromString (write path);
+// cache-hit GetConfig does not call this — see manager.go's FAST PATH — which is the
+// invariant that lets a successful parse decide what the latest issues list is.
+// The cache (cacheConfig + cacheModTime) and the issues list are decoupled by design:
+// they live behind separate mutexes and update independently, since validation runs
+// after parsing whereas the cache stores the parsed result.
+func (m *FileConfigManager) swapValidationIssues(fresh []ConfigValidationIssue) {
+	m.validationIssuesMu.Lock()
+	defer m.validationIssuesMu.Unlock()
+	m.validationIssues = fresh
+}
+
+// GetConfigValidationIssues returns a defensive copy of the validation issues recorded
+// by the most recent successful parse (read or write path). The returned slice is
+// owned by the caller; mutating it does not affect the manager's internal list.
+// Safe to call concurrently with swapValidationIssues. An empty slice means the
+// last parse passed validation; nil and empty are equivalent here.
+func (m *FileConfigManager) GetConfigValidationIssues() []ConfigValidationIssue {
+	m.validationIssuesMu.RLock()
+	defer m.validationIssuesMu.RUnlock()
+	out := make([]ConfigValidationIssue, len(m.validationIssues))
+	copy(out, m.validationIssues)
+	return out
 }
 
 // FileConfigManagerWithBackoff wraps a FileConfigManager and implements backoff for GetConfig errors.
@@ -562,6 +611,12 @@ func (m *FileConfigManagerWithBackoff) SetConfigBackupEnabled(enabled bool) {
 // GetBackupCount returns the number of config backups created since startup.
 func (m *FileConfigManagerWithBackoff) GetBackupCount() uint64 {
 	return m.configManager.GetBackupCount()
+}
+
+// GetConfigValidationIssues delegates to the wrapped FileConfigManager.
+// Returns a copy of the validation issues from the most recent parse.
+func (m *FileConfigManagerWithBackoff) GetConfigValidationIssues() []ConfigValidationIssue {
+	return m.configManager.GetConfigValidationIssues()
 }
 
 // GetBackupCount returns the number of config backups created since startup.
@@ -637,13 +692,22 @@ func (m *FileConfigManager) WithConfigPath(configPath string) *FileConfigManager
 }
 
 // ParseConfig parses YAML configuration data into a FullConfig struct with optional validation.
-// It performs two main operations:
+// It performs three main operations:
 // 1. Decodes the YAML data using strict field validation (unless allowUnknownFields is true)
 // 2. Processes any templateRef resolution for protocol converters
+// 3. When applyDefaults is true, applies defaults for omitempty fields (location, releaseChannel)
 //
 // Parameters:
 //   - data: Raw YAML configuration data as bytes
-//   - allowUnknownFields: If true, allows unknown fields in the YAML; if false, rejects them
+//   - ctx: Context for cancellation propagated through templateRef resolution
+//   - allowUnknownFields: If true, allows unknown fields in the YAML; if false, rejects them.
+//     readAndParseConfig passes false (strict); WriteYAMLConfigFromString first tries
+//     false then retries with true to keep YAML anchors working for hand-edited files.
+//   - applyDefaults: If true, defaults nil location to empty map and empty releaseChannel to "stable".
+//     The read path (readAndParseConfig) and the cache-update parse inside
+//     WriteYAMLConfigFromString pass true so downstream consumers always see populated
+//     fields; pure-validation parses (the strict pre-write check) and tests that need
+//     to assert original empty-equals-empty semantics pass false.
 //
 // Returns:
 //   - FullConfig: The parsed and processed configuration
@@ -651,7 +715,7 @@ func (m *FileConfigManager) WithConfigPath(configPath string) *FileConfigManager
 //
 // Note: This function is exported primarily for use in runtime_config_test to provide
 // comprehensive test coverage of the configuration parsing functionality.
-func ParseConfig(data []byte, ctx context.Context, allowUnknownFields bool) (FullConfig, error) {
+func ParseConfig(data []byte, ctx context.Context, allowUnknownFields, applyDefaults bool) (FullConfig, error) {
 	var rawConfig FullConfig
 
 	// First decode the YAML into the raw config structure using standard YAML functions
@@ -666,6 +730,15 @@ func ParseConfig(data []byte, ctx context.Context, allowUnknownFields bool) (Ful
 	processedConfig, err := convertYamlToSpec(rawConfig, ctx)
 	if err != nil {
 		return FullConfig{}, fmt.Errorf("failed to resolve protocol converter template references: %w", err)
+	}
+
+	if applyDefaults {
+		if processedConfig.Agent.Location == nil {
+			processedConfig.Agent.Location = make(map[int]string)
+		}
+		if strings.TrimSpace(string(processedConfig.Agent.ReleaseChannel)) == "" {
+			processedConfig.Agent.ReleaseChannel = ReleaseChannelStable
+		}
 	}
 
 	return processedConfig, nil
@@ -1102,11 +1175,11 @@ func (m *FileConfigManagerWithBackoff) UpdateAndGetCacheModTime(ctx context.Cont
 // otherwise be processed through the template system.
 func (m *FileConfigManager) WriteYAMLConfigFromString(ctx context.Context, configStr string, expectedModTime string) error {
 	// First parse the config with strict validation to detect syntax errors and schema problems
-	_, err := ParseConfig([]byte(configStr), ctx, false)
+	_, err := ParseConfig([]byte(configStr), ctx, false, false)
 	if err != nil {
 		// If strict parsing fails, try again with allowUnknownFields=true
 		// This allows YAML anchors and other custom fields
-		_, err = ParseConfig([]byte(configStr), ctx, true)
+		_, err = ParseConfig([]byte(configStr), ctx, true, false)
 		if err != nil {
 			return fmt.Errorf("failed to parse config: %w", err)
 		}
@@ -1164,7 +1237,7 @@ func (m *FileConfigManager) WriteYAMLConfigFromString(ctx context.Context, confi
 	// We already validated the config above, so this should succeed
 	// This parsing step is crucial as it converts the raw YAML to the proper spec config format,
 	// ensuring template references are resolved and the cache contains valid, usable config data
-	newConfig, err := ParseConfig([]byte(configStr), ctx, true) // Allow unknown fields for YAML anchors
+	newConfig, err := ParseConfig([]byte(configStr), ctx, true, true) // Allow unknown fields for YAML anchors; apply defaults so cache matches readAndParseConfig
 	if err != nil {
 		// If parsing fails, invalidate cache to force fresh read later
 		m.cacheMu.Lock()
@@ -1176,6 +1249,13 @@ func (m *FileConfigManager) WriteYAMLConfigFromString(ctx context.Context, confi
 
 		return fmt.Errorf("failed to parse new config for cache update: %w", err)
 	}
+
+	// Re-run validation on the just-written config so that fixing a typo via MC
+	// clears stale issues immediately (and a freshly introduced typo surfaces
+	// without waiting for the next mtime change). validateConfig may coerce
+	// invalid fields on the passed-in struct; the cache stores the coerced copy
+	// so subsequent reads observe the same value as readAndParseConfig.
+	m.swapValidationIssues(m.validateConfig(&newConfig))
 
 	// Update cache with the new config, raw data, and mod time
 	m.cacheMu.Lock()

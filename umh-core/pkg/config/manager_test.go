@@ -307,7 +307,7 @@ agent:
     0: Enterprise
     1: Site
 `
-				config, err := ParseConfig([]byte(validYAML), ctx, false)
+				config, err := ParseConfig([]byte(validYAML), ctx, false, false)
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(config.Internal.Services).To(HaveLen(1))
@@ -321,14 +321,14 @@ agent:
 			})
 
 			It("should handle empty input", func() {
-				config, err := ParseConfig([]byte{}, ctx, false)
+				config, err := ParseConfig([]byte{}, ctx, false, false)
 				Expect(err).To(HaveOccurred())
 				Expect(config).To(Equal(FullConfig{}))
 			})
 
 			It("should handle empty but valid YAML", func() {
 				emptyYAML := "---\n"
-				config, err := ParseConfig([]byte(emptyYAML), ctx, false)
+				config, err := ParseConfig([]byte(emptyYAML), ctx, false, false)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(config).To(Equal(FullConfig{}))
 			})
@@ -339,7 +339,7 @@ internal: {
   services: [
     { name: service1, desiredState: running,
 `
-				_, err := ParseConfig([]byte(malformedYAML), ctx, false)
+				_, err := ParseConfig([]byte(malformedYAML), ctx, false, false)
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("did not find expected node content"))
 			})
@@ -354,7 +354,7 @@ internal:
   unknownSection:
     key: value
 `
-				_, err := ParseConfig([]byte(yamlWithUnknownFields), ctx, false)
+				_, err := ParseConfig([]byte(yamlWithUnknownFields), ctx, false, false)
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("failed to decode config"))
 			})
@@ -372,7 +372,7 @@ internal:
 agent:
   location: null
 `
-				config, err := ParseConfig([]byte(yamlWithNulls), ctx, false)
+				config, err := ParseConfig([]byte(yamlWithNulls), ctx, false, false)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(config.Internal.Services).To(HaveLen(1))
 				Expect(config.Internal.Services[0].Name).To(Equal("service1"))
@@ -397,7 +397,7 @@ internal:
         configFiles:
           "file with spaces.txt": "content with multiple\nlines\nand \"quotes\""
 `
-				config, err := ParseConfig([]byte(complexYAML), ctx, false)
+				config, err := ParseConfig([]byte(complexYAML), ctx, false, false)
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(config.Internal.Services).To(HaveLen(1))
@@ -442,7 +442,7 @@ internal:
 					data, err := fsService.ReadFile(ctx, filepath.Join("../../examples", file.Name()))
 					Expect(err).NotTo(HaveOccurred())
 
-					_, err = ParseConfig(data, ctx, false)
+					_, err = ParseConfig(data, ctx, false, false)
 					Expect(err).NotTo(HaveOccurred(), "Failed to parse "+file.Name())
 				}
 			})
@@ -452,7 +452,7 @@ internal:
 				data, err := fsService.ReadFile(ctx, "../../examples/example-config-protocolconverter-templated.yaml")
 				Expect(err).NotTo(HaveOccurred())
 
-				config, err := ParseConfig(data, ctx, true)
+				config, err := ParseConfig(data, ctx, true, false)
 				Expect(err).NotTo(HaveOccurred())
 
 				// The example should have at least one protocol converter using a template
@@ -484,7 +484,7 @@ internal:
 				Expect(err).NotTo(HaveOccurred())
 
 				// Parse the config with anchor extraction enabled
-				config, err := ParseConfig(originalData, ctx, true)
+				config, err := ParseConfig(originalData, ctx, true, false)
 				Expect(err).NotTo(HaveOccurred())
 
 				// Verify we have the expected structure
@@ -526,7 +526,7 @@ internal:
 				Expect(writtenData).NotTo(BeEmpty())
 
 				// Parse the written data to verify it's still valid
-				writtenConfig, err := ParseConfig(writtenData, ctx, true)
+				writtenConfig, err := ParseConfig(writtenData, ctx, true, false)
 				Expect(err).NotTo(HaveOccurred())
 
 				// Verify the structure is preserved
@@ -557,7 +557,7 @@ internal:
 				Expect(err).NotTo(HaveOccurred())
 
 				// Parse the config with anchor extraction enabled
-				config, err := ParseConfig(originalData, ctx, true)
+				config, err := ParseConfig(originalData, ctx, true, false)
 				Expect(err).NotTo(HaveOccurred())
 
 				// Verify we have the expected structure
@@ -625,7 +625,7 @@ internal:
 				Expect(writtenData).NotTo(BeEmpty())
 
 				// Parse the written data to verify it's still valid
-				writtenConfig, err := ParseConfig(writtenData, ctx, true)
+				writtenConfig, err := ParseConfig(writtenData, ctx, true, false)
 				Expect(err).NotTo(HaveOccurred())
 
 				// Verify the structure is preserved
@@ -697,7 +697,7 @@ internal:
 			Expect(err).NotTo(HaveOccurred())
 
 			// Parse and write initial config
-			config, err := ParseConfig(originalData, ctx, true)
+			config, err := ParseConfig(originalData, ctx, true, false)
 			Expect(err).NotTo(HaveOccurred())
 
 			err = configManager.writeConfig(ctx, config)
@@ -1549,6 +1549,265 @@ agent:
 			})
 		})
 	})
+})
+
+// newTestManagerWithYAML returns a FileConfigManager wired to a MockFileSystem
+// pre-loaded with the given YAML content. Used by ConfigValidationIssue tests.
+func newTestManagerWithYAML(yaml string) (*FileConfigManager, *filesystem.MockFileSystem) {
+	mockFS := filesystem.NewMockFileSystem()
+	current := []byte(yaml)
+	mockFS.WithFileExistsFunc(func(ctx context.Context, path string) (bool, error) {
+		return true, nil
+	})
+	mockFS.WithReadFileFunc(func(ctx context.Context, path string) ([]byte, error) {
+		return current, nil
+	})
+	mockFS.WithStatFunc(func(ctx context.Context, path string) (os.FileInfo, error) {
+		return &mockFileInfo{name: filepath.Base(path), size: int64(len(current)), modTime: time.Now()}, nil
+	})
+	mockFS.WithEnsureDirectoryFunc(func(ctx context.Context, path string) error {
+		return nil
+	})
+	cm := NewFileConfigManager()
+	cm.WithFileSystemService(mockFS)
+	return cm, mockFS
+}
+
+// mockFileInfo is a minimal os.FileInfo stub for tests.
+type mockFileInfo struct {
+	modTime time.Time
+	name    string
+	size    int64
+}
+
+func (m *mockFileInfo) Name() string       { return m.name }
+func (m *mockFileInfo) Size() int64        { return m.size }
+func (m *mockFileInfo) Mode() os.FileMode  { return 0644 }
+func (m *mockFileInfo) ModTime() time.Time { return m.modTime }
+func (m *mockFileInfo) IsDir() bool        { return false }
+func (m *mockFileInfo) Sys() any           { return nil }
+
+var _ = Describe("ConfigValidationIssue surface", func() {
+	var ctx context.Context
+
+	BeforeEach(func() {
+		ctx = context.Background()
+	})
+
+	It("emits a ConfigValidationIssue for invalid releaseChannel (P3)", func() {
+		m, _ := newTestManagerWithYAML("agent:\n  releaseChannel: nigtly\n")
+		defer m.Stop()
+		cfg, _, err := m.readAndParseConfig(ctx)
+		Expect(err).NotTo(HaveOccurred())
+
+		issues := m.GetConfigValidationIssues()
+		Expect(issues).To(HaveLen(1))
+		Expect(issues[0].Field).To(Equal("agent.releaseChannel"))
+		Expect(issues[0].OffendingValue).To(Equal("nigtly"))
+		Expect(issues[0].AllowedValues).To(ConsistOf("nightly", "stable", "enterprise"))
+
+		// After validation, the channel must be coerced to stable so downstream
+		// code (auto-update, dashboards) doesn't branch on the typo.
+		Expect(cfg.Agent.ReleaseChannel).To(Equal(ReleaseChannelStable))
+	})
+
+	DescribeTable("valid releaseChannel values produce no validation issue (P4-readAndParseConfig)",
+		func(channel string) {
+			m, _ := newTestManagerWithYAML(fmt.Sprintf("agent:\n  releaseChannel: %s\n", channel))
+			defer m.Stop()
+			_, _, err := m.readAndParseConfig(ctx)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(m.GetConfigValidationIssues()).To(BeEmpty())
+		},
+		Entry("nightly", "nightly"),
+		Entry("stable", "stable"),
+		Entry("enterprise", "enterprise"),
+	)
+
+	It("clears validation issues when YAML is fixed (P5)", func() {
+		m, mockFS := newTestManagerWithYAML("agent:\n  releaseChannel: nigtly\n")
+		defer m.Stop()
+		_, _, err := m.readAndParseConfig(ctx)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(m.GetConfigValidationIssues()).To(HaveLen(1))
+
+		// Swap YAML to a valid value and re-parse
+		fixed := []byte("agent:\n  releaseChannel: stable\n")
+		mockFS.WithReadFileFunc(func(ctx context.Context, path string) ([]byte, error) {
+			return fixed, nil
+		})
+		_, _, err = m.readAndParseConfig(ctx)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(m.GetConfigValidationIssues()).To(BeEmpty())
+	})
+
+	It("does not duplicate on repeated bad reads (P6)", func() {
+		m, _ := newTestManagerWithYAML("agent:\n  releaseChannel: nigtly\n")
+		defer m.Stop()
+		_, _, err := m.readAndParseConfig(ctx)
+		Expect(err).NotTo(HaveOccurred())
+		_, _, err = m.readAndParseConfig(ctx)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(m.GetConfigValidationIssues()).To(HaveLen(1))
+	})
+
+	It("does not change the list on cache hits (P7)", func() {
+		// readAndParseConfig is the only reader-path mutator of validationIssues.
+		// We populate via readAndParseConfig, then mutate the issues list out-of-band
+		// (a sentinel value) and seed the cache so a subsequent GetConfig call hits
+		// the FAST PATH. If the cache hit path were to (incorrectly) re-run
+		// swapValidationIssues, our sentinel would be overwritten by the freshly
+		// computed list. Surviving the second call proves cache hits don't mutate.
+		m, mockFS := newTestManagerWithYAML("agent:\n  releaseChannel: nigtly\n")
+		defer m.Stop()
+		fixedMod := time.Unix(1700000000, 0)
+		mockFS.WithStatFunc(func(ctx context.Context, path string) (os.FileInfo, error) {
+			return &mockFileInfo{name: filepath.Base(path), size: int64(len("x")), modTime: fixedMod}, nil
+		})
+
+		_, _, err := m.readAndParseConfig(ctx)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(m.GetConfigValidationIssues()).To(HaveLen(1))
+
+		// Seed the cache so GetConfig's FAST PATH triggers (mtime match + non-empty
+		// cached config + cleared error).
+		cfg, _, err := m.readAndParseConfig(ctx)
+		Expect(err).NotTo(HaveOccurred())
+		m.cacheMu.Lock()
+		m.cacheConfig = cfg
+		m.cacheModTime = fixedMod
+		m.cacheError = nil
+		m.cacheMu.Unlock()
+
+		// Mutate the in-memory issues list out-of-band so we can detect a re-run.
+		m.swapValidationIssues([]ConfigValidationIssue{{Field: "marker", OffendingValue: "sentinel"}})
+
+		// Cache hit must not re-run validateConfig.
+		_, err = m.GetConfig(ctx, 0)
+		Expect(err).NotTo(HaveOccurred())
+		after := m.GetConfigValidationIssues()
+		Expect(after).To(HaveLen(1))
+		Expect(after[0].Field).To(Equal("marker"))
+	})
+
+	It("WriteYAMLConfigFromString clears stale issues when user fixes the typo via MC (P7-write-clear)", func() {
+		m, mockFS := newTestManagerWithYAML("agent:\n  releaseChannel: nigtly\n")
+		defer m.Stop()
+		// Capture writes so subsequent reads see the new content.
+		mockFS.WithWriteFileFunc(func(ctx context.Context, path string, data []byte, perm os.FileMode) error {
+			mockFS.WithReadFileFunc(func(ctx context.Context, path string) ([]byte, error) { return data, nil })
+			return nil
+		})
+
+		_, _, err := m.readAndParseConfig(ctx)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(m.GetConfigValidationIssues()).To(HaveLen(1))
+
+		err = m.WriteYAMLConfigFromString(ctx, "agent:\n  releaseChannel: stable\n", "")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(m.GetConfigValidationIssues()).To(BeEmpty())
+	})
+
+	It("WriteYAMLConfigFromString flags a freshly-introduced typo (P7-write-flag)", func() {
+		m, mockFS := newTestManagerWithYAML("agent:\n  releaseChannel: stable\n")
+		defer m.Stop()
+		mockFS.WithWriteFileFunc(func(ctx context.Context, path string, data []byte, perm os.FileMode) error {
+			mockFS.WithReadFileFunc(func(ctx context.Context, path string) ([]byte, error) { return data, nil })
+			return nil
+		})
+
+		_, _, err := m.readAndParseConfig(ctx)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(m.GetConfigValidationIssues()).To(BeEmpty())
+
+		err = m.WriteYAMLConfigFromString(ctx, "agent:\n  releaseChannel: nigtly\n", "")
+		Expect(err).NotTo(HaveOccurred())
+		issues := m.GetConfigValidationIssues()
+		Expect(issues).To(HaveLen(1))
+		Expect(issues[0].Field).To(Equal("agent.releaseChannel"))
+		Expect(issues[0].OffendingValue).To(Equal("nigtly"))
+	})
+
+	It("survives concurrent swap+read (P9)", func() {
+		m, _ := newTestManagerWithYAML("agent: {}\n")
+		defer m.Stop()
+
+		done := make(chan struct{})
+		go func() {
+			defer GinkgoRecover()
+			for i := 0; i < 1000; i++ {
+				_ = m.GetConfigValidationIssues()
+			}
+			close(done)
+		}()
+		for i := 0; i < 1000; i++ {
+			m.swapValidationIssues([]ConfigValidationIssue{
+				{Field: "x", OffendingValue: "y"},
+			})
+		}
+		<-done
+	})
+
+	It("FileConfigManagerWithBackoff delegates GetConfigValidationIssues (P10)", func() {
+		m, _ := newTestManagerWithYAML("agent:\n  releaseChannel: nigtly\n")
+		defer m.Stop()
+		_, _, err := m.readAndParseConfig(ctx)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Wrap directly without going through the singleton constructor so the test
+		// is hermetic and doesn't conflict with other suites.
+		wrapped := &FileConfigManagerWithBackoff{configManager: m}
+		Expect(wrapped.GetConfigValidationIssues()).To(HaveLen(1))
+		Expect(wrapped.GetConfigValidationIssues()[0].Field).To(Equal("agent.releaseChannel"))
+	})
+})
+
+var _ = Describe("ParseConfig defaulting", func() {
+	var ctx context.Context
+
+	BeforeEach(func() {
+		ctx = context.Background()
+	})
+
+	It("defaults empty releaseChannel to stable when applyDefaults=true (P1)", func() {
+		yaml := []byte("agent:\n  releaseChannel: \"\"\n")
+		cfg, err := ParseConfig(yaml, ctx, false, true)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(cfg.Agent.ReleaseChannel).To(Equal(ReleaseChannelStable))
+	})
+
+	It("defaults nil Location to empty map when applyDefaults=true (P2)", func() {
+		yaml := []byte("agent: {}\n")
+		cfg, err := ParseConfig(yaml, ctx, false, true)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(cfg.Agent.Location).NotTo(BeNil())
+		Expect(cfg.Agent.Location).To(BeEmpty())
+	})
+
+	It("preserves empty values when applyDefaults=false (P11)", func() {
+		yaml := []byte("agent: {}\n")
+		cfg, err := ParseConfig(yaml, ctx, false, false)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(string(cfg.Agent.ReleaseChannel)).To(BeEmpty())
+		Expect(cfg.Agent.Location).To(BeNil())
+	})
+
+	DescribeTable("ReleaseChannel defaulting fuzz (P4b)",
+		func(input string, expected ReleaseChannel) {
+			yaml := []byte(fmt.Sprintf("agent:\n  releaseChannel: %q\n", input))
+			cfg, err := ParseConfig(yaml, ctx, false, true)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(cfg.Agent.ReleaseChannel).To(Equal(expected))
+		},
+		Entry("empty string", "", ReleaseChannelStable),
+		Entry("single space", " ", ReleaseChannelStable),
+		Entry("multiple spaces", "  ", ReleaseChannelStable),
+		Entry("Stable (capital)", "Stable", ReleaseChannel("Stable")),
+		Entry("STABLE", "STABLE", ReleaseChannel("STABLE")),
+		Entry("nightly", "nightly", ReleaseChannelNightly),
+		Entry("stable", "stable", ReleaseChannelStable),
+		Entry("enterprise", "enterprise", ReleaseChannelEnterprise),
+	)
 })
 
 // filterBackupDirPaths returns only paths that start with the backup directory.

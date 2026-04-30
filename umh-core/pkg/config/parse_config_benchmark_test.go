@@ -32,7 +32,7 @@ func BenchmarkParseConfig_100(b *testing.B) {
 	ctx := context.Background()
 
 	for range b.N {
-		_, err := ParseConfig(cfg, ctx, false)
+		_, err := ParseConfig(cfg, ctx, false, false)
 		if err != nil {
 			b.Fatalf("parseConfig failed: %v", err)
 		}
@@ -51,7 +51,7 @@ func BenchmarkParseConfig_Comm(b *testing.B) {
 	ctx := context.Background()
 
 	for range b.N {
-		_, err := ParseConfig(cfg, ctx, false)
+		_, err := ParseConfig(cfg, ctx, false, false)
 		if err != nil {
 			b.Fatalf("parseConfig failed: %v", err)
 		}

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Improvements
+
+- A typo in `releaseChannel` in `config.yaml` (e.g. `nigtly`) used to be silently swapped for a placeholder, with nothing surfacing in Management Console. The agent now flags it as degraded with the offending value and the allowed options (`nightly`, `stable`, `enterprise`), and runs on `stable` until you fix the YAML
+
 ## [0.44.18]
 
 Enables FSMv2 communicator by default.

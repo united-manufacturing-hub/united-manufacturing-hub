@@ -25,6 +25,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/agent_monitor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
@@ -325,5 +326,128 @@ var _ = Describe("Agent Monitor Service", func() {
 			expectedPath := filepath.Join(constants.S6BaseDir, "umh-core")
 			Expect(customMockS6.lastServicePath).To(Equal(expectedPath))
 		})
+	})
+})
+
+// fakeConfigValidationProvider is a stub implementation of ConfigValidationProvider for tests.
+type fakeConfigValidationProvider struct {
+	issues []config.ConfigValidationIssue
+}
+
+func (f *fakeConfigValidationProvider) GetConfigValidationIssues() []config.ConfigValidationIssue {
+	return f.issues
+}
+
+var _ = Describe("Agent Monitor Service config validation escalation (P12)", func() {
+	var (
+		mockFS       *filesystem.MockFileSystem
+		mockS6       *s6.MockService
+		ctx          context.Context
+		mockSnapshot fsm.SystemSnapshot
+	)
+
+	BeforeEach(func() {
+		mockFS = filesystem.NewMockFileSystem()
+		mockS6 = s6.NewMockService()
+		ctx = context.Background()
+
+		mockSnapshot = fsm.SystemSnapshot{
+			CurrentConfig: config.FullConfig{
+				Agent: config.AgentConfig{
+					Location:       map[int]string{0: "Plant"},
+					ReleaseChannel: config.ReleaseChannelStable,
+				},
+			},
+			SnapshotTime: time.Now(),
+			Tick:         1,
+		}
+
+		mockS6.GetLogsResult = []s6.LogEntry{}
+	})
+
+	It("escalates to Degraded with formatted message when validation issues exist", func() {
+		fp := &fakeConfigValidationProvider{issues: []config.ConfigValidationIssue{
+			{
+				Field:          "agent.releaseChannel",
+				OffendingValue: "nigtly",
+				AllowedValues:  []string{"nightly", "stable", "enterprise"},
+			},
+		}}
+		svc := agent_monitor.NewAgentMonitorService(
+			agent_monitor.WithFilesystemService(mockFS),
+			agent_monitor.WithS6Service(mockS6),
+			agent_monitor.WithConfigValidationProvider(fp),
+		)
+
+		info, err := svc.Status(ctx, mockSnapshot)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(info.OverallHealth).To(Equal(models.Degraded))
+		Expect(info.HealthMessage).To(ContainSubstring("agent.releaseChannel"))
+		Expect(info.HealthMessage).To(ContainSubstring("nigtly"))
+		Expect(info.HealthMessage).To(ContainSubstring("nightly, stable, enterprise"))
+	})
+
+	It("stays Active with empty HealthMessage when no validation issues", func() {
+		fp := &fakeConfigValidationProvider{issues: nil}
+		svc := agent_monitor.NewAgentMonitorService(
+			agent_monitor.WithFilesystemService(mockFS),
+			agent_monitor.WithS6Service(mockS6),
+			agent_monitor.WithConfigValidationProvider(fp),
+		)
+
+		info, err := svc.Status(ctx, mockSnapshot)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(info.OverallHealth).To(Equal(models.Active))
+		Expect(info.HealthMessage).To(BeEmpty())
+	})
+
+	It("validation message wins when location is also empty (P12 ordering)", func() {
+		// When BOTH the nil-location escalation and the config-validation block
+		// fire, the validation block runs last in Status() and overwrites the
+		// (empty) HealthMessage. OverallHealth is already Degraded from the
+		// location escalation, so the categories compose; what we assert is
+		// that the user-actionable validation message wins over the silent
+		// "no location" fallback because we want the user to see why we
+		// degraded, not just that we did.
+		nilLocSnapshot := fsm.SystemSnapshot{
+			CurrentConfig: config.FullConfig{
+				Agent: config.AgentConfig{
+					Location:       nil,
+					ReleaseChannel: config.ReleaseChannelStable,
+				},
+			},
+			SnapshotTime: time.Now(),
+			Tick:         1,
+		}
+		fp := &fakeConfigValidationProvider{issues: []config.ConfigValidationIssue{
+			{
+				Field:          "agent.releaseChannel",
+				OffendingValue: "nigtly",
+				AllowedValues:  []string{"nightly", "stable", "enterprise"},
+			},
+		}}
+		svc := agent_monitor.NewAgentMonitorService(
+			agent_monitor.WithFilesystemService(mockFS),
+			agent_monitor.WithS6Service(mockS6),
+			agent_monitor.WithConfigValidationProvider(fp),
+		)
+
+		info, err := svc.Status(ctx, nilLocSnapshot)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(info.OverallHealth).To(Equal(models.Degraded))
+		Expect(info.HealthMessage).To(ContainSubstring("agent.releaseChannel"))
+		Expect(info.HealthMessage).To(ContainSubstring("nigtly"))
+	})
+
+	It("stays Active when no provider is wired (nil-guard)", func() {
+		svc := agent_monitor.NewAgentMonitorService(
+			agent_monitor.WithFilesystemService(mockFS),
+			agent_monitor.WithS6Service(mockS6),
+		)
+
+		info, err := svc.Status(ctx, mockSnapshot)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(info.OverallHealth).To(Equal(models.Active))
+		Expect(info.HealthMessage).To(BeEmpty())
 	})
 })
