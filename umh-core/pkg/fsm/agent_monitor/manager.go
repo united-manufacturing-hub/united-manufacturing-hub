@@ -24,6 +24,7 @@ import (
 	public_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/agent_monitor"
 )
 
 // AgentManager is the FSM manager for the agent monitor instance.
@@ -40,7 +41,9 @@ type AgentManagerSnapshot struct {
 func (a *AgentManagerSnapshot) IsObservedStateSnapshot() {}
 
 // NewAgentManager constructs a manager.
-func NewAgentManager(name string) *AgentManager {
+// configValidationProvider may be nil; production wires the FileConfigManagerWithBackoff
+// so config-validation issues surface via the agent's health message.
+func NewAgentManager(name string, configValidationProvider agent_monitor.ConfigValidationProvider) *AgentManager {
 	managerName := fmt.Sprintf("%s_%s", logger.AgentManagerComponentName, name)
 
 	baseMgr := public_fsm.NewBaseFSMManager[config.AgentMonitorConfig](
@@ -68,7 +71,7 @@ func NewAgentManager(name string) *AgentManager {
 		},
 		// Create instance
 		func(fc config.AgentMonitorConfig) (public_fsm.FSMInstance, error) {
-			inst := NewAgentInstance(fc)
+			inst := NewAgentInstance(fc, configValidationProvider)
 
 			return inst, nil
 		},

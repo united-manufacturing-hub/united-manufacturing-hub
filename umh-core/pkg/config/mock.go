@@ -1252,6 +1252,12 @@ func (m *MockConfigManager) GetBackupCount() uint64 {
 	return 0
 }
 
+// GetConfigValidationIssues returns nil for the mock — tests that need to assert
+// validation behaviour should drive the real FileConfigManager via newTestManagerWithYAML.
+func (m *MockConfigManager) GetConfigValidationIssues() []ConfigValidationIssue {
+	return nil
+}
+
 // IsGetConfigCalled returns true if GetConfig has been called (thread-safe).
 func (m *MockConfigManager) IsGetConfigCalled() bool {
 	return atomic.LoadInt32(&m.GetConfigCalled) != 0

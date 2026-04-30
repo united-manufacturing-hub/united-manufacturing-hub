@@ -122,7 +122,7 @@ func NewControlLoop(configManager config.ConfigManager) *ControlLoop {
 		benthos.NewBenthosManager(constants.DefaultManagerName),
 		container.NewContainerManager(constants.DefaultManagerName),
 		redpanda.NewRedpandaManager(constants.DefaultManagerName),
-		agent_monitor.NewAgentManager(constants.DefaultManagerName),
+		agent_monitor.NewAgentManager(constants.DefaultManagerName, configManager),
 		nmap.NewNmapManager(constants.DefaultManagerName),
 		dataflowcomponent.NewDataflowComponentManager(constants.DefaultManagerName),
 		connection.NewConnectionManager(constants.DefaultManagerName),
