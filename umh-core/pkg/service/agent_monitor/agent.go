@@ -59,6 +59,11 @@ type ServiceInfo struct {
 	// Release: Channel, Version, Supported Feature
 	Release *models.Release `json:"release"`
 
+	// HealthMessage carries a dynamic agent-health message — typically a projection of
+	// ConfigValidationIssues. Empty for the default "operating normally" / canned-message
+	// path; non-empty when readers should prefer this over the canned text.
+	HealthMessage string `json:"healthMessage,omitempty"`
+
 	// AgentLogs contains the structured s6 log entries emitted by the
 	// agent service.
 	//
@@ -77,11 +82,6 @@ type ServiceInfo struct {
 	// Therefore we override the default behaviour and copy only the 3-word
 	// slice header (24 B on amd64) — see CopyAgentLogs below.
 	AgentLogs []s6.LogEntry `json:"agentLogs"`
-
-	// HealthMessage carries a dynamic agent-health message — typically a projection of
-	// ConfigValidationIssues. Empty for the default "operating normally" / canned-message
-	// path; non-empty when readers should prefer this over the canned text.
-	HealthMessage string `json:"healthMessage,omitempty"`
 
 	// Health: Overall, Latency, Release
 	OverallHealth models.HealthCategory `json:"overallHealth"`
