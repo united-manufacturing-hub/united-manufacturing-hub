@@ -131,8 +131,12 @@ type NextResult[TSnapshot any, TDeps any] struct {
 	// §2.10 children-set design.)
 	//
 	// Discriminator (Go-level, unambiguous):
-	//   - nil sentinel       → "no opinion" — supervisor falls back to legacy
-	//                          DDS-derived children (SetChildSpecsFactory).
+	//   - nil sentinel       → "no opinion" — supervisor falls back to the
+	//                          DDS-derived ChildrenSpecs path (legacy parents
+	//                          that populate ChildrenSpecs directly in
+	//                          DeriveDesiredState, e.g. application's YAML
+	//                          passthrough and exampleparent's principled-nil
+	//                          state-package mirror).
 	//   - non-nil (any len)  → "use this exact set" — including the explicit
 	//                          empty form []config.ChildSpec{} which means
 	//                          "I am a parent and I want zero children right
@@ -144,12 +148,6 @@ type NextResult[TSnapshot any, TDeps any] struct {
 	// boundary (state.Next return value) BEFORE serialization, never after.
 	// State authors should construct the explicit empty slice when they mean
 	// "no children" and reserve nil for "no opinion" / unmigrated paths.
-	//
-	// Migration window: P1.5 introduces the field only — the supervisor does
-	// not yet read it. Passing a non-nil Children slice has no effect until
-	// P2.4 wires the reconciliation discriminator. Legacy parents that set
-	// ChildSpecs via DeriveDesiredState continue to work until P2.1 retires
-	// SetChildSpecsFactory.
 	Children []config.ChildSpec
 
 	// Signal indicates framework-level events (shutdown, restart, etc.).
@@ -235,6 +233,11 @@ func Result[TSnapshot any, TDeps any](
 // Pass nil (the common case during the P1 migration window) when the state is
 // not managing children. Parents that have migrated to renderChildren pass
 // the rendered slice. See NextResult.Children godoc for migration semantics.
+//
+// Prefer Action[any] over Transition for hot-path actions to avoid the
+// ~8.5% reflection auto-wrap overhead measured by BenchmarkReflectAutoWrap
+// (see pre-c7-reflection-benchmark.md). For state-machine orchestration
+// callbacks this overhead is negligible.
 //
 // Usage:
 //

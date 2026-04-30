@@ -26,9 +26,28 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/snapshot"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/state"
 )
+
+// snapshotForSpec builds a typed WorkerSnapshot fixture matching the shape
+// state.Next consumes. RenderChildren is the canonical children-set emitter
+// invoked at the top of state.Next (P2.2 wiring); calling it directly mirrors
+// the architecture-test fixture in architecture_p1_8_test.go's
+// parentRenderers() and is the post-P2.4 authoritative path. The snapshot's
+// Desired.ChildrenSpecs[0].UserSpec is what transport.snapshotUserSpec reads
+// to thread the parent's raw spec into both push and pull children.
+func snapshotForSpec(spec fsmv2types.UserSpec) fsmv2.WorkerSnapshot[transport.TransportConfig, transport.TransportStatus] {
+	return fsmv2.WorkerSnapshot[transport.TransportConfig, transport.TransportStatus]{
+		Desired: fsmv2.WrappedDesiredState[transport.TransportConfig]{
+			BaseDesiredState: fsmv2types.BaseDesiredState{State: fsmv2types.DesiredStateRunning},
+			ChildrenSpecs: []fsmv2types.ChildSpec{{
+				Name:       "push",
+				WorkerType: "push",
+				UserSpec:   spec,
+			}},
+		},
+	}
+}
 
 // Note: mockChannelProvider is defined in dependencies_test.go (same package)
 // and is reused here via newTestChannelProvider()
@@ -63,14 +82,14 @@ var _ = Describe("TransportWorker", func() {
 	Describe("NewTransportWorker", func() {
 		Context("dependency validation", func() {
 			It("should create a worker with valid dependencies", func() {
-				var err error
-				worker, err = transport.NewTransportWorker(identity, logger, nil)
+				w, err := transport.NewTransportWorker(identity, logger, nil, nil)
 				Expect(err).ToNot(HaveOccurred())
-				Expect(worker).NotTo(BeNil())
+				Expect(w).NotTo(BeNil())
+				worker = w.(*transport.TransportWorker)
 			})
 
 			It("should reject nil logger", func() {
-				_, err := transport.NewTransportWorker(identity, nil, nil)
+				_, err := transport.NewTransportWorker(identity, nil, nil, nil)
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("logger"))
 			})
@@ -79,18 +98,19 @@ var _ = Describe("TransportWorker", func() {
 
 	Describe("CollectObservedState", func() {
 		BeforeEach(func() {
-			var err error
-			worker, err = transport.NewTransportWorker(identity, logger, nil)
+			w, err := transport.NewTransportWorker(identity, logger, nil, nil)
 			Expect(err).ToNot(HaveOccurred())
+			worker = w.(*transport.TransportWorker)
 		})
 
-		It("should return observed state with timestamp", func() {
+		It("should return observed state (NewObservation with zero timestamp for collector)", func() {
 			ctx := context.Background()
 			observed, err := worker.CollectObservedState(ctx, nil)
 
 			Expect(err).ToNot(HaveOccurred())
 			Expect(observed).NotTo(BeNil())
-			Expect(observed.GetTimestamp()).NotTo(BeZero())
+			// NewObservation returns zero timestamp — the collector sets it after COS returns
+			Expect(observed.GetTimestamp()).To(BeZero())
 		})
 
 		It("should handle context cancellation at entry", func() {
@@ -103,31 +123,32 @@ var _ = Describe("TransportWorker", func() {
 			Expect(err).To(Equal(context.Canceled))
 		})
 
-		It("should call GetFrameworkState from dependencies", func() {
+		It("should return Observation[TransportStatus] from COS", func() {
 			ctx := context.Background()
 			observed, err := worker.CollectObservedState(ctx, nil)
 
 			Expect(err).ToNot(HaveOccurred())
-			// The observed state should have metrics container
-			typedObs, ok := observed.(snapshot.TransportObservedState)
+			typedObs, ok := observed.(fsmv2.Observation[transport.TransportStatus])
 			Expect(ok).To(BeTrue())
-			Expect(typedObs.Metrics).NotTo(BeNil())
+			// Status fields populated from deps (empty deps -> zero values)
+			Expect(typedObs.Status.JWTToken).To(BeEmpty())
+			Expect(typedObs.Status.ConsecutiveErrors).To(BeZero())
 		})
 
 		It("should populate FailedAuthConfig from dependencies", func() {
 			// Set failed auth config on the worker's dependencies
-			workerDeps := worker.GetDependencies()
+			workerDeps := worker.GetDependenciesAny().(*transport.TransportDependencies)
 			workerDeps.SetFailedAuthConfig("failed-token", "https://failed-relay.example.com", "failed-uuid")
 
 			ctx := context.Background()
 			observed, err := worker.CollectObservedState(ctx, nil)
 
 			Expect(err).ToNot(HaveOccurred())
-			typedObs, ok := observed.(snapshot.TransportObservedState)
+			typedObs, ok := observed.(fsmv2.Observation[transport.TransportStatus])
 			Expect(ok).To(BeTrue())
-			Expect(typedObs.FailedAuthConfig.AuthToken).To(Equal("failed-token"))
-			Expect(typedObs.FailedAuthConfig.RelayURL).To(Equal("https://failed-relay.example.com"))
-			Expect(typedObs.FailedAuthConfig.InstanceUUID).To(Equal("failed-uuid"))
+			Expect(typedObs.Status.FailedAuthConfig.AuthToken).To(Equal("failed-token"))
+			Expect(typedObs.Status.FailedAuthConfig.RelayURL).To(Equal("https://failed-relay.example.com"))
+			Expect(typedObs.Status.FailedAuthConfig.InstanceUUID).To(Equal("failed-uuid"))
 		})
 
 		It("should return empty FailedAuthConfig when none is set", func() {
@@ -135,29 +156,17 @@ var _ = Describe("TransportWorker", func() {
 			observed, err := worker.CollectObservedState(ctx, nil)
 
 			Expect(err).ToNot(HaveOccurred())
-			typedObs, ok := observed.(snapshot.TransportObservedState)
+			typedObs, ok := observed.(fsmv2.Observation[transport.TransportStatus])
 			Expect(ok).To(BeTrue())
-			Expect(typedObs.FailedAuthConfig.IsEmpty()).To(BeTrue())
-		})
-
-		It("should call GetActionHistory from dependencies", func() {
-			ctx := context.Background()
-			observed, err := worker.CollectObservedState(ctx, nil)
-
-			Expect(err).ToNot(HaveOccurred())
-			// The observed state should have last action results (even if empty)
-			typedObs, ok := observed.(snapshot.TransportObservedState)
-			Expect(ok).To(BeTrue())
-			// LastActionResults should be initialized (possibly empty slice)
-			Expect(typedObs.LastActionResults).To(BeNil()) // Empty when no actions recorded
+			Expect(typedObs.Status.FailedAuthConfig.IsEmpty()).To(BeTrue())
 		})
 	})
 
 	Describe("DeriveDesiredState", func() {
 		BeforeEach(func() {
-			var err error
-			worker, err = transport.NewTransportWorker(identity, logger, nil)
+			w, err := transport.NewTransportWorker(identity, logger, nil, nil)
 			Expect(err).ToNot(HaveOccurred())
+			worker = w.(*transport.TransportWorker)
 		})
 
 		Context("nil spec handling", func() {
@@ -170,17 +179,14 @@ var _ = Describe("TransportWorker", func() {
 				Expect(desired.GetState()).To(Equal("running"))
 			})
 
-			It("should include PushWorker ChildrenSpecs even with nil spec", func() {
-				desired, err := worker.DeriveDesiredState(nil)
-				Expect(err).ToNot(HaveOccurred())
+			It("should include PushWorker children via RenderChildren even with nil spec", func() {
+				children := transport.RenderChildren(snapshotForSpec(fsmv2types.UserSpec{}))
 
-				transportDesired, ok := desired.(*snapshot.TransportDesiredState)
-				Expect(ok).To(BeTrue())
-				Expect(transportDesired.ChildrenSpecs).To(HaveLen(2))
-				Expect(transportDesired.ChildrenSpecs[0].Name).To(Equal("push"))
-				Expect(transportDesired.ChildrenSpecs[0].WorkerType).To(Equal("push"))
-				Expect(transportDesired.ChildrenSpecs[1].Name).To(Equal("pull"))
-				Expect(transportDesired.ChildrenSpecs[1].WorkerType).To(Equal("pull"))
+				Expect(children).To(HaveLen(2))
+				Expect(children[0].Name).To(Equal("push"))
+				Expect(children[0].WorkerType).To(Equal("push"))
+				Expect(children[1].Name).To(Equal("pull"))
+				Expect(children[1].WorkerType).To(Equal("pull"))
 			})
 		})
 
@@ -200,14 +206,14 @@ authToken: "test-token"`,
 				Expect(desired.GetState()).To(Equal("running"))
 
 				// Type assert to access transport-specific fields
-				transportDesired, ok := desired.(*snapshot.TransportDesiredState)
+				transportDesired, ok := desired.(*fsmv2.WrappedDesiredState[transport.TransportConfig])
 				Expect(ok).To(BeTrue())
-				Expect(transportDesired.RelayURL).To(Equal("https://relay.example.com"))
-				Expect(transportDesired.InstanceUUID).To(Equal("test-uuid"))
-				Expect(transportDesired.AuthToken).To(Equal("test-token"))
+				Expect(transportDesired.Config.RelayURL).To(Equal("https://relay.example.com"))
+				Expect(transportDesired.Config.InstanceUUID).To(Equal("test-uuid"))
+				Expect(transportDesired.Config.AuthToken).To(Equal("test-token"))
 			})
 
-			It("should include PushWorker ChildrenSpecs", func() {
+			It("should include PushWorker children via RenderChildren", func() {
 				spec := fsmv2types.UserSpec{
 					Config: `relayURL: "https://relay.example.com"
 instanceUUID: "test-uuid"
@@ -215,19 +221,15 @@ authToken: "test-token"`,
 					Variables: fsmv2types.VariableBundle{},
 				}
 
-				desired, err := worker.DeriveDesiredState(spec)
-				Expect(err).ToNot(HaveOccurred())
+				children := transport.RenderChildren(snapshotForSpec(spec))
+				Expect(children).To(HaveLen(2))
 
-				transportDesired, ok := desired.(*snapshot.TransportDesiredState)
-				Expect(ok).To(BeTrue())
-				Expect(transportDesired.ChildrenSpecs).To(HaveLen(2))
-
-				pushSpec := transportDesired.ChildrenSpecs[0]
+				pushSpec := children[0]
 				Expect(pushSpec.Name).To(Equal("push"))
 				Expect(pushSpec.WorkerType).To(Equal("push"))
 				Expect(pushSpec.ChildStartStates).To(ConsistOf("Running", "Degraded"))
 
-				pullSpec := transportDesired.ChildrenSpecs[1]
+				pullSpec := children[1]
 				Expect(pullSpec.Name).To(Equal("pull"))
 				Expect(pullSpec.WorkerType).To(Equal("pull"))
 				Expect(pullSpec.ChildStartStates).To(ConsistOf("Running", "Degraded"))
@@ -347,8 +349,8 @@ authToken: "test-token"`,
 				desired, err := worker.DeriveDesiredState(spec)
 
 				Expect(err).ToNot(HaveOccurred())
-				transportDesired := desired.(*snapshot.TransportDesiredState)
-				Expect(transportDesired.Timeout).To(Equal(10 * time.Second))
+				transportDesired := desired.(*fsmv2.WrappedDesiredState[transport.TransportConfig])
+				Expect(transportDesired.Config.Timeout).To(Equal(10 * time.Second))
 			})
 		})
 
@@ -375,9 +377,9 @@ authToken: "test-token"`,
 
 	Describe("GetInitialState", func() {
 		BeforeEach(func() {
-			var err error
-			worker, err = transport.NewTransportWorker(identity, logger, nil)
+			w, err := transport.NewTransportWorker(identity, logger, nil, nil)
 			Expect(err).ToNot(HaveOccurred())
+			worker = w.(*transport.TransportWorker)
 		})
 
 		It("should return StoppedState", func() {
@@ -407,9 +409,9 @@ authToken: "test-token"`,
 		It("should use pointer receiver for all Worker methods", func() {
 			// This is enforced at compile time by the interface implementation,
 			// but we verify by testing that methods work on a pointer
-			var err error
-			worker, err = transport.NewTransportWorker(identity, logger, nil)
+			w, err := transport.NewTransportWorker(identity, logger, nil, nil)
 			Expect(err).ToNot(HaveOccurred())
+			worker = w.(*transport.TransportWorker)
 
 			// All these should work with pointer receiver
 			ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)

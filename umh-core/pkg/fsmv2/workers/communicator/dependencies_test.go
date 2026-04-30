@@ -114,28 +114,34 @@ var _ = Describe("CommunicatorDependencies", func() {
 		Context("when creating a new dependencies", func() {
 			It("should return a non-nil dependencies", func() {
 				identity := depspkg.Identity{ID: "test-id", WorkerType: "communicator"}
-				deps := communicator.NewCommunicatorDependencies(mt, logger, nil, identity)
+				baseDeps := depspkg.NewBaseDependencies(logger, nil, identity)
+				deps := communicator.NewCommunicatorDependencies(baseDeps)
 				Expect(deps).NotTo(BeNil())
 			})
 
-			It("should store the transport", func() {
+			It("should store the transport after SetTransport", func() {
 				identity := depspkg.Identity{ID: "test-id", WorkerType: "communicator"}
-				deps := communicator.NewCommunicatorDependencies(mt, logger, nil, identity)
+				baseDeps := depspkg.NewBaseDependencies(logger, nil, identity)
+				deps := communicator.NewCommunicatorDependencies(baseDeps)
+				deps.SetTransport(mt)
 				Expect(deps.GetTransport()).To(Equal(mt))
 			})
 
 			It("should store the logger", func() {
 				identity := depspkg.Identity{ID: "test-id", WorkerType: "communicator"}
-				deps := communicator.NewCommunicatorDependencies(mt, logger, nil, identity)
+				baseDeps := depspkg.NewBaseDependencies(logger, nil, identity)
+				deps := communicator.NewCommunicatorDependencies(baseDeps)
 				Expect(deps.GetLogger()).NotTo(BeNil())
 			})
 		})
 	})
 
 	Describe("GetTransport", func() {
-		It("should return the transport passed to the constructor", func() {
+		It("should return the transport set via SetTransport", func() {
 			identity := depspkg.Identity{ID: "test-id", WorkerType: "communicator"}
-			deps := communicator.NewCommunicatorDependencies(mt, logger, nil, identity)
+			baseDeps := depspkg.NewBaseDependencies(logger, nil, identity)
+			deps := communicator.NewCommunicatorDependencies(baseDeps)
+			deps.SetTransport(mt)
 			Expect(deps.GetTransport()).To(Equal(mt))
 		})
 	})
@@ -143,7 +149,8 @@ var _ = Describe("CommunicatorDependencies", func() {
 	Describe("GetLogger", func() {
 		It("should return the logger inherited from BaseDependencies", func() {
 			identity := depspkg.Identity{ID: "test-id", WorkerType: "communicator"}
-			deps := communicator.NewCommunicatorDependencies(mt, logger, nil, identity)
+			baseDeps := depspkg.NewBaseDependencies(logger, nil, identity)
+			deps := communicator.NewCommunicatorDependencies(baseDeps)
 			// Logger is enriched with worker context
 			Expect(deps.GetLogger()).NotTo(BeNil())
 		})
@@ -152,7 +159,8 @@ var _ = Describe("CommunicatorDependencies", func() {
 	Describe("Dependencies interface implementation", func() {
 		It("should implement deps.Dependencies interface", func() {
 			identity := depspkg.Identity{ID: "test-id", WorkerType: "communicator"}
-			deps := communicator.NewCommunicatorDependencies(mt, logger, nil, identity)
+			baseDeps := depspkg.NewBaseDependencies(logger, nil, identity)
+			deps := communicator.NewCommunicatorDependencies(baseDeps)
 			var _ depspkg.Dependencies = deps
 			Expect(deps).To(Satisfy(func(d interface{}) bool {
 				_, ok := d.(depspkg.Dependencies)
@@ -167,7 +175,9 @@ var _ = Describe("CommunicatorDependencies", func() {
 
 		BeforeEach(func() {
 			identity := depspkg.Identity{ID: "test-id", WorkerType: "communicator"}
-			deps = communicator.NewCommunicatorDependencies(mt, logger, nil, identity)
+			baseDeps := depspkg.NewBaseDependencies(logger, nil, identity)
+			deps = communicator.NewCommunicatorDependencies(baseDeps)
+			deps.SetTransport(mt)
 		})
 
 		Describe("GetConsecutiveErrors", func() {
@@ -256,7 +266,9 @@ var _ = Describe("CommunicatorDependencies", func() {
 		BeforeEach(func() {
 			mockTrans = NewMockTransport()
 			identity := depspkg.Identity{ID: "test-id", WorkerType: "communicator"}
-			deps = communicator.NewCommunicatorDependencies(mockTrans, logger, nil, identity)
+			baseDeps := depspkg.NewBaseDependencies(logger, nil, identity)
+			deps = communicator.NewCommunicatorDependencies(baseDeps)
+			deps.SetTransport(mockTrans)
 		})
 
 		Context("when errors are below threshold", func() {
@@ -294,7 +306,8 @@ var _ = Describe("CommunicatorDependencies", func() {
 		Context("when transport is nil", func() {
 			It("should not panic when recording errors without transport", func() {
 				identity := depspkg.Identity{ID: "test-id", WorkerType: "communicator"}
-				depsWithNilTransport := communicator.NewCommunicatorDependencies(nil, logger, nil, identity)
+				nilBaseDeps := depspkg.NewBaseDependencies(logger, nil, identity)
+				depsWithNilTransport := communicator.NewCommunicatorDependencies(nilBaseDeps)
 
 				Expect(func() {
 					for range 10 {
@@ -330,7 +343,9 @@ var _ = Describe("CommunicatorDependencies", func() {
 
 		BeforeEach(func() {
 			identity := depspkg.Identity{ID: "test-id", WorkerType: "communicator"}
-			deps = communicator.NewCommunicatorDependencies(mt, logger, nil, identity)
+			baseDeps := depspkg.NewBaseDependencies(logger, nil, identity)
+			deps = communicator.NewCommunicatorDependencies(baseDeps)
+			deps.SetTransport(mt)
 		})
 
 		Describe("GetDegradedEnteredAt", func() {
@@ -446,8 +461,9 @@ var _ = Describe("CommunicatorDependencies", func() {
 
 					// Creating dependencies without singleton should panic
 					identity := depspkg.Identity{ID: "test-id", WorkerType: "communicator"}
+					baseDeps := depspkg.NewBaseDependencies(logger, nil, identity)
 					Expect(func() {
-						communicator.NewCommunicatorDependencies(mt, logger, nil, identity)
+						communicator.NewCommunicatorDependencies(baseDeps)
 					}).To(PanicWith(ContainSubstring("ChannelProvider must be set")))
 				})
 			})
@@ -463,9 +479,10 @@ var _ = Describe("CommunicatorDependencies", func() {
 					communicator.SetChannelProvider(mockProvider)
 
 					identity := depspkg.Identity{ID: "test-singleton-id", WorkerType: "communicator"}
+					baseDeps := depspkg.NewBaseDependencies(logger, nil, identity)
 					var deps *communicator.CommunicatorDependencies
 					Expect(func() {
-						deps = communicator.NewCommunicatorDependencies(mt, logger, nil, identity)
+						deps = communicator.NewCommunicatorDependencies(baseDeps)
 					}).NotTo(Panic())
 
 					Expect(deps).NotTo(BeNil())

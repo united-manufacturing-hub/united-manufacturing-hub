@@ -349,6 +349,15 @@ func checkChildSpecValidation(filename string) []Violation {
 		return violations
 	}
 
+	// Scope: this validator only walks worker directories whose basename
+	// contains "parent" — today, that's just `exampleparent/`. Other parent
+	// workers (transport, communicator, application) are NOT validated by
+	// this code path; their ChildSpec emission is exercised by P1.8
+	// architecture tests (Test #5 ParentRenderChildrenEmitsNonNil + Test #13
+	// Layer 2 registry walk + Test #7 idempotency + Test #8 no-templates).
+	// Expanding this filter to the other parents is reasonable future work
+	// but currently adds no coverage the architecture tests don't already
+	// provide.
 	baseName := filepath.Base(filepath.Dir(filename))
 	if !strings.Contains(baseName, "parent") {
 		return violations
@@ -362,6 +371,7 @@ func checkChildSpecValidation(filename string) []Violation {
 
 		hasChildrenValidation := false
 		hasProgrammaticChildren := false
+		hasRenderChildrenCall := false
 
 		ast.Inspect(funcDecl.Body, func(bodyNode ast.Node) bool {
 			if rangeStmt, ok := bodyNode.(*ast.RangeStmt); ok {
@@ -388,12 +398,40 @@ func checkChildSpecValidation(filename string) []Violation {
 						}
 					}
 				}
+
+				// P2.1 renderChildren convention: DeriveDesiredState
+				// delegates child construction to a RenderChildren
+				// helper. Treat that delegation as equivalent to
+				// inline make([]config.ChildSpec, ...) for the
+				// early-validation invariant. Per-spec validation is
+				// NOT performed inside the helper; it is enforced
+				// elsewhere in the framework (P1.8 architecture
+				// tests #5/#7/#8/#13 Layer 2 anchor the invariants
+				// the helper output must satisfy). This branch
+				// recognises that the construction has been delegated;
+				// the framework is responsible for correctness.
+				//
+				// Match both same-package calls (RenderChildren as
+				// *ast.Ident) and cross-package calls (pkg.RenderChildren
+				// as *ast.SelectorExpr) so future workers that import a
+				// shared RenderChildren helper aren't false-negatively
+				// flagged.
+				if ident, ok := callExpr.Fun.(*ast.Ident); ok && ident.Name == "RenderChildren" {
+					hasRenderChildrenCall = true
+
+					return false
+				}
+				if sel, ok := callExpr.Fun.(*ast.SelectorExpr); ok && sel.Sel.Name == "RenderChildren" {
+					hasRenderChildrenCall = true
+
+					return false
+				}
 			}
 
 			return true
 		})
 
-		if !hasChildrenValidation && !hasProgrammaticChildren {
+		if !hasChildrenValidation && !hasProgrammaticChildren && !hasRenderChildrenCall {
 			pos := fset.Position(funcDecl.Pos())
 			violations = append(violations, Violation{
 				File:    filename,
@@ -531,6 +569,7 @@ func checkFrameworkMetricsCopy(filename string) []Violation {
 
 		hasGetDependencies := false
 		hasGetFrameworkState := false
+		hasNewObservation := false
 
 		ast.Inspect(funcDecl.Body, func(bodyNode ast.Node) bool {
 			callExpr, ok := bodyNode.(*ast.CallExpr)
@@ -544,11 +583,18 @@ func checkFrameworkMetricsCopy(filename string) []Violation {
 					hasGetDependencies = true
 				case "GetFrameworkState":
 					hasGetFrameworkState = true
+				case "NewObservation":
+					hasNewObservation = true
 				}
 			}
 
 			return true
 		})
+
+		// NewObservation workers: the collector handles framework metrics after COS returns.
+		if hasNewObservation {
+			return true
+		}
 
 		if hasGetDependencies && !hasGetFrameworkState {
 			pos := fset.Position(funcDecl.Pos())
@@ -777,6 +823,7 @@ func checkActionHistoryCopy(filename string) []Violation {
 
 		hasGetDependencies := false
 		hasGetActionHistory := false
+		hasNewObservation := false
 
 		ast.Inspect(funcDecl.Body, func(bodyNode ast.Node) bool {
 			callExpr, ok := bodyNode.(*ast.CallExpr)
@@ -790,11 +837,18 @@ func checkActionHistoryCopy(filename string) []Violation {
 					hasGetDependencies = true
 				case "GetActionHistory":
 					hasGetActionHistory = true
+				case "NewObservation":
+					hasNewObservation = true
 				}
 			}
 
 			return true
 		})
+
+		// NewObservation workers: the collector handles action history after COS returns.
+		if hasNewObservation {
+			return true
+		}
 
 		if hasGetDependencies && !hasGetActionHistory {
 			pos := fset.Position(funcDecl.Pos())

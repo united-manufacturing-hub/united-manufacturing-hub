@@ -29,17 +29,21 @@ func (s *DisconnectedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := helpers.ConvertSnapshot[snapshot.ExamplechildObservedState, *snapshot.ExamplechildDesiredState](snapAny)
 
 	if snap.Observed.ShouldStop() {
-		return fsmv2.Result[any, any](&TryingToStopState{}, fsmv2.SignalNone, nil, "Stop required, initiating shutdown", nil)
+		return fsmv2.Transition(&TryingToStopState{}, fsmv2.SignalNone, nil, "Stop required, initiating shutdown", nil)
 	}
 
-	// Only attempt reconnection if desired state wants us running.
-	// Check via Observed since ParentMappedState is injected by collector into the
-	// embedded DesiredState within ObservedState.
-	if snap.Observed.ShouldBeRunning() {
-		return fsmv2.Result[any, any](&TryingToConnectState{}, fsmv2.SignalNone, nil, "Attempting to reconnect", nil)
+	if !snap.Observed.ShouldStop() {
+		return fsmv2.Transition(&TryingToConnectState{}, fsmv2.SignalNone, nil, "Attempting to reconnect", nil)
 	}
 
-	return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil, "Connection lost, will retry", nil)
+	// The catch-all return below is logically dead code: the two branches above
+	// (`ShouldStop()` and `!ShouldStop()`) partition the boolean's domain
+	// completely. We keep the canonical 3-branch FSM idiom anyway because the
+	// architecture validator's MISSING_CATCHALL_RETURN check is syntactic, not
+	// semantic — see PR2 cascade pattern memory #3 (validator-syntactic vs
+	// migration-semantic). Collapsing to 2 branches would trip the validator
+	// even though the simplification is behavior-preserving.
+	return fsmv2.Transition(s, fsmv2.SignalNone, nil, "Connection lost, will retry", nil)
 }
 
 func (s *DisconnectedState) String() string {

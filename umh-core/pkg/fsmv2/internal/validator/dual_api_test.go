@@ -173,10 +173,10 @@ func (s *RunningState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := fsmv2.ConvertWorkerSnapshot[MyConfig, MyStatus](snapAny)
 
 	if snap.IsShutdownRequested {
-		return fsmv2.Result[any, any](nil, fsmv2.SignalNone, nil, "shutdown")
+		return fsmv2.Result[any, any](nil, fsmv2.SignalNone, nil, "shutdown", nil)
 	}
 
-	return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil, "running")
+	return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil, "running", nil)
 }
 `), 0o644)).To(Succeed())
 

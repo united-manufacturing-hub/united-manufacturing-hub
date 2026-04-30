@@ -457,7 +457,7 @@ func ValidateStateXORAction(baseDir string) []Violation {
 }
 
 // checkStateXORAction parses a state file and checks return statements in Next().
-// This now checks for fsmv2.Result(state, signal, action, reason) calls.
+// This now checks for fsmv2.Result(state, signal, action, reason, nil) calls.
 func checkStateXORAction(filename string) []Violation {
 	var violations []Violation
 
@@ -563,7 +563,7 @@ func extractResultArgs(expr ast.Expr) (state, action ast.Expr) {
 		}
 	}
 
-	if funcName != "Result" || len(callExpr.Args) < 3 {
+	if (funcName != "Result" && funcName != "Transition") || len(callExpr.Args) < 3 {
 		return nil, nil
 	}
 
@@ -596,7 +596,7 @@ func extractResultArgsWithSignal(expr ast.Expr) (state, signal, action ast.Expr)
 		}
 	}
 
-	if funcName != "Result" || len(callExpr.Args) < 3 {
+	if (funcName != "Result" && funcName != "Transition") || len(callExpr.Args) < 3 {
 		return nil, nil, nil
 	}
 
@@ -767,7 +767,7 @@ func ValidateSignalStateMutualExclusion(baseDir string) []Violation {
 }
 
 // checkSignalStateMutualExclusion checks signals only with same-state returns.
-// This now checks for fsmv2.Result(state, signal, action, reason) calls.
+// This now checks for fsmv2.Result(state, signal, action, reason, nil) calls.
 func checkSignalStateMutualExclusion(filename string) []Violation {
 	var violations []Violation
 
@@ -848,7 +848,7 @@ func ValidateTryingToStatesReturnActions(baseDir string) []Violation {
 }
 
 // checkTryingToStatesReturnActions checks if TryingTo states return actions.
-// This now checks for fsmv2.Result(state, signal, action, reason) calls where action is non-nil.
+// This now checks for fsmv2.Result(state, signal, action, reason, nil) calls where action is non-nil.
 func checkTryingToStatesReturnActions(filename string) []Violation {
 	var violations []Violation
 
@@ -902,11 +902,11 @@ func checkTryingToStatesReturnActions(filename string) []Violation {
 				}
 			}
 
-			if funcName != "Result" {
+			if funcName != "Result" && funcName != "Transition" {
 				return true
 			}
 
-			// fsmv2.Result(state, signal, action, reason) - action is the 3rd argument (index 2)
+			// fsmv2.Result(state, signal, action, reason, nil) - action is the 3rd argument (index 2)
 			if len(callExpr.Args) >= 3 {
 				actionArg := callExpr.Args[2]
 
@@ -966,7 +966,7 @@ func ValidateExhaustiveTransitionCoverage(baseDir string) []Violation {
 }
 
 // checkExhaustiveTransitionCoverage checks for catch-all return (TryingTo states exempt).
-// This now checks for fsmv2.Result(s, fsmv2.SignalNone, nil, "reason") pattern.
+// This now checks for fsmv2.Result(s, fsmv2.SignalNone, nil, "reason", nil) pattern.
 func checkExhaustiveTransitionCoverage(filename string) []Violation {
 	var violations []Violation
 

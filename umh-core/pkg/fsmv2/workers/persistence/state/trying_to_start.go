@@ -26,19 +26,19 @@ type TryingToStartState struct {
 }
 
 func (s *TryingToStartState) Next(snapAny any) fsmv2.NextResult[any, any] {
-	snap := helpers.ConvertSnapshot[snapshot.PersistenceObservedState, *snapshot.PersistenceDesiredState](snapAny)
+	snap := fsmv2.ConvertWorkerSnapshot[snapshot.PersistenceConfig, snapshot.PersistenceStatus](snapAny)
 
-	if snap.Desired.IsShutdownRequested() {
-		return fsmv2.Result[any, any](&StoppedState{}, fsmv2.SignalNone, nil, "Shutdown requested during startup", nil)
+	if snap.IsShutdownRequested {
+		return fsmv2.Transition(&StoppedState{}, fsmv2.SignalNone, nil, "Shutdown requested during startup", nil)
 	}
 
-	for _, result := range snap.Observed.LastActionResults {
+	for _, result := range snap.LastActionResults {
 		if result.ActionType == action.NewRunMaintenanceAction().Name() && result.Success {
-			return fsmv2.Result[any, any](&RunningState{}, fsmv2.SignalNone, nil, "Startup maintenance completed", nil)
+			return fsmv2.Transition(&RunningState{}, fsmv2.SignalNone, nil, "Startup maintenance completed", nil)
 		}
 	}
 
-	return fsmv2.Result[any, any](s, fsmv2.SignalNone,
+	return fsmv2.Transition(s, fsmv2.SignalNone,
 		action.NewRunMaintenanceAction(), "Running startup maintenance", nil)
 }
 

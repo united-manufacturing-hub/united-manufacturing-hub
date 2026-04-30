@@ -119,7 +119,7 @@ Worker API v2 reduces a minimal worker from ~662 SLOC / 7 files to ~50 SLOC / 1 
 ```go
 // Registration (replaces init() + factory wiring + supervisor factory + CSE type registry)
 func init() {
-    register.Worker[MyConfig, MyStatus]("myworker", NewMyWorker)
+    register.Worker[MyConfig, MyStatus, register.NoDeps]("myworker", NewMyWorker)
 }
 
 // Worker struct (replaces separate dependencies, observed state, desired state files)
@@ -165,7 +165,7 @@ type Worker interface {
 
 ### States: pure functions with Next()
 
-States are concrete Go types (not strings). Each state implements `Next()`, which returns a `NextResult` via `fsmv2.Result()`:
+States are concrete Go types (not strings). Each state implements `Next()`, which returns a `NextResult` via `fsmv2.Transition()`:
 
 ```go
 // States embed a lifecycle base and implement Next()
@@ -179,16 +179,23 @@ func (s *TryingToStartState) Next(snapAny any) fsmv2.NextResult[any, any] {
 
     // ALWAYS check shutdown first
     if snap.Desired.IsShutdownRequested() {
-        return fsmv2.Result[any, any](&StoppedState{}, fsmv2.SignalNone, nil, "Shutdown requested")
+        return fsmv2.Transition(&StoppedState{}, fsmv2.SignalNone, nil, "Shutdown requested")
     }
     // Check observation - did the process start?
     if snap.Observed.IsRunning {
-        return fsmv2.Result[any, any](&RunningState{}, fsmv2.SignalNone, nil, "Process is running")
+        return fsmv2.Transition(&RunningState{}, fsmv2.SignalNone, nil, "Process is running")
     }
-    // Not running yet - emit action to start it
-    return fsmv2.Result[any, any](s, fsmv2.SignalNone, &StartAction{}, "Starting process")
+    // Not running yet - emit action to start it.
+    // Pass typed actions directly — the framework auto-wraps them via reflection.
+    return fsmv2.Transition(s, fsmv2.SignalNone, &StartAction{}, "Starting process")
 }
 ```
+
+`fsmv2.Transition` is the recommended return shape. It is a non-generic alias for `fsmv2.Result[any, any]` that also auto-wraps typed `Action[TDeps]` values into the internal `Action[any]` envelope, so state files no longer need a caller-visible `WrapAction` adapter.
+
+> **Deprecated — removed in PR3**
+>
+> The older `fsmv2.Result[any, any](...)` return and the `fsmv2.WrapAction[TDeps](&MyAction{})` wrapper are still present for in-flight migrations but will be deleted in PR3 to shrink the API surface. Do not write new code against them.
 
 ### State transitions: observation-driven
 
@@ -208,7 +215,7 @@ func (s *TryingToStartState) String() string {
 
 **Naming convention**: `DeriveStateName` produces PascalCase names (`RunningState` → `"Running"`, `TryingToStartState` → `"TryingToStart"`, `StoppedState` → `"Stopped"`).
 
-Reason strings are the 4th argument to `fsmv2.Result()` in `Next()`, not a separate method. See the `Next()` example above.
+Reason strings are the 4th argument to `fsmv2.Transition()` in `Next()`, not a separate method. See the `Next()` example above.
 
 ### Signals
 

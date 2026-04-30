@@ -35,16 +35,15 @@ import (
 // The developer must implement CollectObservedState.
 // It also implements DependencyProvider (1 method).
 type WorkerBase[TConfig any, TStatus any] struct {
-	logger           deps.FSMLogger
-	stateReader      deps.StateReader
-	config           TConfig
-	baseDeps         *deps.BaseDependencies
-	postParseHook    func(*TConfig) error
-	childSpecFactory func(TConfig, config.UserSpec) []config.ChildSpec
-	identity         deps.Identity
-	mu               sync.RWMutex
-	configReady      bool
-	initialized      bool
+	logger        deps.FSMLogger
+	stateReader   deps.StateReader
+	config        TConfig
+	baseDeps      *deps.BaseDependencies
+	postParseHook func(*TConfig) error
+	identity      deps.Identity
+	mu            sync.RWMutex
+	configReady   bool
+	initialized   bool
 }
 
 // InitBase initializes the embedded WorkerBase with framework dependencies.
@@ -70,15 +69,6 @@ func (w *WorkerBase[TConfig, TStatus]) InitBase(id deps.Identity, logger deps.FS
 // Must be called in the constructor, before any DeriveDesiredState call.
 func (w *WorkerBase[TConfig, TStatus]) SetPostParseHook(hook func(*TConfig) error) {
 	w.postParseHook = hook
-}
-
-// SetChildSpecsFactory registers a factory that produces child specifications
-// from the parsed config and raw UserSpec. The raw spec is needed so children
-// can run their own DeriveDesiredState with template variables intact.
-// Called after the post-parse hook in DeriveDesiredState.
-// Must be called in the constructor, before any DeriveDesiredState call.
-func (w *WorkerBase[TConfig, TStatus]) SetChildSpecsFactory(factory func(TConfig, config.UserSpec) []config.ChildSpec) {
-	w.childSpecFactory = factory
 }
 
 // Config returns the cached TConfig from the last DeriveDesiredState call.
@@ -228,7 +218,6 @@ func (w *WorkerBase[TConfig, TStatus]) DeriveDesiredState(spec interface{}) (Des
 			BaseDesiredState: config.BaseDesiredState{State: config.DesiredStateRunning},
 			Config:           cfg,
 		}
-		w.populateChildrenSpecs(wds, cfg, config.UserSpec{})
 
 		return wds, nil
 	}
@@ -271,7 +260,6 @@ func (w *WorkerBase[TConfig, TStatus]) DeriveDesiredState(spec interface{}) (Des
 		BaseDesiredState: config.BaseDesiredState{State: desiredState},
 		Config:           cfg,
 	}
-	w.populateChildrenSpecs(wds, cfg, userSpec)
 
 	return wds, nil
 }
@@ -283,12 +271,6 @@ func (w *WorkerBase[TConfig, TStatus]) runPostParseHook(cfg *TConfig) error {
 		}
 	}
 	return nil
-}
-
-func (w *WorkerBase[TConfig, TStatus]) populateChildrenSpecs(wds *WrappedDesiredState[TConfig], cfg TConfig, spec config.UserSpec) {
-	if w.childSpecFactory != nil {
-		wds.ChildrenSpecs = w.childSpecFactory(cfg, spec)
-	}
 }
 
 // GetInitialState returns the registered initial state for this worker type.

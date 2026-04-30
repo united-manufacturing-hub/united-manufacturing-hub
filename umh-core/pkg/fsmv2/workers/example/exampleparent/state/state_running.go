@@ -35,19 +35,21 @@ func (s *RunningState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := helpers.ConvertSnapshot[snapshot.ExampleparentObservedState, *snapshot.ExampleparentDesiredState](snapAny)
 
 	if snap.Desired.IsShutdownRequested() {
-		return fsmv2.Result[any, any](&TryingToStopState{}, fsmv2.SignalNone, nil, "Shutdown requested, transitioning to TryingToStop", nil)
+		return fsmv2.Transition(&TryingToStopState{}, fsmv2.SignalNone, nil, "Shutdown requested, transitioning to TryingToStop", nil)
 	}
 
+	children := RenderChildren(snap)
+
 	if snap.Observed.ChildrenUnhealthy > 0 {
-		return fsmv2.Result[any, any](&DegradedState{}, fsmv2.SignalNone, nil, "Some children are unhealthy, transitioning to Degraded", nil)
+		return fsmv2.Transition(&DegradedState{}, fsmv2.SignalNone, nil, "Some children are unhealthy, transitioning to Degraded", children)
 	}
 
 	elapsed := time.Duration(snap.Observed.Metrics.Framework.TimeInCurrentStateMs) * time.Millisecond
 	if elapsed >= RunningDuration {
-		return fsmv2.Result[any, any](&TryingToStopState{}, fsmv2.SignalNone, nil, "Running duration elapsed, transitioning to TryingToStop", nil)
+		return fsmv2.Transition(&TryingToStopState{}, fsmv2.SignalNone, nil, "Running duration elapsed, transitioning to TryingToStop", children)
 	}
 
-	return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil, "All children healthy and running", nil)
+	return fsmv2.Transition(s, fsmv2.SignalNone, nil, "All children healthy and running", children)
 }
 
 func (s *RunningState) String() string {

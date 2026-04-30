@@ -330,13 +330,17 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 
 	result := currentState.Next(*snapshot)
 
-	// P2.4: result.Children is intentionally NOT read here yet. The supervisor
-	// reconciliation discriminator that reads NextResult.Children (nil =
-	// fall back to legacy DDS-derived children; non-nil = use this exact set)
-	// lands at P2.4. Until then, parents passing a non-nil Children slice
-	// from state.Next see no runtime effect — this is by design during the
-	// migration window. See api.go NextResult.Children godoc for the full
-	// discriminator contract.
+	// P2.4: capture result.Children into workerCtx so tick() can apply the
+	// reconciliation discriminator post-tickWorker. The discriminator (read
+	// site at the children-resolution block in tick()) treats nil as
+	// "no opinion → fall back to legacy DDS-derived children" and any
+	// non-nil slice (including the explicit empty form []config.ChildSpec{})
+	// as "use this exact set". Storing the slice directly preserves the
+	// nil vs empty distinction; len(...) == 0 MUST NOT be used as the
+	// discriminator. See api.go NextResult.Children godoc lines 126-153.
+	workerCtx.mu.Lock()
+	workerCtx.lastRenderedChildren = result.Children
+	workerCtx.mu.Unlock()
 
 	hasAction := result.Action != nil
 	// Per-tick log moved to TRACE for scalability
@@ -829,8 +833,83 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) (err error) 
 		s.logTrace("derived_desired_state_saved")
 	}
 
+	// Tick worker before resolving children so the parent's state.Next has
+	// run for this tick and workerCtx.lastRenderedChildren reflects the
+	// emission for the current snapshot+desired pair. The original ordering
+	// note ("Tick worker before creating children to progress FSM state
+	// first") is satisfied — we reconcile children only after tickWorker.
+	if err := s.tickWorker(ctx, firstWorkerID); err != nil {
+		return fmt.Errorf("failed to tick worker: %w", err)
+	}
+
+	// P2.4 discriminator (live): the supervisor decides which children-set
+	// to authoritative-reconcile against, based on what state.Next emitted
+	// this tick. See fsmv2/api.go NextResult.Children godoc lines 126-153.
+	//
+	//   - non-nil (any length, including []config.ChildSpec{})
+	//       → migrated parent — use this exact set authoritatively. The
+	//         empty form means "I am a parent and I want zero children
+	//         right now"; the supervisor will despawn any existing
+	//         children not in this set.
+	//   - nil sentinel
+	//       → legacy / migration-window — the parent expressed no opinion
+	//         from state.Next (e.g. exampleparent's principled-nil mirror
+	//         while ExampleparentDesiredState does not yet carry the
+	//         ParentUserSpec fields). Fall back to the DDS-derived
+	//         ChildSpecProvider path so teaching children survive.
+	//
+	// IMPORTANT: the discriminator treats nil and []config.ChildSpec{} as
+	// distinct cases. Never use `len(rendered) == 0` here — that collapses
+	// the two cases and would either silently despawn legacy parents
+	// (collapse-to-empty) or silently zero-child migrated parents
+	// (collapse-to-fallback).
+	//
+	// PR2 boundary caveat (pr2_issues #13 — action-gating staleness):
+	// During action-gating ticks (tickWorker early-returns before writing
+	// lastRenderedChildren), this discriminator reads the PRIOR tick's
+	// rendered set. Pre-P2.4, the legacy DDS path always reflected the
+	// CURRENT desired.ChildrenSpecs. Behavioural delta: parent UserSpec
+	// Variables changes during action-gating cause one-tick stale Variables
+	// in transport children for ~10-100ms (single tick cadence). Resolves
+	// automatically on the next non-gated tick. Bounded, intentional, and
+	// not a correctness issue — child eventually converges.
+	//
+	// PR2 boundary caveat (pr2_issues #8 — empty-string ParentMappedState):
+	// Migrated state files use `!ShouldStop()` as a start-check. The
+	// FRAMEWORK ShouldStop body (worker_snapshot.go) is
+	// `IsShutdownRequested || ParentMappedState == "stopped"` and returns
+	// FALSE for empty-string ParentMappedState — so `!ShouldStop()` returns
+	// TRUE (fail-OPEN start). The pre-migration form `== DesiredStateRunning`
+	// returned FALSE for empty string (fail-SAFE stay-stopped). Production
+	// today is safe via the applyStateMapping() ordering invariant
+	// (reconciliation.go:913 runs before child tick at :925 — empty-string
+	// PMS cannot reach a child Next() in normal operation). The migrated
+	// code has no defense if that ordering is ever broken — exactly the F7
+	// premature-start failure mode the cascade is meant to prevent. Note
+	// the asymmetry: workers with a worker-local ShouldStop override (e.g.
+	// examplechild's snapshot.ShouldStop = `IsShutdownRequested ||
+	// !ShouldBeRunning`) fail-SAFE on empty string. transport / communicator
+	// inherit the framework body and so inherit the fail-OPEN polarity.
+	// Proper fix is harmonization at framework level (P3.x scope).
 	var childrenSpecs []config.ChildSpec
-	if provider, ok := desired.(config.ChildSpecProvider); ok {
+
+	s.mu.RLock()
+	workerCtx, workerCtxExists := s.workers[firstWorkerID]
+	s.mu.RUnlock()
+
+	if workerCtxExists {
+		workerCtx.mu.RLock()
+		rendered := workerCtx.lastRenderedChildren
+		workerCtx.mu.RUnlock()
+
+		if rendered != nil {
+			childrenSpecs = rendered
+		} else if provider, ok := desired.(config.ChildSpecProvider); ok {
+			childrenSpecs = provider.GetChildrenSpecs()
+		}
+	} else if provider, ok := desired.(config.ChildSpecProvider); ok {
+		// Defensive: if the workerCtx is gone (worker removed mid-tick),
+		// keep the legacy fallback path so we still reconcile correctly.
 		childrenSpecs = provider.GetChildrenSpecs()
 	}
 
@@ -894,11 +973,6 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) (err error) 
 				delete(s.validatedSpecHashes, name)
 			}
 		}
-	}
-
-	// Tick worker before creating children to progress FSM state first
-	if err := s.tickWorker(ctx, firstWorkerID); err != nil {
-		return fmt.Errorf("failed to tick worker: %w", err)
 	}
 
 	// When shutting down, pass nil to trigger graceful child shutdown instead of re-creation

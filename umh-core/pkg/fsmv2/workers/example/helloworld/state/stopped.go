@@ -26,8 +26,12 @@ package state
 import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/helloworld/snapshot"
+	hello_world "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/helloworld"
 )
+
+func init() {
+	fsmv2.RegisterInitialState("helloworld", &StoppedState{})
+}
 
 // StoppedState is the initial state where the worker is not running.
 // It waits for the desired state to request running, then transitions.
@@ -37,19 +41,18 @@ type StoppedState struct {
 
 // Next implements the state transition logic.
 func (s *StoppedState) Next(snapAny any) fsmv2.NextResult[any, any] {
-	snap := helpers.ConvertSnapshot[snapshot.HelloworldObservedState, *snapshot.HelloworldDesiredState](snapAny)
+	snap := fsmv2.ConvertWorkerSnapshot[hello_world.HelloworldConfig, hello_world.HelloworldStatus](snapAny)
 
 	// 1. Check shutdown first
-	if snap.Desired.IsShutdownRequested() {
-		return fsmv2.Result[any, any](s, fsmv2.SignalNeedsRemoval, nil, "Shutdown requested, signaling removal", nil)
+	if snap.IsShutdownRequested {
+		return fsmv2.Transition(s, fsmv2.SignalNeedsRemoval, nil, "Shutdown requested, signaling removal", nil)
 	}
 
 	// 2. Start running
-	return fsmv2.Result[any, any](&TryingToStartState{}, fsmv2.SignalNone, nil, "Starting worker", nil)
+	return fsmv2.Transition(&TryingToStartState{}, fsmv2.SignalNone, nil, "Starting worker", nil)
 }
 
 // String returns the state name for logging and metrics.
-// Use helpers.DeriveStateName to get consistent naming.
 func (s *StoppedState) String() string {
 	return helpers.DeriveStateName(s)
 }

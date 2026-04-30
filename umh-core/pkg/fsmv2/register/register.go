@@ -28,23 +28,33 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
 )
 
+// NoDeps is a type alias for struct{}, used as the TDeps parameter for workers
+// that require no custom dependencies beyond the standard framework deps
+// (Identity, FSMLogger, StateReader).
+type NoDeps = struct{}
+
 // Worker registers a worker type with the framework.
 // TConfig is the developer's configuration type.
 // TStatus is the developer's status/observation type.
+// TDeps is passed to the constructor for workers that need custom dependencies
+// beyond framework ones. Use register.NoDeps for zero-dep workers. The framework
+// consults the package-level deps registry at construction time via
+// GetDeps[TDeps](workerType). Parent wiring publishes typed deps by calling
+// SetDeps[TDeps](workerType, deps) before factory.NewWorkerByType runs.
+// Workers that never publish deps (e.g. those relying on per-package singletons
+// like transport.ChildDeps or persistence.Store) receive the Go-native zero
+// value of TDeps, preserving the pre-registry nil-forward contract.
 // The workerType string is the canonical name used in config YAML and CSE storage.
-//
-// Constructor receives only the standard framework dependencies (identity, logger, stateReader).
-// Workers that require parent-injected dependencies via the extraDeps mechanism
-// (e.g., transport push/pull children) must use factory.RegisterWorkerType directly.
 //
 // Workers registered via this function MUST use WorkerBase[TConfig, TStatus] and
 // return w.WrapStatus(status) from CollectObservedState. Workers with custom
-// ObservedState types must use factory.RegisterWorkerType directly.
+// ObservedState types or that need parent-injected extraDeps must use
+// factory.RegisterWorkerType directly.
 //
 // Panics on field name collision or duplicate worker type (fail-fast at init time).
-func Worker[TConfig any, TStatus any](
+func Worker[TConfig any, TStatus any, TDeps any](
 	workerType string,
-	constructor func(deps.Identity, deps.FSMLogger, deps.StateReader) (fsmv2.Worker, error),
+	constructor func(deps.Identity, deps.FSMLogger, deps.StateReader, TDeps) (fsmv2.Worker, error),
 ) {
 	if workerType == "" {
 		panic("register.Worker: workerType must be non-empty")
@@ -60,8 +70,14 @@ func Worker[TConfig any, TStatus any](
 	}
 
 	// Step 2: Wrap constructor to match existing factory signature.
+	// The closure consults the package-level deps registry (SetDeps/GetDeps)
+	// at construction time. If nothing was published for this worker type,
+	// GetDeps returns the Go-native zero value of TDeps, preserving the
+	// pre-C8 nil-forward contract for singleton-backed workers
+	// (transport/push/pull/persistence).
 	wrappedFactory := func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader, _ map[string]any) fsmv2.Worker {
-		w, err := constructor(id, logger, sr)
+		typedDeps := GetDeps[TDeps](workerType)
+		w, err := constructor(id, logger, sr, typedDeps)
 		if err != nil {
 			panic(fmt.Sprintf("register.Worker(%q): constructor failed for %s: %v", workerType, id.String(), err))
 		}

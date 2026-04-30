@@ -15,14 +15,16 @@
 package persistence
 
 import (
-	"time"
-
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/persistence/snapshot"
 )
 
-type PersistenceUserSpec struct {
-	config.BaseUserSpec `yaml:",inline"`
-	CompactionInterval  time.Duration `json:"compactionInterval"  yaml:"compactionInterval"`
-	RetentionWindow     time.Duration `json:"retentionWindow"     yaml:"retentionWindow"`
-	MaintenanceInterval time.Duration `json:"maintenanceInterval" yaml:"maintenanceInterval"`
-}
+// PersistenceConfig re-exports snapshot.PersistenceConfig so callers can use
+// persistence.PersistenceConfig without pulling the snapshot leaf package in
+// directly. The underlying type lives in snapshot to allow the state
+// sub-package (which the worker imports for init-only side effects) to reference
+// Config/Status without creating an import cycle with the worker package.
+type PersistenceConfig = snapshot.PersistenceConfig
+
+// PersistenceStatus re-exports snapshot.PersistenceStatus for the same reason
+// as PersistenceConfig.
+type PersistenceStatus = snapshot.PersistenceStatus

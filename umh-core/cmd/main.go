@@ -40,14 +40,15 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/redpanda"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/streamprocessor"
 	topicbrowserfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/topicbrowser"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/examples"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/register"
 	fsmv2sentry "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/sentry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/application"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator"
-	_ "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/persistence"
+	persistenceWorker "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/persistence"
 	transportWorker "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport"
-	transportSnapshot "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/snapshot"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
@@ -498,7 +499,7 @@ func enableFSMv2BackendConnection(
 
 	// Build YAML config for FSMv2 ApplicationSupervisor
 	// Note: instanceUUID in config is a placeholder - the real UUID is returned by the backend
-	// and will be set via onAuthSuccessCallback (Bug #6 fix)
+	// and picked up by polling TransportWorker.ObservedState.AuthenticatedUUID below (Bug #6 fix).
 	placeholderUUID := uuid.New().String()
 	yamlConfig := fmt.Sprintf(`
 children:
@@ -522,17 +523,8 @@ children:
 	// Setup store (in-memory for now)
 	store := examples.SetupStore(deps.NewFSMLogger(logger))
 
-	// Create callback to update LoginResponse with real UUID from backend (Bug #6 fix)
-	// This is called by AuthenticateAction after successful authentication
-	onAuthSuccessCallback := func(realUUID, name string) {
-		logger.Infow("Authentication succeeded, updating LoginResponse with backend UUID",
-			"realUUID", realUUID, "name", name, "placeholderUUID", placeholderUUID)
-		communicationState.SetLoginResponseForFSMv2(realUUID)
-	}
-
-	// Create ApplicationSupervisor with channel provider and auth callback injected via Dependencies
-	// This avoids global state and enables proper testing
-	// Use Named("fsmv2") to create [fsmv2] prefix in logs for easy filtering
+	// Create ApplicationSupervisor.
+	// Use Named("fsmv2") to create [fsmv2] prefix in logs for easy filtering.
 	fsmv2Logger := logger.Named("fsmv2")
 	// Wrap with FSMv2 SentryHook for automatic error capture to Sentry with:
 	// - Per-fingerprint debouncing (5 min window)
@@ -544,12 +536,17 @@ children:
 
 	fsmv2Logger = fsmv2Logger.Desugar().WithOptions(zap.WrapCore(fsmv2Hook.Wrap)).Sugar()
 
-	fsmv2Deps := map[string]any{
-		"channelProvider":       channelAdapter,
-		"onAuthSuccessCallback": onAuthSuccessCallback,
-	}
+	fsmv2Deps := map[string]any{}
 	if configData.Agent.UseFSMv2MemoryCleanup {
-		fsmv2Deps["store"] = store
+		// Publish the triangular store via register.SetDeps, keyed by the
+		// persistence worker-type name. The register.Worker factory closure
+		// at persistence.init() reads this seed via GetDeps during worker
+		// construction and rebuilds full dependencies with the per-worker
+		// identity/logger/stateReader.
+		register.SetDeps[*persistenceWorker.PersistenceDependencies](
+			persistenceWorker.WorkerTypeName,
+			persistenceWorker.NewStoreOnlyDependencies(store),
+		)
 	}
 
 	appSup, err := application.NewApplicationSupervisor(application.SupervisorConfig{
@@ -575,7 +572,7 @@ children:
 
 	// Initialize Router for FSMv2 mode:
 	// 1. Create write-only Pusher (writes to channel, FSMv2 handles HTTP)
-	// 2. Set LoginResponse with placeholder UUID (will be updated by onAuthSuccessCallback)
+	// 2. Set LoginResponse with placeholder UUID (replaced when TransportWorker.ObservedState.AuthenticatedUUID is observed below)
 	// 3. Initialize SubscriberHandler (generates status messages)
 	// 4. Start Router (processes inbound messages, generates status via Subscriber)
 	communicationState.InitializeWriteOnlyPusher(placeholderUUID)
@@ -603,18 +600,18 @@ children:
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
-				var observed transportSnapshot.TransportObservedState
+				var observed fsmv2.Observation[transportWorker.TransportStatus]
 
 				err := store.LoadObservedTyped(ctx, "transport", "transport-001", &observed)
 				if err != nil {
 					continue
 				}
 
-				if observed.AuthenticatedUUID != "" && observed.AuthenticatedUUID != placeholderUUID {
+				if observed.Status.AuthenticatedUUID != "" && observed.Status.AuthenticatedUUID != placeholderUUID {
 					logger.Infow("Detected real UUID from TransportWorker ObservedState, updating LoginResponse",
-						"realUUID", observed.AuthenticatedUUID,
+						"realUUID", observed.Status.AuthenticatedUUID,
 						"placeholderUUID", placeholderUUID)
-					communicationState.SetLoginResponseForFSMv2(observed.AuthenticatedUUID)
+					communicationState.SetLoginResponseForFSMv2(observed.Status.AuthenticatedUUID)
 
 					return
 				}

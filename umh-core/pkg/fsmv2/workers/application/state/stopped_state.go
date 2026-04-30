@@ -20,6 +20,13 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/application/snapshot"
 )
 
+// init registers RunningState as the initial state for the application worker
+// type. WorkerBase.GetInitialState looks this up at runtime; the worker
+// package blank-imports state/ to ensure this init runs before any tick.
+func init() {
+	fsmv2.RegisterInitialState("application", &RunningState{})
+}
+
 // StoppedState represents the stopped state of the application supervisor.
 // In this state, the worker emits SignalNeedsRemoval to indicate it's ready
 // to be removed from the supervisor's registry.
@@ -28,13 +35,15 @@ type StoppedState struct {
 }
 
 func (s *StoppedState) Next(snapAny any) fsmv2.NextResult[any, any] {
-	snap := helpers.ConvertSnapshot[snapshot.ApplicationObservedState, *snapshot.ApplicationDesiredState](snapAny)
+	snap := fsmv2.ConvertWorkerSnapshot[snapshot.ApplicationConfig, snapshot.ApplicationStatus](snapAny)
 
-	if snap.Desired.IsShutdownRequested() {
-		return fsmv2.Result[any, any](s, fsmv2.SignalNeedsRemoval, nil, "Application supervisor is stopped and shutdown requested", nil)
+	if snap.IsShutdownRequested {
+		return fsmv2.Transition(s, fsmv2.SignalNeedsRemoval, nil, "Application supervisor is stopped and shutdown requested", nil)
 	}
 
-	return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil, "Application supervisor is stopped", nil)
+	children := RenderChildren(snap)
+
+	return fsmv2.Transition(s, fsmv2.SignalNone, nil, "Application supervisor is stopped", children)
 }
 
 func (s *StoppedState) String() string {

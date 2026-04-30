@@ -18,36 +18,35 @@ import (
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/persistence/action"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/persistence/snapshot"
 )
 
 func emitActionIfDue(
 	currentState fsmv2.State[any, any],
-	snap helpers.TypedSnapshot[snapshot.PersistenceObservedState, *snapshot.PersistenceDesiredState],
+	snap fsmv2.WorkerSnapshot[snapshot.PersistenceConfig, snapshot.PersistenceStatus],
 ) fsmv2.NextResult[any, any] {
-	timeSinceCompaction := snap.Observed.CollectedAt.Sub(snap.Observed.LastCompactionAt)
-	if timeSinceCompaction >= snap.Desired.CompactionInterval {
-		return fsmv2.Result[any, any](currentState, fsmv2.SignalNone,
-			action.NewCompactDeltasAction(snap.Desired.RetentionWindow), "Running compaction", nil)
+	timeSinceCompaction := snap.CollectedAt.Sub(snap.Status.LastCompactionAt)
+	if timeSinceCompaction >= snap.Config.CompactionInterval {
+		return fsmv2.Transition(currentState, fsmv2.SignalNone,
+			action.NewCompactDeltasAction(snap.Config.RetentionWindow), "Running compaction", nil)
 	}
 
 	if isMaintenanceDue(snap) {
-		return fsmv2.Result[any, any](currentState, fsmv2.SignalNone,
+		return fsmv2.Transition(currentState, fsmv2.SignalNone,
 			action.NewRunMaintenanceAction(), "Running maintenance", nil)
 	}
 
-	return fsmv2.Result[any, any](currentState, fsmv2.SignalNone, nil, "Monitoring for cleanup needs", nil)
+	return fsmv2.Transition(currentState, fsmv2.SignalNone, nil, "Monitoring for cleanup needs", nil)
 }
 
 const shortIntervalThreshold = 3 * 24 * time.Hour
 
 func isMaintenanceDue(
-	snap helpers.TypedSnapshot[snapshot.PersistenceObservedState, *snapshot.PersistenceDesiredState],
+	snap fsmv2.WorkerSnapshot[snapshot.PersistenceConfig, snapshot.PersistenceStatus],
 ) bool {
-	interval := snap.Desired.MaintenanceInterval
-	timeSince := snap.Observed.CollectedAt.Sub(snap.Observed.LastMaintenanceAt)
+	interval := snap.Config.MaintenanceInterval
+	timeSince := snap.CollectedAt.Sub(snap.Status.LastMaintenanceAt)
 
 	if interval < shortIntervalThreshold {
 		return timeSince >= interval
@@ -60,11 +59,11 @@ func isMaintenanceDue(
 		return true
 	}
 
-	if timeSince >= interval && snap.Observed.IsAcceptableMaintenanceWindow {
+	if timeSince >= interval && snap.Status.IsAcceptableMaintenanceWindow {
 		return true
 	}
 
-	if timeSince >= earlyStart && snap.Observed.IsPreferredMaintenanceWindow {
+	if timeSince >= earlyStart && snap.Status.IsPreferredMaintenanceWindow {
 		return true
 	}
 

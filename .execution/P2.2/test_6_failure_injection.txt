@@ -1,0 +1,139 @@
+P2.2 — Test #6 (RenderChildrenCalledAtTopOfStateNext) Failure-Injection Certificate
+====================================================================================
+
+Date: 2026-04-29
+Branch: cascade/pr2-prove-pattern (P2.2 working commit, top of 6ed1b5d09)
+
+Purpose: confirm that the un-gated Test #6 actually catches the convention
+violation it is intended to enforce — i.e. removing the renderChildren call
+from a parent state.Next body causes the test to fail with a precise file:line
+violation, and restoring the call returns the test to GREEN.
+
+Method (PASS-FAIL-PASS round trip):
+  1. Baseline: run Test #6 against the in-tree P2.2 wiring.
+  2. Failure injection: in
+     pkg/fsmv2/workers/application/state/running_state.go, remove the
+     `children := RenderChildren(snap)` statement and the corresponding
+     `children` argument on the four return sites within Next() (i.e. revert
+     RunningState.Next to the pre-P2.2 form).
+     Run Test #6 — must FAIL with the violating file:line in the message.
+  3. Revert: restore the file from backup. Run Test #6 — must PASS again.
+
+Test 6 invocation:
+  go test ./pkg/fsmv2/ -timeout 60s -v -ginkgo.focus="renderChildren is invoked"
+
+----------------------------------------------------------------------------
+[1/3] Baseline — PASS
+----------------------------------------------------------------------------
+
+=== RUN   TestFsmv2
+Running Suite: FSMv2 Suite - /Users/jeremytheocharis/umh-git-v2/cascade-pr2/umh-core/pkg/fsmv2
+==============================================================================================
+Random Seed: 1777423264
+
+Will run 1 of 177 specs
+SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS•SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS
+
+Ran 1 of 177 Specs in 0.004 seconds
+SUCCESS! -- 1 Passed | 0 Failed | 0 Pending | 176 Skipped
+--- PASS: TestFsmv2 (0.01s)
+PASS
+ok  	github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2	0.237s
+
+----------------------------------------------------------------------------
+[2/3] Failure injection — Test #6 FAILS with file:line citation
+----------------------------------------------------------------------------
+
+Injection edit: removed the `children := RenderChildren(snap)` statement from
+RunningState.Next in pkg/fsmv2/workers/application/state/running_state.go and
+reverted the `children` argument on all four return sites to nil — i.e. the
+state.Next body now has the assignment to `circuitOpen, stale` as the first
+non-shutdown statement, which is the pre-P2.2 form.
+
+=== RUN   TestFsmv2
+Running Suite: FSMv2 Suite - /Users/jeremytheocharis/umh-git-v2/cascade-pr2/umh-core/pkg/fsmv2
+==============================================================================================
+Random Seed: 1777423288
+
+Will run 1 of 177 specs
+SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS
+------------------------------
+• [FAILED] [0.003 seconds]
+FSMv2 Architecture Validation — P1.8 Foundation Cap renderChildren is invoked at top of every parent state.Next [It] AST: first non-shutdown statement in parent state.Next calls renderChildren
+/Users/jeremytheocharis/umh-git-v2/cascade-pr2/umh-core/pkg/fsmv2/architecture_p1_8_test.go:403
+
+  [FAILED] parent state.Next bodies must invoke renderChildren as the first non-shutdown statement (P2.2 §4-E LOCKED, Design Intent §16):
+  /Users/jeremytheocharis/umh-git-v2/cascade-pr2/umh-core/pkg/fsmv2/workers/application/state/running_state.go:35 first non-shutdown statement in Next() is *ast.AssignStmt (circuitOpen); expected `children := RenderChildren(snap)` or equivalent call to RenderChildren
+  Expected
+      <[]string | len:1, cap:1>: [
+          "/Users/jeremytheocharis/umh-git-v2/cascade-pr2/umh-core/pkg/fsmv2/workers/application/state/running_state.go:35 first non-shutdown statement in Next() is *ast.AssignStmt (circuitOpen); expected `children := RenderChildren(snap)` or equivalent call to RenderChildren",
+      ]
+  to be empty
+  In [It] at: /Users/jeremytheocharis/umh-git-v2/cascade-pr2/umh-core/pkg/fsmv2/architecture_p1_8_test.go:464 @ 04/29/26 02:41:28.967
+------------------------------
+SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS
+
+Summarizing 1 Failure:
+  [FAIL] FSMv2 Architecture Validation — P1.8 Foundation Cap renderChildren is invoked at top of every parent state.Next [It] AST: first non-shutdown statement in parent state.Next calls renderChildren
+  /Users/jeremytheocharis/umh-git-v2/cascade-pr2/umh-core/pkg/fsmv2/architecture_p1_8_test.go:464
+
+Ran 1 of 177 Specs in 0.004 seconds
+FAIL! -- 0 Passed | 1 Failed | 0 Pending | 176 Skipped
+--- FAIL: TestFsmv2 (0.01s)
+FAIL
+FAIL	github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2	0.238s
+FAIL
+
+Key evidence:
+  - Test #6 fails CLOSED, not silent.
+  - Failure message names the violating file (running_state.go) and line (35).
+  - Failure message identifies the offending statement kind (*ast.AssignStmt
+    "circuitOpen") and prescribes the canonical idiom (children :=
+    RenderChildren(snap)).
+
+----------------------------------------------------------------------------
+[3/3] Revert — Test #6 PASSES again
+----------------------------------------------------------------------------
+
+Revert edit: restored running_state.go from backup; the file is bit-for-bit
+identical to the P2.2 wiring.
+
+=== RUN   TestFsmv2
+Running Suite: FSMv2 Suite - /Users/jeremytheocharis/umh-git-v2/cascade-pr2/umh-core/pkg/fsmv2
+==============================================================================================
+Random Seed: 1777423300
+
+Will run 1 of 177 specs
+SSSSSSSSSSSSSSSSSS•SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS
+
+Ran 1 of 177 Specs in 0.004 seconds
+SUCCESS! -- 1 Passed | 0 Failed | 0 Pending | 176 Skipped
+--- PASS: TestFsmv2 (0.01s)
+PASS
+ok  	github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2	0.238s
+
+----------------------------------------------------------------------------
+Conclusion
+----------------------------------------------------------------------------
+
+Test #6 (RenderChildrenCalledAtTopOfStateNext) is functionally certified:
+  PASS → FAIL (with file:line + offending kind) → PASS
+
+The mechanism actually catches the violation it is intended to catch. P2.2's
+state.Next renderChildren wiring is anchored against future drift; any
+regression that drops the renderChildren call from a parent state.Next body
+will fail this test at build time with an actionable diagnostic message.
+
+This certificate is the helper-mechanism counterpart to
+.execution/P2.1/test_13_layer2_failure_injection.txt (which certified
+validateAllEnabled / F4⊕G1 trap detector).
+
+Combined with the F4⊕G1 closure (registry-exhaustiveness AST meta-test +
+registry walk + helper meta-test, all GREEN at P2.2), the renderChildren
+contract is now defended by:
+  - Test #5  (non-nil emission) -- worker-package emitter
+  - Test #6  (call at top of state.Next) -- state.Next wiring [NEW at P2.2]
+  - Test #7  (idempotency) -- worker-package emitter
+  - Test #8  (no template strings) -- worker-package emitter
+  - Test #13 (Enabled-true layer 2 walk) -- worker-package emitter
+  - Test #5b (registry exhaustiveness) -- meta-test

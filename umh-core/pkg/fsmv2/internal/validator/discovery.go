@@ -32,10 +32,6 @@ func FindStateFiles(baseDir string) []string {
 			return err
 		}
 
-		if strings.Contains(path, "workers/communicator/") {
-			return nil
-		}
-
 		if !info.IsDir() &&
 			strings.HasPrefix(filepath.Base(path), "state_") &&
 			!strings.HasSuffix(path, "_test.go") &&
@@ -59,10 +55,6 @@ func FindActionFiles(baseDir string) []string {
 			return err
 		}
 
-		if strings.Contains(path, "workers/communicator/") {
-			return nil
-		}
-
 		if !info.IsDir() &&
 			strings.Contains(path, "/action/") &&
 			!strings.HasSuffix(path, "_test.go") &&
@@ -83,10 +75,6 @@ func FindWorkerFiles(baseDir string) []string {
 	_ = filepath.Walk(filepath.Join(baseDir, "workers"), func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
-		}
-
-		if strings.Contains(path, "workers/communicator/") {
-			return nil
 		}
 
 		if !info.IsDir() &&
@@ -188,10 +176,6 @@ func FindSnapshotFiles(baseDir string) []string {
 	_ = filepath.Walk(filepath.Join(baseDir, "workers"), func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
-		}
-
-		if strings.Contains(path, "workers/communicator/") {
-			return nil
 		}
 
 		if !info.IsDir() &&

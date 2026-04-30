@@ -17,8 +17,7 @@ package state
 import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/helloworld/action"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/helloworld/snapshot"
+	hello_world "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/helloworld"
 )
 
 // TryingToStartState is a transitional state that emits the SayHelloAction.
@@ -29,22 +28,23 @@ type TryingToStartState struct {
 
 // Next implements state transition logic for TryingToStartState.
 func (s *TryingToStartState) Next(snapAny any) fsmv2.NextResult[any, any] {
-	snap := helpers.ConvertSnapshot[snapshot.HelloworldObservedState, *snapshot.HelloworldDesiredState](snapAny)
+	snap := fsmv2.ConvertWorkerSnapshot[hello_world.HelloworldConfig, hello_world.HelloworldStatus](snapAny)
 
 	// 1. Check shutdown first
-	if snap.Desired.IsShutdownRequested() {
-		return fsmv2.Result[any, any](&StoppedState{}, fsmv2.SignalNone, nil, "Shutdown requested, transitioning to stopped", nil)
+	if snap.IsShutdownRequested {
+		return fsmv2.Transition(&StoppedState{}, fsmv2.SignalNone, nil, "Shutdown requested, transitioning to stopped", nil)
 	}
 
 	// 2. Check if action has already completed (observe the effect)
 	// This makes the state machine resilient to action replay
-	if snap.Observed.HelloSaid {
-		return fsmv2.Result[any, any](&RunningState{}, fsmv2.SignalNone, nil, "Hello has been said, transitioning to running", nil)
+	if snap.Status.HelloSaid {
+		return fsmv2.Transition(&RunningState{}, fsmv2.SignalNone, nil, "Hello has been said, transitioning to running", nil)
 	}
 
 	// 3. Emit action and stay in this state
-	// The action will set HelloSaid=true, which we'll observe next tick
-	return fsmv2.Result[any, any](s, fsmv2.SignalNone, &action.SayHelloAction{}, "Saying hello to the world", nil)
+	return fsmv2.Transition(s, fsmv2.SignalNone,
+		fsmv2.SimpleAction[*hello_world.HelloworldDependencies](hello_world.SayHelloActionName, hello_world.SayHello),
+		"Saying hello to the world", nil)
 }
 
 // String returns the state name for logging and metrics.

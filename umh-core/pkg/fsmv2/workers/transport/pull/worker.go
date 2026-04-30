@@ -18,24 +18,21 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"time"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/pull/snapshot"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/pull/state"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/register"
 
 	transport_pkg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport"
 )
 
+const workerType = "pull"
+
 var _ fsmv2.Worker = (*PullWorker)(nil)
 
-// PullWorker implements the FSM v2 Worker interface for inbound message pulling.
+// PullWorker implements the FSM Worker interface for inbound message pulling.
 // It polls the backend relay server and delivers messages to the inbound channel.
 // PullWorker is a child of TransportWorker and shares its parent's JWT token and transport.
 type PullWorker struct {
@@ -45,24 +42,27 @@ type PullWorker struct {
 }
 
 // NewPullWorker creates a new PullWorker in Stopped state.
-// parentDeps must not be nil — the pull worker delegates auth and transport to the parent.
+// The TDeps parameter is accepted to match register.Worker's constructor
+// signature but is currently ignored; parent transport deps are obtained
+// from the transport.ChildDeps() singleton populated by the transport
+// worker's constructor.
 func NewPullWorker(
 	identity deps.Identity,
 	logger deps.FSMLogger,
 	stateReader deps.StateReader,
-	parentDeps *transport_pkg.TransportDependencies,
-) (*PullWorker, error) {
+	_ *PullDependencies,
+) (fsmv2.Worker, error) {
 	if logger == nil {
 		return nil, errors.New("logger must not be nil")
 	}
 
 	if identity.WorkerType == "" {
-		workerType, err := storage.DeriveWorkerType[snapshot.PullObservedState]()
-		if err != nil {
-			return nil, fmt.Errorf("failed to derive worker type: %w", err)
-		}
-
 		identity.WorkerType = workerType
+	}
+
+	parentDeps := transport_pkg.ChildDeps()
+	if parentDeps == nil {
+		return nil, errors.New("pull worker requires parent transport deps via transport.ChildDeps(); transport worker must be registered/constructed first")
 	}
 
 	dependencies, err := NewPullDependencies(parentDeps, identity, logger, stateReader)
@@ -78,7 +78,8 @@ func NewPullWorker(
 }
 
 // CollectObservedState snapshots the current pull worker state.
-// Handles context cancellation at entry as required by architecture tests.
+// Returns NewObservation — the collector handles CollectedAt, framework metrics,
+// action history, and metric accumulation automatically after COS returns.
 func (w *PullWorker) CollectObservedState(ctx context.Context, _ fsmv2.DesiredState) (fsmv2.ObservedState, error) {
 	select {
 	case <-ctx.Done():
@@ -88,8 +89,7 @@ func (w *PullWorker) CollectObservedState(ctx context.Context, _ fsmv2.DesiredSt
 
 	d := w.GetDependencies()
 
-	observed := snapshot.PullObservedState{
-		CollectedAt:         time.Now(),
+	return fsmv2.NewObservation(PullStatus{
 		HasTransport:        d.GetTransport() != nil,
 		HasValidToken:       d.IsTokenValid(),
 		IsBackpressured:     d.IsBackpressured(),
@@ -99,54 +99,14 @@ func (w *PullWorker) CollectObservedState(ctx context.Context, _ fsmv2.DesiredSt
 		LastRetryAfter:      d.GetLastRetryAfter(),
 		DegradedEnteredAt:   d.GetDegradedEnteredAt(),
 		LastErrorAt:         d.GetLastErrorAt(),
-		LastActionResults:   d.GetActionHistory(),
-	}
-
-	var prevWorkerMetrics deps.Metrics
-
-	stateReader := d.GetStateReader()
-	if stateReader != nil {
-		var prev snapshot.PullObservedState
-		if err := stateReader.LoadObservedTyped(ctx, d.GetWorkerType(), d.GetWorkerID(), &prev); err == nil {
-			prevWorkerMetrics = prev.Metrics.Worker
-		} else {
-			d.GetLogger().Debug("observed_state_load_failed", deps.Err(err))
-		}
-	}
-
-	newWorkerMetrics := prevWorkerMetrics
-	if newWorkerMetrics.Counters == nil {
-		newWorkerMetrics.Counters = make(map[string]int64)
-	}
-
-	if newWorkerMetrics.Gauges == nil {
-		newWorkerMetrics.Gauges = make(map[string]float64)
-	}
-
-	tickMetrics := d.MetricsRecorder().Drain()
-
-	for name, delta := range tickMetrics.Counters {
-		newWorkerMetrics.Counters[name] += delta
-	}
-
-	for name, value := range tickMetrics.Gauges {
-		newWorkerMetrics.Gauges[name] = value
-	}
-
-	observed.Metrics.Worker = newWorkerMetrics
-
-	if fm := d.GetFrameworkState(); fm != nil {
-		observed.Metrics.Framework = *fm
-	}
-
-	return observed, nil
+	}), nil
 }
 
 // DeriveDesiredState determines the desired state from the provided spec.
 // Must be PURE — only uses the spec parameter, never dependencies.
 func (w *PullWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, error) {
 	if spec == nil {
-		return &snapshot.PullDesiredState{
+		return &fsmv2.WrappedDesiredState[PullConfig]{
 			BaseDesiredState: config.BaseDesiredState{State: config.DesiredStateRunning},
 		}, nil
 	}
@@ -166,44 +126,29 @@ func (w *PullWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, e
 		Variables: userSpec.Variables,
 	}
 
-	desired, err := config.DeriveLeafState[PullUserSpec](renderedSpec)
+	leafDesired, err := config.DeriveLeafState[PullConfig](renderedSpec)
 	if err != nil {
 		return nil, err
 	}
 
-	return &desired, nil
+	return &fsmv2.WrappedDesiredState[PullConfig]{
+		BaseDesiredState: leafDesired.BaseDesiredState,
+	}, nil
 }
 
-// GetInitialState returns StoppedState as the pull worker's initial FSM state.
+// GetInitialState returns the registered initial state for the pull worker.
 func (w *PullWorker) GetInitialState() fsmv2.State[any, any] {
-	return &state.StoppedState{}
+	s := fsmv2.LookupInitialState(workerType)
+	if s == nil {
+		panic(fmt.Sprintf("no initial state registered for worker type %q", workerType))
+	}
+	return s
 }
 
+// init registers the pull worker via the generic register.Worker helper with
+// typed TDeps = *PullDependencies. Parent transport deps are consumed via the
+// transport.ChildDeps() singleton populated by the transport worker during its
+// own factory init, replacing the prior extraDeps["transport_deps"] seam.
 func init() {
-	if err := factory.RegisterWorkerType[snapshot.PullObservedState, *snapshot.PullDesiredState](
-		func(id deps.Identity, logger deps.FSMLogger, stateReader deps.StateReader, extraDeps map[string]any) fsmv2.Worker {
-			parentDepsRaw, ok := extraDeps["transport_deps"]
-			if !ok {
-				panic("pull worker requires transport_deps in extraDeps")
-			}
-
-			parentDeps, ok := parentDepsRaw.(*transport_pkg.TransportDependencies)
-			if !ok {
-				panic("transport_deps must be *TransportDependencies")
-			}
-
-			worker, err := NewPullWorker(id, logger, stateReader, parentDeps)
-			if err != nil {
-				panic(fmt.Sprintf("failed to create pull worker: %v", err))
-			}
-
-			return worker
-		},
-		func(cfg interface{}) interface{} {
-			return supervisor.NewSupervisor[snapshot.PullObservedState, *snapshot.PullDesiredState](
-				cfg.(supervisor.Config))
-		},
-	); err != nil {
-		panic(fmt.Sprintf("failed to register pull worker: %v", err))
-	}
+	register.Worker[PullConfig, PullStatus, *PullDependencies](workerType, NewPullWorker)
 }

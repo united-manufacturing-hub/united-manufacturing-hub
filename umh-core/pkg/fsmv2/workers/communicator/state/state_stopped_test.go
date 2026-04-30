@@ -21,7 +21,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/snapshot"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/state"
 )
 
@@ -40,8 +40,8 @@ var _ = Describe("StoppedState", func() {
 			BeforeEach(func() {
 				snap = fsmv2.Snapshot{
 					Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "communicator"},
-					Observed: snapshot.CommunicatorObservedState{},
-					Desired:  &snapshot.CommunicatorDesiredState{},
+					Observed: fsmv2.Observation[communicator.CommunicatorStatus]{},
+					Desired:  &fsmv2.WrappedDesiredState[communicator.CommunicatorConfig]{},
 				}
 			})
 
@@ -80,8 +80,8 @@ var _ = Describe("StoppedState Transitions", func() {
 		It("should transition when shutdown is not requested", func() {
 			snap := fsmv2.Snapshot{
 				Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "communicator"},
-				Observed: snapshot.CommunicatorObservedState{},
-				Desired:  &snapshot.CommunicatorDesiredState{},
+				Observed: fsmv2.Observation[communicator.CommunicatorStatus]{},
+				Desired:  &fsmv2.WrappedDesiredState[communicator.CommunicatorConfig]{},
 			}
 
 			result := stateObj.Next(snap)
@@ -94,8 +94,8 @@ var _ = Describe("StoppedState Transitions", func() {
 		It("should transition with empty observed state", func() {
 			snap := fsmv2.Snapshot{
 				Identity: deps.Identity{ID: "comm-1", Name: "communicator", WorkerType: "communicator"},
-				Observed: snapshot.CommunicatorObservedState{},
-				Desired: &snapshot.CommunicatorDesiredState{
+				Observed: fsmv2.Observation[communicator.CommunicatorStatus]{},
+				Desired: &fsmv2.WrappedDesiredState[communicator.CommunicatorConfig]{
 					BaseDesiredState: config.BaseDesiredState{ShutdownRequested: false},
 				},
 			}
@@ -112,8 +112,8 @@ var _ = Describe("StoppedState Transitions", func() {
 		It("should signal removal when shutdown is requested", func() {
 			snap := fsmv2.Snapshot{
 				Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "communicator"},
-				Observed: snapshot.CommunicatorObservedState{},
-				Desired: &snapshot.CommunicatorDesiredState{
+				Observed: fsmv2.Observation[communicator.CommunicatorStatus]{},
+				Desired: &fsmv2.WrappedDesiredState[communicator.CommunicatorConfig]{
 					BaseDesiredState: config.BaseDesiredState{ShutdownRequested: true},
 				},
 			}
@@ -128,8 +128,8 @@ var _ = Describe("StoppedState Transitions", func() {
 		It("should stay in StoppedState and emit SignalNeedsRemoval on shutdown", func() {
 			snap := fsmv2.Snapshot{
 				Identity: deps.Identity{ID: "comm-shutdown", Name: "communicator", WorkerType: "communicator"},
-				Observed: snapshot.CommunicatorObservedState{},
-				Desired: &snapshot.CommunicatorDesiredState{
+				Observed: fsmv2.Observation[communicator.CommunicatorStatus]{},
+				Desired: &fsmv2.WrappedDesiredState[communicator.CommunicatorConfig]{
 					BaseDesiredState: config.BaseDesiredState{ShutdownRequested: true},
 				},
 			}

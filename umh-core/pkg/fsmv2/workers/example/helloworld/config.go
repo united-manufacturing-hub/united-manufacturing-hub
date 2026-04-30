@@ -18,17 +18,21 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 )
 
-// HelloworldUserSpec defines the user configuration for the helloworld worker.
-// This is parsed from the UserSpec.Config YAML/JSON string in scenarios.
-//
-// Example YAML config:
-//
-//	config: |
-//	  state: running
-//	  moodFilePath: /tmp/helloworld-mood
-type HelloworldUserSpec struct {
-	config.BaseUserSpec // Provides State field with GetState() defaulting to "running"
+// HelloworldConfig holds the user-provided configuration for the helloworld worker.
+// Embeds BaseUserSpec to support the StateGetter interface, allowing WorkerBase.DeriveDesiredState
+// to extract the desired state from the "state" YAML field.
+type HelloworldConfig struct {
+	config.BaseUserSpec `yaml:",inline"`
 
 	// MoodFilePath is the path to the mood file whose contents set the worker's mood.
-	MoodFilePath string `json:"moodFilePath" yaml:"moodFilePath"`
+	// When empty, mood checking is skipped.
+	MoodFilePath string `yaml:"moodFilePath" json:"moodFilePath"`
+}
+
+// HelloworldStatus holds the runtime observation data for the helloworld worker.
+type HelloworldStatus struct {
+	// Mood is read from the mood file at HelloworldConfig.MoodFilePath by CollectObservedState.
+	Mood string `json:"mood,omitempty"`
+	// HelloSaid tracks whether the SayHelloAction has been executed.
+	HelloSaid bool `json:"helloSaid"`
 }

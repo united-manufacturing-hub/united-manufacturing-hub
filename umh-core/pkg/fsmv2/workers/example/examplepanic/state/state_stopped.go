@@ -28,15 +28,15 @@ func (s *StoppedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := helpers.ConvertSnapshot[snapshot.ExamplepanicObservedState, *snapshot.ExamplepanicDesiredState](snapAny)
 
 	if snap.Desired.IsShutdownRequested() {
-		return fsmv2.Result[any, any](s, fsmv2.SignalNeedsRemoval, nil, "Shutdown requested, signaling removal", nil)
+		return fsmv2.Transition(s, fsmv2.SignalNeedsRemoval, nil, "Shutdown requested, signaling removal", nil)
 	}
 
 	// ParentMappedState is in Observed.DesiredState, not Desired
 	if snap.Observed.ShouldBeRunning() {
-		return fsmv2.Result[any, any](&TryingToConnectState{}, fsmv2.SignalNone, nil, "Should be running, transitioning to TryingToConnect", nil)
+		return fsmv2.Transition(&TryingToConnectState{}, fsmv2.SignalNone, nil, "Should be running, transitioning to TryingToConnect", nil)
 	}
 
-	return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil, "Panic worker is stopped, no connection", nil)
+	return fsmv2.Transition(s, fsmv2.SignalNone, nil, "Panic worker is stopped, no connection", nil)
 }
 
 func (s *StoppedState) String() string {

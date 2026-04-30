@@ -18,24 +18,21 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"time"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/push/snapshot"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/push/state"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/register"
 
 	transport_pkg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport"
 )
 
+const workerType = "push"
+
 var _ fsmv2.Worker = (*PushWorker)(nil)
 
-// PushWorker implements the FSM v2 Worker interface for outbound message pushing.
+// PushWorker implements the FSM Worker interface for outbound message pushing.
 // It drains the outbound channel and pushes messages to the backend relay server.
 // PushWorker is a child of TransportWorker and shares its parent's JWT token and transport.
 type PushWorker struct {
@@ -45,24 +42,27 @@ type PushWorker struct {
 }
 
 // NewPushWorker creates a new PushWorker in Stopped state.
-// parentDeps must not be nil — the push worker delegates auth and transport to the parent.
+// The TDeps parameter is accepted to match register.Worker's constructor
+// signature but is currently ignored; parent transport deps are obtained
+// from the transport.ChildDeps() singleton populated by the transport
+// worker's constructor.
 func NewPushWorker(
 	identity deps.Identity,
 	logger deps.FSMLogger,
 	stateReader deps.StateReader,
-	parentDeps *transport_pkg.TransportDependencies,
-) (*PushWorker, error) {
+	_ *PushDependencies,
+) (fsmv2.Worker, error) {
 	if logger == nil {
 		return nil, errors.New("logger must not be nil")
 	}
 
 	if identity.WorkerType == "" {
-		workerType, err := storage.DeriveWorkerType[snapshot.PushObservedState]()
-		if err != nil {
-			return nil, fmt.Errorf("failed to derive worker type: %w", err)
-		}
-
 		identity.WorkerType = workerType
+	}
+
+	parentDeps := transport_pkg.ChildDeps()
+	if parentDeps == nil {
+		return nil, errors.New("push worker requires parent transport deps via transport.ChildDeps(); transport worker must be registered/constructed first")
 	}
 
 	dependencies, err := NewPushDependencies(parentDeps, identity, logger, stateReader)
@@ -78,7 +78,8 @@ func NewPushWorker(
 }
 
 // CollectObservedState snapshots the current push worker state.
-// Handles context cancellation at entry as required by architecture tests.
+// Returns NewObservation — the collector handles CollectedAt, framework metrics,
+// action history, and metric accumulation automatically after COS returns.
 func (w *PushWorker) CollectObservedState(ctx context.Context, _ fsmv2.DesiredState) (fsmv2.ObservedState, error) {
 	select {
 	case <-ctx.Done():
@@ -88,59 +89,16 @@ func (w *PushWorker) CollectObservedState(ctx context.Context, _ fsmv2.DesiredSt
 
 	d := w.GetDependencies()
 
-	observed := snapshot.PushObservedState{
-		CollectedAt:   time.Now(),
-		HasTransport:  d.GetTransport() != nil,
-		HasValidToken: d.IsTokenValid(),
-	}
-
-	observed.ConsecutiveErrors = d.GetConsecutiveErrors()
-	observed.PendingMessageCount = d.PendingMessageCount()
-	observed.LastErrorType = d.GetLastErrorType()
-	observed.LastRetryAfter = d.GetLastRetryAfter()
-	observed.DegradedEnteredAt = d.GetDegradedEnteredAt()
-	observed.LastErrorAt = d.GetLastErrorAt()
-
-	var prevWorkerMetrics deps.Metrics
-
-	stateReader := d.GetStateReader()
-	if stateReader != nil {
-		var prev snapshot.PushObservedState
-		if err := stateReader.LoadObservedTyped(ctx, d.GetWorkerType(), d.GetWorkerID(), &prev); err == nil {
-			prevWorkerMetrics = prev.Metrics.Worker
-		} else {
-			d.GetLogger().Debug("observed_state_load_failed", deps.Err(err))
-		}
-	}
-
-	newWorkerMetrics := prevWorkerMetrics
-	if newWorkerMetrics.Counters == nil {
-		newWorkerMetrics.Counters = make(map[string]int64)
-	}
-
-	if newWorkerMetrics.Gauges == nil {
-		newWorkerMetrics.Gauges = make(map[string]float64)
-	}
-
-	tickMetrics := d.MetricsRecorder().Drain()
-
-	for name, delta := range tickMetrics.Counters {
-		newWorkerMetrics.Counters[name] += delta
-	}
-
-	for name, value := range tickMetrics.Gauges {
-		newWorkerMetrics.Gauges[name] = value
-	}
-
-	observed.Metrics.Worker = newWorkerMetrics
-
-	if fm := d.GetFrameworkState(); fm != nil {
-		observed.Metrics.Framework = *fm
-	}
-
-	observed.LastActionResults = d.GetActionHistory()
-
-	return observed, nil
+	return fsmv2.NewObservation(PushStatus{
+		HasTransport:        d.GetTransport() != nil,
+		HasValidToken:       d.IsTokenValid(),
+		ConsecutiveErrors:   d.GetConsecutiveErrors(),
+		PendingMessageCount: d.PendingMessageCount(),
+		LastErrorType:       d.GetLastErrorType(),
+		LastRetryAfter:      d.GetLastRetryAfter(),
+		DegradedEnteredAt:   d.GetDegradedEnteredAt(),
+		LastErrorAt:         d.GetLastErrorAt(),
+	}), nil
 }
 
 // DeriveDesiredState determines the desired state from the provided spec.
@@ -148,7 +106,7 @@ func (w *PushWorker) CollectObservedState(ctx context.Context, _ fsmv2.DesiredSt
 // Must be PURE — only uses the spec parameter, never dependencies.
 func (w *PushWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, error) {
 	if spec == nil {
-		return &snapshot.PushDesiredState{
+		return &fsmv2.WrappedDesiredState[PushConfig]{
 			BaseDesiredState: config.BaseDesiredState{State: config.DesiredStateRunning},
 		}, nil
 	}
@@ -168,46 +126,29 @@ func (w *PushWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, e
 		Variables: userSpec.Variables,
 	}
 
-	leafDesired, err := config.DeriveLeafState[PushUserSpec](renderedSpec)
+	leafDesired, err := config.DeriveLeafState[PushConfig](renderedSpec)
 	if err != nil {
 		return nil, err
 	}
 
-	return &snapshot.PushDesiredState{
+	return &fsmv2.WrappedDesiredState[PushConfig]{
 		BaseDesiredState: leafDesired.BaseDesiredState,
 	}, nil
 }
 
-// GetInitialState returns StoppedState as the push worker's initial FSM state.
+// GetInitialState returns the registered initial state for the push worker.
 func (w *PushWorker) GetInitialState() fsmv2.State[any, any] {
-	return &state.StoppedState{}
+	s := fsmv2.LookupInitialState(workerType)
+	if s == nil {
+		panic(fmt.Sprintf("no initial state registered for worker type %q", workerType))
+	}
+	return s
 }
 
+// init registers the push worker via the generic register.Worker helper with
+// typed TDeps = *PushDependencies. Parent transport deps are consumed via the
+// transport.ChildDeps() singleton populated by the transport worker during its
+// own factory init, replacing the prior extraDeps["transport_deps"] seam.
 func init() {
-	if err := factory.RegisterWorkerType[snapshot.PushObservedState, *snapshot.PushDesiredState](
-		func(id deps.Identity, logger deps.FSMLogger, stateReader deps.StateReader, extraDeps map[string]any) fsmv2.Worker {
-			parentDepsRaw, ok := extraDeps["transport_deps"]
-			if !ok {
-				panic("push worker requires transport_deps in extraDeps")
-			}
-
-			parentDeps, ok := parentDepsRaw.(*transport_pkg.TransportDependencies)
-			if !ok {
-				panic("transport_deps must be *TransportDependencies")
-			}
-
-			worker, err := NewPushWorker(id, logger, stateReader, parentDeps)
-			if err != nil {
-				panic(fmt.Sprintf("failed to create push worker: %v", err))
-			}
-
-			return worker
-		},
-		func(cfg interface{}) interface{} {
-			return supervisor.NewSupervisor[snapshot.PushObservedState, *snapshot.PushDesiredState](
-				cfg.(supervisor.Config))
-		},
-	); err != nil {
-		panic(fmt.Sprintf("failed to register push worker: %v", err))
-	}
+	register.Worker[PushConfig, PushStatus, *PushDependencies](workerType, NewPushWorker)
 }

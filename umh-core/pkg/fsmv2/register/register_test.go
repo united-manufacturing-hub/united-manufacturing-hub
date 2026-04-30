@@ -53,7 +53,7 @@ type regTestWorker struct {
 	fsmv2.WorkerBase[regTestConfig, regTestStatus]
 }
 
-func newRegTestWorker(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader) (fsmv2.Worker, error) {
+func newRegTestWorker(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader, _ register.NoDeps) (fsmv2.Worker, error) {
 	w := &regTestWorker{}
 	w.InitBase(id, logger, sr)
 
@@ -71,7 +71,7 @@ var _ = Describe("register.Worker", func() {
 	})
 
 	It("registers successfully and factory lookup works", func() {
-		register.Worker[regTestConfig, regTestStatus]("regtest", newRegTestWorker)
+		register.Worker[regTestConfig, regTestStatus, register.NoDeps]("regtest", newRegTestWorker)
 
 		types := factory.ListRegisteredTypes()
 		Expect(types).To(ContainElement("regtest"))
@@ -90,7 +90,7 @@ var _ = Describe("register.Worker", func() {
 	})
 
 	It("populates CSE TypeRegistry with correct types", func() {
-		register.Worker[regTestConfig, regTestStatus]("regtest-cse", newRegTestWorker)
+		register.Worker[regTestConfig, regTestStatus, register.NoDeps]("regtest-cse", newRegTestWorker)
 
 		obsType := storage.GlobalRegistry().GetObservedType("regtest-cse")
 		desType := storage.GlobalRegistry().GetDesiredType("regtest-cse")
@@ -103,36 +103,36 @@ var _ = Describe("register.Worker", func() {
 
 	It("panics on field name collision", func() {
 		Expect(func() {
-			register.Worker[regTestConfig, collidingStatus]("regtest-collision", func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader) (fsmv2.Worker, error) {
+			register.Worker[regTestConfig, collidingStatus, register.NoDeps]("regtest-collision", func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader, _ register.NoDeps) (fsmv2.Worker, error) {
 				return nil, nil
 			})
 		}).To(PanicWith(ContainSubstring("collide")))
 	})
 
 	It("panics on duplicate worker type", func() {
-		register.Worker[regTestConfig, regTestStatus]("regtest-dup", newRegTestWorker)
+		register.Worker[regTestConfig, regTestStatus, register.NoDeps]("regtest-dup", newRegTestWorker)
 
 		Expect(func() {
-			register.Worker[regTestConfig, regTestStatus]("regtest-dup", newRegTestWorker)
+			register.Worker[regTestConfig, regTestStatus, register.NoDeps]("regtest-dup", newRegTestWorker)
 		}).To(PanicWith(ContainSubstring("already registered")))
 	})
 
 	It("panics on empty worker type", func() {
 		Expect(func() {
-			register.Worker[regTestConfig, regTestStatus]("", newRegTestWorker)
+			register.Worker[regTestConfig, regTestStatus, register.NoDeps]("", newRegTestWorker)
 		}).To(PanicWith(ContainSubstring("non-empty")))
 	})
 
 	It("panics on nil constructor", func() {
 		Expect(func() {
-			register.Worker[regTestConfig, regTestStatus]("regtest-nil", nil)
+			register.Worker[regTestConfig, regTestStatus, register.NoDeps]("regtest-nil", nil)
 		}).To(PanicWith(ContainSubstring("non-nil")))
 	})
 
 	It("panics when constructor returns an error at factory call time", func() {
 		constructorErr := errors.New("device unreachable")
-		register.Worker[regTestConfig, regTestStatus]("regtest-errconstructor",
-			func(_ deps.Identity, _ deps.FSMLogger, _ deps.StateReader) (fsmv2.Worker, error) {
+		register.Worker[regTestConfig, regTestStatus, register.NoDeps]("regtest-errconstructor",
+			func(_ deps.Identity, _ deps.FSMLogger, _ deps.StateReader, _ register.NoDeps) (fsmv2.Worker, error) {
 				return nil, constructorErr
 			},
 		)
@@ -151,8 +151,8 @@ var _ = Describe("register.Worker", func() {
 	})
 
 	It("panics when constructor returns nil worker without error", func() {
-		register.Worker[regTestConfig, regTestStatus]("regtest-nilworker",
-			func(_ deps.Identity, _ deps.FSMLogger, _ deps.StateReader) (fsmv2.Worker, error) {
+		register.Worker[regTestConfig, regTestStatus, register.NoDeps]("regtest-nilworker",
+			func(_ deps.Identity, _ deps.FSMLogger, _ deps.StateReader, _ register.NoDeps) (fsmv2.Worker, error) {
 				return nil, nil
 			},
 		)
@@ -168,5 +168,95 @@ var _ = Describe("register.Worker", func() {
 			ContainSubstring("returned nil worker"),
 			ContainSubstring("nil-1"),
 		)))
+	})
+
+	It("registers with TDeps generic and passes zero-value TDeps to constructor", func() {
+		type regTestDeps struct {
+			Marker string
+		}
+
+		var capturedDeps regTestDeps
+		var constructorRan bool
+
+		register.Worker[regTestConfig, regTestStatus, regTestDeps]("regtest-tdeps",
+			func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader, d regTestDeps) (fsmv2.Worker, error) {
+				constructorRan = true
+				capturedDeps = d
+				w := &regTestWorker{}
+				w.InitBase(id, logger, sr)
+
+				return w, nil
+			},
+		)
+
+		nopLogger := deps.NewNopFSMLogger()
+		worker, err := factory.NewWorkerByType("regtest-tdeps", deps.Identity{
+			ID:         "tdeps-1",
+			Name:       "tdeps-test",
+			WorkerType: "regtest-tdeps",
+		}, nopLogger, nil, nil)
+
+		Expect(err).NotTo(HaveOccurred())
+		Expect(worker).NotTo(BeNil())
+		Expect(constructorRan).To(BeTrue())
+		Expect(capturedDeps).To(Equal(regTestDeps{}))
+	})
+
+	It("accepts pointer TDeps and passes typed nil to constructor (transitional until extraDeps extraction lands)", func() {
+		type regTestPtrDeps *struct{ X int }
+
+		var capturedDeps regTestPtrDeps
+		var constructorRan bool
+
+		register.Worker[regTestConfig, regTestStatus, regTestPtrDeps]("regtest-ptrdeps",
+			func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader, d regTestPtrDeps) (fsmv2.Worker, error) {
+				constructorRan = true
+				capturedDeps = d
+				w := &regTestWorker{}
+				w.InitBase(id, logger, sr)
+
+				return w, nil
+			},
+		)
+
+		nopLogger := deps.NewNopFSMLogger()
+		worker, err := factory.NewWorkerByType("regtest-ptrdeps", deps.Identity{
+			ID:         "ptrdeps-1",
+			Name:       "ptrdeps-test",
+			WorkerType: "regtest-ptrdeps",
+		}, nopLogger, nil, nil)
+
+		Expect(err).NotTo(HaveOccurred())
+		Expect(worker).NotTo(BeNil())
+		Expect(constructorRan).To(BeTrue())
+		Expect(capturedDeps).To(BeNil())
+	})
+
+	It("supports NoDeps alias", func() {
+		var capturedDeps register.NoDeps
+		var constructorRan bool
+
+		register.Worker[regTestConfig, regTestStatus, register.NoDeps]("regtest-nodeps-alias",
+			func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader, d register.NoDeps) (fsmv2.Worker, error) {
+				constructorRan = true
+				capturedDeps = d
+				w := &regTestWorker{}
+				w.InitBase(id, logger, sr)
+
+				return w, nil
+			},
+		)
+
+		nopLogger := deps.NewNopFSMLogger()
+		worker, err := factory.NewWorkerByType("regtest-nodeps-alias", deps.Identity{
+			ID:         "nodeps-1",
+			Name:       "nodeps-test",
+			WorkerType: "regtest-nodeps-alias",
+		}, nopLogger, nil, nil)
+
+		Expect(err).NotTo(HaveOccurred())
+		Expect(worker).NotTo(BeNil())
+		Expect(constructorRan).To(BeTrue())
+		Expect(capturedDeps).To(Equal(struct{}{}))
 	})
 })

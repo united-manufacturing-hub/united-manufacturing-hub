@@ -12,14 +12,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package pull
+package hello_world
 
-import (
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
-)
+import "context"
 
-// PullUserSpec defines the typed configuration for the pull worker.
-// PullWorker config comes from parent TransportWorker, so this is minimal.
-type PullUserSpec struct {
-	config.BaseUserSpec `yaml:",inline"`
+// SayHelloActionName is the name used for logging and metrics.
+const SayHelloActionName = "say_hello"
+
+// SayHello implements the say-hello action logic.
+// Idempotent: skips if hello was already said.
+func SayHello(_ context.Context, d *HelloworldDependencies) error {
+	logger := d.ActionLogger(SayHelloActionName)
+
+	if d.HasSaidHello() {
+		logger.Debug("already_said_hello")
+		return nil
+	}
+
+	logger.Info("hello_world")
+	d.SetHelloSaid(true)
+
+	return nil
 }

@@ -31,19 +31,20 @@ type CommunicatorDependencies struct {
 }
 
 // NewCommunicatorDependencies creates dependencies for the communicator worker.
+// Accepts a shared BaseDependencies to avoid dual-instance metrics divergence
+// (collector reads metrics from baseDeps; supervisor writes to the same one).
 // Panics if SetChannelProvider was not called first.
-func NewCommunicatorDependencies(t transport.Transport, logger deps.FSMLogger, stateReader deps.StateReader, identity deps.Identity) *CommunicatorDependencies {
+func NewCommunicatorDependencies(baseDeps *deps.BaseDependencies) *CommunicatorDependencies {
 	provider := GetChannelProvider()
 	if provider == nil {
 		panic("ChannelProvider must be set before creating communicator dependencies. " +
 			"Call SetChannelProvider() in main.go before starting the FSMv2 supervisor.")
 	}
 
-	inbound, outbound := provider.GetChannels(identity.ID)
+	inbound, outbound := provider.GetChannels(baseDeps.GetWorkerID())
 
 	return &CommunicatorDependencies{
-		BaseDependencies: deps.NewBaseDependencies(logger, stateReader, identity),
-		transport:        t,
+		BaseDependencies: baseDeps,
 		inboundChan:      inbound,
 		outboundChan:     outbound,
 	}

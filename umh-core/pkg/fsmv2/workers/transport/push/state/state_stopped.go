@@ -15,12 +15,14 @@
 package state
 
 import (
-	"fmt"
-
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/push/snapshot"
+	push_pkg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/push"
 )
+
+func init() {
+	fsmv2.RegisterInitialState("push", &StoppedState{})
+}
 
 // StoppedState represents the initial state where the push worker is not active.
 type StoppedState struct {
@@ -28,19 +30,19 @@ type StoppedState struct {
 }
 
 func (s *StoppedState) Next(snapAny any) fsmv2.NextResult[any, any] {
-	snap := helpers.ConvertSnapshot[snapshot.PushObservedState, *snapshot.PushDesiredState](snapAny)
+	snap := fsmv2.ConvertWorkerSnapshot[push_pkg.PushConfig, push_pkg.PushStatus](snapAny)
 
-	if snap.Desired.IsShutdownRequested() {
-		return fsmv2.Result[any, any](s, fsmv2.SignalNeedsRemoval, nil, "shutdown requested, signaling removal", nil)
+	if snap.IsShutdownRequested {
+		return fsmv2.Transition(s, fsmv2.SignalNeedsRemoval, nil, "shutdown requested, signaling removal", nil)
 	}
 
-	if snap.Observed.ShouldBeRunning() {
-		return fsmv2.Result[any, any](&RunningState{}, fsmv2.SignalNone, nil,
-			fmt.Sprintf("parent mapped state is %q, transitioning to Running", snap.Observed.ParentMappedState), nil)
+	if !snap.ShouldStop() {
+		return fsmv2.Transition(&RunningState{}, fsmv2.SignalNone, nil,
+			"parent requests running, transitioning to Running", nil)
 	}
 
-	return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil,
-		fmt.Sprintf("stopped, parent mapped state is %q", snap.Observed.ParentMappedState), nil)
+	return fsmv2.Transition(s, fsmv2.SignalNone, nil,
+		"stopped, awaiting parent run signal", nil)
 }
 
 func (s *StoppedState) String() string {

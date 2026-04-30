@@ -21,7 +21,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/helloworld/snapshot"
+	hello_world "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/helloworld"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/helloworld/state"
 )
 
@@ -40,8 +40,10 @@ var _ = Describe("RunningState", func() {
 			BeforeEach(func() {
 				snap = fsmv2.Snapshot{
 					Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "helloworld"},
-					Observed: snapshot.HelloworldObservedState{HelloSaid: true},
-					Desired:  &snapshot.HelloworldDesiredState{},
+					Observed: fsmv2.Observation[hello_world.HelloworldStatus]{
+						Status: hello_world.HelloworldStatus{HelloSaid: true},
+					},
+					Desired: &fsmv2.WrappedDesiredState[hello_world.HelloworldConfig]{},
 				}
 			})
 
@@ -68,8 +70,10 @@ var _ = Describe("RunningState", func() {
 			BeforeEach(func() {
 				snap = fsmv2.Snapshot{
 					Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "helloworld"},
-					Observed: snapshot.HelloworldObservedState{HelloSaid: true},
-					Desired: &snapshot.HelloworldDesiredState{
+					Observed: fsmv2.Observation[hello_world.HelloworldStatus]{
+						Status: hello_world.HelloworldStatus{HelloSaid: true},
+					},
+					Desired: &fsmv2.WrappedDesiredState[hello_world.HelloworldConfig]{
 						BaseDesiredState: config.BaseDesiredState{ShutdownRequested: true},
 					},
 				}
@@ -113,8 +117,10 @@ var _ = Describe("RunningState Transitions", func() {
 		It("should transition on shutdown request", func() {
 			snap := fsmv2.Snapshot{
 				Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "helloworld"},
-				Observed: snapshot.HelloworldObservedState{HelloSaid: true},
-				Desired: &snapshot.HelloworldDesiredState{
+				Observed: fsmv2.Observation[hello_world.HelloworldStatus]{
+					Status: hello_world.HelloworldStatus{HelloSaid: true},
+				},
+				Desired: &fsmv2.WrappedDesiredState[hello_world.HelloworldConfig]{
 					BaseDesiredState: config.BaseDesiredState{ShutdownRequested: true},
 				},
 			}
@@ -131,8 +137,10 @@ var _ = Describe("RunningState Transitions", func() {
 		It("should stay running with default desired state", func() {
 			snap := fsmv2.Snapshot{
 				Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "helloworld"},
-				Observed: snapshot.HelloworldObservedState{HelloSaid: true},
-				Desired:  &snapshot.HelloworldDesiredState{},
+				Observed: fsmv2.Observation[hello_world.HelloworldStatus]{
+					Status: hello_world.HelloworldStatus{HelloSaid: true},
+				},
+				Desired: &fsmv2.WrappedDesiredState[hello_world.HelloworldConfig]{},
 			}
 
 			result := stateObj.Next(snap)
@@ -145,8 +153,10 @@ var _ = Describe("RunningState Transitions", func() {
 		It("should stay running with explicit shutdown=false", func() {
 			snap := fsmv2.Snapshot{
 				Identity: deps.Identity{ID: "hello-running", Name: "helloworld", WorkerType: "helloworld"},
-				Observed: snapshot.HelloworldObservedState{HelloSaid: true},
-				Desired: &snapshot.HelloworldDesiredState{
+				Observed: fsmv2.Observation[hello_world.HelloworldStatus]{
+					Status: hello_world.HelloworldStatus{HelloSaid: true},
+				},
+				Desired: &fsmv2.WrappedDesiredState[hello_world.HelloworldConfig]{
 					BaseDesiredState: config.BaseDesiredState{ShutdownRequested: false},
 				},
 			}
@@ -159,18 +169,16 @@ var _ = Describe("RunningState Transitions", func() {
 		})
 
 		It("should stay running even if HelloSaid becomes false", func() {
-			// This is an edge case - HelloSaid shouldn't normally become false,
-			// but the state machine should handle it gracefully
 			snap := fsmv2.Snapshot{
 				Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "helloworld"},
-				Observed: snapshot.HelloworldObservedState{HelloSaid: false},
-				Desired:  &snapshot.HelloworldDesiredState{},
+				Observed: fsmv2.Observation[hello_world.HelloworldStatus]{
+					Status: hello_world.HelloworldStatus{HelloSaid: false},
+				},
+				Desired: &fsmv2.WrappedDesiredState[hello_world.HelloworldConfig]{},
 			}
 
 			result := stateObj.Next(snap)
 
-			// Running state stays running - it doesn't check HelloSaid
-			// Only cares about shutdown
 			Expect(result.State).To(BeAssignableToTypeOf(&state.RunningState{}))
 			Expect(result.Signal).To(Equal(fsmv2.SignalNone))
 			Expect(result.Action).To(BeNil())
