@@ -1,0 +1,61 @@
+// Copyright 2025 UMH Systems GmbH
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package state
+
+import (
+	"fmt"
+	"time"
+
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/certfetcher/action"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/certfetcher/snapshot"
+)
+
+// DegradedBackoff is the wait time between retries in degraded state.
+const DegradedBackoff = 5 * time.Minute
+
+// DegradedState retries certificate fetching with backoff after consecutive failures.
+type DegradedState struct {
+	helpers.RunningDegradedBase
+}
+
+// Next recovers to Running when errors clear, otherwise retries with backoff.
+func (s *DegradedState) Next(snapAny any) fsmv2.NextResult[any, any] {
+	snap := helpers.ConvertSnapshot[snapshot.CertFetcherObservedState, *snapshot.CertFetcherDesiredState](snapAny)
+
+	if snap.Desired.IsShutdownRequested() {
+		return fsmv2.Result[any, any](&StoppedState{}, fsmv2.SignalNone, nil, "shutdown requested")
+	}
+
+	if snap.Observed.ConsecutiveErrors == 0 {
+		return fsmv2.Result[any, any](&RunningState{}, fsmv2.SignalNone, nil, "errors cleared, recovering")
+	}
+
+	timeSinceLastFetch := snap.Observed.CollectedAt.Sub(snap.Observed.LastFetchAt)
+	if timeSinceLastFetch >= DegradedBackoff {
+		return fsmv2.Result[any, any](s, fsmv2.SignalNone, &action.FetchCertsAction{},
+			fmt.Sprintf("degraded retry: %d errors, last fetch %s ago",
+				snap.Observed.ConsecutiveErrors, timeSinceLastFetch.Round(time.Second)))
+	}
+
+	return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil,
+		fmt.Sprintf("degraded backoff: %d errors, retry in %s",
+			snap.Observed.ConsecutiveErrors, (DegradedBackoff-timeSinceLastFetch).Round(time.Second)))
+}
+
+func (s *DegradedState) String() string {
+	return helpers.DeriveStateName(s)
+}

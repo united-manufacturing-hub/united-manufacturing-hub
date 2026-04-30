@@ -27,6 +27,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/subscriber"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/maptostruct"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/watchdog"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"go.uber.org/zap"
 )
@@ -34,7 +35,7 @@ import (
 type Router struct {
 	dog                   watchdog.Iface
 	configManager         config.ConfigManager
-	inboundChannel        chan *models.UMHMessage
+	inboundChannel        <-chan *transport.MessageWithSender
 	outboundChannel       chan *models.UMHMessage
 	clientConnections     map[string]*ClientConnection
 	subHandler            *subscriber.Handler
@@ -52,8 +53,63 @@ type ClientConnection struct {
 	CompanionToFrontendChannel chan []byte
 }
 
+// NewRouter creates a Router for the legacy (non-FSMv2) path.
+// Deprecated: Use NewRouterForFSMv2 for FSMv2 mode with gatekeeper.
 func NewRouter(dog watchdog.Iface,
 	inboundChannel chan *models.UMHMessage,
+	instanceUUID uuid.UUID,
+	outboundChannel chan *models.UMHMessage,
+	releaseChannel config.ReleaseChannel,
+	subHandler *subscriber.Handler,
+	systemSnapshotManager *fsm.SnapshotManager,
+	configManager config.ConfigManager,
+	logger *zap.SugaredLogger,
+) *Router {
+	// Legacy path: spawn adapter goroutine that decodes and forwards
+	verifiedChan := make(chan *transport.MessageWithSender, cap(inboundChannel))
+	go func() {
+		for msg := range inboundChannel {
+			messageContent, err := encoding.DecodeMessageFromUserToUMHInstance(msg.Content)
+			if err != nil {
+				logger.Warnf("Failed to decrypt message: %s", err.Error())
+
+				continue
+			}
+
+			traceID := ""
+			if msg.Metadata != nil {
+				traceID = msg.Metadata.TraceID.String()
+			}
+
+			verifiedChan <- &transport.MessageWithSender{
+				Content:     messageContent,
+				SenderEmail: msg.Email,
+				TraceID:     traceID,
+			}
+		}
+		close(verifiedChan)
+	}()
+
+	return &Router{
+		dog:                   dog,
+		inboundChannel:        verifiedChan,
+		instanceUUID:          instanceUUID,
+		outboundChannel:       outboundChannel,
+		releaseChannel:        releaseChannel,
+		clientConnections:     make(map[string]*ClientConnection),
+		clientConnectionsLock: sync.RWMutex{},
+		subHandler:            subHandler,
+		systemSnapshotManager: systemSnapshotManager,
+		configManager:         configManager,
+		actionLogger:          logger,
+		routerLogger:          logger,
+	}
+}
+
+// NewRouterForFSMv2 creates a Router for FSMv2 mode where the gatekeeper
+// provides pre-decoded MessageWithSender on the inbound channel.
+func NewRouterForFSMv2(dog watchdog.Iface,
+	inboundChannel <-chan *transport.MessageWithSender,
 	instanceUUID uuid.UUID,
 	outboundChannel chan *models.UMHMessage,
 	releaseChannel config.ReleaseChannel,
@@ -121,21 +177,15 @@ func (r *Router) router() {
 			}
 
 			r.dog.ReportHeartbeatStatus(watcherUUID, watchdog.HEARTBEAT_STATUS_OK)
-			// Decode message
-			messageContent, err := encoding.DecodeMessageFromUserToUMHInstance(message.Content)
-			if err != nil {
-				r.routerLogger.Warnf("Failed to decrypt message: %s", err.Error())
 
-				continue
-			}
-
-			switch messageContent.MessageType {
+			// Message already decoded by gatekeeper
+			switch message.Content.MessageType {
 			case models.Subscribe:
-				r.handleSub(message, messageContent, watcherUUID)
+				r.handleSub(message, watcherUUID)
 			case models.Action:
-				r.handleAction(messageContent, message, watcherUUID)
+				r.handleAction(message, watcherUUID)
 			default:
-				r.routerLogger.Warnf("Unexpected message type: %s", messageContent.MessageType)
+				r.routerLogger.Warnf("Unexpected message type: %s", message.Content.MessageType)
 
 				continue
 			}
@@ -151,7 +201,7 @@ func (r *Router) router() {
 // this is an optimization to avoid sending a "new subscriber" message, containing the cached uns data with at least
 // one event for every topic, to the frontend when the user is already subscribed
 // we should avoid unnecessary new subscriber message generation because of its high memory and cpu usage.
-func (r *Router) handleSub(message *models.UMHMessage, messageContent models.UMHMessageContent, watcherUUID uuid.UUID) {
+func (r *Router) handleSub(message *transport.MessageWithSender, watcherUUID uuid.UUID) {
 	if r.subHandler == nil {
 		r.dog.ReportHeartbeatStatus(watcherUUID, watchdog.HEARTBEAT_STATUS_WARNING)
 		r.routerLogger.Warnf("Subscribe handler not yet initialized")
@@ -160,22 +210,22 @@ func (r *Router) handleSub(message *models.UMHMessage, messageContent models.UMH
 	}
 
 	var subscribePayload models.SubscribeMessagePayload
-	if messageContent.Payload != nil {
+	if message.Content.Payload != nil {
 		// Try direct type assertion first
-		if payload, ok := messageContent.Payload.(models.SubscribeMessagePayload); ok {
+		if payload, ok := message.Content.Payload.(models.SubscribeMessagePayload); ok {
 			subscribePayload = payload
 		}
 	}
 
-	r.subHandler.AddOrRefreshSubscriber(message.Email, subscribePayload.Resubscribed)
+	r.subHandler.AddOrRefreshSubscriber(message.SenderEmail, subscribePayload.Resubscribed)
 }
 
-func (r *Router) handleAction(messageContent models.UMHMessageContent, message *models.UMHMessage, watcherUUID uuid.UUID) {
+func (r *Router) handleAction(message *transport.MessageWithSender, watcherUUID uuid.UUID) {
 	var actionPayload models.ActionMessagePayload
 
-	payloadMap, ok := messageContent.Payload.(map[string]interface{})
+	payloadMap, ok := message.Content.Payload.(map[string]interface{})
 	if !ok {
-		r.routerLogger.Warnf("Warning: Could not assert payload to map[string]interface{}. Actual type: %T, Value: %v", messageContent.Payload, messageContent.Payload)
+		r.routerLogger.Warnf("Warning: Could not assert payload to map[string]interface{}. Actual type: %T, Value: %v", message.Content.Payload, message.Content.Payload)
 
 		return
 	}
@@ -186,19 +236,22 @@ func (r *Router) handleAction(messageContent models.UMHMessageContent, message *
 		return
 	}
 
-	traceId := uuid.Nil
-	if message.Metadata != nil {
-		traceId = message.Metadata.TraceID
+	traceID := uuid.Nil
+	if message.TraceID != "" {
+		parsed, err := uuid.Parse(message.TraceID)
+		if err == nil {
+			traceID = parsed
+		}
 	}
 
 	go actions.HandleActionMessage(
 		r.GetInstanceUUID(),
 		actionPayload,
-		message.Email,
+		message.SenderEmail,
 		r.outboundChannel,
 		r.releaseChannel,
 		r.dog,
-		traceId,
+		traceID,
 		r.systemSnapshotManager,
 		r.configManager,
 	)

@@ -76,14 +76,14 @@ const (
 )
 
 // UMHMessage is sent between UMH instances and users.
-// UMHInstance contains the UUID of the UMH instance.
-// Email identifies the user.
 type UMHMessage struct {
 	Metadata     *MessageMetadata `json:"metadata"`
 	Email        string           `json:"email"`
 	Content      string           `json:"content"`
 	InstanceUUID uuid.UUID        `json:"umhInstance"`
 }
+
+
 
 // Define MessageType as a custom type for better type safety.
 type MessageType string

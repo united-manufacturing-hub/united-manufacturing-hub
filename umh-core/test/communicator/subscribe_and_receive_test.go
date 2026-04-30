@@ -255,7 +255,7 @@ var _ = Describe("Subscribe and Receive Test", func() {
 
 		By("Verifying the subscriber was added")
 		// Verify the subscriber was added
-		subscribers := subHandler.GetSubscribers()
+		subscribers := subHandler.Subscribers()
 		Expect(subscribers).To(ContainElement(testEmail))
 		GinkgoWriter.Printf("Confirmed subscriber was added\n")
 
