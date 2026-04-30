@@ -1649,6 +1649,39 @@ var _ = Describe("ConfigValidationIssue surface", func() {
 		after := m.GetConfigValidationIssues()
 		Expect(after).To(Equal(before))
 	})
+
+	It("survives concurrent swap+read (P9)", func() {
+		m, _ := newTestManagerWithYAML("agent: {}\n")
+		defer m.Stop()
+
+		done := make(chan struct{})
+		go func() {
+			defer GinkgoRecover()
+			for i := 0; i < 1000; i++ {
+				_ = m.GetConfigValidationIssues()
+			}
+			close(done)
+		}()
+		for i := 0; i < 1000; i++ {
+			m.swapValidationIssues([]ConfigValidationIssue{
+				{Field: "x", OffendingValue: "y"},
+			})
+		}
+		<-done
+	})
+
+	It("FileConfigManagerWithBackoff delegates GetConfigValidationIssues (P10)", func() {
+		m, _ := newTestManagerWithYAML("agent:\n  releaseChannel: nigtly\n")
+		defer m.Stop()
+		_, _, err := m.readAndParseConfig(ctx)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Wrap directly without going through the singleton constructor so the test
+		// is hermetic and doesn't conflict with other suites.
+		wrapped := &FileConfigManagerWithBackoff{configManager: m}
+		Expect(wrapped.GetConfigValidationIssues()).To(HaveLen(1))
+		Expect(wrapped.GetConfigValidationIssues()[0].Field).To(Equal("agent.releaseChannel"))
+	})
 })
 
 var _ = Describe("ParseConfig defaulting", func() {
