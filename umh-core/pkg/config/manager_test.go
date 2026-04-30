@@ -307,7 +307,7 @@ agent:
     0: Enterprise
     1: Site
 `
-				config, err := ParseConfig([]byte(validYAML), ctx, false)
+				config, err := ParseConfig([]byte(validYAML), ctx, false, false)
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(config.Internal.Services).To(HaveLen(1))
@@ -321,14 +321,14 @@ agent:
 			})
 
 			It("should handle empty input", func() {
-				config, err := ParseConfig([]byte{}, ctx, false)
+				config, err := ParseConfig([]byte{}, ctx, false, false)
 				Expect(err).To(HaveOccurred())
 				Expect(config).To(Equal(FullConfig{}))
 			})
 
 			It("should handle empty but valid YAML", func() {
 				emptyYAML := "---\n"
-				config, err := ParseConfig([]byte(emptyYAML), ctx, false)
+				config, err := ParseConfig([]byte(emptyYAML), ctx, false, false)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(config).To(Equal(FullConfig{}))
 			})
@@ -339,7 +339,7 @@ internal: {
   services: [
     { name: service1, desiredState: running,
 `
-				_, err := ParseConfig([]byte(malformedYAML), ctx, false)
+				_, err := ParseConfig([]byte(malformedYAML), ctx, false, false)
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("did not find expected node content"))
 			})
@@ -354,7 +354,7 @@ internal:
   unknownSection:
     key: value
 `
-				_, err := ParseConfig([]byte(yamlWithUnknownFields), ctx, false)
+				_, err := ParseConfig([]byte(yamlWithUnknownFields), ctx, false, false)
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("failed to decode config"))
 			})
@@ -372,7 +372,7 @@ internal:
 agent:
   location: null
 `
-				config, err := ParseConfig([]byte(yamlWithNulls), ctx, false)
+				config, err := ParseConfig([]byte(yamlWithNulls), ctx, false, false)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(config.Internal.Services).To(HaveLen(1))
 				Expect(config.Internal.Services[0].Name).To(Equal("service1"))
@@ -397,7 +397,7 @@ internal:
         configFiles:
           "file with spaces.txt": "content with multiple\nlines\nand \"quotes\""
 `
-				config, err := ParseConfig([]byte(complexYAML), ctx, false)
+				config, err := ParseConfig([]byte(complexYAML), ctx, false, false)
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(config.Internal.Services).To(HaveLen(1))
@@ -442,7 +442,7 @@ internal:
 					data, err := fsService.ReadFile(ctx, filepath.Join("../../examples", file.Name()))
 					Expect(err).NotTo(HaveOccurred())
 
-					_, err = ParseConfig(data, ctx, false)
+					_, err = ParseConfig(data, ctx, false, false)
 					Expect(err).NotTo(HaveOccurred(), "Failed to parse "+file.Name())
 				}
 			})
@@ -452,7 +452,7 @@ internal:
 				data, err := fsService.ReadFile(ctx, "../../examples/example-config-protocolconverter-templated.yaml")
 				Expect(err).NotTo(HaveOccurred())
 
-				config, err := ParseConfig(data, ctx, true)
+				config, err := ParseConfig(data, ctx, true, false)
 				Expect(err).NotTo(HaveOccurred())
 
 				// The example should have at least one protocol converter using a template
@@ -484,7 +484,7 @@ internal:
 				Expect(err).NotTo(HaveOccurred())
 
 				// Parse the config with anchor extraction enabled
-				config, err := ParseConfig(originalData, ctx, true)
+				config, err := ParseConfig(originalData, ctx, true, false)
 				Expect(err).NotTo(HaveOccurred())
 
 				// Verify we have the expected structure
@@ -526,7 +526,7 @@ internal:
 				Expect(writtenData).NotTo(BeEmpty())
 
 				// Parse the written data to verify it's still valid
-				writtenConfig, err := ParseConfig(writtenData, ctx, true)
+				writtenConfig, err := ParseConfig(writtenData, ctx, true, false)
 				Expect(err).NotTo(HaveOccurred())
 
 				// Verify the structure is preserved
@@ -557,7 +557,7 @@ internal:
 				Expect(err).NotTo(HaveOccurred())
 
 				// Parse the config with anchor extraction enabled
-				config, err := ParseConfig(originalData, ctx, true)
+				config, err := ParseConfig(originalData, ctx, true, false)
 				Expect(err).NotTo(HaveOccurred())
 
 				// Verify we have the expected structure
@@ -625,7 +625,7 @@ internal:
 				Expect(writtenData).NotTo(BeEmpty())
 
 				// Parse the written data to verify it's still valid
-				writtenConfig, err := ParseConfig(writtenData, ctx, true)
+				writtenConfig, err := ParseConfig(writtenData, ctx, true, false)
 				Expect(err).NotTo(HaveOccurred())
 
 				// Verify the structure is preserved
@@ -697,7 +697,7 @@ internal:
 			Expect(err).NotTo(HaveOccurred())
 
 			// Parse and write initial config
-			config, err := ParseConfig(originalData, ctx, true)
+			config, err := ParseConfig(originalData, ctx, true, false)
 			Expect(err).NotTo(HaveOccurred())
 
 			err = configManager.writeConfig(ctx, config)

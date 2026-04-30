@@ -77,7 +77,7 @@ dataModels:
           unit:
             _payloadshape: timeseries-number
 `
-				config, err := ParseConfig([]byte(validYAML), ctx, false)
+				config, err := ParseConfig([]byte(validYAML), ctx, false, false)
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(config.Internal.Services).To(HaveLen(1))
@@ -118,7 +118,7 @@ dataModels:
               name: device-info
               version: v1
 `
-				config, err := ParseConfig([]byte(complexYAML), ctx, false)
+				config, err := ParseConfig([]byte(complexYAML), ctx, false, false)
 				Expect(err).NotTo(HaveOccurred())
 
 				// Test complex data model parsing
@@ -159,7 +159,7 @@ dataModels:
               name: sensor-metadata
               version: v1
 `
-				config, err := ParseConfig([]byte(multiVersionYAML), ctx, false)
+				config, err := ParseConfig([]byte(multiVersionYAML), ctx, false, false)
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(config.DataModels).To(HaveLen(1))
@@ -265,7 +265,7 @@ dataModels:
 				Expect(writtenData).NotTo(BeEmpty())
 
 				// Parse the written data to verify it contains the data model
-				writtenConfig, err := ParseConfig(writtenData, ctx, false)
+				writtenConfig, err := ParseConfig(writtenData, ctx, false, false)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(writtenConfig.DataModels).To(HaveLen(1))
 				Expect(writtenConfig.DataModels[0].Name).To(Equal("temperature"))
@@ -402,7 +402,7 @@ dataModels:
 				Expect(writtenData).NotTo(BeEmpty())
 
 				// Parse the written data to verify it contains both versions
-				writtenConfig, err := ParseConfig(writtenData, ctx, false)
+				writtenConfig, err := ParseConfig(writtenData, ctx, false, false)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(writtenConfig.DataModels).To(HaveLen(1))
 				Expect(writtenConfig.DataModels[0].Name).To(Equal("temperature"))
@@ -517,7 +517,7 @@ dataModels:
 				Expect(writtenData).NotTo(BeEmpty())
 
 				// Parse the written data to verify the correct model was removed
-				writtenConfig, err := ParseConfig(writtenData, ctx, false)
+				writtenConfig, err := ParseConfig(writtenData, ctx, false, false)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(writtenConfig.DataModels).To(HaveLen(1))
 				Expect(writtenConfig.DataModels[0].Name).To(Equal("pressure"))

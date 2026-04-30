@@ -467,7 +467,7 @@ func (m *FileConfigManager) readAndParseConfig(ctx context.Context) (FullConfig,
 		return FullConfig{}, "", ctx.Err()
 	}
 
-	config, err := ParseConfig(data, ctx, false)
+	config, err := ParseConfig(data, ctx, false, true)
 	if err != nil {
 		return FullConfig{}, "", fmt.Errorf("failed to parse config file: %w", err)
 	}
@@ -637,13 +637,17 @@ func (m *FileConfigManager) WithConfigPath(configPath string) *FileConfigManager
 }
 
 // ParseConfig parses YAML configuration data into a FullConfig struct with optional validation.
-// It performs two main operations:
+// It performs three main operations:
 // 1. Decodes the YAML data using strict field validation (unless allowUnknownFields is true)
 // 2. Processes any templateRef resolution for protocol converters
+// 3. When applyDefaults is true, applies defaults for omitempty fields (location, releaseChannel)
 //
 // Parameters:
 //   - data: Raw YAML configuration data as bytes
 //   - allowUnknownFields: If true, allows unknown fields in the YAML; if false, rejects them
+//   - applyDefaults: If true, defaults nil location to empty map and empty releaseChannel to "stable".
+//     Production callers (readAndParseConfig) pass true. Test callers that round-trip configs
+//     should pass false to preserve the original empty-equals-empty semantics.
 //
 // Returns:
 //   - FullConfig: The parsed and processed configuration
@@ -651,7 +655,7 @@ func (m *FileConfigManager) WithConfigPath(configPath string) *FileConfigManager
 //
 // Note: This function is exported primarily for use in runtime_config_test to provide
 // comprehensive test coverage of the configuration parsing functionality.
-func ParseConfig(data []byte, ctx context.Context, allowUnknownFields bool) (FullConfig, error) {
+func ParseConfig(data []byte, ctx context.Context, allowUnknownFields, applyDefaults bool) (FullConfig, error) {
 	var rawConfig FullConfig
 
 	// First decode the YAML into the raw config structure using standard YAML functions
@@ -666,6 +670,15 @@ func ParseConfig(data []byte, ctx context.Context, allowUnknownFields bool) (Ful
 	processedConfig, err := convertYamlToSpec(rawConfig, ctx)
 	if err != nil {
 		return FullConfig{}, fmt.Errorf("failed to resolve protocol converter template references: %w", err)
+	}
+
+	if applyDefaults {
+		if processedConfig.Agent.Location == nil {
+			processedConfig.Agent.Location = make(map[int]string)
+		}
+		if strings.TrimSpace(string(processedConfig.Agent.ReleaseChannel)) == "" {
+			processedConfig.Agent.ReleaseChannel = ReleaseChannelStable
+		}
 	}
 
 	return processedConfig, nil
@@ -1102,11 +1115,11 @@ func (m *FileConfigManagerWithBackoff) UpdateAndGetCacheModTime(ctx context.Cont
 // otherwise be processed through the template system.
 func (m *FileConfigManager) WriteYAMLConfigFromString(ctx context.Context, configStr string, expectedModTime string) error {
 	// First parse the config with strict validation to detect syntax errors and schema problems
-	_, err := ParseConfig([]byte(configStr), ctx, false)
+	_, err := ParseConfig([]byte(configStr), ctx, false, false)
 	if err != nil {
 		// If strict parsing fails, try again with allowUnknownFields=true
 		// This allows YAML anchors and other custom fields
-		_, err = ParseConfig([]byte(configStr), ctx, true)
+		_, err = ParseConfig([]byte(configStr), ctx, true, false)
 		if err != nil {
 			return fmt.Errorf("failed to parse config: %w", err)
 		}
@@ -1164,7 +1177,7 @@ func (m *FileConfigManager) WriteYAMLConfigFromString(ctx context.Context, confi
 	// We already validated the config above, so this should succeed
 	// This parsing step is crucial as it converts the raw YAML to the proper spec config format,
 	// ensuring template references are resolved and the cache contains valid, usable config data
-	newConfig, err := ParseConfig([]byte(configStr), ctx, true) // Allow unknown fields for YAML anchors
+	newConfig, err := ParseConfig([]byte(configStr), ctx, true, true) // Allow unknown fields for YAML anchors; apply defaults so cache matches readAndParseConfig
 	if err != nil {
 		// If parsing fails, invalidate cache to force fresh read later
 		m.cacheMu.Lock()
