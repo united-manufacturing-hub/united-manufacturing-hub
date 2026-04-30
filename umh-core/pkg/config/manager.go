@@ -112,10 +112,13 @@ type ConfigManager interface {
 	WriteYAMLConfigFromString(ctx context.Context, configStr string, expectedModTime string) error
 	// GetBackupCount returns the number of config backups created since startup.
 	GetBackupCount() uint64
-	// GetConfigValidationIssues returns the validation issues from the most recent parse.
-	// Used by agent_monitor.Status to escalate the agent to Degraded with a dynamic
-	// health message when user-supplied YAML field values fail validation.
-	GetConfigValidationIssues() []ConfigValidationIssue
+
+	// GetConfigValidationIssues is intentionally NOT on this interface. The
+	// narrow surface lives at agent_monitor.ConfigValidationProvider, which
+	// FileConfigManager and FileConfigManagerWithBackoff satisfy structurally.
+	// Keeping it off ConfigManager prevents unrelated mocks from having to
+	// stub it out, and signals that callers needing validation issues should
+	// depend on the narrow provider type.
 
 	// TODO: Add AtomicUnlinkFromTemplate method
 	// AtomicUnlinkFromTemplate converts a templated configuration (using YAML anchors/aliases)
