@@ -35,9 +35,9 @@ var _ = Describe("VariableBundle", func() {
 				Global: map[string]any{
 					"api_endpoint": "https://api.example.com",
 				},
-				Internal: map[string]any{
-					"id":         "internal-123",
-					"bridged_by": "bridge-1",
+				Internal: config.VariablesInternal{
+					WorkerID:  "internal-123",
+					BridgedBy: "bridge-1",
 				},
 			}
 
@@ -50,9 +50,9 @@ var _ = Describe("VariableBundle", func() {
 			Expect(yamlStr).To(ContainSubstring("PORT: 502"))
 			Expect(yamlStr).To(ContainSubstring("global:"))
 			Expect(yamlStr).To(ContainSubstring("api_endpoint: https://api.example.com"))
-			Expect(yamlStr).ToNot(ContainSubstring("internal"))
-			Expect(yamlStr).ToNot(ContainSubstring("id:"))
-			Expect(yamlStr).ToNot(ContainSubstring("bridged_by:"))
+			// VariableBundle.Internal carries `yaml:"-"` because users do not author it.
+			Expect(yamlStr).ToNot(ContainSubstring("internal-123"))
+			Expect(yamlStr).ToNot(ContainSubstring("bridged_by"))
 		})
 
 		It("should deserialize User and Global correctly", func() {
@@ -70,7 +70,8 @@ global:
 			Expect(bundle.User).To(HaveKeyWithValue("IP", "192.168.1.100"))
 			Expect(bundle.User).To(HaveKeyWithValue("PORT", 502))
 			Expect(bundle.Global).To(HaveKeyWithValue("api_endpoint", "https://api.example.com"))
-			Expect(bundle.Internal).To(BeNil())
+			// Internal is yaml:"-"; the zero value reaches the consumer.
+			Expect(bundle.Internal).To(Equal(config.VariablesInternal{}))
 		})
 
 		It("should handle empty VariableBundle correctly", func() {
@@ -98,8 +99,8 @@ global:
 					"cluster_id": "prod-cluster",
 					"version":    "2.0",
 				},
-				Internal: map[string]any{
-					"should_not_serialize": true,
+				Internal: config.VariablesInternal{
+					WorkerID: "should-not-serialize-via-yaml",
 				},
 			}
 
@@ -116,12 +117,13 @@ global:
 			Expect(roundtripped.User).To(HaveKeyWithValue("rate_limit", 100.5))
 			Expect(roundtripped.Global).To(HaveKeyWithValue("cluster_id", "prod-cluster"))
 			Expect(roundtripped.Global).To(HaveKeyWithValue("version", "2.0"))
-			Expect(roundtripped.Internal).To(BeNil())
+			// Internal is yaml:"-"; round-trip clears it back to the zero value.
+			Expect(roundtripped.Internal).To(Equal(config.VariablesInternal{}))
 		})
 	})
 
 	Describe("JSON serialization", func() {
-		It("should serialize User and Global, but exclude Internal", func() {
+		It("should serialize User, Global, and the typed Internal sub-object", func() {
 			bundle := config.VariableBundle{
 				User: map[string]any{
 					"IP":   "192.168.1.100",
@@ -130,9 +132,9 @@ global:
 				Global: map[string]any{
 					"api_endpoint": "https://api.example.com",
 				},
-				Internal: map[string]any{
-					"id":         "internal-123",
-					"bridged_by": "bridge-1",
+				Internal: config.VariablesInternal{
+					WorkerID:  "internal-123",
+					BridgedBy: "bridge-1",
 				},
 			}
 
@@ -145,9 +147,15 @@ global:
 			Expect(jsonStr).To(ContainSubstring(`"PORT":502`))
 			Expect(jsonStr).To(ContainSubstring(`"global"`))
 			Expect(jsonStr).To(ContainSubstring(`"api_endpoint":"https://api.example.com"`))
-			Expect(jsonStr).ToNot(ContainSubstring(`"internal"`))
-			Expect(jsonStr).ToNot(ContainSubstring(`"id":"internal-123"`))
-			Expect(jsonStr).ToNot(ContainSubstring(`"bridged_by"`))
+			// Per §4-D LOCKED, Internal is now JSON-serialized so the typed
+			// identity round-trips through CSE storage between supervisor
+			// goroutines (Design Intent §13). The JSON wire tags are camelCase
+			// for codegen cleanliness; the snake_case template vocabulary
+			// lives in the Flatten() map keys, decoupled from these JSON
+			// tags. See variables.go VariablesInternal for the canonical tags.
+			Expect(jsonStr).To(ContainSubstring(`"internal"`))
+			Expect(jsonStr).To(ContainSubstring(`"workerID":"internal-123"`))
+			Expect(jsonStr).To(ContainSubstring(`"bridgedBy":"bridge-1"`))
 		})
 
 		It("should round-trip through JSON correctly", func() {
@@ -160,8 +168,8 @@ global:
 				Global: map[string]any{
 					"cluster_id": "prod-cluster",
 				},
-				Internal: map[string]any{
-					"should_not_serialize": true,
+				Internal: config.VariablesInternal{
+					WorkerID: "round-trips-via-json",
 				},
 			}
 
@@ -176,7 +184,7 @@ global:
 			Expect(roundtripped.User).To(HaveKeyWithValue("PORT", float64(8080)))
 			Expect(roundtripped.User).To(HaveKeyWithValue("enabled", true))
 			Expect(roundtripped.Global).To(HaveKeyWithValue("cluster_id", "prod-cluster"))
-			Expect(roundtripped.Internal).To(BeNil())
+			Expect(roundtripped.Internal.WorkerID).To(Equal("round-trips-via-json"))
 		})
 	})
 
@@ -214,9 +222,9 @@ global:
 
 		It("should nest Internal variables under 'internal' key", func() {
 			bundle := config.VariableBundle{
-				Internal: map[string]any{
-					"id":        "internal-123",
-					"timestamp": 1234567890,
+				Internal: config.VariablesInternal{
+					WorkerID:  "internal-123",
+					BridgedBy: "bridge-1",
 				},
 			}
 
@@ -226,7 +234,7 @@ global:
 			internalMap, ok := result["internal"].(map[string]any)
 			Expect(ok).To(BeTrue())
 			Expect(internalMap).To(HaveKeyWithValue("id", "internal-123"))
-			Expect(internalMap).To(HaveKeyWithValue("timestamp", 1234567890))
+			Expect(internalMap).To(HaveKeyWithValue("bridged_by", "bridge-1"))
 		})
 
 		It("should handle multiple User variables all promoted to top-level", func() {
@@ -258,8 +266,8 @@ global:
 				Global: map[string]any{
 					"api_endpoint": "https://api.example.com",
 				},
-				Internal: map[string]any{
-					"id": "internal-123",
+				Internal: config.VariablesInternal{
+					WorkerID: "internal-123",
 				},
 			}
 
@@ -320,18 +328,24 @@ global:
 			Expect(result).ToNot(HaveKey("global"))
 		})
 
-		It("should NOT include internal key when Internal map is nil", func() {
+		It("should always include the internal key (typed struct always present)", func() {
+			// VariablesInternal is now a typed value, not a map; the
+			// "internal" namespace always exists in flattened output.
+			// Optional fields (parent_id, bridged_by) are omitted when empty.
 			bundle := config.VariableBundle{
 				User: map[string]any{
 					"IP": "192.168.1.100",
 				},
-				Internal: nil,
 			}
 
 			result := bundle.Flatten()
 
 			Expect(result).To(HaveKeyWithValue("IP", "192.168.1.100"))
-			Expect(result).ToNot(HaveKey("internal"))
+			Expect(result).To(HaveKey("internal"))
+			internalMap := result["internal"].(map[string]any)
+			Expect(internalMap).To(HaveKey("id"))
+			Expect(internalMap).ToNot(HaveKey("parent_id"))
+			Expect(internalMap).ToNot(HaveKey("bridged_by"))
 		})
 
 		It("should handle completely empty VariableBundle", func() {
@@ -341,8 +355,9 @@ global:
 
 			Expect(result).ToNot(BeNil())
 			Expect(result).ToNot(HaveKey("global"))
-			Expect(result).ToNot(HaveKey("internal"))
-			Expect(result).To(BeEmpty())
+			// internal is always present per the typed VariablesInternal
+			// design (zero value emits id="" and created_at=zero time).
+			Expect(result).To(HaveKey("internal"))
 		})
 	})
 
@@ -454,8 +469,8 @@ global:
 				Global: map[string]any{
 					"api_endpoint": "https://api.example.com",
 				},
-				Internal: map[string]any{
-					"id": "parent-123",
+				Internal: config.VariablesInternal{
+					WorkerID: "parent-123",
 				},
 			}
 			child := config.VariableBundle{
@@ -465,8 +480,8 @@ global:
 				Global: map[string]any{
 					"cluster_id": "prod-cluster",
 				},
-				Internal: map[string]any{
-					"id": "child-456",
+				Internal: config.VariablesInternal{
+					WorkerID: "child-456",
 				},
 			}
 
@@ -481,8 +496,10 @@ global:
 			Expect(result.Global).To(HaveKeyWithValue("api_endpoint", "https://api.example.com"))
 			Expect(result.Global).To(HaveKeyWithValue("cluster_id", "prod-cluster"))
 
-			// Internal should NOT be merged (runtime-only, regenerated per-worker by supervisor)
-			Expect(result.Internal).To(BeNil())
+			// Internal should NOT be merged: Merge() leaves it at the zero
+			// value so the supervisor's per-worker injector populates it
+			// fresh after the merge.
+			Expect(result.Internal).To(Equal(config.VariablesInternal{}))
 		})
 	})
 
@@ -621,27 +638,28 @@ global:
 			Expect(cloned.Global).To(BeEmpty())
 		})
 
-		It("should NOT clone Internal map (intentional - regenerated per-worker)", func() {
-			// Internal map is intentionally NOT cloned by Clone() because:
+		It("should NOT clone Internal (intentional - regenerated per-worker)", func() {
+			// Internal is intentionally NOT cloned by Clone() because:
 			// 1. Internal variables are regenerated per-worker (identity, parent_id, etc.)
 			// 2. Cloning Internal would preserve stale identity from parent
 			// 3. The supervisor sets fresh Internal values after cloning
 			original := config.VariableBundle{
-				Internal: map[string]any{
-					"id":        "worker-123",
-					"parent_id": "parent-456",
+				Internal: config.VariablesInternal{
+					WorkerID: "worker-123",
+					ParentID: "parent-456",
 				},
 			}
 
 			cloned := original.Clone()
 
-			// Verify Internal is nil after cloning (intentional behavior)
-			Expect(cloned.Internal).To(BeNil(),
+			// Verify Internal is at zero value after cloning (typed-struct
+			// equivalent of the previous "nil map" guarantee).
+			Expect(cloned.Internal).To(Equal(config.VariablesInternal{}),
 				"Internal should NOT be cloned - it's regenerated per-worker by the supervisor")
 
-			// Verify original is unchanged
-			Expect(original.Internal).ToNot(BeNil())
-			Expect(original.Internal["id"]).To(Equal("worker-123"))
+			// Verify original is unchanged.
+			Expect(original.Internal.WorkerID).To(Equal("worker-123"))
+			Expect(original.Internal.ParentID).To(Equal("parent-456"))
 		})
 	})
 })

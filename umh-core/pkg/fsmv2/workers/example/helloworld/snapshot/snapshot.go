@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package snapshot defines the state types for the helloworld worker.
+// Package snapshot defines the observed and desired state types for the helloworld worker.
 //
-// NAMING CONVENTION: Types must be named {FolderName}ObservedState and
+// Naming convention: Types must be named {FolderName}ObservedState and
 // {FolderName}DesiredState where FolderName is the parent directory name
 // with only the first letter capitalized.
 //
@@ -31,7 +31,7 @@ import (
 )
 
 // HelloworldDependencies defines the interface for accessing worker dependencies.
-// Defined here to avoid import cycles between snapshot and the main package.
+// This interface lives here (not in the main package) to avoid import cycles.
 type HelloworldDependencies interface {
 	deps.Dependencies
 	SetHelloSaid(said bool)
@@ -41,30 +41,36 @@ type HelloworldDependencies interface {
 // HelloworldDesiredState represents the target configuration for the worker.
 // Embed BaseDesiredState to get standard fields like ShutdownRequested.
 type HelloworldDesiredState struct {
+
+	// MoodFilePath is the path to the mood file whose contents set the worker's mood.
+	// When empty, mood checking is skipped.
+	MoodFilePath string `json:"moodFilePath,omitempty"`
 	config.BaseDesiredState
 }
 
 // HelloworldObservedState represents the current observed state of the worker.
-// This is collected by CollectObservedState() and persisted to the triangular store.
+// CollectObservedState collects it each tick, and the supervisor persists it to the triangular store.
 //
-// REQUIRED: Embed deps.MetricsEmbedder to enable metrics collection.
-// REQUIRED: Embed HelloworldDesiredState with json:",inline" for architecture tests.
+// Embeds deps.MetricsEmbedder to enable metrics collection (required by supervisor).
+// Embeds HelloworldDesiredState with json:",inline" (required by architecture_test.go).
 type HelloworldObservedState struct {
 	// CollectedAt is when this observation was taken
 	CollectedAt time.Time `json:"collected_at"`
 
-	// LastActionResults contains action history (managed by supervisor)
-	LastActionResults []deps.ActionResult `json:"last_action_results,omitempty"`
-
 	// State is the current FSM state name (set by supervisor)
 	State string `json:"state"`
 
-	// HelloworldDesiredState embedded for state consistency
-	// REQUIRED: Architecture tests verify this pattern
+	// Mood is read from the mood file at DesiredState.MoodFilePath by CollectObservedState.
+	// When MoodFilePath is empty, this field stays empty.
+	Mood string `json:"mood,omitempty"`
+
+	// LastActionResults contains action history (managed by supervisor)
+	LastActionResults []deps.ActionResult `json:"last_action_results,omitempty"`
+
+	// Embeds HelloworldDesiredState to enable state consistency (required by architecture_test.go).
 	HelloworldDesiredState `json:",inline"`
 
-	// MetricsEmbedder provides framework and worker metrics
-	// REQUIRED: Without this, metrics won't be collected
+	// Embeds MetricsEmbedder to enable metrics collection (required by supervisor).
 	deps.MetricsEmbedder `json:",inline"`
 
 	// HelloSaid tracks whether the SayHelloAction has been executed
@@ -75,12 +81,6 @@ type HelloworldObservedState struct {
 // Required by fsmv2.ObservedState interface.
 func (o HelloworldObservedState) GetTimestamp() time.Time {
 	return o.CollectedAt
-}
-
-// GetObservedDesiredState returns the desired state embedded in this observation.
-// Required by fsmv2.ObservedState interface for shutdown handling.
-func (o HelloworldObservedState) GetObservedDesiredState() fsmv2.DesiredState {
-	return &o.HelloworldDesiredState
 }
 
 // SetState sets the FSM state name on this observed state.

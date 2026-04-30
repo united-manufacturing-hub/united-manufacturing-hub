@@ -29,13 +29,8 @@ import (
 )
 
 type ObservedState struct {
-	CollectedAt time.Time          `json:"collectedAt"`
-	Desired     fsmv2.DesiredState `json:"-"`
-	ID          string             `json:"id"`
-}
-
-func (t *ObservedState) GetObservedDesiredState() fsmv2.DesiredState {
-	return t.Desired
+	CollectedAt time.Time `json:"collectedAt"`
+	ID          string    `json:"id"`
 }
 
 func (t *ObservedState) GetTimestamp() time.Time {
@@ -70,7 +65,7 @@ type Worker struct {
 	CollectFunc  func(ctx context.Context) (fsmv2.ObservedState, error)
 }
 
-func (m *Worker) CollectObservedState(ctx context.Context) (fsmv2.ObservedState, error) {
+func (m *Worker) CollectObservedState(ctx context.Context, _ fsmv2.DesiredState) (fsmv2.ObservedState, error) {
 	if m.CollectFunc != nil {
 		return m.CollectFunc(ctx)
 	}
@@ -86,7 +81,6 @@ func (m *Worker) CollectObservedState(ctx context.Context) (fsmv2.ObservedState,
 	return &ObservedState{
 		ID:          "test-worker",
 		CollectedAt: time.Now(),
-		Desired:     &DesiredState{},
 	}, nil
 }
 
@@ -107,7 +101,7 @@ type WorkerWithType struct {
 	WorkerType string
 }
 
-func (m *WorkerWithType) CollectObservedState(ctx context.Context) (fsmv2.ObservedState, error) {
+func (m *WorkerWithType) CollectObservedState(ctx context.Context, _ fsmv2.DesiredState) (fsmv2.ObservedState, error) {
 	if m.CollectFunc != nil {
 		return m.CollectFunc(ctx)
 	}
@@ -123,7 +117,6 @@ func (m *WorkerWithType) CollectObservedState(ctx context.Context) (fsmv2.Observ
 	return &ObservedState{
 		ID:          m.WorkerType + "-worker",
 		CollectedAt: time.Now(),
-		Desired:     &DesiredState{},
 	}, nil
 }
 
@@ -136,7 +129,7 @@ type State struct {
 
 func (m *State) Next(snapshot any) fsmv2.NextResult[any, any] {
 	if m.NextState == nil {
-		return fsmv2.Result[any, any](m, fsmv2.SignalNone, nil, "test state")
+		return fsmv2.Result[any, any](m, fsmv2.SignalNone, nil, "test state", nil)
 	}
 
 	reason := m.Reason
@@ -144,7 +137,7 @@ func (m *State) Next(snapshot any) fsmv2.NextResult[any, any] {
 		reason = "test state"
 	}
 
-	return fsmv2.Result[any, any](m.NextState, m.Signal, m.Action, reason)
+	return fsmv2.Result[any, any](m.NextState, m.Signal, m.Action, reason, nil)
 }
 
 func (m *State) String() string { return "State" }
@@ -203,7 +196,6 @@ func CreateObservedStateWithID(id string) *ObservedState {
 	return &ObservedState{
 		ID:          id,
 		CollectedAt: time.Now(),
-		Desired:     &DesiredState{},
 	}
 }
 

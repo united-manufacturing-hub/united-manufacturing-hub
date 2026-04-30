@@ -106,9 +106,9 @@ worker starts an operation right before shutdown is requested.`,
 }`,
 		ReferenceFile: "example-child/state/state_connected.go:30",
 	},
-	"CHILD_MUST_USE_IS_STOP_REQUIRED": {
-		Name: "Child Workers Must Use IsStopRequired()",
-		Why: `Child workers must check IsStopRequired() instead of just IsShutdownRequested().
+	"CHILD_MUST_USE_SHOULD_STOP": {
+		Name: "Child Workers Must Use ShouldStop()",
+		Why: `Child workers must check ShouldStop() instead of just IsShutdownRequested().
 WHY: Child workers have TWO shutdown signals:
 1. IsShutdownRequested() - explicit shutdown request
 2. !ShouldBeRunning() - parent stopped via ChildStartStates
@@ -116,10 +116,10 @@ WHY: Child workers have TWO shutdown signals:
 Using only IsShutdownRequested() misses parent lifecycle changes, causing
 children to stay running when parent goes to TryingToStop.
 
-IsStopRequired() = IsShutdownRequested() || !ShouldBeRunning()`,
+ShouldStop() = IsShutdownRequested() || !ShouldBeRunning()`,
 		CorrectCode: `func (s *ChildState) Next(snapAny any) (...) {
     snap := helpers.ConvertSnapshot[...](snapAny)
-    if snap.Observed.IsStopRequired() {  // NOT snap.Desired.IsShutdownRequested()
+    if snap.Observed.ShouldStop() {  // NOT snap.Desired.IsShutdownRequested()
         return &TryingToStopState{}, SignalNone, nil
     }
     // Then other logic...
@@ -226,7 +226,7 @@ WHY: Collection runs with a timeout. Without context cancellation handling, the
 method blocks until I/O completes (network timeout, disk read) even after the
 context is cancelled. This delays shutdown and can cause timeouts to cascade.
 Early exit on ctx.Done() enables responsive shutdown.`,
-		CorrectCode: `func (w *Worker) CollectObservedState(ctx context.Context) (ObservedState, error) {
+		CorrectCode: `func (w *Worker) CollectObservedState(ctx context.Context, _ DesiredState) (ObservedState, error) {
     select {
     case <-ctx.Done():
         return nil, ctx.Err()  // Early exit
@@ -319,12 +319,12 @@ More importantly, Go interfaces work differently with pointer vs value
 receivers - inconsistent receiver types cause subtle interface satisfaction
 bugs where methods "disappear" depending on how the type is used.`,
 		CorrectCode: `// Correct: pointer receiver
-func (w *MyWorker) CollectObservedState(ctx context.Context) (ObservedState, error) {
+func (w *MyWorker) CollectObservedState(ctx context.Context, _ DesiredState) (ObservedState, error) {
     return w.doCollection(ctx)
 }
 
 // WRONG: value receiver loses state
-func (w MyWorker) CollectObservedState(ctx context.Context) (ObservedState, error) {
+func (w MyWorker) CollectObservedState(ctx context.Context, _ DesiredState) (ObservedState, error) {
     return w.doCollection(ctx)  // Changes to w are lost!
 }`,
 		ReferenceFile: "example-child/worker.go",

@@ -74,10 +74,6 @@ func (o PersistenceObservedState) IsHealthy() bool {
 	return o.IsLastActionHealthy()
 }
 
-func (o PersistenceObservedState) GetObservedDesiredState() fsmv2.DesiredState {
-	return &o.PersistenceDesiredState
-}
-
 func (o PersistenceObservedState) GetTimestamp() time.Time {
 	return o.CollectedAt
 }

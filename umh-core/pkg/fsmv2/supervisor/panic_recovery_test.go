@@ -511,11 +511,10 @@ type panickingWorker struct {
 	panicTriggered      bool
 }
 
-func (w *panickingWorker) CollectObservedState(ctx context.Context) (fsmv2.ObservedState, error) {
+func (w *panickingWorker) CollectObservedState(ctx context.Context, _ fsmv2.DesiredState) (fsmv2.ObservedState, error) {
 	return &testutil.ObservedState{
 		ID:          "panic-worker",
 		CollectedAt: time.Now(),
-		Desired:     &testutil.DesiredState{},
 	}, nil
 }
 
@@ -535,7 +534,7 @@ type panickingState struct {
 func (s *panickingState) Next(snapshot any) fsmv2.NextResult[any, any] {
 	if s.worker.panicOnTick {
 		if s.worker.panicOnlyOnce && s.worker.panicTriggered {
-			return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil, "staying in state")
+			return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil, "staying in state", nil)
 		}
 
 		s.worker.panicTriggered = true
@@ -547,7 +546,7 @@ func (s *panickingState) Next(snapshot any) fsmv2.NextResult[any, any] {
 		panic(s.worker.panicMessage)
 	}
 
-	return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil, "staying in state")
+	return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil, "staying in state", nil)
 }
 
 func (s *panickingState) String() string { return "PanickingState" }

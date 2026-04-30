@@ -16,13 +16,16 @@ package collection_test
 
 import (
 	"context"
+	"sync/atomic"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/internal/collection"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 )
 
 var _ = Describe("Collector", func() {
@@ -282,6 +285,43 @@ var _ = Describe("Collector", func() {
 			}, 2*time.Second, 50*time.Millisecond).Should(BeFalse())
 		})
 
+		It("should skip COS when context is cancelled after desired state load", func() {
+			cosCalled := &atomic.Bool{}
+			worker := &cosTrackingWorker{called: cosCalled}
+
+			var cancelCollector context.CancelFunc
+
+			collector := collection.NewCollector[supervisor.TestObservedState](collection.CollectorConfig[supervisor.TestObservedState]{
+				Worker:              worker,
+				Identity:            supervisor.TestIdentity(),
+				Store:               supervisor.CreateTestTriangularStore(),
+				Logger:              deps.NewNopFSMLogger(),
+				ObservationInterval: 50 * time.Millisecond,
+				ObservationTimeout:  5 * time.Second,
+				DesiredStateProvider: func() fsmv2.DesiredState {
+					// Cancel context inside DesiredStateProvider — after desired
+					// state is loaded but before the framework ctx check.
+					if cancelCollector != nil {
+						cancelCollector()
+					}
+
+					return &config.DesiredState{BaseDesiredState: config.BaseDesiredState{State: "running"}}
+				},
+			})
+
+			ctx, cancel := context.WithCancel(context.Background())
+			cancelCollector = cancel
+
+			err := collector.Start(ctx)
+			Expect(err).ToNot(HaveOccurred())
+
+			// Wait for collector to process at least one tick.
+			time.Sleep(200 * time.Millisecond)
+
+			// COS should NOT have been called — the framework ctx check caught the cancellation.
+			Expect(cosCalled.Load()).To(BeFalse())
+		})
+
 		It("should handle immediate cancellation after start", func() {
 			worker := &supervisor.TestWorker{Observed: supervisor.CreateTestObservedStateWithID("test-worker")}
 			collector := collection.NewCollector[supervisor.TestObservedState](collection.CollectorConfig[supervisor.TestObservedState]{
@@ -305,6 +345,43 @@ var _ = Describe("Collector", func() {
 			Eventually(func() bool {
 				return collector.IsRunning()
 			}, 2*time.Second, 50*time.Millisecond).Should(BeFalse())
+		})
+	})
+
+	Describe("typed desired-state handoff (post-P1.5c)", func() {
+		It("passes DesiredStateProvider's typed value into CollectObservedState verbatim", func() {
+			// Locks the contract that replaced the pre-P1.5c duck-typed
+			// observedDesiredState injection: the collector must pass the
+			// same typed DesiredState pointer the DesiredStateProvider
+			// returned to CollectObservedState, so workers can ExtractConfig
+			// from it without a separate plumbing path.
+			expected := &config.DesiredState{BaseDesiredState: config.BaseDesiredState{State: "running"}}
+			cosCalled := &atomic.Bool{}
+			worker := &desiredCapturingWorker{called: cosCalled}
+
+			collector := collection.NewCollector[supervisor.TestObservedState](collection.CollectorConfig[supervisor.TestObservedState]{
+				Worker:               worker,
+				Identity:             supervisor.TestIdentity(),
+				Store:                supervisor.CreateTestTriangularStore(),
+				Logger:               deps.NewNopFSMLogger(),
+				ObservationInterval:  50 * time.Millisecond,
+				ObservationTimeout:   3 * time.Second,
+				DesiredStateProvider: func() fsmv2.DesiredState { return expected },
+			})
+
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
+			Expect(collector.Start(ctx)).To(Succeed())
+
+			Eventually(func() bool { return cosCalled.Load() }, 2*time.Second, 25*time.Millisecond).Should(BeTrue())
+
+			got := worker.gotDesired.Load()
+			Expect(got).NotTo(BeNil(), "collector must pass non-nil typed DesiredState into CollectObservedState")
+			gotTyped, ok := got.(fsmv2.DesiredState)
+			Expect(ok).To(BeTrue(), "captured value must satisfy fsmv2.DesiredState; collector must not box-and-unbox the type")
+			Expect(gotTyped).To(BeIdenticalTo(fsmv2.DesiredState(expected)),
+				"collector must hand the worker the same DesiredState pointer the provider returned")
 		})
 	})
 })
@@ -348,4 +425,50 @@ func (c *testCollectorWithHangingLoop) TriggerNow() {
 	}
 
 	_ = c.Start(parentCtx)
+}
+
+// cosTrackingWorker records whether CollectObservedState was called.
+// Used to verify the framework-level ctx.Done() check in the collector.
+type cosTrackingWorker struct {
+	called *atomic.Bool
+}
+
+func (w *cosTrackingWorker) CollectObservedState(_ context.Context, _ fsmv2.DesiredState) (fsmv2.ObservedState, error) {
+	w.called.Store(true)
+
+	return supervisor.CreateTestObservedStateWithID("cos-tracking"), nil
+}
+
+// desiredCapturingWorker records the typed DesiredState pointer value the
+// collector passes into CollectObservedState. Used by the typed-handoff
+// regression spec — replaces the duck-typed observedDesiredState injection
+// test that was removed in P1.5c Row 1. Locks the contract that the
+// collector hands the worker the same DesiredState the DesiredStateProvider
+// produced, so the worker can ExtractConfig from it directly.
+type desiredCapturingWorker struct {
+	gotDesired atomic.Value // holds fsmv2.DesiredState
+	called     *atomic.Bool
+}
+
+func (w *desiredCapturingWorker) CollectObservedState(_ context.Context, desired fsmv2.DesiredState) (fsmv2.ObservedState, error) {
+	w.gotDesired.Store(desired)
+	w.called.Store(true)
+
+	return supervisor.CreateTestObservedStateWithID("desired-capture"), nil
+}
+
+func (w *desiredCapturingWorker) DeriveDesiredState(_ interface{}) (fsmv2.DesiredState, error) {
+	return &config.DesiredState{BaseDesiredState: config.BaseDesiredState{State: "running"}}, nil
+}
+
+func (w *desiredCapturingWorker) GetInitialState() fsmv2.State[any, any] {
+	return &supervisor.TestState{}
+}
+
+func (w *cosTrackingWorker) DeriveDesiredState(_ interface{}) (fsmv2.DesiredState, error) {
+	return &config.DesiredState{BaseDesiredState: config.BaseDesiredState{State: "running"}}, nil
+}
+
+func (w *cosTrackingWorker) GetInitialState() fsmv2.State[any, any] {
+	return &supervisor.TestState{}
 }

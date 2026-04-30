@@ -198,11 +198,6 @@ func (o TransportObservedState) GetTimestamp() time.Time {
 	return o.CollectedAt
 }
 
-// GetObservedDesiredState returns the desired state that is actually deployed.
-func (o TransportObservedState) GetObservedDesiredState() fsmv2.DesiredState {
-	return &o.TransportDesiredState
-}
-
 // SetState sets the FSM state name on this observed state.
 func (o TransportObservedState) SetState(s string) fsmv2.ObservedState {
 	o.State = s

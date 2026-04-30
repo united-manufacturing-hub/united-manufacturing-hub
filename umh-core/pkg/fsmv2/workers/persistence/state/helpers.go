@@ -30,15 +30,15 @@ func emitActionIfDue(
 	timeSinceCompaction := snap.Observed.CollectedAt.Sub(snap.Observed.LastCompactionAt)
 	if timeSinceCompaction >= snap.Desired.CompactionInterval {
 		return fsmv2.Result[any, any](currentState, fsmv2.SignalNone,
-			action.NewCompactDeltasAction(snap.Desired.RetentionWindow), "Running compaction")
+			action.NewCompactDeltasAction(snap.Desired.RetentionWindow), "Running compaction", nil)
 	}
 
 	if isMaintenanceDue(snap) {
 		return fsmv2.Result[any, any](currentState, fsmv2.SignalNone,
-			action.NewRunMaintenanceAction(), "Running maintenance")
+			action.NewRunMaintenanceAction(), "Running maintenance", nil)
 	}
 
-	return fsmv2.Result[any, any](currentState, fsmv2.SignalNone, nil, "Monitoring for cleanup needs")
+	return fsmv2.Result[any, any](currentState, fsmv2.SignalNone, nil, "Monitoring for cleanup needs", nil)
 }
 
 const shortIntervalThreshold = 3 * 24 * time.Hour

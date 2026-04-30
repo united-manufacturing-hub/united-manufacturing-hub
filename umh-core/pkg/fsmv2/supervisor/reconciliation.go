@@ -24,7 +24,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
@@ -330,6 +329,14 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 	}
 
 	result := currentState.Next(*snapshot)
+
+	// P2.4: result.Children is intentionally NOT read here yet. The supervisor
+	// reconciliation discriminator that reads NextResult.Children (nil =
+	// fall back to legacy DDS-derived children; non-nil = use this exact set)
+	// lands at P2.4. Until then, parents passing a non-nil Children slice
+	// from state.Next see no runtime effect — this is by design during the
+	// migration window. See api.go NextResult.Children godoc for the full
+	// discriminator contract.
 
 	hasAction := result.Action != nil
 	// Per-tick log moved to TRACE for scalability
@@ -710,10 +717,10 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) (err error) 
 
 	userSpecWithVars.Variables.Global = globalVarsCopy
 
-	userSpecWithVars.Variables.Internal = map[string]any{
-		FieldID:                firstWorkerID,
-		storage.FieldCreatedAt: s.createdAt,
-		FieldParentID:          s.parentID,
+	userSpecWithVars.Variables.Internal = config.VariablesInternal{
+		WorkerID:  firstWorkerID,
+		ParentID:  s.parentID,
+		CreatedAt: s.createdAt,
 	}
 
 	userVarCount := len(userSpecWithVars.Variables.User)

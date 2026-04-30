@@ -160,15 +160,9 @@ var _ = Describe("FSMv2 Architecture Validation", func() {
 			})
 		})
 
-		Describe("Context Cancellation in CollectObservedState (Invariant: Responsive Shutdown)", func() {
-			It("should handle ctx.Done() for cancellation", func() {
-				violations := validator.ValidateContextCancellationInCollect(getFsmv2Dir())
-				if len(violations) > 0 {
-					message := validator.FormatViolationsWithPattern("Context Cancellation Violations", violations, "MISSING_CONTEXT_CANCELLATION_COLLECT")
-					Fail(message)
-				}
-			})
-		})
+		// Context Cancellation in CollectObservedState removed: the collector now
+		// checks ctx.Done() at the framework level before calling COS, making
+		// per-worker checks optional (defense-in-depth, not mandatory).
 
 		Describe("Nil Spec Handling in DeriveDesiredState (Invariant: Defensive Programming)", func() {
 			It("should check if spec == nil before type casting", func() {
@@ -400,14 +394,14 @@ var _ = Describe("FSMv2 Architecture Validation", func() {
 			})
 		})
 
-		Describe("Child Workers Use IsStopRequired() (Invariant: Parent Lifecycle Awareness)", func() {
-			It("should use IsStopRequired() not just IsShutdownRequested() in child worker states", func() {
-				violations := validator.ValidateChildWorkersIsStopRequired(getFsmv2Dir())
+		Describe("Child Workers Use ShouldStop() (Invariant: Parent Lifecycle Awareness)", func() {
+			It("should use ShouldStop() not just IsShutdownRequested() in child worker states", func() {
+				violations := validator.ValidateChildWorkersUseShouldStop(getFsmv2Dir())
 				if len(violations) > 0 {
 					message := validator.FormatViolationsWithPattern(
-						"Child Worker IsStopRequired Violations",
+						"Child Worker ShouldStop Violations",
 						violations,
-						"CHILD_MUST_USE_IS_STOP_REQUIRED",
+						"CHILD_MUST_USE_SHOULD_STOP",
 					)
 					Fail(message)
 				}
@@ -450,6 +444,20 @@ var _ = Describe("FSMv2 Architecture Validation", func() {
 						"Action History Copy Violations",
 						violations,
 						"MISSING_ACTION_HISTORY_COPY",
+					)
+					Fail(message)
+				}
+			})
+		})
+
+		Describe("GetDependenciesAny Override (Invariant: Custom Deps Visibility)", func() {
+			It("should override GetDependenciesAny when custom Dependencies struct exists", func() {
+				violations := validator.ValidateGetDependenciesAny(getFsmv2Dir())
+				if len(violations) > 0 {
+					message := validator.FormatViolationsWithPattern(
+						"GetDependenciesAny Override Violations",
+						violations,
+						"MISSING_GET_DEPENDENCIES_ANY_OVERRIDE",
 					)
 					Fail(message)
 				}

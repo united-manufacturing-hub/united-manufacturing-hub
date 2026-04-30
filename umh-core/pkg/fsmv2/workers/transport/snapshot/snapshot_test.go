@@ -37,40 +37,6 @@ var _ = Describe("TransportObservedState", func() {
 		})
 	})
 
-	Describe("GetObservedDesiredState", func() {
-		It("should return a non-nil desired state", func() {
-			observed := snapshot.TransportObservedState{
-				CollectedAt: time.Now(),
-				State:       "running_healthy",
-			}
-
-			desired := observed.GetObservedDesiredState()
-			Expect(desired).NotTo(BeNil())
-		})
-
-		It("should return the embedded desired state", func() {
-			observed := snapshot.TransportObservedState{
-				CollectedAt: time.Now(),
-				TransportDesiredState: snapshot.TransportDesiredState{
-					InstanceUUID: "test-uuid",
-					AuthToken:    "test-token",
-					RelayURL:     "https://example.com",
-					Timeout:      30 * time.Second,
-				},
-			}
-
-			desired := observed.GetObservedDesiredState()
-			Expect(desired).NotTo(BeNil())
-
-			transportDesired, ok := desired.(*snapshot.TransportDesiredState)
-			Expect(ok).To(BeTrue())
-			Expect(transportDesired.InstanceUUID).To(Equal("test-uuid"))
-			Expect(transportDesired.AuthToken).To(Equal("test-token"))
-			Expect(transportDesired.RelayURL).To(Equal("https://example.com"))
-			Expect(transportDesired.Timeout).To(Equal(30 * time.Second))
-		})
-	})
-
 	Describe("SetState", func() {
 		It("should set the state and return a new observed state", func() {
 			observed := snapshot.TransportObservedState{

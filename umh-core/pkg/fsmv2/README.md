@@ -11,7 +11,8 @@ Type-safe state machine framework for managing worker lifecycles with compile-ti
 ```bash
 # Run the existing examples
 go run pkg/fsmv2/cmd/runner/main.go --list          # List all scenarios
-go run pkg/fsmv2/cmd/runner/main.go --scenario=simple --duration=5s
+go run pkg/fsmv2/cmd/runner/main.go --scenario=helloworld --duration=5s  # Minimal single worker
+go run pkg/fsmv2/cmd/runner/main.go --scenario=simple --duration=5s      # Parent with 2 children
 ```
 
 ### Creating a New Worker
@@ -40,12 +41,40 @@ workers/myworker/
 
 ---
 
+## Modeling your worker
+
+FSMv2 runs the same control loop as a PLC or a room thermostat: observe the process, compare to the desired state, actuate, repeat. Your worker maps to three parts of that loop.
+
+### The control loop
+
+- **`CollectObservedState` is the sensor.** Read the world: check if an action completed, query a service, measure a connection. Read-only I/O. Example: helloworld reads `deps.HasSaidHello()` to see if the greeting was logged (`worker.go:115`).
+- **`State.Next()` is the controller.** Pure logic, no I/O. It compares observed state to desired state and decides: change state, or emit an action. Example: helloworld's `RunningState` checks shutdown, then checks the observed mood (`state/running.go:35`).
+- **Actions are the actuator.** Change the world: write files, send HTTP requests, authenticate. Always idempotent. Example: helloworld's `SayHelloAction` logs a greeting and sets a flag; the communicator's `AuthenticateAction` gets a JWT token.
+
+Sensor reads from Dependencies; actuator changes the external world and writes results back through Dependencies. The controller touches neither.
+
+### Lifecycle phases
+
+Each state embeds a base type that tells the supervisor which phase the control loop is in:
+
+- `helpers.StoppedBase` — loop is off, no observation or actuation happening
+- `helpers.StartingBase` — first observations arriving, actuator not yet confirmed working
+- `helpers.RunningHealthyBase` — loop running, health checks passing
+- `helpers.RunningDegradedBase` — loop running, but health checks failing (sensor sees a problem the actuator cannot fully fix)
+- `helpers.StoppingBase` — actuator shutting down gracefully, loop winding down
+
+See `internal/helpers/base_states.go` for the source. Example: helloworld's `RunningState` embeds `helpers.RunningHealthyBase` (`state/running.go:26`).
+
+Your states handle process deviations: is the port open? Is the sync working? Is the token expired? The supervisor handles instrumentation failures: stale observations, collector crashes, action panics, timeouts. You don't write states for those. In control loop terms, your controller handles the process. The supervisor is the watchdog that monitors the instruments.
+
+---
+
 ## How it works
 
 FSMv2 is a **state machine supervisor**:
 
 1. **You define** States (decision logic) and Actions (I/O operations)
-2. **Supervisor runs a loop**: Observe → Compare → Decide → Act → Repeat (~4µs per worker per tick)
+2. **Supervisor runs the control loop** [described above](#the-control-loop): observe, compare, actuate, repeat (~4µs per worker per tick)
 3. **State transitions happen** when observations change, NOT when actions complete
 
 ```text
@@ -66,8 +95,7 @@ FSMv2 solves problems from UMH Classic (Kubernetes-based) and FSMv1:
 | AI couldn't help (would "freestyle and break things") | Clean patterns AI can understand and generate |
 | Pod states don't reflect actual health | Explicit states: `running`, `degraded` (with reason), `stopped` |
 
-FSMv2 implements the same control loop pattern as Kubernetes controllers and PLCs:
-Desired state → Compare → Actuate → Observe → Repeat.
+FSMv2 implements the same [observe → compare → actuate](#the-control-loop) pattern as Kubernetes controllers and PLCs.
 
 ### For FSMv1 developers
 
@@ -83,6 +111,39 @@ Desired state → Compare → Actuate → Observe → Repeat.
 | Desired via config parsing | `DeriveDesiredState()` - you implement |
 
 **Key mindset shift**: You write business logic (states, actions). The supervisor handles everything else.
+
+### Worker API v2 (reduced boilerplate)
+
+Worker API v2 reduces a minimal worker from ~662 SLOC / 7 files to ~50 SLOC / 1 file using generics. Instead of hand-writing ObservedState, DesiredState, snapshot conversion, and factory registration, you embed `WorkerBase[TConfig, TStatus]` and call `register.Worker`.
+
+```go
+// Registration (replaces init() + factory wiring + supervisor factory + CSE type registry)
+func init() {
+    register.Worker[MyConfig, MyStatus]("myworker", NewMyWorker)
+}
+
+// Worker struct (replaces separate dependencies, observed state, desired state files)
+type MyWorker struct {
+    fsmv2.WorkerBase[MyConfig, MyStatus]
+}
+
+func NewMyWorker(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader) (fsmv2.Worker, error) {
+    w := &MyWorker{}
+    w.InitBase(id, logger, sr)
+    return w, nil
+}
+
+// CollectObservedState — the only required method
+func (w *MyWorker) CollectObservedState(ctx context.Context, desired fsmv2.DesiredState) (fsmv2.ObservedState, error) {
+    cfg := fsmv2.ExtractConfig[MyConfig](desired) // typed config access
+    // ... observe the world using cfg.Host, cfg.Port, etc.
+    return fsmv2.NewObservation(MyStatus{Reachable: true}), nil
+}
+```
+
+The framework provides: `DeriveDesiredState`, `GetInitialState`, `Config()`, `NewObservation()`, `ConvertWorkerSnapshot`, flat JSON serialization, and CSE type registry wiring. The collector handles CollectedAt, framework metrics, action history, and metric accumulation automatically. Optional capabilities (`ActionProvider`, `ChildSpecProvider`, `MetricsProvider`, `GracefulShutdowner`) are detected via interface implementation on your worker struct.
+
+See `MIGRATION.md` for migrating existing workers from old-API to new-API.
 
 ## Worker interface
 
@@ -104,31 +165,28 @@ type Worker interface {
 
 ### States: pure functions with Next()
 
-States are concrete Go types (not strings). Each state implements `Next()`:
+States are concrete Go types (not strings). Each state implements `Next()`, which returns a `NextResult` via `fsmv2.Result()`:
 
 ```go
-// States are empty structs - behavior only
-type StoppedState struct{}
-type TryingToStartState struct{}
-type RunningState struct{}
+// States embed a lifecycle base and implement Next()
+type StoppedState struct{ helpers.StoppedBase }
+type TryingToStartState struct{ helpers.StartingBase }
+type RunningState struct{ helpers.RunningHealthyBase }
 
-// Next() returns: (nextState, signal, action)
-func (s TryingToStartState) Next(snapshot fsmv2.Snapshot) (fsmv2.State, fsmv2.Signal, fsmv2.Action) {
-    // Type assertions are safe here - each worker defines its own concrete types
-    // and the supervisor guarantees type consistency within a worker
-    desired := snapshot.Desired.(DesiredState)
-    observed := snapshot.Observed.(ObservedState)
+// Next() returns a NextResult containing: state, signal, action, reason
+func (s *TryingToStartState) Next(snapAny any) fsmv2.NextResult[any, any] {
+    snap := helpers.ConvertSnapshot[ObservedState, *DesiredState](snapAny)
 
     // ALWAYS check shutdown first
-    if desired.IsShutdownRequested() {
-        return StoppedState{}, fsmv2.SignalNone, nil
+    if snap.Desired.IsShutdownRequested() {
+        return fsmv2.Result[any, any](&StoppedState{}, fsmv2.SignalNone, nil, "Shutdown requested")
     }
     // Check observation - did the process start?
-    if observed.IsRunning {
-        return RunningState{}, fsmv2.SignalNone, nil  // Transition based on observation
+    if snap.Observed.IsRunning {
+        return fsmv2.Result[any, any](&RunningState{}, fsmv2.SignalNone, nil, "Process is running")
     }
     // Not running yet - emit action to start it
-    return s, fsmv2.SignalNone, &StartAction{}  // Stay in same state, emit action
+    return fsmv2.Result[any, any](s, fsmv2.SignalNone, &StartAction{}, "Starting process")
 }
 ```
 
@@ -138,23 +196,19 @@ State transitions happen when observed state changes, NOT when actions complete.
 
 Return EITHER a state change OR an action from `Next()`, not both. See [State XOR action rule](#state-xor-action-rule).
 
-### State names and reasons (required methods)
+### State names
 
-Every state must implement two additional methods for observability:
+Every state must implement `String()` for logging and metrics. Use `helpers.DeriveStateName()` to derive the name automatically — it strips the `State` suffix and preserves casing:
 
 ```go
-// String() returns the state name for logging and metrics
-func (s TryingToStartState) String() string {
-    return "trying_to_start"
-}
-
-// Reason() provides human-readable context about the state
-func (s DegradedState) Reason() string {
-    return "degraded: 5 consecutive sync errors, retrying with backoff"
+func (s *TryingToStartState) String() string {
+    return helpers.DeriveStateName(s)  // returns "TryingToStart"
 }
 ```
 
-**Naming convention**: Use lowercase, underscore-separated names (`stopped`, `trying_to_connect`, `running`, `degraded`).
+**Naming convention**: `DeriveStateName` produces PascalCase names (`RunningState` → `"Running"`, `TryingToStartState` → `"TryingToStart"`, `StoppedState` → `"Stopped"`).
+
+Reason strings are the 4th argument to `fsmv2.Result()` in `Next()`, not a separate method. See the `Next()` example above.
 
 ### Signals
 
@@ -191,11 +245,11 @@ func (a *StartProcessAction) Name() string { return "StartProcess" }
 
 ### I/O isolation rule
 
-| Component | Can Do I/O | Purpose |
-|-----------|------------|---------|
+| Component | I/O | Purpose |
+|-----------|-----|---------|
 | States | NO (pure functions) | Decide next state + action |
-| Actions | YES (idempotent) | Perform HTTP, file, network I/O |
-| Worker | NO (read-only) | Collect observations |
+| Actions | WRITE (idempotent) | Change the world: HTTP, file, network I/O |
+| Worker | READ (query system state) | Collect observations from dependencies and state store |
 
 ### State XOR action rule
 
@@ -424,7 +478,8 @@ func (w *MyWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, err
 **Accessing children**:
 - `ChildrenView.List()` - all children with state info
 - `ChildrenView.Get(name)` - single child by name
-- `ChildrenView.AllHealthy()` / `AllStopped()` - aggregate checks
+- `ChildrenView.AllHealthy` / `ChildrenView.AllStopped` / `ChildrenView.AllOperational` - pre-computed aggregate predicates (struct fields, not methods)
+- `ChildrenView.HealthyCount` / `ChildrenView.UnhealthyCount` - pre-computed aggregate counts
 - `StateReader.LoadObservedTyped()` - query child state from parent
 
 ### FrameworkMetrics (auto-injected)
@@ -460,7 +515,7 @@ go run pkg/fsmv2/cmd/runner/main.go --scenario=simple --duration=10s
 go run pkg/fsmv2/cmd/runner/main.go --scenario=communicator --log-level=debug
 ```
 
-Built-in scenarios: `simple`, `failing`, `panic`, `cascade`, `timeout`, `communicator`
+Built-in scenarios: `helloworld`, `simple`, `failing`, `panic`, `slow`, `cascade`, `timeout`, `configerror`, `inheritance`, `communicator`, `concurrent`, `persistence`
 
 ### Unit tests
 
@@ -493,16 +548,16 @@ ginkgo run --focus="Architecture" -v ./pkg/fsmv2/
 
 ```go
 It("should transition to Running when process is observed", func() {
-    snapshot := fsmv2.Snapshot{
-        Observed: &MyObservedState{IsRunning: true},
-        Desired:  &MyDesiredState{},
-    }
-    state := TryingToStartState{}
-    nextState, signal, action := state.Next(snapshot)
+    snap := helpers.BuildTestSnapshot(
+        MyObservedState{IsRunning: true},
+        &MyDesiredState{},
+    )
+    state := &TryingToStartState{}
+    result := state.Next(snap)
 
-    Expect(nextState).To(BeAssignableToTypeOf(RunningState{}))
-    Expect(signal).To(Equal(fsmv2.SignalNone))
-    Expect(action).To(BeNil())
+    Expect(result.State).To(BeAssignableToTypeOf(&RunningState{}))
+    Expect(result.Signal).To(Equal(fsmv2.SignalNone))
+    Expect(result.Action).To(BeNil())
 })
 ```
 

@@ -36,17 +36,6 @@ var _ = Describe("ExamplefailingObservedState", func() {
 		})
 	})
 
-	Describe("GetObservedDesiredState", func() {
-		It("should return a non-nil desired state", func() {
-			observed := snapshot.ExamplefailingObservedState{
-				CollectedAt: time.Now(),
-				State:       "running_connected",
-			}
-
-			desired := observed.GetObservedDesiredState()
-			Expect(desired).NotTo(BeNil())
-		})
-	})
 })
 
 var _ = Describe("ExamplefailingDesiredState", func() {
@@ -64,7 +53,7 @@ var _ = Describe("ExamplefailingDesiredState", func() {
 	})
 })
 
-var _ = Describe("ExamplefailingObservedState.IsStopRequired", func() {
+var _ = Describe("ExamplefailingObservedState.ShouldStop", func() {
 	DescribeTable("should correctly determine stop requirement",
 		func(shutdownRequested bool, parentMappedState string, want bool) {
 			obs := snapshot.ExamplefailingObservedState{
@@ -74,7 +63,7 @@ var _ = Describe("ExamplefailingObservedState.IsStopRequired", func() {
 			}
 			obs.ExamplefailingDesiredState.SetShutdownRequested(shutdownRequested)
 
-			Expect(obs.IsStopRequired()).To(Equal(want))
+			Expect(obs.ShouldStop()).To(Equal(want))
 		},
 		Entry("returns true when shutdown requested", true, config.DesiredStateRunning, true),
 		Entry("returns true when parent mapped state is stopped", false, config.DesiredStateStopped, true),

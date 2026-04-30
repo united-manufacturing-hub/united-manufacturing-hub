@@ -77,10 +77,6 @@ func (o ExamplechildObservedState) GetTimestamp() time.Time {
 	return o.CollectedAt
 }
 
-func (o ExamplechildObservedState) GetObservedDesiredState() fsmv2.DesiredState {
-	return &o.ExamplechildDesiredState
-}
-
 // SetState sets the FSM state name on this observed state.
 func (o ExamplechildObservedState) SetState(s string) fsmv2.ObservedState {
 	o.State = s
@@ -102,7 +98,7 @@ func (o ExamplechildObservedState) SetParentMappedState(state string) fsmv2.Obse
 	return o
 }
 
-// IsStopRequired reports whether the child needs to stop.
-func (o ExamplechildObservedState) IsStopRequired() bool {
+// ShouldStop reports whether the child needs to stop.
+func (o ExamplechildObservedState) ShouldStop() bool {
 	return o.IsShutdownRequested() || !o.ShouldBeRunning()
 }

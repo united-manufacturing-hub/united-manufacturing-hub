@@ -13,19 +13,48 @@ _ "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm
 ## State Machine
 
 ```text
-┌──────────┐    ShouldBeRunning()    ┌──────────────────┐    HelloSaid    ┌─────────┐
-│ stopped  │ ──────────────────────▶ │ trying_to_start  │ ─────────────▶ │ running │
-└──────────┘                         └──────────────────┘                └─────────┘
-     ▲                                        │                              │
-     │        IsShutdownRequested()           │                              │
-     └────────────────────────────────────────┴──────────────────────────────┘
+┌──────────┐   !IsShutdownRequested()  ┌──────────────────┐   HelloSaid   ┌─────────┐
+│ stopped  │ ────────────────────────▶ │ trying_to_start  │ ────────────▶ │ running │
+└──────────┘                           └──────────────────┘              └─────────┘
+     ▲                                          │                  mood="sad" │ ▲ mood!="sad"
+     │         IsShutdownRequested()            │                            ▼ │
+     │                                          │                      ┌──────────┐
+     └──────────────────────────────────────────┴──────────────────────┤ degraded │
+                                                                       └──────────┘
+```
+
+### Control loop mapping
+
+| Control loop role | Helloworld implementation |
+|-------------------|--------------------------|
+| **Sensor** (`CollectObservedState`) | Reads `deps.HasSaidHello()` + reads mood file from `DesiredState.MoodFilePath` |
+| **Controller** (`State.Next()`) | Checks shutdown → checks hello said → checks mood → decides |
+| **Actuator** (Actions) | `SayHelloAction` logs a greeting and sets `deps.HelloSaid` |
+
+See the parent [README's control loop section](../../../README.md#the-control-loop) for the general pattern.
+
+The mood file path is configurable via `moodFilePath` in the worker's YAML config.
+When omitted, mood checking is skipped.
+
+```yaml
+# Scenario config example
+config: |
+  state: running
+  moodFilePath: /tmp/helloworld-mood
+```
+
+```bash
+# Demo: observation-driven transitions (assuming moodFilePath: /tmp/helloworld-mood)
+echo "happy" > /tmp/helloworld-mood   # stays Running
+echo "sad" > /tmp/helloworld-mood     # → Degraded
+rm /tmp/helloworld-mood               # → Running (no mood file = fine)
 ```
 
 ## File Structure
 
 ```text
 helloworld/
-├── README.md           # This file - start here!
+├── README.md           # Overview and step-by-step guide
 ├── worker.go           # Main worker implementation (3 required methods)
 ├── dependencies.go     # Action dependencies and state storage
 ├── userspec.go         # User configuration parsing
@@ -34,14 +63,15 @@ helloworld/
 ├── state/
 │   ├── stopped.go      # Initial state - waiting to start
 │   ├── trying_to_start.go  # Transitional state - emits action
-│   └── running.go      # Running state - worker is active
+│   ├── running.go      # Running state - worker is active
+│   └── degraded.go     # Degraded state - mood file says "sad"
 └── action/
-    └── say_hello.go    # Action that transitions to running
+    └── say_hello.go    # Action that logs a greeting and sets HelloSaid=true
 ```
 
-## Critical Naming Convention
+## Naming Convention
 
-**GOTCHA**: The folder name determines the type prefix. The worker type is derived
+The folder name determines the type prefix. The worker type is derived
 from `{TypePrefix}ObservedState` by lowercasing `{TypePrefix}`.
 
 | Folder Name | Type Prefix | Example Type |
@@ -49,7 +79,7 @@ from `{TypePrefix}ObservedState` by lowercasing `{TypePrefix}`.
 | `helloworld` | `Helloworld` | `HelloworldObservedState` |
 | `examplechild` | `Examplechild` | `ExamplechildObservedState` |
 
-**NOT**: `HelloWorldObservedState` (two capitals would derive to `helloworld` but
+**Incorrect**: `HelloWorldObservedState` (two capitals would derive to `helloworld` but
 the type name wouldn't match the folder convention).
 
 ## Creating a New Worker (Step by Step)
@@ -63,7 +93,7 @@ mkdir -p pkg/fsmv2/workers/yourworker/{snapshot,state,action}
 ### 2. Define snapshot types (`snapshot/snapshot.go`)
 
 ```go
-// CRITICAL: Type name must be {FolderName}ObservedState with EXACT capitalization
+// Type name must be {FolderName}ObservedState with matching capitalization
 type YourworkerObservedState struct {
     CollectedAt time.Time `json:"collected_at"`
     deps.MetricsEmbedder `json:",inline"`  // Required for metrics
@@ -109,9 +139,15 @@ func init() {
 
 ## Testing
 
-Run the hello world scenario:
+Run the helloworld scenario:
 ```bash
 go run pkg/fsmv2/cmd/runner/main.go --scenario=helloworld --duration=5s
+
+# Interactive mood demo. Run these in a separate terminal while the scenario runs.
+# These commands use the path from moodFilePath in the scenario YAML.
+echo "sad" > /tmp/helloworld-mood     # watch the worker transition to Degraded
+echo "happy" > /tmp/helloworld-mood   # back to Running
+rm /tmp/helloworld-mood               # stays Running (no mood file = fine)
 ```
 
 ## Common Mistakes

@@ -10,7 +10,7 @@ This guide covers dependency injection patterns for FSMv2 workers.
 | `StateReader` | `deps.StateReader` | Read-only access to observed state from CSE | All workers via `BaseDependencies` |
 | `MetricsRecorder` | `*deps.MetricsRecorder` | Buffer and record per-tick metrics | All workers via `BaseDependencies` |
 | `FrameworkMetrics` | `*deps.FrameworkMetrics` | Supervisor-tracked metrics (read-only) | Injected via `deps.GetFrameworkState()` |
-| `ChildrenView` | `config.ChildrenView` | Access child worker info (read-only) | Injected via `deps.GetChildrenView()` |
+| `ChildrenView` | `config.ChildrenView` | Access child worker info (read-only) | Injected by the supervisor via `ChildrenViewConsumer.SetChildrenView`; read in `State.Next()` from `snapshot.Observed.ChildrenView` |
 | `WorkerType` | `string` | Worker type identifier | All workers via `BaseDependencies` |
 | `WorkerID` | `string` | Worker instance ID | All workers via `BaseDependencies` |
 
@@ -314,7 +314,7 @@ All workers automatically receive these via `BaseDependencies`:
 | StateReader | Read state from CSE | `deps.GetStateReader()` | N/A (query) |
 | MetricsRecorder | Record custom metrics | `deps.MetricsRecorder().IncrementCounter()` | Actions |
 | FrameworkMetrics | Supervisor metrics | `deps.GetFrameworkState()` | Supervisor |
-| ChildrenView | Access child info | `deps.GetChildrenView()` | Supervisor |
+| ChildrenView | Access child info | `snapshot.Observed.ChildrenView` (set by supervisor via `ChildrenViewConsumer.SetChildrenView`) | Supervisor |
 | WorkerType/ID | Worker identity | `deps.GetWorkerType()`, `deps.GetWorkerID()` | N/A |
 
 **ActionHistory** is accessed via `deps.GetActionHistory()` which returns `[]ActionResult` (read-only). The supervisor injects the data via `ActionHistorySetter` before `CollectObservedState` is called. Workers read and assign: `ObservedState.LastActionResults = deps.GetActionHistory()`. This matches the FrameworkMetrics pattern exactly.

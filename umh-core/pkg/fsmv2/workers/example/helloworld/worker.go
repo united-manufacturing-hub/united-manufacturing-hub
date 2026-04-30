@@ -12,17 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package hello_world provides a minimal FSMv2 worker example.
+// Package hello_world implements a minimal FSMv2 worker that demonstrates
+// the three required Worker interface methods, factory registration,
+// state transitions, and action execution.
 //
-// This is the simplest possible worker implementation demonstrating:
-//   - The 3 required Worker interface methods
-//   - Factory registration pattern
-//   - State machine transitions
-//   - Action execution
+// Use this as a template when creating new workers. See README.md for the step-by-step guide.
 //
-// Use this as a template when creating new workers. See README.md for details.
-//
-// NAMING CONVENTION: The package name uses underscore (hello_world) but the
+// Naming convention: The package name uses underscore (hello_world) but the
 // folder name is "helloworld". The type prefix must be "Helloworld" (one capital)
 // to derive correctly as worker type "helloworld".
 package hello_world
@@ -31,6 +27,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
+	"strings"
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
@@ -46,7 +44,7 @@ import (
 
 // HelloworldWorker implements the FSMv2 Worker interface.
 //
-// Workers are the core building blocks of FSMv2. Each worker:
+// A worker is the core building block of FSMv2. Each worker:
 //   - Collects its current observed state (CollectObservedState)
 //   - Derives what state it should be in (DeriveDesiredState)
 //   - Provides an initial state (GetInitialState)
@@ -87,18 +85,12 @@ func NewHelloworldWorker(
 	}, nil
 }
 
-// CollectObservedState returns the current observed state.
+// CollectObservedState collects and returns the current observed state.
 //
 // This method is called by the supervisor each tick to collect what the
 // worker currently observes about itself. The observed state is then
 // passed to the current FSM state's Next() method.
-//
-// IMPLEMENTATION PATTERN:
-//   - Check context cancellation first
-//   - Read state from dependencies (what actions have set)
-//   - Copy framework metrics if available
-//   - Return the observed state
-func (w *HelloworldWorker) CollectObservedState(ctx context.Context) (fsmv2.ObservedState, error) {
+func (w *HelloworldWorker) CollectObservedState(ctx context.Context, desired fsmv2.DesiredState) (fsmv2.ObservedState, error) {
 	select {
 	case <-ctx.Done():
 		return nil, ctx.Err()
@@ -120,20 +112,26 @@ func (w *HelloworldWorker) CollectObservedState(ctx context.Context) (fsmv2.Obse
 	// Include action history for debugging
 	observed.LastActionResults = deps.GetActionHistory()
 
+	// Read the mood file at DesiredState.MoodFilePath.
+	// This is blocking disk I/O, which is why CollectObservedState runs in a
+	// background goroutine. The supervisor ensures slow reads never block the tick loop.
+	if d, ok := desired.(*snapshot.HelloworldDesiredState); ok && d.MoodFilePath != "" {
+		if data, err := os.ReadFile(d.MoodFilePath); err == nil {
+			observed.Mood = strings.TrimSpace(string(data))
+		}
+	}
+
 	return observed, nil
 }
 
-// DeriveDesiredState determines what state the worker should be in.
+// DeriveDesiredState parses UserSpec.Config YAML into typed HelloworldDesiredState.
 //
-// This method parses user configuration (from scenarios or external config)
-// and returns the desired state. The supervisor compares this with observed
-// state to drive transitions.
-//
-// For simple workers, this just returns "running" as the desired state.
+// Uses config.ParseUserSpec instead of config.DeriveLeafState.
+// DeriveLeafState returns a generic config.DesiredState that drops
+// worker-specific fields like MoodFilePath. ParseUserSpec returns the
+// full typed struct so custom fields flow through to CollectObservedState.
 func (w *HelloworldWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, error) {
 	if spec == nil {
-		// Default: desired state is running
-		// Return the registered type (*snapshot.HelloworldDesiredState) to avoid type assertion failures
 		return &snapshot.HelloworldDesiredState{
 			BaseDesiredState: config.BaseDesiredState{State: config.DesiredStateRunning},
 		}, nil
@@ -144,41 +142,34 @@ func (w *HelloworldWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredSt
 		return nil, fmt.Errorf("invalid spec type: expected UserSpec, got %T", spec)
 	}
 
-	// Render any template variables in the config
 	renderedConfig, err := config.RenderConfigTemplate(userSpec.Config, userSpec.Variables)
 	if err != nil {
 		return nil, fmt.Errorf("template rendering failed: %w", err)
 	}
 
-	renderedSpec := config.UserSpec{
-		Config:    renderedConfig,
-		Variables: userSpec.Variables,
-	}
-
-	// Parse into typed config and derive desired state
-	desired, err := config.DeriveLeafState[HelloworldUserSpec](renderedSpec)
+	renderedSpec := config.UserSpec{Config: renderedConfig, Variables: userSpec.Variables}
+	hwSpec, err := config.ParseUserSpec[HelloworldUserSpec](renderedSpec)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("config parse failed: %w", err)
 	}
 
-	// Return the registered type (*snapshot.HelloworldDesiredState) to avoid type assertion failures
 	return &snapshot.HelloworldDesiredState{
-		BaseDesiredState: desired.BaseDesiredState,
+		BaseDesiredState: config.BaseDesiredState{State: hwSpec.GetState()},
+		MoodFilePath:     hwSpec.MoodFilePath,
 	}, nil
 }
 
 // GetInitialState returns the state the FSM should start in.
 //
-// All workers start in some initial state. For most workers this is
-// a "stopped" state that waits for the desired state to request running.
+// All workers start in StoppedState. It waits for the desired state
+// to request running before transitioning.
 func (w *HelloworldWorker) GetInitialState() fsmv2.State[any, any] {
 	return &state.StoppedState{}
 }
 
-// init registers the worker with the factory.
+// init registers the worker with the factory so the supervisor can discover it.
 //
-// CRITICAL: Without this init() function, the worker won't be discoverable
-// by the supervisor. The factory uses the type parameters to:
+// The factory uses the type parameters to:
 //   - Match incoming worker specs to the correct worker type
 //   - Create worker instances with proper typing
 //   - Create typed supervisors for the worker

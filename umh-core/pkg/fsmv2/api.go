@@ -16,6 +16,8 @@ package fsmv2
 
 import (
 	"context"
+	"fmt"
+	"reflect"
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
@@ -63,9 +65,6 @@ const (
 
 // ObservedState represents the actual state gathered from monitoring the system.
 type ObservedState interface {
-	// GetObservedDesiredState returns the desired state that is actually deployed.
-	GetObservedDesiredState() DesiredState
-
 	// GetTimestamp returns the time when this observed state was collected,
 	// used for staleness checks.
 	GetTimestamp() time.Time
@@ -124,6 +123,35 @@ type NextResult[TSnapshot any, TDeps any] struct {
 	// Example: "sync degraded: 5 consecutive errors (authentication_failure)"
 	Reason string
 
+	// Children is the parent's intended children-set for this tick. Parents
+	// emit children via this field so renderChildren is part of state.Next();
+	// the supervisor reads it post-tick and reconciles spawn / despawn /
+	// config-update against its own children registry. (Design Intent §16
+	// convergence-by-default; §17 explicit wire-format compatibility; Spec
+	// §2.10 children-set design.)
+	//
+	// Discriminator (Go-level, unambiguous):
+	//   - nil sentinel       → "no opinion" — supervisor falls back to legacy
+	//                          DDS-derived children (SetChildSpecsFactory).
+	//   - non-nil (any len)  → "use this exact set" — including the explicit
+	//                          empty form []config.ChildSpec{} which means
+	//                          "I am a parent and I want zero children right
+	//                          now." The supervisor will despawn any children
+	//                          not in the set.
+	//
+	// CSE JSON round-trip note: nil and [] collapse ambiguously across some
+	// JSON encoders. The discriminator above is enforced at the Go API
+	// boundary (state.Next return value) BEFORE serialization, never after.
+	// State authors should construct the explicit empty slice when they mean
+	// "no children" and reserve nil for "no opinion" / unmigrated paths.
+	//
+	// Migration window: P1.5 introduces the field only — the supervisor does
+	// not yet read it. Passing a non-nil Children slice has no effect until
+	// P2.4 wires the reconciliation discriminator. Legacy parents that set
+	// ChildSpecs via DeriveDesiredState continue to work until P2.1 retires
+	// SetChildSpecsFactory.
+	Children []config.ChildSpec
+
 	// Signal indicates framework-level events (shutdown, restart, etc.).
 	Signal Signal
 }
@@ -146,7 +174,7 @@ type State[TSnapshot any, TDeps any] interface {
 	// The supervisor uses this to:
 	//   - Construct the observed state name: phase.Prefix() + lowercase(String())
 	//   - Classify child health: phase.IsHealthy(), phase.IsOperational()
-	//   - Enable ChildrenManager methods: AllHealthy(), Counts()
+	//   - Enable ChildrenView aggregates: AllHealthy, AllOperational, Counts()
 	//
 	// Lifecycle phases:
 	//   - PhaseStopped:         stopped                → neutral health
@@ -161,23 +189,163 @@ type State[TSnapshot any, TDeps any] interface {
 // Result creates a NextResult with the given components.
 // This is a convenience function to reduce boilerplate when returning from Next().
 //
+// The children argument is the parent's intended children-set for this tick.
+// Pass nil (the common case during the P1 migration window) when the state is
+// not managing children. Parents that have migrated to renderChildren pass the
+// rendered slice. See NextResult.Children godoc for migration semantics.
+//
 // Usage:
 //
-//	return fsmv2.Result(s, fsmv2.SignalNone, nil, "Worker is stopped")
+//	return fsmv2.Result(s, fsmv2.SignalNone, nil, "Worker is stopped", nil)
 //
 //	reason := fmt.Sprintf("degraded: %d errors (%s)", errors, errorType)
-//	return fsmv2.Result(&DegradedState{}, fsmv2.SignalNone, nil, reason)
+//	return fsmv2.Result(&DegradedState{}, fsmv2.SignalNone, nil, reason, nil)
 func Result[TSnapshot any, TDeps any](
 	state State[TSnapshot, TDeps],
 	signal Signal,
 	action Action[TDeps],
 	reason string,
+	children []config.ChildSpec,
 ) NextResult[TSnapshot, TDeps] {
 	return NextResult[TSnapshot, TDeps]{
-		State:  state,
-		Signal: signal,
-		Action: action,
-		Reason: reason,
+		State:    state,
+		Signal:   signal,
+		Action:   action,
+		Reason:   reason,
+		Children: children,
+	}
+}
+
+// Transition is a non-generic convenience wrapper around Result for worker
+// state files. It lets state implementations drop the explicit [any, any]
+// type parameters when returning from Next(), reducing boilerplate.
+//
+// The action argument is `any` so that typed Action[TDeps] values can be
+// passed without a caller-visible WrapAction. The function accepts:
+//   - nil: no action
+//   - Action[any]: passed through unchanged (fast path)
+//   - Action[TDeps] for any concrete TDeps: auto-wrapped via reflection
+//     so Execute asserts deps into TDeps before delegating
+//
+// Values that don't structurally match an Action (missing Execute/Name or
+// wrong signatures) cause a panic with a diagnostic message; this is a
+// programmer error, not a runtime condition.
+//
+// The children argument is the parent's intended children-set for this tick.
+// Pass nil (the common case during the P1 migration window) when the state is
+// not managing children. Parents that have migrated to renderChildren pass
+// the rendered slice. See NextResult.Children godoc for migration semantics.
+//
+// Usage:
+//
+//	return fsmv2.Transition(s, fsmv2.SignalNone, nil, "Worker is stopped", nil)
+//	return fsmv2.Transition(&RunningState{}, fsmv2.SignalNone, &MyAction{}, reason, nil)
+func Transition(
+	state State[any, any],
+	signal Signal,
+	action any,
+	reason string,
+	children []config.ChildSpec,
+) NextResult[any, any] {
+	var wrapped Action[any]
+	switch a := action.(type) {
+	case nil:
+		// wrapped stays nil
+	case Action[any]:
+		wrapped = a
+	default:
+		wrapped = wrapTypedAction(a)
+	}
+
+	return Result[any, any](state, signal, wrapped, reason, children)
+}
+
+// reflectedAction adapts an Action[TDeps] for some concrete TDeps into an
+// Action[any]. The adapter asserts deps into TDeps via reflection before
+// delegating to the inner action's Execute method.
+type reflectedAction struct {
+	execute func(ctx context.Context, deps any) error
+	name    string
+}
+
+// Execute delegates to the reflection-built closure.
+func (r *reflectedAction) Execute(ctx context.Context, deps any) error {
+	return r.execute(ctx, deps)
+}
+
+// Name returns the cached name captured at wrap time.
+func (r *reflectedAction) Name() string { return r.name }
+
+// wrapTypedAction builds an Action[any] adapter for a typed Action[TDeps]
+// discovered via reflection. Panics if the value does not structurally match
+// an Action interface (Execute(context.Context, TDeps) error + Name() string).
+func wrapTypedAction(action any) Action[any] {
+	v := reflect.ValueOf(action)
+	if !v.IsValid() {
+		panic(fmt.Sprintf("fsmv2.Transition auto-wrap: action is nil or invalid; "+
+			"requires Execute(context.Context, TDeps) error and Name() string (got %T)", action))
+	}
+
+	if v.Kind() == reflect.Ptr && v.IsNil() {
+		panic(fmt.Sprintf("fsmv2.Transition auto-wrap: typed nil action (%T)", action))
+	}
+
+	execMethod := v.MethodByName("Execute")
+	nameMethod := v.MethodByName("Name")
+
+	if !execMethod.IsValid() || !nameMethod.IsValid() {
+		panic(fmt.Sprintf("fsmv2.Transition auto-wrap: action of type %T is not a valid Action[TDeps] — "+
+			"requires Execute(context.Context, TDeps) error and Name() string", action))
+	}
+
+	// Validate Execute signature: func(context.Context, <TDeps>) error.
+	execType := execMethod.Type()
+	ctxType := reflect.TypeOf((*context.Context)(nil)).Elem()
+	errType := reflect.TypeOf((*error)(nil)).Elem()
+	if execType.NumIn() != 2 || execType.NumOut() != 1 ||
+		!execType.In(0).Implements(ctxType) ||
+		!execType.Out(0).Implements(errType) {
+		panic(fmt.Sprintf("fsmv2.Transition auto-wrap: action of type %T has wrong Execute signature %s — "+
+			"requires Execute(context.Context, TDeps) error", action, execType))
+	}
+
+	// Validate Name signature: func() string.
+	nameType := nameMethod.Type()
+	stringType := reflect.TypeOf("")
+	if nameType.NumIn() != 0 || nameType.NumOut() != 1 || nameType.Out(0) != stringType {
+		panic(fmt.Sprintf("fsmv2.Transition auto-wrap: action of type %T has wrong Name signature %s — "+
+			"requires Name() string", action, nameType))
+	}
+
+	expectedDepsType := execType.In(1)
+	cachedName := nameMethod.Call(nil)[0].String()
+
+	return &reflectedAction{
+		name: cachedName,
+		execute: func(ctx context.Context, deps any) error {
+			depsVal := reflect.ValueOf(deps)
+			if !depsVal.IsValid() {
+				// nil deps: only valid if expectedDepsType is nilable (ptr, iface, map, chan, func, slice).
+				switch expectedDepsType.Kind() {
+				case reflect.Ptr, reflect.Interface, reflect.Map, reflect.Chan, reflect.Func, reflect.Slice:
+					depsVal = reflect.Zero(expectedDepsType)
+				default:
+					return fmt.Errorf("fsmv2.Transition auto-wrap: nil deps not assignable to %s (action %q)",
+						expectedDepsType, cachedName)
+				}
+			} else if !depsVal.Type().AssignableTo(expectedDepsType) {
+				return fmt.Errorf("fsmv2.Transition auto-wrap: deps type %T not assignable to %s (action %q)",
+					deps, expectedDepsType, cachedName)
+			} else {
+				depsVal = depsVal.Convert(expectedDepsType)
+			}
+
+			out := execMethod.Call([]reflect.Value{reflect.ValueOf(ctx), depsVal})
+			if errIface := out[0].Interface(); errIface != nil {
+				return errIface.(error)
+			}
+			return nil
+		},
 	}
 }
 
@@ -186,7 +354,11 @@ func Result[TSnapshot any, TDeps any](
 // not by a method on this interface.
 type Worker interface {
 	// CollectObservedState monitors the actual system state.
-	CollectObservedState(ctx context.Context) (ObservedState, error)
+	// The desired parameter provides the current desired state so observation-based
+	// workers can access configuration (target IP, port, etc.) without workarounds.
+	// The supervisor guarantees desired is always non-nil; collection is skipped
+	// until a desired state exists in the store.
+	CollectObservedState(ctx context.Context, desired DesiredState) (ObservedState, error)
 
 	// DeriveDesiredState derives the target state from user configuration (spec).
 	DeriveDesiredState(spec interface{}) (DesiredState, error)

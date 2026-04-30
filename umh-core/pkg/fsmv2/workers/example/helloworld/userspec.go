@@ -25,10 +25,10 @@ import (
 //
 //	config: |
 //	  state: running
-//	  message: "Hello, {{ .Name }}!"
+//	  moodFilePath: /tmp/helloworld-mood
 type HelloworldUserSpec struct {
 	config.BaseUserSpec // Provides State field with GetState() defaulting to "running"
 
-	// Message is the optional greeting message (can use template variables)
-	Message string `json:"message" yaml:"message"`
+	// MoodFilePath is the path to the mood file whose contents set the worker's mood.
+	MoodFilePath string `json:"moodFilePath" yaml:"moodFilePath"`
 }

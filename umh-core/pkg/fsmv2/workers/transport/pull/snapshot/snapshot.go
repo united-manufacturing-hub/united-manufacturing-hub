@@ -100,10 +100,6 @@ func (o PullObservedState) GetTimestamp() time.Time {
 	return o.CollectedAt
 }
 
-func (o PullObservedState) GetObservedDesiredState() fsmv2.DesiredState {
-	return &o.PullDesiredState
-}
-
 // SetState sets the FSM state name on this observed state.
 func (o PullObservedState) SetState(s string) fsmv2.ObservedState {
 	o.State = s
@@ -125,7 +121,7 @@ func (o PullObservedState) SetParentMappedState(state string) fsmv2.ObservedStat
 	return o
 }
 
-// IsStopRequired reports whether the pull worker needs to stop.
-func (o PullObservedState) IsStopRequired() bool {
+// ShouldStop reports whether the pull worker needs to stop.
+func (o PullObservedState) ShouldStop() bool {
 	return o.IsShutdownRequested() || !o.ShouldBeRunning()
 }

@@ -99,7 +99,6 @@ func benchmarkSupervisorTick(b *testing.B, workerCount int) {
 			observed: &mockObservedState{
 				ID:          workerID,
 				CollectedAt: time.Now(),
-				Desired:     &mockDesiredState{},
 			},
 		}
 
@@ -147,7 +146,7 @@ type slowCollectWorker struct {
 	observed     *mockObservedState
 }
 
-func (w *slowCollectWorker) CollectObservedState(ctx context.Context) (fsmv2.ObservedState, error) {
+func (w *slowCollectWorker) CollectObservedState(ctx context.Context, _ fsmv2.DesiredState) (fsmv2.ObservedState, error) {
 	// Simulate slow collection (e.g., network timeout, slow database query)
 	select {
 	case <-time.After(w.collectDelay):
@@ -191,7 +190,6 @@ func BenchmarkTickLoopWithSlowWorker(b *testing.B) {
 		observed: &mockObservedState{
 			ID:          slowWorkerID,
 			CollectedAt: time.Now(),
-			Desired:     &mockDesiredState{},
 		},
 	}
 
@@ -212,7 +210,6 @@ func BenchmarkTickLoopWithSlowWorker(b *testing.B) {
 			observed: &mockObservedState{
 				ID:          workerID,
 				CollectedAt: time.Now(),
-				Desired:     &mockDesiredState{},
 			},
 		}
 
@@ -260,7 +257,6 @@ func BenchmarkTickLoopConcurrentActions(b *testing.B) {
 			observed: &mockObservedState{
 				ID:          workerID,
 				CollectedAt: time.Now(),
-				Desired:     &mockDesiredState{},
 			},
 		}
 
@@ -298,7 +294,7 @@ type observationLatencyWorker struct {
 	observed      *mockObservedState
 }
 
-func (w *observationLatencyWorker) CollectObservedState(ctx context.Context) (fsmv2.ObservedState, error) {
+func (w *observationLatencyWorker) CollectObservedState(ctx context.Context, _ fsmv2.DesiredState) (fsmv2.ObservedState, error) {
 	w.mu.Lock()
 	w.lastCollected = time.Now()
 	w.observed.CollectedAt = w.lastCollected
@@ -344,7 +340,6 @@ func BenchmarkObservationCollectionSingle(b *testing.B) {
 		observed: &mockObservedState{
 			ID:          workerID,
 			CollectedAt: time.Now(),
-			Desired:     &mockDesiredState{},
 		},
 	}
 
@@ -404,7 +399,6 @@ func benchmarkObservationCollectionN(b *testing.B, workerCount int) {
 			observed: &mockObservedState{
 				ID:          workerID,
 				CollectedAt: time.Now(),
-				Desired:     &mockDesiredState{},
 			},
 		}
 

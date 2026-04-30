@@ -56,7 +56,6 @@ var _ = Describe("PendingRemoval Flag Clearing", func() {
 				observed: &mockObservedState{
 					ID:          "parent-worker",
 					CollectedAt: time.Now(),
-					Desired:     &mockDesiredState{},
 				},
 				childrenSpecs: childSpecs,
 			}

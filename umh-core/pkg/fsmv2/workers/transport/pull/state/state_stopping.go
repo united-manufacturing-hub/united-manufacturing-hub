@@ -36,7 +36,7 @@ func (s *StoppingState) Next(snapAny any) fsmv2.NextResult[any, any] {
 
 	return fsmv2.Result[any, any](&StoppedState{}, fsmv2.SignalNone, nil,
 		fmt.Sprintf("stop complete: shutdown=%t, parentState(observed)=%s",
-			snap.Desired.IsShutdownRequested(), snap.Observed.ParentMappedState))
+			snap.Desired.IsShutdownRequested(), snap.Observed.ParentMappedState), nil)
 }
 
 func (s *StoppingState) String() string {

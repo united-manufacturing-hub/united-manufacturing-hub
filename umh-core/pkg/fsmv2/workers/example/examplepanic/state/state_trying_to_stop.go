@@ -29,10 +29,10 @@ func (s *TryingToStopState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := helpers.ConvertSnapshot[snapshot.ExamplepanicObservedState, *snapshot.ExamplepanicDesiredState](snapAny)
 
 	if snap.Observed.ConnectionHealth == "no connection" {
-		return fsmv2.Result[any, any](&StoppedState{}, fsmv2.SignalNone, nil, "Connection closed, transitioning to Stopped")
+		return fsmv2.Result[any, any](&StoppedState{}, fsmv2.SignalNone, nil, "Connection closed, transitioning to Stopped", nil)
 	}
 
-	return fsmv2.Result[any, any](s, fsmv2.SignalNone, &action.DisconnectAction{}, "Closing connections gracefully")
+	return fsmv2.Result[any, any](s, fsmv2.SignalNone, &action.DisconnectAction{}, "Closing connections gracefully", nil)
 }
 
 func (s *TryingToStopState) String() string {

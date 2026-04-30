@@ -31,14 +31,14 @@ func (s *StoppedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := helpers.ConvertSnapshot[snapshot.TransportObservedState, *snapshot.TransportDesiredState](snapAny)
 
 	if snap.Desired.IsShutdownRequested() {
-		return fsmv2.Result[any, any](s, fsmv2.SignalNeedsRemoval, nil, "Shutdown requested, signaling removal")
+		return fsmv2.Result[any, any](s, fsmv2.SignalNeedsRemoval, nil, "Shutdown requested, signaling removal", nil)
 	}
 
 	if snap.Desired.ShouldBeRunning() {
-		return fsmv2.Result[any, any](&StartingState{}, fsmv2.SignalNone, nil, "Desired state is running, transitioning to Starting")
+		return fsmv2.Result[any, any](&StartingState{}, fsmv2.SignalNone, nil, "Desired state is running, transitioning to Starting", nil)
 	}
 
-	return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil, "Transport is stopped, waiting for running request")
+	return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil, "Transport is stopped, waiting for running request", nil)
 }
 
 // String returns the state name derived from the type.

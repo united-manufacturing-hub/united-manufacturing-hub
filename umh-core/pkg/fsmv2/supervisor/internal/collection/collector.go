@@ -16,6 +16,7 @@ package collection
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"runtime/debug"
@@ -23,7 +24,9 @@ import (
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/internal/panicutil"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/metrics"
@@ -59,9 +62,19 @@ type CollectorConfig[TObserved any] struct {
 	Logger                    deps.FSMLogger
 	StateProvider             func() string                       // Returns current FSM state name (injected by supervisor)
 	ShutdownRequestedProvider func() bool                         // Returns current shutdown requested status (injected by supervisor)
-	ChildrenCountsProvider    func() (healthy int, unhealthy int) // Returns children health counts (injected by supervisor for parent workers)
+	// ChildrenCountsProvider returns the per-tick (healthy, unhealthy) counts.
+	// Retained for workers that satisfy SetChildrenCounts but not SetChildrenView;
+	// new code should consume the richer ChildrenView and read view.HealthyCount /
+	// view.UnhealthyCount instead. The two providers carry redundant data by
+	// construction (NewChildrenView derives counts from the same per-child Phase
+	// the supervisor reports here), so satisfying both setters is harmless.
+	ChildrenCountsProvider    func() (healthy int, unhealthy int)
 	MappedParentStateProvider func() string                       // Returns mapped state from parent's StateMapping (injected by supervisor for child workers)
-	ChildrenViewProvider      func() any                          // Returns config.ChildrenView for parent workers to inspect children (injected by supervisor)
+	// ChildrenViewProvider returns the full ChildrenView snapshot for parent
+	// workers that need per-child detail. Counts are also exposed on the view
+	// (view.HealthyCount / view.UnhealthyCount) so workers consuming the view
+	// can ignore ChildrenCountsProvider.
+	ChildrenViewProvider func() config.ChildrenView
 	// FrameworkMetricsProvider returns current framework metrics from supervisor.
 	// Called BEFORE collection to inject into worker dependencies.
 	// The provider captures workerCtx and acquires RLock when called (thread-safe).
@@ -78,7 +91,13 @@ type CollectorConfig[TObserved any] struct {
 	// Workers then access via deps.GetActionHistory() and assign to their ObservedState.
 	// This follows the same pattern as FrameworkMetricsSetter.
 	ActionHistorySetter func([]deps.ActionResult)
-	Identity            deps.Identity
+	// DesiredStateProvider returns the current desired state from the CSE store.
+	// Called BEFORE CollectObservedState so workers can access configuration
+	// (target IP, port, etc.) without workarounds. If nil is returned (desired
+	// state not yet saved), collection is skipped entirely — workers are
+	// guaranteed to always receive a non-nil desired state.
+	DesiredStateProvider func() fsmv2.DesiredState
+	Identity             deps.Identity
 	ObservationInterval time.Duration
 	ObservationTimeout  time.Duration
 	EnableTraceLogging  bool // Whether to emit verbose per-collection logs
@@ -95,6 +114,7 @@ type Collector[TObserved any] struct {
 	config        CollectorConfig[TObserved]
 	state         collectorState
 	mu            sync.RWMutex
+	collectionMu  sync.Mutex // Serializes collectAndSaveObservedState between observation loop and CollectFinalObservation
 	running       bool
 }
 
@@ -282,7 +302,10 @@ func (c *Collector[TObserved]) CollectFinalObservation(ctx context.Context) erro
 
 	c.config.Logger.Debug("collector_final_observation_starting")
 
+	c.collectionMu.Lock()
 	err := c.collectAndSaveObservedState(collectCtx)
+	c.collectionMu.Unlock()
+
 	if err != nil {
 		c.config.Logger.SentryWarn(deps.FeatureForWorker(c.config.Identity.WorkerType), c.config.Identity.HierarchyPath, "collector_final_observation_failed",
 			deps.Err(err))
@@ -332,7 +355,12 @@ func (c *Collector[TObserved]) observationLoop() {
 			c.config.Logger.Debug("collector_restart_triggered")
 
 			collectCtx, cancel := context.WithTimeout(ctx, timeout)
-			if err := c.collectAndSaveObservedState(collectCtx); err != nil {
+
+			c.collectionMu.Lock()
+			err := c.collectAndSaveObservedState(collectCtx)
+			c.collectionMu.Unlock()
+
+			if err != nil {
 				c.config.Logger.SentryError(deps.FeatureForWorker(c.config.Identity.WorkerType), c.config.Identity.HierarchyPath, err, "collector_observation_failed",
 					deps.String("trigger", "restart"))
 			}
@@ -341,7 +369,12 @@ func (c *Collector[TObserved]) observationLoop() {
 
 		case <-ticker.C:
 			collectCtx, cancel := context.WithTimeout(ctx, timeout)
-			if err := c.collectAndSaveObservedState(collectCtx); err != nil {
+
+			c.collectionMu.Lock()
+			err := c.collectAndSaveObservedState(collectCtx)
+			c.collectionMu.Unlock()
+
+			if err != nil {
 				c.config.Logger.SentryError(deps.FeatureForWorker(c.config.Identity.WorkerType), c.config.Identity.HierarchyPath, err, "collector_observation_failed",
 					deps.String("trigger", "ticker"))
 			}
@@ -374,12 +407,40 @@ func (c *Collector[TObserved]) collectAndSaveObservedState(ctx context.Context) 
 		c.config.ActionHistorySetter(actionHistory)
 	}
 
-	observed, err := c.config.Worker.CollectObservedState(ctx)
+	// Load desired state to pass to CollectObservedState.
+	// Skip collection entirely if no desired state exists yet — the supervisor
+	// guarantees workers always receive a non-nil desired state.
+	var desired fsmv2.DesiredState
+	if c.config.DesiredStateProvider != nil {
+		desired = c.config.DesiredStateProvider()
+	}
+
+	if desired == nil {
+		c.logTrace("collector_skipped_no_desired_state")
+
+		return nil
+	}
+
+	// Framework-level ctx check before calling into worker code.
+	// Guarantees responsive shutdown even if the worker omits its own check.
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+	}
+
+	observed, err := c.config.Worker.CollectObservedState(ctx, desired)
 	if err != nil {
 		c.config.Logger.Debug("collector_collect_failed",
 			deps.Err(err))
 
 		return err
+	}
+
+	// Post-COS framework wrapping for NewObservation-based workers.
+	// Gate: zero CollectedAt means NewObservation (not WrapStatus).
+	if observed.GetTimestamp().IsZero() {
+		observed = c.wrapNewObservation(ctx, observed)
 	}
 
 	// Inject FSM state via callback to preserve "Collector-only writes ObservedState" boundary
@@ -425,7 +486,9 @@ func (c *Collector[TObserved]) collectAndSaveObservedState(ctx context.Context) 
 	// Inject children view so parent workers can inspect individual child states
 	if c.config.ChildrenViewProvider != nil {
 		childrenView := c.config.ChildrenViewProvider()
-		if setter, ok := observed.(interface{ SetChildrenView(any) fsmv2.ObservedState }); ok {
+		if setter, ok := observed.(interface {
+			SetChildrenView(config.ChildrenView) fsmv2.ObservedState
+		}); ok {
 			observed = setter.SetChildrenView(childrenView)
 		}
 	}
@@ -452,17 +515,22 @@ func (c *Collector[TObserved]) collectAndSaveObservedState(ctx context.Context) 
 		return err
 	}
 
-	ts, ok := c.config.Store.(*storage.TriangularStore)
-	if !ok {
-		err := fmt.Errorf("store is not *TriangularStore, got %T", c.config.Store)
-		c.config.Logger.SentryError(deps.FeatureForWorker(c.config.Identity.WorkerType), c.config.Identity.HierarchyPath, err, "collector_store_type_mismatch",
-			deps.String("expected_type", "*storage.TriangularStore"),
-			deps.String("actual_type", fmt.Sprintf("%T", c.config.Store)))
-
-		return err
+	// Use non-generic save path: marshal to JSON → unmarshal to Document → SaveObserved.
+	// SaveObservedTyped[TObserved] would call DeriveWorkerType which fails for generic
+	// type names like Observation[SomeStatus] (name ends in "]" not "ObservedState").
+	observedJSON, err := json.Marshal(observedTyped)
+	if err != nil {
+		return fmt.Errorf("collector marshal observed: %w", err)
 	}
 
-	changed, err := storage.SaveObservedTyped[TObserved](ts, ctx, c.config.Identity.ID, observedTyped)
+	observedDoc := make(persistence.Document)
+	if err := json.Unmarshal(observedJSON, &observedDoc); err != nil {
+		return fmt.Errorf("collector unmarshal observed to document: %w", err)
+	}
+
+	observedDoc["id"] = c.config.Identity.ID
+
+	changed, err := c.config.Store.SaveObserved(ctx, c.config.Identity.WorkerType, c.config.Identity.ID, observedDoc)
 	if err != nil {
 		c.config.Logger.Debug("collector_save_failed",
 			deps.Err(err))
@@ -486,6 +554,115 @@ func (c *Collector[TObserved]) collectAndSaveObservedState(ctx context.Context) 
 	}
 
 	return nil
+}
+
+// baseDepsAccessor is a duck-type interface for extracting framework data from
+// any worker's dependencies (BaseDependencies or a struct embedding it).
+type baseDepsAccessor interface {
+	GetFrameworkState() *deps.FrameworkMetrics
+	GetActionHistory() []deps.ActionResult
+	MetricsRecorder() *deps.MetricsRecorder
+}
+
+// wrapNewObservation fills framework fields on a NewObservation-based ObservedState.
+// Called only when the zero-time gate fires (CollectedAt is zero), meaning the
+// developer used NewObservation instead of WrapStatus/WrapStatusAccumulated.
+//
+// Steps: set CollectedAt, inject framework metrics + action history,
+// accumulate worker metrics (load previous from CSE, drain recorder, merge).
+func (c *Collector[TObserved]) wrapNewObservation(ctx context.Context, observed fsmv2.ObservedState) fsmv2.ObservedState {
+	// Step 1: Set CollectedAt to now.
+	if setter, ok := observed.(interface {
+		SetCollectedAt(time.Time) fsmv2.ObservedState
+	}); ok {
+		observed = setter.SetCollectedAt(time.Now())
+	}
+
+	// Step 2: Get BaseDependencies from worker via DependencyProvider → baseDepsAccessor.
+	depProvider, ok := c.config.Worker.(fsmv2.DependencyProvider)
+	if !ok {
+		c.config.Logger.Debug("wrap_new_observation_no_dependency_provider",
+			deps.String("worker_type", fmt.Sprintf("%T", c.config.Worker)))
+
+		return observed
+	}
+
+	depsAny := depProvider.GetDependenciesAny()
+
+	bd, ok := depsAny.(baseDepsAccessor)
+	if !ok {
+		c.config.Logger.Debug("wrap_new_observation_no_base_deps_accessor",
+			deps.String("deps_type", fmt.Sprintf("%T", depsAny)))
+
+		return observed
+	}
+
+	// Step 3: Inject framework metrics.
+	if fm := bd.GetFrameworkState(); fm != nil {
+		if setter, ok := observed.(interface {
+			SetFrameworkMetrics(deps.FrameworkMetrics) fsmv2.ObservedState
+		}); ok {
+			observed = setter.SetFrameworkMetrics(*fm)
+		}
+	}
+
+	// Step 4: Inject action history.
+	if ah := bd.GetActionHistory(); ah != nil {
+		if setter, ok := observed.(interface {
+			SetActionHistory([]deps.ActionResult) fsmv2.ObservedState
+		}); ok {
+			observed = setter.SetActionHistory(ah)
+		}
+	}
+
+	// Step 5: Accumulate worker metrics (load previous → drain → merge).
+	var prevWorkerMetrics deps.Metrics
+
+	// Step 5a: Load previous state from CSE BEFORE drain (drain is destructive).
+	if ctx.Err() == nil {
+		var prev struct {
+			Metrics deps.MetricsContainer `json:"metrics"`
+		}
+
+		if err := c.config.Store.LoadObservedTyped(ctx, c.config.Identity.WorkerType, c.config.Identity.ID, &prev); err == nil {
+			prevWorkerMetrics = prev.Metrics.Worker
+		} else {
+			c.config.Logger.Debug("wrap_new_observation_cse_load_failed",
+				deps.Err(err))
+		}
+	}
+
+	// Step 5b: Init empty maps if CSE load failed or returned nil maps.
+	if prevWorkerMetrics.Counters == nil {
+		prevWorkerMetrics.Counters = make(map[string]int64)
+	}
+
+	if prevWorkerMetrics.Gauges == nil {
+		prevWorkerMetrics.Gauges = make(map[string]float64)
+	}
+
+	// Step 5c: Drain MetricsRecorder AFTER CSE read.
+	if recorder := bd.MetricsRecorder(); recorder != nil {
+		drained := recorder.Drain()
+
+		// Step 5d: Merge — counters additive, gauges replace.
+		for name, delta := range drained.Counters {
+			prevWorkerMetrics.Counters[name] += delta
+		}
+
+		for name, value := range drained.Gauges {
+			prevWorkerMetrics.Gauges[name] = value
+		}
+	}
+
+	// Step 5e: Set accumulated worker metrics.
+	if setter, ok := observed.(interface {
+		SetWorkerMetrics(deps.Metrics) fsmv2.ObservedState
+	}); ok {
+		observed = setter.SetWorkerMetrics(prevWorkerMetrics)
+	}
+
+	return observed
 }
 
 // handleCollectorPanic processes a recovered panic from collectAndSaveObservedState.

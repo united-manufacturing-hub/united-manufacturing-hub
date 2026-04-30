@@ -20,6 +20,30 @@ import (
 	"sync"
 )
 
+var (
+	globalRegistry     *TypeRegistry
+	globalRegistryOnce sync.Once
+)
+
+// GlobalRegistry returns the process-wide TypeRegistry singleton.
+func GlobalRegistry() *TypeRegistry {
+	globalRegistryOnce.Do(func() {
+		globalRegistry = NewTypeRegistry()
+	})
+
+	if globalRegistry == nil {
+		panic("storage.GlobalRegistry: globalRegistry is nil after Once.Do")
+	}
+
+	return globalRegistry
+}
+
+// ResetGlobalRegistry resets the global registry so the next GlobalRegistry() call creates a fresh instance. For testing only.
+func ResetGlobalRegistry() {
+	globalRegistryOnce = sync.Once{}
+	globalRegistry = nil
+}
+
 // TypeRegistry stores reflect.Type metadata for worker types.
 type TypeRegistry struct {
 	observed map[string]reflect.Type

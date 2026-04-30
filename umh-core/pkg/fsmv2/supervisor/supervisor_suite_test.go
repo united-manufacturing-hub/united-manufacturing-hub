@@ -100,13 +100,8 @@ func registerTestWorkerFactories() {
 }
 
 type mockObservedState struct {
-	ID          string             `json:"id"`
-	CollectedAt time.Time          `json:"collectedAt"`
-	Desired     fsmv2.DesiredState `json:"-"`
-}
-
-func (m *mockObservedState) GetObservedDesiredState() fsmv2.DesiredState {
-	return m.Desired
+	ID          string    `json:"id"`
+	CollectedAt time.Time `json:"collectedAt"`
 }
 
 func (m *mockObservedState) GetTimestamp() time.Time {
@@ -138,7 +133,7 @@ type mockWorker struct {
 	requestShutdownFunc func() // Callback for when RequestShutdown is called
 }
 
-func (m *mockWorker) CollectObservedState(ctx context.Context) (fsmv2.ObservedState, error) {
+func (m *mockWorker) CollectObservedState(ctx context.Context, _ fsmv2.DesiredState) (fsmv2.ObservedState, error) {
 	if m.collectFunc != nil {
 		return m.collectFunc(ctx)
 	}
@@ -154,7 +149,6 @@ func (m *mockWorker) CollectObservedState(ctx context.Context) (fsmv2.ObservedSt
 	return &mockObservedState{
 		ID:          "test-worker",
 		CollectedAt: time.Now(),
-		Desired:     &mockDesiredState{},
 	}, nil
 }
 
@@ -179,7 +173,7 @@ type mockState struct {
 
 func (m *mockState) Next(snapshot any) fsmv2.NextResult[any, any] {
 	if m.nextState == nil {
-		return fsmv2.Result[any, any](m, fsmv2.SignalNone, nil, "mock state")
+		return fsmv2.Result[any, any](m, fsmv2.SignalNone, nil, "mock state", nil)
 	}
 
 	reason := m.reason
@@ -187,7 +181,7 @@ func (m *mockState) Next(snapshot any) fsmv2.NextResult[any, any] {
 		reason = "mock state"
 	}
 
-	return fsmv2.Result[any, any](m.nextState, m.signal, m.action, reason)
+	return fsmv2.Result[any, any](m.nextState, m.signal, m.action, reason, nil)
 }
 
 func (m *mockState) String() string { return "MockState" }
@@ -470,7 +464,6 @@ func createMockObservedStateWithID(id string) *mockObservedState {
 	return &mockObservedState{
 		ID:          id,
 		CollectedAt: time.Now(),
-		Desired:     &mockDesiredState{},
 	}
 }
 

@@ -220,11 +220,29 @@ func (u UserSpec) Clone() UserSpec {
 //	    },
 //	}
 type ChildSpec struct {
-	Dependencies     map[string]any `json:"dependencies,omitempty"     yaml:"dependencies,omitempty"`     // Additional deps to merge with parent's deps (child overrides parent)
+	Dependencies     map[string]any `json:"-"                          yaml:"-"`                          // Runtime channels and interfaces; not serializable. Inherited from parent at supervisor merge time (see ChildSpec.Hash godoc).
 	UserSpec         UserSpec       `json:"userSpec"                   yaml:"userSpec"`                   // Raw user config (input to DeriveDesiredState)
 	Name             string         `json:"name"                       yaml:"name"`                       // Unique name for this child (within parent scope)
 	WorkerType       string         `json:"workerType"                 yaml:"workerType"`                 // Type of worker to create (registered worker factory key)
 	ChildStartStates []string       `json:"childStartStates,omitempty" yaml:"childStartStates,omitempty"` // Parent FSM states where child should run (empty = always run)
+
+	// Enabled is the parent's per-tick enable signal for this child. true = run,
+	// false = stop. The zero value (§4-C LOCKED) is false: ChildSpec literals that
+	// omit Enabled produce a stopped child. Parents that want a running child must
+	// explicitly set Enabled: true in their renderChildren body. The "forgot
+	// Enabled: true" trap is caught by the P1.8 architecture test
+	// TestRenderChildrenEmitsExplicitEnabled, which un-gates atomically when
+	// renderChildren lands in P2.1.
+	//
+	// Supervisor will reduce Enabled to the child's BaseDesiredState.ShutdownRequested
+	// at P2.x (Enabled=true => ShutdownRequested=false; Enabled=false =>
+	// ShutdownRequested=true). P1.5 introduces the field only — no live reducer
+	// reads it yet; setting Enabled has no runtime effect until P2.x wires the
+	// reduction. Children read snap.Desired.IsShutdownRequested() (or the
+	// dual-shape snap.ShouldStop() reader, which still reads the deprecated
+	// flat aliases during the migration window); they will never read
+	// Enabled directly. (Design Intent §4 no-Parent-references-in-children.)
+	Enabled bool `json:"enabled" yaml:"enabled"`
 }
 
 // Clone creates a deep copy of the ChildSpec.
@@ -254,8 +272,11 @@ func (c ChildSpec) Clone() ChildSpec {
 // This is used by the supervisor to detect when a ChildSpec has changed,
 // enabling incremental validation (only re-validate specs whose hash changed).
 //
-// The hash is computed from all relevant fields: Name, WorkerType, UserSpec,
-// ChildStartStates, and Dependencies (excluding any unexported fields).
+// The hash is computed from the comparable spec fields: Name, WorkerType,
+// Enabled, UserSpec, and ChildStartStates. Dependencies are intentionally
+// excluded — they hold runtime objects (channels, mutex-protected values)
+// that cannot be meaningfully hashed and whose churn does not require
+// re-validation. Unexported fields are also excluded.
 //
 // Returns a hex-encoded FNV-1a 64-bit hash string (16 characters) and an error
 // if Variables cannot be marshaled to JSON.
@@ -268,6 +289,20 @@ func (c ChildSpec) Hash() (string, error) {
 	h.Write([]byte(c.Name))
 	h.Write([]byte{0}) // separator
 	h.Write([]byte(c.WorkerType))
+	h.Write([]byte{0}) // separator
+
+	// Hash Enabled (single value byte: 1 for true, 0 for false) so flipping
+	// the per-tick enable signal changes the hash and triggers re-validation
+	// downstream. The trailing zero byte is the field separator (matching the
+	// pattern above) — not the value, which is the byte already written. The
+	// value byte and separator byte are distinct writes intentionally so that
+	// Enabled=false (value 0) is still distinguishable from omission via the
+	// position of the separator that always follows.
+	if c.Enabled {
+		h.Write([]byte{1})
+	} else {
+		h.Write([]byte{0})
+	}
 	h.Write([]byte{0}) // separator
 
 	// Hash UserSpec (config string + variables)
@@ -328,25 +363,106 @@ func (c *ChildSpec) GetMappedChildState(parentState string) string {
 // without allowing direct modification.
 //
 // All fields are copies, not references - modifying them has no effect on the actual child.
+//
+// JSON encoding uses camelCase. UnmarshalJSON also accepts the legacy
+// PascalCase form for backward compatibility during the migration window.
 type ChildInfo struct {
-	Name          string // Child name (unique within parent scope)
-	WorkerType    string // Child worker type
-	StateName     string // Current FSM state name (e.g., "Running", "TryingToStart")
-	StateReason   string // Human-readable reason for current state
-	ErrorMsg      string // Error message if unhealthy (empty if healthy)
-	HierarchyPath string // Full path in the worker hierarchy (e.g., "app.parent.child")
-	IsHealthy     bool   // Whether the child is considered healthy
+	Name          string         `json:"name"`          // Child name (unique within parent scope)
+	WorkerType    string         `json:"workerType"`    // Child worker type
+	StateName     string         `json:"stateName"`     // Current FSM state name (raw, e.g., "Running", "TryingToConnect" — display only)
+	StateReason   string         `json:"stateReason"`   // Human-readable reason for current state
+	ErrorMsg      string         `json:"errorMsg"`      // Error message if unhealthy (empty if healthy)
+	HierarchyPath string         `json:"hierarchyPath"` // Full path in the worker hierarchy (e.g., "app.parent.child")
+	Phase         LifecyclePhase `json:"phase"`         // Cached lifecycle phase populated by the supervisor; ChildrenView predicates read this rather than parsing StateName.
+	IsHealthy     bool           `json:"isHealthy"`     // Whether the child is considered healthy
 	// Infrastructure status fields (framework-tracked)
-	IsStale       bool // True if observation age > stale threshold (~10s)
-	IsCircuitOpen bool // True if infrastructure failure detected (circuit breaker open)
+	IsStale       bool `json:"isStale"`       // True if observation age > stale threshold (~10s)
+	IsCircuitOpen bool `json:"isCircuitOpen"` // True if infrastructure failure detected (circuit breaker open)
 }
 
-// ChildrenView provides read-only access to a parent worker's children.
-// This interface enables parent workers to observe their children's state
-// without being able to modify them.
+// UnmarshalJSON reads ChildInfo from both the canonical camelCase form and the
+// legacy PascalCase form for migration compatibility.
 //
-// The supervisor injects ChildrenView via setter methods on ObservedState,
-// not through dependencies. To use it:
+// Strategy: decode into both auxiliary forms and merge — for each field, the
+// camelCase value wins when it is non-zero; otherwise the PascalCase value
+// fills in. This preserves legacy bool true-states (e.g., IsHealthy: true,
+// IsStale: true) even when newer writers omit the field. Both forms eventually
+// re-marshal to the canonical camelCase form.
+//
+// Phase has no PascalCase legacy companion: it was introduced together with
+// the camelCase migration, so older payloads simply omit it (decodes to
+// PhaseUnknown, which is the correct fall-through for unclassifiable rows).
+// During a CSE migration window, snapshots written by a pre-Phase supervisor
+// decode with Phase=PhaseUnknown for at most one reconcile interval — the next
+// tick rebuilds ChildInfo from live child.GetLifecyclePhase() calls (see
+// supervisor/children_view.go buildChildInfo) and the field is repopulated.
+// Aggregate predicates therefore self-recover within a single tick (~10ms);
+// no operator action is required.
+func (c *ChildInfo) UnmarshalJSON(data []byte) error {
+	var legacy struct {
+		Name          string `json:"Name"`
+		WorkerType    string `json:"WorkerType"`
+		StateName     string `json:"StateName"`
+		StateReason   string `json:"StateReason"`
+		ErrorMsg      string `json:"ErrorMsg"`
+		HierarchyPath string `json:"HierarchyPath"`
+		IsHealthy     bool   `json:"IsHealthy"`
+		IsStale       bool   `json:"IsStale"`
+		IsCircuitOpen bool   `json:"IsCircuitOpen"`
+	}
+	if err := json.Unmarshal(data, &legacy); err != nil {
+		return fmt.Errorf("ChildInfo: unmarshal legacy form: %w", err)
+	}
+
+	type childInfoCamel ChildInfo
+	var camel childInfoCamel
+	if err := json.Unmarshal(data, &camel); err != nil {
+		return fmt.Errorf("ChildInfo: unmarshal camel form: %w", err)
+	}
+
+	if camel.Name == "" {
+		camel.Name = legacy.Name
+	}
+	if camel.WorkerType == "" {
+		camel.WorkerType = legacy.WorkerType
+	}
+	if camel.StateName == "" {
+		camel.StateName = legacy.StateName
+	}
+	if camel.StateReason == "" {
+		camel.StateReason = legacy.StateReason
+	}
+	if camel.ErrorMsg == "" {
+		camel.ErrorMsg = legacy.ErrorMsg
+	}
+	if camel.HierarchyPath == "" {
+		camel.HierarchyPath = legacy.HierarchyPath
+	}
+	if !camel.IsHealthy {
+		camel.IsHealthy = legacy.IsHealthy
+	}
+	if !camel.IsStale {
+		camel.IsStale = legacy.IsStale
+	}
+	if !camel.IsCircuitOpen {
+		camel.IsCircuitOpen = legacy.IsCircuitOpen
+	}
+
+	*c = ChildInfo(camel)
+
+	return nil
+}
+
+// ChildrenView is a serializable read-only snapshot of a parent worker's
+// children at a single tick. It carries pre-computed aggregate counts and
+// predicates so consumers do not need access to the live supervisor tree.
+//
+// The struct is pure data: JSON-serializable end-to-end (Design Intent §13)
+// and round-trips through CSE storage between the collector goroutine and the
+// reconciler goroutine without losing information.
+//
+// The supervisor builds ChildrenView via NewChildrenView and injects it via
+// setter methods on ObservedState. To use it:
 //
 // 1. Add fields to your ObservedState to store children info:
 //
@@ -357,11 +473,10 @@ type ChildInfo struct {
 //
 // 2. Implement SetChildrenView on your ObservedState (called automatically by supervisor):
 //
-//	func (o MyObservedState) SetChildrenView(view any) fsmv2.ObservedState {
-//	    if cv, ok := view.(config.ChildrenView); ok {
-//	        o.ChildrenHealthy, o.ChildrenUnhealthy = cv.Counts()
-//	        // Or use cv.List(), cv.Get(name), cv.AllHealthy(), cv.AllStopped()
-//	    }
+//	func (o MyObservedState) SetChildrenView(view config.ChildrenView) fsmv2.ObservedState {
+//	    o.ChildrenHealthy = view.HealthyCount
+//	    o.ChildrenUnhealthy = view.UnhealthyCount
+//	    // Or use view.List(), view.Get(name), view.AllHealthy, view.AllStopped
 //	    return o
 //	}
 //
@@ -383,30 +498,121 @@ type ChildInfo struct {
 //	}
 //
 // See workers/example/exampleparent/snapshot/snapshot.go for the simple counts pattern.
-type ChildrenView interface {
-	// List returns info about all children.
-	List() []ChildInfo
+type ChildrenView struct {
+	// Children carries the per-child snapshots in deterministic order.
+	Children []ChildInfo `json:"children"`
+	// HealthyCount is the number of children in PhaseRunningHealthy.
+	HealthyCount int `json:"healthyCount"`
+	// UnhealthyCount is the number of children that are neither healthy nor stopped.
+	// Includes PhaseUnknown, PhaseStarting, PhaseRunningDegraded, PhaseStopping.
+	UnhealthyCount int `json:"unhealthyCount"`
+	// AllHealthy is true when every child is PhaseRunningHealthy, or there are
+	// no children.
+	AllHealthy bool `json:"allHealthy"`
+	// AllOperational is true when every child is PhaseRunningHealthy or
+	// PhaseRunningDegraded, or there are no children.
+	AllOperational bool `json:"allOperational"`
+	// AllStopped is true when every child is PhaseStopped, or there are no
+	// children.
+	AllStopped bool `json:"allStopped"`
+}
 
-	// Get returns info about a specific child by name, or nil if not found.
-	Get(name string) *ChildInfo
+// NewChildrenView builds a ChildrenView from a slice of ChildInfo entries.
+//
+// Aggregate predicate rules:
+//   - AllHealthy: empty slice yields true; otherwise true iff every child has
+//     Phase == PhaseRunningHealthy.
+//   - AllOperational: empty slice yields true; otherwise true iff every child
+//     has Phase ∈ {PhaseRunningHealthy, PhaseRunningDegraded}.
+//   - AllStopped: empty slice yields true; otherwise true iff every child has
+//     Phase == PhaseStopped.
+//   - HealthyCount: number of children with Phase == PhaseRunningHealthy.
+//   - UnhealthyCount: number of children with Phase ∈ {PhaseUnknown,
+//     PhaseStarting, PhaseRunningDegraded, PhaseStopping}. PhaseStopped
+//     children count as neither healthy nor unhealthy.
+//
+// Predicates read the cached Phase field on each ChildInfo rather than parsing
+// StateName, because StateName carries raw worker state names like "Connected"
+// or "TryingToConnect" that the prefix-based ParseLifecyclePhase cannot
+// classify. The supervisor populates Phase from child.GetLifecyclePhase() in
+// buildChildInfo. NewChildrenView normalises a nil children slice to an empty
+// slice so JSON encoding emits "children":[] instead of "children":null,
+// keeping CSE delta-sync stable across ticks.
+func NewChildrenView(children []ChildInfo) ChildrenView {
+	// Normalise nil to an empty slice into a separate local so the input
+	// parameter is not shadowed; callers that passed nil keep their value
+	// unchanged in the caller's scope.
+	normalised := children
+	if normalised == nil {
+		normalised = []ChildInfo{}
+	}
 
-	// Counts returns the number of healthy and unhealthy children.
-	// healthy = PhaseRunningHealthy only (fully stable)
-	// unhealthy = everything except PhaseRunningHealthy and PhaseStopped
-	// Note: PhaseRunningDegraded counts as unhealthy (operational but NOT healthy).
-	Counts() (healthy, unhealthy int)
+	v := ChildrenView{
+		Children: normalised,
+	}
 
-	// AllHealthy returns true if all children are PhaseRunningHealthy (or there are no children).
-	// Note: PhaseRunningDegraded is NOT healthy (even though it IS operational).
-	AllHealthy() bool
+	allHealthy := true
+	allOperational := true
+	allStopped := true
 
-	// AllOperational returns true if all children are operational (or there are no children).
-	// Operational = PhaseRunningHealthy OR PhaseRunningDegraded (can serve requests).
-	// Use this for "can system serve requests?" checks.
-	AllOperational() bool
+	for i := range normalised {
+		phase := normalised[i].Phase
 
-	// AllStopped returns true if all children are in PhaseStopped (or there are no children).
-	AllStopped() bool
+		if phase.IsHealthy() {
+			v.HealthyCount++
+		} else if !phase.IsStopped() {
+			// Everything except healthy and stopped is unhealthy.
+			// Includes PhaseUnknown, PhaseStarting, PhaseRunningDegraded, PhaseStopping.
+			v.UnhealthyCount++
+		}
+
+		if !phase.IsHealthy() {
+			allHealthy = false
+		}
+		if !phase.IsOperational() {
+			allOperational = false
+		}
+		if !phase.IsStopped() {
+			allStopped = false
+		}
+	}
+
+	v.AllHealthy = allHealthy
+	v.AllOperational = allOperational
+	v.AllStopped = allStopped
+
+	return v
+}
+
+// List returns the child snapshots. The returned slice should be treated as
+// read-only; mutations are not observed by the supervisor.
+//
+// Deprecated: prefer reading the Children field directly. This wrapper is
+// retained for migration compatibility with the prior interface API and is
+// removed in P3.0 once all callers move to the field access form.
+func (v ChildrenView) List() []ChildInfo {
+	return v.Children
+}
+
+// Get returns a copy of the ChildInfo for the given child name. The boolean is
+// false when no child with that name exists in this view.
+func (v ChildrenView) Get(name string) (ChildInfo, bool) {
+	for i := range v.Children {
+		if v.Children[i].Name == name {
+			return v.Children[i], true
+		}
+	}
+
+	return ChildInfo{}, false
+}
+
+// Counts returns the pre-computed healthy / unhealthy counts.
+//
+// Deprecated: read HealthyCount / UnhealthyCount fields directly. Retained for
+// migration compatibility with code that previously called Counts() on the
+// ChildrenView interface; removed in P3.0.
+func (v ChildrenView) Counts() (healthy, unhealthy int) {
+	return v.HealthyCount, v.UnhealthyCount
 }
 
 // DesiredState represents what we want the system to be.
@@ -438,7 +644,7 @@ type ChildrenView interface {
 //	    ChildrenSpecs:    nil,                                        // Children removed during shutdown
 //	}
 type DesiredState struct {
-	OriginalUserSpec interface{}      `json:"originalUserSpec,omitempty" yaml:"-"` // Captures the input that produced this DesiredState (for debugging/traceability)
+	OriginalUserSpec interface{}      `json:"-"                          yaml:"-"` // Captures the input that produced this DesiredState (for debugging/traceability); not serialized (would emit untyped any over the wire per §17).
 	BaseDesiredState `yaml:",inline"` // Provides State, ShutdownRequested fields and methods (GetState, IsShutdownRequested, SetShutdownRequested)
 	ChildrenSpecs    []ChildSpec      `json:"childrenSpecs,omitempty"    yaml:"childrenSpecs,omitempty"` // Declarative specification of child workers
 }

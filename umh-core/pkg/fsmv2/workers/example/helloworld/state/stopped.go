@@ -12,13 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package state contains the FSM states for the helloworld worker.
+// Package state defines the FSM states for the helloworld worker.
 //
-// State Machine:
+// State machine:
 //
 //	stopped -> trying_to_start -> running
-//	   ^                            |
-//	   └────── (shutdown) ──────────┘
+//	   ^                |        mood="sad" | ^ mood!="sad"
+//	   |                |                   v |
+//	   |                |               degraded
+//	   └── (shutdown) ──┴──────────────────┘
 package state
 
 import (
@@ -34,33 +36,20 @@ type StoppedState struct {
 }
 
 // Next implements the state transition logic.
-//
-// STATE MACHINE PATTERN:
-//  1. Check shutdown FIRST - always honor shutdown requests
-//  2. Check conditions for transitioning to other states
-//  3. If no transition, stay in current state
-//
-// Returns:
-//   - NextResult containing next state, signal, action, and reason
 func (s *StoppedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := helpers.ConvertSnapshot[snapshot.HelloworldObservedState, *snapshot.HelloworldDesiredState](snapAny)
 
-	// 1. ALWAYS check shutdown first
+	// 1. Check shutdown first
 	if snap.Desired.IsShutdownRequested() {
-		return fsmv2.Result[any, any](s, fsmv2.SignalNeedsRemoval, nil, "Shutdown requested, signaling removal")
+		return fsmv2.Result[any, any](s, fsmv2.SignalNeedsRemoval, nil, "Shutdown requested, signaling removal", nil)
 	}
 
-	// 2. Check if we should start running
-	if !snap.Desired.IsShutdownRequested() {
-		return fsmv2.Result[any, any](&TryingToStartState{}, fsmv2.SignalNone, nil, "Starting worker")
-	}
-
-	// 3. Stay in stopped state
-	return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil, "Worker is stopped, waiting to start")
+	// 2. Start running
+	return fsmv2.Result[any, any](&TryingToStartState{}, fsmv2.SignalNone, nil, "Starting worker", nil)
 }
 
 // String returns the state name for logging and metrics.
-// Use helpers.DeriveStateName to get consistent snake_case naming.
+// Use helpers.DeriveStateName to get consistent naming.
 func (s *StoppedState) String() string {
 	return helpers.DeriveStateName(s)
 }

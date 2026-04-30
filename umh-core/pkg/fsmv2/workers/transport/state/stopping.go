@@ -40,7 +40,7 @@ func (s *StoppingState) Next(snapAny any) fsmv2.NextResult[any, any] {
 
 	return fsmv2.Result[any, any](&StoppedState{}, fsmv2.SignalNone, nil,
 		fmt.Sprintf("stop complete: children healthy=%d, unhealthy=%d",
-			snap.Observed.ChildrenHealthy, snap.Observed.ChildrenUnhealthy))
+			snap.Observed.ChildrenHealthy, snap.Observed.ChildrenUnhealthy), nil)
 }
 
 // String returns the state name derived from the type.

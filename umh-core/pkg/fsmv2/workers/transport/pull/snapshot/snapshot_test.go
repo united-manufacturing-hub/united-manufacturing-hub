@@ -35,18 +35,6 @@ var _ = Describe("PullObservedState", func() {
 		})
 	})
 
-	Describe("GetObservedDesiredState", func() {
-		It("should return a pointer to the embedded desired state", func() {
-			observed := snapshot.PullObservedState{
-				CollectedAt: time.Now(),
-				State:       "running",
-			}
-
-			desired := observed.GetObservedDesiredState()
-			Expect(desired).NotTo(BeNil())
-		})
-	})
-
 	Describe("SetState", func() {
 		It("should return an updated observed state with the new state", func() {
 			observed := snapshot.PullObservedState{
@@ -113,7 +101,7 @@ var _ = Describe("PullDesiredState", func() {
 	})
 })
 
-var _ = Describe("PullObservedState.IsStopRequired", func() {
+var _ = Describe("PullObservedState.ShouldStop", func() {
 	DescribeTable("should correctly determine stop requirement",
 		func(shutdownRequested bool, parentMappedState string, want bool) {
 			obs := snapshot.PullObservedState{
@@ -123,7 +111,7 @@ var _ = Describe("PullObservedState.IsStopRequired", func() {
 			}
 			obs.PullDesiredState.SetShutdownRequested(shutdownRequested)
 
-			Expect(obs.IsStopRequired()).To(Equal(want))
+			Expect(obs.ShouldStop()).To(Equal(want))
 		},
 		Entry("returns true when shutdown requested", true, "running", true),
 		Entry("returns true when parent mapped state is stopped", false, "stopped", true),

@@ -30,12 +30,12 @@ func (s *ShuttingDownState) Next(snapAny any) fsmv2.NextResult[any, any] {
 
 	for _, result := range snap.Observed.LastActionResults {
 		if result.ActionType == action.NewRunMaintenanceAction().Name() && result.Success {
-			return fsmv2.Result[any, any](&StoppedState{}, fsmv2.SignalNone, nil, "Shutdown maintenance completed")
+			return fsmv2.Result[any, any](&StoppedState{}, fsmv2.SignalNone, nil, "Shutdown maintenance completed", nil)
 		}
 	}
 
 	return fsmv2.Result[any, any](s, fsmv2.SignalNone,
-		action.NewRunMaintenanceAction(), "Running shutdown maintenance")
+		action.NewRunMaintenanceAction(), "Running shutdown maintenance", nil)
 }
 
 func (s *ShuttingDownState) String() string {

@@ -95,10 +95,6 @@ func (o CommunicatorObservedState) GetConsecutiveErrors() int {
 	return o.ConsecutiveErrors
 }
 
-func (o CommunicatorObservedState) GetObservedDesiredState() fsmv2.DesiredState {
-	return &o.CommunicatorDesiredState
-}
-
 func (o CommunicatorObservedState) GetTimestamp() time.Time {
 	return o.CollectedAt
 }

@@ -35,29 +35,29 @@ func (s *DegradedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := helpers.ConvertSnapshot[snapshot.TransportObservedState, *snapshot.TransportDesiredState](snapAny)
 
 	if snap.Desired.IsShutdownRequested() {
-		return fsmv2.Result[any, any](&StoppingState{}, fsmv2.SignalNone, nil, "Shutdown requested, transitioning to Stopping")
+		return fsmv2.Result[any, any](&StoppingState{}, fsmv2.SignalNone, nil, "Shutdown requested, transitioning to Stopping", nil)
 	}
 
 	// If token is expired, need to re-authenticate (mirrors RunningState)
 	if snap.Observed.IsTokenExpired() {
-		return fsmv2.Result[any, any](&StartingState{}, fsmv2.SignalNone, nil, "Token expired, transitioning to Starting for re-authentication")
+		return fsmv2.Result[any, any](&StartingState{}, fsmv2.SignalNone, nil, "Token expired, transitioning to Starting for re-authentication", nil)
 	}
 
 	// Nuclear fallback: reset transport on prolonged child failures
 	if backoff.ShouldResetTransport(snap.Observed.LastErrorType, snap.Observed.ConsecutiveErrors) {
 		return fsmv2.Result[any, any](s, fsmv2.SignalNone, action.NewResetTransportAction(),
 			fmt.Sprintf("resetting transport: %d consecutive errors (type=%d)",
-				snap.Observed.ConsecutiveErrors, snap.Observed.LastErrorType))
+				snap.Observed.ConsecutiveErrors, snap.Observed.LastErrorType), nil)
 	}
 
 	// If all children are now healthy, transition back to Running
 	if snap.Observed.ChildrenUnhealthy == 0 {
-		return fsmv2.Result[any, any](&RunningState{}, fsmv2.SignalNone, nil, "All children now healthy, transitioning to Running")
+		return fsmv2.Result[any, any](&RunningState{}, fsmv2.SignalNone, nil, "All children now healthy, transitioning to Running", nil)
 	}
 
 	return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil,
 		fmt.Sprintf("degraded: %d unhealthy children, %d consecutive errors",
-			snap.Observed.ChildrenUnhealthy, snap.Observed.ConsecutiveErrors))
+			snap.Observed.ChildrenUnhealthy, snap.Observed.ConsecutiveErrors), nil)
 }
 
 // String returns the state name derived from the type.

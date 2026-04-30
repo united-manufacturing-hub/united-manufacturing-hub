@@ -76,10 +76,6 @@ func (o ExampleslowObservedState) GetTimestamp() time.Time {
 	return o.CollectedAt
 }
 
-func (o ExampleslowObservedState) GetObservedDesiredState() fsmv2.DesiredState {
-	return &o.ExampleslowDesiredState
-}
-
 func (o ExampleslowObservedState) SetState(s string) fsmv2.ObservedState {
 	o.State = s
 
@@ -98,7 +94,7 @@ func (o ExampleslowObservedState) SetParentMappedState(state string) fsmv2.Obser
 	return o
 }
 
-// IsStopRequired returns true if shutdown is requested or parent no longer wants child running.
-func (o ExampleslowObservedState) IsStopRequired() bool {
+// ShouldStop returns true if shutdown is requested or parent no longer wants child running.
+func (o ExampleslowObservedState) ShouldStop() bool {
 	return o.IsShutdownRequested() || !o.ShouldBeRunning()
 }

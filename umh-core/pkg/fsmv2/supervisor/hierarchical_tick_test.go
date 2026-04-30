@@ -61,7 +61,7 @@ type hierarchicalWorker struct {
 	observed      *mockObservedState
 }
 
-func (h *hierarchicalWorker) CollectObservedState(ctx context.Context) (fsmv2.ObservedState, error) {
+func (h *hierarchicalWorker) CollectObservedState(ctx context.Context, _ fsmv2.DesiredState) (fsmv2.ObservedState, error) {
 	return h.observed, nil
 }
 
@@ -100,7 +100,6 @@ var _ = Describe("Hierarchical Tick Propagation (Task 0.6)", func() {
 				observed: &mockObservedState{
 					ID:          "parent-worker",
 					CollectedAt: time.Now(),
-					Desired:     &mockDesiredState{},
 				},
 				childrenSpecs: []config.ChildSpec{},
 			}
@@ -149,7 +148,6 @@ var _ = Describe("Hierarchical Tick Propagation (Task 0.6)", func() {
 				observed: &mockObservedState{
 					ID:          "parent-worker",
 					CollectedAt: time.Now(),
-					Desired:     &mockDesiredState{},
 				},
 				childrenSpecs: []config.ChildSpec{
 					{
@@ -211,7 +209,6 @@ var _ = Describe("Hierarchical Tick Propagation (Task 0.6)", func() {
 				observed: &mockObservedState{
 					ID:          "parent-worker",
 					CollectedAt: time.Now(),
-					Desired:     &mockDesiredState{},
 				},
 				childrenSpecs: []config.ChildSpec{
 					{Name: "child1", WorkerType: "child1", UserSpec: config.UserSpec{}},
@@ -263,7 +260,6 @@ var _ = Describe("Hierarchical Tick Propagation (Task 0.6)", func() {
 				observed: &mockObservedState{
 					ID:          "parent-worker",
 					CollectedAt: time.Now(),
-					Desired:     &mockDesiredState{},
 				},
 				childrenSpecs: []config.ChildSpec{
 					{
@@ -326,7 +322,6 @@ var _ = Describe("Hierarchical Tick Propagation (Task 0.6)", func() {
 				observed: &mockObservedState{
 					ID:          "parent-worker",
 					CollectedAt: time.Now(),
-					Desired:     &mockDesiredState{},
 				},
 				childrenSpecs: []config.ChildSpec{
 					{Name: "newChild", WorkerType: "child", UserSpec: config.UserSpec{}},
@@ -384,7 +379,6 @@ var _ = Describe("Hierarchical Tick Propagation (Task 0.6)", func() {
 				observed: &mockObservedState{
 					ID:          "parent-worker",
 					CollectedAt: time.Now(),
-					Desired:     &mockDesiredState{},
 				},
 				childrenSpecs: []config.ChildSpec{
 					{Name: "child1", WorkerType: "child", UserSpec: config.UserSpec{}},

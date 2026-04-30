@@ -91,10 +91,6 @@ func (o ExamplepanicObservedState) GetTimestamp() time.Time {
 	return o.CollectedAt
 }
 
-func (o ExamplepanicObservedState) GetObservedDesiredState() fsmv2.DesiredState {
-	return &o.ExamplepanicDesiredState
-}
-
 // SetState sets the FSM state name, called by Collector via StateProvider callback.
 func (o ExamplepanicObservedState) SetState(s string) fsmv2.ObservedState {
 	o.State = s
@@ -116,7 +112,7 @@ func (o ExamplepanicObservedState) SetParentMappedState(state string) fsmv2.Obse
 	return o
 }
 
-// IsStopRequired reports whether the child needs to stop (shutdown requested OR parent wants child stopped).
-func (o ExamplepanicObservedState) IsStopRequired() bool {
+// ShouldStop reports whether the child needs to stop (shutdown requested OR parent wants child stopped).
+func (o ExamplepanicObservedState) ShouldStop() bool {
 	return o.IsShutdownRequested() || !o.ShouldBeRunning()
 }

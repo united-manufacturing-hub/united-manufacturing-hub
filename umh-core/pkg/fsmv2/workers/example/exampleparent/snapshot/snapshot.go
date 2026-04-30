@@ -63,10 +63,6 @@ func (o ExampleparentObservedState) GetTimestamp() time.Time {
 	return o.CollectedAt
 }
 
-func (o ExampleparentObservedState) GetObservedDesiredState() fsmv2.DesiredState {
-	return &o.ExampleparentDesiredState
-}
-
 // SetState sets the FSM state name on this observed state.
 func (o ExampleparentObservedState) SetState(s string) fsmv2.ObservedState {
 	o.State = s

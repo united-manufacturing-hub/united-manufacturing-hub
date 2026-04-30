@@ -37,7 +37,7 @@ type TestWorker struct {
 	deriveDesiredStateFunc func(spec config.UserSpec) (fsmv2.DesiredState, error)
 }
 
-func (t *TestWorker) CollectObservedState(ctx context.Context) (fsmv2.ObservedState, error) {
+func (t *TestWorker) CollectObservedState(ctx context.Context, _ fsmv2.DesiredState) (fsmv2.ObservedState, error) {
 	return &TestObservedState{
 		ID:          t.identity.ID,
 		CollectedAt: time.Now(),
@@ -72,10 +72,6 @@ func (t *TestObservedState) GetTimestamp() time.Time {
 	return t.CollectedAt
 }
 
-func (t *TestObservedState) GetObservedDesiredState() fsmv2.DesiredState {
-	return &config.DesiredState{BaseDesiredState: config.BaseDesiredState{State: "running"}}
-}
-
 // TestState is a test double for fsmv2.State.
 type TestState struct {
 	name   string
@@ -88,7 +84,7 @@ func (t *TestState) Next(snapshot any) fsmv2.NextResult[any, any] {
 		reason = t.name
 	}
 
-	return fsmv2.Result[any, any](t, fsmv2.SignalNone, nil, reason)
+	return fsmv2.Result[any, any](t, fsmv2.SignalNone, nil, reason, nil)
 }
 
 func (t *TestState) String() string {
@@ -242,20 +238,12 @@ var _ = Describe("Variable Injection", func() {
 			err := s.TestTick(ctx)
 			Expect(err).ToNot(HaveOccurred())
 
-			// Verify Internal variables were injected
-			Expect(capturedSpec.Variables.Internal).ToNot(BeNil())
-			Expect(capturedSpec.Variables.Internal[supervisor.FieldID]).To(Equal(identity.ID))
-			Expect(capturedSpec.Variables.Internal[storage.FieldCreatedAt]).ToNot(BeNil())
+			// Verify Internal variables were injected (typed struct).
+			Expect(capturedSpec.Variables.Internal.WorkerID).To(Equal(identity.ID))
+			Expect(capturedSpec.Variables.Internal.CreatedAt).ToNot(BeZero())
 
-			createdAt, ok := capturedSpec.Variables.Internal[storage.FieldCreatedAt].(time.Time)
-			Expect(ok).To(BeTrue())
-			Expect(createdAt).ToNot(BeZero())
-
-			// For root supervisor, parent_id should be empty
-			parentID, exists := capturedSpec.Variables.Internal[supervisor.FieldParentID]
-			if exists {
-				Expect(parentID).To(Equal(""))
-			}
+			// For root supervisor, ParentID should be empty.
+			Expect(capturedSpec.Variables.Internal.ParentID).To(Equal(""))
 		})
 
 	})

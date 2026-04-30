@@ -63,7 +63,6 @@ var _ = Describe("DeriveDesiredState saves to store", func() {
 			observed: &mockObservedState{
 				ID:          workerID,
 				CollectedAt: time.Now(),
-				Desired:     &mockDesiredState{},
 			},
 		}
 
@@ -143,7 +142,6 @@ var _ = Describe("DeriveDesiredState saves to store", func() {
 			observed: &mockObservedState{
 				ID:          workerID,
 				CollectedAt: time.Now(),
-				Desired:     &mockDesiredState{},
 			},
 		}
 
@@ -234,7 +232,6 @@ var _ = Describe("DeriveDesiredState saves to store", func() {
 			observed: &mockObservedState{
 				ID:          workerID,
 				CollectedAt: time.Now(),
-				Desired:     &mockDesiredState{},
 			},
 		}
 

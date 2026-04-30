@@ -69,7 +69,6 @@ var _ = Describe("Supervisor Lifecycle", func() {
 					observed: &mockObservedState{
 						ID:          mockIdentity().ID,
 						CollectedAt: time.Now().Add(-25 * time.Second),
-						Desired:     &mockDesiredState{},
 					},
 				}, store, supervisor.CollectorHealthConfig{
 					StaleThreshold:     10 * time.Second,
