@@ -20,6 +20,7 @@ package register
 import (
 	"fmt"
 	"reflect"
+	"sync"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
@@ -27,6 +28,9 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
 )
+
+// depsBuilderRegistry stores typed deps builder functions by worker type.
+var depsBuilderRegistry sync.Map
 
 // NoDeps is the TDeps sentinel for workers that have no custom dependencies.
 // Workers with no typed deps embed WorkerBase[TConfig, TStatus, NoDeps].
@@ -97,4 +101,42 @@ func Worker[TConfig any, TStatus any](
 	if err := storage.GlobalRegistry().RegisterWorkerType(workerType, observedType, desiredType); err != nil {
 		panic(fmt.Sprintf("register.Worker(%q): %v", workerType, err))
 	}
+}
+
+// SetDepsBuilder registers a typed deps builder function for workerType.
+// The builder is invoked by the framework to construct fresh typed deps for each
+// worker instance, enabling the supervisor to wire deps without per-worker boilerplate.
+// T is the concrete deps type (e.g., *MyDeps).
+//
+// Panics if workerType is empty or builderFn is nil (fail-fast at init time).
+func SetDepsBuilder[T any](workerType string, builderFn func() T) {
+	if workerType == "" {
+		panic("register.SetDepsBuilder: workerType must be non-empty")
+	}
+	if builderFn == nil {
+		panic("register.SetDepsBuilder: builderFn must be non-nil")
+	}
+
+	wrapped := func() any { return builderFn() }
+	depsBuilderRegistry.Store(workerType, wrapped)
+}
+
+// GetDepsBuilder retrieves the deps builder function for workerType.
+// Returns (nil, false) if no builder was registered for this worker type.
+func GetDepsBuilder(workerType string) (func() any, bool) {
+	v, ok := depsBuilderRegistry.Load(workerType)
+	if !ok {
+		return nil, false
+	}
+
+	return v.(func() any), true
+}
+
+// ResetDepsBuilderRegistry clears all registered deps builders.
+// For use in tests only.
+func ResetDepsBuilderRegistry() {
+	depsBuilderRegistry.Range(func(key, _ any) bool {
+		depsBuilderRegistry.Delete(key)
+		return true
+	})
 }
