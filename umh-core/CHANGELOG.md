@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Preview: FSMv2 Communicator
+
+- Previously, the FSMv2 communicator could stop working if it rebuilt its HTTP connection (which happens after persistent network failures) while a message was being sent or received. Connection rebuilds and in-flight requests are now coordinated so they cannot interfere. Only affects instances with `USE_FSMV2_TRANSPORT=true`
+
 ## [0.44.18]
 
 Enables FSMv2 communicator by default.
