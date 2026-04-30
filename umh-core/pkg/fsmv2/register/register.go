@@ -28,6 +28,10 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
 )
 
+// NoDeps is the TDeps sentinel for workers that have no custom dependencies.
+// Workers with no typed deps embed WorkerBase[TConfig, TStatus, NoDeps].
+type NoDeps = struct{}
+
 // Worker registers a worker type with the framework.
 // TConfig is the developer's configuration type.
 // TStatus is the developer's status/observation type.
@@ -37,8 +41,8 @@ import (
 // Workers that require parent-injected dependencies via the extraDeps mechanism
 // (e.g., transport push/pull children) must use factory.RegisterWorkerType directly.
 //
-// Workers registered via this function MUST use WorkerBase[TConfig, TStatus] and
-// return w.WrapStatus(status) from CollectObservedState. Workers with custom
+// Workers registered via this function MUST use WorkerBase[TConfig, TStatus, register.NoDeps]
+// and return w.WrapStatus(status) from CollectObservedState. Workers with custom
 // ObservedState types must use factory.RegisterWorkerType directly.
 //
 // Panics on field name collision or duplicate worker type (fail-fast at init time).

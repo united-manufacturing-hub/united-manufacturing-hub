@@ -46,7 +46,7 @@ var _ = Describe("Dual API support", func() {
 import "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 
 type MyWorker struct {
-	fsmv2.WorkerBase[MyConfig, MyStatus]
+	fsmv2.WorkerBase[MyConfig, MyStatus, any]
 }
 `), 0o644)).To(Succeed())
 
@@ -58,7 +58,7 @@ type MyWorker struct {
 			Expect(os.WriteFile(file, []byte(`package myworker
 
 type MyWorker struct {
-	WorkerBase[MyConfig, MyStatus]
+	WorkerBase[MyConfig, MyStatus, any]
 }
 `), 0o644)).To(Succeed())
 
@@ -94,7 +94,7 @@ func (w *MyWorker) CollectObservedState(ctx context.Context, desired fsmv2.Desir
 import "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 
 type MyWorker struct {
-	fsmv2.WorkerBase[MyConfig, MyStatus]
+	fsmv2.WorkerBase[MyConfig, MyStatus, any]
 }
 `), 0o644)).To(Succeed())
 

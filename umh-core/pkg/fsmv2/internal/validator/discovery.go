@@ -101,7 +101,7 @@ func FindWorkerFiles(baseDir string) []string {
 }
 
 // IsNewAPIWorkerFile checks if a worker.go file uses the Worker API v2
-// by scanning for a struct that embeds fsmv2.WorkerBase[...].
+// by scanning for a struct that embeds fsmv2.WorkerBase[TConfig, TStatus, TDeps].
 func IsNewAPIWorkerFile(filename string) bool {
 	fset := token.NewFileSet()
 
@@ -146,7 +146,7 @@ func IsNewAPIWorkerFile(filename string) bool {
 }
 
 // containsWorkerBase checks if an AST expression refers to WorkerBase.
-// WorkerBase[TConfig, TStatus] appears as IndexListExpr or IndexExpr in the AST.
+// WorkerBase[TConfig, TStatus, TDeps] appears as IndexListExpr in the AST.
 func containsWorkerBase(expr ast.Expr) bool {
 	switch t := expr.(type) {
 	case *ast.IndexListExpr:

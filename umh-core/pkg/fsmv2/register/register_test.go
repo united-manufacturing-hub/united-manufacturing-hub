@@ -50,7 +50,7 @@ type collidingStatus struct {
 }
 
 type regTestWorker struct {
-	fsmv2.WorkerBase[regTestConfig, regTestStatus]
+	fsmv2.WorkerBase[regTestConfig, regTestStatus, register.NoDeps]
 }
 
 func newRegTestWorker(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader) (fsmv2.Worker, error) {

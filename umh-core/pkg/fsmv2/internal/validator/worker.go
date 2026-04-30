@@ -813,8 +813,8 @@ func checkActionHistoryCopy(filename string) []Violation {
 }
 
 // ValidateGetDependenciesAny checks that new-API workers with custom dependencies
-// override GetDependenciesAny(). WorkerBase's default returns *BaseDependencies,
-// which is incorrect when a worker defines its own dependency struct.
+// override GetDependenciesAny(). WorkerBase's default returns TDeps (the zero value),
+// which is incorrect for workers that have not called BindDeps with their typed deps.
 func ValidateGetDependenciesAny(baseDir string) []Violation {
 	var violations []Violation
 

@@ -27,6 +27,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/register"
 )
 
 // workerTestConfig is a typed config used in WorkerBase tests.
@@ -49,12 +50,12 @@ type workerTestStatus struct {
 
 var _ = Describe("WorkerBase", func() {
 	var (
-		wb       *fsmv2.WorkerBase[workerTestConfig, workerTestStatus]
+		wb       *fsmv2.WorkerBase[workerTestConfig, workerTestStatus, register.NoDeps]
 		identity deps.Identity
 	)
 
 	BeforeEach(func() {
-		wb = &fsmv2.WorkerBase[workerTestConfig, workerTestStatus]{}
+		wb = &fsmv2.WorkerBase[workerTestConfig, workerTestStatus, register.NoDeps]{}
 		identity = deps.Identity{
 			ID:         "test-worker-1",
 			Name:       "test-worker",
@@ -89,7 +90,7 @@ var _ = Describe("WorkerBase", func() {
 		})
 
 		It("handles uninitialized WorkerBase gracefully (no panic)", func() {
-			uninit := &fsmv2.WorkerBase[workerTestConfig, workerTestStatus]{}
+			uninit := &fsmv2.WorkerBase[workerTestConfig, workerTestStatus, register.NoDeps]{}
 			status := workerTestStatus{Reachable: false}
 
 			Expect(func() {
@@ -112,10 +113,9 @@ var _ = Describe("WorkerBase", func() {
 		})
 
 		It("drains worker metrics from MetricsRecorder", func() {
-			wb.InitBase(identity, mockLogger, mockStateReader)
+			bd := wb.InitBase(identity, mockLogger, mockStateReader)
 
 			// Record some metrics via baseDeps
-			bd := wb.GetDependenciesAny().(*deps.BaseDependencies)
 			bd.MetricsRecorder().IncrementCounter(deps.CounterPullOps, 5)
 			bd.MetricsRecorder().SetGauge(deps.GaugeConsecutiveErrors, 3.0)
 
@@ -267,7 +267,7 @@ port: {{ .PORT }}`,
 		})
 
 		It("extracts state from config implementing StateGetter", func() {
-			sgWb := &fsmv2.WorkerBase[stateGetterConfig, workerTestStatus]{}
+			sgWb := &fsmv2.WorkerBase[stateGetterConfig, workerTestStatus, register.NoDeps]{}
 			sgWb.InitBase(identity, mockLogger, mockStateReader)
 
 			spec := config.UserSpec{
@@ -443,9 +443,8 @@ port: 1`}
 			}
 
 			sr := &configurableStateReader{previousState: prevObs}
-			wb.InitBase(identity, mockLogger, sr)
+			bd := wb.InitBase(identity, mockLogger, sr)
 
-			bd := wb.GetDependenciesAny().(*deps.BaseDependencies)
 			bd.MetricsRecorder().IncrementCounter(deps.CounterPullOps, 5)
 
 			obs := wb.WrapStatusAccumulated(context.Background(), workerTestStatus{Reachable: true})
@@ -468,9 +467,8 @@ port: 1`}
 			}
 
 			sr := &configurableStateReader{previousState: prevObs}
-			wb.InitBase(identity, mockLogger, sr)
+			bd := wb.InitBase(identity, mockLogger, sr)
 
-			bd := wb.GetDependenciesAny().(*deps.BaseDependencies)
 			bd.MetricsRecorder().SetGauge(deps.GaugeConsecutiveErrors, 3.0)
 
 			obs := wb.WrapStatusAccumulated(context.Background(), workerTestStatus{})
@@ -482,9 +480,8 @@ port: 1`}
 
 		It("starts fresh when CSE read fails (no previous state)", func() {
 			sr := &configurableStateReader{err: fmt.Errorf("no state")}
-			wb.InitBase(identity, mockLogger, sr)
+			bd := wb.InitBase(identity, mockLogger, sr)
 
-			bd := wb.GetDependenciesAny().(*deps.BaseDependencies)
 			bd.MetricsRecorder().IncrementCounter(deps.CounterPullOps, 5)
 			bd.MetricsRecorder().SetGauge(deps.GaugeConsecutiveErrors, 1.0)
 
@@ -496,7 +493,7 @@ port: 1`}
 		})
 
 		It("handles uninitialized WorkerBase gracefully (no panic)", func() {
-			uninit := &fsmv2.WorkerBase[workerTestConfig, workerTestStatus]{}
+			uninit := &fsmv2.WorkerBase[workerTestConfig, workerTestStatus, register.NoDeps]{}
 			Expect(func() {
 				obs := uninit.WrapStatusAccumulated(context.Background(), workerTestStatus{})
 				Expect(obs).NotTo(BeNil())
@@ -538,9 +535,8 @@ port: 1`}
 		})
 
 		It("handles nil stateReader gracefully", func() {
-			wb.InitBase(identity, mockLogger, nil)
+			bd := wb.InitBase(identity, mockLogger, nil)
 
-			bd := wb.GetDependenciesAny().(*deps.BaseDependencies)
 			bd.MetricsRecorder().IncrementCounter(deps.CounterPullOps, 3)
 
 			obs := wb.WrapStatusAccumulated(context.Background(), workerTestStatus{})
@@ -551,9 +547,8 @@ port: 1`}
 
 		It("copies action history from baseDeps", func() {
 			sr := &configurableStateReader{err: fmt.Errorf("no state")}
-			wb.InitBase(identity, mockLogger, sr)
+			bd := wb.InitBase(identity, mockLogger, sr)
 
-			bd := wb.GetDependenciesAny().(*deps.BaseDependencies)
 			bd.SetActionHistory([]deps.ActionResult{
 				{ActionType: "test-action", Success: true},
 			})
@@ -590,7 +585,7 @@ port: 1`}
 		})
 
 		It("panics when InitBase was not called", func() {
-			uninit := &fsmv2.WorkerBase[workerTestConfig, workerTestStatus]{}
+			uninit := &fsmv2.WorkerBase[workerTestConfig, workerTestStatus, register.NoDeps]{}
 			Expect(func() {
 				uninit.GetInitialState()
 			}).To(PanicWith(ContainSubstring("InitBase was not called")))
@@ -598,19 +593,20 @@ port: 1`}
 	})
 
 	Describe("GetDependenciesAny", func() {
-		It("returns baseDeps after initialization", func() {
+		It("returns NoDeps zero value (struct{}) after initialization (no BindDeps called)", func() {
 			wb.InitBase(identity, mockLogger, mockStateReader)
 			d := wb.GetDependenciesAny()
-			Expect(d).NotTo(BeNil())
 
-			baseDeps, ok := d.(*deps.BaseDependencies)
-			Expect(ok).To(BeTrue())
-			Expect(baseDeps).NotTo(BeNil())
+			_, ok := d.(register.NoDeps)
+			Expect(ok).To(BeTrue(), "NoDeps worker should return struct{} from GetDependenciesAny")
 		})
 
-		It("returns nil before initialization", func() {
-			uninit := &fsmv2.WorkerBase[workerTestConfig, workerTestStatus]{}
-			Expect(uninit.GetDependenciesAny()).To(BeNil())
+		It("returns NoDeps zero value before initialization (not nil)", func() {
+			uninit := &fsmv2.WorkerBase[workerTestConfig, workerTestStatus, register.NoDeps]{}
+			d := uninit.GetDependenciesAny()
+
+			_, ok := d.(register.NoDeps)
+			Expect(ok).To(BeTrue(), "NoDeps worker GetDependenciesAny returns struct{} even before init")
 		})
 	})
 
@@ -714,5 +710,37 @@ port: 1`}
 			})
 			Expect(ok).To(BeFalse(), "WorkerBase must not satisfy ChildrenViewConsumer (L5)")
 		})
+	})
+})
+
+// testBindDepsConfig and testBindDepsStatus are minimal types for TestWorkerBase_TypedDepsViaBindDeps.
+type testBindDepsConfig struct{}
+type testBindDepsStatus struct{}
+
+// testBindDeps is a typed deps struct used to verify BindDeps + GetDependenciesAny roundtrip.
+type testBindDeps struct {
+	Value int
+}
+
+var _ = Describe("WorkerBase BindDeps", func() {
+	It("TestWorkerBase_TypedDepsViaBindDeps: GetDependenciesAny returns *testBindDeps after BindDeps", func() {
+		identity := deps.Identity{
+			ID:         "binddeps-worker-1",
+			Name:       "binddeps-worker",
+			WorkerType: "binddeps-test",
+		}
+
+		w := &fsmv2.WorkerBase[testBindDepsConfig, testBindDepsStatus, *testBindDeps]{}
+		w.InitBase(identity, mockLogger, mockStateReader)
+
+		typed := &testBindDeps{Value: 42}
+		w.BindDeps(typed)
+
+		got := w.GetDependenciesAny()
+
+		result, ok := got.(*testBindDeps)
+		Expect(ok).To(BeTrue(), "GetDependenciesAny must return *testBindDeps (not *deps.BaseDependencies)")
+		Expect(result).NotTo(BeNil())
+		Expect(result.Value).To(Equal(42))
 	})
 })

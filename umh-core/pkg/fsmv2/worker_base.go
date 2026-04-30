@@ -30,15 +30,19 @@ import (
 // Developers embed this in their worker struct and only implement
 // CollectObservedState (the business logic).
 //
+// TDeps is the typed deps payload returned by GetDependenciesAny.
+// Workers with no custom deps pass register.NoDeps as the third type argument.
+//
 // WorkerBase does NOT implement any optional capability interface (BW1).
 // It implements: Worker (2 of 3 methods: DeriveDesiredState, GetInitialState).
 // The developer must implement CollectObservedState.
 // It also implements DependencyProvider (1 method).
-type WorkerBase[TConfig any, TStatus any] struct {
+type WorkerBase[TConfig any, TStatus any, TDeps any] struct {
 	logger           deps.FSMLogger
 	stateReader      deps.StateReader
 	config           TConfig
 	baseDeps         *deps.BaseDependencies
+	typedDeps        TDeps
 	postParseHook    func(*TConfig) error
 	childSpecFactory func(TConfig, config.UserSpec) []config.ChildSpec
 	identity         deps.Identity
@@ -51,7 +55,7 @@ type WorkerBase[TConfig any, TStatus any] struct {
 // Returns the BaseDependencies instance that WrapStatus reads from. Workers
 // that construct custom dependencies MUST use this returned pointer — do not call
 // deps.NewBaseDependencies separately, as a separate instance is invisible to WrapStatus.
-func (w *WorkerBase[TConfig, TStatus]) InitBase(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader) *deps.BaseDependencies {
+func (w *WorkerBase[TConfig, TStatus, TDeps]) InitBase(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader) *deps.BaseDependencies {
 	bd := deps.NewBaseDependencies(logger, sr, id)
 
 	w.mu.Lock()
@@ -68,7 +72,7 @@ func (w *WorkerBase[TConfig, TStatus]) InitBase(id deps.Identity, logger deps.FS
 // SetPostParseHook registers a hook called after config parsing in DeriveDesiredState.
 // The hook receives a pointer to the parsed config and may modify or validate it.
 // Must be called in the constructor, before any DeriveDesiredState call.
-func (w *WorkerBase[TConfig, TStatus]) SetPostParseHook(hook func(*TConfig) error) {
+func (w *WorkerBase[TConfig, TStatus, TDeps]) SetPostParseHook(hook func(*TConfig) error) {
 	w.postParseHook = hook
 }
 
@@ -77,13 +81,13 @@ func (w *WorkerBase[TConfig, TStatus]) SetPostParseHook(hook func(*TConfig) erro
 // can run their own DeriveDesiredState with template variables intact.
 // Called after the post-parse hook in DeriveDesiredState.
 // Must be called in the constructor, before any DeriveDesiredState call.
-func (w *WorkerBase[TConfig, TStatus]) SetChildSpecsFactory(factory func(TConfig, config.UserSpec) []config.ChildSpec) {
+func (w *WorkerBase[TConfig, TStatus, TDeps]) SetChildSpecsFactory(factory func(TConfig, config.UserSpec) []config.ChildSpec) {
 	w.childSpecFactory = factory
 }
 
 // Config returns the cached TConfig from the last DeriveDesiredState call.
 // Returns zero-value TConfig before first DDS (BW4).
-func (w *WorkerBase[TConfig, TStatus]) Config() TConfig {
+func (w *WorkerBase[TConfig, TStatus, TDeps]) Config() TConfig {
 	w.mu.RLock()
 	defer w.mu.RUnlock()
 
@@ -91,7 +95,7 @@ func (w *WorkerBase[TConfig, TStatus]) Config() TConfig {
 }
 
 // ConfigReady returns true after the first successful DeriveDesiredState call.
-func (w *WorkerBase[TConfig, TStatus]) ConfigReady() bool {
+func (w *WorkerBase[TConfig, TStatus, TDeps]) ConfigReady() bool {
 	w.mu.RLock()
 	defer w.mu.RUnlock()
 
@@ -105,7 +109,7 @@ func (w *WorkerBase[TConfig, TStatus]) ConfigReady() bool {
 // WrapStatus constructs an Observation from the developer's TStatus.
 // Sets CollectedAt to time.Now() (BW2), copies framework metrics and action history from baseDeps (BW3).
 // Safe to call on uninitialized WorkerBase (returns observation with zero metrics, no panic).
-func (w *WorkerBase[TConfig, TStatus]) WrapStatus(status TStatus) ObservedState {
+func (w *WorkerBase[TConfig, TStatus, TDeps]) WrapStatus(status TStatus) ObservedState {
 	obs := Observation[TStatus]{
 		CollectedAt: time.Now(),
 		Status:      status,
@@ -151,7 +155,7 @@ func (w *WorkerBase[TConfig, TStatus]) WrapStatus(status TStatus) ObservedState 
 //
 // Calls MetricsRecorder().Drain() which is destructive — calling this method
 // twice in the same tick yields zero deltas on the second call.
-func (w *WorkerBase[TConfig, TStatus]) WrapStatusAccumulated(ctx context.Context, status TStatus) ObservedState {
+func (w *WorkerBase[TConfig, TStatus, TDeps]) WrapStatusAccumulated(ctx context.Context, status TStatus) ObservedState {
 	obs := Observation[TStatus]{
 		CollectedAt: time.Now(),
 		Status:      status,
@@ -212,7 +216,7 @@ func (w *WorkerBase[TConfig, TStatus]) WrapStatusAccumulated(ctx context.Context
 
 // DeriveDesiredState parses UserSpec, renders templates, unmarshals into TConfig,
 // caches the config (write-lock), and wraps in WrappedDesiredState.
-func (w *WorkerBase[TConfig, TStatus]) DeriveDesiredState(spec interface{}) (DesiredState, error) {
+func (w *WorkerBase[TConfig, TStatus, TDeps]) DeriveDesiredState(spec interface{}) (DesiredState, error) {
 	if spec == nil {
 		var cfg TConfig
 		if err := w.runPostParseHook(&cfg); err != nil {
@@ -276,7 +280,7 @@ func (w *WorkerBase[TConfig, TStatus]) DeriveDesiredState(spec interface{}) (Des
 	return wds, nil
 }
 
-func (w *WorkerBase[TConfig, TStatus]) runPostParseHook(cfg *TConfig) error {
+func (w *WorkerBase[TConfig, TStatus, TDeps]) runPostParseHook(cfg *TConfig) error {
 	if w.postParseHook != nil {
 		if err := w.postParseHook(cfg); err != nil {
 			return fmt.Errorf("post-parse hook failed: %w", err)
@@ -285,7 +289,7 @@ func (w *WorkerBase[TConfig, TStatus]) runPostParseHook(cfg *TConfig) error {
 	return nil
 }
 
-func (w *WorkerBase[TConfig, TStatus]) populateChildrenSpecs(wds *WrappedDesiredState[TConfig], cfg TConfig, spec config.UserSpec) {
+func (w *WorkerBase[TConfig, TStatus, TDeps]) populateChildrenSpecs(wds *WrappedDesiredState[TConfig], cfg TConfig, spec config.UserSpec) {
 	if w.childSpecFactory != nil {
 		wds.ChildrenSpecs = w.childSpecFactory(cfg, spec)
 	}
@@ -294,7 +298,7 @@ func (w *WorkerBase[TConfig, TStatus]) populateChildrenSpecs(wds *WrappedDesired
 // GetInitialState returns the registered initial state for this worker type.
 // Panics if no state is registered — call fsmv2.RegisterInitialState in
 // the state package init() function.
-func (w *WorkerBase[TConfig, TStatus]) GetInitialState() State[any, any] {
+func (w *WorkerBase[TConfig, TStatus, TDeps]) GetInitialState() State[any, any] {
 	if !w.initialized {
 		panic("WorkerBase.GetInitialState: InitBase was not called — ensure your constructor calls w.InitBase(id, logger, sr)")
 	}
@@ -307,16 +311,30 @@ func (w *WorkerBase[TConfig, TStatus]) GetInitialState() State[any, any] {
 }
 
 // Identity returns the worker's identity.
-func (w *WorkerBase[TConfig, TStatus]) Identity() deps.Identity {
+func (w *WorkerBase[TConfig, TStatus, TDeps]) Identity() deps.Identity {
 	return w.identity
 }
 
 // Logger returns the worker's logger.
-func (w *WorkerBase[TConfig, TStatus]) Logger() deps.FSMLogger {
+func (w *WorkerBase[TConfig, TStatus, TDeps]) Logger() deps.FSMLogger {
 	return w.logger
 }
 
-// GetDependenciesAny returns the base dependencies. Satisfies DependencyProvider.
-func (w *WorkerBase[TConfig, TStatus]) GetDependenciesAny() any {
-	return w.baseDeps
+// BindDeps stores the typed deps payload. Call after InitBase in worker constructors.
+// Workers that have custom typed deps pass their deps struct here; the framework
+// returns it from GetDependenciesAny. Workers using register.NoDeps skip BindDeps.
+func (w *WorkerBase[TConfig, TStatus, TDeps]) BindDeps(d TDeps) {
+	w.mu.Lock()
+	w.typedDeps = d
+	w.mu.Unlock()
+}
+
+// GetDependenciesAny returns the typed deps bound via BindDeps. Satisfies DependencyProvider.
+// Workers no longer need to override this method; they call BindDeps in their constructor.
+func (w *WorkerBase[TConfig, TStatus, TDeps]) GetDependenciesAny() any {
+	w.mu.RLock()
+	d := w.typedDeps
+	w.mu.RUnlock()
+
+	return d
 }
