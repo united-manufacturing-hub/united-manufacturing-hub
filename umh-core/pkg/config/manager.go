@@ -484,15 +484,6 @@ func (m *FileConfigManager) readAndParseConfig(ctx context.Context) (FullConfig,
 		return FullConfig{}, "", fmt.Errorf("config file is empty: %s", m.configPath)
 	}
 
-	// Validate the location map
-	// This ensures downstream code doesn't panic when trying to access the location map
-	if config.Agent.Location == nil {
-		m.logger.SentryWarn(deps.FeatureFSMv1ConfigManager, configManagerHierarchyPath,
-			"config_missing_location_map", deps.String("path", m.configPath))
-
-		config.Agent.Location = make(map[int]string)
-	}
-
 	// Validate that the release channel is valid
 	// This prevent weird values from being set by the user
 	if config.Agent.ReleaseChannel != ReleaseChannelNightly && config.Agent.ReleaseChannel != ReleaseChannelStable && config.Agent.ReleaseChannel != ReleaseChannelEnterprise {
