@@ -153,7 +153,7 @@ func (w *WorkerBase[TConfig, TStatus, TDeps]) WrapStatus(status TStatus) Observe
 // Use for workers that accumulate metrics across ticks (communicator, transport push/pull).
 // Workers without cross-tick metrics should use WrapStatus instead.
 //
-// Calls MetricsRecorder().Drain() which is destructive — calling this method
+// Calls MetricsRecorder().Drain() which is destructive; calling this method
 // twice in the same tick yields zero deltas on the second call.
 func (w *WorkerBase[TConfig, TStatus, TDeps]) WrapStatusAccumulated(ctx context.Context, status TStatus) ObservedState {
 	obs := Observation[TStatus]{
@@ -326,7 +326,7 @@ func (w *WorkerBase[TConfig, TStatus, TDeps]) Logger() deps.FSMLogger {
 //
 // TODO(PR2): NoDeps workers (TDeps = register.NoDeps) get zero framework telemetry
 // because the collector's FrameworkMetricsSetter duck-types GetDependenciesAny() to
-// find SetFrameworkState — which NoDeps's struct{} zero value does not implement.
+// find SetFrameworkState, which NoDeps's struct{} zero value does not implement.
 // Before shipping the first NoDeps production worker, ensure either:
 //   (a) the worker uses NewObservation (collector path handles framework metrics), or
 //   (b) the worker's TDeps embeds deps.BaseDependencies so SetFrameworkState is found.

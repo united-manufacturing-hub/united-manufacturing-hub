@@ -42,6 +42,10 @@ type NoDeps = struct{}
 // TDeps is the worker's typed dependency payload; use register.NoDeps for workers with no custom deps.
 // The workerType string is the canonical name used in config YAML and CSE storage.
 //
+// Note: TDeps is a phantom type parameter at registration time. The compiler does not
+// verify that TDeps here matches the TDeps in the concrete WorkerBase[TConfig, TStatus, TDeps]
+// embed inside the worker struct. By convention, callers pass the same TDeps in both places.
+//
 // Constructor receives only the standard framework dependencies (identity, logger, stateReader).
 // Workers that require parent-injected dependencies via the extraDeps mechanism
 // (e.g., transport push/pull children) must use factory.RegisterWorkerType directly.
