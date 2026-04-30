@@ -491,13 +491,22 @@ func (m *FileConfigManager) readAndParseConfig(ctx context.Context) (FullConfig,
 		return FullConfig{}, "", fmt.Errorf("config file is empty: %s", m.configPath)
 	}
 
-	// Validate that the release channel is valid
-	// This prevent weird values from being set by the user
-	if config.Agent.ReleaseChannel != ReleaseChannelNightly && config.Agent.ReleaseChannel != ReleaseChannelStable && config.Agent.ReleaseChannel != ReleaseChannelEnterprise {
-		m.logger.SentryWarn(deps.FeatureFSMv1ConfigManager, configManagerHierarchyPath,
-			"config_invalid_release_channel", deps.String("release_channel", string(config.Agent.ReleaseChannel)))
-		config.Agent.ReleaseChannel = "n/a"
+	// Validate that the release channel is one of the allowed enum values.
+	// Empty values are defaulted to "stable" inside ParseConfig (applyDefaults=true) and
+	// never reach this branch — only non-empty typos do. We do NOT call SentryWarn here:
+	// see doc.go for the Sentry-vs-validation policy.
+	var issues []ConfigValidationIssue
+	if config.Agent.ReleaseChannel != ReleaseChannelNightly &&
+		config.Agent.ReleaseChannel != ReleaseChannelStable &&
+		config.Agent.ReleaseChannel != ReleaseChannelEnterprise {
+		issues = append(issues, ConfigValidationIssue{
+			Field:          "agent.releaseChannel",
+			OffendingValue: string(config.Agent.ReleaseChannel),
+			AllowedValues:  []string{"nightly", "stable", "enterprise"},
+		})
+		config.Agent.ReleaseChannel = ReleaseChannelStable
 	}
+	m.swapValidationIssues(issues)
 
 	// Return both config and raw data for atomic cache update by caller
 	return config, string(data), nil
