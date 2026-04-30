@@ -644,3 +644,9 @@ func (w *writeFailingMockConfigManager) AtomicDeleteStreamProcessor(ctx context.
 func (w *writeFailingMockConfigManager) GetBackupCount() uint64 {
 	return 0
 }
+
+// GetConfigValidationIssues returns nil for the mock — this test fixture is
+// scoped to write-failure paths and has no validation surface to assert.
+func (w *writeFailingMockConfigManager) GetConfigValidationIssues() []config.ConfigValidationIssue {
+	return nil
+}
