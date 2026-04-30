@@ -392,7 +392,7 @@ var _ = Describe("LifecycleManager", func() {
 
 		It("should return HealthUnknown when artifacts are nil", func() {
 			// Simulate a fresh start or post-restart scenario
-			service.artifacts = nil
+			service.artifacts.Store(nil)
 			
 			health := service.CheckServiceDirectoryIntegrity(ctx, servicePath, mockFS)
 			Expect(health).To(Equal(HealthUnknown))
@@ -400,14 +400,14 @@ var _ = Describe("LifecycleManager", func() {
 
 		It("should return HealthOK when all tracked files exist", func() {
 			// Set up artifacts with tracked files
-			service.artifacts = &ServiceArtifacts{
+			service.artifacts.Store(&ServiceArtifacts{
 				ServiceDir: servicePath,
 				CreatedFiles: []string{
 					filepath.Join(servicePath, "run"),
 					filepath.Join(servicePath, "type"),
 					filepath.Join(servicePath, ".complete"),
 				},
-			}
+			})
 			
 			// Mock all files as existing
 			mockFS.WithFileExistsFunc(func(ctx context.Context, path string) (bool, error) {
@@ -423,14 +423,14 @@ var _ = Describe("LifecycleManager", func() {
 
 		It("should return HealthBad when tracked files are missing", func() {
 			// Set up artifacts with tracked files
-			service.artifacts = &ServiceArtifacts{
+			service.artifacts.Store(&ServiceArtifacts{
 				ServiceDir: servicePath,
 				CreatedFiles: []string{
 					filepath.Join(servicePath, "run"),
 					filepath.Join(servicePath, "type"),
 					filepath.Join(servicePath, ".complete"),
 				},
-			}
+			})
 			
 			// Mock run file as missing
 			mockFS.WithFileExistsFunc(func(ctx context.Context, path string) (bool, error) {
@@ -450,12 +450,12 @@ var _ = Describe("LifecycleManager", func() {
 
 		It("should return HealthUnknown on I/O errors", func() {
 			// Set up artifacts
-			service.artifacts = &ServiceArtifacts{
+			service.artifacts.Store(&ServiceArtifacts{
 				ServiceDir: servicePath,
 				CreatedFiles: []string{
 					filepath.Join(servicePath, "run"),
 				},
-			}
+			})
 			
 			// Simulate I/O error
 			mockFS.WithPathExistsFunc(func(ctx context.Context, path string) (bool, error) {
@@ -468,12 +468,12 @@ var _ = Describe("LifecycleManager", func() {
 
 		It("should return HealthUnknown on context cancellation", func() {
 			// Set up artifacts
-			service.artifacts = &ServiceArtifacts{
+			service.artifacts.Store(&ServiceArtifacts{
 				ServiceDir: servicePath,
 				CreatedFiles: []string{
 					filepath.Join(servicePath, "run"),
 				},
-			}
+			})
 			
 			// Create cancelled context
 			cancelledCtx, cancel := context.WithCancel(ctx)
@@ -491,13 +491,13 @@ var _ = Describe("LifecycleManager", func() {
 		It("should handle config files with absolute paths correctly", func() {
 			// Test the fix for config file path tracking bug
 			configPath := filepath.Join(servicePath, "config", "app.yaml")
-			service.artifacts = &ServiceArtifacts{
+			service.artifacts.Store(&ServiceArtifacts{
 				ServiceDir: servicePath,
 				CreatedFiles: []string{
 					filepath.Join(servicePath, "run"),
 					configPath, // Absolute path (the fix)
 				},
-			}
+			})
 			
 			// Mock all files as existing
 			mockFS.WithFileExistsFunc(func(ctx context.Context, path string) (bool, error) {
@@ -513,14 +513,14 @@ var _ = Describe("LifecycleManager", func() {
 
 		It("should not check for down files", func() {
 			// Test that down files are not tracked (the fix for down file issue)
-			service.artifacts = &ServiceArtifacts{
+			service.artifacts.Store(&ServiceArtifacts{
 				ServiceDir: servicePath,
 				CreatedFiles: []string{
 					filepath.Join(servicePath, "run"),
 					filepath.Join(servicePath, "type"),
 					// Note: no down file in tracked files
 				},
-			}
+			})
 			
 			// Mock: down file doesn't exist (service is running)
 			mockFS.WithFileExistsFunc(func(ctx context.Context, path string) (bool, error) {
