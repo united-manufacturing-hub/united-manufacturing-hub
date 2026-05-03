@@ -3,14 +3,14 @@ module github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core
 go 1.26.2
 
 require (
-	github.com/99designs/gqlgen v0.17.89
+	github.com/99designs/gqlgen v0.17.90
 	github.com/DataDog/gostackparse v0.7.0
 	github.com/Masterminds/semver/v3 v3.4.0
 	github.com/benbjohnson/clock v1.3.5
 	github.com/cactus/tai64 v1.0.4
 	github.com/cenkalti/backoff v2.2.1+incompatible
 	github.com/cespare/xxhash/v2 v2.3.0
-	github.com/getsentry/sentry-go v0.45.1
+	github.com/getsentry/sentry-go v0.46.0
 	github.com/gin-gonic/gin v1.12.0
 	github.com/goccy/go-json v0.10.6
 	github.com/google/uuid v1.6.0
@@ -28,7 +28,7 @@ require (
 	github.com/tiendc/go-deepcopy v1.7.2
 	github.com/united-manufacturing-hub/expiremap/v2 v2.1.0
 	github.com/united-manufacturing-hub/umh-utils v0.2.2
-	github.com/vektah/gqlparser/v2 v2.5.32
+	github.com/vektah/gqlparser/v2 v2.5.33
 	go.uber.org/zap v1.27.1
 	golang.org/x/crypto v0.50.0
 	golang.org/x/sync v0.20.0
@@ -82,7 +82,7 @@ require (
 	github.com/leodido/go-urn v1.4.0 // indirect
 	github.com/lufia/plan9stats v0.0.0-20250821153705-5981dea3221d // indirect
 	github.com/magiconair/properties v1.8.10 // indirect
-	github.com/mattn/go-isatty v0.0.20 // indirect
+	github.com/mattn/go-isatty v0.0.21 // indirect
 	github.com/moby/docker-image-spec v1.3.1 // indirect
 	github.com/moby/go-archive v0.2.0 // indirect
 	github.com/moby/moby/api v1.54.1 // indirect
