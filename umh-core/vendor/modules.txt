@@ -1,7 +1,7 @@
 # dario.cat/mergo v1.0.2
 ## explicit; go 1.13
 dario.cat/mergo
-# github.com/99designs/gqlgen v0.17.89
+# github.com/99designs/gqlgen v0.17.90
 ## explicit; go 1.25.0
 github.com/99designs/gqlgen/complexity
 github.com/99designs/gqlgen/graphql
@@ -151,8 +151,8 @@ github.com/gabriel-vasile/mimetype/internal/json
 github.com/gabriel-vasile/mimetype/internal/magic
 github.com/gabriel-vasile/mimetype/internal/markup
 github.com/gabriel-vasile/mimetype/internal/scan
-# github.com/getsentry/sentry-go v0.45.1
-## explicit; go 1.24.0
+# github.com/getsentry/sentry-go v0.46.0
+## explicit; go 1.25.0
 github.com/getsentry/sentry-go
 github.com/getsentry/sentry-go/attribute
 github.com/getsentry/sentry-go/internal/debug
@@ -293,8 +293,8 @@ github.com/lufia/plan9stats
 # github.com/magiconair/properties v1.8.10
 ## explicit; go 1.19
 github.com/magiconair/properties
-# github.com/mattn/go-isatty v0.0.20
-## explicit; go 1.15
+# github.com/mattn/go-isatty v0.0.21
+## explicit; go 1.21
 github.com/mattn/go-isatty
 # github.com/moby/docker-image-spec v1.3.1
 ## explicit; go 1.18
@@ -549,7 +549,7 @@ github.com/united-manufacturing-hub/expiremap/v2/pkg/expiremap
 ## explicit; go 1.19
 github.com/united-manufacturing-hub/umh-utils/env
 github.com/united-manufacturing-hub/umh-utils/logger
-# github.com/vektah/gqlparser/v2 v2.5.32
+# github.com/vektah/gqlparser/v2 v2.5.33
 ## explicit; go 1.22
 github.com/vektah/gqlparser/v2
 github.com/vektah/gqlparser/v2/ast
