@@ -117,14 +117,34 @@ const (
 	// Transient: resolves as the consumer drains the channel.
 	// Classified here for backoff purposes; not a network-layer transport error.
 	ErrorTypeChannelFull
+
+	// ErrorTypeMax is a helper value marking the end of the ErrorType iota range.
+	// It is used in tests
+	// DO NOT ADD NEW CONSTANTS AFTER THIS
+	ErrorTypeMax
 )
 
-// IsTransient reports whether the error type represents a condition that
-// typically self-resolves without human intervention.
+// IsTransientTypes maps every known ErrorType to its transient classification.
+// Adding a new ErrorType constant without a corresponding entry here causes the
+// exhaustiveness test in is_transient_test.go to fail at test time.
 //
 // Transient: Network, ServerError, ChannelFull, BackendRateLimit.
 // Persistent: everything else (InvalidToken, InstanceDeleted, ProxyBlock,
 // CloudflareChallenge, Unknown).
+var IsTransientTypes = map[ErrorType]bool{
+	ErrorTypeUnknown:             false,
+	ErrorTypeCloudflareChallenge: false,
+	ErrorTypeBackendRateLimit:    true,
+	ErrorTypeInvalidToken:        false,
+	ErrorTypeInstanceDeleted:     false,
+	ErrorTypeServerError:         true,
+	ErrorTypeProxyBlock:          false,
+	ErrorTypeNetwork:             true,
+	ErrorTypeChannelFull:         true,
+}
+
+// IsTransient reports whether the error type represents a condition that
+// typically self-resolves without human intervention.
 //
 // The classification controls error propagation in push and pull actions:
 //   - Transient errors are suppressed (action returns nil). Metrics and
@@ -134,36 +154,30 @@ const (
 //   - Persistent errors propagate to the FSM as errors, triggering state
 //     transitions (recovering, re-authentication) and firing SentryError.
 func (e ErrorType) IsTransient() bool {
-	switch e {
-	case ErrorTypeNetwork, ErrorTypeServerError, ErrorTypeChannelFull, ErrorTypeBackendRateLimit:
-		return true
-	default:
-		return false
-	}
+	return IsTransientTypes[e]
+}
+
+// ErrorTypeNames maps every known ErrorType to its human-readable name.
+// Adding a new ErrorType constant without a corresponding entry here causes the
+// exhaustiveness test in is_transient_test.go to fail at test time.
+var ErrorTypeNames = map[ErrorType]string{
+	ErrorTypeUnknown:             "unknown",
+	ErrorTypeCloudflareChallenge: "cloudflare_challenge",
+	ErrorTypeBackendRateLimit:    "backend_rate_limit",
+	ErrorTypeInvalidToken:        "invalid_token",
+	ErrorTypeInstanceDeleted:     "instance_deleted",
+	ErrorTypeServerError:         "server_error",
+	ErrorTypeProxyBlock:          "proxy_block",
+	ErrorTypeNetwork:             "network",
+	ErrorTypeChannelFull:         "channel_full",
 }
 
 // String returns a human-readable name for the error type.
 func (e ErrorType) String() string {
-	switch e {
-	case ErrorTypeCloudflareChallenge:
-		return "cloudflare_challenge"
-	case ErrorTypeBackendRateLimit:
-		return "backend_rate_limit"
-	case ErrorTypeInvalidToken:
-		return "invalid_token"
-	case ErrorTypeInstanceDeleted:
-		return "instance_deleted"
-	case ErrorTypeServerError:
-		return "server_error"
-	case ErrorTypeProxyBlock:
-		return "proxy_block"
-	case ErrorTypeNetwork:
-		return "network"
-	case ErrorTypeChannelFull:
-		return "channel_full"
-	default:
-		return "unknown"
+	if s, ok := ErrorTypeNames[e]; ok {
+		return s
 	}
+	return "unknown"
 }
 
 // TransportError represents a classified HTTP transport error.
@@ -207,36 +221,37 @@ func (e *TransportError) Is(target error) bool {
 // ErrorTypeUnknown, a persistent type that propagates to the FSM and fires
 // SentryError, ensuring unclassified errors are never silently suppressed.
 func ExtractErrorType(err error) (ErrorType, time.Duration) {
-	var transportErr *TransportError
-	if errors.As(err, &transportErr) {
+	if transportErr, ok := errors.AsType[*TransportError](err); ok {
 		return transportErr.Type, transportErr.RetryAfter
 	}
 
 	return ErrorTypeUnknown, 0
 }
 
+// ErrorTypeCounters maps every known ErrorType to its Prometheus counter.
+// Adding a new ErrorType constant without a corresponding entry here causes the
+// exhaustiveness test in is_transient_test.go to fail at test time.
+//
+// ErrorTypeUnknown and ErrorTypeChannelFull share CounterNetworkErrorsTotal:
+// Unknown because it is unclassified, ChannelFull because it is internal
+// backpressure pending a dedicated counter.
+var ErrorTypeCounters = map[ErrorType]depspkg.CounterName{
+	ErrorTypeUnknown:             depspkg.CounterNetworkErrorsTotal,
+	ErrorTypeCloudflareChallenge: depspkg.CounterCloudflareErrorsTotal,
+	ErrorTypeBackendRateLimit:    depspkg.CounterBackendRateLimitErrorsTotal,
+	ErrorTypeInvalidToken:        depspkg.CounterAuthFailuresTotal,
+	ErrorTypeInstanceDeleted:     depspkg.CounterInstanceDeletedTotal,
+	ErrorTypeServerError:         depspkg.CounterServerErrorsTotal,
+	ErrorTypeProxyBlock:          depspkg.CounterProxyBlockErrorsTotal,
+	ErrorTypeNetwork:             depspkg.CounterNetworkErrorsTotal,
+	ErrorTypeChannelFull:         depspkg.CounterNetworkErrorsTotal,
+}
+
 // CounterForErrorType maps an ErrorType to its corresponding Prometheus counter.
 // Unknown and unrecognized types default to CounterNetworkErrorsTotal.
 func CounterForErrorType(t ErrorType) depspkg.CounterName {
-	switch t {
-	case ErrorTypeCloudflareChallenge:
-		return depspkg.CounterCloudflareErrorsTotal
-	case ErrorTypeBackendRateLimit:
-		return depspkg.CounterBackendRateLimitErrorsTotal
-	case ErrorTypeInvalidToken:
-		return depspkg.CounterAuthFailuresTotal
-	case ErrorTypeInstanceDeleted:
-		return depspkg.CounterInstanceDeletedTotal
-	case ErrorTypeServerError:
-		return depspkg.CounterServerErrorsTotal
-	case ErrorTypeProxyBlock:
-		return depspkg.CounterProxyBlockErrorsTotal
-	case ErrorTypeNetwork:
-		return depspkg.CounterNetworkErrorsTotal
-	case ErrorTypeChannelFull:
-		// ChannelFull is internal backpressure; routed to network counter pending a dedicated counter.
-		return depspkg.CounterNetworkErrorsTotal
-	default:
-		return depspkg.CounterNetworkErrorsTotal
+	if c, ok := ErrorTypeCounters[t]; ok {
+		return c
 	}
+	return depspkg.CounterNetworkErrorsTotal
 }
