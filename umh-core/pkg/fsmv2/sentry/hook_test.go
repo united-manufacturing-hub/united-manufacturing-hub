@@ -1116,8 +1116,8 @@ var _ = Describe("Contexts Catch-All", func() {
 		ctx, ok := event.Contexts["umh_context"]
 		Expect(ok).To(BeTrue())
 		Expect(ctx["panic_value"]).To(Equal("runtime error: nil pointer"))
-		// Extra should not have panic_value
-		Expect(event.Extra).To(BeEmpty())
+		// Extra context bucket should not have panic_value
+		Expect(event.Contexts["extra"]).NotTo(HaveKey("panic_value"))
 	})
 
 	It("filters sensitive keys from Contexts", func() {
