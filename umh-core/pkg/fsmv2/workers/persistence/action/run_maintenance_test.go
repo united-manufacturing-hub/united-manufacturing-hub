@@ -70,17 +70,6 @@ var _ = Describe("RunMaintenanceAction", func() {
 			})
 		})
 
-		Context("when context is cancelled", func() {
-			It("should return context error", func() {
-				cancelledCtx, cancel := context.WithCancel(ctx)
-				cancel()
-
-				a := action.NewRunMaintenanceAction()
-				err := a.Execute(cancelledCtx, d)
-				Expect(err).To(Equal(context.Canceled))
-				Expect(mockStore.maintenanceCalled).To(BeFalse())
-			})
-		})
 	})
 
 	Describe("Name", func() {

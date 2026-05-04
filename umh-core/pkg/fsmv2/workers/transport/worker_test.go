@@ -113,16 +113,6 @@ var _ = Describe("TransportWorker", func() {
 			Expect(observed.GetTimestamp()).To(BeZero())
 		})
 
-		It("should handle context cancellation at entry", func() {
-			ctx, cancel := context.WithCancel(context.Background())
-			cancel() // Cancel immediately
-
-			_, err := worker.CollectObservedState(ctx, nil)
-
-			Expect(err).To(HaveOccurred())
-			Expect(err).To(Equal(context.Canceled))
-		})
-
 		It("should return Observation[TransportStatus] from COS", func() {
 			ctx := context.Background()
 			observed, err := worker.CollectObservedState(ctx, nil)

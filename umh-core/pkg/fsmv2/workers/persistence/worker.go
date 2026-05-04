@@ -130,12 +130,6 @@ func (w *PersistenceWorker) GetDependencies() *PersistenceDependencies {
 // framework metrics, action history, and metric accumulation automatically
 // after COS returns.
 func (w *PersistenceWorker) CollectObservedState(ctx context.Context, _ fsmv2.DesiredState) (fsmv2.ObservedState, error) {
-	select {
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	default:
-	}
-
 	d := w.deps
 
 	var prev fsmv2.Observation[PersistenceStatus]

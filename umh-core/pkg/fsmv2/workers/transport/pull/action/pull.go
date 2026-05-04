@@ -37,12 +37,6 @@ type PullAction struct{}
 // Execute runs one pull cycle: delivers pending messages, checks backpressure,
 // pulls new messages from the backend, and delivers them to the inbound channel.
 func (a *PullAction) Execute(ctx context.Context, depsAny any) error {
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	default:
-	}
-
 	pullDeps, ok := depsAny.(snapshot.PullDependencies)
 	if !ok {
 		return errors.New("invalid dependencies type: expected PullDependencies")

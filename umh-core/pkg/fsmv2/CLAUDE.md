@@ -15,7 +15,6 @@ The `architecture_test.go` validates ALL workers via file-system scanning (not r
 | State XOR Action | Return state OR action, never both |
 | Single Type Assertion | `Next()` has exactly one type assertion at entry |
 | Pure DeriveDesiredState | No dependency access - only use `spec` parameter |
-| Context Cancellation | Handle `ctx.Done()` at entry in `CollectObservedState` |
 | Pointer Receivers | Use `*WorkerType` for all Worker methods |
 
 Run architecture tests after every change:

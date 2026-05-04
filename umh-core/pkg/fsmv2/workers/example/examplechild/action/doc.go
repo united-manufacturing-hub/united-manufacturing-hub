@@ -21,7 +21,6 @@
 //
 // This package demonstrates FSM v2 action patterns:
 //   - Use empty structs with no fields. Inject dependencies via Execute.
-//   - Check context cancellation first with select on ctx.Done().
 //   - Check if work is already done before acting.
 //
 // # Error handling
@@ -67,19 +66,6 @@
 //	func (a *CounterAction) Execute(ctx context.Context, depsAny any) error {
 //	    counter++  // Increments on every retry
 //	    return nil
-//	}
-//
-// # Context cancellation
-//
-// Check context cancellation at the start of every action:
-//
-//	func (a *MyAction) Execute(ctx context.Context, depsAny any) error {
-//	    select {
-//	    case <-ctx.Done():
-//	        return ctx.Err()
-//	    default:
-//	    }
-//	    // Action logic here
 //	}
 //
 // See workers/example/doc.go for the full example worker documentation.

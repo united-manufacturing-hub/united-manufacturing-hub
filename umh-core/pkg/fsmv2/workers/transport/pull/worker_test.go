@@ -100,16 +100,6 @@ var _ = Describe("PullWorker", func() {
 			Expect(observed.GetTimestamp()).To(BeZero())
 		})
 
-		It("should handle context cancellation", func() {
-			ctx, cancel := context.WithCancel(context.Background())
-			cancel()
-
-			_, err := worker.CollectObservedState(ctx, nil)
-
-			Expect(err).To(HaveOccurred())
-			Expect(err).To(Equal(context.Canceled))
-		})
-
 		It("should report transport availability from parent deps", func() {
 			ctx := context.Background()
 			observed, err := worker.CollectObservedState(ctx, nil)

@@ -371,17 +371,6 @@ var _ = Describe("PullAction", func() {
 		})
 	})
 
-	Describe("Context cancellation", func() {
-		It("should return ctx.Err()", func() {
-			ctx, cancel := context.WithCancel(context.Background())
-			cancel()
-
-			err := act.Execute(ctx, mockDeps)
-			Expect(err).To(Equal(context.Canceled))
-			Expect(mockTrans.pullCallCount).To(Equal(0))
-		})
-	})
-
 	Describe("Nil transport", func() {
 		It("should return error without pulling", func() {
 			mockDeps.transport = nil

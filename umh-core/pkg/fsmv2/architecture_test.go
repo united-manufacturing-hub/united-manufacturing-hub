@@ -150,15 +150,9 @@ var _ = Describe("FSMv2 Architecture Validation", func() {
 			})
 		})
 
-		Describe("Context Cancellation in Actions (Invariant: Abortable Operations)", func() {
-			It("should check ctx.Done() in Execute() methods", func() {
-				violations := validator.ValidateContextCancellationInActions(getFsmv2Dir())
-				if len(violations) > 0 {
-					message := validator.FormatViolationsWithPattern("Action Context Violations", violations, "MISSING_CONTEXT_CANCELLATION_ACTION")
-					Fail(message)
-				}
-			})
-		})
+		// Context Cancellation in Actions removed: action_executor.go wraps every
+		// action in context.WithTimeout, making per-action ctx.Done() entry checks
+		// redundant (defense-in-depth, not mandatory).
 
 		Describe("No Internal Retry Loops in Actions (Invariant: Supervisor Manages Retries)", func() {
 			It("should not have for loops with error handling in Execute()", func() {

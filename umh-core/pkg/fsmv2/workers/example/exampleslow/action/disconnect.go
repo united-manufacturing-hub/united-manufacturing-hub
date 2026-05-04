@@ -25,12 +25,6 @@ const DisconnectActionName = "disconnect"
 type DisconnectAction struct{}
 
 func (a *DisconnectAction) Execute(ctx context.Context, depsAny any) error {
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	default:
-	}
-
 	deps := depsAny.(snapshot.ExampleslowDependencies)
 	logger := deps.GetLogger()
 

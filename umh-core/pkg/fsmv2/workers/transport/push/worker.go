@@ -80,12 +80,6 @@ func NewPushWorker(
 // Returns NewObservation — the collector handles CollectedAt, framework metrics,
 // action history, and metric accumulation automatically after COS returns.
 func (w *PushWorker) CollectObservedState(ctx context.Context, _ fsmv2.DesiredState) (fsmv2.ObservedState, error) {
-	select {
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	default:
-	}
-
 	d := w.GetDependencies()
 
 	return fsmv2.NewObservation(PushStatus{

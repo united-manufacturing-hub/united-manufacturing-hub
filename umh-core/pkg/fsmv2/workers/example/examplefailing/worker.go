@@ -79,12 +79,6 @@ func NewFailingWorker(
 
 // CollectObservedState returns the current observed state of the failing worker.
 func (w *FailingWorker) CollectObservedState(ctx context.Context, desiredAny fsmv2.DesiredState) (fsmv2.ObservedState, error) {
-	select {
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	default:
-	}
-
 	desired, ok := desiredAny.(*snapshot.ExamplefailingDesiredState)
 	if !ok || desired == nil {
 		w.deps.GetLogger().SentryWarn(deps.FeatureExamples, w.Identity().HierarchyPath,

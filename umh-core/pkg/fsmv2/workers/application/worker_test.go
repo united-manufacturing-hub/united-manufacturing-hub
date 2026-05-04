@@ -52,13 +52,6 @@ var _ = Describe("ApplicationWorker", func() {
 			Expect(typedObs.Status.ID).To(Equal("root-1"))
 		})
 
-		It("should respect context cancellation", func() {
-			ctx, cancel := context.WithCancel(context.Background())
-			cancel() // Cancel immediately.
-
-			_, err := worker.CollectObservedState(ctx, nil)
-			Expect(err).To(Equal(context.Canceled))
-		})
 	})
 
 	Describe("DeriveDesiredState", func() {

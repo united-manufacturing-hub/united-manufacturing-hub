@@ -104,18 +104,6 @@ var _ = Describe("PersistenceWorker", func() {
 			Expect(ok).To(BeTrue())
 		})
 
-		It("should return error when context is cancelled", func() {
-			w, err := persistence.NewPersistenceWorker(identity, logger, nil, persistence.NewStoreOnlyDependencies(store))
-			Expect(err).NotTo(HaveOccurred())
-
-			worker := getPersistenceWorker(w)
-			cancelledCtx, cancel := context.WithCancel(context.Background())
-			cancel()
-
-			_, err = worker.CollectObservedState(cancelledCtx, nil)
-			Expect(err).To(Equal(context.Canceled))
-		})
-
 		Context("ConsecutiveActionErrors computation", func() {
 			It("should increment on failure", func() {
 				w, err := persistence.NewPersistenceWorker(identity, logger, nil, persistence.NewStoreOnlyDependencies(store))

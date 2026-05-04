@@ -27,12 +27,6 @@ type DisconnectAction struct{}
 
 // Execute releases the connection back to the pool.
 func (a *DisconnectAction) Execute(ctx context.Context, depsAny any) error {
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	default:
-	}
-
 	deps := depsAny.(snapshot.ExamplechildDependencies)
 	logger := deps.GetLogger()
 	logger.Info("Disconnecting")

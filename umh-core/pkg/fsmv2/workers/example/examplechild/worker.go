@@ -79,12 +79,6 @@ func NewChildWorker(
 
 // CollectObservedState returns the current observed state of the child worker.
 func (w *ChildWorker) CollectObservedState(ctx context.Context, _ fsmv2.DesiredState) (fsmv2.ObservedState, error) {
-	select {
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	default:
-	}
-
 	connectionHealth := "no connection"
 
 	if w.deps.IsConnected() {

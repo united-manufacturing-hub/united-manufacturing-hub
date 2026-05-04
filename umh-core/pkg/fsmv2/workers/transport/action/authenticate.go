@@ -74,13 +74,6 @@ func NewAuthenticateAction(relayURL, instanceUUID, authToken string, timeout tim
 // Creates transport if not present, then POSTs auth request and stores JWT in deps.
 // Records auth attempt timestamp and error type for intelligent backoff.
 func (a *AuthenticateAction) Execute(ctx context.Context, depsAny any) error {
-	// Check context cancellation first (Architecture: Context Cancellation in Actions)
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	default:
-	}
-
 	deps, ok := depsAny.(snapshot.TransportDependencies)
 	if !ok {
 		return errors.New("invalid dependencies type: expected TransportDependencies")

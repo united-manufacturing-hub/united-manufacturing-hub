@@ -245,35 +245,6 @@ then type-assert safely.`,
 }`,
 		ReferenceFile: "example-child/worker.go",
 	},
-	"MISSING_CONTEXT_CANCELLATION_ACTION": {
-		Name: "Context Cancellation in Actions",
-		Why: `Execute() methods must check ctx.Done() for cancellation.
-WHY: Actions may involve I/O operations (network calls, file writes) that block.
-Without context cancellation, the supervisor cannot abort long-running actions
-during shutdown. This causes shutdown delays and resource leaks. Always provide
-an escape hatch via ctx.Done() checks before and during blocking operations.`,
-		CorrectCode: `func (a *ConnectAction) Execute(ctx context.Context) error {
-    select {
-    case <-ctx.Done():
-        return ctx.Err()  // Early exit
-    default:
-    }
-
-    // For long operations, check periodically:
-    for i := 0; i < retries; i++ {
-        select {
-        case <-ctx.Done():
-            return ctx.Err()
-        default:
-            if err := tryConnect(); err == nil {
-                return nil
-            }
-        }
-    }
-    return errors.New("connection failed")
-}`,
-		ReferenceFile: "example-child/action/connect.go",
-	},
 	"INTERNAL_RETRY_LOOP": {
 		Name: "No Internal Retry Loops in Actions",
 		Why: `Actions must NOT implement internal retry loops with error handling.

@@ -141,12 +141,6 @@ func (w *TransportWorker) GetDependenciesAny() any {
 // Returns NewObservation — the collector handles CollectedAt, framework metrics,
 // action history, and metric accumulation automatically after COS returns.
 func (w *TransportWorker) CollectObservedState(ctx context.Context, _ fsmv2.DesiredState) (fsmv2.ObservedState, error) {
-	select {
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	default:
-	}
-
 	failedToken, failedRelay, failedUUID := w.deps.GetFailedAuthConfig()
 
 	return fsmv2.NewObservation(TransportStatus{

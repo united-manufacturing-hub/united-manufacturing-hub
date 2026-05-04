@@ -39,12 +39,6 @@ type TriggerObservationAction struct {
 // The act of completing this action causes the collector to trigger TriggerNow(),
 // making this worker's state immediately visible to parent supervisors.
 func (a *TriggerObservationAction) Execute(ctx context.Context, depsAny any) error {
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	default:
-	}
-
 	deps := depsAny.(snapshot.ExamplefailingDependencies)
 	newTicks := deps.IncrementTicksInConnected()
 	deps.GetLogger().Info("trigger_observation",

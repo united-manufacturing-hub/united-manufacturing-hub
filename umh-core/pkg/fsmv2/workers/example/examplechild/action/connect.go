@@ -27,12 +27,6 @@ type ConnectAction struct{}
 
 // Execute attempts to acquire a connection from the pool.
 func (a *ConnectAction) Execute(ctx context.Context, depsAny any) error {
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	default:
-	}
-
 	deps := depsAny.(snapshot.ExamplechildDependencies)
 	logger := deps.ActionLogger(ConnectActionName)
 	logger.Info("Attempting to connect")

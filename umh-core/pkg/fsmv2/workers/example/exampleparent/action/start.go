@@ -27,12 +27,6 @@ type StartAction struct{}
 
 // Execute loads config and returns ChildrenSpecs for spawning.
 func (a *StartAction) Execute(ctx context.Context, depsAny any) error {
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	default:
-	}
-
 	if depsAny != nil {
 		deps := depsAny.(deps.Dependencies)
 		logger := deps.GetLogger()

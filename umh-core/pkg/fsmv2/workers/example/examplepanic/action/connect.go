@@ -26,12 +26,6 @@ const ConnectActionName = "connect"
 type ConnectAction struct{}
 
 func (a *ConnectAction) Execute(ctx context.Context, depsAny any) error {
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	default:
-	}
-
 	deps := depsAny.(snapshot.ExamplepanicDependencies)
 	logger := deps.GetLogger()
 

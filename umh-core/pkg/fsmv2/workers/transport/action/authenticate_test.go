@@ -77,17 +77,6 @@ var _ = Describe("AuthenticateAction", func() {
 		})
 	})
 
-	Describe("Context Cancellation", func() {
-		It("should return error when context is cancelled before execution", func() {
-			ctx, cancel := context.WithCancel(context.Background())
-			cancel() // Cancel immediately
-
-			err := act.Execute(ctx, dependencies)
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("context"))
-		})
-	})
-
 	Describe("Idempotency (Invariant I10)", func() {
 		It("should be idempotent when authentication succeeds", func() {
 			ctx := context.Background()
@@ -497,8 +486,7 @@ var _ = Describe("AuthenticateAction", func() {
 
 		It("should propagate context cancellation during Authenticate", func() {
 			ctx, cancel := context.WithCancel(context.Background())
-			// Cancel inside Authenticate() to exercise the post-Authenticate ctx.Err() branch,
-			// not the top-of-method guard (which is tested in "Context Cancellation" above).
+			// Cancel inside Authenticate() to exercise the post-Authenticate ctx.Err() branch.
 			mockTransp.cancelDuringAuth = cancel
 			mockTransp.authError = &httpTransport.TransportError{
 				Type:    httpTransport.ErrorTypeNetwork,

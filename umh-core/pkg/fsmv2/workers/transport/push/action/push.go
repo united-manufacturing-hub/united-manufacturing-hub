@@ -31,12 +31,6 @@ const PushActionName = "push"
 type PushAction struct{}
 
 func (a *PushAction) Execute(ctx context.Context, depsAny any) error {
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	default:
-	}
-
 	pushDeps, ok := depsAny.(snapshot.PushDependencies)
 	if !ok {
 		return errors.New("invalid dependencies type: expected PushDependencies")

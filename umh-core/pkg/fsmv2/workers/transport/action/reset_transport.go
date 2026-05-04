@@ -40,12 +40,6 @@ func (a *ResetTransportAction) Name() string {
 }
 
 func (a *ResetTransportAction) Execute(ctx context.Context, depsAny any) error {
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	default:
-	}
-
 	deps, ok := depsAny.(snapshot.TransportDependencies)
 	if !ok {
 		return errors.New("invalid dependencies type: expected TransportDependencies")

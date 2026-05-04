@@ -27,12 +27,6 @@ type StopAction struct{}
 
 // Execute stops all children gracefully.
 func (a *StopAction) Execute(ctx context.Context, depsAny any) error {
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	default:
-	}
-
 	if depsAny != nil {
 		deps := depsAny.(deps.Dependencies)
 		logger := deps.GetLogger()

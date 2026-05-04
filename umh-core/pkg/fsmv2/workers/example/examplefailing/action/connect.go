@@ -43,12 +43,6 @@ type ConnectAction struct {
 // Returns ErrSimulatedFailure when configured to fail and attempt count < MaxFailures.
 // Supports multiple failure cycles: each cycle fails MaxFailures times before succeeding.
 func (a *ConnectAction) Execute(ctx context.Context, depsAny any) error {
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	default:
-	}
-
 	deps := depsAny.(snapshot.ExamplefailingDependencies)
 	logger := deps.GetLogger()
 

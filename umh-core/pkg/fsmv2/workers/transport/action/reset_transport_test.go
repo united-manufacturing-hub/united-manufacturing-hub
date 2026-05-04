@@ -66,15 +66,6 @@ var _ = Describe("ResetTransportAction", func() {
 			// We can verify this didn't panic and the action completed.
 		})
 
-		It("should handle context cancellation", func() {
-			ctx, cancel := context.WithCancel(context.Background())
-			cancel()
-
-			err := act.Execute(ctx, dependencies)
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("context"))
-		})
-
 		It("should return error on invalid deps type", func() {
 			err := act.Execute(context.Background(), "not-deps")
 			Expect(err).To(HaveOccurred())
