@@ -236,6 +236,12 @@ func (c *AgentMonitorService) Status(ctx context.Context, systemSnapshot fsm.Sys
 	// Surface config-content validation issues as a degraded agent state with a
 	// dynamic message. The user is the one who can fix the offending YAML; we
 	// route this through the existing health channel rather than Sentry.
+	//
+	// HealthMessage is only meaningful when paired with a non-Active OverallHealth.
+	// buildAgent (in pkg/communicator/pkg/generator/agent.go) enforces this
+	// invariant by ignoring HealthMessage on Active — keep the producer side
+	// aligned: if you set HealthMessage, also escalate OverallHealth to Degraded
+	// (or stronger) above.
 	if c.configValidationProvider != nil {
 		if issues := c.configValidationProvider.GetConfigValidationIssues(); len(issues) > 0 {
 			status.OverallHealth = models.Degraded
