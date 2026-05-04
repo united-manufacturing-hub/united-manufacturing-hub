@@ -39,7 +39,8 @@ var _ = Describe("FailingDependencies Observation-Based Recovery", func() {
 		logger := fsmdeps.NewNopFSMLogger()
 		pool := &examplefailing.DefaultConnectionPool{}
 		identity := fsmdeps.Identity{ID: "test-worker", WorkerType: "examplefailing"}
-		failDeps = examplefailing.NewFailingDependencies(pool, logger, nil, identity)
+		baseDeps := fsmdeps.NewBaseDependencies(logger, nil, identity)
+		failDeps = examplefailing.NewFailingDependencies(pool, baseDeps)
 	})
 
 	Describe("SetRecoveryDelayObservations and GetRecoveryDelayObservations", func() {

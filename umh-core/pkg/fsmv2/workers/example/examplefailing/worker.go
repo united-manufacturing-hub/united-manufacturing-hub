@@ -25,7 +25,6 @@ import (
 	fsmv2types "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplefailing/snapshot"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplefailing/state"
@@ -34,9 +33,8 @@ import (
 // FailingWorker implements the FSM v2 Worker interface for testing failure scenarios.
 type FailingWorker struct {
 	connection Connection
-	*helpers.BaseWorker[*FailingDependencies]
-	logger   deps.FSMLogger
-	identity deps.Identity
+	deps       *FailingDependencies
+	fsmv2.WorkerBase[FailingUserSpec, snapshot.ExamplefailingObservedState, *FailingDependencies]
 }
 
 // NewFailingWorker creates a new example failing worker.
@@ -63,7 +61,10 @@ func NewFailingWorker(
 		identity.WorkerType = workerType
 	}
 
-	dependencies := NewFailingDependencies(connectionPool, logger, stateReader, identity)
+	w := &FailingWorker{}
+	baseDeps := w.InitBase(identity, logger, stateReader)
+	w.deps = NewFailingDependencies(connectionPool, baseDeps)
+	w.BindDeps(w.deps)
 
 	conn, err := connectionPool.Acquire()
 	if err != nil {
@@ -71,12 +72,9 @@ func NewFailingWorker(
 			deps.Err(err))
 	}
 
-	return &FailingWorker{
-		BaseWorker: helpers.NewBaseWorker(dependencies),
-		identity:   identity,
-		logger:     logger,
-		connection: conn,
-	}, nil
+	w.connection = conn
+
+	return w, nil
 }
 
 // CollectObservedState returns the current observed state of the failing worker.
@@ -87,40 +85,38 @@ func (w *FailingWorker) CollectObservedState(ctx context.Context, _ fsmv2.Desire
 	default:
 	}
 
-	deps := w.GetDependencies()
-
 	// IMPORTANT: Increment observation counter at START of collection when recovery delay is active.
 	// This ensures deterministic counting for tests.
-	if deps.ShouldDelayRecovery() {
-		deps.IncrementObservationsSinceFailure()
+	if w.deps.ShouldDelayRecovery() {
+		w.deps.IncrementObservationsSinceFailure()
 	}
 
 	connectionHealth := "no connection"
 
-	if deps.IsConnected() {
+	if w.deps.IsConnected() {
 		connectionHealth = "healthy"
 	}
 
 	observed := snapshot.ExamplefailingObservedState{
-		ID:                       w.identity.ID,
+		ID:                       w.Identity().ID,
 		CollectedAt:              time.Now(),
 		ConnectionHealth:         connectionHealth,
-		ConnectAttempts:          deps.GetAttempts(),
-		RestartAfterFailures:     deps.GetRestartAfterFailures(),
-		AllCyclesComplete:        deps.AllCyclesComplete(),
-		TicksInConnectedState:    deps.GetTicksInConnected(),
-		CurrentCycle:             deps.GetCurrentCycle(),
-		TotalCycles:              deps.GetFailureCycles(),
-		RecoveryDelayActive:      deps.ShouldDelayRecovery(),
-		ObservationsSinceFailure: deps.GetObservationsSinceFailure(),
+		ConnectAttempts:          w.deps.GetAttempts(),
+		RestartAfterFailures:     w.deps.GetRestartAfterFailures(),
+		AllCyclesComplete:        w.deps.AllCyclesComplete(),
+		TicksInConnectedState:    w.deps.GetTicksInConnected(),
+		CurrentCycle:             w.deps.GetCurrentCycle(),
+		TotalCycles:              w.deps.GetFailureCycles(),
+		RecoveryDelayActive:      w.deps.ShouldDelayRecovery(),
+		ObservationsSinceFailure: w.deps.GetObservationsSinceFailure(),
 	}
-	observed.ShouldFail = deps.GetShouldFail()
+	observed.ShouldFail = w.deps.GetShouldFail()
 
-	if fm := deps.GetFrameworkState(); fm != nil {
+	if fm := w.deps.GetFrameworkState(); fm != nil {
 		observed.Metrics.Framework = *fm
 	}
 
-	observed.LastActionResults = deps.GetActionHistory()
+	observed.LastActionResults = w.deps.GetActionHistory()
 
 	return observed, nil
 }
@@ -148,13 +144,12 @@ func (w *FailingWorker) updateDependenciesFromSpec(spec interface{}) {
 		return
 	}
 
-	deps := w.GetDependencies()
-	deps.SetShouldFail(parsed.ShouldFail)
-	deps.SetMaxFailures(parsed.GetMaxFailures())
-	deps.SetRestartAfterFailures(parsed.GetRestartAfterFailures())
-	deps.SetFailureCycles(parsed.GetFailureCycles())
-	deps.SetRecoveryDelayMs(parsed.RecoveryDelayMs)
-	deps.SetRecoveryDelayObservations(parsed.GetRecoveryDelayObservations())
+	w.deps.SetShouldFail(parsed.ShouldFail)
+	w.deps.SetMaxFailures(parsed.GetMaxFailures())
+	w.deps.SetRestartAfterFailures(parsed.GetRestartAfterFailures())
+	w.deps.SetFailureCycles(parsed.GetFailureCycles())
+	w.deps.SetRecoveryDelayMs(parsed.RecoveryDelayMs)
+	w.deps.SetRecoveryDelayObservations(parsed.GetRecoveryDelayObservations())
 }
 
 // GetInitialState returns the state the FSM should start in.

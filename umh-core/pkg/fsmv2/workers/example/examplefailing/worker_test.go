@@ -1,0 +1,44 @@
+// Copyright 2025 UMH Systems GmbH
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package examplefailing_test
+
+import (
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplefailing"
+)
+
+var _ = Describe("FailingWorker", func() {
+	Describe("GetDependenciesAny", func() {
+		It("returns *FailingDependencies", func() {
+			logger := deps.NewNopFSMLogger()
+			pool := &examplefailing.DefaultConnectionPool{}
+			identity := deps.Identity{ID: "test-id", Name: "test-failing"}
+
+			worker, err := examplefailing.NewFailingWorker(identity, pool, logger, nil)
+			Expect(err).NotTo(HaveOccurred())
+
+			var w fsmv2.Worker = worker
+			dp, ok := w.(fsmv2.DependencyProvider)
+			Expect(ok).To(BeTrue(), "worker must implement DependencyProvider")
+			got := dp.GetDependenciesAny()
+			_, ok = got.(*examplefailing.FailingDependencies)
+			Expect(ok).To(BeTrue(), "expected *FailingDependencies, got %T", got)
+		})
+	})
+})

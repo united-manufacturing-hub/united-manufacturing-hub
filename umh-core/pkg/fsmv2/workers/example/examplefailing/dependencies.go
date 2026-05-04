@@ -65,9 +65,9 @@ type FailingDependencies struct {
 	connected              bool
 }
 
-func NewFailingDependencies(connectionPool ConnectionPool, logger deps.FSMLogger, stateReader deps.StateReader, identity deps.Identity) *FailingDependencies {
+func NewFailingDependencies(connectionPool ConnectionPool, baseDeps *deps.BaseDependencies) *FailingDependencies {
 	return &FailingDependencies{
-		BaseDependencies: deps.NewBaseDependencies(logger, stateReader, identity),
+		BaseDependencies: baseDeps,
 		connectionPool:   connectionPool,
 		maxFailures:      3, // Default: fail 3 times before success
 		failureCycles:    1, // Default: single failure cycle (backward compatible)
