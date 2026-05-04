@@ -137,6 +137,12 @@ func (d *BaseDependencies) GetActionHistory() []ActionResult {
 }
 
 // SetActionHistory is for supervisor use only; called before CollectObservedState.
+//
+// Design invariant: the supervisor injects framework setters (CollectedAt,
+// FrameworkMetrics, ActionHistory) into deps BEFORE calling CollectObservedState
+// each tick. Workers that call SaveObserved in CollectObservedState receive a
+// fully-populated deps at that moment. This ordering is enforced by
+// supervisor/internal/collection/collector.go (collectAndSaveObservedState).
 func (d *BaseDependencies) SetActionHistory(history []ActionResult) {
 	d.mu.Lock()
 	defer d.mu.Unlock()

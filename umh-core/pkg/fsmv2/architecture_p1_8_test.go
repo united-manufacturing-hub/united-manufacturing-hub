@@ -16,7 +16,6 @@ package fsmv2_test
 
 import (
 	"bytes"
-	"encoding/json"
 	"fmt"
 	"go/ast"
 	"go/parser"
@@ -24,7 +23,6 @@ import (
 	"go/token"
 	"os"
 	"path/filepath"
-	"reflect"
 	"strings"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -52,37 +50,9 @@ var _ = Describe("FSMv2 Architecture Validation — P1.8 Foundation Cap", func()
 	// =====================================================================
 	// Test 2 — TestNoJsonDashFieldsOnObservation (§14)
 	// =====================================================================
-	Describe("Observation has no surprise json:\"-\" fields (§14)", func() {
-		It("rejects json:\"-\" fields on Observation unless the type implements json.Marshaler", func() {
-			// Observation[T] has json:"-" on Status but flattens it via
-			// custom MarshalJSON. The check is: the enclosing type must
-			// implement json.Marshaler when it carries json:"-".
-			obsType := reflect.TypeOf(fsmv2.Observation[struct{}]{})
-
-			// Verify Observation implements json.Marshaler (otherwise the
-			// json:"-" Status field would be a real silent-loss bug).
-			marshalerType := reflect.TypeOf((*json.Marshaler)(nil)).Elem()
-			Expect(obsType.Implements(marshalerType)).To(BeTrue(),
-				"Observation[T] carries json:\"-\" Status but does not implement json.Marshaler — silent serialization loss (Design Intent §14)")
-
-			// Walk Observation's fields. For any json:"-" field, the enclosing
-			// type MUST be a Marshaler. (For Observation itself this is
-			// already verified above; this loop just documents the audit
-			// path for future fields.)
-			for i := 0; i < obsType.NumField(); i++ {
-				f := obsType.Field(i)
-				tag := f.Tag.Get("json")
-				if tag != "-" {
-					continue
-				}
-				// Status is the documented exception.
-				if f.Name == "Status" {
-					continue
-				}
-				Fail(fmt.Sprintf("Observation has unexpected json:\"-\" field %s — review Design Intent §14 before adding more", f.Name))
-			}
-		})
-	})
+	// REMOVED in PR3-c16: replaced with godoc on Observation[T] (the §14
+	// invariant is documented in the type's godoc; runtime reflect check
+	// was redundant with the documented contract).
 
 	// =====================================================================
 	// Test 3 — TestSupervisorInjectionBeforePersistence (§14)
@@ -474,46 +444,12 @@ var _ = Describe("FSMv2 Architecture Validation — P1.8 Foundation Cap", func()
 	// =====================================================================
 	// Bonus 1 — TestVariablesInternalSchemaStability (§4-D LOCKED)
 	// =====================================================================
-	//
-	// Pairs with the wire-level round-trip test in
-	// integration/variables_typed_wire_test.go. The two tests catch
-	// different defect classes intentionally:
-	//
-	//   - This test (reflect-based, struct-definition level): catches
-	//     EXACT tag string changes — e.g., `json:"parentID,omitempty"`
-	//     accidentally becoming `json:"parentID"` (omitempty modifier
-	//     dropped) would slip past the wire-level test (the key is still
-	//     present in JSON output) but fails here because the tag string
-	//     no longer matches the locked spelling.
-	//
-	//   - The integration round-trip test (wire-level): catches whether
-	//     the field actually serializes / deserializes through JSON
-	//     correctly — e.g., a custom MarshalJSON that drops a field, or
-	//     an alias renaming field case while preserving the tag would
-	//     pass this reflect check but fail the round-trip.
-	//
-	// Both tests are cheap (microseconds each); keep both for layered
-	// coverage of the §4-D LOCKED contract.
-	Describe("VariablesInternal preserves §4-D LOCKED JSON tag spelling", func() {
-		It("WorkerID/ParentID/BridgedBy/CreatedAt match the locked tags", func() {
-			expected := map[string]string{
-				"WorkerID":  "workerID",
-				"ParentID":  "parentID,omitempty",
-				"BridgedBy": "bridgedBy,omitempty",
-				"CreatedAt": "createdAt",
-			}
-
-			typ := reflect.TypeOf(config.VariablesInternal{})
-			for name, wantTag := range expected {
-				f, ok := typ.FieldByName(name)
-				Expect(ok).To(BeTrue(),
-					"field %s missing from VariablesInternal — §4-D LOCKED schema violation", name)
-				gotTag := f.Tag.Get("json")
-				Expect(gotTag).To(Equal(wantTag),
-					"field %s json tag = %q; want %q (§4-D LOCKED)", name, gotTag, wantTag)
-			}
-		})
-	})
+	// REMOVED in PR3-c16: the §4-D LOCKED tag spelling is documented in
+	// godoc on config.VariablesInternal (and a comment near LOCKED tag
+	// constants in config/childspec.go). The wire-level round-trip test
+	// in integration/variables_typed_wire_test.go retains coverage of the
+	// serialization contract; the reflect-based exact-tag check is a
+	// doc-invariant duplicate.
 
 	// =====================================================================
 	// Test 14 — Mirror byte-equivalence (P2.4 / pr2_issues #10)

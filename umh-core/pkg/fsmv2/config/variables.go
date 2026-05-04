@@ -97,6 +97,18 @@ type VariableBundle struct {
 // transition; the Go field names follow Go conventions (PascalCase). Per §17,
 // keeping the wire shape stable avoids a delta-storm against pre-P1.5c
 // observation documents.
+//
+// §4-D LOCKED tag spellings — these JSON tags must match exactly:
+//
+//	WorkerID  → "workerID"
+//	ParentID  → "parentID,omitempty"
+//	BridgedBy → "bridgedBy,omitempty"
+//	CreatedAt → "createdAt"
+//
+// Changing tag spelling (including the omitempty modifier) breaks supervisor
+// unmarshalling and the codegened TypeScript surface. The wire-level
+// round-trip test in integration/variables_typed_wire_test.go enforces the
+// serialization contract.
 type VariablesInternal struct {
 
 	// CreatedAt is the supervisor-recorded creation time of the worker

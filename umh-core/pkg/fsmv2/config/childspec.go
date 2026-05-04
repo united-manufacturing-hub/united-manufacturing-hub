@@ -56,7 +56,8 @@ import (
 //	    return !s.ShutdownRequested && s.ParentMappedState == config.DesiredStateRunning
 //	}
 //
-// See ValidateNoCustomLifecycleFields in pkg/fsmv2/internal/validator/snapshot.go for enforcement.
+// Custom lifecycle fields are forbidden; the framework controls lifecycle
+// exclusively via ShouldStop() and reconciliation.
 type BaseDesiredState struct {
 	State             string `json:"state"             yaml:"state"`             // "stopped" or "running" - desired lifecycle state
 	ShutdownRequested bool   `json:"ShutdownRequested" yaml:"ShutdownRequested"` //nolint:tagliatelle // Match JSON field name for API compatibility
