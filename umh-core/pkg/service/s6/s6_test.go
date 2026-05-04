@@ -478,6 +478,7 @@ var _ = Describe("S6 Service", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(pathExists(svcPath)).To(BeFalse())
 			Expect(pathExists(logDir)).To(BeFalse())
+			Expect(svc.artifacts.Load()).To(BeNil(), "Remove must clear artifact tracking so Health() returns ActionOK after cleanup")
 		})
 
 		It("is successful when only the log dir had to be removed", func() {
@@ -502,6 +503,7 @@ var _ = Describe("S6 Service", func() {
 			err := svc.Remove(ctx, svcPath, mockFS)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(pathExists(logDir)).To(BeFalse())
+			Expect(svc.artifacts.Load()).To(BeNil(), "Remove must clear artifact tracking so Health() returns ActionOK after cleanup")
 		})
 
 		It("is idempotent (everything already gone)", func() {
@@ -533,6 +535,7 @@ var _ = Describe("S6 Service", func() {
 			err := svc.Remove(ctx, svcPath, mockFS)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(removeCalls).To(Equal(0), "RemoveAll should not be called when nothing exists")
+			Expect(svc.artifacts.Load()).To(BeNil(), "Remove must clear artifact tracking so Health() returns ActionOK after cleanup")
 		})
 
 		It("returns an error when deletion fails", func() {

@@ -197,7 +197,9 @@ type LogEntry struct {
 type Service interface {
 	// Create creates the service with specific configuration
 	Create(ctx context.Context, servicePath string, config s6serviceconfig.S6ServiceConfig, fsService filesystem.Service) error
-	// Remove removes the service directory structure
+	// Remove removes the service directory structure. Returns ErrServiceNotExist
+	// when the service has no tracked files (idempotent — callers may treat this
+	// as success). Clears the service's artifact tracking on success.
 	Remove(ctx context.Context, servicePath string, fsService filesystem.Service) error
 	// Start starts the service
 	Start(ctx context.Context, servicePath string, fsService filesystem.Service) error
@@ -1229,13 +1231,15 @@ func (s *DefaultService) ForceRemove(
 	s.logger.Warnf("Force removing S6 service %s", servicePath)
 
 	return s.withLifecycleGuard(func() error {
-		// ForceRemove doesn't need tracked files - it does aggressive cleanup
-		// Create minimal artifacts for cleanup operations
+		// ForceRemove uses a minimal stub with the three directory paths ForceCleanup
+		// needs. CreatedFiles is intentionally empty — ForceCleanup removes directories
+		// wholesale rather than per-file. RepositoryDir must be set so ForceCleanup
+		// removes the repository (the scan dir is only a symlink).
 		serviceName := filepath.Base(servicePath)
 		artifacts := &ServiceArtifacts{
-			ServiceDir: servicePath,
-			LogDir:     filepath.Join(constants.S6LogBaseDir, serviceName),
-			// CreatedFiles intentionally empty - we don't care about tracked files for force cleanup
+			ServiceDir:    servicePath,
+			RepositoryDir: filepath.Join(constants.GetS6RepositoryBaseDir(), serviceName),
+			LogDir:        filepath.Join(constants.S6LogBaseDir, serviceName),
 		}
 
 		// Use lifecycle manager for aggressive cleanup

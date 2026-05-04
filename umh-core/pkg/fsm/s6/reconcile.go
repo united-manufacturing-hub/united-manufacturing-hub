@@ -214,7 +214,7 @@ func (s *S6Instance) reconcileStateTransition(ctx context.Context, services serv
 	// This single check supersedes the operational-state HealthBad escape
 	// added under ENG-3468/ENG-3473 (and closes the lifecycle gap that
 	// produced ENG-4862). The remaining HealthBad branches in
-	// reconcileTransitionToRunning are now defensive belt-and-suspenders.
+	// reconcileTransitionToStopped are now defensive belt-and-suspenders.
 	switch directive := s.service.Health(ctx, services.GetFileSystem()); directive {
 	case s6service.ActionOK:
 		// Healthy — fall through to normal lifecycle/operational dispatch.
@@ -229,7 +229,13 @@ func (s *S6Instance) reconcileStateTransition(ctx context.Context, services serv
 		// misrepresent that nothing changed this tick.
 		return fmt.Errorf("%s: directory corrupted in state %s", backoff.PermanentFailureError, currentState), false
 	case s6service.ActionWait:
-		return nil, false
+		// ActionWait applies only to operational states. Lifecycle states (especially
+		// LifecycleStateRemoving) must fall through to ReconcileLifecycleStates to
+		// retry RemoveInstance. Blocking that retry when RemovalProgress != nil would
+		// permanently stall removal if RemoveArtifacts fails mid-sequence.
+		if IsOperationalState(currentState) {
+			return nil, false
+		}
 	default:
 		s.baseFSMInstance.GetLogger().Errorf(
 			"unknown RecoveryAction %v from s6 service Health for %s - falling through to normal dispatch",

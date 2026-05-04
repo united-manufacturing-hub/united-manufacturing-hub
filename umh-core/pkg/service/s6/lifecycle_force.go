@@ -75,12 +75,26 @@ func (s *DefaultService) ForceCleanup(ctx context.Context, artifacts *ServiceArt
 		s.logger.Warnf("Failed to remove log directory: %v", err)
 	}
 
+	// Step 4: Remove the repository directory. The scan dir (ServiceDir) is a
+	// symlink; the actual service files live in RepositoryDir. Without this step
+	// the repository is orphaned on disk and only recovered when the next Create
+	// call detects the stale directory.
+	if artifacts.RepositoryDir != "" {
+		if err := s.removeDirectoryWithTimeout(ctx, artifacts.RepositoryDir, fsService); err != nil {
+			s.logger.Warnf("Failed to remove repository directory: %v", err)
+		}
+	}
+
 	// Verify cleanup completed
 	serviceExists, _ := fsService.PathExists(ctx, artifacts.ServiceDir)
 	logExists, _ := fsService.PathExists(ctx, artifacts.LogDir)
+	repoExists := false
+	if artifacts.RepositoryDir != "" {
+		repoExists, _ = fsService.PathExists(ctx, artifacts.RepositoryDir)
+	}
 
-	if serviceExists || logExists {
-		return fmt.Errorf("force cleanup incomplete: service=%v, log=%v", serviceExists, logExists)
+	if serviceExists || logExists || repoExists {
+		return fmt.Errorf("force cleanup incomplete: service=%v, log=%v, repo=%v", serviceExists, logExists, repoExists)
 	}
 
 	s.logger.Infof("Force cleanup completed for service: %s", filepath.Base(artifacts.ServiceDir))
