@@ -589,6 +589,101 @@ var _ = Describe("ProtocolConverter YAML Comparator", func() {
 		})
 	})
 
+	Describe("Per-DFC desired state comparison", func() {
+		baseConfig := func() ProtocolConverterServiceConfigSpec {
+			return ProtocolConverterServiceConfigSpec{
+				Config: ProtocolConverterServiceConfigTemplate{
+					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
+						NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
+							Target: "127.0.0.1",
+							Port:   "443",
+						},
+					},
+					DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+						BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
+							Input: map[string]any{
+								"mqtt": map[string]any{"topic": "test"},
+							},
+						},
+					},
+				},
+			}
+		}
+
+		It("should consider configs equal when both DFC desired states match", func() {
+			c1 := baseConfig()
+			c1.ReadDFCDesiredState = "active"
+			c1.WriteDFCDesiredState = "stopped"
+
+			c2 := baseConfig()
+			c2.ReadDFCDesiredState = "active"
+			c2.WriteDFCDesiredState = "stopped"
+
+			comparator := NewComparator()
+			Expect(comparator.ConfigsEqual(c1, c2)).To(BeTrue())
+		})
+
+		It("should consider configs not equal when ReadDFCDesiredState differs", func() {
+			c1 := baseConfig()
+			c1.ReadDFCDesiredState = "active"
+
+			c2 := baseConfig()
+			c2.ReadDFCDesiredState = "stopped"
+
+			comparator := NewComparator()
+			Expect(comparator.ConfigsEqual(c1, c2)).To(BeFalse())
+
+			diff := comparator.ConfigDiff(c1, c2)
+			Expect(diff).To(ContainSubstring("ReadDFCDesiredState"))
+			Expect(diff).To(ContainSubstring("active"))
+			Expect(diff).To(ContainSubstring("stopped"))
+		})
+
+		It("should consider configs not equal when WriteDFCDesiredState differs", func() {
+			c1 := baseConfig()
+			c1.WriteDFCDesiredState = "active"
+
+			c2 := baseConfig()
+			c2.WriteDFCDesiredState = "stopped"
+
+			comparator := NewComparator()
+			Expect(comparator.ConfigsEqual(c1, c2)).To(BeFalse())
+
+			diff := comparator.ConfigDiff(c1, c2)
+			Expect(diff).To(ContainSubstring("WriteDFCDesiredState"))
+			Expect(diff).To(ContainSubstring("active"))
+			Expect(diff).To(ContainSubstring("stopped"))
+		})
+
+		It("should consider configs not equal when both DFC desired states differ", func() {
+			c1 := baseConfig()
+			c1.ReadDFCDesiredState = "active"
+			c1.WriteDFCDesiredState = "active"
+
+			c2 := baseConfig()
+			c2.ReadDFCDesiredState = "stopped"
+			c2.WriteDFCDesiredState = "stopped"
+
+			comparator := NewComparator()
+			Expect(comparator.ConfigsEqual(c1, c2)).To(BeFalse())
+
+			diff := comparator.ConfigDiff(c1, c2)
+			Expect(diff).To(ContainSubstring("ReadDFCDesiredState"))
+			Expect(diff).To(ContainSubstring("WriteDFCDesiredState"))
+		})
+
+		It("should consider empty and non-empty DFC desired states not equal", func() {
+			c1 := baseConfig()
+			// c1 has empty ReadDFCDesiredState (zero value)
+
+			c2 := baseConfig()
+			c2.ReadDFCDesiredState = "active"
+
+			comparator := NewComparator()
+			Expect(comparator.ConfigsEqual(c1, c2)).To(BeFalse())
+		})
+	})
+
 	// Test package-level functions
 	Describe("Package-level functions", func() {
 		It("ConfigsEqual should use default comparator", func() {

@@ -71,7 +71,10 @@ const (
 	// writing, backup, and validation.
 	FeatureFSMv1ConfigManager Feature = "fsmv1_config_manager"
 
-	// FeatureDisableReadFlows controls the feature about activating and deactivating read flows.
+	// FeatureDisableReadFlows covers errors from the read-flow and write-flow
+	// features (activating/deactivating individual DFCs on protocol converters).
+	// Both features share this tag because they are implemented together and
+	// route to the same owner.
 	FeatureDisableReadFlows Feature = "disable_read_flows"
 )
 
