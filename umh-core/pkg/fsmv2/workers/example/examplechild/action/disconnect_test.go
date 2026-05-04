@@ -35,7 +35,8 @@ var _ = Describe("DisconnectAction", func() {
 	BeforeEach(func() {
 		ctx = context.Background()
 		identity := deps.Identity{ID: "test-id", WorkerType: "child"}
-		depsAny = example_child.NewExamplechildDependencies(&example_child.DefaultConnectionPool{}, deps.NewNopFSMLogger(), nil, identity)
+		baseDeps := deps.NewBaseDependencies(deps.NewNopFSMLogger(), nil, identity)
+		depsAny = example_child.NewExamplechildDependencies(&example_child.DefaultConnectionPool{}, baseDeps)
 	})
 
 	Describe("Execute", func() {

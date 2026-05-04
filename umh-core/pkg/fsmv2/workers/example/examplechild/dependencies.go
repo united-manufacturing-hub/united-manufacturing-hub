@@ -58,9 +58,10 @@ type ExamplechildDependencies struct {
 }
 
 // NewExamplechildDependencies creates new dependencies for the child worker.
-func NewExamplechildDependencies(connectionPool ConnectionPool, logger deps.FSMLogger, stateReader deps.StateReader, identity deps.Identity) *ExamplechildDependencies {
+// Accepts a shared BaseDependencies to avoid dual-instance metrics divergence.
+func NewExamplechildDependencies(connectionPool ConnectionPool, baseDeps *deps.BaseDependencies) *ExamplechildDependencies {
 	return &ExamplechildDependencies{
-		BaseDependencies: deps.NewBaseDependencies(logger, stateReader, identity),
+		BaseDependencies: baseDeps,
 		connectionPool:   connectionPool,
 		isConnected:      false,
 	}
