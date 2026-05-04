@@ -33,7 +33,9 @@ func (s *TryingToStopState) Next(snapAny any) fsmv2.NextResult[any, any] {
 		return fsmv2.Transition(&StoppedState{}, fsmv2.SignalNone, nil, "disconnected successfully", nil)
 	}
 
-	return fsmv2.Transition(s, fsmv2.SignalNone, &action.DisconnectAction{}, "attempting to disconnect cleanly", nil)
+	return fsmv2.Transition(s, fsmv2.SignalNone,
+		&action.DisconnectAction{ShouldFail: snap.Desired.ShouldFail, FailureCycles: snap.Desired.FailureCycles},
+		"attempting to disconnect cleanly", nil)
 }
 
 func (s *TryingToStopState) String() string {

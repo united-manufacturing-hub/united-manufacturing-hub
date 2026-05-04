@@ -31,10 +31,12 @@ var ErrSimulatedFailure = errors.New("simulated connection failure")
 // ConnectAction establishes a connection to an external resource.
 // This action can be configured to fail predictably for testing FSM error handling.
 //
-// When ShouldFail is true in dependencies, the action will fail for the first
-// MaxFailures attempts, then succeed. This demonstrates exponential backoff
-// and recovery behavior.
+// When ShouldFail is true, the action will fail for the first MaxFailures attempts,
+// then succeed. This demonstrates exponential backoff and recovery behavior.
 type ConnectAction struct {
+	ShouldFail    bool
+	MaxFailures   int
+	FailureCycles int
 }
 
 // Execute attempts to acquire a connection from the pool.
@@ -50,11 +52,11 @@ func (a *ConnectAction) Execute(ctx context.Context, depsAny any) error {
 	deps := depsAny.(snapshot.ExamplefailingDependencies)
 	logger := deps.GetLogger()
 
-	if deps.GetShouldFail() && !deps.AllCyclesComplete() {
+	if a.ShouldFail && deps.GetCurrentCycle() < a.FailureCycles {
 		attempts := deps.IncrementAttempts()
-		maxFailures := deps.GetMaxFailures()
+		maxFailures := a.MaxFailures
 		currentCycle := deps.GetCurrentCycle()
-		totalCycles := deps.GetFailureCycles()
+		totalCycles := a.FailureCycles
 
 		logger.Info("connect_attempting",
 			depspkg.Int("attempt", attempts),

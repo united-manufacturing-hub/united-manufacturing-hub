@@ -33,8 +33,8 @@ func (s *TryingToConnectState) Next(snapAny any) fsmv2.NextResult[any, any] {
 		return fsmv2.Transition(&TryingToStopState{}, fsmv2.SignalNone, nil, "stop required, transitioning to stop state", nil)
 	}
 
-	if snap.Observed.RestartAfterFailures > 0 &&
-		snap.Observed.ConnectAttempts >= snap.Observed.RestartAfterFailures {
+	if snap.Desired.RestartAfterFailures > 0 &&
+		snap.Observed.ConnectAttempts >= snap.Desired.RestartAfterFailures {
 		return fsmv2.Transition(s, fsmv2.SignalNeedsRestart, nil, "max connection attempts reached, signaling restart", nil)
 	}
 
@@ -48,11 +48,14 @@ func (s *TryingToConnectState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	// Without an action, observations only happen every 1 second (DefaultObservationInterval),
 	// which could cause the parent to miss the unhealthy window during recovery delay.
 	if snap.Observed.RecoveryDelayActive {
-		return fsmv2.Transition(s, fsmv2.SignalNone, &action.TriggerObservationAction{},
+		return fsmv2.Transition(s, fsmv2.SignalNone,
+			&action.TriggerObservationAction{ShouldFail: snap.Desired.ShouldFail, FailureCycles: snap.Desired.FailureCycles},
 			"waiting for recovery delay (triggering observation)", nil)
 	}
 
-	return fsmv2.Transition(s, fsmv2.SignalNone, &action.ConnectAction{}, "attempting to establish connection", nil)
+	return fsmv2.Transition(s, fsmv2.SignalNone,
+		&action.ConnectAction{ShouldFail: snap.Desired.ShouldFail, MaxFailures: snap.Desired.MaxFailures, FailureCycles: snap.Desired.FailureCycles},
+		"attempting to establish connection", nil)
 }
 
 func (s *TryingToConnectState) String() string {

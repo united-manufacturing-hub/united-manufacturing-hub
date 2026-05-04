@@ -78,16 +78,22 @@ func NewFailingWorker(
 }
 
 // CollectObservedState returns the current observed state of the failing worker.
-func (w *FailingWorker) CollectObservedState(ctx context.Context, _ fsmv2.DesiredState) (fsmv2.ObservedState, error) {
+func (w *FailingWorker) CollectObservedState(ctx context.Context, desiredAny fsmv2.DesiredState) (fsmv2.ObservedState, error) {
 	select {
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	default:
 	}
 
+	desired, ok := desiredAny.(*snapshot.ExamplefailingDesiredState)
+	if !ok || desired == nil {
+		desired = &snapshot.ExamplefailingDesiredState{}
+	}
+
 	// IMPORTANT: Increment observation counter at START of collection when recovery delay is active.
 	// This ensures deterministic counting for tests.
-	if w.deps.ShouldDelayRecovery() {
+	recoveryDelayObservations := desired.RecoveryDelayObservations
+	if recoveryDelayObservations > 0 && w.deps.GetObservationsSinceFailure() < recoveryDelayObservations {
 		w.deps.IncrementObservationsSinceFailure()
 	}
 
@@ -97,20 +103,25 @@ func (w *FailingWorker) CollectObservedState(ctx context.Context, _ fsmv2.Desire
 		connectionHealth = "healthy"
 	}
 
+	allCyclesComplete := w.deps.GetCurrentCycle() >= desired.FailureCycles
+
 	observed := snapshot.ExamplefailingObservedState{
 		ID:                       w.Identity().ID,
 		CollectedAt:              time.Now(),
 		ConnectionHealth:         connectionHealth,
 		ConnectAttempts:          w.deps.GetAttempts(),
-		RestartAfterFailures:     w.deps.GetRestartAfterFailures(),
-		AllCyclesComplete:        w.deps.AllCyclesComplete(),
+		AllCyclesComplete:        allCyclesComplete,
 		TicksInConnectedState:    w.deps.GetTicksInConnected(),
 		CurrentCycle:             w.deps.GetCurrentCycle(),
-		TotalCycles:              w.deps.GetFailureCycles(),
-		RecoveryDelayActive:      w.deps.ShouldDelayRecovery(),
+		TotalCycles:              desired.FailureCycles,
+		RecoveryDelayActive:      recoveryDelayObservations > 0 && w.deps.GetObservationsSinceFailure() < recoveryDelayObservations,
 		ObservationsSinceFailure: w.deps.GetObservationsSinceFailure(),
 	}
-	observed.ShouldFail = w.deps.GetShouldFail()
+	observed.ShouldFail = desired.ShouldFail
+	observed.MaxFailures = desired.MaxFailures
+	observed.FailureCycles = desired.FailureCycles
+	observed.RestartAfterFailures = desired.RestartAfterFailures
+	observed.RecoveryDelayObservations = desired.RecoveryDelayObservations
 
 	if fm := w.deps.GetFrameworkState(); fm != nil {
 		observed.Metrics.Framework = *fm
@@ -123,33 +134,25 @@ func (w *FailingWorker) CollectObservedState(ctx context.Context, _ fsmv2.Desire
 
 // DeriveDesiredState determines what state the failing worker should be in.
 func (w *FailingWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, error) {
-	desired, err := fsmv2types.DeriveLeafState[FailingUserSpec](spec)
-	if err != nil {
-		return nil, err
-	}
-
-	w.updateDependenciesFromSpec(spec)
-
-	return &desired, nil
-}
-
-// updateDependenciesFromSpec configures dependencies based on the user spec.
-func (w *FailingWorker) updateDependenciesFromSpec(spec interface{}) {
 	if spec == nil {
-		return
+		return &snapshot.ExamplefailingDesiredState{
+			BaseDesiredState: fsmv2types.BaseDesiredState{State: fsmv2types.DesiredStateRunning},
+		}, nil
 	}
 
 	parsed, err := fsmv2types.ParseUserSpec[FailingUserSpec](spec)
 	if err != nil {
-		return
+		return nil, err
 	}
 
-	w.deps.SetShouldFail(parsed.ShouldFail)
-	w.deps.SetMaxFailures(parsed.GetMaxFailures())
-	w.deps.SetRestartAfterFailures(parsed.GetRestartAfterFailures())
-	w.deps.SetFailureCycles(parsed.GetFailureCycles())
-	w.deps.SetRecoveryDelayMs(parsed.RecoveryDelayMs)
-	w.deps.SetRecoveryDelayObservations(parsed.GetRecoveryDelayObservations())
+	return &snapshot.ExamplefailingDesiredState{
+		BaseDesiredState:          fsmv2types.BaseDesiredState{State: parsed.GetState()},
+		ShouldFail:                parsed.ShouldFail,
+		MaxFailures:               parsed.GetMaxFailures(),
+		FailureCycles:             parsed.GetFailureCycles(),
+		RestartAfterFailures:      parsed.GetRestartAfterFailures(),
+		RecoveryDelayObservations: parsed.GetRecoveryDelayObservations(),
+	}, nil
 }
 
 // GetInitialState returns the state the FSM should start in.

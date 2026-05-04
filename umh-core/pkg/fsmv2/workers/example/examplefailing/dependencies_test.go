@@ -43,17 +43,6 @@ var _ = Describe("FailingDependencies Observation-Based Recovery", func() {
 		failDeps = examplefailing.NewFailingDependencies(pool, baseDeps)
 	})
 
-	Describe("SetRecoveryDelayObservations and GetRecoveryDelayObservations", func() {
-		It("should set and get recovery delay observations", func() {
-			failDeps.SetRecoveryDelayObservations(5)
-			Expect(failDeps.GetRecoveryDelayObservations()).To(Equal(5))
-		})
-
-		It("should default to 0", func() {
-			Expect(failDeps.GetRecoveryDelayObservations()).To(Equal(0))
-		})
-	})
-
 	Describe("IncrementObservationsSinceFailure", func() {
 		It("should increment the counter and return new value", func() {
 			result := failDeps.IncrementObservationsSinceFailure()
@@ -84,37 +73,4 @@ var _ = Describe("FailingDependencies Observation-Based Recovery", func() {
 		})
 	})
 
-	Describe("ShouldDelayRecovery (observation-based)", func() {
-		Context("when recoveryDelayObservations is 0", func() {
-			It("should return false", func() {
-				failDeps.SetRecoveryDelayObservations(0)
-				Expect(failDeps.ShouldDelayRecovery()).To(BeFalse())
-			})
-		})
-
-		Context("when observationsSinceFailure < recoveryDelayObservations", func() {
-			It("should return true", func() {
-				failDeps.SetRecoveryDelayObservations(3)
-				failDeps.IncrementObservationsSinceFailure() // 1 observation
-				Expect(failDeps.ShouldDelayRecovery()).To(BeTrue())
-			})
-		})
-
-		Context("when observationsSinceFailure >= recoveryDelayObservations", func() {
-			It("should return false when equal", func() {
-				failDeps.SetRecoveryDelayObservations(2)
-				failDeps.IncrementObservationsSinceFailure() // 1
-				failDeps.IncrementObservationsSinceFailure() // 2
-				Expect(failDeps.ShouldDelayRecovery()).To(BeFalse())
-			})
-
-			It("should return false when greater", func() {
-				failDeps.SetRecoveryDelayObservations(2)
-				failDeps.IncrementObservationsSinceFailure() // 1
-				failDeps.IncrementObservationsSinceFailure() // 2
-				failDeps.IncrementObservationsSinceFailure() // 3
-				Expect(failDeps.ShouldDelayRecovery()).To(BeFalse())
-			})
-		})
-	})
 })

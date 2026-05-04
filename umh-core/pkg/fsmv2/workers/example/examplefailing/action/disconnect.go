@@ -25,6 +25,8 @@ const DisconnectActionName = "disconnect"
 
 // DisconnectAction releases a connection back to the pool.
 type DisconnectAction struct {
+	ShouldFail    bool
+	FailureCycles int
 }
 
 // Execute releases the connection back to the pool.
@@ -42,12 +44,12 @@ func (a *DisconnectAction) Execute(ctx context.Context, depsAny any) error {
 
 	deps.SetConnected(false)
 
-	if deps.GetShouldFail() && !deps.AllCyclesComplete() {
+	if a.ShouldFail && deps.GetCurrentCycle() < a.FailureCycles {
 		newCycle := deps.AdvanceCycle() // Increments cycle AND resets attempts
 		logger.Info("disconnect_advanced_cycle",
 			depspkg.Int("new_cycle", newCycle+1),
-			depspkg.Int("total_cycles", deps.GetFailureCycles()),
-			depspkg.Bool("all_complete", deps.AllCyclesComplete()),
+			depspkg.Int("total_cycles", a.FailureCycles),
+			depspkg.Bool("all_complete", deps.GetCurrentCycle() >= a.FailureCycles),
 		)
 	} else {
 		deps.ResetAttempts()

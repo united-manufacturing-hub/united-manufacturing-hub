@@ -25,29 +25,18 @@ import (
 // ExamplefailingDependencies interface to avoid import cycles.
 type ExamplefailingDependencies interface {
 	deps.Dependencies
-	GetShouldFail() bool
 	IncrementAttempts() int
 	GetAttempts() int
 	ResetAttempts()
-	GetMaxFailures() int
 	SetConnected(connected bool)
 	IsConnected() bool
-	GetRestartAfterFailures() int
-	GetFailureCycles() int
 	GetCurrentCycle() int
-	AllCyclesComplete() bool
 	AdvanceCycle() int
 	IncrementTicksInConnected() int
 	GetTicksInConnected() int
 	ResetTicksInConnected()
-	// Recovery delay support (time-based - kept for backward compatibility)
 	SetLastFailureTime(t time.Time)
 	GetLastFailureTime() time.Time
-	ShouldDelayRecovery() bool
-	GetRecoveryDelayMs() int
-	// Recovery delay support (observation-based - preferred)
-	SetRecoveryDelayObservations(n int)
-	GetRecoveryDelayObservations() int
 	IncrementObservationsSinceFailure() int
 	GetObservationsSinceFailure() int
 	ResetObservationsSinceFailure()
@@ -68,7 +57,11 @@ type ExamplefailingDesiredState struct {
 
 	config.BaseDesiredState // Provides ShutdownRequested + IsShutdownRequested() + SetShutdownRequested()
 
-	ShouldFail bool `json:"ShouldFail"`
+	ShouldFail                bool `json:"ShouldFail"`
+	MaxFailures               int  `json:"max_failures"`
+	FailureCycles             int  `json:"failure_cycles"`
+	RestartAfterFailures      int  `json:"restart_after_failures"`
+	RecoveryDelayObservations int  `json:"recovery_delay_observations"`
 }
 
 // ShouldBeRunning returns true if ShutdownRequested is false and parent wants children to run.
@@ -101,7 +94,6 @@ type ExamplefailingObservedState struct {
 	deps.MetricsEmbedder `json:",inline"`
 
 	ConnectAttempts       int `json:"connect_attempts"`
-	RestartAfterFailures  int `json:"restart_after_failures"`
 	TicksInConnectedState int `json:"ticks_in_connected"`
 	CurrentCycle          int `json:"current_cycle"`
 	TotalCycles           int `json:"total_cycles"`

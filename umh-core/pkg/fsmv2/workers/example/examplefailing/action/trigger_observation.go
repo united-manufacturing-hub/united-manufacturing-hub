@@ -31,6 +31,8 @@ const TriggerObservationActionName = "trigger_observation"
 // The action also increments the tick counter while in Connected state,
 // which can be used to track how long the worker has been connected.
 type TriggerObservationAction struct {
+	ShouldFail    bool
+	FailureCycles int
 }
 
 // Execute triggers an observation by completing successfully.
@@ -47,10 +49,10 @@ func (a *TriggerObservationAction) Execute(ctx context.Context, depsAny any) err
 	newTicks := deps.IncrementTicksInConnected()
 	deps.GetLogger().Info("trigger_observation",
 		depspkg.Int("new_ticks", newTicks),
-		depspkg.Bool("should_fail", deps.GetShouldFail()),
-		depspkg.Bool("all_cycles_complete", deps.AllCyclesComplete()),
+		depspkg.Bool("should_fail", a.ShouldFail),
+		depspkg.Bool("all_cycles_complete", deps.GetCurrentCycle() >= a.FailureCycles),
 		depspkg.Int("current_cycle", deps.GetCurrentCycle()),
-		depspkg.Int("total_cycles", deps.GetFailureCycles()),
+		depspkg.Int("total_cycles", a.FailureCycles),
 	)
 
 	return nil

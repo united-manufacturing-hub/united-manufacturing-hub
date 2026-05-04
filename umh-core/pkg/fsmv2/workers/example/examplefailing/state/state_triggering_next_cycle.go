@@ -35,7 +35,9 @@ func (s *TriggeringNextCycleState) Next(snapAny any) fsmv2.NextResult[any, any] 
 	}
 
 	if snap.Observed.ConnectionHealth == "healthy" {
-		return fsmv2.Transition(s, fsmv2.SignalNone, &action.DisconnectAction{}, "disconnecting to trigger next failure cycle", nil)
+		return fsmv2.Transition(s, fsmv2.SignalNone,
+			&action.DisconnectAction{ShouldFail: snap.Desired.ShouldFail, FailureCycles: snap.Desired.FailureCycles},
+			"disconnecting to trigger next failure cycle", nil)
 	}
 
 	if snap.Observed.ConnectionHealth == "no connection" {

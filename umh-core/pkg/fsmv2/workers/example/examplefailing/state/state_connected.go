@@ -70,7 +70,9 @@ func (s *ConnectedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 
 		// Use TriggerObservationAction to trigger immediate observation (even though we use wall-clock
 		// time for the transition decision). This ensures parent observes child health promptly.
-		return fsmv2.Transition(s, fsmv2.SignalNone, &action.TriggerObservationAction{}, "waiting for healthy duration, triggering observation", nil)
+		return fsmv2.Transition(s, fsmv2.SignalNone,
+			&action.TriggerObservationAction{ShouldFail: snap.Desired.ShouldFail, FailureCycles: snap.Desired.FailureCycles},
+			"waiting for healthy duration, triggering observation", nil)
 	}
 
 	return fsmv2.Transition(s, fsmv2.SignalNone, nil, "connected and ready, no action needed", nil)
