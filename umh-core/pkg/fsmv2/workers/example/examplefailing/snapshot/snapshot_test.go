@@ -15,6 +15,7 @@
 package snapshot_test
 
 import (
+	"encoding/json"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -50,6 +51,32 @@ var _ = Describe("ExamplefailingDesiredState", func() {
 			Entry("not requested", false, false),
 			Entry("requested", true, true),
 		)
+	})
+
+	Describe("JSON round-trip", func() {
+		It("survives marshal→unmarshal with all config fields intact", func() {
+			original := &snapshot.ExamplefailingDesiredState{
+				ShouldFail:                true,
+				MaxFailures:               7,
+				FailureCycles:             3,
+				RestartAfterFailures:      5,
+				RecoveryDelayObservations: 4,
+			}
+			original.BaseDesiredState.State = config.DesiredStateRunning
+
+			data, err := json.Marshal(original)
+			Expect(err).NotTo(HaveOccurred())
+
+			var restored snapshot.ExamplefailingDesiredState
+			Expect(json.Unmarshal(data, &restored)).To(Succeed())
+
+			Expect(restored.ShouldFail).To(BeTrue(), "ShouldFail must survive JSON round-trip")
+			Expect(restored.MaxFailures).To(Equal(7), "MaxFailures must survive JSON round-trip")
+			Expect(restored.FailureCycles).To(Equal(3), "FailureCycles must survive JSON round-trip")
+			Expect(restored.RestartAfterFailures).To(Equal(5), "RestartAfterFailures must survive JSON round-trip")
+			Expect(restored.RecoveryDelayObservations).To(Equal(4), "RecoveryDelayObservations must survive JSON round-trip")
+			Expect(restored.GetState()).To(Equal(config.DesiredStateRunning), "State must survive JSON round-trip")
+		})
 	})
 })
 
