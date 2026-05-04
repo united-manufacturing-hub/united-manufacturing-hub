@@ -5,6 +5,7 @@
 ### Improvements
 
 - Updated Go dependencies, includes security fixes for OIDC and JOSE authentication libraries
+- The helloworld example worker now receives framework telemetry via typed deps binding (was silently dropped under the NoDeps sentinel)
 
 ### Preview: Disable Read Flows
 

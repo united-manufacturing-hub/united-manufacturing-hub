@@ -118,7 +118,7 @@ var _ = Describe("HelloworldWorker", func() {
 	})
 
 	Describe("GetDependenciesAny", func() {
-		It("returns *HelloworldDependencies after WorkerBase migration", func() {
+		It("returns *HelloworldDependencies", func() {
 			identity := deps.Identity{ID: "test-worker", WorkerType: "helloworld"}
 			w, err := hello_world.NewHelloworldWorker(identity, logger, nil)
 			Expect(err).NotTo(HaveOccurred())
@@ -127,6 +127,23 @@ var _ = Describe("HelloworldWorker", func() {
 			got := dp.GetDependenciesAny()
 			_, ok = got.(*hello_world.HelloworldDependencies)
 			Expect(ok).To(BeTrue(), "expected *HelloworldDependencies, got %T", got)
+		})
+	})
+
+	Describe("Actions", func() {
+		BeforeEach(func() {
+			identity := deps.Identity{ID: "test-worker", WorkerType: "helloworld"}
+			var err error
+			worker, err = hello_world.NewHelloworldWorker(identity, logger, nil)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("contains SayHelloActionName with a non-nil value", func() {
+			ap, ok := worker.(fsmv2.ActionProvider)
+			Expect(ok).To(BeTrue(), "worker must implement ActionProvider")
+			actions := ap.Actions()
+			Expect(actions).To(HaveKey(hello_world.SayHelloActionName))
+			Expect(actions[hello_world.SayHelloActionName]).NotTo(BeNil())
 		})
 	})
 
