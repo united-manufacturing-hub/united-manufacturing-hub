@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package example_child_test
+package examplechild_test
 
 import (
 	"errors"
@@ -22,7 +22,7 @@ import (
 	
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
-	example_child "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplechild"
+	examplechild "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplechild"
 )
 
 // MockConnectionPool is a mock implementation of ConnectionPool for testing.
@@ -44,7 +44,7 @@ func NewMockConnectionPool() *MockConnectionPool {
 	}
 }
 
-func (m *MockConnectionPool) Acquire() (example_child.Connection, error) {
+func (m *MockConnectionPool) Acquire() (examplechild.Connection, error) {
 	if m.acquireErr != nil {
 		return nil, m.acquireErr
 	}
@@ -55,7 +55,7 @@ func (m *MockConnectionPool) Acquire() (example_child.Connection, error) {
 	return conn, nil
 }
 
-func (m *MockConnectionPool) Release(conn example_child.Connection) error {
+func (m *MockConnectionPool) Release(conn examplechild.Connection) error {
 	if m.releaseErr != nil {
 		return m.releaseErr
 	}
@@ -71,7 +71,7 @@ func (m *MockConnectionPool) Release(conn example_child.Connection) error {
 	return nil
 }
 
-func (m *MockConnectionPool) HealthCheck(conn example_child.Connection) error {
+func (m *MockConnectionPool) HealthCheck(conn examplechild.Connection) error {
 	if m.healthCheckErr != nil {
 		return m.healthCheckErr
 	}
@@ -101,7 +101,7 @@ var _ = Describe("ExamplechildDependencies", func() {
 	Describe("NewExamplechildDependencies", func() {
 		It("should create dependencies with valid logger and pool", func() {
 			baseDeps := deps.NewBaseDependencies(logger, nil, identity)
-			d := example_child.NewExamplechildDependencies(mockPool, baseDeps)
+			d := examplechild.NewExamplechildDependencies(mockPool, baseDeps)
 
 			Expect(d).NotTo(BeNil())
 			Expect(d.GetLogger()).NotTo(BeNil())
@@ -111,7 +111,7 @@ var _ = Describe("ExamplechildDependencies", func() {
 	Describe("GetConnectionPool", func() {
 		It("should return the original connection pool", func() {
 			baseDeps := deps.NewBaseDependencies(logger, nil, identity)
-			d := example_child.NewExamplechildDependencies(mockPool, baseDeps)
+			d := examplechild.NewExamplechildDependencies(mockPool, baseDeps)
 
 			pool := d.GetConnectionPool()
 			Expect(pool).NotTo(BeNil())

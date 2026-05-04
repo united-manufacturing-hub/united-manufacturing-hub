@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package example_child_test
+package examplechild_test
 
 import (
 	"testing"

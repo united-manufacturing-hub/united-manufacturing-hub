@@ -12,8 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package snapshot provides the dependencies interface for transport actions.
-// Action packages import this interface to avoid import cycles with the parent transport package.
+// Package snapshot holds the transport dependencies interface only.
+// Config/Status types live in the transport worker package (config.go).
+// This package is named snapshot/ for historical reasons; action packages
+// import this interface to avoid import cycles with the parent transport package.
 package snapshot
 
 import (

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package example_child_test
+package examplechild_test
 
 import (
 	"context"
@@ -23,7 +23,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
-	example_child "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplechild"
+	examplechild "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplechild"
 )
 
 var _ = Describe("ChildWorker", func() {
@@ -41,14 +41,14 @@ var _ = Describe("ChildWorker", func() {
 
 	Describe("NewChildWorker", func() {
 		It("should create a worker successfully", func() {
-			worker, err := example_child.NewChildWorker(identity, mockPool, logger, nil)
+			worker, err := examplechild.NewChildWorker(identity, mockPool, logger, nil)
 
 			Expect(err).NotTo(HaveOccurred())
 			Expect(worker).NotTo(BeNil())
 		})
 
 		It("should have a non-nil initial state", func() {
-			worker, err := example_child.NewChildWorker(identity, mockPool, logger, nil)
+			worker, err := examplechild.NewChildWorker(identity, mockPool, logger, nil)
 
 			Expect(err).NotTo(HaveOccurred())
 			Expect(worker.GetInitialState()).NotTo(BeNil())
@@ -57,7 +57,7 @@ var _ = Describe("ChildWorker", func() {
 
 	Describe("CollectObservedState", func() {
 		It("should return a valid observed state", func() {
-			worker, err := example_child.NewChildWorker(identity, mockPool, logger, nil)
+			worker, err := examplechild.NewChildWorker(identity, mockPool, logger, nil)
 			Expect(err).NotTo(HaveOccurred())
 
 			observed, err := worker.CollectObservedState(context.Background(), nil)
@@ -69,7 +69,7 @@ var _ = Describe("ChildWorker", func() {
 
 	Describe("DeriveDesiredState", func() {
 		It("should return running state for empty config", func() {
-			worker, err := example_child.NewChildWorker(identity, mockPool, logger, nil)
+			worker, err := examplechild.NewChildWorker(identity, mockPool, logger, nil)
 			Expect(err).NotTo(HaveOccurred())
 
 			spec := config.UserSpec{
@@ -88,13 +88,13 @@ var _ = Describe("ChildWorker", func() {
 
 	Describe("GetDependenciesAny", func() {
 		It("returns *ExamplechildDependencies", func() {
-			worker, err := example_child.NewChildWorker(identity, mockPool, logger, nil)
+			worker, err := examplechild.NewChildWorker(identity, mockPool, logger, nil)
 			Expect(err).NotTo(HaveOccurred())
 			var w fsmv2.Worker = worker
 			dp, ok := w.(fsmv2.DependencyProvider)
 			Expect(ok).To(BeTrue(), "worker must implement DependencyProvider")
 			got := dp.GetDependenciesAny()
-			_, ok = got.(*example_child.ExamplechildDependencies)
+			_, ok = got.(*examplechild.ExamplechildDependencies)
 			Expect(ok).To(BeTrue(), "expected *ExamplechildDependencies, got %T", got)
 		})
 	})

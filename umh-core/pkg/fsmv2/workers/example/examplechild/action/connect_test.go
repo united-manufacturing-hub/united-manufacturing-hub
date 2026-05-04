@@ -22,7 +22,7 @@ import (
 	
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
-	example_child "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplechild"
+	examplechild "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplechild"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplechild/action"
 )
 
@@ -36,7 +36,7 @@ var _ = Describe("ConnectAction", func() {
 		ctx = context.Background()
 		identity := deps.Identity{ID: "test-id", WorkerType: "child"}
 		baseDeps := deps.NewBaseDependencies(deps.NewNopFSMLogger(), nil, identity)
-		depsAny = example_child.NewExamplechildDependencies(&example_child.DefaultConnectionPool{}, baseDeps)
+		depsAny = examplechild.NewExamplechildDependencies(&examplechild.DefaultConnectionPool{}, baseDeps)
 	})
 
 	Describe("Execute", func() {

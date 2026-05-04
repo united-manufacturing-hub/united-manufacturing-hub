@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package example_slow_test
+package exampleslow_test
 
 import (
 	"testing"
