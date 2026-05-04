@@ -41,7 +41,7 @@ func (s *StoppedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 		return fsmv2.Transition(s, fsmv2.SignalNeedsRemoval, nil, "Application supervisor is stopped and shutdown requested", nil)
 	}
 
-	children := RenderChildren(snap)
+	children := snapshot.RenderChildren(snap)
 
 	return fsmv2.Transition(s, fsmv2.SignalNone, nil, "Application supervisor is stopped", children)
 }

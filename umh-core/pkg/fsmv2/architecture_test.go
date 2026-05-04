@@ -72,16 +72,11 @@ var _ = Describe("FSMv2 Architecture Validation", func() {
 			})
 		})
 
-		Describe("Pure DeriveDesiredState() Methods (Invariant: No External Dependencies)", func() {
-			It("should not access dependencies directly", func() {
-				violations := validator.ValidateDeriveDesiredState(getFsmv2Dir())
-
-				if len(violations) > 0 {
-					message := validator.FormatViolations("DeriveDesiredState Violations", violations)
-					Fail(message)
-				}
-			})
-		})
+		// Pure DeriveDesiredState() check removed in PR3-c10: DDS purity
+		// (no dependency access, no clock reads, no goroutines, no channel
+		// ops) is enforced by golangci-lint forbidigo rules which run on
+		// every commit. The runtime AST walk duplicated coverage and was
+		// prone to false positives on identifier shadowing.
 
 		Describe("State Change XOR Action (Invariant: Deterministic Transitions)", func() {
 			It("should return either a new state or an action, never both", func() {
@@ -140,15 +135,12 @@ var _ = Describe("FSMv2 Architecture Validation", func() {
 		// checks ctx.Done() at the framework level before calling COS, making
 		// per-worker checks optional (defense-in-depth, not mandatory).
 
-		Describe("Nil Spec Handling in DeriveDesiredState (Invariant: Defensive Programming)", func() {
-			It("should check if spec == nil before type casting", func() {
-				violations := validator.ValidateNilSpecHandling(getFsmv2Dir())
-				if len(violations) > 0 {
-					message := validator.FormatViolationsWithPattern("Nil Spec Handling Violations", violations, "MISSING_NIL_SPEC_CHECK")
-					Fail(message)
-				}
-			})
-		})
+		// Nil Spec Handling check removed in PR3-c10: defensive `spec == nil`
+		// guards became vacuous once DeriveDesiredState callers (parser,
+		// supervisor) stopped passing nil specs and switched to typed
+		// helpers (DeriveLeafState, ParseUserSpec). The runtime AST walk
+		// flagged false positives on workers using nil-safe helpers and
+		// duplicated coverage already in worker unit tests.
 
 		// Context Cancellation in Actions removed: action_executor.go wraps every
 		// action in context.WithTimeout, making per-action ctx.Done() entry checks
@@ -249,16 +241,11 @@ var _ = Describe("FSMv2 Architecture Validation", func() {
 			})
 		})
 
-		Describe("Spec Usage in DeriveDesiredState (Invariant: Spec Fields Must Be Used)", func() {
-			It("should not discard spec type assertion results", func() {
-				violations := validator.ValidateSpecUsage(getFsmv2Dir())
-				if len(violations) > 0 {
-					message := validator.FormatViolationsWithPattern(
-						"Spec Result Discarded Violations", violations, "SPEC_RESULT_DISCARDED")
-					Fail(message)
-				}
-			})
-		})
+		// Spec Usage check removed in PR3-c10: discarded-spec detection
+		// was a defensive heuristic against early-prototype workers that
+		// type-asserted spec but never read its fields. After P2.x's
+		// migration to typed UserSpec parsers (ParseUserSpec, DeriveLeafState),
+		// every production worker uses its spec or fails compilation.
 
 		Describe("StoppingState No Catch-All Self-Return (Invariant: No Stopping Deadlock)", func() {
 			It("should not have catch-all self-return with nil action in StoppingBase states", func() {

@@ -77,19 +77,6 @@ Early-exit optimizations should still go through the typed snapshot.`,
 }`,
 		ReferenceFile: "example-child/state/state_connected.go",
 	},
-	"PURE_DERIVE": {
-		Name: "Pure DeriveDesiredState",
-		Why: `DeriveDesiredState() must not access dependencies directly.
-WHY: This method converts UserSpec → DesiredState. It should be a pure
-transformation based only on configuration, not runtime state. Accessing
-dependencies here creates hidden coupling and makes the derivation non-
-deterministic. Dependencies are for actions and observation, not derivation.`,
-		CorrectCode: `func (w *Worker) DeriveDesiredState(spec MySpec) (*DesiredState, error) {
-    return &DesiredState{ChildCount: spec.ChildCount}, nil
-    // NOT: deps := w.GetDependencies(); deps.SomeService.Check()
-}`,
-		ReferenceFile: "example-child/worker.go",
-	},
 	"SHUTDOWN_CHECK_NOT_FIRST": {
 		Name: "Shutdown Check First",
 		Why: `Every state's Next() must check IsShutdownRequested() as the FIRST conditional.
@@ -206,25 +193,6 @@ Early exit on ctx.Done() enables responsive shutdown.`,
 }`,
 		ReferenceFile: "example-child/worker.go",
 	},
-	"MISSING_NIL_SPEC_CHECK": {
-		Name: "Nil Spec Handling in DeriveDesiredState",
-		Why: `DeriveDesiredState() must check if spec == nil before type casting.
-WHY: During shutdown or when no config exists, spec may be nil. Without a nil
-check, the type assertion panics. This is the first defensive layer that
-prevents runtime panics from configuration issues. Always check nil first,
-then type-assert safely.`,
-		CorrectCode: `func (w *Worker) DeriveDesiredState(spec any) (*DesiredState, error) {
-    if spec == nil {
-        return &DesiredState{shutdownRequested: true}, nil  // Graceful nil handling
-    }
-    userSpec, ok := spec.(MyUserSpec)
-    if !ok {
-        return nil, fmt.Errorf("invalid spec type: %T", spec)
-    }
-    // ... derive from userSpec
-}`,
-		ReferenceFile: "example-child/worker.go",
-	},
 	"INTERNAL_RETRY_LOOP": {
 		Name: "No Internal Retry Loops in Actions",
 		Why: `Actions must NOT implement internal retry loops with error handling.
@@ -332,26 +300,6 @@ return config.DesiredState{
     State: "active",     // Ambiguous, use "running" instead
 }`,
 		ReferenceFile: "workers/example/examplechild/worker.go",
-	},
-	"SPEC_RESULT_DISCARDED": {
-		Name: "Spec Result Used in DeriveDesiredState",
-		Why: `DeriveDesiredState() must USE the spec type assertion result, not discard it.
-WHY: When a worker type-asserts spec with a blank identifier (_, ok := spec.(Type)),
-it validates the type but discards the value. This means the spec's configuration
-fields are never read, and DeriveDesiredState returns hardcoded defaults regardless
-of what the user configured. Every worker should parse its spec to populate the
-DesiredState from user configuration.`,
-		CorrectCode: `// Correct: use the spec value
-userSpec, ok := spec.(config.UserSpec)
-if !ok {
-    return nil, fmt.Errorf("invalid spec type: %T", spec)
-}
-var mySpec MyUserSpec
-yaml.Unmarshal([]byte(userSpec.Config), &mySpec)
-
-// WRONG: discard with blank identifier
-_, ok := spec.(config.UserSpec)  // spec is validated but never used!`,
-		ReferenceFile: "workers/application/worker.go",
 	},
 }
 

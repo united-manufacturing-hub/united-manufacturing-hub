@@ -33,7 +33,7 @@ func (s *DegradedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 		return fsmv2.Transition(&StoppedState{}, fsmv2.SignalNone, nil, "Shutdown requested", nil)
 	}
 
-	children := RenderChildren(snap)
+	children := snapshot.RenderChildren(snap)
 
 	circuitOpen, stale := snapshot.ChildrenViewToStatus(snap.ChildrenView)
 	status := snapshot.ApplicationStatus{
