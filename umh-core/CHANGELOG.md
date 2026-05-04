@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## [0.44.19]
+
 ### Improvements
 
 - Tag processor now supports `msg.meta.datatype` to override value type auto-detection. Set to `"string"`, `"number"`, or `"bool"` to force the output type
