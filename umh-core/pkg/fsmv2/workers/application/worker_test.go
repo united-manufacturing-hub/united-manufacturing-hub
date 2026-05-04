@@ -16,6 +16,7 @@ package application
 
 import (
 	"context"
+	"testing"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -24,6 +25,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/register"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/application/snapshot"
 )
 
@@ -274,3 +276,11 @@ children:
 		})
 	})
 })
+
+func TestApplicationWorker_GetDependenciesAnyReturnsNoDeps(t *testing.T) {
+	w := &ApplicationWorker{}
+	got := w.GetDependenciesAny()
+	if _, ok := got.(register.NoDeps); !ok {
+		t.Fatalf("expected register.NoDeps, got %T", got)
+	}
+}

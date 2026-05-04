@@ -194,12 +194,6 @@ func (w *ApplicationWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredS
 	}, nil
 }
 
-// GetDependenciesAny implements fsmv2.DependencyProvider. The application
-// worker has no typed dependencies today, so it returns nil.
-func (w *ApplicationWorker) GetDependenciesAny() any {
-	return nil
-}
-
 // SupervisorConfig contains configuration for creating an application supervisor.
 type SupervisorConfig struct {
 	Store              storage.TriangularStoreInterface
