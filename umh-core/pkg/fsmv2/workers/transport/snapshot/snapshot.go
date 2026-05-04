@@ -28,7 +28,6 @@ import (
 // TransportDependencies is the dependencies interface for transport actions (avoids import cycles).
 type TransportDependencies interface {
 	deps.Dependencies
-	MetricsRecorder() *deps.MetricsRecorder
 
 	// Transport management
 	GetTransport() transport.Transport

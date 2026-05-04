@@ -36,7 +36,6 @@ type PushDependencies interface {
 	RecordError()
 	GetConsecutiveErrors() int
 	GetLastErrorType() httpTransport.ErrorType
-	MetricsRecorder() *deps.MetricsRecorder
 
 	// Pending buffer for retry on push failure
 	StorePendingMessages(msgs []*transport.UMHMessage)

@@ -65,6 +65,8 @@ type Dependencies interface {
 	GetHierarchyPath() string
 	// GetWorkerType returns the worker's type identifier for Sentry feature tagging.
 	GetWorkerType() string
+	// MetricsRecorder returns the write-only metrics buffer for this worker.
+	MetricsRecorder() *MetricsRecorder
 }
 
 // BaseDependencies provides common tools for all workers.

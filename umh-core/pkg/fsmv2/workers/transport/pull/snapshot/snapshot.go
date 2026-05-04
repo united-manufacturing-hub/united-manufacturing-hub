@@ -36,7 +36,6 @@ type PullDependencies interface {
 	RecordError()
 	GetConsecutiveErrors() int
 	GetLastErrorType() httpTransport.ErrorType
-	MetricsRecorder() *deps.MetricsRecorder
 
 	StorePendingMessages(msgs []*transport.UMHMessage)
 	DrainPendingMessages() []*transport.UMHMessage

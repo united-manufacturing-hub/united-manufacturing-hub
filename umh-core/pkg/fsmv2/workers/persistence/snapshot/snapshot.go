@@ -74,7 +74,6 @@ func (s PersistenceStatus) IsHealthy() bool {
 // PersistenceDependencies is the dependencies interface for persistence actions (avoids import cycles).
 type PersistenceDependencies interface {
 	deps.Dependencies
-	MetricsRecorder() *deps.MetricsRecorder
 	GetStore() storage.TriangularStoreInterface
 	GetScheduler() deps.Scheduler
 	SetLastCompactionAt(time.Time)
