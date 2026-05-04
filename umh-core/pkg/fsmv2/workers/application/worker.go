@@ -61,7 +61,7 @@ var _ fsmv2.Worker = (*ApplicationWorker)(nil)
 // passes through ChildrenSpecs from the YAML config without knowing about
 // specific child implementations.
 type ApplicationWorker struct {
-	fsmv2.WorkerBase[snapshot.ApplicationConfig, snapshot.ApplicationStatus]
+	fsmv2.WorkerBase[snapshot.ApplicationConfig, snapshot.ApplicationStatus, register.NoDeps]
 	id   string
 	name string
 }
@@ -263,7 +263,7 @@ func NewApplicationSupervisor(cfg SupervisorConfig) (*supervisor.Supervisor[fsmv
 func init() {
 	register.Worker[snapshot.ApplicationConfig, snapshot.ApplicationStatus, register.NoDeps](
 		WorkerTypeName,
-		func(id deps.Identity, logger deps.FSMLogger, stateReader deps.StateReader, _ register.NoDeps) (fsmv2.Worker, error) {
+		func(id deps.Identity, logger deps.FSMLogger, stateReader deps.StateReader) (fsmv2.Worker, error) {
 			w := NewApplicationWorker(id.ID, id.Name, logger, stateReader)
 			if w == nil {
 				return nil, fmt.Errorf("NewApplicationWorker returned nil for id=%q name=%q", id.ID, id.Name)

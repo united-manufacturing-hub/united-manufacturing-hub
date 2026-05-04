@@ -15,6 +15,8 @@
 package communicator
 
 import (
+	"gopkg.in/yaml.v3"
+
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 )
@@ -44,13 +46,31 @@ func RenderChildren(snap fsmv2.WorkerSnapshot[CommunicatorConfig, CommunicatorSt
 	}}
 }
 
-// snapshotUserSpec extracts the transport child's UserSpec from the parent
-// snapshot. The communicator passes its own raw UserSpec through to the
-// transport child unchanged. Returns the zero-value UserSpec when no spec
-// is in the snapshot (nil-spec startup path).
+// snapshotUserSpec builds the transport child's UserSpec from the communicator's
+// parsed config. Returns zero-value UserSpec when RelayURL is empty (nil-spec
+// startup path before the first DeriveDesiredState call).
 func snapshotUserSpec(snap fsmv2.WorkerSnapshot[CommunicatorConfig, CommunicatorStatus]) config.UserSpec {
-	if len(snap.Desired.ChildrenSpecs) > 0 {
-		return snap.Desired.ChildrenSpecs[0].UserSpec
+	cfg := snap.Desired.Config
+	if cfg.RelayURL == "" {
+		return config.UserSpec{}
 	}
-	return config.UserSpec{}
+
+	type childCfg struct {
+		RelayURL     string `yaml:"relayURL"`
+		InstanceUUID string `yaml:"instanceUUID"`
+		AuthToken    string `yaml:"authToken"`
+	}
+
+	cc := childCfg{
+		RelayURL:     cfg.RelayURL,
+		InstanceUUID: cfg.InstanceUUID,
+		AuthToken:    cfg.AuthToken,
+	}
+
+	yamlBytes, err := yaml.Marshal(cc)
+	if err != nil {
+		return config.UserSpec{}
+	}
+
+	return config.UserSpec{Config: string(yamlBytes)}
 }

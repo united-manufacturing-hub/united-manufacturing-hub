@@ -68,7 +68,7 @@ var _ fsmv2.Worker = (*TransportWorker)(nil)
 // It manages authentication and coordinates PushWorker/PullWorker children
 // for bidirectional message exchange with the backend relay server.
 type TransportWorker struct {
-	fsmv2.WorkerBase[TransportConfig, TransportStatus]
+	fsmv2.WorkerBase[TransportConfig, TransportStatus, register.NoDeps]
 	deps *TransportDependencies
 }
 
@@ -82,7 +82,6 @@ func NewTransportWorker(
 	identity deps.Identity,
 	logger deps.FSMLogger,
 	stateReader deps.StateReader,
-	_ *TransportDependencies,
 ) (fsmv2.Worker, error) {
 	if logger == nil {
 		return nil, errors.New("logger must not be nil")
@@ -173,6 +172,6 @@ const workerType = "transport"
 // handled by the transport.SetChildDeps / ChildDeps singleton in child_deps.go
 // rather than the untyped extraDeps map.
 func init() {
-	register.Worker[TransportConfig, TransportStatus, *TransportDependencies](workerType, NewTransportWorker)
+	register.Worker[TransportConfig, TransportStatus, register.NoDeps](workerType, NewTransportWorker)
 }
 

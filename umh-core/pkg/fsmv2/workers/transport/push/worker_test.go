@@ -61,7 +61,7 @@ var _ = Describe("PushWorker", func() {
 
 	Describe("NewPushWorker", func() {
 		It("should create a worker with valid args", func() {
-			w, err := push.NewPushWorker(identity, logger, nil, nil)
+			w, err := push.NewPushWorker(identity, logger, nil)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(w).NotTo(BeNil())
 			var ok bool
@@ -71,14 +71,14 @@ var _ = Describe("PushWorker", func() {
 		})
 
 		It("should reject nil logger", func() {
-			_, err := push.NewPushWorker(identity, nil, nil, nil)
+			_, err := push.NewPushWorker(identity, nil, nil)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("logger"))
 		})
 
 		It("should reject missing parent transport ChildDeps", func() {
 			transport.ClearChildDeps()
-			_, err := push.NewPushWorker(identity, logger, nil, nil)
+			_, err := push.NewPushWorker(identity, logger, nil)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("transport.ChildDeps()"))
 		})
@@ -86,7 +86,7 @@ var _ = Describe("PushWorker", func() {
 
 	Describe("CollectObservedState", func() {
 		BeforeEach(func() {
-			w, err := push.NewPushWorker(identity, logger, nil, nil)
+			w, err := push.NewPushWorker(identity, logger, nil)
 			Expect(err).ToNot(HaveOccurred())
 			worker = w.(*push.PushWorker)
 		})
@@ -172,7 +172,7 @@ var _ = Describe("PushWorker", func() {
 
 	Describe("DeriveDesiredState", func() {
 		BeforeEach(func() {
-			w, err := push.NewPushWorker(identity, logger, nil, nil)
+			w, err := push.NewPushWorker(identity, logger, nil)
 			Expect(err).ToNot(HaveOccurred())
 			worker = w.(*push.PushWorker)
 		})
@@ -234,7 +234,7 @@ var _ = Describe("PushWorker", func() {
 
 	Describe("GetInitialState", func() {
 		BeforeEach(func() {
-			w, err := push.NewPushWorker(identity, logger, nil, nil)
+			w, err := push.NewPushWorker(identity, logger, nil)
 			Expect(err).ToNot(HaveOccurred())
 			worker = w.(*push.PushWorker)
 		})

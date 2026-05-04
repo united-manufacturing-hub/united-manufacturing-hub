@@ -176,18 +176,16 @@ state: "running"
 				specs := communicator.RenderChildren(fsmv2.WorkerSnapshot[communicator.CommunicatorConfig, communicator.CommunicatorStatus]{
 					Desired: fsmv2.WrappedDesiredState[communicator.CommunicatorConfig]{
 						BaseDesiredState: fsmv2types.BaseDesiredState{State: fsmv2types.DesiredStateRunning},
-						ChildrenSpecs: []fsmv2types.ChildSpec{{
-							Name:       "transport",
-							WorkerType: "transport",
-							UserSpec:   spec,
-						}},
+						Config:           desired.Config,
 					},
 				})
 				Expect(specs).To(HaveLen(1))
 				Expect(specs[0].Name).To(Equal("transport"))
 				Expect(specs[0].WorkerType).To(Equal("transport"))
 				Expect(specs[0].ChildStartStates).To(ConsistOf("Syncing", "Recovering"))
-				Expect(specs[0].UserSpec.Config).To(Equal(spec.Config))
+				Expect(specs[0].UserSpec.Config).To(ContainSubstring("relay.umh.app"))
+				Expect(specs[0].UserSpec.Config).To(ContainSubstring("test-uuid-12345"))
+				Expect(specs[0].UserSpec.Config).To(ContainSubstring("test-auth-token-secret"))
 			})
 
 			It("should apply default timeout when not specified", func() {

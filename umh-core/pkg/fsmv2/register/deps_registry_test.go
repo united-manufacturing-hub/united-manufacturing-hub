@@ -49,7 +49,7 @@ type depsRegistryDeps struct {
 }
 
 type depsRegistryWorker struct {
-	fsmv2.WorkerBase[depsRegistryConfig, depsRegistryStatus]
+	fsmv2.WorkerBase[depsRegistryConfig, depsRegistryStatus, register.NoDeps]
 	receivedDeps *depsRegistryDeps
 }
 
@@ -192,9 +192,14 @@ var _ = Describe("register deps registry", func() {
 			var capturedDeps *depsRegistryDeps
 			var constructorRan bool
 
+			// Publish deps BEFORE registering the worker, mirroring how parent
+			// wiring (cmd/main.go) will use the registry.
+			register.SetDeps[*depsRegistryDeps](workerType, published)
+
 			register.Worker[depsRegistryConfig, depsRegistryStatus, *depsRegistryDeps](workerType,
-				func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader, d *depsRegistryDeps) (fsmv2.Worker, error) {
+				func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader) (fsmv2.Worker, error) {
 					constructorRan = true
+					d := register.GetDeps[*depsRegistryDeps](workerType)
 					capturedDeps = d
 					w := &depsRegistryWorker{receivedDeps: d}
 					w.InitBase(id, logger, sr)
@@ -202,10 +207,6 @@ var _ = Describe("register deps registry", func() {
 					return w, nil
 				},
 			)
-
-			// Publish deps BEFORE the factory call, mirroring how parent
-			// wiring (cmd/main.go) will use the registry.
-			register.SetDeps[*depsRegistryDeps](workerType, published)
 
 			nopLogger := deps.NewNopFSMLogger()
 			w, err := factory.NewWorkerByType(workerType, deps.Identity{
@@ -227,8 +228,9 @@ var _ = Describe("register deps registry", func() {
 			var constructorRan bool
 
 			register.Worker[depsRegistryConfig, depsRegistryStatus, *depsRegistryDeps](workerType,
-				func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader, d *depsRegistryDeps) (fsmv2.Worker, error) {
+				func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader) (fsmv2.Worker, error) {
 					constructorRan = true
+					d := register.GetDeps[*depsRegistryDeps](workerType)
 					capturedDeps = d
 					w := &depsRegistryWorker{receivedDeps: d}
 					w.InitBase(id, logger, sr)

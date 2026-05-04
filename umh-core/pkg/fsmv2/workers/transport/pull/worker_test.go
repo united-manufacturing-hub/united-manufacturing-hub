@@ -60,7 +60,7 @@ var _ = Describe("PullWorker", func() {
 
 	Describe("NewPullWorker", func() {
 		It("should create a worker with valid args", func() {
-			w, err := pull.NewPullWorker(identity, logger, nil, nil)
+			w, err := pull.NewPullWorker(identity, logger, nil)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(w).NotTo(BeNil())
 			var ok bool
@@ -70,14 +70,14 @@ var _ = Describe("PullWorker", func() {
 		})
 
 		It("should reject nil logger", func() {
-			_, err := pull.NewPullWorker(identity, nil, nil, nil)
+			_, err := pull.NewPullWorker(identity, nil, nil)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("logger"))
 		})
 
 		It("should reject missing parent transport ChildDeps", func() {
 			transport.ClearChildDeps()
-			_, err := pull.NewPullWorker(identity, logger, nil, nil)
+			_, err := pull.NewPullWorker(identity, logger, nil)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("transport.ChildDeps()"))
 		})
@@ -85,7 +85,7 @@ var _ = Describe("PullWorker", func() {
 
 	Describe("CollectObservedState", func() {
 		BeforeEach(func() {
-			w, err := pull.NewPullWorker(identity, logger, nil, nil)
+			w, err := pull.NewPullWorker(identity, logger, nil)
 			Expect(err).ToNot(HaveOccurred())
 			worker = w.(*pull.PullWorker)
 		})
@@ -179,7 +179,7 @@ var _ = Describe("PullWorker", func() {
 
 	Describe("DeriveDesiredState", func() {
 		BeforeEach(func() {
-			w, err := pull.NewPullWorker(identity, logger, nil, nil)
+			w, err := pull.NewPullWorker(identity, logger, nil)
 			Expect(err).ToNot(HaveOccurred())
 			worker = w.(*pull.PullWorker)
 		})
@@ -251,7 +251,7 @@ var _ = Describe("PullWorker", func() {
 
 	Describe("GetInitialState", func() {
 		BeforeEach(func() {
-			w, err := pull.NewPullWorker(identity, logger, nil, nil)
+			w, err := pull.NewPullWorker(identity, logger, nil)
 			Expect(err).ToNot(HaveOccurred())
 			worker = w.(*pull.PullWorker)
 		})

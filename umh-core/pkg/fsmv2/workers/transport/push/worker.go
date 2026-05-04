@@ -50,7 +50,6 @@ func NewPushWorker(
 	identity deps.Identity,
 	logger deps.FSMLogger,
 	stateReader deps.StateReader,
-	_ *PushDependencies,
 ) (fsmv2.Worker, error) {
 	if logger == nil {
 		return nil, errors.New("logger must not be nil")
@@ -150,5 +149,5 @@ func (w *PushWorker) GetInitialState() fsmv2.State[any, any] {
 // transport.ChildDeps() singleton populated by the transport worker during its
 // own factory init, replacing the prior extraDeps["transport_deps"] seam.
 func init() {
-	register.Worker[PushConfig, PushStatus, *PushDependencies](workerType, NewPushWorker)
+	register.Worker[PushConfig, PushStatus, register.NoDeps](workerType, NewPushWorker)
 }
