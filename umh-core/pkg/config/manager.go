@@ -163,8 +163,10 @@ type FileConfigManager struct {
 
 	cacheRawConfig string
 
-	// validationIssues holds the results of the last config-content validation pass.
-	// Always swapped wholesale (never appended to) by readAndParseConfig — see swapValidationIssues.
+	// validationIssues lists user-facing config-content problems detected by
+	// validateConfig. Replaced wholesale by swapValidationIssues; never
+	// appended in place. Cleared at the start of readAndParseConfig and
+	// repopulated after a successful parse.
 	validationIssues []ConfigValidationIssue
 
 	cacheConfig FullConfig // struct obtained from that file
