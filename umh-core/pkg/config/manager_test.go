@@ -1624,6 +1624,22 @@ var _ = Describe("ConfigValidationIssue surface", func() {
 		Entry("enterprise", "enterprise"),
 	)
 
+	DescribeTable("non-empty invalid releaseChannel values produce exactly one validation issue (P4b-readAndParseConfig)",
+		func(channel string) {
+			m, _ := newTestManagerWithYAML(fmt.Sprintf("agent:\n  releaseChannel: %s\n", channel))
+			defer m.Stop()
+			_, _, err := m.readAndParseConfig(ctx)
+			Expect(err).NotTo(HaveOccurred())
+			issues := m.GetConfigValidationIssues()
+			Expect(issues).To(HaveLen(1))
+			Expect(issues[0].OffendingValue).To(Equal(channel))
+		},
+		Entry("production", "production"),
+		Entry("preview", "preview"),
+		Entry("Stable (case mismatch)", "Stable"),
+		Entry("STABLE (case mismatch)", "STABLE"),
+	)
+
 	It("clears validation issues when YAML is fixed (P5)", func() {
 		m, mockFS := newTestManagerWithYAML("agent:\n  releaseChannel: nigtly\n")
 		defer m.Stop()
@@ -1821,6 +1837,8 @@ var _ = Describe("ParseConfig defaulting", func() {
 		Entry("multiple spaces", "  ", ReleaseChannelStable),
 		Entry("Stable (capital)", "Stable", ReleaseChannel("Stable")),
 		Entry("STABLE", "STABLE", ReleaseChannel("STABLE")),
+		Entry("production", "production", ReleaseChannel("production")),
+		Entry("preview", "preview", ReleaseChannel("preview")),
 		Entry("nightly", "nightly", ReleaseChannelNightly),
 		Entry("stable", "stable", ReleaseChannelStable),
 		Entry("enterprise", "enterprise", ReleaseChannelEnterprise),
