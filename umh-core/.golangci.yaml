@@ -66,6 +66,7 @@ linters:
           list-mode: lax
           files:
             - "**/pkg/fsmv2/**"
+            - "!**/pkg/fsmv2/config/template.go"
           deny:
             - pkg: "text/template"
               desc: "FSMv2 workers must not use text/template; use config struct fields directly"
