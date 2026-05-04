@@ -74,7 +74,7 @@ func (s *StartingState) Next(snapAny any) fsmv2.NextResult[any, any] {
 			snap.Config.RelayURL,
 			snap.Config.InstanceUUID,
 			snap.Config.AuthToken,
-			snap.Config.Timeout,
+			snap.Config.GetTimeout(),
 		)
 
 		return fsmv2.Transition(s, fsmv2.SignalNone, authAction, "No valid token, authenticating with relay", children)

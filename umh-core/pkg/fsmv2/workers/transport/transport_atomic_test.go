@@ -22,8 +22,7 @@ import (
 )
 
 // TestTransportConfigDefaultsTimeout verifies GetTimeout() returns a non-zero default
-// when Timeout==0. Required after deleting SetPostParseHook closure that previously
-// performed the same defaulting.
+// when Timeout==0. The accessor centralises the defaulting that callers rely on.
 func TestTransportConfigDefaultsTimeout(t *testing.T) {
 	cfg := transport.TransportConfig{}
 	if cfg.GetTimeout() == 0 {
@@ -32,15 +31,14 @@ func TestTransportConfigDefaultsTimeout(t *testing.T) {
 }
 
 // TestTransportEmptyCredsReachAuthAction verifies DeriveDesiredState succeeds with
-// empty relayURL/instanceUUID/authToken even when state=running. SetPostParseHook
-// validation was deleted per D8: empty creds now flow through to AuthenticateAction
-// and surface as classified errors via AuthFailedState.
+// empty relayURL/instanceUUID/authToken even when state=running. Empty creds flow
+// through to AuthenticateAction and surface as classified errors via AuthFailedState.
 func TestTransportEmptyCredsReachAuthAction(t *testing.T) {
 	w := &transport.TransportWorker{}
 	spec := config.UserSpec{
 		Config: "state: running",
 	}
 	if _, err := w.DeriveDesiredState(spec); err != nil {
-		t.Fatalf("DeriveDesiredState with empty creds must not error post-D8: %v", err)
+		t.Fatalf("DeriveDesiredState with empty creds must not error: %v", err)
 	}
 }

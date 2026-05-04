@@ -30,16 +30,6 @@ import (
 
 var _ = Describe("FSMv2 Architecture Validation — P1.8 Foundation Cap", func() {
 
-	// =====================================================================
-	// Test 2 — TestNoJsonDashFieldsOnObservation (§14)
-	// =====================================================================
-	// REMOVED in PR3-c16: replaced with godoc on Observation[T] (the §14
-	// invariant is documented in the type's godoc; runtime reflect check
-	// was redundant with the documented contract).
-
-	// =====================================================================
-	// Test 3 — TestSupervisorInjectionBeforePersistence (§14)
-	// =====================================================================
 	Describe("Supervisor injects observation setters before SaveObserved (§14)", func() {
 		It("collector source orders SetState/SetChildrenView/etc. ahead of SaveObserved", func() {
 			// AST walk SCOPED to the collectAndSaveObservedState function
@@ -126,84 +116,4 @@ var _ = Describe("FSMv2 Architecture Validation — P1.8 Foundation Cap", func()
 				lastSetterName, lastSetterLine, saveLine, targetFn)
 		})
 	})
-
-	// =====================================================================
-	// Test 5 — TestParentRenderChildrenEmitsNonNil (un-gated at P2.1)
-	// =====================================================================
-	// REMOVED in PR3-c9: Class C — F4⊕G1 trap structurally impossible after
-	// migrating all RenderChildren callsites to config.NewChildSpec, which
-	// always sets Enabled:true. The non-nil convention remains documented in
-	// NextResult.Children godoc.
-
-	// =====================================================================
-	// Test 7 — TestRenderChildrenIsIdempotent (un-gated at P2.1)
-	// =====================================================================
-	// REMOVED in PR3-c10: idempotency is guaranteed by-construction now that
-	// every RenderChildren emitter is a pure transformation over snapshot
-	// state — no goroutines, no clocks, no random sources (DDS purity is
-	// enforced by golangci-lint forbidigo rules). The runtime hash-equality
-	// check duplicated coverage already provided by per-worker unit tests
-	// and by the snapshot-package mirror migration completed in this
-	// commit.
-
-	// =====================================================================
-	// Test 8 — TestNoTemplatesInChildSpec (un-gated at P2.1)
-	// =====================================================================
-	// REMOVED in PR3-c9: Class C — overlaps with template-resolution coverage
-	// in production renderChildren bodies; ChildSpec.Name / WorkerType are
-	// supplied as Go literals at every callsite (no template-marker source).
-
-	// =====================================================================
-	// Test 9 — TestDDSPurity (§2.7)
-	// =====================================================================
-	// REMOVED in PR3-c10: DDS purity is enforced by golangci-lint forbidigo
-	// rules (no time.Now, no rand, no goroutines, no channel ops in DDS
-	// bodies) which run on every commit. The duplicate AST walk added
-	// no coverage and was prone to false positives on identifier shadowing.
-
-	// =====================================================================
-	// Test 10 — TestStateActionChildrenTruthTable
-	// =====================================================================
-	//
-	// REMOVED at iter-1 per reviewer's I2: the XOR-state-vs-action invariant
-	// is already covered with proper AST-level inspection by
-	// `ValidateStateXORAction` in `internal/validator/state.go`, surfaced
-	// via the existing arch test "should return either a new state or an
-	// action, never both" (architecture_test.go:99-108). A string-only
-	// match on `reconciliation.go` source would be lower-fidelity duplicate
-	// coverage that could match a comment or a commented-out version of
-	// the guard. The existing arch test is authoritative.
-	//
-	// If a future test ever proves the existing AST coverage is
-	// insufficient (e.g., the supervisor's panic-message format becomes a
-	// load-bearing contract), this slot is the natural home — but as of
-	// P1.8 ship time, ValidateStateXORAction already exercises the
-	// invariant at the right layer.
-
-	// =====================================================================
-	// Test 13 — TestRenderChildrenEmitsExplicitEnabled (F4⊕G1 trap)
-	// =====================================================================
-	// REMOVED in PR3-c9: Class C — F4⊕G1 trap structurally impossible after
-	// migrating all RenderChildren callsites to config.NewChildSpec. The
-	// constructor always sets Enabled:true; there is no longer a "forgotten
-	// Enabled" failure mode for the registry walk to detect.
-
-	// =====================================================================
-	// Bonus 1 — TestVariablesInternalSchemaStability (§4-D LOCKED)
-	// =====================================================================
-	// REMOVED in PR3-c16: the §4-D LOCKED tag spelling is documented in
-	// godoc on config.VariablesInternal (and a comment near LOCKED tag
-	// constants in config/childspec.go). The wire-level round-trip test
-	// in integration/variables_typed_wire_test.go retains coverage of the
-	// serialization contract; the reflect-based exact-tag check is a
-	// doc-invariant duplicate.
-
-	// =====================================================================
-	// Test 14 — Mirror byte-equivalence (P2.4 / pr2_issues #10)
-	// =====================================================================
-	// REMOVED in PR3-c10: with state-package RenderChildren mirrors moved
-	// to snapshot/, there is no longer a parallel mirror to keep in sync —
-	// state.Next now calls snapshot.RenderChildren directly. The byte-
-	// equivalence trap (F4⊕G1 drift between two copies of the same body)
-	// is structurally impossible without a second body to drift from.
 })

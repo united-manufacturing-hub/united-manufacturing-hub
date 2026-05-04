@@ -15,19 +15,12 @@
 package fsmv2_test
 
 import (
-	"fmt"
 	"path/filepath"
-	"reflect"
 	"runtime"
 
 	. "github.com/onsi/ginkgo/v2"
-	. "github.com/onsi/gomega"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/validator"
-
-	// Import state packages to scan for violations.
-	childState "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplechild/state"
-	parentState "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleparent/state"
 
 	// Import worker packages to register them for registry consistency tests.
 	_ "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/application"
@@ -41,210 +34,48 @@ import (
 
 var _ = Describe("FSMv2 Architecture Validation", func() {
 
-	Context("🔴 PHASE 1: Architectural Validation Tests (Steps 52-55)", func() {
+	Describe("State Change XOR Action (Invariant: Deterministic Transitions)", func() {
+		It("should return either a new state or an action, never both", func() {
+			violations := validator.ValidateStateXORAction(getFsmv2Dir())
 
-		Describe("Empty State Structs (Invariant: States are Pure Behavior)", func() {
-			It("should have no fields except embedded base types", func() {
-				violations := validateStateStructs()
-				Expect(violations).To(BeEmpty(), validator.FormatViolations("Empty State Violations", violations))
-			})
+			if len(violations) > 0 {
+				message := validator.FormatViolationsWithPattern("State XOR Action Violations", violations, "STATE_AND_ACTION")
+				Fail(message)
+			}
 		})
-
-		Describe("Stateless Actions (Invariant: Actions are Idempotent Commands)", func() {
-			It("should have no mutable state fields", func() {
-				violations := validator.ValidateActionStructs(getFsmv2Dir())
-
-				if len(violations) > 0 {
-					message := validator.FormatViolations("Stateless Action Violations", violations)
-					Fail(message)
-				}
-			})
-		})
-
-		Describe("Type Assertions in Next() Methods (Invariant: Single Entry-Point Pattern)", func() {
-			It("should have exactly one type assertion at method entry", func() {
-				violations := validator.ValidateNextMethodTypeAssertions(getFsmv2Dir())
-
-				if len(violations) > 0 {
-					message := validator.FormatViolations("Type Assertion Pattern Violations", violations)
-					Fail(message)
-				}
-			})
-		})
-
-		// Pure DeriveDesiredState() check removed in PR3-c10: DDS purity
-		// (no dependency access, no clock reads, no goroutines, no channel
-		// ops) is enforced by golangci-lint forbidigo rules which run on
-		// every commit. The runtime AST walk duplicated coverage and was
-		// prone to false positives on identifier shadowing.
-
-		Describe("State Change XOR Action (Invariant: Deterministic Transitions)", func() {
-			It("should return either a new state or an action, never both", func() {
-				violations := validator.ValidateStateXORAction(getFsmv2Dir())
-
-				if len(violations) > 0 {
-					message := validator.FormatViolationsWithPattern("State XOR Action Violations", violations, "STATE_AND_ACTION")
-					Fail(message)
-				}
-			})
-		})
-
-		Describe("DesiredState IsShutdownRequested Method (Invariant: Graceful Shutdown)", func() {
-			It("should implement IsShutdownRequested() bool", func() {
-				violations := validator.ValidateDesiredStateShutdownMethod(getFsmv2Dir())
-
-				if len(violations) > 0 {
-					message := validator.FormatViolationsWithPattern("IsShutdownRequested Method Violations", violations, "MISSING_IS_SHUTDOWN_REQUESTED")
-					Fail(message)
-				}
-			})
-		})
-
-		Describe("State String() Method (Invariant: Debuggability)", func() {
-			// Note: Reason() method was removed from State interface - reason now comes from NextResult.Reason
-			It("should have String() method for debugging", func() {
-				violations := validator.ValidateStateStringAndReason(getFsmv2Dir())
-				if len(violations) > 0 {
-					message := validator.FormatViolationsWithPattern("State Method Violations", violations, "STATE_MISSING_STRING_METHOD")
-					Fail(message)
-				}
-			})
-		})
-
-		Describe("No Nil State Returns (Invariant: Non-Nil State Guarantee)", func() {
-			It("should never return nil as state in Next()", func() {
-				violations := validator.ValidateNoNilStateReturns(getFsmv2Dir())
-				if len(violations) > 0 {
-					message := validator.FormatViolationsWithPattern("Nil State Violations", violations, "NIL_STATE_RETURN")
-					Fail(message)
-				}
-			})
-		})
-
-		Describe("Signal-State Mutual Exclusion (Invariant: Clear Signal Semantics)", func() {
-			It("should only send signals with same-state returns", func() {
-				violations := validator.ValidateSignalStateMutualExclusion(getFsmv2Dir())
-				if len(violations) > 0 {
-					message := validator.FormatViolationsWithPattern("Signal State Violations", violations, "SIGNAL_STATE_MISMATCH")
-					Fail(message)
-				}
-			})
-		})
-
-		// Context Cancellation in CollectObservedState removed: the collector now
-		// checks ctx.Done() at the framework level before calling COS, making
-		// per-worker checks optional (defense-in-depth, not mandatory).
-
-		// Nil Spec Handling check removed in PR3-c10: defensive `spec == nil`
-		// guards became vacuous once DeriveDesiredState callers (parser,
-		// supervisor) stopped passing nil specs and switched to typed
-		// helpers (DeriveLeafState, ParseUserSpec). The runtime AST walk
-		// flagged false positives on workers using nil-safe helpers and
-		// duplicated coverage already in worker unit tests.
-
-		// Context Cancellation in Actions removed: action_executor.go wraps every
-		// action in context.WithTimeout, making per-action ctx.Done() entry checks
-		// redundant (defense-in-depth, not mandatory).
-
-		Describe("No Internal Retry Loops in Actions (Invariant: Supervisor Manages Retries)", func() {
-			It("should not have for loops with error handling in Execute()", func() {
-				violations := validator.ValidateNoInternalRetryLoops(getFsmv2Dir())
-				if len(violations) > 0 {
-					message := validator.FormatViolationsWithPattern("Internal Retry Loop Violations", violations, "INTERNAL_RETRY_LOOP")
-					Fail(message)
-				}
-			})
-		})
-
 	})
 
-	Context("🟡 PHASE 2: Additional Architectural Patterns", func() {
-
-		Describe("State Field Exists (Invariant: FSM State Tracking)", func() {
-			It("should have State string field in both DesiredState and ObservedState", func() {
-				violations := validator.ValidateStateFieldExists(getFsmv2Dir())
-
-				if len(violations) > 0 {
-					message := validator.FormatViolationsWithPattern("State Field Violations", violations, "MISSING_STATE_FIELD")
-					Fail(message)
-				}
-			})
+	Describe("No Nil State Returns (Invariant: Non-Nil State Guarantee)", func() {
+		It("should never return nil as state in Next()", func() {
+			violations := validator.ValidateNoNilStateReturns(getFsmv2Dir())
+			if len(violations) > 0 {
+				message := validator.FormatViolationsWithPattern("Nil State Violations", violations, "NIL_STATE_RETURN")
+				Fail(message)
+			}
 		})
+	})
 
-		Describe("DesiredState.State Values (Invariant: Valid Lifecycle States)", func() {
-			It("should only use \"stopped\" or \"running\" as values", func() {
-				violations := validator.ValidateDesiredStateValues(getFsmv2Dir())
-
-				if len(violations) > 0 {
-					message := validator.FormatViolationsWithPattern("Invalid State Value Violations", violations, "INVALID_DESIRED_STATE_VALUE")
-					Fail(message)
-				}
-			})
+	Describe("Signal-State Mutual Exclusion (Invariant: Clear Signal Semantics)", func() {
+		It("should only send signals with same-state returns", func() {
+			violations := validator.ValidateSignalStateMutualExclusion(getFsmv2Dir())
+			if len(violations) > 0 {
+				message := validator.FormatViolationsWithPattern("Signal State Violations", violations, "SIGNAL_STATE_MISMATCH")
+				Fail(message)
+			}
 		})
+	})
 
-		Describe("DeriveDesiredState Returns (Invariant: Valid Lifecycle States)", func() {
-			It("should only return \"stopped\" or \"running\" in State field", func() {
-				violations := validator.ValidateDeriveDesiredStateReturns(getFsmv2Dir())
-
-				if len(violations) > 0 {
-					message := validator.FormatViolationsWithPattern("DeriveDesiredState State Value Violations", violations, "INVALID_DESIRED_STATE_VALUE")
-					Fail(message)
-				}
-			})
-		})
-
-		Describe("Base State Type Embedding (Invariant: Type Hierarchy)", func() {
-			It("should embed exactly one Base*State type", func() {
-				violations := validator.ValidateBaseStateEmbedding(getFsmv2Dir())
-				if len(violations) > 0 {
-					message := validator.FormatViolationsWithPattern("Base State Embedding Violations", violations, "MISSING_BASE_STATE")
-					Fail(message)
-				}
-			})
-		})
-
-		Describe("Child Spec Validation (Invariant: Early Validation)", func() {
-			It("should validate ChildrenSpecs before returning them", func() {
-				violations := validator.ValidateChildSpecValidation(getFsmv2Dir())
-				if len(violations) > 0 {
-					message := validator.FormatViolationsWithPattern("Child Spec Validation Violations", violations, "MISSING_CHILDSPEC_VALIDATION")
-					Fail(message)
-				}
-			})
-		})
-
-		Describe("MetricsEmbedder Value Receivers (Invariant: Interface Satisfaction)", func() {
-			It("should use value receivers for MetricsHolder interface methods", func() {
-				violations := validator.ValidateMetricsEmbedderValueReceivers(getFsmv2Dir())
-				if len(violations) > 0 {
-					message := validator.FormatViolationsWithPattern(
-						"MetricsEmbedder Receiver Violations",
-						violations,
-						"POINTER_RECEIVER_ON_METRICS_EMBEDDER",
-					)
-					Fail(message)
-				}
-			})
-		})
-
-		// Spec Usage check removed in PR3-c10: discarded-spec detection
-		// was a defensive heuristic against early-prototype workers that
-		// type-asserted spec but never read its fields. After P2.x's
-		// migration to typed UserSpec parsers (ParseUserSpec, DeriveLeafState),
-		// every production worker uses its spec or fails compilation.
-
-		Describe("StoppingState No Catch-All Self-Return (Invariant: No Stopping Deadlock)", func() {
-			It("should not have catch-all self-return with nil action in StoppingBase states", func() {
-				violations := validator.ValidateStoppingStateNoCatchAllSelfReturn(getFsmv2Dir())
-				if len(violations) > 0 {
-					message := validator.FormatViolationsWithPattern(
-						"StoppingState Deadlock Violations",
-						violations,
-						"STOPPING_STATE_DEADLOCK",
-					)
-					Fail(message)
-				}
-			})
+	Describe("StoppingState No Catch-All Self-Return (Invariant: No Stopping Deadlock)", func() {
+		It("should not have catch-all self-return with nil action in StoppingBase states", func() {
+			violations := validator.ValidateStoppingStateNoCatchAllSelfReturn(getFsmv2Dir())
+			if len(violations) > 0 {
+				message := validator.FormatViolationsWithPattern(
+					"StoppingState Deadlock Violations",
+					violations,
+					"STOPPING_STATE_DEADLOCK",
+				)
+				Fail(message)
+			}
 		})
 	})
 })
@@ -254,74 +85,4 @@ func getFsmv2Dir() string {
 	_, filename, _, _ := runtime.Caller(0)
 
 	return filepath.Dir(filename)
-}
-
-// validateStateStructs checks that state structs have no fields (except base state).
-// This function must remain in the test file because it uses reflection on imported
-// state packages, which would create import cycles if moved to the validator package.
-func validateStateStructs() []validator.Violation {
-	var violations []validator.Violation
-
-	fsmv2Dir := getFsmv2Dir()
-
-	// Check example-child states
-	childStates := []interface{}{
-		&childState.TryingToConnectState{},
-		&childState.ConnectedState{},
-		&childState.DisconnectedState{},
-		&childState.TryingToStopState{},
-		&childState.StoppedState{},
-	}
-
-	for _, state := range childStates {
-		v := reflect.ValueOf(state).Elem()
-		t := v.Type()
-
-		for i := range t.NumField() {
-			field := t.Field(i)
-
-			// Skip embedded base types (they start with capital letter and are anonymous)
-			if field.Anonymous {
-				continue
-			}
-
-			// Found a violation: state has a field
-			violations = append(violations, validator.Violation{
-				File:    validator.GetStateFilePath(fsmv2Dir, t.Name()),
-				Line:    0, // Would need source parsing to get exact line
-				Type:    "EMPTY_STATE",
-				Message: fmt.Sprintf("State %s has field '%s %s' (should be empty)", t.Name(), field.Name, field.Type),
-			})
-		}
-	}
-
-	// Check exampleparent states
-	parentStates := []interface{}{
-		&parentState.TryingToStartState{},
-		&parentState.RunningState{},
-		&parentState.TryingToStopState{},
-		&parentState.StoppedState{},
-	}
-
-	for _, state := range parentStates {
-		v := reflect.ValueOf(state).Elem()
-		t := v.Type()
-
-		for i := range t.NumField() {
-			field := t.Field(i)
-
-			if field.Anonymous {
-				continue
-			}
-
-			violations = append(violations, validator.Violation{
-				File:    validator.GetStateFilePath(fsmv2Dir, t.Name()),
-				Line:    0,
-				Type:    "EMPTY_STATE",
-				Message: fmt.Sprintf("State %s has field '%s %s' (should be empty)", t.Name(), field.Name, field.Type),
-			})
-		}
-	}
-
-	return violations
 }

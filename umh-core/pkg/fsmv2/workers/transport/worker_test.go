@@ -272,7 +272,7 @@ authToken: "test-token"`,
 			})
 		})
 
-		Context("empty credentials when running (post-D8: no PostParseHook validation)", func() {
+		Context("empty credentials when running (validation deferred to runtime)", func() {
 			It("should NOT return an error when relayURL is empty", func() {
 				spec := fsmv2types.UserSpec{
 					Config: `state: running

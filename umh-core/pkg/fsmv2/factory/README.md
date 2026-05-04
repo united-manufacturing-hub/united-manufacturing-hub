@@ -163,24 +163,8 @@ _ = factory.RegisterFactoryByType("example-parent", ...)
 
 **Fix:** Rename type to `MyworkerObservedState` or folder to `somethingelse`.
 
-## Architecture tests
+## Registry consistency
 
-### Folder naming validation
+`ValidateRegistryConsistency()` returns `(workerOnly, supervisorOnly)` — non-empty slices indicate a worker type is registered in only one of the two factory maps. The expected steady state is two empty slices; otherwise the worker type names in each slice identify the missing registrations.
 
-The `ValidateFolderMatchesWorkerType` test validates:
-- Every worker folder contains a snapshot with `*ObservedState` type
-- The derived worker type equals the folder name
-
-Run with: `ginkgo --focus="Worker Folder Naming" ./pkg/fsmv2/`
-
-### Registry consistency validation
-
-The registry consistency test validates:
-- Every worker type in the worker registry exists in the supervisor registry
-- Every worker type in the supervisor registry exists in the worker registry
-
-The test catches mismatches caused by using different keys when registering worker vs supervisor factories, or forgetting to register one of the two factories.
-
-Run with: `ginkgo --focus="Worker Factory Registration" ./pkg/fsmv2/`
-
-If this test fails, a `REGISTRY_MISMATCH` violation indicates which types are missing from which registry.
+Run with: `ginkgo --focus="ValidateRegistryConsistency" ./pkg/fsmv2/factory/`

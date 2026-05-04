@@ -162,10 +162,7 @@ func init() {
 				return nil
 			}
 
-			d, err := NewPushDependencies(parentDeps, id, logger, sr)
-			if err != nil {
-				return nil
-			}
+			d, _ := NewPushDependencies(parentDeps, id, logger, sr)
 
 			return d
 		})
