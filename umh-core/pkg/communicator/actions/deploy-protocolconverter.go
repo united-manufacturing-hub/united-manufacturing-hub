@@ -50,6 +50,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/dataflowcomponent"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/protocolconverter"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"go.uber.org/zap"
@@ -64,6 +65,7 @@ type DeployProtocolConverterAction struct {
 	outboundChannel       chan *models.UMHMessage
 	systemSnapshotManager *fsm.SnapshotManager // Snapshot Manager holds the latest system snapshot
 	actionLogger          *zap.SugaredLogger
+	fsmLogger             deps.FSMLogger
 
 	userEmail string
 	// Parsed request payload (only populated after Parse)
@@ -75,13 +77,15 @@ type DeployProtocolConverterAction struct {
 
 // NewDeployProtocolConverterAction returns an un-parsed action instance.
 func NewDeployProtocolConverterAction(userEmail string, actionUUID uuid.UUID, instanceUUID uuid.UUID, outboundChannel chan *models.UMHMessage, configManager config.ConfigManager, systemSnapshotManager *fsm.SnapshotManager) *DeployProtocolConverterAction {
+	al := logger.For(logger.ComponentCommunicator)
 	return &DeployProtocolConverterAction{
 		userEmail:             userEmail,
 		actionUUID:            actionUUID,
 		instanceUUID:          instanceUUID,
 		outboundChannel:       outboundChannel,
 		configManager:         configManager,
-		actionLogger:          logger.For(logger.ComponentCommunicator),
+		actionLogger:          al,
+		fsmLogger:             deps.NewFSMLogger(al),
 		systemSnapshotManager: systemSnapshotManager,
 	}
 }
@@ -145,6 +149,8 @@ func (a *DeployProtocolConverterAction) Execute() (interface{}, map[string]inter
 		errorMsg := fmt.Sprintf("Failed to create protocol converter configuration: %v", err)
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
 			errorMsg, a.outboundChannel, models.DeployProtocolConverter)
+		a.fsmLogger.SentryError(deps.FeatureDisableReadFlows, "", err, "deploy_protocol_converter_create_config_failed",
+			deps.String("name", a.payload.Name))
 
 		return nil, nil, fmt.Errorf("%s", errorMsg)
 	}
@@ -164,6 +170,8 @@ func (a *DeployProtocolConverterAction) Execute() (interface{}, map[string]inter
 		errorMsg := fmt.Sprintf("Failed to add protocol converter: %v", err)
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
 			errorMsg, a.outboundChannel, models.DeployProtocolConverter)
+		a.fsmLogger.SentryError(deps.FeatureDisableReadFlows, "", err, "deploy_protocol_converter_add_failed",
+			deps.String("pcConfig", pcConfig.String()))
 
 		return nil, nil, fmt.Errorf("%s", errorMsg)
 	}
@@ -214,6 +222,9 @@ func (a *DeployProtocolConverterAction) Execute() (interface{}, map[string]inter
 				models.DeployProtocolConverter,
 				nil,
 			)
+			a.fsmLogger.SentryError(deps.FeatureDisableReadFlows, "", err, "deploy_protocol_converter_wait_failed",
+				deps.String("pcConfig", pcConfig.String()),
+				deps.String("desiredState", pcConfig.DesiredFSMState))
 
 			return nil, nil, fmt.Errorf("%s", errorMsg)
 		}
@@ -386,6 +397,9 @@ func (a *DeployProtocolConverterAction) waitForComponentToAppear(desiredState st
 			err := a.configManager.AtomicDeleteProtocolConverter(ctx, dataflowcomponentserviceconfig.GenerateUUIDFromName(a.payload.Name))
 			if err != nil {
 				a.actionLogger.Errorf("failed to remove protocol converter %s: %v", a.payload.Name, err)
+				a.fsmLogger.SentryError(deps.FeatureDisableReadFlows, "", err, "deploy_protocol_converter_rollback_failed",
+					deps.String("name", a.payload.Name),
+					deps.String("desiredState", desiredState))
 
 				return models.ErrRetryRollbackTimeout, fmt.Errorf("protocol converter '%s' failed to reach state '%s' within timeout but could not be removed: %w. Please check system load and consider removing the component manually", a.payload.Name, desiredState, err)
 			}
@@ -397,6 +411,11 @@ func (a *DeployProtocolConverterAction) waitForComponentToAppear(desiredState st
 			} else {
 				errorMsg += ". Please check system load or component configuration and try again"
 			}
+
+			a.fsmLogger.SentryWarn(deps.FeatureDisableReadFlows, "", "deploy_protocol_converter_rollback_on_timeout",
+				deps.String("name", a.payload.Name),
+				deps.String("desiredState", desiredState),
+				deps.String("lastStatusReason", lastStatusReason))
 
 			return models.ErrRetryRollbackTimeout, fmt.Errorf("%s", errorMsg)
 
