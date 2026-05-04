@@ -25,16 +25,14 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleslow/snapshot"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleslow/state"
 )
 
 type ExampleslowWorker struct {
-	*helpers.BaseWorker[*ExampleslowDependencies]
-	logger   deps.FSMLogger
-	identity deps.Identity
+	deps *ExampleslowDependencies
+	fsmv2.WorkerBase[ExampleslowUserSpec, snapshot.ExampleslowObservedState, *ExampleslowDependencies]
 }
 
 func NewExampleslowWorker(
@@ -60,13 +58,12 @@ func NewExampleslowWorker(
 		identity.WorkerType = workerType
 	}
 
-	dependencies := NewExampleslowDependencies(connectionPool, logger, stateReader, identity)
+	w := &ExampleslowWorker{}
+	baseDeps := w.InitBase(identity, logger, stateReader)
+	w.deps = NewExampleslowDependencies(connectionPool, baseDeps)
+	w.BindDeps(w.deps)
 
-	return &ExampleslowWorker{
-		BaseWorker: helpers.NewBaseWorker(dependencies),
-		identity:   identity,
-		logger:     logger,
-	}, nil
+	return w, nil
 }
 
 func (w *ExampleslowWorker) CollectObservedState(ctx context.Context, _ fsmv2.DesiredState) (fsmv2.ObservedState, error) {
@@ -76,25 +73,23 @@ func (w *ExampleslowWorker) CollectObservedState(ctx context.Context, _ fsmv2.De
 	default:
 	}
 
-	deps := w.GetDependencies()
-
 	connectionHealth := "no connection"
 
-	if deps.IsConnected() {
+	if w.deps.IsConnected() {
 		connectionHealth = "healthy"
 	}
 
 	observed := snapshot.ExampleslowObservedState{
-		ID:               w.identity.ID,
+		ID:               w.Identity().ID,
 		CollectedAt:      time.Now(),
 		ConnectionHealth: connectionHealth,
 	}
 
-	if fm := deps.GetFrameworkState(); fm != nil {
+	if fm := w.deps.GetFrameworkState(); fm != nil {
 		observed.Metrics.Framework = *fm
 	}
 
-	observed.LastActionResults = deps.GetActionHistory()
+	observed.LastActionResults = w.deps.GetActionHistory()
 
 	return observed, nil
 }
@@ -121,8 +116,7 @@ func (w *ExampleslowWorker) updateDependenciesFromSpec(spec interface{}) {
 		return
 	}
 
-	deps := w.GetDependencies()
-	deps.SetDelaySeconds(parsed.DelaySeconds)
+	w.deps.SetDelaySeconds(parsed.DelaySeconds)
 }
 
 func (w *ExampleslowWorker) GetInitialState() fsmv2.State[any, any] {

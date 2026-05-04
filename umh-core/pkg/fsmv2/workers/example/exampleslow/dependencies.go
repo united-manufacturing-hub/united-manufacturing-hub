@@ -51,9 +51,11 @@ type ExampleslowDependencies struct {
 	delaySeconds int
 }
 
-func NewExampleslowDependencies(connectionPool ConnectionPool, logger deps.FSMLogger, stateReader deps.StateReader, identity deps.Identity) *ExampleslowDependencies {
+// NewExampleslowDependencies creates new dependencies for the exampleslow worker.
+// Accepts a shared BaseDependencies to avoid dual-instance metrics divergence.
+func NewExampleslowDependencies(connectionPool ConnectionPool, baseDeps *deps.BaseDependencies) *ExampleslowDependencies {
 	return &ExampleslowDependencies{
-		BaseDependencies: deps.NewBaseDependencies(logger, stateReader, identity),
+		BaseDependencies: baseDeps,
 		connectionPool:   connectionPool,
 	}
 }
