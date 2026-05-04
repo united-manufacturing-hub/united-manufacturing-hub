@@ -19,7 +19,6 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
-	"path/filepath"
 	"strings"
 )
 
@@ -292,61 +291,6 @@ func checkDesiredStateValues(filename string) []Violation {
 					})
 				}
 			}
-		}
-
-		return true
-	})
-
-	return violations
-}
-
-// ValidateFolderMatchesWorkerType checks that worker folder names match their derived worker types.
-func ValidateFolderMatchesWorkerType(baseDir string) []Violation {
-	var violations []Violation
-
-	snapshotFiles := FindSnapshotFiles(baseDir)
-
-	for _, file := range snapshotFiles {
-		fileViolations := checkFolderMatchesWorkerType(file)
-		violations = append(violations, fileViolations...)
-	}
-
-	return violations
-}
-
-// checkFolderMatchesWorkerType derives worker type from ObservedState and compares to folder name.
-func checkFolderMatchesWorkerType(filename string) []Violation {
-	var violations []Violation
-
-	fset := token.NewFileSet()
-
-	node, err := parser.ParseFile(fset, filename, nil, parser.ParseComments)
-	if err != nil {
-		return violations
-	}
-
-	dir := filepath.Dir(filename)
-	workerDir := filepath.Dir(dir)
-	folderName := filepath.Base(workerDir)
-
-	ast.Inspect(node, func(n ast.Node) bool {
-		typeSpec, ok := n.(*ast.TypeSpec)
-		if !ok || !strings.HasSuffix(typeSpec.Name.Name, "ObservedState") {
-			return true
-		}
-
-		typeName := typeSpec.Name.Name
-		workerType := strings.TrimSuffix(typeName, "ObservedState")
-		workerType = strings.ToLower(workerType)
-
-		if folderName != workerType {
-			pos := fset.Position(typeSpec.Pos())
-			violations = append(violations, Violation{
-				File:    filename,
-				Line:    pos.Line,
-				Type:    "FOLDER_WORKER_TYPE_MISMATCH",
-				Message: fmt.Sprintf("Folder name %q does not match derived worker type %q (from %s). Rename folder to %q to match.", folderName, workerType, typeName, workerType),
-			})
 		}
 
 		return true

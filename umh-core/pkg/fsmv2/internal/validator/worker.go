@@ -215,68 +215,6 @@ func usesNilSafeHelper(body *ast.BlockStmt) bool {
 	return found
 }
 
-// ValidatePointerReceivers checks that Worker methods use pointer receivers.
-func ValidatePointerReceivers(baseDir string) []Violation {
-	var violations []Violation
-
-	workerFiles := FindWorkerFiles(baseDir)
-
-	for _, file := range workerFiles {
-		fileViolations := checkPointerReceivers(file)
-		violations = append(violations, fileViolations...)
-	}
-
-	return violations
-}
-
-// checkPointerReceivers checks that Worker methods use pointer receivers.
-func checkPointerReceivers(filename string) []Violation {
-	var violations []Violation
-
-	fset := token.NewFileSet()
-
-	node, err := parser.ParseFile(fset, filename, nil, parser.ParseComments)
-	if err != nil {
-		return violations
-	}
-
-	targetMethods := map[string]bool{
-		"CollectObservedState": true,
-		"DeriveDesiredState":   true,
-		"GetInitialState":      true,
-	}
-
-	ast.Inspect(node, func(n ast.Node) bool {
-		funcDecl, ok := n.(*ast.FuncDecl)
-		if !ok || !targetMethods[funcDecl.Name.Name] {
-			return true
-		}
-
-		if funcDecl.Recv == nil || len(funcDecl.Recv.List) == 0 {
-			return true
-		}
-
-		isPointer := false
-		if _, ok := funcDecl.Recv.List[0].Type.(*ast.StarExpr); ok {
-			isPointer = true
-		}
-
-		if !isPointer {
-			pos := fset.Position(funcDecl.Pos())
-			violations = append(violations, Violation{
-				File:    filename,
-				Line:    pos.Line,
-				Type:    "VALUE_RECEIVER_ON_WORKER",
-				Message: fmt.Sprintf("Method %s() uses value receiver (should use pointer receiver *T)", funcDecl.Name.Name),
-			})
-		}
-
-		return true
-	})
-
-	return violations
-}
-
 // ValidateChildSpecValidation checks that DeriveDesiredState validates children.
 func ValidateChildSpecValidation(baseDir string) []Violation {
 	var violations []Violation

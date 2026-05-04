@@ -300,52 +300,6 @@ func (a *ConnectAction) Execute(ctx context.Context) error {
 }`,
 		ReferenceFile: "example-child/action/connect.go",
 	},
-	"VALUE_RECEIVER_ON_WORKER": {
-		Name: "Pointer Receivers on Workers",
-		Why: `All Worker interface methods must use pointer receivers (*T).
-WHY: Workers contain state (dependencies, configuration) that must persist
-across method calls. Value receivers create copies, losing mutations.
-More importantly, Go interfaces work differently with pointer vs value
-receivers - inconsistent receiver types cause subtle interface satisfaction
-bugs where methods "disappear" depending on how the type is used.`,
-		CorrectCode: `// Correct: pointer receiver
-func (w *MyWorker) CollectObservedState(ctx context.Context, _ DesiredState) (ObservedState, error) {
-    return w.doCollection(ctx)
-}
-
-// WRONG: value receiver loses state
-func (w MyWorker) CollectObservedState(ctx context.Context, _ DesiredState) (ObservedState, error) {
-    return w.doCollection(ctx)  // Changes to w are lost!
-}`,
-		ReferenceFile: "example-child/worker.go",
-	},
-	"TRYINGTO_NO_ACTION": {
-		Name: "TryingTo States Return Actions",
-		Why: `States named "TryingTo*" MUST return non-nil actions in at least one code path.
-WHY: The "TryingTo" prefix indicates an active state that performs work to achieve
-a goal. If it never returns an action, it's passive (should be renamed) or broken.
-This naming convention helps developers understand state behavior at a glance.`,
-		CorrectCode: `// TryingTo prefix = MUST have action
-func (s *TryingToConnectState) Next(snap any) (...) {
-    // At least one path returns an action
-    return s, SignalNone, &ConnectAction{}
-}`,
-		ReferenceFile: "example-child/state/state_trying_to_connect.go",
-	},
-	"MISSING_CATCHALL_RETURN": {
-		Name: "Exhaustive Transition Coverage",
-		Why: `Next() methods should end with a catch-all return: "return s, SignalNone, nil".
-WHY: The FSM always has a valid transition. Without a catch-all,
-edge cases may cause undefined behavior. The catch-all is a safety net that
-maintains the current state when no explicit transition matches.`,
-		CorrectCode: `func (s *MyState) Next(snap any) (...) {
-    if condition1 { return &State1{}, ... }
-    if condition2 { return &State2{}, ... }
-    // Catch-all: stay in current state
-    return s, SignalNone, nil
-}`,
-		ReferenceFile: "example-child/state/state_connected.go",
-	},
 	"MISSING_BASE_STATE": {
 		Name: "Base State Type Embedding",
 		Why: `State structs should embed exactly one Base*State type.
@@ -372,25 +326,6 @@ partial deployments where some children fail.`,
     return &DesiredState{Children: spec.Children}, nil
 }`,
 		ReferenceFile: "exampleparent/worker.go",
-	},
-	"CHANNEL_OPERATION_IN_ACTION": {
-		Name: "No Channel Operations in Actions",
-		Why: `Execute() methods should not use goroutines, channels, or channel operations.
-WHY: Actions are synchronous operations managed by the supervisor. Spawning
-goroutines or using channels creates concurrent state that the supervisor
-can't track. This leads to resource leaks on shutdown and race conditions.
-If async work is needed, model it as a state transition instead.`,
-		CorrectCode: `// Correct: synchronous operation
-func (a *Action) Execute(ctx context.Context) error {
-    return doSyncOperation(ctx)
-}
-
-// WRONG: spawns goroutine
-func (a *Action) Execute(ctx context.Context) error {
-    go doAsyncWork()  // Supervisor can't track this!
-    return nil
-}`,
-		ReferenceFile: "example-child/action/connect.go",
 	},
 	"MISSING_STATE_FIELD": {
 		Name: "State Field Required in DesiredState and ObservedState",
@@ -446,48 +381,6 @@ return config.DesiredState{
     State: "active",     // Ambiguous, use "running" instead
 }`,
 		ReferenceFile: "workers/example/examplechild/worker.go",
-	},
-	"FOLDER_WORKER_TYPE_MISMATCH": {
-		Name: "Folder Name Must Match Worker Type",
-		Why: `Worker folder names must exactly match the derived worker type.
-WHY: The factory registration system uses type names to derive worker types:
-"ExamplechildObservedState" → "examplechild". If the folder is named differently (e.g., "example-child"),
-it creates confusion and enables registration mismatches where supervisor factory
-registers as "examplechild" but worker factory registers manually as "example-child".
-Go type names cannot contain hyphens, so hyphenated folder names can NEVER match.`,
-		CorrectCode: `// Folder "examplechild" with type ExamplechildObservedState → worker type "examplechild" ✓
-workers/example/examplechild/snapshot/snapshot.go:
-    type ExamplechildObservedState struct { ... }
-
-// Folder "exampleparent" with type ExampleparentObservedState → "exampleparent" ✓
-workers/example/exampleparent/snapshot/snapshot.go:
-    type ExampleparentObservedState struct { ... }
-
-// WRONG: Folder "example-child" can never match (hyphens invalid in Go types)`,
-		ReferenceFile: "workers/example/examplechild/snapshot/snapshot.go",
-	},
-	"DYNAMIC_ERROR_MESSAGE": {
-		Name: "Static Error Messages for Sentry Grouping",
-		Why: `Error messages must be static strings without dynamic content (IDs, timestamps, counts).
-WHY: Sentry groups errors by message. Dynamic content creates unique messages that
-cannot be grouped, causing:
-1. Sentry spam - thousands of "unique" issues that are the same error
-2. Impossible to track error frequency (each occurrence is a "new" issue)
-3. Alert fatigue for on-call engineers who can't distinguish severity
-
-Use static messages like "worker failed to start" and put dynamic context in
-Sentry's extra data fields, not in the error message itself.`,
-		CorrectCode: `// Correct: static message, context in Sentry scope
-return fmt.Errorf("worker failed to start: %w", err)
-
-// Correct: static message only
-return fmt.Errorf("connection refused")
-
-// WRONG: dynamic content in message (creates unique errors)
-return fmt.Errorf("worker %s failed at %v", workerID, time.Now())
-return fmt.Errorf("failed after %d retries", count)
-return fmt.Errorf("connection to %s:%d failed", host, port)`,
-		ReferenceFile: "pkg/fsmv2/ARCHITECTURE.md",
 	},
 	"SPEC_RESULT_DISCARDED": {
 		Name: "Spec Result Used in DeriveDesiredState",

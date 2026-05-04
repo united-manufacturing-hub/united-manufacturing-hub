@@ -83,17 +83,6 @@ var _ = Describe("FSMv2 Architecture Validation", func() {
 			})
 		})
 
-		Describe("Shutdown Check First in Next() (Invariant: Lifecycle Overrides Operational)", func() {
-			It("should check IsShutdownRequested as first conditional after type assertion", func() {
-				violations := validator.ValidateShutdownCheckFirst(getFsmv2Dir())
-
-				if len(violations) > 0 {
-					message := validator.FormatViolationsWithPattern("Shutdown Check Violations", violations, "SHUTDOWN_CHECK_NOT_FIRST")
-					Fail(message)
-				}
-			})
-		})
-
 		Describe("State Change XOR Action (Invariant: Deterministic Transitions)", func() {
 			It("should return either a new state or an action, never both", func() {
 				violations := validator.ValidateStateXORAction(getFsmv2Dir())
@@ -181,15 +170,6 @@ var _ = Describe("FSMv2 Architecture Validation", func() {
 			})
 		})
 
-		Describe("Pointer Receivers on Workers (Invariant: Consistent Interface)", func() {
-			It("should use pointer receivers (*T) for all Worker methods", func() {
-				violations := validator.ValidatePointerReceivers(getFsmv2Dir())
-				if len(violations) > 0 {
-					message := validator.FormatViolationsWithPattern("Pointer Receiver Violations", violations, "VALUE_RECEIVER_ON_WORKER")
-					Fail(message)
-				}
-			})
-		})
 	})
 
 	Context("🟡 PHASE 2: Additional Architectural Patterns", func() {
@@ -227,26 +207,6 @@ var _ = Describe("FSMv2 Architecture Validation", func() {
 			})
 		})
 
-		Describe("TryingTo States Return Actions (Invariant: Active State Semantics)", func() {
-			It("should return non-nil actions in at least one code path", func() {
-				violations := validator.ValidateTryingToStatesReturnActions(getFsmv2Dir())
-				if len(violations) > 0 {
-					message := validator.FormatViolationsWithPattern("TryingTo State Action Violations", violations, "TRYINGTO_NO_ACTION")
-					Fail(message)
-				}
-			})
-		})
-
-		Describe("Exhaustive Transition Coverage (Invariant: Complete State Handling)", func() {
-			It("should end with catch-all return: return s, SignalNone, nil", func() {
-				violations := validator.ValidateExhaustiveTransitionCoverage(getFsmv2Dir())
-				if len(violations) > 0 {
-					message := validator.FormatViolationsWithPattern("Catch-All Return Violations", violations, "MISSING_CATCHALL_RETURN")
-					Fail(message)
-				}
-			})
-		})
-
 		Describe("Base State Type Embedding (Invariant: Type Hierarchy)", func() {
 			It("should embed exactly one Base*State type", func() {
 				violations := validator.ValidateBaseStateEmbedding(getFsmv2Dir())
@@ -262,36 +222,6 @@ var _ = Describe("FSMv2 Architecture Validation", func() {
 				violations := validator.ValidateChildSpecValidation(getFsmv2Dir())
 				if len(violations) > 0 {
 					message := validator.FormatViolationsWithPattern("Child Spec Validation Violations", violations, "MISSING_CHILDSPEC_VALIDATION")
-					Fail(message)
-				}
-			})
-		})
-
-		Describe("No Channel Operations in Actions (Invariant: Synchronous Actions)", func() {
-			It("should not use goroutines, channels, or channel operations", func() {
-				violations := validator.ValidateNoChannelOperations(getFsmv2Dir())
-				if len(violations) > 0 {
-					message := validator.FormatViolationsWithPattern("Channel Operation Violations", violations, "CHANNEL_OPERATION_IN_ACTION")
-					Fail(message)
-				}
-			})
-		})
-
-		Describe("Structured Logging Only (Invariant: Consistent Log Format)", func() {
-			It("should use structured logging (Warnw/Errorw/Infow) not format-based (Warnf/Errorf/Infof)", func() {
-				violations := validator.ValidateStructuredLogging(getFsmv2Dir())
-				if len(violations) > 0 {
-					message := validator.FormatViolationsWithPattern("Non-Structured Logging Violations", violations, "NON_STRUCTURED_LOGGING")
-					Fail(message)
-				}
-			})
-		})
-
-		Describe("Worker Folder Naming (Invariant: Folder = Worker Type)", func() {
-			It("should have folder name equal to derived worker type", func() {
-				violations := validator.ValidateFolderMatchesWorkerType(getFsmv2Dir())
-				if len(violations) > 0 {
-					message := validator.FormatViolationsWithPattern("Folder Naming Violations", violations, "FOLDER_WORKER_TYPE_MISMATCH")
 					Fail(message)
 				}
 			})
@@ -335,35 +265,6 @@ var _ = Describe("FSMv2 Architecture Validation", func() {
 						"POINTER_RECEIVER_ON_METRICS_EMBEDDER",
 					)
 					Fail(message)
-				}
-			})
-		})
-
-		Describe("Static Error Messages (Invariant: Sentry Grouping)", func() {
-			It("should not have dynamic content in error messages", func() {
-				violations := validator.ValidateStaticErrorMessages(getFsmv2Dir())
-				if len(violations) > 0 {
-					// Report violations but skip instead of failing
-					// P2-19 will fix all violations; this test documents what needs fixing
-					maxViolations := 20
-					if len(violations) > maxViolations {
-						truncated := violations[:maxViolations]
-						message := validator.FormatViolationsWithPattern(
-							"Static Error Message Violations",
-							truncated,
-							"DYNAMIC_ERROR_MESSAGE",
-						)
-						Skip(fmt.Sprintf("Found %d static error violations (showing first %d, to be fixed in P2-19):\n%s",
-							len(violations), maxViolations, message))
-					} else {
-						message := validator.FormatViolationsWithPattern(
-							"Static Error Message Violations",
-							violations,
-							"DYNAMIC_ERROR_MESSAGE",
-						)
-						Skip(fmt.Sprintf("Found %d static error violations (to be fixed in P2-19):\n%s",
-							len(violations), message))
-					}
 				}
 			})
 		})

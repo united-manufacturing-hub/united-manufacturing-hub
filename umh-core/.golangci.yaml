@@ -26,9 +26,12 @@ linters:
   enable:
     - canonicalheader
     - copyloopvar
+    - depguard
     - dupword
+    - err113
     - errorlint
     - exptostd
+    - forbidigo
     - ginkgolinter
     - gocritic
     - godot
@@ -51,3 +54,18 @@ linters:
     - usetesting
     - whitespace
     - wsl_v5
+
+  settings:
+    forbidigo:
+      forbid:
+        - pattern: '^(fmt\.Print|fmt\.Println|fmt\.Printf|log\.Print|log\.Println|log\.Printf)$'
+          msg: "use framework logger (GetLogger(), ActionLogger()) in FSMv2 workers; bare fmt/log bypasses structured logging"
+    depguard:
+      rules:
+        fsmv2-no-text-template:
+          list-mode: lax
+          files:
+            - "**/pkg/fsmv2/**"
+          deny:
+            - pkg: "text/template"
+              desc: "FSMv2 workers must not use text/template; use config struct fields directly"
