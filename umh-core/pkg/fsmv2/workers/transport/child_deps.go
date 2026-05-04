@@ -25,6 +25,9 @@ var (
 // children to consume via ChildDeps(). Transport's constructor calls this
 // after building its deps. Mirrors the ChannelProvider singleton pattern
 // to avoid an untyped extraDeps seam between parent and children.
+//
+// Deprecated: This singleton will be deleted in P3.13-transport-atomic when
+// register.SetDepsBuilder replaces it. Do not add new callers.
 func SetChildDeps(d *TransportDependencies) {
 	childDepsMu.Lock()
 	defer childDepsMu.Unlock()
