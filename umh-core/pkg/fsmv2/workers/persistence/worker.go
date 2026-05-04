@@ -22,6 +22,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/register"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/persistence/snapshot"
 	persistencepkg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
 
 	// Blank import for side effects: registers the "Stopped" initial state
@@ -41,10 +42,12 @@ const WorkerTypeName = "persistence"
 
 const workerType = WorkerTypeName
 
+// Re-exported defaults for caller convenience. Canonical values live with
+// PersistenceConfig in the snapshot package, alongside the GetX accessors.
 const (
-	DefaultCompactionInterval  = 5 * time.Minute
-	DefaultRetentionWindow     = 1 * time.Hour
-	DefaultMaintenanceInterval = 7 * 24 * time.Hour
+	DefaultCompactionInterval  = snapshot.DefaultCompactionInterval
+	DefaultRetentionWindow     = snapshot.DefaultRetentionWindow
+	DefaultMaintenanceInterval = snapshot.DefaultMaintenanceInterval
 )
 
 // Compile-time interface check: PersistenceWorker implements fsmv2.Worker.
@@ -99,22 +102,6 @@ func NewPersistenceWorker(
 	w := &PersistenceWorker{deps: dependencies}
 	w.InitBase(identity, logger, stateReader)
 	w.BindDeps(w.deps)
-
-	// Apply persistence-specific defaults after config parsing. Zero values in
-	// the parsed config (no user-supplied value) are replaced with package
-	// defaults so the rest of the worker can rely on non-zero intervals.
-	w.SetPostParseHook(func(cfg *PersistenceConfig) error {
-		if cfg.CompactionInterval == 0 {
-			cfg.CompactionInterval = DefaultCompactionInterval
-		}
-		if cfg.RetentionWindow == 0 {
-			cfg.RetentionWindow = DefaultRetentionWindow
-		}
-		if cfg.MaintenanceInterval == 0 {
-			cfg.MaintenanceInterval = DefaultMaintenanceInterval
-		}
-		return nil
-	})
 
 	return w, nil
 }

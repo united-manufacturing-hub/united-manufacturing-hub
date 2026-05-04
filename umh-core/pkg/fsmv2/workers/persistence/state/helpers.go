@@ -27,9 +27,9 @@ func emitActionIfDue(
 	snap fsmv2.WorkerSnapshot[snapshot.PersistenceConfig, snapshot.PersistenceStatus],
 ) fsmv2.NextResult[any, any] {
 	timeSinceCompaction := snap.CollectedAt.Sub(snap.Status.LastCompactionAt)
-	if timeSinceCompaction >= snap.Config.CompactionInterval {
+	if timeSinceCompaction >= snap.Config.GetCompactionInterval() {
 		return fsmv2.Transition(currentState, fsmv2.SignalNone,
-			action.NewCompactDeltasAction(snap.Config.RetentionWindow), "Running compaction", nil)
+			action.NewCompactDeltasAction(snap.Config.GetRetentionWindow()), "Running compaction", nil)
 	}
 
 	if isMaintenanceDue(snap) {

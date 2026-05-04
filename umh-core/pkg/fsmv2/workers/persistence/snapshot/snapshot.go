@@ -31,6 +31,14 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 )
 
+// Default intervals applied when a PersistenceConfig field is left at its
+// zero value. Accessor methods on PersistenceConfig fall back to these.
+const (
+	DefaultCompactionInterval  = 5 * time.Minute
+	DefaultRetentionWindow     = 1 * time.Hour
+	DefaultMaintenanceInterval = 7 * 24 * time.Hour
+)
+
 // PersistenceConfig holds the user-provided configuration for the persistence worker.
 // Embeds BaseUserSpec to support the StateGetter interface, allowing
 // WorkerBase.DeriveDesiredState to extract the desired state from the "state"
@@ -40,6 +48,33 @@ type PersistenceConfig struct {
 	CompactionInterval  time.Duration `json:"compactionInterval"  yaml:"compactionInterval"`
 	RetentionWindow     time.Duration `json:"retentionWindow"     yaml:"retentionWindow"`
 	MaintenanceInterval time.Duration `json:"maintenanceInterval" yaml:"maintenanceInterval"`
+}
+
+// GetCompactionInterval returns CompactionInterval, falling back to
+// DefaultCompactionInterval when the field is zero.
+func (c PersistenceConfig) GetCompactionInterval() time.Duration {
+	if c.CompactionInterval != 0 {
+		return c.CompactionInterval
+	}
+	return DefaultCompactionInterval
+}
+
+// GetRetentionWindow returns RetentionWindow, falling back to
+// DefaultRetentionWindow when the field is zero.
+func (c PersistenceConfig) GetRetentionWindow() time.Duration {
+	if c.RetentionWindow != 0 {
+		return c.RetentionWindow
+	}
+	return DefaultRetentionWindow
+}
+
+// GetMaintenanceInterval returns MaintenanceInterval, falling back to
+// DefaultMaintenanceInterval when the field is zero.
+func (c PersistenceConfig) GetMaintenanceInterval() time.Duration {
+	if c.MaintenanceInterval != 0 {
+		return c.MaintenanceInterval
+	}
+	return DefaultMaintenanceInterval
 }
 
 // PersistenceStatus holds the runtime observation data for the persistence worker.

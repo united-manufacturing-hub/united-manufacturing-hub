@@ -296,50 +296,6 @@ port: 2`}
 			Expect(wb.Config().Host).To(Equal("second"))
 		})
 
-		It("calls postParseHook after config parsing", func() {
-			wb.SetPostParseHook(func(cfg *workerTestConfig) error {
-				cfg.Host = cfg.Host + "-modified"
-				return nil
-			})
-
-			spec := config.UserSpec{Config: `host: "original"
-port: 8080`}
-			ds, err := wb.DeriveDesiredState(spec)
-			Expect(err).NotTo(HaveOccurred())
-
-			typed := ds.(*fsmv2.WrappedDesiredState[workerTestConfig])
-			Expect(typed.Config.Host).To(Equal("original-modified"))
-			Expect(wb.Config().Host).To(Equal("original-modified"))
-		})
-
-		It("returns error when postParseHook fails", func() {
-			wb.SetPostParseHook(func(_ *workerTestConfig) error {
-				return fmt.Errorf("validation failed")
-			})
-
-			spec := config.UserSpec{Config: `host: "test"
-port: 1`}
-			_, err := wb.DeriveDesiredState(spec)
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("validation failed"))
-		})
-
-		It("calls postParseHook on nil-spec path", func() {
-			var hookCalled bool
-			wb.SetPostParseHook(func(cfg *workerTestConfig) error {
-				hookCalled = true
-				cfg.Host = "default-host"
-				return nil
-			})
-
-			ds, err := wb.DeriveDesiredState(nil)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(hookCalled).To(BeTrue())
-
-			typed := ds.(*fsmv2.WrappedDesiredState[workerTestConfig])
-			Expect(typed.Config.Host).To(Equal("default-host"))
-		})
-
 	})
 
 	Describe("WrapStatusAccumulated", func() {

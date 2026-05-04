@@ -43,7 +43,6 @@ type WorkerBase[TConfig any, TStatus any, TDeps any] struct {
 	config           TConfig
 	baseDeps         *deps.BaseDependencies
 	typedDeps        TDeps
-	postParseHook    func(*TConfig) error
 	childSpecFactory func(TConfig, config.UserSpec) []config.ChildSpec
 	identity         deps.Identity
 	mu               sync.RWMutex
@@ -67,13 +66,6 @@ func (w *WorkerBase[TConfig, TStatus, TDeps]) InitBase(id deps.Identity, logger 
 	w.mu.Unlock()
 
 	return bd
-}
-
-// SetPostParseHook registers a hook called after config parsing in DeriveDesiredState.
-// The hook receives a pointer to the parsed config and may modify or validate it.
-// Must be called in the constructor, before any DeriveDesiredState call.
-func (w *WorkerBase[TConfig, TStatus, TDeps]) SetPostParseHook(hook func(*TConfig) error) {
-	w.postParseHook = hook
 }
 
 // SetChildSpecsFactory registers a factory that produces child specifications
@@ -220,9 +212,6 @@ func (w *WorkerBase[TConfig, TStatus, TDeps]) WrapStatusAccumulated(ctx context.
 func (w *WorkerBase[TConfig, TStatus, TDeps]) DeriveDesiredState(spec interface{}) (DesiredState, error) {
 	if spec == nil {
 		var cfg TConfig
-		if err := w.runPostParseHook(&cfg); err != nil {
-			return nil, err
-		}
 
 		w.mu.Lock()
 		w.config = cfg
@@ -254,10 +243,6 @@ func (w *WorkerBase[TConfig, TStatus, TDeps]) DeriveDesiredState(spec interface{
 		}
 	}
 
-	if err := w.runPostParseHook(&cfg); err != nil {
-		return nil, err
-	}
-
 	// Extract state from config if it implements StateGetter (e.g., embeds BaseUserSpec).
 	desiredState := config.DesiredStateRunning
 	if sg, ok := any(&cfg).(config.StateGetter); ok {
@@ -277,15 +262,6 @@ func (w *WorkerBase[TConfig, TStatus, TDeps]) DeriveDesiredState(spec interface{
 	}
 
 	return wds, nil
-}
-
-func (w *WorkerBase[TConfig, TStatus, TDeps]) runPostParseHook(cfg *TConfig) error {
-	if w.postParseHook != nil {
-		if err := w.postParseHook(cfg); err != nil {
-			return fmt.Errorf("post-parse hook failed: %w", err)
-		}
-	}
-	return nil
 }
 
 func (w *WorkerBase[TConfig, TStatus, TDeps]) populateChildrenSpecs(wds *WrappedDesiredState[TConfig], cfg TConfig, spec config.UserSpec) {

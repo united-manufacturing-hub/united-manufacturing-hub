@@ -200,9 +200,9 @@ var _ = Describe("PersistenceWorker", func() {
 
 			d := desired.(*fsmv2.WrappedDesiredState[persistence.PersistenceConfig])
 			Expect(d.GetState()).To(Equal("running"))
-			Expect(d.Config.CompactionInterval).To(Equal(persistence.DefaultCompactionInterval))
-			Expect(d.Config.RetentionWindow).To(Equal(persistence.DefaultRetentionWindow))
-			Expect(d.Config.MaintenanceInterval).To(Equal(persistence.DefaultMaintenanceInterval))
+			Expect(d.Config.GetCompactionInterval()).To(Equal(persistence.DefaultCompactionInterval))
+			Expect(d.Config.GetRetentionWindow()).To(Equal(persistence.DefaultRetentionWindow))
+			Expect(d.Config.GetMaintenanceInterval()).To(Equal(persistence.DefaultMaintenanceInterval))
 		})
 
 		It("should return error for invalid spec type", func() {
@@ -246,9 +246,9 @@ var _ = Describe("PersistenceWorker", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			d := desired.(*fsmv2.WrappedDesiredState[persistence.PersistenceConfig])
-			Expect(d.Config.CompactionInterval).To(Equal(15 * time.Minute))
-			Expect(d.Config.RetentionWindow).To(Equal(persistence.DefaultRetentionWindow))
-			Expect(d.Config.MaintenanceInterval).To(Equal(persistence.DefaultMaintenanceInterval))
+			Expect(d.Config.GetCompactionInterval()).To(Equal(15 * time.Minute))
+			Expect(d.Config.GetRetentionWindow()).To(Equal(persistence.DefaultRetentionWindow))
+			Expect(d.Config.GetMaintenanceInterval()).To(Equal(persistence.DefaultMaintenanceInterval))
 		})
 
 		It("should return defaults for empty Config string", func() {
@@ -263,9 +263,9 @@ var _ = Describe("PersistenceWorker", func() {
 
 			d := desired.(*fsmv2.WrappedDesiredState[persistence.PersistenceConfig])
 			Expect(d.GetState()).To(Equal("running"))
-			Expect(d.Config.CompactionInterval).To(Equal(persistence.DefaultCompactionInterval))
-			Expect(d.Config.RetentionWindow).To(Equal(persistence.DefaultRetentionWindow))
-			Expect(d.Config.MaintenanceInterval).To(Equal(persistence.DefaultMaintenanceInterval))
+			Expect(d.Config.GetCompactionInterval()).To(Equal(persistence.DefaultCompactionInterval))
+			Expect(d.Config.GetRetentionWindow()).To(Equal(persistence.DefaultRetentionWindow))
+			Expect(d.Config.GetMaintenanceInterval()).To(Equal(persistence.DefaultMaintenanceInterval))
 		})
 
 		It("should return error for invalid YAML", func() {
