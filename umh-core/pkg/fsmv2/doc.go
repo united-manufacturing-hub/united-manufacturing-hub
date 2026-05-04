@@ -294,6 +294,41 @@
 // Use phase-specific base types (internal/helpers/base_states.go) to ensure
 // compile-time phase safety.
 //
+// ### Lifecycle transition vocabulary
+//
+// Two naming conventions are canonical for transition states. Pick based on
+// what the worker actually does in that state — not by feel or precedent.
+//
+//   - Use "Xing" (Stopping, Starting, Connecting) when the state runs
+//     active cleanup or setup: the worker drives the work, optionally
+//     gated by an observation confirming completion.
+//     Examples: transport.StoppingState (drains connections), transport.StartingState
+//     (runs auth with backoff).
+//
+//   - Use "TryingToX" (TryingToStop, TryingToStart, TryingToConnect) when
+//     the state emits a signal or action and waits for an external observation
+//     to confirm X completed. The state itself is passive; it observes.
+//     Examples: examplechild.TryingToStopState (emits despawn, observes health).
+//
+// Forbidden synonyms: "ShuttingDown" (use "Stopping"), "RunningDegraded" (use
+// "Degraded"). Synonyms cause lexical drift that confuses cross-worker readers.
+//
+// ### One-way stop trajectory
+//
+// TryingToStop and Stopping states are ONE-WAY. They do NOT check
+// !ShouldStop() to abort cleanup mid-flight. Once a worker enters a stop
+// state it runs the full trajectory to Stopped before any resume can begin.
+//
+// This design rule makes the CHANGE-19 pause/resume reducer race-free: the
+// supervisor reducer can flip Enabled true→false→true during cleanup without
+// corrupting the state machine, because the stop trajectory ignores it until
+// Stopped is reached. At Stopped, the worker checks ShouldStop() and either
+// stays stopped or re-enters TryingToStart.
+//
+// If you are writing a new stop state and feel tempted to add a
+// "if !ShouldStop() { return GoTo{Running} }" branch — don't. That is the
+// bug this rule prevents.
+//
 // ## Shutdown handling
 //
 // Check IsShutdownRequested() as the first conditional in Next().
