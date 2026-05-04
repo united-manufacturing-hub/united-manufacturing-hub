@@ -226,22 +226,31 @@ type ChildSpec struct {
 	WorkerType       string         `json:"workerType"                 yaml:"workerType"`                 // Type of worker to create (registered worker factory key)
 	ChildStartStates []string       `json:"childStartStates,omitempty" yaml:"childStartStates,omitempty"` // Parent FSM states where child should run (empty = always run)
 
-	// Enabled is the parent's per-tick enable signal for this child. true = run,
-	// false = stop. The zero value (§4-C LOCKED) is false: ChildSpec literals that
-	// omit Enabled produce a stopped child. Parents that want a running child must
-	// explicitly set Enabled: true in their renderChildren body. The "forgot
-	// Enabled: true" trap is caught by the P1.8 architecture test
-	// TestRenderChildrenEmitsExplicitEnabled, which un-gates atomically when
-	// renderChildren lands in P2.1.
+	// Enabled is the parent's per-tick enable signal for this child. The CHANGE-19
+	// reducer translates it to IsShutdownRequested on the child's desired state every
+	// tick. Three-state semantics:
 	//
-	// Supervisor will reduce Enabled to the child's BaseDesiredState.ShutdownRequested
-	// at P2.x (Enabled=true => ShutdownRequested=false; Enabled=false =>
-	// ShutdownRequested=true). P1.5 introduces the field only — no live reducer
-	// reads it yet; setting Enabled has no runtime effect until P2.x wires the
-	// reduction. Children read snap.Desired.IsShutdownRequested() (or the
-	// dual-shape snap.ShouldStop() reader, which still reads the deprecated
-	// flat aliases during the migration window); they will never read
-	// Enabled directly. (Design Intent §4 no-Parent-references-in-children.)
+	//   - Name present, Enabled: true  → child runs (reducer writes IsShutdownRequested=false)
+	//   - Name present, Enabled: false → stopped-but-resident: child reaches Stopped and stays
+	//     there; supervisor remains resident in s.children, NOT placed in s.pendingRemoval
+	//   - Name absent from spec list   → graceful despawn (full removal via pendingRemoval)
+	//
+	// The zero value (§4-C LOCKED) is false: ChildSpec literals that omit Enabled
+	// produce a stopped-but-resident child. Parents that want a running child must
+	// explicitly set Enabled: true in their renderChildren body.
+	//
+	// Pause/resume flow: setting Enabled=false drives the child to Stopped; setting
+	// Enabled=true again writes IsShutdownRequested=false, and the child's state machine
+	// transitions from Stopped back to TryingToStart on the next tick.
+	//
+	// One-way stop guarantee: once a child enters TryingToStop, it completes the stop
+	// before accepting a new IsShutdownRequested=false signal. The supervisor only
+	// manages the flag; the child's state machine enforces the trajectory.
+	//
+	// Children read snap.Desired.IsShutdownRequested() and never read Enabled directly
+	// (Design Intent §4 no-Parent-references-in-children). Implemented by the CHANGE-19
+	// reducer in supervisor/reconciliation.go (the spec→IsShutdownRequested translation
+	// runs at the start of reconcileChildren, before Phase 1's pendingRemoval writes).
 	Enabled bool `json:"enabled" yaml:"enabled"`
 }
 
