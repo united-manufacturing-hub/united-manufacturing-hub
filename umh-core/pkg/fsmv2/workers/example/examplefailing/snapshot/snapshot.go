@@ -96,7 +96,6 @@ type ExamplefailingObservedState struct {
 	ConnectAttempts       int `json:"connect_attempts"`
 	TicksInConnectedState int `json:"ticks_in_connected"`
 	CurrentCycle          int `json:"current_cycle"`
-	TotalCycles           int `json:"total_cycles"`
 
 	AllCyclesComplete bool `json:"all_cycles_complete"`
 

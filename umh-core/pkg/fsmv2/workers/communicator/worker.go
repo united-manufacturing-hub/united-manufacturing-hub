@@ -61,6 +61,10 @@ import (
 // workerType is the registered type name for this worker.
 const workerType = "communicator"
 
+// defaultCommunicatorTimeout is the HTTP timeout applied when the user spec does not
+// specify one. It covers the full long-poll round-trip including the server-side wait.
+const defaultCommunicatorTimeout = httpTransport.LongPollingDuration + httpTransport.LongPollingBuffer
+
 // CommunicatorWorker implements the FSMv2 Worker interface using the WorkerBase API.
 type CommunicatorWorker struct {
 	deps *CommunicatorDependencies
@@ -90,7 +94,7 @@ func (w *CommunicatorWorker) DeriveDesiredState(spec interface{}) (fsmv2.Desired
 		return &fsmv2.WrappedDesiredState[CommunicatorConfig]{
 			BaseDesiredState: fsmv2config.BaseDesiredState{State: fsmv2config.DesiredStateRunning},
 			Config: CommunicatorConfig{
-				Timeout: httpTransport.LongPollingDuration + httpTransport.LongPollingBuffer,
+				Timeout: defaultCommunicatorTimeout,
 			},
 		}, nil
 	}
@@ -113,16 +117,11 @@ func (w *CommunicatorWorker) DeriveDesiredState(spec interface{}) (fsmv2.Desired
 	}
 
 	if cfg.Timeout == 0 {
-		cfg.Timeout = httpTransport.LongPollingDuration + httpTransport.LongPollingBuffer
-	}
-
-	desiredState := fsmv2config.DesiredStateRunning
-	if s := cfg.GetState(); s != "" {
-		desiredState = s
+		cfg.Timeout = defaultCommunicatorTimeout
 	}
 
 	return &fsmv2.WrappedDesiredState[CommunicatorConfig]{
-		BaseDesiredState: fsmv2config.BaseDesiredState{State: desiredState},
+		BaseDesiredState: fsmv2config.BaseDesiredState{State: cfg.GetState()},
 		Config:           cfg,
 	}, nil
 }

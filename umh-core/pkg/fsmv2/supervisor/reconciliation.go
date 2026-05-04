@@ -1665,6 +1665,10 @@ func (s *Supervisor[TObserved, TDesired]) reconcileChildren(specs []config.Child
 	// CHANGE-19 reducer: translate Enabled → IsShutdownRequested for resident children.
 	// This runs before Phase 1 (pendingRemoval) so Enabled=false children are NOT
 	// despawned — they stay in s.children but have IsShutdownRequested=true.
+	//
+	// context.Background() is used here because reconcileChildren does not accept a ctx
+	// parameter. If reconcileChildren is ever refactored to propagate context, replace
+	// this with the passed-in context so reducer operations respect cancellation.
 	reducerCtx := context.Background()
 	for _, spec := range specs {
 		child, exists := s.children[spec.Name]

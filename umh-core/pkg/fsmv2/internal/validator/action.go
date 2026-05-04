@@ -95,6 +95,12 @@ func checkActionFile(filename string) []Violation {
 // struct within the parsed file. It returns the function declaration and the
 // receiver variable name (e.g. "a" from `func (a *ConnectAction) Execute`).
 // Returns nil, "" when no matching Execute method is found.
+//
+// Limitation: mutation detection only works when the action struct and its Execute
+// method are defined in the same file. If Execute is in a separate file, the AST
+// walk will not find it and mutations in that method will be silently missed.
+// No current worker has this split, but future maintainers should keep struct and
+// Execute co-located to keep this validator effective.
 func findExecuteMethod(node *ast.File, structName string) (*ast.FuncDecl, string) {
 	for _, decl := range node.Decls {
 		funcDecl, ok := decl.(*ast.FuncDecl)

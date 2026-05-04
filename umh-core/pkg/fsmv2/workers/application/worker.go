@@ -61,9 +61,9 @@ var _ fsmv2.Worker = (*ApplicationWorker)(nil)
 // passes through ChildrenSpecs from the YAML config without knowing about
 // specific child implementations.
 type ApplicationWorker struct {
-	fsmv2.WorkerBase[snapshot.ApplicationConfig, snapshot.ApplicationStatus, register.NoDeps]
 	id   string
 	name string
+	fsmv2.WorkerBase[snapshot.ApplicationConfig, snapshot.ApplicationStatus, register.NoDeps]
 }
 
 // NewApplicationWorker creates a new application worker. Returns nil when

@@ -98,6 +98,12 @@ type VariableBundle struct {
 // keeping the wire shape stable avoids a delta-storm against pre-P1.5c
 // observation documents.
 type VariablesInternal struct {
+
+	// CreatedAt is the supervisor-recorded creation time of the worker
+	// document, mirroring CSE storage's createdAt field. Templates read it
+	// as {{ .internal.created_at }} via the flatten map; JSON wire is
+	// camelCase per §4-D LOCKED.
+	CreatedAt time.Time `json:"createdAt"           yaml:"-"`
 	// WorkerID is the unique worker identifier. Always populated by the
 	// supervisor injector. Templates read it as {{ .internal.id }} via the
 	// flatten map; the JSON wire tag is camelCase per §4-D LOCKED so the
@@ -114,12 +120,6 @@ type VariablesInternal struct {
 	// as {{ .internal.bridged_by }} via the flatten map; JSON wire is
 	// camelCase per §4-D LOCKED.
 	BridgedBy string `json:"bridgedBy,omitempty" yaml:"-"`
-
-	// CreatedAt is the supervisor-recorded creation time of the worker
-	// document, mirroring CSE storage's createdAt field. Templates read it
-	// as {{ .internal.created_at }} via the flatten map; JSON wire is
-	// camelCase per §4-D LOCKED.
-	CreatedAt time.Time `json:"createdAt"           yaml:"-"`
 }
 
 // Flatten returns a map with User variables promoted to top-level and

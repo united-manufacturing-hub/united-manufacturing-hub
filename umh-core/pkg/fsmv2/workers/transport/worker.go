@@ -68,8 +68,8 @@ var _ fsmv2.Worker = (*TransportWorker)(nil)
 // It manages authentication and coordinates PushWorker/PullWorker children
 // for bidirectional message exchange with the backend relay server.
 type TransportWorker struct {
-	fsmv2.WorkerBase[TransportConfig, TransportStatus, register.NoDeps]
 	deps *TransportDependencies
+	fsmv2.WorkerBase[TransportConfig, TransportStatus, register.NoDeps]
 }
 
 // NewTransportWorker creates a new Transport worker.
@@ -174,4 +174,3 @@ const workerType = "transport"
 func init() {
 	register.Worker[TransportConfig, TransportStatus, register.NoDeps](workerType, NewTransportWorker)
 }
-

@@ -17,3 +17,4 @@ umh-core-data/
 test_output.txt
 runner
 runner-panic
+.self-review/

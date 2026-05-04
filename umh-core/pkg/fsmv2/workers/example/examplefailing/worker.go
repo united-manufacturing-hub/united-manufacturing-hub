@@ -87,11 +87,15 @@ func (w *FailingWorker) CollectObservedState(ctx context.Context, desiredAny fsm
 
 	desired, ok := desiredAny.(*snapshot.ExamplefailingDesiredState)
 	if !ok || desired == nil {
+		w.deps.GetLogger().SentryWarn(deps.FeatureExamples, w.Identity().HierarchyPath,
+			"examplefailing_cos_desired_state_assertion_failed")
 		desired = &snapshot.ExamplefailingDesiredState{}
 	}
 
-	// IMPORTANT: Increment observation counter at START of collection when recovery delay is active.
-	// This ensures deterministic counting for tests.
+	// Advance the observation counter early in COS, before the snapshot is assembled.
+	// The counter increments only while recovery delay is active: desired.RecoveryDelayObservations > 0
+	// and the current count has not yet reached the threshold. Incrementing here (rather than in a
+	// state action) gives tests deterministic control: each COS call = exactly one observation step.
 	recoveryDelayObservations := desired.RecoveryDelayObservations
 	if recoveryDelayObservations > 0 && w.deps.GetObservationsSinceFailure() < recoveryDelayObservations {
 		w.deps.IncrementObservationsSinceFailure()
@@ -113,7 +117,6 @@ func (w *FailingWorker) CollectObservedState(ctx context.Context, desiredAny fsm
 		AllCyclesComplete:        allCyclesComplete,
 		TicksInConnectedState:    w.deps.GetTicksInConnected(),
 		CurrentCycle:             w.deps.GetCurrentCycle(),
-		TotalCycles:              desired.FailureCycles,
 		RecoveryDelayActive:      recoveryDelayObservations > 0 && w.deps.GetObservationsSinceFailure() < recoveryDelayObservations,
 		ObservationsSinceFailure: w.deps.GetObservationsSinceFailure(),
 	}

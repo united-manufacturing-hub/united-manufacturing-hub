@@ -65,6 +65,14 @@ func (h *hierarchicalWorker) CollectObservedState(ctx context.Context, _ fsmv2.D
 	return h.observed, nil
 }
 
+// DeriveDesiredState ignores the spec parameter and reads h.childrenSpecs directly.
+// This is intentional test convenience: tests mutate h.childrenSpecs to control
+// child spawning without going through the YAML parsing path.
+//
+// Caution: the supervisor caches DeriveDesiredState output by hashing the user spec.
+// Tests that mutate h.childrenSpecs after the first DDS call must also call
+// parentSuper.TestUpdateUserSpec(...) to bust the cache; otherwise the supervisor
+// serves the stale cached result and the new specs are never picked up.
 func (h *hierarchicalWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, error) {
 	h.logger.Log("DeriveDesiredState:" + h.id)
 

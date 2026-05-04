@@ -53,8 +53,8 @@ var _ fsmv2.Worker = (*PersistenceWorker)(nil)
 // PersistenceWorker implements the FSM Worker interface for the edge persistence
 // layer. It drives compaction and maintenance against the triangular store.
 type PersistenceWorker struct {
-	fsmv2.WorkerBase[PersistenceConfig, PersistenceStatus, *PersistenceDependencies]
 	deps *PersistenceDependencies
+	fsmv2.WorkerBase[PersistenceConfig, PersistenceStatus, *PersistenceDependencies]
 }
 
 // NewPersistenceWorker creates a new persistence worker. The dependencies

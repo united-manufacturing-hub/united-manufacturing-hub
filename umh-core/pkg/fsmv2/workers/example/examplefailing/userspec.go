@@ -32,6 +32,12 @@ type FailingUserSpec struct {
 	// RecoveryDelayMs: time in milliseconds to wait after a failure before retrying.
 	// This keeps the worker in the unhealthy "TryingToConnect" state long enough
 	// for parent supervisors to observe it. 0 = no delay (immediate retry).
+	//
+	// Deprecated: RecoveryDelayMs is no longer read by DeriveDesiredState and has
+	// no effect on worker behaviour. Use RecoveryDelayObservations instead, which
+	// provides deterministic, tick-count-based control. The field is retained for
+	// YAML backwards-compatibility; existing configs that set it will not break, but
+	// the value is silently ignored.
 	RecoveryDelayMs int `json:"recovery_delay_ms" yaml:"recovery_delay_ms"`
 	// RecoveryDelayObservations: number of observation cycles to wait after failure.
 	// This is preferred over RecoveryDelayMs for deterministic testing.
