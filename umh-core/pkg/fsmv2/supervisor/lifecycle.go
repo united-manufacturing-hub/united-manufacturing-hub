@@ -426,10 +426,6 @@ func (s *Supervisor[TObserved, TDesired]) logTrace(msg string, fields ...deps.Fi
 }
 
 func (s *Supervisor[TObserved, TDesired]) requestShutdown(ctx context.Context, workerID string, reason string) error {
-	s.logger.Info("shutdown_requested",
-		deps.String("worker_id", workerID),
-		deps.Reason(reason))
-
 	s.mu.RLock()
 	_, exists := s.workers[workerID]
 	s.mu.RUnlock()
@@ -449,6 +445,19 @@ func (s *Supervisor[TObserved, TDesired]) requestShutdown(ctx context.Context, w
 		// No desired state in DB yet, nothing to update
 		return nil
 	}
+
+	// Guard against log flood: return early if shutdown is already requested.
+	// The reducer calls this every tick for every Enabled=false child, so logging
+	// unconditionally would produce ~100 Info lines/sec per disabled child.
+	if ds, ok := any(desired).(fsmv2.DesiredState); ok && ds.IsShutdownRequested() {
+		return nil
+	} else if ds, ok := any(&desired).(fsmv2.DesiredState); ok && ds.IsShutdownRequested() {
+		return nil
+	}
+
+	s.logger.Info("shutdown_requested",
+		deps.String("worker_id", workerID),
+		deps.Reason(reason))
 
 	// Set ShutdownRequested=true using the ShutdownRequestable interface
 	if sr, ok := any(desired).(fsmv2.ShutdownRequestable); ok {
@@ -667,6 +676,9 @@ func (s *Supervisor[TObserved, TDesired]) clearShutdownRequested(ctx context.Con
 	// Load current desired state
 	var desired TDesired
 	if err := s.store.LoadDesiredTyped(ctx, s.workerType, workerID, &desired); err != nil {
+		if errors.Is(err, persistence.ErrNotFound) {
+			return nil
+		}
 		return fmt.Errorf("load desired for clear shutdown: %w", err)
 	}
 
