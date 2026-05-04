@@ -117,6 +117,19 @@ var _ = Describe("HelloworldWorker", func() {
 		})
 	})
 
+	Describe("GetDependenciesAny", func() {
+		It("returns *HelloworldDependencies after WorkerBase migration", func() {
+			identity := deps.Identity{ID: "test-worker", WorkerType: "helloworld"}
+			w, err := hello_world.NewHelloworldWorker(identity, logger, nil)
+			Expect(err).NotTo(HaveOccurred())
+			dp, ok := w.(fsmv2.DependencyProvider)
+			Expect(ok).To(BeTrue(), "worker must implement DependencyProvider")
+			got := dp.GetDependenciesAny()
+			_, ok = got.(*hello_world.HelloworldDependencies)
+			Expect(ok).To(BeTrue(), "expected *HelloworldDependencies, got %T", got)
+		})
+	})
+
 	Describe("SayHello action", func() {
 		var d *hello_world.HelloworldDependencies
 

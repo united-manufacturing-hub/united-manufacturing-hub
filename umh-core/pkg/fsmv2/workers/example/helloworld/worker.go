@@ -13,7 +13,7 @@
 // limitations under the License.
 
 // Package hello_world implements a minimal FSMv2 worker that demonstrates
-// the WorkerBase API with typed config/status, action wrapping, and one-line registration.
+// typed-deps wiring, action wrapping, and one-line registration.
 //
 // Naming convention: The package name uses underscore (hello_world) but the
 // folder name is "helloworld". The type prefix must be "Helloworld" (one capital)
@@ -34,10 +34,10 @@ import (
 // workerType is the registered type name for this worker.
 const workerType = "helloworld"
 
-// HelloworldWorker implements the FSMv2 Worker interface using the WorkerBase API.
+// HelloworldWorker implements the FSMv2 Worker interface.
 type HelloworldWorker struct {
 	deps *HelloworldDependencies
-	fsmv2.WorkerBase[HelloworldConfig, HelloworldStatus, register.NoDeps]
+	fsmv2.WorkerBase[HelloworldConfig, HelloworldStatus, *HelloworldDependencies]
 }
 
 // NewHelloworldWorker creates a new helloworld worker with the standard framework dependencies.
@@ -49,6 +49,7 @@ func NewHelloworldWorker(id deps.Identity, logger deps.FSMLogger, sr deps.StateR
 	w := &HelloworldWorker{}
 	baseDeps := w.InitBase(id, logger, sr)
 	w.deps = NewHelloworldDependencies(baseDeps)
+	w.BindDeps(w.deps)
 
 	return w, nil
 }
@@ -66,13 +67,6 @@ func (w *HelloworldWorker) CollectObservedState(_ context.Context, desired fsmv2
 	}
 
 	return fsmv2.NewObservation(status), nil
-}
-
-// GetDependenciesAny returns the worker's dependencies for action execution.
-// Overrides WorkerBase.GetDependenciesAny to return *HelloworldDependencies
-// instead of *deps.BaseDependencies.
-func (w *HelloworldWorker) GetDependenciesAny() any {
-	return w.deps
 }
 
 // Actions returns the available actions for this worker.
@@ -98,5 +92,5 @@ func readMoodFile(path string) string {
 }
 
 func init() {
-	register.Worker[HelloworldConfig, HelloworldStatus, register.NoDeps](workerType, NewHelloworldWorker)
+	register.Worker[HelloworldConfig, HelloworldStatus, *HelloworldDependencies](workerType, NewHelloworldWorker)
 }
