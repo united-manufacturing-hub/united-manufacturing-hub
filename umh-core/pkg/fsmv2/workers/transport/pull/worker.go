@@ -22,7 +22,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/register"
 
 	transport_pkg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport"
@@ -36,44 +35,41 @@ var _ fsmv2.Worker = (*PullWorker)(nil)
 // It polls the backend relay server and delivers messages to the inbound channel.
 // PullWorker is a child of TransportWorker and shares its parent's JWT token and transport.
 type PullWorker struct {
-	*helpers.BaseWorker[*PullDependencies]
-	logger   deps.FSMLogger
-	identity deps.Identity
+	fsmv2.WorkerBase[PullConfig, PullStatus, *PullDependencies]
 }
 
-// NewPullWorker creates a new PullWorker in Stopped state.
-// The TDeps parameter is accepted to match register.Worker's constructor
-// signature but is currently ignored; parent transport deps are obtained
-// from the transport.ChildDeps() singleton populated by the transport
-// worker's constructor.
+// NewPullWorker creates a new PullWorker in Stopped state with the supplied
+// PullDependencies. The deps argument is built by the SetDepsBuilder callback
+// registered in init(), which reads parent transport deps via register.GetDeps.
 func NewPullWorker(
 	identity deps.Identity,
 	logger deps.FSMLogger,
 	stateReader deps.StateReader,
+	dependencies *PullDependencies,
 ) (fsmv2.Worker, error) {
 	if logger == nil {
 		return nil, errors.New("logger must not be nil")
+	}
+	if dependencies == nil {
+		return nil, errors.New("pull worker requires non-nil dependencies; ensure transport worker has published deps via register.SetDeps[*TransportDependencies] before pull instantiation")
 	}
 
 	if identity.WorkerType == "" {
 		identity.WorkerType = workerType
 	}
 
-	parentDeps := transport_pkg.ChildDeps()
-	if parentDeps == nil {
-		return nil, errors.New("pull worker requires parent transport deps via transport.ChildDeps(); transport worker must be registered/constructed first")
-	}
+	w := &PullWorker{}
+	w.InitBase(identity, logger, stateReader)
+	w.BindDeps(dependencies)
 
-	dependencies, err := NewPullDependencies(parentDeps, identity, logger, stateReader)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create pull dependencies: %w", err)
-	}
+	return w, nil
+}
 
-	return &PullWorker{
-		BaseWorker: helpers.NewBaseWorker(dependencies),
-		identity:   identity,
-		logger:     logger,
-	}, nil
+// GetDependencies returns the typed PullDependencies for use in tests and
+// internal call-sites that need direct access without the any-typed accessor.
+func (w *PullWorker) GetDependencies() *PullDependencies {
+	d, _ := w.GetDependenciesAny().(*PullDependencies)
+	return d
 }
 
 // CollectObservedState snapshots the current pull worker state.
@@ -139,9 +135,38 @@ func (w *PullWorker) GetInitialState() fsmv2.State[any, any] {
 }
 
 // init registers the pull worker via the generic register.Worker helper with
-// typed TDeps = *PullDependencies. Parent transport deps are consumed via the
-// transport.ChildDeps() singleton populated by the transport worker during its
-// own factory init, replacing the prior extraDeps["transport_deps"] seam.
+// typed TDeps = *PullDependencies. The factory closure pulls per-instance deps
+// via register.GetDepsBuilder, which in turn reads parent transport deps via
+// register.GetDeps[*transport_pkg.TransportDependencies] published by the
+// transport worker constructor.
 func init() {
-	register.Worker[PullConfig, PullStatus, register.NoDeps](workerType, NewPullWorker)
+	register.Worker[PullConfig, PullStatus, *PullDependencies](workerType,
+		func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader) (fsmv2.Worker, error) {
+			builder, ok := register.GetDepsBuilder(workerType)
+			if !ok {
+				return nil, errors.New("pull worker requires deps builder; transport worker must initialise before pull instantiation")
+			}
+			rawDeps := builder(id, logger, sr)
+			pdeps, ok := rawDeps.(*PullDependencies)
+			if !ok || pdeps == nil {
+				return nil, fmt.Errorf("pull deps builder returned %T; want *PullDependencies (parent transport deps may not be published)", rawDeps)
+			}
+
+			return NewPullWorker(id, logger, sr, pdeps)
+		})
+
+	register.SetDepsBuilder[*PullDependencies](workerType,
+		func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader) *PullDependencies {
+			parentDeps := register.GetDeps[*transport_pkg.TransportDependencies]("transport")
+			if parentDeps == nil {
+				return nil
+			}
+
+			d, err := NewPullDependencies(parentDeps, id, logger, sr)
+			if err != nil {
+				return nil
+			}
+
+			return d
+		})
 }

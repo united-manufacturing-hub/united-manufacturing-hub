@@ -22,6 +22,10 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/types"
 )
 
+// defaultTransportTimeout is the fallback authenticate timeout when not specified in config.
+// Mirrors action.DefaultAuthenticateTimeout (kept duplicated to avoid an import cycle).
+const defaultTransportTimeout = 10 * time.Second
+
 // TransportConfig holds the user-provided configuration for the transport worker.
 // Embeds BaseUserSpec to support the StateGetter interface, allowing WorkerBase.DeriveDesiredState
 // to extract the desired state from the "state" YAML field.
@@ -29,6 +33,15 @@ type TransportConfig struct {
 	config.BaseUserSpec `yaml:",inline"`
 	types.RelayConfig   `yaml:",inline"`
 	Timeout             time.Duration `json:"timeout" yaml:"timeout"`
+}
+
+// GetTimeout returns the configured authenticate timeout, or defaultTransportTimeout when zero.
+func (c TransportConfig) GetTimeout() time.Duration {
+	if c.Timeout != 0 {
+		return c.Timeout
+	}
+
+	return defaultTransportTimeout
 }
 
 // FailedAuthConfig captures the auth configuration that was used in the last

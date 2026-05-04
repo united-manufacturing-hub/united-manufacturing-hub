@@ -24,6 +24,7 @@ import (
 	fsmv2config "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	depspkg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/register"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/pull"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/pull/state"
@@ -37,6 +38,7 @@ var _ = Describe("PullWorker", func() {
 		logger     depspkg.FSMLogger
 		identity   depspkg.Identity
 		parentDeps *transport.TransportDependencies
+		pullDeps   *pull.PullDependencies
 	)
 
 	BeforeEach(func() {
@@ -44,11 +46,14 @@ var _ = Describe("PullWorker", func() {
 		identity = depspkg.Identity{ID: "test-pull", Name: "Test Pull"}
 		transport.SetChannelProvider(newTestChannelProvider())
 		parentDeps = createParentDeps(logger)
-		transport.SetChildDeps(parentDeps)
+		register.SetDeps[*transport.TransportDependencies]("transport", parentDeps)
+		var err error
+		pullDeps, err = pull.NewPullDependencies(parentDeps, identity, logger, nil)
+		Expect(err).ToNot(HaveOccurred())
 	})
 
 	AfterEach(func() {
-		transport.ClearChildDeps()
+		register.ClearDeps("transport")
 		transport.ClearChannelProvider()
 	})
 
@@ -60,7 +65,7 @@ var _ = Describe("PullWorker", func() {
 
 	Describe("NewPullWorker", func() {
 		It("should create a worker with valid args", func() {
-			w, err := pull.NewPullWorker(identity, logger, nil)
+			w, err := pull.NewPullWorker(identity, logger, nil, pullDeps)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(w).NotTo(BeNil())
 			var ok bool
@@ -70,22 +75,21 @@ var _ = Describe("PullWorker", func() {
 		})
 
 		It("should reject nil logger", func() {
-			_, err := pull.NewPullWorker(identity, nil, nil)
+			_, err := pull.NewPullWorker(identity, nil, nil, pullDeps)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("logger"))
 		})
 
-		It("should reject missing parent transport ChildDeps", func() {
-			transport.ClearChildDeps()
-			_, err := pull.NewPullWorker(identity, logger, nil)
+		It("should reject nil dependencies", func() {
+			_, err := pull.NewPullWorker(identity, logger, nil, nil)
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("transport.ChildDeps()"))
+			Expect(err.Error()).To(ContainSubstring("non-nil dependencies"))
 		})
 	})
 
 	Describe("CollectObservedState", func() {
 		BeforeEach(func() {
-			w, err := pull.NewPullWorker(identity, logger, nil)
+			w, err := pull.NewPullWorker(identity, logger, nil, pullDeps)
 			Expect(err).ToNot(HaveOccurred())
 			worker = w.(*pull.PullWorker)
 		})
@@ -169,7 +173,7 @@ var _ = Describe("PullWorker", func() {
 
 	Describe("DeriveDesiredState", func() {
 		BeforeEach(func() {
-			w, err := pull.NewPullWorker(identity, logger, nil)
+			w, err := pull.NewPullWorker(identity, logger, nil, pullDeps)
 			Expect(err).ToNot(HaveOccurred())
 			worker = w.(*pull.PullWorker)
 		})
@@ -241,7 +245,7 @@ var _ = Describe("PullWorker", func() {
 
 	Describe("GetInitialState", func() {
 		BeforeEach(func() {
-			w, err := pull.NewPullWorker(identity, logger, nil)
+			w, err := pull.NewPullWorker(identity, logger, nil, pullDeps)
 			Expect(err).ToNot(HaveOccurred())
 			worker = w.(*pull.PullWorker)
 		})
@@ -265,7 +269,7 @@ var _ = Describe("PullWorker", func() {
 			Expect(supervisorOnly).NotTo(ContainElement("pull"))
 		})
 
-		It("should read parent deps from transport.ChildDeps() when instantiated via factory", func() {
+		It("should read parent deps via register.SetDeps when instantiated via factory", func() {
 			factoryIdentity := depspkg.Identity{ID: "factory-pull", Name: "Factory Pull", WorkerType: "pull"}
 
 			w, err := factory.NewWorkerByType("pull", factoryIdentity, logger, nil, map[string]any{})
@@ -276,7 +280,7 @@ var _ = Describe("PullWorker", func() {
 			Expect(ok).To(BeTrue())
 			Expect(pw).NotTo(BeNil())
 
-			// The constructed worker must reflect the parent deps seeded via SetChildDeps
+			// The constructed worker must reflect the parent deps seeded via register.SetDeps
 			// in BeforeEach (parentDeps has a mockTransport attached, so HasTransport is true).
 			ctx := context.Background()
 			observed, err := pw.CollectObservedState(ctx, nil)

@@ -272,8 +272,8 @@ authToken: "test-token"`,
 			})
 		})
 
-		Context("field validation when running", func() {
-			It("should return error when relayURL is empty", func() {
+		Context("empty credentials when running (post-D8: no PostParseHook validation)", func() {
+			It("should NOT return an error when relayURL is empty", func() {
 				spec := fsmv2types.UserSpec{
 					Config: `state: running
 instanceUUID: "test-uuid"
@@ -282,12 +282,10 @@ authToken: "test-token"`,
 				}
 
 				_, err := worker.DeriveDesiredState(spec)
-
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("relayURL is required"))
+				Expect(err).ToNot(HaveOccurred())
 			})
 
-			It("should return error when instanceUUID is empty", func() {
+			It("should NOT return an error when instanceUUID is empty", func() {
 				spec := fsmv2types.UserSpec{
 					Config: `state: running
 relayURL: "https://relay.example.com"
@@ -296,12 +294,10 @@ authToken: "test-token"`,
 				}
 
 				_, err := worker.DeriveDesiredState(spec)
-
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("instanceUUID is required"))
+				Expect(err).ToNot(HaveOccurred())
 			})
 
-			It("should return error when authToken is empty", func() {
+			It("should NOT return an error when authToken is empty", func() {
 				spec := fsmv2types.UserSpec{
 					Config: `state: running
 relayURL: "https://relay.example.com"
@@ -310,9 +306,7 @@ instanceUUID: "test-uuid"`,
 				}
 
 				_, err := worker.DeriveDesiredState(spec)
-
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("authToken is required"))
+				Expect(err).ToNot(HaveOccurred())
 			})
 
 			It("should not validate fields when state is stopped", func() {
@@ -327,7 +321,7 @@ instanceUUID: "test-uuid"`,
 				Expect(desired.GetState()).To(Equal("stopped"))
 			})
 
-			It("should default timeout when zero", func() {
+			It("GetTimeout returns the default when Timeout is zero", func() {
 				spec := fsmv2types.UserSpec{
 					Config: `state: running
 relayURL: "https://relay.example.com"
@@ -337,10 +331,11 @@ authToken: "test-token"`,
 				}
 
 				desired, err := worker.DeriveDesiredState(spec)
-
 				Expect(err).ToNot(HaveOccurred())
+
 				transportDesired := desired.(*fsmv2.WrappedDesiredState[transport.TransportConfig])
-				Expect(transportDesired.Config.Timeout).To(Equal(10 * time.Second))
+				Expect(transportDesired.Config.Timeout).To(Equal(time.Duration(0)))
+				Expect(transportDesired.Config.GetTimeout()).To(Equal(10 * time.Second))
 			})
 		})
 

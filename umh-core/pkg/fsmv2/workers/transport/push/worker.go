@@ -22,7 +22,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/register"
 
 	transport_pkg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport"
@@ -36,44 +35,41 @@ var _ fsmv2.Worker = (*PushWorker)(nil)
 // It drains the outbound channel and pushes messages to the backend relay server.
 // PushWorker is a child of TransportWorker and shares its parent's JWT token and transport.
 type PushWorker struct {
-	*helpers.BaseWorker[*PushDependencies]
-	logger   deps.FSMLogger
-	identity deps.Identity
+	fsmv2.WorkerBase[PushConfig, PushStatus, *PushDependencies]
 }
 
-// NewPushWorker creates a new PushWorker in Stopped state.
-// The TDeps parameter is accepted to match register.Worker's constructor
-// signature but is currently ignored; parent transport deps are obtained
-// from the transport.ChildDeps() singleton populated by the transport
-// worker's constructor.
+// NewPushWorker creates a new PushWorker in Stopped state with the supplied
+// PushDependencies. The deps argument is built by the SetDepsBuilder callback
+// registered in init(), which reads parent transport deps via register.GetDeps.
 func NewPushWorker(
 	identity deps.Identity,
 	logger deps.FSMLogger,
 	stateReader deps.StateReader,
+	dependencies *PushDependencies,
 ) (fsmv2.Worker, error) {
 	if logger == nil {
 		return nil, errors.New("logger must not be nil")
+	}
+	if dependencies == nil {
+		return nil, errors.New("push worker requires non-nil dependencies; ensure transport worker has published deps via register.SetDeps[*TransportDependencies] before push instantiation")
 	}
 
 	if identity.WorkerType == "" {
 		identity.WorkerType = workerType
 	}
 
-	parentDeps := transport_pkg.ChildDeps()
-	if parentDeps == nil {
-		return nil, errors.New("push worker requires parent transport deps via transport.ChildDeps(); transport worker must be registered/constructed first")
-	}
+	w := &PushWorker{}
+	w.InitBase(identity, logger, stateReader)
+	w.BindDeps(dependencies)
 
-	dependencies, err := NewPushDependencies(parentDeps, identity, logger, stateReader)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create push dependencies: %w", err)
-	}
+	return w, nil
+}
 
-	return &PushWorker{
-		BaseWorker: helpers.NewBaseWorker(dependencies),
-		identity:   identity,
-		logger:     logger,
-	}, nil
+// GetDependencies returns the typed PushDependencies for use in tests and
+// internal call-sites that need direct access without the any-typed accessor.
+func (w *PushWorker) GetDependencies() *PushDependencies {
+	d, _ := w.GetDependenciesAny().(*PushDependencies)
+	return d
 }
 
 // CollectObservedState snapshots the current push worker state.
@@ -139,9 +135,38 @@ func (w *PushWorker) GetInitialState() fsmv2.State[any, any] {
 }
 
 // init registers the push worker via the generic register.Worker helper with
-// typed TDeps = *PushDependencies. Parent transport deps are consumed via the
-// transport.ChildDeps() singleton populated by the transport worker during its
-// own factory init, replacing the prior extraDeps["transport_deps"] seam.
+// typed TDeps = *PushDependencies. The factory closure pulls per-instance deps
+// via register.GetDepsBuilder, which in turn reads parent transport deps via
+// register.GetDeps[*transport_pkg.TransportDependencies] published by the
+// transport worker constructor.
 func init() {
-	register.Worker[PushConfig, PushStatus, register.NoDeps](workerType, NewPushWorker)
+	register.Worker[PushConfig, PushStatus, *PushDependencies](workerType,
+		func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader) (fsmv2.Worker, error) {
+			builder, ok := register.GetDepsBuilder(workerType)
+			if !ok {
+				return nil, errors.New("push worker requires deps builder; transport worker must initialise before push instantiation")
+			}
+			rawDeps := builder(id, logger, sr)
+			pdeps, ok := rawDeps.(*PushDependencies)
+			if !ok || pdeps == nil {
+				return nil, fmt.Errorf("push deps builder returned %T; want *PushDependencies (parent transport deps may not be published)", rawDeps)
+			}
+
+			return NewPushWorker(id, logger, sr, pdeps)
+		})
+
+	register.SetDepsBuilder[*PushDependencies](workerType,
+		func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader) *PushDependencies {
+			parentDeps := register.GetDeps[*transport_pkg.TransportDependencies]("transport")
+			if parentDeps == nil {
+				return nil
+			}
+
+			d, err := NewPushDependencies(parentDeps, id, logger, sr)
+			if err != nil {
+				return nil
+			}
+
+			return d
+		})
 }

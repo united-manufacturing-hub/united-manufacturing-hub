@@ -48,18 +48,11 @@ package transport
 import (
 	"context"
 	"errors"
-	"fmt"
-	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/register"
 )
-
-// defaultAuthenticateTimeout is the fallback timeout for authentication when not specified in config.
-// Defined locally to avoid import cycle with the action package.
-const defaultAuthenticateTimeout = 10 * time.Second
 
 // Compile-time interface check: TransportWorker implements fsmv2.Worker.
 var _ fsmv2.Worker = (*TransportWorker)(nil)
@@ -69,15 +62,18 @@ var _ fsmv2.Worker = (*TransportWorker)(nil)
 // for bidirectional message exchange with the backend relay server.
 type TransportWorker struct {
 	deps *TransportDependencies
-	fsmv2.WorkerBase[TransportConfig, TransportStatus, register.NoDeps]
+	fsmv2.WorkerBase[TransportConfig, TransportStatus, *TransportDependencies]
 }
 
 // NewTransportWorker creates a new Transport worker.
 // Returns an error if required dependencies are missing.
-// Matches the signature required by register.Worker: the TDeps parameter
-// is accepted but ignored; the worker builds its own deps from the
-// package-level ChannelProvider singleton and publishes them via
-// SetChildDeps for push/pull children to consume.
+//
+// Publishes its TransportDependencies via register.SetDeps[*TransportDependencies]
+// keyed by workerType so push and pull child workers can build their per-instance
+// PushDependencies/PullDependencies via register.SetDepsBuilder callbacks defined
+// in their own init() functions. This avoids the import cycle that would arise
+// from transport importing push/pull (push/pull already import transport for the
+// TransportDependencies type and ChildFailureRateConfig).
 func NewTransportWorker(
 	identity deps.Identity,
 	logger deps.FSMLogger,
@@ -94,47 +90,16 @@ func NewTransportWorker(
 	w := &TransportWorker{}
 	w.InitBase(identity, logger, stateReader)
 
-	// Create dependencies (will panic if ChannelProvider not set)
 	w.deps = NewTransportDependencies(nil, logger, stateReader, identity)
 	if w.deps == nil {
 		return nil, errors.New("NewTransportDependencies returned nil")
 	}
 
-	SetChildDeps(w.deps)
+	w.BindDeps(w.deps)
 
-	// Validation hook: required fields when running.
-	// When all fields are empty (nil spec startup path), skip validation —
-	// transport will attempt auth with empty credentials, fail, and retry with backoff.
-	// This enables self-healing when spec delivery is delayed during startup.
-	w.SetPostParseHook(func(cfg *TransportConfig) error {
-		if cfg.GetState() == config.DesiredStateRunning {
-			if cfg.RelayURL == "" && cfg.InstanceUUID == "" && cfg.AuthToken == "" {
-				return nil
-			}
-			if cfg.RelayURL == "" {
-				return fmt.Errorf("relayURL is required when state is running")
-			}
-			if cfg.InstanceUUID == "" {
-				return fmt.Errorf("instanceUUID is required when state is running")
-			}
-			if cfg.AuthToken == "" {
-				return fmt.Errorf("authToken is required when state is running")
-			}
-			if cfg.Timeout == 0 {
-				cfg.Timeout = defaultAuthenticateTimeout
-			}
-		}
-		return nil
-	})
+	register.SetDeps[*TransportDependencies](workerType, w.deps)
 
 	return w, nil
-}
-
-// GetDependenciesAny returns the custom TransportDependencies.
-// Overrides WorkerBase's default which returns *BaseDependencies.
-// Required by architecture test: custom deps must be visible to the supervisor.
-func (w *TransportWorker) GetDependenciesAny() any {
-	return w.deps
 }
 
 // CollectObservedState returns the current observed state of the transport worker.
@@ -162,9 +127,8 @@ func (w *TransportWorker) CollectObservedState(ctx context.Context, _ fsmv2.Desi
 const workerType = "transport"
 
 // init registers the transport worker via the generic register.Worker helper
-// with typed TDeps = *TransportDependencies. Parent→child deps sharing is
-// handled by the transport.SetChildDeps / ChildDeps singleton in child_deps.go
-// rather than the untyped extraDeps map.
+// with typed TDeps = *TransportDependencies. Push/pull children read the
+// published deps via register.GetDeps in their SetDepsBuilder callbacks.
 func init() {
-	register.Worker[TransportConfig, TransportStatus, register.NoDeps](workerType, NewTransportWorker)
+	register.Worker[TransportConfig, TransportStatus, *TransportDependencies](workerType, NewTransportWorker)
 }
