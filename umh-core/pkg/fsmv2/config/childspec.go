@@ -255,6 +255,20 @@ type ChildSpec struct {
 	Enabled bool `json:"enabled" yaml:"enabled"`
 }
 
+// NewChildSpec creates a ChildSpec with Enabled:true set by default.
+// Use this constructor in all RenderChildren implementations — it makes
+// the F4⊕G1 trap (forgotten Enabled:false silently stopping children)
+// impossible to trigger by accident.
+func NewChildSpec(name, workerType string, userSpec UserSpec, childStartStates []string) ChildSpec {
+	return ChildSpec{
+		Name:             name,
+		WorkerType:       workerType,
+		UserSpec:         userSpec,
+		ChildStartStates: childStartStates,
+		Enabled:          true,
+	}
+}
+
 // Clone creates a deep copy of the ChildSpec.
 // Note: Dependencies is shallow-copied (values are shared intentionally since they
 // represent shared resources like channels and interfaces).

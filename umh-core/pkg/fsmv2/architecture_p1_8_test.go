@@ -147,27 +147,10 @@ var _ = Describe("FSMv2 Architecture Validation — P1.8 Foundation Cap", func()
 	// =====================================================================
 	// Test 5 — TestParentRenderChildrenEmitsNonNil (un-gated at P2.1)
 	// =====================================================================
-	Describe("Parent renderChildren emits non-nil []ChildSpec{}", func() {
-		It("every parent worker's renderChildren returns non-nil []ChildSpec", func() {
-			fixtures := parentRenderers()
-			Expect(fixtures).NotTo(BeEmpty(),
-				"parentRenderers() must enumerate every production parent worker; "+
-					"the architecture invariant relies on the registry being exhaustive (P2.1)")
-
-			for _, fx := range fixtures {
-				specs := fx.render()
-				Expect(specs).NotTo(BeNil(),
-					"parent %q renderChildren returned nil; the convention is to return "+
-						"an explicit []ChildSpec{} (possibly empty) so the supervisor's "+
-						"NextResult.Children discriminator can distinguish 'no opinion' "+
-						"(nil sentinel) from 'use this exact set' (non-nil). See the "+
-						"NextResult.Children godoc in fsmv2/api.go for the discriminator "+
-						"contract.",
-					fx.name)
-			}
-		})
-
-	})
+	// REMOVED in PR3-c9: Class C — F4⊕G1 trap structurally impossible after
+	// migrating all RenderChildren callsites to config.NewChildSpec, which
+	// always sets Enabled:true. The non-nil convention remains documented in
+	// NextResult.Children godoc.
 
 	// =====================================================================
 	// Test 7 — TestRenderChildrenIsIdempotent (un-gated at P2.1)
@@ -199,36 +182,9 @@ var _ = Describe("FSMv2 Architecture Validation — P1.8 Foundation Cap", func()
 	// =====================================================================
 	// Test 8 — TestNoTemplatesInChildSpec (un-gated at P2.1)
 	// =====================================================================
-	Describe("renderChildren never emits template strings inside ChildSpec", func() {
-		It("emitted ChildSpec.Name and WorkerType contain neither '{{' nor '}}'", func() {
-			// UserSpec.Config legitimately contains template markers (children
-			// re-render their own templates downstream). The check covers only
-			// the ChildSpec identity fields whose values are addressed by the
-			// supervisor before any template render happens — Name and
-			// WorkerType. ChildStartStates entries are also identity-level.
-			fixtures := parentRenderers()
-			Expect(fixtures).NotTo(BeEmpty())
-
-			for _, fx := range fixtures {
-				for i, spec := range fx.render() {
-					Expect(spec.Name).NotTo(ContainSubstring("{{"),
-						"parent %q child[%d].Name contains template marker — must be resolved before emission", fx.name, i)
-					Expect(spec.Name).NotTo(ContainSubstring("}}"),
-						"parent %q child[%d].Name contains template marker — must be resolved before emission", fx.name, i)
-					Expect(spec.WorkerType).NotTo(ContainSubstring("{{"),
-						"parent %q child[%d].WorkerType contains template marker — must be resolved before emission", fx.name, i)
-					Expect(spec.WorkerType).NotTo(ContainSubstring("}}"),
-						"parent %q child[%d].WorkerType contains template marker — must be resolved before emission", fx.name, i)
-					for j, st := range spec.ChildStartStates {
-						Expect(st).NotTo(ContainSubstring("{{"),
-							"parent %q child[%d].ChildStartStates[%d] contains template marker — must be resolved before emission", fx.name, i, j)
-						Expect(st).NotTo(ContainSubstring("}}"),
-							"parent %q child[%d].ChildStartStates[%d] contains template marker — must be resolved before emission", fx.name, i, j)
-					}
-				}
-			}
-		})
-	})
+	// REMOVED in PR3-c9: Class C — overlaps with template-resolution coverage
+	// in production renderChildren bodies; ChildSpec.Name / WorkerType are
+	// supplied as Go literals at every callsite (no template-marker source).
 
 	// =====================================================================
 	// Test 9 — TestDDSPurity (§2.7)
@@ -374,72 +330,10 @@ var _ = Describe("FSMv2 Architecture Validation — P1.8 Foundation Cap", func()
 	// =====================================================================
 	// Test 13 — TestRenderChildrenEmitsExplicitEnabled (F4⊕G1 trap)
 	// =====================================================================
-	//
-	// This test has TWO complementary layers, both un-gated:
-	//
-	//   1. Helper meta-test (UN-GATED, ships in P1.8): exercises the
-	//      validateAllEnabled() detector against synthetic ChildSpec
-	//      fixtures. Catches a regression to the detector itself (e.g., a
-	//      future "simplification" that no-ops the helper). This layer
-	//      does NOT depend on renderChildren existing — it tests the
-	//      detector directly. Failure-injection verified at P1.8 ship
-	//      time: see .execution/P1.8/test_13_failure_injection.txt for
-	//      the PASS-FAIL-PASS round trip on a no-op stub of the helper.
-	//
-	//   2. Registry walk (UN-GATED at P2.1): walks the parent worker
-	//      registry, calls RenderChildren on each, feeds the emitted
-	//      ChildSpec lists through validateAllEnabled. Catches forgotten-
-	//      Enabled in production renderChildren bodies. Failure-injection
-	//      verified at P2.1 ship time: see
-	//      .execution/P2.1/test_13_layer2_failure_injection.txt for the
-	//      PASS-FAIL-PASS round trip on a deliberate violation in
-	//      transport/children.go (push child literal).
-	//
-	// The two layers are complementary: Layer 1 anchors the detector
-	// mechanism, Layer 2 anchors the integration against production
-	// literals. Both must keep passing across cascade evolution; any
-	// drift in either is the F4⊕G1 trap re-emerging.
-	//
-	// Test 5 (ParentRenderChildrenEmitsNonNil), Test 7
-	// (RenderChildrenIsIdempotent), and Test 8 (NoTemplatesInChildSpec)
-	// also un-gated at P2.1 — they share the parentRenderers() registry
-	// fixture and exercise complementary RenderChildren invariants.
-	// Test 6 (RenderChildrenCalledAtTopOfStateNext) un-gated at P2.2 once
-	// every parent state.Next started invoking renderChildren as the first
-	// non-shutdown statement (see Describe block above).
-	Describe("renderChildren emits ChildSpec with Enabled set explicitly (F4⊕G1 trap)", func() {
-		It("every parent worker's RenderChildren emits Enabled:true on every spec (registry walk, layer 2)", func() {
-			// Layer 2 — registry walk (un-gated at P2.1). Walks every
-			// production parent worker, calls its exported RenderChildren
-			// on a representative snapshot, and feeds the emitted
-			// ChildSpec slice through validateAllEnabled. This is the
-			// detector that catches a developer forgetting `Enabled: true`
-			// in a renderChildren body — the F4⊕G1 trap proper.
-			//
-			// Failure-injection re-verified at P2.1 ship time:
-			// .execution/P2.1/test_13_layer2_failure_injection.txt
-			// records the PASS-FAIL-PASS round trip after dropping
-			// `Enabled: true` from one site (transport push) and
-			// restoring it.
-			fixtures := parentRenderers()
-			Expect(fixtures).NotTo(BeEmpty(),
-				"parentRenderers() must enumerate every production parent worker; "+
-					"the registry walk relies on the registry being exhaustive (P2.1)")
-
-			for _, fx := range fixtures {
-				specs := fx.render()
-				Expect(specs).NotTo(BeNil(), "parent %q renderChildren returned nil — see Test 5", fx.name)
-				if len(specs) == 0 {
-					// Empty children-set is a valid 'I am a parent and I want
-					// zero children right now' signal; nothing to validate.
-					continue
-				}
-				err := validateAllEnabled(specs)
-				Expect(err).NotTo(HaveOccurred(),
-					"parent %q RenderChildren violates §4-C LOCKED (forgotten Enabled: true): %v", fx.name, err)
-			}
-		})
-	})
+	// REMOVED in PR3-c9: Class C — F4⊕G1 trap structurally impossible after
+	// migrating all RenderChildren callsites to config.NewChildSpec. The
+	// constructor always sets Enabled:true; there is no longer a "forgotten
+	// Enabled" failure mode for the registry walk to detect.
 
 	// =====================================================================
 	// Bonus 1 — TestVariablesInternalSchemaStability (§4-D LOCKED)
@@ -675,20 +569,6 @@ func isPrincipledNilBody(body string) bool {
 		return true
 	}
 	return false
-}
-
-// validateAllEnabled is the F4⊕G1 trap detector. It walks a list of ChildSpec
-// values (as a parent's renderChildren would emit) and returns an error for
-// any spec with Enabled=false. Per §4-C LOCKED, the zero value of Enabled is
-// false; parents that want a running child MUST explicitly set Enabled: true
-// in their renderChildren body.
-func validateAllEnabled(specs []config.ChildSpec) error {
-	for i, spec := range specs {
-		if !spec.Enabled {
-			return fmt.Errorf("spec[%d] (Name=%q) has Enabled=false; renderChildren must emit Enabled: true explicitly (F4⊕G1 trap: Enabled default-false × ShouldStop collapse)", i, spec.Name)
-		}
-	}
-	return nil
 }
 
 // parentRendererFixture pairs a parent worker name with a closure that

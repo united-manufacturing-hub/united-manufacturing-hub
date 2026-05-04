@@ -37,13 +37,14 @@ import (
 // authoritative for the supervisor in P2.4); the legacy DDS-derived path was
 // retired in P2.5.
 func RenderChildren(snap fsmv2.WorkerSnapshot[CommunicatorConfig, CommunicatorStatus]) []config.ChildSpec {
-	return []config.ChildSpec{{
-		Name:             "transport",
-		WorkerType:       "transport",
-		UserSpec:         snapshotUserSpec(snap),
-		ChildStartStates: []string{"Syncing", "Recovering"},
-		Enabled:          true,
-	}}
+	return []config.ChildSpec{
+		config.NewChildSpec(
+			"transport",
+			"transport",
+			snapshotUserSpec(snap),
+			[]string{"Syncing", "Recovering"},
+		),
+	}
 }
 
 // snapshotUserSpec builds the transport child's UserSpec from the communicator's

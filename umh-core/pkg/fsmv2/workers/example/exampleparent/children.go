@@ -58,16 +58,15 @@ func RenderChildren(spec *ParentUserSpec) []config.ChildSpec {
 			},
 		}
 
-		childrenSpecs[i] = config.ChildSpec{
-			Name:       fmt.Sprintf("child-%d", i),
-			WorkerType: childWorkerType,
-			UserSpec: config.UserSpec{
+		childrenSpecs[i] = config.NewChildSpec(
+			fmt.Sprintf("child-%d", i),
+			childWorkerType,
+			config.UserSpec{
 				Config:    childConfig,
 				Variables: childVariables,
 			},
-			ChildStartStates: []string{"TryingToStart", "Running"},
-			Enabled:          true,
-		}
+			[]string{"TryingToStart", "Running"},
+		)
 	}
 
 	return childrenSpecs

@@ -41,20 +41,18 @@ func RenderChildren(snap fsmv2.WorkerSnapshot[TransportConfig, TransportStatus])
 	rawSpec := snapshotUserSpec(snap)
 
 	return []config.ChildSpec{
-		{
-			Name:             "push",
-			WorkerType:       "push",
-			UserSpec:         config.UserSpec{Config: rawSpec.Config, Variables: rawSpec.Variables},
-			ChildStartStates: []string{"Running", "Degraded"},
-			Enabled:          true,
-		},
-		{
-			Name:             "pull",
-			WorkerType:       "pull",
-			UserSpec:         config.UserSpec{Config: rawSpec.Config, Variables: rawSpec.Variables},
-			ChildStartStates: []string{"Running", "Degraded"},
-			Enabled:          true,
-		},
+		config.NewChildSpec(
+			"push",
+			"push",
+			config.UserSpec{Config: rawSpec.Config, Variables: rawSpec.Variables},
+			[]string{"Running", "Degraded"},
+		),
+		config.NewChildSpec(
+			"pull",
+			"pull",
+			config.UserSpec{Config: rawSpec.Config, Variables: rawSpec.Variables},
+			[]string{"Running", "Degraded"},
+		),
 	}
 }
 
