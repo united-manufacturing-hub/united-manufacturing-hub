@@ -9,7 +9,7 @@
 
 ### Fixes
 
-- A bridge whose underlying service directory got corrupted at runtime previously stayed in a starting state until umh-core was restarted or replaced with a different bridge name. umh-core now detects the corruption and recovers the bridge automatically.
+- A bridge that got stuck in a starting state due to file corruption now recovers automatically. Previously, recovery required restarting umh-core or recreating the bridge under a different name.
 
 ## [0.44.19]
 
