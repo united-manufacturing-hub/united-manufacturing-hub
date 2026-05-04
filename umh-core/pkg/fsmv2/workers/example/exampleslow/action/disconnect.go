@@ -24,10 +24,6 @@ const DisconnectActionName = "disconnect"
 
 type DisconnectAction struct{}
 
-func NewDisconnectAction() *DisconnectAction {
-	return &DisconnectAction{}
-}
-
 func (a *DisconnectAction) Execute(ctx context.Context, depsAny any) error {
 	select {
 	case <-ctx.Done():

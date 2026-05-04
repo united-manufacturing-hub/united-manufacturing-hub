@@ -100,23 +100,7 @@ func (w *ExampleslowWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredS
 		return nil, err
 	}
 
-	w.updateDependenciesFromSpec(spec)
-
 	return &desired, nil
-}
-
-// updateDependenciesFromSpec configures dependencies based on the user spec (separate to avoid PURE_DERIVE violations).
-func (w *ExampleslowWorker) updateDependenciesFromSpec(spec interface{}) {
-	if spec == nil {
-		return
-	}
-
-	parsed, err := config.ParseUserSpec[ExampleslowUserSpec](spec)
-	if err != nil {
-		return
-	}
-
-	w.deps.SetDelaySeconds(parsed.DelaySeconds)
 }
 
 func (w *ExampleslowWorker) GetInitialState() fsmv2.State[any, any] {

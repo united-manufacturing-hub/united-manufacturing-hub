@@ -26,8 +26,6 @@ type ExampleslowDependencies interface {
 	deps.Dependencies
 	SetConnected(connected bool)
 	IsConnected() bool
-	SetDelaySeconds(delaySeconds int)
-	GetDelaySeconds() int
 }
 
 type ExampleslowSnapshot struct {

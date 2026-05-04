@@ -36,7 +36,7 @@ func (s *TryingToConnectState) Next(snapAny any) fsmv2.NextResult[any, any] {
 		return fsmv2.Transition(&ConnectedState{}, fsmv2.SignalNone, nil, "connection healthy, transitioning to connected", nil)
 	}
 
-	return fsmv2.Transition(s, fsmv2.SignalNone, &action.ConnectAction{}, "attempting to establish connection with delay", nil)
+	return fsmv2.Transition(s, fsmv2.SignalNone, &action.ConnectAction{DelaySeconds: snap.Desired.DelaySeconds}, "attempting to establish connection with delay", nil)
 }
 
 func (s *TryingToConnectState) String() string {

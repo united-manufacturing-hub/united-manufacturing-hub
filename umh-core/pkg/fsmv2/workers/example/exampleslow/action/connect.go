@@ -25,23 +25,24 @@ import (
 const ConnectActionName = "connect"
 
 // ConnectAction attempts to establish a connection with a configurable delay.
-type ConnectAction struct{}
+type ConnectAction struct {
+	DelaySeconds int
+}
 
 func (a *ConnectAction) Execute(ctx context.Context, depsAny any) error {
 	deps := depsAny.(snapshot.ExampleslowDependencies)
 	logger := deps.GetLogger()
-	delaySeconds := deps.GetDelaySeconds()
 
-	logger.Info("connect_attempting", depspkg.Int("delay_seconds", delaySeconds))
+	logger.Info("connect_attempting", depspkg.Int("delay_seconds", a.DelaySeconds))
 
-	if delaySeconds > 0 {
+	if a.DelaySeconds > 0 {
 		select {
-		case <-time.After(time.Duration(delaySeconds) * time.Second):
+		case <-time.After(time.Duration(a.DelaySeconds) * time.Second):
 			logger.Info("Connect delay completed successfully")
 		case <-ctx.Done():
 			logger.SentryWarn(depspkg.FeatureExamples, deps.GetHierarchyPath(), "connect_cancelled_during_delay",
 				depspkg.String("reason", "context_done"),
-				depspkg.Int("delay_seconds", delaySeconds))
+				depspkg.Int("delay_seconds", a.DelaySeconds))
 
 			return ctx.Err()
 		}

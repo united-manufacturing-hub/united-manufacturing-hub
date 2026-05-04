@@ -46,9 +46,8 @@ type ExampleslowDependencies struct {
 	*deps.BaseDependencies
 	connectionPool ConnectionPool
 
-	mu           sync.RWMutex
-	isConnected  bool
-	delaySeconds int
+	mu          sync.RWMutex
+	isConnected bool
 }
 
 // NewExampleslowDependencies creates new dependencies for the exampleslow worker.
@@ -78,16 +77,3 @@ func (d *ExampleslowDependencies) IsConnected() bool {
 	return d.isConnected
 }
 
-func (d *ExampleslowDependencies) SetDelaySeconds(delaySeconds int) {
-	d.mu.Lock()
-	defer d.mu.Unlock()
-
-	d.delaySeconds = delaySeconds
-}
-
-func (d *ExampleslowDependencies) GetDelaySeconds() int {
-	d.mu.RLock()
-	defer d.mu.RUnlock()
-
-	return d.delaySeconds
-}
