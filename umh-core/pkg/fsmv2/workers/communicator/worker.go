@@ -30,7 +30,7 @@
 //
 // This package uses the WorkerBase[TConfig, TStatus] API with custom overrides:
 //   - Custom CollectObservedState: builds status from deps, returns NewObservation (collector handles metric accumulation)
-//   - Post-parse hook: applies timeout default
+//   - Custom DeriveDesiredState: captures Timeout default at construction time (C18 pattern)
 //   - state.Next emits TransportWorker child specs via NextResult.Children
 //     (canonical RenderChildren in children.go; state-package mirror feeds the
 //     supervisor's authoritative children-set discriminator)
@@ -47,8 +47,12 @@ package communicator
 import (
 	"context"
 	"errors"
+	"fmt"
+
+	"gopkg.in/yaml.v3"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	fsmv2config "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/register"
 	httpTransport "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport/http"
@@ -74,14 +78,53 @@ func NewCommunicatorWorker(id deps.Identity, logger deps.FSMLogger, sr deps.Stat
 	w.deps = NewCommunicatorDependencies(baseDeps)
 	w.BindDeps(w.deps)
 
-	w.SetPostParseHook(func(cfg *CommunicatorConfig) error {
-		if cfg.Timeout == 0 {
-			cfg.Timeout = httpTransport.LongPollingDuration + httpTransport.LongPollingBuffer
-		}
-		return nil
-	})
-
 	return w, nil
+}
+
+// DeriveDesiredState parses the user spec and returns the desired state.
+// Applies the default Timeout when the spec does not specify one.
+// Timeout is captured at construction time in the returned WrappedDesiredState.Config
+// so it survives the supervisor's JSON round-trip through CSE storage.
+func (w *CommunicatorWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, error) {
+	if spec == nil {
+		return &fsmv2.WrappedDesiredState[CommunicatorConfig]{
+			BaseDesiredState: fsmv2config.BaseDesiredState{State: fsmv2config.DesiredStateRunning},
+			Config: CommunicatorConfig{
+				Timeout: httpTransport.LongPollingDuration + httpTransport.LongPollingBuffer,
+			},
+		}, nil
+	}
+
+	userSpec, ok := spec.(fsmv2config.UserSpec)
+	if !ok {
+		return nil, fmt.Errorf("invalid spec type: expected UserSpec, got %T", spec)
+	}
+
+	renderedConfig, err := fsmv2config.RenderConfigTemplate(userSpec.Config, userSpec.Variables)
+	if err != nil {
+		return nil, fmt.Errorf("template rendering failed: %w", err)
+	}
+
+	var cfg CommunicatorConfig
+	if renderedConfig != "" {
+		if err := yaml.Unmarshal([]byte(renderedConfig), &cfg); err != nil {
+			return nil, fmt.Errorf("config unmarshal failed: %w", err)
+		}
+	}
+
+	if cfg.Timeout == 0 {
+		cfg.Timeout = httpTransport.LongPollingDuration + httpTransport.LongPollingBuffer
+	}
+
+	desiredState := fsmv2config.DesiredStateRunning
+	if s := cfg.GetState(); s != "" {
+		desiredState = s
+	}
+
+	return &fsmv2.WrappedDesiredState[CommunicatorConfig]{
+		BaseDesiredState: fsmv2config.BaseDesiredState{State: desiredState},
+		Config:           cfg,
+	}, nil
 }
 
 // GetDependencies returns the typed communicator dependencies.

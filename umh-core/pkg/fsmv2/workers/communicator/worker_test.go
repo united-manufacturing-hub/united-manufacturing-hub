@@ -238,6 +238,35 @@ state: "running"
 				Expect(loadedDesired.GetState()).To(Equal("running"))
 			})
 
+			It("default Timeout survives marshal→unmarshal round-trip", func() {
+				spec := fsmv2types.UserSpec{
+					Config: `
+relayURL: "https://relay.example.com"
+instanceUUID: "default-timeout-uuid"
+authToken: "default-timeout-token"
+`,
+				}
+
+				desiredIface, err := worker.DeriveDesiredState(spec)
+				Expect(err).NotTo(HaveOccurred())
+
+				original, ok := desiredIface.(*fsmv2.WrappedDesiredState[communicator.CommunicatorConfig])
+				Expect(ok).To(BeTrue())
+				Expect(original.Config.Timeout).To(Equal(httpTransport.LongPollingDuration+httpTransport.LongPollingBuffer),
+					"default Timeout must be set before round-trip")
+
+				jsonBytes, err := json.Marshal(original)
+				Expect(err).NotTo(HaveOccurred())
+
+				var restored fsmv2.WrappedDesiredState[communicator.CommunicatorConfig]
+				Expect(json.Unmarshal(jsonBytes, &restored)).To(Succeed())
+
+				Expect(restored.Config.Timeout).To(Equal(httpTransport.LongPollingDuration+httpTransport.LongPollingBuffer),
+					"default Timeout must survive JSON round-trip")
+				Expect(restored.Config.RelayURL).To(Equal("https://relay.example.com"),
+					"RelayURL must survive JSON round-trip")
+			})
+
 			It("should return clear error on invalid spec type", func() {
 				_, err := worker.DeriveDesiredState("invalid-string-spec")
 				Expect(err).To(HaveOccurred())
