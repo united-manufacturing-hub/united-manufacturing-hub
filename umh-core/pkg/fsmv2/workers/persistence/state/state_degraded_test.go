@@ -28,16 +28,16 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/persistence/state"
 )
 
-var _ = Describe("RunningDegradedState", func() {
-	var stateObj *state.RunningDegradedState
+var _ = Describe("DegradedState", func() {
+	var stateObj *state.DegradedState
 
 	BeforeEach(func() {
-		stateObj = &state.RunningDegradedState{}
+		stateObj = &state.DegradedState{}
 	})
 
 	Describe("Next", func() {
 		Context("when shutdown is requested", func() {
-			It("should transition to ShuttingDownState", func() {
+			It("should transition to StoppingState", func() {
 				snap := fsmv2.Snapshot{
 					Identity: deps.Identity{ID: "test", WorkerType: "persistence"},
 					Observed: fsmv2.Observation[persistence.PersistenceStatus]{
@@ -59,7 +59,7 @@ var _ = Describe("RunningDegradedState", func() {
 				}
 
 				result := stateObj.Next(snap)
-				Expect(result.State).To(BeAssignableToTypeOf(&state.ShuttingDownState{}))
+				Expect(result.State).To(BeAssignableToTypeOf(&state.StoppingState{}))
 				Expect(result.Signal).To(Equal(fsmv2.SignalNone))
 				Expect(result.Action).To(BeNil())
 			})
@@ -117,7 +117,7 @@ var _ = Describe("RunningDegradedState", func() {
 				}
 
 				result := stateObj.Next(snap)
-				Expect(result.State).To(BeAssignableToTypeOf(&state.RunningDegradedState{}))
+				Expect(result.State).To(BeAssignableToTypeOf(&state.DegradedState{}))
 				Expect(result.Signal).To(Equal(fsmv2.SignalNone))
 				Expect(result.Action).To(BeAssignableToTypeOf(&action.CompactDeltasAction{}))
 			})
@@ -148,7 +148,7 @@ var _ = Describe("RunningDegradedState", func() {
 				}
 
 				result := stateObj.Next(snap)
-				Expect(result.State).To(BeAssignableToTypeOf(&state.RunningDegradedState{}))
+				Expect(result.State).To(BeAssignableToTypeOf(&state.DegradedState{}))
 				Expect(result.Action).To(BeAssignableToTypeOf(&action.RunMaintenanceAction{}))
 			})
 		})
@@ -178,7 +178,7 @@ var _ = Describe("RunningDegradedState", func() {
 				}
 
 				result := stateObj.Next(snap)
-				Expect(result.State).To(BeAssignableToTypeOf(&state.RunningDegradedState{}))
+				Expect(result.State).To(BeAssignableToTypeOf(&state.DegradedState{}))
 				Expect(result.Action).To(BeAssignableToTypeOf(&action.CompactDeltasAction{}))
 			})
 		})
@@ -208,7 +208,7 @@ var _ = Describe("RunningDegradedState", func() {
 				}
 
 				result := stateObj.Next(snap)
-				Expect(result.State).To(BeAssignableToTypeOf(&state.RunningDegradedState{}))
+				Expect(result.State).To(BeAssignableToTypeOf(&state.DegradedState{}))
 				Expect(result.Signal).To(Equal(fsmv2.SignalNone))
 				Expect(result.Action).To(BeNil())
 			})
@@ -216,8 +216,8 @@ var _ = Describe("RunningDegradedState", func() {
 	})
 
 	Describe("String", func() {
-		It("should return RunningDegraded", func() {
-			Expect(stateObj.String()).To(Equal("RunningDegraded"))
+		It("should return Degraded", func() {
+			Expect(stateObj.String()).To(Equal("Degraded"))
 		})
 	})
 })

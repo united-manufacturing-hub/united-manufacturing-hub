@@ -37,7 +37,7 @@ var _ = Describe("RunningState", func() {
 
 	Describe("Next", func() {
 		Context("when shutdown is requested", func() {
-			It("should transition to ShuttingDownState", func() {
+			It("should transition to StoppingState", func() {
 				snap := fsmv2.Snapshot{
 					Identity: deps.Identity{ID: "test", WorkerType: "persistence"},
 					Observed: fsmv2.Observation[persistence.PersistenceStatus]{
@@ -56,14 +56,14 @@ var _ = Describe("RunningState", func() {
 				}
 
 				result := stateObj.Next(snap)
-				Expect(result.State).To(BeAssignableToTypeOf(&state.ShuttingDownState{}))
+				Expect(result.State).To(BeAssignableToTypeOf(&state.StoppingState{}))
 				Expect(result.Signal).To(Equal(fsmv2.SignalNone))
 				Expect(result.Action).To(BeNil())
 			})
 		})
 
 		Context("when not healthy (consecutive action errors > 0)", func() {
-			It("should transition to RunningDegradedState with nil action", func() {
+			It("should transition to DegradedState with nil action", func() {
 				snap := fsmv2.Snapshot{
 					Identity: deps.Identity{ID: "test", WorkerType: "persistence"},
 					Observed: fsmv2.Observation[persistence.PersistenceStatus]{
@@ -84,7 +84,7 @@ var _ = Describe("RunningState", func() {
 				}
 
 				result := stateObj.Next(snap)
-				Expect(result.State).To(BeAssignableToTypeOf(&state.RunningDegradedState{}))
+				Expect(result.State).To(BeAssignableToTypeOf(&state.DegradedState{}))
 				Expect(result.Signal).To(Equal(fsmv2.SignalNone))
 				Expect(result.Action).To(BeNil())
 			})

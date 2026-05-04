@@ -28,11 +28,11 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/persistence/state"
 )
 
-var _ = Describe("ShuttingDownState", func() {
-	var stateObj *state.ShuttingDownState
+var _ = Describe("StoppingState", func() {
+	var stateObj *state.StoppingState
 
 	BeforeEach(func() {
-		stateObj = &state.ShuttingDownState{}
+		stateObj = &state.StoppingState{}
 	})
 
 	Describe("Next", func() {
@@ -85,7 +85,7 @@ var _ = Describe("ShuttingDownState", func() {
 				}
 
 				result := stateObj.Next(snap)
-				Expect(result.State).To(BeAssignableToTypeOf(&state.ShuttingDownState{}))
+				Expect(result.State).To(BeAssignableToTypeOf(&state.StoppingState{}))
 				Expect(result.Signal).To(Equal(fsmv2.SignalNone))
 				Expect(result.Action).To(BeAssignableToTypeOf(&action.RunMaintenanceAction{}))
 			})
@@ -114,7 +114,7 @@ var _ = Describe("ShuttingDownState", func() {
 				}
 
 				result := stateObj.Next(snap)
-				Expect(result.State).To(BeAssignableToTypeOf(&state.ShuttingDownState{}))
+				Expect(result.State).To(BeAssignableToTypeOf(&state.StoppingState{}))
 				Expect(result.Signal).To(Equal(fsmv2.SignalNone))
 				Expect(result.Action).To(BeAssignableToTypeOf(&action.RunMaintenanceAction{}))
 			})
@@ -152,8 +152,8 @@ var _ = Describe("ShuttingDownState", func() {
 	})
 
 	Describe("String", func() {
-		It("should return ShuttingDown", func() {
-			Expect(stateObj.String()).To(Equal("ShuttingDown"))
+		It("should return Stopping", func() {
+			Expect(stateObj.String()).To(Equal("Stopping"))
 		})
 	})
 })

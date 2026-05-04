@@ -20,15 +20,15 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/persistence/snapshot"
 )
 
-type RunningDegradedState struct {
+type DegradedState struct {
 	helpers.RunningDegradedBase
 }
 
-func (s *RunningDegradedState) Next(snapAny any) fsmv2.NextResult[any, any] {
+func (s *DegradedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := fsmv2.ConvertWorkerSnapshot[snapshot.PersistenceConfig, snapshot.PersistenceStatus](snapAny)
 
 	if snap.ShouldStop() {
-		return fsmv2.Transition(&ShuttingDownState{}, fsmv2.SignalNone, nil, "Shutdown requested", nil)
+		return fsmv2.Transition(&StoppingState{}, fsmv2.SignalNone, nil, "Shutdown requested", nil)
 	}
 
 	if snap.Observed.Status.IsHealthy() {
@@ -38,6 +38,6 @@ func (s *RunningDegradedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	return emitActionIfDue(s, snap)
 }
 
-func (s *RunningDegradedState) String() string {
-	return "RunningDegraded"
+func (s *DegradedState) String() string {
+	return "Degraded"
 }

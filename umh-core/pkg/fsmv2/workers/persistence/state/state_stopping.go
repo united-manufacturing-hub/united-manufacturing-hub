@@ -21,11 +21,11 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/persistence/snapshot"
 )
 
-type ShuttingDownState struct {
+type StoppingState struct {
 	helpers.StoppingBase
 }
 
-func (s *ShuttingDownState) Next(snapAny any) fsmv2.NextResult[any, any] {
+func (s *StoppingState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := fsmv2.ConvertWorkerSnapshot[snapshot.PersistenceConfig, snapshot.PersistenceStatus](snapAny)
 
 	for _, result := range snap.Observed.LastActionResults {
@@ -38,6 +38,6 @@ func (s *ShuttingDownState) Next(snapAny any) fsmv2.NextResult[any, any] {
 		action.NewRunMaintenanceAction(), "Running shutdown maintenance", nil)
 }
 
-func (s *ShuttingDownState) String() string {
-	return "ShuttingDown"
+func (s *StoppingState) String() string {
+	return "Stopping"
 }
