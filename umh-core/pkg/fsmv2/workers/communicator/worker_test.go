@@ -294,3 +294,22 @@ state: "running"
 
 	})
 })
+
+var _ = Describe("CommunicatorWorker GetDependenciesAny", func() {
+	It("returns *CommunicatorDependencies", func() {
+		logger := depspkg.NewNopFSMLogger()
+		id := depspkg.Identity{ID: "test-id", Name: "test-communicator"}
+
+		communicator.SetChannelProvider(NewMockChannelProvider())
+		defer communicator.ClearChannelProvider()
+
+		worker, err := communicator.NewCommunicatorWorker(id, logger, nil)
+		Expect(err).NotTo(HaveOccurred())
+
+		dp, ok := worker.(fsmv2.DependencyProvider)
+		Expect(ok).To(BeTrue(), "worker must implement DependencyProvider")
+		got := dp.GetDependenciesAny()
+		_, ok = got.(*communicator.CommunicatorDependencies)
+		Expect(ok).To(BeTrue(), "expected *CommunicatorDependencies, got %T", got)
+	})
+})

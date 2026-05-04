@@ -60,7 +60,7 @@ const workerType = "communicator"
 // CommunicatorWorker implements the FSMv2 Worker interface using the WorkerBase API.
 type CommunicatorWorker struct {
 	deps *CommunicatorDependencies
-	fsmv2.WorkerBase[CommunicatorConfig, CommunicatorStatus, register.NoDeps]
+	fsmv2.WorkerBase[CommunicatorConfig, CommunicatorStatus, *CommunicatorDependencies]
 }
 
 // NewCommunicatorWorker creates a new communicator worker with the standard framework dependencies.
@@ -72,6 +72,7 @@ func NewCommunicatorWorker(id deps.Identity, logger deps.FSMLogger, sr deps.Stat
 	w := &CommunicatorWorker{}
 	baseDeps := w.InitBase(id, logger, sr)
 	w.deps = NewCommunicatorDependencies(baseDeps)
+	w.BindDeps(w.deps)
 
 	w.SetPostParseHook(func(cfg *CommunicatorConfig) error {
 		if cfg.Timeout == 0 {
@@ -85,13 +86,6 @@ func NewCommunicatorWorker(id deps.Identity, logger deps.FSMLogger, sr deps.Stat
 
 // GetDependencies returns the typed communicator dependencies.
 func (w *CommunicatorWorker) GetDependencies() *CommunicatorDependencies {
-	return w.deps
-}
-
-// GetDependenciesAny returns the worker's dependencies for action execution.
-// Overrides WorkerBase.GetDependenciesAny to return *CommunicatorDependencies
-// instead of *deps.BaseDependencies.
-func (w *CommunicatorWorker) GetDependenciesAny() any {
 	return w.deps
 }
 
