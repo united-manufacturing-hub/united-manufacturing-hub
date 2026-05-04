@@ -19,8 +19,8 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	example_child "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplechild"
@@ -83,6 +83,19 @@ var _ = Describe("ChildWorker", func() {
 
 			desired := desiredIface.(*config.DesiredState)
 			Expect(desired.State).To(Equal(config.DesiredStateRunning))
+		})
+	})
+
+	Describe("GetDependenciesAny", func() {
+		It("returns *ExamplechildDependencies", func() {
+			worker, err := example_child.NewChildWorker(identity, mockPool, logger, nil)
+			Expect(err).NotTo(HaveOccurred())
+			var w fsmv2.Worker = worker
+			dp, ok := w.(fsmv2.DependencyProvider)
+			Expect(ok).To(BeTrue(), "worker must implement DependencyProvider")
+			got := dp.GetDependenciesAny()
+			_, ok = got.(*example_child.ExamplechildDependencies)
+			Expect(ok).To(BeTrue(), "expected *ExamplechildDependencies, got %T", got)
 		})
 	})
 })

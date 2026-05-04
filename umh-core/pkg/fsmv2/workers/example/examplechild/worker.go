@@ -25,7 +25,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplechild/snapshot"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplechild/state"
@@ -33,10 +32,9 @@ import (
 
 // ChildWorker implements the FSM v2 Worker interface for resource management.
 type ChildWorker struct {
+	deps       *ExamplechildDependencies
 	connection Connection
-	*helpers.BaseWorker[*ExamplechildDependencies]
-	logger   deps.FSMLogger
-	identity deps.Identity
+	fsmv2.WorkerBase[ChildUserSpec, snapshot.ExamplechildObservedState, *ExamplechildDependencies]
 }
 
 // NewChildWorker creates a new example child worker.
@@ -63,7 +61,10 @@ func NewChildWorker(
 		identity.WorkerType = workerType
 	}
 
-	dependencies := NewExamplechildDependencies(connectionPool, logger, stateReader, identity)
+	w := &ChildWorker{}
+	w.InitBase(identity, logger, stateReader)
+	w.deps = NewExamplechildDependencies(connectionPool, logger, stateReader, identity)
+	w.BindDeps(w.deps)
 
 	conn, err := connectionPool.Acquire()
 	if err != nil {
@@ -71,12 +72,9 @@ func NewChildWorker(
 			deps.Err(err))
 	}
 
-	return &ChildWorker{
-		BaseWorker: helpers.NewBaseWorker(dependencies),
-		identity:   identity,
-		logger:     logger,
-		connection: conn,
-	}, nil
+	w.connection = conn
+
+	return w, nil
 }
 
 // CollectObservedState returns the current observed state of the child worker.
@@ -87,25 +85,23 @@ func (w *ChildWorker) CollectObservedState(ctx context.Context, _ fsmv2.DesiredS
 	default:
 	}
 
-	deps := w.GetDependencies()
-
 	connectionHealth := "no connection"
 
-	if deps.IsConnected() {
+	if w.deps.IsConnected() {
 		connectionHealth = "healthy"
 	}
 
 	observed := snapshot.ExamplechildObservedState{
-		ID:               w.identity.ID,
+		ID:               w.Identity().ID,
 		CollectedAt:      time.Now(),
 		ConnectionHealth: connectionHealth,
 	}
 
-	if fm := deps.GetFrameworkState(); fm != nil {
+	if fm := w.deps.GetFrameworkState(); fm != nil {
 		observed.Metrics.Framework = *fm
 	}
 
-	observed.LastActionResults = deps.GetActionHistory()
+	observed.LastActionResults = w.deps.GetActionHistory()
 
 	return observed, nil
 }
