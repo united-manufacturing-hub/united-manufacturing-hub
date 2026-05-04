@@ -40,7 +40,7 @@ type ExampleslowDesiredState struct {
 
 	config.BaseDesiredState
 
-	DelaySeconds int
+	DelaySeconds int `json:"delay_seconds"`
 }
 
 // ShouldBeRunning returns true if not shutting down and parent wants children to run.
