@@ -85,12 +85,23 @@ func (s *DefaultService) ForceCleanup(ctx context.Context, artifacts *ServiceArt
 		}
 	}
 
-	// Verify cleanup completed
-	serviceExists, _ := fsService.PathExists(ctx, artifacts.ServiceDir)
-	logExists, _ := fsService.PathExists(ctx, artifacts.LogDir)
+	// Verify cleanup completed. Propagate PathExists errors rather than
+	// treating them as "not exists" — a false negative would cause ForceCleanup
+	// to return nil while directories may still exist on disk.
+	serviceExists, err := fsService.PathExists(ctx, artifacts.ServiceDir)
+	if err != nil {
+		return fmt.Errorf("failed to verify service cleanup: %w", err)
+	}
+	logExists, err := fsService.PathExists(ctx, artifacts.LogDir)
+	if err != nil {
+		return fmt.Errorf("failed to verify log cleanup: %w", err)
+	}
 	repoExists := false
 	if artifacts.RepositoryDir != "" {
-		repoExists, _ = fsService.PathExists(ctx, artifacts.RepositoryDir)
+		repoExists, err = fsService.PathExists(ctx, artifacts.RepositoryDir)
+		if err != nil {
+			return fmt.Errorf("failed to verify repository cleanup: %w", err)
+		}
 	}
 
 	if serviceExists || logExists || repoExists {
