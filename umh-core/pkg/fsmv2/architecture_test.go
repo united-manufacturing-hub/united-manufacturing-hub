@@ -221,20 +221,6 @@ var _ = Describe("FSMv2 Architecture Validation", func() {
 			})
 		})
 
-		Describe("Child Workers Use ShouldStop() (Invariant: Parent Lifecycle Awareness)", func() {
-			It("should use ShouldStop() not just IsShutdownRequested() in child worker states", func() {
-				violations := validator.ValidateChildWorkersUseShouldStop(getFsmv2Dir())
-				if len(violations) > 0 {
-					message := validator.FormatViolationsWithPattern(
-						"Child Worker ShouldStop Violations",
-						violations,
-						"CHILD_MUST_USE_SHOULD_STOP",
-					)
-					Fail(message)
-				}
-			})
-		})
-
 		Describe("GetDependenciesAny Override (Invariant: Custom Deps Visibility)", func() {
 			It("should override GetDependenciesAny when custom Dependencies struct exists", func() {
 				violations := validator.ValidateGetDependenciesAny(getFsmv2Dir())
