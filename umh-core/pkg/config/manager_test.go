@@ -1690,6 +1690,23 @@ var _ = Describe("ConfigValidationIssue surface", func() {
 		Expect(after[0].Field).To(Equal("marker"))
 	})
 
+	It("clears stale validation issues if the YAML becomes unparseable (P-stale)", func() {
+		m, mockFS := newTestManagerWithYAML("agent:\n  releaseChannel: nigtly\n")
+		defer m.Stop()
+		_, _, err := m.readAndParseConfig(ctx)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(m.GetConfigValidationIssues()).To(HaveLen(1))
+
+		// User now breaks the YAML.
+		mockFS.WithReadFileFunc(func(ctx context.Context, path string) ([]byte, error) {
+			return []byte("agent: { releaseChannel: \n  unbalanced["), nil
+		})
+		_, _, err = m.readAndParseConfig(ctx)
+		Expect(err).To(HaveOccurred())
+		// Stale issue from previous parse must NOT linger.
+		Expect(m.GetConfigValidationIssues()).To(BeEmpty())
+	})
+
 	It("WriteYAMLConfigFromString clears stale issues when user fixes the typo via MC (P7-write-clear)", func() {
 		m, mockFS := newTestManagerWithYAML("agent:\n  releaseChannel: nigtly\n")
 		defer m.Stop()

@@ -466,6 +466,10 @@ func (m *FileConfigManager) backgroundRefresh(modTime time.Time) {
 // readAndParseConfig contains the shared logic for reading and parsing the config file
 // Returns both the parsed config and the raw data to allow atomic cache updates.
 func (m *FileConfigManager) readAndParseConfig(ctx context.Context) (FullConfig, string, error) {
+	// Clear stale validation issues at the start. Each parse rebuilds the list;
+	// if the parse fails or the file is empty, no issue is recorded for this read.
+	m.swapValidationIssues(nil)
+
 	// Read the file
 	// Allow half of the timeout for the read operation
 	readFileCtx, cancel := context.WithTimeout(ctx, constants.ConfigGetConfigTimeout/2)
