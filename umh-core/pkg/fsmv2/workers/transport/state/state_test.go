@@ -25,6 +25,7 @@ import (
 	httpTransport "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport/http"
 	transport_pkg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/state"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/types"
 )
 
 // makeSnapshot creates a test snapshot with the given parameters.
@@ -44,10 +45,12 @@ func makeSnapshotWithBackoff(shutdownRequested bool, desiredState string, jwtTok
 		},
 		Config: transport_pkg.TransportConfig{
 			BaseUserSpec: config.BaseUserSpec{State: desiredState},
-			RelayURL:     "https://relay.test.com",
-			InstanceUUID: "test-uuid",
-			AuthToken:    "test-auth-token",
-			Timeout:      30 * time.Second,
+			RelayConfig: types.RelayConfig{
+				RelayURL:     "https://relay.test.com",
+				InstanceUUID: "test-uuid",
+				AuthToken:    "test-auth-token",
+			},
+			Timeout: 30 * time.Second,
 		},
 	}
 
@@ -86,10 +89,12 @@ func makeAuthFailedSnapshot(authToken, relayURL, instanceUUID string, shutdownRe
 		},
 		Config: transport_pkg.TransportConfig{
 			BaseUserSpec: config.BaseUserSpec{State: config.DesiredStateRunning},
-			InstanceUUID: instanceUUID,
-			AuthToken:    authToken,
-			RelayURL:     relayURL,
-			Timeout:      30 * time.Second,
+			RelayConfig: types.RelayConfig{
+				InstanceUUID: instanceUUID,
+				AuthToken:    authToken,
+				RelayURL:     relayURL,
+			},
+			Timeout: 30 * time.Second,
 		},
 	}
 	observed := fsmv2.Observation[transport_pkg.TransportStatus]{
@@ -118,10 +123,12 @@ func makeAuthFailedStartingSnapshot(
 		BaseDesiredState: config.BaseDesiredState{State: config.DesiredStateRunning},
 		Config: transport_pkg.TransportConfig{
 			BaseUserSpec: config.BaseUserSpec{State: config.DesiredStateRunning},
-			InstanceUUID: desiredUUID,
-			AuthToken:    desiredToken,
-			RelayURL:     desiredRelay,
-			Timeout:      30 * time.Second,
+			RelayConfig: types.RelayConfig{
+				InstanceUUID: desiredUUID,
+				AuthToken:    desiredToken,
+				RelayURL:     desiredRelay,
+			},
+			Timeout: 30 * time.Second,
 		},
 	}
 	observed := fsmv2.Observation[transport_pkg.TransportStatus]{
@@ -345,10 +352,12 @@ var _ = Describe("TransportWorker States", func() {
 				BaseDesiredState: config.BaseDesiredState{State: config.DesiredStateRunning},
 				Config: transport_pkg.TransportConfig{
 					BaseUserSpec: config.BaseUserSpec{State: config.DesiredStateRunning},
-					InstanceUUID: "test-uuid",
-					AuthToken:    "test-auth-token",
-					RelayURL:     "https://relay.test.com",
-					Timeout:      30 * time.Second,
+					RelayConfig: types.RelayConfig{
+						InstanceUUID: "test-uuid",
+						AuthToken:    "test-auth-token",
+						RelayURL:     "https://relay.test.com",
+					},
+					Timeout: 30 * time.Second,
 				},
 			}
 			observed := fsmv2.Observation[transport_pkg.TransportStatus]{
@@ -669,10 +678,12 @@ var _ = Describe("TransportWorker States", func() {
 				BaseDesiredState: config.BaseDesiredState{State: config.DesiredStateRunning},
 				Config: transport_pkg.TransportConfig{
 					BaseUserSpec: config.BaseUserSpec{State: config.DesiredStateRunning},
-					InstanceUUID: "test-uuid",
-					AuthToken:    "new-auth-token",
-					RelayURL:     "https://relay.test.com",
-					Timeout:      30 * time.Second,
+					RelayConfig: types.RelayConfig{
+						InstanceUUID: "test-uuid",
+						AuthToken:    "new-auth-token",
+						RelayURL:     "https://relay.test.com",
+					},
+					Timeout: 30 * time.Second,
 				},
 			}
 			observed := fsmv2.Observation[transport_pkg.TransportStatus]{
@@ -700,10 +711,12 @@ var _ = Describe("TransportWorker States", func() {
 				BaseDesiredState: config.BaseDesiredState{State: config.DesiredStateRunning},
 				Config: transport_pkg.TransportConfig{
 					BaseUserSpec: config.BaseUserSpec{State: config.DesiredStateRunning},
-					InstanceUUID: "test-uuid",
-					AuthToken:    "test-auth-token",
-					RelayURL:     "https://new-relay.test.com",
-					Timeout:      30 * time.Second,
+					RelayConfig: types.RelayConfig{
+						InstanceUUID: "test-uuid",
+						AuthToken:    "test-auth-token",
+						RelayURL:     "https://new-relay.test.com",
+					},
+					Timeout: 30 * time.Second,
 				},
 			}
 			observed := fsmv2.Observation[transport_pkg.TransportStatus]{
@@ -730,10 +743,12 @@ var _ = Describe("TransportWorker States", func() {
 				BaseDesiredState: config.BaseDesiredState{State: config.DesiredStateRunning},
 				Config: transport_pkg.TransportConfig{
 					BaseUserSpec: config.BaseUserSpec{State: config.DesiredStateRunning},
-					InstanceUUID: "new-uuid",
-					AuthToken:    "test-auth-token",
-					RelayURL:     "https://relay.test.com",
-					Timeout:      30 * time.Second,
+					RelayConfig: types.RelayConfig{
+						InstanceUUID: "new-uuid",
+						AuthToken:    "test-auth-token",
+						RelayURL:     "https://relay.test.com",
+					},
+					Timeout: 30 * time.Second,
 				},
 			}
 			observed := fsmv2.Observation[transport_pkg.TransportStatus]{
@@ -760,9 +775,11 @@ var _ = Describe("TransportWorker States", func() {
 				BaseDesiredState: config.BaseDesiredState{State: config.DesiredStateRunning},
 				Config: transport_pkg.TransportConfig{
 					BaseUserSpec: config.BaseUserSpec{State: config.DesiredStateRunning},
-					InstanceUUID: "test-uuid",
-					AuthToken:    "test-auth-token",
-					RelayURL:     "https://relay.test.com",
+					RelayConfig: types.RelayConfig{
+						InstanceUUID: "test-uuid",
+						AuthToken:    "test-auth-token",
+						RelayURL:     "https://relay.test.com",
+					},
 				},
 			}
 			observed := fsmv2.Observation[transport_pkg.TransportStatus]{

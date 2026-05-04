@@ -19,6 +19,7 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	httpTransport "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport/http"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/types"
 )
 
 // TransportConfig holds the user-provided configuration for the transport worker.
@@ -26,10 +27,8 @@ import (
 // to extract the desired state from the "state" YAML field.
 type TransportConfig struct {
 	config.BaseUserSpec `yaml:",inline"`
-	RelayURL            string        `json:"relayURL"     yaml:"relayURL"`
-	InstanceUUID        string        `json:"instanceUUID" yaml:"instanceUUID"`
-	AuthToken           string        `json:"authToken"    yaml:"authToken"`
-	Timeout             time.Duration `json:"timeout"      yaml:"timeout"`
+	types.RelayConfig   `yaml:",inline"`
+	Timeout             time.Duration `json:"timeout" yaml:"timeout"`
 }
 
 // FailedAuthConfig captures the auth configuration that was used in the last

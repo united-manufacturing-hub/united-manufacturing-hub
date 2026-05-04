@@ -22,6 +22,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/types"
 )
 
 // Test suite is registered in channel_provider_test.go to avoid duplicate RunSpecs
@@ -30,21 +31,21 @@ var _ = Describe("TransportConfig", func() {
 	Describe("Struct fields", func() {
 		It("should have RelayURL field", func() {
 			cfg := transport.TransportConfig{
-				RelayURL: "https://relay.umh.app",
+				RelayConfig: types.RelayConfig{RelayURL: "https://relay.umh.app"},
 			}
 			Expect(cfg.RelayURL).To(Equal("https://relay.umh.app"))
 		})
 
 		It("should have InstanceUUID field", func() {
 			cfg := transport.TransportConfig{
-				InstanceUUID: "test-uuid-12345",
+				RelayConfig: types.RelayConfig{InstanceUUID: "test-uuid-12345"},
 			}
 			Expect(cfg.InstanceUUID).To(Equal("test-uuid-12345"))
 		})
 
 		It("should have AuthToken field", func() {
 			cfg := transport.TransportConfig{
-				AuthToken: "secret-auth-token",
+				RelayConfig: types.RelayConfig{AuthToken: "secret-auth-token"},
 			}
 			Expect(cfg.AuthToken).To(Equal("secret-auth-token"))
 		})

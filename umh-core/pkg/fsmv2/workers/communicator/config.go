@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/types"
 )
 
 // CommunicatorConfig holds the user-provided configuration for the communicator worker.
@@ -25,11 +26,8 @@ import (
 // to extract the desired state from the "state" YAML field.
 type CommunicatorConfig struct {
 	config.BaseUserSpec `yaml:",inline"`
-
-	RelayURL     string        `json:"relayURL"     yaml:"relayURL"`
-	InstanceUUID string        `json:"instanceUUID" yaml:"instanceUUID"`
-	AuthToken    string        `json:"authToken"    yaml:"authToken"`
-	Timeout      time.Duration `json:"timeout"      yaml:"timeout"`
+	types.RelayConfig   `yaml:",inline"`
+	Timeout             time.Duration `json:"timeout" yaml:"timeout"`
 }
 
 // CommunicatorStatus holds the runtime observation data for the communicator worker.
