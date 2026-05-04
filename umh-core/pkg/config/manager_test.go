@@ -1835,6 +1835,25 @@ var _ = Describe("ConfigValidationIssue surface", func() {
 		<-done
 	})
 
+	DescribeTable(
+		"readAndParseConfig empty-config safety net (P-empty)",
+		// Each input decodes to a zero FullConfig{}. With applyDefaults runs
+		// before the DeepEqual check, the safety net silently went dead and the
+		// control loop would tear down running services on the next tick.
+		// Verifies the safety net is reachable for each canonical empty form.
+		func(yamlInput string) {
+			m, _ := newTestManagerWithYAML(yamlInput)
+			defer m.Stop()
+
+			_, _, err := m.readAndParseConfig(ctx)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("config file is empty"))
+		},
+		Entry("empty document marker", "---\n"),
+		Entry("empty mapping", "{}\n"),
+		Entry("empty agent stanza", "agent: {}\n"),
+	)
+
 	It("FileConfigManagerWithBackoff delegates GetConfigValidationIssues (P10)", func() {
 		m, _ := newTestManagerWithYAML("agent:\n  releaseChannel: nigtly\n")
 		defer m.Stop()

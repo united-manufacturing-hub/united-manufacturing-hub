@@ -490,7 +490,14 @@ func (m *FileConfigManager) readAndParseConfig(ctx context.Context) (FullConfig,
 		return FullConfig{}, "", ctx.Err()
 	}
 
-	config, err := ParseConfig(data, ctx, false, true)
+	// Decode without applying defaults so the empty-config safety net below can
+	// distinguish a genuinely empty file (e.g. truncated by docker cp during a
+	// write window, partial deploy script, manual mis-edit) from a file that
+	// merely omits optional fields. Defaulting Location/ReleaseChannel here
+	// would make every empty file deep-equal to a populated FullConfig and
+	// silently disable the safety net (the agent then reconciles an empty
+	// desired state and tears down running services).
+	config, err := ParseConfig(data, ctx, false, false)
 	if err != nil {
 		return FullConfig{}, "", fmt.Errorf("failed to parse config file: %w", err)
 	}
@@ -507,6 +514,15 @@ func (m *FileConfigManager) readAndParseConfig(ctx context.Context) (FullConfig,
 		return FullConfig{}, "", fmt.Errorf("config file is empty: %s", m.configPath)
 	}
 
+	// Apply the same defaults ParseConfig(applyDefaults=true) would, but only
+	// after the empty-config check so the safety net stays armed.
+	if config.Agent.Location == nil {
+		config.Agent.Location = make(map[int]string)
+	}
+	if strings.TrimSpace(string(config.Agent.ReleaseChannel)) == "" {
+		config.Agent.ReleaseChannel = ReleaseChannelStable
+	}
+
 	m.swapValidationIssues(m.validateConfig(&config))
 
 	// Return both config and raw data for atomic cache update by caller
@@ -517,9 +533,10 @@ func (m *FileConfigManager) readAndParseConfig(ctx context.Context) (FullConfig,
 // a list of validation issues. Side effect: coerces invalid values to safe
 // defaults on the passed-in config (e.g. an unrecognized releaseChannel resets
 // to "stable" so downstream code never branches on the typo). Empty values are
-// defaulted to "stable" inside ParseConfig (applyDefaults=true) and never reach
-// this branch — only non-empty typos do. We do NOT call SentryWarn here: see
-// doc.go for the Sentry-vs-validation policy.
+// defaulted to "stable" by callers before reaching this branch (readAndParseConfig
+// applies defaults manually after the empty-config safety net; ParseConfig with
+// applyDefaults=true does the same for write callers) — only non-empty typos do.
+// We do NOT call SentryWarn here: see doc.go for the Sentry-vs-validation policy.
 func (m *FileConfigManager) validateConfig(config *FullConfig) []ConfigValidationIssue {
 	var issues []ConfigValidationIssue
 	if config.Agent.ReleaseChannel != ReleaseChannelNightly &&
