@@ -175,7 +175,10 @@ type FileConfigManager struct {
 	backupCount atomic.Uint64
 
 	// ---------- in-memory cache (read-only after RLock) ----------
-	cacheMu sync.RWMutex // guards the two fields below
+	// cacheMu guards cacheConfig, cacheRawConfig, cacheError, and cacheModTime.
+	// All fast-path reads in GetConfig hold this mutex; readAndParseConfig
+	// updates it after a successful parse.
+	cacheMu sync.RWMutex
 
 	// validationIssuesMu guards validationIssues.
 	validationIssuesMu sync.RWMutex
