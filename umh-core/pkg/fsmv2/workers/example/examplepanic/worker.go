@@ -25,16 +25,14 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplepanic/snapshot"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplepanic/state"
 )
 
 type ExamplepanicWorker struct {
-	*helpers.BaseWorker[*ExamplepanicDependencies]
-	logger   deps.FSMLogger
-	identity deps.Identity
+	deps *ExamplepanicDependencies
+	fsmv2.WorkerBase[ExamplepanicUserSpec, snapshot.ExamplepanicObservedState, *ExamplepanicDependencies]
 }
 
 func NewExamplepanicWorker(
@@ -60,35 +58,32 @@ func NewExamplepanicWorker(
 		identity.WorkerType = workerType
 	}
 
-	dependencies := NewExamplepanicDependencies(connectionPool, logger, stateReader, identity)
+	w := &ExamplepanicWorker{}
+	w.InitBase(identity, logger, stateReader)
+	w.deps = NewExamplepanicDependencies(connectionPool, logger, stateReader, identity)
+	w.BindDeps(w.deps)
 
-	return &ExamplepanicWorker{
-		BaseWorker: helpers.NewBaseWorker(dependencies),
-		identity:   identity,
-		logger:     logger,
-	}, nil
+	return w, nil
 }
 
 func (w *ExamplepanicWorker) CollectObservedState(ctx context.Context, _ fsmv2.DesiredState) (fsmv2.ObservedState, error) {
-	deps := w.GetDependencies()
-
 	connectionHealth := "no connection"
 
-	if deps.IsConnected() {
+	if w.deps.IsConnected() {
 		connectionHealth = "healthy"
 	}
 
 	observed := snapshot.ExamplepanicObservedState{
-		ID:               w.identity.ID,
+		ID:               w.Identity().ID,
 		CollectedAt:      time.Now(),
 		ConnectionHealth: connectionHealth,
 	}
 
-	if fm := deps.GetFrameworkState(); fm != nil {
+	if fm := w.deps.GetFrameworkState(); fm != nil {
 		observed.Metrics.Framework = *fm
 	}
 
-	observed.LastActionResults = deps.GetActionHistory()
+	observed.LastActionResults = w.deps.GetActionHistory()
 
 	return observed, nil
 }
@@ -115,8 +110,7 @@ func (w *ExamplepanicWorker) updateDependenciesFromSpec(spec interface{}) {
 		return
 	}
 
-	deps := w.GetDependencies()
-	deps.SetShouldPanic(parsed.ShouldPanic)
+	w.deps.SetShouldPanic(parsed.ShouldPanic)
 }
 
 func (w *ExamplepanicWorker) GetInitialState() fsmv2.State[any, any] {

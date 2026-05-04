@@ -372,7 +372,7 @@ type Worker interface {
 }
 
 // DependencyProvider exposes worker dependencies for action execution.
-// Workers that embed helpers.BaseWorker automatically satisfy this interface.
+// Workers that embed WorkerBase satisfy this interface via BindDeps.
 type DependencyProvider interface {
 	// GetDependenciesAny returns the worker's dependencies as any.
 	GetDependenciesAny() any
