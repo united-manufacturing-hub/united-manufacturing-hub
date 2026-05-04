@@ -53,6 +53,10 @@ type SupervisorInterface interface {
 	StartAsChild(ctx context.Context)
 	Shutdown()
 	RequestShutdown(ctx context.Context, reason string) error
+	// ClearShutdownRequest clears IsShutdownRequested on all workers in this supervisor.
+	// Sibling of RequestShutdown. Used by the CHANGE-19 reducer to flip a
+	// previously-disabled child back to enabled state.
+	ClearShutdownRequest(ctx context.Context) error
 	ListWorkers() []string
 	tick(ctx context.Context) error
 	updateUserSpec(spec config.UserSpec)
@@ -144,16 +148,6 @@ type WorkerContext[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState] s
 	stateTransitions map[string]int64         // state_name → total times entered
 	stateDurations   map[string]time.Duration // state_name → cumulative time spent
 
-	// lastRenderedChildren stores the parent's children-set emitted by the
-	// most recent state.Next call (NextResult.Children). The supervisor's
-	// reconciliation discriminator (P2.4) reads this in tick() to decide
-	// whether to use the authoritative state-machine emission (non-nil) or
-	// fall back to the legacy DDS-derived path (nil sentinel). See
-	// fsmv2/api.go NextResult.Children godoc lines 126-153 for the full
-	// contract; the discriminator MUST treat nil and []ChildSpec{} as
-	// distinct cases. Protected by mu (written in tickWorker, read in tick).
-	lastRenderedChildren []config.ChildSpec
-
 	// Structs
 	identity deps.Identity
 
@@ -163,6 +157,16 @@ type WorkerContext[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState] s
 	// Used by parent supervisors via GetObservedStateName() for health checks.
 	lastObservedStateName string
 	currentStateReason    string // Human-readable reason for current state (from NextResult.Reason)
+
+	// lastRenderedChildren stores the parent's children-set emitted by the
+	// most recent state.Next call (NextResult.Children). The supervisor's
+	// reconciliation discriminator (P2.4) reads this in tick() to decide
+	// whether to use the authoritative state-machine emission (non-nil) or
+	// fall back to the legacy DDS-derived path (nil sentinel). See
+	// fsmv2/api.go NextResult.Children godoc lines 126-153 for the full
+	// contract; the discriminator MUST treat nil and []ChildSpec{} as
+	// distinct cases. Protected by mu (written in tickWorker, read in tick).
+	lastRenderedChildren []config.ChildSpec
 
 	// int64 fields (8 bytes each)
 	totalTransitions   int64 // Sum of all stateTransitions values

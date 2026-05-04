@@ -1662,6 +1662,29 @@ func (s *Supervisor[TObserved, TDesired]) reconcileChildren(specs []config.Child
 		}
 	}
 
+	// CHANGE-19 reducer: translate Enabled → IsShutdownRequested for resident children.
+	// This runs before Phase 1 (pendingRemoval) so Enabled=false children are NOT
+	// despawned — they stay in s.children but have IsShutdownRequested=true.
+	reducerCtx := context.Background()
+	for _, spec := range specs {
+		child, exists := s.children[spec.Name]
+		if !exists {
+			continue
+		}
+		var reducerErr error
+		if !spec.Enabled {
+			reducerErr = child.RequestShutdown(reducerCtx, "reducer: enabled=false")
+		} else {
+			reducerErr = child.ClearShutdownRequest(reducerCtx)
+		}
+		if reducerErr != nil {
+			s.logger.SentryWarn(deps.FeatureFSMv2, s.GetHierarchyPathUnlocked(), "reducer_set_enabled_failed",
+				deps.Err(reducerErr),
+				deps.String("child_name", spec.Name),
+				deps.Bool("enabled", spec.Enabled))
+		}
+	}
+
 	// Phase 1: Request shutdown for children not in specs (mark as pendingRemoval)
 	for name := range s.children {
 		if !specNames[name] && !s.pendingRemoval[name] {

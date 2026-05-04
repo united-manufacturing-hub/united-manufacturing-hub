@@ -640,6 +640,28 @@ func (s *Supervisor[TObserved, TDesired]) handleWorkerRestart(ctx context.Contex
 	return nil
 }
 
+// ClearShutdownRequest clears IsShutdownRequested on all workers in this supervisor.
+// Sibling of RequestShutdown. Used by the CHANGE-19 reducer to flip a
+// previously-disabled child back to enabled state.
+func (s *Supervisor[TObserved, TDesired]) ClearShutdownRequest(ctx context.Context) error {
+	s.mu.RLock()
+
+	workerIDs := make([]string, 0, len(s.workers))
+	for id := range s.workers {
+		workerIDs = append(workerIDs, id)
+	}
+
+	s.mu.RUnlock()
+
+	for _, id := range workerIDs {
+		if err := s.clearShutdownRequested(ctx, id); err != nil {
+			return fmt.Errorf("clear shutdown request for %s: %w", id, err)
+		}
+	}
+
+	return nil
+}
+
 // clearShutdownRequested clears the ShutdownRequested flag in storage for restart.
 func (s *Supervisor[TObserved, TDesired]) clearShutdownRequested(ctx context.Context, workerID string) error {
 	// Load current desired state
