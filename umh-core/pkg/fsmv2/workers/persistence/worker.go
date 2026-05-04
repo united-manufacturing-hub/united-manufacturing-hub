@@ -53,7 +53,7 @@ var _ fsmv2.Worker = (*PersistenceWorker)(nil)
 // PersistenceWorker implements the FSM Worker interface for the edge persistence
 // layer. It drives compaction and maintenance against the triangular store.
 type PersistenceWorker struct {
-	fsmv2.WorkerBase[PersistenceConfig, PersistenceStatus, register.NoDeps]
+	fsmv2.WorkerBase[PersistenceConfig, PersistenceStatus, *PersistenceDependencies]
 	deps *PersistenceDependencies
 }
 
@@ -98,6 +98,7 @@ func NewPersistenceWorker(
 
 	w := &PersistenceWorker{deps: dependencies}
 	w.InitBase(identity, logger, stateReader)
+	w.BindDeps(w.deps)
 
 	// Apply persistence-specific defaults after config parsing. Zero values in
 	// the parsed config (no user-supplied value) are replaced with package
@@ -121,13 +122,6 @@ func NewPersistenceWorker(
 // GetDependencies returns the typed persistence dependencies.
 // Used by tests and by external callers that need to observe worker state.
 func (w *PersistenceWorker) GetDependencies() *PersistenceDependencies {
-	return w.deps
-}
-
-// GetDependenciesAny returns the custom PersistenceDependencies.
-// Overrides WorkerBase's default which returns *BaseDependencies.
-// Required by architecture test: custom deps must be visible to the supervisor.
-func (w *PersistenceWorker) GetDependenciesAny() any {
 	return w.deps
 }
 

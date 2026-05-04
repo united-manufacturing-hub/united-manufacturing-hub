@@ -328,3 +328,21 @@ var _ = Describe("PersistenceWorker", func() {
 		})
 	})
 })
+
+var _ = Describe("PersistenceWorker GetDependenciesAny", func() {
+	It("returns *PersistenceDependencies", func() {
+		logger := deps.NewNopFSMLogger()
+		store := &mockTriangularStore{}
+		seedDeps := persistence.NewStoreOnlyDependencies(store)
+		identity := deps.Identity{ID: "test-id", Name: "test-persistence"}
+
+		worker, err := persistence.NewPersistenceWorker(identity, logger, nil, seedDeps)
+		Expect(err).NotTo(HaveOccurred())
+
+		dp, ok := worker.(fsmv2.DependencyProvider)
+		Expect(ok).To(BeTrue(), "worker must implement DependencyProvider")
+		got := dp.GetDependenciesAny()
+		_, ok = got.(*persistence.PersistenceDependencies)
+		Expect(ok).To(BeTrue(), "expected *PersistenceDependencies, got %T", got)
+	})
+})
