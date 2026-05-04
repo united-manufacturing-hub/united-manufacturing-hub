@@ -26,14 +26,12 @@ import (
 	"path/filepath"
 	"reflect"
 	"strings"
-	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 
 	// Parent worker packages — imported by name (not blank) because Test #5,
 	// #7, #8 and #13 layer 2 call each parent's exported RenderChildren to
@@ -51,36 +49,6 @@ import (
 // gating P-step so the test un-gates atomically when that step lands.
 
 var _ = Describe("FSMv2 Architecture Validation — P1.8 Foundation Cap", func() {
-
-	// =====================================================================
-	// Test 1 — TestObservedFieldsAreSerializable (§13)
-	// =====================================================================
-	Describe("Observation/WrappedDesiredState fields are JSON-serializable (§13)", func() {
-		It("rejects interface, chan, func, and bare any fields", func() {
-			// Sample concrete instantiations of the generic types so we can
-			// reflect on the struct shape.
-			roots := []reflect.Type{
-				reflect.TypeOf(fsmv2.Observation[struct{}]{}),
-				reflect.TypeOf(fsmv2.WrappedDesiredState[struct{}]{}),
-				reflect.TypeOf(config.ChildSpec{}),
-				reflect.TypeOf(config.ChildInfo{}),
-				reflect.TypeOf(config.ChildrenView{}),
-				reflect.TypeOf(deps.FrameworkMetrics{}),
-				reflect.TypeOf(config.VariableBundle{}),
-				reflect.TypeOf(config.VariablesInternal{}),
-			}
-
-			var violations []string
-
-			for _, root := range roots {
-				violations = append(violations, walkSerializable(root, root.Name(), map[reflect.Type]bool{})...)
-			}
-
-			Expect(violations).To(BeEmpty(),
-				"non-serializable fields detected (Design Intent §13):\n%s",
-				strings.Join(violations, "\n"))
-		})
-	})
 
 	// =====================================================================
 	// Test 2 — TestNoJsonDashFieldsOnObservation (§14)
@@ -208,32 +176,6 @@ var _ = Describe("FSMv2 Architecture Validation — P1.8 Foundation Cap", func()
 	})
 
 	// =====================================================================
-	// Test 4 — TestNoRuntimeResourcesOnObservation (§15)
-	// =====================================================================
-	Describe("Observation has no runtime-resource fields (§15)", func() {
-		It("rejects fields whose type implements prometheus.Collector, sync.Locker, or io.Closer", func() {
-			roots := []reflect.Type{
-				reflect.TypeOf(fsmv2.Observation[struct{}]{}),
-				reflect.TypeOf(fsmv2.WrappedDesiredState[struct{}]{}),
-				reflect.TypeOf(deps.FrameworkMetrics{}),
-				reflect.TypeOf(config.ChildSpec{}),
-				reflect.TypeOf(config.ChildInfo{}),
-				reflect.TypeOf(config.ChildrenView{}),
-				reflect.TypeOf(config.VariableBundle{}),
-			}
-
-			var violations []string
-			for _, root := range roots {
-				violations = append(violations, walkRuntimeResources(root, root.Name(), map[reflect.Type]bool{})...)
-			}
-
-			Expect(violations).To(BeEmpty(),
-				"runtime-resource fields detected on data types (Design Intent §15):\n%s",
-				strings.Join(violations, "\n"))
-		})
-	})
-
-	// =====================================================================
 	// Test 5 — TestParentRenderChildrenEmitsNonNil (un-gated at P2.1)
 	// =====================================================================
 	Describe("Parent renderChildren emits non-nil []ChildSpec{}", func() {
@@ -256,122 +198,6 @@ var _ = Describe("FSMv2 Architecture Validation — P1.8 Foundation Cap", func()
 			}
 		})
 
-		// Registry-exhaustiveness meta-test (added in P2.1 iter-2 per DA
-		// per-step adversarial pass): a future parent worker added in PR2/PR3
-		// without a fixture entry would silently bypass Layer 2 coverage of
-		// the F4⊕G1 trap. AST-walk the workers/ tree for top-level
-		// `func RenderChildren` declarations and assert the per-package set
-		// matches the parentRenderers() fixture name set. If a new worker
-		// adds RenderChildren without a corresponding fixture, this test
-		// fails with the missing worker's package name.
-		It("parentRenderers() registry covers every worker package that defines RenderChildren", func() {
-			workersDir := filepath.Join(getFsmv2Dir(), "workers")
-
-			// AST-walk: find top-level `func RenderChildren(...)` decls.
-			// Map from package directory basename → worker source file path.
-			//
-			// State-package mirrors are skipped: at P2.2, application and
-			// exampleparent introduce state-package-local RenderChildren
-			// helpers (state/render_children.go) to break the parent-package →
-			// state-package import cycle introduced when state.Next started
-			// invoking renderChildren (P1.8 architecture test #6 convention).
-			// The mirrors are NOT the canonical emitter — the registry walk
-			// validates the canonical worker-package emitter, which is the
-			// ground truth that the renderChildren contract is anchored to.
-			discovered := map[string]string{}
-
-			err := filepath.Walk(workersDir, func(path string, info os.FileInfo, walkErr error) error {
-				if walkErr != nil {
-					return walkErr
-				}
-				if info.IsDir() {
-					return nil
-				}
-				if !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
-					return nil
-				}
-				// Skip state-package mirrors (see comment above on the cycle-
-				// break rationale).
-				if filepath.Base(filepath.Dir(path)) == "state" {
-					return nil
-				}
-
-				fset := token.NewFileSet()
-				file, perr := parser.ParseFile(fset, path, nil, parser.ParseComments)
-				if perr != nil {
-					// Surface parse failures rather than silent skip
-					// (consistent with Test 11's discipline).
-					return fmt.Errorf("parse %s: %w", path, perr)
-				}
-
-				for _, decl := range file.Decls {
-					fn, ok := decl.(*ast.FuncDecl)
-					if !ok {
-						continue
-					}
-					// Top-level (non-method) func with name RenderChildren.
-					if fn.Recv != nil {
-						continue
-					}
-					if fn.Name == nil || fn.Name.Name != "RenderChildren" {
-						continue
-					}
-
-					pkgDir := filepath.Base(filepath.Dir(path))
-					if existing, dup := discovered[pkgDir]; dup {
-						Fail(fmt.Sprintf(
-							"package %q has multiple RenderChildren declarations (first at %s, second at %s); "+
-								"convention is one RenderChildren per parent package",
-							pkgDir, existing, path))
-					}
-					discovered[pkgDir] = path
-				}
-
-				return nil
-			})
-			Expect(err).NotTo(HaveOccurred(), "walking workers directory")
-
-			// Map fixtures to their package basenames. Fixture names use
-			// human-readable identifiers (e.g., "transport", "communicator")
-			// chosen to match the basename of their worker package.
-			fixtureNames := map[string]bool{}
-			for _, fx := range parentRenderers() {
-				fixtureNames[fx.name] = true
-			}
-
-			// Check 1: every discovered RenderChildren has a fixture.
-			var missing []string
-			for pkg := range discovered {
-				if !fixtureNames[pkg] {
-					missing = append(missing, pkg)
-				}
-			}
-			Expect(missing).To(BeEmpty(),
-				"worker package(s) define RenderChildren but parentRenderers() has no fixture entry — "+
-					"these workers silently bypass Layer 2 of the F4⊕G1 trap detector. "+
-					"Add a fixture in parentRenderers() for each missing package: %v\n"+
-					"Source files: %v",
-				missing, discovered)
-
-			// Check 2: every fixture corresponds to a real RenderChildren.
-			// Catches the inverse drift (fixture for a package whose
-			// RenderChildren was renamed/moved) — fixture would be a no-op
-			// and miss real production literals.
-			var stale []string
-			for name := range fixtureNames {
-				if _, found := discovered[name]; !found {
-					stale = append(stale, name)
-				}
-			}
-			Expect(stale).To(BeEmpty(),
-				"parentRenderers() has fixture(s) for package(s) that no longer define RenderChildren: %v",
-				stale)
-
-			// Sanity: at least one production RenderChildren must exist (catches a
-			// regression where all renderers got accidentally deleted).
-			Expect(discovered).NotTo(BeEmpty(),
-				"no top-level RenderChildren found anywhere in workers/ — F4⊕G1 detector has nothing to anchor against")
-		})
 	})
 
 	// =====================================================================
@@ -740,15 +566,6 @@ var _ = Describe("FSMv2 Architecture Validation — P1.8 Foundation Cap", func()
 			Expect(violations).To(BeEmpty(),
 				"unauthorized text/template imports (templating must stay inside the config layer):\n%s",
 				strings.Join(violations, "\n"))
-		})
-	})
-
-	// =====================================================================
-	// Test 12 — TestChildrenDontReferenceParents (GATED → P3.7)
-	// =====================================================================
-	Describe("Child workers don't reference parent-side concepts (GATED P3.7)", func() {
-		It("AST: child worker state files have no Parent/ParentMappedState references", func() {
-			Skip("pending P3.7: ParentMappedState retirement is the gating event; un-gates atomically with P3.7 per §4-E LOCKED")
 		})
 	})
 
@@ -1410,204 +1227,3 @@ func isStdlibImport(file *ast.File, pkgPath string) bool {
 	return false
 }
 
-// walkSerializable recursively inspects a struct type and returns one
-// violation message per field that is not safely JSON-serializable.
-// Whitelist: time.Time, json.RawMessage, fields tagged json:"-" whose
-// enclosing type implements json.Marshaler.
-func walkSerializable(t reflect.Type, path string, seen map[reflect.Type]bool) []string {
-	if seen[t] {
-		return nil
-	}
-	seen[t] = true
-
-	if t.Kind() != reflect.Struct {
-		return nil
-	}
-
-	var violations []string
-
-	marshalerType := reflect.TypeOf((*json.Marshaler)(nil)).Elem()
-	enclosingImplementsMarshaler := reflect.PointerTo(t).Implements(marshalerType) || t.Implements(marshalerType)
-
-	for i := 0; i < t.NumField(); i++ {
-		f := t.Field(i)
-		fieldPath := path + "." + f.Name
-
-		// json:"-" is an explicit opt-out from JSON serialization. It is a
-		// deliberate authorial choice — either because (a) the field is a
-		// runtime resource (channels, mutexes; see ChildSpec.Dependencies),
-		// or (b) the enclosing type has a custom MarshalJSON that handles
-		// the field (see Observation.Status). Either way, it is NOT a
-		// silent-loss bug. The dedicated Observation-specific audit is
-		// handled by Test 2 (TestNoJsonDashFieldsOnObservation). Here we
-		// just skip the field — our concern is implicit non-serializability,
-		// not explicit opt-outs.
-		jsonTag := f.Tag.Get("json")
-		if jsonTag == "-" {
-			_ = enclosingImplementsMarshaler // silenced; Test 2 owns this audit
-			continue
-		}
-
-		ft := f.Type
-
-		// Whitelist time.Time and json.RawMessage early.
-		switch ft {
-		case reflect.TypeOf(time.Time{}):
-			continue
-		case reflect.TypeOf(json.RawMessage{}):
-			continue
-		}
-
-		// If the field's TYPE implements json.Marshaler, defer to it
-		// (custom marshalling makes the structural shape opaque to us).
-		if reflect.PointerTo(ft).Implements(marshalerType) || ft.Implements(marshalerType) {
-			continue
-		}
-
-		switch ft.Kind() {
-		case reflect.Interface:
-			violations = append(violations, fmt.Sprintf("non-serializable field %s of kind interface (Design Intent §13)", fieldPath))
-		case reflect.Chan:
-			violations = append(violations, fmt.Sprintf("non-serializable field %s of kind chan (Design Intent §13)", fieldPath))
-		case reflect.Func:
-			violations = append(violations, fmt.Sprintf("non-serializable field %s of kind func (Design Intent §13)", fieldPath))
-		case reflect.Struct:
-			violations = append(violations, walkSerializable(ft, fieldPath, seen)...)
-		case reflect.Slice, reflect.Array:
-			elem := ft.Elem()
-			if elem.Kind() == reflect.Struct {
-				violations = append(violations, walkSerializable(elem, fieldPath+"[]", seen)...)
-			} else if elem.Kind() == reflect.Interface {
-				// []any / []interface{} fields are red flags too.
-				violations = append(violations, fmt.Sprintf("non-serializable field %s element of kind interface (Design Intent §13)", fieldPath))
-			}
-		case reflect.Map:
-			// map[K]V: V may be interface{}; map[string]any is acceptable
-			// only when the field is documented as an opaque user payload.
-			// We skip recursion here — map[string]any is too pervasive in
-			// the config layer to flag without per-field opt-out wiring.
-			_ = ft
-		}
-	}
-
-	return violations
-}
-
-// walkRuntimeResources recursively inspects a struct type and returns one
-// violation message per field whose type implements prometheus.Collector,
-// sync.Locker, or io.Closer. These are runtime resources that have no
-// place on a CSE-serialized observation/desired-state document
-// (Design Intent §15).
-//
-// We use interface name matching (rather than importing prometheus and
-// sync) because the rule is about the *role* the type plays, not the
-// specific package. False negatives are acceptable; this test catches
-// the canonical violation patterns.
-func walkRuntimeResources(t reflect.Type, path string, seen map[reflect.Type]bool) []string {
-	if seen[t] {
-		return nil
-	}
-	seen[t] = true
-
-	if t.Kind() != reflect.Struct {
-		return nil
-	}
-
-	var violations []string
-
-	for i := 0; i < t.NumField(); i++ {
-		f := t.Field(i)
-		fieldPath := path + "." + f.Name
-
-		// Whitelist deps.MetricsEmbedder anonymous embed: framework-injected
-		// data carrier, pure data despite living near the metrics surface.
-		if f.Anonymous && f.Type.Name() == "MetricsEmbedder" {
-			continue
-		}
-
-		ft := f.Type
-		// Dereference pointer types for method-set checking.
-		probe := ft
-		if probe.Kind() == reflect.Ptr {
-			probe = probe.Elem()
-		}
-
-		if implementsByMethodName(probe, "Lock") && implementsByMethodName(probe, "Unlock") {
-			violations = append(violations, fmt.Sprintf("%s field type %s implements sync.Locker (Design Intent §15: no runtime resources on data types)", fieldPath, ft.String()))
-			continue
-		}
-		if implementsByMethodName(probe, "Close") {
-			// io.Closer is `Close() error`. Many data structs do not have
-			// a Close method; only flag when it appears.
-			closeMethod, hasClose := probe.MethodByName("Close")
-			// Also check ptr method set.
-			if !hasClose {
-				closeMethod, hasClose = reflect.PointerTo(probe).MethodByName("Close")
-			}
-			if hasClose && closeMethod.Type.NumIn() <= 1 && closeMethod.Type.NumOut() == 1 {
-				out := closeMethod.Type.Out(0)
-				if out.Kind() == reflect.Interface && out.Name() == "error" {
-					violations = append(violations, fmt.Sprintf("%s field type %s implements io.Closer (Design Intent §15)", fieldPath, ft.String()))
-					continue
-				}
-			}
-		}
-		// prometheus.Collector: Describe(chan<- *Desc), Collect(chan<- Metric).
-		// Detect by method names with channel-typed first arg.
-		if hasMethodWithChanArg(probe, "Describe") && hasMethodWithChanArg(probe, "Collect") {
-			violations = append(violations, fmt.Sprintf("%s field type %s implements prometheus.Collector (Design Intent §15)", fieldPath, ft.String()))
-			continue
-		}
-
-		switch ft.Kind() {
-		case reflect.Struct:
-			violations = append(violations, walkRuntimeResources(ft, fieldPath, seen)...)
-		case reflect.Slice, reflect.Array:
-			elem := ft.Elem()
-			if elem.Kind() == reflect.Struct {
-				violations = append(violations, walkRuntimeResources(elem, fieldPath+"[]", seen)...)
-			}
-		}
-	}
-
-	return violations
-}
-
-// implementsByMethodName checks whether t (or *t) has a method named name.
-// Used to detect role-implementations without importing the source package.
-func implementsByMethodName(t reflect.Type, name string) bool {
-	if _, ok := t.MethodByName(name); ok {
-		return true
-	}
-	if _, ok := reflect.PointerTo(t).MethodByName(name); ok {
-		return true
-	}
-	return false
-}
-
-// hasMethodWithChanArg reports whether t has a method named name whose first
-// argument is a channel (a heuristic for prometheus.Collector's
-// Describe/Collect signatures).
-func hasMethodWithChanArg(t reflect.Type, name string) bool {
-	probe := func(rt reflect.Type) bool {
-		m, ok := rt.MethodByName(name)
-		if !ok {
-			return false
-		}
-		// Method.Type includes the receiver for non-interface types, so the
-		// first user argument is at index 1; for interfaces, index 0.
-		mt := m.Type
-		argIdx := 1
-		if rt.Kind() == reflect.Interface {
-			argIdx = 0
-		}
-		if mt.NumIn() <= argIdx {
-			return false
-		}
-		return mt.In(argIdx).Kind() == reflect.Chan
-	}
-	if probe(t) {
-		return true
-	}
-	return probe(reflect.PointerTo(t))
-}

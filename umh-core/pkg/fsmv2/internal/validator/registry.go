@@ -143,16 +143,6 @@ return s, SignalNone, &ConnectAction{}
 return &ConnectedState{}, SignalNone, &SomeAction{}`,
 		ReferenceFile: "example-child/state/state_trying_to_connect.go:38-41",
 	},
-	"MISSING_COLLECTED_AT": {
-		Name: "ObservedState CollectedAt Timestamp",
-		Why: `Every ObservedState struct must have a CollectedAt time.Time field.
-WHY: The supervisor uses this timestamp to detect stale data. If a collector
-crashes or hangs, stale timestamps trigger recovery mechanisms. Without
-timestamps, the supervisor cannot distinguish between "recently collected"
-and "collector is dead, data is hours old". This is required for self-healing.`,
-		CorrectCode:   "type MyObservedState struct {\n    ID          string    `json:\"id\"`\n    CollectedAt time.Time `json:\"collected_at\"`  // REQUIRED\n    // ... other fields\n}",
-		ReferenceFile: "example-child/snapshot/snapshot.go:61",
-	},
 	"MISSING_IS_SHUTDOWN_REQUESTED": {
 		Name: "DesiredState IsShutdownRequested Method",
 		Why: `Every DesiredState type must implement IsShutdownRequested() bool.
@@ -367,20 +357,6 @@ may not properly satisfy interfaces.`,
 }`,
 		ReferenceFile: "example-child/state/state_connected.go",
 	},
-	"MISSING_DEPENDENCY_VALIDATION": {
-		Name: "Dependency Validation in Constructors",
-		Why: `NewXxxWorker constructors should validate required dependencies are non-nil.
-WHY: Nil dependencies cause panics at runtime, often deep in call stacks where
-the root cause is hard to identify. Early validation in constructors provides
-clear error messages and fail-fast behavior.`,
-		CorrectCode: `func NewMyWorker(deps Dependencies) (*MyWorker, error) {
-    if deps.Logger == nil {
-        return nil, errors.New("logger is required")
-    }
-    return &MyWorker{deps: deps}, nil
-}`,
-		ReferenceFile: "example-child/worker.go",
-	},
 	"MISSING_CHILDSPEC_VALIDATION": {
 		Name: "Child Spec Validation",
 		Why: `DeriveDesiredState should validate ChildrenSpecs before returning them.
@@ -415,28 +391,6 @@ func (a *Action) Execute(ctx context.Context) error {
     return nil
 }`,
 		ReferenceFile: "example-child/action/connect.go",
-	},
-	"OBSERVED_STATE_NOT_EMBEDDING_DESIRED": {
-		Name: "ObservedState Must Embed DesiredState",
-		Why: `ObservedState structs must embed their DesiredState type anonymously with json:",inline" tag.
-WHY: All desired state fields are automatically included in the observed
-state, maintaining consistency between what is desired and what is observed. The inline
-tag prevents nested JSON structure and keeps the serialized format flat. Using named fields
-instead of embedding leads to duplication and potential inconsistency.`,
-		CorrectCode: `type MyObservedState struct {
-    CollectedAt time.Time ` + "`json:\"collected_at\"`" + `
-
-    MyDesiredState ` + "`json:\",inline\"`" + `  // REQUIRED: anonymous embedding with inline tag
-
-    // Observed-only fields
-    ActualValue int ` + "`json:\"actual_value\"`" + `
-}
-
-// WRONG: named field instead of embedding
-type MyObservedState struct {
-    Desired MyDesiredState  // This is wrong - should be anonymous
-}`,
-		ReferenceFile: "example-child/snapshot/snapshot.go",
 	},
 	"MISSING_STATE_FIELD": {
 		Name: "State Field Required in DesiredState and ObservedState",
@@ -493,27 +447,6 @@ return config.DesiredState{
 }`,
 		ReferenceFile: "workers/example/examplechild/worker.go",
 	},
-	"MISSING_SET_STATE_METHOD": {
-		Name: "ObservedState Must Have SetState Method",
-		Why: `ObservedState types must implement SetState(string) method.
-WHY: The Supervisor injects a StateProvider callback into the Collector. When collecting
-observed state, the Collector calls StateProvider to get the current FSM state name, then
-calls SetState on the observed state to inject it. Without this method, the State field
-in ObservedState remains empty - the "observed state is only in collector" boundary is
-preserved while still allowing FSM state to be observed.`,
-		CorrectCode: `type MyObservedState struct {
-    CollectedAt time.Time ` + "`json:\"collected_at\"`" + `
-    State       string    ` + "`json:\"state\"`" + `
-    // ... other fields
-}
-
-// SetState sets the FSM state name on this observed state.
-// Called by Collector when StateProvider callback is configured.
-func (o *MyObservedState) SetState(s string) {
-    o.State = s
-}`,
-		ReferenceFile: "workers/application/snapshot/snapshot.go",
-	},
 	"FOLDER_WORKER_TYPE_MISMATCH": {
 		Name: "Folder Name Must Match Worker Type",
 		Why: `Worker folder names must exactly match the derived worker type.
@@ -532,53 +465,6 @@ workers/example/exampleparent/snapshot/snapshot.go:
 
 // WRONG: Folder "example-child" can never match (hyphens invalid in Go types)`,
 		ReferenceFile: "workers/example/examplechild/snapshot/snapshot.go",
-	},
-	"DEPENDENCIES_IN_DESIRED_STATE": {
-		Name: "Dependencies Not Allowed in DesiredState",
-		Why: `DesiredState structs must NOT have a Dependencies field.
-WHY: DesiredState is pure configuration that can be serialized to JSON/YAML.
-Dependencies are runtime interfaces (loggers, clients, services) that belong
-in Worker, not in DesiredState. Including dependencies in DesiredState breaks
-serialization and creates tight coupling between configuration and runtime.`,
-		CorrectCode: `// Correct: Dependencies in Worker, not DesiredState
-type MyWorker struct {
-    deps Dependencies  // Runtime dependencies here
-}
-
-type MyDesiredState struct {
-    config.BaseDesiredState
-    State string  // Configuration only
-}
-
-// WRONG: Dependencies in DesiredState
-type MyDesiredState struct {
-    Dependencies *Dependencies  // This is forbidden
-}`,
-		ReferenceFile: "example-child/snapshot/snapshot.go",
-	},
-	"REGISTRY_MISMATCH": {
-		Name: "Worker/Supervisor Registry Mismatch",
-		Why: `Worker and supervisor registries must contain the same type names.
-WHY: Every worker type needs both a worker factory (creates Worker instances) and
-a supervisor factory (creates Supervisor instances). If only one is registered,
-the FSM system will panic at runtime when trying to create the missing component.
-Use RegisterWorkerType[TObserved, TDesired]() to register both atomically.`,
-		CorrectCode: `func init() {
-    err := factory.RegisterWorkerType[snapshot.MyObservedState, *snapshot.MyDesiredState](
-        func(id deps.Identity, logger deps.FSMLogger, _ deps.StateReader, _ map[string]any) fsmv2.Worker {
-            worker, _ := NewMyWorker(id, logger)
-            return worker
-        },
-        func(cfg interface{}) interface{} {
-            return supervisor.NewSupervisor[snapshot.MyObservedState, *snapshot.MyDesiredState](
-                cfg.(supervisor.Config))
-        },
-    )
-    if err != nil {
-        panic(err)
-    }
-}`,
-		ReferenceFile: "factory/worker_factory.go:451-461",
 	},
 	"DYNAMIC_ERROR_MESSAGE": {
 		Name: "Static Error Messages for Sentry Grouping",
@@ -622,31 +508,6 @@ yaml.Unmarshal([]byte(userSpec.Config), &mySpec)
 // WRONG: discard with blank identifier
 _, ok := spec.(config.UserSpec)  // spec is validated but never used!`,
 		ReferenceFile: "workers/application/worker.go",
-	},
-	"OBSERVED_STATE_MUTATION": {
-		Name: "No Observed State Mutation (Pure Functions)",
-		Why: `Next() methods must NEVER mutate snap.Observed.* fields.
-WHY: The FSMv2 architecture requires state transitions to be pure functions:
-1. Same input (snapshot) must ALWAYS produce the same output (state, signal, action)
-2. Mutations to ObservedState break referential transparency
-3. ObservedState should ONLY be written by the collector (CollectObservedState)
-4. Mutations in Next() cause race conditions and non-deterministic behavior
-5. Testing becomes impossible when state can be modified mid-transition
-
-Observation data flows: Dependencies → CollectObservedState → ObservedState → Next() (read-only)
-State changes flow: Next() returns new state → supervisor updates current state`,
-		CorrectCode: `func (s *MyState) Next(snapAny any) (...) {
-    snap := helpers.ConvertSnapshot[...](snapAny)
-
-    // CORRECT: Read from Observed
-    if snap.Observed.ConnectionHealth != "healthy" {
-        return fsmv2.Result(...)
-    }
-
-    // WRONG: Mutate Observed (causes race conditions)
-    // snap.Observed.State = "connecting"  // NEVER DO THIS
-}`,
-		ReferenceFile: "pkg/fsmv2/ARCHITECTURE.md",
 	},
 }
 

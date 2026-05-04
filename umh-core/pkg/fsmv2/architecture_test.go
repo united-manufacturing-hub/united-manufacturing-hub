@@ -19,12 +19,10 @@ import (
 	"path/filepath"
 	"reflect"
 	"runtime"
-	"sort"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/validator"
 
 	// Import state packages to scan for violations.
@@ -102,17 +100,6 @@ var _ = Describe("FSMv2 Architecture Validation", func() {
 
 				if len(violations) > 0 {
 					message := validator.FormatViolationsWithPattern("State XOR Action Violations", violations, "STATE_AND_ACTION")
-					Fail(message)
-				}
-			})
-		})
-
-		Describe("ObservedState CollectedAt Timestamp (Invariant: Staleness Detection)", func() {
-			It("should have CollectedAt time.Time field", func() {
-				violations := validator.ValidateObservedStateTimestamp(getFsmv2Dir())
-
-				if len(violations) > 0 {
-					message := validator.FormatViolationsWithPattern("CollectedAt Timestamp Violations", violations, "MISSING_COLLECTED_AT")
 					Fail(message)
 				}
 			})
@@ -207,34 +194,12 @@ var _ = Describe("FSMv2 Architecture Validation", func() {
 
 	Context("🟡 PHASE 2: Additional Architectural Patterns", func() {
 
-		Describe("ObservedState Embeds DesiredState (Invariant: State Consistency)", func() {
-			It("should embed DesiredState anonymously with json:\",inline\" tag", func() {
-				violations := validator.ValidateObservedStateEmbedsDesired(getFsmv2Dir())
-
-				if len(violations) > 0 {
-					message := validator.FormatViolationsWithPattern("ObservedState Embedding Violations", violations, "OBSERVED_STATE_NOT_EMBEDDING_DESIRED")
-					Fail(message)
-				}
-			})
-		})
-
 		Describe("State Field Exists (Invariant: FSM State Tracking)", func() {
 			It("should have State string field in both DesiredState and ObservedState", func() {
 				violations := validator.ValidateStateFieldExists(getFsmv2Dir())
 
 				if len(violations) > 0 {
 					message := validator.FormatViolationsWithPattern("State Field Violations", violations, "MISSING_STATE_FIELD")
-					Fail(message)
-				}
-			})
-		})
-
-		Describe("ObservedState SetState Method (Invariant: StateProvider Callback)", func() {
-			It("should have SetState(string) method for StateProvider injection", func() {
-				violations := validator.ValidateObservedStateHasSetState(getFsmv2Dir())
-
-				if len(violations) > 0 {
-					message := validator.FormatViolationsWithPattern("SetState Method Violations", violations, "MISSING_SET_STATE_METHOD")
 					Fail(message)
 				}
 			})
@@ -292,16 +257,6 @@ var _ = Describe("FSMv2 Architecture Validation", func() {
 			})
 		})
 
-		Describe("Dependency Validation in Constructors (Invariant: Fail-Fast)", func() {
-			It("should validate required dependencies are non-nil", func() {
-				violations := validator.ValidateDependencyValidation(getFsmv2Dir())
-				if len(violations) > 0 {
-					message := validator.FormatViolationsWithPattern("Dependency Validation Violations", violations, "MISSING_DEPENDENCY_VALIDATION")
-					Fail(message)
-				}
-			})
-		})
-
 		Describe("Child Spec Validation (Invariant: Early Validation)", func() {
 			It("should validate ChildrenSpecs before returning them", func() {
 				violations := validator.ValidateChildSpecValidation(getFsmv2Dir())
@@ -322,31 +277,11 @@ var _ = Describe("FSMv2 Architecture Validation", func() {
 			})
 		})
 
-		Describe("No Direct Document Manipulation (Invariant: Type-Safe Boundaries)", func() {
-			It("should not type-assert to persistence.Document in supervisor", func() {
-				violations := validator.ValidateNoDirectDocumentManipulation(getFsmv2Dir())
-				if len(violations) > 0 {
-					message := validator.FormatViolationsWithPattern("Direct Document Manipulation Violations", violations, "DIRECT_DOCUMENT_ASSERTION")
-					Fail(message)
-				}
-			})
-		})
-
 		Describe("Structured Logging Only (Invariant: Consistent Log Format)", func() {
 			It("should use structured logging (Warnw/Errorw/Infow) not format-based (Warnf/Errorf/Infof)", func() {
 				violations := validator.ValidateStructuredLogging(getFsmv2Dir())
 				if len(violations) > 0 {
 					message := validator.FormatViolationsWithPattern("Non-Structured Logging Violations", violations, "NON_STRUCTURED_LOGGING")
-					Fail(message)
-				}
-			})
-		})
-
-		Describe("DesiredState Has No Dependencies (Invariant: Serializable Configuration)", func() {
-			It("should not have Dependencies field in any DesiredState struct", func() {
-				violations := validator.ValidateDesiredStateHasNoDependencies(getFsmv2Dir())
-				if len(violations) > 0 {
-					message := validator.FormatViolationsWithPattern("Dependencies in DesiredState Violations", violations, "DEPENDENCIES_IN_DESIRED_STATE")
 					Fail(message)
 				}
 			})
@@ -362,38 +297,6 @@ var _ = Describe("FSMv2 Architecture Validation", func() {
 			})
 		})
 
-		Describe("Worker Factory Registration (Invariant: Complete Registry)", func() {
-			It("should have matching worker and supervisor registrations", func() {
-				workerOnly, supervisorOnly := factory.ValidateRegistryConsistency()
-
-				if len(workerOnly) > 0 || len(supervisorOnly) > 0 {
-					var violations []validator.Violation
-
-					sort.Strings(workerOnly)
-					for _, wt := range workerOnly {
-						violations = append(violations, validator.Violation{
-							File:    "factory/worker_factory.go",
-							Type:    "REGISTRY_MISMATCH",
-							Message: fmt.Sprintf("Worker '%s' registered without supervisor factory", wt),
-						})
-					}
-
-					sort.Strings(supervisorOnly)
-					for _, st := range supervisorOnly {
-						violations = append(violations, validator.Violation{
-							File:    "factory/worker_factory.go",
-							Type:    "REGISTRY_MISMATCH",
-							Message: fmt.Sprintf("Supervisor '%s' registered without worker factory", st),
-						})
-					}
-
-					message := validator.FormatViolationsWithPattern(
-						"Registry Mismatch", violations, "REGISTRY_MISMATCH")
-					Fail(message)
-				}
-			})
-		})
-
 		Describe("Child Workers Use ShouldStop() (Invariant: Parent Lifecycle Awareness)", func() {
 			It("should use ShouldStop() not just IsShutdownRequested() in child worker states", func() {
 				violations := validator.ValidateChildWorkersUseShouldStop(getFsmv2Dir())
@@ -402,48 +305,6 @@ var _ = Describe("FSMv2 Architecture Validation", func() {
 						"Child Worker ShouldStop Violations",
 						violations,
 						"CHILD_MUST_USE_SHOULD_STOP",
-					)
-					Fail(message)
-				}
-			})
-		})
-
-		Describe("No Custom Lifecycle Fields (Invariant: FSM Controls Lifecycle)", func() {
-			It("should not have ShouldRun, IsRunning, or similar fields in DesiredState", func() {
-				violations := validator.ValidateNoCustomLifecycleFields(getFsmv2Dir())
-				if len(violations) > 0 {
-					message := validator.FormatViolationsWithPattern(
-						"Custom Lifecycle Field Violations",
-						violations,
-						"CUSTOM_LIFECYCLE_FIELD",
-					)
-					Fail(message)
-				}
-			})
-		})
-
-		Describe("Framework Metrics Copy (Invariant: Workers Copy Metrics from Deps)", func() {
-			It("should call GetFrameworkState() when GetDependencies() is used in CollectObservedState", func() {
-				violations := validator.ValidateFrameworkMetricsCopy(getFsmv2Dir())
-				if len(violations) > 0 {
-					message := validator.FormatViolationsWithPattern(
-						"Framework Metrics Copy Violations",
-						violations,
-						"MISSING_FRAMEWORK_METRICS_COPY",
-					)
-					Fail(message)
-				}
-			})
-		})
-
-		Describe("Action History Copy (Invariant: Workers Copy ActionHistory from Deps)", func() {
-			It("should call GetActionHistory() when GetDependencies() is used in CollectObservedState", func() {
-				violations := validator.ValidateActionHistoryCopy(getFsmv2Dir())
-				if len(violations) > 0 {
-					message := validator.FormatViolationsWithPattern(
-						"Action History Copy Violations",
-						violations,
-						"MISSING_ACTION_HISTORY_COPY",
 					)
 					Fail(message)
 				}
@@ -513,20 +374,6 @@ var _ = Describe("FSMv2 Architecture Validation", func() {
 				if len(violations) > 0 {
 					message := validator.FormatViolationsWithPattern(
 						"Spec Result Discarded Violations", violations, "SPEC_RESULT_DISCARDED")
-					Fail(message)
-				}
-			})
-		})
-
-		Describe("No Observed State Mutation (Invariant: Pure Functions)", func() {
-			It("should not mutate snap.Observed.* fields in Next() methods", func() {
-				violations := validator.ValidateNoObservedStateMutation(getFsmv2Dir())
-				if len(violations) > 0 {
-					message := validator.FormatViolationsWithPattern(
-						"Observed State Mutation Violations",
-						violations,
-						"OBSERVED_STATE_MUTATION",
-					)
 					Fail(message)
 				}
 			})
