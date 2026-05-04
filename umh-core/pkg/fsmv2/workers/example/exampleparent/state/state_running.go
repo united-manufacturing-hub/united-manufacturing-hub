@@ -38,7 +38,7 @@ func (s *RunningState) Next(snapAny any) fsmv2.NextResult[any, any] {
 		return fsmv2.Transition(&TryingToStopState{}, fsmv2.SignalNone, nil, "Shutdown requested, transitioning to TryingToStop", nil)
 	}
 
-	children := RenderChildren(snap)
+	children := snapshot.RenderChildren(snap)
 
 	if snap.Observed.ChildrenUnhealthy > 0 {
 		return fsmv2.Transition(&DegradedState{}, fsmv2.SignalNone, nil, "Some children are unhealthy, transitioning to Degraded", children)

@@ -35,7 +35,7 @@ func (s *TryingToStartState) Next(snapAny any) fsmv2.NextResult[any, any] {
 		return fsmv2.Transition(&TryingToStopState{}, fsmv2.SignalNone, nil, "Shutdown requested, transitioning to TryingToStop", nil)
 	}
 
-	children := RenderChildren(snap)
+	children := snapshot.RenderChildren(snap)
 
 	if snap.Observed.ID == "" {
 		return fsmv2.Transition(s, fsmv2.SignalNone, &action.StartAction{}, "ID not set, executing StartAction", children)

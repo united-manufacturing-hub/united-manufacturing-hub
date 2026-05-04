@@ -39,7 +39,7 @@ func (s *StoppedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 		return fsmv2.Transition(s, fsmv2.SignalNeedsRemoval, nil, "Shutdown requested, signaling removal", nil)
 	}
 
-	children := RenderChildren(snap)
+	children := snapshot.RenderChildren(snap)
 
 	// Wait StoppedWaitDuration before transitioning. Direct field access required for CSE serializability.
 	if snap.Desired.ShouldBeRunning() {

@@ -31,7 +31,7 @@ type TryingToStopState struct {
 func (s *TryingToStopState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := helpers.ConvertSnapshot[snapshot.ExampleparentObservedState, *snapshot.ExampleparentDesiredState](snapAny)
 
-	children := RenderChildren(snap)
+	children := snapshot.RenderChildren(snap)
 
 	if snap.Observed.ID == "" {
 		return fsmv2.Transition(s, fsmv2.SignalNone, &action.StopAction{}, "ID not set, executing StopAction", children)
