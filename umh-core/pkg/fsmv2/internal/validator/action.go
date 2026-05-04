@@ -37,6 +37,10 @@ func ValidateActionStructs(baseDir string) []Violation {
 }
 
 // checkActionFile parses an action file and looks for mutable state fields.
+// A field is considered mutable only when Execute() directly assigns to it
+// (via =, +=, ++, etc.). Fields that are only read in Execute are allowed,
+// so immutable config captured at action construction time does not trigger
+// a violation.
 func checkActionFile(filename string) []Violation {
 	var violations []Violation
 
@@ -58,22 +62,25 @@ func checkActionFile(filename string) []Violation {
 			return true
 		}
 
+		execFn, receiverName := findExecuteMethod(node, typeSpec.Name.Name)
+		var mutations map[string]token.Pos
+		if execFn != nil && receiverName != "" {
+			mutations = findReceiverFieldMutations(execFn, receiverName)
+		}
+
 		for _, field := range structType.Fields.List {
 			if len(field.Names) == 0 {
 				continue
 			}
 
 			fieldName := field.Names[0].Name
-			if strings.Contains(strings.ToLower(fieldName), "dependencies") ||
-				strings.Contains(strings.ToLower(fieldName), "failure") ||
-				strings.Contains(strings.ToLower(fieldName), "count") ||
-				strings.Contains(strings.ToLower(fieldName), "max") {
-				pos := fset.Position(field.Pos())
+			if mutPos, mutated := mutations[fieldName]; mutated {
+				pos := fset.Position(mutPos)
 				violations = append(violations, Violation{
 					File:    filename,
 					Line:    pos.Line,
 					Type:    "STATELESS_ACTION",
-					Message: fmt.Sprintf("Action %s has mutable field '%s' (actions should be stateless)", typeSpec.Name.Name, fieldName),
+					Message: fmt.Sprintf("Action %s mutates field '%s' in Execute (actions should be stateless; mutate on deps instead)", typeSpec.Name.Name, fieldName),
 				})
 			}
 		}
@@ -82,6 +89,81 @@ func checkActionFile(filename string) []Violation {
 	})
 
 	return violations
+}
+
+// findExecuteMethod locates the Execute method declaration for the named action
+// struct within the parsed file. It returns the function declaration and the
+// receiver variable name (e.g. "a" from `func (a *ConnectAction) Execute`).
+// Returns nil, "" when no matching Execute method is found.
+func findExecuteMethod(node *ast.File, structName string) (*ast.FuncDecl, string) {
+	for _, decl := range node.Decls {
+		funcDecl, ok := decl.(*ast.FuncDecl)
+		if !ok || funcDecl.Name.Name != "Execute" {
+			continue
+		}
+		if funcDecl.Recv == nil || len(funcDecl.Recv.List) == 0 {
+			continue
+		}
+		recv := funcDecl.Recv.List[0]
+		if extractReceiverTypeName(recv.Type) != structName {
+			continue
+		}
+		if len(recv.Names) == 0 {
+			// Receiver has no variable name — cannot reference fields.
+			return funcDecl, ""
+		}
+		return funcDecl, recv.Names[0].Name
+	}
+	return nil, ""
+}
+
+// findReceiverFieldMutations walks the body of an Execute function and returns
+// all receiver fields that are directly assigned (written) to. Read-only access
+// does not produce an entry. The map value is the position of the first mutation.
+func findReceiverFieldMutations(execFn *ast.FuncDecl, receiverName string) map[string]token.Pos {
+	mutations := make(map[string]token.Pos)
+
+	isReceiverField := func(expr ast.Expr) (string, bool) {
+		sel, ok := expr.(*ast.SelectorExpr)
+		if !ok {
+			return "", false
+		}
+		ident, ok := sel.X.(*ast.Ident)
+		if !ok || ident.Name != receiverName {
+			return "", false
+		}
+		return sel.Sel.Name, true
+	}
+
+	recordMutation := func(name string, pos token.Pos) {
+		if _, already := mutations[name]; !already {
+			mutations[name] = pos
+		}
+	}
+
+	ast.Inspect(execFn.Body, func(n ast.Node) bool {
+		switch stmt := n.(type) {
+		case *ast.AssignStmt:
+			for _, lhs := range stmt.Lhs {
+				if name, ok := isReceiverField(lhs); ok {
+					recordMutation(name, stmt.Pos())
+				}
+				// Also catch `*a.ptr = v` (first-level pointer field write).
+				if star, ok := lhs.(*ast.StarExpr); ok {
+					if name, ok := isReceiverField(star.X); ok {
+						recordMutation(name, stmt.Pos())
+					}
+				}
+			}
+		case *ast.IncDecStmt:
+			if name, ok := isReceiverField(stmt.X); ok {
+				recordMutation(name, stmt.Pos())
+			}
+		}
+		return true
+	})
+
+	return mutations
 }
 
 // ValidateContextCancellationInActions checks that Execute() handles ctx.Done().
