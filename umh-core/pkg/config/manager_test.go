@@ -1761,6 +1761,60 @@ var _ = Describe("ConfigValidationIssue surface", func() {
 		Expect(issues[0].OffendingValue).To(Equal("nigtly"))
 	})
 
+	It("writeConfig clears stale issues after an Atomic* round-trip (P-write-atomic-clear)", func() {
+		// Setup mirrors P7-write-clear: file holds a typo, manager records it, then
+		// the Atomic* round-trip (modeled as writeConfig with the cache's coerced
+		// struct) writes back to disk. Pre-fix: validationIssues stayed at [{nigtly}]
+		// because writeConfig never re-validated. Post-fix: writeConfig calls
+		// swapValidationIssues so the list reflects what is now on disk.
+		m, mockFS := newTestManagerWithYAML("agent:\n  releaseChannel: nigtly\n")
+		defer m.Stop()
+		mockFS.WithWriteFileFunc(func(ctx context.Context, path string, data []byte, perm os.FileMode) error {
+			mockFS.WithReadFileFunc(func(ctx context.Context, path string) ([]byte, error) { return data, nil })
+			return nil
+		})
+
+		// Boot read records the issue and coerces the cached struct to stable.
+		cfg, _, err := m.readAndParseConfig(ctx)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(m.GetConfigValidationIssues()).To(HaveLen(1))
+		Expect(cfg.Agent.ReleaseChannel).To(Equal(ReleaseChannelStable))
+
+		// Simulate the Atomic* round-trip: take the post-coerced struct GetConfig
+		// would hand to a mutator, write back. The bug pre-fix: validationIssues
+		// stays [{nigtly}] forever even though disk now says stable.
+		err = m.writeConfig(ctx, cfg)
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(m.GetConfigValidationIssues()).To(BeEmpty())
+	})
+
+	It("writeConfig flags a typo introduced by a non-Atomic caller (P-write-atomic-flag)", func() {
+		// Defensive: every current writeConfig caller funnels through GetConfig (so
+		// the struct is already coerced). This test pins the contract for any future
+		// caller that constructs a FullConfig from scratch — validateConfig must
+		// catch the typo and record an issue, mirroring P7-write-flag.
+		m, mockFS := newTestManagerWithYAML("agent:\n  releaseChannel: stable\n")
+		defer m.Stop()
+		mockFS.WithWriteFileFunc(func(ctx context.Context, path string, data []byte, perm os.FileMode) error {
+			mockFS.WithReadFileFunc(func(ctx context.Context, path string) ([]byte, error) { return data, nil })
+			return nil
+		})
+
+		_, _, err := m.readAndParseConfig(ctx)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(m.GetConfigValidationIssues()).To(BeEmpty())
+
+		synthetic := FullConfig{Agent: AgentConfig{ReleaseChannel: ReleaseChannel("nigtly")}}
+		err = m.writeConfig(ctx, synthetic)
+		Expect(err).NotTo(HaveOccurred())
+
+		issues := m.GetConfigValidationIssues()
+		Expect(issues).To(HaveLen(1))
+		Expect(issues[0].Field).To(Equal("agent.releaseChannel"))
+		Expect(issues[0].OffendingValue).To(Equal("nigtly"))
+	})
+
 	It("survives concurrent swap+read (P9)", func() {
 		m, _ := newTestManagerWithYAML("agent: {}\n")
 		defer m.Stop()

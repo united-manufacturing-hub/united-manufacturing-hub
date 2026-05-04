@@ -538,12 +538,12 @@ func (m *FileConfigManager) validateConfig(config *FullConfig) []ConfigValidatio
 
 // swapValidationIssues replaces the validation-issues list wholesale. Mutex-protected
 // so concurrent GetConfigValidationIssues readers always observe a consistent slice.
-// Callers are readAndParseConfig (read path) and WriteYAMLConfigFromString (write path);
-// cache-hit GetConfig does not call this — see manager.go's FAST PATH — which is the
-// invariant that lets a successful parse decide what the latest issues list is.
-// The cache (cacheConfig + cacheModTime) and the issues list are decoupled by design:
-// they live behind separate mutexes and update independently, since validation runs
-// after parsing whereas the cache stores the parsed result.
+// Callers are readAndParseConfig (boot/refresh read path), WriteYAMLConfigFromString
+// (editor save path) and writeConfig (Atomic* mutator path); cache-hit GetConfig does
+// not call this — see manager.go's FAST PATH — which is the invariant that lets a
+// successful parse or write decide what the latest issues list is.
+// The cache (cacheConfig + cacheModTime) and the issues list live behind separate
+// mutexes since validation runs after parsing whereas the cache stores the result.
 func (m *FileConfigManager) swapValidationIssues(fresh []ConfigValidationIssue) {
 	m.validationIssuesMu.Lock()
 	defer m.validationIssuesMu.Unlock()
@@ -682,11 +682,19 @@ func (m *FileConfigManager) writeConfig(ctx context.Context, config FullConfig) 
 		return fmt.Errorf("failed to get file stats: %w", err)
 	}
 
+	// Re-validate the just-written config so the issues list reflects what is
+	// now on disk. Without this, an Atomic* round-trip (which reads the cached
+	// post-coercion config and writes it back) leaves a stale validation issue
+	// pointing at a value the user no longer sees in their YAML — see
+	// WriteYAMLConfigFromString for the same pattern on the editor save path.
+	m.swapValidationIssues(m.validateConfig(&config))
+
 	// update the cache
 	m.cacheMu.Lock()
 	m.cacheModTime = fileStats.ModTime()
 	m.cacheConfig = config
 	m.cacheRawConfig = string(data)
+	m.cacheError = nil
 	m.cacheMu.Unlock()
 
 	m.logger.Info("Successfully wrote config", deps.String("path", m.configPath))
