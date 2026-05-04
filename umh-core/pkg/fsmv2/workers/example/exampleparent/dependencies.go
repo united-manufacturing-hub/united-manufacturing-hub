@@ -26,10 +26,11 @@ type ParentDependencies struct {
 }
 
 // NewParentDependencies creates new dependencies for the parent worker.
-func NewParentDependencies(logger deps.FSMLogger, stateReader deps.StateReader, identity deps.Identity) *ParentDependencies {
+// Accepts a shared BaseDependencies to avoid dual-instance metrics divergence.
+func NewParentDependencies(baseDeps *deps.BaseDependencies) *ParentDependencies {
 	return &ParentDependencies{
-		BaseDependencies: deps.NewBaseDependencies(logger, stateReader, identity),
-		stateTracker:     dependency.NewDefaultStateTracker(nil), // Uses real clock
+		BaseDependencies: baseDeps,
+		stateTracker:     dependency.NewDefaultStateTracker(nil),
 	}
 }
 

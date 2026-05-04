@@ -25,7 +25,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleparent/snapshot"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleparent/state"
@@ -33,9 +32,8 @@ import (
 
 // ParentWorker implements the FSM v2 Worker interface for parent-child relationships.
 type ParentWorker struct {
-	*helpers.BaseWorker[*ParentDependencies]
-	logger   deps.FSMLogger
-	identity deps.Identity
+	deps *ParentDependencies
+	fsmv2.WorkerBase[ParentUserSpec, snapshot.ExampleparentObservedState, *ParentDependencies]
 }
 
 // NewParentWorker creates a new example parent worker.
@@ -57,13 +55,12 @@ func NewParentWorker(
 		identity.WorkerType = workerType
 	}
 
-	dependencies := NewParentDependencies(logger, stateReader, identity)
+	w := &ParentWorker{}
+	baseDeps := w.InitBase(identity, logger, stateReader)
+	w.deps = NewParentDependencies(baseDeps)
+	w.BindDeps(w.deps)
 
-	return &ParentWorker{
-		BaseWorker: helpers.NewBaseWorker(dependencies),
-		identity:   identity,
-		logger:     logger,
-	}, nil
+	return w, nil
 }
 
 // CollectObservedState returns the current observed state of the parent worker.
@@ -74,14 +71,13 @@ func (w *ParentWorker) CollectObservedState(ctx context.Context, _ fsmv2.Desired
 	default:
 	}
 
-	deps := w.GetDependencies()
-	tracker := deps.GetStateTracker()
+	tracker := w.deps.GetStateTracker()
 
-	stateReader := deps.GetStateReader()
+	stateReader := w.deps.GetStateReader()
 	if stateReader != nil {
 		var previousObserved snapshot.ExampleparentObservedState
 
-		err := stateReader.LoadObservedTyped(ctx, w.identity.WorkerType, w.identity.ID, &previousObserved)
+		err := stateReader.LoadObservedTyped(ctx, w.Identity().WorkerType, w.Identity().ID, &previousObserved)
 		if err == nil && previousObserved.State != "" {
 			// Record state change - resets timer if state changed
 			tracker.RecordStateChange(previousObserved.State)
@@ -89,15 +85,15 @@ func (w *ParentWorker) CollectObservedState(ctx context.Context, _ fsmv2.Desired
 	}
 
 	observed := snapshot.ExampleparentObservedState{
-		ID:          w.identity.ID,
+		ID:          w.Identity().ID,
 		CollectedAt: time.Now(),
 	}
 
-	if fm := deps.GetFrameworkState(); fm != nil {
+	if fm := w.deps.GetFrameworkState(); fm != nil {
 		observed.Metrics.Framework = *fm
 	}
 
-	observed.LastActionResults = deps.GetActionHistory()
+	observed.LastActionResults = w.deps.GetActionHistory()
 
 	return observed, nil
 }

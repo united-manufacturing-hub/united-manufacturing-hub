@@ -20,8 +20,8 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	fsmv2types "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleparent"
@@ -114,6 +114,17 @@ var _ = Describe("ParentWorker", func() {
 			initialState := worker.GetInitialState()
 
 			Expect(initialState).To(BeAssignableToTypeOf(&state.StoppedState{}))
+		})
+	})
+
+	Describe("GetDependenciesAny", func() {
+		It("returns *ParentDependencies", func() {
+			var w fsmv2.Worker = worker
+			dp, ok := w.(fsmv2.DependencyProvider)
+			Expect(ok).To(BeTrue(), "worker must implement DependencyProvider")
+			got := dp.GetDependenciesAny()
+			_, ok = got.(*exampleparent.ParentDependencies)
+			Expect(ok).To(BeTrue(), "expected *ParentDependencies, got %T", got)
 		})
 	})
 })
