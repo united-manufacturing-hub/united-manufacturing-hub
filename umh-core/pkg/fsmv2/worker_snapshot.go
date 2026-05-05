@@ -18,7 +18,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 )
 
@@ -53,15 +52,14 @@ type WorkerSnapshot[TConfig any, TStatus any] struct {
 }
 
 // ShouldStop returns true when the worker should transition to stopped.
-// Merges the user-shutdown signal (Desired.IsShutdownRequested()) with the
-// parent-driven stop signal (Observed.ParentMappedState == DesiredStateStopped).
+// Returns the user-shutdown signal (Desired.IsShutdownRequested()).
 //
-// The OR clause covers parents that propagate stop intent via ParentMappedState
-// rather than the wrapped shutdown flag; once parents merge their stop intent
-// into the shutdown signal (P3.7 in the cascade plan), the body simplifies to
-// `s.Desired.IsShutdownRequested()`.
+// Parent-driven stop intent now flows through the same flag via the CHANGE-19
+// reducer: a parent that wants a child stopped marks the child's ChildSpec
+// Enabled=false, which the reducer translates into IsShutdownRequested=true on
+// the child. There is no longer a separate parent-mapped-state path.
 func (s WorkerSnapshot[TConfig, TStatus]) ShouldStop() bool {
-	return s.Desired.IsShutdownRequested() || s.Observed.ParentMappedState == config.DesiredStateStopped
+	return s.Desired.IsShutdownRequested()
 }
 
 // ConvertWorkerSnapshot type-asserts the raw snapshot from State.Next() into a

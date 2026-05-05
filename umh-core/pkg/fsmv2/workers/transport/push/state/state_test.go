@@ -61,15 +61,20 @@ func makeSnapshotWithBackoff(
 	degradedEnteredAt time.Time,
 	lastErrorAt time.Time,
 ) fsmv2.Snapshot {
+	// Parent-driven stop now flows through IsShutdownRequested via the
+	// CHANGE-19 reducer. Translate the legacy parentMappedState=stopped test
+	// input into shutdownRequested=true so existing scenarios still exercise
+	// the parent-stop code path.
+	effectiveShutdown := shutdownRequested || parentMappedState == config.DesiredStateStopped
+
 	desired := &fsmv2.WrappedDesiredState[push_pkg.PushConfig]{
 		BaseDesiredState: config.BaseDesiredState{
-			ShutdownRequested: shutdownRequested,
+			ShutdownRequested: effectiveShutdown,
 		},
 	}
 
 	observed := fsmv2.Observation[push_pkg.PushStatus]{
-		CollectedAt:       time.Now(),
-		ParentMappedState: parentMappedState,
+		CollectedAt: time.Now(),
 		Status: push_pkg.PushStatus{
 			ConsecutiveErrors:   consecutiveErrors,
 			PendingMessageCount: pendingMessageCount,
@@ -116,11 +121,15 @@ var _ = Describe("StoppedState", func() {
 		Expect(result.State).To(BeAssignableToTypeOf(&state.RunningState{}))
 	})
 
-	It("should stay Stopped when not ShouldBeRunning", func() {
+	It("should signal NeedsRemoval when parent has stopped (Enabled=false → shutdown)", func() {
+		// Under PR3 semantics, parent-driven stop flows through
+		// IsShutdownRequested via the CHANGE-19 reducer. The helper
+		// translates parentMappedState=stopped → shutdownRequested=true,
+		// so this case behaves like the explicit-shutdown case above.
 		snap := makeSnapshot(config.DesiredStateStopped, false, 0, false, false)
 		result := s.Next(snap)
 		Expect(result.State).To(BeAssignableToTypeOf(&state.StoppedState{}))
-		Expect(result.Signal).To(Equal(fsmv2.SignalNone))
+		Expect(result.Signal).To(Equal(fsmv2.SignalNeedsRemoval))
 	})
 
 	It("should return a valid String()", func() {

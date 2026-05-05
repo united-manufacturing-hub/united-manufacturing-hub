@@ -41,19 +41,14 @@ import (
 //
 // Correct lifecycle control:
 //   - ShutdownRequested: Inherited from this type. Set by supervisor for graceful shutdown.
-//   - ParentMappedState: For child workers only. Injected by supervisor from parent's mapped state for this child.
+//     Parent-driven stop flows through the same flag: parent sets ChildSpec.Enabled=false,
+//     which the CHANGE-19 reducer translates into IsShutdownRequested=true on the child.
 //   - State ("running"/"stopped"): From BaseUserSpec.GetState(). Controls whether worker should be running.
 //
 // Correct ShouldBeRunning() implementations:
 //
-//	// Root/leaf workers (no parent):
 //	func (s *MyDesiredState) ShouldBeRunning() bool {
 //	    return !s.ShutdownRequested
-//	}
-//
-//	// Child workers (have parent):
-//	func (s *MyDesiredState) ShouldBeRunning() bool {
-//	    return !s.ShutdownRequested && s.ParentMappedState == config.DesiredStateRunning
 //	}
 //
 // Custom lifecycle fields are forbidden; the framework controls lifecycle

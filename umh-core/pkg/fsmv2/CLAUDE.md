@@ -274,6 +274,6 @@ This prevents failure rate dilution: if idle ticks feed phantom "successes" into
 - CI enforced: `ValidateStoppingStateNoCatchAllSelfReturn` in `internal/validator/state.go`
 - See any `state_stopping.go` for the pattern
 
-### Observed vs Desired ParentMappedState
+### Parent-driven stop flows through IsShutdownRequested
 
-`ParentMappedState` is only populated on the **observed** state (via `SetParentMappedState()`). The **desired** state copy is always empty. Use `snap.Observed.ParentMappedState` in reason strings, never `snap.Desired.ParentMappedState`.
+There is no longer a separate `ParentMappedState` signal on `Observation[T]`. When a parent wants a child stopped it sets `ChildSpec.Enabled=false`; the CHANGE-19 reducer translates that into `IsShutdownRequested=true` on the child synchronously. State files therefore only need `snap.ShouldStop()` (which returns `Desired.IsShutdownRequested()`) — there is no parent-mapped-state path for child workers using `Observation[T]` to consult.
