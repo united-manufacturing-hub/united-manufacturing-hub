@@ -93,11 +93,12 @@ var _ = Describe("CHANGE-19 Pause/Resume", func() {
 		mockStore = newMockTriangularStore()
 	})
 
-	It("TestPauseResume_EnabledFalseStopsChildSupervisorStaysResident", func() {
+	It("TestPauseResume_EnabledFalseColdBoot_SkipsCreation", func() {
 		// Setup: parent with one child spec, Enabled=false from the start.
-		// On tick 1: reconcileChildren creates the child, then the CHANGE-19 reducer
-		// immediately writes IsShutdownRequested=true (since the child now exists and
-		// Enabled=false). The child remains in s.children (stopped-but-resident).
+		// PR3-I skip-on-create: reconcileChildren must NOT create the child
+		// when its first appearance in the spec list is Enabled=false. The
+		// reducer-on-resident path that writes IsShutdownRequested=true is
+		// covered separately by TestPauseResume_ResidentChildEnabledFalse_…
 		initialSpecs := []config.ChildSpec{
 			{
 				Name:       "child-a",
@@ -108,31 +109,41 @@ var _ = Describe("CHANGE-19 Pause/Resume", func() {
 		}
 		parentSuper, _ := newPauseResumeFixture(ctx, mockStore, initialSpecs)
 
-		// Tick 1: create child and apply reducer (Enabled=false → IsShutdownRequested=true)
 		err := parentSuper.TestTick(ctx)
 		Expect(err).NotTo(HaveOccurred())
 
-		// Assert 1: child is resident in s.children (stopped-but-resident, not despawned)
-		children := parentSuper.GetChildren()
-		Expect(children).To(HaveKey("child-a"),
-			"Enabled=false child must remain resident in s.children (stopped-but-resident semantics)")
+		// Assert 1: child was NOT created (skip-on-create).
+		Expect(parentSuper.GetChildren()).NotTo(HaveKey("child-a"),
+			"PR3-I: Enabled=false on cold boot must skip child creation entirely")
 
-		// Assert 2: child is NOT in pendingRemoval — Enabled=false is not the same as omission
+		// Assert 2: child is NOT in pendingRemoval — Enabled=false is not omission.
 		Expect(parentSuper.TestIsPendingRemoval("child-a")).To(BeFalse(),
-			"Enabled=false must not write pendingRemoval; only omitting the name from specs triggers despawn")
-
-		// Assert 3: child's desired state carries IsShutdownRequested=true so the worker
-		// can progress to Stopped on subsequent ticks
-		var childDesired supervisor.TestDesiredState
-		err = mockStore.LoadDesiredTyped(ctx, "child", "child-a-001", &childDesired)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(childDesired.IsShutdownRequested()).To(BeTrue(),
-			"reducer must write IsShutdownRequested=true on child's desired state when Enabled=false")
+			"skip-on-create must not write pendingRemoval; only spec omission does")
 	})
 
-	It("TestPauseResume_ReenableFromStopped_ChildRestartsTryingToStart", func() {
-		// Setup: start with Enabled=false so the child is paused immediately on tick 1.
+	It("TestPauseResume_ResidentChildEnabledFalse_ReducerSetsIsShutdownRequested", func() {
+		// Resident-child reducer path: when Enabled flips from true to false
+		// on a child that already exists in s.children, the reducer must
+		// write IsShutdownRequested=true on the child's worker desired
+		// state, and the child must stay resident (no pendingRemoval, no
+		// despawn).
 		initialSpecs := []config.ChildSpec{
+			{
+				Name:       "child-a",
+				WorkerType: "child",
+				UserSpec:   config.UserSpec{Config: "child-config"},
+				Enabled:    true,
+			},
+		}
+		parentSuper, worker := newPauseResumeFixture(ctx, mockStore, initialSpecs)
+
+		// Tick 1: create child with Enabled=true.
+		Expect(parentSuper.TestTick(ctx)).To(Succeed())
+		Expect(parentSuper.GetChildren()).To(HaveKey("child-a"),
+			"precondition: child must exist after tick 1")
+
+		// Flip the resident child to Enabled=false.
+		worker.childrenSpecs = []config.ChildSpec{
 			{
 				Name:       "child-a",
 				WorkerType: "child",
@@ -140,19 +151,68 @@ var _ = Describe("CHANGE-19 Pause/Resume", func() {
 				Enabled:    false,
 			},
 		}
+		parentSuper.TestUpdateUserSpec(config.UserSpec{Config: "parent-config-disable"})
+
+		// Tick 2: reducer must write IsShutdownRequested=true; PR3-I's
+		// skip-on-create branch must NOT remove the resident child.
+		Expect(parentSuper.TestTick(ctx)).To(Succeed())
+
+		// Assert 1: child stays resident.
+		Expect(parentSuper.GetChildren()).To(HaveKey("child-a"),
+			"resident child must not be despawned by Enabled=false; only spec omission triggers despawn")
+
+		// Assert 2: child is NOT in pendingRemoval.
+		Expect(parentSuper.TestIsPendingRemoval("child-a")).To(BeFalse(),
+			"Enabled=false must not write pendingRemoval; only omitting the name from specs triggers despawn")
+
+		// Assert 3: reducer wrote IsShutdownRequested=true on child's worker desired state.
+		var childDesired supervisor.TestDesiredState
+		err := mockStore.LoadDesiredTyped(ctx, "child", "child-a-001", &childDesired)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(childDesired.IsShutdownRequested()).To(BeTrue(),
+			"reducer must write IsShutdownRequested=true on resident child's desired state when Enabled=false")
+	})
+
+	It("TestPauseResume_ReenableFromStopped_ChildRestartsTryingToStart", func() {
+		// Setup: start with Enabled=true so PR3-I's skip-on-create does not
+		// suppress creation; that gives us a resident child whose Enabled
+		// flag we then toggle false→true to exercise the resume path.
+		initialSpecs := []config.ChildSpec{
+			{
+				Name:       "child-a",
+				WorkerType: "child",
+				UserSpec:   config.UserSpec{Config: "child-config"},
+				Enabled:    true,
+			},
+		}
 		parentSuper, worker := newPauseResumeFixture(ctx, mockStore, initialSpecs)
 
-		// Tick 1: create child, reducer writes IsShutdownRequested=true
-		err := parentSuper.TestTick(ctx)
-		Expect(err).NotTo(HaveOccurred())
+		// Tick 1: create child with Enabled=true.
+		Expect(parentSuper.TestTick(ctx)).To(Succeed())
+		Expect(parentSuper.GetChildren()).To(HaveKey("child-a"),
+			"precondition: child must be resident after tick 1")
 
-		// Verify precondition: child is paused
+		// Disable the resident child.
+		worker.childrenSpecs = []config.ChildSpec{
+			{
+				Name:       "child-a",
+				WorkerType: "child",
+				UserSpec:   config.UserSpec{Config: "child-config"},
+				Enabled:    false,
+			},
+		}
+		parentSuper.TestUpdateUserSpec(config.UserSpec{Config: "parent-config-disable"})
+
+		// Tick 2: reducer writes IsShutdownRequested=true on resident child.
+		Expect(parentSuper.TestTick(ctx)).To(Succeed())
+
 		var childDesired supervisor.TestDesiredState
-		err = mockStore.LoadDesiredTyped(ctx, "child", "child-a-001", &childDesired)
+		err := mockStore.LoadDesiredTyped(ctx, "child", "child-a-001", &childDesired)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(childDesired.IsShutdownRequested()).To(BeTrue(), "precondition: child must be paused before re-enable")
+		Expect(childDesired.IsShutdownRequested()).To(BeTrue(),
+			"precondition: child must be paused before re-enable")
 
-		// Re-enable: flip the spec to Enabled=true
+		// Re-enable: flip the spec to Enabled=true.
 		worker.childrenSpecs = []config.ChildSpec{
 			{
 				Name:       "child-a",
@@ -164,25 +224,23 @@ var _ = Describe("CHANGE-19 Pause/Resume", func() {
 		// Bust the DDS cache. The cache key is the parent's userSpec hash, not childrenSpecs.
 		// hierarchicalWorker.DeriveDesiredState ignores its spec parameter and reads
 		// h.childrenSpecs directly, so changing childrenSpecs alone would not invalidate
-		// the cache and reconcileChildren would reuse the Enabled=false DDS from tick 1.
+		// the cache and reconcileChildren would reuse the Enabled=false DDS from tick 2.
 		parentSuper.TestUpdateUserSpec(config.UserSpec{Config: "parent-config-reenable"})
 
-		// Tick 2: reducer calls ClearShutdownRequest → IsShutdownRequested=false;
+		// Tick 3: reducer calls ClearShutdownRequest → IsShutdownRequested=false;
 		// the child's state machine will transition from Stopped to TryingToStart on
-		// subsequent worker ticks
-		err = parentSuper.TestTick(ctx)
-		Expect(err).NotTo(HaveOccurred())
+		// subsequent worker ticks.
+		Expect(parentSuper.TestTick(ctx)).To(Succeed())
 
-		// Assert 1: child is still resident (never despawned during the pause/resume cycle)
-		children := parentSuper.GetChildren()
-		Expect(children).To(HaveKey("child-a"),
+		// Assert 1: child is still resident (never despawned during the pause/resume cycle).
+		Expect(parentSuper.GetChildren()).To(HaveKey("child-a"),
 			"child must remain resident throughout the pause/resume cycle")
 
-		// Assert 2: child is still NOT in pendingRemoval
+		// Assert 2: child is still NOT in pendingRemoval.
 		Expect(parentSuper.TestIsPendingRemoval("child-a")).To(BeFalse(),
 			"re-enabling must not affect pendingRemoval — only spec omission triggers despawn")
 
-		// Assert 3: IsShutdownRequested is now false so the worker can restart
+		// Assert 3: IsShutdownRequested is now false so the worker can restart.
 		err = mockStore.LoadDesiredTyped(ctx, "child", "child-a-001", &childDesired)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(childDesired.IsShutdownRequested()).To(BeFalse(),

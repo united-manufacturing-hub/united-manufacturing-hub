@@ -47,6 +47,7 @@ var _ = Describe("PendingRemoval Flag Clearing", func() {
 					Name:       "child1",
 					WorkerType: "child",
 					UserSpec:   config.UserSpec{Config: "child-config"},
+					Enabled:    true,
 				},
 			}
 

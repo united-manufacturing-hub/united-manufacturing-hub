@@ -1506,6 +1506,28 @@ func (s *Supervisor[TObserved, TDesired]) reconcileChildren(specs []config.Child
 
 			updatedCount++
 		} else {
+			// CHANGE-19 reducer follow-up: don't create resources for disabled
+			// specs. The reducer (below this block) handles the running case
+			// where Enabled flips to false on a resident child. Here we handle
+			// the not-yet-resident case where the spec arrives Enabled=false
+			// from cold boot (e.g., the parent's Stopped state has not yet
+			// emitted Enabled=true). Without this guard, the supervisor would
+			// allocate dependencies, construct the worker, then on the very
+			// next tick the reducer would flip IsShutdownRequested=true and
+			// the child's StoppedState would signal NeedsRemoval — a full
+			// create-and-destroy round-trip just to honor "this should be off."
+			//
+			// When Enabled flips back to true on a non-resident spec, the
+			// next reconcileChildren tick's creation loop picks it up
+			// normally.
+			if !spec.Enabled {
+				s.logger.Debug("supervisor_skip_disabled_child_creation",
+					deps.String("child_name", spec.Name),
+					deps.String("child_worker_type", spec.WorkerType))
+
+				continue
+			}
+
 			s.logTrace("lifecycle",
 				deps.String("lifecycle_event", "child_add_start"),
 				deps.String("child_name", spec.Name),

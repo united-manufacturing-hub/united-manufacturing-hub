@@ -290,6 +290,7 @@ var _ = Describe("Variable Injection", func() {
 							Name:       "test-child",
 							WorkerType: "test",
 							UserSpec:   childUserSpec,
+							Enabled:    true,
 						},
 					},
 				}, nil
@@ -348,6 +349,7 @@ var _ = Describe("Variable Injection", func() {
 							Name:       "override-child",
 							WorkerType: "test",
 							UserSpec:   childUserSpec,
+							Enabled:    true,
 						},
 					},
 				}, nil
