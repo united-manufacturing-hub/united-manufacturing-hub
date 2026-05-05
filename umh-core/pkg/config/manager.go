@@ -507,20 +507,19 @@ func (m *FileConfigManager) readAndParseConfig(ctx context.Context) (FullConfig,
 		return FullConfig{}, "", ctx.Err()
 	}
 
-	// If the config is empty, return an error
-	// Note: sometimes it can happen that due to a filesystem error or maybe in the tests due to docker cp, the file is empty
-	// In this case we want to return an error, which is then ignored by the control loop and will retry in the next cycle
+	// Empty-config safety net. If the parsed file decodes to a zero FullConfig
+	// (truncated by docker cp during a write window, partial deploy stub, manual
+	// mis-edit), return an error so the control loop ignores this tick and retries
+	// next cycle. Without this, the control loop would reconcile an empty desired
+	// state and tear down every running flow, bridge, and stream processor.
+	//
+	// LOAD-BEARING ORDERING: this check MUST run BEFORE validateConfig.
+	// validateConfig defaults Location to an empty non-nil map and ReleaseChannel
+	// to "stable" — once defaulted, the FullConfig is no longer deep-equal to
+	// FullConfig{} and this check silently goes dead. Do not move this below
+	// validateConfig.
 	if reflect.DeepEqual(config, FullConfig{}) {
 		return FullConfig{}, "", fmt.Errorf("config file is empty: %s", m.configPath)
-	}
-
-	// Apply the same defaults ParseConfig(applyDefaults=true) would, but only
-	// after the empty-config check so the safety net stays armed.
-	if config.Agent.Location == nil {
-		config.Agent.Location = make(map[int]string)
-	}
-	if strings.TrimSpace(string(config.Agent.ReleaseChannel)) == "" {
-		config.Agent.ReleaseChannel = ReleaseChannelStable
 	}
 
 	m.swapValidationIssues(m.validateConfig(&config))
@@ -529,15 +528,47 @@ func (m *FileConfigManager) readAndParseConfig(ctx context.Context) (FullConfig,
 	return config, string(data), nil
 }
 
-// validateConfig inspects the parsed config for known invariants and returns
-// a list of validation issues. Side effect: coerces invalid values to safe
-// defaults on the passed-in config (e.g. an unrecognized releaseChannel resets
-// to "stable" so downstream code never branches on the typo). Empty values are
-// defaulted to "stable" by callers before reaching this branch (readAndParseConfig
-// applies defaults manually after the empty-config safety net; ParseConfig with
-// applyDefaults=true does the same for write callers) — only non-empty typos do.
+// validateConfig defaults empty fields per the omitempty contract, then records
+// issues for non-empty values that fail the allowed set. Side effect: mutates
+// the passed-in config (defaults empties to safe values; coerces typos to stable
+// so downstream code never branches on the typo).
+//
+// Callers MUST NOT default empty fields before calling this function. All
+// defaulting happens here exclusively. If a future engineer finds themselves
+// adding a defaulter at a call site, the call site is wrong — either the call
+// site shouldn't be calling validateConfig (e.g. should call ParseConfig
+// directly without subsequent validation), or the field should be added to
+// this function. Keeping defaulting in one place prevents drift across the
+// three call sites (readAndParseConfig, writeConfig, WriteYAMLConfigFromString).
+//
+// Empty values do NOT get recorded as issues — they are user-omitted optional
+// fields, not typos. Only non-empty values that fail the allowed set become
+// issues. This is the spec's intent: "Empty releaseChannel defaults to stable
+// silently."
+//
+// Idempotent: re-calling on an already-defaulted config produces the same
+// result (defaulting branches skip the no-op).
+//
+// The empty-config safety net in readAndParseConfig (the reflect.DeepEqual
+// check above this function's only read-path call site) MUST still run BEFORE
+// this function. Once empty fields are defaulted, the FullConfig is no longer
+// deep-equal to FullConfig{} and the safety net cannot fire. See the
+// LOAD-BEARING ORDERING comment at that site for detail.
+//
 // We do NOT call SentryWarn here: see doc.go for the Sentry-vs-validation policy.
 func (m *FileConfigManager) validateConfig(config *FullConfig) []ConfigValidationIssue {
+	// Default empties first. Idempotent: a non-nil map skips, a non-empty
+	// release channel skips. The whitespace check on ReleaseChannel matches the
+	// behavior previously living in ParseConfig's applyDefaults branch.
+	if config.Agent.Location == nil {
+		config.Agent.Location = make(map[int]string)
+	}
+	if strings.TrimSpace(string(config.Agent.ReleaseChannel)) == "" {
+		config.Agent.ReleaseChannel = ReleaseChannelStable
+	}
+
+	// Then flag typos. Empty values were defaulted to stable above and won't
+	// reach this branch.
 	var issues []ConfigValidationIssue
 	if config.Agent.ReleaseChannel != ReleaseChannelNightly &&
 		config.Agent.ReleaseChannel != ReleaseChannelStable &&
@@ -1271,7 +1302,11 @@ func (m *FileConfigManager) WriteYAMLConfigFromString(ctx context.Context, confi
 	// We already validated the config above, so this should succeed
 	// This parsing step is crucial as it converts the raw YAML to the proper spec config format,
 	// ensuring template references are resolved and the cache contains valid, usable config data
-	newConfig, err := ParseConfig([]byte(configStr), ctx, true, true) // Allow unknown fields for YAML anchors; apply defaults so cache matches readAndParseConfig
+	// Allow unknown fields for YAML anchors. applyDefaults=false because
+	// validateConfig below now handles defaulting (Fix A round 3) — keeping
+	// applyDefaults=true here would be a redundant code path with no behavioral
+	// difference, just an extra place where defaulting logic could drift.
+	newConfig, err := ParseConfig([]byte(configStr), ctx, true, false)
 	if err != nil {
 		// If parsing fails, invalidate cache to force fresh read later
 		m.cacheMu.Lock()

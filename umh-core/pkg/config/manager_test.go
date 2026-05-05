@@ -1854,6 +1854,116 @@ var _ = Describe("ConfigValidationIssue surface", func() {
 		Entry("empty agent stanza", "agent: {}\n"),
 	)
 
+	It("validateConfig defaults empty fields silently (P-validate-defaults-empty)", func() {
+		// Pins Fix A's structural invariant: validateConfig is the single defaulter.
+		// Empty Location and ReleaseChannel are user-omitted optional fields, not
+		// typos, so validateConfig must default them silently without recording an
+		// issue. Pre-fix: validateConfig flagged "" as a typo with OffendingValue
+		// "" — the regression that produced the fresh-install phantom message.
+		m, _ := newTestManagerWithYAML("agent: {}\n")
+		defer m.Stop()
+
+		cfg := FullConfig{}
+		issues := m.validateConfig(&cfg)
+
+		Expect(issues).To(BeEmpty())
+		Expect(cfg.Agent.Location).NotTo(BeNil())
+		Expect(cfg.Agent.Location).To(BeEmpty())
+		Expect(cfg.Agent.ReleaseChannel).To(Equal(ReleaseChannelStable))
+	})
+
+	It("validateConfig is idempotent on already-defaulted input (P-validate-idempotent)", func() {
+		// Calling validateConfig twice produces the same end state. Important
+		// because some call paths (e.g. WriteYAMLConfigFromString post Fix A) hand
+		// validateConfig a struct that ParseConfig didn't default; others hand it
+		// a struct that ParseConfig DID default. Both must work.
+		m, _ := newTestManagerWithYAML("agent: {}\n")
+		defer m.Stop()
+
+		cfg := FullConfig{}
+		issues1 := m.validateConfig(&cfg)
+		issues2 := m.validateConfig(&cfg)
+
+		Expect(issues1).To(BeEmpty())
+		Expect(issues2).To(BeEmpty())
+		Expect(cfg.Agent.Location).To(BeEmpty())
+		Expect(cfg.Agent.ReleaseChannel).To(Equal(ReleaseChannelStable))
+	})
+
+	It("writeConfig on fresh install records no validation issues (P-fresh-install)", func() {
+		// Reproduces Finding #2 from claude[bot] round 3. Fresh install: no
+		// /data/config.yaml, RELEASE_CHANNEL env var unset. GetConfigWithOverwrites
+		// OrCreateNew constructs a FullConfig{} with empty ReleaseChannel and
+		// calls writeConfig. Pre-Fix-A: writeConfig invokes validateConfig on the
+		// empty struct, which records a phantom ConfigValidationIssue with empty
+		// OffendingValue. Post-Fix-A: validateConfig defaults the empty value to
+		// stable silently, no issue recorded.
+		m, mockFS := newTestManagerWithYAML("")
+		defer m.Stop()
+		mockFS.WithWriteFileFunc(func(ctx context.Context, path string, data []byte, perm os.FileMode) error {
+			mockFS.WithReadFileFunc(func(ctx context.Context, path string) ([]byte, error) { return data, nil })
+			return nil
+		})
+
+		freshConfig := FullConfig{}
+		err := m.writeConfig(ctx, freshConfig)
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(m.GetConfigValidationIssues()).To(BeEmpty())
+	})
+
+	It("backgroundRefresh preserves cacheModTime when parse fails (P-empty-cache-poison)", func() {
+		// Reproduces Finding #1 from claude[bot] round 3. After f8b5ef7 restored
+		// the empty-config safety net, backgroundRefresh would still update
+		// cacheModTime to the truncated file's mtime AND set cacheError. Next
+		// tick: GetConfig FAST PATH matches mtime, returns cacheConfig (which is
+		// FullConfig{}) with hardcoded nil error — control loop tears down
+		// services. Fix B: don't update cacheModTime when readAndParseConfig
+		// returns an error, so subsequent calls re-enter SLOW PATH where the
+		// empty-deep-equal check at line 435 surfaces cacheError.
+		validModTime := time.Unix(1000, 0)
+		truncatedModTime := time.Unix(2000, 0)
+		current := []byte("agent:\n  releaseChannel: stable\n")
+		currentMod := validModTime
+
+		mockFS := filesystem.NewMockFileSystem()
+		mockFS.WithFileExistsFunc(func(ctx context.Context, path string) (bool, error) { return true, nil })
+		mockFS.WithReadFileFunc(func(ctx context.Context, path string) ([]byte, error) { return current, nil })
+		mockFS.WithStatFunc(func(ctx context.Context, path string) (os.FileInfo, error) {
+			return &mockFileInfo{name: filepath.Base(path), size: int64(len(current)), modTime: currentMod}, nil
+		})
+		mockFS.WithEnsureDirectoryFunc(func(ctx context.Context, path string) error { return nil })
+
+		m := NewFileConfigManager()
+		m.WithFileSystemService(mockFS)
+		defer m.Stop()
+
+		// Boot: prime cache with valid config at validModTime via backgroundRefresh.
+		m.refreshMu.Lock()
+		m.backgroundRefresh(validModTime)
+		Expect(m.cacheError).NotTo(HaveOccurred())
+		Expect(m.cacheModTime).To(Equal(validModTime))
+		Expect(m.cacheConfig.Agent.ReleaseChannel).To(Equal(ReleaseChannelStable))
+
+		// Truncate the file: empty content + new mtime (T1).
+		current = []byte("---\n")
+		currentMod = truncatedModTime
+
+		// Trigger backgroundRefresh as the SLOW PATH would. With Fix B: cacheModTime
+		// stays at validModTime, cacheConfig is clobbered to FullConfig{},
+		// cacheError holds the empty-config error. Without Fix B: cacheModTime
+		// would be set to truncatedModTime, poisoning the FAST PATH for tick 2.
+		m.refreshMu.Lock()
+		m.backgroundRefresh(truncatedModTime)
+		Expect(m.cacheError).To(HaveOccurred())
+		Expect(m.cacheError.Error()).To(ContainSubstring("config file is empty"))
+		Expect(m.cacheConfig).To(Equal(FullConfig{}))
+		// The load-bearing assertion: cacheModTime must NOT have been updated to
+		// the truncated file's mtime. Otherwise FAST PATH would silently serve
+		// FullConfig{} on the next tick.
+		Expect(m.cacheModTime).To(Equal(validModTime))
+	})
+
 	It("FileConfigManagerWithBackoff delegates GetConfigValidationIssues (P10)", func() {
 		m, _ := newTestManagerWithYAML("agent:\n  releaseChannel: nigtly\n")
 		defer m.Stop()
