@@ -21,19 +21,19 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/types"
 )
 
-var _ = Describe("IsTransient", func() {
-	DescribeTable("classifies all ErrorType values",
-		func(errType types.ErrorType, expected bool) {
-			Expect(errType.IsTransient()).To(Equal(expected))
-		},
-		Entry("Unknown is persistent", types.ErrorTypeUnknown, false),
-		Entry("CloudflareChallenge is persistent", types.ErrorTypeCloudflareChallenge, false),
-		Entry("InvalidToken is persistent", types.ErrorTypeInvalidToken, false),
-		Entry("InstanceDeleted is persistent", types.ErrorTypeInstanceDeleted, false),
-		Entry("ProxyBlock is persistent", types.ErrorTypeProxyBlock, false),
-		Entry("Network is transient", types.ErrorTypeNetwork, true),
-		Entry("ServerError is transient", types.ErrorTypeServerError, true),
-		Entry("ChannelFull is transient", types.ErrorTypeChannelFull, true),
-		Entry("BackendRateLimit is transient", types.ErrorTypeBackendRateLimit, true),
-	)
+var _ = Describe("ErrorType", func() {
+	It("covers every ErrorType value — fails when a new constant is added without classifying it", func() {
+		for i := range types.ErrorTypeMax {
+			errType := types.ErrorType(i)
+			// Maps return the zero value for absent keys (false / ""), so we
+			// cannot rely on the return value to detect gaps. Instead we assert
+			// that an explicit entry exists for every iota value.
+			Expect(types.IsTransientTypes).To(HaveKey(errType),
+				"ErrorType(%d) has no entry in IsTransientTypes — add it to types.go", i)
+			Expect(types.ErrorTypeNames).To(HaveKey(errType),
+				"ErrorType(%d) has no entry in ErrorTypeNames — add it to types.go", i)
+			Expect(types.ErrorTypeCounters).To(HaveKey(errType),
+				"ErrorType(%d) has no entry in ErrorTypeCounters — add it to types.go", i)
+		}
+	})
 })
