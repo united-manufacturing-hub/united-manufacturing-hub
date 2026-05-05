@@ -28,12 +28,10 @@ device: {{ .DEVICE_ID }}`
 
 // RenderChildren is the parent's children-set emitter for the example parent
 // worker. Pure function of the parsed ParentUserSpec: same input yields the
-// same ChildSpec values (and ChildSpec.Hash output) across repeated calls
-// (idempotency property exercised by P1.8 architecture test #7).
+// same ChildSpec values (and ChildSpec.Hash output) across repeated calls.
 //
-// Per §4-C LOCKED, Enabled MUST be set explicitly to true; the F4⊕G1 trap
-// detector in P1.8 architecture test #13 (registry walk, layer 2) catches
-// forgotten-Enabled in renderChildren bodies.
+// Per §4-C LOCKED, Enabled MUST be set explicitly to true to avoid the
+// F4⊕G1 trap of forgotten-Enabled in renderChildren bodies.
 //
 // State.Next will adopt this emitter when P2.2 wires renderChildren into the
 // state-machine return path; until then DeriveDesiredState calls this helper

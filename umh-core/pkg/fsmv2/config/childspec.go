@@ -555,8 +555,7 @@ func NewChildrenView(children []ChildInfo) ChildrenView {
 // read-only; mutations are not observed by the supervisor.
 //
 // Deprecated: prefer reading the Children field directly. This wrapper is
-// retained for migration compatibility with the prior interface API and is
-// removed in P3.0 once all callers move to the field access form.
+// retained for migration compatibility with the prior interface API.
 func (v ChildrenView) List() []ChildInfo {
 	return v.Children
 }
@@ -577,7 +576,7 @@ func (v ChildrenView) Get(name string) (ChildInfo, bool) {
 //
 // Deprecated: read HealthyCount / UnhealthyCount fields directly. Retained for
 // migration compatibility with code that previously called Counts() on the
-// ChildrenView interface; removed in P3.0.
+// ChildrenView interface.
 func (v ChildrenView) Counts() (healthy, unhealthy int) {
 	return v.HealthyCount, v.UnhealthyCount
 }

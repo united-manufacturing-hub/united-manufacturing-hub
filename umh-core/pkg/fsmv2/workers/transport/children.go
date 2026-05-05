@@ -21,17 +21,15 @@ import (
 
 // RenderChildren is the parent's children-set emitter for the transport
 // worker. Pure function of the typed snapshot: same input yields the same
-// ChildSpec values (and ChildSpec.Hash output) across repeated calls
-// (idempotency property exercised by P1.8 architecture test #7).
+// ChildSpec values (and ChildSpec.Hash output) across repeated calls.
 //
 // The transport parent always emits two children — push and pull — that are
 // always-enabled while the parent is running. Deliberate disable goes through
 // ChildSpec.Enabled=false (CHANGE-19 reducer), not through parent-state
 // gating.
 //
-// Per §4-C LOCKED, Enabled MUST be set explicitly to true; the F4⊕G1 trap
-// detector in P1.8 architecture test #13 (registry walk, layer 2) catches
-// forgotten-Enabled in renderChildren bodies.
+// Per §4-C LOCKED, Enabled MUST be set explicitly to true to avoid the
+// F4⊕G1 trap of forgotten-Enabled in renderChildren bodies.
 //
 // State.Next emits this set via NextResult.Children (wired in P2.2 and made
 // authoritative for the supervisor in P2.4); the legacy DDS-derived path was

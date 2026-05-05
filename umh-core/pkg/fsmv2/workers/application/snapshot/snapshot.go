@@ -17,10 +17,10 @@
 // depend on these types without introducing an import cycle with the worker
 // package.
 //
-// Post-PR2-C11 the application worker uses fsmv2.Observation[ApplicationStatus]
-// and *fsmv2.WrappedDesiredState[ApplicationConfig]; the underlying value
-// types are defined here and re-exported from the worker package as type
-// aliases for caller convenience.
+// The application worker uses fsmv2.Observation[ApplicationStatus] and
+// *fsmv2.WrappedDesiredState[ApplicationConfig]; the underlying value types
+// are defined here and re-exported from the worker package as type aliases
+// for caller convenience.
 package snapshot
 
 import (

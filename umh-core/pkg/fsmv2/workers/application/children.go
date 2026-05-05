@@ -33,10 +33,9 @@ import (
 // Callers that want a stopped child must use ShutdownRequested, not Enabled.
 //
 // Pure, deterministic, idempotent: same snapshot input yields the same
-// ChildSpec values across repeated calls (idempotency property exercised by
-// P1.8 architecture test #7). Per §4-C LOCKED, Enabled is set explicitly to
-// true so the F4⊕G1 trap detector in P1.8 architecture test #13 (registry
-// walk, layer 2) accepts the emitted slice.
+// ChildSpec values across repeated calls. Per §4-C LOCKED, Enabled is set
+// explicitly to true to avoid the F4⊕G1 trap of forgotten-Enabled in
+// renderChildren bodies.
 func RenderChildren(snap fsmv2.WorkerSnapshot[snapshot.ApplicationConfig, snapshot.ApplicationStatus]) []config.ChildSpec {
 	src := snap.Desired.ChildrenSpecs
 	if len(src) == 0 {

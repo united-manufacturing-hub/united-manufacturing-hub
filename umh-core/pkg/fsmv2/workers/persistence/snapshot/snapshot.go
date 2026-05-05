@@ -17,10 +17,10 @@
 // exists as a separate leaf package so the state sub-package can depend on
 // these types without introducing an import cycle with the worker package.
 //
-// Post-PR2-C9 the persistence worker uses fsmv2.Observation[PersistenceStatus]
-// and *fsmv2.WrappedDesiredState[PersistenceConfig]; the underlying value
-// types are defined here and re-exported from the worker package as type
-// aliases for caller convenience.
+// The persistence worker uses fsmv2.Observation[PersistenceStatus] and
+// *fsmv2.WrappedDesiredState[PersistenceConfig]; the underlying value types
+// are defined here and re-exported from the worker package as type aliases
+// for caller convenience.
 package snapshot
 
 import (
