@@ -13,14 +13,6 @@
 // limitations under the License.
 
 // Package state defines the FSM states for the helloworld worker.
-//
-// State machine:
-//
-//	stopped -> trying_to_start -> running
-//	   ^                |        mood="sad" | ^ mood!="sad"
-//	   |                |                   v |
-//	   |                |               degraded
-//	   └── (shutdown) ──┴──────────────────┘
 package state
 
 import (

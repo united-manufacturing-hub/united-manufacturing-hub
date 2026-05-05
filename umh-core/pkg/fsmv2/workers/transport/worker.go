@@ -12,37 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package transport implements the Transport FSM worker for bidirectional
-// message exchange between Edge and Backend tiers via HTTP relay.
-//
-// # Architecture
-//
-// TransportWorker is an orchestrator parent that manages the following children:
-//   - PushWorker: Handles outbound message pushing to backend
-//   - PullWorker: Handles inbound message pulling from backend
-//
-// The worker authenticates with the relay server and coordinates its children
-// for continuous message exchange.
-//
-// # Control Loop
-//
-// Sensor (CollectObservedState): reads JWT token, error counters, auth timing from deps
-// Controller (state machine): Stopped → Starting → Running ⇄ Degraded
-// Actuator (Actions): AuthenticateAction, ResetTransportAction
-//
-// # States and Transitions
-//
-// State flow:
-//
-//	Stopped ──→ Starting ──→ Running ⇄ Degraded
-//	                ↑   ↘       ↓ (token expired)
-//	                │  AuthFailed ← (InvalidToken/InstanceDeleted)
-//	                │    ↓ (config changed)
-//	                └────┘
-//
-// All active states transition to Stopping → Stopped on shutdown.
-// Permanent auth errors (InvalidToken, InstanceDeleted) enter AuthFailedState,
-// which waits for a config change before retrying.
+// Package transport authenticates with the relay server and orchestrates
+// PushWorker/PullWorker children for bidirectional message exchange.
 package transport
 
 import (

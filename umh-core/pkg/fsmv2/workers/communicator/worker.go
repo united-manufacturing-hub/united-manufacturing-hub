@@ -12,36 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package communicator implements the CommunicatorWorker, a parent orchestrator
-// that manages bidirectional message exchange between Edge and Backend tiers.
+// Package communicator is the parent orchestrator that manages a TransportWorker
+// child for bidirectional message exchange with the backend.
 //
-// # Architecture
-//
-// CommunicatorWorker delegates all transport operations to a TransportWorker child.
-// TransportWorker handles authentication, push, pull, backoff, and transport reset.
-// CommunicatorWorker monitors child health and manages lifecycle transitions.
-//
-// Channel sharing: Both communicator and transport packages use a ChannelProvider
-// singleton to supply inbound and outbound message channels. Call
-// communicator.SetChannelProvider() and transport.SetChannelProvider() before
-// starting the supervisor.
-//
-// # Worker API v2
-//
-// This package uses the WorkerBase[TConfig, TStatus] API with custom overrides:
-//   - Custom CollectObservedState: builds status from deps, returns NewObservation (collector handles metric accumulation)
-//   - Custom DeriveDesiredState: captures Timeout default at construction time (C18 pattern)
-//   - state.Next emits TransportWorker child specs via NextResult.Children
-//     (canonical RenderChildren in children.go; state-package mirror feeds the
-//     supervisor's authoritative children-set discriminator)
-//
-// # States and Transitions
-//
-// State flow:
-//
-//	Stopped → Syncing ↔ Recovering → Stopped
-//
-// TransportWorker runs as a child when the parent is in Syncing or Recovering.
+// Setup: call communicator.SetChannelProvider() and transport.SetChannelProvider()
+// before starting the supervisor — both packages share inbound/outbound channels
+// through a ChannelProvider singleton.
 package communicator
 
 import (

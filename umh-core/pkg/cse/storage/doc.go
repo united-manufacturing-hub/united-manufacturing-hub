@@ -189,7 +189,7 @@
 //
 // Maintenance() performs heavyweight cleanup. Currently clears the snapshot cache.
 // For SQLite, this will be VACUUM. Called at startup (TryingToStartState), shutdown
-// (ShuttingDownState), and preferentially on weekend nights every 7 days by the
+// (StoppingState), and preferentially on weekend nights every 7 days by the
 // PersistenceWorker. See pkg/fsmv2/workers/persistence/ for scheduling details.
 //
 // # UserSpec and SAGA patterns

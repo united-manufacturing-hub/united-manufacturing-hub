@@ -12,15 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package snapshot holds the persistence worker's Config and Status value
-// types plus the PersistenceDependencies interface consumed by actions. It
-// exists as a separate leaf package so the state sub-package can depend on
-// these types without introducing an import cycle with the worker package.
-//
-// The persistence worker uses fsmv2.Observation[PersistenceStatus] and
-// *fsmv2.WrappedDesiredState[PersistenceConfig]; the underlying value types
-// are defined here and re-exported from the worker package as type aliases
-// for caller convenience.
+// Package snapshot holds the persistence worker's Config, Status, and
+// dependencies interface as a leaf package so state/ can depend on them
+// without an import cycle through the worker package.
 package snapshot
 
 import (

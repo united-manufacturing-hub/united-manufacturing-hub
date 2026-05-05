@@ -13,14 +13,8 @@
 // limitations under the License.
 
 // Package snapshot holds the application worker's Config and Status value
-// types. It exists as a separate leaf package so the state sub-package can
-// depend on these types without introducing an import cycle with the worker
-// package.
-//
-// The application worker uses fsmv2.Observation[ApplicationStatus] and
-// *fsmv2.WrappedDesiredState[ApplicationConfig]; the underlying value types
-// are defined here and re-exported from the worker package as type aliases
-// for caller convenience.
+// types as a leaf package so state/ can depend on them without an import
+// cycle through the worker package.
 package snapshot
 
 import (
