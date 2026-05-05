@@ -18,6 +18,7 @@ import (
 	"fmt"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
 	transport_pkg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport"
 )
@@ -45,10 +46,7 @@ func (s *AuthFailedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	// Auth permanently broken — children must not run. StartingState (on
 	// config-change transition) will keep Enabled=false; RunningState flips to
 	// Enabled=true once auth succeeds.
-	children := transport_pkg.RenderChildren(snap)
-	for i := range children {
-		children[i].Enabled = false
-	}
+	children := config.DisableAll(transport_pkg.RenderChildren(snap))
 
 	// FailedAuthConfig is guaranteed populated here because only permanent errors
 	// (which call SetFailedAuthConfig via the !IsTransient() guard in authenticate.go)

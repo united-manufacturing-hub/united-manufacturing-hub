@@ -49,10 +49,7 @@ func (s *StoppedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	// (supervisor/reconciliation.go) translates Enabled=false into RequestShutdown
 	// while leaving the child in supervisor's children map, so flipping Enabled
 	// back to true on transition resumes cleanly without losing internal state.
-	for i := range children {
-		children[i].Enabled = false
-	}
-	return fsmv2.Transition(s, fsmv2.SignalNone, nil, "Transport is stopped, waiting for running request", children)
+	return fsmv2.Transition(s, fsmv2.SignalNone, nil, "Transport is stopped, waiting for running request", config.DisableAll(children))
 }
 
 // String returns the state name derived from the type.

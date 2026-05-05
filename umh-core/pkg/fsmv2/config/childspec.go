@@ -231,6 +231,27 @@ func NewChildSpec(name, workerType string, userSpec UserSpec) ChildSpec {
 	}
 }
 
+// DisableAll marks every ChildSpec in the slice as Enabled=false. Used by
+// parent state machines that want children resident-but-shutdown via the
+// CHANGE-19 reducer (e.g. parent in Stopped/Stopping/transient states).
+// Returns the slice for chaining. Mutates in place.
+//
+// Pattern:
+//
+//	return fsmv2.Transition(..., config.DisableAll(pkg.RenderChildren(snap)))
+//
+// CHANGE-19 reducer (supervisor/reconciliation.go ~line 1660) translates
+// Enabled=false into RequestShutdown synchronously before the child's tick,
+// so children stay resident in supervisor.children with IsShutdownRequested
+// set. Flipping back to Enabled=true issues ClearShutdownRequest for clean
+// resume.
+func DisableAll(specs []ChildSpec) []ChildSpec {
+	for i := range specs {
+		specs[i].Enabled = false
+	}
+	return specs
+}
+
 // Clone creates a deep copy of the ChildSpec.
 // Note: Dependencies is shallow-copied (values are shared intentionally since they
 // represent shared resources like channels and interfaces).

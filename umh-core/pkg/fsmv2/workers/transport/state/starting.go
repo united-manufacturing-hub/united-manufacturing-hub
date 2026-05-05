@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/backoff"
 	httpTransport "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport/http"
@@ -46,10 +47,7 @@ func (s *StartingState) Next(snapAny any) fsmv2.NextResult[any, any] {
 
 	// No valid token yet — children must not push/pull. Each return path below
 	// emits this disabled set; destination state (RunningState) flips Enabled=true.
-	children := transport_pkg.RenderChildren(snap)
-	for i := range children {
-		children[i].Enabled = false
-	}
+	children := config.DisableAll(transport_pkg.RenderChildren(snap))
 
 	// If we don't have a valid token, authenticate (with backoff on repeated failures)
 	if !snap.Observed.Status.HasValidToken() {
