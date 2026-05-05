@@ -783,7 +783,7 @@ Worker API v2 replaces the 7-file pattern with a single-file approach using gene
 | `dependencies.go` with custom deps struct | `deps.Identity`, `deps.FSMLogger`, `deps.StateReader` passed to constructor |
 | `init()` with `factory.RegisterWorkerType[...]` + supervisor factory | `register.Worker[TConfig, TStatus, register.NoDeps]("type", constructor)` |
 | `helpers.ConvertSnapshot[Obs, *Des](snapAny)` in states | `fsmv2.ConvertWorkerSnapshot[TConfig, TStatus](snapAny)` in states |
-| `snap.Desired.IsShutdownRequested()` method call | `snap.IsShutdownRequested` field access |
+| `snap.Desired.IsShutdownRequested()` method call | `snap.ShouldStop()` (merged shutdown + parent-stop) or `snap.Desired.IsShutdownRequested()` (raw shutdown flag) |
 | Manual `SetState`, `SetShutdownRequested`, `SetChildrenCounts` in ObservedState | Automatic via collector duck-typing on `Observation` |
 
 ### Migration steps
@@ -793,7 +793,7 @@ Worker API v2 replaces the 7-file pattern with a single-file approach using gene
 3. **Replace constructor** — call `w.InitBase(id, logger, sr)` instead of manual dependency wiring
 4. **Simplify CollectObservedState** — use `fsmv2.ExtractConfig[TConfig](desired)` for config access, return `fsmv2.NewObservation(TStatus{...})` (the collector handles CollectedAt, framework metrics, action history, and metric accumulation automatically)
 5. **Delete DeriveDesiredState and GetInitialState** — provided by WorkerBase (override only if needed)
-6. **Update states** — use `fsmv2.ConvertWorkerSnapshot[TConfig, TStatus](snapAny)` and `snap.IsShutdownRequested` field access
+6. **Update states** — use `fsmv2.ConvertWorkerSnapshot[TConfig, TStatus](snapAny)` and `snap.ShouldStop()` (or `snap.Desired.IsShutdownRequested()` when distinguishing self-shutdown from parent-stop)
 7. **Replace registration** — single `register.Worker[TConfig, TStatus, register.NoDeps]("type", constructor)` call (replace `register.NoDeps` with your deps type if using typed deps)
 8. **Delete snapshot/, dependencies.go, userspec.go** — no longer needed
 9. **Implement capability interfaces** on your worker struct if needed (ActionProvider, ChildSpecProvider, etc.)

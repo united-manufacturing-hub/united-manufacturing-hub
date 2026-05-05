@@ -141,7 +141,7 @@ New workers should use `WorkerBase[TConfig, TStatus, TDeps]` instead of the lega
 - **`WrapAction[TDeps]`** — *(deprecated, removed in PR3)* adapts typed actions to `Action[any]`. Prefer passing `&MyAction{}` directly to `fsmv2.Transition` — the framework auto-wraps via reflection.
 - **`register.Worker[TConfig, TStatus, TDeps]`** — one-line registration (factory + supervisor + CSE types). Use `register.NoDeps` for zero-dep workers.
 
-**Architecture validators** accept both APIs: `ConvertWorkerSnapshot` and `ConvertSnapshot` are valid entry points; `snap.IsShutdownRequested` (field) and `snap.Desired.IsShutdownRequested()` (method) are valid shutdown checks.
+**Architecture validators** accept both APIs: `ConvertWorkerSnapshot` and `ConvertSnapshot` are valid entry points. The shutdown check uses `snap.ShouldStop()` (merged user-shutdown + parent-stop signal) or `snap.Desired.IsShutdownRequested()` (raw user-shutdown flag, used when the state needs to distinguish self-driven shutdown from parent-driven stop). The deprecated `snap.IsShutdownRequested` field is gone.
 
 **Capability interfaces** (optional, detected via type assertion on first instantiation):
 - `ActionProvider` — `Actions() map[string]Action[any]`
