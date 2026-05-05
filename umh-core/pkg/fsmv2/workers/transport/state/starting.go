@@ -28,8 +28,10 @@ import (
 
 // StartingState represents the state where the transport worker is authenticating.
 // It emits AuthenticateAction to obtain a JWT token from the relay server.
-// Once authenticated, transitions to RunningState. Children are always-enabled
-// while the parent is running; they wait for a valid token before pushing/pulling.
+// Once authenticated, transitions to RunningState. Children are emitted with
+// Enabled=false while the parent is acquiring auth — the CHANGE-19 reducer
+// drives RequestShutdown so they wait without consuming resources. RunningState
+// flips Enabled=true on its first tick once authentication succeeds.
 type StartingState struct {
 	helpers.StartingBase
 }
@@ -42,7 +44,12 @@ func (s *StartingState) Next(snapAny any) fsmv2.NextResult[any, any] {
 		return fsmv2.Transition(&StoppingState{}, fsmv2.SignalNone, nil, "Shutdown requested, transitioning to Stopping", nil)
 	}
 
+	// No valid token yet — children must not push/pull. Each return path below
+	// emits this disabled set; destination state (RunningState) flips Enabled=true.
 	children := transport_pkg.RenderChildren(snap)
+	for i := range children {
+		children[i].Enabled = false
+	}
 
 	// If we don't have a valid token, authenticate (with backoff on repeated failures)
 	if !snap.Observed.Status.HasValidToken() {
@@ -79,8 +86,9 @@ func (s *StartingState) Next(snapAny any) fsmv2.NextResult[any, any] {
 		return fsmv2.Transition(s, fsmv2.SignalNone, authAction, "No valid token, authenticating with relay", children)
 	}
 
-	// Authenticated — transition to Running. Children are always-enabled and
-	// will pick up the new token on the next tick; RunningState handles unhealthy children.
+	// Authenticated — transition to Running. Children remain Enabled=false on
+	// this transition emission; RunningState flips them to Enabled=true on its
+	// first tick and handles unhealthy children.
 	return fsmv2.Transition(&RunningState{}, fsmv2.SignalNone, nil, "Authenticated, transitioning to Running", children)
 }
 
