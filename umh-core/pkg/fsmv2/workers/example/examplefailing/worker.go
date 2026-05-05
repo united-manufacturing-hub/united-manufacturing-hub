@@ -71,6 +71,12 @@ func NewFailingWorker(
 // CollectObservedState returns the current observed state of the failing worker.
 // Returns NewObservation; the collector handles CollectedAt, framework metrics,
 // action history, and metric accumulation automatically.
+//
+// Demonstration-only: this worker writes into deps from CollectObservedState
+// (IncrementObservationsSinceFailure below) to simulate runtime conditions
+// (failure cycles) that production configuration drives directly. Real workers
+// MUST keep CollectObservedState pure I/O reads. See pkg/fsmv2/README.md
+// "I/O isolation rule".
 func (w *FailingWorker) CollectObservedState(_ context.Context, desiredAny fsmv2.DesiredState) (fsmv2.ObservedState, error) {
 	cfg := fsmv2.ExtractConfig[ExamplefailingConfig](desiredAny)
 

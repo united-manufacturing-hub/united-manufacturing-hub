@@ -61,8 +61,11 @@ func NewExamplepanicWorker(
 // Returns NewObservation; the collector handles CollectedAt, framework metrics,
 // action history, and metric accumulation automatically.
 //
-// The ShouldPanic flag from the typed config is propagated to dependencies here
-// so the connect action can read it via IsShouldPanic() at execution time.
+// Demonstration-only: this worker writes into deps from CollectObservedState
+// (SetShouldPanic below) to simulate runtime conditions (panic flag) that
+// production configuration drives directly. Real workers MUST keep
+// CollectObservedState pure I/O reads. See pkg/fsmv2/README.md
+// "I/O isolation rule".
 func (w *ExamplepanicWorker) CollectObservedState(_ context.Context, desiredAny fsmv2.DesiredState) (fsmv2.ObservedState, error) {
 	cfg := fsmv2.ExtractConfig[ExamplepanicConfig](desiredAny)
 	w.deps.SetShouldPanic(cfg.GetShouldPanic())
