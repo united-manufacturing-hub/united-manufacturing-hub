@@ -22,8 +22,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps/retry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps/retry/failurerate"
-	communicator_transport "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport"
-	httpTransport "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport/http"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/types"
 )
 
 // ChildFailureRateConfig is the shared failurerate.Config for push and pull
@@ -62,12 +61,12 @@ type TransportDependencies struct {
 	jwtExpiry         time.Time
 	lastAuthAttemptAt time.Time
 
-	transport communicator_transport.Transport
+	transport types.Transport
 
 	*deps.BaseDependencies
 	authFailureRate *failurerate.Tracker
-	inboundChan     chan<- *communicator_transport.UMHMessage
-	outboundChan    <-chan *communicator_transport.UMHMessage
+	inboundChan     chan<- *types.UMHMessage
+	outboundChan    <-chan *types.UMHMessage
 	jwtToken        string
 	instanceUUID    string
 
@@ -75,7 +74,7 @@ type TransportDependencies struct {
 	failedRelayURL     string
 	failedInstanceUUID string
 
-	lastErrorType            httpTransport.ErrorType
+	lastErrorType            types.ErrorType
 	persistentAuthErrorCount int
 
 	resetGeneration uint64
@@ -85,7 +84,7 @@ type TransportDependencies struct {
 
 // NewTransportDependencies creates dependencies for the transport worker.
 // Panics if SetChannelProvider was not called first.
-func NewTransportDependencies(t communicator_transport.Transport, logger deps.FSMLogger, stateReader deps.StateReader, identity deps.Identity) *TransportDependencies {
+func NewTransportDependencies(t types.Transport, logger deps.FSMLogger, stateReader deps.StateReader, identity deps.Identity) *TransportDependencies {
 	provider := GetChannelProvider()
 	if provider == nil {
 		panic(fmt.Sprintf("ChannelProvider must be set before creating dependencies (worker=%s). "+
@@ -105,7 +104,7 @@ func NewTransportDependencies(t communicator_transport.Transport, logger deps.FS
 }
 
 // SetTransport sets the transport instance.
-func (d *TransportDependencies) SetTransport(t communicator_transport.Transport) {
+func (d *TransportDependencies) SetTransport(t types.Transport) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
@@ -113,7 +112,7 @@ func (d *TransportDependencies) SetTransport(t communicator_transport.Transport)
 }
 
 // GetTransport returns the transport. Nil only before AuthenticateAction runs.
-func (d *TransportDependencies) GetTransport() communicator_transport.Transport {
+func (d *TransportDependencies) GetTransport() types.Transport {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
 
@@ -154,7 +153,7 @@ func (d *TransportDependencies) RecordError() {
 // RecordAuthError records a typed auth error and feeds the auth failure rate
 // tracker. If the tracker's one-shot fires (sustained failures crossing the
 // MinSamples threshold), a SentryWarn("persistent_auth_failure") is emitted.
-func (d *TransportDependencies) RecordAuthError(errType httpTransport.ErrorType, retryAfter time.Duration) {
+func (d *TransportDependencies) RecordAuthError(errType types.ErrorType, retryAfter time.Duration) {
 	d.RecordTypedError(errType, retryAfter)
 
 	if !errType.IsTransient() {
@@ -175,7 +174,7 @@ func (d *TransportDependencies) RecordAuthError(errType httpTransport.ErrorType,
 // avoid a mutex deadlock — this method already holds d.mu.
 func (d *TransportDependencies) RecordSuccess() {
 	d.mu.Lock()
-	d.lastErrorType = httpTransport.ErrorTypeUnknown
+	d.lastErrorType = types.ErrorTypeUnknown
 	d.lastAuthAttemptAt = time.Time{}
 	d.persistentAuthErrorCount = 0
 	d.failedAuthToken = ""
@@ -238,12 +237,12 @@ func (d *TransportDependencies) GetLastErrorAt() time.Time {
 }
 
 // GetInboundChan returns channel to write received messages, or nil if no provider set.
-func (d *TransportDependencies) GetInboundChan() chan<- *communicator_transport.UMHMessage {
+func (d *TransportDependencies) GetInboundChan() chan<- *types.UMHMessage {
 	return d.inboundChan
 }
 
 // GetOutboundChan returns channel to read messages for pushing, or nil if no provider set.
-func (d *TransportDependencies) GetOutboundChan() <-chan *communicator_transport.UMHMessage {
+func (d *TransportDependencies) GetOutboundChan() <-chan *types.UMHMessage {
 	return d.outboundChan
 }
 
@@ -268,7 +267,7 @@ func (d *TransportDependencies) GetInboundChanStats() (capacity int, length int)
 // so the parent sees all child failures and can trigger transport reset decisions. However,
 // child successes do NOT propagate here -- only successful auth resets the parent tracker.
 // This means the parent error count grows monotonically from child errors until re-auth.
-func (d *TransportDependencies) RecordTypedError(errType httpTransport.ErrorType, retryAfter time.Duration) {
+func (d *TransportDependencies) RecordTypedError(errType types.ErrorType, retryAfter time.Duration) {
 	d.mu.Lock()
 	d.lastErrorType = errType
 	d.mu.Unlock()
@@ -277,7 +276,7 @@ func (d *TransportDependencies) RecordTypedError(errType httpTransport.ErrorType
 }
 
 // GetLastErrorType returns the last recorded error type.
-func (d *TransportDependencies) GetLastErrorType() httpTransport.ErrorType {
+func (d *TransportDependencies) GetLastErrorType() types.ErrorType {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
 

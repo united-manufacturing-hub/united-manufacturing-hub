@@ -19,7 +19,7 @@
 //
 // This adapter exists for the TRANSITIONAL PERIOD while FSMv2 Communicator
 // is being integrated with the existing UMH codebase. It bridges the gap
-// between FSMv2's transport.UMHMessage and the legacy models.UMHMessage
+// between FSMv2's types.UMHMessage and the legacy models.UMHMessage
 // used by the Router and other subsystems.
 //
 // # When to Use
@@ -29,7 +29,7 @@
 //
 // # When NOT to Use
 //
-//   - For new greenfield FSMv2 workers (use transport.UMHMessage directly)
+//   - For new greenfield FSMv2 workers (use types.UMHMessage directly)
 //   - After full migration is complete (this package becomes obsolete)
 //
 // # Message Flow
@@ -41,16 +41,16 @@
 //
 // Flow:
 //   - FSMv2 worker writes received messages to inbound channel
-//   - Bridge converts transport.UMHMessage -> models.UMHMessage
+//   - Bridge converts types.UMHMessage -> models.UMHMessage
 //   - Writes to CommunicationState.InboundChannel for Router processing
 //   - Router writes responses to CommunicationState.OutboundChannel
-//   - Bridge converts models.UMHMessage -> transport.UMHMessage
+//   - Bridge converts models.UMHMessage -> types.UMHMessage
 //   - FSMv2 worker reads from outbound channel to push to HTTP
 //
 // # Deprecation Plan
 //
 // This adapter is intended to be removed once the full FSMv2 migration is
-// complete and all subsystems use transport.UMHMessage directly.
+// complete and all subsystems use types.UMHMessage directly.
 package fsmv2_adapter
 
 import (
@@ -62,7 +62,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"go.uber.org/zap"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/types"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 )
 
@@ -79,11 +79,11 @@ var (
 )
 
 // LegacyChannelBridge adapts CommunicationState channels for FSMv2 communicator.
-// It converts between models.UMHMessage (legacy) and transport.UMHMessage (FSMv2).
+// It converts between models.UMHMessage (legacy) and types.UMHMessage (FSMv2).
 type LegacyChannelBridge struct {
-	// Intermediate channels with transport.UMHMessage type
-	fsmInbound  chan *transport.UMHMessage // FSMv2 writes here
-	fsmOutbound chan *transport.UMHMessage // FSMv2 reads from here
+	// Intermediate channels with types.UMHMessage type
+	fsmInbound  chan *types.UMHMessage // FSMv2 writes here
+	fsmOutbound chan *types.UMHMessage // FSMv2 reads from here
 
 	// Legacy channels from CommunicationState
 	legacyInbound  chan *models.UMHMessage // Router reads from here
@@ -112,8 +112,8 @@ func NewLegacyChannelBridge(
 	}
 
 	return &LegacyChannelBridge{
-		fsmInbound:     make(chan *transport.UMHMessage, bufferSize),
-		fsmOutbound:    make(chan *transport.UMHMessage, bufferSize),
+		fsmInbound:     make(chan *types.UMHMessage, bufferSize),
+		fsmOutbound:    make(chan *types.UMHMessage, bufferSize),
 		legacyInbound:  legacyInbound,
 		legacyOutbound: legacyOutbound,
 		logger:         logger,
@@ -144,7 +144,7 @@ func (b *LegacyChannelBridge) Start(ctx context.Context) {
 					continue
 				}
 
-				// Convert transport.UMHMessage -> models.UMHMessage
+				// Convert types.UMHMessage -> models.UMHMessage
 				var instanceUUID uuid.UUID
 				if msg.InstanceUUID != "" {
 					parsed, err := uuid.Parse(msg.InstanceUUID)
@@ -214,13 +214,13 @@ func (b *LegacyChannelBridge) Start(ctx context.Context) {
 					continue
 				}
 
-				// Convert models.UMHMessage -> transport.UMHMessage
+				// Convert models.UMHMessage -> types.UMHMessage
 				var traceID string
 				if msg.Metadata != nil && msg.Metadata.TraceID != uuid.Nil {
 					traceID = msg.Metadata.TraceID.String()
 				}
 
-				fsmMsg := &transport.UMHMessage{
+				fsmMsg := &types.UMHMessage{
 					Content:      msg.Content,
 					InstanceUUID: msg.InstanceUUID.String(),
 					Email:        msg.Email,
@@ -250,8 +250,8 @@ func (b *LegacyChannelBridge) Wait() {
 // GetChannels returns channels for the FSMv2 communicator worker.
 // Implements communicator.ChannelProvider interface.
 func (b *LegacyChannelBridge) GetChannels(_ string) (
-	inbound chan<- *transport.UMHMessage,
-	outbound <-chan *transport.UMHMessage,
+	inbound chan<- *types.UMHMessage,
+	outbound <-chan *types.UMHMessage,
 ) {
 	return b.fsmInbound, b.fsmOutbound
 }
@@ -264,8 +264,8 @@ func (b *LegacyChannelBridge) GetInboundStats(_ string) (capacity int, length in
 
 // GetOutboundWriteChannel returns the outbound channel for direct writing.
 // This allows SubscriberHandler to bypass the legacy->FSMv2 conversion goroutine
-// and write transport.UMHMessage directly to the FSMv2 outbound channel.
+// and write types.UMHMessage directly to the FSMv2 outbound channel.
 // Used for Priority 0: Remove Pusher from FSMv2 flow.
-func (b *LegacyChannelBridge) GetOutboundWriteChannel() chan<- *transport.UMHMessage {
+func (b *LegacyChannelBridge) GetOutboundWriteChannel() chan<- *types.UMHMessage {
 	return b.fsmOutbound
 }

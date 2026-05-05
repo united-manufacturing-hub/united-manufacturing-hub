@@ -20,19 +20,13 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"sync"
-	"testing"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	httptransport "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport/http"
+	httptransport "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/http"
 )
-
-func TestHTTPTransport(t *testing.T) {
-	RegisterFailHandler(Fail)
-	RunSpecs(t, "HTTP Transport Suite")
-}
 
 var _ = Describe("HTTP Transport", func() {
 	Describe("Bug #7: Connection Pooling Fix", func() {

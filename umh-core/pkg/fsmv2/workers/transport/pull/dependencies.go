@@ -22,10 +22,9 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps/retry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps/retry/failurerate"
-	communicator_transport "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport"
-	httpTransport "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport/http"
 	transport_pkg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/pull/snapshot"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/types"
 )
 
 // maxPendingMessages caps the pending buffer to prevent unbounded memory growth
@@ -41,12 +40,12 @@ type PullDependencies struct {
 	*deps.BaseDependencies
 	parentDeps              *transport_pkg.TransportDependencies
 	failureRate             *failurerate.Tracker
-	pendingMessages         []*communicator_transport.UMHMessage
+	pendingMessages         []*types.UMHMessage
 	errorMu                 sync.RWMutex
 	pendingMu               sync.RWMutex
 	backpressureMu          sync.RWMutex
 	lastSeenResetGeneration uint64
-	lastErrorType           httpTransport.ErrorType
+	lastErrorType           types.ErrorType
 	backpressured           bool
 }
 
@@ -59,27 +58,34 @@ func NewPullDependencies(parentDeps *transport_pkg.TransportDependencies, identi
 	return &PullDependencies{
 		BaseDependencies: deps.NewBaseDependencies(logger, stateReader, identity),
 		parentDeps:       parentDeps,
-		failureRate: failurerate.New(transport_pkg.ChildFailureRateConfig),
+		failureRate:      failurerate.New(transport_pkg.ChildFailureRateConfig),
 	}, nil
 }
 
-func (d *PullDependencies) GetInboundChan() chan<- *communicator_transport.UMHMessage {
+// GetInboundChan returns the parent's inbound message channel for write access
+// by the pull action.
+func (d *PullDependencies) GetInboundChan() chan<- *types.UMHMessage {
 	return d.parentDeps.GetInboundChan()
 }
 
+// GetInboundChanStats returns the capacity and current length of the inbound channel.
 func (d *PullDependencies) GetInboundChanStats() (capacity int, length int) {
 	return d.parentDeps.GetInboundChanStats()
 }
 
-func (d *PullDependencies) GetTransport() communicator_transport.Transport {
+// GetTransport returns the parent's transport implementation.
+func (d *PullDependencies) GetTransport() types.Transport {
 	return d.parentDeps.GetTransport()
 }
 
+// GetJWTToken returns the parent's current JWT token.
 func (d *PullDependencies) GetJWTToken() string {
 	return d.parentDeps.GetJWTToken()
 }
 
-func (d *PullDependencies) RecordTypedError(errType httpTransport.ErrorType, retryAfter time.Duration) {
+// RecordTypedError records a typed error for this child, propagates it to the parent
+// transport tracker, and emits a Sentry warning when the failure rate escalates.
+func (d *PullDependencies) RecordTypedError(errType types.ErrorType, retryAfter time.Duration) {
 	d.errorMu.Lock()
 	d.lastErrorType = errType
 	d.errorMu.Unlock()
@@ -107,6 +113,8 @@ func (d *PullDependencies) RecordSuccess() {
 	d.failureRate.RecordOutcome(true)
 }
 
+// RecordError records an unclassified error for this child, propagates it to the
+// parent transport tracker, and emits a Sentry warning when the failure rate escalates.
 func (d *PullDependencies) RecordError() {
 	d.RetryTracker().RecordError()
 	d.parentDeps.RecordError()
@@ -116,11 +124,14 @@ func (d *PullDependencies) RecordError() {
 	}
 }
 
+// GetConsecutiveErrors returns the number of consecutive errors recorded by the
+// child's retry tracker.
 func (d *PullDependencies) GetConsecutiveErrors() int {
 	return d.RetryTracker().ConsecutiveErrors()
 }
 
-func (d *PullDependencies) GetLastErrorType() httpTransport.ErrorType {
+// GetLastErrorType returns the most recent error type recorded for this child.
+func (d *PullDependencies) GetLastErrorType() types.ErrorType {
 	d.errorMu.RLock()
 	defer d.errorMu.RUnlock()
 	return d.lastErrorType
@@ -129,7 +140,7 @@ func (d *PullDependencies) GetLastErrorType() httpTransport.ErrorType {
 // StorePendingMessages appends messages to the pending buffer for retry on the next tick.
 // Nil messages are filtered out. If the buffer exceeds maxPendingMessages, the oldest
 // messages are dropped.
-func (d *PullDependencies) StorePendingMessages(msgs []*communicator_transport.UMHMessage) {
+func (d *PullDependencies) StorePendingMessages(msgs []*types.UMHMessage) {
 	d.pendingMu.Lock()
 	defer d.pendingMu.Unlock()
 
@@ -148,7 +159,7 @@ func (d *PullDependencies) StorePendingMessages(msgs []*communicator_transport.U
 }
 
 // DrainPendingMessages returns all pending messages and clears the buffer.
-func (d *PullDependencies) DrainPendingMessages() []*communicator_transport.UMHMessage {
+func (d *PullDependencies) DrainPendingMessages() []*types.UMHMessage {
 	d.pendingMu.Lock()
 	defer d.pendingMu.Unlock()
 
@@ -202,19 +213,24 @@ func (d *PullDependencies) IsTokenValid() bool {
 	return !time.Now().Add(safetyBuffer).After(expiry)
 }
 
+// GetLastRetryAfter returns the retry-after duration from the most recent error.
 func (d *PullDependencies) GetLastRetryAfter() time.Duration {
 	return d.RetryTracker().LastError().RetryAfter
 }
 
+// GetDegradedEnteredAt returns the timestamp at which the retry tracker entered
+// the degraded state, or the zero time if the child is not currently degraded.
 func (d *PullDependencies) GetDegradedEnteredAt() time.Time {
 	degradedSince, _ := d.RetryTracker().DegradedSince()
 	return degradedSince
 }
 
+// GetLastErrorAt returns the timestamp of the most recent error.
 func (d *PullDependencies) GetLastErrorAt() time.Time {
 	return d.RetryTracker().LastError().OccurredAt
 }
 
+// GetResetGeneration returns the parent's current reset-generation counter.
 func (d *PullDependencies) GetResetGeneration() uint64 {
 	return d.parentDeps.GetResetGeneration()
 }

@@ -20,27 +20,26 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport"
-	httpTransport "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport/http"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/types"
 )
 
 // PullDependencies abstracts the pull worker's runtime dependencies to avoid import
 // cycles between the pull and transport packages.
 type PullDependencies interface {
 	deps.Dependencies
-	GetInboundChan() chan<- *transport.UMHMessage
+	GetInboundChan() chan<- *types.UMHMessage
 	GetInboundChanStats() (capacity int, length int)
-	GetTransport() transport.Transport
+	GetTransport() types.Transport
 	GetJWTToken() string
-	RecordTypedError(errType httpTransport.ErrorType, retryAfter time.Duration)
+	RecordTypedError(errType types.ErrorType, retryAfter time.Duration)
 	RecordSuccess()
 	RecordError()
 	GetConsecutiveErrors() int
-	GetLastErrorType() httpTransport.ErrorType
+	GetLastErrorType() types.ErrorType
 	MetricsRecorder() *deps.MetricsRecorder
 
-	StorePendingMessages(msgs []*transport.UMHMessage)
-	DrainPendingMessages() []*transport.UMHMessage
+	StorePendingMessages(msgs []*types.UMHMessage)
+	DrainPendingMessages() []*types.UMHMessage
 	PendingMessageCount() int
 
 	IsBackpressured() bool
@@ -87,9 +86,9 @@ type PullObservedState struct {
 
 	LastRetryAfter time.Duration `json:"last_retry_after,omitempty"`
 
-	LastErrorType       httpTransport.ErrorType `json:"last_error_type"`
-	ConsecutiveErrors   int                     `json:"consecutive_errors"`
-	PendingMessageCount int                     `json:"pending_message_count"`
+	LastErrorType       types.ErrorType `json:"last_error_type"`
+	ConsecutiveErrors   int             `json:"consecutive_errors"`
+	PendingMessageCount int             `json:"pending_message_count"`
 
 	HasTransport    bool `json:"has_transport"`
 	HasValidToken   bool `json:"has_valid_token"`

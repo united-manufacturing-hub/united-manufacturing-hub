@@ -18,7 +18,7 @@ import (
 	"context"
 	"sync"
 
-	transportpkg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/types"
 )
 
 // MockTransport is a mock implementation of HTTPTransport for testing.
@@ -34,34 +34,34 @@ type MockTransport struct {
 	pullErr         error
 	pushErr         error
 
-	pullMessages   []*transportpkg.UMHMessage
-	pushedMessages []*transportpkg.UMHMessage
+	pullMessages   []*types.UMHMessage
+	pushedMessages []*types.UMHMessage
 	token          string
 }
 
 func NewMockTransport() *MockTransport {
 	return &MockTransport{
-		pullMessages:   []*transportpkg.UMHMessage{},
-		pushedMessages: []*transportpkg.UMHMessage{},
+		pullMessages:   []*types.UMHMessage{},
+		pushedMessages: []*types.UMHMessage{},
 	}
 }
 
-func (m *MockTransport) Authenticate(ctx context.Context, req transportpkg.AuthRequest) (transportpkg.AuthResponse, error) {
+func (m *MockTransport) Authenticate(ctx context.Context, req types.AuthRequest) (types.AuthResponse, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	m.authenticateCalls++
 
 	if m.authenticateErr != nil {
-		return transportpkg.AuthResponse{}, m.authenticateErr
+		return types.AuthResponse{}, m.authenticateErr
 	}
 
 	m.token = "mock-jwt-token"
 
-	return transportpkg.AuthResponse{Token: m.token}, nil
+	return types.AuthResponse{Token: m.token}, nil
 }
 
-func (m *MockTransport) Pull(ctx context.Context, jwtToken string) ([]*transportpkg.UMHMessage, error) {
+func (m *MockTransport) Pull(ctx context.Context, jwtToken string) ([]*types.UMHMessage, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -74,7 +74,7 @@ func (m *MockTransport) Pull(ctx context.Context, jwtToken string) ([]*transport
 	return m.pullMessages, nil
 }
 
-func (m *MockTransport) Push(ctx context.Context, jwtToken string, messages []*transportpkg.UMHMessage) error {
+func (m *MockTransport) Push(ctx context.Context, jwtToken string, messages []*types.UMHMessage) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -121,14 +121,14 @@ func (m *MockTransport) SetPushError(err error) {
 	m.pushErr = err
 }
 
-func (m *MockTransport) SetPullMessages(messages []*transportpkg.UMHMessage) {
+func (m *MockTransport) SetPullMessages(messages []*types.UMHMessage) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	m.pullMessages = messages
 }
 
-func (m *MockTransport) GetPushedMessages() []*transportpkg.UMHMessage {
+func (m *MockTransport) GetPushedMessages() []*types.UMHMessage {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -165,15 +165,15 @@ func (m *MockTransport) ResetCallCount() int {
 
 // MockChannelProvider implements communicator.ChannelProvider for testing.
 type MockChannelProvider struct {
-	inbound  chan<- *transportpkg.UMHMessage
-	outbound <-chan *transportpkg.UMHMessage
+	inbound  chan<- *types.UMHMessage
+	outbound <-chan *types.UMHMessage
 }
 
 // NewMockChannelProvider creates a mock channel provider with buffered channels.
 func NewMockChannelProvider() *MockChannelProvider {
 	// Create bidirectional channels with buffer size 100
-	inboundBi := make(chan *transportpkg.UMHMessage, 100)
-	outboundBi := make(chan *transportpkg.UMHMessage, 100)
+	inboundBi := make(chan *types.UMHMessage, 100)
+	outboundBi := make(chan *types.UMHMessage, 100)
 
 	return &MockChannelProvider{
 		inbound:  inboundBi,
@@ -182,8 +182,8 @@ func NewMockChannelProvider() *MockChannelProvider {
 }
 
 func (m *MockChannelProvider) GetChannels(_ string) (
-	inbound chan<- *transportpkg.UMHMessage,
-	outbound <-chan *transportpkg.UMHMessage,
+	inbound chan<- *types.UMHMessage,
+	outbound <-chan *types.UMHMessage,
 ) {
 	return m.inbound, m.outbound
 }

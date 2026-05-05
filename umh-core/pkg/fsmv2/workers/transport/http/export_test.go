@@ -14,12 +14,16 @@
 
 package transport
 
-import "time"
+import (
+	"time"
+
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/types"
+)
 
 // NewTransportErrorForTest creates a TransportError with explicit fields for testing.
 // This is an internal test helper (export_test.go is only compiled during testing).
-func NewTransportErrorForTest(errType ErrorType, statusCode int, message string, retryAfter time.Duration, inner error) *TransportError {
-	return &TransportError{
+func NewTransportErrorForTest(errType types.ErrorType, statusCode int, message string, retryAfter time.Duration, inner error) *types.TransportError {
+	return &types.TransportError{
 		Type:       errType,
 		StatusCode: statusCode,
 		Message:    message,

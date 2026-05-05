@@ -21,7 +21,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/api/v2/push"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/encoding"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/topicbrowser"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/types"
 
 	"github.com/google/uuid"
 
@@ -41,7 +41,7 @@ type Handler struct {
 	configManager              config.ConfigManager
 	subscriberRegistry         *subscribers.Registry
 	pusher                     *push.Pusher
-	fsmOutboundChannel         chan<- *transport.UMHMessage // FSMv2 direct channel (nil for legacy mode)
+	fsmOutboundChannel         chan<- *types.UMHMessage // FSMv2 direct channel (nil for legacy mode)
 	StatusCollector            *generator.StatusCollectorType
 	systemSnapshotManager      *fsm.SnapshotManager
 	topicBrowserCommunicator   *topicbrowser.TopicBrowserCommunicator
@@ -65,7 +65,7 @@ func NewHandler(
 	configManager config.ConfigManager,
 	logger *zap.SugaredLogger,
 	topicBrowserCommunicator *topicbrowser.TopicBrowserCommunicator,
-	fsmOutboundChannel chan<- *transport.UMHMessage, // FSMv2 direct channel (nil for legacy mode)
+	fsmOutboundChannel chan<- *types.UMHMessage, // FSMv2 direct channel (nil for legacy mode)
 	featureUsage *models.FeatureUsage,
 ) *Handler {
 	s := &Handler{}
@@ -195,7 +195,7 @@ func (s *Handler) notify() {
 		// FSMv2 mode: write directly to FSMv2 outbound channel (bypasses legacy Pusher)
 		// Legacy mode: use Pusher as before
 		if s.fsmOutboundChannel != nil {
-			msg := &transport.UMHMessage{
+			msg := &types.UMHMessage{
 				InstanceUUID: s.GetInstanceUUID().String(),
 				Content:      message,
 				Email:        email,

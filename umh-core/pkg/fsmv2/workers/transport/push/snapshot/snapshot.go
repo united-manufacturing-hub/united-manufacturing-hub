@@ -20,27 +20,26 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport"
-	httpTransport "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport/http"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/types"
 )
 
 // PushDependencies interface to avoid import cycles between push and transport packages.
 type PushDependencies interface {
 	deps.Dependencies
-	GetOutboundChan() <-chan *transport.UMHMessage
-	GetTransport() transport.Transport
+	GetOutboundChan() <-chan *types.UMHMessage
+	GetTransport() types.Transport
 	GetJWTToken() string
 	GetAuthenticatedUUID() string
-	RecordTypedError(errType httpTransport.ErrorType, retryAfter time.Duration)
+	RecordTypedError(errType types.ErrorType, retryAfter time.Duration)
 	RecordSuccess()
 	RecordError()
 	GetConsecutiveErrors() int
-	GetLastErrorType() httpTransport.ErrorType
+	GetLastErrorType() types.ErrorType
 	MetricsRecorder() *deps.MetricsRecorder
 
 	// Pending buffer for retry on push failure
-	StorePendingMessages(msgs []*transport.UMHMessage)
-	DrainPendingMessages() []*transport.UMHMessage
+	StorePendingMessages(msgs []*types.UMHMessage)
+	DrainPendingMessages() []*types.UMHMessage
 	PendingMessageCount() int
 
 	// Token pre-check (1-minute safety buffer)
@@ -94,9 +93,9 @@ type PushObservedState struct {
 
 	LastRetryAfter time.Duration `json:"last_retry_after,omitempty"`
 
-	LastErrorType       httpTransport.ErrorType `json:"last_error_type"`
-	ConsecutiveErrors   int                     `json:"consecutive_errors"`
-	PendingMessageCount int                     `json:"pending_message_count"`
+	LastErrorType       types.ErrorType `json:"last_error_type"`
+	ConsecutiveErrors   int             `json:"consecutive_errors"`
+	PendingMessageCount int             `json:"pending_message_count"`
 
 	HasTransport  bool `json:"has_transport"`
 	HasValidToken bool `json:"has_valid_token"`

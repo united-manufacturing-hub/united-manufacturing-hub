@@ -25,7 +25,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/testutil"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/types"
 )
 
 func TestMockServer(t *testing.T) {
@@ -100,12 +100,12 @@ var _ = Describe("MockRelayServer", func() {
 
 	Describe("Pull", func() {
 		It("returns queued messages", func() {
-			msg1 := &transport.UMHMessage{
+			msg1 := &types.UMHMessage{
 				InstanceUUID: "test-instance-123",
 				Content:      "message-1",
 				Email:        "test@example.com",
 			}
-			msg2 := &transport.UMHMessage{
+			msg2 := &types.UMHMessage{
 				InstanceUUID: "test-instance-123",
 				Content:      "message-2",
 				Email:        "test@example.com",
@@ -125,7 +125,7 @@ var _ = Describe("MockRelayServer", func() {
 			Expect(resp.StatusCode).To(Equal(http.StatusOK))
 
 			var payload struct {
-				UMHMessages []*transport.UMHMessage `json:"UMHMessages"`
+				UMHMessages []*types.UMHMessage `json:"UMHMessages"`
 			}
 			err = json.NewDecoder(resp.Body).Decode(&payload)
 			Expect(err).NotTo(HaveOccurred())
@@ -147,7 +147,7 @@ var _ = Describe("MockRelayServer", func() {
 			Expect(resp.StatusCode).To(Equal(http.StatusOK))
 
 			var payload struct {
-				UMHMessages []*transport.UMHMessage `json:"UMHMessages"`
+				UMHMessages []*types.UMHMessage `json:"UMHMessages"`
 			}
 			err = json.NewDecoder(resp.Body).Decode(&payload)
 			Expect(err).NotTo(HaveOccurred())
@@ -155,7 +155,7 @@ var _ = Describe("MockRelayServer", func() {
 		})
 
 		It("clears queue after pull", func() {
-			msg := &transport.UMHMessage{
+			msg := &types.UMHMessage{
 				InstanceUUID: "test-instance-123",
 				Content:      "message-1",
 				Email:        "test@example.com",
@@ -176,7 +176,7 @@ var _ = Describe("MockRelayServer", func() {
 			defer func() { _ = resp.Body.Close() }()
 
 			var payload struct {
-				UMHMessages []*transport.UMHMessage `json:"UMHMessages"`
+				UMHMessages []*types.UMHMessage `json:"UMHMessages"`
 			}
 			err = json.NewDecoder(resp.Body).Decode(&payload)
 			Expect(err).NotTo(HaveOccurred())
@@ -186,20 +186,20 @@ var _ = Describe("MockRelayServer", func() {
 
 	Describe("Push", func() {
 		It("records pushed messages", func() {
-			msg1 := &transport.UMHMessage{
+			msg1 := &types.UMHMessage{
 				InstanceUUID: "test-instance-123",
 				Content:      "pushed-message-1",
 				Email:        "test@example.com",
 			}
-			msg2 := &transport.UMHMessage{
+			msg2 := &types.UMHMessage{
 				InstanceUUID: "test-instance-123",
 				Content:      "pushed-message-2",
 				Email:        "test@example.com",
 			}
 			payload := struct {
-				UMHMessages []*transport.UMHMessage `json:"UMHMessages"`
+				UMHMessages []*types.UMHMessage `json:"UMHMessages"`
 			}{
-				UMHMessages: []*transport.UMHMessage{msg1, msg2},
+				UMHMessages: []*types.UMHMessage{msg1, msg2},
 			}
 			body, err := json.Marshal(payload)
 			Expect(err).NotTo(HaveOccurred())
@@ -223,15 +223,15 @@ var _ = Describe("MockRelayServer", func() {
 		})
 
 		It("allows clearing pushed messages", func() {
-			msg := &transport.UMHMessage{
+			msg := &types.UMHMessage{
 				InstanceUUID: "test-instance-123",
 				Content:      "pushed-message",
 				Email:        "test@example.com",
 			}
 			payload := struct {
-				UMHMessages []*transport.UMHMessage `json:"UMHMessages"`
+				UMHMessages []*types.UMHMessage `json:"UMHMessages"`
 			}{
-				UMHMessages: []*transport.UMHMessage{msg},
+				UMHMessages: []*types.UMHMessage{msg},
 			}
 			body, _ := json.Marshal(payload)
 

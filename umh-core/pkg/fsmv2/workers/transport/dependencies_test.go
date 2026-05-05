@@ -22,9 +22,8 @@ import (
 	. "github.com/onsi/gomega"
 
 	depspkg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
-	communicator_transport "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport"
-	httpTransport "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport/http"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/types"
 )
 
 // mockTransport implements the transport.Transport interface for testing.
@@ -32,15 +31,15 @@ type mockTransport struct {
 	resetCallCount int
 }
 
-func (m *mockTransport) Authenticate(_ context.Context, _ communicator_transport.AuthRequest) (communicator_transport.AuthResponse, error) {
-	return communicator_transport.AuthResponse{}, nil
+func (m *mockTransport) Authenticate(_ context.Context, _ types.AuthRequest) (types.AuthResponse, error) {
+	return types.AuthResponse{}, nil
 }
 
-func (m *mockTransport) Pull(_ context.Context, _ string) ([]*communicator_transport.UMHMessage, error) {
+func (m *mockTransport) Pull(_ context.Context, _ string) ([]*types.UMHMessage, error) {
 	return nil, nil
 }
 
-func (m *mockTransport) Push(_ context.Context, _ string, _ []*communicator_transport.UMHMessage) error {
+func (m *mockTransport) Push(_ context.Context, _ string, _ []*types.UMHMessage) error {
 	return nil
 }
 
@@ -56,13 +55,13 @@ func (m *mockTransport) ResetCallCount() int {
 
 // mockChannelProvider implements transport.ChannelProvider for testing.
 type mockChannelProvider struct {
-	inbound  chan<- *communicator_transport.UMHMessage
-	outbound <-chan *communicator_transport.UMHMessage
+	inbound  chan<- *types.UMHMessage
+	outbound <-chan *types.UMHMessage
 }
 
 func (m *mockChannelProvider) GetChannels(_ string) (
-	inbound chan<- *communicator_transport.UMHMessage,
-	outbound <-chan *communicator_transport.UMHMessage,
+	inbound chan<- *types.UMHMessage,
+	outbound <-chan *types.UMHMessage,
 ) {
 	return m.inbound, m.outbound
 }
@@ -73,8 +72,8 @@ func (m *mockChannelProvider) GetInboundStats(_ string) (capacity int, length in
 
 // newTestChannelProvider creates a mock channel provider for test setup.
 func newTestChannelProvider() *mockChannelProvider {
-	inboundBi := make(chan *communicator_transport.UMHMessage, 100)
-	outboundBi := make(chan *communicator_transport.UMHMessage, 100)
+	inboundBi := make(chan *types.UMHMessage, 100)
+	outboundBi := make(chan *types.UMHMessage, 100)
 
 	return &mockChannelProvider{
 		inbound:  inboundBi,
@@ -84,7 +83,7 @@ func newTestChannelProvider() *mockChannelProvider {
 
 var _ = Describe("TransportDependencies", func() {
 	var (
-		mt     communicator_transport.Transport
+		mt     types.Transport
 		logger depspkg.FSMLogger
 	)
 
@@ -269,27 +268,27 @@ var _ = Describe("TransportDependencies", func() {
 
 		Describe("Typed error recording", func() {
 			It("should record error type via RecordTypedError", func() {
-				deps.RecordTypedError(httpTransport.ErrorTypeBackendRateLimit, 30*time.Second)
-				Expect(deps.GetLastErrorType()).To(Equal(httpTransport.ErrorTypeBackendRateLimit))
+				deps.RecordTypedError(types.ErrorTypeBackendRateLimit, 30*time.Second)
+				Expect(deps.GetLastErrorType()).To(Equal(types.ErrorTypeBackendRateLimit))
 			})
 
 			It("should record retry-after duration", func() {
-				deps.RecordTypedError(httpTransport.ErrorTypeBackendRateLimit, 45*time.Second)
+				deps.RecordTypedError(types.ErrorTypeBackendRateLimit, 45*time.Second)
 				Expect(deps.GetLastRetryAfter()).To(Equal(45 * time.Second))
 			})
 
 			It("should clear error type on RecordSuccess", func() {
-				deps.RecordTypedError(httpTransport.ErrorTypeInvalidToken, 0)
-				Expect(deps.GetLastErrorType()).To(Equal(httpTransport.ErrorTypeInvalidToken))
+				deps.RecordTypedError(types.ErrorTypeInvalidToken, 0)
+				Expect(deps.GetLastErrorType()).To(Equal(types.ErrorTypeInvalidToken))
 
 				deps.RecordSuccess()
-				Expect(deps.GetLastErrorType()).To(Equal(httpTransport.ErrorType(0)))
+				Expect(deps.GetLastErrorType()).To(Equal(types.ErrorType(0)))
 			})
 
 			It("should preserve transport instance after errors", func() {
 				originalTransport := deps.GetTransport()
-				deps.RecordTypedError(httpTransport.ErrorTypeBackendRateLimit, 0)
-				deps.RecordTypedError(httpTransport.ErrorTypeNetwork, 0)
+				deps.RecordTypedError(types.ErrorTypeBackendRateLimit, 0)
+				deps.RecordTypedError(types.ErrorTypeNetwork, 0)
 				Expect(deps.GetTransport()).To(Equal(originalTransport))
 			})
 		})
@@ -471,8 +470,8 @@ var _ = Describe("TransportDependencies", func() {
 
 			Context("when ChannelProvider singleton IS set", func() {
 				It("should NOT panic and create dependencies with channels from singleton", func() {
-					inbound := make(chan<- *communicator_transport.UMHMessage, 10)
-					outbound := make(<-chan *communicator_transport.UMHMessage, 10)
+					inbound := make(chan<- *types.UMHMessage, 10)
+					outbound := make(<-chan *types.UMHMessage, 10)
 					mockProvider := &mockChannelProvider{
 						inbound:  inbound,
 						outbound: outbound,

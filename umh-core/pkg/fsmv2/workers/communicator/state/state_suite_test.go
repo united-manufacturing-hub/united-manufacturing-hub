@@ -22,19 +22,19 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/types"
 )
 
 // mockStateChannelProvider implements communicator.ChannelProvider for state tests.
 // Required for integration tests that use CommunicatorDependencies.
 type mockStateChannelProvider struct {
-	inbound  chan<- *transport.UMHMessage
-	outbound <-chan *transport.UMHMessage
+	inbound  chan<- *types.UMHMessage
+	outbound <-chan *types.UMHMessage
 }
 
 func (m *mockStateChannelProvider) GetChannels(_ string) (
-	chan<- *transport.UMHMessage,
-	<-chan *transport.UMHMessage,
+	chan<- *types.UMHMessage,
+	<-chan *types.UMHMessage,
 ) {
 	return m.inbound, m.outbound
 }
@@ -47,8 +47,8 @@ func (m *mockStateChannelProvider) GetInboundStats(_ string) (capacity int, leng
 // setupChannelProviderSingleton sets up the global singleton for tests.
 // Must be called in BeforeEach before creating CommunicatorDependencies.
 func setupChannelProviderSingleton() {
-	inboundBi := make(chan *transport.UMHMessage, 100)
-	outboundBi := make(chan *transport.UMHMessage, 100)
+	inboundBi := make(chan *types.UMHMessage, 100)
+	outboundBi := make(chan *types.UMHMessage, 100)
 	provider := &mockStateChannelProvider{
 		inbound:  inboundBi,
 		outbound: outboundBi,
