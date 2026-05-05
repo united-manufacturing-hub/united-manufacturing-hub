@@ -242,6 +242,17 @@ func (w *WorkerBase[TConfig, TStatus, TDeps]) DeriveDesiredState(spec interface{
 		}
 	}
 
+	// Validate the user-facing desired lifecycle state if TConfig exposes it
+	// (typically by embedding config.BaseUserSpec). Catches typos like
+	// `state: foo` that would otherwise silently leave the worker in Stopped
+	// because BaseUserSpec.GetState returns the raw value verbatim when
+	// non-empty.
+	if g, ok := any(&cfg).(interface{ GetState() string }); ok {
+		if err := config.ValidateDesiredState(g.GetState()); err != nil {
+			return nil, fmt.Errorf("invalid desired state: %w", err)
+		}
+	}
+
 	w.mu.Lock()
 	w.config = cfg
 	w.configReady = true

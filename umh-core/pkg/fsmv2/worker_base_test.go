@@ -281,6 +281,43 @@ host: "example.com"`,
 			Expect(typed.Config.GetState()).To(Equal("stopped"))
 		})
 
+		It("rejects invalid user-facing State values like typos", func() {
+			sgWb := &fsmv2.WorkerBase[userSpecConfig, workerTestStatus, register.NoDeps]{}
+			sgWb.InitBase(identity, mockLogger, mockStateReader)
+
+			spec := config.UserSpec{
+				Config: `state: "foo"
+host: "example.com"`,
+			}
+			_, err := sgWb.DeriveDesiredState(spec)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("invalid desired state"))
+		})
+
+		It("accepts canonical lifecycle states", func() {
+			sgWb := &fsmv2.WorkerBase[userSpecConfig, workerTestStatus, register.NoDeps]{}
+			sgWb.InitBase(identity, mockLogger, mockStateReader)
+
+			for _, state := range []string{"running", "stopped"} {
+				spec := config.UserSpec{
+					Config: fmt.Sprintf("state: %q\nhost: \"example.com\"", state),
+				}
+				_, err := sgWb.DeriveDesiredState(spec)
+				Expect(err).NotTo(HaveOccurred(), "state=%s", state)
+			}
+		})
+
+		It("accepts empty State (defaults to running via BaseUserSpec.GetState)", func() {
+			sgWb := &fsmv2.WorkerBase[userSpecConfig, workerTestStatus, register.NoDeps]{}
+			sgWb.InitBase(identity, mockLogger, mockStateReader)
+
+			spec := config.UserSpec{
+				Config: `host: "example.com"`,
+			}
+			_, err := sgWb.DeriveDesiredState(spec)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
 		It("caches config for subsequent Config() calls", func() {
 			spec := config.UserSpec{Config: `host: "first"
 port: 1`}
