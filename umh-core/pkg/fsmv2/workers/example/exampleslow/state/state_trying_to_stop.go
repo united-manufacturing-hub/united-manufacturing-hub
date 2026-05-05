@@ -17,8 +17,8 @@ package state
 import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleslow"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleslow/action"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleslow/snapshot"
 )
 
 type TryingToStopState struct {
@@ -26,9 +26,9 @@ type TryingToStopState struct {
 }
 
 func (s *TryingToStopState) Next(snapAny any) fsmv2.NextResult[any, any] {
-	snap := helpers.ConvertSnapshot[snapshot.ExampleslowObservedState, *snapshot.ExampleslowDesiredState](snapAny)
+	snap := fsmv2.ConvertWorkerSnapshot[exampleslow.ExampleslowConfig, exampleslow.ExampleslowStatus](snapAny)
 
-	if snap.Observed.ConnectionHealth == "no connection" {
+	if snap.Observed.Status.ConnectionHealth == "no connection" {
 		return fsmv2.Transition(&StoppedState{}, fsmv2.SignalNone, nil, "connection closed, transitioning to stopped", nil)
 	}
 

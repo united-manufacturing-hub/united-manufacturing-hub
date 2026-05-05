@@ -17,8 +17,8 @@ package state
 import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleslow"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleslow/action"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleslow/snapshot"
 )
 
 type TryingToConnectState struct {
@@ -26,17 +26,18 @@ type TryingToConnectState struct {
 }
 
 func (s *TryingToConnectState) Next(snapAny any) fsmv2.NextResult[any, any] {
-	snap := helpers.ConvertSnapshot[snapshot.ExampleslowObservedState, *snapshot.ExampleslowDesiredState](snapAny)
+	snap := fsmv2.ConvertWorkerSnapshot[exampleslow.ExampleslowConfig, exampleslow.ExampleslowStatus](snapAny)
 
-	if snap.Observed.ShouldStop() {
+	if snap.ShouldStop() {
 		return fsmv2.Transition(&TryingToStopState{}, fsmv2.SignalNone, nil, "stop required, transitioning to trying to stop", nil)
 	}
 
-	if snap.Observed.ConnectionHealth == "healthy" {
+	if snap.Observed.Status.ConnectionHealth == "healthy" {
 		return fsmv2.Transition(&ConnectedState{}, fsmv2.SignalNone, nil, "connection healthy, transitioning to connected", nil)
 	}
 
-	return fsmv2.Transition(s, fsmv2.SignalNone, &action.ConnectAction{DelaySeconds: snap.Desired.DelaySeconds}, "attempting to establish connection with delay", nil)
+	cfg := snap.Desired.Config
+	return fsmv2.Transition(s, fsmv2.SignalNone, &action.ConnectAction{DelaySeconds: cfg.GetDelaySeconds()}, "attempting to establish connection with delay", nil)
 }
 
 func (s *TryingToConnectState) String() string {

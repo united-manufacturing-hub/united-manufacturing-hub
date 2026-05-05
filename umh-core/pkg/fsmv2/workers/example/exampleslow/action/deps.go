@@ -12,16 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package snapshot_test
+package action
 
 import (
-	"testing"
-
-	. "github.com/onsi/ginkgo/v2"
-	. "github.com/onsi/gomega"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 )
 
-func TestSnapshot(t *testing.T) {
-	RegisterFailHandler(Fail)
-	RunSpecs(t, "Exampleslow Snapshot Suite")
+// ExampleslowDependencies is the dependency interface required by the
+// connect/disconnect actions. The concrete *ExampleslowDependencies struct
+// in the parent package satisfies this interface; declaring it here keeps the
+// action package free of import cycles back into the worker package.
+type ExampleslowDependencies interface {
+	deps.Dependencies
+	SetConnected(connected bool)
+	IsConnected() bool
 }

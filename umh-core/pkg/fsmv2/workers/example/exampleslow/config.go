@@ -23,3 +23,20 @@ type ExampleslowConfig struct {
 	config.BaseUserSpec
 	DelaySeconds int `yaml:"delaySeconds"`
 }
+
+// GetDelaySeconds returns the configured connect delay in seconds.
+// State files and CollectObservedState should always go through this accessor
+// so future defaulting/validation logic has a single insertion point.
+func (s *ExampleslowConfig) GetDelaySeconds() int {
+	return s.DelaySeconds
+}
+
+// ExampleslowStatus holds the runtime observation data for the slow worker.
+// Only worker-specific business fields belong here; the framework supplies
+// CollectedAt, State, LastActionResults, MetricsEmbedder, and ChildrenHealthy/Unhealthy
+// via Observation[ExampleslowStatus].
+type ExampleslowStatus struct {
+	// ConnectionHealth reports the current connection state ("healthy" or "no connection").
+	// Populated by CollectObservedState from dependencies.IsConnected().
+	ConnectionHealth string `json:"connection_health"`
+}

@@ -19,7 +19,6 @@ import (
 	"time"
 
 	depspkg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleslow/snapshot"
 )
 
 const ConnectActionName = "connect"
@@ -30,7 +29,7 @@ type ConnectAction struct {
 }
 
 func (a *ConnectAction) Execute(ctx context.Context, depsAny any) error {
-	deps := depsAny.(snapshot.ExampleslowDependencies)
+	deps := depsAny.(ExampleslowDependencies)
 	logger := deps.GetLogger()
 
 	logger.Info("connect_attempting", depspkg.Int("delay_seconds", a.DelaySeconds))

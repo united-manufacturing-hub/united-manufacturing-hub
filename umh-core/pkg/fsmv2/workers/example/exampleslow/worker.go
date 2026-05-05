@@ -17,22 +17,18 @@ package exampleslow
 import (
 	"context"
 	"errors"
-	"fmt"
-	"time"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleslow/snapshot"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleslow/state"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/register"
 )
+
+// workerType is the registered type name for this worker.
+const workerType = "exampleslow"
 
 type ExampleslowWorker struct {
 	deps *ExampleslowDependencies
-	fsmv2.WorkerBase[ExampleslowConfig, snapshot.ExampleslowObservedState, *ExampleslowDependencies]
+	fsmv2.WorkerBase[ExampleslowConfig, ExampleslowStatus, *ExampleslowDependencies]
 }
 
 func NewExampleslowWorker(
@@ -50,11 +46,6 @@ func NewExampleslowWorker(
 	}
 
 	if identity.WorkerType == "" {
-		workerType, err := storage.DeriveWorkerType[snapshot.ExampleslowObservedState]()
-		if err != nil {
-			return nil, fmt.Errorf("failed to derive worker type: %w", err)
-		}
-
 		identity.WorkerType = workerType
 	}
 
@@ -66,60 +57,29 @@ func NewExampleslowWorker(
 	return w, nil
 }
 
-func (w *ExampleslowWorker) CollectObservedState(ctx context.Context, _ fsmv2.DesiredState) (fsmv2.ObservedState, error) {
+// CollectObservedState returns the current observed state of the slow worker.
+// Returns NewObservation; the collector handles CollectedAt, framework metrics,
+// action history, and metric accumulation automatically.
+func (w *ExampleslowWorker) CollectObservedState(_ context.Context, _ fsmv2.DesiredState) (fsmv2.ObservedState, error) {
 	connectionHealth := "no connection"
 
 	if w.deps.IsConnected() {
 		connectionHealth = "healthy"
 	}
 
-	observed := snapshot.ExampleslowObservedState{
-		ID:               w.Identity().ID,
-		CollectedAt:      time.Now(),
+	status := ExampleslowStatus{
 		ConnectionHealth: connectionHealth,
 	}
 
-	if fm := w.deps.GetFrameworkState(); fm != nil {
-		observed.Metrics.Framework = *fm
-	}
-
-	observed.LastActionResults = w.deps.GetActionHistory()
-
-	return observed, nil
-}
-
-func (w *ExampleslowWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, error) {
-	if spec == nil {
-		return &snapshot.ExampleslowDesiredState{}, nil
-	}
-
-	parsed, err := config.ParseUserSpec[ExampleslowConfig](spec)
-	if err != nil {
-		return nil, err
-	}
-
-	return &snapshot.ExampleslowDesiredState{
-		DelaySeconds: parsed.DelaySeconds,
-	}, nil
-}
-
-func (w *ExampleslowWorker) GetInitialState() fsmv2.State[any, any] {
-	return &state.StoppedState{}
+	return fsmv2.NewObservation(status), nil
 }
 
 func init() {
-	if err := factory.RegisterWorkerType[snapshot.ExampleslowObservedState, *snapshot.ExampleslowDesiredState](
-		func(id deps.Identity, logger deps.FSMLogger, stateReader deps.StateReader, _ map[string]any) fsmv2.Worker {
+	register.Worker[ExampleslowConfig, ExampleslowStatus, *ExampleslowDependencies](
+		workerType,
+		func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader) (fsmv2.Worker, error) {
 			pool := &DefaultConnectionPool{}
-			worker, _ := NewExampleslowWorker(id, pool, logger, stateReader)
-
-			return worker
+			return NewExampleslowWorker(id, pool, logger, sr)
 		},
-		func(cfg interface{}) interface{} {
-			return supervisor.NewSupervisor[snapshot.ExampleslowObservedState, *snapshot.ExampleslowDesiredState](
-				cfg.(supervisor.Config))
-		},
-	); err != nil {
-		panic(err)
-	}
+	)
 }
