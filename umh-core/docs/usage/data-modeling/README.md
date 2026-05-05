@@ -5,14 +5,13 @@ Data modeling in UMH Core transforms device data into business-ready information
 ## The Component Chain
 
 ```text
-Payload Shapes → Data Models → Data Contracts → Data Flows
-       ↓              ↓              ↓                ↓
-  Value types     Structure      Enforcement    Execution
+Data Models → Data Contracts → Data Flows
+     ↓              ↓               ↓
+ Structure     Enforcement     Execution
 ```
 
 Each component builds on the previous:
-- **[Payload Shapes](payload-shapes.md)** define what types of values are allowed
-- **[Data Models](data-models.md)** use shapes to create hierarchical structure
+- **[Data Models](data-models.md)** define the hierarchical structure of your data — both timeseries (sensor readings) and relational (business records)
 - **[Data Contracts](data-contracts.md)** enforce models at runtime
 - **[Data Flows](../data-flows/)** execute with or without contracts
 
@@ -253,10 +252,9 @@ _pump_v1.diagnostics.vibration
 
 ## Next Steps
 
-1. **Define value types**: [Payload Shapes](payload-shapes.md)
-2. **Create structure**: [Data Models](data-models.md)
-3. **Enforce validation**: [Data Contracts](data-contracts.md)
-4. **Transform data**: [Stream Processors](stream-processors.md)
+1. **Create structure**: [Data Models](data-models.md)
+2. **Enforce validation**: [Data Contracts](data-contracts.md)
+3. **Transform data**: [Stream Processors](stream-processors.md)
 
 ## Learn More
 

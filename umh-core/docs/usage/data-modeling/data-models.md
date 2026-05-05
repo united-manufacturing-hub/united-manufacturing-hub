@@ -2,21 +2,26 @@
 
 > This article assumes you've completed the [Getting Started guide](../../getting-started/) and understand the [data modeling concepts](README.md).
 
-Data models define the hierarchical structure of your industrial data. They create the virtual paths and fields that organize raw data into meaningful information.
+Data models define the structure of your industrial data. They create the virtual paths and fields that organize raw data into meaningful information. UMH supports two kinds:
+
+- **[Timeseries Models](#timeseries-models)** — for sensor readings, machine states, counters. Each topic carries one value over time.
+- **[Relational Models](#relational-models)** — for business records like work orders or quality reports. Each topic carries a structured object with multiple fields.
+
+The Management Console editor automatically scopes its in-editor docs to the model type you are creating, so you only see the section that applies.
 
 ## Overview
 
 In the [component chain](README.md#the-component-chain), models provide the structure:
 
 ```text
-Payload Shapes → Data Models → Data Contracts → Data Flows
-                      ↑
-                 Structure defined here
+Data Models → Data Contracts → Data Flows
+     ↑
+Structure defined here
 ```
 
 When you create a data model, you're defining:
 - Virtual paths - organizational folders (e.g., `vibration`, `motor.electrical`)
-- Fields - data endpoints with specific types (e.g., `temperature`, `pressure`)
+- Fields - data endpoints (e.g., `temperature`, `pressure`, or a relational record like `order`)
 - Relationships - how components nest and reference each other
 
 ## UI Capabilities
@@ -53,7 +58,11 @@ Click the three-dot menu (⋮) on any model to access actions:
 
 ![Data Model Creation](./images/data-models-add.png)
 
-## Configuration
+---
+
+## Timeseries Models
+
+Timeseries models describe topics that emit one value at a time — temperature, pressure, vibration, machine state. Each field becomes its own UNS topic. Each message carries `{timestamp_ms, value}`.
 
 ### Basic Structure
 
@@ -87,9 +96,9 @@ umh.v1.enterprise.site._pump_v1.vibration.x-axis
        └─ fixed ─┘     └contract┘└─from model─┘
 ```
 
-## The Three Building Blocks
+### The Three Building Blocks
 
-### Fields
+#### Fields
 
 ```yaml
 temperature:
@@ -99,10 +108,10 @@ temperature:
 **Characteristics:**
 - Has `_payloadshape` property
 - Creates a topic endpoint that accepts data
-- References a [payload shape](payload-shapes.md) for validation
+- Built-in shapes: `timeseries-number`, `timeseries-string`
 - Cannot have child elements
 
-### Folders
+#### Folders
 
 ```yaml
 vibration:           # Folder - no _payloadshape
@@ -118,7 +127,7 @@ vibration:           # Folder - no _payloadshape
 - Creates hierarchy in topic path
 - Can nest multiple levels deep
 
-### Sub-Models
+#### Sub-Models
 
 Define once, use everywhere:
 
@@ -158,6 +167,91 @@ Topics created:
 - Single source of truth
 - Consistent structure across models
 - Update once, reflected everywhere
+
+### Built-in Payload Shapes
+
+Two built-in shapes cover virtually all timeseries data — no configuration needed:
+
+| Shape | Payload | Use cases |
+|-------|---------|-----------|
+| `timeseries-number` | `{"timestamp_ms": int, "value": <number>}` | Temperature, pressure, speed, counters |
+| `timeseries-string` | `{"timestamp_ms": int, "value": <string>}` | Machine states, batch IDs, operator names |
+
+See [Payload Formats](../unified-namespace/payload-formats.md) for the on-wire envelope.
+
+---
+
+## Relational Models
+
+Relational models describe **business records** — work orders, quality inspections, batch reports — where multiple related fields must stay together in one message. Each topic carries a structured JSON object whose columns are declared inline on the field via `_relational`.
+
+Use relational models when:
+- The record only makes sense as a whole (work order with `orderId`, `productId`, `quantity`)
+- Fields belong together as one message, not as separate timeseries topics
+
+### Basic Structure
+
+Mark a field as relational with `_relational.fields`. Each column has a `_type` of `string` or `number`. `_relational` is mutually exclusive with `_payloadshape` and `_refModel` on the same field, and the field cannot have subfields.
+
+```yaml
+dataModels:
+  - name: work-order
+    version:
+      v1:
+        structure:
+          order:                       # Field name → becomes topic suffix
+            _relational:
+              fields:
+                orderId:
+                  _type: string
+                productId:
+                  _type: string
+                quantity:
+                  _type: number
+                status:
+                  _type: string
+```
+
+This creates topic `enterprise.site._work-order_v1.order`. Each message on that topic carries the full record:
+
+```json
+{
+  "orderId": "WO-2026-001",
+  "productId": "Widget-A",
+  "quantity": 1000,
+  "status": "created"
+}
+```
+
+### Mixing Timeseries and Relational
+
+A single model can hold both kinds. Each leaf is independent:
+
+```yaml
+dataModels:
+  - name: line
+    version:
+      v1:
+        structure:
+          throughput:                  # Timeseries leaf
+            _payloadshape: timeseries-number
+          activeOrder:                 # Relational leaf
+            _relational:
+              fields:
+                orderId:
+                  _type: string
+                quantity:
+                  _type: number
+```
+
+### When to Use Timeseries vs Relational
+
+| Scenario | Model type |
+|----------|-----------|
+| Single value over time (sensor, status) | Timeseries |
+| Business record (work order, inspection, batch) | Relational |
+
+---
 
 ## Version Evolution
 
@@ -217,6 +311,5 @@ Without a contract, a model is just documentation. With a contract, it becomes v
 
 ## Next Steps
 
-- [Data Contracts](data-contracts.md) - Make models mandatory
-- [Payload Shapes](payload-shapes.md) - Specify data types for fields
-- [Stream Processors](stream-processors.md) - Transform device models to business models
+- [Data Contracts](data-contracts.md) — Make models mandatory
+- [Stream Processors](stream-processors.md) — Transform device models to business models

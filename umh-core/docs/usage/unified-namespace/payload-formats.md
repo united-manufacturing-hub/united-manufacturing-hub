@@ -1,13 +1,18 @@
 # Payload Formats
 
-UMH Core supports two payload formats: **Time-Series** for individual sensor readings and **Relational** for structured business data.
+MH Core supports two formats:
+
+- **Time-Series** — for individual sensor readings (one value per message)
+- **Relational** — for structured business records (multiple fields per message)
+
+The shape of each message is determined by the [data model](../data-modeling/data-models.md) attached to the topic. This page covers only the envelope; for how to define structure, see [Data Models](../data-modeling/data-models.md).
 
 ## Quick Reference
 
-| Type | Structure | Use Case | Example |
-|------|-----------|----------|---------|
-| **Time-Series** | `{"timestamp_ms": int, "value": any}` | Sensor readings, machine states | Temperature, pressure, status |
-| **Relational** | `{...any JSON object...}` | Business records, work orders | Batch data, quality reports |
+| Type | Envelope | Use Case | Example |
+|------|----------|----------|---------|
+| **Time-Series** | `{"timestamp_ms": int, "value": <number\|string\|bool>}` | Sensor readings, machine states | Temperature, pressure, status |
+| **Relational** | `{...JSON object with fields defined by your data model...}` | Business records, work orders | Batch data, quality reports |
 
 ## Time-Series Data
 
@@ -42,9 +47,9 @@ Individual sensor values with timestamps. One value per message.
 
 ## Relational Data
 
-Structured records with multiple fields. Used for business data and aggregated metrics.
+Structured records with multiple fields. Used for business data and aggregated metrics — work orders, quality reports, batch records.
 
-**Format:**
+**Envelope:**
 ```json
 {
   "field1": "value1",
@@ -57,8 +62,10 @@ Structured records with multiple fields. Used for business data and aggregated m
 
 **Requirements:**
 - Must be a JSON object (not array or primitive)
-- Can have any keys and nested structure
+- Field names and types are defined by your [relational data model](../data-modeling/data-models.md#relational-models)
 - Max size: 1MiB
+
+**How structure is enforced:** Mark a field as `_relational` in a [data model](../data-modeling/data-models.md#relational-models) with typed columns (`string` or `number`). The model's data contract validates each message against that schema. Send via the `nodered_js` processor in a bridge.
 
 **Examples:**
 ```json
@@ -120,6 +127,6 @@ Payload: {"timestamp_ms": 1733904005123, "value": 42.1}
 
 ## Next Steps
 
+- [Data Models](../data-modeling/data-models.md) - Define structure for timeseries and relational data
 - [Bridges](../data-flows/bridges.md) - Send data to UNS
-- [Stream Processors](../data-modeling/stream-processors.md) - Transform time-series to relational
-- [Data Models](../data-modeling/data-models.md) - Define structure for both formats
+- [Stream Processors](../data-modeling/stream-processors.md) - Aggregate time-series into relational records
