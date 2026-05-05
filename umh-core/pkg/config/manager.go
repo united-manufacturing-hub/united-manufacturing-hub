@@ -785,10 +785,10 @@ func (m *FileConfigManager) WithConfigPath(configPath string) *FileConfigManager
 //     readAndParseConfig passes false (strict); WriteYAMLConfigFromString first tries
 //     false then retries with true to keep YAML anchors working for hand-edited files.
 //   - applyDefaults: If true, defaults nil location to empty map and empty releaseChannel to "stable".
-//     The read path (readAndParseConfig) and the cache-update parse inside
-//     WriteYAMLConfigFromString pass true so downstream consumers always see populated
-//     fields; pure-validation parses (the strict pre-write check) and tests that need
-//     to assert original empty-equals-empty semantics pass false.
+//     Production callers pass false: defaulting is now centralized in validateConfig
+//     (see round-3 Fix A). The branch is retained for the exported function signature
+//     and direct test callers. Tests asserting original empty-equals-empty semantics
+//     also pass false.
 //
 // Returns:
 //   - FullConfig: The parsed and processed configuration
