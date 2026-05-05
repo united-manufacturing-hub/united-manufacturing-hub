@@ -25,9 +25,8 @@ import (
 const defaultChildConfig = `address: {{ .IP }}:{{ .PORT }}
 device: {{ .DEVICE_ID }}`
 
-// State.Next emits children via snapshot.RenderChildren(snap); this helper
-// is the parent-spec variant called from DeriveDesiredState to populate
-// ChildrenSpecs.
+// RenderChildren is called from DeriveDesiredState to populate ChildrenSpecs
+// from an ExampleparentConfig.
 func RenderChildren(spec *ExampleparentConfig) []config.ChildSpec {
 	if spec == nil || spec.ChildrenCount == 0 {
 		return []config.ChildSpec{}

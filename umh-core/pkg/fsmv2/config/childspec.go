@@ -464,7 +464,8 @@ func (c *ChildInfo) UnmarshalJSON(data []byte) error {
 //	    return o
 //	}
 //
-// See workers/example/exampleparent/snapshot/snapshot.go for the simple counts pattern.
+// See fsmv2/observation.go (Observation.SetChildrenCounts and the embedded
+// ChildrenHealthy/ChildrenUnhealthy fields) for the framework-supplied counts pattern.
 type ChildrenView struct {
 	// Children carries the per-child snapshots in deterministic order.
 	Children []ChildInfo `json:"children"`

@@ -54,12 +54,13 @@ var _ = Describe("ParentWorker", func() {
 	})
 
 	Describe("CollectObservedState", func() {
-		It("should return observed state with timestamp", func() {
+		It("should return observed state", func() {
 			observed, err := worker.CollectObservedState(context.Background(), nil)
 
 			Expect(err).ToNot(HaveOccurred())
 			Expect(observed).NotTo(BeNil())
-			Expect(observed.GetTimestamp()).NotTo(BeZero())
+			// CollectedAt is set by the collector post-COS (zero on direct return).
+			Expect(observed.GetTimestamp()).To(BeZero())
 		})
 	})
 
@@ -73,18 +74,16 @@ var _ = Describe("ParentWorker", func() {
 			desiredIface, err := worker.DeriveDesiredState(spec)
 
 			Expect(err).ToNot(HaveOccurred())
-			desired := desiredIface.(*fsmv2types.DesiredState)
+			desired := desiredIface.(*fsmv2.WrappedDesiredState[exampleparent.ExampleparentConfig])
 			Expect(desired.IsShutdownRequested()).To(BeFalse())
+			// ChildrenCount == 0 -> non-nil empty slice (worker.go: spec parse with ChildrenCount=0).
+			Expect(desired.ChildrenSpecs).To(BeEmpty())
+			Expect(desired.ChildrenSpecs).NotTo(BeNil())
 
-			// Per P2.2 option (a) decision, exampleparent's canonical
-			// RenderChildren takes *ExampleparentConfig (not the WorkerSnapshot
-			// shape used by the other parents); the state-package mirror is
-			// runtime-only (returns nil to defer to the DDS-derived
-			// ChildrenSpecs path that the supervisor still consults for
-			// exampleparent post-P2.5). Tests exercise the canonical path
-			// directly.
+			// Canonical RenderChildren is called with *ExampleparentConfig and
+			// also returns the same shape (preserved unchanged in PR4-A.5;
+			// PR4-C will extract this to a children/ package).
 			children := exampleparent.RenderChildren(&exampleparent.ExampleparentConfig{ChildrenCount: 0})
-			// ChildrenCount == 0 -> non-nil empty slice (children.go:42-44).
 			Expect(children).To(BeEmpty())
 			Expect(children).NotTo(BeNil())
 		})
@@ -98,8 +97,11 @@ var _ = Describe("ParentWorker", func() {
 			desiredIface, err := worker.DeriveDesiredState(spec)
 
 			Expect(err).ToNot(HaveOccurred())
-			desired := desiredIface.(*fsmv2types.DesiredState)
+			desired := desiredIface.(*fsmv2.WrappedDesiredState[exampleparent.ExampleparentConfig])
 			Expect(desired.IsShutdownRequested()).To(BeFalse())
+			Expect(desired.ChildrenSpecs).To(HaveLen(3))
+			Expect(desired.ChildrenSpecs[0].Name).To(Equal("child-0"))
+			Expect(desired.ChildrenSpecs[0].Enabled).To(BeTrue(), "ChildSpec.Enabled must be true (§4-C/F4⊕G1 invariant)")
 
 			children := exampleparent.RenderChildren(&exampleparent.ExampleparentConfig{ChildrenCount: 3})
 			Expect(children).To(HaveLen(3))

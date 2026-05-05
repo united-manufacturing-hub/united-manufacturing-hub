@@ -16,10 +16,9 @@ package state
 
 import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleparent"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleparent/action"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleparent/snapshot"
 )
 
 // TryingToStopState represents the state during graceful shutdown. While in
@@ -32,28 +31,18 @@ type TryingToStopState struct {
 }
 
 func (s *TryingToStopState) Next(snapAny any) fsmv2.NextResult[any, any] {
-	snap := helpers.ConvertSnapshot[snapshot.ExampleparentObservedState, *snapshot.ExampleparentDesiredState](snapAny)
+	snap := fsmv2.ConvertWorkerSnapshot[exampleparent.ExampleparentConfig, exampleparent.ExampleparentStatus](snapAny)
 
-	// P1.8 §4-E LOCKED: renderChildren must be the first non-shutdown call.
-	// Result discarded — in TryingToStop we emit an empty spec so the
-	// supervisor calls RequestShutdown on every existing child.
-	snapshot.RenderChildren(snap)
-
-	// Emit an empty children set so the supervisor calls RequestShutdown on
-	// each existing child; children absent from the emitted specs receive
-	// ShutdownRequested=true and then stop on their own.
-	children := []config.ChildSpec{}
-
-	if snap.Observed.ID == "" {
-		return fsmv2.Transition(s, fsmv2.SignalNone, &action.StopAction{}, "ID not set, executing StopAction", children)
+	if snap.Identity.ID == "" {
+		return fsmv2.Transition(s, fsmv2.SignalNone, &action.StopAction{}, "ID not set, executing StopAction", nil)
 	}
 
 	// All children must be stopped before transitioning.
 	if snap.Observed.ChildrenHealthy == 0 && snap.Observed.ChildrenUnhealthy == 0 {
-		return fsmv2.Transition(&StoppedState{}, fsmv2.SignalNone, nil, "All children stopped, transitioning to Stopped", children)
+		return fsmv2.Transition(&StoppedState{}, fsmv2.SignalNone, nil, "All children stopped, transitioning to Stopped", nil)
 	}
 
-	return fsmv2.Transition(s, fsmv2.SignalNone, nil, "Gracefully stopping all children", children)
+	return fsmv2.Transition(s, fsmv2.SignalNone, nil, "Gracefully stopping all children", nil)
 }
 
 func (s *TryingToStopState) String() string {

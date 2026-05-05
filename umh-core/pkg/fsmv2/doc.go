@@ -254,7 +254,8 @@
 // the prefix-only ParseLifecyclePhase parser cannot classify production raw
 // state names and would silently mis-aggregate.
 //
-// See workers/example/exampleparent/snapshot/snapshot.go for the simple counts pattern.
+// See observation.go (Observation.SetChildrenCounts / ChildrenHealthy /
+// ChildrenUnhealthy) for the canonical counts hook supplied by the framework.
 // See config/childspec.go for ChildrenView and ChildInfo definitions.
 //
 // # Architecture documentation

@@ -19,7 +19,7 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleparent/snapshot"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleparent"
 )
 
 // RunningDuration is how long to stay in running state before initiating the stop cycle.
@@ -32,24 +32,22 @@ type RunningState struct {
 }
 
 func (s *RunningState) Next(snapAny any) fsmv2.NextResult[any, any] {
-	snap := helpers.ConvertSnapshot[snapshot.ExampleparentObservedState, *snapshot.ExampleparentDesiredState](snapAny)
+	snap := fsmv2.ConvertWorkerSnapshot[exampleparent.ExampleparentConfig, exampleparent.ExampleparentStatus](snapAny)
 
 	if snap.Desired.IsShutdownRequested() {
 		return fsmv2.Transition(&TryingToStopState{}, fsmv2.SignalNone, nil, "Shutdown requested, transitioning to TryingToStop", nil)
 	}
 
-	children := snapshot.RenderChildren(snap)
-
 	if snap.Observed.ChildrenUnhealthy > 0 {
-		return fsmv2.Transition(&DegradedState{}, fsmv2.SignalNone, nil, "Some children are unhealthy, transitioning to Degraded", children)
+		return fsmv2.Transition(&DegradedState{}, fsmv2.SignalNone, nil, "Some children are unhealthy, transitioning to Degraded", nil)
 	}
 
 	elapsed := time.Duration(snap.Observed.Metrics.Framework.TimeInCurrentStateMs) * time.Millisecond
 	if elapsed >= RunningDuration {
-		return fsmv2.Transition(&TryingToStopState{}, fsmv2.SignalNone, nil, "Running duration elapsed, transitioning to TryingToStop", children)
+		return fsmv2.Transition(&TryingToStopState{}, fsmv2.SignalNone, nil, "Running duration elapsed, transitioning to TryingToStop", nil)
 	}
 
-	return fsmv2.Transition(s, fsmv2.SignalNone, nil, "All children healthy and running", children)
+	return fsmv2.Transition(s, fsmv2.SignalNone, nil, "All children healthy and running", nil)
 }
 
 func (s *RunningState) String() string {

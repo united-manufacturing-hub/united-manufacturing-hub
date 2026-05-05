@@ -840,9 +840,11 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) (err error) 
 	//   - nil sentinel
 	//       → legacy / migration-window — the parent expressed no opinion
 	//         from state.Next (e.g. exampleparent's principled-nil mirror
-	//         while ExampleparentDesiredState does not yet carry the
-	//         ExampleparentConfig fields). Fall back to the DDS-derived
-	//         ChildSpecProvider path so teaching children survive.
+	//         which is deferred until the PR4-C children/ extraction lands;
+	//         until then state.Next does not have a snapshot-shaped emitter
+	//         that can drive the canonical body deterministically). Fall
+	//         back to the DDS-derived ChildSpecProvider path so teaching
+	//         children survive.
 	//
 	// IMPORTANT: the discriminator treats nil and []config.ChildSpec{} as
 	// distinct cases. Never use `len(rendered) == 0` here — that collapses

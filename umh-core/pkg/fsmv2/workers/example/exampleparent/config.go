@@ -34,3 +34,13 @@ func (s *ExampleparentConfig) GetChildWorkerType() string {
 
 	return s.ChildWorkerType
 }
+
+// ExampleparentStatus holds the runtime observation data for the parent worker.
+// Only worker-specific business fields belong here; the framework supplies
+// CollectedAt, State, LastActionResults, MetricsEmbedder, and ChildrenHealthy/Unhealthy
+// via Observation[ExampleparentStatus].
+//
+// Currently empty — the parent worker has no business-level fields beyond what
+// the framework supplies. Kept as a named type so future fields land in a stable
+// location without rewiring the WorkerBase generics.
+type ExampleparentStatus struct{}
