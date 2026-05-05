@@ -41,7 +41,7 @@ func (s *StoppedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := fsmv2.ConvertWorkerSnapshot[exampleparent.ExampleparentConfig, exampleparent.ExampleparentStatus](snapAny)
 
 	if snap.Desired.IsShutdownRequested() {
-		return fsmv2.Transition(s, fsmv2.SignalNeedsRemoval, nil, "Shutdown requested, signaling removal", nil)
+		return fsmv2.Transition(s, fsmv2.SignalNeedsRemoval, nil, "Shutdown requested, signaling removal", []config.ChildSpec{})
 	}
 
 	// Top-level parent gate: advance only if the user-configured State is
@@ -50,11 +50,16 @@ func (s *StoppedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	if snap.Desired.Config.GetState() == config.DesiredStateRunning {
 		elapsed := time.Duration(snap.Observed.Metrics.Framework.TimeInCurrentStateMs) * time.Millisecond
 		if elapsed >= StoppedWaitDuration {
-			return fsmv2.Transition(&TryingToStartState{}, fsmv2.SignalNone, nil, "Wait duration elapsed, transitioning to TryingToStart", nil)
+			// Bootstrap: hand off to TryingToStart with the rendered children
+			// set so the supervisor creates them on the same tick.
+			return fsmv2.Transition(&TryingToStartState{}, fsmv2.SignalNone, nil, "Wait duration elapsed, transitioning to TryingToStart", exampleparent.RenderChildren(&snap.Desired.Config))
 		}
 	}
 
-	return fsmv2.Transition(s, fsmv2.SignalNone, nil, "Parent is stopped, no children spawned", nil)
+	// Parent is stopped — children should not exist while the parent is in
+	// this state. Emit the explicit empty set so the supervisor's Phase-1
+	// absent-from-specs path tears down any residual children.
+	return fsmv2.Transition(s, fsmv2.SignalNone, nil, "Parent is stopped, no children spawned", []config.ChildSpec{})
 }
 
 func (s *StoppedState) String() string {
