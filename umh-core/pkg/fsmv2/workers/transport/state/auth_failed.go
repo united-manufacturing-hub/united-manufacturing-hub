@@ -27,8 +27,11 @@ import (
 // change (AuthToken, RelayURL, or InstanceUUID) before transitioning back to
 // StartingState for a fresh attempt.
 //
-// Uses StartingBase because the worker has not reached Running -- children remain
-// stopped (they only start when the parent enters RunningHealthy).
+// Uses StartingBase because the worker has not reached Running. Children
+// (push/pull) are emitted with Enabled=true and rush forward into their own
+// state machines, where they observe HasValidToken=false and degrade
+// gracefully until the auth retry succeeds. Pending message buffers are
+// preserved across the AuthFailed cycle.
 type AuthFailedState struct {
 	helpers.StartingBase
 }

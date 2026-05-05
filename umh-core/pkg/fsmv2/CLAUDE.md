@@ -38,6 +38,43 @@ func (w *ParentWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState,
 
 Children aggregation (health counts) is handled by the supervisor, not in `CollectObservedState`. The supervisor calls `SetChildrenCounts()` after collection.
 
+## Stopping a child worker — two options
+
+Parents have two semantically distinct ways to stop children:
+
+1. **`ChildSpec.Enabled = false`** — "disable this child, possibly preserve state in future". The CHANGE-19 reducer (`supervisor/reconciliation.go`) translates `Enabled=false` into `IsShutdownRequested=true` on resident children synchronously, before the child's tick. For non-resident specs (cold boot), the supervisor skips creation entirely (PR3-I).
+2. **Omit the spec from `[]config.ChildSpec{}`** — "this child should not exist". The supervisor's Phase-1 absent-from-specs path drives full teardown (`RequestShutdown` → child's `NeedsRemoval` → removal from `s.workers`).
+
+Today, both options converge to "child gone" because the default `StoppedState.Next()` pattern signals `NeedsRemoval` on `IsShutdownRequested`. Internal state (counters, connection handles, pending buffers) is lost; respawn starts fresh.
+
+Default `StoppedState.Next()` shape:
+
+```go
+if snap.Desired.IsShutdownRequested() {
+    return fsmv2.Transition(s, fsmv2.SignalNeedsRemoval, nil, "shutdown requested", nil)
+}
+if !snap.ShouldStop() {
+    return fsmv2.Transition(&NextState{}, fsmv2.SignalNone, nil, "advancing", nil)
+}
+return fsmv2.Transition(s, fsmv2.SignalNone, nil, "staying stopped", nil)
+```
+
+### When to use which
+
+- **`Enabled=false`**: per-child temporary disable. Useful when the parent wants finer control than "all-or-nothing" (e.g., one of N children disabled by config).
+- **`[]ChildSpec{}`**: parent's whole "stopped" semantics. The parent is itself stopped/draining; children should not exist during this period.
+
+### Future: state-preservation across respawn
+
+Designed but not yet implemented. See `003_klaus/artifacts/2026-04-09_fsmv2_state_recovery_design.md`. Two layers:
+
+1. **`cse:"retain"` struct tag**: workers annotate `Status` fields that should survive restart. The collector merges retained values from `prevObserved` into the fresh COS-returned struct, only when the fresh value is zero. Workers don't change code — just struct tags.
+2. **`DependencyHydrator` interface**: optional `HydrateDependencies(ctx, prevObs)` called once before first COS, for workers whose Dependencies must be warm before any state observation (e.g., CertFetcher's `CertHandler` map for TLS).
+
+When that lands, `Enabled=false` becomes truly state-preserving (children stay resident; their retained fields survive the disable cycle). `[]ChildSpec{}` continues to mean full removal.
+
+Until then, both options behave the same. Choose based on which intent reads more clearly at the call site.
+
 ## Channel Singleton Pattern
 
 For workers that share channels (like TransportWorker with Push/Pull children), use a singleton `ChannelProvider`:
