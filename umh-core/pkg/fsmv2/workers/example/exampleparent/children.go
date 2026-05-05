@@ -29,13 +29,8 @@ device: {{ .DEVICE_ID }}`
 // RenderChildren is the parent's children-set emitter for the example parent
 // worker. Pure function of the parsed ParentUserSpec: same input yields the
 // same ChildSpec values (and ChildSpec.Hash output) across repeated calls.
-//
-// Per §4-C LOCKED, Enabled MUST be set explicitly to true to avoid the
-// F4⊕G1 trap of forgotten-Enabled in renderChildren bodies.
-//
-// State.Next will adopt this emitter when P2.2 wires renderChildren into the
-// state-machine return path; until then DeriveDesiredState calls this helper
-// to populate ChildrenSpecs.
+// State.Next adopts this emitter via NextResult.Children; see state_running.go
+// and state_degraded.go.
 func RenderChildren(spec *ParentUserSpec) []config.ChildSpec {
 	if spec == nil || spec.ChildrenCount == 0 {
 		return []config.ChildSpec{}
