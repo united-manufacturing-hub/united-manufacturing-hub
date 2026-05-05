@@ -77,13 +77,13 @@ var _ = Describe("ParentWorker", func() {
 			Expect(desired.IsShutdownRequested()).To(BeFalse())
 
 			// Per P2.2 option (a) decision, exampleparent's canonical
-			// RenderChildren takes *ParentUserSpec (not the WorkerSnapshot
+			// RenderChildren takes *ExampleparentConfig (not the WorkerSnapshot
 			// shape used by the other parents); the state-package mirror is
 			// runtime-only (returns nil to defer to the DDS-derived
 			// ChildrenSpecs path that the supervisor still consults for
 			// exampleparent post-P2.5). Tests exercise the canonical path
 			// directly.
-			children := exampleparent.RenderChildren(&exampleparent.ParentUserSpec{ChildrenCount: 0})
+			children := exampleparent.RenderChildren(&exampleparent.ExampleparentConfig{ChildrenCount: 0})
 			// ChildrenCount == 0 -> non-nil empty slice (children.go:42-44).
 			Expect(children).To(BeEmpty())
 			Expect(children).NotTo(BeNil())
@@ -101,7 +101,7 @@ var _ = Describe("ParentWorker", func() {
 			desired := desiredIface.(*fsmv2types.DesiredState)
 			Expect(desired.IsShutdownRequested()).To(BeFalse())
 
-			children := exampleparent.RenderChildren(&exampleparent.ParentUserSpec{ChildrenCount: 3})
+			children := exampleparent.RenderChildren(&exampleparent.ExampleparentConfig{ChildrenCount: 3})
 			Expect(children).To(HaveLen(3))
 			Expect(children[0].Name).To(Equal("child-0"))
 			Expect(children[1].Name).To(Equal("child-1"))

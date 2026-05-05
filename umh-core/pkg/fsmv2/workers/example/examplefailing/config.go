@@ -18,8 +18,8 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 )
 
-// FailingUserSpec defines the typed configuration for the failing worker.
-type FailingUserSpec struct {
+// ExamplefailingConfig defines the typed configuration for the failing worker.
+type ExamplefailingConfig struct {
 	config.BaseUserSpec
 	// ShouldFail: when true, fails MaxFailures times before succeeding.
 	ShouldFail bool `json:"should_fail" yaml:"should_fail"`
@@ -34,7 +34,7 @@ type FailingUserSpec struct {
 }
 
 // GetMaxFailures returns the configured max failures, defaulting to 3.
-func (s *FailingUserSpec) GetMaxFailures() int {
+func (s *ExamplefailingConfig) GetMaxFailures() int {
 	if s.MaxFailures <= 0 {
 		return 3
 	}
@@ -43,7 +43,7 @@ func (s *FailingUserSpec) GetMaxFailures() int {
 }
 
 // GetFailureCycles returns the configured number of failure cycles, defaulting to 1.
-func (s *FailingUserSpec) GetFailureCycles() int {
+func (s *ExamplefailingConfig) GetFailureCycles() int {
 	if s.FailureCycles <= 0 {
 		return 1
 	}
@@ -52,11 +52,11 @@ func (s *FailingUserSpec) GetFailureCycles() int {
 }
 
 // GetRestartAfterFailures returns the configured restart threshold (0 = disabled).
-func (s *FailingUserSpec) GetRestartAfterFailures() int {
+func (s *ExamplefailingConfig) GetRestartAfterFailures() int {
 	return s.RestartAfterFailures
 }
 
 // GetRecoveryDelayObservations returns the configured number of observation cycles to wait after failure.
-func (s *FailingUserSpec) GetRecoveryDelayObservations() int {
+func (s *ExamplefailingConfig) GetRecoveryDelayObservations() int {
 	return s.RecoveryDelayObservations
 }

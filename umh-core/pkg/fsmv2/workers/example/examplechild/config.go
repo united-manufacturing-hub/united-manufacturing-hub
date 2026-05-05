@@ -12,15 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package example_panic
+package examplechild
 
 import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 )
 
-// ExamplepanicUserSpec is the typed configuration for the panic worker.
-type ExamplepanicUserSpec struct {
-	config.BaseUserSpec      // Provides State field with GetState() defaulting to "running"
-	ShouldRun           bool `yaml:"should_run"`
-	ShouldPanic         bool `yaml:"should_panic"`
+// ExamplechildConfig defines the typed configuration for the child worker.
+// This is parsed from the UserSpec.Config YAML/JSON string.
+type ExamplechildConfig struct {
+	config.BaseUserSpec // Provides State field with GetState() defaulting to "running"
 }

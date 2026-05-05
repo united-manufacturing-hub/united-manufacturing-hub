@@ -33,7 +33,7 @@ import (
 // ParentWorker implements the FSM v2 Worker interface for parent-child relationships.
 type ParentWorker struct {
 	deps *ParentDependencies
-	fsmv2.WorkerBase[ParentUserSpec, snapshot.ExampleparentObservedState, *ParentDependencies]
+	fsmv2.WorkerBase[ExampleparentConfig, snapshot.ExampleparentObservedState, *ParentDependencies]
 }
 
 // NewParentWorker creates a new example parent worker.
@@ -105,7 +105,7 @@ func (w *ParentWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState,
 		}, nil
 	}
 
-	parentSpec, err := config.ParseUserSpec[ParentUserSpec](spec)
+	parentSpec, err := config.ParseUserSpec[ExampleparentConfig](spec)
 	if err != nil {
 		return nil, err
 	}

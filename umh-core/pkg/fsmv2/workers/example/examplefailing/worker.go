@@ -34,7 +34,7 @@ import (
 type FailingWorker struct {
 	connection Connection
 	deps       *FailingDependencies
-	fsmv2.WorkerBase[FailingUserSpec, snapshot.ExamplefailingObservedState, *FailingDependencies]
+	fsmv2.WorkerBase[ExamplefailingConfig, snapshot.ExamplefailingObservedState, *FailingDependencies]
 }
 
 // NewFailingWorker creates a new example failing worker.
@@ -135,7 +135,7 @@ func (w *FailingWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState
 		return &snapshot.ExamplefailingDesiredState{}, nil
 	}
 
-	parsed, err := fsmv2types.ParseUserSpec[FailingUserSpec](spec)
+	parsed, err := fsmv2types.ParseUserSpec[ExamplefailingConfig](spec)
 	if err != nil {
 		return nil, err
 	}

@@ -32,7 +32,7 @@ import (
 
 type ExampleslowWorker struct {
 	deps *ExampleslowDependencies
-	fsmv2.WorkerBase[ExampleslowUserSpec, snapshot.ExampleslowObservedState, *ExampleslowDependencies]
+	fsmv2.WorkerBase[ExampleslowConfig, snapshot.ExampleslowObservedState, *ExampleslowDependencies]
 }
 
 func NewExampleslowWorker(
@@ -93,7 +93,7 @@ func (w *ExampleslowWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredS
 		return &snapshot.ExampleslowDesiredState{}, nil
 	}
 
-	parsed, err := config.ParseUserSpec[ExampleslowUserSpec](spec)
+	parsed, err := config.ParseUserSpec[ExampleslowConfig](spec)
 	if err != nil {
 		return nil, err
 	}

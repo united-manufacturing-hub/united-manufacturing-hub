@@ -25,9 +25,9 @@ import (
 // pulling in the worker package and creating an import cycle.
 //
 // Exampleparent intentionally preserves the divergent
-// RenderChildren(spec *ParentUserSpec) signature in the worker package as a
+// RenderChildren(spec *ExampleparentConfig) signature in the worker package as a
 // teaching example for the OLD typed-config / helpers.ConvertSnapshot pattern.
-// ExampleparentDesiredState does not carry the ParentUserSpec fields
+// ExampleparentDesiredState does not carry the ExampleparentConfig fields
 // (ChildrenCount, ChildWorkerType, ChildConfig) needed to drive the canonical
 // emitter from the snapshot alone, so this function cannot reproduce the
 // canonical body deterministically.

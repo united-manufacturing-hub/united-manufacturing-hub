@@ -12,14 +12,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package exampleslow
+package exampleparent
 
 import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 )
 
-// ExampleslowUserSpec defines the typed configuration for the slow worker.
-type ExampleslowUserSpec struct {
+// ExampleparentConfig defines the typed configuration for the parent worker.
+type ExampleparentConfig struct {
 	config.BaseUserSpec
-	DelaySeconds int `yaml:"delaySeconds"`
+	ChildWorkerType string `json:"child_worker_type" yaml:"child_worker_type"` // Optional: defaults to "examplechild"
+	ChildConfig     string `json:"child_config"      yaml:"child_config"`      // Optional: config to pass to children
+	ChildrenCount   int    `json:"children_count"    yaml:"children_count"`
+}
+
+// GetChildWorkerType returns the configured child worker type, defaulting to "examplechild".
+func (s *ExampleparentConfig) GetChildWorkerType() string {
+	if s.ChildWorkerType == "" {
+		return "examplechild"
+	}
+
+	return s.ChildWorkerType
 }

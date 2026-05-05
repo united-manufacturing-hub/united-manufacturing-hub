@@ -32,7 +32,7 @@ import (
 
 type ExamplepanicWorker struct {
 	deps *ExamplepanicDependencies
-	fsmv2.WorkerBase[ExamplepanicUserSpec, snapshot.ExamplepanicObservedState, *ExamplepanicDependencies]
+	fsmv2.WorkerBase[ExamplepanicConfig, snapshot.ExamplepanicObservedState, *ExamplepanicDependencies]
 }
 
 func NewExamplepanicWorker(
@@ -89,7 +89,7 @@ func (w *ExamplepanicWorker) CollectObservedState(ctx context.Context, _ fsmv2.D
 }
 
 func (w *ExamplepanicWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, error) {
-	if _, err := config.ParseUserSpec[ExamplepanicUserSpec](spec); err != nil {
+	if _, err := config.ParseUserSpec[ExamplepanicConfig](spec); err != nil {
 		return nil, err
 	}
 
@@ -106,7 +106,7 @@ func (w *ExamplepanicWorker) updateDependenciesFromSpec(spec interface{}) {
 		return
 	}
 
-	parsed, err := config.ParseUserSpec[ExamplepanicUserSpec](spec)
+	parsed, err := config.ParseUserSpec[ExamplepanicConfig](spec)
 	if err != nil {
 		return
 	}

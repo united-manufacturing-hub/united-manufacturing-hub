@@ -34,7 +34,7 @@ import (
 type ChildWorker struct {
 	deps       *ExamplechildDependencies
 	connection Connection
-	fsmv2.WorkerBase[ChildUserSpec, snapshot.ExamplechildObservedState, *ExamplechildDependencies]
+	fsmv2.WorkerBase[ExamplechildConfig, snapshot.ExamplechildObservedState, *ExamplechildDependencies]
 }
 
 // NewChildWorker creates a new example child worker.
@@ -124,7 +124,7 @@ func (w *ChildWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, 
 		Variables: userSpec.Variables,
 	}
 
-	if _, err := config.ParseUserSpec[ChildUserSpec](renderedSpec); err != nil {
+	if _, err := config.ParseUserSpec[ExamplechildConfig](renderedSpec); err != nil {
 		return nil, err
 	}
 

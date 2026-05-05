@@ -841,7 +841,7 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) (err error) 
 	//       → legacy / migration-window — the parent expressed no opinion
 	//         from state.Next (e.g. exampleparent's principled-nil mirror
 	//         while ExampleparentDesiredState does not yet carry the
-	//         ParentUserSpec fields). Fall back to the DDS-derived
+	//         ExampleparentConfig fields). Fall back to the DDS-derived
 	//         ChildSpecProvider path so teaching children survive.
 	//
 	// IMPORTANT: the discriminator treats nil and []config.ChildSpec{} as

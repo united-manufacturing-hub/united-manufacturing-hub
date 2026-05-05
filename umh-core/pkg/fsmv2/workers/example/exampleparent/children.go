@@ -20,7 +20,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 )
 
-// defaultChildConfig is the fallback YAML used when ParentUserSpec.ChildConfig
+// defaultChildConfig is the fallback YAML used when ExampleparentConfig.ChildConfig
 // is empty.
 const defaultChildConfig = `address: {{ .IP }}:{{ .PORT }}
 device: {{ .DEVICE_ID }}`
@@ -28,7 +28,7 @@ device: {{ .DEVICE_ID }}`
 // State.Next emits children via snapshot.RenderChildren(snap); this helper
 // is the parent-spec variant called from DeriveDesiredState to populate
 // ChildrenSpecs.
-func RenderChildren(spec *ParentUserSpec) []config.ChildSpec {
+func RenderChildren(spec *ExampleparentConfig) []config.ChildSpec {
 	if spec == nil || spec.ChildrenCount == 0 {
 		return []config.ChildSpec{}
 	}
