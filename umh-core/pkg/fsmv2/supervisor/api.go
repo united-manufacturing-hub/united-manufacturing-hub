@@ -131,6 +131,18 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity deps.Identity, work
 
 	observedDoc["id"] = identity.ID
 
+	// Inject the initial FSM state name so the store never contains state="".
+	// CollectObservedState runs before the collector's StateProvider closure is
+	// wired up, so the Observation struct leaves State="" at this point. The
+	// StateProvider fires on every subsequent collection tick, but if the
+	// scenario ends before the first tick fires (e.g., during the last cycle's
+	// shutdown), the store would retain state="" and fail the
+	// verifyObservedStateHasState check. Injecting the registered initial state
+	// here closes that window.
+	if initialStateForDoc := worker.GetInitialState(); initialStateForDoc != nil {
+		observedDoc["state"] = initialStateForDoc.String()
+	}
+
 	_, err = s.store.SaveObserved(ctx, s.workerType, identity.ID, observedDoc)
 	if err != nil {
 		s.logger.SentryError(deps.FeatureFSMv2, identity.HierarchyPath, err, "worker_add_save_observed_failed")
@@ -605,29 +617,6 @@ func (s *Supervisor[TObserved, TDesired]) setMappedParentState(state string) {
 	defer s.mu.Unlock()
 
 	s.mappedParentState = state
-}
-
-// getChildStartStates implements SupervisorInterface.
-func (s *Supervisor[TObserved, TDesired]) getChildStartStates() []string {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	if s.childStartStates == nil {
-		return nil
-	}
-
-	states := make([]string, len(s.childStartStates))
-	copy(states, s.childStartStates)
-
-	return states
-}
-
-// setChildStartStates implements SupervisorInterface.
-func (s *Supervisor[TObserved, TDesired]) setChildStartStates(states []string) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	s.childStartStates = states
 }
 
 // updateUserSpec implements SupervisorInterface.

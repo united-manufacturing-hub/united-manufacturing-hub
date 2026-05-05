@@ -24,11 +24,10 @@ import (
 // ChildSpec values (and ChildSpec.Hash output) across repeated calls
 // (idempotency property exercised by P1.8 architecture test #7).
 //
-// The transport parent always emits two children — push and pull — that run
-// whenever the parent is in Running or Degraded. Including Degraded prevents
-// the oscillation loop where a child stops on parent degradation (caused by
-// the child being unhealthy), the parent recovers (no unhealthy children),
-// the child restarts, and the cycle repeats.
+// The transport parent always emits two children — push and pull — that are
+// always-enabled while the parent is running. Deliberate disable goes through
+// ChildSpec.Enabled=false (CHANGE-19 reducer), not through parent-state
+// gating.
 //
 // Per §4-C LOCKED, Enabled MUST be set explicitly to true; the F4⊕G1 trap
 // detector in P1.8 architecture test #13 (registry walk, layer 2) catches
@@ -45,13 +44,11 @@ func RenderChildren(snap fsmv2.WorkerSnapshot[TransportConfig, TransportStatus])
 			"push",
 			"push",
 			config.UserSpec{Config: rawSpec.Config, Variables: rawSpec.Variables},
-			[]string{"Running", "Degraded"},
 		),
 		config.NewChildSpec(
 			"pull",
 			"pull",
 			config.UserSpec{Config: rawSpec.Config, Variables: rawSpec.Variables},
-			[]string{"Running", "Degraded"},
 		),
 	}
 }

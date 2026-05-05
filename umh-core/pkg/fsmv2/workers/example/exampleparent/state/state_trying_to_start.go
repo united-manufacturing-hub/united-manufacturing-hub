@@ -22,7 +22,7 @@ import (
 )
 
 // TryingToStartState represents the state while loading config and spawning children.
-// Children with ChildStartStates containing "TryingToStart" will have desired state "running".
+// Children are always-enabled while the parent is running, including during startup.
 // Waits for all children to become healthy before transitioning to RunningState.
 type TryingToStartState struct {
 	helpers.StartingBase

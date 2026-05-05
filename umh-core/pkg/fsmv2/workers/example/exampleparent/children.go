@@ -65,7 +65,6 @@ func RenderChildren(spec *ParentUserSpec) []config.ChildSpec {
 				Config:    childConfig,
 				Variables: childVariables,
 			},
-			[]string{"TryingToStart", "Running"},
 		)
 	}
 

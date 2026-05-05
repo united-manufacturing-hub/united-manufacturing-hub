@@ -100,9 +100,9 @@
 //   - Propagates errors (halts reconciliation on failure)
 //
 // Apply state mapping:
-//   - Parent state influences child desired state
-//   - ChildStartStates determines when children should run
-//   - Empty ChildStartStates means child always runs
+//   - Parent's mapped state is propagated to children for observation
+//   - Children are always-enabled when the parent is running
+//   - Use ChildSpec.Enabled=false to deliberately disable a resident child
 //
 // Recursively tick children:
 //   - Ticks all children in hierarchy order
@@ -422,7 +422,8 @@
 //
 //   - Check IsShutdownRequested() as first condition in state.Next()
 //   - Make all actions idempotent (check if work already done)
-//   - Use ChildStartStates to coordinate child lifecycle (not data passing)
+//   - Children are always-enabled when the parent is running; use
+//     ChildSpec.Enabled=false to deliberately disable a resident child
 //   - Pass data to children via VariableBundle, not direct method calls
 //   - Release locks before calling child methods (prevent deadlock)
 //   - Handle context cancellation in all async operations

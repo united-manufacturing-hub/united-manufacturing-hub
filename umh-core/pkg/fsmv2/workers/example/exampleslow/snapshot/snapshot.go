@@ -35,7 +35,8 @@ type ExampleslowSnapshot struct {
 }
 
 type ExampleslowDesiredState struct {
-	// ParentMappedState is the desired state derived from parent's ChildStartStates via state mapping.
+	// ParentMappedState is the parent's mapped lifecycle state, propagated for
+	// observation. Children are always-enabled while the parent is running.
 	ParentMappedState string `json:"parent_mapped_state"`
 
 	config.BaseDesiredState

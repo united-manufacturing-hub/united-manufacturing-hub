@@ -145,7 +145,7 @@ var _ = Describe("CommunicatorWorker", func() {
 				Expect(specs).To(HaveLen(1))
 				Expect(specs[0].Name).To(Equal("transport"))
 				Expect(specs[0].WorkerType).To(Equal("transport"))
-				Expect(specs[0].ChildStartStates).To(ConsistOf("Syncing", "Recovering"))
+				Expect(specs[0].Enabled).To(BeTrue())
 			})
 		})
 
@@ -182,7 +182,7 @@ state: "running"
 				Expect(specs).To(HaveLen(1))
 				Expect(specs[0].Name).To(Equal("transport"))
 				Expect(specs[0].WorkerType).To(Equal("transport"))
-				Expect(specs[0].ChildStartStates).To(ConsistOf("Syncing", "Recovering"))
+				Expect(specs[0].Enabled).To(BeTrue())
 				Expect(specs[0].UserSpec.Config).To(ContainSubstring("relay.umh.app"))
 				Expect(specs[0].UserSpec.Config).To(ContainSubstring("test-uuid-12345"))
 				Expect(specs[0].UserSpec.Config).To(ContainSubstring("test-auth-token-secret"))

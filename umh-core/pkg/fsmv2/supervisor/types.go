@@ -61,8 +61,6 @@ type SupervisorInterface interface {
 	tick(ctx context.Context) error
 	updateUserSpec(spec config.UserSpec)
 	getUserSpec() config.UserSpec
-	getChildStartStates() []string
-	setChildStartStates(states []string)
 	getMappedParentState() string
 	setMappedParentState(state string)
 	calculateHierarchySize() int

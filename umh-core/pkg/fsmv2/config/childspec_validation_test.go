@@ -57,20 +57,6 @@ var _ = Describe("ChildSpec Validation", func() {
 			Expect(err).NotTo(HaveOccurred())
 		})
 
-		It("should pass validation for a ChildSpec with ChildStartStates", func() {
-			spec := config.ChildSpec{
-				Name:       "valid-child-with-states",
-				WorkerType: "test-worker",
-				UserSpec: config.UserSpec{
-					Config: "config-data",
-				},
-				ChildStartStates: []string{"Running", "TryingToStart"},
-			}
-
-			err := config.ValidateChildSpec(spec, registry)
-			Expect(err).NotTo(HaveOccurred())
-		})
-
 		It("should fail when Name is empty", func() {
 			spec := config.ChildSpec{
 				Name:       "",
@@ -140,75 +126,6 @@ var _ = Describe("ChildSpec Validation", func() {
 			err := config.ValidateChildSpec(spec, registry)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("invalid user spec"))
-		})
-
-		It("should validate even with nil ChildStartStates", func() {
-			spec := config.ChildSpec{
-				Name:       "no-states",
-				WorkerType: "test-worker",
-				UserSpec: config.UserSpec{
-					Config: "config",
-				},
-				ChildStartStates: nil,
-			}
-
-			err := config.ValidateChildSpec(spec, registry)
-			Expect(err).NotTo(HaveOccurred())
-		})
-
-		It("should validate with empty ChildStartStates", func() {
-			spec := config.ChildSpec{
-				Name:       "empty-states",
-				WorkerType: "test-worker",
-				UserSpec: config.UserSpec{
-					Config: "config",
-				},
-				ChildStartStates: []string{},
-			}
-
-			err := config.ValidateChildSpec(spec, registry)
-			Expect(err).NotTo(HaveOccurred())
-		})
-
-		It("should reject ChildStartStates with empty state name", func() {
-			spec := config.ChildSpec{
-				Name:             "test-child",
-				WorkerType:       "test-worker",
-				ChildStartStates: []string{"Running", ""},
-				UserSpec: config.UserSpec{
-					Config: "config",
-				},
-			}
-			err := config.ValidateChildSpec(spec, registry)
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("cannot be empty"))
-		})
-
-		It("should reject ChildStartStates with duplicate state names", func() {
-			spec := config.ChildSpec{
-				Name:             "test-child",
-				WorkerType:       "test-worker",
-				ChildStartStates: []string{"Running", "Running"},
-				UserSpec: config.UserSpec{
-					Config: "config",
-				},
-			}
-			err := config.ValidateChildSpec(spec, registry)
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("duplicate"))
-		})
-
-		It("should accept valid ChildStartStates with multiple unique states", func() {
-			spec := config.ChildSpec{
-				Name:             "test-child",
-				WorkerType:       "test-worker",
-				ChildStartStates: []string{"Running", "TryingToStart", "Degraded"},
-				UserSpec: config.UserSpec{
-					Config: "config",
-				},
-			}
-			err := config.ValidateChildSpec(spec, registry)
-			Expect(err).NotTo(HaveOccurred())
 		})
 
 		It("should return error for bad worker type", func() {
@@ -425,29 +342,6 @@ var _ = Describe("ChildSpec Validation", func() {
 			err := config.ValidateChildSpecs(specs, registry)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("duplicate name"))
-		})
-
-		It("should pass validation with multiple specs having different ChildStartStates", func() {
-			specs := []config.ChildSpec{
-				{
-					Name:       "child-with-states",
-					WorkerType: "communicator",
-					UserSpec: config.UserSpec{
-						Config: "config",
-					},
-					ChildStartStates: []string{"Running"},
-				},
-				{
-					Name:       "child-without-states",
-					WorkerType: "test-worker",
-					UserSpec: config.UserSpec{
-						Config: "config",
-					},
-				},
-			}
-
-			err := config.ValidateChildSpecs(specs, registry)
-			Expect(err).NotTo(HaveOccurred())
 		})
 
 		It("should fail with proper context when first spec is invalid", func() {

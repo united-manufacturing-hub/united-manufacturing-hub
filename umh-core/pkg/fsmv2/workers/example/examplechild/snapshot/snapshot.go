@@ -38,7 +38,8 @@ type ExamplechildSnapshot struct {
 
 // ExamplechildDesiredState represents the target configuration for the child worker.
 type ExamplechildDesiredState struct {
-	// ParentMappedState derives from parent's ChildStartStates; injected via MappedParentStateProvider.
+	// ParentMappedState is the parent's mapped lifecycle state, propagated for
+	// observation. Children are always-enabled while the parent is running.
 	ParentMappedState string `json:"parent_mapped_state"`
 	config.BaseDesiredState
 }

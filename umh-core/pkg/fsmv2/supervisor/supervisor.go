@@ -179,7 +179,6 @@ type Supervisor[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState] stru
 	mappedParentState        string
 	parentID                 string
 	lastUserSpecHash         string
-	childStartStates         []string
 	collectorHealth          CollectorHealth
 	metricsWg                sync.WaitGroup
 	tickInterval             time.Duration

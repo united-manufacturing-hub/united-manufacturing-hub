@@ -72,12 +72,12 @@ var _ = Describe("Application — DDS vs RenderChildren differential parity (P2.
 
 			Expect(rhash).To(Equal(lhash),
 				"%s parity violation on spec[%d]:\n"+
-					"  legacy   = name=%q workerType=%q startStates=%v enabled=%v userSpec.Config=%q\n"+
-					"  rendered = name=%q workerType=%q startStates=%v enabled=%v userSpec.Config=%q",
+					"  legacy   = name=%q workerType=%q enabled=%v userSpec.Config=%q\n"+
+					"  rendered = name=%q workerType=%q enabled=%v userSpec.Config=%q",
 				label, i,
-				legacy[i].Name, legacy[i].WorkerType, legacy[i].ChildStartStates,
+				legacy[i].Name, legacy[i].WorkerType,
 				legacy[i].Enabled, legacy[i].UserSpec.Config,
-				rendered[i].Name, rendered[i].WorkerType, rendered[i].ChildStartStates,
+				rendered[i].Name, rendered[i].WorkerType,
 				rendered[i].Enabled, rendered[i].UserSpec.Config)
 		}
 	}

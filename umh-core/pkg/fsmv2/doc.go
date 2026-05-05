@@ -174,7 +174,9 @@
 //
 // Key concepts:
 //   - Parent returns ChildrenSpecs in DeriveDesiredState()
-//   - ChildStartStates coordinates child lifecycle (not data passing)
+//   - Children are always-enabled when the parent is running; set
+//     Enabled: false on a child spec to drive it to Stopped while keeping
+//     the supervisor resident
 //   - Use VariableBundle for passing data to children
 //
 // See workers/example/exampleparent/worker.go for a complete example.

@@ -16,13 +16,16 @@ package state
 
 import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleparent/action"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleparent/snapshot"
 )
 
-// TryingToStopState represents the state during graceful shutdown.
-// Children without "TryingToStop" in ChildStartStates will have desired state "stopped".
+// TryingToStopState represents the state during graceful shutdown. While in
+// this state the parent emits an empty ChildSpec slice so the supervisor calls
+// RequestShutdown on every existing child; children absent from the emitted
+// specs receive ShutdownRequested=true and stop on their own.
 // Waits for all children to stop before transitioning to StoppedState.
 type TryingToStopState struct {
 	helpers.StoppingBase
@@ -31,7 +34,15 @@ type TryingToStopState struct {
 func (s *TryingToStopState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := helpers.ConvertSnapshot[snapshot.ExampleparentObservedState, *snapshot.ExampleparentDesiredState](snapAny)
 
-	children := snapshot.RenderChildren(snap)
+	// P1.8 §4-E LOCKED: renderChildren must be the first non-shutdown call.
+	// Result discarded — in TryingToStop we emit an empty spec so the
+	// supervisor calls RequestShutdown on every existing child.
+	snapshot.RenderChildren(snap)
+
+	// Emit an empty children set so the supervisor calls RequestShutdown on
+	// each existing child; children absent from the emitted specs receive
+	// ShutdownRequested=true and then stop on their own.
+	children := []config.ChildSpec{}
 
 	if snap.Observed.ID == "" {
 		return fsmv2.Transition(s, fsmv2.SignalNone, &action.StopAction{}, "ID not set, executing StopAction", children)

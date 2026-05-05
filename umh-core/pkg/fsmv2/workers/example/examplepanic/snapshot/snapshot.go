@@ -43,10 +43,9 @@ type ExamplepanicSnapshot struct {
 // See fsmv2.DesiredState documentation for the architectural invariant.
 type ExamplepanicDesiredState struct {
 
-	// ParentMappedState is the desired state derived from parent's ChildStartStates.
-	// When parent is in a state listed in ChildStartStates → "running"
-	// When parent is in any other state → "stopped"
-	// This field is injected by the supervisor via MappedParentStateProvider callback.
+	// ParentMappedState is the parent's mapped lifecycle state propagated down
+	// for observation. Children are always-enabled while the parent is running;
+	// this field is informational and injected by the supervisor.
 	ParentMappedState string `json:"parent_mapped_state"`
 
 	config.BaseDesiredState // Provides ShutdownRequested + IsShutdownRequested() + SetShutdownRequested()

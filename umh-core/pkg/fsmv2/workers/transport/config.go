@@ -98,8 +98,8 @@ type TransportStatus struct {
 // Token buffer architecture: the parent TransportWorker uses a 10-minute buffer (proactive
 // refresh trigger) while child workers (push/pull) use a 1-minute buffer via IsTokenValid().
 // The 9-minute gap is safe by design: when IsTokenExpired triggers here, the parent
-// transitions Running → Starting, which causes children to stop (they are not in ChildStartStates
-// while the parent is Starting). Children never push or pull during the refresh window.
+// transitions Running → Starting and the children check the token freshness on each tick;
+// during the refresh window children skip pushing/pulling and wait for the new token.
 // The children's 1-minute buffer is a last-resort safety net for edge cases only.
 func (s TransportStatus) IsTokenExpired() bool {
 	if s.JWTExpiry.IsZero() {
