@@ -247,6 +247,14 @@ func (w *WorkerBase[TConfig, TStatus, TDeps]) DeriveDesiredState(spec interface{
 	// `state: foo` that would otherwise silently leave the worker in Stopped
 	// because BaseUserSpec.GetState returns the raw value verbatim when
 	// non-empty.
+	//
+	// TODO: this is a band-aid against silent state typos. The proper home is
+	// per-component Validate() called at apply-time by a dry-run pipeline (see
+	// the "refuse-invalid-config" pitch — boot/MC/CLI all share one validator,
+	// each FSMv2 component exposes its own validation rules, refuse to apply
+	// invalid config rather than auto-fixing it). When that lands, this generic
+	// check should be subsumed by BaseUserSpec.Validate() and removed from
+	// here.
 	if g, ok := any(&cfg).(interface{ GetState() string }); ok {
 		if err := config.ValidateDesiredState(g.GetState()); err != nil {
 			return nil, fmt.Errorf("invalid desired state: %w", err)
