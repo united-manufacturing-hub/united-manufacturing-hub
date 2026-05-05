@@ -167,23 +167,14 @@ var _ = Describe("PushDependencies", func() {
 				parentDeps.RecordError()
 				Expect(parentDeps.GetConsecutiveErrors()).To(Equal(2))
 
-				d.RecordError()
-				d.RecordError()
+				d.RecordTypedError(httpTransport.ErrorTypeNetwork, 0)
+				d.RecordTypedError(httpTransport.ErrorTypeNetwork, 0)
 				Expect(d.GetConsecutiveErrors()).To(Equal(2))
 				Expect(parentDeps.GetConsecutiveErrors()).To(Equal(4))
 
 				d.RecordSuccess()
 				Expect(d.GetConsecutiveErrors()).To(Equal(0))
 				Expect(parentDeps.GetConsecutiveErrors()).To(Equal(4))
-			})
-		})
-
-		Describe("RecordError", func() {
-			It("should record on both child and parent", func() {
-				d.RecordError()
-				d.RecordError()
-				Expect(d.GetConsecutiveErrors()).To(Equal(2))
-				Expect(parentDeps.GetConsecutiveErrors()).To(Equal(2))
 			})
 		})
 
@@ -209,7 +200,7 @@ var _ = Describe("PushDependencies", func() {
 		Describe("GetDegradedEnteredAt", func() {
 			It("should read from child tracker", func() {
 				Expect(d.GetDegradedEnteredAt().IsZero()).To(BeTrue())
-				d.RecordError()
+				d.RecordTypedError(httpTransport.ErrorTypeNetwork, 0)
 				Expect(d.GetDegradedEnteredAt().IsZero()).To(BeFalse())
 				d.RecordSuccess()
 				Expect(d.GetDegradedEnteredAt().IsZero()).To(BeTrue())
@@ -341,9 +332,9 @@ var _ = Describe("PushDependencies", func() {
 		})
 
 		It("push success does not mask pull errors", func() {
-			pullDeps.RecordError()
-			pullDeps.RecordError()
-			pullDeps.RecordError()
+			pullDeps.RecordTypedError(httpTransport.ErrorTypeNetwork, 0)
+			pullDeps.RecordTypedError(httpTransport.ErrorTypeNetwork, 0)
+			pullDeps.RecordTypedError(httpTransport.ErrorTypeNetwork, 0)
 			Expect(pullDeps.GetConsecutiveErrors()).To(Equal(3))
 
 			pushDeps.RecordSuccess()
@@ -354,9 +345,9 @@ var _ = Describe("PushDependencies", func() {
 		})
 
 		It("pull success does not mask push errors", func() {
-			pushDeps.RecordError()
-			pushDeps.RecordError()
-			pushDeps.RecordError()
+			pushDeps.RecordTypedError(httpTransport.ErrorTypeNetwork, 0)
+			pushDeps.RecordTypedError(httpTransport.ErrorTypeNetwork, 0)
+			pushDeps.RecordTypedError(httpTransport.ErrorTypeNetwork, 0)
 
 			pullDeps.RecordSuccess()
 

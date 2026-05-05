@@ -25,6 +25,7 @@ import (
 	depspkg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/register"
+	httpTransport "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport/http"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/pull"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/pull/state"
@@ -127,8 +128,8 @@ var _ = Describe("PullWorker", func() {
 		})
 
 		It("should report consecutive errors from child deps", func() {
-			worker.GetDependencies().RecordError()
-			worker.GetDependencies().RecordError()
+			worker.GetDependencies().RecordTypedError(httpTransport.ErrorTypeNetwork, 0)
+			worker.GetDependencies().RecordTypedError(httpTransport.ErrorTypeNetwork, 0)
 
 			ctx := context.Background()
 			observed, err := worker.CollectObservedState(ctx, nil)

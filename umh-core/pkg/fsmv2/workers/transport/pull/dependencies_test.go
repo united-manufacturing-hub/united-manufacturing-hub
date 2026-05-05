@@ -375,23 +375,14 @@ var _ = Describe("PullDependencies", func() {
 				parentDeps.RecordError()
 				Expect(parentDeps.GetConsecutiveErrors()).To(Equal(2))
 
-				d.RecordError()
-				d.RecordError()
+				d.RecordTypedError(httpTransport.ErrorTypeNetwork, 0)
+				d.RecordTypedError(httpTransport.ErrorTypeNetwork, 0)
 				Expect(d.GetConsecutiveErrors()).To(Equal(2))
 				Expect(parentDeps.GetConsecutiveErrors()).To(Equal(4))
 
 				d.RecordSuccess()
 				Expect(d.GetConsecutiveErrors()).To(Equal(0))
 				Expect(parentDeps.GetConsecutiveErrors()).To(Equal(4))
-			})
-		})
-
-		Describe("RecordError", func() {
-			It("should record on both child and parent", func() {
-				d.RecordError()
-				d.RecordError()
-				Expect(d.GetConsecutiveErrors()).To(Equal(2))
-				Expect(parentDeps.GetConsecutiveErrors()).To(Equal(2))
 			})
 		})
 
@@ -417,7 +408,7 @@ var _ = Describe("PullDependencies", func() {
 		Describe("GetDegradedEnteredAt", func() {
 			It("should read from child tracker", func() {
 				Expect(d.GetDegradedEnteredAt().IsZero()).To(BeTrue())
-				d.RecordError()
+				d.RecordTypedError(httpTransport.ErrorTypeNetwork, 0)
 				Expect(d.GetDegradedEnteredAt().IsZero()).To(BeFalse())
 				d.RecordSuccess()
 				Expect(d.GetDegradedEnteredAt().IsZero()).To(BeTrue())

@@ -107,15 +107,6 @@ func (d *PullDependencies) RecordSuccess() {
 	d.failureRate.RecordOutcome(true)
 }
 
-func (d *PullDependencies) RecordError() {
-	d.RetryTracker().RecordError()
-	d.parentDeps.RecordError()
-	if d.failureRate.RecordOutcome(false) {
-		d.BaseDependencies.GetLogger().SentryWarn(deps.FeatureForWorker(d.GetWorkerType()), d.GetHierarchyPath(), "persistent_pull_failure",
-			deps.Float64("failure_rate", d.failureRate.FailureRate()))
-	}
-}
-
 func (d *PullDependencies) GetConsecutiveErrors() int {
 	return d.RetryTracker().ConsecutiveErrors()
 }

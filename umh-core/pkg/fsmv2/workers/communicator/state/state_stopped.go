@@ -16,7 +16,6 @@ package state
 
 import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator"
 )
@@ -37,13 +36,7 @@ func (s *StoppedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 
 	children := communicator.RenderChildren(snap)
 
-	if !snap.ShouldStop() {
-		return fsmv2.Transition(&SyncingState{}, fsmv2.SignalNone, nil, "Starting sync orchestration", children)
-	}
-
-	// Stay stopped: keep transport child resident but disabled. CHANGE-19 reducer
-	// drives RequestShutdown from Enabled=false; resume on Enabled=true.
-	return fsmv2.Transition(s, fsmv2.SignalNone, nil, "Communicator stopped", config.DisableAll(children))
+	return fsmv2.Transition(&SyncingState{}, fsmv2.SignalNone, nil, "Starting sync orchestration", children)
 }
 
 func (s *StoppedState) String() string {

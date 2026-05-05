@@ -70,8 +70,6 @@ type ExamplechildObservedState struct {
 	LastActionResults []deps.ActionResult `json:"last_action_results,omitempty"`
 
 	deps.MetricsEmbedder `json:",inline"`
-
-	ConnectAttempts int `json:"connect_attempts"`
 }
 
 func (o ExamplechildObservedState) GetTimestamp() time.Time {
