@@ -18,7 +18,6 @@ import (
 	"context"
 
 	depspkg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplefailing/snapshot"
 )
 
 const DisconnectActionName = "disconnect"
@@ -32,7 +31,7 @@ type DisconnectAction struct {
 // Execute releases the connection back to the pool.
 // When failure cycles are configured, advances to the next cycle instead of resetting attempts.
 func (a *DisconnectAction) Execute(ctx context.Context, depsAny any) error {
-	deps := depsAny.(snapshot.ExamplefailingDependencies)
+	deps := depsAny.(ExamplefailingDependencies)
 	logger := deps.GetLogger()
 	logger.Info("Disconnecting")
 

@@ -20,7 +20,6 @@ import (
 	"time"
 
 	depspkg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplefailing/snapshot"
 )
 
 const ConnectActionName = "connect"
@@ -43,7 +42,7 @@ type ConnectAction struct {
 // Returns ErrSimulatedFailure when configured to fail and attempt count < MaxFailures.
 // Supports multiple failure cycles: each cycle fails MaxFailures times before succeeding.
 func (a *ConnectAction) Execute(ctx context.Context, depsAny any) error {
-	deps := depsAny.(snapshot.ExamplefailingDependencies)
+	deps := depsAny.(ExamplefailingDependencies)
 	logger := deps.GetLogger()
 
 	if a.ShouldFail && deps.GetCurrentCycle() < a.FailureCycles {

@@ -60,3 +60,27 @@ func (s *ExamplefailingConfig) GetRestartAfterFailures() int {
 func (s *ExamplefailingConfig) GetRecoveryDelayObservations() int {
 	return s.RecoveryDelayObservations
 }
+
+// ExamplefailingStatus holds the runtime observation data for the failing worker.
+// Only worker-specific business fields belong here; the framework supplies
+// CollectedAt, State, LastActionResults, MetricsEmbedder, and ChildrenHealthy/Unhealthy
+// via Observation[ExamplefailingStatus].
+type ExamplefailingStatus struct {
+	// ConnectionHealth reports the current connection state ("healthy" or "no connection").
+	// Populated by CollectObservedState from dependencies.IsConnected().
+	ConnectionHealth string `json:"connection_health"`
+
+	// ConnectAttempts is the number of connect attempts since the last cycle reset.
+	ConnectAttempts int `json:"connect_attempts"`
+	// TicksInConnectedState counts wall-clock ticks the worker has spent in Connected.
+	TicksInConnectedState int `json:"ticks_in_connected"`
+	// CurrentCycle is the index of the current failure/success cycle.
+	CurrentCycle int `json:"current_cycle"`
+	// AllCyclesComplete is true when CurrentCycle has reached the configured FailureCycles.
+	AllCyclesComplete bool `json:"all_cycles_complete"`
+	// RecoveryDelayActive is true when waiting after a failure before retrying.
+	// Keeps the worker in the unhealthy state long enough for parents to observe.
+	RecoveryDelayActive bool `json:"recovery_delay_active"`
+	// ObservationsSinceFailure counts CollectObservedState calls since the last failure.
+	ObservationsSinceFailure int `json:"observations_since_failure"`
+}

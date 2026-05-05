@@ -17,8 +17,8 @@ package state
 import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplefailing"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplefailing/action"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplefailing/snapshot"
 )
 
 // TriggeringNextCycleState is an intermediate state used to trigger the next failure cycle.
@@ -28,19 +28,20 @@ type TriggeringNextCycleState struct {
 }
 
 func (s *TriggeringNextCycleState) Next(snapAny any) fsmv2.NextResult[any, any] {
-	snap := helpers.ConvertSnapshot[snapshot.ExamplefailingObservedState, *snapshot.ExamplefailingDesiredState](snapAny)
+	snap := fsmv2.ConvertWorkerSnapshot[examplefailing.ExamplefailingConfig, examplefailing.ExamplefailingStatus](snapAny)
 
-	if snap.Observed.ShouldStop() {
+	if snap.ShouldStop() {
 		return fsmv2.Transition(&TryingToStopState{}, fsmv2.SignalNone, nil, "stop required, transitioning to stop state", nil)
 	}
 
-	if snap.Observed.ConnectionHealth == "healthy" {
+	cfg := snap.Desired.Config
+	if snap.Observed.Status.ConnectionHealth == "healthy" {
 		return fsmv2.Transition(s, fsmv2.SignalNone,
-			&action.DisconnectAction{ShouldFail: snap.Desired.ShouldFail, FailureCycles: snap.Desired.FailureCycles},
+			&action.DisconnectAction{ShouldFail: cfg.ShouldFail, FailureCycles: cfg.GetFailureCycles()},
 			"disconnecting to trigger next failure cycle", nil)
 	}
 
-	if snap.Observed.ConnectionHealth == "no connection" {
+	if snap.Observed.Status.ConnectionHealth == "no connection" {
 		return fsmv2.Transition(&DisconnectedState{}, fsmv2.SignalNone, nil, "cycle triggered, connection lost", nil)
 	}
 

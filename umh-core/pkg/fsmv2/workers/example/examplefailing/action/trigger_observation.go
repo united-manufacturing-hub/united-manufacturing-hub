@@ -18,7 +18,6 @@ import (
 	"context"
 
 	depspkg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplefailing/snapshot"
 )
 
 const TriggerObservationActionName = "trigger_observation"
@@ -39,7 +38,7 @@ type TriggerObservationAction struct {
 // The act of completing this action causes the collector to trigger TriggerNow(),
 // making this worker's state immediately visible to parent supervisors.
 func (a *TriggerObservationAction) Execute(ctx context.Context, depsAny any) error {
-	deps := depsAny.(snapshot.ExamplefailingDependencies)
+	deps := depsAny.(ExamplefailingDependencies)
 	newTicks := deps.IncrementTicksInConnected()
 	deps.GetLogger().Info("trigger_observation",
 		depspkg.Int("new_ticks", newTicks),
