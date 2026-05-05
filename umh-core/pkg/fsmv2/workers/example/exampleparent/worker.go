@@ -97,10 +97,8 @@ func (w *ParentWorker) CollectObservedState(ctx context.Context, _ fsmv2.Desired
 func (w *ParentWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, error) {
 	if spec == nil {
 		// Byte-equivalent with canonical RenderChildren(nil) = []ChildSpec{}.
-		// Pre-PR2-boundary this branch returned nil; PR2 boundary cleanup
-		// flipped to []ChildSpec{} so the DDS path emits the same authoritative
-		// "zero children right now" sentinel as the canonical path. Closes the
-		// G11 DDS-vs-canonical divergence (PR2 boundary DA finding).
+		// The DDS path emits the same authoritative "zero children right now"
+		// sentinel as the canonical path.
 		return &config.DesiredState{
 			ChildrenSpecs:    []config.ChildSpec{},
 			OriginalUserSpec: nil,
@@ -126,9 +124,9 @@ func (w *ParentWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState,
 	}
 
 	// RenderChildren (children.go) is the canonical children-set emitter and
-	// the single source of truth for ChildSpec construction; called here so
-	// the legacy DDS path and the P2.2 renderChildren-in-state.Next migration
-	// remain bit-for-bit identical.
+	// the single source of truth for ChildSpec construction; the DDS path and
+	// the renderChildren-in-state.Next path stay bit-for-bit identical by
+	// calling it here.
 	childrenSpecs := RenderChildren(&parentSpec)
 
 	return &config.DesiredState{

@@ -24,26 +24,21 @@ import (
 // by both state/ and the worker package) so state/ can call it without
 // pulling in the worker package and creating an import cycle.
 //
-// Per P2.2 option (a) decision (see lab report): exampleparent intentionally
-// preserves the divergent RenderChildren(spec *ParentUserSpec) signature in
-// the worker package as a teaching example for the OLD typed-config /
-// helpers.ConvertSnapshot pattern. The snapshot's typed Desired
-// (*ExampleparentDesiredState) does not yet carry the ParentUserSpec fields
+// Exampleparent intentionally preserves the divergent
+// RenderChildren(spec *ParentUserSpec) signature in the worker package as a
+// teaching example for the OLD typed-config / helpers.ConvertSnapshot pattern.
+// ExampleparentDesiredState does not carry the ParentUserSpec fields
 // (ChildrenCount, ChildWorkerType, ChildConfig) needed to drive the canonical
 // emitter from the snapshot alone, so this function cannot reproduce the
-// canonical body deterministically during the migration window.
+// canonical body deterministically.
 //
-// The function returns nil ("no opinion" per NextResult.Children godoc at
-// fsmv2/api.go:140-153) so the supervisor continues to reconcile
-// exampleparent's children via the DDS-derived path. nil is the only safe
-// return here — the alternative non-nil empty slice ([]ChildSpec{}) is the
-// authoritative "I want zero children" signal that, once P2.4 cuts the
-// supervisor over to NextResult.Children, would silently despawn
-// exampleparent's teaching children (child-0/1/2 from worker_test.go).
-// This deferral remains in effect until a future P-step extends
-// ExampleparentDesiredState to carry ParentUserSpec fields and the canonical
-// worker.go RenderChildren(&parentSpec) is replaceable with a snapshot-driven
-// body.
+// Returns nil ("no opinion" per NextResult.Children godoc at
+// fsmv2/api.go:140-153) so the supervisor reconciles exampleparent's children
+// via the DDS-derived path. nil is the only safe return — a non-nil empty
+// slice ([]ChildSpec{}) is the authoritative "I want zero children" signal
+// and would silently despawn exampleparent's teaching children
+// (child-0/1/2 from worker_test.go) once the supervisor cuts over to
+// NextResult.Children.
 //
 // Idempotent (Design Intent §16), pure, deterministic.
 func RenderChildren(snap helpers.TypedSnapshot[ExampleparentObservedState, *ExampleparentDesiredState]) []config.ChildSpec {

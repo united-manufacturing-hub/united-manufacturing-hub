@@ -21,16 +21,13 @@ import (
 )
 
 // defaultChildConfig is the fallback YAML used when ParentUserSpec.ChildConfig
-// is empty. Kept as a package-level constant so RenderChildren and the legacy
-// DeriveDesiredState body share a single source of truth for the default.
+// is empty.
 const defaultChildConfig = `address: {{ .IP }}:{{ .PORT }}
 device: {{ .DEVICE_ID }}`
 
-// RenderChildren is the parent's children-set emitter for the example parent
-// worker. Pure function of the parsed ParentUserSpec: same input yields the
-// same ChildSpec values (and ChildSpec.Hash output) across repeated calls.
-// State.Next adopts this emitter via NextResult.Children; see state_running.go
-// and state_degraded.go.
+// State.Next emits children via snapshot.RenderChildren(snap); this helper
+// is the parent-spec variant called from DeriveDesiredState to populate
+// ChildrenSpecs.
 func RenderChildren(spec *ParentUserSpec) []config.ChildSpec {
 	if spec == nil || spec.ChildrenCount == 0 {
 		return []config.ChildSpec{}
