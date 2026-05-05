@@ -18,7 +18,6 @@ import (
 	"fmt"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
 	transport_pkg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport"
 )
@@ -28,9 +27,8 @@ import (
 // change (AuthToken, RelayURL, or InstanceUUID) before transitioning back to
 // StartingState for a fresh attempt.
 //
-// Uses StartingBase because the worker has not reached Running. Children are
-// emitted with Enabled=false — the CHANGE-19 reducer drives RequestShutdown so
-// push/pull stay quiescent until auth recovers.
+// Uses StartingBase because the worker has not reached Running -- children remain
+// stopped (they only start when the parent enters RunningHealthy).
 type AuthFailedState struct {
 	helpers.StartingBase
 }
@@ -43,10 +41,7 @@ func (s *AuthFailedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 		return fsmv2.Transition(&StoppingState{}, fsmv2.SignalNone, nil, "Shutdown requested, transitioning to Stopping", nil)
 	}
 
-	// Auth permanently broken — children must not run. StartingState (on
-	// config-change transition) will keep Enabled=false; RunningState flips to
-	// Enabled=true once auth succeeds.
-	children := config.DisableAll(transport_pkg.RenderChildren(snap))
+	children := transport_pkg.RenderChildren(snap)
 
 	// FailedAuthConfig is guaranteed populated here because only permanent errors
 	// (which call SetFailedAuthConfig via the !IsTransient() guard in authenticate.go)
