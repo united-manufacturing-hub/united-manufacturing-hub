@@ -32,11 +32,7 @@ func (s *DisconnectedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 		return fsmv2.Transition(&TryingToStopState{}, fsmv2.SignalNone, nil, "Stop required, initiating shutdown", nil)
 	}
 
-	if !snap.Observed.ShouldStop() {
-		return fsmv2.Transition(&TryingToConnectState{}, fsmv2.SignalNone, nil, "Attempting to reconnect", nil)
-	}
-
-	return fsmv2.Transition(s, fsmv2.SignalNone, nil, "Connection lost, will retry", nil)
+	return fsmv2.Transition(&TryingToConnectState{}, fsmv2.SignalNone, nil, "Attempting to reconnect", nil)
 }
 
 func (s *DisconnectedState) String() string {
