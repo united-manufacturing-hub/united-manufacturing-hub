@@ -31,6 +31,8 @@ type StoppingState struct {
 
 // Next evaluates the current snapshot and returns the next state or action.
 func (s *StoppingState) Next(snapAny any) fsmv2.NextResult[any, any] {
+	// No shutdown check: StoppingState is ONE-WAY per the one-way stop trajectory
+	// rule (see pkg/fsmv2/doc.go). Once entered, always runs to completion.
 	snap := fsmv2.ConvertWorkerSnapshot[transport_pkg.TransportConfig, transport_pkg.TransportStatus](snapAny)
 
 	// Stopping: keep children resident but disabled so the CHANGE-19 reducer

@@ -25,15 +25,11 @@ import (
 //
 // The transport parent always emits two children — push and pull — that are
 // always-enabled while the parent is running. Deliberate disable goes through
-// ChildSpec.Enabled=false (CHANGE-19 reducer), not through parent-state
-// gating.
+// ChildSpec.Enabled=false, not through parent-state gating. Enabled MUST be
+// set explicitly to true to avoid forgotten-Enabled in renderChildren bodies.
 //
-// Per §4-C LOCKED, Enabled MUST be set explicitly to true to avoid the
-// F4⊕G1 trap of forgotten-Enabled in renderChildren bodies.
-//
-// State.Next emits this set via NextResult.Children (wired in P2.2 and made
-// authoritative for the supervisor in P2.4); the legacy DDS-derived path was
-// retired in P2.5.
+// State.Next emits this set via NextResult.Children; the legacy DDS-derived
+// path was retired during the cascade.
 func RenderChildren(snap fsmv2.WorkerSnapshot[TransportConfig, TransportStatus]) []config.ChildSpec {
 	rawSpec := snapshotUserSpec(snap)
 

@@ -7,6 +7,10 @@
 - Updated Go dependencies, includes security fixes for OIDC and JOSE authentication libraries
 - The helloworld example worker now receives framework telemetry via typed deps binding (was silently dropped under the NoDeps sentinel)
 
+### Changed
+
+- FSMv2 persistence worker: internal state names changed from `ShuttingDown`/`RunningDegraded` to `Stopping`/`Degraded`. Affects `observed_state` field values in CSE snapshots and any external consumers (monitoring, UI badge logic) keyed on the old string values.
+
 ### Preview: Disable Read Flows
 
 - Supports extracting metrics for write flows for bridges.

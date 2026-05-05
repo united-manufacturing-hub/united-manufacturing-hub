@@ -31,11 +31,7 @@ func (s *DisconnectedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 		return fsmv2.Transition(&TryingToStopState{}, fsmv2.SignalNone, nil, "stop required, transitioning to trying to stop", nil)
 	}
 
-	if !snap.Observed.ShouldStop() {
-		return fsmv2.Transition(&TryingToConnectState{}, fsmv2.SignalNone, nil, "should be running, attempting reconnection", nil)
-	}
-
-	return fsmv2.Transition(s, fsmv2.SignalNone, nil, "connection lost, will retry", nil)
+	return fsmv2.Transition(&TryingToConnectState{}, fsmv2.SignalNone, nil, "should be running, attempting reconnection", nil)
 }
 
 func (s *DisconnectedState) String() string {
