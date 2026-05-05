@@ -17,6 +17,7 @@ package models
 import (
 	"github.com/Masterminds/semver/v3"
 	"github.com/google/uuid"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 )
 
 type DeployCustomDataFlowComponentPayload struct {
@@ -798,8 +799,6 @@ type ProtocolConverterDFC struct {
 	Inputs CommonDataFlowComponentInputConfig `json:"inputs,omitempty" mapstructure:"inputs,omitempty" yaml:"inputs,omitempty"`
 	// Outputs is used by both read and write DFCs (user-supplied output config).
 	Outputs CommonDataFlowComponentOutputConfig `json:"outputs,omitempty" mapstructure:"outputs,omitempty" yaml:"outputs,omitempty"`
-	// UMHTopics is used by write DFCs — UNS topic regexes to subscribe to. Auto-injected into input config.
-	UMHTopics []string `json:"umh_topics,omitempty" mapstructure:"umh_topics,omitempty" yaml:"umh_topics,omitempty"`
 }
 
 type ProtocolConverterVariable struct {
@@ -813,11 +812,47 @@ type ProtocolConverterTemplateInfo struct {
 	IsTemplated bool                        `json:"isTemplated" mapstructure:"isTemplated" yaml:"isTemplated"`
 }
 
+// WriteDFCRequest is the inbound wire format for write DFC configuration.
+// The embedded struct uses mapstructure:",squash" so mapstructure flattens its fields
+// into this struct during action payload decoding. Go's encoding/json promotes embedded
+// struct fields automatically without a tag, so no json:",squash" is needed or exists.
+type WriteDFCRequest struct {
+	dataflowcomponentserviceconfig.DataflowComponentWriteConfigInput `mapstructure:",squash"`
+	// State is the desired lifecycle state ("active" or "stopped").
+	State string `json:"state,omitempty" mapstructure:"state,omitempty"`
+	// IgnoreErrors skips the health-check rollout when true.
+	IgnoreErrors *bool `json:"ignoreErrors,omitempty" mapstructure:"ignoreErrors,omitempty"`
+}
+
+// WriteDFCResponse is the outbound wire format for write DFC configuration.
+// InputTopics is returned as the raw string from config.yaml (may contain Go template
+// actions), matching the inbound WriteDFCRequest shape.
+type WriteDFCResponse struct {
+	dataflowcomponentserviceconfig.DataflowComponentWriteConfigInput `mapstructure:",squash"`
+	// State is the desired lifecycle state ("active" or "stopped").
+	State string `json:"state,omitempty" mapstructure:"state,omitempty"`
+	// IgnoreErrors skips the health-check rollout when true.
+	IgnoreErrors *bool `json:"ignoreErrors,omitempty" mapstructure:"ignoreErrors,omitempty"`
+}
+
+// ProtocolConverterRequest is the inbound shape used by edit and deploy actions.
+type ProtocolConverterRequest struct {
+	UUID         *uuid.UUID                     `binding:"required"     json:"uuid"`
+	Location     map[int]string                 `json:"location"`
+	ReadDFC      *ProtocolConverterDFC          `json:"readDFC"`
+	WriteDFC     *WriteDFCRequest               `json:"writeDFC"`
+	TemplateInfo *ProtocolConverterTemplateInfo `json:"templateInfo"`
+	Meta         *ProtocolConverterMeta         `json:"meta"`
+	Name         string                         `binding:"required" json:"name"`
+	Connection   ProtocolConverterConnection    `json:"connection"`
+}
+
+// ProtocolConverter is the outbound shape returned by GET actions.
 type ProtocolConverter struct {
 	UUID         *uuid.UUID                     `binding:"required"  json:"uuid"`
 	Location     map[int]string                 `json:"location"`
 	ReadDFC      *ProtocolConverterDFC          `json:"readDFC"`
-	WriteDFC     *ProtocolConverterDFC          `json:"writeDFC"`
+	WriteDFC     *WriteDFCResponse              `json:"writeDFC"`
 	TemplateInfo *ProtocolConverterTemplateInfo `json:"templateInfo"`
 	Meta         *ProtocolConverterMeta         `json:"meta"`
 	Name         string                         `binding:"required"  json:"name"`

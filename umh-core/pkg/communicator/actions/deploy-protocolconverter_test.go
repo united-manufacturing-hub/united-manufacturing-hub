@@ -90,10 +90,6 @@ var _ = Describe("DeployProtocolConverter", func() {
 
 	// Cleanup after each test
 	AfterEach(func() {
-		// Drain the outbound channel to prevent goroutine leaks
-		for len(outboundChannel) > 0 {
-			<-outboundChannel
-		}
 		close(outboundChannel)
 	})
 
@@ -220,6 +216,31 @@ var _ = Describe("DeployProtocolConverter", func() {
 			err = action.Validate()
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("missing required field Name"))
+		})
+
+		It("should pass validation when input_topics contains golang template vars", func() {
+			// Regression test: {{ .IP }}, {{ .location_path }} etc. in input_topics must not
+			// cause validation to fail — full rendering happens later in BuildRuntimeConfig.
+			payload := map[string]interface{}{
+				"name": pcName,
+				"connection": map[string]interface{}{
+					"ip":   pcIP,
+					"port": pcPort,
+				},
+				"location": pcLocation,
+				"writeDFC": map[string]interface{}{
+					"output": map[string]interface{}{
+						"stdout": map[string]interface{}{},
+					},
+					"input_topics": "umh.v1.{{ .location_path }}.{{ .IP }}.*",
+				},
+			}
+
+			err := action.Parse(payload)
+			Expect(err).NotTo(HaveOccurred())
+
+			err = action.Validate()
+			Expect(err).NotTo(HaveOccurred())
 		})
 	})
 
@@ -355,8 +376,7 @@ var _ = Describe("DeployProtocolConverter", func() {
 			stateMocker.Stop()
 		})
 
-		It("should store UMH_TOPICS in user variables when deploying with write DFC", func() {
-			topics := []interface{}{"umh.v1.factory.*", "umh.v1.plant.*"}
+		It("should store InputTopics in write DFC config when deploying with write DFC", func() {
 			payload := map[string]any{
 				"name": pcName,
 				"connection": map[string]any{
@@ -365,12 +385,10 @@ var _ = Describe("DeployProtocolConverter", func() {
 				},
 				"location": pcLocation,
 				"writeDFC": map[string]any{
-					"outputs": map[string]any{
-						"data": "output:\n  stdout: {}",
-						"type": "stdout",
+					"output": map[string]any{
+						"stdout": map[string]any{},
 					},
-					"pipeline": map[string]any{},
-					"umh_topics": topics,
+					"input_topics": "umh.v1.factory.*\numh.v1.plant.*",
 				},
 			}
 
@@ -391,10 +409,8 @@ var _ = Describe("DeployProtocolConverter", func() {
 			Expect(mockConfig.Config.ProtocolConverter).To(HaveLen(1))
 
 			addedPC := mockConfig.Config.ProtocolConverter[0]
-			Expect(addedPC.ProtocolConverterServiceConfig.Variables.User).To(HaveKey("UMH_TOPICS"))
-			Expect(addedPC.ProtocolConverterServiceConfig.Variables.User["UMH_TOPICS"]).To(ConsistOf(
-				"umh.v1.factory.*",
-				"umh.v1.plant.*",
+			Expect(addedPC.ProtocolConverterServiceConfig.Config.DataflowComponentWriteServiceConfig.InputTopics).To(Equal(
+				"umh.v1.factory.*\numh.v1.plant.*",
 			))
 		})
 
@@ -407,12 +423,10 @@ var _ = Describe("DeployProtocolConverter", func() {
 				},
 				"location": pcLocation,
 				"writeDFC": map[string]any{
-					"outputs": map[string]any{
-						"data": "output:\n  stdout: {}",
-						"type": "stdout",
+					"output": map[string]any{
+						"stdout": map[string]any{},
 					},
-					"pipeline": map[string]any{},
-					"umh_topics": []interface{}{"umh.v1.factory.*"},
+					"input_topics": "umh.v1.factory.*",
 					"state":      "stopped",
 				},
 			}

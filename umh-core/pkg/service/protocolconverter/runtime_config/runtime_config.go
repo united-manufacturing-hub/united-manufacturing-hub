@@ -195,18 +195,6 @@ func BuildRuntimeConfig(
 
 	vb.Internal["bridged_by"] = config.GenerateBridgedBy(config.ComponentTypeProtocolConverter, nodeName, pcName)
 
-	// TODO(ENG-4856): This default exists because UMH_TOPICS lives in Variables.User
-	// instead of a typed config block. A typed field would have a proper zero value.
-	// Remove once UMH_TOPICS moves to typed config in the FSMv2 bridge migration.
-	// UMH_TOPICS is required in user variables when write DFC is configured
-	// We usually catch this in the frontend, but user could bypass it through config.yaml
-	if len(spec.Config.DataflowComponentWriteServiceConfig.BenthosConfig.Output) > 0 {
-		if _, ok := vb.User["UMH_TOPICS"]; !ok {
-			// UMH_TOPICS is not set by the frontend. Set value here and which will throw error in deployment
-			vb.User["UMH_TOPICS"] = []string{"TOPIC_NOT_SET_BY_USER"}
-		}
-	}
-
 	//----------------------------------------------------------------------
 	// 4. Render all three sub-templates
 	//----------------------------------------------------------------------
@@ -315,25 +303,25 @@ func renderConfig(
 		read = appendDownsampler(read)
 	}
 
-	write, err := config.RenderTemplate(spec.GetDFCWriteServiceConfig(), scope)
+	// Render the write DFC template (resolves {{ .IP }}, {{ .PORT }}, etc. in write_output).
+	renderedWriteConfig, err := config.RenderTemplate(spec.Config.DataflowComponentWriteServiceConfig, scope)
 	if err != nil {
 		return protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime{}, err
 	}
 
-	// TODO(ENG-4856): This post-render injection exists because UMH_TOPICS is stored in
-	// Variables.User (an untyped map) rather than a typed config field. text/template
-	// can't render []string, so we inject it manually after rendering. Remove once
-	// UMH_TOPICS moves to a typed config block in the FSMv2 bridge migration.
-	// Inject umh_topics into write DFC input after template rendering.
-	// []string values can't be rendered via text/template, so we set them directly.
-	// UMH_TOPICS presence is guaranteed by BuildRuntimeConfig above.
-	//
-	// The Input["uns"] assertion always succeeds when Output is non-empty:
-	// GetDFCWriteServiceConfig unconditionally sets Input["uns"] whenever
-	// len(Output) > 0 — the same gate that guards the UMH_TOPICS default block above.
-	if unsInput, ok := write.BenthosConfig.Input["uns"].(map[string]any); ok {
-		unsInput["umh_topics"] = scope["UMH_TOPICS"]
+	// Extract the resolved bridged_by value from the scope to wire up the UNS consumer group.
+	// If scope["internal"]["bridged_by"] is absent (e.g. in structural comparisons that never
+	// hit the Benthos wire), bridgedBy stays "" and ToDataflowComponentServiceConfig will
+	// emit consumer_group: "" — acceptable for diff logic, but invalid for a live bridge.
+	// The FSM always injects this key before deploying, so a blank value at runtime is a bug.
+	var bridgedBy string
+	if internal, ok := scope["internal"].(map[string]any); ok {
+		bridgedBy, _ = internal["bridged_by"].(string)
 	}
+
+	// Expand the typed write config into a full Benthos service config.
+	// This enforces the UNS input and nodered_js processor, injecting umh_topics directly.
+	write := renderedWriteConfig.ToDataflowComponentServiceConfig(bridgedBy)
 
 	return protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime{
 		ConnectionServiceConfig:             connRuntime,
@@ -362,6 +350,7 @@ func appendDownsampler(dfc dataflowcomponentserviceconfig.DataflowComponentServi
 
 	return updatedDFC
 }
+
 
 // getProcessors safely extracts the processors array from a pipeline configuration.
 func getProcessors(pipeline map[string]any) []any {

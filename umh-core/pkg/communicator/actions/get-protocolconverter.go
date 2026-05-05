@@ -55,6 +55,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/protocolconverterserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/protocolconverter"
@@ -114,7 +115,9 @@ func NewGetProtocolConverterAction(userEmail string, actionUUID uuid.UUID, insta
 func (a *GetProtocolConverterAction) Parse(payload interface{}) (err error) {
 	a.actionLogger.Info("Parsing the payload")
 	a.payload, err = ParseActionPayload[models.GetProtocolConverterPayload](payload)
-	a.actionLogger.Info("Payload parsed, uuid: ", a.payload.UUID)
+	if err == nil {
+		a.actionLogger.Info("Payload parsed, uuid: ", a.payload.UUID)
+	}
 
 	return err
 }
@@ -173,6 +176,67 @@ func determineProtocol(readDFC *models.ProtocolConverterDFC) string {
 	input := readDFC.Inputs
 
 	return input.Type
+}
+
+// connectionInfoFromSpec extracts IP, port, and template metadata from a
+// ProtocolConverterServiceConfigSpec. Variables.User is the primary source; if
+// it is empty the Nmap connection template is used as a fallback for non-templated PCs.
+func connectionInfoFromSpec(
+	spec protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec,
+	logger *zap.SugaredLogger,
+) (ip string, port uint32, templateInfo *models.ProtocolConverterTemplateInfo) {
+	var (
+		variables   []models.ProtocolConverterVariable
+		isTemplated bool
+	)
+
+	for key, value := range spec.Variables.User {
+		variables = append(variables, models.ProtocolConverterVariable{Label: key, Value: value})
+		valueStr := fmt.Sprintf("%v", value)
+		switch key {
+		case "IP", "ip", "target", "Target":
+			ip = valueStr
+		case "Port", "port", "PORT":
+			if n, err := strconv.ParseUint(valueStr, 10, 32); err == nil {
+				port = uint32(n)
+			} else {
+				logger.Warnw("Failed to parse port from variable", "port", valueStr, "error", err)
+			}
+		}
+	}
+	isTemplated = len(variables) > 0
+
+	if !isTemplated {
+		if nmap := spec.Config.ConnectionServiceConfig.NmapTemplate; nmap != nil {
+			ip = nmap.Target
+			if nmap.Port != "" {
+				if n, err := strconv.ParseUint(nmap.Port, 10, 32); err == nil {
+					port = uint32(n)
+				} else {
+					logger.Warnw("Failed to parse port number", "port", nmap.Port, "error", err)
+				}
+			}
+		}
+	}
+
+	templateInfo = &models.ProtocolConverterTemplateInfo{
+		IsTemplated: isTemplated,
+		Variables:   variables,
+		RootUUID:    uuid.Nil,
+	}
+	return
+}
+
+// writeDFCResponseFromSpec builds a WriteDFCResponse from the raw spec config (as stored
+// in config.yaml). Returns nil when no output is configured (write DFC not deployed).
+func writeDFCResponseFromSpec(specWrite dataflowcomponentserviceconfig.DataflowComponentWriteConfigInput, state string) *models.WriteDFCResponse {
+	if !specWrite.HasOutput() {
+		return nil
+	}
+	return &models.WriteDFCResponse{
+		DataflowComponentWriteConfigInput: specWrite,
+		State:                             state,
+	}
 }
 
 // buildProtocolConverterDFCFromConfig converts a dataflow component service config
@@ -244,88 +308,21 @@ func (a *GetProtocolConverterAction) Execute() (interface{}, map[string]interfac
 					return nil, nil, fmt.Errorf("no observed state found for protocol converter %s", instance.ID)
 				}
 
-				// Extract template information and variables from the observed spec config
-				var (
-					templateInfo *models.ProtocolConverterTemplateInfo
-					ip           string
-					port         uint32
-					variables    []models.ProtocolConverterVariable
-					isTemplated  bool
-				)
-
-				// Extract variables from observed spec config
+				// Get IP, port, and template info from observed, rendered spec config
 				specConfig := observedState.ObservedProtocolConverterSpecConfig
-				if specConfig.Variables.User != nil {
-					for key, value := range specConfig.Variables.User {
-						// TODO(ENG-4856): This filter exists because UMH_TOPICS is stored in
-						// Variables.User alongside real user template variables. A typed field
-						// would not need filtering here. Remove once UMH_TOPICS moves to a
-						// typed config block in the FSMv2 bridge migration.
-						// UMH_TOPICS is an internal write-DFC field, not a user-editable
-						// template variable. It is returned via writeDFC.UMHTopics instead.
-						if key == "UMH_TOPICS" {
-							continue
-						}
+				ip, port, templateInfo := connectionInfoFromSpec(specConfig, a.actionLogger)
 
-						variables = append(variables, models.ProtocolConverterVariable{
-							Label: key,
-							Value: value,
-						})
-
-						// Extract IP and Port from variables (convert to string for connection info)
-						valueStr := fmt.Sprintf("%v", value)
-
-						switch key {
-						case "IP", "ip", "target", "Target":
-							ip = valueStr
-						case "Port", "port", "PORT":
-							if portInt, err := strconv.ParseUint(valueStr, 10, 32); err == nil {
-								port = uint32(portInt)
-							} else {
-								a.actionLogger.Warnw("Failed to parse port from variable", "port", valueStr, "error", err)
-							}
-						}
-					}
-
-					isTemplated = len(variables) > 0
-				}
-
-				// If no variables found, check template config for non-templated values
-				if !isTemplated {
-					if specConfig.Config.ConnectionServiceConfig.NmapTemplate != nil {
-						if specConfig.Config.ConnectionServiceConfig.NmapTemplate.Target != "" {
-							ip = specConfig.Config.ConnectionServiceConfig.NmapTemplate.Target
-						}
-
-						if specConfig.Config.ConnectionServiceConfig.NmapTemplate.Port != "" {
-							if portInt, err := strconv.ParseUint(specConfig.Config.ConnectionServiceConfig.NmapTemplate.Port, 10, 32); err == nil {
-								port = uint32(portInt)
-							} else {
-								a.actionLogger.Warnw("Failed to parse port number", "port", specConfig.Config.ConnectionServiceConfig.NmapTemplate.Port, "error", err)
-							}
-						}
-					}
-				}
-
-				// Create template info
-				templateInfo = &models.ProtocolConverterTemplateInfo{
-					IsTemplated: isTemplated,
-					Variables:   variables,
-					RootUUID:    uuid.Nil, // For now, we don't have a root UUID concept
-				}
-
-				// Build ReadDFC if present
+				// Build ReadDFC from observed, rendered spec config, if present
 				var readDFC *models.ProtocolConverterDFC
-
 				if readDFCConfig := specConfig.Config.DataflowComponentReadServiceConfig; len(readDFCConfig.BenthosConfig.Input) > 0 {
 					var err error
 
 					readDFC, err = buildProtocolConverterDFCFromConfig(readDFCConfig, a)
 					if err != nil {
-						a.actionLogger.Warnf("Failed to build read DFC: %v", err)
-						SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
-							fmt.Sprintf("Warning: Failed to build read DFC for protocol converter '%s': %v", instance.ID, err),
-							a.outboundChannel, models.GetProtocolConverter)
+						errMsg := fmt.Sprintf("Failed to build read DFC for protocol converter '%s': %v", instance.ID, err)
+						SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
+							errMsg, a.outboundChannel, models.GetProtocolConverter)
+						return nil, nil, fmt.Errorf("%s", errMsg)
 					}
 
 					if readDFC != nil {
@@ -333,35 +330,17 @@ func (a *GetProtocolConverterAction) Execute() (interface{}, map[string]interfac
 					}
 				}
 
-				// Build WriteDFC if present (check output since input is auto-generated)
-				var writeDFC *models.ProtocolConverterDFC
+				// Build WriteDFC from the raw spec config (as stored in config.yaml, non-rendered).
+				writeDFC := writeDFCResponseFromSpec(specConfig.Config.DataflowComponentWriteServiceConfig, specConfig.WriteDFCDesiredState)
 
-				if writeDFCConfig := specConfig.Config.DataflowComponentWriteServiceConfig; len(writeDFCConfig.BenthosConfig.Output) > 0 {
-					var err error
-
-					writeDFC, err = buildProtocolConverterDFCFromConfig(writeDFCConfig, a)
-					if err != nil {
-						a.actionLogger.Warnf("Failed to build write DFC: %v", err)
-						SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
-							fmt.Sprintf("Warning: Failed to build write DFC for protocol converter '%s': %v", instance.ID, err),
-							a.outboundChannel, models.GetProtocolConverter)
-					}
-
-					if writeDFC != nil {
-						writeDFC.State = specConfig.WriteDFCDesiredState
-						// Populate UMHTopics from user variables for the frontend
-						if umhTopics, ok := specConfig.Variables.User["UMH_TOPICS"]; ok {
-							if topics, ok := toStringSlice(umhTopics); ok {
-								writeDFC.UMHTopics = topics
-							}
-						}
-					}
+				// Create meta information
+				meta := &models.ProtocolConverterMeta{
+					ProcessingMode: determineProcessingMode(readDFC),
+					Protocol:       determineProtocol(readDFC),
 				}
 
-				// Location is stored in the config spec
-				location := make(map[int]string)
-
 				// Extract location from observed spec config
+				location := make(map[int]string)
 				if len(specConfig.Location) > 0 {
 					for k, v := range specConfig.Location {
 						var intKey int
@@ -369,12 +348,6 @@ func (a *GetProtocolConverterAction) Execute() (interface{}, map[string]interfac
 							location[intKey] = v
 						}
 					}
-				}
-
-				// Create meta information
-				meta := &models.ProtocolConverterMeta{
-					ProcessingMode: determineProcessingMode(readDFC),
-					Protocol:       determineProtocol(readDFC),
 				}
 
 				// Build the response

@@ -30,10 +30,10 @@ templates:
             opcua:
               address: "opc.tcp://{{ .IP }}:{{ .PORT }}"
       dataflowcomponent_write:
-        benthos:
-          output:
-            http_client:
-              url: "http://collector.local/ingest"   # static
+        input_topics: "umh.v1.{{ .location_path }}.temperature-sensor-pc.*"
+        output:
+          http_client:
+            url: "http://collector.local/ingest"   # static
 
 # ---------- Agent-wide settings ---------- #
 agent:

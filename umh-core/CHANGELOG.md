@@ -41,7 +41,7 @@ Enables FSMv2 communicator by default.
 
 ### Preview: Write Flows
 
-- Previously, write flows used raw `input` for benthos. We now define a user variable `UMH_TOPICS` and automatically generate the proper `input` in umh-core, which provides an improved user experience and less surface for errors.
+- Previously, write flows used raw `input` for benthos. We now define a typed `input_topics` field and automatically generate the proper `input` in umh-core, which provides an improved user experience and less surface for errors.
 
 ## [0.44.17]
  

@@ -20,6 +20,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/connectionserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/variables"
+	"go.uber.org/zap"
 	"gopkg.in/yaml.v3"
 )
 
@@ -46,6 +47,7 @@ func (g *Generator) RenderConfig(cfg ProtocolConverterServiceConfigSpec) (string
 	}
 
 	yamlStr := string(yamlBytes)
+	zap.S().Errorf("rendered ProtocolConverter config: %s", yamlStr)
 
 	return yamlStr, nil
 }
@@ -58,7 +60,9 @@ func (g *Generator) configToMap(cfg ProtocolConverterServiceConfigSpec) map[stri
 	variableBundleGenerator := variables.NewGenerator()
 
 	dfcReadConfigMap := dfcGenerator.ConfigToMap(cfg.Config.DataflowComponentReadServiceConfig)
-	dfcWriteConfigMap := dfcGenerator.ConfigToMap(cfg.Config.DataflowComponentWriteServiceConfig)
+
+	// Write DFC uses a typed struct; marshal it directly to a map.
+	dfcWriteConfigMap := writeConfigToMap(cfg.Config.DataflowComponentWriteServiceConfig)
 	// Convert template to runtime for config map generation
 	connRuntime, err := connectionserviceconfig.ConvertTemplateToRuntime(cfg.Config.ConnectionServiceConfig)
 	if err != nil {
@@ -132,9 +136,11 @@ func normalizeConfig(raw map[string]any) map[string]any {
 		connectionConfig = template
 	}
 
-	// Normalize each component
+	// Normalize each component.
+	// Read DFC uses free-form benthos maps that need benthos normalization.
+	// Write DFC uses a typed struct marshaled to a plain map; pass it through unchanged.
 	normalizedDFCReadConfig := dataflowcomponentserviceconfig.NormalizeConfig(dfcReadConfig)
-	normalizedDFCWriteConfig := dataflowcomponentserviceconfig.NormalizeConfig(dfcWriteConfig)
+	normalizedDFCWriteConfig := dfcWriteConfig
 	normalizedConnectionConfig := connectionserviceconfig.NormalizeConfig(connectionConfig)
 
 	// Variables don't need normalization, they are just key-value pairs
@@ -152,4 +158,20 @@ func normalizeConfig(raw map[string]any) map[string]any {
 	normalized["location"] = locationMap // Use our correctly processed location map
 
 	return normalized
+}
+
+// writeConfigToMap marshals a DataflowComponentWriteConfig to a plain map[string]any
+// for inclusion in the YAML generator output.
+func writeConfigToMap(cfg dataflowcomponentserviceconfig.DataflowComponentWriteConfigInput) map[string]any {
+	data, err := yaml.Marshal(cfg)
+	if err != nil {
+		zap.S().Errorf("writeConfigToMap: failed to marshal write DFC config, write side will be empty in YAML output: %v", err)
+		return map[string]any{}
+	}
+	var m map[string]any
+	if err := yaml.Unmarshal(data, &m); err != nil {
+		zap.S().Errorf("writeConfigToMap: failed to unmarshal write DFC config, write side will be empty in YAML output: %v", err)
+		return map[string]any{}
+	}
+	return m
 }

@@ -69,10 +69,6 @@ var _ = Describe("GetProtocolConverter", func() {
 
 	// Cleanup after each test
 	AfterEach(func() {
-		// Drain the outbound channel to prevent goroutine leaks
-		for len(outboundChannel) > 0 {
-			<-outboundChannel
-		}
 		close(outboundChannel)
 	})
 
@@ -144,6 +140,25 @@ var _ = Describe("GetProtocolConverter", func() {
 
 				// Create observed state with populated DFC configs
 				observedState := &protocolconverter.ProtocolConverterObservedStateSnapshot{
+					// Runtime config holds the fully-rendered Benthos configs (what is actually deployed).
+					ObservedProtocolConverterRuntimeConfig: protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime{
+						DataflowComponentWriteServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+							BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
+								Input: map[string]interface{}{
+									"uns": map[string]interface{}{
+										"consumer_group": "unimplemented",
+										"umh_topics":     []interface{}{"umh.v1.factory.line-1.*"},
+									},
+								},
+								Output: map[string]interface{}{
+									"stdout": map[string]interface{}{},
+								},
+								Pipeline: map[string]interface{}{
+									"processors": []interface{}{},
+								},
+							},
+						},
+					},
 					ObservedProtocolConverterSpecConfig: protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
 						Config: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
 							ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
@@ -161,19 +176,17 @@ var _ = Describe("GetProtocolConverter", func() {
 									},
 								},
 							},
-							DataflowComponentWriteServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
-								BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
-									Output: map[string]interface{}{
-										"stdout": map[string]interface{}{},
-									},
+							DataflowComponentWriteServiceConfig: dataflowcomponentserviceconfig.DataflowComponentWriteConfigInput{
+								Output: map[string]interface{}{
+									"stdout": map[string]interface{}{},
 								},
+								InputTopics: "umh.v1.factory.line-1.*",
 							},
 						},
 						Variables: variables.VariableBundle{
 							User: map[string]interface{}{
-								"IP":        "192.168.1.100",
-								"PORT":      "502",
-								"UMH_TOPICS": []string{"umh.v1.factory.line-1.*"},
+								"IP":   "192.168.1.100",
+								"PORT": "502",
 							},
 						},
 						Location: map[string]string{
@@ -274,9 +287,9 @@ var _ = Describe("GetProtocolConverter", func() {
 				Expect(response.ReadDFC).NotTo(BeNil())
 				Expect(response.ReadDFC.Inputs.Type).To(Equal("modbus"))
 
-				// Verify write DFC is populated with UMH_TOPICS from user variables
+				// Verify write DFC is populated with InputTopics
 				Expect(response.WriteDFC).NotTo(BeNil())
-				Expect(response.WriteDFC.UMHTopics).To(Equal([]string{"umh.v1.factory.line-1.*"}))
+				Expect(response.WriteDFC.InputTopics).To(Equal([]string{"umh.v1.factory.line-1.*"}))
 
 				// Verify meta information
 				Expect(response.Meta).NotTo(BeNil())
