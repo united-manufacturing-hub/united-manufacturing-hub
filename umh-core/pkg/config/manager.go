@@ -456,12 +456,28 @@ func (m *FileConfigManager) backgroundRefresh(modTime time.Time) {
 
 	config, rawConfig, err := m.readAndParseConfig(ctx)
 
-	// Update cache atomically
+	// Update cache atomically.
+	//
+	// LOAD-BEARING: cacheConfig is intentionally clobbered to FullConfig{} on
+	// parse error (not preserved as last-known-good). The empty-deep-equal check
+	// in GetConfig's SLOW PATH relies on cacheConfig being zero to surface
+	// cacheError. A future "improvement" that preserves the prior valid config
+	// here would silently swallow parse errors — DO NOT do that.
+	//
+	// LOAD-BEARING: cacheModTime is only updated on successful parse. On parse
+	// error, leaving cacheModTime at its previous (last-known-good) value
+	// ensures subsequent GetConfig calls re-enter SLOW PATH (file mtime ≠
+	// cached mtime) where the empty-deep-equal check at GetConfig:435 surfaces
+	// cacheError. Without this guard, the next tick's FAST PATH would match
+	// (file mtime == cached mtime) and silently serve the clobbered FullConfig{}
+	// with hardcoded nil error, defeating the empty-config safety net.
 	m.cacheMu.Lock()
 	m.cacheConfig = config
 	m.cacheRawConfig = rawConfig
-	m.cacheModTime = modTime
 	m.cacheError = err
+	if err == nil {
+		m.cacheModTime = modTime
+	}
 	m.cacheMu.Unlock()
 
 	duration := time.Since(start)
