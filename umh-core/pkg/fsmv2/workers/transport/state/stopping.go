@@ -36,6 +36,12 @@ func (s *StoppingState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	}
 
 	children := transport_pkg.RenderChildren(snap)
+	// Stopping: keep children resident but disabled so the CHANGE-19 reducer
+	// drives RequestShutdown without despawning. Children resume cleanly when
+	// the parent re-enters a running path and emits Enabled=true again.
+	for i := range children {
+		children[i].Enabled = false
+	}
 
 	// Cleanup hook: add resource cleanup here if needed.
 	// Self-return during cleanup MUST carry an action — never nil.

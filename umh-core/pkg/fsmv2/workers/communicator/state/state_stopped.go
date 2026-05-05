@@ -40,6 +40,11 @@ func (s *StoppedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 		return fsmv2.Transition(&SyncingState{}, fsmv2.SignalNone, nil, "Starting sync orchestration", children)
 	}
 
+	// Stay stopped: keep transport child resident but disabled. CHANGE-19 reducer
+	// drives RequestShutdown from Enabled=false; resume on Enabled=true.
+	for i := range children {
+		children[i].Enabled = false
+	}
 	return fsmv2.Transition(s, fsmv2.SignalNone, nil, "Communicator stopped", children)
 }
 
