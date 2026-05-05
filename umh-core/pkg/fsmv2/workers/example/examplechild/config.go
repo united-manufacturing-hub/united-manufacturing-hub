@@ -23,3 +23,13 @@ import (
 type ExamplechildConfig struct {
 	config.BaseUserSpec // Provides State field with GetState() defaulting to "running"
 }
+
+// ExamplechildStatus holds the runtime observation data for the child worker.
+// Only worker-specific business fields belong here; the framework supplies
+// CollectedAt, State, LastActionResults, MetricsEmbedder, ChildrenHealthy/Unhealthy
+// via Observation[ExamplechildStatus].
+type ExamplechildStatus struct {
+	// ConnectionHealth reports the current connection state ("healthy" or "no connection").
+	// Populated by CollectObservedState from dependencies.IsConnected().
+	ConnectionHealth string `json:"connection_health"`
+}

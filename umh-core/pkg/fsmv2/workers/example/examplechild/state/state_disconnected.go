@@ -17,7 +17,7 @@ package state
 import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplechild/snapshot"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplechild"
 )
 
 // DisconnectedState represents the state where connection has been lost and will be retried.
@@ -26,9 +26,9 @@ type DisconnectedState struct {
 }
 
 func (s *DisconnectedState) Next(snapAny any) fsmv2.NextResult[any, any] {
-	snap := helpers.ConvertSnapshot[snapshot.ExamplechildObservedState, *snapshot.ExamplechildDesiredState](snapAny)
+	snap := fsmv2.ConvertWorkerSnapshot[examplechild.ExamplechildConfig, examplechild.ExamplechildStatus](snapAny)
 
-	if snap.Observed.ShouldStop() {
+	if snap.ShouldStop() {
 		return fsmv2.Transition(&TryingToStopState{}, fsmv2.SignalNone, nil, "Stop required, initiating shutdown", nil)
 	}
 

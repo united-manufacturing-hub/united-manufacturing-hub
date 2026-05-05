@@ -21,23 +21,21 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplechild/snapshot"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplechild"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplechild/state"
 )
 
 // makeChildSnapshot constructs an examplechild snapshot for state-machine
-// behavioral tests. parentMappedState mirrors what the supervisor's
-// MappedParentStateProvider injects each tick.
-func makeChildSnapshot(parentMappedState string, shutdownRequested bool) fsmv2.Snapshot {
-	desired := &snapshot.ExamplechildDesiredState{
-		ParentMappedState: parentMappedState,
+// behavioral tests. shutdownRequested mirrors what the parent sets when it
+// disables the child via ChildSpec.Enabled=false (the reducer translates
+// Enabled=false into IsShutdownRequested=true).
+func makeChildSnapshot(shutdownRequested bool) fsmv2.Snapshot {
+	desired := &fsmv2.WrappedDesiredState[examplechild.ExamplechildConfig]{
 		BaseDesiredState: config.BaseDesiredState{
 			ShutdownRequested: shutdownRequested,
 		},
 	}
-	observed := snapshot.ExamplechildObservedState{
-		ExamplechildDesiredState: *desired,
-	}
+	observed := fsmv2.Observation[examplechild.ExamplechildStatus]{}
 
 	return fsmv2.Snapshot{
 		Observed: observed,
@@ -58,23 +56,16 @@ var _ = Describe("StoppedState (examplechild)", func() {
 	})
 
 	It("signals NeedsRemoval when shutdown is requested", func() {
-		snap := makeChildSnapshot(config.DesiredStateRunning, true)
+		snap := makeChildSnapshot(true)
 		result := s.Next(snap)
 		Expect(result.Signal).To(Equal(fsmv2.SignalNeedsRemoval))
 		Expect(result.State).To(BeAssignableToTypeOf(&state.StoppedState{}))
 	})
 
-	It("transitions to TryingToConnect when parent wants children running", func() {
-		snap := makeChildSnapshot(config.DesiredStateRunning, false)
+	It("transitions to TryingToConnect when shutdown is not requested", func() {
+		snap := makeChildSnapshot(false)
 		result := s.Next(snap)
 		Expect(result.State).To(BeAssignableToTypeOf(&state.TryingToConnectState{}))
-		Expect(result.Signal).To(Equal(fsmv2.SignalNone))
-	})
-
-	It("stays Stopped when parent is not running", func() {
-		snap := makeChildSnapshot(config.DesiredStateStopped, false)
-		result := s.Next(snap)
-		Expect(result.State).To(BeAssignableToTypeOf(&state.StoppedState{}))
 		Expect(result.Signal).To(Equal(fsmv2.SignalNone))
 	})
 

@@ -24,6 +24,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	examplechild "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplechild"
+	_ "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplechild/state"
 )
 
 var _ = Describe("ChildWorker", func() {
@@ -64,6 +65,10 @@ var _ = Describe("ChildWorker", func() {
 
 			Expect(err).NotTo(HaveOccurred())
 			Expect(observed).NotTo(BeNil())
+
+			obs, ok := observed.(fsmv2.Observation[examplechild.ExamplechildStatus])
+			Expect(ok).To(BeTrue(), "expected fsmv2.Observation[ExamplechildStatus], got %T", observed)
+			Expect(obs.Status.ConnectionHealth).To(Equal("no connection"))
 		})
 	})
 
@@ -81,7 +86,8 @@ var _ = Describe("ChildWorker", func() {
 
 			Expect(err).NotTo(HaveOccurred())
 
-			desired := desiredIface.(*config.DesiredState)
+			desired, ok := desiredIface.(*fsmv2.WrappedDesiredState[examplechild.ExamplechildConfig])
+			Expect(ok).To(BeTrue(), "expected *WrappedDesiredState[ExamplechildConfig], got %T", desiredIface)
 			Expect(desired.IsShutdownRequested()).To(BeFalse())
 		})
 	})

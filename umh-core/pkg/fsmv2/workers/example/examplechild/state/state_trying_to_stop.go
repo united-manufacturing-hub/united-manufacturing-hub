@@ -17,8 +17,8 @@ package state
 import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplechild"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplechild/action"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplechild/snapshot"
 )
 
 // TryingToStopState represents the shutdown state where the worker is closing connections.
@@ -27,11 +27,11 @@ type TryingToStopState struct {
 }
 
 func (s *TryingToStopState) Next(snapAny any) fsmv2.NextResult[any, any] {
-	snap := helpers.ConvertSnapshot[snapshot.ExamplechildObservedState, *snapshot.ExamplechildDesiredState](snapAny)
+	snap := fsmv2.ConvertWorkerSnapshot[examplechild.ExamplechildConfig, examplechild.ExamplechildStatus](snapAny)
 
 	// Child worker is "stopped" when connection health shows not healthy (disconnected)
 	// After DisconnectAction executes and collector runs, ConnectionHealth will show "no connection"
-	if snap.Observed.ConnectionHealth != "healthy" {
+	if snap.Observed.Status.ConnectionHealth != "healthy" {
 		return fsmv2.Transition(&StoppedState{}, fsmv2.SignalNone, nil, "Disconnection complete, child stopped", nil)
 	}
 

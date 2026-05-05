@@ -16,8 +16,6 @@ package action
 
 import (
 	"context"
-
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplechild/snapshot"
 )
 
 const DisconnectActionName = "disconnect"
@@ -27,7 +25,7 @@ type DisconnectAction struct{}
 
 // Execute releases the connection back to the pool.
 func (a *DisconnectAction) Execute(ctx context.Context, depsAny any) error {
-	deps := depsAny.(snapshot.ExamplechildDependencies)
+	deps := depsAny.(ExamplechildDependencies)
 	logger := deps.GetLogger()
 	logger.Info("Disconnecting")
 
