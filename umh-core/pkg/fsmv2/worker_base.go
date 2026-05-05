@@ -219,8 +219,7 @@ func (w *WorkerBase[TConfig, TStatus, TDeps]) DeriveDesiredState(spec interface{
 		w.mu.Unlock()
 
 		wds := &WrappedDesiredState[TConfig]{
-			BaseDesiredState: config.BaseDesiredState{State: config.DesiredStateRunning},
-			Config:           cfg,
+			Config: cfg,
 		}
 
 		return wds, nil
@@ -243,22 +242,13 @@ func (w *WorkerBase[TConfig, TStatus, TDeps]) DeriveDesiredState(spec interface{
 		}
 	}
 
-	// Extract state from config if it implements StateGetter (e.g., embeds BaseUserSpec).
-	desiredState := config.DesiredStateRunning
-	if sg, ok := any(&cfg).(config.StateGetter); ok {
-		if s := sg.GetState(); s != "" {
-			desiredState = s
-		}
-	}
-
 	w.mu.Lock()
 	w.config = cfg
 	w.configReady = true
 	w.mu.Unlock()
 
 	wds := &WrappedDesiredState[TConfig]{
-		BaseDesiredState: config.BaseDesiredState{State: desiredState},
-		Config:           cfg,
+		Config: cfg,
 	}
 
 	return wds, nil

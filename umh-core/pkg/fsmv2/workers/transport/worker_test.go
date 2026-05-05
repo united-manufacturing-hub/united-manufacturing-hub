@@ -39,7 +39,7 @@ import (
 func snapshotForSpec(spec fsmv2types.UserSpec) fsmv2.WorkerSnapshot[transport.TransportConfig, transport.TransportStatus] {
 	return fsmv2.WorkerSnapshot[transport.TransportConfig, transport.TransportStatus]{
 		Desired: fsmv2.WrappedDesiredState[transport.TransportConfig]{
-			BaseDesiredState: fsmv2types.BaseDesiredState{State: fsmv2types.DesiredStateRunning},
+			BaseDesiredState: fsmv2types.BaseDesiredState{},
 			ChildrenSpecs: []fsmv2types.ChildSpec{{
 				Name:       "push",
 				WorkerType: "push",
@@ -166,7 +166,7 @@ var _ = Describe("TransportWorker", func() {
 				Expect(err).ToNot(HaveOccurred())
 				Expect(desired).NotTo(BeNil())
 				// Default to running when spec is nil
-				Expect(desired.GetState()).To(Equal("running"))
+				Expect(desired.(*fsmv2.WrappedDesiredState[transport.TransportConfig]).Config.GetState()).To(Equal("running"))
 			})
 
 			It("should include PushWorker children via RenderChildren even with nil spec", func() {
@@ -193,7 +193,7 @@ authToken: "test-token"`,
 
 				Expect(err).ToNot(HaveOccurred())
 				Expect(desired).NotTo(BeNil())
-				Expect(desired.GetState()).To(Equal("running"))
+				Expect(desired.(*fsmv2.WrappedDesiredState[transport.TransportConfig]).Config.GetState()).To(Equal("running"))
 
 				// Type assert to access transport-specific fields
 				transportDesired, ok := desired.(*fsmv2.WrappedDesiredState[transport.TransportConfig])
@@ -235,7 +235,7 @@ relayURL: "https://relay.example.com"`,
 				desired, err := worker.DeriveDesiredState(spec)
 
 				Expect(err).ToNot(HaveOccurred())
-				Expect(desired.GetState()).To(Equal("stopped"))
+				Expect(desired.(*fsmv2.WrappedDesiredState[transport.TransportConfig]).Config.GetState()).To(Equal("stopped"))
 			})
 
 			It("should return running state when configured", func() {
@@ -250,7 +250,7 @@ authToken: "test-token"`,
 				desired, err := worker.DeriveDesiredState(spec)
 
 				Expect(err).ToNot(HaveOccurred())
-				Expect(desired.GetState()).To(Equal("running"))
+				Expect(desired.(*fsmv2.WrappedDesiredState[transport.TransportConfig]).Config.GetState()).To(Equal("running"))
 			})
 		})
 
@@ -268,7 +268,7 @@ authToken: "test-token"`,
 
 				Expect(err1).ToNot(HaveOccurred())
 				Expect(err2).ToNot(HaveOccurred())
-				Expect(desired1.GetState()).To(Equal(desired2.GetState()))
+				Expect(desired1.(*fsmv2.WrappedDesiredState[transport.TransportConfig]).Config.GetState()).To(Equal(desired2.(*fsmv2.WrappedDesiredState[transport.TransportConfig]).Config.GetState()))
 			})
 		})
 
@@ -318,7 +318,7 @@ instanceUUID: "test-uuid"`,
 				desired, err := worker.DeriveDesiredState(spec)
 
 				Expect(err).ToNot(HaveOccurred())
-				Expect(desired.GetState()).To(Equal("stopped"))
+				Expect(desired.(*fsmv2.WrappedDesiredState[transport.TransportConfig]).Config.GetState()).To(Equal("stopped"))
 			})
 
 			It("GetTimeout returns the default when Timeout is zero", func() {

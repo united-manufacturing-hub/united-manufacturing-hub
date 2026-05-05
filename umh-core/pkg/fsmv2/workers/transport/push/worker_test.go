@@ -176,7 +176,8 @@ var _ = Describe("PushWorker", func() {
 
 			Expect(err).ToNot(HaveOccurred())
 			Expect(desired).NotTo(BeNil())
-			Expect(desired.GetState()).To(Equal("running"))
+			wds := desired.(*fsmv2.WrappedDesiredState[push.PushConfig])
+			Expect(wds.Config.GetState()).To(Equal("running"))
 		})
 
 		It("should return correct state for valid spec", func() {
@@ -189,7 +190,8 @@ var _ = Describe("PushWorker", func() {
 
 			Expect(err).ToNot(HaveOccurred())
 			Expect(desired).NotTo(BeNil())
-			Expect(desired.GetState()).To(Equal("stopped"))
+			wds := desired.(*fsmv2.WrappedDesiredState[push.PushConfig])
+			Expect(wds.Config.GetState()).To(Equal("stopped"))
 		})
 
 		It("should return running state for empty config", func() {
@@ -201,7 +203,8 @@ var _ = Describe("PushWorker", func() {
 			desired, err := worker.DeriveDesiredState(spec)
 
 			Expect(err).ToNot(HaveOccurred())
-			Expect(desired.GetState()).To(Equal("running"))
+			wds := desired.(*fsmv2.WrappedDesiredState[push.PushConfig])
+			Expect(wds.Config.GetState()).To(Equal("running"))
 		})
 
 		It("should be deterministic", func() {
@@ -215,7 +218,9 @@ var _ = Describe("PushWorker", func() {
 
 			Expect(err1).ToNot(HaveOccurred())
 			Expect(err2).ToNot(HaveOccurred())
-			Expect(desired1.GetState()).To(Equal(desired2.GetState()))
+			wds1 := desired1.(*fsmv2.WrappedDesiredState[push.PushConfig])
+			wds2 := desired2.(*fsmv2.WrappedDesiredState[push.PushConfig])
+			Expect(wds1.Config.GetState()).To(Equal(wds2.Config.GetState()))
 		})
 
 		It("should return error for invalid spec type", func() {

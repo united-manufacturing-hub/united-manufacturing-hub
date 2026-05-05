@@ -90,9 +90,7 @@ func (w *ExampleslowWorker) CollectObservedState(ctx context.Context, _ fsmv2.De
 
 func (w *ExampleslowWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, error) {
 	if spec == nil {
-		return &snapshot.ExampleslowDesiredState{
-			BaseDesiredState: config.BaseDesiredState{State: config.DesiredStateRunning},
-		}, nil
+		return &snapshot.ExampleslowDesiredState{}, nil
 	}
 
 	parsed, err := config.ParseUserSpec[ExampleslowUserSpec](spec)
@@ -101,8 +99,7 @@ func (w *ExampleslowWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredS
 	}
 
 	return &snapshot.ExampleslowDesiredState{
-		BaseDesiredState: config.BaseDesiredState{State: parsed.GetState()},
-		DelaySeconds:     parsed.DelaySeconds,
+		DelaySeconds: parsed.DelaySeconds,
 	}, nil
 }
 

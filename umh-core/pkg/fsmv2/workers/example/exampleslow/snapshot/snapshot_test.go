@@ -20,7 +20,6 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleslow/snapshot"
 )
 
@@ -30,7 +29,7 @@ var _ = Describe("ExampleslowDesiredState", func() {
 			original := &snapshot.ExampleslowDesiredState{
 				DelaySeconds: 7,
 			}
-			original.BaseDesiredState.State = config.DesiredStateRunning
+			original.SetShutdownRequested(true)
 
 			data, err := json.Marshal(original)
 			Expect(err).NotTo(HaveOccurred())
@@ -39,7 +38,7 @@ var _ = Describe("ExampleslowDesiredState", func() {
 			Expect(json.Unmarshal(data, &restored)).To(Succeed())
 
 			Expect(restored.DelaySeconds).To(Equal(7), "DelaySeconds must survive JSON round-trip")
-			Expect(restored.GetState()).To(Equal(config.DesiredStateRunning), "State must survive JSON round-trip")
+			Expect(restored.IsShutdownRequested()).To(BeTrue(), "ShutdownRequested must survive JSON round-trip")
 		})
 	})
 })

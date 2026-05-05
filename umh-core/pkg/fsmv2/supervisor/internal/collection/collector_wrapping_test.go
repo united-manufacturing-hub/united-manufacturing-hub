@@ -82,7 +82,7 @@ func (w *wrappingTestWorker) CollectObservedState(_ context.Context, _ fsmv2.Des
 }
 
 func (w *wrappingTestWorker) DeriveDesiredState(_ interface{}) (fsmv2.DesiredState, error) {
-	return &config.DesiredState{BaseDesiredState: config.BaseDesiredState{State: "running"}}, nil
+	return &config.DesiredState{BaseDesiredState: config.BaseDesiredState{}}, nil
 }
 
 func (w *wrappingTestWorker) GetInitialState() fsmv2.State[any, any] {
@@ -103,7 +103,7 @@ func (w *wrappingTestWorkerNoDeps) CollectObservedState(_ context.Context, _ fsm
 }
 
 func (w *wrappingTestWorkerNoDeps) DeriveDesiredState(_ interface{}) (fsmv2.DesiredState, error) {
-	return &config.DesiredState{BaseDesiredState: config.BaseDesiredState{State: "running"}}, nil
+	return &config.DesiredState{BaseDesiredState: config.BaseDesiredState{}}, nil
 }
 
 func (w *wrappingTestWorkerNoDeps) GetInitialState() fsmv2.State[any, any] {
@@ -120,7 +120,7 @@ func wrappingTestIdentity(id string) deps.Identity {
 
 func wrappingDesiredProvider() func() fsmv2.DesiredState {
 	return func() fsmv2.DesiredState {
-		return &config.DesiredState{BaseDesiredState: config.BaseDesiredState{State: "running"}}
+		return &config.DesiredState{BaseDesiredState: config.BaseDesiredState{}}
 	}
 }
 

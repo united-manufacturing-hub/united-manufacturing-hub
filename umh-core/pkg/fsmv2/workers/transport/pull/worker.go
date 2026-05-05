@@ -19,6 +19,8 @@ import (
 	"errors"
 	"fmt"
 
+	"gopkg.in/yaml.v3"
+
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
@@ -95,9 +97,7 @@ func (w *PullWorker) CollectObservedState(ctx context.Context, _ fsmv2.DesiredSt
 // Must be PURE — only uses the spec parameter, never dependencies.
 func (w *PullWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, error) {
 	if spec == nil {
-		return &fsmv2.WrappedDesiredState[PullConfig]{
-			BaseDesiredState: config.BaseDesiredState{State: config.DesiredStateRunning},
-		}, nil
+		return &fsmv2.WrappedDesiredState[PullConfig]{}, nil
 	}
 
 	userSpec, ok := spec.(config.UserSpec)
@@ -110,18 +110,15 @@ func (w *PullWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, e
 		return nil, fmt.Errorf("template rendering failed: %w", err)
 	}
 
-	renderedSpec := config.UserSpec{
-		Config:    renderedConfig,
-		Variables: userSpec.Variables,
-	}
-
-	leafDesired, err := config.DeriveLeafState[PullConfig](renderedSpec)
-	if err != nil {
-		return nil, err
+	var cfg PullConfig
+	if renderedConfig != "" {
+		if err := yaml.Unmarshal([]byte(renderedConfig), &cfg); err != nil {
+			return nil, fmt.Errorf("config unmarshal failed: %w", err)
+		}
 	}
 
 	return &fsmv2.WrappedDesiredState[PullConfig]{
-		BaseDesiredState: leafDesired.BaseDesiredState,
+		Config: cfg,
 	}, nil
 }
 

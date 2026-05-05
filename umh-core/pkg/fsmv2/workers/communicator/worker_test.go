@@ -129,7 +129,7 @@ var _ = Describe("CommunicatorWorker", func() {
 
 				desired, ok := desiredIface.(*fsmv2.WrappedDesiredState[communicator.CommunicatorConfig])
 				Expect(ok).To(BeTrue(), "expected *fsmv2.WrappedDesiredState[CommunicatorConfig]")
-				Expect(desired.GetState()).To(Equal("running"))
+				Expect(desired.Config.GetState()).To(Equal("running"))
 				Expect(desired.IsShutdownRequested()).To(BeFalse())
 			})
 
@@ -139,7 +139,7 @@ var _ = Describe("CommunicatorWorker", func() {
 
 				specs := communicator.RenderChildren(fsmv2.WorkerSnapshot[communicator.CommunicatorConfig, communicator.CommunicatorStatus]{
 					Desired: fsmv2.WrappedDesiredState[communicator.CommunicatorConfig]{
-						BaseDesiredState: fsmv2types.BaseDesiredState{State: fsmv2types.DesiredStateRunning},
+						BaseDesiredState: fsmv2types.BaseDesiredState{},
 					},
 				})
 				Expect(specs).To(HaveLen(1))
@@ -171,11 +171,11 @@ state: "running"
 				Expect(desired.Config.InstanceUUID).To(Equal("test-uuid-12345"))
 				Expect(desired.Config.AuthToken).To(Equal("test-auth-token-secret"))
 				Expect(desired.Config.Timeout).To(Equal(15 * time.Second))
-				Expect(desired.GetState()).To(Equal("running"))
+				Expect(desired.Config.GetState()).To(Equal("running"))
 
 				specs := communicator.RenderChildren(fsmv2.WorkerSnapshot[communicator.CommunicatorConfig, communicator.CommunicatorStatus]{
 					Desired: fsmv2.WrappedDesiredState[communicator.CommunicatorConfig]{
-						BaseDesiredState: fsmv2types.BaseDesiredState{State: fsmv2types.DesiredStateRunning},
+						BaseDesiredState: fsmv2types.BaseDesiredState{},
 						Config:           desired.Config,
 					},
 				})
@@ -235,7 +235,7 @@ state: "running"
 				Expect(loadedDesired.Config.InstanceUUID).To(Equal("roundtrip-uuid-test"))
 				Expect(loadedDesired.Config.AuthToken).To(Equal("roundtrip-auth-token"))
 				Expect(loadedDesired.Config.Timeout).To(Equal(30 * time.Second))
-				Expect(loadedDesired.GetState()).To(Equal("running"))
+				Expect(loadedDesired.Config.GetState()).To(Equal("running"))
 			})
 
 			It("default Timeout survives marshal→unmarshal round-trip", func() {

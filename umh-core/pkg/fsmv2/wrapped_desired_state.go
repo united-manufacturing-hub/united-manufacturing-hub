@@ -20,7 +20,7 @@ import (
 
 // WrappedDesiredState wraps a developer's TConfig into the full DesiredState
 // required by the supervisor. BaseDesiredState promotion provides
-// IsShutdownRequested, GetState, and SetShutdownRequested for free.
+// IsShutdownRequested and SetShutdownRequested for free.
 //
 // The framework constructs this internally during DeriveDesiredState;
 // developers only provide TConfig via WorkerBase helpers.

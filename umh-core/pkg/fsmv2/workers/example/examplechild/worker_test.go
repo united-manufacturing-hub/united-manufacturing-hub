@@ -82,7 +82,7 @@ var _ = Describe("ChildWorker", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			desired := desiredIface.(*config.DesiredState)
-			Expect(desired.State).To(Equal(config.DesiredStateRunning))
+			Expect(desired.IsShutdownRequested()).To(BeFalse())
 		})
 	})
 

@@ -74,7 +74,7 @@ var _ = Describe("ParentWorker", func() {
 
 			Expect(err).ToNot(HaveOccurred())
 			desired := desiredIface.(*fsmv2types.DesiredState)
-			Expect(desired.State).To(Equal("running"))
+			Expect(desired.IsShutdownRequested()).To(BeFalse())
 
 			// Per P2.2 option (a) decision, exampleparent's canonical
 			// RenderChildren takes *ParentUserSpec (not the WorkerSnapshot
@@ -99,7 +99,7 @@ var _ = Describe("ParentWorker", func() {
 
 			Expect(err).ToNot(HaveOccurred())
 			desired := desiredIface.(*fsmv2types.DesiredState)
-			Expect(desired.State).To(Equal("running"))
+			Expect(desired.IsShutdownRequested()).To(BeFalse())
 
 			children := exampleparent.RenderChildren(&exampleparent.ParentUserSpec{ChildrenCount: 3})
 			Expect(children).To(HaveLen(3))

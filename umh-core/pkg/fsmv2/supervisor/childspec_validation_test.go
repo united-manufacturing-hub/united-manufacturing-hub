@@ -602,7 +602,7 @@ func (m *validChildSpecMockWorker) CollectObservedState(_ context.Context, _ fsm
 
 func (m *validChildSpecMockWorker) DeriveDesiredState(_ interface{}) (fsmv2.DesiredState, error) {
 	return &config.DesiredState{
-		BaseDesiredState: config.BaseDesiredState{State: "running"},
+		BaseDesiredState: config.BaseDesiredState{},
 		ChildrenSpecs:    m.childSpecs,
 	}, nil
 }
@@ -633,7 +633,7 @@ func (m *trackedCallOrderMockWorker) DeriveDesiredState(_ interface{}) (fsmv2.De
 	*m.callTracker = append(*m.callTracker, "derive")
 
 	return &config.DesiredState{
-		BaseDesiredState: config.BaseDesiredState{State: "running"},
+		BaseDesiredState: config.BaseDesiredState{},
 		ChildrenSpecs:    m.childSpecs,
 	}, nil
 }

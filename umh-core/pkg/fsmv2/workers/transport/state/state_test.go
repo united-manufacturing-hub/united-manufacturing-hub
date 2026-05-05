@@ -40,7 +40,6 @@ func makeSnapshotFull(shutdownRequested bool, desiredState string, jwtToken stri
 func makeSnapshotWithBackoff(shutdownRequested bool, desiredState string, jwtToken string, jwtExpiry time.Time, childrenHealthy, childrenUnhealthy int, consecutiveErrors int, lastErrorType httpTransport.ErrorType, lastAuthAttemptAt time.Time, lastRetryAfter time.Duration) fsmv2.Snapshot {
 	desired := &fsmv2.WrappedDesiredState[transport_pkg.TransportConfig]{
 		BaseDesiredState: config.BaseDesiredState{
-			State:             desiredState,
 			ShutdownRequested: shutdownRequested,
 		},
 		Config: transport_pkg.TransportConfig{
@@ -84,7 +83,6 @@ func makeSnapshotWithBackoff(shutdownRequested bool, desiredState string, jwtTok
 func makeAuthFailedSnapshot(authToken, relayURL, instanceUUID string, shutdownRequested bool) fsmv2.Snapshot {
 	desired := &fsmv2.WrappedDesiredState[transport_pkg.TransportConfig]{
 		BaseDesiredState: config.BaseDesiredState{
-			State:             config.DesiredStateRunning,
 			ShutdownRequested: shutdownRequested,
 		},
 		Config: transport_pkg.TransportConfig{
@@ -120,7 +118,7 @@ func makeAuthFailedStartingSnapshot(
 	consecutiveErrors int, lastErrorType httpTransport.ErrorType,
 ) fsmv2.Snapshot {
 	desired := &fsmv2.WrappedDesiredState[transport_pkg.TransportConfig]{
-		BaseDesiredState: config.BaseDesiredState{State: config.DesiredStateRunning},
+		BaseDesiredState: config.BaseDesiredState{},
 		Config: transport_pkg.TransportConfig{
 			BaseUserSpec: config.BaseUserSpec{State: config.DesiredStateRunning},
 			RelayConfig: types.RelayConfig{
@@ -349,7 +347,7 @@ var _ = Describe("TransportWorker States", func() {
 
 		It("should apply backoff after transient error even when FailedAuthConfig is empty", func() {
 			desired := &fsmv2.WrappedDesiredState[transport_pkg.TransportConfig]{
-				BaseDesiredState: config.BaseDesiredState{State: config.DesiredStateRunning},
+				BaseDesiredState: config.BaseDesiredState{},
 				Config: transport_pkg.TransportConfig{
 					BaseUserSpec: config.BaseUserSpec{State: config.DesiredStateRunning},
 					RelayConfig: types.RelayConfig{
@@ -675,7 +673,7 @@ var _ = Describe("TransportWorker States", func() {
 		// Scenario 1 tick 3: AuthFailed exits when AuthToken changes
 		It("should transition to Starting when AuthToken changes", func() {
 			desired := &fsmv2.WrappedDesiredState[transport_pkg.TransportConfig]{
-				BaseDesiredState: config.BaseDesiredState{State: config.DesiredStateRunning},
+				BaseDesiredState: config.BaseDesiredState{},
 				Config: transport_pkg.TransportConfig{
 					BaseUserSpec: config.BaseUserSpec{State: config.DesiredStateRunning},
 					RelayConfig: types.RelayConfig{
@@ -708,7 +706,7 @@ var _ = Describe("TransportWorker States", func() {
 		// Scenario 7: Only relay changes
 		It("should transition to Starting when RelayURL changes", func() {
 			desired := &fsmv2.WrappedDesiredState[transport_pkg.TransportConfig]{
-				BaseDesiredState: config.BaseDesiredState{State: config.DesiredStateRunning},
+				BaseDesiredState: config.BaseDesiredState{},
 				Config: transport_pkg.TransportConfig{
 					BaseUserSpec: config.BaseUserSpec{State: config.DesiredStateRunning},
 					RelayConfig: types.RelayConfig{
@@ -740,7 +738,7 @@ var _ = Describe("TransportWorker States", func() {
 		// Scenario 2: InstanceDeleted → UUID changes
 		It("should transition to Starting when InstanceUUID changes", func() {
 			desired := &fsmv2.WrappedDesiredState[transport_pkg.TransportConfig]{
-				BaseDesiredState: config.BaseDesiredState{State: config.DesiredStateRunning},
+				BaseDesiredState: config.BaseDesiredState{},
 				Config: transport_pkg.TransportConfig{
 					BaseUserSpec: config.BaseUserSpec{State: config.DesiredStateRunning},
 					RelayConfig: types.RelayConfig{
@@ -772,7 +770,7 @@ var _ = Describe("TransportWorker States", func() {
 		// Scenario 8: Empty failed config = safety net (fresh deps after restart)
 		It("should transition to Starting when failed config is empty (safety net)", func() {
 			desired := &fsmv2.WrappedDesiredState[transport_pkg.TransportConfig]{
-				BaseDesiredState: config.BaseDesiredState{State: config.DesiredStateRunning},
+				BaseDesiredState: config.BaseDesiredState{},
 				Config: transport_pkg.TransportConfig{
 					BaseUserSpec: config.BaseUserSpec{State: config.DesiredStateRunning},
 					RelayConfig: types.RelayConfig{

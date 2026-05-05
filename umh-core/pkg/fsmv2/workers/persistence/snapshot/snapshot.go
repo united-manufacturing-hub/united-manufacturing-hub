@@ -40,7 +40,7 @@ const (
 )
 
 // PersistenceConfig holds the user-provided configuration for the persistence worker.
-// Embeds BaseUserSpec to support the StateGetter interface, allowing
+// Embeds BaseUserSpec so state files read user-facing State via
 // WorkerBase.DeriveDesiredState to extract the desired state from the "state"
 // YAML field.
 type PersistenceConfig struct {

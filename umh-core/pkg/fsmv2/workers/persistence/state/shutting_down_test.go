@@ -48,7 +48,6 @@ var _ = Describe("ShuttingDownState", func() {
 					},
 					Desired: &fsmv2.WrappedDesiredState[persistence.PersistenceConfig]{
 						BaseDesiredState: fsmv2config.BaseDesiredState{
-							State:             "running",
 							ShutdownRequested: true,
 						},
 						Config: persistence.PersistenceConfig{
@@ -75,7 +74,6 @@ var _ = Describe("ShuttingDownState", func() {
 					},
 					Desired: &fsmv2.WrappedDesiredState[persistence.PersistenceConfig]{
 						BaseDesiredState: fsmv2config.BaseDesiredState{
-							State:             "running",
 							ShutdownRequested: true,
 						},
 						Config: persistence.PersistenceConfig{
@@ -105,7 +103,6 @@ var _ = Describe("ShuttingDownState", func() {
 					},
 					Desired: &fsmv2.WrappedDesiredState[persistence.PersistenceConfig]{
 						BaseDesiredState: fsmv2config.BaseDesiredState{
-							State:             "running",
 							ShutdownRequested: true,
 						},
 						Config: persistence.PersistenceConfig{
@@ -135,7 +132,6 @@ var _ = Describe("ShuttingDownState", func() {
 					},
 					Desired: &fsmv2.WrappedDesiredState[persistence.PersistenceConfig]{
 						BaseDesiredState: fsmv2config.BaseDesiredState{
-							State:             "running",
 							ShutdownRequested: true,
 						},
 						Config: persistence.PersistenceConfig{

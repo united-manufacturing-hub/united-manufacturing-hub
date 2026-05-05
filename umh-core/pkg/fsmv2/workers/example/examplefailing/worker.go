@@ -132,9 +132,7 @@ func (w *FailingWorker) CollectObservedState(ctx context.Context, desiredAny fsm
 // DeriveDesiredState determines what state the failing worker should be in.
 func (w *FailingWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, error) {
 	if spec == nil {
-		return &snapshot.ExamplefailingDesiredState{
-			BaseDesiredState: fsmv2types.BaseDesiredState{State: fsmv2types.DesiredStateRunning},
-		}, nil
+		return &snapshot.ExamplefailingDesiredState{}, nil
 	}
 
 	parsed, err := fsmv2types.ParseUserSpec[FailingUserSpec](spec)
@@ -143,7 +141,6 @@ func (w *FailingWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState
 	}
 
 	return &snapshot.ExamplefailingDesiredState{
-		BaseDesiredState:          fsmv2types.BaseDesiredState{State: parsed.GetState()},
 		ShouldFail:                parsed.ShouldFail,
 		MaxFailures:               parsed.GetMaxFailures(),
 		FailureCycles:             parsed.GetFailureCycles(),

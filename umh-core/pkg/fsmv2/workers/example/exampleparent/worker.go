@@ -102,7 +102,6 @@ func (w *ParentWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState,
 		// "zero children right now" sentinel as the canonical path. Closes the
 		// G11 DDS-vs-canonical divergence (PR2 boundary DA finding).
 		return &config.DesiredState{
-			BaseDesiredState: config.BaseDesiredState{State: config.DesiredStateRunning},
 			ChildrenSpecs:    []config.ChildSpec{},
 			OriginalUserSpec: nil,
 		}, nil
@@ -121,7 +120,6 @@ func (w *ParentWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState,
 		// and leak the prior tick's children-set on parents whose mirror also
 		// returns nil (option-a, exampleparent).
 		return &config.DesiredState{
-			BaseDesiredState: config.BaseDesiredState{State: parentSpec.GetState()},
 			ChildrenSpecs:    []config.ChildSpec{},
 			OriginalUserSpec: spec,
 		}, nil
@@ -134,7 +132,6 @@ func (w *ParentWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState,
 	childrenSpecs := RenderChildren(&parentSpec)
 
 	return &config.DesiredState{
-		BaseDesiredState: config.BaseDesiredState{State: parentSpec.GetState()},
 		ChildrenSpecs:    childrenSpecs,
 		OriginalUserSpec: spec,
 	}, nil

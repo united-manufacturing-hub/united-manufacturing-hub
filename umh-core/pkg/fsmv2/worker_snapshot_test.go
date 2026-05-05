@@ -47,7 +47,7 @@ var _ = Describe("ConvertWorkerSnapshot", func() {
 		}
 
 		wds := &fsmv2.WrappedDesiredState[workerTestConfig]{
-			BaseDesiredState: config.BaseDesiredState{State: config.DesiredStateRunning},
+			BaseDesiredState: config.BaseDesiredState{},
 			Config:           workerTestConfig{Host: "10.0.0.1", Port: 502},
 		}
 
@@ -88,7 +88,7 @@ var _ = Describe("ConvertWorkerSnapshot", func() {
 		}
 
 		wds := &fsmv2.WrappedDesiredState[workerTestConfig]{
-			BaseDesiredState: config.BaseDesiredState{State: config.DesiredStateRunning},
+			BaseDesiredState: config.BaseDesiredState{},
 		}
 		wds.SetShutdownRequested(true)
 
@@ -158,7 +158,7 @@ var _ = Describe("ShouldStop", func() {
 var _ = Describe("ExtractConfig", func() {
 	It("returns typed config from WrappedDesiredState", func() {
 		wds := &fsmv2.WrappedDesiredState[workerTestConfig]{
-			BaseDesiredState: config.BaseDesiredState{State: config.DesiredStateRunning},
+			BaseDesiredState: config.BaseDesiredState{},
 			Config:           workerTestConfig{Host: "192.168.1.100", Port: 8080},
 		}
 

@@ -92,7 +92,6 @@ func NewCommunicatorWorker(id deps.Identity, logger deps.FSMLogger, sr deps.Stat
 func (w *CommunicatorWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, error) {
 	if spec == nil {
 		return &fsmv2.WrappedDesiredState[CommunicatorConfig]{
-			BaseDesiredState: fsmv2config.BaseDesiredState{State: fsmv2config.DesiredStateRunning},
 			Config: CommunicatorConfig{
 				Timeout: defaultCommunicatorTimeout,
 			},
@@ -121,8 +120,7 @@ func (w *CommunicatorWorker) DeriveDesiredState(spec interface{}) (fsmv2.Desired
 	}
 
 	return &fsmv2.WrappedDesiredState[CommunicatorConfig]{
-		BaseDesiredState: fsmv2config.BaseDesiredState{State: cfg.GetState()},
-		Config:           cfg,
+		Config: cfg,
 	}, nil
 }
 

@@ -76,7 +76,7 @@ children:
 			desiredIface, err := worker.DeriveDesiredState(userSpec)
 			Expect(err).ToNot(HaveOccurred())
 			desired := desiredIface.(*fsmv2.WrappedDesiredState[snapshot.ApplicationConfig])
-			Expect(desired.State).To(Equal("running"))
+			Expect(desired.IsShutdownRequested()).To(BeFalse())
 
 			children := RenderChildren(fsmv2.WorkerSnapshot[snapshot.ApplicationConfig, snapshot.ApplicationStatus]{
 				Desired: *desired,
@@ -97,7 +97,7 @@ children:
 			desiredIface, err := worker.DeriveDesiredState(userSpec)
 			Expect(err).ToNot(HaveOccurred())
 			desired := desiredIface.(*fsmv2.WrappedDesiredState[snapshot.ApplicationConfig])
-			Expect(desired.State).To(Equal("running"))
+			Expect(desired.IsShutdownRequested()).To(BeFalse())
 
 			children := RenderChildren(fsmv2.WorkerSnapshot[snapshot.ApplicationConfig, snapshot.ApplicationStatus]{
 				Desired: *desired,
@@ -118,7 +118,7 @@ children:
 			desiredIface, err := worker.DeriveDesiredState(userSpec)
 			Expect(err).ToNot(HaveOccurred())
 			desired := desiredIface.(*fsmv2.WrappedDesiredState[snapshot.ApplicationConfig])
-			Expect(desired.State).To(Equal("running"))
+			Expect(desired.IsShutdownRequested()).To(BeFalse())
 
 			children := RenderChildren(fsmv2.WorkerSnapshot[snapshot.ApplicationConfig, snapshot.ApplicationStatus]{
 				Desired: *desired,
@@ -135,7 +135,7 @@ children:
 			desiredIface, err := worker.DeriveDesiredState(nil)
 			Expect(err).ToNot(HaveOccurred())
 			desired := desiredIface.(*fsmv2.WrappedDesiredState[snapshot.ApplicationConfig])
-			Expect(desired.State).To(Equal("running"))
+			Expect(desired.IsShutdownRequested()).To(BeFalse())
 			Expect(desired.Config.Name).To(Equal("test-root"))
 
 			children := RenderChildren(fsmv2.WorkerSnapshot[snapshot.ApplicationConfig, snapshot.ApplicationStatus]{

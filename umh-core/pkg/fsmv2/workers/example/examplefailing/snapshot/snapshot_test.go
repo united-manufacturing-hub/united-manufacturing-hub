@@ -62,7 +62,7 @@ var _ = Describe("ExamplefailingDesiredState", func() {
 				RestartAfterFailures:      5,
 				RecoveryDelayObservations: 4,
 			}
-			original.BaseDesiredState.State = config.DesiredStateRunning
+			original.SetShutdownRequested(true)
 
 			data, err := json.Marshal(original)
 			Expect(err).NotTo(HaveOccurred())
@@ -75,7 +75,7 @@ var _ = Describe("ExamplefailingDesiredState", func() {
 			Expect(restored.FailureCycles).To(Equal(3), "FailureCycles must survive JSON round-trip")
 			Expect(restored.RestartAfterFailures).To(Equal(5), "RestartAfterFailures must survive JSON round-trip")
 			Expect(restored.RecoveryDelayObservations).To(Equal(4), "RecoveryDelayObservations must survive JSON round-trip")
-			Expect(restored.GetState()).To(Equal(config.DesiredStateRunning), "State must survive JSON round-trip")
+			Expect(restored.IsShutdownRequested()).To(BeTrue(), "ShutdownRequested must survive JSON round-trip")
 		})
 	})
 })

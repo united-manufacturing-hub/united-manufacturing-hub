@@ -43,7 +43,8 @@ import (
 //   - ShutdownRequested: Inherited from this type. Set by supervisor for graceful shutdown.
 //     Parent-driven stop flows through the same flag: parent sets ChildSpec.Enabled=false,
 //     which the CHANGE-19 reducer translates into IsShutdownRequested=true on the child.
-//   - State ("running"/"stopped"): From BaseUserSpec.GetState(). Controls whether worker should be running.
+//   - User-facing state ("running"/"stopped"): Read from TConfig via BaseUserSpec.GetState() in
+//     state files. The wrapper-level BaseDesiredState does not carry a State field of its own.
 //
 // Correct ShouldBeRunning() implementations:
 //
@@ -54,8 +55,7 @@ import (
 // Custom lifecycle fields are forbidden; the framework controls lifecycle
 // exclusively via ShouldStop() and reconciliation.
 type BaseDesiredState struct {
-	State             string `json:"state"             yaml:"state"`             // "stopped" or "running" - desired lifecycle state
-	ShutdownRequested bool   `json:"ShutdownRequested" yaml:"ShutdownRequested"` //nolint:tagliatelle // Match JSON field name for API compatibility
+	ShutdownRequested bool `json:"ShutdownRequested" yaml:"ShutdownRequested"` //nolint:tagliatelle // Match JSON field name for API compatibility
 }
 
 // IsShutdownRequested returns whether shutdown has been requested for this worker.
@@ -67,16 +67,6 @@ func (b *BaseDesiredState) IsShutdownRequested() bool {
 // This satisfies the ShutdownRequestable interface.
 func (b *BaseDesiredState) SetShutdownRequested(v bool) {
 	b.ShutdownRequested = v
-}
-
-// GetState returns the desired lifecycle state.
-// Implements fsmv2.DesiredState interface.
-func (b *BaseDesiredState) GetState() string {
-	if b.State == "" {
-		return DesiredStateRunning
-	}
-
-	return b.State
 }
 
 // BaseUserSpec provides common fields for all user configuration types.
@@ -585,7 +575,6 @@ func (v ChildrenView) Counts() (healthy, unhealthy int) {
 //	// In parent's DeriveDesiredState():
 //	func (w *ParentWorker) DeriveDesiredState(spec interface{}) (config.DesiredState, error) {
 //	    return config.DesiredState{
-//	        BaseDesiredState: config.BaseDesiredState{State: "running"},
 //	        ChildrenSpecs: []config.ChildSpec{
 //	            {Name: "child-1", WorkerType: "mqtt_client", ...},
 //	            {Name: "child-2", WorkerType: "modbus_client", ...},
@@ -601,7 +590,7 @@ func (v ChildrenView) Counts() (healthy, unhealthy int) {
 //	}
 type DesiredState struct {
 	OriginalUserSpec interface{}      `json:"-"                          yaml:"-"` // Captures the input that produced this DesiredState (for debugging/traceability); not serialized (would emit untyped any over the wire per §17).
-	BaseDesiredState `yaml:",inline"` // Provides State, ShutdownRequested fields and methods (GetState, IsShutdownRequested, SetShutdownRequested)
+	BaseDesiredState `yaml:",inline"` // Provides ShutdownRequested field and methods (IsShutdownRequested, SetShutdownRequested)
 	ChildrenSpecs    []ChildSpec      `json:"childrenSpecs,omitempty"    yaml:"childrenSpecs,omitempty"` // Declarative specification of child workers
 }
 
@@ -639,5 +628,5 @@ func (d *DesiredState) GetChildrenSpecs() []ChildSpec {
 	return d.ChildrenSpecs
 }
 
-// NOTE: GetState() is provided by embedded BaseDesiredState.
-// The BaseDesiredState.State field is the canonical source of truth for lifecycle state.
+// NOTE: User-facing lifecycle state ("running"/"stopped") lives on TConfig via embedded
+// BaseUserSpec.State, not on BaseDesiredState. State files read it via Config.GetState().

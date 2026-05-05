@@ -21,7 +21,6 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
-	fsmv2config "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/persistence"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/persistence/action"
@@ -54,9 +53,6 @@ var _ = Describe("Preferential Maintenance Scheduling", func() {
 				},
 			},
 			Desired: &fsmv2.WrappedDesiredState[persistence.PersistenceConfig]{
-				BaseDesiredState: fsmv2config.BaseDesiredState{
-					State: "running",
-				},
 				Config: persistence.PersistenceConfig{
 					CompactionInterval:  5 * time.Minute,
 					RetentionWindow:     24 * time.Hour,
@@ -79,9 +75,6 @@ var _ = Describe("Preferential Maintenance Scheduling", func() {
 					},
 				},
 				Desired: &fsmv2.WrappedDesiredState[persistence.PersistenceConfig]{
-					BaseDesiredState: fsmv2config.BaseDesiredState{
-						State: "running",
-					},
 					Config: persistence.PersistenceConfig{
 						CompactionInterval:  5 * time.Minute,
 						RetentionWindow:     24 * time.Hour,
@@ -106,9 +99,6 @@ var _ = Describe("Preferential Maintenance Scheduling", func() {
 					},
 				},
 				Desired: &fsmv2.WrappedDesiredState[persistence.PersistenceConfig]{
-					BaseDesiredState: fsmv2config.BaseDesiredState{
-						State: "running",
-					},
 					Config: persistence.PersistenceConfig{
 						CompactionInterval:  5 * time.Minute,
 						RetentionWindow:     24 * time.Hour,
@@ -228,9 +218,6 @@ var _ = Describe("Preferential Maintenance Scheduling", func() {
 					},
 				},
 				Desired: &fsmv2.WrappedDesiredState[persistence.PersistenceConfig]{
-					BaseDesiredState: fsmv2config.BaseDesiredState{
-						State: "running",
-					},
 					Config: persistence.PersistenceConfig{
 						CompactionInterval:  5 * time.Minute,
 						RetentionWindow:     24 * time.Hour,

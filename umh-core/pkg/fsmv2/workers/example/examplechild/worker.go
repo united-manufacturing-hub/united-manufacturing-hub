@@ -105,7 +105,6 @@ func (w *ChildWorker) CollectObservedState(ctx context.Context, _ fsmv2.DesiredS
 func (w *ChildWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, error) {
 	if spec == nil {
 		return &config.DesiredState{
-			BaseDesiredState: config.BaseDesiredState{State: config.DesiredStateRunning},
 			OriginalUserSpec: nil,
 		}, nil
 	}
@@ -125,12 +124,13 @@ func (w *ChildWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, 
 		Variables: userSpec.Variables,
 	}
 
-	desired, err := config.DeriveLeafState[ChildUserSpec](renderedSpec)
-	if err != nil {
+	if _, err := config.ParseUserSpec[ChildUserSpec](renderedSpec); err != nil {
 		return nil, err
 	}
 
-	return &desired, nil
+	return &config.DesiredState{
+		OriginalUserSpec: spec,
+	}, nil
 }
 
 // GetInitialState returns the state the FSM should start in.

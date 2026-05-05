@@ -36,8 +36,8 @@ type workerTestConfig struct {
 	Port int    `json:"port" yaml:"port"`
 }
 
-// stateGetterConfig embeds BaseUserSpec so it implements config.StateGetter.
-type stateGetterConfig struct {
+// userSpecConfig embeds BaseUserSpec so it has BaseUserSpec.GetState() promoted.
+type userSpecConfig struct {
 	config.BaseUserSpec `yaml:",inline"`
 	Host                string `json:"host" yaml:"host"`
 }
@@ -195,11 +195,10 @@ port: 8080`,
 			wb.InitBase(identity, mockLogger, mockStateReader)
 		})
 
-		It("returns default WrappedDesiredState with running state for nil spec", func() {
+		It("returns default WrappedDesiredState for nil spec", func() {
 			ds, err := wb.DeriveDesiredState(nil)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(ds).NotTo(BeNil())
-			Expect(ds.GetState()).To(Equal("running"))
 			Expect(ds.IsShutdownRequested()).To(BeFalse())
 		})
 
@@ -266,8 +265,8 @@ port: {{ .PORT }}`,
 			Expect(err).To(HaveOccurred())
 		})
 
-		It("extracts state from config implementing StateGetter", func() {
-			sgWb := &fsmv2.WorkerBase[stateGetterConfig, workerTestStatus, register.NoDeps]{}
+		It("preserves user-facing State on the embedded BaseUserSpec field of TConfig", func() {
+			sgWb := &fsmv2.WorkerBase[userSpecConfig, workerTestStatus, register.NoDeps]{}
 			sgWb.InitBase(identity, mockLogger, mockStateReader)
 
 			spec := config.UserSpec{
@@ -276,10 +275,10 @@ host: "example.com"`,
 			}
 			ds, err := sgWb.DeriveDesiredState(spec)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(ds.GetState()).To(Equal("stopped"))
 
-			typed := ds.(*fsmv2.WrappedDesiredState[stateGetterConfig])
+			typed := ds.(*fsmv2.WrappedDesiredState[userSpecConfig])
 			Expect(typed.Config.Host).To(Equal("example.com"))
+			Expect(typed.Config.GetState()).To(Equal("stopped"))
 		})
 
 		It("caches config for subsequent Config() calls", func() {

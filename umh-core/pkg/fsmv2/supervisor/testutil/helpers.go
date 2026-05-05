@@ -50,14 +50,6 @@ func (t *DesiredState) SetShutdownRequested(requested bool) {
 	t.ShutdownReq = requested
 }
 
-func (t *DesiredState) GetState() string {
-	if t.State == "" {
-		return "running"
-	}
-
-	return t.State
-}
-
 type Worker struct {
 	CollectErr   error
 	Observed     fsmv2.ObservedState
@@ -85,7 +77,7 @@ func (m *Worker) CollectObservedState(ctx context.Context, _ fsmv2.DesiredState)
 }
 
 func (m *Worker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, error) {
-	return &config.DesiredState{BaseDesiredState: config.BaseDesiredState{State: "running"}}, nil
+	return &config.DesiredState{}, nil
 }
 
 func (m *Worker) GetInitialState() fsmv2.State[any, any] {

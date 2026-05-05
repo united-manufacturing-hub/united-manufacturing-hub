@@ -27,8 +27,8 @@ import (
 const defaultTransportTimeout = 10 * time.Second
 
 // TransportConfig holds the user-provided configuration for the transport worker.
-// Embeds BaseUserSpec to support the StateGetter interface, allowing WorkerBase.DeriveDesiredState
-// to extract the desired state from the "state" YAML field.
+// Embeds BaseUserSpec so state files read user-facing State via Config.GetState()
+// (the YAML "state" field, defaulting to "running").
 type TransportConfig struct {
 	config.BaseUserSpec `yaml:",inline"`
 	types.RelayConfig   `yaml:",inline"`
