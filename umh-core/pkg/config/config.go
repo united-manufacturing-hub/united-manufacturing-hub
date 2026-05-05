@@ -15,6 +15,8 @@
 package config
 
 import (
+	"fmt"
+
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/benthosserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/connectionserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
@@ -196,6 +198,16 @@ type ProtocolConverterConfig struct {
 	// private marker – not (un)marshalled
 	// explanation see templating.go
 	hasAnchors bool `yaml:"-"`
+}
+
+// String returns a concise description of the protocol converter config.
+func (d *ProtocolConverterConfig) String() string {
+	return fmt.Sprintf(
+		"ProtocolConverterConfig{Name:%q, DesiredFSMState:%q, ProtocolConverterServiceConfig:%v}",
+		d.Name,
+		d.DesiredFSMState,
+		d.ProtocolConverterServiceConfig,
+	)
 }
 
 // HasAnchors returns true if the ProtocolConverterConfig has anchors, see templating.go.

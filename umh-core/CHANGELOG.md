@@ -2,9 +2,15 @@
 
 ## Unreleased
 
-### Preview: FSMv2 Communicator
+### Improvements
 
-- Previously, the FSMv2 communicator could stop working if it rebuilt its HTTP connection (which happens after persistent network failures) while a message was being sent or received. Connection rebuilds and in-flight requests are now coordinated so they cannot interfere. Only affects instances with `USE_FSMV2_TRANSPORT=true`
+- Previously, the component tasked with communicating with the UI could stop working if it rebuilt its HTTP connection (which happens after persistent network failures) while a message was being sent or received. Connection rebuilds and in-flight requests are now coordinated so they cannot interfere.
+
+## [0.44.19]
+
+### Improvements
+
+- Tag processor now supports `msg.meta.datatype` to override value type auto-detection. Set to `"string"`, `"number"`, or `"bool"` to force the output type
 
 ## [0.44.18]
 
