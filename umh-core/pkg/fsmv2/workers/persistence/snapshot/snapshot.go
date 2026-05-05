@@ -96,14 +96,9 @@ type PersistenceStatus struct {
 	IsAcceptableMaintenanceWindow bool `json:"is_acceptable_maintenance_window"`
 }
 
-// IsLastActionHealthy returns true if ConsecutiveActionErrors is zero.
-func (s PersistenceStatus) IsLastActionHealthy() bool {
-	return s.ConsecutiveActionErrors == 0
-}
-
 // IsHealthy returns true if the worker is operating normally.
 func (s PersistenceStatus) IsHealthy() bool {
-	return s.IsLastActionHealthy()
+	return s.ConsecutiveActionErrors == 0
 }
 
 // PersistenceDependencies is the dependencies interface for persistence actions (avoids import cycles).
