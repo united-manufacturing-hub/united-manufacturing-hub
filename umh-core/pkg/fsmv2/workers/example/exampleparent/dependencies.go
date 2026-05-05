@@ -15,14 +15,86 @@
 package exampleparent
 
 import (
+	"sync"
+	"time"
+
+	"github.com/benbjohnson/clock"
+
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleparent/dependency"
 )
+
+// StateTracker provides state transition time tracking.
+type StateTracker interface {
+	// RecordStateChange updates the entry time if state changed
+	RecordStateChange(newState string)
+	// GetStateEnteredAt returns when current state was entered
+	GetStateEnteredAt() time.Time
+	// GetCurrentState returns the current recorded state
+	GetCurrentState() string
+	// Elapsed returns time since state was entered (uses injected Clock)
+	Elapsed() time.Duration
+}
+
+// DefaultStateTracker is the production implementation.
+type DefaultStateTracker struct {
+	enteredAt    time.Time
+	clock        clock.Clock
+	currentState string
+	mu           sync.RWMutex
+}
+
+// NewDefaultStateTracker creates a new StateTracker with the given clock.
+// If clock is nil, uses the real system clock.
+func NewDefaultStateTracker(c clock.Clock) *DefaultStateTracker {
+	if c == nil {
+		c = clock.New()
+	}
+
+	return &DefaultStateTracker{
+		clock:     c,
+		enteredAt: c.Now(),
+	}
+}
+
+// RecordStateChange updates the entry time if state changed.
+func (t *DefaultStateTracker) RecordStateChange(newState string) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	if t.currentState != newState {
+		t.currentState = newState
+		t.enteredAt = t.clock.Now()
+	}
+}
+
+// GetStateEnteredAt returns when current state was entered.
+func (t *DefaultStateTracker) GetStateEnteredAt() time.Time {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+
+	return t.enteredAt
+}
+
+// GetCurrentState returns the current recorded state.
+func (t *DefaultStateTracker) GetCurrentState() string {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+
+	return t.currentState
+}
+
+// Elapsed returns time since state was entered.
+func (t *DefaultStateTracker) Elapsed() time.Duration {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+
+	return t.clock.Since(t.enteredAt)
+}
 
 // ParentDependencies provides access to tools needed by parent worker actions.
 type ParentDependencies struct {
 	*deps.BaseDependencies
-	stateTracker dependency.StateTracker
+	stateTracker StateTracker
 }
 
 // NewParentDependencies creates new dependencies for the parent worker.
@@ -30,11 +102,11 @@ type ParentDependencies struct {
 func NewParentDependencies(baseDeps *deps.BaseDependencies) *ParentDependencies {
 	return &ParentDependencies{
 		BaseDependencies: baseDeps,
-		stateTracker:     dependency.NewDefaultStateTracker(nil),
+		stateTracker:     NewDefaultStateTracker(nil),
 	}
 }
 
 // GetStateTracker returns the state tracker tool for tracking state transitions.
-func (d *ParentDependencies) GetStateTracker() dependency.StateTracker {
+func (d *ParentDependencies) GetStateTracker() StateTracker {
 	return d.stateTracker
 }
