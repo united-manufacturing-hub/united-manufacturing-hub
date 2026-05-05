@@ -22,8 +22,8 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/persistence"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/persistence/action"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/persistence/snapshot"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/persistence/state"
 )
 
@@ -43,17 +43,17 @@ var _ = Describe("Preferential Maintenance Scheduling", func() {
 	makeSnap := func(collectedAt time.Time, lastMaintenanceAt time.Time, isPreferred, isAcceptable bool) fsmv2.Snapshot {
 		return fsmv2.Snapshot{
 			Identity: deps.Identity{ID: "test", WorkerType: "persistence"},
-			Observed: fsmv2.Observation[persistence.PersistenceStatus]{
+			Observed: fsmv2.Observation[snapshot.PersistenceStatus]{
 				CollectedAt: collectedAt,
-				Status: persistence.PersistenceStatus{
+				Status: snapshot.PersistenceStatus{
 					LastCompactionAt:              collectedAt.Add(-1 * time.Minute),
 					LastMaintenanceAt:             lastMaintenanceAt,
 					IsPreferredMaintenanceWindow:  isPreferred,
 					IsAcceptableMaintenanceWindow: isAcceptable,
 				},
 			},
-			Desired: &fsmv2.WrappedDesiredState[persistence.PersistenceConfig]{
-				Config: persistence.PersistenceConfig{
+			Desired: &fsmv2.WrappedDesiredState[snapshot.PersistenceConfig]{
+				Config: snapshot.PersistenceConfig{
 					CompactionInterval:  5 * time.Minute,
 					RetentionWindow:     24 * time.Hour,
 					MaintenanceInterval: maintenanceInterval,
@@ -67,15 +67,15 @@ var _ = Describe("Preferential Maintenance Scheduling", func() {
 			now := time.Date(2025, 2, 3, 12, 0, 0, 0, time.UTC) // Monday noon
 			snap := fsmv2.Snapshot{
 				Identity: deps.Identity{ID: "test", WorkerType: "persistence"},
-				Observed: fsmv2.Observation[persistence.PersistenceStatus]{
+				Observed: fsmv2.Observation[snapshot.PersistenceStatus]{
 					CollectedAt: now,
-					Status: persistence.PersistenceStatus{
+					Status: snapshot.PersistenceStatus{
 						LastCompactionAt:  now.Add(-1 * time.Minute),
 						LastMaintenanceAt: now.Add(-25 * time.Hour),
 					},
 				},
-				Desired: &fsmv2.WrappedDesiredState[persistence.PersistenceConfig]{
-					Config: persistence.PersistenceConfig{
+				Desired: &fsmv2.WrappedDesiredState[snapshot.PersistenceConfig]{
+					Config: snapshot.PersistenceConfig{
 						CompactionInterval:  5 * time.Minute,
 						RetentionWindow:     24 * time.Hour,
 						MaintenanceInterval: 24 * time.Hour,
@@ -91,15 +91,15 @@ var _ = Describe("Preferential Maintenance Scheduling", func() {
 			now := time.Date(2025, 2, 3, 12, 0, 0, 0, time.UTC) // Monday noon
 			snap := fsmv2.Snapshot{
 				Identity: deps.Identity{ID: "test", WorkerType: "persistence"},
-				Observed: fsmv2.Observation[persistence.PersistenceStatus]{
+				Observed: fsmv2.Observation[snapshot.PersistenceStatus]{
 					CollectedAt: now,
-					Status: persistence.PersistenceStatus{
+					Status: snapshot.PersistenceStatus{
 						LastCompactionAt:  now.Add(-1 * time.Minute),
 						LastMaintenanceAt: now.Add(-23 * time.Hour),
 					},
 				},
-				Desired: &fsmv2.WrappedDesiredState[persistence.PersistenceConfig]{
-					Config: persistence.PersistenceConfig{
+				Desired: &fsmv2.WrappedDesiredState[snapshot.PersistenceConfig]{
+					Config: snapshot.PersistenceConfig{
 						CompactionInterval:  5 * time.Minute,
 						RetentionWindow:     24 * time.Hour,
 						MaintenanceInterval: 24 * time.Hour,
@@ -208,17 +208,17 @@ var _ = Describe("Preferential Maintenance Scheduling", func() {
 
 			snap := fsmv2.Snapshot{
 				Identity: deps.Identity{ID: "test", WorkerType: "persistence"},
-				Observed: fsmv2.Observation[persistence.PersistenceStatus]{
+				Observed: fsmv2.Observation[snapshot.PersistenceStatus]{
 					CollectedAt: mon12pm,
-					Status: persistence.PersistenceStatus{
+					Status: snapshot.PersistenceStatus{
 						LastCompactionAt:              mon12pm.Add(-1 * time.Minute),
 						LastMaintenanceAt:             lastMaint,
 						IsPreferredMaintenanceWindow:  false,
 						IsAcceptableMaintenanceWindow: false,
 					},
 				},
-				Desired: &fsmv2.WrappedDesiredState[persistence.PersistenceConfig]{
-					Config: persistence.PersistenceConfig{
+				Desired: &fsmv2.WrappedDesiredState[snapshot.PersistenceConfig]{
+					Config: snapshot.PersistenceConfig{
 						CompactionInterval:  5 * time.Minute,
 						RetentionWindow:     24 * time.Hour,
 						MaintenanceInterval: 3 * 24 * time.Hour,

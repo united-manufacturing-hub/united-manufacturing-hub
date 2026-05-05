@@ -23,8 +23,8 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	fsmv2config "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/persistence"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/persistence/action"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/persistence/snapshot"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/persistence/state"
 )
 
@@ -40,17 +40,17 @@ var _ = Describe("StoppingState", func() {
 			It("should transition to StoppedState", func() {
 				snap := fsmv2.Snapshot{
 					Identity: deps.Identity{ID: "test", WorkerType: "persistence"},
-					Observed: fsmv2.Observation[persistence.PersistenceStatus]{
+					Observed: fsmv2.Observation[snapshot.PersistenceStatus]{
 						CollectedAt: time.Now(),
 						LastActionResults: []deps.ActionResult{
 							{ActionType: "RunMaintenance", Success: true},
 						},
 					},
-					Desired: &fsmv2.WrappedDesiredState[persistence.PersistenceConfig]{
+					Desired: &fsmv2.WrappedDesiredState[snapshot.PersistenceConfig]{
 						BaseDesiredState: fsmv2config.BaseDesiredState{
 							ShutdownRequested: true,
 						},
-						Config: persistence.PersistenceConfig{
+						Config: snapshot.PersistenceConfig{
 							CompactionInterval:  5 * time.Minute,
 							RetentionWindow:     24 * time.Hour,
 							MaintenanceInterval: 7 * 24 * time.Hour,
@@ -69,14 +69,14 @@ var _ = Describe("StoppingState", func() {
 			It("should emit RunMaintenanceAction and stay", func() {
 				snap := fsmv2.Snapshot{
 					Identity: deps.Identity{ID: "test", WorkerType: "persistence"},
-					Observed: fsmv2.Observation[persistence.PersistenceStatus]{
+					Observed: fsmv2.Observation[snapshot.PersistenceStatus]{
 						CollectedAt: time.Now(),
 					},
-					Desired: &fsmv2.WrappedDesiredState[persistence.PersistenceConfig]{
+					Desired: &fsmv2.WrappedDesiredState[snapshot.PersistenceConfig]{
 						BaseDesiredState: fsmv2config.BaseDesiredState{
 							ShutdownRequested: true,
 						},
-						Config: persistence.PersistenceConfig{
+						Config: snapshot.PersistenceConfig{
 							CompactionInterval:  5 * time.Minute,
 							RetentionWindow:     24 * time.Hour,
 							MaintenanceInterval: 7 * 24 * time.Hour,
@@ -95,17 +95,17 @@ var _ = Describe("StoppingState", func() {
 			It("should re-emit RunMaintenanceAction and stay", func() {
 				snap := fsmv2.Snapshot{
 					Identity: deps.Identity{ID: "test", WorkerType: "persistence"},
-					Observed: fsmv2.Observation[persistence.PersistenceStatus]{
+					Observed: fsmv2.Observation[snapshot.PersistenceStatus]{
 						CollectedAt: time.Now(),
 						LastActionResults: []deps.ActionResult{
 							{ActionType: "RunMaintenance", Success: false},
 						},
 					},
-					Desired: &fsmv2.WrappedDesiredState[persistence.PersistenceConfig]{
+					Desired: &fsmv2.WrappedDesiredState[snapshot.PersistenceConfig]{
 						BaseDesiredState: fsmv2config.BaseDesiredState{
 							ShutdownRequested: true,
 						},
-						Config: persistence.PersistenceConfig{
+						Config: snapshot.PersistenceConfig{
 							CompactionInterval:  5 * time.Minute,
 							RetentionWindow:     24 * time.Hour,
 							MaintenanceInterval: 7 * 24 * time.Hour,
@@ -124,17 +124,17 @@ var _ = Describe("StoppingState", func() {
 			It("should keep emitting RunMaintenanceAction on each tick", func() {
 				snap := fsmv2.Snapshot{
 					Identity: deps.Identity{ID: "test", WorkerType: "persistence"},
-					Observed: fsmv2.Observation[persistence.PersistenceStatus]{
+					Observed: fsmv2.Observation[snapshot.PersistenceStatus]{
 						CollectedAt: time.Now(),
 						LastActionResults: []deps.ActionResult{
 							{ActionType: "RunMaintenance", Success: false},
 						},
 					},
-					Desired: &fsmv2.WrappedDesiredState[persistence.PersistenceConfig]{
+					Desired: &fsmv2.WrappedDesiredState[snapshot.PersistenceConfig]{
 						BaseDesiredState: fsmv2config.BaseDesiredState{
 							ShutdownRequested: true,
 						},
-						Config: persistence.PersistenceConfig{
+						Config: snapshot.PersistenceConfig{
 							CompactionInterval:  5 * time.Minute,
 							RetentionWindow:     24 * time.Hour,
 							MaintenanceInterval: 7 * 24 * time.Hour,

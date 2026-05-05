@@ -57,7 +57,7 @@ var _ fsmv2.Worker = (*PersistenceWorker)(nil)
 // layer. It drives compaction and maintenance against the triangular store.
 type PersistenceWorker struct {
 	deps *PersistenceDependencies
-	fsmv2.WorkerBase[PersistenceConfig, PersistenceStatus, *PersistenceDependencies]
+	fsmv2.WorkerBase[snapshot.PersistenceConfig, snapshot.PersistenceStatus, *PersistenceDependencies]
 }
 
 // NewPersistenceWorker creates a new persistence worker. The dependencies
@@ -119,7 +119,7 @@ func (w *PersistenceWorker) GetDependencies() *PersistenceDependencies {
 func (w *PersistenceWorker) CollectObservedState(ctx context.Context, _ fsmv2.DesiredState) (fsmv2.ObservedState, error) {
 	d := w.deps
 
-	var prev fsmv2.Observation[PersistenceStatus]
+	var prev fsmv2.Observation[snapshot.PersistenceStatus]
 
 	stateReader := d.GetStateReader()
 	if stateReader != nil {
@@ -160,7 +160,7 @@ func (w *PersistenceWorker) CollectObservedState(ctx context.Context, _ fsmv2.De
 	now := time.Now()
 	scheduler := d.GetScheduler()
 
-	return fsmv2.NewObservation(PersistenceStatus{
+	return fsmv2.NewObservation(snapshot.PersistenceStatus{
 		LastCompactionAt:              lastCompactionAt,
 		LastMaintenanceAt:             lastMaintenanceAt,
 		IsPreferredMaintenanceWindow:  scheduler.IsPreferredMaintenanceWindow(now),
@@ -176,7 +176,7 @@ func (w *PersistenceWorker) CollectObservedState(ctx context.Context, _ fsmv2.De
 // seed deps to NewPersistenceWorker. If nothing has been published the
 // constructor returns an error — there is no singleton fallback.
 func init() {
-	register.Worker[PersistenceConfig, PersistenceStatus, register.NoDeps](WorkerTypeName,
+	register.Worker[snapshot.PersistenceConfig, snapshot.PersistenceStatus, register.NoDeps](WorkerTypeName,
 		func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader) (fsmv2.Worker, error) {
 			d := register.GetDeps[*PersistenceDependencies](WorkerTypeName)
 			return NewPersistenceWorker(id, logger, sr, d)

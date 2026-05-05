@@ -27,6 +27,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/register"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/persistence"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/persistence/snapshot"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/persistence/state"
 )
 
@@ -100,7 +101,7 @@ var _ = Describe("PersistenceWorker", func() {
 			// CollectedAt is populated by the collector post-COS, not inside COS
 			// itself (per NewObservation contract). Assert only that the type is
 			// correct; framework fields are exercised in integration tests.
-			_, ok := observed.(fsmv2.Observation[persistence.PersistenceStatus])
+			_, ok := observed.(fsmv2.Observation[snapshot.PersistenceStatus])
 			Expect(ok).To(BeTrue())
 		})
 
@@ -118,7 +119,7 @@ var _ = Describe("PersistenceWorker", func() {
 				observed, err := worker.CollectObservedState(context.Background(), nil)
 				Expect(err).NotTo(HaveOccurred())
 
-				obs := observed.(fsmv2.Observation[persistence.PersistenceStatus])
+				obs := observed.(fsmv2.Observation[snapshot.PersistenceStatus])
 				Expect(obs.Status.ConsecutiveActionErrors).To(Equal(1))
 			})
 
@@ -137,7 +138,7 @@ var _ = Describe("PersistenceWorker", func() {
 				observed, err := worker.CollectObservedState(context.Background(), nil)
 				Expect(err).NotTo(HaveOccurred())
 
-				obs := observed.(fsmv2.Observation[persistence.PersistenceStatus])
+				obs := observed.(fsmv2.Observation[snapshot.PersistenceStatus])
 				Expect(obs.Status.ConsecutiveActionErrors).To(Equal(0))
 			})
 
@@ -153,7 +154,7 @@ var _ = Describe("PersistenceWorker", func() {
 
 				observed1, err := worker.CollectObservedState(context.Background(), nil)
 				Expect(err).NotTo(HaveOccurred())
-				obs1 := observed1.(fsmv2.Observation[persistence.PersistenceStatus])
+				obs1 := observed1.(fsmv2.Observation[snapshot.PersistenceStatus])
 				Expect(obs1.Status.ConsecutiveActionErrors).To(Equal(1))
 
 				// Second tick: no action results (empty drain after state transition)
@@ -163,7 +164,7 @@ var _ = Describe("PersistenceWorker", func() {
 				d.SetActionHistory(nil)
 				observed2, err := worker.CollectObservedState(context.Background(), nil)
 				Expect(err).NotTo(HaveOccurred())
-				obs2 := observed2.(fsmv2.Observation[persistence.PersistenceStatus])
+				obs2 := observed2.(fsmv2.Observation[snapshot.PersistenceStatus])
 				// Without stateReader, prev.ConsecutiveActionErrors is 0 and empty results
 				// preserve 0. The full persistence test requires a stateReader mock.
 				Expect(obs2.Status.ConsecutiveActionErrors).To(Equal(0))
@@ -183,7 +184,7 @@ var _ = Describe("PersistenceWorker", func() {
 			observed, err := worker.CollectObservedState(context.Background(), nil)
 			Expect(err).NotTo(HaveOccurred())
 
-			obs := observed.(fsmv2.Observation[persistence.PersistenceStatus])
+			obs := observed.(fsmv2.Observation[snapshot.PersistenceStatus])
 			Expect(obs.Status.LastCompactionAt).To(Equal(now))
 			Expect(obs.Status.LastMaintenanceAt).To(Equal(now.Add(-time.Hour)))
 		})
@@ -198,8 +199,7 @@ var _ = Describe("PersistenceWorker", func() {
 			desired, err := worker.DeriveDesiredState(nil)
 			Expect(err).NotTo(HaveOccurred())
 
-			d := desired.(*fsmv2.WrappedDesiredState[persistence.PersistenceConfig])
-			Expect(d.Config.GetState()).To(Equal("running"))
+			d := desired.(*fsmv2.WrappedDesiredState[snapshot.PersistenceConfig])
 			Expect(d.Config.GetCompactionInterval()).To(Equal(persistence.DefaultCompactionInterval))
 			Expect(d.Config.GetRetentionWindow()).To(Equal(persistence.DefaultRetentionWindow))
 			Expect(d.Config.GetMaintenanceInterval()).To(Equal(persistence.DefaultMaintenanceInterval))
@@ -226,8 +226,7 @@ var _ = Describe("PersistenceWorker", func() {
 			desired, err := worker.DeriveDesiredState(spec)
 			Expect(err).NotTo(HaveOccurred())
 
-			d := desired.(*fsmv2.WrappedDesiredState[persistence.PersistenceConfig])
-			Expect(d.Config.GetState()).To(Equal("running"))
+			d := desired.(*fsmv2.WrappedDesiredState[snapshot.PersistenceConfig])
 			Expect(d.Config.CompactionInterval).To(Equal(10 * time.Minute))
 			Expect(d.Config.RetentionWindow).To(Equal(48 * time.Hour))
 			Expect(d.Config.MaintenanceInterval).To(Equal(336 * time.Hour))
@@ -245,7 +244,7 @@ var _ = Describe("PersistenceWorker", func() {
 			desired, err := worker.DeriveDesiredState(spec)
 			Expect(err).NotTo(HaveOccurred())
 
-			d := desired.(*fsmv2.WrappedDesiredState[persistence.PersistenceConfig])
+			d := desired.(*fsmv2.WrappedDesiredState[snapshot.PersistenceConfig])
 			Expect(d.Config.GetCompactionInterval()).To(Equal(15 * time.Minute))
 			Expect(d.Config.GetRetentionWindow()).To(Equal(persistence.DefaultRetentionWindow))
 			Expect(d.Config.GetMaintenanceInterval()).To(Equal(persistence.DefaultMaintenanceInterval))
@@ -261,8 +260,7 @@ var _ = Describe("PersistenceWorker", func() {
 			desired, err := worker.DeriveDesiredState(spec)
 			Expect(err).NotTo(HaveOccurred())
 
-			d := desired.(*fsmv2.WrappedDesiredState[persistence.PersistenceConfig])
-			Expect(d.Config.GetState()).To(Equal("running"))
+			d := desired.(*fsmv2.WrappedDesiredState[snapshot.PersistenceConfig])
 			Expect(d.Config.GetCompactionInterval()).To(Equal(persistence.DefaultCompactionInterval))
 			Expect(d.Config.GetRetentionWindow()).To(Equal(persistence.DefaultRetentionWindow))
 			Expect(d.Config.GetMaintenanceInterval()).To(Equal(persistence.DefaultMaintenanceInterval))

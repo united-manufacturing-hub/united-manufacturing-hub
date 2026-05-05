@@ -25,6 +25,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/register"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/application"
 	persistenceWorker "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/persistence"
+	persistenceSnapshot "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/persistence/snapshot"
 )
 
 type PersistenceRunConfig struct {
@@ -149,7 +150,7 @@ children:
 
 		loadCtx := context.Background()
 
-		var observed fsmv2.Observation[persistenceWorker.PersistenceStatus]
+		var observed fsmv2.Observation[persistenceSnapshot.PersistenceStatus]
 		if loadErr := store.LoadObservedTyped(loadCtx, "persistence", "persistence-001", &observed); loadErr != nil {
 			if !errors.Is(loadErr, context.Canceled) {
 				logger.SentryWarn(deps.FeatureExamples, "", "failed to load persistence observed state",
