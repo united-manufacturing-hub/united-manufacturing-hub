@@ -17,23 +17,29 @@ package state
 import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplepanic/snapshot"
+	example_panic "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplepanic"
 )
+
+func init() {
+	fsmv2.RegisterInitialState("examplepanic", &StoppedState{})
+}
 
 type StoppedState struct {
 	helpers.StoppedBase
 }
 
 func (s *StoppedState) Next(snapAny any) fsmv2.NextResult[any, any] {
-	snap := helpers.ConvertSnapshot[snapshot.ExamplepanicObservedState, *snapshot.ExamplepanicDesiredState](snapAny)
+	snap := fsmv2.ConvertWorkerSnapshot[example_panic.ExamplepanicConfig, example_panic.ExamplepanicStatus](snapAny)
 
 	if snap.Desired.IsShutdownRequested() {
 		return fsmv2.Transition(s, fsmv2.SignalNeedsRemoval, nil, "Shutdown requested, signaling removal", nil)
 	}
 
-	// ParentMappedState is in Observed.DesiredState, not Desired
-	if snap.Observed.ShouldBeRunning() {
-		return fsmv2.Transition(&TryingToConnectState{}, fsmv2.SignalNone, nil, "Should be running, transitioning to TryingToConnect", nil)
+	// Parent disable propagates via ChildSpec.Enabled=false → IsShutdownRequested
+	// (handled by the shutdown check above). When neither user nor parent has
+	// requested stop, advance to TryingToConnect.
+	if !snap.ShouldStop() {
+		return fsmv2.Transition(&TryingToConnectState{}, fsmv2.SignalNone, nil, "attempting to connect", nil)
 	}
 
 	return fsmv2.Transition(s, fsmv2.SignalNone, nil, "Panic worker is stopped, no connection", nil)

@@ -18,7 +18,6 @@ import (
 	"context"
 
 	depspkg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplepanic/snapshot"
 )
 
 const ConnectActionName = "connect"
@@ -26,7 +25,7 @@ const ConnectActionName = "connect"
 type ConnectAction struct{}
 
 func (a *ConnectAction) Execute(ctx context.Context, depsAny any) error {
-	deps := depsAny.(snapshot.ExamplepanicDependencies)
+	deps := depsAny.(ExamplepanicDependencies)
 	logger := deps.GetLogger()
 
 	if deps.IsShouldPanic() {

@@ -16,8 +16,6 @@ package action
 
 import (
 	"context"
-
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplepanic/snapshot"
 )
 
 const DisconnectActionName = "disconnect"
@@ -26,7 +24,7 @@ type DisconnectAction struct {
 }
 
 func (a *DisconnectAction) Execute(ctx context.Context, depsAny any) error {
-	deps := depsAny.(snapshot.ExamplepanicDependencies)
+	deps := depsAny.(ExamplepanicDependencies)
 	logger := deps.GetLogger()
 	logger.Info("Disconnecting")
 

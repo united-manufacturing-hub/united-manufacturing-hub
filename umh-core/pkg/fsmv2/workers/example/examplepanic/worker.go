@@ -17,22 +17,18 @@ package example_panic
 import (
 	"context"
 	"errors"
-	"fmt"
-	"time"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplepanic/snapshot"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplepanic/state"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/register"
 )
+
+// workerType is the registered type name for this worker.
+const workerType = "examplepanic"
 
 type ExamplepanicWorker struct {
 	deps *ExamplepanicDependencies
-	fsmv2.WorkerBase[ExamplepanicConfig, snapshot.ExamplepanicObservedState, *ExamplepanicDependencies]
+	fsmv2.WorkerBase[ExamplepanicConfig, ExamplepanicStatus, *ExamplepanicDependencies]
 }
 
 func NewExamplepanicWorker(
@@ -50,11 +46,6 @@ func NewExamplepanicWorker(
 	}
 
 	if identity.WorkerType == "" {
-		workerType, err := storage.DeriveWorkerType[snapshot.ExamplepanicObservedState]()
-		if err != nil {
-			return nil, fmt.Errorf("failed to derive worker type: %w", err)
-		}
-
 		identity.WorkerType = workerType
 	}
 
@@ -66,71 +57,35 @@ func NewExamplepanicWorker(
 	return w, nil
 }
 
-func (w *ExamplepanicWorker) CollectObservedState(ctx context.Context, _ fsmv2.DesiredState) (fsmv2.ObservedState, error) {
+// CollectObservedState returns the current observed state of the panic worker.
+// Returns NewObservation; the collector handles CollectedAt, framework metrics,
+// action history, and metric accumulation automatically.
+//
+// The ShouldPanic flag from the typed config is propagated to dependencies here
+// so the connect action can read it via IsShouldPanic() at execution time.
+func (w *ExamplepanicWorker) CollectObservedState(_ context.Context, desiredAny fsmv2.DesiredState) (fsmv2.ObservedState, error) {
+	cfg := fsmv2.ExtractConfig[ExamplepanicConfig](desiredAny)
+	w.deps.SetShouldPanic(cfg.GetShouldPanic())
+
 	connectionHealth := "no connection"
 
 	if w.deps.IsConnected() {
 		connectionHealth = "healthy"
 	}
 
-	observed := snapshot.ExamplepanicObservedState{
-		ID:               w.Identity().ID,
-		CollectedAt:      time.Now(),
+	status := ExamplepanicStatus{
 		ConnectionHealth: connectionHealth,
 	}
 
-	if fm := w.deps.GetFrameworkState(); fm != nil {
-		observed.Metrics.Framework = *fm
-	}
-
-	observed.LastActionResults = w.deps.GetActionHistory()
-
-	return observed, nil
-}
-
-func (w *ExamplepanicWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, error) {
-	if _, err := config.ParseUserSpec[ExamplepanicConfig](spec); err != nil {
-		return nil, err
-	}
-
-	w.updateDependenciesFromSpec(spec)
-
-	return &config.DesiredState{
-		OriginalUserSpec: spec,
-	}, nil
-}
-
-// updateDependenciesFromSpec configures dependencies based on the user spec (separate to avoid PURE_DERIVE violations).
-func (w *ExamplepanicWorker) updateDependenciesFromSpec(spec interface{}) {
-	if spec == nil {
-		return
-	}
-
-	parsed, err := config.ParseUserSpec[ExamplepanicConfig](spec)
-	if err != nil {
-		return
-	}
-
-	w.deps.SetShouldPanic(parsed.ShouldPanic)
-}
-
-func (w *ExamplepanicWorker) GetInitialState() fsmv2.State[any, any] {
-	return &state.StoppedState{}
+	return fsmv2.NewObservation(status), nil
 }
 
 func init() {
-	if err := factory.RegisterWorkerType[snapshot.ExamplepanicObservedState, *snapshot.ExamplepanicDesiredState](
-		func(id deps.Identity, logger deps.FSMLogger, stateReader deps.StateReader, _ map[string]any) fsmv2.Worker {
+	register.Worker[ExamplepanicConfig, ExamplepanicStatus, *ExamplepanicDependencies](
+		workerType,
+		func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader) (fsmv2.Worker, error) {
 			pool := &DefaultConnectionPool{}
-			worker, _ := NewExamplepanicWorker(id, pool, logger, stateReader)
-
-			return worker
+			return NewExamplepanicWorker(id, pool, logger, sr)
 		},
-		func(cfg interface{}) interface{} {
-			return supervisor.NewSupervisor[snapshot.ExamplepanicObservedState, *snapshot.ExamplepanicDesiredState](
-				cfg.(supervisor.Config))
-		},
-	); err != nil {
-		panic(err)
-	}
+	)
 }

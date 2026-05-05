@@ -24,3 +24,20 @@ type ExamplepanicConfig struct {
 	ShouldRun           bool `yaml:"should_run"`
 	ShouldPanic         bool `yaml:"should_panic"`
 }
+
+// GetShouldPanic returns whether the worker should panic during connect action.
+// CollectObservedState should always go through this accessor so future
+// defaulting/validation logic has a single insertion point.
+func (s *ExamplepanicConfig) GetShouldPanic() bool {
+	return s.ShouldPanic
+}
+
+// ExamplepanicStatus holds the runtime observation data for the panic worker.
+// Only worker-specific business fields belong here; the framework supplies
+// CollectedAt, State, LastActionResults, MetricsEmbedder, and ChildrenHealthy/Unhealthy
+// via Observation[ExamplepanicStatus].
+type ExamplepanicStatus struct {
+	// ConnectionHealth reports the current connection state ("healthy" or "no connection").
+	// Populated by CollectObservedState from dependencies.IsConnected().
+	ConnectionHealth string `json:"connection_health"`
+}
