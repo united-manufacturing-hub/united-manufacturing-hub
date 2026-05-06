@@ -28,8 +28,6 @@ const workerType = "examplefailing"
 
 // FailingWorker implements the FSM v2 Worker interface for testing failure scenarios.
 type FailingWorker struct {
-	connection Connection
-	deps       *FailingDependencies
 	fsmv2.WorkerBase[ExamplefailingConfig, ExamplefailingStatus, *FailingDependencies]
 }
 
@@ -54,18 +52,16 @@ func NewFailingWorker(
 
 	w := &FailingWorker{}
 	baseDeps := w.InitBase(identity, logger, stateReader)
-	w.deps = NewFailingDependencies(connectionPool, baseDeps)
-	w.BindDeps(w.deps)
-
-	conn, err := connectionPool.Acquire()
-	if err != nil {
-		logger.SentryWarn(deps.FeatureExamples, identity.HierarchyPath, "initial_connection_failed",
-			deps.Err(err))
-	}
-
-	w.connection = conn
+	w.BindDeps(NewFailingDependencies(connectionPool, baseDeps))
 
 	return w, nil
+}
+
+// GetDependencies returns the typed FailingDependencies for use in tests
+// and internal call-sites that need direct access without the any-typed accessor.
+func (w *FailingWorker) GetDependencies() *FailingDependencies {
+	d, _ := w.GetDependenciesAny().(*FailingDependencies)
+	return d
 }
 
 // CollectObservedState returns the current observed state of the failing worker.
@@ -79,32 +75,33 @@ func NewFailingWorker(
 // "I/O isolation rule".
 func (w *FailingWorker) CollectObservedState(_ context.Context, desiredAny fsmv2.DesiredState) (fsmv2.ObservedState, error) {
 	cfg := fsmv2.ExtractConfig[ExamplefailingConfig](desiredAny)
+	d := w.GetDependencies()
 
 	// Advance the observation counter early in COS, before the snapshot is assembled.
 	// The counter increments only while recovery delay is active: cfg.GetRecoveryDelayObservations() > 0
 	// and the current count has not yet reached the threshold. Incrementing here (rather than in a
 	// state action) gives tests deterministic control: each COS call = exactly one observation step.
 	recoveryDelayObservations := cfg.GetRecoveryDelayObservations()
-	if recoveryDelayObservations > 0 && w.deps.GetObservationsSinceFailure() < recoveryDelayObservations {
-		w.deps.IncrementObservationsSinceFailure()
+	if recoveryDelayObservations > 0 && d.GetObservationsSinceFailure() < recoveryDelayObservations {
+		d.IncrementObservationsSinceFailure()
 	}
 
 	connectionHealth := "no connection"
 
-	if w.deps.IsConnected() {
+	if d.IsConnected() {
 		connectionHealth = "healthy"
 	}
 
-	allCyclesComplete := w.deps.GetCurrentCycle() >= cfg.GetFailureCycles()
+	allCyclesComplete := d.GetCurrentCycle() >= cfg.GetFailureCycles()
 
 	status := ExamplefailingStatus{
 		ConnectionHealth:         connectionHealth,
-		ConnectAttempts:          w.deps.GetAttempts(),
-		TicksInConnectedState:    w.deps.GetTicksInConnected(),
-		CurrentCycle:             w.deps.GetCurrentCycle(),
+		ConnectAttempts:          d.GetAttempts(),
+		TicksInConnectedState:    d.GetTicksInConnected(),
+		CurrentCycle:             d.GetCurrentCycle(),
 		AllCyclesComplete:        allCyclesComplete,
-		RecoveryDelayActive:      recoveryDelayObservations > 0 && w.deps.GetObservationsSinceFailure() < recoveryDelayObservations,
-		ObservationsSinceFailure: w.deps.GetObservationsSinceFailure(),
+		RecoveryDelayActive:      recoveryDelayObservations > 0 && d.GetObservationsSinceFailure() < recoveryDelayObservations,
+		ObservationsSinceFailure: d.GetObservationsSinceFailure(),
 	}
 
 	return fsmv2.NewObservation(status), nil

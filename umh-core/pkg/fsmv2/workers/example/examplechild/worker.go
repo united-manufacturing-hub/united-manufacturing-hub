@@ -28,8 +28,6 @@ const workerType = "examplechild"
 
 // ChildWorker implements the FSM v2 Worker interface for resource management.
 type ChildWorker struct {
-	deps       *ExamplechildDependencies
-	connection Connection
 	fsmv2.WorkerBase[ExamplechildConfig, ExamplechildStatus, *ExamplechildDependencies]
 }
 
@@ -54,18 +52,16 @@ func NewChildWorker(
 
 	w := &ChildWorker{}
 	baseDeps := w.InitBase(identity, logger, stateReader)
-	w.deps = NewExamplechildDependencies(connectionPool, baseDeps)
-	w.BindDeps(w.deps)
-
-	conn, err := connectionPool.Acquire()
-	if err != nil {
-		logger.SentryWarn(deps.FeatureExamples, identity.HierarchyPath, "initial_connection_failed",
-			deps.Err(err))
-	}
-
-	w.connection = conn
+	w.BindDeps(NewExamplechildDependencies(connectionPool, baseDeps))
 
 	return w, nil
+}
+
+// GetDependencies returns the typed ExamplechildDependencies for use in tests
+// and internal call-sites that need direct access without the any-typed accessor.
+func (w *ChildWorker) GetDependencies() *ExamplechildDependencies {
+	d, _ := w.GetDependenciesAny().(*ExamplechildDependencies)
+	return d
 }
 
 // CollectObservedState returns the current observed state of the child worker.
@@ -74,7 +70,7 @@ func NewChildWorker(
 func (w *ChildWorker) CollectObservedState(_ context.Context, _ fsmv2.DesiredState) (fsmv2.ObservedState, error) {
 	connectionHealth := "no connection"
 
-	if w.deps.IsConnected() {
+	if w.GetDependencies().IsConnected() {
 		connectionHealth = "healthy"
 	}
 
