@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 )
 
@@ -51,15 +52,27 @@ type WorkerSnapshot[TConfig any, TStatus any] struct {
 	Observed Observation[TStatus]
 }
 
-// ShouldStop returns true when the worker should transition to stopped.
-// Returns the user-shutdown signal (Desired.IsShutdownRequested()).
+// ShouldStop reports whether the worker should be in (or transitioning to) a stopped state.
+// It is the umbrella check for all three stop signals:
+//   - IsShutdownRequested (permanent removal — Phase 1 absent-from-specs, SignalNeedsRestart,
+//     graceful shutdown, supervisor self-protection). Renamed to IsBeingRemoved in PR5.3.
+//   - IsDisabled (transient parent-disable — ChildSpec.Enabled=false set by CHANGE-19 reducer).
+//   - Config.GetState() == DesiredStateStopped (user-driven stop via YAML).
 //
-// Parent-driven stop intent now flows through the same flag: a parent that
-// wants a child stopped marks the child's ChildSpec Enabled=false, which the
-// reducer translates into IsShutdownRequested=true on the child. There is no
-// longer a separate parent-mapped-state path.
+// Use ShouldStop in non-Stopped state files where the source doesn't matter ("just stop").
+// In StoppedState, distinguish IsBeingRemoved (signal NeedsRemoval) from the others
+// (stay resident); see helpers.StoppedNext (PR5.9) for the canonical pattern.
 func (s WorkerSnapshot[TConfig, TStatus]) ShouldStop() bool {
-	return s.Desired.IsShutdownRequested()
+	if s.Desired.IsShutdownRequested() {
+		return true
+	}
+	if s.Desired.IsDisabled() {
+		return true
+	}
+	if cfg, ok := any(&s.Desired.Config).(interface{ GetState() string }); ok {
+		return cfg.GetState() == config.DesiredStateStopped
+	}
+	return false
 }
 
 // ConvertWorkerSnapshot type-asserts the raw snapshot from State.Next() into a

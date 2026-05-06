@@ -138,7 +138,7 @@ var _ = Describe("ConvertWorkerSnapshot", func() {
 })
 
 var _ = Describe("ShouldStop", func() {
-	It("returns true when Desired.IsShutdownRequested() is true", func() {
+	It("returns true when Desired.IsShutdownRequested() is true (other signals false)", func() {
 		wds := fsmv2.WrappedDesiredState[workerTestConfig]{}
 		wds.SetShutdownRequested(true)
 		snap := fsmv2.WorkerSnapshot[workerTestConfig, workerTestStatus]{
@@ -147,7 +147,49 @@ var _ = Describe("ShouldStop", func() {
 		Expect(snap.ShouldStop()).To(BeTrue())
 	})
 
-	It("returns false when Desired.IsShutdownRequested() is false", func() {
+	It("returns true when Desired.IsDisabled() is true (other signals false)", func() {
+		wds := fsmv2.WrappedDesiredState[workerTestConfig]{}
+		wds.SetDisabled(true)
+		snap := fsmv2.WorkerSnapshot[workerTestConfig, workerTestStatus]{
+			Desired: wds,
+		}
+		Expect(snap.ShouldStop()).To(BeTrue())
+	})
+
+	It("returns true when Config.GetState() == \"stopped\" (other signals false)", func() {
+		wds := fsmv2.WrappedDesiredState[userSpecConfig]{
+			Config: userSpecConfig{
+				BaseUserSpec: config.BaseUserSpec{State: config.DesiredStateStopped},
+			},
+		}
+		snap := fsmv2.WorkerSnapshot[userSpecConfig, workerTestStatus]{
+			Desired: wds,
+		}
+		Expect(snap.ShouldStop()).To(BeTrue())
+	})
+
+	It("returns false when all three signals are negative", func() {
+		wds := fsmv2.WrappedDesiredState[userSpecConfig]{
+			Config: userSpecConfig{
+				BaseUserSpec: config.BaseUserSpec{State: config.DesiredStateRunning},
+			},
+		}
+		snap := fsmv2.WorkerSnapshot[userSpecConfig, workerTestStatus]{
+			Desired: wds,
+		}
+		Expect(snap.ShouldStop()).To(BeFalse())
+	})
+
+	It("returns true via IsShutdownRequested when Config does not implement GetState()", func() {
+		wds := fsmv2.WrappedDesiredState[workerTestConfig]{}
+		wds.SetShutdownRequested(true)
+		snap := fsmv2.WorkerSnapshot[workerTestConfig, workerTestStatus]{
+			Desired: wds,
+		}
+		Expect(snap.ShouldStop()).To(BeTrue())
+	})
+
+	It("returns false when Config does not implement GetState() and other signals are false", func() {
 		snap := fsmv2.WorkerSnapshot[workerTestConfig, workerTestStatus]{
 			Desired: fsmv2.WrappedDesiredState[workerTestConfig]{},
 		}
