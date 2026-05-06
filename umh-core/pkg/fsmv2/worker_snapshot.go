@@ -53,15 +53,20 @@ type WorkerSnapshot[TConfig any, TStatus any] struct {
 }
 
 // ShouldStop reports whether the worker should be in (or transitioning to) a stopped state.
-// It is the umbrella check for all three stop signals:
-//   - IsBeingRemoved (permanent removal — Phase 1 absent-from-specs, SignalNeedsRestart,
-//     graceful shutdown, supervisor self-protection). Renamed from IsShutdownRequested in PR5.3.
-//   - IsDisabled (transient parent-disable — ChildSpec.Enabled=false set by CHANGE-19 reducer).
-//   - Config.GetState() == DesiredStateStopped (user-driven stop via YAML).
+// It is the umbrella OR over the three stop signals PR5 disambiguated:
 //
-// Use ShouldStop in non-Stopped state files where the source doesn't matter ("just stop").
-// In StoppedState, distinguish IsBeingRemoved (signal NeedsRemoval) from the others
-// (stay resident); see helpers.StoppedNext (PR5.9) for the canonical pattern.
+//   - IsBeingRemoved (permanent: cases C, D, E, F — Phase 1 absent-from-specs,
+//     SignalNeedsRestart, graceful process shutdown, supervisor self-protection).
+//   - IsDisabled (transient parent-disable: case B — ChildSpec.Enabled=false set
+//     by the CHANGE-19 reducer).
+//   - Config.GetState() == DesiredStateStopped (transient user-driven stop:
+//     case A — user writes state: stopped in YAML).
+//
+// Use ShouldStop in non-Stopped state files where the source doesn't matter
+// ("just stop"). In StoppedState, discriminate IsBeingRemoved (emit
+// SignalNeedsRemoval, tear down) from the transient signals (stay resident);
+// see helpers.StoppedNext for the canonical three-branch pattern. Full case
+// table in pkg/fsmv2/CLAUDE.md "Stopping a worker — six cases, three signals".
 func (s WorkerSnapshot[TConfig, TStatus]) ShouldStop() bool {
 	if s.Desired.IsBeingRemoved() {
 		return true

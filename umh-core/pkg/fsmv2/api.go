@@ -81,21 +81,43 @@ type TimestampProvider interface {
 // IsBeingRemoved() reader method (against the BeingRemoved field) and the
 // SetBeingRemoved setter (RemovalRequestable interface). State files read the
 // flag through snap.Desired.IsBeingRemoved().
+//
+// IsBeingRemoved is the permanent-removal signal — one of three primitives PR5
+// disambiguated. Transient parent-disable lives on the Disablable interface;
+// user-driven "stopped" lives on TConfig via BaseUserSpec.GetState(). See
+// WorkerSnapshot.ShouldStop for the umbrella OR, and pkg/fsmv2/CLAUDE.md
+// "Stopping a worker — six cases, three signals" for the full case table.
 type DesiredState interface {
-	// IsBeingRemoved is set by supervisor to initiate graceful removal of the
-	// worker. States should check this first in their Next() method.
+	// IsBeingRemoved is set by the supervisor to initiate permanent teardown
+	// of this worker instance. Sources: parent omits child from spec list,
+	// state emits SignalNeedsRestart, graceful process shutdown, supervisor
+	// self-protection. States should check this first in their Next() method
+	// (or use the umbrella WorkerSnapshot.ShouldStop for non-Stopped states
+	// that don't need to discriminate the source).
 	IsBeingRemoved() bool
 }
 
-// RemovalRequestable allows setting the shutdown flag on any DesiredState.
-// Embed config.BaseDesiredState (from pkg/fsmv2/config) to satisfy this interface.
+// RemovalRequestable allows the supervisor to set the permanent-removal flag
+// on any DesiredState. Embed config.BaseDesiredState (from pkg/fsmv2/config)
+// to satisfy this interface. Setting BeingRemoved=true is irreversible from
+// the worker's perspective — the supervisor will tear the worker down and
+// remove it from s.children.
 type RemovalRequestable interface {
 	SetBeingRemoved(bool)
 }
 
 // Disablable is implemented by desired states that can be transiently disabled
 // by their parent (ChildSpec.Enabled=false). Distinct from RemovalRequestable
-// (permanent removal) and Config-level state stops.
+// (permanent removal — case C/D/E/F) and Config-level "stopped" (user pause —
+// case A): IsDisabled is case B, the parent's per-tick "pause this child"
+// signal. The CHANGE-19 reducer in supervisor/reconciliation.go writes
+// IsDisabled from the parent's ChildSpec.Enabled flag every tick. Disabled
+// children stay resident in s.children and resume when the parent flips
+// Enabled=true again.
+//
+// WrappedDesiredState satisfies this interface for all WorkerBase-using
+// workers; bespoke DesiredState types implement it directly if they need to
+// participate in the parent-driven pause flow.
 type Disablable interface {
 	SetDisabled(bool)
 	IsDisabled() bool

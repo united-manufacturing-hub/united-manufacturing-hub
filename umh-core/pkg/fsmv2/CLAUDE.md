@@ -4,19 +4,22 @@ This file captures patterns and insights for working with the FSMv2 framework.
 
 ## Architecture Test Compliance
 
-The `architecture_test.go` validates ALL workers via file-system scanning (not runtime reflection). Compliance must be satisfied from day one - tests will fail if any invariant is violated.
+The `architecture_test.go` validates a subset of worker invariants via file-system scanning (not runtime reflection). The CI-enforced rules will fail builds; the conventions are reviewer-enforced — code authors and reviewers should hold the line.
 
 **Key invariants to follow:**
 
-| Rule | Description |
-|------|-------------|
-| Empty State Structs | States have no fields (except embedded base) |
-| Shutdown Check First | Check `IsBeingRemoved` as FIRST conditional in `Next()` |
-| State XOR Action | Return state OR action, never both |
-| Single Type Assertion | `Next()` has exactly one type assertion at entry |
-| Pure DeriveDesiredState | No dependency access - only use `spec` parameter |
+| Rule | Description | Enforcement |
+|------|-------------|-------------|
+| Empty State Structs | States have no fields (except embedded base) | Convention |
+| Stop Check First | Check `IsBeingRemoved` (or `ShouldStop`) as FIRST conditional in `Next()` | Convention |
+| State XOR Action | Return state OR action, never both | CI (`ValidateStateXORAction`) |
+| No Nil State Returns | `Transition`'s state argument is non-nil | CI (`ValidateNoNilStateReturns`) |
+| Signal/State Mutual Exclusion | A `Next()` does not return both `SignalNeedsRemoval` and a non-self state | CI (`ValidateSignalStateMutualExclusion`) |
+| StoppingState Progress | StoppingState catch-all must not self-return without an action | CI (`ValidateStoppingStateNoCatchAllSelfReturn`) |
+| Single Type Assertion | `Next()` has exactly one type assertion at entry | Convention |
+| Pure DeriveDesiredState | No dependency access - only use `spec` parameter | Convention |
 
-Run architecture tests after every change:
+Run CI-enforced architecture tests after every change:
 ```bash
 go test ./pkg/fsmv2/... -run "Architecture" -v
 ```
@@ -38,31 +41,71 @@ func (w *ParentWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState,
 
 Children aggregation (health counts) is handled by the supervisor, not in `CollectObservedState`. The supervisor calls `SetChildrenCounts()` after collection.
 
-## Stopping a child worker — two options
+## Stopping a worker — six cases, three signals
 
-Parents have two semantically distinct ways to stop children:
+A worker can be wanted-stopped for six semantically distinct reasons. PR5
+disambiguated these into three primitive signals on `WrappedDesiredState`,
+plus the umbrella check `WorkerSnapshot.ShouldStop()`.
 
-1. **`ChildSpec.Enabled = false`** — "disable this child, possibly preserve state in future". The CHANGE-19 reducer (`supervisor/reconciliation.go`) translates `Enabled=false` into `IsBeingRemoved=true` on resident children synchronously, before the child's tick. For non-resident specs (cold boot), the supervisor skips creation entirely (PR3-I).
-2. **Omit the spec from `[]config.ChildSpec{}`** — "this child should not exist". The supervisor's Phase-1 absent-from-specs path drives full teardown (`RequestRemoval` → child's `NeedsRemoval` → removal from `s.workers`).
+### The three primitive signals
 
-Today, both options converge to "child gone" because the default `StoppedState.Next()` pattern signals `NeedsRemoval` on `IsBeingRemoved`. Internal state (counters, connection handles, pending buffers) is lost; respawn starts fresh.
+| Signal | Permanence | Source | Meaning |
+|--------|------------|--------|---------|
+| `Desired.IsBeingRemoved()` | Permanent (this instance gone) | Supervisor (`SetBeingRemoved`) | Tear down: emit `SignalNeedsRemoval` from `Stopped`, lose retained state |
+| `Desired.IsDisabled()` | Transient (parent says pause) | CHANGE-19 reducer (parent's `ChildSpec.Enabled=false`) | Stop and stay resident; flipping `Enabled=true` resumes |
+| `Desired.Config.GetState()=="stopped"` | Transient (user says pause) | User YAML (`state: stopped`) | Stop and stay resident; flipping back to `running` resumes |
 
-Default `StoppedState.Next()` shape:
+`WorkerSnapshot.ShouldStop()` is the umbrella OR of all three. State files
+that don't care about the source ("just stop") use it directly. The Stopped
+state needs to discriminate (permanent → emit removal; transient → stay
+resident); see `helpers.StoppedNext` below for the canonical pattern.
+
+### The six cases
+
+| # | Case | Source | Permanence | Mapped signal |
+|---|------|--------|------------|---------------|
+| A | User `state: stopped` (YAML) | user config | Transient | `Config.GetState()=="stopped"` |
+| B | Parent disable (`ChildSpec.Enabled=false`) | parent's `renderChildren` | Transient | `Desired.IsDisabled()` |
+| C | Parent remove (omit from spec list) | parent returns shorter `[]ChildSpec` | Permanent | `Desired.IsBeingRemoved()` |
+| D | Self-driven restart (`SignalNeedsRestart`) | worker self | Permanent (this instance) | `Desired.IsBeingRemoved()` |
+| E | Graceful process shutdown | process exit | Permanent (this process) | `Desired.IsBeingRemoved()` |
+| F | Supervisor self-protection (collector unresponsive) | Layer-3 escalation | Permanent (this instance) | `Desired.IsBeingRemoved()` |
+
+Cases C, D, E, F all converge on `IsBeingRemoved=true` — they are different
+upstream causes for the same "this instance must be torn down" outcome.
+Cases A and B are the genuinely transient ones: the worker stops but stays
+resident in `s.children`, ready to resume when the signal clears.
+
+### Canonical Stopped state — `helpers.StoppedNext`
+
+Most workers' `StoppedState.Next()` is a three-branch decision over the
+three signals. The framework provides `internal/helpers.StoppedNext` so
+state files don't have to reimplement it:
 
 ```go
-if snap.Desired.IsBeingRemoved() {
-    return fsmv2.Transition(s, fsmv2.SignalNeedsRemoval, nil, "shutdown requested", nil)
+func (s *StoppedState) Next(snapAny any) fsmv2.NextResult[any, any] {
+    snap := fsmv2.ConvertWorkerSnapshot[Config, Status](snapAny)
+    return helpers.StoppedNext(s, snap, &TryingToConnectState{}, "attempting to connect")
 }
-if !snap.ShouldStop() {
-    return fsmv2.Transition(&NextState{}, fsmv2.SignalNone, nil, "advancing", nil)
-}
-return fsmv2.Transition(s, fsmv2.SignalNone, nil, "staying stopped", nil)
 ```
 
-### When to use which
+Three branches:
 
-- **`Enabled=false`**: per-child temporary disable. Useful when the parent wants finer control than "all-or-nothing" (e.g., one of N children disabled by config).
-- **`[]ChildSpec{}`**: parent's whole "stopped" semantics. The parent is itself stopped/draining; children should not exist during this period.
+1. **`Desired.IsBeingRemoved()`** → `SignalNeedsRemoval` (permanent: cases C, D, E, F)
+2. **`!ShouldStop()`** → advance to the next state (signal cleared; resume)
+3. **else** → stay in `Stopped` (transient: cases A and B; preserves in-memory state)
+
+Workers with custom Stopped semantics (children rendering, additional
+preconditions before advancing, custom signals) hand-roll the three branches
+and keep `helpers.StoppedNext` as the reference. `transport/state_stopped.go`
+is one such case — it emits children even while stopped.
+
+### When to use which signal
+
+- **`Enabled=false` (case B)**: per-child transient disable. The parent wants finer control than "all-or-nothing" (e.g., one of N children paused by config). Worker stays resident; flipping back to `Enabled=true` resumes.
+- **Omit child from spec list (case C)**: parent's "this child should not exist anymore." Drives the supervisor's Phase-1 absent-from-specs teardown via `RequestRemoval` → `IsBeingRemoved=true` → `NeedsRemoval` → removal from `s.children`.
+- **`SetBeingRemoved` directly (cases D, E, F)**: framework-driven removal — `SignalNeedsRestart` from a state, graceful process shutdown, or supervisor self-protection. State files don't write this flag; they emit signals and let the supervisor set it.
+- **Config `state: stopped` (case A)**: user-facing stop. The worker stays resident; the user can resume by editing config back to `state: running`.
 
 ### Future: state-preservation across respawn
 
@@ -71,9 +114,11 @@ Designed but not yet implemented. See `003_klaus/artifacts/2026-04-09_fsmv2_stat
 1. **`cse:"retain"` struct tag**: workers annotate `Status` fields that should survive restart. The collector merges retained values from `prevObserved` into the fresh COS-returned struct, only when the fresh value is zero. Workers don't change code — just struct tags.
 2. **`DependencyHydrator` interface**: optional `HydrateDependencies(ctx, prevObs)` called once before first COS, for workers whose Dependencies must be warm before any state observation (e.g., CertFetcher's `CertHandler` map for TLS).
 
-When that lands, `Enabled=false` becomes truly state-preserving (children stay resident; their retained fields survive the disable cycle). `[]ChildSpec{}` continues to mean full removal.
-
-Until then, both options behave the same. Choose based on which intent reads more clearly at the call site.
+This design lands on top of the disambiguated signals: `IsDisabled` (case B,
+transient) keeps the worker resident, so retained state on `Status` survives
+the disable cycle automatically once `cse:"retain"` is implemented.
+`IsBeingRemoved` (cases C, D, E, F) tears the worker down, so retained state
+is lost — that is the intended boundary.
 
 ## Channel Singleton Pattern
 
@@ -105,9 +150,11 @@ type RunningState struct {
 func (s *RunningState) Next(snapAny any) fsmv2.NextResult[any, any] {
     snap := helpers.ConvertSnapshot[...](snapAny)  // Single type assertion
 
-    // Shutdown check FIRST
+    // Stop check FIRST — IsBeingRemoved (permanent) routes to StoppingState.
+    // Non-Stopped states that don't care about source can use snap.ShouldStop()
+    // instead (umbrella over IsBeingRemoved + IsDisabled + Config "stopped").
     if snap.Desired.IsBeingRemoved() {
-        return fsmv2.Transition(&StoppingState{}, fsmv2.SignalNone, nil, "Shutdown requested")
+        return fsmv2.Transition(&StoppingState{}, fsmv2.SignalNone, nil, "removal requested")
     }
 
     // Business logic — pass typed actions directly, the framework
@@ -123,9 +170,9 @@ func (s *RunningState) Next(snapAny any) fsmv2.NextResult[any, any] {
 
 `fsmv2.Transition` is the canonical return shape for state files. It is a non-generic alias for `fsmv2.Result[any, any]` that also accepts typed `Action[TDeps]` values directly.
 
-> **Deprecated — removed in PR3**
+> **Compat seam — migration window only**
 >
-> `fsmv2.Result[any, any](...)` and the `fsmv2.WrapAction[TDeps](&MyAction{})` wrapper remain as a compat seam for workers still mid-migration but will be deleted in PR3. New state files must use `fsmv2.Transition` + direct `&MyAction{}` construction.
+> `fsmv2.Result[any, any](...)` and the `fsmv2.WrapAction[TDeps](&MyAction{})` wrapper remain as a compat seam for any code still using the old shape. Delete once all callsites use `fsmv2.Transition` + direct `&MyAction{}` construction. New state files must NOT use `Result`/`WrapAction`.
 
 ## Reason Strings in State Transitions
 
@@ -170,7 +217,7 @@ New workers should use `WorkerBase[TConfig, TStatus, TDeps]` instead of the lega
 
 - **`WorkerBase[TConfig, TStatus, TDeps]`** — embed in your worker struct; provides `InitBase`, `Config()`, `DeriveDesiredState`. Use `register.NoDeps` as `TDeps` for workers with no custom deps.
 - **`NewObservation[TStatus](status)`** — preferred constructor for `CollectObservedState` return values; the collector fills CollectedAt, framework metrics, action history, and accumulated worker metrics automatically after COS returns
-- **`Observation[TStatus]`** — flat JSON serialization with framework fields (state, shutdown, children counts)
+- **`Observation[TStatus]`** — flat JSON serialization with framework fields (state, isBeingRemoved, children counts)
 - **`WrappedDesiredState[TConfig]`** — promotes `BaseDesiredState` fields alongside TConfig
 - **`WorkerSnapshot[TConfig, TStatus]`** — typed snapshot for state `Next()` methods
 - **`ConvertWorkerSnapshot[TConfig, TStatus]`** — entry-point type assertion in states
@@ -178,7 +225,7 @@ New workers should use `WorkerBase[TConfig, TStatus, TDeps]` instead of the lega
 - **`WrapAction[TDeps]`** — *(deprecated, removed in PR3)* adapts typed actions to `Action[any]`. Prefer passing `&MyAction{}` directly to `fsmv2.Transition` — the framework auto-wraps via reflection.
 - **`register.Worker[TConfig, TStatus, TDeps]`** — one-line registration (factory + supervisor + CSE types). Use `register.NoDeps` for zero-dep workers.
 
-**Architecture validators** accept both APIs: `ConvertWorkerSnapshot` and `ConvertSnapshot` are valid entry points. The shutdown check uses `snap.ShouldStop()` (merged user-shutdown + parent-stop signal) or `snap.Desired.IsBeingRemoved` (raw user-shutdown flag, used when the state needs to distinguish self-driven shutdown from parent-driven stop). The deprecated `snap.IsBeingRemoved` field is gone.
+**Architecture validators** accept both APIs: `ConvertWorkerSnapshot` and `ConvertSnapshot` are valid entry points. The stop check uses `snap.ShouldStop()` (umbrella over `IsBeingRemoved`, `IsDisabled`, and `Config.GetState()=="stopped"`) for non-Stopped states that just need "should I stop?". Stopped states discriminate further: `snap.Desired.IsBeingRemoved()` for permanent removal (emit `SignalNeedsRemoval`) versus the transient signals (stay resident). `helpers.StoppedNext` encodes the canonical pattern. The deprecated flat `snap.IsBeingRemoved` field is gone — read it via `snap.Desired.IsBeingRemoved()`.
 
 **Capability interfaces** (optional, detected via type assertion on first instantiation):
 - `ActionProvider` — `Actions() map[string]Action[any]`
@@ -311,6 +358,10 @@ This prevents failure rate dilution: if idle ticks feed phantom "successes" into
 - CI enforced: `ValidateStoppingStateNoCatchAllSelfReturn` in `internal/validator/state.go`
 - See any `state_stopping.go` for the pattern
 
-### Parent-driven stop flows through IsBeingRemoved
+### Parent-driven stop flows through IsDisabled
 
-There is no longer a separate `ParentMappedState` signal on `Observation[T]`. When a parent wants a child stopped it sets `ChildSpec.Enabled=false`; the CHANGE-19 reducer translates that into `IsBeingRemoved=true` on the child synchronously. State files therefore only need `snap.ShouldStop()` (which now ORs `Desired.IsBeingRemoved`, `Desired.IsDisabled()`, and Config-level "stopped") — there is no parent-mapped-state path for child workers using `Observation[T]` to consult.
+There is no longer a separate `ParentMappedState` signal on `Observation[T]`. When a parent wants a child paused it sets `ChildSpec.Enabled=false`; the CHANGE-19 reducer (`supervisor/reconciliation.go`) translates that into `IsDisabled=true` on the child synchronously, before the child's tick. The child stays resident in `s.children` and resumes when the parent flips `Enabled=true` again.
+
+When a parent wants a child gone permanently it omits the spec from its `[]ChildSpec` return; the supervisor's Phase-1 absent-from-specs path drives `RequestRemoval` → `IsBeingRemoved=true` → `SignalNeedsRemoval` from Stopped → removal from `s.children`. This is one-way: a removed child does not come back without a fresh spec.
+
+State files therefore use `snap.ShouldStop()` (umbrella over `IsBeingRemoved`, `IsDisabled`, and Config "stopped") for non-Stopped states that don't care about the source, and discriminate in `Stopped` via `helpers.StoppedNext`. There is no parent-mapped-state path for child workers using `Observation[T]` to consult.

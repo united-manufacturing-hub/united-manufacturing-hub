@@ -21,8 +21,8 @@ import (
 	"hash/fnv"
 )
 
-// BaseDesiredState provides common shutdown functionality for all DesiredState types.
-// Workers embed this struct to get consistent shutdown handling without boilerplate.
+// BaseDesiredState provides the permanent-removal signal for all DesiredState types.
+// Workers embed this struct to get consistent removal handling without boilerplate.
 //
 // Example:
 //
@@ -37,24 +37,30 @@ import (
 // # Lifecycle Control Invariant
 //
 // The FSM controls worker lifecycle through state transitions, not through custom bool fields.
-// Do not add fields like ShouldRun, IsRunning, Enabled, or Active to your DesiredState.
+// Do not add fields like ShouldRun, IsRunning, or Active to your DesiredState. Per-child
+// transient pause is signalled via the separate IsDisabled flag on WrappedDesiredState
+// (set by the CHANGE-19 reducer from ChildSpec.Enabled=false), not on BaseDesiredState.
 //
-// Correct lifecycle control:
-//   - BeingRemoved: Inherited from this type. Set by supervisor for graceful shutdown via
-//     SetBeingRemoved; read via the IsBeingRemoved() method.
-//     Parent-driven stop flows through the same flag: parent sets ChildSpec.Enabled=false,
-//     which the CHANGE-19 reducer translates into BeingRemoved=true on the child.
-//   - User-facing state ("running"/"stopped"): Read from TConfig via BaseUserSpec.GetState() in
-//     state files. The wrapper-level BaseDesiredState does not carry a State field of its own.
+// PR5 disambiguated stop signals into three primitives. BaseDesiredState carries only one:
 //
-// Correct ShouldBeRunning() implementations:
+//   - BeingRemoved (this type): Permanent — set when this instance must be torn down.
+//     Sources: parent omits child from spec list, SignalNeedsRestart, graceful process
+//     shutdown, supervisor self-protection. Read via IsBeingRemoved(); set via
+//     SetBeingRemoved (RemovalRequestable interface).
+//   - IsDisabled (on WrappedDesiredState): Transient parent-disable. Worker stays resident.
+//   - Config.GetState()=="stopped": Transient user-driven stop. Worker stays resident.
 //
-//	func (s *MyDesiredState) ShouldBeRunning() bool {
-//	    return !s.IsBeingRemoved()
-//	}
+// State files use snap.ShouldStop() as the umbrella over all three (non-Stopped states),
+// or snap.Desired.IsBeingRemoved() to discriminate in Stopped (permanent → emit
+// SignalNeedsRemoval; transient → stay resident). See helpers.StoppedNext for the
+// canonical Stopped pattern, and pkg/fsmv2/CLAUDE.md "Stopping a worker — six cases,
+// three signals" for the full case table.
+//
+// User-facing state ("running"/"stopped") is read from TConfig via BaseUserSpec.GetState()
+// in state files. The wrapper-level BaseDesiredState does not carry a State field of its own.
 //
 // Custom lifecycle fields are forbidden; the framework controls lifecycle
-// exclusively via ShouldStop() and reconciliation.
+// exclusively via the three signals above and reconciliation.
 type BaseDesiredState struct {
 	BeingRemoved bool `json:"isBeingRemoved" yaml:"isBeingRemoved"` //nolint:tagliatelle // Match JSON field name for API compatibility
 }
@@ -196,30 +202,43 @@ type ChildSpec struct {
 	WorkerType   string         `json:"workerType" yaml:"workerType"` // Type of worker to create (registered worker factory key)
 
 	// Enabled is the parent's per-tick enable signal for this child. The CHANGE-19
-	// reducer translates it to IsBeingRemoved on the child's desired state every
+	// reducer translates it to IsDisabled on the child's WrappedDesiredState every
 	// tick. Three-state semantics:
 	//
-	//   - Name present, Enabled: true  → child runs (reducer writes IsBeingRemoved=false)
-	//   - Name present, Enabled: false → stopped-but-resident: child reaches Stopped and stays
-	//     there; supervisor remains resident in s.children, NOT placed in s.pendingRemoval
-	//   - Name absent from spec list   → graceful despawn (full removal via pendingRemoval)
+	//   - Name present, Enabled: true  → child runs (reducer writes IsDisabled=false)
+	//   - Name present, Enabled: false → stopped-but-resident: reducer writes
+	//     IsDisabled=true; child reaches Stopped via ShouldStop and stays there;
+	//     supervisor remains resident in s.children, NOT placed in s.pendingRemoval
+	//   - Name absent from spec list   → graceful despawn (full removal via pendingRemoval,
+	//     which sets IsBeingRemoved=true permanently)
 	//
 	// The zero value (§4-C LOCKED) is false: ChildSpec literals that omit Enabled
 	// produce a stopped-but-resident child. Parents that want a running child must
-	// explicitly set Enabled: true in their renderChildren body.
+	// explicitly set Enabled: true in their renderChildren body. Use NewChildSpec
+	// to set Enabled:true by default.
 	//
-	// Pause/resume flow: setting Enabled=false drives the child to Stopped; setting
-	// Enabled=true again writes IsBeingRemoved=false, and the child's state machine
-	// transitions from Stopped back to TryingToStart on the next tick.
+	// IsDisabled vs IsBeingRemoved: Enabled=false maps to the transient IsDisabled
+	// signal — the child stays resident and resumes when the parent flips Enabled
+	// back. Permanent removal (cases C/D/E/F: spec absence, SignalNeedsRestart,
+	// process shutdown, supervisor self-protection) goes through IsBeingRemoved
+	// instead, which tears the child down. PR5 disambiguated these into separate
+	// fields; before PR5 they were conflated as "ShutdownRequested". See
+	// pkg/fsmv2/CLAUDE.md "Stopping a worker — six cases, three signals".
+	//
+	// Pause/resume flow: setting Enabled=false drives the child to Stopped via
+	// IsDisabled; setting Enabled=true again writes IsDisabled=false, and the
+	// child's state machine transitions from Stopped back to TryingToStart on
+	// the next tick (helpers.StoppedNext takes the !ShouldStop branch).
 	//
 	// One-way stop guarantee: once a child enters TryingToStop, it completes the stop
-	// before accepting a new IsBeingRemoved=false signal. The supervisor only
+	// before accepting a new IsDisabled=false signal. The supervisor only
 	// manages the flag; the child's state machine enforces the trajectory.
 	//
-	// Children read snap.Desired.IsBeingRemoved() and never read Enabled directly
-	// (Design Intent §4 no-Parent-references-in-children). Implemented by the CHANGE-19
-	// reducer in supervisor/reconciliation.go (the spec→IsBeingRemoved translation
-	// runs at the start of reconcileChildren, before Phase 1's pendingRemoval writes).
+	// Children read snap.ShouldStop() (umbrella) or snap.Desired.IsDisabled()
+	// (specific) and never read Enabled directly (Design Intent §4
+	// no-Parent-references-in-children). Implemented by the CHANGE-19 reducer in
+	// supervisor/reconciliation.go (the spec→IsDisabled translation runs at the
+	// start of reconcileChildren, before Phase 1's pendingRemoval writes).
 	Enabled bool `json:"enabled" yaml:"enabled"`
 }
 
@@ -237,7 +256,7 @@ func NewChildSpec(name, workerType string, userSpec UserSpec) ChildSpec {
 }
 
 // DisableAll marks every ChildSpec in the slice as Enabled=false. Used by
-// parent state machines that want children resident-but-shutdown via the
+// parent state machines that want children resident-but-paused via the
 // CHANGE-19 reducer (e.g. parent in Stopped/Stopping/transient states).
 // Returns the slice for chaining. Mutates in place.
 //
@@ -245,11 +264,17 @@ func NewChildSpec(name, workerType string, userSpec UserSpec) ChildSpec {
 //
 //	return fsmv2.Transition(..., config.DisableAll(pkg.RenderChildren(snap)))
 //
-// CHANGE-19 reducer (supervisor/reconciliation.go ~line 1660) translates
-// Enabled=false into RequestRemoval synchronously before the child's tick,
-// so children stay resident in supervisor.children with IsBeingRemoved
-// set. Flipping back to Enabled=true issues ClearRemoval for clean
-// resume.
+// CHANGE-19 reducer (supervisor/reconciliation.go) translates Enabled=false
+// into IsDisabled=true on the child's WrappedDesiredState synchronously before
+// the child's tick, so children stay resident in supervisor.children with the
+// transient IsDisabled flag set. Flipping back to Enabled=true clears
+// IsDisabled and the child resumes from Stopped on the next tick.
+//
+// DisableAll signals transient pause (case B), not removal — children retain
+// their identity and (once retain/hydrate lands per
+// 003_klaus/artifacts/2026-04-09_fsmv2_state_recovery_design.md) their
+// in-memory state. For permanent removal, return a shorter spec list instead
+// (case C, drives IsBeingRemoved=true).
 func DisableAll(specs []ChildSpec) []ChildSpec {
 	for i := range specs {
 		specs[i].Enabled = false
@@ -590,8 +615,11 @@ func (v ChildrenView) Counts() (healthy, unhealthy int) {
 // DesiredState represents what we want the system to be.
 // This is returned by Worker.DeriveDesiredState() and used by State.Next() for decisions.
 //
-// The supervisor injects shutdown requests by setting IsBeingRemoved = true.
-// Workers must check IsBeingRemoved first in their State.Next() implementations.
+// The supervisor injects permanent removal by setting IsBeingRemoved=true via
+// SetBeingRemoved (RemovalRequestable). Workers check IsBeingRemoved (or the
+// umbrella ShouldStop) first in their State.Next() implementations. Transient
+// parent-disable goes through the separate IsDisabled flag on WrappedDesiredState
+// (CHANGE-19 reducer, written from ChildSpec.Enabled=false).
 //
 // # Children Management
 //
@@ -608,11 +636,11 @@ func (v ChildrenView) Counts() (healthy, unhealthy int) {
 //	    }, nil
 //	}
 //
-// Example with shutdown:
+// Example with permanent removal:
 //
 //	DesiredState{
-//	    BaseDesiredState: BaseDesiredState{BeingRemoved: true},  // Triggers shutdown sequence
-//	    ChildrenSpecs:    nil,                                        // Children removed during shutdown
+//	    BaseDesiredState: BaseDesiredState{BeingRemoved: true},  // Triggers teardown
+//	    ChildrenSpecs:    nil,                                   // Children removed alongside parent
 //	}
 type DesiredState struct {
 	OriginalUserSpec interface{}      `json:"-"                          yaml:"-"` // Captures the input that produced this DesiredState (for debugging/traceability); not serialized (would emit untyped any over the wire per §17).
@@ -621,23 +649,31 @@ type DesiredState struct {
 }
 
 // NOTE: IsBeingRemoved() and SetBeingRemoved() are provided by embedded BaseDesiredState.
-// The BeingRemoved field is the canonical source of truth for shutdown state.
+// The BeingRemoved field is the canonical signal for permanent removal.
 //
-// Shutdown flow:
-//  1. Supervisor sets BeingRemoved = true via SetBeingRemoved()
-//  2. State.Next() calls IsBeingRemoved() → returns true
-//  3. State transitions to shutdown/cleanup states
-//  4. Eventually returns SignalNeedsRemoval
-//  5. Supervisor removes worker from system
+// Permanent removal flow (cases C/D/E/F per CLAUDE.md):
+//  1. Trigger: parent omits child from spec list, SignalNeedsRestart from a state,
+//     graceful process shutdown, or supervisor self-protection
+//  2. Supervisor sets BeingRemoved = true via SetBeingRemoved()
+//  3. State.Next() calls IsBeingRemoved() → returns true
+//  4. State transitions to Stopping → Stopped
+//  5. Stopped emits SignalNeedsRemoval
+//  6. Supervisor removes worker from system
+//
+// Transient pause (cases A/B) does NOT flow through BeingRemoved — see
+// WrappedDesiredState.IsDisabled (parent disable) and Config.GetState()
+// (user "stopped"). Workers stay resident on transient signals.
 //
 // Example usage in State.Next():
 //
 //	func (s RunningState) Next(snapshot fsmv2.Snapshot) (State, Signal, Action) {
 //	    desired := snapshot.Desired.(types.DesiredState)
-//	    // Always check shutdown first
+//	    // Always check stop first — IsBeingRemoved (permanent) routes to Stopping.
 //	    if desired.IsBeingRemoved() {
 //	        return StoppingState{}, fsmv2.SignalNone, nil
 //	    }
+//	    // For non-Stopped states that don't care about source, use snap.ShouldStop()
+//	    // (umbrella over IsBeingRemoved + IsDisabled + Config "stopped").
 //	    // ... rest of logic
 //	}
 

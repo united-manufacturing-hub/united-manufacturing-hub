@@ -37,19 +37,31 @@ func (d *WrappedDesiredState[TConfig]) GetChildrenSpecs() []config.ChildSpec {
 	return d.ChildrenSpecs
 }
 
-// IsDisabled reports whether this child is currently disabled by its parent.
-// Set by the CHANGE-19 reducer when ChildSpec.Enabled=false. Transient — the
-// parent may flip Enabled=true to resume the child without removing it.
+// IsDisabled reports whether this child is currently transient-paused by its
+// parent (case B in the six-cases enumeration). Set by the CHANGE-19 reducer
+// in supervisor/reconciliation.go when the parent's ChildSpec.Enabled=false
+// for this child; cleared when the parent flips back to Enabled=true. The
+// reducer runs at the start of reconcileChildren, before the child's tick,
+// so child state files see a consistent value for the whole tick.
 //
-// Compare with IsBeingRemoved (permanent removal — renamed from
-// IsShutdownRequested in PR5.3) and Config.GetState()=="stopped"
-// (user-driven stop). See WorkerSnapshot.ShouldStop for the umbrella
-// semantic.
+// Transient: the worker stays resident in s.children. ShouldStop returns true
+// (the umbrella OR), so non-Stopped states route to Stopping → Stopped via
+// the standard stop path. The Stopped state stays put (helpers.StoppedNext
+// "stay resident" branch) and resumes to TryingToStart when IsDisabled clears.
+//
+// Distinct from IsBeingRemoved (permanent removal — cases C, D, E, F: parent
+// omits spec, SignalNeedsRestart, graceful process shutdown, supervisor
+// self-protection) and Config.GetState()=="stopped" (transient user-driven
+// stop — case A). See WorkerSnapshot.ShouldStop for the umbrella OR over all
+// three, and pkg/fsmv2/CLAUDE.md "Stopping a worker — six cases, three
+// signals" for the case table.
 func (d *WrappedDesiredState[TConfig]) IsDisabled() bool {
 	return d.Disabled
 }
 
-// SetDisabled sets the disabled flag. Called by the supervisor reducer.
+// SetDisabled sets the transient-disable flag. Called by the CHANGE-19 reducer
+// in supervisor/reconciliation.go from the parent's ChildSpec.Enabled flag.
+// Worker code should not call this directly.
 func (d *WrappedDesiredState[TConfig]) SetDisabled(v bool) {
 	d.Disabled = v
 }
