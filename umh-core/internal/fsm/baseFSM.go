@@ -57,6 +57,10 @@ type BaseFSMInstance struct {
 	// transientStreakCounter is the number of ticks a FSM has remained in a transient state
 	transientStreakCounter uint64
 
+	// lastLoggedErrorMsg is used to deduplicate error logs in the reconcile loop.
+	// Error on first/changed occurrence, Debug on repeats.
+	lastLoggedErrorMsg string
+
 	// mu is a mutex for protecting concurrent access to fields
 	mu sync.RWMutex
 }
@@ -346,6 +350,19 @@ func (s *BaseFSMInstance) ShouldSkipReconcileBecauseOfError(tick uint64) bool {
 // ResetState clears the error and backoff after a successful reconcile.
 func (s *BaseFSMInstance) ResetState() {
 	s.backoffManager.Reset()
+	s.lastLoggedErrorMsg = ""
+}
+
+// LogErrorDedup logs at Error level on the first or changed error, Debug on repeats.
+// Use this in reconcile loops to avoid log spam while keeping errors visible when they first occur.
+func (s *BaseFSMInstance) LogErrorDedup(format string, args ...any) {
+	msg := fmt.Sprintf(format, args...)
+	if msg != s.lastLoggedErrorMsg {
+		s.logger.Errorf("%s", msg)
+		s.lastLoggedErrorMsg = msg
+	} else {
+		s.logger.Debugf("%s", msg)
+	}
 }
 
 // IsPermanentlyFailed returns true if the FSM has reached a permanent failure state

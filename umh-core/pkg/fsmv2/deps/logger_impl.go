@@ -16,10 +16,19 @@ package deps
 
 import (
 	"io"
+	"time"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
+
+// samplerWrap is used by NewFSMLogger to ensure prefix-based sampling sits
+// outside any hook (e.g. SentryHook) that may override Check without
+// delegating to its inner core, which would otherwise bypass sampling entirely.
+func samplerWrap(core zapcore.Core) zapcore.Core {
+	return logger.NewPrefixSamplerCore(core, time.Second, 5, 100)
+}
 
 // LogLevel controls the minimum severity for log output.
 type LogLevel int8
@@ -38,12 +47,17 @@ type zapLogger struct {
 }
 
 // NewFSMLogger creates a new FSMLogger wrapping a zap.SugaredLogger.
+// It wraps the core with prefix-based sampling as the outermost layer so that
+// hooks like SentryHook (which override Check without delegating inward) cannot
+// bypass the rate limit.
 func NewFSMLogger(sugar *zap.SugaredLogger) FSMLogger {
 	if sugar == nil {
 		panic("NewFSMLogger: sugar cannot be nil")
 	}
 
-	return &zapLogger{sugar: sugar}
+	sampled := sugar.Desugar().WithOptions(zap.WrapCore(samplerWrap)).Sugar()
+
+	return &zapLogger{sugar: sampled}
 }
 
 func (l *zapLogger) Debug(msg string, fields ...Field) {
@@ -103,11 +117,12 @@ func NewJSONFSMLogger(w io.Writer, level LogLevel) FSMLogger {
 		EncodeTime:     zapcore.ISO8601TimeEncoder,
 		EncodeDuration: zapcore.StringDurationEncoder,
 	}
-	core := zapcore.NewCore(
+	baseCore := zapcore.NewCore(
 		zapcore.NewJSONEncoder(encoderConfig),
 		zapcore.AddSync(w),
 		zapcore.Level(level),
 	)
+	core := logger.NewPrefixSamplerCore(baseCore, 10*time.Second, 2, 200)
 
 	return NewFSMLogger(zap.New(core).Sugar())
 }

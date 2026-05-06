@@ -545,7 +545,7 @@ func (p *ProtocolConverterService) UpdateInManager(
 		return errors.New("config is nil")
 	}
 
-	p.logger.Infof("Updating protocolconverter %s", protConvName)
+	p.logger.Debugf("Updating protocolconverter %s", protConvName)
 
 	if ctx.Err() != nil {
 		return ctx.Err()
@@ -637,9 +637,9 @@ func (p *ProtocolConverterService) UpdateInManager(
 		}
 	}
 
-	p.logger.Info("Updated protocolconverter config in manager")
-	p.logger.Infof("Connection config: %+v", p.connectionConfig)
-	p.logger.Infof("Dataflow component config: %+v", p.dataflowComponentConfig)
+	p.logger.Debug("Updated protocolconverter config in manager")
+	p.logger.Debugf("Connection config: %+v", p.connectionConfig)
+	p.logger.Debugf("Dataflow component config: %+v", p.dataflowComponentConfig)
 
 	return nil
 }

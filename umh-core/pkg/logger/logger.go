@@ -15,6 +15,7 @@
 package logger
 
 import (
+	"fmt"
 	"os"
 	"strings"
 	"sync"
@@ -23,6 +24,98 @@ import (
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
+
+// msgPrefixLen is the number of bytes used as the sampling key.
+// Messages that share the same prefix share one rate-limit bucket, so
+// "Updating protocolconverter foo" and "Updating protocolconverter bar"
+// are throttled together rather than each getting a fresh allowance.
+const msgPrefixLen = 40
+
+// sampleWindow holds the per-bucket counter for one sampling window.
+type sampleWindow struct {
+	mu        sync.Mutex
+	count     int64
+	windowEnd time.Time
+}
+
+// globalPrefixCounters maps "level|prefix" → *sampleWindow.
+// Using a package-level sync.Map keeps the state consistent across
+// loggers created with With() (which otherwise get fresh structs).
+var globalPrefixCounters sync.Map
+
+// prefixSamplerCore is a zapcore.Core that samples based on a message
+// prefix rather than the full formatted string, making it effective even
+// when log calls include variable arguments (instance names, error text).
+type prefixSamplerCore struct {
+	zapcore.Core
+	tick       time.Duration
+	first      int64
+	thereafter int64
+}
+
+// NewPrefixSamplerCore wraps a zapcore.Core with prefix-based sampling.
+// It uses the first msgPrefixLen bytes of the message as the bucket key, so
+// log calls with the same message prefix but different variable arguments
+// share one rate-limit bucket.
+func NewPrefixSamplerCore(inner zapcore.Core, tick time.Duration, first, thereafter int) zapcore.Core {
+	return newPrefixSamplerCore(inner, tick, first, thereafter)
+}
+
+func newPrefixSamplerCore(inner zapcore.Core, tick time.Duration, first, thereafter int) zapcore.Core {
+	return &prefixSamplerCore{
+		Core:       inner,
+		tick:       tick,
+		first:      int64(first),
+		thereafter: int64(thereafter),
+	}
+}
+
+func (c *prefixSamplerCore) With(fields []zapcore.Field) zapcore.Core {
+	return &prefixSamplerCore{
+		Core:       c.Core.With(fields),
+		tick:       c.tick,
+		first:      c.first,
+		thereafter: c.thereafter,
+	}
+}
+
+func (c *prefixSamplerCore) Check(entry zapcore.Entry, ce *zapcore.CheckedEntry) *zapcore.CheckedEntry {
+	if !c.shouldLog(entry.Level, entry.Message) {
+		return ce
+	}
+	return c.Core.Check(entry, ce)
+}
+
+func (c *prefixSamplerCore) shouldLog(level zapcore.Level, msg string) bool {
+	prefix := msg
+	if len(prefix) > msgPrefixLen {
+		prefix = prefix[:msgPrefixLen]
+	}
+	key := fmt.Sprintf("%d|%s", level, prefix)
+	now := time.Now()
+
+	actual, _ := globalPrefixCounters.LoadOrStore(key, &sampleWindow{})
+	w := actual.(*sampleWindow)
+
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	if now.After(w.windowEnd) {
+		w.count = 1
+		w.windowEnd = now.Add(c.tick)
+		return true
+	}
+
+	w.count++
+	n := w.count
+	if n <= c.first {
+		return true
+	}
+	if c.thereafter == 0 {
+		return false
+	}
+	return (n-c.first)%c.thereafter == 0
+}
 
 // LogLevel represents the logging level.
 type LogLevel string
@@ -164,8 +257,13 @@ func New(logLevel string, logFormat LogFormat) *zap.Logger {
 		zap.NewAtomicLevelAt(level),
 	)
 
+	// Sampling: bucket by the first 40 chars of the message so that
+	// "Updating protocolconverter foo" and "Updating protocolconverter bar"
+	// share one rate-limit bucket instead of each getting a fresh allowance.
+	sampledCore := newPrefixSamplerCore(core, 10*time.Second, 3, 100)
+
 	// Create the logger
-	logger := zap.New(core, zap.AddCaller())
+	logger := zap.New(sampledCore, zap.AddCaller())
 
 	return logger
 }
@@ -173,6 +271,11 @@ func New(logLevel string, logFormat LogFormat) *zap.Logger {
 // Initialize sets up the global logger with the specified log level using zap.ReplaceGlobals().
 func Initialize() {
 	loggerMutex.Do(func() {
+		if getEnv("LOGGING_DISABLED", "") == "true" {
+			Disable()
+			return
+		}
+
 		logLevel := getEnv("LOGGING_LEVEL", string(ProductionLevel))
 		logFormat := getLogFormat(FormatPretty) // Default to human-readable pretty format
 		logger := New(logLevel, logFormat)
@@ -219,4 +322,13 @@ func For(component string) *zap.SugaredLogger {
 	}
 
 	return zap.S().Named(component)
+}
+
+// Disable replaces the global logger with a no-op logger that discards all
+// output without any allocations. Call this in TestMain or BeforeSuite to
+// silence all logging during tests.
+func Disable() {
+	nop := zap.NewNop()
+	zap.ReplaceGlobals(nop)
+	initialized = true
 }

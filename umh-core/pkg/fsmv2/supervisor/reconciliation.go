@@ -1417,7 +1417,7 @@ func (s *Supervisor[TObserved, TDesired]) logHeartbeat() {
 
 	s.mu.RUnlock()
 
-	s.logger.Info("supervisor_heartbeat",
+	s.logger.Debug("supervisor_heartbeat",
 		deps.HierarchyPath(s.GetHierarchyPathUnlocked()),
 		deps.Any("tick", atomic.LoadUint64(&s.tickCount)),
 		deps.Int("workers", workerCount),
