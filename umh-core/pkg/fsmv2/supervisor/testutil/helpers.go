@@ -40,6 +40,7 @@ func (t *ObservedState) GetTimestamp() time.Time {
 type DesiredState struct {
 	State       string `json:"state"`
 	ShutdownReq bool   `json:"ShutdownRequested"`
+	Disabled    bool   `json:"isDisabled,omitempty"`
 }
 
 func (t *DesiredState) IsShutdownRequested() bool {
@@ -48,6 +49,14 @@ func (t *DesiredState) IsShutdownRequested() bool {
 
 func (t *DesiredState) SetShutdownRequested(requested bool) {
 	t.ShutdownReq = requested
+}
+
+func (t *DesiredState) IsDisabled() bool {
+	return t.Disabled
+}
+
+func (t *DesiredState) SetDisabled(disabled bool) {
+	t.Disabled = disabled
 }
 
 type Worker struct {

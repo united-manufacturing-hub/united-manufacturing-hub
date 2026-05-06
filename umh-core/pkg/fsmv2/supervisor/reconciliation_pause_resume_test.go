@@ -97,7 +97,7 @@ var _ = Describe("CHANGE-19 Pause/Resume", func() {
 		// Setup: parent with one child spec, Enabled=false from the start.
 		// PR3-I skip-on-create: reconcileChildren must NOT create the child
 		// when its first appearance in the spec list is Enabled=false. The
-		// reducer-on-resident path that writes IsShutdownRequested=true is
+		// reducer-on-resident path that writes IsDisabled=true is
 		// covered separately by TestPauseResume_ResidentChildEnabledFalse_…
 		initialSpecs := []config.ChildSpec{
 			{
@@ -121,12 +121,13 @@ var _ = Describe("CHANGE-19 Pause/Resume", func() {
 			"skip-on-create must not write pendingRemoval; only spec omission does")
 	})
 
-	It("TestPauseResume_ResidentChildEnabledFalse_ReducerSetsIsShutdownRequested", func() {
+	It("TestPauseResume_ResidentChildEnabledFalse_ReducerSetsIsDisabled", func() {
 		// Resident-child reducer path: when Enabled flips from true to false
 		// on a child that already exists in s.children, the reducer must
-		// write IsShutdownRequested=true on the child's worker desired
-		// state, and the child must stay resident (no pendingRemoval, no
-		// despawn).
+		// write IsDisabled=true on the child's worker desired state (NOT
+		// IsShutdownRequested — that signals permanent removal). The child
+		// stays resident (no pendingRemoval, no despawn) and ShouldStop()
+		// drives it into Stopped state via the OR with IsDisabled.
 		initialSpecs := []config.ChildSpec{
 			{
 				Name:       "child-a",
@@ -153,7 +154,7 @@ var _ = Describe("CHANGE-19 Pause/Resume", func() {
 		}
 		parentSuper.TestUpdateUserSpec(config.UserSpec{Config: "parent-config-disable"})
 
-		// Tick 2: reducer must write IsShutdownRequested=true; PR3-I's
+		// Tick 2: reducer must write IsDisabled=true; PR3-I's
 		// skip-on-create branch must NOT remove the resident child.
 		Expect(parentSuper.TestTick(ctx)).To(Succeed())
 
@@ -165,12 +166,17 @@ var _ = Describe("CHANGE-19 Pause/Resume", func() {
 		Expect(parentSuper.TestIsPendingRemoval("child-a")).To(BeFalse(),
 			"Enabled=false must not write pendingRemoval; only omitting the name from specs triggers despawn")
 
-		// Assert 3: reducer wrote IsShutdownRequested=true on child's worker desired state.
+		// Assert 3: reducer wrote IsDisabled=true on child's worker desired state.
 		var childDesired supervisor.TestDesiredState
 		err := mockStore.LoadDesiredTyped(ctx, "child", "child-a-001", &childDesired)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(childDesired.IsShutdownRequested()).To(BeTrue(),
-			"reducer must write IsShutdownRequested=true on resident child's desired state when Enabled=false")
+		Expect(childDesired.IsDisabled()).To(BeTrue(),
+			"reducer must write IsDisabled=true on resident child's desired state when Enabled=false")
+
+		// Assert 4: IsShutdownRequested stays false — that signal is reserved
+		// for permanent removal, not transient parent-disable.
+		Expect(childDesired.IsShutdownRequested()).To(BeFalse(),
+			"reducer must NOT write IsShutdownRequested=true on Enabled=false; that signal is for permanent removal")
 	})
 
 	It("TestPauseResume_ReenableFromStopped_ChildRestartsTryingToStart", func() {
@@ -203,13 +209,13 @@ var _ = Describe("CHANGE-19 Pause/Resume", func() {
 		}
 		parentSuper.TestUpdateUserSpec(config.UserSpec{Config: "parent-config-disable"})
 
-		// Tick 2: reducer writes IsShutdownRequested=true on resident child.
+		// Tick 2: reducer writes IsDisabled=true on resident child.
 		Expect(parentSuper.TestTick(ctx)).To(Succeed())
 
 		var childDesired supervisor.TestDesiredState
 		err := mockStore.LoadDesiredTyped(ctx, "child", "child-a-001", &childDesired)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(childDesired.IsShutdownRequested()).To(BeTrue(),
+		Expect(childDesired.IsDisabled()).To(BeTrue(),
 			"precondition: child must be paused before re-enable")
 
 		// Re-enable: flip the spec to Enabled=true.
@@ -227,9 +233,10 @@ var _ = Describe("CHANGE-19 Pause/Resume", func() {
 		// the cache and reconcileChildren would reuse the Enabled=false DDS from tick 2.
 		parentSuper.TestUpdateUserSpec(config.UserSpec{Config: "parent-config-reenable"})
 
-		// Tick 3: reducer calls ClearShutdownRequest → IsShutdownRequested=false;
-		// the child's state machine will transition from Stopped to TryingToStart on
-		// subsequent worker ticks.
+		// Tick 3: reducer writes IsDisabled=false; the child's state machine
+		// will transition from Stopped to TryingToStart on subsequent worker
+		// ticks (ShouldStop now returns false because all three signals are
+		// false).
 		Expect(parentSuper.TestTick(ctx)).To(Succeed())
 
 		// Assert 1: child is still resident (never despawned during the pause/resume cycle).
@@ -240,11 +247,16 @@ var _ = Describe("CHANGE-19 Pause/Resume", func() {
 		Expect(parentSuper.TestIsPendingRemoval("child-a")).To(BeFalse(),
 			"re-enabling must not affect pendingRemoval — only spec omission triggers despawn")
 
-		// Assert 3: IsShutdownRequested is now false so the worker can restart.
-		err = mockStore.LoadDesiredTyped(ctx, "child", "child-a-001", &childDesired)
+		// Assert 3: IsDisabled is now false so the worker can restart.
+		// Use a fresh variable: IsDisabled has json:"isDisabled,omitempty", so when
+		// the flag is false the JSON document omits the key entirely. Reusing the
+		// previous childDesired (Disabled=true) would leave the field untouched on
+		// unmarshal and produce a stale read.
+		var childDesiredAfter supervisor.TestDesiredState
+		err = mockStore.LoadDesiredTyped(ctx, "child", "child-a-001", &childDesiredAfter)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(childDesired.IsShutdownRequested()).To(BeFalse(),
-			"reducer must write IsShutdownRequested=false when Enabled flips back to true, "+
+		Expect(childDesiredAfter.IsDisabled()).To(BeFalse(),
+			"reducer must write IsDisabled=false when Enabled flips back to true, "+
 				"allowing the child's state machine to transition from Stopped to TryingToStart")
 	})
 
@@ -255,9 +267,9 @@ var _ = Describe("CHANGE-19 Pause/Resume", func() {
 		// last Enabled value.
 		//
 		// The one-way stop trajectory (TryingToStop→Stopped before accepting the new
-		// IsShutdownRequested=false) is enforced by the child worker's state machine, not
+		// IsDisabled=false) is enforced by the child worker's state machine, not
 		// by the supervisor. At the supervisor level, the reducer is stateless: it reads
-		// the current spec's Enabled field and writes IsShutdownRequested each tick.
+		// the current spec's Enabled field and writes IsDisabled each tick.
 		initialSpecs := []config.ChildSpec{
 			{
 				Name:       "child-a",
@@ -268,7 +280,7 @@ var _ = Describe("CHANGE-19 Pause/Resume", func() {
 		}
 		parentSuper, worker := newPauseResumeFixture(ctx, mockStore, initialSpecs)
 
-		// Tick 1: create child with Enabled=true → reducer writes IsShutdownRequested=false
+		// Tick 1: create child with Enabled=true → reducer writes IsDisabled=false
 		err := parentSuper.TestTick(ctx)
 		Expect(err).NotTo(HaveOccurred())
 
@@ -290,7 +302,7 @@ var _ = Describe("CHANGE-19 Pause/Resume", func() {
 		// Bust the DDS cache so reconcileChildren picks up the Enabled=false spec.
 		parentSuper.TestUpdateUserSpec(config.UserSpec{Config: "parent-config-disable"})
 
-		// Tick 2: reducer writes IsShutdownRequested=true (child enters TryingToStop in worker FSM)
+		// Tick 2: reducer writes IsDisabled=true (child enters TryingToStop in worker FSM via ShouldStop)
 		err = parentSuper.TestTick(ctx)
 		Expect(err).NotTo(HaveOccurred())
 
@@ -310,7 +322,7 @@ var _ = Describe("CHANGE-19 Pause/Resume", func() {
 		// Bust the DDS cache again so the Enabled=true is picked up on tick 3.
 		parentSuper.TestUpdateUserSpec(config.UserSpec{Config: "parent-config-reenable"})
 
-		// Tick 3: reducer writes IsShutdownRequested=false; child stays resident
+		// Tick 3: reducer writes IsDisabled=false; child stays resident
 		err = parentSuper.TestTick(ctx)
 		Expect(err).NotTo(HaveOccurred())
 
@@ -322,11 +334,11 @@ var _ = Describe("CHANGE-19 Pause/Resume", func() {
 		Expect(children).To(HaveKey("child-a"),
 			"child must remain resident after the rapid disable/re-enable cycle")
 
-		// Assert 2: IsShutdownRequested reflects the final Enabled=true value
+		// Assert 2: IsDisabled reflects the final Enabled=true value
 		var childDesired supervisor.TestDesiredState
 		err = mockStore.LoadDesiredTyped(ctx, "child", "child-a-001", &childDesired)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(childDesired.IsShutdownRequested()).To(BeFalse(),
-			"after re-enable, IsShutdownRequested must be false regardless of prior mid-flight disable")
+		Expect(childDesired.IsDisabled()).To(BeFalse(),
+			"after re-enable, IsDisabled must be false regardless of prior mid-flight disable")
 	})
 })

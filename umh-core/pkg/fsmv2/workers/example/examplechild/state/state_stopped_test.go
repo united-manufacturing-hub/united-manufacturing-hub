@@ -26,9 +26,11 @@ import (
 )
 
 // makeChildSnapshot constructs an examplechild snapshot for state-machine
-// behavioral tests. shutdownRequested mirrors what the parent sets when it
-// disables the child via ChildSpec.Enabled=false (the reducer translates
-// Enabled=false into IsShutdownRequested=true).
+// behavioral tests. shutdownRequested models the permanent-removal signal
+// (Phase 1 absent-from-specs path, SignalNeedsRestart, graceful shutdown).
+// Transient parent-disable flows through IsDisabled (set by the CHANGE-19
+// reducer) — that signal does NOT cause StoppedState to signal NeedsRemoval,
+// so the child stays resident. See PR5 signal disambiguation.
 func makeChildSnapshot(shutdownRequested bool) fsmv2.Snapshot {
 	desired := &fsmv2.WrappedDesiredState[examplechild.ExamplechildConfig]{
 		BaseDesiredState: config.BaseDesiredState{

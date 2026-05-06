@@ -797,13 +797,23 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) (err error) 
 
 	desiredDoc[FieldID] = firstWorkerID
 
-	// Preserve ShutdownRequested: shutdown is a supervisor operation that overrides DeriveDesiredState
+	// Preserve supervisor-managed flags: shutdown and disabled are supervisor
+	// operations that override DeriveDesiredState. Without this, the per-tick
+	// derivation would clobber the reducer's writes.
 	var existingDesiredTyped TDesired
 	if err := s.store.LoadDesiredTyped(ctx, s.workerType, firstWorkerID, &existingDesiredTyped); err == nil {
-		// Check if existing state had shutdown requested via interface
 		if ds, ok := any(existingDesiredTyped).(fsmv2.DesiredState); ok {
 			if ds.IsShutdownRequested() {
 				desiredDoc[FieldShutdownRequested] = true
+			}
+		}
+		if d, ok := any(existingDesiredTyped).(fsmv2.Disablable); ok {
+			if d.IsDisabled() {
+				desiredDoc[FieldIsDisabled] = true
+			}
+		} else if d, ok := any(&existingDesiredTyped).(fsmv2.Disablable); ok {
+			if d.IsDisabled() {
+				desiredDoc[FieldIsDisabled] = true
 			}
 		}
 	}
@@ -1670,9 +1680,13 @@ func (s *Supervisor[TObserved, TDesired]) reconcileChildren(specs []config.Child
 		}
 	}
 
-	// CHANGE-19 reducer: translate Enabled → IsShutdownRequested for resident children.
+	// CHANGE-19 reducer: translate Enabled → IsDisabled for resident children.
 	// This runs before Phase 1 (pendingRemoval) so Enabled=false children are NOT
-	// despawned — they stay in s.children but have IsShutdownRequested=true.
+	// despawned — they stay in s.children with IsDisabled=true. ShouldStop() ORs
+	// IsDisabled with IsShutdownRequested + Config.GetState()=="stopped", so the
+	// child still enters its Stopped state machine. But because IsShutdownRequested
+	// stays false, the child's StoppedState does NOT signal NeedsRemoval, leaving
+	// the child resident and ready to resume on Enabled=true.
 	//
 	// context.Background() is used here because reconcileChildren does not accept a ctx
 	// parameter. If reconcileChildren is ever refactored to propagate context, replace
@@ -1683,15 +1697,9 @@ func (s *Supervisor[TObserved, TDesired]) reconcileChildren(specs []config.Child
 		if !exists {
 			continue
 		}
-		var reducerErr error
-		if !spec.Enabled {
-			reducerErr = child.RequestShutdown(reducerCtx, "reducer: enabled=false")
-		} else {
-			reducerErr = child.ClearShutdownRequest(reducerCtx)
-		}
-		if reducerErr != nil {
-			s.logger.SentryWarn(deps.FeatureFSMv2, s.GetHierarchyPathUnlocked(), "reducer_set_enabled_failed",
-				deps.Err(reducerErr),
+		if err := child.SetDisabled(reducerCtx, "reducer: enabled=false", !spec.Enabled); err != nil {
+			s.logger.SentryWarn(deps.FeatureFSMv2, s.GetHierarchyPathUnlocked(), "reducer_set_disabled_failed",
+				deps.Err(err),
 				deps.String("child_name", spec.Name),
 				deps.Bool("enabled", spec.Enabled))
 		}

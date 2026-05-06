@@ -34,6 +34,13 @@ const (
 	// PascalCase matches struct tag: `json:"ShutdownRequested"`.
 	FieldShutdownRequested = "ShutdownRequested"
 
+	// FieldIsDisabled is the transient parent-disable signal.
+	// Set in desired documents by the CHANGE-19 reducer when a parent flips
+	// ChildSpec.Enabled=false. Distinct from FieldShutdownRequested (permanent
+	// removal): IsDisabled drives ShouldStop without signalling NeedsRemoval.
+	// camelCase matches struct tag: `json:"isDisabled,omitempty"`.
+	FieldIsDisabled = "isDisabled"
+
 	// FieldParentID is the parent supervisor ID (renamed from "bridged_by").
 	FieldParentID = "parent_id"
 )

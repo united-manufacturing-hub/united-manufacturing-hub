@@ -57,6 +57,13 @@ type SupervisorInterface interface {
 	// Sibling of RequestShutdown. Used by the CHANGE-19 reducer to flip a
 	// previously-disabled child back to enabled state.
 	ClearShutdownRequest(ctx context.Context) error
+	// SetDisabled writes the IsDisabled signal on all workers' WrappedDesiredState
+	// in this supervisor. Called by the CHANGE-19 reducer to translate
+	// ChildSpec.Enabled=false into a transient stop. Distinct from RequestShutdown
+	// (permanent removal): IsDisabled drives ShouldStop without signalling
+	// NeedsRemoval, so the child stays resident in its Stopped state and can
+	// resume when re-enabled.
+	SetDisabled(ctx context.Context, reason string, disabled bool) error
 	ListWorkers() []string
 	tick(ctx context.Context) error
 	updateUserSpec(spec config.UserSpec)

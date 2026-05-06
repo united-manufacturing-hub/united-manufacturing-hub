@@ -671,6 +671,104 @@ func (s *Supervisor[TObserved, TDesired]) ClearShutdownRequest(ctx context.Conte
 	return nil
 }
 
+// SetDisabled writes the IsDisabled flag on all workers in this supervisor.
+// Used by the CHANGE-19 reducer to translate ChildSpec.Enabled=false into a
+// transient stop. Distinct from RequestShutdown (permanent removal):
+// IsDisabled drives ShouldStop but does NOT signal NeedsRemoval, so the child
+// stays resident in its Stopped state and can resume when re-enabled.
+func (s *Supervisor[TObserved, TDesired]) SetDisabled(ctx context.Context, reason string, disabled bool) error {
+	s.mu.RLock()
+
+	workerIDs := make([]string, 0, len(s.workers))
+	for id := range s.workers {
+		workerIDs = append(workerIDs, id)
+	}
+
+	s.mu.RUnlock()
+
+	for _, id := range workerIDs {
+		if err := s.setDisabled(ctx, id, reason, disabled); err != nil {
+			s.logger.SentryWarn(deps.FeatureFSMv2, s.GetHierarchyPath(), "set_disabled_failed",
+				deps.Err(err),
+				deps.String("worker_id", id),
+				deps.Bool("disabled", disabled))
+		}
+	}
+
+	return nil
+}
+
+// setDisabled writes the IsDisabled flag in storage for a single worker.
+// Mirrors requestShutdown but targets the IsDisabled signal via the Disablable
+// interface instead of IsShutdownRequested via ShutdownRequestable.
+//
+//nolint:cyclop // mirrors requestShutdown structure
+func (s *Supervisor[TObserved, TDesired]) setDisabled(ctx context.Context, workerID string, reason string, disabled bool) error {
+	s.mu.RLock()
+	_, exists := s.workers[workerID]
+	s.mu.RUnlock()
+
+	if !exists {
+		return errors.New("worker not found")
+	}
+
+	// Load current desired state from database
+	var desired TDesired
+
+	err := s.store.LoadDesiredTyped(ctx, s.workerType, workerID, &desired)
+	if err != nil {
+		if !errors.Is(err, persistence.ErrNotFound) {
+			return fmt.Errorf("failed to load desired state: %w", err)
+		}
+		// No desired state in DB yet, nothing to update
+		return nil
+	}
+
+	// Guard against log flood and no-op writes: return early if the flag is
+	// already at the requested value. The reducer calls this every tick for
+	// every child; logging unconditionally would produce ~100 lines/sec per
+	// child.
+	if d, ok := any(desired).(fsmv2.Disablable); ok && d.IsDisabled() == disabled {
+		return nil
+	} else if d, ok := any(&desired).(fsmv2.Disablable); ok && d.IsDisabled() == disabled {
+		return nil
+	}
+
+	s.logger.Info("disabled_set",
+		deps.String("worker_id", workerID),
+		deps.Bool("disabled", disabled),
+		deps.Reason(reason))
+
+	// Set IsDisabled via the Disablable interface
+	if d, ok := any(desired).(fsmv2.Disablable); ok {
+		d.SetDisabled(disabled)
+	} else if d, ok := any(&desired).(fsmv2.Disablable); ok {
+		d.SetDisabled(disabled)
+	} else {
+		return fmt.Errorf("desired state type %T does not implement Disablable", desired)
+	}
+
+	desiredJSON, err := json.Marshal(desired)
+	if err != nil {
+		return fmt.Errorf("failed to marshal desired state: %w", err)
+	}
+
+	desiredDoc := make(persistence.Document)
+	if err := json.Unmarshal(desiredJSON, &desiredDoc); err != nil {
+		return fmt.Errorf("failed to unmarshal to document: %w", err)
+	}
+
+	// Add 'id' field required by TriangularStore validation.
+	desiredDoc[FieldID] = workerID
+
+	// Save updated desired state back to database
+	if _, err := s.store.SaveDesired(ctx, s.workerType, workerID, desiredDoc); err != nil {
+		return fmt.Errorf("failed to save desired state with disabled flag: %w", err)
+	}
+
+	return nil
+}
+
 // clearShutdownRequested clears the ShutdownRequested flag in storage for restart.
 func (s *Supervisor[TObserved, TDesired]) clearShutdownRequested(ctx context.Context, workerID string) error {
 	// Load current desired state

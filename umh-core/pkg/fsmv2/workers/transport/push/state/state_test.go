@@ -61,10 +61,11 @@ func makeSnapshotWithBackoff(
 	degradedEnteredAt time.Time,
 	lastErrorAt time.Time,
 ) fsmv2.Snapshot {
-	// Parent-driven stop now flows through IsShutdownRequested via the
-	// CHANGE-19 reducer. Translate the legacy parentMappedState=stopped test
-	// input into shutdownRequested=true so existing scenarios still exercise
-	// the parent-stop code path.
+	// Legacy parentMappedState=stopped test input is translated into
+	// shutdownRequested=true so existing scenarios still exercise the
+	// permanent-removal code path (Phase-1 absent-from-specs). Transient
+	// parent-disable (Enabled=false → IsDisabled, added in PR5) is not
+	// modelled here; see PR5.7.
 	effectiveShutdown := shutdownRequested || parentMappedState == config.DesiredStateStopped
 
 	desired := &fsmv2.WrappedDesiredState[push_pkg.PushConfig]{
@@ -121,11 +122,11 @@ var _ = Describe("StoppedState", func() {
 		Expect(result.State).To(BeAssignableToTypeOf(&state.RunningState{}))
 	})
 
-	It("should signal NeedsRemoval when parent has stopped (Enabled=false → shutdown)", func() {
-		// Under PR3 semantics, parent-driven stop flows through
-		// IsShutdownRequested via the CHANGE-19 reducer. The helper
-		// translates parentMappedState=stopped → shutdownRequested=true,
-		// so this case behaves like the explicit-shutdown case above.
+	It("should signal NeedsRemoval when parent has stopped (legacy mapping → shutdown)", func() {
+		// The makeSnapshot helper translates parentMappedState=stopped into
+		// shutdownRequested=true to exercise the permanent-removal path
+		// (Phase-1 absent-from-specs). Transient parent-disable (PR5
+		// IsDisabled signal) is not modelled here yet — see PR5.7.
 		snap := makeSnapshot(config.DesiredStateStopped, false, 0, false, false)
 		result := s.Next(snap)
 		Expect(result.State).To(BeAssignableToTypeOf(&state.StoppedState{}))
