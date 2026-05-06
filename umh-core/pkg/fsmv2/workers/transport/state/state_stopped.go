@@ -46,7 +46,7 @@ func (s *StoppedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	}
 
 	// Stay stopped: keep children resident but disabled. The CHANGE-19 reducer
-	// (supervisor/reconciliation.go) translates Enabled=false into RequestShutdown
+	// (supervisor/reconciliation.go) translates Enabled=false into RequestRemoval
 	// while leaving the child in supervisor's children map, so flipping Enabled
 	// back to true on transition resumes cleanly without losing internal state.
 	return fsmv2.Transition(s, fsmv2.SignalNone, nil, "Transport is stopped, waiting for running request", config.DisableAll(children))

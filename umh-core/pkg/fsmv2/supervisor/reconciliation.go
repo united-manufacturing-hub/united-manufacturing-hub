@@ -73,7 +73,7 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 		// Worker was removed via SignalNeedsRemoval during concurrent tick.
 		// This race can happen during:
 		// 1. Shutdown() (s.started == false)
-		// 2. RequestShutdown() from reconcileChildren (s.started == true)
+		// 2. RequestRemoval() from reconcileChildren (s.started == true)
 		// WorkerIDs are always obtained from iterating s.workers, so
 		// "not found" is only possible due to this benign race condition.
 		s.logger.Debug("tick_worker_skip",
@@ -211,7 +211,7 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 				s.logger.SentryError(deps.FeatureForWorker(s.workerType), s.GetHierarchyPathUnlocked(), maxAttemptsErr, "collector_unresponsive_max_attempts",
 					deps.Attempts(s.collectorHealth.maxRestartAttempts))
 
-				if shutdownErr := s.requestShutdown(ctx, workerID, maxAttemptsErr.Error()); shutdownErr != nil {
+				if shutdownErr := s.requestRemoval(ctx, workerID, maxAttemptsErr.Error()); shutdownErr != nil {
 					s.logger.SentryError(deps.FeatureForWorker(s.workerType), workerCtx.identity.HierarchyPath, shutdownErr, "shutdown_request_failed")
 				}
 
@@ -1169,7 +1169,7 @@ func (s *Supervisor[TObserved, TDesired]) processSignal(ctx context.Context, wor
 		s.mu.Unlock()
 
 		// Request graceful shutdown - worker will go through cleanup states
-		if err := s.requestShutdown(ctx, workerID, "restart_requested"); err != nil {
+		if err := s.requestRemoval(ctx, workerID, "restart_requested"); err != nil {
 			s.logger.SentryWarn(deps.FeatureFSMv2, s.GetHierarchyPathUnlocked(), "restart_shutdown_request_failed",
 				deps.Err(err),
 				deps.String("target_worker_id", workerID))
@@ -1728,7 +1728,7 @@ func (s *Supervisor[TObserved, TDesired]) reconcileChildren(specs []config.Child
 				// Request shutdown - sets IsBeingRemoved=true on child's workers
 				// Child continues ticking and will emit SignalNeedsRemoval when ready
 				ctx := context.Background()
-				if err := child.RequestShutdown(ctx, "removed_from_specs"); err != nil {
+				if err := child.RequestRemoval(ctx, "removed_from_specs"); err != nil {
 					s.logger.SentryWarn(deps.FeatureFSMv2, s.GetHierarchyPathUnlocked(), "child_shutdown_request_failed",
 						deps.Err(err),
 						deps.String("child_name", name))

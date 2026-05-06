@@ -203,7 +203,7 @@
 //
 // SignalNeedsRestart:
 //   - Marks for restart (pendingRestart flag)
-//   - Requests graceful shutdown via requestShutdown()
+//   - Requests graceful shutdown via requestRemoval()
 //   - Worker goes through shutdown states, emits SignalNeedsRemoval
 //   - On SignalNeedsRemoval: restarts instead of removes
 //

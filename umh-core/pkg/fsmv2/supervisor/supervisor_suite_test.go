@@ -130,7 +130,7 @@ type mockWorker struct {
 	observed            fsmv2.ObservedState
 	initialState        fsmv2.State[any, any]
 	collectFunc         func(ctx context.Context) (fsmv2.ObservedState, error)
-	requestShutdownFunc func() // Callback for when RequestShutdown is called
+	requestRemovalFunc func() // Callback for when RequestRemoval is called
 }
 
 func (m *mockWorker) CollectObservedState(ctx context.Context, _ fsmv2.DesiredState) (fsmv2.ObservedState, error) {

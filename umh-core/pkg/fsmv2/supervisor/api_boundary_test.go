@@ -119,7 +119,7 @@ var _ = Describe("Supervisor API Boundary", func() {
 		It("should NOT export signal processing methods", func() {
 			internalMethods := []string{
 				"processSignal",
-				// Note: RequestShutdown is now intentionally exported via SupervisorInterface
+				// Note: RequestRemoval is now intentionally exported via SupervisorInterface
 				// to support graceful shutdown of child supervisors
 			}
 

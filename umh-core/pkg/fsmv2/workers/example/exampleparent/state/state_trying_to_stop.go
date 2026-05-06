@@ -24,7 +24,7 @@ import (
 
 // TryingToStopState represents the state during graceful shutdown. While in
 // this state the parent emits an empty ChildSpec slice so the supervisor calls
-// RequestShutdown on every existing child; children absent from the emitted
+// RequestRemoval on every existing child; children absent from the emitted
 // specs receive IsBeingRemoved=true and stop on their own.
 // Waits for all children to stop before transitioning to StoppedState.
 type TryingToStopState struct {

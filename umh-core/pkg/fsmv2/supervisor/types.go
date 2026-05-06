@@ -52,14 +52,14 @@ type SupervisorInterface interface {
 	// Collectors and executors still run in goroutines (they handle async I/O).
 	StartAsChild(ctx context.Context)
 	Shutdown()
-	RequestShutdown(ctx context.Context, reason string) error
-	// ClearShutdownRequest clears IsBeingRemoved on all workers in this supervisor.
-	// Sibling of RequestShutdown. Used by the CHANGE-19 reducer to flip a
+	RequestRemoval(ctx context.Context, reason string) error
+	// ClearRemoval clears IsBeingRemoved on all workers in this supervisor.
+	// Sibling of RequestRemoval. Used by the CHANGE-19 reducer to flip a
 	// previously-disabled child back to enabled state.
-	ClearShutdownRequest(ctx context.Context) error
+	ClearRemoval(ctx context.Context) error
 	// SetDisabled writes the IsDisabled signal on all workers' WrappedDesiredState
 	// in this supervisor. Called by the CHANGE-19 reducer to translate
-	// ChildSpec.Enabled=false into a transient stop. Distinct from RequestShutdown
+	// ChildSpec.Enabled=false into a transient stop. Distinct from RequestRemoval
 	// (permanent removal): IsDisabled drives ShouldStop without signalling
 	// NeedsRemoval, so the child stays resident in its Stopped state and can
 	// resume when re-enabled.

@@ -246,9 +246,9 @@ func NewChildSpec(name, workerType string, userSpec UserSpec) ChildSpec {
 //	return fsmv2.Transition(..., config.DisableAll(pkg.RenderChildren(snap)))
 //
 // CHANGE-19 reducer (supervisor/reconciliation.go ~line 1660) translates
-// Enabled=false into RequestShutdown synchronously before the child's tick,
+// Enabled=false into RequestRemoval synchronously before the child's tick,
 // so children stay resident in supervisor.children with IsBeingRemoved
-// set. Flipping back to Enabled=true issues ClearShutdownRequest for clean
+// set. Flipping back to Enabled=true issues ClearRemoval for clean
 // resume.
 func DisableAll(specs []ChildSpec) []ChildSpec {
 	for i := range specs {

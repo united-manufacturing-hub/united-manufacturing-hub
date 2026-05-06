@@ -256,7 +256,7 @@ func (s *Supervisor[TObserved, TDesired]) Shutdown() {
 
 		// Request graceful shutdown on all workers
 		for _, workerID := range workerIDs {
-			if err := s.requestShutdown(gracefulCtx, workerID, "supervisor_shutdown"); err != nil {
+			if err := s.requestRemoval(gracefulCtx, workerID, "supervisor_shutdown"); err != nil {
 				s.logger.SentryWarn(deps.FeatureFSMv2, s.GetHierarchyPath(), "graceful_shutdown_request_failed",
 					deps.Err(err))
 			}
@@ -425,7 +425,7 @@ func (s *Supervisor[TObserved, TDesired]) logTrace(msg string, fields ...deps.Fi
 	}
 }
 
-func (s *Supervisor[TObserved, TDesired]) requestShutdown(ctx context.Context, workerID string, reason string) error {
+func (s *Supervisor[TObserved, TDesired]) requestRemoval(ctx context.Context, workerID string, reason string) error {
 	s.mu.RLock()
 	_, exists := s.workers[workerID]
 	s.mu.RUnlock()
@@ -455,7 +455,7 @@ func (s *Supervisor[TObserved, TDesired]) requestShutdown(ctx context.Context, w
 		return nil
 	}
 
-	s.logger.Info("shutdown_requested",
+	s.logger.Info("removal_requested",
 		deps.String("worker_id", workerID),
 		deps.Reason(reason))
 
@@ -489,13 +489,13 @@ func (s *Supervisor[TObserved, TDesired]) requestShutdown(ctx context.Context, w
 	return nil
 }
 
-// RequestShutdown sets IsBeingRemoved=true on all workers in this supervisor.
+// RequestRemoval sets IsBeingRemoved=true on all workers in this supervisor.
 // Workers continue ticking and can complete their FSM shutdown transitions.
 // This does NOT cancel the context - use Shutdown() for forced stop.
 //
 // This method is used by parent supervisors to request graceful shutdown of
 // child supervisors when children are removed from ChildrenSpecs.
-func (s *Supervisor[TObserved, TDesired]) RequestShutdown(ctx context.Context, reason string) error {
+func (s *Supervisor[TObserved, TDesired]) RequestRemoval(ctx context.Context, reason string) error {
 	s.mu.RLock()
 
 	workerIDs := make([]string, 0, len(s.workers))
@@ -507,7 +507,7 @@ func (s *Supervisor[TObserved, TDesired]) RequestShutdown(ctx context.Context, r
 	s.mu.RUnlock()
 
 	for _, workerID := range workerIDs {
-		if err := s.requestShutdown(ctx, workerID, reason); err != nil {
+		if err := s.requestRemoval(ctx, workerID, reason); err != nil {
 			s.logger.SentryWarn(deps.FeatureFSMv2, s.GetHierarchyPath(), "shutdown_request_failed",
 				deps.Err(err))
 		}
@@ -572,7 +572,7 @@ func (s *Supervisor[TObserved, TDesired]) handleWorkerRestart(ctx context.Contex
 		deps.HierarchyPath(identity.HierarchyPath))
 
 	// 2. Clear shutdown flag in storage BEFORE creating new worker.
-	if err := s.clearIsBeingRemoved(ctx, workerID); err != nil {
+	if err := s.clearRemoval(ctx, workerID); err != nil {
 		s.logger.SentryWarn(deps.FeatureFSMv2, identity.HierarchyPath, "restart_clear_shutdown_failed",
 			deps.Err(err))
 		// Continue anyway - the new worker might still work
@@ -649,10 +649,10 @@ func (s *Supervisor[TObserved, TDesired]) handleWorkerRestart(ctx context.Contex
 	return nil
 }
 
-// ClearShutdownRequest clears IsBeingRemoved on all workers in this supervisor.
-// Sibling of RequestShutdown. Used by the CHANGE-19 reducer to flip a
+// ClearRemoval clears IsBeingRemoved on all workers in this supervisor.
+// Sibling of RequestRemoval. Used by the CHANGE-19 reducer to flip a
 // previously-disabled child back to enabled state.
-func (s *Supervisor[TObserved, TDesired]) ClearShutdownRequest(ctx context.Context) error {
+func (s *Supervisor[TObserved, TDesired]) ClearRemoval(ctx context.Context) error {
 	s.mu.RLock()
 
 	workerIDs := make([]string, 0, len(s.workers))
@@ -663,8 +663,8 @@ func (s *Supervisor[TObserved, TDesired]) ClearShutdownRequest(ctx context.Conte
 	s.mu.RUnlock()
 
 	for _, id := range workerIDs {
-		if err := s.clearIsBeingRemoved(ctx, id); err != nil {
-			return fmt.Errorf("clear shutdown request for %s: %w", id, err)
+		if err := s.clearRemoval(ctx, id); err != nil {
+			return fmt.Errorf("clear removal for %s: %w", id, err)
 		}
 	}
 
@@ -673,7 +673,7 @@ func (s *Supervisor[TObserved, TDesired]) ClearShutdownRequest(ctx context.Conte
 
 // SetDisabled writes the IsDisabled flag on all workers in this supervisor.
 // Used by the CHANGE-19 reducer to translate ChildSpec.Enabled=false into a
-// transient stop. Distinct from RequestShutdown (permanent removal):
+// transient stop. Distinct from RequestRemoval (permanent removal):
 // IsDisabled drives ShouldStop but does NOT signal NeedsRemoval, so the child
 // stays resident in its Stopped state and can resume when re-enabled.
 func (s *Supervisor[TObserved, TDesired]) SetDisabled(ctx context.Context, reason string, disabled bool) error {
@@ -699,10 +699,10 @@ func (s *Supervisor[TObserved, TDesired]) SetDisabled(ctx context.Context, reaso
 }
 
 // setDisabled writes the IsDisabled flag in storage for a single worker.
-// Mirrors requestShutdown but targets the IsDisabled signal via the Disablable
+// Mirrors requestRemoval but targets the IsDisabled signal via the Disablable
 // interface instead of IsBeingRemoved via RemovalRequestable.
 //
-//nolint:cyclop // mirrors requestShutdown structure
+//nolint:cyclop // mirrors requestRemoval structure
 func (s *Supervisor[TObserved, TDesired]) setDisabled(ctx context.Context, workerID string, reason string, disabled bool) error {
 	s.mu.RLock()
 	_, exists := s.workers[workerID]
@@ -769,18 +769,18 @@ func (s *Supervisor[TObserved, TDesired]) setDisabled(ctx context.Context, worke
 	return nil
 }
 
-// clearIsBeingRemoved clears the IsBeingRemoved flag in storage for restart.
-func (s *Supervisor[TObserved, TDesired]) clearIsBeingRemoved(ctx context.Context, workerID string) error {
+// clearRemoval clears the IsBeingRemoved flag in storage for restart.
+func (s *Supervisor[TObserved, TDesired]) clearRemoval(ctx context.Context, workerID string) error {
 	// Load current desired state
 	var desired TDesired
 	if err := s.store.LoadDesiredTyped(ctx, s.workerType, workerID, &desired); err != nil {
 		if errors.Is(err, persistence.ErrNotFound) {
 			return nil
 		}
-		return fmt.Errorf("load desired for clear shutdown: %w", err)
+		return fmt.Errorf("load desired for clear removal: %w", err)
 	}
 
-	// Clear shutdown flag via interface
+	// Clear removal flag via interface
 	if sr, ok := any(desired).(fsmv2.RemovalRequestable); ok {
 		sr.SetBeingRemoved(false)
 	} else if sr, ok := any(&desired).(fsmv2.RemovalRequestable); ok {

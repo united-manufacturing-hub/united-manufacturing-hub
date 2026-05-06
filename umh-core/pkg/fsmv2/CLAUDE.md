@@ -43,7 +43,7 @@ Children aggregation (health counts) is handled by the supervisor, not in `Colle
 Parents have two semantically distinct ways to stop children:
 
 1. **`ChildSpec.Enabled = false`** — "disable this child, possibly preserve state in future". The CHANGE-19 reducer (`supervisor/reconciliation.go`) translates `Enabled=false` into `IsBeingRemoved=true` on resident children synchronously, before the child's tick. For non-resident specs (cold boot), the supervisor skips creation entirely (PR3-I).
-2. **Omit the spec from `[]config.ChildSpec{}`** — "this child should not exist". The supervisor's Phase-1 absent-from-specs path drives full teardown (`RequestShutdown` → child's `NeedsRemoval` → removal from `s.workers`).
+2. **Omit the spec from `[]config.ChildSpec{}`** — "this child should not exist". The supervisor's Phase-1 absent-from-specs path drives full teardown (`RequestRemoval` → child's `NeedsRemoval` → removal from `s.workers`).
 
 Today, both options converge to "child gone" because the default `StoppedState.Next()` pattern signals `NeedsRemoval` on `IsBeingRemoved`. Internal state (counters, connection handles, pending buffers) is lost; respawn starts fresh.
 

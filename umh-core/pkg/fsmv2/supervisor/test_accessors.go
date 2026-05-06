@@ -47,9 +47,9 @@ func (s *Supervisor[TObserved, TDesired]) TestTick(ctx context.Context) error {
 	return s.tick(ctx)
 }
 
-// TestRequestShutdown exposes requestShutdown() for testing. DO NOT USE in production code.
-func (s *Supervisor[TObserved, TDesired]) TestRequestShutdown(ctx context.Context, workerID string, reason string) error {
-	return s.requestShutdown(ctx, workerID, reason)
+// TestRequestRemoval exposes requestRemoval() for testing. DO NOT USE in production code.
+func (s *Supervisor[TObserved, TDesired]) TestRequestRemoval(ctx context.Context, workerID string, reason string) error {
+	return s.requestRemoval(ctx, workerID, reason)
 }
 
 // TestGetRestartCount returns collectorHealth.restartCount for testing. DO NOT USE in production code.

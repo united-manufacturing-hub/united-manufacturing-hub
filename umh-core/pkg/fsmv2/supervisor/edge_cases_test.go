@@ -44,7 +44,7 @@ var _ = Describe("Edge Cases", func() {
 		})
 	})
 
-	Describe("RequestShutdown", func() {
+	Describe("RequestRemoval", func() {
 		Context("when shutdown is requested", func() {
 			It("should save desired state with shutdown flag", func() {
 				mockStore := newMockTriangularStore()
@@ -79,7 +79,7 @@ var _ = Describe("Edge Cases", func() {
 				err = s.AddWorker(identity, worker)
 				Expect(err).ToNot(HaveOccurred())
 
-				err = s.TestRequestShutdown(context.Background(), identity.ID, "test reason")
+				err = s.TestRequestRemoval(context.Background(), identity.ID, "test reason")
 				Expect(err).ToNot(HaveOccurred())
 				Expect(mockStore.SaveDesiredCalled).To(BeNumerically(">", 1))
 			})
@@ -101,8 +101,8 @@ var _ = Describe("Edge Cases", func() {
 					},
 				})
 
-				// Don't add worker - test that requestShutdown fails for non-existent worker
-				err := s.TestRequestShutdown(context.Background(), identity.ID, "test reason")
+				// Don't add worker - test that requestRemoval fails for non-existent worker
+				err := s.TestRequestRemoval(context.Background(), identity.ID, "test reason")
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("not found"))
 			})
@@ -439,7 +439,7 @@ var _ = Describe("Edge Cases", func() {
 		})
 	})
 
-	Describe("RequestShutdown with valid worker", func() {
+	Describe("RequestRemoval with valid worker", func() {
 		Context("when worker exists", func() {
 			It("should set IsBeingRemoved in persistence when desired state exists", func() {
 				mockStore := newMockTriangularStore()
@@ -453,7 +453,7 @@ var _ = Describe("Edge Cases", func() {
 				err := mockStore.SaveIdentity(context.Background(), "container", identity.ID, identityDoc)
 				Expect(err).ToNot(HaveOccurred())
 
-				// Save a desired state that requestShutdown can load and modify
+				// Save a desired state that requestRemoval can load and modify
 				// Note: JSON key is "isBeingRemoved" (PascalCase) per the struct tag in testutil.DesiredState
 				desiredDoc := persistence.Document{
 					"isBeingRemoved": false,
@@ -475,8 +475,8 @@ var _ = Describe("Edge Cases", func() {
 				err = s.AddWorker(identity, worker)
 				Expect(err).ToNot(HaveOccurred())
 
-				// RequestShutdown should succeed and update persistence
-				err = s.TestRequestShutdown(context.Background(), identity.ID, "test reason")
+				// RequestRemoval should succeed and update persistence
+				err = s.TestRequestRemoval(context.Background(), identity.ID, "test reason")
 				Expect(err).ToNot(HaveOccurred())
 
 				// Verify IsBeingRemoved was set in the store
@@ -501,7 +501,7 @@ var _ = Describe("Edge Cases", func() {
 				err := mockStore.SaveIdentity(context.Background(), "container", identity.ID, identityDoc)
 				Expect(err).ToNot(HaveOccurred())
 
-				// Don't save any desired state - requestShutdown should return nil
+				// Don't save any desired state - requestRemoval should return nil
 
 				s := supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
 					WorkerType: "container",
@@ -517,8 +517,8 @@ var _ = Describe("Edge Cases", func() {
 				err = s.AddWorker(identity, worker)
 				Expect(err).ToNot(HaveOccurred())
 
-				// RequestShutdown should return nil when no desired state exists
-				err = s.TestRequestShutdown(context.Background(), identity.ID, "test reason")
+				// RequestRemoval should return nil when no desired state exists
+				err = s.TestRequestRemoval(context.Background(), identity.ID, "test reason")
 				Expect(err).ToNot(HaveOccurred())
 			})
 		})

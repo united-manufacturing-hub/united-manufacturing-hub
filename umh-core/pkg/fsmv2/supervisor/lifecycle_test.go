@@ -61,7 +61,7 @@ var _ = Describe("Supervisor Lifecycle", func() {
 	})
 
 	Describe("Tick with shutdown request error", func() {
-		Context("when RequestShutdown fails during timeout handling", func() {
+		Context("when RequestRemoval fails during timeout handling", func() {
 			It("should still return error about unresponsive collector", func() {
 				store := newMockTriangularStore()
 
