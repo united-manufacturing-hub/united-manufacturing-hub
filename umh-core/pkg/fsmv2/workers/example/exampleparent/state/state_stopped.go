@@ -40,13 +40,13 @@ type StoppedState struct {
 func (s *StoppedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := fsmv2.ConvertWorkerSnapshot[exampleparent.ExampleparentConfig, exampleparent.ExampleparentStatus](snapAny)
 
-	if snap.Desired.IsShutdownRequested() {
+	if snap.Desired.IsBeingRemoved() {
 		return fsmv2.Transition(s, fsmv2.SignalNeedsRemoval, nil, "Shutdown requested, signaling removal", []config.ChildSpec{})
 	}
 
 	// Top-level parent gate: advance only if the user-configured State is
 	// "running". exampleparent has no parent of its own; child workers use
-	// IsShutdownRequested propagated from ChildSpec.Enabled instead.
+	// IsBeingRemoved propagated from ChildSpec.Enabled instead.
 	if snap.Desired.Config.GetState() == config.DesiredStateRunning {
 		elapsed := time.Duration(snap.Observed.Metrics.Framework.TimeInCurrentStateMs) * time.Millisecond
 		if elapsed >= StoppedWaitDuration {

@@ -147,8 +147,8 @@ type Observation[TStatus any] struct {
 	ChildrenHealthy int `json:"children_healthy"`
 	// ChildrenUnhealthy is the count of unhealthy children.
 	ChildrenUnhealthy int `json:"children_unhealthy"`
-	// ShutdownRequested mirrors the desired state's shutdown flag.
-	ShutdownRequested bool `json:"ShutdownRequested"` //nolint:tagliatelle // Match existing API field name
+	// BeingRemoved mirrors the desired state's shutdown flag.
+	BeingRemoved bool `json:"isBeingRemoved"` //nolint:tagliatelle // Match existing API field name
 }
 
 // observationFrameworkFields is the shared alias type used by MarshalJSON and UnmarshalJSON
@@ -166,7 +166,7 @@ type observationFrameworkFields struct {
 	deps.MetricsEmbedder
 	ChildrenHealthy   int  `json:"children_healthy"`
 	ChildrenUnhealthy int  `json:"children_unhealthy"`
-	ShutdownRequested bool `json:"ShutdownRequested"` //nolint:tagliatelle
+	BeingRemoved bool `json:"isBeingRemoved"` //nolint:tagliatelle
 }
 
 // MarshalJSON produces flat JSON with framework fields and TStatus fields at the same level.
@@ -176,7 +176,7 @@ func (o Observation[TStatus]) MarshalJSON() ([]byte, error) {
 		CollectedAt:       o.CollectedAt,
 		ChildrenView:      o.ChildrenView,
 		State:             o.State,
-		ShutdownRequested: o.ShutdownRequested,
+		BeingRemoved:      o.BeingRemoved,
 		LastActionResults: o.LastActionResults,
 		ChildrenHealthy:   o.ChildrenHealthy,
 		ChildrenUnhealthy: o.ChildrenUnhealthy,
@@ -228,7 +228,7 @@ func (o *Observation[TStatus]) UnmarshalJSON(data []byte) error {
 	o.CollectedAt = fw.CollectedAt
 	o.ChildrenView = fw.ChildrenView
 	o.State = fw.State
-	o.ShutdownRequested = fw.ShutdownRequested
+	o.BeingRemoved = fw.BeingRemoved
 	o.LastActionResults = fw.LastActionResults
 	o.ChildrenHealthy = fw.ChildrenHealthy
 	o.ChildrenUnhealthy = fw.ChildrenUnhealthy
@@ -278,11 +278,11 @@ func (o Observation[TStatus]) SetState(s string) ObservedState {
 	return o
 }
 
-// SetShutdownRequested sets the shutdown requested flag. Matches collector pattern:
+// SetBeingRemoved sets the shutdown requested flag. Matches collector pattern:
 //
-//	interface{ SetShutdownRequested(bool) fsmv2.ObservedState }
-func (o Observation[TStatus]) SetShutdownRequested(v bool) ObservedState {
-	o.ShutdownRequested = v
+//	interface{ SetBeingRemoved(bool) fsmv2.ObservedState }
+func (o Observation[TStatus]) SetBeingRemoved(v bool) ObservedState {
+	o.BeingRemoved = v
 
 	return o
 }

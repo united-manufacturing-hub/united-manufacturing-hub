@@ -182,7 +182,7 @@ type MockDesiredState struct {
 	shutdownRequested bool
 }
 
-func (m *MockDesiredState) IsShutdownRequested() bool {
+func (m *MockDesiredState) IsBeingRemoved() bool {
 	return m.shutdownRequested
 }
 
@@ -190,7 +190,7 @@ func (m *MockDesiredState) GetState() string {
 	return "running"
 }
 
-func (m *MockDesiredState) SetShutdownRequested(requested bool) {
+func (m *MockDesiredState) SetBeingRemoved(requested bool) {
 	m.shutdownRequested = requested
 }
 

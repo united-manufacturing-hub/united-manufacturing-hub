@@ -34,7 +34,7 @@ import (
 func makeChildSnapshot(shutdownRequested bool) fsmv2.Snapshot {
 	desired := &fsmv2.WrappedDesiredState[examplechild.ExamplechildConfig]{
 		BaseDesiredState: config.BaseDesiredState{
-			ShutdownRequested: shutdownRequested,
+			BeingRemoved: shutdownRequested,
 		},
 	}
 	observed := fsmv2.Observation[examplechild.ExamplechildStatus]{}

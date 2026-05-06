@@ -26,7 +26,7 @@ import (
 
 // Compile-time assertions: WrappedDesiredState satisfies framework interfaces.
 var _ fsmv2.DesiredState = &fsmv2.WrappedDesiredState[testConfig]{}
-var _ fsmv2.ShutdownRequestable = &fsmv2.WrappedDesiredState[testConfig]{}
+var _ fsmv2.RemovalRequestable = &fsmv2.WrappedDesiredState[testConfig]{}
 var _ fsmv2.Disablable = &fsmv2.WrappedDesiredState[testConfig]{}
 var _ config.ChildSpecProvider = &fsmv2.WrappedDesiredState[testConfig]{}
 
@@ -37,35 +37,35 @@ type testConfig struct {
 }
 
 var _ = Describe("WrappedDesiredState", func() {
-	Describe("IsShutdownRequested", func() {
+	Describe("IsBeingRemoved", func() {
 		It("returns false when not requested", func() {
 			ds := &fsmv2.WrappedDesiredState[testConfig]{}
-			Expect(ds.IsShutdownRequested()).To(BeFalse())
+			Expect(ds.IsBeingRemoved()).To(BeFalse())
 		})
 
 		It("returns true when requested", func() {
 			ds := &fsmv2.WrappedDesiredState[testConfig]{
-				BaseDesiredState: config.BaseDesiredState{ShutdownRequested: true},
+				BaseDesiredState: config.BaseDesiredState{BeingRemoved: true},
 			}
-			Expect(ds.IsShutdownRequested()).To(BeTrue())
+			Expect(ds.IsBeingRemoved()).To(BeTrue())
 		})
 	})
 
-	Describe("SetShutdownRequested", func() {
+	Describe("SetBeingRemoved", func() {
 		It("sets shutdown to true", func() {
 			ds := &fsmv2.WrappedDesiredState[testConfig]{}
-			Expect(ds.IsShutdownRequested()).To(BeFalse())
+			Expect(ds.IsBeingRemoved()).To(BeFalse())
 
-			ds.SetShutdownRequested(true)
-			Expect(ds.IsShutdownRequested()).To(BeTrue())
+			ds.SetBeingRemoved(true)
+			Expect(ds.IsBeingRemoved()).To(BeTrue())
 		})
 
 		It("sets shutdown back to false", func() {
 			ds := &fsmv2.WrappedDesiredState[testConfig]{
-				BaseDesiredState: config.BaseDesiredState{ShutdownRequested: true},
+				BaseDesiredState: config.BaseDesiredState{BeingRemoved: true},
 			}
-			ds.SetShutdownRequested(false)
-			Expect(ds.IsShutdownRequested()).To(BeFalse())
+			ds.SetBeingRemoved(false)
+			Expect(ds.IsBeingRemoved()).To(BeFalse())
 		})
 	})
 
@@ -85,7 +85,7 @@ var _ = Describe("WrappedDesiredState", func() {
 			original := &fsmv2.WrappedDesiredState[testConfig]{
 				Config: testConfig{Host: "localhost", Port: 8080},
 			}
-			original.SetShutdownRequested(true)
+			original.SetBeingRemoved(true)
 
 			data, err := json.Marshal(original)
 			Expect(err).NotTo(HaveOccurred())
@@ -94,7 +94,7 @@ var _ = Describe("WrappedDesiredState", func() {
 			Expect(json.Unmarshal(data, &restored)).To(Succeed())
 			Expect(restored.Config.Host).To(Equal("localhost"))
 			Expect(restored.Config.Port).To(Equal(8080))
-			Expect(restored.IsShutdownRequested()).To(BeTrue())
+			Expect(restored.IsBeingRemoved()).To(BeTrue())
 		})
 	})
 

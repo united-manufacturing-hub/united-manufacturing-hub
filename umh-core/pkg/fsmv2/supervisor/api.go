@@ -207,7 +207,13 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity deps.Identity, work
 				return true
 			}
 
-			return desired.IsShutdownRequested()
+			if ds, ok := any(desired).(fsmv2.DesiredState); ok {
+				return ds.IsBeingRemoved()
+			}
+			if ds, ok := any(&desired).(fsmv2.DesiredState); ok {
+				return ds.IsBeingRemoved()
+			}
+			return false
 		},
 		// A child is healthy ONLY if in PhaseRunningHealthy (fully stable).
 		// PhaseRunningDegraded is operational but NOT healthy.

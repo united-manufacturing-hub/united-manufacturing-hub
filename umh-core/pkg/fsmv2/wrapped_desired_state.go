@@ -20,7 +20,7 @@ import (
 
 // WrappedDesiredState wraps a developer's TConfig into the full DesiredState
 // required by the supervisor. BaseDesiredState promotion provides
-// IsShutdownRequested and SetShutdownRequested for free.
+// IsBeingRemoved and SetBeingRemoved for free.
 //
 // The framework constructs this internally during DeriveDesiredState;
 // developers only provide TConfig via WorkerBase helpers.
@@ -41,9 +41,10 @@ func (d *WrappedDesiredState[TConfig]) GetChildrenSpecs() []config.ChildSpec {
 // Set by the CHANGE-19 reducer when ChildSpec.Enabled=false. Transient — the
 // parent may flip Enabled=true to resume the child without removing it.
 //
-// Compare with IsShutdownRequested (permanent removal; renamed IsBeingRemoved
-// in PR5.3) and Config.GetState()=="stopped" (user-driven stop). See
-// WorkerSnapshot.ShouldStop for the umbrella semantic.
+// Compare with IsBeingRemoved (permanent removal — renamed from
+// IsShutdownRequested in PR5.3) and Config.GetState()=="stopped"
+// (user-driven stop). See WorkerSnapshot.ShouldStop for the umbrella
+// semantic.
 func (d *WrappedDesiredState[TConfig]) IsDisabled() bool {
 	return d.Disabled
 }

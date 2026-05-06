@@ -38,7 +38,7 @@ type ApplicationConfig struct {
 
 // ApplicationStatus holds the runtime observation data for the application
 // supervisor. Framework fields (CollectedAt, State, LastActionResults,
-// MetricsEmbedder, ShutdownRequested, ChildrenHealthy, ChildrenUnhealthy,
+// MetricsEmbedder, IsBeingRemoved, ChildrenHealthy, ChildrenUnhealthy,
 // ChildrenView) are carried by fsmv2.Observation[ApplicationStatus] and are
 // not duplicated here.
 //

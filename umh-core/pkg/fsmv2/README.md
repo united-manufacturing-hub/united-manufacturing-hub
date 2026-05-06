@@ -178,7 +178,7 @@ func (s *TryingToStartState) Next(snapAny any) fsmv2.NextResult[any, any] {
     snap := helpers.ConvertSnapshot[ObservedState, *DesiredState](snapAny)
 
     // ALWAYS check shutdown first
-    if snap.Desired.IsShutdownRequested() {
+    if snap.Desired.IsBeingRemoved() {
         return fsmv2.Transition(&StoppedState{}, fsmv2.SignalNone, nil, "Shutdown requested")
     }
     // Check observation - did the process start?
@@ -456,7 +456,7 @@ Developers implement business logic; the supervisor handles:
 | **Actions** | Worker pool, panic recovery, timeout | 10 workers, 30s timeout, auto-retry |
 | **Metrics** | FrameworkMetrics auto-injected | TimeInCurrentStateMs, StateTransitionsTotal |
 | **Persistence** | Delta checking (skips unchanged writes) | Automatic I/O reduction |
-| **Shutdown** | `IsShutdownRequested()` propagated to all states | Graceful cleanup |
+| **Shutdown** | `IsBeingRemoved` propagated to all states | Graceful cleanup |
 | **Templates** | Variable expansion (User/Global/Internal) | Strict mode (fails on missing) |
 | **Children** | Spawn, manage, reconcile child workers | Automatic lifecycle |
 
@@ -551,7 +551,7 @@ ginkgo run --focus="Architecture" -v ./pkg/fsmv2/
 
 1. **State transitions**: Call `Next()` with test snapshots
 2. **Action idempotency**: Verify actions are safe to call multiple times
-3. **Shutdown handling**: Test `IsShutdownRequested()` path in all states
+3. **Shutdown handling**: Test `IsBeingRemoved` path in all states
 
 **Example test pattern:**
 
@@ -576,7 +576,7 @@ It("should transition to Running when process is observed", func() {
 |---------|-------|------------|
 | Stuck in `TryingTo*` state | Action logs for errors | Fix action failure or external dependency |
 | Running but not working | Observation timestamps | Verify `CollectObservedState()` queries actual system |
-| Won't shut down | `IsShutdownRequested()` check | Ensure all states check shutdown first |
+| Won't shut down | `IsBeingRemoved` check | Ensure all states check shutdown first |
 | Action runs multiple times | Action idempotency | Add "already done" check before work |
 | Data considered stale | Circuit breaker metrics | Check observation collection errors |
 

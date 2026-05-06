@@ -125,17 +125,17 @@
 //
 // # DesiredState and shutdown control
 //
-// DesiredState includes IsShutdownRequested() for graceful shutdown:
+// DesiredState includes IsBeingRemoved for graceful shutdown:
 //
 //	type DesiredState struct {
 //	    State            string
-//	    ShutdownRequested bool
+//	    IsBeingRemoved bool
 //	    ChildrenSpecs    []ChildSpec
 //	}
 //
-// The supervisor sets ShutdownRequested when shutdown is initiated. Workers
+// The supervisor sets IsBeingRemoved when shutdown is initiated. Workers
 // check this flag in their state transitions and complete cleanup states
-// before signaling removal. Parent shutdown propagates ShutdownRequested
+// before signaling removal. Parent shutdown propagates IsBeingRemoved
 // to all children, so children clean up before parent completes shutdown.
 //
 // # Template expansion

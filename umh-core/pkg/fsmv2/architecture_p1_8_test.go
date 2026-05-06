@@ -36,7 +36,7 @@ var _ = Describe("FSMv2 Architecture Validation — P1.8 Foundation Cap", func()
 			// body in collector.go (collector goroutine in the two-goroutine
 			// architecture documented in Design Intent §14). SaveObserved
 			// must be the LAST observation mutation in that function: any
-			// setter call (SetState, SetChildrenView, SetShutdownRequested,
+			// setter call (SetState, SetChildrenView, SetBeingRemoved,
 			// SetChildrenCounts, SetParentMappedState) that appears AFTER
 			// SaveObserved indicates an injection-after-persistence drift.
 			//
@@ -55,7 +55,7 @@ var _ = Describe("FSMv2 Architecture Validation — P1.8 Foundation Cap", func()
 			setterNames := map[string]bool{
 				"SetState":             true,
 				"SetChildrenView":      true,
-				"SetShutdownRequested": true,
+				"SetBeingRemoved": true,
 				"SetChildrenCounts":    true,
 				"SetParentMappedState": true,
 			}

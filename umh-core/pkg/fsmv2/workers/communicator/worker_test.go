@@ -130,7 +130,7 @@ var _ = Describe("CommunicatorWorker", func() {
 				desired, ok := desiredIface.(*fsmv2.WrappedDesiredState[communicator.CommunicatorConfig])
 				Expect(ok).To(BeTrue(), "expected *fsmv2.WrappedDesiredState[CommunicatorConfig]")
 				Expect(desired.Config.GetState()).To(Equal("running"))
-				Expect(desired.IsShutdownRequested()).To(BeFalse())
+				Expect(desired.IsBeingRemoved()).To(BeFalse())
 			})
 
 			It("should include TransportWorker child via RenderChildren", func() {

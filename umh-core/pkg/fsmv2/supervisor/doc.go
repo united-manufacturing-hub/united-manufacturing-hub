@@ -420,7 +420,7 @@
 //
 // # Best practices
 //
-//   - Check IsShutdownRequested() as first condition in state.Next()
+//   - Check IsBeingRemoved as first condition in state.Next()
 //   - Make all actions idempotent (check if work already done)
 //   - Children are always-enabled when the parent is running; use
 //     ChildSpec.Enabled=false to deliberately disable a resident child

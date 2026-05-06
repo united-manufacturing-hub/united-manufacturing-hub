@@ -70,7 +70,7 @@ var _ = Describe("StoppedState", func() {
 					Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "helloworld"},
 					Observed: fsmv2.Observation[hello_world.HelloworldStatus]{},
 					Desired: &fsmv2.WrappedDesiredState[hello_world.HelloworldConfig]{
-						BaseDesiredState: config.BaseDesiredState{ShutdownRequested: true},
+						BaseDesiredState: config.BaseDesiredState{BeingRemoved: true},
 					},
 				}
 			})
@@ -129,7 +129,7 @@ var _ = Describe("StoppedState Transitions", func() {
 				Identity: deps.Identity{ID: "hello-1", Name: "helloworld", WorkerType: "helloworld"},
 				Observed: fsmv2.Observation[hello_world.HelloworldStatus]{},
 				Desired: &fsmv2.WrappedDesiredState[hello_world.HelloworldConfig]{
-					BaseDesiredState: config.BaseDesiredState{ShutdownRequested: false},
+					BaseDesiredState: config.BaseDesiredState{BeingRemoved: false},
 				},
 			}
 
@@ -147,7 +147,7 @@ var _ = Describe("StoppedState Transitions", func() {
 				Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "helloworld"},
 				Observed: fsmv2.Observation[hello_world.HelloworldStatus]{},
 				Desired: &fsmv2.WrappedDesiredState[hello_world.HelloworldConfig]{
-					BaseDesiredState: config.BaseDesiredState{ShutdownRequested: true},
+					BaseDesiredState: config.BaseDesiredState{BeingRemoved: true},
 				},
 			}
 
@@ -165,7 +165,7 @@ var _ = Describe("StoppedState Transitions", func() {
 					Status: hello_world.HelloworldStatus{HelloSaid: true},
 				},
 				Desired: &fsmv2.WrappedDesiredState[hello_world.HelloworldConfig]{
-					BaseDesiredState: config.BaseDesiredState{ShutdownRequested: true},
+					BaseDesiredState: config.BaseDesiredState{BeingRemoved: true},
 				},
 			}
 

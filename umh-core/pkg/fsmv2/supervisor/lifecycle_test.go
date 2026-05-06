@@ -212,7 +212,7 @@ var _ = Describe("Supervisor Lifecycle", func() {
 				var desiredState mockDesiredState
 				loadErr := store.LoadDesiredTyped(context.Background(), "test", identity.ID, &desiredState)
 				Expect(loadErr).ToNot(HaveOccurred())
-				Expect(desiredState.ShutdownRequested).To(BeTrue())
+				Expect(desiredState.IsBeingRemoved()).To(BeTrue())
 			})
 		})
 
@@ -247,7 +247,7 @@ var _ = Describe("Supervisor Lifecycle", func() {
 				var desiredState mockDesiredState
 				loadErr := store.LoadDesiredTyped(context.Background(), "test", identity.ID, &desiredState)
 				Expect(loadErr).ToNot(HaveOccurred())
-				Expect(desiredState.ShutdownRequested).To(BeFalse())
+				Expect(desiredState.IsBeingRemoved()).To(BeFalse())
 			})
 		})
 

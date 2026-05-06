@@ -42,7 +42,7 @@ func (r *testStateReader) LoadObservedTyped(_ context.Context, _ string, _ strin
 // mockDesiredState satisfies fsmv2.DesiredState for tests.
 type mockDesiredState struct{}
 
-func (d *mockDesiredState) IsShutdownRequested() bool { return false }
+func (d *mockDesiredState) IsBeingRemoved() bool      { return false }
 func (d *mockDesiredState) GetState() string          { return "running" }
 
 // configurableStateReader satisfies deps.StateReader with configurable responses.

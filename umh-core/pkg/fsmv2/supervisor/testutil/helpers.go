@@ -38,17 +38,17 @@ func (t *ObservedState) GetTimestamp() time.Time {
 }
 
 type DesiredState struct {
-	State       string `json:"state"`
-	ShutdownReq bool   `json:"ShutdownRequested"`
-	Disabled    bool   `json:"isDisabled,omitempty"`
+	State        string `json:"state"`
+	BeingRemoved bool   `json:"isBeingRemoved"`
+	Disabled     bool   `json:"isDisabled,omitempty"`
 }
 
-func (t *DesiredState) IsShutdownRequested() bool {
-	return t.ShutdownReq
+func (t *DesiredState) IsBeingRemoved() bool {
+	return t.BeingRemoved
 }
 
-func (t *DesiredState) SetShutdownRequested(requested bool) {
-	t.ShutdownReq = requested
+func (t *DesiredState) SetBeingRemoved(requested bool) {
+	t.BeingRemoved = requested
 }
 
 func (t *DesiredState) IsDisabled() bool {

@@ -104,7 +104,7 @@ var _ = Describe("DegradedState", func() {
 						Status: hello_world.HelloworldStatus{Mood: "sad", HelloSaid: true},
 					},
 					Desired: &fsmv2.WrappedDesiredState[hello_world.HelloworldConfig]{
-						BaseDesiredState: config.BaseDesiredState{ShutdownRequested: true},
+						BaseDesiredState: config.BaseDesiredState{BeingRemoved: true},
 					},
 				}
 			})
@@ -185,7 +185,7 @@ var _ = Describe("DegradedState Transitions", func() {
 					Status: hello_world.HelloworldStatus{Mood: "sad", HelloSaid: true},
 				},
 				Desired: &fsmv2.WrappedDesiredState[hello_world.HelloworldConfig]{
-					BaseDesiredState: config.BaseDesiredState{ShutdownRequested: true},
+					BaseDesiredState: config.BaseDesiredState{BeingRemoved: true},
 				},
 			}
 
@@ -203,7 +203,7 @@ var _ = Describe("DegradedState Transitions", func() {
 					Status: hello_world.HelloworldStatus{Mood: "happy", HelloSaid: true},
 				},
 				Desired: &fsmv2.WrappedDesiredState[hello_world.HelloworldConfig]{
-					BaseDesiredState: config.BaseDesiredState{ShutdownRequested: true},
+					BaseDesiredState: config.BaseDesiredState{BeingRemoved: true},
 				},
 			}
 

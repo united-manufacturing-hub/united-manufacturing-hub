@@ -30,7 +30,7 @@ import (
 // §4-C exception: the regular zero-value-false rule is opted out of here in
 // favor of "every declared child runs" — the load-bearing semantic for the
 // application worker (see the §4-C exception block in DeriveDesiredState).
-// Callers that want a stopped child must use ShutdownRequested, not Enabled.
+// Callers that want a stopped child must use IsBeingRemoved, not Enabled.
 //
 // Pure, deterministic, idempotent: same snapshot input yields the same
 // ChildSpec values across repeated calls. Per §4-C LOCKED, Enabled is set

@@ -67,7 +67,7 @@ func newPauseResumeFixture(
 
 	desiredDoc := persistence.Document{
 		"id":                identity.ID,
-		"ShutdownRequested": false,
+		"isBeingRemoved": false,
 	}
 	_, err = mockStore.SaveDesired(ctx, "parent", identity.ID, desiredDoc)
 	Expect(err).NotTo(HaveOccurred())
@@ -125,7 +125,7 @@ var _ = Describe("CHANGE-19 Pause/Resume", func() {
 		// Resident-child reducer path: when Enabled flips from true to false
 		// on a child that already exists in s.children, the reducer must
 		// write IsDisabled=true on the child's worker desired state (NOT
-		// IsShutdownRequested — that signals permanent removal). The child
+		// IsBeingRemoved — that signals permanent removal). The child
 		// stays resident (no pendingRemoval, no despawn) and ShouldStop()
 		// drives it into Stopped state via the OR with IsDisabled.
 		initialSpecs := []config.ChildSpec{
@@ -173,10 +173,10 @@ var _ = Describe("CHANGE-19 Pause/Resume", func() {
 		Expect(childDesired.IsDisabled()).To(BeTrue(),
 			"reducer must write IsDisabled=true on resident child's desired state when Enabled=false")
 
-		// Assert 4: IsShutdownRequested stays false — that signal is reserved
+		// Assert 4: IsBeingRemoved stays false — that signal is reserved
 		// for permanent removal, not transient parent-disable.
-		Expect(childDesired.IsShutdownRequested()).To(BeFalse(),
-			"reducer must NOT write IsShutdownRequested=true on Enabled=false; that signal is for permanent removal")
+		Expect(childDesired.IsBeingRemoved()).To(BeFalse(),
+			"reducer must NOT write IsBeingRemoved=true on Enabled=false; that signal is for permanent removal")
 	})
 
 	It("TestPauseResume_ReenableFromStopped_ChildRestartsTryingToStart", func() {

@@ -512,7 +512,7 @@ func verifyNoOrphanedStates(store storage.TriangularStoreInterface) {
 		isTrying := strings.HasPrefix(state, "TryingTo")
 
 		// If shutdown requested, should not be in TryingTo* state
-		if shutdown, ok := w.Desired["ShutdownRequested"].(bool); ok && shutdown {
+		if shutdown, ok := w.Desired["isBeingRemoved"].(bool); ok && shutdown {
 			if isTrying {
 				GinkgoWriter.Printf("  Warning: %s/%s stuck in %s during shutdown\n",
 					w.WorkerType, w.WorkerID, state)

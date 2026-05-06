@@ -29,14 +29,14 @@ const (
 	// FieldWorkerType is the worker type designation.
 	FieldWorkerType = "worker_type"
 
-	// FieldShutdownRequested is the graceful shutdown signal.
+	// FieldIsBeingRemoved is the graceful shutdown signal.
 	// Set in desired documents to request FSM shutdown.
-	// PascalCase matches struct tag: `json:"ShutdownRequested"`.
-	FieldShutdownRequested = "ShutdownRequested"
+	// PascalCase matches struct tag: `json:"isBeingRemoved"`.
+	FieldIsBeingRemoved = "isBeingRemoved"
 
 	// FieldIsDisabled is the transient parent-disable signal.
 	// Set in desired documents by the CHANGE-19 reducer when a parent flips
-	// ChildSpec.Enabled=false. Distinct from FieldShutdownRequested (permanent
+	// ChildSpec.Enabled=false. Distinct from FieldIsBeingRemoved (permanent
 	// removal): IsDisabled drives ShouldStop without signalling NeedsRemoval.
 	// camelCase matches struct tag: `json:"isDisabled,omitempty"`.
 	FieldIsDisabled = "isDisabled"

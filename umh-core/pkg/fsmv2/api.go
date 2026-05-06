@@ -32,12 +32,12 @@ const (
 	SignalNone Signal = iota
 
 	// SignalNeedsRemoval tells supervisor this worker has completed cleanup and can be removed.
-	// Emitted by Stopped state when IsShutdownRequested() returns true and cleanup is complete.
+	// Emitted by Stopped state when IsBeingRemoved returns true and cleanup is complete.
 	SignalNeedsRemoval
 
 	// SignalNeedsRestart tells supervisor the worker has detected an unrecoverable error
 	// and needs a full restart. The supervisor will:
-	//   1. Call SetShutdownRequested(true) (trigger graceful shutdown)
+	//   1. Call SetBeingRemoved(true) (trigger graceful shutdown)
 	//   2. Wait for worker to complete shutdown and emit SignalNeedsRemoval
 	//   3. Reset worker to initial state instead of removing it
 	//   4. Restart the observation collector
@@ -76,20 +76,25 @@ type TimestampProvider interface {
 }
 
 // DesiredState represents the target state derived from user configuration.
+//
+// Concrete DesiredState types embed config.BaseDesiredState, which provides the
+// IsBeingRemoved() reader method (against the BeingRemoved field) and the
+// SetBeingRemoved setter (RemovalRequestable interface). State files read the
+// flag through snap.Desired.IsBeingRemoved().
 type DesiredState interface {
-	// IsShutdownRequested is set by supervisor to initiate graceful shutdown.
-	// States should check this first in their Next() method.
-	IsShutdownRequested() bool
+	// IsBeingRemoved is set by supervisor to initiate graceful removal of the
+	// worker. States should check this first in their Next() method.
+	IsBeingRemoved() bool
 }
 
-// ShutdownRequestable allows setting the shutdown flag on any DesiredState.
+// RemovalRequestable allows setting the shutdown flag on any DesiredState.
 // Embed config.BaseDesiredState (from pkg/fsmv2/config) to satisfy this interface.
-type ShutdownRequestable interface {
-	SetShutdownRequested(bool)
+type RemovalRequestable interface {
+	SetBeingRemoved(bool)
 }
 
 // Disablable is implemented by desired states that can be transiently disabled
-// by their parent (ChildSpec.Enabled=false). Distinct from ShutdownRequestable
+// by their parent (ChildSpec.Enabled=false). Distinct from RemovalRequestable
 // (permanent removal) and Config-level state stops.
 type Disablable interface {
 	SetDisabled(bool)
@@ -357,7 +362,7 @@ func wrapTypedAction(action any) Action[any] {
 }
 
 // Worker is the business logic interface that developers implement.
-// Note: Shutdown is managed by the supervisor via ShutdownRequested in desired state,
+// Note: Shutdown is managed by the supervisor via IsBeingRemoved in desired state,
 // not by a method on this interface.
 type Worker interface {
 	// CollectObservedState monitors the actual system state.

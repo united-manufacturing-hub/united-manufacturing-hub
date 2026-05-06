@@ -79,7 +79,7 @@ var _ = Describe("PendingRemoval Flag Clearing", func() {
 
 			desiredDoc := persistence.Document{
 				"id":                identity.ID,
-				"ShutdownRequested": false,
+				"isBeingRemoved": false,
 			}
 			_, err = mockStore.SaveDesired(ctx, "parent", identity.ID, desiredDoc)
 			Expect(err).NotTo(HaveOccurred())

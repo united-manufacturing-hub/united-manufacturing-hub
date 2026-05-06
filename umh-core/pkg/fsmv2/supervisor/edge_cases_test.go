@@ -60,7 +60,7 @@ var _ = Describe("Edge Cases", func() {
 
 				desiredDoc := persistence.Document{
 					"id":                identity.ID,
-					"ShutdownRequested": false,
+					"isBeingRemoved": false,
 				}
 				_, err = mockStore.SaveDesired(context.Background(), "container", identity.ID, desiredDoc)
 				Expect(err).ToNot(HaveOccurred())
@@ -283,7 +283,7 @@ var _ = Describe("Edge Cases", func() {
 
 				desiredDoc := persistence.Document{
 					"id":                identity.ID,
-					"ShutdownRequested": false,
+					"isBeingRemoved": false,
 				}
 				_, err = mockStore.SaveDesired(context.Background(), "container", identity.ID, desiredDoc)
 				Expect(err).ToNot(HaveOccurred())
@@ -441,7 +441,7 @@ var _ = Describe("Edge Cases", func() {
 
 	Describe("RequestShutdown with valid worker", func() {
 		Context("when worker exists", func() {
-			It("should set ShutdownRequested in persistence when desired state exists", func() {
+			It("should set IsBeingRemoved in persistence when desired state exists", func() {
 				mockStore := newMockTriangularStore()
 
 				identity := mockIdentity()
@@ -454,9 +454,9 @@ var _ = Describe("Edge Cases", func() {
 				Expect(err).ToNot(HaveOccurred())
 
 				// Save a desired state that requestShutdown can load and modify
-				// Note: JSON key is "ShutdownRequested" (PascalCase) per the struct tag in testutil.DesiredState
+				// Note: JSON key is "isBeingRemoved" (PascalCase) per the struct tag in testutil.DesiredState
 				desiredDoc := persistence.Document{
-					"ShutdownRequested": false,
+					"isBeingRemoved": false,
 				}
 				_, err = mockStore.SaveDesired(context.Background(), "container", identity.ID, desiredDoc)
 				Expect(err).ToNot(HaveOccurred())
@@ -479,12 +479,12 @@ var _ = Describe("Edge Cases", func() {
 				err = s.TestRequestShutdown(context.Background(), identity.ID, "test reason")
 				Expect(err).ToNot(HaveOccurred())
 
-				// Verify ShutdownRequested was set in the store
+				// Verify IsBeingRemoved was set in the store
 				savedDesired, loadErr := mockStore.LoadDesired(context.Background(), "container", identity.ID)
 				Expect(loadErr).ToNot(HaveOccurred())
 				savedDoc, ok := savedDesired.(persistence.Document)
 				Expect(ok).To(BeTrue())
-				Expect(savedDoc["ShutdownRequested"]).To(BeTrue())
+				Expect(savedDoc["isBeingRemoved"]).To(BeTrue())
 			})
 		})
 
@@ -540,7 +540,7 @@ var _ = Describe("Edge Cases", func() {
 
 				desiredDoc := persistence.Document{
 					"id":                identity.ID,
-					"ShutdownRequested": false,
+					"isBeingRemoved": false,
 				}
 				_, err = mockStore.SaveDesired(context.Background(), "container", identity.ID, desiredDoc)
 				Expect(err).ToNot(HaveOccurred())
@@ -644,7 +644,7 @@ var _ = Describe("Type Safety (Invariant I16)", func() {
 
 				desiredDoc := persistence.Document{
 					"id":                identity.ID,
-					"ShutdownRequested": false,
+					"isBeingRemoved": false,
 				}
 				_, err = mockStore.SaveDesired(context.Background(), "container", identity.ID, desiredDoc)
 				Expect(err).ToNot(HaveOccurred())
@@ -693,7 +693,7 @@ var _ = Describe("Type Safety (Invariant I16)", func() {
 
 				desiredDoc := persistence.Document{
 					"id":                identity.ID,
-					"ShutdownRequested": false,
+					"isBeingRemoved": false,
 				}
 				_, err = mockStore.SaveDesired(context.Background(), "container", identity.ID, desiredDoc)
 				Expect(err).ToNot(HaveOccurred())

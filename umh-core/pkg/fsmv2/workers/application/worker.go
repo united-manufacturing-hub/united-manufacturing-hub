@@ -145,7 +145,7 @@ func (w *ApplicationWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredS
 	// contract is "every child the user declared runs". Default-on is the
 	// load-bearing semantic for this worker; the regular §4-C zero-value-
 	// false rule is opted out of here. Callers that explicitly want a
-	// stopped child must use the worker-specific ShutdownRequested signal,
+	// stopped child must use the worker-specific IsBeingRemoved signal,
 	// not the per-tick Enabled flag. RenderChildren (children.go) emits
 	// the same default-on result so the legacy DDS path and the post-P2.2
 	// renderChildren-in-state.Next path stay bit-for-bit identical.
@@ -167,7 +167,7 @@ func (w *ApplicationWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredS
 		}
 		for i, raw := range rawCfg.Children {
 			if _, hasEnabled := raw["enabled"]; hasEnabled {
-				return nil, fmt.Errorf("application children[%d] has user-supplied `enabled:` field; not permitted (§4-C YAML-passthrough exception): the application worker forces all declared children to run. Remove the `enabled:` key from your YAML, or use the ShutdownRequested signal at runtime if you need to stop a specific child", i)
+				return nil, fmt.Errorf("application children[%d] has user-supplied `enabled:` field; not permitted (§4-C YAML-passthrough exception): the application worker forces all declared children to run. Remove the `enabled:` key from your YAML, or use the IsBeingRemoved signal at runtime if you need to stop a specific child", i)
 			}
 		}
 	}

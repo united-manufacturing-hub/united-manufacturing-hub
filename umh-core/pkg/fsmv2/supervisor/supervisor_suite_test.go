@@ -109,12 +109,12 @@ func (m *mockObservedState) GetTimestamp() time.Time {
 }
 
 type mockDesiredState struct {
-	ShutdownRequested bool
-	State             string
+	BeingRemoved bool   `json:"isBeingRemoved"`
+	State        string `json:"state"`
 }
 
-func (m *mockDesiredState) IsShutdownRequested() bool {
-	return m.ShutdownRequested
+func (m *mockDesiredState) IsBeingRemoved() bool {
+	return m.BeingRemoved
 }
 
 func (m *mockDesiredState) GetState() string {
@@ -438,7 +438,7 @@ func newSupervisorWithWorker(worker *mockWorker, customStore storage.TriangularS
 
 	desiredDoc := persistence.Document{
 		"id":                identity.ID,
-		"ShutdownRequested": false,
+		"isBeingRemoved": false,
 	}
 	if _, err := triangularStore.SaveDesired(ctx, workerType, identity.ID, desiredDoc); err != nil {
 		panic(fmt.Sprintf("failed to save initial desired state: %v", err))

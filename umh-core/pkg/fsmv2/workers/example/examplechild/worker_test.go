@@ -88,7 +88,7 @@ var _ = Describe("ChildWorker", func() {
 
 			desired, ok := desiredIface.(*fsmv2.WrappedDesiredState[examplechild.ExamplechildConfig])
 			Expect(ok).To(BeTrue(), "expected *WrappedDesiredState[ExamplechildConfig], got %T", desiredIface)
-			Expect(desired.IsShutdownRequested()).To(BeFalse())
+			Expect(desired.IsBeingRemoved()).To(BeFalse())
 		})
 	})
 

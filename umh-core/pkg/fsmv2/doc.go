@@ -332,7 +332,7 @@
 //
 // ## Shutdown handling
 //
-// Check IsShutdownRequested() as the first conditional in Next().
+// Check IsBeingRemoved as the first conditional in Next().
 // See workers/example/examplechild/state/ for examples.
 //
 // ## Type-safe dependencies
@@ -365,7 +365,7 @@
 //
 //   - Keep Next() pure (no side effects)
 //   - Make actions idempotent (check if work already done)
-//   - Check IsShutdownRequested() first in all states
+//   - Check IsBeingRemoved first in all states
 //   - Use type-safe state structs, not strings
 //   - Return action or transition, not both (the supervisor panics if both are returned)
 //   - Handle context cancellation in all async operations

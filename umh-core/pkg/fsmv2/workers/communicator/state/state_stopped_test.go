@@ -96,7 +96,7 @@ var _ = Describe("StoppedState Transitions", func() {
 				Identity: deps.Identity{ID: "comm-1", Name: "communicator", WorkerType: "communicator"},
 				Observed: fsmv2.Observation[communicator.CommunicatorStatus]{},
 				Desired: &fsmv2.WrappedDesiredState[communicator.CommunicatorConfig]{
-					BaseDesiredState: config.BaseDesiredState{ShutdownRequested: false},
+					BaseDesiredState: config.BaseDesiredState{BeingRemoved: false},
 				},
 			}
 
@@ -114,7 +114,7 @@ var _ = Describe("StoppedState Transitions", func() {
 				Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "communicator"},
 				Observed: fsmv2.Observation[communicator.CommunicatorStatus]{},
 				Desired: &fsmv2.WrappedDesiredState[communicator.CommunicatorConfig]{
-					BaseDesiredState: config.BaseDesiredState{ShutdownRequested: true},
+					BaseDesiredState: config.BaseDesiredState{BeingRemoved: true},
 				},
 			}
 
@@ -130,7 +130,7 @@ var _ = Describe("StoppedState Transitions", func() {
 				Identity: deps.Identity{ID: "comm-shutdown", Name: "communicator", WorkerType: "communicator"},
 				Observed: fsmv2.Observation[communicator.CommunicatorStatus]{},
 				Desired: &fsmv2.WrappedDesiredState[communicator.CommunicatorConfig]{
-					BaseDesiredState: config.BaseDesiredState{ShutdownRequested: true},
+					BaseDesiredState: config.BaseDesiredState{BeingRemoved: true},
 				},
 			}
 

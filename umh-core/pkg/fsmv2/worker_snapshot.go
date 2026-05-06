@@ -43,7 +43,7 @@ type WorkerSnapshot[TConfig any, TStatus any] struct {
 
 	// Desired is the wrapped desired state (BaseDesiredState + TConfig +
 	// ChildrenSpecs). Use Desired.Config for typed config and
-	// Desired.IsShutdownRequested() for the merged shutdown signal.
+	// Desired.IsBeingRemoved for the merged shutdown signal.
 	Desired WrappedDesiredState[TConfig]
 
 	// Observed is the full typed observation captured by the supervisor on
@@ -54,8 +54,8 @@ type WorkerSnapshot[TConfig any, TStatus any] struct {
 
 // ShouldStop reports whether the worker should be in (or transitioning to) a stopped state.
 // It is the umbrella check for all three stop signals:
-//   - IsShutdownRequested (permanent removal — Phase 1 absent-from-specs, SignalNeedsRestart,
-//     graceful shutdown, supervisor self-protection). Renamed to IsBeingRemoved in PR5.3.
+//   - IsBeingRemoved (permanent removal — Phase 1 absent-from-specs, SignalNeedsRestart,
+//     graceful shutdown, supervisor self-protection). Renamed from IsShutdownRequested in PR5.3.
 //   - IsDisabled (transient parent-disable — ChildSpec.Enabled=false set by CHANGE-19 reducer).
 //   - Config.GetState() == DesiredStateStopped (user-driven stop via YAML).
 //
@@ -63,7 +63,7 @@ type WorkerSnapshot[TConfig any, TStatus any] struct {
 // In StoppedState, distinguish IsBeingRemoved (signal NeedsRemoval) from the others
 // (stay resident); see helpers.StoppedNext (PR5.9) for the canonical pattern.
 func (s WorkerSnapshot[TConfig, TStatus]) ShouldStop() bool {
-	if s.Desired.IsShutdownRequested() {
+	if s.Desired.IsBeingRemoved() {
 		return true
 	}
 	if s.Desired.IsDisabled() {

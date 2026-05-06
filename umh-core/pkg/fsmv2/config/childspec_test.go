@@ -302,7 +302,7 @@ childrenSpecs:
 
 		It("should handle empty ChildrenSpecs correctly", func() {
 			yamlData := `
-ShutdownRequested: false
+isBeingRemoved: false
 `
 			var desired config.DesiredState
 			err := yaml.Unmarshal([]byte(yamlData), &desired)
@@ -312,18 +312,18 @@ ShutdownRequested: false
 		})
 	})
 
-	Describe("ShutdownRequested interface", func() {
+	Describe("IsBeingRemoved interface", func() {
 		It("should return false by default", func() {
 			desired := config.DesiredState{}
 
-			Expect(desired.IsShutdownRequested()).To(BeFalse())
+			Expect(desired.IsBeingRemoved()).To(BeFalse())
 		})
 
-		It("should return true when ShutdownRequested is set", func() {
+		It("should return true when BeingRemoved is set", func() {
 			desired := config.DesiredState{}
-			desired.SetShutdownRequested(true)
+			desired.SetBeingRemoved(true)
 
-			Expect(desired.IsShutdownRequested()).To(BeTrue())
+			Expect(desired.IsBeingRemoved()).To(BeTrue())
 		})
 	})
 })

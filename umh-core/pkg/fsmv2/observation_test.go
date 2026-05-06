@@ -71,9 +71,9 @@ var _ = Describe("Observation", func() {
 			Expect(ok).To(BeTrue(), "must satisfy SetState duck-type")
 
 			_, ok = obs.(interface {
-				SetShutdownRequested(bool) fsmv2.ObservedState
+				SetBeingRemoved(bool) fsmv2.ObservedState
 			})
-			Expect(ok).To(BeTrue(), "must satisfy SetShutdownRequested duck-type")
+			Expect(ok).To(BeTrue(), "must satisfy SetBeingRemoved duck-type")
 
 			_, ok = obs.(interface {
 				SetChildrenCounts(int, int) fsmv2.ObservedState
@@ -115,21 +115,21 @@ var _ = Describe("Observation", func() {
 			Expect(obs.State).To(Equal("stopped"))
 		})
 
-		It("SetShutdownRequested matches collector pattern and returns modified copy", func() {
-			obs := fsmv2.Observation[TestStatus]{ShutdownRequested: false}
+		It("SetBeingRemoved matches collector pattern and returns modified copy", func() {
+			obs := fsmv2.Observation[TestStatus]{BeingRemoved: false}
 			var asAny fsmv2.ObservedState = obs
 
 			setter, ok := asAny.(interface {
-				SetShutdownRequested(bool) fsmv2.ObservedState
+				SetBeingRemoved(bool) fsmv2.ObservedState
 			})
-			Expect(ok).To(BeTrue(), "must satisfy collector SetShutdownRequested duck-type")
+			Expect(ok).To(BeTrue(), "must satisfy collector SetBeingRemoved duck-type")
 
-			result := setter.SetShutdownRequested(true)
+			result := setter.SetBeingRemoved(true)
 			typed := result.(fsmv2.Observation[TestStatus])
-			Expect(typed.ShutdownRequested).To(BeTrue())
+			Expect(typed.BeingRemoved).To(BeTrue())
 
 			// Original unchanged.
-			Expect(obs.ShutdownRequested).To(BeFalse())
+			Expect(obs.BeingRemoved).To(BeFalse())
 		})
 
 		It("SetChildrenCounts matches collector pattern and returns modified copy", func() {
@@ -294,7 +294,7 @@ var _ = Describe("Observation", func() {
 			original := fsmv2.Observation[TestStatus]{
 				CollectedAt:       time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
 				State:             "running",
-				ShutdownRequested: true,
+				BeingRemoved:      true,
 				ChildrenHealthy:   3,
 				ChildrenUnhealthy: 1,
 				LastActionResults: []deps.ActionResult{
@@ -326,7 +326,7 @@ var _ = Describe("Observation", func() {
 			// Framework fields
 			Expect(restored.CollectedAt).To(Equal(original.CollectedAt))
 			Expect(restored.State).To(Equal("running"))
-			Expect(restored.ShutdownRequested).To(BeTrue())
+			Expect(restored.BeingRemoved).To(BeTrue())
 			Expect(restored.ChildrenHealthy).To(Equal(3))
 			Expect(restored.ChildrenUnhealthy).To(Equal(1))
 
@@ -347,18 +347,18 @@ var _ = Describe("Observation", func() {
 			Expect(restored.Metrics.Worker.Gauges["latency"]).To(Equal(1.5))
 		})
 
-		It("includes ShutdownRequested=false in JSON (not omitted)", func() {
+		It("includes isBeingRemoved=false in JSON (not omitted)", func() {
 			obs := fsmv2.Observation[TestStatus]{
-				State:             "stopped",
-				ShutdownRequested: false,
+				State:        "stopped",
+				BeingRemoved: false,
 			}
 
 			data, err := json.Marshal(obs)
 			Expect(err).NotTo(HaveOccurred())
 
-			// ShutdownRequested intentionally has no omitempty — false must appear in wire format.
-			Expect(strings.Contains(string(data), `"ShutdownRequested":false`)).To(BeTrue(),
-				"ShutdownRequested=false must be present in JSON, got: %s", string(data))
+			// BeingRemoved intentionally has no omitempty — false must appear in wire format.
+			Expect(strings.Contains(string(data), `"isBeingRemoved":false`)).To(BeTrue(),
+				"isBeingRemoved=false must be present in JSON, got: %s", string(data))
 		})
 
 		It("includes MetricsEmbedder fields at top level with correct values", func() {

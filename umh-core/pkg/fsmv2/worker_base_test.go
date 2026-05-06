@@ -199,7 +199,7 @@ port: 8080`,
 			ds, err := wb.DeriveDesiredState(nil)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(ds).NotTo(BeNil())
-			Expect(ds.IsShutdownRequested()).To(BeFalse())
+			Expect(ds.(interface{ IsBeingRemoved() bool }).IsBeingRemoved()).To(BeFalse())
 		})
 
 		It("sets configReady=true even for nil spec", func() {

@@ -53,7 +53,7 @@ type SupervisorInterface interface {
 	StartAsChild(ctx context.Context)
 	Shutdown()
 	RequestShutdown(ctx context.Context, reason string) error
-	// ClearShutdownRequest clears IsShutdownRequested on all workers in this supervisor.
+	// ClearShutdownRequest clears IsBeingRemoved on all workers in this supervisor.
 	// Sibling of RequestShutdown. Used by the CHANGE-19 reducer to flip a
 	// previously-disabled child back to enabled state.
 	ClearShutdownRequest(ctx context.Context) error

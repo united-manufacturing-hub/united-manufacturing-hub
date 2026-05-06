@@ -70,7 +70,7 @@ func makeSnapshotWithBackoff(
 
 	desired := &fsmv2.WrappedDesiredState[push_pkg.PushConfig]{
 		BaseDesiredState: config.BaseDesiredState{
-			ShutdownRequested: effectiveShutdown,
+			BeingRemoved: effectiveShutdown,
 		},
 	}
 

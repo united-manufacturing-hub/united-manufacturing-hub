@@ -48,7 +48,7 @@ var _ = Describe("DegradedState", func() {
 					},
 					Desired: &fsmv2.WrappedDesiredState[snapshot.PersistenceConfig]{
 						BaseDesiredState: fsmv2config.BaseDesiredState{
-							ShutdownRequested: true,
+							BeingRemoved: true,
 						},
 						Config: snapshot.PersistenceConfig{
 							CompactionInterval:  5 * time.Minute,

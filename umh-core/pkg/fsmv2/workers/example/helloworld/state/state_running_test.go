@@ -74,7 +74,7 @@ var _ = Describe("RunningState", func() {
 						Status: hello_world.HelloworldStatus{HelloSaid: true},
 					},
 					Desired: &fsmv2.WrappedDesiredState[hello_world.HelloworldConfig]{
-						BaseDesiredState: config.BaseDesiredState{ShutdownRequested: true},
+						BaseDesiredState: config.BaseDesiredState{BeingRemoved: true},
 					},
 				}
 			})
@@ -121,7 +121,7 @@ var _ = Describe("RunningState Transitions", func() {
 					Status: hello_world.HelloworldStatus{HelloSaid: true},
 				},
 				Desired: &fsmv2.WrappedDesiredState[hello_world.HelloworldConfig]{
-					BaseDesiredState: config.BaseDesiredState{ShutdownRequested: true},
+					BaseDesiredState: config.BaseDesiredState{BeingRemoved: true},
 				},
 			}
 
@@ -157,7 +157,7 @@ var _ = Describe("RunningState Transitions", func() {
 					Status: hello_world.HelloworldStatus{HelloSaid: true},
 				},
 				Desired: &fsmv2.WrappedDesiredState[hello_world.HelloworldConfig]{
-					BaseDesiredState: config.BaseDesiredState{ShutdownRequested: false},
+					BaseDesiredState: config.BaseDesiredState{BeingRemoved: false},
 				},
 			}
 

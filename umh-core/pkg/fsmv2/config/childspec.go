@@ -32,7 +32,7 @@ import (
 //	}
 //
 // Workers embedding BaseDesiredState automatically satisfy the DesiredState interface's
-// IsShutdownRequested() method and the ShutdownRequestable interface's SetShutdownRequested() method.
+// IsBeingRemoved() method and the RemovalRequestable interface's SetBeingRemoved() method.
 //
 // # Lifecycle Control Invariant
 //
@@ -40,33 +40,38 @@ import (
 // Do not add fields like ShouldRun, IsRunning, Enabled, or Active to your DesiredState.
 //
 // Correct lifecycle control:
-//   - ShutdownRequested: Inherited from this type. Set by supervisor for graceful shutdown.
+//   - BeingRemoved: Inherited from this type. Set by supervisor for graceful shutdown via
+//     SetBeingRemoved; read via the IsBeingRemoved() method.
 //     Parent-driven stop flows through the same flag: parent sets ChildSpec.Enabled=false,
-//     which the CHANGE-19 reducer translates into IsShutdownRequested=true on the child.
+//     which the CHANGE-19 reducer translates into BeingRemoved=true on the child.
 //   - User-facing state ("running"/"stopped"): Read from TConfig via BaseUserSpec.GetState() in
 //     state files. The wrapper-level BaseDesiredState does not carry a State field of its own.
 //
 // Correct ShouldBeRunning() implementations:
 //
 //	func (s *MyDesiredState) ShouldBeRunning() bool {
-//	    return !s.ShutdownRequested
+//	    return !s.IsBeingRemoved()
 //	}
 //
 // Custom lifecycle fields are forbidden; the framework controls lifecycle
 // exclusively via ShouldStop() and reconciliation.
 type BaseDesiredState struct {
-	ShutdownRequested bool `json:"ShutdownRequested" yaml:"ShutdownRequested"` //nolint:tagliatelle // Match JSON field name for API compatibility
+	BeingRemoved bool `json:"isBeingRemoved" yaml:"isBeingRemoved"` //nolint:tagliatelle // Match JSON field name for API compatibility
 }
 
-// IsShutdownRequested returns whether shutdown has been requested for this worker.
-func (b *BaseDesiredState) IsShutdownRequested() bool {
-	return b.ShutdownRequested
+// SetBeingRemoved sets the removal-requested flag.
+// This satisfies the RemovalRequestable interface.
+func (b *BaseDesiredState) SetBeingRemoved(v bool) {
+	b.BeingRemoved = v
 }
 
-// SetShutdownRequested sets the shutdown requested flag.
-// This satisfies the ShutdownRequestable interface.
-func (b *BaseDesiredState) SetShutdownRequested(v bool) {
-	b.ShutdownRequested = v
+// IsBeingRemoved returns the removal-requested flag.
+//
+// This is the canonical read accessor used by the DesiredState interface and
+// by state files. The underlying field is BeingRemoved (no Is-prefix) to mirror
+// the IsDisabled/Disabled pairing on WrappedDesiredState.
+func (b *BaseDesiredState) IsBeingRemoved() bool {
+	return b.BeingRemoved
 }
 
 // BaseUserSpec provides common fields for all user configuration types.
@@ -191,10 +196,10 @@ type ChildSpec struct {
 	WorkerType   string         `json:"workerType" yaml:"workerType"` // Type of worker to create (registered worker factory key)
 
 	// Enabled is the parent's per-tick enable signal for this child. The CHANGE-19
-	// reducer translates it to IsShutdownRequested on the child's desired state every
+	// reducer translates it to IsBeingRemoved on the child's desired state every
 	// tick. Three-state semantics:
 	//
-	//   - Name present, Enabled: true  → child runs (reducer writes IsShutdownRequested=false)
+	//   - Name present, Enabled: true  → child runs (reducer writes IsBeingRemoved=false)
 	//   - Name present, Enabled: false → stopped-but-resident: child reaches Stopped and stays
 	//     there; supervisor remains resident in s.children, NOT placed in s.pendingRemoval
 	//   - Name absent from spec list   → graceful despawn (full removal via pendingRemoval)
@@ -204,16 +209,16 @@ type ChildSpec struct {
 	// explicitly set Enabled: true in their renderChildren body.
 	//
 	// Pause/resume flow: setting Enabled=false drives the child to Stopped; setting
-	// Enabled=true again writes IsShutdownRequested=false, and the child's state machine
+	// Enabled=true again writes IsBeingRemoved=false, and the child's state machine
 	// transitions from Stopped back to TryingToStart on the next tick.
 	//
 	// One-way stop guarantee: once a child enters TryingToStop, it completes the stop
-	// before accepting a new IsShutdownRequested=false signal. The supervisor only
+	// before accepting a new IsBeingRemoved=false signal. The supervisor only
 	// manages the flag; the child's state machine enforces the trajectory.
 	//
-	// Children read snap.Desired.IsShutdownRequested() and never read Enabled directly
+	// Children read snap.Desired.IsBeingRemoved() and never read Enabled directly
 	// (Design Intent §4 no-Parent-references-in-children). Implemented by the CHANGE-19
-	// reducer in supervisor/reconciliation.go (the spec→IsShutdownRequested translation
+	// reducer in supervisor/reconciliation.go (the spec→IsBeingRemoved translation
 	// runs at the start of reconcileChildren, before Phase 1's pendingRemoval writes).
 	Enabled bool `json:"enabled" yaml:"enabled"`
 }
@@ -242,7 +247,7 @@ func NewChildSpec(name, workerType string, userSpec UserSpec) ChildSpec {
 //
 // CHANGE-19 reducer (supervisor/reconciliation.go ~line 1660) translates
 // Enabled=false into RequestShutdown synchronously before the child's tick,
-// so children stay resident in supervisor.children with IsShutdownRequested
+// so children stay resident in supervisor.children with IsBeingRemoved
 // set. Flipping back to Enabled=true issues ClearShutdownRequest for clean
 // resume.
 func DisableAll(specs []ChildSpec) []ChildSpec {
@@ -585,8 +590,8 @@ func (v ChildrenView) Counts() (healthy, unhealthy int) {
 // DesiredState represents what we want the system to be.
 // This is returned by Worker.DeriveDesiredState() and used by State.Next() for decisions.
 //
-// The supervisor injects shutdown requests by setting ShutdownRequested = true.
-// Workers must check IsShutdownRequested() first in their State.Next() implementations.
+// The supervisor injects shutdown requests by setting IsBeingRemoved = true.
+// Workers must check IsBeingRemoved first in their State.Next() implementations.
 //
 // # Children Management
 //
@@ -606,21 +611,21 @@ func (v ChildrenView) Counts() (healthy, unhealthy int) {
 // Example with shutdown:
 //
 //	DesiredState{
-//	    BaseDesiredState: BaseDesiredState{ShutdownRequested: true},  // Triggers shutdown sequence
+//	    BaseDesiredState: BaseDesiredState{BeingRemoved: true},  // Triggers shutdown sequence
 //	    ChildrenSpecs:    nil,                                        // Children removed during shutdown
 //	}
 type DesiredState struct {
 	OriginalUserSpec interface{}      `json:"-"                          yaml:"-"` // Captures the input that produced this DesiredState (for debugging/traceability); not serialized (would emit untyped any over the wire per §17).
-	BaseDesiredState `yaml:",inline"` // Provides ShutdownRequested field and methods (IsShutdownRequested, SetShutdownRequested)
+	BaseDesiredState `yaml:",inline"` // Provides BeingRemoved field and methods (IsBeingRemoved, SetBeingRemoved)
 	ChildrenSpecs    []ChildSpec      `json:"childrenSpecs,omitempty"    yaml:"childrenSpecs,omitempty"` // Declarative specification of child workers
 }
 
-// NOTE: IsShutdownRequested() and SetShutdownRequested() are provided by embedded BaseDesiredState.
-// The ShutdownRequested field is the canonical source of truth for shutdown state.
+// NOTE: IsBeingRemoved() and SetBeingRemoved() are provided by embedded BaseDesiredState.
+// The BeingRemoved field is the canonical source of truth for shutdown state.
 //
 // Shutdown flow:
-//  1. Supervisor sets ShutdownRequested = true via SetShutdownRequested()
-//  2. State.Next() calls IsShutdownRequested() → returns true
+//  1. Supervisor sets BeingRemoved = true via SetBeingRemoved()
+//  2. State.Next() calls IsBeingRemoved() → returns true
 //  3. State transitions to shutdown/cleanup states
 //  4. Eventually returns SignalNeedsRemoval
 //  5. Supervisor removes worker from system
@@ -630,7 +635,7 @@ type DesiredState struct {
 //	func (s RunningState) Next(snapshot fsmv2.Snapshot) (State, Signal, Action) {
 //	    desired := snapshot.Desired.(types.DesiredState)
 //	    // Always check shutdown first
-//	    if desired.IsShutdownRequested() {
+//	    if desired.IsBeingRemoved() {
 //	        return StoppingState{}, fsmv2.SignalNone, nil
 //	    }
 //	    // ... rest of logic

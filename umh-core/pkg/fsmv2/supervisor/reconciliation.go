@@ -187,16 +187,16 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 	// Shutdown bypass: Allow FSM to process shutdown even with stale data.
 	// During graceful shutdown, child supervisors shut down first (correct order),
 	// which causes parent's observation to become stale (collectors can't observe gone children).
-	// The shutdown transition only needs the ShutdownRequested flag, not fresh observation data.
-	var isShutdownRequested bool
+	// The shutdown transition only needs the IsBeingRemoved flag, not fresh observation data.
+	var isBeingRemoved bool
 	if ds, ok := snapshot.Desired.(fsmv2.DesiredState); ok {
-		isShutdownRequested = ds.IsShutdownRequested()
+		isBeingRemoved = ds.IsBeingRemoved()
 	}
 
 	// I3: Check data freshness BEFORE calling state.Next()
 	// This is the trust boundary: states assume data is always fresh
 	// EXCEPT when shutdown is requested - shutdown doesn't need fresh observation
-	if !isShutdownRequested && !s.checkDataFreshness(snapshot) {
+	if !isBeingRemoved && !s.checkDataFreshness(snapshot) {
 		if s.freshnessChecker.IsTimeout(snapshot) {
 			// I4: Check if we've exhausted restart attempts
 			// Acquire lock to read mutable collectorHealth fields (restartCount)
@@ -803,8 +803,12 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) (err error) 
 	var existingDesiredTyped TDesired
 	if err := s.store.LoadDesiredTyped(ctx, s.workerType, firstWorkerID, &existingDesiredTyped); err == nil {
 		if ds, ok := any(existingDesiredTyped).(fsmv2.DesiredState); ok {
-			if ds.IsShutdownRequested() {
-				desiredDoc[FieldShutdownRequested] = true
+			if ds.IsBeingRemoved() {
+				desiredDoc[FieldIsBeingRemoved] = true
+			}
+		} else if ds, ok := any(&existingDesiredTyped).(fsmv2.DesiredState); ok {
+			if ds.IsBeingRemoved() {
+				desiredDoc[FieldIsBeingRemoved] = true
 			}
 		}
 		if d, ok := any(existingDesiredTyped).(fsmv2.Disablable); ok {
@@ -875,7 +879,7 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) (err error) 
 	// PR2 boundary caveat (pr2_issues #8 — empty-string ParentMappedState):
 	// Migrated state files use `!ShouldStop()` as a start-check. The
 	// FRAMEWORK ShouldStop body (worker_snapshot.go) is
-	// `IsShutdownRequested || ParentMappedState == "stopped"` and returns
+	// `IsBeingRemoved || ParentMappedState == "stopped"` and returns
 	// FALSE for empty-string ParentMappedState — so `!ShouldStop()` returns
 	// TRUE (fail-OPEN start). The pre-migration form `== DesiredStateRunning`
 	// returned FALSE for empty string (fail-SAFE stay-stopped). Production
@@ -885,7 +889,7 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) (err error) 
 	// code has no defense if that ordering is ever broken — exactly the F7
 	// premature-start failure mode the cascade is meant to prevent. Note
 	// the asymmetry: workers with a worker-local ShouldStop override (e.g.
-	// examplechild's snapshot.ShouldStop = `IsShutdownRequested ||
+	// examplechild's snapshot.ShouldStop = `IsBeingRemoved ||
 	// !ShouldBeRunning`) fail-SAFE on empty string. transport / communicator
 	// inherit the framework body and so inherit the fail-OPEN polarity.
 	// Proper fix is harmonization at framework level (P3.x scope).
@@ -974,7 +978,7 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) (err error) 
 	}
 
 	// When shutting down, pass nil to trigger graceful child shutdown instead of re-creation
-	if desiredDoc[FieldShutdownRequested] == true {
+	if desiredDoc[FieldIsBeingRemoved] == true {
 		childrenSpecs = nil
 	}
 
@@ -1525,7 +1529,7 @@ func (s *Supervisor[TObserved, TDesired]) reconcileChildren(specs []config.Child
 			// from cold boot (e.g., the parent's Stopped state has not yet
 			// emitted Enabled=true). Without this guard, the supervisor would
 			// allocate dependencies, construct the worker, then on the very
-			// next tick the reducer would flip IsShutdownRequested=true and
+			// next tick the reducer would flip IsBeingRemoved=true and
 			// the child's StoppedState would signal NeedsRemoval — a full
 			// create-and-destroy round-trip just to honor "this should be off."
 			//
@@ -1649,7 +1653,7 @@ func (s *Supervisor[TObserved, TDesired]) reconcileChildren(specs []config.Child
 
 			desiredDoc := persistence.Document{
 				FieldID:                childIdentity.ID,
-				FieldShutdownRequested: false,
+				FieldIsBeingRemoved: false,
 			}
 			if _, err := s.store.SaveDesired(childDesiredCtx, spec.WorkerType, childIdentity.ID, desiredDoc); err != nil {
 				s.logger.SentryWarn(deps.FeatureFSMv2, childPath, "child_initial_desired_state_save_failed",
@@ -1683,8 +1687,8 @@ func (s *Supervisor[TObserved, TDesired]) reconcileChildren(specs []config.Child
 	// CHANGE-19 reducer: translate Enabled → IsDisabled for resident children.
 	// This runs before Phase 1 (pendingRemoval) so Enabled=false children are NOT
 	// despawned — they stay in s.children with IsDisabled=true. ShouldStop() ORs
-	// IsDisabled with IsShutdownRequested + Config.GetState()=="stopped", so the
-	// child still enters its Stopped state machine. But because IsShutdownRequested
+	// IsDisabled with IsBeingRemoved + Config.GetState()=="stopped", so the
+	// child still enters its Stopped state machine. But because IsBeingRemoved
 	// stays false, the child's StoppedState does NOT signal NeedsRemoval, leaving
 	// the child resident and ready to resume on Enabled=true.
 	//
@@ -1721,7 +1725,7 @@ func (s *Supervisor[TObserved, TDesired]) reconcileChildren(specs []config.Child
 
 			child := s.children[name]
 			if child != nil {
-				// Request shutdown - sets ShutdownRequested=true on child's workers
+				// Request shutdown - sets IsBeingRemoved=true on child's workers
 				// Child continues ticking and will emit SignalNeedsRemoval when ready
 				ctx := context.Background()
 				if err := child.RequestShutdown(ctx, "removed_from_specs"); err != nil {

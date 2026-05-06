@@ -65,7 +65,7 @@ var _ = Describe("Restart Scenario Integration", func() {
 		// 2. Parent signals children to run -> TryingToConnect
 		// 3. ConnectAction fails 5 times (simulated failures)
 		// 4. After 5th failure, TryingToConnectState.Next() returns SignalNeedsRestart
-		// 5. Supervisor marks worker in pendingRestart, sets ShutdownRequested=true
+		// 5. Supervisor marks worker in pendingRestart, sets IsBeingRemoved=true
 		// 6. Worker transitions: TryingToConnect -> TryingToStop -> Stopped
 		// 7. Stopped state emits SignalNeedsRemoval
 		// 8. Supervisor detects pendingRestart, calls handleWorkerRestart()

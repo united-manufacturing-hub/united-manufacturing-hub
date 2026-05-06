@@ -75,7 +75,7 @@ var _ = Describe("ParentWorker", func() {
 
 			Expect(err).ToNot(HaveOccurred())
 			desired := desiredIface.(*fsmv2.WrappedDesiredState[exampleparent.ExampleparentConfig])
-			Expect(desired.IsShutdownRequested()).To(BeFalse())
+			Expect(desired.IsBeingRemoved()).To(BeFalse())
 			// ChildrenCount == 0 -> non-nil empty slice (worker.go: spec parse with ChildrenCount=0).
 			Expect(desired.ChildrenSpecs).To(BeEmpty())
 			Expect(desired.ChildrenSpecs).NotTo(BeNil())
@@ -98,7 +98,7 @@ var _ = Describe("ParentWorker", func() {
 
 			Expect(err).ToNot(HaveOccurred())
 			desired := desiredIface.(*fsmv2.WrappedDesiredState[exampleparent.ExampleparentConfig])
-			Expect(desired.IsShutdownRequested()).To(BeFalse())
+			Expect(desired.IsBeingRemoved()).To(BeFalse())
 			Expect(desired.ChildrenSpecs).To(HaveLen(3))
 			Expect(desired.ChildrenSpecs[0].Name).To(Equal("child-0"))
 			Expect(desired.ChildrenSpecs[0].Enabled).To(BeTrue(), "ChildSpec.Enabled must be true (§4-C/F4⊕G1 invariant)")

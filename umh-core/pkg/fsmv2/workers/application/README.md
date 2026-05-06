@@ -118,7 +118,7 @@ Represents the desired state with child specifications:
 
 ```go
 type ApplicationDesiredState struct {
-    config.BaseDesiredState `json:",inline"`  // Embeds State and ShutdownRequested
+    config.BaseDesiredState `json:",inline"`  // Embeds IsBeingRemoved
     Name          string                       `json:"name"`
     ChildrenSpecs []config.ChildSpec           `json:"childrenSpecs,omitempty"`
 }

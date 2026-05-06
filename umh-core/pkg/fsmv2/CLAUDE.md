@@ -11,7 +11,7 @@ The `architecture_test.go` validates ALL workers via file-system scanning (not r
 | Rule | Description |
 |------|-------------|
 | Empty State Structs | States have no fields (except embedded base) |
-| Shutdown Check First | Check `IsShutdownRequested()` as FIRST conditional in `Next()` |
+| Shutdown Check First | Check `IsBeingRemoved` as FIRST conditional in `Next()` |
 | State XOR Action | Return state OR action, never both |
 | Single Type Assertion | `Next()` has exactly one type assertion at entry |
 | Pure DeriveDesiredState | No dependency access - only use `spec` parameter |
@@ -42,15 +42,15 @@ Children aggregation (health counts) is handled by the supervisor, not in `Colle
 
 Parents have two semantically distinct ways to stop children:
 
-1. **`ChildSpec.Enabled = false`** — "disable this child, possibly preserve state in future". The CHANGE-19 reducer (`supervisor/reconciliation.go`) translates `Enabled=false` into `IsShutdownRequested=true` on resident children synchronously, before the child's tick. For non-resident specs (cold boot), the supervisor skips creation entirely (PR3-I).
+1. **`ChildSpec.Enabled = false`** — "disable this child, possibly preserve state in future". The CHANGE-19 reducer (`supervisor/reconciliation.go`) translates `Enabled=false` into `IsBeingRemoved=true` on resident children synchronously, before the child's tick. For non-resident specs (cold boot), the supervisor skips creation entirely (PR3-I).
 2. **Omit the spec from `[]config.ChildSpec{}`** — "this child should not exist". The supervisor's Phase-1 absent-from-specs path drives full teardown (`RequestShutdown` → child's `NeedsRemoval` → removal from `s.workers`).
 
-Today, both options converge to "child gone" because the default `StoppedState.Next()` pattern signals `NeedsRemoval` on `IsShutdownRequested`. Internal state (counters, connection handles, pending buffers) is lost; respawn starts fresh.
+Today, both options converge to "child gone" because the default `StoppedState.Next()` pattern signals `NeedsRemoval` on `IsBeingRemoved`. Internal state (counters, connection handles, pending buffers) is lost; respawn starts fresh.
 
 Default `StoppedState.Next()` shape:
 
 ```go
-if snap.Desired.IsShutdownRequested() {
+if snap.Desired.IsBeingRemoved() {
     return fsmv2.Transition(s, fsmv2.SignalNeedsRemoval, nil, "shutdown requested", nil)
 }
 if !snap.ShouldStop() {
@@ -106,7 +106,7 @@ func (s *RunningState) Next(snapAny any) fsmv2.NextResult[any, any] {
     snap := helpers.ConvertSnapshot[...](snapAny)  // Single type assertion
 
     // Shutdown check FIRST
-    if snap.Desired.IsShutdownRequested() {
+    if snap.Desired.IsBeingRemoved() {
         return fsmv2.Transition(&StoppingState{}, fsmv2.SignalNone, nil, "Shutdown requested")
     }
 
@@ -178,7 +178,7 @@ New workers should use `WorkerBase[TConfig, TStatus, TDeps]` instead of the lega
 - **`WrapAction[TDeps]`** — *(deprecated, removed in PR3)* adapts typed actions to `Action[any]`. Prefer passing `&MyAction{}` directly to `fsmv2.Transition` — the framework auto-wraps via reflection.
 - **`register.Worker[TConfig, TStatus, TDeps]`** — one-line registration (factory + supervisor + CSE types). Use `register.NoDeps` for zero-dep workers.
 
-**Architecture validators** accept both APIs: `ConvertWorkerSnapshot` and `ConvertSnapshot` are valid entry points. The shutdown check uses `snap.ShouldStop()` (merged user-shutdown + parent-stop signal) or `snap.Desired.IsShutdownRequested()` (raw user-shutdown flag, used when the state needs to distinguish self-driven shutdown from parent-driven stop). The deprecated `snap.IsShutdownRequested` field is gone.
+**Architecture validators** accept both APIs: `ConvertWorkerSnapshot` and `ConvertSnapshot` are valid entry points. The shutdown check uses `snap.ShouldStop()` (merged user-shutdown + parent-stop signal) or `snap.Desired.IsBeingRemoved` (raw user-shutdown flag, used when the state needs to distinguish self-driven shutdown from parent-driven stop). The deprecated `snap.IsBeingRemoved` field is gone.
 
 **Capability interfaces** (optional, detected via type assertion on first instantiation):
 - `ActionProvider` — `Actions() map[string]Action[any]`
@@ -311,6 +311,6 @@ This prevents failure rate dilution: if idle ticks feed phantom "successes" into
 - CI enforced: `ValidateStoppingStateNoCatchAllSelfReturn` in `internal/validator/state.go`
 - See any `state_stopping.go` for the pattern
 
-### Parent-driven stop flows through IsShutdownRequested
+### Parent-driven stop flows through IsBeingRemoved
 
-There is no longer a separate `ParentMappedState` signal on `Observation[T]`. When a parent wants a child stopped it sets `ChildSpec.Enabled=false`; the CHANGE-19 reducer translates that into `IsShutdownRequested=true` on the child synchronously. State files therefore only need `snap.ShouldStop()` (which returns `Desired.IsShutdownRequested()`) — there is no parent-mapped-state path for child workers using `Observation[T]` to consult.
+There is no longer a separate `ParentMappedState` signal on `Observation[T]`. When a parent wants a child stopped it sets `ChildSpec.Enabled=false`; the CHANGE-19 reducer translates that into `IsBeingRemoved=true` on the child synchronously. State files therefore only need `snap.ShouldStop()` (which now ORs `Desired.IsBeingRemoved`, `Desired.IsDisabled()`, and Config-level "stopped") — there is no parent-mapped-state path for child workers using `Observation[T]` to consult.

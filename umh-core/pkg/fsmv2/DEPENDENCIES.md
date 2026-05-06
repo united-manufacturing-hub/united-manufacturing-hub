@@ -224,8 +224,8 @@ if holder, ok := observed.(deps.MetricsHolder); ok {
 }
 
 // Check if DesiredState supports shutdown
-if sr, ok := any(desired).(fsmv2.ShutdownRequestable); ok {
-    sr.SetShutdownRequested(true)
+if sr, ok := any(desired).(fsmv2.RemovalRequestable); ok {
+    sr.SetBeingRemoved(true)
 }
 ```
 

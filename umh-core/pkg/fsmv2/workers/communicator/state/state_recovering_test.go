@@ -98,7 +98,7 @@ var _ = Describe("RecoveringState Transitions", func() {
 					ChildrenUnhealthy: 1,
 				},
 				Desired: &fsmv2.WrappedDesiredState[communicator.CommunicatorConfig]{
-					BaseDesiredState: config.BaseDesiredState{ShutdownRequested: true},
+					BaseDesiredState: config.BaseDesiredState{BeingRemoved: true},
 				},
 			}
 
@@ -117,7 +117,7 @@ var _ = Describe("RecoveringState Transitions", func() {
 					ChildrenUnhealthy: 0,
 				},
 				Desired: &fsmv2.WrappedDesiredState[communicator.CommunicatorConfig]{
-					BaseDesiredState: config.BaseDesiredState{ShutdownRequested: true},
+					BaseDesiredState: config.BaseDesiredState{BeingRemoved: true},
 				},
 			}
 

@@ -32,7 +32,7 @@ type TryingToStartState struct {
 func (s *TryingToStartState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := fsmv2.ConvertWorkerSnapshot[exampleparent.ExampleparentConfig, exampleparent.ExampleparentStatus](snapAny)
 
-	if snap.Desired.IsShutdownRequested() {
+	if snap.Desired.IsBeingRemoved() {
 		return fsmv2.Transition(&TryingToStopState{}, fsmv2.SignalNone, nil, "Shutdown requested, transitioning to TryingToStop", []config.ChildSpec{})
 	}
 

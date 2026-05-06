@@ -40,7 +40,7 @@ func makeSnapshotFull(shutdownRequested bool, desiredState string, jwtToken stri
 func makeSnapshotWithBackoff(shutdownRequested bool, desiredState string, jwtToken string, jwtExpiry time.Time, childrenHealthy, childrenUnhealthy int, consecutiveErrors int, lastErrorType httpTransport.ErrorType, lastAuthAttemptAt time.Time, lastRetryAfter time.Duration) fsmv2.Snapshot {
 	desired := &fsmv2.WrappedDesiredState[transport_pkg.TransportConfig]{
 		BaseDesiredState: config.BaseDesiredState{
-			ShutdownRequested: shutdownRequested,
+			BeingRemoved: shutdownRequested,
 		},
 		Config: transport_pkg.TransportConfig{
 			BaseUserSpec: config.BaseUserSpec{State: desiredState},
@@ -83,7 +83,7 @@ func makeSnapshotWithBackoff(shutdownRequested bool, desiredState string, jwtTok
 func makeAuthFailedSnapshot(authToken, relayURL, instanceUUID string, shutdownRequested bool) fsmv2.Snapshot {
 	desired := &fsmv2.WrappedDesiredState[transport_pkg.TransportConfig]{
 		BaseDesiredState: config.BaseDesiredState{
-			ShutdownRequested: shutdownRequested,
+			BeingRemoved: shutdownRequested,
 		},
 		Config: transport_pkg.TransportConfig{
 			BaseUserSpec: config.BaseUserSpec{State: config.DesiredStateRunning},

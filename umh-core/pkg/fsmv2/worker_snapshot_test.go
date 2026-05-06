@@ -65,7 +65,7 @@ var _ = Describe("ConvertWorkerSnapshot", func() {
 		Expect(snap.Observed.Status.LatencyMs).To(Equal(int64(42)))
 		Expect(snap.Identity).To(Equal(identity))
 		Expect(snap.CollectedAt).To(Equal(now))
-		Expect(snap.Desired.IsShutdownRequested()).To(BeFalse())
+		Expect(snap.Desired.IsBeingRemoved()).To(BeFalse())
 	})
 
 	It("copies framework fields from observed state", func() {
@@ -90,7 +90,7 @@ var _ = Describe("ConvertWorkerSnapshot", func() {
 		wds := &fsmv2.WrappedDesiredState[workerTestConfig]{
 			BaseDesiredState: config.BaseDesiredState{},
 		}
-		wds.SetShutdownRequested(true)
+		wds.SetBeingRemoved(true)
 
 		raw := fsmv2.Snapshot{
 			Observed: obs,
@@ -105,7 +105,7 @@ var _ = Describe("ConvertWorkerSnapshot", func() {
 		Expect(snap.Observed.ChildrenHealthy).To(Equal(3))
 		Expect(snap.Observed.ChildrenUnhealthy).To(Equal(1))
 		Expect(snap.Observed.ChildrenView).To(Equal(mockView))
-		Expect(snap.Desired.IsShutdownRequested()).To(BeTrue())
+		Expect(snap.Desired.IsBeingRemoved()).To(BeTrue())
 	})
 
 	It("panics with descriptive message on non-Snapshot input", func() {
@@ -138,9 +138,9 @@ var _ = Describe("ConvertWorkerSnapshot", func() {
 })
 
 var _ = Describe("ShouldStop", func() {
-	It("returns true when Desired.IsShutdownRequested() is true (other signals false)", func() {
+	It("returns true when Desired.IsBeingRemoved is true (other signals false)", func() {
 		wds := fsmv2.WrappedDesiredState[workerTestConfig]{}
-		wds.SetShutdownRequested(true)
+		wds.SetBeingRemoved(true)
 		snap := fsmv2.WorkerSnapshot[workerTestConfig, workerTestStatus]{
 			Desired: wds,
 		}
@@ -180,9 +180,9 @@ var _ = Describe("ShouldStop", func() {
 		Expect(snap.ShouldStop()).To(BeFalse())
 	})
 
-	It("returns true via IsShutdownRequested when Config does not implement GetState()", func() {
+	It("returns true via IsBeingRemoved when Config does not implement GetState()", func() {
 		wds := fsmv2.WrappedDesiredState[workerTestConfig]{}
-		wds.SetShutdownRequested(true)
+		wds.SetBeingRemoved(true)
 		snap := fsmv2.WorkerSnapshot[workerTestConfig, workerTestStatus]{
 			Desired: wds,
 		}

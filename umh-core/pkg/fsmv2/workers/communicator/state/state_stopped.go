@@ -30,7 +30,7 @@ type StoppedState struct {
 func (s *StoppedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := fsmv2.ConvertWorkerSnapshot[communicator.CommunicatorConfig, communicator.CommunicatorStatus](snapAny)
 
-	if snap.Desired.IsShutdownRequested() {
+	if snap.Desired.IsBeingRemoved() {
 		return fsmv2.Transition(s, fsmv2.SignalNeedsRemoval, nil, "Communicator is stopped and shutdown was requested", nil)
 	}
 
