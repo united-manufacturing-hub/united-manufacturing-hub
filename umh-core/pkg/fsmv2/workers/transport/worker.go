@@ -32,7 +32,6 @@ var _ fsmv2.Worker = (*TransportWorker)(nil)
 // It manages authentication and coordinates PushWorker/PullWorker children
 // for bidirectional message exchange with the backend relay server.
 type TransportWorker struct {
-	deps *TransportDependencies
 	fsmv2.WorkerBase[TransportConfig, TransportStatus, *TransportDependencies]
 }
 
@@ -61,32 +60,40 @@ func NewTransportWorker(
 	w := &TransportWorker{}
 	w.InitBase(identity, logger, stateReader)
 
-	w.deps = NewTransportDependencies(nil, logger, stateReader, identity)
-	if w.deps == nil {
+	transportDeps := NewTransportDependencies(nil, logger, stateReader, identity)
+	if transportDeps == nil {
 		return nil, errors.New("NewTransportDependencies returned nil")
 	}
 
-	w.BindDeps(w.deps)
+	w.BindDeps(transportDeps)
 
-	register.SetDeps[*TransportDependencies](workerType, w.deps)
+	register.SetDeps[*TransportDependencies](workerType, transportDeps)
 
 	return w, nil
+}
+
+// GetDependencies returns the typed TransportDependencies for use in tests
+// and internal call-sites that need direct access without the any-typed accessor.
+func (w *TransportWorker) GetDependencies() *TransportDependencies {
+	d, _ := w.GetDependenciesAny().(*TransportDependencies)
+	return d
 }
 
 // CollectObservedState returns the current observed state of the transport worker.
 // Returns NewObservation — the collector handles CollectedAt, framework metrics,
 // action history, and metric accumulation automatically after COS returns.
 func (w *TransportWorker) CollectObservedState(ctx context.Context, _ fsmv2.DesiredState) (fsmv2.ObservedState, error) {
-	failedToken, failedRelay, failedUUID := w.deps.GetFailedAuthConfig()
+	d := w.GetDependencies()
+	failedToken, failedRelay, failedUUID := d.GetFailedAuthConfig()
 
 	return fsmv2.NewObservation(TransportStatus{
-		JWTToken:          w.deps.GetJWTToken(),
-		JWTExpiry:         w.deps.GetJWTExpiry(),
-		AuthenticatedUUID: w.deps.GetAuthenticatedUUID(),
-		ConsecutiveErrors: w.deps.GetConsecutiveErrors(),
-		LastErrorType:     w.deps.GetLastErrorType(),
-		LastAuthAttemptAt: w.deps.GetLastAuthAttemptAt(),
-		LastRetryAfter:    w.deps.GetLastRetryAfter(),
+		JWTToken:          d.GetJWTToken(),
+		JWTExpiry:         d.GetJWTExpiry(),
+		AuthenticatedUUID: d.GetAuthenticatedUUID(),
+		ConsecutiveErrors: d.GetConsecutiveErrors(),
+		LastErrorType:     d.GetLastErrorType(),
+		LastAuthAttemptAt: d.GetLastAuthAttemptAt(),
+		LastRetryAfter:    d.GetLastRetryAfter(),
 		FailedAuthConfig: FailedAuthConfig{
 			AuthToken:    failedToken,
 			RelayURL:     failedRelay,
