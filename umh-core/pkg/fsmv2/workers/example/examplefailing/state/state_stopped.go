@@ -32,18 +32,7 @@ type StoppedState struct {
 func (s *StoppedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := fsmv2.ConvertWorkerSnapshot[examplefailing.ExamplefailingConfig, examplefailing.ExamplefailingStatus](snapAny)
 
-	if snap.Desired.IsBeingRemoved() {
-		return fsmv2.Transition(s, fsmv2.SignalNeedsRemoval, nil, "shutdown requested, signaling removal", nil)
-	}
-
-	// Parent disable propagates via ChildSpec.Enabled=false → IsBeingRemoved
-	// (handled by the shutdown check above). When neither user nor parent has
-	// requested stop, advance to TryingToConnect.
-	if !snap.ShouldStop() {
-		return fsmv2.Transition(&TryingToConnectState{}, fsmv2.SignalNone, nil, "attempting to connect", nil)
-	}
-
-	return fsmv2.Transition(s, fsmv2.SignalNone, nil, "worker is stopped, no connection", nil)
+	return helpers.StoppedNext(s, snap, &TryingToConnectState{}, "attempting to connect")
 }
 
 func (s *StoppedState) String() string {

@@ -32,6 +32,12 @@ type StoppedState struct {
 }
 
 // Next evaluates the current snapshot and returns the next state or action.
+//
+// Diverges from the canonical helpers.StoppedNext pattern because Transport is
+// a parent worker: its StoppedState renders children explicitly (resident but
+// disabled via config.DisableAll) so internal state survives a stop/start
+// cycle. helpers.StoppedNext does not emit children and so is not a fit here;
+// the three-branch shape below mirrors it for the leaf concerns.
 func (s *StoppedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := fsmv2.ConvertWorkerSnapshot[transport_pkg.TransportConfig, transport_pkg.TransportStatus](snapAny)
 
