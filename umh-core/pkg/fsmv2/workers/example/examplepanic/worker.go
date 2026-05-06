@@ -57,19 +57,37 @@ func NewExamplepanicWorker(
 	return w, nil
 }
 
+// DeriveDesiredState parses the user spec via WorkerBase, then synchronously
+// pushes the parsed ShouldPanic flag into deps before any state tick runs.
+//
+// Why this override exists: WorkerBase.DeriveDesiredState runs once per
+// userSpec change BEFORE the first CollectObservedState tick. The supervisor
+// passes a zero-valued *WrappedDesiredState[ExamplepanicConfig] to the very
+// first COS call (the user spec has not yet been reconciled into the
+// desired-state pipeline). Without this override, SetShouldPanic(false) wins
+// on tick 1, the worker connects normally, reaches Connected, and the
+// panic-on-connect action is never re-dispatched — the Panic Scenario
+// integration test then fails because no action_panic log is ever recorded.
+//
+// Routing the SetShouldPanic write through DDS guarantees it lands before the
+// state machine takes its first tick, regardless of how the supervisor seeds
+// COS on cold start.
+func (w *ExamplepanicWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, error) {
+	wds, err := w.WorkerBase.DeriveDesiredState(spec)
+	if err != nil {
+		return nil, err
+	}
+
+	cfg := fsmv2.ExtractConfig[ExamplepanicConfig](wds)
+	w.deps.SetShouldPanic(cfg.GetShouldPanic())
+
+	return wds, nil
+}
+
 // CollectObservedState returns the current observed state of the panic worker.
 // Returns NewObservation; the collector handles CollectedAt, framework metrics,
 // action history, and metric accumulation automatically.
-//
-// Demonstration-only: this worker writes into deps from CollectObservedState
-// (SetShouldPanic below) to simulate runtime conditions (panic flag) that
-// production configuration drives directly. Real workers MUST keep
-// CollectObservedState pure I/O reads. See pkg/fsmv2/README.md
-// "I/O isolation rule".
-func (w *ExamplepanicWorker) CollectObservedState(_ context.Context, desiredAny fsmv2.DesiredState) (fsmv2.ObservedState, error) {
-	cfg := fsmv2.ExtractConfig[ExamplepanicConfig](desiredAny)
-	w.deps.SetShouldPanic(cfg.GetShouldPanic())
-
+func (w *ExamplepanicWorker) CollectObservedState(_ context.Context, _ fsmv2.DesiredState) (fsmv2.ObservedState, error) {
 	connectionHealth := "no connection"
 
 	if w.deps.IsConnected() {
