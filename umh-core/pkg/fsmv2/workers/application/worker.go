@@ -61,8 +61,6 @@ var _ fsmv2.Worker = (*ApplicationWorker)(nil)
 // passes through ChildrenSpecs from the YAML config without knowing about
 // specific child implementations.
 type ApplicationWorker struct {
-	id   string
-	name string
 	fsmv2.WorkerBase[snapshot.ApplicationConfig, snapshot.ApplicationStatus, register.NoDeps]
 }
 
@@ -80,10 +78,7 @@ func NewApplicationWorker(id, name string, logger deps.FSMLogger, stateReader de
 		logger = deps.NewNopFSMLogger()
 	}
 
-	w := &ApplicationWorker{
-		id:   id,
-		name: name,
-	}
+	w := &ApplicationWorker{}
 	w.InitBase(deps.Identity{
 		ID:         id,
 		Name:       name,
@@ -98,9 +93,10 @@ func NewApplicationWorker(id, name string, logger deps.FSMLogger, stateReader de
 // framework metrics, action history, ChildrenView, and children counts
 // automatically after COS returns.
 func (w *ApplicationWorker) CollectObservedState(ctx context.Context, _ fsmv2.DesiredState) (fsmv2.ObservedState, error) {
+	id := w.Identity()
 	return fsmv2.NewObservation(snapshot.ApplicationStatus{
-		ID:   w.id,
-		Name: w.name,
+		ID:   id.ID,
+		Name: id.Name,
 	}), nil
 }
 
@@ -114,7 +110,7 @@ type childrenConfig struct {
 // satisfies the WorkerBase TConfig/TStatus shape while preserving the
 // application worker's passthrough children semantics.
 func (w *ApplicationWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, error) {
-	cfg := snapshot.ApplicationConfig{Name: w.name}
+	cfg := snapshot.ApplicationConfig{Name: w.Identity().Name}
 
 	if spec == nil {
 		// Byte-equivalent with canonical RenderChildren on the empty case:

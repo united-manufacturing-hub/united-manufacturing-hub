@@ -56,7 +56,6 @@ var _ fsmv2.Worker = (*PersistenceWorker)(nil)
 // PersistenceWorker implements the FSM Worker interface for the edge persistence
 // layer. It drives compaction and maintenance against the triangular store.
 type PersistenceWorker struct {
-	deps *PersistenceDependencies
 	fsmv2.WorkerBase[snapshot.PersistenceConfig, snapshot.PersistenceStatus, *PersistenceDependencies]
 }
 
@@ -99,9 +98,9 @@ func NewPersistenceWorker(
 		return nil, errors.New("persistence worker: dependencies.Store must not be nil")
 	}
 
-	w := &PersistenceWorker{deps: dependencies}
+	w := &PersistenceWorker{}
 	w.InitBase(identity, logger, stateReader)
-	w.BindDeps(w.deps)
+	w.BindDeps(dependencies)
 
 	return w, nil
 }
@@ -109,7 +108,8 @@ func NewPersistenceWorker(
 // GetDependencies returns the typed persistence dependencies.
 // Used by tests and by external callers that need to observe worker state.
 func (w *PersistenceWorker) GetDependencies() *PersistenceDependencies {
-	return w.deps
+	d, _ := w.GetDependenciesAny().(*PersistenceDependencies)
+	return d
 }
 
 // CollectObservedState returns the current observed state of the persistence
@@ -117,7 +117,7 @@ func (w *PersistenceWorker) GetDependencies() *PersistenceDependencies {
 // framework metrics, action history, and metric accumulation automatically
 // after COS returns.
 func (w *PersistenceWorker) CollectObservedState(ctx context.Context, _ fsmv2.DesiredState) (fsmv2.ObservedState, error) {
-	d := w.deps
+	d := w.GetDependencies()
 
 	var prev fsmv2.Observation[snapshot.PersistenceStatus]
 

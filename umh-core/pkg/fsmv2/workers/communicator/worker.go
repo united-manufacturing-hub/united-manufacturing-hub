@@ -43,7 +43,6 @@ const defaultCommunicatorTimeout = httpTransport.LongPollingDuration + httpTrans
 
 // CommunicatorWorker implements the FSMv2 Worker interface using the WorkerBase API.
 type CommunicatorWorker struct {
-	deps *CommunicatorDependencies
 	fsmv2.WorkerBase[CommunicatorConfig, CommunicatorStatus, *CommunicatorDependencies]
 }
 
@@ -55,8 +54,7 @@ func NewCommunicatorWorker(id deps.Identity, logger deps.FSMLogger, sr deps.Stat
 
 	w := &CommunicatorWorker{}
 	baseDeps := w.InitBase(id, logger, sr)
-	w.deps = NewCommunicatorDependencies(baseDeps)
-	w.BindDeps(w.deps)
+	w.BindDeps(NewCommunicatorDependencies(baseDeps))
 
 	return w, nil
 }
@@ -102,7 +100,8 @@ func (w *CommunicatorWorker) DeriveDesiredState(spec interface{}) (fsmv2.Desired
 
 // GetDependencies returns the typed communicator dependencies.
 func (w *CommunicatorWorker) GetDependencies() *CommunicatorDependencies {
-	return w.deps
+	d, _ := w.GetDependenciesAny().(*CommunicatorDependencies)
+	return d
 }
 
 // CollectObservedState returns the current observed state of the communicator.
@@ -110,7 +109,7 @@ func (w *CommunicatorWorker) GetDependencies() *CommunicatorDependencies {
 // handles CollectedAt, framework metrics, action history, and metric
 // accumulation (load previous from CSE, drain, merge) automatically.
 func (w *CommunicatorWorker) CollectObservedState(_ context.Context, _ fsmv2.DesiredState) (fsmv2.ObservedState, error) {
-	d := w.deps
+	d := w.GetDependencies()
 
 	d.MetricsRecorder().SetGauge(deps.GaugeConsecutiveErrors, float64(d.GetConsecutiveErrors()))
 
