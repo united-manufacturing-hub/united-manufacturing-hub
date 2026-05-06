@@ -57,6 +57,15 @@ type BaseFSMInstance struct {
 	// transientStreakCounter is the number of ticks a FSM has remained in a transient state
 	transientStreakCounter uint64
 
+	// lastLoggedErrorMsg is used to deduplicate error logs in the reconcile loop.
+	// Error on first/changed occurrence, Debug on repeats.
+	lastLoggedErrorMsg string
+
+	// errorSuppressionAnnounced records whether the "repeats suppressed" notice
+	// has already been logged for the current lastLoggedErrorMsg, so it is
+	// emitted exactly once (on the first repeat) rather than every repeat.
+	errorSuppressionAnnounced bool
+
 	// mu is a mutex for protecting concurrent access to fields
 	mu sync.RWMutex
 }
@@ -346,6 +355,32 @@ func (s *BaseFSMInstance) ShouldSkipReconcileBecauseOfError(tick uint64) bool {
 // ResetState clears the error and backoff after a successful reconcile.
 func (s *BaseFSMInstance) ResetState() {
 	s.backoffManager.Reset()
+	s.lastLoggedErrorMsg = ""
+	s.errorSuppressionAnnounced = false
+}
+
+// LogErrorDedup keeps reconcile-loop errors visible without spamming the log:
+//   - first occurrence of a message: Error, logged plainly
+//   - first repeat: Error, with a suffix announcing that further repeats are
+//     demoted to Debug, so a reader following the error log knows suppression
+//     has kicked in
+//   - subsequent repeats: Debug
+//
+// A changed message, or ResetState after a successful reconcile, resets the
+// cycle so the next error is again logged plainly at Error.
+func (s *BaseFSMInstance) LogErrorDedup(format string, args ...any) {
+	msg := fmt.Sprintf(format, args...)
+	switch {
+	case msg != s.lastLoggedErrorMsg:
+		s.logger.Errorf("%s", msg)
+		s.lastLoggedErrorMsg = msg
+		s.errorSuppressionAnnounced = false
+	case !s.errorSuppressionAnnounced:
+		s.logger.Errorf("%s (further repeats suppressed to debug until it changes or clears)", msg)
+		s.errorSuppressionAnnounced = true
+	default:
+		s.logger.Debugf("%s", msg)
+	}
 }
 
 // IsPermanentlyFailed returns true if the FSM has reached a permanent failure state

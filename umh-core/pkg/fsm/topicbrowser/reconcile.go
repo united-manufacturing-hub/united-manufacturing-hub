@@ -119,7 +119,7 @@ func (i *TopicBrowserInstance) Reconcile(ctx context.Context, snapshot fsm.Syste
 
 			// Log the error but always continue reconciling - we need reconcileStateTransition to run
 			// to restore services after restart, even if we can't read their status yet
-			i.baseFSMInstance.GetLogger().Warnf("failed to update observed state (continuing reconciliation): %s", err)
+			i.baseFSMInstance.GetLogger().Debugf("failed to update observed state (continuing reconciliation): %s", err)
 
 			// For all other errors, just continue reconciling without setting backoff
 			err = nil
@@ -141,7 +141,7 @@ func (i *TopicBrowserInstance) Reconcile(ctx context.Context, snapshot fsm.Syste
 		}
 
 		i.baseFSMInstance.SetError(err, snapshot.Tick)
-		i.baseFSMInstance.GetLogger().Errorf("error reconciling state: %s", err)
+		i.baseFSMInstance.LogErrorDedup("error reconciling state: %s", err)
 
 		return nil, false // We don't want to return an error here, because we want to continue reconciling
 	}
@@ -158,7 +158,7 @@ func (i *TopicBrowserInstance) Reconcile(ctx context.Context, snapshot fsm.Syste
 		}
 
 		i.baseFSMInstance.SetError(managerErr, snapshot.Tick)
-		i.baseFSMInstance.GetLogger().Errorf("error reconciling manager: %s", managerErr)
+		i.baseFSMInstance.LogErrorDedup("error reconciling manager: %s", managerErr)
 
 		return nil, false
 	}

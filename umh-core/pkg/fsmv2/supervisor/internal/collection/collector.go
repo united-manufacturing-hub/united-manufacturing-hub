@@ -180,7 +180,7 @@ func (c *Collector[TObserved]) TriggerNow() {
 		return
 	}
 
-	c.config.Logger.Info("collector_trigger_now_requested")
+	c.config.Logger.Debug("collector_trigger_now_requested")
 
 	select {
 	case c.restartChan <- struct{}{}:

@@ -24,6 +24,53 @@ import (
 	"go.uber.org/zap/zapcore"
 )
 
+// maxLevelCore enables only entries strictly below max, delegating everything
+// else to the embedded Core. It is the counterpart to zapcore's
+// IncreaseLevelCore (which sets a minimum) and lets NewLevelSampledCore route
+// sub-Warn entries through the sampler while Warn and above bypass it.
+type maxLevelCore struct {
+	zapcore.Core
+	max zapcore.Level
+}
+
+func (c maxLevelCore) Enabled(l zapcore.Level) bool {
+	return l < c.max && c.Core.Enabled(l)
+}
+
+func (c maxLevelCore) Check(e zapcore.Entry, ce *zapcore.CheckedEntry) *zapcore.CheckedEntry {
+	if e.Level >= c.max {
+		return ce
+	}
+	return c.Core.Check(e, ce)
+}
+
+func (c maxLevelCore) With(fields []zapcore.Field) zapcore.Core {
+	return maxLevelCore{Core: c.Core.With(fields), max: c.max}
+}
+
+// NewLevelSampledCore wraps inner with zap's battle-tested message-based
+// sampler for entries below Warn, while Warn and above pass through unsampled
+// so warnings and errors are never dropped. Within each tick the first
+// occurrences of a message are logged, then every thereafter-th.
+//
+// The sampler keys on the entry message, so keep the message constant and put
+// variable data in structured fields (Infow("updating converter", "name",
+// name)) for repeated calls to share a bucket. Interpolated messages (Infof)
+// produce a unique string per call and will not be grouped.
+func NewLevelSampledCore(inner zapcore.Core, tick time.Duration, first, thereafter int) zapcore.Core {
+	low := zapcore.NewSamplerWithOptions(maxLevelCore{Core: inner, max: zapcore.WarnLevel}, tick, first, thereafter)
+
+	high, err := zapcore.NewIncreaseLevelCore(inner, zapcore.WarnLevel)
+	if err != nil {
+		// Only happens when the core's minimum level is already above Warn
+		// (e.g. Error-only), so there is nothing below Warn to split off.
+		// Fall back to sampling the whole core rather than losing entries.
+		return zapcore.NewSamplerWithOptions(inner, tick, first, thereafter)
+	}
+
+	return zapcore.NewTee(low, high)
+}
+
 // LogLevel represents the logging level.
 type LogLevel string
 
@@ -164,8 +211,13 @@ func New(logLevel string, logFormat LogFormat) *zap.Logger {
 		zap.NewAtomicLevelAt(level),
 	)
 
+	// Sample repeated messages below Warn to keep logs readable; Warn and
+	// above are never sampled. Keys on the message string, so keep messages
+	// constant and put variable data in structured fields.
+	sampledCore := NewLevelSampledCore(core, 10*time.Second, 3, 100)
+
 	// Create the logger
-	logger := zap.New(core, zap.AddCaller())
+	logger := zap.New(sampledCore, zap.AddCaller())
 
 	return logger
 }
@@ -173,6 +225,11 @@ func New(logLevel string, logFormat LogFormat) *zap.Logger {
 // Initialize sets up the global logger with the specified log level using zap.ReplaceGlobals().
 func Initialize() {
 	loggerMutex.Do(func() {
+		if getEnv("LOGGING_DISABLED", "") == "true" {
+			Disable()
+			return
+		}
+
 		logLevel := getEnv("LOGGING_LEVEL", string(ProductionLevel))
 		logFormat := getLogFormat(FormatPretty) // Default to human-readable pretty format
 		logger := New(logLevel, logFormat)
@@ -219,4 +276,13 @@ func For(component string) *zap.SugaredLogger {
 	}
 
 	return zap.S().Named(component)
+}
+
+// Disable replaces the global logger with a no-op logger that discards all
+// output without any allocations. Call this in TestMain or BeforeSuite to
+// silence all logging during tests.
+func Disable() {
+	nop := zap.NewNop()
+	zap.ReplaceGlobals(nop)
+	initialized = true
 }

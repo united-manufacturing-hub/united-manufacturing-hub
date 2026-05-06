@@ -578,6 +578,10 @@ func (p *ProtocolConverterService) UpdateInManager(
 		return errors.New("config is nil")
 	}
 
+	p.logger.Infof("Updating protocolconverter %s", protConvName)
+
+	p.logger.Debugf("Updating protocolconverter %s", protConvName)
+
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}

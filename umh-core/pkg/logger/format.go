@@ -16,12 +16,42 @@ package logger
 
 import (
 	"fmt"
-	"strconv"
+	"strings"
 	"time"
+	"unicode/utf8"
 
 	"go.uber.org/zap/buffer"
 	"go.uber.org/zap/zapcore"
 )
+
+const (
+	levelColumnWidth  = 8  // [ERROR] = 7, pad to 8
+	callerColumnWidth = 40 // longest common caller path
+	nameColumnWidth   = 45 // longest common logger name; longer ones are left-truncated
+)
+
+// padRight pads s with spaces on the right so its displayed width reaches
+// the given number of columns. Width is measured in runes, not bytes, so
+// multi-byte characters (e.g. "…") align correctly. If s is already >=
+// width, it is returned as-is.
+func padRight(s string, width int) string {
+	n := utf8.RuneCountInString(s)
+	if n >= width {
+		return s
+	}
+	return s + strings.Repeat(" ", width-n)
+}
+
+// truncateLeft shortens s to maxLen runes by keeping the rightmost
+// characters, prefixing with "…" so the reader knows content was cut.
+// It operates on runes to avoid splitting a multi-byte UTF-8 sequence.
+func truncateLeft(s string, maxLen int) string {
+	r := []rune(s)
+	if len(r) <= maxLen {
+		return s
+	}
+	return "…" + string(r[len(r)-(maxLen-1):])
+}
 
 // PrettyConsoleEncoder is a custom encoder that produces human-readable logs
 // in a format like:
@@ -61,34 +91,23 @@ func (e *PrettyConsoleEncoder) EncodeEntry(entry zapcore.Entry, fields []zapcore
 	// }
 	// line.AppendByte(']')
 
-	// Format log level with padding for alignment
-	line.AppendString(" [")
+	// Level column
+	levelStr := "[" + entry.Level.CapitalString() + "]"
+	line.AppendString(padRight(levelStr, levelColumnWidth))
+	line.AppendByte(' ')
 
-	level := entry.Level.CapitalString()
-	line.AppendString(level)
-
-	line.AppendByte(']')
-	// Add tab after level
-	line.AppendByte('\t')
-
-	// Format caller information if available
+	// Caller column — left-truncate paths that exceed the column width
 	if entry.Caller.Defined {
-		line.AppendString("[")
-		line.AppendString(entry.Caller.TrimmedPath())
-		line.AppendString(":")
-		line.AppendString(strconv.Itoa(entry.Caller.Line))
-		line.AppendByte(']')
-		line.AppendByte('\t')
+		callerStr := "[" + truncateLeft(entry.Caller.TrimmedPath(), callerColumnWidth-2) + "]"
+		line.AppendString(padRight(callerStr, callerColumnWidth))
+		line.AppendByte(' ')
 	}
 
-	// Format component name if available
+	// Logger name column — left-truncate names that exceed the column width
 	if entry.LoggerName != "" {
-		line.AppendString("[")
-		line.AppendString(entry.LoggerName)
-		line.AppendByte(']')
-		line.AppendByte('\t')
-		line.AppendByte('\t')
-		line.AppendByte('\t')
+		nameStr := "[" + truncateLeft(entry.LoggerName, nameColumnWidth-2) + "]"
+		line.AppendString(padRight(nameStr, nameColumnWidth))
+		line.AppendByte(' ')
 	}
 
 	// Format log message

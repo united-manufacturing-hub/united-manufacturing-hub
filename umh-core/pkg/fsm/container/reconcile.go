@@ -99,7 +99,7 @@ func (c *ContainerInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSn
 
 		// Log the error but always continue reconciling - we need reconcileStateTransition to run
 		// to restore services after restart, even if we can't read their status yet
-		c.baseFSMInstance.GetLogger().Warnf("failed to update observed state (continuing reconciliation): %s", err)
+		c.baseFSMInstance.GetLogger().Debugf("failed to update observed state (continuing reconciliation): %s", err)
 
 		// For all other errors, just continue reconciling without setting backoff
 		err = nil
@@ -124,7 +124,7 @@ func (c *ContainerInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSn
 		}
 
 		c.baseFSMInstance.SetError(err, snapshot.Tick)
-		c.baseFSMInstance.GetLogger().Errorf("error reconciling state: %s", err)
+		c.baseFSMInstance.LogErrorDedup("error reconciling state: %s", err)
 
 		return nil, false // We don't want to return an error here, because we want to continue reconciling
 	}
@@ -163,25 +163,25 @@ func (c *ContainerInstance) printSystemState(instanceName string, tick uint64) {
 	logger := c.baseFSMInstance.GetLogger()
 	status := c.ObservedState.ServiceInfo
 
-	logger.Infof("======= Container Instance State: %s (tick: %d) =======", instanceName, tick)
-	logger.Infof("FSM States: Current=%s, Desired=%s", c.baseFSMInstance.GetCurrentFSMState(), c.baseFSMInstance.GetDesiredFSMState())
+	logger.Debugf("======= Container Instance State: %s (tick: %d) =======", instanceName, tick)
+	logger.Debugf("FSM States: Current=%s, Desired=%s", c.baseFSMInstance.GetCurrentFSMState(), c.baseFSMInstance.GetDesiredFSMState())
 
 	if status == nil {
-		logger.Infof("Container Status: No data available")
+		logger.Debugf("Container Status: No data available")
 	} else {
-		logger.Infof("Health: Overall=%s, CPU=%s, Memory=%s, Disk=%s",
+		logger.Debugf("Health: Overall=%s, CPU=%s, Memory=%s, Disk=%s",
 			healthCategoryToString(status.OverallHealth),
 			healthCategoryToString(status.CPUHealth),
 			healthCategoryToString(status.MemoryHealth),
 			healthCategoryToString(status.DiskHealth))
 
 		if status.CPU != nil {
-			logger.Infof("CPU: Usage=%.2fm cores, Cores=%d", status.CPU.TotalUsageMCpu, status.CPU.CoreCount)
-			
+			logger.Debugf("CPU: Usage=%.2fm cores, Cores=%d", status.CPU.TotalUsageMCpu, status.CPU.CoreCount)
+
 			// Log cgroup CPU info if available
 			if status.CPU.CgroupCores > 0 {
-				logger.Infof("CPU Cgroup: Quota=%.2f cores, Throttle Ratio=%.4f, Throttled=%v", 
-					status.CPU.CgroupCores, 
+				logger.Debugf("CPU Cgroup: Quota=%.2f cores, Throttle Ratio=%.4f, Throttled=%v",
+					status.CPU.CgroupCores,
 					status.CPU.ThrottleRatio,
 					status.CPU.IsThrottled)
 			}
@@ -196,7 +196,7 @@ func (c *ContainerInstance) printSystemState(instanceName string, tick uint64) {
 				usagePercent = float64(status.Memory.CGroupUsedBytes) / float64(status.Memory.CGroupTotalBytes) * 100
 			}
 
-			logger.Infof("Memory: Used=%.2f MB, Total=%.2f MB, Usage=%.2f%%", usedMB, totalMB, usagePercent)
+			logger.Debugf("Memory: Used=%.2f MB, Total=%.2f MB, Usage=%.2f%%", usedMB, totalMB, usagePercent)
 		}
 
 		if status.Disk != nil {
@@ -208,13 +208,13 @@ func (c *ContainerInstance) printSystemState(instanceName string, tick uint64) {
 				usagePercent = float64(status.Disk.DataPartitionUsedBytes) / float64(status.Disk.DataPartitionTotalBytes) * 100
 			}
 
-			logger.Infof("Disk: Used=%.2f GB, Total=%.2f GB, Usage=%.2f%%", usedGB, totalGB, usagePercent)
+			logger.Debugf("Disk: Used=%.2f GB, Total=%.2f GB, Usage=%.2f%%", usedGB, totalGB, usagePercent)
 		}
 
-		logger.Infof("Architecture: %s, HWID: %s", status.Architecture, status.Hwid)
+		logger.Debugf("Architecture: %s, HWID: %s", status.Architecture, status.Hwid)
 	}
 
-	logger.Infof("=================================================")
+	logger.Debugf("=================================================")
 }
 
 // healthCategoryToString converts a HealthCategory to a human-readable string.
