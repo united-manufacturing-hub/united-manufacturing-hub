@@ -27,6 +27,7 @@ import (
 // Compile-time assertions: WrappedDesiredState satisfies framework interfaces.
 var _ fsmv2.DesiredState = &fsmv2.WrappedDesiredState[testConfig]{}
 var _ fsmv2.ShutdownRequestable = &fsmv2.WrappedDesiredState[testConfig]{}
+var _ fsmv2.Disablable = &fsmv2.WrappedDesiredState[testConfig]{}
 var _ config.ChildSpecProvider = &fsmv2.WrappedDesiredState[testConfig]{}
 
 // testConfig is a minimal worker configuration for testing.
@@ -94,6 +95,49 @@ var _ = Describe("WrappedDesiredState", func() {
 			Expect(restored.Config.Host).To(Equal("localhost"))
 			Expect(restored.Config.Port).To(Equal(8080))
 			Expect(restored.IsShutdownRequested()).To(BeTrue())
+		})
+	})
+
+	Describe("IsDisabled", func() {
+		It("returns false by default", func() {
+			ds := &fsmv2.WrappedDesiredState[testConfig]{}
+			Expect(ds.IsDisabled()).To(BeFalse())
+		})
+
+		It("returns true after SetDisabled(true)", func() {
+			ds := &fsmv2.WrappedDesiredState[testConfig]{}
+			ds.SetDisabled(true)
+			Expect(ds.IsDisabled()).To(BeTrue())
+		})
+
+		It("returns false after SetDisabled(false)", func() {
+			ds := &fsmv2.WrappedDesiredState[testConfig]{Disabled: true}
+			Expect(ds.IsDisabled()).To(BeTrue())
+			ds.SetDisabled(false)
+			Expect(ds.IsDisabled()).To(BeFalse())
+		})
+	})
+
+	Describe("Disabled JSON serialization", func() {
+		It("omits the field when false (omitempty)", func() {
+			ds := &fsmv2.WrappedDesiredState[testConfig]{}
+			data, err := json.Marshal(ds)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(string(data)).NotTo(ContainSubstring("isDisabled"))
+		})
+
+		It("includes the field when true", func() {
+			ds := &fsmv2.WrappedDesiredState[testConfig]{Disabled: true}
+			data, err := json.Marshal(ds)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(string(data)).To(ContainSubstring(`"isDisabled":true`))
+		})
+
+		It("unmarshals isDisabled into Disabled field", func() {
+			raw := `{"config":{"host":"","port":0},"isDisabled":true}`
+			var ds fsmv2.WrappedDesiredState[testConfig]
+			Expect(json.Unmarshal([]byte(raw), &ds)).To(Succeed())
+			Expect(ds.IsDisabled()).To(BeTrue())
 		})
 	})
 

@@ -28,10 +28,27 @@ type WrappedDesiredState[TConfig any] struct {
 	config.BaseDesiredState
 	Config        TConfig            `json:"config"`
 	ChildrenSpecs []config.ChildSpec `json:"childrenSpecs,omitempty"`
+	Disabled      bool               `json:"isDisabled,omitempty"`
 }
 
 // GetChildrenSpecs returns the children specifications.
 // Implements config.ChildSpecProvider interface.
 func (d *WrappedDesiredState[TConfig]) GetChildrenSpecs() []config.ChildSpec {
 	return d.ChildrenSpecs
+}
+
+// IsDisabled reports whether this child is currently disabled by its parent.
+// Set by the CHANGE-19 reducer when ChildSpec.Enabled=false. Transient — the
+// parent may flip Enabled=true to resume the child without removing it.
+//
+// Compare with IsShutdownRequested (permanent removal; renamed IsBeingRemoved
+// in PR5.3) and Config.GetState()=="stopped" (user-driven stop). See
+// WorkerSnapshot.ShouldStop for the umbrella semantic.
+func (d *WrappedDesiredState[TConfig]) IsDisabled() bool {
+	return d.Disabled
+}
+
+// SetDisabled sets the disabled flag. Called by the supervisor reducer.
+func (d *WrappedDesiredState[TConfig]) SetDisabled(v bool) {
+	d.Disabled = v
 }

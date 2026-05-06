@@ -88,6 +88,14 @@ type ShutdownRequestable interface {
 	SetShutdownRequested(bool)
 }
 
+// Disablable is implemented by desired states that can be transiently disabled
+// by their parent (ChildSpec.Enabled=false). Distinct from ShutdownRequestable
+// (permanent removal) and Config-level state stops.
+type Disablable interface {
+	SetDisabled(bool)
+	IsDisabled() bool
+}
+
 // Snapshot is the complete view of the worker at a point in time (immutable).
 type Snapshot struct {
 	Observed interface{}   // What is the actual state? (ObservedState or basic.Document).
