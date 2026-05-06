@@ -5,6 +5,7 @@
 ### Improvements
 
 - Previously, the component tasked with communicating with the UI could stop working if it rebuilt its HTTP connection (which happens after persistent network failures) while a message was being sent or received. Connection rebuilds and in-flight requests are now coordinated so they cannot interfere.
+- Config backup is now enabled by default. Previously, automatic config.yaml backups required setting `ENABLE_CONFIG_BACKUP=true`. After validating the feature in customer environments for over two months, every umh-core instance now writes timestamped copies of `config.yaml` to `/data/config-backups/` on every config write, retaining the 100 most recent versions (roughly 5–20 MB). To opt out, set `ENABLE_CONFIG_BACKUP=false`. To roll back a bad config, use the second-most-recent backup — the most recent one mirrors the bad write
 
 ## [0.44.19]
 
