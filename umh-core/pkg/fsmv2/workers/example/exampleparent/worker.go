@@ -32,7 +32,6 @@ const workerType = "exampleparent"
 
 // ParentWorker implements the FSM v2 Worker interface for parent-child relationships.
 type ParentWorker struct {
-	deps *ParentDependencies
 	fsmv2.WorkerBase[ExampleparentConfig, ExampleparentStatus, *ParentDependencies]
 }
 
@@ -52,10 +51,16 @@ func NewParentWorker(
 
 	w := &ParentWorker{}
 	baseDeps := w.InitBase(identity, logger, stateReader)
-	w.deps = NewParentDependencies(baseDeps)
-	w.BindDeps(w.deps)
+	w.BindDeps(NewParentDependencies(baseDeps))
 
 	return w, nil
+}
+
+// GetDependencies returns the typed ParentDependencies for use in tests
+// and internal call-sites that need direct access without the any-typed accessor.
+func (w *ParentWorker) GetDependencies() *ParentDependencies {
+	d, _ := w.GetDependenciesAny().(*ParentDependencies)
+	return d
 }
 
 // CollectObservedState returns the current observed state of the parent worker.

@@ -27,7 +27,6 @@ import (
 const workerType = "examplepanic"
 
 type ExamplepanicWorker struct {
-	deps *ExamplepanicDependencies
 	fsmv2.WorkerBase[ExamplepanicConfig, ExamplepanicStatus, *ExamplepanicDependencies]
 }
 
@@ -51,10 +50,16 @@ func NewExamplepanicWorker(
 
 	w := &ExamplepanicWorker{}
 	w.InitBase(identity, logger, stateReader)
-	w.deps = NewExamplepanicDependencies(connectionPool, logger, stateReader, identity)
-	w.BindDeps(w.deps)
+	w.BindDeps(NewExamplepanicDependencies(connectionPool, logger, stateReader, identity))
 
 	return w, nil
+}
+
+// GetDependencies returns the typed ExamplepanicDependencies for use in tests
+// and internal call-sites that need direct access without the any-typed accessor.
+func (w *ExamplepanicWorker) GetDependencies() *ExamplepanicDependencies {
+	d, _ := w.GetDependenciesAny().(*ExamplepanicDependencies)
+	return d
 }
 
 // DeriveDesiredState parses the user spec via WorkerBase, then synchronously
@@ -79,7 +84,7 @@ func (w *ExamplepanicWorker) DeriveDesiredState(spec interface{}) (fsmv2.Desired
 	}
 
 	cfg := fsmv2.ExtractConfig[ExamplepanicConfig](wds)
-	w.deps.SetShouldPanic(cfg.GetShouldPanic())
+	w.GetDependencies().SetShouldPanic(cfg.GetShouldPanic())
 
 	return wds, nil
 }
@@ -90,7 +95,7 @@ func (w *ExamplepanicWorker) DeriveDesiredState(spec interface{}) (fsmv2.Desired
 func (w *ExamplepanicWorker) CollectObservedState(_ context.Context, _ fsmv2.DesiredState) (fsmv2.ObservedState, error) {
 	connectionHealth := "no connection"
 
-	if w.deps.IsConnected() {
+	if w.GetDependencies().IsConnected() {
 		connectionHealth = "healthy"
 	}
 

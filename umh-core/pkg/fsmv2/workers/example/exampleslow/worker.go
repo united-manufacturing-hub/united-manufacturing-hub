@@ -27,7 +27,6 @@ import (
 const workerType = "exampleslow"
 
 type ExampleslowWorker struct {
-	deps *ExampleslowDependencies
 	fsmv2.WorkerBase[ExampleslowConfig, ExampleslowStatus, *ExampleslowDependencies]
 }
 
@@ -51,10 +50,16 @@ func NewExampleslowWorker(
 
 	w := &ExampleslowWorker{}
 	baseDeps := w.InitBase(identity, logger, stateReader)
-	w.deps = NewExampleslowDependencies(connectionPool, baseDeps)
-	w.BindDeps(w.deps)
+	w.BindDeps(NewExampleslowDependencies(connectionPool, baseDeps))
 
 	return w, nil
+}
+
+// GetDependencies returns the typed ExampleslowDependencies for use in tests
+// and internal call-sites that need direct access without the any-typed accessor.
+func (w *ExampleslowWorker) GetDependencies() *ExampleslowDependencies {
+	d, _ := w.GetDependenciesAny().(*ExampleslowDependencies)
+	return d
 }
 
 // CollectObservedState returns the current observed state of the slow worker.
@@ -63,7 +68,7 @@ func NewExampleslowWorker(
 func (w *ExampleslowWorker) CollectObservedState(_ context.Context, _ fsmv2.DesiredState) (fsmv2.ObservedState, error) {
 	connectionHealth := "no connection"
 
-	if w.deps.IsConnected() {
+	if w.GetDependencies().IsConnected() {
 		connectionHealth = "healthy"
 	}
 

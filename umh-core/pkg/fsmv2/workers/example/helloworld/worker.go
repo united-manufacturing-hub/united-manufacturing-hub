@@ -36,7 +36,6 @@ const workerType = "helloworld"
 
 // HelloworldWorker implements the FSMv2 Worker interface.
 type HelloworldWorker struct {
-	deps *HelloworldDependencies
 	fsmv2.WorkerBase[HelloworldConfig, HelloworldStatus, *HelloworldDependencies]
 }
 
@@ -48,10 +47,16 @@ func NewHelloworldWorker(id deps.Identity, logger deps.FSMLogger, sr deps.StateR
 
 	w := &HelloworldWorker{}
 	baseDeps := w.InitBase(id, logger, sr)
-	w.deps = NewHelloworldDependencies(baseDeps)
-	w.BindDeps(w.deps)
+	w.BindDeps(NewHelloworldDependencies(baseDeps))
 
 	return w, nil
+}
+
+// GetDependencies returns the typed HelloworldDependencies for use in tests
+// and internal call-sites that need direct access without the any-typed accessor.
+func (w *HelloworldWorker) GetDependencies() *HelloworldDependencies {
+	d, _ := w.GetDependenciesAny().(*HelloworldDependencies)
+	return d
 }
 
 // CollectObservedState collects and returns the current observed state.
@@ -62,7 +67,7 @@ func (w *HelloworldWorker) CollectObservedState(_ context.Context, desired fsmv2
 	cfg := fsmv2.ExtractConfig[HelloworldConfig](desired)
 
 	status := HelloworldStatus{
-		HelloSaid: w.deps.HasSaidHello(),
+		HelloSaid: w.GetDependencies().HasSaidHello(),
 		Mood:      readMoodFile(cfg.MoodFilePath),
 	}
 
