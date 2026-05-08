@@ -37,48 +37,54 @@ var _ = Describe("RunningState", func() {
 
 	Describe("Next", func() {
 		Context("when shutdown is requested", func() {
-			It("should transition to ShuttingDownState", func() {
+			It("should transition to StoppingState", func() {
 				snap := fsmv2.Snapshot{
 					Identity: deps.Identity{ID: "test", WorkerType: "persistence"},
-					Observed: snapshot.PersistenceObservedState{
+					Observed: fsmv2.Observation[snapshot.PersistenceStatus]{
 						CollectedAt: time.Now(),
 					},
-					Desired: &snapshot.PersistenceDesiredState{
+					Desired: &fsmv2.WrappedDesiredState[snapshot.PersistenceConfig]{
 						BaseDesiredState: fsmv2config.BaseDesiredState{
 							ShutdownRequested: true,
 						},
-						State:               "running",
-						CompactionInterval:  5 * time.Minute,
-						RetentionWindow:     24 * time.Hour,
-						MaintenanceInterval: 7 * 24 * time.Hour,
+						Config: snapshot.PersistenceConfig{
+							CompactionInterval:  5 * time.Minute,
+							RetentionWindow:     24 * time.Hour,
+							MaintenanceInterval: 7 * 24 * time.Hour,
+						},
 					},
 				}
 
 				result := stateObj.Next(snap)
-				Expect(result.State).To(BeAssignableToTypeOf(&state.ShuttingDownState{}))
+				Expect(result.State).To(BeAssignableToTypeOf(&state.StoppingState{}))
 				Expect(result.Signal).To(Equal(fsmv2.SignalNone))
 				Expect(result.Action).To(BeNil())
 			})
 		})
 
 		Context("when not healthy (consecutive action errors > 0)", func() {
-			It("should transition to RunningDegradedState with nil action", func() {
+			It("should transition to DegradedState with nil action", func() {
 				snap := fsmv2.Snapshot{
 					Identity: deps.Identity{ID: "test", WorkerType: "persistence"},
-					Observed: snapshot.PersistenceObservedState{
-						CollectedAt:             time.Now(),
-						ConsecutiveActionErrors: 1,
+					Observed: fsmv2.Observation[snapshot.PersistenceStatus]{
+						CollectedAt: time.Now(),
+						Status: snapshot.PersistenceStatus{
+							ConsecutiveActionErrors: 1,
+						},
 					},
-					Desired: &snapshot.PersistenceDesiredState{
-						State: "running",
-						CompactionInterval:  5 * time.Minute,
-						RetentionWindow:     24 * time.Hour,
-						MaintenanceInterval: 7 * 24 * time.Hour,
+					Desired: &fsmv2.WrappedDesiredState[snapshot.PersistenceConfig]{
+						BaseDesiredState: fsmv2config.BaseDesiredState{
+						},
+						Config: snapshot.PersistenceConfig{
+							CompactionInterval:  5 * time.Minute,
+							RetentionWindow:     24 * time.Hour,
+							MaintenanceInterval: 7 * 24 * time.Hour,
+						},
 					},
 				}
 
 				result := stateObj.Next(snap)
-				Expect(result.State).To(BeAssignableToTypeOf(&state.RunningDegradedState{}))
+				Expect(result.State).To(BeAssignableToTypeOf(&state.DegradedState{}))
 				Expect(result.Signal).To(Equal(fsmv2.SignalNone))
 				Expect(result.Action).To(BeNil())
 			})
@@ -89,15 +95,20 @@ var _ = Describe("RunningState", func() {
 				now := time.Now()
 				snap := fsmv2.Snapshot{
 					Identity: deps.Identity{ID: "test", WorkerType: "persistence"},
-					Observed: snapshot.PersistenceObservedState{
-						CollectedAt:      now,
-						LastCompactionAt: now.Add(-10 * time.Minute),
+					Observed: fsmv2.Observation[snapshot.PersistenceStatus]{
+						CollectedAt: now,
+						Status: snapshot.PersistenceStatus{
+							LastCompactionAt: now.Add(-10 * time.Minute),
+						},
 					},
-					Desired: &snapshot.PersistenceDesiredState{
-						State: "running",
-						CompactionInterval:  5 * time.Minute,
-						RetentionWindow:     24 * time.Hour,
-						MaintenanceInterval: 7 * 24 * time.Hour,
+					Desired: &fsmv2.WrappedDesiredState[snapshot.PersistenceConfig]{
+						BaseDesiredState: fsmv2config.BaseDesiredState{
+						},
+						Config: snapshot.PersistenceConfig{
+							CompactionInterval:  5 * time.Minute,
+							RetentionWindow:     24 * time.Hour,
+							MaintenanceInterval: 7 * 24 * time.Hour,
+						},
 					},
 				}
 
@@ -115,16 +126,21 @@ var _ = Describe("RunningState", func() {
 				now := time.Now()
 				snap := fsmv2.Snapshot{
 					Identity: deps.Identity{ID: "test", WorkerType: "persistence"},
-					Observed: snapshot.PersistenceObservedState{
-						CollectedAt:       now,
-						LastCompactionAt:  now.Add(-1 * time.Minute),
-						LastMaintenanceAt: now.Add(-10 * 24 * time.Hour),
+					Observed: fsmv2.Observation[snapshot.PersistenceStatus]{
+						CollectedAt: now,
+						Status: snapshot.PersistenceStatus{
+							LastCompactionAt:  now.Add(-1 * time.Minute),
+							LastMaintenanceAt: now.Add(-10 * 24 * time.Hour),
+						},
 					},
-					Desired: &snapshot.PersistenceDesiredState{
-						State: "running",
-						CompactionInterval:  5 * time.Minute,
-						RetentionWindow:     24 * time.Hour,
-						MaintenanceInterval: 7 * 24 * time.Hour,
+					Desired: &fsmv2.WrappedDesiredState[snapshot.PersistenceConfig]{
+						BaseDesiredState: fsmv2config.BaseDesiredState{
+						},
+						Config: snapshot.PersistenceConfig{
+							CompactionInterval:  5 * time.Minute,
+							RetentionWindow:     24 * time.Hour,
+							MaintenanceInterval: 7 * 24 * time.Hour,
+						},
 					},
 				}
 
@@ -140,16 +156,21 @@ var _ = Describe("RunningState", func() {
 				now := time.Now()
 				snap := fsmv2.Snapshot{
 					Identity: deps.Identity{ID: "test", WorkerType: "persistence"},
-					Observed: snapshot.PersistenceObservedState{
-						CollectedAt:       now,
-						LastCompactionAt:  now.Add(-10 * time.Minute),
-						LastMaintenanceAt: now.Add(-10 * 24 * time.Hour),
+					Observed: fsmv2.Observation[snapshot.PersistenceStatus]{
+						CollectedAt: now,
+						Status: snapshot.PersistenceStatus{
+							LastCompactionAt:  now.Add(-10 * time.Minute),
+							LastMaintenanceAt: now.Add(-10 * 24 * time.Hour),
+						},
 					},
-					Desired: &snapshot.PersistenceDesiredState{
-						State: "running",
-						CompactionInterval:  5 * time.Minute,
-						RetentionWindow:     24 * time.Hour,
-						MaintenanceInterval: 7 * 24 * time.Hour,
+					Desired: &fsmv2.WrappedDesiredState[snapshot.PersistenceConfig]{
+						BaseDesiredState: fsmv2config.BaseDesiredState{
+						},
+						Config: snapshot.PersistenceConfig{
+							CompactionInterval:  5 * time.Minute,
+							RetentionWindow:     24 * time.Hour,
+							MaintenanceInterval: 7 * 24 * time.Hour,
+						},
 					},
 				}
 
@@ -164,16 +185,21 @@ var _ = Describe("RunningState", func() {
 				now := time.Now()
 				snap := fsmv2.Snapshot{
 					Identity: deps.Identity{ID: "test", WorkerType: "persistence"},
-					Observed: snapshot.PersistenceObservedState{
-						CollectedAt:       now,
-						LastCompactionAt:  now.Add(-1 * time.Minute),
-						LastMaintenanceAt: now.Add(-1 * time.Hour),
+					Observed: fsmv2.Observation[snapshot.PersistenceStatus]{
+						CollectedAt: now,
+						Status: snapshot.PersistenceStatus{
+							LastCompactionAt:  now.Add(-1 * time.Minute),
+							LastMaintenanceAt: now.Add(-1 * time.Hour),
+						},
 					},
-					Desired: &snapshot.PersistenceDesiredState{
-						State: "running",
-						CompactionInterval:  5 * time.Minute,
-						RetentionWindow:     24 * time.Hour,
-						MaintenanceInterval: 7 * 24 * time.Hour,
+					Desired: &fsmv2.WrappedDesiredState[snapshot.PersistenceConfig]{
+						BaseDesiredState: fsmv2config.BaseDesiredState{
+						},
+						Config: snapshot.PersistenceConfig{
+							CompactionInterval:  5 * time.Minute,
+							RetentionWindow:     24 * time.Hour,
+							MaintenanceInterval: 7 * 24 * time.Hour,
+						},
 					},
 				}
 
@@ -188,14 +214,17 @@ var _ = Describe("RunningState", func() {
 			It("should emit CompactDeltasAction immediately", func() {
 				snap := fsmv2.Snapshot{
 					Identity: deps.Identity{ID: "test", WorkerType: "persistence"},
-					Observed: snapshot.PersistenceObservedState{
+					Observed: fsmv2.Observation[snapshot.PersistenceStatus]{
 						CollectedAt: time.Now(),
 					},
-					Desired: &snapshot.PersistenceDesiredState{
-						State: "running",
-						CompactionInterval:  5 * time.Minute,
-						RetentionWindow:     24 * time.Hour,
-						MaintenanceInterval: 7 * 24 * time.Hour,
+					Desired: &fsmv2.WrappedDesiredState[snapshot.PersistenceConfig]{
+						BaseDesiredState: fsmv2config.BaseDesiredState{
+						},
+						Config: snapshot.PersistenceConfig{
+							CompactionInterval:  5 * time.Minute,
+							RetentionWindow:     24 * time.Hour,
+							MaintenanceInterval: 7 * 24 * time.Hour,
+						},
 					},
 				}
 

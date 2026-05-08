@@ -20,24 +20,24 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/persistence/snapshot"
 )
 
-type RunningDegradedState struct {
-	helpers.RunningDegradedBase
+type RunningState struct {
+	helpers.RunningHealthyBase
 }
 
-func (s *RunningDegradedState) Next(snapAny any) fsmv2.NextResult[any, any] {
-	snap := helpers.ConvertSnapshot[snapshot.PersistenceObservedState, *snapshot.PersistenceDesiredState](snapAny)
+func (s *RunningState) Next(snapAny any) fsmv2.NextResult[any, any] {
+	snap := fsmv2.ConvertWorkerSnapshot[snapshot.PersistenceConfig, snapshot.PersistenceStatus](snapAny)
 
-	if snap.Desired.IsShutdownRequested() {
-		return fsmv2.Result[any, any](&ShuttingDownState{}, fsmv2.SignalNone, nil, "Shutdown requested")
+	if snap.IsStopRequired() {
+		return fsmv2.Result[any, any](&StoppingState{}, fsmv2.SignalNone, nil, "Shutdown requested")
 	}
 
-	if snap.Observed.IsHealthy() {
-		return fsmv2.Result[any, any](&RunningState{}, fsmv2.SignalNone, nil, "Action succeeded, recovered to healthy")
+	if !snap.Status.IsHealthy() {
+		return fsmv2.Result[any, any](&DegradedState{}, fsmv2.SignalNone, nil, "Action failed, entering degraded state")
 	}
 
 	return emitActionIfDue(s, snap)
 }
 
-func (s *RunningDegradedState) String() string {
-	return "RunningDegraded"
+func (s *RunningState) String() string {
+	return "Running"
 }

@@ -43,18 +43,21 @@ var _ = Describe("Preferential Maintenance Scheduling", func() {
 	makeSnap := func(collectedAt time.Time, lastMaintenanceAt time.Time, isPreferred, isAcceptable bool) fsmv2.Snapshot {
 		return fsmv2.Snapshot{
 			Identity: deps.Identity{ID: "test", WorkerType: "persistence"},
-			Observed: snapshot.PersistenceObservedState{
-				CollectedAt:                   collectedAt,
-				LastCompactionAt:              collectedAt.Add(-1 * time.Minute),
-				LastMaintenanceAt:             lastMaintenanceAt,
-				IsPreferredMaintenanceWindow:  isPreferred,
-				IsAcceptableMaintenanceWindow: isAcceptable,
+			Observed: fsmv2.Observation[snapshot.PersistenceStatus]{
+				CollectedAt: collectedAt,
+				Status: snapshot.PersistenceStatus{
+					LastCompactionAt:              collectedAt.Add(-1 * time.Minute),
+					LastMaintenanceAt:             lastMaintenanceAt,
+					IsPreferredMaintenanceWindow:  isPreferred,
+					IsAcceptableMaintenanceWindow: isAcceptable,
+				},
 			},
-			Desired: &snapshot.PersistenceDesiredState{
-				State: "running",
-				CompactionInterval:  5 * time.Minute,
-				RetentionWindow:     24 * time.Hour,
-				MaintenanceInterval: maintenanceInterval,
+			Desired: &fsmv2.WrappedDesiredState[snapshot.PersistenceConfig]{
+				Config: snapshot.PersistenceConfig{
+					CompactionInterval:  5 * time.Minute,
+					RetentionWindow:     24 * time.Hour,
+					MaintenanceInterval: maintenanceInterval,
+				},
 			},
 		}
 	}
@@ -64,16 +67,19 @@ var _ = Describe("Preferential Maintenance Scheduling", func() {
 			now := time.Date(2025, 2, 3, 12, 0, 0, 0, time.UTC) // Monday noon
 			snap := fsmv2.Snapshot{
 				Identity: deps.Identity{ID: "test", WorkerType: "persistence"},
-				Observed: snapshot.PersistenceObservedState{
-					CollectedAt:      now,
-					LastCompactionAt: now.Add(-1 * time.Minute),
-					LastMaintenanceAt: now.Add(-25 * time.Hour),
+				Observed: fsmv2.Observation[snapshot.PersistenceStatus]{
+					CollectedAt: now,
+					Status: snapshot.PersistenceStatus{
+						LastCompactionAt:  now.Add(-1 * time.Minute),
+						LastMaintenanceAt: now.Add(-25 * time.Hour),
+					},
 				},
-				Desired: &snapshot.PersistenceDesiredState{
-					State: "running",
-					CompactionInterval:  5 * time.Minute,
-					RetentionWindow:     24 * time.Hour,
-					MaintenanceInterval: 24 * time.Hour,
+				Desired: &fsmv2.WrappedDesiredState[snapshot.PersistenceConfig]{
+					Config: snapshot.PersistenceConfig{
+						CompactionInterval:  5 * time.Minute,
+						RetentionWindow:     24 * time.Hour,
+						MaintenanceInterval: 24 * time.Hour,
+					},
 				},
 			}
 
@@ -85,16 +91,19 @@ var _ = Describe("Preferential Maintenance Scheduling", func() {
 			now := time.Date(2025, 2, 3, 12, 0, 0, 0, time.UTC) // Monday noon
 			snap := fsmv2.Snapshot{
 				Identity: deps.Identity{ID: "test", WorkerType: "persistence"},
-				Observed: snapshot.PersistenceObservedState{
-					CollectedAt:       now,
-					LastCompactionAt:  now.Add(-1 * time.Minute),
-					LastMaintenanceAt: now.Add(-23 * time.Hour),
+				Observed: fsmv2.Observation[snapshot.PersistenceStatus]{
+					CollectedAt: now,
+					Status: snapshot.PersistenceStatus{
+						LastCompactionAt:  now.Add(-1 * time.Minute),
+						LastMaintenanceAt: now.Add(-23 * time.Hour),
+					},
 				},
-				Desired: &snapshot.PersistenceDesiredState{
-					State: "running",
-					CompactionInterval:  5 * time.Minute,
-					RetentionWindow:     24 * time.Hour,
-					MaintenanceInterval: 24 * time.Hour,
+				Desired: &fsmv2.WrappedDesiredState[snapshot.PersistenceConfig]{
+					Config: snapshot.PersistenceConfig{
+						CompactionInterval:  5 * time.Minute,
+						RetentionWindow:     24 * time.Hour,
+						MaintenanceInterval: 24 * time.Hour,
+					},
 				},
 			}
 
@@ -199,18 +208,21 @@ var _ = Describe("Preferential Maintenance Scheduling", func() {
 
 			snap := fsmv2.Snapshot{
 				Identity: deps.Identity{ID: "test", WorkerType: "persistence"},
-				Observed: snapshot.PersistenceObservedState{
-					CollectedAt:                   mon12pm,
-					LastCompactionAt:              mon12pm.Add(-1 * time.Minute),
-					LastMaintenanceAt:             lastMaint,
-					IsPreferredMaintenanceWindow:  false,
-					IsAcceptableMaintenanceWindow: false,
+				Observed: fsmv2.Observation[snapshot.PersistenceStatus]{
+					CollectedAt: mon12pm,
+					Status: snapshot.PersistenceStatus{
+						LastCompactionAt:              mon12pm.Add(-1 * time.Minute),
+						LastMaintenanceAt:             lastMaint,
+						IsPreferredMaintenanceWindow:  false,
+						IsAcceptableMaintenanceWindow: false,
+					},
 				},
-				Desired: &snapshot.PersistenceDesiredState{
-					State: "running",
-					CompactionInterval:  5 * time.Minute,
-					RetentionWindow:     24 * time.Hour,
-					MaintenanceInterval: 3 * 24 * time.Hour,
+				Desired: &fsmv2.WrappedDesiredState[snapshot.PersistenceConfig]{
+					Config: snapshot.PersistenceConfig{
+						CompactionInterval:  5 * time.Minute,
+						RetentionWindow:     24 * time.Hour,
+						MaintenanceInterval: 3 * 24 * time.Hour,
+					},
 				},
 			}
 
