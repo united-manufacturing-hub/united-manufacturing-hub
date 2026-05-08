@@ -322,8 +322,15 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity deps.Identity, work
 
 			var desired TDesired
 			if err := s.store.LoadDesiredTyped(ctx, s.workerType, identity.ID, &desired); err != nil {
-				s.logger.SentryWarn(deps.FeatureFSMv2, identity.HierarchyPath, "desired_state_load_failed",
-					deps.Err(err))
+				// ErrNotFound is expected on first boot before the initial desired state
+				// has been written to CSE storage. Suppress the SentryWarn to avoid
+				// flooding Sentry with expected startup noise (fsmv2.ErrNoDesiredState
+				// documents this case; persistence.ErrNotFound is the store-level sentinel).
+				if !errors.Is(err, persistence.ErrNotFound) {
+					s.logger.SentryWarn(deps.FeatureFSMv2, identity.HierarchyPath, "desired_state_load_failed",
+						deps.Err(err))
+				}
+
 				return nil
 			}
 
