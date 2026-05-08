@@ -19,28 +19,26 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	hello_world "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/helloworld"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/helloworld/snapshot"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/helloworld/state"
+	_ "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/helloworld/state"
 )
 
 var _ = Describe("HelloworldWorker", func() {
 	var (
-		worker *hello_world.HelloworldWorker
+		worker fsmv2.Worker
 		logger deps.FSMLogger
 	)
 
 	BeforeEach(func() {
-		// Use nop logger for tests
 		logger = deps.NewNopFSMLogger()
 	})
 
 	Describe("NewHelloworldWorker", func() {
-		It("should create worker with derived worker type", func() {
-			identity := deps.Identity{ID: "test-worker"}
+		It("should create worker successfully", func() {
+			identity := deps.Identity{ID: "test-worker", WorkerType: "helloworld"}
 			w, err := hello_world.NewHelloworldWorker(identity, logger, nil)
 
 			Expect(err).NotTo(HaveOccurred())
@@ -48,7 +46,7 @@ var _ = Describe("HelloworldWorker", func() {
 		})
 
 		It("should fail with nil logger", func() {
-			identity := deps.Identity{ID: "test-worker"}
+			identity := deps.Identity{ID: "test-worker", WorkerType: "helloworld"}
 			w, err := hello_world.NewHelloworldWorker(identity, nil, nil)
 
 			Expect(err).To(HaveOccurred())
@@ -59,51 +57,53 @@ var _ = Describe("HelloworldWorker", func() {
 
 	Describe("CollectObservedState", func() {
 		BeforeEach(func() {
-			identity := deps.Identity{ID: "test-worker"}
+			identity := deps.Identity{ID: "test-worker", WorkerType: "helloworld"}
 			var err error
 			worker, err = hello_world.NewHelloworldWorker(identity, logger, nil)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
 		It("should collect initial state with HelloSaid=false", func() {
-			obs, err := worker.CollectObservedState(context.Background())
+			desired := &fsmv2.WrappedDesiredState[hello_world.HelloworldConfig]{}
+			obs, err := worker.CollectObservedState(context.Background(), desired)
 
 			Expect(err).NotTo(HaveOccurred())
-			typedObs, ok := obs.(snapshot.HelloworldObservedState)
+			typedObs, ok := obs.(fsmv2.Observation[hello_world.HelloworldStatus])
 			Expect(ok).To(BeTrue())
-			Expect(typedObs.HelloSaid).To(BeFalse())
+			Expect(typedObs.Status.HelloSaid).To(BeFalse())
 		})
 
-		It("should return error on cancelled context", func() {
+		It("should succeed even with cancelled context (framework handles ctx cancellation)", func() {
 			ctx, cancel := context.WithCancel(context.Background())
 			cancel()
 
-			obs, err := worker.CollectObservedState(ctx)
+			desired := &fsmv2.WrappedDesiredState[hello_world.HelloworldConfig]{}
+			obs, err := worker.CollectObservedState(ctx, desired)
 
-			Expect(err).To(Equal(context.Canceled))
-			Expect(obs).To(BeNil())
+			Expect(err).NotTo(HaveOccurred())
+			Expect(obs).NotTo(BeNil())
 		})
 	})
 
 	Describe("GetInitialState", func() {
 		BeforeEach(func() {
-			identity := deps.Identity{ID: "test-worker"}
+			identity := deps.Identity{ID: "test-worker", WorkerType: "helloworld"}
 			var err error
 			worker, err = hello_world.NewHelloworldWorker(identity, logger, nil)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
-		It("should return StoppedState", func() {
+		It("should return Stopped state", func() {
 			initialState := worker.GetInitialState()
 
-			_, ok := initialState.(*state.StoppedState)
-			Expect(ok).To(BeTrue())
+			Expect(initialState).NotTo(BeNil())
+			Expect(initialState.String()).To(Equal("Stopped"))
 		})
 	})
 
 	Describe("DeriveDesiredState", func() {
 		BeforeEach(func() {
-			identity := deps.Identity{ID: "test-worker"}
+			identity := deps.Identity{ID: "test-worker", WorkerType: "helloworld"}
 			var err error
 			worker, err = hello_world.NewHelloworldWorker(identity, logger, nil)
 			Expect(err).NotTo(HaveOccurred())
@@ -114,6 +114,72 @@ var _ = Describe("HelloworldWorker", func() {
 
 			Expect(err).NotTo(HaveOccurred())
 			Expect(desired).NotTo(BeNil())
+		})
+	})
+
+	Describe("GetDependenciesAny", func() {
+		It("returns *HelloworldDependencies", func() {
+			identity := deps.Identity{ID: "test-worker", WorkerType: "helloworld"}
+			concrete, err := hello_world.NewHelloworldWorker(identity, logger, nil)
+			Expect(err).NotTo(HaveOccurred())
+			var w fsmv2.Worker = concrete
+			dp, ok := w.(fsmv2.DependencyProvider)
+			Expect(ok).To(BeTrue(), "worker must implement DependencyProvider")
+			got := dp.GetDependenciesAny()
+			_, ok = got.(*hello_world.HelloworldDependencies)
+			Expect(ok).To(BeTrue(), "expected *HelloworldDependencies, got %T", got)
+		})
+	})
+
+	Describe("Actions", func() {
+		BeforeEach(func() {
+			identity := deps.Identity{ID: "test-worker", WorkerType: "helloworld"}
+			var err error
+			worker, err = hello_world.NewHelloworldWorker(identity, logger, nil)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("contains SayHelloActionName with a non-nil value", func() {
+			ap, ok := worker.(fsmv2.ActionProvider)
+			Expect(ok).To(BeTrue(), "worker must implement ActionProvider")
+			actions := ap.Actions()
+			Expect(actions).To(HaveKey(hello_world.SayHelloActionName))
+			Expect(actions[hello_world.SayHelloActionName]).NotTo(BeNil())
+		})
+	})
+
+	Describe("SayHello action", func() {
+		var d *hello_world.HelloworldDependencies
+
+		BeforeEach(func() {
+			identity := deps.Identity{ID: "test-id", WorkerType: "helloworld"}
+			baseDeps := deps.NewBaseDependencies(logger, nil, identity)
+			d = hello_world.NewHelloworldDependencies(baseDeps)
+		})
+
+		It("should set HelloSaid to true", func() {
+			Expect(d.HasSaidHello()).To(BeFalse())
+
+			err := hello_world.SayHello(context.Background(), d)
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(d.HasSaidHello()).To(BeTrue())
+		})
+
+		It("should be idempotent when called multiple times", func() {
+			ctx := context.Background()
+
+			err := hello_world.SayHello(ctx, d)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(d.HasSaidHello()).To(BeTrue())
+
+			err = hello_world.SayHello(ctx, d)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(d.HasSaidHello()).To(BeTrue())
+
+			err = hello_world.SayHello(ctx, d)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(d.HasSaidHello()).To(BeTrue())
 		})
 	})
 })

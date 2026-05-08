@@ -40,7 +40,6 @@ var _ = Describe("FreshnessChecker", func() {
 				Observed: &supervisor.TestObservedState{
 					ID:          "test-worker",
 					CollectedAt: time.Now(),
-					Desired:     &supervisor.TestDesiredState{},
 				},
 				Desired: &supervisor.TestDesiredState{},
 			}
@@ -63,7 +62,6 @@ var _ = Describe("FreshnessChecker", func() {
 				Observed: &supervisor.TestObservedState{
 					ID:          "test-worker",
 					CollectedAt: time.Now().Add(-15 * time.Second),
-					Desired:     &supervisor.TestDesiredState{},
 				},
 				Desired: &supervisor.TestDesiredState{},
 			}
@@ -86,7 +84,6 @@ var _ = Describe("FreshnessChecker", func() {
 				Observed: &supervisor.TestObservedState{
 					ID:          "test-worker",
 					CollectedAt: time.Now().Add(-25 * time.Second),
-					Desired:     &supervisor.TestDesiredState{},
 				},
 				Desired: &supervisor.TestDesiredState{},
 			}

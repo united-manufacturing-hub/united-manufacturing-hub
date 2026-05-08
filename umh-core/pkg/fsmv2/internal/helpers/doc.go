@@ -29,18 +29,6 @@
 //	    return helpers.DeriveStateName(s)  // Returns "Running"
 //	}
 //
-// # BaseWorker
-//
-// BaseWorker provides type-safe dependency access:
-//
-//	type MyWorker struct {
-//	    *helpers.BaseWorker[*MyDeps]
-//	}
-//
-//	func NewMyWorker(deps *MyDeps) *MyWorker {
-//	    return &MyWorker{BaseWorker: helpers.NewBaseWorker(deps)}
-//	}
-//
 // # ConvertSnapshot
 //
 // ConvertSnapshot converts snapshots with type safety for state transitions:

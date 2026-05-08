@@ -115,7 +115,7 @@ func resolveField[T, R any](
 
 	resTmp, err := oc.ResolverMiddleware(ctx, next)
 	if err != nil {
-		oc.Error(ctx, AddFieldLocationToError(ctx, err))
+		oc.Error(ctx, err)
 		return defaultResult
 	}
 	if resTmp == nil {

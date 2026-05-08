@@ -67,7 +67,7 @@ func NewParentWorker(
 }
 
 // CollectObservedState returns the current observed state of the parent worker.
-func (w *ParentWorker) CollectObservedState(ctx context.Context) (fsmv2.ObservedState, error) {
+func (w *ParentWorker) CollectObservedState(ctx context.Context, _ fsmv2.DesiredState) (fsmv2.ObservedState, error) {
 	select {
 	case <-ctx.Done():
 		return nil, ctx.Err()

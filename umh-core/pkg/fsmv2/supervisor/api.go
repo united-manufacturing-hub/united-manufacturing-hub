@@ -66,13 +66,8 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity deps.Identity, work
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	observed, err := worker.CollectObservedState(ctx)
-	if err != nil {
-		s.logger.SentryError(deps.FeatureFSMv2, identity.HierarchyPath, err, "worker_add_collect_observed_failed")
-
-		return fmt.Errorf("failed to collect initial observed state: %w", err)
-	}
-
+	// Derive desired state first so we can pass it to CollectObservedState.
+	// Workers are guaranteed a non-nil desired state parameter.
 	initialDesired, err := worker.DeriveDesiredState(nil)
 	if err != nil {
 		s.logger.SentryError(deps.FeatureFSMv2, identity.HierarchyPath, err, "worker_add_derive_desired_failed")
@@ -80,10 +75,24 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity deps.Identity, work
 		return fmt.Errorf("failed to derive initial desired state: %w", err)
 	}
 
-	if valErr := config.ValidateDesiredState(initialDesired.GetState()); valErr != nil {
-		s.logger.SentryError(deps.FeatureFSMv2, identity.HierarchyPath, valErr, "worker_add_validate_desired_failed")
+	observed, err := worker.CollectObservedState(ctx, initialDesired)
+	if err != nil {
+		s.logger.SentryError(deps.FeatureFSMv2, identity.HierarchyPath, err, "worker_add_collect_observed_failed")
 
-		return fmt.Errorf("failed to derive initial desired state: %w", valErr)
+		return fmt.Errorf("failed to collect initial observed state: %w", err)
+	}
+
+	// If COS returned a NewObservation (zero CollectedAt), set it now.
+	// AddWorker bypasses the collector, so we must set CollectedAt here
+	// to prevent the freshness checker from declaring the observation stale.
+	if observed.GetTimestamp().IsZero() {
+		if setter, ok := observed.(interface{ SetCollectedAt(time.Time) fsmv2.ObservedState }); ok {
+			observed = setter.SetCollectedAt(time.Now())
+		} else {
+			s.logger.SentryWarn(deps.FeatureFSMv2, identity.HierarchyPath,
+				"worker_add_zero_timestamp_not_settable",
+				deps.String("type", fmt.Sprintf("%T", observed)))
+		}
 	}
 
 	identityDoc := persistence.Document{
@@ -115,6 +124,18 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity deps.Identity, work
 	}
 
 	observedDoc["id"] = identity.ID
+
+	// Inject the initial FSM state name so the store never contains state="".
+	// CollectObservedState runs before the collector's StateProvider closure is
+	// wired up, so the Observation struct leaves State="" at this point. The
+	// StateProvider fires on every subsequent collection tick, but if the
+	// scenario ends before the first tick fires (e.g., during the last cycle's
+	// shutdown), the store would retain state="" and fail the
+	// verifyObservedStateHasState check. Injecting the registered initial state
+	// here closes that window.
+	if initialStateForDoc := worker.GetInitialState(); initialStateForDoc != nil {
+		observedDoc["state"] = initialStateForDoc.String()
+	}
 
 	_, err = s.store.SaveObserved(ctx, s.workerType, identity.ID, observedDoc)
 	if err != nil {
@@ -212,14 +233,18 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity deps.Identity, work
 		MappedParentStateProvider: func() string {
 			return s.getMappedParentState()
 		},
-		ChildrenViewProvider: func() any {
+		ChildrenViewProvider: func() config.ChildrenView {
+			// Hold the RLock only long enough to snapshot the children map.
+			// NewChildrenManager calls multiple per-child accessors and would
+			// block AddWorker / RemoveWorker for the whole section if we kept
+			// the lock. The map values are pointer interfaces — copying gives
+			// safe per-child iteration once unlocked.
 			s.mu.RLock()
-			defer s.mu.RUnlock()
-
 			childrenCopy := make(map[string]SupervisorInterface, len(s.children))
 			for name, child := range s.children {
 				childrenCopy[name] = child
 			}
+			s.mu.RUnlock()
 
 			return NewChildrenManager(childrenCopy)
 		},
@@ -258,6 +283,10 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity deps.Identity, work
 		},
 		FrameworkMetricsSetter: func(fm *deps.FrameworkMetrics) {
 			// Must use GetDependenciesAny() (returns any), not GetDependencies() (returns D).
+			// TODO(PR2): NoDeps workers (TDeps = register.NoDeps, i.e. struct{}) return
+			// struct{}{} here, which does not implement SetFrameworkState; so framework
+			// telemetry is silently skipped. Resolve before shipping the first NoDeps
+			// production worker (see worker_base.go BindDeps TODO for options).
 			type depsGetter interface {
 				GetDependenciesAny() any
 			}
@@ -286,6 +315,19 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity deps.Identity, work
 					setter.SetActionHistory(history)
 				}
 			}
+		},
+		DesiredStateProvider: func() fsmv2.DesiredState {
+			ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+			defer cancel()
+
+			var desired TDesired
+			if err := s.store.LoadDesiredTyped(ctx, s.workerType, identity.ID, &desired); err != nil {
+				s.logger.SentryWarn(deps.FeatureFSMv2, identity.HierarchyPath, "desired_state_load_failed",
+					deps.Err(err))
+				return nil
+			}
+
+			return desired
 		},
 	})
 

@@ -39,7 +39,7 @@ var _ = Describe("ApplicationWorker", func() {
 	Describe("CollectObservedState", func() {
 		It("should return observed state with timestamp", func() {
 			ctx := context.Background()
-			obs, err := worker.CollectObservedState(ctx)
+			obs, err := worker.CollectObservedState(ctx, nil)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(obs).NotTo(BeNil())
 
@@ -51,7 +51,7 @@ var _ = Describe("ApplicationWorker", func() {
 
 		It("should return observed state with timestamp", func() {
 			ctx := context.Background()
-			obs, err := worker.CollectObservedState(ctx)
+			obs, err := worker.CollectObservedState(ctx, nil)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(obs).NotTo(BeNil())
 
@@ -65,7 +65,7 @@ var _ = Describe("ApplicationWorker", func() {
 			ctx, cancel := context.WithCancel(context.Background())
 			cancel() // Cancel immediately.
 
-			_, err := worker.CollectObservedState(ctx)
+			_, err := worker.CollectObservedState(ctx, nil)
 			Expect(err).To(Equal(context.Canceled))
 		})
 	})
@@ -198,7 +198,7 @@ children:
 		It("should return recent timestamp", func() {
 			ctx := context.Background()
 			before := time.Now()
-			obs, err := worker.CollectObservedState(ctx)
+			obs, err := worker.CollectObservedState(ctx, nil)
 			after := time.Now()
 
 			Expect(err).ToNot(HaveOccurred())

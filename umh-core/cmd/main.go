@@ -40,12 +40,12 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/redpanda"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/streamprocessor"
 	topicbrowserfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/topicbrowser"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/examples"
 	fsmv2sentry "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/sentry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/application"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator"
-	_ "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/persistence"
 	transportWorker "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport"
 	transportSnapshot "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/snapshot"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
@@ -95,9 +95,10 @@ func main() {
 
 	// Config backup feature flag: must be set before LoadConfigWithEnvOverrides,
 	// which writes config on startup and should back up the pre-write state.
-	// GetAsBool with required=false never returns an error (silently falls back
-	// to the default on parse failure); see ENG-4809 for the signature fix.
-	configBackupEnabled, _ := env.GetAsBool("ENABLE_CONFIG_BACKUP", false, false)
+	configBackupEnabled, err := env.GetAsBool("ENABLE_CONFIG_BACKUP", false, false)
+	if err != nil {
+		log.Warnf("Failed to parse ENABLE_CONFIG_BACKUP: %v", err)
+	}
 
 	configManager.SetConfigBackupEnabled(configBackupEnabled)
 
@@ -117,22 +118,26 @@ func main() {
 	// FSMv2 feature flags: read directly from env vars, not persisted to config.yaml.
 	// These bypass the config manager intentionally — they are temporary migration flags
 	// that will be replaced when the config manager becomes an FSMv2 worker.
-	// GetAsBool with required=false never returns an error (silently falls back
-	// to the default on parse failure); see ENG-4809 for the signature fix.
-	transportEnabled, _ := env.GetAsBool("USE_FSMV2_TRANSPORT", false, true)
-	memoryCleanupEnabled, _ := env.GetAsBool("USE_FSMV2_MEMORY_CLEANUP", false, true)
-
-	// Memory cleanup is required whenever transport is on; running transport
-	// without cleanup reintroduces the unbounded state-growth risk (ENG-4292).
-	if transportEnabled {
-		memoryCleanupEnabled = true
+	v, err := env.GetAsBool("USE_FSMV2_TRANSPORT", false, false)
+	if err != nil {
+		log.Warnf("Failed to parse USE_FSMV2_TRANSPORT: %v", err)
 	}
 
-	configData.Agent.UseFSMv2Transport = transportEnabled
-	configData.Agent.UseFSMv2MemoryCleanup = memoryCleanupEnabled
+	configData.Agent.UseFSMv2Transport = v
 
-	protocolConverterEnabled, _ := env.GetAsBool("USE_FSMV2_PROTOCOL_CONVERTER", false, false)
-	configData.Agent.UseFSMv2ProtocolConverter = protocolConverterEnabled
+	v, err = env.GetAsBool("USE_FSMV2_MEMORY_CLEANUP", false, false)
+	if err != nil {
+		log.Warnf("Failed to parse USE_FSMV2_MEMORY_CLEANUP: %v", err)
+	}
+
+	configData.Agent.UseFSMv2MemoryCleanup = v
+
+	v, err = env.GetAsBool("USE_FSMV2_PROTOCOL_CONVERTER", false, false)
+	if err != nil {
+		log.Warnf("Failed to parse USE_FSMV2_PROTOCOL_CONVERTER: %v", err)
+	}
+
+	configData.Agent.UseFSMv2ProtocolConverter = v
 
 	featureUsage := &models.FeatureUsage{
 		ConfigBackupEnabled:           configBackupEnabled,
@@ -493,7 +498,7 @@ func enableFSMv2BackendConnection(
 
 	// Build YAML config for FSMv2 ApplicationSupervisor
 	// Note: instanceUUID in config is a placeholder - the real UUID is returned by the backend
-	// and will be set via onAuthSuccessCallback (Bug #6 fix)
+	// and picked up by polling TransportWorker.ObservedState.AuthenticatedUUID below (Bug #6 fix).
 	placeholderUUID := uuid.New().String()
 	yamlConfig := fmt.Sprintf(`
 children:
@@ -517,17 +522,8 @@ children:
 	// Setup store (in-memory for now)
 	store := examples.SetupStore(deps.NewFSMLogger(logger))
 
-	// Create callback to update LoginResponse with real UUID from backend (Bug #6 fix)
-	// This is called by AuthenticateAction after successful authentication
-	onAuthSuccessCallback := func(realUUID, name string) {
-		logger.Infow("Authentication succeeded, updating LoginResponse with backend UUID",
-			"realUUID", realUUID, "name", name, "placeholderUUID", placeholderUUID)
-		communicationState.SetLoginResponseForFSMv2(realUUID)
-	}
-
-	// Create ApplicationSupervisor with channel provider and auth callback injected via Dependencies
-	// This avoids global state and enables proper testing
-	// Use Named("fsmv2") to create [fsmv2] prefix in logs for easy filtering
+	// Create ApplicationSupervisor.
+	// Use Named("fsmv2") to create [fsmv2] prefix in logs for easy filtering.
 	fsmv2Logger := logger.Named("fsmv2")
 	// Wrap with FSMv2 SentryHook for automatic error capture to Sentry with:
 	// - Per-fingerprint debouncing (5 min window)
@@ -539,12 +535,11 @@ children:
 
 	fsmv2Logger = fsmv2Logger.Desugar().WithOptions(zap.WrapCore(fsmv2Hook.Wrap)).Sugar()
 
-	fsmv2Deps := map[string]any{
-		"channelProvider":       channelAdapter,
-		"onAuthSuccessCallback": onAuthSuccessCallback,
-	}
+	fsmv2Deps := map[string]any{}
 	if configData.Agent.UseFSMv2MemoryCleanup {
-		fsmv2Deps["store"] = store
+		// TODO(L5-register): fsmv2/register package with SetDeps/GetDeps arrives in PR3.
+		// Dependency injection for PersistenceWorker not yet wired at L1.
+		_ = fsmv2Deps
 	}
 
 	appSup, err := application.NewApplicationSupervisor(application.SupervisorConfig{
@@ -570,7 +565,7 @@ children:
 
 	// Initialize Router for FSMv2 mode:
 	// 1. Create write-only Pusher (writes to channel, FSMv2 handles HTTP)
-	// 2. Set LoginResponse with placeholder UUID (will be updated by onAuthSuccessCallback)
+	// 2. Set LoginResponse with placeholder UUID (replaced when TransportWorker.ObservedState.AuthenticatedUUID is observed below)
 	// 3. Initialize SubscriberHandler (generates status messages)
 	// 4. Start Router (processes inbound messages, generates status via Subscriber)
 	communicationState.InitializeWriteOnlyPusher(placeholderUUID)
@@ -598,18 +593,18 @@ children:
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
-				var observed transportSnapshot.TransportObservedState
+				var observed fsmv2.Observation[transportSnapshot.TransportObservedState]
 
 				err := store.LoadObservedTyped(ctx, "transport", "transport-001", &observed)
 				if err != nil {
 					continue
 				}
 
-				if observed.AuthenticatedUUID != "" && observed.AuthenticatedUUID != placeholderUUID {
+				if observed.Status.AuthenticatedUUID != "" && observed.Status.AuthenticatedUUID != placeholderUUID {
 					logger.Infow("Detected real UUID from TransportWorker ObservedState, updating LoginResponse",
-						"realUUID", observed.AuthenticatedUUID,
+						"realUUID", observed.Status.AuthenticatedUUID,
 						"placeholderUUID", placeholderUUID)
-					communicationState.SetLoginResponseForFSMv2(observed.AuthenticatedUUID)
+					communicationState.SetLoginResponseForFSMv2(observed.Status.AuthenticatedUUID)
 
 					return
 				}

@@ -35,7 +35,7 @@ var _ = Describe("DataFreshness Full Cycle Integration", func() {
 			collectFunc: func(ctx context.Context) (fsmv2.ObservedState, error) {
 				return &mockObservedState{CollectedAt: snapshotTimestamp}, nil
 			},
-			requestShutdownFunc: func() {
+			requestRemovalFunc: func() {
 				shutdownRequested = true
 			},
 		}
@@ -45,13 +45,13 @@ var _ = Describe("DataFreshness Full Cycle Integration", func() {
 		store := newMockStore()
 
 		// Initialize the desired state in the store's internal map
-		// This is required because RequestShutdown calls LoadDesired first
+		// This is required because RequestRemoval calls LoadDesired first
 		if store.desired["test"] == nil {
 			store.desired["test"] = make(map[string]persistence.Document)
 		}
 		store.desired["test"]["test-worker"] = persistence.Document{
 			"id":                "test-worker",
-			"ShutdownRequested": false,
+			"isBeingRemoved": false,
 		}
 
 		// Initialize the observed state in the store's internal map
@@ -73,7 +73,7 @@ var _ = Describe("DataFreshness Full Cycle Integration", func() {
 
 			desired := persistence.Document{
 				"id":                "test-worker",
-				"ShutdownRequested": shutdownRequested,
+				"isBeingRemoved": shutdownRequested,
 			}
 
 			observed := persistence.Document{
@@ -94,7 +94,7 @@ var _ = Describe("DataFreshness Full Cycle Integration", func() {
 			store.desired[workerType][id] = desired
 
 			// Update closure variable for test assertions
-			if shutdown, ok := desired["ShutdownRequested"].(bool); ok {
+			if shutdown, ok := desired["isBeingRemoved"].(bool); ok {
 				shutdownRequested = shutdown
 			}
 
