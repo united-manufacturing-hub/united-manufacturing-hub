@@ -306,12 +306,12 @@ func (m *MockConnection) IsHealthy() bool {
 	return true
 }
 
-func NewTestApplicationSupervisor(yamlConfig string, logger deps.FSMLogger) (*supervisor.Supervisor[snapshot.ApplicationObservedState, *snapshot.ApplicationDesiredState], error) {
+func NewTestApplicationSupervisor(yamlConfig string, logger deps.FSMLogger) (*supervisor.Supervisor[fsmv2.Observation[snapshot.ApplicationStatus], *fsmv2.WrappedDesiredState[snapshot.ApplicationConfig]], error) {
 	ctx := context.Background()
 
 	basicStore := memory.NewInMemoryStore()
 
-	applicationWorkerType, err := storage.DeriveWorkerType[snapshot.ApplicationObservedState]()
+	applicationWorkerType, err := storage.DeriveWorkerType[fsmv2.Observation[snapshot.ApplicationStatus]]()
 	if err != nil {
 		return nil, fmt.Errorf("failed to derive worker type: %w", err)
 	}

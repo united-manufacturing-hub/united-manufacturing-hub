@@ -20,23 +20,31 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/application/snapshot"
 )
 
-// StoppedState represents the stopped state of the application supervisor.
-// In this state, the worker emits SignalNeedsRemoval to indicate it's ready
-// to be removed from the supervisor's registry.
-type StoppedState struct {
-	helpers.StoppedBase
+// RunningState represents the normal operating state of the application supervisor.
+type RunningState struct {
+	helpers.RunningHealthyBase
 }
 
-func (s *StoppedState) Next(snapAny any) fsmv2.NextResult[any, any] {
-	snap := helpers.ConvertSnapshot[snapshot.ApplicationObservedState, *snapshot.ApplicationDesiredState](snapAny)
+func (s *RunningState) Next(snapAny any) fsmv2.NextResult[any, any] {
+	snap := fsmv2.ConvertWorkerSnapshot[snapshot.ApplicationConfig, snapshot.ApplicationStatus](snapAny)
 
-	if snap.Desired.IsShutdownRequested() {
-		return fsmv2.Result[any, any](s, fsmv2.SignalNeedsRemoval, nil, "Application supervisor is stopped and shutdown requested")
+	if snap.IsStopRequired() {
+		return fsmv2.Result[any, any](&StoppedState{}, fsmv2.SignalNone, nil, "Shutdown requested")
 	}
 
-	return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil, "Application supervisor is stopped")
+	circuitOpen, stale := snapshot.ChildrenViewToStatus(snap.ChildrenView)
+	status := snapshot.ApplicationStatus{
+		ChildrenCircuitOpen: circuitOpen,
+		ChildrenStale:       stale,
+	}
+
+	if status.HasInfrastructureIssues() {
+		return fsmv2.Result[any, any](&DegradedState{}, fsmv2.SignalNone, nil, status.InfrastructureReason())
+	}
+
+	return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil, "Application supervisor is running and managing children")
 }
 
-func (s *StoppedState) String() string {
+func (s *RunningState) String() string {
 	return helpers.DeriveStateName(s)
 }
