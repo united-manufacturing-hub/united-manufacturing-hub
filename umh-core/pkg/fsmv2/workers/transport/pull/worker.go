@@ -146,9 +146,7 @@ func (w *PullWorker) CollectObservedState(ctx context.Context, _ fsmv2.DesiredSt
 // Must be PURE  -  only uses the spec parameter, never dependencies.
 func (w *PullWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, error) {
 	if spec == nil {
-		return &snapshot.PullDesiredState{
-			BaseDesiredState: config.BaseDesiredState{State: config.DesiredStateRunning},
-		}, nil
+		return &snapshot.PullDesiredState{}, nil
 	}
 
 	userSpec, ok := spec.(config.UserSpec)
@@ -166,12 +164,12 @@ func (w *PullWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, e
 		Variables: userSpec.Variables,
 	}
 
-	desired, err := config.DeriveLeafState[PullUserSpec](renderedSpec)
+	parsed, err := config.ParseUserSpec[PullUserSpec](renderedSpec)
 	if err != nil {
 		return nil, err
 	}
 
-	return &desired, nil
+	return &snapshot.PullDesiredState{State: parsed.BaseUserSpec.GetState()}, nil
 }
 
 // GetInitialState returns StoppedState as the pull worker's initial FSM state.

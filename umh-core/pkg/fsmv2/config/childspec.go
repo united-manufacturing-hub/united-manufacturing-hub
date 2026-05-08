@@ -37,12 +37,17 @@ import (
 // # Lifecycle Control Invariant
 //
 // The FSM controls worker lifecycle through state transitions, not through custom bool fields.
-// Do not add fields like ShouldRun, IsRunning, Enabled, or Active to your DesiredState.
+// Do not add fields like ShouldRun, IsRunning, Enabled, Active, or State to your DesiredState.
 //
 // Correct lifecycle control:
 //   - ShutdownRequested: Inherited from this type. Set by supervisor for graceful shutdown.
 //   - ParentMappedState: For child workers only. Injected by supervisor from parent's ChildStartStates.
-//   - State ("running"/"stopped"): From BaseUserSpec.GetState(). Controls whether worker should be running.
+//
+// The desired lifecycle state ("running"/"stopped") is read from the user spec
+// via BaseUserSpec.GetState() in DeriveDesiredState and stored directly on the
+// outer DesiredState type (not on BaseDesiredState). Callers that used to set
+// BaseDesiredState{State: x} should instead set the State field on the embedding
+// struct (e.g., MyDesiredState{State: x, ...}).
 //
 // Correct ShouldBeRunning() implementations:
 //
@@ -58,8 +63,7 @@ import (
 //
 // See ValidateNoCustomLifecycleFields in pkg/fsmv2/internal/validator/snapshot.go for enforcement.
 type BaseDesiredState struct {
-	State             string `json:"state"             yaml:"state"`             // "stopped" or "running" - desired lifecycle state
-	ShutdownRequested bool   `json:"ShutdownRequested" yaml:"ShutdownRequested"` //nolint:tagliatelle // Match JSON field name for API compatibility
+	ShutdownRequested bool `json:"ShutdownRequested" yaml:"ShutdownRequested"` //nolint:tagliatelle // Match JSON field name for API compatibility
 }
 
 // IsShutdownRequested returns whether shutdown has been requested for this worker.
@@ -71,16 +75,6 @@ func (b *BaseDesiredState) IsShutdownRequested() bool {
 // This satisfies the ShutdownRequestable interface.
 func (b *BaseDesiredState) SetShutdownRequested(v bool) {
 	b.ShutdownRequested = v
-}
-
-// GetState returns the desired lifecycle state.
-// Implements fsmv2.DesiredState interface.
-func (b *BaseDesiredState) GetState() string {
-	if b.State == "" {
-		return DesiredStateRunning
-	}
-
-	return b.State
 }
 
 // BaseUserSpec provides common fields for all user configuration types.
@@ -439,8 +433,18 @@ type ChildrenView interface {
 //	}
 type DesiredState struct {
 	OriginalUserSpec interface{}      `json:"originalUserSpec,omitempty" yaml:"-"` // Captures the input that produced this DesiredState (for debugging/traceability)
-	BaseDesiredState `yaml:",inline"` // Provides State, ShutdownRequested fields and methods (GetState, IsShutdownRequested, SetShutdownRequested)
+	BaseDesiredState `yaml:",inline"` // Provides ShutdownRequested field and IsShutdownRequested/SetShutdownRequested methods
 	ChildrenSpecs    []ChildSpec      `json:"childrenSpecs,omitempty"    yaml:"childrenSpecs,omitempty"` // Declarative specification of child workers
+	State            string           `json:"state"                      yaml:"state"`                  // "stopped" or "running" - desired lifecycle state
+}
+
+// GetState returns the desired lifecycle state, defaulting to "running" if empty.
+func (d *DesiredState) GetState() string {
+	if d.State == "" {
+		return DesiredStateRunning
+	}
+
+	return d.State
 }
 
 // NOTE: IsShutdownRequested() and SetShutdownRequested() are provided by embedded BaseDesiredState.

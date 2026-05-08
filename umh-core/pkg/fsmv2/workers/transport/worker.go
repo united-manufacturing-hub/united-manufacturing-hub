@@ -163,9 +163,7 @@ func (w *TransportWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredSta
 	// a real spec is parsed.
 	if spec == nil {
 		return &snapshot.TransportDesiredState{
-			BaseDesiredState: config.BaseDesiredState{
-				State: config.DesiredStateRunning,
-			},
+			State:         config.DesiredStateRunning,
 			ChildrenSpecs: append(makePushChildSpec(config.UserSpec{}), makePullChildSpec(config.UserSpec{})...),
 		}, nil
 	}
@@ -209,9 +207,7 @@ func (w *TransportWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredSta
 
 	// Build desired state with valid state values only ("stopped" or "running")
 	return &snapshot.TransportDesiredState{
-		BaseDesiredState: config.BaseDesiredState{
-			State: transportSpec.GetState(), // Returns "running" or "stopped"
-		},
+		State:         transportSpec.GetState(), // Returns "running" or "stopped"
 		RelayURL:      transportSpec.RelayURL,
 		InstanceUUID:  transportSpec.InstanceUUID,
 		AuthToken:     transportSpec.AuthToken,

@@ -20,7 +20,9 @@ import (
 
 // WrappedDesiredState wraps a developer's TConfig into the full DesiredState
 // required by the supervisor. BaseDesiredState promotion provides
-// IsShutdownRequested, GetState, and SetShutdownRequested for free.
+// IsShutdownRequested and SetShutdownRequested for free. The State field
+// carries the desired lifecycle state ("running"/"stopped") set by
+// DeriveDesiredState from the user spec's BaseUserSpec.GetState().
 //
 // The framework constructs this internally during DeriveDesiredState;
 // developers only provide TConfig via WorkerBase helpers.
@@ -28,6 +30,16 @@ type WrappedDesiredState[TConfig any] struct {
 	config.BaseDesiredState
 	Config        TConfig            `json:"config"`
 	ChildrenSpecs []config.ChildSpec `json:"childrenSpecs,omitempty"`
+	State         string             `json:"state"             yaml:"state"` // "stopped" or "running" - desired lifecycle state
+}
+
+// GetState returns the desired lifecycle state, defaulting to "running" if empty.
+func (d *WrappedDesiredState[TConfig]) GetState() string {
+	if d.State == "" {
+		return config.DesiredStateRunning
+	}
+
+	return d.State
 }
 
 // GetChildrenSpecs returns the children specifications.

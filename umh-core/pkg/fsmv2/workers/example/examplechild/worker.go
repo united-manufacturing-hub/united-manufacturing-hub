@@ -104,7 +104,7 @@ func (w *ChildWorker) CollectObservedState(ctx context.Context, _ fsmv2.DesiredS
 func (w *ChildWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, error) {
 	if spec == nil {
 		return &fsmv2.WrappedDesiredState[ExamplechildConfig]{
-			BaseDesiredState: config.BaseDesiredState{State: config.DesiredStateRunning},
+			State: config.DesiredStateRunning,
 		}, nil
 	}
 
@@ -134,7 +134,7 @@ func (w *ChildWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, 
 	}
 
 	return &fsmv2.WrappedDesiredState[ExamplechildConfig]{
-		BaseDesiredState: config.BaseDesiredState{State: state},
+		State: state,
 		Config: ExamplechildConfig{
 			BaseUserSpec: parsed.BaseUserSpec,
 		},

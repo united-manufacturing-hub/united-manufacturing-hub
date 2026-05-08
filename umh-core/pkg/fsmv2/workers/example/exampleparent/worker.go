@@ -100,7 +100,7 @@ func (w *ParentWorker) CollectObservedState(ctx context.Context, _ fsmv2.Desired
 func (w *ParentWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, error) {
 	if spec == nil {
 		return &fsmv2.WrappedDesiredState[ExampleparentConfig]{
-			BaseDesiredState: config.BaseDesiredState{State: config.DesiredStateRunning},
+			State: config.DesiredStateRunning,
 		}, nil
 	}
 
@@ -113,7 +113,7 @@ func (w *ParentWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState,
 
 	if childrenCount == 0 {
 		return &fsmv2.WrappedDesiredState[ExampleparentConfig]{
-			BaseDesiredState: config.BaseDesiredState{State: parentSpec.GetState()},
+			State: parentSpec.GetState(),
 			Config: ExampleparentConfig{
 				BaseUserSpec: parentSpec.BaseUserSpec,
 				ChildCount:   0,
@@ -151,7 +151,7 @@ device: {{ .DEVICE_ID }}`
 	}
 
 	return &fsmv2.WrappedDesiredState[ExampleparentConfig]{
-		BaseDesiredState: config.BaseDesiredState{State: parentSpec.GetState()},
+		State: parentSpec.GetState(),
 		Config: ExampleparentConfig{
 			BaseUserSpec: parentSpec.BaseUserSpec,
 			ChildCount:   childrenCount,

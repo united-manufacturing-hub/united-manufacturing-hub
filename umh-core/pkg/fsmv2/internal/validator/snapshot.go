@@ -320,7 +320,11 @@ func ValidateStateFieldExists(baseDir string) []Violation {
 }
 
 // checkStateFieldExists parses a snapshot file and checks for State string field.
-// DesiredState inherits State from BaseDesiredState; ObservedState needs explicit field.
+// Both DesiredState and ObservedState types must have an explicit State string field.
+// BaseDesiredState no longer carries State (F4 refactor); each embedding type owns it.
+// Child worker desired states (PushDesiredState, PullDesiredState) that are controlled
+// entirely by ParentMappedState are exempt: they embed BaseDesiredState only for
+// ShutdownRequested and do not participate in the running/stopped lifecycle transition.
 func checkStateFieldExists(filename string) []Violation {
 	var violations []Violation
 
@@ -371,7 +375,12 @@ func checkStateFieldExists(filename string) []Violation {
 			}
 		}
 
-		if isDesiredState && embedsBaseDesiredState {
+		// Child worker DesiredState types that embed only BaseDesiredState (for
+		// ShutdownRequested) and rely solely on ParentMappedState for lifecycle
+		// are exempt from the State field requirement. They are identified by
+		// embedding BaseDesiredState without having a State string field of their own.
+		// This is a valid pattern for push/pull child workers.
+		if isDesiredState && embedsBaseDesiredState && !hasStateField {
 			hasStateField = true
 		}
 

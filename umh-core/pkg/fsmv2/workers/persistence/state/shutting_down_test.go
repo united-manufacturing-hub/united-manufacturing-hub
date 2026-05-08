@@ -48,9 +48,9 @@ var _ = Describe("ShuttingDownState", func() {
 					},
 					Desired: &snapshot.PersistenceDesiredState{
 						BaseDesiredState: fsmv2config.BaseDesiredState{
-							State:             "running",
 							ShutdownRequested: true,
 						},
+					State: "running",
 						CompactionInterval:  5 * time.Minute,
 						RetentionWindow:     24 * time.Hour,
 						MaintenanceInterval: 7 * 24 * time.Hour,
@@ -73,9 +73,9 @@ var _ = Describe("ShuttingDownState", func() {
 					},
 					Desired: &snapshot.PersistenceDesiredState{
 						BaseDesiredState: fsmv2config.BaseDesiredState{
-							State:             "running",
 							ShutdownRequested: true,
 						},
+					State: "running",
 						CompactionInterval:  5 * time.Minute,
 						RetentionWindow:     24 * time.Hour,
 						MaintenanceInterval: 7 * 24 * time.Hour,
@@ -101,9 +101,9 @@ var _ = Describe("ShuttingDownState", func() {
 					},
 					Desired: &snapshot.PersistenceDesiredState{
 						BaseDesiredState: fsmv2config.BaseDesiredState{
-							State:             "running",
 							ShutdownRequested: true,
 						},
+					State: "running",
 						CompactionInterval:  5 * time.Minute,
 						RetentionWindow:     24 * time.Hour,
 						MaintenanceInterval: 7 * 24 * time.Hour,
@@ -129,9 +129,9 @@ var _ = Describe("ShuttingDownState", func() {
 					},
 					Desired: &snapshot.PersistenceDesiredState{
 						BaseDesiredState: fsmv2config.BaseDesiredState{
-							State:             "running",
 							ShutdownRequested: true,
 						},
+					State: "running",
 						CompactionInterval:  5 * time.Minute,
 						RetentionWindow:     24 * time.Hour,
 						MaintenanceInterval: 7 * 24 * time.Hour,

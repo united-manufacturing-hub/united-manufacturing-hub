@@ -88,11 +88,13 @@ type TransportDesiredState struct {
 	// adding a CSE secret tier to persist locally but exclude from delta sync.
 	AuthToken               string `json:"authToken"`
 	RelayURL                string `json:"relayURL"`
-	config.BaseDesiredState        // Provides State, ShutdownRequested + IsShutdownRequested() + SetShutdownRequested()
+	config.BaseDesiredState        // Provides ShutdownRequested + IsShutdownRequested() + SetShutdownRequested()
 
 	ChildrenSpecs []config.ChildSpec `json:"childrenSpecs,omitempty"`
 
 	Timeout time.Duration `json:"timeout"`
+
+	State string `json:"state" yaml:"state"` // "stopped" or "running" - desired lifecycle state
 }
 
 // GetChildrenSpecs returns the children specifications.
@@ -103,7 +105,11 @@ func (d *TransportDesiredState) GetChildrenSpecs() []config.ChildSpec {
 
 // GetState returns the desired lifecycle state ("running" or "stopped").
 func (d *TransportDesiredState) GetState() string {
-	return d.BaseDesiredState.GetState()
+	if d.State == "" {
+		return config.DesiredStateRunning
+	}
+
+	return d.State
 }
 
 // ShouldBeRunning returns true if the transport should be running.

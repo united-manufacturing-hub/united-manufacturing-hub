@@ -20,8 +20,8 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	fsmv2types "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleparent"
@@ -54,12 +54,13 @@ var _ = Describe("ParentWorker", func() {
 	})
 
 	Describe("CollectObservedState", func() {
-		It("should return observed state with timestamp", func() {
+		It("should return observed state via NewObservation (zero timestamp filled by collector)", func() {
 			observed, err := worker.CollectObservedState(context.Background(), nil)
 
 			Expect(err).ToNot(HaveOccurred())
 			Expect(observed).NotTo(BeNil())
-			Expect(observed.GetTimestamp()).NotTo(BeZero())
+			_, ok := observed.(fsmv2.Observation[exampleparent.ExampleparentStatus])
+			Expect(ok).To(BeTrue())
 		})
 	})
 
@@ -73,8 +74,8 @@ var _ = Describe("ParentWorker", func() {
 			desiredIface, err := worker.DeriveDesiredState(spec)
 
 			Expect(err).ToNot(HaveOccurred())
-			desired := desiredIface.(*fsmv2types.DesiredState)
-			Expect(desired.State).To(Equal("running"))
+			desired := desiredIface.(*fsmv2.WrappedDesiredState[exampleparent.ExampleparentConfig])
+			Expect(desired.GetState()).To(Equal("running"))
 			Expect(desired.ChildrenSpecs).To(BeNil())
 		})
 
@@ -87,8 +88,8 @@ var _ = Describe("ParentWorker", func() {
 			desiredIface, err := worker.DeriveDesiredState(spec)
 
 			Expect(err).ToNot(HaveOccurred())
-			desired := desiredIface.(*fsmv2types.DesiredState)
-			Expect(desired.State).To(Equal("running"))
+			desired := desiredIface.(*fsmv2.WrappedDesiredState[exampleparent.ExampleparentConfig])
+			Expect(desired.GetState()).To(Equal("running"))
 			Expect(desired.ChildrenSpecs).To(HaveLen(3))
 			Expect(desired.ChildrenSpecs[0].Name).To(Equal("child-0"))
 			Expect(desired.ChildrenSpecs[1].Name).To(Equal("child-1"))
