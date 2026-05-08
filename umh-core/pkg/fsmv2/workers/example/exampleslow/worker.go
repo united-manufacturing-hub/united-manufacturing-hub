@@ -18,17 +18,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"time"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleslow/snapshot"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleslow/state"
 )
 
 type ExampleslowWorker struct {
@@ -52,12 +48,7 @@ func NewExampleslowWorker(
 	}
 
 	if identity.WorkerType == "" {
-		workerType, err := storage.DeriveWorkerType[snapshot.ExampleslowObservedState]()
-		if err != nil {
-			return nil, fmt.Errorf("failed to derive worker type: %w", err)
-		}
-
-		identity.WorkerType = workerType
+		identity.WorkerType = "exampleslow"
 	}
 
 	dependencies := NewExampleslowDependencies(connectionPool, logger, stateReader, identity)
@@ -69,68 +60,80 @@ func NewExampleslowWorker(
 	}, nil
 }
 
-func (w *ExampleslowWorker) CollectObservedState(ctx context.Context, _ fsmv2.DesiredState) (fsmv2.ObservedState, error) {
+func (w *ExampleslowWorker) CollectObservedState(ctx context.Context, desired fsmv2.DesiredState) (fsmv2.ObservedState, error) {
 	select {
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	default:
 	}
 
-	deps := w.GetDependencies()
+	d := w.GetDependencies()
+
+	if desired != nil {
+		cfg := fsmv2.ExtractConfig[ExampleslowConfig](desired)
+		d.SetDelaySeconds(cfg.DelaySeconds)
+	}
 
 	connectionHealth := "no connection"
 
-	if deps.IsConnected() {
+	if d.IsConnected() {
 		connectionHealth = "healthy"
 	}
 
-	observed := snapshot.ExampleslowObservedState{
-		ID:               w.identity.ID,
-		CollectedAt:      time.Now(),
+	status := ExampleslowStatus{
 		ConnectionHealth: connectionHealth,
 	}
 
-	if fm := deps.GetFrameworkState(); fm != nil {
-		observed.Metrics.Framework = *fm
-	}
-
-	observed.LastActionResults = deps.GetActionHistory()
-
-	return observed, nil
+	return fsmv2.NewObservation(status), nil
 }
 
 func (w *ExampleslowWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, error) {
-	desired, err := config.DeriveLeafState[ExampleslowUserSpec](spec)
-	if err != nil {
-		return nil, err
-	}
-
-	w.updateDependenciesFromSpec(spec)
-
-	return &desired, nil
-}
-
-// updateDependenciesFromSpec configures dependencies based on the user spec (separate to avoid PURE_DERIVE violations).
-func (w *ExampleslowWorker) updateDependenciesFromSpec(spec interface{}) {
 	if spec == nil {
-		return
+		return &fsmv2.WrappedDesiredState[ExampleslowConfig]{
+			BaseDesiredState: config.BaseDesiredState{State: config.DesiredStateRunning},
+		}, nil
 	}
 
-	parsed, err := config.ParseUserSpec[ExampleslowUserSpec](spec)
+	userSpec, ok := spec.(config.UserSpec)
+	if !ok {
+		return nil, fmt.Errorf("invalid spec type: expected UserSpec, got %T", spec)
+	}
+
+	renderedConfig, err := config.RenderConfigTemplate(userSpec.Config, userSpec.Variables)
 	if err != nil {
-		return
+		return nil, fmt.Errorf("template rendering failed: %w", err)
 	}
 
-	deps := w.GetDependencies()
-	deps.SetDelaySeconds(parsed.DelaySeconds)
+	parsed, err := config.ParseUserSpec[ExampleslowUserSpec](userSpec)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse exampleslow spec: %w", err)
+	}
+
+	_ = renderedConfig
+
+	state := parsed.GetState()
+	if state == "" {
+		state = config.DesiredStateRunning
+	}
+
+	return &fsmv2.WrappedDesiredState[ExampleslowConfig]{
+		BaseDesiredState: config.BaseDesiredState{State: state},
+		Config: ExampleslowConfig{
+			BaseUserSpec: parsed.BaseUserSpec,
+			DelaySeconds: parsed.DelaySeconds,
+		},
+	}, nil
 }
 
+// GetInitialState returns the state the FSM should start in.
+// Uses the initial state registry populated by the state package's init() function.
 func (w *ExampleslowWorker) GetInitialState() fsmv2.State[any, any] {
-	return &state.StoppedState{}
+	return fsmv2.LookupInitialState("exampleslow")
 }
 
 func init() {
-	if err := factory.RegisterWorkerType[snapshot.ExampleslowObservedState, *snapshot.ExampleslowDesiredState](
+	if err := factory.RegisterWorkerAndSupervisorFactoryByType(
+		"exampleslow",
 		func(id deps.Identity, logger deps.FSMLogger, stateReader deps.StateReader, _ map[string]any) fsmv2.Worker {
 			pool := &DefaultConnectionPool{}
 			worker, _ := NewExampleslowWorker(id, pool, logger, stateReader)
@@ -138,7 +141,7 @@ func init() {
 			return worker
 		},
 		func(cfg interface{}) interface{} {
-			return supervisor.NewSupervisor[snapshot.ExampleslowObservedState, *snapshot.ExampleslowDesiredState](
+			return supervisor.NewSupervisor[fsmv2.Observation[ExampleslowStatus], *fsmv2.WrappedDesiredState[ExampleslowConfig]](
 				cfg.(supervisor.Config))
 		},
 	); err != nil {

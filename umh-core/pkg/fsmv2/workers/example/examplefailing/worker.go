@@ -18,18 +18,16 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"time"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	fsmv2types "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplefailing/snapshot"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplefailing/state"
 )
+
+const workerTypeName = "examplefailing"
 
 // FailingWorker implements the FSM v2 Worker interface for testing failure scenarios.
 type FailingWorker struct {
@@ -55,12 +53,7 @@ func NewFailingWorker(
 	}
 
 	if identity.WorkerType == "" {
-		workerType, err := storage.DeriveWorkerType[snapshot.ExamplefailingObservedState]()
-		if err != nil {
-			return nil, fmt.Errorf("failed to derive worker type: %w", err)
-		}
-
-		identity.WorkerType = workerType
+		identity.WorkerType = workerTypeName
 	}
 
 	dependencies := NewFailingDependencies(connectionPool, logger, stateReader, identity)
@@ -80,90 +73,97 @@ func NewFailingWorker(
 }
 
 // CollectObservedState returns the current observed state of the failing worker.
-func (w *FailingWorker) CollectObservedState(ctx context.Context, _ fsmv2.DesiredState) (fsmv2.ObservedState, error) {
+func (w *FailingWorker) CollectObservedState(ctx context.Context, desired fsmv2.DesiredState) (fsmv2.ObservedState, error) {
 	select {
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	default:
 	}
 
-	deps := w.GetDependencies()
+	d := w.GetDependencies()
 
-	// IMPORTANT: Increment observation counter at START of collection when recovery delay is active.
-	// This ensures deterministic counting for tests.
-	if deps.ShouldDelayRecovery() {
-		deps.IncrementObservationsSinceFailure()
+	if desired != nil {
+		cfg := fsmv2.ExtractConfig[ExamplefailingConfig](desired)
+		w.updateDependenciesFromConfig(cfg)
+	}
+
+	if d.ShouldDelayRecovery() {
+		d.IncrementObservationsSinceFailure()
 	}
 
 	connectionHealth := "no connection"
-
-	if deps.IsConnected() {
+	if d.IsConnected() {
 		connectionHealth = "healthy"
 	}
 
-	observed := snapshot.ExamplefailingObservedState{
-		ID:                       w.identity.ID,
-		CollectedAt:              time.Now(),
+	status := ExamplefailingStatus{
 		ConnectionHealth:         connectionHealth,
-		ConnectAttempts:          deps.GetAttempts(),
-		RestartAfterFailures:     deps.GetRestartAfterFailures(),
-		AllCyclesComplete:        deps.AllCyclesComplete(),
-		TicksInConnectedState:    deps.GetTicksInConnected(),
-		CurrentCycle:             deps.GetCurrentCycle(),
-		TotalCycles:              deps.GetFailureCycles(),
-		RecoveryDelayActive:      deps.ShouldDelayRecovery(),
-		ObservationsSinceFailure: deps.GetObservationsSinceFailure(),
-	}
-	observed.ShouldFail = deps.GetShouldFail()
-
-	if fm := deps.GetFrameworkState(); fm != nil {
-		observed.Metrics.Framework = *fm
+		ConnectAttempts:          d.GetAttempts(),
+		RestartAfterFailures:     d.GetRestartAfterFailures(),
+		AllCyclesComplete:        d.AllCyclesComplete(),
+		TicksInConnectedState:    d.GetTicksInConnected(),
+		CurrentCycle:             d.GetCurrentCycle(),
+		TotalCycles:              d.GetFailureCycles(),
+		RecoveryDelayActive:      d.ShouldDelayRecovery(),
+		ObservationsSinceFailure: d.GetObservationsSinceFailure(),
 	}
 
-	observed.LastActionResults = deps.GetActionHistory()
-
-	return observed, nil
+	return fsmv2.NewObservation(status), nil
 }
 
 // DeriveDesiredState determines what state the failing worker should be in.
 func (w *FailingWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, error) {
-	desired, err := fsmv2types.DeriveLeafState[FailingUserSpec](spec)
-	if err != nil {
-		return nil, err
-	}
-
-	w.updateDependenciesFromSpec(spec)
-
-	return &desired, nil
-}
-
-// updateDependenciesFromSpec configures dependencies based on the user spec.
-func (w *FailingWorker) updateDependenciesFromSpec(spec interface{}) {
 	if spec == nil {
-		return
+		return &fsmv2.WrappedDesiredState[ExamplefailingConfig]{
+			BaseDesiredState: fsmv2types.BaseDesiredState{State: fsmv2types.DesiredStateRunning},
+		}, nil
 	}
 
 	parsed, err := fsmv2types.ParseUserSpec[FailingUserSpec](spec)
 	if err != nil {
-		return
+		return nil, fmt.Errorf("failed to parse examplefailing spec: %w", err)
 	}
 
-	deps := w.GetDependencies()
-	deps.SetShouldFail(parsed.ShouldFail)
-	deps.SetMaxFailures(parsed.GetMaxFailures())
-	deps.SetRestartAfterFailures(parsed.GetRestartAfterFailures())
-	deps.SetFailureCycles(parsed.GetFailureCycles())
-	deps.SetRecoveryDelayMs(parsed.RecoveryDelayMs)
-	deps.SetRecoveryDelayObservations(parsed.GetRecoveryDelayObservations())
+	state := parsed.GetState()
+	if state == "" {
+		state = fsmv2types.DesiredStateRunning
+	}
+
+	return &fsmv2.WrappedDesiredState[ExamplefailingConfig]{
+		BaseDesiredState: fsmv2types.BaseDesiredState{State: state},
+		Config: ExamplefailingConfig{
+			BaseUserSpec:              parsed.BaseUserSpec,
+			ShouldFail:                parsed.ShouldFail,
+			MaxFailures:               parsed.GetMaxFailures(),
+			FailureCycles:             parsed.GetFailureCycles(),
+			RestartAfterFailures:      parsed.GetRestartAfterFailures(),
+			RecoveryDelayMs:           parsed.RecoveryDelayMs,
+			RecoveryDelayObservations: parsed.GetRecoveryDelayObservations(),
+		},
+	}, nil
+}
+
+// updateDependenciesFromConfig applies config values to dependencies.
+// Called from CollectObservedState so dependency mutations happen outside DeriveDesiredState.
+func (w *FailingWorker) updateDependenciesFromConfig(cfg ExamplefailingConfig) {
+	d := w.GetDependencies()
+	d.SetShouldFail(cfg.ShouldFail)
+	d.SetMaxFailures(cfg.MaxFailures)
+	d.SetRestartAfterFailures(cfg.RestartAfterFailures)
+	d.SetFailureCycles(cfg.FailureCycles)
+	d.SetRecoveryDelayMs(cfg.RecoveryDelayMs)
+	d.SetRecoveryDelayObservations(cfg.RecoveryDelayObservations)
 }
 
 // GetInitialState returns the state the FSM should start in.
+// Uses the initial state registry populated by the state package's init() function.
 func (w *FailingWorker) GetInitialState() fsmv2.State[any, any] {
-	return &state.StoppedState{}
+	return fsmv2.LookupInitialState(workerTypeName)
 }
 
 func init() {
-	if err := factory.RegisterWorkerType[snapshot.ExamplefailingObservedState, *snapshot.ExamplefailingDesiredState](
+	if err := factory.RegisterWorkerAndSupervisorFactoryByType(
+		workerTypeName,
 		func(id deps.Identity, logger deps.FSMLogger, stateReader deps.StateReader, _ map[string]any) fsmv2.Worker {
 			pool := &DefaultConnectionPool{}
 			worker, _ := NewFailingWorker(id, pool, logger, stateReader)
@@ -171,7 +171,7 @@ func init() {
 			return worker
 		},
 		func(cfg interface{}) interface{} {
-			return supervisor.NewSupervisor[snapshot.ExamplefailingObservedState, *snapshot.ExamplefailingDesiredState](
+			return supervisor.NewSupervisor[fsmv2.Observation[ExamplefailingStatus], *fsmv2.WrappedDesiredState[ExamplefailingConfig]](
 				cfg.(supervisor.Config))
 		},
 	); err != nil {
