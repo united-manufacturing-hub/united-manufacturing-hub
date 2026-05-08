@@ -788,9 +788,15 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) (err error) 
 	// Store the merged user spec as originalUserSpec so observers can verify variable inheritance.
 	if userSpecWithVars.Config != "" || len(userSpecWithVars.Variables.User) > 0 {
 		userSpecBytes, marshalErr := json.Marshal(userSpecWithVars)
-		if marshalErr == nil {
+		if marshalErr != nil {
+			s.logger.SentryWarn(deps.FeatureFSMv2, s.GetHierarchyPathUnlocked(), "original_user_spec_marshal_failed",
+				deps.Err(marshalErr))
+		} else {
 			var userSpecMap map[string]any
-			if unmarshalErr := json.Unmarshal(userSpecBytes, &userSpecMap); unmarshalErr == nil {
+			if unmarshalErr := json.Unmarshal(userSpecBytes, &userSpecMap); unmarshalErr != nil {
+				s.logger.SentryWarn(deps.FeatureFSMv2, s.GetHierarchyPathUnlocked(), "original_user_spec_unmarshal_failed",
+					deps.Err(unmarshalErr))
+			} else {
 				desiredDoc["originalUserSpec"] = userSpecMap
 			}
 		}

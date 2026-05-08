@@ -117,9 +117,6 @@ func (w *ExamplepanicWorker) DeriveDesiredState(spec interface{}) (fsmv2.Desired
 	}
 
 	state := parsed.GetState()
-	if state == "" {
-		state = config.DesiredStateRunning
-	}
 
 	return &fsmv2.WrappedDesiredState[ExamplepanicConfig]{
 		State: state,

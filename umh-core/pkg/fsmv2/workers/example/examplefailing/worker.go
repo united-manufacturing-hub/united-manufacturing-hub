@@ -137,9 +137,6 @@ func (w *FailingWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState
 	}
 
 	state := parsed.GetState()
-	if state == "" {
-		state = fsmv2types.DesiredStateRunning
-	}
 
 	return &fsmv2.WrappedDesiredState[ExamplefailingConfig]{
 		State: state,

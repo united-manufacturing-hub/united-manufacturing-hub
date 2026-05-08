@@ -72,7 +72,7 @@ func (c PersistenceConfig) GetMaintenanceInterval() time.Duration {
 
 // PersistenceStatus holds the runtime observation data for the persistence worker.
 // Framework fields (CollectedAt, State, LastActionResults, MetricsEmbedder,
-// IsBeingRemoved, children counts) are carried by fsmv2.Observation[PersistenceStatus]
+// ShutdownRequested, children counts) are carried by fsmv2.Observation[PersistenceStatus]
 // and are not duplicated here.
 type PersistenceStatus struct {
 	// LastCompactionAt records the most recent successful compaction timestamp.

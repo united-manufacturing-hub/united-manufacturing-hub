@@ -16,3 +16,8 @@ compass_artifact*
 # Test results
 *.result.txt
 .worktrees/
+
+# Local AI agent artifacts (Klaus self-review skill output, Claude Code state)
+.self-review/
+.claude/
+.self_review_dispatches/
