@@ -28,59 +28,38 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/persistence/state"
 )
 
-var _ = Describe("TryingToStartState", func() {
-	var stateObj *state.TryingToStartState
+var _ = Describe("StoppingState", func() {
+	var stateObj *state.StoppingState
 
 	BeforeEach(func() {
-		stateObj = &state.TryingToStartState{}
+		stateObj = &state.StoppingState{}
 	})
 
 	Describe("Next", func() {
-		Context("when shutdown is requested", func() {
+		Context("when maintenance action succeeded", func() {
 			It("should transition to StoppedState", func() {
 				snap := fsmv2.Snapshot{
 					Identity: deps.Identity{ID: "test", WorkerType: "persistence"},
-					Observed: snapshot.PersistenceObservedState{
-						CollectedAt: time.Now(),
-					},
-					Desired: &snapshot.PersistenceDesiredState{
-						BaseDesiredState: fsmv2config.BaseDesiredState{
-							ShutdownRequested: true,
-						},
-					State: "running",
-						CompactionInterval:  5 * time.Minute,
-						RetentionWindow:     24 * time.Hour,
-						MaintenanceInterval: 7 * 24 * time.Hour,
-					},
-				}
-
-				result := stateObj.Next(snap)
-				Expect(result.State).To(BeAssignableToTypeOf(&state.StoppedState{}))
-				Expect(result.Signal).To(Equal(fsmv2.SignalNone))
-				Expect(result.Action).To(BeNil())
-			})
-		})
-
-		Context("when maintenance action succeeded", func() {
-			It("should transition to RunningState", func() {
-				snap := fsmv2.Snapshot{
-					Identity: deps.Identity{ID: "test", WorkerType: "persistence"},
-					Observed: snapshot.PersistenceObservedState{
+					Observed: fsmv2.Observation[snapshot.PersistenceStatus]{
 						CollectedAt: time.Now(),
 						LastActionResults: []deps.ActionResult{
 							{ActionType: "RunMaintenance", Success: true},
 						},
 					},
-					Desired: &snapshot.PersistenceDesiredState{
-						State: "running",
-						CompactionInterval:  5 * time.Minute,
-						RetentionWindow:     24 * time.Hour,
-						MaintenanceInterval: 7 * 24 * time.Hour,
+					Desired: &fsmv2.WrappedDesiredState[snapshot.PersistenceConfig]{
+						BaseDesiredState: fsmv2config.BaseDesiredState{
+							ShutdownRequested: true,
+						},
+						Config: snapshot.PersistenceConfig{
+							CompactionInterval:  5 * time.Minute,
+							RetentionWindow:     24 * time.Hour,
+							MaintenanceInterval: 7 * 24 * time.Hour,
+						},
 					},
 				}
 
 				result := stateObj.Next(snap)
-				Expect(result.State).To(BeAssignableToTypeOf(&state.RunningState{}))
+				Expect(result.State).To(BeAssignableToTypeOf(&state.StoppedState{}))
 				Expect(result.Signal).To(Equal(fsmv2.SignalNone))
 				Expect(result.Action).To(BeNil())
 			})
@@ -90,19 +69,23 @@ var _ = Describe("TryingToStartState", func() {
 			It("should emit RunMaintenanceAction and stay", func() {
 				snap := fsmv2.Snapshot{
 					Identity: deps.Identity{ID: "test", WorkerType: "persistence"},
-					Observed: snapshot.PersistenceObservedState{
+					Observed: fsmv2.Observation[snapshot.PersistenceStatus]{
 						CollectedAt: time.Now(),
 					},
-					Desired: &snapshot.PersistenceDesiredState{
-						State: "running",
-						CompactionInterval:  5 * time.Minute,
-						RetentionWindow:     24 * time.Hour,
-						MaintenanceInterval: 7 * 24 * time.Hour,
+					Desired: &fsmv2.WrappedDesiredState[snapshot.PersistenceConfig]{
+						BaseDesiredState: fsmv2config.BaseDesiredState{
+							ShutdownRequested: true,
+						},
+						Config: snapshot.PersistenceConfig{
+							CompactionInterval:  5 * time.Minute,
+							RetentionWindow:     24 * time.Hour,
+							MaintenanceInterval: 7 * 24 * time.Hour,
+						},
 					},
 				}
 
 				result := stateObj.Next(snap)
-				Expect(result.State).To(BeAssignableToTypeOf(&state.TryingToStartState{}))
+				Expect(result.State).To(BeAssignableToTypeOf(&state.StoppingState{}))
 				Expect(result.Signal).To(Equal(fsmv2.SignalNone))
 				Expect(result.Action).To(BeAssignableToTypeOf(&action.RunMaintenanceAction{}))
 			})
@@ -112,59 +95,65 @@ var _ = Describe("TryingToStartState", func() {
 			It("should re-emit RunMaintenanceAction and stay", func() {
 				snap := fsmv2.Snapshot{
 					Identity: deps.Identity{ID: "test", WorkerType: "persistence"},
-					Observed: snapshot.PersistenceObservedState{
+					Observed: fsmv2.Observation[snapshot.PersistenceStatus]{
 						CollectedAt: time.Now(),
 						LastActionResults: []deps.ActionResult{
 							{ActionType: "RunMaintenance", Success: false},
 						},
 					},
-					Desired: &snapshot.PersistenceDesiredState{
-						State: "running",
-						CompactionInterval:  5 * time.Minute,
-						RetentionWindow:     24 * time.Hour,
-						MaintenanceInterval: 7 * 24 * time.Hour,
+					Desired: &fsmv2.WrappedDesiredState[snapshot.PersistenceConfig]{
+						BaseDesiredState: fsmv2config.BaseDesiredState{
+							ShutdownRequested: true,
+						},
+						Config: snapshot.PersistenceConfig{
+							CompactionInterval:  5 * time.Minute,
+							RetentionWindow:     24 * time.Hour,
+							MaintenanceInterval: 7 * 24 * time.Hour,
+						},
 					},
 				}
 
 				result := stateObj.Next(snap)
-				Expect(result.State).To(BeAssignableToTypeOf(&state.TryingToStartState{}))
+				Expect(result.State).To(BeAssignableToTypeOf(&state.StoppingState{}))
 				Expect(result.Signal).To(Equal(fsmv2.SignalNone))
 				Expect(result.Action).To(BeAssignableToTypeOf(&action.RunMaintenanceAction{}))
 			})
 		})
 
-		Context("when shutdown is requested and action succeeded", func() {
-			It("should prioritize shutdown over action result", func() {
+		Context("when multiple ticks without success", func() {
+			It("should keep emitting RunMaintenanceAction on each tick", func() {
 				snap := fsmv2.Snapshot{
 					Identity: deps.Identity{ID: "test", WorkerType: "persistence"},
-					Observed: snapshot.PersistenceObservedState{
+					Observed: fsmv2.Observation[snapshot.PersistenceStatus]{
 						CollectedAt: time.Now(),
 						LastActionResults: []deps.ActionResult{
-							{ActionType: "RunMaintenance", Success: true},
+							{ActionType: "RunMaintenance", Success: false},
 						},
 					},
-					Desired: &snapshot.PersistenceDesiredState{
+					Desired: &fsmv2.WrappedDesiredState[snapshot.PersistenceConfig]{
 						BaseDesiredState: fsmv2config.BaseDesiredState{
 							ShutdownRequested: true,
 						},
-					State: "running",
-						CompactionInterval:  5 * time.Minute,
-						RetentionWindow:     24 * time.Hour,
-						MaintenanceInterval: 7 * 24 * time.Hour,
+						Config: snapshot.PersistenceConfig{
+							CompactionInterval:  5 * time.Minute,
+							RetentionWindow:     24 * time.Hour,
+							MaintenanceInterval: 7 * 24 * time.Hour,
+						},
 					},
 				}
 
-				result := stateObj.Next(snap)
-				Expect(result.State).To(BeAssignableToTypeOf(&state.StoppedState{}))
-				Expect(result.Signal).To(Equal(fsmv2.SignalNone))
-				Expect(result.Action).To(BeNil())
+				result1 := stateObj.Next(snap)
+				Expect(result1.Action).To(BeAssignableToTypeOf(&action.RunMaintenanceAction{}))
+
+				result2 := stateObj.Next(snap)
+				Expect(result2.Action).To(BeAssignableToTypeOf(&action.RunMaintenanceAction{}))
 			})
 		})
 	})
 
 	Describe("String", func() {
-		It("should return TryingToStart", func() {
-			Expect(stateObj.String()).To(Equal("TryingToStart"))
+		It("should return Stopping", func() {
+			Expect(stateObj.String()).To(Equal("Stopping"))
 		})
 	})
 })

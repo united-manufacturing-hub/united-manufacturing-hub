@@ -20,14 +20,18 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/persistence/snapshot"
 )
 
+func init() {
+	fsmv2.RegisterInitialState("persistence", &StoppedState{})
+}
+
 type StoppedState struct {
 	helpers.StoppedBase
 }
 
 func (s *StoppedState) Next(snapAny any) fsmv2.NextResult[any, any] {
-	snap := helpers.ConvertSnapshot[snapshot.PersistenceObservedState, *snapshot.PersistenceDesiredState](snapAny)
+	snap := fsmv2.ConvertWorkerSnapshot[snapshot.PersistenceConfig, snapshot.PersistenceStatus](snapAny)
 
-	if snap.Desired.IsShutdownRequested() {
+	if snap.IsStopRequired() {
 		return fsmv2.Result[any, any](s, fsmv2.SignalNeedsRemoval, nil, "Persistence worker stopped and shutdown requested")
 	}
 
