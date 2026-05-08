@@ -74,7 +74,7 @@ func (a *PushAction) Execute(ctx context.Context, depsAny any) error {
 
 		// Drain outbound into pending on transient/recoverable failure so the
 		// channel does not fill up across ticks while pending keeps failing
-		// (ENG-4741). Skipped when ctx is canceled — the messages survive in
+		// (ENG-4741). Skipped when ctx is canceled  -  the messages survive in
 		// the channel until the next tick.
 		if err != nil || len(remaining) > 0 {
 			if ctx.Err() == nil {
@@ -235,7 +235,7 @@ func (a *PushAction) retryPending(ctx context.Context, t types.Transport, pushDe
 			//
 			// ErrorTypeUnknown (unclassifiable) and ErrorTypeInstanceDeleted
 			// (terminal) reach this branch. There is no per-message retry
-			// counter in the system — preserving these would retry every tick
+			// counter in the system  -  preserving these would retry every tick
 			// until transport reset (5 consecutive errors) wipes the entire
 			// pending buffer, losing all messages instead of just the bad one.
 			//
@@ -304,7 +304,7 @@ drainLoop:
 // parent action (re-authentication, transport reset). Messages are preserved
 // in the pending buffer for retry rather than dropped.
 //
-// Only persistent types reach here — transient errors (network, server, rate
+// Only persistent types reach here  -  transient errors (network, server, rate
 // limit, channel full) are intercepted by IsTransient() earlier in retryPending.
 func isRecoverableByParent(errType types.ErrorType) bool {
 	switch errType {

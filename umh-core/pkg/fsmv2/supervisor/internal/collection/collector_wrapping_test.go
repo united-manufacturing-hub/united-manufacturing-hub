@@ -35,7 +35,7 @@ import (
 
 // testWrappingObservedState satisfies ObservedState and implements all duck-type
 // setters used by wrapNewObservation. Type name ends in "ObservedState" so
-// DeriveWorkerType produces "testwrapping" — matching the CSE collection name.
+// DeriveWorkerType produces "testwrapping"  -  matching the CSE collection name.
 type testWrappingObservedState struct {
 	CollectedAt   time.Time             `json:"collected_at"`
 	State         string                `json:"state"`
@@ -308,7 +308,7 @@ var _ = Describe("Collector post-COS wrapping", func() {
 		It("should start from empty metrics and drain correctly", func() {
 			identity := wrappingTestIdentity("no-prev")
 			store := supervisor.CreateTestTriangularStoreForWorkerType("testwrapping")
-			// No pre-seeding — CSE load will fail.
+			// No pre-seeding  -  CSE load will fail.
 
 			bd := deps.NewBaseDependencies(deps.NewNopFSMLogger(), nil, identity)
 			bd.MetricsRecorder().IncrementCounter("fresh_counter", 7)
@@ -360,7 +360,7 @@ var _ = Describe("Collector post-COS wrapping", func() {
 			store := supervisor.CreateTestTriangularStoreForWorkerType("testwrapping")
 
 			bd := deps.NewBaseDependencies(deps.NewNopFSMLogger(), nil, identity)
-			// MetricsRecorder left empty — no IncrementCounter/SetGauge calls.
+			// MetricsRecorder left empty  -  no IncrementCounter/SetGauge calls.
 
 			worker := &wrappingTestWorker{
 				baseDeps: bd,

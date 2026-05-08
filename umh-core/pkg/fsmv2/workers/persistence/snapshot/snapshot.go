@@ -40,6 +40,17 @@ type PersistenceDesiredState struct {
 	CompactionInterval  time.Duration `json:"compactionInterval"`
 	RetentionWindow     time.Duration `json:"retentionWindow"`
 	MaintenanceInterval time.Duration `json:"maintenanceInterval"`
+
+	State string `json:"state" yaml:"state"`
+}
+
+// GetState returns the desired lifecycle state, defaulting to "running" if empty.
+func (d *PersistenceDesiredState) GetState() string {
+	if d.State == "" {
+		return config.DesiredStateRunning
+	}
+
+	return d.State
 }
 
 var _ fsmv2.DesiredState = (*PersistenceDesiredState)(nil)

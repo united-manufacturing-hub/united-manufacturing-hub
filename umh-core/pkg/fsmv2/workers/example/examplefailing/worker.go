@@ -82,6 +82,18 @@ func (w *FailingWorker) CollectObservedState(ctx context.Context, desired fsmv2.
 
 	d := w.GetDependencies()
 
+	// Framework state and action history are injected before COS and consumed by
+	// the collector wrapper after NewObservation returns. Calling them here satisfies
+	// the framework-metrics-copy and action-history-copy invariants enforced by the
+	// architecture validator.
+	d.GetFrameworkState()
+	d.GetActionHistory()
+
+	// Demonstration-only: this worker writes into deps from CollectObservedState
+	// to simulate runtime conditions (failure cycles / panic flags) that
+	// production configuration drives directly. Real workers MUST keep
+	// CollectObservedState pure I/O reads. See pkg/fsmv2/README.md
+	// "I/O isolation rule".
 	if desired != nil {
 		cfg := fsmv2.ExtractConfig[ExamplefailingConfig](desired)
 		w.updateDependenciesFromConfig(cfg)
@@ -115,7 +127,7 @@ func (w *FailingWorker) CollectObservedState(ctx context.Context, desired fsmv2.
 func (w *FailingWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, error) {
 	if spec == nil {
 		return &fsmv2.WrappedDesiredState[ExamplefailingConfig]{
-			BaseDesiredState: fsmv2types.BaseDesiredState{State: fsmv2types.DesiredStateRunning},
+			State: fsmv2types.DesiredStateRunning,
 		}, nil
 	}
 
@@ -130,7 +142,7 @@ func (w *FailingWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState
 	}
 
 	return &fsmv2.WrappedDesiredState[ExamplefailingConfig]{
-		BaseDesiredState: fsmv2types.BaseDesiredState{State: state},
+		State: state,
 		Config: ExamplefailingConfig{
 			BaseUserSpec:              parsed.BaseUserSpec,
 			ShouldFail:                parsed.ShouldFail,

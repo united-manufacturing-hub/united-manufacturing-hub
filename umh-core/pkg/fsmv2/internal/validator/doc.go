@@ -23,7 +23,7 @@
 //   - State structs (empty fields, base embedding, String/Reason methods)
 //   - Action structs (stateless, context cancellation, no channels)
 //   - Worker files (DeriveDesiredState purity, dependency validation)
-//   - Snapshot files (CollectedAt timestamp, IsBeingRemoved method)
+//   - Snapshot files (CollectedAt timestamp, IsShutdownRequested method)
 //
 // # Pattern registry
 //

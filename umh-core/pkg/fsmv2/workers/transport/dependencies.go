@@ -171,7 +171,7 @@ func (d *TransportDependencies) RecordAuthError(errType types.ErrorType, retryAf
 
 // RecordSuccess resets all error tracking state including the failed auth config.
 // The failed auth config fields are cleared inline (not via SetFailedAuthConfig) to
-// avoid a mutex deadlock — this method already holds d.mu.
+// avoid a mutex deadlock  -  this method already holds d.mu.
 func (d *TransportDependencies) RecordSuccess() {
 	d.mu.Lock()
 	d.lastErrorType = types.ErrorTypeUnknown

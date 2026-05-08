@@ -21,7 +21,6 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
-	fsmv2config "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/persistence/action"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/persistence/snapshot"
@@ -52,9 +51,7 @@ var _ = Describe("Preferential Maintenance Scheduling", func() {
 				IsAcceptableMaintenanceWindow: isAcceptable,
 			},
 			Desired: &snapshot.PersistenceDesiredState{
-				BaseDesiredState: fsmv2config.BaseDesiredState{
-					State: "running",
-				},
+				State: "running",
 				CompactionInterval:  5 * time.Minute,
 				RetentionWindow:     24 * time.Hour,
 				MaintenanceInterval: maintenanceInterval,
@@ -73,9 +70,7 @@ var _ = Describe("Preferential Maintenance Scheduling", func() {
 					LastMaintenanceAt: now.Add(-25 * time.Hour),
 				},
 				Desired: &snapshot.PersistenceDesiredState{
-					BaseDesiredState: fsmv2config.BaseDesiredState{
-						State: "running",
-					},
+					State: "running",
 					CompactionInterval:  5 * time.Minute,
 					RetentionWindow:     24 * time.Hour,
 					MaintenanceInterval: 24 * time.Hour,
@@ -96,9 +91,7 @@ var _ = Describe("Preferential Maintenance Scheduling", func() {
 					LastMaintenanceAt: now.Add(-23 * time.Hour),
 				},
 				Desired: &snapshot.PersistenceDesiredState{
-					BaseDesiredState: fsmv2config.BaseDesiredState{
-						State: "running",
-					},
+					State: "running",
 					CompactionInterval:  5 * time.Minute,
 					RetentionWindow:     24 * time.Hour,
 					MaintenanceInterval: 24 * time.Hour,
@@ -214,9 +207,7 @@ var _ = Describe("Preferential Maintenance Scheduling", func() {
 					IsAcceptableMaintenanceWindow: false,
 				},
 				Desired: &snapshot.PersistenceDesiredState{
-					BaseDesiredState: fsmv2config.BaseDesiredState{
-						State: "running",
-					},
+					State: "running",
 					CompactionInterval:  5 * time.Minute,
 					RetentionWindow:     24 * time.Hour,
 					MaintenanceInterval: 3 * 24 * time.Hour,

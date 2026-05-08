@@ -75,7 +75,7 @@
 // A timer-based approach (escalate when degraded longer than N minutes) has a
 // blind spot: a single success in a 99% failure pattern resets the timer
 // completely (ENG-4565). The rolling window tracks rate, not duration. A single
-// success shifts the window from 100/100 failures to 99/100 — the rate barely
+// success shifts the window from 100/100 failures to 99/100  -  the rate barely
 // changes, and escalation holds.
 //
 // # Integration
@@ -84,6 +84,6 @@
 // workers/transport/types package. Rate tracking lives in this package.
 // Push and pull dependencies each hold a *[Tracker] and call
 // [Tracker.RecordOutcome] after every real HTTP operation (success or
-// failure). Idle ticks — where no HTTP request was made — must NOT record
+// failure). Idle ticks  -  where no HTTP request was made  -  must NOT record
 // an outcome, as this would dilute the failure rate with phantom data.
 package failurerate

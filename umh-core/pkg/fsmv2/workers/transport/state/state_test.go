@@ -39,9 +39,9 @@ func makeSnapshotFull(shutdownRequested bool, desiredState string, jwtToken stri
 func makeSnapshotWithBackoff(shutdownRequested bool, desiredState string, jwtToken string, jwtExpiry time.Time, childrenHealthy, childrenUnhealthy int, consecutiveErrors int, lastErrorType types.ErrorType, lastAuthAttemptAt time.Time, lastRetryAfter time.Duration) fsmv2.Snapshot {
 	desired := &snapshot.TransportDesiredState{
 		BaseDesiredState: config.BaseDesiredState{
-			State:             desiredState,
 			ShutdownRequested: shutdownRequested,
 		},
+		State:        desiredState,
 		InstanceUUID: "test-uuid",
 		AuthToken:    "test-auth-token",
 		RelayURL:     "https://relay.test.com",
@@ -77,9 +77,9 @@ func makeSnapshotWithBackoff(shutdownRequested bool, desiredState string, jwtTok
 func makeAuthFailedSnapshot(authToken, relayURL, instanceUUID string, shutdownRequested bool) fsmv2.Snapshot {
 	desired := &snapshot.TransportDesiredState{
 		BaseDesiredState: config.BaseDesiredState{
-			State:             config.DesiredStateRunning,
 			ShutdownRequested: shutdownRequested,
 		},
+		State:        config.DesiredStateRunning,
 		InstanceUUID: instanceUUID,
 		AuthToken:    authToken,
 		RelayURL:     relayURL,
@@ -106,7 +106,7 @@ func makeAuthFailedStartingSnapshot(
 	consecutiveErrors int, lastErrorType types.ErrorType,
 ) fsmv2.Snapshot {
 	desired := &snapshot.TransportDesiredState{
-		BaseDesiredState: config.BaseDesiredState{State: config.DesiredStateRunning},
+		State: config.DesiredStateRunning,
 		InstanceUUID:     desiredUUID,
 		AuthToken:        desiredToken,
 		RelayURL:         desiredRelay,
@@ -328,7 +328,7 @@ var _ = Describe("TransportWorker States", func() {
 
 		It("should apply backoff after transient error even when FailedAuthConfig is empty", func() {
 			desired := &snapshot.TransportDesiredState{
-				BaseDesiredState: config.BaseDesiredState{State: config.DesiredStateRunning},
+				State: config.DesiredStateRunning,
 				InstanceUUID:     "test-uuid",
 				AuthToken:        "test-auth-token",
 				RelayURL:         "https://relay.test.com",
@@ -349,7 +349,7 @@ var _ = Describe("TransportWorker States", func() {
 
 			Expect(result.State).To(BeAssignableToTypeOf(&state.StartingState{}))
 			Expect(result.Action).To(BeNil(),
-				"should NOT dispatch auth during backoff — transient error with empty FailedAuthConfig must still respect backoff")
+				"should NOT dispatch auth during backoff  -  transient error with empty FailedAuthConfig must still respect backoff")
 			Expect(result.Reason).To(ContainSubstring("auth backoff"))
 		})
 	})
@@ -669,7 +669,7 @@ var _ = Describe("TransportWorker States", func() {
 		// Scenario 1 tick 3: AuthFailed exits when AuthToken changes
 		It("should transition to Starting when AuthToken changes", func() {
 			desired := &snapshot.TransportDesiredState{
-				BaseDesiredState: config.BaseDesiredState{State: config.DesiredStateRunning},
+				State: config.DesiredStateRunning,
 				InstanceUUID:     "test-uuid",
 				AuthToken:        "new-auth-token",
 				RelayURL:         "https://relay.test.com",
@@ -695,7 +695,7 @@ var _ = Describe("TransportWorker States", func() {
 		// Scenario 7: Only relay changes
 		It("should transition to Starting when RelayURL changes", func() {
 			desired := &snapshot.TransportDesiredState{
-				BaseDesiredState: config.BaseDesiredState{State: config.DesiredStateRunning},
+				State: config.DesiredStateRunning,
 				InstanceUUID:     "test-uuid",
 				AuthToken:        "test-auth-token",
 				RelayURL:         "https://new-relay.test.com",
@@ -720,7 +720,7 @@ var _ = Describe("TransportWorker States", func() {
 		// Scenario 2: InstanceDeleted → UUID changes
 		It("should transition to Starting when InstanceUUID changes", func() {
 			desired := &snapshot.TransportDesiredState{
-				BaseDesiredState: config.BaseDesiredState{State: config.DesiredStateRunning},
+				State: config.DesiredStateRunning,
 				InstanceUUID:     "new-uuid",
 				AuthToken:        "test-auth-token",
 				RelayURL:         "https://relay.test.com",
@@ -745,7 +745,7 @@ var _ = Describe("TransportWorker States", func() {
 		// Scenario 8: Empty failed config = safety net (fresh deps after restart)
 		It("should transition to Starting when failed config is empty (safety net)", func() {
 			desired := &snapshot.TransportDesiredState{
-				BaseDesiredState: config.BaseDesiredState{State: config.DesiredStateRunning},
+				State: config.DesiredStateRunning,
 				InstanceUUID:     "test-uuid",
 				AuthToken:        "test-auth-token",
 				RelayURL:         "https://relay.test.com",
@@ -754,7 +754,7 @@ var _ = Describe("TransportWorker States", func() {
 				CollectedAt:       time.Now(),
 				ConsecutiveErrors: 3,
 				LastErrorType:     types.ErrorTypeInvalidToken,
-				// FailedAuth* fields all empty (zero values) — simulates fresh deps
+				// FailedAuth* fields all empty (zero values)  -  simulates fresh deps
 			}
 			result := s.Next(fsmv2.Snapshot{Observed: observed, Desired: desired})
 

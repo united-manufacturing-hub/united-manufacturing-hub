@@ -156,16 +156,14 @@ func (w *TransportWorker) CollectObservedState(ctx context.Context, _ fsmv2.Desi
 // Must be PURE - only uses the spec parameter, never dependencies.
 // Returns "running" or "stopped" as valid state values.
 func (w *TransportWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, error) {
-	// Nil spec defaults to "running" — matches CommunicatorWorker convention.
+	// Nil spec defaults to "running"  -  matches CommunicatorWorker convention.
 	// Transport will attempt auth with empty credentials, fail, and retry with backoff.
 	// This enables self-healing: if spec delivery is delayed during startup, the worker
 	// retries until config arrives. Field validation below catches empty fields once
 	// a real spec is parsed.
 	if spec == nil {
 		return &snapshot.TransportDesiredState{
-			BaseDesiredState: config.BaseDesiredState{
-				State: config.DesiredStateRunning,
-			},
+			State:         config.DesiredStateRunning,
 			ChildrenSpecs: append(makePushChildSpec(config.UserSpec{}), makePullChildSpec(config.UserSpec{})...),
 		}, nil
 	}
@@ -209,9 +207,7 @@ func (w *TransportWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredSta
 
 	// Build desired state with valid state values only ("stopped" or "running")
 	return &snapshot.TransportDesiredState{
-		BaseDesiredState: config.BaseDesiredState{
-			State: transportSpec.GetState(), // Returns "running" or "stopped"
-		},
+		State:         transportSpec.GetState(), // Returns "running" or "stopped"
 		RelayURL:      transportSpec.RelayURL,
 		InstanceUUID:  transportSpec.InstanceUUID,
 		AuthToken:     transportSpec.AuthToken,

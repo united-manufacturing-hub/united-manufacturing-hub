@@ -45,9 +45,9 @@ var _ = Describe("RunningState", func() {
 					},
 					Desired: &snapshot.PersistenceDesiredState{
 						BaseDesiredState: fsmv2config.BaseDesiredState{
-							State:             "running",
 							ShutdownRequested: true,
 						},
+						State:               "running",
 						CompactionInterval:  5 * time.Minute,
 						RetentionWindow:     24 * time.Hour,
 						MaintenanceInterval: 7 * 24 * time.Hour,
@@ -70,9 +70,7 @@ var _ = Describe("RunningState", func() {
 						ConsecutiveActionErrors: 1,
 					},
 					Desired: &snapshot.PersistenceDesiredState{
-						BaseDesiredState: fsmv2config.BaseDesiredState{
-							State: "running",
-						},
+						State: "running",
 						CompactionInterval:  5 * time.Minute,
 						RetentionWindow:     24 * time.Hour,
 						MaintenanceInterval: 7 * 24 * time.Hour,
@@ -96,9 +94,7 @@ var _ = Describe("RunningState", func() {
 						LastCompactionAt: now.Add(-10 * time.Minute),
 					},
 					Desired: &snapshot.PersistenceDesiredState{
-						BaseDesiredState: fsmv2config.BaseDesiredState{
-							State: "running",
-						},
+						State: "running",
 						CompactionInterval:  5 * time.Minute,
 						RetentionWindow:     24 * time.Hour,
 						MaintenanceInterval: 7 * 24 * time.Hour,
@@ -125,9 +121,7 @@ var _ = Describe("RunningState", func() {
 						LastMaintenanceAt: now.Add(-10 * 24 * time.Hour),
 					},
 					Desired: &snapshot.PersistenceDesiredState{
-						BaseDesiredState: fsmv2config.BaseDesiredState{
-							State: "running",
-						},
+						State: "running",
 						CompactionInterval:  5 * time.Minute,
 						RetentionWindow:     24 * time.Hour,
 						MaintenanceInterval: 7 * 24 * time.Hour,
@@ -152,9 +146,7 @@ var _ = Describe("RunningState", func() {
 						LastMaintenanceAt: now.Add(-10 * 24 * time.Hour),
 					},
 					Desired: &snapshot.PersistenceDesiredState{
-						BaseDesiredState: fsmv2config.BaseDesiredState{
-							State: "running",
-						},
+						State: "running",
 						CompactionInterval:  5 * time.Minute,
 						RetentionWindow:     24 * time.Hour,
 						MaintenanceInterval: 7 * 24 * time.Hour,
@@ -178,9 +170,7 @@ var _ = Describe("RunningState", func() {
 						LastMaintenanceAt: now.Add(-1 * time.Hour),
 					},
 					Desired: &snapshot.PersistenceDesiredState{
-						BaseDesiredState: fsmv2config.BaseDesiredState{
-							State: "running",
-						},
+						State: "running",
 						CompactionInterval:  5 * time.Minute,
 						RetentionWindow:     24 * time.Hour,
 						MaintenanceInterval: 7 * 24 * time.Hour,
@@ -202,9 +192,7 @@ var _ = Describe("RunningState", func() {
 						CollectedAt: time.Now(),
 					},
 					Desired: &snapshot.PersistenceDesiredState{
-						BaseDesiredState: fsmv2config.BaseDesiredState{
-							State: "running",
-						},
+						State: "running",
 						CompactionInterval:  5 * time.Minute,
 						RetentionWindow:     24 * time.Hour,
 						MaintenanceInterval: 7 * 24 * time.Hour,

@@ -53,7 +53,7 @@ var _ = Describe("Failure Rate Tracker", func() {
 			}
 			Expect(tracker.FailureRate()).To(BeNumerically("==", 1.0))
 
-			// Add 20 successes — rate should drop to 0.5
+			// Add 20 successes  -  rate should drop to 0.5
 			for range 20 {
 				tracker.RecordOutcome(true)
 			}
@@ -67,7 +67,7 @@ var _ = Describe("Failure Rate Tracker", func() {
 			}
 			Expect(tracker.FailureRate()).To(BeNumerically("==", 1.0))
 
-			// Now record 50 successes — oldest 50 failures are evicted
+			// Now record 50 successes  -  oldest 50 failures are evicted
 			for range 50 {
 				tracker.RecordOutcome(true)
 			}
@@ -112,7 +112,7 @@ var _ = Describe("Failure Rate Tracker", func() {
 			tracker.RecordOutcome(true)
 			Expect(tracker.IsEscalated()).To(BeFalse(), "should de-escalate after recovery")
 
-			// Now cross threshold again — should fire again
+			// Now cross threshold again  -  should fire again
 			// Fill with failures until we cross 90% again
 			var firedAgain bool
 			for range 20 {
@@ -125,7 +125,7 @@ var _ = Describe("Failure Rate Tracker", func() {
 		})
 
 		It("should fire escalation at exact threshold boundary (rate == threshold)", func() {
-			// 9 failures + 1 success = 90% rate == 0.9 threshold — should fire (>= comparator)
+			// 9 failures + 1 success = 90% rate == 0.9 threshold  -  should fire (>= comparator)
 			cfg := failurerate.Config{
 				WindowSize: 100,
 				Threshold:  0.9,
@@ -137,7 +137,7 @@ var _ = Describe("Failure Rate Tracker", func() {
 				t.RecordOutcome(false)
 			}
 			t.RecordOutcome(true)
-			// 9/10 = 0.9 == threshold — should have fired on the 10th outcome
+			// 9/10 = 0.9 == threshold  -  should have fired on the 10th outcome
 			Expect(t.IsEscalated()).To(BeTrue(), "should escalate when rate exactly equals threshold")
 		})
 
@@ -361,13 +361,13 @@ var _ = Describe("Failure Rate Tracker", func() {
 			}
 			Expect(t.FailureRate()).To(BeNumerically("==", 1.0))
 
-			// Wrap around: add 10 successes — evicts all 10 failures
+			// Wrap around: add 10 successes  -  evicts all 10 failures
 			for range 10 {
 				t.RecordOutcome(true)
 			}
 			Expect(t.FailureRate()).To(BeNumerically("==", 0.0))
 
-			// Wrap again: add 5 failures — now 5 failures + 5 successes
+			// Wrap again: add 5 failures  -  now 5 failures + 5 successes
 			for range 5 {
 				t.RecordOutcome(false)
 			}

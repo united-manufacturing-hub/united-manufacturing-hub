@@ -36,13 +36,13 @@ var _ = Describe("DefaultScheduler", func() {
 		func(t time.Time, expected bool) {
 			Expect(s.IsPreferredMaintenanceWindow(t)).To(Equal(expected))
 		},
-		Entry("Saturday 03:00 — weekend AND low-traffic",
+		Entry("Saturday 03:00  -  weekend AND low-traffic",
 			time.Date(2025, 2, 1, 3, 0, 0, 0, time.UTC), true),
-		Entry("Monday 03:00 — low-traffic but NOT weekend",
+		Entry("Monday 03:00  -  low-traffic but NOT weekend",
 			time.Date(2025, 2, 3, 3, 0, 0, 0, time.UTC), false),
-		Entry("Saturday 12:00 — weekend but NOT low-traffic",
+		Entry("Saturday 12:00  -  weekend but NOT low-traffic",
 			time.Date(2025, 2, 1, 12, 0, 0, 0, time.UTC), false),
-		Entry("Monday 12:00 — neither",
+		Entry("Monday 12:00  -  neither",
 			time.Date(2025, 2, 3, 12, 0, 0, 0, time.UTC), false),
 	)
 
@@ -50,13 +50,13 @@ var _ = Describe("DefaultScheduler", func() {
 		func(t time.Time, expected bool) {
 			Expect(s.IsAcceptableMaintenanceWindow(t)).To(Equal(expected))
 		},
-		Entry("Saturday 03:00 — weekend AND low-traffic",
+		Entry("Saturday 03:00  -  weekend AND low-traffic",
 			time.Date(2025, 2, 1, 3, 0, 0, 0, time.UTC), true),
-		Entry("Monday 03:00 — low-traffic only",
+		Entry("Monday 03:00  -  low-traffic only",
 			time.Date(2025, 2, 3, 3, 0, 0, 0, time.UTC), true),
-		Entry("Saturday 12:00 — weekend only",
+		Entry("Saturday 12:00  -  weekend only",
 			time.Date(2025, 2, 1, 12, 0, 0, 0, time.UTC), true),
-		Entry("Monday 12:00 — neither",
+		Entry("Monday 12:00  -  neither",
 			time.Date(2025, 2, 3, 12, 0, 0, 0, time.UTC), false),
 	)
 

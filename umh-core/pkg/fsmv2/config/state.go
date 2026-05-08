@@ -70,7 +70,7 @@ const (
 //
 // Example: ConnectedState + PhaseRunningHealthy → "running_healthy_connected"
 //
-// Note: PhaseStopped is special—Prefix() returns "stopped" (no underscore),
+// Note: PhaseStopped is special - Prefix() returns "stopped" (no underscore),
 // and the state string is not appended. StoppedState → just "stopped".
 //
 // # Phase-Specific Base Types

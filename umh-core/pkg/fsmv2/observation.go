@@ -28,7 +28,10 @@ import (
 
 // DetectFieldCollisions checks at init time whether T's JSON field names
 // collide with reserved framework field names used by Observation.
-// Called by register.Worker to fail-fast on namespace conflicts.
+// Called from tests to verify TStatus types do not clash with framework
+// namespace. Exported so that external test packages can instantiate it with
+// locally-defined status types; Go generics do not support an export_test.go
+// bridge pattern for generic functions.
 func DetectFieldCollisions[T any]() error {
 	reserved := collectJSONFieldNames(reflect.TypeOf(observationFrameworkFields{}))
 
@@ -132,7 +135,7 @@ type Observation[TStatus any] struct {
 	// must serialise even for childless leaf workers so CSE round-trip stays
 	// stable across ticks (a leaf that omits the key flips on/off in deltas
 	// when later promoted to a parent). Same architectural reason as the
-	// JWTToken / AuthToken `json:"-"` pushback in PR #2399 — accept the
+	// JWTToken / AuthToken `json:"-"` pushback in PR #2399  -  accept the
 	// modest storage cost (~6.5 KB per instance) for delta-sync stability.
 	ChildrenView config.ChildrenView `json:"childrenView"`
 	// Status is the developer's business data. Flattened to top level via custom MarshalJSON.

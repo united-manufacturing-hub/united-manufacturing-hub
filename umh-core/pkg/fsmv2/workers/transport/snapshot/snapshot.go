@@ -88,11 +88,13 @@ type TransportDesiredState struct {
 	// adding a CSE secret tier to persist locally but exclude from delta sync.
 	AuthToken               string `json:"authToken"`
 	RelayURL                string `json:"relayURL"`
-	config.BaseDesiredState        // Provides State, ShutdownRequested + IsShutdownRequested() + SetShutdownRequested()
+	config.BaseDesiredState        // Provides ShutdownRequested + IsShutdownRequested() + SetShutdownRequested()
 
 	ChildrenSpecs []config.ChildSpec `json:"childrenSpecs,omitempty"`
 
 	Timeout time.Duration `json:"timeout"`
+
+	State string `json:"state" yaml:"state"` // "stopped" or "running" - desired lifecycle state
 }
 
 // GetChildrenSpecs returns the children specifications.
@@ -103,7 +105,11 @@ func (d *TransportDesiredState) GetChildrenSpecs() []config.ChildSpec {
 
 // GetState returns the desired lifecycle state ("running" or "stopped").
 func (d *TransportDesiredState) GetState() string {
-	return d.BaseDesiredState.GetState()
+	if d.State == "" {
+		return config.DesiredStateRunning
+	}
+
+	return d.State
 }
 
 // ShouldBeRunning returns true if the transport should be running.
@@ -154,7 +160,7 @@ type TransportObservedState struct {
 	AuthenticatedUUID string `json:"authenticated_uuid,omitempty"`
 
 	// JWTToken is the current authentication token for relay communication.
-	// NOTE: This field must NOT use json:"-" — the supervisor reconciliation loop
+	// NOTE: This field must NOT use json:"-"  -  the supervisor reconciliation loop
 	// serializes observed state to CSE storage between ticks and deserializes it
 	// via LoadObservedTyped(). Excluding JWTToken from JSON would force
 	// re-authentication on every tick (~10ms), hammering the relay server.

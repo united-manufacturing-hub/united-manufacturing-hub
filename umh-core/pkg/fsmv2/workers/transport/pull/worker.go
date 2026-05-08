@@ -45,7 +45,7 @@ type PullWorker struct {
 }
 
 // NewPullWorker creates a new PullWorker in Stopped state.
-// parentDeps must not be nil — the pull worker delegates auth and transport to the parent.
+// parentDeps must not be nil  -  the pull worker delegates auth and transport to the parent.
 func NewPullWorker(
 	identity deps.Identity,
 	logger deps.FSMLogger,
@@ -143,12 +143,10 @@ func (w *PullWorker) CollectObservedState(ctx context.Context, _ fsmv2.DesiredSt
 }
 
 // DeriveDesiredState determines the desired state from the provided spec.
-// Must be PURE — only uses the spec parameter, never dependencies.
+// Must be PURE  -  only uses the spec parameter, never dependencies.
 func (w *PullWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, error) {
 	if spec == nil {
-		return &snapshot.PullDesiredState{
-			BaseDesiredState: config.BaseDesiredState{State: config.DesiredStateRunning},
-		}, nil
+		return &snapshot.PullDesiredState{}, nil
 	}
 
 	userSpec, ok := spec.(config.UserSpec)
@@ -166,12 +164,12 @@ func (w *PullWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, e
 		Variables: userSpec.Variables,
 	}
 
-	desired, err := config.DeriveLeafState[PullUserSpec](renderedSpec)
+	parsed, err := config.ParseUserSpec[PullUserSpec](renderedSpec)
 	if err != nil {
 		return nil, err
 	}
 
-	return &desired, nil
+	return &snapshot.PullDesiredState{State: parsed.BaseUserSpec.GetState()}, nil
 }
 
 // GetInitialState returns StoppedState as the pull worker's initial FSM state.

@@ -69,8 +69,8 @@ func (h *hierarchicalWorker) DeriveDesiredState(spec interface{}) (fsmv2.Desired
 	h.logger.Log("DeriveDesiredState:" + h.id)
 
 	return &config.DesiredState{
-		BaseDesiredState: config.BaseDesiredState{State: "running"},
-		ChildrenSpecs:    h.childrenSpecs,
+		State:         "running",
+		ChildrenSpecs: h.childrenSpecs,
 	}, nil
 }
 

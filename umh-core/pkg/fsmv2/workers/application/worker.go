@@ -85,8 +85,8 @@ type childrenConfig struct {
 func (w *ApplicationWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, error) {
 	if spec == nil {
 		return &config.DesiredState{
-			BaseDesiredState: config.BaseDesiredState{State: "running"},
-			ChildrenSpecs:    nil,
+			State:         "running",
+			ChildrenSpecs: nil,
 		}, nil
 	}
 
@@ -103,8 +103,8 @@ func (w *ApplicationWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredS
 	}
 
 	return &config.DesiredState{
-		BaseDesiredState: config.BaseDesiredState{State: "running"},
-		ChildrenSpecs:    childrenCfg.Children,
+		State:         "running",
+		ChildrenSpecs: childrenCfg.Children,
 	}, nil
 }
 

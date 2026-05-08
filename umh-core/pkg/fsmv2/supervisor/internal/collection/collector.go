@@ -94,7 +94,7 @@ type CollectorConfig[TObserved any] struct {
 	// DesiredStateProvider returns the current desired state from the CSE store.
 	// Called BEFORE CollectObservedState so workers can access configuration
 	// (target IP, port, etc.) without workarounds. If nil is returned (desired
-	// state not yet saved), collection is skipped entirely — workers are
+	// state not yet saved), collection is skipped entirely  -  workers are
 	// guaranteed to always receive a non-nil desired state.
 	DesiredStateProvider func() fsmv2.DesiredState
 	Identity             deps.Identity
@@ -408,7 +408,7 @@ func (c *Collector[TObserved]) collectAndSaveObservedState(ctx context.Context) 
 	}
 
 	// Load desired state to pass to CollectObservedState.
-	// Skip collection entirely if no desired state exists yet — the supervisor
+	// Skip collection entirely if no desired state exists yet  -  the supervisor
 	// guarantees workers always receive a non-nil desired state.
 	var desired fsmv2.DesiredState
 	if c.config.DesiredStateProvider != nil {
@@ -645,7 +645,7 @@ func (c *Collector[TObserved]) wrapNewObservation(ctx context.Context, observed 
 	if recorder := bd.MetricsRecorder(); recorder != nil {
 		drained := recorder.Drain()
 
-		// Step 5d: Merge — counters additive, gauges replace.
+		// Step 5d: Merge  -  counters additive, gauges replace.
 		for name, delta := range drained.Counters {
 			prevWorkerMetrics.Counters[name] += delta
 		}

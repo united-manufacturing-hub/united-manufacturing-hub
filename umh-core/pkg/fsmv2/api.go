@@ -16,11 +16,20 @@ package fsmv2
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 )
+
+// ErrNoDesiredState signals that no desired state is available yet.
+// This is an expected condition on first boot before the supervisor has written
+// the initial desired state to CSE storage, distinguishing it from genuine
+// load failures (e.g., deserialization errors, store connectivity issues).
+// The DesiredStateProvider in supervisor/api.go returns nil and suppresses the
+// SentryWarn log when errors.Is(err, persistence.ErrNotFound).
+var ErrNoDesiredState = errors.New("fsmv2: no desired state available")
 
 // Signal communicates special conditions from states to the supervisor.
 type Signal int

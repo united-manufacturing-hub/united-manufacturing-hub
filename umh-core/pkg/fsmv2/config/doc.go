@@ -40,14 +40,14 @@
 //
 // Internal Namespace:
 //   - Contains: Supervisor-injected identity (worker ID, parent ID,
-//     creation timestamp, bridge-source label) — typed VariablesInternal
+//     creation timestamp, bridge-source label)  -  typed VariablesInternal
 //     struct, not a free-form map
 //   - Template access: Prefixed {{ .internal.id }}, {{ .internal.parent_id }},
 //     {{ .internal.created_at }}, {{ .internal.bridged_by }}
 //   - Serialization: JSON YES (json:"internal", camelCase wire tags per
 //     §4-D LOCKED for codegen cleanliness; round-trips through CSE storage
 //     between supervisor goroutines per Design Intent §13/§14). YAML NO
-//     (yaml:"-" — users do not author Internal; supervisor injects it at
+//     (yaml:"-"  -  users do not author Internal; supervisor injects it at
 //     reconciliation time)
 //   - Use case: identity / structural desired state injected by the system,
 //     not user-authored. Templates read it via the Flatten map's snake_case
@@ -85,7 +85,7 @@
 // Internal carries the typed VariablesInternal struct (yaml:"-",
 // json:"internal"). Per §4-D LOCKED, the JSON form round-trips through CSE
 // storage between supervisor goroutines (Design Intent §13/§14). YAML
-// serialization is suppressed because users do not author Internal — the
+// serialization is suppressed because users do not author Internal  -  the
 // supervisor injects identity at reconciliation time.
 //
 // # map[string]any design (User and Global only)
@@ -119,23 +119,21 @@
 // how to create them. The supervisor handles creation, deletion, and updates.
 // Children can be added or removed by changing ChildrenSpecs in DeriveDesiredState().
 //
-// Children are always-enabled when their parent is running. To deliberately
-// disable a child while keeping it resident, set Enabled: false on the spec
-// (the CHANGE-19 reducer drives the child to Stopped).
+// Children run when their parent is in a listed ChildStartState.
 //
 // # DesiredState and shutdown control
 //
-// DesiredState includes IsBeingRemoved for graceful shutdown:
+// DesiredState includes ShutdownRequested for graceful shutdown:
 //
-//	type DesiredState struct {
-//	    State            string
-//	    IsBeingRemoved bool
-//	    ChildrenSpecs    []ChildSpec
+//	type BaseDesiredState struct {
+//	    State              string
+//	    ShutdownRequested  bool
+//	    ChildrenSpecs      []ChildSpec
 //	}
 //
-// The supervisor sets IsBeingRemoved when shutdown is initiated. Workers
+// The supervisor sets ShutdownRequested when shutdown is initiated. Workers
 // check this flag in their state transitions and complete cleanup states
-// before signaling removal. Parent shutdown propagates IsBeingRemoved
+// before signaling removal. Parent shutdown propagates ShutdownRequested
 // to all children, so children clean up before parent completes shutdown.
 //
 // # Template expansion

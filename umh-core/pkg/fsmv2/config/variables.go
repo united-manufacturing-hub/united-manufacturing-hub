@@ -58,7 +58,7 @@ import "time"
 //   - Template access: Nested ({{ .internal.id }}, {{ .internal.created_at }})
 //   - Serialization: YES on JSON (round-trips through CSE storage between
 //     collector and reconciler goroutines per Design Intent §13/§14); NO on
-//     YAML (users do not author this — supervisor injects it).
+//     YAML (users do not author this  -  supervisor injects it).
 //   - Source: FSM runtime, system-generated metadata.
 //   - Purpose: Identity carried alongside the rest of desired state.
 //
@@ -98,7 +98,7 @@ type VariableBundle struct {
 // keeping the wire shape stable avoids a delta-storm against pre-P1.5c
 // observation documents.
 //
-// §4-D LOCKED tag spellings — these JSON tags must match exactly:
+// §4-D LOCKED tag spellings  -  these JSON tags must match exactly:
 //
 //	WorkerID  → "workerID"
 //	ParentID  → "parentID,omitempty"
@@ -174,7 +174,7 @@ func (v VariableBundle) Flatten() map[string]any {
 // flatten projects VariablesInternal into the map-shaped form the templating
 // layer expects ({{ .internal.id }}, {{ .internal.parent_id }}, etc.). Note
 // the deliberate snake_case keys here (`id`, `parent_id`, `bridged_by`,
-// `created_at`) — they preserve the existing template vocabulary while the
+// `created_at`)  -  they preserve the existing template vocabulary while the
 // JSON wire tags use camelCase per §4-D LOCKED. Wire tags and flatten keys
 // are independent.
 //
@@ -338,7 +338,7 @@ func deepCloneValue(v any) any {
 
 // Clone creates a deep copy of the VariableBundle.
 // All maps are deeply copied (including nested structures) to prevent shared references.
-// Internal is reset to its zero-value VariablesInternal{} on the clone — the
+// Internal is reset to its zero-value VariablesInternal{} on the clone  -  the
 // supervisor injects per-worker identity at reconciliation time, so a clone
 // inherits no parent identity. This is implicit in the body (the function
 // only assigns User and Global; the un-assigned Internal field gets the

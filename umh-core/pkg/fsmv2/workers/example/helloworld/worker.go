@@ -84,7 +84,6 @@ func NewHelloworldWorker(
 func (w *HelloworldWorker) CollectObservedState(ctx context.Context, desired fsmv2.DesiredState) (fsmv2.ObservedState, error) {
 	select {
 	case <-ctx.Done():
-		return nil, ctx.Err()
 	default:
 	}
 
@@ -105,7 +104,7 @@ func (w *HelloworldWorker) CollectObservedState(ctx context.Context, desired fsm
 func (w *HelloworldWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, error) {
 	if spec == nil {
 		return &fsmv2.WrappedDesiredState[HelloworldConfig]{
-			BaseDesiredState: config.BaseDesiredState{State: config.DesiredStateRunning},
+			State: config.DesiredStateRunning,
 		}, nil
 	}
 
@@ -132,7 +131,7 @@ func (w *HelloworldWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredSt
 	}
 
 	return &fsmv2.WrappedDesiredState[HelloworldConfig]{
-		BaseDesiredState: config.BaseDesiredState{State: state},
+		State: state,
 		Config:           cfg,
 	}, nil
 }

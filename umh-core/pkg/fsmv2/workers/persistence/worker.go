@@ -164,9 +164,7 @@ func (w *PersistenceWorker) CollectObservedState(ctx context.Context, _ fsmv2.De
 func (w *PersistenceWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, error) {
 	if spec == nil {
 		return &snapshot.PersistenceDesiredState{
-			BaseDesiredState: fsmv2config.BaseDesiredState{
-				State: "running",
-			},
+			State:               "running",
 			CompactionInterval:  DefaultCompactionInterval,
 			RetentionWindow:     DefaultRetentionWindow,
 			MaintenanceInterval: DefaultMaintenanceInterval,
@@ -201,7 +199,7 @@ func (w *PersistenceWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredS
 	}
 
 	return &snapshot.PersistenceDesiredState{
-		BaseDesiredState:    fsmv2config.BaseDesiredState{State: persSpec.GetState()},
+		State:               persSpec.GetState(),
 		CompactionInterval:  compactionInterval,
 		RetentionWindow:     retentionWindow,
 		MaintenanceInterval: maintenanceInterval,

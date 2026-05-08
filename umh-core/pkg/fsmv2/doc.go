@@ -52,11 +52,11 @@
 //
 // The supervisor passes snapshots by value to State.Next(). Go's pass-by-value
 // semantics prevent states from modifying the supervisor's data.
-// See internal/helpers/state_adapter.go for ConvertSnapshot helper.
+// See ConvertWorkerSnapshot for typed snapshot access.
 //
 // The State interface uses generics (State[TSnapshot, TDeps]), but implementations
 // use State[any, any] because Go lacks covariance support. Access typed data via
-// helpers.ConvertSnapshot[O, D](snapAny).
+// fsmv2.ConvertWorkerSnapshot[TConfig, TStatus](snapAny).
 //
 // ## Actions
 //
@@ -247,7 +247,7 @@
 //   - Name, WorkerType, StateName, StateReason, IsHealthy, ErrorMsg, HierarchyPath, Phase
 //
 // StateName is display-only (raw form like "Connected" or "TryingToConnect").
-// Phase (config.LifecyclePhase) is the canonical predicate source — it is
+// Phase (config.LifecyclePhase) is the canonical predicate source  -  it is
 // populated from the child's cached lifecycle phase and is what
 // NewChildrenView's aggregate predicates (HealthyCount, AllHealthy,
 // AllOperational, AllStopped) read. Do NOT recompute predicates from StateName;
@@ -263,7 +263,7 @@
 // For detailed architecture explanations, see:
 //   - architecture_test.go - Patterns enforced by tests (run with -v for rationale explanations)
 //   - api.go - Core interfaces (Worker, State, Action)
-//   - internal/helpers/ - Convenience helpers (BaseState, BaseWorker, ConvertSnapshot)
+//   - internal/helpers/ - Convenience helpers (BaseState, BaseWorker, ConvertWorkerSnapshot)
 //   - supervisor/supervisor.go - Orchestration and lifecycle management
 //   - config/childspec.go - Hierarchical composition
 //   - config/variables.go - Variable namespaces
@@ -298,7 +298,7 @@
 // ### Lifecycle transition vocabulary
 //
 // Two naming conventions are canonical for transition states. Pick based on
-// what the worker actually does in that state — not by feel or precedent.
+// what the worker actually does in that state  -  not by feel or precedent.
 //
 //   - Use "Xing" (Stopping, Starting, Connecting) when the state runs
 //     active cleanup or setup: the worker drives the work, optionally
@@ -317,22 +317,19 @@
 // ### One-way stop trajectory
 //
 // TryingToStop and Stopping states are ONE-WAY. They do NOT check
-// !ShouldStop() to abort cleanup mid-flight. Once a worker enters a stop
+// IsStopRequired() to abort cleanup mid-flight. Once a worker enters a stop
 // state it runs the full trajectory to Stopped before any resume can begin.
 //
-// This design rule makes the CHANGE-19 pause/resume reducer race-free: the
-// supervisor reducer can flip Enabled true→false→true during cleanup without
-// corrupting the state machine, because the stop trajectory ignores it until
-// Stopped is reached. At Stopped, the worker checks ShouldStop() and either
-// stays stopped or re-enters TryingToStart.
+// At Stopped, the worker checks IsStopRequired() and either stays stopped or
+// re-enters TryingToStart.
 //
 // If you are writing a new stop state and feel tempted to add a
-// "if !ShouldStop() { return GoTo{Running} }" branch — don't. That is the
+// "if !IsStopRequired() { return GoTo{Running} }" branch - don't. That is the
 // bug this rule prevents.
 //
 // ## Shutdown handling
 //
-// Check IsBeingRemoved as the first conditional in Next().
+// Check IsShutdownRequested() as the first conditional in Next().
 // See workers/example/examplechild/state/ for examples.
 //
 // ## Type-safe dependencies
@@ -365,7 +362,7 @@
 //
 //   - Keep Next() pure (no side effects)
 //   - Make actions idempotent (check if work already done)
-//   - Check IsBeingRemoved first in all states
+//   - Check IsShutdownRequested() first in all states
 //   - Use type-safe state structs, not strings
 //   - Return action or transition, not both (the supervisor panics if both are returned)
 //   - Handle context cancellation in all async operations

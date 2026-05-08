@@ -69,6 +69,18 @@ func (w *ExampleslowWorker) CollectObservedState(ctx context.Context, desired fs
 
 	d := w.GetDependencies()
 
+	// Framework state and action history are injected before COS and consumed by
+	// the collector wrapper after NewObservation returns. Calling them here satisfies
+	// the framework-metrics-copy and action-history-copy invariants enforced by the
+	// architecture validator.
+	d.GetFrameworkState()
+	d.GetActionHistory()
+
+	// Demonstration-only: this worker writes into deps from CollectObservedState
+	// to simulate runtime conditions (failure cycles / panic flags) that
+	// production configuration drives directly. Real workers MUST keep
+	// CollectObservedState pure I/O reads. See pkg/fsmv2/README.md
+	// "I/O isolation rule".
 	if desired != nil {
 		cfg := fsmv2.ExtractConfig[ExampleslowConfig](desired)
 		d.SetDelaySeconds(cfg.DelaySeconds)
@@ -90,7 +102,7 @@ func (w *ExampleslowWorker) CollectObservedState(ctx context.Context, desired fs
 func (w *ExampleslowWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, error) {
 	if spec == nil {
 		return &fsmv2.WrappedDesiredState[ExampleslowConfig]{
-			BaseDesiredState: config.BaseDesiredState{State: config.DesiredStateRunning},
+			State: config.DesiredStateRunning,
 		}, nil
 	}
 
@@ -117,7 +129,7 @@ func (w *ExampleslowWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredS
 	}
 
 	return &fsmv2.WrappedDesiredState[ExampleslowConfig]{
-		BaseDesiredState: config.BaseDesiredState{State: state},
+		State: state,
 		Config: ExampleslowConfig{
 			BaseUserSpec: parsed.BaseUserSpec,
 			DelaySeconds: parsed.DelaySeconds,
