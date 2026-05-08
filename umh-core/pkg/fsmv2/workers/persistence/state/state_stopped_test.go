@@ -62,7 +62,7 @@ var _ = Describe("StoppedState", func() {
 		})
 
 		Context("when shutdown is not requested", func() {
-			It("should transition to RunningState", func() {
+			It("should transition to TryingToStartState", func() {
 				snap := fsmv2.Snapshot{
 					Identity: deps.Identity{ID: "test", WorkerType: "persistence"},
 					Observed: fsmv2.Observation[snapshot.PersistenceStatus]{
