@@ -61,27 +61,6 @@ var _ = Describe("PushObservedState", func() {
 		})
 	})
 
-	Describe("SetParentMappedState", func() {
-		It("should return an updated observed state with the new parent mapped state", func() {
-			observed := snapshot.PushObservedState{}
-
-			result := observed.SetParentMappedState("running")
-			updated, ok := result.(snapshot.PushObservedState)
-			Expect(ok).To(BeTrue())
-			Expect(updated.ParentMappedState).To(Equal("running"))
-		})
-	})
-
-	Describe("SetShutdownRequested", func() {
-		It("should return an updated observed state with shutdown requested", func() {
-			observed := snapshot.PushObservedState{}
-
-			result := observed.SetShutdownRequested(true)
-			updated, ok := result.(snapshot.PushObservedState)
-			Expect(ok).To(BeTrue())
-			Expect(updated.IsShutdownRequested()).To(BeTrue())
-		})
-	})
 })
 
 var _ = Describe("PushDesiredState", func() {

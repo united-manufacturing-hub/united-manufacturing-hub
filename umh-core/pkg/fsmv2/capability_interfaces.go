@@ -21,6 +21,11 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 )
 
+// The interfaces in this file represent the L1 observation framework capability
+// surface. Additional capability interfaces (typed action providers, child-spec
+// versioning, health-aware scheduling) are planned for L2a through L9 and will
+// be added here as those layers land.
+
 // ActionProvider enables side effects via actions.
 // Workers that implement this interface opt into the action execution pipeline.
 // The supervisor calls Actions() once at registration to discover available actions.

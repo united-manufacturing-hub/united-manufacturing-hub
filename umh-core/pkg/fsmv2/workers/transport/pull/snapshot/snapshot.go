@@ -86,16 +86,6 @@ type PullDesiredState struct {
 	State string `json:"state" yaml:"state"`
 }
 
-// GetState returns the desired lifecycle state, defaulting to "running" if empty.
-// For pull workers this is propagated from the parent's user spec.
-func (s *PullDesiredState) GetState() string {
-	if s.State == "" {
-		return config.DesiredStateRunning
-	}
-
-	return s.State
-}
-
 // ShouldBeRunning returns true if the pull worker should be in a running state.
 func (s *PullDesiredState) ShouldBeRunning() bool {
 	if s.ShutdownRequested {

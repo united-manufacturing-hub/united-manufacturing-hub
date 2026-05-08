@@ -87,21 +87,6 @@ var _ = Describe("TransportObservedState", func() {
 		})
 	})
 
-	Describe("SetShutdownRequested", func() {
-		It("should set shutdown requested and return a new observed state", func() {
-			observed := snapshot.TransportObservedState{
-				CollectedAt: time.Now(),
-			}
-
-			newObserved := observed.SetShutdownRequested(true)
-			Expect(newObserved).NotTo(BeNil())
-
-			transportObserved, ok := newObserved.(snapshot.TransportObservedState)
-			Expect(ok).To(BeTrue())
-			Expect(transportObserved.IsShutdownRequested()).To(BeTrue())
-		})
-	})
-
 	Describe("HasValidToken", func() {
 		It("should return false when JWT token is empty", func() {
 			observed := snapshot.TransportObservedState{
@@ -182,18 +167,18 @@ var _ = Describe("TransportDesiredState", func() {
 		)
 	})
 
-	Describe("GetState", func() {
-		It("should return the state value", func() {
+	Describe("State field", func() {
+		It("should return the state value when set", func() {
 			desired := &snapshot.TransportDesiredState{}
 			desired.State = "running"
 
-			Expect(desired.GetState()).To(Equal("running"))
+			Expect(desired.State).To(Equal("running"))
 		})
 
-		It("should return running by default when state is empty", func() {
+		It("should be empty by default (DeriveDesiredState applies the running default)", func() {
 			desired := &snapshot.TransportDesiredState{}
 
-			Expect(desired.GetState()).To(Equal("running"))
+			Expect(desired.State).To(Equal(""))
 		})
 	})
 

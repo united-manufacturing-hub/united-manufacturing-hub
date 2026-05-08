@@ -191,11 +191,11 @@ var _ = Describe("DeriveDesiredState saves to store", func() {
 			"SaveDesired (index %d) should be called BEFORE LoadSnapshot (index %d)", saveIdx, loadIdx)
 	})
 
-	It("should save derived state with IsBeingRemoved field", func() {
+	It("should save derived state with ShutdownRequested field", func() {
 		var savedShutdown interface{}
 
 		store.saveDesired = func(ctx context.Context, wt string, id string, desired persistence.Document) error {
-			savedShutdown = desired["isBeingRemoved"]
+			savedShutdown = desired["ShutdownRequested"]
 			if store.desired[wt] == nil {
 				store.desired[wt] = make(map[string]persistence.Document)
 			}
@@ -227,7 +227,7 @@ var _ = Describe("DeriveDesiredState saves to store", func() {
 			}, nil
 		}
 
-		// Create a simple worker that returns default desired state (IsBeingRemoved=false).
+		// Create a simple worker that returns default desired state (ShutdownRequested=false).
 		worker := &mockWorker{
 			observed: &mockObservedState{
 				ID:          workerID,
