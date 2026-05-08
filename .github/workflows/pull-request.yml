@@ -19,6 +19,9 @@ on:
   pull_request:
     branches: ["**"]
   merge_group:
+  push:
+    branches:
+      - chore/fossa-cli
 
 jobs:
   changes:
@@ -87,7 +90,7 @@ jobs:
 
   fossa-container:
     name: FOSSA Container Scan
-    if: github.event_name == 'pull_request' && github.base_ref == 'main'
+    if: (github.event_name == 'pull_request' && github.base_ref == 'main') || github.event_name == 'push'
     runs-on: depot-ubuntu-24.04
     timeout-minutes: 15
     permissions:
