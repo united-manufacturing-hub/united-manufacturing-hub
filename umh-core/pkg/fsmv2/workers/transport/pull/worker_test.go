@@ -90,7 +90,7 @@ var _ = Describe("PullWorker", func() {
 
 			Expect(err).ToNot(HaveOccurred())
 			Expect(observed).NotTo(BeNil())
-			// Timestamp is zero from NewObservation — the collector fills it post-COS.
+			// Timestamp is zero from NewObservation  - the collector fills it post-COS.
 			// Only assert the return is non-nil and of the correct type.
 			_, ok := observed.(fsmv2.Observation[snapshot.PullStatus])
 			Expect(ok).To(BeTrue())
@@ -166,7 +166,7 @@ var _ = Describe("PullWorker", func() {
 			observed, err := worker.CollectObservedState(ctx, nil)
 
 			Expect(err).ToNot(HaveOccurred())
-			// NewObservation returns Observation[T] — collector post-processes it.
+			// NewObservation returns Observation[T]  - collector post-processes it.
 			// We only verify the return type here; metrics are filled post-COS.
 			_, ok := observed.(fsmv2.Observation[snapshot.PullStatus])
 			Expect(ok).To(BeTrue())
@@ -187,7 +187,7 @@ var _ = Describe("PullWorker", func() {
 			Expect(desired).NotTo(BeNil())
 			typed, ok := desired.(*fsmv2.WrappedDesiredState[snapshot.PullConfig])
 			Expect(ok).To(BeTrue())
-			Expect(typed.GetState()).To(Equal("running"))
+			Expect(typed.State).To(Equal("running"))
 		})
 
 		It("should return correct state for valid spec", func() {
@@ -202,7 +202,7 @@ var _ = Describe("PullWorker", func() {
 			Expect(desired).NotTo(BeNil())
 			typedStopped, okStopped := desired.(*fsmv2.WrappedDesiredState[snapshot.PullConfig])
 			Expect(okStopped).To(BeTrue())
-			Expect(typedStopped.GetState()).To(Equal("stopped"))
+			Expect(typedStopped.State).To(Equal("stopped"))
 		})
 
 		It("should return running state for empty config", func() {
@@ -216,7 +216,7 @@ var _ = Describe("PullWorker", func() {
 			Expect(err).ToNot(HaveOccurred())
 			typedRunning, okRunning := desired.(*fsmv2.WrappedDesiredState[snapshot.PullConfig])
 			Expect(okRunning).To(BeTrue())
-			Expect(typedRunning.GetState()).To(Equal("running"))
+			Expect(typedRunning.State).To(Equal("running"))
 		})
 
 		It("should be deterministic", func() {
@@ -234,7 +234,7 @@ var _ = Describe("PullWorker", func() {
 			Expect(pullOk1).To(BeTrue())
 			pull2, pullOk2 := desired2.(*fsmv2.WrappedDesiredState[snapshot.PullConfig])
 			Expect(pullOk2).To(BeTrue())
-			Expect(pull1.GetState()).To(Equal(pull2.GetState()))
+			Expect(pull1.State).To(Equal(pull2.State))
 		})
 
 		It("should return error for invalid spec type", func() {

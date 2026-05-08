@@ -25,7 +25,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/application/snapshot"
 )
 
-// Differential parity — anchors that the ChildrenSpecs derived via DDS and
+// Differential parity  - anchors that the ChildrenSpecs derived via DDS and
 // the canonical application.RenderChildren emitter produce IDENTICAL ChildSpec
 // slices for the application worker.
 //
@@ -34,7 +34,7 @@ import (
 // WrappedDesiredState.ChildrenSpecs. RenderChildren reads that same slice back
 // out. The parity property is "the two reads observe the same set of fields
 // under Hash()".
-var _ = Describe("Application — DDS vs RenderChildren differential parity", func() {
+var _ = Describe("Application  - DDS vs RenderChildren differential parity", func() {
 	logger := deps.NewNopFSMLogger()
 
 	runParity := func(rawSpec config.UserSpec, label string) {
@@ -46,7 +46,7 @@ var _ = Describe("Application — DDS vs RenderChildren differential parity", fu
 
 		provider, ok := desired.(config.ChildSpecProvider)
 		Expect(ok).To(BeTrue(),
-			"application DesiredState must implement ChildSpecProvider during migration window")
+			"application DesiredState must implement ChildSpecProvider")
 
 		legacy := provider.GetChildrenSpecs()
 

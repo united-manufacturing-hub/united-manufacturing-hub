@@ -92,16 +92,6 @@ type PushDesiredState struct {
 	State string `json:"state" yaml:"state"`
 }
 
-// GetState returns the desired lifecycle state, defaulting to "running" if empty.
-// For push workers this is propagated from the parent's user spec.
-func (s *PushDesiredState) GetState() string {
-	if s.State == "" {
-		return config.DesiredStateRunning
-	}
-
-	return s.State
-}
-
 // ShouldBeRunning returns true if the push worker should be in a running state.
 func (s *PushDesiredState) ShouldBeRunning() bool {
 	if s.ShutdownRequested {

@@ -44,8 +44,8 @@ import (
 //   - ParentMappedState: For child workers only. Injected by supervisor from parent's ChildStartStates.
 //
 // The desired lifecycle state ("running"/"stopped") is read from the user spec
-// via BaseUserSpec.GetState() in DeriveDesiredState and stored directly on the
-// outer DesiredState type (not on BaseDesiredState). Callers that used to set
+// via BaseUserSpec.State in DeriveDesiredState (defaulting to "running" when empty)
+// and stored directly on the outer DesiredState type (not on BaseDesiredState). Callers that used to set
 // BaseDesiredState{State: x} should instead set the State field on the embedding
 // struct (e.g., MyDesiredState{State: x, ...}).
 //
@@ -87,21 +87,12 @@ func (b *BaseDesiredState) SetShutdownRequested(v bool) {
 //	    // ... worker-specific fields
 //	}
 //
-// Workers embedding BaseUserSpec can use GetState() to get the desired lifecycle state
-// with a default of "running" if not specified by the user.
+// Workers embedding BaseUserSpec read the desired lifecycle state from the State field
+// directly. DeriveDesiredState applies a "running" default when State is empty.
 type BaseUserSpec struct {
 	// State specifies the desired lifecycle state: "running" or "stopped".
 	// Defaults to "running" if empty. Validated in the supervisor after DeriveDesiredState.
 	State string `json:"state,omitempty" yaml:"state,omitempty"`
-}
-
-// GetState returns the desired state, defaulting to "running" if empty.
-func (b *BaseUserSpec) GetState() string {
-	if b.State == "" {
-		return DesiredStateRunning
-	}
-
-	return b.State
 }
 
 // UserSpec contains user-provided configuration for a worker.
@@ -438,15 +429,6 @@ type DesiredState struct {
 	State            string           `json:"state"                      yaml:"state"`                  // "stopped" or "running" - desired lifecycle state
 }
 
-// GetState returns the desired lifecycle state, defaulting to "running" if empty.
-func (d *DesiredState) GetState() string {
-	if d.State == "" {
-		return DesiredStateRunning
-	}
-
-	return d.State
-}
-
 // NOTE: IsShutdownRequested() and SetShutdownRequested() are provided by embedded BaseDesiredState.
 // The ShutdownRequested field is the canonical source of truth for shutdown state.
 //
@@ -481,5 +463,5 @@ func (d *DesiredState) GetChildrenSpecs() []ChildSpec {
 	return d.ChildrenSpecs
 }
 
-// NOTE: GetState() is provided by embedded BaseDesiredState.
-// The BaseDesiredState.State field is the canonical source of truth for lifecycle state.
+// NOTE: The State field is the canonical source of truth for lifecycle state.
+// DeriveDesiredState defaults State to "running" when the user spec is empty.

@@ -25,6 +25,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/internal/collection"
@@ -53,12 +54,13 @@ var _ = Describe("Collector Panic Recovery", func() {
 			logger := deps.NewFSMLogger(zap.New(observedCore).Sugar())
 
 			collector := collection.NewCollector[supervisor.TestObservedState](collection.CollectorConfig[supervisor.TestObservedState]{
-				Worker:              worker,
-				Identity:            supervisor.TestIdentity(),
-				Store:               supervisor.CreateTestTriangularStore(),
-				Logger:              logger,
-				ObservationInterval: 50 * time.Millisecond,
-				ObservationTimeout:  1 * time.Second,
+				Worker:               worker,
+				Identity:             supervisor.TestIdentity(),
+				Store:                supervisor.CreateTestTriangularStore(),
+				Logger:               logger,
+				ObservationInterval:  50 * time.Millisecond,
+				ObservationTimeout:   1 * time.Second,
+				DesiredStateProvider: panicTestDesiredProvider(),
 			})
 
 			ctx, cancel := context.WithCancel(context.Background())
@@ -105,12 +107,13 @@ var _ = Describe("Collector Panic Recovery", func() {
 			logger := deps.NewFSMLogger(zap.New(observedCore).Sugar())
 
 			collector := collection.NewCollector[supervisor.TestObservedState](collection.CollectorConfig[supervisor.TestObservedState]{
-				Worker:              worker,
-				Identity:            supervisor.TestIdentity(),
-				Store:               supervisor.CreateTestTriangularStore(),
-				Logger:              logger,
-				ObservationInterval: 50 * time.Millisecond,
-				ObservationTimeout:  1 * time.Second,
+				Worker:               worker,
+				Identity:             supervisor.TestIdentity(),
+				Store:                supervisor.CreateTestTriangularStore(),
+				Logger:               logger,
+				ObservationInterval:  50 * time.Millisecond,
+				ObservationTimeout:   1 * time.Second,
+				DesiredStateProvider: panicTestDesiredProvider(),
 			})
 
 			ctx, cancel := context.WithCancel(context.Background())
@@ -153,12 +156,13 @@ var _ = Describe("Collector Panic Type Classification", func() {
 		logger := deps.NewFSMLogger(zap.New(observedCore).Sugar())
 
 		collector := collection.NewCollector[supervisor.TestObservedState](collection.CollectorConfig[supervisor.TestObservedState]{
-			Worker:              worker,
-			Identity:            supervisor.TestIdentity(),
-			Store:               supervisor.CreateTestTriangularStore(),
-			Logger:              logger,
-			ObservationInterval: 50 * time.Millisecond,
-			ObservationTimeout:  1 * time.Second,
+			Worker:               worker,
+			Identity:             supervisor.TestIdentity(),
+			Store:                supervisor.CreateTestTriangularStore(),
+			Logger:               logger,
+			ObservationInterval:  50 * time.Millisecond,
+			ObservationTimeout:   1 * time.Second,
+			DesiredStateProvider: panicTestDesiredProvider(),
 		})
 
 		ctx, cancel := context.WithCancel(context.Background())
@@ -197,12 +201,13 @@ var _ = Describe("Collector Panic Type Classification", func() {
 		logger := deps.NewFSMLogger(zap.New(observedCore).Sugar())
 
 		collector := collection.NewCollector[supervisor.TestObservedState](collection.CollectorConfig[supervisor.TestObservedState]{
-			Worker:              worker,
-			Identity:            supervisor.TestIdentity(),
-			Store:               supervisor.CreateTestTriangularStore(),
-			Logger:              logger,
-			ObservationInterval: 50 * time.Millisecond,
-			ObservationTimeout:  1 * time.Second,
+			Worker:               worker,
+			Identity:             supervisor.TestIdentity(),
+			Store:                supervisor.CreateTestTriangularStore(),
+			Logger:               logger,
+			ObservationInterval:  50 * time.Millisecond,
+			ObservationTimeout:   1 * time.Second,
+			DesiredStateProvider: panicTestDesiredProvider(),
 		})
 
 		ctx, cancel := context.WithCancel(context.Background())
@@ -242,12 +247,13 @@ var _ = Describe("Collector Double Panic", func() {
 		logger := &panicOnSentryErrorCollectorLogger{}
 
 		collector := collection.NewCollector[supervisor.TestObservedState](collection.CollectorConfig[supervisor.TestObservedState]{
-			Worker:              worker,
-			Identity:            supervisor.TestIdentity(),
-			Store:               supervisor.CreateTestTriangularStore(),
-			Logger:              logger,
-			ObservationInterval: 50 * time.Millisecond,
-			ObservationTimeout:  1 * time.Second,
+			Worker:               worker,
+			Identity:             supervisor.TestIdentity(),
+			Store:                supervisor.CreateTestTriangularStore(),
+			Logger:               logger,
+			ObservationInterval:  50 * time.Millisecond,
+			ObservationTimeout:   1 * time.Second,
+			DesiredStateProvider: panicTestDesiredProvider(),
 		})
 
 		ctx, cancel := context.WithCancel(context.Background())
@@ -286,6 +292,15 @@ func (p *panicOnSentryErrorCollectorLogger) SentryError(_ deps.Feature, _ string
 	}
 }
 func (p *panicOnSentryErrorCollectorLogger) With(fields ...deps.Field) deps.FSMLogger { return p }
+
+// panicTestDesiredProvider returns a stub DesiredStateProvider for panic tests.
+// Panic tests need a non-nil desired state so the collector actually calls
+// CollectObservedState (which is where the panics under test occur).
+func panicTestDesiredProvider() func() fsmv2.DesiredState {
+	return func() fsmv2.DesiredState {
+		return &config.DesiredState{BaseDesiredState: config.BaseDesiredState{}}
+	}
+}
 
 func filterCollectorLogs(logs *observer.ObservedLogs, message string) []observer.LoggedEntry {
 	var filtered []observer.LoggedEntry

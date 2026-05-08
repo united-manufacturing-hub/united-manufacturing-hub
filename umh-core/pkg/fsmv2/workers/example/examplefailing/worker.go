@@ -136,7 +136,7 @@ func (w *FailingWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState
 		return nil, fmt.Errorf("failed to parse examplefailing spec: %w", err)
 	}
 
-	state := parsed.GetState()
+	state := parsed.State
 	if state == "" {
 		state = fsmv2types.DesiredStateRunning
 	}

@@ -77,7 +77,7 @@ func NewPushWorker(
 }
 
 // CollectObservedState snapshots the current push worker state.
-// Returns fsmv2.NewObservation — the collector fills CollectedAt, metrics,
+// Returns fsmv2.NewObservation  - the collector fills CollectedAt, metrics,
 // and action history after COS returns.
 func (w *PushWorker) CollectObservedState(ctx context.Context, _ fsmv2.DesiredState) (fsmv2.ObservedState, error) {
 	select {
@@ -136,8 +136,13 @@ func (w *PushWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, e
 		return nil, err
 	}
 
+	pushState := parsed.BaseUserSpec.State
+	if pushState == "" {
+		pushState = config.DesiredStateRunning
+	}
+
 	return &fsmv2.WrappedDesiredState[snapshot.PushConfig]{
-		State: parsed.BaseUserSpec.GetState(),
+		State: pushState,
 	}, nil
 }
 

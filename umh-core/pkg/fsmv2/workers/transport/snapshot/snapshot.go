@@ -39,15 +39,6 @@ type TransportConfig struct {
 	State string `json:"state" yaml:"state"` // "stopped" or "running" - desired lifecycle state
 }
 
-// GetState returns the desired lifecycle state ("running" or "stopped").
-func (c TransportConfig) GetState() string {
-	if c.State == "" {
-		return config.DesiredStateRunning
-	}
-
-	return c.State
-}
-
 // TransportStatus holds the runtime observation data for the transport worker.
 // Framework fields (CollectedAt, State, LastActionResults, MetricsEmbedder,
 // ChildrenHealthy, ChildrenUnhealthy, ChildrenView) are carried by
@@ -66,7 +57,7 @@ type TransportStatus struct {
 	AuthenticatedUUID string `json:"authenticated_uuid,omitempty"`
 
 	// JWTToken is the current authentication token for relay communication.
-	// NOTE: Must NOT use json:"-" — see TransportObservedState.JWTToken comment.
+	// NOTE: Must NOT use json:"-"  - see TransportObservedState.JWTToken comment.
 	JWTToken string `json:"jwt_token,omitempty"`
 
 	// TotalMessagesPushed tracks cumulative messages pushed to backend.
@@ -175,22 +166,13 @@ func (d *TransportDesiredState) GetChildrenSpecs() []config.ChildSpec {
 	return d.ChildrenSpecs
 }
 
-// GetState returns the desired lifecycle state ("running" or "stopped").
-func (d *TransportDesiredState) GetState() string {
-	if d.State == "" {
-		return config.DesiredStateRunning
-	}
-
-	return d.State
-}
-
 // ShouldBeRunning returns true if the transport should be running.
 func (d *TransportDesiredState) ShouldBeRunning() bool {
 	if d.ShutdownRequested {
 		return false
 	}
 
-	return d.GetState() == config.DesiredStateRunning
+	return d.State == config.DesiredStateRunning || d.State == ""
 }
 
 // FailedAuthConfig captures the auth configuration that was used in the last
