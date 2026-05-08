@@ -247,7 +247,7 @@
 //   - Name, WorkerType, StateName, StateReason, IsHealthy, ErrorMsg, HierarchyPath, Phase
 //
 // StateName is display-only (raw form like "Connected" or "TryingToConnect").
-// Phase (config.LifecyclePhase) is the canonical predicate source — it is
+// Phase (config.LifecyclePhase) is the canonical predicate source  -  it is
 // populated from the child's cached lifecycle phase and is what
 // NewChildrenView's aggregate predicates (HealthyCount, AllHealthy,
 // AllOperational, AllStopped) read. Do NOT recompute predicates from StateName;
@@ -298,7 +298,7 @@
 // ### Lifecycle transition vocabulary
 //
 // Two naming conventions are canonical for transition states. Pick based on
-// what the worker actually does in that state — not by feel or precedent.
+// what the worker actually does in that state  -  not by feel or precedent.
 //
 //   - Use "Xing" (Stopping, Starting, Connecting) when the state runs
 //     active cleanup or setup: the worker drives the work, optionally

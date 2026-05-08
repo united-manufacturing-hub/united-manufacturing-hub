@@ -349,7 +349,7 @@ var _ = Describe("TransportWorker States", func() {
 
 			Expect(result.State).To(BeAssignableToTypeOf(&state.StartingState{}))
 			Expect(result.Action).To(BeNil(),
-				"should NOT dispatch auth during backoff — transient error with empty FailedAuthConfig must still respect backoff")
+				"should NOT dispatch auth during backoff  -  transient error with empty FailedAuthConfig must still respect backoff")
 			Expect(result.Reason).To(ContainSubstring("auth backoff"))
 		})
 	})
@@ -754,7 +754,7 @@ var _ = Describe("TransportWorker States", func() {
 				CollectedAt:       time.Now(),
 				ConsecutiveErrors: 3,
 				LastErrorType:     types.ErrorTypeInvalidToken,
-				// FailedAuth* fields all empty (zero values) — simulates fresh deps
+				// FailedAuth* fields all empty (zero values)  -  simulates fresh deps
 			}
 			result := s.Next(fsmv2.Snapshot{Observed: observed, Desired: desired})
 

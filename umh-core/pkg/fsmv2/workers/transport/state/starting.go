@@ -48,7 +48,7 @@ func (s *StartingState) Next(snapAny any) fsmv2.NextResult[any, any] {
 		configChanged := authConfigChanged(snap.Desired, snap.Observed)
 
 		// Apply error handling only when config hasn't changed since last attempt.
-		// If config changed, stale errors and backoff are irrelevant — go straight to auth dispatch.
+		// If config changed, stale errors and backoff are irrelevant  -  go straight to auth dispatch.
 		if !configChanged && snap.Observed.ConsecutiveErrors > 0 && !snap.Observed.LastAuthAttemptAt.IsZero() {
 			if isPermanentAuthError(snap.Observed.LastErrorType) {
 				return fsmv2.Result[any, any](&AuthFailedState{}, fsmv2.SignalNone, nil,
@@ -78,7 +78,7 @@ func (s *StartingState) Next(snapAny any) fsmv2.NextResult[any, any] {
 		return fsmv2.Result[any, any](s, fsmv2.SignalNone, authAction, "No valid token, authenticating with relay")
 	}
 
-	// Authenticated — transition to Running. Children start via ChildStartStates
+	// Authenticated  -  transition to Running. Children start via ChildStartStates
 	// once parent enters Running; RunningState handles unhealthy children.
 	return fsmv2.Result[any, any](&RunningState{}, fsmv2.SignalNone, nil, "Authenticated, transitioning to Running")
 }

@@ -45,7 +45,7 @@ type PushWorker struct {
 }
 
 // NewPushWorker creates a new PushWorker in Stopped state.
-// parentDeps must not be nil — the push worker delegates auth and transport to the parent.
+// parentDeps must not be nil  -  the push worker delegates auth and transport to the parent.
 func NewPushWorker(
 	identity deps.Identity,
 	logger deps.FSMLogger,
@@ -145,7 +145,7 @@ func (w *PushWorker) CollectObservedState(ctx context.Context, _ fsmv2.DesiredSt
 
 // DeriveDesiredState determines the desired state from the provided spec.
 // Returns DesiredStateRunning when spec is nil (child workers default to running).
-// Must be PURE — only uses the spec parameter, never dependencies.
+// Must be PURE  -  only uses the spec parameter, never dependencies.
 func (w *PushWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, error) {
 	if spec == nil {
 		return &snapshot.PushDesiredState{

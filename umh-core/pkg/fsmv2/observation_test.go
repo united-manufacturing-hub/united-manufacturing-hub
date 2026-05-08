@@ -53,7 +53,7 @@ var _ = Describe("Observation", func() {
 
 			typed := obs.(fsmv2.Observation[TestStatus])
 			Expect(typed.CollectedAt.IsZero()).To(BeTrue(),
-				"NewObservation must not set CollectedAt — the collector sets it")
+				"NewObservation must not set CollectedAt  -  the collector sets it")
 		})
 
 		It("satisfies the ObservedState interface", func() {
@@ -353,7 +353,7 @@ var _ = Describe("Observation", func() {
 			data, err := json.Marshal(obs)
 			Expect(err).NotTo(HaveOccurred())
 
-			// ShutdownRequested intentionally has no omitempty — false must appear in wire format.
+			// ShutdownRequested intentionally has no omitempty  -  false must appear in wire format.
 			Expect(strings.Contains(string(data), `"ShutdownRequested":false`)).To(BeTrue(),
 				"ShutdownRequested=false must be present in JSON, got: %s", string(data))
 		})

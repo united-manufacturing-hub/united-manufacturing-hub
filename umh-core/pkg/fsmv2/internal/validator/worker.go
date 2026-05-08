@@ -770,7 +770,7 @@ func checkSpecUsage(filename string) []Violation {
 					File:    filename,
 					Line:    pos.Line,
 					Type:    "SPEC_RESULT_DISCARDED",
-					Message: "DeriveDesiredState() type-asserts spec but discards the result with _ — spec fields should be parsed and used",
+					Message: "DeriveDesiredState() type-asserts spec but discards the result with _  -  spec fields should be parsed and used",
 				})
 
 				return false

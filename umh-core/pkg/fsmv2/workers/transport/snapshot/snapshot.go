@@ -154,7 +154,7 @@ type TransportObservedState struct {
 	AuthenticatedUUID string `json:"authenticated_uuid,omitempty"`
 
 	// JWTToken is the current authentication token for relay communication.
-	// NOTE: This field must NOT use json:"-" — the supervisor reconciliation loop
+	// NOTE: This field must NOT use json:"-"  -  the supervisor reconciliation loop
 	// serializes observed state to CSE storage between ticks and deserializes it
 	// via LoadObservedTyped(). Excluding JWTToken from JSON would force
 	// re-authentication on every tick (~10ms), hammering the relay server.

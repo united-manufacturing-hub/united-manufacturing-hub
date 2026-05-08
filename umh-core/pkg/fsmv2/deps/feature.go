@@ -50,7 +50,7 @@ package deps
 // infrastructure. Some collector restart events in reconciliation.go use
 // [FeatureForWorker] because they are triggered by stale observations from
 // a specific worker, even though the restart itself is supervisor machinery.
-// When in doubt, route to the worker team — they have the most context to
+// When in doubt, route to the worker team  -  they have the most context to
 // investigate.
 type Feature string
 

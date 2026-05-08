@@ -237,7 +237,7 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity deps.Identity, work
 			// Hold the RLock only long enough to snapshot the children map.
 			// NewChildrenManager calls multiple per-child accessors and would
 			// block AddWorker / RemoveWorker for the whole section if we kept
-			// the lock. The map values are pointer interfaces — copying gives
+			// the lock. The map values are pointer interfaces  -  copying gives
 			// safe per-child iteration once unlocked.
 			s.mu.RLock()
 			childrenCopy := make(map[string]SupervisorInterface, len(s.children))

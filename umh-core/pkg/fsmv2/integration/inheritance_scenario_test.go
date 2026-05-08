@@ -525,7 +525,7 @@ func extractUserSpec(desired map[string]any) (config.UserSpec, error) {
 					variables.Global = globalVarsMap
 				}
 			}
-			// Extract internal namespace — typed struct fields extracted from map
+			// Extract internal namespace  -  typed struct fields extracted from map
 			if internalVars, hasInternal := varsMap["internal"]; hasInternal {
 				if internalVarsMap, ok := internalVars.(map[string]any); ok {
 					if id, ok := internalVarsMap["id"].(string); ok {

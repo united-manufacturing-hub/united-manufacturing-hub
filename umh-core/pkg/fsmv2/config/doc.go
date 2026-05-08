@@ -40,14 +40,14 @@
 //
 // Internal Namespace:
 //   - Contains: Supervisor-injected identity (worker ID, parent ID,
-//     creation timestamp, bridge-source label) — typed VariablesInternal
+//     creation timestamp, bridge-source label)  -  typed VariablesInternal
 //     struct, not a free-form map
 //   - Template access: Prefixed {{ .internal.id }}, {{ .internal.parent_id }},
 //     {{ .internal.created_at }}, {{ .internal.bridged_by }}
 //   - Serialization: JSON YES (json:"internal", camelCase wire tags per
 //     §4-D LOCKED for codegen cleanliness; round-trips through CSE storage
 //     between supervisor goroutines per Design Intent §13/§14). YAML NO
-//     (yaml:"-" — users do not author Internal; supervisor injects it at
+//     (yaml:"-"  -  users do not author Internal; supervisor injects it at
 //     reconciliation time)
 //   - Use case: identity / structural desired state injected by the system,
 //     not user-authored. Templates read it via the Flatten map's snake_case
@@ -85,7 +85,7 @@
 // Internal carries the typed VariablesInternal struct (yaml:"-",
 // json:"internal"). Per §4-D LOCKED, the JSON form round-trips through CSE
 // storage between supervisor goroutines (Design Intent §13/§14). YAML
-// serialization is suppressed because users do not author Internal — the
+// serialization is suppressed because users do not author Internal  -  the
 // supervisor injects identity at reconciliation time.
 //
 // # map[string]any design (User and Global only)

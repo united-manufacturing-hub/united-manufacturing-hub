@@ -1150,7 +1150,7 @@ func checkStoppingStateNoCatchAllSelfReturn(filename string) []Violation {
 			}
 
 			if !isSelfReturn {
-				// Transitions to a different state — this is a progress path
+				// Transitions to a different state  -  this is a progress path
 				hasProgressPath = true
 
 				return false

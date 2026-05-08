@@ -70,7 +70,7 @@
 //   - worker_chain: type-only path, e.g., "application/communicator/transport/pull" (~10-15 values)
 //
 // Raw hierarchy paths contain customer-specific data (bridge names, instance IDs)
-// that would cause unbounded tag cardinality — each bridge a customer creates adds
+// that would cause unbounded tag cardinality  -  each bridge a customer creates adds
 // a new unique path. With ~5 bridges per CPU core, a typical deployment would have
 // 150-600 unique paths. The worker_chain strips instance IDs and names, keeping only
 // the structural type chain, which is bounded to ~10-15 unique values globally.

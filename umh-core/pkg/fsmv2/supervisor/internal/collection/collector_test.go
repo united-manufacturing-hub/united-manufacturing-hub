@@ -299,7 +299,7 @@ var _ = Describe("Collector", func() {
 				ObservationInterval: 50 * time.Millisecond,
 				ObservationTimeout:  5 * time.Second,
 				DesiredStateProvider: func() fsmv2.DesiredState {
-					// Cancel context inside DesiredStateProvider — after desired
+					// Cancel context inside DesiredStateProvider  -  after desired
 					// state is loaded but before the framework ctx check.
 					if cancelCollector != nil {
 						cancelCollector()
@@ -318,7 +318,7 @@ var _ = Describe("Collector", func() {
 			// Wait for collector to process at least one tick.
 			time.Sleep(200 * time.Millisecond)
 
-			// COS should NOT have been called — the framework ctx check caught the cancellation.
+			// COS should NOT have been called  -  the framework ctx check caught the cancellation.
 			Expect(cosCalled.Load()).To(BeFalse())
 		})
 
@@ -441,7 +441,7 @@ func (w *cosTrackingWorker) CollectObservedState(_ context.Context, _ fsmv2.Desi
 
 // desiredCapturingWorker records the typed DesiredState pointer value the
 // collector passes into CollectObservedState. Used by the typed-handoff
-// regression spec — replaces the duck-typed observedDesiredState injection
+// regression spec  -  replaces the duck-typed observedDesiredState injection
 // test that was removed in P1.5c Row 1. Locks the contract that the
 // collector hands the worker the same DesiredState the DesiredStateProvider
 // produced, so the worker can ExtractConfig from it directly.

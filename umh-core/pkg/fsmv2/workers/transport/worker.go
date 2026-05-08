@@ -156,7 +156,7 @@ func (w *TransportWorker) CollectObservedState(ctx context.Context, _ fsmv2.Desi
 // Must be PURE - only uses the spec parameter, never dependencies.
 // Returns "running" or "stopped" as valid state values.
 func (w *TransportWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, error) {
-	// Nil spec defaults to "running" — matches CommunicatorWorker convention.
+	// Nil spec defaults to "running"  -  matches CommunicatorWorker convention.
 	// Transport will attempt auth with empty credentials, fail, and retry with backoff.
 	// This enables self-healing: if spec delivery is delayed during startup, the worker
 	// retries until config arrives. Field validation below catches empty fields once
