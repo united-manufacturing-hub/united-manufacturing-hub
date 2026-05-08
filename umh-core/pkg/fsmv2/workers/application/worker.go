@@ -86,6 +86,12 @@ func NewApplicationWorker(id, name string, logger deps.FSMLogger, stateReader de
 // framework metrics, action history, ChildrenView, and children counts
 // automatically after COS returns.
 func (w *ApplicationWorker) CollectObservedState(ctx context.Context, _ fsmv2.DesiredState) (fsmv2.ObservedState, error) {
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
+	}
+
 	return fsmv2.NewObservation(snapshot.ApplicationStatus{
 		ID:   w.id,
 		Name: w.name,
