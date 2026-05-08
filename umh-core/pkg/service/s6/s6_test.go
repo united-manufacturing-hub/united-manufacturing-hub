@@ -27,6 +27,7 @@ import (
 	"github.com/cactus/tai64"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/backoff"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/s6serviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
@@ -571,6 +572,71 @@ var _ = Describe("S6 Service", func() {
 			err := svc.Remove(ctx, svcPath, mockFS)
 			Expect(err).To(MatchError(ContainSubstring("IO error")))
 		})
+
+		// Fix 3 — disk-fallback when in-memory artifacts is lost (e.g., post-restart).
+		// The atomic.Pointer is in-memory only; if umh-core crashes between Create and
+		// clean shutdown, restart leaves on-disk state with no tracking. Without the
+		// fallback, Remove() would falsely report ErrServiceNotExist (idempotent
+		// success) and the FSM would transition to Removed, orphaning the directories.
+		Describe("disk-fallback when artifacts is nil (post-restart orphan recovery)", func() {
+			repoPath := func() string {
+				return filepath.Join(constants.GetS6RepositoryBaseDir(), "my-service")
+			}
+
+			It("returns permanent-failure error when service dir exists on disk", func() {
+				// artifacts NOT stored — simulates post-crash-restart state.
+				exists = sync.Map{}
+				exists.Store(svcPath, true) // orphaned service dir on disk
+
+				err := svc.Remove(ctx, svcPath, mockFS)
+
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring(backoff.PermanentFailureError),
+					"must escalate to permanent failure so HandlePermanentError → ForceRemove fires next tick")
+			})
+
+			It("returns permanent-failure error when repository dir exists on disk", func() {
+				exists = sync.Map{}
+				exists.Store(repoPath(), true) // orphaned repo dir on disk
+
+				err := svc.Remove(ctx, svcPath, mockFS)
+
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring(backoff.PermanentFailureError))
+			})
+
+			It("returns permanent-failure error when log dir exists on disk", func() {
+				exists = sync.Map{}
+				exists.Store(logDir, true) // orphaned log dir on disk
+
+				err := svc.Remove(ctx, svcPath, mockFS)
+
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring(backoff.PermanentFailureError))
+			})
+
+			It("returns ErrServiceNotExist when artifacts=nil and nothing exists on disk", func() {
+				exists = sync.Map{} // nothing on disk
+
+				err := svc.Remove(ctx, svcPath, mockFS)
+
+				Expect(err).To(MatchError(ErrServiceNotExist),
+					"genuinely-empty case stays idempotent")
+			})
+
+			It("propagates PathExists I/O errors", func() {
+				boom := errors.New("filesystem I/O error")
+				mockFS.WithPathExistsFunc(func(ctx context.Context, p string) (bool, error) {
+					return false, boom
+				})
+
+				err := svc.Remove(ctx, svcPath, mockFS)
+
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("filesystem I/O error"),
+					"I/O errors must propagate, not be silently treated as 'doesn't exist'")
+			})
+		})
 	})
 })
 
@@ -747,4 +813,3 @@ var _ = Describe("MaxFunc Approach for Rotated Files", func() {
 		Expect(result).To(Equal(expectedLatest))
 	})
 })
-

@@ -31,6 +31,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/backoff"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/s6serviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
@@ -458,11 +459,43 @@ func (s *DefaultService) Remove(ctx context.Context, servicePath string, fsServi
 			return nil
 		}
 
-		// No tracked files - service is in an inconsistent state. Returning the
-		// typed ErrServiceNotExist lets the FSM-layer caller use errors.Is to
-		// treat a no-tracking Remove as success (idempotent), rather than
-		// pattern-matching a string error.
-		s.logger.Debugf("No tracked files for service %s, cannot do tracked removal", servicePath)
+		// No in-memory tracking. On-disk state may still exist if umh-core
+		// crashed after Create populated artifacts but before clean shutdown —
+		// the atomic.Pointer is in-memory only, but disk state persists. If we
+		// reported ErrServiceNotExist here unconditionally, the FSM would
+		// transition to Removed and the manager would delete the instance,
+		// orphaning the directories on disk. Probe the canonical service/repo/log
+		// paths and escalate to ForceRemove via permanent failure if anything
+		// exists. ForceRemove constructs synthetic artifacts from the same
+		// conventional paths (s6.go ForceRemove) and runs ForceCleanup.
+		serviceName := filepath.Base(servicePath)
+		repoPath := filepath.Join(constants.GetS6RepositoryBaseDir(), serviceName)
+		logPath := filepath.Join(constants.S6LogBaseDir, serviceName)
+
+		serviceExists, err := fsService.PathExists(ctx, servicePath)
+		if err != nil {
+			return fmt.Errorf("failed to probe service path during no-tracking remove: %w", err)
+		}
+		repoExists, err := fsService.PathExists(ctx, repoPath)
+		if err != nil {
+			return fmt.Errorf("failed to probe repository path during no-tracking remove: %w", err)
+		}
+		logExists, err := fsService.PathExists(ctx, logPath)
+		if err != nil {
+			return fmt.Errorf("failed to probe log path during no-tracking remove: %w", err)
+		}
+
+		if serviceExists || repoExists || logExists {
+			s.logger.Warnf(
+				"No tracking for service %s but on-disk state exists (service=%v, repo=%v, log=%v) — escalating to ForceRemove",
+				serviceName, serviceExists, repoExists, logExists,
+			)
+
+			return fmt.Errorf("%s: untracked on-disk state for service %s",
+				backoff.PermanentFailureError, serviceName)
+		}
+
+		s.logger.Debugf("No tracked files for service %s and no on-disk state, treating as already removed", servicePath)
 
 		return ErrServiceNotExist
 	})
@@ -1742,4 +1775,3 @@ func (s *DefaultService) findLatestRotatedFile(entries []string) string {
 
 	return latestFile
 }
-
