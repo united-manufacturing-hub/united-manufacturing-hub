@@ -35,7 +35,7 @@ func (s *StoppedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 		return fsmv2.Result[any, any](s, fsmv2.SignalNeedsRemoval, nil, "Shutdown requested, signaling removal")
 	}
 
-	if !snap.IsShutdownRequested && snap.Config.GetState() == config.DesiredStateRunning {
+	if !snap.IsShutdownRequested && (snap.Config.State == config.DesiredStateRunning || snap.Config.State == "") {
 		return fsmv2.Result[any, any](&StartingState{}, fsmv2.SignalNone, nil, "Desired state is running, transitioning to Starting")
 	}
 

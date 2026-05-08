@@ -35,7 +35,7 @@ import (
 	// Blank import for side effects: registers the initial state via
 	// fsmv2.RegisterInitialState in state/stopped_state.go init(). GetInitialState
 	// looks up the state from the registry, so the state package must be loaded
-	// whenever the worker is imported — otherwise the registry lookup returns nil
+	// whenever the worker is imported  - otherwise the registry lookup returns nil
 	// and the supervisor panics at first tick. This import is safe because state/
 	// depends on snapshot/ (not on the worker package), so no import cycle is
 	// introduced.
@@ -66,7 +66,7 @@ type ApplicationWorker struct {
 }
 
 // NewApplicationWorker creates a new application worker. Returns nil when
-// id or name is empty — callers must surface that as a construction error.
+// id or name is empty  - callers must surface that as a construction error.
 // A nil logger is replaced with a no-op logger so unit tests can construct
 // workers without wiring a full logger stack; production callers should pass
 // the supervisor's configured logger.
@@ -82,7 +82,7 @@ func NewApplicationWorker(id, name string, logger deps.FSMLogger, stateReader de
 }
 
 // CollectObservedState returns the current observed state of the application
-// supervisor. Returns fsmv2.NewObservation — the collector fills CollectedAt,
+// supervisor. Returns fsmv2.NewObservation  - the collector fills CollectedAt,
 // framework metrics, action history, ChildrenView, and children counts
 // automatically after COS returns.
 func (w *ApplicationWorker) CollectObservedState(ctx context.Context, _ fsmv2.DesiredState) (fsmv2.ObservedState, error) {

@@ -83,7 +83,7 @@ var _ = Describe("ChildWorker", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			desired := desiredIface.(*fsmv2.WrappedDesiredState[example_child.ExamplechildConfig])
-			Expect(desired.GetState()).To(Equal(config.DesiredStateRunning))
+			Expect(desired.State).To(Equal(config.DesiredStateRunning))
 		})
 	})
 })

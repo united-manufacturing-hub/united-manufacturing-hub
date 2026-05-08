@@ -111,7 +111,7 @@ func NewTransportWorker(
 }
 
 // CollectObservedState returns the current observed state of the transport worker.
-// Returns fsmv2.NewObservation — the collector fills CollectedAt, metrics,
+// Returns fsmv2.NewObservation  - the collector fills CollectedAt, metrics,
 // and action history after COS returns.
 func (w *TransportWorker) CollectObservedState(ctx context.Context, _ fsmv2.DesiredState) (fsmv2.ObservedState, error) {
 	select {
@@ -181,8 +181,13 @@ func (w *TransportWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredSta
 		return nil, fmt.Errorf("config parse failed: %w", err)
 	}
 
+	transportState := transportSpec.State
+	if transportState == "" {
+		transportState = config.DesiredStateRunning
+	}
+
 	// Validate required fields when worker should be running
-	if transportSpec.GetState() == config.DesiredStateRunning {
+	if transportState == config.DesiredStateRunning {
 		if transportSpec.RelayURL == "" {
 			return nil, fmt.Errorf("relayURL is required when state is running")
 		}
@@ -201,10 +206,10 @@ func (w *TransportWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredSta
 	}
 
 	return &fsmv2.WrappedDesiredState[tsnap.TransportConfig]{
-		State:         transportSpec.GetState(),
+		State:         transportState,
 		ChildrenSpecs: append(makePushChildSpec(userSpec), makePullChildSpec(userSpec)...),
 		Config: tsnap.TransportConfig{
-			State:        transportSpec.GetState(),
+			State:        transportState,
 			RelayURL:     transportSpec.RelayURL,
 			InstanceUUID: transportSpec.InstanceUUID,
 			AuthToken:    transportSpec.AuthToken,
