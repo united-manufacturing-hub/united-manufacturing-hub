@@ -19,7 +19,7 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/push/snapshot"
+	pushsnap "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/push/snapshot"
 )
 
 // StoppingState represents the shutdown state where the push worker is stopping.
@@ -28,7 +28,7 @@ type StoppingState struct {
 }
 
 func (s *StoppingState) Next(snapAny any) fsmv2.NextResult[any, any] {
-	snap := helpers.ConvertSnapshot[snapshot.PushObservedState, *snapshot.PushDesiredState](snapAny)
+	snap := fsmv2.ConvertWorkerSnapshot[pushsnap.PushConfig, pushsnap.PushStatus](snapAny)
 
 	// Cleanup hook: add resource cleanup actions here in the future.
 	// Self-return is valid during cleanup but MUST carry an action  -  never nil.
@@ -36,7 +36,7 @@ func (s *StoppingState) Next(snapAny any) fsmv2.NextResult[any, any] {
 
 	return fsmv2.Result[any, any](&StoppedState{}, fsmv2.SignalNone, nil,
 		fmt.Sprintf("stop complete: shutdown=%t, parentState(observed)=%s",
-			snap.Desired.IsShutdownRequested(), snap.Observed.ParentMappedState))
+			snap.IsShutdownRequested, snap.ParentMappedState))
 }
 
 func (s *StoppingState) String() string {

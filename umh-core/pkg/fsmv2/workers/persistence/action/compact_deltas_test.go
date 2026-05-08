@@ -75,6 +75,17 @@ var _ = Describe("CompactDeltasAction", func() {
 			})
 		})
 
+		Context("when context is cancelled", func() {
+			It("should return context error", func() {
+				cancelledCtx, cancel := context.WithCancel(ctx)
+				cancel()
+
+				a := action.NewCompactDeltasAction(24 * time.Hour)
+				err := a.Execute(cancelledCtx, d)
+				Expect(err).To(Equal(context.Canceled))
+				Expect(mockStore.compactDeltasCalled).To(BeFalse())
+			})
+		})
 	})
 
 	Describe("Name", func() {
