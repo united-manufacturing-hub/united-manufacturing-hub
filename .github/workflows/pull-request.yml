@@ -62,6 +62,57 @@ jobs:
       contents: read
       packages: write
 
+  fossa:
+    name: FOSSA License Scan
+    needs: changes
+    if: github.event_name != 'merge_group'
+    runs-on: depot-ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: FOSSA Analyze
+        uses: fossas/fossa-action@ff70fe9fe17cbd2040648f1c45e8ec4e4884dcf3 # v1
+        with:
+          api-key: ${{ secrets.FOSSA_API_KEY }}
+          project: united-manufacturing-hub
+          working-directory: umh-core
+      - name: FOSSA Test
+        uses: fossas/fossa-action@ff70fe9fe17cbd2040648f1c45e8ec4e4884dcf3 # v1
+        with:
+          api-key: ${{ secrets.FOSSA_API_KEY }}
+          project: united-manufacturing-hub
+          working-directory: umh-core
+          run-tests: true
+
+  fossa-container:
+    name: FOSSA Container Scan
+    if: github.event_name == 'pull_request' && github.base_ref == 'main'
+    runs-on: depot-ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      packages: read
+    steps:
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: FOSSA Container Analyze
+        uses: fossas/fossa-action@ff70fe9fe17cbd2040648f1c45e8ec4e4884dcf3 # v1
+        with:
+          api-key: ${{ secrets.FOSSA_API_KEY }}
+          project: united-manufacturing-hub
+          container: ghcr.io/united-manufacturing-hub/umh-core:staging
+      - name: FOSSA Container Test
+        uses: fossas/fossa-action@ff70fe9fe17cbd2040648f1c45e8ec4e4884dcf3 # v1
+        with:
+          api-key: ${{ secrets.FOSSA_API_KEY }}
+          project: united-manufacturing-hub
+          container: ghcr.io/united-manufacturing-hub/umh-core:staging
+          run-tests: true
+
   license-eye-header:
     uses: ./.github/workflows/license-eye-header.yaml
 
@@ -293,6 +344,8 @@ jobs:
         go-analysis,
         tests,
         build,
+        fossa,
+        fossa-container,
         license-eye-header,
         require-changelog-entry,
         validate-changelog,
