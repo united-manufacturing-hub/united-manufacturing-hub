@@ -147,12 +147,15 @@ func createSentryEventWithContext(level sentry.Level, err error, context map[str
 			case int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64, float32, float64, bool:
 				event.Tags[key] = convertToString(v)
 			default:
-				// For complex types, add them to the extra data instead
-				if event.Extra == nil {
-					event.Extra = make(map[string]interface{})
+				// For complex types, store in Contexts (Extra was removed in sentry-go v0.46.0)
+				if event.Contexts == nil {
+					event.Contexts = make(map[string]sentry.Context)
+				}
+				if event.Contexts["extra"] == nil {
+					event.Contexts["extra"] = make(sentry.Context)
 				}
 
-				event.Extra[key] = v
+				event.Contexts["extra"][key] = v
 			}
 
 

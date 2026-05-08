@@ -32,6 +32,12 @@ func NewCompactDeltasAction(retentionWindow time.Duration) *CompactDeltasAction 
 }
 
 func (a *CompactDeltasAction) Execute(ctx context.Context, depsAny any) error {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+	}
+
 	d, ok := depsAny.(snapshot.PersistenceDependencies)
 	if !ok {
 		return fmt.Errorf("unexpected deps type: %T", depsAny)

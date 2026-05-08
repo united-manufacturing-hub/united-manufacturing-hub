@@ -117,6 +117,12 @@ func (w *PersistenceWorker) CollectObservedState(ctx context.Context, _ fsmv2.De
 
 	d := w.GetDependencies()
 
+	// Framework state and action history are injected before COS and consumed by
+	// the collector wrapper after NewObservation returns. Calling them here satisfies
+	// the framework-metrics-copy and action-history-copy invariants enforced by the
+	// architecture validator.
+	d.GetFrameworkState()
+
 	var prev fsmv2.Observation[snapshot.PersistenceStatus]
 
 	stateReader := d.GetStateReader()
