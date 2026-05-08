@@ -9,7 +9,7 @@
 
 ### Fixes
 
-- A bridge that got stuck in a starting state due to file corruption now recovers automatically. Previously, recovery required restarting umh-core or recreating the bridge under a different name.
+- A data flow (bridge, standalone, or stream processor) could get stuck in a starting state when its on-disk service directory was left in an inconsistent state — for example after a container restart or OOM-kill interrupted setup. umh-core now detects the inconsistency and rebuilds the directory automatically. Previously, recovery required restarting umh-core or recreating the data flow under a different name.
 
 ## [0.44.19]
 
