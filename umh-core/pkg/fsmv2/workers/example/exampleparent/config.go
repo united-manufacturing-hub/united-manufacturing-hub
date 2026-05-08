@@ -12,16 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package snapshot_test
+package exampleparent
 
-import (
-	"testing"
+import "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 
-	. "github.com/onsi/ginkgo/v2"
-	. "github.com/onsi/gomega"
-)
+// ExampleparentConfig is the typed configuration for the parent worker.
+type ExampleparentConfig struct {
+	config.BaseUserSpec
+	ChildCount int `json:"child_count" yaml:"child_count"`
+}
 
-func TestSnapshot(t *testing.T) {
-	RegisterFailHandler(Fail)
-	RunSpecs(t, "Examplefailing Snapshot Suite")
+// ExampleparentStatus is the observed status for the parent worker.
+type ExampleparentStatus struct {
+	ID string `json:"id"`
 }

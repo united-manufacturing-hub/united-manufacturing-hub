@@ -18,7 +18,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleparent/action"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleparent/snapshot"
+	exampleparent "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleparent"
 )
 
 // TryingToStopState represents the state during graceful shutdown.
@@ -29,14 +29,13 @@ type TryingToStopState struct {
 }
 
 func (s *TryingToStopState) Next(snapAny any) fsmv2.NextResult[any, any] {
-	snap := helpers.ConvertSnapshot[snapshot.ExampleparentObservedState, *snapshot.ExampleparentDesiredState](snapAny)
+	snap := fsmv2.ConvertWorkerSnapshot[exampleparent.ExampleparentConfig, exampleparent.ExampleparentStatus](snapAny)
 
-	if snap.Observed.ID == "" {
+	if snap.Status.ID == "" {
 		return fsmv2.Result[any, any](s, fsmv2.SignalNone, &action.StopAction{}, "ID not set, executing StopAction")
 	}
 
-	// All children must be stopped before transitioning.
-	if snap.Observed.ChildrenHealthy == 0 && snap.Observed.ChildrenUnhealthy == 0 {
+	if snap.ChildrenHealthy == 0 && snap.ChildrenUnhealthy == 0 {
 		return fsmv2.Result[any, any](&StoppedState{}, fsmv2.SignalNone, nil, "All children stopped, transitioning to Stopped")
 	}
 

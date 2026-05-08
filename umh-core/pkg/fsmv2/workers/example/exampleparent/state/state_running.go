@@ -19,7 +19,7 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleparent/snapshot"
+	exampleparent "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleparent"
 )
 
 // RunningDuration is how long to stay in running state before initiating the stop cycle.
@@ -32,17 +32,17 @@ type RunningState struct {
 }
 
 func (s *RunningState) Next(snapAny any) fsmv2.NextResult[any, any] {
-	snap := helpers.ConvertSnapshot[snapshot.ExampleparentObservedState, *snapshot.ExampleparentDesiredState](snapAny)
+	snap := fsmv2.ConvertWorkerSnapshot[exampleparent.ExampleparentConfig, exampleparent.ExampleparentStatus](snapAny)
 
-	if snap.Desired.IsShutdownRequested() {
+	if snap.IsShutdownRequested {
 		return fsmv2.Result[any, any](&TryingToStopState{}, fsmv2.SignalNone, nil, "Shutdown requested, transitioning to TryingToStop")
 	}
 
-	if snap.Observed.ChildrenUnhealthy > 0 {
+	if snap.ChildrenUnhealthy > 0 {
 		return fsmv2.Result[any, any](&DegradedState{}, fsmv2.SignalNone, nil, "Some children are unhealthy, transitioning to Degraded")
 	}
 
-	elapsed := time.Duration(snap.Observed.Metrics.Framework.TimeInCurrentStateMs) * time.Millisecond
+	elapsed := time.Duration(snap.Metrics.Metrics.Framework.TimeInCurrentStateMs) * time.Millisecond
 	if elapsed >= RunningDuration {
 		return fsmv2.Result[any, any](&TryingToStopState{}, fsmv2.SignalNone, nil, "Running duration elapsed, transitioning to TryingToStop")
 	}

@@ -18,7 +18,7 @@ import (
 	"context"
 
 	depspkg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplefailing/snapshot"
+	examplefailing "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplefailing"
 )
 
 const TriggerObservationActionName = "trigger_observation"
@@ -43,7 +43,7 @@ func (a *TriggerObservationAction) Execute(ctx context.Context, depsAny any) err
 	default:
 	}
 
-	deps := depsAny.(snapshot.ExamplefailingDependencies)
+	deps := depsAny.(examplefailing.ExamplefailingDepsIface)
 	newTicks := deps.IncrementTicksInConnected()
 	deps.GetLogger().Info("trigger_observation",
 		depspkg.Int("new_ticks", newTicks),
