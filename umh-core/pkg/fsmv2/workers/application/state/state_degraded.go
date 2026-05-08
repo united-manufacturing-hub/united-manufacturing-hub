@@ -27,18 +27,23 @@ type DegradedState struct {
 }
 
 func (s *DegradedState) Next(snapAny any) fsmv2.NextResult[any, any] {
-	snap := helpers.ConvertSnapshot[snapshot.ApplicationObservedState, *snapshot.ApplicationDesiredState](snapAny)
+	snap := fsmv2.ConvertWorkerSnapshot[snapshot.ApplicationConfig, snapshot.ApplicationStatus](snapAny)
 
-	if snap.Desired.IsShutdownRequested() {
+	if snap.IsStopRequired() {
 		return fsmv2.Result[any, any](&StoppedState{}, fsmv2.SignalNone, nil, "Shutdown requested")
 	}
 
-	// Recovered when no infrastructure issues remain
-	if !snap.Observed.HasInfrastructureIssues() {
+	circuitOpen, stale := snapshot.ChildrenViewToStatus(snap.ChildrenView)
+	status := snapshot.ApplicationStatus{
+		ChildrenCircuitOpen: circuitOpen,
+		ChildrenStale:       stale,
+	}
+
+	if !status.HasInfrastructureIssues() {
 		return fsmv2.Result[any, any](&RunningState{}, fsmv2.SignalNone, nil, "Recovered from infrastructure issues")
 	}
 
-	return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil, snap.Observed.InfrastructureReason())
+	return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil, status.InfrastructureReason())
 }
 
 func (s *DegradedState) String() string {
