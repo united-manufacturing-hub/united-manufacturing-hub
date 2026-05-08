@@ -32,7 +32,7 @@ import (
 //	    snap := ConvertSnapshot[MyObserved, *MyDesired](snapAny)
 //
 //	    // Direct typed access - no casting needed
-//	    if snap.Desired.IsBeingRemoved() {
+//	    if snap.Desired.IsShutdownRequested() {
 //	        return &StoppedState{}, SignalNone, nil
 //	    }
 //

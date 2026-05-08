@@ -119,23 +119,21 @@
 // how to create them. The supervisor handles creation, deletion, and updates.
 // Children can be added or removed by changing ChildrenSpecs in DeriveDesiredState().
 //
-// Children are always-enabled when their parent is running. To deliberately
-// disable a child while keeping it resident, set Enabled: false on the spec
-// (the CHANGE-19 reducer drives the child to Stopped).
+// Children run when their parent is in a listed ChildStartState.
 //
 // # DesiredState and shutdown control
 //
-// DesiredState includes IsBeingRemoved for graceful shutdown:
+// DesiredState includes ShutdownRequested for graceful shutdown:
 //
-//	type DesiredState struct {
-//	    State            string
-//	    IsBeingRemoved bool
-//	    ChildrenSpecs    []ChildSpec
+//	type BaseDesiredState struct {
+//	    State              string
+//	    ShutdownRequested  bool
+//	    ChildrenSpecs      []ChildSpec
 //	}
 //
-// The supervisor sets IsBeingRemoved when shutdown is initiated. Workers
+// The supervisor sets ShutdownRequested when shutdown is initiated. Workers
 // check this flag in their state transitions and complete cleanup states
-// before signaling removal. Parent shutdown propagates IsBeingRemoved
+// before signaling removal. Parent shutdown propagates ShutdownRequested
 // to all children, so children clean up before parent completes shutdown.
 //
 // # Template expansion

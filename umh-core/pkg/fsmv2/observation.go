@@ -28,7 +28,10 @@ import (
 
 // DetectFieldCollisions checks at init time whether T's JSON field names
 // collide with reserved framework field names used by Observation.
-// Called by register.Worker to fail-fast on namespace conflicts.
+// Called from tests to verify TStatus types do not clash with framework
+// namespace. Exported so that external test packages can instantiate it with
+// locally-defined status types; Go generics do not support an export_test.go
+// bridge pattern for generic functions.
 func DetectFieldCollisions[T any]() error {
 	reserved := collectJSONFieldNames(reflect.TypeOf(observationFrameworkFields{}))
 
