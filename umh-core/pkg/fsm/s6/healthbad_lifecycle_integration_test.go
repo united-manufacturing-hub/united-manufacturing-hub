@@ -69,7 +69,7 @@ var _ = Describe("S6 recovery directive — FSM dispatch", func() {
 		}
 	}
 
-	It("drives the FSM to Removed when Health returns ActionRecreate from any state", func() {
+	It("drives the FSM to Removed when Health returns ActionRecreate from to_be_created", func() {
 		mockSvc.MockHealthAction = s6service.ActionRecreate
 
 		driveTicks(1, 30)
