@@ -142,13 +142,8 @@ func (w *CommunicatorWorker) DeriveDesiredState(spec interface{}) (fsmv2.Desired
 		commSpec.Timeout = httpTransport.LongPollingDuration + httpTransport.LongPollingBuffer
 	}
 
-	state := commSpec.State
-	if state == "" {
-		state = fsmv2types.DesiredStateRunning
-	}
-
 	return &fsmv2.WrappedDesiredState[CommunicatorConfig]{
-		State: state,
+		State: commSpec.GetState(),
 		Config: CommunicatorConfig{
 			BaseUserSpec: commSpec.BaseUserSpec,
 			RelayURL:     commSpec.RelayURL,

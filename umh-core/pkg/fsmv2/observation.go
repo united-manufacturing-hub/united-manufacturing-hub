@@ -164,15 +164,25 @@ type Observation[TStatus any] struct {
 // reject TStatus types whose own JSON tags would collide with framework
 // fields, so omitting an entry here would silently allow a collision.
 type observationFrameworkFields struct {
-	CollectedAt       time.Time           `json:"collected_at"`
-	ChildrenView      config.ChildrenView `json:"childrenView"`
-	State             string              `json:"state"`
-	ParentMappedState string              `json:"parent_mapped_state"`
-	LastActionResults []deps.ActionResult `json:"last_action_results,omitempty"`
+	CollectedAt       time.Time                    `json:"collected_at"`
+	ChildrenView      config.ChildrenViewSnapshot  `json:"childrenView"`
+	State             string                       `json:"state"`
+	ParentMappedState string                       `json:"parent_mapped_state"`
+	LastActionResults []deps.ActionResult          `json:"last_action_results,omitempty"`
 	deps.MetricsEmbedder
 	ChildrenHealthy   int  `json:"children_healthy"`
 	ChildrenUnhealthy int  `json:"children_unhealthy"`
 	ShutdownRequested bool `json:"ShutdownRequested"` //nolint:tagliatelle
+}
+
+// childrenViewToSnapshot converts a ChildrenView interface to a ChildrenViewSnapshot.
+// Returns an empty snapshot when v is nil (leaf workers with no children).
+func childrenViewToSnapshot(v config.ChildrenView) config.ChildrenViewSnapshot {
+	if v == nil {
+		return config.ChildrenViewSnapshot{}
+	}
+
+	return config.ChildrenViewSnapshot{Children: v.List()}
 }
 
 // MarshalJSON produces flat JSON with framework fields and TStatus fields at the same level.
@@ -180,7 +190,7 @@ type observationFrameworkFields struct {
 func (o Observation[TStatus]) MarshalJSON() ([]byte, error) {
 	fw := observationFrameworkFields{
 		CollectedAt:       o.CollectedAt,
-		ChildrenView:      o.ChildrenView,
+		ChildrenView:      childrenViewToSnapshot(o.ChildrenView),
 		State:             o.State,
 		ShutdownRequested: o.ShutdownRequested,
 		ParentMappedState: o.ParentMappedState,

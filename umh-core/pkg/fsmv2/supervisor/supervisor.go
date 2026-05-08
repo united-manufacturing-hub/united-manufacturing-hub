@@ -25,9 +25,9 @@
 //	supervisor := NewSupervisor[fsmv2.Observation[ExampleparentStatus], *fsmv2.WrappedDesiredState[ExampleparentConfig]](config)
 //	supervisor.AddWorker(identity, worker)
 //
-// Worker types are registered via register.Worker[Config, Status, *Deps] which
-// publishes the observed/desired type pair into the CSE TypeRegistry under an
-// explicit type name (no longer derived from the type's symbol):
+// Worker type names are derived from the observed state type by the supervisor
+// (e.g., ExampleparentObservedState → "exampleparent"). The type pair is
+// registered in the CSE TypeRegistry for serialization:
 //   - exampleparent: Observation[ExampleparentStatus] / *WrappedDesiredState[ExampleparentConfig]
 //   - container:     Observation[ContainerStatus]     / *WrappedDesiredState[ContainerConfig]
 //

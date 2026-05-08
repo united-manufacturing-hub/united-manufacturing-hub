@@ -29,12 +29,6 @@ import (
 // load failures (e.g., deserialization errors, store connectivity issues).
 // The DesiredStateProvider in supervisor/api.go returns nil and suppresses the
 // SentryWarn log when errors.Is(err, persistence.ErrNotFound).
-//
-// L1 scope: sentinel introduced as the contract for "no desired state observed yet."
-// L2a scope: WorkerBase[T,S,*D] propagates this through the supervisor reconciliation
-// loop by changing DesiredStateProvider from func() DesiredState to
-// func() (DesiredState, error). Until L2a lands, the supervisor handles
-// absence-of-desired-state via the existing nil-check path in supervisor/api.go.
 var ErrNoDesiredState = errors.New("fsmv2: no desired state available")
 
 // Signal communicates special conditions from states to the supervisor.

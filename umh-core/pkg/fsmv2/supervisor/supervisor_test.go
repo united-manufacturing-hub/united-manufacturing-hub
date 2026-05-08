@@ -119,19 +119,11 @@ type mockDesiredState struct {
 	State string
 }
 
-func (m *mockDesiredState) IsBeingRemoved() bool {
+func (m *mockDesiredState) IsShutdownRequested() bool {
 	return false
 }
 
-func (m *mockDesiredState) SetBeingRemoved(_ bool) {
-}
-
-func (m *mockDesiredState) GetState() string {
-	if m.State == "" {
-		return "running"
-	}
-
-	return m.State
+func (m *mockDesiredState) SetShutdownRequested(_ bool) {
 }
 
 // mockState is shared across internal supervisor tests (package supervisor).

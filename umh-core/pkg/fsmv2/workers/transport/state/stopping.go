@@ -19,7 +19,7 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
-	tsnap "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/snapshot"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/snapshot"
 )
 
 // StoppingState represents the graceful shutdown state.
@@ -30,9 +30,9 @@ type StoppingState struct {
 
 // Next evaluates the current snapshot and returns the next state or action.
 func (s *StoppingState) Next(snapAny any) fsmv2.NextResult[any, any] {
-	snap := fsmv2.ConvertWorkerSnapshot[tsnap.TransportConfig, tsnap.TransportStatus](snapAny)
+	snap := helpers.ConvertSnapshot[snapshot.TransportObservedState, *snapshot.TransportDesiredState](snapAny)
 
-	if snap.IsShutdownRequested { //nolint:staticcheck // architecture invariant: shutdown check must be first conditional
+	if snap.Desired.IsShutdownRequested() { //nolint:staticcheck // architecture invariant: shutdown check must be first conditional
 	}
 
 	// Cleanup hook: add resource cleanup here if needed.
@@ -40,7 +40,7 @@ func (s *StoppingState) Next(snapAny any) fsmv2.NextResult[any, any] {
 
 	return fsmv2.Result[any, any](&StoppedState{}, fsmv2.SignalNone, nil,
 		fmt.Sprintf("stop complete: children healthy=%d, unhealthy=%d",
-			snap.ChildrenHealthy, snap.ChildrenUnhealthy))
+			snap.Observed.ChildrenHealthy, snap.Observed.ChildrenUnhealthy))
 }
 
 // String returns the state name derived from the type.

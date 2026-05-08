@@ -122,14 +122,6 @@ func (m *mockDesiredState) IsShutdownRequested() bool {
 	return m.ShutdownRequested
 }
 
-func (m *mockDesiredState) GetState() string {
-	if m.State == "" {
-		return "running"
-	}
-
-	return m.State
-}
-
 type mockWorker struct {
 	collectErr          error
 	observed            fsmv2.ObservedState

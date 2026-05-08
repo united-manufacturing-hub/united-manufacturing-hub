@@ -19,8 +19,6 @@ import (
 	"errors"
 	"fmt"
 
-	"gopkg.in/yaml.v3"
-
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
@@ -118,14 +116,14 @@ func (w *ExampleslowWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredS
 		return nil, fmt.Errorf("template rendering failed: %w", err)
 	}
 
-	var parsed ExampleslowUserSpec
-	if renderedConfig != "" {
-		if err := yaml.Unmarshal([]byte(renderedConfig), &parsed); err != nil {
-			return nil, fmt.Errorf("failed to parse exampleslow spec: %w", err)
-		}
+	parsed, err := config.ParseUserSpec[ExampleslowUserSpec](userSpec)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse exampleslow spec: %w", err)
 	}
 
-	state := parsed.State
+	_ = renderedConfig
+
+	state := parsed.GetState()
 	if state == "" {
 		state = config.DesiredStateRunning
 	}

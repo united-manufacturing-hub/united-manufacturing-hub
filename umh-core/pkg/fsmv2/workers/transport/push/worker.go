@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
@@ -77,8 +78,7 @@ func NewPushWorker(
 }
 
 // CollectObservedState snapshots the current push worker state.
-// Returns fsmv2.NewObservation  - the collector fills CollectedAt, metrics,
-// and action history after COS returns.
+// Handles context cancellation at entry as required by architecture tests.
 func (w *PushWorker) CollectObservedState(ctx context.Context, _ fsmv2.DesiredState) (fsmv2.ObservedState, error) {
 	select {
 	case <-ctx.Done():
@@ -88,22 +88,59 @@ func (w *PushWorker) CollectObservedState(ctx context.Context, _ fsmv2.DesiredSt
 
 	d := w.GetDependencies()
 
-	// Required by architecture invariants ValidateFrameworkMetricsCopy and
-	// ValidateActionHistoryCopy (AST scanners in architecture_test.go).
-	// The collector post-processes these values after COS returns.
-	d.GetFrameworkState()
-	d.GetActionHistory()
+	observed := snapshot.PushObservedState{
+		CollectedAt:   time.Now(),
+		HasTransport:  d.GetTransport() != nil,
+		HasValidToken: d.IsTokenValid(),
+	}
 
-	return fsmv2.NewObservation(snapshot.PushStatus{
-		HasTransport:        d.GetTransport() != nil,
-		HasValidToken:       d.IsTokenValid(),
-		ConsecutiveErrors:   d.GetConsecutiveErrors(),
-		PendingMessageCount: d.PendingMessageCount(),
-		LastErrorType:       d.GetLastErrorType(),
-		LastRetryAfter:      d.GetLastRetryAfter(),
-		DegradedEnteredAt:   d.GetDegradedEnteredAt(),
-		LastErrorAt:         d.GetLastErrorAt(),
-	}), nil
+	observed.ConsecutiveErrors = d.GetConsecutiveErrors()
+	observed.PendingMessageCount = d.PendingMessageCount()
+	observed.LastErrorType = d.GetLastErrorType()
+	observed.LastRetryAfter = d.GetLastRetryAfter()
+	observed.DegradedEnteredAt = d.GetDegradedEnteredAt()
+	observed.LastErrorAt = d.GetLastErrorAt()
+
+	var prevWorkerMetrics deps.Metrics
+
+	stateReader := d.GetStateReader()
+	if stateReader != nil {
+		var prev snapshot.PushObservedState
+		if err := stateReader.LoadObservedTyped(ctx, d.GetWorkerType(), d.GetWorkerID(), &prev); err == nil {
+			prevWorkerMetrics = prev.Metrics.Worker
+		} else {
+			d.GetLogger().Debug("observed_state_load_failed", deps.Err(err))
+		}
+	}
+
+	newWorkerMetrics := prevWorkerMetrics
+	if newWorkerMetrics.Counters == nil {
+		newWorkerMetrics.Counters = make(map[string]int64)
+	}
+
+	if newWorkerMetrics.Gauges == nil {
+		newWorkerMetrics.Gauges = make(map[string]float64)
+	}
+
+	tickMetrics := d.MetricsRecorder().Drain()
+
+	for name, delta := range tickMetrics.Counters {
+		newWorkerMetrics.Counters[name] += delta
+	}
+
+	for name, value := range tickMetrics.Gauges {
+		newWorkerMetrics.Gauges[name] = value
+	}
+
+	observed.Metrics.Worker = newWorkerMetrics
+
+	if fm := d.GetFrameworkState(); fm != nil {
+		observed.Metrics.Framework = *fm
+	}
+
+	observed.LastActionResults = d.GetActionHistory()
+
+	return observed, nil
 }
 
 // DeriveDesiredState determines the desired state from the provided spec.
@@ -111,9 +148,7 @@ func (w *PushWorker) CollectObservedState(ctx context.Context, _ fsmv2.DesiredSt
 // Must be PURE  -  only uses the spec parameter, never dependencies.
 func (w *PushWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, error) {
 	if spec == nil {
-		return &fsmv2.WrappedDesiredState[snapshot.PushConfig]{
-			State: config.DesiredStateRunning,
-		}, nil
+		return &snapshot.PushDesiredState{}, nil
 	}
 
 	userSpec, ok := spec.(config.UserSpec)
@@ -136,14 +171,7 @@ func (w *PushWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, e
 		return nil, err
 	}
 
-	pushState := parsed.BaseUserSpec.State
-	if pushState == "" {
-		pushState = config.DesiredStateRunning
-	}
-
-	return &fsmv2.WrappedDesiredState[snapshot.PushConfig]{
-		State: pushState,
-	}, nil
+	return &snapshot.PushDesiredState{State: parsed.BaseUserSpec.GetState()}, nil
 }
 
 // GetInitialState returns StoppedState as the push worker's initial FSM state.
@@ -152,13 +180,7 @@ func (w *PushWorker) GetInitialState() fsmv2.State[any, any] {
 }
 
 func init() {
-	workerType, err := storage.DeriveWorkerType[snapshot.PushObservedState]()
-	if err != nil {
-		panic(fmt.Sprintf("failed to derive push worker type: %v", err))
-	}
-
-	if err := factory.RegisterWorkerAndSupervisorFactoryByType(
-		workerType,
+	if err := factory.RegisterWorkerType[snapshot.PushObservedState, *snapshot.PushDesiredState](
 		func(id deps.Identity, logger deps.FSMLogger, stateReader deps.StateReader, extraDeps map[string]any) fsmv2.Worker {
 			parentDepsRaw, ok := extraDeps["transport_deps"]
 			if !ok {
@@ -178,7 +200,7 @@ func init() {
 			return worker
 		},
 		func(cfg interface{}) interface{} {
-			return supervisor.NewSupervisor[fsmv2.Observation[snapshot.PushStatus], *fsmv2.WrappedDesiredState[snapshot.PushConfig]](
+			return supervisor.NewSupervisor[snapshot.PushObservedState, *snapshot.PushDesiredState](
 				cfg.(supervisor.Config))
 		},
 	); err != nil {

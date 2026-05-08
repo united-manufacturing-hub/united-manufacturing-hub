@@ -16,9 +16,8 @@ package state
 
 import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
-	tsnap "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/snapshot"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/snapshot"
 )
 
 // StoppedState represents the initial state where the transport worker is not running.
@@ -29,13 +28,13 @@ type StoppedState struct {
 
 // Next evaluates the current snapshot and returns the next state or action.
 func (s *StoppedState) Next(snapAny any) fsmv2.NextResult[any, any] {
-	snap := fsmv2.ConvertWorkerSnapshot[tsnap.TransportConfig, tsnap.TransportStatus](snapAny)
+	snap := helpers.ConvertSnapshot[snapshot.TransportObservedState, *snapshot.TransportDesiredState](snapAny)
 
-	if snap.IsShutdownRequested {
+	if snap.Desired.IsShutdownRequested() {
 		return fsmv2.Result[any, any](s, fsmv2.SignalNeedsRemoval, nil, "Shutdown requested, signaling removal")
 	}
 
-	if !snap.IsShutdownRequested && (snap.Config.State == config.DesiredStateRunning || snap.Config.State == "") {
+	if snap.Desired.ShouldBeRunning() {
 		return fsmv2.Result[any, any](&StartingState{}, fsmv2.SignalNone, nil, "Desired state is running, transitioning to Starting")
 	}
 

@@ -73,16 +73,15 @@ var _ = Describe("HelloworldWorker", func() {
 			Expect(typedObs.Status.HelloSaid).To(BeFalse())
 		})
 
-		It("should return ctx.Err() when context is cancelled at entry", func() {
+		It("should succeed even with cancelled context (framework handles ctx cancellation)", func() {
 			ctx, cancel := context.WithCancel(context.Background())
 			cancel()
 
 			desired := &fsmv2.WrappedDesiredState[hello_world.HelloworldConfig]{}
 			obs, err := worker.CollectObservedState(ctx, desired)
 
-			Expect(err).To(HaveOccurred())
-			Expect(err).To(Equal(context.Canceled))
-			Expect(obs).To(BeNil())
+			Expect(err).NotTo(HaveOccurred())
+			Expect(obs).NotTo(BeNil())
 		})
 	})
 

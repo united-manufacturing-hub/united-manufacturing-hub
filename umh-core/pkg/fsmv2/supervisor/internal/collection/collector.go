@@ -457,9 +457,9 @@ func (c *Collector[TObserved]) collectAndSaveObservedState(ctx context.Context) 
 	if c.config.ShutdownRequestedProvider != nil {
 		shutdownRequested := c.config.ShutdownRequestedProvider()
 		if setter, ok := observed.(interface {
-			SetShutdownRequested(bool) fsmv2.ObservedState
+			SetBeingRemoved(bool) fsmv2.ObservedState
 		}); ok {
-			observed = setter.SetShutdownRequested(shutdownRequested)
+			observed = setter.SetBeingRemoved(shutdownRequested)
 		}
 	}
 

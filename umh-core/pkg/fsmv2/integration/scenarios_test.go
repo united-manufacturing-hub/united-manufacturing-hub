@@ -176,7 +176,7 @@ func verifyStateTransitionSequence(t *integration.TestLogger) {
 }
 
 func verifyTriangularStoreChanges(t *integration.TestLogger) {
-	observationLogs := t.GetLogsMatching("observation_changed")
+	observationLogs := t.GetLogsMatching("observed_changed")
 	desiredLogs := t.GetLogsMatching("desired_changed")
 
 	// Verify that store changes were logged

@@ -68,7 +68,25 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity deps.Identity, work
 
 	// Derive desired state first so we can pass it to CollectObservedState.
 	// Workers are guaranteed a non-nil desired state parameter.
-	initialDesired, err := worker.DeriveDesiredState(nil)
+	// Use the current userSpec if non-empty so that the initial COS call receives
+	// the correct configuration (e.g., DelaySeconds, connection parameters).
+	// reconcileChildren sets updateUserSpec before AddWorker, so s.userSpec is
+	// already populated for child workers. Workers added without a userSpec
+	// (empty Config) receive nil, preserving the original behaviour.
+	var ddsSpec interface{}
+	if s.userSpec.Config != "" {
+		ddsSpec = s.userSpec
+	}
+
+	initialDesired, err := worker.DeriveDesiredState(ddsSpec)
+	if err != nil && ddsSpec != nil {
+		// Template rendering can fail when variables aren't fully propagated yet
+		// (e.g., parent variables like IP/PORT not set in this scenario). Fall back
+		// to nil so the worker gets a valid default desired state; the tick loop
+		// re-derives with the full spec on the next reconciliation cycle.
+		initialDesired, err = worker.DeriveDesiredState(nil)
+	}
+
 	if err != nil {
 		s.logger.SentryError(deps.FeatureFSMv2, identity.HierarchyPath, err, "worker_add_derive_desired_failed")
 
@@ -173,6 +191,7 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity deps.Identity, work
 
 	// Use baseLogger (un-enriched) to prevent duplicate "worker" fields.
 	workerLogger := s.baseLogger.With(deps.String("worker", identity.String()))
+	workerLogger.Info("identity_created")
 
 	// Declared early so closures can capture it by reference.
 	var workerCtx *WorkerContext[TObserved, TDesired]

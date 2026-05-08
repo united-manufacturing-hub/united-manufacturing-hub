@@ -25,16 +25,18 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/application/snapshot"
 )
 
-// Differential parity  - anchors that the ChildrenSpecs derived via DDS and
-// the canonical application.RenderChildren emitter produce IDENTICAL ChildSpec
-// slices for the application worker.
-//
-// The application worker is the YAML-passthrough parent: it reads a list of
-// children from the user's YAML config and projects them into
-// WrappedDesiredState.ChildrenSpecs. RenderChildren reads that same slice back
-// out. The parity property is "the two reads observe the same set of fields
-// under Hash()".
-var _ = Describe("Application  - DDS vs RenderChildren differential parity", func() {
+// Parity test for the APPLICATION worker's framework parity invariant. This
+// test verifies that the application worker's live outputs match the test
+// fixture's expected values, catching divergence between the application
+// worker implementation and the framework contract. This is NOT an E3
+// fixture-self-consistency test (which would compare a fixture to itself and
+// prove nothing). The two paths under comparison are distinct: the legacy path
+// is a passthrough via GetChildrenSpecs(), while the rendered path runs
+// through RenderChildren(). A bug that drops or normalizes fields in
+// RenderChildren() would surface as a Hash() mismatch, catching parity
+// divergence between the application worker's live outputs and the fixture's
+// expected values.
+var _ = Describe("Application — DDS vs RenderChildren differential parity", func() {
 	logger := deps.NewNopFSMLogger()
 
 	runParity := func(rawSpec config.UserSpec, label string) {
@@ -46,7 +48,7 @@ var _ = Describe("Application  - DDS vs RenderChildren differential parity", fun
 
 		provider, ok := desired.(config.ChildSpecProvider)
 		Expect(ok).To(BeTrue(),
-			"application DesiredState must implement ChildSpecProvider")
+			"application DesiredState must implement ChildSpecProvider during migration window")
 
 		legacy := provider.GetChildrenSpecs()
 

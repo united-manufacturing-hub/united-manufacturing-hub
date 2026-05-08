@@ -39,12 +39,12 @@ type testDesired struct {
 	shutdown bool
 }
 
-func (t *testDesired) IsBeingRemoved() bool {
+func (t *testDesired) IsShutdownRequested() bool {
 	return t.shutdown
 }
 
-func (t *testDesired) GetState() string {
-	return "running"
+func (t *testDesired) SetShutdownRequested(v bool) {
+	t.shutdown = v
 }
 
 type wrongObserved struct {
@@ -59,13 +59,11 @@ type wrongDesired struct {
 	value int
 }
 
-func (w *wrongDesired) IsBeingRemoved() bool {
+func (w *wrongDesired) IsShutdownRequested() bool {
 	return false
 }
 
-func (w *wrongDesired) GetState() string {
-	return "running"
-}
+func (w *wrongDesired) SetShutdownRequested(_ bool) {}
 
 var _ = Describe("StateAdapter", func() {
 	Describe("ConvertSnapshot", func() {
@@ -94,7 +92,7 @@ var _ = Describe("StateAdapter", func() {
 				Expect(typedSnap.Identity.Name).To(Equal(identity.Name))
 				Expect(typedSnap.Identity.WorkerType).To(Equal(identity.WorkerType))
 				Expect(typedSnap.Observed.Value).To(Equal(observed.Value))
-				Expect(typedSnap.Desired.IsBeingRemoved()).To(BeTrue())
+				Expect(typedSnap.Desired.IsShutdownRequested()).To(BeTrue())
 			})
 
 			It("should handle value type observed", func() {
@@ -141,7 +139,7 @@ var _ = Describe("StateAdapter", func() {
 				typedSnap := helpers.ConvertSnapshot[testObserved, *testDesired](rawSnapshot)
 
 				Expect(typedSnap.Desired).NotTo(BeNil())
-				Expect(typedSnap.Desired.IsBeingRemoved()).To(BeTrue())
+				Expect(typedSnap.Desired.IsShutdownRequested()).To(BeTrue())
 			})
 		})
 
@@ -371,7 +369,7 @@ var _ = Describe("StateAdapter", func() {
 
 			Expect(typedSnap.Identity.ID).To(Equal("test-id"))
 			Expect(typedSnap.Observed.Value).To(Equal("direct-access-test"))
-			Expect(typedSnap.Desired.IsBeingRemoved()).To(BeTrue())
+			Expect(typedSnap.Desired.IsShutdownRequested()).To(BeTrue())
 		})
 	})
 })

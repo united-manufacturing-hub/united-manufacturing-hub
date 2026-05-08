@@ -55,6 +55,14 @@ func (t *DesiredState) SetShutdownRequested(requested bool) {
 	t.ShutdownReq = requested
 }
 
+func (t *DesiredState) GetState() string {
+	if t.State == "" {
+		return "running"
+	}
+
+	return t.State
+}
+
 type Worker struct {
 	CollectErr   error
 	Observed     fsmv2.ObservedState

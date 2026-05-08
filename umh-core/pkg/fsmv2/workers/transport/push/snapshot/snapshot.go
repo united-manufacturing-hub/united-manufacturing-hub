@@ -23,28 +23,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/types"
 )
 
-// PushConfig holds the user-provided configuration for the push worker.
-// Framework fields (State, ShutdownRequested, ParentMappedState, ChildrenSpecs)
-// are carried by fsmv2.WrappedDesiredState[PushConfig].
-type PushConfig struct{}
-
-// PushStatus holds the runtime observation data for the push worker.
-// Framework fields (CollectedAt, State, LastActionResults, MetricsEmbedder,
-// ShutdownRequested, ParentMappedState) are carried by fsmv2.Observation[PushStatus].
-type PushStatus struct {
-	DegradedEnteredAt time.Time `json:"degraded_entered_at,omitempty"`
-	LastErrorAt       time.Time `json:"last_error_at,omitempty"`
-
-	LastRetryAfter time.Duration `json:"last_retry_after,omitempty"`
-
-	LastErrorType       types.ErrorType `json:"last_error_type"`
-	ConsecutiveErrors   int             `json:"consecutive_errors"`
-	PendingMessageCount int             `json:"pending_message_count"`
-
-	HasTransport  bool `json:"has_transport"`
-	HasValidToken bool `json:"has_valid_token"`
-}
-
 // PushDependencies interface to avoid import cycles between push and transport packages.
 type PushDependencies interface {
 	deps.Dependencies
@@ -90,6 +68,16 @@ type PushDesiredState struct {
 	config.BaseDesiredState
 
 	State string `json:"state" yaml:"state"`
+}
+
+// GetState returns the desired lifecycle state, defaulting to "running" if empty.
+// For push workers this is propagated from the parent's user spec.
+func (s *PushDesiredState) GetState() string {
+	if s.State == "" {
+		return config.DesiredStateRunning
+	}
+
+	return s.State
 }
 
 // ShouldBeRunning returns true if the push worker should be in a running state.
