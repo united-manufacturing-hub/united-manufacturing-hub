@@ -23,7 +23,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/snapshot"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/state"
 )
 
@@ -57,11 +57,11 @@ var _ = Describe("SyncingState Transitions", func() {
 		It("should transition to StoppedState when shutdown is requested", func() {
 			snap := fsmv2.Snapshot{
 				Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "communicator"},
-				Observed: snapshot.CommunicatorObservedState{
+				Observed: fsmv2.Observation[communicator.CommunicatorStatus]{
 					ChildrenHealthy:   1,
 					ChildrenUnhealthy: 0,
 				},
-				Desired: &snapshot.CommunicatorDesiredState{
+				Desired: &fsmv2.WrappedDesiredState[communicator.CommunicatorConfig]{
 					BaseDesiredState: config.BaseDesiredState{ShutdownRequested: true},
 				},
 			}
@@ -76,11 +76,11 @@ var _ = Describe("SyncingState Transitions", func() {
 		It("should prioritize shutdown over unhealthy children", func() {
 			snap := fsmv2.Snapshot{
 				Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "communicator"},
-				Observed: snapshot.CommunicatorObservedState{
+				Observed: fsmv2.Observation[communicator.CommunicatorStatus]{
 					ChildrenHealthy:   0,
 					ChildrenUnhealthy: 1,
 				},
-				Desired: &snapshot.CommunicatorDesiredState{
+				Desired: &fsmv2.WrappedDesiredState[communicator.CommunicatorConfig]{
 					BaseDesiredState: config.BaseDesiredState{ShutdownRequested: true},
 				},
 			}
@@ -97,11 +97,11 @@ var _ = Describe("SyncingState Transitions", func() {
 		It("should transition when children are unhealthy", func() {
 			snap := fsmv2.Snapshot{
 				Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "communicator"},
-				Observed: snapshot.CommunicatorObservedState{
+				Observed: fsmv2.Observation[communicator.CommunicatorStatus]{
 					ChildrenHealthy:   0,
 					ChildrenUnhealthy: 1,
 				},
-				Desired: &snapshot.CommunicatorDesiredState{},
+				Desired: &fsmv2.WrappedDesiredState[communicator.CommunicatorConfig]{},
 			}
 
 			result := stateObj.Next(snap)
@@ -114,11 +114,11 @@ var _ = Describe("SyncingState Transitions", func() {
 		It("should transition when multiple children are unhealthy", func() {
 			snap := fsmv2.Snapshot{
 				Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "communicator"},
-				Observed: snapshot.CommunicatorObservedState{
+				Observed: fsmv2.Observation[communicator.CommunicatorStatus]{
 					ChildrenHealthy:   1,
 					ChildrenUnhealthy: 2,
 				},
-				Desired: &snapshot.CommunicatorDesiredState{},
+				Desired: &fsmv2.WrappedDesiredState[communicator.CommunicatorConfig]{},
 			}
 
 			result := stateObj.Next(snap)
@@ -133,11 +133,11 @@ var _ = Describe("SyncingState Transitions", func() {
 		It("should stay in SyncingState with nil action when children are healthy", func() {
 			snap := fsmv2.Snapshot{
 				Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "communicator"},
-				Observed: snapshot.CommunicatorObservedState{
+				Observed: fsmv2.Observation[communicator.CommunicatorStatus]{
 					ChildrenHealthy:   1,
 					ChildrenUnhealthy: 0,
 				},
-				Desired: &snapshot.CommunicatorDesiredState{},
+				Desired: &fsmv2.WrappedDesiredState[communicator.CommunicatorConfig]{},
 			}
 
 			result := stateObj.Next(snap)
@@ -150,11 +150,11 @@ var _ = Describe("SyncingState Transitions", func() {
 		It("should transition to RecoveringState when no children exist yet", func() {
 			snap := fsmv2.Snapshot{
 				Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "communicator"},
-				Observed: snapshot.CommunicatorObservedState{
+				Observed: fsmv2.Observation[communicator.CommunicatorStatus]{
 					ChildrenHealthy:   0,
 					ChildrenUnhealthy: 0,
 				},
-				Desired: &snapshot.CommunicatorDesiredState{},
+				Desired: &fsmv2.WrappedDesiredState[communicator.CommunicatorConfig]{},
 			}
 
 			result := stateObj.Next(snap)
