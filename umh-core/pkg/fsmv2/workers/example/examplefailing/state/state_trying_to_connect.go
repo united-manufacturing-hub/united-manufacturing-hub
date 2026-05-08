@@ -18,7 +18,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplefailing/action"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplefailing/snapshot"
+	examplefailing "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplefailing"
 )
 
 // TryingToConnectState represents the state where the worker is attempting to establish a connection.
@@ -27,27 +27,22 @@ type TryingToConnectState struct {
 }
 
 func (s *TryingToConnectState) Next(snapAny any) fsmv2.NextResult[any, any] {
-	snap := helpers.ConvertSnapshot[snapshot.ExamplefailingObservedState, *snapshot.ExamplefailingDesiredState](snapAny)
+	snap := fsmv2.ConvertWorkerSnapshot[examplefailing.ExamplefailingConfig, examplefailing.ExamplefailingStatus](snapAny)
 
-	if snap.Observed.IsStopRequired() {
+	if snap.IsStopRequired() {
 		return fsmv2.Result[any, any](&TryingToStopState{}, fsmv2.SignalNone, nil, "stop required, transitioning to stop state")
 	}
 
-	if snap.Observed.RestartAfterFailures > 0 &&
-		snap.Observed.ConnectAttempts >= snap.Observed.RestartAfterFailures {
+	if snap.Status.RestartAfterFailures > 0 &&
+		snap.Status.ConnectAttempts >= snap.Status.RestartAfterFailures {
 		return fsmv2.Result[any, any](s, fsmv2.SignalNeedsRestart, nil, "max connection attempts reached, signaling restart")
 	}
 
-	if snap.Observed.ConnectionHealth == "healthy" {
+	if snap.Status.ConnectionHealth == "healthy" {
 		return fsmv2.Result[any, any](&ConnectedState{}, fsmv2.SignalNone, nil, "connection established successfully")
 	}
 
-	// Check if we should delay before retrying (recovery delay after failure).
-	// This keeps the worker in the unhealthy state long enough for parents to observe.
-	// IMPORTANT: Return an action to trigger observation, which keeps the child visible to the parent.
-	// Without an action, observations only happen every 1 second (DefaultObservationInterval),
-	// which could cause the parent to miss the unhealthy window during recovery delay.
-	if snap.Observed.RecoveryDelayActive {
+	if snap.Status.RecoveryDelayActive {
 		return fsmv2.Result[any, any](s, fsmv2.SignalNone, &action.TriggerObservationAction{},
 			"waiting for recovery delay (triggering observation)")
 	}

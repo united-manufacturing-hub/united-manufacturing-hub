@@ -12,16 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package snapshot_test
+package example_panic
 
-import (
-	"testing"
+import "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 
-	. "github.com/onsi/ginkgo/v2"
-	. "github.com/onsi/gomega"
-)
+// ExamplepanicConfig is the typed configuration for the panic worker.
+type ExamplepanicConfig struct {
+	config.BaseUserSpec
+	ShouldRun   bool `json:"should_run"   yaml:"should_run"`
+	ShouldPanic bool `json:"should_panic" yaml:"should_panic"`
+}
 
-func TestSnapshot(t *testing.T) {
-	RegisterFailHandler(Fail)
-	RunSpecs(t, "Examplechild Snapshot Suite")
+// ExamplepanicStatus is the observed status for the panic worker.
+type ExamplepanicStatus struct {
+	ConnectionHealth string `json:"connection_health"`
 }

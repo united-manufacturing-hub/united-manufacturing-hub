@@ -17,7 +17,7 @@ package action
 import (
 	"context"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplechild/snapshot"
+	example_child "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplechild"
 )
 
 const ConnectActionName = "connect"
@@ -33,7 +33,7 @@ func (a *ConnectAction) Execute(ctx context.Context, depsAny any) error {
 	default:
 	}
 
-	deps := depsAny.(snapshot.ExamplechildDependencies)
+	deps := depsAny.(example_child.ExamplechildDepsIface)
 	logger := deps.ActionLogger(ConnectActionName)
 	logger.Info("Attempting to connect")
 

@@ -12,16 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package snapshot_test
+package example_slow
 
-import (
-	"testing"
+import "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 
-	. "github.com/onsi/ginkgo/v2"
-	. "github.com/onsi/gomega"
-)
+// ExampleslowConfig is the typed configuration for the slow worker.
+type ExampleslowConfig struct {
+	config.BaseUserSpec
+	DelaySeconds int `json:"delaySeconds" yaml:"delaySeconds"`
+}
 
-func TestSnapshot(t *testing.T) {
-	RegisterFailHandler(Fail)
-	RunSpecs(t, "Examplefailing Snapshot Suite")
+// ExampleslowStatus is the observed status for the slow worker.
+type ExampleslowStatus struct {
+	ConnectionHealth string `json:"connection_health"`
 }
