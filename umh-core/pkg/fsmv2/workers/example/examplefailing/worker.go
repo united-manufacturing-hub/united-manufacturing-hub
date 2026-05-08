@@ -89,6 +89,11 @@ func (w *FailingWorker) CollectObservedState(ctx context.Context, desired fsmv2.
 	d.GetFrameworkState()
 	d.GetActionHistory()
 
+	// Demonstration-only: this worker writes into deps from CollectObservedState
+	// to simulate runtime conditions (failure cycles / panic flags) that
+	// production configuration drives directly. Real workers MUST keep
+	// CollectObservedState pure I/O reads. See pkg/fsmv2/README.md
+	// "I/O isolation rule".
 	if desired != nil {
 		cfg := fsmv2.ExtractConfig[ExamplefailingConfig](desired)
 		w.updateDependenciesFromConfig(cfg)
