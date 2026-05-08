@@ -366,6 +366,15 @@ func (m *BaseFSMManager[C]) Reconcile(
 			return fmt.Errorf("failed to get name: %w", err), false
 		}
 
+		if inst, ok := m.instances[name]; ok && inst.GetCurrentFSMState() == internalfsm.LifecycleStateRemoved {
+			// Step 2 has nothing useful to do for a Removed instance — let Step 3's
+			// cleanup loop (lines 529–532) delete it so the manager can recreate
+			// from config next tick. Without this guard, parent-FSM desired-state
+			// flapping (~100ms cadence) early-returns Step 2 every tick and starves
+			// Step 3, leaving the instance wedged in m.instances forever (ENG-4862).
+			continue
+		}
+
 		// If the instance does not exist, create it and set it to the desired state
 		if _, ok := m.instances[name]; !ok {
 			// Using manager-specific ticks for rate limiting
