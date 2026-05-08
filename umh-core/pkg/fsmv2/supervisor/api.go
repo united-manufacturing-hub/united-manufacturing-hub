@@ -84,6 +84,8 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity deps.Identity, work
 		// (e.g., parent variables like IP/PORT not set in this scenario). Fall back
 		// to nil so the worker gets a valid default desired state; the tick loop
 		// re-derives with the full spec on the next reconciliation cycle.
+		s.logger.SentryWarn(deps.FeatureFSMv2, identity.HierarchyPath, "worker_add_derive_desired_fallback_to_nil",
+			deps.Err(err))
 		initialDesired, err = worker.DeriveDesiredState(nil)
 	}
 

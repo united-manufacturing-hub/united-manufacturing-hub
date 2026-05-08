@@ -32,11 +32,11 @@ type StoppedState struct {
 func (s *StoppedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := fsmv2.ConvertWorkerSnapshot[example_slow.ExampleslowConfig, example_slow.ExampleslowStatus](snapAny)
 
-	if snap.IsShutdownRequested {
-		return fsmv2.Result[any, any](s, fsmv2.SignalNeedsRemoval, nil, "shutdown requested, needs removal")
+	if snap.IsStopRequired() {
+		return fsmv2.Result[any, any](s, fsmv2.SignalNeedsRemoval, nil, "stop required, needs removal")
 	}
 
-	if !snap.IsShutdownRequested && snap.ParentMappedState == config.DesiredStateRunning {
+	if snap.ParentMappedState == config.DesiredStateRunning {
 		return fsmv2.Result[any, any](&TryingToConnectState{}, fsmv2.SignalNone, nil, "should be running, transitioning to trying to connect")
 	}
 

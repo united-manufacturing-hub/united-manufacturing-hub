@@ -782,7 +782,7 @@ Worker API v2 replaces the 7-file pattern with a single-file approach using gene
 | `init()` with `factory.RegisterWorkerType[...]` + supervisor factory | `register.Worker[TConfig, TStatus, register.NoDeps]("type", constructor)` |
 | `helpers.ConvertSnapshot[Obs, *Des](snapAny)` in states | `fsmv2.ConvertWorkerSnapshot[TConfig, TStatus](snapAny)` in states |
 | `snap.Desired.IsShutdownRequested()` method call | `snap.IsStopRequired()` (merged shutdown + parent-stop) or `snap.IsShutdownRequested` (raw shutdown field) |
-| Manual `SetState`, `SetBeingRemoved`, `SetChildrenCounts` in ObservedState | Automatic via collector duck-typing on `Observation` |
+| Manual `SetState`, `SetShutdownRequested`, `SetChildrenCounts` in ObservedState | Automatic via collector duck-typing on `Observation` |
 
 ### Migration steps
 

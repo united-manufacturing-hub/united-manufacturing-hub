@@ -61,3 +61,5 @@ type GracefulShutdowner interface {
 type ChildrenViewConsumer interface {
 	SetChildrenView(view config.ChildrenView) ObservedState
 }
+
+// Additional capability interfaces (e.g., StateReporter, HealthChecker) are planned for L2a.

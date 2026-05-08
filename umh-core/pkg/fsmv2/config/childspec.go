@@ -330,7 +330,7 @@ type ChildInfo struct {
 	ErrorMsg      string // Error message if unhealthy (empty if healthy)
 	HierarchyPath string // Full path in the worker hierarchy (e.g., "app.parent.child")
 	IsHealthy     bool   // Whether the child is considered healthy
-	IsOperational bool   // True if operational (healthy or degraded — can serve requests)
+	IsOperational bool   // True if operational (healthy or degraded - can serve requests)
 	IsStopped     bool   // True if in PhaseStopped
 	// Infrastructure status fields (framework-tracked)
 	IsStale       bool // True if observation age > stale threshold (~10s)

@@ -105,7 +105,7 @@ func (w *PersistenceWorker) GetDependencies() *PersistenceDependencies {
 }
 
 // CollectObservedState returns the current observed state of the persistence
-// worker. Returns fsmv2.NewObservation — the collector handles CollectedAt,
+// worker. Returns fsmv2.NewObservation - the collector handles CollectedAt,
 // framework metrics, action history, and metric accumulation automatically
 // after COS returns.
 func (w *PersistenceWorker) CollectObservedState(ctx context.Context, _ fsmv2.DesiredState) (fsmv2.ObservedState, error) {
@@ -216,9 +216,6 @@ func (w *PersistenceWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredS
 	}
 
 	state := cfg.GetState()
-	if state == "" {
-		state = fsmv2config.DesiredStateRunning
-	}
 
 	return &fsmv2.WrappedDesiredState[snapshot.PersistenceConfig]{
 		State:  state,

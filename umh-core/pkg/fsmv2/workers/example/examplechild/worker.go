@@ -129,9 +129,6 @@ func (w *ChildWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, 
 	}
 
 	state := parsed.GetState()
-	if state == "" {
-		state = config.DesiredStateRunning
-	}
 
 	return &fsmv2.WrappedDesiredState[ExamplechildConfig]{
 		State: state,
