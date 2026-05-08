@@ -35,18 +35,11 @@ type StoppedState struct {
 func (s *StoppedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := fsmv2.ConvertWorkerSnapshot[hello_world.HelloworldConfig, hello_world.HelloworldStatus](snapAny)
 
-	// 1. Check shutdown first
 	if snap.IsStopRequired() {
 		return fsmv2.Result[any, any](s, fsmv2.SignalNeedsRemoval, nil, "Shutdown requested, signaling removal")
 	}
 
-	// 2. Start running when desired state requests it
-	if !snap.IsShutdownRequested {
-		return fsmv2.Result[any, any](&TryingToStartState{}, fsmv2.SignalNone, nil, "Starting worker")
-	}
-
-	// 3. Catch-all: remain stopped
-	return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil, "Worker stopped, waiting for start signal")
+	return fsmv2.Result[any, any](&TryingToStartState{}, fsmv2.SignalNone, nil, "Starting worker")
 }
 
 // String returns the state name for logging and metrics.

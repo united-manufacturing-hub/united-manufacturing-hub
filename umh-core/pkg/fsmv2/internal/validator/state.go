@@ -892,7 +892,10 @@ func checkExhaustiveTransitionCoverage(filename string) []Violation {
 	var violations []Violation
 
 	baseName := filepath.Base(filename)
-	if strings.Contains(baseName, "trying_to") || strings.Contains(baseName, "stopping") {
+	// TryingTo and stopping states are active-transition states exempt from the catch-all rule.
+	// Stopped states are also exempt because they legitimately transition out when desired state
+	// changes (e.g., StoppedState -> TryingToStartState).
+	if strings.Contains(baseName, "trying_to") || strings.Contains(baseName, "stopping") || strings.Contains(baseName, "stopped") {
 		return violations
 	}
 
