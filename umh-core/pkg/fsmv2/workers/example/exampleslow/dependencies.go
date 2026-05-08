@@ -20,6 +20,15 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 )
 
+// ExampleslowDepsIface is the minimal interface used by action files to avoid import cycles with snapshot.
+type ExampleslowDepsIface interface {
+	deps.Dependencies
+	SetConnected(connected bool)
+	IsConnected() bool
+	SetDelaySeconds(delaySeconds int)
+	GetDelaySeconds() int
+}
+
 type Connection interface{}
 
 type ConnectionPool interface {
