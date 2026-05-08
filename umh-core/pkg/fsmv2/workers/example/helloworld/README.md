@@ -29,7 +29,7 @@ _ "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm
 |-------|---------------|
 | **Observe** (`CollectObservedState`) | Reads `deps.HasSaidHello()` + mood file from `cfg.MoodFilePath` |
 | **Derive** (`DeriveDesiredState`) | WorkerBase parses YAML into `HelloworldConfig` |
-| **Evaluate** (`State.Next()`) | Checks shutdown, hello said, mood — returns state or action |
+| **Evaluate** (`State.Next()`) | Checks shutdown, hello said, mood - returns state or action |
 | **Execute** (Actions) | `SayHello` logs a greeting and calls `deps.SetHelloSaid(true)` |
 
 See the parent [README's control loop section](../../../README.md#the-control-loop) for the general pattern.
@@ -43,10 +43,10 @@ helloworld/
 ├── config.go         # HelloworldConfig (TConfig) + HelloworldStatus (TStatus)
 ├── dependencies.go   # HelloworldDependencies (action state)
 └── state/
-    ├── stopped.go          # Initial state — waits for !shutdown
+    ├── stopped.go          # Initial state - waits for !shutdown
     ├── trying_to_start.go  # Emits SayHello action
-    ├── running.go          # Steady state — checks mood
-    └── degraded.go         # mood="sad" — returns to Running when mood clears
+    ├── running.go          # Steady state - checks mood
+    └── degraded.go         # mood="sad" - returns to Running when mood clears
 ```
 
 ## Config Example
@@ -65,6 +65,6 @@ rm /tmp/helloworld-mood               # → Running (no file = fine)
 
 ## Common Mistakes
 
-1. **Non-idempotent actions**: `SayHello` checks `HasSaidHello()` before acting — actions may run more than once
-2. **Missing registration**: Forgot `register.Worker[...]()` in `init()` — worker type unknown at runtime
-3. **Missing blank import**: Forgot to import the package in scenario/main — `init()` never runs
+1. **Non-idempotent actions**: `SayHello` checks `HasSaidHello()` before acting - actions may run more than once
+2. **Missing registration**: Forgot `register.Worker[...]()` in `init()` - worker type unknown at runtime
+3. **Missing blank import**: Forgot to import the package in scenario/main - `init()` never runs

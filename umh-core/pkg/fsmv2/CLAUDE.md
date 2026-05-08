@@ -46,7 +46,7 @@ Children aggregation (health counts) is handled by the supervisor, not in `Colle
 
 **The zero-time gate**: The collector checks `observed.GetTimestamp().IsZero()`. If true (`NewObservation`), it runs post-COS wrapping. If false (`WrapStatus`/`WrapStatusAccumulated`), it skips wrapping since the worker already handled it. Both paths coexist safely during migration.
 
-**Drain is destructive**: `MetricsRecorder().Drain()` empties the buffer. Only one path should drain per tick. `NewObservation` workers must not call `Drain()` in COS — the collector does it.
+**Drain is destructive**: `MetricsRecorder().Drain()` empties the buffer. Only one path should drain per tick. `NewObservation` workers must not call `Drain()` in COS - the collector does it.
 
 Workers return `fsmv2.NewObservation(status)` from `CollectObservedState`:
 ```go
@@ -106,13 +106,13 @@ func (s *RunningState) Next(snapAny any) fsmv2.NextResult[any, any] {
 The `Reason` parameter in `fsmv2.Result()` is visible in structured JSON logs (every state transition), supervisor heartbeats (every ~100 ticks), and parent supervisor's `ChildInfo.StateReason`. Write reasons that help operators troubleshoot without reading code.
 
 **Rules:**
-- Include dynamic snapshot values via `fmt.Sprintf` — never hardcode values that exist in the snapshot
+- Include dynamic snapshot values via `fmt.Sprintf` - never hardcode values that exist in the snapshot
 - For "stop required" transitions: `fmt.Sprintf("stop required: shutdown=%t, parentState=%s", ...)`
 - For "waiting" catch-alls: include which preconditions are missing (`hasTransport=%t, hasValidToken=%t`)
 - For degraded/error states: include the consecutive error count
 - For child lifecycle: include the parent mapped state (`parentState=%q`)
 
-**Gold standard** — communicator worker's `buildRecoveringReason()` in `state_recovering.go`:
+**Gold standard** - communicator worker's `buildRecoveringReason()` in `state_recovering.go`:
 ```go
 fmt.Sprintf("sync recovering: %d consecutive errors (%s), backoff %s",
     consecutiveErrors, mapErrorTypeToReason(errorType), backoffDelay.Round(time.Second))
@@ -208,11 +208,11 @@ var _ = Describe("Transport Scenario", func() {
 
 ## Destructive Channel Drain Safety
 
-`<-chan` reads are destructive — once a message is read from a channel, it's gone. Pre-check all preconditions (token valid, transport exists) BEFORE draining. Use a `pendingMessages` buffer to store failed messages for retry on the next tick.
+`<-chan` reads are destructive - once a message is read from a channel, it's gone. Pre-check all preconditions (token valid, transport exists) BEFORE draining. Use a `pendingMessages` buffer to store failed messages for retry on the next tick.
 
 ## Error Classification Pattern
 
-9 `ErrorType` values exist in `workers/transport/types`. `ShouldStopRetrying` always returns false — classify locally as infrastructure (retry forever) vs non-infrastructure (drop). No retry cap: at 100ms tick rate, even `maxRetries=3` = 300ms, meaning a 1-second network outage drops messages.
+9 `ErrorType` values exist in `workers/transport/types`. `ShouldStopRetrying` always returns false - classify locally as infrastructure (retry forever) vs non-infrastructure (drop). No retry cap: at 100ms tick rate, even `maxRetries=3` = 300ms, meaning a 1-second network outage drops messages.
 
 ## Parent-Level Transport Reset (resetGeneration Pattern)
 
@@ -232,7 +232,7 @@ Each child (push/pull) has its own `RetryTracker` and `failurerate.Tracker` for 
 
 `RecordSuccess()` and `RecordTypedError()` both feed the `failurerate.Tracker` rolling window. They must ONLY be called after a real HTTP request completed (success or failure). Never call them when nothing happened (e.g., empty channel, backpressure skip, precondition failure).
 
-**The rule**: if no HTTP round-trip occurred this tick, the action should return without calling any `Record*` method. "Nothing happened" is not a success and not a failure — it is the absence of an outcome.
+**The rule**: if no HTTP round-trip occurred this tick, the action should return without calling any `Record*` method. "Nothing happened" is not a success and not a failure - it is the absence of an outcome.
 
 This prevents failure rate dilution: if idle ticks feed phantom "successes" into the rolling window, a 100% broken transport can appear healthy because idle ticks vastly outnumber real operations in bursty workloads.
 
@@ -241,7 +241,7 @@ This prevents failure rate dilution: if idle ticks feed phantom "successes" into
 ### StoppingState must always progress
 
 - MUST transition to StoppedState (or self-return with a cleanup action)
-- Self-return with `nil` action is **forbidden** — creates a permanent deadlock (worker stuck in PhaseStopping)
+- Self-return with `nil` action is **forbidden** - creates a permanent deadlock (worker stuck in PhaseStopping)
 - Self-return WITH an action (e.g., `&FlushAction{}`) is allowed (active cleanup)
 - CI enforced: `ValidateStoppingStateNoCatchAllSelfReturn` in `internal/validator/state.go`
 - See any `state_stopping.go` for the pattern

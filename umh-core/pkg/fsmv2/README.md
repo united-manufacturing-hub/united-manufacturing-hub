@@ -57,11 +57,11 @@ Sensor reads from Dependencies; actuator changes the external world and writes r
 
 Each state embeds a base type that tells the supervisor which phase the control loop is in:
 
-- `helpers.StoppedBase` — loop is off, no observation or actuation happening
-- `helpers.StartingBase` — first observations arriving, actuator not yet confirmed working
-- `helpers.RunningHealthyBase` — loop running, health checks passing
-- `helpers.RunningDegradedBase` — loop running, but health checks failing (sensor sees a problem the actuator cannot fully fix)
-- `helpers.StoppingBase` — actuator shutting down gracefully, loop winding down
+- `helpers.StoppedBase` - loop is off, no observation or actuation happening
+- `helpers.StartingBase` - first observations arriving, actuator not yet confirmed working
+- `helpers.RunningHealthyBase` - loop running, health checks passing
+- `helpers.RunningDegradedBase` - loop running, but health checks failing (sensor sees a problem the actuator cannot fully fix)
+- `helpers.StoppingBase` - actuator shutting down gracefully, loop winding down
 
 See `internal/helpers/base_states.go` for the source. Example: helloworld's `RunningState` embeds `helpers.RunningHealthyBase` (`state/running.go:26`).
 
@@ -133,7 +133,7 @@ func NewMyWorker(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader) (
     return w, nil
 }
 
-// CollectObservedState — the only required method
+// CollectObservedState - the only required method
 func (w *MyWorker) CollectObservedState(ctx context.Context, desired fsmv2.DesiredState) (fsmv2.ObservedState, error) {
     cfg := fsmv2.ExtractConfig[MyConfig](desired) // typed config access
     // ... observe the world using cfg.Host, cfg.Port, etc.
@@ -186,14 +186,14 @@ func (s *TryingToStartState) Next(snapAny any) fsmv2.NextResult[any, any] {
         return fsmv2.Transition(&RunningState{}, fsmv2.SignalNone, nil, "Process is running")
     }
     // Not running yet - emit action to start it.
-    // Pass typed actions directly — the framework auto-wraps them via reflection.
+    // Pass typed actions directly - the framework auto-wraps them via reflection.
     return fsmv2.Transition(s, fsmv2.SignalNone, &StartAction{}, "Starting process")
 }
 ```
 
 `fsmv2.Transition` is the recommended return shape. It is a non-generic alias for `fsmv2.Result[any, any]` that also auto-wraps typed `Action[TDeps]` values into the internal `Action[any]` envelope, so state files no longer need a caller-visible `WrapAction` adapter.
 
-> **Deprecated — removed in PR3**
+> **Deprecated - removed in PR3**
 >
 > The older `fsmv2.Result[any, any](...)` return and the `fsmv2.WrapAction[TDeps](&MyAction{})` wrapper are still present for in-flight migrations but will be deleted in PR3 to shrink the API surface. Do not write new code against them.
 
@@ -205,7 +205,7 @@ Return EITHER a state change OR an action from `Next()`, not both. See [State XO
 
 ### State names
 
-Every state must implement `String()` for logging and metrics. Use `helpers.DeriveStateName()` to derive the name automatically — it strips the `State` suffix and preserves casing:
+Every state must implement `String()` for logging and metrics. Use `helpers.DeriveStateName()` to derive the name automatically - it strips the `State` suffix and preserves casing:
 
 ```go
 func (s *TryingToStartState) String() string {

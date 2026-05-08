@@ -116,7 +116,7 @@ func (w *ExamplepanicWorker) DeriveDesiredState(spec interface{}) (fsmv2.Desired
 		return nil, fmt.Errorf("failed to parse examplepanic spec: %w", err)
 	}
 
-	state := parsed.State
+	state := parsed.GetState()
 	if state == "" {
 		state = config.DesiredStateRunning
 	}

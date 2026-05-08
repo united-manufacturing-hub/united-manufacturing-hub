@@ -18,9 +18,8 @@ import (
 	"fmt"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
-	pullsnap "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/pull/snapshot"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/pull/snapshot"
 )
 
 // StoppedState represents the idle state where the pull worker waits for the parent
@@ -30,19 +29,19 @@ type StoppedState struct {
 }
 
 func (s *StoppedState) Next(snapAny any) fsmv2.NextResult[any, any] {
-	snap := fsmv2.ConvertWorkerSnapshot[pullsnap.PullConfig, pullsnap.PullStatus](snapAny)
+	snap := helpers.ConvertSnapshot[snapshot.PullObservedState, *snapshot.PullDesiredState](snapAny)
 
-	if snap.IsShutdownRequested {
+	if snap.Desired.IsShutdownRequested() {
 		return fsmv2.Result[any, any](s, fsmv2.SignalNeedsRemoval, nil, "shutdown requested, signaling removal")
 	}
 
-	if !snap.IsShutdownRequested && snap.ParentMappedState == config.DesiredStateRunning {
+	if snap.Observed.ShouldBeRunning() {
 		return fsmv2.Result[any, any](&RunningState{}, fsmv2.SignalNone, nil,
-			fmt.Sprintf("parent mapped state is %q, transitioning to Running", snap.ParentMappedState))
+			fmt.Sprintf("parent mapped state is %q, transitioning to Running", snap.Observed.ParentMappedState))
 	}
 
 	return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil,
-		fmt.Sprintf("stopped, parent mapped state is %q", snap.ParentMappedState))
+		fmt.Sprintf("stopped, parent mapped state is %q", snap.Observed.ParentMappedState))
 }
 
 func (s *StoppedState) String() string {

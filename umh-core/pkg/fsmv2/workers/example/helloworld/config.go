@@ -19,8 +19,8 @@ import (
 )
 
 // HelloworldConfig holds the user-provided configuration for the helloworld worker.
-// Embeds BaseUserSpec so state files read user-facing State via Config.State
-// (the YAML "state" field, defaulting to "running" when empty).
+// Embeds BaseUserSpec so state files read user-facing State via Config.GetState()
+// (the YAML "state" field, defaulting to "running").
 type HelloworldConfig struct {
 	config.BaseUserSpec `yaml:",inline"`
 

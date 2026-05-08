@@ -24,69 +24,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/types"
 )
 
-// TransportConfig holds the user-provided configuration for the transport worker.
-// Framework fields (ShutdownRequested, ChildrenSpecs) are carried by
-// fsmv2.WrappedDesiredState[TransportConfig].
-type TransportConfig struct {
-	InstanceUUID string `json:"instanceUUID"`
-	// TODO(security): AuthToken included in CSE sync payloads. ENG-4405 tracks
-	// adding a CSE secret tier to persist locally but exclude from delta sync.
-	AuthToken string `json:"authToken"`
-	RelayURL  string `json:"relayURL"`
-
-	Timeout time.Duration `json:"timeout"`
-
-	State string `json:"state" yaml:"state"` // "stopped" or "running" - desired lifecycle state
-}
-
-// TransportStatus holds the runtime observation data for the transport worker.
-// Framework fields (CollectedAt, State, LastActionResults, MetricsEmbedder,
-// ChildrenHealthy, ChildrenUnhealthy, ChildrenView) are carried by
-// fsmv2.Observation[TransportStatus].
-type TransportStatus struct {
-	JWTExpiry time.Time `json:"jwt_expiry,omitempty"`
-
-	// LastAuthAttemptAt records when the last authentication attempt was made (for backoff gating).
-	LastAuthAttemptAt time.Time `json:"last_auth_attempt_at,omitempty"`
-
-	// FailedAuthConfig holds the auth config that was used in the last permanently-failed
-	// auth attempt. Used by AuthFailedState to detect config changes that warrant a retry.
-	FailedAuthConfig FailedAuthConfig `json:"failed_auth_config,omitempty"`
-
-	// AuthenticatedUUID is the instance UUID returned from the backend after authentication.
-	AuthenticatedUUID string `json:"authenticated_uuid,omitempty"`
-
-	// JWTToken is the current authentication token for relay communication.
-	// NOTE: Must NOT use json:"-"  - see TransportObservedState.JWTToken comment.
-	JWTToken string `json:"jwt_token,omitempty"`
-
-	// TotalMessagesPushed tracks cumulative messages pushed to backend.
-	TotalMessagesPushed int64 `json:"total_messages_pushed"`
-
-	// TotalMessagesPulled tracks cumulative messages pulled from backend.
-	TotalMessagesPulled int64 `json:"total_messages_pulled"`
-
-	ConsecutiveErrors int             `json:"consecutive_errors"`
-	LastErrorType     types.ErrorType `json:"last_error_type"`
-	LastRetryAfter    time.Duration   `json:"last_retry_after,omitempty"`
-}
-
-// HasValidToken returns true if there is a valid JWT token that hasn't expired.
-func (s TransportStatus) HasValidToken() bool {
-	return s.JWTToken != "" && !s.IsTokenExpired()
-}
-
-// IsTokenExpired returns true if the JWT token is expired or will expire within 10 minutes.
-func (s TransportStatus) IsTokenExpired() bool {
-	if s.JWTExpiry.IsZero() {
-		return false
-	}
-
-	const refreshBuffer = 10 * time.Minute
-
-	return time.Now().Add(refreshBuffer).After(s.JWTExpiry)
-}
-
 // TransportDependencies is the dependencies interface for transport actions (avoids import cycles).
 type TransportDependencies interface {
 	deps.Dependencies
@@ -166,13 +103,22 @@ func (d *TransportDesiredState) GetChildrenSpecs() []config.ChildSpec {
 	return d.ChildrenSpecs
 }
 
+// GetState returns the desired lifecycle state ("running" or "stopped").
+func (d *TransportDesiredState) GetState() string {
+	if d.State == "" {
+		return config.DesiredStateRunning
+	}
+
+	return d.State
+}
+
 // ShouldBeRunning returns true if the transport should be running.
 func (d *TransportDesiredState) ShouldBeRunning() bool {
 	if d.ShutdownRequested {
 		return false
 	}
 
-	return d.State == config.DesiredStateRunning || d.State == ""
+	return d.GetState() == config.DesiredStateRunning
 }
 
 // FailedAuthConfig captures the auth configuration that was used in the last

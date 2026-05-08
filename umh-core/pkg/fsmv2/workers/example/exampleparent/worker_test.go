@@ -75,7 +75,7 @@ var _ = Describe("ParentWorker", func() {
 
 			Expect(err).ToNot(HaveOccurred())
 			desired := desiredIface.(*fsmv2.WrappedDesiredState[exampleparent.ExampleparentConfig])
-			Expect(desired.State).To(Equal("running"))
+			Expect(desired.GetState()).To(Equal("running"))
 			Expect(desired.ChildrenSpecs).To(BeNil())
 		})
 
@@ -89,7 +89,7 @@ var _ = Describe("ParentWorker", func() {
 
 			Expect(err).ToNot(HaveOccurred())
 			desired := desiredIface.(*fsmv2.WrappedDesiredState[exampleparent.ExampleparentConfig])
-			Expect(desired.State).To(Equal("running"))
+			Expect(desired.GetState()).To(Equal("running"))
 			Expect(desired.ChildrenSpecs).To(HaveLen(3))
 			Expect(desired.ChildrenSpecs[0].Name).To(Equal("child-0"))
 			Expect(desired.ChildrenSpecs[1].Name).To(Equal("child-1"))

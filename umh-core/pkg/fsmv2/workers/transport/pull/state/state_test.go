@@ -23,7 +23,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
-	pullsnap "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/pull/snapshot"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/pull/snapshot"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/pull/state"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/types"
 )
@@ -61,25 +61,29 @@ func makeSnapshotWithBackoff(
 	degradedEnteredAt time.Time,
 	lastErrorAt time.Time,
 ) fsmv2.Snapshot {
-	desired := &fsmv2.WrappedDesiredState[pullsnap.PullConfig]{
-		State: config.DesiredStateRunning,
+	desired := &snapshot.PullDesiredState{
+		ParentMappedState: parentMappedState,
 		BaseDesiredState: config.BaseDesiredState{
 			ShutdownRequested: shutdownRequested,
 		},
 	}
 
-	observed := fsmv2.Observation[pullsnap.PullStatus]{
-		ParentMappedState: parentMappedState,
-		Status: pullsnap.PullStatus{
-			ConsecutiveErrors:   consecutiveErrors,
-			PendingMessageCount: pendingMessageCount,
-			HasTransport:        hasTransport,
-			HasValidToken:       hasValidToken,
-			LastErrorType:       lastErrorType,
-			LastRetryAfter:      lastRetryAfter,
-			DegradedEnteredAt:   degradedEnteredAt,
-			LastErrorAt:         lastErrorAt,
+	observed := snapshot.PullObservedState{
+		CollectedAt: time.Now(),
+		PullDesiredState: snapshot.PullDesiredState{
+			ParentMappedState: parentMappedState,
+			BaseDesiredState: config.BaseDesiredState{
+				ShutdownRequested: shutdownRequested,
+			},
 		},
+		ConsecutiveErrors:   consecutiveErrors,
+		PendingMessageCount: pendingMessageCount,
+		HasTransport:        hasTransport,
+		HasValidToken:       hasValidToken,
+		LastErrorType:       lastErrorType,
+		LastRetryAfter:      lastRetryAfter,
+		DegradedEnteredAt:   degradedEnteredAt,
+		LastErrorAt:         lastErrorAt,
 	}
 
 	return fsmv2.Snapshot{

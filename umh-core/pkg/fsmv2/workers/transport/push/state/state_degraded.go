@@ -22,7 +22,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/backoff"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/push/action"
-	pushsnap "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/push/snapshot"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/push/snapshot"
 )
 
 // DegradedState represents the degraded state where the push worker has experienced consecutive errors.
@@ -31,47 +31,47 @@ type DegradedState struct {
 }
 
 func (s *DegradedState) Next(snapAny any) fsmv2.NextResult[any, any] {
-	snap := fsmv2.ConvertWorkerSnapshot[pushsnap.PushConfig, pushsnap.PushStatus](snapAny)
+	snap := helpers.ConvertSnapshot[snapshot.PushObservedState, *snapshot.PushDesiredState](snapAny)
 
-	if snap.IsStopRequired() {
+	if snap.Observed.IsStopRequired() {
 		return fsmv2.Result[any, any](&StoppingState{}, fsmv2.SignalNone, nil,
-			fmt.Sprintf("stop required: shutdown=%t, parentState(observed)=%s", snap.IsShutdownRequested, snap.ParentMappedState))
+			fmt.Sprintf("stop required: shutdown=%t, parentState(observed)=%s", snap.Desired.IsShutdownRequested(), snap.Observed.ParentMappedState))
 	}
 
-	if snap.Status.ConsecutiveErrors == 0 {
+	if snap.Observed.ConsecutiveErrors == 0 {
 		return fsmv2.Result[any, any](&RunningState{}, fsmv2.SignalNone, nil, "errors cleared (consecutiveErrors=0), recovering to Running")
 	}
 
-	if snap.Status.HasTransport && snap.Status.HasValidToken {
+	if snap.Observed.HasTransport && snap.Observed.HasValidToken {
 		backoffDelay := backoff.CalculateDelayForErrorType(
-			snap.Status.LastErrorType,
-			snap.Status.ConsecutiveErrors,
-			snap.Status.LastRetryAfter,
+			snap.Observed.LastErrorType,
+			snap.Observed.ConsecutiveErrors,
+			snap.Observed.LastRetryAfter,
 		)
 
 		shouldWait := false
-		if snap.Status.LastRetryAfter > 0 && !snap.Status.LastErrorAt.IsZero() {
-			shouldWait = time.Since(snap.Status.LastErrorAt) < snap.Status.LastRetryAfter
-		} else if !snap.Status.DegradedEnteredAt.IsZero() {
-			shouldWait = time.Since(snap.Status.DegradedEnteredAt) < backoffDelay
+		if snap.Observed.LastRetryAfter > 0 && !snap.Observed.LastErrorAt.IsZero() {
+			shouldWait = time.Since(snap.Observed.LastErrorAt) < snap.Observed.LastRetryAfter
+		} else if !snap.Observed.DegradedEnteredAt.IsZero() {
+			shouldWait = time.Since(snap.Observed.DegradedEnteredAt) < backoffDelay
 		}
 
 		if shouldWait {
 			return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil,
 				fmt.Sprintf("degraded (%d errors, %d pending), backoff %s",
-					snap.Status.ConsecutiveErrors, snap.Status.PendingMessageCount,
+					snap.Observed.ConsecutiveErrors, snap.Observed.PendingMessageCount,
 					backoffDelay.Round(time.Second)))
 		}
 
 		return fsmv2.Result[any, any](s, fsmv2.SignalNone, &action.PushAction{},
 			fmt.Sprintf("degraded (%d consecutive errors, %d pending), still pushing",
-				snap.Status.ConsecutiveErrors, snap.Status.PendingMessageCount))
+				snap.Observed.ConsecutiveErrors, snap.Observed.PendingMessageCount))
 	}
 
 	return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil,
 		fmt.Sprintf("degraded (%d consecutive errors, %d pending), waiting: hasTransport=%t, hasValidToken=%t",
-			snap.Status.ConsecutiveErrors, snap.Status.PendingMessageCount,
-			snap.Status.HasTransport, snap.Status.HasValidToken))
+			snap.Observed.ConsecutiveErrors, snap.Observed.PendingMessageCount,
+			snap.Observed.HasTransport, snap.Observed.HasValidToken))
 }
 
 func (s *DegradedState) String() string {

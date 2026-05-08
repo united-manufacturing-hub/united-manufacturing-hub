@@ -26,7 +26,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport"
-	tsnap "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/snapshot"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/snapshot"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/state"
 )
 
@@ -84,15 +84,13 @@ var _ = Describe("TransportWorker", func() {
 			Expect(err).ToNot(HaveOccurred())
 		})
 
-		It("should return non-nil observed state of correct type", func() {
+		It("should return observed state with timestamp", func() {
 			ctx := context.Background()
 			observed, err := worker.CollectObservedState(ctx, nil)
 
 			Expect(err).ToNot(HaveOccurred())
 			Expect(observed).NotTo(BeNil())
-			// Timestamp is zero from NewObservation  - the collector fills it post-COS.
-			_, ok := observed.(fsmv2.Observation[tsnap.TransportStatus])
-			Expect(ok).To(BeTrue())
+			Expect(observed.GetTimestamp()).NotTo(BeZero())
 		})
 
 		It("should handle context cancellation at entry", func() {
@@ -105,14 +103,15 @@ var _ = Describe("TransportWorker", func() {
 			Expect(err).To(Equal(context.Canceled))
 		})
 
-		It("should return Observation type (framework fields filled by collector)", func() {
+		It("should call GetFrameworkState from dependencies", func() {
 			ctx := context.Background()
 			observed, err := worker.CollectObservedState(ctx, nil)
 
 			Expect(err).ToNot(HaveOccurred())
-			// NewObservation returns Observation[T]  - collector post-processes metrics/timestamp.
-			_, ok := observed.(fsmv2.Observation[tsnap.TransportStatus])
+			// The observed state should have metrics container
+			typedObs, ok := observed.(snapshot.TransportObservedState)
 			Expect(ok).To(BeTrue())
+			Expect(typedObs.Metrics).NotTo(BeNil())
 		})
 
 		It("should populate FailedAuthConfig from dependencies", func() {
@@ -124,11 +123,11 @@ var _ = Describe("TransportWorker", func() {
 			observed, err := worker.CollectObservedState(ctx, nil)
 
 			Expect(err).ToNot(HaveOccurred())
-			typedObs, ok := observed.(fsmv2.Observation[tsnap.TransportStatus])
+			typedObs, ok := observed.(snapshot.TransportObservedState)
 			Expect(ok).To(BeTrue())
-			Expect(typedObs.Status.FailedAuthConfig.AuthToken).To(Equal("failed-token"))
-			Expect(typedObs.Status.FailedAuthConfig.RelayURL).To(Equal("https://failed-relay.example.com"))
-			Expect(typedObs.Status.FailedAuthConfig.InstanceUUID).To(Equal("failed-uuid"))
+			Expect(typedObs.FailedAuthConfig.AuthToken).To(Equal("failed-token"))
+			Expect(typedObs.FailedAuthConfig.RelayURL).To(Equal("https://failed-relay.example.com"))
+			Expect(typedObs.FailedAuthConfig.InstanceUUID).To(Equal("failed-uuid"))
 		})
 
 		It("should return empty FailedAuthConfig when none is set", func() {
@@ -136,21 +135,21 @@ var _ = Describe("TransportWorker", func() {
 			observed, err := worker.CollectObservedState(ctx, nil)
 
 			Expect(err).ToNot(HaveOccurred())
-			typedObs, ok := observed.(fsmv2.Observation[tsnap.TransportStatus])
+			typedObs, ok := observed.(snapshot.TransportObservedState)
 			Expect(ok).To(BeTrue())
-			Expect(typedObs.Status.FailedAuthConfig.IsEmpty()).To(BeTrue())
+			Expect(typedObs.FailedAuthConfig.IsEmpty()).To(BeTrue())
 		})
 
-		It("should call GetActionHistory from dependencies (invariant check)", func() {
+		It("should call GetActionHistory from dependencies", func() {
 			ctx := context.Background()
 			observed, err := worker.CollectObservedState(ctx, nil)
 
 			Expect(err).ToNot(HaveOccurred())
-			// Verify Observation[T] type is returned  - action history is filled by collector post-COS.
-			typedObs, ok := observed.(fsmv2.Observation[tsnap.TransportStatus])
+			// The observed state should have last action results (even if empty)
+			typedObs, ok := observed.(snapshot.TransportObservedState)
 			Expect(ok).To(BeTrue())
-			// LastActionResults is nil in the raw NewObservation; collector populates it.
-			Expect(typedObs.LastActionResults).To(BeNil())
+			// LastActionResults should be initialized (possibly empty slice)
+			Expect(typedObs.LastActionResults).To(BeNil()) // Empty when no actions recorded
 		})
 	})
 
@@ -168,16 +167,16 @@ var _ = Describe("TransportWorker", func() {
 				Expect(err).ToNot(HaveOccurred())
 				Expect(desired).NotTo(BeNil())
 				// Default to running when spec is nil
-				typed, ok := desired.(*fsmv2.WrappedDesiredState[tsnap.TransportConfig])
+				typed, ok := desired.(*snapshot.TransportDesiredState)
 				Expect(ok).To(BeTrue())
-				Expect(typed.State).To(Equal("running"))
+				Expect(typed.GetState()).To(Equal("running"))
 			})
 
 			It("should include PushWorker ChildrenSpecs even with nil spec", func() {
 				desired, err := worker.DeriveDesiredState(nil)
 				Expect(err).ToNot(HaveOccurred())
 
-				transportDesired, ok := desired.(*fsmv2.WrappedDesiredState[tsnap.TransportConfig])
+				transportDesired, ok := desired.(*snapshot.TransportDesiredState)
 				Expect(ok).To(BeTrue())
 				Expect(transportDesired.ChildrenSpecs).To(HaveLen(2))
 				Expect(transportDesired.ChildrenSpecs[0].Name).To(Equal("push"))
@@ -201,11 +200,11 @@ authToken: "test-token"`,
 				Expect(err).ToNot(HaveOccurred())
 				Expect(desired).NotTo(BeNil())
 				// Type assert to access transport-specific fields
-				transportDesired, ok := desired.(*fsmv2.WrappedDesiredState[tsnap.TransportConfig])
+				transportDesired, ok := desired.(*snapshot.TransportDesiredState)
 				Expect(ok).To(BeTrue())
-				Expect(transportDesired.Config.RelayURL).To(Equal("https://relay.example.com"))
-				Expect(transportDesired.Config.InstanceUUID).To(Equal("test-uuid"))
-				Expect(transportDesired.Config.AuthToken).To(Equal("test-token"))
+				Expect(transportDesired.RelayURL).To(Equal("https://relay.example.com"))
+				Expect(transportDesired.InstanceUUID).To(Equal("test-uuid"))
+				Expect(transportDesired.AuthToken).To(Equal("test-token"))
 			})
 
 			It("should include PushWorker ChildrenSpecs", func() {
@@ -219,7 +218,7 @@ authToken: "test-token"`,
 				desired, err := worker.DeriveDesiredState(spec)
 				Expect(err).ToNot(HaveOccurred())
 
-				transportDesired, ok := desired.(*fsmv2.WrappedDesiredState[tsnap.TransportConfig])
+				transportDesired, ok := desired.(*snapshot.TransportDesiredState)
 				Expect(ok).To(BeTrue())
 				Expect(transportDesired.ChildrenSpecs).To(HaveLen(2))
 
@@ -244,9 +243,9 @@ relayURL: "https://relay.example.com"`,
 				desired, err := worker.DeriveDesiredState(spec)
 
 				Expect(err).ToNot(HaveOccurred())
-				transportDesired2, ok2 := desired.(*fsmv2.WrappedDesiredState[tsnap.TransportConfig])
+				transportDesired2, ok2 := desired.(*snapshot.TransportDesiredState)
 				Expect(ok2).To(BeTrue())
-				Expect(transportDesired2.State).To(Equal("stopped"))
+				Expect(transportDesired2.GetState()).To(Equal("stopped"))
 			})
 
 			It("should return running state when configured", func() {
@@ -261,9 +260,9 @@ authToken: "test-token"`,
 				desired, err := worker.DeriveDesiredState(spec)
 
 				Expect(err).ToNot(HaveOccurred())
-				transportDesired3, ok3 := desired.(*fsmv2.WrappedDesiredState[tsnap.TransportConfig])
+				transportDesired3, ok3 := desired.(*snapshot.TransportDesiredState)
 				Expect(ok3).To(BeTrue())
-				Expect(transportDesired3.State).To(Equal("running"))
+				Expect(transportDesired3.GetState()).To(Equal("running"))
 			})
 		})
 
@@ -281,11 +280,11 @@ authToken: "test-token"`,
 
 				Expect(err1).ToNot(HaveOccurred())
 				Expect(err2).ToNot(HaveOccurred())
-				td1, ok1 := desired1.(*fsmv2.WrappedDesiredState[tsnap.TransportConfig])
+				td1, ok1 := desired1.(*snapshot.TransportDesiredState)
 				Expect(ok1).To(BeTrue())
-				td2, ok2 := desired2.(*fsmv2.WrappedDesiredState[tsnap.TransportConfig])
+				td2, ok2 := desired2.(*snapshot.TransportDesiredState)
 				Expect(ok2).To(BeTrue())
-				Expect(td1.State).To(Equal(td2.State))
+				Expect(td1.GetState()).To(Equal(td2.GetState()))
 			})
 		})
 
@@ -341,9 +340,9 @@ instanceUUID: "test-uuid"`,
 				desired, err := worker.DeriveDesiredState(spec)
 
 				Expect(err).ToNot(HaveOccurred())
-				transportDesiredStopped, okStopped := desired.(*fsmv2.WrappedDesiredState[tsnap.TransportConfig])
+				transportDesiredStopped, okStopped := desired.(*snapshot.TransportDesiredState)
 				Expect(okStopped).To(BeTrue())
-				Expect(transportDesiredStopped.State).To(Equal("stopped"))
+				Expect(transportDesiredStopped.GetState()).To(Equal("stopped"))
 			})
 
 			It("should default timeout when zero", func() {
@@ -358,8 +357,8 @@ authToken: "test-token"`,
 				desired, err := worker.DeriveDesiredState(spec)
 
 				Expect(err).ToNot(HaveOccurred())
-				transportDesired := desired.(*fsmv2.WrappedDesiredState[tsnap.TransportConfig])
-				Expect(transportDesired.Config.Timeout).To(Equal(10 * time.Second))
+				transportDesired := desired.(*snapshot.TransportDesiredState)
+				Expect(transportDesired.Timeout).To(Equal(10 * time.Second))
 			})
 		})
 

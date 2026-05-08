@@ -57,11 +57,11 @@ var _ = Describe("TransportUserSpec", func() {
 		})
 	})
 
-	Describe("State field", func() {
+	Describe("GetState", func() {
 		Context("when state is empty", func() {
-			It("should default to empty string (caller applies running default)", func() {
+			It("should return 'running' as default", func() {
 				spec := &transport.TransportUserSpec{}
-				Expect(spec.State).To(Equal(""))
+				Expect(spec.GetState()).To(Equal("running"))
 			})
 		})
 
@@ -69,7 +69,7 @@ var _ = Describe("TransportUserSpec", func() {
 			It("should return 'stopped'", func() {
 				spec := &transport.TransportUserSpec{}
 				spec.State = "stopped"
-				Expect(spec.State).To(Equal("stopped"))
+				Expect(spec.GetState()).To(Equal("stopped"))
 			})
 		})
 
@@ -77,7 +77,7 @@ var _ = Describe("TransportUserSpec", func() {
 			It("should return 'running'", func() {
 				spec := &transport.TransportUserSpec{}
 				spec.State = "running"
-				Expect(spec.State).To(Equal("running"))
+				Expect(spec.GetState()).To(Equal("running"))
 			})
 		})
 	})
@@ -99,7 +99,7 @@ state: "running"
 			Expect(spec.InstanceUUID).To(Equal("uuid-from-yaml"))
 			Expect(spec.AuthToken).To(Equal("token-from-yaml"))
 			Expect(spec.Timeout).To(Equal(15 * time.Second))
-			Expect(spec.State).To(Equal("running"))
+			Expect(spec.GetState()).To(Equal("running"))
 		})
 
 		It("should handle missing optional fields", func() {
@@ -114,7 +114,7 @@ relayURL: "https://relay.example.com"
 			Expect(spec.InstanceUUID).To(BeEmpty())
 			Expect(spec.AuthToken).To(BeEmpty())
 			Expect(spec.Timeout).To(Equal(time.Duration(0)))
-			Expect(spec.State).To(Equal("")) // Empty; DeriveDesiredState applies the running default
+			Expect(spec.GetState()).To(Equal("running")) // Default when empty
 		})
 	})
 
@@ -141,9 +141,9 @@ relayURL: "https://relay.example.com"
 	Describe("BaseUserSpec embedding", func() {
 		It("should embed BaseUserSpec for State field", func() {
 			spec := &transport.TransportUserSpec{}
-			// BaseUserSpec provides the State field
+			// BaseUserSpec provides the State field and GetState method
 			spec.State = "stopped"
-			Expect(spec.State).To(Equal("stopped"))
+			Expect(spec.GetState()).To(Equal("stopped"))
 		})
 	})
 })

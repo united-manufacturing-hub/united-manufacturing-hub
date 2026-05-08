@@ -785,6 +785,17 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) (err error) 
 
 	desiredDoc[FieldID] = firstWorkerID
 
+	// Store the merged user spec as originalUserSpec so observers can verify variable inheritance.
+	if userSpecWithVars.Config != "" || len(userSpecWithVars.Variables.User) > 0 {
+		userSpecBytes, marshalErr := json.Marshal(userSpecWithVars)
+		if marshalErr == nil {
+			var userSpecMap map[string]any
+			if unmarshalErr := json.Unmarshal(userSpecBytes, &userSpecMap); unmarshalErr == nil {
+				desiredDoc["originalUserSpec"] = userSpecMap
+			}
+		}
+	}
+
 	// Preserve ShutdownRequested: shutdown is a supervisor operation that overrides DeriveDesiredState
 	var existingDesiredTyped TDesired
 	if err := s.store.LoadDesiredTyped(ctx, s.workerType, firstWorkerID, &existingDesiredTyped); err == nil {

@@ -110,14 +110,10 @@ func (w *ParentWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState,
 	}
 
 	childrenCount := parentSpec.ChildrenCount
-	state := parentSpec.State
-	if state == "" {
-		state = config.DesiredStateRunning
-	}
 
 	if childrenCount == 0 {
 		return &fsmv2.WrappedDesiredState[ExampleparentConfig]{
-			State: state,
+			State: parentSpec.GetState(),
 			Config: ExampleparentConfig{
 				BaseUserSpec: parentSpec.BaseUserSpec,
 				ChildCount:   0,
@@ -155,7 +151,7 @@ device: {{ .DEVICE_ID }}`
 	}
 
 	return &fsmv2.WrappedDesiredState[ExampleparentConfig]{
-		State: state,
+		State: parentSpec.GetState(),
 		Config: ExampleparentConfig{
 			BaseUserSpec: parentSpec.BaseUserSpec,
 			ChildCount:   childrenCount,

@@ -62,7 +62,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
-	tsnap "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/snapshot"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/snapshot"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/state"
 )
 
@@ -94,12 +94,12 @@ func NewTransportWorker(
 
 	// Derive worker type if not set
 	if identity.WorkerType == "" {
-		wt, err := storage.DeriveWorkerType[tsnap.TransportObservedState]()
+		workerType, err := storage.DeriveWorkerType[snapshot.TransportObservedState]()
 		if err != nil {
 			return nil, fmt.Errorf("failed to derive worker type: %w", err)
 		}
 
-		identity.WorkerType = wt
+		identity.WorkerType = workerType
 	}
 
 	// Create dependencies (will panic if ChannelProvider not set)
@@ -111,39 +111,45 @@ func NewTransportWorker(
 }
 
 // CollectObservedState returns the current observed state of the transport worker.
-// Returns fsmv2.NewObservation  - the collector fills CollectedAt, metrics,
-// and action history after COS returns.
+// Handles context cancellation at entry as required by architecture tests.
 func (w *TransportWorker) CollectObservedState(ctx context.Context, _ fsmv2.DesiredState) (fsmv2.ObservedState, error) {
+	// Context cancellation check at entry (architecture requirement)
 	select {
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	default:
 	}
 
-	d := w.GetDependencies()
+	deps := w.GetDependencies()
 
-	// Required by architecture invariants ValidateFrameworkMetricsCopy and
-	// ValidateActionHistoryCopy (AST scanners in architecture_test.go).
-	// The collector post-processes these values after COS returns.
-	d.GetFrameworkState()
-	d.GetActionHistory()
+	failedToken, failedRelay, failedUUID := deps.GetFailedAuthConfig()
 
-	failedToken, failedRelay, failedUUID := d.GetFailedAuthConfig()
-
-	return fsmv2.NewObservation(tsnap.TransportStatus{
-		JWTToken:          d.GetJWTToken(),
-		JWTExpiry:         d.GetJWTExpiry(),
-		AuthenticatedUUID: d.GetAuthenticatedUUID(),
-		ConsecutiveErrors: d.GetConsecutiveErrors(),
-		LastErrorType:     d.GetLastErrorType(),
-		LastAuthAttemptAt: d.GetLastAuthAttemptAt(),
-		LastRetryAfter:    d.GetLastRetryAfter(),
-		FailedAuthConfig: tsnap.FailedAuthConfig{
+	// Build observed state
+	observed := snapshot.TransportObservedState{
+		CollectedAt:       time.Now(),
+		JWTToken:          deps.GetJWTToken(),
+		JWTExpiry:         deps.GetJWTExpiry(),
+		AuthenticatedUUID: deps.GetAuthenticatedUUID(),
+		ConsecutiveErrors: deps.GetConsecutiveErrors(),
+		LastErrorType:     deps.GetLastErrorType(),
+		LastAuthAttemptAt: deps.GetLastAuthAttemptAt(),
+		LastRetryAfter:    deps.GetLastRetryAfter(),
+		FailedAuthConfig: snapshot.FailedAuthConfig{
 			AuthToken:    failedToken,
 			RelayURL:     failedRelay,
 			InstanceUUID: failedUUID,
 		},
-	}), nil
+	}
+
+	// Framework metrics copy (architecture requirement)
+	if fm := deps.GetFrameworkState(); fm != nil {
+		observed.Metrics.Framework = *fm
+	}
+
+	// Action history copy (architecture requirement)
+	observed.LastActionResults = deps.GetActionHistory()
+
+	return observed, nil
 }
 
 // DeriveDesiredState determines what state the transport worker should be in.
@@ -156,10 +162,9 @@ func (w *TransportWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredSta
 	// retries until config arrives. Field validation below catches empty fields once
 	// a real spec is parsed.
 	if spec == nil {
-		return &fsmv2.WrappedDesiredState[tsnap.TransportConfig]{
+		return &snapshot.TransportDesiredState{
 			State:         config.DesiredStateRunning,
 			ChildrenSpecs: append(makePushChildSpec(config.UserSpec{}), makePullChildSpec(config.UserSpec{})...),
-			Config:        tsnap.TransportConfig{State: config.DesiredStateRunning},
 		}, nil
 	}
 
@@ -181,13 +186,8 @@ func (w *TransportWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredSta
 		return nil, fmt.Errorf("config parse failed: %w", err)
 	}
 
-	transportState := transportSpec.State
-	if transportState == "" {
-		transportState = config.DesiredStateRunning
-	}
-
 	// Validate required fields when worker should be running
-	if transportState == config.DesiredStateRunning {
+	if transportSpec.GetState() == config.DesiredStateRunning {
 		if transportSpec.RelayURL == "" {
 			return nil, fmt.Errorf("relayURL is required when state is running")
 		}
@@ -205,16 +205,14 @@ func (w *TransportWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredSta
 		}
 	}
 
-	return &fsmv2.WrappedDesiredState[tsnap.TransportConfig]{
-		State:         transportState,
+	// Build desired state with valid state values only ("stopped" or "running")
+	return &snapshot.TransportDesiredState{
+		State:         transportSpec.GetState(), // Returns "running" or "stopped"
+		RelayURL:      transportSpec.RelayURL,
+		InstanceUUID:  transportSpec.InstanceUUID,
+		AuthToken:     transportSpec.AuthToken,
+		Timeout:       transportSpec.Timeout,
 		ChildrenSpecs: append(makePushChildSpec(userSpec), makePullChildSpec(userSpec)...),
-		Config: tsnap.TransportConfig{
-			State:        transportState,
-			RelayURL:     transportSpec.RelayURL,
-			InstanceUUID: transportSpec.InstanceUUID,
-			AuthToken:    transportSpec.AuthToken,
-			Timeout:      transportSpec.Timeout,
-		},
 	}, nil
 }
 
@@ -226,13 +224,7 @@ func (w *TransportWorker) GetInitialState() fsmv2.State[any, any] {
 // init registers the transport worker and supervisor factory.
 // This is called automatically when the package is imported.
 func init() {
-	workerType, err := storage.DeriveWorkerType[tsnap.TransportObservedState]()
-	if err != nil {
-		panic(fmt.Sprintf("failed to derive transport worker type: %v", err))
-	}
-
-	if err := factory.RegisterWorkerAndSupervisorFactoryByType(
-		workerType,
+	if err := factory.RegisterWorkerType[snapshot.TransportObservedState, *snapshot.TransportDesiredState](
 		// Worker factory function
 		func(id deps.Identity, logger deps.FSMLogger, stateReader deps.StateReader, extraDeps map[string]any) fsmv2.Worker {
 			worker, err := NewTransportWorker(id, logger, stateReader)
@@ -248,7 +240,7 @@ func init() {
 		},
 		// Supervisor factory function
 		func(cfg interface{}) interface{} {
-			return supervisor.NewSupervisor[fsmv2.Observation[tsnap.TransportStatus], *fsmv2.WrappedDesiredState[tsnap.TransportConfig]](
+			return supervisor.NewSupervisor[snapshot.TransportObservedState, *snapshot.TransportDesiredState](
 				cfg.(supervisor.Config))
 		},
 	); err != nil {

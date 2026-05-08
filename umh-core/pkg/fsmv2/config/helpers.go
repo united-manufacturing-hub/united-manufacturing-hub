@@ -30,7 +30,7 @@ import (
 //	        return config.DesiredState{}, err
 //	    }
 //	    // Use parsed.Field1, parsed.Field2, etc.
-//	    return config.DesiredState{State: parsed.State}, nil
+//	    return config.DesiredState{State: parsed.GetState()}, nil
 //	}
 //
 // For nil specs (used during initialization), returns zero value of T.

@@ -85,16 +85,13 @@ var _ = Describe("PushWorker", func() {
 			Expect(err).ToNot(HaveOccurred())
 		})
 
-		It("should return non-nil observed state", func() {
+		It("should return valid observed state with timestamp", func() {
 			ctx := context.Background()
 			observed, err := worker.CollectObservedState(ctx, nil)
 
 			Expect(err).ToNot(HaveOccurred())
 			Expect(observed).NotTo(BeNil())
-			// Timestamp is zero from NewObservation  - the collector fills it post-COS.
-			// Only assert the return is non-nil and of the correct type.
-			_, ok := observed.(fsmv2.Observation[snapshot.PushStatus])
-			Expect(ok).To(BeTrue())
+			Expect(observed.GetTimestamp()).NotTo(BeZero())
 		})
 
 		It("should handle context cancellation", func() {
@@ -112,9 +109,9 @@ var _ = Describe("PushWorker", func() {
 			observed, err := worker.CollectObservedState(ctx, nil)
 
 			Expect(err).ToNot(HaveOccurred())
-			typedObs, ok := observed.(fsmv2.Observation[snapshot.PushStatus])
+			typedObs, ok := observed.(snapshot.PushObservedState)
 			Expect(ok).To(BeTrue())
-			Expect(typedObs.Status.HasTransport).To(BeTrue())
+			Expect(typedObs.HasTransport).To(BeTrue())
 		})
 
 		It("should report JWT token availability from parent deps", func() {
@@ -124,9 +121,9 @@ var _ = Describe("PushWorker", func() {
 			observed, err := worker.CollectObservedState(ctx, nil)
 
 			Expect(err).ToNot(HaveOccurred())
-			typedObs, ok := observed.(fsmv2.Observation[snapshot.PushStatus])
+			typedObs, ok := observed.(snapshot.PushObservedState)
 			Expect(ok).To(BeTrue())
-			Expect(typedObs.Status.HasValidToken).To(BeTrue())
+			Expect(typedObs.HasValidToken).To(BeTrue())
 		})
 
 		It("should report HasValidToken false for expired token", func() {
@@ -136,9 +133,9 @@ var _ = Describe("PushWorker", func() {
 			observed, err := worker.CollectObservedState(ctx, nil)
 
 			Expect(err).ToNot(HaveOccurred())
-			typedObs, ok := observed.(fsmv2.Observation[snapshot.PushStatus])
+			typedObs, ok := observed.(snapshot.PushObservedState)
 			Expect(ok).To(BeTrue())
-			Expect(typedObs.Status.HasValidToken).To(BeFalse())
+			Expect(typedObs.HasValidToken).To(BeFalse())
 		})
 
 		It("should report consecutive errors from child deps", func() {
@@ -149,20 +146,59 @@ var _ = Describe("PushWorker", func() {
 			observed, err := worker.CollectObservedState(ctx, nil)
 
 			Expect(err).ToNot(HaveOccurred())
-			typedObs, ok := observed.(fsmv2.Observation[snapshot.PushStatus])
+			typedObs, ok := observed.(snapshot.PushObservedState)
 			Expect(ok).To(BeTrue())
-			Expect(typedObs.Status.ConsecutiveErrors).To(Equal(2))
+			Expect(typedObs.ConsecutiveErrors).To(Equal(2))
 		})
 
-		It("should return Observation type (framework fields filled by collector)", func() {
+		It("should include framework metrics", func() {
 			ctx := context.Background()
 			observed, err := worker.CollectObservedState(ctx, nil)
 
 			Expect(err).ToNot(HaveOccurred())
-			// NewObservation returns Observation[T]  - collector post-processes it.
-			// We only verify the return type here; metrics are filled post-COS.
-			_, ok := observed.(fsmv2.Observation[snapshot.PushStatus])
+			typedObs, ok := observed.(snapshot.PushObservedState)
 			Expect(ok).To(BeTrue())
+			Expect(typedObs.Metrics).NotTo(BeNil())
+		})
+
+		It("should drain worker metrics from MetricsRecorder into ObservedState", func() {
+			d := worker.GetDependencies()
+			d.MetricsRecorder().IncrementCounter(depspkg.CounterMessagesPushed, 5)
+			d.MetricsRecorder().IncrementCounter(depspkg.CounterBytesPushed, 1024)
+			d.MetricsRecorder().SetGauge(depspkg.GaugeLastPushLatencyMs, 42.0)
+
+			ctx := context.Background()
+			observed, err := worker.CollectObservedState(ctx, nil)
+
+			Expect(err).ToNot(HaveOccurred())
+			typedObs, ok := observed.(snapshot.PushObservedState)
+			Expect(ok).To(BeTrue())
+
+			Expect(typedObs.Metrics.Worker.Counters).NotTo(BeNil())
+			Expect(typedObs.Metrics.Worker.Counters["messages_pushed"]).To(Equal(int64(5)))
+			Expect(typedObs.Metrics.Worker.Counters["bytes_pushed"]).To(Equal(int64(1024)))
+
+			Expect(typedObs.Metrics.Worker.Gauges).NotTo(BeNil())
+			Expect(typedObs.Metrics.Worker.Gauges["last_push_latency_ms"]).To(Equal(42.0))
+		})
+
+		It("should drain metrics from recorder buffer on each tick", func() {
+			ctx := context.Background()
+
+			d := worker.GetDependencies()
+			d.MetricsRecorder().IncrementCounter(depspkg.CounterPushOps, 1)
+			observed1, err := worker.CollectObservedState(ctx, nil)
+			Expect(err).ToNot(HaveOccurred())
+			typedObs1, ok := observed1.(snapshot.PushObservedState)
+			Expect(ok).To(BeTrue())
+			Expect(typedObs1.Metrics.Worker.Counters["push_ops"]).To(Equal(int64(1)))
+
+			d.MetricsRecorder().IncrementCounter(depspkg.CounterPushOps, 2)
+			observed2, err := worker.CollectObservedState(ctx, nil)
+			Expect(err).ToNot(HaveOccurred())
+			typedObs2, ok := observed2.(snapshot.PushObservedState)
+			Expect(ok).To(BeTrue())
+			Expect(typedObs2.Metrics.Worker.Counters["push_ops"]).To(Equal(int64(2)))
 		})
 	})
 
@@ -178,9 +214,9 @@ var _ = Describe("PushWorker", func() {
 
 			Expect(err).ToNot(HaveOccurred())
 			Expect(desired).NotTo(BeNil())
-			typed, ok := desired.(*fsmv2.WrappedDesiredState[snapshot.PushConfig])
+			typed, ok := desired.(*snapshot.PushDesiredState)
 			Expect(ok).To(BeTrue())
-			Expect(typed.State).To(Equal("running"))
+			Expect(typed.GetState()).To(Equal("running"))
 		})
 
 		It("should return correct state for valid spec", func() {
@@ -193,9 +229,9 @@ var _ = Describe("PushWorker", func() {
 
 			Expect(err).ToNot(HaveOccurred())
 			Expect(desired).NotTo(BeNil())
-			typedStopped, okStopped := desired.(*fsmv2.WrappedDesiredState[snapshot.PushConfig])
+			typedStopped, okStopped := desired.(*snapshot.PushDesiredState)
 			Expect(okStopped).To(BeTrue())
-			Expect(typedStopped.State).To(Equal("stopped"))
+			Expect(typedStopped.GetState()).To(Equal("stopped"))
 		})
 
 		It("should return running state for empty config", func() {
@@ -207,9 +243,9 @@ var _ = Describe("PushWorker", func() {
 			desired, err := worker.DeriveDesiredState(spec)
 
 			Expect(err).ToNot(HaveOccurred())
-			typedRunning, okRunning := desired.(*fsmv2.WrappedDesiredState[snapshot.PushConfig])
+			typedRunning, okRunning := desired.(*snapshot.PushDesiredState)
 			Expect(okRunning).To(BeTrue())
-			Expect(typedRunning.State).To(Equal("running"))
+			Expect(typedRunning.GetState()).To(Equal("running"))
 		})
 
 		It("should be deterministic", func() {
@@ -223,11 +259,11 @@ var _ = Describe("PushWorker", func() {
 
 			Expect(err1).ToNot(HaveOccurred())
 			Expect(err2).ToNot(HaveOccurred())
-			pd1, pdOk1 := desired1.(*fsmv2.WrappedDesiredState[snapshot.PushConfig])
+			pd1, pdOk1 := desired1.(*snapshot.PushDesiredState)
 			Expect(pdOk1).To(BeTrue())
-			pd2, pdOk2 := desired2.(*fsmv2.WrappedDesiredState[snapshot.PushConfig])
+			pd2, pdOk2 := desired2.(*snapshot.PushDesiredState)
 			Expect(pdOk2).To(BeTrue())
-			Expect(pd1.State).To(Equal(pd2.State))
+			Expect(pd1.GetState()).To(Equal(pd2.GetState()))
 		})
 
 		It("should return error for invalid spec type", func() {
