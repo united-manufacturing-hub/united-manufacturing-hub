@@ -120,7 +120,7 @@ func (s *StoppedState) Next(snapAny any) (fsmv2.State[any, any], fsmv2.Signal, f
     snap := helpers.ConvertSnapshot[MyObservedState, *MyDesiredState](snapAny)
 
     // ALWAYS check shutdown first
-    if snap.Desired.IsShutdownRequested() {
+    if snap.Desired.IsBeingRemoved() {
         return s, fsmv2.SignalNeedsRemoval, nil
     }
 
@@ -161,7 +161,7 @@ func (s *TryingToStartState) Next(snapAny any) (fsmv2.State[any, any], fsmv2.Sig
     snap := helpers.ConvertSnapshot[MyObservedState, *MyDesiredState](snapAny)
 
     // Check shutdown first
-    if snap.Observed.IsStopRequired() {
+    if snap.Observed.ShouldStop() {
         return &TryingToStopState{}, fsmv2.SignalNone, nil
     }
 
@@ -315,7 +315,7 @@ type StoppedState struct{}
 func (s *StoppedState) Next(snapAny any) (fsmv2.State[any, any], fsmv2.Signal, fsmv2.Action[any]) {
     snap := helpers.ConvertSnapshot[MyObservedState, *MyDesiredState](snapAny)
 
-    if snap.Desired.IsShutdownRequested() {
+    if snap.Desired.IsBeingRemoved() {
         return s, fsmv2.SignalNeedsRemoval, nil
     }
 
@@ -363,7 +363,7 @@ func (s *RunningState) Next(snapAny any) (fsmv2.State[any, any], fsmv2.Signal, f
     snap := helpers.ConvertSnapshot[MyObservedState, *MyDesiredState](snapAny)
 
     // Check shutdown first (equivalent to leave callback)
-    if snap.Observed.IsStopRequired() {
+    if snap.Observed.ShouldStop() {
         return &TryingToStopState{}, fsmv2.SignalNone, nil
     }
 
@@ -688,7 +688,16 @@ func (s *TryingToConnectState) Next(snapAny any) (fsmv2.State[any, any], fsmv2.S
 
 ObservedState must include a timestamp for staleness detection. The supervisor uses this to detect when observations are too old.
 
-**Required:**
+**Worker API v2 (preferred):** Use `fsmv2.NewObservation(status)` — the collector sets `CollectedAt` automatically.
+
+```go
+func (w *MyWorker) CollectObservedState(ctx context.Context, desired fsmv2.DesiredState) (fsmv2.ObservedState, error) {
+    return fsmv2.NewObservation(MyStatus{Healthy: true}), nil
+}
+```
+
+**Legacy API:** Set `CollectedAt` manually in your ObservedState.
+
 ```go
 type MyObservedState struct {
     CollectedAt time.Time  // REQUIRED for staleness detection
@@ -721,7 +730,7 @@ return s, fsmv2.SignalNone, &SomeAction{}
 
 ### Check shutdown first in every state
 
-Every state's Next() method should check IsShutdownRequested() as the first condition.
+Every state's Next() method should check IsBeingRemoved() as the first condition.
 
 **Required pattern:**
 ```go
@@ -729,7 +738,7 @@ func (s *AnyState) Next(snapAny any) (fsmv2.State[any, any], fsmv2.Signal, fsmv2
     snap := helpers.ConvertSnapshot[MyObservedState, *MyDesiredState](snapAny)
 
     // ALWAYS check shutdown first
-    if snap.Desired.IsShutdownRequested() {
+    if snap.Desired.IsBeingRemoved() {
         return &StoppedState{}, fsmv2.SignalNeedsRemoval, nil
         // Or transition to TryingToStop if cleanup needed
     }
@@ -760,6 +769,41 @@ func (d *MyDependencies) SetConnected(v bool) {
     d.connected = v
 }
 ```
+
+## Migrating from FSMv2 Old-API to Worker API v2
+
+Worker API v2 replaces the 7-file pattern with a single-file approach using generics. Both APIs coexist; migrate workers one at a time.
+
+### What changes
+
+| Old API | Worker API v2 |
+|---------|---------------|
+| `snapshot/snapshot.go` with ObservedState, DesiredState, Snapshot structs | `Observation[TStatus]`, `WrappedDesiredState[TConfig]`, `WorkerSnapshot[TConfig, TStatus]` |
+| `worker.go` with `CollectObservedState`, `DeriveDesiredState`, `GetInitialState` | Only `CollectObservedState` required; others provided by `WorkerBase` |
+| `dependencies.go` with custom deps struct | `deps.Identity`, `deps.FSMLogger`, `deps.StateReader` passed to constructor |
+| `init()` with `factory.RegisterWorkerType[...]` + supervisor factory | `register.Worker[TConfig, TStatus, register.NoDeps]("type", constructor)` |
+| `helpers.ConvertSnapshot[Obs, *Des](snapAny)` in states | `fsmv2.ConvertWorkerSnapshot[TConfig, TStatus](snapAny)` in states |
+| `snap.Desired.IsBeingRemoved` method call | `snap.ShouldStop()` (merged shutdown + parent-stop) or `snap.Desired.IsBeingRemoved` (raw shutdown flag) |
+| Manual `SetState`, `SetBeingRemoved`, `SetChildrenCounts` in ObservedState | Automatic via collector duck-typing on `Observation` |
+
+### Migration steps
+
+1. **Define TConfig and TStatus** — extract config fields from your DesiredState and status fields from your ObservedState into plain structs with JSON tags
+2. **Embed WorkerBase** — replace your worker struct fields with `fsmv2.WorkerBase[TConfig, TStatus, register.NoDeps]` (or your custom deps type)
+3. **Replace constructor** — call `w.InitBase(id, logger, sr)` instead of manual dependency wiring
+4. **Simplify CollectObservedState** — use `fsmv2.ExtractConfig[TConfig](desired)` for config access, return `fsmv2.NewObservation(TStatus{...})` (the collector handles CollectedAt, framework metrics, action history, and metric accumulation automatically)
+5. **Delete DeriveDesiredState and GetInitialState** — provided by WorkerBase (override only if needed)
+6. **Update states** — use `fsmv2.ConvertWorkerSnapshot[TConfig, TStatus](snapAny)` and `snap.ShouldStop()` (or `snap.Desired.IsBeingRemoved` when distinguishing self-shutdown from parent-stop)
+7. **Replace registration** — single `register.Worker[TConfig, TStatus, register.NoDeps]("type", constructor)` call (replace `register.NoDeps` with your deps type if using typed deps)
+8. **Delete snapshot/, dependencies.go, userspec.go** — no longer needed
+9. **Implement capability interfaces** on your worker struct if needed (ActionProvider, ChildSpecProvider, etc.)
+
+### What you can delete after migration
+
+- `snapshot/snapshot.go` — replaced by framework types
+- `dependencies.go` — replaced by `deps.Identity` + `deps.FSMLogger` + `deps.StateReader`
+- `userspec.go` — TConfig IS your userspec
+- Factory/supervisor registration boilerplate in `init()`
 
 ## Further Reading
 

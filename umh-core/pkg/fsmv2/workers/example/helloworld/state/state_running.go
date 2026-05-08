@@ -17,7 +17,7 @@ package state
 import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/helloworld/snapshot"
+	hello_world "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/helloworld"
 )
 
 // RunningState represents the worker actively running.
@@ -27,20 +27,20 @@ type RunningState struct {
 }
 
 // Next implements state transition logic for RunningState.
-//
-// RUNNING STATE PATTERN:
-//   - Check shutdown first (transition to stopped)
-//   - Otherwise stay in running state
-//   - No actions needed in steady state
 func (s *RunningState) Next(snapAny any) fsmv2.NextResult[any, any] {
-	snap := helpers.ConvertSnapshot[snapshot.HelloworldObservedState, *snapshot.HelloworldDesiredState](snapAny)
+	snap := fsmv2.ConvertWorkerSnapshot[hello_world.HelloworldConfig, hello_world.HelloworldStatus](snapAny)
 
 	// 1. Check shutdown - transition back to stopped
-	if snap.Desired.IsShutdownRequested() {
+	if snap.IsStopRequired() {
 		return fsmv2.Result[any, any](&StoppedState{}, fsmv2.SignalNone, nil, "Shutdown requested, transitioning to stopped")
 	}
 
-	// 2. Stay in running state - nothing to do
+	// 2. Check mood from mood file (read in CollectObservedState)
+	if snap.Status.Mood == "sad" {
+		return fsmv2.Result[any, any](&DegradedState{}, fsmv2.SignalNone, nil, "Mood is sad, transitioning to degraded")
+	}
+
+	// 3. Stay in running state
 	return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil, "Worker is running and has said hello")
 }
 

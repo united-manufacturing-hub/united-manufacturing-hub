@@ -174,7 +174,9 @@
 //
 // Key concepts:
 //   - Parent returns ChildrenSpecs in DeriveDesiredState()
-//   - ChildStartStates coordinates child lifecycle (not data passing)
+//   - Children are always-enabled when the parent is running; set
+//     Enabled: false on a child spec to drive it to Stopped while keeping
+//     the supervisor resident
 //   - Use VariableBundle for passing data to children
 //
 // See workers/example/exampleparent/worker.go for a complete example.
@@ -186,10 +188,6 @@
 //	// ParseUserSpec[T] - type-safe parsing of UserSpec.Config
 //	parsed, err := config.ParseUserSpec[MyConfig](spec)
 //	if err != nil { return config.DesiredState{}, err }
-//
-//	// DeriveLeafState[T] - one-liner for leaf workers (no children)
-//	// Requires MyConfig to implement GetState() string
-//	return config.DeriveLeafState[MyConfig](spec)
 //
 // See config/helpers.go for documentation.
 //
@@ -231,27 +229,33 @@
 //
 // Pattern 2: Full visibility (for inspecting individual children)
 //
-//	func (o MyObservedState) SetChildrenView(view any) fsmv2.ObservedState {
-//	    if cv, ok := view.(config.ChildrenView); ok {
-//	        healthy, unhealthy := cv.Counts()
-//	        o.ChildrenHealthy = healthy
-//	        o.ChildrenUnhealthy = unhealthy
-//	        // Can also use: cv.List(), cv.Get(name), cv.AllHealthy(), cv.AllStopped()
-//	    }
+//	func (o MyObservedState) SetChildrenView(view config.ChildrenView) fsmv2.ObservedState {
+//	    o.ChildrenHealthy = view.HealthyCount
+//	    o.ChildrenUnhealthy = view.UnhealthyCount
+//	    // Can also use: view.List(), view.Get(name), view.AllHealthy, view.AllStopped
 //	    return o
 //	}
 //
-// ChildrenView interface provides:
-//   - List() []ChildInfo: All children with state info
-//   - Get(name string) *ChildInfo: Single child by name
-//   - Counts() (healthy, unhealthy int): Aggregate health counts
-//   - AllHealthy() bool: True if all children healthy
-//   - AllStopped() bool: True if all children stopped
+// ChildrenView struct provides:
+//   - Children []ChildInfo: All children with state info
+//   - List() []ChildInfo: Same as Children, kept for migration compatibility
+//   - Get(name string) (ChildInfo, bool): Single child by name
+//   - HealthyCount / UnhealthyCount: Aggregate health counts
+//   - AllHealthy / AllOperational / AllStopped: Aggregate predicate flags
 //
 // ChildInfo provides read-only info about each child:
-//   - Name, WorkerType, StateName, StateReason, IsHealthy, ErrorMsg, HierarchyPath
+//   - Name, WorkerType, StateName, StateReason, IsHealthy, ErrorMsg, HierarchyPath, Phase
 //
-// See workers/example/exampleparent/snapshot/snapshot.go for the simple counts pattern.
+// StateName is display-only (raw form like "Connected" or "TryingToConnect").
+// Phase (config.LifecyclePhase) is the canonical predicate source — it is
+// populated from the child's cached lifecycle phase and is what
+// NewChildrenView's aggregate predicates (HealthyCount, AllHealthy,
+// AllOperational, AllStopped) read. Do NOT recompute predicates from StateName;
+// the prefix-only ParseLifecyclePhase parser cannot classify production raw
+// state names and would silently mis-aggregate.
+//
+// See observation.go (Observation.SetChildrenCounts / ChildrenHealthy /
+// ChildrenUnhealthy) for the canonical counts hook supplied by the framework.
 // See config/childspec.go for ChildrenView and ChildInfo definitions.
 //
 // # Architecture documentation
@@ -291,9 +295,44 @@
 // Use phase-specific base types (internal/helpers/base_states.go) to ensure
 // compile-time phase safety.
 //
+// ### Lifecycle transition vocabulary
+//
+// Two naming conventions are canonical for transition states. Pick based on
+// what the worker actually does in that state — not by feel or precedent.
+//
+//   - Use "Xing" (Stopping, Starting, Connecting) when the state runs
+//     active cleanup or setup: the worker drives the work, optionally
+//     gated by an observation confirming completion.
+//     Examples: transport.StoppingState (drains connections), transport.StartingState
+//     (runs auth with backoff).
+//
+//   - Use "TryingToX" (TryingToStop, TryingToStart, TryingToConnect) when
+//     the state emits a signal or action and waits for an external observation
+//     to confirm X completed. The state itself is passive; it observes.
+//     Examples: examplechild.TryingToStopState (emits despawn, observes health).
+//
+// Forbidden synonyms: "ShuttingDown" (use "Stopping"), "RunningDegraded" (use
+// "Degraded"). Synonyms cause lexical drift that confuses cross-worker readers.
+//
+// ### One-way stop trajectory
+//
+// TryingToStop and Stopping states are ONE-WAY. They do NOT check
+// !ShouldStop() to abort cleanup mid-flight. Once a worker enters a stop
+// state it runs the full trajectory to Stopped before any resume can begin.
+//
+// This design rule makes the CHANGE-19 pause/resume reducer race-free: the
+// supervisor reducer can flip Enabled true→false→true during cleanup without
+// corrupting the state machine, because the stop trajectory ignores it until
+// Stopped is reached. At Stopped, the worker checks ShouldStop() and either
+// stays stopped or re-enters TryingToStart.
+//
+// If you are writing a new stop state and feel tempted to add a
+// "if !ShouldStop() { return GoTo{Running} }" branch — don't. That is the
+// bug this rule prevents.
+//
 // ## Shutdown handling
 //
-// Check IsShutdownRequested() as the first conditional in Next().
+// Check IsBeingRemoved as the first conditional in Next().
 // See workers/example/examplechild/state/ for examples.
 //
 // ## Type-safe dependencies
@@ -326,7 +365,7 @@
 //
 //   - Keep Next() pure (no side effects)
 //   - Make actions idempotent (check if work already done)
-//   - Check IsShutdownRequested() first in all states
+//   - Check IsBeingRemoved first in all states
 //   - Use type-safe state structs, not strings
 //   - Return action or transition, not both (the supervisor panics if both are returned)
 //   - Handle context cancellation in all async operations

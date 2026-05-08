@@ -12,16 +12,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package action_test
+package hello_world
 
-import (
-	"testing"
+import "context"
 
-	. "github.com/onsi/ginkgo/v2"
-	. "github.com/onsi/gomega"
-)
+// SayHelloActionName is the name used for logging and metrics.
+const SayHelloActionName = "say_hello"
 
-func TestAction(t *testing.T) {
-	RegisterFailHandler(Fail)
-	RunSpecs(t, "Helloworld Action Suite")
+// SayHello implements the say-hello action logic.
+// Idempotent: skips if hello was already said.
+func SayHello(_ context.Context, d *HelloworldDependencies) error {
+	logger := d.ActionLogger(SayHelloActionName)
+
+	if d.HasSaidHello() {
+		logger.Debug("already_said_hello")
+		return nil
+	}
+
+	logger.Info("hello_world")
+	d.SetHelloSaid(true)
+
+	return nil
 }

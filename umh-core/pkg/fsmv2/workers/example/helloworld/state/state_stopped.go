@@ -12,20 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package state contains the FSM states for the helloworld worker.
-//
-// State Machine:
-//
-//	stopped -> trying_to_start -> running
-//	   ^                            |
-//	   └────── (shutdown) ──────────┘
+// Package state defines the FSM states for the helloworld worker.
 package state
 
 import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/helloworld/snapshot"
+	hello_world "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/helloworld"
 )
+
+func init() {
+	fsmv2.RegisterInitialState("helloworld", &StoppedState{})
+}
 
 // StoppedState is the initial state where the worker is not running.
 // It waits for the desired state to request running, then transitions.
@@ -34,33 +32,19 @@ type StoppedState struct {
 }
 
 // Next implements the state transition logic.
-//
-// STATE MACHINE PATTERN:
-//  1. Check shutdown FIRST - always honor shutdown requests
-//  2. Check conditions for transitioning to other states
-//  3. If no transition, stay in current state
-//
-// Returns:
-//   - NextResult containing next state, signal, action, and reason
 func (s *StoppedState) Next(snapAny any) fsmv2.NextResult[any, any] {
-	snap := helpers.ConvertSnapshot[snapshot.HelloworldObservedState, *snapshot.HelloworldDesiredState](snapAny)
+	snap := fsmv2.ConvertWorkerSnapshot[hello_world.HelloworldConfig, hello_world.HelloworldStatus](snapAny)
 
-	// 1. ALWAYS check shutdown first
-	if snap.Desired.IsShutdownRequested() {
+	// 1. Check shutdown first
+	if snap.IsStopRequired() {
 		return fsmv2.Result[any, any](s, fsmv2.SignalNeedsRemoval, nil, "Shutdown requested, signaling removal")
 	}
 
-	// 2. Check if we should start running
-	if !snap.Desired.IsShutdownRequested() {
-		return fsmv2.Result[any, any](&TryingToStartState{}, fsmv2.SignalNone, nil, "Starting worker")
-	}
-
-	// 3. Stay in stopped state
-	return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil, "Worker is stopped, waiting to start")
+	// 2. Start running
+	return fsmv2.Result[any, any](&TryingToStartState{}, fsmv2.SignalNone, nil, "Starting worker")
 }
 
 // String returns the state name for logging and metrics.
-// Use helpers.DeriveStateName to get consistent snake_case naming.
 func (s *StoppedState) String() string {
 	return helpers.DeriveStateName(s)
 }

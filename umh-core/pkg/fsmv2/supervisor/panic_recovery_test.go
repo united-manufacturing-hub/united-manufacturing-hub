@@ -511,7 +511,7 @@ type panickingWorker struct {
 	panicTriggered      bool
 }
 
-func (w *panickingWorker) CollectObservedState(ctx context.Context) (fsmv2.ObservedState, error) {
+func (w *panickingWorker) CollectObservedState(ctx context.Context, _ fsmv2.DesiredState) (fsmv2.ObservedState, error) {
 	return &testutil.ObservedState{
 		ID:          "panic-worker",
 		CollectedAt: time.Now(),

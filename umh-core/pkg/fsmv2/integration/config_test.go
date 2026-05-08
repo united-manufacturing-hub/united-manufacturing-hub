@@ -33,9 +33,9 @@ var _ = Describe("Phase 0.5 Integration Tests", func() {
 					"api_endpoint": "https://api.example.com",
 					"cluster_id":   "cluster-123",
 				},
-				Internal: map[string]any{
-					"id":        "worker-456",
-					"timestamp": "2025-11-04T10:00:00Z",
+				Internal: config.VariablesInternal{
+					WorkerID: "worker-456",
+					ParentID: "parent-789",
 				},
 			}
 
@@ -52,7 +52,7 @@ var _ = Describe("Phase 0.5 Integration Tests", func() {
 			internalMap, ok := flattened["internal"].(map[string]any)
 			Expect(ok).To(BeTrue())
 			Expect(internalMap["id"]).To(Equal("worker-456"))
-			Expect(internalMap["timestamp"]).To(Equal("2025-11-04T10:00:00Z"))
+			Expect(internalMap["parent_id"]).To(Equal("parent-789"))
 		})
 	})
 
@@ -189,8 +189,8 @@ internal_id: {{ .internal.id }}`
 				Global: map[string]any{
 					"api_endpoint": "https://api.example.com",
 				},
-				Internal: map[string]any{
-					"id": "worker-789",
+				Internal: config.VariablesInternal{
+					WorkerID: "worker-789",
 				},
 			}
 

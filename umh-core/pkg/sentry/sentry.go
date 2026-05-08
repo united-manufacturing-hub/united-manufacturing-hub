@@ -147,12 +147,12 @@ func createSentryEventWithContext(level sentry.Level, err error, context map[str
 			case int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64, float32, float64, bool:
 				event.Tags[key] = convertToString(v)
 			default:
-				// For complex types, add them to a dedicated context bucket
-				if event.Contexts["extra"] == nil {
-					event.Contexts["extra"] = make(map[string]interface{})
+				// For complex types, add them to the extra data instead
+				if event.Extra == nil {
+					event.Extra = make(map[string]interface{})
 				}
 
-				event.Contexts["extra"][key] = v
+				event.Extra[key] = v
 			}
 
 

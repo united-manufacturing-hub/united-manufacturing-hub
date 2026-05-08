@@ -133,7 +133,7 @@ var _ = Describe("LegacyChannelBridge", func() {
 			cancel()
 		})
 
-		It("should convert transport.UMHMessage to models.UMHMessage on inbound", func() {
+		It("should convert types.UMHMessage to models.UMHMessage on inbound", func() {
 			legacyIn := make(chan *models.UMHMessage, 10)
 			legacyOut := make(chan *models.UMHMessage, 10)
 			bridge := fsmv2_adapter.NewLegacyChannelBridge(legacyIn, legacyOut, logger, 0)
@@ -154,7 +154,7 @@ var _ = Describe("LegacyChannelBridge", func() {
 			)))
 		})
 
-		It("should convert models.UMHMessage to transport.UMHMessage on outbound", func() {
+		It("should convert models.UMHMessage to types.UMHMessage on outbound", func() {
 			legacyIn := make(chan *models.UMHMessage, 10)
 			legacyOut := make(chan *models.UMHMessage, 10)
 			bridge := fsmv2_adapter.NewLegacyChannelBridge(legacyIn, legacyOut, logger, 0)
@@ -262,7 +262,7 @@ var _ = Describe("LegacyChannelBridge", func() {
 	})
 
 	Describe("TraceID preservation", func() {
-		It("should preserve TraceID when converting transport.UMHMessage to models.UMHMessage on inbound", func() {
+		It("should preserve TraceID when converting types.UMHMessage to models.UMHMessage on inbound", func() {
 			legacyIn := make(chan *models.UMHMessage, 10)
 			legacyOut := make(chan *models.UMHMessage, 10)
 			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
@@ -292,7 +292,7 @@ var _ = Describe("LegacyChannelBridge", func() {
 			)))
 		})
 
-		It("should preserve TraceID when converting models.UMHMessage to transport.UMHMessage on outbound", func() {
+		It("should preserve TraceID when converting models.UMHMessage to types.UMHMessage on outbound", func() {
 			legacyIn := make(chan *models.UMHMessage, 10)
 			legacyOut := make(chan *models.UMHMessage, 10)
 			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
@@ -321,7 +321,7 @@ var _ = Describe("LegacyChannelBridge", func() {
 			)))
 		})
 
-		It("should handle nil Metadata when converting to transport.UMHMessage", func() {
+		It("should handle nil Metadata when converting to types.UMHMessage", func() {
 			legacyIn := make(chan *models.UMHMessage, 10)
 			legacyOut := make(chan *models.UMHMessage, 10)
 			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)

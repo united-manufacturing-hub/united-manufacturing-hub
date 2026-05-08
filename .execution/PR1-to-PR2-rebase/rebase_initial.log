@@ -1,0 +1,15 @@
+Rebasing (1/33)Rebasing (2/33)Rebasing (3/33)CONFLICT (modify/delete): umh-core/pkg/fsmv2/workers/example/helloworld/snapshot/snapshot.go deleted in 739e778a7 (refactor(fsmv2): migrate HelloWorld states to WorkerSnapshot) and modified in HEAD.  Version HEAD of umh-core/pkg/fsmv2/workers/example/helloworld/snapshot/snapshot.go left in tree.
+Auto-merging umh-core/pkg/fsmv2/workers/example/helloworld/state/degraded.go
+CONFLICT (content): Merge conflict in umh-core/pkg/fsmv2/workers/example/helloworld/state/degraded.go
+Auto-merging umh-core/pkg/fsmv2/workers/example/helloworld/state/running.go
+CONFLICT (content): Merge conflict in umh-core/pkg/fsmv2/workers/example/helloworld/state/running.go
+Auto-merging umh-core/pkg/fsmv2/workers/example/helloworld/state/stopped.go
+CONFLICT (content): Merge conflict in umh-core/pkg/fsmv2/workers/example/helloworld/state/stopped.go
+Auto-merging umh-core/pkg/fsmv2/workers/example/helloworld/state/trying_to_start.go
+CONFLICT (content): Merge conflict in umh-core/pkg/fsmv2/workers/example/helloworld/state/trying_to_start.go
+error: could not apply 739e778a7... refactor(fsmv2): migrate HelloWorld states to WorkerSnapshot
+hint: Resolve all conflicts manually, mark them as resolved with
+hint: "git add/rm <conflicted_files>", then run "git rebase --continue".
+hint: You can instead skip this commit: run "git rebase --skip".
+hint: To abort and get back to the state before "git rebase", run "git rebase --abort".
+Could not apply 739e778a7... refactor(fsmv2): migrate HelloWorld states to WorkerSnapshot

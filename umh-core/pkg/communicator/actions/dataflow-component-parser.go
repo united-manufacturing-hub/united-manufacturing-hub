@@ -138,18 +138,14 @@ func ParseCustomDataFlowComponent(payload interface{}) (models.CDFCPayload, erro
 }
 
 // ValidateCustomDataFlowComponentPayload validates the structure and YAML content of a CDFCPayload.
-// validateInput should be false for write DFCs where input is auto-generated.
-// validateOutput should be false for read DFCs where output is auto-generated.
-func ValidateCustomDataFlowComponentPayload(payload models.CDFCPayload, validateInput bool, validateOutput bool) error {
+func ValidateCustomDataFlowComponentPayload(payload models.CDFCPayload, validateOutput bool) error {
 	// Validate input fields
-	if validateInput {
-		if payload.Inputs.Type == "" {
-			return errors.New("missing required field inputs.type")
-		}
+	if payload.Inputs.Type == "" {
+		return errors.New("missing required field inputs.type")
+	}
 
-		if payload.Inputs.Data == "" {
-			return errors.New("missing required field inputs.data")
-		}
+	if payload.Inputs.Data == "" {
+		return errors.New("missing required field inputs.data")
 	}
 
 	// Validate output fields
@@ -163,9 +159,8 @@ func ValidateCustomDataFlowComponentPayload(payload models.CDFCPayload, validate
 		}
 	}
 
-	// Validate pipeline. Write DFCs (validateInput=false) may have an empty pipeline
-	// when acting as a passthrough. Read DFCs and stand-alone DFCs always require processors.
-	if validateInput && len(payload.Pipeline) == 0 {
+	// Validate pipeline
+	if len(payload.Pipeline) == 0 {
 		return errors.New("missing required field pipeline.processors")
 	}
 

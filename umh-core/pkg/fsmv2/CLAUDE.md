@@ -40,6 +40,25 @@ func (w *ParentWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState,
 
 Children aggregation (health counts) is handled by the supervisor, not in `CollectObservedState`. The supervisor calls `SetChildrenCounts()` after collection.
 
+## Observation Pattern (NewObservation[T])
+
+`NewObservation[TStatus]` is the preferred constructor for `CollectObservedState` return values. The supervisor's collector wrapping path fills framework fields (CollectedAt, metrics, action history) automatically after COS returns, so workers using this constructor do not set those fields manually.
+
+**The zero-time gate**: The collector checks `observed.GetTimestamp().IsZero()`. If true (`NewObservation`), it runs post-COS wrapping. If false (`WrapStatus`/`WrapStatusAccumulated`), it skips wrapping since the worker already handled it. Both paths coexist safely during migration.
+
+**Drain is destructive**: `MetricsRecorder().Drain()` empties the buffer. Only one path should drain per tick. `NewObservation` workers must not call `Drain()` in COS — the collector does it.
+
+Workers return `fsmv2.NewObservation(status)` from `CollectObservedState`:
+```go
+func (w *MyWorker) CollectObservedState(ctx context.Context, desired fsmv2.DesiredState) (fsmv2.ObservedState, error) {
+    if ctx.Err() != nil {
+        return nil, ctx.Err()
+    }
+    status := MyStatus{/* ... */}
+    return fsmv2.NewObservation(status), nil
+}
+```
+
 ## Channel Singleton Pattern
 
 For workers that share channels (like TransportWorker with Push/Pull children), use a singleton `ChannelProvider`:

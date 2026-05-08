@@ -1,0 +1,87 @@
+P2.4 — Differential parity test (transport DDS vs RenderChildren) failure-injection certificate
+=================================================================================================
+
+Test under inspection:
+  umh-core/pkg/fsmv2/workers/transport/parity_test.go
+  Describe: "Transport — DDS vs RenderChildren differential parity (P2.4)"
+  Specs: 2 (steady-state running + nil-spec startup)
+
+Goal of failure injection:
+  Demonstrate that the test FAILS — with a useful, field-level diagnostic —
+  when the canonical RenderChildren emitter and the legacy DDS-derived path
+  diverge on a single ChildSpec field. PASS-FAIL-PASS round trip records
+  that the test catches what it advertises and reverts cleanly.
+
+Round trip record
+-----------------
+
+Step 1 — Baseline PASS (no injection)
+  Command: cd umh-core && go test -count=1 -timeout 60s \
+             ./pkg/fsmv2/workers/transport/ \
+             -args -ginkgo.focus="differential parity"
+  Result:  ok  (2 specs PASS, 0 fail)
+  Time:    ~0.22s
+
+Step 2 — Injection: drop Enabled:true → Enabled:false on the push child
+  File:    umh-core/pkg/fsmv2/workers/transport/children.go
+  Site:    transport.RenderChildren push entry (line ~48)
+  Mutation: changed `Enabled: true,` to `Enabled: false,` on the push spec
+            ONLY in RenderChildren — the legacy makePushChildSpec body
+            (worker.go line ~200) was left untouched, so the two paths
+            now disagree on a single field on a single child.
+
+  Rationale: this mirrors the canonical F4⊕G1 forgotten-Enabled drift
+            that the §4-C LOCKED zero-value-false rule guards against.
+            It is the smallest meaningful divergence that ChildSpec.Hash
+            should detect (Enabled is a hashed field).
+
+Step 3 — Injected FAIL
+  Command: same as step 1
+  Result:  FAIL (2 specs FAIL, both with hash-mismatch + field-level diagnostic)
+  Diagnostic excerpt (steady-state spec):
+
+    DDS vs RenderChildren parity violation on spec[0]:
+      legacy   = name="push" workerType="push" startStates=[Running Degraded] enabled=true userSpec.Config="..."
+      rendered = name="push" workerType="push" startStates=[Running Degraded] enabled=false userSpec.Config="..."
+    This breaks the P2.4 supervisor-cutover discriminator: the legacy
+    DDS-derived path and the new NextResult.Children path MUST agree
+    during the migration window. If a divergence is intentional, the
+    legacy path must be retired in the same change (P3.x).
+    Expected
+        <string>: 990f7f5b382412de
+    to equal
+        <string>: 1ff601761317c8cd
+
+  Diagnostic excerpt (nil-spec spec):
+
+    nil-spec startup parity violation on spec[0]: push vs push
+    Expected
+        <string>: 135e163f6b612c90
+    to equal
+        <string>: 543b1ec4915602ad
+
+  Both specs caught the divergence; both surfaced the offending child by
+  index and identity. ChildSpec.Hash gives 16-hex-char digests that
+  differ when ANY hashed field changes — Enabled is part of the canonical
+  form, so the divergence is detected without further field probing.
+
+Step 4 — Revert and re-verify PASS
+  File:    umh-core/pkg/fsmv2/workers/transport/children.go restored to
+           Enabled: true on the push spec (matching legacy parity).
+  Command: same as step 1
+  Result:  ok  (2 specs PASS, 0 fail)
+  Time:    ~0.22s
+
+Conclusion
+----------
+The differential parity test correctly:
+  1. PASSES on the unmodified P2.4 tip (legacy DDS == RenderChildren on
+     every emitted spec, Hash-byte-equal).
+  2. FAILS with a clear, actionable diagnostic when one path drifts on
+     a hashed field (Enabled: false vs true on push).
+  3. Returns to PASS after the divergence is reverted.
+
+The test ships now (P2.4 commit) as the behavioral backstop for the
+supervisor-cutover discriminator. It will be retired in P3.x once the
+legacy SetChildSpecsFactory path is deleted (the parity becomes
+trivially true — only one path remains).
