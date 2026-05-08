@@ -129,8 +129,8 @@ func (w *HelloworldWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredSt
 	state := cfg.GetState()
 
 	return &fsmv2.WrappedDesiredState[HelloworldConfig]{
-		State: state,
-		Config:           cfg,
+		State:  state,
+		Config: cfg,
 	}, nil
 }
 

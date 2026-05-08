@@ -36,7 +36,7 @@ import (
 // RenderChildren() would surface as a Hash() mismatch, catching parity
 // divergence between the application worker's live outputs and the fixture's
 // expected values.
-var _ = Describe("Application — DDS vs RenderChildren differential parity", func() {
+var _ = Describe("Application - DDS vs RenderChildren differential parity", func() {
 	logger := deps.NewNopFSMLogger()
 
 	runParity := func(rawSpec config.UserSpec, label string) {

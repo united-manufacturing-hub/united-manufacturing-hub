@@ -73,12 +73,13 @@ var _ = Describe("PushObservedState", func() {
 	})
 
 	Describe("SetShutdownRequested", func() {
-		It("should return an updated observed state of the correct type", func() {
+		It("should return an updated observed state with shutdown requested", func() {
 			observed := snapshot.PushObservedState{}
 
 			result := observed.SetShutdownRequested(true)
-			_, ok := result.(snapshot.PushObservedState)
+			updated, ok := result.(snapshot.PushObservedState)
 			Expect(ok).To(BeTrue())
+			Expect(updated.IsShutdownRequested()).To(BeTrue())
 		})
 	})
 })

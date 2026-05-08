@@ -80,7 +80,7 @@ var _ = Describe("HelloworldWorker", func() {
 			desired := &fsmv2.WrappedDesiredState[hello_world.HelloworldConfig]{}
 			obs, err := worker.CollectObservedState(ctx, desired)
 
-			Expect(err).To(HaveOccurred())
+			Expect(err).To(Equal(context.Canceled))
 			Expect(obs).To(BeNil())
 		})
 	})
