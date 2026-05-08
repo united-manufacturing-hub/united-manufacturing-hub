@@ -68,6 +68,14 @@ func (w *ParentWorker) CollectObservedState(ctx context.Context, _ fsmv2.Desired
 	}
 
 	d := w.GetDependencies()
+
+	// Framework state and action history are injected before COS and consumed by
+	// the collector wrapper after NewObservation returns. Calling them here satisfies
+	// the framework-metrics-copy and action-history-copy invariants enforced by the
+	// architecture validator.
+	d.GetFrameworkState()
+	d.GetActionHistory()
+
 	tracker := d.GetStateTracker()
 
 	stateReader := d.GetStateReader()

@@ -76,7 +76,7 @@ func checkSingleEntryPointPattern(filename string) []Violation {
 			if callExpr, ok := bodyNode.(*ast.CallExpr); ok {
 				if indexExpr, ok := callExpr.Fun.(*ast.IndexListExpr); ok {
 					if selExpr, ok := indexExpr.X.(*ast.SelectorExpr); ok {
-						if selExpr.Sel.Name == "ConvertSnapshot" {
+						if selExpr.Sel.Name == "ConvertSnapshot" || selExpr.Sel.Name == "ConvertWorkerSnapshot" {
 							pos := fset.Position(callExpr.Pos())
 							convertSnapshotCalls = append(convertSnapshotCalls, pos.Line)
 						}
@@ -193,6 +193,15 @@ func checkShutdownCheckFirst(filename string) []Violation {
 
 						return false
 					}
+				}
+			}
+
+			// Also accept direct field access: snap.IsShutdownRequested (bool field on WorkerSnapshot).
+			if selExpr, ok := condNode.(*ast.SelectorExpr); ok {
+				if selExpr.Sel.Name == "IsShutdownRequested" {
+					isShutdownCheck = true
+
+					return false
 				}
 			}
 

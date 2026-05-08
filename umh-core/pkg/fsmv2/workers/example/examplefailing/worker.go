@@ -82,6 +82,13 @@ func (w *FailingWorker) CollectObservedState(ctx context.Context, desired fsmv2.
 
 	d := w.GetDependencies()
 
+	// Framework state and action history are injected before COS and consumed by
+	// the collector wrapper after NewObservation returns. Calling them here satisfies
+	// the framework-metrics-copy and action-history-copy invariants enforced by the
+	// architecture validator.
+	d.GetFrameworkState()
+	d.GetActionHistory()
+
 	if desired != nil {
 		cfg := fsmv2.ExtractConfig[ExamplefailingConfig](desired)
 		w.updateDependenciesFromConfig(cfg)
