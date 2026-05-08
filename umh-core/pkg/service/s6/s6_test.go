@@ -638,6 +638,115 @@ var _ = Describe("S6 Service", func() {
 			})
 		})
 	})
+
+	// Fix 4a — EnsureSupervision must wait for BOTH supervise/ and log/supervise/.
+	// s6-svscan creates the two directories in two non-atomic steps. Returning
+	// true after only supervise/ existed previously let the FSM transition
+	// Creating → Created with the asymmetric mid-bringup state still present;
+	// the operational Health() dispatch then flagged the asymmetry as HealthBad
+	// and tore down a perfectly-fine just-created service.
+	Describe("DefaultService EnsureSupervision()", func() {
+		var (
+			ctx        context.Context
+			mockFS     *filesystem.MockFileSystem
+			svc        *DefaultService
+			svcPath    string
+			fileExists sync.Map // path -> bool
+		)
+
+		pathFileExists := func(p string) bool {
+			v, ok := fileExists.Load(p)
+
+			return ok && v.(bool)
+		}
+
+		BeforeEach(func() {
+			ctx = context.Background()
+			mockFS = filesystem.NewMockFileSystem()
+			svc = NewDefaultService().(*DefaultService)
+			svcPath = filepath.Join(constants.S6BaseDir, "my-service")
+
+			fileExists = sync.Map{}
+			// ServiceExists uses PathExists; treat servicePath as present by default.
+			mockFS.WithPathExistsFunc(func(ctx context.Context, p string) (bool, error) {
+				if p == svcPath {
+					return true, nil
+				}
+
+				return pathFileExists(p), nil
+			})
+			mockFS.WithFileExistsFunc(func(ctx context.Context, p string) (bool, error) {
+				return pathFileExists(p), nil
+			})
+			mockFS.WithExecuteCommandFunc(func(ctx context.Context, name string, args ...string) ([]byte, error) {
+				return nil, nil
+			})
+		})
+
+		It("returns true when both supervise/ and log/supervise/ exist", func() {
+			fileExists.Store(filepath.Join(svcPath, "supervise"), true)
+			fileExists.Store(filepath.Join(svcPath, "log", "supervise"), true)
+
+			ready, err := svc.EnsureSupervision(ctx, svcPath, mockFS)
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(ready).To(BeTrue())
+		})
+
+		It("returns false when only supervise/ exists, not log/supervise/", func() {
+			// This is the race window during s6-svscan's two-step bringup. Pre-Fix-4a,
+			// EnsureSupervision returned true here, which caused the FSM to transition
+			// Creating → Created with the asymmetric state still on disk.
+			fileExists.Store(filepath.Join(svcPath, "supervise"), true)
+			// log/supervise NOT set — does not exist yet
+
+			ready, err := svc.EnsureSupervision(ctx, svcPath, mockFS)
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(ready).To(BeFalse(),
+				"must wait for both supervise/ AND log/supervise/ before transitioning to Created")
+		})
+
+		It("notifies s6-svscan when supervise/ is missing (existing behavior preserved)", func() {
+			// Neither supervise/ nor log/supervise/ exist. EnsureSupervision must
+			// kick s6-svscan via s6-svscanctl -a so it creates them.
+			notified := false
+			mockFS.WithExecuteCommandFunc(func(ctx context.Context, name string, args ...string) ([]byte, error) {
+				if name == "s6-svscanctl" {
+					notified = true
+				}
+
+				return nil, nil
+			})
+
+			ready, err := svc.EnsureSupervision(ctx, svcPath, mockFS)
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(ready).To(BeFalse())
+			Expect(notified).To(BeTrue(),
+				"existing s6-svscanctl notification must still fire when supervise/ is missing")
+		})
+
+		It("notifies s6-svscan when log/supervise/ is missing while supervise/ exists", func() {
+			// Same kick scans all services and prods s6-svscan to finish bringup.
+			fileExists.Store(filepath.Join(svcPath, "supervise"), true)
+			notified := false
+			mockFS.WithExecuteCommandFunc(func(ctx context.Context, name string, args ...string) ([]byte, error) {
+				if name == "s6-svscanctl" {
+					notified = true
+				}
+
+				return nil, nil
+			})
+
+			ready, err := svc.EnsureSupervision(ctx, svcPath, mockFS)
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(ready).To(BeFalse())
+			Expect(notified).To(BeTrue(),
+				"a kick must also fire when log/supervise/ lags supervise/ — same s6-svscan scan handles both")
+		})
+	})
 })
 
 // TestLastDeploymentTimeSharedAcrossInstances verifies that the LastDeploymentTime timestamp

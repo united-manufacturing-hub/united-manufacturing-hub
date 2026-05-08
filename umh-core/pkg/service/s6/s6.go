@@ -1666,9 +1666,13 @@ func parseLogLine(line string) LogEntry {
 	}
 }
 
-// EnsureSupervision checks if the supervise directory exists for a service and notifies
-// s6-svscan if it doesn't, to trigger supervision setup.
-// Returns true if supervise directory exists (ready for supervision), false otherwise.
+// EnsureSupervision returns true once s6-svscan has finished bringing up
+// BOTH supervise/ and log/supervise/. Returning true after only supervise/
+// existed previously let the FSM transition Creating → Created with the
+// asymmetric mid-bringup state still present, and the operational Health()
+// dispatch then flagged the asymmetry as HealthBad and tore down a
+// perfectly-fine just-created service. See lifecycle.go:354 for the
+// symmetric check Health() makes.
 func (s *DefaultService) EnsureSupervision(ctx context.Context, servicePath string, fsService filesystem.Service) (bool, error) {
 	start := time.Now()
 
@@ -1705,7 +1709,25 @@ func (s *DefaultService) EnsureSupervision(ctx context.Context, servicePath stri
 		return false, nil
 	}
 
-	s.logger.Debugf("Supervise directory exists for %s", servicePath)
+	logSuperviseDir := filepath.Join(servicePath, "log", "supervise")
+
+	exists, err = fsService.FileExists(ctx, logSuperviseDir)
+	if err != nil {
+		return false, fmt.Errorf("failed to check if log/supervise directory exists: %w", err)
+	}
+
+	if !exists {
+		s.logger.Debugf("Log/supervise directory not found for %s, notifying s6-svscan", servicePath)
+
+		_, err = s.ExecuteS6Command(ctx, servicePath, fsService, "s6-svscanctl", "-a", constants.S6BaseDir)
+		if err != nil {
+			return false, fmt.Errorf("failed to notify s6-svscan: %w", err)
+		}
+
+		return false, nil
+	}
+
+	s.logger.Debugf("Both supervise directories exist for %s", servicePath)
 
 	return true, nil
 }
