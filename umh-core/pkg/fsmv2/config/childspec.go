@@ -463,5 +463,5 @@ func (d *DesiredState) GetChildrenSpecs() []ChildSpec {
 	return d.ChildrenSpecs
 }
 
-// NOTE: GetState() is provided by embedded BaseDesiredState.
-// The BaseDesiredState.State field is the canonical source of truth for lifecycle state.
+// NOTE: The State field is the canonical source of truth for lifecycle state.
+// DeriveDesiredState defaults State to "running" when the user spec is empty.

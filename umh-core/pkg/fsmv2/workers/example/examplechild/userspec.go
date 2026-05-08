@@ -21,5 +21,5 @@ import (
 // ChildUserSpec defines the typed configuration for the child worker.
 // This is parsed from the UserSpec.Config YAML/JSON string.
 type ChildUserSpec struct {
-	config.BaseUserSpec // Provides State field with GetState() defaulting to "running"
+	config.BaseUserSpec // Provides State field (DeriveDesiredState defaults to "running")
 }
