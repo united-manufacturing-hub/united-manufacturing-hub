@@ -23,6 +23,29 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/types"
 )
 
+// PullConfig holds the user-provided configuration for the pull worker.
+// Framework fields (State, ShutdownRequested, ParentMappedState, ChildrenSpecs)
+// are carried by fsmv2.WrappedDesiredState[PullConfig].
+type PullConfig struct{}
+
+// PullStatus holds the runtime observation data for the pull worker.
+// Framework fields (CollectedAt, State, LastActionResults, MetricsEmbedder,
+// ShutdownRequested, ParentMappedState) are carried by fsmv2.Observation[PullStatus].
+type PullStatus struct {
+	DegradedEnteredAt time.Time `json:"degraded_entered_at,omitempty"`
+	LastErrorAt       time.Time `json:"last_error_at,omitempty"`
+
+	LastRetryAfter time.Duration `json:"last_retry_after,omitempty"`
+
+	LastErrorType       types.ErrorType `json:"last_error_type"`
+	ConsecutiveErrors   int             `json:"consecutive_errors"`
+	PendingMessageCount int             `json:"pending_message_count"`
+
+	HasTransport    bool `json:"has_transport"`
+	HasValidToken   bool `json:"has_valid_token"`
+	IsBackpressured bool `json:"is_backpressured"`
+}
+
 // PullDependencies abstracts the pull worker's runtime dependencies to avoid import
 // cycles between the pull and transport packages.
 type PullDependencies interface {
