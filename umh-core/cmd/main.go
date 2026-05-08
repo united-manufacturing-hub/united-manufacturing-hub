@@ -97,7 +97,7 @@ func main() {
 	// which writes config on startup and should back up the pre-write state.
 	// GetAsBool with required=false never returns an error (silently falls back
 	// to the default on parse failure); see ENG-4809 for the signature fix.
-	configBackupEnabled, _ := env.GetAsBool("ENABLE_CONFIG_BACKUP", false, false)
+	configBackupEnabled, _ := env.GetAsBool("ENABLE_CONFIG_BACKUP", false, true)
 
 	configManager.SetConfigBackupEnabled(configBackupEnabled)
 
