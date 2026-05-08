@@ -120,7 +120,7 @@ func (s *StoppedState) Next(snapAny any) (fsmv2.State[any, any], fsmv2.Signal, f
     snap := helpers.ConvertSnapshot[MyObservedState, *MyDesiredState](snapAny)
 
     // ALWAYS check shutdown first
-    if snap.Desired.IsBeingRemoved() {
+    if snap.IsShutdownRequested() {
         return s, fsmv2.SignalNeedsRemoval, nil
     }
 
@@ -161,7 +161,7 @@ func (s *TryingToStartState) Next(snapAny any) (fsmv2.State[any, any], fsmv2.Sig
     snap := helpers.ConvertSnapshot[MyObservedState, *MyDesiredState](snapAny)
 
     // Check shutdown first
-    if snap.Observed.ShouldStop() {
+    if snap.IsStopRequired() {
         return &TryingToStopState{}, fsmv2.SignalNone, nil
     }
 
@@ -312,22 +312,21 @@ events := fsm.Events{
 // state/stopped.go
 type StoppedState struct{}
 
-func (s *StoppedState) Next(snapAny any) (fsmv2.State[any, any], fsmv2.Signal, fsmv2.Action[any]) {
-    snap := helpers.ConvertSnapshot[MyObservedState, *MyDesiredState](snapAny)
+func (s *StoppedState) Next(snapAny any) fsmv2.NextResult[any, any] {
+    snap := fsmv2.ConvertWorkerSnapshot[MyConfig, MyStatus](snapAny)
 
-    if snap.Desired.IsBeingRemoved() {
-        return s, fsmv2.SignalNeedsRemoval, nil
+    if snap.IsStopRequired() {
+        return fsmv2.Result[any, any](s, fsmv2.SignalNeedsRemoval, nil, "Shutdown requested")
     }
 
     if snap.Observed.ShouldBeRunning() {
-        return &TryingToStartState{}, fsmv2.SignalNone, nil
+        return fsmv2.Result[any, any](&TryingToStartState{}, fsmv2.SignalNone, nil, "Starting worker")
     }
 
-    return s, fsmv2.SignalNone, nil
+    return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil, "Worker stopped")
 }
 
 func (s *StoppedState) String() string { return "stopped" }
-func (s *StoppedState) Reason() string { return "Worker is stopped" }
 ```
 
 ### FSMv1 callback to FSMv2 Next() method
@@ -359,25 +358,24 @@ func (m *MyFSM) leaveRunning(e *fsm.Event) {
 // state/running.go
 type RunningState struct{}
 
-func (s *RunningState) Next(snapAny any) (fsmv2.State[any, any], fsmv2.Signal, fsmv2.Action[any]) {
-    snap := helpers.ConvertSnapshot[MyObservedState, *MyDesiredState](snapAny)
+func (s *RunningState) Next(snapAny any) fsmv2.NextResult[any, any] {
+    snap := fsmv2.ConvertWorkerSnapshot[MyConfig, MyStatus](snapAny)
 
     // Check shutdown first (equivalent to leave callback)
-    if snap.Observed.ShouldStop() {
-        return &TryingToStopState{}, fsmv2.SignalNone, nil
+    if snap.IsStopRequired() {
+        return fsmv2.Result[any, any](&TryingToStopState{}, fsmv2.SignalNone, nil, "Stop required")
     }
 
     // Health check (equivalent to before callback condition)
-    if !snap.Observed.IsHealthy {
-        return &DegradedState{Reason: "health check failed"}, fsmv2.SignalNone, nil
+    if !snap.Status.IsHealthy {
+        return fsmv2.Result[any, any](&DegradedState{}, fsmv2.SignalNone, nil, "Health check failed")
     }
 
     // Stay running
-    return s, fsmv2.SignalNone, nil
+    return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil, "Worker is healthy")
 }
 
 func (s *RunningState) String() string { return "running" }
-func (s *RunningState) Reason() string { return "Worker is healthy and operational" }
 ```
 
 ### FSMv1 action to FSMv2 Action implementation
@@ -730,15 +728,15 @@ return s, fsmv2.SignalNone, &SomeAction{}
 
 ### Check shutdown first in every state
 
-Every state's Next() method should check IsBeingRemoved() as the first condition.
+Every state's Next() method should check IsShutdownRequested() as the first condition.
 
 **Required pattern:**
 ```go
 func (s *AnyState) Next(snapAny any) (fsmv2.State[any, any], fsmv2.Signal, fsmv2.Action[any]) {
-    snap := helpers.ConvertSnapshot[MyObservedState, *MyDesiredState](snapAny)
+    snap := fsmv2.ConvertWorkerSnapshot[MyConfig, MyStatus](snapAny)
 
     // ALWAYS check shutdown first
-    if snap.Desired.IsBeingRemoved() {
+    if snap.IsShutdownRequested {
         return &StoppedState{}, fsmv2.SignalNeedsRemoval, nil
         // Or transition to TryingToStop if cleanup needed
     }
@@ -783,7 +781,7 @@ Worker API v2 replaces the 7-file pattern with a single-file approach using gene
 | `dependencies.go` with custom deps struct | `deps.Identity`, `deps.FSMLogger`, `deps.StateReader` passed to constructor |
 | `init()` with `factory.RegisterWorkerType[...]` + supervisor factory | `register.Worker[TConfig, TStatus, register.NoDeps]("type", constructor)` |
 | `helpers.ConvertSnapshot[Obs, *Des](snapAny)` in states | `fsmv2.ConvertWorkerSnapshot[TConfig, TStatus](snapAny)` in states |
-| `snap.Desired.IsBeingRemoved` method call | `snap.ShouldStop()` (merged shutdown + parent-stop) or `snap.Desired.IsBeingRemoved` (raw shutdown flag) |
+| `snap.Desired.IsShutdownRequested()` method call | `snap.IsStopRequired()` (merged shutdown + parent-stop) or `snap.IsShutdownRequested` (raw shutdown field) |
 | Manual `SetState`, `SetBeingRemoved`, `SetChildrenCounts` in ObservedState | Automatic via collector duck-typing on `Observation` |
 
 ### Migration steps
@@ -793,7 +791,7 @@ Worker API v2 replaces the 7-file pattern with a single-file approach using gene
 3. **Replace constructor** — call `w.InitBase(id, logger, sr)` instead of manual dependency wiring
 4. **Simplify CollectObservedState** — use `fsmv2.ExtractConfig[TConfig](desired)` for config access, return `fsmv2.NewObservation(TStatus{...})` (the collector handles CollectedAt, framework metrics, action history, and metric accumulation automatically)
 5. **Delete DeriveDesiredState and GetInitialState** — provided by WorkerBase (override only if needed)
-6. **Update states** — use `fsmv2.ConvertWorkerSnapshot[TConfig, TStatus](snapAny)` and `snap.ShouldStop()` (or `snap.Desired.IsBeingRemoved` when distinguishing self-shutdown from parent-stop)
+6. **Update states** — use `fsmv2.ConvertWorkerSnapshot[TConfig, TStatus](snapAny)` and `snap.IsStopRequired()` (merged shutdown + parent-stop) or `snap.IsShutdownRequested` (self-shutdown only)
 7. **Replace registration** — single `register.Worker[TConfig, TStatus, register.NoDeps]("type", constructor)` call (replace `register.NoDeps` with your deps type if using typed deps)
 8. **Delete snapshot/, dependencies.go, userspec.go** — no longer needed
 9. **Implement capability interfaces** on your worker struct if needed (ActionProvider, ChildSpecProvider, etc.)
