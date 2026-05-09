@@ -17,7 +17,7 @@ package action
 import (
 	"context"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplechild/snapshot"
+	example_child "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplechild"
 )
 
 const DisconnectActionName = "disconnect"
@@ -33,7 +33,7 @@ func (a *DisconnectAction) Execute(ctx context.Context, depsAny any) error {
 	default:
 	}
 
-	deps := depsAny.(snapshot.ExamplechildDependencies)
+	deps := depsAny.(example_child.ExamplechildDepsIface)
 	logger := deps.GetLogger()
 	logger.Info("Disconnecting")
 

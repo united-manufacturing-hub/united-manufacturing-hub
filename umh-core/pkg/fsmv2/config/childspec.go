@@ -37,12 +37,17 @@ import (
 // # Lifecycle Control Invariant
 //
 // The FSM controls worker lifecycle through state transitions, not through custom bool fields.
-// Do not add fields like ShouldRun, IsRunning, Enabled, or Active to your DesiredState.
+// Do not add fields like ShouldRun, IsRunning, Enabled, Active, or State to your DesiredState.
 //
 // Correct lifecycle control:
 //   - ShutdownRequested: Inherited from this type. Set by supervisor for graceful shutdown.
 //   - ParentMappedState: For child workers only. Injected by supervisor from parent's ChildStartStates.
-//   - State ("running"/"stopped"): From BaseUserSpec.GetState(). Controls whether worker should be running.
+//
+// The desired lifecycle state ("running"/"stopped") is read from the user spec
+// via BaseUserSpec.GetState() in DeriveDesiredState and stored directly on the
+// outer DesiredState type (not on BaseDesiredState). Callers that used to set
+// BaseDesiredState{State: x} should instead set the State field on the embedding
+// struct (e.g., MyDesiredState{State: x, ...}).
 //
 // Correct ShouldBeRunning() implementations:
 //
@@ -58,8 +63,7 @@ import (
 //
 // See ValidateNoCustomLifecycleFields in pkg/fsmv2/internal/validator/snapshot.go for enforcement.
 type BaseDesiredState struct {
-	State             string `json:"state"             yaml:"state"`             // "stopped" or "running" - desired lifecycle state
-	ShutdownRequested bool   `json:"ShutdownRequested" yaml:"ShutdownRequested"` //nolint:tagliatelle // Match JSON field name for API compatibility
+	ShutdownRequested bool `json:"ShutdownRequested" yaml:"ShutdownRequested"` //nolint:tagliatelle // Match JSON field name for API compatibility
 }
 
 // IsShutdownRequested returns whether shutdown has been requested for this worker.
@@ -71,16 +75,6 @@ func (b *BaseDesiredState) IsShutdownRequested() bool {
 // This satisfies the ShutdownRequestable interface.
 func (b *BaseDesiredState) SetShutdownRequested(v bool) {
 	b.ShutdownRequested = v
-}
-
-// GetState returns the desired lifecycle state.
-// Implements fsmv2.DesiredState interface.
-func (b *BaseDesiredState) GetState() string {
-	if b.State == "" {
-		return DesiredStateRunning
-	}
-
-	return b.State
 }
 
 // BaseUserSpec provides common fields for all user configuration types.
@@ -360,7 +354,7 @@ type ChildInfo struct {
 //	func (o MyObservedState) SetChildrenView(view any) fsmv2.ObservedState {
 //	    if cv, ok := view.(config.ChildrenView); ok {
 //	        o.ChildrenHealthy, o.ChildrenUnhealthy = cv.Counts()
-//	        // Or use cv.List(), cv.Get(name), cv.AllHealthy(), cv.AllStopped()
+//	        // Or use cv.List(), cv.Get(name), cv.AllHealthy()
 //	    }
 //	    return o
 //	}
@@ -392,22 +386,71 @@ type ChildrenView interface {
 
 	// Counts returns the number of healthy and unhealthy children.
 	// healthy = PhaseRunningHealthy only (fully stable)
-	// unhealthy = everything except PhaseRunningHealthy and PhaseStopped
-	// Note: PhaseRunningDegraded counts as unhealthy (operational but NOT healthy).
+	// unhealthy = everything except PhaseRunningHealthy
 	Counts() (healthy, unhealthy int)
 
 	// AllHealthy returns true if all children are PhaseRunningHealthy (or there are no children).
-	// Note: PhaseRunningDegraded is NOT healthy (even though it IS operational).
 	AllHealthy() bool
-
-	// AllOperational returns true if all children are operational (or there are no children).
-	// Operational = PhaseRunningHealthy OR PhaseRunningDegraded (can serve requests).
-	// Use this for "can system serve requests?" checks.
-	AllOperational() bool
-
-	// AllStopped returns true if all children are in PhaseStopped (or there are no children).
-	AllStopped() bool
 }
+
+// ChildrenViewSnapshot is a JSON-serializable concrete snapshot of ChildrenView.
+// The supervisor stores this to CSE storage on each tick; the reconciler deserializes
+// it back and uses it in State.Next(). The live *ChildrenManager (which holds supervisor
+// references) cannot round-trip through JSON, so this DTO carries the same data.
+//
+// Workers that access ChildrenView from snap.Observed will see a ChildrenViewSnapshot
+// between collector ticks; the supervisor re-injects a live *ChildrenManager via
+// SetChildrenView on each collector cycle.
+type ChildrenViewSnapshot struct {
+	Children []ChildInfo `json:"children"`
+}
+
+// List implements ChildrenView.
+func (s ChildrenViewSnapshot) List() []ChildInfo {
+	return s.Children
+}
+
+// Get implements ChildrenView.
+func (s ChildrenViewSnapshot) Get(name string) *ChildInfo {
+	for i := range s.Children {
+		if s.Children[i].Name == name {
+			return &s.Children[i]
+		}
+	}
+
+	return nil
+}
+
+// Counts implements ChildrenView.
+func (s ChildrenViewSnapshot) Counts() (healthy, unhealthy int) {
+	for _, c := range s.Children {
+		if c.IsHealthy {
+			healthy++
+		} else {
+			unhealthy++
+		}
+	}
+
+	return healthy, unhealthy
+}
+
+// AllHealthy implements ChildrenView.
+func (s ChildrenViewSnapshot) AllHealthy() bool {
+	if len(s.Children) == 0 {
+		return true
+	}
+
+	for _, c := range s.Children {
+		if !c.IsHealthy {
+			return false
+		}
+	}
+
+	return true
+}
+
+// Compile-time check that ChildrenViewSnapshot implements ChildrenView.
+var _ ChildrenView = ChildrenViewSnapshot{}
 
 // DesiredState represents what we want the system to be.
 // This is returned by Worker.DeriveDesiredState() and used by State.Next() for decisions.
@@ -439,8 +482,18 @@ type ChildrenView interface {
 //	}
 type DesiredState struct {
 	OriginalUserSpec interface{}      `json:"originalUserSpec,omitempty" yaml:"-"` // Captures the input that produced this DesiredState (for debugging/traceability)
-	BaseDesiredState `yaml:",inline"` // Provides State, ShutdownRequested fields and methods (GetState, IsShutdownRequested, SetShutdownRequested)
+	BaseDesiredState `yaml:",inline"` // Provides ShutdownRequested field and IsShutdownRequested/SetShutdownRequested methods
 	ChildrenSpecs    []ChildSpec      `json:"childrenSpecs,omitempty"    yaml:"childrenSpecs,omitempty"` // Declarative specification of child workers
+	State            string           `json:"state"                      yaml:"state"`                  // "stopped" or "running" - desired lifecycle state
+}
+
+// GetState returns the desired lifecycle state, defaulting to "running" if empty.
+func (d *DesiredState) GetState() string {
+	if d.State == "" {
+		return DesiredStateRunning
+	}
+
+	return d.State
 }
 
 // NOTE: IsShutdownRequested() and SetShutdownRequested() are provided by embedded BaseDesiredState.
@@ -477,5 +530,5 @@ func (d *DesiredState) GetChildrenSpecs() []ChildSpec {
 	return d.ChildrenSpecs
 }
 
-// NOTE: GetState() is provided by embedded BaseDesiredState.
-// The BaseDesiredState.State field is the canonical source of truth for lifecycle state.
+// NOTE: GetState() is defined directly on DesiredState (above), not on the embedded BaseDesiredState.
+// The State field on DesiredState is the canonical source of truth for lifecycle state.

@@ -18,17 +18,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"time"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplechild/snapshot"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplechild/state"
 )
 
 // ChildWorker implements the FSM v2 Worker interface for resource management.
@@ -55,12 +51,7 @@ func NewChildWorker(
 	}
 
 	if identity.WorkerType == "" {
-		workerType, err := storage.DeriveWorkerType[snapshot.ExamplechildObservedState]()
-		if err != nil {
-			return nil, fmt.Errorf("failed to derive worker type: %w", err)
-		}
-
-		identity.WorkerType = workerType
+		identity.WorkerType = "examplechild"
 	}
 
 	dependencies := NewExamplechildDependencies(connectionPool, logger, stateReader, identity)
@@ -80,43 +71,40 @@ func NewChildWorker(
 }
 
 // CollectObservedState returns the current observed state of the child worker.
-func (w *ChildWorker) CollectObservedState(ctx context.Context) (fsmv2.ObservedState, error) {
+func (w *ChildWorker) CollectObservedState(ctx context.Context, _ fsmv2.DesiredState) (fsmv2.ObservedState, error) {
 	select {
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	default:
 	}
 
-	deps := w.GetDependencies()
+	d := w.GetDependencies()
+
+	// Framework state and action history are injected before COS and consumed by
+	// the collector wrapper after NewObservation returns. Calling them here satisfies
+	// the framework-metrics-copy and action-history-copy invariants enforced by the
+	// architecture validator.
+	d.GetFrameworkState()
+	d.GetActionHistory()
 
 	connectionHealth := "no connection"
 
-	if deps.IsConnected() {
+	if d.IsConnected() {
 		connectionHealth = "healthy"
 	}
 
-	observed := snapshot.ExamplechildObservedState{
-		ID:               w.identity.ID,
-		CollectedAt:      time.Now(),
+	status := ExamplechildStatus{
 		ConnectionHealth: connectionHealth,
 	}
 
-	if fm := deps.GetFrameworkState(); fm != nil {
-		observed.Metrics.Framework = *fm
-	}
-
-	observed.LastActionResults = deps.GetActionHistory()
-
-	return observed, nil
+	return fsmv2.NewObservation(status), nil
 }
 
 // DeriveDesiredState determines what state the child worker should be in.
-// Templates are rendered here; production workers store checksums for drift detection.
 func (w *ChildWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, error) {
 	if spec == nil {
-		return &config.DesiredState{
-			BaseDesiredState: config.BaseDesiredState{State: config.DesiredStateRunning},
-			OriginalUserSpec: nil,
+		return &fsmv2.WrappedDesiredState[ExamplechildConfig]{
+			State: config.DesiredStateRunning,
 		}, nil
 	}
 
@@ -135,21 +123,30 @@ func (w *ChildWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, 
 		Variables: userSpec.Variables,
 	}
 
-	desired, err := config.DeriveLeafState[ChildUserSpec](renderedSpec)
+	parsed, err := config.ParseUserSpec[ChildUserSpec](renderedSpec)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to parse examplechild spec: %w", err)
 	}
 
-	return &desired, nil
+	state := parsed.GetState()
+
+	return &fsmv2.WrappedDesiredState[ExamplechildConfig]{
+		State: state,
+		Config: ExamplechildConfig{
+			BaseUserSpec: parsed.BaseUserSpec,
+		},
+	}, nil
 }
 
 // GetInitialState returns the state the FSM should start in.
+// Uses the initial state registry populated by the state package's init() function.
 func (w *ChildWorker) GetInitialState() fsmv2.State[any, any] {
-	return &state.StoppedState{}
+	return fsmv2.LookupInitialState("examplechild")
 }
 
 func init() {
-	if err := factory.RegisterWorkerType[snapshot.ExamplechildObservedState, *snapshot.ExamplechildDesiredState](
+	if err := factory.RegisterWorkerAndSupervisorFactoryByType(
+		"examplechild",
 		func(id deps.Identity, logger deps.FSMLogger, stateReader deps.StateReader, _ map[string]any) fsmv2.Worker {
 			pool := &DefaultConnectionPool{}
 			worker, _ := NewChildWorker(id, pool, logger, stateReader)
@@ -157,7 +154,7 @@ func init() {
 			return worker
 		},
 		func(cfg interface{}) interface{} {
-			return supervisor.NewSupervisor[snapshot.ExamplechildObservedState, *snapshot.ExamplechildDesiredState](
+			return supervisor.NewSupervisor[fsmv2.Observation[ExamplechildStatus], *fsmv2.WrappedDesiredState[ExamplechildConfig]](
 				cfg.(supervisor.Config))
 		},
 	); err != nil {

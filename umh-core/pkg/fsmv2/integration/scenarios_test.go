@@ -28,7 +28,8 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/examples"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/integration"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleparent/snapshot"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	exampleparent "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleparent"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleparent/state"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence/memory"
@@ -175,7 +176,7 @@ func verifyStateTransitionSequence(t *integration.TestLogger) {
 }
 
 func verifyTriangularStoreChanges(t *integration.TestLogger) {
-	observationLogs := t.GetLogsMatching("observation_changed")
+	observationLogs := t.GetLogsMatching("observed_changed")
 	desiredLogs := t.GetLogsMatching("desired_changed")
 
 	// Verify that store changes were logged
@@ -1134,7 +1135,7 @@ var _ = Describe("MetricsHolder Type Assertion", func() {
 		workers := getWorkersFromStore(store)
 		Expect(workers).NotTo(BeEmpty(), "Should have workers in store")
 
-		var parentObs snapshot.ExampleparentObservedState
+		var parentObs fsmv2.Observation[exampleparent.ExampleparentStatus]
 		var foundParent bool
 		for _, w := range workers {
 			if w.WorkerType == "exampleparent" {

@@ -367,7 +367,7 @@ var _ = Describe("StoppingState", func() {
 	})
 
 	// ENG-4608: Scenarios where the stop signal disappears while in Stopping.
-	// StoppingState must always progress to Stopped — it must never get stuck.
+	// StoppingState must always progress to Stopped  -  it must never get stuck.
 	// StoppedState handles recovery back to Running when conditions change.
 	Describe("stop signal reverted during shutdown", func() {
 		It("should recover when parent transitions back to Running (token re-auth)", func() {

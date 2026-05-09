@@ -19,7 +19,7 @@ import (
 	"time"
 
 	depspkg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleslow/snapshot"
+	example_slow "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleslow"
 )
 
 const ConnectActionName = "connect"
@@ -27,8 +27,10 @@ const ConnectActionName = "connect"
 // ConnectAction attempts to establish a connection with a configurable delay.
 type ConnectAction struct{}
 
+// Execute establishes a connection after an optional delay configured in dependencies.
+// Returns ctx.Err() if the context is cancelled during the delay, or nil on success.
 func (a *ConnectAction) Execute(ctx context.Context, depsAny any) error {
-	deps := depsAny.(snapshot.ExampleslowDependencies)
+	deps := depsAny.(example_slow.ExampleslowDepsIface)
 	logger := deps.GetLogger()
 	delaySeconds := deps.GetDelaySeconds()
 

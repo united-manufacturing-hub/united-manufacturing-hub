@@ -23,14 +23,14 @@ import (
 
 var _ = Describe("ErrorType", func() {
 	// HaveKey instead of value lookup: false/"" are legitimate mapped values, so we must assert key presence to detect gaps.
-	It("covers every ErrorType value — fails when a new constant is added without classifying it", func() {
+	It("covers every ErrorType value  -  fails when a new constant is added without classifying it", func() {
 		for errType := range types.ErrorTypeMax {
 			Expect(types.IsTransientTypes).To(HaveKey(errType),
-				"ErrorType(%d) has no entry in IsTransientTypes — add it to types.go", errType)
+				"ErrorType(%d) has no entry in IsTransientTypes  -  add it to types.go", errType)
 			Expect(types.ErrorTypeNames).To(HaveKey(errType),
-				"ErrorType(%d) has no entry in ErrorTypeNames — add it to types.go", errType)
+				"ErrorType(%d) has no entry in ErrorTypeNames  -  add it to types.go", errType)
 			Expect(types.ErrorTypeCounters).To(HaveKey(errType),
-				"ErrorType(%d) has no entry in ErrorTypeCounters — add it to types.go", errType)
+				"ErrorType(%d) has no entry in ErrorTypeCounters  -  add it to types.go", errType)
 		}
 	})
 })

@@ -52,11 +52,11 @@
 //
 // The supervisor passes snapshots by value to State.Next(). Go's pass-by-value
 // semantics prevent states from modifying the supervisor's data.
-// See internal/helpers/state_adapter.go for ConvertSnapshot helper.
+// See ConvertWorkerSnapshot for typed snapshot access.
 //
 // The State interface uses generics (State[TSnapshot, TDeps]), but implementations
 // use State[any, any] because Go lacks covariance support. Access typed data via
-// helpers.ConvertSnapshot[O, D](snapAny).
+// fsmv2.ConvertWorkerSnapshot[TConfig, TStatus](snapAny).
 //
 // ## Actions
 //
@@ -174,7 +174,9 @@
 //
 // Key concepts:
 //   - Parent returns ChildrenSpecs in DeriveDesiredState()
-//   - ChildStartStates coordinates child lifecycle (not data passing)
+//   - Children are always-enabled when the parent is running; set
+//     Enabled: false on a child spec to drive it to Stopped while keeping
+//     the supervisor resident
 //   - Use VariableBundle for passing data to children
 //
 // See workers/example/exampleparent/worker.go for a complete example.
@@ -186,10 +188,6 @@
 //	// ParseUserSpec[T] - type-safe parsing of UserSpec.Config
 //	parsed, err := config.ParseUserSpec[MyConfig](spec)
 //	if err != nil { return config.DesiredState{}, err }
-//
-//	// DeriveLeafState[T] - one-liner for leaf workers (no children)
-//	// Requires MyConfig to implement GetState() string
-//	return config.DeriveLeafState[MyConfig](spec)
 //
 // See config/helpers.go for documentation.
 //
@@ -231,27 +229,33 @@
 //
 // Pattern 2: Full visibility (for inspecting individual children)
 //
-//	func (o MyObservedState) SetChildrenView(view any) fsmv2.ObservedState {
-//	    if cv, ok := view.(config.ChildrenView); ok {
-//	        healthy, unhealthy := cv.Counts()
-//	        o.ChildrenHealthy = healthy
-//	        o.ChildrenUnhealthy = unhealthy
-//	        // Can also use: cv.List(), cv.Get(name), cv.AllHealthy(), cv.AllStopped()
-//	    }
+//	func (o MyObservedState) SetChildrenView(view config.ChildrenView) fsmv2.ObservedState {
+//	    o.ChildrenHealthy = view.HealthyCount
+//	    o.ChildrenUnhealthy = view.UnhealthyCount
+//	    // Can also use: view.List(), view.Get(name), view.AllHealthy()
 //	    return o
 //	}
 //
-// ChildrenView interface provides:
-//   - List() []ChildInfo: All children with state info
-//   - Get(name string) *ChildInfo: Single child by name
-//   - Counts() (healthy, unhealthy int): Aggregate health counts
-//   - AllHealthy() bool: True if all children healthy
-//   - AllStopped() bool: True if all children stopped
+// ChildrenView struct provides:
+//   - Children []ChildInfo: All children with state info
+//   - List() []ChildInfo: Same as Children, kept for migration compatibility
+//   - Get(name string) (ChildInfo, bool): Single child by name
+//   - HealthyCount / UnhealthyCount: Aggregate health counts
+//   - AllHealthy(): Aggregate predicate (true when all children are PhaseRunningHealthy)
 //
 // ChildInfo provides read-only info about each child:
-//   - Name, WorkerType, StateName, StateReason, IsHealthy, ErrorMsg, HierarchyPath
+//   - Name, WorkerType, StateName, StateReason, IsHealthy, ErrorMsg, HierarchyPath, Phase
 //
-// See workers/example/exampleparent/snapshot/snapshot.go for the simple counts pattern.
+// StateName is display-only (raw form like "Connected" or "TryingToConnect").
+// Phase (config.LifecyclePhase) is the canonical predicate source  -  it is
+// populated from the child's cached lifecycle phase and is what
+// NewChildrenView's aggregate predicates (HealthyCount, AllHealthy()) read.
+// Do NOT recompute predicates from StateName;
+// the prefix-only ParseLifecyclePhase parser cannot classify production raw
+// state names and would silently mis-aggregate.
+//
+// See observation.go (Observation.SetChildrenCounts / ChildrenHealthy /
+// ChildrenUnhealthy) for the canonical counts hook supplied by the framework.
 // See config/childspec.go for ChildrenView and ChildInfo definitions.
 //
 // # Architecture documentation
@@ -259,7 +263,7 @@
 // For detailed architecture explanations, see:
 //   - architecture_test.go - Patterns enforced by tests (run with -v for rationale explanations)
 //   - api.go - Core interfaces (Worker, State, Action)
-//   - internal/helpers/ - Convenience helpers (BaseState, BaseWorker, ConvertSnapshot)
+//   - internal/helpers/ - Convenience helpers (BaseState, BaseWorker, ConvertWorkerSnapshot)
 //   - supervisor/supervisor.go - Orchestration and lifecycle management
 //   - config/childspec.go - Hierarchical composition
 //   - config/variables.go - Variable namespaces
@@ -290,6 +294,38 @@
 //
 // Use phase-specific base types (internal/helpers/base_states.go) to ensure
 // compile-time phase safety.
+//
+// ### Lifecycle transition vocabulary
+//
+// Two naming conventions are canonical for transition states. Pick based on
+// what the worker actually does in that state  -  not by feel or precedent.
+//
+//   - Use "Xing" (Stopping, Starting, Connecting) when the state runs
+//     active cleanup or setup: the worker drives the work, optionally
+//     gated by an observation confirming completion.
+//     Examples: transport.StoppingState (drains connections), transport.StartingState
+//     (runs auth with backoff).
+//
+//   - Use "TryingToX" (TryingToStop, TryingToStart, TryingToConnect) when
+//     the state emits a signal or action and waits for an external observation
+//     to confirm X completed. The state itself is passive; it observes.
+//     Examples: examplechild.TryingToStopState (emits despawn, observes health).
+//
+// Forbidden synonyms: "ShuttingDown" (use "Stopping"), "RunningDegraded" (use
+// "Degraded"). Synonyms cause lexical drift that confuses cross-worker readers.
+//
+// ### One-way stop trajectory
+//
+// TryingToStop and Stopping states are ONE-WAY. They do NOT check
+// IsStopRequired() to abort cleanup mid-flight. Once a worker enters a stop
+// state it runs the full trajectory to Stopped before any resume can begin.
+//
+// At Stopped, the worker checks IsStopRequired() and either stays stopped or
+// re-enters TryingToStart.
+//
+// If you are writing a new stop state and feel tempted to add a
+// "if !IsStopRequired() { return GoTo{Running} }" branch - don't. That is the
+// bug this rule prevents.
 //
 // ## Shutdown handling
 //

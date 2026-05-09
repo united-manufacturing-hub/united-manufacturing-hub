@@ -76,7 +76,7 @@ func checkSingleEntryPointPattern(filename string) []Violation {
 			if callExpr, ok := bodyNode.(*ast.CallExpr); ok {
 				if indexExpr, ok := callExpr.Fun.(*ast.IndexListExpr); ok {
 					if selExpr, ok := indexExpr.X.(*ast.SelectorExpr); ok {
-						if selExpr.Sel.Name == "ConvertSnapshot" {
+						if selExpr.Sel.Name == "ConvertSnapshot" || selExpr.Sel.Name == "ConvertWorkerSnapshot" {
 							pos := fset.Position(callExpr.Pos())
 							convertSnapshotCalls = append(convertSnapshotCalls, pos.Line)
 						}
@@ -193,6 +193,15 @@ func checkShutdownCheckFirst(filename string) []Violation {
 
 						return false
 					}
+				}
+			}
+
+			// Also accept direct field access: snap.IsShutdownRequested (bool field on WorkerSnapshot).
+			if selExpr, ok := condNode.(*ast.SelectorExpr); ok {
+				if selExpr.Sel.Name == "IsShutdownRequested" {
+					isShutdownCheck = true
+
+					return false
 				}
 			}
 
@@ -883,7 +892,10 @@ func checkExhaustiveTransitionCoverage(filename string) []Violation {
 	var violations []Violation
 
 	baseName := filepath.Base(filename)
-	if strings.Contains(baseName, "trying_to") || strings.Contains(baseName, "stopping") {
+	// TryingTo and stopping states are active-transition states exempt from the catch-all rule.
+	// Stopped states are also exempt because they legitimately transition out when desired state
+	// changes (e.g., StoppedState -> TryingToStartState).
+	if strings.Contains(baseName, "trying_to") || strings.Contains(baseName, "stopping") || strings.Contains(baseName, "stopped") {
 		return violations
 	}
 
@@ -1138,7 +1150,7 @@ func checkStoppingStateNoCatchAllSelfReturn(filename string) []Violation {
 			}
 
 			if !isSelfReturn {
-				// Transitions to a different state — this is a progress path
+				// Transitions to a different state  -  this is a progress path
 				hasProgressPath = true
 
 				return false

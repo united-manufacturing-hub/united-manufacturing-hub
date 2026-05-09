@@ -24,7 +24,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
@@ -710,10 +709,10 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) (err error) 
 
 	userSpecWithVars.Variables.Global = globalVarsCopy
 
-	userSpecWithVars.Variables.Internal = map[string]any{
-		FieldID:                firstWorkerID,
-		storage.FieldCreatedAt: s.createdAt,
-		FieldParentID:          s.parentID,
+	userSpecWithVars.Variables.Internal = config.VariablesInternal{
+		WorkerID:  firstWorkerID,
+		ParentID:  s.parentID,
+		CreatedAt: s.createdAt,
 	}
 
 	userVarCount := len(userSpecWithVars.Variables.User)
@@ -761,20 +760,6 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) (err error) 
 			return fmt.Errorf("failed to derive desired state: %w", err)
 		}
 
-		// Validate DesiredState.State is a valid lifecycle state ("stopped" or "running")
-		// This catches both developer mistakes (hardcoded wrong values) and user config mistakes
-		// Use GetState() method from fsmv2.DesiredState interface
-		if valErr := config.ValidateDesiredState(desired.GetState()); valErr != nil {
-			s.logger.SentryError(deps.FeatureFSMv2, s.GetHierarchyPathUnlocked(), valErr, "invalid_desired_state",
-				deps.String("state", desired.GetState()),
-				deps.WorkerID(firstWorkerID))
-			metrics.RecordTemplateRenderingDuration(s.GetHierarchyPathUnlocked(), "error", templateDuration)
-			metrics.RecordTemplateRenderingError(s.GetHierarchyPathUnlocked(), "invalid_state_value")
-
-			// Don't cache validation errors - will retry next tick
-			return fmt.Errorf("failed to derive desired state: %w", valErr)
-		}
-
 		// Update cache
 		s.mu.Lock()
 		s.lastUserSpecHash = currentHash
@@ -799,6 +784,23 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) (err error) 
 	}
 
 	desiredDoc[FieldID] = firstWorkerID
+
+	// Store the merged user spec as originalUserSpec so observers can verify variable inheritance.
+	if userSpecWithVars.Config != "" || len(userSpecWithVars.Variables.User) > 0 {
+		userSpecBytes, marshalErr := json.Marshal(userSpecWithVars)
+		if marshalErr != nil {
+			s.logger.SentryWarn(deps.FeatureFSMv2, s.GetHierarchyPathUnlocked(), "original_user_spec_marshal_failed",
+				deps.Err(marshalErr))
+		} else {
+			var userSpecMap map[string]any
+			if unmarshalErr := json.Unmarshal(userSpecBytes, &userSpecMap); unmarshalErr != nil {
+				s.logger.SentryWarn(deps.FeatureFSMv2, s.GetHierarchyPathUnlocked(), "original_user_spec_unmarshal_failed",
+					deps.Err(unmarshalErr))
+			} else {
+				desiredDoc["originalUserSpec"] = userSpecMap
+			}
+		}
+	}
 
 	// Preserve ShutdownRequested: shutdown is a supervisor operation that overrides DeriveDesiredState
 	var existingDesiredTyped TDesired

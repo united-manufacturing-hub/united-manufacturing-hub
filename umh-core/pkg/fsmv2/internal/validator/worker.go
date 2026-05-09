@@ -770,7 +770,7 @@ func checkSpecUsage(filename string) []Violation {
 					File:    filename,
 					Line:    pos.Line,
 					Type:    "SPEC_RESULT_DISCARDED",
-					Message: "DeriveDesiredState() type-asserts spec but discards the result with _ — spec fields should be parsed and used",
+					Message: "DeriveDesiredState() type-asserts spec but discards the result with _  -  spec fields should be parsed and used",
 				})
 
 				return false
@@ -887,6 +887,76 @@ func checkActionHistoryCopy(filename string) []Violation {
 				Line:    pos.Line,
 				Type:    "MISSING_ACTION_HISTORY_COPY",
 				Message: "CollectObservedState() calls GetDependencies() but not GetActionHistory() - must copy action history from deps",
+			})
+		}
+
+		return true
+	})
+
+	return violations
+}
+
+// ValidateCollectObservedState2ArgSignature validates that all CollectObservedState
+// implementations use the L1 two-argument signature:
+//
+//	CollectObservedState(ctx context.Context, desired fsmv2.DesiredState) (ObservedState, error)
+//
+// The single-argument form (ctx context.Context) is the pre-L1 signature and must not
+// appear in any worker file after the L1 migration.
+func ValidateCollectObservedState2ArgSignature(baseDir string) []Violation {
+	var violations []Violation
+
+	workerFiles := FindWorkerFiles(baseDir)
+
+	for _, file := range workerFiles {
+		fileViolations := checkCollectObservedState2ArgSignature(file)
+		violations = append(violations, fileViolations...)
+	}
+
+	return violations
+}
+
+// checkCollectObservedState2ArgSignature checks that CollectObservedState has the 2-arg L1 signature.
+func checkCollectObservedState2ArgSignature(filename string) []Violation {
+	var violations []Violation
+
+	fset := token.NewFileSet()
+
+	node, err := parser.ParseFile(fset, filename, nil, parser.ParseComments)
+	if err != nil {
+		return violations
+	}
+
+	ast.Inspect(node, func(n ast.Node) bool {
+		funcDecl, ok := n.(*ast.FuncDecl)
+		if !ok || funcDecl.Name.Name != "CollectObservedState" {
+			return true
+		}
+
+		// Count the non-receiver parameters.
+		paramCount := 0
+		if funcDecl.Type.Params != nil {
+			for _, field := range funcDecl.Type.Params.List {
+				// Each field can represent multiple names (e.g., "a, b int").
+				// Count at least 1 even if no names (anonymous).
+				names := len(field.Names)
+				if names == 0 {
+					names = 1
+				}
+
+				paramCount += names
+			}
+		}
+
+		// L1 signature requires exactly 2 parameters: ctx and desired.
+		if paramCount != 2 {
+			pos := fset.Position(funcDecl.Pos())
+
+			violations = append(violations, Violation{
+				File:    filename,
+				Line:    pos.Line,
+				Type:    "COLLECT_OBSERVED_STATE_1ARG_SIGNATURE",
+				Message: fmt.Sprintf("CollectObservedState has %d parameter(s); L1 requires 2 (ctx context.Context, desired DesiredState)", paramCount),
 			})
 		}
 

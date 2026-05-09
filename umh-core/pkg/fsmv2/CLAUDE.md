@@ -68,19 +68,24 @@ type RunningState struct {
 }
 
 func (s *RunningState) Next(snapAny any) fsmv2.NextResult[any, any] {
-    snap := helpers.ConvertSnapshot[...](snapAny)  // Single type assertion
+    snap := fsmv2.ConvertWorkerSnapshot[MyConfig, MyStatus](snapAny)
 
     // Shutdown check FIRST
-    if snap.Desired.IsShutdownRequested() {
-        return fsmv2.Result[any, any](&StoppingState{}, fsmv2.SignalNone, nil, "Shutdown requested")
+    if snap.IsStopRequired() {
+        return fsmv2.Result[any, any](&ShuttingDownState{}, fsmv2.SignalNone, nil, "Shutdown requested")
     }
 
-    // Business logic...
+    // Business logic
+    if needsWork {
+        return fsmv2.Result[any, any](s, fsmv2.SignalNone, &MyAction{}, "Doing work")
+    }
 
     // Catch-all return at end
     return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil, "Staying in running")
 }
 ```
+
+`fsmv2.Result[any, any]` is the canonical return shape for state files.
 
 ## Reason Strings in State Transitions
 
@@ -118,6 +123,41 @@ func init() {
 ```
 
 The folder name must match the worker type (e.g., `transport/` for type `"transport"`).
+
+## FSMv2 Framework Types
+
+Key types used when building workers:
+
+- **`NewObservation[TStatus](status)`** — preferred constructor for `CollectObservedState` return values; the collector fills CollectedAt, framework metrics, action history, and accumulated worker metrics automatically after COS returns
+- **`Observation[TStatus]`** — flat JSON serialization with framework fields (state, shutdown, children counts)
+- **`WrappedDesiredState[TConfig]`** — promotes `BaseDesiredState` fields alongside TConfig
+- **`WorkerSnapshot[TConfig, TStatus]`** — typed snapshot for state `Next()` methods
+- **`ConvertWorkerSnapshot[TConfig, TStatus]`** — entry-point type assertion in states
+- **`ExtractConfig[TConfig](desired)`** — typed config access in `CollectObservedState`
+**Architecture validators** accept both APIs: `ConvertWorkerSnapshot` (Pattern A) and `ConvertSnapshot` (Pattern B) are valid entry points; `snap.IsStopRequired()` (WorkerSnapshot) is the canonical shutdown check for Pattern A workers.
+
+**Capability interfaces** (optional, detected via type assertion on first instantiation):
+- `ActionProvider` — `Actions() map[string]Action[any]`
+- `ChildSpecProvider` — `ChildSpecs() []config.ChildSpec`
+- `MetricsProvider` — `Metrics() []prometheus.Collector`
+- `GracefulShutdowner` — `Shutdown(ctx context.Context) error`
+- `ChildrenViewConsumer` — `SetChildrenView(view config.ChildrenView) ObservedState`
+
+**L5 invariant**: Optional capability interfaces must NEVER be implemented on embedded base types. Only the concrete worker struct should implement them.
+
+## Metrics Patterns
+
+Workers record metrics via `deps.MetricsRecorder()`. There are two observation return paths with different metric handling:
+
+| Return Path | CollectedAt | Metrics Handling | When to Use |
+|-------------|-------------|------------------|-------------|
+| `fsmv2.NewObservation(status)` | Zero (collector sets it) | Collector loads previous from CSE, drains recorder, merges (counters additive, gauges replace) | New workers (preferred) |
+| `w.WrapStatus(status)` | Set by caller | Worker drains recorder in COS, current-tick only | Legacy workers (deprecated) |
+| `w.WrapStatusAccumulated(ctx, status)` | Set by caller | Worker loads CSE + drains + merges in COS | Legacy workers needing cross-tick accumulation (deprecated) |
+
+**The zero-time gate**: The collector checks `observed.GetTimestamp().IsZero()`. If true (NewObservation), it runs post-COS wrapping. If false (WrapStatus/WrapStatusAccumulated), it skips wrapping since the worker already handled it. Both paths coexist safely during migration.
+
+**Drain is destructive**: `MetricsRecorder().Drain()` empties the buffer. Only one path should drain per tick. NewObservation workers must not call Drain() in COS — the collector does it. WrapStatus workers drain in COS — the collector skips it.
 
 ## Graceful Shutdown Cascading
 
@@ -193,7 +233,7 @@ var _ = Describe("Transport Scenario", func() {
 
 ## Error Classification Pattern
 
-9 `ErrorType` values exist in `workers/transport/types`. `ShouldStopRetrying` always returns false — classify locally as infrastructure (retry forever) vs non-infrastructure (drop). No retry cap: at 100ms tick rate, even `maxRetries=3` = 300ms, meaning a 1-second network outage drops messages.
+9 ErrorTypes exist in `communicator/transport/http`. `ShouldStopRetrying` always returns false — classify locally as infrastructure (retry forever) vs non-infrastructure (drop). No retry cap: at 100ms tick rate, even `maxRetries=3` = 300ms, meaning a 1-second network outage drops messages.
 
 ## Parent-Level Transport Reset (resetGeneration Pattern)
 
@@ -219,7 +259,7 @@ This prevents failure rate dilution: if idle ticks feed phantom "successes" into
 
 ## State Transition Traps
 
-### StoppingState must always progress
+### ShuttingDownState must always progress
 
 - MUST transition to StoppedState (or self-return with a cleanup action)
 - Self-return with `nil` action is **forbidden** — creates a permanent deadlock (worker stuck in PhaseStopping)

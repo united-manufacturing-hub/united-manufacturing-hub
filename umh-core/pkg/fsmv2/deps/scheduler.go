@@ -17,7 +17,7 @@ package deps
 import "time"
 
 // Scheduler provides time-based scheduling decisions for FSMv2 workers.
-// Methods are timezone-agnostic — they operate on the timezone of the
+// Methods are timezone-agnostic  -  they operate on the timezone of the
 // provided time.Time value.
 //
 // Maintenance window hierarchy (subset relationship):

@@ -19,7 +19,7 @@ import "time"
 // FSMLogger provides structured logging with compile-time enforcement of Sentry fields.
 //
 // Debug and Info are general-purpose. All warn/error level logs require Feature
-// and hierarchyPath parameters for Sentry routing — the compiler rejects any call
+// and hierarchyPath parameters for Sentry routing  -  the compiler rejects any call
 // missing these. This ensures every warning and error reaches Sentry with proper
 // feature and hierarchy context.
 type FSMLogger interface {

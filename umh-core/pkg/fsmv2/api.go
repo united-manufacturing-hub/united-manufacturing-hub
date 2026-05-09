@@ -16,11 +16,20 @@ package fsmv2
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 )
+
+// ErrNoDesiredState signals that no desired state is available yet.
+// This is an expected condition on first boot before the supervisor has written
+// the initial desired state to CSE storage, distinguishing it from genuine
+// load failures (e.g., deserialization errors, store connectivity issues).
+// The DesiredStateProvider in supervisor/api.go returns nil and suppresses the
+// SentryWarn log when errors.Is(err, persistence.ErrNotFound).
+var ErrNoDesiredState = errors.New("fsmv2: no desired state available")
 
 // Signal communicates special conditions from states to the supervisor.
 type Signal int
@@ -63,9 +72,6 @@ const (
 
 // ObservedState represents the actual state gathered from monitoring the system.
 type ObservedState interface {
-	// GetObservedDesiredState returns the desired state that is actually deployed.
-	GetObservedDesiredState() DesiredState
-
 	// GetTimestamp returns the time when this observed state was collected,
 	// used for staleness checks.
 	GetTimestamp() time.Time
@@ -81,10 +87,6 @@ type DesiredState interface {
 	// IsShutdownRequested is set by supervisor to initiate graceful shutdown.
 	// States should check this first in their Next() method.
 	IsShutdownRequested() bool
-
-	// GetState returns the desired lifecycle state ("running", "stopped", etc.).
-	// Used by supervisor to validate state values after DeriveDesiredState.
-	GetState() string
 }
 
 // ShutdownRequestable allows setting the shutdown flag on any DesiredState.
@@ -186,7 +188,11 @@ func Result[TSnapshot any, TDeps any](
 // not by a method on this interface.
 type Worker interface {
 	// CollectObservedState monitors the actual system state.
-	CollectObservedState(ctx context.Context) (ObservedState, error)
+	// The desired parameter provides the current desired state so observation-based
+	// workers can access configuration (target IP, port, etc.) without workarounds.
+	// The supervisor guarantees desired is always non-nil; collection is skipped
+	// until a desired state exists in the store.
+	CollectObservedState(ctx context.Context, desired DesiredState) (ObservedState, error)
 
 	// DeriveDesiredState derives the target state from user configuration (spec).
 	DeriveDesiredState(spec interface{}) (DesiredState, error)

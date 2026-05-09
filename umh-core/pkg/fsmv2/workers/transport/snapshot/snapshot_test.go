@@ -169,19 +169,6 @@ var _ = Describe("TransportObservedState", func() {
 })
 
 var _ = Describe("TransportDesiredState", func() {
-	Describe("ShutdownRequested", func() {
-		DescribeTable("should correctly report shutdown status",
-			func(shutdown bool, want bool) {
-				desired := &snapshot.TransportDesiredState{}
-				desired.SetShutdownRequested(shutdown)
-
-				Expect(desired.IsShutdownRequested()).To(Equal(want))
-			},
-			Entry("not requested", false, false),
-			Entry("requested", true, true),
-		)
-	})
-
 	Describe("GetState", func() {
 		It("should return the state value", func() {
 			desired := &snapshot.TransportDesiredState{}

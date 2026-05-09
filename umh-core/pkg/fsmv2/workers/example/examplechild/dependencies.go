@@ -20,6 +20,13 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 )
 
+// ExamplechildDepsIface is the minimal interface used by action files.
+type ExamplechildDepsIface interface {
+	deps.Dependencies
+	SetConnected(connected bool)
+	IsConnected() bool
+}
+
 // Connection represents a connection to an external resource.
 type Connection interface{}
 

@@ -45,7 +45,7 @@ import (
 	fsmv2sentry "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/sentry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/application"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator"
-	_ "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/persistence"
+	persistenceWorker "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/persistence"
 	transportWorker "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport"
 	transportSnapshot "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/snapshot"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
@@ -544,7 +544,7 @@ children:
 		"onAuthSuccessCallback": onAuthSuccessCallback,
 	}
 	if configData.Agent.UseFSMv2MemoryCleanup {
-		fsmv2Deps["store"] = store
+		fsmv2Deps["dependencies"] = persistenceWorker.NewStoreOnlyDependencies(store)
 	}
 
 	appSup, err := application.NewApplicationSupervisor(application.SupervisorConfig{

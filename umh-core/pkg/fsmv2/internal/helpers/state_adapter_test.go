@@ -31,10 +31,6 @@ type testObserved struct {
 	Timestamp time.Time
 }
 
-func (t testObserved) GetObservedDesiredState() fsmv2.DesiredState {
-	return &testDesired{}
-}
-
 func (t testObserved) GetTimestamp() time.Time {
 	return t.Timestamp
 }
@@ -47,16 +43,12 @@ func (t *testDesired) IsShutdownRequested() bool {
 	return t.shutdown
 }
 
-func (t *testDesired) GetState() string {
-	return "running"
+func (t *testDesired) SetShutdownRequested(v bool) {
+	t.shutdown = v
 }
 
 type wrongObserved struct {
 	Value string
-}
-
-func (w wrongObserved) GetObservedDesiredState() fsmv2.DesiredState {
-	return &testDesired{}
 }
 
 func (w wrongObserved) GetTimestamp() time.Time {
@@ -71,9 +63,7 @@ func (w *wrongDesired) IsShutdownRequested() bool {
 	return false
 }
 
-func (w *wrongDesired) GetState() string {
-	return "running"
-}
+func (w *wrongDesired) SetShutdownRequested(_ bool) {}
 
 var _ = Describe("StateAdapter", func() {
 	Describe("ConvertSnapshot", func() {
