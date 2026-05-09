@@ -15,6 +15,8 @@
 package state
 
 import (
+	"fmt"
+
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplechild/action"
@@ -30,7 +32,7 @@ func (s *TryingToStopState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := fsmv2.ConvertWorkerSnapshot[example_child.ExamplechildConfig, example_child.ExamplechildStatus](snapAny)
 
 	if snap.Status.ConnectionHealth != "healthy" {
-		return fsmv2.Result[any, any](&StoppedState{}, fsmv2.SignalNone, nil, "Disconnection complete, child stopped")
+		return fsmv2.Result[any, any](&StoppedState{}, fsmv2.SignalNone, nil, fmt.Sprintf("disconnection complete: connectionHealth=%q parentState=%q", snap.Status.ConnectionHealth, snap.ParentMappedState))
 	}
 
 	return fsmv2.Result[any, any](s, fsmv2.SignalNone, &action.DisconnectAction{}, "Closing connections gracefully")
