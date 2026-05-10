@@ -18,7 +18,7 @@ import (
 	"context"
 
 	depspkg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplefailing/snapshot"
+	examplefailing "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplefailing"
 )
 
 const DisconnectActionName = "disconnect"
@@ -36,7 +36,7 @@ func (a *DisconnectAction) Execute(ctx context.Context, depsAny any) error {
 	default:
 	}
 
-	deps := depsAny.(snapshot.ExamplefailingDependencies)
+	deps := depsAny.(examplefailing.ExamplefailingDepsIface)
 	logger := deps.GetLogger()
 	logger.Info("Disconnecting")
 

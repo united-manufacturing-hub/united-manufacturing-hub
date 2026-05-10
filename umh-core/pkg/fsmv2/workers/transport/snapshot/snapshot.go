@@ -68,17 +68,14 @@ type TransportDependencies interface {
 	GetFailedAuthConfig() (token, relayURL, uuid string)
 }
 
-// TransportSnapshot represents a point-in-time view of the transport worker state.
-type TransportSnapshot struct {
-	Desired  *TransportDesiredState
-	Identity deps.Identity
-	Observed TransportObservedState
-}
-
 // Compile-time check that TransportDesiredState implements fsmv2.DesiredState.
 var _ fsmv2.DesiredState = (*TransportDesiredState)(nil)
 
-// Compile-time check that TransportDesiredState implements config.ChildSpecProvider.
+// Deprecated: TransportDesiredState.ChildrenSpecs and GetChildrenSpecs are forward-deletion
+// candidates. DeriveDesiredState now populates WrappedDesiredState.ChildrenSpecs (the wrapper
+// field), not TransportDesiredState.ChildrenSpecs (the inner config field). The supervisor reads
+// child specs via the ChildSpecProvider type assertion on the WrappedDesiredState wrapper, so
+// this compile-time check is no longer load-bearing. Remove once all callers are confirmed gone.
 var _ config.ChildSpecProvider = (*TransportDesiredState)(nil)
 
 // TransportDesiredState represents the target configuration for the transport worker.
@@ -88,22 +85,34 @@ type TransportDesiredState struct {
 	// adding a CSE secret tier to persist locally but exclude from delta sync.
 	AuthToken               string `json:"authToken"`
 	RelayURL                string `json:"relayURL"`
-	config.BaseDesiredState        // Provides State, ShutdownRequested + IsShutdownRequested() + SetShutdownRequested()
+	config.BaseDesiredState        // Provides ShutdownRequested + IsShutdownRequested() + SetShutdownRequested()
 
+	// Deprecated: ChildrenSpecs on TransportDesiredState is never populated. Child specs are
+	// set on WrappedDesiredState.ChildrenSpecs by DeriveDesiredState. This field exists only
+	// to satisfy the legacy config.ChildSpecProvider interface check above.
 	ChildrenSpecs []config.ChildSpec `json:"childrenSpecs,omitempty"`
 
 	Timeout time.Duration `json:"timeout"`
+
+	State string `json:"state" yaml:"state"` // "stopped" or "running" - desired lifecycle state
 }
 
 // GetChildrenSpecs returns the children specifications.
-// Implements config.ChildSpecProvider interface.
+//
+// Deprecated: This method is a forward-deletion candidate. The supervisor resolves child specs
+// via WrappedDesiredState.GetChildrenSpecs(), not via TransportDesiredState.GetChildrenSpecs().
+// ChildrenSpecs on TransportDesiredState is always empty in production code.
 func (d *TransportDesiredState) GetChildrenSpecs() []config.ChildSpec {
 	return d.ChildrenSpecs
 }
 
 // GetState returns the desired lifecycle state ("running" or "stopped").
 func (d *TransportDesiredState) GetState() string {
-	return d.BaseDesiredState.GetState()
+	if d.State == "" {
+		return config.DesiredStateRunning
+	}
+
+	return d.State
 }
 
 // ShouldBeRunning returns true if the transport should be running.
@@ -130,90 +139,24 @@ func (f FailedAuthConfig) IsEmpty() bool {
 	return f.AuthToken == "" && f.RelayURL == "" && f.InstanceUUID == ""
 }
 
-// TransportObservedState represents the current state of the transport worker.
-type TransportObservedState struct {
-	CollectedAt time.Time `json:"collected_at"`
-
-	JWTExpiry time.Time `json:"jwt_expiry,omitempty"`
-
-	// LastAuthAttemptAt records when the last authentication attempt was made (for backoff gating).
-	LastAuthAttemptAt time.Time `json:"last_auth_attempt_at,omitempty"`
-
-	// Children contains the observed state of child workers (PushWorker, PullWorker).
-	Children map[string]fsmv2.ObservedState `json:"children,omitempty"`
-
-	// FailedAuthConfig holds the auth config (token, relay URL, instance UUID) that was
-	// used in the last permanently-failed auth attempt. Set by AuthenticateAction on
-	// InvalidToken/InstanceDeleted, cleared by RecordSuccess. AuthFailedState compares
-	// snap.Desired fields against this to detect config changes that warrant a retry.
-	FailedAuthConfig FailedAuthConfig `json:"failed_auth_config,omitempty"`
-
-	State string `json:"state"` // Observed lifecycle state (e.g., "running_healthy")
-
-	// AuthenticatedUUID is the instance UUID returned from the backend after authentication.
-	AuthenticatedUUID string `json:"authenticated_uuid,omitempty"`
-
-	// JWTToken is the current authentication token for relay communication.
-	// NOTE: This field must NOT use json:"-" — the supervisor reconciliation loop
-	// serializes observed state to CSE storage between ticks and deserializes it
-	// via LoadObservedTyped(). Excluding JWTToken from JSON would force
-	// re-authentication on every tick (~10ms), hammering the relay server.
-	// TODO(security): JWTToken included in CSE sync payloads. ENG-4405 tracks
-	// adding a CSE secret tier to persist locally but exclude from delta sync.
-	JWTToken string `json:"jwt_token,omitempty"`
-
-	// LastActionResults contains the action history from the last collection cycle (supervisor-managed).
-	LastActionResults []deps.ActionResult `json:"last_action_results,omitempty"`
-
-	// DesiredState embedded for state consistency
-	TransportDesiredState `json:",inline"`
-
-	deps.MetricsEmbedder `json:",inline"`
-
-	// TotalMessagesPushed tracks cumulative messages pushed to backend.
-	TotalMessagesPushed int64 `json:"total_messages_pushed"`
-
-	// TotalMessagesPulled tracks cumulative messages pulled from backend.
-	TotalMessagesPulled int64 `json:"total_messages_pulled"`
-
-	// ChildrenHealthy is the count of healthy child workers.
-	ChildrenHealthy int `json:"children_healthy"`
-
-	// ChildrenUnhealthy is the count of unhealthy child workers.
-	ChildrenUnhealthy int `json:"children_unhealthy"`
-
-	// ConsecutiveErrors tracks consecutive push/pull errors for transport reset decisions.
-	ConsecutiveErrors int `json:"consecutive_errors"`
-
-	// LastErrorType tracks the most recent error type for ShouldResetTransport evaluation.
-	LastErrorType types.ErrorType `json:"last_error_type"`
-
-	// LastRetryAfter holds the server-suggested retry delay from the most recent error (for backoff).
-	LastRetryAfter time.Duration `json:"last_retry_after,omitempty"`
-}
-
-// GetTimestamp returns when this observed state was collected.
-func (o TransportObservedState) GetTimestamp() time.Time {
-	return o.CollectedAt
-}
-
-// GetObservedDesiredState returns the desired state that is actually deployed.
-func (o TransportObservedState) GetObservedDesiredState() fsmv2.DesiredState {
-	return &o.TransportDesiredState
-}
-
-// SetState sets the FSM state name on this observed state.
-func (o TransportObservedState) SetState(s string) fsmv2.ObservedState {
-	o.State = s
-
-	return o
-}
-
-// SetShutdownRequested sets the shutdown requested status on this observed state.
-func (o TransportObservedState) SetShutdownRequested(v bool) fsmv2.ObservedState {
-	o.ShutdownRequested = v
-
-	return o
+// TransportStatus holds the runtime observation data for the transport worker.
+// NOTE: JWTToken must NOT use json:"-" — the supervisor reconciliation loop
+// serializes observed state to CSE storage between ticks and deserializes it
+// via LoadObservedTyped(). Excluding JWTToken from JSON would force
+// re-authentication on every tick (~10ms), hammering the relay server.
+// TODO(security): JWTToken included in CSE sync payloads. ENG-4405 tracks
+// adding a CSE secret tier to persist locally but exclude from delta sync.
+type TransportStatus struct {
+	JWTExpiry         time.Time        `json:"jwt_expiry,omitempty"`
+	LastAuthAttemptAt time.Time        `json:"last_auth_attempt_at,omitempty"`
+	FailedAuthConfig  FailedAuthConfig `json:"failed_auth_config,omitempty"`
+	JWTToken          string           `json:"jwt_token,omitempty"`
+	AuthenticatedUUID string           `json:"authenticated_uuid,omitempty"`
+	LastErrorType     types.ErrorType  `json:"last_error_type"`
+	LastRetryAfter    time.Duration    `json:"last_retry_after,omitempty"`
+	TotalMessagesPushed int64          `json:"total_messages_pushed"`
+	TotalMessagesPulled int64          `json:"total_messages_pulled"`
+	ConsecutiveErrors   int            `json:"consecutive_errors"`
 }
 
 // IsTokenExpired returns true if the JWT token is expired or will expire within 10 minutes.
@@ -224,25 +167,17 @@ func (o TransportObservedState) SetShutdownRequested(v bool) fsmv2.ObservedState
 // transitions Running → Starting, which causes children to stop (they are not in ChildStartStates
 // while the parent is Starting). Children never push or pull during the refresh window.
 // The children's 1-minute buffer is a last-resort safety net for edge cases only.
-func (o TransportObservedState) IsTokenExpired() bool {
-	if o.JWTExpiry.IsZero() {
+func (s TransportStatus) IsTokenExpired() bool {
+	if s.JWTExpiry.IsZero() {
 		return false
 	}
 
 	const refreshBuffer = 10 * time.Minute
 
-	return time.Now().Add(refreshBuffer).After(o.JWTExpiry)
-}
-
-// SetChildrenCounts sets the children health counts on this observed state.
-func (o TransportObservedState) SetChildrenCounts(healthy, unhealthy int) fsmv2.ObservedState {
-	o.ChildrenHealthy = healthy
-	o.ChildrenUnhealthy = unhealthy
-
-	return o
+	return time.Now().Add(refreshBuffer).After(s.JWTExpiry)
 }
 
 // HasValidToken returns true if there is a valid JWT token that hasn't expired.
-func (o TransportObservedState) HasValidToken() bool {
-	return o.JWTToken != "" && !o.IsTokenExpired()
+func (s TransportStatus) HasValidToken() bool {
+	return s.JWTToken != "" && !s.IsTokenExpired()
 }

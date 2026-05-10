@@ -16,11 +16,23 @@ package fsmv2
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"sync"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 )
+
+// ErrNoDesiredState signals that no desired state is available yet.
+// This is an expected condition on first boot before the supervisor has written
+// the initial desired state to CSE storage, distinguishing it from genuine
+// load failures (e.g., deserialization errors, store connectivity issues).
+// The DesiredStateProvider in supervisor/api.go returns nil and suppresses the
+// SentryWarn log when errors.Is(err, persistence.ErrNotFound).
+var ErrNoDesiredState = errors.New("fsmv2: no desired state available")
 
 // Signal communicates special conditions from states to the supervisor.
 type Signal int
@@ -63,9 +75,6 @@ const (
 
 // ObservedState represents the actual state gathered from monitoring the system.
 type ObservedState interface {
-	// GetObservedDesiredState returns the desired state that is actually deployed.
-	GetObservedDesiredState() DesiredState
-
 	// GetTimestamp returns the time when this observed state was collected,
 	// used for staleness checks.
 	GetTimestamp() time.Time
@@ -81,10 +90,6 @@ type DesiredState interface {
 	// IsShutdownRequested is set by supervisor to initiate graceful shutdown.
 	// States should check this first in their Next() method.
 	IsShutdownRequested() bool
-
-	// GetState returns the desired lifecycle state ("running", "stopped", etc.).
-	// Used by supervisor to validate state values after DeriveDesiredState.
-	GetState() string
 }
 
 // ShutdownRequestable allows setting the shutdown flag on any DesiredState.
@@ -186,7 +191,11 @@ func Result[TSnapshot any, TDeps any](
 // not by a method on this interface.
 type Worker interface {
 	// CollectObservedState monitors the actual system state.
-	CollectObservedState(ctx context.Context) (ObservedState, error)
+	// The desired parameter provides the current desired state so observation-based
+	// workers can access configuration (target IP, port, etc.) without workarounds.
+	// The supervisor guarantees desired is always non-nil; collection is skipped
+	// until a desired state exists in the store.
+	CollectObservedState(ctx context.Context, desired DesiredState) (ObservedState, error)
 
 	// DeriveDesiredState derives the target state from user configuration (spec).
 	DeriveDesiredState(spec interface{}) (DesiredState, error)
@@ -201,4 +210,210 @@ type Worker interface {
 type DependencyProvider interface {
 	// GetDependenciesAny returns the worker's dependencies as any.
 	GetDependenciesAny() any
+}
+
+// --- Capability interfaces (optional, discovered via type assertion) ---
+
+// ActionProvider enables side effects via actions.
+// Workers that implement this interface opt into the action execution pipeline.
+// The supervisor calls Actions() once at registration to discover available actions.
+type ActionProvider interface {
+	Actions() map[string]Action[any]
+}
+
+// MetricsProvider enables custom Prometheus metrics.
+// Workers that implement this interface register custom collectors
+// with Prometheus at registration time.
+type MetricsProvider interface {
+	Metrics() []prometheus.Collector
+}
+
+// GracefulShutdowner enables custom cleanup on shutdown.
+// Workers that implement this interface get a chance to flush buffers,
+// close connections, etc. before the supervisor removes the worker.
+type GracefulShutdowner interface {
+	Shutdown(ctx context.Context) error
+}
+
+// ChildrenViewConsumer enables access to the full child state tree.
+// Workers that implement this interface receive the complete children
+// supervisor view each tick, enabling extraction of circuit breaker state,
+// stale counts, and other detailed child information beyond aggregate counts.
+//
+// SetChildrenView returns the updated ObservedState because it is invoked on
+// value receivers (the collector treats ObservedState as immutable and
+// re-assigns the returned value), matching every other Set* method on
+// Observation.
+type ChildrenViewConsumer interface {
+	SetChildrenView(view config.ChildrenView) ObservedState
+}
+
+// --- WrappedDesiredState ---
+
+// WrappedDesiredState wraps a developer's TConfig into the full DesiredState
+// required by the supervisor. BaseDesiredState promotion provides
+// IsShutdownRequested and SetShutdownRequested for free. The State field
+// carries the desired lifecycle state ("running"/"stopped") set by
+// DeriveDesiredState from the user spec's BaseUserSpec.GetState().
+//
+// The framework constructs this during DeriveDesiredState. Developers define
+// their TConfig type and call the typed DeriveDesiredState helpers to produce it.
+type WrappedDesiredState[TConfig any] struct {
+	config.BaseDesiredState
+	Config        TConfig            `json:"config"`
+	ChildrenSpecs []config.ChildSpec `json:"childrenSpecs,omitempty"`
+	State         string             `json:"state"             yaml:"state"` // "stopped" or "running" - desired lifecycle state
+}
+
+// GetState returns the desired lifecycle state, defaulting to "running" if empty.
+func (d *WrappedDesiredState[TConfig]) GetState() string {
+	if d.State == "" {
+		return config.DesiredStateRunning
+	}
+
+	return d.State
+}
+
+// GetChildrenSpecs returns the children specifications.
+// Implements config.ChildSpecProvider interface.
+func (d *WrappedDesiredState[TConfig]) GetChildrenSpecs() []config.ChildSpec {
+	return d.ChildrenSpecs
+}
+
+// --- WorkerSnapshot and ConvertWorkerSnapshot ---
+
+// WorkerSnapshot is the typed snapshot passed to State.Next(). It eliminates
+// unsafe type assertions previously required in every state file.
+type WorkerSnapshot[TConfig any, TStatus any] struct {
+	CollectedAt         time.Time
+	Config              TConfig
+	Status              TStatus
+	ChildrenView        any
+	Identity            deps.Identity
+	ParentMappedState   string
+	LastActionResults   []deps.ActionResult
+	Metrics             deps.MetricsEmbedder
+	ChildrenHealthy     int
+	ChildrenUnhealthy   int
+	IsShutdownRequested bool
+}
+
+// IsStopRequired returns true when the worker should transition to stopped,
+// whether from an explicit shutdown request or a parent-driven stop signal.
+func (s WorkerSnapshot[TConfig, TStatus]) IsStopRequired() bool {
+	return s.IsShutdownRequested || s.ParentMappedState == config.DesiredStateStopped
+}
+
+// ConvertWorkerSnapshot type-asserts the raw snapshot from State.Next() into a
+// fully typed WorkerSnapshot. Panics with a descriptive message if the snapshot
+// contains unexpected types.
+func ConvertWorkerSnapshot[TConfig any, TStatus any](snapAny any) WorkerSnapshot[TConfig, TStatus] {
+	snap, ok := snapAny.(Snapshot)
+	if !ok {
+		panic(fmt.Sprintf("ConvertWorkerSnapshot: expected fsmv2.Snapshot, got %T", snapAny))
+	}
+
+	obs, ok := snap.Observed.(Observation[TStatus])
+	if !ok {
+		panic(fmt.Sprintf("ConvertWorkerSnapshot: expected Observation[TStatus], got %T", snap.Observed))
+	}
+
+	des, ok := snap.Desired.(*WrappedDesiredState[TConfig])
+	if !ok {
+		panic(fmt.Sprintf("ConvertWorkerSnapshot: expected *WrappedDesiredState[TConfig], got %T", snap.Desired))
+	}
+
+	return WorkerSnapshot[TConfig, TStatus]{
+		Config:              des.Config,
+		Status:              obs.Status,
+		Identity:            snap.Identity,
+		IsShutdownRequested: des.IsShutdownRequested(),
+		ParentMappedState:   obs.ParentMappedState,
+		CollectedAt:         obs.CollectedAt,
+		LastActionResults:   obs.LastActionResults,
+		Metrics:             obs.MetricsEmbedder,
+		ChildrenHealthy:     obs.ChildrenHealthy,
+		ChildrenUnhealthy:   obs.ChildrenUnhealthy,
+		ChildrenView:        obs.ChildrenView,
+	}
+}
+
+// ExtractConfig type-asserts a DesiredState to *WrappedDesiredState[TConfig]
+// and returns the developer's typed config.
+// Panics with a descriptive message if the type does not match.
+func ExtractConfig[TConfig any](desired DesiredState) TConfig {
+	wds, ok := desired.(*WrappedDesiredState[TConfig])
+	if !ok {
+		panic(fmt.Sprintf("ExtractConfig: expected *WrappedDesiredState[TConfig], got %T", desired))
+	}
+
+	return wds.Config
+}
+
+// --- SimpleAction ---
+
+// SimpleAction creates an Action[any] from a typed function. It checks
+// ctx.Done() before invoking fn, eliminating the need for explicit action
+// structs in simple cases.
+//
+// The returned action type-asserts depsAny to TDeps at call time.
+// A wrong type returns a descriptive error.
+func SimpleAction[TDeps any](name string, fn func(ctx context.Context, deps TDeps) error) Action[any] {
+	return &simpleAction[TDeps]{name: name, fn: fn}
+}
+
+type simpleAction[TDeps any] struct {
+	fn   func(ctx context.Context, deps TDeps) error
+	name string
+}
+
+func (a *simpleAction[TDeps]) Execute(ctx context.Context, depsAny any) error {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+	}
+
+	typedDeps, ok := depsAny.(TDeps)
+	if !ok {
+		return fmt.Errorf("SimpleAction %q: expected deps type %T, got %T", a.name, *new(TDeps), depsAny)
+	}
+
+	return a.fn(ctx, typedDeps)
+}
+
+func (a *simpleAction[TDeps]) Name() string   { return a.name }
+func (a *simpleAction[TDeps]) String() string { return a.name }
+
+// --- InitialStateRegistry ---
+
+var (
+	initialStateRegistry   = make(map[string]State[any, any])
+	initialStateRegistryMu sync.RWMutex
+)
+
+// RegisterInitialState registers the initial state for a worker type.
+// Called from state package init() functions. Panics on duplicate registration.
+func RegisterInitialState(workerType string, state State[any, any]) {
+	initialStateRegistryMu.Lock()
+	defer initialStateRegistryMu.Unlock()
+	if _, exists := initialStateRegistry[workerType]; exists {
+		panic(fmt.Sprintf("RegisterInitialState: duplicate registration for %q", workerType))
+	}
+	initialStateRegistry[workerType] = state
+}
+
+// LookupInitialState returns the registered initial state for a worker type.
+// Returns nil if no state is registered.
+func LookupInitialState(workerType string) State[any, any] {
+	initialStateRegistryMu.RLock()
+	defer initialStateRegistryMu.RUnlock()
+	return initialStateRegistry[workerType]
+}
+
+// ResetInitialStateRegistry clears all registrations. For testing only.
+func ResetInitialStateRegistry() {
+	initialStateRegistryMu.Lock()
+	defer initialStateRegistryMu.Unlock()
+	initialStateRegistry = make(map[string]State[any, any])
 }

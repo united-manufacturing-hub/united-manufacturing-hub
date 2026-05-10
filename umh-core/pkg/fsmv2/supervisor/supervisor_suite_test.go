@@ -122,23 +122,16 @@ func (m *mockDesiredState) IsShutdownRequested() bool {
 	return m.ShutdownRequested
 }
 
-func (m *mockDesiredState) GetState() string {
-	if m.State == "" {
-		return "running"
-	}
-
-	return m.State
-}
-
 type mockWorker struct {
 	collectErr          error
 	observed            fsmv2.ObservedState
 	initialState        fsmv2.State[any, any]
 	collectFunc         func(ctx context.Context) (fsmv2.ObservedState, error)
 	requestShutdownFunc func() // Callback for when RequestShutdown is called
+	requestRemovalFunc  func() // Alias: callback for when removal is requested
 }
 
-func (m *mockWorker) CollectObservedState(ctx context.Context) (fsmv2.ObservedState, error) {
+func (m *mockWorker) CollectObservedState(ctx context.Context, _ fsmv2.DesiredState) (fsmv2.ObservedState, error) {
 	if m.collectFunc != nil {
 		return m.collectFunc(ctx)
 	}
@@ -159,7 +152,7 @@ func (m *mockWorker) CollectObservedState(ctx context.Context) (fsmv2.ObservedSt
 }
 
 func (m *mockWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, error) {
-	return &config.DesiredState{BaseDesiredState: config.BaseDesiredState{State: "running"}}, nil
+	return &config.DesiredState{State: "running"}, nil
 }
 
 func (m *mockWorker) GetInitialState() fsmv2.State[any, any] {

@@ -84,7 +84,7 @@ type internalMockWorker struct {
 	observed     persistence.Document
 }
 
-func (m *internalMockWorker) CollectObservedState(_ context.Context) (fsmv2.ObservedState, error) {
+func (m *internalMockWorker) CollectObservedState(_ context.Context, _ fsmv2.DesiredState) (fsmv2.ObservedState, error) {
 	return &mockObservedState{
 		doc:       m.observed,
 		timestamp: time.Now(),
@@ -92,7 +92,7 @@ func (m *internalMockWorker) CollectObservedState(_ context.Context) (fsmv2.Obse
 }
 
 func (m *internalMockWorker) DeriveDesiredState(_ interface{}) (fsmv2.DesiredState, error) {
-	return &config.DesiredState{BaseDesiredState: config.BaseDesiredState{State: "running"}}, nil
+	return &config.DesiredState{BaseDesiredState: config.BaseDesiredState{}}, nil
 }
 
 func (m *internalMockWorker) GetInitialState() fsmv2.State[any, any] {
@@ -104,10 +104,6 @@ func (m *internalMockWorker) GetInitialState() fsmv2.State[any, any] {
 type mockObservedState struct {
 	doc       persistence.Document
 	timestamp time.Time
-}
-
-func (m *mockObservedState) GetObservedDesiredState() fsmv2.DesiredState {
-	return &mockDesiredState{}
 }
 
 func (m *mockObservedState) GetTimestamp() time.Time {
@@ -128,14 +124,6 @@ func (m *mockDesiredState) IsShutdownRequested() bool {
 }
 
 func (m *mockDesiredState) SetShutdownRequested(_ bool) {
-}
-
-func (m *mockDesiredState) GetState() string {
-	if m.State == "" {
-		return "running"
-	}
-
-	return m.State
 }
 
 // mockState is shared across internal supervisor tests (package supervisor).
@@ -163,7 +151,7 @@ type internalMockWorkerWithChildren struct {
 	childrenSpecs []config.ChildSpec
 }
 
-func (m *internalMockWorkerWithChildren) CollectObservedState(_ context.Context) (fsmv2.ObservedState, error) {
+func (m *internalMockWorkerWithChildren) CollectObservedState(_ context.Context, _ fsmv2.DesiredState) (fsmv2.ObservedState, error) {
 	return &mockObservedState{
 		doc:       m.observed,
 		timestamp: time.Now(),
@@ -172,12 +160,33 @@ func (m *internalMockWorkerWithChildren) CollectObservedState(_ context.Context)
 
 func (m *internalMockWorkerWithChildren) DeriveDesiredState(_ interface{}) (fsmv2.DesiredState, error) {
 	return &config.DesiredState{
-		BaseDesiredState: config.BaseDesiredState{State: "running"},
+		BaseDesiredState: config.BaseDesiredState{},
 		ChildrenSpecs:    m.childrenSpecs,
 	}, nil
 }
 
 func (m *internalMockWorkerWithChildren) GetInitialState() fsmv2.State[any, any] {
+	return m.initialState
+}
+
+// newObservationMockWorker returns fsmv2.NewObservation (zero CollectedAt) from CollectObservedState.
+type newObservationMockWorker struct {
+	initialState fsmv2.State[any, any]
+}
+
+type newObsStatus struct {
+	Ready bool `json:"ready"`
+}
+
+func (m *newObservationMockWorker) CollectObservedState(_ context.Context, _ fsmv2.DesiredState) (fsmv2.ObservedState, error) {
+	return fsmv2.NewObservation(newObsStatus{Ready: true}), nil
+}
+
+func (m *newObservationMockWorker) DeriveDesiredState(_ interface{}) (fsmv2.DesiredState, error) {
+	return &config.DesiredState{BaseDesiredState: config.BaseDesiredState{}}, nil
+}
+
+func (m *newObservationMockWorker) GetInitialState() fsmv2.State[any, any] {
 	return m.initialState
 }
 
@@ -308,354 +317,46 @@ var _ = Describe("Supervisor Internal", func() {
 		})
 	})
 
-	Describe("ChildStartStates", func() {
-		var (
-			basicStore      *memory.InMemoryStore
-			triangularStore *storage.TriangularStore
-		)
+	Describe("AddWorker with NewObservation", func() {
+		It("should set CollectedAt when worker returns zero-time observation", func() {
+			basicStore := memory.NewInMemoryStore()
+			defer func() { _ = basicStore.Close(ctx) }()
 
-		BeforeEach(func() {
-			basicStore = memory.NewInMemoryStore()
+			Expect(basicStore.CreateCollection(ctx, "test_identity", nil)).To(Succeed())
+			Expect(basicStore.CreateCollection(ctx, "test_desired", nil)).To(Succeed())
+			Expect(basicStore.CreateCollection(ctx, "test_observed", nil)).To(Succeed())
 
-			Expect(basicStore.CreateCollection(ctx, "parent_identity", nil)).To(Succeed())
-			Expect(basicStore.CreateCollection(ctx, "parent_desired", nil)).To(Succeed())
-			Expect(basicStore.CreateCollection(ctx, "parent_observed", nil)).To(Succeed())
-			Expect(basicStore.CreateCollection(ctx, "child_identity", nil)).To(Succeed())
-			Expect(basicStore.CreateCollection(ctx, "child_desired", nil)).To(Succeed())
-			Expect(basicStore.CreateCollection(ctx, "child_observed", nil)).To(Succeed())
-			Expect(basicStore.CreateCollection(ctx, "mqtt_client_identity", nil)).To(Succeed())
-			Expect(basicStore.CreateCollection(ctx, "mqtt_client_desired", nil)).To(Succeed())
-			Expect(basicStore.CreateCollection(ctx, "mqtt_client_observed", nil)).To(Succeed())
+			triangularStore := storage.NewTriangularStore(basicStore, deps.NewNopFSMLogger())
 
-			triangularStore = storage.NewTriangularStore(basicStore, deps.NewNopFSMLogger())
-		})
-
-		AfterEach(func() {
-			_ = basicStore.Close(ctx)
-		})
-
-		It("should run child when parent state is in ChildStartStates list", func() {
-			supervisorCfg := Config{
-				WorkerType: "parent",
+			sup := NewSupervisor[*TestObservedState, *TestDesiredState](Config{
+				WorkerType: "test",
 				Store:      triangularStore,
 				Logger:     logger,
-			}
+			})
 
-			parent := NewSupervisor[*TestObservedState, *TestDesiredState](supervisorCfg)
-
-			identity := deps.Identity{
-				ID:         "parent-1",
-				Name:       "Parent Worker",
-				WorkerType: "parent",
-			}
-
-			childSpecs := []config.ChildSpec{
-				{
-					Name:             "child-1",
-					WorkerType:       "child",
-					UserSpec:         config.UserSpec{Config: "url: tcp://localhost:1883"},
-					ChildStartStates: []string{"active"},
-				},
-			}
-
-			worker := &internalMockWorkerWithChildren{
-				identity:      identity,
-				initialState:  &mockState{name: "active"},
-				observed:      persistence.Document{"id": "parent-1", "status": "active"},
-				childrenSpecs: childSpecs,
-			}
-
-			err := parent.AddWorker(identity, worker)
-			Expect(err).NotTo(HaveOccurred())
-
-			err = parent.tick(ctx)
-			Expect(err).NotTo(HaveOccurred())
-
-			children := parent.GetChildren()
-			Expect(children).To(HaveLen(1))
-
-			child, exists := children["child-1"]
-			Expect(exists).To(BeTrue())
-
-			typedChild, ok := child.(*Supervisor[*TestObservedState, *TestDesiredState])
-			Expect(ok).To(BeTrue())
-
-			mappedState := typedChild.GetMappedParentState()
-			Expect(mappedState).To(Equal("running"))
-		})
-
-		It("should always run child when ChildStartStates is nil", func() {
-			supervisorCfg := Config{
-				WorkerType: "parent",
-				Store:      triangularStore,
-				Logger:     logger,
-			}
-
-			parent := NewSupervisor[*TestObservedState, *TestDesiredState](supervisorCfg)
+			beforeAdd := time.Now()
 
 			identity := deps.Identity{
-				ID:         "parent-1",
-				Name:       "Parent Worker",
-				WorkerType: "parent",
+				ID:         "worker-obs",
+				Name:       "Observation Worker",
+				WorkerType: "test",
 			}
 
-			childSpecs := []config.ChildSpec{
-				{
-					Name:             "child-1",
-					WorkerType:       "child",
-					UserSpec:         config.UserSpec{Config: "url: tcp://localhost:1883"},
-					ChildStartStates: nil,
-				},
+			newObsWorker := &newObservationMockWorker{
+				initialState: &mockState{name: "initial"},
 			}
 
-			worker := &internalMockWorkerWithChildren{
-				identity:      identity,
-				initialState:  &mockState{name: "running"},
-				observed:      persistence.Document{"id": "parent-1", "status": "running"},
-				childrenSpecs: childSpecs,
-			}
-
-			err := parent.AddWorker(identity, worker)
+			err := sup.AddWorker(identity, newObsWorker)
 			Expect(err).NotTo(HaveOccurred())
 
-			err = parent.tick(ctx)
+			// Load the saved observation and verify CollectedAt was set.
+			var loaded struct {
+				CollectedAt time.Time `json:"collected_at"`
+			}
+			err = triangularStore.LoadObservedTyped(ctx, "test", "worker-obs", &loaded)
 			Expect(err).NotTo(HaveOccurred())
-
-			children := parent.GetChildren()
-			child, exists := children["child-1"]
-			Expect(exists).To(BeTrue())
-
-			typedChild, ok := child.(*Supervisor[*TestObservedState, *TestDesiredState])
-			Expect(ok).To(BeTrue())
-
-			mappedState := typedChild.GetMappedParentState()
-			Expect(mappedState).To(Equal("running"))
-		})
-
-		It("should stop child when parent state is not in ChildStartStates list", func() {
-			supervisorCfg := Config{
-				WorkerType: "parent",
-				Store:      triangularStore,
-				Logger:     logger,
-			}
-
-			parent := NewSupervisor[*TestObservedState, *TestDesiredState](supervisorCfg)
-
-			identity := deps.Identity{
-				ID:         "parent-1",
-				Name:       "Parent Worker",
-				WorkerType: "parent",
-			}
-
-			childSpecs := []config.ChildSpec{
-				{
-					Name:             "child-1",
-					WorkerType:       "child",
-					UserSpec:         config.UserSpec{Config: "url: tcp://localhost:1883"},
-					ChildStartStates: []string{"active"},
-				},
-			}
-
-			worker := &internalMockWorkerWithChildren{
-				identity:      identity,
-				initialState:  &mockState{name: "unknown"},
-				observed:      persistence.Document{"id": "parent-1", "status": "unknown"},
-				childrenSpecs: childSpecs,
-			}
-
-			err := parent.AddWorker(identity, worker)
-			Expect(err).NotTo(HaveOccurred())
-
-			err = parent.tick(ctx)
-			Expect(err).NotTo(HaveOccurred())
-
-			children := parent.GetChildren()
-			child, exists := children["child-1"]
-			Expect(exists).To(BeTrue())
-
-			typedChild, ok := child.(*Supervisor[*TestObservedState, *TestDesiredState])
-			Expect(ok).To(BeTrue())
-
-			mappedState := typedChild.GetMappedParentState()
-			Expect(mappedState).To(Equal("stopped"))
-		})
-
-		It("should handle multiple children with different ChildStartStates", func() {
-			// Add additional collections for child-2 and child-3
-			Expect(basicStore.CreateCollection(ctx, "child-2_identity", nil)).To(Succeed())
-			Expect(basicStore.CreateCollection(ctx, "child-2_desired", nil)).To(Succeed())
-			Expect(basicStore.CreateCollection(ctx, "child-2_observed", nil)).To(Succeed())
-			Expect(basicStore.CreateCollection(ctx, "child-3_identity", nil)).To(Succeed())
-			Expect(basicStore.CreateCollection(ctx, "child-3_desired", nil)).To(Succeed())
-			Expect(basicStore.CreateCollection(ctx, "child-3_observed", nil)).To(Succeed())
-
-			supervisorCfg := Config{
-				WorkerType: "parent",
-				Store:      triangularStore,
-				Logger:     logger,
-			}
-
-			parent := NewSupervisor[*TestObservedState, *TestDesiredState](supervisorCfg)
-
-			identity := deps.Identity{
-				ID:         "parent-1",
-				Name:       "Parent Worker",
-				WorkerType: "parent",
-			}
-
-			childSpecs := []config.ChildSpec{
-				{
-					Name:             "child-1",
-					WorkerType:       "child",
-					UserSpec:         config.UserSpec{Config: "url: tcp://localhost:1883"},
-					ChildStartStates: []string{"active"},
-				},
-				{
-					Name:             "child-2",
-					WorkerType:       "child",
-					UserSpec:         config.UserSpec{Config: "address: 192.168.1.100:502"},
-					ChildStartStates: []string{"idle"},
-				},
-				{
-					Name:             "child-3",
-					WorkerType:       "child",
-					UserSpec:         config.UserSpec{Config: "endpoint: opc.tcp://localhost:4840"},
-					ChildStartStates: nil,
-				},
-			}
-
-			worker := &internalMockWorkerWithChildren{
-				identity:      identity,
-				initialState:  &mockState{name: "active"},
-				observed:      persistence.Document{"id": "parent-1", "status": "active"},
-				childrenSpecs: childSpecs,
-			}
-
-			err := parent.AddWorker(identity, worker)
-			Expect(err).NotTo(HaveOccurred())
-
-			err = parent.tick(ctx)
-			Expect(err).NotTo(HaveOccurred())
-
-			children := parent.GetChildren()
-			Expect(children).To(HaveLen(3))
-
-			// child-1: ChildStartStates: ["active"], parent is "active" → runs
-			child1, exists := children["child-1"]
-			Expect(exists).To(BeTrue())
-			typedChild1, ok := child1.(*Supervisor[*TestObservedState, *TestDesiredState])
-			Expect(ok).To(BeTrue())
-			Expect(typedChild1.GetMappedParentState()).To(Equal("running"))
-
-			// child-2: ChildStartStates: ["idle"], parent is "active" → stopped
-			child2, exists := children["child-2"]
-			Expect(exists).To(BeTrue())
-			typedChild2, ok := child2.(*Supervisor[*TestObservedState, *TestDesiredState])
-			Expect(ok).To(BeTrue())
-			Expect(typedChild2.GetMappedParentState()).To(Equal("stopped"))
-
-			// child-3: ChildStartStates: nil (empty) → always runs
-			child3, exists := children["child-3"]
-			Expect(exists).To(BeTrue())
-			typedChild3, ok := child3.(*Supervisor[*TestObservedState, *TestDesiredState])
-			Expect(ok).To(BeTrue())
-			Expect(typedChild3.GetMappedParentState()).To(Equal("running"))
-		})
-
-		It("should always run child when ChildStartStates is empty slice", func() {
-			supervisorCfg := Config{
-				WorkerType: "parent",
-				Store:      triangularStore,
-				Logger:     logger,
-			}
-
-			parent := NewSupervisor[*TestObservedState, *TestDesiredState](supervisorCfg)
-
-			identity := deps.Identity{
-				ID:         "parent-1",
-				Name:       "Parent Worker",
-				WorkerType: "parent",
-			}
-
-			childSpecs := []config.ChildSpec{
-				{
-					Name:             "child-1",
-					WorkerType:       "mqtt_client",
-					UserSpec:         config.UserSpec{Config: "url: tcp://localhost:1883"},
-					ChildStartStates: []string{},
-				},
-			}
-
-			worker := &internalMockWorkerWithChildren{
-				identity:      identity,
-				initialState:  &mockState{name: "running"},
-				observed:      persistence.Document{"id": "parent-1", "status": "running"},
-				childrenSpecs: childSpecs,
-			}
-
-			err := parent.AddWorker(identity, worker)
-			Expect(err).NotTo(HaveOccurred())
-
-			err = parent.tick(ctx)
-			Expect(err).NotTo(HaveOccurred())
-
-			children := parent.GetChildren()
-			child, exists := children["child-1"]
-			Expect(exists).To(BeTrue())
-
-			typedChild, ok := child.(*Supervisor[*TestObservedState, *TestDesiredState])
-			Expect(ok).To(BeTrue())
-
-			mappedState := typedChild.GetMappedParentState()
-			Expect(mappedState).To(Equal("running"))
-		})
-
-		It("should always run child when ChildStartStates is nil (starting state)", func() {
-			supervisorCfg := Config{
-				WorkerType: "parent",
-				Store:      triangularStore,
-				Logger:     logger,
-			}
-
-			parent := NewSupervisor[*TestObservedState, *TestDesiredState](supervisorCfg)
-
-			identity := deps.Identity{
-				ID:         "parent-1",
-				Name:       "Parent Worker",
-				WorkerType: "parent",
-			}
-
-			childSpecs := []config.ChildSpec{
-				{
-					Name:             "child-1",
-					WorkerType:       "mqtt_client",
-					UserSpec:         config.UserSpec{Config: "url: tcp://localhost:1883"},
-					ChildStartStates: nil,
-				},
-			}
-
-			worker := &internalMockWorkerWithChildren{
-				identity:      identity,
-				initialState:  &mockState{name: "starting"},
-				observed:      persistence.Document{"id": "parent-1", "status": "starting"},
-				childrenSpecs: childSpecs,
-			}
-
-			err := parent.AddWorker(identity, worker)
-			Expect(err).NotTo(HaveOccurred())
-
-			err = parent.tick(ctx)
-			Expect(err).NotTo(HaveOccurred())
-
-			children := parent.GetChildren()
-			child, exists := children["child-1"]
-			Expect(exists).To(BeTrue())
-
-			typedChild, ok := child.(*Supervisor[*TestObservedState, *TestDesiredState])
-			Expect(ok).To(BeTrue())
-
-			mappedState := typedChild.GetMappedParentState()
-			Expect(mappedState).To(Equal("running"))
+			Expect(loaded.CollectedAt).NotTo(BeZero(), "CollectedAt should be set by AddWorker")
+			Expect(loaded.CollectedAt).To(BeTemporally(">=", beforeAdd))
 		})
 	})
 

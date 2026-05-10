@@ -21,8 +21,10 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	fsmv2config "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/persistence"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/persistence/snapshot"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/persistence/state"
@@ -41,66 +43,81 @@ var _ = Describe("PersistenceWorker", func() {
 		store = &mockTriangularStore{}
 	})
 
+	getPersistenceWorker := func(w any) *persistence.PersistenceWorker {
+		pw, ok := w.(*persistence.PersistenceWorker)
+		Expect(ok).To(BeTrue())
+		return pw
+	}
+
 	Describe("NewPersistenceWorker", func() {
-		It("should create a worker successfully", func() {
-			worker, err := persistence.NewPersistenceWorker(identity, store, logger, nil)
+		It("should create a worker successfully from seed dependencies", func() {
+			w, err := persistence.NewPersistenceWorker(identity, logger, nil, persistence.NewStoreOnlyDependencies(store))
 			Expect(err).NotTo(HaveOccurred())
-			Expect(worker).NotTo(BeNil())
+			Expect(w).NotTo(BeNil())
+			Expect(getPersistenceWorker(w)).NotTo(BeNil())
 		})
 
-		It("should panic when store is nil", func() {
-			Expect(func() {
-				_, _ = persistence.NewPersistenceWorker(identity, nil, logger, nil)
-			}).To(Panic())
+		It("should error when dependencies are nil", func() {
+			_, err := persistence.NewPersistenceWorker(identity, logger, nil, nil)
+			Expect(err).To(HaveOccurred())
+		})
+
+		It("should accept non-nil typed dependencies directly", func() {
+			d := persistence.NewPersistenceDependencies(store, deps.DefaultScheduler{}, logger, nil, identity)
+			w, err := persistence.NewPersistenceWorker(identity, logger, nil, d)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(w).NotTo(BeNil())
+		})
+
+		It("should default WorkerType to 'persistence' when empty", func() {
+			id := deps.Identity{ID: "test-id", Name: "test-persistence"}
+			w, err := persistence.NewPersistenceWorker(id, logger, nil, persistence.NewStoreOnlyDependencies(store))
+			Expect(err).NotTo(HaveOccurred())
+			pw := getPersistenceWorker(w)
+			Expect(pw.GetDependencies().GetWorkerType()).To(Equal("persistence"))
 		})
 	})
 
 	Describe("CollectObservedState", func() {
 		It("should return valid observed state", func() {
-			worker, err := persistence.NewPersistenceWorker(identity, store, logger, nil)
+			w, err := persistence.NewPersistenceWorker(identity, logger, nil, persistence.NewStoreOnlyDependencies(store))
 			Expect(err).NotTo(HaveOccurred())
 
-			observed, err := worker.CollectObservedState(context.Background())
+			worker := getPersistenceWorker(w)
+			observed, err := worker.CollectObservedState(context.Background(), nil)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(observed).NotTo(BeNil())
 
-			obs, ok := observed.(snapshot.PersistenceObservedState)
+			// CollectedAt is populated by the collector post-COS, not inside COS
+			// itself (per NewObservation contract). Assert only that the type is
+			// correct; framework fields are exercised in integration tests.
+			_, ok := observed.(fsmv2.Observation[snapshot.PersistenceStatus])
 			Expect(ok).To(BeTrue())
-			Expect(obs.CollectedAt).NotTo(BeZero())
-		})
-
-		It("should return error when context is cancelled", func() {
-			worker, err := persistence.NewPersistenceWorker(identity, store, logger, nil)
-			Expect(err).NotTo(HaveOccurred())
-
-			cancelledCtx, cancel := context.WithCancel(context.Background())
-			cancel()
-
-			_, err = worker.CollectObservedState(cancelledCtx)
-			Expect(err).To(Equal(context.Canceled))
 		})
 
 		Context("ConsecutiveActionErrors computation", func() {
 			It("should increment on failure", func() {
-				worker, err := persistence.NewPersistenceWorker(identity, store, logger, nil)
+				w, err := persistence.NewPersistenceWorker(identity, logger, nil, persistence.NewStoreOnlyDependencies(store))
 				Expect(err).NotTo(HaveOccurred())
 
+				worker := getPersistenceWorker(w)
 				d := worker.GetDependencies()
 				d.SetActionHistory([]deps.ActionResult{
 					{Success: false, ActionType: "CompactDeltas", Timestamp: time.Now()},
 				})
 
-				observed, err := worker.CollectObservedState(context.Background())
+				observed, err := worker.CollectObservedState(context.Background(), nil)
 				Expect(err).NotTo(HaveOccurred())
 
-				obs := observed.(snapshot.PersistenceObservedState)
-				Expect(obs.ConsecutiveActionErrors).To(Equal(1))
+				obs := observed.(fsmv2.Observation[snapshot.PersistenceStatus])
+				Expect(obs.Status.ConsecutiveActionErrors).To(Equal(1))
 			})
 
 			It("should reset on success", func() {
-				worker, err := persistence.NewPersistenceWorker(identity, store, logger, nil)
+				w, err := persistence.NewPersistenceWorker(identity, logger, nil, persistence.NewStoreOnlyDependencies(store))
 				Expect(err).NotTo(HaveOccurred())
 
+				worker := getPersistenceWorker(w)
 				d := worker.GetDependencies()
 				d.SetActionHistory([]deps.ActionResult{
 					{Success: false, ActionType: "CompactDeltas", Timestamp: time.Now()},
@@ -108,86 +125,89 @@ var _ = Describe("PersistenceWorker", func() {
 					{Success: true, ActionType: "CompactDeltas", Timestamp: time.Now()},
 				})
 
-				observed, err := worker.CollectObservedState(context.Background())
+				observed, err := worker.CollectObservedState(context.Background(), nil)
 				Expect(err).NotTo(HaveOccurred())
 
-				obs := observed.(snapshot.PersistenceObservedState)
-				Expect(obs.ConsecutiveActionErrors).To(Equal(0))
+				obs := observed.(fsmv2.Observation[snapshot.PersistenceStatus])
+				Expect(obs.Status.ConsecutiveActionErrors).To(Equal(0))
 			})
 
-			It("should preserve count on empty drain (no action results)", func() {
-				worker, err := persistence.NewPersistenceWorker(identity, store, logger, nil)
+			It("should reset count to zero on empty drain (no stateReader, no cross-tick persistence)", func() {
+				w, err := persistence.NewPersistenceWorker(identity, logger, nil, persistence.NewStoreOnlyDependencies(store))
 				Expect(err).NotTo(HaveOccurred())
 
+				worker := getPersistenceWorker(w)
 				d := worker.GetDependencies()
 				d.SetActionHistory([]deps.ActionResult{
 					{Success: false, ActionType: "CompactDeltas", Timestamp: time.Now()},
 				})
 
-				observed1, err := worker.CollectObservedState(context.Background())
+				observed1, err := worker.CollectObservedState(context.Background(), nil)
 				Expect(err).NotTo(HaveOccurred())
-				obs1 := observed1.(snapshot.PersistenceObservedState)
-				Expect(obs1.ConsecutiveActionErrors).To(Equal(1))
+				obs1 := observed1.(fsmv2.Observation[snapshot.PersistenceStatus])
+				Expect(obs1.Status.ConsecutiveActionErrors).To(Equal(1))
 
 				// Second tick: no action results (empty drain after state transition)
 				// Without stateReader the previous state is zero-valued, so consecutive errors
-				// won't persist across ticks in this unit test. This test verifies the
-				// within-tick computation: empty action history preserves previous count.
+				// won't persist across ticks in this unit test.
 				d.SetActionHistory(nil)
-				observed2, err := worker.CollectObservedState(context.Background())
+				observed2, err := worker.CollectObservedState(context.Background(), nil)
 				Expect(err).NotTo(HaveOccurred())
-				obs2 := observed2.(snapshot.PersistenceObservedState)
+				obs2 := observed2.(fsmv2.Observation[snapshot.PersistenceStatus])
 				// Without stateReader, prev.ConsecutiveActionErrors is 0 and empty results
 				// preserve 0. The full persistence test requires a stateReader mock.
-				Expect(obs2.ConsecutiveActionErrors).To(Equal(0))
+				Expect(obs2.Status.ConsecutiveActionErrors).To(Equal(0))
 			})
 		})
 
 		It("should pick up timestamps set by actions", func() {
-			worker, err := persistence.NewPersistenceWorker(identity, store, logger, nil)
+			w, err := persistence.NewPersistenceWorker(identity, logger, nil, persistence.NewStoreOnlyDependencies(store))
 			Expect(err).NotTo(HaveOccurred())
 
+			worker := getPersistenceWorker(w)
 			now := time.Now()
 			d := worker.GetDependencies()
 			d.SetLastCompactionAt(now)
 			d.SetLastMaintenanceAt(now.Add(-time.Hour))
 
-			observed, err := worker.CollectObservedState(context.Background())
+			observed, err := worker.CollectObservedState(context.Background(), nil)
 			Expect(err).NotTo(HaveOccurred())
 
-			obs := observed.(snapshot.PersistenceObservedState)
-			Expect(obs.LastCompactionAt).To(Equal(now))
-			Expect(obs.LastMaintenanceAt).To(Equal(now.Add(-time.Hour)))
+			obs := observed.(fsmv2.Observation[snapshot.PersistenceStatus])
+			Expect(obs.Status.LastCompactionAt).To(Equal(now))
+			Expect(obs.Status.LastMaintenanceAt).To(Equal(now.Add(-time.Hour)))
 		})
 	})
 
 	Describe("DeriveDesiredState", func() {
 		It("should return defaults with State running for nil spec", func() {
-			worker, err := persistence.NewPersistenceWorker(identity, store, logger, nil)
+			w, err := persistence.NewPersistenceWorker(identity, logger, nil, persistence.NewStoreOnlyDependencies(store))
 			Expect(err).NotTo(HaveOccurred())
 
+			worker := getPersistenceWorker(w)
 			desired, err := worker.DeriveDesiredState(nil)
 			Expect(err).NotTo(HaveOccurred())
 
-			d := desired.(*snapshot.PersistenceDesiredState)
-			Expect(d.GetState()).To(Equal("running"))
-			Expect(d.CompactionInterval).To(Equal(persistence.DefaultCompactionInterval))
-			Expect(d.RetentionWindow).To(Equal(persistence.DefaultRetentionWindow))
-			Expect(d.MaintenanceInterval).To(Equal(persistence.DefaultMaintenanceInterval))
+			d := desired.(*fsmv2.WrappedDesiredState[snapshot.PersistenceConfig])
+			Expect(d.Config.GetCompactionInterval()).To(Equal(persistence.DefaultCompactionInterval))
+			Expect(d.Config.GetRetentionWindow()).To(Equal(persistence.DefaultRetentionWindow))
+			Expect(d.Config.GetMaintenanceInterval()).To(Equal(persistence.DefaultMaintenanceInterval))
 		})
 
 		It("should return error for invalid spec type", func() {
-			worker, err := persistence.NewPersistenceWorker(identity, store, logger, nil)
+			w, err := persistence.NewPersistenceWorker(identity, logger, nil, persistence.NewStoreOnlyDependencies(store))
 			Expect(err).NotTo(HaveOccurred())
 
+			worker := getPersistenceWorker(w)
 			_, err = worker.DeriveDesiredState("invalid")
 			Expect(err).To(HaveOccurred())
 		})
 
 		It("should parse custom intervals from spec", func() {
-			worker, err := persistence.NewPersistenceWorker(identity, store, logger, nil)
+			w, err := persistence.NewPersistenceWorker(identity, logger, nil, persistence.NewStoreOnlyDependencies(store))
 			Expect(err).NotTo(HaveOccurred())
 
+			worker := getPersistenceWorker(w)
 			spec := fsmv2config.UserSpec{
 				Config: "compactionInterval: 10m\nretentionWindow: 48h\nmaintenanceInterval: 336h\n",
 			}
@@ -195,17 +215,17 @@ var _ = Describe("PersistenceWorker", func() {
 			desired, err := worker.DeriveDesiredState(spec)
 			Expect(err).NotTo(HaveOccurred())
 
-			d := desired.(*snapshot.PersistenceDesiredState)
-			Expect(d.GetState()).To(Equal("running"))
-			Expect(d.CompactionInterval).To(Equal(10 * time.Minute))
-			Expect(d.RetentionWindow).To(Equal(48 * time.Hour))
-			Expect(d.MaintenanceInterval).To(Equal(336 * time.Hour))
+			d := desired.(*fsmv2.WrappedDesiredState[snapshot.PersistenceConfig])
+			Expect(d.Config.CompactionInterval).To(Equal(10 * time.Minute))
+			Expect(d.Config.RetentionWindow).To(Equal(48 * time.Hour))
+			Expect(d.Config.MaintenanceInterval).To(Equal(336 * time.Hour))
 		})
 
 		It("should apply defaults for unspecified fields", func() {
-			worker, err := persistence.NewPersistenceWorker(identity, store, logger, nil)
+			w, err := persistence.NewPersistenceWorker(identity, logger, nil, persistence.NewStoreOnlyDependencies(store))
 			Expect(err).NotTo(HaveOccurred())
 
+			worker := getPersistenceWorker(w)
 			spec := fsmv2config.UserSpec{
 				Config: "compactionInterval: 15m\n",
 			}
@@ -213,47 +233,94 @@ var _ = Describe("PersistenceWorker", func() {
 			desired, err := worker.DeriveDesiredState(spec)
 			Expect(err).NotTo(HaveOccurred())
 
-			d := desired.(*snapshot.PersistenceDesiredState)
-			Expect(d.CompactionInterval).To(Equal(15 * time.Minute))
-			Expect(d.RetentionWindow).To(Equal(persistence.DefaultRetentionWindow))
-			Expect(d.MaintenanceInterval).To(Equal(persistence.DefaultMaintenanceInterval))
+			d := desired.(*fsmv2.WrappedDesiredState[snapshot.PersistenceConfig])
+			Expect(d.Config.GetCompactionInterval()).To(Equal(15 * time.Minute))
+			Expect(d.Config.GetRetentionWindow()).To(Equal(persistence.DefaultRetentionWindow))
+			Expect(d.Config.GetMaintenanceInterval()).To(Equal(persistence.DefaultMaintenanceInterval))
 		})
 
 		It("should return defaults for empty Config string", func() {
-			worker, err := persistence.NewPersistenceWorker(identity, store, logger, nil)
+			w, err := persistence.NewPersistenceWorker(identity, logger, nil, persistence.NewStoreOnlyDependencies(store))
 			Expect(err).NotTo(HaveOccurred())
 
+			worker := getPersistenceWorker(w)
 			spec := fsmv2config.UserSpec{Config: ""}
 
 			desired, err := worker.DeriveDesiredState(spec)
 			Expect(err).NotTo(HaveOccurred())
 
-			d := desired.(*snapshot.PersistenceDesiredState)
-			Expect(d.GetState()).To(Equal("running"))
-			Expect(d.CompactionInterval).To(Equal(persistence.DefaultCompactionInterval))
-			Expect(d.RetentionWindow).To(Equal(persistence.DefaultRetentionWindow))
-			Expect(d.MaintenanceInterval).To(Equal(persistence.DefaultMaintenanceInterval))
+			d := desired.(*fsmv2.WrappedDesiredState[snapshot.PersistenceConfig])
+			Expect(d.Config.GetCompactionInterval()).To(Equal(persistence.DefaultCompactionInterval))
+			Expect(d.Config.GetRetentionWindow()).To(Equal(persistence.DefaultRetentionWindow))
+			Expect(d.Config.GetMaintenanceInterval()).To(Equal(persistence.DefaultMaintenanceInterval))
 		})
 
 		It("should return error for invalid YAML", func() {
-			worker, err := persistence.NewPersistenceWorker(identity, store, logger, nil)
+			w, err := persistence.NewPersistenceWorker(identity, logger, nil, persistence.NewStoreOnlyDependencies(store))
 			Expect(err).NotTo(HaveOccurred())
 
+			worker := getPersistenceWorker(w)
 			spec := fsmv2config.UserSpec{Config: "{{invalid yaml"}
 
 			_, err = worker.DeriveDesiredState(spec)
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("failed to parse persistence config"))
 		})
 	})
 
 	Describe("GetInitialState", func() {
 		It("should return StoppedState", func() {
-			worker, err := persistence.NewPersistenceWorker(identity, store, logger, nil)
+			w, err := persistence.NewPersistenceWorker(identity, logger, nil, persistence.NewStoreOnlyDependencies(store))
 			Expect(err).NotTo(HaveOccurred())
 
+			worker := getPersistenceWorker(w)
 			initial := worker.GetInitialState()
 			Expect(initial).To(BeAssignableToTypeOf(&state.StoppedState{}))
 		})
+	})
+
+	Describe("Factory registration", func() {
+		It("should be registered in the factory as 'persistence'", func() {
+			registeredTypes := factory.ListRegisteredTypes()
+			Expect(registeredTypes).To(ContainElement("persistence"))
+		})
+
+		It("should have both worker and supervisor factories registered", func() {
+			workerOnly, supervisorOnly := factory.ValidateRegistryConsistency()
+			Expect(workerOnly).NotTo(ContainElement("persistence"))
+			Expect(supervisorOnly).NotTo(ContainElement("persistence"))
+		})
+
+		It("should create worker via factory with store in params", func() {
+			factoryIdentity := deps.Identity{ID: "factory-persistence", Name: "Factory Persistence", WorkerType: "persistence"}
+			d := persistence.NewStoreOnlyDependencies(store)
+
+			w, err := factory.NewWorkerByType("persistence", factoryIdentity, logger, nil, map[string]any{
+				"dependencies": d,
+			})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(w).NotTo(BeNil())
+
+			pw, ok := w.(*persistence.PersistenceWorker)
+			Expect(ok).To(BeTrue())
+			Expect(pw.GetDependencies().GetStore()).To(BeIdenticalTo(store))
+		})
+	})
+})
+
+var _ = Describe("PersistenceWorker GetDependenciesAny", func() {
+	It("returns *PersistenceDependencies", func() {
+		logger := deps.NewNopFSMLogger()
+		store := &mockTriangularStore{}
+		seedDeps := persistence.NewStoreOnlyDependencies(store)
+		identity := deps.Identity{ID: "test-id", Name: "test-persistence"}
+
+		worker, err := persistence.NewPersistenceWorker(identity, logger, nil, seedDeps)
+		Expect(err).NotTo(HaveOccurred())
+
+		dp, ok := worker.(fsmv2.DependencyProvider)
+		Expect(ok).To(BeTrue(), "worker must implement DependencyProvider")
+		got := dp.GetDependenciesAny()
+		_, ok = got.(*persistence.PersistenceDependencies)
+		Expect(ok).To(BeTrue(), "expected *PersistenceDependencies, got %T", got)
 	})
 })

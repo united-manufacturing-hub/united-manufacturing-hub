@@ -15,24 +15,31 @@
 package state
 
 import (
+	"fmt"
+
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleslow/snapshot"
+	example_slow "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleslow"
 )
+
+func init() {
+	fsmv2.RegisterInitialState("exampleslow", &StoppedState{})
+}
 
 type StoppedState struct {
 	helpers.StoppedBase
 }
 
 func (s *StoppedState) Next(snapAny any) fsmv2.NextResult[any, any] {
-	snap := helpers.ConvertSnapshot[snapshot.ExampleslowObservedState, *snapshot.ExampleslowDesiredState](snapAny)
+	snap := fsmv2.ConvertWorkerSnapshot[example_slow.ExampleslowConfig, example_slow.ExampleslowStatus](snapAny)
 
-	if snap.Desired.IsShutdownRequested() {
-		return fsmv2.Result[any, any](s, fsmv2.SignalNeedsRemoval, nil, "shutdown requested, needs removal")
+	if snap.IsShutdownRequested {
+		return fsmv2.Result[any, any](s, fsmv2.SignalNeedsRemoval, nil,
+			fmt.Sprintf("shutdown requested, stopping: parentState=%s", snap.ParentMappedState))
 	}
 
-	// ParentMappedState is injected into Observed.DesiredState by collector.
-	if snap.Observed.ShouldBeRunning() {
+	if snap.ParentMappedState == config.DesiredStateRunning {
 		return fsmv2.Result[any, any](&TryingToConnectState{}, fsmv2.SignalNone, nil, "should be running, transitioning to trying to connect")
 	}
 

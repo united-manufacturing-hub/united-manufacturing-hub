@@ -23,7 +23,10 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/push/snapshot"
 )
 
-const pendingDegradedThreshold = 100
+const (
+	errorDegradedThreshold  = 3
+	pendingDegradedThreshold = 100
+)
 
 // RunningState represents the operational state where the push worker is actively pushing messages.
 type RunningState struct {
@@ -31,30 +34,30 @@ type RunningState struct {
 }
 
 func (s *RunningState) Next(snapAny any) fsmv2.NextResult[any, any] {
-	snap := helpers.ConvertSnapshot[snapshot.PushObservedState, *snapshot.PushDesiredState](snapAny)
+	snap := fsmv2.ConvertWorkerSnapshot[snapshot.PushDesiredState, snapshot.PushStatus](snapAny)
 
-	if snap.Observed.IsStopRequired() {
+	if snap.IsStopRequired() {
 		return fsmv2.Result[any, any](&StoppingState{}, fsmv2.SignalNone, nil,
-			fmt.Sprintf("stop required: shutdown=%t, parentState(observed)=%s", snap.Desired.IsShutdownRequested(), snap.Observed.ParentMappedState))
+			fmt.Sprintf("stop required: shutdown=%t, parentState(observed)=%s", snap.IsShutdownRequested, snap.ParentMappedState))
 	}
 
-	if snap.Observed.ConsecutiveErrors >= 3 {
+	if snap.Status.ConsecutiveErrors >= errorDegradedThreshold {
 		return fsmv2.Result[any, any](&DegradedState{}, fsmv2.SignalNone, nil,
-			fmt.Sprintf("degrading: %d consecutive errors", snap.Observed.ConsecutiveErrors))
+			fmt.Sprintf("degrading: %d consecutive errors", snap.Status.ConsecutiveErrors))
 	}
 
-	if snap.Observed.PendingMessageCount >= pendingDegradedThreshold {
+	if snap.Status.PendingMessageCount >= pendingDegradedThreshold {
 		return fsmv2.Result[any, any](&DegradedState{}, fsmv2.SignalNone, nil,
 			fmt.Sprintf("degrading: %d pending messages (threshold=%d)",
-				snap.Observed.PendingMessageCount, pendingDegradedThreshold))
+				snap.Status.PendingMessageCount, pendingDegradedThreshold))
 	}
 
-	if snap.Observed.HasTransport && snap.Observed.HasValidToken {
+	if snap.Status.HasTransport && snap.Status.HasValidToken {
 		return fsmv2.Result[any, any](s, fsmv2.SignalNone, &action.PushAction{}, "pushing messages (transport and token available)")
 	}
 
 	return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil,
-		fmt.Sprintf("waiting: hasTransport=%t, hasValidToken=%t", snap.Observed.HasTransport, snap.Observed.HasValidToken))
+		fmt.Sprintf("waiting: hasTransport=%t, hasValidToken=%t", snap.Status.HasTransport, snap.Status.HasValidToken))
 }
 
 func (s *RunningState) String() string {

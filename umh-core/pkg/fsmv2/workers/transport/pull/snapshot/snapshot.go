@@ -17,7 +17,6 @@ package snapshot
 import (
 	"time"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/types"
@@ -59,6 +58,18 @@ type PullDependencies interface {
 type PullDesiredState struct {
 	ParentMappedState string `json:"parent_mapped_state"`
 	config.BaseDesiredState
+
+	State string `json:"state" yaml:"state"`
+}
+
+// GetState returns the desired lifecycle state, defaulting to "running" if empty.
+// For pull workers this is propagated from the parent's user spec.
+func (s *PullDesiredState) GetState() string {
+	if s.State == "" {
+		return config.DesiredStateRunning
+	}
+
+	return s.State
 }
 
 // ShouldBeRunning returns true if the pull worker should be in a running state.
@@ -70,61 +81,15 @@ func (s *PullDesiredState) ShouldBeRunning() bool {
 	return s.ParentMappedState == config.DesiredStateRunning
 }
 
-// PullObservedState represents the current observed state of the pull worker.
-type PullObservedState struct {
-	CollectedAt       time.Time `json:"collected_at"`
-	DegradedEnteredAt time.Time `json:"degraded_entered_at,omitempty"`
-	LastErrorAt       time.Time `json:"last_error_at,omitempty"`
-
-	PullDesiredState `json:",inline"`
-
-	State string `json:"state"`
-
-	LastActionResults []deps.ActionResult `json:"last_action_results,omitempty"`
-
-	deps.MetricsEmbedder `json:",inline"`
-
-	LastRetryAfter time.Duration `json:"last_retry_after,omitempty"`
-
+// PullStatus holds the runtime observation data for the pull worker.
+type PullStatus struct {
+	DegradedEnteredAt   time.Time       `json:"degraded_entered_at,omitempty"`
+	LastErrorAt         time.Time       `json:"last_error_at,omitempty"`
+	LastRetryAfter      time.Duration   `json:"last_retry_after,omitempty"`
 	LastErrorType       types.ErrorType `json:"last_error_type"`
 	ConsecutiveErrors   int             `json:"consecutive_errors"`
 	PendingMessageCount int             `json:"pending_message_count"`
-
-	HasTransport    bool `json:"has_transport"`
-	HasValidToken   bool `json:"has_valid_token"`
-	IsBackpressured bool `json:"is_backpressured"`
-}
-
-func (o PullObservedState) GetTimestamp() time.Time {
-	return o.CollectedAt
-}
-
-func (o PullObservedState) GetObservedDesiredState() fsmv2.DesiredState {
-	return &o.PullDesiredState
-}
-
-// SetState sets the FSM state name on this observed state.
-func (o PullObservedState) SetState(s string) fsmv2.ObservedState {
-	o.State = s
-
-	return o
-}
-
-// SetShutdownRequested sets the shutdown requested status on this observed state.
-func (o PullObservedState) SetShutdownRequested(v bool) fsmv2.ObservedState {
-	o.ShutdownRequested = v
-
-	return o
-}
-
-// SetParentMappedState sets the parent's mapped state on this observed state.
-func (o PullObservedState) SetParentMappedState(state string) fsmv2.ObservedState {
-	o.ParentMappedState = state
-
-	return o
-}
-
-// IsStopRequired reports whether the pull worker needs to stop.
-func (o PullObservedState) IsStopRequired() bool {
-	return o.IsShutdownRequested() || !o.ShouldBeRunning()
+	HasTransport        bool            `json:"has_transport"`
+	HasValidToken       bool            `json:"has_valid_token"`
+	IsBackpressured     bool            `json:"is_backpressured"`
 }

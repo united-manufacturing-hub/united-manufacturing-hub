@@ -22,12 +22,15 @@
 //
 // Example usage:
 //
-//	supervisor := NewSupervisor[ExampleparentObservedState, *ExampleparentDesiredState](config)
+//	supervisor := NewSupervisor[fsmv2.Observation[ExampleparentStatus], *fsmv2.WrappedDesiredState[ExampleparentConfig]](config)
 //	supervisor.AddWorker(identity, worker)
 //
-// Worker types are automatically derived from the observed state type name:
-//   - ExampleparentObservedState -> "exampleparent"
-//   - ContainerObservedState -> "container"
+// Worker type names are derived from the inner status type of the
+// fsmv2.Observation[T] wrapper (e.g., fsmv2.Observation[ExampleparentStatus]
+// → "exampleparent" by stripping the "Status" suffix and lowercasing). The
+// type pair is registered in the CSE TypeRegistry for serialization:
+//   - exampleparent: Observation[ExampleparentStatus] / *WrappedDesiredState[ExampleparentConfig]
+//   - container:     Observation[ContainerStatus]     / *WrappedDesiredState[ContainerConfig]
 //
 // # Architecture Constraints
 //
