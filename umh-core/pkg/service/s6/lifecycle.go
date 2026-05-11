@@ -346,28 +346,13 @@ func (s *DefaultService) CheckArtifactsHealth(ctx context.Context, artifacts *Se
 		return HealthBad, nil
 	}
 
-	// Check supervise directory consistency (in repository location)
-	superviseMain := filepath.Join(artifacts.RepositoryDir, "supervise")
-	superviseLog := filepath.Join(artifacts.RepositoryDir, "log", "supervise")
+	// The supervise/ and log/supervise/ directories are s6-supervise's own
+	// runtime state, brought up by s6-svscan in two non-atomic steps. UMH
+	// must not observe their existence (or asymmetry) as a service-author
+	// integrity signal — that conflates s6's bookkeeping with our own and
+	// produces ForceRemove cascades on benign mid-bringup transients. See
+	// ENG-4862 + VSDD reviews/s6_conventions_research.md for the contract.
 
-	mainExists, mainErr := fsService.PathExists(ctx, superviseMain)
-	logExists, logErr := fsService.PathExists(ctx, superviseLog)
-
-	// If either check failed due to I/O error, return Unknown
-	if mainErr != nil || logErr != nil {
-		s.logger.Debugf("Health check: I/O error checking supervise directories: main=%v, log=%v", mainErr, logErr)
-
-		return HealthUnknown, fmt.Errorf("supervise directory check failed: main=%w, log=%w", mainErr, logErr)
-	}
-
-	// If supervise directories exist, both must exist (prevents race condition)
-	if mainExists != logExists {
-		s.logger.Debugf("Health check: supervise directory mismatch - main=%v, log=%v", mainExists, logExists)
-
-		return HealthBad, nil
-	}
-
-	// All checks passed
 	return HealthOK, nil
 }
 
