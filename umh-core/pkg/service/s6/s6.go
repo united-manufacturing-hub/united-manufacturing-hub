@@ -1668,11 +1668,12 @@ func parseLogLine(line string) LogEntry {
 
 // EnsureSupervision returns true once s6-svscan has finished bringing up
 // BOTH supervise/ and log/supervise/. Returning true after only supervise/
-// existed previously let the FSM transition Creating → Created with the
-// asymmetric mid-bringup state still present, and the operational Health()
-// dispatch then flagged the asymmetry as HealthBad and tore down a
-// perfectly-fine just-created service. See lifecycle.go:354 for the
-// symmetric check Health() makes.
+// exists would let the FSM advance to Created mid-bringup, which is wrong
+// because operational reconcile would then race against a half-set-up
+// supervisor. This gate is forward-direction only — it does NOT classify
+// asymmetry as service corruption; that distinction belongs to s6-svscan.
+// CheckArtifactsHealth (lifecycle.go) intentionally does not examine the
+// supervise dirs, per the s6 supervisor-owned-state contract.
 func (s *DefaultService) EnsureSupervision(ctx context.Context, servicePath string, fsService filesystem.Service) (bool, error) {
 	start := time.Now()
 
