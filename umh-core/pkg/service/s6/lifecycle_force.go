@@ -22,6 +22,8 @@ import (
 
 	"errors"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 )
 
@@ -83,6 +85,30 @@ func (s *DefaultService) ForceCleanup(ctx context.Context, artifacts *ServiceArt
 		if err := s.removeDirectoryWithTimeout(ctx, artifacts.RepositoryDir, fsService); err != nil {
 			s.logger.Warnf("Failed to remove repository directory: %v", err)
 		}
+	}
+
+	// Step 5: Tell s6-svscan to rescan and drop stale supervisor entries.
+	// This is the second half of the canonical skarnet manual unlink recipe
+	// ("rm symlink + s6-svscanctl -an"). s6-svunlink already notifies the
+	// scanner when it succeeds, but on exit 111 (s6 temporary error) it
+	// leaves the scanner's internal supervisor table holding a stale entry
+	// for this service. Subsequent ForceCleanup cycles compound the drift
+	// until the scanner can no longer bring up fresh supervise dirs and
+	// the service wedges in LifecycleStateCreating. Calling -an after every
+	// teardown keeps the scanner in sync regardless of svunlink's outcome.
+	//
+	// Best-effort: log + metric on failure. Returning an error here would
+	// trade the cumulative-corruption wedge for an indefinite-stall wedge.
+	// A persistent failure to reach s6-svscan is surfaced via the
+	// .forceRemove.svscanctl_failed metric so operators can detect a
+	// genuinely unresponsive scanner before customers see a wedge.
+	if _, err := s.ExecuteS6Command(ctx, artifacts.ServiceDir, fsService,
+		"s6-svscanctl", "-an", constants.S6BaseDir); err != nil {
+		s.logger.Warnf("s6-svscanctl -an failed during force cleanup for %s: %v "+
+			"(scanner may be out of sync — monitor .forceRemove.svscanctl_failed)",
+			filepath.Base(artifacts.ServiceDir), err)
+		metrics.IncErrorCount(metrics.ComponentS6Service,
+			filepath.Base(artifacts.ServiceDir)+".forceRemove.svscanctl_failed")
 	}
 
 	// Verify cleanup completed. Propagate PathExists errors rather than
