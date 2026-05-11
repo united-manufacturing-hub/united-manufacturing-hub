@@ -109,6 +109,13 @@ func (s *DefaultService) ForceCleanup(ctx context.Context, artifacts *ServiceArt
 			filepath.Base(artifacts.ServiceDir), err)
 		metrics.IncErrorCount(metrics.ComponentS6Service,
 			filepath.Base(artifacts.ServiceDir)+".forceRemove.svscanctl_failed")
+	} else {
+		// Logging the success path makes Fix 4e observable without scraping
+		// metrics. Pairs with the failure-side .forceRemove.svscanctl_failed
+		// counter so operators and reviewers can confirm the canonical
+		// recipe completed on every ForceCleanup invocation.
+		s.logger.Infof("s6-svscanctl -an completed for %s (scanner synced after force cleanup)",
+			filepath.Base(artifacts.ServiceDir))
 	}
 
 	// Verify cleanup completed. Propagate PathExists errors rather than
