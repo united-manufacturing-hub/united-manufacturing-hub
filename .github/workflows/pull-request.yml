@@ -100,7 +100,7 @@ jobs:
   fossa-container:
     name: FOSSA Container Scan
     needs: [changes, build]
-    if: github.event_name == 'pull_request' && github.base_ref == 'main'
+    if: github.event_name == 'pull_request' # && github.base_ref == 'main'
     runs-on: depot-ubuntu-24.04
     timeout-minutes: 15
     permissions:
