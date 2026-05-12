@@ -973,11 +973,15 @@ func (s *Supervisor[TObserved, TDesired]) processSignal(ctx context.Context, wor
 	case fsmv2.SignalNeedsRemoval:
 		s.logger.Debug("worker_removal_signaled")
 
-		// Check if this worker should be restarted instead of removed
+		// During shutdown, demote a pending restart to plain removal so the
+		// shutdown sequence can complete. The lock here ensures that a
+		// concurrent Shutdown() setting started=false is fully visible before
+		// shouldRestart is evaluated.
 		s.mu.Lock()
 
-		shouldRestart := s.pendingRestart[workerID]
-		if shouldRestart {
+		shouldRestart := s.started.Load() && s.pendingRestart[workerID]
+		if s.pendingRestart[workerID] {
+			// Clean up maps unconditionally so no stale entries remain during drain.
 			delete(s.pendingRestart, workerID)
 			delete(s.restartRequestedAt, workerID)
 		}

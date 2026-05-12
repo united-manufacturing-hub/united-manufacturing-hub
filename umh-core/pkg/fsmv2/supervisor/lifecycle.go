@@ -42,6 +42,9 @@ func (s *Supervisor[TObserved, TDesired]) Start(ctx context.Context) <-chan stru
 	s.ctxMu.Unlock()
 	s.started.Store(true)
 
+	// Store done so Shutdown() can wait for tickLoop to exit in Phase 4.
+	s.tickLoopDone = done
+
 	s.logger.Debug("supervisor_started")
 
 	s.actionExecutor.Start(supervisorCtx)
@@ -104,6 +107,41 @@ func (s *Supervisor[TObserved, TDesired]) StartAsChild(ctx context.Context) {
 	s.mu.RUnlock()
 }
 
+// Run starts the supervisor and blocks until ctx is canceled, the supervisor
+// stops on its own, or Shutdown is called externally. When ctx is canceled,
+// Run drives a graceful shutdown via Shutdown() before returning. Returns nil
+// on a clean shutdown.
+//
+// Run is the recommended entry point for top-level supervisors (e.g.,
+// cmd/main.go). For child supervisors, parents use StartAsChild instead.
+//
+// Composition:
+//
+//	done := s.Start(ctx)
+//	<-ctx.Done()   // OR <-done if supervisor stops on its own first
+//	s.Shutdown()
+//	<-done         // Shutdown waits for tickLoop; this read is a safe no-op
+func (s *Supervisor[TObserved, TDesired]) Run(ctx context.Context) error {
+	done := s.Start(ctx)
+
+	select {
+	case <-ctx.Done():
+		// External cancellation (e.g., SIGTERM via signal.NotifyContext).
+		// Shutdown drives graceful drain before cancelling the supervisor context.
+		s.Shutdown()
+		// done is already closed when Shutdown returns; this read is a safe no-op.
+		<-done
+
+		return nil
+	case <-done:
+		// tickLoop exited on its own (e.g., panic-circuit open or external stop).
+		// Call Shutdown to clean up executor + collectors (idempotent).
+		s.Shutdown()
+
+		return nil
+	}
+}
+
 // tickLoop is the main FSM loop.
 // Calls tick() which includes hierarchical composition (Phase 0) and worker state transitions.
 func (s *Supervisor[TObserved, TDesired]) tickLoop(ctx context.Context) {
@@ -136,8 +174,17 @@ func (s *Supervisor[TObserved, TDesired]) tickLoop(ctx context.Context) {
 }
 
 // Shutdown gracefully shuts down this supervisor and all its workers.
-// Shutdown order: cancel context first (so children can exit their tickLoops),
-// then wait for children, then request worker shutdown, then cleanup executors.
+//
+// Phases:
+//  1. Set accepting-work flag to false. Do NOT cancel context.
+//  2. Cascade Shutdown() to children.
+//  3. Drain: request worker shutdown, then wait for tickLoop to reap them
+//     (via SignalNeedsRemoval). Exit on len(workers)==0 or gracefulTimeout.
+//  4. Cancel context. Wait for tickLoop to exit. Stop executor + collectors.
+//
+// s.ctx remains valid until the shutdown sequence completes; workers and
+// actions all share this context throughout.
+//
 // Idempotent.
 func (s *Supervisor[TObserved, TDesired]) Shutdown() {
 	s.logTrace("lifecycle",
@@ -171,8 +218,6 @@ func (s *Supervisor[TObserved, TDesired]) Shutdown() {
 
 	s.logger.Info("supervisor_shutting_down")
 
-	gracefulCtx := context.Background()
-
 	// Extract children before releasing lock to avoid deadlock with child Tick() goroutines.
 	childrenToShutdown := make(map[string]SupervisorInterface, len(s.children))
 
@@ -195,25 +240,6 @@ func (s *Supervisor[TObserved, TDesired]) Shutdown() {
 	// Release lock before graceful shutdown operations
 	s.mu.Unlock()
 
-	// Phase 1: Cancel context first (allows tickLoops to exit via ctx.Done()).
-	// This MUST happen before waiting for child done channels, otherwise deadlock:
-	// - Parent waits for child's done channel
-	// - Child's done channel only closes when child's tickLoop exits
-	// - Child's tickLoop only exits when context is cancelled
-	// - Context cancellation happens here, before waiting
-	s.ctxMu.Lock()
-
-	if s.ctxCancel != nil {
-		s.ctxCancel()
-		s.ctxCancel = nil // Prevent double-cancel
-	}
-
-	s.ctxMu.Unlock()
-
-	// Wait for metrics reporter to finish (it will exit now that context is cancelled)
-	s.metricsWg.Wait()
-
-	// Phase 2: Wait for children to complete shutdown (now unblocked since context is cancelled).
 	if len(childrenToShutdown) > 0 {
 		s.logger.Debug("graceful_shutdown_children_starting",
 			deps.Int("child_count", len(childrenToShutdown)))
@@ -249,29 +275,25 @@ func (s *Supervisor[TObserved, TDesired]) Shutdown() {
 		s.logger.Debug("graceful_shutdown_children_complete")
 	}
 
-	// Phase 3: Request graceful shutdown on own workers.
 	if len(workerIDs) > 0 {
 		s.logger.Debug("graceful_shutdown_workers_starting",
 			deps.Int("worker_count", len(workerIDs)))
 
 		// Request graceful shutdown on all workers
 		for _, workerID := range workerIDs {
-			if err := s.requestShutdown(gracefulCtx, workerID, "supervisor_shutdown"); err != nil {
+			if err := s.requestShutdown(s.ctx, workerID, "supervisor_shutdown"); err != nil {
 				s.logger.SentryWarn(deps.FeatureFSMv2, s.GetHierarchyPath(), "graceful_shutdown_request_failed",
 					deps.Err(err))
 			}
 		}
 
-		// Wait for workers to complete graceful shutdown (with timeout)
-		gracefulTimeout := s.gracefulShutdownTimeout
-
 		ticker := time.NewTicker(100 * time.Millisecond)
 		defer ticker.Stop()
 
-		gracefulTimer := time.NewTimer(gracefulTimeout)
+		gracefulTimer := time.NewTimer(s.gracefulShutdownTimeout)
 		defer gracefulTimer.Stop()
 
-	gracefulWaitLoop:
+	drainLoop:
 		for {
 			select {
 			case <-gracefulTimer.C:
@@ -280,10 +302,10 @@ func (s *Supervisor[TObserved, TDesired]) Shutdown() {
 				s.mu.RUnlock()
 
 				s.logger.SentryWarn(deps.FeatureFSMv2, s.GetHierarchyPath(), "graceful_shutdown_timeout",
-					deps.Duration("timeout", gracefulTimeout),
+					deps.Duration("timeout", s.gracefulShutdownTimeout),
 					deps.Int("remaining_worker_count", remainingCount))
 
-				break gracefulWaitLoop
+				break drainLoop
 			case <-ticker.C:
 				s.mu.RLock()
 				remaining := len(s.workers)
@@ -292,13 +314,31 @@ func (s *Supervisor[TObserved, TDesired]) Shutdown() {
 				if remaining == 0 {
 					s.logger.Debug("graceful_shutdown_workers_removed")
 
-					break gracefulWaitLoop
+					break drainLoop
 				}
 			}
 		}
 	}
 
-	// Phase 4: Cleanup executors and collectors.
+	// Phase 4: Terminate context, wait for tickLoop, stop executor + collectors.
+	s.ctxMu.Lock()
+
+	if s.ctxCancel != nil {
+		s.ctxCancel()
+		s.ctxCancel = nil // Prevent double-cancel
+	}
+
+	s.ctxMu.Unlock()
+
+	// Wait for tickLoop to exit (it exits on ctx.Done()).
+	// tickLoopDone is nil for StartAsChild supervisors (no owned tickLoop).
+	if s.tickLoopDone != nil {
+		<-s.tickLoopDone
+	}
+
+	// Wait for metrics reporter to finish (it exits on ctx.Done())
+	s.metricsWg.Wait()
+
 	// Re-acquire lock for cleanup
 	s.mu.Lock()
 
@@ -561,6 +601,17 @@ func (s *Supervisor[TObserved, TDesired]) handleWorkerRestart(ctx context.Contex
 
 	s.logger.Debug("worker_restart_old_removed",
 		deps.HierarchyPath(identity.HierarchyPath))
+
+	// Shutdown may have started after processSignal read started=true but
+	// before this point. The old worker is already removed; skip re-creation
+	// so shutdown can complete. Best-effort — correctness does not depend on it.
+	if !s.started.Load() {
+		s.logger.Info("worker_restart_cancelled_shutdown",
+			deps.HierarchyPath(identity.HierarchyPath),
+			deps.String("target_worker_id", workerID))
+
+		return nil
+	}
 
 	// 2. Clear shutdown flag in storage BEFORE creating new worker.
 	if err := s.clearShutdownRequested(ctx, workerID); err != nil {

@@ -164,6 +164,10 @@ type Supervisor[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState] stru
 	panicTracker       *panicRecovery
 	actionExecutor     *execution.ActionExecutor
 	ctxCancel          context.CancelFunc
+	// tickLoopDone is closed when the tickLoop goroutine exits. Stored here so
+	// Shutdown() can wait for tickLoop to fully exit in Phase 4 after ctxCancel().
+	// Nil when Start() has not been called (StartAsChild supervisors have no tickLoop).
+	tickLoopDone <-chan struct{}
 	// ctxMu Protects ctx and ctxCancel to prevent TOCTOU races during shutdown.
 	//
 	// Without this lock, a goroutine could check ctx.Err() (finding it non-cancelled),

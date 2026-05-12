@@ -236,6 +236,9 @@ var _ = Describe("Supervisor Lifecycle", func() {
 				identity := mockIdentity()
 				s.TestSetPendingRestart(identity.ID)
 
+				// processSignal only restarts when started=true; set it before the tick.
+				s.TestMarkAsStarted()
+
 				workersBefore := s.ListWorkers()
 				Expect(workersBefore).To(HaveLen(1))
 
@@ -295,6 +298,42 @@ var _ = Describe("Supervisor Lifecycle", func() {
 				Expect(workers).To(HaveLen(1))
 
 				Expect(s.TestIsPendingRestart(identity.ID)).To(BeFalse())
+			})
+		})
+	})
+
+	Describe("Run(ctx) error API", func() {
+		Context("when ctx is cancelled externally", func() {
+			It("should block until cancelled, then shut down and return nil", func() {
+				store := createTestTriangularStore()
+
+				s := supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
+					WorkerType:              "container",
+					Store:                   store,
+					Logger:                  deps.NewNopFSMLogger(),
+					TickInterval:            50 * time.Millisecond,
+					GracefulShutdownTimeout: 200 * time.Millisecond,
+				})
+
+				ctx, cancel := context.WithCancel(context.Background())
+
+				runResult := make(chan error, 1)
+
+				go func() {
+					runResult <- s.Run(ctx)
+				}()
+
+				time.Sleep(100 * time.Millisecond)
+
+				// Run must be blocking (channel should have no result yet)
+				Expect(runResult).ToNot(Receive(), "Run should block until ctx is cancelled")
+
+				// Cancel the context to trigger shutdown
+				cancel()
+
+				// Run should return nil within a reasonable time
+				Eventually(runResult, 2*time.Second).Should(Receive(BeNil()),
+					"Run should return nil after ctx cancellation")
 			})
 		})
 	})
