@@ -20,6 +20,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	internalfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
@@ -95,6 +96,67 @@ var _ = Describe("S6 recovery directive — FSM dispatch", func() {
 
 		Expect(mockSvc.ForceRemoveCallCount).To(Equal(1),
 			"once Health flips back to ActionOK, no further ForceRemove calls may fire")
+	})
+
+	// driveUntilState advances ticks (up to maxTicks) until the FSM reports the
+	// target state, returning the tick at which the state was first observed or
+	// -1 if it never arrived. Errors are swallowed so transient reconcile failures
+	// don't abort the loop.
+	driveUntilState := func(startTick uint64, maxTicks int, target string) (uint64, int) {
+		for i := 0; i < maxTicks; i++ {
+			tick := startTick + uint64(i)
+			_, _ = inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: tick}, registry)
+			if inst.GetCurrentFSMState() == target {
+				return tick, i + 1
+			}
+		}
+
+		return 0, -1
+	}
+
+	It("drives the FSM to Removed when Health returns ActionRecreate from Creating", func() {
+		// Tick 1 takes the FSM through ReconcileLifecycleStates from
+		// to_be_created -> CreateInstance -> SendEvent(LifecycleEventCreate),
+		// landing in LifecycleStateCreating before the next tick runs Health().
+		// We assert that state is reached, then flip Health to ActionRecreate
+		// so the recovery dispatch must fire from Creating specifically -- the
+		// gap the reviewer flagged on the original "from to_be_created" test.
+		_, _ = inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: 1}, registry)
+		Expect(inst.GetCurrentFSMState()).To(Equal(internalfsm.LifecycleStateCreating),
+			"after tick 1 the FSM should have transitioned to_be_created -> Creating")
+
+		mockSvc.MockHealthAction = s6service.ActionRecreate
+
+		driveTicks(2, 30)
+
+		Expect(inst.IsRemoved()).To(BeTrue(),
+			"FSM must escape from Creating via Health() recovery dispatch within 30 ticks")
+		Expect(mockSvc.ForceRemoveCalled).To(BeTrue(),
+			"ForceRemove must fire on the underlying service to clear corruption from Creating")
+	})
+
+	It("drives the FSM to Removed when Health returns ActionRecreate from Running", func() {
+		// NewS6Instance hard-codes the desired operational state to Stopped
+		// regardless of the FSMInstanceConfig passed in, so the BeforeEach
+		// alone parks the FSM at Stopped. We have to flip the desired state
+		// explicitly to drive the FSM through Starting into Running.
+		Expect(inst.SetDesiredFSMState(s6fsm.OperationalStateRunning)).To(Succeed())
+
+		_, ticksToRunning := driveUntilState(1, 20, s6fsm.OperationalStateRunning)
+		Expect(ticksToRunning).To(BeNumerically(">", 0),
+			"FSM must reach Running under the healthy mock within 20 ticks")
+		Expect(inst.GetCurrentFSMState()).To(Equal(s6fsm.OperationalStateRunning))
+		Expect(mockSvc.ForceRemoveCalled).To(BeFalse(),
+			"baseline: no recovery should fire while Health is ActionOK")
+
+		mockSvc.MockHealthAction = s6service.ActionRecreate
+
+		driveTicks(uint64(ticksToRunning+1), 30)
+
+		Expect(inst.IsRemoved()).To(BeTrue(),
+			"FSM must escape from Running via Health() recovery dispatch within 30 ticks")
+		Expect(mockSvc.ForceRemoveCalled).To(BeTrue(),
+			"ForceRemove must fire on the underlying service to clear corruption from Running")
 	})
 
 	It("escapes from operational state when Health returns ActionRecreate mid-flight", func() {
