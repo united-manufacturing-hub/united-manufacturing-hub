@@ -27,7 +27,7 @@ type RunningDegradedState struct {
 func (s *RunningDegradedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := fsmv2.ConvertWorkerSnapshot[snapshot.PersistenceConfig, snapshot.PersistenceStatus](snapAny)
 
-	if snap.IsStopRequired() {
+	if snap.ShouldStop() {
 		return fsmv2.Result[any, any](&ShuttingDownState{}, fsmv2.SignalNone, nil, "Shutdown requested")
 	}
 

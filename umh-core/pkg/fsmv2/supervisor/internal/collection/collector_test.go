@@ -16,6 +16,7 @@ package collection_test
 
 import (
 	"context"
+	"errors"
 	"sync/atomic"
 	"time"
 
@@ -47,16 +48,12 @@ var _ = Describe("Collector", func() {
 			err := collector.Start(ctx)
 			Expect(err).ToNot(HaveOccurred())
 
-			// Give it time to start
-			time.Sleep(100 * time.Millisecond)
-
 			// Should be running
 			Expect(collector.IsRunning()).To(BeTrue())
 
 			// Clean shutdown
 			cancel()
-			time.Sleep(100 * time.Millisecond)
-			Expect(collector.IsRunning()).To(BeFalse())
+			Eventually(collector.IsRunning, 2*time.Second, 50*time.Millisecond).Should(BeFalse())
 		})
 	})
 
@@ -84,8 +81,7 @@ var _ = Describe("Collector", func() {
 			Expect(collector.IsRunning()).To(BeTrue())
 
 			cancel()
-			time.Sleep(100 * time.Millisecond)
-			Expect(collector.IsRunning()).To(BeFalse())
+			Eventually(collector.IsRunning, 2*time.Second, 50*time.Millisecond).Should(BeFalse())
 		})
 	})
 
@@ -197,12 +193,10 @@ var _ = Describe("Collector", func() {
 			err := collector.Start(ctx)
 			Expect(err).ToNot(HaveOccurred())
 
-			time.Sleep(50 * time.Millisecond)
 			Expect(collector.IsRunning()).To(BeTrue())
 
 			cancel()
-			time.Sleep(100 * time.Millisecond)
-			Expect(collector.IsRunning()).To(BeFalse())
+			Eventually(collector.IsRunning, 2*time.Second, 50*time.Millisecond).Should(BeFalse())
 		})
 	})
 
@@ -236,8 +230,7 @@ var _ = Describe("Collector", func() {
 			Expect(collector.IsRunning()).To(BeTrue())
 
 			cancel()
-			time.Sleep(100 * time.Millisecond)
-			Expect(collector.IsRunning()).To(BeFalse())
+			Eventually(collector.IsRunning, 2*time.Second, 50*time.Millisecond).Should(BeFalse())
 		})
 
 		It("should handle Restart() gracefully when called before Start()", func() {
@@ -272,8 +265,7 @@ var _ = Describe("Collector", func() {
 			err := collector.Start(ctx)
 			Expect(err).ToNot(HaveOccurred())
 
-			// Wait for at least one collection cycle to start
-			time.Sleep(100 * time.Millisecond)
+			// Verify running before cancelling
 			Expect(collector.IsRunning()).To(BeTrue())
 
 			// Cancel context while collection loop is running
@@ -298,14 +290,14 @@ var _ = Describe("Collector", func() {
 				Logger:              deps.NewNopFSMLogger(),
 				ObservationInterval: 50 * time.Millisecond,
 				ObservationTimeout:  5 * time.Second,
-				DesiredStateProvider: func() fsmv2.DesiredState {
+				DesiredStateProvider: func() (fsmv2.DesiredState, error) {
 					// Cancel context inside DesiredStateProvider  -  after desired
 					// state is loaded but before the framework ctx check.
 					if cancelCollector != nil {
 						cancelCollector()
 					}
 
-					return &config.DesiredState{BaseDesiredState: config.BaseDesiredState{}}
+					return &config.DesiredState{BaseDesiredState: config.BaseDesiredState{}}, nil
 				},
 			})
 
@@ -352,6 +344,51 @@ var _ = Describe("Collector", func() {
 		})
 	})
 
+	Describe("DesiredStateProvider transient error (non-ErrNoDesiredState)", func() {
+		It("skips the cycle and keeps the collector running", func() {
+			// Regression lock for the Sentry-flooding fix: a transient store
+			// error (timeout, deserialization failure) must NOT be propagated
+			// back to the outer observationLoop, which fires SentryError on
+			// every non-nil error return (~1/s/worker). Instead the cycle is
+			// skipped and the provider is retried on the next tick.
+			transientErr := errors.New("store timeout")
+			var providerCallCount atomic.Int32
+
+			trackedWorker := &cosTrackingWorker{called: &atomic.Bool{}}
+
+			collector := collection.NewCollector[supervisor.TestObservedState](collection.CollectorConfig[supervisor.TestObservedState]{
+				Worker:              trackedWorker,
+				Identity:            supervisor.TestIdentity(),
+				Store:               supervisor.CreateTestTriangularStore(),
+				Logger:              deps.NewNopFSMLogger(),
+				ObservationInterval: 50 * time.Millisecond,
+				ObservationTimeout:  1 * time.Second,
+				DesiredStateProvider: func() (fsmv2.DesiredState, error) {
+					providerCallCount.Add(1)
+					return nil, transientErr
+				},
+			})
+
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
+			Expect(collector.Start(ctx)).To(Succeed())
+			Expect(collector.IsRunning()).To(BeTrue())
+
+			// Allow multiple ticks to fire.
+			time.Sleep(200 * time.Millisecond)
+
+			// Collector must still be running — the error is not fatal.
+			Expect(collector.IsRunning()).To(BeTrue())
+
+			// COS must not have been called — collection was skipped each cycle.
+			Expect(trackedWorker.called.Load()).To(BeFalse())
+
+			// Provider must have been called on multiple ticks (cycle retries each tick).
+			Expect(providerCallCount.Load()).To(BeNumerically(">", 1))
+		})
+	})
+
 	Describe("typed desired-state handoff (post-P1.5c)", func() {
 		It("passes DesiredStateProvider's typed value into CollectObservedState verbatim", func() {
 			// Locks the contract that replaced the pre-P1.5c duck-typed
@@ -370,7 +407,7 @@ var _ = Describe("Collector", func() {
 				Logger:               deps.NewNopFSMLogger(),
 				ObservationInterval:  50 * time.Millisecond,
 				ObservationTimeout:   3 * time.Second,
-				DesiredStateProvider: func() fsmv2.DesiredState { return expected },
+				DesiredStateProvider: func() (fsmv2.DesiredState, error) { return expected, nil },
 			})
 
 			ctx, cancel := context.WithCancel(context.Background())

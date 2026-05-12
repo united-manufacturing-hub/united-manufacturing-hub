@@ -23,7 +23,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/pull/snapshot"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/pull/state"
@@ -37,9 +36,7 @@ var _ fsmv2.Worker = (*PullWorker)(nil)
 // It polls the backend relay server and delivers messages to the inbound channel.
 // PullWorker is a child of TransportWorker and shares its parent's JWT token and transport.
 type PullWorker struct {
-	*helpers.BaseWorker[*PullDependencies]
-	logger   deps.FSMLogger
-	identity deps.Identity
+	fsmv2.WorkerBase[snapshot.PullDesiredState, snapshot.PullStatus, *PullDependencies]
 }
 
 // NewPullWorker creates a new PullWorker in Stopped state.
@@ -64,11 +61,22 @@ func NewPullWorker(
 		return nil, fmt.Errorf("failed to create pull dependencies: %w", err)
 	}
 
-	return &PullWorker{
-		BaseWorker: helpers.NewBaseWorker(dependencies),
-		identity:   identity,
-		logger:     logger,
-	}, nil
+	w := &PullWorker{}
+	w.InitBase(identity, logger, stateReader)
+	w.BindDeps(dependencies)
+
+	return w, nil
+}
+
+// GetDependencies returns the typed PullDependencies.
+// Panics with a clear message if BindDeps was not called before this worker is used.
+func (w *PullWorker) GetDependencies() *PullDependencies {
+	d := w.GetDependenciesAny().(*PullDependencies)
+	if d == nil {
+		panic("PullWorker: GetDependencies called before BindDeps")
+	}
+
+	return d
 }
 
 // CollectObservedState snapshots the current pull worker state.

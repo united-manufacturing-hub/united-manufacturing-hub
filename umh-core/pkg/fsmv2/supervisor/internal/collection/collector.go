@@ -93,10 +93,10 @@ type CollectorConfig[TObserved any] struct {
 	ActionHistorySetter func([]deps.ActionResult)
 	// DesiredStateProvider returns the current desired state from the CSE store.
 	// Called BEFORE CollectObservedState so workers can access configuration
-	// (target IP, port, etc.) without workarounds. If nil is returned (desired
-	// state not yet saved), collection is skipped entirely  -  workers are
+	// (target IP, port, etc.) without workarounds. Returns (nil, fsmv2.ErrNoDesiredState)
+	// when no desired state exists yet; collection is skipped entirely so workers are
 	// guaranteed to always receive a non-nil desired state.
-	DesiredStateProvider func() fsmv2.DesiredState
+	DesiredStateProvider func() (fsmv2.DesiredState, error)
 	Identity             deps.Identity
 	ObservationInterval time.Duration
 	ObservationTimeout  time.Duration
@@ -413,7 +413,26 @@ func (c *Collector[TObserved]) collectAndSaveObservedState(ctx context.Context) 
 	// guarantees workers always receive a non-nil desired state.
 	var desired fsmv2.DesiredState
 	if c.config.DesiredStateProvider != nil {
-		desired = c.config.DesiredStateProvider()
+		var providerErr error
+		desired, providerErr = c.config.DesiredStateProvider()
+		if providerErr != nil {
+			if errors.Is(providerErr, fsmv2.ErrNoDesiredState) {
+				c.logTrace("collector_skipped_no_desired_state")
+				return nil
+			}
+			// Non-ErrNoDesiredState error (transient store timeout, deserialization failure).
+			// Skip this collection cycle and log at Info; the outer loop would otherwise
+			// fire SentryError on every tick (~1/s/worker) and exhaust Sentry quota
+			// during brief store outages. Sentry escalation happens upstream in api.go's
+			// DesiredStateProvider closure, which fires SentryWarn at the source.
+			// (Sticky-error dedup at that layer is deferred to a follow-up ticket;
+			// FSMLogger lacks a Loki-only Warn method today, which is why Info is the
+			// current best fit.)
+			c.config.Logger.Info("collector_skipped_desired_state_error",
+				deps.Err(providerErr))
+
+			return nil
+		}
 	}
 
 	if desired == nil {

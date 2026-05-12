@@ -57,7 +57,6 @@ import (
 	fsmv2types "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	depspkg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
 	httpTransport "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/http"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/types"
@@ -67,7 +66,7 @@ const workerTypeName = "communicator"
 
 // CommunicatorWorker implements the FSM v2 Worker interface for channel-based synchronization.
 type CommunicatorWorker struct {
-	*helpers.BaseWorker[*CommunicatorDependencies]
+	fsmv2.WorkerBase[CommunicatorConfig, CommunicatorStatus, *CommunicatorDependencies]
 }
 
 // NewCommunicatorWorker creates a new Channel-based Communicator worker in Stopped state.
@@ -87,9 +86,15 @@ func NewCommunicatorWorker(
 
 	dependencies := NewCommunicatorDependencies(transportParam, logger, stateReader, identity)
 
-	return &CommunicatorWorker{
-		BaseWorker: helpers.NewBaseWorker(dependencies),
-	}, nil
+	w := &CommunicatorWorker{}
+	w.InitBase(identity, logger, stateReader)
+	w.BindDeps(dependencies)
+	return w, nil
+}
+
+// GetDependencies returns the typed CommunicatorDependencies.
+func (w *CommunicatorWorker) GetDependencies() *CommunicatorDependencies {
+	return w.GetDependenciesAny().(*CommunicatorDependencies)
 }
 
 // CollectObservedState returns the current observed state of the communicator.
@@ -162,13 +167,6 @@ func makeTransportChildSpec(parentSpec fsmv2types.UserSpec) []fsmv2types.ChildSp
 	}}
 }
 
-// GetInitialState returns StoppedState as the initial FSM state.
-// Uses the initial state registry populated by the state package's init() function.
-// The caller must ensure the state package is imported (via blank import in main or test).
-func (w *CommunicatorWorker) GetInitialState() fsmv2.State[any, any] {
-	return fsmv2.LookupInitialState(workerTypeName)
-}
-
 func init() {
 	if err := factory.RegisterWorkerAndSupervisorFactoryByType(
 		workerTypeName,
@@ -177,9 +175,10 @@ func init() {
 			// Transport creation and auth are handled by TransportWorker (ENG-4264).
 			commDeps := NewCommunicatorDependencies(nil, logger, stateReader, id)
 
-			return &CommunicatorWorker{
-				BaseWorker: helpers.NewBaseWorker(commDeps),
-			}
+			w := &CommunicatorWorker{}
+			w.InitBase(id, logger, stateReader)
+			w.BindDeps(commDeps)
+			return w
 		},
 		func(cfg interface{}) interface{} {
 			return supervisor.NewSupervisor[fsmv2.Observation[CommunicatorStatus], *fsmv2.WrappedDesiredState[CommunicatorConfig]](

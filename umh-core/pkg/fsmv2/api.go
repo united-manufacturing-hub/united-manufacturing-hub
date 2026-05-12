@@ -30,8 +30,9 @@ import (
 // This is an expected condition on first boot before the supervisor has written
 // the initial desired state to CSE storage, distinguishing it from genuine
 // load failures (e.g., deserialization errors, store connectivity issues).
-// The DesiredStateProvider in supervisor/api.go returns nil and suppresses the
-// SentryWarn log when errors.Is(err, persistence.ErrNotFound).
+// The DesiredStateProvider in supervisor/api.go returns (nil, ErrNoDesiredState)
+// when persistence.ErrNotFound is encountered, signaling the collector to skip
+// the collection cycle without Sentry noise.
 var ErrNoDesiredState = errors.New("fsmv2: no desired state available")
 
 // Signal communicates special conditions from states to the supervisor.
@@ -223,10 +224,18 @@ type Worker interface {
 }
 
 // DependencyProvider exposes worker dependencies for action execution.
-// Workers that embed helpers.BaseWorker automatically satisfy this interface.
+// Workers that embed fsmv2.WorkerBase automatically satisfy this interface.
 type DependencyProvider interface {
 	// GetDependenciesAny returns the worker's dependencies as any.
 	GetDependenciesAny() any
+}
+
+// BaseUserSpec is satisfied by config types that embed config.BaseUserSpec.
+// WorkerBase.DeriveDesiredState uses this interface to read and validate the
+// desired lifecycle state ("running" or "stopped") from TConfig, then propagate
+// it into WrappedDesiredState.State.
+type BaseUserSpec interface {
+	GetState() string
 }
 
 // --- Capability interfaces (optional, discovered via type assertion) ---
@@ -315,9 +324,9 @@ type WorkerSnapshot[TConfig any, TStatus any] struct {
 	IsShutdownRequested bool
 }
 
-// IsStopRequired returns true when the worker should transition to stopped,
+// ShouldStop returns true when the worker should transition to stopped,
 // whether from an explicit shutdown request or a parent-driven stop signal.
-func (s WorkerSnapshot[TConfig, TStatus]) IsStopRequired() bool {
+func (s WorkerSnapshot[TConfig, TStatus]) ShouldStop() bool {
 	return s.IsShutdownRequested || s.ParentMappedState == config.DesiredStateStopped
 }
 

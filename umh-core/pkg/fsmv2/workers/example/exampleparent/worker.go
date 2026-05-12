@@ -23,7 +23,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
 )
 
@@ -31,9 +30,7 @@ const workerTypeName = "exampleparent"
 
 // ParentWorker implements the FSM v2 Worker interface for parent-child relationships.
 type ParentWorker struct {
-	*helpers.BaseWorker[*ParentDependencies]
-	logger   deps.FSMLogger
-	identity deps.Identity
+	fsmv2.WorkerBase[ExampleparentConfig, ExampleparentStatus, *ParentDependencies]
 }
 
 // NewParentWorker creates a new example parent worker.
@@ -52,11 +49,16 @@ func NewParentWorker(
 
 	dependencies := NewParentDependencies(logger, stateReader, identity)
 
-	return &ParentWorker{
-		BaseWorker: helpers.NewBaseWorker(dependencies),
-		identity:   identity,
-		logger:     logger,
-	}, nil
+	w := &ParentWorker{}
+	w.InitBase(identity, logger, stateReader)
+	w.BindDeps(dependencies)
+
+	return w, nil
+}
+
+// GetDependencies returns the typed ParentDependencies.
+func (w *ParentWorker) GetDependencies() *ParentDependencies {
+	return w.GetDependenciesAny().(*ParentDependencies)
 }
 
 // CollectObservedState returns the current observed state of the parent worker.
@@ -77,7 +79,7 @@ func (w *ParentWorker) CollectObservedState(ctx context.Context, _ fsmv2.Desired
 	d.GetActionHistory()
 
 	status := ExampleparentStatus{
-		ID: w.identity.ID,
+		ID: w.Identity().ID,
 	}
 
 	return fsmv2.NewObservation(status), nil
@@ -146,12 +148,6 @@ device: {{ .DEVICE_ID }}`
 		},
 		ChildrenSpecs: childrenSpecs,
 	}, nil
-}
-
-// GetInitialState returns the state the FSM should start in.
-// Uses the initial state registry populated by the state package's init() function.
-func (w *ParentWorker) GetInitialState() fsmv2.State[any, any] {
-	return fsmv2.LookupInitialState(workerTypeName)
 }
 
 func init() {

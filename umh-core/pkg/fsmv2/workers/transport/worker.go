@@ -59,7 +59,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/snapshot"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/state"
@@ -76,7 +75,7 @@ var _ fsmv2.Worker = (*TransportWorker)(nil)
 // It manages authentication and coordinates PushWorker/PullWorker children
 // for bidirectional message exchange with the backend relay server.
 type TransportWorker struct {
-	*helpers.BaseWorker[*TransportDependencies]
+	fsmv2.WorkerBase[snapshot.TransportDesiredState, snapshot.TransportStatus, *TransportDependencies]
 }
 
 // NewTransportWorker creates a new Transport worker in Stopped state.
@@ -96,12 +95,19 @@ func NewTransportWorker(
 		identity.WorkerType = "transport"
 	}
 
+	w := &TransportWorker{}
+	w.InitBase(identity, logger, stateReader)
+
 	// Create dependencies (will panic if ChannelProvider not set)
 	dependencies := NewTransportDependencies(nil, logger, stateReader, identity)
+	w.BindDeps(dependencies)
 
-	return &TransportWorker{
-		BaseWorker: helpers.NewBaseWorker(dependencies),
-	}, nil
+	return w, nil
+}
+
+// GetDependencies returns the typed TransportDependencies.
+func (w *TransportWorker) GetDependencies() *TransportDependencies {
+	return w.GetDependenciesAny().(*TransportDependencies)
 }
 
 // CollectObservedState returns the current observed state of the transport worker.

@@ -26,7 +26,6 @@ import (
 	fsmv2config "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/persistence/snapshot"
 	persistencepkg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
@@ -57,7 +56,7 @@ var _ fsmv2.Worker = (*PersistenceWorker)(nil)
 // PersistenceWorker implements the FSM Worker interface for the edge persistence
 // layer. It drives compaction and maintenance against the triangular store.
 type PersistenceWorker struct {
-	*helpers.BaseWorker[*PersistenceDependencies]
+	fsmv2.WorkerBase[snapshot.PersistenceConfig, snapshot.PersistenceStatus, *PersistenceDependencies]
 }
 
 // NewPersistenceWorker creates a new persistence worker.
@@ -94,14 +93,15 @@ func NewPersistenceWorker(
 		return nil, errors.New("persistence worker: dependencies.Store must not be nil")
 	}
 
-	return &PersistenceWorker{
-		BaseWorker: helpers.NewBaseWorker(dependencies),
-	}, nil
+	w := &PersistenceWorker{}
+	w.InitBase(identity, logger, stateReader)
+	w.BindDeps(dependencies)
+	return w, nil
 }
 
 // GetDependencies returns the typed persistence dependencies.
 func (w *PersistenceWorker) GetDependencies() *PersistenceDependencies {
-	return w.BaseWorker.GetDependencies()
+	return w.GetDependenciesAny().(*PersistenceDependencies)
 }
 
 // CollectObservedState returns the current observed state of the persistence
@@ -223,12 +223,6 @@ func (w *PersistenceWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredS
 	}, nil
 }
 
-// GetInitialState returns the state the FSM should start in.
-// Uses the initial state registry populated by the state package's init() function.
-func (w *PersistenceWorker) GetInitialState() fsmv2.State[any, any] {
-	return fsmv2.LookupInitialState(workerType)
-}
-
 func init() {
 	if err := factory.RegisterWorkerAndSupervisorFactoryByType(
 		WorkerTypeName,
@@ -237,7 +231,12 @@ func init() {
 
 			if params != nil {
 				if raw, ok := params["dependencies"]; ok {
-					d, _ = raw.(*PersistenceDependencies)
+					typed, ok := raw.(*PersistenceDependencies)
+					if !ok {
+						panic(fmt.Sprintf("persistence factory: params[\"dependencies\"] has unexpected type %T (want *PersistenceDependencies)", raw))
+					}
+
+					d = typed
 				}
 			}
 

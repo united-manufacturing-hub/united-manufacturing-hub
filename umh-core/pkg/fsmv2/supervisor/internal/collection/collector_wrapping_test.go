@@ -118,9 +118,9 @@ func wrappingTestIdentity(id string) deps.Identity {
 	return deps.Identity{ID: id, WorkerType: "testwrapping", Name: id}
 }
 
-func wrappingDesiredProvider() func() fsmv2.DesiredState {
-	return func() fsmv2.DesiredState {
-		return &config.DesiredState{BaseDesiredState: config.BaseDesiredState{}}
+func wrappingDesiredProvider() func() (fsmv2.DesiredState, error) {
+	return func() (fsmv2.DesiredState, error) {
+		return &config.DesiredState{BaseDesiredState: config.BaseDesiredState{}}, nil
 	}
 }
 

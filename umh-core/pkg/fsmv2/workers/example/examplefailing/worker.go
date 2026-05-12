@@ -23,7 +23,6 @@ import (
 	fsmv2types "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
 )
 
@@ -32,9 +31,7 @@ const workerTypeName = "examplefailing"
 // FailingWorker implements the FSM v2 Worker interface for testing failure scenarios.
 type FailingWorker struct {
 	connection Connection
-	*helpers.BaseWorker[*FailingDependencies]
-	logger   deps.FSMLogger
-	identity deps.Identity
+	fsmv2.WorkerBase[ExamplefailingConfig, ExamplefailingStatus, *FailingDependencies]
 }
 
 // NewFailingWorker creates a new example failing worker.
@@ -64,12 +61,16 @@ func NewFailingWorker(
 			deps.Err(err))
 	}
 
-	return &FailingWorker{
-		BaseWorker: helpers.NewBaseWorker(dependencies),
-		identity:   identity,
-		logger:     logger,
-		connection: conn,
-	}, nil
+	w := &FailingWorker{connection: conn}
+	w.InitBase(identity, logger, stateReader)
+	w.BindDeps(dependencies)
+
+	return w, nil
+}
+
+// GetDependencies returns the typed FailingDependencies.
+func (w *FailingWorker) GetDependencies() *FailingDependencies {
+	return w.GetDependenciesAny().(*FailingDependencies)
 }
 
 // CollectObservedState returns the current observed state of the failing worker.
@@ -162,12 +163,6 @@ func (w *FailingWorker) updateDependenciesFromConfig(cfg ExamplefailingConfig) {
 	d.SetFailureCycles(cfg.FailureCycles)
 	d.SetRecoveryDelayMs(cfg.RecoveryDelayMs)
 	d.SetRecoveryDelayObservations(cfg.RecoveryDelayObservations)
-}
-
-// GetInitialState returns the state the FSM should start in.
-// Uses the initial state registry populated by the state package's init() function.
-func (w *FailingWorker) GetInitialState() fsmv2.State[any, any] {
-	return fsmv2.LookupInitialState(workerTypeName)
 }
 
 func init() {
