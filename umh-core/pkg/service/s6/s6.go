@@ -778,9 +778,8 @@ func (s *DefaultService) CheckServiceDirectoryIntegrity(ctx context.Context, ser
 //     see files vanishing one-by-one and report HealthBad mid-Remove, which
 //     would permanent-error a Remove that is making progress.
 //   - artifacts populated, files present → ActionOK.
-//   - artifacts populated, files missing → ActionRecreate. Corruption is
-//     the wedge condition: tracked files vanished externally while the
-//     service was running.
+//   - artifacts populated, files missing → ActionRecreate. Tracked files
+//     vanished externally while the service was running.
 //   - artifacts populated, transient I/O error → ActionWait.
 //
 // During Create's recreate paths there is a window between Store(nil) and

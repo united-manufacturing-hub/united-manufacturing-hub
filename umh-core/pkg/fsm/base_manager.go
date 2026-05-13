@@ -367,11 +367,11 @@ func (m *BaseFSMManager[C]) Reconcile(
 		}
 
 		if inst, ok := m.instances[name]; ok && inst.GetCurrentFSMState() == internalfsm.LifecycleStateRemoved {
-			// Step 2 has nothing useful to do for a Removed instance — let Step 3's
-			// cleanup loop (lines 529–532) delete it so the manager can recreate
-			// from config next tick. Without this guard, parent-FSM desired-state
-			// flapping (~100ms cadence) early-returns Step 2 every tick and starves
-			// Step 3, leaving the instance wedged in m.instances forever (ENG-4862).
+			// Removed instances need Step 3's cleanup, not Step 2's create/update.
+			// Step 2 early-returns on any action, so without this guard the loop
+			// keeps "updating" Removed instances and Step 3 never runs (ENG-4862).
+			// The deeper issue — Step 2's one-action-per-tick pattern — is tracked
+			// for the FSMv2-native rewrite in ENG-4941.
 			continue
 		}
 

@@ -346,12 +346,10 @@ func (s *DefaultService) CheckArtifactsHealth(ctx context.Context, artifacts *Se
 		return HealthBad, nil
 	}
 
-	// The supervise/ and log/supervise/ directories are s6-supervise's own
-	// runtime state, brought up by s6-svscan in two non-atomic steps. UMH
-	// must not observe their existence (or asymmetry) as a service-author
-	// integrity signal — that conflates s6's bookkeeping with our own and
-	// produces ForceRemove cascades on benign mid-bringup transients. See
-	// ENG-4862 + VSDD reviews/s6_conventions_research.md for the contract.
+	// supervise/ and log/supervise/ are runtime state owned by s6-svscan,
+	// not UMH. They appear in two non-atomic steps during bringup, so
+	// checking them here would treat a normal mid-bringup transient as
+	// corruption and force-remove a healthy service. See ENG-4862.
 
 	return HealthOK, nil
 }

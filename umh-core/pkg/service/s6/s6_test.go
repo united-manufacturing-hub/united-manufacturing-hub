@@ -639,12 +639,11 @@ var _ = Describe("S6 Service", func() {
 		})
 	})
 
-	// Fix 4a — EnsureSupervision must wait for BOTH supervise/ and log/supervise/.
-	// s6-svscan creates the two directories in two non-atomic steps. Returning
-	// true after only supervise/ existed previously let the FSM transition
-	// Creating → Created with the asymmetric mid-bringup state still present;
-	// the operational Health() dispatch then flagged the asymmetry as HealthBad
-	// and tore down a perfectly-fine just-created service.
+	// EnsureSupervision must wait for BOTH supervise/ and log/supervise/.
+	// s6-svscan creates them in two non-atomic steps. Returning true after
+	// only supervise/ existed would let the FSM transition to Created mid-
+	// bringup, and reconcile would then race against a half-initialized
+	// service (ENG-4862).
 	Describe("DefaultService EnsureSupervision()", func() {
 		var (
 			ctx        context.Context

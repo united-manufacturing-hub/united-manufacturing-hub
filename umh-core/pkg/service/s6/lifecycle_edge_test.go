@@ -219,12 +219,9 @@ var _ = Describe("LifecycleManager Edge Cases", func() {
 
 	Describe("Filesystem Corruption Scenarios", func() {
 		It("treats asymmetric supervise dirs as healthy (s6 autogenerates these, not UMH)", func() {
-			// The supervise/ and log/supervise/ directories are s6-supervise's
-			// own runtime state — created in two non-atomic steps by s6-svscan
-			// during bringup. Observing one present and the other absent is a
-			// benign mid-bringup transient, not service corruption. UMH must
-			// not police state it doesn't author. See ENG-4862 / VSDD
-			// reviews/s6_conventions_research.md.
+			// supervise/ and log/supervise/ are created by s6-svscan in two
+			// non-atomic steps. CheckArtifactsHealth must not treat asymmetry
+			// as corruption. See ENG-4862.
 			mockFS.WithFileExistsFunc(func(ctx context.Context, path string) (bool, error) {
 				return true, nil
 			})

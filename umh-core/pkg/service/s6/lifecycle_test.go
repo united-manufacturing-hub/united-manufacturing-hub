@@ -311,12 +311,9 @@ var _ = Describe("LifecycleManager", func() {
 
 			Expect(err).NotTo(HaveOccurred())
 
-			// The canonical skarnet manual unlink recipe is
-			// "rm symlink + s6-svscanctl -an". ForceCleanup does the rm step
-			// via RemoveAll; this asserts we also do the svscanctl step so
-			// the scanner's internal supervisor table stays in sync with
-			// disk reality. Without this, s6-svunlink failures (exit 111)
-			// leave orphaned entries that accumulate across cleanup cycles.
+			// ForceCleanup must call both rm (via RemoveAll) and s6-svscanctl
+			// -an. Without the -an step, s6-svunlink failures (exit 111)
+			// leave orphaned scanner entries that accumulate over time.
 			svscanctlCalls := []string{}
 			for _, c := range processCalls {
 				if strings.HasPrefix(c, "s6-svscanctl") {
@@ -330,11 +327,9 @@ var _ = Describe("LifecycleManager", func() {
 		})
 
 		It("still notifies s6-svscan when s6-svunlink fails", func() {
-			// Simulate the ENG-4862 wedge precondition: s6-svunlink errors
-			// out (production exit 111 case) but ForceCleanup must still
-			// complete the canonical recipe by calling svscanctl -an. Without
-			// this, the scanner's internal table is left holding a stale
-			// entry that subsequent reconcile cycles cannot recover from.
+			// Simulate the ENG-4862 case: s6-svunlink errors out (production
+			// exit 111) but ForceCleanup must still call svscanctl -an so the
+			// scanner's internal table doesn't drift from disk state.
 			mockFS.WithExecuteCommandFunc(func(ctx context.Context, name string, args ...string) ([]byte, error) {
 				processCalls = append(processCalls, name+" "+strings.Join(args, " "))
 				if name == "s6-svunlink" {

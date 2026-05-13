@@ -87,21 +87,14 @@ func (s *DefaultService) ForceCleanup(ctx context.Context, artifacts *ServiceArt
 		}
 	}
 
-	// Step 5: Tell s6-svscan to rescan and drop stale supervisor entries.
-	// This is the second half of the canonical skarnet manual unlink recipe
-	// ("rm symlink + s6-svscanctl -an"). s6-svunlink already notifies the
-	// scanner when it succeeds, but on exit 111 (s6 temporary error) it
-	// leaves the scanner's internal supervisor table holding a stale entry
-	// for this service. Subsequent ForceCleanup cycles compound the drift
-	// until the scanner can no longer bring up fresh supervise dirs and
-	// the service wedges in LifecycleStateCreating. Calling -an after every
-	// teardown keeps the scanner in sync regardless of svunlink's outcome.
+	// Step 5: tell s6-svscan to drop any stale supervisor entries for this
+	// service. s6-svunlink normally notifies the scanner itself, but on
+	// exit 111 it doesn't. Without this call, repeated cleanup cycles
+	// accumulate stale entries until s6-svscan can no longer bring up new
+	// services. See ENG-4862.
 	//
-	// Best-effort: log + metric on failure. Returning an error here would
-	// trade the cumulative-corruption wedge for an indefinite-stall wedge.
-	// A persistent failure to reach s6-svscan is surfaced via the
-	// .forceRemove.svscanctl_failed metric so operators can detect a
-	// genuinely unresponsive scanner before customers see a wedge.
+	// Best-effort: a failure here is logged + counted via metric. Blocking
+	// cleanup on a flaky scanner would be worse than the stale entries.
 	if _, err := s.ExecuteS6Command(ctx, artifacts.ServiceDir, fsService,
 		"s6-svscanctl", "-an", constants.S6BaseDir); err != nil {
 		s.logger.Warnf("s6-svscanctl -an failed during force cleanup for %s: %v "+
@@ -110,10 +103,6 @@ func (s *DefaultService) ForceCleanup(ctx context.Context, artifacts *ServiceArt
 		metrics.IncErrorCount(metrics.ComponentS6Service,
 			filepath.Base(artifacts.ServiceDir)+".forceRemove.svscanctl_failed")
 	} else {
-		// Logging the success path makes Fix 4e observable without scraping
-		// metrics. Pairs with the failure-side .forceRemove.svscanctl_failed
-		// counter so operators and reviewers can confirm the canonical
-		// recipe completed on every ForceCleanup invocation.
 		s.logger.Infof("s6-svscanctl -an completed for %s (scanner synced after force cleanup)",
 			filepath.Base(artifacts.ServiceDir))
 	}
