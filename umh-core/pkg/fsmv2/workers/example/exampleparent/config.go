@@ -19,7 +19,18 @@ import "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pk
 // ExampleparentConfig is the typed configuration for the parent worker.
 type ExampleparentConfig struct {
 	config.BaseUserSpec
-	ChildCount int `json:"child_count" yaml:"child_count"`
+	ChildWorkerType string `json:"child_worker_type" yaml:"child_worker_type"` // Optional: defaults to "examplechild"
+	ChildConfig     string `json:"child_config"      yaml:"child_config"`      // Optional: config to pass to children
+	ChildrenCount   int    `json:"children_count"    yaml:"children_count"`
+}
+
+// GetChildWorkerType returns the configured child worker type, defaulting to "examplechild".
+func (c *ExampleparentConfig) GetChildWorkerType() string {
+	if c.ChildWorkerType == "" {
+		return "examplechild"
+	}
+
+	return c.ChildWorkerType
 }
 
 // ExampleparentStatus is the observed status for the parent worker.

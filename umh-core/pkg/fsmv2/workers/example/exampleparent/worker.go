@@ -94,7 +94,7 @@ func (w *ParentWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState,
 		}, nil
 	}
 
-	parentSpec, err := config.ParseUserSpec[ParentUserSpec](spec)
+	parentSpec, err := config.ParseUserSpec[ExampleparentConfig](spec)
 	if err != nil {
 		return nil, err
 	}
@@ -106,7 +106,7 @@ func (w *ParentWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState,
 			State: parentSpec.GetState(),
 			Config: ExampleparentConfig{
 				BaseUserSpec: parentSpec.BaseUserSpec,
-				ChildCount:   0,
+				ChildrenCount: 0,
 			},
 		}, nil
 	}
@@ -144,7 +144,7 @@ device: {{ .DEVICE_ID }}`
 		State: parentSpec.GetState(),
 		Config: ExampleparentConfig{
 			BaseUserSpec: parentSpec.BaseUserSpec,
-			ChildCount:   childrenCount,
+			ChildrenCount: childrenCount,
 		},
 		ChildrenSpecs: childrenSpecs,
 	}, nil
