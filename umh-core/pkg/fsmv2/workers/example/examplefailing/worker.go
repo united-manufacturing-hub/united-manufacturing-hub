@@ -53,7 +53,10 @@ func NewFailingWorker(
 		identity.WorkerType = workerTypeName
 	}
 
-	dependencies := NewFailingDependencies(connectionPool, logger, stateReader, identity)
+	w := &FailingWorker{}
+	bd := w.InitBase(identity, logger, stateReader)
+
+	dependencies := NewFailingDependencies(connectionPool, bd)
 
 	conn, err := connectionPool.Acquire()
 	if err != nil {
@@ -61,8 +64,7 @@ func NewFailingWorker(
 			deps.Err(err))
 	}
 
-	w := &FailingWorker{connection: conn}
-	w.InitBase(identity, logger, stateReader)
+	w.connection = conn
 	w.BindDeps(dependencies)
 
 	return w, nil

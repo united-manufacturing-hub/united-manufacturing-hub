@@ -84,10 +84,10 @@ func NewCommunicatorWorker(
 		// HierarchyPath is set by the supervisor when adding workers via factory.
 	}
 
-	dependencies := NewCommunicatorDependencies(transportParam, logger, stateReader, identity)
-
 	w := &CommunicatorWorker{}
-	w.InitBase(identity, logger, stateReader)
+	bd := w.InitBase(identity, logger, stateReader)
+
+	dependencies := NewCommunicatorDependencies(transportParam, bd)
 	w.BindDeps(dependencies)
 	return w, nil
 }
@@ -173,10 +173,9 @@ func init() {
 		func(id depspkg.Identity, logger depspkg.FSMLogger, stateReader depspkg.StateReader, _ map[string]any) fsmv2.Worker {
 			// ChannelProvider must be set via global singleton before factory is called (will panic if not set).
 			// Transport creation and auth are handled by TransportWorker (ENG-4264).
-			commDeps := NewCommunicatorDependencies(nil, logger, stateReader, id)
-
 			w := &CommunicatorWorker{}
-			w.InitBase(id, logger, stateReader)
+			wbd := w.InitBase(id, logger, stateReader)
+			commDeps := NewCommunicatorDependencies(nil, wbd)
 			w.BindDeps(commDeps)
 			return w
 		},

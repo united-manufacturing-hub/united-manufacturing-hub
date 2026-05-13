@@ -48,10 +48,10 @@ func NewExamplepanicWorker(
 		identity.WorkerType = "examplepanic"
 	}
 
-	dependencies := NewExamplepanicDependencies(connectionPool, logger, stateReader, identity)
-
 	w := &ExamplepanicWorker{}
-	w.InitBase(identity, logger, stateReader)
+	bd := w.InitBase(identity, logger, stateReader)
+
+	dependencies := NewExamplepanicDependencies(connectionPool, bd)
 	w.BindDeps(dependencies)
 
 	return w, nil

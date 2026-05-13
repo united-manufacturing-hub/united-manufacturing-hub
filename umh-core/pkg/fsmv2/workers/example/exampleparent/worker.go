@@ -47,10 +47,10 @@ func NewParentWorker(
 		identity.WorkerType = workerTypeName
 	}
 
-	dependencies := NewParentDependencies(logger, stateReader, identity)
-
 	w := &ParentWorker{}
-	w.InitBase(identity, logger, stateReader)
+	bd := w.InitBase(identity, logger, stateReader)
+
+	dependencies := NewParentDependencies(bd)
 	w.BindDeps(dependencies)
 
 	return w, nil

@@ -56,13 +56,14 @@ func NewPullWorker(
 		identity.WorkerType = "pull"
 	}
 
-	dependencies, err := NewPullDependencies(parentDeps, identity, logger, stateReader)
+	w := &PullWorker{}
+	bd := w.InitBase(identity, logger, stateReader)
+
+	dependencies, err := NewPullDependencies(parentDeps, bd)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create pull dependencies: %w", err)
 	}
 
-	w := &PullWorker{}
-	w.InitBase(identity, logger, stateReader)
 	w.BindDeps(dependencies)
 
 	return w, nil

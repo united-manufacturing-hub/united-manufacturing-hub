@@ -79,6 +79,9 @@ func NewPersistenceWorker(
 		identity.WorkerType = workerType
 	}
 
+	w := &PersistenceWorker{}
+	bd := w.InitBase(identity, logger, stateReader)
+
 	switch {
 	case dependencies == nil:
 		return nil, errors.New("persistence worker requires a store; pass via NewPersistenceDependencies or NewStoreOnlyDependencies")
@@ -88,13 +91,11 @@ func NewPersistenceWorker(
 			return nil, errors.New("persistence worker: seed dependencies.Store must not be nil")
 		}
 
-		dependencies = NewPersistenceDependencies(store, deps.DefaultScheduler{}, logger, stateReader, identity)
+		dependencies = NewPersistenceDependencies(store, deps.DefaultScheduler{}, bd)
 	case dependencies.GetStore() == nil:
 		return nil, errors.New("persistence worker: dependencies.Store must not be nil")
 	}
 
-	w := &PersistenceWorker{}
-	w.InitBase(identity, logger, stateReader)
 	w.BindDeps(dependencies)
 	return w, nil
 }

@@ -51,7 +51,10 @@ func NewChildWorker(
 		identity.WorkerType = "examplechild"
 	}
 
-	dependencies := NewExamplechildDependencies(connectionPool, logger, stateReader, identity)
+	w := &ChildWorker{}
+	bd := w.InitBase(identity, logger, stateReader)
+
+	dependencies := NewExamplechildDependencies(connectionPool, bd)
 
 	conn, err := connectionPool.Acquire()
 	if err != nil {
@@ -59,8 +62,7 @@ func NewChildWorker(
 			deps.Err(err))
 	}
 
-	w := &ChildWorker{connection: conn}
-	w.InitBase(identity, logger, stateReader)
+	w.connection = conn
 	w.BindDeps(dependencies)
 
 	return w, nil

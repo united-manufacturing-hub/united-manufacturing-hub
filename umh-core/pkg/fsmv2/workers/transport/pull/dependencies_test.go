@@ -74,7 +74,7 @@ func createParentDeps(logger deps.FSMLogger) *transportpkg.TransportDependencies
 	mt := &mockTransport{}
 	identity := deps.Identity{ID: "parent-id", WorkerType: "transport"}
 
-	return transportpkg.NewTransportDependencies(mt, logger, nil, identity)
+	return transportpkg.NewTransportDependencies(mt, deps.NewBaseDependencies(logger, nil, identity))
 }
 
 func makeMessages(n int) []*types.UMHMessage {
@@ -106,14 +106,14 @@ var _ = Describe("PullDependencies", func() {
 
 	Describe("NewPullDependencies", func() {
 		It("should return error with nil parentDeps", func() {
-			d, err := pull.NewPullDependencies(nil, identity, logger, nil)
+			d, err := pull.NewPullDependencies(nil, deps.NewBaseDependencies(logger, nil, identity))
 			Expect(err).To(HaveOccurred())
 			Expect(d).To(BeNil())
 			Expect(err.Error()).To(ContainSubstring("parentDeps must not be nil"))
 		})
 
 		It("should return non-nil with valid parentDeps", func() {
-			d, err := pull.NewPullDependencies(parentDeps, identity, logger, nil)
+			d, err := pull.NewPullDependencies(parentDeps, deps.NewBaseDependencies(logger, nil, identity))
 			Expect(err).NotTo(HaveOccurred())
 			Expect(d).NotTo(BeNil())
 		})
@@ -124,7 +124,7 @@ var _ = Describe("PullDependencies", func() {
 
 		BeforeEach(func() {
 			var err error
-			d, err = pull.NewPullDependencies(parentDeps, identity, logger, nil)
+			d, err = pull.NewPullDependencies(parentDeps, deps.NewBaseDependencies(logger, nil, identity))
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -179,7 +179,7 @@ var _ = Describe("PullDependencies", func() {
 
 		BeforeEach(func() {
 			var err error
-			d, err = pull.NewPullDependencies(parentDeps, identity, logger, nil)
+			d, err = pull.NewPullDependencies(parentDeps, deps.NewBaseDependencies(logger, nil, identity))
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -216,7 +216,7 @@ var _ = Describe("PullDependencies", func() {
 
 	Describe("PendingMessageCount", func() {
 		It("should return zero for a fresh instance", func() {
-			d, err := pull.NewPullDependencies(parentDeps, identity, logger, nil)
+			d, err := pull.NewPullDependencies(parentDeps, deps.NewBaseDependencies(logger, nil, identity))
 			Expect(err).NotTo(HaveOccurred())
 			Expect(d.PendingMessageCount()).To(Equal(0))
 		})
@@ -227,7 +227,7 @@ var _ = Describe("PullDependencies", func() {
 
 		BeforeEach(func() {
 			var err error
-			d, err = pull.NewPullDependencies(parentDeps, identity, logger, nil)
+			d, err = pull.NewPullDependencies(parentDeps, deps.NewBaseDependencies(logger, nil, identity))
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -252,7 +252,7 @@ var _ = Describe("PullDependencies", func() {
 
 		BeforeEach(func() {
 			var err error
-			d, err = pull.NewPullDependencies(parentDeps, identity, logger, nil)
+			d, err = pull.NewPullDependencies(parentDeps, deps.NewBaseDependencies(logger, nil, identity))
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -286,7 +286,7 @@ var _ = Describe("PullDependencies", func() {
 
 		BeforeEach(func() {
 			var err error
-			d, err = pull.NewPullDependencies(parentDeps, identity, logger, nil)
+			d, err = pull.NewPullDependencies(parentDeps, deps.NewBaseDependencies(logger, nil, identity))
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -326,7 +326,7 @@ var _ = Describe("PullDependencies", func() {
 
 		BeforeEach(func() {
 			var err error
-			d, err = pull.NewPullDependencies(parentDeps, identity, logger, nil)
+			d, err = pull.NewPullDependencies(parentDeps, deps.NewBaseDependencies(logger, nil, identity))
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -441,7 +441,7 @@ var _ = Describe("PullDependencies", func() {
 
 	Describe("BaseDependencies", func() {
 		It("should have its own logger", func() {
-			d, err := pull.NewPullDependencies(parentDeps, identity, logger, nil)
+			d, err := pull.NewPullDependencies(parentDeps, deps.NewBaseDependencies(logger, nil, identity))
 			Expect(err).NotTo(HaveOccurred())
 			Expect(d.GetLogger()).NotTo(BeNil())
 		})

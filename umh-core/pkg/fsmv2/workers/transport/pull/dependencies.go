@@ -50,13 +50,14 @@ type PullDependencies struct {
 }
 
 // NewPullDependencies creates a PullDependencies backed by the given parent transport dependencies.
-func NewPullDependencies(parentDeps *transport_pkg.TransportDependencies, identity deps.Identity, logger deps.FSMLogger, stateReader deps.StateReader) (*PullDependencies, error) {
+// bd is the shared BaseDependencies returned by WorkerBase.InitBase.
+func NewPullDependencies(parentDeps *transport_pkg.TransportDependencies, bd *deps.BaseDependencies) (*PullDependencies, error) {
 	if parentDeps == nil {
 		return nil, errors.New("parentDeps must not be nil")
 	}
 
 	return &PullDependencies{
-		BaseDependencies: deps.NewBaseDependencies(logger, stateReader, identity),
+		BaseDependencies: bd,
 		parentDeps:       parentDeps,
 		failureRate:      failurerate.New(transport_pkg.ChildFailureRateConfig),
 	}, nil

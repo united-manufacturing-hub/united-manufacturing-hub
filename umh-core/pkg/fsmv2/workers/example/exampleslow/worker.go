@@ -50,10 +50,10 @@ func NewExampleslowWorker(
 		identity.WorkerType = "exampleslow"
 	}
 
-	dependencies := NewExampleslowDependencies(connectionPool, logger, stateReader, identity)
-
 	w := &ExampleslowWorker{}
-	w.InitBase(identity, logger, stateReader)
+	bd := w.InitBase(identity, logger, stateReader)
+
+	dependencies := NewExampleslowDependencies(connectionPool, bd)
 	w.BindDeps(dependencies)
 
 	return w, nil

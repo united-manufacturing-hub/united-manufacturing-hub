@@ -56,13 +56,14 @@ func NewPushWorker(
 		identity.WorkerType = "push"
 	}
 
-	dependencies, err := NewPushDependencies(parentDeps, identity, logger, stateReader)
+	w := &PushWorker{}
+	bd := w.InitBase(identity, logger, stateReader)
+
+	dependencies, err := NewPushDependencies(parentDeps, bd)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create push dependencies: %w", err)
 	}
 
-	w := &PushWorker{}
-	w.InitBase(identity, logger, stateReader)
 	w.BindDeps(dependencies)
 
 	return w, nil

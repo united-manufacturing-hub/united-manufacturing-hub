@@ -46,13 +46,14 @@ type PushDependencies struct {
 }
 
 // NewPushDependencies creates a PushDependencies backed by the given parent transport dependencies.
-func NewPushDependencies(parentDeps *transport_pkg.TransportDependencies, identity deps.Identity, logger deps.FSMLogger, stateReader deps.StateReader) (*PushDependencies, error) {
+// bd is the shared BaseDependencies returned by WorkerBase.InitBase.
+func NewPushDependencies(parentDeps *transport_pkg.TransportDependencies, bd *deps.BaseDependencies) (*PushDependencies, error) {
 	if parentDeps == nil {
 		return nil, errors.New("parentDeps must not be nil")
 	}
 
 	return &PushDependencies{
-		BaseDependencies: deps.NewBaseDependencies(logger, stateReader, identity),
+		BaseDependencies: bd,
 		parentDeps:       parentDeps,
 		failureRate:      failurerate.New(transport_pkg.ChildFailureRateConfig),
 	}, nil

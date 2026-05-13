@@ -96,10 +96,10 @@ func NewTransportWorker(
 	}
 
 	w := &TransportWorker{}
-	w.InitBase(identity, logger, stateReader)
+	bd := w.InitBase(identity, logger, stateReader)
 
 	// Create dependencies (will panic if ChannelProvider not set)
-	dependencies := NewTransportDependencies(nil, logger, stateReader, identity)
+	dependencies := NewTransportDependencies(nil, bd)
 	w.BindDeps(dependencies)
 
 	return w, nil
