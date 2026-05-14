@@ -71,7 +71,7 @@ services:
       - LOCATION_0=your-location # TODO: change this
 
 +   pgbouncer:
-+     image: docker.io/edoburu/pgbouncer:v1.24.1-p1
++     image: management.umh.app/oci/edoburu/pgbouncer:v1.24.1-p1
 +     restart: unless-stopped
 +     environment:
 +       - DB_NAME=umh
@@ -198,7 +198,7 @@ services:
       retries: 3
 
   pgbouncer:
-    image: docker.io/edoburu/pgbouncer:v1.24.1-p1
+    image: management.umh.app/oci/edoburu/pgbouncer:v1.24.1-p1
     restart: unless-stopped
     environment:
       - DB_NAME=umh
