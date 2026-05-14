@@ -535,7 +535,7 @@ type panickingState struct {
 func (s *panickingState) Next(snapshot any) fsmv2.NextResult[any, any] {
 	if s.worker.panicOnTick {
 		if s.worker.panicOnlyOnce && s.worker.panicTriggered {
-			return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil, "staying in state")
+			return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil, "staying in state", nil)
 		}
 
 		s.worker.panicTriggered = true
@@ -547,7 +547,7 @@ func (s *panickingState) Next(snapshot any) fsmv2.NextResult[any, any] {
 		panic(s.worker.panicMessage)
 	}
 
-	return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil, "staying in state")
+	return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil, "staying in state", nil)
 }
 
 func (s *panickingState) String() string { return "PanickingState" }

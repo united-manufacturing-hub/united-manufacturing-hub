@@ -208,23 +208,29 @@ type State[TSnapshot any, TDeps any] interface {
 // Result creates a NextResult with the given components.
 // This is a convenience function to reduce boilerplate when returning from Next().
 //
+// The children argument is the parent's intended children-set for this tick.
+// Pass nil when the state is not managing children. See NextResult.Children
+// godoc for discriminator semantics.
+//
 // Usage:
 //
-//	return fsmv2.Result(s, fsmv2.SignalNone, nil, "Worker is stopped")
+//	return fsmv2.Result(s, fsmv2.SignalNone, nil, "Worker is stopped", nil)
 //
 //	reason := fmt.Sprintf("degraded: %d errors (%s)", errors, errorType)
-//	return fsmv2.Result(&DegradedState{}, fsmv2.SignalNone, nil, reason)
+//	return fsmv2.Result(&DegradedState{}, fsmv2.SignalNone, nil, reason, nil)
 func Result[TSnapshot any, TDeps any](
 	state State[TSnapshot, TDeps],
 	signal Signal,
 	action Action[TDeps],
 	reason string,
+	children []config.ChildSpec,
 ) NextResult[TSnapshot, TDeps] {
 	return NextResult[TSnapshot, TDeps]{
-		State:  state,
-		Signal: signal,
-		Action: action,
-		Reason: reason,
+		State:    state,
+		Signal:   signal,
+		Action:   action,
+		Reason:   reason,
+		Children: children,
 	}
 }
 
@@ -272,13 +278,7 @@ func Transition(
 		wrapped = wrapTypedAction(a)
 	}
 
-	return NextResult[any, any]{
-		State:    state,
-		Signal:   signal,
-		Action:   wrapped,
-		Reason:   reason,
-		Children: children,
-	}
+	return Result[any, any](state, signal, wrapped, reason, children)
 }
 
 // reflectedAction adapts an Action[TDeps] for some concrete TDeps into an
