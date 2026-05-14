@@ -15,7 +15,10 @@
 package actions
 
 import (
+	"errors"
 	"fmt"
+	"os"
+	"runtime/debug"
 
 	"github.com/google/uuid"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/encoding"
@@ -25,8 +28,10 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	deps "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
+	"go.uber.org/zap"
 )
 
 // Action is the interface that all action types must implement.
@@ -63,150 +68,23 @@ func HandleActionMessage(instanceUUID uuid.UUID, payload models.ActionMessagePay
 	log := logger.For(logger.ComponentCommunicator)
 	fsmLogger := deps.NewFSMLogger(log)
 
+	// Panic recovery. Converts any uncaught panic in this goroutine into a
+	// Sentry event, a counter increment, and a non-blocking failure reply so
+	// the user-visible action is marked failed and the umh-core process keeps
+	// running. Adapted from pkg/fsmv2/supervisor's tick-recovery pattern
+	// (ENG-4289). See ENG-4959 for the regression that motivated wiring this
+	// guard into the Communicator goroutine tree.
+	defer func() {
+		if r := recover(); r != nil {
+			recoverActionPanic(r, instanceUUID, sender, payload, fsmLogger, outboundChannel)
+		}
+	}()
+
 	// Start a new transaction for this action
 	log.Debugf("Handling action message: Type: %s, Payload: %v", payload.ActionType, payload.ActionPayload)
 
-	var action Action
-
-	switch payload.ActionType {
-	case models.EditInstance:
-		action = &EditInstanceAction{
-			userEmail:             sender,
-			actionUUID:            payload.ActionUUID,
-			instanceUUID:          instanceUUID,
-			outboundChannel:       outboundChannel,
-			configManager:         configManager,
-			actionLogger:          log,
-			systemSnapshotManager: systemSnapshotManager,
-		}
-	case models.DeployDataFlowComponent:
-		action = &DeployDataflowComponentAction{
-			userEmail:             sender,
-			actionUUID:            payload.ActionUUID,
-			instanceUUID:          instanceUUID,
-			outboundChannel:       outboundChannel,
-			configManager:         configManager,
-			systemSnapshotManager: systemSnapshotManager,
-			actionLogger:          log,
-		}
-
-	case models.DeleteDataFlowComponent:
-		action = &DeleteDataflowComponentAction{
-			userEmail:             sender,
-			actionUUID:            payload.ActionUUID,
-			instanceUUID:          instanceUUID,
-			outboundChannel:       outboundChannel,
-			configManager:         configManager,
-			systemSnapshotManager: systemSnapshotManager,
-			actionLogger:          log,
-		}
-
-	case models.GetDataFlowComponent:
-		action = &GetDataFlowComponentAction{
-			userEmail:             sender,
-			actionUUID:            payload.ActionUUID,
-			instanceUUID:          instanceUUID,
-			outboundChannel:       outboundChannel,
-			configManager:         configManager,
-			systemSnapshotManager: systemSnapshotManager,
-			actionLogger:          log,
-		}
-	case models.EditDataFlowComponent:
-		action = &EditDataflowComponentAction{
-			userEmail:             sender,
-			actionUUID:            payload.ActionUUID,
-			instanceUUID:          instanceUUID,
-			outboundChannel:       outboundChannel,
-			configManager:         configManager,
-			actionLogger:          log,
-			systemSnapshotManager: systemSnapshotManager,
-		}
-	case models.GetLogs:
-		action = &GetLogsAction{
-			userEmail:             sender,
-			actionUUID:            payload.ActionUUID,
-			instanceUUID:          instanceUUID,
-			outboundChannel:       outboundChannel,
-			configManager:         configManager,
-			actionLogger:          log,
-			systemSnapshotManager: systemSnapshotManager,
-		}
-	case models.GetConfigFile:
-		action = &GetConfigFileAction{
-			userEmail:             sender,
-			actionUUID:            payload.ActionUUID,
-			instanceUUID:          instanceUUID,
-			outboundChannel:       outboundChannel,
-			systemSnapshotManager: systemSnapshotManager,
-			configManager:         configManager,
-			actionLogger:          log,
-		}
-	case models.SetConfigFile:
-		action = &SetConfigFileAction{
-			userEmail:             sender,
-			actionUUID:            payload.ActionUUID,
-			instanceUUID:          instanceUUID,
-			outboundChannel:       outboundChannel,
-			systemSnapshotManager: systemSnapshotManager,
-			configManager:         configManager,
-			actionLogger:          log,
-		}
-
-	case models.GetDataFlowComponentMetrics: //nolint:staticcheck // Deprecated but kept for back compat
-		action = &GetDataflowcomponentMetricsAction{
-			userEmail:             sender,
-			actionUUID:            payload.ActionUUID,
-			instanceUUID:          instanceUUID,
-			outboundChannel:       outboundChannel,
-			actionLogger:          log,
-			systemSnapshotManager: systemSnapshotManager,
-		}
-
-	case models.DeployProtocolConverter:
-		action = &DeployProtocolConverterAction{
-			userEmail:             sender,
-			actionUUID:            payload.ActionUUID,
-			instanceUUID:          instanceUUID,
-			outboundChannel:       outboundChannel,
-			configManager:         configManager,
-			actionLogger:          log,
-			systemSnapshotManager: systemSnapshotManager,
-		}
-	case models.EditProtocolConverter:
-		action = &EditProtocolConverterAction{
-			userEmail:             sender,
-			actionUUID:            payload.ActionUUID,
-			instanceUUID:          instanceUUID,
-			outboundChannel:       outboundChannel,
-			configManager:         configManager,
-			systemSnapshotManager: systemSnapshotManager,
-			actionLogger:          log,
-		}
-	case models.GetProtocolConverter:
-		action = NewGetProtocolConverterAction(sender, payload.ActionUUID, instanceUUID, outboundChannel, configManager, systemSnapshotManager)
-
-	case models.GetMetrics:
-		action = NewGetMetricsAction(sender, payload.ActionUUID, instanceUUID, outboundChannel, systemSnapshotManager, log)
-	case models.DeleteProtocolConverter:
-		action = NewDeleteProtocolConverterAction(sender, payload.ActionUUID, instanceUUID, outboundChannel, configManager, systemSnapshotManager)
-	case models.AddDataModel:
-		action = NewAddDataModelAction(sender, payload.ActionUUID, instanceUUID, outboundChannel, configManager)
-	case models.DeleteDataModel:
-		action = NewDeleteDataModelAction(sender, payload.ActionUUID, instanceUUID, outboundChannel, configManager)
-	case models.EditDataModel:
-		action = NewEditDataModelAction(sender, payload.ActionUUID, instanceUUID, outboundChannel, configManager)
-	case models.GetDataModel:
-		action = NewGetDataModelAction(sender, payload.ActionUUID, instanceUUID, outboundChannel, configManager)
-	case models.DeleteStreamProcessor:
-		action = NewDeleteStreamProcessorAction(sender, payload.ActionUUID, instanceUUID, outboundChannel, configManager, systemSnapshotManager)
-	case models.EditStreamProcessor:
-		action = NewEditStreamProcessorAction(sender, payload.ActionUUID, instanceUUID, outboundChannel, configManager, systemSnapshotManager)
-	case models.DeployStreamProcessor:
-		action = NewDeployStreamProcessorAction(sender, payload.ActionUUID, instanceUUID, outboundChannel, configManager, systemSnapshotManager)
-	case models.GetStreamProcessor:
-		action = NewGetStreamProcessorAction(sender, payload.ActionUUID, instanceUUID, outboundChannel, configManager, systemSnapshotManager)
-
-	default:
+	action := newActionFromPayloadFn(instanceUUID, payload, sender, outboundChannel, systemSnapshotManager, configManager, log, fsmLogger)
+	if action == nil {
 		log.Errorf("Unknown action type: %s", payload.ActionType)
 		SendActionReply(instanceUUID, sender, payload.ActionUUID, models.ActionFinishedWithFailure, "Unknown action type", outboundChannel, payload.ActionType)
 
@@ -270,6 +148,340 @@ func HandleActionMessage(instanceUUID uuid.UUID, payload models.ActionMessagePay
 	}
 
 	SendActionReplyWithAdditionalContext(instanceUUID, sender, payload.ActionUUID, models.ActionFinishedSuccessfull, result, outboundChannel, payload.ActionType, metadata)
+}
+
+// newActionFromPayloadFn is the indirection HandleActionMessage uses to build
+// the Action. It is a variable so tests can swap in a stub that returns a
+// panicking Action, exercising the defer-recover guard end-to-end. Production
+// callers never reassign this variable.
+//
+// Tests that swap this seam must not use t.Parallel(): the read inside
+// HandleActionMessage is unsynchronized, and concurrent swaps race under
+// -race.
+var newActionFromPayloadFn = newActionFromPayload
+
+// recordActionPanicFn is the indirection recoverActionPanic uses to increment
+// the panic counter. Exposed as a package-level variable so tests can swap
+// in a panicking stub to exercise the metric-panics branch of the double-panic
+// guard. Production callers never reassign this variable.
+//
+// Same t.Parallel() constraint as newActionFromPayloadFn applies.
+var recordActionPanicFn = metrics.RecordActionPanic
+
+// recoverActionPanic is the recovery body for the defer in HandleActionMessage.
+// It is split out so tests can drive it with a synthetic panic value without
+// constructing a full action goroutine. The outer recover catches panics
+// originating in the action handler itself (the ENG-4959 regression class).
+// The inner double-panic guard mirrors pkg/fsmv2/supervisor's tick-recover
+// secondary guard: if THIS function's Sentry/metric/reply path itself panics
+// (e.g. a nil zap core, a duplicate-counter registration, a marshaling bug),
+// the secondary panic is swallowed and a last-resort stderr line is written.
+func recoverActionPanic(
+	r any,
+	instanceUUID uuid.UUID,
+	userEmail string,
+	payload models.ActionMessagePayload,
+	fsmLogger deps.FSMLogger,
+	outboundChannel chan *models.UMHMessage,
+) {
+	defer func() {
+		if r2 := recover(); r2 != nil {
+			// Best-effort Sentry breadcrumb when the recovery path itself
+			// panics (Sentry logger, metric increment, or reply generation
+			// — not the original action panic, which the OUTER recover
+			// already captured). Pattern mirrors pkg/fsmv2/supervisor's
+			// tick-recover secondary guard. The innermost recover ensures
+			// a panic inside this last-resort Sentry call does not
+			// propagate; stderr remains the absolute fallback.
+			func() {
+				defer func() { _ = recover() }()
+
+				if fsmLogger != nil {
+					fsmLogger.SentryError(
+						deps.FeatureCommunicator,
+						"",
+						fmt.Errorf("action handler double panic: primary=%v secondary=%v", r, r2),
+						"action_handler_double_panic",
+						deps.String("action_type", string(payload.ActionType)),
+						deps.String("action_uuid", payload.ActionUUID.String()),
+					)
+				}
+			}()
+
+			fmt.Fprintf(os.Stderr,
+				"action_handler_double_panic: action=%s uuid=%s primary=%v secondary=%v\n",
+				payload.ActionType, payload.ActionUUID.String(), r, r2)
+		}
+	}()
+
+	panicType, panicErr := classifyActionPanic(r)
+
+	// Sentry runs before the metric increment because Sentry carries the
+	// most diagnostic value for incident response. The double-panic guard
+	// (above) re-attempts Sentry if either subsequent step itself panics,
+	// so the primary panic always reaches the dashboard even if metrics
+	// or reply generation fails.
+	if fsmLogger != nil {
+		fsmLogger.SentryError(
+			deps.FeatureCommunicator,
+			"",
+			fmt.Errorf("action handler panic: %w", panicErr),
+			"action_handler_panic",
+			deps.String("action_type", string(payload.ActionType)),
+			deps.String("action_uuid", payload.ActionUUID.String()),
+			deps.String("panic_type", panicType),
+			// debug.Stack() captures the panicking goroutine's stack: the
+			// frames between the panic site and this deferred recover are
+			// still on the stack (unwind has not happened yet), so Sentry
+			// receives the full panic-site trace.
+			deps.String("stack_trace", string(debug.Stack())),
+		)
+	}
+
+	recordActionPanicFn(string(payload.ActionType), panicType)
+
+	replyMsg, err := generateUMHMessage(
+		instanceUUID, userEmail, models.ActionReply,
+		models.ActionReplyMessagePayload{
+			ActionUUID:       payload.ActionUUID,
+			ActionReplyState: models.ActionFinishedWithFailure,
+			ActionReplyPayload: fmt.Sprintf(
+				"Internal error: %s action failed unexpectedly (action %s). UMH engineering has been notified.",
+				payload.ActionType, payload.ActionUUID.String()),
+		})
+	if err != nil {
+		// Reply generation can fail on JSON marshal errors. Without a Sentry
+		// breadcrumb here the customer's action appears stuck (no failure
+		// reply ever arrives) and engineering only sees the panic event, not
+		// the follow-on failure. Stderr line kept as last-resort fallback.
+		if fsmLogger != nil {
+			fsmLogger.SentryError(
+				deps.FeatureCommunicator,
+				"",
+				err,
+				"action_handler_panic_reply_generation_failed",
+				deps.String("action_type", string(payload.ActionType)),
+				deps.String("action_uuid", payload.ActionUUID.String()),
+			)
+		}
+
+		fmt.Fprintf(os.Stderr,
+			"action_handler_panic_reply_generation_failed: action=%s uuid=%s err=%v\n",
+			payload.ActionType, payload.ActionUUID.String(), err)
+
+		return
+	}
+
+	// Non-blocking send. SendActionReply uses an unconditional channel
+	// write (sendActionReplyInternal further down this file) that would
+	// block forever if outboundChannel is full. The recovery goroutine
+	// must not block; Sentry and the metric have already captured the
+	// panic, so the reply is a UX nicety.
+	select {
+	case outboundChannel <- &replyMsg:
+	default:
+		// Structured log matches the pattern used elsewhere when the outbound
+		// channel saturates (push/push.go, fsmv2_adapter/legacy_bridge.go).
+		// Stderr fallback kept so the line remains grep-friendly during
+		// instance-offline triage even if zap is misconfigured.
+		logger.For(logger.ComponentCommunicator).Warnw(
+			"action_handler_panic_reply_dropped",
+			"action_type", string(payload.ActionType),
+			"action_uuid", payload.ActionUUID.String(),
+		)
+
+		fmt.Fprintf(os.Stderr,
+			"action_handler_panic_reply_dropped: outbound channel full, action=%s uuid=%s\n",
+			payload.ActionType, payload.ActionUUID.String())
+	}
+}
+
+// classifyActionPanic categorizes a recovered panic value for metrics labels
+// and Sentry routing. Local helper because pkg/fsmv2/supervisor/internal/panicutil
+// is intentionally internal to fsmv2; duplicating ~10 lines here is cleaner
+// than promoting that package out of internal/ for one call site.
+//
+// Label values are aligned to panicutil.PanicType* constants so Sentry
+// dashboards can treat action panics and FSM worker panics uniformly.
+//
+// Do not extend panic_type to encode richer panic info (error class names,
+// stack-trace fingerprints, etc.) — Prometheus cardinality must stay
+// bounded. action_type × panic_type already gives ~66 series; richer
+// classification belongs in Sentry, not Prometheus.
+func classifyActionPanic(r any) (panicType string, err error) {
+	switch v := r.(type) {
+	case error:
+		return "error_panic", v
+	case string:
+		return "string_panic", errors.New(v)
+	default:
+		// %T renders the static type without invoking String(), avoiding a
+		// re-panic if the panic value happens to be a pathological Stringer
+		// (the very shape the parent ENG-4289 incident class targeted).
+		return "unknown_panic", fmt.Errorf("%T (string repr suppressed)", v)
+	}
+}
+
+// newActionFromPayload constructs the concrete Action implementation for the
+// given action type. It returns nil for unknown action types.
+//
+// This is the single point where action structs are built from their
+// dependencies. Every action whose struct exposes an fsmLogger field must
+// receive fsmLogger here, otherwise it will be a zero-value (nil) interface
+// and any call to its SentryWarn/SentryError methods will panic at runtime.
+// See ENG-4959 for the PR #2546 regression that motivated this contract.
+func newActionFromPayload(
+	instanceUUID uuid.UUID,
+	payload models.ActionMessagePayload,
+	sender string,
+	outboundChannel chan *models.UMHMessage,
+	systemSnapshotManager *fsm.SnapshotManager,
+	configManager config.ConfigManager,
+	log *zap.SugaredLogger,
+	fsmLogger deps.FSMLogger,
+) Action {
+	switch payload.ActionType {
+	case models.EditInstance:
+		return &EditInstanceAction{
+			userEmail:             sender,
+			actionUUID:            payload.ActionUUID,
+			instanceUUID:          instanceUUID,
+			outboundChannel:       outboundChannel,
+			configManager:         configManager,
+			actionLogger:          log,
+			systemSnapshotManager: systemSnapshotManager,
+		}
+	case models.DeployDataFlowComponent:
+		return &DeployDataflowComponentAction{
+			userEmail:             sender,
+			actionUUID:            payload.ActionUUID,
+			instanceUUID:          instanceUUID,
+			outboundChannel:       outboundChannel,
+			configManager:         configManager,
+			systemSnapshotManager: systemSnapshotManager,
+			actionLogger:          log,
+		}
+
+	case models.DeleteDataFlowComponent:
+		return &DeleteDataflowComponentAction{
+			userEmail:             sender,
+			actionUUID:            payload.ActionUUID,
+			instanceUUID:          instanceUUID,
+			outboundChannel:       outboundChannel,
+			configManager:         configManager,
+			systemSnapshotManager: systemSnapshotManager,
+			actionLogger:          log,
+		}
+
+	case models.GetDataFlowComponent:
+		return &GetDataFlowComponentAction{
+			userEmail:             sender,
+			actionUUID:            payload.ActionUUID,
+			instanceUUID:          instanceUUID,
+			outboundChannel:       outboundChannel,
+			configManager:         configManager,
+			systemSnapshotManager: systemSnapshotManager,
+			actionLogger:          log,
+		}
+	case models.EditDataFlowComponent:
+		return &EditDataflowComponentAction{
+			userEmail:             sender,
+			actionUUID:            payload.ActionUUID,
+			instanceUUID:          instanceUUID,
+			outboundChannel:       outboundChannel,
+			configManager:         configManager,
+			actionLogger:          log,
+			systemSnapshotManager: systemSnapshotManager,
+		}
+	case models.GetLogs:
+		return &GetLogsAction{
+			userEmail:             sender,
+			actionUUID:            payload.ActionUUID,
+			instanceUUID:          instanceUUID,
+			outboundChannel:       outboundChannel,
+			configManager:         configManager,
+			actionLogger:          log,
+			systemSnapshotManager: systemSnapshotManager,
+		}
+	case models.GetConfigFile:
+		return &GetConfigFileAction{
+			userEmail:             sender,
+			actionUUID:            payload.ActionUUID,
+			instanceUUID:          instanceUUID,
+			outboundChannel:       outboundChannel,
+			systemSnapshotManager: systemSnapshotManager,
+			configManager:         configManager,
+			actionLogger:          log,
+		}
+	case models.SetConfigFile:
+		return &SetConfigFileAction{
+			userEmail:             sender,
+			actionUUID:            payload.ActionUUID,
+			instanceUUID:          instanceUUID,
+			outboundChannel:       outboundChannel,
+			systemSnapshotManager: systemSnapshotManager,
+			configManager:         configManager,
+			actionLogger:          log,
+		}
+
+	case models.GetDataFlowComponentMetrics: //nolint:staticcheck // Deprecated but kept for back compat
+		return &GetDataflowcomponentMetricsAction{
+			userEmail:             sender,
+			actionUUID:            payload.ActionUUID,
+			instanceUUID:          instanceUUID,
+			outboundChannel:       outboundChannel,
+			actionLogger:          log,
+			systemSnapshotManager: systemSnapshotManager,
+		}
+
+	case models.DeployProtocolConverter:
+		return &DeployProtocolConverterAction{
+			userEmail:             sender,
+			actionUUID:            payload.ActionUUID,
+			instanceUUID:          instanceUUID,
+			outboundChannel:       outboundChannel,
+			configManager:         configManager,
+			actionLogger:          log,
+			fsmLogger:             fsmLogger,
+			systemSnapshotManager: systemSnapshotManager,
+		}
+	case models.EditProtocolConverter:
+		return &EditProtocolConverterAction{
+			userEmail:             sender,
+			actionUUID:            payload.ActionUUID,
+			instanceUUID:          instanceUUID,
+			outboundChannel:       outboundChannel,
+			configManager:         configManager,
+			systemSnapshotManager: systemSnapshotManager,
+			actionLogger:          log,
+			fsmLogger:             fsmLogger,
+		}
+	case models.GetProtocolConverter:
+		return NewGetProtocolConverterAction(sender, payload.ActionUUID, instanceUUID, outboundChannel, configManager, systemSnapshotManager)
+
+	case models.GetMetrics:
+		return NewGetMetricsAction(sender, payload.ActionUUID, instanceUUID, outboundChannel, systemSnapshotManager, log)
+	case models.DeleteProtocolConverter:
+		return NewDeleteProtocolConverterAction(sender, payload.ActionUUID, instanceUUID, outboundChannel, configManager, systemSnapshotManager)
+	case models.AddDataModel:
+		return NewAddDataModelAction(sender, payload.ActionUUID, instanceUUID, outboundChannel, configManager)
+	case models.DeleteDataModel:
+		return NewDeleteDataModelAction(sender, payload.ActionUUID, instanceUUID, outboundChannel, configManager)
+	case models.EditDataModel:
+		return NewEditDataModelAction(sender, payload.ActionUUID, instanceUUID, outboundChannel, configManager)
+	case models.GetDataModel:
+		return NewGetDataModelAction(sender, payload.ActionUUID, instanceUUID, outboundChannel, configManager)
+	case models.DeleteStreamProcessor:
+		return NewDeleteStreamProcessorAction(sender, payload.ActionUUID, instanceUUID, outboundChannel, configManager, systemSnapshotManager)
+	case models.EditStreamProcessor:
+		return NewEditStreamProcessorAction(sender, payload.ActionUUID, instanceUUID, outboundChannel, configManager, systemSnapshotManager)
+	case models.DeployStreamProcessor:
+		return NewDeployStreamProcessorAction(sender, payload.ActionUUID, instanceUUID, outboundChannel, configManager, systemSnapshotManager)
+	case models.GetStreamProcessor:
+		return NewGetStreamProcessorAction(sender, payload.ActionUUID, instanceUUID, outboundChannel, configManager, systemSnapshotManager)
+	}
+
+	return nil
 }
 
 // SendActionReply sends an action reply with the given state and payload.

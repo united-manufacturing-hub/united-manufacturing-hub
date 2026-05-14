@@ -117,6 +117,12 @@ type SubscribeMessagePayload struct {
 // ActionType is a custom string type to ensure type safety for specifying different action types.
 type ActionType string
 
+// Keep this block in sync with allKnownActionTypes() in
+// umh-core/pkg/communicator/actions/actions_internal_test.go. That helper
+// drives the reflection-based wire-up sweep that guards against the
+// PR #2546 / ENG-4959 regression class (forgotten field on a new action's
+// switch-case struct literal). Adding a new ActionType here without
+// adding it there silently weakens the guard.
 const (
 	// UnknownAction represents an unknown action type.
 	UnknownAction ActionType = "unknown"

@@ -76,6 +76,12 @@ const (
 	// Both features share this tag because they are implemented together and
 	// route to the same owner.
 	FeatureDisableReadFlows Feature = "disable_read_flows"
+
+	// FeatureCommunicator scopes Sentry events from the Communicator package
+	// (action handlers, router, pull/push transport). The recovered-panic
+	// handler in HandleActionMessage uses this tag so action-handler panics
+	// route separately from FSM worker events.
+	FeatureCommunicator Feature = "communicator"
 )
 
 // FeatureForWorker returns the Feature for a specific worker type.
