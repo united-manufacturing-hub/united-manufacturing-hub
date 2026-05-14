@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Bug Fixes
+
+- Fixed a P1 crash introduced in v0.44.19 where editing or deploying a bridge could panic umh-core with a nil-pointer dereference. The production code path that built EditProtocolConverter and DeployProtocolConverter actions omitted a required logger field; any rollback, validation failure, or other Sentry-logged error path then crashed the process the first time it ran. The field is now wired correctly, and action handlers also have a defer-recover safety net so a single missing field can no longer take the whole process down — recovered panics are reported to Sentry with action type and UUID, counted in the new `umh_communicator_action_panics_total` metric, and surfaced to the user as a normal failure reply.
+
 ### Improvements
 
 - Previously, the component tasked with communicating with the UI could stop working if it rebuilt its HTTP connection (which happens after persistent network failures) while a message was being sent or received. Connection rebuilds and in-flight requests are now coordinated so they cannot interfere.
