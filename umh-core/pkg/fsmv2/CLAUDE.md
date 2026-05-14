@@ -75,27 +75,28 @@ func (s *RunningState) Next(snapAny any) fsmv2.NextResult[any, any] {
     if snap.ShouldStop() {
         reason := fmt.Sprintf("stop required: shutdown=%t, parentState=%q",
             snap.IsShutdownRequested(), snap.Observed.ParentMappedState)
-        return fsmv2.Result[any, any](&ShuttingDownState{}, fsmv2.SignalNone, nil, reason)
+        return fsmv2.Transition(&ShuttingDownState{}, fsmv2.SignalNone, nil, reason, nil)
     }
 
     // Business logic.
     if needsWork {
         reason := fmt.Sprintf("dispatching %s (queue=%d)", MyActionName, snap.Status.QueueDepth)
-        return fsmv2.Result[any, any](s, fsmv2.SignalNone, &MyAction{}, reason)
+        return fsmv2.Transition(s, fsmv2.SignalNone, &MyAction{}, reason, nil)
     }
 
     // Catch-all return: include the conditions that kept the worker here so
     // operators can identify which precondition is still missing.
     reason := fmt.Sprintf("running: queue=%d, hasWork=%t", snap.Status.QueueDepth, needsWork)
-    return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil, reason)
+    return fsmv2.Transition(s, fsmv2.SignalNone, nil, reason, nil)
 }
 ```
 
-`fsmv2.Result[any, any]` is the canonical return shape for state files.
+`fsmv2.Transition()` is the canonical return shape for state files. Never use the generic
+`fsmv2.Result[any, any](...)` form — the architecture gate rejects it.
 
 ## Reason Strings in State Transitions
 
-The `Reason` parameter in `fsmv2.Result()` is visible in structured JSON logs (every state transition), supervisor heartbeats (every ~100 ticks), and parent supervisor's `ChildInfo.StateReason`. Write reasons that help operators troubleshoot without reading code.
+The `Reason` parameter in `fsmv2.Transition()` is visible in structured JSON logs (every state transition), supervisor heartbeats (every ~100 ticks), and parent supervisor's `ChildInfo.StateReason`. Write reasons that help operators troubleshoot without reading code.
 
 **Rules:**
 - Include dynamic snapshot values via `fmt.Sprintf` — never hardcode values that exist in the snapshot
@@ -112,6 +113,39 @@ fmt.Sprintf("sync recovering: %d consecutive errors (%s), backoff %s",
 
 **Bad**: `"Stop required"`, `"Waiting for transport or token"`, `"Degraded, still pushing"`
 **Good**: `"stop required: shutdown=false, parentState=stopped"`, `"waiting: hasTransport=true, hasValidToken=false"`, `"degraded (5 consecutive errors), still pushing"`
+
+## Children-in-Next Pattern
+
+Parent state files can express child sets directly in `Next()` via the fifth argument of
+`fsmv2.Transition()`. This is the path toward moving child lifecycle decisions out of
+`DeriveDesiredState` and into the state machine where they are visible to operators.
+
+**Nil = no opinion** (supervisor uses the `ChildrenSpecs` from `DeriveDesiredState`):
+
+```go
+return fsmv2.Transition(s, fsmv2.SignalNone, nil, "no change to children", nil)
+```
+
+**Empty slice = zero children** (supervisor tears down all children):
+
+```go
+return fsmv2.Transition(&TryingToStopState{}, fsmv2.SignalNone, nil, "stopping, no children needed",
+    []config.ChildSpec{})
+```
+
+**Populated slice = exact desired child set** (supervisor reconciles to match):
+
+```go
+return fsmv2.Transition(s, fsmv2.SignalNone, nil, "running with children",
+    []config.ChildSpec{
+        {Name: "child1", WorkerType: "examplechild", UserSpec: spec1},
+        {Name: "child2", WorkerType: "examplechild", UserSpec: spec2},
+    })
+```
+
+Until a parent state returns a non-nil `Children` value, the supervisor continues using
+the legacy `ChildrenSpecs` path from `DeriveDesiredState`. Both paths coexist safely
+during migration.
 
 ## Worker Struct Pattern (WorkerBase embed)
 
