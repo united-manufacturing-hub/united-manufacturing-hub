@@ -310,13 +310,17 @@ var _ = Describe("Collector", func() {
 			})
 
 			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
 			cancelCollector = cancel
 
 			err := collector.Start(ctx)
 			Expect(err).ToNot(HaveOccurred())
 
-			// Wait for collector to process at least one tick.
-			time.Sleep(200 * time.Millisecond)
+			// Wait for the cancellation triggered inside DesiredStateProvider to
+			// stop the collector loop instead of relying on a fixed sleep.
+			Eventually(func() bool {
+				return collector.IsRunning()
+			}, 2*time.Second, 25*time.Millisecond).Should(BeFalse())
 
 			// COS should NOT have been called  -  the framework ctx check caught the cancellation.
 			Expect(cosCalled.Load()).To(BeFalse())

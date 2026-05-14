@@ -70,18 +70,24 @@ type RunningState struct {
 func (s *RunningState) Next(snapAny any) fsmv2.NextResult[any, any] {
     snap := fsmv2.ConvertWorkerSnapshot[MyConfig, MyStatus](snapAny)
 
-    // Shutdown check FIRST
+    // Shutdown check FIRST. Build the reason from snapshot fields so operators
+    // can see why the worker stopped without reading code.
     if snap.IsStopRequired() {
-        return fsmv2.Result[any, any](&ShuttingDownState{}, fsmv2.SignalNone, nil, "Shutdown requested")
+        reason := fmt.Sprintf("stop required: shutdown=%t, parentState=%q",
+            snap.IsShutdownRequested(), snap.Observed.ParentMappedState)
+        return fsmv2.Result[any, any](&ShuttingDownState{}, fsmv2.SignalNone, nil, reason)
     }
 
-    // Business logic
+    // Business logic.
     if needsWork {
-        return fsmv2.Result[any, any](s, fsmv2.SignalNone, &MyAction{}, "Doing work")
+        reason := fmt.Sprintf("dispatching %s (queue=%d)", MyActionName, snap.Status.QueueDepth)
+        return fsmv2.Result[any, any](s, fsmv2.SignalNone, &MyAction{}, reason)
     }
 
-    // Catch-all return at end
-    return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil, "Staying in running")
+    // Catch-all return: include the conditions that kept the worker here so
+    // operators can identify which precondition is still missing.
+    reason := fmt.Sprintf("running: queue=%d, hasWork=%t", snap.Status.QueueDepth, needsWork)
+    return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil, reason)
 }
 ```
 

@@ -16,6 +16,7 @@ package action
 
 import (
 	"context"
+	"fmt"
 
 	example_child "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplechild"
 )
@@ -33,7 +34,11 @@ func (a *ConnectAction) Execute(ctx context.Context, depsAny any) error {
 	default:
 	}
 
-	deps := depsAny.(example_child.ExamplechildDepsIface)
+	deps, ok := depsAny.(example_child.ExamplechildDepsIface)
+	if !ok {
+		return fmt.Errorf("connect: unexpected deps type %T", depsAny)
+	}
+
 	logger := deps.ActionLogger(ConnectActionName)
 	logger.Info("Attempting to connect")
 

@@ -96,6 +96,24 @@ func collectJSONFieldNames(t reflect.Type) map[string]bool {
 		}
 
 		name, _, _ := strings.Cut(tag, ",")
+		// Embedded structs with option-only tags (e.g., `json:",omitempty"`)
+		// keep their inner fields promoted; recurse to surface real collisions
+		// instead of recording the type name.
+		if field.Anonymous && name == "" {
+			ft := field.Type
+			if ft.Kind() == reflect.Ptr {
+				ft = ft.Elem()
+			}
+
+			if ft.Kind() == reflect.Struct {
+				for k := range collectJSONFieldNames(ft) {
+					names[k] = true
+				}
+			}
+
+			continue
+		}
+
 		if name == "" {
 			name = field.Name
 		}

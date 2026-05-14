@@ -16,6 +16,7 @@ package action
 
 import (
 	"context"
+	"fmt"
 
 	depspkg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	examplefailing "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplefailing"
@@ -43,7 +44,11 @@ func (a *TriggerObservationAction) Execute(ctx context.Context, depsAny any) err
 	default:
 	}
 
-	deps := depsAny.(examplefailing.ExamplefailingDepsIface)
+	deps, ok := depsAny.(examplefailing.ExamplefailingDepsIface)
+	if !ok {
+		return fmt.Errorf("trigger_observation: unexpected deps type %T", depsAny)
+	}
+
 	newTicks := deps.IncrementTicksInConnected()
 	deps.GetLogger().Info("trigger_observation",
 		depspkg.Int("new_ticks", newTicks),

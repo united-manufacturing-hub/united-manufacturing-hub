@@ -336,4 +336,21 @@ var _ = Describe("DetectFieldCollisions", func() {
 		err := fsmv2.DetectFieldCollisions[SkippedField]()
 		Expect(err).NotTo(HaveOccurred())
 	})
+
+	// Embedded structs with option-only tags (e.g., `json:",omitempty"`) still
+	// promote their inner fields to the parent JSON object. The detector must
+	// recurse into them, otherwise a collision via a promoted field is missed.
+	It("detects collisions through embedded structs tagged with options only", func() {
+		type stateHolder struct {
+			State string `json:"state"`
+		}
+
+		type EmbeddedOmitempty struct {
+			stateHolder `json:",omitempty"`
+		}
+
+		err := fsmv2.DetectFieldCollisions[EmbeddedOmitempty]()
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("state"))
+	})
 })

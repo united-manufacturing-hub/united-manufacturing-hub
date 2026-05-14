@@ -94,7 +94,14 @@ type TransportDesiredState struct {
 
 	Timeout time.Duration `json:"timeout"`
 
-	State string `json:"state" yaml:"state"` // "stopped" or "running" - desired lifecycle state
+	// State is the desired lifecycle state ("stopped" or "running").
+	//
+	// Deprecated: Never populated in production. Lifecycle is owned by
+	// WrappedDesiredState.State, set from TransportUserSpec.GetState() in
+	// DeriveDesiredState. Forward-deletion candidate alongside ChildrenSpecs /
+	// GetChildrenSpecs / GetState / ShouldBeRunning — slated for the L9
+	// transport-snapshot cleanup.
+	State string `json:"state" yaml:"state"`
 }
 
 // GetChildrenSpecs returns the children specifications.
