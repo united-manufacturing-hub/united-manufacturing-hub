@@ -40,17 +40,17 @@ func (s *StoppedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := fsmv2.ConvertWorkerSnapshot[exampleparent.ExampleparentConfig, exampleparent.ExampleparentStatus](snapAny)
 
 	if snap.IsShutdownRequested {
-		return fsmv2.Result[any, any](s, fsmv2.SignalNeedsRemoval, nil, "Shutdown requested, signaling removal")
+		return fsmv2.Transition(s, fsmv2.SignalNeedsRemoval, nil, "Shutdown requested, signaling removal", nil)
 	}
 
 	if !snap.IsShutdownRequested {
 		elapsed := time.Duration(snap.Metrics.Metrics.Framework.TimeInCurrentStateMs) * time.Millisecond
 		if elapsed >= StoppedWaitDuration {
-			return fsmv2.Result[any, any](&TryingToStartState{}, fsmv2.SignalNone, nil, "Wait duration elapsed, transitioning to TryingToStart")
+			return fsmv2.Transition(&TryingToStartState{}, fsmv2.SignalNone, nil, "Wait duration elapsed, transitioning to TryingToStart", nil)
 		}
 	}
 
-	return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil, "Parent is stopped, no children spawned")
+	return fsmv2.Transition(s, fsmv2.SignalNone, nil, "Parent is stopped, no children spawned", nil)
 }
 
 func (s *StoppedState) String() string {

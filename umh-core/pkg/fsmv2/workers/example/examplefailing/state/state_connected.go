@@ -48,25 +48,25 @@ func (s *ConnectedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := fsmv2.ConvertWorkerSnapshot[examplefailing.ExamplefailingConfig, examplefailing.ExamplefailingStatus](snapAny)
 
 	if snap.ShouldStop() {
-		return fsmv2.Result[any, any](&TryingToStopState{}, fsmv2.SignalNone, nil,
+		return fsmv2.Transition(&TryingToStopState{}, fsmv2.SignalNone, nil,
 			fmt.Sprintf("stop required: shutdown=%t, parentState=%s",
-				snap.IsShutdownRequested, snap.ParentMappedState))
+				snap.IsShutdownRequested, snap.ParentMappedState), nil)
 	}
 
 	if snap.Status.ConnectionHealth == "no connection" {
-		return fsmv2.Result[any, any](&DisconnectedState{}, fsmv2.SignalNone, nil, "connection lost unexpectedly")
+		return fsmv2.Transition(&DisconnectedState{}, fsmv2.SignalNone, nil, "connection lost unexpectedly", nil)
 	}
 
 	if snap.Config.ShouldFail && !snap.Status.AllCyclesComplete {
 		timeInStateMs := snap.Metrics.Metrics.Framework.TimeInCurrentStateMs
 		if timeInStateMs >= healthyDurationMsBeforeNextCycle {
-			return fsmv2.Result[any, any](&TriggeringNextCycleState{}, fsmv2.SignalNone, nil, "reached healthy duration threshold, triggering next failure cycle")
+			return fsmv2.Transition(&TriggeringNextCycleState{}, fsmv2.SignalNone, nil, "reached healthy duration threshold, triggering next failure cycle", nil)
 		}
 
-		return fsmv2.Result[any, any](s, fsmv2.SignalNone, &action.TriggerObservationAction{}, "waiting for healthy duration, triggering observation")
+		return fsmv2.Transition(s, fsmv2.SignalNone, &action.TriggerObservationAction{}, "waiting for healthy duration, triggering observation", nil)
 	}
 
-	return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil, "connected and ready, no action needed")
+	return fsmv2.Transition(s, fsmv2.SignalNone, nil, "connected and ready, no action needed", nil)
 }
 
 func (s *ConnectedState) String() string {

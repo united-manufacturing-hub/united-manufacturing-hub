@@ -32,26 +32,26 @@ func (s *TryingToConnectState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := fsmv2.ConvertWorkerSnapshot[examplefailing.ExamplefailingConfig, examplefailing.ExamplefailingStatus](snapAny)
 
 	if snap.ShouldStop() {
-		return fsmv2.Result[any, any](&TryingToStopState{}, fsmv2.SignalNone, nil,
+		return fsmv2.Transition(&TryingToStopState{}, fsmv2.SignalNone, nil,
 			fmt.Sprintf("stop required: shutdown=%t, parentState=%s",
-				snap.IsShutdownRequested, snap.ParentMappedState))
+				snap.IsShutdownRequested, snap.ParentMappedState), nil)
 	}
 
 	if snap.Status.RestartAfterFailures > 0 &&
 		snap.Status.ConnectAttempts >= snap.Status.RestartAfterFailures {
-		return fsmv2.Result[any, any](s, fsmv2.SignalNeedsRestart, nil, "max connection attempts reached, signaling restart")
+		return fsmv2.Transition(s, fsmv2.SignalNeedsRestart, nil, "max connection attempts reached, signaling restart", nil)
 	}
 
 	if snap.Status.ConnectionHealth == "healthy" {
-		return fsmv2.Result[any, any](&ConnectedState{}, fsmv2.SignalNone, nil, "connection established successfully")
+		return fsmv2.Transition(&ConnectedState{}, fsmv2.SignalNone, nil, "connection established successfully", nil)
 	}
 
 	if snap.Status.RecoveryDelayActive {
-		return fsmv2.Result[any, any](s, fsmv2.SignalNone, &action.TriggerObservationAction{},
-			"waiting for recovery delay (triggering observation)")
+		return fsmv2.Transition(s, fsmv2.SignalNone, &action.TriggerObservationAction{},
+			"waiting for recovery delay (triggering observation)", nil)
 	}
 
-	return fsmv2.Result[any, any](s, fsmv2.SignalNone, &action.ConnectAction{}, "attempting to establish connection")
+	return fsmv2.Transition(s, fsmv2.SignalNone, &action.ConnectAction{}, "attempting to establish connection", nil)
 }
 
 func (s *TryingToConnectState) String() string {

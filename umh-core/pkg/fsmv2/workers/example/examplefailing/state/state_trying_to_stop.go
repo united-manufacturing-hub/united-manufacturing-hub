@@ -15,6 +15,8 @@
 package state
 
 import (
+	"fmt"
+
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplefailing/action"
@@ -30,11 +32,11 @@ func (s *TryingToStopState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := fsmv2.ConvertWorkerSnapshot[examplefailing.ExamplefailingConfig, examplefailing.ExamplefailingStatus](snapAny)
 
 	if snap.Status.ConnectionHealth == "no connection" {
-		return fsmv2.Result[any, any](&StoppedState{}, fsmv2.SignalNone, nil,
-			"disconnected successfully: connectionHealth="+snap.Status.ConnectionHealth)
+		return fsmv2.Transition(&StoppedState{}, fsmv2.SignalNone, nil,
+			fmt.Sprintf("disconnected successfully: connectionHealth=%s", snap.Status.ConnectionHealth), nil)
 	}
 
-	return fsmv2.Result[any, any](s, fsmv2.SignalNone, &action.DisconnectAction{}, "attempting to disconnect cleanly")
+	return fsmv2.Transition(s, fsmv2.SignalNone, &action.DisconnectAction{}, "attempting to disconnect cleanly", nil)
 }
 
 func (s *TryingToStopState) String() string {

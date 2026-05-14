@@ -15,6 +15,8 @@
 package state
 
 import (
+	"fmt"
+
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
@@ -33,15 +35,15 @@ func (s *StoppedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := fsmv2.ConvertWorkerSnapshot[example_slow.ExampleslowConfig, example_slow.ExampleslowStatus](snapAny)
 
 	if snap.IsShutdownRequested {
-		return fsmv2.Result[any, any](s, fsmv2.SignalNeedsRemoval, nil,
-			"shutdown requested, stopping: parentState="+snap.ParentMappedState)
+		return fsmv2.Transition(s, fsmv2.SignalNeedsRemoval, nil,
+			fmt.Sprintf("shutdown requested, stopping: parentState=%s", snap.ParentMappedState), nil)
 	}
 
 	if snap.ParentMappedState == config.DesiredStateRunning {
-		return fsmv2.Result[any, any](&TryingToConnectState{}, fsmv2.SignalNone, nil, "should be running, transitioning to trying to connect")
+		return fsmv2.Transition(&TryingToConnectState{}, fsmv2.SignalNone, nil, "should be running, transitioning to trying to connect", nil)
 	}
 
-	return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil, "slow worker is stopped, no connection")
+	return fsmv2.Transition(s, fsmv2.SignalNone, nil, "slow worker is stopped, no connection", nil)
 }
 
 func (s *StoppedState) String() string {
