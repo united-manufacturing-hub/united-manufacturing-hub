@@ -59,12 +59,6 @@ var _ = Describe("Observation", func() {
 				"NewObservation must not set CollectedAt  -  the collector sets it")
 		})
 
-		It("satisfies the ObservedState interface", func() {
-			obs := fsmv2.NewObservation(TestStatus{})
-			_, ok := obs.(fsmv2.ObservedState)
-			Expect(ok).To(BeTrue())
-		})
-
 		It("satisfies all collector duck-type setter interfaces", func() {
 			obs := fsmv2.NewObservation(TestStatus{})
 

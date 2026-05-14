@@ -74,6 +74,16 @@ const (
 )
 
 // ObservedState represents the actual state gathered from monitoring the system.
+// Intentional pair with TimestampProvider: ObservedState is the compile-time
+// return-type contract for CollectObservedState, while TimestampProvider is the
+// runtime capability the supervisor asserts against Snapshot.Observed (typed
+// `any` — see line above). Identical method sets today, different roles.
+//
+// Invariant: TimestampProvider must remain a strict subset of ObservedState's
+// methods so the runtime assertion never misses a value the compile-time
+// contract accepted. The compile-time check below enforces this.
+//
+//nolint:iface // see godoc above — paired contract/capability interfaces.
 type ObservedState interface {
 	// GetTimestamp returns the time when this observed state was collected,
 	// used for staleness checks.
@@ -81,9 +91,16 @@ type ObservedState interface {
 }
 
 // TimestampProvider allows access to observation timestamps for staleness checks.
+//
+//nolint:iface // see ObservedState above — paired contract/capability interfaces.
 type TimestampProvider interface {
 	GetTimestamp() time.Time
 }
+
+// Compile-time invariant: every ObservedState satisfies TimestampProvider.
+// If ObservedState ever grows methods, TimestampProvider stays a strict subset
+// so the runtime assertions in supervisor stay correct.
+var _ TimestampProvider = (ObservedState)(nil)
 
 // DesiredState represents the target state derived from user configuration.
 type DesiredState interface {
@@ -262,7 +279,7 @@ type WrappedDesiredState[TConfig any] struct {
 	config.BaseDesiredState
 	Config        TConfig            `json:"config"`
 	ChildrenSpecs []config.ChildSpec `json:"childrenSpecs,omitempty"`
-	State         string             `json:"state"             yaml:"state"` // "stopped" or "running" - desired lifecycle state
+	State         string             `json:"state"                   yaml:"state"` // "stopped" or "running" - desired lifecycle state
 }
 
 // GetState returns the desired lifecycle state, defaulting to "running" if empty.
@@ -397,9 +414,11 @@ var (
 func RegisterInitialState(workerType string, state State[any, any]) {
 	initialStateRegistryMu.Lock()
 	defer initialStateRegistryMu.Unlock()
+
 	if _, exists := initialStateRegistry[workerType]; exists {
 		panic(fmt.Sprintf("RegisterInitialState: duplicate registration for %q", workerType))
 	}
+
 	initialStateRegistry[workerType] = state
 }
 
@@ -408,6 +427,7 @@ func RegisterInitialState(workerType string, state State[any, any]) {
 func LookupInitialState(workerType string) State[any, any] {
 	initialStateRegistryMu.RLock()
 	defer initialStateRegistryMu.RUnlock()
+
 	return initialStateRegistry[workerType]
 }
 
@@ -415,5 +435,6 @@ func LookupInitialState(workerType string) State[any, any] {
 func ResetInitialStateRegistry() {
 	initialStateRegistryMu.Lock()
 	defer initialStateRegistryMu.Unlock()
+
 	initialStateRegistry = make(map[string]State[any, any])
 }

@@ -114,18 +114,6 @@ func (m *mockObservedState) MarshalJSON() ([]byte, error) {
 	return json.Marshal(m.doc)
 }
 
-// mockDesiredState is shared across internal supervisor tests (package supervisor).
-type mockDesiredState struct {
-	State string
-}
-
-func (m *mockDesiredState) IsShutdownRequested() bool {
-	return false
-}
-
-func (m *mockDesiredState) SetShutdownRequested(_ bool) {
-}
-
 // mockState is shared across internal supervisor tests (package supervisor).
 // NOTE: There is a different mockState in supervisor_suite_test.go (package supervisor_test).
 type mockState struct {
@@ -142,32 +130,6 @@ func (m *mockState) Next(_ any) fsmv2.NextResult[any, any] {
 }
 
 func (m *mockState) LifecyclePhase() config.LifecyclePhase { return config.PhaseRunningHealthy }
-
-// internalMockWorkerWithChildren is a mock worker that returns configurable ChildSpecs.
-type internalMockWorkerWithChildren struct {
-	identity      deps.Identity
-	initialState  fsmv2.State[any, any]
-	observed      persistence.Document
-	childrenSpecs []config.ChildSpec
-}
-
-func (m *internalMockWorkerWithChildren) CollectObservedState(_ context.Context, _ fsmv2.DesiredState) (fsmv2.ObservedState, error) {
-	return &mockObservedState{
-		doc:       m.observed,
-		timestamp: time.Now(),
-	}, nil
-}
-
-func (m *internalMockWorkerWithChildren) DeriveDesiredState(_ interface{}) (fsmv2.DesiredState, error) {
-	return &config.DesiredState{
-		BaseDesiredState: config.BaseDesiredState{},
-		ChildrenSpecs:    m.childrenSpecs,
-	}, nil
-}
-
-func (m *internalMockWorkerWithChildren) GetInitialState() fsmv2.State[any, any] {
-	return m.initialState
-}
 
 // newObservationMockWorker returns fsmv2.NewObservation (zero CollectedAt) from CollectObservedState.
 type newObservationMockWorker struct {
