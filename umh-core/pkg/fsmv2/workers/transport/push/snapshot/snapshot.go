@@ -57,9 +57,9 @@ type PushDependencies interface {
 // PushDesiredState represents the target configuration for the push worker.
 type PushDesiredState struct {
 	ParentMappedState string `json:"parent_mapped_state"`
-	config.BaseDesiredState
 
 	State string `json:"state" yaml:"state"`
+	config.BaseDesiredState
 }
 
 // GetState returns the desired lifecycle state, defaulting to "running" if empty.

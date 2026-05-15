@@ -276,10 +276,10 @@ type ChildrenViewConsumer interface {
 // The framework constructs this during DeriveDesiredState. Developers define
 // their TConfig type and call the typed DeriveDesiredState helpers to produce it.
 type WrappedDesiredState[TConfig any] struct {
-	config.BaseDesiredState
 	Config        TConfig            `json:"config"`
-	ChildrenSpecs []config.ChildSpec `json:"childrenSpecs,omitempty"`
 	State         string             `json:"state"                   yaml:"state"` // "stopped" or "running" - desired lifecycle state
+	ChildrenSpecs []config.ChildSpec `json:"childrenSpecs,omitempty"`
+	config.BaseDesiredState
 }
 
 // GetState returns the desired lifecycle state, defaulting to "running" if empty.

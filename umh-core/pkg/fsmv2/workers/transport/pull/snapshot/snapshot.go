@@ -57,9 +57,9 @@ type PullDependencies interface {
 // PullDesiredState represents the target configuration for the pull worker.
 type PullDesiredState struct {
 	ParentMappedState string `json:"parent_mapped_state"`
-	config.BaseDesiredState
 
 	State string `json:"state" yaml:"state"`
+	config.BaseDesiredState
 }
 
 // GetState returns the desired lifecycle state, defaulting to "running" if empty.

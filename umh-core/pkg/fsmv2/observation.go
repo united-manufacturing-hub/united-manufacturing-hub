@@ -16,6 +16,7 @@ package fsmv2
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"reflect"
 	"sort"
@@ -36,10 +37,12 @@ func DetectFieldCollisions[T any]() error {
 	reserved := collectJSONFieldNames(reflect.TypeOf(observationFrameworkFields{}))
 
 	var zero T
+
 	tType := reflect.TypeOf(zero)
 	if tType == nil {
-		return fmt.Errorf("DetectFieldCollisions: T must be a concrete type, got nil (interface type)")
+		return errors.New("DetectFieldCollisions: T must be a concrete type, got nil (interface type)")
 	}
+
 	if tType.Kind() == reflect.Ptr {
 		tType = tType.Elem()
 	}
@@ -51,6 +54,7 @@ func DetectFieldCollisions[T any]() error {
 	statusNames := collectJSONFieldNames(tType)
 
 	var collisions []string
+
 	for name := range statusNames {
 		if reserved[name] {
 			collisions = append(collisions, name)
@@ -85,6 +89,7 @@ func collectJSONFieldNames(t reflect.Type) map[string]bool {
 				if ft.Kind() == reflect.Ptr {
 					ft = ft.Elem()
 				}
+
 				if ft.Kind() == reflect.Struct {
 					for k := range collectJSONFieldNames(ft) {
 						names[k] = true
@@ -117,6 +122,7 @@ func collectJSONFieldNames(t reflect.Type) map[string]bool {
 		if name == "" {
 			name = field.Name
 		}
+
 		if name != "" {
 			names[name] = true
 		}

@@ -15,8 +15,6 @@
 package state
 
 import (
-	"fmt"
-
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
@@ -36,7 +34,7 @@ func (s *StoppedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 
 	if snap.IsShutdownRequested {
 		return fsmv2.Result[any, any](s, fsmv2.SignalNeedsRemoval, nil,
-			fmt.Sprintf("shutdown requested, stopping: parentState=%s", snap.ParentMappedState))
+			"shutdown requested, stopping: parentState="+snap.ParentMappedState)
 	}
 
 	if snap.ParentMappedState == config.DesiredStateRunning {

@@ -464,11 +464,13 @@ func (s ChildrenViewSnapshot) AllOperational() bool {
 	if len(s.Children) == 0 {
 		return true
 	}
+
 	for _, c := range s.Children {
 		if !c.IsOperational {
 			return false
 		}
 	}
+
 	return true
 }
 
@@ -477,11 +479,13 @@ func (s ChildrenViewSnapshot) AllStopped() bool {
 	if len(s.Children) == 0 {
 		return true
 	}
+
 	for _, c := range s.Children {
 		if !c.IsStopped {
 			return false
 		}
 	}
+
 	return true
 }
 
@@ -523,10 +527,10 @@ var _ ChildrenView = ChildrenViewSnapshot{}
 //	    ChildrenSpecs:    nil,                                        // Children removed during shutdown
 //	}
 type DesiredState struct {
-	OriginalUserSpec interface{}      `json:"originalUserSpec,omitempty" yaml:"-"` // Captures the input that produced this DesiredState (for debugging/traceability)
-	BaseDesiredState `yaml:",inline"` // Provides ShutdownRequested field and IsShutdownRequested/SetShutdownRequested methods
+	OriginalUserSpec interface{}      `json:"originalUserSpec,omitempty" yaml:"-"`                       // Captures the input that produced this DesiredState (for debugging/traceability)
+	State            string           `json:"state"                      yaml:"state"`                   // "stopped" or "running" - desired lifecycle state
 	ChildrenSpecs    []ChildSpec      `json:"childrenSpecs,omitempty"    yaml:"childrenSpecs,omitempty"` // Declarative specification of child workers
-	State            string           `json:"state"                      yaml:"state"`                  // "stopped" or "running" - desired lifecycle state
+	BaseDesiredState `yaml:",inline"` // Provides ShutdownRequested field and IsShutdownRequested/SetShutdownRequested methods
 }
 
 // GetState returns the desired lifecycle state, defaulting to "running" if empty.

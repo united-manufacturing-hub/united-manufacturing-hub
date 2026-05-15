@@ -83,16 +83,8 @@ type TransportDesiredState struct {
 	InstanceUUID string `json:"instanceUUID"` // Used by AuthenticateAction for backend authentication
 	// TODO(security): AuthToken included in CSE sync payloads. ENG-4405 tracks
 	// adding a CSE secret tier to persist locally but exclude from delta sync.
-	AuthToken               string `json:"authToken"`
-	RelayURL                string `json:"relayURL"`
-	config.BaseDesiredState        // Provides ShutdownRequested + IsShutdownRequested() + SetShutdownRequested()
-
-	// Deprecated: ChildrenSpecs on TransportDesiredState is never populated. Child specs are
-	// set on WrappedDesiredState.ChildrenSpecs by DeriveDesiredState. This field exists only
-	// to satisfy the legacy config.ChildSpecProvider interface check above.
-	ChildrenSpecs []config.ChildSpec `json:"childrenSpecs,omitempty"`
-
-	Timeout time.Duration `json:"timeout"`
+	AuthToken string `json:"authToken"`
+	RelayURL  string `json:"relayURL"`
 
 	// State is the desired lifecycle state ("stopped" or "running").
 	//
@@ -102,6 +94,16 @@ type TransportDesiredState struct {
 	// GetChildrenSpecs / GetState / ShouldBeRunning — slated for the L9
 	// transport-snapshot cleanup.
 	State string `json:"state" yaml:"state"`
+
+	// Deprecated: ChildrenSpecs on TransportDesiredState is never populated. Child specs are
+	// set on WrappedDesiredState.ChildrenSpecs by DeriveDesiredState. This field exists only
+	// to satisfy the legacy config.ChildSpecProvider interface check above.
+	ChildrenSpecs []config.ChildSpec `json:"childrenSpecs,omitempty"`
+
+	Timeout time.Duration `json:"timeout"`
+
+	config.BaseDesiredState // Provides ShutdownRequested + IsShutdownRequested() + SetShutdownRequested()
+
 }
 
 // GetChildrenSpecs returns the children specifications.
@@ -154,16 +156,16 @@ func (f FailedAuthConfig) IsEmpty() bool {
 // TODO(security): JWTToken included in CSE sync payloads. ENG-4405 tracks
 // adding a CSE secret tier to persist locally but exclude from delta sync.
 type TransportStatus struct {
-	JWTExpiry         time.Time        `json:"jwt_expiry,omitempty"`
-	LastAuthAttemptAt time.Time        `json:"last_auth_attempt_at,omitempty"`
-	FailedAuthConfig  FailedAuthConfig `json:"failed_auth_config,omitempty"`
-	JWTToken          string           `json:"jwt_token,omitempty"`
-	AuthenticatedUUID string           `json:"authenticated_uuid,omitempty"`
-	LastErrorType     types.ErrorType  `json:"last_error_type"`
-	LastRetryAfter    time.Duration    `json:"last_retry_after,omitempty"`
-	TotalMessagesPushed int64          `json:"total_messages_pushed"`
-	TotalMessagesPulled int64          `json:"total_messages_pulled"`
-	ConsecutiveErrors   int            `json:"consecutive_errors"`
+	JWTExpiry           time.Time        `json:"jwt_expiry,omitempty"`
+	LastAuthAttemptAt   time.Time        `json:"last_auth_attempt_at,omitempty"`
+	FailedAuthConfig    FailedAuthConfig `json:"failed_auth_config,omitempty"`
+	JWTToken            string           `json:"jwt_token,omitempty"`
+	AuthenticatedUUID   string           `json:"authenticated_uuid,omitempty"`
+	LastErrorType       types.ErrorType  `json:"last_error_type"`
+	LastRetryAfter      time.Duration    `json:"last_retry_after,omitempty"`
+	TotalMessagesPushed int64            `json:"total_messages_pushed"`
+	TotalMessagesPulled int64            `json:"total_messages_pulled"`
+	ConsecutiveErrors   int              `json:"consecutive_errors"`
 }
 
 // IsTokenExpired returns true if the JWT token is expired or will expire within 10 minutes.
