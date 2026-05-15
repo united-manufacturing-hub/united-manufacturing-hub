@@ -20,7 +20,7 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/snapshot"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/state"
 )
 
@@ -37,42 +37,42 @@ var _ = Describe("RecoveringState Integration - Recovery Cycle", func() {
 
 	Describe("Recovery Cycle", func() {
 		It("should complete full cycle: unhealthy children -> stay recovering -> healthy children -> syncing", func() {
-			// Phase 1: Children go unhealthy — stay in Recovering
+			// Phase 1: Children go unhealthy  -  stay in Recovering
 			snap1 := fsmv2.Snapshot{
 				Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "communicator"},
-				Observed: snapshot.CommunicatorObservedState{
+				Observed: fsmv2.Observation[communicator.CommunicatorStatus]{
 					ChildrenHealthy:   0,
 					ChildrenUnhealthy: 1,
 				},
-				Desired: &snapshot.CommunicatorDesiredState{},
+				Desired: &fsmv2.WrappedDesiredState[communicator.CommunicatorConfig]{},
 			}
 
 			result1 := stateObj.Next(snap1)
 			Expect(result1.State).To(BeAssignableToTypeOf(&state.RecoveringState{}))
 			Expect(result1.Action).To(BeNil())
 
-			// Phase 2: Children still unhealthy — stay in Recovering
+			// Phase 2: Children still unhealthy  -  stay in Recovering
 			snap2 := fsmv2.Snapshot{
 				Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "communicator"},
-				Observed: snapshot.CommunicatorObservedState{
+				Observed: fsmv2.Observation[communicator.CommunicatorStatus]{
 					ChildrenHealthy:   0,
 					ChildrenUnhealthy: 1,
 				},
-				Desired: &snapshot.CommunicatorDesiredState{},
+				Desired: &fsmv2.WrappedDesiredState[communicator.CommunicatorConfig]{},
 			}
 
 			result2 := stateObj.Next(snap2)
 			Expect(result2.State).To(BeAssignableToTypeOf(&state.RecoveringState{}))
 			Expect(result2.Action).To(BeNil())
 
-			// Phase 3: Children recover — transition to Syncing
+			// Phase 3: Children recover  -  transition to Syncing
 			snap3 := fsmv2.Snapshot{
 				Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "communicator"},
-				Observed: snapshot.CommunicatorObservedState{
+				Observed: fsmv2.Observation[communicator.CommunicatorStatus]{
 					ChildrenHealthy:   1,
 					ChildrenUnhealthy: 0,
 				},
-				Desired: &snapshot.CommunicatorDesiredState{},
+				Desired: &fsmv2.WrappedDesiredState[communicator.CommunicatorConfig]{},
 			}
 
 			result3 := stateObj.Next(snap3)

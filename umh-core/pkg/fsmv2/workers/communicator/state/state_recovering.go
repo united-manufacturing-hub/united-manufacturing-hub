@@ -19,7 +19,7 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/snapshot"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator"
 )
 
 // RecoveringState monitors child health and transitions back to SyncingState
@@ -30,21 +30,21 @@ type RecoveringState struct {
 }
 
 func (s *RecoveringState) Next(snapAny any) fsmv2.NextResult[any, any] {
-	snap := helpers.ConvertSnapshot[snapshot.CommunicatorObservedState, *snapshot.CommunicatorDesiredState](snapAny)
+	snap := fsmv2.ConvertWorkerSnapshot[communicator.CommunicatorConfig, communicator.CommunicatorStatus](snapAny)
 
-	if snap.Desired.IsShutdownRequested() {
+	if snap.IsShutdownRequested {
 		return fsmv2.Result[any, any](&StoppedState{}, fsmv2.SignalNone, nil, "Shutdown requested during recovering state")
 	}
 
-	if snap.Observed.IsSyncHealthy() {
+	if snap.ChildrenHealthy > 0 && snap.ChildrenUnhealthy == 0 {
 		return fsmv2.Result[any, any](&SyncingState{}, fsmv2.SignalNone, nil,
 			fmt.Sprintf("recovered: healthy=%d, unhealthy=%d",
-				snap.Observed.ChildrenHealthy, snap.Observed.ChildrenUnhealthy))
+				snap.ChildrenHealthy, snap.ChildrenUnhealthy))
 	}
 
 	return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil,
 		fmt.Sprintf("recovering: healthy=%d, unhealthy=%d",
-			snap.Observed.ChildrenHealthy, snap.Observed.ChildrenUnhealthy))
+			snap.ChildrenHealthy, snap.ChildrenUnhealthy))
 }
 
 func (s *RecoveringState) String() string {

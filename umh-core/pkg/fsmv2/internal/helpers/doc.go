@@ -29,27 +29,6 @@
 //	    return helpers.DeriveStateName(s)  // Returns "Running"
 //	}
 //
-// # BaseWorker
-//
-// BaseWorker provides type-safe dependency access:
-//
-//	type MyWorker struct {
-//	    *helpers.BaseWorker[*MyDeps]
-//	}
-//
-//	func NewMyWorker(deps *MyDeps) *MyWorker {
-//	    return &MyWorker{BaseWorker: helpers.NewBaseWorker(deps)}
-//	}
-//
-// # ConvertSnapshot
-//
-// ConvertSnapshot converts snapshots with type safety for state transitions:
-//
-//	func (s *MyState) Next(snapAny any) (fsmv2.State, fsmv2.Signal, fsmv2.Action) {
-//	    snap := helpers.ConvertSnapshot[MyObserved, *MyDesired](snapAny)
-//	    // Direct typed access: snap.Observed.Field, snap.Desired.Method()
-//	}
-//
 // # Internal placement
 //
 // The helpers live in internal/ because they support the public fsmv2 API as

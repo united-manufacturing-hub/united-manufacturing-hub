@@ -55,7 +55,6 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
@@ -92,14 +91,9 @@ func NewTransportWorker(
 		return nil, errors.New("logger must not be nil")
 	}
 
-	// Derive worker type if not set
+	// Hardcode worker type to avoid DeriveWorkerType dependency on ObservedState struct name.
 	if identity.WorkerType == "" {
-		workerType, err := storage.DeriveWorkerType[snapshot.TransportObservedState]()
-		if err != nil {
-			return nil, fmt.Errorf("failed to derive worker type: %w", err)
-		}
-
-		identity.WorkerType = workerType
+		identity.WorkerType = "transport"
 	}
 
 	// Create dependencies (will panic if ChannelProvider not set)
@@ -111,8 +105,9 @@ func NewTransportWorker(
 }
 
 // CollectObservedState returns the current observed state of the transport worker.
-// Handles context cancellation at entry as required by architecture tests.
-func (w *TransportWorker) CollectObservedState(ctx context.Context) (fsmv2.ObservedState, error) {
+// Returns NewObservation; the collector handles CollectedAt, framework metrics,
+// action history, and metric accumulation automatically.
+func (w *TransportWorker) CollectObservedState(ctx context.Context, _ fsmv2.DesiredState) (fsmv2.ObservedState, error) {
 	// Context cancellation check at entry (architecture requirement)
 	select {
 	case <-ctx.Done():
@@ -120,20 +115,18 @@ func (w *TransportWorker) CollectObservedState(ctx context.Context) (fsmv2.Obser
 	default:
 	}
 
-	deps := w.GetDependencies()
+	d := w.GetDependencies()
 
-	failedToken, failedRelay, failedUUID := deps.GetFailedAuthConfig()
+	failedToken, failedRelay, failedUUID := d.GetFailedAuthConfig()
 
-	// Build observed state
-	observed := snapshot.TransportObservedState{
-		CollectedAt:       time.Now(),
-		JWTToken:          deps.GetJWTToken(),
-		JWTExpiry:         deps.GetJWTExpiry(),
-		AuthenticatedUUID: deps.GetAuthenticatedUUID(),
-		ConsecutiveErrors: deps.GetConsecutiveErrors(),
-		LastErrorType:     deps.GetLastErrorType(),
-		LastAuthAttemptAt: deps.GetLastAuthAttemptAt(),
-		LastRetryAfter:    deps.GetLastRetryAfter(),
+	status := snapshot.TransportStatus{
+		JWTToken:          d.GetJWTToken(),
+		JWTExpiry:         d.GetJWTExpiry(),
+		AuthenticatedUUID: d.GetAuthenticatedUUID(),
+		ConsecutiveErrors: d.GetConsecutiveErrors(),
+		LastErrorType:     d.GetLastErrorType(),
+		LastAuthAttemptAt: d.GetLastAuthAttemptAt(),
+		LastRetryAfter:    d.GetLastRetryAfter(),
 		FailedAuthConfig: snapshot.FailedAuthConfig{
 			AuthToken:    failedToken,
 			RelayURL:     failedRelay,
@@ -141,32 +134,23 @@ func (w *TransportWorker) CollectObservedState(ctx context.Context) (fsmv2.Obser
 		},
 	}
 
-	// Framework metrics copy (architecture requirement)
-	if fm := deps.GetFrameworkState(); fm != nil {
-		observed.Metrics.Framework = *fm
-	}
-
-	// Action history copy (architecture requirement)
-	observed.LastActionResults = deps.GetActionHistory()
-
-	return observed, nil
+	return fsmv2.NewObservation(status), nil
 }
 
 // DeriveDesiredState determines what state the transport worker should be in.
 // Must be PURE - only uses the spec parameter, never dependencies.
 // Returns "running" or "stopped" as valid state values.
 func (w *TransportWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, error) {
-	// Nil spec defaults to "running" — matches CommunicatorWorker convention.
+	// Nil spec defaults to "running"  -  matches CommunicatorWorker convention.
 	// Transport will attempt auth with empty credentials, fail, and retry with backoff.
 	// This enables self-healing: if spec delivery is delayed during startup, the worker
 	// retries until config arrives. Field validation below catches empty fields once
 	// a real spec is parsed.
 	if spec == nil {
-		return &snapshot.TransportDesiredState{
-			BaseDesiredState: config.BaseDesiredState{
-				State: config.DesiredStateRunning,
-			},
+		return &fsmv2.WrappedDesiredState[snapshot.TransportDesiredState]{
+			State:         config.DesiredStateRunning,
 			ChildrenSpecs: append(makePushChildSpec(config.UserSpec{}), makePullChildSpec(config.UserSpec{})...),
+			Config:        snapshot.TransportDesiredState{},
 		}, nil
 	}
 
@@ -208,15 +192,15 @@ func (w *TransportWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredSta
 	}
 
 	// Build desired state with valid state values only ("stopped" or "running")
-	return &snapshot.TransportDesiredState{
-		BaseDesiredState: config.BaseDesiredState{
-			State: transportSpec.GetState(), // Returns "running" or "stopped"
-		},
-		RelayURL:      transportSpec.RelayURL,
-		InstanceUUID:  transportSpec.InstanceUUID,
-		AuthToken:     transportSpec.AuthToken,
-		Timeout:       transportSpec.Timeout,
+	return &fsmv2.WrappedDesiredState[snapshot.TransportDesiredState]{
+		State:         transportSpec.GetState(),
 		ChildrenSpecs: append(makePushChildSpec(userSpec), makePullChildSpec(userSpec)...),
+		Config: snapshot.TransportDesiredState{
+			RelayURL:     transportSpec.RelayURL,
+			InstanceUUID: transportSpec.InstanceUUID,
+			AuthToken:    transportSpec.AuthToken,
+			Timeout:      transportSpec.Timeout,
+		},
 	}, nil
 }
 
@@ -228,7 +212,8 @@ func (w *TransportWorker) GetInitialState() fsmv2.State[any, any] {
 // init registers the transport worker and supervisor factory.
 // This is called automatically when the package is imported.
 func init() {
-	if err := factory.RegisterWorkerType[snapshot.TransportObservedState, *snapshot.TransportDesiredState](
+	if err := factory.RegisterWorkerAndSupervisorFactoryByType(
+		"transport",
 		// Worker factory function
 		func(id deps.Identity, logger deps.FSMLogger, stateReader deps.StateReader, extraDeps map[string]any) fsmv2.Worker {
 			worker, err := NewTransportWorker(id, logger, stateReader)
@@ -244,7 +229,7 @@ func init() {
 		},
 		// Supervisor factory function
 		func(cfg interface{}) interface{} {
-			return supervisor.NewSupervisor[snapshot.TransportObservedState, *snapshot.TransportDesiredState](
+			return supervisor.NewSupervisor[fsmv2.Observation[snapshot.TransportStatus], *fsmv2.WrappedDesiredState[snapshot.TransportDesiredState]](
 				cfg.(supervisor.Config))
 		},
 	); err != nil {

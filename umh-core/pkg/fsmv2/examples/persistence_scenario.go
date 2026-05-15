@@ -20,8 +20,10 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/application"
+	persistenceworker "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/persistence"
 	persistencesnapshot "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/persistence/snapshot"
 )
 
@@ -100,7 +102,7 @@ children:
 		TickInterval: tickInterval,
 		YAMLConfig:   yamlConfig,
 		Dependencies: map[string]any{
-			"store": store,
+			"dependencies": persistenceworker.NewStoreOnlyDependencies(store),
 		},
 	})
 	if err != nil {
@@ -141,19 +143,19 @@ children:
 
 		loadCtx := context.Background()
 
-		var observed persistencesnapshot.PersistenceObservedState
+		var observed fsmv2.Observation[persistencesnapshot.PersistenceStatus]
 		if loadErr := store.LoadObservedTyped(loadCtx, "persistence", "persistence-001", &observed); loadErr != nil {
 			if !errors.Is(loadErr, context.Canceled) {
 				logger.SentryWarn(deps.FeatureExamples, "", "failed to load persistence observed state",
 					deps.Err(loadErr))
 			}
 		} else {
-			workerMetrics := observed.GetWorkerMetrics()
+			workerMetrics := observed.MetricsEmbedder.Metrics.Worker
 			result.CompactionCycles = workerMetrics.Counters[string(deps.CounterCompactionCyclesTotal)]
 			result.MaintenanceCycles = workerMetrics.Counters[string(deps.CounterMaintenanceCyclesTotal)]
-			result.LastCompactionAt = observed.LastCompactionAt
-			result.LastMaintenanceAt = observed.LastMaintenanceAt
-			result.Healthy = observed.IsHealthy()
+			result.LastCompactionAt = observed.Status.LastCompactionAt
+			result.LastMaintenanceAt = observed.Status.LastMaintenanceAt
+			result.Healthy = observed.Status.IsHealthy()
 		}
 
 		close(done)

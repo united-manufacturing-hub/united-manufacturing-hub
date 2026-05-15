@@ -35,7 +35,7 @@ var _ = Describe("Phase 0.5 Integration Tests", func() {
 				},
 				Internal: map[string]any{
 					"id":        "worker-456",
-					"timestamp": "2025-11-04T10:00:00Z",
+					"parent_id": "parent-789",
 				},
 			}
 
@@ -52,7 +52,7 @@ var _ = Describe("Phase 0.5 Integration Tests", func() {
 			internalMap, ok := flattened["internal"].(map[string]any)
 			Expect(ok).To(BeTrue())
 			Expect(internalMap["id"]).To(Equal("worker-456"))
-			Expect(internalMap["timestamp"]).To(Equal("2025-11-04T10:00:00Z"))
+			Expect(internalMap["parent_id"]).To(Equal("parent-789"))
 		})
 	})
 

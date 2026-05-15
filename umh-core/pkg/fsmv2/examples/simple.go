@@ -248,7 +248,7 @@ package examples
 //	    workerType: "exampleparent"   # References exampleparent worker
 //	    userSpec:
 //	      config: |
-//	        children_count: 2         # ParentUserSpec.ChildrenCount = 2
+//	        children_count: 2         # ExampleparentConfig.ChildrenCount = 2
 //
 // What happens:
 //
@@ -257,7 +257,7 @@ package examples
 // 2. It looks up "exampleparent" worker type in the registry (registered by exampleparent's init())
 //
 // 3. It calls ParentWorker.ParseUserSpec() with config: "children_count: 2"
-//    This returns ParentUserSpec{ChildrenCount: 2}
+//    This returns ExampleparentConfig{ChildrenCount: 2}
 //
 // 4. It calls ParentWorker.GetChildSpecs() which returns 2 ChildSpec entries:
 //    - name: "parent-1-child-1", workerType: "child"
@@ -320,7 +320,7 @@ package examples
 // Parents can dynamically create children based on runtime conditions:
 //
 //	func (w *ParentWorker) GetChildSpecs(userSpec interface{}) ([]config.ChildSpec, error) {
-//	    spec := userSpec.(*ParentUserSpec)
+//	    spec := userSpec.(*ExampleparentConfig)
 //	    children := make([]config.ChildSpec, spec.ChildrenCount)
 //
 //	    for i := 0; i < spec.ChildrenCount; i++ {

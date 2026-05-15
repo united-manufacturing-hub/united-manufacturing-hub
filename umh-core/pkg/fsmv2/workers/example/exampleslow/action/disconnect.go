@@ -17,7 +17,7 @@ package action
 import (
 	"context"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleslow/snapshot"
+	example_slow "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleslow"
 )
 
 const DisconnectActionName = "disconnect"
@@ -35,7 +35,7 @@ func (a *DisconnectAction) Execute(ctx context.Context, depsAny any) error {
 	default:
 	}
 
-	deps := depsAny.(snapshot.ExampleslowDependencies)
+	deps := depsAny.(example_slow.ExampleslowDepsIface)
 	logger := deps.GetLogger()
 
 	logger.Info("Attempting to disconnect")

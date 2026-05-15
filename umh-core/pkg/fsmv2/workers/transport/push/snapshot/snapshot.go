@@ -17,7 +17,6 @@ package snapshot
 import (
 	"time"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/types"
@@ -55,17 +54,22 @@ type PushDependencies interface {
 	GetLastErrorAt() time.Time
 }
 
-// PushSnapshot represents a point-in-time view of the push worker state.
-type PushSnapshot struct {
-	Desired  *PushDesiredState
-	Identity deps.Identity
-	Observed PushObservedState
-}
-
 // PushDesiredState represents the target configuration for the push worker.
 type PushDesiredState struct {
 	ParentMappedState string `json:"parent_mapped_state"`
+
+	State string `json:"state" yaml:"state"`
 	config.BaseDesiredState
+}
+
+// GetState returns the desired lifecycle state, defaulting to "running" if empty.
+// For push workers this is propagated from the parent's user spec.
+func (s *PushDesiredState) GetState() string {
+	if s.State == "" {
+		return config.DesiredStateRunning
+	}
+
+	return s.State
 }
 
 // ShouldBeRunning returns true if the push worker should be in a running state.
@@ -77,60 +81,14 @@ func (s *PushDesiredState) ShouldBeRunning() bool {
 	return s.ParentMappedState == config.DesiredStateRunning
 }
 
-// PushObservedState represents the current state of the push worker.
-type PushObservedState struct {
-	CollectedAt       time.Time `json:"collected_at"`
-	DegradedEnteredAt time.Time `json:"degraded_entered_at,omitempty"`
-	LastErrorAt       time.Time `json:"last_error_at,omitempty"`
-
-	PushDesiredState `json:",inline"`
-
-	State string `json:"state"`
-
-	LastActionResults []deps.ActionResult `json:"last_action_results,omitempty"`
-
-	deps.MetricsEmbedder `json:",inline"`
-
-	LastRetryAfter time.Duration `json:"last_retry_after,omitempty"`
-
+// PushStatus holds the runtime observation data for the push worker.
+type PushStatus struct {
+	DegradedEnteredAt   time.Time       `json:"degraded_entered_at,omitempty"`
+	LastErrorAt         time.Time       `json:"last_error_at,omitempty"`
+	LastRetryAfter      time.Duration   `json:"last_retry_after,omitempty"`
 	LastErrorType       types.ErrorType `json:"last_error_type"`
 	ConsecutiveErrors   int             `json:"consecutive_errors"`
 	PendingMessageCount int             `json:"pending_message_count"`
-
-	HasTransport  bool `json:"has_transport"`
-	HasValidToken bool `json:"has_valid_token"`
-}
-
-func (o PushObservedState) GetTimestamp() time.Time {
-	return o.CollectedAt
-}
-
-func (o PushObservedState) GetObservedDesiredState() fsmv2.DesiredState {
-	return &o.PushDesiredState
-}
-
-// SetState sets the FSM state name on this observed state.
-func (o PushObservedState) SetState(s string) fsmv2.ObservedState {
-	o.State = s
-
-	return o
-}
-
-// SetShutdownRequested sets the shutdown requested status on this observed state.
-func (o PushObservedState) SetShutdownRequested(v bool) fsmv2.ObservedState {
-	o.ShutdownRequested = v
-
-	return o
-}
-
-// SetParentMappedState sets the parent's mapped state on this observed state.
-func (o PushObservedState) SetParentMappedState(state string) fsmv2.ObservedState {
-	o.ParentMappedState = state
-
-	return o
-}
-
-// IsStopRequired reports whether the push worker needs to stop.
-func (o PushObservedState) IsStopRequired() bool {
-	return o.IsShutdownRequested() || !o.ShouldBeRunning()
+	HasTransport        bool            `json:"has_transport"`
+	HasValidToken       bool            `json:"has_valid_token"`
 }

@@ -16,9 +16,18 @@ package config
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"text/template"
 )
+
+// ErrVariablesNotPropagated indicates a template execution failure caused by
+// unresolved variables — typically a transient condition before parent variables
+// (IP, PORT, auth token, …) reach the worker. Callers may safely fall back to a
+// nil-spec derive in this case; hard errors (parse failures, type mismatches,
+// downstream YAML/validation issues) are NOT wrapped and must bubble up so they
+// don't get swallowed by the supervisor's startup-time fallback.
+var ErrVariablesNotPropagated = errors.New("variables not propagated")
 
 // RenderTemplate renders a Go template string with the provided data using strict mode.
 // Strict mode (missingkey=error) causes template execution to fail if any variable
@@ -29,7 +38,9 @@ import (
 //
 // Returns the rendered template string or an error if:
 //   - Template parsing fails (invalid template syntax)
-//   - Template execution fails (missing variables in strict mode, or other runtime errors)
+//   - Template execution fails (missing variables in strict mode, or other runtime errors).
+//     Execution errors are wrapped with [ErrVariablesNotPropagated] so callers can
+//     distinguish transient propagation gaps from hard errors via [errors.Is].
 func RenderTemplate[T any](tmpl string, data T) (string, error) {
 	t := template.New("config").Option("missingkey=error")
 
@@ -42,7 +53,7 @@ func RenderTemplate[T any](tmpl string, data T) (string, error) {
 
 	err = t.Execute(&buf, data)
 	if err != nil {
-		return "", fmt.Errorf("execute template: %w", err)
+		return "", fmt.Errorf("%w: execute template: %w", ErrVariablesNotPropagated, err)
 	}
 
 	return buf.String(), nil

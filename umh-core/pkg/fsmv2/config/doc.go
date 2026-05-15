@@ -39,10 +39,13 @@
 //   - Use case: Shared settings across all workers
 //
 // Internal Namespace:
-//   - Contains: Runtime metadata (timestamps, derived values, system state)
-//   - Template access: Prefixed {{ .internal.timestamp }}
-//   - Serialization: NO (runtime-only, not persisted)
-//   - Use case: Values that shouldn't be saved to config
+//   - Contains: Supervisor-injected identity (worker ID, parent ID,
+//     creation timestamp, bridge-source label)
+//   - Template access: Prefixed {{ .internal.id }}, {{ .internal.parent_id }},
+//     {{ .internal._created_at }}, {{ .internal.bridged_by }}
+//   - Serialization: NO (runtime-only; supervisor regenerates per-worker)
+//   - Use case: identity / structural desired state injected by the system,
+//     not user-authored.
 //
 // # User variable flattening
 //
@@ -54,31 +57,32 @@
 //	bundle := VariableBundle{
 //	    User:     map[string]any{"IP": "192.168.1.100"},
 //	    Global:   map[string]any{"cluster": "prod"},
-//	    Internal: map[string]any{"timestamp": time.Now()},
+//	    Internal: map[string]any{"id": "worker-42", "_created_at": time.Now()},
 //	}
 //
 //	flat := bundle.Flatten()
-//	// flat["IP"] = "192.168.1.100"           (top-level)
-//	// flat["global"]["cluster"] = "prod"     (nested)
-//	// flat["internal"]["timestamp"] = ...    (nested)
+//	// flat["IP"] = "192.168.1.100"                  (top-level)
+//	// flat["global"]["cluster"] = "prod"            (nested)
+//	// flat["internal"]["id"] = "worker-42"          (nested)
+//	// flat["internal"]["_created_at"] = time.Time   (nested)
 //
 // Template usage:
 //
-//	{{ .IP }}                  // User variable (flattened)
-//	{{ .global.cluster }}      // Global variable (nested)
-//	{{ .internal.timestamp }}  // Internal variable (nested)
-//
-// # Internal variable serialization
-//
-// Internal variables use json:"-" yaml:"-" tags because they contain
-// runtime-only values (timestamps, system state) that are computed fresh
-// each run. Saving them would produce stale data on next load.
+//	{{ .IP }}                      // User variable (flattened)
+//	{{ .global.cluster }}          // Global variable (nested)
+//	{{ .internal.id }}             // Internal identity field
+//	{{ .internal._created_at }}    // Internal creation time
 //
 // # map[string]any design
 //
-// VariableBundle uses map[string]any because users define arbitrary config
-// fields in YAML. A typed struct would require code changes for each new
-// variable. Go templates validate variable existence and type at render time.
+// VariableBundle.User and VariableBundle.Global use map[string]any because
+// users define arbitrary config fields in YAML. A typed struct would
+// require code changes for each new variable. Go templates validate
+// variable existence and type at render time.
+//
+// VariableBundle.Internal also uses map[string]any. It is runtime-only
+// (json:"-" yaml:"-") and populated by the supervisor at reconciliation
+// time with snake_case keys matching the template vocabulary.
 //
 // # ChildSpec and hierarchical composition
 //

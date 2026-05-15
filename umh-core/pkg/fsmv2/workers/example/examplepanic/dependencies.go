@@ -12,13 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package example_panic
+package examplepanic
 
 import (
 	"sync"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 )
+
+// ExamplepanicDepsIface is the minimal interface used by action files.
+type ExamplepanicDepsIface interface {
+	deps.Dependencies
+	IsShouldPanic() bool
+	SetConnected(connected bool)
+	IsConnected() bool
+}
 
 type Connection interface{}
 

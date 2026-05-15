@@ -48,8 +48,8 @@ interface. The single entry-point pattern ensures type safety: convert once at
 entry, then use strongly-typed snapshot throughout. Multiple assertions or
 late assertions indicate logic that should be refactored.`,
 		CorrectCode: `func (s *MyState) Next(snapAny any) (...) {
-    snap := helpers.ConvertSnapshot[ObsState, *DesState](snapAny)  // First line
-    // Now use snap.Observed, snap.Desired with full type safety
+    snap := fsmv2.ConvertWorkerSnapshot[MyConfig, MyStatus](snapAny)  // First line
+    // Now use snap.Config, snap.Status with full type safety
 }`,
 		ReferenceFile: "example-child/state/state_connected.go",
 	},
@@ -60,7 +60,7 @@ WHY: Multiple type assertions indicate scattered type handling. Each assertion
 is a potential runtime panic. The single entry-point pattern centralizes type
 conversion, enabling compile-time verification of correctness and impossible to forget.`,
 		CorrectCode: `func (s *MyState) Next(snapAny any) (...) {
-    snap := helpers.ConvertSnapshot[ObsState, *DesState](snapAny)  // ONCE at entry
+    snap := fsmv2.ConvertWorkerSnapshot[MyConfig, MyStatus](snapAny)  // ONCE at entry
     // NOT: multiple conversions scattered through the method
 }`,
 		ReferenceFile: "example-child/state/state_connected.go",
@@ -72,8 +72,8 @@ WHY: If code runs before the type assertion, it's operating on untyped data.
 The entry-point pattern ensures all logic has access to typed snapshot data.
 Early-exit optimizations should still go through the typed snapshot.`,
 		CorrectCode: `func (s *MyState) Next(snapAny any) (...) {
-    snap := helpers.ConvertSnapshot[...](snapAny)  // MUST be first
-    if snap.Desired.IsShutdownRequested() { ... }
+    snap := fsmv2.ConvertWorkerSnapshot[MyConfig, MyStatus](snapAny)  // MUST be first
+    if snap.IsShutdownRequested { ... }
 }`,
 		ReferenceFile: "example-child/state/state_connected.go",
 	},
@@ -98,9 +98,9 @@ If a worker is being stopped, it should not try to reconnect, process data, or
 perform any actions. Checking shutdown first prevents race conditions where a
 worker starts an operation right before shutdown is requested.`,
 		CorrectCode: `func (s *MyState) Next(snapAny any) (...) {
-    snap := helpers.ConvertSnapshot[...](snapAny)
-    if snap.Desired.IsShutdownRequested() {  // MUST be first conditional
-        return &TryingToStopState{}, SignalNone, nil
+    snap := fsmv2.ConvertWorkerSnapshot[MyConfig, MyStatus](snapAny)
+    if snap.IsShutdownRequested {  // MUST be first conditional
+        return fsmv2.Result[any, any](&TryingToStopState{}, fsmv2.SignalNone, nil, "shutdown requested")
     }
     // Then other logic...
 }`,
@@ -118,9 +118,9 @@ children to stay running when parent goes to TryingToStop.
 
 IsStopRequired() = IsShutdownRequested() || !ShouldBeRunning()`,
 		CorrectCode: `func (s *ChildState) Next(snapAny any) (...) {
-    snap := helpers.ConvertSnapshot[...](snapAny)
-    if snap.Observed.IsStopRequired() {  // NOT snap.Desired.IsShutdownRequested()
-        return &TryingToStopState{}, SignalNone, nil
+    snap := fsmv2.ConvertWorkerSnapshot[MyConfig, MyStatus](snapAny)
+    if snap.IsStopRequired() {  // NOT snap.IsShutdownRequested alone
+        return fsmv2.Result[any, any](&TryingToStopState{}, fsmv2.SignalNone, nil, "stop required")
     }
     // Then other logic...
 }`,
@@ -526,10 +526,6 @@ Go type names cannot contain hyphens, so hyphenated folder names can NEVER match
 workers/example/examplechild/snapshot/snapshot.go:
     type ExamplechildObservedState struct { ... }
 
-// Folder "exampleparent" with type ExampleparentObservedState → "exampleparent" ✓
-workers/example/exampleparent/snapshot/snapshot.go:
-    type ExampleparentObservedState struct { ... }
-
 // WRONG: Folder "example-child" can never match (hyphens invalid in Go types)`,
 		ReferenceFile: "workers/example/examplechild/snapshot/snapshot.go",
 	},
@@ -625,26 +621,26 @@ _, ok := spec.(config.UserSpec)  // spec is validated but never used!`,
 	},
 	"OBSERVED_STATE_MUTATION": {
 		Name: "No Observed State Mutation (Pure Functions)",
-		Why: `Next() methods must NEVER mutate snap.Observed.* fields.
+		Why: `Next() methods must NEVER mutate snap.Status.* fields.
 WHY: The FSMv2 architecture requires state transitions to be pure functions:
 1. Same input (snapshot) must ALWAYS produce the same output (state, signal, action)
-2. Mutations to ObservedState break referential transparency
-3. ObservedState should ONLY be written by the collector (CollectObservedState)
+2. Mutations to Status break referential transparency
+3. Status should ONLY be written by the collector (CollectObservedState)
 4. Mutations in Next() cause race conditions and non-deterministic behavior
 5. Testing becomes impossible when state can be modified mid-transition
 
-Observation data flows: Dependencies → CollectObservedState → ObservedState → Next() (read-only)
+Observation data flows: Dependencies → CollectObservedState → Status → Next() (read-only)
 State changes flow: Next() returns new state → supervisor updates current state`,
 		CorrectCode: `func (s *MyState) Next(snapAny any) (...) {
-    snap := helpers.ConvertSnapshot[...](snapAny)
+    snap := fsmv2.ConvertWorkerSnapshot[MyConfig, MyStatus](snapAny)
 
-    // CORRECT: Read from Observed
-    if snap.Observed.ConnectionHealth != "healthy" {
-        return fsmv2.Result(...)
+    // CORRECT: Read from Status
+    if snap.Status.ConnectionHealth != "healthy" {
+        return fsmv2.Result[any, any](...)
     }
 
-    // WRONG: Mutate Observed (causes race conditions)
-    // snap.Observed.State = "connecting"  // NEVER DO THIS
+    // WRONG: Mutate Status (causes race conditions)
+    // snap.Status.State = "connecting"  // NEVER DO THIS
 }`,
 		ReferenceFile: "pkg/fsmv2/ARCHITECTURE.md",
 	},
