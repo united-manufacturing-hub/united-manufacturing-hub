@@ -83,7 +83,17 @@ func captureStderr(t *testing.T, fn func()) string {
 		t.Fatalf("os.Pipe: %v", err)
 	}
 
+	// Panic-safe restore: if fn() panics, the deferred restore keeps
+	// os.Stderr from staying redirected and the reader goroutine from
+	// blocking forever on io.ReadAll. t.Cleanup belt-and-braces for the
+	// case where the panic kills the test process before defer fires.
 	os.Stderr = w
+	t.Cleanup(func() { os.Stderr = orig })
+	defer func() {
+		os.Stderr = orig
+		_ = w.Close()
+	}()
+
 	done := make(chan string, 1)
 
 	go func() {
@@ -93,11 +103,12 @@ func captureStderr(t *testing.T, fn func()) string {
 
 	fn()
 
+	// Close before the deferred restore so the reader's io.ReadAll
+	// returns. The deferred close on a panic path is a redundant safety
+	// net (io.ReadAll on an already-closed reader returns nil, nil).
 	if err := w.Close(); err != nil {
 		t.Fatalf("close pipe writer: %v", err)
 	}
-
-	os.Stderr = orig
 
 	return <-done
 }
@@ -438,8 +449,10 @@ func (l panickingFSMLogger) With(...deps.Field) deps.FSMLogger { return l }
 
 func TestHandleActionMessageRecoversFromPanic(t *testing.T) {
 	// T2.1 — driving a payload through a panicking action does not crash the
-	// process. Swap newActionFromPayloadFn for a stub that returns a
-	// panickingAction.
+	// process, AND the recovery path actually fires: a failure reply reaches
+	// the outbound channel and the panic counter ticks. Non-hang alone would
+	// pass even if a future refactor silently swallowed the panic without
+	// invoking recoverActionPanic.
 	prev := newActionFromPayloadFn
 
 	t.Cleanup(func() { newActionFromPayloadFn = prev })
@@ -449,6 +462,9 @@ func TestHandleActionMessageRecoversFromPanic(t *testing.T) {
 	}
 
 	out := make(chan *models.UMHMessage, 8)
+	actionUUID := uuid.New()
+
+	beforePanics := metrics.ActionPanicsTotalForTest("edit-protocol-converter", "error_panic")
 
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -458,7 +474,7 @@ func TestHandleActionMessageRecoversFromPanic(t *testing.T) {
 
 		HandleActionMessage(
 			uuid.New(),
-			models.ActionMessagePayload{ActionType: "edit-protocol-converter", ActionUUID: uuid.New()},
+			models.ActionMessagePayload{ActionType: models.EditProtocolConverter, ActionUUID: actionUUID},
 			"user@example.com",
 			out,
 			"", nil, uuid.Nil, nil, nil,
@@ -473,5 +489,41 @@ func TestHandleActionMessageRecoversFromPanic(t *testing.T) {
 	case <-doneCh:
 	case <-time.After(3 * time.Second):
 		t.Fatalf("HandleActionMessage did not return — panic recovery is broken")
+	}
+
+	afterPanics := metrics.ActionPanicsTotalForTest("edit-protocol-converter", "error_panic")
+	if afterPanics-beforePanics < 1 {
+		t.Errorf("panic counter did not advance: before=%v after=%v — recoverActionPanic did not fire", beforePanics, afterPanics)
+	}
+
+	// Drain replies and check at least one carries ActionFinishedWithFailure.
+	// Without this, a future refactor that recovers but skips the reply path
+	// would still pass the non-hang assertion above.
+	var sawFailureReply bool
+
+	for len(out) > 0 {
+		msg := <-out
+		if msg == nil {
+			continue
+		}
+
+		dec, err := encoding.DecodeMessageFromUMHInstanceToUser(msg.Content)
+		if err != nil {
+			continue
+		}
+
+		reply, ok := dec.Payload.(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		if state, _ := reply["actionReplyState"].(string); state == string(models.ActionFinishedWithFailure) {
+			sawFailureReply = true
+			break
+		}
+	}
+
+	if !sawFailureReply {
+		t.Errorf("no ActionFinishedWithFailure reply observed — recovery path skipped the user-visible failure")
 	}
 }

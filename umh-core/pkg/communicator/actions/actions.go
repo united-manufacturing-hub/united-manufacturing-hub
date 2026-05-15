@@ -150,32 +150,17 @@ func HandleActionMessage(instanceUUID uuid.UUID, payload models.ActionMessagePay
 	SendActionReplyWithAdditionalContext(instanceUUID, sender, payload.ActionUUID, models.ActionFinishedSuccessfull, result, outboundChannel, payload.ActionType, metadata)
 }
 
-// newActionFromPayloadFn is the indirection HandleActionMessage uses to build
-// the Action. It is a variable so tests can swap in a stub that returns a
-// panicking Action, exercising the defer-recover guard end-to-end. Production
-// callers never reassign this variable.
-//
-// Tests that swap this seam must not use t.Parallel(): the read inside
-// HandleActionMessage is unsynchronized, and concurrent swaps race under
-// -race.
+// Test seam. Production never reassigns. Tests that swap this must not
+// call t.Parallel() — the read in HandleActionMessage is unsynchronized.
 var newActionFromPayloadFn = newActionFromPayload
 
-// recordActionPanicFn is the indirection recoverActionPanic uses to increment
-// the panic counter. Exposed as a package-level variable so tests can swap
-// in a panicking stub to exercise the metric-panics branch of the double-panic
-// guard. Production callers never reassign this variable.
-//
-// Same t.Parallel() constraint as newActionFromPayloadFn applies.
+// Test seam. Same t.Parallel() constraint as newActionFromPayloadFn.
 var recordActionPanicFn = metrics.RecordActionPanic
 
-// recoverActionPanic is the recovery body for the defer in HandleActionMessage.
-// It is split out so tests can drive it with a synthetic panic value without
-// constructing a full action goroutine. The outer recover catches panics
-// originating in the action handler itself (the ENG-4959 regression class).
-// The inner double-panic guard mirrors pkg/fsmv2/supervisor's tick-recover
-// secondary guard: if THIS function's Sentry/metric/reply path itself panics
-// (e.g. a nil zap core, a duplicate-counter registration, a marshaling bug),
-// the secondary panic is swallowed and a last-resort stderr line is written.
+// recoverActionPanic is the body of HandleActionMessage's defer-recover,
+// split out so tests can drive it directly. The outer recover catches a
+// panic in the action handler itself; the inner guard catches a panic
+// inside this recovery path (mirrors fsmv2 supervisor's tick-recover).
 func recoverActionPanic(
 	r any,
 	instanceUUID uuid.UUID,
@@ -296,18 +281,11 @@ func recoverActionPanic(
 	}
 }
 
-// classifyActionPanic categorizes a recovered panic value for metrics labels
-// and Sentry routing. Local helper because pkg/fsmv2/supervisor/internal/panicutil
-// is intentionally internal to fsmv2; duplicating ~10 lines here is cleaner
-// than promoting that package out of internal/ for one call site.
-//
-// Label values are aligned to panicutil.PanicType* constants so Sentry
-// dashboards can treat action panics and FSM worker panics uniformly.
-//
-// Do not extend panic_type to encode richer panic info (error class names,
-// stack-trace fingerprints, etc.) — Prometheus cardinality must stay
-// bounded. action_type × panic_type already gives ~66 series; richer
-// classification belongs in Sentry, not Prometheus.
+// classifyActionPanic maps a recovered panic to the panic_type metric
+// label and an error for Sentry. Labels match panicutil.PanicType* in
+// fsmv2 so dashboards group action and worker panics together. Do not
+// add richer categories — cardinality stays bounded, richer info goes
+// to Sentry.
 func classifyActionPanic(r any) (panicType string, err error) {
 	switch v := r.(type) {
 	case error:
@@ -315,9 +293,8 @@ func classifyActionPanic(r any) (panicType string, err error) {
 	case string:
 		return "string_panic", errors.New(v)
 	default:
-		// %T renders the static type without invoking String(), avoiding a
-		// re-panic if the panic value happens to be a pathological Stringer
-		// (the very shape the parent ENG-4289 incident class targeted).
+		// %T avoids invoking String() — a re-panic from a pathological
+		// Stringer (ENG-4289 family) would defeat the recovery here.
 		return "unknown_panic", fmt.Errorf("%T (string repr suppressed)", v)
 	}
 }

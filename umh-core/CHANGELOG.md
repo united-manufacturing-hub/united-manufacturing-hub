@@ -2,14 +2,15 @@
 
 ## Unreleased
 
-### Bug Fixes
-
-- Fixed a P1 crash introduced in v0.44.19 where editing or deploying a bridge could panic umh-core with a nil-pointer dereference. The production code path that built EditProtocolConverter and DeployProtocolConverter actions omitted a required logger field; any rollback, validation failure, or other Sentry-logged error path then crashed the process the first time it ran. The field is now wired correctly, and action handlers also have a defer-recover safety net so a single missing field can no longer take the whole process down — recovered panics are reported to Sentry with action type and UUID, counted in the new `umh_communicator_action_panics_total` metric, and surfaced to the user as a normal failure reply.
-
 ### Improvements
 
 - Previously, the component tasked with communicating with the UI could stop working if it rebuilt its HTTP connection (which happens after persistent network failures) while a message was being sent or received. Connection rebuilds and in-flight requests are now coordinated so they cannot interfere.
 - Config backup is now enabled by default. Previously, automatic config.yaml backups required setting `ENABLE_CONFIG_BACKUP=true`. After validating the feature in customer environments for over two months, every umh-core instance now writes timestamped copies of `config.yaml` to `/data/config-backups/` on every config write, retaining the 100 most recent versions (roughly 5–20 MB). To opt out, set `ENABLE_CONFIG_BACKUP=false`. To roll back a bad config, use the second-most-recent backup — the most recent one mirrors the bad write
+
+### Fixes
+
+- Editing or deploying a bridge with an invalid config could hang the Management Console in "executing" indefinitely — umh-core's rollback path crashed mid-execution, the instance restarted, and the UI never received a final reply. The bridge often ended up needing delete + recreate to recover. The edit/deploy now ends with a clear failure when the rollback succeeds. Affects v0.44.19
+- An unexpected error in umh-core (e.g. editing or deploying a bridge) used to restart the umh-core instance and leave the operation stuck in "executing". Affected operations now end with a clear failure message (`Internal error: <type> action failed unexpectedly. UMH engineering has been notified.`) while the rest of the instance keeps running
 
 ## [0.44.19]
 
