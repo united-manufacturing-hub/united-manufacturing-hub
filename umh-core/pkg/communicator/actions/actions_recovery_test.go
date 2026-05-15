@@ -350,8 +350,8 @@ func TestRecoverActionPanicDoublePanicGuardReattemptsSentry(t *testing.T) {
 		t.Errorf("want secondary msg=action_handler_double_panic, got %q", secondary.msg)
 	}
 
-	if secondary.feature != deps.FeatureCommunicator {
-		t.Errorf("want secondary feature=%v, got %v", deps.FeatureCommunicator, secondary.feature)
+	if secondary.feature != deps.FeatureFSMv1Communicator {
+		t.Errorf("want secondary feature=%v, got %v", deps.FeatureFSMv1Communicator, secondary.feature)
 	}
 }
 
@@ -393,8 +393,15 @@ func TestRecoverActionPanicLogsSentryFields(t *testing.T) {
 	}
 
 	call := cap.calls[0]
-	if call.feature != deps.FeatureCommunicator {
-		t.Errorf("want feature=%v, got %v", deps.FeatureCommunicator, call.feature)
+	if call.feature != deps.FeatureFSMv1Communicator {
+		t.Errorf("want feature=%v, got %v", deps.FeatureFSMv1Communicator, call.feature)
+	}
+
+	// Hierarchy path drives fsm_version/worker_type/worker_chain in the Sentry
+	// hook. Dotted FSMv1 format ensures events tag as fsm_version=v1, matching
+	// the convention from pkg/config/manager.go's configManagerHierarchyPath.
+	if call.hierarchyPath != "fsmv1.Communicator" {
+		t.Errorf("want hierarchyPath=fsmv1.Communicator, got %q", call.hierarchyPath)
 	}
 
 	if call.msg != "action_handler_panic" {

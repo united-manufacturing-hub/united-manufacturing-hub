@@ -34,6 +34,12 @@ import (
 	"go.uber.org/zap"
 )
 
+// communicatorHierarchyPath is the Sentry hierarchy path for action-handler
+// logs. Uses dot separator: ParseHierarchyPath splits FSMv1 paths on "."
+// (not "/"). Mirrors configManagerHierarchyPath in pkg/config/manager.go,
+// the canonical convention for non-FSMv2 packages wired to FSMLogger.
+const communicatorHierarchyPath = "fsmv1.Communicator"
+
 // Action is the interface that all action types must implement.
 // It defines the core lifecycle methods for parsing, validating, and executing actions.
 type Action interface {
@@ -183,8 +189,8 @@ func recoverActionPanic(
 
 				if fsmLogger != nil {
 					fsmLogger.SentryError(
-						deps.FeatureCommunicator,
-						"",
+						deps.FeatureFSMv1Communicator,
+						communicatorHierarchyPath,
 						fmt.Errorf("action handler double panic: primary=%v secondary=%v", r, r2),
 						"action_handler_double_panic",
 						deps.String("action_type", string(payload.ActionType)),
@@ -208,8 +214,8 @@ func recoverActionPanic(
 	// or reply generation fails.
 	if fsmLogger != nil {
 		fsmLogger.SentryError(
-			deps.FeatureCommunicator,
-			"",
+			deps.FeatureFSMv1Communicator,
+			communicatorHierarchyPath,
 			fmt.Errorf("action handler panic: %w", panicErr),
 			"action_handler_panic",
 			deps.String("action_type", string(payload.ActionType)),
@@ -241,8 +247,8 @@ func recoverActionPanic(
 		// the follow-on failure. Stderr line kept as last-resort fallback.
 		if fsmLogger != nil {
 			fsmLogger.SentryError(
-				deps.FeatureCommunicator,
-				"",
+				deps.FeatureFSMv1Communicator,
+				communicatorHierarchyPath,
 				err,
 				"action_handler_panic_reply_generation_failed",
 				deps.String("action_type", string(payload.ActionType)),

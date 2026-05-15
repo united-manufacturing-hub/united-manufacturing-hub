@@ -77,11 +77,11 @@ const (
 	// route to the same owner.
 	FeatureDisableReadFlows Feature = "disable_read_flows"
 
-	// FeatureCommunicator scopes Sentry events from the Communicator package
-	// (action handlers, router, pull/push transport). The recovered-panic
-	// handler in HandleActionMessage uses this tag so action-handler panics
-	// route separately from FSM worker events.
-	FeatureCommunicator Feature = "communicator"
+	// FeatureFSMv1Communicator covers the FSMv1 communicator package: action
+	// handlers (HandleActionMessage) and router goroutines that predate the
+	// FSMv2 worker pattern. Mirrors [FeatureFSMv1ConfigManager] for the other
+	// pre-FSMv2 package wired to FSMLogger.
+	FeatureFSMv1Communicator Feature = "fsmv1_communicator"
 )
 
 // FeatureForWorker returns the Feature for a specific worker type.
