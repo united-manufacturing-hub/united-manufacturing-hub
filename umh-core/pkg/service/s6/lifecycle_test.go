@@ -305,6 +305,54 @@ var _ = Describe("LifecycleManager", func() {
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("artifacts is nil"))
 		})
+
+		It("notifies s6-svscan after teardown to keep scanner in sync (ENG-4862)", func() {
+			err := service.ForceCleanup(ctx, artifacts, mockFS)
+
+			Expect(err).NotTo(HaveOccurred())
+
+			// ForceCleanup must call both rm (via RemoveAll) and s6-svscanctl
+			// -an. Without the -an step, s6-svunlink failures (exit 111)
+			// leave orphaned scanner entries that accumulate over time.
+			svscanctlCalls := []string{}
+			for _, c := range processCalls {
+				if strings.HasPrefix(c, "s6-svscanctl") {
+					svscanctlCalls = append(svscanctlCalls, c)
+				}
+			}
+			Expect(svscanctlCalls).NotTo(BeEmpty(),
+				"ForceCleanup must invoke s6-svscanctl after teardown; calls=%v", processCalls)
+			Expect(svscanctlCalls).To(ContainElement(ContainSubstring("-an")),
+				"ForceCleanup must use s6-svscanctl -an (rescan + nuke orphans), got %v", svscanctlCalls)
+		})
+
+		It("still notifies s6-svscan when s6-svunlink fails", func() {
+			// Simulate the ENG-4862 case: s6-svunlink errors out (production
+			// exit 111) but ForceCleanup must still call svscanctl -an so the
+			// scanner's internal table doesn't drift from disk state.
+			mockFS.WithExecuteCommandFunc(func(ctx context.Context, name string, args ...string) ([]byte, error) {
+				processCalls = append(processCalls, name+" "+strings.Join(args, " "))
+				if name == "s6-svunlink" {
+					return []byte{}, errors.New("s6 temporary error")
+				}
+
+				return []byte{}, nil
+			})
+
+			err := service.ForceCleanup(ctx, artifacts, mockFS)
+			Expect(err).NotTo(HaveOccurred())
+
+			svscanctlCalled := false
+			for _, c := range processCalls {
+				if strings.HasPrefix(c, "s6-svscanctl") && strings.Contains(c, "-an") {
+					svscanctlCalled = true
+
+					break
+				}
+			}
+			Expect(svscanctlCalled).To(BeTrue(),
+				"ForceCleanup must call s6-svscanctl -an even when s6-svunlink fails; calls=%v", processCalls)
+		})
 	})
 
 	Describe("CheckArtifactsHealth", func() {
