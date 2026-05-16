@@ -84,6 +84,27 @@ func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 
+	// signal.NotifyContext is single-shot: it cancels ctx on the first signal
+	// and exits, after which Go's stdlib silently drops further signals. To
+	// give operators a real fast-exit on a second SIGTERM, we run a parallel
+	// signal.Notify channel and close forceExit on the second receive. The
+	// FSMv2 supervisor hierarchy shares forceExit via Config; closing it
+	// breaks every drain loop at once. SIGKILL remains the final escalation.
+	forceExit := make(chan struct{})
+	sigCh := make(chan os.Signal, 2)
+	signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)
+	defer signal.Stop(sigCh)
+
+	go func() {
+		// The first signal also goes to NotifyContext, which cancels ctx.
+		// Wait unconditionally so we never miss it; the receive is buffered.
+		<-sigCh
+		// If the operator sends a second signal, broadcast force-exit. If
+		// they don't, this goroutine sits idle until the process exits.
+		<-sigCh
+		close(forceExit)
+	}()
+
 	// Configure encoder for communication
 	encoding.ChooseEncoder(encoding.EncodingCorev1)
 
@@ -250,7 +271,7 @@ func main() {
 		if configData.Agent.UseFSMv2Transport {
 			log.Info("Using FSMv2 communicator (feature flag enabled)")
 
-			appSup, channelAdapter, fsmv2Store, placeholderUUID, cleanup, buildErr := buildFSMv2Supervisor(ctx, &configData, communicationState, log)
+			appSup, channelAdapter, fsmv2Store, placeholderUUID, cleanup, buildErr := buildFSMv2Supervisor(ctx, &configData, communicationState, log, forceExit)
 			if buildErr != nil {
 				log.Errorw("Failed to build FSMv2 supervisor", "error", buildErr)
 				close(fsmv2Done)
@@ -510,6 +531,7 @@ func buildFSMv2Supervisor(
 	configData *config.FullConfig,
 	communicationState *communication_state.CommunicationState,
 	logger *zap.SugaredLogger,
+	forceExit <-chan struct{},
 ) (appSup fsmv2Supervisor, channelAdapter *fsmv2_adapter.LegacyChannelBridge, store storage.TriangularStoreInterface, placeholderUUID string, cleanup func(), err error) {
 	if configData == nil {
 		return nil, nil, nil, "", func() {}, fmt.Errorf("config is nil, cannot build FSMv2 supervisor")
@@ -594,6 +616,7 @@ children:
 		TickInterval: 100 * time.Millisecond,
 		YAMLConfig:   yamlConfig,
 		Dependencies: fsmv2Deps,
+		ForceExit:    forceExit,
 	})
 	if err != nil {
 		fsmv2Hook.Stop()

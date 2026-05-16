@@ -323,4 +323,69 @@ var _ = Describe("Shutdown drain regression", func() {
 				"pendingRestart entry should be cleared after demotion")
 		})
 	})
+
+	Describe("ForceExit short-circuits the drain", func() {
+		It("breaks the Phase 3 drain when the ForceExit channel closes", func() {
+			triangularStore := newStore()
+			logger := deps.NewJSONFSMLogger(buf, deps.LevelDebug)
+			forceExit := make(chan struct{})
+
+			s := NewSupervisor[*TestObservedState, *TestDesiredState](Config{
+				WorkerType: workerType,
+				Store:      triangularStore,
+				Logger:     logger,
+				// Long timeout so the test must hit forceExit, not the timer.
+				TickInterval:            50 * time.Millisecond,
+				GracefulShutdownTimeout: 5 * time.Second,
+				ForceExit:               forceExit,
+			})
+
+			identity := deps.Identity{
+				ID:         workerID,
+				Name:       "Force Exit Test Worker",
+				WorkerType: workerType,
+			}
+			// Worker never honours ShutdownRequested -> drain would otherwise
+			// run to its full 5-second timeout. ForceExit must cut it short.
+			worker := &TestWorker{}
+			Expect(s.AddWorker(identity, worker)).To(Succeed())
+
+			seedDesiredState(s)
+
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			_ = s.Start(ctx)
+
+			Eventually(func() int {
+				s.mu.RLock()
+				defer s.mu.RUnlock()
+				return len(s.workers)
+			}, 500*time.Millisecond, 10*time.Millisecond).Should(Equal(1))
+
+			// Close forceExit shortly after Shutdown enters Phase 3 drain.
+			go func() {
+				time.Sleep(100 * time.Millisecond)
+				close(forceExit)
+			}()
+
+			start := time.Now()
+			s.Shutdown()
+			elapsed := time.Since(start)
+
+			// Assertion 1: elapsed must be far below GracefulShutdownTimeout=5s.
+			// A successful forceExit cuts Phase 3 within ~150ms of the close.
+			Expect(elapsed).To(BeNumerically("<", 1*time.Second),
+				"Shutdown took %v; expected ForceExit to cut Phase 3 well before "+
+					"GracefulShutdownTimeout=5s", elapsed)
+
+			// Assertion 2: the dedicated force-exit log event fires.
+			logOutput := buf.String()
+			Expect(containsLogEvent(logOutput, "graceful_shutdown_force_exit")).To(BeTrue(),
+				"expected graceful_shutdown_force_exit log; ForceExit branch did not fire")
+
+			// Assertion 3: the timeout path must NOT have fired (forceExit wins).
+			Expect(containsLogEvent(logOutput, "graceful_shutdown_timeout")).To(BeFalse(),
+				"graceful_shutdown_timeout fired; ForceExit should have won the race")
+		})
+	})
 })

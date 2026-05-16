@@ -158,9 +158,13 @@ func (w *ApplicationWorker) GetDependenciesAny() any {
 
 // SupervisorConfig contains configuration for creating an application supervisor.
 type SupervisorConfig struct {
-	Store              storage.TriangularStoreInterface
-	Logger             deps.FSMLogger
-	Dependencies       map[string]any // Injected into child workers via deps parameter
+	Store        storage.TriangularStoreInterface
+	Logger       deps.FSMLogger
+	Dependencies map[string]any // Injected into child workers via deps parameter
+	// ForceExit, when non-nil, lets the caller short-circuit the drain phase of
+	// shutdown across the full supervisor hierarchy. cmd/main.go closes this
+	// channel on a second SIGTERM. See supervisor.Config.ForceExit.
+	ForceExit          <-chan struct{}
 	ID                 string
 	Name               string
 	YAMLConfig         string        // Raw YAML containing children specifications
@@ -187,6 +191,7 @@ func NewApplicationSupervisor(cfg SupervisorConfig) (*supervisor.Supervisor[fsmv
 		UserSpec:           config.UserSpec{Config: cfg.YAMLConfig},
 		EnableTraceLogging: cfg.EnableTraceLogging,
 		Dependencies:       cfg.Dependencies,
+		ForceExit:          cfg.ForceExit,
 	})
 
 	appIdentity := deps.Identity{
@@ -221,8 +226,10 @@ func init() {
 						fmt.Errorf("NewApplicationWorker returned nil for id=%q name=%q", id.ID, id.Name),
 						"application_worker_creation_failed")
 				}
+
 				return nil
 			}
+
 			return w
 		},
 		func(cfg interface{}) interface{} {

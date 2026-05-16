@@ -140,6 +140,8 @@ type Supervisor[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState] stru
 	ctx                 context.Context
 	cachedDesiredState  fsmv2.DesiredState
 	cachedFirstWorkerID atomic.Value // string - cached for GetHierarchyPathUnlocked()
+	logger              deps.FSMLogger
+	baseLogger          deps.FSMLogger // Un-enriched logger for child supervisors
 	workers             map[string]*WorkerContext[TObserved, TDesired]
 	// mu Protects access to workers map, children, globalVars, and mappedParentState.
 	//
@@ -151,8 +153,6 @@ type Supervisor[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState] stru
 	// See package-level LOCK ORDER section for details.
 	mu                 *lockmanager.Lock
 	lockManager        *lockmanager.LockManager
-	logger             deps.FSMLogger
-	baseLogger         deps.FSMLogger // Un-enriched logger for child supervisors
 	freshnessChecker   *health.FreshnessChecker
 	children           map[string]SupervisorInterface
 	pendingRemoval     map[string]bool
@@ -176,9 +176,13 @@ type Supervisor[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState] stru
 	// This lock is independent from Supervisor.mu and can be acquired separately.
 	// It can be acquired alone when checking context status, or after Supervisor.mu
 	// if both are needed (advisory order).
-	ctxMu                    *lockmanager.Lock
-	deps                     map[string]any
-	validatedSpecHashes      map[string]string // name -> hash of last validated spec
+	ctxMu               *lockmanager.Lock
+	deps                map[string]any
+	validatedSpecHashes map[string]string // name -> hash of last validated spec
+	// forceExit, when non-nil, breaks Phase 3 drain in lifecycle.go. Closed
+	// upstream by cmd/main.go on a second SIGTERM. Propagated to children via
+	// Config so all supervisors observe the same close. See types.go Config.ForceExit.
+	forceExit                <-chan struct{}
 	noStateMachineLoggedOnce sync.Map
 	userSpec                 config.UserSpec
 	workerType               string
@@ -303,6 +307,7 @@ func NewSupervisor[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState](c
 		gracefulShutdownTimeout: gracefulShutdownTimeout,
 		metricsReportInterval:   metricsReportInterval,
 		childShutdownTimeout:    childShutdownTimeout,
+		forceExit:               cfg.ForceExit,
 		deps:                    ensureNonNilDeps(cfg.Dependencies),
 		validatedSpecHashes:     make(map[string]string),
 	}

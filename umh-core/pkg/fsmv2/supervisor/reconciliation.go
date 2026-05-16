@@ -1463,6 +1463,10 @@ func (s *Supervisor[TObserved, TDesired]) reconcileChildren(specs []config.Child
 				ChildShutdownTimeout:    s.childShutdownTimeout,
 				EnableTraceLogging:      s.enableTraceLogging,
 				Dependencies:            mergedDeps,
+				// Share the same forceExit channel across the hierarchy so a single
+				// close (from cmd/main.go on a second SIGTERM) breaks every level's
+				// drain simultaneously.
+				ForceExit: s.forceExit,
 			}
 
 			// Use factory to create child supervisor with proper type
@@ -1602,7 +1606,17 @@ func (s *Supervisor[TObserved, TDesired]) reconcileChildren(specs []config.Child
 		}
 	}
 
-	// Phase 2: Complete removal of children that have finished shutdown
+	// Phase 2: Complete removal of children that have finished shutdown.
+	//
+	// First pass: collect the children that are ready to reap. This runs under
+	// parent.mu so the s.pendingRemoval / s.children reads are race-free.
+	type childToReap struct {
+		child SupervisorInterface
+		name  string
+	}
+
+	var reapList []childToReap
+
 	for name := range s.pendingRemoval {
 		child := s.children[name]
 		if child == nil {
@@ -1621,17 +1635,33 @@ func (s *Supervisor[TObserved, TDesired]) reconcileChildren(specs []config.Child
 			s.logger.Debug("child_shutdown_complete",
 				deps.String("child_name", name))
 
-			// child.Shutdown() is idempotent and synchronous (see lifecycle.go Shutdown's
-			// started-flag guard). Safe even if the supervisor cascade already shut this
-			// child down during a parent-level Shutdown().
-			child.Shutdown()
+			reapList = append(reapList, childToReap{name: name, child: child})
+		}
+	}
 
-			delete(s.children, name)
-			delete(s.pendingRemoval, name)
+	// Second pass: release parent.mu around child.Shutdown(). Each Shutdown can
+	// block up to the child's own gracefulShutdownTimeout (~5s by default), and
+	// holding parent.mu through it would stall this supervisor's tickLoop on
+	// any runtime spec-change that removes a child. The captured references stay
+	// valid: child.Shutdown() is idempotent, so concurrent callers are benign,
+	// and we re-acquire the lock to delete from the parent's maps below.
+	if len(reapList) > 0 {
+		s.mu.Unlock()
+
+		for _, item := range reapList {
+			item.child.Shutdown()
+		}
+
+		s.mu.Lock()
+
+		// Third pass: under lock again, finalize bookkeeping.
+		for _, item := range reapList {
+			delete(s.children, item.name)
+			delete(s.pendingRemoval, item.name)
 
 			s.logTrace("lifecycle",
 				deps.String("lifecycle_event", "child_remove_complete"),
-				deps.String("child_name", name),
+				deps.String("child_name", item.name),
 				deps.String("parent_worker_type", s.workerType))
 
 			removedCount++

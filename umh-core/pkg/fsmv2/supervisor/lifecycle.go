@@ -290,10 +290,13 @@ func (s *Supervisor[TObserved, TDesired]) Shutdown() {
 
 		// Phase 3 drain loop intentionally does NOT watch s.ctx.Done() — Phase 4
 		// below is what cancels s.ctx; escaping here would short-circuit the drain.
-		// Note: Go's signal.NotifyContext is single-shot, so a second SIGTERM is
-		// silently dropped by the stdlib (no default handler restore, buffered
-		// channel never re-consumed). Operators wanting force-exit must send
-		// SIGKILL until a dedicated forceExit path lands.
+		// The forceExit arm gives operators an explicit fast-exit: cmd/main.go
+		// closes the channel on a second SIGTERM (Go's signal.NotifyContext is
+		// single-shot and silently drops repeats). The channel is shared across
+		// all supervisor levels via Config propagation, so closing it breaks the
+		// drain at every level simultaneously. A nil forceExit blocks that case
+		// forever (Go semantics for nil-channel receive), preserving the previous
+		// "drain to gracefulShutdownTimeout" behaviour for callers that don't opt in.
 	drainLoop:
 		for {
 			select {
@@ -317,6 +320,15 @@ func (s *Supervisor[TObserved, TDesired]) Shutdown() {
 
 					break drainLoop
 				}
+			case <-s.forceExit:
+				s.mu.RLock()
+				remainingCount := len(s.workers)
+				s.mu.RUnlock()
+
+				s.logger.SentryWarn(deps.FeatureFSMv2, s.GetHierarchyPath(), "graceful_shutdown_force_exit",
+					deps.Int("remaining_worker_count", remainingCount))
+
+				break drainLoop
 			}
 		}
 	}
