@@ -366,7 +366,7 @@ func (m *BaseFSMManager[C]) Reconcile(
 			return fmt.Errorf("failed to get name: %w", err), false
 		}
 
-		if inst, ok := m.instances[name]; ok && inst.GetCurrentFSMState() == internalfsm.LifecycleStateRemoved {
+		if inst, ok := m.instances[name]; ok && inst != nil && inst.GetCurrentFSMState() == internalfsm.LifecycleStateRemoved {
 			// Removed instances need Step 3's cleanup, not Step 2's create/update.
 			// Step 2 early-returns on any action, so without this guard the loop
 			// keeps "updating" Removed instances and Step 3 never runs (ENG-4862).
