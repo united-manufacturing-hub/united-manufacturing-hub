@@ -140,8 +140,10 @@ type Supervisor[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState] stru
 	ctx                 context.Context
 	cachedDesiredState  fsmv2.DesiredState
 	cachedFirstWorkerID atomic.Value // string - cached for GetHierarchyPathUnlocked()
+	logger              deps.FSMLogger
+	baseLogger          deps.FSMLogger // Un-enriched logger for child supervisors
 	workers             map[string]*WorkerContext[TObserved, TDesired]
-	// mu Protects access to workers map, children, childDoneChans, globalVars, and mappedParentState.
+	// mu Protects access to workers map, children, globalVars, and mappedParentState.
 	//
 	// This is a lockmanager.Lock wrapping sync.RWMutex to allow concurrent reads from multiple goroutines
 	// (e.g., GetWorker, ListWorkers) while ensuring exclusive writes when modifying
@@ -151,11 +153,8 @@ type Supervisor[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState] stru
 	// See package-level LOCK ORDER section for details.
 	mu                 *lockmanager.Lock
 	lockManager        *lockmanager.LockManager
-	logger             deps.FSMLogger
-	baseLogger         deps.FSMLogger // Un-enriched logger for child supervisors
 	freshnessChecker   *health.FreshnessChecker
 	children           map[string]SupervisorInterface
-	childDoneChans     map[string]<-chan struct{}
 	pendingRemoval     map[string]bool
 	pendingRestart     map[string]bool
 	restartRequestedAt map[string]time.Time
@@ -164,6 +163,10 @@ type Supervisor[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState] stru
 	panicTracker       *panicRecovery
 	actionExecutor     *execution.ActionExecutor
 	ctxCancel          context.CancelFunc
+	// tickLoopDone is closed when the tickLoop goroutine exits. Stored here so
+	// Shutdown() can wait for tickLoop to fully exit in Phase 4 after ctxCancel().
+	// Nil when Start() has not been called (StartAsChild supervisors have no tickLoop).
+	tickLoopDone <-chan struct{}
 	// ctxMu Protects ctx and ctxCancel to prevent TOCTOU races during shutdown.
 	//
 	// Without this lock, a goroutine could check ctx.Err() (finding it non-cancelled),
@@ -173,9 +176,13 @@ type Supervisor[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState] stru
 	// This lock is independent from Supervisor.mu and can be acquired separately.
 	// It can be acquired alone when checking context status, or after Supervisor.mu
 	// if both are needed (advisory order).
-	ctxMu                    *lockmanager.Lock
-	deps                     map[string]any
-	validatedSpecHashes      map[string]string // name -> hash of last validated spec
+	ctxMu               *lockmanager.Lock
+	deps                map[string]any
+	validatedSpecHashes map[string]string // name -> hash of last validated spec
+	// forceExit, when non-nil, breaks Phase 3 drain in lifecycle.go. Closed
+	// upstream by cmd/main.go on a second SIGTERM. Propagated to children via
+	// Config so all supervisors observe the same close. See types.go Config.ForceExit.
+	forceExit                <-chan struct{}
 	noStateMachineLoggedOnce sync.Map
 	userSpec                 config.UserSpec
 	workerType               string
@@ -280,7 +287,6 @@ func NewSupervisor[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState](c
 		tickInterval:       tickInterval,
 		freshnessChecker:   freshnessChecker,
 		children:           make(map[string]SupervisorInterface),
-		childDoneChans:     make(map[string]<-chan struct{}),
 		pendingRemoval:     make(map[string]bool),
 		pendingRestart:     make(map[string]bool),
 		restartRequestedAt: make(map[string]time.Time),
@@ -301,6 +307,7 @@ func NewSupervisor[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState](c
 		gracefulShutdownTimeout: gracefulShutdownTimeout,
 		metricsReportInterval:   metricsReportInterval,
 		childShutdownTimeout:    childShutdownTimeout,
+		forceExit:               cfg.ForceExit,
 		deps:                    ensureNonNilDeps(cfg.Dependencies),
 		validatedSpecHashes:     make(map[string]string),
 	}
