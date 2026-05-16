@@ -16,6 +16,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/signal"
@@ -26,7 +27,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/pprof"
 	v2 "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/api/v2"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/communication_state"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/fsmv2_adapter"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/graphql"
@@ -36,6 +36,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/control"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/env"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/dataflowcomponent"
@@ -92,6 +93,7 @@ func main() {
 	// breaks every drain loop at once. SIGKILL remains the final escalation.
 	forceExit := make(chan struct{})
 	sigCh := make(chan os.Signal, 2)
+
 	signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)
 	defer signal.Stop(sigCh)
 
@@ -277,12 +279,15 @@ func main() {
 				close(fsmv2Done)
 			} else {
 				defer cleanup()
+
 				go func() {
 					defer close(fsmv2Done)
+
 					if runErr := appSup.Run(ctx); runErr != nil {
 						log.Errorw("FSMv2 supervisor Run error", "error", runErr)
 					}
 				}()
+
 				sentry.SafeGoWithContext(ctx, func(ctx context.Context) {
 					wireFSMv2Communicator(ctx, appSup, channelAdapter, fsmv2Store, placeholderUUID, &configData, communicationState, log)
 				})
@@ -534,7 +539,7 @@ func buildFSMv2Supervisor(
 	forceExit <-chan struct{},
 ) (appSup fsmv2Supervisor, channelAdapter *fsmv2_adapter.LegacyChannelBridge, store storage.TriangularStoreInterface, placeholderUUID string, cleanup func(), err error) {
 	if configData == nil {
-		return nil, nil, nil, "", func() {}, fmt.Errorf("config is nil, cannot build FSMv2 supervisor")
+		return nil, nil, nil, "", func() {}, errors.New("config is nil, cannot build FSMv2 supervisor")
 	}
 
 	// Create channel adapter to bridge FSMv2 and legacy channels.
@@ -620,6 +625,7 @@ children:
 	})
 	if err != nil {
 		fsmv2Hook.Stop()
+
 		return nil, nil, nil, "", func() {}, fmt.Errorf("failed to create FSMv2 supervisor: %w", err)
 	}
 
@@ -627,6 +633,7 @@ children:
 	metrics.RegisterFSMv2DebugProvider("application", appSup)
 
 	cleanup = fsmv2Hook.Stop
+
 	return appSup, channelAdapter, store, placeholderUUID, cleanup, nil
 }
 
