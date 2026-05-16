@@ -133,6 +133,13 @@ func HandleActionMessage(instanceUUID uuid.UUID, payload models.ActionMessagePay
 	action := newActionFromPayloadFn(instanceUUID, payload, sender, outboundChannel, systemSnapshotManager, configManager, log, fsmLogger)
 	if action == nil {
 		log.Errorf("Unknown action type: %s", payload.ActionType)
+		fsmLogger.SentryWarn(
+			deps.FeatureFSMv1Communicator,
+			communicatorHierarchyPath,
+			"unknown action type",
+			deps.String("action_type", string(payload.ActionType)),
+			deps.String("action_uuid", payload.ActionUUID.String()),
+		)
 		SendActionReply(instanceUUID, sender, payload.ActionUUID, models.ActionFinishedWithFailure, "Unknown action type", outboundChannel, payload.ActionType)
 
 		return
