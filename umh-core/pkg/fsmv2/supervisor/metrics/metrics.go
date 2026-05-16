@@ -296,16 +296,6 @@ var (
 		[]string{"hierarchy_path", "panic_type"},
 	)
 
-	childShutdownTimeoutTotal = promauto.NewCounterVec(
-		prometheus.CounterOpts{
-			Namespace: namespace,
-			Subsystem: subsystem,
-			Name:      "child_shutdown_timeout_total",
-			Help:      "Total number of child supervisor shutdown timeouts",
-		},
-		[]string{"hierarchy_path", "child_name"},
-	)
-
 	stuckActionDetectedTotal = promauto.NewCounterVec(
 		prometheus.CounterOpts{
 			Namespace: namespace,
@@ -461,11 +451,6 @@ func CleanupStateDuration(hierarchyPath, state string) {
 // RecordPanicRecovery records a panic recovery event in a supervisor goroutine.
 func RecordPanicRecovery(hierarchyPath, panicType string) {
 	panicRecoveryTotal.WithLabelValues(hierarchyPath, panicType).Inc()
-}
-
-// RecordChildShutdownTimeout records a child supervisor shutdown timeout event.
-func RecordChildShutdownTimeout(hierarchyPath, childName string) {
-	childShutdownTimeoutTotal.WithLabelValues(hierarchyPath, childName).Inc()
 }
 
 // RecordStuckActionDetected records detection of a stuck action (running > 2x timeout).

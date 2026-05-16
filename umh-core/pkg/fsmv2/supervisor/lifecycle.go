@@ -221,14 +221,8 @@ func (s *Supervisor[TObserved, TDesired]) Shutdown() {
 	// Extract children before releasing lock to avoid deadlock with child Tick() goroutines.
 	childrenToShutdown := make(map[string]SupervisorInterface, len(s.children))
 
-	childDoneChans := make(map[string]<-chan struct{}, len(s.childDoneChans))
-
 	for name, child := range s.children {
 		childrenToShutdown[name] = child
-	}
-
-	for name, done := range s.childDoneChans {
-		childDoneChans[name] = done
 	}
 
 	// Get worker IDs under lock
@@ -253,18 +247,11 @@ func (s *Supervisor[TObserved, TDesired]) Shutdown() {
 			s.logger.Debug("child_shutting_down",
 				deps.String("child_name", childName))
 
+			// child.Shutdown() is idempotent (lifecycle.go: see Shutdown's started-flag guard)
+			// and synchronous — bounded by the child's own gracefulShutdownTimeout. Calls
+			// from this cascade and from later tick-driven reconcileChildren(nil) paths
+			// converge on the same early-return.
 			child.Shutdown()
-
-			// Wait for child supervisor to fully shut down (with timeout)
-			if done, exists := childDoneChans[childName]; exists {
-				s.logger.Debug("waiting_child_shutdown",
-					deps.String("child_name", childName))
-
-				if s.waitForChildDone(done, childName, s.GetHierarchyPath(), "shutdown") {
-					s.logger.Debug("child_shutdown_complete",
-						deps.String("child_name", childName))
-				}
-			}
 
 			s.logTrace("lifecycle",
 				deps.String("lifecycle_event", "child_shutdown_complete"),
@@ -279,9 +266,17 @@ func (s *Supervisor[TObserved, TDesired]) Shutdown() {
 		s.logger.Debug("graceful_shutdown_workers_starting",
 			deps.Int("worker_count", len(workerIDs)))
 
+		// Capture s.ctx once under ctxMu. The invariant on ctxMu (see Supervisor
+		// definition) covers cancel-vs-use races in getStartedContext; this read
+		// is on the same goroutine that will later cancel ctx in Phase 4, but
+		// locking here keeps the access uniformly disciplined.
+		s.ctxMu.RLock()
+		shutdownCtx := s.ctx
+		s.ctxMu.RUnlock()
+
 		// Request graceful shutdown on all workers
 		for _, workerID := range workerIDs {
-			if err := s.requestShutdown(s.ctx, workerID, "supervisor_shutdown"); err != nil {
+			if err := s.requestShutdown(shutdownCtx, workerID, "supervisor_shutdown"); err != nil {
 				s.logger.SentryWarn(deps.FeatureFSMv2, s.GetHierarchyPath(), "graceful_shutdown_request_failed",
 					deps.Err(err))
 			}
@@ -293,6 +288,12 @@ func (s *Supervisor[TObserved, TDesired]) Shutdown() {
 		gracefulTimer := time.NewTimer(s.gracefulShutdownTimeout)
 		defer gracefulTimer.Stop()
 
+		// Phase 3 drain loop intentionally does NOT watch s.ctx.Done() — Phase 4
+		// below is what cancels s.ctx; escaping here would short-circuit the drain.
+		// Note: Go's signal.NotifyContext is single-shot, so a second SIGTERM is
+		// silently dropped by the stdlib (no default handler restore, buffered
+		// channel never re-consumed). Operators wanting force-exit must send
+		// SIGKILL until a dedicated forceExit path lands.
 	drainLoop:
 		for {
 			select {
@@ -363,28 +364,6 @@ func (s *Supervisor[TObserved, TDesired]) Shutdown() {
 
 	s.logTrace("lifecycle",
 		deps.String("lifecycle_event", "shutdown_complete"))
-}
-
-// waitForChildDone waits for a child supervisor's done channel to close, with a timeout.
-// Returns true if the child completed, false if the timeout fired.
-// The hierarchyPath and logContext parameters are used for metrics and log attribution.
-func (s *Supervisor[TObserved, TDesired]) waitForChildDone(done <-chan struct{}, childName, hierarchyPath, logContext string) bool {
-	shutdownTimer := time.NewTimer(s.childShutdownTimeout)
-	defer shutdownTimer.Stop()
-
-	select {
-	case <-done:
-		return true
-	case <-shutdownTimer.C:
-		metrics.RecordChildShutdownTimeout(hierarchyPath, childName)
-
-		s.logger.SentryWarn(deps.FeatureFSMv2, hierarchyPath, "child_shutdown_timeout",
-			deps.String("child_name", childName),
-			deps.Duration("timeout", s.childShutdownTimeout),
-			deps.String("context", logContext))
-
-		return false
-	}
 }
 
 // startMetricsReporter starts a goroutine that periodically records hierarchy metrics.

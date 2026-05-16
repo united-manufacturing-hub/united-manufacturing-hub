@@ -1029,34 +1029,19 @@ func (s *Supervisor[TObserved, TDesired]) processSignal(ctx context.Context, wor
 		delete(s.workers, workerID)
 		s.mu.Unlock()
 
-		// Clean up children outside parent lock to avoid deadlock with GetChildren/calculateHierarchySize
-		doneChannels := make(map[string]<-chan struct{})
-
-		s.mu.Lock()
-
-		for name := range childrenToCleanup {
-			if done, exists := s.childDoneChans[name]; exists {
-				doneChannels[name] = done
-			}
-		}
-
-		s.mu.Unlock()
-
+		// Clean up children outside parent lock to avoid deadlock with GetChildren/calculateHierarchySize.
 		for name, child := range childrenToCleanup {
 			s.logger.Debug("child_supervisor_shutdown",
 				deps.String("child_name", name),
 				deps.String("context", "post_graceful_cleanup"))
-			child.Shutdown()
 
-			// Wait for child supervisor to fully stop (with timeout)
-			if done, exists := doneChannels[name]; exists {
-				s.waitForChildDone(done, name, s.GetHierarchyPath(), "worker_removal_cleanup")
-			}
+			// child.Shutdown() is idempotent and synchronous (see lifecycle.go Shutdown's
+			// started-flag guard). Subsequent removal-cascade calls to the same child early-return.
+			child.Shutdown()
 
 			// Remove from parent's children map (requires lock)
 			s.mu.Lock()
 			delete(s.children, name)
-			delete(s.childDoneChans, name)
 			s.mu.Unlock()
 		}
 
@@ -1636,13 +1621,10 @@ func (s *Supervisor[TObserved, TDesired]) reconcileChildren(specs []config.Child
 			s.logger.Debug("child_shutdown_complete",
 				deps.String("child_name", name))
 
-			// Now safe to fully shut down and remove
+			// child.Shutdown() is idempotent and synchronous (see lifecycle.go Shutdown's
+			// started-flag guard). Safe even if the supervisor cascade already shut this
+			// child down during a parent-level Shutdown().
 			child.Shutdown()
-
-			if done, exists := s.childDoneChans[name]; exists {
-				s.waitForChildDone(done, name, s.GetHierarchyPathUnlocked(), "reconcile_children")
-				delete(s.childDoneChans, name)
-			}
 
 			delete(s.children, name)
 			delete(s.pendingRemoval, name)

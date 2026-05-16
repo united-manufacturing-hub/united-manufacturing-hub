@@ -141,7 +141,7 @@ type Supervisor[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState] stru
 	cachedDesiredState  fsmv2.DesiredState
 	cachedFirstWorkerID atomic.Value // string - cached for GetHierarchyPathUnlocked()
 	workers             map[string]*WorkerContext[TObserved, TDesired]
-	// mu Protects access to workers map, children, childDoneChans, globalVars, and mappedParentState.
+	// mu Protects access to workers map, children, globalVars, and mappedParentState.
 	//
 	// This is a lockmanager.Lock wrapping sync.RWMutex to allow concurrent reads from multiple goroutines
 	// (e.g., GetWorker, ListWorkers) while ensuring exclusive writes when modifying
@@ -155,7 +155,6 @@ type Supervisor[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState] stru
 	baseLogger         deps.FSMLogger // Un-enriched logger for child supervisors
 	freshnessChecker   *health.FreshnessChecker
 	children           map[string]SupervisorInterface
-	childDoneChans     map[string]<-chan struct{}
 	pendingRemoval     map[string]bool
 	pendingRestart     map[string]bool
 	restartRequestedAt map[string]time.Time
@@ -284,7 +283,6 @@ func NewSupervisor[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState](c
 		tickInterval:       tickInterval,
 		freshnessChecker:   freshnessChecker,
 		children:           make(map[string]SupervisorInterface),
-		childDoneChans:     make(map[string]<-chan struct{}),
 		pendingRemoval:     make(map[string]bool),
 		pendingRestart:     make(map[string]bool),
 		restartRequestedAt: make(map[string]time.Time),
