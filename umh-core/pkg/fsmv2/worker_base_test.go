@@ -36,10 +36,14 @@ type wbTestConfig struct {
 	Port                int    `yaml:"port"`
 }
 
-// wbTestStatus is the observed status for the test worker.
+// wbTestStatus is the observed status for the test worker. It is referenced
+// only via WorkerBase generic instantiation; the blank-var below keeps the
+// unused linter (which doesn't trace through type parameters) satisfied.
 type wbTestStatus struct {
 	Health string
 }
+
+var _ = wbTestStatus{}
 
 // wbTestDeps is the dependency set for the test worker.
 type wbTestDeps struct {
@@ -401,7 +405,7 @@ var _ = Describe("WorkerBase", func() {
 		It("returned WrappedDesiredState satisfies DesiredState interface", func() {
 			ds, err := worker.DeriveDesiredState(nil)
 			Expect(err).NotTo(HaveOccurred())
-			var _ fsmv2.DesiredState = ds
+			var _ = ds
 			Expect(ds.IsShutdownRequested()).To(BeFalse())
 		})
 

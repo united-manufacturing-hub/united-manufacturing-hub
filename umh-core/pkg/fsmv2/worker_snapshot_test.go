@@ -32,6 +32,11 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 )
 
+// mockDesiredState satisfies fsmv2.DesiredState for the wrong-type panic test.
+type mockDesiredState struct{}
+
+func (d *mockDesiredState) IsShutdownRequested() bool { return false }
+
 // workerTestConfig and workerTestStatus are lightweight types used exclusively
 // for WorkerSnapshot construction and ShouldStop tests.
 type workerTestConfig struct {
