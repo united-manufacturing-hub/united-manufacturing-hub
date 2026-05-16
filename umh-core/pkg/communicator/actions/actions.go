@@ -43,29 +43,33 @@ import (
 // the canonical convention for non-FSMv2 packages wired to FSMLogger.
 const communicatorHierarchyPath = "fsmv1.Communicator"
 
-// communicatorFSMLoggerOnce gates one-time construction of the wrapped logger.
-// Build the wrapped logger exactly once: SentryHook.Wrap mutates h.Core
+// communicatorSentryHook is the package-level SentryHook shared across all
+// action goroutines. Set inside initCommunicatorFSMLogger on first use.
+// StopCommunicatorSentryHook nil-checks before calling Stop, so reading
+// here without synchronization is safe (sync.OnceValue establishes the
+// happens-before for the first read; subsequent reads see the same pointer).
+var communicatorSentryHook *fsmv2sentry.SentryHook
+
+// communicatorFSMLoggerFn lazily builds the wrapped FSMLogger exactly once.
+// Build-once is required: SentryHook.Wrap mutates h.Core
 // (pkg/fsmv2/sentry/hook.go:62), so rebuilding on every call would race
 // under concurrent action goroutines. Mirrors the singleton precedent at
 // pkg/config/manager.go:179-182 (FileConfigManager).
-var (
-	communicatorFSMLoggerOnce sync.Once
-	communicatorFSMLoggerVal  deps.FSMLogger
-	communicatorSentryHook    *fsmv2sentry.SentryHook
-)
+var communicatorFSMLoggerFn = sync.OnceValue(initCommunicatorFSMLogger)
 
-// communicatorFSMLogger returns an FSMLogger whose underlying zap core is
-// wrapped with a package-level SentryHook. Lazy init via sync.Once keeps the
-// debouncer goroutine out of tests that never exercise this path.
+func initCommunicatorFSMLogger() deps.FSMLogger {
+	base := logger.For(logger.ComponentCommunicator)
+	communicatorSentryHook = fsmv2sentry.NewSentryHook(5 * time.Minute)
+	wrapped := base.Desugar().WithOptions(zap.WrapCore(communicatorSentryHook.Wrap)).Sugar()
+
+	return deps.NewFSMLogger(wrapped)
+}
+
+// communicatorFSMLogger returns the FSMLogger whose underlying zap core is
+// wrapped with the package-level SentryHook. First call constructs the hook
+// and the wrapped logger; subsequent calls return the same instance.
 func communicatorFSMLogger() deps.FSMLogger {
-	communicatorFSMLoggerOnce.Do(func() {
-		base := logger.For(logger.ComponentCommunicator)
-		communicatorSentryHook = fsmv2sentry.NewSentryHook(5 * time.Minute)
-		wrapped := base.Desugar().WithOptions(zap.WrapCore(communicatorSentryHook.Wrap)).Sugar()
-		communicatorFSMLoggerVal = deps.NewFSMLogger(wrapped)
-	})
-
-	return communicatorFSMLoggerVal
+	return communicatorFSMLoggerFn()
 }
 
 // StopCommunicatorSentryHook releases the package-level SentryHook's
