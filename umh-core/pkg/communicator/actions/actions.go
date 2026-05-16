@@ -19,6 +19,8 @@ import (
 	"fmt"
 	"os"
 	"runtime/debug"
+	"sync"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/encoding"
@@ -27,6 +29,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	deps "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
+	fsmv2sentry "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/sentry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
@@ -39,6 +42,40 @@ import (
 // (not "/"). Mirrors configManagerHierarchyPath in pkg/config/manager.go,
 // the canonical convention for non-FSMv2 packages wired to FSMLogger.
 const communicatorHierarchyPath = "fsmv1.Communicator"
+
+// communicatorFSMLoggerOnce gates one-time construction of the wrapped logger.
+// Build the wrapped logger exactly once: SentryHook.Wrap mutates h.Core
+// (pkg/fsmv2/sentry/hook.go:62), so rebuilding on every call would race
+// under concurrent action goroutines. Mirrors the singleton precedent at
+// pkg/config/manager.go:179-182 (FileConfigManager).
+var (
+	communicatorFSMLoggerOnce sync.Once
+	communicatorFSMLoggerVal  deps.FSMLogger
+	communicatorSentryHook    *fsmv2sentry.SentryHook
+)
+
+// communicatorFSMLogger returns an FSMLogger whose underlying zap core is
+// wrapped with a package-level SentryHook. Lazy init via sync.Once keeps the
+// debouncer goroutine out of tests that never exercise this path.
+func communicatorFSMLogger() deps.FSMLogger {
+	communicatorFSMLoggerOnce.Do(func() {
+		base := logger.For(logger.ComponentCommunicator)
+		communicatorSentryHook = fsmv2sentry.NewSentryHook(5 * time.Minute)
+		wrapped := base.Desugar().WithOptions(zap.WrapCore(communicatorSentryHook.Wrap)).Sugar()
+		communicatorFSMLoggerVal = deps.NewFSMLogger(wrapped)
+	})
+
+	return communicatorFSMLoggerVal
+}
+
+// StopCommunicatorSentryHook releases the package-level SentryHook's
+// debouncer goroutine. Call from cmd/main.go shutdown alongside
+// fsmv2Hook.Stop(). Safe to call when the hook was never initialized.
+func StopCommunicatorSentryHook() {
+	if communicatorSentryHook != nil {
+		communicatorSentryHook.Stop()
+	}
+}
 
 // Action is the interface that all action types must implement.
 // It defines the core lifecycle methods for parsing, validating, and executing actions.
@@ -72,7 +109,7 @@ type Action interface {
 // Error handling for each step is done within this function.
 func HandleActionMessage(instanceUUID uuid.UUID, payload models.ActionMessagePayload, sender string, outboundChannel chan *models.UMHMessage, releaseChannel config.ReleaseChannel, dog watchdog.Iface, traceID uuid.UUID, systemSnapshotManager *fsm.SnapshotManager, configManager config.ConfigManager) {
 	log := logger.For(logger.ComponentCommunicator)
-	fsmLogger := deps.NewFSMLogger(log)
+	fsmLogger := communicatorFSMLogger()
 
 	// Panic recovery. Converts any uncaught panic in this goroutine into a
 	// Sentry event, a counter increment, and a non-blocking failure reply so

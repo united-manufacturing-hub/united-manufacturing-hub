@@ -23,6 +23,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/pprof"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions"
 	v2 "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/api/v2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/communication_state"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/fsmv2_adapter"
@@ -536,6 +537,12 @@ children:
 	// This only affects FSMv2 logs, not the rest of the application
 	fsmv2Hook := fsmv2sentry.NewSentryHook(5 * time.Minute)
 	defer fsmv2Hook.Stop()
+
+	// Release the Communicator action-handler SentryHook's debouncer
+	// goroutine. The hook is lazy-initialized on first action; this
+	// no-ops when nothing exercised the path. Symmetric with the
+	// fsmv2Hook.Stop() above (pkg/communicator/actions/actions.go).
+	defer actions.StopCommunicatorSentryHook()
 
 	fsmv2Logger = fsmv2Logger.Desugar().WithOptions(zap.WrapCore(fsmv2Hook.Wrap)).Sugar()
 
