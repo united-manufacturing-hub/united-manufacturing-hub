@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## [0.44.20]
+
 ### Improvements
 
 - Previously, the component tasked with communicating with the UI could stop working if it rebuilt its HTTP connection (which happens after persistent network failures) while a message was being sent or received. Connection rebuilds and in-flight requests are now coordinated so they cannot interfere.
