@@ -366,6 +366,15 @@ func (m *BaseFSMManager[C]) Reconcile(
 			return fmt.Errorf("failed to get name: %w", err), false
 		}
 
+		if inst, ok := m.instances[name]; ok && inst != nil && inst.GetCurrentFSMState() == internalfsm.LifecycleStateRemoved {
+			// Removed instances need Step 3's cleanup, not Step 2's create/update.
+			// Step 2 early-returns on any action, so without this guard the loop
+			// keeps "updating" Removed instances and Step 3 never runs (ENG-4862).
+			// The deeper issue — Step 2's one-action-per-tick pattern — is tracked
+			// for the FSMv2-native rewrite in ENG-4941.
+			continue
+		}
+
 		// If the instance does not exist, create it and set it to the desired state
 		if _, ok := m.instances[name]; !ok {
 			// Using manager-specific ticks for rate limiting

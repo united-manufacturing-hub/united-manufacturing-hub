@@ -46,7 +46,6 @@ func NewCachingTestWorker(identity deps.Identity) *CachingTestWorker {
 		return &testutil.ObservedState{
 			ID:          identity.ID,
 			CollectedAt: time.Now(),
-			Desired:     &testutil.DesiredState{},
 		}, nil
 	}
 
@@ -61,7 +60,7 @@ func (w *CachingTestWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredS
 	}
 
 	return &config.DesiredState{
-		BaseDesiredState: config.BaseDesiredState{State: config.DesiredStateRunning},
+		BaseDesiredState: config.BaseDesiredState{},
 	}, nil
 }
 

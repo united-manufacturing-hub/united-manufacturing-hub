@@ -337,7 +337,7 @@ var _ = Describe("PullAction", func() {
 		It("should skip nil messages and only deliver valid ones", func() {
 			// Edge case: Transport returns array containing nil pointers.
 			// The defensive code `if msg == nil { continue }` skips them during delivery.
-			// CounterMessagesPulled uses nonNilCount — only valid messages are counted.
+			// CounterMessagesPulled uses nonNilCount  -  only valid messages are counted.
 			mockTrans.pullMessages = []*types.UMHMessage{
 				{InstanceUUID: "uuid-1", Content: "msg1", Email: "a@b.com"},
 				nil,

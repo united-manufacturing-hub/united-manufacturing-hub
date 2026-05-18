@@ -17,7 +17,7 @@ package state
 import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplechild/snapshot"
+	example_child "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplechild"
 )
 
 // ConnectedState represents the operational state where the worker has an active connection.
@@ -26,14 +26,13 @@ type ConnectedState struct {
 }
 
 func (s *ConnectedState) Next(snapAny any) fsmv2.NextResult[any, any] {
-	snap := helpers.ConvertSnapshot[snapshot.ExamplechildObservedState, *snapshot.ExamplechildDesiredState](snapAny)
+	snap := fsmv2.ConvertWorkerSnapshot[example_child.ExamplechildConfig, example_child.ExamplechildStatus](snapAny)
 
-	if snap.Observed.IsStopRequired() {
+	if snap.IsStopRequired() {
 		return fsmv2.Result[any, any](&TryingToStopState{}, fsmv2.SignalNone, nil, "Stop required, initiating shutdown")
 	}
 
-	// ConnectionHealth is populated by collector from dependencies
-	if snap.Observed.ConnectionHealth != "healthy" {
+	if snap.Status.ConnectionHealth != "healthy" {
 		return fsmv2.Result[any, any](&DisconnectedState{}, fsmv2.SignalNone, nil, "Connection lost, transitioning to disconnected")
 	}
 

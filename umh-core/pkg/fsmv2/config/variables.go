@@ -14,8 +14,6 @@
 
 package config
 
-// No imports needed - pure Go code with type-preserving deep copy
-
 // VariableBundle provides three-tier namespace structure for FSMv2 variables.
 //
 // The three namespaces serve distinct purposes with different serialization
@@ -53,11 +51,12 @@ package config
 //   - Purpose: Distinguish fleet-wide settings from worker-specific variables
 //
 // Internal Namespace:
-//   - Contains: Runtime metadata (id, timestamps, bridged_by)
-//   - Template access: Nested ({{ .internal.id }}, {{ .internal.timestamp }})
-//   - Serialization: NO (runtime-only, not persisted)
-//   - Source: FSM runtime, system-generated metadata
-//   - Purpose: Metadata that exists during execution but shouldn't be saved
+//   - Contains: Framework-injected identity/structural desired state
+//     (worker ID, parent ID, creation timestamp, optional bridged-by tag).
+//   - Template access: Nested ({{ .internal.id }}, {{ .internal.created_at }})
+//   - Serialization: NO (runtime-only; supervisor regenerates per-worker)
+//   - Source: FSM runtime, system-generated metadata.
+//   - Purpose: Identity carried alongside the rest of desired state.
 type VariableBundle struct {
 	// User contains user-defined variables, parent state variables, and computed values.
 	// Variables in this namespace are accessible at top-level in templates ({{ .varname }}).
@@ -69,15 +68,17 @@ type VariableBundle struct {
 	// This namespace is serialized to YAML/JSON and persisted with state/config.
 	Global map[string]any `json:"global,omitempty" yaml:"global,omitempty"`
 
-	// Internal contains runtime metadata like worker IDs, timestamps, and bridging info.
-	// Variables in this namespace require explicit prefix ({{ .internal.varname }}).
-	// This namespace is NOT serialized (yaml:"-" json:"-") and exists only at runtime.
+	// Internal carries framework-injected identity (worker ID, parent ID,
+	// creation timestamp, optional bridged-by tag). Runtime-only: not
+	// serialized to JSON or YAML. The supervisor regenerates per-worker
+	// identity at reconciliation time.
 	Internal map[string]any `json:"-" yaml:"-"`
 }
 
-// Flatten returns a map with User variables promoted to top-level and Global/Internal nested.
-// Template syntax uses User variables where User variables are accessible as {{ .varname }}
-// while Global and Internal require explicit prefixes ({{ .global.varname }}, {{ .internal.varname }}).
+// Flatten returns a map with User variables promoted to top-level and
+// Global/Internal nested. User variables flatten to top-level
+// ({{ .varname }}); Global and Internal require explicit prefixes
+// ({{ .global.varname }}, {{ .internal.varname }}).
 //
 // Example:
 //

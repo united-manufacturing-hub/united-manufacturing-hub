@@ -1,0 +1,123 @@
+// Copyright 2025 UMH Systems GmbH
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package state
+
+import (
+	"fmt"
+	"time"
+
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/backoff"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/action"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/snapshot"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/types"
+)
+
+// StartingState represents the state where the transport worker is authenticating.
+// It emits AuthenticateAction to obtain a JWT token from the relay server.
+// Once authenticated, transitions to RunningState. Children start via ChildStartStates
+// when the parent enters Running, avoiding a deadlock where children can't become healthy
+// while the parent waits in Starting.
+type StartingState struct {
+	helpers.StartingBase
+}
+
+// Next evaluates the current snapshot and returns the next state or action.
+func (s *StartingState) Next(snapAny any) fsmv2.NextResult[any, any] {
+	snap := fsmv2.ConvertWorkerSnapshot[snapshot.TransportDesiredState, snapshot.TransportStatus](snapAny)
+
+	if snap.IsShutdownRequested {
+		return fsmv2.Result[any, any](&StoppingState{}, fsmv2.SignalNone, nil, "Shutdown requested, transitioning to Stopping")
+	}
+
+	// If we don't have a valid token, authenticate (with backoff on repeated failures)
+	if !snap.Status.HasValidToken() {
+		configChanged := authConfigChanged(&snap.Config, snap.Status)
+
+		// Apply error handling only when config hasn't changed since last attempt.
+		// If config changed, stale errors and backoff are irrelevant: go straight to auth dispatch.
+		if !configChanged && snap.Status.ConsecutiveErrors > 0 && !snap.Status.LastAuthAttemptAt.IsZero() {
+			if isPermanentAuthError(snap.Status.LastErrorType) {
+				return fsmv2.Result[any, any](&AuthFailedState{}, fsmv2.SignalNone, nil,
+					fmt.Sprintf("permanent auth failure (%s after %d errors), entering AuthFailed",
+						snap.Status.LastErrorType, snap.Status.ConsecutiveErrors))
+			}
+
+			delay := backoff.CalculateDelayForErrorType(
+				snap.Status.LastErrorType,
+				snap.Status.ConsecutiveErrors,
+				snap.Status.LastRetryAfter,
+			)
+			if time.Since(snap.Status.LastAuthAttemptAt) < delay {
+				return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil,
+					fmt.Sprintf("auth backoff: %d errors (%s), delay %s",
+						snap.Status.ConsecutiveErrors, snap.Status.LastErrorType, delay.Round(time.Second)))
+			}
+		}
+
+		authAction := action.NewAuthenticateAction(
+			snap.Config.RelayURL,
+			snap.Config.InstanceUUID,
+			snap.Config.AuthToken,
+			snap.Config.Timeout,
+		)
+
+		return fsmv2.Result[any, any](s, fsmv2.SignalNone, authAction, "No valid token, authenticating with relay")
+	}
+
+	// Authenticated; transition to Running. Children start via ChildStartStates
+	// once parent enters Running; RunningState handles unhealthy children.
+	if snap.Status.HasValidToken() {
+		return fsmv2.Result[any, any](&RunningState{}, fsmv2.SignalNone, nil, "Authenticated, transitioning to Running")
+	}
+
+	// Unreachable: the !HasValidToken() block above returns in all paths, so
+	// control only reaches here when HasValidToken() is true. The catch-all is
+	// required by the architecture validator's MISSING_CATCHALL_RETURN rule.
+	return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil,
+		fmt.Sprintf("starting: awaiting token (hasValidToken=%t)", snap.Status.HasValidToken()))
+}
+
+// isPermanentAuthError returns true for error types that indicate a configuration
+// problem requiring human intervention (new token, re-registration).
+//
+// This is intentionally narrower than !IsTransient(): ProxyBlock, CloudflareChallenge,
+// and ErrorTypeUnknown are non-transient but may self-resolve (infrastructure issues,
+// not config problems). Only InvalidToken and InstanceDeleted warrant parking in
+// AuthFailedState. SetFailedAuthConfig in the action uses the broader !IsTransient()
+// guard so that config changes also skip backoff for those error types.
+func isPermanentAuthError(errType types.ErrorType) bool {
+	return errType == types.ErrorTypeInvalidToken ||
+		errType == types.ErrorTypeInstanceDeleted
+}
+
+// authConfigChanged returns true if the current desired auth config differs from the
+// config that was used in the last permanently-failed auth attempt. Used by StartingState
+// to skip stale permanent errors after a config change. AuthFailedState performs the same
+// comparison inline to capture per-field diagnostics in the reason string.
+func authConfigChanged(desired *snapshot.TransportDesiredState, status snapshot.TransportStatus) bool {
+	if status.FailedAuthConfig.IsEmpty() {
+		return false
+	}
+	return desired.AuthToken != status.FailedAuthConfig.AuthToken ||
+		desired.RelayURL != status.FailedAuthConfig.RelayURL ||
+		desired.InstanceUUID != status.FailedAuthConfig.InstanceUUID
+}
+
+// String returns the state name derived from the type.
+func (s *StartingState) String() string {
+	return helpers.DeriveStateName(s)
+}

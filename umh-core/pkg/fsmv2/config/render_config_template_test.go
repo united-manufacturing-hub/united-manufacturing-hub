@@ -77,15 +77,15 @@ var _ = Describe("RenderConfigTemplate", func() {
 			vars := config.VariableBundle{
 				Internal: map[string]any{
 					"id":        "worker-abc-123",
-					"timestamp": 1234567890,
+					"parent_id": "parent-456",
 				},
 			}
-			tmpl := "worker_id: {{ .internal.id }}, ts: {{ .internal.timestamp }}"
+			tmpl := "worker_id: {{ .internal.id }}, parent: {{ .internal.parent_id }}"
 
 			result, err := config.RenderConfigTemplate(tmpl, vars)
 
 			Expect(err).NotTo(HaveOccurred())
-			Expect(result).To(Equal("worker_id: worker-abc-123, ts: 1234567890"))
+			Expect(result).To(Equal("worker_id: worker-abc-123, parent: parent-456"))
 		})
 	})
 
@@ -168,8 +168,8 @@ var _ = Describe("RenderConfigTemplate", func() {
 					"environment":  "production",
 				},
 				Internal: map[string]any{
-					"id":         "bridge-12345",
-					"created_at": "2025-01-13T10:00:00Z",
+					"id":          "bridge-12345",
+					"_created_at": "2025-01-01T00:00:00Z",
 				},
 			}
 			tmpl := `input:
@@ -185,7 +185,7 @@ output:
 
 # Bridge ID: {{ .internal.id }}
 # Environment: {{ .global.environment }}
-# Created: {{ .internal.created_at }}`
+# Created: {{ .internal._created_at }}`
 
 			result, err := config.RenderConfigTemplate(tmpl, vars)
 
@@ -196,7 +196,7 @@ output:
 			Expect(result).To(ContainSubstring(`topic: "umh.v1.enterprise.site.area.modbus-plc"`))
 			Expect(result).To(ContainSubstring(`# Bridge ID: bridge-12345`))
 			Expect(result).To(ContainSubstring(`# Environment: production`))
-			Expect(result).To(ContainSubstring(`# Created: 2025-01-13T10:00:00Z`))
+			Expect(result).To(ContainSubstring(`# Created: 2025-01-01T00:00:00Z`))
 		})
 
 		It("should handle repeated variable usage in template", func() {

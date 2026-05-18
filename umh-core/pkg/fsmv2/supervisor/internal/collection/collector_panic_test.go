@@ -59,6 +59,9 @@ var _ = Describe("Collector Panic Recovery", func() {
 				Logger:              logger,
 				ObservationInterval: 50 * time.Millisecond,
 				ObservationTimeout:  1 * time.Second,
+				DesiredStateProvider: func() fsmv2.DesiredState {
+					return &supervisor.TestDesiredState{}
+				},
 			})
 
 			ctx, cancel := context.WithCancel(context.Background())
@@ -111,6 +114,9 @@ var _ = Describe("Collector Panic Recovery", func() {
 				Logger:              logger,
 				ObservationInterval: 50 * time.Millisecond,
 				ObservationTimeout:  1 * time.Second,
+				DesiredStateProvider: func() fsmv2.DesiredState {
+					return &supervisor.TestDesiredState{}
+				},
 			})
 
 			ctx, cancel := context.WithCancel(context.Background())
@@ -159,6 +165,9 @@ var _ = Describe("Collector Panic Type Classification", func() {
 			Logger:              logger,
 			ObservationInterval: 50 * time.Millisecond,
 			ObservationTimeout:  1 * time.Second,
+			DesiredStateProvider: func() fsmv2.DesiredState {
+				return &supervisor.TestDesiredState{}
+			},
 		})
 
 		ctx, cancel := context.WithCancel(context.Background())
@@ -203,6 +212,9 @@ var _ = Describe("Collector Panic Type Classification", func() {
 			Logger:              logger,
 			ObservationInterval: 50 * time.Millisecond,
 			ObservationTimeout:  1 * time.Second,
+			DesiredStateProvider: func() fsmv2.DesiredState {
+				return &supervisor.TestDesiredState{}
+			},
 		})
 
 		ctx, cancel := context.WithCancel(context.Background())
@@ -248,6 +260,9 @@ var _ = Describe("Collector Double Panic", func() {
 			Logger:              logger,
 			ObservationInterval: 50 * time.Millisecond,
 			ObservationTimeout:  1 * time.Second,
+			DesiredStateProvider: func() fsmv2.DesiredState {
+				return &supervisor.TestDesiredState{}
+			},
 		})
 
 		ctx, cancel := context.WithCancel(context.Background())

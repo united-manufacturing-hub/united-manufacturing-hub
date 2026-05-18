@@ -35,7 +35,7 @@ var _ = Describe("DataFreshness Full Cycle Integration", func() {
 			collectFunc: func(ctx context.Context) (fsmv2.ObservedState, error) {
 				return &mockObservedState{CollectedAt: snapshotTimestamp}, nil
 			},
-			requestShutdownFunc: func() {
+			requestRemovalFunc: func() {
 				shutdownRequested = true
 			},
 		}
@@ -45,7 +45,7 @@ var _ = Describe("DataFreshness Full Cycle Integration", func() {
 		store := newMockStore()
 
 		// Initialize the desired state in the store's internal map
-		// This is required because RequestShutdown calls LoadDesired first
+		// This is required because RequestRemoval calls LoadDesired first
 		if store.desired["test"] == nil {
 			store.desired["test"] = make(map[string]persistence.Document)
 		}

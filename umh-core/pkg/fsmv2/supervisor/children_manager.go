@@ -137,7 +137,9 @@ func (m *ChildrenManager) buildChildInfo(name string, child SupervisorInterface)
 		WorkerType:    child.GetWorkerType(),
 		StateName:     stateName,
 		StateReason:   stateReason,
-		IsHealthy:     phase.IsHealthy(), // Only PhaseRunningHealthy is healthy
+		IsHealthy:     phase.IsHealthy(),
+		IsOperational: phase.IsOperational(),
+		IsStopped:     phase.IsStopped(),
 		ErrorMsg:      "",
 		HierarchyPath: child.GetHierarchyPath(),
 		IsStale:       child.IsObservationStale(),

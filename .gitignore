@@ -13,6 +13,10 @@
 # Claude artifacts
 compass_artifact*
 
+# Self-review and finalization artifacts
+.self-review/
+finalization/
+
 # Test results
 *.result.txt
 .worktrees/

@@ -16,9 +16,14 @@ package state
 
 import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplefailing/snapshot"
+	examplefailing "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplefailing"
 )
+
+func init() {
+	fsmv2.RegisterInitialState("examplefailing", &StoppedState{})
+}
 
 // StoppedState represents the initial state where the failing worker is not connected.
 type StoppedState struct {
@@ -26,13 +31,13 @@ type StoppedState struct {
 }
 
 func (s *StoppedState) Next(snapAny any) fsmv2.NextResult[any, any] {
-	snap := helpers.ConvertSnapshot[snapshot.ExamplefailingObservedState, *snapshot.ExamplefailingDesiredState](snapAny)
+	snap := fsmv2.ConvertWorkerSnapshot[examplefailing.ExamplefailingConfig, examplefailing.ExamplefailingStatus](snapAny)
 
-	if snap.Desired.IsShutdownRequested() {
+	if snap.IsShutdownRequested {
 		return fsmv2.Result[any, any](s, fsmv2.SignalNeedsRemoval, nil, "shutdown requested, signaling removal")
 	}
 
-	if snap.Observed.ShouldBeRunning() {
+	if !snap.IsShutdownRequested && snap.ParentMappedState == config.DesiredStateRunning {
 		return fsmv2.Result[any, any](&TryingToConnectState{}, fsmv2.SignalNone, nil, "worker should be running, transitioning to connect")
 	}
 

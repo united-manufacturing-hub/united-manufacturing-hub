@@ -37,37 +37,41 @@ func makeSnapshotFull(shutdownRequested bool, desiredState string, jwtToken stri
 }
 
 func makeSnapshotWithBackoff(shutdownRequested bool, desiredState string, jwtToken string, jwtExpiry time.Time, childrenHealthy, childrenUnhealthy int, consecutiveErrors int, lastErrorType types.ErrorType, lastAuthAttemptAt time.Time, lastRetryAfter time.Duration) fsmv2.Snapshot {
-	desired := &snapshot.TransportDesiredState{
+	desired := &fsmv2.WrappedDesiredState[snapshot.TransportDesiredState]{
+		State: desiredState,
 		BaseDesiredState: config.BaseDesiredState{
-			State:             desiredState,
 			ShutdownRequested: shutdownRequested,
 		},
-		InstanceUUID: "test-uuid",
-		AuthToken:    "test-auth-token",
-		RelayURL:     "https://relay.test.com",
-		Timeout:      30 * time.Second,
+		Config: snapshot.TransportDesiredState{
+			State:        desiredState,
+			InstanceUUID: "test-uuid",
+			AuthToken:    "test-auth-token",
+			RelayURL:     "https://relay.test.com",
+			Timeout:      30 * time.Second,
+		},
+		ChildrenSpecs: nil,
 	}
 
-	observed := snapshot.TransportObservedState{
-		CollectedAt:           time.Now(),
-		JWTToken:              jwtToken,
-		JWTExpiry:             jwtExpiry,
-		TransportDesiredState: *desired,
-		ChildrenHealthy:       childrenHealthy,
-		ChildrenUnhealthy:     childrenUnhealthy,
-		ConsecutiveErrors:     consecutiveErrors,
-		LastErrorType:         lastErrorType,
-		LastAuthAttemptAt:     lastAuthAttemptAt,
-		LastRetryAfter:        lastRetryAfter,
-		FailedAuthConfig: snapshot.FailedAuthConfig{
-			AuthToken:    desired.AuthToken,
-			RelayURL:     desired.RelayURL,
-			InstanceUUID: desired.InstanceUUID,
+	obs := fsmv2.Observation[snapshot.TransportStatus]{
+		ChildrenHealthy:   childrenHealthy,
+		ChildrenUnhealthy: childrenUnhealthy,
+		Status: snapshot.TransportStatus{
+			JWTToken:          jwtToken,
+			JWTExpiry:         jwtExpiry,
+			ConsecutiveErrors: consecutiveErrors,
+			LastErrorType:     lastErrorType,
+			LastAuthAttemptAt: lastAuthAttemptAt,
+			LastRetryAfter:    lastRetryAfter,
+			FailedAuthConfig: snapshot.FailedAuthConfig{
+				AuthToken:    "test-auth-token",
+				RelayURL:     "https://relay.test.com",
+				InstanceUUID: "test-uuid",
+			},
 		},
 	}
 
 	return fsmv2.Snapshot{
-		Observed: observed,
+		Observed: obs,
 		Desired:  desired,
 	}
 }
@@ -75,27 +79,30 @@ func makeSnapshotWithBackoff(shutdownRequested bool, desiredState string, jwtTok
 // makeAuthFailedSnapshot creates a snapshot for testing AuthFailedState.
 // The failed config matches the desired config (simulating "config unchanged since failure").
 func makeAuthFailedSnapshot(authToken, relayURL, instanceUUID string, shutdownRequested bool) fsmv2.Snapshot {
-	desired := &snapshot.TransportDesiredState{
+	desired := &fsmv2.WrappedDesiredState[snapshot.TransportDesiredState]{
+		State: config.DesiredStateRunning,
 		BaseDesiredState: config.BaseDesiredState{
-			State:             config.DesiredStateRunning,
 			ShutdownRequested: shutdownRequested,
 		},
-		InstanceUUID: instanceUUID,
-		AuthToken:    authToken,
-		RelayURL:     relayURL,
-		Timeout:      30 * time.Second,
-	}
-	observed := snapshot.TransportObservedState{
-		CollectedAt:   time.Now(),
-		LastErrorType: types.ErrorTypeInvalidToken,
-		FailedAuthConfig: snapshot.FailedAuthConfig{
+		Config: snapshot.TransportDesiredState{
+			InstanceUUID: instanceUUID,
 			AuthToken:    authToken,
 			RelayURL:     relayURL,
-			InstanceUUID: instanceUUID,
+			Timeout:      30 * time.Second,
 		},
-		ConsecutiveErrors: 3,
 	}
-	return fsmv2.Snapshot{Observed: observed, Desired: desired}
+	obs := fsmv2.Observation[snapshot.TransportStatus]{
+		Status: snapshot.TransportStatus{
+			LastErrorType:     types.ErrorTypeInvalidToken,
+			ConsecutiveErrors: 3,
+			FailedAuthConfig: snapshot.FailedAuthConfig{
+				AuthToken:    authToken,
+				RelayURL:     relayURL,
+				InstanceUUID: instanceUUID,
+			},
+		},
+	}
+	return fsmv2.Snapshot{Observed: obs, Desired: desired}
 }
 
 // makeAuthFailedStartingSnapshot creates a snapshot for testing StartingState's transition
@@ -105,25 +112,28 @@ func makeAuthFailedStartingSnapshot(
 	failedToken, failedRelay, failedUUID string,
 	consecutiveErrors int, lastErrorType types.ErrorType,
 ) fsmv2.Snapshot {
-	desired := &snapshot.TransportDesiredState{
-		BaseDesiredState: config.BaseDesiredState{State: config.DesiredStateRunning},
-		InstanceUUID:     desiredUUID,
-		AuthToken:        desiredToken,
-		RelayURL:         desiredRelay,
-		Timeout:          30 * time.Second,
-	}
-	observed := snapshot.TransportObservedState{
-		CollectedAt:       time.Now(),
-		ConsecutiveErrors: consecutiveErrors,
-		LastErrorType:     lastErrorType,
-		LastAuthAttemptAt: time.Now(),
-		FailedAuthConfig: snapshot.FailedAuthConfig{
-			AuthToken:    failedToken,
-			RelayURL:     failedRelay,
-			InstanceUUID: failedUUID,
+	desired := &fsmv2.WrappedDesiredState[snapshot.TransportDesiredState]{
+		State: config.DesiredStateRunning,
+		Config: snapshot.TransportDesiredState{
+			InstanceUUID: desiredUUID,
+			AuthToken:    desiredToken,
+			RelayURL:     desiredRelay,
+			Timeout:      30 * time.Second,
 		},
 	}
-	return fsmv2.Snapshot{Observed: observed, Desired: desired}
+	obs := fsmv2.Observation[snapshot.TransportStatus]{
+		Status: snapshot.TransportStatus{
+			ConsecutiveErrors: consecutiveErrors,
+			LastErrorType:     lastErrorType,
+			LastAuthAttemptAt: time.Now(),
+			FailedAuthConfig: snapshot.FailedAuthConfig{
+				AuthToken:    failedToken,
+				RelayURL:     failedRelay,
+				InstanceUUID: failedUUID,
+			},
+		},
+	}
+	return fsmv2.Snapshot{Observed: obs, Desired: desired}
 }
 
 var _ = Describe("TransportWorker States", func() {
@@ -327,29 +337,33 @@ var _ = Describe("TransportWorker States", func() {
 		})
 
 		It("should apply backoff after transient error even when FailedAuthConfig is empty", func() {
-			desired := &snapshot.TransportDesiredState{
-				BaseDesiredState: config.BaseDesiredState{State: config.DesiredStateRunning},
-				InstanceUUID:     "test-uuid",
-				AuthToken:        "test-auth-token",
-				RelayURL:         "https://relay.test.com",
-				Timeout:          30 * time.Second,
+			desired := &fsmv2.WrappedDesiredState[snapshot.TransportDesiredState]{
+				State: config.DesiredStateRunning,
+				Config: snapshot.TransportDesiredState{
+					InstanceUUID: "test-uuid",
+					AuthToken:    "test-auth-token",
+					RelayURL:     "https://relay.test.com",
+					Timeout:      30 * time.Second,
+				},
 			}
-			observed := snapshot.TransportObservedState{
-				CollectedAt:       time.Now(),
-				ConsecutiveErrors: 3,
-				LastErrorType:     types.ErrorTypeNetwork,
-				LastAuthAttemptAt: time.Now(),
+			obs := fsmv2.Observation[snapshot.TransportStatus]{
+				Status: snapshot.TransportStatus{
+					ConsecutiveErrors: 3,
+					LastErrorType:     types.ErrorTypeNetwork,
+					LastAuthAttemptAt: time.Now(),
+					// FailedAuthConfig is zero value (empty)
+				},
 			}
 
-			Expect(observed.FailedAuthConfig.IsEmpty()).To(BeTrue(),
+			Expect(obs.Status.FailedAuthConfig.IsEmpty()).To(BeTrue(),
 				"precondition: FailedAuthConfig must be empty to simulate transient error path")
 
-			snap := fsmv2.Snapshot{Observed: observed, Desired: desired}
+			snap := fsmv2.Snapshot{Observed: obs, Desired: desired}
 			result := s.Next(snap)
 
 			Expect(result.State).To(BeAssignableToTypeOf(&state.StartingState{}))
 			Expect(result.Action).To(BeNil(),
-				"should NOT dispatch auth during backoff — transient error with empty FailedAuthConfig must still respect backoff")
+				"should NOT dispatch auth during backoff  -  transient error with empty FailedAuthConfig must still respect backoff")
 			Expect(result.Reason).To(ContainSubstring("auth backoff"))
 		})
 	})
@@ -668,24 +682,27 @@ var _ = Describe("TransportWorker States", func() {
 
 		// Scenario 1 tick 3: AuthFailed exits when AuthToken changes
 		It("should transition to Starting when AuthToken changes", func() {
-			desired := &snapshot.TransportDesiredState{
-				BaseDesiredState: config.BaseDesiredState{State: config.DesiredStateRunning},
-				InstanceUUID:     "test-uuid",
-				AuthToken:        "new-auth-token",
-				RelayURL:         "https://relay.test.com",
-				Timeout:          30 * time.Second,
-			}
-			observed := snapshot.TransportObservedState{
-				CollectedAt: time.Now(),
-				FailedAuthConfig: snapshot.FailedAuthConfig{
-					AuthToken:    "old-auth-token",
-					RelayURL:     "https://relay.test.com",
+			desired := &fsmv2.WrappedDesiredState[snapshot.TransportDesiredState]{
+				State: config.DesiredStateRunning,
+				Config: snapshot.TransportDesiredState{
 					InstanceUUID: "test-uuid",
+					AuthToken:    "new-auth-token",
+					RelayURL:     "https://relay.test.com",
+					Timeout:      30 * time.Second,
 				},
-				ConsecutiveErrors: 3,
-				LastErrorType:     types.ErrorTypeInvalidToken,
 			}
-			result := s.Next(fsmv2.Snapshot{Observed: observed, Desired: desired})
+			obs := fsmv2.Observation[snapshot.TransportStatus]{
+				Status: snapshot.TransportStatus{
+					ConsecutiveErrors: 3,
+					LastErrorType:     types.ErrorTypeInvalidToken,
+					FailedAuthConfig: snapshot.FailedAuthConfig{
+						AuthToken:    "old-auth-token",
+						RelayURL:     "https://relay.test.com",
+						InstanceUUID: "test-uuid",
+					},
+				},
+			}
+			result := s.Next(fsmv2.Snapshot{Observed: obs, Desired: desired})
 
 			Expect(result.State).To(BeAssignableToTypeOf(&state.StartingState{}))
 			Expect(result.Reason).To(ContainSubstring("config changed"))
@@ -694,24 +711,27 @@ var _ = Describe("TransportWorker States", func() {
 
 		// Scenario 7: Only relay changes
 		It("should transition to Starting when RelayURL changes", func() {
-			desired := &snapshot.TransportDesiredState{
-				BaseDesiredState: config.BaseDesiredState{State: config.DesiredStateRunning},
-				InstanceUUID:     "test-uuid",
-				AuthToken:        "test-auth-token",
-				RelayURL:         "https://new-relay.test.com",
-				Timeout:          30 * time.Second,
-			}
-			observed := snapshot.TransportObservedState{
-				CollectedAt: time.Now(),
-				FailedAuthConfig: snapshot.FailedAuthConfig{
-					AuthToken:    "test-auth-token",
-					RelayURL:     "https://relay.test.com",
+			desired := &fsmv2.WrappedDesiredState[snapshot.TransportDesiredState]{
+				State: config.DesiredStateRunning,
+				Config: snapshot.TransportDesiredState{
 					InstanceUUID: "test-uuid",
+					AuthToken:    "test-auth-token",
+					RelayURL:     "https://new-relay.test.com",
+					Timeout:      30 * time.Second,
 				},
-				ConsecutiveErrors: 3,
-				LastErrorType:     types.ErrorTypeInvalidToken,
 			}
-			result := s.Next(fsmv2.Snapshot{Observed: observed, Desired: desired})
+			obs := fsmv2.Observation[snapshot.TransportStatus]{
+				Status: snapshot.TransportStatus{
+					ConsecutiveErrors: 3,
+					LastErrorType:     types.ErrorTypeInvalidToken,
+					FailedAuthConfig: snapshot.FailedAuthConfig{
+						AuthToken:    "test-auth-token",
+						RelayURL:     "https://relay.test.com",
+						InstanceUUID: "test-uuid",
+					},
+				},
+			}
+			result := s.Next(fsmv2.Snapshot{Observed: obs, Desired: desired})
 
 			Expect(result.State).To(BeAssignableToTypeOf(&state.StartingState{}))
 			Expect(result.Reason).To(ContainSubstring("relay=true"))
@@ -719,24 +739,27 @@ var _ = Describe("TransportWorker States", func() {
 
 		// Scenario 2: InstanceDeleted → UUID changes
 		It("should transition to Starting when InstanceUUID changes", func() {
-			desired := &snapshot.TransportDesiredState{
-				BaseDesiredState: config.BaseDesiredState{State: config.DesiredStateRunning},
-				InstanceUUID:     "new-uuid",
-				AuthToken:        "test-auth-token",
-				RelayURL:         "https://relay.test.com",
-				Timeout:          30 * time.Second,
-			}
-			observed := snapshot.TransportObservedState{
-				CollectedAt: time.Now(),
-				FailedAuthConfig: snapshot.FailedAuthConfig{
+			desired := &fsmv2.WrappedDesiredState[snapshot.TransportDesiredState]{
+				State: config.DesiredStateRunning,
+				Config: snapshot.TransportDesiredState{
+					InstanceUUID: "new-uuid",
 					AuthToken:    "test-auth-token",
 					RelayURL:     "https://relay.test.com",
-					InstanceUUID: "test-uuid",
+					Timeout:      30 * time.Second,
 				},
-				ConsecutiveErrors: 3,
-				LastErrorType:     types.ErrorTypeInstanceDeleted,
 			}
-			result := s.Next(fsmv2.Snapshot{Observed: observed, Desired: desired})
+			obs := fsmv2.Observation[snapshot.TransportStatus]{
+				Status: snapshot.TransportStatus{
+					ConsecutiveErrors: 3,
+					LastErrorType:     types.ErrorTypeInstanceDeleted,
+					FailedAuthConfig: snapshot.FailedAuthConfig{
+						AuthToken:    "test-auth-token",
+						RelayURL:     "https://relay.test.com",
+						InstanceUUID: "test-uuid",
+					},
+				},
+			}
+			result := s.Next(fsmv2.Snapshot{Observed: obs, Desired: desired})
 
 			Expect(result.State).To(BeAssignableToTypeOf(&state.StartingState{}))
 			Expect(result.Reason).To(ContainSubstring("uuid=true"))
@@ -744,19 +767,22 @@ var _ = Describe("TransportWorker States", func() {
 
 		// Scenario 8: Empty failed config = safety net (fresh deps after restart)
 		It("should transition to Starting when failed config is empty (safety net)", func() {
-			desired := &snapshot.TransportDesiredState{
-				BaseDesiredState: config.BaseDesiredState{State: config.DesiredStateRunning},
-				InstanceUUID:     "test-uuid",
-				AuthToken:        "test-auth-token",
-				RelayURL:         "https://relay.test.com",
+			desired := &fsmv2.WrappedDesiredState[snapshot.TransportDesiredState]{
+				State: config.DesiredStateRunning,
+				Config: snapshot.TransportDesiredState{
+					InstanceUUID: "test-uuid",
+					AuthToken:    "test-auth-token",
+					RelayURL:     "https://relay.test.com",
+				},
 			}
-			observed := snapshot.TransportObservedState{
-				CollectedAt:       time.Now(),
-				ConsecutiveErrors: 3,
-				LastErrorType:     types.ErrorTypeInvalidToken,
-				// FailedAuth* fields all empty (zero values) — simulates fresh deps
+			obs := fsmv2.Observation[snapshot.TransportStatus]{
+				Status: snapshot.TransportStatus{
+					ConsecutiveErrors: 3,
+					LastErrorType:     types.ErrorTypeInvalidToken,
+					// FailedAuthConfig is zero value (empty)  -  simulates fresh deps
+				},
 			}
-			result := s.Next(fsmv2.Snapshot{Observed: observed, Desired: desired})
+			result := s.Next(fsmv2.Snapshot{Observed: obs, Desired: desired})
 
 			Expect(result.State).To(BeAssignableToTypeOf(&state.StartingState{}))
 			Expect(result.Reason).To(ContainSubstring("config changed"))

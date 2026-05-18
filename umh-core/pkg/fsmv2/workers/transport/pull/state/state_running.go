@@ -39,30 +39,30 @@ type RunningState struct {
 }
 
 func (s *RunningState) Next(snapAny any) fsmv2.NextResult[any, any] {
-	snap := helpers.ConvertSnapshot[snapshot.PullObservedState, *snapshot.PullDesiredState](snapAny)
+	snap := fsmv2.ConvertWorkerSnapshot[snapshot.PullDesiredState, snapshot.PullStatus](snapAny)
 
-	if snap.Observed.IsStopRequired() {
+	if snap.IsStopRequired() {
 		return fsmv2.Result[any, any](&StoppingState{}, fsmv2.SignalNone, nil,
-			fmt.Sprintf("stop required: shutdown=%t, parentState(observed)=%s", snap.Desired.IsShutdownRequested(), snap.Observed.ParentMappedState))
+			fmt.Sprintf("stop required: shutdown=%t, parentState(observed)=%s", snap.IsShutdownRequested, snap.ParentMappedState))
 	}
 
-	if snap.Observed.ConsecutiveErrors >= errorDegradedThreshold {
+	if snap.Status.ConsecutiveErrors >= errorDegradedThreshold {
 		return fsmv2.Result[any, any](&DegradedState{}, fsmv2.SignalNone, nil,
-			fmt.Sprintf("degrading: %d consecutive errors (threshold=%d)", snap.Observed.ConsecutiveErrors, errorDegradedThreshold))
+			fmt.Sprintf("degrading: %d consecutive errors (threshold=%d)", snap.Status.ConsecutiveErrors, errorDegradedThreshold))
 	}
 
-	if snap.Observed.PendingMessageCount >= pendingDegradedThreshold {
+	if snap.Status.PendingMessageCount >= pendingDegradedThreshold {
 		return fsmv2.Result[any, any](&DegradedState{}, fsmv2.SignalNone, nil,
 			fmt.Sprintf("degrading: %d pending messages (threshold=%d)",
-				snap.Observed.PendingMessageCount, pendingDegradedThreshold))
+				snap.Status.PendingMessageCount, pendingDegradedThreshold))
 	}
 
-	if snap.Observed.HasTransport && snap.Observed.HasValidToken {
+	if snap.Status.HasTransport && snap.Status.HasValidToken {
 		return fsmv2.Result[any, any](s, fsmv2.SignalNone, &action.PullAction{}, "pulling messages (transport and token available)")
 	}
 
 	return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil,
-		fmt.Sprintf("waiting: hasTransport=%t, hasValidToken=%t", snap.Observed.HasTransport, snap.Observed.HasValidToken))
+		fmt.Sprintf("waiting: hasTransport=%t, hasValidToken=%t", snap.Status.HasTransport, snap.Status.HasValidToken))
 }
 
 func (s *RunningState) String() string {

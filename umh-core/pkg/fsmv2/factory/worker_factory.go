@@ -136,7 +136,12 @@ func NewWorkerByType(workerType string, identity deps.Identity, logger deps.FSML
 		return nil, errors.New("unknown worker type")
 	}
 
-	return factoryFunc(identity, logger, stateReader, deps), nil
+	w := factoryFunc(identity, logger, stateReader, deps)
+	if w == nil {
+		return nil, fmt.Errorf("factory for type %q returned nil worker", workerType)
+	}
+
+	return w, nil
 }
 
 // NewSupervisorByType creates a supervisor for the given worker type.

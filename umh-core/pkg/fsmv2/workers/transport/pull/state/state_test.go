@@ -61,33 +61,34 @@ func makeSnapshotWithBackoff(
 	degradedEnteredAt time.Time,
 	lastErrorAt time.Time,
 ) fsmv2.Snapshot {
-	desired := &snapshot.PullDesiredState{
-		ParentMappedState: parentMappedState,
-		BaseDesiredState: config.BaseDesiredState{
-			ShutdownRequested: shutdownRequested,
-		},
-	}
-
-	observed := snapshot.PullObservedState{
-		CollectedAt: time.Now(),
-		PullDesiredState: snapshot.PullDesiredState{
+	desired := &fsmv2.WrappedDesiredState[snapshot.PullDesiredState]{
+		Config: snapshot.PullDesiredState{
 			ParentMappedState: parentMappedState,
 			BaseDesiredState: config.BaseDesiredState{
 				ShutdownRequested: shutdownRequested,
 			},
 		},
-		ConsecutiveErrors:   consecutiveErrors,
-		PendingMessageCount: pendingMessageCount,
-		HasTransport:        hasTransport,
-		HasValidToken:       hasValidToken,
-		LastErrorType:       lastErrorType,
-		LastRetryAfter:      lastRetryAfter,
-		DegradedEnteredAt:   degradedEnteredAt,
-		LastErrorAt:         lastErrorAt,
+		BaseDesiredState: config.BaseDesiredState{
+			ShutdownRequested: shutdownRequested,
+		},
 	}
 
+	obs := fsmv2.Observation[snapshot.PullStatus]{
+		Status: snapshot.PullStatus{
+			ConsecutiveErrors:   consecutiveErrors,
+			PendingMessageCount: pendingMessageCount,
+			HasTransport:        hasTransport,
+			HasValidToken:       hasValidToken,
+			LastErrorType:       lastErrorType,
+			LastRetryAfter:      lastRetryAfter,
+			DegradedEnteredAt:   degradedEnteredAt,
+			LastErrorAt:         lastErrorAt,
+		},
+	}
+	obs.ParentMappedState = parentMappedState
+
 	return fsmv2.Snapshot{
-		Observed: observed,
+		Observed: obs,
 		Desired:  desired,
 		Identity: deps.Identity{
 			ID:         "test-pull-worker",
@@ -367,7 +368,7 @@ var _ = Describe("StoppingState", func() {
 	})
 
 	// ENG-4608: Scenarios where the stop signal disappears while in Stopping.
-	// StoppingState must always progress to Stopped — it must never get stuck.
+	// StoppingState must always progress to Stopped  -  it must never get stuck.
 	// StoppedState handles recovery back to Running when conditions change.
 	Describe("stop signal reverted during shutdown", func() {
 		It("should recover when parent transitions back to Running (token re-auth)", func() {

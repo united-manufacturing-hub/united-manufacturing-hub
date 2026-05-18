@@ -1,0 +1,48 @@
+// Copyright 2025 UMH Systems GmbH
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+// Package state defines the FSM states for the helloworld worker.
+package state
+
+import (
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
+	hello_world "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/helloworld"
+)
+
+func init() {
+	fsmv2.RegisterInitialState("helloworld", &StoppedState{})
+}
+
+// StoppedState is the initial state where the worker is not running.
+// It waits for the desired state to request running, then transitions.
+type StoppedState struct {
+	helpers.StoppedBase
+}
+
+// Next implements the state transition logic.
+func (s *StoppedState) Next(snapAny any) fsmv2.NextResult[any, any] {
+	snap := fsmv2.ConvertWorkerSnapshot[hello_world.HelloworldConfig, hello_world.HelloworldStatus](snapAny)
+
+	if snap.IsShutdownRequested {
+		return fsmv2.Result[any, any](s, fsmv2.SignalNeedsRemoval, nil, "Shutdown requested, signaling removal")
+	}
+
+	return fsmv2.Result[any, any](&TryingToStartState{}, fsmv2.SignalNone, nil, "Starting worker")
+}
+
+// String returns the state name for logging and metrics.
+func (s *StoppedState) String() string {
+	return helpers.DeriveStateName(s)
+}

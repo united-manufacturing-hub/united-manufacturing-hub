@@ -24,7 +24,7 @@ import (
 	"strings"
 )
 
-// ValidateNextMethodTypeAssertions checks that Next() methods use the single entry-point type assertion pattern.
+// ValidateNextMethodTypeAssertions checks that Next() methods use fsmv2.ConvertWorkerSnapshot as the single entry-point.
 func ValidateNextMethodTypeAssertions(baseDir string) []Violation {
 	var violations []Violation
 
@@ -38,7 +38,7 @@ func ValidateNextMethodTypeAssertions(baseDir string) []Violation {
 	return violations
 }
 
-// checkSingleEntryPointPattern checks for type assertion or ConvertSnapshot at first statement.
+// checkSingleEntryPointPattern checks for type assertion or ConvertWorkerSnapshot at first statement.
 func checkSingleEntryPointPattern(filename string) []Violation {
 	var violations []Violation
 
@@ -76,7 +76,7 @@ func checkSingleEntryPointPattern(filename string) []Violation {
 			if callExpr, ok := bodyNode.(*ast.CallExpr); ok {
 				if indexExpr, ok := callExpr.Fun.(*ast.IndexListExpr); ok {
 					if selExpr, ok := indexExpr.X.(*ast.SelectorExpr); ok {
-						if selExpr.Sel.Name == "ConvertSnapshot" {
+						if selExpr.Sel.Name == "ConvertWorkerSnapshot" {
 							pos := fset.Position(callExpr.Pos())
 							convertSnapshotCalls = append(convertSnapshotCalls, pos.Line)
 						}
@@ -95,7 +95,7 @@ func checkSingleEntryPointPattern(filename string) []Violation {
 				File:    filename,
 				Line:    fset.Position(funcDecl.Pos()).Line,
 				Type:    "MISSING_ENTRY_ASSERTION",
-				Message: "Next() method missing entry-point type conversion (should use type assertion or ConvertSnapshot at first statement)",
+				Message: "Next() method missing entry-point type conversion (should use fsmv2.ConvertWorkerSnapshot at first statement)",
 			})
 		case totalEntryPoints > 1:
 			allLines := make([]int, 0, len(typeAssertions)+len(convertSnapshotCalls))
@@ -193,6 +193,15 @@ func checkShutdownCheckFirst(filename string) []Violation {
 
 						return false
 					}
+				}
+			}
+
+			// Also accept direct field access: snap.IsShutdownRequested (bool field on WorkerSnapshot).
+			if selExpr, ok := condNode.(*ast.SelectorExpr); ok {
+				if selExpr.Sel.Name == "IsShutdownRequested" {
+					isShutdownCheck = true
+
+					return false
 				}
 			}
 
@@ -883,7 +892,10 @@ func checkExhaustiveTransitionCoverage(filename string) []Violation {
 	var violations []Violation
 
 	baseName := filepath.Base(filename)
-	if strings.Contains(baseName, "trying_to") || strings.Contains(baseName, "stopping") {
+	// TryingTo and stopping states are active-transition states exempt from the catch-all rule.
+	// Stopped states are also exempt because they legitimately transition out when desired state
+	// changes (e.g., StoppedState -> TryingToStartState).
+	if strings.Contains(baseName, "trying_to") || strings.Contains(baseName, "stopping") || strings.Contains(baseName, "stopped") {
 		return violations
 	}
 
@@ -1138,7 +1150,7 @@ func checkStoppingStateNoCatchAllSelfReturn(filename string) []Violation {
 			}
 
 			if !isSelfReturn {
-				// Transitions to a different state — this is a progress path
+				// Transitions to a different state  -  this is a progress path
 				hasProgressPath = true
 
 				return false

@@ -511,7 +511,7 @@ type panickingWorker struct {
 	panicTriggered      bool
 }
 
-func (w *panickingWorker) CollectObservedState(ctx context.Context) (fsmv2.ObservedState, error) {
+func (w *panickingWorker) CollectObservedState(ctx context.Context, _ fsmv2.DesiredState) (fsmv2.ObservedState, error) {
 	return &testutil.ObservedState{
 		ID:          "panic-worker",
 		CollectedAt: time.Now(),
@@ -520,7 +520,7 @@ func (w *panickingWorker) CollectObservedState(ctx context.Context) (fsmv2.Obser
 }
 
 func (w *panickingWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, error) {
-	return &config.DesiredState{BaseDesiredState: config.BaseDesiredState{State: "running"}}, nil
+	return &config.DesiredState{State: "running"}, nil
 }
 
 func (w *panickingWorker) GetInitialState() fsmv2.State[any, any] {

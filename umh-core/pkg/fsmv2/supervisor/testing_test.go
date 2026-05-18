@@ -140,7 +140,7 @@ var _ = Describe("Testing Helpers", func() {
 				WorkerType: "s6",
 			}
 
-			observed, err := worker.CollectObservedState(ctx)
+			observed, err := worker.CollectObservedState(ctx, nil)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(observed).ToNot(BeNil())
 		})
@@ -160,7 +160,7 @@ var _ = Describe("Testing Helpers", func() {
 				WorkerType: "s6",
 			}
 
-			observed, err := worker.CollectObservedState(ctx)
+			observed, err := worker.CollectObservedState(ctx, nil)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(observed).To(Equal(customObserved))
 		})
@@ -174,7 +174,7 @@ var _ = Describe("Testing Helpers", func() {
 				},
 			}
 
-			observed, err := oldWorker.CollectObservedState(ctx)
+			observed, err := oldWorker.CollectObservedState(ctx, nil)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(observed).ToNot(BeNil())
 		})

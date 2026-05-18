@@ -61,33 +61,34 @@ func makeSnapshotWithBackoff(
 	degradedEnteredAt time.Time,
 	lastErrorAt time.Time,
 ) fsmv2.Snapshot {
-	desired := &snapshot.PushDesiredState{
-		ParentMappedState: parentMappedState,
-		BaseDesiredState: config.BaseDesiredState{
-			ShutdownRequested: shutdownRequested,
-		},
-	}
-
-	observed := snapshot.PushObservedState{
-		CollectedAt: time.Now(),
-		PushDesiredState: snapshot.PushDesiredState{
+	desired := &fsmv2.WrappedDesiredState[snapshot.PushDesiredState]{
+		Config: snapshot.PushDesiredState{
 			ParentMappedState: parentMappedState,
 			BaseDesiredState: config.BaseDesiredState{
 				ShutdownRequested: shutdownRequested,
 			},
 		},
-		ConsecutiveErrors:   consecutiveErrors,
-		PendingMessageCount: pendingMessageCount,
-		HasTransport:        hasTransport,
-		HasValidToken:       hasValidToken,
-		LastErrorType:       lastErrorType,
-		LastRetryAfter:      lastRetryAfter,
-		DegradedEnteredAt:   degradedEnteredAt,
-		LastErrorAt:         lastErrorAt,
+		BaseDesiredState: config.BaseDesiredState{
+			ShutdownRequested: shutdownRequested,
+		},
 	}
 
+	obs := fsmv2.Observation[snapshot.PushStatus]{
+		Status: snapshot.PushStatus{
+			ConsecutiveErrors:   consecutiveErrors,
+			PendingMessageCount: pendingMessageCount,
+			HasTransport:        hasTransport,
+			HasValidToken:       hasValidToken,
+			LastErrorType:       lastErrorType,
+			LastRetryAfter:      lastRetryAfter,
+			DegradedEnteredAt:   degradedEnteredAt,
+			LastErrorAt:         lastErrorAt,
+		},
+	}
+	obs.ParentMappedState = parentMappedState
+
 	return fsmv2.Snapshot{
-		Observed: observed,
+		Observed: obs,
 		Desired:  desired,
 		Identity: deps.Identity{
 			ID:         "test-push-worker",

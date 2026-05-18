@@ -204,11 +204,6 @@ type CollectorHealthConfig struct {
 // All fields except WorkerType and Store have sensible defaults.
 type Config struct {
 
-	// UserSpec provides initial user configuration for the supervisor.
-	// This is optional for supervisors created by parents (they receive config via updateUserSpec).
-	// For root supervisors (like application supervisors), this provides the initial configuration.
-	UserSpec config.UserSpec
-
 	// Store persists FSM state (identity, desired, observed) using triangular model.
 	// Required - no default. Use storage.NewTriangularStore(basicStore, logger) or a mock.
 	Store storage.TriangularStoreInterface
@@ -222,6 +217,22 @@ type Config struct {
 	// Example: deps["channelProvider"] could provide channels for the communicator worker.
 	// Optional - defaults to nil.
 	Dependencies map[string]any
+
+	// ForceExit, when non-nil, lets operators short-circuit the Phase 3 worker drain.
+	// Closing the channel signals every supervisor watching it (parent and children
+	// share the same channel via Config propagation) to break out of the drain loop
+	// and proceed to Phase 4 (ctx cancel). Intended use: cmd/main.go closes the
+	// channel on a second SIGTERM/SIGINT, since Go's signal.NotifyContext is
+	// single-shot and silently drops subsequent signals. Optional - nil means the
+	// drain loop runs to gracefulShutdownTimeout as before (the select arm blocks
+	// forever on a nil channel).
+	ForceExit <-chan struct{}
+
+	// UserSpec provides initial user configuration for the supervisor.
+	// This is optional for supervisors created by parents (they receive config via updateUserSpec).
+	// For root supervisors (like application supervisors), this provides the initial configuration.
+	UserSpec config.UserSpec
+
 	// WorkerType identifies the type of workers this supervisor manages.
 	// Required - no default.
 	WorkerType string
