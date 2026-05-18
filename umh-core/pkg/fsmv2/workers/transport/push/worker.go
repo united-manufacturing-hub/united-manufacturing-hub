@@ -72,8 +72,10 @@ func NewPushWorker(
 // GetDependencies returns the typed PushDependencies.
 // Panics with a clear message if BindDeps was not called before this worker is used.
 func (w *PushWorker) GetDependencies() *PushDependencies {
-	d := w.GetDependenciesAny().(*PushDependencies)
-	if d == nil {
+	raw := w.GetDependenciesAny()
+
+	d, ok := raw.(*PushDependencies)
+	if !ok || d == nil {
 		panic("PushWorker: GetDependencies called before BindDeps")
 	}
 
@@ -135,7 +137,7 @@ func (w *PushWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, e
 	}
 
 	return &fsmv2.WrappedDesiredState[snapshot.PushDesiredState]{
-		State: parsed.BaseUserSpec.GetState(),
+		State: parsed.GetState(),
 	}, nil
 }
 

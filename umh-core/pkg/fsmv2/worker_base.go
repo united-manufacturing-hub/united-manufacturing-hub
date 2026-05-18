@@ -74,6 +74,7 @@ func (w *WorkerBase[TConfig, TStatus, TDeps]) InitBase(
 func (w *WorkerBase[TConfig, TStatus, TDeps]) Config() TConfig {
 	w.mu.RLock()
 	defer w.mu.RUnlock()
+
 	return w.config
 }
 
@@ -81,6 +82,7 @@ func (w *WorkerBase[TConfig, TStatus, TDeps]) Config() TConfig {
 func (w *WorkerBase[TConfig, TStatus, TDeps]) ConfigReady() bool {
 	w.mu.RLock()
 	defer w.mu.RUnlock()
+
 	return w.configReady
 }
 
@@ -137,6 +139,7 @@ func (w *WorkerBase[TConfig, TStatus, TDeps]) DeriveDesiredState(spec interface{
 				return nil, fmt.Errorf("invalid desired state: %w", err)
 			}
 		}
+
 		wds.State = state
 	}
 
@@ -172,6 +175,7 @@ func (w *WorkerBase[TConfig, TStatus, TDeps]) GetInitialState() State[any, any] 
 func (w *WorkerBase[TConfig, TStatus, TDeps]) Identity() deps.Identity {
 	w.mu.RLock()
 	defer w.mu.RUnlock()
+
 	return w.identity
 }
 
@@ -179,6 +183,7 @@ func (w *WorkerBase[TConfig, TStatus, TDeps]) Identity() deps.Identity {
 func (w *WorkerBase[TConfig, TStatus, TDeps]) Logger() deps.FSMLogger {
 	w.mu.RLock()
 	defer w.mu.RUnlock()
+
 	return w.logger
 }
 
@@ -197,5 +202,6 @@ func (w *WorkerBase[TConfig, TStatus, TDeps]) GetDependenciesAny() any {
 	w.mu.RLock()
 	d := w.typedDeps
 	w.mu.RUnlock()
+
 	return d
 }

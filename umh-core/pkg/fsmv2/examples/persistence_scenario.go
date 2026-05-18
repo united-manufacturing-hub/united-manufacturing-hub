@@ -82,6 +82,7 @@ func RunPersistenceScenario(ctx context.Context, cfg PersistenceRunConfig) *Pers
 			Error:    fmt.Errorf("invalid tick interval %v: must be non-negative", cfg.TickInterval),
 		}
 	}
+
 	if tickInterval == 0 {
 		tickInterval = 100 * time.Millisecond
 	}
@@ -150,7 +151,7 @@ children:
 					deps.Err(loadErr))
 			}
 		} else {
-			workerMetrics := observed.MetricsEmbedder.Metrics.Worker
+			workerMetrics := observed.Metrics.Worker
 			result.CompactionCycles = workerMetrics.Counters[string(deps.CounterCompactionCyclesTotal)]
 			result.MaintenanceCycles = workerMetrics.Counters[string(deps.CounterMaintenanceCyclesTotal)]
 			result.LastCompactionAt = observed.Status.LastCompactionAt

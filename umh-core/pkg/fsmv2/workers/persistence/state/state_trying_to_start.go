@@ -36,14 +36,17 @@ func (s *TryingToStartState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	}
 
 	maintenanceActionName := action.NewRunMaintenanceAction().Name()
+
 	for i := len(snap.LastActionResults) - 1; i >= 0; i-- {
 		result := snap.LastActionResults[i]
 		if result.ActionType != maintenanceActionName {
 			continue
 		}
+
 		if result.Success {
 			return fsmv2.Result[any, any](&RunningState{}, fsmv2.SignalNone, nil, "Startup maintenance completed")
 		}
+
 		break
 	}
 

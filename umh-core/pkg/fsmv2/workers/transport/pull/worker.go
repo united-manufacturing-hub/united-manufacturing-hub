@@ -72,8 +72,10 @@ func NewPullWorker(
 // GetDependencies returns the typed PullDependencies.
 // Panics with a clear message if BindDeps was not called before this worker is used.
 func (w *PullWorker) GetDependencies() *PullDependencies {
-	d := w.GetDependenciesAny().(*PullDependencies)
-	if d == nil {
+	raw := w.GetDependenciesAny()
+
+	d, ok := raw.(*PullDependencies)
+	if !ok || d == nil {
 		panic("PullWorker: GetDependencies called before BindDeps")
 	}
 
@@ -135,7 +137,7 @@ func (w *PullWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, e
 	}
 
 	return &fsmv2.WrappedDesiredState[snapshot.PullDesiredState]{
-		State: parsed.BaseUserSpec.GetState(),
+		State: parsed.GetState(),
 	}, nil
 }
 

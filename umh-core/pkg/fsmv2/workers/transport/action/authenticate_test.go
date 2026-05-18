@@ -475,7 +475,7 @@ var _ = Describe("AuthenticateAction", func() {
 				Message: "connection refused",
 			}
 
-			for i := 0; i < 4; i++ {
+			for range 4 {
 				err := act.Execute(ctx, spyDeps)
 				Expect(err).NotTo(HaveOccurred())
 			}

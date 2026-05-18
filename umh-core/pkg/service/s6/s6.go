@@ -476,10 +476,12 @@ func (s *DefaultService) Remove(ctx context.Context, servicePath string, fsServi
 		if err != nil {
 			return fmt.Errorf("failed to probe service path during no-tracking remove: %w", err)
 		}
+
 		repoExists, err := fsService.PathExists(ctx, repoPath)
 		if err != nil {
 			return fmt.Errorf("failed to probe repository path during no-tracking remove: %w", err)
 		}
+
 		logExists, err := fsService.PathExists(ctx, logPath)
 		if err != nil {
 			return fmt.Errorf("failed to probe log path during no-tracking remove: %w", err)

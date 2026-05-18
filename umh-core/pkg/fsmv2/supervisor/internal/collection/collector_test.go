@@ -365,6 +365,7 @@ var _ = Describe("Collector", func() {
 				ObservationTimeout:  1 * time.Second,
 				DesiredStateProvider: func() (fsmv2.DesiredState, error) {
 					providerCallCount.Add(1)
+
 					return nil, transientErr
 				},
 			})

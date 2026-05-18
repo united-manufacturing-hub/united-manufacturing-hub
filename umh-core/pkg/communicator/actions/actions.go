@@ -226,6 +226,7 @@ func HandleActionMessage(instanceUUID uuid.UUID, payload models.ActionMessagePay
 		// this will allow the UI to retry the action
 		SendActionReplyV2(instanceUUID, sender, payload.ActionUUID, models.ActionFinishedWithFailure, "Failed to parse action payload: "+err.Error(), models.ErrParseFailed, nil, outboundChannel, payload.ActionType, nil)
 		log.Errorf("Error parsing action payload: %s", err)
+
 		if isLogToSentry {
 			fsmLogger.SentryError(deps.FeatureDisableReadFlows, "", err, "protocol_converter_parse_failed")
 		}
@@ -240,6 +241,7 @@ func HandleActionMessage(instanceUUID uuid.UUID, payload models.ActionMessagePay
 		// If validation fails, send a structured error reply using SendActionReplyV2 with ErrEditValidationFailed
 		SendActionReplyV2(instanceUUID, sender, payload.ActionUUID, models.ActionFinishedWithFailure, "Failed to validate action payload: "+err.Error(), models.ErrValidationFailed, nil, outboundChannel, payload.ActionType, nil)
 		log.Errorf("Error validating action payload: %s", err)
+
 		if isLogToSentry {
 			fsmLogger.SentryError(deps.FeatureDisableReadFlows, "", err, "protocol_converter_validate_failed")
 		}
@@ -252,6 +254,7 @@ func HandleActionMessage(instanceUUID uuid.UUID, payload models.ActionMessagePay
 	result, metadata, err := action.Execute()
 	if err != nil {
 		log.Errorf("Error executing action: %s", err)
+
 		if isLogToSentry {
 			fsmLogger.SentryError(deps.FeatureDisableReadFlows, "", err, "protocol_converter_execute_failed")
 		}
@@ -512,6 +515,7 @@ func payloadHasDFCState(actionPayload any) bool {
 	if !ok {
 		return false
 	}
+
 	for _, key := range []string{"readDFC", "writeDFC"} {
 		if dfc, ok := m[key]; ok {
 			if dfcMap, ok := dfc.(map[string]any); ok {
@@ -521,5 +525,6 @@ func payloadHasDFCState(actionPayload any) bool {
 			}
 		}
 	}
+
 	return false
 }

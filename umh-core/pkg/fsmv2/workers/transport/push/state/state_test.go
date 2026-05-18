@@ -366,7 +366,7 @@ var _ = Describe("StoppingState", func() {
 		})
 
 		It("should handle parent flapping between Running and Starting", func() {
-			for i := 0; i < 3; i++ {
+			for range 3 {
 				stopping := &state.StoppingState{}
 				snapStopped := makeSnapshot(config.DesiredStateStopped, false, 0, true, true)
 				result := stopping.Next(snapStopped)

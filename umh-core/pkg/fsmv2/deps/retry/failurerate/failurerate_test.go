@@ -118,6 +118,7 @@ var _ = Describe("Failure Rate Tracker", func() {
 			for range 20 {
 				if tracker.RecordOutcome(false) {
 					firedAgain = true
+
 					break
 				}
 			}

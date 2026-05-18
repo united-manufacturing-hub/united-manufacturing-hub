@@ -102,6 +102,7 @@ func makeAuthFailedSnapshot(authToken, relayURL, instanceUUID string, shutdownRe
 			},
 		},
 	}
+
 	return fsmv2.Snapshot{Observed: obs, Desired: desired}
 }
 
@@ -133,6 +134,7 @@ func makeAuthFailedStartingSnapshot(
 			},
 		},
 	}
+
 	return fsmv2.Snapshot{Observed: obs, Desired: desired}
 }
 

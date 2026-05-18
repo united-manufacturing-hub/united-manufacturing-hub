@@ -68,6 +68,7 @@ type ApplicationWorker struct {
 func NewApplicationWorker(identity deps.Identity, logger deps.FSMLogger, sr deps.StateReader) *ApplicationWorker {
 	w := &ApplicationWorker{}
 	w.InitBase(identity, logger, sr)
+
 	return w
 }
 

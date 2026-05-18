@@ -115,6 +115,7 @@ func (d *PushDependencies) RecordSuccess() {
 func (d *PushDependencies) RecordError() {
 	d.RetryTracker().RecordError()
 	d.parentDeps.RecordError()
+
 	if d.failureRate.RecordOutcome(false) {
 		d.BaseDependencies.GetLogger().SentryWarn(deps.FeatureForWorker(d.GetWorkerType()), d.GetHierarchyPath(), "persistent_push_failure",
 			deps.Float64("failure_rate", d.failureRate.FailureRate()))
@@ -131,6 +132,7 @@ func (d *PushDependencies) GetConsecutiveErrors() int {
 func (d *PushDependencies) GetLastErrorType() types.ErrorType {
 	d.errorMu.RLock()
 	defer d.errorMu.RUnlock()
+
 	return d.lastErrorType
 }
 
@@ -146,6 +148,7 @@ func (d *PushDependencies) StorePendingMessages(msgs []*types.UMHMessage) {
 			d.pendingMessages = append(d.pendingMessages, msg)
 		}
 	}
+
 	if len(d.pendingMessages) > maxPendingMessages {
 		dropped := len(d.pendingMessages) - maxPendingMessages
 		d.pendingMessages = d.pendingMessages[len(d.pendingMessages)-maxPendingMessages:]
@@ -201,6 +204,7 @@ func (d *PushDependencies) GetLastRetryAfter() time.Duration {
 // the degraded state, or the zero time if the child is not currently degraded.
 func (d *PushDependencies) GetDegradedEnteredAt() time.Time {
 	degradedSince, _ := d.RetryTracker().DegradedSince()
+
 	return degradedSince
 }
 

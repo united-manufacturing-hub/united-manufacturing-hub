@@ -65,6 +65,7 @@ func NewHelloworldWorker(
 	bd := w.InitBase(identity, logger, stateReader)
 	workerDeps := NewHelloworldDependencies(bd)
 	w.BindDeps(workerDeps)
+
 	return w, nil
 }
 

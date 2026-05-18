@@ -257,6 +257,6 @@ var _ = Describe("DeriveDesiredState saves to store", func() {
 		Expect(err).ToNot(HaveOccurred())
 
 		// mockWorker.DeriveDesiredState returns config.DesiredState{} (IsBeingRemoved=false).
-		Expect(savedShutdown).To(Equal(false))
+		Expect(savedShutdown).To(BeFalse())
 	})
 })

@@ -89,6 +89,7 @@ func NewCommunicatorWorker(
 
 	dependencies := NewCommunicatorDependencies(transportParam, bd)
 	w.BindDeps(dependencies)
+
 	return w, nil
 }
 
@@ -177,6 +178,7 @@ func init() {
 			wbd := w.InitBase(id, logger, stateReader)
 			commDeps := NewCommunicatorDependencies(nil, wbd)
 			w.BindDeps(commDeps)
+
 			return w
 		},
 		func(cfg interface{}) interface{} {

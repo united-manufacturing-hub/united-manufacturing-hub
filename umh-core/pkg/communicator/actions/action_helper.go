@@ -117,10 +117,12 @@ func toStringSlice(v any) ([]string, bool) {
 				result = append(result, s)
 			}
 		}
+
 		return result, len(result) == len(typed)
 	case string:
 		return []string{typed}, true
 	}
+
 	return nil, false
 }
 
@@ -130,10 +132,13 @@ func equalTopicSets(a, b []string) bool {
 	if len(a) != len(b) {
 		return false
 	}
+
 	aCopy := slices.Clone(a)
 	bCopy := slices.Clone(b)
+
 	sort.Strings(aCopy)
 	sort.Strings(bCopy)
+
 	return slices.Equal(aCopy, bCopy)
 }
 

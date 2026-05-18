@@ -31,8 +31,8 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/protocolconverter"
-	protocolconvertersvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/protocolconverter"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
+	protocolconvertersvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/protocolconverter"
 )
 
 var _ = Describe("EditProtocolConverter", func() {
@@ -270,7 +270,7 @@ var _ = Describe("EditProtocolConverter", func() {
 						"data": "output:\n  stdout: {}",
 						"type": "stdout",
 					},
-					"pipeline": map[string]interface{}{},
+					"pipeline":   map[string]interface{}{},
 					"umh_topics": []interface{}{"umh.v1.factory.*"},
 				},
 			}
@@ -289,7 +289,7 @@ var _ = Describe("EditProtocolConverter", func() {
 						"data": "output:\n  stdout: {}",
 						"type": "stdout",
 					},
-					"pipeline": map[string]interface{}{},
+					"pipeline":   map[string]interface{}{},
 					"umh_topics": []interface{}{"umh.v1.factory.*", "umh.v1.plant.*"},
 				},
 			}
@@ -373,7 +373,7 @@ var _ = Describe("EditProtocolConverter", func() {
 						"data": "output:\n  stdout: {}",
 						"type": "stdout",
 					},
-					"pipeline": map[string]interface{}{},
+					"pipeline":   map[string]interface{}{},
 					"umh_topics": []interface{}{"umh.v1.factory.*"},
 				},
 			}
@@ -542,7 +542,7 @@ var _ = Describe("EditProtocolConverter", func() {
 						"data": "output:\n  stdout: {}",
 						"type": "stdout",
 					},
-					"pipeline": map[string]interface{}{},
+					"pipeline":   map[string]interface{}{},
 					"umh_topics": topics,
 				},
 			}
@@ -571,6 +571,7 @@ var _ = Describe("EditProtocolConverter", func() {
 			for i, pc := range updatedConfig.ProtocolConverter {
 				if pc.Name == pcName {
 					updatedPC = &updatedConfig.ProtocolConverter[i]
+
 					break
 				}
 			}
@@ -621,7 +622,7 @@ var _ = Describe("EditProtocolConverter", func() {
 							"data": "output:\n  kafka:\n    addresses: [localhost:9092]",
 							"type": "kafka",
 						},
-						"pipeline":    map[string]interface{}{},
+						"pipeline":   map[string]interface{}{},
 						"umh_topics": newTopics,
 					},
 				}
@@ -645,6 +646,7 @@ var _ = Describe("EditProtocolConverter", func() {
 				for i, pc := range updatedConfig.ProtocolConverter {
 					if pc.Name == pcName {
 						updatedPC = &updatedConfig.ProtocolConverter[i]
+
 						break
 					}
 				}
@@ -700,6 +702,7 @@ var _ = Describe("EditProtocolConverter", func() {
 				for i, pc := range updatedConfig.ProtocolConverter {
 					if pc.Name == pcName {
 						updatedPC = &updatedConfig.ProtocolConverter[i]
+
 						break
 					}
 				}
@@ -773,6 +776,7 @@ var _ = Describe("EditProtocolConverter", func() {
 					}
 				}
 				Fail("protocol converter not found after execute")
+
 				return nil
 			}
 
@@ -800,8 +804,8 @@ var _ = Describe("EditProtocolConverter", func() {
 
 			It("should stop read DFC only", Label("disable-bridges"), func() {
 				pc := runEdit(map[string]interface{}{
-					"name": pcName,
-					"uuid": pcUUID.String(),
+					"name":    pcName,
+					"uuid":    pcUUID.String(),
 					"readDFC": minimalReadDFCPayload("stopped"),
 				})
 
@@ -813,8 +817,8 @@ var _ = Describe("EditProtocolConverter", func() {
 				mockConfig.Config.ProtocolConverter[0].ProtocolConverterServiceConfig.ReadDFCDesiredState = "stopped"
 
 				pc := runEdit(map[string]interface{}{
-					"name": pcName,
-					"uuid": pcUUID.String(),
+					"name":    pcName,
+					"uuid":    pcUUID.String(),
 					"readDFC": minimalReadDFCPayload("active"),
 				})
 
@@ -1113,6 +1117,7 @@ var _ = Describe("EditProtocolConverter", func() {
 				for i, pc := range updatedConfig.ProtocolConverter {
 					if pc.Name == pcName {
 						updatedPC = &updatedConfig.ProtocolConverter[i]
+
 						break
 					}
 				}
@@ -1192,6 +1197,7 @@ var _ = Describe("EditProtocolConverter", func() {
 				for i, pc := range updatedConfig.ProtocolConverter {
 					if pc.Name == pcName {
 						updatedPC = &updatedConfig.ProtocolConverter[i]
+
 						break
 					}
 				}

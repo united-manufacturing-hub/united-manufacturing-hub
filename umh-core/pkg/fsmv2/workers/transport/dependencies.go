@@ -224,6 +224,7 @@ func (d *TransportDependencies) GetConsecutiveErrors() int {
 func (d *TransportDependencies) GetPersistentAuthErrorCount() int {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
+
 	return d.persistentAuthErrorCount
 }
 

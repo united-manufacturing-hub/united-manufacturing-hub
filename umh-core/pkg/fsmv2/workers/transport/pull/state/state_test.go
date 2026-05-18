@@ -413,7 +413,7 @@ var _ = Describe("StoppingState", func() {
 			// Scenario: parent oscillates (e.g., repeated auth failures/retries).
 			// Each cycle: Running → Starting → Running. Children must not get stuck.
 
-			for i := 0; i < 3; i++ {
+			for i := range 3 {
 				// Parent enters Starting → child enters Stopping → Stopped
 				stopping := &state.StoppingState{}
 				snapStopped := makeSnapshot(config.DesiredStateStopped, false, 0, true, true)

@@ -120,7 +120,7 @@ const (
 
 	// ErrorTypeMax is a helper value marking the end of the ErrorType iota range.
 	// It is used in tests
-	// DO NOT ADD NEW CONSTANTS AFTER THIS
+	// DO NOT ADD NEW CONSTANTS AFTER THIS.
 	ErrorTypeMax
 )
 
@@ -177,6 +177,7 @@ func (e ErrorType) String() string {
 	if s, ok := ErrorTypeNames[e]; ok {
 		return s
 	}
+
 	return "unknown"
 }
 
@@ -253,5 +254,6 @@ func CounterForErrorType(t ErrorType) depspkg.CounterName {
 	if c, ok := ErrorTypeCounters[t]; ok {
 		return c
 	}
+
 	return depspkg.CounterNetworkErrorsTotal
 }

@@ -181,15 +181,15 @@ func (w *TransportWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredSta
 	// Validate required fields when worker should be running
 	if transportSpec.GetState() == config.DesiredStateRunning {
 		if transportSpec.RelayURL == "" {
-			return nil, fmt.Errorf("relayURL is required when state is running")
+			return nil, errors.New("relayURL is required when state is running")
 		}
 
 		if transportSpec.InstanceUUID == "" {
-			return nil, fmt.Errorf("instanceUUID is required when state is running")
+			return nil, errors.New("instanceUUID is required when state is running")
 		}
 
 		if transportSpec.AuthToken == "" {
-			return nil, fmt.Errorf("authToken is required when state is running")
+			return nil, errors.New("authToken is required when state is running")
 		}
 
 		if transportSpec.Timeout == 0 {

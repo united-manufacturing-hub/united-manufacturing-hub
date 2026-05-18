@@ -97,12 +97,21 @@ func NewPersistenceWorker(
 	}
 
 	w.BindDeps(dependencies)
+
 	return w, nil
 }
 
 // GetDependencies returns the typed persistence dependencies.
+// Panics with a clear message if BindDeps was not called before this worker is used.
 func (w *PersistenceWorker) GetDependencies() *PersistenceDependencies {
-	return w.GetDependenciesAny().(*PersistenceDependencies)
+	raw := w.GetDependenciesAny()
+
+	d, ok := raw.(*PersistenceDependencies)
+	if !ok || d == nil {
+		panic("PersistenceWorker: GetDependencies called before BindDeps")
+	}
+
+	return d
 }
 
 // CollectObservedState returns the current observed state of the persistence

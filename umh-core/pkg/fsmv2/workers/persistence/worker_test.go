@@ -46,6 +46,7 @@ var _ = Describe("PersistenceWorker", func() {
 	getPersistenceWorker := func(w any) *persistence.PersistenceWorker {
 		pw, ok := w.(*persistence.PersistenceWorker)
 		Expect(ok).To(BeTrue())
+
 		return pw
 	}
 

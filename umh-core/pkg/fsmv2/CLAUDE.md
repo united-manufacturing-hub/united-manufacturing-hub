@@ -126,23 +126,30 @@ type MyWorker struct {
 }
 ```
 
-**Constructor ritual** — call InitBase then BindDeps:
+**Constructor ritual** — call InitBase, then build deps from its returned `*BaseDependencies`, then BindDeps:
 
 ```go
 func NewMyWorker(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader, pool ConnectionPool) (*MyWorker, error) {
-    d := NewMyDependencies(pool, logger, sr, id)
     w := &MyWorker{}
-    w.InitBase(id, logger, sr)
+    bd := w.InitBase(id, logger, sr)
+    d := NewMyDependencies(pool, bd)
     w.BindDeps(d)
     return w, nil
 }
 ```
 
-**Typed dependency accessor** — add one per concrete worker (WorkerBase only exposes `any`):
+**Typed dependency accessor** — add one per concrete worker (WorkerBase only exposes `any`). Use comma-ok and a nil guard so the panic message survives any future TDeps change:
 
 ```go
 func (w *MyWorker) GetDependencies() *MyDependencies {
-    return w.GetDependenciesAny().(*MyDependencies)
+    raw := w.GetDependenciesAny()
+
+    d, ok := raw.(*MyDependencies)
+    if !ok || d == nil {
+        panic("MyWorker: GetDependencies called before BindDeps")
+    }
+
+    return d
 }
 ```
 
@@ -152,6 +159,7 @@ func (w *MyWorker) GetDependencies() *MyDependencies {
 - `Identity()`, `Logger()`, `Config()`, `ConfigReady()`, `GetDependenciesAny()`
 
 **What to override:**
+
 | Override | When |
 |----------|------|
 | `CollectObservedState` | Always — worker-specific snapshot |
