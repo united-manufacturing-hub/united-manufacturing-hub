@@ -19,11 +19,12 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	example_child "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplechild"
+	_ "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplechild/state"
 )
 
 var _ = Describe("ChildWorker", func() {
@@ -60,7 +61,7 @@ var _ = Describe("ChildWorker", func() {
 			worker, err := example_child.NewChildWorker(identity, mockPool, logger, nil)
 			Expect(err).NotTo(HaveOccurred())
 
-			observed, err := worker.CollectObservedState(context.Background())
+			observed, err := worker.CollectObservedState(context.Background(), nil)
 
 			Expect(err).NotTo(HaveOccurred())
 			Expect(observed).NotTo(BeNil())
@@ -81,8 +82,8 @@ var _ = Describe("ChildWorker", func() {
 
 			Expect(err).NotTo(HaveOccurred())
 
-			desired := desiredIface.(*config.DesiredState)
-			Expect(desired.State).To(Equal(config.DesiredStateRunning))
+			desired := desiredIface.(*fsmv2.WrappedDesiredState[example_child.ExamplechildConfig])
+			Expect(desired.GetState()).To(Equal(config.DesiredStateRunning))
 		})
 	})
 })

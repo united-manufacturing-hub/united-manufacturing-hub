@@ -20,8 +20,8 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport"
 	transportpkg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/types"
 )
 
 func TestAction(t *testing.T) {
@@ -32,13 +32,13 @@ func TestAction(t *testing.T) {
 // mockActionChannelProvider implements transport.ChannelProvider for action tests.
 // Phase 1 Architecture: ChannelProvider singleton MUST be set before creating dependencies.
 type mockActionChannelProvider struct {
-	inbound  chan<- *transport.UMHMessage
-	outbound <-chan *transport.UMHMessage
+	inbound  chan<- *types.UMHMessage
+	outbound <-chan *types.UMHMessage
 }
 
 func (m *mockActionChannelProvider) GetChannels(_ string) (
-	chan<- *transport.UMHMessage,
-	<-chan *transport.UMHMessage,
+	chan<- *types.UMHMessage,
+	<-chan *types.UMHMessage,
 ) {
 	return m.inbound, m.outbound
 }
@@ -51,8 +51,8 @@ func (m *mockActionChannelProvider) GetInboundStats(_ string) (capacity int, len
 // setupChannelProviderSingleton sets up the global singleton for tests.
 // Must be called in BeforeEach before creating TransportDependencies.
 func setupChannelProviderSingleton() {
-	inboundBi := make(chan *transport.UMHMessage, 100)
-	outboundBi := make(chan *transport.UMHMessage, 100)
+	inboundBi := make(chan *types.UMHMessage, 100)
+	outboundBi := make(chan *types.UMHMessage, 100)
 	provider := &mockActionChannelProvider{
 		inbound:  inboundBi,
 		outbound: outboundBi,

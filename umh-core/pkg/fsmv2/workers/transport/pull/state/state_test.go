@@ -23,9 +23,9 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
-	httpTransport "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport/http"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/pull/snapshot"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/pull/state"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/types"
 )
 
 func makeSnapshot(
@@ -56,38 +56,39 @@ func makeSnapshotWithBackoff(
 	hasTransport bool,
 	hasValidToken bool,
 	pendingMessageCount int,
-	lastErrorType httpTransport.ErrorType,
+	lastErrorType types.ErrorType,
 	lastRetryAfter time.Duration,
 	degradedEnteredAt time.Time,
 	lastErrorAt time.Time,
 ) fsmv2.Snapshot {
-	desired := &snapshot.PullDesiredState{
-		ParentMappedState: parentMappedState,
-		BaseDesiredState: config.BaseDesiredState{
-			ShutdownRequested: shutdownRequested,
-		},
-	}
-
-	observed := snapshot.PullObservedState{
-		CollectedAt: time.Now(),
-		PullDesiredState: snapshot.PullDesiredState{
+	desired := &fsmv2.WrappedDesiredState[snapshot.PullDesiredState]{
+		Config: snapshot.PullDesiredState{
 			ParentMappedState: parentMappedState,
 			BaseDesiredState: config.BaseDesiredState{
 				ShutdownRequested: shutdownRequested,
 			},
 		},
-		ConsecutiveErrors:   consecutiveErrors,
-		PendingMessageCount: pendingMessageCount,
-		HasTransport:        hasTransport,
-		HasValidToken:       hasValidToken,
-		LastErrorType:       lastErrorType,
-		LastRetryAfter:      lastRetryAfter,
-		DegradedEnteredAt:   degradedEnteredAt,
-		LastErrorAt:         lastErrorAt,
+		BaseDesiredState: config.BaseDesiredState{
+			ShutdownRequested: shutdownRequested,
+		},
 	}
 
+	obs := fsmv2.Observation[snapshot.PullStatus]{
+		Status: snapshot.PullStatus{
+			ConsecutiveErrors:   consecutiveErrors,
+			PendingMessageCount: pendingMessageCount,
+			HasTransport:        hasTransport,
+			HasValidToken:       hasValidToken,
+			LastErrorType:       lastErrorType,
+			LastRetryAfter:      lastRetryAfter,
+			DegradedEnteredAt:   degradedEnteredAt,
+			LastErrorAt:         lastErrorAt,
+		},
+	}
+	obs.ParentMappedState = parentMappedState
+
 	return fsmv2.Snapshot{
-		Observed: observed,
+		Observed: obs,
 		Desired:  desired,
 		Identity: deps.Identity{
 			ID:         "test-pull-worker",
@@ -260,7 +261,7 @@ var _ = Describe("DegradedState", func() {
 	It("should stay Degraded and emit PullAction with non-zero errors but low pending count", func() {
 		snap := makeSnapshotWithBackoff(
 			config.DesiredStateRunning, false, 2, true, true, 10,
-			httpTransport.ErrorTypeNetwork, 0,
+			types.ErrorTypeNetwork, 0,
 			time.Now().Add(-30*time.Second),
 			time.Time{},
 		)
@@ -281,7 +282,7 @@ var _ = Describe("DegradedState", func() {
 	It("should wait for backoff before retrying pull in degraded", func() {
 		snap := makeSnapshotWithBackoff(
 			config.DesiredStateRunning, false, 3, true, true, 5,
-			httpTransport.ErrorTypeNetwork, 0,
+			types.ErrorTypeNetwork, 0,
 			time.Now(), // degraded just entered
 			time.Time{},
 		)
@@ -294,7 +295,7 @@ var _ = Describe("DegradedState", func() {
 	It("should dispatch pull when backoff has expired", func() {
 		snap := makeSnapshotWithBackoff(
 			config.DesiredStateRunning, false, 1, true, true, 2,
-			httpTransport.ErrorTypeNetwork, 0,
+			types.ErrorTypeNetwork, 0,
 			time.Now().Add(-10*time.Second), // degraded 10s ago, backoff for 1 error = 2s
 			time.Time{},
 		)
@@ -307,7 +308,7 @@ var _ = Describe("DegradedState", func() {
 	It("should respect Retry-After header in degraded", func() {
 		snap := makeSnapshotWithBackoff(
 			config.DesiredStateRunning, false, 1, true, true, 1,
-			httpTransport.ErrorTypeServerError, 60*time.Second,
+			types.ErrorTypeServerError, 60*time.Second,
 			time.Time{},
 			time.Now(), // error just occurred, Retry-After = 60s
 		)
@@ -320,7 +321,7 @@ var _ = Describe("DegradedState", func() {
 	It("should use DegradedEnteredAt for exponential backoff timing", func() {
 		snap := makeSnapshotWithBackoff(
 			config.DesiredStateRunning, false, 5, true, true, 3,
-			httpTransport.ErrorTypeNetwork, 0,
+			types.ErrorTypeNetwork, 0,
 			time.Now().Add(-1*time.Second), // degraded 1s ago, backoff for 5 errors = 32s
 			time.Time{},
 		)
@@ -367,7 +368,7 @@ var _ = Describe("StoppingState", func() {
 	})
 
 	// ENG-4608: Scenarios where the stop signal disappears while in Stopping.
-	// StoppingState must always progress to Stopped — it must never get stuck.
+	// StoppingState must always progress to Stopped  -  it must never get stuck.
 	// StoppedState handles recovery back to Running when conditions change.
 	Describe("stop signal reverted during shutdown", func() {
 		It("should recover when parent transitions back to Running (token re-auth)", func() {

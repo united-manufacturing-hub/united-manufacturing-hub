@@ -18,9 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"time"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
@@ -45,7 +43,7 @@ type PushWorker struct {
 }
 
 // NewPushWorker creates a new PushWorker in Stopped state.
-// parentDeps must not be nil — the push worker delegates auth and transport to the parent.
+// parentDeps must not be nil  -  the push worker delegates auth and transport to the parent.
 func NewPushWorker(
 	identity deps.Identity,
 	logger deps.FSMLogger,
@@ -56,13 +54,9 @@ func NewPushWorker(
 		return nil, errors.New("logger must not be nil")
 	}
 
+	// Hardcode worker type to avoid DeriveWorkerType dependency on ObservedState struct name.
 	if identity.WorkerType == "" {
-		workerType, err := storage.DeriveWorkerType[snapshot.PushObservedState]()
-		if err != nil {
-			return nil, fmt.Errorf("failed to derive worker type: %w", err)
-		}
-
-		identity.WorkerType = workerType
+		identity.WorkerType = "push"
 	}
 
 	dependencies, err := NewPushDependencies(parentDeps, identity, logger, stateReader)
@@ -78,8 +72,9 @@ func NewPushWorker(
 }
 
 // CollectObservedState snapshots the current push worker state.
-// Handles context cancellation at entry as required by architecture tests.
-func (w *PushWorker) CollectObservedState(ctx context.Context) (fsmv2.ObservedState, error) {
+// Returns NewObservation; the collector handles CollectedAt, framework metrics,
+// action history, and metric accumulation automatically.
+func (w *PushWorker) CollectObservedState(ctx context.Context, _ fsmv2.DesiredState) (fsmv2.ObservedState, error) {
 	select {
 	case <-ctx.Done():
 		return nil, ctx.Err()
@@ -88,69 +83,26 @@ func (w *PushWorker) CollectObservedState(ctx context.Context) (fsmv2.ObservedSt
 
 	d := w.GetDependencies()
 
-	observed := snapshot.PushObservedState{
-		CollectedAt:   time.Now(),
-		HasTransport:  d.GetTransport() != nil,
-		HasValidToken: d.IsTokenValid(),
+	status := snapshot.PushStatus{
+		HasTransport:        d.GetTransport() != nil,
+		HasValidToken:       d.IsTokenValid(),
+		ConsecutiveErrors:   d.GetConsecutiveErrors(),
+		PendingMessageCount: d.PendingMessageCount(),
+		LastErrorType:       d.GetLastErrorType(),
+		LastRetryAfter:      d.GetLastRetryAfter(),
+		DegradedEnteredAt:   d.GetDegradedEnteredAt(),
+		LastErrorAt:         d.GetLastErrorAt(),
 	}
 
-	observed.ConsecutiveErrors = d.GetConsecutiveErrors()
-	observed.PendingMessageCount = d.PendingMessageCount()
-	observed.LastErrorType = d.GetLastErrorType()
-	observed.LastRetryAfter = d.GetLastRetryAfter()
-	observed.DegradedEnteredAt = d.GetDegradedEnteredAt()
-	observed.LastErrorAt = d.GetLastErrorAt()
-
-	var prevWorkerMetrics deps.Metrics
-
-	stateReader := d.GetStateReader()
-	if stateReader != nil {
-		var prev snapshot.PushObservedState
-		if err := stateReader.LoadObservedTyped(ctx, d.GetWorkerType(), d.GetWorkerID(), &prev); err == nil {
-			prevWorkerMetrics = prev.Metrics.Worker
-		} else {
-			d.GetLogger().Debug("observed_state_load_failed", deps.Err(err))
-		}
-	}
-
-	newWorkerMetrics := prevWorkerMetrics
-	if newWorkerMetrics.Counters == nil {
-		newWorkerMetrics.Counters = make(map[string]int64)
-	}
-
-	if newWorkerMetrics.Gauges == nil {
-		newWorkerMetrics.Gauges = make(map[string]float64)
-	}
-
-	tickMetrics := d.MetricsRecorder().Drain()
-
-	for name, delta := range tickMetrics.Counters {
-		newWorkerMetrics.Counters[name] += delta
-	}
-
-	for name, value := range tickMetrics.Gauges {
-		newWorkerMetrics.Gauges[name] = value
-	}
-
-	observed.Metrics.Worker = newWorkerMetrics
-
-	if fm := d.GetFrameworkState(); fm != nil {
-		observed.Metrics.Framework = *fm
-	}
-
-	observed.LastActionResults = d.GetActionHistory()
-
-	return observed, nil
+	return fsmv2.NewObservation(status), nil
 }
 
 // DeriveDesiredState determines the desired state from the provided spec.
 // Returns DesiredStateRunning when spec is nil (child workers default to running).
-// Must be PURE — only uses the spec parameter, never dependencies.
+// Must be PURE  -  only uses the spec parameter, never dependencies.
 func (w *PushWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, error) {
 	if spec == nil {
-		return &snapshot.PushDesiredState{
-			BaseDesiredState: config.BaseDesiredState{State: config.DesiredStateRunning},
-		}, nil
+		return &fsmv2.WrappedDesiredState[snapshot.PushDesiredState]{}, nil
 	}
 
 	userSpec, ok := spec.(config.UserSpec)
@@ -168,13 +120,13 @@ func (w *PushWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, e
 		Variables: userSpec.Variables,
 	}
 
-	leafDesired, err := config.DeriveLeafState[PushUserSpec](renderedSpec)
+	parsed, err := config.ParseUserSpec[PushUserSpec](renderedSpec)
 	if err != nil {
 		return nil, err
 	}
 
-	return &snapshot.PushDesiredState{
-		BaseDesiredState: leafDesired.BaseDesiredState,
+	return &fsmv2.WrappedDesiredState[snapshot.PushDesiredState]{
+		State: parsed.BaseUserSpec.GetState(),
 	}, nil
 }
 
@@ -184,7 +136,8 @@ func (w *PushWorker) GetInitialState() fsmv2.State[any, any] {
 }
 
 func init() {
-	if err := factory.RegisterWorkerType[snapshot.PushObservedState, *snapshot.PushDesiredState](
+	if err := factory.RegisterWorkerAndSupervisorFactoryByType(
+		"push",
 		func(id deps.Identity, logger deps.FSMLogger, stateReader deps.StateReader, extraDeps map[string]any) fsmv2.Worker {
 			parentDepsRaw, ok := extraDeps["transport_deps"]
 			if !ok {
@@ -204,7 +157,7 @@ func init() {
 			return worker
 		},
 		func(cfg interface{}) interface{} {
-			return supervisor.NewSupervisor[snapshot.PushObservedState, *snapshot.PushDesiredState](
+			return supervisor.NewSupervisor[fsmv2.Observation[snapshot.PushStatus], *fsmv2.WrappedDesiredState[snapshot.PushDesiredState]](
 				cfg.(supervisor.Config))
 		},
 	); err != nil {

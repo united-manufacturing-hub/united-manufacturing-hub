@@ -22,7 +22,7 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/subscriber"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/types"
 	"go.uber.org/zap"
 )
 
@@ -30,7 +30,7 @@ var _ = Describe("FSMv2 Direct Channel Mode", func() {
 	var (
 		handler            *subscriber.Handler
 		logger             *zap.SugaredLogger
-		fsmOutboundChannel chan *transport.UMHMessage
+		fsmOutboundChannel chan *types.UMHMessage
 	)
 
 	BeforeEach(func() {
@@ -48,7 +48,7 @@ var _ = Describe("FSMv2 Direct Channel Mode", func() {
 	Describe("FSMv2 mode (fsmOutboundChannel != nil)", func() {
 		BeforeEach(func() {
 			// Create buffered channel for FSMv2 mode
-			fsmOutboundChannel = make(chan *transport.UMHMessage, 10)
+			fsmOutboundChannel = make(chan *types.UMHMessage, 10)
 
 			handler = subscriber.NewHandler(
 				&mockWatchdog{},
@@ -136,7 +136,7 @@ var _ = Describe("FSMv2 Direct Channel Mode", func() {
 			)
 
 			// Create FSMv2 handler (with channel)
-			fsmv2Channel := make(chan *transport.UMHMessage, 10)
+			fsmv2Channel := make(chan *types.UMHMessage, 10)
 			defer close(fsmv2Channel)
 
 			fsmv2Handler := subscriber.NewHandler(

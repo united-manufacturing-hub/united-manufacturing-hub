@@ -70,7 +70,7 @@ type Worker struct {
 	CollectFunc  func(ctx context.Context) (fsmv2.ObservedState, error)
 }
 
-func (m *Worker) CollectObservedState(ctx context.Context) (fsmv2.ObservedState, error) {
+func (m *Worker) CollectObservedState(ctx context.Context, _ fsmv2.DesiredState) (fsmv2.ObservedState, error) {
 	if m.CollectFunc != nil {
 		return m.CollectFunc(ctx)
 	}
@@ -91,7 +91,7 @@ func (m *Worker) CollectObservedState(ctx context.Context) (fsmv2.ObservedState,
 }
 
 func (m *Worker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, error) {
-	return &config.DesiredState{BaseDesiredState: config.BaseDesiredState{State: "running"}}, nil
+	return &config.DesiredState{State: "running"}, nil
 }
 
 func (m *Worker) GetInitialState() fsmv2.State[any, any] {
@@ -107,7 +107,7 @@ type WorkerWithType struct {
 	WorkerType string
 }
 
-func (m *WorkerWithType) CollectObservedState(ctx context.Context) (fsmv2.ObservedState, error) {
+func (m *WorkerWithType) CollectObservedState(ctx context.Context, _ fsmv2.DesiredState) (fsmv2.ObservedState, error) {
 	if m.CollectFunc != nil {
 		return m.CollectFunc(ctx)
 	}

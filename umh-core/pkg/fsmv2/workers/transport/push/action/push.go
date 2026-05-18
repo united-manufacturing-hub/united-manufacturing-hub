@@ -21,9 +21,8 @@ import (
 	"time"
 
 	depspkg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport"
-	httpTransport "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport/http"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/push/snapshot"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/types"
 )
 
 const PushActionName = "push"
@@ -75,7 +74,7 @@ func (a *PushAction) Execute(ctx context.Context, depsAny any) error {
 
 		// Drain outbound into pending on transient/recoverable failure so the
 		// channel does not fill up across ticks while pending keeps failing
-		// (ENG-4741). Skipped when ctx is canceled — the messages survive in
+		// (ENG-4741). Skipped when ctx is canceled  -  the messages survive in
 		// the channel until the next tick.
 		if err != nil || len(remaining) > 0 {
 			if ctx.Err() == nil {
@@ -93,7 +92,7 @@ func (a *PushAction) Execute(ctx context.Context, depsAny any) error {
 		return errors.New("outbound channel is nil")
 	}
 
-	var messagesToPush []*transport.UMHMessage
+	var messagesToPush []*types.UMHMessage
 
 drainLoop:
 	for {
@@ -128,9 +127,9 @@ drainLoop:
 
 		pushDeps.StorePendingMessages(messagesToPush)
 
-		errType, retryAfter := httpTransport.ExtractErrorType(err)
+		errType, retryAfter := types.ExtractErrorType(err)
 		pushDeps.RecordTypedError(errType, retryAfter)
-		metrics.IncrementCounter(httpTransport.CounterForErrorType(errType), 1)
+		metrics.IncrementCounter(types.CounterForErrorType(errType), 1)
 
 		metrics.IncrementCounter(depspkg.CounterPushOps, 1)
 		metrics.IncrementCounter(depspkg.CounterPushFailures, 1)
@@ -191,7 +190,7 @@ drainLoop:
 // Returns (nil, nil) when all messages are sent successfully. Otherwise
 // returns the unsent tail of pending so the caller can buffer them for
 // the next tick.
-func (a *PushAction) retryPending(ctx context.Context, t transport.Transport, pushDeps snapshot.PushDependencies, pending []*transport.UMHMessage, metrics *depspkg.MetricsRecorder) ([]*transport.UMHMessage, error) {
+func (a *PushAction) retryPending(ctx context.Context, t types.Transport, pushDeps snapshot.PushDependencies, pending []*types.UMHMessage, metrics *depspkg.MetricsRecorder) ([]*types.UMHMessage, error) {
 	jwtToken := pushDeps.GetJWTToken()
 	authenticatedUUID := pushDeps.GetAuthenticatedUUID()
 
@@ -211,11 +210,11 @@ func (a *PushAction) retryPending(ctx context.Context, t transport.Transport, pu
 		}
 
 		pushStart := time.Now()
-		if err := t.Push(ctx, jwtToken, []*transport.UMHMessage{msg}); err != nil {
+		if err := t.Push(ctx, jwtToken, []*types.UMHMessage{msg}); err != nil {
 			pushLatency := time.Since(pushStart)
-			errType, retryAfter := httpTransport.ExtractErrorType(err)
+			errType, retryAfter := types.ExtractErrorType(err)
 			pushDeps.RecordTypedError(errType, retryAfter)
-			metrics.IncrementCounter(httpTransport.CounterForErrorType(errType), 1)
+			metrics.IncrementCounter(types.CounterForErrorType(errType), 1)
 			metrics.IncrementCounter(depspkg.CounterPushOps, 1)
 			metrics.IncrementCounter(depspkg.CounterPushFailures, 1)
 			metrics.SetGauge(depspkg.GaugeLastPushLatencyMs, float64(pushLatency.Milliseconds()))
@@ -236,7 +235,7 @@ func (a *PushAction) retryPending(ctx context.Context, t transport.Transport, pu
 			//
 			// ErrorTypeUnknown (unclassifiable) and ErrorTypeInstanceDeleted
 			// (terminal) reach this branch. There is no per-message retry
-			// counter in the system — preserving these would retry every tick
+			// counter in the system  -  preserving these would retry every tick
 			// until transport reset (5 consecutive errors) wipes the entire
 			// pending buffer, losing all messages instead of just the bad one.
 			//
@@ -276,7 +275,7 @@ func (a *PushAction) retryPending(ctx context.Context, t transport.Transport, pu
 func (a *PushAction) drainChannelToPending(pushDeps snapshot.PushDependencies, metrics *depspkg.MetricsRecorder) {
 	outChan := pushDeps.GetOutboundChan()
 
-	var drained []*transport.UMHMessage
+	var drained []*types.UMHMessage
 
 drainLoop:
 	for {
@@ -305,13 +304,13 @@ drainLoop:
 // parent action (re-authentication, transport reset). Messages are preserved
 // in the pending buffer for retry rather than dropped.
 //
-// Only persistent types reach here — transient errors (network, server, rate
+// Only persistent types reach here  -  transient errors (network, server, rate
 // limit, channel full) are intercepted by IsTransient() earlier in retryPending.
-func isRecoverableByParent(errType httpTransport.ErrorType) bool {
+func isRecoverableByParent(errType types.ErrorType) bool {
 	switch errType {
-	case httpTransport.ErrorTypeCloudflareChallenge,
-		httpTransport.ErrorTypeInvalidToken,
-		httpTransport.ErrorTypeProxyBlock:
+	case types.ErrorTypeCloudflareChallenge,
+		types.ErrorTypeInvalidToken,
+		types.ErrorTypeProxyBlock:
 		return true
 	default:
 		return false

@@ -761,20 +761,6 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) (err error) 
 			return fmt.Errorf("failed to derive desired state: %w", err)
 		}
 
-		// Validate DesiredState.State is a valid lifecycle state ("stopped" or "running")
-		// This catches both developer mistakes (hardcoded wrong values) and user config mistakes
-		// Use GetState() method from fsmv2.DesiredState interface
-		if valErr := config.ValidateDesiredState(desired.GetState()); valErr != nil {
-			s.logger.SentryError(deps.FeatureFSMv2, s.GetHierarchyPathUnlocked(), valErr, "invalid_desired_state",
-				deps.String("state", desired.GetState()),
-				deps.WorkerID(firstWorkerID))
-			metrics.RecordTemplateRenderingDuration(s.GetHierarchyPathUnlocked(), "error", templateDuration)
-			metrics.RecordTemplateRenderingError(s.GetHierarchyPathUnlocked(), "invalid_state_value")
-
-			// Don't cache validation errors - will retry next tick
-			return fmt.Errorf("failed to derive desired state: %w", valErr)
-		}
-
 		// Update cache
 		s.mu.Lock()
 		s.lastUserSpecHash = currentHash
@@ -799,6 +785,23 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) (err error) 
 	}
 
 	desiredDoc[FieldID] = firstWorkerID
+
+	// Store the merged user spec as originalUserSpec so observers can verify variable inheritance.
+	if userSpecWithVars.Config != "" || len(userSpecWithVars.Variables.User) > 0 {
+		userSpecBytes, marshalErr := json.Marshal(userSpecWithVars)
+		if marshalErr != nil {
+			s.logger.SentryWarn(deps.FeatureFSMv2, s.GetHierarchyPathUnlocked(), "original_user_spec_marshal_failed",
+				deps.Err(marshalErr))
+		} else {
+			var userSpecMap map[string]any
+			if unmarshalErr := json.Unmarshal(userSpecBytes, &userSpecMap); unmarshalErr != nil {
+				s.logger.SentryWarn(deps.FeatureFSMv2, s.GetHierarchyPathUnlocked(), "original_user_spec_unmarshal_failed",
+					deps.Err(unmarshalErr))
+			} else {
+				desiredDoc["originalUserSpec"] = userSpecMap
+			}
+		}
+	}
 
 	// Preserve ShutdownRequested: shutdown is a supervisor operation that overrides DeriveDesiredState
 	var existingDesiredTyped TDesired
@@ -970,11 +973,15 @@ func (s *Supervisor[TObserved, TDesired]) processSignal(ctx context.Context, wor
 	case fsmv2.SignalNeedsRemoval:
 		s.logger.Debug("worker_removal_signaled")
 
-		// Check if this worker should be restarted instead of removed
+		// During shutdown, demote a pending restart to plain removal so the
+		// shutdown sequence can complete. The lock here ensures that a
+		// concurrent Shutdown() setting started=false is fully visible before
+		// shouldRestart is evaluated.
 		s.mu.Lock()
 
-		shouldRestart := s.pendingRestart[workerID]
-		if shouldRestart {
+		shouldRestart := s.started.Load() && s.pendingRestart[workerID]
+		if s.pendingRestart[workerID] {
+			// Clean up maps unconditionally so no stale entries remain during drain.
 			delete(s.pendingRestart, workerID)
 			delete(s.restartRequestedAt, workerID)
 		}
@@ -1022,34 +1029,19 @@ func (s *Supervisor[TObserved, TDesired]) processSignal(ctx context.Context, wor
 		delete(s.workers, workerID)
 		s.mu.Unlock()
 
-		// Clean up children outside parent lock to avoid deadlock with GetChildren/calculateHierarchySize
-		doneChannels := make(map[string]<-chan struct{})
-
-		s.mu.Lock()
-
-		for name := range childrenToCleanup {
-			if done, exists := s.childDoneChans[name]; exists {
-				doneChannels[name] = done
-			}
-		}
-
-		s.mu.Unlock()
-
+		// Clean up children outside parent lock to avoid deadlock with GetChildren/calculateHierarchySize.
 		for name, child := range childrenToCleanup {
 			s.logger.Debug("child_supervisor_shutdown",
 				deps.String("child_name", name),
 				deps.String("context", "post_graceful_cleanup"))
-			child.Shutdown()
 
-			// Wait for child supervisor to fully stop (with timeout)
-			if done, exists := doneChannels[name]; exists {
-				s.waitForChildDone(done, name, s.GetHierarchyPath(), "worker_removal_cleanup")
-			}
+			// child.Shutdown() is idempotent and synchronous (see lifecycle.go Shutdown's
+			// started-flag guard). Subsequent removal-cascade calls to the same child early-return.
+			child.Shutdown()
 
 			// Remove from parent's children map (requires lock)
 			s.mu.Lock()
 			delete(s.children, name)
-			delete(s.childDoneChans, name)
 			s.mu.Unlock()
 		}
 
@@ -1471,6 +1463,10 @@ func (s *Supervisor[TObserved, TDesired]) reconcileChildren(specs []config.Child
 				ChildShutdownTimeout:    s.childShutdownTimeout,
 				EnableTraceLogging:      s.enableTraceLogging,
 				Dependencies:            mergedDeps,
+				// Share the same forceExit channel across the hierarchy so a single
+				// close (from cmd/main.go on a second SIGTERM) breaks every level's
+				// drain simultaneously.
+				ForceExit: s.forceExit,
 			}
 
 			// Use factory to create child supervisor with proper type
@@ -1610,7 +1606,17 @@ func (s *Supervisor[TObserved, TDesired]) reconcileChildren(specs []config.Child
 		}
 	}
 
-	// Phase 2: Complete removal of children that have finished shutdown
+	// Phase 2: Complete removal of children that have finished shutdown.
+	//
+	// First pass: collect the children that are ready to reap. This runs under
+	// parent.mu so the s.pendingRemoval / s.children reads are race-free.
+	type childToReap struct {
+		child SupervisorInterface
+		name  string
+	}
+
+	var reapList []childToReap
+
 	for name := range s.pendingRemoval {
 		child := s.children[name]
 		if child == nil {
@@ -1629,20 +1635,33 @@ func (s *Supervisor[TObserved, TDesired]) reconcileChildren(specs []config.Child
 			s.logger.Debug("child_shutdown_complete",
 				deps.String("child_name", name))
 
-			// Now safe to fully shut down and remove
-			child.Shutdown()
+			reapList = append(reapList, childToReap{name: name, child: child})
+		}
+	}
 
-			if done, exists := s.childDoneChans[name]; exists {
-				s.waitForChildDone(done, name, s.GetHierarchyPathUnlocked(), "reconcile_children")
-				delete(s.childDoneChans, name)
-			}
+	// Second pass: release parent.mu around child.Shutdown(). Each Shutdown can
+	// block up to the child's own gracefulShutdownTimeout (~5s by default), and
+	// holding parent.mu through it would stall this supervisor's tickLoop on
+	// any runtime spec-change that removes a child. The captured references stay
+	// valid: child.Shutdown() is idempotent, so concurrent callers are benign,
+	// and we re-acquire the lock to delete from the parent's maps below.
+	if len(reapList) > 0 {
+		s.mu.Unlock()
 
-			delete(s.children, name)
-			delete(s.pendingRemoval, name)
+		for _, item := range reapList {
+			item.child.Shutdown()
+		}
+
+		s.mu.Lock()
+
+		// Third pass: under lock again, finalize bookkeeping.
+		for _, item := range reapList {
+			delete(s.children, item.name)
+			delete(s.pendingRemoval, item.name)
 
 			s.logTrace("lifecycle",
 				deps.String("lifecycle_event", "child_remove_complete"),
-				deps.String("child_name", name),
+				deps.String("child_name", item.name),
 				deps.String("parent_worker_type", s.workerType))
 
 			removedCount++

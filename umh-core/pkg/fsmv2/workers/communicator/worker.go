@@ -30,8 +30,8 @@
 //
 // This package follows the FSM v2 pattern:
 //   - worker.go: Implements Worker interface (CollectObservedState, DeriveDesiredState)
+//   - config.go: CommunicatorConfig and CommunicatorStatus types
 //   - state/*.go: Defines state machine states and transitions
-//   - snapshot/snapshot.go: Observed and desired state structures
 //
 // # States and Transitions
 //
@@ -50,22 +50,20 @@ package communicator
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	fsmv2types "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	depspkg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/snapshot"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/state"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport"
-	httpTransport "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport/http"
+	httpTransport "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/http"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/types"
 )
+
+const workerTypeName = "communicator"
 
 // CommunicatorWorker implements the FSM v2 Worker interface for channel-based synchronization.
 type CommunicatorWorker struct {
@@ -76,19 +74,14 @@ type CommunicatorWorker struct {
 func NewCommunicatorWorker(
 	id string,
 	name string,
-	transportParam transport.Transport,
+	transportParam types.Transport,
 	logger depspkg.FSMLogger,
 	stateReader depspkg.StateReader,
 ) (*CommunicatorWorker, error) {
-	workerType, err := storage.DeriveWorkerType[snapshot.CommunicatorObservedState]()
-	if err != nil {
-		return nil, fmt.Errorf("failed to derive worker type: %w", err)
-	}
-
 	identity := depspkg.Identity{
 		ID:         id,
 		Name:       name,
-		WorkerType: workerType,
+		WorkerType: workerTypeName,
 		// HierarchyPath is set by the supervisor when adding workers via factory.
 	}
 
@@ -100,76 +93,31 @@ func NewCommunicatorWorker(
 }
 
 // CollectObservedState returns the current observed state of the communicator.
-func (w *CommunicatorWorker) CollectObservedState(ctx context.Context) (fsmv2.ObservedState, error) {
-	select {
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	default:
+// Returns NewObservation; the collector handles CollectedAt, framework metrics,
+// action history, and metric accumulation automatically.
+func (w *CommunicatorWorker) CollectObservedState(ctx context.Context, _ fsmv2.DesiredState) (fsmv2.ObservedState, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
 	}
 
-	deps := w.GetDependencies()
+	d := w.GetDependencies()
 
-	consecutiveErrors := deps.GetConsecutiveErrors()
-	degradedEnteredAt := deps.GetDegradedEnteredAt()
+	d.MetricsRecorder().SetGauge(depspkg.GaugeConsecutiveErrors, float64(d.GetConsecutiveErrors()))
 
-	var prevWorkerMetrics depspkg.Metrics
-
-	stateReader := deps.GetStateReader()
-	if stateReader != nil {
-		var prev snapshot.CommunicatorObservedState
-		if err := stateReader.LoadObservedTyped(ctx, deps.GetWorkerType(), deps.GetWorkerID(), &prev); err != nil {
-			deps.GetLogger().Debug("observed_state_load_failed", depspkg.Err(err))
-		} else {
-			prevWorkerMetrics = prev.Metrics.Worker
-		}
+	status := CommunicatorStatus{
+		DegradedEnteredAt: d.GetDegradedEnteredAt(),
 	}
 
-	newWorkerMetrics := prevWorkerMetrics
-
-	if newWorkerMetrics.Counters == nil {
-		newWorkerMetrics.Counters = make(map[string]int64)
-	}
-
-	if newWorkerMetrics.Gauges == nil {
-		newWorkerMetrics.Gauges = make(map[string]float64)
-	}
-
-	tickMetrics := deps.MetricsRecorder().Drain()
-
-	for name, delta := range tickMetrics.Counters {
-		newWorkerMetrics.Counters[name] += delta
-	}
-
-	for name, value := range tickMetrics.Gauges {
-		newWorkerMetrics.Gauges[name] = value
-	}
-
-	newWorkerMetrics.Gauges[string(depspkg.GaugeConsecutiveErrors)] = float64(consecutiveErrors)
-
-	metricsContainer := depspkg.MetricsContainer{
-		Worker: newWorkerMetrics,
-	}
-
-	if fm := deps.GetFrameworkState(); fm != nil {
-		metricsContainer.Framework = *fm
-	}
-
-	observed := snapshot.CommunicatorObservedState{
-		CollectedAt:       time.Now(),
-		ConsecutiveErrors: consecutiveErrors,
-		DegradedEnteredAt: degradedEnteredAt,
-		MetricsEmbedder:   depspkg.MetricsEmbedder{Metrics: metricsContainer},
-	}
-
-	return observed, nil
+	return fsmv2.NewObservation(status), nil
 }
 
-// DeriveDesiredState parses UserSpec.Config YAML into typed CommunicatorDesiredState.
+// DeriveDesiredState parses UserSpec.Config YAML into typed WrappedDesiredState[CommunicatorConfig].
 func (w *CommunicatorWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, error) {
 	if spec == nil {
-		return &snapshot.CommunicatorDesiredState{
-			BaseDesiredState: fsmv2types.BaseDesiredState{
-				State: "running",
+		return &fsmv2.WrappedDesiredState[CommunicatorConfig]{
+			State: fsmv2types.DesiredStateRunning,
+			Config: CommunicatorConfig{
+				Timeout: httpTransport.LongPollingDuration + httpTransport.LongPollingBuffer,
 			},
 			ChildrenSpecs: makeTransportChildSpec(fsmv2types.UserSpec{}),
 		}, nil
@@ -185,24 +133,18 @@ func (w *CommunicatorWorker) DeriveDesiredState(spec interface{}) (fsmv2.Desired
 		return nil, fmt.Errorf("template rendering failed: %w", err)
 	}
 
-	var commSpec CommunicatorUserSpec
+	var commSpec CommunicatorConfig
 	if err := yaml.Unmarshal([]byte(renderedConfig), &commSpec); err != nil {
 		return nil, fmt.Errorf("config parse failed: %w", err)
 	}
 
 	if commSpec.Timeout == 0 {
-		// Default to LongPollingDuration + buffer to prevent premature action timeouts
 		commSpec.Timeout = httpTransport.LongPollingDuration + httpTransport.LongPollingBuffer
 	}
 
-	return &snapshot.CommunicatorDesiredState{
-		BaseDesiredState: fsmv2types.BaseDesiredState{
-			State: commSpec.GetState(),
-		},
-		RelayURL:      commSpec.RelayURL,
-		InstanceUUID:  commSpec.InstanceUUID,
-		AuthToken:     commSpec.AuthToken,
-		Timeout:       commSpec.Timeout,
+	return &fsmv2.WrappedDesiredState[CommunicatorConfig]{
+		State:         commSpec.GetState(),
+		Config:        commSpec,
 		ChildrenSpecs: makeTransportChildSpec(userSpec),
 	}, nil
 }
@@ -221,12 +163,15 @@ func makeTransportChildSpec(parentSpec fsmv2types.UserSpec) []fsmv2types.ChildSp
 }
 
 // GetInitialState returns StoppedState as the initial FSM state.
+// Uses the initial state registry populated by the state package's init() function.
+// The caller must ensure the state package is imported (via blank import in main or test).
 func (w *CommunicatorWorker) GetInitialState() fsmv2.State[any, any] {
-	return &state.StoppedState{}
+	return fsmv2.LookupInitialState(workerTypeName)
 }
 
 func init() {
-	if err := factory.RegisterWorkerType[snapshot.CommunicatorObservedState, *snapshot.CommunicatorDesiredState](
+	if err := factory.RegisterWorkerAndSupervisorFactoryByType(
+		workerTypeName,
 		func(id depspkg.Identity, logger depspkg.FSMLogger, stateReader depspkg.StateReader, _ map[string]any) fsmv2.Worker {
 			// ChannelProvider must be set via global singleton before factory is called (will panic if not set).
 			// Transport creation and auth are handled by TransportWorker (ENG-4264).
@@ -237,7 +182,7 @@ func init() {
 			}
 		},
 		func(cfg interface{}) interface{} {
-			return supervisor.NewSupervisor[snapshot.CommunicatorObservedState, *snapshot.CommunicatorDesiredState](
+			return supervisor.NewSupervisor[fsmv2.Observation[CommunicatorStatus], *fsmv2.WrappedDesiredState[CommunicatorConfig]](
 				cfg.(supervisor.Config))
 		},
 	); err != nil {

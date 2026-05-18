@@ -61,7 +61,7 @@ type hierarchicalWorker struct {
 	observed      *mockObservedState
 }
 
-func (h *hierarchicalWorker) CollectObservedState(ctx context.Context) (fsmv2.ObservedState, error) {
+func (h *hierarchicalWorker) CollectObservedState(ctx context.Context, _ fsmv2.DesiredState) (fsmv2.ObservedState, error) {
 	return h.observed, nil
 }
 
@@ -69,8 +69,8 @@ func (h *hierarchicalWorker) DeriveDesiredState(spec interface{}) (fsmv2.Desired
 	h.logger.Log("DeriveDesiredState:" + h.id)
 
 	return &config.DesiredState{
-		BaseDesiredState: config.BaseDesiredState{State: "running"},
-		ChildrenSpecs:    h.childrenSpecs,
+		State:         "running",
+		ChildrenSpecs: h.childrenSpecs,
 	}, nil
 }
 

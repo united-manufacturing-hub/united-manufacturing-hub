@@ -51,3 +51,21 @@ linters:
     - usetesting
     - whitespace
     - wsl_v5
+
+  exclusions:
+    rules:
+      # The deprecation godoc on config.DesiredState exempts supervisor/testutil
+      # as the named legacy test-helper location. Per-package test mocks across
+      # the fsmv2 tree follow the same pattern, so suppress SA1019 at every
+      # test-mock use site instead of annotating each individually.
+      #
+      # TODO(L9): remove once supervisor/testutil and per-package test mocks
+      # migrate to fsmv2.WrappedDesiredState[TConfig].
+      - path: _test\.go
+        linters:
+          - staticcheck
+        text: "SA1019:.*config.DesiredState is deprecated"
+      - path: supervisor/testutil/
+        linters:
+          - staticcheck
+        text: "SA1019:.*config.DesiredState is deprecated"

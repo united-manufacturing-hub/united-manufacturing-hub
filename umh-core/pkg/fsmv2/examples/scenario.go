@@ -49,7 +49,7 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/types"
 )
 
 // ScenarioRunner executes scenarios that need infrastructure setup beyond
@@ -177,6 +177,7 @@ type Scenario struct {
 // Registry contains all available scenarios.
 // Add new scenarios here to make them available in both tests and CLI.
 var Registry = map[string]Scenario{
+	"helloworld":   HelloworldScenario,
 	"simple":       SimpleScenario,
 	"failing":      FailingScenario,
 	"panic":        PanicScenario,
@@ -217,12 +218,12 @@ var CommunicatorScenarioEntry = Scenario{
 			TickInterval: cfg.TickInterval,
 			Logger:       cfg.Logger,
 			// Add test messages for metrics visibility in CLI scenario
-			InitialPullMessages: []*transport.UMHMessage{
+			InitialPullMessages: []*types.UMHMessage{
 				{InstanceUUID: "test-instance-uuid", Content: "test-action-1"},
 				{InstanceUUID: "test-instance-uuid", Content: "test-action-2"},
 				{InstanceUUID: "test-instance-uuid", Content: "test-action-3"},
 			},
-			InitialOutboundMessages: []*transport.UMHMessage{
+			InitialOutboundMessages: []*types.UMHMessage{
 				{InstanceUUID: "test-instance-uuid", Content: "test-status-1"},
 				{InstanceUUID: "test-instance-uuid", Content: "test-status-2"},
 			},

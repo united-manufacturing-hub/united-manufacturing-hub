@@ -18,9 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"time"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
@@ -45,7 +43,7 @@ type PullWorker struct {
 }
 
 // NewPullWorker creates a new PullWorker in Stopped state.
-// parentDeps must not be nil — the pull worker delegates auth and transport to the parent.
+// parentDeps must not be nil  -  the pull worker delegates auth and transport to the parent.
 func NewPullWorker(
 	identity deps.Identity,
 	logger deps.FSMLogger,
@@ -56,13 +54,9 @@ func NewPullWorker(
 		return nil, errors.New("logger must not be nil")
 	}
 
+	// Hardcode worker type to avoid DeriveWorkerType dependency on ObservedState struct name.
 	if identity.WorkerType == "" {
-		workerType, err := storage.DeriveWorkerType[snapshot.PullObservedState]()
-		if err != nil {
-			return nil, fmt.Errorf("failed to derive worker type: %w", err)
-		}
-
-		identity.WorkerType = workerType
+		identity.WorkerType = "pull"
 	}
 
 	dependencies, err := NewPullDependencies(parentDeps, identity, logger, stateReader)
@@ -78,8 +72,9 @@ func NewPullWorker(
 }
 
 // CollectObservedState snapshots the current pull worker state.
-// Handles context cancellation at entry as required by architecture tests.
-func (w *PullWorker) CollectObservedState(ctx context.Context) (fsmv2.ObservedState, error) {
+// Returns NewObservation; the collector handles CollectedAt, framework metrics,
+// action history, and metric accumulation automatically.
+func (w *PullWorker) CollectObservedState(ctx context.Context, _ fsmv2.DesiredState) (fsmv2.ObservedState, error) {
 	select {
 	case <-ctx.Done():
 		return nil, ctx.Err()
@@ -88,8 +83,7 @@ func (w *PullWorker) CollectObservedState(ctx context.Context) (fsmv2.ObservedSt
 
 	d := w.GetDependencies()
 
-	observed := snapshot.PullObservedState{
-		CollectedAt:         time.Now(),
+	status := snapshot.PullStatus{
 		HasTransport:        d.GetTransport() != nil,
 		HasValidToken:       d.IsTokenValid(),
 		IsBackpressured:     d.IsBackpressured(),
@@ -99,56 +93,16 @@ func (w *PullWorker) CollectObservedState(ctx context.Context) (fsmv2.ObservedSt
 		LastRetryAfter:      d.GetLastRetryAfter(),
 		DegradedEnteredAt:   d.GetDegradedEnteredAt(),
 		LastErrorAt:         d.GetLastErrorAt(),
-		LastActionResults:   d.GetActionHistory(),
 	}
 
-	var prevWorkerMetrics deps.Metrics
-
-	stateReader := d.GetStateReader()
-	if stateReader != nil {
-		var prev snapshot.PullObservedState
-		if err := stateReader.LoadObservedTyped(ctx, d.GetWorkerType(), d.GetWorkerID(), &prev); err == nil {
-			prevWorkerMetrics = prev.Metrics.Worker
-		} else {
-			d.GetLogger().Debug("observed_state_load_failed", deps.Err(err))
-		}
-	}
-
-	newWorkerMetrics := prevWorkerMetrics
-	if newWorkerMetrics.Counters == nil {
-		newWorkerMetrics.Counters = make(map[string]int64)
-	}
-
-	if newWorkerMetrics.Gauges == nil {
-		newWorkerMetrics.Gauges = make(map[string]float64)
-	}
-
-	tickMetrics := d.MetricsRecorder().Drain()
-
-	for name, delta := range tickMetrics.Counters {
-		newWorkerMetrics.Counters[name] += delta
-	}
-
-	for name, value := range tickMetrics.Gauges {
-		newWorkerMetrics.Gauges[name] = value
-	}
-
-	observed.Metrics.Worker = newWorkerMetrics
-
-	if fm := d.GetFrameworkState(); fm != nil {
-		observed.Metrics.Framework = *fm
-	}
-
-	return observed, nil
+	return fsmv2.NewObservation(status), nil
 }
 
 // DeriveDesiredState determines the desired state from the provided spec.
-// Must be PURE — only uses the spec parameter, never dependencies.
+// Must be PURE  -  only uses the spec parameter, never dependencies.
 func (w *PullWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, error) {
 	if spec == nil {
-		return &snapshot.PullDesiredState{
-			BaseDesiredState: config.BaseDesiredState{State: config.DesiredStateRunning},
-		}, nil
+		return &fsmv2.WrappedDesiredState[snapshot.PullDesiredState]{}, nil
 	}
 
 	userSpec, ok := spec.(config.UserSpec)
@@ -166,12 +120,14 @@ func (w *PullWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, e
 		Variables: userSpec.Variables,
 	}
 
-	desired, err := config.DeriveLeafState[PullUserSpec](renderedSpec)
+	parsed, err := config.ParseUserSpec[PullUserSpec](renderedSpec)
 	if err != nil {
 		return nil, err
 	}
 
-	return &desired, nil
+	return &fsmv2.WrappedDesiredState[snapshot.PullDesiredState]{
+		State: parsed.BaseUserSpec.GetState(),
+	}, nil
 }
 
 // GetInitialState returns StoppedState as the pull worker's initial FSM state.
@@ -180,7 +136,8 @@ func (w *PullWorker) GetInitialState() fsmv2.State[any, any] {
 }
 
 func init() {
-	if err := factory.RegisterWorkerType[snapshot.PullObservedState, *snapshot.PullDesiredState](
+	if err := factory.RegisterWorkerAndSupervisorFactoryByType(
+		"pull",
 		func(id deps.Identity, logger deps.FSMLogger, stateReader deps.StateReader, extraDeps map[string]any) fsmv2.Worker {
 			parentDepsRaw, ok := extraDeps["transport_deps"]
 			if !ok {
@@ -200,7 +157,7 @@ func init() {
 			return worker
 		},
 		func(cfg interface{}) interface{} {
-			return supervisor.NewSupervisor[snapshot.PullObservedState, *snapshot.PullDesiredState](
+			return supervisor.NewSupervisor[fsmv2.Observation[snapshot.PullStatus], *fsmv2.WrappedDesiredState[snapshot.PullDesiredState]](
 				cfg.(supervisor.Config))
 		},
 	); err != nil {

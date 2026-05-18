@@ -157,25 +157,24 @@ func (m *MyFSM) enterRunning(e *fsm.Event) {
 
 **FSMv2 Next():**
 ```go
-func (s *TryingToStartState) Next(snapAny any) (fsmv2.State[any, any], fsmv2.Signal, fsmv2.Action[any]) {
-    snap := helpers.ConvertSnapshot[MyObservedState, *MyDesiredState](snapAny)
+func (s *TryingToStartState) Next(snapAny any) fsmv2.NextResult[any, any] {
+    snap := fsmv2.ConvertWorkerSnapshot[MyConfig, MyStatus](snapAny)
 
     // Check shutdown first
-    if snap.Observed.IsStopRequired() {
-        return &TryingToStopState{}, fsmv2.SignalNone, nil
+    if snap.IsStopRequired() {
+        return fsmv2.Result[any, any](&TryingToStopState{}, fsmv2.SignalNone, nil, "stop required")
     }
 
     // Transition based on observation, not action completion
-    if snap.Observed.IsProcessRunning {
-        return &RunningState{}, fsmv2.SignalNone, nil
+    if snap.Status.IsProcessRunning {
+        return fsmv2.Result[any, any](&RunningState{}, fsmv2.SignalNone, nil, "process running")
     }
 
     // Emit action - stay in same state until observation changes
-    return s, fsmv2.SignalNone, &StartProcessAction{}
+    return fsmv2.Result[any, any](s, fsmv2.SignalNone, &StartProcessAction{}, "starting process")
 }
 
 func (s *TryingToStartState) String() string { return "trying_to_start" }
-func (s *TryingToStartState) Reason() string { return "Starting process" }
 ```
 
 ### 4. Convert actions to Action interface implementations
@@ -256,7 +255,7 @@ type MyWorker struct {
     logger deps.FSMLogger
 }
 
-func (w *MyWorker) CollectObservedState(ctx context.Context) (fsmv2.ObservedState, error) {
+func (w *MyWorker) CollectObservedState(ctx context.Context, desired fsmv2.DesiredState) (fsmv2.ObservedState, error) {
     // Runs in background goroutine managed by supervisor
     return &MyObservedState{
         CollectedAt:      time.Now(),
@@ -276,7 +275,7 @@ Every FSMv2 worker must implement:
 ```go
 type Worker interface {
     // Query actual system state (runs periodically in a background goroutine)
-    CollectObservedState(ctx context.Context) (ObservedState, error)
+    CollectObservedState(ctx context.Context, desired DesiredState) (ObservedState, error)
 
     // Transform user config to desired state (called on config change)
     DeriveDesiredState(spec interface{}) (DesiredState, error)
@@ -356,28 +355,27 @@ func (m *MyFSM) leaveRunning(e *fsm.Event) {
 
 **FSMv2:**
 ```go
-// state/running.go
+// state/state_running.go
 type RunningState struct{}
 
-func (s *RunningState) Next(snapAny any) (fsmv2.State[any, any], fsmv2.Signal, fsmv2.Action[any]) {
-    snap := helpers.ConvertSnapshot[MyObservedState, *MyDesiredState](snapAny)
+func (s *RunningState) Next(snapAny any) fsmv2.NextResult[any, any] {
+    snap := fsmv2.ConvertWorkerSnapshot[MyConfig, MyStatus](snapAny)
 
     // Check shutdown first (equivalent to leave callback)
-    if snap.Observed.IsStopRequired() {
-        return &TryingToStopState{}, fsmv2.SignalNone, nil
+    if snap.IsStopRequired() {
+        return fsmv2.Result[any, any](&TryingToStopState{}, fsmv2.SignalNone, nil, "stop required")
     }
 
     // Health check (equivalent to before callback condition)
-    if !snap.Observed.IsHealthy {
-        return &DegradedState{Reason: "health check failed"}, fsmv2.SignalNone, nil
+    if !snap.Status.IsHealthy {
+        return fsmv2.Result[any, any](&DegradedState{}, fsmv2.SignalNone, nil, "health check failed")
     }
 
     // Stay running
-    return s, fsmv2.SignalNone, nil
+    return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil, "running healthy")
 }
 
 func (s *RunningState) String() string { return "running" }
-func (s *RunningState) Reason() string { return "Worker is healthy and operational" }
 ```
 
 ### FSMv1 action to FSMv2 Action implementation
@@ -534,7 +532,7 @@ if !m.healthCheck() {
 **FSMv2:**
 ```go
 // Health is part of ObservedState, collected automatically
-func (w *MyWorker) CollectObservedState(ctx context.Context) (fsmv2.ObservedState, error) {
+func (w *MyWorker) CollectObservedState(ctx context.Context, desired fsmv2.DesiredState) (fsmv2.ObservedState, error) {
     deps := w.GetDependencies()
 
     return &MyObservedState{
@@ -688,7 +686,16 @@ func (s *TryingToConnectState) Next(snapAny any) (fsmv2.State[any, any], fsmv2.S
 
 ObservedState must include a timestamp for staleness detection. The supervisor uses this to detect when observations are too old.
 
-**Required:**
+**Worker API v2 (preferred):** Use `fsmv2.NewObservation(status)`; the collector sets `CollectedAt` automatically.
+
+```go
+func (w *MyWorker) CollectObservedState(ctx context.Context, desired fsmv2.DesiredState) (fsmv2.ObservedState, error) {
+    return fsmv2.NewObservation(MyStatus{Healthy: true}), nil
+}
+```
+
+**Legacy API:** Set `CollectedAt` manually in your ObservedState.
+
 ```go
 type MyObservedState struct {
     CollectedAt time.Time  // REQUIRED for staleness detection

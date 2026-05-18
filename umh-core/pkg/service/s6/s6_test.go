@@ -27,6 +27,7 @@ import (
 	"github.com/cactus/tai64"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/backoff"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/s6serviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
@@ -459,7 +460,7 @@ var _ = Describe("S6 Service", func() {
 
 		It("removes both service and log directory (normal case)", func() {
 			// Simulate a service with tracked files
-			svc.artifacts = &ServiceArtifacts{
+			svc.artifacts.Store(&ServiceArtifacts{
 				ServiceDir: svcPath,
 				LogDir:     logDir,
 				CreatedFiles: []string{
@@ -472,17 +473,18 @@ var _ = Describe("S6 Service", func() {
 					filepath.Join(svcPath, "dependencies.d", "base"),
 					filepath.Join(svcPath, ".complete"),
 				},
-			}
+			})
 
 			err := svc.Remove(ctx, svcPath, mockFS)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(pathExists(svcPath)).To(BeFalse())
 			Expect(pathExists(logDir)).To(BeFalse())
+			Expect(svc.artifacts.Load()).To(BeNil(), "Remove must clear artifact tracking so Health() returns ActionOK after cleanup")
 		})
 
 		It("is successful when only the log dir had to be removed", func() {
 			// Simulate a service with tracked files
-			svc.artifacts = &ServiceArtifacts{
+			svc.artifacts.Store(&ServiceArtifacts{
 				ServiceDir: svcPath,
 				LogDir:     logDir,
 				CreatedFiles: []string{
@@ -495,18 +497,19 @@ var _ = Describe("S6 Service", func() {
 					filepath.Join(svcPath, "dependencies.d", "base"),
 					filepath.Join(svcPath, ".complete"),
 				},
-			}
+			})
 
 			exists.Delete(svcPath) // service dir already gone
 
 			err := svc.Remove(ctx, svcPath, mockFS)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(pathExists(logDir)).To(BeFalse())
+			Expect(svc.artifacts.Load()).To(BeNil(), "Remove must clear artifact tracking so Health() returns ActionOK after cleanup")
 		})
 
 		It("is idempotent (everything already gone)", func() {
 			// Simulate a service with tracked files
-			svc.artifacts = &ServiceArtifacts{
+			svc.artifacts.Store(&ServiceArtifacts{
 				ServiceDir: svcPath,
 				LogDir:     logDir,
 				CreatedFiles: []string{
@@ -519,7 +522,7 @@ var _ = Describe("S6 Service", func() {
 					filepath.Join(svcPath, "dependencies.d", "base"),
 					filepath.Join(svcPath, ".complete"),
 				},
-			}
+			})
 
 			exists = sync.Map{} // nothing exists
 
@@ -533,11 +536,12 @@ var _ = Describe("S6 Service", func() {
 			err := svc.Remove(ctx, svcPath, mockFS)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(removeCalls).To(Equal(0), "RemoveAll should not be called when nothing exists")
+			Expect(svc.artifacts.Load()).To(BeNil(), "Remove must clear artifact tracking so Health() returns ActionOK after cleanup")
 		})
 
 		It("returns an error when deletion fails", func() {
 			// Simulate a service with tracked files
-			svc.artifacts = &ServiceArtifacts{
+			svc.artifacts.Store(&ServiceArtifacts{
 				ServiceDir: svcPath,
 				LogDir:     logDir,
 				CreatedFiles: []string{
@@ -550,7 +554,7 @@ var _ = Describe("S6 Service", func() {
 					filepath.Join(svcPath, "dependencies.d", "base"),
 					filepath.Join(svcPath, ".complete"),
 				},
-			}
+			})
 
 			boom := errors.New("IO error")
 			mockFS.WithRemoveAllFunc(func(ctx context.Context, path string) error {
@@ -567,6 +571,179 @@ var _ = Describe("S6 Service", func() {
 
 			err := svc.Remove(ctx, svcPath, mockFS)
 			Expect(err).To(MatchError(ContainSubstring("IO error")))
+		})
+
+		// Fix 3 — disk-fallback when in-memory artifacts is lost (e.g., post-restart).
+		// The atomic.Pointer is in-memory only; if umh-core crashes between Create and
+		// clean shutdown, restart leaves on-disk state with no tracking. Without the
+		// fallback, Remove() would falsely report ErrServiceNotExist (idempotent
+		// success) and the FSM would transition to Removed, orphaning the directories.
+		Describe("disk-fallback when artifacts is nil (post-restart orphan recovery)", func() {
+			repoPath := func() string {
+				return filepath.Join(constants.GetS6RepositoryBaseDir(), "my-service")
+			}
+
+			It("returns permanent-failure error when service dir exists on disk", func() {
+				// artifacts NOT stored — simulates post-crash-restart state.
+				exists = sync.Map{}
+				exists.Store(svcPath, true) // orphaned service dir on disk
+
+				err := svc.Remove(ctx, svcPath, mockFS)
+
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring(backoff.PermanentFailureError),
+					"must escalate to permanent failure so HandlePermanentError → ForceRemove fires next tick")
+			})
+
+			It("returns permanent-failure error when repository dir exists on disk", func() {
+				exists = sync.Map{}
+				exists.Store(repoPath(), true) // orphaned repo dir on disk
+
+				err := svc.Remove(ctx, svcPath, mockFS)
+
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring(backoff.PermanentFailureError))
+			})
+
+			It("returns permanent-failure error when log dir exists on disk", func() {
+				exists = sync.Map{}
+				exists.Store(logDir, true) // orphaned log dir on disk
+
+				err := svc.Remove(ctx, svcPath, mockFS)
+
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring(backoff.PermanentFailureError))
+			})
+
+			It("returns ErrServiceNotExist when artifacts=nil and nothing exists on disk", func() {
+				exists = sync.Map{} // nothing on disk
+
+				err := svc.Remove(ctx, svcPath, mockFS)
+
+				Expect(err).To(MatchError(ErrServiceNotExist),
+					"genuinely-empty case stays idempotent")
+			})
+
+			It("propagates PathExists I/O errors", func() {
+				boom := errors.New("filesystem I/O error")
+				mockFS.WithPathExistsFunc(func(ctx context.Context, p string) (bool, error) {
+					return false, boom
+				})
+
+				err := svc.Remove(ctx, svcPath, mockFS)
+
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("filesystem I/O error"),
+					"I/O errors must propagate, not be silently treated as 'doesn't exist'")
+			})
+		})
+	})
+
+	// EnsureSupervision must wait for BOTH supervise/ and log/supervise/.
+	// s6-svscan creates them in two non-atomic steps. Returning true after
+	// only supervise/ existed would let the FSM transition to Created mid-
+	// bringup, and reconcile would then race against a half-initialized
+	// service (ENG-4862).
+	Describe("DefaultService EnsureSupervision()", func() {
+		var (
+			ctx        context.Context
+			mockFS     *filesystem.MockFileSystem
+			svc        *DefaultService
+			svcPath    string
+			fileExists sync.Map // path -> bool
+		)
+
+		pathFileExists := func(p string) bool {
+			v, ok := fileExists.Load(p)
+
+			return ok && v.(bool)
+		}
+
+		BeforeEach(func() {
+			ctx = context.Background()
+			mockFS = filesystem.NewMockFileSystem()
+			svc = NewDefaultService().(*DefaultService)
+			svcPath = filepath.Join(constants.S6BaseDir, "my-service")
+
+			fileExists = sync.Map{}
+			// ServiceExists uses PathExists; treat servicePath as present by default.
+			mockFS.WithPathExistsFunc(func(ctx context.Context, p string) (bool, error) {
+				if p == svcPath {
+					return true, nil
+				}
+
+				return pathFileExists(p), nil
+			})
+			mockFS.WithFileExistsFunc(func(ctx context.Context, p string) (bool, error) {
+				return pathFileExists(p), nil
+			})
+			mockFS.WithExecuteCommandFunc(func(ctx context.Context, name string, args ...string) ([]byte, error) {
+				return nil, nil
+			})
+		})
+
+		It("returns true when both supervise/ and log/supervise/ exist", func() {
+			fileExists.Store(filepath.Join(svcPath, "supervise"), true)
+			fileExists.Store(filepath.Join(svcPath, "log", "supervise"), true)
+
+			ready, err := svc.EnsureSupervision(ctx, svcPath, mockFS)
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(ready).To(BeTrue())
+		})
+
+		It("returns false when only supervise/ exists, not log/supervise/", func() {
+			// This is the race window during s6-svscan's two-step bringup. Pre-Fix-4a,
+			// EnsureSupervision returned true here, which caused the FSM to transition
+			// Creating → Created with the asymmetric state still on disk.
+			fileExists.Store(filepath.Join(svcPath, "supervise"), true)
+			// log/supervise NOT set — does not exist yet
+
+			ready, err := svc.EnsureSupervision(ctx, svcPath, mockFS)
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(ready).To(BeFalse(),
+				"must wait for both supervise/ AND log/supervise/ before transitioning to Created")
+		})
+
+		It("notifies s6-svscan when supervise/ is missing (existing behavior preserved)", func() {
+			// Neither supervise/ nor log/supervise/ exist. EnsureSupervision must
+			// kick s6-svscan via s6-svscanctl -a so it creates them.
+			notified := false
+			mockFS.WithExecuteCommandFunc(func(ctx context.Context, name string, args ...string) ([]byte, error) {
+				if name == "s6-svscanctl" {
+					notified = true
+				}
+
+				return nil, nil
+			})
+
+			ready, err := svc.EnsureSupervision(ctx, svcPath, mockFS)
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(ready).To(BeFalse())
+			Expect(notified).To(BeTrue(),
+				"existing s6-svscanctl notification must still fire when supervise/ is missing")
+		})
+
+		It("notifies s6-svscan when log/supervise/ is missing while supervise/ exists", func() {
+			// Same kick scans all services and prods s6-svscan to finish bringup.
+			fileExists.Store(filepath.Join(svcPath, "supervise"), true)
+			notified := false
+			mockFS.WithExecuteCommandFunc(func(ctx context.Context, name string, args ...string) ([]byte, error) {
+				if name == "s6-svscanctl" {
+					notified = true
+				}
+
+				return nil, nil
+			})
+
+			ready, err := svc.EnsureSupervision(ctx, svcPath, mockFS)
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(ready).To(BeFalse())
+			Expect(notified).To(BeTrue(),
+				"a kick must also fire when log/supervise/ lags supervise/ — same s6-svscan scan handles both")
 		})
 	})
 })
@@ -744,4 +921,3 @@ var _ = Describe("MaxFunc Approach for Rotated Files", func() {
 		Expect(result).To(Equal(expectedLatest))
 	})
 })
-

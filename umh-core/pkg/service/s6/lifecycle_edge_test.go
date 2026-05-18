@@ -218,13 +218,15 @@ var _ = Describe("LifecycleManager Edge Cases", func() {
 	})
 
 	Describe("Filesystem Corruption Scenarios", func() {
-		It("should handle supervise directory consistency issues", func() {
+		It("treats asymmetric supervise dirs as healthy (s6 autogenerates these, not UMH)", func() {
+			// supervise/ and log/supervise/ are created by s6-svscan in two
+			// non-atomic steps. CheckArtifactsHealth must not treat asymmetry
+			// as corruption. See ENG-4862.
 			mockFS.WithFileExistsFunc(func(ctx context.Context, path string) (bool, error) {
 				return true, nil
 			})
 
 			mockFS.WithPathExistsFunc(func(ctx context.Context, path string) (bool, error) {
-				// Main supervise exists but log supervise doesn't
 				if strings.Contains(path, "/log/supervise") {
 					return false, nil
 				}
@@ -235,7 +237,7 @@ var _ = Describe("LifecycleManager Edge Cases", func() {
 			health, err := service.CheckArtifactsHealth(ctx, artifacts, mockFS)
 
 			Expect(err).NotTo(HaveOccurred())
-			Expect(health).To(Equal(HealthBad)) // Inconsistent supervise = bad state
+			Expect(health).To(Equal(HealthOK))
 		})
 
 		It("should detect incomplete service creation", func() {

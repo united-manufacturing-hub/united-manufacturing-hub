@@ -16,11 +16,9 @@ package snapshot
 
 import (
 	"testing"
-	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 )
 
@@ -29,71 +27,103 @@ func TestRoot(t *testing.T) {
 	RunSpecs(t, "Root Suite")
 }
 
-// Compile-time interface verification.
-var _ fsmv2.ObservedState = (*ApplicationObservedState)(nil)
-var _ fsmv2.DesiredState = (*ApplicationDesiredState)(nil)
+var _ = Describe("ApplicationStatus", func() {
+	Describe("HasInfrastructureIssues", func() {
+		It("returns false when no issues", func() {
+			s := ApplicationStatus{}
+			Expect(s.HasInfrastructureIssues()).To(BeFalse())
+		})
 
-var _ = Describe("ApplicationObservedState", func() {
-	It("should implement fsmv2.ObservedState interface", func() {
-		obs := &ApplicationObservedState{
-			CollectedAt: time.Now(),
-			Name:        "test-root",
-		}
+		It("returns true when circuit open", func() {
+			s := ApplicationStatus{ChildrenCircuitOpen: 1}
+			Expect(s.HasInfrastructureIssues()).To(BeTrue())
+		})
 
-		// GetTimestamp should return the collected time.
-		Expect(obs.GetTimestamp()).NotTo(BeZero())
-
-		// GetObservedDesiredState should return the deployed desired state.
-		desired := obs.GetObservedDesiredState()
-		Expect(desired).NotTo(BeNil())
+		It("returns true when stale", func() {
+			s := ApplicationStatus{ChildrenStale: 1}
+			Expect(s.HasInfrastructureIssues()).To(BeTrue())
+		})
 	})
 
-	It("should return the correct timestamp", func() {
-		now := time.Now()
-		obs := &ApplicationObservedState{
-			CollectedAt: now,
-		}
-		Expect(obs.GetTimestamp()).To(Equal(now))
-	})
-})
+	Describe("InfrastructureReason", func() {
+		It("returns empty string when no issues", func() {
+			s := ApplicationStatus{}
+			Expect(s.InfrastructureReason()).To(BeEmpty())
+		})
 
-var _ = Describe("ApplicationDesiredState", func() {
-	It("should implement fsmv2.DesiredState interface", func() {
-		desired := &ApplicationDesiredState{
-			Name: "test-root",
-		}
-
-		// IsShutdownRequested should return false by default.
-		Expect(desired.IsShutdownRequested()).To(BeFalse())
+		It("returns non-empty string when issues exist", func() {
+			s := ApplicationStatus{ChildrenCircuitOpen: 2, ChildrenStale: 1}
+			Expect(s.InfrastructureReason()).To(ContainSubstring("circuit_open=2"))
+			Expect(s.InfrastructureReason()).To(ContainSubstring("stale=1"))
+		})
 	})
 
-	It("should return true when shutdown is requested", func() {
-		desired := &ApplicationDesiredState{}
-		desired.SetShutdownRequested(true)
-		Expect(desired.IsShutdownRequested()).To(BeTrue())
-	})
+	Describe("ChildrenViewToStatus", func() {
+		It("returns zeroed counts for nil view", func() {
+			c, s := ChildrenViewToStatus(nil)
+			Expect(c).To(Equal(0))
+			Expect(s).To(Equal(0))
+		})
 
-	It("should return children specs from named field", func() {
-		children := []config.ChildSpec{
-			{
-				Name:       "child-1",
-				WorkerType: "example-child",
-			},
-			{
-				Name:       "child-2",
-				WorkerType: "example-child",
-			},
-		}
+		It("returns zeroed counts for wrong type", func() {
+			c, s := ChildrenViewToStatus("not a ChildrenView")
+			Expect(c).To(Equal(0))
+			Expect(s).To(Equal(0))
+		})
 
-		// New flat structure - ChildrenSpecs is a direct field, not embedded
-		desired := &ApplicationDesiredState{
-			Name:          "test-root",
-			ChildrenSpecs: children,
-		}
-
-		specs := desired.GetChildrenSpecs()
-		Expect(specs).To(HaveLen(2))
-		Expect(specs[0].Name).To(Equal("child-1"))
-		Expect(specs[1].Name).To(Equal("child-2"))
+		It("counts circuit-open and stale children from a ChildrenView", func() {
+			view := stubChildrenView{children: []config.ChildInfo{
+				{Name: "a", IsCircuitOpen: true},
+				{Name: "b", IsStale: true},
+				{Name: "c"},
+			}}
+			c, s := ChildrenViewToStatus(view)
+			Expect(c).To(Equal(1))
+			Expect(s).To(Equal(1))
+		})
 	})
 })
+
+// stubChildrenView is a test-only implementation of config.ChildrenView.
+type stubChildrenView struct {
+	children []config.ChildInfo
+}
+
+func (s stubChildrenView) List() []config.ChildInfo { return s.children }
+
+func (s stubChildrenView) Get(name string) *config.ChildInfo {
+	for i := range s.children {
+		if s.children[i].Name == name {
+			return &s.children[i]
+		}
+	}
+	return nil
+}
+
+func (s stubChildrenView) Counts() (healthy, unhealthy int) {
+	for _, c := range s.children {
+		if c.IsHealthy {
+			healthy++
+		} else {
+			unhealthy++
+		}
+	}
+	return
+}
+
+func (s stubChildrenView) AllHealthy() bool {
+	for _, c := range s.children {
+		if !c.IsHealthy {
+			return false
+		}
+	}
+	return true
+}
+
+func (s stubChildrenView) AllOperational() bool {
+	return s.AllHealthy()
+}
+
+func (s stubChildrenView) AllStopped() bool {
+	return len(s.children) == 0
+}

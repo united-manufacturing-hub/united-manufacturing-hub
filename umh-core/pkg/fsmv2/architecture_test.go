@@ -39,6 +39,9 @@ import (
 	_ "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleparent"
 	_ "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleslow"
 	_ "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/persistence"
+	_ "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport"
+	_ "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/pull"
+	_ "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/push"
 )
 
 var _ = Describe("FSMv2 Architecture Validation", func() {
@@ -532,6 +535,20 @@ var _ = Describe("FSMv2 Architecture Validation", func() {
 						"StoppingState Deadlock Violations",
 						violations,
 						"STOPPING_STATE_DEADLOCK",
+					)
+					Fail(message)
+				}
+			})
+		})
+
+		Describe("CollectObservedState 2-Arg Signature (Invariant: L1 Worker Interface)", func() {
+			It("should use the 2-argument CollectObservedState(ctx, desired) signature in all workers", func() {
+				violations := validator.ValidateCollectObservedState2ArgSignature(getFsmv2Dir())
+				if len(violations) > 0 {
+					message := validator.FormatViolationsWithPattern(
+						"CollectObservedState Signature Violations",
+						violations,
+						"COLLECT_OBSERVED_STATE_1ARG_SIGNATURE",
 					)
 					Fail(message)
 				}

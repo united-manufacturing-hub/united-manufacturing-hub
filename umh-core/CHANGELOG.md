@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+## [0.44.20]
+
+### Improvements
+
+- Previously, the component tasked with communicating with the UI could stop working if it rebuilt its HTTP connection (which happens after persistent network failures) while a message was being sent or received. Connection rebuilds and in-flight requests are now coordinated so they cannot interfere.
+- Config backup is now enabled by default. Previously, automatic config.yaml backups required setting `ENABLE_CONFIG_BACKUP=true`. After validating the feature in customer environments for over two months, every umh-core instance now writes timestamped copies of `config.yaml` to `/data/config-backups/` on every config write, retaining the 100 most recent versions (roughly 5–20 MB). To opt out, set `ENABLE_CONFIG_BACKUP=false`. To roll back a bad config, use the second-most-recent backup — the most recent one mirrors the bad write
+- Previously, `docker stop` and Kubernetes pod terminations killed umh-core immediately, dropping in-flight messages and connections without a clean shutdown. umh-core now handles SIGTERM and lets its background services (e.g., the communicator) finish their in-flight work before exiting, typically well within Docker's 10 s and Kubernetes' 30 s default grace periods.
+
+### Fixes
+
+- A data flow (bridge, standalone, or stream processor) could get stuck in a starting state when its on-disk service directory was left in an inconsistent state — for example after a container restart or OOM-kill interrupted setup. umh-core now detects the inconsistency and rebuilds the directory automatically. Previously, recovery required restarting umh-core or recreating the data flow under a different name.
+- OPC-UA input could get stuck while browsing when a configured NodeID did not exist on the server, requiring a manual restart. Browse failures now trigger a clean reconnect
+- OPC-UA input no longer spams `Variant is nil` errors when a node sends a status update without a value. These are harmless and now logged at debug level with the NodeID and status code
+- Modbus TCP input now reconnects immediately on any transport-level error (timeouts, resets, network failures), not just broken pipes. Previously these stuck the connection for up to 10 seconds
+- Modbus TCP input now recovers automatically from transaction-ID mismatches. Previously, when a slow PLC reply arrived after its read timeout, the next poll picked up the stale frame and failed with `modbus: response transaction id 'X' does not match request 'Y'`. The connection thrashed (reconnect, mismatch, reconnect) and reads stalled until conditions cleared or the input was restarted
+
 ## [0.44.19]
 
 ### Improvements

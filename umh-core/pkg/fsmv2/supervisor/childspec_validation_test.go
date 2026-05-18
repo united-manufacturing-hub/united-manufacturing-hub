@@ -591,7 +591,7 @@ type validChildSpecMockWorker struct {
 	childSpecs   []config.ChildSpec
 }
 
-func (m *validChildSpecMockWorker) CollectObservedState(_ context.Context) (fsmv2.ObservedState, error) {
+func (m *validChildSpecMockWorker) CollectObservedState(_ context.Context, _ fsmv2.DesiredState) (fsmv2.ObservedState, error) {
 	return &mockObservedState{
 		doc: persistence.Document{
 			"id": m.identity.ID,
@@ -602,7 +602,7 @@ func (m *validChildSpecMockWorker) CollectObservedState(_ context.Context) (fsmv
 
 func (m *validChildSpecMockWorker) DeriveDesiredState(_ interface{}) (fsmv2.DesiredState, error) {
 	return &config.DesiredState{
-		BaseDesiredState: config.BaseDesiredState{State: "running"},
+		State: "running",
 		ChildrenSpecs:    m.childSpecs,
 	}, nil
 }
@@ -620,7 +620,7 @@ type trackedCallOrderMockWorker struct {
 	callTracker  *[]string
 }
 
-func (m *trackedCallOrderMockWorker) CollectObservedState(_ context.Context) (fsmv2.ObservedState, error) {
+func (m *trackedCallOrderMockWorker) CollectObservedState(_ context.Context, _ fsmv2.DesiredState) (fsmv2.ObservedState, error) {
 	return &mockObservedState{
 		doc: persistence.Document{
 			"id": m.identity.ID,
@@ -633,7 +633,7 @@ func (m *trackedCallOrderMockWorker) DeriveDesiredState(_ interface{}) (fsmv2.De
 	*m.callTracker = append(*m.callTracker, "derive")
 
 	return &config.DesiredState{
-		BaseDesiredState: config.BaseDesiredState{State: "running"},
+		State: "running",
 		ChildrenSpecs:    m.childSpecs,
 	}, nil
 }

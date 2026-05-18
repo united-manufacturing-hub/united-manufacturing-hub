@@ -21,15 +21,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 )
 
-// TestSetChild injects a child supervisor and done channel for testing. DO NOT USE in production code.
-func (s *Supervisor[TObserved, TDesired]) TestSetChild(name string, child SupervisorInterface, done <-chan struct{}) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	s.children[name] = child
-	s.childDoneChans[name] = done
-}
-
 // TestMarkAsStarted sets the supervisor as started with a valid context. DO NOT USE in production code.
 func (s *Supervisor[TObserved, TDesired]) TestMarkAsStarted() {
 	ctx, cancel := context.WithCancel(context.Background())

@@ -20,6 +20,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/application/snapshot"
 )
@@ -28,7 +29,7 @@ var _ = Describe("Supervisor API Boundary", func() {
 	var supervisorType reflect.Type
 
 	BeforeEach(func() {
-		supervisorType = reflect.TypeOf(&supervisor.Supervisor[snapshot.ApplicationObservedState, *snapshot.ApplicationDesiredState]{})
+		supervisorType = reflect.TypeOf(&supervisor.Supervisor[fsmv2.Observation[snapshot.ApplicationStatus], *fsmv2.WrappedDesiredState[snapshot.ApplicationConfig]]{})
 	})
 
 	Context("Public API methods", func() {

@@ -49,7 +49,7 @@ func (b RunningHealthyBase) LifecyclePhase() config.LifecyclePhase {
 //
 // Usage:
 //
-//	type RecoveringState struct {
+//	type DegradedState struct {
 //	    helpers.RunningDegradedBase
 //	}
 type RunningDegradedBase struct{}
@@ -63,7 +63,7 @@ func (b RunningDegradedBase) LifecyclePhase() config.LifecyclePhase {
 //
 // Usage:
 //
-//	type ShuttingDownState struct {
+//	type StoppingState struct {
 //	    helpers.StoppingBase
 //	}
 type StoppingBase struct{}

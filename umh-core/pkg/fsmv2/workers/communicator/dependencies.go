@@ -18,21 +18,21 @@ import (
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator/transport"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/types"
 )
 
 // CommunicatorDependencies provides transport and channel access for communicator worker actions.
 type CommunicatorDependencies struct {
-	transport transport.Transport
+	transport types.Transport
 
 	*deps.BaseDependencies
-	inboundChan  chan<- *transport.UMHMessage
-	outboundChan <-chan *transport.UMHMessage
+	inboundChan  chan<- *types.UMHMessage
+	outboundChan <-chan *types.UMHMessage
 }
 
 // NewCommunicatorDependencies creates dependencies for the communicator worker.
 // Panics if SetChannelProvider was not called first.
-func NewCommunicatorDependencies(t transport.Transport, logger deps.FSMLogger, stateReader deps.StateReader, identity deps.Identity) *CommunicatorDependencies {
+func NewCommunicatorDependencies(t types.Transport, logger deps.FSMLogger, stateReader deps.StateReader, identity deps.Identity) *CommunicatorDependencies {
 	provider := GetChannelProvider()
 	if provider == nil {
 		panic("ChannelProvider must be set before creating communicator dependencies. " +
@@ -50,12 +50,12 @@ func NewCommunicatorDependencies(t transport.Transport, logger deps.FSMLogger, s
 }
 
 // SetTransport sets the transport instance.
-func (d *CommunicatorDependencies) SetTransport(t transport.Transport) {
+func (d *CommunicatorDependencies) SetTransport(t types.Transport) {
 	d.transport = t
 }
 
 // GetTransport returns the transport instance, or nil if not yet set.
-func (d *CommunicatorDependencies) GetTransport() transport.Transport {
+func (d *CommunicatorDependencies) GetTransport() types.Transport {
 	return d.transport
 }
 
@@ -83,12 +83,12 @@ func (d *CommunicatorDependencies) GetDegradedEnteredAt() time.Time {
 }
 
 // GetInboundChan returns channel to write received messages, or nil if no provider set.
-func (d *CommunicatorDependencies) GetInboundChan() chan<- *transport.UMHMessage {
+func (d *CommunicatorDependencies) GetInboundChan() chan<- *types.UMHMessage {
 	return d.inboundChan
 }
 
 // GetOutboundChan returns channel to read messages for pushing, or nil if no provider set.
-func (d *CommunicatorDependencies) GetOutboundChan() <-chan *transport.UMHMessage {
+func (d *CommunicatorDependencies) GetOutboundChan() <-chan *types.UMHMessage {
 	return d.outboundChan
 }
 

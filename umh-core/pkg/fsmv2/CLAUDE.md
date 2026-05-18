@@ -68,19 +68,30 @@ type RunningState struct {
 }
 
 func (s *RunningState) Next(snapAny any) fsmv2.NextResult[any, any] {
-    snap := helpers.ConvertSnapshot[...](snapAny)  // Single type assertion
+    snap := fsmv2.ConvertWorkerSnapshot[MyConfig, MyStatus](snapAny)
 
-    // Shutdown check FIRST
-    if snap.Desired.IsShutdownRequested() {
-        return fsmv2.Result[any, any](&StoppingState{}, fsmv2.SignalNone, nil, "Shutdown requested")
+    // Shutdown check FIRST. Build the reason from snapshot fields so operators
+    // can see why the worker stopped without reading code.
+    if snap.IsStopRequired() {
+        reason := fmt.Sprintf("stop required: shutdown=%t, parentState=%q",
+            snap.IsShutdownRequested(), snap.Observed.ParentMappedState)
+        return fsmv2.Result[any, any](&ShuttingDownState{}, fsmv2.SignalNone, nil, reason)
     }
 
-    // Business logic...
+    // Business logic.
+    if needsWork {
+        reason := fmt.Sprintf("dispatching %s (queue=%d)", MyActionName, snap.Status.QueueDepth)
+        return fsmv2.Result[any, any](s, fsmv2.SignalNone, &MyAction{}, reason)
+    }
 
-    // Catch-all return at end
-    return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil, "Staying in running")
+    // Catch-all return: include the conditions that kept the worker here so
+    // operators can identify which precondition is still missing.
+    reason := fmt.Sprintf("running: queue=%d, hasWork=%t", snap.Status.QueueDepth, needsWork)
+    return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil, reason)
 }
 ```
+
+`fsmv2.Result[any, any]` is the canonical return shape for state files.
 
 ## Reason Strings in State Transitions
 
@@ -118,6 +129,40 @@ func init() {
 ```
 
 The folder name must match the worker type (e.g., `transport/` for type `"transport"`).
+
+## FSMv2 Framework Types
+
+Key types used when building workers:
+
+- **`NewObservation[TStatus](status)`**: preferred constructor for `CollectObservedState` return values; the collector fills CollectedAt, framework metrics, action history, and accumulated worker metrics automatically after COS returns
+- **`Observation[TStatus]`**: flat JSON serialization with framework fields (state, shutdown, children counts)
+- **`WrappedDesiredState[TConfig]`**: promotes `BaseDesiredState` fields alongside TConfig
+- **`WorkerSnapshot[TConfig, TStatus]`**: typed snapshot for state `Next()` methods
+- **`ConvertWorkerSnapshot[TConfig, TStatus]`**: entry-point type assertion in states
+- **`ExtractConfig[TConfig](desired)`**: typed config access in `CollectObservedState`
+**Architecture validators** require `ConvertWorkerSnapshot` as the single entry-point in `Next()` methods; `snap.IsStopRequired()` (WorkerSnapshot) is the canonical shutdown check.
+
+**Capability interfaces** (optional, detected via type assertion on first instantiation):
+- `ActionProvider`: `Actions() map[string]Action[any]`
+- `MetricsProvider`: `Metrics() []prometheus.Collector`
+- `GracefulShutdowner`: `Shutdown(ctx context.Context) error`
+- `ChildrenViewConsumer`: `SetChildrenView(view config.ChildrenView) ObservedState`
+
+**L5 invariant**: Optional capability interfaces must NEVER be implemented on embedded base types. Only the concrete worker struct should implement them.
+
+## Metrics Patterns
+
+Workers record metrics via `deps.MetricsRecorder()`. There are two observation return paths with different metric handling:
+
+| Return Path | CollectedAt | Metrics Handling | When to Use |
+|-------------|-------------|------------------|-------------|
+| `fsmv2.NewObservation(status)` | Zero (collector sets it) | Collector loads previous from CSE, drains recorder, merges (counters additive, gauges replace) | New workers (preferred) |
+| `w.WrapStatus(status)` | Set by caller | Worker drains recorder in COS, current-tick only | Legacy workers (deprecated) |
+| `w.WrapStatusAccumulated(ctx, status)` | Set by caller | Worker loads CSE + drains + merges in COS | Legacy workers needing cross-tick accumulation (deprecated) |
+
+**The zero-time gate**: The collector checks `observed.GetTimestamp().IsZero()`. If true (NewObservation), it runs post-COS wrapping. If false (WrapStatus/WrapStatusAccumulated), it skips wrapping since the worker already handled it. Both paths coexist safely during migration.
+
+**Drain is destructive**: `MetricsRecorder().Drain()` empties the buffer. Only one path should drain per tick. NewObservation workers must not call Drain() in COS — the collector does it. WrapStatus workers drain in COS — the collector skips it.
 
 ## Graceful Shutdown Cascading
 
