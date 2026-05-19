@@ -115,21 +115,27 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Install FOSSA CLI
+        run: |
+          curl -H 'Cache-Control: no-cache' https://raw.githubusercontent.com/fossas/fossa-cli/master/install-latest.sh | bash
+
       - name: FOSSA Container Analyze
-        uses: fossas/fossa-action@ff70fe9fe17cbd2040648f1c45e8ec4e4884dcf3 # v1
-        with:
-          api-key: ${{ secrets.FOSSA_API_KEY }}
-          project: united-manufacturing-hub-container
-          container: ghcr.io/united-manufacturing-hub/umh-core:sha-${{ needs.build.outputs.short-sha }}
+        id: analyze
+        env:
+          FOSSA_API_KEY: ${{ secrets.FOSSA_API_KEY }}
+          IMAGE: ghcr.io/united-manufacturing-hub/umh-core:sha-${{ needs.build.outputs.short-sha }}
+        run: |
+          set -o pipefail
+          fossa container analyze --project united-manufacturing-hub-container "$IMAGE" 2>&1 | tee fossa.log
+          URL=$(grep -oE 'https://app\.fossa\.com/projects/[^ ]+' fossa.log | head -1)
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
 
       - name: FOSSA Container Test
         id: test
-        uses: fossas/fossa-action@ff70fe9fe17cbd2040648f1c45e8ec4e4884dcf3 # v1
-        with:
-          api-key: ${{ secrets.FOSSA_API_KEY }}
-          project: united-manufacturing-hub-container
-          container: ghcr.io/united-manufacturing-hub/umh-core:sha-${{ needs.build.outputs.short-sha }}
-          run-tests: true
+        env:
+          FOSSA_API_KEY: ${{ secrets.FOSSA_API_KEY }}
+          IMAGE: ghcr.io/united-manufacturing-hub/umh-core:sha-${{ needs.build.outputs.short-sha }}
+        run: fossa container test --project united-manufacturing-hub-container "$IMAGE"
 
       - name: Comment FOSSA container scan result
         if: always()
@@ -139,7 +145,7 @@ jobs:
           message: |
             **FOSSA Container Scan**
 
-            ${{ steps.test.outcome == 'success' && '✅ No issues found' || format('[View issues](https://app.fossa.com/projects/custom%2B36616%2Funited-manufacturing-hub-container/refs/branch/master/{0})', github.sha) }}
+            ${{ steps.test.outcome == 'success' && '✅ No issues found' || format('[View issues]({0})', steps.analyze.outputs.url) }}
 
   license-eye-header:
     uses: ./.github/workflows/license-eye-header.yaml
