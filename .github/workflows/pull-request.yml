@@ -139,7 +139,7 @@ jobs:
           message: |
             **FOSSA Container Scan**
 
-            ${{ steps.test.outcome == 'success' && '✅ No issues found' || format('[View issues](https://app.fossa.com/projects/custom%2B36616%2Funited-manufacturing-hub-container/refs/branch/master/{0})', github.sha) }}
+            ${{ steps.test.outcome == 'success' && '✅ No issues found' || format('[View issues](https://app.fossa.com/projects/custom%2B36616%2Funited-manufacturing-hub-container/refs/branch/master/{0})', needs.build.outputs.digest) }}
 
   license-eye-header:
     uses: ./.github/workflows/license-eye-header.yaml

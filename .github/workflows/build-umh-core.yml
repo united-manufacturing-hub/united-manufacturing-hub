@@ -23,6 +23,9 @@ on:
       short-sha:
         description: "Short SHA for the image tag"
         value: ${{ jobs.build.outputs.short-sha }}
+      digest:
+        description: "Image manifest digest (sha256:...) of the pushed image"
+        value: ${{ jobs.build.outputs.digest }}
   push:
     branches:
       - staging
@@ -44,6 +47,7 @@ jobs:
     runs-on: depot-ubuntu-24.04
     outputs:
       short-sha: ${{ steps.short-sha.outputs.sha }}
+      digest: ${{ steps.build.outputs.digest }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
@@ -89,6 +93,7 @@ jobs:
           fi
 
       - name: Build and Push
+        id: build
         working-directory: ./umh-core
         env:
           DEPOT_PROJECT_ID: ${{ secrets.DEPOT_PROJECT_ID }}
@@ -102,7 +107,11 @@ jobs:
 
           make build-depot \
             VERSION=${{ steps.version.outputs.VERSION }} \
-            TAGS="$TAGS"
+            TAGS="$TAGS" \
+            EXTRA_ARGS="--metadata-file=/tmp/depot-metadata.json"
+
+          DIGEST=$(jq -r '."containerimage.digest"' /tmp/depot-metadata.json)
+          echo "digest=$DIGEST" >> "$GITHUB_OUTPUT"
 
   verify-binaries:
     name: Verify ${{ matrix.arch }} Image
