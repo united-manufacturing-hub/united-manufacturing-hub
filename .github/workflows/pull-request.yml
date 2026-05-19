@@ -81,21 +81,22 @@ jobs:
           project: united-manufacturing-hub
           working-directory: umh-core
       - name: FOSSA Test
+        id: test
         uses: fossas/fossa-action@ff70fe9fe17cbd2040648f1c45e8ec4e4884dcf3 # v1
         with:
           api-key: ${{ secrets.FOSSA_API_KEY }}
           project: united-manufacturing-hub
           working-directory: umh-core
           run-tests: true
-      - name: Comment FOSSA code scan link on failure
-        if: failure() && github.event_name == 'pull_request'
+      - name: Comment FOSSA code scan result
+        if: always()
         uses: marocchino/sticky-pull-request-comment@0ea0beb66eb9baf113663a64ec522f60e49231c0 # v3.0.4
         with:
           header: fossa-code
           message: |
-            **FOSSA License Scan Failed**
+            **FOSSA License Scan**
 
-            [View issues](https://app.fossa.com/projects/custom%2B36616%2Funited-manufacturing-hub/refs/branch/master/${{ github.sha }})
+            ${{ steps.test.outcome == 'success' && '✅ No issues found' || format('[View issues](https://app.fossa.com/projects/custom%2B36616%2Funited-manufacturing-hub/refs/branch/master/{0})', github.sha) }}
 
   fossa-container:
     name: FOSSA Container Scan
@@ -122,6 +123,7 @@ jobs:
           container: ghcr.io/united-manufacturing-hub/umh-core:sha-${{ needs.build.outputs.short-sha }}
 
       - name: FOSSA Container Test
+        id: test
         uses: fossas/fossa-action@ff70fe9fe17cbd2040648f1c45e8ec4e4884dcf3 # v1
         with:
           api-key: ${{ secrets.FOSSA_API_KEY }}
@@ -129,15 +131,15 @@ jobs:
           container: ghcr.io/united-manufacturing-hub/umh-core:sha-${{ needs.build.outputs.short-sha }}
           run-tests: true
 
-      - name: Comment FOSSA container scan link on failure
-        if: failure()
+      - name: Comment FOSSA container scan result
+        if: always()
         uses: marocchino/sticky-pull-request-comment@0ea0beb66eb9baf113663a64ec522f60e49231c0 # v3.0.4
         with:
           header: fossa-container
           message: |
-            **FOSSA Container Scan Failed**
+            **FOSSA Container Scan**
 
-            [View issues](https://app.fossa.com/projects/custom%2B36616%2Funited-manufacturing-hub-container/refs/branch/master/${{ github.sha }})
+            ${{ steps.test.outcome == 'success' && '✅ No issues found' || format('[View issues](https://app.fossa.com/projects/custom%2B36616%2Funited-manufacturing-hub-container/refs/branch/master/{0})', github.sha) }}
 
   license-eye-header:
     uses: ./.github/workflows/license-eye-header.yaml
