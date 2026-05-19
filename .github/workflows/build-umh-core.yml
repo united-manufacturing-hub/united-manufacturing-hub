@@ -47,7 +47,7 @@ jobs:
     runs-on: depot-ubuntu-24.04
     outputs:
       short-sha: ${{ steps.short-sha.outputs.sha }}
-      digest: ${{ steps.build.outputs.digest }}
+      digest: ${{ steps.digest.outputs.digest }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
@@ -93,7 +93,6 @@ jobs:
           fi
 
       - name: Build and Push
-        id: build
         working-directory: ./umh-core
         env:
           DEPOT_PROJECT_ID: ${{ secrets.DEPOT_PROJECT_ID }}
@@ -107,10 +106,12 @@ jobs:
 
           make build-depot \
             VERSION=${{ steps.version.outputs.VERSION }} \
-            TAGS="$TAGS" \
-            EXTRA_ARGS="--metadata-file=/tmp/depot-metadata.json"
+            TAGS="$TAGS"
 
-          DIGEST=$(jq -r '."containerimage.digest"' /tmp/depot-metadata.json)
+      - name: Get image digest
+        id: digest
+        run: |
+          DIGEST=$(docker buildx imagetools inspect "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:sha-${{ steps.short-sha.outputs.sha }}" --format '{{json .Manifest}}' | jq -r '.manifests[] | select(.platform.architecture=="amd64") | .digest')
           echo "digest=$DIGEST" >> "$GITHUB_OUTPUT"
 
   verify-binaries:
