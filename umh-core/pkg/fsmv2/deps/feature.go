@@ -76,6 +76,12 @@ const (
 	// Both features share this tag because they are implemented together and
 	// route to the same owner.
 	FeatureDisableReadFlows Feature = "disable_read_flows"
+
+	// FeatureFSMv1Communicator covers the FSMv1 communicator package: action
+	// handlers (HandleActionMessage) and router goroutines that predate the
+	// FSMv2 worker pattern. Mirrors [FeatureFSMv1ConfigManager] for the other
+	// pre-FSMv2 package wired to FSMLogger.
+	FeatureFSMv1Communicator Feature = "fsmv1_communicator"
 )
 
 // FeatureForWorker returns the Feature for a specific worker type.
