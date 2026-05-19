@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## [0.44.21]
+
 ### Fixes
 
 - Editing or deploying a bridge with an invalid config could hang the Management Console in "executing" indefinitely — umh-core's rollback path crashed mid-execution, the instance restarted, and the UI never received a final reply. The bridge often ended up needing delete + recreate to recover. The edit/deploy now ends with a clear failure when the rollback succeeds. Affects v0.44.19
