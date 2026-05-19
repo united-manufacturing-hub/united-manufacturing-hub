@@ -103,7 +103,7 @@ jobs:
     needs: [changes, build]
     if: github.event_name == 'pull_request' # && github.base_ref == 'main'
     runs-on: depot-ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 30
     permissions:
       packages: read
       pull-requests: write
