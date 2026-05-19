@@ -325,6 +325,13 @@ func (a *DeployProtocolConverterAction) createProtocolConverterConfig() (config.
 		WriteDFCDesiredState: writeDFCDesiredState,
 	}
 
+	// Persist UI metadata (protocol, processing mode) so it survives
+	// even when the read DFC was never configured (e.g. failed initial deploy).
+	if a.payload.Meta != nil {
+		spec.Protocol = a.payload.Meta.Protocol
+		spec.ReadDFCProcessingMode = a.payload.Meta.ProcessingMode
+	}
+
 	// Create the full config
 	return config.ProtocolConverterConfig{
 		FSMInstanceConfig: config.FSMInstanceConfig{

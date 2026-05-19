@@ -111,6 +111,12 @@ type EditProtocolConverterAction struct {
 
 	vb []models.ProtocolConverterVariable
 
+	// protocol / processingMode parsed from the payload's meta block. Empty
+	// string means "leave the persisted value unchanged" — same preserve
+	// semantics as connectionIP / connectionPort.
+	protocol       string
+	processingMode string
+
 	// Desired DFC configs for comparison during health checks
 	desiredReadDFCConfig  dataflowcomponentserviceconfig.DataflowComponentServiceConfig
 	desiredWriteDFCConfig dataflowcomponentserviceconfig.DataflowComponentServiceConfig
@@ -180,6 +186,11 @@ func (a *EditProtocolConverterAction) Parse(payload interface{}) error {
 		a.vb = pcPayload.TemplateInfo.Variables
 	} else {
 		a.vb = make([]models.ProtocolConverterVariable, 0)
+	}
+
+	if pcPayload.Meta != nil {
+		a.protocol = pcPayload.Meta.Protocol
+		a.processingMode = pcPayload.Meta.ProcessingMode
 	}
 
 	// Extract location
@@ -490,6 +501,16 @@ func (a *EditProtocolConverterAction) applyMutation(readBenthosConfig, writeBent
 		if a.connectionPort != "" && a.connectionPort != "0" {
 			instanceToModify.ProtocolConverterServiceConfig.Variables.User["PORT"] = a.connectionPort
 		}
+	}
+
+	// Update protocol / processing mode. Empty values are preserved — same
+	// semantics as IP/PORT above — so that an edit that does not touch them
+	// cannot accidentally clear them.
+	if a.protocol != "" {
+		instanceToModify.ProtocolConverterServiceConfig.Protocol = a.protocol
+	}
+	if a.processingMode != "" {
+		instanceToModify.ProtocolConverterServiceConfig.ReadDFCProcessingMode = a.processingMode
 	}
 
 	// Only update the per-DFC desired states if the user provided new values.

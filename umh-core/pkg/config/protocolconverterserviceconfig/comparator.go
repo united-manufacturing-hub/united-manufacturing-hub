@@ -55,13 +55,18 @@ func (c *Comparator) ConfigsEqual(desired, observed ProtocolConverterServiceConf
 	readDFCDesiredStateEqual := desired.ReadDFCDesiredState == observed.ReadDFCDesiredState
 	writeDFCDesiredStateEqual := desired.WriteDFCDesiredState == observed.WriteDFCDesiredState
 
+	protocolEqual := desired.Protocol == observed.Protocol
+	readDFCProcessingModeEqual := desired.ReadDFCProcessingMode == observed.ReadDFCProcessingMode
+
 	return connectionEqual &&
 		locationEqual &&
 		comparatorDFC.ConfigsEqual(dfcReadD, dfcReadO) &&
 		comparatorDFC.ConfigsEqual(dfcWriteD, dfcWriteO) &&
 		comparatorVariable.ConfigsEqual(desired.Variables, observed.Variables) &&
 		readDFCDesiredStateEqual &&
-		writeDFCDesiredStateEqual
+		writeDFCDesiredStateEqual &&
+		protocolEqual &&
+		readDFCProcessingModeEqual
 }
 
 // ConfigDiff returns a human-readable string describing differences between configs.
@@ -104,5 +109,15 @@ func (c *Comparator) ConfigDiff(desired, observed ProtocolConverterServiceConfig
 		writeDFCDesiredStateDiff = fmt.Sprintf("WriteDFCDesiredState: %v vs %v", desired.WriteDFCDesiredState, observed.WriteDFCDesiredState)
 	}
 
-	return connectionDiff + locationDiff + dfcReadDiff + dfcWriteDiff + variableDiff + readDFCDesiredStateDiff + writeDFCDesiredStateDiff
+	protocolDiff := ""
+	if desired.Protocol != observed.Protocol {
+		protocolDiff = fmt.Sprintf("Protocol: %v vs %v", desired.Protocol, observed.Protocol)
+	}
+
+	readDFCProcessingModeDiff := ""
+	if desired.ReadDFCProcessingMode != observed.ReadDFCProcessingMode {
+		readDFCProcessingModeDiff = fmt.Sprintf("ReadDFCProcessingMode: %v vs %v", desired.ReadDFCProcessingMode, observed.ReadDFCProcessingMode)
+	}
+
+	return connectionDiff + locationDiff + dfcReadDiff + dfcWriteDiff + variableDiff + readDFCDesiredStateDiff + writeDFCDesiredStateDiff + protocolDiff + readDFCProcessingModeDiff
 }

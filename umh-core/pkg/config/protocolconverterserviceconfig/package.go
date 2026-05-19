@@ -108,8 +108,19 @@ type ProtocolConverterServiceConfigSpec struct {
 	ReadDFCDesiredState string `yaml:"readDFCDesiredState,omitempty"`
 	// WriteDFCDesiredState overrides the desired state for the write DFC ("active" or "stopped").
 	// When empty, the overall protocol converter desired state is used.
-	WriteDFCDesiredState string                                 `yaml:"writeDFCDesiredState,omitempty"`
-	Config               ProtocolConverterServiceConfigTemplate `yaml:"config,omitempty"`
+	WriteDFCDesiredState string `yaml:"writeDFCDesiredState,omitempty"`
+	// Protocol persists the user-facing protocol family (e.g. "opcua", "modbus")
+	// independently from the rendered Benthos config, so the configuration UI
+	// can render the correct protocol-specific surface even when no read DFC
+	// has been deployed (e.g. after a failed initial deployment). When empty,
+	// get-protocol-converter falls back to deriving the value from the read DFC.
+	// Bridge-overall (not scoped to a single DFC).
+	Protocol string `yaml:"protocol,omitempty"`
+	// ReadDFCProcessingMode persists the user-facing processing mode for the
+	// read DFC (e.g. "tag_processor"). Read-flow scoped — naming mirrors
+	// ReadDFCDesiredState above. Same fallback semantics as Protocol.
+	ReadDFCProcessingMode string                                 `yaml:"readDFCProcessingMode,omitempty"`
+	Config                ProtocolConverterServiceConfigTemplate `yaml:"config,omitempty"`
 }
 
 // Equal checks if two ProtocolConverterServiceConfigs are equal.

@@ -370,10 +370,20 @@ func (a *GetProtocolConverterAction) Execute() (interface{}, map[string]interfac
 					}
 				}
 
-				// Create meta information
+				// Create meta information.
+				// Prefer the typed Protocol/ReadDFCProcessingMode fields
+				// persisted on the spec (set during deploy/edit). For older
+				// bridges that predate this storage, fall back to deriving the
+				// values from the rendered read DFC.
 				meta := &models.ProtocolConverterMeta{
-					ProcessingMode: determineProcessingMode(readDFC),
-					Protocol:       determineProtocol(readDFC),
+					Protocol:       specConfig.Protocol,
+					ProcessingMode: specConfig.ReadDFCProcessingMode,
+				}
+				if meta.Protocol == "" {
+					meta.Protocol = determineProtocol(readDFC)
+				}
+				if meta.ProcessingMode == "" {
+					meta.ProcessingMode = determineProcessingMode(readDFC)
 				}
 
 				// Build the response
