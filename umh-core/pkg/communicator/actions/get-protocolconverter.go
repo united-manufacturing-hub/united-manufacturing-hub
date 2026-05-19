@@ -227,13 +227,13 @@ func connectionInfoFromSpec(
 	return
 }
 
-// writeDFCResponseFromSpec builds a WriteDFCResponse from the raw spec config (as stored
+// writeDFCFromSpec builds a WriteDFC from the raw spec config (as stored
 // in config.yaml). Returns nil when no output is configured (write DFC not deployed).
-func writeDFCResponseFromSpec(specWrite dataflowcomponentserviceconfig.DataflowComponentWriteConfigInput, state string) *models.WriteDFCResponse {
+func writeDFCFromSpec(specWrite dataflowcomponentserviceconfig.DataflowComponentWriteConfigInput, state string) *models.WriteDFCPayload {
 	if !specWrite.HasOutput() {
 		return nil
 	}
-	return &models.WriteDFCResponse{
+	return &models.WriteDFCPayload{
 		DataflowComponentWriteConfigInput: specWrite,
 		State:                             state,
 	}
@@ -331,7 +331,7 @@ func (a *GetProtocolConverterAction) Execute() (interface{}, map[string]interfac
 				}
 
 				// Build WriteDFC from the raw spec config (as stored in config.yaml, non-rendered).
-				writeDFC := writeDFCResponseFromSpec(specConfig.Config.DataflowComponentWriteServiceConfig, specConfig.WriteDFCDesiredState)
+				writeDFC := writeDFCFromSpec(specConfig.Config.DataflowComponentWriteServiceConfig, specConfig.WriteDFCDesiredState)
 
 				// Create meta information
 				meta := &models.ProtocolConverterMeta{
@@ -359,10 +359,10 @@ func (a *GetProtocolConverterAction) Execute() (interface{}, map[string]interfac
 						IP:   ip,
 						Port: port,
 					},
-					ReadDFC:      readDFC,
-					WriteDFC:     writeDFC,
-					Meta:         meta,
-					TemplateInfo: templateInfo,
+					ReadDFC:         readDFC,
+					WriteDFCPayload: writeDFC,
+					Meta:            meta,
+					TemplateInfo:    templateInfo,
 				}
 
 				a.actionLogger.Info("Protocol converter found and built, returning response")

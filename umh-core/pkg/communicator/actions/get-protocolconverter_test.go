@@ -288,8 +288,8 @@ var _ = Describe("GetProtocolConverter", func() {
 				Expect(response.ReadDFC.Inputs.Type).To(Equal("modbus"))
 
 				// Verify write DFC is populated with InputTopics
-				Expect(response.WriteDFC).NotTo(BeNil())
-				Expect(response.WriteDFC.InputTopics).To(Equal([]string{"umh.v1.factory.line-1.*"}))
+				Expect(response.WriteDFCPayload).NotTo(BeNil())
+				Expect(response.WriteDFCPayload.InputTopics).To(Equal([]string{"umh.v1.factory.line-1.*"}))
 
 				// Verify meta information
 				Expect(response.Meta).NotTo(BeNil())
@@ -382,7 +382,7 @@ var _ = Describe("GetProtocolConverter", func() {
 
 				// Verify DFC configs are nil for uninitialized protocol converter
 				Expect(response.ReadDFC).To(BeNil())
-				Expect(response.WriteDFC).To(BeNil())
+				Expect(response.WriteDFCPayload).To(BeNil())
 
 				// Verify meta information reflects uninitialized state
 				Expect(response.Meta).NotTo(BeNil())

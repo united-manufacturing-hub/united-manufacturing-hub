@@ -294,7 +294,7 @@ var _ = Describe("DeployProtocolConverter", func() {
 
 			// Verify optional fields are nil as expected for deployment
 			Expect(responsePC.ReadDFC).To(BeNil())
-			Expect(responsePC.WriteDFC).To(BeNil())
+			Expect(responsePC.WriteDFCPayload).To(BeNil())
 			Expect(responsePC.TemplateInfo).To(BeNil())
 
 			// Verify expected configuration changes
@@ -427,7 +427,7 @@ var _ = Describe("DeployProtocolConverter", func() {
 						"stdout": map[string]any{},
 					},
 					"input_topics": "umh.v1.factory.*",
-					"state":      "stopped",
+					"state":        "stopped",
 				},
 			}
 

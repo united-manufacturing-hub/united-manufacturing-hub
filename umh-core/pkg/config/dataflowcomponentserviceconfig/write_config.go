@@ -25,9 +25,9 @@ import (
 // It replaces the generic DataflowComponentServiceConfig for write flows, making the
 // nodered_js processor and UNS topics first-class typed fields instead of free-form maps.
 //
-// This struct is the internal typed form used for FSM deployment. The frontend wire format
-// (WriteDFCResponse/WriteDFCRequest) embeds DataflowComponentWriteConfigInput so that
-// InputTopics remains a raw string (preserving template actions for round-trip fidelity).
+// This struct is the internal typed form used for FSM deployment. The wire format
+// (models.WriteDFC) embeds DataflowComponentWriteConfigInput so that InputTopics remains
+// a raw string (preserving template actions for round-trip fidelity).
 //
 // YAML / JSON shape:
 //

@@ -68,7 +68,7 @@ type DeployProtocolConverterAction struct {
 
 	userEmail string
 	// Parsed request payload (only populated after Parse)
-	payload models.ProtocolConverterRequest
+	payload models.ProtocolConverter
 
 	actionUUID        uuid.UUID
 	instanceUUID      uuid.UUID
@@ -94,7 +94,7 @@ func NewDeployProtocolConverterAction(userEmail string, actionUUID uuid.UUID, in
 // Parse implements the Action interface by extracting protocol converter configuration from the payload.
 func (a *DeployProtocolConverterAction) Parse(payload interface{}) error {
 	// Parse the payload to get the protocol converter configuration
-	parsedPayload, err := ParseActionPayload[models.ProtocolConverterRequest](payload)
+	parsedPayload, err := ParseActionPayload[models.ProtocolConverter](payload)
 	if err != nil {
 		return fmt.Errorf("failed to parse payload: %w", err)
 	}
@@ -104,8 +104,8 @@ func (a *DeployProtocolConverterAction) Parse(payload interface{}) error {
 	if parsedPayload.ReadDFC != nil && parsedPayload.ReadDFC.IgnoreErrors != nil {
 		a.ignoreHealthCheck = *parsedPayload.ReadDFC.IgnoreErrors
 	}
-	if parsedPayload.WriteDFC != nil && parsedPayload.WriteDFC.IgnoreErrors != nil {
-		a.ignoreHealthCheck = a.ignoreHealthCheck || *parsedPayload.WriteDFC.IgnoreErrors
+	if parsedPayload.WriteDFCPayload != nil && parsedPayload.WriteDFCPayload.IgnoreErrors != nil {
+		a.ignoreHealthCheck = a.ignoreHealthCheck || *parsedPayload.WriteDFCPayload.IgnoreErrors
 	}
 
 	a.actionLogger.Debugf("Parsed DeployProtocolConverter action payload: name=%s, ip=%s, port=%d",
@@ -139,7 +139,7 @@ func (a *DeployProtocolConverterAction) Validate() error {
 	}
 
 	// Validate the write DFC, if present. Might not exist for read-only bridges
-	if w := a.payload.WriteDFC; w != nil {
+	if w := a.payload.WriteDFCPayload; w != nil {
 		if err := validateWriteDFCConfig(&w.DataflowComponentWriteConfigInput, w.State); err != nil {
 			return err
 		}
@@ -279,7 +279,7 @@ func (a *DeployProtocolConverterAction) createProtocolConverterConfig() (config.
 		tmpl.DataflowComponentReadServiceConfig = readSvcCfg
 	}
 
-	if w := a.payload.WriteDFC; w != nil {
+	if w := a.payload.WriteDFCPayload; w != nil {
 		tmpl.DataflowComponentWriteServiceConfig = w.DataflowComponentWriteConfigInput
 	}
 
@@ -287,9 +287,8 @@ func (a *DeployProtocolConverterAction) createProtocolConverterConfig() (config.
 	if a.payload.ReadDFC != nil {
 		readDFCDesiredState = a.payload.ReadDFC.State
 	}
-
-	if a.payload.WriteDFC != nil {
-		writeDFCDesiredState = a.payload.WriteDFC.State
+	if a.payload.WriteDFCPayload != nil {
+		writeDFCDesiredState = a.payload.WriteDFCPayload.State
 	}
 
 	spec := protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
@@ -320,7 +319,7 @@ func (a *DeployProtocolConverterAction) getUuid() uuid.UUID {
 }
 
 // GetParsedPayload returns the parsed payload - exposed primarily for testing purposes.
-func (a *DeployProtocolConverterAction) GetParsedPayload() models.ProtocolConverterRequest {
+func (a *DeployProtocolConverterAction) GetParsedPayload() models.ProtocolConverter {
 	return a.payload
 }
 

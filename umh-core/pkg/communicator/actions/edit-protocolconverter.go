@@ -150,7 +150,7 @@ func NewEditProtocolConverterAction(userEmail string, actionUUID uuid.UUID, inst
 // dataflow component configuration from the payload.
 func (a *EditProtocolConverterAction) Parse(payload interface{}) error {
 	// Parse the payload directly as a complete ProtocolConverter object
-	pcPayload, err := ParseActionPayload[models.ProtocolConverterRequest](payload)
+	pcPayload, err := ParseActionPayload[models.ProtocolConverter](payload)
 	if err != nil {
 		return fmt.Errorf("failed to parse protocol converter payload: %w", err)
 	}
@@ -183,13 +183,12 @@ func (a *EditProtocolConverterAction) Parse(payload interface{}) error {
 			a.ignoreHealthCheck = *pcPayload.ReadDFC.IgnoreErrors
 		}
 	}
-
-	if pcPayload.WriteDFC != nil {
-		input := pcPayload.WriteDFC.DataflowComponentWriteConfigInput
+	if pcPayload.WriteDFCPayload != nil {
+		input := pcPayload.WriteDFCPayload.DataflowComponentWriteConfigInput
 		a.writeDFCInput = &input
-		a.writeDFCState = pcPayload.WriteDFC.State
-		if pcPayload.WriteDFC.IgnoreErrors != nil {
-			a.ignoreHealthCheck = a.ignoreHealthCheck || *pcPayload.WriteDFC.IgnoreErrors
+		a.writeDFCState = pcPayload.WriteDFCPayload.State
+		if pcPayload.WriteDFCPayload.IgnoreErrors != nil {
+			a.ignoreHealthCheck = a.ignoreHealthCheck || *pcPayload.WriteDFCPayload.IgnoreErrors
 		}
 	}
 

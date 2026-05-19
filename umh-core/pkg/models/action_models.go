@@ -812,11 +812,12 @@ type ProtocolConverterTemplateInfo struct {
 	IsTemplated bool                        `json:"isTemplated" mapstructure:"isTemplated" yaml:"isTemplated"`
 }
 
-// WriteDFCRequest is the inbound wire format for write DFC configuration.
+// WriteDFCPayload is the wire format for write DFC configuration, used for both inbound
+// (deploy/edit actions) and outbound (GET responses) payloads i.e. what is transmitted to/from the client.
 // The embedded struct uses mapstructure:",squash" so mapstructure flattens its fields
 // into this struct during action payload decoding. Go's encoding/json promotes embedded
 // struct fields automatically without a tag, so no json:",squash" is needed or exists.
-type WriteDFCRequest struct {
+type WriteDFCPayload struct {
 	dataflowcomponentserviceconfig.DataflowComponentWriteConfigInput `mapstructure:",squash"`
 	// State is the desired lifecycle state ("active" or "stopped").
 	State string `json:"state,omitempty" mapstructure:"state,omitempty"`
@@ -824,39 +825,17 @@ type WriteDFCRequest struct {
 	IgnoreErrors *bool `json:"ignoreErrors,omitempty" mapstructure:"ignoreErrors,omitempty"`
 }
 
-// WriteDFCResponse is the outbound wire format for write DFC configuration.
-// InputTopics is returned as the raw string from config.yaml (may contain Go template
-// actions), matching the inbound WriteDFCRequest shape.
-type WriteDFCResponse struct {
-	dataflowcomponentserviceconfig.DataflowComponentWriteConfigInput `mapstructure:",squash"`
-	// State is the desired lifecycle state ("active" or "stopped").
-	State string `json:"state,omitempty" mapstructure:"state,omitempty"`
-	// IgnoreErrors skips the health-check rollout when true.
-	IgnoreErrors *bool `json:"ignoreErrors,omitempty" mapstructure:"ignoreErrors,omitempty"`
-}
-
-// ProtocolConverterRequest is the inbound shape used by edit and deploy actions.
-type ProtocolConverterRequest struct {
-	UUID         *uuid.UUID                     `binding:"required"     json:"uuid"`
-	Location     map[int]string                 `json:"location"`
-	ReadDFC      *ProtocolConverterDFC          `json:"readDFC"`
-	WriteDFC     *WriteDFCRequest               `json:"writeDFC"`
-	TemplateInfo *ProtocolConverterTemplateInfo `json:"templateInfo"`
-	Meta         *ProtocolConverterMeta         `json:"meta"`
-	Name         string                         `binding:"required" json:"name"`
-	Connection   ProtocolConverterConnection    `json:"connection"`
-}
-
-// ProtocolConverter is the outbound shape returned by GET actions.
+// ProtocolConverter is the wire format for protocol converter configuration,
+// used by deploy/edit actions and GET responses.
 type ProtocolConverter struct {
-	UUID         *uuid.UUID                     `binding:"required"  json:"uuid"`
-	Location     map[int]string                 `json:"location"`
-	ReadDFC      *ProtocolConverterDFC          `json:"readDFC"`
-	WriteDFC     *WriteDFCResponse              `json:"writeDFC"`
-	TemplateInfo *ProtocolConverterTemplateInfo `json:"templateInfo"`
-	Meta         *ProtocolConverterMeta         `json:"meta"`
-	Name         string                         `binding:"required"  json:"name"`
-	Connection   ProtocolConverterConnection    `json:"connection"`
+	UUID            *uuid.UUID                     `binding:"required"     json:"uuid"`
+	Location        map[int]string                 `json:"location"`
+	ReadDFC         *ProtocolConverterDFC          `json:"readDFC"`
+	WriteDFCPayload *WriteDFCPayload               `json:"writeDFC"`
+	TemplateInfo    *ProtocolConverterTemplateInfo `json:"templateInfo"`
+	Meta            *ProtocolConverterMeta         `json:"meta"`
+	Name            string                         `binding:"required" json:"name"`
+	Connection      ProtocolConverterConnection    `json:"connection"`
 }
 
 type ProtocolConverterMeta struct {
