@@ -91,6 +91,7 @@ func (c DataflowComponentWriteConfigInput) ToWriteConfig() DataflowComponentWrit
 	}
 }
 
+
 // ToDataflowComponentServiceConfig expands the input config into a full Benthos service
 // config. InputTopics is split without template rendering — call Render first if the
 // string still contains {{ }} actions.

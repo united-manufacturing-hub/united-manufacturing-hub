@@ -289,7 +289,7 @@ var _ = Describe("GetProtocolConverter", func() {
 
 				// Verify write DFC is populated with InputTopics
 				Expect(response.WriteDFCPayload).NotTo(BeNil())
-				Expect(response.WriteDFCPayload.InputTopics).To(Equal([]string{"umh.v1.factory.line-1.*"}))
+				Expect(response.WriteDFCPayload.InputTopics).To(Equal("umh.v1.factory.line-1.*"))
 
 				// Verify meta information
 				Expect(response.Meta).NotTo(BeNil())
