@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Preview: Write Flows
+
+- The write flow wire format now uses a typed `input_topics` field (string or Go template) and a `write_output` block, replacing the old `benthos.input`/`benthos.output` nesting. The `UMH_TOPICS` user variable is no longer used.
+
 ## [0.44.21]
 
 ### Fixes
@@ -41,7 +45,7 @@ Enables FSMv2 communicator by default.
 
 ### Preview: Write Flows
 
-- Previously, write flows used raw `input` for benthos. We now define a typed `input_topics` field and automatically generate the proper `input` in umh-core, which provides an improved user experience and less surface for errors.
+- Previously, write flows used raw `input` for benthos. We now define a user variable `UMH_TOPICS` and automatically generate the proper `input` in umh-core, which provides an improved user experience and less surface for errors.
 
 ## [0.44.17]
  
