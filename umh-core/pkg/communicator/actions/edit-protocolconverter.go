@@ -390,7 +390,7 @@ func (a *EditProtocolConverterAction) applyMutation() (config.ProtocolConverterC
 	}
 
 	// Apply write DFC config if provided — store the original input (template string preserved).
-	if a.writeDFCInput != nil {
+	if a.writeDFCInput != nil && a.writeDFCInput.HasOutput() {
 		instanceToModify.ProtocolConverterServiceConfig.Config.DataflowComponentWriteServiceConfig = *a.writeDFCInput
 	}
 

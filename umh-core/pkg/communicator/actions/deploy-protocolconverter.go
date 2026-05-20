@@ -93,6 +93,8 @@ func NewDeployProtocolConverterAction(userEmail string, actionUUID uuid.UUID, in
 
 // Parse implements the Action interface by extracting protocol converter configuration from the payload.
 func (a *DeployProtocolConverterAction) Parse(payload interface{}) error {
+	a.ignoreHealthCheck = false
+
 	// Parse the payload to get the protocol converter configuration
 	parsedPayload, err := ParseActionPayload[models.ProtocolConverter](payload)
 	if err != nil {
