@@ -174,12 +174,7 @@ func (m *mockState) Next(snapshot any) fsmv2.NextResult[any, any] {
 		return fsmv2.Result[any, any](m, fsmv2.SignalNone, nil, "mock state")
 	}
 
-	reason := m.reason
-	if reason == "" {
-		reason = "mock state"
-	}
-
-	return fsmv2.Result[any, any](m.nextState, m.signal, m.action, reason)
+	return fsmv2.Result[any, any](m.nextState, m.signal, m.action, m.reason)
 }
 
 func (m *mockState) String() string { return "MockState" }

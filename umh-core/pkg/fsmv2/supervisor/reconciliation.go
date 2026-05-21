@@ -390,6 +390,14 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 			deps.String("observation_time", currentObsTime.Format(time.RFC3339Nano)))
 	}
 
+	// Live per-tick reason — must update on every reconcile, not only on state
+	// transitions, so the supervisor heartbeat surfaces transient retry state
+	// (e.g. "auth backoff: N errors (TYPE), delay X") that Next() composes on
+	// every self-return. See ENG-4991.
+	workerCtx.mu.Lock()
+	workerCtx.currentStateReason = result.Reason
+	workerCtx.mu.Unlock()
+
 	if result.State != currentState {
 		fromState := currentState.String()
 		toState := result.State.String()
@@ -427,7 +435,6 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 		workerCtx.currentState = result.State
 
 		// Exposed via FrameworkMetrics and GetCurrentStateNameAndReason
-		workerCtx.currentStateReason = result.Reason
 		workerCtx.stateEnteredAt = now
 
 		// Update cached lifecycle phase and observed state name AFTER state transition.
