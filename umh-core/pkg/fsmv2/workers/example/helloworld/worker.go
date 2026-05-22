@@ -70,8 +70,16 @@ func NewHelloworldWorker(
 }
 
 // GetDependencies returns the typed HelloworldDependencies.
+// Panics with a clear message if BindDeps was not called before this worker is used.
 func (w *HelloworldWorker) GetDependencies() *HelloworldDependencies {
-	return w.GetDependenciesAny().(*HelloworldDependencies)
+	raw := w.GetDependenciesAny()
+
+	d, ok := raw.(*HelloworldDependencies)
+	if !ok || d == nil {
+		panic("HelloworldWorker: GetDependencies called before BindDeps")
+	}
+
+	return d
 }
 
 // CollectObservedState returns the current observed state.

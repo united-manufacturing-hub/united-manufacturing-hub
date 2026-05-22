@@ -58,8 +58,16 @@ func NewExamplepanicWorker(
 }
 
 // GetDependencies returns the typed ExamplepanicDependencies.
+// Panics with a clear message if BindDeps was not called before this worker is used.
 func (w *ExamplepanicWorker) GetDependencies() *ExamplepanicDependencies {
-	return w.GetDependenciesAny().(*ExamplepanicDependencies)
+	raw := w.GetDependenciesAny()
+
+	d, ok := raw.(*ExamplepanicDependencies)
+	if !ok || d == nil {
+		panic("ExamplepanicWorker: GetDependencies called before BindDeps")
+	}
+
+	return d
 }
 
 func (w *ExamplepanicWorker) CollectObservedState(ctx context.Context, desired fsmv2.DesiredState) (fsmv2.ObservedState, error) {

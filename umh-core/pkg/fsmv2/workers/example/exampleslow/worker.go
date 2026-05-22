@@ -60,8 +60,16 @@ func NewExampleslowWorker(
 }
 
 // GetDependencies returns the typed ExampleslowDependencies.
+// Panics with a clear message if BindDeps was not called before this worker is used.
 func (w *ExampleslowWorker) GetDependencies() *ExampleslowDependencies {
-	return w.GetDependenciesAny().(*ExampleslowDependencies)
+	raw := w.GetDependenciesAny()
+
+	d, ok := raw.(*ExampleslowDependencies)
+	if !ok || d == nil {
+		panic("ExampleslowWorker: GetDependencies called before BindDeps")
+	}
+
+	return d
 }
 
 func (w *ExampleslowWorker) CollectObservedState(ctx context.Context, desired fsmv2.DesiredState) (fsmv2.ObservedState, error) {

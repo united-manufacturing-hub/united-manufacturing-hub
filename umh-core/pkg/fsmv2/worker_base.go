@@ -70,7 +70,11 @@ func (w *WorkerBase[TConfig, TStatus, TDeps]) InitBase(
 }
 
 // Config returns the TConfig cached from the last DeriveDesiredState call.
-// Returns zero-value TConfig before the first successful DeriveDesiredState.
+//
+// Deprecated: scheduled for deletion in L3 (see L2b_SCOPE_MANIFEST). Production
+// workers override DeriveDesiredState and never populate this cache, so Config()
+// returns zero-value TConfig forever. Read config via fsmv2.ExtractConfig[T](desired)
+// inside CollectObservedState instead.
 func (w *WorkerBase[TConfig, TStatus, TDeps]) Config() TConfig {
 	w.mu.RLock()
 	defer w.mu.RUnlock()
@@ -79,6 +83,9 @@ func (w *WorkerBase[TConfig, TStatus, TDeps]) Config() TConfig {
 }
 
 // ConfigReady reports whether DeriveDesiredState has been called at least once.
+//
+// Deprecated: scheduled for deletion in L3 alongside Config(). Returns false
+// forever for any worker that overrides DeriveDesiredState. See Config() godoc.
 func (w *WorkerBase[TConfig, TStatus, TDeps]) ConfigReady() bool {
 	w.mu.RLock()
 	defer w.mu.RUnlock()
@@ -93,8 +100,9 @@ func (w *WorkerBase[TConfig, TStatus, TDeps]) ConfigReady() bool {
 // config.BaseUserSpec (or implements GetState() string), and caches the config.
 //
 // Workers that need children specs must override this method in their own struct
-// and call w.Config() after calling the embedded DeriveDesiredState, or use the
-// ChildrenSpecs field directly on the returned WrappedDesiredState.
+// and either call w.WorkerBase.DeriveDesiredState(spec) first (then read the
+// parsed TConfig from the returned WrappedDesiredState) or re-parse spec from
+// scratch. Do NOT call w.Config() — see its godoc for why that path is dead.
 func (w *WorkerBase[TConfig, TStatus, TDeps]) DeriveDesiredState(spec interface{}) (DesiredState, error) {
 	if spec == nil {
 		var cfg TConfig

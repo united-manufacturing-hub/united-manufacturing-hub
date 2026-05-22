@@ -57,8 +57,16 @@ func NewParentWorker(
 }
 
 // GetDependencies returns the typed ParentDependencies.
+// Panics with a clear message if BindDeps was not called before this worker is used.
 func (w *ParentWorker) GetDependencies() *ParentDependencies {
-	return w.GetDependenciesAny().(*ParentDependencies)
+	raw := w.GetDependenciesAny()
+
+	d, ok := raw.(*ParentDependencies)
+	if !ok || d == nil {
+		panic("ParentWorker: GetDependencies called before BindDeps")
+	}
+
+	return d
 }
 
 // CollectObservedState returns the current observed state of the parent worker.

@@ -71,8 +71,16 @@ func NewFailingWorker(
 }
 
 // GetDependencies returns the typed FailingDependencies.
+// Panics with a clear message if BindDeps was not called before this worker is used.
 func (w *FailingWorker) GetDependencies() *FailingDependencies {
-	return w.GetDependenciesAny().(*FailingDependencies)
+	raw := w.GetDependenciesAny()
+
+	d, ok := raw.(*FailingDependencies)
+	if !ok || d == nil {
+		panic("FailingWorker: GetDependencies called before BindDeps")
+	}
+
+	return d
 }
 
 // CollectObservedState returns the current observed state of the failing worker.

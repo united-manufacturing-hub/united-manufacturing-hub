@@ -156,7 +156,8 @@ func (w *MyWorker) GetDependencies() *MyDependencies {
 **What WorkerBase provides without override:**
 - `DeriveDesiredState`: parses `config.UserSpec`, duck-types `GetState() string` for state propagation
 - `GetInitialState`: registry lookup via `fsmv2.LookupInitialState(workerType)` — register in `state/` init()
-- `Identity()`, `Logger()`, `Config()`, `ConfigReady()`, `GetDependenciesAny()`
+- `Identity()`, `Logger()`, `GetDependenciesAny()`
+- ~~`Config()`, `ConfigReady()`~~ — deprecated, slated for deletion in L3. Read config via `fsmv2.ExtractConfig[T](desired)` in `CollectObservedState`.
 
 **What to override:**
 

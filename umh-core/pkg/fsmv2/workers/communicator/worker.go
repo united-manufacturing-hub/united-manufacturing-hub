@@ -94,8 +94,16 @@ func NewCommunicatorWorker(
 }
 
 // GetDependencies returns the typed CommunicatorDependencies.
+// Panics with a clear message if BindDeps was not called before this worker is used.
 func (w *CommunicatorWorker) GetDependencies() *CommunicatorDependencies {
-	return w.GetDependenciesAny().(*CommunicatorDependencies)
+	raw := w.GetDependenciesAny()
+
+	d, ok := raw.(*CommunicatorDependencies)
+	if !ok || d == nil {
+		panic("CommunicatorWorker: GetDependencies called before BindDeps")
+	}
+
+	return d
 }
 
 // CollectObservedState returns the current observed state of the communicator.
