@@ -127,7 +127,7 @@ var _ = Describe("Live state reason propagation (ENG-4991)", func() {
 	})
 
 	Context("empty reason on a self-return", func() {
-		// Empty reason is a real signal — Next() is authoritative, not a bug to mask.
+		// Empty reason from worker.Next() is a real signal, not a bug to mask.
 		It("overwrites a stale non-empty reason with an empty one", func() {
 			initialState = &mockState{}
 			initialState.nextState = initialState
