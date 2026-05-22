@@ -390,14 +390,13 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 			deps.String("observation_time", currentObsTime.Format(time.RFC3339Nano)))
 	}
 
-	// Live per-tick reason — must update on every reconcile, not only on state
-	// transitions, so the supervisor heartbeat surfaces transient retry state
-	// (e.g. "auth backoff: N errors (TYPE), delay X") that Next() composes on
-	// every self-return. See ENG-4991.
-	workerCtx.mu.Lock()
-	workerCtx.currentStateReason = result.Reason
-	workerCtx.mu.Unlock()
-
+	// Live per-tick reason: updated on every reconcile that reaches state
+	// evaluation, so the supervisor heartbeat surfaces transient retry state
+	// (e.g. "auth backoff: N errors (TYPE), delay X") that Next() composes
+	// on self-returns. Ticks that exit early (action-in-progress, stale
+	// observation, action-gating) leave the cached reason unchanged.
+	// The transition branch writes it under the same lock as currentState so
+	// readers cannot observe a torn (reason, state) pair. See ENG-4991.
 	if result.State != currentState {
 		fromState := currentState.String()
 		toState := result.State.String()
@@ -433,8 +432,7 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 		workerCtx.stateTransitions[toState]++
 		workerCtx.totalTransitions++
 		workerCtx.currentState = result.State
-
-		// Exposed via FrameworkMetrics and GetCurrentStateNameAndReason
+		workerCtx.currentStateReason = result.Reason
 		workerCtx.stateEnteredAt = now
 
 		// Update cached lifecycle phase and observed state name AFTER state transition.
@@ -454,6 +452,11 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 		// Record Prometheus metric AFTER lock release
 		metrics.RecordStateTransition(s.GetHierarchyPathUnlocked(), fromState, toState)
 	} else {
+		// Self-return: standalone lock is coherent (no second write follows).
+		workerCtx.mu.Lock()
+		workerCtx.currentStateReason = result.Reason
+		workerCtx.mu.Unlock()
+
 		s.logTrace("state_unchanged",
 			deps.String("state", currentState.String()))
 	}
