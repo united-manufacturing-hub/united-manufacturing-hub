@@ -60,9 +60,11 @@ func (a *fakeTypedAction) Execute(_ context.Context, deps fakeTypedDeps) error {
 	if a.called != nil {
 		*a.called = true
 	}
+
 	if a.wantMarker != "" && deps.marker != a.wantMarker {
 		return fmt.Errorf("unexpected marker: got %q, want %q", deps.marker, a.wantMarker)
 	}
+
 	return a.returnError
 }
 
@@ -79,6 +81,7 @@ func (a *fakePtrDepsAction) Execute(_ context.Context, deps *fakeTypedDeps) erro
 	if a.sawNil != nil {
 		*a.sawNil = (deps == nil)
 	}
+
 	return nil
 }
 

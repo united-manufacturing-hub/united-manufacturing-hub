@@ -148,9 +148,6 @@ type NextResult[TSnapshot any, TDeps any] struct {
 	// Example: "sync degraded: 5 consecutive errors (authentication_failure)"
 	Reason string
 
-	// Signal indicates framework-level events (shutdown, restart, etc.).
-	Signal Signal
-
 	// Children is the parent's intended children-set for this tick.
 	// The supervisor reads this field in L5 and reconciles spawn / despawn /
 	// config-update against its own children registry. Until then, nil signals
@@ -173,6 +170,9 @@ type NextResult[TSnapshot any, TDeps any] struct {
 	// State authors should construct the explicit empty slice when they mean
 	// "no children" and reserve nil for "no opinion" / unmigrated paths.
 	Children []config.ChildSpec
+
+	// Signal indicates framework-level events (shutdown, restart, etc.).
+	Signal Signal
 }
 
 // State represents a single state in the FSM lifecycle (stateless).
@@ -322,6 +322,7 @@ func wrapTypedAction(action any) Action[any] {
 	// Validate Execute signature: func(context.Context, <TDeps>) error.
 	execType := execMethod.Type()
 	ctxType := reflect.TypeOf((*context.Context)(nil)).Elem()
+
 	errType := reflect.TypeOf((*error)(nil)).Elem()
 	if execType.NumIn() != 2 || execType.NumOut() != 1 ||
 		!execType.In(0).Implements(ctxType) ||
@@ -332,6 +333,7 @@ func wrapTypedAction(action any) Action[any] {
 
 	// Validate Name signature: func() string.
 	nameType := nameMethod.Type()
+
 	stringType := reflect.TypeOf("")
 	if nameType.NumIn() != 0 || nameType.NumOut() != 1 || nameType.Out(0) != stringType {
 		panic(fmt.Sprintf("fsmv2.Transition auto-wrap: action of type %T has wrong Name signature %s — "+
@@ -345,7 +347,9 @@ func wrapTypedAction(action any) Action[any] {
 		name: cachedName,
 		execute: func(ctx context.Context, deps any) error {
 			depsVal := reflect.ValueOf(deps)
-			if !depsVal.IsValid() {
+
+			switch {
+			case !depsVal.IsValid():
 				// nil deps: only valid if expectedDepsType is nilable (ptr, iface, map, chan, func, slice).
 				switch expectedDepsType.Kind() {
 				case reflect.Ptr, reflect.Interface, reflect.Map, reflect.Chan, reflect.Func, reflect.Slice:
@@ -354,10 +358,10 @@ func wrapTypedAction(action any) Action[any] {
 					return fmt.Errorf("fsmv2.Transition auto-wrap: nil deps not assignable to %s (action %q)",
 						expectedDepsType, cachedName)
 				}
-			} else if !depsVal.Type().AssignableTo(expectedDepsType) {
+			case !depsVal.Type().AssignableTo(expectedDepsType):
 				return fmt.Errorf("fsmv2.Transition auto-wrap: deps type %T not assignable to %s (action %q)",
 					deps, expectedDepsType, cachedName)
-			} else {
+			default:
 				depsVal = depsVal.Convert(expectedDepsType)
 			}
 
@@ -365,6 +369,7 @@ func wrapTypedAction(action any) Action[any] {
 			if errIface := out[0].Interface(); errIface != nil {
 				return errIface.(error)
 			}
+
 			return nil
 		},
 	}
