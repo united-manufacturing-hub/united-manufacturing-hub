@@ -22,8 +22,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/register"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/pull/snapshot"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/pull/state"
 
@@ -147,31 +146,40 @@ func (w *PullWorker) GetInitialState() fsmv2.State[any, any] {
 }
 
 func init() {
-	if err := factory.RegisterWorkerAndSupervisorFactoryByType(
-		"pull",
-		func(id deps.Identity, logger deps.FSMLogger, stateReader deps.StateReader, extraDeps map[string]any) fsmv2.Worker {
-			parentDepsRaw, ok := extraDeps["transport_deps"]
+	register.Worker[snapshot.PullDesiredState, snapshot.PullStatus, *PullDependencies]("pull",
+		func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader) (fsmv2.Worker, error) {
+			builder, ok := register.GetDepsBuilder("pull")
 			if !ok {
-				panic("pull worker requires transport_deps in extraDeps")
+				return nil, errors.New("pull worker requires deps builder; transport worker must initialise before pull instantiation")
 			}
-
-			parentDeps, ok := parentDepsRaw.(*transport_pkg.TransportDependencies)
-			if !ok {
-				panic("transport_deps must be *TransportDependencies")
+			rawDeps := builder(id, logger, sr)
+			pdeps, ok := rawDeps.(*PullDependencies)
+			if !ok || pdeps == nil {
+				return nil, fmt.Errorf("pull deps builder returned %T; want *PullDependencies (parent transport deps may not be published)", rawDeps)
 			}
+			if id.WorkerType == "" {
+				id.WorkerType = "pull"
+			}
+			w := &PullWorker{}
+			w.InitBase(id, logger, sr)
+			w.BindDeps(pdeps)
+			return w, nil
+		})
 
-			worker, err := NewPullWorker(id, logger, stateReader, parentDeps)
+	register.SetDepsBuilder[*PullDependencies]("pull",
+		func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader) *PullDependencies {
+			parentDeps := register.GetDeps[*transport_pkg.TransportDependencies]("transport")
+			if parentDeps == nil {
+				logger.SentryError(deps.FeatureForWorker("pull"), id.HierarchyPath,
+					errors.New("parent transport deps not published"),
+					"pull_parent_transport_deps_missing")
+				return nil
+			}
+			d, err := NewPullDependencies(parentDeps, deps.NewBaseDependencies(logger, sr, id))
 			if err != nil {
-				panic(fmt.Sprintf("failed to create pull worker: %v", err))
+				logger.SentryError(deps.FeatureForWorker("pull"), id.HierarchyPath, err, "pull_dependencies_creation_failed")
+				return nil
 			}
-
-			return worker
-		},
-		func(cfg interface{}) interface{} {
-			return supervisor.NewSupervisor[fsmv2.Observation[snapshot.PullStatus], *fsmv2.WrappedDesiredState[snapshot.PullDesiredState]](
-				cfg.(supervisor.Config))
-		},
-	); err != nil {
-		panic(fmt.Sprintf("failed to register pull worker: %v", err))
-	}
+			return d
+		})
 }
