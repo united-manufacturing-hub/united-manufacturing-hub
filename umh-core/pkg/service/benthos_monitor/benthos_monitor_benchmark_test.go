@@ -272,6 +272,80 @@ func TestMetricsParsing(t *testing.T) {
 	}
 }
 
+// TestSwitchOutputMetricsAggregation tests that metrics from switch/broker outputs
+// with multiple labeled child outputs are correctly aggregated (summed).
+func TestSwitchOutputMetricsAggregation(t *testing.T) {
+	// Simulates Benthos switch output metrics - multiple outputs with different labels
+	switchMetrics := `# HELP output_sent Benthos Counter metric
+# TYPE output_sent counter
+output_sent{label="route_0",path="root.output.switch.0"} 100
+output_sent{label="route_1",path="root.output.switch.1"} 200
+output_sent{label="route_2",path="root.output.switch.2"} 45
+# HELP output_batch_sent Benthos Counter metric
+# TYPE output_batch_sent counter
+output_batch_sent{label="route_0",path="root.output.switch.0"} 10
+output_batch_sent{label="route_1",path="root.output.switch.1"} 20
+output_batch_sent{label="route_2",path="root.output.switch.2"} 5
+# HELP output_error Benthos Counter metric
+# TYPE output_error counter
+output_error{label="route_0",path="root.output.switch.0"} 1
+output_error{label="route_1",path="root.output.switch.1"} 2
+# HELP output_latency_ns Benthos Timing metric
+# TYPE output_latency_ns summary
+output_latency_ns{label="route_0",path="root.output.switch.0",quantile="0.5"} 10000
+output_latency_ns{label="route_1",path="root.output.switch.1",quantile="0.5"} 20000
+output_latency_ns{label="route_0",path="root.output.switch.0",quantile="0.9"} 50000
+output_latency_ns{label="route_1",path="root.output.switch.1",quantile="0.9"} 30000
+output_latency_ns{label="route_0",path="root.output.switch.0",quantile="0.99"} 100000
+output_latency_ns{label="route_1",path="root.output.switch.1",quantile="0.99"} 80000
+output_latency_ns_sum{label="route_0",path="root.output.switch.0"} 500000
+output_latency_ns_sum{label="route_1",path="root.output.switch.1"} 300000
+output_latency_ns_count{label="route_0",path="root.output.switch.0"} 50
+output_latency_ns_count{label="route_1",path="root.output.switch.1"} 30
+`
+
+	metrics, err := ParseMetricsFromBytes([]byte(switchMetrics))
+	if err != nil {
+		t.Fatalf("Failed to parse switch metrics: %v", err)
+	}
+
+	// Verify output_sent is aggregated (100 + 200 + 45 = 345)
+	if metrics.Output.Sent != 345 {
+		t.Errorf("output_sent: expected 345, got %d", metrics.Output.Sent)
+	}
+
+	// Verify output_batch_sent is aggregated (10 + 20 + 5 = 35)
+	if metrics.Output.BatchSent != 35 {
+		t.Errorf("output_batch_sent: expected 35, got %d", metrics.Output.BatchSent)
+	}
+
+	// Verify output_error is aggregated (1 + 2 = 3)
+	if metrics.Output.Error != 3 {
+		t.Errorf("output_error: expected 3, got %d", metrics.Output.Error)
+	}
+
+	// Verify latency percentiles take max values (worst case)
+	if metrics.Output.LatencyNS.P50 != 20000 {
+		t.Errorf("output_latency_ns p50: expected 20000 (max), got %f", metrics.Output.LatencyNS.P50)
+	}
+	if metrics.Output.LatencyNS.P90 != 50000 {
+		t.Errorf("output_latency_ns p90: expected 50000 (max), got %f", metrics.Output.LatencyNS.P90)
+	}
+	if metrics.Output.LatencyNS.P99 != 100000 {
+		t.Errorf("output_latency_ns p99: expected 100000 (max), got %f", metrics.Output.LatencyNS.P99)
+	}
+
+	// Verify latency sum is aggregated (500000 + 300000 = 800000)
+	if metrics.Output.LatencyNS.Sum != 800000 {
+		t.Errorf("output_latency_ns_sum: expected 800000, got %f", metrics.Output.LatencyNS.Sum)
+	}
+
+	// Verify latency count is aggregated (50 + 30 = 80)
+	if metrics.Output.LatencyNS.Count != 80 {
+		t.Errorf("output_latency_ns_count: expected 80, got %d", metrics.Output.LatencyNS.Count)
+	}
+}
+
 // BenchmarkCompleteProcessing benchmarks the entire pipeline: hex decode -> gzip decode -> parse metrics.
 func BenchmarkCompleteProcessing(b *testing.B) {
 	_, encodedAndHexedData := prepareDataForBenchmark()

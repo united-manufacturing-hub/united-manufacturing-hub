@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Fixes
+
+- Output metrics (sent count, batch count, errors, latency) now display correctly when using switch or broker outputs. Previously, metrics from multiple switch routes were overwritten instead of aggregated, causing the UI to show only the last route's values or zero. Data was always flowing correctly — only the metric display was affected
+
 ## [0.44.21]
 
 ### Fixes
