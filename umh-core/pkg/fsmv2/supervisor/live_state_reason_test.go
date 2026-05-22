@@ -21,7 +21,11 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
 )
 
 // These tests cover ENG-4991: the supervisor must persist the per-tick reason
@@ -168,6 +172,156 @@ var _ = Describe("Live state reason propagation (ENG-4991)", func() {
 
 			Expect(s.TestTick(context.Background())).To(Succeed())
 			Expect(getWorkerDebug().StateReason).To(Equal(""), "empty reason from Next() must overwrite the stale value — Next() is authoritative")
+		})
+	})
+
+	Context("propagating the live reason from a child to its parent (P5)", func() {
+		// Spec test #7 / property P5. The spec's "central operator win":
+		// when a parent supervisor reports an unhealthy child, the parent
+		// heartbeat carries the child's live per-tick reason, propagated
+		// through children_manager.go's call to GetCurrentStateNameAndReason().
+		// This Context locks the propagation contract; a future refactor of
+		// children_manager.go (or of the parent's child-tracking code) cannot
+		// silently break the propagation without this test going red.
+		//
+		// Setup: a fresh worker type ("p5-child") is registered so the factory
+		// can return a mockWorker with a controlled mockState. The suite-level
+		// AfterEach resets the factory registry, so there is no cross-test leak.
+
+		const childWorkerType = "p5-child"
+
+		var (
+			parentSuper *supervisor.Supervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState]
+			mockStore   *mockTriangularStore
+			childState  *mockState
+		)
+
+		BeforeEach(func() {
+			mockStore = newMockTriangularStore()
+
+			childState = &mockState{}
+			childState.nextState = childState
+			childState.reason = "degraded (47 errors, 12 pending), backoff 8s"
+
+			// Register a worker factory for the child type that returns a
+			// mockWorker with the configured childState. The suite-level
+			// BeforeEach already ran registerTestWorkerFactories(); we add
+			// p5-child here because it is not in the default list.
+			err := factory.RegisterFactoryByType(childWorkerType,
+				func(_ deps.Identity, _ deps.FSMLogger, _ deps.StateReader, _ map[string]any) fsmv2.Worker {
+					return &mockWorker{initialState: childState}
+				},
+			)
+			Expect(err).ToNot(HaveOccurred())
+
+			err = factory.RegisterSupervisorFactoryByType(childWorkerType,
+				func(cfg interface{}) interface{} {
+					return supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](
+						cfg.(supervisor.Config),
+					)
+				},
+			)
+			Expect(err).ToNot(HaveOccurred())
+
+			// Parent worker whose DeriveDesiredState declares one child of type
+			// p5-child.  The hierarchicalWorker type (defined in
+			// hierarchical_tick_test.go) is reused directly.
+			parentWorker := &hierarchicalWorker{
+				id: "parent-worker",
+				logger: newTickLogger(),
+				observed: &mockObservedState{
+					ID:          "parent-worker",
+					CollectedAt: time.Now(),
+					Desired:     &mockDesiredState{},
+				},
+				childrenSpecs: []config.ChildSpec{
+					{
+						Name:       "child1",
+						WorkerType: childWorkerType,
+						UserSpec:   config.UserSpec{Config: "child-config"},
+					},
+				},
+			}
+
+			parentSuper = supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
+				WorkerType: "parent",
+				Logger:     deps.NewNopFSMLogger(),
+				Store:      mockStore,
+			})
+
+			identity := deps.Identity{
+				ID:         "parent-worker",
+				Name:       "Parent Worker",
+				WorkerType: "parent",
+			}
+			Expect(parentSuper.AddWorker(identity, parentWorker)).To(Succeed())
+
+			parentSuper.TestUpdateUserSpec(config.UserSpec{Config: "parent-config"})
+
+			desiredDoc := persistence.Document{
+				"id":                identity.ID,
+				"ShutdownRequested": false,
+			}
+			_, err = mockStore.SaveDesired(context.Background(), "parent", identity.ID, desiredDoc)
+			Expect(err).ToNot(HaveOccurred())
+
+			mockStore.Observed["parent"] = map[string]interface{}{
+				"parent-worker": persistence.Document{
+					"id":          "parent-worker",
+					"collectedAt": time.Now(),
+				},
+			}
+		})
+
+		It("parent observes the child's live self-return reason after a tick", func() {
+			// One parent tick: reconcileChildren creates the p5-child
+			// supervisor, then the parent ticks it.  Inside that child tick
+			// tickWorker runs Next() and writes childState.reason into
+			// currentStateReason.  GetDebugInfo on the parent then collects
+			// the child's debug info recursively, reading currentStateReason
+			// via the same path that GetCurrentStateNameAndReason uses.
+			Expect(parentSuper.TestTick(context.Background())).To(Succeed())
+
+			raw := parentSuper.GetDebugInfo()
+			parentDebug, ok := raw.(supervisor.SupervisorDebugInfo)
+			Expect(ok).To(BeTrue(), "GetDebugInfo should return SupervisorDebugInfo")
+			Expect(parentDebug.Children).ToNot(BeEmpty(), "parent must have at least one child after tick")
+
+			childDebug, exists := parentDebug.Children["child1"]
+			Expect(exists).To(BeTrue(), "child named 'child1' must appear in parent's Children map")
+			Expect(childDebug.Workers).ToNot(BeEmpty(), "child supervisor must have at least one worker")
+
+			Expect(childDebug.Workers[0].StateReason).To(
+				Equal("degraded (47 errors, 12 pending), backoff 8s"),
+				"parent's view of child must carry the child's live per-tick reason, not the stale entry reason",
+			)
+		})
+
+		It("parent reflects updated child reasons across multiple ticks", func() {
+			// First tick: establishes the initial live reason.
+			Expect(parentSuper.TestTick(context.Background())).To(Succeed())
+
+			raw := parentSuper.GetDebugInfo()
+			parentDebug, ok := raw.(supervisor.SupervisorDebugInfo)
+			Expect(ok).To(BeTrue())
+			Expect(parentDebug.Children["child1"].Workers[0].StateReason).To(
+				Equal("degraded (47 errors, 12 pending), backoff 8s"),
+			)
+
+			// Simulate the child's retry counter advancing (backoff growing),
+			// the way auth/push/pull workers update their reason every tick.
+			childState.reason = "degraded (89 errors, 5 pending), backoff 120s"
+
+			// Second tick: child ticks again with the new reason.
+			Expect(parentSuper.TestTick(context.Background())).To(Succeed())
+
+			raw = parentSuper.GetDebugInfo()
+			parentDebug, ok = raw.(supervisor.SupervisorDebugInfo)
+			Expect(ok).To(BeTrue())
+			Expect(parentDebug.Children["child1"].Workers[0].StateReason).To(
+				Equal("degraded (89 errors, 5 pending), backoff 120s"),
+				"parent must reflect the child's updated live reason after a subsequent tick",
+			)
 		})
 	})
 
