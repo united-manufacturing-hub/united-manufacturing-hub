@@ -563,7 +563,7 @@ func buildFSMv2Supervisor(
 
 	// Build YAML config for FSMv2 ApplicationSupervisor.
 	// instanceUUID is a placeholder — the real UUID is returned by the backend
-	// and will be set via onAuthSuccessCallback (Bug #6 fix).
+	// and picked up by polling TransportWorker.ObservedState.AuthenticatedUUID below (Bug #6 fix).
 	placeholderUUID = uuid.New().String()
 	yamlConfig := fmt.Sprintf(`
 children:
@@ -662,7 +662,7 @@ func wireFSMv2Communicator(
 
 	// Initialize Router for FSMv2 mode:
 	// 1. Create write-only Pusher (writes to channel, FSMv2 handles HTTP)
-	// 2. Set LoginResponse with placeholder UUID (will be updated by onAuthSuccessCallback)
+	// 2. Set LoginResponse with placeholder UUID (replaced when TransportWorker.ObservedState.AuthenticatedUUID is observed below)
 	// 3. Initialize SubscriberHandler (generates status messages)
 	// 4. Start Router (processes inbound messages, generates status via Subscriber)
 	communicationState.InitializeWriteOnlyPusher(placeholderUUID)
