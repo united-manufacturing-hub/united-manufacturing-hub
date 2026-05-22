@@ -174,9 +174,6 @@ func (m *mockState) Next(snapshot any) fsmv2.NextResult[any, any] {
 		return fsmv2.Result[any, any](m, fsmv2.SignalNone, nil, "mock state")
 	}
 
-	// Non-nil branch returns m.reason verbatim — including the empty string,
-	// per ENG-4991 (Next() is authoritative). The nil-branch "mock state"
-	// fallback above is for tests that don't drive Next() at all.
 	return fsmv2.Result[any, any](m.nextState, m.signal, m.action, m.reason)
 }
 
