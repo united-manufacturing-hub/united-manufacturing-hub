@@ -587,15 +587,6 @@ children:
 	// Setup store (in-memory for now).
 	store = examples.SetupStore(deps.NewFSMLogger(logger))
 
-	// Create callback to update LoginResponse with real UUID from backend (Bug #6 fix).
-	// This is called by AuthenticateAction after successful authentication.
-	onAuthSuccessCallback := func(realUUID, name string) {
-		logger.Infow("Authentication succeeded, updating LoginResponse with backend UUID",
-			"realUUID", realUUID, "name", name, "placeholderUUID", placeholderUUID)
-		communicationState.SetLoginResponseForFSMv2(realUUID)
-	}
-
-	// Create ApplicationSupervisor with channel provider and auth callback injected via Dependencies.
 	// Use Named("fsmv2") to create [fsmv2] prefix in logs for easy filtering.
 	fsmv2Logger := logger.Named("fsmv2")
 	// Wrap with FSMv2 SentryHook for automatic error capture to Sentry with:
@@ -612,10 +603,7 @@ children:
 
 	fsmv2Logger = fsmv2Logger.Desugar().WithOptions(zap.WrapCore(fsmv2Hook.Wrap)).Sugar()
 
-	fsmv2Deps := map[string]any{
-		"channelProvider":       channelAdapter,
-		"onAuthSuccessCallback": onAuthSuccessCallback,
-	}
+	fsmv2Deps := map[string]any{}
 	if configData.Agent.UseFSMv2MemoryCleanup {
 		fsmv2Deps["dependencies"] = persistenceWorker.NewStoreOnlyDependencies(store)
 	}
