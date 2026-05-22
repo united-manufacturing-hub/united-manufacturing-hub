@@ -25,6 +25,7 @@ import (
 	fsmv2config "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/register"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/persistence"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/persistence/snapshot"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/persistence/state"
@@ -291,13 +292,13 @@ var _ = Describe("PersistenceWorker", func() {
 			Expect(supervisorOnly).NotTo(ContainElement("persistence"))
 		})
 
-		It("should create worker via factory with store in params", func() {
+		It("should create worker via factory with store published through register.SetDeps", func() {
 			factoryIdentity := deps.Identity{ID: "factory-persistence", Name: "Factory Persistence", WorkerType: "persistence"}
 			d := persistence.NewStoreOnlyDependencies(store)
+			register.SetDeps[*persistence.PersistenceDependencies](persistence.WorkerTypeName, d)
+			DeferCleanup(func() { register.ClearDeps(persistence.WorkerTypeName) })
 
-			w, err := factory.NewWorkerByType("persistence", factoryIdentity, logger, nil, map[string]any{
-				"dependencies": d,
-			})
+			w, err := factory.NewWorkerByType("persistence", factoryIdentity, logger, nil, nil)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(w).NotTo(BeNil())
 

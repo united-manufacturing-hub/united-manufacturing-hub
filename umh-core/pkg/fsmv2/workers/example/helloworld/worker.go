@@ -35,8 +35,7 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/register"
 )
 
 // HelloworldWorker implements the FSMv2 Worker interface.
@@ -125,33 +124,11 @@ func readMoodFile(path string) string {
 	return strings.TrimSpace(string(data))
 }
 
-// init registers the worker with the factory using an explicit worker type name.
-// Uses RegisterWorkerAndSupervisorFactoryByType since Observation[T] generics
-// cannot be used with DeriveWorkerType (which relies on type name conventions).
 func init() {
-	if err := factory.RegisterWorkerAndSupervisorFactoryByType(
-		"helloworld",
-		// Worker factory: creates worker instances
-		func(id deps.Identity, logger deps.FSMLogger, stateReader deps.StateReader, _ map[string]any) fsmv2.Worker {
-			worker, err := NewHelloworldWorker(id, logger, stateReader)
-			if err != nil {
-				if logger != nil {
-					logger.SentryError(deps.FeatureExamples, id.HierarchyPath, err, "helloworld_worker_creation_failed")
-				}
-
-				return nil
-			}
-
-			return worker
-		},
-		// Supervisor factory: creates supervisor instances
-		func(cfg interface{}) interface{} {
-			return supervisor.NewSupervisor[fsmv2.Observation[HelloworldStatus], *fsmv2.WrappedDesiredState[HelloworldConfig]](
-				cfg.(supervisor.Config))
-		},
-	); err != nil {
-		panic(err)
-	}
+	register.Worker[HelloworldConfig, HelloworldStatus, *HelloworldDependencies]("helloworld",
+		func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader) (fsmv2.Worker, error) {
+			return NewHelloworldWorker(id, logger, sr)
+		})
 }
 
 // ensure HelloworldWorker implements Worker interfaces (compile-time check).
