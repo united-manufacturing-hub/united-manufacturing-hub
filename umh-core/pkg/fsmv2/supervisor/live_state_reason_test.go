@@ -45,7 +45,7 @@ var _ = Describe("Live state reason propagation (ENG-4991)", func() {
 		raw := s.GetDebugInfo()
 		info, ok := raw.(supervisor.SupervisorDebugInfo)
 		Expect(ok).To(BeTrue(), "GetDebugInfo should return SupervisorDebugInfo")
-		Expect(info.Workers).ToNot(BeEmpty(), "expected at least one worker")
+		Expect(info.Workers).To(HaveLen(1), "getWorkerDebug: expected exactly one worker")
 
 		return info.Workers[0]
 	}
@@ -74,6 +74,13 @@ var _ = Describe("Live state reason propagation (ENG-4991)", func() {
 
 			debug := getWorkerDebug()
 			Expect(debug.StateReason).To(Equal("auth backoff: 42 errors (cloudflare_challenge), delay 60s"))
+
+			// Pin the production consumer path: children_manager.go calls
+			// GetCurrentStateNameAndReason on every parent tick, copying the
+			// result into ChildInfo.StateReason. A future GetDebugInfo refactor
+			// could mask a regression that this assertion still catches.
+			_, reason := s.GetCurrentStateNameAndReason()
+			Expect(reason).To(Equal("auth backoff: 42 errors (cloudflare_challenge), delay 60s"))
 		})
 
 		It("leaves transition-gated fields unchanged on a self-return", func() {
@@ -325,10 +332,4 @@ var _ = Describe("Live state reason propagation (ENG-4991)", func() {
 		})
 	})
 
-	// Compile-time witness that the mock-supervisor type is what
-	// GetDebugInfo() will return. If the underlying type ever changes,
-	// the type assertion in getWorkerDebug catches it at test time but
-	// this assignment will fail at compile time so test rot is visible
-	// without running the suite.
-	var _ = func() fsmv2.State[any, any] { return &mockState{} }
 })
