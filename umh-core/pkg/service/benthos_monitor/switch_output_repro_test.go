@@ -19,11 +19,10 @@
 // only leaf `AsyncWriter`s do. So a switch with N cases emits N distinct
 // `output_sent` series with different `path` labels and NO top-level aggregate.
 //
-// Both parsers currently treat `output_sent` as a singleton:
-//   - ParseMetricsFromBytes:     last-wins (overwrite in the case branch)
-//   - ParseMetricsFromBytesSlow: first-wins (reads family.GetMetric()[0])
-//
-// Either way the UI shows the wrong number. These tests pin the bug.
+// Before ENG-5006, ParseMetricsFromBytes treated `output_sent` as a singleton
+// (last-wins overwrite in the case branch), so the UI showed only one route's
+// counter. The fast parser now aggregates per-path into Metrics.Outputs; this
+// test pins that behavior.
 package benthos_monitor
 
 import "testing"
@@ -135,32 +134,3 @@ func mapKeys[V any](m map[string]V) []string {
 	return out
 }
 
-func TestENG5006_SwitchOutput_SlowParser_AggregatesAcrossRoutes(t *testing.T) {
-	t.Skip("slow parser is deleted in C6 of ENG-5006; arm kept for completeness")
-
-	m, err := ParseMetricsFromBytesSlow([]byte(switchOutputMetrics))
-	if err != nil {
-		t.Fatalf("parse: %v", err)
-	}
-
-	if got := m.OutputSentTotal(); got != wantSentTotal {
-		t.Errorf("OutputSentTotal() = %d, want %d (sum across switch routes)", got, wantSentTotal)
-	}
-
-	if got := m.OutputBatchSentTotal(); got != wantBatchSentTotal {
-		t.Errorf("OutputBatchSentTotal() = %d, want %d", got, wantBatchSentTotal)
-	}
-
-	var errorTotal int64
-	for _, out := range m.Outputs {
-		errorTotal += out.Error
-	}
-
-	if errorTotal != wantErrorTotal {
-		t.Errorf("sum of Outputs[*].Error = %d, want %d", errorTotal, wantErrorTotal)
-	}
-
-	if got := m.OutputConnectionUpTotal(); got != wantConnectionUpTotal {
-		t.Errorf("OutputConnectionUpTotal() = %d, want %d", got, wantConnectionUpTotal)
-	}
-}

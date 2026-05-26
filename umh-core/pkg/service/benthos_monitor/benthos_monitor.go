@@ -82,27 +82,6 @@ type OutputInstance struct {
 	Sent             int64   `json:"sent"`
 }
 
-// InputMetrics is the legacy flat input metric struct. Removed in C5; kept
-// here so the C1..C4 dual-write window keeps existing consumers compiling.
-type InputMetrics struct {
-	ConnectionFailed int64   `json:"connection_failed"`
-	ConnectionLost   int64   `json:"connection_lost"`
-	ConnectionUp     int64   `json:"connection_up"`
-	LatencyNS        Latency `json:"latency_ns"`
-	Received         int64   `json:"received"`
-}
-
-// OutputMetrics is the legacy flat output metric struct. Removed in C5.
-type OutputMetrics struct {
-	BatchSent        int64   `json:"batch_sent"`
-	ConnectionFailed int64   `json:"connection_failed"`
-	ConnectionLost   int64   `json:"connection_lost"`
-	ConnectionUp     int64   `json:"connection_up"`
-	Error            int64   `json:"error"`
-	LatencyNS        Latency `json:"latency_ns"`
-	Sent             int64   `json:"sent"`
-}
-
 // ProcessMetrics contains processor-specific metrics.
 type ProcessMetrics struct {
 	Processors map[string]ProcessorMetrics `json:"processors"` // key is the processor path (e.g. "root.pipeline.processors.0")
@@ -1437,19 +1416,6 @@ func extractLabel(b []byte, key string) string {
 // unsafeString converts a []byte to string without allocation.
 // Use only for read-only parsing.
 // func unsafeString(b []byte) string { return *(*string)(unsafe.Pointer(&b)) }
-
-//go:fix inline
-// ParseMetricsFromBytesSlow is deprecated. The old expfmt-based body
-// suffered the same per-path bug as the fast parser with different
-// semantics (first-wins instead of last-wins); both are now fixed by
-// ParseMetricsFromBytes, which produces per-path Inputs/Outputs maps.
-// This stub remains for one commit so the deprecation is visible in
-// the diff (the //go:fix inline directive points new callers at the
-// fast parser). C6 deletes the stub, the BenchmarkMetricsParsing /
-// TestMetricsParsing cross-validation, and the expfmt import set.
-func ParseMetricsFromBytesSlow(data []byte) (Metrics, error) {
-	return ParseMetricsFromBytes(data)
-}
 
 // Status checks the status of a benthos service.
 func (s *BenthosMonitorService) Status(ctx context.Context, services serviceregistry.Provider, tick uint64) (ServiceInfo, error) {
