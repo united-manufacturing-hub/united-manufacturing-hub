@@ -286,12 +286,16 @@ func buildDFCServiceInfo(fsmState string) dataflowcomponent.ServiceInfo {
 							IsActive: isActive,
 						},
 						Metrics: benthos_monitor.Metrics{
-							Input: benthos_monitor.InputMetrics{
-								ConnectionUp:   connectionUp,
-								ConnectionLost: 0,
+							Inputs: map[string]benthos_monitor.InputInstance{
+								"root.input": {
+									ConnectionUp:   connectionUp,
+									ConnectionLost: 0,
+								},
 							},
-							Output: benthos_monitor.OutputMetrics{
-								ConnectionUp: connectionUp,
+							Outputs: map[string]benthos_monitor.OutputInstance{
+								"root.output": {
+									ConnectionUp: connectionUp,
+								},
 							},
 						},
 					},

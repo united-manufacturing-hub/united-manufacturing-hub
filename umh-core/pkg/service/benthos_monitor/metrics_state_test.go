@@ -44,12 +44,11 @@ var _ = Describe("MetricsState", Label("metrics_state"), func() {
 	Context("UpdateFromMetrics", func() {
 		It("should handle first update as baseline", func() {
 			metrics := benthos_monitor.Metrics{
-				Input: benthos_monitor.InputMetrics{
-					Received: 100,
+				Inputs: map[string]benthos_monitor.InputInstance{
+					"root.input": {Received: 100},
 				},
-				Output: benthos_monitor.OutputMetrics{
-					Sent:      90,
-					BatchSent: 10,
+				Outputs: map[string]benthos_monitor.OutputInstance{
+					"root.output": {Sent: 90, BatchSent: 10},
 				},
 			}
 
@@ -69,24 +68,24 @@ var _ = Describe("MetricsState", Label("metrics_state"), func() {
 		It("should handle counter reset", func() {
 			// First update
 			state.UpdateFromMetrics(benthos_monitor.Metrics{
-				Input: benthos_monitor.InputMetrics{
-					Received: 100,
+				Inputs: map[string]benthos_monitor.InputInstance{
+					"root.input": {Received: 100},
 				},
 			}, tick)
 			tick++
 
 			// Second update to establish throughput
 			state.UpdateFromMetrics(benthos_monitor.Metrics{
-				Input: benthos_monitor.InputMetrics{
-					Received: 150,
+				Inputs: map[string]benthos_monitor.InputInstance{
+					"root.input": {Received: 150},
 				},
 			}, tick)
 			tick++
 
 			// Counter reset (new count lower than last count)
 			state.UpdateFromMetrics(benthos_monitor.Metrics{
-				Input: benthos_monitor.InputMetrics{
-					Received: 50, // Reset to lower value
+				Inputs: map[string]benthos_monitor.InputInstance{
+					"root.input": {Received: 50}, // Reset to lower value
 				},
 			}, tick)
 			tick++
@@ -99,24 +98,22 @@ var _ = Describe("MetricsState", Label("metrics_state"), func() {
 		It("should calculate rates correctly over multiple ticks", func() {
 			// First update at tick 0
 			state.UpdateFromMetrics(benthos_monitor.Metrics{
-				Input: benthos_monitor.InputMetrics{
-					Received: 100,
+				Inputs: map[string]benthos_monitor.InputInstance{
+					"root.input": {Received: 100},
 				},
-				Output: benthos_monitor.OutputMetrics{
-					Sent:      90,
-					BatchSent: 10,
+				Outputs: map[string]benthos_monitor.OutputInstance{
+					"root.output": {Sent: 90, BatchSent: 10},
 				},
 			}, tick)
 			tick++
 
 			// Second update at tick 1
 			state.UpdateFromMetrics(benthos_monitor.Metrics{
-				Input: benthos_monitor.InputMetrics{
-					Received: 160, // +60 over 1 tick = 60 per tick
+				Inputs: map[string]benthos_monitor.InputInstance{
+					"root.input": {Received: 160}, // +60 over 1 tick = 60 per tick
 				},
-				Output: benthos_monitor.OutputMetrics{
-					Sent:      140, // +50 over 1 tick = 50 per tick
-					BatchSent: 20,  // +10 over 1 tick = 10 per tick
+				Outputs: map[string]benthos_monitor.OutputInstance{
+					"root.output": {Sent: 140, BatchSent: 20}, // +50 sent, +10 batch over 1 tick
 				},
 			}, tick)
 			tick++
@@ -159,8 +156,8 @@ var _ = Describe("MetricsState", Label("metrics_state"), func() {
 
 			// First input update
 			state.UpdateFromMetrics(benthos_monitor.Metrics{
-				Input: benthos_monitor.InputMetrics{
-					Received: 100,
+				Inputs: map[string]benthos_monitor.InputInstance{
+					"root.input": {Received: 100},
 				},
 			}, tick)
 			tick++
@@ -168,8 +165,8 @@ var _ = Describe("MetricsState", Label("metrics_state"), func() {
 
 			// Second update shows activity
 			state.UpdateFromMetrics(benthos_monitor.Metrics{
-				Input: benthos_monitor.InputMetrics{
-					Received: 200,
+				Inputs: map[string]benthos_monitor.InputInstance{
+					"root.input": {Received: 200},
 				},
 			}, tick)
 			tick++
@@ -177,8 +174,8 @@ var _ = Describe("MetricsState", Label("metrics_state"), func() {
 
 			// No new input activity (same count)
 			state.UpdateFromMetrics(benthos_monitor.Metrics{
-				Input: benthos_monitor.InputMetrics{
-					Received: 200, // Same as last tick
+				Inputs: map[string]benthos_monitor.InputInstance{
+					"root.input": {Received: 200}, // Same as last tick
 				},
 			}, tick)
 			tick++
@@ -186,34 +183,53 @@ var _ = Describe("MetricsState", Label("metrics_state"), func() {
 
 			// No new input activity for a while
 			for range uint64(benthos_monitor.ThroughputWindowSize + 1) {
-				state.UpdateFromMetrics(benthos_monitor.Metrics{Input: benthos_monitor.InputMetrics{Received: 200}}, tick)
+				state.UpdateFromMetrics(benthos_monitor.Metrics{
+					Inputs: map[string]benthos_monitor.InputInstance{
+						"root.input": {Received: 200},
+					},
+				}, tick)
 				tick++
 			}
 			Expect(state.IsActive).To(BeFalse()) // Not active as we had no throughput for a while
 
 			// New input activity
 			state.UpdateFromMetrics(benthos_monitor.Metrics{
-				Input: benthos_monitor.InputMetrics{
-					Received: 300, // New messages
+				Inputs: map[string]benthos_monitor.InputInstance{
+					"root.input": {Received: 300}, // New messages
 				},
 			}, tick)
 			tick++
 			Expect(state.IsActive).To(BeTrue()) // Active again due to throughput
 		})
 
+		It("sums OutputSent across multiple output paths via OutputSentTotal", func() {
+			// Simulate a switch output with three routes: 10 + 7 + 3 = 20 messages.
+			state.UpdateFromMetrics(benthos_monitor.Metrics{
+				Outputs: map[string]benthos_monitor.OutputInstance{
+					"root.output.switch.cases.0.output.fallback.0": {Sent: 10, BatchSent: 10},
+					"root.output.switch.cases.1.output.fallback.0": {Sent: 7, BatchSent: 7},
+					"root.output.switch.cases.2.output.fallback.0": {Sent: 3, BatchSent: 3},
+				},
+			}, tick)
+
+			Expect(state.Output.LastCount).To(Equal(int64(20)),
+				"metrics_state must read OutputSentTotal(), not Output.Sent (flat field)")
+			Expect(state.Output.LastBatchCount).To(Equal(int64(20)))
+		})
+
 		It("should handle high throughput (60k msg/sec) without counter issues", func() {
 			// Simulate a baseline
 			state.UpdateFromMetrics(benthos_monitor.Metrics{
-				Input: benthos_monitor.InputMetrics{
-					Received: 0,
+				Inputs: map[string]benthos_monitor.InputInstance{
+					"root.input": {Received: 0},
 				},
 			}, tick)
 			tick++
 
 			// Simulate 60,000 messages received in one tick
 			state.UpdateFromMetrics(benthos_monitor.Metrics{
-				Input: benthos_monitor.InputMetrics{
-					Received: 60000,
+				Inputs: map[string]benthos_monitor.InputInstance{
+					"root.input": {Received: 60000},
 				},
 			}, tick)
 			tick++
@@ -224,8 +240,8 @@ var _ = Describe("MetricsState", Label("metrics_state"), func() {
 
 			// Simulate another 60,000 messages in the next tick (total 120,000)
 			state.UpdateFromMetrics(benthos_monitor.Metrics{
-				Input: benthos_monitor.InputMetrics{
-					Received: 120000,
+				Inputs: map[string]benthos_monitor.InputInstance{
+					"root.input": {Received: 120000},
 				},
 			}, tick)
 			tick++

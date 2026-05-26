@@ -471,8 +471,8 @@ var _ = Describe("Benthos Service", func() {
 			It("should detect output errors", func() {
 				metrics := benthos_monitor.BenthosMetrics{
 					Metrics: benthos_monitor.Metrics{
-						Output: benthos_monitor.OutputMetrics{
-							Error: 1,
+						Outputs: map[string]benthos_monitor.OutputInstance{
+							"root.output": {Error: 1},
 						},
 					},
 				}

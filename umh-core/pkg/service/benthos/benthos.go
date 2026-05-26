@@ -1055,9 +1055,11 @@ func (s *BenthosService) IsLogsFine(
 //	reason – empty when ok is true; otherwise a short explanation (e.g.
 //	         "benthos reported 3 processor errors").
 func (s *BenthosService) IsMetricsErrorFree(metrics benthos_monitor.BenthosMetrics) (bool, string) {
-	// Check output errors
-	if metrics.Metrics.Output.Error > 0 {
-		return false, fmt.Sprintf("benthos reported %d output errors", metrics.Metrics.Output.Error)
+	// Check output errors. OutputErrorTotal sums across all output paths,
+	// so a switch/broker/fallback config reports the true total instead
+	// of only the last route's error count (the pre-ENG-5006 behavior).
+	if total := metrics.Metrics.OutputErrorTotal(); total > 0 {
+		return false, fmt.Sprintf("benthos reported %d output errors", total)
 	}
 
 	// Check processor errors
