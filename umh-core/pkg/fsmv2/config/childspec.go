@@ -37,7 +37,9 @@ import (
 // # Lifecycle Control Invariant
 //
 // The FSM controls worker lifecycle through state transitions, not through custom bool fields.
-// Do not add fields like ShouldRun, IsRunning, Enabled, Active, or State to your DesiredState.
+// Do not add fields like ShouldRun, IsRunning, Active, or State to your DesiredState.
+// Note: ChildSpec.Enabled is intentionally different — it is a parent-to-supervisor gating
+// signal on the child descriptor (not a DesiredState lifecycle field) and is explicitly allowed.
 //
 // Correct lifecycle control:
 //   - ShutdownRequested: Inherited from this type. Set by supervisor for graceful shutdown.
@@ -219,6 +221,28 @@ type ChildSpec struct {
 	Name             string         `json:"name"                       yaml:"name"`                       // Unique name for this child (within parent scope)
 	WorkerType       string         `json:"workerType"                 yaml:"workerType"`                 // Type of worker to create (registered worker factory key)
 	ChildStartStates []string       `json:"childStartStates,omitempty" yaml:"childStartStates,omitempty"` // Parent FSM states where child should run (empty = always run)
+
+	// Enabled is the parent's per-tick enable signal for this child.
+	//
+	// The zero value is false: ChildSpec literals that omit Enabled produce a
+	// stopped-but-resident child. Parents that want a running child must
+	// explicitly set Enabled: true in their renderChildren body.
+	//
+	// Pause/resume flow: setting Enabled=false drives the child to Stopped;
+	// setting Enabled=true again writes IsShutdownRequested=false, and the
+	// child's state machine transitions from Stopped back to TryingToStart on
+	// the next tick.
+	//
+	// One-way stop guarantee: once a child enters TryingToStop, it completes
+	// the stop before accepting a new IsShutdownRequested=false signal. The
+	// supervisor only manages the flag; the child's state machine enforces
+	// the trajectory.
+	//
+	// Children read snap.Desired.IsShutdownRequested() and never read Enabled
+	// directly. The CHANGE-19 reducer in supervisor/reconciliation.go
+	// translates the spec value to IsShutdownRequested at the start of
+	// reconcileChildren, before Phase 1's pendingRemoval writes.
+	Enabled bool `json:"enabled" yaml:"enabled"`
 }
 
 // Clone creates a deep copy of the ChildSpec.
@@ -249,7 +273,7 @@ func (c ChildSpec) Clone() ChildSpec {
 // enabling incremental validation (only re-validate specs whose hash changed).
 //
 // The hash is computed from all relevant fields: Name, WorkerType, UserSpec,
-// ChildStartStates, and Dependencies (excluding any unexported fields).
+// ChildStartStates, Enabled, and Dependencies (excluding any unexported fields).
 //
 // Returns a hex-encoded FNV-1a 64-bit hash string (16 characters) and an error
 // if Variables cannot be marshaled to JSON.
@@ -281,6 +305,13 @@ func (c ChildSpec) Hash() (string, error) {
 		h.Write([]byte(state))
 		h.Write([]byte{0}) // separator
 	}
+
+	if c.Enabled {
+		h.Write([]byte{1})
+	} else {
+		h.Write([]byte{0})
+	}
+	h.Write([]byte{0}) // separator
 
 	// Dependencies contain runtime objects (channels, etc.) that can't be meaningfully hashed,
 	// so we skip them. Changes to dependencies don't require re-validation anyway.
