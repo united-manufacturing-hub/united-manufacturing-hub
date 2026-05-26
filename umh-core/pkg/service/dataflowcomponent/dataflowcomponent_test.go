@@ -236,8 +236,12 @@ var _ = Describe("DataFlowComponentService", func() {
 			Expect(err).NotTo(HaveOccurred())
 			tick = newTick
 
-			mockBenthosService.ServiceStates[benthosName].BenthosStatus.BenthosMetrics.Metrics.Input.Received = 10
-			mockBenthosService.ServiceStates[benthosName].BenthosStatus.BenthosMetrics.Metrics.Output.Sent = 10
+			mockBenthosService.ServiceStates[benthosName].BenthosStatus.BenthosMetrics.Metrics.Inputs = map[string]benthos_monitor.InputInstance{
+				"root.input": {Path: "root.input", Received: 10},
+			}
+			mockBenthosService.ServiceStates[benthosName].BenthosStatus.BenthosMetrics.Metrics.Outputs = map[string]benthos_monitor.OutputInstance{
+				"root.output": {Path: "root.output", Sent: 10},
+			}
 
 			// Reconcile once to ensure that serviceInfo is used to update the observed state
 			_, reconciled := statusService.ReconcileManager(ctx, mockSvcRegistry, fsm.SystemSnapshot{Tick: tick, SnapshotTime: time.Now()})
@@ -252,8 +256,8 @@ var _ = Describe("DataFlowComponentService", func() {
 			Expect(status.BenthosObservedState.ServiceInfo.S6ObservedState.ServiceInfo.Status).To(Equal(s6svc.ServiceUp))
 			Expect(status.BenthosObservedState.ServiceInfo.BenthosStatus.HealthCheck.IsLive).To(BeTrue())
 			Expect(status.BenthosObservedState.ServiceInfo.BenthosStatus.HealthCheck.IsReady).To(BeTrue())
-			Expect(status.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosMetrics.Metrics.Input.Received).To(Equal(int64(10)))
-			Expect(status.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosMetrics.Metrics.Output.Sent).To(Equal(int64(10)))
+			Expect(status.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosMetrics.Metrics.InputReceivedTotal()).To(Equal(int64(10)))
+			Expect(status.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosMetrics.Metrics.OutputSentTotal()).To(Equal(int64(10)))
 		})
 
 		It("should return error for non-existent component", func() {
@@ -529,6 +533,20 @@ var _ = Describe("DataFlowComponentService", func() {
 			// but for a unit test, verifying that reconciled is false is sufficient
 		})
 	})
+
+	Describe("MockDataFlowComponentService", func() {
+		It("exposes ConnectionUp via per-path Input/Output totals", func() {
+			mock := NewMockDataFlowComponentService()
+			mock.SetComponentState("test-dfc", ComponentStateFlags{
+				IsBenthosProcessingMetricsActive: true,
+				BenthosFSMState:                  benthosfsmmanager.OperationalStateActive,
+			})
+
+			state := mock.ComponentStates["test-dfc"].BenthosObservedState.ServiceInfo.BenthosStatus.BenthosMetrics.Metrics
+			Expect(state.InputConnectionUpTotal()).To(Equal(int64(1)))
+			Expect(state.OutputConnectionUpTotal()).To(Equal(int64(1)))
+		})
+	})
 })
 
 // ConfigureBenthosManagerForState configures mock service for proper transitions.
@@ -649,23 +667,23 @@ func SetupBenthosServiceState(
 			IsLive:  true,
 			IsReady: true,
 		}
-		mockService.ServiceStates[serviceName].BenthosStatus.BenthosMetrics.Metrics.Input.ConnectionUp = 1
-		mockService.ServiceStates[serviceName].BenthosStatus.BenthosMetrics.Metrics.Input.ConnectionFailed = 0
-		mockService.ServiceStates[serviceName].BenthosStatus.BenthosMetrics.Metrics.Input.ConnectionLost = 0
-		mockService.ServiceStates[serviceName].BenthosStatus.BenthosMetrics.Metrics.Output.ConnectionUp = 1
-		mockService.ServiceStates[serviceName].BenthosStatus.BenthosMetrics.Metrics.Output.ConnectionFailed = 0
-		mockService.ServiceStates[serviceName].BenthosStatus.BenthosMetrics.Metrics.Output.ConnectionLost = 0
+		mockService.ServiceStates[serviceName].BenthosStatus.BenthosMetrics.Metrics.Inputs = map[string]benthos_monitor.InputInstance{
+			"root.input": {Path: "root.input", ConnectionUp: 1, ConnectionFailed: 0, ConnectionLost: 0},
+		}
+		mockService.ServiceStates[serviceName].BenthosStatus.BenthosMetrics.Metrics.Outputs = map[string]benthos_monitor.OutputInstance{
+			"root.output": {Path: "root.output", ConnectionUp: 1, ConnectionFailed: 0, ConnectionLost: 0},
+		}
 	} else {
 		mockService.ServiceStates[serviceName].BenthosStatus.HealthCheck = benthos_monitor.HealthCheck{
 			IsLive:  false,
 			IsReady: false,
 		}
-		mockService.ServiceStates[serviceName].BenthosStatus.BenthosMetrics.Metrics.Input.ConnectionUp = 1
-		mockService.ServiceStates[serviceName].BenthosStatus.BenthosMetrics.Metrics.Input.ConnectionFailed = 1
-		mockService.ServiceStates[serviceName].BenthosStatus.BenthosMetrics.Metrics.Input.ConnectionLost = 0
-		mockService.ServiceStates[serviceName].BenthosStatus.BenthosMetrics.Metrics.Output.ConnectionUp = 1
-		mockService.ServiceStates[serviceName].BenthosStatus.BenthosMetrics.Metrics.Output.ConnectionFailed = 1
-		mockService.ServiceStates[serviceName].BenthosStatus.BenthosMetrics.Metrics.Output.ConnectionLost = 0
+		mockService.ServiceStates[serviceName].BenthosStatus.BenthosMetrics.Metrics.Inputs = map[string]benthos_monitor.InputInstance{
+			"root.input": {Path: "root.input", ConnectionUp: 1, ConnectionFailed: 1, ConnectionLost: 0},
+		}
+		mockService.ServiceStates[serviceName].BenthosStatus.BenthosMetrics.Metrics.Outputs = map[string]benthos_monitor.OutputInstance{
+			"root.output": {Path: "root.output", ConnectionUp: 1, ConnectionFailed: 1, ConnectionLost: 0},
+		}
 	}
 
 	// Setup metrics state if needed

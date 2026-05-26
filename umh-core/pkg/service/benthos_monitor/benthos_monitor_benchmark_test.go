@@ -361,33 +361,39 @@ func BenchmarkUpdateFromMetricsWithPercentiles(b *testing.B) {
 
 	// Create sample metrics
 	metrics := Metrics{
-		Input: InputMetrics{
-			ConnectionFailed: 0,
-			ConnectionLost:   0,
-			ConnectionUp:     1,
-			LatencyNS: Latency{
-				P50:   127167,
-				P90:   378375,
-				P99:   858666,
-				Sum:   3629208,
-				Count: 18,
+		Inputs: map[string]InputInstance{
+			"root.input": {
+				Path:             "root.input",
+				ConnectionFailed: 0,
+				ConnectionLost:   0,
+				ConnectionUp:     1,
+				LatencyNS: Latency{
+					P50:   127167,
+					P90:   378375,
+					P99:   858666,
+					Sum:   3629208,
+					Count: 18,
+				},
+				Received: 18,
 			},
-			Received: 18,
 		},
-		Output: OutputMetrics{
-			BatchSent:        18,
-			ConnectionFailed: 0,
-			ConnectionLost:   0,
-			ConnectionUp:     1,
-			Error:            0,
-			LatencyNS: Latency{
-				P50:   33250,
-				P90:   94709,
-				P99:   138250,
-				Sum:   816919,
-				Count: 18,
+		Outputs: map[string]OutputInstance{
+			"root.output": {
+				Path:             "root.output",
+				BatchSent:        18,
+				ConnectionFailed: 0,
+				ConnectionLost:   0,
+				ConnectionUp:     1,
+				Error:            0,
+				LatencyNS: Latency{
+					P50:   33250,
+					P90:   94709,
+					P99:   138250,
+					Sum:   816919,
+					Count: 18,
+				},
+				Sent: 18,
 			},
-			Sent: 18,
 		},
 		Process: ProcessMetrics{
 			Processors: map[string]ProcessorMetrics{
@@ -418,10 +424,15 @@ func BenchmarkUpdateFromMetricsWithPercentiles(b *testing.B) {
 
 	for i := range b.N {
 		// Simulate increasing counters for realistic benchmark
-		metrics.Input.Received++
-		metrics.Output.Sent++
+		in := metrics.Inputs["root.input"]
+		in.Received++
+		metrics.Inputs["root.input"] = in
 
-		metrics.Output.BatchSent++
+		out := metrics.Outputs["root.output"]
+		out.Sent++
+		out.BatchSent++
+		metrics.Outputs["root.output"] = out
+
 		for path := range metrics.Process.Processors {
 			proc := metrics.Process.Processors[path]
 			proc.Received++

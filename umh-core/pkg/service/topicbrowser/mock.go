@@ -113,9 +113,12 @@ func (m *MockService) SetState(tbName string, flags StateFlags) {
 			BenthosStatus: benthossvc.BenthosStatus{
 				BenthosMetrics: benthos_monitor.BenthosMetrics{
 					Metrics: benthos_monitor.Metrics{
-						Output: benthos_monitor.OutputMetrics{
-							ConnectionUp: 1,
-							BatchSent:    int64(batchSent),
+						Outputs: map[string]benthos_monitor.OutputInstance{
+							"root.output": {
+								Path:         "root.output",
+								ConnectionUp: 1,
+								BatchSent:    int64(batchSent),
+							},
 						},
 					},
 				},
