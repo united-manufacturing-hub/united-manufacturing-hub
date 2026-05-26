@@ -29,8 +29,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/prometheus/common/expfmt"
-	"github.com/prometheus/common/model"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/s6serviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
@@ -40,7 +38,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/standarderrors"
 
-	dto "github.com/prometheus/client_model/go"
 	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/monitor"
@@ -53,16 +50,12 @@ import (
 // Inputs and Outputs are keyed by benthos `path` label (one entry per leaf
 // AsyncReader / AsyncWriter). For switch/broker/fallback configs, multiple
 // entries exist; for a single-input or single-output config there is one
-// entry at "root.input" / "root.output". The flat Input and Output fields
-// are kept during the C1..C4 migration window and are populated from the
-// per-path totals so existing consumers keep compiling. They are removed
-// in C5.
+// entry at "root.input" / "root.output". Aggregate values are exposed via
+// the *Total helpers on Metrics.
 type Metrics struct {
 	Process ProcessMetrics            `json:"process,omitempty"`
 	Outputs map[string]OutputInstance `json:"outputs,omitempty"`
 	Inputs  map[string]InputInstance  `json:"inputs,omitempty"`
-	Output  OutputMetrics             `json:"output,omitempty"` // legacy; removed in C5
-	Input   InputMetrics              `json:"input,omitempty"`  // legacy; removed in C5
 }
 
 // InputInstance contains per-path input metrics for one benthos AsyncReader.
@@ -1413,49 +1406,6 @@ func ParseMetricsFromBytes(raw []byte) (Metrics, error) {
 		}
 	}
 
-	// Dual-write: populate the legacy flat fields from the per-path totals
-	// so consumers that have not yet been migrated keep working through
-	// C1..C4. These fields disappear in C5.
-	m.Input.Received = m.InputReceivedTotal()
-	m.Input.ConnectionUp = m.InputConnectionUpTotal()
-	m.Input.ConnectionLost = m.InputConnectionLostTotal()
-	m.Output.Sent = m.OutputSentTotal()
-	m.Output.BatchSent = m.OutputBatchSentTotal()
-	m.Output.ConnectionUp = m.OutputConnectionUpTotal()
-	m.Output.ConnectionLost = m.OutputConnectionLostTotal()
-	// ConnectionFailed and Error are not in the helper set; sum them
-	// directly so the migration window stays behavior-preserving.
-	for _, in := range m.Inputs {
-		m.Input.ConnectionFailed += in.ConnectionFailed
-	}
-
-	for _, out := range m.Outputs {
-		m.Output.ConnectionFailed += out.ConnectionFailed
-		m.Output.Error += out.Error
-	}
-
-	// Latency: copy from the single-instance case (the only one that
-	// existed before C1) so single-output configs keep identical values.
-	// For multi-output configs the merged latency is undefined; the spec
-	// says the UI shows per-path quantiles via the map and there is no
-	// "merged P50" requirement. Pick the first non-empty entry for the
-	// legacy fields purely so the field is non-zero.
-	for _, in := range m.Inputs {
-		if in.LatencyNS.Count > 0 {
-			m.Input.LatencyNS = in.LatencyNS
-
-			break
-		}
-	}
-
-	for _, out := range m.Outputs {
-		if out.LatencyNS.Count > 0 {
-			m.Output.LatencyNS = out.LatencyNS
-
-			break
-		}
-	}
-
 	return m, nil
 }
 
@@ -1488,221 +1438,17 @@ func extractLabel(b []byte, key string) string {
 // Use only for read-only parsing.
 // func unsafeString(b []byte) string { return *(*string)(unsafe.Pointer(&b)) }
 
-// ParseMetricsFromBytes parses prometheus metrics into structured format
-// Deprecated: Use ParseMetricsFromBytes instead.
+//go:fix inline
+// ParseMetricsFromBytesSlow is deprecated. The old expfmt-based body
+// suffered the same per-path bug as the fast parser with different
+// semantics (first-wins instead of last-wins); both are now fixed by
+// ParseMetricsFromBytes, which produces per-path Inputs/Outputs maps.
+// This stub remains for one commit so the deprecation is visible in
+// the diff (the //go:fix inline directive points new callers at the
+// fast parser). C6 deletes the stub, the BenchmarkMetricsParsing /
+// TestMetricsParsing cross-validation, and the expfmt import set.
 func ParseMetricsFromBytesSlow(data []byte) (Metrics, error) {
-	var (
-		scheme = model.LegacyValidation
-		parser = expfmt.NewTextParser(scheme)
-	)
-
-	metrics := Metrics{
-		Input:   InputMetrics{},
-		Output:  OutputMetrics{},
-		Inputs:  make(map[string]InputInstance, 1),
-		Outputs: make(map[string]OutputInstance, 1),
-		Process: ProcessMetrics{
-			Processors: make(map[string]ProcessorMetrics),
-		},
-	}
-
-	// Parse the metrics text into prometheus format
-	mf, err := parser.TextToMetricFamilies(bytes.NewReader(data))
-	if err != nil {
-		return metrics, fmt.Errorf("failed to parse metrics: %w", err)
-	}
-
-	// Helper function to get metric value
-	getValue := func(m *dto.Metric) float64 {
-		if m.GetCounter() != nil {
-			return m.GetCounter().GetValue()
-		}
-
-		if m.GetGauge() != nil {
-			return m.GetGauge().GetValue()
-		}
-
-		if m.GetUntyped() != nil {
-			return m.GetUntyped().GetValue()
-		}
-
-		return 0
-	}
-
-	// Helper function to get label value
-	getLabel := func(m *dto.Metric, name string) string {
-		for _, label := range m.GetLabel() {
-			if label.GetName() == name {
-				return label.GetValue()
-			}
-		}
-
-		return ""
-	}
-
-	// Process each metric family
-	for name, family := range mf {
-		switch name {
-		// Input metrics
-		case "input_connection_failed":
-			if len(family.GetMetric()) > 0 {
-				metrics.Input.ConnectionFailed = int64(getValue(family.GetMetric()[0]))
-			}
-		case "input_connection_lost":
-			if len(family.GetMetric()) > 0 {
-				metrics.Input.ConnectionLost = int64(getValue(family.GetMetric()[0]))
-			}
-		case "input_connection_up":
-			if len(family.GetMetric()) > 0 {
-				metrics.Input.ConnectionUp = int64(getValue(family.GetMetric()[0]))
-			}
-		case "input_received":
-			if len(family.GetMetric()) > 0 {
-				metrics.Input.Received = int64(getValue(family.GetMetric()[0]))
-			}
-		case "input_latency_ns":
-			updateLatencyFromFamily(&metrics.Input.LatencyNS, family)
-
-		// Output metrics
-		case "output_batch_sent":
-			if len(family.GetMetric()) > 0 {
-				metrics.Output.BatchSent = int64(getValue(family.GetMetric()[0]))
-			}
-		case "output_connection_failed":
-			if len(family.GetMetric()) > 0 {
-				metrics.Output.ConnectionFailed = int64(getValue(family.GetMetric()[0]))
-			}
-		case "output_connection_lost":
-			if len(family.GetMetric()) > 0 {
-				metrics.Output.ConnectionLost = int64(getValue(family.GetMetric()[0]))
-			}
-		case "output_connection_up":
-			if len(family.GetMetric()) > 0 {
-				metrics.Output.ConnectionUp = int64(getValue(family.GetMetric()[0]))
-			}
-		case "output_error":
-			if len(family.GetMetric()) > 0 {
-				metrics.Output.Error = int64(getValue(family.GetMetric()[0]))
-			}
-		case "output_sent":
-			if len(family.GetMetric()) > 0 {
-				metrics.Output.Sent = int64(getValue(family.GetMetric()[0]))
-			}
-		case "output_latency_ns":
-			updateLatencyFromFamily(&metrics.Output.LatencyNS, family)
-
-		// Process metrics
-		case "processor_received", "processor_batch_received",
-			"processor_sent", "processor_batch_sent",
-			"processor_error", "processor_latency_ns":
-			for _, metric := range family.GetMetric() {
-				path := getLabel(metric, "path")
-				if path == "" {
-					continue
-				}
-
-				// Initialize processor metrics if not exists
-				if _, exists := metrics.Process.Processors[path]; !exists {
-					metrics.Process.Processors[path] = ProcessorMetrics{
-						Label: getLabel(metric, "label"),
-					}
-				}
-
-				proc := metrics.Process.Processors[path]
-
-				switch name {
-				case "processor_received":
-					proc.Received = int64(getValue(metric))
-				case "processor_batch_received":
-					proc.BatchReceived = int64(getValue(metric))
-				case "processor_sent":
-					proc.Sent = int64(getValue(metric))
-				case "processor_batch_sent":
-					proc.BatchSent = int64(getValue(metric))
-				case "processor_error":
-					proc.Error = int64(getValue(metric))
-				case "processor_latency_ns":
-					updateLatencyFromMetric(&proc.LatencyNS, metric)
-				}
-
-				metrics.Process.Processors[path] = proc
-			}
-		}
-	}
-
-	// Symmetric singleton-map backfill so TestMetricsParsing (slow-vs-fast
-	// cross-validation) keeps passing through the C1..C4 migration window.
-	// The slow parser does not iterate per-path, so for switch/broker/fallback
-	// payloads the maps remain empty here — that path is gated behind
-	// t.Skip in switch_output_repro_test.go's slow-arm. Removed in C6 with
-	// the rest of the slow parser body.
-	if metrics.Input != (InputMetrics{}) {
-		metrics.Inputs["root.input"] = InputInstance{
-			Path:             "root.input",
-			ConnectionFailed: metrics.Input.ConnectionFailed,
-			ConnectionLost:   metrics.Input.ConnectionLost,
-			ConnectionUp:     metrics.Input.ConnectionUp,
-			LatencyNS:        metrics.Input.LatencyNS,
-			Received:         metrics.Input.Received,
-		}
-	}
-
-	if metrics.Output != (OutputMetrics{}) {
-		metrics.Outputs["root.output"] = OutputInstance{
-			Path:             "root.output",
-			BatchSent:        metrics.Output.BatchSent,
-			ConnectionFailed: metrics.Output.ConnectionFailed,
-			ConnectionLost:   metrics.Output.ConnectionLost,
-			ConnectionUp:     metrics.Output.ConnectionUp,
-			Error:            metrics.Output.Error,
-			LatencyNS:        metrics.Output.LatencyNS,
-			Sent:             metrics.Output.Sent,
-		}
-	}
-
-	return metrics, nil
-}
-
-func updateLatencyFromFamily(latency *Latency, family *dto.MetricFamily) {
-	for _, metric := range family.GetMetric() {
-		if metric.GetSummary() == nil {
-			continue
-		}
-
-		latency.Sum = metric.GetSummary().GetSampleSum()
-		latency.Count = int64(metric.GetSummary().GetSampleCount())
-
-		for _, quantile := range metric.GetSummary().GetQuantile() {
-			switch quantile.GetQuantile() {
-			case 0.5:
-				latency.P50 = quantile.GetValue()
-			case 0.9:
-				latency.P90 = quantile.GetValue()
-			case 0.99:
-				latency.P99 = quantile.GetValue()
-			}
-		}
-	}
-}
-
-func updateLatencyFromMetric(latency *Latency, metric *dto.Metric) {
-	if metric.GetSummary() == nil {
-		return
-	}
-
-	latency.Sum = metric.GetSummary().GetSampleSum()
-	latency.Count = int64(metric.GetSummary().GetSampleCount())
-
-	for _, quantile := range metric.GetSummary().GetQuantile() {
-		switch quantile.GetQuantile() {
-		case 0.5:
-			latency.P50 = quantile.GetValue()
-		case 0.9:
-			latency.P90 = quantile.GetValue()
-		case 0.99:
-			latency.P99 = quantile.GetValue()
-		}
-	}
+	return ParseMetricsFromBytes(data)
 }
 
 // Status checks the status of a benthos service.

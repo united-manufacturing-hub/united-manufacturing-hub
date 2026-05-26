@@ -131,15 +131,17 @@ type IBenthosService interface {
 
 // ServiceInfo contains information about a Benthos service.
 type ServiceInfo struct {
+	// BenthosStatus contains information about the status of the Benthos service
+	BenthosStatus BenthosStatus
 	// S6FSMState contains the current state of the S6 FSM
 	S6FSMState string
 	// S6ObservedState contains information about the S6 service
 	S6ObservedState s6fsm.S6ObservedState
-	// BenthosStatus contains information about the status of the Benthos service
-	BenthosStatus BenthosStatus
 }
 
 type BenthosStatus struct {
+	// BenthosMetrics contains information about the metrics of the Benthos service
+	BenthosMetrics benthos_monitor.BenthosMetrics
 	// StatusReason contains the reason for the status of the Benthos service
 	// If the service is degraded, this will contain the log entry that caused the degradation together with the information that it is degraded because of the log entry
 	// If the service is currently starting up, it will contain the s6 status of the service
@@ -164,8 +166,6 @@ type BenthosStatus struct {
 	BenthosLogs []s6service.LogEntry
 	// HealthCheck contains information about the health of the Benthos service
 	HealthCheck benthos_monitor.HealthCheck
-	// BenthosMetrics contains information about the metrics of the Benthos service
-	BenthosMetrics benthos_monitor.BenthosMetrics
 }
 
 // CopyBenthosLogs is a go-deepcopy override for the BenthosLogs field.

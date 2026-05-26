@@ -76,21 +76,28 @@ func TestENG5006_SwitchOutput_FastParser_AggregatesAcrossRoutes(t *testing.T) {
 		t.Fatalf("parse: %v", err)
 	}
 
-	// Dual-write check (passes in C1 via flat-field population; removed in C5).
-	if m.Output.Sent != wantSentTotal {
-		t.Errorf("Output.Sent = %d, want %d (sum across switch routes)", m.Output.Sent, wantSentTotal)
+	// Totals across all three switch routes via Total helpers.
+	if got := m.OutputSentTotal(); got != wantSentTotal {
+		t.Errorf("OutputSentTotal() = %d, want %d (sum across switch routes)", got, wantSentTotal)
 	}
 
-	if m.Output.BatchSent != wantBatchSentTotal {
-		t.Errorf("Output.BatchSent = %d, want %d", m.Output.BatchSent, wantBatchSentTotal)
+	if got := m.OutputBatchSentTotal(); got != wantBatchSentTotal {
+		t.Errorf("OutputBatchSentTotal() = %d, want %d", got, wantBatchSentTotal)
 	}
 
-	if m.Output.Error != wantErrorTotal {
-		t.Errorf("Output.Error = %d, want %d", m.Output.Error, wantErrorTotal)
+	if got := m.OutputConnectionUpTotal(); got != wantConnectionUpTotal {
+		t.Errorf("OutputConnectionUpTotal() = %d, want %d", got, wantConnectionUpTotal)
 	}
 
-	if m.Output.ConnectionUp != wantConnectionUpTotal {
-		t.Errorf("Output.ConnectionUp = %d, want %d", m.Output.ConnectionUp, wantConnectionUpTotal)
+	// Sum the map directly here to keep the per-path assertion explicit
+	// alongside the total. OutputErrorTotal() covers the aggregate elsewhere.
+	var errorTotal int64
+	for _, out := range m.Outputs {
+		errorTotal += out.Error
+	}
+
+	if errorTotal != wantErrorTotal {
+		t.Errorf("sum of Outputs[*].Error = %d, want %d", errorTotal, wantErrorTotal)
 	}
 
 	// Map-shape check: the switch fixture has 6 distinct output paths
@@ -136,19 +143,24 @@ func TestENG5006_SwitchOutput_SlowParser_AggregatesAcrossRoutes(t *testing.T) {
 		t.Fatalf("parse: %v", err)
 	}
 
-	if m.Output.Sent != wantSentTotal {
-		t.Errorf("Output.Sent = %d, want %d (sum across switch routes)", m.Output.Sent, wantSentTotal)
+	if got := m.OutputSentTotal(); got != wantSentTotal {
+		t.Errorf("OutputSentTotal() = %d, want %d (sum across switch routes)", got, wantSentTotal)
 	}
 
-	if m.Output.BatchSent != wantBatchSentTotal {
-		t.Errorf("Output.BatchSent = %d, want %d", m.Output.BatchSent, wantBatchSentTotal)
+	if got := m.OutputBatchSentTotal(); got != wantBatchSentTotal {
+		t.Errorf("OutputBatchSentTotal() = %d, want %d", got, wantBatchSentTotal)
 	}
 
-	if m.Output.Error != wantErrorTotal {
-		t.Errorf("Output.Error = %d, want %d", m.Output.Error, wantErrorTotal)
+	var errorTotal int64
+	for _, out := range m.Outputs {
+		errorTotal += out.Error
 	}
 
-	if m.Output.ConnectionUp != wantConnectionUpTotal {
-		t.Errorf("Output.ConnectionUp = %d, want %d", m.Output.ConnectionUp, wantConnectionUpTotal)
+	if errorTotal != wantErrorTotal {
+		t.Errorf("sum of Outputs[*].Error = %d, want %d", errorTotal, wantErrorTotal)
+	}
+
+	if got := m.OutputConnectionUpTotal(); got != wantConnectionUpTotal {
+		t.Errorf("OutputConnectionUpTotal() = %d, want %d", got, wantConnectionUpTotal)
 	}
 }

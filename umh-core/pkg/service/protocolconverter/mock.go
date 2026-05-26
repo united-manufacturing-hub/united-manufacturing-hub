@@ -83,15 +83,16 @@ type MockProtocolConverterService struct {
 	   us full fidelity (e.g. Nmap scan results, Benthos metrics-active
 	   flag) and keeps all FSM helpers DRY.
 	*/
-	DfcService      *dataflowcomponent.MockDataFlowComponentService
-	ConnService     *connection.MockConnectionService
-	GetConfigResult protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime
-
-	// Return values for each method
-	GenerateConfigResultDFC        dataflowcomponentserviceconfig.DataflowComponentServiceConfig
+	DfcService                     *dataflowcomponent.MockDataFlowComponentService
+	ConnService                    *connection.MockConnectionService
 	GenerateConfigResultConnection connectionserviceconfig.ConnectionServiceConfig
 	dfcConfigs                     []config.DataFlowComponentConfig
 	connConfigs                    []config.ConnectionConfig
+
+	GetConfigResult protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime
+
+	// Return values for each method
+	GenerateConfigResultDFC dataflowcomponentserviceconfig.DataflowComponentServiceConfig
 
 	StatusResult ServiceInfo
 

@@ -52,8 +52,9 @@ type MockDataFlowComponentService struct {
 	// State control for FSM testing
 	stateFlags map[string]*ComponentStateFlags
 
+	BenthosConfigs []config.BenthosConfig
+
 	GetConfigResult dataflowcomponentserviceconfig.DataflowComponentServiceConfig
-	BenthosConfigs  []config.BenthosConfig
 
 	// Return values for each method
 	GenerateBenthosConfigForDataFlowComponentResult benthosserviceconfig.BenthosServiceConfig
