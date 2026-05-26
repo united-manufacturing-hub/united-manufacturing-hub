@@ -158,12 +158,10 @@ type Observation[TStatus any] struct {
 	// serializable (see pkg/fsmv2/config/doc.go Design Intent §13). Do NOT add `omitempty`: the field
 	// must serialise even for childless leaf workers so CSE round-trip stays
 	// stable across ticks (a leaf that omits the key flips on/off in deltas
-	// when later promoted to a parent).
-	// ChildrenView must serialize even for leaf workers so CSE round-trip stays
-	// stable across ticks. A leaf that omits this key flips on/off in deltas when
-	// later promoted to a parent. Adding json:"-" would break the reconciler goroutine
-	// because it reads from CSE storage, not from in-memory deps; see the two-goroutine
-	// architecture note in supervisor/internal/collection/collector.go.
+	// when later promoted to a parent). Adding json:"-" would break the
+	// reconciler goroutine because it reads from CSE storage, not from
+	// in-memory deps; see the two-goroutine architecture note in
+	// supervisor/internal/collection/collector.go.
 	ChildrenView config.ChildrenView `json:"childrenView"`
 	// Status is the developer's business data. Flattened to top level via custom MarshalJSON.
 	Status TStatus `json:"-"`
@@ -191,25 +189,15 @@ type Observation[TStatus any] struct {
 // reject TStatus types whose own JSON tags would collide with framework
 // fields, so omitting an entry here would silently allow a collision.
 type observationFrameworkFields struct {
-	CollectedAt       time.Time                   `json:"collected_at"`
-	ChildrenView      config.ChildrenViewSnapshot `json:"childrenView"`
-	State             string                      `json:"state"`
-	ParentMappedState string                      `json:"parent_mapped_state"`
-	LastActionResults []deps.ActionResult         `json:"last_action_results,omitempty"`
+	CollectedAt       time.Time           `json:"collected_at"`
+	ChildrenView      config.ChildrenView `json:"childrenView"`
+	State             string              `json:"state"`
+	ParentMappedState string              `json:"parent_mapped_state"`
+	LastActionResults []deps.ActionResult `json:"last_action_results,omitempty"`
 	deps.MetricsEmbedder
 	ChildrenHealthy   int  `json:"children_healthy"`
 	ChildrenUnhealthy int  `json:"children_unhealthy"`
 	ShutdownRequested bool `json:"ShutdownRequested"` //nolint:tagliatelle
-}
-
-// childrenViewToSnapshot converts a ChildrenView interface to a ChildrenViewSnapshot.
-// Returns an empty snapshot when v is nil (leaf workers with no children).
-func childrenViewToSnapshot(v config.ChildrenView) config.ChildrenViewSnapshot {
-	if v == nil {
-		return config.ChildrenViewSnapshot{}
-	}
-
-	return config.ChildrenViewSnapshot{Children: v.List()}
 }
 
 // MarshalJSON produces flat JSON with framework fields and TStatus fields at the same level.
@@ -217,7 +205,7 @@ func childrenViewToSnapshot(v config.ChildrenView) config.ChildrenViewSnapshot {
 func (o Observation[TStatus]) MarshalJSON() ([]byte, error) {
 	fw := observationFrameworkFields{
 		CollectedAt:       o.CollectedAt,
-		ChildrenView:      childrenViewToSnapshot(o.ChildrenView),
+		ChildrenView:      o.ChildrenView,
 		State:             o.State,
 		ShutdownRequested: o.ShutdownRequested,
 		ParentMappedState: o.ParentMappedState,

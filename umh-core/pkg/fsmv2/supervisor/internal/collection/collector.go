@@ -64,16 +64,17 @@ type CollectorConfig[TObserved any] struct {
 	ShutdownRequestedProvider func() bool   // Returns current shutdown requested status (injected by supervisor)
 	// ChildrenCountsProvider returns the per-tick (healthy, unhealthy) counts.
 	// Retained for workers that satisfy SetChildrenCounts but not SetChildrenView;
-	// new code should consume the richer ChildrenView and call view.Counts()
-	// instead. The two providers carry redundant data by construction
-	// (NewChildrenManager derives counts from the same per-child Phase the
-	// supervisor reports here), so satisfying both setters is harmless.
+	// new code should consume the richer ChildrenView and read view.HealthyCount
+	// and view.UnhealthyCount instead. The two providers carry redundant data
+	// by construction (config.NewChildrenView derives counts from the same
+	// per-child Phase the supervisor reports here), so satisfying both setters
+	// is harmless.
 	ChildrenCountsProvider    func() (healthy int, unhealthy int)
 	MappedParentStateProvider func() string // Returns mapped state from parent's StateMapping (injected by supervisor for child workers)
 	// ChildrenViewProvider returns the full ChildrenView snapshot for parent
 	// workers that need per-child detail. Counts are also available via
-	// view.Counts() so workers consuming the view can ignore
-	// ChildrenCountsProvider.
+	// view.HealthyCount and view.UnhealthyCount so workers consuming the view
+	// can ignore ChildrenCountsProvider.
 	ChildrenViewProvider func() config.ChildrenView
 	// FrameworkMetricsProvider returns current framework metrics from supervisor.
 	// Called BEFORE collection to inject into worker dependencies.

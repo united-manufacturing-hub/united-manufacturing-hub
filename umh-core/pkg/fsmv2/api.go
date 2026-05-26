@@ -193,7 +193,9 @@ type State[TSnapshot any, TDeps any] interface {
 	// The supervisor uses this to:
 	//   - Construct the observed state name: phase.Prefix() + lowercase(String())
 	//   - Classify child health: phase.IsHealthy(), phase.IsOperational()
-	//   - Enable ChildrenManager methods: AllHealthy(), Counts()
+	//   - Populate config.ChildrenView aggregate fields (HealthyCount,
+	//     UnhealthyCount, AllHealthy, AllOperational, AllStopped) via
+	//     config.NewChildrenView
 	//
 	// Lifecycle phases:
 	//   - PhaseStopped:         stopped                → neutral health
@@ -485,7 +487,7 @@ type WorkerSnapshot[TConfig any, TStatus any] struct {
 	CollectedAt         time.Time
 	Config              TConfig
 	Status              TStatus
-	ChildrenView        any
+	ChildrenView        config.ChildrenView
 	Identity            deps.Identity
 	ParentMappedState   string
 	LastActionResults   []deps.ActionResult

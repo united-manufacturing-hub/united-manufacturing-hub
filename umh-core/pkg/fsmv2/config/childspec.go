@@ -337,12 +337,17 @@ type ChildInfo struct {
 	IsCircuitOpen bool // True if infrastructure failure detected (circuit breaker open)
 }
 
-// ChildrenView provides read-only access to a parent worker's children.
-// This interface enables parent workers to observe their children's state
-// without being able to modify them.
+// ChildrenView is a per-tick snapshot of a parent worker's children. The
+// supervisor builds one via NewChildrenView on every collector cycle and
+// injects it onto ObservedState through SetChildrenView, then round-trips it
+// through CSE storage to the reconciler goroutine.
 //
-// The supervisor injects ChildrenView via setter methods on ObservedState,
-// not through dependencies. To use it:
+// Aggregate predicates (HealthyCount, UnhealthyCount, AllHealthy,
+// AllOperational, AllStopped) are pre-computed at construction time from each
+// ChildInfo.Phase so readers access them as direct field reads instead of
+// method calls.
+//
+// To consume a ChildrenView in a worker:
 //
 // 1. Add fields to your ObservedState to store children info:
 //
@@ -351,13 +356,12 @@ type ChildInfo struct {
 //	    ChildrenUnhealthy int
 //	}
 //
-// 2. Implement SetChildrenView on your ObservedState (called automatically by supervisor):
+// 2. Implement SetChildrenView on your ObservedState (the supervisor calls it
+//    automatically through the ChildrenViewConsumer capability interface):
 //
-//	func (o MyObservedState) SetChildrenView(view any) fsmv2.ObservedState {
-//	    if cv, ok := view.(config.ChildrenView); ok {
-//	        o.ChildrenHealthy, o.ChildrenUnhealthy = cv.Counts()
-//	        // Or use cv.List(), cv.Get(name), cv.AllHealthy()
-//	    }
+//	func (o MyObservedState) SetChildrenView(view config.ChildrenView) fsmv2.ObservedState {
+//	    o.ChildrenHealthy = view.HealthyCount
+//	    o.ChildrenUnhealthy = view.UnhealthyCount
 //	    return o
 //	}
 //
@@ -379,118 +383,95 @@ type ChildInfo struct {
 //	}
 //
 // See workers/example/examplechild/snapshot/snapshot.go for the simple counts pattern.
-type ChildrenView interface {
-	// List returns info about all children.
-	List() []ChildInfo
-
-	// Get returns info about a specific child by name, or nil if not found.
-	Get(name string) *ChildInfo
-
-	// Counts returns the number of healthy and unhealthy children.
-	// healthy = PhaseRunningHealthy only (fully stable)
-	// unhealthy = everything except PhaseRunningHealthy and PhaseStopped
-	Counts() (healthy, unhealthy int)
-
-	// AllHealthy returns true if all children are PhaseRunningHealthy (or there are no children).
-	AllHealthy() bool
-
-	// AllOperational returns true if all children are operational (or there are no children).
-	// Operational = PhaseRunningHealthy OR PhaseRunningDegraded (can serve requests).
-	// Use this for "can system serve requests?" checks.
-	AllOperational() bool
-
-	// AllStopped returns true if all children are in PhaseStopped (or there are no children).
-	AllStopped() bool
+type ChildrenView struct {
+	Children       []ChildInfo `json:"children"`
+	HealthyCount   int         `json:"healthyCount"`
+	UnhealthyCount int         `json:"unhealthyCount"`
+	AllHealthy     bool        `json:"allHealthy"`
+	AllOperational bool        `json:"allOperational"`
+	AllStopped     bool        `json:"allStopped"`
 }
 
-// ChildrenViewSnapshot is a JSON-serializable concrete snapshot of ChildrenView.
-// The supervisor stores this to CSE storage on each tick; the reconciler deserializes
-// it back and uses it in State.Next(). The live *ChildrenManager (which holds supervisor
-// references) cannot round-trip through JSON, so this DTO carries the same data.
+// NewChildrenView builds a ChildrenView from a slice of ChildInfo entries.
+// Aggregate predicates are derived from each ChildInfo's IsHealthy,
+// IsOperational, and IsStopped booleans:
 //
-// Workers that access ChildrenView from snap.Observed will see a ChildrenViewSnapshot
-// between collector ticks; the supervisor re-injects a live *ChildrenManager via
-// SetChildrenView on each collector cycle.
-type ChildrenViewSnapshot struct {
-	Children []ChildInfo `json:"children"`
-}
-
-// List implements ChildrenView.
-func (s ChildrenViewSnapshot) List() []ChildInfo {
-	return s.Children
-}
-
-// Get implements ChildrenView.
-func (s ChildrenViewSnapshot) Get(name string) *ChildInfo {
-	for i := range s.Children {
-		if s.Children[i].Name == name {
-			return &s.Children[i]
-		}
+//   - HealthyCount counts entries with IsHealthy true.
+//   - UnhealthyCount counts entries that are neither healthy nor stopped.
+//   - AllHealthy is true when every entry is healthy, or when there are no
+//     entries.
+//   - AllOperational is true when every entry is operational, or when there
+//     are no entries.
+//   - AllStopped is true when every entry is stopped, or when there are no
+//     entries.
+//
+// A nil input slice is normalised to an empty slice so CSE delta-sync produces
+// a stable JSON shape across ticks. Tests that need a fake ChildrenView build
+// one by passing a hand-authored []ChildInfo to this constructor, with no mock
+// library required.
+func NewChildrenView(children []ChildInfo) ChildrenView {
+	if children == nil {
+		children = []ChildInfo{}
 	}
 
-	return nil
-}
+	view := ChildrenView{
+		Children:       children,
+		AllHealthy:     true,
+		AllOperational: true,
+		AllStopped:     true,
+	}
 
-// Counts implements ChildrenView.
-func (s ChildrenViewSnapshot) Counts() (healthy, unhealthy int) {
-	for _, c := range s.Children {
+	for _, c := range children {
 		if c.IsHealthy {
-			healthy++
+			view.HealthyCount++
 		} else if !c.IsStopped {
-			unhealthy++
+			view.UnhealthyCount++
 		}
-	}
 
-	return healthy, unhealthy
-}
-
-// AllHealthy implements ChildrenView.
-func (s ChildrenViewSnapshot) AllHealthy() bool {
-	if len(s.Children) == 0 {
-		return true
-	}
-
-	for _, c := range s.Children {
 		if !c.IsHealthy {
-			return false
+			view.AllHealthy = false
 		}
-	}
 
-	return true
-}
-
-// AllOperational implements ChildrenView.
-func (s ChildrenViewSnapshot) AllOperational() bool {
-	if len(s.Children) == 0 {
-		return true
-	}
-
-	for _, c := range s.Children {
 		if !c.IsOperational {
-			return false
+			view.AllOperational = false
 		}
-	}
 
-	return true
-}
-
-// AllStopped implements ChildrenView.
-func (s ChildrenViewSnapshot) AllStopped() bool {
-	if len(s.Children) == 0 {
-		return true
-	}
-
-	for _, c := range s.Children {
 		if !c.IsStopped {
-			return false
+			view.AllStopped = false
 		}
 	}
 
-	return true
+	return view
 }
 
-// Compile-time check that ChildrenViewSnapshot implements ChildrenView.
-var _ ChildrenView = ChildrenViewSnapshot{}
+// Get returns the ChildInfo for name as a copy along with a presence bool.
+// The bool is false when no child with that name exists in the view.
+func (v ChildrenView) Get(name string) (ChildInfo, bool) {
+	for i := range v.Children {
+		if v.Children[i].Name == name {
+			return v.Children[i], true
+		}
+	}
+
+	return ChildInfo{}, false
+}
+
+// List returns the slice of ChildInfo entries.
+//
+// Deprecated: read v.Children directly. Retained as a migration shim for
+// callers written against the prior ChildrenView interface.
+func (v ChildrenView) List() []ChildInfo {
+	return v.Children
+}
+
+// Counts returns the pre-computed (healthy, unhealthy) child counts.
+//
+// Deprecated: read v.HealthyCount and v.UnhealthyCount directly. Retained as
+// a migration shim for callers written against the prior ChildrenView
+// interface.
+func (v ChildrenView) Counts() (healthy, unhealthy int) {
+	return v.HealthyCount, v.UnhealthyCount
+}
 
 // DesiredState represents what we want the system to be.
 // This is returned by Worker.DeriveDesiredState() and used by State.Next() for decisions.
