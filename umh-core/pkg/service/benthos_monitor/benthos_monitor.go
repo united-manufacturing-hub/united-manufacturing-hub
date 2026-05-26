@@ -50,13 +50,47 @@ import (
 )
 
 // Metrics contains information about the metrics of the Benthos service.
+// Inputs and Outputs are keyed by benthos `path` label (one entry per leaf
+// AsyncReader / AsyncWriter). For switch/broker/fallback configs, multiple
+// entries exist; for a single-input or single-output config there is one
+// entry at "root.input" / "root.output". The flat Input and Output fields
+// are kept during the C1..C4 migration window and are populated from the
+// per-path totals so existing consumers keep compiling. They are removed
+// in C5.
 type Metrics struct {
-	Process ProcessMetrics `json:"process,omitempty"`
-	Output  OutputMetrics  `json:"output,omitempty"`
-	Input   InputMetrics   `json:"input,omitempty"`
+	Process ProcessMetrics            `json:"process,omitempty"`
+	Outputs map[string]OutputInstance `json:"outputs,omitempty"`
+	Inputs  map[string]InputInstance  `json:"inputs,omitempty"`
+	Output  OutputMetrics             `json:"output,omitempty"` // legacy; removed in C5
+	Input   InputMetrics              `json:"input,omitempty"`  // legacy; removed in C5
 }
 
-// InputMetrics contains input-specific metrics.
+// InputInstance contains per-path input metrics for one benthos AsyncReader.
+type InputInstance struct {
+	Path             string  `json:"path"`
+	Label            string  `json:"label"`
+	ConnectionFailed int64   `json:"connection_failed"`
+	ConnectionLost   int64   `json:"connection_lost"`
+	ConnectionUp     int64   `json:"connection_up"`
+	LatencyNS        Latency `json:"latency_ns"`
+	Received         int64   `json:"received"`
+}
+
+// OutputInstance contains per-path output metrics for one benthos AsyncWriter.
+type OutputInstance struct {
+	Path             string  `json:"path"`
+	Label            string  `json:"label"`
+	BatchSent        int64   `json:"batch_sent"`
+	ConnectionFailed int64   `json:"connection_failed"`
+	ConnectionLost   int64   `json:"connection_lost"`
+	ConnectionUp     int64   `json:"connection_up"`
+	Error            int64   `json:"error"`
+	LatencyNS        Latency `json:"latency_ns"`
+	Sent             int64   `json:"sent"`
+}
+
+// InputMetrics is the legacy flat input metric struct. Removed in C5; kept
+// here so the C1..C4 dual-write window keeps existing consumers compiling.
 type InputMetrics struct {
 	ConnectionFailed int64   `json:"connection_failed"`
 	ConnectionLost   int64   `json:"connection_lost"`
@@ -65,7 +99,7 @@ type InputMetrics struct {
 	Received         int64   `json:"received"`
 }
 
-// OutputMetrics contains output-specific metrics.
+// OutputMetrics is the legacy flat output metric struct. Removed in C5.
 type OutputMetrics struct {
 	BatchSent        int64   `json:"batch_sent"`
 	ConnectionFailed int64   `json:"connection_failed"`
@@ -99,6 +133,90 @@ type Latency struct {
 	P99   float64 `json:"p99"`   // 99th percentile
 	Sum   float64 `json:"sum"`   // Total sum
 	Count int64   `json:"count"` // Number of samples
+}
+
+// InputReceivedTotal returns the sum of Received across every input instance.
+// For a single-input config it equals the legacy Input.Received.
+func (m Metrics) InputReceivedTotal() int64 {
+	var total int64
+	for _, in := range m.Inputs {
+		total += in.Received
+	}
+
+	return total
+}
+
+// InputConnectionUpTotal returns the sum of ConnectionUp across every input.
+func (m Metrics) InputConnectionUpTotal() int64 {
+	var total int64
+	for _, in := range m.Inputs {
+		total += in.ConnectionUp
+	}
+
+	return total
+}
+
+// InputConnectionLostTotal returns the sum of ConnectionLost across every input.
+func (m Metrics) InputConnectionLostTotal() int64 {
+	var total int64
+	for _, in := range m.Inputs {
+		total += in.ConnectionLost
+	}
+
+	return total
+}
+
+// OutputSentTotal returns the sum of Sent across every output instance.
+// For a switch/broker/fallback config this is the only correct total.
+func (m Metrics) OutputSentTotal() int64 {
+	var total int64
+	for _, out := range m.Outputs {
+		total += out.Sent
+	}
+
+	return total
+}
+
+// OutputBatchSentTotal returns the sum of BatchSent across every output.
+func (m Metrics) OutputBatchSentTotal() int64 {
+	var total int64
+	for _, out := range m.Outputs {
+		total += out.BatchSent
+	}
+
+	return total
+}
+
+// OutputConnectionUpTotal returns the sum of ConnectionUp across every output.
+func (m Metrics) OutputConnectionUpTotal() int64 {
+	var total int64
+	for _, out := range m.Outputs {
+		total += out.ConnectionUp
+	}
+
+	return total
+}
+
+// OutputConnectionLostTotal returns the sum of ConnectionLost across every output.
+func (m Metrics) OutputConnectionLostTotal() int64 {
+	var total int64
+	for _, out := range m.Outputs {
+		total += out.ConnectionLost
+	}
+
+	return total
+}
+
+// OutputErrorTotal returns the sum of Error across every output. Used by
+// benthos.IsMetricsErrorFree to decide whether the FSM should treat the
+// component as healthy.
+func (m Metrics) OutputErrorTotal() int64 {
+	var total int64
+	for _, out := range m.Outputs {
+		total += out.Error
+	}
+
+	return total
 }
 
 // HealthCheck contains information about the health of the Benthos service
@@ -962,11 +1080,18 @@ func TailInt(line []byte) (int64, error) {
 
 // ---------------------------------------------------------------------------
 
-// ParseMetricsFromBytesOpt – fixed & quantile aware.
+// ParseMetricsFromBytes parses the prometheus text-format payload benthos
+// returns and produces a per-path Metrics. For switch/broker/fallback
+// outputs the input emits N distinct series per metric, one per leaf
+// path; the parser stores each in its own InputInstance / OutputInstance
+// entry. The legacy flat Input/Output fields are populated from the
+// totals so the C1..C4 migration window keeps consumers compiling.
 func ParseMetricsFromBytes(raw []byte) (Metrics, error) {
 	var m Metrics
 
 	m.Process.Processors = make(map[string]ProcessorMetrics, 8)
+	m.Inputs = make(map[string]InputInstance, 1)
+	m.Outputs = make(map[string]OutputInstance, 1)
 
 	lineStart := 0
 
@@ -995,173 +1120,217 @@ func ParseMetricsFromBytes(raw []byte) (Metrics, error) {
 		if nameEnd == -1 {
 			continue
 		}
-		// name := unsafeString(line[:nameEnd])
+
 		name := string(line[:nameEnd])
-		switch name {
-		// ---------- input ----------
-		case "input_connection_failed":
-			count, err := TailInt(line)
-			if err != nil {
-				return Metrics{}, fmt.Errorf("failed to parse input connection failed: %w", err)
+
+		// All input_* and output_* lines carry a `path` label. Extract it
+		// once per line and use it as the map key.
+		labelsRegion := line[nameEnd:]
+
+		switch {
+		case strings.HasPrefix(name, "input_"):
+			path := extractLabel(labelsRegion, "path")
+			if path == "" {
+				path = "root.input"
 			}
 
-			m.Input.ConnectionFailed = count
-		case "input_connection_lost":
-			count, err := TailInt(line)
-			if err != nil {
-				return Metrics{}, fmt.Errorf("failed to parse input connection lost: %w", err)
+			label := extractLabel(labelsRegion, "label")
+
+			in := m.Inputs[path]
+			if in.Path == "" {
+				in.Path = path
 			}
 
-			m.Input.ConnectionLost = count
-		case "input_connection_up":
-			count, err := TailInt(line)
-			if err != nil {
-				return Metrics{}, fmt.Errorf("failed to parse input connection up: %w", err)
+			if in.Label == "" && label != "" {
+				in.Label = label
 			}
 
-			m.Input.ConnectionUp = count
-		case "input_received":
-			count, err := TailInt(line)
-			if err != nil {
-				return Metrics{}, fmt.Errorf("failed to parse input received: %w", err)
-			}
-
-			m.Input.Received = count
-		case "input_latency_ns":
-			switch extractLabel(line[nameEnd:], "quantile") {
-			case "0.5":
-				p50, err := TailInt(line)
+			switch name {
+			case "input_connection_failed":
+				count, err := TailInt(line)
 				if err != nil {
-					return Metrics{}, fmt.Errorf("failed to parse input latency ns p50: %w", err)
+					return Metrics{}, fmt.Errorf("failed to parse input connection failed: %w", err)
 				}
 
-				m.Input.LatencyNS.P50 = float64(p50)
-			case "0.9":
-				p90, err := TailInt(line)
+				in.ConnectionFailed = count
+			case "input_connection_lost":
+				count, err := TailInt(line)
 				if err != nil {
-					return Metrics{}, fmt.Errorf("failed to parse input latency ns p90: %w", err)
+					return Metrics{}, fmt.Errorf("failed to parse input connection lost: %w", err)
 				}
 
-				m.Input.LatencyNS.P90 = float64(p90)
-			case "0.99":
-				p99, err := TailInt(line)
+				in.ConnectionLost = count
+			case "input_connection_up":
+				count, err := TailInt(line)
 				if err != nil {
-					return Metrics{}, fmt.Errorf("failed to parse input latency ns p99: %w", err)
+					return Metrics{}, fmt.Errorf("failed to parse input connection up: %w", err)
 				}
 
-				m.Input.LatencyNS.P99 = float64(p99)
-			}
-		case "input_latency_ns_sum":
-			sum, err := TailInt(line)
-			if err != nil {
-				return Metrics{}, fmt.Errorf("failed to parse input latency ns sum: %w", err)
-			}
-
-			m.Input.LatencyNS.Sum = float64(sum)
-		case "input_latency_ns_count":
-			count, err := TailInt(line)
-			if err != nil {
-				return Metrics{}, fmt.Errorf("failed to parse input latency ns count: %w", err)
-			}
-
-			m.Input.LatencyNS.Count = count
-
-		// ---------- output ----------
-		case "output_batch_sent":
-			count, err := TailInt(line)
-			if err != nil {
-				return Metrics{}, fmt.Errorf("failed to parse output batch sent: %w", err)
-			}
-
-			m.Output.BatchSent = count
-		case "output_connection_failed":
-			count, err := TailInt(line)
-			if err != nil {
-				return Metrics{}, fmt.Errorf("failed to parse output connection failed: %w", err)
-			}
-
-			m.Output.ConnectionFailed = count
-		case "output_connection_lost":
-			count, err := TailInt(line)
-			if err != nil {
-				return Metrics{}, fmt.Errorf("failed to parse output connection lost: %w", err)
-			}
-
-			m.Output.ConnectionLost = count
-		case "output_connection_up":
-			count, err := TailInt(line)
-			if err != nil {
-				return Metrics{}, fmt.Errorf("failed to parse output connection up: %w", err)
-			}
-
-			m.Output.ConnectionUp = count
-		case "output_error":
-			count, err := TailInt(line)
-			if err != nil {
-				return Metrics{}, fmt.Errorf("failed to parse output error: %w", err)
-			}
-
-			m.Output.Error = count
-		case "output_sent":
-			count, err := TailInt(line)
-			if err != nil {
-				return Metrics{}, fmt.Errorf("failed to parse output sent: %w", err)
-			}
-
-			m.Output.Sent = count
-		case "output_latency_ns":
-			switch extractLabel(line[nameEnd:], "quantile") {
-			case "0.5":
-				p50, err := TailInt(line)
+				in.ConnectionUp = count
+			case "input_received":
+				count, err := TailInt(line)
 				if err != nil {
-					return Metrics{}, fmt.Errorf("failed to parse output latency ns p50: %w", err)
+					return Metrics{}, fmt.Errorf("failed to parse input received: %w", err)
 				}
 
-				m.Output.LatencyNS.P50 = float64(p50)
-			case "0.9":
-				p90, err := TailInt(line)
+				in.Received = count
+			case "input_latency_ns":
+				switch extractLabel(labelsRegion, "quantile") {
+				case "0.5":
+					p50, err := TailInt(line)
+					if err != nil {
+						return Metrics{}, fmt.Errorf("failed to parse input latency ns p50: %w", err)
+					}
+
+					in.LatencyNS.P50 = float64(p50)
+				case "0.9":
+					p90, err := TailInt(line)
+					if err != nil {
+						return Metrics{}, fmt.Errorf("failed to parse input latency ns p90: %w", err)
+					}
+
+					in.LatencyNS.P90 = float64(p90)
+				case "0.99":
+					p99, err := TailInt(line)
+					if err != nil {
+						return Metrics{}, fmt.Errorf("failed to parse input latency ns p99: %w", err)
+					}
+
+					in.LatencyNS.P99 = float64(p99)
+				}
+			case "input_latency_ns_sum":
+				sum, err := TailInt(line)
 				if err != nil {
-					return Metrics{}, fmt.Errorf("failed to parse output latency ns p90: %w", err)
+					return Metrics{}, fmt.Errorf("failed to parse input latency ns sum: %w", err)
 				}
 
-				m.Output.LatencyNS.P90 = float64(p90)
-			case "0.99":
-				p99, err := TailInt(line)
+				in.LatencyNS.Sum = float64(sum)
+			case "input_latency_ns_count":
+				count, err := TailInt(line)
 				if err != nil {
-					return Metrics{}, fmt.Errorf("failed to parse output latency ns p99: %w", err)
+					return Metrics{}, fmt.Errorf("failed to parse input latency ns count: %w", err)
 				}
 
-				m.Output.LatencyNS.P99 = float64(p99)
-			}
-		case "output_latency_ns_sum":
-			sum, err := TailInt(line)
-			if err != nil {
-				return Metrics{}, fmt.Errorf("failed to parse output latency ns sum: %w", err)
+				in.LatencyNS.Count = count
 			}
 
-			m.Output.LatencyNS.Sum = float64(sum)
-		case "output_latency_ns_count":
-			count, err := TailInt(line)
-			if err != nil {
-				return Metrics{}, fmt.Errorf("failed to parse output latency ns count: %w", err)
+			m.Inputs[path] = in
+
+		case strings.HasPrefix(name, "output_"):
+			path := extractLabel(labelsRegion, "path")
+			if path == "" {
+				path = "root.output"
 			}
 
-			m.Output.LatencyNS.Count = count
+			label := extractLabel(labelsRegion, "label")
 
-		// ---------- processors ----------
+			out := m.Outputs[path]
+			if out.Path == "" {
+				out.Path = path
+			}
+
+			if out.Label == "" && label != "" {
+				out.Label = label
+			}
+
+			switch name {
+			case "output_batch_sent":
+				count, err := TailInt(line)
+				if err != nil {
+					return Metrics{}, fmt.Errorf("failed to parse output batch sent: %w", err)
+				}
+
+				out.BatchSent = count
+			case "output_connection_failed":
+				count, err := TailInt(line)
+				if err != nil {
+					return Metrics{}, fmt.Errorf("failed to parse output connection failed: %w", err)
+				}
+
+				out.ConnectionFailed = count
+			case "output_connection_lost":
+				count, err := TailInt(line)
+				if err != nil {
+					return Metrics{}, fmt.Errorf("failed to parse output connection lost: %w", err)
+				}
+
+				out.ConnectionLost = count
+			case "output_connection_up":
+				count, err := TailInt(line)
+				if err != nil {
+					return Metrics{}, fmt.Errorf("failed to parse output connection up: %w", err)
+				}
+
+				out.ConnectionUp = count
+			case "output_error":
+				count, err := TailInt(line)
+				if err != nil {
+					return Metrics{}, fmt.Errorf("failed to parse output error: %w", err)
+				}
+
+				out.Error = count
+			case "output_sent":
+				count, err := TailInt(line)
+				if err != nil {
+					return Metrics{}, fmt.Errorf("failed to parse output sent: %w", err)
+				}
+
+				out.Sent = count
+			case "output_latency_ns":
+				switch extractLabel(labelsRegion, "quantile") {
+				case "0.5":
+					p50, err := TailInt(line)
+					if err != nil {
+						return Metrics{}, fmt.Errorf("failed to parse output latency ns p50: %w", err)
+					}
+
+					out.LatencyNS.P50 = float64(p50)
+				case "0.9":
+					p90, err := TailInt(line)
+					if err != nil {
+						return Metrics{}, fmt.Errorf("failed to parse output latency ns p90: %w", err)
+					}
+
+					out.LatencyNS.P90 = float64(p90)
+				case "0.99":
+					p99, err := TailInt(line)
+					if err != nil {
+						return Metrics{}, fmt.Errorf("failed to parse output latency ns p99: %w", err)
+					}
+
+					out.LatencyNS.P99 = float64(p99)
+				}
+			case "output_latency_ns_sum":
+				sum, err := TailInt(line)
+				if err != nil {
+					return Metrics{}, fmt.Errorf("failed to parse output latency ns sum: %w", err)
+				}
+
+				out.LatencyNS.Sum = float64(sum)
+			case "output_latency_ns_count":
+				count, err := TailInt(line)
+				if err != nil {
+					return Metrics{}, fmt.Errorf("failed to parse output latency ns count: %w", err)
+				}
+
+				out.LatencyNS.Count = count
+			}
+
+			m.Outputs[path] = out
+
 		default:
 			if !bytes.HasPrefix(line, []byte("processor_")) {
 				continue
 			}
 
-			path := extractLabel(line[nameEnd:], "path")
+			path := extractLabel(labelsRegion, "path")
 			if path == "" {
 				continue
 			}
 
 			pm := m.Process.Processors[path]
 			if pm.Label == "" {
-				pm.Label = extractLabel(line[nameEnd:], "label")
+				pm.Label = extractLabel(labelsRegion, "label")
 			}
 
 			switch name {
@@ -1201,7 +1370,7 @@ func ParseMetricsFromBytes(raw []byte) (Metrics, error) {
 
 				pm.Error = count
 			case "processor_latency_ns":
-				switch extractLabel(line[nameEnd:], "quantile") {
+				switch extractLabel(labelsRegion, "quantile") {
 				case "0.5":
 					p50, err := TailInt(line)
 					if err != nil {
@@ -1241,6 +1410,49 @@ func ParseMetricsFromBytes(raw []byte) (Metrics, error) {
 			}
 
 			m.Process.Processors[path] = pm
+		}
+	}
+
+	// Dual-write: populate the legacy flat fields from the per-path totals
+	// so consumers that have not yet been migrated keep working through
+	// C1..C4. These fields disappear in C5.
+	m.Input.Received = m.InputReceivedTotal()
+	m.Input.ConnectionUp = m.InputConnectionUpTotal()
+	m.Input.ConnectionLost = m.InputConnectionLostTotal()
+	m.Output.Sent = m.OutputSentTotal()
+	m.Output.BatchSent = m.OutputBatchSentTotal()
+	m.Output.ConnectionUp = m.OutputConnectionUpTotal()
+	m.Output.ConnectionLost = m.OutputConnectionLostTotal()
+	// ConnectionFailed and Error are not in the helper set; sum them
+	// directly so the migration window stays behavior-preserving.
+	for _, in := range m.Inputs {
+		m.Input.ConnectionFailed += in.ConnectionFailed
+	}
+
+	for _, out := range m.Outputs {
+		m.Output.ConnectionFailed += out.ConnectionFailed
+		m.Output.Error += out.Error
+	}
+
+	// Latency: copy from the single-instance case (the only one that
+	// existed before C1) so single-output configs keep identical values.
+	// For multi-output configs the merged latency is undefined; the spec
+	// says the UI shows per-path quantiles via the map and there is no
+	// "merged P50" requirement. Pick the first non-empty entry for the
+	// legacy fields purely so the field is non-zero.
+	for _, in := range m.Inputs {
+		if in.LatencyNS.Count > 0 {
+			m.Input.LatencyNS = in.LatencyNS
+
+			break
+		}
+	}
+
+	for _, out := range m.Outputs {
+		if out.LatencyNS.Count > 0 {
+			m.Output.LatencyNS = out.LatencyNS
+
+			break
 		}
 	}
 
@@ -1285,8 +1497,10 @@ func ParseMetricsFromBytesSlow(data []byte) (Metrics, error) {
 	)
 
 	metrics := Metrics{
-		Input:  InputMetrics{},
-		Output: OutputMetrics{},
+		Input:   InputMetrics{},
+		Output:  OutputMetrics{},
+		Inputs:  make(map[string]InputInstance, 1),
+		Outputs: make(map[string]OutputInstance, 1),
 		Process: ProcessMetrics{
 			Processors: make(map[string]ProcessorMetrics),
 		},
@@ -1413,6 +1627,36 @@ func ParseMetricsFromBytesSlow(data []byte) (Metrics, error) {
 
 				metrics.Process.Processors[path] = proc
 			}
+		}
+	}
+
+	// Symmetric singleton-map backfill so TestMetricsParsing (slow-vs-fast
+	// cross-validation) keeps passing through the C1..C4 migration window.
+	// The slow parser does not iterate per-path, so for switch/broker/fallback
+	// payloads the maps remain empty here — that path is gated behind
+	// t.Skip in switch_output_repro_test.go's slow-arm. Removed in C6 with
+	// the rest of the slow parser body.
+	if metrics.Input != (InputMetrics{}) {
+		metrics.Inputs["root.input"] = InputInstance{
+			Path:             "root.input",
+			ConnectionFailed: metrics.Input.ConnectionFailed,
+			ConnectionLost:   metrics.Input.ConnectionLost,
+			ConnectionUp:     metrics.Input.ConnectionUp,
+			LatencyNS:        metrics.Input.LatencyNS,
+			Received:         metrics.Input.Received,
+		}
+	}
+
+	if metrics.Output != (OutputMetrics{}) {
+		metrics.Outputs["root.output"] = OutputInstance{
+			Path:             "root.output",
+			BatchSent:        metrics.Output.BatchSent,
+			ConnectionFailed: metrics.Output.ConnectionFailed,
+			ConnectionLost:   metrics.Output.ConnectionLost,
+			ConnectionUp:     metrics.Output.ConnectionUp,
+			Error:            metrics.Output.Error,
+			LatencyNS:        metrics.Output.LatencyNS,
+			Sent:             metrics.Output.Sent,
 		}
 	}
 
