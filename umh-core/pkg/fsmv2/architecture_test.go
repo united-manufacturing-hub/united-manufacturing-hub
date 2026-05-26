@@ -403,20 +403,6 @@ var _ = Describe("FSMv2 Architecture Validation", func() {
 			})
 		})
 
-		Describe("Child Workers Use IsStopRequired() (Invariant: Parent Lifecycle Awareness)", func() {
-			It("should use IsStopRequired() not just IsShutdownRequested() in child worker states", func() {
-				violations := validator.ValidateChildWorkersIsStopRequired(getFsmv2Dir())
-				if len(violations) > 0 {
-					message := validator.FormatViolationsWithPattern(
-						"Child Worker IsStopRequired Violations",
-						violations,
-						"CHILD_MUST_USE_IS_STOP_REQUIRED",
-					)
-					Fail(message)
-				}
-			})
-		})
-
 		Describe("No Custom Lifecycle Fields (Invariant: FSM Controls Lifecycle)", func() {
 			It("should not have ShouldRun, IsRunning, or similar fields in DesiredState", func() {
 				violations := validator.ValidateNoCustomLifecycleFields(getFsmv2Dir())

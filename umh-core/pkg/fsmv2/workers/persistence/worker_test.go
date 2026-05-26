@@ -46,6 +46,7 @@ var _ = Describe("PersistenceWorker", func() {
 	getPersistenceWorker := func(w any) *persistence.PersistenceWorker {
 		pw, ok := w.(*persistence.PersistenceWorker)
 		Expect(ok).To(BeTrue())
+
 		return pw
 	}
 
@@ -63,7 +64,7 @@ var _ = Describe("PersistenceWorker", func() {
 		})
 
 		It("should accept non-nil typed dependencies directly", func() {
-			d := persistence.NewPersistenceDependencies(store, deps.DefaultScheduler{}, logger, nil, identity)
+			d := persistence.NewPersistenceDependencies(store, deps.DefaultScheduler{}, deps.NewBaseDependencies(logger, nil, identity))
 			w, err := persistence.NewPersistenceWorker(identity, logger, nil, d)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(w).NotTo(BeNil())

@@ -206,6 +206,7 @@ func (t *Translator) extractVirtualPaths(
 			}
 
 			pathsByShape[field.PayloadShape] = append(pathsByShape[field.PayloadShape], fieldPath)
+
 			continue
 		}
 
@@ -218,6 +219,7 @@ func (t *Translator) extractVirtualPaths(
 
 			pathsByShape[syntheticName] = append(pathsByShape[syntheticName], fieldPath)
 			payloadShapes[syntheticName] = *field.Relational
+
 			continue
 		}
 
@@ -287,6 +289,7 @@ func (t *Translator) extractVirtualPathsWithReferences(
 			}
 
 			pathsByShape[field.PayloadShape] = append(pathsByShape[field.PayloadShape], fieldPath)
+
 			continue
 		}
 
@@ -299,6 +302,7 @@ func (t *Translator) extractVirtualPathsWithReferences(
 
 			pathsByShape[syntheticName] = append(pathsByShape[syntheticName], fieldPath)
 			payloadShapes[syntheticName] = *field.Relational
+
 			continue
 		}
 

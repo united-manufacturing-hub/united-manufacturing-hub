@@ -284,12 +284,14 @@ func (c *ContainerMonitorService) getCPUMetrics(ctx context.Context) (*models.CP
 		if isThrottled && !c.wasThrottled {
 			c.logger.Warnf("CPU throttling detected: %.1f%% of periods throttled", cgroupInfo.ThrottleRatio*100)
 		}
+
 		c.wasThrottled = isThrottled
 	}
 
 	switch {
 	case usagePercent >= constants.CPUHighThresholdPercent || isThrottled:
 		category = models.Degraded
+
 		if isThrottled && cgroupInfo != nil {
 			message = fmt.Sprintf("CPU throttled (%.1f%% periods throttled)", cgroupInfo.ThrottleRatio*100)
 		} else {
@@ -349,10 +351,12 @@ func (c *ContainerMonitorService) updateThrottleWindow(cgroupInfo *CPUCgroupInfo
 
 	// Prune entries older than the window
 	cutoff := now.Add(-constants.CPUThrottleWindow)
+
 	pruneIdx := 0
 	for pruneIdx < len(c.throttleSnapshots) && c.throttleSnapshots[pruneIdx].timestamp.Before(cutoff) {
 		pruneIdx++
 	}
+
 	if pruneIdx > 0 {
 		c.throttleSnapshots = c.throttleSnapshots[pruneIdx:]
 	}
@@ -435,6 +439,7 @@ func (c *ContainerMonitorService) getMemoryMetrics(ctx context.Context) (*models
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
 	}
+
 	if cgroupErr == nil {
 		usedBytes = uint64(cgroupInfo.CurrentBytes)
 		if !cgroupInfo.Unlimited && cgroupInfo.LimitBytes > 0 {

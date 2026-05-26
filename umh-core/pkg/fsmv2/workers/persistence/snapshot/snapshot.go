@@ -49,6 +49,7 @@ func (c PersistenceConfig) GetCompactionInterval() time.Duration {
 	if c.CompactionInterval != 0 {
 		return c.CompactionInterval
 	}
+
 	return DefaultCompactionInterval
 }
 
@@ -58,6 +59,7 @@ func (c PersistenceConfig) GetRetentionWindow() time.Duration {
 	if c.RetentionWindow != 0 {
 		return c.RetentionWindow
 	}
+
 	return DefaultRetentionWindow
 }
 
@@ -67,6 +69,7 @@ func (c PersistenceConfig) GetMaintenanceInterval() time.Duration {
 	if c.MaintenanceInterval != 0 {
 		return c.MaintenanceInterval
 	}
+
 	return DefaultMaintenanceInterval
 }
 

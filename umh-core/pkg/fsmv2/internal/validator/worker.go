@@ -638,6 +638,7 @@ func checkFrameworkMetricsCopy(filename string) []Violation {
 			if ident, ok := callExpr.Fun.(*ast.Ident); ok && ident.Name == "NewObservation" {
 				hasNewObservation = true
 			}
+
 			if selExpr, ok := callExpr.Fun.(*ast.SelectorExpr); ok && selExpr.Sel.Name == "NewObservation" {
 				hasNewObservation = true
 			}
@@ -896,6 +897,7 @@ func checkActionHistoryCopy(filename string) []Violation {
 			if ident, ok := callExpr.Fun.(*ast.Ident); ok && ident.Name == "NewObservation" {
 				hasNewObservation = true
 			}
+
 			if selExpr, ok := callExpr.Fun.(*ast.SelectorExpr); ok && selExpr.Sel.Name == "NewObservation" {
 				hasNewObservation = true
 			}
@@ -958,6 +960,7 @@ func checkCollectObservedState2ArgSignature(filename string) []Violation {
 
 		// Count the non-receiver parameters.
 		paramCount := 0
+
 		if funcDecl.Type.Params != nil {
 			for _, field := range funcDecl.Type.Params.List {
 				// Each field can represent multiple names (e.g., "a, b int").

@@ -15,6 +15,8 @@
 package state
 
 import (
+	"fmt"
+
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/persistence/snapshot"
@@ -27,8 +29,10 @@ type RunningDegradedState struct {
 func (s *RunningDegradedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := fsmv2.ConvertWorkerSnapshot[snapshot.PersistenceConfig, snapshot.PersistenceStatus](snapAny)
 
-	if snap.IsStopRequired() {
-		return fsmv2.Result[any, any](&ShuttingDownState{}, fsmv2.SignalNone, nil, "Shutdown requested")
+	if snap.ShouldStop() {
+		return fsmv2.Result[any, any](&ShuttingDownState{}, fsmv2.SignalNone, nil,
+			fmt.Sprintf("stop required: shutdown=%t, parentState=%s",
+				snap.IsShutdownRequested, snap.ParentMappedState))
 	}
 
 	if snap.Status.IsHealthy() {

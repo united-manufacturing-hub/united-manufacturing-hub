@@ -26,7 +26,7 @@ type HelloworldConfig struct {
 
 	// MoodFilePath is the path to the mood file whose contents set the worker's mood.
 	// When empty, mood checking is skipped.
-	MoodFilePath string `yaml:"moodFilePath" json:"moodFilePath"`
+	MoodFilePath string `json:"moodFilePath" yaml:"moodFilePath"`
 }
 
 // HelloworldStatus holds the runtime observation data for the helloworld worker.

@@ -274,6 +274,7 @@ func (a *GetProtocolConverterAction) Execute() (interface{}, map[string]interfac
 
 						// Extract IP and Port from variables (convert to string for connection info)
 						valueStr := fmt.Sprintf("%v", value)
+
 						switch key {
 						case "IP", "ip", "target", "Target":
 							ip = valueStr

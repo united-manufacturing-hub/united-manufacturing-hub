@@ -15,6 +15,8 @@
 package state
 
 import (
+	"fmt"
+
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplefailing/action"
@@ -30,8 +32,10 @@ type TriggeringNextCycleState struct {
 func (s *TriggeringNextCycleState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := fsmv2.ConvertWorkerSnapshot[examplefailing.ExamplefailingConfig, examplefailing.ExamplefailingStatus](snapAny)
 
-	if snap.IsStopRequired() {
-		return fsmv2.Result[any, any](&TryingToStopState{}, fsmv2.SignalNone, nil, "stop required, transitioning to stop state")
+	if snap.ShouldStop() {
+		return fsmv2.Result[any, any](&TryingToStopState{}, fsmv2.SignalNone, nil,
+			fmt.Sprintf("stop required: shutdown=%t, parentState=%s",
+				snap.IsShutdownRequested, snap.ParentMappedState))
 	}
 
 	if snap.Status.ConnectionHealth == "healthy" {

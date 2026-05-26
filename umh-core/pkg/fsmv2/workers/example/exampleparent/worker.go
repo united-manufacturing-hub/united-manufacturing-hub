@@ -23,7 +23,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
 )
 
@@ -31,9 +30,7 @@ const workerTypeName = "exampleparent"
 
 // ParentWorker implements the FSM v2 Worker interface for parent-child relationships.
 type ParentWorker struct {
-	*helpers.BaseWorker[*ParentDependencies]
-	logger   deps.FSMLogger
-	identity deps.Identity
+	fsmv2.WorkerBase[ExampleparentConfig, ExampleparentStatus, *ParentDependencies]
 }
 
 // NewParentWorker creates a new example parent worker.
@@ -50,13 +47,26 @@ func NewParentWorker(
 		identity.WorkerType = workerTypeName
 	}
 
-	dependencies := NewParentDependencies(logger, stateReader, identity)
+	w := &ParentWorker{}
+	bd := w.InitBase(identity, logger, stateReader)
 
-	return &ParentWorker{
-		BaseWorker: helpers.NewBaseWorker(dependencies),
-		identity:   identity,
-		logger:     logger,
-	}, nil
+	dependencies := NewParentDependencies(bd)
+	w.BindDeps(dependencies)
+
+	return w, nil
+}
+
+// GetDependencies returns the typed ParentDependencies.
+// Panics with a clear message if BindDeps was not called before this worker is used.
+func (w *ParentWorker) GetDependencies() *ParentDependencies {
+	raw := w.GetDependenciesAny()
+
+	d, ok := raw.(*ParentDependencies)
+	if !ok || d == nil {
+		panic("ParentWorker: GetDependencies called before BindDeps")
+	}
+
+	return d
 }
 
 // CollectObservedState returns the current observed state of the parent worker.
@@ -77,7 +87,7 @@ func (w *ParentWorker) CollectObservedState(ctx context.Context, _ fsmv2.Desired
 	d.GetActionHistory()
 
 	status := ExampleparentStatus{
-		ID: w.identity.ID,
+		ID: w.Identity().ID,
 	}
 
 	return fsmv2.NewObservation(status), nil
@@ -92,7 +102,7 @@ func (w *ParentWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState,
 		}, nil
 	}
 
-	parentSpec, err := config.ParseUserSpec[ParentUserSpec](spec)
+	parentSpec, err := config.ParseUserSpec[ExampleparentConfig](spec)
 	if err != nil {
 		return nil, err
 	}
@@ -104,7 +114,7 @@ func (w *ParentWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState,
 			State: parentSpec.GetState(),
 			Config: ExampleparentConfig{
 				BaseUserSpec: parentSpec.BaseUserSpec,
-				ChildCount:   0,
+				ChildrenCount: 0,
 			},
 		}, nil
 	}
@@ -142,16 +152,10 @@ device: {{ .DEVICE_ID }}`
 		State: parentSpec.GetState(),
 		Config: ExampleparentConfig{
 			BaseUserSpec: parentSpec.BaseUserSpec,
-			ChildCount:   childrenCount,
+			ChildrenCount: childrenCount,
 		},
 		ChildrenSpecs: childrenSpecs,
 	}, nil
-}
-
-// GetInitialState returns the state the FSM should start in.
-// Uses the initial state registry populated by the state package's init() function.
-func (w *ParentWorker) GetInitialState() fsmv2.State[any, any] {
-	return fsmv2.LookupInitialState(workerTypeName)
 }
 
 func init() {

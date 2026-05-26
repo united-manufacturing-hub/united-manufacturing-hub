@@ -31,7 +31,7 @@ type DisconnectedState struct {
 func (s *DisconnectedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := fsmv2.ConvertWorkerSnapshot[examplefailing.ExamplefailingConfig, examplefailing.ExamplefailingStatus](snapAny)
 
-	if snap.IsStopRequired() {
+	if snap.ShouldStop() {
 		return fsmv2.Result[any, any](&TryingToStopState{}, fsmv2.SignalNone, nil,
 			fmt.Sprintf("stop required: shutdown=%t, parentState=%s", snap.IsShutdownRequested, snap.ParentMappedState))
 	}

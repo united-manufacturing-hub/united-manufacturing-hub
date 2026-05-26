@@ -117,7 +117,7 @@ var _ = Describe("updateThrottleWindow", func() {
 
 			Expect(ratio).To(Equal(0.0))
 			Expect(isThrottled).To(BeFalse())
-			Expect(svc.throttleSnapshots).To(HaveLen(0))
+			Expect(svc.throttleSnapshots).To(BeEmpty())
 		})
 	})
 

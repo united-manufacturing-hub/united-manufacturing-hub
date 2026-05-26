@@ -59,7 +59,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/snapshot"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/state"
@@ -76,7 +75,7 @@ var _ fsmv2.Worker = (*TransportWorker)(nil)
 // It manages authentication and coordinates PushWorker/PullWorker children
 // for bidirectional message exchange with the backend relay server.
 type TransportWorker struct {
-	*helpers.BaseWorker[*TransportDependencies]
+	fsmv2.WorkerBase[snapshot.TransportDesiredState, snapshot.TransportStatus, *TransportDependencies]
 }
 
 // NewTransportWorker creates a new Transport worker in Stopped state.
@@ -96,12 +95,27 @@ func NewTransportWorker(
 		identity.WorkerType = "transport"
 	}
 
-	// Create dependencies (will panic if ChannelProvider not set)
-	dependencies := NewTransportDependencies(nil, logger, stateReader, identity)
+	w := &TransportWorker{}
+	bd := w.InitBase(identity, logger, stateReader)
 
-	return &TransportWorker{
-		BaseWorker: helpers.NewBaseWorker(dependencies),
-	}, nil
+	// Create dependencies (will panic if ChannelProvider not set)
+	dependencies := NewTransportDependencies(nil, bd)
+	w.BindDeps(dependencies)
+
+	return w, nil
+}
+
+// GetDependencies returns the typed TransportDependencies.
+// Panics with a clear message if BindDeps was not called before this worker is used.
+func (w *TransportWorker) GetDependencies() *TransportDependencies {
+	raw := w.GetDependenciesAny()
+
+	d, ok := raw.(*TransportDependencies)
+	if !ok || d == nil {
+		panic("TransportWorker: GetDependencies called before BindDeps")
+	}
+
+	return d
 }
 
 // CollectObservedState returns the current observed state of the transport worker.
@@ -175,15 +189,15 @@ func (w *TransportWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredSta
 	// Validate required fields when worker should be running
 	if transportSpec.GetState() == config.DesiredStateRunning {
 		if transportSpec.RelayURL == "" {
-			return nil, fmt.Errorf("relayURL is required when state is running")
+			return nil, errors.New("relayURL is required when state is running")
 		}
 
 		if transportSpec.InstanceUUID == "" {
-			return nil, fmt.Errorf("instanceUUID is required when state is running")
+			return nil, errors.New("instanceUUID is required when state is running")
 		}
 
 		if transportSpec.AuthToken == "" {
-			return nil, fmt.Errorf("authToken is required when state is running")
+			return nil, errors.New("authToken is required when state is running")
 		}
 
 		if transportSpec.Timeout == 0 {

@@ -23,16 +23,13 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
 )
 
 // ChildWorker implements the FSM v2 Worker interface for resource management.
 type ChildWorker struct {
 	connection Connection
-	*helpers.BaseWorker[*ExamplechildDependencies]
-	logger   deps.FSMLogger
-	identity deps.Identity
+	fsmv2.WorkerBase[ExamplechildConfig, ExamplechildStatus, *ExamplechildDependencies]
 }
 
 // NewChildWorker creates a new example child worker.
@@ -54,7 +51,10 @@ func NewChildWorker(
 		identity.WorkerType = "examplechild"
 	}
 
-	dependencies := NewExamplechildDependencies(connectionPool, logger, stateReader, identity)
+	w := &ChildWorker{}
+	bd := w.InitBase(identity, logger, stateReader)
+
+	dependencies := NewExamplechildDependencies(connectionPool, bd)
 
 	conn, err := connectionPool.Acquire()
 	if err != nil {
@@ -62,12 +62,23 @@ func NewChildWorker(
 			deps.Err(err))
 	}
 
-	return &ChildWorker{
-		BaseWorker: helpers.NewBaseWorker(dependencies),
-		identity:   identity,
-		logger:     logger,
-		connection: conn,
-	}, nil
+	w.connection = conn
+	w.BindDeps(dependencies)
+
+	return w, nil
+}
+
+// GetDependencies returns the typed ExamplechildDependencies.
+// Panics with a clear message if BindDeps was not called before this worker is used.
+func (w *ChildWorker) GetDependencies() *ExamplechildDependencies {
+	raw := w.GetDependenciesAny()
+
+	d, ok := raw.(*ExamplechildDependencies)
+	if !ok || d == nil {
+		panic("ChildWorker: GetDependencies called before BindDeps")
+	}
+
+	return d
 }
 
 // CollectObservedState returns the current observed state of the child worker.
@@ -134,12 +145,6 @@ func (w *ChildWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, 
 		State:  state,
 		Config: parsed,
 	}, nil
-}
-
-// GetInitialState returns the state the FSM should start in.
-// Uses the initial state registry populated by the state package's init() function.
-func (w *ChildWorker) GetInitialState() fsmv2.State[any, any] {
-	return fsmv2.LookupInitialState("examplechild")
 }
 
 func init() {

@@ -112,6 +112,7 @@ func authConfigChanged(desired *snapshot.TransportDesiredState, status snapshot.
 	if status.FailedAuthConfig.IsEmpty() {
 		return false
 	}
+
 	return desired.AuthToken != status.FailedAuthConfig.AuthToken ||
 		desired.RelayURL != status.FailedAuthConfig.RelayURL ||
 		desired.InstanceUUID != status.FailedAuthConfig.InstanceUUID
