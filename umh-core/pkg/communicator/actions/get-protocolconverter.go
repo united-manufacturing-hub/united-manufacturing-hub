@@ -215,14 +215,16 @@ func connectionInfoFromSpec(
 				logger.Warnw("Failed to parse port from variable", "port", valueStr, "error", err)
 			}
 		}
-		// Only include user-defined (non-system) variables in the returned list.
-		if !systemInjectedVarKeys[key] {
-			variables = append(variables, models.ProtocolConverterVariable{Label: key, Value: value})
-		}
+		variables = append(variables, models.ProtocolConverterVariable{Label: key, Value: value})
 	}
 	// isTemplated is true only when the PC has custom variables beyond the system-injected ones.
 	// IP and PORT alone do not make a PC "templated" — they are always present.
-	isTemplated = len(variables) > 0
+	for _, v := range variables {
+		if !systemInjectedVarKeys[v.Label] {
+			isTemplated = true
+			break
+		}
+	}
 
 	if !hasConnectionVars {
 		if nmap := spec.Config.ConnectionServiceConfig.NmapTemplate; nmap != nil {
