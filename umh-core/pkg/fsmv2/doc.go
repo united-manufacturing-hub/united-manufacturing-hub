@@ -230,19 +230,18 @@
 // Pattern 2: Full visibility (for inspecting individual children)
 //
 //	func (o MyObservedState) SetChildrenView(view config.ChildrenView) fsmv2.ObservedState {
-//	    healthy, unhealthy := view.Counts()
-//	    o.ChildrenHealthy = healthy
-//	    o.ChildrenUnhealthy = unhealthy
-//	    // Can also use: view.List(), view.Get(name), view.AllHealthy()
+//	    o.ChildrenHealthy = view.HealthyCount
+//	    o.ChildrenUnhealthy = view.UnhealthyCount
+//	    // Can also use: view.Children, view.Get(name), view.AllHealthy
 //	    return o
 //	}
 //
-// ChildrenView interface provides:
-//   - Children []ChildInfo: All children with state info
-//   - List() []ChildInfo: Same as Children, kept for migration compatibility
-//   - Get(name string) *ChildInfo: Single child by name (nil if not found)
-//   - Counts() (healthy, unhealthy int): Aggregate health counts (stopped children excluded from unhealthy)
-//   - AllHealthy(): Aggregate predicate (true when all children are PhaseRunningHealthy)
+// ChildrenView is a value-type struct with pre-computed aggregate fields:
+//   - Children []ChildInfo: all children with state info
+//   - HealthyCount, UnhealthyCount int: per-tick aggregate counts (stopped children excluded from unhealthy)
+//   - AllHealthy, AllOperational, AllStopped bool: aggregate predicates derived from each child's lifecycle phase
+//   - Get(name string) (ChildInfo, bool): copy + presence bool
+//   - List() []ChildInfo, Counts() (healthy, unhealthy int): deprecated migration shims
 //
 // ChildInfo provides read-only info about each child:
 //   - Name, WorkerType, StateName, StateReason, IsHealthy, IsOperational, IsStopped, ErrorMsg, HierarchyPath
@@ -250,10 +249,10 @@
 // StateName is display-only (raw form like "Connected" or "TryingToConnect").
 // IsHealthy, IsOperational, and IsStopped are the canonical predicate fields; they are
 // populated from the child's cached lifecycle phase and are what
-// NewChildrenManager's aggregate predicates (Counts(), AllHealthy()) read.
-// Do NOT recompute predicates from StateName;
-// the prefix-only ParseLifecyclePhase parser cannot classify production raw
-// state names and would silently mis-aggregate.
+// config.NewChildrenView reads to derive HealthyCount, UnhealthyCount, and the
+// AllHealthy / AllOperational / AllStopped flags. Do NOT recompute predicates
+// from StateName; the prefix-only ParseLifecyclePhase parser cannot classify
+// production raw state names and would silently mis-aggregate.
 //
 // See observation.go (Observation.SetChildrenCounts / ChildrenHealthy /
 // ChildrenUnhealthy) for the canonical counts hook supplied by the framework.
