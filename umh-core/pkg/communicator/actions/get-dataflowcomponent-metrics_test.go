@@ -215,32 +215,38 @@ var _ = Describe("GetDataflowcomponentMetricsAction", func() {
 				BenthosStatus: benthos.BenthosStatus{
 					BenthosMetrics: benthos_monitor.BenthosMetrics{
 						Metrics: benthos_monitor.Metrics{
-							Input: benthos_monitor.InputMetrics{
-								ConnectionFailed: inputMetrics.ConnectionFailed,
-								ConnectionLost:   inputMetrics.ConnectionLost,
-								ConnectionUp:     inputMetrics.ConnectionUp,
-								Received:         inputMetrics.Received,
-								LatencyNS: benthos_monitor.Latency{
-									P50:   latencyNSInput.P50,
-									P90:   latencyNSInput.P90,
-									P99:   latencyNSInput.P99,
-									Sum:   latencyNSInput.Sum,
-									Count: latencyNSInput.Count,
+							Inputs: map[string]benthos_monitor.InputInstance{
+								"root.input": {
+									Path:             "root.input",
+									ConnectionFailed: inputMetrics.ConnectionFailed,
+									ConnectionLost:   inputMetrics.ConnectionLost,
+									ConnectionUp:     inputMetrics.ConnectionUp,
+									Received:         inputMetrics.Received,
+									LatencyNS: benthos_monitor.Latency{
+										P50:   latencyNSInput.P50,
+										P90:   latencyNSInput.P90,
+										P99:   latencyNSInput.P99,
+										Sum:   latencyNSInput.Sum,
+										Count: latencyNSInput.Count,
+									},
 								},
 							},
-							Output: benthos_monitor.OutputMetrics{
-								BatchSent:        outputMetrics.BatchSent,
-								ConnectionFailed: outputMetrics.ConnectionFailed,
-								ConnectionLost:   outputMetrics.ConnectionLost,
-								ConnectionUp:     outputMetrics.ConnectionUp,
-								Error:            outputMetrics.Error,
-								Sent:             outputMetrics.Sent,
-								LatencyNS: benthos_monitor.Latency{
-									P50:   latencyNSOutput.P50,
-									P90:   latencyNSOutput.P90,
-									P99:   latencyNSOutput.P99,
-									Sum:   latencyNSOutput.Sum,
-									Count: latencyNSOutput.Count,
+							Outputs: map[string]benthos_monitor.OutputInstance{
+								"root.output": {
+									Path:             "root.output",
+									BatchSent:        outputMetrics.BatchSent,
+									ConnectionFailed: outputMetrics.ConnectionFailed,
+									ConnectionLost:   outputMetrics.ConnectionLost,
+									ConnectionUp:     outputMetrics.ConnectionUp,
+									Error:            outputMetrics.Error,
+									Sent:             outputMetrics.Sent,
+									LatencyNS: benthos_monitor.Latency{
+										P50:   latencyNSOutput.P50,
+										P90:   latencyNSOutput.P90,
+										P99:   latencyNSOutput.P99,
+										Sum:   latencyNSOutput.Sum,
+										Count: latencyNSOutput.Count,
+									},
 								},
 							},
 							Process: benthos_monitor.ProcessMetrics{
@@ -457,6 +463,71 @@ var _ = Describe("GetDataflowcomponentMetricsAction", func() {
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("was not found"))
 			Expect(result).To(BeNil())
+		})
+
+		It("emits one DfcMetric set per output path for switch outputs", func() {
+			// Build a Metrics value with three output paths to mirror the
+			// ENG-5006 switch reproduction. The map shape is what C1's parser
+			// produces; this test pins that the emitter iterates the map.
+			switchMetrics := benthos_monitor.Metrics{
+				Inputs: map[string]benthos_monitor.InputInstance{
+					"root.input": {Path: "root.input", Received: 20},
+				},
+				Outputs: map[string]benthos_monitor.OutputInstance{
+					"root.output.switch.cases.0.output.fallback.0": {
+						Path: "root.output.switch.cases.0.output.fallback.0", Sent: 10, BatchSent: 10,
+					},
+					"root.output.switch.cases.1.output.fallback.0": {
+						Path: "root.output.switch.cases.1.output.fallback.0", Sent: 7, BatchSent: 7,
+					},
+					"root.output.switch.cases.2.output.fallback.0": {
+						Path: "root.output.switch.cases.2.output.fallback.0", Sent: 3, BatchSent: 3,
+					},
+				},
+			}
+
+			dfcObs := &dfc.DataflowComponentObservedStateSnapshot{
+				ServiceInfo: dfcsvc.ServiceInfo{
+					BenthosObservedState: benthosfsmmanager.BenthosObservedState{
+						ServiceInfo: benthos.ServiceInfo{
+							BenthosStatus: benthos.BenthosStatus{
+								BenthosMetrics: benthos_monitor.BenthosMetrics{
+									Metrics: switchMetrics,
+								},
+							},
+						},
+					},
+				},
+			}
+			snapshotManager.UpdateSnapshot(&fsm.SystemSnapshot{
+				Managers: map[string]fsm.ManagerSnapshot{
+					constants.DataflowcomponentManagerName: &actions.MockManagerSnapshot{
+						Instances: map[string]*fsm.FSMInstanceSnapshot{
+							dfcName: {ID: dfcName, CurrentState: "active", LastObservedState: dfcObs},
+						},
+					},
+				},
+			})
+
+			Expect(action.Parse(map[string]interface{}{"uuid": dfcUUID.String()})).To(Succeed())
+			Expect(action.Validate()).To(Succeed())
+			result, _, err := action.Execute()
+			Expect(err).NotTo(HaveOccurred())
+
+			dfcMetrics, ok := result.(actions.DfcMetrics)
+			Expect(ok).To(BeTrue())
+
+			outputPaths := map[string]bool{}
+			for _, m := range dfcMetrics.Metrics {
+				if m.ComponentType == actions.DfcMetricComponentTypeOutput {
+					outputPaths[m.Path] = true
+				}
+			}
+			Expect(outputPaths).To(HaveKey("root.output.switch.cases.0.output.fallback.0"))
+			Expect(outputPaths).To(HaveKey("root.output.switch.cases.1.output.fallback.0"))
+			Expect(outputPaths).To(HaveKey("root.output.switch.cases.2.output.fallback.0"))
+			Expect(outputPaths).NotTo(HaveKey("root.output"),
+				"hardcoded root.output path must not appear when real per-path data exists")
 		})
 
 		It("should handle the case when no dataflowcomponent manager exists", func() {
