@@ -1082,6 +1082,88 @@ var _ = Describe("EditProtocolConverter", func() {
 				Expect(err).NotTo(HaveOccurred())
 				Expect(action2.GetDFCType()).To(Equal("write"))
 			})
+
+			It("should return DFCTypeBoth when a custom template variable changes", Label("write-dfc"), func() {
+				// First edit: deploy read + write with a custom template variable.
+				firstPayload := map[string]interface{}{
+					"name": pcName,
+					"uuid": pcUUID.String(),
+					"connection": map[string]interface{}{
+						"ip":   "10.0.0.1",
+						"port": 502,
+					},
+					"templateInfo": map[string]interface{}{
+						"variables": []interface{}{
+							map[string]interface{}{"label": "baudRate", "value": "9600"},
+						},
+					},
+					"readDFC": map[string]interface{}{
+						"inputs": map[string]interface{}{
+							"data": "input:\n  http_client:\n    url: 'http://{{ .baudRate }}'",
+							"type": "http_client",
+						},
+						"pipeline": map[string]interface{}{
+							"processors": map[string]interface{}{
+								"0": map[string]interface{}{
+									"type": "bloblang",
+									"data": "bloblang: root = content()",
+								},
+							},
+						},
+						"state": "active",
+					},
+					"writeDFC": map[string]interface{}{
+						"output":       map[string]interface{}{"stdout": map[string]interface{}{}},
+						"input_topics": "umh.v1.factory.*",
+					},
+				}
+				firstAction := actions.NewEditProtocolConverterAction(userEmail, uuid.New(), instanceUUID, outboundChannel, mockConfig, nil)
+				err := firstAction.Parse(firstPayload)
+				Expect(err).NotTo(HaveOccurred())
+				err = firstAction.Validate()
+				Expect(err).NotTo(HaveOccurred())
+				_, _, err = firstAction.Execute()
+				Expect(err).NotTo(HaveOccurred())
+
+				// Second edit: change only baudRate — DFC config text is identical.
+				action2 := actions.NewEditProtocolConverterAction(userEmail, uuid.New(), instanceUUID, outboundChannel, mockConfig, nil)
+				payload := map[string]interface{}{
+					"name": pcName,
+					"uuid": pcUUID.String(),
+					"connection": map[string]interface{}{
+						"ip":   "10.0.0.1",
+						"port": 502,
+					},
+					"templateInfo": map[string]interface{}{
+						"variables": []interface{}{
+							map[string]interface{}{"label": "baudRate", "value": "19200"}, // changed
+						},
+					},
+					"readDFC": map[string]interface{}{
+						"inputs": map[string]interface{}{
+							"data": "input:\n  http_client:\n    url: 'http://{{ .baudRate }}'",
+							"type": "http_client",
+						},
+						"pipeline": map[string]interface{}{
+							"processors": map[string]interface{}{
+								"0": map[string]interface{}{
+									"type": "bloblang",
+									"data": "bloblang: root = content()",
+								},
+							},
+						},
+						"state": "active",
+					},
+					"writeDFC": map[string]interface{}{
+						"output":       map[string]interface{}{"stdout": map[string]interface{}{}},
+						"input_topics": "umh.v1.factory.*",
+					},
+				}
+				err = action2.Parse(payload)
+				Expect(err).NotTo(HaveOccurred())
+				// baudRate changed → both DFCs need redeploy even though DFC config text is identical.
+				Expect(action2.GetDFCType()).To(Equal("both"))
+			})
 		})
 
 		Context("DFCTypeEmpty edit preserves per-DFC stopped states", func() {

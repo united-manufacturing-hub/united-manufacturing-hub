@@ -38,7 +38,6 @@ func (n *Normalizer) NormalizeConfig(cfg ProtocolConverterServiceConfigSpec) Pro
 	normalized.Config.DataflowComponentReadServiceConfig = dfcNormalizer.NormalizeConfig(normalized.GetDFCReadServiceConfig())
 
 	// Write DFC uses a typed struct — no benthos map normalization required.
-	normalized.Config.DataflowComponentWriteServiceConfig = normalized.GetDFCWriteServiceConfig()
 
 	// Then we  need to normalize the underlying ConnectionServiceConfig
 	connectionNormalizer := connectionserviceconfig.NewNormalizer()

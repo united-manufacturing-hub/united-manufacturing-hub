@@ -15,11 +15,12 @@
 package dataflowcomponentserviceconfig
 
 import (
-	"bytes"
-	"fmt"
 	"strings"
-	"text/template"
 )
+
+// PlaceholderUMHTopicUnset is used when no input topics were configured for a write DFC.
+// It makes the misconfiguration visible in Benthos logs rather than silently subscribing to nothing.
+const PlaceholderUMHTopicUnset = "TOPIC_NOT_SET_BY_USER"
 
 // DataflowComponentWriteConfig is the typed, validated configuration for write-side DFCs.
 // It replaces the generic DataflowComponentServiceConfig for write flows, making the
@@ -91,7 +92,6 @@ func (c DataflowComponentWriteConfigInput) ToWriteConfig() DataflowComponentWrit
 	}
 }
 
-
 // ToDataflowComponentServiceConfig expands the input config into a full Benthos service
 // config. InputTopics is split without template rendering — call Render first if the
 // string still contains {{ }} actions.
@@ -99,33 +99,10 @@ func (c DataflowComponentWriteConfigInput) ToDataflowComponentServiceConfig(brid
 	return c.ToWriteConfig().ToDataflowComponentServiceConfig(bridgedBy)
 }
 
-// Render executes InputTopics as a Go template with scope, splits the result
-// into individual topic strings, and returns a fully typed DataflowComponentWriteConfig.
-func (c DataflowComponentWriteConfigInput) Render(scope map[string]any) (DataflowComponentWriteConfig, error) {
-	rendered := c.InputTopics
-	if strings.Contains(c.InputTopics, "{{") {
-		tpl, err := template.New("input_topics").Option("missingkey=zero").Parse(c.InputTopics)
-		if err != nil {
-			return DataflowComponentWriteConfig{}, fmt.Errorf("failed to parse input_topics template: %w", err)
-		}
-		var buf bytes.Buffer
-		if err := tpl.Execute(&buf, scope); err != nil {
-			return DataflowComponentWriteConfig{}, fmt.Errorf("failed to render input_topics template: %w", err)
-		}
-		rendered = buf.String()
-	}
-	return DataflowComponentWriteConfig{
-		InputTopics:         splitTopics(rendered),
-		ProcessingNoderedJS: c.ProcessingNoderedJS,
-		Output:              c.Output,
-		Buffer:              c.Buffer,
-	}, nil
-}
-
 // splitTopics splits a newline- or comma-separated topic string into a trimmed,
 // non-empty []string.
 func splitTopics(s string) []string {
-	// normalise commas to newlines, then split
+	// normalize commas to newlines, then split
 	s = strings.ReplaceAll(s, ",", "\n")
 	parts := strings.Split(s, "\n")
 	out := make([]string, 0, len(parts))
@@ -138,7 +115,6 @@ func splitTopics(s string) []string {
 }
 
 // HasOutput reports whether a write output is configured.
-// Used as a gate: the UNS input is only generated when an output exists.
 func (c DataflowComponentWriteConfig) HasOutput() bool {
 	return len(c.Output) > 0
 }
@@ -161,7 +137,7 @@ func (c DataflowComponentWriteConfig) ToDataflowComponentServiceConfig(bridgedBy
 			// Output is present, but set-config-file bypasses actions and can produce
 			// this state. The sentinel makes the misconfiguration visible in Benthos
 			// logs rather than silently subscribing to nothing.
-			umhTopics = []string{"TOPIC_NOT_SET_BY_USER"}
+			umhTopics = []string{PlaceholderUMHTopicUnset}
 		}
 		input = map[string]any{
 			"uns": map[string]any{

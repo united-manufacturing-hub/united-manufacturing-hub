@@ -149,6 +149,8 @@ func NewEditProtocolConverterAction(userEmail string, actionUUID uuid.UUID, inst
 // Parse implements the Action interface by extracting the protocol converter UUID and
 // dataflow component configuration from the payload.
 func (a *EditProtocolConverterAction) Parse(payload interface{}) error {
+	a.ignoreHealthCheck = false
+
 	// Parse the payload directly as a complete ProtocolConverter object
 	pcPayload, err := ParseActionPayload[models.ProtocolConverter](payload)
 	if err != nil {
@@ -187,6 +189,8 @@ func (a *EditProtocolConverterAction) Parse(payload interface{}) error {
 		input := pcPayload.WriteDFCPayload.DataflowComponentWriteConfigInput
 		a.writeDFCInput = &input
 		a.writeDFCState = pcPayload.WriteDFCPayload.State
+		// OR-merge: if either DFC requests skipping errors, skip the health-check wait
+		// for the entire PC. See deploy-protocolconverter.go for the rationale.
 		if pcPayload.WriteDFCPayload.IgnoreErrors != nil {
 			a.ignoreHealthCheck = a.ignoreHealthCheck || *pcPayload.WriteDFCPayload.IgnoreErrors
 		}
@@ -222,8 +226,9 @@ func (a *EditProtocolConverterAction) Validate() error {
 		return err
 	}
 
-	// Validate read DFC state
-	if a.readDFCSvcCfg != nil && a.readDFCState != "" {
+	// Validate read DFC state — validate independently of whether config was provided,
+	// so state-only edits (readDFCSvcCfg == nil) are also checked.
+	if a.readDFCState != "" {
 		if err := ValidateDataFlowComponentState(a.readDFCState); err != nil {
 			return fmt.Errorf("invalid read DFC state: %w", err)
 		}
@@ -389,8 +394,10 @@ func (a *EditProtocolConverterAction) applyMutation() (config.ProtocolConverterC
 		instanceToModify.ProtocolConverterServiceConfig.Config.DataflowComponentReadServiceConfig = *a.readDFCSvcCfg
 	}
 
-	// Apply write DFC config if provided — store the original input (template string preserved).
-	if a.writeDFCInput != nil && a.writeDFCInput.HasOutput() {
+	// Apply write DFC config when the Output field was explicitly included in the payload
+	// (non-nil, even if empty). A nil Output means a state-only change; the existing
+	// config is preserved. An explicitly empty Output ({}) clears the write DFC output.
+	if a.writeDFCInput != nil && a.writeDFCInput.Output != nil {
 		instanceToModify.ProtocolConverterServiceConfig.Config.DataflowComponentWriteServiceConfig = *a.writeDFCInput
 	}
 
@@ -935,7 +942,7 @@ func (a *EditProtocolConverterAction) renderDesiredDFCConfig(pcSnapshot *protoco
 		modifiedSpec,
 		agentLocation,
 		nil,             // TODO: add global vars
-		"unimplemented", // Must stay "unimplemented": FSM uses the same sentinel, so bridged_by values match. If FSM changes its node-name source, update here in lockstep.
+		runtime_config.BridgedByPlaceholder,
 		pcName,
 	)
 	if err != nil {
@@ -992,21 +999,34 @@ func (a *EditProtocolConverterAction) deriveDFCType() DFCType {
 		return dfcTypeFromPresence(hasRead, hasWrite)
 	}
 
-	// Connection IP/PORT changes affect all DFCs since they use {{ .IP }}/{{ .PORT }} templates.
-	// So if a change is detected, all present DFCs need redeploy.
-	// Use comma-ok map lookups: if IP/PORT keys are absent (e.g. PCs created
-	// before these variables were standard), skip the connection-change check
-	// rather than treating it as changed. Without this, fmt.Sprint(nil) returns
-	// "<nil>" which never equals any real value, forcing a spurious redeploy.
+	// Any variable change (IP, PORT, or custom vars like baudRate) forces redeploy of all
+	// present DFCs because template rendering uses all variables. Keys absent in the deployed
+	// config are skipped — treating nil as changed would cause spurious redeploys on PCs
+	// created before a variable was standard (fmt.Sprint(nil) → "<nil>" ≠ any real value).
 	deployedVars := currentPC.ProtocolConverterServiceConfig.Variables.User
-	deployedIP, ipOk := deployedVars["IP"]
-	deployedPort, portOk := deployedVars["PORT"]
 
-	connectionChanged := ipOk && portOk &&
-		(fmt.Sprint(deployedIP) != a.connectionIP || fmt.Sprint(deployedPort) != a.connectionPort)
+	incomingVars := make(map[string]any, len(a.templateVars)+2)
+	for _, v := range a.templateVars {
+		incomingVars[v.Label] = v.Value
+	}
+	if a.connectionIP != "" {
+		incomingVars["IP"] = a.connectionIP
+	}
+	if a.connectionPort != "" && a.connectionPort != "0" {
+		incomingVars["PORT"] = a.connectionPort
+	}
+
+	connectionChanged := false
+	for k, incomingVal := range incomingVars {
+		if deployedVal, ok := deployedVars[k]; ok {
+			if fmt.Sprint(deployedVal) != fmt.Sprint(incomingVal) {
+				a.actionLogger.Debugf("Variable %q changed (%v → %v), all present DFCs need redeploy", k, deployedVal, incomingVal)
+				connectionChanged = true
+				break
+			}
+		}
+	}
 	if connectionChanged {
-		a.actionLogger.Debugf("Connection changed (IP or PORT), all present DFCs need redeploy")
-
 		return dfcTypeFromPresence(hasRead, hasWrite)
 	}
 
@@ -1056,7 +1076,28 @@ func (a *EditProtocolConverterAction) writeDFCConfigDiffers(
 	if incomingState != "" && deployedState != "" && incomingState != deployedState {
 		return true
 	}
-	return !reflect.DeepEqual(incoming, deployedConfig)
+	// Normalize nil maps to empty maps before comparison: YAML round-trip converts
+	// nil maps (Output/Buffer) to empty maps, and reflect.DeepEqual treats them as
+	// different, causing spurious drift detection on every reconcile.
+	return !reflect.DeepEqual(normalizeWriteConfigInput(incoming), normalizeWriteConfigInput(deployedConfig))
+}
+
+// normalizeWriteConfigInput replaces nil map fields with empty maps so that
+// reflect.DeepEqual comparisons are not tripped up by YAML round-trip nil→{} coercions.
+func normalizeWriteConfigInput(c dataflowcomponentserviceconfig.DataflowComponentWriteConfigInput) dataflowcomponentserviceconfig.DataflowComponentWriteConfigInput {
+	if c.Output == nil {
+		c.Output = map[string]any{}
+	}
+	if c.Buffer == nil {
+		c.Buffer = map[string]any{}
+	}
+	// Mirror the default applied by ToDataflowComponentServiceConfig so that a config
+	// stored without an explicit JS snippet compares equal to one that was just parsed
+	// from a payload carrying the default "return msg;".
+	if c.ProcessingNoderedJS == "" {
+		c.ProcessingNoderedJS = "return msg;"
+	}
+	return c
 }
 
 // getUserEmail implements the Action interface by returning the user email associated with this action.

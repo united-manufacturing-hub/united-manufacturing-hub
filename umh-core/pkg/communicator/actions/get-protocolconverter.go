@@ -64,6 +64,15 @@ import (
 	"go.uber.org/zap"
 )
 
+// systemInjectedVarKeys are Variables.User keys that deploy/edit always write regardless
+// of whether the PC was created from a user-defined template. They are excluded from the
+// variables list returned to the frontend and do not count toward isTemplated.
+var systemInjectedVarKeys = map[string]bool{
+	"IP": true, "ip": true, "target": true, "Target": true,
+	"PORT": true, "Port": true, "port": true,
+	"location": true, "location_path": true,
+}
+
 // GetProtocolConverterAction returns metadata and Benthos configuration for the
 // requested Protocol Converter **UUID**.  The action never blocks the FSM
 // writer goroutine – instead it holds the read‑lock only while making a deep
@@ -190,12 +199,15 @@ func connectionInfoFromSpec(
 		isTemplated bool
 	)
 
+	// hasConnectionVars tracks whether Variables.User contains IP/PORT so we know
+	// whether to fall back to the Nmap template for connection info.
+	hasConnectionVars := false
 	for key, value := range spec.Variables.User {
-		variables = append(variables, models.ProtocolConverterVariable{Label: key, Value: value})
 		valueStr := fmt.Sprintf("%v", value)
 		switch key {
 		case "IP", "ip", "target", "Target":
 			ip = valueStr
+			hasConnectionVars = true
 		case "Port", "port", "PORT":
 			if n, err := strconv.ParseUint(valueStr, 10, 32); err == nil {
 				port = uint32(n)
@@ -203,10 +215,16 @@ func connectionInfoFromSpec(
 				logger.Warnw("Failed to parse port from variable", "port", valueStr, "error", err)
 			}
 		}
+		// Only include user-defined (non-system) variables in the returned list.
+		if !systemInjectedVarKeys[key] {
+			variables = append(variables, models.ProtocolConverterVariable{Label: key, Value: value})
+		}
 	}
+	// isTemplated is true only when the PC has custom variables beyond the system-injected ones.
+	// IP and PORT alone do not make a PC "templated" — they are always present.
 	isTemplated = len(variables) > 0
 
-	if !isTemplated {
+	if !hasConnectionVars {
 		if nmap := spec.Config.ConnectionServiceConfig.NmapTemplate; nmap != nil {
 			ip = nmap.Target
 			if nmap.Port != "" {
@@ -228,9 +246,12 @@ func connectionInfoFromSpec(
 }
 
 // writeDFCFromSpec builds a WriteDFC from the raw spec config (as stored
-// in config.yaml). Returns nil when no output is configured (write DFC not deployed).
+// in config.yaml). Returns nil only when no output is configured AND no desired state
+// is set — i.e. the write DFC was never configured at all. A write DFC with a desired
+// state (e.g. "stopped") but no output is still a meaningful configuration: the
+// frontend must see the state to render the enable/disable toggle correctly.
 func writeDFCFromSpec(specWrite dataflowcomponentserviceconfig.DataflowComponentWriteConfigInput, state string) *models.WriteDFCPayload {
-	if !specWrite.HasOutput() {
+	if !specWrite.HasOutput() && state == "" {
 		return nil
 	}
 	return &models.WriteDFCPayload{

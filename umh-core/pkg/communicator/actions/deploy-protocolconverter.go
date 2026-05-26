@@ -106,6 +106,10 @@ func (a *DeployProtocolConverterAction) Parse(payload interface{}) error {
 	if parsedPayload.ReadDFC != nil && parsedPayload.ReadDFC.IgnoreErrors != nil {
 		a.ignoreHealthCheck = *parsedPayload.ReadDFC.IgnoreErrors
 	}
+	// OR-merge: if either DFC requests skipping errors, skip the health-check wait for
+	// the entire PC. This means a write DFC with IgnoreErrors=true also suppresses the
+	// read DFC health check. This is intentional: the frontend sets IgnoreErrors when it
+	// cannot guarantee a DFC will reach a healthy state (e.g. experimental outputs).
 	if parsedPayload.WriteDFCPayload != nil && parsedPayload.WriteDFCPayload.IgnoreErrors != nil {
 		a.ignoreHealthCheck = a.ignoreHealthCheck || *parsedPayload.WriteDFCPayload.IgnoreErrors
 	}
@@ -245,15 +249,24 @@ func (a *DeployProtocolConverterAction) Execute() (interface{}, map[string]inter
 		}
 	}
 
+	var successMsg string
+	if a.ignoreHealthCheck {
+		successMsg = fmt.Sprintf(
+			`Protocol converter deployed (health check skipped; state '%s' not verified)`,
+			pcConfig.DesiredFSMState,
+		)
+	} else {
+		successMsg = fmt.Sprintf(
+			`Protocol converter was successfully deployed and reached the expected state '%s'`,
+			pcConfig.DesiredFSMState,
+		)
+	}
 	SendActionReply(
 		a.instanceUUID,
 		a.userEmail,
 		a.actionUUID,
 		models.ActionExecuting,
-		fmt.Sprintf(
-			`Protocol converter was successfully deployed and reached the expected state '%s'`,
-			pcConfig.DesiredFSMState,
-		),
+		successMsg,
 		a.outboundChannel,
 		models.DeployProtocolConverter,
 	)

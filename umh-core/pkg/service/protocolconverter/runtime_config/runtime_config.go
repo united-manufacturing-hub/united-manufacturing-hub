@@ -28,6 +28,12 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 )
 
+// BridgedByPlaceholder is the node-name sentinel passed to BuildRuntimeConfig when
+// the real node name is not yet available (e.g. during action verification in the
+// communicator). It must match the value used in FSM actions so the Kafka consumer-group
+// name is identical across both callers — update both if this ever changes.
+const BridgedByPlaceholder = "unimplemented"
+
 // BuildRuntimeConfig merges all variables (user + agent + global + internal),
 // performs the location merge, derives the `bridged_by` header, and finally
 // renders the three sub-templates.
@@ -310,13 +316,16 @@ func renderConfig(
 	}
 
 	// Extract the resolved bridged_by value from the scope to wire up the UNS consumer group.
-	// If scope["internal"]["bridged_by"] is absent (e.g. in structural comparisons that never
-	// hit the Benthos wire), bridgedBy stays "" and ToDataflowComponentServiceConfig will
-	// emit consumer_group: "" — acceptable for diff logic, but invalid for a live bridge.
-	// The FSM always injects this key before deploying, so a blank value at runtime is a bug.
+	// A blank value is acceptable only for structural comparisons (no live Benthos wire).
+	// When a write output is configured, bridgedBy must be non-empty — a blank value means
+	// all bridges share an empty consumer group and steal each other's messages.
 	var bridgedBy string
 	if internal, ok := scope["internal"].(map[string]any); ok {
 		bridgedBy, _ = internal["bridged_by"].(string)
+	}
+	if bridgedBy == "" && renderedWriteConfig.HasOutput() {
+		return protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime{},
+			errors.New("bridged_by is empty for a write DFC with output configured: the FSM must inject internal.bridged_by before calling BuildRuntimeConfig")
 	}
 
 	// Expand the typed write config into a full Benthos service config.
@@ -350,7 +359,6 @@ func appendDownsampler(dfc dataflowcomponentserviceconfig.DataflowComponentServi
 
 	return updatedDFC
 }
-
 
 // getProcessors safely extracts the processors array from a pipeline configuration.
 func getProcessors(pipeline map[string]any) []any {

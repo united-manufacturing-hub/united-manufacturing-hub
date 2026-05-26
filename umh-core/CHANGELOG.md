@@ -4,7 +4,9 @@
 
 ### Preview: Write Flows
 
-- The write flow wire format now uses a typed `input_topics` field (string or Go template) and a `write_output` block, replacing the old `benthos.input`/`benthos.output` nesting. The `UMH_TOPICS` user variable is no longer used.
+- The write flow wire format now uses a typed `input_topics` field (string or Go template) and an `output` block, replacing the old `benthos.input`/`benthos.output` nesting. The `UMH_TOPICS` user variable is no longer used.
+
+  **Migration (internal staging users with write flows enabled):** Existing write flows that used the old `benthos.{input,output}` shape are not automatically converted. Re-create any write flow via the UI using the new format. There is no data loss — only the write-flow configuration is affected; read flows and connection settings are preserved.
 
 ## [0.44.21]
 

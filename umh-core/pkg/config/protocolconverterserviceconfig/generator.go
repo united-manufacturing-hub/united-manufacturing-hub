@@ -64,7 +64,7 @@ func (g *Generator) configToMap(cfg ProtocolConverterServiceConfigSpec) (map[str
 
 	connRuntime, err := connectionserviceconfig.ConvertTemplateToRuntime(cfg.Config.ConnectionServiceConfig)
 	if err != nil {
-		connRuntime = connectionserviceconfig.ConnectionServiceConfigRuntime{}
+		return nil, fmt.Errorf("failed to convert connection template to runtime: %w", err)
 	}
 
 	connectionConfigMap := connectionGenerator.ConfigToMap(connRuntime)

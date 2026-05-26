@@ -331,7 +331,7 @@ func (p *ProtocolConverterInstance) UpdateObservedStateOfInstance(ctx context.Co
 		p.specConfig,
 		agentLocationStr,
 		nil,             // TODO: add global vars
-		"unimplemented", // TODO: add node name
+		runtime_config.BridgedByPlaceholder,
 		p.baseFSMInstance.GetID(),
 	)
 
