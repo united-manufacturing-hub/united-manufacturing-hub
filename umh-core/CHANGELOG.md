@@ -4,9 +4,7 @@
 
 ### Preview: Write Flows
 
-- The write flow wire format now uses a typed `input_topics` field (string or Go template) and an `output` block, replacing the old `benthos.input`/`benthos.output` nesting. The `UMH_TOPICS` user variable is no longer used.
-
-  **Migration (internal staging users with write flows enabled):** Existing write flows that used the old `benthos.{input,output}` shape are not automatically converted. Re-create any write flow via the UI using the new format. There is no data loss — only the write-flow configuration is affected; read flows and connection settings are preserved.
+- Write flows (preview) now take their input topics directly on the flow, with Go template support for values like `{{ .location_path }}`. Write flows configured on this preview before this release are not carried over and need to be re-created from the UI; read flows and connection settings are unaffected
 
 ## [0.44.21]
 
