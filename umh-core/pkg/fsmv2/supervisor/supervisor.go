@@ -178,7 +178,8 @@ type Supervisor[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState] stru
 	// if both are needed (advisory order).
 	ctxMu               *lockmanager.Lock
 	deps                map[string]any
-	validatedSpecHashes map[string]string // name -> hash of last validated spec
+	validatedSpecHashes map[string]string           // name -> hash of last validated spec
+	reducerErrors       map[reducerSuppressKey]reducerErrorEntry // log-flood suppression for reducer errors
 	// forceExit, when non-nil, breaks Phase 3 drain in lifecycle.go. Closed
 	// upstream by cmd/main.go on a second SIGTERM. Propagated to children via
 	// Config so all supervisors observe the same close. See types.go Config.ForceExit.
@@ -310,6 +311,7 @@ func NewSupervisor[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState](c
 		forceExit:               cfg.ForceExit,
 		deps:                    ensureNonNilDeps(cfg.Dependencies),
 		validatedSpecHashes:     make(map[string]string),
+		reducerErrors:           make(map[reducerSuppressKey]reducerErrorEntry),
 	}
 }
 

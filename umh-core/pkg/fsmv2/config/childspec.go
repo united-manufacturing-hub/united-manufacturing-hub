@@ -66,6 +66,7 @@ import (
 // See ValidateNoCustomLifecycleFields in pkg/fsmv2/internal/validator/snapshot.go for enforcement.
 type BaseDesiredState struct {
 	ShutdownRequested bool `json:"ShutdownRequested" yaml:"ShutdownRequested"` //nolint:tagliatelle // Match JSON field name for API compatibility
+	Disabled          bool `json:"Disabled"          yaml:"Disabled"`          //nolint:tagliatelle // Match JSON field name for API compatibility
 }
 
 // IsShutdownRequested returns whether shutdown has been requested for this worker.
@@ -77,6 +78,19 @@ func (b *BaseDesiredState) IsShutdownRequested() bool {
 // This satisfies the ShutdownRequestable interface.
 func (b *BaseDesiredState) SetShutdownRequested(v bool) {
 	b.ShutdownRequested = v
+}
+
+// IsDisabled returns whether the worker has been administratively disabled.
+// Disabled workers stay resident in Stopped state without resuming (see CHANGE-19).
+// The reducer is the exclusive writer; the restart subsystem never touches this field.
+func (b *BaseDesiredState) IsDisabled() bool {
+	return b.Disabled
+}
+
+// SetDisabled sets the disabled flag.
+// This satisfies the Disableable interface.
+func (b *BaseDesiredState) SetDisabled(v bool) {
+	b.Disabled = v
 }
 
 // BaseUserSpec provides common fields for all user configuration types.
@@ -228,20 +242,20 @@ type ChildSpec struct {
 	// stopped-but-resident child. Parents that want a running child must
 	// explicitly set Enabled: true in their renderChildren body.
 	//
-	// Pause/resume flow: setting Enabled=false drives the child to Stopped;
-	// setting Enabled=true again writes IsShutdownRequested=false, and the
-	// child's state machine transitions from Stopped back to TryingToStart on
-	// the next tick.
+	// Pause/resume flow: setting Enabled=false drives the child to Stopped via
+	// IsDisabled=true; setting Enabled=true again writes IsDisabled=false, and
+	// the child's state machine transitions from Stopped back to TryingToStart
+	// on the next tick.
 	//
 	// One-way stop guarantee: once a child enters TryingToStop, it completes
-	// the stop before accepting a new IsShutdownRequested=false signal. The
-	// supervisor only manages the flag; the child's state machine enforces
-	// the trajectory.
+	// the stop before accepting a new IsDisabled=false signal. The supervisor
+	// only manages the flag; the child's state machine enforces the trajectory.
 	//
-	// Children read snap.Desired.IsShutdownRequested() and never read Enabled
-	// directly. The CHANGE-19 reducer in supervisor/reconciliation.go
-	// translates the spec value to IsShutdownRequested at the start of
-	// reconcileChildren, before Phase 1's pendingRemoval writes.
+	// Children read snap.IsDisabled and never read Enabled directly. The
+	// CHANGE-19 reducer in supervisor/reconciliation.go translates the spec
+	// value to IsDisabled (via SetDisabled) at the start of reconcileChildren,
+	// before Phase 1's pendingRemoval writes. IsShutdownRequested is owned
+	// exclusively by the restart subsystem and is never written by the reducer.
 	Enabled bool `json:"enabled" yaml:"enabled"`
 }
 

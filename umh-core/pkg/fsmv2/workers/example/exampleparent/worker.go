@@ -144,6 +144,7 @@ device: {{ .DEVICE_ID }}`
 				Variables: childVariables,
 			},
 			ChildStartStates: []string{"TryingToStart", "Running"},
+			Enabled:          true,
 		}
 	}
 

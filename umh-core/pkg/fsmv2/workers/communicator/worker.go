@@ -176,6 +176,7 @@ func makeTransportChildSpec(parentSpec fsmv2types.UserSpec) []fsmv2types.ChildSp
 		WorkerType:       "transport",
 		UserSpec:         parentSpec,
 		ChildStartStates: []string{"Syncing", "Recovering"},
+		Enabled:          true,
 	}}
 }
 

@@ -682,6 +682,79 @@ func (s *Supervisor[TObserved, TDesired]) handleWorkerRestart(ctx context.Contex
 	return nil
 }
 
+// setDisabled writes the Disabled flag to storage for a single worker.
+// It mirrors requestShutdown but uses the Disableable interface instead of ShutdownRequestable.
+// The reducer is the exclusive caller; no other subsystem should call this.
+func (s *Supervisor[TObserved, TDesired]) setDisabled(ctx context.Context, workerID string, disabled bool) error {
+	s.mu.RLock()
+	_, exists := s.workers[workerID]
+	s.mu.RUnlock()
+
+	if !exists {
+		return errors.New("worker not found")
+	}
+
+	var desired TDesired
+
+	err := s.store.LoadDesiredTyped(ctx, s.workerType, workerID, &desired)
+	if err != nil {
+		if !errors.Is(err, persistence.ErrNotFound) {
+			return fmt.Errorf("failed to load desired state: %w", err)
+		}
+		// No desired state in DB yet, nothing to update
+		return nil
+	}
+
+	if d, ok := any(desired).(fsmv2.Disableable); ok {
+		d.SetDisabled(disabled)
+	} else if d, ok := any(&desired).(fsmv2.Disableable); ok {
+		d.SetDisabled(disabled)
+	} else {
+		return fmt.Errorf("desired state type %T does not implement Disableable", desired)
+	}
+
+	desiredJSON, err := json.Marshal(desired)
+	if err != nil {
+		return fmt.Errorf("failed to marshal desired state: %w", err)
+	}
+
+	desiredDoc := make(persistence.Document)
+	if err := json.Unmarshal(desiredJSON, &desiredDoc); err != nil {
+		return fmt.Errorf("failed to unmarshal to document: %w", err)
+	}
+
+	desiredDoc[FieldID] = workerID
+
+	if _, err := s.store.SaveDesired(ctx, s.workerType, workerID, desiredDoc); err != nil {
+		return fmt.Errorf("failed to save desired state with disabled flag: %w", err)
+	}
+
+	return nil
+}
+
+// SetDisabled sets the Disabled flag on all workers in this supervisor.
+// When disabled=true, workers stay resident in Stopped state without resuming.
+// The reducer calls this per-tick for CHANGE-19; returns the first error encountered.
+func (s *Supervisor[TObserved, TDesired]) SetDisabled(ctx context.Context, disabled bool) error {
+	s.mu.RLock()
+
+	workerIDs := make([]string, 0, len(s.workers))
+
+	for workerID := range s.workers {
+		workerIDs = append(workerIDs, workerID)
+	}
+
+	s.mu.RUnlock()
+
+	for _, workerID := range workerIDs {
+		if err := s.setDisabled(ctx, workerID, disabled); err != nil {
+			return fmt.Errorf("worker %q: %w", workerID, err)
+		}
+	}
+
+	return nil
+}
+
 // clearShutdownRequested clears the ShutdownRequested flag in storage for restart.
 func (s *Supervisor[TObserved, TDesired]) clearShutdownRequested(ctx context.Context, workerID string) error {
 	// Load current desired state

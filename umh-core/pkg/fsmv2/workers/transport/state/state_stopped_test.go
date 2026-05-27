@@ -20,18 +20,11 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
-	examplechild "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplechild"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplechild/state"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/snapshot"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/state"
 )
 
-var _ = Describe("StoppedState", func() {
-	It("should compile and instantiate", func() {
-		s := &state.StoppedState{}
-		Expect(s).NotTo(BeNil())
-	})
-})
-
-// --- CHANGE-19 D6 discriminator: IsDisabled branch ---
+// --- CHANGE-19 D6 discriminator: IsDisabled branch in StoppedState ---
 
 var _ = Describe("StoppedState D6 IsDisabled discriminator", func() {
 	var stateObj *state.StoppedState
@@ -42,9 +35,10 @@ var _ = Describe("StoppedState D6 IsDisabled discriminator", func() {
 
 	It("disabled-only (IsDisabled=true, IsShutdownRequested=false) → SignalNone, stays Stopped", func() {
 		snap := fsmv2.Snapshot{
-			Observed: fsmv2.Observation[examplechild.ExamplechildStatus]{},
-			Desired: &fsmv2.WrappedDesiredState[examplechild.ExamplechildConfig]{
+			Observed: fsmv2.Observation[snapshot.TransportStatus]{},
+			Desired: &fsmv2.WrappedDesiredState[snapshot.TransportDesiredState]{
 				BaseDesiredState: config.BaseDesiredState{Disabled: true, ShutdownRequested: false},
+				Config:           snapshot.TransportDesiredState{State: config.DesiredStateRunning},
 			},
 		}
 		result := stateObj.Next(snap)
@@ -54,9 +48,10 @@ var _ = Describe("StoppedState D6 IsDisabled discriminator", func() {
 
 	It("disabled+shutdown (both true) → SignalNeedsRemoval (shutdown wins)", func() {
 		snap := fsmv2.Snapshot{
-			Observed: fsmv2.Observation[examplechild.ExamplechildStatus]{},
-			Desired: &fsmv2.WrappedDesiredState[examplechild.ExamplechildConfig]{
+			Observed: fsmv2.Observation[snapshot.TransportStatus]{},
+			Desired: &fsmv2.WrappedDesiredState[snapshot.TransportDesiredState]{
 				BaseDesiredState: config.BaseDesiredState{Disabled: true, ShutdownRequested: true},
+				Config:           snapshot.TransportDesiredState{State: config.DesiredStateRunning},
 			},
 		}
 		result := stateObj.Next(snap)

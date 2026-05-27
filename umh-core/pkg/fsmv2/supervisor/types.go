@@ -53,6 +53,7 @@ type SupervisorInterface interface {
 	StartAsChild(ctx context.Context)
 	Shutdown()
 	RequestShutdown(ctx context.Context, reason string) error
+	SetDisabled(ctx context.Context, disabled bool) error
 	ListWorkers() []string
 	tick(ctx context.Context) error
 	updateUserSpec(spec config.UserSpec)

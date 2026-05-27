@@ -41,6 +41,10 @@ func (s *StoppedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 			fmt.Sprintf("removal signaled: shouldBeRunning=%t", snap.Config.ShouldBeRunning()), nil)
 	}
 
+	if snap.IsDisabled {
+		return fsmv2.Transition(s, fsmv2.SignalNone, nil, "Disabled by supervisor, staying stopped", nil)
+	}
+
 	if snap.Config.ShouldBeRunning() {
 		return fsmv2.Transition(&StartingState{}, fsmv2.SignalNone, nil,
 			fmt.Sprintf("transitioning to Starting: shutdown=%t", snap.IsShutdownRequested), nil)

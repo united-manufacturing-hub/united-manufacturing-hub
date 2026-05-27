@@ -109,12 +109,23 @@ type DesiredState interface {
 	// IsShutdownRequested is set by supervisor to initiate graceful shutdown.
 	// States should check this first in their Next() method.
 	IsShutdownRequested() bool
+	// IsDisabled returns whether the worker has been administratively disabled.
+	// Disabled workers stay resident in Stopped state without resuming.
+	// The reducer is the exclusive writer; see Disableable and CHANGE-19.
+	IsDisabled() bool
 }
 
 // ShutdownRequestable allows setting the shutdown flag on any DesiredState.
 // Embed config.BaseDesiredState (from pkg/fsmv2/config) to satisfy this interface.
 type ShutdownRequestable interface {
 	SetShutdownRequested(bool)
+}
+
+// Disableable allows setting the disabled flag on any DesiredState.
+// Embed config.BaseDesiredState (from pkg/fsmv2/config) to satisfy this interface.
+// The reducer is the exclusive writer; no other subsystem should call SetDisabled.
+type Disableable interface {
+	SetDisabled(bool)
 }
 
 // Snapshot is the complete view of the worker at a point in time (immutable).
@@ -495,12 +506,16 @@ type WorkerSnapshot[TConfig any, TStatus any] struct {
 	ChildrenHealthy     int
 	ChildrenUnhealthy   int
 	IsShutdownRequested bool
+	// IsDisabled is set by the CHANGE-19 reducer when the parent's ChildSpec.Enabled=false.
+	// Disabled workers stay resident in Stopped state without resuming.
+	// IsShutdownRequested takes precedence: a shutdown request overrides a disabled state.
+	IsDisabled bool
 }
 
 // ShouldStop returns true when the worker should transition to stopped,
-// whether from an explicit shutdown request or a parent-driven stop signal.
+// whether from an explicit shutdown request, an admin disable, or a parent-driven stop signal.
 func (s WorkerSnapshot[TConfig, TStatus]) ShouldStop() bool {
-	return s.IsShutdownRequested || s.ParentMappedState == config.DesiredStateStopped
+	return s.IsShutdownRequested || s.IsDisabled || s.ParentMappedState == config.DesiredStateStopped
 }
 
 // ConvertWorkerSnapshot type-asserts the raw snapshot from State.Next() into a
@@ -527,6 +542,7 @@ func ConvertWorkerSnapshot[TConfig any, TStatus any](snapAny any) WorkerSnapshot
 		Status:              obs.Status,
 		Identity:            snap.Identity,
 		IsShutdownRequested: des.IsShutdownRequested(),
+		IsDisabled:          des.IsDisabled(),
 		ParentMappedState:   obs.ParentMappedState,
 		CollectedAt:         obs.CollectedAt,
 		LastActionResults:   obs.LastActionResults,

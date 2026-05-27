@@ -38,6 +38,10 @@ func (s *StoppedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 		return fsmv2.Transition(s, fsmv2.SignalNeedsRemoval, nil, "Communicator is stopped and shutdown was requested", nil)
 	}
 
+	if snap.IsDisabled {
+		return fsmv2.Transition(s, fsmv2.SignalNone, nil, "Disabled by supervisor, staying stopped", nil)
+	}
+
 	return fsmv2.Transition(&SyncingState{}, fsmv2.SignalNone, nil, "Starting sync orchestration", nil)
 }
 
