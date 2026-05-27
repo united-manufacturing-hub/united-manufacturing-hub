@@ -136,7 +136,6 @@ func (w *CommunicatorWorker) DeriveDesiredState(spec interface{}) (fsmv2.Desired
 			Config: CommunicatorConfig{
 				Timeout: httpTransport.LongPollingDuration + httpTransport.LongPollingBuffer,
 			},
-			ChildrenSpecs: makeTransportChildSpec(fsmv2types.UserSpec{}),
 		}, nil
 	}
 
@@ -160,24 +159,9 @@ func (w *CommunicatorWorker) DeriveDesiredState(spec interface{}) (fsmv2.Desired
 	}
 
 	return &fsmv2.WrappedDesiredState[CommunicatorConfig]{
-		State:         commSpec.GetState(),
-		Config:        commSpec,
-		ChildrenSpecs: makeTransportChildSpec(userSpec),
+		State:  commSpec.GetState(),
+		Config: commSpec,
 	}, nil
-}
-
-// makeTransportChildSpec creates the ChildSpec for the TransportWorker child.
-// TransportWorker handles authentication, push, and pull operations.
-// ChildStartStates includes both Syncing and Recovering so the child remains
-// running during error recovery and does not restart on parent state oscillation.
-func makeTransportChildSpec(parentSpec fsmv2types.UserSpec) []fsmv2types.ChildSpec {
-	return []fsmv2types.ChildSpec{{
-		Name:             "transport",
-		WorkerType:       "transport",
-		UserSpec:         parentSpec,
-		ChildStartStates: []string{"Syncing", "Recovering"},
-		Enabled:          true,
-	}}
 }
 
 func init() {
