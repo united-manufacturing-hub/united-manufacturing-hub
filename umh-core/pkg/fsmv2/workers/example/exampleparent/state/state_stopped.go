@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
 	exampleparent "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleparent"
 )
@@ -39,22 +40,30 @@ type StoppedState struct {
 func (s *StoppedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := fsmv2.ConvertWorkerSnapshot[exampleparent.ExampleparentConfig, exampleparent.ExampleparentStatus](snapAny)
 
+	// Stop-trajectory: no children while stopped (exampleparent is stateless).
+	despawnChildren := []config.ChildSpec{}
+
 	if snap.IsShutdownRequested {
-		return fsmv2.Transition(s, fsmv2.SignalNeedsRemoval, nil, "Shutdown requested, signaling removal", nil)
+		return fsmv2.Transition(s, fsmv2.SignalNeedsRemoval, nil, "Shutdown requested, signaling removal", despawnChildren)
 	}
 
 	// Parent-level workers carry the IsDisabled branch for the same reason as leaf
 	// workers: they are themselves children of a supervisor that can disable them (CHANGE-19).
 	if snap.IsDisabled {
-		return fsmv2.Transition(s, fsmv2.SignalNone, nil, "Disabled by supervisor, staying stopped", nil)
+		return fsmv2.Transition(s, fsmv2.SignalNone, nil, "Disabled by supervisor, staying stopped", despawnChildren)
 	}
 
 	elapsed := time.Duration(snap.Metrics.Metrics.Framework.TimeInCurrentStateMs) * time.Millisecond
 	if elapsed >= StoppedWaitDuration {
-		return fsmv2.Transition(&TryingToStartState{}, fsmv2.SignalNone, nil, "Wait duration elapsed, transitioning to TryingToStart", nil)
+		aliveChildren, err := exampleparent.RenderChildren(snap.Config, true)
+		if err != nil {
+			aliveChildren = nil
+		}
+
+		return fsmv2.Transition(&TryingToStartState{}, fsmv2.SignalNone, nil, "Wait duration elapsed, transitioning to TryingToStart", aliveChildren)
 	}
 
-	return fsmv2.Transition(s, fsmv2.SignalNone, nil, "Parent is stopped, no children spawned", nil)
+	return fsmv2.Transition(s, fsmv2.SignalNone, nil, "Parent is stopped, no children spawned", despawnChildren)
 }
 
 func (s *StoppedState) String() string {
