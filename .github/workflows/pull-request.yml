@@ -108,6 +108,8 @@ jobs:
       packages: read
       pull-requests: write
     steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
       - name: Login to GitHub Container Registry
         uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4
         with:
@@ -115,12 +117,23 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Verify fossa-deps.yml in sync with Makefile
+        working-directory: umh-core
+        run: |
+          make fossa-deps
+          if [ -n "$(git status --porcelain fossa-deps.yml)" ]; then
+            echo "::error::fossa-deps.yml is out of sync with Makefile versions. Run 'make fossa-deps' in umh-core/ and commit."
+            git diff fossa-deps.yml
+            exit 1
+          fi
+
       - name: FOSSA Container Analyze
         uses: fossas/fossa-action@ff70fe9fe17cbd2040648f1c45e8ec4e4884dcf3 # v1
         with:
           api-key: ${{ secrets.FOSSA_API_KEY }}
           project: united-manufacturing-hub-container
           container: ghcr.io/united-manufacturing-hub/umh-core:sha-${{ needs.build.outputs.short-sha }}
+          working-directory: umh-core
 
       - name: FOSSA Container Test
         id: test
@@ -129,6 +142,7 @@ jobs:
           api-key: ${{ secrets.FOSSA_API_KEY }}
           project: united-manufacturing-hub-container
           container: ghcr.io/united-manufacturing-hub/umh-core:sha-${{ needs.build.outputs.short-sha }}
+          working-directory: umh-core
           run-tests: true
 
       - name: Comment FOSSA container scan result
