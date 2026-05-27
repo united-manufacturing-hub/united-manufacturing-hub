@@ -151,8 +151,10 @@ device: {{ .DEVICE_ID }}`
 	return &fsmv2.WrappedDesiredState[ExampleparentConfig]{
 		State: parentSpec.GetState(),
 		Config: ExampleparentConfig{
-			BaseUserSpec: parentSpec.BaseUserSpec,
-			ChildrenCount: childrenCount,
+			BaseUserSpec:    parentSpec.BaseUserSpec,
+			ChildWorkerType: parentSpec.ChildWorkerType,
+			ChildConfig:     parentSpec.ChildConfig,
+			ChildrenCount:   childrenCount,
 		},
 		ChildrenSpecs: childrenSpecs,
 	}, nil

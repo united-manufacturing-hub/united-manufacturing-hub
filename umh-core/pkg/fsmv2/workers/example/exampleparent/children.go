@@ -22,19 +22,22 @@ import (
 
 // RenderChildren returns the ChildSpec set for the exampleparent worker.
 //
-// Each child receives a config.BaseUserSpec (ExamplechildConfig has no additional
-// fields beyond BaseUserSpec). ChildStartStates mirrors the legacy DeriveDesiredState
-// builder so children start when the parent enters TryingToStart or Running.
+// Each child receives cfg.ChildConfig as its UserSpec.Config and a per-child
+// DEVICE_ID variable (device-0, device-1, …). ChildStartStates mirrors the
+// legacy DeriveDesiredState builder so children start when the parent enters
+// TryingToStart or Running.
+//
+// When cfg.ChildConfig == "", each child's UserSpec.Config is an empty string. The
+// legacy DeriveDesiredState injected a default template ("address: {{ .IP }}:{{ .PORT }}
+// device: {{ .DEVICE_ID }}") for unset ChildConfig; that default is intentionally not
+// replicated — ExamplechildConfig has no typed address/device fields so the template
+// was never consumed, and no active scenario relies on it.
 //
 // The enabled parameter controls whether children should be active. Alive-trajectory
 // states (TryingToStart, Running, Degraded) pass enabled=true. Stop-trajectory states
 // (TryingToStop, Stopped) pass the empty slice []config.ChildSpec{} directly rather
 // than calling RenderChildren — exampleparent is stateless (no buffer holders), so
 // children are fully despawned rather than resident-disabled.
-// cfg.ChildConfig is intentionally NOT threaded into the child UserSpec: ExamplechildConfig
-// embeds only BaseUserSpec with no additional fields, so there is no target field to receive it.
-// The legacy DeriveDesiredState path wires ChildConfig for template rendering; that path is
-// preserved intact until the cutover removes it.
 func RenderChildren(cfg ExampleparentConfig, enabled bool) ([]config.ChildSpec, error) {
 	childWorkerType := cfg.GetChildWorkerType()
 	count := cfg.ChildrenCount
@@ -42,13 +45,22 @@ func RenderChildren(cfg ExampleparentConfig, enabled bool) ([]config.ChildSpec, 
 	specs := make([]config.ChildSpec, 0, count)
 
 	for i := range count {
-		spec, err := config.NewChildSpec(fmt.Sprintf("child-%d", i), childWorkerType, config.BaseUserSpec{}, enabled)
-		if err != nil {
-			return nil, fmt.Errorf("exampleparent RenderChildren: child-%d: %w", i, err)
+		childVariables := config.VariableBundle{
+			User: map[string]any{
+				"DEVICE_ID": fmt.Sprintf("device-%d", i),
+			},
 		}
 
-		spec.ChildStartStates = []string{"TryingToStart", "Running"}
-		specs = append(specs, spec)
+		specs = append(specs, config.ChildSpec{
+			Name:       fmt.Sprintf("child-%d", i),
+			WorkerType: childWorkerType,
+			UserSpec: config.UserSpec{
+				Config:    cfg.ChildConfig,
+				Variables: childVariables,
+			},
+			ChildStartStates: []string{"TryingToStart", "Running"},
+			Enabled:          enabled,
+		})
 	}
 
 	return specs, nil

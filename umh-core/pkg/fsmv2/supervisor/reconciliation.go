@@ -347,6 +347,12 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 
 	result := currentState.Next(*snapshot)
 
+	// Stash children unconditionally so tick() can read the most recent rendered set.
+	// Must happen before any early returns to satisfy the every-tick invariant.
+	workerCtx.mu.Lock()
+	workerCtx.lastRenderedChildren = result.Children
+	workerCtx.mu.Unlock()
+
 	hasAction := result.Action != nil
 	// Per-tick log moved to TRACE for scalability
 	s.logTrace("state_evaluation",
@@ -841,8 +847,33 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) (err error) 
 		s.logTrace("derived_desired_state_saved")
 	}
 
+	// Tick the worker first so its state machine progresses before child reconciliation.
+	if err := s.tickWorker(ctx, firstWorkerID); err != nil {
+		return fmt.Errorf("failed to tick worker: %w", err)
+	}
+
+	// Select the children source after the tick so the latest rendered set is available.
+	// Workers that implement RenderChildren stash a non-nil slice on every tick
+	// (the new path). Workers that have not yet migrated return nil → fall back to
+	// GetChildrenSpecs() (the legacy path). Application emits nil and stays on the
+	// legacy path; all other migrated workers use the new path.
 	var childrenSpecs []config.ChildSpec
-	if provider, ok := desired.(config.ChildSpecProvider); ok {
+
+	s.mu.RLock()
+	renderedCtx, renderedExists := s.workers[firstWorkerID]
+	s.mu.RUnlock()
+
+	if renderedExists {
+		renderedCtx.mu.RLock()
+		rendered := renderedCtx.lastRenderedChildren
+		renderedCtx.mu.RUnlock()
+
+		if rendered != nil {
+			childrenSpecs = rendered
+		} else if provider, ok := desired.(config.ChildSpecProvider); ok {
+			childrenSpecs = provider.GetChildrenSpecs()
+		}
+	} else if provider, ok := desired.(config.ChildSpecProvider); ok {
 		childrenSpecs = provider.GetChildrenSpecs()
 	}
 
@@ -908,12 +939,8 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) (err error) 
 		}
 	}
 
-	// Tick worker before creating children to progress FSM state first
-	if err := s.tickWorker(ctx, firstWorkerID); err != nil {
-		return fmt.Errorf("failed to tick worker: %w", err)
-	}
-
-	// When shutting down, pass nil to trigger graceful child shutdown instead of re-creation
+	// When shutting down, pass nil to trigger graceful child shutdown instead of re-creation.
+	// Shutdown override wins over any source-selected set.
 	if desiredDoc[FieldShutdownRequested] == true {
 		childrenSpecs = nil
 	}
