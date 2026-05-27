@@ -1057,7 +1057,7 @@ func (s *BenthosService) IsLogsFine(
 func (s *BenthosService) IsMetricsErrorFree(metrics benthos_monitor.BenthosMetrics) (bool, string) {
 	// Check output errors. OutputErrorTotal sums across all output paths,
 	// so a switch/broker/fallback config reports the true total instead
-	// of only the last route's error count (the pre-ENG-5006 behavior).
+	// of only the last route's error count.
 	if total := metrics.Metrics.OutputErrorTotal(); total > 0 {
 		return false, fmt.Sprintf("benthos reported %d output errors", total)
 	}

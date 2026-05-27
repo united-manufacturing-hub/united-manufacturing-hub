@@ -467,7 +467,7 @@ var _ = Describe("GetDataflowcomponentMetricsAction", func() {
 
 		It("emits one DfcMetric set per output path for switch outputs", func() {
 			// Build a Metrics value with three output paths to mirror the
-			// ENG-5006 switch reproduction. The map shape is what C1's parser
+			// ENG-5006 switch reproduction. The map shape is what the parser
 			// produces; this test pins that the emitter iterates the map.
 			switchMetrics := benthos_monitor.Metrics{
 				Inputs: map[string]benthos_monitor.InputInstance{

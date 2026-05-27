@@ -19,13 +19,16 @@
 // only leaf `AsyncWriter`s do. So a switch with N cases emits N distinct
 // `output_sent` series with different `path` labels and NO top-level aggregate.
 //
-// Before ENG-5006, ParseMetricsFromBytes treated `output_sent` as a singleton
+// ParseMetricsFromBytes previously treated `output_sent` as a singleton
 // (last-wins overwrite in the case branch), so the UI showed only one route's
-// counter. The fast parser now aggregates per-path into Metrics.Outputs; this
+// counter. The parser now aggregates per-path into Metrics.Outputs; this
 // test pins that behavior.
 package benthos_monitor
 
-import "testing"
+import (
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+)
 
 // switchOutputMetrics models the prometheus output benthos emits for the
 // reporter's three-route switch config in ENG-5006 (job_start/job_end/logbook).
@@ -64,73 +67,37 @@ output_connection_up{label="",path="root.output.switch.cases.1.output.fallback.0
 output_connection_up{label="",path="root.output.switch.cases.2.output.fallback.0"} 1
 `
 
-const wantSentTotal int64 = 10 + 7 + 3   // 20
-const wantBatchSentTotal int64 = 10 + 7 + 3
-const wantErrorTotal int64 = 1 + 2 + 0   // 3
-const wantConnectionUpTotal int64 = 1 + 1 + 1 // 3
+const (
+	wantSentTotal         int64 = 10 + 7 + 3 // 20
+	wantBatchSentTotal    int64 = 10 + 7 + 3
+	wantErrorTotal        int64 = 1 + 2 + 0 // 3
+	wantConnectionUpTotal int64 = 1 + 1 + 1 // 3
+)
 
-func TestENG5006_SwitchOutput_FastParser_AggregatesAcrossRoutes(t *testing.T) {
-	m, err := ParseMetricsFromBytes([]byte(switchOutputMetrics))
-	if err != nil {
-		t.Fatalf("parse: %v", err)
-	}
+var _ = Describe("ENG-5006 switch output metrics", func() {
+	It("aggregates output_sent across switch routes", func() {
+		m, err := ParseMetricsFromBytes([]byte(switchOutputMetrics))
+		Expect(err).NotTo(HaveOccurred())
 
-	// Totals across all three switch routes via Total helpers.
-	if got := m.OutputSentTotal(); got != wantSentTotal {
-		t.Errorf("OutputSentTotal() = %d, want %d (sum across switch routes)", got, wantSentTotal)
-	}
+		By("summing totals across all three switch routes via Total helpers")
+		Expect(m.OutputSentTotal()).To(Equal(wantSentTotal), "sum across switch routes")
+		Expect(m.OutputBatchSentTotal()).To(Equal(wantBatchSentTotal))
+		Expect(m.OutputConnectionUpTotal()).To(Equal(wantConnectionUpTotal))
 
-	if got := m.OutputBatchSentTotal(); got != wantBatchSentTotal {
-		t.Errorf("OutputBatchSentTotal() = %d, want %d", got, wantBatchSentTotal)
-	}
+		By("summing the map directly to keep the per-path assertion explicit alongside the total")
+		var errorTotal int64
+		for _, out := range m.Outputs {
+			errorTotal += out.Error
+		}
+		Expect(errorTotal).To(Equal(wantErrorTotal))
 
-	if got := m.OutputConnectionUpTotal(); got != wantConnectionUpTotal {
-		t.Errorf("OutputConnectionUpTotal() = %d, want %d", got, wantConnectionUpTotal)
-	}
+		By("keeping one entry per output path so a collapsed map fails even when totals add up")
+		Expect(m.Outputs).To(HaveLen(6), "3 cases x 2 fallback leaves")
 
-	// Sum the map directly here to keep the per-path assertion explicit
-	// alongside the total. OutputErrorTotal() covers the aggregate elsewhere.
-	var errorTotal int64
-	for _, out := range m.Outputs {
-		errorTotal += out.Error
-	}
-
-	if errorTotal != wantErrorTotal {
-		t.Errorf("sum of Outputs[*].Error = %d, want %d", errorTotal, wantErrorTotal)
-	}
-
-	// Map-shape check: the switch fixture has 6 distinct output paths
-	// (3 cases x 2 fallback leaves). If the parser collapses paths or
-	// drops the map, this fails even when the totals happen to add up.
-	if got := len(m.Outputs); got != 6 {
-		t.Errorf("len(m.Outputs) = %d, want 6 (3 cases x 2 fallback leaves)", got)
-	}
-
-	// Per-leaf-path check: the leading sql_raw sink for case 0 received
-	// 10 messages. A parser that summed all routes into one entry would
-	// fail this even when the totals are correct.
-	const leafPath = "root.output.switch.cases.0.output.fallback.0"
-
-	leaf, ok := m.Outputs[leafPath]
-	if !ok {
-		t.Fatalf("m.Outputs[%q] missing; got keys: %v", leafPath, mapKeys(m.Outputs))
-	}
-
-	if leaf.Sent != 10 {
-		t.Errorf("m.Outputs[%q].Sent = %d, want 10 (the case-0 sql_raw leaf)", leafPath, leaf.Sent)
-	}
-
-	if leaf.Path != leafPath {
-		t.Errorf("m.Outputs[%q].Path = %q, want %q (parser must populate Path on the instance)", leafPath, leaf.Path, leafPath)
-	}
-}
-
-func mapKeys[V any](m map[string]V) []string {
-	out := make([]string, 0, len(m))
-	for k := range m {
-		out = append(out, k)
-	}
-
-	return out
-}
-
+		By("preserving the per-leaf value so a route-summing parser fails even when totals are correct")
+		const leafPath = "root.output.switch.cases.0.output.fallback.0"
+		Expect(m.Outputs).To(HaveKey(leafPath))
+		Expect(m.Outputs[leafPath].Sent).To(Equal(int64(10)), "the case-0 sql_raw leaf")
+		Expect(m.Outputs[leafPath].Path).To(Equal(leafPath), "parser must populate Path on the instance")
+	})
+})

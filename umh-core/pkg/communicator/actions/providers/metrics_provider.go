@@ -96,7 +96,6 @@ func getDFCMetrics(uuid string, snapshot fsm.SystemSnapshot) (models.GetMetricsR
 		)
 	}
 
-	// Process Output metrics per benthos path.
 	for outputPath, out := range metrics.Outputs {
 		addMetrics(&res, DFCMetricComponentTypeOutput, outputPath,
 			MetricEntry{Name: "batch_sent", Value: out.BatchSent, ValueType: models.MetricValueTypeNumber},
@@ -219,7 +218,6 @@ func getTopicBrowserMetrics(snapshot fsm.SystemSnapshot) (models.GetMetricsRespo
 		)
 	}
 
-	// Process Output metrics per benthos path.
 	for outputPath, out := range metrics.Outputs {
 		addMetrics(&res, TopicBrowserMetricComponentTypeOutput, outputPath,
 			MetricEntry{Name: "batch_sent", Value: out.BatchSent, ValueType: models.MetricValueTypeNumber},
@@ -361,7 +359,6 @@ func getStreamProcessorMetrics(uuid string, snapshot fsm.SystemSnapshot) (models
 		)
 	}
 
-	// Process Output metrics per benthos path.
 	for outputPath, out := range metrics.Outputs {
 		addMetrics(&res, StreamProcessorMetricComponentTypeOutput, outputPath,
 			MetricEntry{Name: "batch_sent", Value: out.BatchSent, ValueType: models.MetricValueTypeNumber},

@@ -108,7 +108,6 @@ type Latency struct {
 }
 
 // InputReceivedTotal returns the sum of Received across every input instance.
-// For a single-input config it equals the legacy Input.Received.
 func (m Metrics) InputReceivedTotal() int64 {
 	var total int64
 	for _, in := range m.Inputs {
@@ -139,7 +138,6 @@ func (m Metrics) InputConnectionLostTotal() int64 {
 }
 
 // OutputSentTotal returns the sum of Sent across every output instance.
-// For a switch/broker/fallback config this is the only correct total.
 func (m Metrics) OutputSentTotal() int64 {
 	var total int64
 	for _, out := range m.Outputs {
@@ -1056,8 +1054,7 @@ func TailInt(line []byte) (int64, error) {
 // returns and produces a per-path Metrics. For switch/broker/fallback
 // outputs the input emits N distinct series per metric, one per leaf
 // path; the parser stores each in its own InputInstance / OutputInstance
-// entry. The legacy flat Input/Output fields are populated from the
-// totals so the C1..C4 migration window keeps consumers compiling.
+// entry.
 func ParseMetricsFromBytes(raw []byte) (Metrics, error) {
 	var m Metrics
 
@@ -1095,8 +1092,7 @@ func ParseMetricsFromBytes(raw []byte) (Metrics, error) {
 
 		name := string(line[:nameEnd])
 
-		// All input_* and output_* lines carry a `path` label. Extract it
-		// once per line and use it as the map key.
+		// All input_* and output_* lines carry a `path` label.
 		labelsRegion := line[nameEnd:]
 
 		switch {
