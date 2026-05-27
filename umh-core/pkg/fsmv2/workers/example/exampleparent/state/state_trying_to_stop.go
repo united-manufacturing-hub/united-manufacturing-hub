@@ -16,6 +16,7 @@ package state
 
 import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleparent/action"
 	exampleparent "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleparent"
@@ -31,15 +32,18 @@ type TryingToStopState struct {
 func (s *TryingToStopState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := fsmv2.ConvertWorkerSnapshot[exampleparent.ExampleparentConfig, exampleparent.ExampleparentStatus](snapAny)
 
+	// Stop-trajectory: despawn all children (exampleparent is stateless, no buffer holders).
+	despawnChildren := []config.ChildSpec{}
+
 	if snap.Status.ID == "" {
-		return fsmv2.Transition(s, fsmv2.SignalNone, &action.StopAction{}, "ID not set, executing StopAction", nil)
+		return fsmv2.Transition(s, fsmv2.SignalNone, &action.StopAction{}, "ID not set, executing StopAction", despawnChildren)
 	}
 
 	if snap.ChildrenHealthy == 0 && snap.ChildrenUnhealthy == 0 {
-		return fsmv2.Transition(&StoppedState{}, fsmv2.SignalNone, nil, "All children stopped, transitioning to Stopped", nil)
+		return fsmv2.Transition(&StoppedState{}, fsmv2.SignalNone, nil, "All children stopped, transitioning to Stopped", despawnChildren)
 	}
 
-	return fsmv2.Transition(s, fsmv2.SignalNone, nil, "Gracefully stopping all children", nil)
+	return fsmv2.Transition(s, fsmv2.SignalNone, nil, "Gracefully stopping all children", despawnChildren)
 }
 
 func (s *TryingToStopState) String() string {

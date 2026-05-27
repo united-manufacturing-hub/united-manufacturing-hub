@@ -19,6 +19,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"hash/fnv"
+
+	"gopkg.in/yaml.v3"
 )
 
 // BaseDesiredState provides common shutdown functionality for all DesiredState types.
@@ -607,3 +609,28 @@ func (d *DesiredState) GetChildrenSpecs() []ChildSpec {
 
 // NOTE: GetState() is defined directly on DesiredState (above), not on the embedded BaseDesiredState.
 // The State field on DesiredState is the canonical source of truth for lifecycle state.
+
+// NewChildSpec creates a typed ChildSpec by marshalling cfg into UserSpec.Config (YAML).
+// Returns an error if YAML marshalling fails (unexpected for static struct types).
+// The ChildStartStates and Dependencies fields are left at their zero values; callers
+// that need them should set them on the returned spec.
+//
+// Use NewChildSpec to build typed child specs from a parent's RenderChildren body:
+//
+//	spec, err := config.NewChildSpec("push", "push", push.PushUserSpec{}, enabled)
+//	if err != nil {
+//	    return nil, err
+//	}
+func NewChildSpec[T any](name, workerType string, cfg T, enabled bool) (ChildSpec, error) {
+	data, err := yaml.Marshal(cfg)
+	if err != nil {
+		return ChildSpec{}, fmt.Errorf("NewChildSpec: marshal %q/%q: %w", name, workerType, err)
+	}
+
+	return ChildSpec{
+		Name:       name,
+		WorkerType: workerType,
+		UserSpec:   UserSpec{Config: string(data)},
+		Enabled:    enabled,
+	}, nil
+}
