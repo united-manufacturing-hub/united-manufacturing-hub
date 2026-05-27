@@ -130,16 +130,12 @@ var _ = Describe("CommunicatorWorker", func() {
 				Expect(desired.IsShutdownRequested()).To(BeFalse())
 			})
 
-			It("should include TransportWorker child spec", func() {
+			It("should not populate ChildrenSpecs — transport child is declared in RenderChildren", func() {
 				desiredIface, err := worker.DeriveDesiredState(nil)
 				Expect(err).NotTo(HaveOccurred())
 
 				desired := desiredIface.(*fsmv2.WrappedDesiredState[communicator.CommunicatorConfig])
-				specs := desired.GetChildrenSpecs()
-				Expect(specs).To(HaveLen(1))
-				Expect(specs[0].Name).To(Equal("transport"))
-				Expect(specs[0].WorkerType).To(Equal("transport"))
-				Expect(specs[0].ChildStartStates).To(ConsistOf("Syncing", "Recovering"))
+				Expect(desired.GetChildrenSpecs()).To(BeNil())
 			})
 		})
 
@@ -166,13 +162,9 @@ state: "running"
 				Expect(desired.Config.AuthToken).To(Equal("test-auth-token-secret"))
 				Expect(desired.Config.Timeout).To(Equal(15 * time.Second))
 				Expect(desired.GetState()).To(Equal("running"))
-
-				specs := desired.GetChildrenSpecs()
-				Expect(specs).To(HaveLen(1))
-				Expect(specs[0].Name).To(Equal("transport"))
-				Expect(specs[0].WorkerType).To(Equal("transport"))
-				Expect(specs[0].ChildStartStates).To(ConsistOf("Syncing", "Recovering"))
-				Expect(specs[0].UserSpec.Config).To(Equal(spec.Config))
+				// ChildrenSpecs is nil: transport child is declared in RenderChildren (children.go),
+				// not in DeriveDesiredState. RenderChildren is the single source of truth.
+				Expect(desired.GetChildrenSpecs()).To(BeNil())
 			})
 
 			It("should apply default timeout when not specified", func() {

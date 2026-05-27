@@ -23,7 +23,7 @@ import (
 
 // Cutover parity: communicator Variables path equivalence.
 //
-// The legacy path (makeTransportChildSpec) passes the parent's full UserSpec to
+// The legacy path (DeriveDesiredState) passed the parent's full UserSpec to
 // the transport child, so child.UserSpec.Variables == parentVars. The new path
 // (RenderChildren) uses BaseUserSpec{} with no Variables, so
 // child.UserSpec.Variables == {}.
