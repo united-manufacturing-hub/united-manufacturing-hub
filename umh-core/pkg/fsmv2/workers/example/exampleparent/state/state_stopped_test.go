@@ -20,18 +20,13 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
-	examplechild "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplechild"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplechild/state"
+	exampleparent "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleparent"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleparent/state"
 )
 
-var _ = Describe("StoppedState", func() {
-	It("should compile and instantiate", func() {
-		s := &state.StoppedState{}
-		Expect(s).NotTo(BeNil())
-	})
-})
-
-// --- CHANGE-19 D6 discriminator: IsDisabled branch ---
+// --- CHANGE-19 D6 discriminator: IsDisabled branch in StoppedState ---
+// exampleparent is a parent worker but is itself a child of an application supervisor,
+// so it carries the same 3-way discriminator as leaf workers (CHANGE-19).
 
 var _ = Describe("StoppedState D6 IsDisabled discriminator", func() {
 	var stateObj *state.StoppedState
@@ -42,8 +37,8 @@ var _ = Describe("StoppedState D6 IsDisabled discriminator", func() {
 
 	It("disabled-only (IsDisabled=true, IsShutdownRequested=false) → SignalNone, stays Stopped", func() {
 		snap := fsmv2.Snapshot{
-			Observed: fsmv2.Observation[examplechild.ExamplechildStatus]{},
-			Desired: &fsmv2.WrappedDesiredState[examplechild.ExamplechildConfig]{
+			Observed: fsmv2.Observation[exampleparent.ExampleparentStatus]{},
+			Desired: &fsmv2.WrappedDesiredState[exampleparent.ExampleparentConfig]{
 				BaseDesiredState: config.BaseDesiredState{Disabled: true, ShutdownRequested: false},
 			},
 		}
@@ -54,8 +49,8 @@ var _ = Describe("StoppedState D6 IsDisabled discriminator", func() {
 
 	It("disabled+shutdown (both true) → SignalNeedsRemoval (shutdown wins)", func() {
 		snap := fsmv2.Snapshot{
-			Observed: fsmv2.Observation[examplechild.ExamplechildStatus]{},
-			Desired: &fsmv2.WrappedDesiredState[examplechild.ExamplechildConfig]{
+			Observed: fsmv2.Observation[exampleparent.ExampleparentStatus]{},
+			Desired: &fsmv2.WrappedDesiredState[exampleparent.ExampleparentConfig]{
 				BaseDesiredState: config.BaseDesiredState{Disabled: true, ShutdownRequested: true},
 			},
 		}

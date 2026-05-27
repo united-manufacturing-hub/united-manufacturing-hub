@@ -132,6 +132,13 @@ func (w *ApplicationWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredS
 		children = []config.ChildSpec{}
 	}
 
+	// Ensure every child parsed from YAML carries Enabled=true.
+	// ChildSpec.Enabled defaults to false (zero value); the reducer would disable
+	// all application children on every tick without this normalization.
+	for i := range children {
+		children[i].Enabled = true
+	}
+
 	return &fsmv2.WrappedDesiredState[snapshot.ApplicationConfig]{
 		Config:        cfg,
 		ChildrenSpecs: children,

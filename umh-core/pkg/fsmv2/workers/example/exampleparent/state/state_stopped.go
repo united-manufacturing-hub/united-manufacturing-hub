@@ -43,11 +43,15 @@ func (s *StoppedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 		return fsmv2.Transition(s, fsmv2.SignalNeedsRemoval, nil, "Shutdown requested, signaling removal", nil)
 	}
 
-	if !snap.IsShutdownRequested {
-		elapsed := time.Duration(snap.Metrics.Metrics.Framework.TimeInCurrentStateMs) * time.Millisecond
-		if elapsed >= StoppedWaitDuration {
-			return fsmv2.Transition(&TryingToStartState{}, fsmv2.SignalNone, nil, "Wait duration elapsed, transitioning to TryingToStart", nil)
-		}
+	// Parent-level workers carry the IsDisabled branch for the same reason as leaf
+	// workers: they are themselves children of a supervisor that can disable them (CHANGE-19).
+	if snap.IsDisabled {
+		return fsmv2.Transition(s, fsmv2.SignalNone, nil, "Disabled by supervisor, staying stopped", nil)
+	}
+
+	elapsed := time.Duration(snap.Metrics.Metrics.Framework.TimeInCurrentStateMs) * time.Millisecond
+	if elapsed >= StoppedWaitDuration {
+		return fsmv2.Transition(&TryingToStartState{}, fsmv2.SignalNone, nil, "Wait duration elapsed, transitioning to TryingToStart", nil)
 	}
 
 	return fsmv2.Transition(s, fsmv2.SignalNone, nil, "Parent is stopped, no children spawned", nil)

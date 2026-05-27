@@ -199,6 +199,10 @@ func (m *MockDesiredState) SetShutdownRequested(requested bool) {
 	m.shutdownRequested = requested
 }
 
+func (m *MockDesiredState) IsDisabled() bool {
+	return false
+}
+
 func ExpectNoGoroutineLeaks(before int) {
 	Eventually(func() int {
 		runtime.GC()

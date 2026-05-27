@@ -37,6 +37,10 @@ func (s *StoppedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 		return fsmv2.Transition(s, fsmv2.SignalNeedsRemoval, nil, "shutdown requested, stopping: parentState="+snap.ParentMappedState, nil)
 	}
 
+	if snap.IsDisabled {
+		return fsmv2.Transition(s, fsmv2.SignalNone, nil, "disabled by supervisor, staying stopped: parentState="+snap.ParentMappedState, nil)
+	}
+
 	if snap.ParentMappedState == config.DesiredStateRunning {
 		return fsmv2.Transition(&TryingToConnectState{}, fsmv2.SignalNone, nil, "parent wants running, attempting to connect: parentState="+snap.ParentMappedState, nil)
 	}

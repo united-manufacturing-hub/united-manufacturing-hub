@@ -69,6 +69,40 @@ var _ = Describe("StoppedState", func() {
 	})
 })
 
+// --- CHANGE-19 D6 discriminator: IsDisabled branch ---
+
+var _ = Describe("StoppedState D6 IsDisabled discriminator", func() {
+	var stateObj *state.StoppedState
+
+	BeforeEach(func() {
+		stateObj = &state.StoppedState{}
+	})
+
+	It("disabled-only (IsDisabled=true, IsShutdownRequested=false) → SignalNone, stays Stopped", func() {
+		snap := fsmv2.Snapshot{
+			Observed: fsmv2.Observation[communicator.CommunicatorStatus]{},
+			Desired: &fsmv2.WrappedDesiredState[communicator.CommunicatorConfig]{
+				BaseDesiredState: config.BaseDesiredState{Disabled: true, ShutdownRequested: false},
+			},
+		}
+		result := stateObj.Next(snap)
+		Expect(result.Signal).To(Equal(fsmv2.SignalNone))
+		Expect(result.State).To(BeAssignableToTypeOf(&state.StoppedState{}))
+	})
+
+	It("disabled+shutdown (both true) → SignalNeedsRemoval (shutdown wins)", func() {
+		snap := fsmv2.Snapshot{
+			Observed: fsmv2.Observation[communicator.CommunicatorStatus]{},
+			Desired: &fsmv2.WrappedDesiredState[communicator.CommunicatorConfig]{
+				BaseDesiredState: config.BaseDesiredState{Disabled: true, ShutdownRequested: true},
+			},
+		}
+		result := stateObj.Next(snap)
+		Expect(result.Signal).To(Equal(fsmv2.SignalNeedsRemoval))
+		Expect(result.State).To(BeAssignableToTypeOf(&state.StoppedState{}))
+	})
+})
+
 var _ = Describe("StoppedState Transitions", func() {
 	var stateObj *state.StoppedState
 

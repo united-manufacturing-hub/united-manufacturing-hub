@@ -122,6 +122,10 @@ func (m *mockDesiredState) IsShutdownRequested() bool {
 	return m.ShutdownRequested
 }
 
+func (m *mockDesiredState) IsDisabled() bool {
+	return false
+}
+
 type mockWorker struct {
 	collectErr         error
 	observed           fsmv2.ObservedState

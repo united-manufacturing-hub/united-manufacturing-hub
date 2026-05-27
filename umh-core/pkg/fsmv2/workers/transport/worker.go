@@ -250,6 +250,7 @@ func makePushChildSpec(parentSpec config.UserSpec) []config.ChildSpec {
 			WorkerType:       "push",
 			UserSpec:         config.UserSpec{Config: parentSpec.Config, Variables: parentSpec.Variables},
 			ChildStartStates: []string{"Running", "Degraded"},
+			Enabled:          true,
 		},
 	}
 }
@@ -264,6 +265,7 @@ func makePullChildSpec(parentSpec config.UserSpec) []config.ChildSpec {
 			WorkerType:       "pull",
 			UserSpec:         config.UserSpec{Config: parentSpec.Config, Variables: parentSpec.Variables},
 			ChildStartStates: []string{"Running", "Degraded"},
+			Enabled:          true,
 		},
 	}
 }
