@@ -1,0 +1,14 @@
+# Generated via "make fossa-deps" — do not edit by hand.
+custom-dependencies:
+  - name: redpanda
+    version: "24.3.18"
+    license: "BUSL-1.1"
+    metadata:
+      homepage: https://redpanda.com
+      description: Kafka-compatible streaming broker (raw COPY into image)
+  - name: s6-overlay
+    version: "3.2.0.2"
+    license: "ISC"
+    metadata:
+      homepage: https://github.com/just-containers/s6-overlay
+      description: Process supervisor init (tarball extracted)

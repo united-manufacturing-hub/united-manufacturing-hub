@@ -246,6 +246,26 @@ build build-pprof build-debug: build-protobuf download-docker-binaries
 build-depot: download-docker-binaries
 	$(call DEPOT_BUILD)
 
+# Regenerates fossa-deps.yml — declares raw COPYs (Redpanda, s6-overlay) the FOSSA container scanner misses.
+.PHONY: fossa-deps
+fossa-deps:
+	@printf '%s\n' \
+		'# Generated via "make fossa-deps" — do not edit by hand.' \
+		'custom-dependencies:' \
+		'  - name: redpanda' \
+		'    version: "$(REDPANDA_VERSION)"' \
+		'    license: "BUSL-1.1"' \
+		'    metadata:' \
+		'      homepage: https://redpanda.com' \
+		'      description: Kafka-compatible streaming broker (raw COPY into image)' \
+		'  - name: s6-overlay' \
+		'    version: "$(S6_OVERLAY_VERSION)"' \
+		'    license: "ISC"' \
+		'    metadata:' \
+		'      homepage: https://github.com/just-containers/s6-overlay' \
+		'      description: Process supervisor init (tarball extracted)' \
+		> fossa-deps.yml
+
 FLAVOR ?=                         # empty → normal build
 BUILD_TARGET = $(if $(FLAVOR),build-$(FLAVOR),build)
 S6_PERSIST ?=                     # empty → temp directory (default), true → persistent /data/services
