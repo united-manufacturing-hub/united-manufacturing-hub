@@ -22,6 +22,8 @@ import (
 
 	"errors"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 )
 
@@ -83,6 +85,26 @@ func (s *DefaultService) ForceCleanup(ctx context.Context, artifacts *ServiceArt
 		if err := s.removeDirectoryWithTimeout(ctx, artifacts.RepositoryDir, fsService); err != nil {
 			s.logger.Warnf("Failed to remove repository directory: %v", err)
 		}
+	}
+
+	// Step 5: tell s6-svscan to drop any stale supervisor entries for this
+	// service. s6-svunlink normally notifies the scanner itself, but on
+	// exit 111 it doesn't. Without this call, repeated cleanup cycles
+	// accumulate stale entries until s6-svscan can no longer bring up new
+	// services. See ENG-4862.
+	//
+	// Best-effort: a failure here is logged + counted via metric. Blocking
+	// cleanup on a flaky scanner would be worse than the stale entries.
+	if _, err := s.ExecuteS6Command(ctx, artifacts.ServiceDir, fsService,
+		"s6-svscanctl", "-an", constants.S6BaseDir); err != nil {
+		s.logger.Warnf("s6-svscanctl -an failed during force cleanup for %s: %v "+
+			"(scanner may be out of sync — monitor .forceRemove.svscanctl_failed)",
+			filepath.Base(artifacts.ServiceDir), err)
+		metrics.IncErrorCount(metrics.ComponentS6Service,
+			filepath.Base(artifacts.ServiceDir)+".forceRemove.svscanctl_failed")
+	} else {
+		s.logger.Infof("s6-svscanctl -an completed for %s (scanner synced after force cleanup)",
+			filepath.Base(artifacts.ServiceDir))
 	}
 
 	// Verify cleanup completed. Propagate PathExists errors rather than

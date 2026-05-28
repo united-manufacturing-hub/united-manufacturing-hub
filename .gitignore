@@ -20,3 +20,4 @@ finalization/
 # Test results
 *.result.txt
 .worktrees/
+.self-review/

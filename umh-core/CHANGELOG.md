@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## [0.44.21]
+
+### Fixes
+
+- Editing or deploying a bridge with an invalid config could hang the Management Console in "executing" indefinitely — umh-core's rollback path crashed mid-execution, the instance restarted, and the UI never received a final reply. The bridge often ended up needing delete + recreate to recover. The edit/deploy now ends with a clear failure when the rollback succeeds. Affects v0.44.19
+- An unexpected error in umh-core (e.g. editing or deploying a bridge) used to restart the umh-core instance and leave the operation stuck in "executing". Affected operations now end with a clear failure message (`Internal error: <type> action failed unexpectedly. UMH engineering has been notified.`) while the rest of the instance keeps running
+
+## [0.44.20]
+
 ### Improvements
 
 - Previously, the component tasked with communicating with the UI could stop working if it rebuilt its HTTP connection (which happens after persistent network failures) while a message was being sent or received. Connection rebuilds and in-flight requests are now coordinated so they cannot interfere.
@@ -11,6 +20,10 @@
 ### Fixes
 
 - A data flow (bridge, standalone, or stream processor) could get stuck in a starting state when its on-disk service directory was left in an inconsistent state — for example after a container restart or OOM-kill interrupted setup. umh-core now detects the inconsistency and rebuilds the directory automatically. Previously, recovery required restarting umh-core or recreating the data flow under a different name.
+- OPC-UA input could get stuck while browsing when a configured NodeID did not exist on the server, requiring a manual restart. Browse failures now trigger a clean reconnect
+- OPC-UA input no longer spams `Variant is nil` errors when a node sends a status update without a value. These are harmless and now logged at debug level with the NodeID and status code
+- Modbus TCP input now reconnects immediately on any transport-level error (timeouts, resets, network failures), not just broken pipes. Previously these stuck the connection for up to 10 seconds
+- Modbus TCP input now recovers automatically from transaction-ID mismatches. Previously, when a slow PLC reply arrived after its read timeout, the next poll picked up the stale frame and failed with `modbus: response transaction id 'X' does not match request 'Y'`. The connection thrashed (reconnect, mismatch, reconnect) and reads stalled until conditions cleared or the input was restarted
 
 ## [0.44.19]
 

@@ -780,9 +780,8 @@ func (s *DefaultService) CheckServiceDirectoryIntegrity(ctx context.Context, ser
 //     see files vanishing one-by-one and report HealthBad mid-Remove, which
 //     would permanent-error a Remove that is making progress.
 //   - artifacts populated, files present → ActionOK.
-//   - artifacts populated, files missing → ActionRecreate. Corruption is
-//     the wedge condition: tracked files vanished externally while the
-//     service was running.
+//   - artifacts populated, files missing → ActionRecreate. Tracked files
+//     vanished externally while the service was running.
 //   - artifacts populated, transient I/O error → ActionWait.
 //
 // During Create's recreate paths there is a window between Store(nil) and
@@ -1668,9 +1667,14 @@ func parseLogLine(line string) LogEntry {
 	}
 }
 
-// EnsureSupervision checks if the supervise directory exists for a service and notifies
-// s6-svscan if it doesn't, to trigger supervision setup.
-// Returns true if supervise directory exists (ready for supervision), false otherwise.
+// EnsureSupervision returns true once s6-svscan has finished bringing up
+// BOTH supervise/ and log/supervise/. Returning true after only supervise/
+// exists would let the FSM advance to Created mid-bringup, which is wrong
+// because operational reconcile would then race against a half-set-up
+// supervisor. This gate is forward-direction only — it does NOT classify
+// asymmetry as service corruption; that distinction belongs to s6-svscan.
+// CheckArtifactsHealth (lifecycle.go) intentionally does not examine the
+// supervise dirs, per the s6 supervisor-owned-state contract.
 func (s *DefaultService) EnsureSupervision(ctx context.Context, servicePath string, fsService filesystem.Service) (bool, error) {
 	start := time.Now()
 
@@ -1707,7 +1711,25 @@ func (s *DefaultService) EnsureSupervision(ctx context.Context, servicePath stri
 		return false, nil
 	}
 
-	s.logger.Debugf("Supervise directory exists for %s", servicePath)
+	logSuperviseDir := filepath.Join(servicePath, "log", "supervise")
+
+	exists, err = fsService.FileExists(ctx, logSuperviseDir)
+	if err != nil {
+		return false, fmt.Errorf("failed to check if log/supervise directory exists: %w", err)
+	}
+
+	if !exists {
+		s.logger.Debugf("Log/supervise directory not found for %s, notifying s6-svscan", servicePath)
+
+		_, err = s.ExecuteS6Command(ctx, servicePath, fsService, "s6-svscanctl", "-a", constants.S6BaseDir)
+		if err != nil {
+			return false, fmt.Errorf("failed to notify s6-svscan: %w", err)
+		}
+
+		return false, nil
+	}
+
+	s.logger.Debugf("Both supervise directories exist for %s", servicePath)
 
 	return true, nil
 }

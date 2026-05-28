@@ -23,6 +23,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/encoding"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/connectionserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
@@ -1384,6 +1385,108 @@ var _ = Describe("EditProtocolConverter", func() {
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("failed to get current configuration: mock get config failure"))
 			Expect(metadata).To(BeNil())
+		})
+	})
+
+	// I1 — production switch path is safe end-to-end.
+	//
+	// Before the ENG-4959 wire-up fix, an EditProtocolConverter action built by
+	// the production switch had a nil fsmLogger. Any code path in Execute()
+	// that hits a.fsmLogger.SentryError (edit-protocolconverter.go:253, 267,
+	// 291, 305, 319, 591, 860, 866) panicked at runtime. This test drives a
+	// real Execute() failure through HandleActionMessage (the switch path,
+	// NOT NewEditProtocolConverterAction, which already wired fsmLogger via
+	// its constructor) by configuring the mock config manager to fail at
+	// AtomicEditProtocolConverter. The persist failure hits a.fsmLogger.
+	// SentryError at edit-protocolconverter.go:305. The pre-fix code crashed
+	// the whole umh-core process here; this test asserts the action now
+	// completes with ActionFinishedWithFailure instead.
+	Describe("HandleActionMessage end-to-end (switch path)", func() {
+		It("does not panic on AtomicEditProtocolConverter failure inside Execute", func() {
+			// Force AtomicEditProtocolConverter to fail so Execute reaches
+			// edit-protocolconverter.go:305, which calls a.fsmLogger.
+			// SentryError. Without the wire-up fix, a.fsmLogger is nil here
+			// and the SentryError call panics with a nil-pointer dereference,
+			// killing the process.
+			mockConfig.WithAtomicEditProtocolConverterError(errors.New("mock persist failure"))
+
+			payload := map[string]interface{}{
+				"name": pcName,
+				"uuid": pcUUID.String(),
+				"readDFC": map[string]interface{}{
+					"state": "active",
+					"inputs": map[string]interface{}{
+						"data": "input:\n  http_client:\n    url: http://example.com",
+						"type": "http_client",
+					},
+					"pipeline": map[string]interface{}{
+						"processors": map[string]interface{}{
+							"0": map[string]interface{}{
+								"type": "bloblang",
+								"data": "bloblang: |-\n  root = content()",
+							},
+						},
+					},
+				},
+			}
+
+			actionMsg := models.ActionMessagePayload{
+				ActionType:    models.EditProtocolConverter,
+				ActionUUID:    uuid.New(),
+				ActionPayload: payload,
+			}
+
+			localOut := make(chan *models.UMHMessage, 16)
+			done := make(chan struct{})
+
+			go func() {
+				defer GinkgoRecover()
+				defer close(done)
+				actions.HandleActionMessage(
+					instanceUUID,
+					actionMsg,
+					userEmail,
+					localOut,
+					"",
+					nil,
+					uuid.Nil,
+					nil,
+					mockConfig,
+				)
+			}()
+
+			Eventually(done, "3s").Should(BeClosed(), "HandleActionMessage should complete without panicking (ENG-4959)")
+
+			// Drain the reply channel and assert at least one reply carries
+			// the failure state. This pins the test to the failure branch:
+			// if a future refactor accidentally turns Execute into a success
+			// path here, the assertion fires.
+			var sawFailure bool
+			for len(localOut) > 0 {
+				msg := <-localOut
+				dec, err := encoding.DecodeMessageFromUMHInstanceToUser(msg.Content)
+				if err != nil {
+					continue
+				}
+				reply, ok := dec.Payload.(map[string]interface{})
+				if !ok {
+					continue
+				}
+				if state, _ := reply["actionReplyState"].(string); state == string(models.ActionFinishedWithFailure) {
+					sawFailure = true
+				}
+			}
+			Expect(sawFailure).To(BeTrue(), "expected at least one ActionFinishedWithFailure reply")
+
+			// Pin the integration test to the actual crash path. Without
+			// this assertion, a future Parse-leniency change could let the
+			// test pass on a happy-path or early-validation failure without
+			// ever reaching the a.fsmLogger.SentryError call inside
+			// Execute() — the very call site that PR #2546's missing field
+			// would have crashed on. AtomicEditProtocolConverter is the
+			// gate we must cross to exercise the regression.
+			Expect(mockConfig.AtomicEditProtocolConverterCalled).To(BeTrue(),
+				"I1 must reach AtomicEditProtocolConverter to exercise the real fsmLogger crash path")
 		})
 	})
 })

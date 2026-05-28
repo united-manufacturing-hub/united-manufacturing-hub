@@ -1,0 +1,56 @@
+# Copyright 2025 UMH Systems GmbH
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Syncs each stable GitHub Release to a Linear release (continuous pipeline).
+# Skips pre-release tags (v*-pre.*) so the Linear release attribution lives
+# on the version that actually shipped to customers. The commit range from
+# the previous stable release captures every issue that landed during soak.
+
+name: Linear Release
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing stable release tag to (re)sync (e.g., v0.44.20).'
+        required: true
+        type: string
+
+jobs:
+  sync:
+    # Gate: only stable semver tags (v*), excludes pre-releases and non-semver tags.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (startsWith(github.event.release.tag_name, 'v') && !github.event.release.prerelease)
+    name: Sync to Linear
+    runs-on: depot-ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ inputs.tag || github.event.release.tag_name }}
+          # Required: the CLI walks the commit range from the previous release.
+          fetch-depth: 0
+
+      - uses: linear/linear-release-action@0917777589db006387af296dde440385f88d6ac4 # v0.10.0
+        with:
+          access_key: ${{ secrets.LINEAR_ACCESS_KEY_UMH_CORE }}
+          version: ${{ inputs.tag || github.event.release.tag_name }}
+          name: ${{ inputs.tag || github.event.release.tag_name }}
+          # Monorepo: scope to umh-core; ignore helm chart and classic commits.
+          include_paths: umh-core/**
