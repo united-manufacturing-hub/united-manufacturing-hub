@@ -33,20 +33,20 @@ func (s *TriggeringNextCycleState) Next(snapAny any) fsmv2.NextResult[any, any] 
 	snap := fsmv2.ConvertWorkerSnapshot[examplefailing.ExamplefailingConfig, examplefailing.ExamplefailingStatus](snapAny)
 
 	if snap.ShouldStop() {
-		return fsmv2.Result[any, any](&TryingToStopState{}, fsmv2.SignalNone, nil,
+		return fsmv2.Transition(&TryingToStopState{}, fsmv2.SignalNone, nil,
 			fmt.Sprintf("stop required: shutdown=%t, parentState=%s",
-				snap.IsShutdownRequested, snap.ParentMappedState))
+				snap.IsShutdownRequested, snap.ParentMappedState), nil)
 	}
 
 	if snap.Status.ConnectionHealth == "healthy" {
-		return fsmv2.Result[any, any](s, fsmv2.SignalNone, &action.DisconnectAction{}, "disconnecting to trigger next failure cycle")
+		return fsmv2.Transition(s, fsmv2.SignalNone, &action.DisconnectAction{}, "disconnecting to trigger next failure cycle", nil)
 	}
 
 	if snap.Status.ConnectionHealth == "no connection" {
-		return fsmv2.Result[any, any](&DisconnectedState{}, fsmv2.SignalNone, nil, "cycle triggered, connection lost")
+		return fsmv2.Transition(&DisconnectedState{}, fsmv2.SignalNone, nil, "cycle triggered, connection lost", nil)
 	}
 
-	return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil, "waiting for disconnect to complete")
+	return fsmv2.Transition(s, fsmv2.SignalNone, nil, "waiting for disconnect to complete", nil)
 }
 
 func (s *TriggeringNextCycleState) String() string {

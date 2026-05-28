@@ -34,21 +34,21 @@ func (s *TryingToStartState) Next(snapAny any) fsmv2.NextResult[any, any] {
 
 	// 1. Check shutdown first
 	if snap.ShouldStop() {
-		return fsmv2.Result[any, any](&StoppedState{}, fsmv2.SignalNone, nil,
+		return fsmv2.Transition(&StoppedState{}, fsmv2.SignalNone, nil,
 			fmt.Sprintf("stop required: shutdown=%t, parentState=%s",
-				snap.IsShutdownRequested, snap.ParentMappedState))
+				snap.IsShutdownRequested, snap.ParentMappedState), nil)
 	}
 
 	// 2. Check if action has already completed (observe the effect)
 	// This makes the state machine resilient to action replay
 	if snap.Status.HelloSaid {
-		return fsmv2.Result[any, any](&RunningState{}, fsmv2.SignalNone, nil, "Hello has been said, transitioning to running")
+		return fsmv2.Transition(&RunningState{}, fsmv2.SignalNone, nil, "Hello has been said, transitioning to running", nil)
 	}
 
 	// 3. Emit action and stay in this state
-	return fsmv2.Result[any, any](s, fsmv2.SignalNone,
+	return fsmv2.Transition(s, fsmv2.SignalNone,
 		fsmv2.SimpleAction[*hello_world.HelloworldDependencies](hello_world.SayHelloActionName, hello_world.SayHello),
-		"Saying hello to the world")
+		"Saying hello to the world", nil)
 }
 
 // String returns the state name for logging and metrics.

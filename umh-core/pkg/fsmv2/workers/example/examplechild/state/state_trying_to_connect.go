@@ -30,14 +30,14 @@ func (s *TryingToConnectState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := fsmv2.ConvertWorkerSnapshot[example_child.ExamplechildConfig, example_child.ExamplechildStatus](snapAny)
 
 	if snap.ShouldStop() {
-		return fsmv2.Result[any, any](&TryingToStopState{}, fsmv2.SignalNone, nil, "Stop required, initiating shutdown")
+		return fsmv2.Transition(&TryingToStopState{}, fsmv2.SignalNone, nil, "Stop required, initiating shutdown", nil)
 	}
 
 	if snap.Status.ConnectionHealth == "healthy" {
-		return fsmv2.Result[any, any](&ConnectedState{}, fsmv2.SignalNone, nil, "Connection established successfully")
+		return fsmv2.Transition(&ConnectedState{}, fsmv2.SignalNone, nil, "Connection established successfully", nil)
 	}
 
-	return fsmv2.Result[any, any](s, fsmv2.SignalNone, &action.ConnectAction{}, "Attempting to establish connection")
+	return fsmv2.Transition(s, fsmv2.SignalNone, &action.ConnectAction{}, "Attempting to establish connection", nil)
 }
 
 func (s *TryingToConnectState) String() string {

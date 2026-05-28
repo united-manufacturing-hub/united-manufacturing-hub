@@ -32,10 +32,10 @@ func (s *TryingToStopState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := fsmv2.ConvertWorkerSnapshot[example_child.ExamplechildConfig, example_child.ExamplechildStatus](snapAny)
 
 	if snap.Status.ConnectionHealth != "healthy" {
-		return fsmv2.Result[any, any](&StoppedState{}, fsmv2.SignalNone, nil, fmt.Sprintf("disconnection complete: connectionHealth=%q parentState=%q", snap.Status.ConnectionHealth, snap.ParentMappedState))
+		return fsmv2.Transition(&StoppedState{}, fsmv2.SignalNone, nil, fmt.Sprintf("disconnection complete: connectionHealth=%q parentState=%q", snap.Status.ConnectionHealth, snap.ParentMappedState), nil)
 	}
 
-	return fsmv2.Result[any, any](s, fsmv2.SignalNone, &action.DisconnectAction{}, "Closing connections gracefully")
+	return fsmv2.Transition(s, fsmv2.SignalNone, &action.DisconnectAction{}, "Closing connections gracefully", nil)
 }
 
 func (s *TryingToStopState) String() string {

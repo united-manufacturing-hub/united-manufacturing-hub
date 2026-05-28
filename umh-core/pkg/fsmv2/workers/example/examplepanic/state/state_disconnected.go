@@ -31,16 +31,16 @@ func (s *DisconnectedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := fsmv2.ConvertWorkerSnapshot[example_panic.ExamplepanicConfig, example_panic.ExamplepanicStatus](snapAny)
 
 	if snap.ShouldStop() {
-		return fsmv2.Result[any, any](&TryingToStopState{}, fsmv2.SignalNone, nil,
-			fmt.Sprintf("stop required: shutdown=%t, parentState=%s", snap.IsShutdownRequested, snap.ParentMappedState))
+		return fsmv2.Transition(&TryingToStopState{}, fsmv2.SignalNone, nil,
+			fmt.Sprintf("stop required: shutdown=%t, parentState=%s", snap.IsShutdownRequested, snap.ParentMappedState), nil)
 	}
 
 	if !snap.IsShutdownRequested && snap.ParentMappedState == config.DesiredStateRunning {
-		return fsmv2.Result[any, any](&TryingToConnectState{}, fsmv2.SignalNone, nil,
-			fmt.Sprintf("parentState=%q: should be running, transitioning to TryingToConnect", snap.ParentMappedState))
+		return fsmv2.Transition(&TryingToConnectState{}, fsmv2.SignalNone, nil,
+			fmt.Sprintf("parentState=%q: should be running, transitioning to TryingToConnect", snap.ParentMappedState), nil)
 	}
 
-	return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil, "Connection lost, will retry")
+	return fsmv2.Transition(s, fsmv2.SignalNone, nil, "Connection lost, will retry", nil)
 }
 
 func (s *DisconnectedState) String() string {

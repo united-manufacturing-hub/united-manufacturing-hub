@@ -540,6 +540,20 @@ var _ = Describe("FSMv2 Architecture Validation", func() {
 				}
 			})
 		})
+
+		Describe("No Legacy Result Calls (Invariant: Use fsmv2.Transition)", func() {
+			It("should use fsmv2.Transition() not fsmv2.Result[any,any]() in state files", func() {
+				violations := validator.ValidateNoLegacyResultCalls(getFsmv2Dir())
+				if len(violations) > 0 {
+					message := validator.FormatViolationsWithPattern(
+						"Legacy Result Call Violations",
+						violations,
+						"LEGACY_RESULT_CALL",
+					)
+					Fail(message)
+				}
+			})
+		})
 	})
 })
 

@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"reflect"
 	"sync"
 	"time"
 
@@ -147,6 +148,29 @@ type NextResult[TSnapshot any, TDeps any] struct {
 	// Example: "sync degraded: 5 consecutive errors (authentication_failure)"
 	Reason string
 
+	// Children is the parent's intended children-set for this tick.
+	// The supervisor reads this field in L5 and reconciles spawn / despawn /
+	// config-update against its own children registry. Until then, nil signals
+	// 'no opinion' and the supervisor falls back to the legacy ChildrenSpecs path.
+	//
+	// Discriminator (Go-level, unambiguous):
+	//   - nil sentinel       → "no opinion" — supervisor falls back to the
+	//                          `WrappedDesiredState.ChildrenSpecs` path (legacy
+	//                          parents that populate ChildrenSpecs directly in
+	//                          DeriveDesiredState).
+	//   - non-nil (any len)  → "use this exact set" — including the explicit
+	//                          empty form []config.ChildSpec{} which means
+	//                          "I am a parent and I want zero children right
+	//                          now." The supervisor will despawn any children
+	//                          not in the set.
+	//
+	// CSE JSON round-trip note: nil and [] collapse ambiguously across some
+	// JSON encoders. The discriminator above is enforced at the Go API
+	// boundary (state.Next return value) BEFORE serialization, never after.
+	// State authors should construct the explicit empty slice when they mean
+	// "no children" and reserve nil for "no opinion" / unmigrated paths.
+	Children []config.ChildSpec
+
 	// Signal indicates framework-level events (shutdown, restart, etc.).
 	Signal Signal
 }
@@ -184,23 +208,170 @@ type State[TSnapshot any, TDeps any] interface {
 // Result creates a NextResult with the given components.
 // This is a convenience function to reduce boilerplate when returning from Next().
 //
+// The children argument is the parent's intended children-set for this tick.
+// Pass nil when the state is not managing children. See NextResult.Children
+// godoc for discriminator semantics.
+//
 // Usage:
 //
-//	return fsmv2.Result(s, fsmv2.SignalNone, nil, "Worker is stopped")
+//	return fsmv2.Result(s, fsmv2.SignalNone, nil, "Worker is stopped", nil)
 //
 //	reason := fmt.Sprintf("degraded: %d errors (%s)", errors, errorType)
-//	return fsmv2.Result(&DegradedState{}, fsmv2.SignalNone, nil, reason)
+//	return fsmv2.Result(&DegradedState{}, fsmv2.SignalNone, nil, reason, nil)
 func Result[TSnapshot any, TDeps any](
 	state State[TSnapshot, TDeps],
 	signal Signal,
 	action Action[TDeps],
 	reason string,
+	children []config.ChildSpec,
 ) NextResult[TSnapshot, TDeps] {
 	return NextResult[TSnapshot, TDeps]{
-		State:  state,
-		Signal: signal,
-		Action: action,
-		Reason: reason,
+		State:    state,
+		Signal:   signal,
+		Action:   action,
+		Reason:   reason,
+		Children: children,
+	}
+}
+
+// Transition is a non-generic convenience wrapper for worker state files.
+// It lets state implementations drop the explicit [any, any] type parameters
+// when returning from Next(), reducing boilerplate.
+//
+// The action argument is `any` so that typed Action[TDeps] values can be
+// passed without a caller-visible WrapAction. The function accepts:
+//   - nil: no action
+//   - Action[any]: passed through unchanged (fast path)
+//   - Action[TDeps] for any concrete TDeps: auto-wrapped via reflection
+//     so Execute asserts deps into TDeps before delegating
+//
+// Values that don't structurally match an Action (missing Execute/Name or
+// wrong signatures) cause a panic with a diagnostic message; this is a
+// programmer error, not a runtime condition.
+//
+// The children argument is the parent's intended children-set for this tick.
+// Pass nil when the state is not managing children. See NextResult.Children
+// godoc for discriminator semantics.
+//
+// Prefer Action[any] over Transition for hot-path actions to avoid the
+// ~8.5% reflection auto-wrap overhead (see transition_test.go benchmark).
+// For state-machine callbacks this overhead is negligible.
+//
+// Usage:
+//
+//	return fsmv2.Transition(s, fsmv2.SignalNone, nil, "Worker is stopped", nil)
+//	return fsmv2.Transition(&RunningState{}, fsmv2.SignalNone, &MyAction{}, reason, nil)
+func Transition(
+	state State[any, any],
+	signal Signal,
+	action any,
+	reason string,
+	children []config.ChildSpec,
+) NextResult[any, any] {
+	var wrapped Action[any]
+	switch a := action.(type) {
+	case nil:
+		// wrapped stays nil
+	case Action[any]:
+		wrapped = a
+	default:
+		wrapped = wrapTypedAction(a)
+	}
+
+	return Result[any, any](state, signal, wrapped, reason, children)
+}
+
+// reflectedAction adapts an Action[TDeps] for some concrete TDeps into an
+// Action[any]. The adapter asserts deps into TDeps via reflection before
+// delegating to the inner action's Execute method.
+type reflectedAction struct {
+	execute func(ctx context.Context, deps any) error
+	name    string
+}
+
+// Execute delegates to the reflection-built closure.
+func (r *reflectedAction) Execute(ctx context.Context, deps any) error {
+	return r.execute(ctx, deps)
+}
+
+// Name returns the cached name captured at wrap time.
+func (r *reflectedAction) Name() string { return r.name }
+
+// wrapTypedAction builds an Action[any] adapter for a typed Action[TDeps]
+// discovered via reflection. Panics if the value does not structurally match
+// an Action interface (Execute(context.Context, TDeps) error + Name() string).
+func wrapTypedAction(action any) Action[any] {
+	v := reflect.ValueOf(action)
+	if !v.IsValid() {
+		panic(fmt.Sprintf("fsmv2.Transition auto-wrap: action is nil or invalid; "+
+			"requires Execute(context.Context, TDeps) error and Name() string (got %T)", action))
+	}
+
+	if v.Kind() == reflect.Ptr && v.IsNil() {
+		panic(fmt.Sprintf("fsmv2.Transition auto-wrap: typed nil action (%T)", action))
+	}
+
+	execMethod := v.MethodByName("Execute")
+	nameMethod := v.MethodByName("Name")
+
+	if !execMethod.IsValid() || !nameMethod.IsValid() {
+		panic(fmt.Sprintf("fsmv2.Transition auto-wrap: action of type %T is not a valid Action[TDeps] — "+
+			"requires Execute(context.Context, TDeps) error and Name() string", action))
+	}
+
+	// Validate Execute signature: func(context.Context, <TDeps>) error.
+	execType := execMethod.Type()
+	ctxType := reflect.TypeOf((*context.Context)(nil)).Elem()
+
+	errType := reflect.TypeOf((*error)(nil)).Elem()
+	if execType.NumIn() != 2 || execType.NumOut() != 1 ||
+		!execType.In(0).Implements(ctxType) ||
+		!execType.Out(0).Implements(errType) {
+		panic(fmt.Sprintf("fsmv2.Transition auto-wrap: action of type %T has wrong Execute signature %s — "+
+			"requires Execute(context.Context, TDeps) error", action, execType))
+	}
+
+	// Validate Name signature: func() string.
+	nameType := nameMethod.Type()
+
+	stringType := reflect.TypeOf("")
+	if nameType.NumIn() != 0 || nameType.NumOut() != 1 || nameType.Out(0) != stringType {
+		panic(fmt.Sprintf("fsmv2.Transition auto-wrap: action of type %T has wrong Name signature %s — "+
+			"requires Name() string", action, nameType))
+	}
+
+	expectedDepsType := execType.In(1)
+	cachedName := nameMethod.Call(nil)[0].String()
+
+	return &reflectedAction{
+		name: cachedName,
+		execute: func(ctx context.Context, deps any) error {
+			depsVal := reflect.ValueOf(deps)
+
+			switch {
+			case !depsVal.IsValid():
+				// nil deps: only valid if expectedDepsType is nilable (ptr, iface, map, chan, func, slice).
+				switch expectedDepsType.Kind() {
+				case reflect.Ptr, reflect.Interface, reflect.Map, reflect.Chan, reflect.Func, reflect.Slice:
+					depsVal = reflect.Zero(expectedDepsType)
+				default:
+					return fmt.Errorf("fsmv2.Transition auto-wrap: nil deps not assignable to %s (action %q)",
+						expectedDepsType, cachedName)
+				}
+			case !depsVal.Type().AssignableTo(expectedDepsType):
+				return fmt.Errorf("fsmv2.Transition auto-wrap: deps type %T not assignable to %s (action %q)",
+					deps, expectedDepsType, cachedName)
+			default:
+				depsVal = depsVal.Convert(expectedDepsType)
+			}
+
+			out := execMethod.Call([]reflect.Value{reflect.ValueOf(ctx), depsVal})
+			if errIface := out[0].Interface(); errIface != nil {
+				return errIface.(error)
+			}
+
+			return nil
+		},
 	}
 }
 
