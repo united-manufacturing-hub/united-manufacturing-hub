@@ -18,10 +18,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 )
 
-// childInfoSlice returns a per-tick snapshot of every child supervisor as a
-// slice of config.ChildInfo. The slice feeds config.NewChildrenView, which the
-// collector injects onto parent ObservedState via the ChildrenViewConsumer
-// capability interface.
+// childInfoSlice snapshots every child supervisor as a slice of config.ChildInfo.
 //
 // The RLock covers the children map snapshot only; per-child accessors run
 // without holding the supervisor lock so AddWorker and RemoveWorker stay

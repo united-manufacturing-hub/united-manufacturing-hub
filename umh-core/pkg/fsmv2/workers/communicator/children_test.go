@@ -25,16 +25,15 @@ import (
 	transport "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport"
 )
 
-// P2-3: communicator RenderChildren 4-field round-trip guard.
+// communicator RenderChildren 4-field round-trip guard.
 //
 // All four auth parameters (RelayURL, InstanceUUID, AuthToken, Timeout) must
 // survive the full path: CommunicatorConfig → RenderChildren → NewChildSpec →
 // UserSpec.Config → ParseUserSpec[TransportUserSpec].
 //
 // A silent field-swap (e.g. AuthToken: cfg.RelayURL) compiles but produces an
-// unauthenticated transport child once the cutover wires it. This test catches
-// the field-swap before the cutover.
-var _ = Describe("communicator RenderChildren 4-field round-trip (P2-3)", func() {
+// unauthenticated transport child. This test catches the field-swap.
+var _ = Describe("communicator RenderChildren 4-field round-trip", func() {
 	var cfg communicator.CommunicatorConfig
 
 	BeforeEach(func() {

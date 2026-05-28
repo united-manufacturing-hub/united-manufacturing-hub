@@ -116,7 +116,6 @@ type SupervisorInterface interface {
 // THREAD SAFETY: currentState is protected by mu. Always lock before accessing.
 // tickInProgress prevents concurrent ticks for the same worker.
 type WorkerContext[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState] struct {
-	// 24-byte time.Time and slice fields first
 	lastActionObsTime time.Time
 	// Supervisor-internal state tracking (copied into FrameworkMetrics before State.Next()).
 	// Workers read via FrameworkMetrics; MetricsRecorder handles worker-written metrics.
@@ -127,10 +126,9 @@ type WorkerContext[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState] s
 	// during its tick without blocking on CSE reads. The parent calls child.IsObservationStale()
 	// when building ChildInfo for SetChildrenView().
 	lastObservationCollectedAt time.Time
-	// lastRenderedChildren is the children set from the most recent Next() call.
-	// Written unconditionally on every tick by tickWorker(), protected by mu.
-	// nil means no opinion → tick() falls back to GetChildrenSpecs().
-	// Non-nil (even empty slice) means use this set directly as the children source.
+	// lastRenderedChildren is written unconditionally each tick by tickWorker (mu held).
+	// nil → tick() falls back to GetChildrenSpecs().
+	// Non-nil (even empty) → tick() uses this directly.
 	lastRenderedChildren []config.ChildSpec
 
 	// Interfaces (16 bytes each)

@@ -14,15 +14,13 @@
 
 package state_test
 
-// P0 GUARD: Application states MUST emit nil Children (never []config.ChildSpec{}).
+// Application states must emit nil Children, never []config.ChildSpec{}.
 //
-// At the cutover, the supervisor will use NextResult.Children as the authoritative
-// children set. nil means "no opinion — fall back to legacy ChildrenSpecs path."
-// A non-nil empty slice means "I am a parent and I want ZERO children right now,"
-// which would despawn all dataflow components.
+// nil → supervisor falls back to legacy ChildrenSpecs path.
+// Non-nil empty → supervisor despawns ALL dataflow components.
 //
-// DO NOT weaken these assertions to BeEmpty() — BeEmpty() passes for both nil and
-// []config.ChildSpec{} and would mask the invariant violation.
+// Do not weaken these assertions to BeEmpty(): BeEmpty() passes for both
+// and would mask the despawn-everything bug.
 
 import (
 	. "github.com/onsi/ginkgo/v2"
@@ -45,9 +43,9 @@ func buildApplicationSnap(shutdownRequested bool) fsmv2.Snapshot {
 	}
 }
 
-var _ = Describe("Application state nil-Children invariant (P0 guard)", func() {
+var _ = Describe("Application state nil-Children invariant", func() {
 	// Each application state must return nil Children (not an empty slice).
-	// Violation here means the cutover would despawn ALL dataflow components.
+	// Violation would despawn ALL dataflow components.
 
 	Describe("RunningState", func() {
 		It("returns nil Children on healthy tick", func() {

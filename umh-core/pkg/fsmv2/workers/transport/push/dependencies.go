@@ -40,7 +40,7 @@ type PushDependencies struct {
 	// TODO(ENG-5018): failureRate and the embedded RetryTracker (from BaseDependencies)
 	// are per-child health counters that live in deps, not in observed status. The store
 	// does not cover them, so both reset to zero when this child is re-created or the
-	// process restarts—even once a durable (SQLite) store backend lands. To preserve
+	// process restarts, even once a durable (SQLite) store backend lands. To preserve
 	// counters across re-creates, model them into status.
 	failureRate             *failurerate.Tracker
 	// TODO(ENG-5018): pendingMessages holds messages destructively drained from the

@@ -24,13 +24,10 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleparent"
 )
 
-// P2-1: examplechild render+parse safety gate.
-//
-// RenderChildren must produce child specs with no leftover Go template markers
-// ("{{") in the rendered config. This gate guards against future changes that
-// accidentally re-introduce template strings into the config path that no longer
-// gets template-expanded (DEVICE_ID dropped in favour of loop index).
-var _ = Describe("exampleparent RenderChildren (P2-1)", func() {
+// RenderChildren must not emit "{{" in any rendered Config: that path no
+// longer template-expands (DEVICE_ID switched to loop index). Catches a
+// future regression that re-introduces template strings silently.
+var _ = Describe("exampleparent RenderChildren", func() {
 	var cfg exampleparent.ExampleparentConfig
 
 	BeforeEach(func() {

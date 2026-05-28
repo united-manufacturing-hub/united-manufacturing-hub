@@ -21,16 +21,11 @@ import (
 	transport "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport"
 )
 
-// RenderChildren returns the ChildSpec set for the communicator worker.
+// RenderChildren returns the ChildSpec for the communicator's single transport child.
+// All auth parameters (RelayURL, InstanceUUID, AuthToken, Timeout) are passed through unchanged.
 //
-// Communicator manages a single transport child whose configuration is derived
-// directly from the communicator's own config fields. All auth parameters
-// (RelayURL, InstanceUUID, AuthToken, Timeout) flow through unchanged.
-//
-// The enabled parameter controls whether the transport child should be active
-// (true = alive trajectory) or resident-disabled (false = stop trajectory,
-// pause-not-delete). The transport child is never despawned — it holds
-// connection buffers and retry state.
+// enabled=false keeps the transport child resident in Stopped (not despawned).
+// The child is never removed because it holds connection buffers and retry state.
 func RenderChildren(cfg CommunicatorConfig, enabled bool) ([]config.ChildSpec, error) {
 	childCfg := transport.TransportUserSpec{
 		BaseUserSpec: cfg.BaseUserSpec,

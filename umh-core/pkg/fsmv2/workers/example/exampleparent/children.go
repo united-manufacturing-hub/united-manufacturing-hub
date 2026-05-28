@@ -21,25 +21,16 @@ import (
 )
 
 // RenderChildren returns the ChildSpec set for the exampleparent worker.
+// Each child receives cfg.ChildConfig verbatim as UserSpec.Config and a
+// per-child DEVICE_ID variable (device-0, device-1, ...).
 //
-// Each child receives cfg.ChildConfig as its UserSpec.Config and a per-child
-// DEVICE_ID variable (device-0, device-1, ...). ChildStartStates is set to
-// ["TryingToStart", "Running"] so each child starts when the parent enters
-// either of those states.
+// When cfg.ChildConfig is empty, the child's Config is also empty.
+// No fallback template is injected — ExamplechildConfig has no address or
+// device fields that would consume one.
 //
-// When cfg.ChildConfig is empty, each child's UserSpec.Config is empty as
-// well. No default template is injected; ExamplechildConfig has no address
-// or device fields that would consume one.
-//
-// The enabled parameter controls whether children should be active. Alive-
-// trajectory states (TryingToStart, Running, Degraded) pass enabled=true.
-// Stop-trajectory states (TryingToStop, Stopped) pass an empty slice
-// directly rather than calling RenderChildren: exampleparent's children
-// are stateless.
-//
-// For the resident-disable variant (enabled=false keeps children in
-// Stopped instead of despawning), see workers/example/examplechild/state/state_stopped.go
-// and workers/transport.
+// enabled=false here is unused: exampleparent's stop-states pass empty
+// slices directly because the children are stateless. See workers/transport
+// for the variant where stopped children stay resident.
 func RenderChildren(cfg ExampleparentConfig, enabled bool) ([]config.ChildSpec, error) {
 	childWorkerType := cfg.GetChildWorkerType()
 	count := cfg.ChildrenCount

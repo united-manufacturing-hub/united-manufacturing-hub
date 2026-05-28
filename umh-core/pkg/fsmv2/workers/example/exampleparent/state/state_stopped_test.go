@@ -24,11 +24,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleparent/state"
 )
 
-// --- CHANGE-19 D6 discriminator: IsDisabled branch in StoppedState ---
-// exampleparent is a parent worker but is itself a child of an application supervisor,
-// so it carries the same 3-way discriminator as leaf workers (CHANGE-19).
-
-var _ = Describe("StoppedState D6 IsDisabled discriminator", func() {
+var _ = Describe("StoppedState IsDisabled discriminator", func() {
 	var stateObj *state.StoppedState
 
 	BeforeEach(func() {

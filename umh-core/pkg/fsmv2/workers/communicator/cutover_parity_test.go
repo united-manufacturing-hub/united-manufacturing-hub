@@ -21,18 +21,12 @@ import (
 	fsmconfig "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 )
 
-// Cutover parity: communicator Variables path equivalence.
-//
-// The legacy path (DeriveDesiredState) passed the parent's full UserSpec to
-// the transport child, so child.UserSpec.Variables == parentVars. The new path
-// (RenderChildren) uses BaseUserSpec{} with no Variables, so
-// child.UserSpec.Variables == {}.
-//
-// After the supervisor merges parent variables with child variables, both paths
-// produce the same effective set because Merge(parent, parent) == Merge(parent, {})
-// == parent. This test pins that invariant so a future Merge regression is caught
-// before it silently breaks the cutover.
-var _ = Describe("communicator cutover parity — Variables merge invariant", func() {
+// Variables-merge parity: communicator's RenderChildren uses BaseUserSpec{}
+// (empty Variables); the previous DeriveDesiredState passed the parent's full
+// UserSpec. After supervisor merges parent + child, both produce the same set
+// because Merge(parent, parent) == Merge(parent, {}) == parent. This test
+// pins that invariant so a future Merge regression is caught.
+var _ = Describe("communicator Variables-merge invariant", func() {
 	It("Merge(parentVars, parentVars) equals Merge(parentVars, {}) for all User keys", func() {
 		parentVars := fsmconfig.VariableBundle{
 			User: map[string]any{
@@ -42,10 +36,7 @@ var _ = Describe("communicator cutover parity — Variables merge invariant", fu
 			},
 		}
 
-		// Legacy path: child copied parent vars wholesale.
 		legacyResult := fsmconfig.Merge(parentVars, parentVars)
-
-		// New path: RenderChildren uses BaseUserSpec{} — child vars are empty.
 		newResult := fsmconfig.Merge(parentVars, fsmconfig.VariableBundle{})
 
 		Expect(legacyResult.User).To(Equal(newResult.User),

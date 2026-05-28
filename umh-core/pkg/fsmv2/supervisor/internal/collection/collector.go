@@ -62,19 +62,14 @@ type CollectorConfig[TObserved any] struct {
 	Logger                    deps.FSMLogger
 	StateProvider             func() string // Returns current FSM state name (injected by supervisor)
 	ShutdownRequestedProvider func() bool   // Returns current shutdown requested status (injected by supervisor)
-	// ChildrenCountsProvider returns the per-tick (healthy, unhealthy) counts.
-	// Retained for workers that satisfy SetChildrenCounts but not SetChildrenView;
-	// new code should consume the richer ChildrenView and read view.HealthyCount
-	// and view.UnhealthyCount instead. The two providers carry redundant data
-	// by construction (config.NewChildrenView derives counts from the same
-	// per-child Phase the supervisor reports here), so satisfying both setters
-	// is harmless.
+	// ChildrenCountsProvider is the legacy two-int interface. New workers should
+	// consume ChildrenView instead and read HealthyCount / UnhealthyCount as fields.
+	// The collector still calls both setters during migration; counts agree because
+	// ChildrenView derives them from the same per-child Phase.
 	ChildrenCountsProvider    func() (healthy int, unhealthy int)
 	MappedParentStateProvider func() string // Returns mapped state from parent's StateMapping (injected by supervisor for child workers)
 	// ChildrenViewProvider returns the full ChildrenView snapshot for parent
-	// workers that need per-child detail. Counts are also available via
-	// view.HealthyCount and view.UnhealthyCount so workers consuming the view
-	// can ignore ChildrenCountsProvider.
+	// workers that need per-child detail.
 	ChildrenViewProvider func() config.ChildrenView
 	// FrameworkMetricsProvider returns current framework metrics from supervisor.
 	// Called BEFORE collection to inject into worker dependencies.

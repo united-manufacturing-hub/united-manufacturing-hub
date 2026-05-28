@@ -40,15 +40,14 @@ type StoppedState struct {
 func (s *StoppedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := fsmv2.ConvertWorkerSnapshot[exampleparent.ExampleparentConfig, exampleparent.ExampleparentStatus](snapAny)
 
-	// Stop-trajectory: no children while stopped (exampleparent is stateless).
 	despawnChildren := []config.ChildSpec{}
 
 	if snap.IsShutdownRequested {
 		return fsmv2.Transition(s, fsmv2.SignalNeedsRemoval, nil, "Shutdown requested, signaling removal", despawnChildren)
 	}
 
-	// Parent-level workers carry the IsDisabled branch for the same reason as leaf
-	// workers: they are themselves children of a supervisor that can disable them (CHANGE-19).
+	// Parent workers need the IsDisabled branch too: they are themselves
+	// children of an application supervisor that can disable them.
 	if snap.IsDisabled {
 		return fsmv2.Transition(s, fsmv2.SignalNone, nil, "Disabled by supervisor, staying stopped", despawnChildren)
 	}

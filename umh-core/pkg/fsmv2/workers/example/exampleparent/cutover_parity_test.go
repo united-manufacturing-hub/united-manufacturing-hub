@@ -24,28 +24,17 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleparent"
 )
 
-// Cutover parity: exampleparent ChildConfig path equivalence.
+// Pins three RenderChildren behaviors against the legacy DeriveDesiredState path:
+//  1. cfg.ChildConfig flows verbatim into each child's UserSpec.Config.
+//  2. Per-child DEVICE_ID is "device-N" (index-based).
+//  3. Empty cfg.ChildConfig produces empty child Config — no fallback template.
 //
-// After the cutover, RenderChildren matches legacy DeriveDesiredState semantics:
-// cfg.ChildConfig is threaded verbatim as each child's UserSpec.Config, and a
-// per-child DEVICE_ID variable (device-0, device-1, …) is added.
-//
-// One deliberate divergence: when cfg.ChildConfig == "", RenderChildren produces
-// empty Config, while legacy DeriveDesiredState produced a default template
-// ("address: {{ .IP }}:{{ .PORT }}\ndevice: {{ .DEVICE_ID }}"). This is safe:
-// ExamplechildConfig embeds only BaseUserSpec — no address/device typed fields exist,
-// so the default template was never parsed into a typed value. No shipped scenario
-// (simple, configerror) relies on the template; those two do not set child_config.
-//
-// Tests:
-//  1. RenderChildren threads cfg.ChildConfig verbatim (effective-config equivalence).
-//  2. Per-child DEVICE_ID matches legacy DeriveDesiredState's "device-N" pattern exactly.
-//  3. Empty cfg.ChildConfig → empty child Config (no fallback template; safe residual divergence).
-var _ = Describe("exampleparent cutover parity — ChildConfig equivalence", func() {
+// Item 3 is deliberate: legacy DeriveDesiredState injected an "address:..."
+// template that was never parsed (ExamplechildConfig has no typed address field).
+// The shipped scenarios (simple, configerror) don't set child_config, so dropping
+// the template changes no observed behavior.
+var _ = Describe("exampleparent RenderChildren ChildConfig equivalence", func() {
 	It("RenderChildren threads cfg.ChildConfig to child UserSpec.Config", func() {
-		// Both legacy DeriveDesiredState and new RenderChildren thread ChildConfig verbatim.
-		// This is the load-bearing equivalence: the cascade scenario uses child_config to
-		// pass should_fail/max_failures to examplefailing children.
 		cfg := exampleparent.ExampleparentConfig{
 			ChildrenCount: 2,
 			ChildConfig:   "should_fail: true\nmax_failures: 3",
@@ -62,8 +51,6 @@ var _ = Describe("exampleparent cutover parity — ChildConfig equivalence", fun
 	})
 
 	It("per-child DEVICE_ID matches legacy DeriveDesiredState device-N pattern exactly", func() {
-		// Legacy: childVariables = {DEVICE_ID: fmt.Sprintf("device-%d", i)}
-		// New:    same — key DEVICE_ID, value device-0, device-1, …
 		cfg := exampleparent.ExampleparentConfig{ChildrenCount: 3}
 
 		specs, err := exampleparent.RenderChildren(cfg, true)
@@ -79,15 +66,8 @@ var _ = Describe("exampleparent cutover parity — ChildConfig equivalence", fun
 		}
 	})
 
-	It("empty cfg.ChildConfig threads as empty string — legacy fallback template is not replicated", func() {
-		// Threading test, empty-input case. ChildConfig IS threaded (same as above) —
-		// the result is just an empty string when the input is empty. This also guards
-		// the design decision NOT to replicate the legacy default-fallback template
-		// ("address: {{ .IP }}:{{ .PORT }}\ndevice: {{ .DEVICE_ID }}") that legacy
-		// DeriveDesiredState injected when ChildConfig was unset. That default is
-		// intentionally absent: ExamplechildConfig has no typed address/device fields so
-		// the template was never consumed. No active scenario (simple, configerror) relies
-		// on it; both omit child_config.
+	It("empty cfg.ChildConfig produces empty child Config — no fallback template", func() {
+		// See file header: legacy fallback template was never parsed and is intentionally dropped.
 		cfg := exampleparent.ExampleparentConfig{ChildrenCount: 1}
 
 		specs, err := exampleparent.RenderChildren(cfg, true)

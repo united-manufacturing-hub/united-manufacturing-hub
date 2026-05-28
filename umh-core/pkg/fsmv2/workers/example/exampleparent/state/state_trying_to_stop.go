@@ -37,7 +37,6 @@ type TryingToStopState struct {
 func (s *TryingToStopState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := fsmv2.ConvertWorkerSnapshot[exampleparent.ExampleparentConfig, exampleparent.ExampleparentStatus](snapAny)
 
-	// Stop-trajectory: despawn all children (exampleparent is stateless, no buffer holders).
 	despawnChildren := []config.ChildSpec{}
 
 	if snap.Status.ID == "" {

@@ -69,9 +69,7 @@ var _ = Describe("StoppedState", func() {
 	})
 })
 
-// --- CHANGE-19 D6 discriminator: IsDisabled branch ---
-
-var _ = Describe("StoppedState D6 IsDisabled discriminator", func() {
+var _ = Describe("StoppedState IsDisabled discriminator", func() {
 	var stateObj *state.StoppedState
 
 	BeforeEach(func() {
