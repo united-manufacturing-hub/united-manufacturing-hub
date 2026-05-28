@@ -19,9 +19,10 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/snapshot"
 )
 
-// childrenAlive calls RenderChildren with enabled=true and returns nil on error.
-// yaml.Marshal of the static BaseUserSpec config never fails in practice;
-// nil means "no opinion" so the supervisor falls back to the legacy path.
+// yaml.Marshal of the static BaseUserSpec cannot fail in practice; on the
+// hypothetical error we still return nil so the supervisor falls back to
+// GetChildrenSpecs() rather than emitting an empty children set (which
+// would despawn all children).
 func childrenAlive(cfg snapshot.TransportDesiredState) []config.ChildSpec {
 	specs, err := snapshot.RenderChildren(cfg, true)
 	if err != nil {
@@ -31,7 +32,6 @@ func childrenAlive(cfg snapshot.TransportDesiredState) []config.ChildSpec {
 	return specs
 }
 
-// childrenStopped calls RenderChildren with enabled=false and returns nil on error.
 func childrenStopped(cfg snapshot.TransportDesiredState) []config.ChildSpec {
 	specs, err := snapshot.RenderChildren(cfg, false)
 	if err != nil {

@@ -24,9 +24,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/state"
 )
 
-// --- CHANGE-19 D6 discriminator: IsDisabled branch in StoppedState ---
-
-var _ = Describe("StoppedState D6 IsDisabled discriminator", func() {
+var _ = Describe("StoppedState IsDisabled discriminator", func() {
 	var stateObj *state.StoppedState
 
 	BeforeEach(func() {

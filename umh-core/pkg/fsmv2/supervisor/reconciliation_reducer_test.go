@@ -90,8 +90,6 @@ var _ = Describe("CHANGE-19 Reducer (applyReducer) — D6 IsDisabled design", fu
 		store = newMockTriangularStore()
 	})
 
-	// --- nil specs: silent no-op (P0-A fix) ---
-
 	Describe("nil specs → silent no-op", func() {
 		It("TestReducer_NilSpecs_LeafSupervisor_SilentlyNoOps: does not panic, does not error", func() {
 			s := newParentSupervisorWithSpecs(ctx, store, []config.ChildSpec{})
@@ -110,8 +108,6 @@ var _ = Describe("CHANGE-19 Reducer (applyReducer) — D6 IsDisabled design", fu
 		})
 	})
 
-	// --- Enabled=false → IsDisabled=true in store ---
-
 	Describe("Enabled=false → IsDisabled=true", func() {
 		It("sets Disabled=true on child worker desired state", func() {
 			childSpecs := []config.ChildSpec{{
@@ -121,14 +117,12 @@ var _ = Describe("CHANGE-19 Reducer (applyReducer) — D6 IsDisabled design", fu
 			}}
 			s := newParentSupervisorWithSpecs(ctx, store, childSpecs)
 
-			// Tick to create the child supervisor in s.children
 			err := s.TestTick(ctx)
 			Expect(err).NotTo(HaveOccurred())
 
 			children := s.GetChildren()
 			Expect(children).To(HaveKey("child1"), "child must exist before reducer can disable it")
 
-			// Save initial desired state for the child's worker so setDisabled has something to load
 			_, err = store.SaveDesired(ctx, "child", "child1-001", persistence.Document{
 				"id":                "child1-001",
 				"ShutdownRequested": false,
@@ -136,22 +130,18 @@ var _ = Describe("CHANGE-19 Reducer (applyReducer) — D6 IsDisabled design", fu
 			})
 			Expect(err).NotTo(HaveOccurred())
 
-			// Run reducer with Enabled=false
 			s.TestApplyReducer(ctx, []config.ChildSpec{{
 				Name:       "child1",
 				WorkerType: "child",
 				Enabled:    false,
 			}})
 
-			// Read back the child's desired state and verify Disabled=true
 			var result supervisor.TestDesiredState
 			err = store.LoadDesiredTyped(ctx, "child", "child1-001", &result)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result.Disabled).To(BeTrue(), "reducer must set Disabled=true for Enabled=false spec")
 		})
 	})
-
-	// --- Enabled=true → IsDisabled=false (re-enable path) ---
 
 	Describe("Enabled=true → IsDisabled=false (re-enable)", func() {
 		It("clears Disabled=false after a previous disable", func() {
@@ -168,7 +158,6 @@ var _ = Describe("CHANGE-19 Reducer (applyReducer) — D6 IsDisabled design", fu
 			children := s.GetChildren()
 			Expect(children).To(HaveKey("child1"))
 
-			// Start with Disabled=true in store (previously disabled)
 			_, err = store.SaveDesired(ctx, "child", "child1-001", persistence.Document{
 				"id":                "child1-001",
 				"ShutdownRequested": false,
@@ -176,7 +165,6 @@ var _ = Describe("CHANGE-19 Reducer (applyReducer) — D6 IsDisabled design", fu
 			})
 			Expect(err).NotTo(HaveOccurred())
 
-			// Run reducer with Enabled=true (re-enable)
 			s.TestApplyReducer(ctx, []config.ChildSpec{{
 				Name:       "child1",
 				WorkerType: "child",
@@ -189,8 +177,6 @@ var _ = Describe("CHANGE-19 Reducer (applyReducer) — D6 IsDisabled design", fu
 			Expect(result.Disabled).To(BeFalse(), "reducer must clear Disabled=false on re-enable (Enabled=true)")
 		})
 	})
-
-	// --- Reducer-exclusive write: does NOT touch IsShutdownRequested ---
 
 	Describe("reducer does not touch IsShutdownRequested", func() {
 		It("leaves ShutdownRequested unchanged when setting Disabled", func() {
@@ -229,8 +215,6 @@ var _ = Describe("CHANGE-19 Reducer (applyReducer) — D6 IsDisabled design", fu
 		})
 	})
 
-	// --- child not in s.children → no panic ---
-
 	Describe("child not found in children map", func() {
 		It("Enabled=false + unknown child: no panic, no error (teardown case)", func() {
 			s := newParentSupervisorWithSpecs(ctx, store, []config.ChildSpec{})
@@ -258,9 +242,7 @@ var _ = Describe("CHANGE-19 Reducer (applyReducer) — D6 IsDisabled design", fu
 	})
 })
 
-// --- WorkerSnapshot.ShouldStop: 3-way discriminator ---
-
-var _ = Describe("WorkerSnapshot.ShouldStop — 3-way discriminator (D6)", func() {
+var _ = Describe("WorkerSnapshot.ShouldStop — 3-way discriminator", func() {
 	type noConfig struct{}
 	type noStatus struct{}
 

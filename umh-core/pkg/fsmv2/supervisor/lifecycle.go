@@ -477,7 +477,6 @@ func (s *Supervisor[TObserved, TDesired]) requestShutdown(ctx context.Context, w
 		if !errors.Is(err, persistence.ErrNotFound) {
 			return fmt.Errorf("failed to load desired state: %w", err)
 		}
-		// No desired state in DB yet, nothing to update
 		return nil
 	}
 
@@ -682,9 +681,8 @@ func (s *Supervisor[TObserved, TDesired]) handleWorkerRestart(ctx context.Contex
 	return nil
 }
 
-// setDisabled writes the Disabled flag to storage for a single worker.
-// It mirrors requestShutdown but uses the Disableable interface instead of ShutdownRequestable.
-// The reducer is the exclusive caller; no other subsystem should call this.
+// setDisabled mirrors requestShutdown but uses the Disableable interface.
+// The reducer is the exclusive caller; no other subsystem may call this.
 func (s *Supervisor[TObserved, TDesired]) setDisabled(ctx context.Context, workerID string, disabled bool) error {
 	s.mu.RLock()
 	_, exists := s.workers[workerID]
@@ -701,7 +699,6 @@ func (s *Supervisor[TObserved, TDesired]) setDisabled(ctx context.Context, worke
 		if !errors.Is(err, persistence.ErrNotFound) {
 			return fmt.Errorf("failed to load desired state: %w", err)
 		}
-		// No desired state in DB yet, nothing to update
 		return nil
 	}
 
@@ -732,9 +729,9 @@ func (s *Supervisor[TObserved, TDesired]) setDisabled(ctx context.Context, worke
 	return nil
 }
 
-// SetDisabled sets the Disabled flag on all workers in this supervisor.
-// When disabled=true, workers stay resident in Stopped state without resuming.
-// The reducer calls this per-tick for CHANGE-19; returns the first error encountered.
+// SetDisabled writes the Disabled flag on every worker. disabled=true keeps
+// them resident in Stopped (no resume). The reducer calls this per-tick.
+// Returns the first error; subsequent workers are still updated.
 func (s *Supervisor[TObserved, TDesired]) SetDisabled(ctx context.Context, disabled bool) error {
 	s.mu.RLock()
 

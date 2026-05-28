@@ -30,14 +30,9 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence/memory"
 )
 
-// despawnPhaseState emits [child-0] on the first Next() call, then []ChildSpec{} (non-nil
-// empty) on every subsequent call. The distinction between nil and non-nil empty is the
-// discriminator being tested: nil → legacy fallback; non-nil (even empty) → use directly.
-//
-// Mutation target: reconciliation.go — change `rendered != nil` to `len(rendered) > 0`.
-// With the correct discriminator, the empty slice wins → child-0 is despawned.
-// With the broken discriminator, empty falls through to legacy GetChildrenSpecs() which
-// returns [child-0] from DeriveDesiredState → child-0 is never despawned → FAIL.
+// despawnPhaseState emits [child-0] on tick 1, then non-nil empty []ChildSpec{} forever.
+// Pins the rendered != nil discriminator: non-nil empty must despawn child-0,
+// not fall back to GetChildrenSpecs() (which would re-create it from DeriveDesiredState).
 type despawnPhaseState struct {
 	spawned bool
 }
@@ -68,10 +63,9 @@ func (s *despawnPhaseState) Next(_ any) fsmv2.NextResult[any, any] {
 		[]fsmconfig.ChildSpec{})
 }
 
-// despawnParentWorker's DeriveDesiredState always returns ChildrenSpecs containing
-// child-0. This is the load-bearing part of the mutation test: a broken !=-nil
-// discriminator (len()>0) causes the supervisor to fall through to GetChildrenSpecs()
-// which returns [child-0] from this method, keeping the child alive indefinitely.
+// DeriveDesiredState returns [child-0] unconditionally. If the supervisor
+// falls back to GetChildrenSpecs() it will keep re-creating child-0 forever,
+// even when the state machine emits non-nil empty.
 type despawnParentWorker struct{}
 
 func (w *despawnParentWorker) CollectObservedState(_ context.Context, _ fsmv2.DesiredState) (fsmv2.ObservedState, error) {

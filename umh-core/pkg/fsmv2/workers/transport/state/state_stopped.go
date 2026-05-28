@@ -36,8 +36,8 @@ type StoppedState struct {
 func (s *StoppedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := fsmv2.ConvertWorkerSnapshot[snapshot.TransportDesiredState, snapshot.TransportStatus](snapAny)
 
-	// Stopped is a stop-trajectory state: children are resident-disabled (pause-not-delete).
-	// On IsShutdownRequested, no children argument is needed (SignalNeedsRemoval drives removal).
+	// Stopped emits children with enabled=false (resident, not despawned).
+	// On IsShutdownRequested, SignalNeedsRemoval drives removal so the children arg is ignored.
 	stopChildren, err := snapshot.RenderChildren(snap.Config, false)
 	if err != nil {
 		stopChildren = nil
@@ -56,8 +56,8 @@ func (s *StoppedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	}
 
 	if snap.Config.ShouldBeRunning() {
-		// Transitioning to Starting: alive trajectory begins. Emit aliveChildren
-		// so supervisor wires children enabled=true one tick before Starting takes over.
+		// Transitioning to Starting: emit aliveChildren NOW (one tick early)
+		// so the supervisor flips enabled=true before Starting reads its first snapshot.
 		aliveChildren, aerr := snapshot.RenderChildren(snap.Config, true)
 		if aerr != nil {
 			aliveChildren = nil

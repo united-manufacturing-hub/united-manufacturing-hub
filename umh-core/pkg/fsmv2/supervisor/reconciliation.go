@@ -853,10 +853,8 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) (err error) 
 	}
 
 	// Select the children source after the tick so the latest rendered set is available.
-	// Workers that implement RenderChildren stash a non-nil slice on every tick
-	// (the new path). Workers that have not yet migrated return nil → fall back to
-	// GetChildrenSpecs() (the legacy path). Application emits nil and stays on the
-	// legacy path; all other migrated workers use the new path.
+	// nil rendered set → fall back to GetChildrenSpecs().
+	// Non-nil (even empty) means use rendered directly.
 	var childrenSpecs []config.ChildSpec
 
 	s.mu.RLock()
@@ -939,8 +937,8 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) (err error) 
 		}
 	}
 
-	// When shutting down, pass nil to trigger graceful child shutdown instead of re-creation.
-	// Shutdown override wins over any source-selected set.
+	// During shutdown, pass nil so reconcileChildren removes children instead of
+	// re-creating them. This wins over whatever the state machine rendered.
 	if desiredDoc[FieldShutdownRequested] == true {
 		childrenSpecs = nil
 	}
@@ -1620,10 +1618,9 @@ func (s *Supervisor[TObserved, TDesired]) reconcileChildren(specs []config.Child
 		}
 	}
 
-	// CHANGE-19 reducer: propagate Enabled flag to child supervisors as IsDisabled.
-	// Run after Phase 0 (children exist) and before Phase 1 (before despawn logic).
-	// Validation runs before reconcileChildren; this runs inside it — ordering preserved.
-	// Nil specs → no-op (leaf workers legitimately return nil from GetChildrenSpecs).
+	// applyReducer propagates ChildSpec.Enabled into each child's IsDisabled bit.
+	// Runs inside reconcileChildren, after the per-spec exists-check and before despawn.
+	// Nil specs are a no-op: leaf workers legitimately return nil from GetChildrenSpecs.
 	if specs != nil {
 		s.applyReducer(context.Background(), specs)
 	}
@@ -1773,16 +1770,14 @@ func (s *Supervisor[TObserved, TDesired]) applyStateMapping() {
 	}
 }
 
-// applyReducer propagates ChildSpec.Enabled flags to child supervisors as the IsDisabled bit.
-// This is the CHANGE-19 reducer: Enabled=false → SetDisabled(true), Enabled=true → SetDisabled(false).
+// applyReducer propagates ChildSpec.Enabled into each child's IsDisabled bit.
+// Called inside reconcileChildren (parent.mu held). Acquires per-child locks internally.
+// Nil specs are a no-op: leaf workers return nil from GetChildrenSpecs every tick.
 //
-// Called inside reconcileChildren (parent.mu is held). Acquires child locks internally (safe — separate objects).
-// Nil specs silently return: leaf workers legitimately return nil from GetChildrenSpecs every tick.
-//
-// Three-state semantics:
-//   - IsShutdownRequested=true → terminal removal (despawn, wins over IsDisabled)
+// Precedence:
+//   - IsShutdownRequested=true → terminal removal (wins over IsDisabled)
 //   - IsDisabled=true          → stay resident in Stopped, do not resume
-//   - both false               → normal operation, resume to Running when desired
+//   - both false               → normal, resume when desired
 func (s *Supervisor[TObserved, TDesired]) applyReducer(ctx context.Context, specs []config.ChildSpec) {
 	if specs == nil {
 		return
@@ -1803,11 +1798,11 @@ func (s *Supervisor[TObserved, TDesired]) applyReducer(ctx context.Context, spec
 			child, exists := s.children[spec.Name]
 			if !exists {
 				if spec.Enabled {
-					// Enabled child is expected to exist; its absence is unexpected.
+					// Enabled=true + not found = unexpected (WARN).
 					s.handleReducerError(spec, persistence.ErrNotFound)
 				}
 
-				// Disabled child not found: silent (child may already be pending removal).
+				// Enabled=false + not found = expected during teardown (DEBUG).
 				return
 			}
 
@@ -1818,10 +1813,9 @@ func (s *Supervisor[TObserved, TDesired]) applyReducer(ctx context.Context, spec
 	}
 }
 
-// handleReducerError logs reducer errors with per-(childName,errorClass) flood suppression.
-// Errors within reducerErrorSuppressionWindow are counted but not re-logged.
-// ErrNotFound when Enabled=true → WARN+CaptureEvent (unexpected missing child).
-// ErrNotFound when Enabled=false → DEBUG (expected during teardown).
+// handleReducerError logs with per-(childName,errorClass) flood suppression.
+// ErrNotFound + Enabled=true → WARN + CaptureEvent (unexpected).
+// ErrNotFound + Enabled=false → DEBUG (expected during teardown).
 func (s *Supervisor[TObserved, TDesired]) handleReducerError(spec config.ChildSpec, err error) {
 	errClass := s.classifyReducerError(err)
 	key := reducerSuppressKey{childName: spec.Name, errorClass: errClass}

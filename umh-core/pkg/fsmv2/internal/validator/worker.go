@@ -479,9 +479,9 @@ func checkChildSpecValidation(filename string) []Violation {
 		})
 
 		if !hasChildrenValidation && !hasProgrammaticChildren {
-			// Accept the new RenderChildren pattern: a parent may declare its
-			// children in a RenderChildren function (called by each state) instead
-			// of inside DeriveDesiredState. Both patterns satisfy the rule.
+			// A parent that declares a top-level RenderChildren passes the
+			// no-children-in-DeriveDesiredState check, even if DeriveDesiredState
+			// has no range-over-Children loop.
 			if !dirHasRenderChildren(filepath.Dir(filename)) {
 				pos := fset.Position(funcDecl.Pos())
 				violations = append(violations, Violation{
@@ -500,9 +500,7 @@ func checkChildSpecValidation(filename string) []Violation {
 }
 
 // dirHasRenderChildren reports whether any non-test .go file in dir or its
-// subdirectories declares a top-level RenderChildren function. This detects
-// the new declarative-children pattern where parents declare their child set
-// in RenderChildren (called per state) instead of inside DeriveDesiredState.
+// subdirectories declares a top-level RenderChildren function.
 func dirHasRenderChildren(dir string) bool {
 	found := false
 

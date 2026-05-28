@@ -21,7 +21,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 )
 
-// P2-2: NewChildSpec[T] round-trip guard.
+// NewChildSpec[T] round-trip guard.
 //
 // Ensures that NewChildSpec marshals T into UserSpec.Config and that ParseUserSpec[T]
 // recovers exactly the same fields. Catches two silent failure modes:

@@ -40,8 +40,6 @@ import (
 //
 // The FSM controls worker lifecycle through state transitions, not through custom bool fields.
 // Do not add fields like ShouldRun, IsRunning, Active, or State to your DesiredState.
-// Note: ChildSpec.Enabled is intentionally different — it is a parent-to-supervisor gating
-// signal on the child descriptor (not a DesiredState lifecycle field) and is explicitly allowed.
 //
 // Correct lifecycle control:
 //   - ShutdownRequested: Inherited from this type. Set by supervisor for graceful shutdown.
@@ -82,15 +80,12 @@ func (b *BaseDesiredState) SetShutdownRequested(v bool) {
 	b.ShutdownRequested = v
 }
 
-// IsDisabled returns whether the worker has been administratively disabled.
-// Disabled workers stay resident in Stopped state without resuming (see CHANGE-19).
-// The reducer is the exclusive writer; the restart subsystem never touches this field.
+// IsDisabled is written exclusively by the reducer (see supervisor/reconciliation.go applyReducer).
+// The restart subsystem never sets it.
 func (b *BaseDesiredState) IsDisabled() bool {
 	return b.Disabled
 }
 
-// SetDisabled sets the disabled flag.
-// This satisfies the Disableable interface.
 func (b *BaseDesiredState) SetDisabled(v bool) {
 	b.Disabled = v
 }
@@ -236,35 +231,17 @@ type ChildSpec struct {
 	UserSpec         UserSpec       `json:"userSpec"                   yaml:"userSpec"`                   // Raw user config (input to DeriveDesiredState)
 	Name             string         `json:"name"                       yaml:"name"`                       // Unique name for this child (within parent scope)
 	WorkerType       string         `json:"workerType"                 yaml:"workerType"`                 // Type of worker to create (registered worker factory key)
-	// ChildStartStates retained for the application worker's legacy gating path.
-	// Migrated workers (transport, communicator) leave it empty so computeMappedState
-	// (reconciliation.go) treats their children as always-run. exampleparent deliberately
-	// sets ["TryingToStart","Running"] to keep examplechild Stopped while the parent is
-	// Degraded. The field and its machinery (computeMappedState, setChildStartStates) are
-	// removed once the application worker — the field's last remaining consumer —
-	// migrates off the legacy DeriveDesiredState path.
+	// Deprecated. Only the application worker still consumes ChildStartStates
+	// (via computeMappedState in reconciliation.go). Other workers leave it
+	// empty. Remove together with computeMappedState when the application
+	// worker moves to RenderChildren.
 	ChildStartStates []string `json:"childStartStates,omitempty" yaml:"childStartStates,omitempty"` // Parent FSM states where child should run (empty = always run)
 
-	// Enabled is the parent's per-tick enable signal for this child.
-	//
-	// The zero value is false: ChildSpec literals that omit Enabled produce a
-	// stopped-but-resident child. Parents that want a running child must
-	// explicitly set Enabled: true in their renderChildren body.
-	//
-	// Pause/resume flow: setting Enabled=false drives the child to Stopped via
-	// IsDisabled=true; setting Enabled=true again writes IsDisabled=false, and
-	// the child's state machine transitions from Stopped back to TryingToStart
-	// on the next tick.
-	//
-	// One-way stop guarantee: once a child enters TryingToStop, it completes
-	// the stop before accepting a new IsDisabled=false signal. The supervisor
-	// only manages the flag; the child's state machine enforces the trajectory.
-	//
-	// Children read snap.IsDisabled and never read Enabled directly. The
-	// CHANGE-19 reducer in supervisor/reconciliation.go translates the spec
-	// value to IsDisabled (via SetDisabled) at the start of reconcileChildren,
-	// before Phase 1's pendingRemoval writes. IsShutdownRequested is owned
-	// exclusively by the restart subsystem and is never written by the reducer.
+	// Enabled is the parent's per-tick request for this child to run. Zero
+	// value (false) means "stopped but resident" — children stay in Stopped
+	// without being despawned. Setting Enabled=false then Enabled=true resumes
+	// the child on the next tick. Children read snap.IsDisabled, not Enabled
+	// directly; the reducer translates Enabled to IsDisabled.
 	Enabled bool `json:"enabled" yaml:"enabled"`
 }
 
@@ -391,15 +368,9 @@ type ChildInfo struct {
 	IsCircuitOpen bool // True if infrastructure failure detected (circuit breaker open)
 }
 
-// ChildrenView is a per-tick snapshot of a parent worker's children. The
-// supervisor builds one via NewChildrenView on every collector cycle and
-// injects it onto ObservedState through SetChildrenView, then round-trips it
-// through CSE storage to the reconciler goroutine.
-//
-// Aggregate predicates (HealthyCount, UnhealthyCount, AllHealthy,
-// AllOperational, AllStopped) are pre-computed at construction time from each
-// ChildInfo.Phase so readers access them as direct field reads instead of
-// method calls.
+// ChildrenView is the per-tick snapshot of a parent's children. Aggregate
+// predicates (HealthyCount, UnhealthyCount, AllHealthy, AllOperational,
+// AllStopped) are computed at construction so callers can read them as fields.
 //
 // To consume a ChildrenView in a worker:
 //
@@ -446,23 +417,9 @@ type ChildrenView struct {
 	AllStopped     bool        `json:"allStopped"`
 }
 
-// NewChildrenView builds a ChildrenView from a slice of ChildInfo entries.
-// Aggregate predicates are derived from each ChildInfo's IsHealthy,
-// IsOperational, and IsStopped booleans:
-//
-//   - HealthyCount counts entries with IsHealthy true.
-//   - UnhealthyCount counts entries that are neither healthy nor stopped.
-//   - AllHealthy is true when every entry is healthy, or when there are no
-//     entries.
-//   - AllOperational is true when every entry is operational, or when there
-//     are no entries.
-//   - AllStopped is true when every entry is stopped, or when there are no
-//     entries.
-//
-// A nil input slice is normalised to an empty slice so CSE delta-sync produces
-// a stable JSON shape across ticks. Tests that need a fake ChildrenView build
-// one by passing a hand-authored []ChildInfo to this constructor, with no mock
-// library required.
+// NewChildrenView builds a ChildrenView from ChildInfo entries. A nil input
+// slice is normalised to empty so CSE delta-sync produces a stable JSON shape
+// across ticks.
 func NewChildrenView(children []ChildInfo) ChildrenView {
 	if children == nil {
 		children = []ChildInfo{}

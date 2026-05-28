@@ -32,9 +32,8 @@
 // # References
 //
 // pkg/fsmv2/doc.go § Parent-child workers points at this package as the
-// despawn example (children are stateless). For the resident-disable
-// counterpart, see workers/example/examplechild/state/state_stopped.go and
-// workers/transport.
+// despawn example (children are stateless). For the variant where stopped
+// children stay resident (not despawned), see workers/transport.
 //
 // See workers/example/doc.go for full example worker documentation.
 package state

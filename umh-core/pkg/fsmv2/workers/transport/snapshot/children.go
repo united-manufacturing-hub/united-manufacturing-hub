@@ -20,22 +20,17 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 )
 
-// RenderChildren returns the ChildSpec set for the transport worker.
+// RenderChildren returns the push and pull ChildSpecs.
+// Both carry an empty config.BaseUserSpec{} because their config arrives via
+// injected dependencies (JWT token, transport interface), not via UserSpec.
 //
-// Transport manages two dependency-configured children — push and pull.
-// Their configuration arrives exclusively via injected dependencies (JWT token,
-// transport interface), so each ChildSpec carries an empty config.BaseUserSpec{};
-// the child's DeriveDesiredState reads an empty spec and defaults to "running".
+// We use BaseUserSpec{} directly instead of PushUserSpec{} / PullUserSpec{}
+// because importing those packages here would create an import cycle (both
+// import the top-level transport package, which imports this one). Both embed
+// only BaseUserSpec with no extra fields, so the YAML output is identical.
 //
-// Push and pull packages import the top-level transport package, which in turn
-// imports this snapshot package. Importing push or pull here would create an
-// import cycle, so config.BaseUserSpec{} is used directly. Both PushUserSpec and
-// PullUserSpec embed only BaseUserSpec with no additional fields, so the marshalled
-// YAML output is identical.
-//
-// The enabled parameter controls whether children should be active (true = alive
-// trajectory) or resident-disabled (false = stop trajectory, pause-not-delete).
-// Children are never despawned for transport: buffer holders stay resident.
+// enabled=false keeps both children resident in Stopped (not despawned).
+// They hold connection buffers and retry state.
 func RenderChildren(cfg TransportDesiredState, enabled bool) ([]config.ChildSpec, error) {
 	_ = cfg // cfg currently unused; retained for API consistency and future field mapping
 
