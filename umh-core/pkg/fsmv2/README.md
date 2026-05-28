@@ -17,6 +17,8 @@ go run pkg/fsmv2/cmd/runner/main.go --scenario=simple --duration=5s      # Paren
 
 ### Creating a New Worker
 
+Start from the example whose shape matches yours. If your worker has children, start from `workers/example/exampleparent/`. If it does not, start from `workers/example/helloworld/`.
+
 ```bash
 # 1. Copy the template structure
 workers/myworker/
@@ -434,24 +436,41 @@ Strict mode: missing variables fail immediately (no silent omissions).
 
 ### Child worker management
 
-Define a child in `DeriveDesiredState()` → supervisor spawns it automatically:
+Parents declare children via a package-level `RenderChildren(cfg, enabled bool)` function called from each state's `Next()`. The returned slice is the set of children that should exist on this tick:
 
 ```go
-func (w *MyWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, error) {
-    return &MyDesiredState{
-        Children: []ChildSpec{
-            {Name: "child-1", WorkerType: "mychildtype", UserSpec: childConfig},
-        },
-    }, nil
+// children.go in your parent worker package
+func RenderChildren(cfg MyParentConfig, enabled bool) ([]config.ChildSpec, error) {
+    specs := make([]config.ChildSpec, 0, cfg.Count)
+    for i := range cfg.Count {
+        specs = append(specs, config.ChildSpec{
+            Name:       fmt.Sprintf("child-%d", i),
+            WorkerType: "mychildtype",
+            UserSpec:   config.UserSpec{ /* ... */ },
+            Enabled:    enabled,
+        })
+    }
+    return specs, nil
 }
 ```
 
-**Accessing children**:
+In your states' `Next()`:
+
+- Alive-trajectory states (Running, Degraded, TryingToStart) call `RenderChildren(cfg, true)` and pass the slice through.
+- Stop-trajectory states (TryingToStop, Stopped) choose one of two patterns:
+  - Children hold state that must survive a pause (e.g., the transport's push buffer): call `RenderChildren(cfg, false)` so children stay resident in Stopped.
+  - Children are stateless: return an empty slice `[]config.ChildSpec{}` so children despawn.
+
+The supervisor reconciles from this slice. Omitting a child despawns it; including it with `Enabled=false` keeps it resident in Stopped.
+
+See `config/childspec.go` for `ChildSpec` fields (Enabled, ChildStartStates, UserSpec, Variables). For the despawn variant see `workers/example/exampleparent/children.go`. For the resident-disable variant see `workers/transport/snapshot/children.go`.
+
+**Accessing children's state from the parent**:
 - `ChildrenView.List()` - all children with state info
 - `ChildrenView.Get(name)` - single child by name (returns `*ChildInfo`, nil if not found)
-- `ChildrenView.AllHealthy()` - pre-computed aggregate predicate (method; true when all children are PhaseRunningHealthy)
+- `ChildrenView.AllHealthy()` - pre-computed aggregate predicate (true when all children are PhaseRunningHealthy)
 - `ChildrenView.Counts() (healthy, unhealthy int)` - pre-computed aggregate counts (stopped children excluded from unhealthy)
-- `StateReader.LoadObservedTyped()` - query child state from parent
+- `StateReader.LoadObservedTyped()` - query a child's observed state
 
 ### FrameworkMetrics (auto-injected)
 

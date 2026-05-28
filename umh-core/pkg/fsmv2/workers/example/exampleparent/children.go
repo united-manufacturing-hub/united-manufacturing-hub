@@ -23,21 +23,23 @@ import (
 // RenderChildren returns the ChildSpec set for the exampleparent worker.
 //
 // Each child receives cfg.ChildConfig as its UserSpec.Config and a per-child
-// DEVICE_ID variable (device-0, device-1, …). ChildStartStates mirrors the
-// legacy DeriveDesiredState builder so children start when the parent enters
-// TryingToStart or Running.
+// DEVICE_ID variable (device-0, device-1, ...). ChildStartStates is set to
+// ["TryingToStart", "Running"] so each child starts when the parent enters
+// either of those states.
 //
-// When cfg.ChildConfig == "", each child's UserSpec.Config is an empty string. The
-// legacy DeriveDesiredState injected a default template ("address: {{ .IP }}:{{ .PORT }}
-// device: {{ .DEVICE_ID }}") for unset ChildConfig; that default is intentionally not
-// replicated — ExamplechildConfig has no typed address/device fields so the template
-// was never consumed, and no active scenario relies on it.
+// When cfg.ChildConfig is empty, each child's UserSpec.Config is empty as
+// well. No default template is injected; ExamplechildConfig has no address
+// or device fields that would consume one.
 //
-// The enabled parameter controls whether children should be active. Alive-trajectory
-// states (TryingToStart, Running, Degraded) pass enabled=true. Stop-trajectory states
-// (TryingToStop, Stopped) pass the empty slice []config.ChildSpec{} directly rather
-// than calling RenderChildren — exampleparent is stateless (no buffer holders), so
-// children are fully despawned rather than resident-disabled.
+// The enabled parameter controls whether children should be active. Alive-
+// trajectory states (TryingToStart, Running, Degraded) pass enabled=true.
+// Stop-trajectory states (TryingToStop, Stopped) pass an empty slice
+// directly rather than calling RenderChildren: exampleparent's children
+// are stateless.
+//
+// For the resident-disable variant (enabled=false keeps children in
+// Stopped instead of despawning), see workers/example/examplechild/state/state_stopped.go
+// and workers/transport.
 func RenderChildren(cfg ExampleparentConfig, enabled bool) ([]config.ChildSpec, error) {
 	childWorkerType := cfg.GetChildWorkerType()
 	count := cfg.ChildrenCount
