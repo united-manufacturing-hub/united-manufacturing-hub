@@ -236,7 +236,14 @@ type ChildSpec struct {
 	UserSpec         UserSpec       `json:"userSpec"                   yaml:"userSpec"`                   // Raw user config (input to DeriveDesiredState)
 	Name             string         `json:"name"                       yaml:"name"`                       // Unique name for this child (within parent scope)
 	WorkerType       string         `json:"workerType"                 yaml:"workerType"`                 // Type of worker to create (registered worker factory key)
-	ChildStartStates []string       `json:"childStartStates,omitempty" yaml:"childStartStates,omitempty"` // Parent FSM states where child should run (empty = always run)
+	// ChildStartStates retained for the application worker's legacy gating path.
+	// Migrated workers (transport, communicator) leave it empty so computeMappedState
+	// (reconciliation.go) treats their children as always-run. exampleparent deliberately
+	// sets ["TryingToStart","Running"] to keep examplechild Stopped while the parent is
+	// Degraded. The field and its machinery (computeMappedState, setChildStartStates) are
+	// removed once the application worker — the field's last remaining consumer —
+	// migrates off the legacy DeriveDesiredState path.
+	ChildStartStates []string `json:"childStartStates,omitempty" yaml:"childStartStates,omitempty"` // Parent FSM states where child should run (empty = always run)
 
 	// Enabled is the parent's per-tick enable signal for this child.
 	//
