@@ -25,7 +25,23 @@ func init() {
 	fsmv2.RegisterInitialState("examplechild", &StoppedState{})
 }
 
-// StoppedState represents the initial state where the child worker is not connected.
+// StoppedState is the child's terminal lifecycle state. It implements the
+// three-way branch between shutdown, disable, and resume.
+//
+// Three branches, in precedence order:
+//
+//  1. IsShutdownRequested wins. The supervisor wants this worker removed
+//     entirely. Emit SignalNeedsRemoval and stop.
+//  2. IsDisabled stays resident. The parent has set Enabled=false on this
+//     child's ChildSpec. The worker stays in Stopped, preserving dependency
+//     state. It does not resume until IsDisabled clears.
+//  3. Otherwise observe the parent. When ParentMappedState is Running,
+//     transition to TryingToConnect. Otherwise stay stopped.
+//
+// This is the child half of the resident-disable contract. For the parent
+// half, see workers/example/exampleparent/children.go (which despawns
+// instead of disabling, because exampleparent's children are stateless).
+// For the resident variant in production, see workers/transport.
 type StoppedState struct {
 	helpers.StoppedBase
 }
