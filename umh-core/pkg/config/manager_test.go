@@ -1291,6 +1291,7 @@ agent:
 			It("should NOT create a backup when WriteFile fails in writeConfig", func() {
 				mockFS.WithWriteFileFunc(func(ctx context.Context, path string, data []byte, perm os.FileMode) error {
 					writeFileCalls = append(writeFileCalls, path)
+
 					return errors.New("disk full")
 				})
 
@@ -1312,6 +1313,7 @@ agent:
 			It("should NOT create a backup when WriteFile fails in WriteYAMLConfigFromString", func() {
 				mockFS.WithWriteFileFunc(func(ctx context.Context, path string, data []byte, perm os.FileMode) error {
 					writeFileCalls = append(writeFileCalls, path)
+
 					return errors.New("disk full")
 				})
 
@@ -1332,12 +1334,14 @@ agent:
 
 				mockFS.WithFileExistsFunc(func(ctx context.Context, path string) (bool, error) {
 					_, ok := files[path]
+
 					return ok, nil
 				})
 				mockFS.WithReadFileFunc(func(ctx context.Context, path string) ([]byte, error) {
 					if data, ok := files[path]; ok {
 						return data, nil
 					}
+
 					return nil, fmt.Errorf("file not found: %s", path)
 				})
 				mockFS.WithWriteFileFunc(func(ctx context.Context, path string, data []byte, perm os.FileMode) error {
@@ -1347,6 +1351,7 @@ agent:
 					if strings.HasPrefix(path, constants.ConfigBackupDir+"/") {
 						backupFiles = append(backupFiles, path)
 					}
+
 					return nil
 				})
 				mockFS.WithReadDirFunc(func(ctx context.Context, path string) ([]os.DirEntry, error) {
@@ -1357,6 +1362,7 @@ agent:
 					for _, name := range backupFiles {
 						entries = append(entries, newMockDirEntry(filepath.Base(name), false))
 					}
+
 					return entries, nil
 				})
 				mockFS.WithEnsureDirectoryFunc(func(ctx context.Context, path string) error { return nil })
@@ -1365,6 +1371,7 @@ agent:
 				})
 				mockFS.WithRemoveFunc(func(ctx context.Context, path string) error {
 					delete(files, path)
+
 					return nil
 				})
 
@@ -1404,6 +1411,7 @@ agent:
 
 				mockFS.WithFileExistsFunc(func(ctx context.Context, path string) (bool, error) {
 					_, ok := files[path]
+
 					return ok, nil
 				})
 
@@ -1411,6 +1419,7 @@ agent:
 					if data, ok := files[path]; ok {
 						return data, nil
 					}
+
 					return nil, fmt.Errorf("file not found: %s", path)
 				})
 
@@ -1421,6 +1430,7 @@ agent:
 					if strings.HasPrefix(path, constants.ConfigBackupDir+"/") {
 						backupFiles = append(backupFiles, path)
 					}
+
 					return nil
 				})
 
@@ -1432,6 +1442,7 @@ agent:
 					for _, name := range backupFiles {
 						entries = append(entries, newMockDirEntry(filepath.Base(name), false))
 					}
+
 					return entries, nil
 				})
 
@@ -1445,6 +1456,7 @@ agent:
 
 				mockFS.WithRemoveFunc(func(ctx context.Context, path string) error {
 					delete(files, path)
+
 					return nil
 				})
 
@@ -1481,6 +1493,7 @@ agent:
 				for _, path := range backupFiles {
 					if strings.Contains(string(files[path]), "9090") {
 						foundNewBackup = true
+
 						break
 					}
 				}
@@ -1574,7 +1587,9 @@ func newMockDirEntry(name string, isDir bool) *mockDirEntry {
 	return &mockDirEntry{name: name, isDir: isDir}
 }
 
-func (m *mockDirEntry) Name() string               { return m.name }
-func (m *mockDirEntry) IsDir() bool                { return m.isDir }
-func (m *mockDirEntry) Type() fs.FileMode          { return 0 }
-func (m *mockDirEntry) Info() (fs.FileInfo, error)  { return nil, errors.New("mockDirEntry.Info() not implemented") }
+func (m *mockDirEntry) Name() string      { return m.name }
+func (m *mockDirEntry) IsDir() bool       { return m.isDir }
+func (m *mockDirEntry) Type() fs.FileMode { return 0 }
+func (m *mockDirEntry) Info() (fs.FileInfo, error) {
+	return nil, errors.New("mockDirEntry.Info() not implemented")
+}

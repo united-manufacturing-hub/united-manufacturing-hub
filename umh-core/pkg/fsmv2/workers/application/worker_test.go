@@ -22,6 +22,7 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/application/snapshot"
 )
 
@@ -32,7 +33,12 @@ var _ = Describe("ApplicationWorker", func() {
 	var worker *ApplicationWorker
 
 	BeforeEach(func() {
-		worker = NewApplicationWorker("root-1", "test-root")
+		identity := deps.Identity{
+			ID:         "root-1",
+			Name:       "test-root",
+			WorkerType: workerType,
+		}
+		worker = NewApplicationWorker(identity, deps.NewNopFSMLogger(), nil)
 	})
 
 	Describe("CollectObservedState", func() {

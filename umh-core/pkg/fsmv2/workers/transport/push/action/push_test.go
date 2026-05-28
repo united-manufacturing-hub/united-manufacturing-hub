@@ -391,7 +391,7 @@ var _ = Describe("PushAction", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			Expect(mockTrans.pushCallCount).To(Equal(2), "1 for pending retry + 1 for Phase 2 batch")
-			Expect(outboundBi).To(HaveLen(0), "channel must be drained after pending succeeds")
+			Expect(outboundBi).To(BeEmpty(), "channel must be drained after pending succeeds")
 		})
 
 		It("should retry pending one-by-one and drop on non-infrastructure error", func() {
@@ -498,13 +498,14 @@ var _ = Describe("PushAction", func() {
 						Message: "connection refused",
 					}
 				}
+
 				return nil
 			}
 
 			err := act.Execute(context.Background(), mockDeps)
 			Expect(err).NotTo(HaveOccurred())
 
-			Expect(outboundBi).To(HaveLen(0), "channel must be drained even when retry has transient error")
+			Expect(outboundBi).To(BeEmpty(), "channel must be drained even when retry has transient error")
 			Expect(mockDeps.PendingMessageCount()).To(Equal(4), "remaining pending (2) + drained channel (2)")
 
 			// FIFO contract: failed pending (older) must come before drained
@@ -531,6 +532,7 @@ var _ = Describe("PushAction", func() {
 						Message: "HTTP 401: invalid_token",
 					}
 				}
+
 				return nil
 			}
 
@@ -538,7 +540,7 @@ var _ = Describe("PushAction", func() {
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("recoverable by parent"))
 
-			Expect(outboundBi).To(HaveLen(0), "channel must be drained even on auth error")
+			Expect(outboundBi).To(BeEmpty(), "channel must be drained even on auth error")
 			Expect(mockDeps.PendingMessageCount()).To(Equal(3), "remaining pending (2) + drained channel (1)")
 		})
 
@@ -557,13 +559,14 @@ var _ = Describe("PushAction", func() {
 				if len(msgs) > 1 {
 					phase2Msgs = msgs
 				}
+
 				return nil
 			}
 
 			err := act.Execute(context.Background(), mockDeps)
 			Expect(err).NotTo(HaveOccurred())
 
-			Expect(outboundBi).To(HaveLen(0), "channel must be drained")
+			Expect(outboundBi).To(BeEmpty(), "channel must be drained")
 			Expect(phase2Msgs).To(HaveLen(2), "Phase 2 should batch-push channel messages")
 			Expect(phase2Msgs[0].Content).To(Equal("channel-msg1"))
 			Expect(phase2Msgs[1].Content).To(Equal("channel-msg2"))
@@ -586,7 +589,7 @@ var _ = Describe("PushAction", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			Expect(mockTrans.pushCallCount).To(Equal(1), "only the pending retry push, no Phase 2 push")
-			Expect(outboundBi).To(HaveLen(0), "channel still drained to pending")
+			Expect(outboundBi).To(BeEmpty(), "channel still drained to pending")
 			Expect(mockDeps.PendingMessageCount()).To(Equal(2), "failed pending (1) + drained channel (1)")
 		})
 
@@ -601,6 +604,7 @@ var _ = Describe("PushAction", func() {
 
 			mockTrans.pushFunc = func(_ context.Context, _ string, _ []*types.UMHMessage) error {
 				cancel()
+
 				return nil
 			}
 
@@ -679,15 +683,15 @@ var _ = Describe("PushAction", func() {
 			const ticks = 10
 			const messagesPerTick = 5
 
-			for tick := 0; tick < ticks; tick++ {
-				for j := 0; j < messagesPerTick; j++ {
+			for tick := range ticks {
+				for j := range messagesPerTick {
 					outboundBi <- &types.UMHMessage{Content: fmt.Sprintf("tick%d-msg%d", tick, j)}
 				}
 
 				err := act.Execute(context.Background(), mockDeps)
 				Expect(err).NotTo(HaveOccurred(), "transient error should be suppressed at tick %d", tick)
 
-				Expect(outboundBi).To(HaveLen(0), "channel must be drained on tick %d (would overflow without ENG-4741 fix)", tick)
+				Expect(outboundBi).To(BeEmpty(), "channel must be drained on tick %d (would overflow without ENG-4741 fix)", tick)
 			}
 
 			// Pending grew by messagesPerTick per tick (drain rescued the
@@ -713,6 +717,7 @@ var _ = Describe("PushAction", func() {
 						Message: "connection refused",
 					}
 				}
+
 				return nil
 			}
 

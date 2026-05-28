@@ -78,6 +78,7 @@ type DeployProtocolConverterAction struct {
 // NewDeployProtocolConverterAction returns an un-parsed action instance.
 func NewDeployProtocolConverterAction(userEmail string, actionUUID uuid.UUID, instanceUUID uuid.UUID, outboundChannel chan *models.UMHMessage, configManager config.ConfigManager, systemSnapshotManager *fsm.SnapshotManager) *DeployProtocolConverterAction {
 	al := logger.For(logger.ComponentCommunicator)
+
 	return &DeployProtocolConverterAction{
 		userEmail:             userEmail,
 		actionUUID:            actionUUID,
@@ -128,6 +129,7 @@ func (a *DeployProtocolConverterAction) Validate() error {
 	if err := validateProtocolConverterDFC(a.payload.ReadDFC, "read"); err != nil {
 		return err
 	}
+
 	if err := validateProtocolConverterDFC(a.payload.WriteDFC, "write"); err != nil {
 		return err
 	}
@@ -290,6 +292,7 @@ func (a *DeployProtocolConverterAction) createProtocolConverterConfig() (config.
 		if err != nil {
 			return config.ProtocolConverterConfig{}, fmt.Errorf("failed to create read DFC benthos config: %w", err)
 		}
+
 		template.DataflowComponentReadServiceConfig = dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
 			BenthosConfig: benthosConfig,
 		}
@@ -312,6 +315,7 @@ func (a *DeployProtocolConverterAction) createProtocolConverterConfig() (config.
 	if a.payload.ReadDFC != nil {
 		readDFCDesiredState = a.payload.ReadDFC.State
 	}
+
 	if a.payload.WriteDFC != nil {
 		writeDFCDesiredState = a.payload.WriteDFC.State
 	}

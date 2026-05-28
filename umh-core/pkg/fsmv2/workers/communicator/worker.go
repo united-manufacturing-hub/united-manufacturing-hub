@@ -57,7 +57,6 @@ import (
 	fsmv2types "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	depspkg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
 	httpTransport "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/http"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/types"
@@ -67,7 +66,7 @@ const workerTypeName = "communicator"
 
 // CommunicatorWorker implements the FSM v2 Worker interface for channel-based synchronization.
 type CommunicatorWorker struct {
-	*helpers.BaseWorker[*CommunicatorDependencies]
+	fsmv2.WorkerBase[CommunicatorConfig, CommunicatorStatus, *CommunicatorDependencies]
 }
 
 // NewCommunicatorWorker creates a new Channel-based Communicator worker in Stopped state.
@@ -85,11 +84,26 @@ func NewCommunicatorWorker(
 		// HierarchyPath is set by the supervisor when adding workers via factory.
 	}
 
-	dependencies := NewCommunicatorDependencies(transportParam, logger, stateReader, identity)
+	w := &CommunicatorWorker{}
+	bd := w.InitBase(identity, logger, stateReader)
 
-	return &CommunicatorWorker{
-		BaseWorker: helpers.NewBaseWorker(dependencies),
-	}, nil
+	dependencies := NewCommunicatorDependencies(transportParam, bd)
+	w.BindDeps(dependencies)
+
+	return w, nil
+}
+
+// GetDependencies returns the typed CommunicatorDependencies.
+// Panics with a clear message if BindDeps was not called before this worker is used.
+func (w *CommunicatorWorker) GetDependencies() *CommunicatorDependencies {
+	raw := w.GetDependenciesAny()
+
+	d, ok := raw.(*CommunicatorDependencies)
+	if !ok || d == nil {
+		panic("CommunicatorWorker: GetDependencies called before BindDeps")
+	}
+
+	return d
 }
 
 // CollectObservedState returns the current observed state of the communicator.
@@ -162,24 +176,18 @@ func makeTransportChildSpec(parentSpec fsmv2types.UserSpec) []fsmv2types.ChildSp
 	}}
 }
 
-// GetInitialState returns StoppedState as the initial FSM state.
-// Uses the initial state registry populated by the state package's init() function.
-// The caller must ensure the state package is imported (via blank import in main or test).
-func (w *CommunicatorWorker) GetInitialState() fsmv2.State[any, any] {
-	return fsmv2.LookupInitialState(workerTypeName)
-}
-
 func init() {
 	if err := factory.RegisterWorkerAndSupervisorFactoryByType(
 		workerTypeName,
 		func(id depspkg.Identity, logger depspkg.FSMLogger, stateReader depspkg.StateReader, _ map[string]any) fsmv2.Worker {
 			// ChannelProvider must be set via global singleton before factory is called (will panic if not set).
 			// Transport creation and auth are handled by TransportWorker (ENG-4264).
-			commDeps := NewCommunicatorDependencies(nil, logger, stateReader, id)
+			w := &CommunicatorWorker{}
+			wbd := w.InitBase(id, logger, stateReader)
+			commDeps := NewCommunicatorDependencies(nil, wbd)
+			w.BindDeps(commDeps)
 
-			return &CommunicatorWorker{
-				BaseWorker: helpers.NewBaseWorker(commDeps),
-			}
+			return w
 		},
 		func(cfg interface{}) interface{} {
 			return supervisor.NewSupervisor[fsmv2.Observation[CommunicatorStatus], *fsmv2.WrappedDesiredState[CommunicatorConfig]](

@@ -84,18 +84,21 @@ type TransportDependencies struct {
 
 // NewTransportDependencies creates dependencies for the transport worker.
 // Panics if SetChannelProvider was not called first.
-func NewTransportDependencies(t types.Transport, logger deps.FSMLogger, stateReader deps.StateReader, identity deps.Identity) *TransportDependencies {
+// bd is the shared BaseDependencies returned by WorkerBase.InitBase.
+// The supervisor writes framework metrics into this instance after construction;
+// constructing a second instance inside the factory would leave those metrics unreachable.
+func NewTransportDependencies(t types.Transport, bd *deps.BaseDependencies) *TransportDependencies {
 	provider := GetChannelProvider()
 	if provider == nil {
 		panic(fmt.Sprintf("ChannelProvider must be set before creating dependencies (worker=%s). "+
 			"Call SetChannelProvider() in main() before starting FSMv2 supervisor.",
-			identity.ID))
+			bd.GetWorkerID()))
 	}
 
-	inbound, outbound := provider.GetChannels(identity.ID)
+	inbound, outbound := provider.GetChannels(bd.GetWorkerID())
 
 	return &TransportDependencies{
-		BaseDependencies: deps.NewBaseDependencies(logger, stateReader, identity),
+		BaseDependencies: bd,
 		transport:        t,
 		authFailureRate:  failurerate.New(AuthFailureRateConfig),
 		inboundChan:      inbound,
@@ -221,6 +224,7 @@ func (d *TransportDependencies) GetConsecutiveErrors() int {
 func (d *TransportDependencies) GetPersistentAuthErrorCount() int {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
+
 	return d.persistentAuthErrorCount
 }
 

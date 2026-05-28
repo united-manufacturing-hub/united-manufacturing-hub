@@ -161,7 +161,7 @@ func (s *TryingToStartState) Next(snapAny any) fsmv2.NextResult[any, any] {
     snap := fsmv2.ConvertWorkerSnapshot[MyConfig, MyStatus](snapAny)
 
     // Check shutdown first
-    if snap.IsStopRequired() {
+    if snap.ShouldStop() {
         return fsmv2.Result[any, any](&TryingToStopState{}, fsmv2.SignalNone, nil, "stop required")
     }
 
@@ -362,7 +362,7 @@ func (s *RunningState) Next(snapAny any) fsmv2.NextResult[any, any] {
     snap := fsmv2.ConvertWorkerSnapshot[MyConfig, MyStatus](snapAny)
 
     // Check shutdown first (equivalent to leave callback)
-    if snap.IsStopRequired() {
+    if snap.ShouldStop() {
         return fsmv2.Result[any, any](&TryingToStopState{}, fsmv2.SignalNone, nil, "stop required")
     }
 

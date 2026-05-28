@@ -491,8 +491,10 @@ func (p *ProtocolConverterInstance) areBothDFCsIntentionallyStopped() bool {
 		p.specConfig.WriteDFCDesiredState != OperationalStateStopped {
 		return false
 	}
+
 	readHasConfig := len(p.specConfig.Config.DataflowComponentReadServiceConfig.BenthosConfig.Input) > 0
 	writeHasConfig := len(p.specConfig.Config.DataflowComponentWriteServiceConfig.BenthosConfig.Output) > 0
+
 	return readHasConfig || writeHasConfig
 }
 
@@ -501,6 +503,7 @@ func stateOrNotExisting(state string) string {
 	if state == "" {
 		return "not existing"
 	}
+
 	return state
 }
 
@@ -565,7 +568,6 @@ func (p *ProtocolConverterInstance) IsOtherDegraded() (bool, string) {
 	}
 
 	for _, c := range checks {
-
 		// Case 1: DFC active but redpanda idle
 		if c.fsmState == dataflowfsm.OperationalStateActive &&
 			p.ObservedState.ServiceInfo.RedpandaFSMState == redpandafsm.OperationalStateIdle {

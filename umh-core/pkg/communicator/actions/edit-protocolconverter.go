@@ -130,6 +130,7 @@ type EditProtocolConverterAction struct {
 // NewEditProtocolConverterAction returns an un-parsed action instance.
 func NewEditProtocolConverterAction(userEmail string, actionUUID uuid.UUID, instanceUUID uuid.UUID, outboundChannel chan *models.UMHMessage, configManager config.ConfigManager, systemSnapshotManager *fsm.SnapshotManager) *EditProtocolConverterAction {
 	al := logger.For(logger.ComponentCommunicator)
+
 	return &EditProtocolConverterAction{
 		userEmail:             userEmail,
 		actionUUID:            actionUUID,
@@ -155,6 +156,7 @@ func (a *EditProtocolConverterAction) Parse(payload interface{}) error {
 	if pcPayload.UUID == nil {
 		return errors.New("missing required field UUID")
 	}
+
 	a.protocolConverterUUID = *pcPayload.UUID
 	a.name = pcPayload.Name
 
@@ -162,14 +164,17 @@ func (a *EditProtocolConverterAction) Parse(payload interface{}) error {
 	if pcPayload.ReadDFC != nil {
 		readPayload := dfcToPayload(pcPayload.ReadDFC)
 		a.readDFCPayload = &readPayload
+
 		a.readDFCState = pcPayload.ReadDFC.State
 		if pcPayload.ReadDFC.IgnoreErrors != nil {
 			a.ignoreHealthCheck = *pcPayload.ReadDFC.IgnoreErrors
 		}
 	}
+
 	if pcPayload.WriteDFC != nil {
 		writePayload := dfcToPayload(pcPayload.WriteDFC)
 		a.writeDFCPayload = &writePayload
+
 		a.writeDFCState = pcPayload.WriteDFC.State
 		if pcPayload.WriteDFC.IgnoreErrors != nil {
 			a.ignoreHealthCheck = a.ignoreHealthCheck || *pcPayload.WriteDFC.IgnoreErrors
@@ -215,6 +220,7 @@ func (a *EditProtocolConverterAction) Validate() error {
 	if err := validateDFCPayloadAndState(a.readDFCPayload, a.readDFCState, "read"); err != nil {
 		return err
 	}
+
 	if err := validateDFCPayloadAndState(a.writeDFCPayload, a.writeDFCState, "write"); err != nil {
 		return err
 	}
@@ -255,6 +261,7 @@ func (a *EditProtocolConverterAction) Execute() (interface{}, map[string]interfa
 
 			return nil, nil, fmt.Errorf("%s", errorMsg)
 		}
+
 		readBenthosConfig = &cfg
 	}
 
@@ -269,6 +276,7 @@ func (a *EditProtocolConverterAction) Execute() (interface{}, map[string]interfa
 
 			return nil, nil, fmt.Errorf("%s", errorMsg)
 		}
+
 		writeBenthosConfig = &cfg
 	}
 
@@ -487,6 +495,7 @@ func (a *EditProtocolConverterAction) applyMutation(readBenthosConfig, writeBent
 		if a.connectionIP != "" {
 			instanceToModify.ProtocolConverterServiceConfig.Variables.User["IP"] = a.connectionIP
 		}
+
 		if a.connectionPort != "" && a.connectionPort != "0" {
 			instanceToModify.ProtocolConverterServiceConfig.Variables.User["PORT"] = a.connectionPort
 		}
@@ -496,6 +505,7 @@ func (a *EditProtocolConverterAction) applyMutation(readBenthosConfig, writeBent
 	if a.readDFCState != "" {
 		instanceToModify.ProtocolConverterServiceConfig.ReadDFCDesiredState = a.readDFCState
 	}
+
 	if a.writeDFCState != "" {
 		instanceToModify.ProtocolConverterServiceConfig.WriteDFCDesiredState = a.writeDFCState
 	}
@@ -680,7 +690,6 @@ func (a *EditProtocolConverterAction) awaitRollout(pcConfig config.ProtocolConve
 
 					switch desiredPCState {
 					case protocolconverter.OperationalStateActive:
-
 						hasReachedDesiredState = slices.Contains(
 							[]string{
 								protocolconverter.OperationalStateActive,
@@ -778,7 +787,6 @@ func (a *EditProtocolConverterAction) awaitRollout(pcConfig config.ProtocolConve
 
 				switch desiredPCState {
 				case protocolconverter.OperationalStateActive:
-
 					hasReachedDesiredState = slices.Contains(
 						[]string{
 							protocolconverter.OperationalStateActive,
@@ -831,7 +839,6 @@ func (a *EditProtocolConverterAction) awaitRollout(pcConfig config.ProtocolConve
 				// only send the logs that have not been sent yet
 				if len(logs) > len(lastLogs) {
 					lastLogs = SendLimitedLogs(logs, lastLogs, a.instanceUUID, a.userEmail, a.actionUUID, a.outboundChannel, models.EditProtocolConverter, remainingSeconds)
-
 				}
 
 				// CheckBenthosLogLinesForConfigErrors is used to detect fatal configuration errors that would cause
@@ -957,6 +964,7 @@ func (a *EditProtocolConverterAction) compareSingleDFCConfig(pcSnapshot *protoco
 	renderedDesiredConfig, err := a.renderDesiredDFCConfig(pcSnapshot, dfcType)
 	if err != nil {
 		a.actionLogger.Errorf("failed to render desired %s DFC config: %v", dfcType, err)
+
 		return false
 	}
 
@@ -1098,19 +1106,24 @@ func (a *EditProtocolConverterAction) deriveDFCType() DFCType {
 	currentConfig, err := a.configManager.GetConfig(ctx, 0)
 	if err != nil {
 		a.actionLogger.Debugf("Cannot read current config for diff, falling back to payload presence: %v", err)
+
 		return dfcTypeFromPresence(hasRead, hasWrite)
 	}
 
 	// Find the protocol converter in the current config.
 	var currentPC *config.ProtocolConverterConfig
+
 	for i, pc := range currentConfig.ProtocolConverter {
 		if dataflowcomponentserviceconfig.GenerateUUIDFromName(pc.Name) == a.protocolConverterUUID {
 			currentPC = &currentConfig.ProtocolConverter[i]
+
 			break
 		}
 	}
+
 	if currentPC == nil {
 		a.actionLogger.Debugf("Protocol converter %s not found in current config, falling back to payload presence", a.protocolConverterUUID)
+
 		return dfcTypeFromPresence(hasRead, hasWrite)
 	}
 
@@ -1123,10 +1136,12 @@ func (a *EditProtocolConverterAction) deriveDFCType() DFCType {
 	deployedVars := currentPC.ProtocolConverterServiceConfig.Variables.User
 	deployedIP, ipOk := deployedVars["IP"]
 	deployedPort, portOk := deployedVars["PORT"]
+
 	connectionChanged := ipOk && portOk &&
 		(fmt.Sprint(deployedIP) != a.connectionIP || fmt.Sprint(deployedPort) != a.connectionPort)
 	if connectionChanged {
 		a.actionLogger.Debugf("Connection changed (IP or PORT), all present DFCs need redeploy")
+
 		return dfcTypeFromPresence(hasRead, hasWrite)
 	}
 
@@ -1144,6 +1159,7 @@ func (a *EditProtocolConverterAction) deriveDFCType() DFCType {
 			writeChanged = true
 		}
 	}
+
 	derived := dfcTypeFromPresence(readChanged, writeChanged)
 	a.actionLogger.Debugf("Derived dfcType=%s (readChanged=%v, writeChanged=%v)", derived, readChanged, writeChanged)
 
@@ -1173,6 +1189,7 @@ func (a *EditProtocolConverterAction) dfcPayloadDiffers(
 	incomingBenthos, err := CreateBenthosConfigFromCDFCPayload(payload, a.name)
 	if err != nil {
 		a.actionLogger.Debugf("Cannot build benthos config for diff, treating as changed: %v", err)
+
 		return true
 	}
 
@@ -1246,11 +1263,13 @@ func validateDFCPayloadAndState(payload *models.CDFCPayload, state string, label
 			return errors.New("write DFC requires at least one UMH topic (umh_topics)")
 		}
 	}
+
 	if state != "" {
 		if err := ValidateDataFlowComponentState(state); err != nil {
 			return fmt.Errorf("invalid %s DFC state: %w", label, err)
 		}
 	}
+
 	return nil
 }
 
@@ -1260,19 +1279,23 @@ func validateProtocolConverterDFC(dfc *models.ProtocolConverterDFC, label string
 	if dfc == nil {
 		return nil
 	}
+
 	if dfc.State != "" {
 		if err := ValidateDataFlowComponentState(dfc.State); err != nil {
 			return fmt.Errorf("invalid %s DFC state: %w", label, err)
 		}
 	}
+
 	payload := dfcToPayload(dfc)
 	// For write DFCs, skip input validation since input is auto-generated
 	validateInput := label != "write"
 	if err := ValidateCustomDataFlowComponentPayload(payload, validateInput, false); err != nil {
 		return fmt.Errorf("invalid %s DFC configuration: %w", label, err)
 	}
+
 	if label == "write" && len(dfc.Outputs.Data) > 0 && len(dfc.UMHTopics) == 0 {
 		return errors.New("write DFC requires at least one UMH topic (umh_topics)")
 	}
+
 	return nil
 }

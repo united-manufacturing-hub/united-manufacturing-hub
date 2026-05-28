@@ -749,6 +749,7 @@ func (b *BenthosInstance) IsBenthosLogsFine(currentTime time.Time, logWindow tim
 	// are ignored. When uptime is 0 (process not yet running or just started),
 	// the window becomes 0 and no historical logs are considered.
 	currentUptime := b.ObservedState.ServiceInfo.S6ObservedState.ServiceInfo.Uptime
+
 	uptimeDuration := time.Duration(currentUptime) * time.Second
 	if uptimeDuration < logWindow {
 		logWindow = uptimeDuration
