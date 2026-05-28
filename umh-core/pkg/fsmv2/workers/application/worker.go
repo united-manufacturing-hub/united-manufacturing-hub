@@ -28,7 +28,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/register"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/application/snapshot"
 
@@ -199,22 +199,9 @@ func NewApplicationSupervisor(cfg SupervisorConfig) (*supervisor.Supervisor[fsmv
 	return sup, nil
 }
 
-// init registers the application worker factory so that child supervisors can
-// spawn application workers by type name. The application worker has no custom
-// dependencies, so the factory ignores params["dependencies"].
 func init() {
-	if err := factory.RegisterWorkerAndSupervisorFactoryByType(
-		WorkerTypeName,
-		func(id deps.Identity, logger deps.FSMLogger, stateReader deps.StateReader, params map[string]any) fsmv2.Worker {
-			return NewApplicationWorker(id, logger, stateReader)
-		},
-		func(cfg interface{}) interface{} {
-			return supervisor.NewSupervisor[
-				fsmv2.Observation[snapshot.ApplicationStatus],
-				*fsmv2.WrappedDesiredState[snapshot.ApplicationConfig],
-			](cfg.(supervisor.Config))
-		},
-	); err != nil {
-		panic(fmt.Sprintf("application: failed to register worker factory: %v", err))
-	}
+	register.Worker[snapshot.ApplicationConfig, snapshot.ApplicationStatus, register.NoDeps](WorkerTypeName,
+		func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader) (fsmv2.Worker, error) {
+			return NewApplicationWorker(id, logger, sr), nil
+		})
 }

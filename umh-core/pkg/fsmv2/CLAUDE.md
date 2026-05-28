@@ -202,22 +202,87 @@ func (w *MyWorker) GetDependencies() *MyDependencies {
 | `GetInitialState` | Worker does NOT register via fsmv2.RegisterInitialState (e.g., push, pull) |
 | `GetDependenciesAny() any { return nil }` | No-deps worker. `WorkerBase[..., struct{}]` boxes `struct{}{}` into `any`, which is non-nil and silently skips framework metrics injection. The override returns a true nil to prevent that. |
 
-## Factory Registration
+## Worker Registration
 
-Workers register in `init()` with both worker and supervisor factories:
+Workers register in `init()` with one `register.Worker` line. The framework
+wires the worker factory, supervisor factory, and CSE TypeRegistry from the
+same call:
 
 ```go
 func init() {
-    if err := factory.RegisterWorkerType[ObservedState, *DesiredState](
-        workerFactory,
-        supervisorFactory,
-    ); err != nil {
-        panic(err)
-    }
+    register.Worker[MyConfig, MyStatus, *MyDependencies]("myworker",
+        func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader) (fsmv2.Worker, error) {
+            return NewMyWorker(id, logger, sr)
+        })
 }
 ```
 
-The folder name must match the worker type (e.g., `transport/` for type `"transport"`).
+`TConfig` and `TStatus` are the developer-defined config/status types from the
+`WorkerBase[TConfig, TStatus, TDeps]` embed. `TDeps` is the worker's typed
+dependency payload — use `register.NoDeps` for workers without per-instance
+dependencies. The constructor returns `(fsmv2.Worker, error)`; a non-nil error
+or nil worker at instantiation time panics with a contextualised message.
+
+The folder name must match the worker type (e.g., `transport/` for type
+`"transport"`).
+
+### Parent-Child Typed Deps
+
+Parents publish their dependencies via `register.SetDeps[T]`; children retrieve
+them via `register.GetDeps[T]` inside a `SetDepsBuilder` closure. The closure
+runs at child instantiation time (not at `init()` time), so the publisher
+always wins the race when parent and child are wired in the same supervisor.
+
+Transport / push canonical example:
+
+```go
+// transport/worker.go
+func init() {
+    register.Worker[snapshot.TransportDesiredState, snapshot.TransportStatus, *TransportDependencies]("transport",
+        func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader) (fsmv2.Worker, error) {
+            w, err := NewTransportWorker(id, logger, sr)
+            if err != nil {
+                return nil, err
+            }
+            register.SetDeps[*TransportDependencies]("transport", w.GetDependencies())
+            return w, nil
+        })
+}
+
+// transport/push/worker.go
+func init() {
+    register.Worker[snapshot.PushDesiredState, snapshot.PushStatus, *PushDependencies]("push",
+        func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader) (fsmv2.Worker, error) {
+            builder, ok := register.GetDepsBuilder("push")
+            if !ok {
+                return nil, errors.New("push deps builder missing")
+            }
+            pdeps := builder(id, logger, sr).(*PushDependencies)
+            w := &PushWorker{}
+            w.InitBase(id, logger, sr)
+            w.BindDeps(pdeps)
+            return w, nil
+        })
+
+    register.SetDepsBuilder[*PushDependencies]("push",
+        func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader) *PushDependencies {
+            parent := register.GetDeps[*transport_pkg.TransportDependencies]("transport")
+            if parent == nil {
+                return nil
+            }
+            d, err := NewPushDependencies(parent, deps.NewBaseDependencies(logger, sr, id))
+            if err != nil {
+                logger.SentryError(deps.FeatureForWorker("push"), id.HierarchyPath, err, "push_dependencies_creation_failed")
+                return nil
+            }
+            return d
+        })
+}
+```
+
+`TDeps` is a phantom type parameter at registration — the compiler does not
+verify it matches the `TDeps` in the worker's `WorkerBase[…]` embed. By
+convention, the same `TDeps` appears in both places.
 
 ## FSMv2 Framework Types
 

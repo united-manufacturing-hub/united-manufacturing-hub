@@ -22,8 +22,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/register"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/push/snapshot"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/push/state"
 
@@ -147,31 +146,40 @@ func (w *PushWorker) GetInitialState() fsmv2.State[any, any] {
 }
 
 func init() {
-	if err := factory.RegisterWorkerAndSupervisorFactoryByType(
-		"push",
-		func(id deps.Identity, logger deps.FSMLogger, stateReader deps.StateReader, extraDeps map[string]any) fsmv2.Worker {
-			parentDepsRaw, ok := extraDeps["transport_deps"]
+	register.Worker[snapshot.PushDesiredState, snapshot.PushStatus, *PushDependencies]("push",
+		func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader) (fsmv2.Worker, error) {
+			builder, ok := register.GetDepsBuilder("push")
 			if !ok {
-				panic("push worker requires transport_deps in extraDeps")
+				return nil, errors.New("push worker requires deps builder; transport worker must initialise before push instantiation")
 			}
-
-			parentDeps, ok := parentDepsRaw.(*transport_pkg.TransportDependencies)
-			if !ok {
-				panic("transport_deps must be *TransportDependencies")
+			rawDeps := builder(id, logger, sr)
+			pdeps, ok := rawDeps.(*PushDependencies)
+			if !ok || pdeps == nil {
+				return nil, fmt.Errorf("push deps builder returned %T; want *PushDependencies (parent transport deps may not be published)", rawDeps)
 			}
+			if id.WorkerType == "" {
+				id.WorkerType = "push"
+			}
+			w := &PushWorker{}
+			w.InitBase(id, logger, sr)
+			w.BindDeps(pdeps)
+			return w, nil
+		})
 
-			worker, err := NewPushWorker(id, logger, stateReader, parentDeps)
+	register.SetDepsBuilder[*PushDependencies]("push",
+		func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader) *PushDependencies {
+			parentDeps := register.GetDeps[*transport_pkg.TransportDependencies]("transport")
+			if parentDeps == nil {
+				logger.SentryError(deps.FeatureForWorker("push"), id.HierarchyPath,
+					errors.New("parent transport deps not published"),
+					"push_parent_transport_deps_missing")
+				return nil
+			}
+			d, err := NewPushDependencies(parentDeps, deps.NewBaseDependencies(logger, sr, id))
 			if err != nil {
-				panic(fmt.Sprintf("failed to create push worker: %v", err))
+				logger.SentryError(deps.FeatureForWorker("push"), id.HierarchyPath, err, "push_dependencies_creation_failed")
+				return nil
 			}
-
-			return worker
-		},
-		func(cfg interface{}) interface{} {
-			return supervisor.NewSupervisor[fsmv2.Observation[snapshot.PushStatus], *fsmv2.WrappedDesiredState[snapshot.PushDesiredState]](
-				cfg.(supervisor.Config))
-		},
-	); err != nil {
-		panic(fmt.Sprintf("failed to register push worker: %v", err))
-	}
+			return d
+		})
 }
