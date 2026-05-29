@@ -56,8 +56,6 @@ type PushDependencies interface {
 
 // PushDesiredState represents the target configuration for the push worker.
 type PushDesiredState struct {
-	ParentMappedState string `json:"parent_mapped_state"`
-
 	State string `json:"state" yaml:"state"`
 	config.BaseDesiredState
 }
@@ -70,15 +68,6 @@ func (s *PushDesiredState) GetState() string {
 	}
 
 	return s.State
-}
-
-// ShouldBeRunning returns true if the push worker should be in a running state.
-func (s *PushDesiredState) ShouldBeRunning() bool {
-	if s.ShutdownRequested {
-		return false
-	}
-
-	return s.ParentMappedState == config.DesiredStateRunning
 }
 
 // PushStatus holds the runtime observation data for the push worker.

@@ -28,9 +28,9 @@ import (
 
 // StartingState represents the state where the transport worker is authenticating.
 // It emits AuthenticateAction to obtain a JWT token from the relay server.
-// Once authenticated, transitions to RunningState. Children start via ChildStartStates
-// when the parent enters Running, avoiding a deadlock where children can't become healthy
-// while the parent waits in Starting.
+// Once authenticated, transitions to RunningState. The parent keeps its children
+// enabled while Starting (childrenAlive), avoiding a deadlock where children can't
+// become healthy while the parent waits in Starting.
 type StartingState struct {
 	helpers.StartingBase
 }
@@ -78,8 +78,8 @@ func (s *StartingState) Next(snapAny any) fsmv2.NextResult[any, any] {
 		return fsmv2.Transition(s, fsmv2.SignalNone, authAction, "No valid token, authenticating with relay", childrenAlive(snap.Config))
 	}
 
-	// Authenticated; transition to Running. Children start via ChildStartStates
-	// once parent enters Running; RunningState handles unhealthy children.
+	// Authenticated; transition to Running. Children remain enabled (childrenAlive);
+	// RunningState handles unhealthy children.
 	if snap.Status.HasValidToken() {
 		return fsmv2.Transition(&RunningState{}, fsmv2.SignalNone, nil, "Authenticated, transitioning to Running", childrenAlive(snap.Config))
 	}

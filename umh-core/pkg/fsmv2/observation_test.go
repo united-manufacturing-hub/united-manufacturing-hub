@@ -96,11 +96,6 @@ var _ = Describe("Observation", func() {
 				SetActionHistory([]deps.ActionResult) fsmv2.ObservedState
 			})
 			Expect(ok).To(BeTrue(), "must satisfy SetActionHistory duck-type")
-
-			_, ok = obs.(interface {
-				SetParentMappedState(string) fsmv2.ObservedState
-			})
-			Expect(ok).To(BeTrue(), "must satisfy SetParentMappedState duck-type")
 		})
 	})
 
@@ -113,7 +108,6 @@ var _ = Describe("Observation", func() {
 			Expect(obs.GetTimestamp()).To(Equal(ts))
 		})
 	})
-
 
 	Describe("MarshalJSON", func() {
 		It("produces flat JSON with framework and business fields at same level", func() {

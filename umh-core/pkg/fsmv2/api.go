@@ -416,8 +416,7 @@ type DependencyProvider interface {
 
 // BaseUserSpec is satisfied by config types that embed config.BaseUserSpec.
 // WorkerBase.DeriveDesiredState uses this interface to read and validate the
-// desired lifecycle state ("running" or "stopped") from TConfig, then propagate
-// it into WrappedDesiredState.State.
+// desired lifecycle state ("running" or "stopped") from TConfig.
 type BaseUserSpec interface {
 	GetState() string
 }
@@ -462,26 +461,14 @@ type ChildrenViewConsumer interface {
 
 // WrappedDesiredState wraps a developer's TConfig into the full DesiredState
 // required by the supervisor. BaseDesiredState promotion provides
-// IsShutdownRequested and SetShutdownRequested for free. The State field
-// carries the desired lifecycle state ("running"/"stopped") set by
-// DeriveDesiredState from the user spec's BaseUserSpec.GetState().
+// IsShutdownRequested and SetShutdownRequested for free.
 //
 // The framework constructs this during DeriveDesiredState. Developers define
 // their TConfig type and call the typed DeriveDesiredState helpers to produce it.
 type WrappedDesiredState[TConfig any] struct {
 	Config        TConfig            `json:"config"`
-	State         string             `json:"state"                   yaml:"state"` // "stopped" or "running" - desired lifecycle state
 	ChildrenSpecs []config.ChildSpec `json:"childrenSpecs,omitempty"`
 	config.BaseDesiredState
-}
-
-// GetState returns the desired lifecycle state, defaulting to "running" if empty.
-func (d *WrappedDesiredState[TConfig]) GetState() string {
-	if d.State == "" {
-		return config.DesiredStateRunning
-	}
-
-	return d.State
 }
 
 // GetChildrenSpecs returns the children specifications.
@@ -500,7 +487,6 @@ type WorkerSnapshot[TConfig any, TStatus any] struct {
 	Status              TStatus
 	ChildrenView        config.ChildrenView
 	Identity            deps.Identity
-	ParentMappedState   string
 	LastActionResults   []deps.ActionResult
 	Metrics             deps.MetricsEmbedder
 	ChildrenHealthy     int
@@ -513,9 +499,9 @@ type WorkerSnapshot[TConfig any, TStatus any] struct {
 }
 
 // ShouldStop returns true when the worker should transition to stopped,
-// whether from an explicit shutdown request, an admin disable, or a parent-driven stop signal.
+// whether from an explicit shutdown request or an admin disable.
 func (s WorkerSnapshot[TConfig, TStatus]) ShouldStop() bool {
-	return s.IsShutdownRequested || s.IsDisabled || s.ParentMappedState == config.DesiredStateStopped
+	return s.IsShutdownRequested || s.IsDisabled
 }
 
 // ConvertWorkerSnapshot type-asserts the raw snapshot from State.Next() into a
@@ -543,7 +529,6 @@ func ConvertWorkerSnapshot[TConfig any, TStatus any](snapAny any) WorkerSnapshot
 		Identity:            snap.Identity,
 		IsShutdownRequested: des.IsShutdownRequested(),
 		IsDisabled:          des.IsDisabled(),
-		ParentMappedState:   obs.ParentMappedState,
 		CollectedAt:         obs.CollectedAt,
 		LastActionResults:   obs.LastActionResults,
 		Metrics:             obs.MetricsEmbedder,

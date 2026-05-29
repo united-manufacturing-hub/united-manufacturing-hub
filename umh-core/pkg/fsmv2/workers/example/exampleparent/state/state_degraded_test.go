@@ -19,18 +19,15 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	exampleparent "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleparent"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleparent/state"
 )
 
 // Pins the Enabled-only child-gating contract for parent Degraded:
 // exampleparent children stay running while the parent is Degraded. They are
-// emitted with Enabled=true and an empty ChildStartStates, so the supervisor's
-// computeMappedState maps them to "running" for every alive parent state
-// (computeMappedState returns DesiredStateRunning when ChildStartStates is empty).
-// Before convergence, ChildStartStates listed only TryingToStart and Running,
-// which mapped children to "stopped" during Degraded.
+// emitted with Enabled=true; the supervisor's disable-mapping pass turns that
+// into the child's IsDisabled bit, and the child's ShouldStop() reads it. An
+// enabled child therefore does not stop while the parent is Degraded.
 var _ = Describe("DegradedState child gating (Enabled-only)", func() {
 	var stateObj *state.DegradedState
 
@@ -38,7 +35,7 @@ var _ = Describe("DegradedState child gating (Enabled-only)", func() {
 		stateObj = &state.DegradedState{}
 	})
 
-	It("keeps children running through parent Degraded (Enabled=true, no ChildStartStates)", func() {
+	It("keeps children running through parent Degraded (Enabled=true)", func() {
 		snap := fsmv2.Snapshot{
 			Observed: fsmv2.Observation[exampleparent.ExampleparentStatus]{
 				ChildrenHealthy:   0,
@@ -59,21 +56,18 @@ var _ = Describe("DegradedState child gating (Enabled-only)", func() {
 		child := result.Children[0]
 		Expect(child.Enabled).To(BeTrue(),
 			"child must carry run intent (Enabled=true) during parent Degraded")
-		Expect(child.ChildStartStates).To(BeEmpty(),
-			"empty ChildStartStates makes the child run for every alive parent state, "+
-				"including Degraded — the converged Enabled-only contract")
 
-		// Pin the gating CONSEQUENCE, not just the field shape: the supervisor's
-		// mapping (GetMappedChildState mirrors supervisor.computeMappedState) must
-		// resolve this child to "running" while the parent is Degraded.
-		Expect(child.GetMappedChildState("Degraded")).To(Equal(config.DesiredStateRunning),
-			"converged gating: child maps to running during parent Degraded")
+		// Pin the gating CONSEQUENCE through live fields, not field shape: the
+		// disable-mapping pass sets IsDisabled = !Enabled, and ShouldStop() reads
+		// it. An enabled child resolves to ShouldStop()==false during Degraded.
+		runningChild := fsmv2.WorkerSnapshot[any, any]{IsDisabled: !child.Enabled}
+		Expect(runningChild.ShouldStop()).To(BeFalse(),
+			"converged gating: an enabled child does not stop during parent Degraded")
 
-		// Counter-direction: document the pre-convergence behavior this change
-		// removes — the old ChildStartStates list mapped children to "stopped"
-		// during Degraded (Degraded was not in the list).
-		oldGating := config.ChildSpec{ChildStartStates: []string{"TryingToStart", "Running"}}
-		Expect(oldGating.GetMappedChildState("Degraded")).To(Equal(config.DesiredStateStopped),
-			"pre-convergence: the old list stopped children during Degraded")
+		// Counter-direction: a disabled child (Enabled=false → IsDisabled=true)
+		// stops. This is the behavior the old parent-state mapping expressed.
+		disabledChild := fsmv2.WorkerSnapshot[any, any]{IsDisabled: true}
+		Expect(disabledChild.ShouldStop()).To(BeTrue(),
+			"a disabled child stops regardless of parent state")
 	})
 })

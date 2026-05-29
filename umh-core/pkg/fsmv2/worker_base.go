@@ -134,8 +134,9 @@ func (w *WorkerBase[TConfig, TStatus, TDeps]) DeriveDesiredState(spec interface{
 		}
 	}
 
-	// Duck-type: validate and propagate the desired lifecycle state when
-	// TConfig embeds config.BaseUserSpec or implements GetState() string.
+	// Duck-type: validate the desired lifecycle state when TConfig embeds
+	// config.BaseUserSpec or implements GetState() string. Validation rejects
+	// illegal user-supplied state values; lifecycle itself is driven by the FSM.
 	wds := &WrappedDesiredState[TConfig]{
 		Config: cfg,
 	}
@@ -147,8 +148,6 @@ func (w *WorkerBase[TConfig, TStatus, TDeps]) DeriveDesiredState(spec interface{
 				return nil, fmt.Errorf("invalid desired state: %w", err)
 			}
 		}
-
-		wds.State = state
 	}
 
 	w.mu.Lock()

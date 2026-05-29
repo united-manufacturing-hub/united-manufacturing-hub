@@ -19,7 +19,6 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 )
 
 var _ = Describe("WrappedDesiredState", func() {
@@ -32,11 +31,6 @@ var _ = Describe("WrappedDesiredState", func() {
 		It("IsShutdownRequested returns false for zero value", func() {
 			wds := &fsmv2.WrappedDesiredState[TestConfig]{}
 			Expect(wds.IsShutdownRequested()).To(BeFalse())
-		})
-
-		It("GetState returns 'running' when State field is empty", func() {
-			wds := &fsmv2.WrappedDesiredState[TestConfig]{}
-			Expect(wds.GetState()).To(Equal(config.DesiredStateRunning))
 		})
 
 		It("GetChildrenSpecs returns nil for zero value", func() {
@@ -63,27 +57,6 @@ var _ = Describe("WrappedDesiredState", func() {
 			wds.SetShutdownRequested(true)
 			wds.SetShutdownRequested(false)
 			Expect(wds.IsShutdownRequested()).To(BeFalse())
-		})
-	})
-
-	Describe("GetState", func() {
-		It("returns 'running' when State is empty", func() {
-			wds := &fsmv2.WrappedDesiredState[TestConfig]{}
-			Expect(wds.GetState()).To(Equal(config.DesiredStateRunning))
-		})
-
-		It("returns 'stopped' when State is set to stopped", func() {
-			wds := &fsmv2.WrappedDesiredState[TestConfig]{
-				State: config.DesiredStateStopped,
-			}
-			Expect(wds.GetState()).To(Equal(config.DesiredStateStopped))
-		})
-
-		It("returns custom state when set", func() {
-			wds := &fsmv2.WrappedDesiredState[TestConfig]{
-				State: "custom_state",
-			}
-			Expect(wds.GetState()).To(Equal("custom_state"))
 		})
 	})
 

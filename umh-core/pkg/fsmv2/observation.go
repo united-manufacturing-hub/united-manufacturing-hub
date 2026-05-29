@@ -167,8 +167,6 @@ type Observation[TStatus any] struct {
 	Status TStatus `json:"-"`
 	// State is the current FSM state name (set by supervisor via SetState).
 	State string `json:"state"`
-	// ParentMappedState is the desired state mapped from the parent's current state.
-	ParentMappedState string `json:"parent_mapped_state"`
 	// LastActionResults contains action history (managed by supervisor).
 	LastActionResults []deps.ActionResult `json:"last_action_results,omitempty"`
 	// MetricsEmbedder provides framework and worker metrics (anonymous embed, inline in JSON).
@@ -192,7 +190,6 @@ type observationFrameworkFields struct {
 	CollectedAt       time.Time           `json:"collected_at"`
 	ChildrenView      config.ChildrenView `json:"childrenView"`
 	State             string              `json:"state"`
-	ParentMappedState string              `json:"parent_mapped_state"`
 	LastActionResults []deps.ActionResult `json:"last_action_results,omitempty"`
 	deps.MetricsEmbedder
 	ChildrenHealthy   int  `json:"children_healthy"`
@@ -208,7 +205,6 @@ func (o Observation[TStatus]) MarshalJSON() ([]byte, error) {
 		ChildrenView:      o.ChildrenView,
 		State:             o.State,
 		ShutdownRequested: o.ShutdownRequested,
-		ParentMappedState: o.ParentMappedState,
 		LastActionResults: o.LastActionResults,
 		ChildrenHealthy:   o.ChildrenHealthy,
 		ChildrenUnhealthy: o.ChildrenUnhealthy,
@@ -257,7 +253,6 @@ func (o *Observation[TStatus]) UnmarshalJSON(data []byte) error {
 	o.ChildrenView = fw.ChildrenView
 	o.State = fw.State
 	o.ShutdownRequested = fw.ShutdownRequested
-	o.ParentMappedState = fw.ParentMappedState
 	o.LastActionResults = fw.LastActionResults
 	o.ChildrenHealthy = fw.ChildrenHealthy
 	o.ChildrenUnhealthy = fw.ChildrenUnhealthy
@@ -366,15 +361,6 @@ func (o Observation[TStatus]) SetFrameworkMetrics(fm deps.FrameworkMetrics) Obse
 //	interface{ SetActionHistory([]deps.ActionResult) fsmv2.ObservedState }
 func (o Observation[TStatus]) SetActionHistory(h []deps.ActionResult) ObservedState {
 	o.LastActionResults = h
-
-	return o
-}
-
-// SetParentMappedState sets the lifecycle state mapped from the parent worker. Matches collector pattern:
-//
-//	interface{ SetParentMappedState(string) fsmv2.ObservedState }
-func (o Observation[TStatus]) SetParentMappedState(s string) ObservedState {
-	o.ParentMappedState = s
 
 	return o
 }
