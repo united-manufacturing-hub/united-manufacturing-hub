@@ -17,10 +17,13 @@
 // Context: Slack thread 2025-04-30 (this file ↔ ENG-2893, ENG-2884)
 // ────────────────────────────────────────────────────────────────────────────────
 //
-// Benchmarks (Go 1.22, Ryzen 9-5900X, pkg/service/benthos_monitor):
+// Historical benchmarks (Go 1.22, Ryzen 9-5900X), captured before the
+// hand-rolled parser landed. The MetricsParsing row below is the
+// pre-optimization baseline (Prometheus text parser); the current
+// BenchmarkMetricsParsing covers the hand-rolled fast path only.
 // BenchmarkGzipDecode-24                             83491             14535 ns/op           49169 B/op         11 allocs/op
 // BenchmarkHexDecode-24                            2826033               419.2 ns/op           416 B/op          1 allocs/op
-// BenchmarkMetricsParsing-24                         24597             47635 ns/op           28392 B/op        781 allocs/op
+// BenchmarkMetricsParsing-24  (pre-optimization)     24597             47635 ns/op           28392 B/op        781 allocs/op
 // BenchmarkCompleteProcessing-24                     17631             70915 ns/op           75673 B/op        792 allocs/op
 // BenchmarkParseBenthosLogsWithPercentiles-24         7845            142591 ns/op            144292 p50ns            469733 p95ns            706459 p99ns          217352 B/op        911 allocs/op
 // BenchmarkUpdateFromMetrics-24                    2992988               399.1 ns/op           925 B/op          2 allocs/op
@@ -52,7 +55,6 @@ import (
 	"context"
 	"encoding/hex"
 	"io"
-	"reflect"
 	"sort"
 	"strconv"
 	"testing"
@@ -234,41 +236,10 @@ func BenchmarkMetricsParsing(b *testing.B) {
 	b.ResetTimer()
 
 	for range b.N {
-		_, err := ParseMetricsFromBytesSlow([]byte(sampleMetrics))
-		if err != nil {
-			b.Fatal(err)
-		}
-	}
-}
-
-// BenchmarkMetricsParsingOpt benchmarks the metrics parsing operation.
-func BenchmarkMetricsParsingOpt(b *testing.B) {
-	b.ResetTimer()
-
-	for range b.N {
 		_, err := ParseMetricsFromBytes([]byte(sampleMetrics))
 		if err != nil {
 			b.Fatal(err)
 		}
-	}
-}
-
-// Test that both output the same result.
-func TestMetricsParsing(t *testing.T) {
-	metrics, err := ParseMetricsFromBytes([]byte(sampleMetrics))
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	metricsOpt, err := ParseMetricsFromBytesSlow([]byte(sampleMetrics))
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if !reflect.DeepEqual(metrics, metricsOpt) {
-		t.Logf("metrics: %+v", metrics)
-		t.Logf("metricsOpt: %+v", metricsOpt)
-		t.Fatal("metrics do not match")
 	}
 }
 
@@ -361,33 +332,39 @@ func BenchmarkUpdateFromMetricsWithPercentiles(b *testing.B) {
 
 	// Create sample metrics
 	metrics := Metrics{
-		Input: InputMetrics{
-			ConnectionFailed: 0,
-			ConnectionLost:   0,
-			ConnectionUp:     1,
-			LatencyNS: Latency{
-				P50:   127167,
-				P90:   378375,
-				P99:   858666,
-				Sum:   3629208,
-				Count: 18,
+		Inputs: map[string]InputInstance{
+			"root.input": {
+				Path:             "root.input",
+				ConnectionFailed: 0,
+				ConnectionLost:   0,
+				ConnectionUp:     1,
+				LatencyNS: Latency{
+					P50:   127167,
+					P90:   378375,
+					P99:   858666,
+					Sum:   3629208,
+					Count: 18,
+				},
+				Received: 18,
 			},
-			Received: 18,
 		},
-		Output: OutputMetrics{
-			BatchSent:        18,
-			ConnectionFailed: 0,
-			ConnectionLost:   0,
-			ConnectionUp:     1,
-			Error:            0,
-			LatencyNS: Latency{
-				P50:   33250,
-				P90:   94709,
-				P99:   138250,
-				Sum:   816919,
-				Count: 18,
+		Outputs: map[string]OutputInstance{
+			"root.output": {
+				Path:             "root.output",
+				BatchSent:        18,
+				ConnectionFailed: 0,
+				ConnectionLost:   0,
+				ConnectionUp:     1,
+				Error:            0,
+				LatencyNS: Latency{
+					P50:   33250,
+					P90:   94709,
+					P99:   138250,
+					Sum:   816919,
+					Count: 18,
+				},
+				Sent: 18,
 			},
-			Sent: 18,
 		},
 		Process: ProcessMetrics{
 			Processors: map[string]ProcessorMetrics{
@@ -418,10 +395,15 @@ func BenchmarkUpdateFromMetricsWithPercentiles(b *testing.B) {
 
 	for i := range b.N {
 		// Simulate increasing counters for realistic benchmark
-		metrics.Input.Received++
-		metrics.Output.Sent++
+		in := metrics.Inputs["root.input"]
+		in.Received++
+		metrics.Inputs["root.input"] = in
 
-		metrics.Output.BatchSent++
+		out := metrics.Outputs["root.output"]
+		out.Sent++
+		out.BatchSent++
+		metrics.Outputs["root.output"] = out
+
 		for path := range metrics.Process.Processors {
 			proc := metrics.Process.Processors[path]
 			proc.Received++

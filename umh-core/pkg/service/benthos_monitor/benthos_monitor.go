@@ -29,8 +29,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/prometheus/common/expfmt"
-	"github.com/prometheus/common/model"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/s6serviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
@@ -40,7 +38,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/standarderrors"
 
-	dto "github.com/prometheus/client_model/go"
 	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/monitor"
@@ -50,14 +47,21 @@ import (
 )
 
 // Metrics contains information about the metrics of the Benthos service.
+// Inputs and Outputs are keyed by benthos `path` label (one entry per leaf
+// AsyncReader / AsyncWriter). For switch/broker/fallback configs, multiple
+// entries exist; for a single-input or single-output config there is one
+// entry at "root.input" / "root.output". Aggregate values are exposed via
+// the *Total helpers on Metrics.
 type Metrics struct {
-	Process ProcessMetrics `json:"process,omitempty"`
-	Output  OutputMetrics  `json:"output,omitempty"`
-	Input   InputMetrics   `json:"input,omitempty"`
+	Process ProcessMetrics            `json:"process,omitempty"`
+	Outputs map[string]OutputInstance `json:"outputs,omitempty"`
+	Inputs  map[string]InputInstance  `json:"inputs,omitempty"`
 }
 
-// InputMetrics contains input-specific metrics.
-type InputMetrics struct {
+// InputInstance contains per-path input metrics for one benthos AsyncReader.
+type InputInstance struct {
+	Path             string  `json:"path"`
+	Label            string  `json:"label"`
 	ConnectionFailed int64   `json:"connection_failed"`
 	ConnectionLost   int64   `json:"connection_lost"`
 	ConnectionUp     int64   `json:"connection_up"`
@@ -65,8 +69,10 @@ type InputMetrics struct {
 	Received         int64   `json:"received"`
 }
 
-// OutputMetrics contains output-specific metrics.
-type OutputMetrics struct {
+// OutputInstance contains per-path output metrics for one benthos AsyncWriter.
+type OutputInstance struct {
+	Path             string  `json:"path"`
+	Label            string  `json:"label"`
 	BatchSent        int64   `json:"batch_sent"`
 	ConnectionFailed int64   `json:"connection_failed"`
 	ConnectionLost   int64   `json:"connection_lost"`
@@ -99,6 +105,88 @@ type Latency struct {
 	P99   float64 `json:"p99"`   // 99th percentile
 	Sum   float64 `json:"sum"`   // Total sum
 	Count int64   `json:"count"` // Number of samples
+}
+
+// InputReceivedTotal returns the sum of Received across every input instance.
+func (m Metrics) InputReceivedTotal() int64 {
+	var total int64
+	for _, in := range m.Inputs {
+		total += in.Received
+	}
+
+	return total
+}
+
+// InputConnectionUpTotal returns the sum of ConnectionUp across every input.
+func (m Metrics) InputConnectionUpTotal() int64 {
+	var total int64
+	for _, in := range m.Inputs {
+		total += in.ConnectionUp
+	}
+
+	return total
+}
+
+// InputConnectionLostTotal returns the sum of ConnectionLost across every input.
+func (m Metrics) InputConnectionLostTotal() int64 {
+	var total int64
+	for _, in := range m.Inputs {
+		total += in.ConnectionLost
+	}
+
+	return total
+}
+
+// OutputSentTotal returns the sum of Sent across every output instance.
+func (m Metrics) OutputSentTotal() int64 {
+	var total int64
+	for _, out := range m.Outputs {
+		total += out.Sent
+	}
+
+	return total
+}
+
+// OutputBatchSentTotal returns the sum of BatchSent across every output.
+func (m Metrics) OutputBatchSentTotal() int64 {
+	var total int64
+	for _, out := range m.Outputs {
+		total += out.BatchSent
+	}
+
+	return total
+}
+
+// OutputConnectionUpTotal returns the sum of ConnectionUp across every output.
+func (m Metrics) OutputConnectionUpTotal() int64 {
+	var total int64
+	for _, out := range m.Outputs {
+		total += out.ConnectionUp
+	}
+
+	return total
+}
+
+// OutputConnectionLostTotal returns the sum of ConnectionLost across every output.
+func (m Metrics) OutputConnectionLostTotal() int64 {
+	var total int64
+	for _, out := range m.Outputs {
+		total += out.ConnectionLost
+	}
+
+	return total
+}
+
+// OutputErrorTotal returns the sum of Error across every output. Used by
+// benthos.IsMetricsErrorFree to decide whether the FSM should treat the
+// component as healthy.
+func (m Metrics) OutputErrorTotal() int64 {
+	var total int64
+	for _, out := range m.Outputs {
+		total += out.Error
+	}
+
+	return total
 }
 
 // HealthCheck contains information about the health of the Benthos service
@@ -962,11 +1050,17 @@ func TailInt(line []byte) (int64, error) {
 
 // ---------------------------------------------------------------------------
 
-// ParseMetricsFromBytesOpt – fixed & quantile aware.
+// ParseMetricsFromBytes parses the prometheus text-format payload benthos
+// returns and produces a per-path Metrics. For switch/broker/fallback
+// outputs the input emits N distinct series per metric, one per leaf
+// path; the parser stores each in its own InputInstance / OutputInstance
+// entry.
 func ParseMetricsFromBytes(raw []byte) (Metrics, error) {
 	var m Metrics
 
 	m.Process.Processors = make(map[string]ProcessorMetrics, 8)
+	m.Inputs = make(map[string]InputInstance, 1)
+	m.Outputs = make(map[string]OutputInstance, 1)
 
 	lineStart := 0
 
@@ -995,173 +1089,216 @@ func ParseMetricsFromBytes(raw []byte) (Metrics, error) {
 		if nameEnd == -1 {
 			continue
 		}
-		// name := unsafeString(line[:nameEnd])
+
 		name := string(line[:nameEnd])
-		switch name {
-		// ---------- input ----------
-		case "input_connection_failed":
-			count, err := TailInt(line)
-			if err != nil {
-				return Metrics{}, fmt.Errorf("failed to parse input connection failed: %w", err)
+
+		// All input_* and output_* lines carry a `path` label.
+		labelsRegion := line[nameEnd:]
+
+		switch {
+		case strings.HasPrefix(name, "input_"):
+			path := extractLabel(labelsRegion, "path")
+			if path == "" {
+				path = "root.input"
 			}
 
-			m.Input.ConnectionFailed = count
-		case "input_connection_lost":
-			count, err := TailInt(line)
-			if err != nil {
-				return Metrics{}, fmt.Errorf("failed to parse input connection lost: %w", err)
+			label := extractLabel(labelsRegion, "label")
+
+			in := m.Inputs[path]
+			if in.Path == "" {
+				in.Path = path
 			}
 
-			m.Input.ConnectionLost = count
-		case "input_connection_up":
-			count, err := TailInt(line)
-			if err != nil {
-				return Metrics{}, fmt.Errorf("failed to parse input connection up: %w", err)
+			if in.Label == "" && label != "" {
+				in.Label = label
 			}
 
-			m.Input.ConnectionUp = count
-		case "input_received":
-			count, err := TailInt(line)
-			if err != nil {
-				return Metrics{}, fmt.Errorf("failed to parse input received: %w", err)
-			}
-
-			m.Input.Received = count
-		case "input_latency_ns":
-			switch extractLabel(line[nameEnd:], "quantile") {
-			case "0.5":
-				p50, err := TailInt(line)
+			switch name {
+			case "input_connection_failed":
+				count, err := TailInt(line)
 				if err != nil {
-					return Metrics{}, fmt.Errorf("failed to parse input latency ns p50: %w", err)
+					return Metrics{}, fmt.Errorf("failed to parse input connection failed: %w", err)
 				}
 
-				m.Input.LatencyNS.P50 = float64(p50)
-			case "0.9":
-				p90, err := TailInt(line)
+				in.ConnectionFailed = count
+			case "input_connection_lost":
+				count, err := TailInt(line)
 				if err != nil {
-					return Metrics{}, fmt.Errorf("failed to parse input latency ns p90: %w", err)
+					return Metrics{}, fmt.Errorf("failed to parse input connection lost: %w", err)
 				}
 
-				m.Input.LatencyNS.P90 = float64(p90)
-			case "0.99":
-				p99, err := TailInt(line)
+				in.ConnectionLost = count
+			case "input_connection_up":
+				count, err := TailInt(line)
 				if err != nil {
-					return Metrics{}, fmt.Errorf("failed to parse input latency ns p99: %w", err)
+					return Metrics{}, fmt.Errorf("failed to parse input connection up: %w", err)
 				}
 
-				m.Input.LatencyNS.P99 = float64(p99)
-			}
-		case "input_latency_ns_sum":
-			sum, err := TailInt(line)
-			if err != nil {
-				return Metrics{}, fmt.Errorf("failed to parse input latency ns sum: %w", err)
-			}
-
-			m.Input.LatencyNS.Sum = float64(sum)
-		case "input_latency_ns_count":
-			count, err := TailInt(line)
-			if err != nil {
-				return Metrics{}, fmt.Errorf("failed to parse input latency ns count: %w", err)
-			}
-
-			m.Input.LatencyNS.Count = count
-
-		// ---------- output ----------
-		case "output_batch_sent":
-			count, err := TailInt(line)
-			if err != nil {
-				return Metrics{}, fmt.Errorf("failed to parse output batch sent: %w", err)
-			}
-
-			m.Output.BatchSent = count
-		case "output_connection_failed":
-			count, err := TailInt(line)
-			if err != nil {
-				return Metrics{}, fmt.Errorf("failed to parse output connection failed: %w", err)
-			}
-
-			m.Output.ConnectionFailed = count
-		case "output_connection_lost":
-			count, err := TailInt(line)
-			if err != nil {
-				return Metrics{}, fmt.Errorf("failed to parse output connection lost: %w", err)
-			}
-
-			m.Output.ConnectionLost = count
-		case "output_connection_up":
-			count, err := TailInt(line)
-			if err != nil {
-				return Metrics{}, fmt.Errorf("failed to parse output connection up: %w", err)
-			}
-
-			m.Output.ConnectionUp = count
-		case "output_error":
-			count, err := TailInt(line)
-			if err != nil {
-				return Metrics{}, fmt.Errorf("failed to parse output error: %w", err)
-			}
-
-			m.Output.Error = count
-		case "output_sent":
-			count, err := TailInt(line)
-			if err != nil {
-				return Metrics{}, fmt.Errorf("failed to parse output sent: %w", err)
-			}
-
-			m.Output.Sent = count
-		case "output_latency_ns":
-			switch extractLabel(line[nameEnd:], "quantile") {
-			case "0.5":
-				p50, err := TailInt(line)
+				in.ConnectionUp = count
+			case "input_received":
+				count, err := TailInt(line)
 				if err != nil {
-					return Metrics{}, fmt.Errorf("failed to parse output latency ns p50: %w", err)
+					return Metrics{}, fmt.Errorf("failed to parse input received: %w", err)
 				}
 
-				m.Output.LatencyNS.P50 = float64(p50)
-			case "0.9":
-				p90, err := TailInt(line)
+				in.Received = count
+			case "input_latency_ns":
+				switch extractLabel(labelsRegion, "quantile") {
+				case "0.5":
+					p50, err := TailInt(line)
+					if err != nil {
+						return Metrics{}, fmt.Errorf("failed to parse input latency ns p50: %w", err)
+					}
+
+					in.LatencyNS.P50 = float64(p50)
+				case "0.9":
+					p90, err := TailInt(line)
+					if err != nil {
+						return Metrics{}, fmt.Errorf("failed to parse input latency ns p90: %w", err)
+					}
+
+					in.LatencyNS.P90 = float64(p90)
+				case "0.99":
+					p99, err := TailInt(line)
+					if err != nil {
+						return Metrics{}, fmt.Errorf("failed to parse input latency ns p99: %w", err)
+					}
+
+					in.LatencyNS.P99 = float64(p99)
+				}
+			case "input_latency_ns_sum":
+				sum, err := TailInt(line)
 				if err != nil {
-					return Metrics{}, fmt.Errorf("failed to parse output latency ns p90: %w", err)
+					return Metrics{}, fmt.Errorf("failed to parse input latency ns sum: %w", err)
 				}
 
-				m.Output.LatencyNS.P90 = float64(p90)
-			case "0.99":
-				p99, err := TailInt(line)
+				in.LatencyNS.Sum = float64(sum)
+			case "input_latency_ns_count":
+				count, err := TailInt(line)
 				if err != nil {
-					return Metrics{}, fmt.Errorf("failed to parse output latency ns p99: %w", err)
+					return Metrics{}, fmt.Errorf("failed to parse input latency ns count: %w", err)
 				}
 
-				m.Output.LatencyNS.P99 = float64(p99)
-			}
-		case "output_latency_ns_sum":
-			sum, err := TailInt(line)
-			if err != nil {
-				return Metrics{}, fmt.Errorf("failed to parse output latency ns sum: %w", err)
+				in.LatencyNS.Count = count
 			}
 
-			m.Output.LatencyNS.Sum = float64(sum)
-		case "output_latency_ns_count":
-			count, err := TailInt(line)
-			if err != nil {
-				return Metrics{}, fmt.Errorf("failed to parse output latency ns count: %w", err)
+			m.Inputs[path] = in
+
+		case strings.HasPrefix(name, "output_"):
+			path := extractLabel(labelsRegion, "path")
+			if path == "" {
+				path = "root.output"
 			}
 
-			m.Output.LatencyNS.Count = count
+			label := extractLabel(labelsRegion, "label")
 
-		// ---------- processors ----------
+			out := m.Outputs[path]
+			if out.Path == "" {
+				out.Path = path
+			}
+
+			if out.Label == "" && label != "" {
+				out.Label = label
+			}
+
+			switch name {
+			case "output_batch_sent":
+				count, err := TailInt(line)
+				if err != nil {
+					return Metrics{}, fmt.Errorf("failed to parse output batch sent: %w", err)
+				}
+
+				out.BatchSent = count
+			case "output_connection_failed":
+				count, err := TailInt(line)
+				if err != nil {
+					return Metrics{}, fmt.Errorf("failed to parse output connection failed: %w", err)
+				}
+
+				out.ConnectionFailed = count
+			case "output_connection_lost":
+				count, err := TailInt(line)
+				if err != nil {
+					return Metrics{}, fmt.Errorf("failed to parse output connection lost: %w", err)
+				}
+
+				out.ConnectionLost = count
+			case "output_connection_up":
+				count, err := TailInt(line)
+				if err != nil {
+					return Metrics{}, fmt.Errorf("failed to parse output connection up: %w", err)
+				}
+
+				out.ConnectionUp = count
+			case "output_error":
+				count, err := TailInt(line)
+				if err != nil {
+					return Metrics{}, fmt.Errorf("failed to parse output error: %w", err)
+				}
+
+				out.Error = count
+			case "output_sent":
+				count, err := TailInt(line)
+				if err != nil {
+					return Metrics{}, fmt.Errorf("failed to parse output sent: %w", err)
+				}
+
+				out.Sent = count
+			case "output_latency_ns":
+				switch extractLabel(labelsRegion, "quantile") {
+				case "0.5":
+					p50, err := TailInt(line)
+					if err != nil {
+						return Metrics{}, fmt.Errorf("failed to parse output latency ns p50: %w", err)
+					}
+
+					out.LatencyNS.P50 = float64(p50)
+				case "0.9":
+					p90, err := TailInt(line)
+					if err != nil {
+						return Metrics{}, fmt.Errorf("failed to parse output latency ns p90: %w", err)
+					}
+
+					out.LatencyNS.P90 = float64(p90)
+				case "0.99":
+					p99, err := TailInt(line)
+					if err != nil {
+						return Metrics{}, fmt.Errorf("failed to parse output latency ns p99: %w", err)
+					}
+
+					out.LatencyNS.P99 = float64(p99)
+				}
+			case "output_latency_ns_sum":
+				sum, err := TailInt(line)
+				if err != nil {
+					return Metrics{}, fmt.Errorf("failed to parse output latency ns sum: %w", err)
+				}
+
+				out.LatencyNS.Sum = float64(sum)
+			case "output_latency_ns_count":
+				count, err := TailInt(line)
+				if err != nil {
+					return Metrics{}, fmt.Errorf("failed to parse output latency ns count: %w", err)
+				}
+
+				out.LatencyNS.Count = count
+			}
+
+			m.Outputs[path] = out
+
 		default:
 			if !bytes.HasPrefix(line, []byte("processor_")) {
 				continue
 			}
 
-			path := extractLabel(line[nameEnd:], "path")
+			path := extractLabel(labelsRegion, "path")
 			if path == "" {
 				continue
 			}
 
 			pm := m.Process.Processors[path]
 			if pm.Label == "" {
-				pm.Label = extractLabel(line[nameEnd:], "label")
+				pm.Label = extractLabel(labelsRegion, "label")
 			}
 
 			switch name {
@@ -1201,7 +1338,7 @@ func ParseMetricsFromBytes(raw []byte) (Metrics, error) {
 
 				pm.Error = count
 			case "processor_latency_ns":
-				switch extractLabel(line[nameEnd:], "quantile") {
+				switch extractLabel(labelsRegion, "quantile") {
 				case "0.5":
 					p50, err := TailInt(line)
 					if err != nil {
@@ -1275,191 +1412,6 @@ func extractLabel(b []byte, key string) string {
 // unsafeString converts a []byte to string without allocation.
 // Use only for read-only parsing.
 // func unsafeString(b []byte) string { return *(*string)(unsafe.Pointer(&b)) }
-
-// ParseMetricsFromBytes parses prometheus metrics into structured format
-// Deprecated: Use ParseMetricsFromBytes instead.
-func ParseMetricsFromBytesSlow(data []byte) (Metrics, error) {
-	var (
-		scheme = model.LegacyValidation
-		parser = expfmt.NewTextParser(scheme)
-	)
-
-	metrics := Metrics{
-		Input:  InputMetrics{},
-		Output: OutputMetrics{},
-		Process: ProcessMetrics{
-			Processors: make(map[string]ProcessorMetrics),
-		},
-	}
-
-	// Parse the metrics text into prometheus format
-	mf, err := parser.TextToMetricFamilies(bytes.NewReader(data))
-	if err != nil {
-		return metrics, fmt.Errorf("failed to parse metrics: %w", err)
-	}
-
-	// Helper function to get metric value
-	getValue := func(m *dto.Metric) float64 {
-		if m.GetCounter() != nil {
-			return m.GetCounter().GetValue()
-		}
-
-		if m.GetGauge() != nil {
-			return m.GetGauge().GetValue()
-		}
-
-		if m.GetUntyped() != nil {
-			return m.GetUntyped().GetValue()
-		}
-
-		return 0
-	}
-
-	// Helper function to get label value
-	getLabel := func(m *dto.Metric, name string) string {
-		for _, label := range m.GetLabel() {
-			if label.GetName() == name {
-				return label.GetValue()
-			}
-		}
-
-		return ""
-	}
-
-	// Process each metric family
-	for name, family := range mf {
-		switch name {
-		// Input metrics
-		case "input_connection_failed":
-			if len(family.GetMetric()) > 0 {
-				metrics.Input.ConnectionFailed = int64(getValue(family.GetMetric()[0]))
-			}
-		case "input_connection_lost":
-			if len(family.GetMetric()) > 0 {
-				metrics.Input.ConnectionLost = int64(getValue(family.GetMetric()[0]))
-			}
-		case "input_connection_up":
-			if len(family.GetMetric()) > 0 {
-				metrics.Input.ConnectionUp = int64(getValue(family.GetMetric()[0]))
-			}
-		case "input_received":
-			if len(family.GetMetric()) > 0 {
-				metrics.Input.Received = int64(getValue(family.GetMetric()[0]))
-			}
-		case "input_latency_ns":
-			updateLatencyFromFamily(&metrics.Input.LatencyNS, family)
-
-		// Output metrics
-		case "output_batch_sent":
-			if len(family.GetMetric()) > 0 {
-				metrics.Output.BatchSent = int64(getValue(family.GetMetric()[0]))
-			}
-		case "output_connection_failed":
-			if len(family.GetMetric()) > 0 {
-				metrics.Output.ConnectionFailed = int64(getValue(family.GetMetric()[0]))
-			}
-		case "output_connection_lost":
-			if len(family.GetMetric()) > 0 {
-				metrics.Output.ConnectionLost = int64(getValue(family.GetMetric()[0]))
-			}
-		case "output_connection_up":
-			if len(family.GetMetric()) > 0 {
-				metrics.Output.ConnectionUp = int64(getValue(family.GetMetric()[0]))
-			}
-		case "output_error":
-			if len(family.GetMetric()) > 0 {
-				metrics.Output.Error = int64(getValue(family.GetMetric()[0]))
-			}
-		case "output_sent":
-			if len(family.GetMetric()) > 0 {
-				metrics.Output.Sent = int64(getValue(family.GetMetric()[0]))
-			}
-		case "output_latency_ns":
-			updateLatencyFromFamily(&metrics.Output.LatencyNS, family)
-
-		// Process metrics
-		case "processor_received", "processor_batch_received",
-			"processor_sent", "processor_batch_sent",
-			"processor_error", "processor_latency_ns":
-			for _, metric := range family.GetMetric() {
-				path := getLabel(metric, "path")
-				if path == "" {
-					continue
-				}
-
-				// Initialize processor metrics if not exists
-				if _, exists := metrics.Process.Processors[path]; !exists {
-					metrics.Process.Processors[path] = ProcessorMetrics{
-						Label: getLabel(metric, "label"),
-					}
-				}
-
-				proc := metrics.Process.Processors[path]
-
-				switch name {
-				case "processor_received":
-					proc.Received = int64(getValue(metric))
-				case "processor_batch_received":
-					proc.BatchReceived = int64(getValue(metric))
-				case "processor_sent":
-					proc.Sent = int64(getValue(metric))
-				case "processor_batch_sent":
-					proc.BatchSent = int64(getValue(metric))
-				case "processor_error":
-					proc.Error = int64(getValue(metric))
-				case "processor_latency_ns":
-					updateLatencyFromMetric(&proc.LatencyNS, metric)
-				}
-
-				metrics.Process.Processors[path] = proc
-			}
-		}
-	}
-
-	return metrics, nil
-}
-
-func updateLatencyFromFamily(latency *Latency, family *dto.MetricFamily) {
-	for _, metric := range family.GetMetric() {
-		if metric.GetSummary() == nil {
-			continue
-		}
-
-		latency.Sum = metric.GetSummary().GetSampleSum()
-		latency.Count = int64(metric.GetSummary().GetSampleCount())
-
-		for _, quantile := range metric.GetSummary().GetQuantile() {
-			switch quantile.GetQuantile() {
-			case 0.5:
-				latency.P50 = quantile.GetValue()
-			case 0.9:
-				latency.P90 = quantile.GetValue()
-			case 0.99:
-				latency.P99 = quantile.GetValue()
-			}
-		}
-	}
-}
-
-func updateLatencyFromMetric(latency *Latency, metric *dto.Metric) {
-	if metric.GetSummary() == nil {
-		return
-	}
-
-	latency.Sum = metric.GetSummary().GetSampleSum()
-	latency.Count = int64(metric.GetSummary().GetSampleCount())
-
-	for _, quantile := range metric.GetSummary().GetQuantile() {
-		switch quantile.GetQuantile() {
-		case 0.5:
-			latency.P50 = quantile.GetValue()
-		case 0.9:
-			latency.P90 = quantile.GetValue()
-		case 0.99:
-			latency.P99 = quantile.GetValue()
-		}
-	}
-}
 
 // Status checks the status of a benthos service.
 func (s *BenthosMonitorService) Status(ctx context.Context, services serviceregistry.Provider, tick uint64) (ServiceInfo, error) {

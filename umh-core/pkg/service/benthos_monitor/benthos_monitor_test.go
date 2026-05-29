@@ -432,10 +432,10 @@ var _ = Describe("Benthos Monitor Service", func() {
 		It("should parse the static ping data", func() {
 			metrics, err := service.ProcessMetricsData([]byte(metricsResponse), tick)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(metrics.Metrics.Input.ConnectionUp).To(Equal(int64(1)))
-			Expect(metrics.Metrics.Input.Received).To(Equal(int64(7)))
-			Expect(metrics.Metrics.Output.ConnectionUp).To(Equal(int64(1)))
-			Expect(metrics.Metrics.Output.Sent).To(Equal(int64(7)))
+			Expect(metrics.Metrics.InputConnectionUpTotal()).To(Equal(int64(1)))
+			Expect(metrics.Metrics.InputReceivedTotal()).To(Equal(int64(7)))
+			Expect(metrics.Metrics.OutputConnectionUpTotal()).To(Equal(int64(1)))
+			Expect(metrics.Metrics.OutputSentTotal()).To(Equal(int64(7)))
 		})
 
 		It("should return an error if the ping data is a curl error", func() {

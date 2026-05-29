@@ -53,11 +53,11 @@ type MockService struct {
 	DfcService      *dataflowcomponent.MockDataFlowComponentService
 	GetConfigResult streamprocessorserviceconfig.StreamProcessorServiceConfigRuntime
 
+	dfcConfigs []config.DataFlowComponentConfig
+
 	// Return values for each method
 	GenerateConfigResultDFC dataflowcomponentserviceconfig.DataflowComponentServiceConfig
-	dfcConfigs              []config.DataFlowComponentConfig
-
-	StatusResult ServiceInfo
+	StatusResult            ServiceInfo
 	// Mutex to protect all shared state
 	mu sync.RWMutex
 

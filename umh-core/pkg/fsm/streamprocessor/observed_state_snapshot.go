@@ -24,8 +24,8 @@ import (
 
 // ObservedStateSnapshot is a deep-copyable snapshot of the ObservedState.
 type ObservedStateSnapshot struct {
-	ObservedRuntimeConfig streamprocessorserviceconfig.StreamProcessorServiceConfigRuntime
 	ObservedSpecConfig    streamprocessorserviceconfig.StreamProcessorServiceConfigSpec
+	ObservedRuntimeConfig streamprocessorserviceconfig.StreamProcessorServiceConfigRuntime
 	ServiceInfo           spsvc.ServiceInfo
 }
 

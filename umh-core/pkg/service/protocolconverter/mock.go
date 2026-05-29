@@ -83,15 +83,16 @@ type MockProtocolConverterService struct {
 	   us full fidelity (e.g. Nmap scan results, Benthos metrics-active
 	   flag) and keeps all FSM helpers DRY.
 	*/
-	DfcService      *dataflowcomponent.MockDataFlowComponentService
-	ConnService     *connection.MockConnectionService
-	GetConfigResult protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime
-
-	// Return values for each method
-	GenerateConfigResultDFC        dataflowcomponentserviceconfig.DataflowComponentServiceConfig
+	DfcService                     *dataflowcomponent.MockDataFlowComponentService
+	ConnService                    *connection.MockConnectionService
 	GenerateConfigResultConnection connectionserviceconfig.ConnectionServiceConfig
 	dfcConfigs                     []config.DataFlowComponentConfig
 	connConfigs                    []config.ConnectionConfig
+
+	GetConfigResult protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime
+
+	// Return values for each method
+	GenerateConfigResultDFC dataflowcomponentserviceconfig.DataflowComponentServiceConfig
 
 	StatusResult ServiceInfo
 
@@ -288,12 +289,16 @@ func buildDFCServiceInfo(fsmState string) dataflowcomponent.ServiceInfo {
 							IsActive: isActive,
 						},
 						Metrics: benthos_monitor.Metrics{
-							Input: benthos_monitor.InputMetrics{
-								ConnectionUp:   connectionUp,
-								ConnectionLost: 0,
+							Inputs: map[string]benthos_monitor.InputInstance{
+								"root.input": {
+									ConnectionUp:   connectionUp,
+									ConnectionLost: 0,
+								},
 							},
-							Output: benthos_monitor.OutputMetrics{
-								ConnectionUp: connectionUp,
+							Outputs: map[string]benthos_monitor.OutputInstance{
+								"root.output": {
+									ConnectionUp: connectionUp,
+								},
 							},
 						},
 					},
