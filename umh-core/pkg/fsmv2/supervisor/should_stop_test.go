@@ -19,10 +19,9 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 )
 
-var _ = Describe("WorkerSnapshot.ShouldStop — 3-way discriminator", func() {
+var _ = Describe("WorkerSnapshot.ShouldStop — 2-way discriminator", func() {
 	type noConfig struct{}
 	type noStatus struct{}
 
@@ -30,7 +29,6 @@ var _ = Describe("WorkerSnapshot.ShouldStop — 3-way discriminator", func() {
 		snap := fsmv2.WorkerSnapshot[noConfig, noStatus]{
 			IsShutdownRequested: true,
 			IsDisabled:          false,
-			ParentMappedState:   config.DesiredStateRunning,
 		}
 		Expect(snap.ShouldStop()).To(BeTrue())
 	})
@@ -39,7 +37,6 @@ var _ = Describe("WorkerSnapshot.ShouldStop — 3-way discriminator", func() {
 		snap := fsmv2.WorkerSnapshot[noConfig, noStatus]{
 			IsShutdownRequested: false,
 			IsDisabled:          true,
-			ParentMappedState:   config.DesiredStateRunning,
 		}
 		Expect(snap.ShouldStop()).To(BeTrue())
 	})
@@ -48,7 +45,6 @@ var _ = Describe("WorkerSnapshot.ShouldStop — 3-way discriminator", func() {
 		snap := fsmv2.WorkerSnapshot[noConfig, noStatus]{
 			IsShutdownRequested: true,
 			IsDisabled:          true,
-			ParentMappedState:   config.DesiredStateRunning,
 		}
 		Expect(snap.ShouldStop()).To(BeTrue())
 		// Verify ordering invariant: IsShutdownRequested is checked first in state files.
@@ -57,21 +53,11 @@ var _ = Describe("WorkerSnapshot.ShouldStop — 3-way discriminator", func() {
 		Expect(snap.IsShutdownRequested).To(BeTrue(), "shutdown WINS in StoppedState discriminator")
 	})
 
-	It("neither flag, parent running → ShouldStop=false (normal resume)", func() {
+	It("neither flag → ShouldStop=false (normal resume)", func() {
 		snap := fsmv2.WorkerSnapshot[noConfig, noStatus]{
 			IsShutdownRequested: false,
 			IsDisabled:          false,
-			ParentMappedState:   config.DesiredStateRunning,
 		}
 		Expect(snap.ShouldStop()).To(BeFalse())
-	})
-
-	It("ParentMappedState=stopped → ShouldStop=true (parent-driven stop)", func() {
-		snap := fsmv2.WorkerSnapshot[noConfig, noStatus]{
-			IsShutdownRequested: false,
-			IsDisabled:          false,
-			ParentMappedState:   config.DesiredStateStopped,
-		}
-		Expect(snap.ShouldStop()).To(BeTrue())
 	})
 })

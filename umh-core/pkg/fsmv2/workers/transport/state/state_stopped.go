@@ -26,8 +26,7 @@ import (
 // The worker is not authenticated and no children are spawned.
 //
 // Transport is a top-level worker, not a child. Reason strings show
-// snap.Config.ShouldBeRunning() and snap.IsShutdownRequested directly;
-// snap.Observed.ParentMappedState is not applicable here (and is deleted in L5b).
+// snap.Config.ShouldBeRunning() and snap.IsShutdownRequested directly.
 type StoppedState struct {
 	helpers.StoppedBase
 }

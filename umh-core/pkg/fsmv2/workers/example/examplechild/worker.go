@@ -113,9 +113,7 @@ func (w *ChildWorker) CollectObservedState(ctx context.Context, _ fsmv2.DesiredS
 // DeriveDesiredState determines what state the child worker should be in.
 func (w *ChildWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, error) {
 	if spec == nil {
-		return &fsmv2.WrappedDesiredState[ExamplechildConfig]{
-			State: config.DesiredStateRunning,
-		}, nil
+		return &fsmv2.WrappedDesiredState[ExamplechildConfig]{}, nil
 	}
 
 	userSpec, ok := spec.(config.UserSpec)
@@ -138,10 +136,7 @@ func (w *ChildWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, 
 		return nil, fmt.Errorf("failed to parse examplechild spec: %w", err)
 	}
 
-	state := parsed.GetState()
-
 	return &fsmv2.WrappedDesiredState[ExamplechildConfig]{
-		State:  state,
 		Config: parsed,
 	}, nil
 }

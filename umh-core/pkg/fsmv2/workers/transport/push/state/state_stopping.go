@@ -35,8 +35,7 @@ func (s *StoppingState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	// See CLAUDE.md "State Transition Traps" for the full pattern.
 
 	return fsmv2.Transition(&StoppedState{}, fsmv2.SignalNone, nil,
-		fmt.Sprintf("stop complete: shutdown=%t, parentState(observed)=%s",
-			snap.IsShutdownRequested, snap.ParentMappedState), nil)
+		fmt.Sprintf("stop complete: shutdown=%t", snap.IsShutdownRequested), nil)
 }
 
 func (s *StoppingState) String() string {

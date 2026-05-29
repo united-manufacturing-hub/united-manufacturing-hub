@@ -95,9 +95,7 @@ func (w *ParentWorker) CollectObservedState(ctx context.Context, _ fsmv2.Desired
 // Must be PURE - only uses the spec parameter, never dependencies.
 func (w *ParentWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, error) {
 	if spec == nil {
-		return &fsmv2.WrappedDesiredState[ExampleparentConfig]{
-			State: config.DesiredStateRunning,
-		}, nil
+		return &fsmv2.WrappedDesiredState[ExampleparentConfig]{}, nil
 	}
 
 	parentSpec, err := config.ParseUserSpec[ExampleparentConfig](spec)
@@ -106,7 +104,6 @@ func (w *ParentWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState,
 	}
 
 	return &fsmv2.WrappedDesiredState[ExampleparentConfig]{
-		State: parentSpec.GetState(),
 		Config: ExampleparentConfig{
 			BaseUserSpec:    parentSpec.BaseUserSpec,
 			ChildWorkerType: parentSpec.ChildWorkerType,

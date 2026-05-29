@@ -256,69 +256,6 @@ var _ = Describe("Hierarchical Tick Propagation (Task 0.6)", func() {
 			Expect(events).To(ContainElement("DeriveDesiredState:parent"))
 		})
 
-		It("should apply state mapping before child tick", func() {
-			worker := &hierarchicalWorker{
-				id:     "parent",
-				logger: tickLog,
-				observed: &mockObservedState{
-					ID:          "parent-worker",
-					CollectedAt: time.Now(),
-					Desired:     &mockDesiredState{},
-				},
-				childrenSpecs: []config.ChildSpec{
-					{
-						Name:             "child1",
-						WorkerType:       "child",
-						UserSpec:         config.UserSpec{},
-						ChildStartStates: []string{"running"},
-					},
-				},
-			}
-
-			parentSuper = supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
-				WorkerType: "parent",
-				Logger:     deps.NewNopFSMLogger(),
-				Store:      mockStore,
-			})
-
-			identity := deps.Identity{
-				ID:         "parent-worker",
-				Name:       "Parent Worker",
-				WorkerType: "parent",
-			}
-			err := parentSuper.AddWorker(identity, worker)
-			Expect(err).NotTo(HaveOccurred())
-
-			parentSuper.TestUpdateUserSpec(config.UserSpec{Config: "config"})
-
-			desiredDoc := persistence.Document{
-				"id":                identity.ID,
-				"ShutdownRequested": false,
-			}
-			_, err = mockStore.SaveDesired(ctx, "parent", identity.ID, desiredDoc)
-			Expect(err).NotTo(HaveOccurred())
-
-			mockStore.Observed["parent"] = map[string]interface{}{
-				"parent-worker": persistence.Document{
-					"id":          "parent-worker",
-					"collectedAt": time.Now(),
-				},
-			}
-
-			mockStore.Observed["child"] = map[string]interface{}{
-				"child-worker": persistence.Document{
-					"id":          "child-worker",
-					"collectedAt": time.Now(),
-				},
-			}
-
-			err = parentSuper.TestTick(ctx)
-			Expect(err).NotTo(HaveOccurred())
-
-			events := tickLog.GetEvents()
-			Expect(events).To(ContainElement("DeriveDesiredState:parent"))
-		})
-
 		It("should reconcile new children in same tick cycle", func() {
 			worker := &hierarchicalWorker{
 				id:     "parent",

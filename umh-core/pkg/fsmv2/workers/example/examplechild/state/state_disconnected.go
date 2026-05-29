@@ -18,7 +18,6 @@ import (
 	"fmt"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
 	example_child "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplechild"
 )
@@ -33,10 +32,10 @@ func (s *DisconnectedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 
 	if snap.ShouldStop() {
 		return fsmv2.Transition(&TryingToStopState{}, fsmv2.SignalNone, nil,
-			fmt.Sprintf("stop required: shutdown=%t, parentState=%s", snap.IsShutdownRequested, snap.ParentMappedState), nil)
+			fmt.Sprintf("stop required: shutdown=%t", snap.IsShutdownRequested), nil)
 	}
 
-	if !snap.IsShutdownRequested && snap.ParentMappedState == config.DesiredStateRunning {
+	if !snap.ShouldStop() {
 		return fsmv2.Transition(&TryingToConnectState{}, fsmv2.SignalNone, nil, "Attempting to reconnect", nil)
 	}
 
