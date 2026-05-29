@@ -45,13 +45,6 @@ const PlaceholderUMHTopicUnset = "TOPIC_NOT_SET_BY_USER"
 //	buffer:
 //	  none: {}
 type DataflowComponentWriteConfig struct {
-	// InputTopics lists the UNS topics this write DFC subscribes to.
-	InputTopics []string `yaml:"input_topics,omitempty" json:"input_topics,omitempty" mapstructure:"input_topics,omitempty"`
-
-	// ProcessingNoderedJS is the Node-RED JS snippet that transforms each message.
-	// Must end with "return msg;" (or "return null;" to drop the message).
-	// Defaults to "return msg;" when empty.
-	ProcessingNoderedJS string `yaml:"processing_nodered_js,omitempty" json:"processing_nodered_js,omitempty" mapstructure:"processing_nodered_js,omitempty"`
 
 	// Output is the Benthos output configuration (e.g. http_client, mqtt).
 	// When non-empty, a UNS input is automatically generated during rendering.
@@ -59,6 +52,14 @@ type DataflowComponentWriteConfig struct {
 
 	// Buffer is the optional Benthos buffer configuration.
 	Buffer map[string]any `yaml:"buffer,omitempty" json:"buffer,omitempty" mapstructure:"buffer,omitempty"`
+
+	// ProcessingNoderedJS is the Node-RED JS snippet that transforms each message.
+	// Must end with "return msg;" (or "return null;" to drop the message).
+	// Defaults to "return msg;" when empty.
+	ProcessingNoderedJS string `yaml:"processing_nodered_js,omitempty" json:"processing_nodered_js,omitempty" mapstructure:"processing_nodered_js,omitempty"`
+
+	// InputTopics lists the UNS topics this write DFC subscribes to.
+	InputTopics []string `yaml:"input_topics,omitempty" json:"input_topics,omitempty" mapstructure:"input_topics,omitempty"`
 }
 
 // DataflowComponentWriteConfigInput is the wire/input form of write DFC config.
@@ -67,12 +68,12 @@ type DataflowComponentWriteConfig struct {
 // topic list. It is rendered with user-supplied variables at action time and
 // converted to the typed DataflowComponentWriteConfig before being stored.
 type DataflowComponentWriteConfigInput struct {
+	Output map[string]any `yaml:"output,omitempty"                json:"output,omitempty"`
+	Buffer map[string]any `yaml:"buffer,omitempty"                json:"buffer,omitempty"`
 	// InputTopics is either a plain topic list (newline- or comma-separated)
 	// or a Go template string that renders to such a list.
-	InputTopics         string         `yaml:"input_topics,omitempty"          json:"input_topics,omitempty"`
-	ProcessingNoderedJS string         `yaml:"processing_nodered_js,omitempty" json:"processing_nodered_js,omitempty"`
-	Output              map[string]any `yaml:"output,omitempty"                json:"output,omitempty"`
-	Buffer              map[string]any `yaml:"buffer,omitempty"                json:"buffer,omitempty"`
+	InputTopics         string `yaml:"input_topics,omitempty"          json:"input_topics,omitempty"`
+	ProcessingNoderedJS string `yaml:"processing_nodered_js,omitempty" json:"processing_nodered_js,omitempty"`
 }
 
 // HasOutput reports whether a write output is configured.

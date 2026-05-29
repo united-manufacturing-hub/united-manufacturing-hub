@@ -37,7 +37,7 @@ type CDFCPayload struct {
 	Outputs         DfcDataConfig            `json:"outputs"`
 	Inject          string                   `json:"inject"`
 	BenthosImageTag string                   `json:"benthosImageTag"`
-	IgnoreErrors bool `json:"ignoreErrors"`
+	IgnoreErrors    bool                     `json:"ignoreErrors"`
 }
 
 type DfcDataConfig struct {
@@ -817,10 +817,10 @@ type ProtocolConverterTemplateInfo struct {
 // struct fields automatically without a tag, so no json:",squash" is needed or exists.
 type WriteDFCPayload struct {
 	dataflowcomponentserviceconfig.DataflowComponentWriteConfigInput `mapstructure:",squash"`
-	// State is the desired lifecycle state ("active" or "stopped").
-	State string `json:"state,omitempty" mapstructure:"state,omitempty"`
 	// IgnoreErrors skips the health-check rollout when true.
 	IgnoreErrors *bool `json:"ignoreErrors,omitempty" mapstructure:"ignoreErrors,omitempty"`
+	// State is the desired lifecycle state ("active" or "stopped").
+	State string `json:"state,omitempty" mapstructure:"state,omitempty"`
 }
 
 // ProtocolConverter is the wire format for protocol converter configuration,

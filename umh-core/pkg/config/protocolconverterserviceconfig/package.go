@@ -37,6 +37,11 @@ var (
 // using expressions like "{{ .PORT }}" which are resolved during rendering.
 type ProtocolConverterServiceConfigTemplate struct {
 
+	// DataflowComponentWriteServiceConfig is the blueprint for the *write* side
+	// of the converter. InputTopics is a string that may contain Go template actions
+	// rendered at deploy time; use DataflowComponentWriteConfigInput.Render to resolve it.
+	DataflowComponentWriteServiceConfig dataflowcomponentserviceconfig.DataflowComponentWriteConfigInput `yaml:"dataflowcomponent_write,omitempty"`
+
 	// ConnectionServiceConfig describes how the converter connects to the
 	// underlying messaging infrastructure. Uses the template form to allow
 	// templating of connection parameters like port numbers.
@@ -48,11 +53,6 @@ type ProtocolConverterServiceConfigTemplate struct {
 	// `BenthosConfig.Output` is an UNS publisher because read‑DFCs **must not**
 	// decide their own egress.
 	DataflowComponentReadServiceConfig dataflowcomponentserviceconfig.DataflowComponentServiceConfig `yaml:"dataflowcomponent_read,omitempty"`
-
-	// DataflowComponentWriteServiceConfig is the blueprint for the *write* side
-	// of the converter. InputTopics is a string that may contain Go template actions
-	// rendered at deploy time; use DataflowComponentWriteConfigInput.Render to resolve it.
-	DataflowComponentWriteServiceConfig dataflowcomponentserviceconfig.DataflowComponentWriteConfigInput `yaml:"dataflowcomponent_write,omitempty"`
 }
 
 // ProtocolConverterServiceConfigRuntime is the **fully rendered** form of a

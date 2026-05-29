@@ -89,14 +89,27 @@ func (d DFCType) IsValid() bool {
 type EditProtocolConverterAction struct {
 	configManager config.ConfigManager
 
+	fsmLogger deps.FSMLogger
+	// lastRenderErr holds the most recent renderDesiredDFCConfig error so the
+	// awaitRollout timeout message can surface the real cause instead of just
+	// "did not become active in time".
+	lastRenderErr error
+
 	outboundChannel chan *models.UMHMessage
 	location        map[int]string
 
 	// Runtime observation for health checks
 	systemSnapshotManager *fsm.SnapshotManager
 
-	actionLogger   *zap.SugaredLogger
-	fsmLogger      deps.FSMLogger
+	actionLogger *zap.SugaredLogger
+
+	// readDFCSvcCfg is the built+validated read DFC service config, set in Parse.
+	// nil means no read DFC was provided in the request.
+	readDFCSvcCfg *dataflowcomponentserviceconfig.DataflowComponentServiceConfig
+	// writeDFCInput is the raw template-string form of the write config, persisted to the spec.
+	// nil means no write DFC was provided.
+	writeDFCInput *dataflowcomponentserviceconfig.DataflowComponentWriteConfigInput
+
 	userEmail      string
 	name           string // protocol converter name (optional for updates)
 	dfcType        DFCType
@@ -106,13 +119,6 @@ type EditProtocolConverterAction struct {
 	writeDFCState  string // desired state for the write DFC ("active" or "stopped"; empty = default active)
 
 	templateVars []models.ProtocolConverterVariable
-
-	// readDFCSvcCfg is the built+validated read DFC service config, set in Parse.
-	// nil means no read DFC was provided in the request.
-	readDFCSvcCfg *dataflowcomponentserviceconfig.DataflowComponentServiceConfig
-	// writeDFCInput is the raw template-string form of the write config, persisted to the spec.
-	// nil means no write DFC was provided.
-	writeDFCInput *dataflowcomponentserviceconfig.DataflowComponentWriteConfigInput
 
 	actionUUID   uuid.UUID
 	instanceUUID uuid.UUID
@@ -124,10 +130,6 @@ type EditProtocolConverterAction struct {
 	atomicEditUUID uuid.UUID
 
 	ignoreHealthCheck bool
-	// lastRenderErr holds the most recent renderDesiredDFCConfig error so the
-	// awaitRollout timeout message can surface the real cause instead of just
-	// "did not become active in time".
-	lastRenderErr error
 }
 
 // NewEditProtocolConverterAction returns an un-parsed action instance.
@@ -941,7 +943,7 @@ func (a *EditProtocolConverterAction) renderDesiredDFCConfig(pcSnapshot *protoco
 	runtimeConfig, err := runtime_config.BuildRuntimeConfig(
 		modifiedSpec,
 		agentLocation,
-		nil,             // TODO: add global vars
+		nil, // TODO: add global vars
 		runtime_config.BridgedByPlaceholder,
 		pcName,
 	)
