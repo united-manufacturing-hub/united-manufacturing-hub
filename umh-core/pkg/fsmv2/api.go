@@ -111,7 +111,7 @@ type DesiredState interface {
 	IsShutdownRequested() bool
 	// IsDisabled returns whether the worker has been administratively disabled.
 	// Disabled workers stay resident in Stopped state without resuming.
-	// The reducer is the exclusive writer; see Disableable and CHANGE-19.
+	// The disable-mapping pass is the exclusive writer; see Disableable and CHANGE-19.
 	IsDisabled() bool
 }
 
@@ -123,7 +123,7 @@ type ShutdownRequestable interface {
 
 // Disableable allows setting the disabled flag on any DesiredState.
 // Embed config.BaseDesiredState (from pkg/fsmv2/config) to satisfy this interface.
-// The reducer is the exclusive writer; no other subsystem should call SetDisabled.
+// The disable-mapping pass is the exclusive writer; no other subsystem should call SetDisabled.
 type Disableable interface {
 	SetDisabled(bool)
 }
@@ -506,7 +506,7 @@ type WorkerSnapshot[TConfig any, TStatus any] struct {
 	ChildrenHealthy     int
 	ChildrenUnhealthy   int
 	IsShutdownRequested bool
-	// IsDisabled is set by the CHANGE-19 reducer when the parent's ChildSpec.Enabled=false.
+	// IsDisabled is set by the CHANGE-19 disable-mapping pass when the parent's ChildSpec.Enabled=false.
 	// Disabled workers stay resident in Stopped state without resuming.
 	// IsShutdownRequested takes precedence: a shutdown request overrides a disabled state.
 	IsDisabled bool

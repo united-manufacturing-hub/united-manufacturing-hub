@@ -682,7 +682,7 @@ func (s *Supervisor[TObserved, TDesired]) handleWorkerRestart(ctx context.Contex
 }
 
 // setDisabled mirrors requestShutdown but uses the Disableable interface.
-// The reducer is the exclusive caller; no other subsystem may call this.
+// The disable-mapping pass is the exclusive caller; no other subsystem may call this.
 func (s *Supervisor[TObserved, TDesired]) setDisabled(ctx context.Context, workerID string, disabled bool) error {
 	s.mu.RLock()
 	_, exists := s.workers[workerID]
@@ -730,7 +730,7 @@ func (s *Supervisor[TObserved, TDesired]) setDisabled(ctx context.Context, worke
 }
 
 // SetDisabled writes the Disabled flag on every worker. disabled=true keeps
-// them resident in Stopped (no resume). The reducer calls this per-tick.
+// them resident in Stopped (no resume). The disable-mapping pass calls this per-tick.
 // Returns the first error; subsequent workers are still updated.
 func (s *Supervisor[TObserved, TDesired]) SetDisabled(ctx context.Context, disabled bool) error {
 	s.mu.RLock()

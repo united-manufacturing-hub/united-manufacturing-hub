@@ -110,7 +110,7 @@ var _ = Describe("Resident-disabled child stays in Stopped, not removed", func()
 		children := parentSup.GetChildren()
 		Expect(children).To(HaveKey("child-0"),
 			"child-0 must remain resident (not removed) when Enabled=false — "+
-				"the reducer sets IsDisabled, not IsShutdownRequested, so "+
+				"the disable-mapping pass sets IsDisabled, not IsShutdownRequested, so "+
 				"SignalNeedsRemoval is never emitted")
 
 		childStateName := children["child-0"].GetCurrentStateName()

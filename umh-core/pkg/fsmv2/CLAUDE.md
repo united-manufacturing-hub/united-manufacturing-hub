@@ -177,7 +177,7 @@ spec, err := config.NewChildSpec[MyChildConfig]("name", "workertype", cfg, enabl
 - Stateless/cheap children (e.g., exampleparent's examplechild) emit `[]config.ChildSpec{}`
   in stop states to despawn entirely.
 
-**`IsDisabled` flow:** the CHANGE-19 reducer in `reconcileChildren` translates
+**`IsDisabled` flow:** the CHANGE-19 disable-mapping pass (`applyDisableMapping`) in `reconcileChildren` translates
 `ChildSpec.Enabled` to the child's `IsDisabled` bit every tick. A child with
 `IsDisabled=true` stays resident in `StoppedState` and does not resume until the
 parent sets `Enabled=true` again. `IsShutdownRequested` (terminal removal) always

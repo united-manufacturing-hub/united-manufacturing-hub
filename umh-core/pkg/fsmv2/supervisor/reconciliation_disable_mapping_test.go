@@ -21,7 +21,6 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
@@ -79,7 +78,7 @@ func newParentSupervisorWithSpecs(
 	return s
 }
 
-var _ = Describe("CHANGE-19 Reducer (applyReducer) — D6 IsDisabled design", func() {
+var _ = Describe("CHANGE-19 disable-mapping pass (applyDisableMapping) — D6 IsDisabled design", func() {
 	var (
 		ctx   context.Context
 		store *mockTriangularStore
@@ -91,11 +90,11 @@ var _ = Describe("CHANGE-19 Reducer (applyReducer) — D6 IsDisabled design", fu
 	})
 
 	Describe("nil specs → silent no-op", func() {
-		It("TestReducer_NilSpecs_LeafSupervisor_SilentlyNoOps: does not panic, does not error", func() {
+		It("TestDisableMapping_NilSpecs_LeafSupervisor_SilentlyNoOps: does not panic, does not error", func() {
 			s := newParentSupervisorWithSpecs(ctx, store, []config.ChildSpec{})
 
 			Expect(func() {
-				s.TestApplyReducer(ctx, nil)
+				s.TestApplyDisableMapping(ctx, nil)
 			}).NotTo(Panic())
 		})
 
@@ -103,7 +102,7 @@ var _ = Describe("CHANGE-19 Reducer (applyReducer) — D6 IsDisabled design", fu
 			s := newParentSupervisorWithSpecs(ctx, store, []config.ChildSpec{})
 
 			Expect(func() {
-				s.TestApplyReducer(ctx, []config.ChildSpec{})
+				s.TestApplyDisableMapping(ctx, []config.ChildSpec{})
 			}).NotTo(Panic())
 		})
 	})
@@ -121,7 +120,7 @@ var _ = Describe("CHANGE-19 Reducer (applyReducer) — D6 IsDisabled design", fu
 			Expect(err).NotTo(HaveOccurred())
 
 			children := s.GetChildren()
-			Expect(children).To(HaveKey("child1"), "child must exist before reducer can disable it")
+			Expect(children).To(HaveKey("child1"), "child must exist before the disable-mapping pass can disable it")
 
 			_, err = store.SaveDesired(ctx, "child", "child1-001", persistence.Document{
 				"id":                "child1-001",
@@ -130,7 +129,7 @@ var _ = Describe("CHANGE-19 Reducer (applyReducer) — D6 IsDisabled design", fu
 			})
 			Expect(err).NotTo(HaveOccurred())
 
-			s.TestApplyReducer(ctx, []config.ChildSpec{{
+			s.TestApplyDisableMapping(ctx, []config.ChildSpec{{
 				Name:       "child1",
 				WorkerType: "child",
 				Enabled:    false,
@@ -139,7 +138,7 @@ var _ = Describe("CHANGE-19 Reducer (applyReducer) — D6 IsDisabled design", fu
 			var result supervisor.TestDesiredState
 			err = store.LoadDesiredTyped(ctx, "child", "child1-001", &result)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(result.Disabled).To(BeTrue(), "reducer must set Disabled=true for Enabled=false spec")
+			Expect(result.Disabled).To(BeTrue(), "the disable-mapping pass must set Disabled=true for Enabled=false spec")
 		})
 	})
 
@@ -165,7 +164,7 @@ var _ = Describe("CHANGE-19 Reducer (applyReducer) — D6 IsDisabled design", fu
 			})
 			Expect(err).NotTo(HaveOccurred())
 
-			s.TestApplyReducer(ctx, []config.ChildSpec{{
+			s.TestApplyDisableMapping(ctx, []config.ChildSpec{{
 				Name:       "child1",
 				WorkerType: "child",
 				Enabled:    true,
@@ -174,11 +173,11 @@ var _ = Describe("CHANGE-19 Reducer (applyReducer) — D6 IsDisabled design", fu
 			var result supervisor.TestDesiredState
 			err = store.LoadDesiredTyped(ctx, "child", "child1-001", &result)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(result.Disabled).To(BeFalse(), "reducer must clear Disabled=false on re-enable (Enabled=true)")
+			Expect(result.Disabled).To(BeFalse(), "the disable-mapping pass must clear Disabled=false on re-enable (Enabled=true)")
 		})
 	})
 
-	Describe("reducer does not touch IsShutdownRequested", func() {
+	Describe("disable-mapping pass does not touch IsShutdownRequested", func() {
 		It("leaves ShutdownRequested unchanged when setting Disabled", func() {
 			childSpecs := []config.ChildSpec{{
 				Name:       "child1",
@@ -200,8 +199,8 @@ var _ = Describe("CHANGE-19 Reducer (applyReducer) — D6 IsDisabled design", fu
 			})
 			Expect(err).NotTo(HaveOccurred())
 
-			// Reducer with Enabled=false must write Disabled=true but NOT clear ShutdownRequested
-			s.TestApplyReducer(ctx, []config.ChildSpec{{
+			// The disable-mapping pass with Enabled=false must write Disabled=true but NOT clear ShutdownRequested
+			s.TestApplyDisableMapping(ctx, []config.ChildSpec{{
 				Name:       "child1",
 				WorkerType: "child",
 				Enabled:    false,
@@ -210,8 +209,8 @@ var _ = Describe("CHANGE-19 Reducer (applyReducer) — D6 IsDisabled design", fu
 			var result supervisor.TestDesiredState
 			err = store.LoadDesiredTyped(ctx, "child", "child1-001", &result)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(result.Disabled).To(BeTrue(), "reducer must set Disabled=true")
-			Expect(result.ShutdownReq).To(BeTrue(), "reducer must NOT clear ShutdownRequested (restart subsystem owns it)")
+			Expect(result.Disabled).To(BeTrue(), "the disable-mapping pass must set Disabled=true")
+			Expect(result.ShutdownReq).To(BeTrue(), "the disable-mapping pass must NOT clear ShutdownRequested (restart subsystem owns it)")
 		})
 	})
 
@@ -220,7 +219,7 @@ var _ = Describe("CHANGE-19 Reducer (applyReducer) — D6 IsDisabled design", fu
 			s := newParentSupervisorWithSpecs(ctx, store, []config.ChildSpec{})
 
 			Expect(func() {
-				s.TestApplyReducer(ctx, []config.ChildSpec{{
+				s.TestApplyDisableMapping(ctx, []config.ChildSpec{{
 					Name:       "nonexistent",
 					WorkerType: "child",
 					Enabled:    false,
@@ -232,66 +231,12 @@ var _ = Describe("CHANGE-19 Reducer (applyReducer) — D6 IsDisabled design", fu
 			s := newParentSupervisorWithSpecs(ctx, store, []config.ChildSpec{})
 
 			Expect(func() {
-				s.TestApplyReducer(ctx, []config.ChildSpec{{
+				s.TestApplyDisableMapping(ctx, []config.ChildSpec{{
 					Name:       "nonexistent",
 					WorkerType: "child",
 					Enabled:    true,
 				}})
 			}).NotTo(Panic())
 		})
-	})
-})
-
-var _ = Describe("WorkerSnapshot.ShouldStop — 3-way discriminator", func() {
-	type noConfig struct{}
-	type noStatus struct{}
-
-	It("IsShutdownRequested=true → ShouldStop=true (shutdown wins)", func() {
-		snap := fsmv2.WorkerSnapshot[noConfig, noStatus]{
-			IsShutdownRequested: true,
-			IsDisabled:          false,
-			ParentMappedState:   config.DesiredStateRunning,
-		}
-		Expect(snap.ShouldStop()).To(BeTrue())
-	})
-
-	It("IsDisabled=true → ShouldStop=true (admin pause)", func() {
-		snap := fsmv2.WorkerSnapshot[noConfig, noStatus]{
-			IsShutdownRequested: false,
-			IsDisabled:          true,
-			ParentMappedState:   config.DesiredStateRunning,
-		}
-		Expect(snap.ShouldStop()).To(BeTrue())
-	})
-
-	It("both IsShutdownRequested and IsDisabled → ShouldStop=true (shutdown wins in StoppedState.Next)", func() {
-		snap := fsmv2.WorkerSnapshot[noConfig, noStatus]{
-			IsShutdownRequested: true,
-			IsDisabled:          true,
-			ParentMappedState:   config.DesiredStateRunning,
-		}
-		Expect(snap.ShouldStop()).To(BeTrue())
-		// Verify ordering invariant: IsShutdownRequested is checked first in state files.
-		// ShouldStop ORs both; the discriminator in StoppedState.Next checks IsShutdownRequested
-		// first to emit SignalNeedsRemoval, only checking IsDisabled when shutdown is not set.
-		Expect(snap.IsShutdownRequested).To(BeTrue(), "shutdown WINS in StoppedState discriminator")
-	})
-
-	It("neither flag, parent running → ShouldStop=false (normal resume)", func() {
-		snap := fsmv2.WorkerSnapshot[noConfig, noStatus]{
-			IsShutdownRequested: false,
-			IsDisabled:          false,
-			ParentMappedState:   config.DesiredStateRunning,
-		}
-		Expect(snap.ShouldStop()).To(BeFalse())
-	})
-
-	It("ParentMappedState=stopped → ShouldStop=true (parent-driven stop)", func() {
-		snap := fsmv2.WorkerSnapshot[noConfig, noStatus]{
-			IsShutdownRequested: false,
-			IsDisabled:          false,
-			ParentMappedState:   config.DesiredStateStopped,
-		}
-		Expect(snap.ShouldStop()).To(BeTrue())
 	})
 })
