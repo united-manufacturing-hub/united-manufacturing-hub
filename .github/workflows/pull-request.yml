@@ -62,6 +62,99 @@ jobs:
       contents: read
       packages: write
 
+  fossa:
+    name: FOSSA License Scan
+    needs: changes
+    if: github.event_name != 'merge_group'
+    runs-on: depot-ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: FOSSA Analyze
+        uses: fossas/fossa-action@ff70fe9fe17cbd2040648f1c45e8ec4e4884dcf3 # v1
+        with:
+          api-key: ${{ secrets.FOSSA_API_KEY }}
+          project: united-manufacturing-hub
+          working-directory: umh-core
+      - name: FOSSA Test
+        id: test
+        uses: fossas/fossa-action@ff70fe9fe17cbd2040648f1c45e8ec4e4884dcf3 # v1
+        with:
+          api-key: ${{ secrets.FOSSA_API_KEY }}
+          project: united-manufacturing-hub
+          working-directory: umh-core
+          run-tests: true
+      - name: Comment FOSSA code scan result
+        if: always()
+        uses: marocchino/sticky-pull-request-comment@0ea0beb66eb9baf113663a64ec522f60e49231c0 # v3.0.4
+        with:
+          header: fossa-code
+          message: |
+            **FOSSA License Scan**
+
+            ${{ steps.test.outcome == 'success' && '✅ No issues found' || format('[View issues](https://app.fossa.com/projects/custom%2B36616%2Funited-manufacturing-hub/refs/branch/master/{0})', github.sha) }}
+
+  fossa-container:
+    name: FOSSA Container Scan
+    needs: [changes, build]
+    if: github.event_name == 'pull_request' # && github.base_ref == 'main'
+    runs-on: depot-ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      packages: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Verify fossa-deps.yml in sync with Makefile
+        working-directory: umh-core
+        run: |
+          make fossa-deps
+          if [ -n "$(git status --porcelain fossa-deps.yml)" ]; then
+            echo "::error::fossa-deps.yml is out of sync with Makefile versions. Run 'make fossa-deps' in umh-core/ and commit."
+            git diff fossa-deps.yml
+            exit 1
+          fi
+
+      - name: FOSSA Container Analyze
+        uses: fossas/fossa-action@ff70fe9fe17cbd2040648f1c45e8ec4e4884dcf3 # v1
+        with:
+          api-key: ${{ secrets.FOSSA_API_KEY }}
+          project: united-manufacturing-hub-container
+          container: ghcr.io/united-manufacturing-hub/umh-core:sha-${{ needs.build.outputs.short-sha }}
+          working-directory: umh-core
+
+      - name: FOSSA Container Test
+        id: test
+        uses: fossas/fossa-action@ff70fe9fe17cbd2040648f1c45e8ec4e4884dcf3 # v1
+        with:
+          api-key: ${{ secrets.FOSSA_API_KEY }}
+          project: united-manufacturing-hub-container
+          container: ghcr.io/united-manufacturing-hub/umh-core:sha-${{ needs.build.outputs.short-sha }}
+          working-directory: umh-core
+          run-tests: true
+
+      - name: Comment FOSSA container scan result
+        if: always()
+        uses: marocchino/sticky-pull-request-comment@0ea0beb66eb9baf113663a64ec522f60e49231c0 # v3.0.4
+        with:
+          header: fossa-container
+          message: |
+            **FOSSA Container Scan**
+
+            ${{ steps.test.outcome == 'success' && '✅ No issues found' || format('[View issues](https://app.fossa.com/projects/custom%2B36616%2Funited-manufacturing-hub-container/refs/branch/master/{0})', needs.build.outputs.digest) }}
+
   license-eye-header:
     uses: ./.github/workflows/license-eye-header.yaml
 
@@ -73,10 +166,6 @@ jobs:
     permissions:
       pull-requests: write
     steps:
-      - name: Compute short SHA
-        id: short-sha
-        run: echo "SHORT_SHA=$(echo '${{ github.sha }}' | cut -c1-7)" >> $GITHUB_OUTPUT
-
       - name: Comment image tag on PR
         uses: marocchino/sticky-pull-request-comment@0ea0beb66eb9baf113663a64ec522f60e49231c0 # v3.0.4
         with:
@@ -85,12 +174,12 @@ jobs:
             **Docker Image Built**
 
             ```
-            ghcr.io/united-manufacturing-hub/umh-core:sha-${{ steps.short-sha.outputs.SHORT_SHA }}
+            ghcr.io/united-manufacturing-hub/umh-core:sha-${{ needs.build.outputs.short-sha }}
             ```
 
             Pull with:
             ```bash
-            docker pull ghcr.io/united-manufacturing-hub/umh-core:sha-${{ steps.short-sha.outputs.SHORT_SHA }}
+            docker pull ghcr.io/united-manufacturing-hub/umh-core:sha-${{ needs.build.outputs.short-sha }}
             ```
 
   require-changelog-entry:
@@ -293,6 +382,8 @@ jobs:
         go-analysis,
         tests,
         build,
+        fossa,
+        fossa-container,
         license-eye-header,
         require-changelog-entry,
         validate-changelog,
