@@ -825,13 +825,20 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) (err error) 
 		}
 	}
 
-	// Preserve ShutdownRequested: shutdown is a supervisor operation that overrides DeriveDesiredState
+	// Preserve ShutdownRequested and Disabled: both are supervisor operations
+	// (shutdown request and the disable-mapping pass) that override DeriveDesiredState.
+	// Workers always re-derive these as false, so the persisted value must be carried
+	// forward or the disable bit would be clobbered every tick.
 	var existingDesiredTyped TDesired
 	if err := s.store.LoadDesiredTyped(ctx, s.workerType, firstWorkerID, &existingDesiredTyped); err == nil {
-		// Check if existing state had shutdown requested via interface
+		// Check the existing state's lifecycle flags via interface.
 		if ds, ok := any(existingDesiredTyped).(fsmv2.DesiredState); ok {
 			if ds.IsShutdownRequested() {
 				desiredDoc[FieldShutdownRequested] = true
+			}
+
+			if ds.IsDisabled() {
+				desiredDoc[FieldDisabled] = true
 			}
 		}
 	}
