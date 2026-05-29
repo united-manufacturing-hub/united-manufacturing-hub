@@ -50,50 +50,11 @@ var _ = Describe("ChildrenView lookup semantics vs legacy", func() {
 		}
 	})
 
-	Describe("Get", func() {
-		It("returns the entry and true when the child is present and healthy", func() {
-			view := config.NewChildrenView([]config.ChildInfo{healthy, unhealthy})
-
-			got, ok := view.Get("alpha")
-			Expect(ok).To(BeTrue())
-			Expect(got.Name).To(Equal("alpha"))
-			Expect(got.IsHealthy).To(BeTrue())
-		})
-
-		It("returns the entry and true when the child is present and unhealthy", func() {
-			view := config.NewChildrenView([]config.ChildInfo{healthy, unhealthy})
-
-			got, ok := view.Get("beta")
-			Expect(ok).To(BeTrue())
-			Expect(got.Name).To(Equal("beta"))
-			Expect(got.IsHealthy).To(BeFalse())
-		})
-
-		It("returns the zero value and false when the child is absent", func() {
-			view := config.NewChildrenView([]config.ChildInfo{healthy})
-
-			got, ok := view.Get("missing")
-			Expect(ok).To(BeFalse())
-			Expect(got).To(Equal(config.ChildInfo{}))
-		})
-
-		It("returns a copy that cannot mutate the view contents", func() {
-			view := config.NewChildrenView([]config.ChildInfo{healthy})
-
-			got, ok := view.Get("alpha")
-			Expect(ok).To(BeTrue())
-			got.StateReason = "mutated"
-
-			fresh, _ := view.Get("alpha")
-			Expect(fresh.StateReason).To(BeEmpty())
-		})
-	})
-
-	Describe("List", func() {
+	Describe("Children", func() {
 		It("returns the underlying slice in insertion order", func() {
 			view := config.NewChildrenView([]config.ChildInfo{healthy, unhealthy, stopped})
 
-			list := view.List()
+			list := view.Children
 			Expect(list).To(HaveLen(3))
 			Expect(list[0].Name).To(Equal("alpha"))
 			Expect(list[1].Name).To(Equal("beta"))
@@ -102,7 +63,7 @@ var _ = Describe("ChildrenView lookup semantics vs legacy", func() {
 
 		It("returns an empty slice for an empty view", func() {
 			view := config.NewChildrenView(nil)
-			Expect(view.List()).To(BeEmpty())
+			Expect(view.Children).To(BeEmpty())
 		})
 	})
 
