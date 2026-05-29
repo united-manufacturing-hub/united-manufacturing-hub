@@ -147,6 +147,48 @@ Until a parent state returns a non-nil `Children` value, the supervisor continue
 the legacy `ChildrenSpecs` path from `DeriveDesiredState`. Both paths coexist safely
 during migration.
 
+## Declarative Children Pattern (RenderChildren + NewChildSpec[T])
+
+Migrated parent workers (transport, communicator, exampleparent) declare children via
+a package-level `RenderChildren` function in `children.go` instead of `DeriveDesiredState`.
+States call it from their `Next()` method.
+
+```go
+// children.go — the single declaration site for this parent's child set.
+func RenderChildren(cfg MyParentConfig, enabled bool) ([]config.ChildSpec, error) {
+    spec, err := config.NewChildSpec("child-name", "childworker", MyChildConfig{
+        Field: cfg.Field,
+    }, enabled)
+    if err != nil {
+        return nil, err
+    }
+    return []config.ChildSpec{spec}, nil
+}
+```
+
+**`NewChildSpec[T]`** marshals the typed config to `UserSpec.Config` and sets `Enabled`:
+```go
+spec, err := config.NewChildSpec[MyChildConfig]("name", "workertype", cfg, enabled)
+```
+
+**`enabled` controls per-tick run intent:**
+- Alive-trajectory states pass `true` (children run).
+- Stop states pass `false` (children stay resident via `IsDisabled=true`).
+- Stateless/cheap children (e.g., exampleparent's examplechild) emit `[]config.ChildSpec{}`
+  in stop states to despawn entirely.
+
+**`IsDisabled` flow:** the CHANGE-19 disable-mapping pass (`applyDisableMapping`) in `reconcileChildren` translates
+`ChildSpec.Enabled` to the child's `IsDisabled` bit every tick. A child with
+`IsDisabled=true` stays resident in `StoppedState` and does not resume until the
+parent sets `Enabled=true` again. `IsShutdownRequested` (terminal removal) always
+wins over `IsDisabled` in `StoppedState.Next`. A child whose spec has `Enabled=false`
+from first creation is still spawned and driven to `StoppedState` — it is never skipped.
+
+**Architecture validator:** any worker directory whose name contains `"parent"` must
+declare a top-level `RenderChildren` function (in any file under the directory, including
+`children.go`) or have child-building in `DeriveDesiredState`. This is enforced by
+`MISSING_CHILDSPEC_VALIDATION` in `internal/validator/worker.go`.
+
 ## Worker Struct Pattern (WorkerBase embed)
 
 Every worker embeds `fsmv2.WorkerBase[TConfig, TStatus, TDeps]`.

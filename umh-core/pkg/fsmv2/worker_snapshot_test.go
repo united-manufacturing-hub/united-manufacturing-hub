@@ -36,6 +36,7 @@ import (
 type mockDesiredState struct{}
 
 func (d *mockDesiredState) IsShutdownRequested() bool { return false }
+func (d *mockDesiredState) IsDisabled() bool          { return false }
 
 // workerTestConfig and workerTestStatus are lightweight types used exclusively
 // for WorkerSnapshot construction and ShouldStop tests.

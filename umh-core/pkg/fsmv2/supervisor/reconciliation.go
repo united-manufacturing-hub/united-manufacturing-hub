@@ -43,6 +43,22 @@ var ErrPanicCircuitOpen = errors.New("panic circuit breaker open")
 // ErrInfraCircuitOpen is returned when the tick is suppressed because the infrastructure circuit breaker is open.
 var ErrInfraCircuitOpen = errors.New("infrastructure circuit breaker open")
 
+// disableMappingSuppressKey identifies a (childName, errorClass) pair for log-flood suppression.
+type disableMappingSuppressKey struct {
+	childName  string
+	errorClass string
+}
+
+// disableMappingErrorEntry tracks the last time an error was logged for a given (childName, errorClass).
+type disableMappingErrorEntry struct {
+	lastSeen time.Time
+	count    int
+}
+
+// disableMappingErrorSuppressionWindow is the minimum interval between repeated error logs for the same
+// (childName, errorClass) pair. Errors within the window are counted but not logged.
+const disableMappingErrorSuppressionWindow = time.Minute
+
 // factoryRegistryAdapter provides an adapter for config validation.
 type factoryRegistryAdapter struct{}
 
@@ -330,6 +346,12 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 	}
 
 	result := currentState.Next(*snapshot)
+
+	// Stash children unconditionally so tick() can read the most recent rendered set.
+	// Must happen before any early returns to satisfy the every-tick invariant.
+	workerCtx.mu.Lock()
+	workerCtx.lastRenderedChildren = result.Children
+	workerCtx.mu.Unlock()
 
 	hasAction := result.Action != nil
 	// Per-tick log moved to TRACE for scalability
@@ -825,8 +847,31 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) (err error) 
 		s.logTrace("derived_desired_state_saved")
 	}
 
+	// Tick the worker first so its state machine progresses before child reconciliation.
+	if err := s.tickWorker(ctx, firstWorkerID); err != nil {
+		return fmt.Errorf("failed to tick worker: %w", err)
+	}
+
+	// Select the children source after the tick so the latest rendered set is available.
+	// nil rendered set → fall back to GetChildrenSpecs().
+	// Non-nil (even empty) means use rendered directly.
 	var childrenSpecs []config.ChildSpec
-	if provider, ok := desired.(config.ChildSpecProvider); ok {
+
+	s.mu.RLock()
+	renderedCtx, renderedExists := s.workers[firstWorkerID]
+	s.mu.RUnlock()
+
+	if renderedExists {
+		renderedCtx.mu.RLock()
+		rendered := renderedCtx.lastRenderedChildren
+		renderedCtx.mu.RUnlock()
+
+		if rendered != nil {
+			childrenSpecs = rendered
+		} else if provider, ok := desired.(config.ChildSpecProvider); ok {
+			childrenSpecs = provider.GetChildrenSpecs()
+		}
+	} else if provider, ok := desired.(config.ChildSpecProvider); ok {
 		childrenSpecs = provider.GetChildrenSpecs()
 	}
 
@@ -892,12 +937,8 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) (err error) 
 		}
 	}
 
-	// Tick worker before creating children to progress FSM state first
-	if err := s.tickWorker(ctx, firstWorkerID); err != nil {
-		return fmt.Errorf("failed to tick worker: %w", err)
-	}
-
-	// When shutting down, pass nil to trigger graceful child shutdown instead of re-creation
+	// During shutdown, pass nil so reconcileChildren removes children instead of
+	// re-creating them. This wins over whatever the state machine rendered.
 	if desiredDoc[FieldShutdownRequested] == true {
 		childrenSpecs = nil
 	}
@@ -1577,6 +1618,13 @@ func (s *Supervisor[TObserved, TDesired]) reconcileChildren(specs []config.Child
 		}
 	}
 
+	// applyDisableMapping propagates ChildSpec.Enabled into each child's IsDisabled bit.
+	// Runs inside reconcileChildren, after the per-spec exists-check and before despawn.
+	// Nil specs are a no-op: leaf workers legitimately return nil from GetChildrenSpecs.
+	if specs != nil {
+		s.applyDisableMapping(context.Background(), specs)
+	}
+
 	// Phase 1: Request shutdown for children not in specs (mark as pendingRemoval)
 	for name := range s.children {
 		if !specNames[name] && !s.pendingRemoval[name] {
@@ -1720,6 +1768,98 @@ func (s *Supervisor[TObserved, TDesired]) applyStateMapping() {
 			deps.String("parent_state", parentState),
 			deps.String("mapped_state", mappedState))
 	}
+}
+
+// applyDisableMapping propagates ChildSpec.Enabled into each child's IsDisabled bit.
+// Called inside reconcileChildren (parent.mu held). Acquires per-child locks internally.
+// Nil specs are a no-op: leaf workers return nil from GetChildrenSpecs every tick.
+//
+// Precedence:
+//   - IsShutdownRequested=true → terminal removal (wins over IsDisabled)
+//   - IsDisabled=true          → stay resident in Stopped, do not resume
+//   - both false               → normal, resume when desired
+func (s *Supervisor[TObserved, TDesired]) applyDisableMapping(ctx context.Context, specs []config.ChildSpec) {
+	if specs == nil {
+		return
+	}
+
+	for _, spec := range specs {
+		spec := spec // capture for closure
+
+		// Per-iteration panic recovery: one misbehaving child must not stop all reductions.
+		func() {
+			defer func() {
+				if r := recover(); r != nil {
+					err := fmt.Errorf("panic: %v\n%s", r, debug.Stack())
+					s.handleDisableMappingError(spec, err)
+				}
+			}()
+
+			child, exists := s.children[spec.Name]
+			if !exists {
+				if spec.Enabled {
+					// Enabled=true + not found = unexpected (WARN).
+					s.handleDisableMappingError(spec, persistence.ErrNotFound)
+				}
+
+				// Enabled=false + not found = expected during teardown (DEBUG).
+				return
+			}
+
+			if err := child.SetDisabled(ctx, !spec.Enabled); err != nil {
+				s.handleDisableMappingError(spec, err)
+			}
+		}()
+	}
+}
+
+// handleDisableMappingError logs with per-(childName,errorClass) flood suppression.
+// ErrNotFound + Enabled=true → WARN + CaptureEvent (unexpected).
+// ErrNotFound + Enabled=false → DEBUG (expected during teardown).
+func (s *Supervisor[TObserved, TDesired]) handleDisableMappingError(spec config.ChildSpec, err error) {
+	errClass := s.classifyDisableMappingError(err)
+	key := disableMappingSuppressKey{childName: spec.Name, errorClass: errClass}
+
+	entry := s.disableMappingErrors[key]
+	entry.count++
+
+	now := time.Now()
+	if now.Sub(entry.lastSeen) < disableMappingErrorSuppressionWindow {
+		s.disableMappingErrors[key] = entry
+		return
+	}
+
+	entry.lastSeen = now
+	s.disableMappingErrors[key] = entry
+
+	isErrNotFound := errors.Is(err, persistence.ErrNotFound)
+
+	if isErrNotFound && !spec.Enabled {
+		// Disabled child not found during teardown: expected, debug-level.
+		// Log key intentionally retains the historical "reducer" name to keep
+		// Sentry/log issue grouping stable across the applyDisableMapping rename.
+		s.logger.Debug("reducer_child_not_found_disabled",
+			deps.String("child_name", spec.Name),
+			deps.Int("suppressed_count", entry.count))
+		return
+	}
+
+	// Sentry key intentionally retains the historical "reducer" name to keep
+	// issue grouping stable across the applyDisableMapping rename.
+	s.logger.SentryWarn(deps.FeatureFSMv2, s.GetHierarchyPathUnlocked(), "reducer_error",
+		deps.String("child_name", spec.Name),
+		deps.String("error_class", errClass),
+		deps.Err(err),
+		deps.Int("suppressed_count", entry.count))
+}
+
+// classifyDisableMappingError maps an error to a stable string class for suppression keying.
+func (s *Supervisor[TObserved, TDesired]) classifyDisableMappingError(err error) string {
+	if errors.Is(err, persistence.ErrNotFound) {
+		return "not_found"
+	}
+
+	return "other"
 }
 
 // computeMappedState determines the desired state for a child based on parent's current state.

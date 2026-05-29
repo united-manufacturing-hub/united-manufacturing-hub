@@ -37,7 +37,17 @@ var _ snapshot.PushDependencies = (*PushDependencies)(nil)
 type PushDependencies struct {
 	*deps.BaseDependencies
 	parentDeps              *transport_pkg.TransportDependencies
+	// TODO(ENG-5018): failureRate and the embedded RetryTracker (from BaseDependencies)
+	// are per-child health counters that live in deps, not in observed status. The store
+	// does not cover them, so both reset to zero when this child is re-created or the
+	// process restarts, even once a durable (SQLite) store backend lands. To preserve
+	// counters across re-creates, model them into status.
 	failureRate             *failurerate.Tracker
+	// TODO(ENG-5018): pendingMessages holds messages destructively drained from the
+	// outbound channel but not yet delivered. It lives in deps, not in observed status,
+	// so it is not covered by the store: up to maxPendingMessages messages are discarded
+	// on child re-create or process restart, even once a durable (SQLite) store backend
+	// lands. To survive re-creates, back this buffer with the durable queue.
 	pendingMessages         []*types.UMHMessage
 	errorMu                 sync.RWMutex
 	pendingMu               sync.RWMutex

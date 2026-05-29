@@ -25,7 +25,15 @@ func init() {
 	fsmv2.RegisterInitialState("examplechild", &StoppedState{})
 }
 
-// StoppedState represents the initial state where the child worker is not connected.
+// StoppedState branches three ways. Precedence matters:
+//
+//  1. IsShutdownRequested=true → emit SignalNeedsRemoval (removal wins).
+//  2. IsDisabled=true → stay in Stopped (preserve dependency state).
+//  3. Otherwise check ParentMappedState: Running → TryingToConnect, else stay stopped.
+//
+// See also workers/transport for the production variant where stopped
+// children stay resident; workers/example/exampleparent/children.go
+// despawns instead (stateless children).
 type StoppedState struct {
 	helpers.StoppedBase
 }
@@ -35,6 +43,10 @@ func (s *StoppedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 
 	if snap.IsShutdownRequested {
 		return fsmv2.Transition(s, fsmv2.SignalNeedsRemoval, nil, "shutdown requested, stopping: parentState="+snap.ParentMappedState, nil)
+	}
+
+	if snap.IsDisabled {
+		return fsmv2.Transition(s, fsmv2.SignalNone, nil, "disabled by supervisor, staying stopped: parentState="+snap.ParentMappedState, nil)
 	}
 
 	if snap.ParentMappedState == config.DesiredStateRunning {

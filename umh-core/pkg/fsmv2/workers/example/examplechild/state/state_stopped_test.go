@@ -18,6 +18,9 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
+	examplechild "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplechild"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplechild/state"
 )
 
@@ -25,5 +28,37 @@ var _ = Describe("StoppedState", func() {
 	It("should compile and instantiate", func() {
 		s := &state.StoppedState{}
 		Expect(s).NotTo(BeNil())
+	})
+})
+
+var _ = Describe("StoppedState IsDisabled discriminator", func() {
+	var stateObj *state.StoppedState
+
+	BeforeEach(func() {
+		stateObj = &state.StoppedState{}
+	})
+
+	It("disabled-only (IsDisabled=true, IsShutdownRequested=false) → SignalNone, stays Stopped", func() {
+		snap := fsmv2.Snapshot{
+			Observed: fsmv2.Observation[examplechild.ExamplechildStatus]{},
+			Desired: &fsmv2.WrappedDesiredState[examplechild.ExamplechildConfig]{
+				BaseDesiredState: config.BaseDesiredState{Disabled: true, ShutdownRequested: false},
+			},
+		}
+		result := stateObj.Next(snap)
+		Expect(result.Signal).To(Equal(fsmv2.SignalNone))
+		Expect(result.State).To(BeAssignableToTypeOf(&state.StoppedState{}))
+	})
+
+	It("disabled+shutdown (both true) → SignalNeedsRemoval (shutdown wins)", func() {
+		snap := fsmv2.Snapshot{
+			Observed: fsmv2.Observation[examplechild.ExamplechildStatus]{},
+			Desired: &fsmv2.WrappedDesiredState[examplechild.ExamplechildConfig]{
+				BaseDesiredState: config.BaseDesiredState{Disabled: true, ShutdownRequested: true},
+			},
+		}
+		result := stateObj.Next(snap)
+		Expect(result.Signal).To(Equal(fsmv2.SignalNeedsRemoval))
+		Expect(result.State).To(BeAssignableToTypeOf(&state.StoppedState{}))
 	})
 })

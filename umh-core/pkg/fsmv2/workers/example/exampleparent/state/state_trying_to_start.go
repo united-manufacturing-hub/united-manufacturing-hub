@@ -16,13 +16,15 @@ package state
 
 import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleparent/action"
 	exampleparent "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleparent"
 )
 
 // TryingToStartState represents the state while loading config and spawning children.
-// Children with ChildStartStates containing "TryingToStart" will have desired state "running".
+// Children are emitted with Enabled=true, so they run for the whole alive
+// trajectory (TryingToStart, Running, Degraded); gating is Enabled-only.
 // Waits for all children to become healthy before transitioning to RunningState.
 type TryingToStartState struct {
 	helpers.StartingBase
@@ -32,18 +34,18 @@ func (s *TryingToStartState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := fsmv2.ConvertWorkerSnapshot[exampleparent.ExampleparentConfig, exampleparent.ExampleparentStatus](snapAny)
 
 	if snap.IsShutdownRequested {
-		return fsmv2.Transition(&TryingToStopState{}, fsmv2.SignalNone, nil, "Shutdown requested, transitioning to TryingToStop", nil)
+		return fsmv2.Transition(&TryingToStopState{}, fsmv2.SignalNone, nil, "Shutdown requested, transitioning to TryingToStop", []config.ChildSpec{})
 	}
 
 	if snap.Status.ID == "" {
-		return fsmv2.Transition(s, fsmv2.SignalNone, &action.StartAction{}, "ID not set, executing StartAction", nil)
+		return fsmv2.Transition(s, fsmv2.SignalNone, &action.StartAction{}, "ID not set, executing StartAction", childrenAlive(snap.Config))
 	}
 
 	if snap.ChildrenHealthy > 0 && snap.ChildrenUnhealthy == 0 {
-		return fsmv2.Transition(&RunningState{}, fsmv2.SignalNone, nil, "All children healthy, transitioning to Running", nil)
+		return fsmv2.Transition(&RunningState{}, fsmv2.SignalNone, nil, "All children healthy, transitioning to Running", childrenAlive(snap.Config))
 	}
 
-	return fsmv2.Transition(s, fsmv2.SignalNone, nil, "Waiting for all children to become healthy", nil)
+	return fsmv2.Transition(s, fsmv2.SignalNone, nil, "Waiting for all children to become healthy", childrenAlive(snap.Config))
 }
 
 func (s *TryingToStartState) String() string {
