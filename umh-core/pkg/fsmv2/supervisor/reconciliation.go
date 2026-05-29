@@ -43,21 +43,21 @@ var ErrPanicCircuitOpen = errors.New("panic circuit breaker open")
 // ErrInfraCircuitOpen is returned when the tick is suppressed because the infrastructure circuit breaker is open.
 var ErrInfraCircuitOpen = errors.New("infrastructure circuit breaker open")
 
-// reducerSuppressKey identifies a (childName, errorClass) pair for log-flood suppression.
-type reducerSuppressKey struct {
+// disableMappingSuppressKey identifies a (childName, errorClass) pair for log-flood suppression.
+type disableMappingSuppressKey struct {
 	childName  string
 	errorClass string
 }
 
-// reducerErrorEntry tracks the last time an error was logged for a given (childName, errorClass).
-type reducerErrorEntry struct {
+// disableMappingErrorEntry tracks the last time an error was logged for a given (childName, errorClass).
+type disableMappingErrorEntry struct {
 	lastSeen time.Time
 	count    int
 }
 
-// reducerErrorSuppressionWindow is the minimum interval between repeated error logs for the same
+// disableMappingErrorSuppressionWindow is the minimum interval between repeated error logs for the same
 // (childName, errorClass) pair. Errors within the window are counted but not logged.
-const reducerErrorSuppressionWindow = time.Minute
+const disableMappingErrorSuppressionWindow = time.Minute
 
 // factoryRegistryAdapter provides an adapter for config validation.
 type factoryRegistryAdapter struct{}
@@ -1618,11 +1618,11 @@ func (s *Supervisor[TObserved, TDesired]) reconcileChildren(specs []config.Child
 		}
 	}
 
-	// applyReducer propagates ChildSpec.Enabled into each child's IsDisabled bit.
+	// applyDisableMapping propagates ChildSpec.Enabled into each child's IsDisabled bit.
 	// Runs inside reconcileChildren, after the per-spec exists-check and before despawn.
 	// Nil specs are a no-op: leaf workers legitimately return nil from GetChildrenSpecs.
 	if specs != nil {
-		s.applyReducer(context.Background(), specs)
+		s.applyDisableMapping(context.Background(), specs)
 	}
 
 	// Phase 1: Request shutdown for children not in specs (mark as pendingRemoval)
@@ -1770,7 +1770,7 @@ func (s *Supervisor[TObserved, TDesired]) applyStateMapping() {
 	}
 }
 
-// applyReducer propagates ChildSpec.Enabled into each child's IsDisabled bit.
+// applyDisableMapping propagates ChildSpec.Enabled into each child's IsDisabled bit.
 // Called inside reconcileChildren (parent.mu held). Acquires per-child locks internally.
 // Nil specs are a no-op: leaf workers return nil from GetChildrenSpecs every tick.
 //
@@ -1778,7 +1778,7 @@ func (s *Supervisor[TObserved, TDesired]) applyStateMapping() {
 //   - IsShutdownRequested=true → terminal removal (wins over IsDisabled)
 //   - IsDisabled=true          → stay resident in Stopped, do not resume
 //   - both false               → normal, resume when desired
-func (s *Supervisor[TObserved, TDesired]) applyReducer(ctx context.Context, specs []config.ChildSpec) {
+func (s *Supervisor[TObserved, TDesired]) applyDisableMapping(ctx context.Context, specs []config.ChildSpec) {
 	if specs == nil {
 		return
 	}
@@ -1791,7 +1791,7 @@ func (s *Supervisor[TObserved, TDesired]) applyReducer(ctx context.Context, spec
 			defer func() {
 				if r := recover(); r != nil {
 					err := fmt.Errorf("panic: %v\n%s", r, debug.Stack())
-					s.handleReducerError(spec, err)
+					s.handleDisableMappingError(spec, err)
 				}
 			}()
 
@@ -1799,7 +1799,7 @@ func (s *Supervisor[TObserved, TDesired]) applyReducer(ctx context.Context, spec
 			if !exists {
 				if spec.Enabled {
 					// Enabled=true + not found = unexpected (WARN).
-					s.handleReducerError(spec, persistence.ErrNotFound)
+					s.handleDisableMappingError(spec, persistence.ErrNotFound)
 				}
 
 				// Enabled=false + not found = expected during teardown (DEBUG).
@@ -1807,41 +1807,45 @@ func (s *Supervisor[TObserved, TDesired]) applyReducer(ctx context.Context, spec
 			}
 
 			if err := child.SetDisabled(ctx, !spec.Enabled); err != nil {
-				s.handleReducerError(spec, err)
+				s.handleDisableMappingError(spec, err)
 			}
 		}()
 	}
 }
 
-// handleReducerError logs with per-(childName,errorClass) flood suppression.
+// handleDisableMappingError logs with per-(childName,errorClass) flood suppression.
 // ErrNotFound + Enabled=true → WARN + CaptureEvent (unexpected).
 // ErrNotFound + Enabled=false → DEBUG (expected during teardown).
-func (s *Supervisor[TObserved, TDesired]) handleReducerError(spec config.ChildSpec, err error) {
-	errClass := s.classifyReducerError(err)
-	key := reducerSuppressKey{childName: spec.Name, errorClass: errClass}
+func (s *Supervisor[TObserved, TDesired]) handleDisableMappingError(spec config.ChildSpec, err error) {
+	errClass := s.classifyDisableMappingError(err)
+	key := disableMappingSuppressKey{childName: spec.Name, errorClass: errClass}
 
-	entry := s.reducerErrors[key]
+	entry := s.disableMappingErrors[key]
 	entry.count++
 
 	now := time.Now()
-	if now.Sub(entry.lastSeen) < reducerErrorSuppressionWindow {
-		s.reducerErrors[key] = entry
+	if now.Sub(entry.lastSeen) < disableMappingErrorSuppressionWindow {
+		s.disableMappingErrors[key] = entry
 		return
 	}
 
 	entry.lastSeen = now
-	s.reducerErrors[key] = entry
+	s.disableMappingErrors[key] = entry
 
 	isErrNotFound := errors.Is(err, persistence.ErrNotFound)
 
 	if isErrNotFound && !spec.Enabled {
 		// Disabled child not found during teardown: expected, debug-level.
+		// Log key intentionally retains the historical "reducer" name to keep
+		// Sentry/log issue grouping stable across the applyDisableMapping rename.
 		s.logger.Debug("reducer_child_not_found_disabled",
 			deps.String("child_name", spec.Name),
 			deps.Int("suppressed_count", entry.count))
 		return
 	}
 
+	// Sentry key intentionally retains the historical "reducer" name to keep
+	// issue grouping stable across the applyDisableMapping rename.
 	s.logger.SentryWarn(deps.FeatureFSMv2, s.GetHierarchyPathUnlocked(), "reducer_error",
 		deps.String("child_name", spec.Name),
 		deps.String("error_class", errClass),
@@ -1849,8 +1853,8 @@ func (s *Supervisor[TObserved, TDesired]) handleReducerError(spec config.ChildSp
 		deps.Int("suppressed_count", entry.count))
 }
 
-// classifyReducerError maps an error to a stable string class for suppression keying.
-func (s *Supervisor[TObserved, TDesired]) classifyReducerError(err error) string {
+// classifyDisableMappingError maps an error to a stable string class for suppression keying.
+func (s *Supervisor[TObserved, TDesired]) classifyDisableMappingError(err error) string {
 	if errors.Is(err, persistence.ErrNotFound) {
 		return "not_found"
 	}

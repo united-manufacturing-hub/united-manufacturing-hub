@@ -133,7 +133,7 @@ func (w *ApplicationWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredS
 	}
 
 	// Ensure every child parsed from YAML carries Enabled=true.
-	// ChildSpec.Enabled defaults to false (zero value); the reducer would disable
+	// ChildSpec.Enabled defaults to false (zero value); the disable-mapping pass would disable
 	// all application children on every tick without this normalization.
 	for i := range children {
 		children[i].Enabled = true

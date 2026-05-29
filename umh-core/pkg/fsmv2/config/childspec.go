@@ -80,7 +80,7 @@ func (b *BaseDesiredState) SetShutdownRequested(v bool) {
 	b.ShutdownRequested = v
 }
 
-// IsDisabled is written exclusively by the reducer (see supervisor/reconciliation.go applyReducer).
+// IsDisabled is written exclusively by the disable-mapping pass (see supervisor/reconciliation.go applyDisableMapping).
 // The restart subsystem never sets it.
 func (b *BaseDesiredState) IsDisabled() bool {
 	return b.Disabled
@@ -241,7 +241,7 @@ type ChildSpec struct {
 	// value (false) means "stopped but resident" — children stay in Stopped
 	// without being despawned. Setting Enabled=false then Enabled=true resumes
 	// the child on the next tick. Children read snap.IsDisabled, not Enabled
-	// directly; the reducer translates Enabled to IsDisabled.
+	// directly; the disable-mapping pass translates Enabled to IsDisabled.
 	Enabled bool `json:"enabled" yaml:"enabled"`
 }
 
