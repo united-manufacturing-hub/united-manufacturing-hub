@@ -266,22 +266,24 @@ var _ = Describe("WorkerBase", func() {
 			Expect(wds.Config.Port).To(Equal(9090))
 		})
 
-		It("valid UserSpec with state=stopped propagates State field", func() {
+		It("valid UserSpec with state=stopped is accepted and parses config", func() {
 			spec := config.UserSpec{Config: "state: stopped\nurl: http://example.com\nport: 1234"}
 			ds, err := worker.DeriveDesiredState(spec)
 			Expect(err).NotTo(HaveOccurred())
 			wds, ok := ds.(*fsmv2.WrappedDesiredState[wbTestConfig])
 			Expect(ok).To(BeTrue())
-			Expect(wds.State).To(Equal(config.DesiredStateStopped))
+			Expect(wds.Config.URL).To(Equal("http://example.com"))
+			Expect(wds.Config.Port).To(Equal(1234))
 		})
 
-		It("valid UserSpec with state=running propagates State field", func() {
+		It("valid UserSpec with state=running is accepted and parses config", func() {
 			spec := config.UserSpec{Config: "state: running\nurl: http://example.com\nport: 5678"}
 			ds, err := worker.DeriveDesiredState(spec)
 			Expect(err).NotTo(HaveOccurred())
 			wds, ok := ds.(*fsmv2.WrappedDesiredState[wbTestConfig])
 			Expect(ok).To(BeTrue())
-			Expect(wds.State).To(Equal(config.DesiredStateRunning))
+			Expect(wds.Config.URL).To(Equal("http://example.com"))
+			Expect(wds.Config.Port).To(Equal(5678))
 		})
 
 		It("invalid spec type (non-UserSpec) returns error", func() {
@@ -306,13 +308,13 @@ var _ = Describe("WorkerBase", func() {
 			Expect(err.Error()).To(ContainSubstring("invalid desired state"))
 		})
 
-		It("nil spec returns State='' (empty; GetState() returns 'running')", func() {
+		It("nil spec returns a default WrappedDesiredState with empty config", func() {
 			ds, err := worker.DeriveDesiredState(nil)
 			Expect(err).NotTo(HaveOccurred())
 			wds, ok := ds.(*fsmv2.WrappedDesiredState[wbTestConfig])
 			Expect(ok).To(BeTrue())
-			Expect(wds.State).To(Equal(""))
-			Expect(wds.GetState()).To(Equal(config.DesiredStateRunning))
+			Expect(wds.Config).To(Equal(wbTestConfig{}))
+			Expect(wds.IsShutdownRequested()).To(BeFalse())
 		})
 
 		It("config is cached: Config() matches after DeriveDesiredState", func() {
