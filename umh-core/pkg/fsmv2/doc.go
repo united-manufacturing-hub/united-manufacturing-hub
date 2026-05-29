@@ -245,7 +245,7 @@
 //	func (o MyObservedState) SetChildrenView(view config.ChildrenView) fsmv2.ObservedState {
 //	    o.ChildrenHealthy = view.HealthyCount
 //	    o.ChildrenUnhealthy = view.UnhealthyCount
-//	    // Can also use: view.Children, view.Get(name), view.AllHealthy
+//	    // Can also use: view.Children, view.AllHealthy
 //	    return o
 //	}
 //
@@ -253,8 +253,6 @@
 //   - Children []ChildInfo: all children with state info
 //   - HealthyCount, UnhealthyCount int: per-tick aggregate counts (stopped children excluded from unhealthy)
 //   - AllHealthy, AllOperational, AllStopped bool: aggregate predicates derived from each child's lifecycle phase
-//   - Get(name string) (ChildInfo, bool): copy + presence bool
-//   - List() []ChildInfo, Counts() (healthy, unhealthy int): deprecated migration shims
 //
 // ChildInfo provides read-only info about each child:
 //   - Name, WorkerType, StateName, StateReason, IsHealthy, IsOperational, IsStopped, ErrorMsg, HierarchyPath

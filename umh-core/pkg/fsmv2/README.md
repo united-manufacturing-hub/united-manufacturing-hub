@@ -466,10 +466,9 @@ The supervisor reconciles from this slice. Omitting a child despawns it; includi
 See `config/childspec.go` for `ChildSpec` fields (Enabled, ChildStartStates, UserSpec, Variables). For the despawn variant see `workers/example/exampleparent/children.go`. For the resident-disable variant see `workers/transport/snapshot/children.go`.
 
 **Accessing children's state from the parent**:
-- `ChildrenView.List()` - all children with state info
-- `ChildrenView.Get(name)` - single child by name (returns `*ChildInfo`, nil if not found)
+- `ChildrenView.Children` - all children with state info
 - `ChildrenView.AllHealthy()` - pre-computed aggregate predicate (true when all children are PhaseRunningHealthy)
-- `ChildrenView.Counts() (healthy, unhealthy int)` - pre-computed aggregate counts (stopped children excluded from unhealthy)
+- `ChildrenView.HealthyCount` / `ChildrenView.UnhealthyCount` - pre-computed aggregate counts (stopped children excluded from unhealthy)
 - `StateReader.LoadObservedTyped()` - query a child's observed state
 
 ### FrameworkMetrics (auto-injected)

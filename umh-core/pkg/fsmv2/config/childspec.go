@@ -455,35 +455,6 @@ func NewChildrenView(children []ChildInfo) ChildrenView {
 	return view
 }
 
-// Get returns the ChildInfo for name as a copy along with a presence bool.
-// The bool is false when no child with that name exists in the view.
-func (v ChildrenView) Get(name string) (ChildInfo, bool) {
-	for i := range v.Children {
-		if v.Children[i].Name == name {
-			return v.Children[i], true
-		}
-	}
-
-	return ChildInfo{}, false
-}
-
-// List returns the slice of ChildInfo entries.
-//
-// Deprecated: read v.Children directly. Retained as a migration shim for
-// callers written against the prior ChildrenView interface.
-func (v ChildrenView) List() []ChildInfo {
-	return v.Children
-}
-
-// Counts returns the pre-computed (healthy, unhealthy) child counts.
-//
-// Deprecated: read v.HealthyCount and v.UnhealthyCount directly. Retained as
-// a migration shim for callers written against the prior ChildrenView
-// interface.
-func (v ChildrenView) Counts() (healthy, unhealthy int) {
-	return v.HealthyCount, v.UnhealthyCount
-}
-
 // DesiredState represents what we want the system to be.
 // This is returned by Worker.DeriveDesiredState() and used by State.Next() for decisions.
 //
