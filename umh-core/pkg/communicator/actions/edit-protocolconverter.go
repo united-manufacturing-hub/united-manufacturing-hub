@@ -34,6 +34,7 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	"reflect"
 	"slices"
 	"strconv"
 	"time"
@@ -41,8 +42,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/tiendc/go-deepcopy"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/benthosserviceconfig"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/connectionserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/protocolconverterserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
@@ -90,14 +89,27 @@ func (d DFCType) IsValid() bool {
 type EditProtocolConverterAction struct {
 	configManager config.ConfigManager
 
+	fsmLogger deps.FSMLogger
+	// lastRenderErr holds the most recent renderDesiredDFCConfig error so the
+	// awaitRollout timeout message can surface the real cause instead of just
+	// "did not become active in time".
+	lastRenderErr error
+
 	outboundChannel chan *models.UMHMessage
 	location        map[int]string
 
 	// Runtime observation for health checks
 	systemSnapshotManager *fsm.SnapshotManager
 
-	actionLogger   *zap.SugaredLogger
-	fsmLogger      deps.FSMLogger
+	actionLogger *zap.SugaredLogger
+
+	// readDFCSvcCfg is the built+validated read DFC service config, set in Parse.
+	// nil means no read DFC was provided in the request.
+	readDFCSvcCfg *dataflowcomponentserviceconfig.DataflowComponentServiceConfig
+	// writeDFCInput is the raw template-string form of the write config, persisted to the spec.
+	// nil means no write DFC was provided.
+	writeDFCInput *dataflowcomponentserviceconfig.DataflowComponentWriteConfigInput
+
 	userEmail      string
 	name           string // protocol converter name (optional for updates)
 	dfcType        DFCType
@@ -106,14 +118,7 @@ type EditProtocolConverterAction struct {
 	readDFCState   string // desired state for the read DFC ("active" or "stopped"; empty = default active)
 	writeDFCState  string // desired state for the write DFC ("active" or "stopped"; empty = default active)
 
-	readDFCPayload  *models.CDFCPayload
-	writeDFCPayload *models.CDFCPayload
-
-	vb []models.ProtocolConverterVariable
-
-	// Desired DFC configs for comparison during health checks
-	desiredReadDFCConfig  dataflowcomponentserviceconfig.DataflowComponentServiceConfig
-	desiredWriteDFCConfig dataflowcomponentserviceconfig.DataflowComponentServiceConfig
+	templateVars []models.ProtocolConverterVariable
 
 	actionUUID   uuid.UUID
 	instanceUUID uuid.UUID
@@ -146,6 +151,8 @@ func NewEditProtocolConverterAction(userEmail string, actionUUID uuid.UUID, inst
 // Parse implements the Action interface by extracting the protocol converter UUID and
 // dataflow component configuration from the payload.
 func (a *EditProtocolConverterAction) Parse(payload interface{}) error {
+	a.ignoreHealthCheck = false
+
 	// Parse the payload directly as a complete ProtocolConverter object
 	pcPayload, err := ParseActionPayload[models.ProtocolConverter](payload)
 	if err != nil {
@@ -160,31 +167,35 @@ func (a *EditProtocolConverterAction) Parse(payload interface{}) error {
 	a.protocolConverterUUID = *pcPayload.UUID
 	a.name = pcPayload.Name
 
-	// Parse each DFC side independently.
-	if pcPayload.ReadDFC != nil {
-		readPayload := dfcToPayload(pcPayload.ReadDFC)
-		a.readDFCPayload = &readPayload
+	// Resolve user variables first — they are needed to render the InputTopics template.
+	if pcPayload.TemplateInfo != nil {
+		a.templateVars = pcPayload.TemplateInfo.Variables
+	} else {
+		a.templateVars = make([]models.ProtocolConverterVariable, 0)
+	}
 
+	// Parse and build each DFC side independently.
+	// Both sides follow the same pattern: wire format → built/rendered config → state + flags.
+	if pcPayload.ReadDFC != nil {
+		svcCfg, err := buildReadDFCServiceConfig(dfcToPayload(pcPayload.ReadDFC), pcPayload.Name)
+		if err != nil {
+			return fmt.Errorf("failed to build read DFC configuration: %w", err)
+		}
+		a.readDFCSvcCfg = &svcCfg
 		a.readDFCState = pcPayload.ReadDFC.State
 		if pcPayload.ReadDFC.IgnoreErrors != nil {
 			a.ignoreHealthCheck = *pcPayload.ReadDFC.IgnoreErrors
 		}
 	}
-
-	if pcPayload.WriteDFC != nil {
-		writePayload := dfcToPayload(pcPayload.WriteDFC)
-		a.writeDFCPayload = &writePayload
-
-		a.writeDFCState = pcPayload.WriteDFC.State
-		if pcPayload.WriteDFC.IgnoreErrors != nil {
-			a.ignoreHealthCheck = a.ignoreHealthCheck || *pcPayload.WriteDFC.IgnoreErrors
+	if pcPayload.WriteDFCPayload != nil {
+		input := pcPayload.WriteDFCPayload.DataflowComponentWriteConfigInput
+		a.writeDFCInput = &input
+		a.writeDFCState = pcPayload.WriteDFCPayload.State
+		// OR-merge: if either DFC requests skipping errors, skip the health-check wait
+		// for the entire PC. See deploy-protocolconverter.go for the rationale.
+		if pcPayload.WriteDFCPayload.IgnoreErrors != nil {
+			a.ignoreHealthCheck = a.ignoreHealthCheck || *pcPayload.WriteDFCPayload.IgnoreErrors
 		}
-	}
-
-	if pcPayload.TemplateInfo != nil {
-		a.vb = pcPayload.TemplateInfo.Variables
-	} else {
-		a.vb = make([]models.ProtocolConverterVariable, 0)
 	}
 
 	// Extract location
@@ -217,11 +228,16 @@ func (a *EditProtocolConverterAction) Validate() error {
 		return err
 	}
 
-	if err := validateDFCPayloadAndState(a.readDFCPayload, a.readDFCState, "read"); err != nil {
-		return err
+	// Validate read DFC state — validate independently of whether config was provided,
+	// so state-only edits (readDFCSvcCfg == nil) are also checked.
+	if a.readDFCState != "" {
+		if err := ValidateDataFlowComponentState(a.readDFCState); err != nil {
+			return fmt.Errorf("invalid read DFC state: %w", err)
+		}
 	}
 
-	if err := validateDFCPayloadAndState(a.writeDFCPayload, a.writeDFCState, "write"); err != nil {
+	// Validate write DFC state
+	if err := validateWriteDFCConfig(a.writeDFCInput, a.writeDFCState); err != nil {
 		return err
 	}
 
@@ -244,41 +260,7 @@ func (a *EditProtocolConverterAction) Execute() (interface{}, map[string]interfa
 	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionConfirmed,
 		confirmationMessage, a.outboundChannel, models.EditProtocolConverter)
 
-	var (
-		readBenthosConfig  *dataflowcomponentserviceconfig.BenthosConfig
-		writeBenthosConfig *dataflowcomponentserviceconfig.BenthosConfig
-		err                error
-	)
-
-	if a.readDFCPayload != nil {
-		cfg, buildErr := CreateBenthosConfigFromCDFCPayload(*a.readDFCPayload, a.name)
-		if buildErr != nil {
-			errorMsg := fmt.Sprintf("Failed to create read DFC Benthos configuration: %v", buildErr)
-			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
-				errorMsg, a.outboundChannel, models.EditProtocolConverter)
-			a.fsmLogger.SentryError(deps.FeatureDisableReadFlows, "", buildErr, "edit_protocol_converter_read_benthos_config_failed",
-				deps.String("readDFCPayload", fmt.Sprintf("%+v", a.readDFCPayload)))
-
-			return nil, nil, fmt.Errorf("%s", errorMsg)
-		}
-
-		readBenthosConfig = &cfg
-	}
-
-	if a.writeDFCPayload != nil {
-		cfg, buildErr := CreateBenthosConfigFromCDFCPayload(*a.writeDFCPayload, a.name)
-		if buildErr != nil {
-			errorMsg := fmt.Sprintf("Failed to create write DFC Benthos configuration: %v", buildErr)
-			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
-				errorMsg, a.outboundChannel, models.EditProtocolConverter)
-			a.fsmLogger.SentryError(deps.FeatureDisableReadFlows, "", buildErr, "edit_protocol_converter_write_benthos_config_failed",
-				deps.String("writeDFCPayload", fmt.Sprintf("%+v", a.writeDFCPayload)))
-
-			return nil, nil, fmt.Errorf("%s", errorMsg)
-		}
-
-		writeBenthosConfig = &cfg
-	}
+	var err error
 
 	if a.dfcType != DFCTypeEmpty {
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
@@ -291,7 +273,7 @@ func (a *EditProtocolConverterAction) Execute() (interface{}, map[string]interfa
 	}
 
 	// Apply mutations to create new spec
-	newSpec, atomicEditUUID, desiredPCState, err := a.applyMutation(readBenthosConfig, writeBenthosConfig)
+	newSpec, atomicEditUUID, desiredPCState, err := a.applyMutation()
 	if err != nil {
 		errorMsg := fmt.Sprintf("Failed to apply configuration mutation: %v", err)
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
@@ -347,7 +329,8 @@ func (a *EditProtocolConverterAction) Execute() (interface{}, map[string]interfa
 // to create the new protocol converter specification. It handles child/root relationships,
 // variable merging, and DFC configuration updates.
 // Returns the new spec, the atomic edit UUID, the derived PC desired state, and any error.
-func (a *EditProtocolConverterAction) applyMutation(readBenthosConfig, writeBenthosConfig *dataflowcomponentserviceconfig.BenthosConfig) (config.ProtocolConverterConfig, uuid.UUID, string, error) {
+// Read/write DFC configs are read from a.readDFCSvcCfg and a.writeDFCInput respectively.
+func (a *EditProtocolConverterAction) applyMutation() (config.ProtocolConverterConfig, uuid.UUID, string, error) {
 	// Get current configuration
 	ctx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
 	defer cancel()
@@ -380,46 +363,13 @@ func (a *EditProtocolConverterAction) applyMutation(readBenthosConfig, writeBent
 	targetPC.ProtocolConverterServiceConfig.TemplateRef = a.name
 	targetPC.Name = a.name
 
-	// Classify the protocol converter instance
-	isChild := targetPC.ProtocolConverterServiceConfig.TemplateRef != "" &&
-		targetPC.ProtocolConverterServiceConfig.TemplateRef != targetPC.Name
-
-	// Determine which instance to modify and which UUID to use for atomic operation
+	// Determine which instance to modify and which UUID to use for atomic operation.
+	// TemplateRef is always set to Name (line above), so stand-alone is the only case.
 	var (
-		instanceToModify config.ProtocolConverterConfig
-		atomicEditUUID   uuid.UUID
+		instanceToModify = targetPC
+		atomicEditUUID   = a.protocolConverterUUID
 		newVB            map[string]any
 	)
-
-	if isChild {
-		// Find the root instance
-		var rootPC config.ProtocolConverterConfig
-
-		rootFound := false
-
-		for _, pc := range currentConfig.ProtocolConverter {
-			if pc.Name == targetPC.ProtocolConverterServiceConfig.TemplateRef &&
-				pc.ProtocolConverterServiceConfig.TemplateRef == pc.Name {
-				rootPC = pc
-				rootFound = true
-
-				break
-			}
-		}
-
-		if !rootFound {
-			return config.ProtocolConverterConfig{}, uuid.Nil, "", fmt.Errorf("root template %s not found for child protocol converter %s",
-				targetPC.ProtocolConverterServiceConfig.TemplateRef, targetPC.Name)
-		}
-
-		// Apply mutations to the root, but keep child's variables
-		instanceToModify = rootPC
-		atomicEditUUID = dataflowcomponentserviceconfig.GenerateUUIDFromName(rootPC.Name)
-	} else {
-		// Root or stand-alone: apply mutations directly
-		instanceToModify = targetPC
-		atomicEditUUID = a.protocolConverterUUID
-	}
 
 	// Add the new variables and preserve existing variables
 	newVB = make(map[string]any)
@@ -430,7 +380,7 @@ func (a *EditProtocolConverterAction) applyMutation(readBenthosConfig, writeBent
 	}
 
 	// Then add new variables (overwrites with updated values)
-	for _, variable := range a.vb {
+	for _, variable := range a.templateVars {
 		newVB[variable.Label] = variable.Value
 	}
 
@@ -441,52 +391,22 @@ func (a *EditProtocolConverterAction) applyMutation(readBenthosConfig, writeBent
 
 	instanceToModify.ProtocolConverterServiceConfig.Variables.User = newVB
 
-	// Apply read DFC config if provided
-	if readBenthosConfig != nil {
-		readDFCServiceConfig := dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
-			BenthosConfig: *readBenthosConfig,
-		}
-		a.desiredReadDFCConfig = readDFCServiceConfig
-		instanceToModify.ProtocolConverterServiceConfig.Config.DataflowComponentReadServiceConfig = readDFCServiceConfig
+	// Apply read DFC config if provided.
+	if a.readDFCSvcCfg != nil {
+		instanceToModify.ProtocolConverterServiceConfig.Config.DataflowComponentReadServiceConfig = *a.readDFCSvcCfg
 	}
 
-	// Apply write DFC config if provided
-	if writeBenthosConfig != nil {
-		writeDFCServiceConfig := dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
-			BenthosConfig: *writeBenthosConfig,
-		}
-		a.desiredWriteDFCConfig = writeDFCServiceConfig
-		instanceToModify.ProtocolConverterServiceConfig.Config.DataflowComponentWriteServiceConfig = writeDFCServiceConfig
-	}
-
-	// TODO(ENG-4856): UMH_TOPICS is a typed field stored in Variables.User as a workaround
-	// because the bridge config has no typed block for it yet. Remove this persist block
-	// once UMH_TOPICS moves to a typed config field in the FSMv2 bridge migration.
-	// Persist UMH_TOPICS from write DFC payload. An explicit empty slice clears the key
-	// so that stale topics do not remain when the user removes all subscriptions.
-	if a.writeDFCPayload != nil {
-		if len(a.writeDFCPayload.UMHTopics) > 0 {
-			instanceToModify.ProtocolConverterServiceConfig.Variables.User["UMH_TOPICS"] = a.writeDFCPayload.UMHTopics
-		} else {
-			delete(instanceToModify.ProtocolConverterServiceConfig.Variables.User, "UMH_TOPICS")
-		}
+	// Apply write DFC config when the Output field was explicitly included in the payload
+	// (non-nil, even if empty). A nil Output means a state-only change; the existing
+	// config is preserved. An explicitly empty Output ({}) clears the write DFC output.
+	if a.writeDFCInput != nil && a.writeDFCInput.Output != nil {
+		instanceToModify.ProtocolConverterServiceConfig.Config.DataflowComponentWriteServiceConfig = *a.writeDFCInput
 	}
 
 	// Add the connection details to the template
-	instanceToModify.ProtocolConverterServiceConfig.Config.ConnectionServiceConfig = connectionserviceconfig.ConnectionServiceConfigTemplate{
-		NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
-			Target: "{{ .IP }}",
-			Port:   "{{ .PORT }}",
-		},
-	}
+	instanceToModify.ProtocolConverterServiceConfig.Config.ConnectionServiceConfig = newIPPortConnectionTemplate()
 
-	// Update the location of the protocol converter (convert the map to a string map)
-	locationMap := make(map[string]string)
-	for k, v := range a.location {
-		locationMap[strconv.Itoa(k)] = v
-	}
-
-	instanceToModify.ProtocolConverterServiceConfig.Location = locationMap
+	instanceToModify.ProtocolConverterServiceConfig.Location = convertIntMapToStringMap(a.location)
 
 	// Update the connection details of the protocol converter (IP and PORT variables).
 	// Only overwrite when non-empty: an edit that omits connection details should
@@ -592,25 +512,28 @@ func (a *EditProtocolConverterAction) awaitRollout(pcConfig config.ProtocolConve
 		case <-timeout:
 			// rollback to previous configuration
 			ctx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
-			defer cancel()
 
-			_, err := a.configManager.AtomicEditProtocolConverter(ctx, a.atomicEditUUID, pcConfig)
-			if err != nil {
-				a.actionLogger.Errorf("Failed to rollback to previous configuration: %v", err)
-				stateMessage := fmt.Sprintf("Protocol converter '%s' edit timeout reached. It did not become %s in time. Rolling back to previous configuration failed: %v", a.name, desiredPCState, err)
-				a.fsmLogger.SentryError(deps.FeatureDisableReadFlows, "", err, "edit_protocol_converter_rollback_failed",
+			_, rollbackErr := a.configManager.AtomicEditProtocolConverter(ctx, a.atomicEditUUID, pcConfig)
+			cancel()
+			if rollbackErr != nil {
+				a.actionLogger.Errorf("Failed to rollback to previous configuration: %v", rollbackErr)
+				stateMessage := fmt.Sprintf("Protocol converter '%s' edit timeout reached. It did not become %s in time. Rolling back to previous configuration failed: %v", a.name, desiredPCState, rollbackErr)
+				a.fsmLogger.SentryError(deps.FeatureDisableReadFlows, "", rollbackErr, "edit_protocol_converter_rollback_failed",
 					deps.String("pcConfig", pcConfig.String()))
 
 				return models.ErrRetryRollbackTimeout, fmt.Errorf("%s", stateMessage)
-			} else {
-				stateMessage := fmt.Sprintf("Protocol converter '%s' edit timeout reached. It did not become %s in time. Rolled back to previous configuration", a.name, desiredPCState)
-				a.fsmLogger.SentryWarn(deps.FeatureDisableReadFlows, "", "edit_protocol_converter_rollback_on_timeout",
-					deps.String("pcConfig", pcConfig.String()),
-					deps.String("desiredPCState", desiredPCState),
-				)
-
-				return models.ErrRetryRollbackTimeout, fmt.Errorf("%s", stateMessage)
 			}
+
+			stateMessage := fmt.Sprintf("Protocol converter '%s' edit timeout reached. It did not become %s in time. Rolled back to previous configuration", a.name, desiredPCState)
+			if a.lastRenderErr != nil {
+				stateMessage += fmt.Sprintf(" (root cause: %v)", a.lastRenderErr)
+			}
+			a.fsmLogger.SentryWarn(deps.FeatureDisableReadFlows, "", "edit_protocol_converter_rollback_on_timeout",
+				deps.String("pcConfig", pcConfig.String()),
+				deps.String("desiredPCState", desiredPCState),
+			)
+
+			return models.ErrRetryRollbackTimeout, fmt.Errorf("%s", stateMessage)
 
 		case <-ticker.C:
 			// Get a deep copy of the system snapshot to prevent race conditions
@@ -857,11 +780,11 @@ func (a *EditProtocolConverterAction) awaitRollout(pcConfig config.ProtocolConve
 					)
 
 					ctx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
-					defer cancel()
 
 					a.actionLogger.Infof("rolling back to previous configuration with user variables: %v", pcConfig.ProtocolConverterServiceConfig.Variables.User)
 
 					_, err := a.configManager.AtomicEditProtocolConverter(ctx, a.atomicEditUUID, pcConfig)
+					cancel()
 					if err != nil {
 						a.actionLogger.Errorf("failed to roll back protocol converter %s: %v", a.name, err)
 						a.fsmLogger.SentryError(deps.FeatureDisableReadFlows, "", err, "edit_protocol_converter_config_error_rollback_failed",
@@ -964,7 +887,7 @@ func (a *EditProtocolConverterAction) compareSingleDFCConfig(pcSnapshot *protoco
 	renderedDesiredConfig, err := a.renderDesiredDFCConfig(pcSnapshot, dfcType)
 	if err != nil {
 		a.actionLogger.Errorf("failed to render desired %s DFC config: %v", dfcType, err)
-
+		a.lastRenderErr = err
 		return false
 	}
 
@@ -981,21 +904,6 @@ func (a *EditProtocolConverterAction) compareSingleDFCConfig(pcSnapshot *protoco
 	a.actionLogger.Debugf("rendered desired %s DFC config: %+v", dfcType, renderedDesiredConfig)
 
 	return dataflowcomponentserviceconfig.NewComparator().ConfigsEqual(observedDFCConfig, renderedDesiredConfig)
-}
-
-// observedBenthosToServiceConfig converts an observed BenthosServiceConfig to a
-// DataflowComponentServiceConfig for comparison with the desired config.
-func observedBenthosToServiceConfig(obs benthosserviceconfig.BenthosServiceConfig) dataflowcomponentserviceconfig.DataflowComponentServiceConfig {
-	return dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
-		BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
-			Input:              obs.Input,
-			Pipeline:           obs.Pipeline,
-			Output:             obs.Output,
-			CacheResources:     obs.CacheResources,
-			RateLimitResources: obs.RateLimitResources,
-			Buffer:             obs.Buffer,
-		},
-	}
 }
 
 // renderDesiredDFCConfig renders the template variables in the desired DFC config
@@ -1018,12 +926,12 @@ func (a *EditProtocolConverterAction) renderDesiredDFCConfig(pcSnapshot *protoco
 	}
 
 	// Apply whichever desired DFC configs are set, so the runtime render sees the full picture.
-	if a.desiredReadDFCConfig.BenthosConfig.Input != nil {
-		modifiedSpec.Config.DataflowComponentReadServiceConfig = a.desiredReadDFCConfig
+	if a.readDFCSvcCfg != nil {
+		modifiedSpec.Config.DataflowComponentReadServiceConfig = *a.readDFCSvcCfg
 	}
 
-	if a.desiredWriteDFCConfig.BenthosConfig.Output != nil {
-		modifiedSpec.Config.DataflowComponentWriteServiceConfig = a.desiredWriteDFCConfig
+	if a.writeDFCInput != nil && a.writeDFCInput.HasOutput() {
+		modifiedSpec.Config.DataflowComponentWriteServiceConfig = *a.writeDFCInput
 	}
 
 	systemSnapshot := a.systemSnapshotManager.GetDeepCopySnapshot()
@@ -1035,8 +943,8 @@ func (a *EditProtocolConverterAction) renderDesiredDFCConfig(pcSnapshot *protoco
 	runtimeConfig, err := runtime_config.BuildRuntimeConfig(
 		modifiedSpec,
 		agentLocation,
-		nil,             // TODO: add global vars
-		"unimplemented", // TODO: add node name
+		nil, // TODO: add global vars
+		runtime_config.BridgedByPlaceholder,
 		pcName,
 	)
 	if err != nil {
@@ -1053,47 +961,13 @@ func (a *EditProtocolConverterAction) renderDesiredDFCConfig(pcSnapshot *protoco
 	}
 }
 
-// dfcToPayload converts a ProtocolConverterDFC to the internal CDFCPayload representation.
-func dfcToPayload(dfc *models.ProtocolConverterDFC) models.CDFCPayload {
-	return models.CDFCPayload{
-		Inputs:    models.DfcDataConfig{Data: dfc.Inputs.Data, Type: dfc.Inputs.Type},
-		Pipeline:  convertPipelineToMap(dfc.Pipeline),
-		Outputs:   models.DfcDataConfig{Data: dfc.Outputs.Data, Type: dfc.Outputs.Type},
-		Inject:    extractInjectFromRawYAML(dfc.RawYAML),
-		UMHTopics: dfc.UMHTopics,
-	}
-}
-
-// convertPipelineToMap converts CommonDataFlowComponentPipelineConfig to map[string]DfcDataConfig.
-func convertPipelineToMap(pipeline models.CommonDataFlowComponentPipelineConfig) map[string]models.DfcDataConfig {
-	result := make(map[string]models.DfcDataConfig)
-	for key, processor := range pipeline.Processors {
-		result[key] = models.DfcDataConfig{
-			Data: processor.Data,
-			Type: processor.Type,
-		}
-	}
-
-	return result
-}
-
-// extractInjectFromRawYAML extracts the inject data from the RawYAML field to support
-// CacheResources, RateLimitResources, and Buffer in protocol converter DFCs.
-func extractInjectFromRawYAML(rawYAML *models.CommonDataFlowComponentRawYamlConfig) string {
-	if rawYAML == nil {
-		return ""
-	}
-
-	return rawYAML.Data
-}
-
 // deriveDFCType compares the incoming DFC payloads against the currently
 // deployed config and returns a DFCType that only includes the sides that
 // actually differ. If no config is deployed yet (first edit) or the config
 // cannot be read, it falls back to payload presence.
 func (a *EditProtocolConverterAction) deriveDFCType() DFCType {
-	hasRead := a.readDFCPayload != nil
-	hasWrite := a.writeDFCPayload != nil
+	hasRead := a.readDFCSvcCfg != nil
+	hasWrite := a.writeDFCInput != nil
 
 	if !hasRead && !hasWrite {
 		return DFCTypeEmpty
@@ -1127,52 +1001,57 @@ func (a *EditProtocolConverterAction) deriveDFCType() DFCType {
 		return dfcTypeFromPresence(hasRead, hasWrite)
 	}
 
-	// Connection IP/PORT changes affect all DFCs since they use {{ .IP }}/{{ .PORT }} templates.
-	// So if a change is detected, all present DFCs need redeploy.
-	// Use comma-ok map lookups: if IP/PORT keys are absent (e.g. PCs created
-	// before these variables were standard), skip the connection-change check
-	// rather than treating it as changed. Without this, fmt.Sprint(nil) returns
-	// "<nil>" which never equals any real value, forcing a spurious redeploy.
+	// Any variable change (IP, PORT, or custom vars like baudRate) forces redeploy of all
+	// present DFCs because template rendering uses all variables. Keys absent in the deployed
+	// config are skipped — treating nil as changed would cause spurious redeploys on PCs
+	// created before a variable was standard (fmt.Sprint(nil) → "<nil>" ≠ any real value).
 	deployedVars := currentPC.ProtocolConverterServiceConfig.Variables.User
-	deployedIP, ipOk := deployedVars["IP"]
-	deployedPort, portOk := deployedVars["PORT"]
 
-	connectionChanged := ipOk && portOk &&
-		(fmt.Sprint(deployedIP) != a.connectionIP || fmt.Sprint(deployedPort) != a.connectionPort)
+	incomingVars := make(map[string]any, len(a.templateVars)+2)
+	for _, v := range a.templateVars {
+		incomingVars[v.Label] = v.Value
+	}
+	if a.connectionIP != "" {
+		incomingVars["IP"] = a.connectionIP
+	}
+	if a.connectionPort != "" && a.connectionPort != "0" {
+		incomingVars["PORT"] = a.connectionPort
+	}
+
+	connectionChanged := false
+	for k, incomingVal := range incomingVars {
+		if deployedVal, ok := deployedVars[k]; ok {
+			if fmt.Sprint(deployedVal) != fmt.Sprint(incomingVal) {
+				a.actionLogger.Debugf("Variable %q changed (%v → %v), all present DFCs need redeploy", k, deployedVal, incomingVal)
+				connectionChanged = true
+				break
+			}
+		}
+	}
 	if connectionChanged {
-		a.actionLogger.Debugf("Connection changed (IP or PORT), all present DFCs need redeploy")
-
 		return dfcTypeFromPresence(hasRead, hasWrite)
 	}
 
 	// Check if read or write payload is different from the deployed config.
-	readChanged := hasRead && a.dfcPayloadDiffers(*a.readDFCPayload, a.readDFCState,
+	readChanged := hasRead && a.readDFCSvcCfgDiffers(*a.readDFCSvcCfg, a.readDFCState,
 		currentPC.ProtocolConverterServiceConfig.Config.DataflowComponentReadServiceConfig,
 		currentPC.ProtocolConverterServiceConfig.ReadDFCDesiredState)
-	writeChanged := hasWrite && a.dfcPayloadDiffers(*a.writeDFCPayload, a.writeDFCState,
+	writeChanged := hasWrite && a.writeDFCConfigDiffers(*a.writeDFCInput, a.writeDFCState,
 		currentPC.ProtocolConverterServiceConfig.Config.DataflowComponentWriteServiceConfig,
 		currentPC.ProtocolConverterServiceConfig.WriteDFCDesiredState)
-
-	if hasWrite && !writeChanged {
-		deployedTopics, _ := toStringSlice(deployedVars["UMH_TOPICS"])
-		if !equalTopicSets(deployedTopics, a.writeDFCPayload.UMHTopics) {
-			writeChanged = true
-		}
-	}
-
 	derived := dfcTypeFromPresence(readChanged, writeChanged)
 	a.actionLogger.Debugf("Derived dfcType=%s (readChanged=%v, writeChanged=%v)", derived, readChanged, writeChanged)
 
 	return derived
 }
 
-// dfcPayloadDiffers checks whether an incoming DFC payload differs from the
+// readDFCSvcCfgDiffers checks whether an incoming read DFC service config differs from the
 // persisted config in config.yaml. This is intentionally simpler than
 // compareSingleDFCConfig, which compares rendered templates against runtime
 // observed state from the FSM snapshot. Here we only need to know whether the
 // user sent something new relative to what is already on disk.
-func (a *EditProtocolConverterAction) dfcPayloadDiffers(
-	payload models.CDFCPayload,
+func (a *EditProtocolConverterAction) readDFCSvcCfgDiffers(
+	incoming dataflowcomponentserviceconfig.DataflowComponentServiceConfig,
 	incomingState string,
 	deployedConfig dataflowcomponentserviceconfig.DataflowComponentServiceConfig,
 	deployedState string,
@@ -1185,33 +1064,42 @@ func (a *EditProtocolConverterAction) dfcPayloadDiffers(
 	if incomingState != "" && deployedState != "" && incomingState != deployedState {
 		return true
 	}
-
-	incomingBenthos, err := CreateBenthosConfigFromCDFCPayload(payload, a.name)
-	if err != nil {
-		a.actionLogger.Debugf("Cannot build benthos config for diff, treating as changed: %v", err)
-
-		return true
-	}
-
-	incomingDFCConfig := dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
-		BenthosConfig: incomingBenthos,
-	}
-
-	return !deployedConfig.Equal(incomingDFCConfig)
+	return !deployedConfig.Equal(incoming)
 }
 
-// dfcTypeFromPresence returns a DFCType based on boolean flags for read/write.
-func dfcTypeFromPresence(read, write bool) DFCType {
-	switch {
-	case read && write:
-		return DFCTypeBoth
-	case read:
-		return DFCTypeRead
-	case write:
-		return DFCTypeWrite
-	default:
-		return DFCTypeEmpty
+// writeDFCConfigDiffers reports whether the incoming typed write config differs from
+// what is persisted in config.yaml.
+func (a *EditProtocolConverterAction) writeDFCConfigDiffers(
+	incoming dataflowcomponentserviceconfig.DataflowComponentWriteConfigInput,
+	incomingState string,
+	deployedConfig dataflowcomponentserviceconfig.DataflowComponentWriteConfigInput,
+	deployedState string,
+) bool {
+	if incomingState != "" && deployedState != "" && incomingState != deployedState {
+		return true
 	}
+	// Normalize nil maps to empty maps before comparison: YAML round-trip converts
+	// nil maps (Output/Buffer) to empty maps, and reflect.DeepEqual treats them as
+	// different, causing spurious drift detection on every reconcile.
+	return !reflect.DeepEqual(normalizeWriteConfigInput(incoming), normalizeWriteConfigInput(deployedConfig))
+}
+
+// normalizeWriteConfigInput replaces nil map fields with empty maps so that
+// reflect.DeepEqual comparisons are not tripped up by YAML round-trip nil→{} coercions.
+func normalizeWriteConfigInput(c dataflowcomponentserviceconfig.DataflowComponentWriteConfigInput) dataflowcomponentserviceconfig.DataflowComponentWriteConfigInput {
+	if c.Output == nil {
+		c.Output = map[string]any{}
+	}
+	if c.Buffer == nil {
+		c.Buffer = map[string]any{}
+	}
+	// Mirror the default applied by ToDataflowComponentServiceConfig so that a config
+	// stored without an explicit JS snippet compares equal to one that was just parsed
+	// from a payload carrying the default "return msg;".
+	if c.ProcessingNoderedJS == "" {
+		c.ProcessingNoderedJS = "return msg;"
+	}
+	return c
 }
 
 // getUserEmail implements the Action interface by returning the user email associated with this action.
@@ -1224,18 +1112,14 @@ func (a *EditProtocolConverterAction) getUuid() uuid.UUID {
 	return a.actionUUID
 }
 
-// GetParsedPayload returns the parsed DFC payload - exposed primarily for testing purposes.
-// Returns the read DFC payload when available, otherwise the write DFC payload.
-func (a *EditProtocolConverterAction) GetParsedPayload() models.CDFCPayload {
-	if a.readDFCPayload != nil {
-		return *a.readDFCPayload
-	}
+// GetParsedPayload returns the built read DFC service config - exposed primarily for testing purposes.
+func (a *EditProtocolConverterAction) GetParsedPayload() *dataflowcomponentserviceconfig.DataflowComponentServiceConfig {
+	return a.readDFCSvcCfg
+}
 
-	if a.writeDFCPayload != nil {
-		return *a.writeDFCPayload
-	}
-
-	return models.CDFCPayload{}
+// GetIgnoreHealthCheck returns whether health-check errors are suppressed - exposed primarily for testing.
+func (a *EditProtocolConverterAction) GetIgnoreHealthCheck() bool {
+	return a.ignoreHealthCheck
 }
 
 // GetProtocolConverterUUID returns the protocol converter UUID - exposed for testing purposes.
@@ -1248,54 +1132,7 @@ func (a *EditProtocolConverterAction) GetDFCType() string {
 	return a.dfcType.String()
 }
 
-// validateDFCPayloadAndState validates a pre-parsed CDFCPayload and its state string.
-func validateDFCPayloadAndState(payload *models.CDFCPayload, state string, label string) error {
-	if payload != nil {
-		// For write DFCs, skip input validation since input is auto-generated
-		validateInput := label != "write"
-		if err := ValidateCustomDataFlowComponentPayload(*payload, validateInput, false); err != nil {
-			return fmt.Errorf("invalid %s DFC configuration: %w", label, err)
-		}
-		// UMH_TOPICS is only required when the payload carries actual output config.
-		// A state-only change (enable/disable with payload.Outputs.Data == 0) skips this check; the FSM's
-		// BuildRuntimeConfig enforces the requirement when it renders the write DFC.
-		if label == "write" && len(payload.Outputs.Data) > 0 && len(payload.UMHTopics) == 0 {
-			return errors.New("write DFC requires at least one UMH topic (umh_topics)")
-		}
-	}
-
-	if state != "" {
-		if err := ValidateDataFlowComponentState(state); err != nil {
-			return fmt.Errorf("invalid %s DFC state: %w", label, err)
-		}
-	}
-
-	return nil
-}
-
-// validateProtocolConverterDFC validates a ProtocolConverterDFC's state and configuration.
-// Returns nil if dfc is nil (nothing to validate).
-func validateProtocolConverterDFC(dfc *models.ProtocolConverterDFC, label string) error {
-	if dfc == nil {
-		return nil
-	}
-
-	if dfc.State != "" {
-		if err := ValidateDataFlowComponentState(dfc.State); err != nil {
-			return fmt.Errorf("invalid %s DFC state: %w", label, err)
-		}
-	}
-
-	payload := dfcToPayload(dfc)
-	// For write DFCs, skip input validation since input is auto-generated
-	validateInput := label != "write"
-	if err := ValidateCustomDataFlowComponentPayload(payload, validateInput, false); err != nil {
-		return fmt.Errorf("invalid %s DFC configuration: %w", label, err)
-	}
-
-	if label == "write" && len(dfc.Outputs.Data) > 0 && len(dfc.UMHTopics) == 0 {
-		return errors.New("write DFC requires at least one UMH topic (umh_topics)")
-	}
-
-	return nil
+// GetDesiredWriteDFCConfig returns the raw write DFC input config - exposed for testing purposes.
+func (a *EditProtocolConverterAction) GetDesiredWriteDFCConfig() *dataflowcomponentserviceconfig.DataflowComponentWriteConfigInput {
+	return a.writeDFCInput
 }

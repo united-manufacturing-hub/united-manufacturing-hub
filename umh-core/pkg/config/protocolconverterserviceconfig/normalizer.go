@@ -33,10 +33,11 @@ func (n *Normalizer) NormalizeConfig(cfg ProtocolConverterServiceConfigSpec) Pro
 	// create a shallow copy
 	normalized := cfg
 
-	// We need to first normalize the underlying DFCServiceConfig
+	// Normalize the read DFC (free-form benthos maps need benthos normalization).
 	dfcNormalizer := dataflowcomponentserviceconfig.NewNormalizer()
 	normalized.Config.DataflowComponentReadServiceConfig = dfcNormalizer.NormalizeConfig(normalized.GetDFCReadServiceConfig())
-	normalized.Config.DataflowComponentWriteServiceConfig = dfcNormalizer.NormalizeConfig(normalized.GetDFCWriteServiceConfig())
+
+	// Write DFC uses a typed struct — no benthos map normalization required.
 
 	// Then we  need to normalize the underlying ConnectionServiceConfig
 	connectionNormalizer := connectionserviceconfig.NewNormalizer()

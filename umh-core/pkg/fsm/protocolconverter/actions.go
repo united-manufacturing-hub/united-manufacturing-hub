@@ -331,10 +331,12 @@ func (p *ProtocolConverterInstance) UpdateObservedStateOfInstance(ctx context.Co
 		p.specConfig,
 		agentLocationStr,
 		nil,             // TODO: add global vars
-		"unimplemented", // TODO: add node name
+		runtime_config.BridgedByPlaceholder,
 		p.baseFSMInstance.GetID(),
 	)
+
 	if err != nil {
+		p.baseFSMInstance.GetLogger().Errorf("failed to build runtime config: %v", err)
 		// Capture the configuration error in StatusReason for troubleshooting
 		p.ObservedState.ServiceInfo.StatusReason = "config error: " + err.Error()
 
@@ -458,7 +460,7 @@ func (p *ProtocolConverterInstance) IsDFCHealthy() (bool, string) {
 	writeIntentionallyStopped := p.specConfig.WriteDFCDesiredState == OperationalStateStopped
 
 	readHasConfig := len(p.specConfig.Config.DataflowComponentReadServiceConfig.BenthosConfig.Input) > 0
-	writeHasConfig := len(p.specConfig.Config.DataflowComponentWriteServiceConfig.BenthosConfig.Output) > 0
+	writeHasConfig := p.specConfig.Config.DataflowComponentWriteServiceConfig.HasOutput()
 
 	readHealthy := readRunning || readIntentionallyStopped || !readHasConfig
 	writeHealthy := writeRunning || writeIntentionallyStopped || !writeHasConfig
@@ -493,8 +495,7 @@ func (p *ProtocolConverterInstance) areBothDFCsIntentionallyStopped() bool {
 	}
 
 	readHasConfig := len(p.specConfig.Config.DataflowComponentReadServiceConfig.BenthosConfig.Input) > 0
-	writeHasConfig := len(p.specConfig.Config.DataflowComponentWriteServiceConfig.BenthosConfig.Output) > 0
-
+	writeHasConfig := p.specConfig.Config.DataflowComponentWriteServiceConfig.HasOutput()
 	return readHasConfig || writeHasConfig
 }
 
@@ -624,7 +625,7 @@ func (p *ProtocolConverterInstance) IsProtocolConverterStopped() (bool, string) 
 	readStopped := p.ObservedState.ServiceInfo.DataflowComponentReadFSMState == dataflowfsm.OperationalStateStopped
 	writeStopped := p.ObservedState.ServiceInfo.DataflowComponentWriteFSMState == dataflowfsm.OperationalStateStopped
 
-	writeHasConfig := len(p.specConfig.Config.DataflowComponentWriteServiceConfig.BenthosConfig.Output) > 0
+	writeHasConfig := p.specConfig.Config.DataflowComponentWriteServiceConfig.HasOutput()
 	writeEffectivelyStopped := writeStopped || !writeHasConfig
 
 	if connStopped && readStopped && writeEffectivelyStopped {
@@ -645,7 +646,7 @@ func (p *ProtocolConverterInstance) IsProtocolConverterStopped() (bool, string) 
 //	reason – empty when ok is true; otherwise a service‑provided explanation.
 func (p *ProtocolConverterInstance) IsDFCExisting() (bool, string) {
 	if len(p.specConfig.Config.DataflowComponentReadServiceConfig.BenthosConfig.Input) > 0 ||
-		len(p.specConfig.Config.DataflowComponentWriteServiceConfig.BenthosConfig.Output) > 0 {
+		p.specConfig.Config.DataflowComponentWriteServiceConfig.HasOutput() {
 		return true, ""
 	}
 

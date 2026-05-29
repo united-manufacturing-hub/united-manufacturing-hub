@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Preview: Write Flows
+
+- Write flows (preview) now take their input topics directly on the flow, with Go template support for values like `{{ .location_path }}`. Write flows configured on this preview before this release are not carried over and need to be re-created from the UI; read flows and connection settings are unaffected
+
 ## [0.44.21]
 
 ### Fixes
