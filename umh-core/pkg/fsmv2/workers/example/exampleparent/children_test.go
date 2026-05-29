@@ -75,12 +75,12 @@ var _ = Describe("exampleparent RenderChildren", func() {
 		}
 	})
 
-	It("attaches ChildStartStates to each spec", func() {
+	It("leaves ChildStartStates empty on each spec (Enabled-only gating)", func() {
 		specs, err := exampleparent.RenderChildren(cfg, true)
 		Expect(err).ToNot(HaveOccurred())
 		for _, spec := range specs {
-			Expect(spec.ChildStartStates).To(ConsistOf("TryingToStart", "Running"),
-				"spec %q must have correct ChildStartStates", spec.Name)
+			Expect(spec.ChildStartStates).To(BeEmpty(),
+				"spec %q must not set ChildStartStates; gating is Enabled-only", spec.Name)
 		}
 	})
 

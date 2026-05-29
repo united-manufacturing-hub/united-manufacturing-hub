@@ -51,8 +51,7 @@ func RenderChildren(cfg ExampleparentConfig, enabled bool) ([]config.ChildSpec, 
 				Config:    cfg.ChildConfig,
 				Variables: childVariables,
 			},
-			ChildStartStates: []string{"TryingToStart", "Running"},
-			Enabled:          enabled,
+			Enabled: enabled,
 		})
 	}
 
