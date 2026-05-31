@@ -258,10 +258,7 @@ func init() {
                 return nil, errors.New("push deps builder missing")
             }
             pdeps := builder(id, logger, sr).(*PushDependencies)
-            w := &PushWorker{}
-            w.InitBase(id, logger, sr)
-            w.BindDeps(pdeps)
-            return w, nil
+            return NewPushWorker(id, logger, sr, pdeps)
         })
 
     register.SetDepsBuilder[*PushDependencies]("push",

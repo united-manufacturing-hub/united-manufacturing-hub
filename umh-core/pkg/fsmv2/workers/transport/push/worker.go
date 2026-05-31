@@ -39,15 +39,19 @@ type PushWorker struct {
 }
 
 // NewPushWorker creates a new PushWorker in Stopped state.
-// parentDeps must not be nil  -  the push worker delegates auth and transport to the parent.
+// dependencies must not be nil  -  the push worker delegates auth and transport to the parent.
 func NewPushWorker(
 	identity deps.Identity,
 	logger deps.FSMLogger,
 	stateReader deps.StateReader,
-	parentDeps *transport_pkg.TransportDependencies,
+	dependencies *PushDependencies,
 ) (*PushWorker, error) {
 	if logger == nil {
 		return nil, errors.New("logger must not be nil")
+	}
+
+	if dependencies == nil {
+		return nil, errors.New("push worker requires non-nil dependencies; ensure transport worker has published deps via register.SetDeps[*TransportDependencies] before push instantiation")
 	}
 
 	// Hardcode worker type to avoid DeriveWorkerType dependency on ObservedState struct name.
@@ -56,13 +60,7 @@ func NewPushWorker(
 	}
 
 	w := &PushWorker{}
-	bd := w.InitBase(identity, logger, stateReader)
-
-	dependencies, err := NewPushDependencies(parentDeps, bd)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create push dependencies: %w", err)
-	}
-
+	w.InitBase(identity, logger, stateReader)
 	w.BindDeps(dependencies)
 
 	return w, nil
@@ -152,18 +150,15 @@ func init() {
 			if !ok {
 				return nil, errors.New("push worker requires deps builder; transport worker must initialise before push instantiation")
 			}
+
 			rawDeps := builder(id, logger, sr)
+
 			pdeps, ok := rawDeps.(*PushDependencies)
 			if !ok || pdeps == nil {
 				return nil, fmt.Errorf("push deps builder returned %T; want *PushDependencies (parent transport deps may not be published)", rawDeps)
 			}
-			if id.WorkerType == "" {
-				id.WorkerType = "push"
-			}
-			w := &PushWorker{}
-			w.InitBase(id, logger, sr)
-			w.BindDeps(pdeps)
-			return w, nil
+
+			return NewPushWorker(id, logger, sr, pdeps)
 		})
 
 	register.SetDepsBuilder[*PushDependencies]("push",
@@ -173,13 +168,17 @@ func init() {
 				logger.SentryError(deps.FeatureForWorker("push"), id.HierarchyPath,
 					errors.New("parent transport deps not published"),
 					"push_parent_transport_deps_missing")
+
 				return nil
 			}
+
 			d, err := NewPushDependencies(parentDeps, deps.NewBaseDependencies(logger, sr, id))
 			if err != nil {
 				logger.SentryError(deps.FeatureForWorker("push"), id.HierarchyPath, err, "push_dependencies_creation_failed")
+
 				return nil
 			}
+
 			return d
 		})
 }

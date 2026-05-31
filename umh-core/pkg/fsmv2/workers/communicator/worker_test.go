@@ -92,8 +92,7 @@ var _ = Describe("CommunicatorWorker", func() {
 
 		var err error
 		worker, err = communicator.NewCommunicatorWorker(
-			"test-id",
-			"Test Communicator",
+			depspkg.Identity{ID: "test-id", Name: "Test Communicator", WorkerType: "communicator"},
 			mockTransport,
 			logger,
 			nil,

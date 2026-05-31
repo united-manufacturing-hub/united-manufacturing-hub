@@ -49,6 +49,7 @@ package communicator
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"gopkg.in/yaml.v3"
@@ -69,18 +70,21 @@ type CommunicatorWorker struct {
 }
 
 // NewCommunicatorWorker creates a new Channel-based Communicator worker in Stopped state.
+// The supervisor sets HierarchyPath on identity before instantiation; tests inject a
+// transport via transportParam (the factory path passes nil  -  transport is owned by
+// the TransportWorker child, ENG-4264).
 func NewCommunicatorWorker(
-	id string,
-	name string,
+	identity depspkg.Identity,
 	transportParam types.Transport,
 	logger depspkg.FSMLogger,
 	stateReader depspkg.StateReader,
 ) (*CommunicatorWorker, error) {
-	identity := depspkg.Identity{
-		ID:         id,
-		Name:       name,
-		WorkerType: workerTypeName,
-		// HierarchyPath is set by the supervisor when adding workers via factory.
+	if logger == nil {
+		return nil, errors.New("logger must not be nil")
+	}
+
+	if identity.WorkerType == "" {
+		identity.WorkerType = workerTypeName
 	}
 
 	w := &CommunicatorWorker{}
@@ -180,9 +184,6 @@ func init() {
 		func(id depspkg.Identity, logger depspkg.FSMLogger, sr depspkg.StateReader) (fsmv2.Worker, error) {
 			// ChannelProvider must be set via global singleton before factory is called (will panic if not set).
 			// Transport creation and auth are handled by TransportWorker (ENG-4264).
-			w := &CommunicatorWorker{}
-			wbd := w.InitBase(id, logger, sr)
-			w.BindDeps(NewCommunicatorDependencies(nil, wbd))
-			return w, nil
+			return NewCommunicatorWorker(id, nil, logger, sr)
 		})
 }

@@ -39,15 +39,19 @@ type PullWorker struct {
 }
 
 // NewPullWorker creates a new PullWorker in Stopped state.
-// parentDeps must not be nil  -  the pull worker delegates auth and transport to the parent.
+// dependencies must not be nil  -  the pull worker delegates auth and transport to the parent.
 func NewPullWorker(
 	identity deps.Identity,
 	logger deps.FSMLogger,
 	stateReader deps.StateReader,
-	parentDeps *transport_pkg.TransportDependencies,
+	dependencies *PullDependencies,
 ) (*PullWorker, error) {
 	if logger == nil {
 		return nil, errors.New("logger must not be nil")
+	}
+
+	if dependencies == nil {
+		return nil, errors.New("pull worker requires non-nil dependencies; ensure transport worker has published deps via register.SetDeps[*TransportDependencies] before pull instantiation")
 	}
 
 	// Hardcode worker type to avoid DeriveWorkerType dependency on ObservedState struct name.
@@ -56,13 +60,7 @@ func NewPullWorker(
 	}
 
 	w := &PullWorker{}
-	bd := w.InitBase(identity, logger, stateReader)
-
-	dependencies, err := NewPullDependencies(parentDeps, bd)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create pull dependencies: %w", err)
-	}
-
+	w.InitBase(identity, logger, stateReader)
 	w.BindDeps(dependencies)
 
 	return w, nil
@@ -152,18 +150,15 @@ func init() {
 			if !ok {
 				return nil, errors.New("pull worker requires deps builder; transport worker must initialise before pull instantiation")
 			}
+
 			rawDeps := builder(id, logger, sr)
+
 			pdeps, ok := rawDeps.(*PullDependencies)
 			if !ok || pdeps == nil {
 				return nil, fmt.Errorf("pull deps builder returned %T; want *PullDependencies (parent transport deps may not be published)", rawDeps)
 			}
-			if id.WorkerType == "" {
-				id.WorkerType = "pull"
-			}
-			w := &PullWorker{}
-			w.InitBase(id, logger, sr)
-			w.BindDeps(pdeps)
-			return w, nil
+
+			return NewPullWorker(id, logger, sr, pdeps)
 		})
 
 	register.SetDepsBuilder[*PullDependencies]("pull",
@@ -173,13 +168,17 @@ func init() {
 				logger.SentryError(deps.FeatureForWorker("pull"), id.HierarchyPath,
 					errors.New("parent transport deps not published"),
 					"pull_parent_transport_deps_missing")
+
 				return nil
 			}
+
 			d, err := NewPullDependencies(parentDeps, deps.NewBaseDependencies(logger, sr, id))
 			if err != nil {
 				logger.SentryError(deps.FeatureForWorker("pull"), id.HierarchyPath, err, "pull_dependencies_creation_failed")
+
 				return nil
 			}
+
 			return d
 		})
 }
