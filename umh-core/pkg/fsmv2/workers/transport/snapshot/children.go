@@ -21,9 +21,9 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/types"
 )
 
-// RenderChildren returns the push and pull ChildSpecs with the auth session stamped onto both.
-// status.AuthSession is embedded in a types.ChildAuthUserSpec carrier so push/pull can parse it
-// from their snapshot without reaching into parent dependencies.
+// RenderChildren returns the push and pull ChildSpecs with the auth session set on both.
+// status.AuthSession is embedded in a types.ChildAuthUserSpec carrier so push/pull can read it
+// from their own snapshot without accessing parent dependencies.
 //
 // enabled=false keeps both children resident in Stopped (not despawned).
 // They hold connection buffers and retry state.

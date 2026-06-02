@@ -166,6 +166,12 @@ type TransportStatus struct {
 }
 
 // IsTokenExpired returns true if the JWT token is expired or will expire within 10 minutes.
+// A zero Expiry is treated as NOT expired — the parent has not yet authenticated and there
+// is nothing to refresh. This is intentionally different from AuthSession.IsUsable, which
+// treats zero Expiry as unusable: IsUsable is a child-side gate ("can I use this token
+// right now?"), while IsTokenExpired is a parent-side trigger ("should I re-authenticate?").
+// Triggering re-auth on zero Expiry would cause the parent to loop before it has ever
+// obtained a token.
 //
 // Token buffer architecture: the parent TransportWorker uses a 10-minute buffer (proactive
 // refresh trigger) while child workers (push/pull) use a 1-minute buffer via
@@ -184,7 +190,12 @@ func (s TransportStatus) IsTokenExpired() bool {
 	return time.Now().Add(refreshBuffer).After(s.AuthSession.Expiry)
 }
 
-// HasValidToken returns true if there is a valid JWT token that hasn't expired.
+// HasValidToken returns true if there is a non-empty JWT token and IsTokenExpired is false.
+// Note: a token with zero Expiry and non-empty Token returns true here (IsTokenExpired
+// treats zero Expiry as not-expired). Children use AuthSession.IsUsable(time.Minute) in
+// their COS, which treats zero Expiry as unusable. This deliberate asymmetry lets the
+// parent hold a "just authenticated, expiry not yet set" window without triggering child
+// action dispatches.
 func (s TransportStatus) HasValidToken() bool {
 	return s.AuthSession.Token != "" && !s.IsTokenExpired()
 }
