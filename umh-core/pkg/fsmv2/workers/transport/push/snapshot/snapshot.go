@@ -57,7 +57,7 @@ type PushDependencies interface {
 // PushDesiredState represents the target configuration for the push worker.
 type PushDesiredState struct {
 	AuthSession types.AuthSession `json:"auth_session,omitempty" yaml:"auth_session,omitempty"`
-	State       string            `json:"state" yaml:"state"`
+	State       string            `json:"state"                  yaml:"state"`
 	config.BaseDesiredState
 }
 

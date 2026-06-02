@@ -122,10 +122,6 @@ type WorkerContext[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState] s
 	// during its tick without blocking on CSE reads. The parent calls child.IsObservationStale()
 	// when building ChildInfo for SetChildrenView().
 	lastObservationCollectedAt time.Time
-	// lastRenderedChildren is written unconditionally each tick by tickWorker (mu held).
-	// nil → tick() falls back to GetChildrenSpecs().
-	// Non-nil (even empty) → tick() uses this directly.
-	lastRenderedChildren []config.ChildSpec
 
 	// Interfaces (16 bytes each)
 	worker       fsmv2.Worker
@@ -153,6 +149,11 @@ type WorkerContext[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState] s
 	// Used by parent supervisors via GetObservedStateName() for health checks.
 	lastObservedStateName string
 	currentStateReason    string // Human-readable reason for current state (from NextResult.Reason)
+
+	// lastRenderedChildren is written unconditionally each tick by tickWorker (mu held).
+	// nil → tick() falls back to GetChildrenSpecs().
+	// Non-nil (even empty) → tick() uses this directly.
+	lastRenderedChildren []config.ChildSpec
 
 	// int64 fields (8 bytes each)
 	totalTransitions   int64 // Sum of all stateTransitions values

@@ -19,8 +19,8 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/types"
 )
 
-// PushUserSpec defines the typed configuration for the push worker.
-// ChildAuthUserSpec carries the AuthSession stamped by the parent transport worker.
+// PushUserSpec defines the typed configuration for the push worker. It embeds
+// ChildAuthUserSpec to carry the AuthSession set by the parent transport worker.
 type PushUserSpec struct {
 	config.BaseUserSpec     `yaml:",inline"`
 	types.ChildAuthUserSpec `yaml:",inline"`
