@@ -701,11 +701,11 @@ func wireFSMv2Communicator(
 					continue
 				}
 
-				if observed.Status.AuthenticatedUUID != "" && observed.Status.AuthenticatedUUID != placeholderUUID {
+				if observed.Status.AuthSession.InstanceUUID != "" && observed.Status.AuthSession.InstanceUUID != placeholderUUID {
 					logger.Infow("Detected real UUID from TransportWorker ObservedState, updating LoginResponse",
-						"realUUID", observed.Status.AuthenticatedUUID,
+						"realUUID", observed.Status.AuthSession.InstanceUUID,
 						"placeholderUUID", placeholderUUID)
-					communicationState.SetLoginResponseForFSMv2(observed.Status.AuthenticatedUUID)
+					communicationState.SetLoginResponseForFSMv2(observed.Status.AuthSession.InstanceUUID)
 
 					return
 				}

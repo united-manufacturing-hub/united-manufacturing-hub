@@ -55,8 +55,10 @@ func makeSnapshotWithBackoff(shutdownRequested bool, desiredState string, jwtTok
 		ChildrenHealthy:   childrenHealthy,
 		ChildrenUnhealthy: childrenUnhealthy,
 		Status: snapshot.TransportStatus{
-			JWTToken:          jwtToken,
-			JWTExpiry:         jwtExpiry,
+			AuthSession: types.AuthSession{
+				Token:  jwtToken,
+				Expiry: jwtExpiry,
+			},
 			ConsecutiveErrors: consecutiveErrors,
 			LastErrorType:     lastErrorType,
 			LastAuthAttemptAt: lastAuthAttemptAt,
