@@ -19,6 +19,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"gopkg.in/yaml.v3"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
@@ -117,6 +118,26 @@ var _ = Describe("TransportStatus", func() {
 			}
 			Expect(fac.IsEmpty()).To(BeFalse())
 		})
+	})
+})
+
+var _ = Describe("RenderChildren", func() {
+	It("stamps AuthSession onto both push and pull children", func() {
+		status := snapshot.TransportStatus{
+			AuthSession: types.AuthSession{
+				Token:        "jwt",
+				InstanceUUID: "be-uuid",
+				Expiry:       time.Now().Add(time.Hour),
+			},
+		}
+		specs, err := snapshot.RenderChildren(snapshot.TransportDesiredState{}, status, true)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(specs).To(HaveLen(2))
+		for _, sp := range specs {
+			var carrier types.ChildAuthUserSpec
+			Expect(yaml.Unmarshal([]byte(sp.UserSpec.Config), &carrier)).To(Succeed())
+			Expect(carrier.AuthSession.Token).To(Equal("jwt"))
+		}
 	})
 })
 
