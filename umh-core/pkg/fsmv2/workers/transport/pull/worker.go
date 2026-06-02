@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
@@ -25,6 +26,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/register"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/pull/snapshot"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/pull/state"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/types"
 
 	transport_pkg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport"
 )
@@ -82,7 +84,7 @@ func (w *PullWorker) GetDependencies() *PullDependencies {
 // CollectObservedState snapshots the current pull worker state.
 // Returns NewObservation; the collector handles CollectedAt, framework metrics,
 // action history, and metric accumulation automatically.
-func (w *PullWorker) CollectObservedState(ctx context.Context, _ fsmv2.DesiredState) (fsmv2.ObservedState, error) {
+func (w *PullWorker) CollectObservedState(ctx context.Context, desired fsmv2.DesiredState) (fsmv2.ObservedState, error) {
 	select {
 	case <-ctx.Done():
 		return nil, ctx.Err()
@@ -91,9 +93,14 @@ func (w *PullWorker) CollectObservedState(ctx context.Context, _ fsmv2.DesiredSt
 
 	d := w.GetDependencies()
 
+	var cfg snapshot.PullDesiredState
+	if desired != nil {
+		cfg = fsmv2.ExtractConfig[snapshot.PullDesiredState](desired)
+	}
+
 	status := snapshot.PullStatus{
 		HasTransport:        d.GetTransport() != nil,
-		HasValidToken:       d.IsTokenValid(),
+		HasValidToken:       authSessionValid(cfg.AuthSession),
 		IsBackpressured:     d.IsBackpressured(),
 		ConsecutiveErrors:   d.GetConsecutiveErrors(),
 		PendingMessageCount: d.PendingMessageCount(),
@@ -104,6 +111,16 @@ func (w *PullWorker) CollectObservedState(ctx context.Context, _ fsmv2.DesiredSt
 	}
 
 	return fsmv2.NewObservation(status), nil
+}
+
+// authSessionValid mirrors the former child IsTokenValid check: a token is usable
+// when present and not within the 1-minute child safety buffer of expiry.
+func authSessionValid(a types.AuthSession) bool {
+	if a.Token == "" || a.Expiry.IsZero() {
+		return false
+	}
+
+	return !time.Now().Add(time.Minute).After(a.Expiry)
 }
 
 // DeriveDesiredState determines the desired state from the provided spec.
