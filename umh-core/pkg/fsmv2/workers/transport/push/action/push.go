@@ -27,7 +27,10 @@ import (
 
 const PushActionName = "push"
 
-type PushAction struct{}
+type PushAction struct {
+	JWTToken     string
+	InstanceUUID string
+}
 
 func (a *PushAction) Execute(ctx context.Context, depsAny any) error {
 	select {
@@ -39,10 +42,6 @@ func (a *PushAction) Execute(ctx context.Context, depsAny any) error {
 	pushDeps, ok := depsAny.(snapshot.PushDependencies)
 	if !ok {
 		return errors.New("invalid dependencies type: expected PushDependencies")
-	}
-
-	if !pushDeps.IsTokenValid() {
-		return errors.New("token not valid, skipping push")
 	}
 
 	t := pushDeps.GetTransport()
@@ -112,8 +111,8 @@ drainLoop:
 		return nil
 	}
 
-	jwtToken := pushDeps.GetJWTToken()
-	authenticatedUUID := pushDeps.GetAuthenticatedUUID()
+	jwtToken := a.JWTToken
+	authenticatedUUID := a.InstanceUUID
 
 	for _, msg := range messagesToPush {
 		if msg != nil && authenticatedUUID != "" {
@@ -191,8 +190,8 @@ drainLoop:
 // returns the unsent tail of pending so the caller can buffer them for
 // the next tick.
 func (a *PushAction) retryPending(ctx context.Context, t types.Transport, pushDeps snapshot.PushDependencies, pending []*types.UMHMessage, metrics *depspkg.MetricsRecorder) ([]*types.UMHMessage, error) {
-	jwtToken := pushDeps.GetJWTToken()
-	authenticatedUUID := pushDeps.GetAuthenticatedUUID()
+	jwtToken := a.JWTToken
+	authenticatedUUID := a.InstanceUUID
 
 	for i, msg := range pending {
 		if msg == nil {

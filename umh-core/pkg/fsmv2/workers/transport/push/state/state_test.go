@@ -23,6 +23,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/push/action"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/push/snapshot"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/push/state"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/types"
@@ -102,6 +103,50 @@ func makeSnapshotWithBackoff(
 		},
 	}
 }
+
+func makeSnapshotWithAuthSession(authSession types.AuthSession) fsmv2.Snapshot {
+	desired := &fsmv2.WrappedDesiredState[snapshot.PushDesiredState]{
+		Config: snapshot.PushDesiredState{
+			BaseDesiredState: config.BaseDesiredState{},
+			AuthSession:      authSession,
+		},
+		BaseDesiredState: config.BaseDesiredState{},
+	}
+
+	obs := fsmv2.Observation[snapshot.PushStatus]{
+		Status: snapshot.PushStatus{
+			HasTransport:  true,
+			HasValidToken: true,
+		},
+	}
+
+	return fsmv2.Snapshot{
+		Observed: obs,
+		Desired:  desired,
+		Identity: deps.Identity{
+			ID:         "test-push-worker",
+			Name:       "push",
+			WorkerType: "push",
+		},
+	}
+}
+
+var _ = Describe("RunningState AuthSession threading", func() {
+	It("should carry Token and InstanceUUID from snap.Config.AuthSession into PushAction", func() {
+		snap := makeSnapshotWithAuthSession(types.AuthSession{
+			Token:        "jwt",
+			InstanceUUID: "u",
+		})
+
+		result := (&state.RunningState{}).Next(snap)
+
+		Expect(result.Action).NotTo(BeNil())
+		pushAction, ok := result.Action.(*action.PushAction)
+		Expect(ok).To(BeTrue(), "expected *action.PushAction but got %T", result.Action)
+		Expect(pushAction.JWTToken).To(Equal("jwt"))
+		Expect(pushAction.InstanceUUID).To(Equal("u"))
+	})
+})
 
 var _ = Describe("StoppedState", func() {
 	var s *state.StoppedState

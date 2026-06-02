@@ -426,15 +426,19 @@ var _ = Describe("PullAction", func() {
 		})
 	})
 
-	Describe("Token pre-check", func() {
-		It("should skip pull when token is invalid (without pulling)", func() {
-			mockDeps.tokenValid = false
+	Describe("Token threading", func() {
+		It("should use JWTToken field from action struct for pulling (not deps.GetJWTToken)", func() {
+			tokenAct := &action.PullAction{JWTToken: "struct-token"}
 
-			err := act.Execute(context.Background(), mockDeps)
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("token not valid"))
+			var capturedToken string
+			mockTrans.pullFunc = func(_ context.Context, jwtToken string) ([]*types.UMHMessage, error) {
+				capturedToken = jwtToken
+				return nil, nil
+			}
 
-			Expect(mockTrans.pullCallCount).To(Equal(0))
+			err := tokenAct.Execute(context.Background(), mockDeps)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(capturedToken).To(Equal("struct-token"))
 		})
 	})
 

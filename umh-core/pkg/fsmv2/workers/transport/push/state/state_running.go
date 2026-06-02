@@ -53,7 +53,10 @@ func (s *RunningState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	}
 
 	if snap.Status.HasTransport && snap.Status.HasValidToken {
-		return fsmv2.Transition(s, fsmv2.SignalNone, &action.PushAction{}, "pushing messages (transport and token available)", nil)
+		return fsmv2.Transition(s, fsmv2.SignalNone, &action.PushAction{
+			JWTToken:     snap.Config.AuthSession.Token,
+			InstanceUUID: snap.Config.AuthSession.InstanceUUID,
+		}, "pushing messages (transport and token available)", nil)
 	}
 
 	return fsmv2.Transition(s, fsmv2.SignalNone, nil,
