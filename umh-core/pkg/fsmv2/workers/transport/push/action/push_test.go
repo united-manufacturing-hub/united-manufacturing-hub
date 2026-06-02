@@ -29,11 +29,11 @@ import (
 )
 
 type mockTransport struct {
-	pushErr        error
-	pushCallCount  int
-	pushedMsgs     []*types.UMHMessage
-	capturedToken  string
-	pushFunc       func(ctx context.Context, jwtToken string, messages []*types.UMHMessage) error
+	pushErr       error
+	pushCallCount int
+	pushedMsgs    []*types.UMHMessage
+	capturedToken string
+	pushFunc      func(ctx context.Context, jwtToken string, messages []*types.UMHMessage) error
 }
 
 func (m *mockTransport) Authenticate(_ context.Context, _ types.AuthRequest) (types.AuthResponse, error) {
@@ -63,7 +63,6 @@ func (m *mockTransport) Reset() {}
 type mockPushDeps struct {
 	outboundChan    <-chan *types.UMHMessage
 	transport       types.Transport
-	jwtToken        string
 	metricsRecorder *deps.MetricsRecorder
 	logger          deps.FSMLogger
 
@@ -74,13 +73,11 @@ type mockPushDeps struct {
 	lastErrorType         types.ErrorType
 
 	pendingMessages   []*types.UMHMessage
-	tokenValid        bool
 	resetGeneration   uint64
 	resetCleared      bool
 	lastRetryAfter    time.Duration
 	degradedEnteredAt time.Time
 	lastErrorAt       time.Time
-	authenticatedUUID string
 }
 
 type typedErrorCall struct {
@@ -92,7 +89,6 @@ func newMockPushDeps() *mockPushDeps {
 	return &mockPushDeps{
 		metricsRecorder: deps.NewMetricsRecorder(),
 		logger:          deps.NewNopFSMLogger(),
-		tokenValid:      true,
 	}
 }
 
@@ -122,10 +118,6 @@ func (m *mockPushDeps) GetOutboundChan() <-chan *types.UMHMessage {
 
 func (m *mockPushDeps) GetTransport() types.Transport {
 	return m.transport
-}
-
-func (m *mockPushDeps) GetJWTToken() string {
-	return m.jwtToken
 }
 
 func (m *mockPushDeps) RecordTypedError(errType types.ErrorType, retryAfter time.Duration) {
@@ -170,10 +162,6 @@ func (m *mockPushDeps) PendingMessageCount() int {
 	return len(m.pendingMessages)
 }
 
-func (m *mockPushDeps) IsTokenValid() bool {
-	return m.tokenValid
-}
-
 func (m *mockPushDeps) GetResetGeneration() uint64 {
 	return m.resetGeneration
 }
@@ -201,10 +189,6 @@ func (m *mockPushDeps) GetLastErrorAt() time.Time {
 	return m.lastErrorAt
 }
 
-func (m *mockPushDeps) GetAuthenticatedUUID() string {
-	return m.authenticatedUUID
-}
-
 var _ = Describe("PushAction", func() {
 	var (
 		act        *action.PushAction
@@ -220,7 +204,6 @@ var _ = Describe("PushAction", func() {
 		mockDeps = newMockPushDeps()
 		mockDeps.outboundChan = outboundBi
 		mockDeps.transport = mockTrans
-		mockDeps.jwtToken = "test-jwt"
 	})
 
 	Describe("Successful push", func() {

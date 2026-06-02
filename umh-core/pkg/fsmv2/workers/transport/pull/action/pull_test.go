@@ -60,7 +60,6 @@ func (m *mockTransport) Reset() {}
 
 type mockPullDeps struct {
 	transport       types.Transport
-	jwtToken        string
 	metricsRecorder *deps.MetricsRecorder
 	logger          deps.FSMLogger
 
@@ -75,7 +74,6 @@ type mockPullDeps struct {
 	lastErrorType         types.ErrorType
 
 	pendingMessages   []*types.UMHMessage
-	tokenValid        bool
 	resetGeneration   uint64
 	resetCleared      bool
 	lastRetryAfter    time.Duration
@@ -94,7 +92,6 @@ func newMockPullDeps() *mockPullDeps {
 	return &mockPullDeps{
 		metricsRecorder: deps.NewMetricsRecorder(),
 		logger:          deps.NewNopFSMLogger(),
-		tokenValid:      true,
 		chanCapacity:    1000,
 		chanLength:      0,
 	}
@@ -144,10 +141,6 @@ func (m *mockPullDeps) GetTransport() types.Transport {
 	return m.transport
 }
 
-func (m *mockPullDeps) GetJWTToken() string {
-	return m.jwtToken
-}
-
 func (m *mockPullDeps) RecordTypedError(errType types.ErrorType, retryAfter time.Duration) {
 	m.recordTypedErrorCalls = append(m.recordTypedErrorCalls, typedErrorCall{
 		errType:    errType,
@@ -188,10 +181,6 @@ func (m *mockPullDeps) DrainPendingMessages() []*types.UMHMessage {
 
 func (m *mockPullDeps) PendingMessageCount() int {
 	return len(m.pendingMessages)
-}
-
-func (m *mockPullDeps) IsTokenValid() bool {
-	return m.tokenValid
 }
 
 func (m *mockPullDeps) GetResetGeneration() uint64 {
@@ -236,7 +225,6 @@ var _ = Describe("PullAction", func() {
 		mockDeps = newMockPullDeps()
 		mockDeps.inboundBi = inboundBi
 		mockDeps.transport = mockTrans
-		mockDeps.jwtToken = "test-jwt"
 	})
 
 	Describe("Successful pull", func() {
