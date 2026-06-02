@@ -19,12 +19,12 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/snapshot"
 )
 
-// yaml.Marshal of the static BaseUserSpec cannot fail in practice; on the
+// yaml.Marshal of the ChildAuthUserSpec carrier cannot fail in practice; on the
 // hypothetical error we still return nil so the supervisor falls back to
 // GetChildrenSpecs() rather than emitting an empty children set (which
 // would despawn all children).
-func childrenAlive(cfg snapshot.TransportDesiredState) []config.ChildSpec {
-	specs, err := snapshot.RenderChildren(cfg, true)
+func childrenAlive(cfg snapshot.TransportDesiredState, status snapshot.TransportStatus) []config.ChildSpec {
+	specs, err := snapshot.RenderChildren(cfg, status, true)
 	if err != nil {
 		return nil
 	}
@@ -32,8 +32,8 @@ func childrenAlive(cfg snapshot.TransportDesiredState) []config.ChildSpec {
 	return specs
 }
 
-func childrenStopped(cfg snapshot.TransportDesiredState) []config.ChildSpec {
-	specs, err := snapshot.RenderChildren(cfg, false)
+func childrenStopped(cfg snapshot.TransportDesiredState, status snapshot.TransportStatus) []config.ChildSpec {
+	specs, err := snapshot.RenderChildren(cfg, status, false)
 	if err != nil {
 		return nil
 	}
