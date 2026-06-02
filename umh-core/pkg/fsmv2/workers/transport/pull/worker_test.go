@@ -130,16 +130,43 @@ var _ = Describe("PullWorker", func() {
 			Expect(typedObs.Status.HasTransport).To(BeTrue())
 		})
 
-		It("should report JWT token availability from parent deps", func() {
-			parentDeps.SetJWT("test-token", time.Now().Add(time.Hour))
-
+		It("HasValidToken is true when the desired AuthSession token is present and unexpired", func() {
+			desired := &fsmv2.WrappedDesiredState[snapshot.PullDesiredState]{
+				Config: snapshot.PullDesiredState{AuthSession: types.AuthSession{Token: "t", Expiry: time.Now().Add(time.Hour)}},
+			}
 			ctx := context.Background()
-			observed, err := worker.CollectObservedState(ctx, nil)
+			observed, err := worker.CollectObservedState(ctx, desired)
 
 			Expect(err).ToNot(HaveOccurred())
 			typedObs, ok := observed.(fsmv2.Observation[snapshot.PullStatus])
 			Expect(ok).To(BeTrue())
 			Expect(typedObs.Status.HasValidToken).To(BeTrue())
+		})
+
+		It("HasValidToken is false when the desired AuthSession token is expired", func() {
+			desired := &fsmv2.WrappedDesiredState[snapshot.PullDesiredState]{
+				Config: snapshot.PullDesiredState{AuthSession: types.AuthSession{Token: "expired-token", Expiry: time.Now().Add(-1 * time.Hour)}},
+			}
+			ctx := context.Background()
+			observed, err := worker.CollectObservedState(ctx, desired)
+
+			Expect(err).ToNot(HaveOccurred())
+			typedObs, ok := observed.(fsmv2.Observation[snapshot.PullStatus])
+			Expect(ok).To(BeTrue())
+			Expect(typedObs.Status.HasValidToken).To(BeFalse())
+		})
+
+		It("HasValidToken is false when the desired AuthSession token is empty", func() {
+			desired := &fsmv2.WrappedDesiredState[snapshot.PullDesiredState]{
+				Config: snapshot.PullDesiredState{AuthSession: types.AuthSession{Token: "", Expiry: time.Now().Add(time.Hour)}},
+			}
+			ctx := context.Background()
+			observed, err := worker.CollectObservedState(ctx, desired)
+
+			Expect(err).ToNot(HaveOccurred())
+			typedObs, ok := observed.(fsmv2.Observation[snapshot.PullStatus])
+			Expect(ok).To(BeTrue())
+			Expect(typedObs.Status.HasValidToken).To(BeFalse())
 		})
 
 		It("should report consecutive errors from child deps", func() {
