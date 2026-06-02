@@ -355,17 +355,18 @@ var _ = Describe("PushAction", func() {
 		})
 	})
 
-	Describe("Token pre-check", func() {
-		It("should skip push when token is invalid (without draining)", func() {
+	Describe("Token threading (no in-action pre-check)", func() {
+		It("should use JWTToken from action struct field, not from deps", func() {
+			// The State gates on HasValidToken before dispatching; the action
+			// trusts its own field and never calls deps.IsTokenValid.
+			act.JWTToken = "struct-jwt"
 			outboundBi <- &types.UMHMessage{Content: "msg1"}
-			mockDeps.tokenValid = false
 
 			err := act.Execute(context.Background(), mockDeps)
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("token not valid"))
+			Expect(err).NotTo(HaveOccurred())
 
-			Expect(mockTrans.pushCallCount).To(Equal(0))
-			Expect(outboundBi).To(HaveLen(1))
+			Expect(mockTrans.pushCallCount).To(Equal(1))
+			Expect(mockTrans.pushedMsgs).To(HaveLen(1))
 		})
 	})
 
@@ -748,10 +749,11 @@ var _ = Describe("PushAction", func() {
 	})
 
 	Describe("UUID consistency (403 prevention)", func() {
-		It("should overwrite message InstanceUUID with authenticated UUID from dependencies", func() {
+		It("should overwrite message InstanceUUID with authenticated UUID from action struct field", func() {
 			// Scenario: SubscriberHandler created messages with placeholder UUID before
 			// authentication completed. The backend validates JWT claims match message UUID.
 			// If they don't match → 403 Forbidden.
+			// The State sets act.InstanceUUID from snap.Config.AuthSession.InstanceUUID.
 			placeholderUUID := "placeholder-uuid-before-auth"
 			authenticatedUUID := "real-uuid-from-backend-jwt"
 
@@ -761,7 +763,7 @@ var _ = Describe("PushAction", func() {
 				Email:        "user@example.com",
 			}
 
-			mockDeps.authenticatedUUID = authenticatedUUID
+			act.InstanceUUID = authenticatedUUID
 
 			err := act.Execute(context.Background(), mockDeps)
 			Expect(err).NotTo(HaveOccurred())
@@ -780,7 +782,7 @@ var _ = Describe("PushAction", func() {
 				{InstanceUUID: placeholderUUID, Content: "pending1"},
 				{InstanceUUID: placeholderUUID, Content: "pending2"},
 			}
-			mockDeps.authenticatedUUID = authenticatedUUID
+			act.InstanceUUID = authenticatedUUID
 
 			err := act.Execute(context.Background(), mockDeps)
 			Expect(err).NotTo(HaveOccurred())
