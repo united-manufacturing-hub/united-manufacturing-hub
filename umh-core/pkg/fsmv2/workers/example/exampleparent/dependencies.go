@@ -24,8 +24,9 @@ type ParentDependencies struct {
 }
 
 // NewParentDependencies creates new dependencies for the parent worker.
-func NewParentDependencies(logger deps.FSMLogger, stateReader deps.StateReader, identity deps.Identity) *ParentDependencies {
+// bd is the shared BaseDependencies returned by WorkerBase.InitBase.
+func NewParentDependencies(bd *deps.BaseDependencies) *ParentDependencies {
 	return &ParentDependencies{
-		BaseDependencies: deps.NewBaseDependencies(logger, stateReader, identity),
+		BaseDependencies: bd,
 	}
 }

@@ -103,7 +103,7 @@ var _ = Describe("S6 recovery directive — FSM dispatch", func() {
 	// -1 if it never arrived. Errors are swallowed so transient reconcile failures
 	// don't abort the loop.
 	driveUntilState := func(startTick uint64, maxTicks int, target string) (uint64, int) {
-		for i := 0; i < maxTicks; i++ {
+		for i := range maxTicks {
 			tick := startTick + uint64(i)
 			_, _ = inst.Reconcile(ctx, fsm.SystemSnapshot{Tick: tick}, registry)
 			if inst.GetCurrentFSMState() == target {

@@ -65,9 +65,10 @@ type ExamplechildDependencies struct {
 }
 
 // NewExamplechildDependencies creates new dependencies for the child worker.
-func NewExamplechildDependencies(connectionPool ConnectionPool, logger deps.FSMLogger, stateReader deps.StateReader, identity deps.Identity) *ExamplechildDependencies {
+// bd is the shared BaseDependencies returned by WorkerBase.InitBase.
+func NewExamplechildDependencies(connectionPool ConnectionPool, bd *deps.BaseDependencies) *ExamplechildDependencies {
 	return &ExamplechildDependencies{
-		BaseDependencies: deps.NewBaseDependencies(logger, stateReader, identity),
+		BaseDependencies: bd,
 		connectionPool:   connectionPool,
 		isConnected:      false,
 	}

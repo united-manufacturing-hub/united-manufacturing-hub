@@ -143,6 +143,7 @@ func printSlowReconcileComponents(metricsBody string, thresholdBucket string) {
 		}
 
 		component := extractLabel(line, "component")
+
 		instance := extractLabel(line, "instance")
 		if component == "" || instance == "" {
 			continue
@@ -187,12 +188,14 @@ func printSlowReconcileComponents(metricsBody string, thresholdBucket string) {
 // extractLabel extracts a label value from a Prometheus metric line.
 func extractLabel(line, label string) string {
 	prefix := label + `="`
+
 	idx := strings.Index(line, prefix)
 	if idx < 0 {
 		return ""
 	}
 
 	start := idx + len(prefix)
+
 	end := strings.Index(line[start:], `"`)
 	if end < 0 {
 		return ""

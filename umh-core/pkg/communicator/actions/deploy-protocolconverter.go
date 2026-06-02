@@ -42,7 +42,6 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/connectionserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/protocolconverterserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/variables"
@@ -71,13 +70,15 @@ type DeployProtocolConverterAction struct {
 	// Parsed request payload (only populated after Parse)
 	payload models.ProtocolConverter
 
-	actionUUID   uuid.UUID
-	instanceUUID uuid.UUID
+	actionUUID        uuid.UUID
+	instanceUUID      uuid.UUID
+	ignoreHealthCheck bool
 }
 
 // NewDeployProtocolConverterAction returns an un-parsed action instance.
 func NewDeployProtocolConverterAction(userEmail string, actionUUID uuid.UUID, instanceUUID uuid.UUID, outboundChannel chan *models.UMHMessage, configManager config.ConfigManager, systemSnapshotManager *fsm.SnapshotManager) *DeployProtocolConverterAction {
 	al := logger.For(logger.ComponentCommunicator)
+
 	return &DeployProtocolConverterAction{
 		userEmail:             userEmail,
 		actionUUID:            actionUUID,
@@ -92,6 +93,8 @@ func NewDeployProtocolConverterAction(userEmail string, actionUUID uuid.UUID, in
 
 // Parse implements the Action interface by extracting protocol converter configuration from the payload.
 func (a *DeployProtocolConverterAction) Parse(payload interface{}) error {
+	a.ignoreHealthCheck = false
+
 	// Parse the payload to get the protocol converter configuration
 	parsedPayload, err := ParseActionPayload[models.ProtocolConverter](payload)
 	if err != nil {
@@ -99,6 +102,17 @@ func (a *DeployProtocolConverterAction) Parse(payload interface{}) error {
 	}
 
 	a.payload = parsedPayload
+
+	if parsedPayload.ReadDFC != nil && parsedPayload.ReadDFC.IgnoreErrors != nil {
+		a.ignoreHealthCheck = *parsedPayload.ReadDFC.IgnoreErrors
+	}
+	// OR-merge: if either DFC requests skipping errors, skip the health-check wait for
+	// the entire PC. This means a write DFC with IgnoreErrors=true also suppresses the
+	// read DFC health check. This is intentional: the frontend sets IgnoreErrors when it
+	// cannot guarantee a DFC will reach a healthy state (e.g. experimental outputs).
+	if parsedPayload.WriteDFCPayload != nil && parsedPayload.WriteDFCPayload.IgnoreErrors != nil {
+		a.ignoreHealthCheck = a.ignoreHealthCheck || *parsedPayload.WriteDFCPayload.IgnoreErrors
+	}
 
 	a.actionLogger.Debugf("Parsed DeployProtocolConverter action payload: name=%s, ip=%s, port=%d",
 		a.payload.Name, a.payload.Connection.IP, a.payload.Connection.Port)
@@ -125,11 +139,16 @@ func (a *DeployProtocolConverterAction) Validate() error {
 		return err
 	}
 
-	if err := validateProtocolConverterDFC(a.payload.ReadDFC, "read"); err != nil {
+	// Always validate the read DFC, even if it's nil (ignoreErrors will handle it)
+	if err := validateReadProtocolConverterDFC(a.payload.ReadDFC); err != nil {
 		return err
 	}
-	if err := validateProtocolConverterDFC(a.payload.WriteDFC, "write"); err != nil {
-		return err
+
+	// Validate the write DFC, if present. Might not exist for read-only bridges
+	if w := a.payload.WriteDFCPayload; w != nil {
+		if err := validateWriteDFCConfig(&w.DataflowComponentWriteConfigInput, w.State); err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -202,7 +221,7 @@ func (a *DeployProtocolConverterAction) Execute() (interface{}, map[string]inter
 	)
 
 	// check against observedState
-	if a.systemSnapshotManager != nil {
+	if a.systemSnapshotManager != nil && !a.ignoreHealthCheck {
 		errCode, err := a.waitForComponentToAppear(pcConfig.DesiredFSMState)
 		if err != nil {
 			errorMsg := fmt.Sprintf(
@@ -230,15 +249,24 @@ func (a *DeployProtocolConverterAction) Execute() (interface{}, map[string]inter
 		}
 	}
 
+	var successMsg string
+	if a.ignoreHealthCheck {
+		successMsg = fmt.Sprintf(
+			`Protocol converter deployed (health check skipped; state '%s' not verified)`,
+			pcConfig.DesiredFSMState,
+		)
+	} else {
+		successMsg = fmt.Sprintf(
+			`Protocol converter was successfully deployed and reached the expected state '%s'`,
+			pcConfig.DesiredFSMState,
+		)
+	}
 	SendActionReply(
 		a.instanceUUID,
 		a.userEmail,
 		a.actionUUID,
 		models.ActionExecuting,
-		fmt.Sprintf(
-			`Protocol converter was successfully deployed and reached the expected state '%s'`,
-			pcConfig.DesiredFSMState,
-		),
+		successMsg,
 		a.outboundChannel,
 		models.DeployProtocolConverter,
 	)
@@ -248,84 +276,44 @@ func (a *DeployProtocolConverterAction) Execute() (interface{}, map[string]inter
 
 // createProtocolConverterConfig creates a ProtocolConverterConfig with templated configuration.
 func (a *DeployProtocolConverterAction) createProtocolConverterConfig() (config.ProtocolConverterConfig, error) {
-	// Create variables bundle - start empty to allow user variables first
-	userVars := map[string]any{}
+	userVars := buildUserScope(a.payload.TemplateInfo)
+	userVars["IP"] = a.payload.Connection.IP
+	userVars["PORT"] = strconv.FormatUint(uint64(a.payload.Connection.Port), 10)
 
-	// Add any additional user-supplied variables from TemplateInfo.Variables
-	if a.payload.TemplateInfo != nil {
-		for _, variable := range a.payload.TemplateInfo.Variables {
-			userVars[variable.Label] = variable.Value
-		}
-	}
-
-	// Enforce reserved connection variables after merging to prevent user overrides
-	userVars["IP"] = a.payload.Connection.IP                                     // Keep IP as string
-	userVars["PORT"] = strconv.FormatUint(uint64(a.payload.Connection.Port), 10) // Convert port to string
-
-	// Extract UMH_TOPICS from write DFC payload if provided
-	if a.payload.WriteDFC != nil && len(a.payload.WriteDFC.UMHTopics) > 0 {
-		userVars["UMH_TOPICS"] = a.payload.WriteDFC.UMHTopics
-	}
-
-	variableBundle := variables.VariableBundle{
-		User: userVars,
-	}
-
-	// Create template configuration with connection and placeholders for DFCs
-	template := protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
-		ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
-			NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
-				Target: "{{ .IP }}",   // Template variable for IP
-				Port:   "{{ .PORT }}", // Template variable for PORT
-			},
-		},
-		// DataflowComponent configs left empty initially - they will be configured later via edit actions
+	tmpl := protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
+		ConnectionServiceConfig:             newIPPortConnectionTemplate(),
 		DataflowComponentReadServiceConfig:  dataflowcomponentserviceconfig.DataflowComponentServiceConfig{},
-		DataflowComponentWriteServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{},
+		DataflowComponentWriteServiceConfig: dataflowcomponentserviceconfig.DataflowComponentWriteConfigInput{},
 	}
 
-	// If a ReadDFC is provided in the payload, configure it immediately
 	if a.payload.ReadDFC != nil {
-		benthosConfig, err := CreateBenthosConfigFromCDFCPayload(dfcToPayload(a.payload.ReadDFC), a.payload.Name)
+		readSvcCfg, err := buildReadDFCServiceConfig(dfcToPayload(a.payload.ReadDFC), a.payload.Name)
 		if err != nil {
-			return config.ProtocolConverterConfig{}, fmt.Errorf("failed to create read DFC benthos config: %w", err)
+			return config.ProtocolConverterConfig{}, err
 		}
-		template.DataflowComponentReadServiceConfig = dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
-			BenthosConfig: benthosConfig,
-		}
+		tmpl.DataflowComponentReadServiceConfig = readSvcCfg
 	}
 
-	// If a WriteDFC is provided in the payload, configure it immediately
-	if a.payload.WriteDFC != nil {
-		benthosConfig, err := CreateBenthosConfigFromCDFCPayload(dfcToPayload(a.payload.WriteDFC), a.payload.Name)
-		if err != nil {
-			return config.ProtocolConverterConfig{}, fmt.Errorf("failed to create write DFC benthos config: %w", err)
-		}
-
-		template.DataflowComponentWriteServiceConfig = dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
-			BenthosConfig: benthosConfig,
-		}
+	if w := a.payload.WriteDFCPayload; w != nil {
+		tmpl.DataflowComponentWriteServiceConfig = w.DataflowComponentWriteConfigInput
 	}
 
-	// Determine per-DFC desired states and derive PC-level state.
 	var readDFCDesiredState, writeDFCDesiredState string
 	if a.payload.ReadDFC != nil {
 		readDFCDesiredState = a.payload.ReadDFC.State
 	}
-	if a.payload.WriteDFC != nil {
-		writeDFCDesiredState = a.payload.WriteDFC.State
+	if a.payload.WriteDFCPayload != nil {
+		writeDFCDesiredState = a.payload.WriteDFCPayload.State
 	}
 
-	// Create the spec with template and variables
 	spec := protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
-		Config:               template,
-		Variables:            variableBundle,
+		Config:               tmpl,
+		Variables:            variables.VariableBundle{User: userVars},
 		Location:             convertIntMapToStringMap(a.payload.Location),
 		ReadDFCDesiredState:  readDFCDesiredState,
 		WriteDFCDesiredState: writeDFCDesiredState,
 	}
 
-	// Create the full config
 	return config.ProtocolConverterConfig{
 		FSMInstanceConfig: config.FSMInstanceConfig{
 			Name:            a.payload.Name,
@@ -333,20 +321,6 @@ func (a *DeployProtocolConverterAction) createProtocolConverterConfig() (config.
 		},
 		ProtocolConverterServiceConfig: spec,
 	}, nil
-}
-
-// convertIntMapToStringMap converts map[int]string to map[string]string.
-func convertIntMapToStringMap(intMap map[int]string) map[string]string {
-	if intMap == nil {
-		return nil
-	}
-
-	stringMap := make(map[string]string)
-	for k, v := range intMap {
-		stringMap[strconv.Itoa(k)] = v
-	}
-
-	return stringMap
 }
 
 // getUserEmail implements the Action interface by returning the user email associated with this action.

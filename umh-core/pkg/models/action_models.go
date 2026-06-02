@@ -17,6 +17,7 @@ package models
 import (
 	"github.com/Masterminds/semver/v3"
 	"github.com/google/uuid"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 )
 
 type DeployCustomDataFlowComponentPayload struct {
@@ -36,9 +37,7 @@ type CDFCPayload struct {
 	Outputs         DfcDataConfig            `json:"outputs"`
 	Inject          string                   `json:"inject"`
 	BenthosImageTag string                   `json:"benthosImageTag"`
-	// UMHTopics is used by write DFCs — UNS topic regexes to subscribe to.
-	UMHTopics    []string `json:"umh_topics,omitempty"`
-	IgnoreErrors bool     `json:"ignoreErrors"`
+	IgnoreErrors    bool                     `json:"ignoreErrors"`
 }
 
 type DfcDataConfig struct {
@@ -798,8 +797,6 @@ type ProtocolConverterDFC struct {
 	Inputs CommonDataFlowComponentInputConfig `json:"inputs,omitempty" mapstructure:"inputs,omitempty" yaml:"inputs,omitempty"`
 	// Outputs is used by both read and write DFCs (user-supplied output config).
 	Outputs CommonDataFlowComponentOutputConfig `json:"outputs,omitempty" mapstructure:"outputs,omitempty" yaml:"outputs,omitempty"`
-	// UMHTopics is used by write DFCs — UNS topic regexes to subscribe to. Auto-injected into input config.
-	UMHTopics []string `json:"umh_topics,omitempty" mapstructure:"umh_topics,omitempty" yaml:"umh_topics,omitempty"`
 }
 
 type ProtocolConverterVariable struct {
@@ -813,15 +810,30 @@ type ProtocolConverterTemplateInfo struct {
 	IsTemplated bool                        `json:"isTemplated" mapstructure:"isTemplated" yaml:"isTemplated"`
 }
 
+// WriteDFCPayload is the wire format for write DFC configuration, used for both inbound
+// (deploy/edit actions) and outbound (GET responses) payloads i.e. what is transmitted to/from the client.
+// The embedded struct uses mapstructure:",squash" so mapstructure flattens its fields
+// into this struct during action payload decoding. Go's encoding/json promotes embedded
+// struct fields automatically without a tag, so no json:",squash" is needed or exists.
+type WriteDFCPayload struct {
+	dataflowcomponentserviceconfig.DataflowComponentWriteConfigInput `mapstructure:",squash"`
+	// IgnoreErrors skips the health-check rollout when true.
+	IgnoreErrors *bool `json:"ignoreErrors,omitempty" mapstructure:"ignoreErrors,omitempty"`
+	// State is the desired lifecycle state ("active" or "stopped").
+	State string `json:"state,omitempty" mapstructure:"state,omitempty"`
+}
+
+// ProtocolConverter is the wire format for protocol converter configuration,
+// used by deploy/edit actions and GET responses.
 type ProtocolConverter struct {
-	UUID         *uuid.UUID                     `binding:"required"     json:"uuid"`
-	Location     map[int]string                 `json:"location"`
-	ReadDFC      *ProtocolConverterDFC          `json:"readDFC"`
-	WriteDFC     *ProtocolConverterDFC          `json:"writeDFC"`
-	TemplateInfo *ProtocolConverterTemplateInfo `json:"templateInfo"`
-	Meta         *ProtocolConverterMeta         `json:"meta"`
-	Name         string                         `binding:"required" json:"name"`
-	Connection   ProtocolConverterConnection    `json:"connection"`
+	UUID            *uuid.UUID                     `binding:"required"     json:"uuid"`
+	Location        map[int]string                 `json:"location"`
+	ReadDFC         *ProtocolConverterDFC          `json:"readDFC"`
+	WriteDFCPayload *WriteDFCPayload               `json:"writeDFC"`
+	TemplateInfo    *ProtocolConverterTemplateInfo `json:"templateInfo"`
+	Meta            *ProtocolConverterMeta         `json:"meta"`
+	Name            string                         `binding:"required" json:"name"`
+	Connection      ProtocolConverterConnection    `json:"connection"`
 }
 
 type ProtocolConverterMeta struct {

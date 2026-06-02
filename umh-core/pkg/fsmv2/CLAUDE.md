@@ -72,30 +72,31 @@ func (s *RunningState) Next(snapAny any) fsmv2.NextResult[any, any] {
 
     // Shutdown check FIRST. Build the reason from snapshot fields so operators
     // can see why the worker stopped without reading code.
-    if snap.IsStopRequired() {
+    if snap.ShouldStop() {
         reason := fmt.Sprintf("stop required: shutdown=%t, parentState=%q",
             snap.IsShutdownRequested(), snap.Observed.ParentMappedState)
-        return fsmv2.Result[any, any](&ShuttingDownState{}, fsmv2.SignalNone, nil, reason)
+        return fsmv2.Transition(&ShuttingDownState{}, fsmv2.SignalNone, nil, reason, nil)
     }
 
     // Business logic.
     if needsWork {
         reason := fmt.Sprintf("dispatching %s (queue=%d)", MyActionName, snap.Status.QueueDepth)
-        return fsmv2.Result[any, any](s, fsmv2.SignalNone, &MyAction{}, reason)
+        return fsmv2.Transition(s, fsmv2.SignalNone, &MyAction{}, reason, nil)
     }
 
     // Catch-all return: include the conditions that kept the worker here so
     // operators can identify which precondition is still missing.
     reason := fmt.Sprintf("running: queue=%d, hasWork=%t", snap.Status.QueueDepth, needsWork)
-    return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil, reason)
+    return fsmv2.Transition(s, fsmv2.SignalNone, nil, reason, nil)
 }
 ```
 
-`fsmv2.Result[any, any]` is the canonical return shape for state files.
+`fsmv2.Transition()` is the canonical return shape for state files. Never use the generic
+`fsmv2.Result[any, any](...)` form — the architecture gate rejects it.
 
 ## Reason Strings in State Transitions
 
-The `Reason` parameter in `fsmv2.Result()` is visible in structured JSON logs (every state transition), supervisor heartbeats (every ~100 ticks), and parent supervisor's `ChildInfo.StateReason`. Write reasons that help operators troubleshoot without reading code.
+The `Reason` parameter in `fsmv2.Transition()` is visible in structured JSON logs (every state transition), supervisor heartbeats (every ~100 ticks), and parent supervisor's `ChildInfo.StateReason`. Write reasons that help operators troubleshoot without reading code.
 
 **Rules:**
 - Include dynamic snapshot values via `fmt.Sprintf` — never hardcode values that exist in the snapshot
@@ -112,6 +113,94 @@ fmt.Sprintf("sync recovering: %d consecutive errors (%s), backoff %s",
 
 **Bad**: `"Stop required"`, `"Waiting for transport or token"`, `"Degraded, still pushing"`
 **Good**: `"stop required: shutdown=false, parentState=stopped"`, `"waiting: hasTransport=true, hasValidToken=false"`, `"degraded (5 consecutive errors), still pushing"`
+
+## Children-in-Next Pattern
+
+Parent state files can express child sets directly in `Next()` via the fifth argument of
+`fsmv2.Transition()`. This is the path toward moving child lifecycle decisions out of
+`DeriveDesiredState` and into the state machine where they are visible to operators.
+
+**Nil = no opinion** (supervisor uses the `ChildrenSpecs` from `DeriveDesiredState`):
+
+```go
+return fsmv2.Transition(s, fsmv2.SignalNone, nil, "no change to children", nil)
+```
+
+**Empty slice = zero children** (supervisor tears down all children):
+
+```go
+return fsmv2.Transition(&TryingToStopState{}, fsmv2.SignalNone, nil, "stopping, no children needed",
+    []config.ChildSpec{})
+```
+
+**Populated slice = exact desired child set** (supervisor reconciles to match):
+
+```go
+return fsmv2.Transition(s, fsmv2.SignalNone, nil, "running with children",
+    []config.ChildSpec{
+        {Name: "child1", WorkerType: "examplechild", UserSpec: spec1},
+        {Name: "child2", WorkerType: "examplechild", UserSpec: spec2},
+    })
+```
+
+Until a parent state returns a non-nil `Children` value, the supervisor continues using
+the legacy `ChildrenSpecs` path from `DeriveDesiredState`. Both paths coexist safely
+during migration.
+
+## Worker Struct Pattern (WorkerBase embed)
+
+Every worker embeds `fsmv2.WorkerBase[TConfig, TStatus, TDeps]`.
+`TDeps` is the concrete dependencies pointer (e.g., `*MyDependencies`); use `struct{}`
+for workers that have no custom dependencies.
+
+```go
+type MyWorker struct {
+    fsmv2.WorkerBase[MyConfig, MyStatus, *MyDependencies]
+    // Extra non-deps fields (e.g., a pre-acquired connection) go here.
+}
+```
+
+**Constructor ritual** — call InitBase, then build deps from its returned `*BaseDependencies`, then BindDeps:
+
+```go
+func NewMyWorker(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader, pool ConnectionPool) (*MyWorker, error) {
+    w := &MyWorker{}
+    bd := w.InitBase(id, logger, sr)
+    d := NewMyDependencies(pool, bd)
+    w.BindDeps(d)
+    return w, nil
+}
+```
+
+**Typed dependency accessor** — add one per concrete worker (WorkerBase only exposes `any`). Use comma-ok and a nil guard so the panic message survives any future TDeps change:
+
+```go
+func (w *MyWorker) GetDependencies() *MyDependencies {
+    raw := w.GetDependenciesAny()
+
+    d, ok := raw.(*MyDependencies)
+    if !ok || d == nil {
+        panic("MyWorker: GetDependencies called before BindDeps")
+    }
+
+    return d
+}
+```
+
+**What WorkerBase provides without override:**
+- `DeriveDesiredState`: parses `config.UserSpec`, duck-types `GetState() string` for state propagation
+- `GetInitialState`: registry lookup via `fsmv2.LookupInitialState(workerType)` — register in `state/` init()
+- `Identity()`, `Logger()`, `GetDependenciesAny()`
+- ~~`Config()`, `ConfigReady()`~~ — deprecated, slated for deletion in L3. Read config via `fsmv2.ExtractConfig[T](desired)` in `CollectObservedState`.
+
+**What to override:**
+
+| Override | When |
+|----------|------|
+| `CollectObservedState` | Always — worker-specific snapshot |
+| `DeriveDesiredState` | Custom children specs (application, communicator) or non-standard config parsing |
+| `GetInitialState` | Worker does NOT register via fsmv2.RegisterInitialState (e.g., push, pull) |
+| `GetDependenciesAny() any { return nil }` | No-deps worker. `WorkerBase[..., struct{}]` boxes `struct{}{}` into `any`, which is non-nil and silently skips framework metrics injection. The override returns a true nil to prevent that. |
 
 ## Factory Registration
 
@@ -140,7 +229,7 @@ Key types used when building workers:
 - **`WorkerSnapshot[TConfig, TStatus]`**: typed snapshot for state `Next()` methods
 - **`ConvertWorkerSnapshot[TConfig, TStatus]`**: entry-point type assertion in states
 - **`ExtractConfig[TConfig](desired)`**: typed config access in `CollectObservedState`
-**Architecture validators** require `ConvertWorkerSnapshot` as the single entry-point in `Next()` methods; `snap.IsStopRequired()` (WorkerSnapshot) is the canonical shutdown check.
+**Architecture validators** require `ConvertWorkerSnapshot` as the single entry-point in `Next()` methods; `snap.ShouldStop()` (WorkerSnapshot) is the canonical shutdown check.
 
 **Capability interfaces** (optional, detected via type assertion on first instantiation):
 - `ActionProvider`: `Actions() map[string]Action[any]`

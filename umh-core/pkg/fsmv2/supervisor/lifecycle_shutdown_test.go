@@ -41,6 +41,7 @@ type shutdownTestSyncBuffer struct {
 func (b *shutdownTestSyncBuffer) Write(p []byte) (int, error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
+
 	return b.buf.Write(p)
 }
 
@@ -49,6 +50,7 @@ func (b *shutdownTestSyncBuffer) Sync() error { return nil }
 func (b *shutdownTestSyncBuffer) String() string {
 	b.mu.Lock()
 	defer b.mu.Unlock()
+
 	return b.buf.String()
 }
 
@@ -58,14 +60,17 @@ func containsLogEvent(logOutput, msg string) bool {
 		if line == "" {
 			continue
 		}
+
 		var entry map[string]interface{}
 		if err := json.Unmarshal([]byte(line), &entry); err != nil {
 			continue
 		}
+
 		if entry["msg"] == msg {
 			return true
 		}
 	}
+
 	return false
 }
 
@@ -75,14 +80,17 @@ func findLogEvent(logOutput, msg string) map[string]interface{} {
 		if line == "" {
 			continue
 		}
+
 		var entry map[string]interface{}
 		if err := json.Unmarshal([]byte(line), &entry); err != nil {
 			continue
 		}
+
 		if entry["msg"] == msg {
 			return entry
 		}
 	}
+
 	return nil
 }
 
@@ -107,6 +115,7 @@ func (s shutdownHonoringState) Next(snapshot any) fsmv2.NextResult[any, any] {
 			}
 		}
 	}
+
 	return fsmv2.NextResult[any, any]{Signal: fsmv2.SignalNone, State: shutdownHonoringState{}, Reason: "running"}
 }
 
@@ -170,6 +179,7 @@ var _ = Describe("Shutdown drain regression", func() {
 			Eventually(func() int {
 				s.mu.RLock()
 				defer s.mu.RUnlock()
+
 				return len(s.workers)
 			}, 500*time.Millisecond, 10*time.Millisecond).Should(Equal(1))
 
@@ -228,6 +238,7 @@ var _ = Describe("Shutdown drain regression", func() {
 			Eventually(func() int {
 				s.mu.RLock()
 				defer s.mu.RUnlock()
+
 				return len(s.workers)
 			}, 500*time.Millisecond, 10*time.Millisecond).Should(Equal(1))
 
@@ -298,6 +309,7 @@ var _ = Describe("Shutdown drain regression", func() {
 			Eventually(func() int {
 				s.mu.RLock()
 				defer s.mu.RUnlock()
+
 				return len(s.workers)
 			}, 300*time.Millisecond, 10*time.Millisecond).Should(Equal(1))
 
@@ -359,6 +371,7 @@ var _ = Describe("Shutdown drain regression", func() {
 			Eventually(func() int {
 				s.mu.RLock()
 				defer s.mu.RUnlock()
+
 				return len(s.workers)
 			}, 500*time.Millisecond, 10*time.Millisecond).Should(Equal(1))
 

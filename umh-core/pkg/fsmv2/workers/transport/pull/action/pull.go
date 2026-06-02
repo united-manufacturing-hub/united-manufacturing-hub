@@ -168,8 +168,10 @@ func (a *PullAction) Execute(ctx context.Context, depsAny any) error {
 		return fmt.Errorf("pull failed: %w", err)
 	}
 
-	var bytesPulled int64
-	var nonNilCount int64
+	var (
+		bytesPulled int64
+		nonNilCount int64
+	)
 
 	for _, msg := range messages {
 		if msg != nil {

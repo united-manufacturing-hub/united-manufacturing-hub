@@ -23,7 +23,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/push/snapshot"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/push/state"
@@ -37,9 +36,7 @@ var _ fsmv2.Worker = (*PushWorker)(nil)
 // It drains the outbound channel and pushes messages to the backend relay server.
 // PushWorker is a child of TransportWorker and shares its parent's JWT token and transport.
 type PushWorker struct {
-	*helpers.BaseWorker[*PushDependencies]
-	logger   deps.FSMLogger
-	identity deps.Identity
+	fsmv2.WorkerBase[snapshot.PushDesiredState, snapshot.PushStatus, *PushDependencies]
 }
 
 // NewPushWorker creates a new PushWorker in Stopped state.
@@ -59,16 +56,30 @@ func NewPushWorker(
 		identity.WorkerType = "push"
 	}
 
-	dependencies, err := NewPushDependencies(parentDeps, identity, logger, stateReader)
+	w := &PushWorker{}
+	bd := w.InitBase(identity, logger, stateReader)
+
+	dependencies, err := NewPushDependencies(parentDeps, bd)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create push dependencies: %w", err)
 	}
 
-	return &PushWorker{
-		BaseWorker: helpers.NewBaseWorker(dependencies),
-		identity:   identity,
-		logger:     logger,
-	}, nil
+	w.BindDeps(dependencies)
+
+	return w, nil
+}
+
+// GetDependencies returns the typed PushDependencies.
+// Panics with a clear message if BindDeps was not called before this worker is used.
+func (w *PushWorker) GetDependencies() *PushDependencies {
+	raw := w.GetDependenciesAny()
+
+	d, ok := raw.(*PushDependencies)
+	if !ok || d == nil {
+		panic("PushWorker: GetDependencies called before BindDeps")
+	}
+
+	return d
 }
 
 // CollectObservedState snapshots the current push worker state.
@@ -126,7 +137,7 @@ func (w *PushWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, e
 	}
 
 	return &fsmv2.WrappedDesiredState[snapshot.PushDesiredState]{
-		State: parsed.BaseUserSpec.GetState(),
+		State: parsed.GetState(),
 	}, nil
 }
 

@@ -41,7 +41,7 @@ var _ = Describe("AuthenticateAction", func() {
 		logger = deps.NewNopFSMLogger()
 		mockTransp = &mockTransport{}
 		identity := deps.Identity{ID: "test-id", WorkerType: "transport"}
-		dependencies = transportpkg.NewTransportDependencies(mockTransp, logger, nil, identity)
+		dependencies = transportpkg.NewTransportDependencies(mockTransp, deps.NewBaseDependencies(logger, nil, identity))
 		// Dependencies now passed to Execute(), not constructor
 		act = action.NewAuthenticateAction(
 			"https://relay.example.com",
@@ -101,7 +101,7 @@ var _ = Describe("AuthenticateAction", func() {
 	Describe("Transport Nil Safety", func() {
 		It("should create transport if nil in dependencies on first execution", func() {
 			identity := deps.Identity{ID: "test-nil-transport", WorkerType: "transport"}
-			depsWithNilTransport := transportpkg.NewTransportDependencies(nil, logger, nil, identity)
+			depsWithNilTransport := transportpkg.NewTransportDependencies(nil, deps.NewBaseDependencies(logger, nil, identity))
 			Expect(depsWithNilTransport.GetTransport()).To(BeNil(), "transport should be nil before first auth")
 
 			authAction := action.NewAuthenticateAction(
@@ -442,7 +442,7 @@ var _ = Describe("AuthenticateAction", func() {
 			ctx := context.Background()
 			spy := &spyLogger{FSMLogger: deps.NewNopFSMLogger()}
 			identity := deps.Identity{ID: "test-spy", WorkerType: "transport"}
-			spyDeps := transportpkg.NewTransportDependencies(mockTransp, spy, nil, identity)
+			spyDeps := transportpkg.NewTransportDependencies(mockTransp, deps.NewBaseDependencies(spy, nil, identity))
 
 			mockTransp.authError = &types.TransportError{
 				Type:    types.ErrorTypeNetwork,
@@ -467,7 +467,7 @@ var _ = Describe("AuthenticateAction", func() {
 		It("should fire persistent_auth_failure SentryWarn after MinSamples consecutive transient errors", func() {
 			spy := &spyLogger{FSMLogger: deps.NewNopFSMLogger()}
 			identity := deps.Identity{ID: "test-spy", WorkerType: "transport"}
-			spyDeps := transportpkg.NewTransportDependencies(mockTransp, spy, nil, identity)
+			spyDeps := transportpkg.NewTransportDependencies(mockTransp, deps.NewBaseDependencies(spy, nil, identity))
 
 			ctx := context.Background()
 			mockTransp.authError = &types.TransportError{
@@ -475,7 +475,7 @@ var _ = Describe("AuthenticateAction", func() {
 				Message: "connection refused",
 			}
 
-			for i := 0; i < 4; i++ {
+			for range 4 {
 				err := act.Execute(ctx, spyDeps)
 				Expect(err).NotTo(HaveOccurred())
 			}

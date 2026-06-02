@@ -60,9 +60,11 @@ type ExampleslowDependencies struct {
 	delaySeconds int
 }
 
-func NewExampleslowDependencies(connectionPool ConnectionPool, logger deps.FSMLogger, stateReader deps.StateReader, identity deps.Identity) *ExampleslowDependencies {
+// NewExampleslowDependencies creates dependencies for the slow worker.
+// bd is the shared BaseDependencies returned by WorkerBase.InitBase.
+func NewExampleslowDependencies(connectionPool ConnectionPool, bd *deps.BaseDependencies) *ExampleslowDependencies {
 	return &ExampleslowDependencies{
-		BaseDependencies: deps.NewBaseDependencies(logger, stateReader, identity),
+		BaseDependencies: bd,
 		connectionPool:   connectionPool,
 	}
 }

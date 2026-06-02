@@ -26,7 +26,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/connectionserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/protocolconverterserviceconfig"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/variables"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/protocolconverter/runtime_config"
 )
 
@@ -73,8 +72,6 @@ var _ = Describe("BuildRuntimeConfig", func() {
 		}
 		nodeName = "test-node"
 		pcName = "temperature-sensor-pc"
-
-		spec.Config.DataflowComponentWriteServiceConfig = dataflowcomponentserviceconfig.DataflowComponentServiceConfig{}
 	})
 
 	Describe("BuildRuntimeConfig", func() {
@@ -89,9 +86,10 @@ var _ = Describe("BuildRuntimeConfig", func() {
 			Expect(result.ConnectionServiceConfig.NmapServiceConfig.Target).To(Equal("10.0.1.50"))
 			Expect(result.ConnectionServiceConfig.NmapServiceConfig.Port).To(Equal(uint16(4840)))
 
-			// Verify dataflow component configs exist (even if empty)
+			// Verify read DFC config exists
 			Expect(result.DataflowComponentReadServiceConfig).NotTo(BeNil())
-			Expect(result.DataflowComponentWriteServiceConfig).NotTo(BeNil())
+			// Verify write DFC output was parsed from the example YAML (regression: wrong key "write_output" was silently dropped)
+			Expect(result.DataflowComponentWriteServiceConfig.BenthosConfig.Output).To(HaveKey("http_client"))
 		})
 
 		It("should properly merge agent and PC locations", func() {
@@ -168,8 +166,7 @@ var _ = Describe("BuildRuntimeConfig", func() {
 		})
 	})
 
-	Describe("Write DFC UMH_TOPICS validation and injection", func() {
-		// Helper to create a basic connection config
+	Describe("Write DFC UMH topics and UNS input injection", func() {
 		createConnectionConfig := func() connectionserviceconfig.ConnectionServiceConfigTemplate {
 			return connectionserviceconfig.ConnectionServiceConfigTemplate{
 				NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
@@ -179,74 +176,34 @@ var _ = Describe("BuildRuntimeConfig", func() {
 			}
 		}
 
-		It("should succeed with default UMH_TOPICS when write DFC has Output but UMH_TOPICS not set", func() {
+		It("should inject default TOPIC_NOT_SET_BY_USER when UMHTopics is empty but output is set", func() {
 			testSpec := protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
 				Config: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
 					ConnectionServiceConfig: createConnectionConfig(),
-					DataflowComponentWriteServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
-						BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
-							Output: map[string]any{
-								"stdout": map[string]any{},
-							},
-						},
+					DataflowComponentWriteServiceConfig: dataflowcomponentserviceconfig.DataflowComponentWriteConfigInput{
+						Output: map[string]any{"stdout": map[string]any{}},
 					},
 				},
 			}
-			// No UMH_TOPICS in variables — default should be injected
 
 			result, err := runtime_config.BuildRuntimeConfig(testSpec, agentLocation, globalVars, nodeName, pcName)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(result).NotTo(BeZero())
 
-			// The default fallback topic must appear in the write DFC's uns input.
 			writeInput := result.DataflowComponentWriteServiceConfig.BenthosConfig.Input
 			Expect(writeInput).To(HaveKey("uns"))
 			unsInput, ok := writeInput["uns"].(map[string]any)
-			Expect(ok).To(BeTrue(), "uns input should be a map")
+			Expect(ok).To(BeTrue())
 			Expect(unsInput).To(HaveKey("umh_topics"))
 			Expect(unsInput["umh_topics"]).To(Equal([]string{"TOPIC_NOT_SET_BY_USER"}))
 		})
 
-		It("should succeed when write DFC has Output and UMH_TOPICS is set", func() {
+		It("should inject UMHTopics into write DFC uns input", func() {
 			testSpec := protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
 				Config: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
 					ConnectionServiceConfig: createConnectionConfig(),
-					DataflowComponentWriteServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
-						BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
-							Output: map[string]any{
-								"stdout": map[string]any{},
-							},
-						},
-					},
-				},
-				Variables: variables.VariableBundle{
-					User: map[string]any{
-						"UMH_TOPICS": []string{"umh.v1.enterprise.site.*"},
-					},
-				},
-			}
-
-			result, err := runtime_config.BuildRuntimeConfig(testSpec, agentLocation, globalVars, nodeName, pcName)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(result).NotTo(BeZero())
-		})
-
-		It("should inject UMH_TOPICS into write DFC uns input after rendering", func() {
-			topics := []string{"umh.v1.factory.line-1.*", "umh.v1.factory.line-2.*"}
-			testSpec := protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
-				Config: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
-					ConnectionServiceConfig: createConnectionConfig(),
-					DataflowComponentWriteServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
-						BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
-							Output: map[string]any{
-								"stdout": map[string]any{},
-							},
-						},
-					},
-				},
-				Variables: variables.VariableBundle{
-					User: map[string]any{
-						"UMH_TOPICS": topics,
+					DataflowComponentWriteServiceConfig: dataflowcomponentserviceconfig.DataflowComponentWriteConfigInput{
+						InputTopics: "umh.v1.factory.line-1.*\numh.v1.factory.line-2.*",
+						Output:      map[string]any{"stdout": map[string]any{}},
 					},
 				},
 			}
@@ -254,26 +211,24 @@ var _ = Describe("BuildRuntimeConfig", func() {
 			result, err := runtime_config.BuildRuntimeConfig(testSpec, agentLocation, globalVars, nodeName, pcName)
 			Expect(err).NotTo(HaveOccurred())
 
-			// After rendering, UMH_TOPICS must be in write DFC's uns input
 			writeInput := result.DataflowComponentWriteServiceConfig.BenthosConfig.Input
 			Expect(writeInput).To(HaveKey("uns"))
 			unsInput, ok := writeInput["uns"].(map[string]any)
-			Expect(ok).To(BeTrue(), "uns input should be a map")
-			Expect(unsInput).To(HaveKey("umh_topics"))
-			Expect(unsInput["umh_topics"]).To(Equal(topics))
+			Expect(ok).To(BeTrue())
+			Expect(unsInput["umh_topics"]).To(Equal([]string{"umh.v1.factory.line-1.*", "umh.v1.factory.line-2.*"}))
 		})
 
-		It("should not require UMH_TOPICS when write DFC is empty", func() {
+		It("should not require UMHTopics when write DFC has no output", func() {
 			testSpec := protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
 				Config: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
-					ConnectionServiceConfig: createConnectionConfig(),
-					// Write DFC with no Output configured
-					DataflowComponentWriteServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{},
+					ConnectionServiceConfig:             createConnectionConfig(),
+					DataflowComponentWriteServiceConfig: dataflowcomponentserviceconfig.DataflowComponentWriteConfigInput{},
 				},
 			}
 
-			_, err := runtime_config.BuildRuntimeConfig(testSpec, agentLocation, globalVars, nodeName, pcName)
+			result, err := runtime_config.BuildRuntimeConfig(testSpec, agentLocation, globalVars, nodeName, pcName)
 			Expect(err).NotTo(HaveOccurred())
+			Expect(result.DataflowComponentWriteServiceConfig.BenthosConfig.Input).To(BeEmpty())
 		})
 	})
 
@@ -501,6 +456,68 @@ var _ = Describe("BuildRuntimeConfig", func() {
 			readConfig := result.DataflowComponentReadServiceConfig
 			_, exists := readConfig.BenthosConfig.Pipeline["processors"]
 			Expect(exists).To(BeFalse(), "Pipeline should NOT be created with processors when no tag_processor exists")
+		})
+	})
+
+	Describe("Write DFC processor validation", func() {
+		createConnectionConfig := func() connectionserviceconfig.ConnectionServiceConfigTemplate {
+			return connectionserviceconfig.ConnectionServiceConfigTemplate{
+				NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
+					Target: "127.0.0.1",
+					Port:   "8080",
+				},
+			}
+		}
+
+		It("should accept write DFC with output and no explicit processing (defaults to passthrough)", func() {
+			testSpec := protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
+				Config: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
+					ConnectionServiceConfig: createConnectionConfig(),
+					DataflowComponentWriteServiceConfig: dataflowcomponentserviceconfig.DataflowComponentWriteConfigInput{
+						Output: map[string]any{"stdout": map[string]any{}},
+					},
+				},
+			}
+
+			_, err := runtime_config.BuildRuntimeConfig(testSpec, agentLocation, globalVars, nodeName, pcName)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("should accept write DFC with explicit nodered_js processing code", func() {
+			testSpec := protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
+				Config: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
+					ConnectionServiceConfig: createConnectionConfig(),
+					DataflowComponentWriteServiceConfig: dataflowcomponentserviceconfig.DataflowComponentWriteConfigInput{
+						Output:              map[string]any{"stdout": map[string]any{}},
+						ProcessingNoderedJS: "msg.payload.foo = 'bar';\nreturn msg;",
+					},
+				},
+			}
+
+			_, err := runtime_config.BuildRuntimeConfig(testSpec, agentLocation, globalVars, nodeName, pcName)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("should produce nodered_js processor in the rendered config", func() {
+			testSpec := protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
+				Config: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
+					ConnectionServiceConfig: createConnectionConfig(),
+					DataflowComponentWriteServiceConfig: dataflowcomponentserviceconfig.DataflowComponentWriteConfigInput{
+						Output:              map[string]any{"stdout": map[string]any{}},
+						ProcessingNoderedJS: "return msg;",
+					},
+				},
+			}
+
+			runtimeConfig, err := runtime_config.BuildRuntimeConfig(testSpec, agentLocation, globalVars, nodeName, pcName)
+			Expect(err).NotTo(HaveOccurred())
+
+			writeDFC := runtimeConfig.DataflowComponentWriteServiceConfig
+			procs, ok := writeDFC.BenthosConfig.Pipeline["processors"].([]any)
+			Expect(ok).To(BeTrue())
+			Expect(procs).To(HaveLen(1))
+			firstProc := procs[0].(map[string]any)
+			Expect(firstProc).To(HaveKey("nodered_js"))
 		})
 	})
 })

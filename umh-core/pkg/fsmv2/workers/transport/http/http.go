@@ -255,6 +255,7 @@ func (t *HTTPTransport) Authenticate(ctx context.Context, req types.AuthRequest)
 	httpReq.Header.Set("Content-Type", "application/json")
 
 	client := t.httpClient.Load()
+
 	resp, err := client.Do(httpReq)
 	if err != nil {
 		return types.AuthResponse{}, &types.TransportError{
@@ -342,6 +343,7 @@ func (t *HTTPTransport) Pull(ctx context.Context, jwtToken string) ([]*types.UMH
 	httpReq.AddCookie(&http.Cookie{Name: "token", Value: jwtToken})
 
 	client := t.httpClient.Load()
+
 	resp, err := client.Do(httpReq)
 	if err != nil {
 		return nil, &types.TransportError{
@@ -409,6 +411,7 @@ func (t *HTTPTransport) Push(ctx context.Context, jwtToken string, messages []*t
 	httpReq.AddCookie(&http.Cookie{Name: "token", Value: jwtToken})
 
 	client := t.httpClient.Load()
+
 	resp, err := client.Do(httpReq)
 	if err != nil {
 		return &types.TransportError{

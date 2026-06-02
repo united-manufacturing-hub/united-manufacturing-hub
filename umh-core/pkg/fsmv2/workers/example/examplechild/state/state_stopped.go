@@ -34,14 +34,14 @@ func (s *StoppedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := fsmv2.ConvertWorkerSnapshot[example_child.ExamplechildConfig, example_child.ExamplechildStatus](snapAny)
 
 	if snap.IsShutdownRequested {
-		return fsmv2.Result[any, any](s, fsmv2.SignalNeedsRemoval, nil, "shutdown requested, stopping: parentState="+snap.ParentMappedState)
+		return fsmv2.Transition(s, fsmv2.SignalNeedsRemoval, nil, "shutdown requested, stopping: parentState="+snap.ParentMappedState, nil)
 	}
 
 	if snap.ParentMappedState == config.DesiredStateRunning {
-		return fsmv2.Result[any, any](&TryingToConnectState{}, fsmv2.SignalNone, nil, "parent wants running, attempting to connect: parentState="+snap.ParentMappedState)
+		return fsmv2.Transition(&TryingToConnectState{}, fsmv2.SignalNone, nil, "parent wants running, attempting to connect: parentState="+snap.ParentMappedState, nil)
 	}
 
-	return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil, "Child is stopped, no connection")
+	return fsmv2.Transition(s, fsmv2.SignalNone, nil, "Child is stopped, no connection", nil)
 }
 
 func (s *StoppedState) String() string {

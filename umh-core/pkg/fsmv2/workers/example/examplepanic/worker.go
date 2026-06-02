@@ -23,14 +23,11 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
 )
 
 type ExamplepanicWorker struct {
-	*helpers.BaseWorker[*ExamplepanicDependencies]
-	logger   deps.FSMLogger
-	identity deps.Identity
+	fsmv2.WorkerBase[ExamplepanicConfig, ExamplepanicStatus, *ExamplepanicDependencies]
 }
 
 func NewExamplepanicWorker(
@@ -51,13 +48,26 @@ func NewExamplepanicWorker(
 		identity.WorkerType = "examplepanic"
 	}
 
-	dependencies := NewExamplepanicDependencies(connectionPool, logger, stateReader, identity)
+	w := &ExamplepanicWorker{}
+	bd := w.InitBase(identity, logger, stateReader)
 
-	return &ExamplepanicWorker{
-		BaseWorker: helpers.NewBaseWorker(dependencies),
-		identity:   identity,
-		logger:     logger,
-	}, nil
+	dependencies := NewExamplepanicDependencies(connectionPool, bd)
+	w.BindDeps(dependencies)
+
+	return w, nil
+}
+
+// GetDependencies returns the typed ExamplepanicDependencies.
+// Panics with a clear message if BindDeps was not called before this worker is used.
+func (w *ExamplepanicWorker) GetDependencies() *ExamplepanicDependencies {
+	raw := w.GetDependenciesAny()
+
+	d, ok := raw.(*ExamplepanicDependencies)
+	if !ok || d == nil {
+		panic("ExamplepanicWorker: GetDependencies called before BindDeps")
+	}
+
+	return d
 }
 
 func (w *ExamplepanicWorker) CollectObservedState(ctx context.Context, desired fsmv2.DesiredState) (fsmv2.ObservedState, error) {
@@ -122,12 +132,6 @@ func (w *ExamplepanicWorker) DeriveDesiredState(spec interface{}) (fsmv2.Desired
 		State:  state,
 		Config: parsed,
 	}, nil
-}
-
-// GetInitialState returns the state the FSM should start in.
-// Uses the initial state registry populated by the state package's init() function.
-func (w *ExamplepanicWorker) GetInitialState() fsmv2.State[any, any] {
-	return fsmv2.LookupInitialState("examplepanic")
 }
 
 func init() {

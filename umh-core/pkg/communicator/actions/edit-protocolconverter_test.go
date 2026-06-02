@@ -32,8 +32,8 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/protocolconverter"
-	protocolconvertersvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/protocolconverter"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
+	protocolconvertersvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/protocolconverter"
 )
 
 var _ = Describe("EditProtocolConverter", func() {
@@ -59,6 +59,9 @@ var _ = Describe("EditProtocolConverter", func() {
 		actionUUID = uuid.New()
 		instanceUUID = uuid.New()
 		outboundChannel = make(chan *models.UMHMessage, 10) // Buffer to prevent blocking
+		mu.Lock()
+		messages = nil
+		mu.Unlock()
 		pcName = "wetter"
 		pcUUID = dataflowcomponentserviceconfig.GenerateUUIDFromName(pcName)
 
@@ -123,10 +126,6 @@ var _ = Describe("EditProtocolConverter", func() {
 
 	// Cleanup after each test
 	AfterEach(func() {
-		// Drain the outbound channel to prevent goroutine leaks
-		for len(outboundChannel) > 0 {
-			<-outboundChannel
-		}
 		close(outboundChannel)
 	})
 
@@ -173,9 +172,10 @@ var _ = Describe("EditProtocolConverter", func() {
 			Expect(action.GetDFCType()).To(Equal("read"))
 
 			parsedPayload := action.GetParsedPayload()
-			Expect(parsedPayload.Inputs.Type).To(Equal("http_client"))
-			Expect(parsedPayload.Pipeline).To(HaveKey("0"))
-			Expect(parsedPayload.IgnoreErrors).To(BeFalse())
+			Expect(parsedPayload).NotTo(BeNil())
+			Expect(parsedPayload.BenthosConfig.Input).To(HaveKey("input"))
+			Expect(parsedPayload.BenthosConfig.Pipeline).To(HaveKey("processors"))
+			Expect(action.GetIgnoreHealthCheck()).To(BeFalse())
 		})
 
 		It("should parse valid write DFC payload", func() {
@@ -183,18 +183,12 @@ var _ = Describe("EditProtocolConverter", func() {
 				"name": pcName,
 				"uuid": pcUUID.String(),
 				"writeDFC": map[string]interface{}{
-					"inputs": map[string]interface{}{
-						"data": "input:\n  kafka:\n    addresses: [localhost:9092]\n    topics: [test]",
-						"type": "kafka",
-					},
-					"pipeline": map[string]interface{}{
-						"processors": map[string]interface{}{
-							"0": map[string]interface{}{
-								"type": "bloblang",
-								"data": "bloblang: |-\n  root = content()",
-							},
+					"output": map[string]interface{}{
+						"kafka": map[string]interface{}{
+							"addresses": []interface{}{"localhost:9092"},
 						},
 					},
+					"input_topics": "umh.v1.factory.*",
 				},
 			}
 
@@ -205,8 +199,10 @@ var _ = Describe("EditProtocolConverter", func() {
 			Expect(action.GetProtocolConverterUUID()).To(Equal(pcUUID))
 			Expect(action.GetDFCType()).To(Equal("write"))
 
-			parsedPayload := action.GetParsedPayload()
-			Expect(parsedPayload.Inputs.Type).To(Equal("kafka"))
+			writeCfg := action.GetDesiredWriteDFCConfig()
+			Expect(writeCfg).NotTo(BeNil())
+			Expect(writeCfg.Output).To(HaveKey("kafka"))
+			Expect(writeCfg.InputTopics).To(Equal("umh.v1.factory.*"))
 		})
 
 		It("should return error for missing UUID", func() {
@@ -263,16 +259,19 @@ var _ = Describe("EditProtocolConverter", func() {
 						"type": "http_client",
 					},
 					"pipeline": map[string]interface{}{
-						"processors": map[string]interface{}{},
+						"processors": map[string]interface{}{
+							"0": map[string]interface{}{
+								"type": "bloblang",
+								"data": "bloblang: root = this",
+							},
+						},
 					},
 				},
 				"writeDFC": map[string]interface{}{
-					"outputs": map[string]interface{}{
-						"data": "output:\n  stdout: {}",
-						"type": "stdout",
+					"output": map[string]interface{}{
+						"stdout": map[string]interface{}{},
 					},
-					"pipeline": map[string]interface{}{},
-					"umh_topics": []interface{}{"umh.v1.factory.*"},
+					"input_topics": "umh.v1.factory.*",
 				},
 			}
 
@@ -286,12 +285,10 @@ var _ = Describe("EditProtocolConverter", func() {
 				"name": pcName,
 				"uuid": pcUUID.String(),
 				"writeDFC": map[string]interface{}{
-					"outputs": map[string]interface{}{
-						"data": "output:\n  stdout: {}",
-						"type": "stdout",
+					"output": map[string]interface{}{
+						"stdout": map[string]interface{}{},
 					},
-					"pipeline": map[string]interface{}{},
-					"umh_topics": []interface{}{"umh.v1.factory.*", "umh.v1.plant.*"},
+					"input_topics": "umh.v1.factory.*\numh.v1.plant.*",
 				},
 			}
 
@@ -299,8 +296,35 @@ var _ = Describe("EditProtocolConverter", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(action.GetDFCType()).To(Equal("write"))
 
-			parsedPayload := action.GetParsedPayload()
-			Expect(parsedPayload.UMHTopics).To(ConsistOf("umh.v1.factory.*", "umh.v1.plant.*"))
+			writeCfg := action.GetDesiredWriteDFCConfig()
+			Expect(writeCfg).NotTo(BeNil())
+			Expect(writeCfg.InputTopics).To(Equal("umh.v1.factory.*\numh.v1.plant.*"))
+		})
+
+		It("should parse write DFC with golang template vars in input_topics", func() {
+			// Regression test: template vars like {{ .IP }}, {{ .location_path }} must not
+			// cause a parse error — rendering happens later in BuildRuntimeConfig with full scope.
+			payload := map[string]interface{}{
+				"name": pcName,
+				"uuid": pcUUID.String(),
+				"connection": map[string]interface{}{
+					"ip":   "192.168.1.1",
+					"port": 502,
+				},
+				"writeDFC": map[string]interface{}{
+					"output": map[string]interface{}{
+						"stdout": map[string]interface{}{},
+					},
+					"input_topics": "umh.v1.{{ .location_path }}.{{ .IP }}.*",
+				},
+			}
+
+			err := action.Parse(payload)
+			Expect(err).NotTo(HaveOccurred())
+
+			writeCfg := action.GetDesiredWriteDFCConfig()
+			Expect(writeCfg).NotTo(BeNil())
+			Expect(writeCfg.InputTopics).To(Equal("umh.v1.{{ .location_path }}.{{ .IP }}.*"))
 		})
 
 		It("should preserve explicit 'stopped' state on read DFC", func() {
@@ -314,10 +338,17 @@ var _ = Describe("EditProtocolConverter", func() {
 				"readDFC": map[string]interface{}{
 					"inputs": map[string]interface{}{
 						"data": "input:\n  http_client:\n    url: 'http://example.com'",
-						"type": "yaml",
+						"type": "http_client",
 					},
-					"pipeline": map[string]interface{}{},
-					"state":    "stopped",
+					"pipeline": map[string]interface{}{
+						"processors": map[string]interface{}{
+							"0": map[string]interface{}{
+								"type": "bloblang",
+								"data": "bloblang: root = this",
+							},
+						},
+					},
+					"state": "stopped",
 				},
 			}
 
@@ -370,12 +401,10 @@ var _ = Describe("EditProtocolConverter", func() {
 				"name": pcName,
 				"uuid": pcUUID.String(),
 				"writeDFC": map[string]interface{}{
-					"outputs": map[string]interface{}{
-						"data": "output:\n  stdout: {}",
-						"type": "stdout",
+					"output": map[string]interface{}{
+						"stdout": map[string]interface{}{},
 					},
-					"pipeline": map[string]interface{}{},
-					"umh_topics": []interface{}{"umh.v1.factory.*"},
+					"input_topics": "umh.v1.factory.*",
 				},
 			}
 
@@ -408,11 +437,9 @@ var _ = Describe("EditProtocolConverter", func() {
 				"name": pcName,
 				"uuid": pcUUID.String(),
 				"writeDFC": map[string]interface{}{
-					"outputs": map[string]interface{}{
-						"data": "output:\n  stdout: {}",
-						"type": "stdout",
+					"output": map[string]interface{}{
+						"stdout": map[string]interface{}{},
 					},
-					"pipeline": map[string]interface{}{},
 					// no umh_topics
 				},
 			}
@@ -422,7 +449,7 @@ var _ = Describe("EditProtocolConverter", func() {
 
 			err = action.Validate()
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("umh_topics"))
+			Expect(err.Error()).To(ContainSubstring("input_topics"))
 		})
 
 		It("should return error for invalid DFC configuration", func() {
@@ -440,10 +467,8 @@ var _ = Describe("EditProtocolConverter", func() {
 				},
 			}
 
+			// Validation happens during Parse (build step validates the DFC)
 			err := action.Parse(payload)
-			Expect(err).NotTo(HaveOccurred())
-
-			err = action.Validate()
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("invalid read DFC configuration"))
 		})
@@ -527,24 +552,21 @@ var _ = Describe("EditProtocolConverter", func() {
 
 			// Verify write DFC is still empty
 			writeDFCConfig := updatedPC.ProtocolConverterServiceConfig.Config.DataflowComponentWriteServiceConfig
-			Expect(writeDFCConfig.BenthosConfig.Input).To(BeEmpty())
+			Expect(writeDFCConfig.HasOutput()).To(BeFalse())
 
 			// verify that the templateRef is set
 			Expect(updatedPC.ProtocolConverterServiceConfig.TemplateRef).To(Equal(pcName))
 		})
 
-		It("should store UMH_TOPICS in user variables when adding write DFC", func() {
-			topics := []interface{}{"umh.v1.factory.line-1.*", "umh.v1.factory.line-2.*"}
+		It("should store InputTopics in typed write config when adding write DFC", func() {
 			payload := map[string]interface{}{
 				"name": pcName,
 				"uuid": pcUUID.String(),
 				"writeDFC": map[string]interface{}{
-					"outputs": map[string]interface{}{
-						"data": "output:\n  stdout: {}",
-						"type": "stdout",
+					"output": map[string]interface{}{
+						"stdout": map[string]interface{}{},
 					},
-					"pipeline": map[string]interface{}{},
-					"umh_topics": topics,
+					"input_topics": "umh.v1.factory.line-1.*\numh.v1.factory.line-2.*",
 				},
 			}
 
@@ -563,7 +585,7 @@ var _ = Describe("EditProtocolConverter", func() {
 
 			stateMocker.Stop()
 
-			// Verify UMH_TOPICS stored in user variables
+			// Verify InputTopics stored in typed write config
 			ctx := context.Background()
 			updatedConfig, err := mockConfig.GetConfig(ctx, 0)
 			Expect(err).NotTo(HaveOccurred())
@@ -572,15 +594,12 @@ var _ = Describe("EditProtocolConverter", func() {
 			for i, pc := range updatedConfig.ProtocolConverter {
 				if pc.Name == pcName {
 					updatedPC = &updatedConfig.ProtocolConverter[i]
+
 					break
 				}
 			}
 			Expect(updatedPC).NotTo(BeNil())
-			Expect(updatedPC.ProtocolConverterServiceConfig.Variables.User).To(HaveKey("UMH_TOPICS"))
-			Expect(updatedPC.ProtocolConverterServiceConfig.Variables.User["UMH_TOPICS"]).To(ConsistOf(
-				"umh.v1.factory.line-1.*",
-				"umh.v1.factory.line-2.*",
-			))
+			Expect(updatedPC.ProtocolConverterServiceConfig.Config.DataflowComponentWriteServiceConfig.InputTopics).To(Equal("umh.v1.factory.line-1.*\numh.v1.factory.line-2.*"))
 		})
 
 		Context("when protocol converter already has both DFCs configured", func() {
@@ -600,12 +619,10 @@ var _ = Describe("EditProtocolConverter", func() {
 						Input: existingReadInput,
 					},
 				}
-				mockConfig.Config.ProtocolConverter[0].ProtocolConverterServiceConfig.Config.DataflowComponentWriteServiceConfig = dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
-					BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
-						Output: existingWriteOutput,
-					},
+				mockConfig.Config.ProtocolConverter[0].ProtocolConverterServiceConfig.Config.DataflowComponentWriteServiceConfig = dataflowcomponentserviceconfig.DataflowComponentWriteConfigInput{
+					Output:      existingWriteOutput,
+					InputTopics: "umh.v1.factory.*",
 				}
-				mockConfig.Config.ProtocolConverter[0].ProtocolConverterServiceConfig.Variables.User["UMH_TOPICS"] = []string{"umh.v1.factory.*"}
 
 				stateMocker = actions.NewStateMocker(mockConfig)
 				stateMocker.Tick()
@@ -613,17 +630,16 @@ var _ = Describe("EditProtocolConverter", func() {
 			})
 
 			It("should not change read DFC when only write DFC is edited", Label("write-dfc", "isolation"), func() {
-				newTopics := []interface{}{"umh.v1.plant.*"}
 				payload := map[string]interface{}{
 					"name": pcName,
 					"uuid": pcUUID.String(),
 					"writeDFC": map[string]interface{}{
-						"outputs": map[string]interface{}{
-							"data": "output:\n  kafka:\n    addresses: [localhost:9092]",
-							"type": "kafka",
+						"output": map[string]interface{}{
+							"kafka": map[string]interface{}{
+								"addresses": []interface{}{"localhost:9092"},
+							},
 						},
-						"pipeline":    map[string]interface{}{},
-						"umh_topics": newTopics,
+						"input_topics": "umh.v1.plant.*",
 					},
 				}
 
@@ -646,15 +662,15 @@ var _ = Describe("EditProtocolConverter", func() {
 				for i, pc := range updatedConfig.ProtocolConverter {
 					if pc.Name == pcName {
 						updatedPC = &updatedConfig.ProtocolConverter[i]
+
 						break
 					}
 				}
 				Expect(updatedPC).NotTo(BeNil())
 
-				// Write DFC output must have changed — parsed YAML wraps in outer "output" key
-				writeOutput := updatedPC.ProtocolConverterServiceConfig.Config.DataflowComponentWriteServiceConfig.BenthosConfig.Output
-				Expect(writeOutput).To(HaveKey("output"))
-				Expect(writeOutput["output"]).To(HaveKey("kafka"))
+				// Write DFC output must have changed — new format stores directly without wrapper
+				writeOutput := updatedPC.ProtocolConverterServiceConfig.Config.DataflowComponentWriteServiceConfig.Output
+				Expect(writeOutput).To(HaveKey("kafka"))
 
 				// Read DFC input must be untouched — initial config set directly without wrapper
 				readInput := updatedPC.ProtocolConverterServiceConfig.Config.DataflowComponentReadServiceConfig.BenthosConfig.Input
@@ -701,6 +717,7 @@ var _ = Describe("EditProtocolConverter", func() {
 				for i, pc := range updatedConfig.ProtocolConverter {
 					if pc.Name == pcName {
 						updatedPC = &updatedConfig.ProtocolConverter[i]
+
 						break
 					}
 				}
@@ -713,11 +730,11 @@ var _ = Describe("EditProtocolConverter", func() {
 				Expect(readInput["input"].(map[string]interface{})["http_client"]).To(HaveKeyWithValue("url", "http://updated.example.com"))
 
 				// Write DFC output must be untouched — initial config set directly without wrapper
-				writeOutput := updatedPC.ProtocolConverterServiceConfig.Config.DataflowComponentWriteServiceConfig.BenthosConfig.Output
+				writeOutput := updatedPC.ProtocolConverterServiceConfig.Config.DataflowComponentWriteServiceConfig.Output
 				Expect(writeOutput).To(HaveKey("stdout"))
 
-				// UMH_TOPICS must be untouched
-				Expect(updatedPC.ProtocolConverterServiceConfig.Variables.User["UMH_TOPICS"]).To(ConsistOf("umh.v1.factory.*"))
+				// InputTopics must be untouched
+				Expect(updatedPC.ProtocolConverterServiceConfig.Config.DataflowComponentWriteServiceConfig.InputTopics).To(Equal("umh.v1.factory.*"))
 			})
 		})
 
@@ -742,8 +759,8 @@ var _ = Describe("EditProtocolConverter", func() {
 				}
 			}
 
-			// Minimal write DFC payload: no inputs, pipeline, or umh_topics needed for
-			// a state-only change. UMH_TOPICS is only required when output config is present.
+			// Minimal write DFC payload: no inputs, pipeline, or input_topics needed for
+			// a state-only change. InputTopics is only required when output config is present.
 			minimalWriteDFCPayload := func(state string) map[string]interface{} {
 				return map[string]interface{}{
 					"state": state,
@@ -774,6 +791,7 @@ var _ = Describe("EditProtocolConverter", func() {
 					}
 				}
 				Fail("protocol converter not found after execute")
+
 				return nil
 			}
 
@@ -785,12 +803,10 @@ var _ = Describe("EditProtocolConverter", func() {
 						Input: map[string]interface{}{"http_client": map[string]interface{}{"url": "http://example.com"}},
 					},
 				}
-				mockConfig.Config.ProtocolConverter[0].ProtocolConverterServiceConfig.Config.DataflowComponentWriteServiceConfig = dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
-					BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
-						Output: map[string]interface{}{"stdout": map[string]interface{}{}},
-					},
+				mockConfig.Config.ProtocolConverter[0].ProtocolConverterServiceConfig.Config.DataflowComponentWriteServiceConfig = dataflowcomponentserviceconfig.DataflowComponentWriteConfigInput{
+					Output:      map[string]interface{}{"stdout": map[string]interface{}{}},
+					InputTopics: "umh.v1.factory.*",
 				}
-				mockConfig.Config.ProtocolConverter[0].ProtocolConverterServiceConfig.Variables.User["UMH_TOPICS"] = []string{"umh.v1.factory.*"}
 				mockConfig.Config.ProtocolConverter[0].ProtocolConverterServiceConfig.ReadDFCDesiredState = "active"
 				mockConfig.Config.ProtocolConverter[0].ProtocolConverterServiceConfig.WriteDFCDesiredState = "active"
 
@@ -801,8 +817,8 @@ var _ = Describe("EditProtocolConverter", func() {
 
 			It("should stop read DFC only", Label("disable-bridges"), func() {
 				pc := runEdit(map[string]interface{}{
-					"name": pcName,
-					"uuid": pcUUID.String(),
+					"name":    pcName,
+					"uuid":    pcUUID.String(),
 					"readDFC": minimalReadDFCPayload("stopped"),
 				})
 
@@ -814,8 +830,8 @@ var _ = Describe("EditProtocolConverter", func() {
 				mockConfig.Config.ProtocolConverter[0].ProtocolConverterServiceConfig.ReadDFCDesiredState = "stopped"
 
 				pc := runEdit(map[string]interface{}{
-					"name": pcName,
-					"uuid": pcUUID.String(),
+					"name":    pcName,
+					"uuid":    pcUUID.String(),
 					"readDFC": minimalReadDFCPayload("active"),
 				})
 
@@ -1022,7 +1038,7 @@ var _ = Describe("EditProtocolConverter", func() {
 				Expect(action2.GetDFCType()).To(Equal("read"))
 			})
 
-			It("should return DFCTypeWrite when UMH_TOPICS list differs from deployed", func() {
+			It("should return DFCTypeWrite when InputTopics differ from deployed", func() {
 				// First, deploy a write DFC with a known topic set.
 				firstWritePayload := map[string]interface{}{
 					"name": pcName,
@@ -1032,12 +1048,10 @@ var _ = Describe("EditProtocolConverter", func() {
 						"port": 80,
 					},
 					"writeDFC": map[string]interface{}{
-						"outputs": map[string]interface{}{
-							"data": "output:\n  stdout: {}",
-							"type": "stdout",
+						"output": map[string]interface{}{
+							"stdout": map[string]interface{}{},
 						},
-						"pipeline":   map[string]interface{}{},
-						"umh_topics": []interface{}{"umh.v1.factory.*"},
+						"input_topics": "umh.v1.factory.*",
 					},
 				}
 				firstAction := actions.NewEditProtocolConverterAction(userEmail, uuid.New(), instanceUUID, outboundChannel, mockConfig, nil)
@@ -1058,17 +1072,97 @@ var _ = Describe("EditProtocolConverter", func() {
 						"port": 80,
 					},
 					"writeDFC": map[string]interface{}{
-						"outputs": map[string]interface{}{
-							"data": "output:\n  stdout: {}",
-							"type": "stdout",
+						"output": map[string]interface{}{
+							"stdout": map[string]interface{}{},
 						},
-						"pipeline":   map[string]interface{}{},
-						"umh_topics": []interface{}{"umh.v1.plant.*"}, // different topic
+						"input_topics": "umh.v1.plant.*", // different topic
 					},
 				}
 				err = action2.Parse(payload)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(action2.GetDFCType()).To(Equal("write"))
+			})
+
+			It("should return DFCTypeBoth when a custom template variable changes", Label("write-dfc"), func() {
+				// First edit: deploy read + write with a custom template variable.
+				firstPayload := map[string]interface{}{
+					"name": pcName,
+					"uuid": pcUUID.String(),
+					"connection": map[string]interface{}{
+						"ip":   "10.0.0.1",
+						"port": 502,
+					},
+					"templateInfo": map[string]interface{}{
+						"variables": []interface{}{
+							map[string]interface{}{"label": "baudRate", "value": "9600"},
+						},
+					},
+					"readDFC": map[string]interface{}{
+						"inputs": map[string]interface{}{
+							"data": "input:\n  http_client:\n    url: 'http://{{ .baudRate }}'",
+							"type": "http_client",
+						},
+						"pipeline": map[string]interface{}{
+							"processors": map[string]interface{}{
+								"0": map[string]interface{}{
+									"type": "bloblang",
+									"data": "bloblang: root = content()",
+								},
+							},
+						},
+						"state": "active",
+					},
+					"writeDFC": map[string]interface{}{
+						"output":       map[string]interface{}{"stdout": map[string]interface{}{}},
+						"input_topics": "umh.v1.factory.*",
+					},
+				}
+				firstAction := actions.NewEditProtocolConverterAction(userEmail, uuid.New(), instanceUUID, outboundChannel, mockConfig, nil)
+				err := firstAction.Parse(firstPayload)
+				Expect(err).NotTo(HaveOccurred())
+				err = firstAction.Validate()
+				Expect(err).NotTo(HaveOccurred())
+				_, _, err = firstAction.Execute()
+				Expect(err).NotTo(HaveOccurred())
+
+				// Second edit: change only baudRate — DFC config text is identical.
+				action2 := actions.NewEditProtocolConverterAction(userEmail, uuid.New(), instanceUUID, outboundChannel, mockConfig, nil)
+				payload := map[string]interface{}{
+					"name": pcName,
+					"uuid": pcUUID.String(),
+					"connection": map[string]interface{}{
+						"ip":   "10.0.0.1",
+						"port": 502,
+					},
+					"templateInfo": map[string]interface{}{
+						"variables": []interface{}{
+							map[string]interface{}{"label": "baudRate", "value": "19200"}, // changed
+						},
+					},
+					"readDFC": map[string]interface{}{
+						"inputs": map[string]interface{}{
+							"data": "input:\n  http_client:\n    url: 'http://{{ .baudRate }}'",
+							"type": "http_client",
+						},
+						"pipeline": map[string]interface{}{
+							"processors": map[string]interface{}{
+								"0": map[string]interface{}{
+									"type": "bloblang",
+									"data": "bloblang: root = content()",
+								},
+							},
+						},
+						"state": "active",
+					},
+					"writeDFC": map[string]interface{}{
+						"output":       map[string]interface{}{"stdout": map[string]interface{}{}},
+						"input_topics": "umh.v1.factory.*",
+					},
+				}
+				err = action2.Parse(payload)
+				Expect(err).NotTo(HaveOccurred())
+				// baudRate changed → both DFCs need redeploy even though DFC config text is identical.
+				Expect(action2.GetDFCType()).To(Equal("both"))
 			})
 		})
 
@@ -1114,6 +1208,7 @@ var _ = Describe("EditProtocolConverter", func() {
 				for i, pc := range updatedConfig.ProtocolConverter {
 					if pc.Name == pcName {
 						updatedPC = &updatedConfig.ProtocolConverter[i]
+
 						break
 					}
 				}
@@ -1130,12 +1225,10 @@ var _ = Describe("EditProtocolConverter", func() {
 						Input: map[string]interface{}{"http_client": map[string]interface{}{"url": "http://old.example.com"}},
 					},
 				}
-				mockConfig.Config.ProtocolConverter[0].ProtocolConverterServiceConfig.Config.DataflowComponentWriteServiceConfig = dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
-					BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
-						Output: map[string]interface{}{"stdout": map[string]interface{}{}},
-					},
+				mockConfig.Config.ProtocolConverter[0].ProtocolConverterServiceConfig.Config.DataflowComponentWriteServiceConfig = dataflowcomponentserviceconfig.DataflowComponentWriteConfigInput{
+					Output:      map[string]interface{}{"stdout": map[string]interface{}{}},
+					InputTopics: "umh.v1.factory.*",
 				}
-				mockConfig.Config.ProtocolConverter[0].ProtocolConverterServiceConfig.Variables.User["UMH_TOPICS"] = []string{"umh.v1.factory.*"}
 				mockConfig.Config.ProtocolConverter[0].ProtocolConverterServiceConfig.ReadDFCDesiredState = "active"
 				mockConfig.Config.ProtocolConverter[0].ProtocolConverterServiceConfig.WriteDFCDesiredState = "active"
 
@@ -1163,12 +1256,12 @@ var _ = Describe("EditProtocolConverter", func() {
 						},
 					},
 					"writeDFC": map[string]interface{}{
-						"outputs": map[string]interface{}{
-							"data": "output:\n  kafka:\n    addresses: [localhost:9092]",
-							"type": "kafka",
+						"output": map[string]interface{}{
+							"kafka": map[string]interface{}{
+								"addresses": []interface{}{"localhost:9092"},
+							},
 						},
-						"pipeline":   map[string]interface{}{},
-						"umh_topics": []interface{}{"umh.v1.plant.*"},
+						"input_topics": "umh.v1.plant.*",
 					},
 				}
 
@@ -1193,6 +1286,7 @@ var _ = Describe("EditProtocolConverter", func() {
 				for i, pc := range updatedConfig.ProtocolConverter {
 					if pc.Name == pcName {
 						updatedPC = &updatedConfig.ProtocolConverter[i]
+
 						break
 					}
 				}
@@ -1204,13 +1298,12 @@ var _ = Describe("EditProtocolConverter", func() {
 				Expect(readInput["input"]).To(HaveKey("http_client"))
 				Expect(readInput["input"].(map[string]interface{})["http_client"]).To(HaveKeyWithValue("url", "http://new.example.com"))
 
-				// Write DFC: parsed YAML wraps in outer "output" key
-				writeOutput := updatedPC.ProtocolConverterServiceConfig.Config.DataflowComponentWriteServiceConfig.BenthosConfig.Output
-				Expect(writeOutput).To(HaveKey("output"))
-				Expect(writeOutput["output"]).To(HaveKey("kafka"))
+				// Write DFC: new format stores directly without wrapper
+				writeOutput := updatedPC.ProtocolConverterServiceConfig.Config.DataflowComponentWriteServiceConfig.Output
+				Expect(writeOutput).To(HaveKey("kafka"))
 
-				// UMH_TOPICS updated
-				Expect(updatedPC.ProtocolConverterServiceConfig.Variables.User["UMH_TOPICS"]).To(ConsistOf("umh.v1.plant.*"))
+				// InputTopics updated
+				Expect(updatedPC.ProtocolConverterServiceConfig.Config.DataflowComponentWriteServiceConfig.InputTopics).To(Equal("umh.v1.plant.*"))
 			})
 		})
 
@@ -1292,11 +1385,9 @@ var _ = Describe("EditProtocolConverter", func() {
 
 			It("should complete when write DFC has reached the stopped state", Label("disable-bridges"), func() {
 				mockConfig.Config.ProtocolConverter[0].ProtocolConverterServiceConfig.WriteDFCDesiredState = "active"
-				mockConfig.Config.ProtocolConverter[0].ProtocolConverterServiceConfig.Variables.User["UMH_TOPICS"] = []string{"umh.v1.factory.*"}
-				mockConfig.Config.ProtocolConverter[0].ProtocolConverterServiceConfig.Config.DataflowComponentWriteServiceConfig = dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
-					BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
-						Output: map[string]interface{}{"stdout": map[string]interface{}{}},
-					},
+				mockConfig.Config.ProtocolConverter[0].ProtocolConverterServiceConfig.Config.DataflowComponentWriteServiceConfig = dataflowcomponentserviceconfig.DataflowComponentWriteConfigInput{
+					Output:      map[string]interface{}{"stdout": map[string]interface{}{}},
+					InputTopics: "umh.v1.factory.*",
 				}
 
 				snapshotMgr := fsm.NewSnapshotManager()

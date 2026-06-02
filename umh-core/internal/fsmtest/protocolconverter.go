@@ -26,7 +26,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/nmapserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/protocolconverterserviceconfig"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/variables"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	connectionservicefsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/connection"
@@ -53,12 +52,10 @@ var (
 		},
 	}
 
-	goodDataflowComponentWriteConfig = dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
-		BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
-			Input: map[string]interface{}{},
-			Output: map[string]interface{}{ // will be overwritten by the protocol converter service
-				"stdout": map[string]interface{}{},
-			},
+	goodDataflowComponentWriteConfig = dataflowcomponentserviceconfig.DataflowComponentWriteConfigInput{
+		InputTopics: "umh.v1.test.*",
+		Output: map[string]interface{}{
+			"stdout": map[string]interface{}{},
 		},
 	}
 
@@ -90,11 +87,6 @@ func CreateProtocolConverterTestConfig(name string, desiredState string) config.
 			DesiredFSMState: desiredState,
 		},
 		ProtocolConverterServiceConfig: protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
-			Variables: variables.VariableBundle{
-				User: map[string]any{
-					"UMH_TOPICS": []string{"umh.v1.test.*"},
-				},
-			},
 			Config: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
 				DataflowComponentReadServiceConfig:  goodDataflowComponentReadConfig,
 				DataflowComponentWriteServiceConfig: goodDataflowComponentWriteConfig,
@@ -113,11 +105,6 @@ func CreateProtocolConverterTestConfigWithMissingDfc(name string, desiredState s
 			DesiredFSMState: desiredState,
 		},
 		ProtocolConverterServiceConfig: protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
-			Variables: variables.VariableBundle{
-				User: map[string]any{
-					"UMH_TOPICS": []string{"umh.v1.test.*"},
-				},
-			},
 			Config: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
 				DataflowComponentReadServiceConfig: missingDataflowComponentConfig,
 				ConnectionServiceConfig:            goodConnectionServiceConfig,
@@ -142,11 +129,6 @@ func CreateProtocolConverterTestConfigWithInvalidPort(name string, desiredState 
 			DesiredFSMState: desiredState,
 		},
 		ProtocolConverterServiceConfig: protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
-			Variables: variables.VariableBundle{
-				User: map[string]any{
-					"UMH_TOPICS": []string{"umh.v1.test.*"},
-				},
-			},
 			Config: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
 				DataflowComponentReadServiceConfig:  goodDataflowComponentReadConfig,
 				DataflowComponentWriteServiceConfig: goodDataflowComponentWriteConfig,
@@ -174,7 +156,7 @@ func SetupProtocolConverterServiceState(
 func ConfigureProtocolConverterServiceConfig(mockService *protocolconvertersvc.MockProtocolConverterService) {
 	mockService.GetConfigResult = protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime{
 		DataflowComponentReadServiceConfig:  goodDataflowComponentReadConfig,
-		DataflowComponentWriteServiceConfig: goodDataflowComponentWriteConfig,
+		DataflowComponentWriteServiceConfig: goodDataflowComponentWriteConfig.ToDataflowComponentServiceConfig(""),
 		ConnectionServiceConfig:             goodConnectionServiceConfigRuntime,
 	}
 }
