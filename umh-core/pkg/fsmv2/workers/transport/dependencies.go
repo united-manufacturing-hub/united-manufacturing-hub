@@ -58,7 +58,7 @@ var AuthFailureRateConfig = failurerate.Config{
 
 // TransportDependencies provides transport and channel access for transport worker actions.
 type TransportDependencies struct {
-	jwtExpiry         time.Time
+	authSession       types.AuthSession
 	lastAuthAttemptAt time.Time
 
 	transport types.Transport
@@ -67,8 +67,6 @@ type TransportDependencies struct {
 	authFailureRate *failurerate.Tracker
 	inboundChan     chan<- *types.UMHMessage
 	outboundChan    <-chan *types.UMHMessage
-	jwtToken        string
-	instanceUUID    string
 
 	failedAuthToken    string
 	failedRelayURL     string
@@ -127,24 +125,38 @@ func (d *TransportDependencies) SetJWT(token string, expiry time.Time) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
-	d.jwtToken = token
-	d.jwtExpiry = expiry
+	d.authSession.Token = token
+	d.authSession.Expiry = expiry
 }
 
 // GetJWTToken returns the stored JWT token.
+// Kept for child-deps delegation (push/pull still call parentDeps.GetJWTToken).
+// Removed in a later task once child deps no longer delegate.
 func (d *TransportDependencies) GetJWTToken() string {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
 
-	return d.jwtToken
+	return d.authSession.Token
 }
 
 // GetJWTExpiry returns the stored JWT expiry time.
+// Kept for child-deps delegation (push/pull still call parentDeps.GetJWTExpiry).
+// Removed in a later task once child deps no longer delegate.
 func (d *TransportDependencies) GetJWTExpiry() time.Time {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
 
-	return d.jwtExpiry
+	return d.authSession.Expiry
+}
+
+// GetAuthSession returns the current auth bundle under the read lock. Parent COS
+// uses this single locked read; per-field reads would race the SetJWT /
+// SetAuthenticatedUUID writers.
+func (d *TransportDependencies) GetAuthSession() types.AuthSession {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+
+	return d.authSession
 }
 
 // RecordError increments consecutive errors and records when degraded mode started.
@@ -313,15 +325,17 @@ func (d *TransportDependencies) SetAuthenticatedUUID(uuid string) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
-	d.instanceUUID = uuid
+	d.authSession.InstanceUUID = uuid
 }
 
 // GetAuthenticatedUUID returns the stored UUID from backend authentication.
+// Kept for child-deps delegation (push still calls parentDeps.GetAuthenticatedUUID).
+// Removed in a later task once child deps no longer delegate.
 func (d *TransportDependencies) GetAuthenticatedUUID() string {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
 
-	return d.instanceUUID
+	return d.authSession.InstanceUUID
 }
 
 // GetResetGeneration returns the current reset generation counter.

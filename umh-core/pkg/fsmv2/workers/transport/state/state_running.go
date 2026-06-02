@@ -49,10 +49,10 @@ func (s *RunningState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	}
 
 	// Proactive night re-auth: if token would expire during business hours, re-auth at 3 AM
-	if ShouldProactivelyReauth(snap.Status.JWTExpiry, time.Now()) {
+	if ShouldProactivelyReauth(snap.Status.AuthSession.Expiry, time.Now()) {
 		return fsmv2.Transition(&StartingState{}, fsmv2.SignalNone, nil,
 			fmt.Sprintf("proactive night re-auth: token expires at %s (business hours), re-authing now",
-				snap.Status.JWTExpiry.Local().Format("15:04")), childrenAlive(snap.Config))
+				snap.Status.AuthSession.Expiry.Local().Format("15:04")), childrenAlive(snap.Config))
 	}
 
 	// If any children are unhealthy, transition to degraded

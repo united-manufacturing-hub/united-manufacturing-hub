@@ -148,23 +148,21 @@ func (f FailedAuthConfig) IsEmpty() bool {
 }
 
 // TransportStatus holds the runtime observation data for the transport worker.
-// NOTE: JWTToken must NOT use json:"-" — the supervisor reconciliation loop
+// NOTE: AuthSession must NOT use json:"-" — the supervisor reconciliation loop
 // serializes observed state to CSE storage between ticks and deserializes it
-// via LoadObservedTyped(). Excluding JWTToken from JSON would force
+// via LoadObservedTyped(). Excluding AuthSession from JSON would force
 // re-authentication on every tick (~10ms), hammering the relay server.
-// TODO(security): JWTToken included in CSE sync payloads. ENG-4405 tracks
+// TODO(security): AuthSession included in CSE sync payloads. ENG-4405 tracks
 // adding a CSE secret tier to persist locally but exclude from delta sync.
 type TransportStatus struct {
-	JWTExpiry           time.Time        `json:"jwt_expiry,omitempty"`
-	LastAuthAttemptAt   time.Time        `json:"last_auth_attempt_at,omitempty"`
-	FailedAuthConfig    FailedAuthConfig `json:"failed_auth_config,omitempty"`
-	JWTToken            string           `json:"jwt_token,omitempty"`
-	AuthenticatedUUID   string           `json:"authenticated_uuid,omitempty"`
-	LastErrorType       types.ErrorType  `json:"last_error_type"`
-	LastRetryAfter      time.Duration    `json:"last_retry_after,omitempty"`
-	TotalMessagesPushed int64            `json:"total_messages_pushed"`
-	TotalMessagesPulled int64            `json:"total_messages_pulled"`
-	ConsecutiveErrors   int              `json:"consecutive_errors"`
+	AuthSession         types.AuthSession `json:"auth_session,omitempty"`
+	LastAuthAttemptAt   time.Time         `json:"last_auth_attempt_at,omitempty"`
+	FailedAuthConfig    FailedAuthConfig  `json:"failed_auth_config,omitempty"`
+	LastErrorType       types.ErrorType   `json:"last_error_type"`
+	LastRetryAfter      time.Duration     `json:"last_retry_after,omitempty"`
+	TotalMessagesPushed int64             `json:"total_messages_pushed"`
+	TotalMessagesPulled int64             `json:"total_messages_pulled"`
+	ConsecutiveErrors   int               `json:"consecutive_errors"`
 }
 
 // IsTokenExpired returns true if the JWT token is expired or will expire within 10 minutes.
@@ -176,16 +174,16 @@ type TransportStatus struct {
 // children well before their own 1-minute buffer would consider the token invalid.
 // The children's 1-minute buffer is a last-resort safety net for edge cases only.
 func (s TransportStatus) IsTokenExpired() bool {
-	if s.JWTExpiry.IsZero() {
+	if s.AuthSession.Expiry.IsZero() {
 		return false
 	}
 
 	const refreshBuffer = 10 * time.Minute
 
-	return time.Now().Add(refreshBuffer).After(s.JWTExpiry)
+	return time.Now().Add(refreshBuffer).After(s.AuthSession.Expiry)
 }
 
 // HasValidToken returns true if there is a valid JWT token that hasn't expired.
 func (s TransportStatus) HasValidToken() bool {
-	return s.JWTToken != "" && !s.IsTokenExpired()
+	return s.AuthSession.Token != "" && !s.IsTokenExpired()
 }
