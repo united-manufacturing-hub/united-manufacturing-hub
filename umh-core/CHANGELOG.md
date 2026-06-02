@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Fixes
+
+- When an FSMv2 transport worker (auth, push, or pull) was stuck in a transient-retry state, the supervisor heartbeat printed the same stale reason set on entry — for example `"Desired state is running, transitioning to Starting"` — instead of the live per-tick reason the worker already composes, such as `"auth backoff: 42 errors (cloudflare_challenge), delay 60s"`. The heartbeat now surfaces the live reason within one ~10s cycle.
+
 ### Preview: Write Flows
 
 - Write flows (preview) now take their input topics directly on the flow, with Go template support for values like `{{ .location_path }}`. Write flows configured on this preview before this release are not carried over and need to be re-created from the UI; read flows and connection settings are unaffected
