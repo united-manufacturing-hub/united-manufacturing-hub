@@ -89,11 +89,6 @@ func (d *PullDependencies) GetTransport() types.Transport {
 	return d.parentDeps.GetTransport()
 }
 
-// GetJWTToken returns the parent's current JWT token.
-func (d *PullDependencies) GetJWTToken() string {
-	return d.parentDeps.GetJWTToken()
-}
-
 // RecordTypedError records a typed error for this child, propagates it to the parent
 // transport tracker, and emits a Sentry warning when the failure rate escalates.
 func (d *PullDependencies) RecordTypedError(errType types.ErrorType, retryAfter time.Duration) {
@@ -207,24 +202,6 @@ func (d *PullDependencies) SetBackpressured(v bool) {
 	defer d.backpressureMu.Unlock()
 
 	d.backpressured = v
-}
-
-// IsTokenValid reports whether the JWT token exists and has not expired
-// (with a 1-minute safety buffer).
-func (d *PullDependencies) IsTokenValid() bool {
-	token := d.parentDeps.GetJWTToken()
-	if token == "" {
-		return false
-	}
-
-	expiry := d.parentDeps.GetJWTExpiry()
-	if expiry.IsZero() {
-		return false
-	}
-
-	const safetyBuffer = 1 * time.Minute
-
-	return !time.Now().Add(safetyBuffer).After(expiry)
 }
 
 // GetLastRetryAfter returns the retry-after duration from the most recent error.

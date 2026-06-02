@@ -35,8 +35,6 @@ type TransportDependencies interface {
 
 	// JWT token management
 	SetJWT(token string, expiry time.Time)
-	GetJWTToken() string
-	GetJWTExpiry() time.Time
 
 	// Error tracking for intelligent backoff
 	RecordError()
@@ -54,7 +52,6 @@ type TransportDependencies interface {
 
 	// Instance identity from backend
 	SetAuthenticatedUUID(uuid string)
-	GetAuthenticatedUUID() string
 
 	// Reset generation for parent-level transport reset signaling to children
 	GetResetGeneration() uint64
@@ -171,11 +168,12 @@ type TransportStatus struct {
 // IsTokenExpired returns true if the JWT token is expired or will expire within 10 minutes.
 //
 // Token buffer architecture: the parent TransportWorker uses a 10-minute buffer (proactive
-// refresh trigger) while child workers (push/pull) use a 1-minute buffer via IsTokenValid().
-// The 9-minute gap is safe by design: when IsTokenExpired triggers here, the parent
-// transitions Running → Starting and re-authenticates, propagating a fresh token to its
-// children well before their own 1-minute buffer would consider the token invalid.
-// The children's 1-minute buffer is a last-resort safety net for edge cases only.
+// refresh trigger) while child workers (push/pull) use a 1-minute buffer via
+// AuthSession.IsUsable(time.Minute) in their COS. The 9-minute gap is safe by design:
+// when IsTokenExpired triggers here, the parent transitions Running → Starting and
+// re-authenticates, propagating a fresh token to its children well before their own
+// 1-minute buffer would consider the token invalid. The children's 1-minute buffer is
+// a last-resort safety net for edge cases only.
 func (s TransportStatus) IsTokenExpired() bool {
 	if s.AuthSession.Expiry.IsZero() {
 		return false

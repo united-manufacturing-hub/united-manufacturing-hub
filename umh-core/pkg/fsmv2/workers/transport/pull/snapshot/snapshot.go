@@ -29,7 +29,6 @@ type PullDependencies interface {
 	GetInboundChan() chan<- *types.UMHMessage
 	GetInboundChanStats() (capacity int, length int)
 	GetTransport() types.Transport
-	GetJWTToken() string
 	RecordTypedError(errType types.ErrorType, retryAfter time.Duration)
 	RecordSuccess()
 	RecordError()
@@ -43,8 +42,6 @@ type PullDependencies interface {
 
 	IsBackpressured() bool
 	SetBackpressured(v bool)
-
-	IsTokenValid() bool
 
 	GetResetGeneration() uint64
 	CheckAndClearOnReset() bool
