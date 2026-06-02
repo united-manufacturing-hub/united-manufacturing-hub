@@ -129,26 +129,6 @@ func (d *TransportDependencies) SetJWT(token string, expiry time.Time) {
 	d.authSession.Expiry = expiry
 }
 
-// GetJWTToken returns the stored JWT token.
-// Kept for child-deps delegation (push/pull still call parentDeps.GetJWTToken).
-// Removed in a later task once child deps no longer delegate.
-func (d *TransportDependencies) GetJWTToken() string {
-	d.mu.RLock()
-	defer d.mu.RUnlock()
-
-	return d.authSession.Token
-}
-
-// GetJWTExpiry returns the stored JWT expiry time.
-// Kept for child-deps delegation (push/pull still call parentDeps.GetJWTExpiry).
-// Removed in a later task once child deps no longer delegate.
-func (d *TransportDependencies) GetJWTExpiry() time.Time {
-	d.mu.RLock()
-	defer d.mu.RUnlock()
-
-	return d.authSession.Expiry
-}
-
 // GetAuthSession returns the current auth bundle under the read lock. Parent COS
 // uses this single locked read; per-field reads would race the SetJWT /
 // SetAuthenticatedUUID writers.
@@ -326,16 +306,6 @@ func (d *TransportDependencies) SetAuthenticatedUUID(uuid string) {
 	defer d.mu.Unlock()
 
 	d.authSession.InstanceUUID = uuid
-}
-
-// GetAuthenticatedUUID returns the stored UUID from backend authentication.
-// Kept for child-deps delegation (push still calls parentDeps.GetAuthenticatedUUID).
-// Removed in a later task once child deps no longer delegate.
-func (d *TransportDependencies) GetAuthenticatedUUID() string {
-	d.mu.RLock()
-	defer d.mu.RUnlock()
-
-	return d.authSession.InstanceUUID
 }
 
 // GetResetGeneration returns the current reset generation counter.

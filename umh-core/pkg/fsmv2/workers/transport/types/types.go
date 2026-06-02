@@ -41,8 +41,8 @@ type AuthSession struct {
 }
 
 // IsUsable reports whether the session has a token that will still be valid after
-// the given safety buffer. Mirrors the former child IsTokenValid check; the buffer
-// lets callers pick the child (1-minute) vs other windows.
+// the given safety buffer. Pass 1*time.Minute for child-worker COS checks or
+// 10*time.Minute for the parent's proactive refresh trigger.
 func (a AuthSession) IsUsable(buffer time.Duration) bool {
 	if a.Token == "" || a.Expiry.IsZero() {
 		return false

@@ -133,8 +133,9 @@ var _ = Describe("TransportDependencies", func() {
 				expiry := time.Now().Add(1 * time.Hour)
 				deps.SetJWT("test-jwt-token", expiry)
 
-				Expect(deps.GetJWTToken()).To(Equal("test-jwt-token"))
-				Expect(deps.GetJWTExpiry()).To(BeTemporally("~", expiry, time.Second))
+				as := deps.GetAuthSession()
+				Expect(as.Token).To(Equal("test-jwt-token"))
+				Expect(as.Expiry).To(BeTemporally("~", expiry, time.Second))
 			})
 
 			It("should update JWT when called multiple times (re-authentication)", func() {
@@ -144,20 +145,9 @@ var _ = Describe("TransportDependencies", func() {
 				secondExpiry := time.Now().Add(2 * time.Hour)
 				deps.SetJWT("second-token", secondExpiry)
 
-				Expect(deps.GetJWTToken()).To(Equal("second-token"))
-				Expect(deps.GetJWTExpiry()).To(BeTemporally("~", secondExpiry, time.Second))
-			})
-		})
-
-		Describe("GetJWTToken", func() {
-			It("should return empty string when no token has been set", func() {
-				Expect(deps.GetJWTToken()).To(BeEmpty())
-			})
-		})
-
-		Describe("GetJWTExpiry", func() {
-			It("should return zero time when no expiry has been set", func() {
-				Expect(deps.GetJWTExpiry().IsZero()).To(BeTrue())
+				as := deps.GetAuthSession()
+				Expect(as.Token).To(Equal("second-token"))
+				Expect(as.Expiry).To(BeTemporally("~", secondExpiry, time.Second))
 			})
 		})
 
