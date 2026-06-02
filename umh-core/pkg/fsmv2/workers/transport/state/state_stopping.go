@@ -34,7 +34,7 @@ func (s *StoppingState) Next(snapAny any) fsmv2.NextResult[any, any] {
 
 	_ = snap.IsShutdownRequested // architecture invariant: shutdown check must be first conditional
 
-	stopChildren, err := snapshot.RenderChildren(snap.Config, false)
+	stopChildren, err := snapshot.RenderChildren(snap.Config, snap.Status, false)
 	if err != nil {
 		stopChildren = nil
 	}
