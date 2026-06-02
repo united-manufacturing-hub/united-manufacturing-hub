@@ -20,6 +20,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"gopkg.in/yaml.v3"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	fsmv2config "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
@@ -29,6 +30,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/push"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/push/snapshot"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/push/state"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/types"
 )
 
 var _ fsmv2.Worker = (*push.PushWorker)(nil)
@@ -235,6 +237,30 @@ var _ = Describe("PushWorker", func() {
 
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("invalid spec type"))
+		})
+
+		It("should bind AuthSession from parsed ChildAuthUserSpec into PushDesiredState", func() {
+			carrier := types.ChildAuthUserSpec{
+				AuthSession: types.AuthSession{
+					Token:        "test-token-push",
+					InstanceUUID: "inst-uuid-push",
+				},
+			}
+			raw, err := yaml.Marshal(carrier)
+			Expect(err).ToNot(HaveOccurred())
+
+			spec := fsmv2config.UserSpec{
+				Config:    string(raw),
+				Variables: fsmv2config.VariableBundle{},
+			}
+
+			desired, err := worker.DeriveDesiredState(spec)
+
+			Expect(err).ToNot(HaveOccurred())
+			typed, ok := desired.(*fsmv2.WrappedDesiredState[snapshot.PushDesiredState])
+			Expect(ok).To(BeTrue())
+			Expect(typed.Config.AuthSession.Token).To(Equal("test-token-push"))
+			Expect(typed.Config.AuthSession.InstanceUUID).To(Equal("inst-uuid-push"))
 		})
 	})
 
