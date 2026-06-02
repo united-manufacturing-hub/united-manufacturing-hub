@@ -16,10 +16,12 @@ package pull
 
 import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/types"
 )
 
 // PullUserSpec defines the typed configuration for the pull worker.
-// PullWorker config comes from parent TransportWorker, so this is minimal.
+// ChildAuthUserSpec carries the AuthSession stamped by the parent transport worker.
 type PullUserSpec struct {
-	config.BaseUserSpec `yaml:",inline"`
+	config.BaseUserSpec     `yaml:",inline"`
+	types.ChildAuthUserSpec `yaml:",inline"`
 }

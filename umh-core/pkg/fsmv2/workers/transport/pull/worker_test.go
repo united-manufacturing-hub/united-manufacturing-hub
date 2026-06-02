@@ -20,6 +20,8 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"gopkg.in/yaml.v3"
+
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	fsmv2config "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	depspkg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
@@ -28,6 +30,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/pull"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/pull/snapshot"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/pull/state"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/types"
 )
 
 var _ fsmv2.Worker = (*pull.PullWorker)(nil)
@@ -249,6 +252,28 @@ var _ = Describe("PullWorker", func() {
 
 			_, err := worker.DeriveDesiredState(spec)
 			Expect(err).To(HaveOccurred())
+		})
+
+		It("should bind AuthSession from parsed ChildAuthUserSpec into PullDesiredState", func() {
+			carrier := types.ChildAuthUserSpec{
+				AuthSession: types.AuthSession{
+					Token: "test-token-pull",
+				},
+			}
+			raw, err := yaml.Marshal(carrier)
+			Expect(err).ToNot(HaveOccurred())
+
+			spec := fsmv2config.UserSpec{
+				Config:    string(raw),
+				Variables: fsmv2config.VariableBundle{},
+			}
+
+			desired, err := worker.DeriveDesiredState(spec)
+
+			Expect(err).ToNot(HaveOccurred())
+			typed, ok := desired.(*fsmv2.WrappedDesiredState[snapshot.PullDesiredState])
+			Expect(ok).To(BeTrue())
+			Expect(typed.Config.AuthSession.Token).To(Equal("test-token-pull"))
 		})
 	})
 
