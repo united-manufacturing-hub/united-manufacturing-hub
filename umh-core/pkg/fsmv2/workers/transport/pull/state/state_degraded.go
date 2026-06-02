@@ -66,7 +66,9 @@ func (s *DegradedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 					backoffDelay.Round(time.Second)), nil)
 		}
 
-		return fsmv2.Transition(s, fsmv2.SignalNone, &action.PullAction{},
+		return fsmv2.Transition(s, fsmv2.SignalNone, &action.PullAction{
+			JWTToken: snap.Config.AuthSession.Token,
+		},
 			fmt.Sprintf("degraded (%d consecutive errors, %d pending), still pulling",
 				snap.Status.ConsecutiveErrors, snap.Status.PendingMessageCount), nil)
 	}
