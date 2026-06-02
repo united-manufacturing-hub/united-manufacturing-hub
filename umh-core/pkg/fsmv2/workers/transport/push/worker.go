@@ -26,7 +26,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/register"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/push/snapshot"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/push/state"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/types"
 
 	transport_pkg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport"
 )
@@ -100,7 +99,7 @@ func (w *PushWorker) CollectObservedState(ctx context.Context, desired fsmv2.Des
 
 	status := snapshot.PushStatus{
 		HasTransport:        d.GetTransport() != nil,
-		HasValidToken:       authSessionValid(cfg.AuthSession),
+		HasValidToken:       cfg.AuthSession.IsUsable(time.Minute),
 		ConsecutiveErrors:   d.GetConsecutiveErrors(),
 		PendingMessageCount: d.PendingMessageCount(),
 		LastErrorType:       d.GetLastErrorType(),
@@ -110,16 +109,6 @@ func (w *PushWorker) CollectObservedState(ctx context.Context, desired fsmv2.Des
 	}
 
 	return fsmv2.NewObservation(status), nil
-}
-
-// authSessionValid mirrors the former child IsTokenValid check: a token is usable
-// when present and not within the 1-minute child safety buffer of expiry.
-func authSessionValid(a types.AuthSession) bool {
-	if a.Token == "" || a.Expiry.IsZero() {
-		return false
-	}
-
-	return !time.Now().Add(time.Minute).After(a.Expiry)
 }
 
 // DeriveDesiredState determines the desired state from the provided spec.

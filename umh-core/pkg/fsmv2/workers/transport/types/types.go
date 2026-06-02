@@ -40,6 +40,17 @@ type AuthSession struct {
 	InstanceUUID string    `json:"instanceUUID,omitempty" yaml:"instanceUUID,omitempty"`
 }
 
+// IsUsable reports whether the session has a token that will still be valid after
+// the given safety buffer. Mirrors the former child IsTokenValid check; the buffer
+// lets callers pick the child (1-minute) vs other windows.
+func (a AuthSession) IsUsable(buffer time.Duration) bool {
+	if a.Token == "" || a.Expiry.IsZero() {
+		return false
+	}
+
+	return !time.Now().Add(buffer).After(a.Expiry)
+}
+
 // ChildAuthUserSpec is the YAML carrier for the auth session that transport's
 // RenderChildren stamps onto its push/pull children. push/pull embed it in their
 // UserSpec so the marshal-then-parse round trip is structurally identical on both sides.
