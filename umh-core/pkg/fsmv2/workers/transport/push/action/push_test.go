@@ -29,10 +29,11 @@ import (
 )
 
 type mockTransport struct {
-	pushErr       error
-	pushCallCount int
-	pushedMsgs    []*types.UMHMessage
-	pushFunc      func(ctx context.Context, jwtToken string, messages []*types.UMHMessage) error
+	pushErr        error
+	pushCallCount  int
+	pushedMsgs     []*types.UMHMessage
+	capturedToken  string
+	pushFunc       func(ctx context.Context, jwtToken string, messages []*types.UMHMessage) error
 }
 
 func (m *mockTransport) Authenticate(_ context.Context, _ types.AuthRequest) (types.AuthResponse, error) {
@@ -46,6 +47,7 @@ func (m *mockTransport) Pull(_ context.Context, _ string) ([]*types.UMHMessage, 
 func (m *mockTransport) Push(ctx context.Context, jwtToken string, messages []*types.UMHMessage) error {
 	m.pushCallCount++
 	m.pushedMsgs = messages
+	m.capturedToken = jwtToken
 
 	if m.pushFunc != nil {
 		return m.pushFunc(ctx, jwtToken, messages)
@@ -367,6 +369,8 @@ var _ = Describe("PushAction", func() {
 
 			Expect(mockTrans.pushCallCount).To(Equal(1))
 			Expect(mockTrans.pushedMsgs).To(HaveLen(1))
+			// The token set on the action struct must reach the transport.
+			Expect(mockTrans.capturedToken).To(Equal("struct-jwt"))
 		})
 	})
 
@@ -806,14 +810,15 @@ var _ = Describe("PushAction", func() {
 				Email:        "user@example.com",
 			}
 
-			mockDeps.authenticatedUUID = "" // Empty - authentication not complete
+			// act.InstanceUUID is "" by default — authentication not complete.
+			// The action skips UUID overwrite when InstanceUUID is empty.
 
 			err := act.Execute(context.Background(), mockDeps)
 			Expect(err).NotTo(HaveOccurred())
 
 			Expect(mockTrans.pushCallCount).To(Equal(1))
 			Expect(mockTrans.pushedMsgs).To(HaveLen(1))
-			// Original UUID should be preserved when authenticatedUUID is empty
+			// Original UUID should be preserved when InstanceUUID is empty
 			Expect(mockTrans.pushedMsgs[0].InstanceUUID).To(Equal(originalUUID))
 		})
 	})

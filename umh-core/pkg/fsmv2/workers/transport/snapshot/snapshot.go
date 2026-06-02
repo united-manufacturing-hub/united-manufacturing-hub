@@ -154,8 +154,11 @@ func (f FailedAuthConfig) IsEmpty() bool {
 // re-authentication on every tick (~10ms), hammering the relay server.
 // TODO(security): AuthSession included in CSE sync payloads. ENG-4405 tracks
 // adding a CSE secret tier to persist locally but exclude from delta sync.
+// The token also rides into the push/pull child UserSpec.Config via
+// RenderChildren stamping ChildAuthUserSpec, so a future CSE secret-tier scrub
+// must cover the parent status AND both child-config copies.
 type TransportStatus struct {
-	AuthSession         types.AuthSession `json:"auth_session,omitempty"`
+	AuthSession         types.AuthSession `json:"auth_session"`
 	LastAuthAttemptAt   time.Time         `json:"last_auth_attempt_at,omitempty"`
 	FailedAuthConfig    FailedAuthConfig  `json:"failed_auth_config,omitempty"`
 	LastErrorType       types.ErrorType   `json:"last_error_type"`

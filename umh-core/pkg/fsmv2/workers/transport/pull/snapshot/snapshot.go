@@ -57,7 +57,7 @@ type PullDependencies interface {
 // PullDesiredState represents the target configuration for the pull worker.
 type PullDesiredState struct {
 	AuthSession types.AuthSession `json:"auth_session,omitempty" yaml:"auth_session,omitempty"`
-	State       string            `json:"state" yaml:"state"`
+	State       string            `json:"state"                  yaml:"state"`
 	config.BaseDesiredState
 }
 

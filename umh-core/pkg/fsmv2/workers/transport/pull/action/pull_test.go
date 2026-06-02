@@ -433,6 +433,7 @@ var _ = Describe("PullAction", func() {
 			var capturedToken string
 			mockTrans.pullFunc = func(_ context.Context, jwtToken string) ([]*types.UMHMessage, error) {
 				capturedToken = jwtToken
+
 				return nil, nil
 			}
 
