@@ -25,6 +25,28 @@ import (
 	depspkg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 )
 
+// AuthSession bundles the auth state the parent transport worker shares with its
+// push/pull children: the JWT bearer token, its expiry, and the backend-confirmed
+// instance UUID. Bundled so a caller cannot set the token without its expiry. It
+// rides the typed snapshot from parent status to child config; children read it
+// from their own snapshot instead of reaching into parent dependencies.
+//
+// Defined here (a leaf package imported by snapshot, push, and pull) to avoid an
+// import cycle: RenderChildren (in the snapshot package) stamps it and push/pull
+// parse it, but snapshot cannot import push/pull.
+type AuthSession struct {
+	Expiry       time.Time `json:"expiry,omitempty"       yaml:"expiry,omitempty"`
+	Token        string    `json:"token,omitempty"        yaml:"token,omitempty"`
+	InstanceUUID string    `json:"instanceUUID,omitempty" yaml:"instanceUUID,omitempty"`
+}
+
+// ChildAuthUserSpec is the YAML carrier for the auth session that transport's
+// RenderChildren stamps onto its push/pull children. push/pull embed it in their
+// UserSpec so the marshal-then-parse round trip is structurally identical on both sides.
+type ChildAuthUserSpec struct {
+	AuthSession AuthSession `json:"authSession,omitempty" yaml:"authSession,omitempty"`
+}
+
 // UMHMessage represents a message in the umh-core push/pull protocol.
 // Note: InstanceUUID uses json tag "umhInstance" to match backend API (models.UMHMessage).
 type UMHMessage struct {
