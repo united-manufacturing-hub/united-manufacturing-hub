@@ -140,17 +140,6 @@ var _ = Describe("PushDependencies", func() {
 			})
 		})
 
-		Describe("GetJWTToken", func() {
-			It("should return empty when parent has no token", func() {
-				Expect(d.GetJWTToken()).To(BeEmpty())
-			})
-
-			It("should reflect parent JWT changes", func() {
-				parentDeps.SetJWT("test-token", time.Now().Add(time.Hour))
-				Expect(d.GetJWTToken()).To(Equal("test-token"))
-			})
-		})
-
 		Describe("RecordTypedError", func() {
 			It("should record on both child and parent", func() {
 				d.RecordTypedError(types.ErrorTypeBackendRateLimit, 30*time.Second)
@@ -294,30 +283,6 @@ var _ = Describe("PushDependencies", func() {
 
 			drained := d.MetricsRecorder().Drain()
 			Expect(drained.Counters[string(deps.CounterMessagesDropped)]).To(Equal(int64(5)))
-		})
-	})
-
-	Describe("IsTokenValid", func() {
-		var d *push.PushDependencies
-
-		BeforeEach(func() {
-			var err error
-			d, err = push.NewPushDependencies(parentDeps, deps.NewBaseDependencies(logger, nil, identity))
-			Expect(err).NotTo(HaveOccurred())
-		})
-
-		It("should return false when token is empty", func() {
-			Expect(d.IsTokenValid()).To(BeFalse())
-		})
-
-		It("should return false when token is expired", func() {
-			parentDeps.SetJWT("expired-token", time.Now().Add(-1*time.Hour))
-			Expect(d.IsTokenValid()).To(BeFalse())
-		})
-
-		It("should return true when token is valid and not near expiry", func() {
-			parentDeps.SetJWT("good-token", time.Now().Add(1*time.Hour))
-			Expect(d.IsTokenValid()).To(BeTrue())
 		})
 	})
 
