@@ -23,63 +23,81 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/snapshot"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/types"
 )
 
 var _ = Describe("TransportStatus", func() {
 	Describe("HasValidToken", func() {
 		It("should return false when JWT token is empty", func() {
 			status := snapshot.TransportStatus{
-				JWTToken:  "",
-				JWTExpiry: time.Now().Add(1 * time.Hour),
+				AuthSession: types.AuthSession{
+					Token:  "",
+					Expiry: time.Now().Add(1 * time.Hour),
+				},
 			}
 			Expect(status.HasValidToken()).To(BeFalse())
 		})
 
 		It("should return false when token is present but expired", func() {
 			status := snapshot.TransportStatus{
-				JWTToken:  "valid-token",
-				JWTExpiry: time.Now().Add(-1 * time.Hour),
+				AuthSession: types.AuthSession{
+					Token:  "valid-token",
+					Expiry: time.Now().Add(-1 * time.Hour),
+				},
 			}
 			Expect(status.HasValidToken()).To(BeFalse())
 		})
 
 		It("should return true when token is present and not expired", func() {
 			status := snapshot.TransportStatus{
-				JWTToken:  "valid-token",
-				JWTExpiry: time.Now().Add(1 * time.Hour),
+				AuthSession: types.AuthSession{
+					Token:  "valid-token",
+					Expiry: time.Now().Add(1 * time.Hour),
+				},
 			}
 			Expect(status.HasValidToken()).To(BeTrue())
+		})
+
+		It("should return false when AuthSession is zero-value", func() {
+			status := snapshot.TransportStatus{}
+			Expect(status.HasValidToken()).To(BeFalse())
 		})
 	})
 
 	Describe("IsTokenExpired", func() {
 		It("should return false when expiry is zero", func() {
 			status := snapshot.TransportStatus{
-				JWTToken: "some-token",
+				AuthSession: types.AuthSession{Token: "some-token"},
 			}
 			Expect(status.IsTokenExpired()).To(BeFalse())
 		})
 
 		It("should return true when token expires within refresh buffer (10 min)", func() {
 			status := snapshot.TransportStatus{
-				JWTToken:  "valid-token",
-				JWTExpiry: time.Now().Add(5 * time.Minute),
+				AuthSession: types.AuthSession{
+					Token:  "valid-token",
+					Expiry: time.Now().Add(5 * time.Minute),
+				},
 			}
 			Expect(status.IsTokenExpired()).To(BeTrue())
 		})
 
 		It("should return false when token expires beyond refresh buffer", func() {
 			status := snapshot.TransportStatus{
-				JWTToken:  "valid-token",
-				JWTExpiry: time.Now().Add(15 * time.Minute),
+				AuthSession: types.AuthSession{
+					Token:  "valid-token",
+					Expiry: time.Now().Add(15 * time.Minute),
+				},
 			}
 			Expect(status.IsTokenExpired()).To(BeFalse())
 		})
 
 		It("should return true when token already expired", func() {
 			status := snapshot.TransportStatus{
-				JWTToken:  "expired-token",
-				JWTExpiry: time.Now().Add(-1 * time.Hour),
+				AuthSession: types.AuthSession{
+					Token:  "expired-token",
+					Expiry: time.Now().Add(-1 * time.Hour),
+				},
 			}
 			Expect(status.IsTokenExpired()).To(BeTrue())
 		})

@@ -161,6 +161,26 @@ var _ = Describe("TransportDependencies", func() {
 			})
 		})
 
+		Describe("GetAuthSession", func() {
+			It("should return the full auth bundle after SetJWT and SetAuthenticatedUUID", func() {
+				expiry := time.Now().Add(1 * time.Hour)
+				deps.SetJWT("tok", expiry)
+				deps.SetAuthenticatedUUID("be-uuid")
+
+				as := deps.GetAuthSession()
+				Expect(as.Token).To(Equal("tok"))
+				Expect(as.Expiry).To(BeTemporally("~", expiry, time.Second))
+				Expect(as.InstanceUUID).To(Equal("be-uuid"))
+			})
+
+			It("should return zero-value AuthSession when nothing is set", func() {
+				as := deps.GetAuthSession()
+				Expect(as.Token).To(BeEmpty())
+				Expect(as.Expiry.IsZero()).To(BeTrue())
+				Expect(as.InstanceUUID).To(BeEmpty())
+			})
+		})
+
 	})
 
 	Describe("Transport management", func() {
