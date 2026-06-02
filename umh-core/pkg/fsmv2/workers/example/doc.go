@@ -66,13 +66,14 @@
 //  2. Register the worker in init():
 //
 //     func init() {
-//     factory.RegisterWorkerType[snapshot.MyworkerObservedState, *snapshot.MyworkerDesiredState](
-//     workerFactory, supervisorFactory)
+//     register.Worker[MyworkerConfig, MyworkerStatus, *MyworkerDependencies](
+//     "myworker", NewMyworkerWorker)
 //     }
 //
 //  3. Copy from examplechild/ as a starting point.
 //
-// See factory/README.md for worker type derivation rules.
+// See pkg/fsmv2/CLAUDE.md for the register.Worker contract and the
+// SetDeps/GetDeps convention for parent-injected dependencies.
 //
 // # Patterns demonstrated
 //

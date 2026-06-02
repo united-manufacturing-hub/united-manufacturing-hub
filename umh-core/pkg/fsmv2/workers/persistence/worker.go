@@ -25,8 +25,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	fsmv2config "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/register"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/persistence/snapshot"
 	persistencepkg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
 
@@ -234,38 +233,9 @@ func (w *PersistenceWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredS
 }
 
 func init() {
-	if err := factory.RegisterWorkerAndSupervisorFactoryByType(
-		WorkerTypeName,
-		func(id deps.Identity, logger deps.FSMLogger, stateReader deps.StateReader, params map[string]any) fsmv2.Worker {
-			var d *PersistenceDependencies
-
-			if params != nil {
-				if raw, ok := params["dependencies"]; ok {
-					typed, ok := raw.(*PersistenceDependencies)
-					if !ok {
-						panic(fmt.Sprintf("persistence factory: params[\"dependencies\"] has unexpected type %T (want *PersistenceDependencies)", raw))
-					}
-
-					d = typed
-				}
-			}
-
-			worker, err := NewPersistenceWorker(id, logger, stateReader, d)
-			if err != nil {
-				if logger != nil {
-					logger.SentryError(deps.FeatureForWorker(WorkerTypeName), id.HierarchyPath, err, "persistence_worker_creation_failed")
-				}
-
-				return nil
-			}
-
-			return worker
-		},
-		func(cfg interface{}) interface{} {
-			return supervisor.NewSupervisor[fsmv2.Observation[snapshot.PersistenceStatus], *fsmv2.WrappedDesiredState[snapshot.PersistenceConfig]](
-				cfg.(supervisor.Config))
-		},
-	); err != nil {
-		panic(err)
-	}
+	register.Worker[snapshot.PersistenceConfig, snapshot.PersistenceStatus, *PersistenceDependencies](WorkerTypeName,
+		func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader) (fsmv2.Worker, error) {
+			d := register.GetDeps[*PersistenceDependencies](WorkerTypeName)
+			return NewPersistenceWorker(id, logger, sr, d)
+		})
 }

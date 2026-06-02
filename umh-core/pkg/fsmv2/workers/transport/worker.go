@@ -58,8 +58,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/register"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/snapshot"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/state"
 )
@@ -223,32 +222,20 @@ func (w *TransportWorker) GetInitialState() fsmv2.State[any, any] {
 	return &state.StoppedState{}
 }
 
-// init registers the transport worker and supervisor factory.
-// This is called automatically when the package is imported.
+// Children retrieve transport dependencies through register.GetDeps keyed on
+// this constant. Defined here so push/pull stay in sync with the publisher.
+const transportDepsKey = "transport"
+
 func init() {
-	if err := factory.RegisterWorkerAndSupervisorFactoryByType(
-		"transport",
-		// Worker factory function
-		func(id deps.Identity, logger deps.FSMLogger, stateReader deps.StateReader, extraDeps map[string]any) fsmv2.Worker {
-			worker, err := NewTransportWorker(id, logger, stateReader)
+	register.Worker[snapshot.TransportDesiredState, snapshot.TransportStatus, *TransportDependencies](transportDepsKey,
+		func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader) (fsmv2.Worker, error) {
+			w, err := NewTransportWorker(id, logger, sr)
 			if err != nil {
-				panic(fmt.Sprintf("failed to create transport worker (id=%s, name=%s): %v. "+
-					"Ensure ChannelProvider is set before supervisor starts.",
-					id.ID, id.Name, err))
+				return nil, err
 			}
-
-			extraDeps["transport_deps"] = worker.GetDependencies()
-
-			return worker
-		},
-		// Supervisor factory function
-		func(cfg interface{}) interface{} {
-			return supervisor.NewSupervisor[fsmv2.Observation[snapshot.TransportStatus], *fsmv2.WrappedDesiredState[snapshot.TransportDesiredState]](
-				cfg.(supervisor.Config))
-		},
-	); err != nil {
-		panic(fmt.Sprintf("failed to register transport worker: %v", err))
-	}
+			register.SetDeps[*TransportDependencies](transportDepsKey, w.GetDependencies())
+			return w, nil
+		})
 }
 
 // makePushChildSpec creates the ChildSpec for the PushWorker child.

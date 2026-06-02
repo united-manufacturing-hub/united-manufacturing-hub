@@ -22,8 +22,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/register"
 )
 
 // ChildWorker implements the FSM v2 Worker interface for resource management.
@@ -148,19 +147,8 @@ func (w *ChildWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, 
 }
 
 func init() {
-	if err := factory.RegisterWorkerAndSupervisorFactoryByType(
-		"examplechild",
-		func(id deps.Identity, logger deps.FSMLogger, stateReader deps.StateReader, _ map[string]any) fsmv2.Worker {
-			pool := &DefaultConnectionPool{}
-			worker, _ := NewChildWorker(id, pool, logger, stateReader)
-
-			return worker
-		},
-		func(cfg interface{}) interface{} {
-			return supervisor.NewSupervisor[fsmv2.Observation[ExamplechildStatus], *fsmv2.WrappedDesiredState[ExamplechildConfig]](
-				cfg.(supervisor.Config))
-		},
-	); err != nil {
-		panic(err)
-	}
+	register.Worker[ExamplechildConfig, ExamplechildStatus, *ExamplechildDependencies]("examplechild",
+		func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader) (fsmv2.Worker, error) {
+			return NewChildWorker(id, &DefaultConnectionPool{}, logger, sr)
+		})
 }
