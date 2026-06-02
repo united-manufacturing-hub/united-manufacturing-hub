@@ -63,10 +63,25 @@ var _ = Describe("TransportStatus", func() {
 			status := snapshot.TransportStatus{}
 			Expect(status.HasValidToken()).To(BeFalse())
 		})
+
+		It("should return true for token+zero-expiry (IsTokenExpired=false for pre-auth window)", func() {
+			// Zero Expiry with a non-empty token: IsTokenExpired returns false,
+			// so HasValidToken returns true. Children's IsUsable(1m) returns false
+			// for the same session, so they stay idle until the parent populates Expiry.
+			status := snapshot.TransportStatus{
+				AuthSession: types.AuthSession{Token: "tok"},
+			}
+			Expect(status.HasValidToken()).To(BeTrue())
+			// Contrast: the child-side IsUsable gate correctly rejects it.
+			Expect(status.AuthSession.IsUsable(time.Minute)).To(BeFalse())
+		})
 	})
 
 	Describe("IsTokenExpired", func() {
-		It("should return false when expiry is zero", func() {
+		It("should return false when expiry is zero (deliberate: parent must not re-auth before first token)", func() {
+			// Zero Expiry with a non-empty token → NOT expired.
+			// Contrast: AuthSession.IsUsable(1m) treats the same value as unusable.
+			// See the IsTokenExpired doc comment for the rationale.
 			status := snapshot.TransportStatus{
 				AuthSession: types.AuthSession{Token: "some-token"},
 			}
@@ -137,6 +152,50 @@ var _ = Describe("RenderChildren", func() {
 			var carrier types.ChildAuthUserSpec
 			Expect(yaml.Unmarshal([]byte(sp.UserSpec.Config), &carrier)).To(Succeed())
 			Expect(carrier.AuthSession.Token).To(Equal("jwt"))
+		}
+	})
+
+	It("propagates a refreshed token when parent AuthSession changes (BS1 refresh propagation)", func() {
+		// Verifies that RenderChildren stamps the NEW token when the parent's
+		// TransportStatus.AuthSession changes. The supervisor re-applies the
+		// changed UserSpec to resident children every reconcile tick, so a
+		// token refresh reaches long-lived push/pull children without respawn.
+
+		status1 := snapshot.TransportStatus{
+			AuthSession: types.AuthSession{
+				Token:        "old-jwt",
+				InstanceUUID: "be-uuid",
+				Expiry:       time.Now().Add(time.Hour),
+			},
+		}
+		status2 := snapshot.TransportStatus{
+			AuthSession: types.AuthSession{
+				Token:        "new-jwt",
+				InstanceUUID: "be-uuid",
+				Expiry:       time.Now().Add(2 * time.Hour),
+			},
+		}
+
+		specs1, err := snapshot.RenderChildren(snapshot.TransportDesiredState{}, status1, true)
+		Expect(err).ToNot(HaveOccurred())
+
+		specs2, err := snapshot.RenderChildren(snapshot.TransportDesiredState{}, status2, true)
+		Expect(err).ToNot(HaveOccurred())
+
+		Expect(specs1).To(HaveLen(2))
+		Expect(specs2).To(HaveLen(2))
+
+		for i := range 2 {
+			var c1, c2 types.ChildAuthUserSpec
+			Expect(yaml.Unmarshal([]byte(specs1[i].UserSpec.Config), &c1)).To(Succeed())
+			Expect(yaml.Unmarshal([]byte(specs2[i].UserSpec.Config), &c2)).To(Succeed())
+
+			Expect(c1.AuthSession.Token).To(Equal("old-jwt"),
+				"first render must carry the old token")
+			Expect(c2.AuthSession.Token).To(Equal("new-jwt"),
+				"second render must carry the refreshed token")
+			Expect(c2.AuthSession.Token).NotTo(Equal(c1.AuthSession.Token),
+				"tokens must differ: refresh must propagate")
 		}
 	})
 })

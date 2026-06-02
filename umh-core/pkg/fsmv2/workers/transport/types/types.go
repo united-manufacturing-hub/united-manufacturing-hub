@@ -25,11 +25,11 @@ import (
 	depspkg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 )
 
-// AuthSession bundles the auth state the parent transport worker shares with its
-// push/pull children: the JWT bearer token, its expiry, and the backend-confirmed
-// instance UUID. Bundled so a caller cannot set the token without its expiry. It
-// rides the typed snapshot from parent status to child config; children read it
-// from their own snapshot instead of reaching into parent dependencies.
+// AuthSession groups the auth fields that travel together from parent transport status
+// to push/pull child config: the JWT bearer token, its expiry, and the backend-confirmed
+// instance UUID. Atomic token+expiry update is provided by the SetJWT setter on
+// TransportDependencies, not enforced by the struct. Children read the session from
+// their own snapshot instead of reaching into parent dependencies.
 //
 // Defined here (a leaf package imported by snapshot, push, and pull) to avoid an
 // import cycle: RenderChildren (in the snapshot package) stamps it and push/pull
