@@ -37,7 +37,7 @@ var _ = Describe("ResetTransportAction", func() {
 		logger = deps.NewNopFSMLogger()
 		mockTransp = &mockTransport{}
 		identity := deps.Identity{ID: "test-id", WorkerType: "transport"}
-		dependencies = transportpkg.NewTransportDependencies(mockTransp, logger, nil, identity)
+		dependencies = transportpkg.NewTransportDependencies(mockTransp, deps.NewBaseDependencies(logger, nil, identity))
 		act = action.NewResetTransportAction()
 	})
 

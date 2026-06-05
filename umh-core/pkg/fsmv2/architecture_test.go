@@ -403,20 +403,6 @@ var _ = Describe("FSMv2 Architecture Validation", func() {
 			})
 		})
 
-		Describe("Child Workers Use IsStopRequired() (Invariant: Parent Lifecycle Awareness)", func() {
-			It("should use IsStopRequired() not just IsShutdownRequested() in child worker states", func() {
-				violations := validator.ValidateChildWorkersIsStopRequired(getFsmv2Dir())
-				if len(violations) > 0 {
-					message := validator.FormatViolationsWithPattern(
-						"Child Worker IsStopRequired Violations",
-						violations,
-						"CHILD_MUST_USE_IS_STOP_REQUIRED",
-					)
-					Fail(message)
-				}
-			})
-		})
-
 		Describe("No Custom Lifecycle Fields (Invariant: FSM Controls Lifecycle)", func() {
 			It("should not have ShouldRun, IsRunning, or similar fields in DesiredState", func() {
 				violations := validator.ValidateNoCustomLifecycleFields(getFsmv2Dir())
@@ -549,6 +535,20 @@ var _ = Describe("FSMv2 Architecture Validation", func() {
 						"CollectObservedState Signature Violations",
 						violations,
 						"COLLECT_OBSERVED_STATE_1ARG_SIGNATURE",
+					)
+					Fail(message)
+				}
+			})
+		})
+
+		Describe("No Legacy Result Calls (Invariant: Use fsmv2.Transition)", func() {
+			It("should use fsmv2.Transition() not fsmv2.Result[any,any]() in state files", func() {
+				violations := validator.ValidateNoLegacyResultCalls(getFsmv2Dir())
+				if len(violations) > 0 {
+					message := validator.FormatViolationsWithPattern(
+						"Legacy Result Call Violations",
+						violations,
+						"LEGACY_RESULT_CALL",
 					)
 					Fail(message)
 				}

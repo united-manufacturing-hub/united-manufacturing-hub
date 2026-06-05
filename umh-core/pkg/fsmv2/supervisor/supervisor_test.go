@@ -126,7 +126,7 @@ func (m *mockState) String() string {
 }
 
 func (m *mockState) Next(_ any) fsmv2.NextResult[any, any] {
-	return fsmv2.Result[any, any](m, fsmv2.SignalNone, nil, m.reason)
+	return fsmv2.Result[any, any](m, fsmv2.SignalNone, nil, m.reason, nil)
 }
 
 func (m *mockState) LifecyclePhase() config.LifecyclePhase { return config.PhaseRunningHealthy }

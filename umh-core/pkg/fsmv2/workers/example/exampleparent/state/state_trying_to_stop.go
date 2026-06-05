@@ -32,14 +32,14 @@ func (s *TryingToStopState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := fsmv2.ConvertWorkerSnapshot[exampleparent.ExampleparentConfig, exampleparent.ExampleparentStatus](snapAny)
 
 	if snap.Status.ID == "" {
-		return fsmv2.Result[any, any](s, fsmv2.SignalNone, &action.StopAction{}, "ID not set, executing StopAction")
+		return fsmv2.Transition(s, fsmv2.SignalNone, &action.StopAction{}, "ID not set, executing StopAction", nil)
 	}
 
 	if snap.ChildrenHealthy == 0 && snap.ChildrenUnhealthy == 0 {
-		return fsmv2.Result[any, any](&StoppedState{}, fsmv2.SignalNone, nil, "All children stopped, transitioning to Stopped")
+		return fsmv2.Transition(&StoppedState{}, fsmv2.SignalNone, nil, "All children stopped, transitioning to Stopped", nil)
 	}
 
-	return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil, "Gracefully stopping all children")
+	return fsmv2.Transition(s, fsmv2.SignalNone, nil, "Gracefully stopping all children", nil)
 }
 
 func (s *TryingToStopState) String() string {

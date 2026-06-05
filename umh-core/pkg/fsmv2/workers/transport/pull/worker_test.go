@@ -38,6 +38,7 @@ var _ = Describe("PullWorker", func() {
 		logger     depspkg.FSMLogger
 		identity   depspkg.Identity
 		parentDeps *transport.TransportDependencies
+		pullDeps   *pull.PullDependencies
 	)
 
 	BeforeEach(func() {
@@ -45,6 +46,10 @@ var _ = Describe("PullWorker", func() {
 		identity = depspkg.Identity{ID: "test-pull", Name: "Test Pull"}
 		transport.SetChannelProvider(newTestChannelProvider())
 		parentDeps = createParentDeps(logger)
+
+		var err error
+		pullDeps, err = pull.NewPullDependencies(parentDeps, depspkg.NewBaseDependencies(logger, nil, identity))
+		Expect(err).ToNot(HaveOccurred())
 	})
 
 	AfterEach(func() {
@@ -60,27 +65,28 @@ var _ = Describe("PullWorker", func() {
 	Describe("NewPullWorker", func() {
 		It("should create a worker with valid args", func() {
 			var err error
-			worker, err = pull.NewPullWorker(identity, logger, nil, parentDeps)
+			worker, err = pull.NewPullWorker(identity, logger, nil, pullDeps)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(worker).NotTo(BeNil())
 		})
 
 		It("should reject nil logger", func() {
-			_, err := pull.NewPullWorker(identity, nil, nil, parentDeps)
+			_, err := pull.NewPullWorker(identity, nil, nil, pullDeps)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("logger"))
 		})
 
-		It("should reject nil parentDeps", func() {
+		It("should reject nil dependencies", func() {
 			_, err := pull.NewPullWorker(identity, logger, nil, nil)
 			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("non-nil dependencies"))
 		})
 	})
 
 	Describe("CollectObservedState", func() {
 		BeforeEach(func() {
 			var err error
-			worker, err = pull.NewPullWorker(identity, logger, nil, parentDeps)
+			worker, err = pull.NewPullWorker(identity, logger, nil, pullDeps)
 			Expect(err).ToNot(HaveOccurred())
 		})
 
@@ -170,7 +176,7 @@ var _ = Describe("PullWorker", func() {
 	Describe("DeriveDesiredState", func() {
 		BeforeEach(func() {
 			var err error
-			worker, err = pull.NewPullWorker(identity, logger, nil, parentDeps)
+			worker, err = pull.NewPullWorker(identity, logger, nil, pullDeps)
 			Expect(err).ToNot(HaveOccurred())
 		})
 
@@ -252,7 +258,7 @@ var _ = Describe("PullWorker", func() {
 	Describe("GetInitialState", func() {
 		BeforeEach(func() {
 			var err error
-			worker, err = pull.NewPullWorker(identity, logger, nil, parentDeps)
+			worker, err = pull.NewPullWorker(identity, logger, nil, pullDeps)
 			Expect(err).ToNot(HaveOccurred())
 		})
 

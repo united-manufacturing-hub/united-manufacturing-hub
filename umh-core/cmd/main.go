@@ -48,6 +48,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/examples"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/register"
 	fsmv2sentry "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/sentry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/application"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator"
@@ -563,7 +564,7 @@ func buildFSMv2Supervisor(
 
 	// Build YAML config for FSMv2 ApplicationSupervisor.
 	// instanceUUID is a placeholder — the real UUID is returned by the backend
-	// and will be set via onAuthSuccessCallback (Bug #6 fix).
+	// and picked up by polling TransportWorker.ObservedState.AuthenticatedUUID below (Bug #6 fix).
 	placeholderUUID = uuid.New().String()
 	yamlConfig := fmt.Sprintf(`
 children:
@@ -587,15 +588,6 @@ children:
 	// Setup store (in-memory for now).
 	store = examples.SetupStore(deps.NewFSMLogger(logger))
 
-	// Create callback to update LoginResponse with real UUID from backend (Bug #6 fix).
-	// This is called by AuthenticateAction after successful authentication.
-	onAuthSuccessCallback := func(realUUID, name string) {
-		logger.Infow("Authentication succeeded, updating LoginResponse with backend UUID",
-			"realUUID", realUUID, "name", name, "placeholderUUID", placeholderUUID)
-		communicationState.SetLoginResponseForFSMv2(realUUID)
-	}
-
-	// Create ApplicationSupervisor with channel provider and auth callback injected via Dependencies.
 	// Use Named("fsmv2") to create [fsmv2] prefix in logs for easy filtering.
 	fsmv2Logger := logger.Named("fsmv2")
 	// Wrap with FSMv2 SentryHook for automatic error capture to Sentry with:
@@ -612,12 +604,9 @@ children:
 
 	fsmv2Logger = fsmv2Logger.Desugar().WithOptions(zap.WrapCore(fsmv2Hook.Wrap)).Sugar()
 
-	fsmv2Deps := map[string]any{
-		"channelProvider":       channelAdapter,
-		"onAuthSuccessCallback": onAuthSuccessCallback,
-	}
+	fsmv2Deps := map[string]any{}
 	if configData.Agent.UseFSMv2MemoryCleanup {
-		fsmv2Deps["dependencies"] = persistenceWorker.NewStoreOnlyDependencies(store)
+		register.SetDeps[*persistenceWorker.PersistenceDependencies](persistenceWorker.WorkerTypeName, persistenceWorker.NewStoreOnlyDependencies(store))
 	}
 
 	appSup, err = application.NewApplicationSupervisor(application.SupervisorConfig{
@@ -662,7 +651,7 @@ func wireFSMv2Communicator(
 
 	// Initialize Router for FSMv2 mode:
 	// 1. Create write-only Pusher (writes to channel, FSMv2 handles HTTP)
-	// 2. Set LoginResponse with placeholder UUID (will be updated by onAuthSuccessCallback)
+	// 2. Set LoginResponse with placeholder UUID (replaced when TransportWorker.ObservedState.AuthenticatedUUID is observed below)
 	// 3. Initialize SubscriberHandler (generates status messages)
 	// 4. Start Router (processes inbound messages, generates status via Subscriber)
 	communicationState.InitializeWriteOnlyPusher(placeholderUUID)

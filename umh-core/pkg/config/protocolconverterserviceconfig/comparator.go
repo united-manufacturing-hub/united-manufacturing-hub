@@ -58,7 +58,7 @@ func (c *Comparator) ConfigsEqual(desired, observed ProtocolConverterServiceConf
 	return connectionEqual &&
 		locationEqual &&
 		comparatorDFC.ConfigsEqual(dfcReadD, dfcReadO) &&
-		comparatorDFC.ConfigsEqual(dfcWriteD, dfcWriteO) &&
+		reflect.DeepEqual(dfcWriteD, dfcWriteO) &&
 		comparatorVariable.ConfigsEqual(desired.Variables, observed.Variables) &&
 		readDFCDesiredStateEqual &&
 		writeDFCDesiredStateEqual
@@ -88,7 +88,10 @@ func (c *Comparator) ConfigDiff(desired, observed ProtocolConverterServiceConfig
 	// diff for dfc's
 	comparatorDFC := dataflowcomponentserviceconfig.NewComparator()
 	dfcReadDiff := comparatorDFC.ConfigDiff(dfcReadD, dfcReadO)
-	dfcWriteDiff := comparatorDFC.ConfigDiff(dfcWriteD, dfcWriteO)
+	dfcWriteDiff := ""
+	if !reflect.DeepEqual(dfcWriteD, dfcWriteO) {
+		dfcWriteDiff = fmt.Sprintf("WriteDFC: %v vs %v", dfcWriteD, dfcWriteO)
+	}
 
 	// diff for variables
 	comparatorVariable := variables.NewComparator()

@@ -22,9 +22,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	fsmv2types "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/register"
 )
 
 const workerTypeName = "examplefailing"
@@ -32,9 +30,7 @@ const workerTypeName = "examplefailing"
 // FailingWorker implements the FSM v2 Worker interface for testing failure scenarios.
 type FailingWorker struct {
 	connection Connection
-	*helpers.BaseWorker[*FailingDependencies]
-	logger   deps.FSMLogger
-	identity deps.Identity
+	fsmv2.WorkerBase[ExamplefailingConfig, ExamplefailingStatus, *FailingDependencies]
 }
 
 // NewFailingWorker creates a new example failing worker.
@@ -56,7 +52,10 @@ func NewFailingWorker(
 		identity.WorkerType = workerTypeName
 	}
 
-	dependencies := NewFailingDependencies(connectionPool, logger, stateReader, identity)
+	w := &FailingWorker{}
+	bd := w.InitBase(identity, logger, stateReader)
+
+	dependencies := NewFailingDependencies(connectionPool, bd)
 
 	conn, err := connectionPool.Acquire()
 	if err != nil {
@@ -64,12 +63,23 @@ func NewFailingWorker(
 			deps.Err(err))
 	}
 
-	return &FailingWorker{
-		BaseWorker: helpers.NewBaseWorker(dependencies),
-		identity:   identity,
-		logger:     logger,
-		connection: conn,
-	}, nil
+	w.connection = conn
+	w.BindDeps(dependencies)
+
+	return w, nil
+}
+
+// GetDependencies returns the typed FailingDependencies.
+// Panics with a clear message if BindDeps was not called before this worker is used.
+func (w *FailingWorker) GetDependencies() *FailingDependencies {
+	raw := w.GetDependenciesAny()
+
+	d, ok := raw.(*FailingDependencies)
+	if !ok || d == nil {
+		panic("FailingWorker: GetDependencies called before BindDeps")
+	}
+
+	return d
 }
 
 // CollectObservedState returns the current observed state of the failing worker.
@@ -164,26 +174,9 @@ func (w *FailingWorker) updateDependenciesFromConfig(cfg ExamplefailingConfig) {
 	d.SetRecoveryDelayObservations(cfg.RecoveryDelayObservations)
 }
 
-// GetInitialState returns the state the FSM should start in.
-// Uses the initial state registry populated by the state package's init() function.
-func (w *FailingWorker) GetInitialState() fsmv2.State[any, any] {
-	return fsmv2.LookupInitialState(workerTypeName)
-}
-
 func init() {
-	if err := factory.RegisterWorkerAndSupervisorFactoryByType(
-		workerTypeName,
-		func(id deps.Identity, logger deps.FSMLogger, stateReader deps.StateReader, _ map[string]any) fsmv2.Worker {
-			pool := &DefaultConnectionPool{}
-			worker, _ := NewFailingWorker(id, pool, logger, stateReader)
-
-			return worker
-		},
-		func(cfg interface{}) interface{} {
-			return supervisor.NewSupervisor[fsmv2.Observation[ExamplefailingStatus], *fsmv2.WrappedDesiredState[ExamplefailingConfig]](
-				cfg.(supervisor.Config))
-		},
-	); err != nil {
-		panic(err)
-	}
+	register.Worker[ExamplefailingConfig, ExamplefailingStatus, *FailingDependencies](workerTypeName,
+		func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader) (fsmv2.Worker, error) {
+			return NewFailingWorker(id, &DefaultConnectionPool{}, logger, sr)
+		})
 }

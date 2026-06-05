@@ -26,6 +26,7 @@ func SayHello(_ context.Context, d *HelloworldDependencies) error {
 
 	if d.HasSaidHello() {
 		logger.Debug("already_said_hello")
+
 		return nil
 	}
 

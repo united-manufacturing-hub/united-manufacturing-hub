@@ -77,7 +77,7 @@ func createParentDeps(logger deps.FSMLogger) *transportpkg.TransportDependencies
 	mt := &mockTransport{}
 	identity := deps.Identity{ID: "parent-id", WorkerType: "transport"}
 
-	return transportpkg.NewTransportDependencies(mt, logger, nil, identity)
+	return transportpkg.NewTransportDependencies(mt, deps.NewBaseDependencies(logger, nil, identity))
 }
 
 var _ = Describe("PushDependencies", func() {
@@ -100,13 +100,13 @@ var _ = Describe("PushDependencies", func() {
 
 	Describe("NewPushDependencies", func() {
 		It("should return non-nil with valid parentDeps", func() {
-			d, err := push.NewPushDependencies(parentDeps, identity, logger, nil)
+			d, err := push.NewPushDependencies(parentDeps, deps.NewBaseDependencies(logger, nil, identity))
 			Expect(err).NotTo(HaveOccurred())
 			Expect(d).NotTo(BeNil())
 		})
 
 		It("should return error with nil parentDeps", func() {
-			d, err := push.NewPushDependencies(nil, identity, logger, nil)
+			d, err := push.NewPushDependencies(nil, deps.NewBaseDependencies(logger, nil, identity))
 			Expect(err).To(HaveOccurred())
 			Expect(d).To(BeNil())
 			Expect(err.Error()).To(ContainSubstring("parentDeps must not be nil"))
@@ -118,7 +118,7 @@ var _ = Describe("PushDependencies", func() {
 
 		BeforeEach(func() {
 			var err error
-			d, err = push.NewPushDependencies(parentDeps, identity, logger, nil)
+			d, err = push.NewPushDependencies(parentDeps, deps.NewBaseDependencies(logger, nil, identity))
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -236,7 +236,7 @@ var _ = Describe("PushDependencies", func() {
 
 		BeforeEach(func() {
 			var err error
-			d, err = push.NewPushDependencies(parentDeps, identity, logger, nil)
+			d, err = push.NewPushDependencies(parentDeps, deps.NewBaseDependencies(logger, nil, identity))
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -280,7 +280,7 @@ var _ = Describe("PushDependencies", func() {
 
 		BeforeEach(func() {
 			var err error
-			d, err = push.NewPushDependencies(parentDeps, identity, logger, nil)
+			d, err = push.NewPushDependencies(parentDeps, deps.NewBaseDependencies(logger, nil, identity))
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -302,7 +302,7 @@ var _ = Describe("PushDependencies", func() {
 
 		BeforeEach(func() {
 			var err error
-			d, err = push.NewPushDependencies(parentDeps, identity, logger, nil)
+			d, err = push.NewPushDependencies(parentDeps, deps.NewBaseDependencies(logger, nil, identity))
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -332,10 +332,10 @@ var _ = Describe("PushDependencies", func() {
 			pullIdentity := deps.Identity{ID: "pull-id", WorkerType: "pull"}
 
 			var err error
-			pushDeps, err = push.NewPushDependencies(parentDeps, pushIdentity, logger, nil)
+			pushDeps, err = push.NewPushDependencies(parentDeps, deps.NewBaseDependencies(logger, nil, pushIdentity))
 			Expect(err).NotTo(HaveOccurred())
 
-			pullDeps, err = pull.NewPullDependencies(parentDeps, pullIdentity, logger, nil)
+			pullDeps, err = pull.NewPullDependencies(parentDeps, deps.NewBaseDependencies(logger, nil, pullIdentity))
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -367,7 +367,7 @@ var _ = Describe("PushDependencies", func() {
 
 	Describe("BaseDependencies", func() {
 		It("should have its own logger", func() {
-			d, err := push.NewPushDependencies(parentDeps, identity, logger, nil)
+			d, err := push.NewPushDependencies(parentDeps, deps.NewBaseDependencies(logger, nil, identity))
 			Expect(err).NotTo(HaveOccurred())
 			Expect(d.GetLogger()).NotTo(BeNil())
 		})

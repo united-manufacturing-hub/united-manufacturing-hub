@@ -100,7 +100,7 @@ var _ = Describe("ExamplechildDependencies", func() {
 
 	Describe("NewExamplechildDependencies", func() {
 		It("should create dependencies with valid logger and pool", func() {
-			deps := example_child.NewExamplechildDependencies(mockPool, logger, nil, identity)
+			deps := example_child.NewExamplechildDependencies(mockPool, deps.NewBaseDependencies(logger, nil, identity))
 
 			Expect(deps).NotTo(BeNil())
 			Expect(deps.GetLogger()).NotTo(BeNil())
@@ -109,7 +109,7 @@ var _ = Describe("ExamplechildDependencies", func() {
 
 	Describe("GetConnectionPool", func() {
 		It("should return the original connection pool", func() {
-			deps := example_child.NewExamplechildDependencies(mockPool, logger, nil, identity)
+			deps := example_child.NewExamplechildDependencies(mockPool, deps.NewBaseDependencies(logger, nil, identity))
 
 			pool := deps.GetConnectionPool()
 			Expect(pool).NotTo(BeNil())

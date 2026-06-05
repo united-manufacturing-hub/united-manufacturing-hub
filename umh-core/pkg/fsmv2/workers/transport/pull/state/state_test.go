@@ -144,13 +144,13 @@ var _ = Describe("RunningState", func() {
 		Expect(s.LifecyclePhase()).To(Equal(config.PhaseRunningHealthy))
 	})
 
-	It("should transition to Stopping on IsStopRequired (shutdown)", func() {
+	It("should transition to Stopping on ShouldStop (shutdown)", func() {
 		snap := makeSnapshot(config.DesiredStateRunning, true, 0, true, true)
 		result := s.Next(snap)
 		Expect(result.State).To(BeAssignableToTypeOf(&state.StoppingState{}))
 	})
 
-	It("should transition to Stopping on IsStopRequired (parent stopped)", func() {
+	It("should transition to Stopping on ShouldStop (parent stopped)", func() {
 		snap := makeSnapshot(config.DesiredStateStopped, false, 0, true, true)
 		result := s.Next(snap)
 		Expect(result.State).To(BeAssignableToTypeOf(&state.StoppingState{}))
@@ -225,7 +225,7 @@ var _ = Describe("DegradedState", func() {
 		Expect(s.LifecyclePhase()).To(Equal(config.PhaseRunningDegraded))
 	})
 
-	It("should transition to Stopping on IsStopRequired", func() {
+	It("should transition to Stopping on ShouldStop", func() {
 		snap := makeSnapshot(config.DesiredStateRunning, true, 5, true, true)
 		result := s.Next(snap)
 		Expect(result.State).To(BeAssignableToTypeOf(&state.StoppingState{}))
@@ -413,7 +413,7 @@ var _ = Describe("StoppingState", func() {
 			// Scenario: parent oscillates (e.g., repeated auth failures/retries).
 			// Each cycle: Running → Starting → Running. Children must not get stuck.
 
-			for i := 0; i < 3; i++ {
+			for i := range 3 {
 				// Parent enters Starting → child enters Stopping → Stopped
 				stopping := &state.StoppingState{}
 				snapStopped := makeSnapshot(config.DesiredStateStopped, false, 0, true, true)

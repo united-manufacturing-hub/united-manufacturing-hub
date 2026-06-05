@@ -102,19 +102,19 @@ var _ = Describe("TransportDependencies", func() {
 		Context("when creating new dependencies", func() {
 			It("should return a non-nil dependencies", func() {
 				identity := depspkg.Identity{ID: "test-id", WorkerType: "transport"}
-				deps := transport.NewTransportDependencies(mt, logger, nil, identity)
+				deps := transport.NewTransportDependencies(mt, depspkg.NewBaseDependencies(logger, nil, identity))
 				Expect(deps).NotTo(BeNil())
 			})
 
 			It("should store the transport", func() {
 				identity := depspkg.Identity{ID: "test-id", WorkerType: "transport"}
-				deps := transport.NewTransportDependencies(mt, logger, nil, identity)
+				deps := transport.NewTransportDependencies(mt, depspkg.NewBaseDependencies(logger, nil, identity))
 				Expect(deps.GetTransport()).To(Equal(mt))
 			})
 
 			It("should store the logger", func() {
 				identity := depspkg.Identity{ID: "test-id", WorkerType: "transport"}
-				deps := transport.NewTransportDependencies(mt, logger, nil, identity)
+				deps := transport.NewTransportDependencies(mt, depspkg.NewBaseDependencies(logger, nil, identity))
 				Expect(deps.GetLogger()).NotTo(BeNil())
 			})
 		})
@@ -125,7 +125,7 @@ var _ = Describe("TransportDependencies", func() {
 
 		BeforeEach(func() {
 			identity := depspkg.Identity{ID: "test-id", WorkerType: "transport"}
-			deps = transport.NewTransportDependencies(mt, logger, nil, identity)
+			deps = transport.NewTransportDependencies(mt, depspkg.NewBaseDependencies(logger, nil, identity))
 		})
 
 		Describe("SetJWT", func() {
@@ -168,7 +168,7 @@ var _ = Describe("TransportDependencies", func() {
 
 		BeforeEach(func() {
 			identity := depspkg.Identity{ID: "test-id", WorkerType: "transport"}
-			deps = transport.NewTransportDependencies(mt, logger, nil, identity)
+			deps = transport.NewTransportDependencies(mt, depspkg.NewBaseDependencies(logger, nil, identity))
 		})
 
 		Describe("SetTransport", func() {
@@ -196,7 +196,7 @@ var _ = Describe("TransportDependencies", func() {
 
 		BeforeEach(func() {
 			identity := depspkg.Identity{ID: "test-id", WorkerType: "transport"}
-			deps = transport.NewTransportDependencies(mt, logger, nil, identity)
+			deps = transport.NewTransportDependencies(mt, depspkg.NewBaseDependencies(logger, nil, identity))
 		})
 
 		Describe("GetInboundChan", func() {
@@ -217,7 +217,7 @@ var _ = Describe("TransportDependencies", func() {
 
 		BeforeEach(func() {
 			identity := depspkg.Identity{ID: "test-id", WorkerType: "transport"}
-			deps = transport.NewTransportDependencies(mt, logger, nil, identity)
+			deps = transport.NewTransportDependencies(mt, depspkg.NewBaseDependencies(logger, nil, identity))
 		})
 
 		Describe("GetConsecutiveErrors", func() {
@@ -300,7 +300,7 @@ var _ = Describe("TransportDependencies", func() {
 
 		BeforeEach(func() {
 			identity := depspkg.Identity{ID: "test-id", WorkerType: "transport"}
-			deps = transport.NewTransportDependencies(mt, logger, nil, identity)
+			deps = transport.NewTransportDependencies(mt, depspkg.NewBaseDependencies(logger, nil, identity))
 		})
 
 		Describe("GetDegradedEnteredAt", func() {
@@ -360,7 +360,7 @@ var _ = Describe("TransportDependencies", func() {
 		BeforeEach(func() {
 			mockTrans = &mockTransport{}
 			identity := depspkg.Identity{ID: "test-id", WorkerType: "transport"}
-			deps = transport.NewTransportDependencies(mockTrans, logger, nil, identity)
+			deps = transport.NewTransportDependencies(mockTrans, depspkg.NewBaseDependencies(logger, nil, identity))
 		})
 
 		Context("when errors reach threshold", func() {
@@ -378,7 +378,7 @@ var _ = Describe("TransportDependencies", func() {
 		Context("when transport is nil", func() {
 			It("should not panic when recording errors without transport", func() {
 				identity := depspkg.Identity{ID: "test-id", WorkerType: "transport"}
-				depsWithNilTransport := transport.NewTransportDependencies(nil, logger, nil, identity)
+				depsWithNilTransport := transport.NewTransportDependencies(nil, depspkg.NewBaseDependencies(logger, nil, identity))
 
 				Expect(func() {
 					for range 10 {
@@ -394,7 +394,7 @@ var _ = Describe("TransportDependencies", func() {
 
 		BeforeEach(func() {
 			identity := depspkg.Identity{ID: "test-id", WorkerType: "transport"}
-			deps = transport.NewTransportDependencies(mt, logger, nil, identity)
+			deps = transport.NewTransportDependencies(mt, depspkg.NewBaseDependencies(logger, nil, identity))
 		})
 
 		Describe("SetFailedAuthConfig and GetFailedAuthConfig", func() {
@@ -437,7 +437,7 @@ var _ = Describe("TransportDependencies", func() {
 	Describe("Dependencies interface implementation", func() {
 		It("should implement deps.Dependencies interface", func() {
 			identity := depspkg.Identity{ID: "test-id", WorkerType: "transport"}
-			deps := transport.NewTransportDependencies(mt, logger, nil, identity)
+			deps := transport.NewTransportDependencies(mt, depspkg.NewBaseDependencies(logger, nil, identity))
 			var _ depspkg.Dependencies = deps
 			Expect(deps).To(Satisfy(func(d interface{}) bool {
 				_, ok := d.(depspkg.Dependencies)
@@ -463,7 +463,7 @@ var _ = Describe("TransportDependencies", func() {
 
 					identity := depspkg.Identity{ID: "test-id", WorkerType: "transport"}
 					Expect(func() {
-						transport.NewTransportDependencies(mt, logger, nil, identity)
+						transport.NewTransportDependencies(mt, depspkg.NewBaseDependencies(logger, nil, identity))
 					}).To(PanicWith(ContainSubstring("ChannelProvider must be set")))
 				})
 			})
@@ -481,7 +481,7 @@ var _ = Describe("TransportDependencies", func() {
 					identity := depspkg.Identity{ID: "test-singleton-id", WorkerType: "transport"}
 					var deps *transport.TransportDependencies
 					Expect(func() {
-						deps = transport.NewTransportDependencies(mt, logger, nil, identity)
+						deps = transport.NewTransportDependencies(mt, depspkg.NewBaseDependencies(logger, nil, identity))
 					}).NotTo(Panic())
 
 					Expect(deps).NotTo(BeNil())

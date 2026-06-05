@@ -253,6 +253,7 @@ func (a *PushAction) retryPending(ctx context.Context, t types.Transport, pushDe
 		}
 
 		pushLatency := time.Since(pushStart)
+
 		pushDeps.RecordSuccess()
 		metrics.IncrementCounter(depspkg.CounterPushOps, 1)
 		metrics.IncrementCounter(depspkg.CounterPushSuccess, 1)

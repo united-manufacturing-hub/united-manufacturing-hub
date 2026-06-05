@@ -264,7 +264,7 @@
 // For detailed architecture explanations, see:
 //   - architecture_test.go - Patterns enforced by tests (run with -v for rationale explanations)
 //   - api.go - Core interfaces (Worker, State, Action)
-//   - internal/helpers/ - Convenience helpers (BaseState, BaseWorker, ConvertWorkerSnapshot)
+//   - internal/helpers/ - Convenience helpers (base state types: RunningHealthyBase, DegradedBase, etc.)
 //   - supervisor/supervisor.go - Orchestration and lifecycle management
 //   - config/childspec.go - Hierarchical composition
 //   - config/variables.go - Variable namespaces
@@ -318,14 +318,14 @@
 // ### One-way stop trajectory
 //
 // TryingToStop and Stopping states are ONE-WAY. They do NOT check
-// IsStopRequired() to abort cleanup mid-flight. Once a worker enters a stop
+// ShouldStop() to abort cleanup mid-flight. Once a worker enters a stop
 // state it runs the full trajectory to Stopped before any resume can begin.
 //
-// At Stopped, the worker checks IsStopRequired() and either stays stopped or
+// At Stopped, the worker checks ShouldStop() and either stays stopped or
 // re-enters TryingToStart.
 //
 // If you are writing a new stop state and feel tempted to add a
-// "if !IsStopRequired() { return GoTo{Running} }" branch - don't. That is the
+// "if !ShouldStop() { return GoTo{Running} }" branch - don't. That is the
 // bug this rule prevents.
 //
 // ## Shutdown handling
@@ -335,7 +335,7 @@
 //
 // ## Type-safe dependencies
 //
-// Use BaseWorker[D] for type-safe dependency access without casting.
+// Embed fsmv2.WorkerBase[TConfig, TStatus, TDeps] for type-safe dependency access.
 // See workers/example/examplechild/dependencies.go for the pattern.
 // See DEPENDENCIES.md for comprehensive documentation including dependency
 // inventory, custom dependencies, global variables, StateReader, metrics,

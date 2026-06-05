@@ -30,17 +30,12 @@ package hello_world
 import (
 	"context"
 	"errors"
-	"fmt"
 	"os"
 	"strings"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
-
-	"gopkg.in/yaml.v3"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/register"
 )
 
 // HelloworldWorker implements the FSMv2 Worker interface.
@@ -52,9 +47,7 @@ import (
 //
 // The supervisor drives the state machine by calling these methods each tick.
 type HelloworldWorker struct {
-	workerDeps *HelloworldDependencies
-	logger     deps.FSMLogger
-	identity   deps.Identity
+	fsmv2.WorkerBase[HelloworldConfig, HelloworldStatus, *HelloworldDependencies]
 }
 
 // NewHelloworldWorker creates a new helloworld worker.
@@ -67,14 +60,25 @@ func NewHelloworldWorker(
 		return nil, errors.New("logger must not be nil")
 	}
 
-	baseDeps := deps.NewBaseDependencies(logger, stateReader, identity)
-	workerDeps := NewHelloworldDependencies(baseDeps)
+	w := &HelloworldWorker{}
+	bd := w.InitBase(identity, logger, stateReader)
+	workerDeps := NewHelloworldDependencies(bd)
+	w.BindDeps(workerDeps)
 
-	return &HelloworldWorker{
-		workerDeps: workerDeps,
-		identity:   identity,
-		logger:     logger,
-	}, nil
+	return w, nil
+}
+
+// GetDependencies returns the typed HelloworldDependencies.
+// Panics with a clear message if BindDeps was not called before this worker is used.
+func (w *HelloworldWorker) GetDependencies() *HelloworldDependencies {
+	raw := w.GetDependenciesAny()
+
+	d, ok := raw.(*HelloworldDependencies)
+	if !ok || d == nil {
+		panic("HelloworldWorker: GetDependencies called before BindDeps")
+	}
+
+	return d
 }
 
 // CollectObservedState returns the current observed state.
@@ -91,60 +95,11 @@ func (w *HelloworldWorker) CollectObservedState(ctx context.Context, desired fsm
 	cfg := fsmv2.ExtractConfig[HelloworldConfig](desired)
 
 	status := HelloworldStatus{
-		HelloSaid: w.workerDeps.HasSaidHello(),
+		HelloSaid: w.GetDependencies().HasSaidHello(),
 		Mood:      readMoodFile(cfg.MoodFilePath),
 	}
 
 	return fsmv2.NewObservation(status), nil
-}
-
-// DeriveDesiredState determines what state the worker should be in.
-//
-// Parses user configuration into HelloworldConfig and wraps it in
-// WrappedDesiredState for typed access in state files via ConvertWorkerSnapshot.
-func (w *HelloworldWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, error) {
-	if spec == nil {
-		return &fsmv2.WrappedDesiredState[HelloworldConfig]{
-			State: config.DesiredStateRunning,
-		}, nil
-	}
-
-	userSpec, ok := spec.(config.UserSpec)
-	if !ok {
-		return nil, fmt.Errorf("invalid spec type: expected UserSpec, got %T", spec)
-	}
-
-	renderedConfig, err := config.RenderConfigTemplate(userSpec.Config, userSpec.Variables)
-	if err != nil {
-		return nil, fmt.Errorf("template rendering failed: %w", err)
-	}
-
-	var cfg HelloworldConfig
-	if renderedConfig != "" {
-		if err := yaml.Unmarshal([]byte(renderedConfig), &cfg); err != nil {
-			return nil, fmt.Errorf("failed to parse helloworld config: %w", err)
-		}
-	}
-
-	state := cfg.GetState()
-
-	return &fsmv2.WrappedDesiredState[HelloworldConfig]{
-		State:  state,
-		Config: cfg,
-	}, nil
-}
-
-// GetInitialState returns the state the FSM should start in.
-// Uses the initial state registry populated by the state package's init() function.
-// The caller must ensure the state package is imported (via blank import in main or test).
-func (w *HelloworldWorker) GetInitialState() fsmv2.State[any, any] {
-	return fsmv2.LookupInitialState("helloworld")
-}
-
-// GetDependenciesAny returns the worker's dependencies for action execution.
-// Implements fsmv2.DependencyProvider.
-func (w *HelloworldWorker) GetDependenciesAny() any {
-	return w.workerDeps
 }
 
 // Actions returns the available actions for this worker.
@@ -169,33 +124,11 @@ func readMoodFile(path string) string {
 	return strings.TrimSpace(string(data))
 }
 
-// init registers the worker with the factory using an explicit worker type name.
-// Uses RegisterWorkerAndSupervisorFactoryByType since Observation[T] generics
-// cannot be used with DeriveWorkerType (which relies on type name conventions).
 func init() {
-	if err := factory.RegisterWorkerAndSupervisorFactoryByType(
-		"helloworld",
-		// Worker factory: creates worker instances
-		func(id deps.Identity, logger deps.FSMLogger, stateReader deps.StateReader, _ map[string]any) fsmv2.Worker {
-			worker, err := NewHelloworldWorker(id, logger, stateReader)
-			if err != nil {
-				if logger != nil {
-					logger.SentryError(deps.FeatureExamples, id.HierarchyPath, err, "helloworld_worker_creation_failed")
-				}
-
-				return nil
-			}
-
-			return worker
-		},
-		// Supervisor factory: creates supervisor instances
-		func(cfg interface{}) interface{} {
-			return supervisor.NewSupervisor[fsmv2.Observation[HelloworldStatus], *fsmv2.WrappedDesiredState[HelloworldConfig]](
-				cfg.(supervisor.Config))
-		},
-	); err != nil {
-		panic(err)
-	}
+	register.Worker[HelloworldConfig, HelloworldStatus, *HelloworldDependencies]("helloworld",
+		func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader) (fsmv2.Worker, error) {
+			return NewHelloworldWorker(id, logger, sr)
+		})
 }
 
 // ensure HelloworldWorker implements Worker interfaces (compile-time check).

@@ -44,24 +44,10 @@ func (c ProtocolConverterServiceConfigSpec) GetDFCReadServiceConfig() dataflowco
 	return dfcReadConfig
 }
 
-// GetDFCWriteServiceConfig converts the component config to a full ProtocolConverterServiceConfig
-// For a write DFC, the user is not allowed to set its own input config, so we "enforce" the input config
-// to be the UNS input config. This ensures protocol converters always read from the unified namespace.
-func (c ProtocolConverterServiceConfigSpec) GetDFCWriteServiceConfig() dataflowcomponentserviceconfig.DataflowComponentServiceConfig {
-	dfcWriteConfig := c.Config.DataflowComponentWriteServiceConfig
-
-	// Always enforce UNS input — user must not supply their own input config.
-	// consumer_group is resolved via template; umh_topics is injected post-render
-	// in renderConfig because []string can't be rendered via text/template.
-	if len(dfcWriteConfig.BenthosConfig.Output) > 0 {
-		dfcWriteConfig.BenthosConfig.Input = map[string]any{
-			"uns": map[string]any{
-				"consumer_group": "{{ .internal.bridged_by }}",
-			},
-		}
-	}
-
-	return dfcWriteConfig
+// GetDFCWriteServiceConfig returns the write DFC input config from the spec.
+// InputTopics may contain Go template actions resolved at deploy time.
+func (c ProtocolConverterServiceConfigSpec) GetDFCWriteServiceConfig() dataflowcomponentserviceconfig.DataflowComponentWriteConfigInput {
+	return c.Config.DataflowComponentWriteServiceConfig
 }
 
 // FromConnectionAndDFCServiceConfig creates a ProtocolConverterServiceConfig

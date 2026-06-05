@@ -65,9 +65,11 @@ type FailingDependencies struct {
 	connected              bool
 }
 
-func NewFailingDependencies(connectionPool ConnectionPool, logger deps.FSMLogger, stateReader deps.StateReader, identity deps.Identity) *FailingDependencies {
+// NewFailingDependencies creates dependencies for the failing worker.
+// bd is the shared BaseDependencies returned by WorkerBase.InitBase.
+func NewFailingDependencies(connectionPool ConnectionPool, bd *deps.BaseDependencies) *FailingDependencies {
 	return &FailingDependencies{
-		BaseDependencies: deps.NewBaseDependencies(logger, stateReader, identity),
+		BaseDependencies: bd,
 		connectionPool:   connectionPool,
 		maxFailures:      3, // Default: fail 3 times before success
 		failureCycles:    1, // Default: single failure cycle (backward compatible)

@@ -464,6 +464,7 @@ func (a *EditDataflowComponentAction) Execute() (interface{}, map[string]interfa
 
 	// Preserve the existing DebugLevel so that UI edits don't reset it to false
 	debugLevel := false
+
 	fetchCtx, fetchCancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
 	defer fetchCancel()
 

@@ -106,26 +106,6 @@ worker starts an operation right before shutdown is requested.`,
 }`,
 		ReferenceFile: "example-child/state/state_connected.go:30",
 	},
-	"CHILD_MUST_USE_IS_STOP_REQUIRED": {
-		Name: "Child Workers Must Use IsStopRequired()",
-		Why: `Child workers must check IsStopRequired() instead of just IsShutdownRequested().
-WHY: Child workers have TWO shutdown signals:
-1. IsShutdownRequested() - explicit shutdown request
-2. !ShouldBeRunning() - parent stopped via ChildStartStates
-
-Using only IsShutdownRequested() misses parent lifecycle changes, causing
-children to stay running when parent goes to TryingToStop.
-
-IsStopRequired() = IsShutdownRequested() || !ShouldBeRunning()`,
-		CorrectCode: `func (s *ChildState) Next(snapAny any) (...) {
-    snap := fsmv2.ConvertWorkerSnapshot[MyConfig, MyStatus](snapAny)
-    if snap.IsStopRequired() {  // NOT snap.IsShutdownRequested alone
-        return fsmv2.Result[any, any](&TryingToStopState{}, fsmv2.SignalNone, nil, "stop required")
-    }
-    // Then other logic...
-}`,
-		ReferenceFile: "example-child/state/state_connected.go:33",
-	},
 	"STATE_AND_ACTION": {
 		Name: "State Change XOR Action",
 		Why: `Next() must return EITHER a new state OR an action, never both simultaneously.

@@ -50,13 +50,14 @@ type PullDependencies struct {
 }
 
 // NewPullDependencies creates a PullDependencies backed by the given parent transport dependencies.
-func NewPullDependencies(parentDeps *transport_pkg.TransportDependencies, identity deps.Identity, logger deps.FSMLogger, stateReader deps.StateReader) (*PullDependencies, error) {
+// bd is the shared BaseDependencies returned by WorkerBase.InitBase.
+func NewPullDependencies(parentDeps *transport_pkg.TransportDependencies, bd *deps.BaseDependencies) (*PullDependencies, error) {
 	if parentDeps == nil {
 		return nil, errors.New("parentDeps must not be nil")
 	}
 
 	return &PullDependencies{
-		BaseDependencies: deps.NewBaseDependencies(logger, stateReader, identity),
+		BaseDependencies: bd,
 		parentDeps:       parentDeps,
 		failureRate:      failurerate.New(transport_pkg.ChildFailureRateConfig),
 	}, nil
@@ -118,6 +119,7 @@ func (d *PullDependencies) RecordSuccess() {
 func (d *PullDependencies) RecordError() {
 	d.RetryTracker().RecordError()
 	d.parentDeps.RecordError()
+
 	if d.failureRate.RecordOutcome(false) {
 		d.BaseDependencies.GetLogger().SentryWarn(deps.FeatureForWorker(d.GetWorkerType()), d.GetHierarchyPath(), "persistent_pull_failure",
 			deps.Float64("failure_rate", d.failureRate.FailureRate()))
@@ -134,6 +136,7 @@ func (d *PullDependencies) GetConsecutiveErrors() int {
 func (d *PullDependencies) GetLastErrorType() types.ErrorType {
 	d.errorMu.RLock()
 	defer d.errorMu.RUnlock()
+
 	return d.lastErrorType
 }
 
@@ -149,6 +152,7 @@ func (d *PullDependencies) StorePendingMessages(msgs []*types.UMHMessage) {
 			d.pendingMessages = append(d.pendingMessages, msg)
 		}
 	}
+
 	if len(d.pendingMessages) > maxPendingMessages {
 		dropped := len(d.pendingMessages) - maxPendingMessages
 		d.pendingMessages = d.pendingMessages[len(d.pendingMessages)-maxPendingMessages:]
@@ -222,6 +226,7 @@ func (d *PullDependencies) GetLastRetryAfter() time.Duration {
 // the degraded state, or the zero time if the child is not currently degraded.
 func (d *PullDependencies) GetDegradedEnteredAt() time.Time {
 	degradedSince, _ := d.RetryTracker().DegradedSince()
+
 	return degradedSince
 }
 

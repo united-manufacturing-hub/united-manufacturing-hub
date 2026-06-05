@@ -22,6 +22,7 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/register"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/application"
 	persistenceworker "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/persistence"
 	persistencesnapshot "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/persistence/snapshot"
@@ -82,6 +83,7 @@ func RunPersistenceScenario(ctx context.Context, cfg PersistenceRunConfig) *Pers
 			Error:    fmt.Errorf("invalid tick interval %v: must be non-negative", cfg.TickInterval),
 		}
 	}
+
 	if tickInterval == 0 {
 		tickInterval = 100 * time.Millisecond
 	}
@@ -94,6 +96,8 @@ children:
     workerType: "persistence"
 `
 
+	register.SetDeps[*persistenceworker.PersistenceDependencies](persistenceworker.WorkerTypeName, persistenceworker.NewStoreOnlyDependencies(store))
+
 	appSup, err := application.NewApplicationSupervisor(application.SupervisorConfig{
 		ID:           "scenario-persistence",
 		Name:         "persistence",
@@ -101,11 +105,10 @@ children:
 		Logger:       logger,
 		TickInterval: tickInterval,
 		YAMLConfig:   yamlConfig,
-		Dependencies: map[string]any{
-			"dependencies": persistenceworker.NewStoreOnlyDependencies(store),
-		},
+		Dependencies: map[string]any{},
 	})
 	if err != nil {
+		register.ClearDeps(persistenceworker.WorkerTypeName)
 		close(done)
 
 		return &PersistenceRunResult{
@@ -150,7 +153,7 @@ children:
 					deps.Err(loadErr))
 			}
 		} else {
-			workerMetrics := observed.MetricsEmbedder.Metrics.Worker
+			workerMetrics := observed.Metrics.Worker
 			result.CompactionCycles = workerMetrics.Counters[string(deps.CounterCompactionCyclesTotal)]
 			result.MaintenanceCycles = workerMetrics.Counters[string(deps.CounterMaintenanceCyclesTotal)]
 			result.LastCompactionAt = observed.Status.LastCompactionAt
@@ -158,6 +161,7 @@ children:
 			result.Healthy = observed.Status.IsHealthy()
 		}
 
+		register.ClearDeps(persistenceworker.WorkerTypeName)
 		close(done)
 	}()
 
