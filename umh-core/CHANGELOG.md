@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## [0.44.22]
+
 ### Improvements
 
 - Sparkplug B input: `request_birth_on_connect` now defaults to `true`, so `secondary_active`/`primary` bridges proactively rebirth newly seen nodes on connect. Set it to `false` to keep the prior behavior (ignored under `secondary_passive`)
