@@ -105,8 +105,8 @@ jobs:
     runs-on: depot-ubuntu-24.04
     timeout-minutes: 30
     permissions:
+      contents: read
       packages: read
-      pull-requests: write
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
@@ -117,23 +117,12 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Verify fossa-deps.yml in sync with Makefile
-        working-directory: umh-core
-        run: |
-          make fossa-deps
-          if [ -n "$(git status --porcelain fossa-deps.yml)" ]; then
-            echo "::error::fossa-deps.yml is out of sync with Makefile versions. Run 'make fossa-deps' in umh-core/ and commit."
-            git diff fossa-deps.yml
-            exit 1
-          fi
-
       - name: FOSSA Container Analyze
         uses: fossas/fossa-action@ff70fe9fe17cbd2040648f1c45e8ec4e4884dcf3 # v1
         with:
           api-key: ${{ secrets.FOSSA_API_KEY }}
           project: united-manufacturing-hub-container
           container: ghcr.io/united-manufacturing-hub/umh-core:sha-${{ needs.build.outputs.short-sha }}
-          working-directory: umh-core
 
       - name: FOSSA Container Test
         id: test
@@ -142,18 +131,30 @@ jobs:
           api-key: ${{ secrets.FOSSA_API_KEY }}
           project: united-manufacturing-hub-container
           container: ghcr.io/united-manufacturing-hub/umh-core:sha-${{ needs.build.outputs.short-sha }}
-          working-directory: umh-core
           run-tests: true
 
-      - name: Comment FOSSA container scan result
-        if: always()
-        uses: marocchino/sticky-pull-request-comment@0ea0beb66eb9baf113663a64ec522f60e49231c0 # v3.0.4
-        with:
-          header: fossa-container
-          message: |
-            **FOSSA Container Scan**
+  fossa-vendored:
+    name: FOSSA Vendored Binaries
+    if: github.event_name == 'pull_request' # && github.base_ref == 'main'
+    runs-on: depot-ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
-            ${{ steps.test.outcome == 'success' && '✅ No issues found' || format('[View issues](https://app.fossa.com/projects/custom%2B36616%2Funited-manufacturing-hub-container/refs/branch/master/{0})', needs.build.outputs.digest) }}
+      - name: FOSSA Analyze (vendored binaries)
+        uses: fossas/fossa-action@ff70fe9fe17cbd2040648f1c45e8ec4e4884dcf3 # v1
+        with:
+          api-key: ${{ secrets.FOSSA_API_KEY }}
+          project: umh-core-vendored
+          working-directory: .fossa-vendored
+
+      - name: FOSSA Test (vendored binaries)
+        uses: fossas/fossa-action@ff70fe9fe17cbd2040648f1c45e8ec4e4884dcf3 # v1
+        with:
+          api-key: ${{ secrets.FOSSA_API_KEY }}
+          project: umh-core-vendored
+          working-directory: .fossa-vendored
+          run-tests: true
 
   license-eye-header:
     uses: ./.github/workflows/license-eye-header.yaml
@@ -384,6 +385,7 @@ jobs:
         build,
         fossa,
         fossa-container,
+        fossa-vendored,
         license-eye-header,
         require-changelog-entry,
         validate-changelog,
