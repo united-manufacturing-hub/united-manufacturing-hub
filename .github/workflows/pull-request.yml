@@ -124,6 +124,9 @@ jobs:
           project: united-manufacturing-hub-container
           container: ghcr.io/united-manufacturing-hub/umh-core:sha-${{ needs.build.outputs.short-sha }}
 
+      - name: Wait for FOSSA backend to index revision
+        run: sleep 30
+
       - name: FOSSA Container Test
         id: test
         uses: fossas/fossa-action@ff70fe9fe17cbd2040648f1c45e8ec4e4884dcf3 # v1
@@ -146,14 +149,14 @@ jobs:
         uses: fossas/fossa-action@ff70fe9fe17cbd2040648f1c45e8ec4e4884dcf3 # v1
         with:
           api-key: ${{ secrets.FOSSA_API_KEY }}
-          project: umh-core-vendored
+          project: united-manufacturing-hub-vendored
           working-directory: .fossa-vendored
 
       - name: FOSSA Test (vendored binaries)
         uses: fossas/fossa-action@ff70fe9fe17cbd2040648f1c45e8ec4e4884dcf3 # v1
         with:
           api-key: ${{ secrets.FOSSA_API_KEY }}
-          project: umh-core-vendored
+          project: united-manufacturing-hub-vendored
           working-directory: .fossa-vendored
           run-tests: true
 
