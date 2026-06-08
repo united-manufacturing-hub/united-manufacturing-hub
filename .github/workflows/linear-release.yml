@@ -23,7 +23,7 @@
 # reads its pipeline access key from the LINEAR_ACCESS_KEY env var.
 #
 # The description is the CHANGELOG section for the released version with images
-# stripped; the image-rich changelog lives at changelog.umh.app.
+# stripped; the image-rich changelog lives at umh.app/insights/changelog.
 #
 # workflow_dispatch exposes dry_run and base_ref so a release can be re-tested
 # (including against historical tags) on the real CLI path without mutating
@@ -73,7 +73,22 @@ jobs:
           fetch-depth: 0
           fetch-tags: true
 
-      - name: Compute release version and name
+      # The step above checks out the released tag, whose tree predates these
+      # CI scripts (and won't contain them when re-syncing historical tags).
+      # Pull the scripts from the workflow file's own revision instead, into a
+      # sibling dir, so they exist regardless of which tag is being synced.
+      # workflow_sha (not github.sha): on a release: event github.sha is the
+      # released tag commit, which may not carry the scripts; workflow_sha is
+      # always the revision the running workflow came from, which does.
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.workflow_sha }}
+          path: .ci-tooling
+          sparse-checkout: .github/scripts
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+
+      - name: Compute release version
         id: ver
         env:
           TAG: ${{ inputs.tag || github.event.release.tag_name }}
@@ -87,31 +102,13 @@ jobs:
 
       - name: Build release notes from CHANGELOG.md
         env:
-          SEMVER: ${{ steps.ver.outputs.semver }}
-        run: |
-          set -euo pipefail
-          # Extract the `## [SEMVER]` section, stopping at the next `## [` heading.
-          # umh-core's CHANGELOG.md uses `## [0.44.21]` (semver in brackets).
-          awk -v v="$SEMVER" '
-            $0 == "## [" v "]" {found=1; next}
-            /^## \[/ {if (found) exit}
-            found {print}
-          ' umh-core/CHANGELOG.md > /tmp/notes.md
-
-          # Drop image-only lines. The image-rich changelog lives at
-          # changelog.umh.app, linked in the footer below.
-          sed -i -E '/^[[:space:]]*!\[[^]]*\]\([^)]*\)[[:space:]]*$/d' /tmp/notes.md
-
-          if [ ! -s /tmp/notes.md ]; then
-            echo "::warning::No CHANGELOG.md section found for [${SEMVER}]; release notes will contain only the footer."
-            : > /tmp/notes.md
-          fi
-
-          {
-            echo ""
-            echo "---"
-            echo "Full changelog: https://changelog.umh.app"
-          } >> /tmp/notes.md
+          # Bare semver: build-release-notes matches the `## [x.y.z]` heading.
+          VERSION: ${{ steps.ver.outputs.semver }}
+          CHANGELOG_FILE: umh-core/CHANGELOG.md
+          # Empty notes fail the step on a real sync, but stay a warning on
+          # dry-runs so historical/odd tags can still be exercised.
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: .ci-tooling/.github/scripts/build-release-notes.sh "$RUNNER_TEMP/notes.md"
 
       - name: Install linear-release CLI
         run: |
@@ -129,32 +126,17 @@ jobs:
           BASE_REF: ${{ inputs.base_ref }}
         run: |
           set -euo pipefail
-          # Resolve the commit-scan base. The CLI's automatic baseline (and
-          # Linear's stored baseline) can break across releases; computing the
-          # base from the previous stable semver tag is robust. A dispatch
-          # base_ref input overrides this.
-          BASE="${BASE_REF:-}"
-          if [ -z "$BASE" ]; then
-            PREV_TAG="$(git tag -l 'v*'               | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$'               | sort -V               | awk -v cur="$CURRENT_TAG" '$0==cur{print prev; exit} {prev=$0}')"
-            if [ -z "$PREV_TAG" ]; then
-              echo "::warning::No previous stable vX.Y.Z tag precedes ${CURRENT_TAG}; using the CLI automatic baseline."
-            elif git merge-base --is-ancestor "$PREV_TAG" "$CURRENT_TAG" 2>/dev/null; then
-              BASE="$(git rev-parse "$PREV_TAG")"
-              echo "Scan base: ${PREV_TAG} (${BASE})"
-            elif git merge-base --is-ancestor "${PREV_TAG}^1" "$CURRENT_TAG" 2>/dev/null; then
-              BASE="$(git rev-parse "${PREV_TAG}^1")"
-              echo "Scan base: ${PREV_TAG}^1 (${BASE}) [previous tag is not a direct ancestor]"
-            else
-              echo "::warning::Neither ${PREV_TAG} nor its first parent is an ancestor of ${CURRENT_TAG}; using the CLI automatic baseline."
-            fi
-          fi
+          # Resolve the commit-scan base (empty = let the CLI pick its automatic
+          # baseline). The resolver prints the base to stdout and its rationale
+          # to stderr; a BASE_REF override short-circuits it. See the script.
+          BASE="$(.ci-tooling/.github/scripts/resolve-base-ref.sh)"
 
           # Monorepo: scope the commit scan to umh-core; ignore helm chart and
           # classic commits.
           args=(sync --json
             "--release-version=${VERSION}"
             "--name=${VERSION}"
-            --release-notes-file /tmp/notes.md
+            --release-notes-file "$RUNNER_TEMP/notes.md"
             "--include-paths=umh-core/**")
           if [ "${DRY_RUN:-false}" = "true" ]; then
             args+=("--dry-run")
