@@ -135,6 +135,7 @@ jobs:
 
   fossa-vendored:
     name: FOSSA Vendored Binaries
+    needs: [changes, build]
     if: github.event_name == 'pull_request' # && github.base_ref == 'main'
     runs-on: depot-ubuntu-24.04
     timeout-minutes: 10
