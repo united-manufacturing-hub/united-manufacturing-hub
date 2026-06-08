@@ -67,7 +67,7 @@ jobs:
     needs: changes
     if: github.event_name != 'merge_group'
     runs-on: depot-ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 20
     permissions:
       contents: read
       pull-requests: write
