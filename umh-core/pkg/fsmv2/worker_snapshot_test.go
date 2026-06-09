@@ -137,6 +137,37 @@ var _ = Describe("ConvertWorkerSnapshot (happy paths)", func() {
 
 		Expect(snap.ChildrenSpecs).To(Equal(children))
 	})
+
+	// The nil vs empty-non-nil discriminator on ChildrenSpecs is load-bearing for
+	// the underlying WrappedDesiredState.ChildrenSpecs: nil means "no opinion"
+	// (the parent declares children via RenderChildren, so DeriveDesiredState no
+	// longer writes ChildrenSpecs) while an empty non-nil slice means "zero
+	// children". ConvertWorkerSnapshot must copy the field verbatim so a future
+	// nil<->empty normalization can never flip one into the other unnoticed.
+	It("preserves a nil ChildrenSpecs as nil through the convert path", func() {
+		obs := fsmv2.Observation[workerTestStatus]{CollectedAt: now}
+		wds := &fsmv2.WrappedDesiredState[workerTestConfig]{
+			ChildrenSpecs: nil,
+		}
+
+		raw := fsmv2.Snapshot{Observed: obs, Desired: wds, Identity: identity}
+		snap := fsmv2.ConvertWorkerSnapshot[workerTestConfig, workerTestStatus](raw)
+
+		Expect(snap.ChildrenSpecs).To(BeNil())
+	})
+
+	It("preserves an empty non-nil ChildrenSpecs as empty non-nil through the convert path", func() {
+		obs := fsmv2.Observation[workerTestStatus]{CollectedAt: now}
+		wds := &fsmv2.WrappedDesiredState[workerTestConfig]{
+			ChildrenSpecs: []config.ChildSpec{},
+		}
+
+		raw := fsmv2.Snapshot{Observed: obs, Desired: wds, Identity: identity}
+		snap := fsmv2.ConvertWorkerSnapshot[workerTestConfig, workerTestStatus](raw)
+
+		Expect(snap.ChildrenSpecs).NotTo(BeNil())
+		Expect(snap.ChildrenSpecs).To(BeEmpty())
+	})
 })
 
 var _ = Describe("ShouldStop", func() {
