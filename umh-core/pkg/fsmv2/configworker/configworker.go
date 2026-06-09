@@ -92,13 +92,31 @@ func (r *Registry) Specs() []config.ChildSpec {
 // ConfigWorker owns a shared Registry and records child specs via Upsert.
 type ConfigWorker struct {
 	registry *Registry
+	validate func(config.ChildSpec) error
+}
+
+// Option configures a ConfigWorker at construction.
+type Option func(*ConfigWorker)
+
+// WithValidate installs a content-validation hook that Upsert runs against the
+// built spec before recording it. A non-nil error from the hook makes Upsert
+// reject the ref and leave the registry unchanged, preserving any spec
+// previously recorded for ref.
+func WithValidate(validate func(config.ChildSpec) error) Option {
+	return func(cw *ConfigWorker) {
+		cw.validate = validate
+	}
 }
 
 // NewConfigWorker returns a ConfigWorker with an empty registry.
-func NewConfigWorker() *ConfigWorker {
-	return &ConfigWorker{
+func NewConfigWorker(opts ...Option) *ConfigWorker {
+	cw := &ConfigWorker{
 		registry: &Registry{specs: make(map[Ref]config.ChildSpec)},
 	}
+	for _, opt := range opts {
+		opt(cw)
+	}
+	return cw
 }
 
 // Registry returns the shared registry.
@@ -114,6 +132,12 @@ func (cw *ConfigWorker) Upsert(ref Ref, cfg map[string]any) error {
 	spec, err := config.NewChildSpec(ref.Name, ref.WorkerType, cfg, true)
 	if err != nil {
 		return err
+	}
+
+	if cw.validate != nil {
+		if err := cw.validate(spec); err != nil {
+			return err
+		}
 	}
 
 	cw.registry.mu.Lock()
