@@ -482,10 +482,18 @@ func (d *WrappedDesiredState[TConfig]) GetChildrenSpecs() []config.ChildSpec {
 // WorkerSnapshot is the typed snapshot passed to State.Next(). It eliminates
 // unsafe type assertions previously required in every state file.
 type WorkerSnapshot[TConfig any, TStatus any] struct {
-	CollectedAt         time.Time
-	Config              TConfig
-	Status              TStatus
-	ChildrenView        config.ChildrenView
+	CollectedAt  time.Time
+	Config       TConfig
+	Status       TStatus
+	ChildrenView config.ChildrenView
+	// ChildrenSpecs is the worker's own DESIRED child set, copied verbatim from
+	// WrappedDesiredState.ChildrenSpecs (the legacy DeriveDesiredState path). It is
+	// NOT the effective reconciled set: for parents that declare children via the
+	// Next() Children override it does not reflect the override and may be stale or
+	// empty. It is also distinct from the observed ChildrenView above, which reports
+	// the children that actually exist. nil means "no opinion" (parent does not
+	// populate ChildrenSpecs); an empty non-nil slice means "zero children".
+	ChildrenSpecs       []config.ChildSpec
 	Identity            deps.Identity
 	LastActionResults   []deps.ActionResult
 	Metrics             deps.MetricsEmbedder
@@ -535,6 +543,7 @@ func ConvertWorkerSnapshot[TConfig any, TStatus any](snapAny any) WorkerSnapshot
 		ChildrenHealthy:     obs.ChildrenHealthy,
 		ChildrenUnhealthy:   obs.ChildrenUnhealthy,
 		ChildrenView:        obs.ChildrenView,
+		ChildrenSpecs:       des.ChildrenSpecs,
 	}
 }
 
