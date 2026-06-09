@@ -21,16 +21,35 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 )
 
-// TestMarkAsStarted sets the supervisor as started with a valid context. DO NOT USE in production code.
+// TestMarkAsStarted sets the supervisor as started with a valid context and
+// starts each worker's observation collector and action executor. Starting the
+// collectors is what lets the worker re-observe its world every tick (e.g. a
+// shared registry losing a ref), so a manually-ticked supervisor reaches the
+// same steady state the production tick loop does.
+//
+// Call-once-only, and mutually exclusive with Start()/StartAsChild() on the
+// same supervisor: all three call Collector.Start via startWorkerRunners, and
+// Collector.Start panics on a second invocation (Invariant I8). A test that
+// double-marks, or marks then starts, panics at runtime.
+//
+// Unlike Start()/StartAsChild(), this omits actionExecutor.Start and
+// startMetricsReporter. The supervisor-level action executor and metrics
+// reporter are not needed by a manually-ticked test, which drives reconcile
+// directly; per-worker collectors and executors are the load-bearing parts.
+//
+// DO NOT USE in production code.
 func (s *Supervisor[TObserved, TDesired]) TestMarkAsStarted() {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	s.ctxMu.Lock()
 	s.ctx = ctx
 	s.ctxCancel = cancel
+	supervisorCtx := s.ctx
 	s.ctxMu.Unlock()
 
 	s.started.Store(true)
+
+	s.startWorkerRunners(supervisorCtx)
 }
 
 // TestTick exposes tick() for testing. DO NOT USE in production code.
