@@ -17,15 +17,18 @@
 package configworker
 
 import (
+	"sort"
 	"sync"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 )
 
-// Ref identifies a child spec by its worker type and name.
+// Ref identifies a child spec by its worker type and name, and is the registry
+// map key for Upsert, Delete, and Lookup. The JSON tags keep the snake_case
+// convention used across the CSE snapshot.
 type Ref struct {
-	WorkerType string
-	Name       string
+	WorkerType string `json:"worker_type"`
+	Name       string `json:"name"`
 }
 
 // Registry holds the child specs recorded by Upsert, keyed by Ref. Upsert and
@@ -58,6 +61,32 @@ func (r *Registry) Snapshot() map[Ref]config.ChildSpec {
 		out[ref] = spec.Clone()
 	}
 	return out
+}
+
+// Specs returns clones of the recorded child specs in a stable order (by
+// WorkerType, then Name). Map iteration over the registry is randomized per
+// call, so readers that persist the specs (e.g. into a CSE snapshot) must use
+// this accessor to avoid spurious order-only deltas on every read. The clones
+// keep callers from mutating the stored specs, and each carries the full spec
+// (Name, WorkerType, UserSpec.Config, Enabled) so the reader can spawn the
+// child, which a Ref (WorkerType+Name only) cannot.
+func (r *Registry) Specs() []config.ChildSpec {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	specs := make([]config.ChildSpec, 0, len(r.specs))
+	for _, spec := range r.specs {
+		specs = append(specs, spec.Clone())
+	}
+
+	sort.Slice(specs, func(i, j int) bool {
+		if specs[i].WorkerType != specs[j].WorkerType {
+			return specs[i].WorkerType < specs[j].WorkerType
+		}
+		return specs[i].Name < specs[j].Name
+	})
+
+	return specs
 }
 
 // ConfigWorker owns a shared Registry and records child specs via Upsert.

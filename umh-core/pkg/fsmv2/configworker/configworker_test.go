@@ -90,6 +90,47 @@ func TestDeleteRemovesRef(t *testing.T) {
 	}
 }
 
+// TestSpecsStableOrderAcrossReads verifies Specs returns the recorded child
+// specs in a deterministic order (by WorkerType, then Name) on every call, even
+// though the underlying map iteration is randomized. Without this, a reader that
+// persists the specs would emit a spurious order-only delta on each read. The
+// assertion checks the returned ChildSpecs' Names against the sorted order.
+func TestSpecsStableOrderAcrossReads(t *testing.T) {
+	cw := NewConfigWorker()
+
+	refs := []Ref{
+		{WorkerType: "zeta", Name: "b"},
+		{WorkerType: "alpha", Name: "b"},
+		{WorkerType: "alpha", Name: "a"},
+		{WorkerType: "beta", Name: "a"},
+	}
+	for _, ref := range refs {
+		if err := cw.Upsert(ref, map[string]any{"v": 1}); err != nil {
+			t.Fatalf("Upsert(%+v) returned error: %v", ref, err)
+		}
+	}
+
+	want := []Ref{
+		{WorkerType: "alpha", Name: "a"},
+		{WorkerType: "alpha", Name: "b"},
+		{WorkerType: "beta", Name: "a"},
+		{WorkerType: "zeta", Name: "b"},
+	}
+
+	for i := 0; i < 20; i++ {
+		got := cw.Registry().Specs()
+		if len(got) != len(want) {
+			t.Fatalf("Specs() returned %d specs, want %d", len(got), len(want))
+		}
+		for j := range want {
+			if got[j].WorkerType != want[j].WorkerType || got[j].Name != want[j].Name {
+				t.Fatalf("Specs()[%d] = {WorkerType:%q, Name:%q}, want {WorkerType:%q, Name:%q} (read %d)",
+					j, got[j].WorkerType, got[j].Name, want[j].WorkerType, want[j].Name, i)
+			}
+		}
+	}
+}
+
 // TestUpsertReplacesOnSameRef exercises the "update" half of Upsert: a second
 // Upsert with the same Ref overwrites the recorded spec rather than adding a
 // duplicate, so the registry never spawns a stale spec.

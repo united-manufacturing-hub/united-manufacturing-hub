@@ -27,6 +27,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/configworker"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/register"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
@@ -83,10 +84,33 @@ func (w *ApplicationWorker) CollectObservedState(ctx context.Context, _ fsmv2.De
 	default:
 	}
 
-	return fsmv2.NewObservation(snapshot.ApplicationStatus{
+	status := snapshot.ApplicationStatus{
 		ID:   w.Identity().ID,
 		Name: w.Identity().Name,
-	}), nil
+	}
+
+	// Shared-registry contract: the SAME *configworker.Registry instance must be
+	// published via register.SetDeps under BOTH the config_worker's key AND the
+	// application worker type (WorkerTypeName) read here, so writer and reader
+	// share one instance.
+	//
+	// Load-bearing wiring contract: parent wiring MUST publish the single shared
+	// *configworker.Registry under the application worker type (WorkerTypeName) -
+	// the same instance the configworker worker produces. Two failure modes follow
+	// from this key being shared with the application worker's own deps key:
+	//   - if nobody publishes it, RegistryConfigured stays false and dynamic
+	//     children never surface (a silent feature outage, not an error);
+	//   - if a value of a DIFFERENT type is ever published under this key,
+	//     register.GetDeps panics here, every tick, in the collector goroutine.
+	// The union-flip step must publish the one shared registry under this key (or
+	// unify the keys); a negative/wiring test must guard it, not only the
+	// integration happy path.
+	if reg := register.GetDeps[*configworker.Registry](WorkerTypeName); reg != nil {
+		status.RegistryConfigured = true
+		status.DynamicChildren = reg.Specs()
+	}
+
+	return fsmv2.NewObservation(status), nil
 }
 
 // childrenConfig is the structure for parsing children from YAML.
