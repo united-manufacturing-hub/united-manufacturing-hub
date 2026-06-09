@@ -26,6 +26,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 )
 
@@ -119,6 +120,22 @@ var _ = Describe("ConvertWorkerSnapshot (happy paths)", func() {
 		Expect(snap.LastActionResults[0].ActionType).To(Equal("connect"))
 		Expect(snap.ChildrenHealthy).To(Equal(3))
 		Expect(snap.ChildrenUnhealthy).To(Equal(1))
+	})
+
+	It("surfaces the desired ChildrenSpecs from WrappedDesiredState", func() {
+		children := []config.ChildSpec{
+			{Name: "child-a", WorkerType: "test", Enabled: true},
+			{Name: "child-b", WorkerType: "test", Enabled: true},
+		}
+		obs := fsmv2.Observation[workerTestStatus]{CollectedAt: now}
+		wds := &fsmv2.WrappedDesiredState[workerTestConfig]{
+			ChildrenSpecs: children,
+		}
+
+		raw := fsmv2.Snapshot{Observed: obs, Desired: wds, Identity: identity}
+		snap := fsmv2.ConvertWorkerSnapshot[workerTestConfig, workerTestStatus](raw)
+
+		Expect(snap.ChildrenSpecs).To(Equal(children))
 	})
 })
 
