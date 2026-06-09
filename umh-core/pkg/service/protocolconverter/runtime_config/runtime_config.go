@@ -309,7 +309,7 @@ func renderConfig(
 		read = appendDownsampler(read)
 	}
 
-	// Render the write DFC template (resolves {{ .IP }}, {{ .PORT }}, etc. in write_output).
+	// Render the write DFC template (resolves {{ .IP }}, {{ .PORT }}, etc. in Source.Topics and Destination.Code).
 	renderedWriteConfig, err := config.RenderTemplate(spec.Config.DataflowComponentWriteServiceConfig, scope)
 	if err != nil {
 		return protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime{}, err

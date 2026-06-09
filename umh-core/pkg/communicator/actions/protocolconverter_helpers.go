@@ -41,10 +41,8 @@ func buildUserScope(templateInfo *models.ProtocolConverterTemplateInfo) map[stri
 
 // validateWriteDFCConfig validates a raw write DFC config input and its desired state.
 func validateWriteDFCConfig(cfg *dataflowcomponentserviceconfig.DataflowComponentWriteConfigInput, state string) error {
-	if cfg != nil && cfg.HasOutput() {
-		if strings.TrimSpace(cfg.InputTopics) == "" {
-			return errors.New("write DFC requires at least one input topic (input_topics)")
-		}
+	if cfg != nil && cfg.HasOutput() && strings.TrimSpace(cfg.Source.Topics) == "" {
+		return errors.New("write DFC requires at least one input topic (source.topics)")
 	}
 	if state != "" {
 		if err := ValidateDataFlowComponentState(state); err != nil {
@@ -53,7 +51,6 @@ func validateWriteDFCConfig(cfg *dataflowcomponentserviceconfig.DataflowComponen
 	}
 	return nil
 }
-
 
 // validateReadProtocolConverterDFC validates a read ProtocolConverterDFC's state and configuration.
 // Returns nil if dfc is nil (nothing to validate).

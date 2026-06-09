@@ -181,7 +181,7 @@ var _ = Describe("BuildRuntimeConfig", func() {
 				Config: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
 					ConnectionServiceConfig: createConnectionConfig(),
 					DataflowComponentWriteServiceConfig: dataflowcomponentserviceconfig.DataflowComponentWriteConfigInput{
-						Output: map[string]any{"stdout": map[string]any{}},
+						Destination: dataflowcomponentserviceconfig.WriteConfigDestination{Protocol: "stdout"},
 					},
 				},
 			}
@@ -202,8 +202,8 @@ var _ = Describe("BuildRuntimeConfig", func() {
 				Config: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
 					ConnectionServiceConfig: createConnectionConfig(),
 					DataflowComponentWriteServiceConfig: dataflowcomponentserviceconfig.DataflowComponentWriteConfigInput{
-						InputTopics: "umh.v1.factory.line-1.*\numh.v1.factory.line-2.*",
-						Output:      map[string]any{"stdout": map[string]any{}},
+						Source:      dataflowcomponentserviceconfig.WriteConfigSource{Topics: "umh.v1.factory.line-1.*\numh.v1.factory.line-2.*"},
+						Destination: dataflowcomponentserviceconfig.WriteConfigDestination{Protocol: "stdout"},
 					},
 				},
 			}
@@ -474,7 +474,7 @@ var _ = Describe("BuildRuntimeConfig", func() {
 				Config: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
 					ConnectionServiceConfig: createConnectionConfig(),
 					DataflowComponentWriteServiceConfig: dataflowcomponentserviceconfig.DataflowComponentWriteConfigInput{
-						Output: map[string]any{"stdout": map[string]any{}},
+						Destination: dataflowcomponentserviceconfig.WriteConfigDestination{Protocol: "stdout"},
 					},
 				},
 			}
@@ -488,8 +488,8 @@ var _ = Describe("BuildRuntimeConfig", func() {
 				Config: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
 					ConnectionServiceConfig: createConnectionConfig(),
 					DataflowComponentWriteServiceConfig: dataflowcomponentserviceconfig.DataflowComponentWriteConfigInput{
-						Output:              map[string]any{"stdout": map[string]any{}},
-						ProcessingNoderedJS: "msg.payload.foo = 'bar';\nreturn msg;",
+						Destination: dataflowcomponentserviceconfig.WriteConfigDestination{Protocol: "stdout"},
+						Processing:  dataflowcomponentserviceconfig.WriteConfigProcessing{Type: "nodered_js", Code: "msg.payload.foo = 'bar';\nreturn msg;"},
 					},
 				},
 			}
@@ -503,8 +503,8 @@ var _ = Describe("BuildRuntimeConfig", func() {
 				Config: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
 					ConnectionServiceConfig: createConnectionConfig(),
 					DataflowComponentWriteServiceConfig: dataflowcomponentserviceconfig.DataflowComponentWriteConfigInput{
-						Output:              map[string]any{"stdout": map[string]any{}},
-						ProcessingNoderedJS: "return msg;",
+						Destination: dataflowcomponentserviceconfig.WriteConfigDestination{Protocol: "stdout"},
+						Processing:  dataflowcomponentserviceconfig.WriteConfigProcessing{Type: "nodered_js", Code: "return msg;"},
 					},
 				},
 			}

@@ -62,12 +62,10 @@ var _ = Describe("ProtocolConverter YAML Generator", func() {
 							},
 						},
 						DataflowComponentWriteServiceConfig: dataflowcomponentserviceconfig.DataflowComponentWriteConfigInput{
-							InputTopics: "umh.v1.enterprise.site.*",
-							Output: map[string]any{
-								"kafka": map[string]any{
-									"addresses": []string{"kafka:9092"},
-									"topic":     "output-topic",
-								},
+							Source: dataflowcomponentserviceconfig.WriteConfigSource{Topics: "umh.v1.enterprise.site.*"},
+							Destination: dataflowcomponentserviceconfig.WriteConfigDestination{
+								Protocol: "kafka",
+								Code:     "addresses:\n- kafka:9092\ntopic: output-topic\n",
 							},
 						},
 					},
@@ -81,12 +79,10 @@ var _ = Describe("ProtocolConverter YAML Generator", func() {
 					"    output:",
 					"      stdout: {}",
 					"dataflowcomponent_write:",
-					"  input_topics: umh.v1.enterprise.site.*",
-					"  output:",
-					"    kafka:",
-					"      addresses:",
-					"      - kafka:9092",
-					"      topic: output-topic",
+					"  source:",
+					"    topics: umh.v1.enterprise.site.*",
+					"  destination:",
+					"    protocol: kafka",
 				},
 				notExpected: []string{},
 			}),
@@ -108,21 +104,23 @@ var _ = Describe("ProtocolConverter YAML Generator", func() {
 							},
 						},
 						DataflowComponentWriteServiceConfig: dataflowcomponentserviceconfig.DataflowComponentWriteConfigInput{
-							ProcessingNoderedJS: "msg.payload.foo = 'bar';\nreturn msg;",
-							Output: map[string]any{
-								"http_client": map[string]any{
-									"url": "http://api.example.com/ingest",
-								},
+							Processing: dataflowcomponentserviceconfig.WriteConfigProcessing{
+								Type: "nodered_js",
+								Code: "msg.payload.foo = 'bar';\nreturn msg;",
+							},
+							Destination: dataflowcomponentserviceconfig.WriteConfigDestination{
+								Protocol: "http_client",
+								Code:     "url: http://api.example.com/ingest\n",
 							},
 						},
 					},
 				},
 				expected: []string{
 					"dataflowcomponent_write:",
-					"  processing_nodered_js:",
-					"  output:",
-					"    http_client:",
-					"      url: http://api.example.com/ingest",
+					"  processing:",
+					"    type: nodered_js",
+					"  destination:",
+					"    protocol: http_client",
 				},
 				notExpected: []string{},
 			}),
@@ -179,22 +177,20 @@ var _ = Describe("ProtocolConverter YAML Generator", func() {
 							},
 						},
 						DataflowComponentWriteServiceConfig: dataflowcomponentserviceconfig.DataflowComponentWriteConfigInput{
-							Output: map[string]any{
-								"redis_pubsub": map[string]any{
-									"url":     "redis://redis:6379",
-									"channel": "processed_data",
-								},
+							Destination: dataflowcomponentserviceconfig.WriteConfigDestination{
+								Protocol: "redis_pubsub",
+								Code:     "url: redis://redis:6379\nchannel: processed_data\n",
 							},
-							Buffer: map[string]any{"none": map[string]any{}},
+							Extra: &dataflowcomponentserviceconfig.WriteConfigExtra{
+								Code: "buffer:\n  none: {}",
+							},
 						},
 					},
 				},
 				expected: []string{
 					"dataflowcomponent_write:",
-					"  output:",
-					"    redis_pubsub:",
-					"      url: redis://redis:6379",
-					"      channel: processed_data",
+					"  destination:",
+					"    protocol: redis_pubsub",
 					"  buffer:",
 					"    none: {}",
 				},
