@@ -59,8 +59,8 @@ var _ = Describe("Collector Panic Recovery", func() {
 				Logger:              logger,
 				ObservationInterval: 50 * time.Millisecond,
 				ObservationTimeout:  1 * time.Second,
-				DesiredStateProvider: func() fsmv2.DesiredState {
-					return &supervisor.TestDesiredState{}
+				DesiredStateProvider: func() (fsmv2.DesiredState, error) {
+					return &supervisor.TestDesiredState{}, nil
 				},
 			})
 
@@ -70,24 +70,22 @@ var _ = Describe("Collector Panic Recovery", func() {
 			err := collector.Start(ctx)
 			Expect(err).ToNot(HaveOccurred())
 
-			// Wait for at least 2 collection cycles (first panics, second succeeds)
-			time.Sleep(200 * time.Millisecond)
+			// Wait for the loop to recover from the panic (first call) and fire at least
+			// one more tick. Eventually(callCount) is necessary: the panic fires on the
+			// first tick and recovery schedules the next tick 50ms later.
+			Eventually(callCount.Load, 3*time.Second, 50*time.Millisecond).Should(BeNumerically(">", int32(1)),
+				"CollectFunc should be called multiple times after panic recovery")
 
-			// Collector should still be running after recovering from panic
+			// After recovery and a second tick, the collector must still be running.
 			Expect(collector.IsRunning()).To(BeTrue(),
 				"Collector should still be running after panic recovery")
-
-			// CollectFunc should have been called more than once (panic didn't kill the loop)
-			Expect(callCount.Load()).To(BeNumerically(">", 1),
-				"CollectFunc should be called multiple times after panic recovery")
 
 			// Verify panic was logged
 			panicLogs := filterCollectorLogs(observedLogs, "collector_panic")
 			Expect(panicLogs).ToNot(BeEmpty(), "Expected collector_panic log entry")
 
 			cancel()
-			time.Sleep(100 * time.Millisecond)
-			Expect(collector.IsRunning()).To(BeFalse())
+			Eventually(collector.IsRunning, 2*time.Second, 50*time.Millisecond).Should(BeFalse())
 		})
 
 		It("should log stack trace when recovering from panic", func() {
@@ -114,8 +112,8 @@ var _ = Describe("Collector Panic Recovery", func() {
 				Logger:              logger,
 				ObservationInterval: 50 * time.Millisecond,
 				ObservationTimeout:  1 * time.Second,
-				DesiredStateProvider: func() fsmv2.DesiredState {
-					return &supervisor.TestDesiredState{}
+				DesiredStateProvider: func() (fsmv2.DesiredState, error) {
+					return &supervisor.TestDesiredState{}, nil
 				},
 			})
 
@@ -165,8 +163,8 @@ var _ = Describe("Collector Panic Type Classification", func() {
 			Logger:              logger,
 			ObservationInterval: 50 * time.Millisecond,
 			ObservationTimeout:  1 * time.Second,
-			DesiredStateProvider: func() fsmv2.DesiredState {
-				return &supervisor.TestDesiredState{}
+			DesiredStateProvider: func() (fsmv2.DesiredState, error) {
+				return &supervisor.TestDesiredState{}, nil
 			},
 		})
 
@@ -212,8 +210,8 @@ var _ = Describe("Collector Panic Type Classification", func() {
 			Logger:              logger,
 			ObservationInterval: 50 * time.Millisecond,
 			ObservationTimeout:  1 * time.Second,
-			DesiredStateProvider: func() fsmv2.DesiredState {
-				return &supervisor.TestDesiredState{}
+			DesiredStateProvider: func() (fsmv2.DesiredState, error) {
+				return &supervisor.TestDesiredState{}, nil
 			},
 		})
 
@@ -260,8 +258,8 @@ var _ = Describe("Collector Double Panic", func() {
 			Logger:              logger,
 			ObservationInterval: 50 * time.Millisecond,
 			ObservationTimeout:  1 * time.Second,
-			DesiredStateProvider: func() fsmv2.DesiredState {
-				return &supervisor.TestDesiredState{}
+			DesiredStateProvider: func() (fsmv2.DesiredState, error) {
+				return &supervisor.TestDesiredState{}, nil
 			},
 		})
 
@@ -271,14 +269,11 @@ var _ = Describe("Collector Double Panic", func() {
 		err := collector.Start(ctx)
 		Expect(err).ToNot(HaveOccurred())
 
-		time.Sleep(200 * time.Millisecond)
-
-		Expect(collector.IsRunning()).To(BeTrue(),
+		Eventually(collector.IsRunning, 3*time.Second, 50*time.Millisecond).Should(BeTrue(),
 			"Collector should still be running after double panic recovery")
 
 		cancel()
-		time.Sleep(100 * time.Millisecond)
-		Expect(collector.IsRunning()).To(BeFalse())
+		Eventually(collector.IsRunning, 2*time.Second, 50*time.Millisecond).Should(BeFalse())
 	})
 })
 

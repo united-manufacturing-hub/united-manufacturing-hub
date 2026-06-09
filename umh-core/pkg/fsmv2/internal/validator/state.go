@@ -19,7 +19,6 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
-	"os"
 	"path/filepath"
 	"strings"
 )
@@ -188,7 +187,7 @@ func checkShutdownCheckFirst(filename string) []Violation {
 		ast.Inspect(firstIfStmt.Cond, func(condNode ast.Node) bool {
 			if callExpr, ok := condNode.(*ast.CallExpr); ok {
 				if selExpr, ok := callExpr.Fun.(*ast.SelectorExpr); ok {
-					if selExpr.Sel.Name == "IsShutdownRequested" || selExpr.Sel.Name == "IsStopRequired" {
+					if selExpr.Sel.Name == "IsShutdownRequested" || selExpr.Sel.Name == "ShouldStop" {
 						isShutdownCheck = true
 
 						return false
@@ -227,140 +226,6 @@ func checkShutdownCheckFirst(filename string) []Violation {
 	})
 
 	return violations
-}
-
-// ValidateChildWorkersIsStopRequired checks that child workers use IsStopRequired() not IsShutdownRequested().
-func ValidateChildWorkersIsStopRequired(baseDir string) []Violation {
-	var violations []Violation
-
-	workersDir := filepath.Join(baseDir, "workers")
-
-	entries, err := os.ReadDir(workersDir)
-	if err != nil {
-		return violations
-	}
-
-	for _, entry := range entries {
-		if !entry.IsDir() {
-			continue
-		}
-
-		workerDir := filepath.Join(workersDir, entry.Name())
-
-		subEntries, err := os.ReadDir(workerDir)
-		if err != nil {
-			continue
-		}
-
-		for _, subEntry := range subEntries {
-			if !subEntry.IsDir() {
-				continue
-			}
-
-			subWorkerDir := filepath.Join(workerDir, subEntry.Name())
-			violations = append(violations, checkChildWorkerIsStopRequired(subWorkerDir)...)
-		}
-
-		violations = append(violations, checkChildWorkerIsStopRequired(workerDir)...)
-	}
-
-	return violations
-}
-
-// checkChildWorkerIsStopRequired checks a single worker directory.
-func checkChildWorkerIsStopRequired(workerDir string) []Violation {
-	var violations []Violation
-
-	if !isChildWorker(workerDir) {
-		return violations
-	}
-
-	stateDir := filepath.Join(workerDir, "state")
-
-	stateFiles, err := filepath.Glob(filepath.Join(stateDir, "state_*.go"))
-	if err != nil {
-		return violations
-	}
-
-	for _, stateFile := range stateFiles {
-		baseName := filepath.Base(stateFile)
-		if strings.HasSuffix(baseName, "_test.go") {
-			continue
-		}
-
-		if strings.Contains(baseName, "stopped") || strings.Contains(baseName, "trying_to_stop") || strings.Contains(baseName, "stopping") {
-			continue
-		}
-
-		if !checkFirstConditionalUsesIsStopRequired(stateFile) {
-			violations = append(violations, Violation{
-				File:    stateFile,
-				Type:    "CHILD_MUST_USE_IS_STOP_REQUIRED",
-				Message: "Child worker state uses IsShutdownRequested() instead of IsStopRequired()",
-			})
-		}
-	}
-
-	return violations
-}
-
-// isChildWorker checks if a worker has IsStopRequired() method in its snapshot.
-func isChildWorker(workerDir string) bool {
-	snapshotFile := filepath.Join(workerDir, "snapshot", "snapshot.go")
-
-	content, err := os.ReadFile(snapshotFile)
-	if err != nil {
-		return false
-	}
-
-	return strings.Contains(string(content), "IsStopRequired()")
-}
-
-// checkFirstConditionalUsesIsStopRequired parses state file and checks first if condition.
-func checkFirstConditionalUsesIsStopRequired(filename string) bool {
-	fset := token.NewFileSet()
-
-	node, err := parser.ParseFile(fset, filename, nil, parser.ParseComments)
-	if err != nil {
-		return true // Be permissive on parse errors
-	}
-
-	usesIsStopRequired := false
-
-	ast.Inspect(node, func(n ast.Node) bool {
-		funcDecl, ok := n.(*ast.FuncDecl)
-		if !ok || funcDecl.Name.Name != "Next" {
-			return true
-		}
-
-		if funcDecl.Body == nil || len(funcDecl.Body.List) < 2 {
-			return true
-		}
-
-		for _, stmt := range funcDecl.Body.List[1:] {
-			if ifStmt, ok := stmt.(*ast.IfStmt); ok {
-				ast.Inspect(ifStmt.Cond, func(condNode ast.Node) bool {
-					if callExpr, ok := condNode.(*ast.CallExpr); ok {
-						if selExpr, ok := callExpr.Fun.(*ast.SelectorExpr); ok {
-							if selExpr.Sel.Name == "IsStopRequired" {
-								usesIsStopRequired = true
-
-								return false
-							}
-						}
-					}
-
-					return true
-				})
-
-				break
-			}
-		}
-
-		return true
-	})
-
-	return usesIsStopRequired
 }
 
 // ValidateStateXORAction checks that Next() returns either state change OR action, not both.
@@ -484,7 +349,7 @@ func extractResultArgs(expr ast.Expr) (state, action ast.Expr) {
 		}
 	}
 
-	if funcName != "Result" || len(callExpr.Args) < 3 {
+	if (funcName != "Result" && funcName != "Transition") || len(callExpr.Args) < 3 {
 		return nil, nil
 	}
 
@@ -517,7 +382,7 @@ func extractResultArgsWithSignal(expr ast.Expr) (state, signal, action ast.Expr)
 		}
 	}
 
-	if funcName != "Result" || len(callExpr.Args) < 3 {
+	if (funcName != "Result" && funcName != "Transition") || len(callExpr.Args) < 3 {
 		return nil, nil, nil
 	}
 
@@ -823,7 +688,7 @@ func checkTryingToStatesReturnActions(filename string) []Violation {
 				}
 			}
 
-			if funcName != "Result" {
+			if funcName != "Result" && funcName != "Transition" {
 				return true
 			}
 

@@ -273,10 +273,12 @@ func BuildProtocolConverterServiceInfo(
 // when the DFC is active, preventing false-positives in IsOtherDegraded Cases 2 and 3.
 func buildDFCServiceInfo(fsmState string) dataflowcomponent.ServiceInfo {
 	isActive := fsmState == dfcfsm.OperationalStateActive
+
 	var connectionUp int64
 	if isActive {
 		connectionUp = 1
 	}
+
 	return dataflowcomponent.ServiceInfo{
 		BenthosFSMState: fsmState,
 		BenthosObservedState: benthosfsmmanager.BenthosObservedState{

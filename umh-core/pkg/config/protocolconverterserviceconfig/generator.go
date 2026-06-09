@@ -35,55 +35,54 @@ func NewGenerator() *Generator {
 
 // RenderConfig generates a ProtocolConverter YAML configuration from a ProtocolConverterServiceConfigSpec.
 func (g *Generator) RenderConfig(cfg ProtocolConverterServiceConfigSpec) (string, error) {
-	// Convert the config to a normalized map
-	configMap := g.configToMap(cfg)
+	configMap, err := g.configToMap(cfg)
+	if err != nil {
+		return "", err
+	}
 	normalizedMap := normalizeConfig(configMap)
 
-	// Marshal to YAML
 	yamlBytes, err := yaml.Marshal(normalizedMap)
 	if err != nil {
 		return "", fmt.Errorf("failed to marshal ProtocolConverter config: %w", err)
 	}
 
-	yamlStr := string(yamlBytes)
-
-	return yamlStr, nil
+	return string(yamlBytes), nil
 }
 
-// configToMap converts a DataFlowComponentServiceConfig to a raw map for YAML generation.
-func (g *Generator) configToMap(cfg ProtocolConverterServiceConfigSpec) map[string]any {
-	// use generator to create a valid dfcConfigMap & connectionConfigMap
+// configToMap converts a ProtocolConverterServiceConfigSpec to a raw map for YAML generation.
+func (g *Generator) configToMap(cfg ProtocolConverterServiceConfigSpec) (map[string]any, error) {
 	dfcGenerator := dataflowcomponentserviceconfig.NewGenerator()
 	connectionGenerator := connectionserviceconfig.NewGenerator()
 	variableBundleGenerator := variables.NewGenerator()
 
 	dfcReadConfigMap := dfcGenerator.ConfigToMap(cfg.Config.DataflowComponentReadServiceConfig)
-	dfcWriteConfigMap := dfcGenerator.ConfigToMap(cfg.Config.DataflowComponentWriteServiceConfig)
-	// Convert template to runtime for config map generation
+
+	dfcWriteConfigMap, err := writeConfigToMap(cfg.Config.DataflowComponentWriteServiceConfig)
+	if err != nil {
+		return nil, fmt.Errorf("failed to convert write DFC config: %w", err)
+	}
+
 	connRuntime, err := connectionserviceconfig.ConvertTemplateToRuntime(cfg.Config.ConnectionServiceConfig)
 	if err != nil {
-		// If conversion fails, use empty config to avoid breaking YAML generation
-		connRuntime = connectionserviceconfig.ConnectionServiceConfigRuntime{}
+		return nil, fmt.Errorf("failed to convert connection template to runtime: %w", err)
 	}
 
 	connectionConfigMap := connectionGenerator.ConfigToMap(connRuntime)
 	variableBundleConfigMap := variableBundleGenerator.ConfigToMap(cfg.Variables)
 
-	configMap := make(map[string]any)
+	templateMap := map[string]any{
+		"connection":             connectionConfigMap,
+		"dataflowcomponent_read": dfcReadConfigMap,
+		"dataflowcomponent_write": dfcWriteConfigMap,
+	}
 
-	// Create the template structure
-	templateMap := make(map[string]any)
-	templateMap["connection"] = connectionConfigMap
-	templateMap["dataflowcomponent_read"] = dfcReadConfigMap
-	templateMap["dataflowcomponent_write"] = dfcWriteConfigMap
+	configMap := map[string]any{
+		"template":  templateMap,
+		"variables": variableBundleConfigMap,
+		"location":  cfg.Location,
+	}
 
-	// Add template and variables to the root config
-	configMap["template"] = templateMap
-	configMap["variables"] = variableBundleConfigMap
-
-	configMap["location"] = cfg.Location
-
-	return configMap
+	return configMap, nil
 }
 
 // normalizeConfig normalizes the configuration by applying defaults and ensuring consistency.
@@ -132,9 +131,11 @@ func normalizeConfig(raw map[string]any) map[string]any {
 		connectionConfig = template
 	}
 
-	// Normalize each component
+	// Normalize each component.
+	// Read DFC uses free-form benthos maps that need benthos normalization.
+	// Write DFC uses a typed struct marshaled to a plain map; pass it through unchanged.
 	normalizedDFCReadConfig := dataflowcomponentserviceconfig.NormalizeConfig(dfcReadConfig)
-	normalizedDFCWriteConfig := dataflowcomponentserviceconfig.NormalizeConfig(dfcWriteConfig)
+	normalizedDFCWriteConfig := dfcWriteConfig
 	normalizedConnectionConfig := connectionserviceconfig.NormalizeConfig(connectionConfig)
 
 	// Variables don't need normalization, they are just key-value pairs
@@ -152,4 +153,18 @@ func normalizeConfig(raw map[string]any) map[string]any {
 	normalized["location"] = locationMap // Use our correctly processed location map
 
 	return normalized
+}
+
+// writeConfigToMap marshals a DataflowComponentWriteConfigInput to a plain map[string]any
+// for inclusion in the YAML generator output.
+func writeConfigToMap(cfg dataflowcomponentserviceconfig.DataflowComponentWriteConfigInput) (map[string]any, error) {
+	data, err := yaml.Marshal(cfg)
+	if err != nil {
+		return nil, fmt.Errorf("writeConfigToMap: failed to marshal write DFC config: %w", err)
+	}
+	var m map[string]any
+	if err := yaml.Unmarshal(data, &m); err != nil {
+		return nil, fmt.Errorf("writeConfigToMap: failed to unmarshal write DFC config: %w", err)
+	}
+	return m, nil
 }

@@ -15,6 +15,8 @@
 package state
 
 import (
+	"fmt"
+
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/snapshot"
@@ -22,6 +24,10 @@ import (
 
 // StoppedState represents the initial state where the transport worker is not running.
 // The worker is not authenticated and no children are spawned.
+//
+// Transport is a top-level worker, not a child. Reason strings show
+// snap.Config.ShouldBeRunning() and snap.IsShutdownRequested directly;
+// snap.Observed.ParentMappedState is not applicable here (and is deleted in L5b).
 type StoppedState struct {
 	helpers.StoppedBase
 }
@@ -31,14 +37,18 @@ func (s *StoppedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := fsmv2.ConvertWorkerSnapshot[snapshot.TransportDesiredState, snapshot.TransportStatus](snapAny)
 
 	if snap.IsShutdownRequested {
-		return fsmv2.Result[any, any](s, fsmv2.SignalNeedsRemoval, nil, "Shutdown requested, signaling removal")
+		return fsmv2.Transition(s, fsmv2.SignalNeedsRemoval, nil,
+			fmt.Sprintf("removal signaled: shouldBeRunning=%t", snap.Config.ShouldBeRunning()), nil)
 	}
 
 	if snap.Config.ShouldBeRunning() {
-		return fsmv2.Result[any, any](&StartingState{}, fsmv2.SignalNone, nil, "Desired state is running, transitioning to Starting")
+		return fsmv2.Transition(&StartingState{}, fsmv2.SignalNone, nil,
+			fmt.Sprintf("transitioning to Starting: shutdown=%t", snap.IsShutdownRequested), nil)
 	}
 
-	return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil, "Transport is stopped, waiting for running request")
+	return fsmv2.Transition(s, fsmv2.SignalNone, nil,
+		fmt.Sprintf("stopped, waiting: shouldBeRunning=%t, shutdown=%t",
+			snap.Config.ShouldBeRunning(), snap.IsShutdownRequested), nil)
 }
 
 // String returns the state name derived from the type.

@@ -336,17 +336,17 @@ main.second()
 
 		It("truncates with ... when over limit", func() {
 			long := ""
-			for i := 0; i < 210; i++ {
+			for range 210 {
 				long += "a"
 			}
 			result := sentry.TruncateTag(long, 200)
-			Expect(len(result)).To(Equal(200))
+			Expect(result).To(HaveLen(200))
 			Expect(result).To(HaveSuffix("..."))
 		})
 
 		It("handles exact limit length", func() {
 			exact := ""
-			for i := 0; i < 200; i++ {
+			for range 200 {
 				exact += "x"
 			}
 			result := sentry.TruncateTag(exact, 200)
@@ -1157,7 +1157,7 @@ var _ = Describe("Contexts Catch-All", func() {
 
 	It("truncates long string values in Contexts at 1024 chars", func() {
 		longVal := ""
-		for i := 0; i < 2000; i++ {
+		for range 2000 {
 			longVal += "x"
 		}
 		logger.Warnw("test_event",
@@ -1229,8 +1229,8 @@ var _ = Describe("Tag Truncation", func() {
 
 	It("truncates error_types exceeding 200 chars", func() {
 		// Build a deeply wrapped error chain to exceed 200 chars
-		var err error = errors.New("root")
-		for i := 0; i < 15; i++ {
+		var err = errors.New("root")
+		for i := range 15 {
 			err = fmt.Errorf("wrap_%d: %w", i, err)
 		}
 		// error_types for 15 wraps + 1 base: ~16 types * ~20 chars = ~320 chars

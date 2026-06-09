@@ -44,8 +44,8 @@ type Config struct {
 //
 // Tracker is safe for concurrent use.
 type Tracker struct {
-	outcomes []bool  // circular buffer: true = success, false = failure
-	cfg      Config  // immutable after construction
+	outcomes []bool // circular buffer: true = success, false = failure
+	cfg      Config // immutable after construction
 	mu       sync.RWMutex
 	head     int // next write position
 	count    int // total recorded outcomes (capped at WindowSize)
@@ -63,9 +63,11 @@ func New(cfg Config) *Tracker {
 	if cfg.WindowSize <= 0 {
 		panic(fmt.Sprintf("failurerate: WindowSize must be > 0, got %d", cfg.WindowSize))
 	}
+
 	if math.IsNaN(cfg.Threshold) || cfg.Threshold <= 0.0 || cfg.Threshold > 1.0 {
 		panic(fmt.Sprintf("failurerate: Threshold must be in (0.0, 1.0], got %f", cfg.Threshold))
 	}
+
 	if cfg.MinSamples < 0 || cfg.MinSamples > cfg.WindowSize {
 		panic(fmt.Sprintf("failurerate: MinSamples must be in [0, WindowSize], got %d (WindowSize=%d)", cfg.MinSamples, cfg.WindowSize))
 	}
@@ -99,6 +101,7 @@ func (t *Tracker) RecordOutcome(success bool) bool {
 	if !success {
 		t.failures++
 	}
+
 	t.head = (t.head + 1) % t.cfg.WindowSize
 
 	// Check escalation transition.
@@ -111,8 +114,10 @@ func (t *Tracker) RecordOutcome(success bool) bool {
 
 	if aboveThreshold && !t.escalated {
 		t.escalated = true
+
 		return true // one-shot: first crossing
 	}
+
 	if !aboveThreshold && t.escalated {
 		t.escalated = false // rearm for next crossing
 	}
@@ -129,6 +134,7 @@ func (t *Tracker) FailureRate() float64 {
 	if t.count == 0 || t.count < t.cfg.MinSamples {
 		return 0.0
 	}
+
 	return float64(t.failures) / float64(t.count)
 }
 

@@ -30,25 +30,28 @@ type TryingToStartState struct {
 func (s *TryingToStartState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := fsmv2.ConvertWorkerSnapshot[snapshot.PersistenceConfig, snapshot.PersistenceStatus](snapAny)
 
-	if snap.IsStopRequired() {
-		return fsmv2.Result[any, any](&StoppedState{}, fsmv2.SignalNone, nil,
-			fmt.Sprintf("stop required: shutdown=%t, parentState=%s", snap.IsShutdownRequested, snap.ParentMappedState))
+	if snap.ShouldStop() {
+		return fsmv2.Transition(&StoppedState{}, fsmv2.SignalNone, nil,
+			fmt.Sprintf("stop required: shutdown=%t, parentState=%s", snap.IsShutdownRequested, snap.ParentMappedState), nil)
 	}
 
 	maintenanceActionName := action.NewRunMaintenanceAction().Name()
+
 	for i := len(snap.LastActionResults) - 1; i >= 0; i-- {
 		result := snap.LastActionResults[i]
 		if result.ActionType != maintenanceActionName {
 			continue
 		}
+
 		if result.Success {
-			return fsmv2.Result[any, any](&RunningState{}, fsmv2.SignalNone, nil, "Startup maintenance completed")
+			return fsmv2.Transition(&RunningState{}, fsmv2.SignalNone, nil, "Startup maintenance completed", nil)
 		}
+
 		break
 	}
 
-	return fsmv2.Result[any, any](s, fsmv2.SignalNone,
-		action.NewRunMaintenanceAction(), "Running startup maintenance")
+	return fsmv2.Transition(s, fsmv2.SignalNone,
+		action.NewRunMaintenanceAction(), "Running startup maintenance", nil)
 }
 
 func (s *TryingToStartState) String() string {

@@ -38,12 +38,11 @@ type PersistenceDependencies struct {
 var _ snapshot.PersistenceDependencies = (*PersistenceDependencies)(nil)
 
 // NewPersistenceDependencies creates dependencies for the persistence worker.
+// bd is the shared BaseDependencies returned by WorkerBase.InitBase.
 func NewPersistenceDependencies(
 	store storage.TriangularStoreInterface,
 	scheduler deps.Scheduler,
-	logger deps.FSMLogger,
-	stateReader deps.StateReader,
-	identity deps.Identity,
+	bd *deps.BaseDependencies,
 ) *PersistenceDependencies {
 	if store == nil {
 		panic("NewPersistenceDependencies: store cannot be nil")
@@ -54,7 +53,7 @@ func NewPersistenceDependencies(
 	}
 
 	return &PersistenceDependencies{
-		BaseDependencies: deps.NewBaseDependencies(logger, stateReader, identity),
+		BaseDependencies: bd,
 		store:            store,
 		scheduler:        scheduler,
 	}

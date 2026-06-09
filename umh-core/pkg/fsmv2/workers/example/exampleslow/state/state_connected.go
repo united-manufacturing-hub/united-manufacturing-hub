@@ -27,15 +27,15 @@ type ConnectedState struct {
 func (s *ConnectedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := fsmv2.ConvertWorkerSnapshot[example_slow.ExampleslowConfig, example_slow.ExampleslowStatus](snapAny)
 
-	if snap.IsStopRequired() {
-		return fsmv2.Result[any, any](&TryingToStopState{}, fsmv2.SignalNone, nil, "stop required, transitioning to trying to stop")
+	if snap.ShouldStop() {
+		return fsmv2.Transition(&TryingToStopState{}, fsmv2.SignalNone, nil, "stop required, transitioning to trying to stop", nil)
 	}
 
 	if snap.Status.ConnectionHealth == "no connection" {
-		return fsmv2.Result[any, any](&DisconnectedState{}, fsmv2.SignalNone, nil, "connection lost, transitioning to disconnected")
+		return fsmv2.Transition(&DisconnectedState{}, fsmv2.SignalNone, nil, "connection lost, transitioning to disconnected", nil)
 	}
 
-	return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil, "active connection established")
+	return fsmv2.Transition(s, fsmv2.SignalNone, nil, "active connection established", nil)
 }
 
 func (s *ConnectedState) String() string {

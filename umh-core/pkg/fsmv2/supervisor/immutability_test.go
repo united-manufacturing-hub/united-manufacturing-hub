@@ -140,7 +140,7 @@ func (s *snapshotMutatingState) Next(snapshot any) fsmv2.NextResult[any, any] {
 	snap := snapshot.(fsmv2.Snapshot)
 	snap.Observed = nil
 
-	return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil, "testing snapshot immutability")
+	return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil, "testing snapshot immutability", nil)
 }
 
 func (s *snapshotMutatingState) String() string { return "SnapshotMutatingState" }
@@ -155,7 +155,7 @@ func (s *identityMutatingState) Next(snapshot any) fsmv2.NextResult[any, any] {
 	snap := snapshot.(fsmv2.Snapshot)
 	snap.Identity.Name = "Modified"
 
-	return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil, "testing identity immutability")
+	return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil, "testing identity immutability", nil)
 }
 
 func (s *identityMutatingState) String() string { return "IdentityMutatingState" }
@@ -172,7 +172,7 @@ func (s *aggressiveMutatingState) Next(snapshot any) fsmv2.NextResult[any, any] 
 	snap.Identity.Name = "Modified"
 	snap.Desired = nil
 
-	return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil, "testing complete snapshot immutability")
+	return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil, "testing complete snapshot immutability", nil)
 }
 
 func (s *aggressiveMutatingState) String() string { return "AggressiveMutatingState" }

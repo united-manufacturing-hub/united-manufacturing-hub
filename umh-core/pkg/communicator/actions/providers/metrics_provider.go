@@ -288,7 +288,7 @@ func getProtocolConverterMetrics(uuid string, snapshot fsm.SystemSnapshot) (mode
 	// Extract benthos metrics from the write DFC only if a write DFC is configured.
 	// Without this guard, read-only protocol converters would emit 22 zero-value write metrics,
 	// making it impossible for the frontend to distinguish "no write DFC" from "idle write DFC".
-	if len(observedState.ObservedProtocolConverterSpecConfig.Config.DataflowComponentWriteServiceConfig.BenthosConfig.Output) == 0 {
+	if !observedState.ObservedProtocolConverterSpecConfig.Config.DataflowComponentWriteServiceConfig.HasOutput() {
 		return res, nil
 	}
 

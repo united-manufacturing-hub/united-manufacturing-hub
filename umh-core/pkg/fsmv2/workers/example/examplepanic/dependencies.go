@@ -59,9 +59,11 @@ type ExamplepanicDependencies struct {
 	isConnected bool
 }
 
-func NewExamplepanicDependencies(connectionPool ConnectionPool, logger deps.FSMLogger, stateReader deps.StateReader, identity deps.Identity) *ExamplepanicDependencies {
+// NewExamplepanicDependencies creates dependencies for the panic worker.
+// bd is the shared BaseDependencies returned by WorkerBase.InitBase.
+func NewExamplepanicDependencies(connectionPool ConnectionPool, bd *deps.BaseDependencies) *ExamplepanicDependencies {
 	return &ExamplepanicDependencies{
-		BaseDependencies: deps.NewBaseDependencies(logger, stateReader, identity),
+		BaseDependencies: bd,
 		connectionPool:   connectionPool,
 	}
 }

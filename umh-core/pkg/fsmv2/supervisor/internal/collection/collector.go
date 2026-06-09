@@ -24,12 +24,12 @@ import (
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/internal/panicutil"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/metrics"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
 )
 
 type collectorState int
@@ -60,8 +60,8 @@ type CollectorConfig[TObserved any] struct {
 	Worker                    fsmv2.Worker
 	Store                     storage.TriangularStoreInterface
 	Logger                    deps.FSMLogger
-	StateProvider             func() string                       // Returns current FSM state name (injected by supervisor)
-	ShutdownRequestedProvider func() bool                         // Returns current shutdown requested status (injected by supervisor)
+	StateProvider             func() string // Returns current FSM state name (injected by supervisor)
+	ShutdownRequestedProvider func() bool   // Returns current shutdown requested status (injected by supervisor)
 	// ChildrenCountsProvider returns the per-tick (healthy, unhealthy) counts.
 	// Retained for workers that satisfy SetChildrenCounts but not SetChildrenView;
 	// new code should consume the richer ChildrenView and call view.Counts()
@@ -93,14 +93,14 @@ type CollectorConfig[TObserved any] struct {
 	ActionHistorySetter func([]deps.ActionResult)
 	// DesiredStateProvider returns the current desired state from the CSE store.
 	// Called BEFORE CollectObservedState so workers can access configuration
-	// (target IP, port, etc.) without workarounds. If nil is returned (desired
-	// state not yet saved), collection is skipped entirely  -  workers are
+	// (target IP, port, etc.) without workarounds. Returns (nil, fsmv2.ErrNoDesiredState)
+	// when no desired state exists yet; collection is skipped entirely so workers are
 	// guaranteed to always receive a non-nil desired state.
-	DesiredStateProvider func() fsmv2.DesiredState
+	DesiredStateProvider func() (fsmv2.DesiredState, error)
 	Identity             deps.Identity
-	ObservationInterval time.Duration
-	ObservationTimeout  time.Duration
-	EnableTraceLogging  bool // Whether to emit verbose per-collection logs
+	ObservationInterval  time.Duration
+	ObservationTimeout   time.Duration
+	EnableTraceLogging   bool // Whether to emit verbose per-collection logs
 }
 
 // Collector manages the observation loop lifecycle and data collection.
@@ -330,6 +330,7 @@ func (c *Collector[TObserved]) observationLoop() {
 		c.mu.Lock()
 		c.state = collectorStateStopped
 		c.running = false
+
 		close(doneChan)
 		// Read state string while holding lock to avoid race with Restart()
 		finalState := c.state.String()
@@ -412,8 +413,30 @@ func (c *Collector[TObserved]) collectAndSaveObservedState(ctx context.Context) 
 	// Skip collection entirely if no desired state exists yet  -  the supervisor
 	// guarantees workers always receive a non-nil desired state.
 	var desired fsmv2.DesiredState
+
 	if c.config.DesiredStateProvider != nil {
-		desired = c.config.DesiredStateProvider()
+		var providerErr error
+
+		desired, providerErr = c.config.DesiredStateProvider()
+		if providerErr != nil {
+			if errors.Is(providerErr, fsmv2.ErrNoDesiredState) {
+				c.logTrace("collector_skipped_no_desired_state")
+
+				return nil
+			}
+			// Non-ErrNoDesiredState error (transient store timeout, deserialization failure).
+			// Skip this collection cycle and log at Info; the outer loop would otherwise
+			// fire SentryError on every tick (~1/s/worker) and exhaust Sentry quota
+			// during brief store outages. Sentry escalation happens upstream in api.go's
+			// DesiredStateProvider closure, which fires SentryWarn at the source.
+			// (Sticky-error dedup at that layer is deferred to a follow-up ticket;
+			// FSMLogger lacks a Loki-only Warn method today, which is why Info is the
+			// current best fit.)
+			c.config.Logger.Info("collector_skipped_desired_state_error",
+				deps.Err(providerErr))
+
+			return nil
+		}
 	}
 
 	if desired == nil {
