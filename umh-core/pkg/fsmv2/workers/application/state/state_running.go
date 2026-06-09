@@ -39,10 +39,10 @@ func (s *RunningState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	}
 
 	if status.HasInfrastructureIssues() {
-		return fsmv2.Transition(&DegradedState{}, fsmv2.SignalNone, nil, status.InfrastructureReason(), nil)
+		return fsmv2.Transition(&DegradedState{}, fsmv2.SignalNone, nil, status.InfrastructureReason(), renderUnion(snap))
 	}
 
-	return fsmv2.Transition(s, fsmv2.SignalNone, nil, "Application supervisor is running and managing children", nil)
+	return fsmv2.Transition(s, fsmv2.SignalNone, nil, "Application supervisor is running and managing children", renderUnion(snap))
 }
 
 func (s *RunningState) String() string {
