@@ -60,8 +60,12 @@ var _ = Describe("Application supervisor spawns a registry-declared worker", fun
 		ref := registry.Ref{WorkerType: "helloworld", Name: "hello-1"}
 		Expect(cw.Upsert(ref, map[string]any{"state": "running"})).To(Succeed())
 
-		// (3) Drive the application supervisor through the real tick loop.
+		// (3) Drive the application supervisor through the real tick loop. Mark it
+		// started so a spawned child is handed the supervisor's long-lived context
+		// and its action executor runs -- the same started==true path production
+		// takes after Start()/StartAsChild().
 		sup, _, _ := newAppSupervisorWithStore(logger)
+		sup.TestMarkAsStarted()
 
 		// (4) Eventually, GetChildren() includes the helloworld child reaching its
 		// Running state, AND the config-worker kernel child is present.
