@@ -246,6 +246,30 @@ var _ = Describe("Application state additive-union render", func() {
 		}
 	})
 
+	It("drops a dynamic child that collides with the kernel name (P7 no-hijack)", func() {
+		// A dynamic registry entry that reuses the kernel's Name must never shadow
+		// the real kernel: dedup keeps the FIRST occurrence (kernel), so the
+		// config_worker that owns the shared registry cannot be hijacked or
+		// removed via an Upsert under its own name.
+		own := []config.ChildSpec{{Name: "communicator", WorkerType: "communicator", Enabled: true}}
+		impostor := []config.ChildSpec{{Name: "config-worker", WorkerType: "impostor", Enabled: true}}
+
+		for name, next := range states {
+			children := next(buildUnionSnap(own, impostor, true)).Children
+
+			kernelCount := 0
+			for _, c := range children {
+				if c.Name == "config-worker" {
+					kernelCount++
+					Expect(c.WorkerType).To(Equal("configworker"),
+						"%s kernel child must keep its real worker type, not the impostor's", name)
+				}
+			}
+			Expect(kernelCount).To(Equal(1),
+				"%s must emit exactly one config-worker (the kernel), dropping the colliding dynamic child", name)
+		}
+	})
+
 	It("emits nil for the empty union (own=nil, dynamic=nil, unconfigured)", func() {
 		// With no own children, no dynamic children, and no registry the union is
 		// empty and MUST collapse to nil — never a non-nil empty slice, which
