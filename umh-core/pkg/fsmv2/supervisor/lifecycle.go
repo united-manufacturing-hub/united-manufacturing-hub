@@ -51,18 +51,7 @@ func (s *Supervisor[TObserved, TDesired]) Start(ctx context.Context) <-chan stru
 
 	s.startMetricsReporter(supervisorCtx)
 
-	// Start observation collectors and action executors for all workers
-	s.mu.RLock()
-
-	for _, workerCtx := range s.workers {
-		if err := workerCtx.collector.Start(supervisorCtx); err != nil {
-			s.logger.SentryError(deps.FeatureFSMv2, workerCtx.identity.HierarchyPath, err, "collector_start_failed")
-		}
-
-		workerCtx.executor.Start(supervisorCtx)
-	}
-
-	s.mu.RUnlock()
+	s.startWorkerRunners(supervisorCtx)
 
 	// Start main tick loop
 	go func() {
@@ -94,17 +83,27 @@ func (s *Supervisor[TObserved, TDesired]) StartAsChild(ctx context.Context) {
 
 	s.startMetricsReporter(supervisorCtx)
 
+	s.startWorkerRunners(supervisorCtx)
+}
+
+// startWorkerRunners starts each worker's observation collector and action
+// executor. The collector is what re-observes the worker's world every tick;
+// the executor drains queued actions. Both must be running before the
+// supervisor is ticked.
+//
+// Lock ordering: takes only mu.RLock internally. Callers must NOT hold ctxMu
+// when calling this (advisory order is mu -> ctxMu).
+func (s *Supervisor[TObserved, TDesired]) startWorkerRunners(ctx context.Context) {
 	s.mu.RLock()
+	defer s.mu.RUnlock()
 
 	for _, workerCtx := range s.workers {
-		if err := workerCtx.collector.Start(supervisorCtx); err != nil {
+		if err := workerCtx.collector.Start(ctx); err != nil {
 			s.logger.SentryError(deps.FeatureFSMv2, workerCtx.identity.HierarchyPath, err, "collector_start_failed")
 		}
 
-		workerCtx.executor.Start(supervisorCtx)
+		workerCtx.executor.Start(ctx)
 	}
-
-	s.mu.RUnlock()
 }
 
 // Run starts the supervisor and blocks until ctx is canceled, the supervisor
