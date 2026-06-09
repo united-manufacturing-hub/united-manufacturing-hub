@@ -20,9 +20,9 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// TestUpsertRecordsEnabledChildSpec exercises the A1 seam: a ConfigWorker owns a
-// shared registry, and Upsert records a Ref to a config.ChildSpec that carries the
-// structured config (serialized internally) and Enabled=true.
+// TestUpsertRecordsEnabledChildSpec verifies a ConfigWorker records a Ref into its
+// shared registry as a config.ChildSpec that carries the structured config (serialized
+// internally) and Enabled=true.
 func TestUpsertRecordsEnabledChildSpec(t *testing.T) {
 	cw := NewConfigWorker()
 
@@ -56,6 +56,37 @@ func TestUpsertRecordsEnabledChildSpec(t *testing.T) {
 	}
 	if got["greeting"] != "hello" {
 		t.Errorf("UserSpec.Config greeting = %v, want %q", got["greeting"], "hello")
+	}
+}
+
+// TestDeleteRemovesRef verifies Delete removes only the targeted Ref and leaves
+// the survivor in the registry (Lookup(survivor) still returns ok), so deleting
+// one child does not drop specs the application control surface still needs.
+func TestDeleteRemovesRef(t *testing.T) {
+	cw := NewConfigWorker()
+
+	target := Ref{WorkerType: "example", Name: "foo"}
+	survivor := Ref{WorkerType: "example", Name: "bar"}
+
+	if err := cw.Upsert(target, map[string]any{"greeting": "hello"}); err != nil {
+		t.Fatalf("Upsert target returned error: %v", err)
+	}
+	if err := cw.Upsert(survivor, map[string]any{"greeting": "hi"}); err != nil {
+		t.Fatalf("Upsert survivor returned error: %v", err)
+	}
+
+	cw.Delete(target)
+
+	if _, ok := cw.Registry().Lookup(target); ok {
+		t.Errorf("registry still holds target %+v after Delete", target)
+	}
+
+	if _, ok := cw.Registry().Lookup(survivor); !ok {
+		t.Errorf("registry dropped survivor %+v after deleting target", survivor)
+	}
+
+	if got := len(cw.Registry().Snapshot()); got != 1 {
+		t.Errorf("registry has %d entries after Delete, want 1", got)
 	}
 }
 
