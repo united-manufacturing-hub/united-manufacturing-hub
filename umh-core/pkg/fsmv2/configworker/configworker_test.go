@@ -15,9 +15,12 @@
 package configworker
 
 import (
+	"errors"
 	"testing"
 
 	"gopkg.in/yaml.v3"
+
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 )
 
 // TestUpsertRecordsEnabledChildSpec verifies a ConfigWorker records a Ref into its
@@ -129,6 +132,120 @@ func TestSpecsStableOrderAcrossReads(t *testing.T) {
 			}
 		}
 	}
+}
+
+// TestUpsertValidationHookGatesRecording verifies the content-validation hook
+// (an ENG-4900 stub) gates Upsert: a hook that returns a non-nil error makes
+// Upsert reject the ref and leave the registry unchanged (Lookup ok==false),
+// while a nil/passing hook admits the ref as before (Lookup ok==true,
+// Enabled==true).
+func TestUpsertValidationHookGatesRecording(t *testing.T) {
+	ref := Ref{WorkerType: "example", Name: "foo"}
+	cfg := map[string]any{"greeting": "hello"}
+
+	t.Run("rejecting hook leaves registry unchanged", func(t *testing.T) {
+		wantErr := errors.New("rejected by validation")
+		cw := NewConfigWorker(WithValidate(func(config.ChildSpec) error {
+			return wantErr
+		}))
+
+		err := cw.Upsert(ref, cfg)
+		if !errors.Is(err, wantErr) {
+			t.Fatalf("Upsert error = %v, want %v", err, wantErr)
+		}
+
+		if _, ok := cw.Registry().Lookup(ref); ok {
+			t.Errorf("registry recorded ref %+v despite rejecting hook", ref)
+		}
+	})
+
+	t.Run("nil hook admits the ref", func(t *testing.T) {
+		cw := NewConfigWorker()
+
+		if err := cw.Upsert(ref, cfg); err != nil {
+			t.Fatalf("Upsert returned error: %v", err)
+		}
+
+		spec, ok := cw.Registry().Lookup(ref)
+		if !ok {
+			t.Fatalf("registry has no entry for ref %+v", ref)
+		}
+		if !spec.Enabled {
+			t.Errorf("spec.Enabled = %v, want true", spec.Enabled)
+		}
+	})
+
+	t.Run("passing hook admits the post-build spec", func(t *testing.T) {
+		var seen config.ChildSpec
+		cw := NewConfigWorker(WithValidate(func(spec config.ChildSpec) error {
+			seen = spec
+			return nil
+		}))
+
+		if err := cw.Upsert(ref, cfg); err != nil {
+			t.Fatalf("Upsert returned error: %v", err)
+		}
+
+		if seen.Name != "foo" {
+			t.Errorf("hook saw spec.Name = %q, want %q", seen.Name, "foo")
+		}
+		if seen.WorkerType != "example" {
+			t.Errorf("hook saw spec.WorkerType = %q, want %q", seen.WorkerType, "example")
+		}
+		if !seen.Enabled {
+			t.Errorf("hook saw spec.Enabled = %v, want true", seen.Enabled)
+		}
+		var hookCfg map[string]any
+		if err := yaml.Unmarshal([]byte(seen.UserSpec.Config), &hookCfg); err != nil {
+			t.Fatalf("hook saw UserSpec.Config that is not valid YAML: %v", err)
+		}
+		if hookCfg["greeting"] != "hello" {
+			t.Errorf("hook saw UserSpec.Config greeting = %v, want %q", hookCfg["greeting"], "hello")
+		}
+
+		spec, ok := cw.Registry().Lookup(ref)
+		if !ok {
+			t.Fatalf("registry has no entry for ref %+v", ref)
+		}
+		if !spec.Enabled {
+			t.Errorf("spec.Enabled = %v, want true", spec.Enabled)
+		}
+	})
+
+	t.Run("rejecting hook leaves the prior spec intact", func(t *testing.T) {
+		wantErr := errors.New("rejected by validation")
+		seeded := false
+		cw := NewConfigWorker(WithValidate(func(config.ChildSpec) error {
+			if !seeded {
+				seeded = true
+				return nil
+			}
+			return wantErr
+		}))
+
+		if err := cw.Upsert(ref, map[string]any{"greeting": "hello"}); err != nil {
+			t.Fatalf("first Upsert returned error: %v", err)
+		}
+
+		if err := cw.Upsert(ref, map[string]any{"greeting": "goodbye"}); !errors.Is(err, wantErr) {
+			t.Fatalf("second Upsert error = %v, want %v", err, wantErr)
+		}
+
+		spec, ok := cw.Registry().Lookup(ref)
+		if !ok {
+			t.Fatalf("registry dropped ref %+v after rejected update", ref)
+		}
+		if !spec.Enabled {
+			t.Errorf("spec.Enabled = %v, want true", spec.Enabled)
+		}
+		var got map[string]any
+		if err := yaml.Unmarshal([]byte(spec.UserSpec.Config), &got); err != nil {
+			t.Fatalf("UserSpec.Config is not valid YAML: %v", err)
+		}
+		if got["greeting"] != "hello" {
+			t.Errorf("UserSpec.Config greeting = %v, want %q (prior spec must survive rejection)", got["greeting"], "hello")
+		}
+	})
 }
 
 // TestUpsertReplacesOnSameRef exercises the "update" half of Upsert: a second
