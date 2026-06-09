@@ -36,6 +36,7 @@ type WriteConfigProcessing struct {
 	// Type is the processor type. Currently hardcoded to "nodered_js".
 	Type string `yaml:"type,omitempty" json:"type,omitempty" mapstructure:"type,omitempty"`
 	// Code is the processor code snippet (e.g. Node-RED JS).
+	// Might contain a Go template string that renders to a processor code snippet.
 	Code string `yaml:"code,omitempty" json:"code,omitempty" mapstructure:"code,omitempty"`
 }
 
@@ -45,12 +46,16 @@ type WriteConfigDestination struct {
 	// Currently hardcoded to "http_client".
 	Protocol string `yaml:"protocol,omitempty" json:"protocol,omitempty" mapstructure:"protocol,omitempty"`
 	// Code is the YAML body of the Benthos output plugin config.
+	// Might contain a Go template string that renders to a YAML body.
 	Code string `yaml:"code,omitempty" json:"code,omitempty" mapstructure:"code,omitempty"`
 }
 
 // WriteConfigExtra holds extra Benthos YAML that is inlined verbatim into the generated
 // Benthos service config. Supported top-level keys: cache_resources, rate_limit_resources, buffer.
 type WriteConfigExtra struct {
+	// Code is any extra Benthos YAML that is inlined verbatim into the generated
+	// Benthos service config.
+	// Might contain a Go template string that renders to a YAML body.
 	Code string `yaml:"code,omitempty" json:"code,omitempty" mapstructure:"code,omitempty"`
 }
 
