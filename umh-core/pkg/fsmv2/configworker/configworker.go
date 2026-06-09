@@ -28,9 +28,9 @@ type Ref struct {
 	Name       string
 }
 
-// Registry holds the child specs recorded by Upsert, keyed by Ref. Upsert is
-// the only writer; readers go through Lookup or Snapshot, which return copies
-// so no caller can mutate the stored specs or bypass the Enabled=true invariant.
+// Registry holds the child specs recorded by Upsert, keyed by Ref. Upsert and
+// Delete are the only writers; readers go through Lookup or Snapshot, which
+// return copies so no caller can mutate the stored specs.
 type Registry struct {
 	specs map[Ref]config.ChildSpec
 	mu    sync.RWMutex
@@ -78,7 +78,8 @@ func (cw *ConfigWorker) Registry() *Registry {
 }
 
 // Upsert records an enabled child spec for ref, serializing cfg into the
-// spec's UserSpec.Config.
+// spec's UserSpec.Config. Upsert is the sole enforcer of the Enabled=true
+// invariant on stored specs: every other writer must preserve it.
 func (cw *ConfigWorker) Upsert(ref Ref, cfg map[string]any) error {
 	// TODO(ENG-5097): drop the YAML round-trip when ChildSpec.UserSpec.Config is removed (non-breaking)
 	spec, err := config.NewChildSpec(ref.Name, ref.WorkerType, cfg, true)
@@ -90,4 +91,11 @@ func (cw *ConfigWorker) Upsert(ref Ref, cfg map[string]any) error {
 	defer cw.registry.mu.Unlock()
 	cw.registry.specs[ref] = spec
 	return nil
+}
+
+// Delete removes the child spec recorded for ref from the shared registry.
+func (cw *ConfigWorker) Delete(ref Ref) {
+	cw.registry.mu.Lock()
+	defer cw.registry.mu.Unlock()
+	delete(cw.registry.specs, ref)
 }
