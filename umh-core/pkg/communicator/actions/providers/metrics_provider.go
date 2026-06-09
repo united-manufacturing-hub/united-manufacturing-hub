@@ -79,52 +79,7 @@ func getDFCMetrics(uuid string, snapshot fsm.SystemSnapshot) (models.GetMetricsR
 
 	metrics := observedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosMetrics.Metrics
 
-	// Process Input metrics
-	inputMetrics := metrics.Input
-	addMetrics(&res, DFCMetricComponentTypeInput, DFCInputPath,
-		MetricEntry{Name: "connection_failed", Value: inputMetrics.ConnectionFailed, ValueType: models.MetricValueTypeNumber},
-		MetricEntry{Name: "connection_lost", Value: inputMetrics.ConnectionLost, ValueType: models.MetricValueTypeNumber},
-		MetricEntry{Name: "connection_up", Value: inputMetrics.ConnectionUp, ValueType: models.MetricValueTypeNumber},
-		MetricEntry{Name: "received", Value: inputMetrics.Received, ValueType: models.MetricValueTypeNumber},
-		MetricEntry{Name: "latency_ns_p50", Value: inputMetrics.LatencyNS.P50, ValueType: models.MetricValueTypeNumber},
-		MetricEntry{Name: "latency_ns_p90", Value: inputMetrics.LatencyNS.P90, ValueType: models.MetricValueTypeNumber},
-		MetricEntry{Name: "latency_ns_p99", Value: inputMetrics.LatencyNS.P99, ValueType: models.MetricValueTypeNumber},
-		MetricEntry{Name: "latency_ns_sum", Value: inputMetrics.LatencyNS.Sum, ValueType: models.MetricValueTypeNumber},
-		MetricEntry{Name: "latency_ns_count", Value: inputMetrics.LatencyNS.Count, ValueType: models.MetricValueTypeNumber},
-	)
-
-	// Process Output metrics
-	outputMetrics := metrics.Output
-	addMetrics(&res, DFCMetricComponentTypeOutput, DFCOutputPath,
-		MetricEntry{Name: "batch_sent", Value: outputMetrics.BatchSent, ValueType: models.MetricValueTypeNumber},
-		MetricEntry{Name: "connection_failed", Value: outputMetrics.ConnectionFailed, ValueType: models.MetricValueTypeNumber},
-		MetricEntry{Name: "connection_lost", Value: outputMetrics.ConnectionLost, ValueType: models.MetricValueTypeNumber},
-		MetricEntry{Name: "connection_up", Value: outputMetrics.ConnectionUp, ValueType: models.MetricValueTypeNumber},
-		MetricEntry{Name: "error", Value: outputMetrics.Error, ValueType: models.MetricValueTypeNumber},
-		MetricEntry{Name: "sent", Value: outputMetrics.Sent, ValueType: models.MetricValueTypeNumber},
-		MetricEntry{Name: "latency_ns_p50", Value: outputMetrics.LatencyNS.P50, ValueType: models.MetricValueTypeNumber},
-		MetricEntry{Name: "latency_ns_p90", Value: outputMetrics.LatencyNS.P90, ValueType: models.MetricValueTypeNumber},
-		MetricEntry{Name: "latency_ns_p99", Value: outputMetrics.LatencyNS.P99, ValueType: models.MetricValueTypeNumber},
-		MetricEntry{Name: "latency_ns_sum", Value: outputMetrics.LatencyNS.Sum, ValueType: models.MetricValueTypeNumber},
-		MetricEntry{Name: "latency_ns_count", Value: outputMetrics.LatencyNS.Count, ValueType: models.MetricValueTypeNumber},
-	)
-
-	// Process processor metrics
-	for path, proc := range metrics.Process.Processors {
-		addMetrics(&res, DFCMetricComponentTypeProcessor, path,
-			MetricEntry{Name: "label", Value: proc.Label, ValueType: models.MetricValueTypeString},
-			MetricEntry{Name: "received", Value: proc.Received, ValueType: models.MetricValueTypeNumber},
-			MetricEntry{Name: "batch_received", Value: proc.BatchReceived, ValueType: models.MetricValueTypeNumber},
-			MetricEntry{Name: "sent", Value: proc.Sent, ValueType: models.MetricValueTypeNumber},
-			MetricEntry{Name: "batch_sent", Value: proc.BatchSent, ValueType: models.MetricValueTypeNumber},
-			MetricEntry{Name: "error", Value: proc.Error, ValueType: models.MetricValueTypeNumber},
-			MetricEntry{Name: "latency_ns_p50", Value: proc.LatencyNS.P50, ValueType: models.MetricValueTypeNumber},
-			MetricEntry{Name: "latency_ns_p90", Value: proc.LatencyNS.P90, ValueType: models.MetricValueTypeNumber},
-			MetricEntry{Name: "latency_ns_p99", Value: proc.LatencyNS.P99, ValueType: models.MetricValueTypeNumber},
-			MetricEntry{Name: "latency_ns_sum", Value: proc.LatencyNS.Sum, ValueType: models.MetricValueTypeNumber},
-			MetricEntry{Name: "latency_ns_count", Value: proc.LatencyNS.Count, ValueType: models.MetricValueTypeNumber},
-		)
-	}
+	addBenthosMetrics(&res, metrics, "")
 
 	return res, nil
 }
@@ -200,65 +155,17 @@ func getTopicBrowserMetrics(snapshot fsm.SystemSnapshot) (models.GetMetricsRespo
 	// Extract benthos metrics from the observed state
 	metrics := observedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosMetrics.Metrics
 
-	// Process Input metrics (same structure as DFC since topic browser uses benthos)
-	inputMetrics := metrics.Input
-	addMetrics(&res, TopicBrowserMetricComponentTypeInput, TopicBrowserInputPath,
-		MetricEntry{Name: "connection_failed", Value: inputMetrics.ConnectionFailed, ValueType: models.MetricValueTypeNumber},
-		MetricEntry{Name: "connection_lost", Value: inputMetrics.ConnectionLost, ValueType: models.MetricValueTypeNumber},
-		MetricEntry{Name: "connection_up", Value: inputMetrics.ConnectionUp, ValueType: models.MetricValueTypeNumber},
-		MetricEntry{Name: "received", Value: inputMetrics.Received, ValueType: models.MetricValueTypeNumber},
-		MetricEntry{Name: "latency_ns_p50", Value: inputMetrics.LatencyNS.P50, ValueType: models.MetricValueTypeNumber},
-		MetricEntry{Name: "latency_ns_p90", Value: inputMetrics.LatencyNS.P90, ValueType: models.MetricValueTypeNumber},
-		MetricEntry{Name: "latency_ns_p99", Value: inputMetrics.LatencyNS.P99, ValueType: models.MetricValueTypeNumber},
-		MetricEntry{Name: "latency_ns_sum", Value: inputMetrics.LatencyNS.Sum, ValueType: models.MetricValueTypeNumber},
-		MetricEntry{Name: "latency_ns_count", Value: inputMetrics.LatencyNS.Count, ValueType: models.MetricValueTypeNumber},
-	)
-
-	// Process Output metrics
-	outputMetrics := metrics.Output
-	addMetrics(&res, TopicBrowserMetricComponentTypeOutput, TopicBrowserOutputPath,
-		MetricEntry{Name: "batch_sent", Value: outputMetrics.BatchSent, ValueType: models.MetricValueTypeNumber},
-		MetricEntry{Name: "connection_failed", Value: outputMetrics.ConnectionFailed, ValueType: models.MetricValueTypeNumber},
-		MetricEntry{Name: "connection_lost", Value: outputMetrics.ConnectionLost, ValueType: models.MetricValueTypeNumber},
-		MetricEntry{Name: "connection_up", Value: outputMetrics.ConnectionUp, ValueType: models.MetricValueTypeNumber},
-		MetricEntry{Name: "error", Value: outputMetrics.Error, ValueType: models.MetricValueTypeNumber},
-		MetricEntry{Name: "sent", Value: outputMetrics.Sent, ValueType: models.MetricValueTypeNumber},
-		MetricEntry{Name: "latency_ns_p50", Value: outputMetrics.LatencyNS.P50, ValueType: models.MetricValueTypeNumber},
-		MetricEntry{Name: "latency_ns_p90", Value: outputMetrics.LatencyNS.P90, ValueType: models.MetricValueTypeNumber},
-		MetricEntry{Name: "latency_ns_p99", Value: outputMetrics.LatencyNS.P99, ValueType: models.MetricValueTypeNumber},
-		MetricEntry{Name: "latency_ns_sum", Value: outputMetrics.LatencyNS.Sum, ValueType: models.MetricValueTypeNumber},
-		MetricEntry{Name: "latency_ns_count", Value: outputMetrics.LatencyNS.Count, ValueType: models.MetricValueTypeNumber},
-	)
-
-	// Process processor metrics
-	for path, proc := range metrics.Process.Processors {
-		addMetrics(&res, TopicBrowserMetricComponentTypeProcessor, path,
-			MetricEntry{Name: "label", Value: proc.Label, ValueType: models.MetricValueTypeString},
-			MetricEntry{Name: "received", Value: proc.Received, ValueType: models.MetricValueTypeNumber},
-			MetricEntry{Name: "batch_received", Value: proc.BatchReceived, ValueType: models.MetricValueTypeNumber},
-			MetricEntry{Name: "sent", Value: proc.Sent, ValueType: models.MetricValueTypeNumber},
-			MetricEntry{Name: "batch_sent", Value: proc.BatchSent, ValueType: models.MetricValueTypeNumber},
-			MetricEntry{Name: "error", Value: proc.Error, ValueType: models.MetricValueTypeNumber},
-			MetricEntry{Name: "latency_ns_p50", Value: proc.LatencyNS.P50, ValueType: models.MetricValueTypeNumber},
-			MetricEntry{Name: "latency_ns_p90", Value: proc.LatencyNS.P90, ValueType: models.MetricValueTypeNumber},
-			MetricEntry{Name: "latency_ns_p99", Value: proc.LatencyNS.P99, ValueType: models.MetricValueTypeNumber},
-			MetricEntry{Name: "latency_ns_sum", Value: proc.LatencyNS.Sum, ValueType: models.MetricValueTypeNumber},
-			MetricEntry{Name: "latency_ns_count", Value: proc.LatencyNS.Count, ValueType: models.MetricValueTypeNumber},
-		)
-	}
+	addBenthosMetrics(&res, metrics, "")
 
 	return res, nil
 }
 
 const (
-	// DFC paths.
-	DFCInputPath  = "root.input"
-	DFCOutputPath = "root.output"
-
-	// DFC metric component types.
-	DFCMetricComponentTypeInput     = "input"
-	DFCMetricComponentTypeOutput    = "output"
-	DFCMetricComponentTypeProcessor = "processor"
+	// BenthosMetricComponentType* are the component type strings for all
+	// benthos-backed resources (DFC, TopicBrowser, StreamProcessor, ProtocolConverter).
+	BenthosMetricComponentTypeInput     = "input"
+	BenthosMetricComponentTypeOutput    = "output"
+	BenthosMetricComponentTypeProcessor = "processor"
 
 	// Redpanda paths.
 	RedpandaStoragePath = "redpanda.storage"
@@ -271,33 +178,6 @@ const (
 	RedpandaMetricComponentTypeCluster = "cluster"
 	RedpandaMetricComponentTypeKafka   = "kafka"
 	RedpandaMetricComponentTypeTopic   = "topic"
-
-	// Topic Browser paths.
-	TopicBrowserInputPath  = "root.input"
-	TopicBrowserOutputPath = "root.output"
-
-	// Topic Browser metric component types.
-	TopicBrowserMetricComponentTypeInput     = "input"
-	TopicBrowserMetricComponentTypeOutput    = "output"
-	TopicBrowserMetricComponentTypeProcessor = "processor"
-
-	// Stream Processor paths.
-	StreamProcessorInputPath  = "root.input"
-	StreamProcessorOutputPath = "root.output"
-
-	// Stream Processor metric component types.
-	StreamProcessorMetricComponentTypeInput     = "input"
-	StreamProcessorMetricComponentTypeOutput    = "output"
-	StreamProcessorMetricComponentTypeProcessor = "processor"
-
-	// Protocol Converter paths.
-	ProtocolConverterInputPath  = "root.input"
-	ProtocolConverterOutputPath = "root.output"
-
-	// Protocol Converter metric component types.
-	ProtocolConverterMetricComponentTypeInput     = "input"
-	ProtocolConverterMetricComponentTypeOutput    = "output"
-	ProtocolConverterMetricComponentTypeProcessor = "processor"
 )
 
 type MetricEntry struct {
@@ -356,52 +236,7 @@ func getStreamProcessorMetrics(uuid string, snapshot fsm.SystemSnapshot) (models
 	// Extract benthos metrics from the observed state
 	metrics := observedState.ServiceInfo.DFCObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosMetrics.Metrics
 
-	// Process Input metrics (same structure as DFC since topic browser uses benthos)
-	inputMetrics := metrics.Input
-	addMetrics(&res, StreamProcessorMetricComponentTypeInput, StreamProcessorInputPath,
-		MetricEntry{Name: "connection_failed", Value: inputMetrics.ConnectionFailed, ValueType: models.MetricValueTypeNumber},
-		MetricEntry{Name: "connection_lost", Value: inputMetrics.ConnectionLost, ValueType: models.MetricValueTypeNumber},
-		MetricEntry{Name: "connection_up", Value: inputMetrics.ConnectionUp, ValueType: models.MetricValueTypeNumber},
-		MetricEntry{Name: "received", Value: inputMetrics.Received, ValueType: models.MetricValueTypeNumber},
-		MetricEntry{Name: "latency_ns_p50", Value: inputMetrics.LatencyNS.P50, ValueType: models.MetricValueTypeNumber},
-		MetricEntry{Name: "latency_ns_p90", Value: inputMetrics.LatencyNS.P90, ValueType: models.MetricValueTypeNumber},
-		MetricEntry{Name: "latency_ns_p99", Value: inputMetrics.LatencyNS.P99, ValueType: models.MetricValueTypeNumber},
-		MetricEntry{Name: "latency_ns_sum", Value: inputMetrics.LatencyNS.Sum, ValueType: models.MetricValueTypeNumber},
-		MetricEntry{Name: "latency_ns_count", Value: inputMetrics.LatencyNS.Count, ValueType: models.MetricValueTypeNumber},
-	)
-
-	// Process Output metrics
-	outputMetrics := metrics.Output
-	addMetrics(&res, StreamProcessorMetricComponentTypeOutput, StreamProcessorOutputPath,
-		MetricEntry{Name: "batch_sent", Value: outputMetrics.BatchSent, ValueType: models.MetricValueTypeNumber},
-		MetricEntry{Name: "connection_failed", Value: outputMetrics.ConnectionFailed, ValueType: models.MetricValueTypeNumber},
-		MetricEntry{Name: "connection_lost", Value: outputMetrics.ConnectionLost, ValueType: models.MetricValueTypeNumber},
-		MetricEntry{Name: "connection_up", Value: outputMetrics.ConnectionUp, ValueType: models.MetricValueTypeNumber},
-		MetricEntry{Name: "error", Value: outputMetrics.Error, ValueType: models.MetricValueTypeNumber},
-		MetricEntry{Name: "sent", Value: outputMetrics.Sent, ValueType: models.MetricValueTypeNumber},
-		MetricEntry{Name: "latency_ns_p50", Value: outputMetrics.LatencyNS.P50, ValueType: models.MetricValueTypeNumber},
-		MetricEntry{Name: "latency_ns_p90", Value: outputMetrics.LatencyNS.P90, ValueType: models.MetricValueTypeNumber},
-		MetricEntry{Name: "latency_ns_p99", Value: outputMetrics.LatencyNS.P99, ValueType: models.MetricValueTypeNumber},
-		MetricEntry{Name: "latency_ns_sum", Value: outputMetrics.LatencyNS.Sum, ValueType: models.MetricValueTypeNumber},
-		MetricEntry{Name: "latency_ns_count", Value: outputMetrics.LatencyNS.Count, ValueType: models.MetricValueTypeNumber},
-	)
-
-	// Process processor metrics
-	for path, proc := range metrics.Process.Processors {
-		addMetrics(&res, StreamProcessorMetricComponentTypeProcessor, path,
-			MetricEntry{Name: "label", Value: proc.Label, ValueType: models.MetricValueTypeString},
-			MetricEntry{Name: "received", Value: proc.Received, ValueType: models.MetricValueTypeNumber},
-			MetricEntry{Name: "batch_received", Value: proc.BatchReceived, ValueType: models.MetricValueTypeNumber},
-			MetricEntry{Name: "sent", Value: proc.Sent, ValueType: models.MetricValueTypeNumber},
-			MetricEntry{Name: "batch_sent", Value: proc.BatchSent, ValueType: models.MetricValueTypeNumber},
-			MetricEntry{Name: "error", Value: proc.Error, ValueType: models.MetricValueTypeNumber},
-			MetricEntry{Name: "latency_ns_p50", Value: proc.LatencyNS.P50, ValueType: models.MetricValueTypeNumber},
-			MetricEntry{Name: "latency_ns_p90", Value: proc.LatencyNS.P90, ValueType: models.MetricValueTypeNumber},
-			MetricEntry{Name: "latency_ns_p99", Value: proc.LatencyNS.P99, ValueType: models.MetricValueTypeNumber},
-			MetricEntry{Name: "latency_ns_sum", Value: proc.LatencyNS.Sum, ValueType: models.MetricValueTypeNumber},
-			MetricEntry{Name: "latency_ns_count", Value: proc.LatencyNS.Count, ValueType: models.MetricValueTypeNumber},
-		)
-	}
+	addBenthosMetrics(&res, metrics, "")
 
 	return res, nil
 }
@@ -464,36 +299,45 @@ func getProtocolConverterMetrics(uuid string, snapshot fsm.SystemSnapshot) (mode
 }
 
 func addProtocolConverterBenthosMetrics(res *models.GetMetricsResponse, metrics benthos_monitor.Metrics, origin models.MetricOriginType) {
-	inputMetrics := metrics.Input
-	addMetrics(res, ProtocolConverterMetricComponentTypeInput, ProtocolConverterInputPath,
-		MetricEntry{Name: "connection_failed", Value: inputMetrics.ConnectionFailed, ValueType: models.MetricValueTypeNumber, ValueOrigin: origin},
-		MetricEntry{Name: "connection_lost", Value: inputMetrics.ConnectionLost, ValueType: models.MetricValueTypeNumber, ValueOrigin: origin},
-		MetricEntry{Name: "connection_up", Value: inputMetrics.ConnectionUp, ValueType: models.MetricValueTypeNumber, ValueOrigin: origin},
-		MetricEntry{Name: "received", Value: inputMetrics.Received, ValueType: models.MetricValueTypeNumber, ValueOrigin: origin},
-		MetricEntry{Name: "latency_ns_p50", Value: inputMetrics.LatencyNS.P50, ValueType: models.MetricValueTypeNumber, ValueOrigin: origin},
-		MetricEntry{Name: "latency_ns_p90", Value: inputMetrics.LatencyNS.P90, ValueType: models.MetricValueTypeNumber, ValueOrigin: origin},
-		MetricEntry{Name: "latency_ns_p99", Value: inputMetrics.LatencyNS.P99, ValueType: models.MetricValueTypeNumber, ValueOrigin: origin},
-		MetricEntry{Name: "latency_ns_sum", Value: inputMetrics.LatencyNS.Sum, ValueType: models.MetricValueTypeNumber, ValueOrigin: origin},
-		MetricEntry{Name: "latency_ns_count", Value: inputMetrics.LatencyNS.Count, ValueType: models.MetricValueTypeNumber, ValueOrigin: origin},
-	)
+	addBenthosMetrics(res, metrics, origin)
+}
 
-	outputMetrics := metrics.Output
-	addMetrics(res, ProtocolConverterMetricComponentTypeOutput, ProtocolConverterOutputPath,
-		MetricEntry{Name: "batch_sent", Value: outputMetrics.BatchSent, ValueType: models.MetricValueTypeNumber, ValueOrigin: origin},
-		MetricEntry{Name: "connection_failed", Value: outputMetrics.ConnectionFailed, ValueType: models.MetricValueTypeNumber, ValueOrigin: origin},
-		MetricEntry{Name: "connection_lost", Value: outputMetrics.ConnectionLost, ValueType: models.MetricValueTypeNumber, ValueOrigin: origin},
-		MetricEntry{Name: "connection_up", Value: outputMetrics.ConnectionUp, ValueType: models.MetricValueTypeNumber, ValueOrigin: origin},
-		MetricEntry{Name: "error", Value: outputMetrics.Error, ValueType: models.MetricValueTypeNumber, ValueOrigin: origin},
-		MetricEntry{Name: "sent", Value: outputMetrics.Sent, ValueType: models.MetricValueTypeNumber, ValueOrigin: origin},
-		MetricEntry{Name: "latency_ns_p50", Value: outputMetrics.LatencyNS.P50, ValueType: models.MetricValueTypeNumber, ValueOrigin: origin},
-		MetricEntry{Name: "latency_ns_p90", Value: outputMetrics.LatencyNS.P90, ValueType: models.MetricValueTypeNumber, ValueOrigin: origin},
-		MetricEntry{Name: "latency_ns_p99", Value: outputMetrics.LatencyNS.P99, ValueType: models.MetricValueTypeNumber, ValueOrigin: origin},
-		MetricEntry{Name: "latency_ns_sum", Value: outputMetrics.LatencyNS.Sum, ValueType: models.MetricValueTypeNumber, ValueOrigin: origin},
-		MetricEntry{Name: "latency_ns_count", Value: outputMetrics.LatencyNS.Count, ValueType: models.MetricValueTypeNumber, ValueOrigin: origin},
-	)
+// addBenthosMetrics appends input, output, and processor metrics from a benthos
+// Metrics snapshot into res. origin is set on every MetricEntry; pass "" for
+// callers that do not distinguish read vs. write origin.
+func addBenthosMetrics(res *models.GetMetricsResponse, metrics benthos_monitor.Metrics, origin models.MetricOriginType) {
+	for inputPath, in := range metrics.Inputs {
+		addMetrics(res, BenthosMetricComponentTypeInput, inputPath,
+			MetricEntry{Name: "connection_failed", Value: in.ConnectionFailed, ValueType: models.MetricValueTypeNumber, ValueOrigin: origin},
+			MetricEntry{Name: "connection_lost", Value: in.ConnectionLost, ValueType: models.MetricValueTypeNumber, ValueOrigin: origin},
+			MetricEntry{Name: "connection_up", Value: in.ConnectionUp, ValueType: models.MetricValueTypeNumber, ValueOrigin: origin},
+			MetricEntry{Name: "received", Value: in.Received, ValueType: models.MetricValueTypeNumber, ValueOrigin: origin},
+			MetricEntry{Name: "latency_ns_p50", Value: in.LatencyNS.P50, ValueType: models.MetricValueTypeNumber, ValueOrigin: origin},
+			MetricEntry{Name: "latency_ns_p90", Value: in.LatencyNS.P90, ValueType: models.MetricValueTypeNumber, ValueOrigin: origin},
+			MetricEntry{Name: "latency_ns_p99", Value: in.LatencyNS.P99, ValueType: models.MetricValueTypeNumber, ValueOrigin: origin},
+			MetricEntry{Name: "latency_ns_sum", Value: in.LatencyNS.Sum, ValueType: models.MetricValueTypeNumber, ValueOrigin: origin},
+			MetricEntry{Name: "latency_ns_count", Value: in.LatencyNS.Count, ValueType: models.MetricValueTypeNumber, ValueOrigin: origin},
+		)
+	}
+
+	for outputPath, out := range metrics.Outputs {
+		addMetrics(res, BenthosMetricComponentTypeOutput, outputPath,
+			MetricEntry{Name: "batch_sent", Value: out.BatchSent, ValueType: models.MetricValueTypeNumber, ValueOrigin: origin},
+			MetricEntry{Name: "connection_failed", Value: out.ConnectionFailed, ValueType: models.MetricValueTypeNumber, ValueOrigin: origin},
+			MetricEntry{Name: "connection_lost", Value: out.ConnectionLost, ValueType: models.MetricValueTypeNumber, ValueOrigin: origin},
+			MetricEntry{Name: "connection_up", Value: out.ConnectionUp, ValueType: models.MetricValueTypeNumber, ValueOrigin: origin},
+			MetricEntry{Name: "error", Value: out.Error, ValueType: models.MetricValueTypeNumber, ValueOrigin: origin},
+			MetricEntry{Name: "sent", Value: out.Sent, ValueType: models.MetricValueTypeNumber, ValueOrigin: origin},
+			MetricEntry{Name: "latency_ns_p50", Value: out.LatencyNS.P50, ValueType: models.MetricValueTypeNumber, ValueOrigin: origin},
+			MetricEntry{Name: "latency_ns_p90", Value: out.LatencyNS.P90, ValueType: models.MetricValueTypeNumber, ValueOrigin: origin},
+			MetricEntry{Name: "latency_ns_p99", Value: out.LatencyNS.P99, ValueType: models.MetricValueTypeNumber, ValueOrigin: origin},
+			MetricEntry{Name: "latency_ns_sum", Value: out.LatencyNS.Sum, ValueType: models.MetricValueTypeNumber, ValueOrigin: origin},
+			MetricEntry{Name: "latency_ns_count", Value: out.LatencyNS.Count, ValueType: models.MetricValueTypeNumber, ValueOrigin: origin},
+		)
+	}
 
 	for path, proc := range metrics.Process.Processors {
-		addMetrics(res, ProtocolConverterMetricComponentTypeProcessor, path,
+		addMetrics(res, BenthosMetricComponentTypeProcessor, path,
 			MetricEntry{Name: "label", Value: proc.Label, ValueType: models.MetricValueTypeString, ValueOrigin: origin},
 			MetricEntry{Name: "received", Value: proc.Received, ValueType: models.MetricValueTypeNumber, ValueOrigin: origin},
 			MetricEntry{Name: "batch_received", Value: proc.BatchReceived, ValueType: models.MetricValueTypeNumber, ValueOrigin: origin},

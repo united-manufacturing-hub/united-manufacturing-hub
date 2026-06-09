@@ -480,11 +480,11 @@ func (m *MockBenthosMonitorService) SetMetricsState(isActive bool) {
 	if m.ServiceState != nil && m.ServiceState.BenthosStatus.LastScan != nil {
 		m.ServiceState.BenthosStatus.LastScan.BenthosMetrics = &BenthosMetrics{
 			Metrics: Metrics{
-				Input: InputMetrics{
-					ConnectionUp: 1,
+				Inputs: map[string]InputInstance{
+					"root.input": {Path: "root.input", ConnectionUp: 1},
 				},
-				Output: OutputMetrics{
-					ConnectionUp: 1,
+				Outputs: map[string]OutputInstance{
+					"root.output": {Path: "root.output", ConnectionUp: 1},
 				},
 			},
 		}
