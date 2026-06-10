@@ -23,12 +23,12 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
-	registry "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/configworker"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/register"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/application"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/application/snapshot"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker/dynamicchildren"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence/memory"
 )
 
@@ -80,10 +80,10 @@ var _ = Describe("Application worker surfaces the shared registry into Applicati
 
 		// Publish ONE shared registry under the application worker type and
 		// record a single ref so the COS read has something to surface.
-		reg := registry.NewConfigWorker()
-		ref := registry.Ref{WorkerType: "example", Name: "example-child"}
+		reg := dynamicchildren.NewWriter()
+		ref := dynamicchildren.Ref{WorkerType: "example", Name: "example-child"}
 		Expect(reg.Upsert(ref, map[string]any{"value": 1})).To(Succeed())
-		register.SetDeps[*registry.Registry](appKey, reg.Registry())
+		register.SetDeps[*dynamicchildren.Registry](appKey, reg.Registry())
 
 		sup, store, appID := newAppSupervisorWithStore(logger)
 

@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package configworker owns the shared registry of child specs that the
+// Package dynamicchildren owns the shared registry of child specs that the
 // application control surface reads to spawn dynamic children.
-package configworker
+package dynamicchildren
 
 import (
 	"sort"
@@ -89,66 +89,66 @@ func (r *Registry) Specs() []config.ChildSpec {
 	return specs
 }
 
-// ConfigWorker owns a shared Registry and records child specs via Upsert.
-type ConfigWorker struct {
+// Writer owns a shared Registry and records child specs via Upsert.
+type Writer struct {
 	registry *Registry
 	validate func(config.ChildSpec) error
 }
 
-// Option configures a ConfigWorker at construction.
-type Option func(*ConfigWorker)
+// Option configures a Writer at construction.
+type Option func(*Writer)
 
 // WithValidate installs a content-validation hook that Upsert runs against the
 // built spec before recording it. A non-nil error from the hook makes Upsert
 // reject the ref and leave the registry unchanged, preserving any spec
 // previously recorded for ref.
 func WithValidate(validate func(config.ChildSpec) error) Option {
-	return func(cw *ConfigWorker) {
-		cw.validate = validate
+	return func(w *Writer) {
+		w.validate = validate
 	}
 }
 
-// NewConfigWorker returns a ConfigWorker with an empty registry.
-func NewConfigWorker(opts ...Option) *ConfigWorker {
-	cw := &ConfigWorker{
+// NewWriter returns a Writer with an empty registry.
+func NewWriter(opts ...Option) *Writer {
+	w := &Writer{
 		registry: &Registry{specs: make(map[Ref]config.ChildSpec)},
 	}
 	for _, opt := range opts {
-		opt(cw)
+		opt(w)
 	}
-	return cw
+	return w
 }
 
 // Registry returns the shared registry.
-func (cw *ConfigWorker) Registry() *Registry {
-	return cw.registry
+func (w *Writer) Registry() *Registry {
+	return w.registry
 }
 
 // Upsert records an enabled child spec for ref, serializing cfg into the
 // spec's UserSpec.Config. Upsert is the sole enforcer of the Enabled=true
 // invariant on stored specs: every other writer must preserve it.
-func (cw *ConfigWorker) Upsert(ref Ref, cfg map[string]any) error {
+func (w *Writer) Upsert(ref Ref, cfg map[string]any) error {
 	// TODO(ENG-5097): drop the YAML round-trip when ChildSpec.UserSpec.Config is removed (non-breaking)
 	spec, err := config.NewChildSpec(ref.Name, ref.WorkerType, cfg, true)
 	if err != nil {
 		return err
 	}
 
-	if cw.validate != nil {
-		if err := cw.validate(spec); err != nil {
+	if w.validate != nil {
+		if err := w.validate(spec); err != nil {
 			return err
 		}
 	}
 
-	cw.registry.mu.Lock()
-	defer cw.registry.mu.Unlock()
-	cw.registry.specs[ref] = spec
+	w.registry.mu.Lock()
+	defer w.registry.mu.Unlock()
+	w.registry.specs[ref] = spec
 	return nil
 }
 
 // Delete removes the child spec recorded for ref from the shared registry.
-func (cw *ConfigWorker) Delete(ref Ref) {
-	cw.registry.mu.Lock()
-	defer cw.registry.mu.Unlock()
-	delete(cw.registry.specs, ref)
+func (w *Writer) Delete(ref Ref) {
+	w.registry.mu.Lock()
+	defer w.registry.mu.Unlock()
+	delete(w.registry.specs, ref)
 }

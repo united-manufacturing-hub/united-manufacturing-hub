@@ -23,9 +23,9 @@ import (
 	"fmt"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
-	registry "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/configworker"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/register"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker/dynamicchildren"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker/snapshot"
 
 	// Blank-import the state subpackage so its init() registers the initial
@@ -39,7 +39,7 @@ const workerType = "configworker"
 // ConfigworkerWorker implements the FSMv2 Worker interface and holds the shared
 // registry of dynamic child specs.
 type ConfigworkerWorker struct {
-	registry *registry.Registry
+	registry *dynamicchildren.Registry
 
 	fsmv2.WorkerBase[snapshot.ConfigworkerConfig, snapshot.ConfigworkerStatus, register.NoDeps]
 }
@@ -53,7 +53,7 @@ func NewConfigworkerWorker(
 	logger deps.FSMLogger,
 	stateReader deps.StateReader,
 ) (*ConfigworkerWorker, error) {
-	shared := register.GetDeps[*registry.Registry](workerType)
+	shared := register.GetDeps[*dynamicchildren.Registry](workerType)
 	if shared == nil {
 		return nil, fmt.Errorf("no registry published for worker type %q: call register.SetDeps before constructing", workerType)
 	}
@@ -67,7 +67,7 @@ func NewConfigworkerWorker(
 }
 
 // Registry returns the shared registry the worker holds.
-func (w *ConfigworkerWorker) Registry() *registry.Registry {
+func (w *ConfigworkerWorker) Registry() *dynamicchildren.Registry {
 	return w.registry
 }
 

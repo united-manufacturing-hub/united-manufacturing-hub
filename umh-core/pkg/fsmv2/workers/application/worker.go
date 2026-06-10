@@ -27,11 +27,11 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/configworker"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/register"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/application/snapshot"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker/dynamicchildren"
 
 	// Blank import for side effects: registers the initial state via
 	// fsmv2.RegisterInitialState in state/stopped_state.go init(). GetInitialState
@@ -89,13 +89,13 @@ func (w *ApplicationWorker) CollectObservedState(ctx context.Context, _ fsmv2.De
 		Name: w.Identity().Name,
 	}
 
-	// Shared-registry contract: the SAME *configworker.Registry instance must be
+	// Shared-registry contract: the SAME *dynamicchildren.Registry instance must be
 	// published via register.SetDeps under BOTH the config_worker's key AND the
 	// application worker type (WorkerTypeName) read here, so writer and reader
 	// share one instance.
 	//
 	// Load-bearing wiring contract: parent wiring MUST publish the single shared
-	// *configworker.Registry under the application worker type (WorkerTypeName) -
+	// *dynamicchildren.Registry under the application worker type (WorkerTypeName) -
 	// the same instance the configworker worker produces. Two failure modes follow
 	// from this key being shared with the application worker's own deps key:
 	//   - if nobody publishes it, RegistryConfigured stays false and dynamic
@@ -105,7 +105,7 @@ func (w *ApplicationWorker) CollectObservedState(ctx context.Context, _ fsmv2.De
 	// The union-flip step must publish the one shared registry under this key (or
 	// unify the keys); a negative/wiring test must guard it, not only the
 	// integration happy path.
-	if reg := register.GetDeps[*configworker.Registry](WorkerTypeName); reg != nil {
+	if reg := register.GetDeps[*dynamicchildren.Registry](WorkerTypeName); reg != nil {
 		status.RegistryConfigured = true
 		status.DynamicChildren = reg.Specs()
 	}

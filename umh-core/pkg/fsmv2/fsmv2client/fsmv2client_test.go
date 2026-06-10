@@ -17,32 +17,32 @@ package fsmv2client
 import (
 	"testing"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/configworker"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker/dynamicchildren"
 )
 
-// TestUpsertAndDeletePassThroughToConfigWorker verifies the FSMv2Client delegates
-// writes to the ConfigWorker it wraps: Upsert records the ref in the underlying
+// TestUpsertAndDeletePassThroughToWriter verifies the FSMv2Client delegates
+// writes to the Writer it wraps: Upsert records the ref in the underlying
 // shared registry (Lookup ok==true) and Delete removes it (Lookup ok==false). The
 // client is constructed with a nil StateReader because A11 only stores the reader
 // for a later typed Get and does not read it here.
-func TestUpsertAndDeletePassThroughToConfigWorker(t *testing.T) {
-	cw := configworker.NewConfigWorker()
-	client := NewFSMv2Client(cw, nil)
+func TestUpsertAndDeletePassThroughToWriter(t *testing.T) {
+	w := dynamicchildren.NewWriter()
+	client := NewFSMv2Client(w, nil)
 
-	ref := configworker.Ref{WorkerType: "example", Name: "foo"}
+	ref := dynamicchildren.Ref{WorkerType: "example", Name: "foo"}
 	cfg := map[string]any{"greeting": "hello"}
 
 	if err := client.Upsert(ref, cfg); err != nil {
 		t.Fatalf("client.Upsert returned error: %v", err)
 	}
 
-	if _, ok := cw.Registry().Lookup(ref); !ok {
-		t.Fatalf("ConfigWorker registry has no entry for ref %+v after client.Upsert", ref)
+	if _, ok := w.Registry().Lookup(ref); !ok {
+		t.Fatalf("Writer registry has no entry for ref %+v after client.Upsert", ref)
 	}
 
 	client.Delete(ref)
 
-	if _, ok := cw.Registry().Lookup(ref); ok {
-		t.Fatalf("ConfigWorker registry still holds ref %+v after client.Delete", ref)
+	if _, ok := w.Registry().Lookup(ref); ok {
+		t.Fatalf("Writer registry still holds ref %+v after client.Delete", ref)
 	}
 }

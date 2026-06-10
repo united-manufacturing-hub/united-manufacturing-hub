@@ -23,7 +23,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/register"
 
-	registry "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/configworker"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker/dynamicchildren"
 
 	// Blank-import the kernel config worker plus the dynamic worker the registry
 	// declares, so their init() registrations exist before the supervisor ticks.
@@ -51,13 +51,13 @@ var _ = Describe("Application supervisor tears down a registry-deleted worker", 
 
 		// One shared registry, wired under both keys before the app supervisor
 		// constructs the application worker (so the COS read sees a non-nil handle).
-		cw := registry.NewConfigWorker()
-		registry.WireSharedRegistry(cw.Registry(), appKey, configWorkerKey)
+		w := dynamicchildren.NewWriter()
+		dynamicchildren.WireSharedRegistry(w.Registry(), appKey, configWorkerKey)
 
 		// Upsert a helloworld child and drive the supervisor on its started
 		// context so the spawned child's action executor runs.
-		ref := registry.Ref{WorkerType: "helloworld", Name: "hello-1"}
-		Expect(cw.Upsert(ref, map[string]any{"state": "running"})).To(Succeed())
+		ref := dynamicchildren.Ref{WorkerType: "helloworld", Name: "hello-1"}
+		Expect(w.Upsert(ref, map[string]any{"state": "running"})).To(Succeed())
 
 		sup, _, _ := newAppSupervisorWithStore(logger)
 		sup.TestMarkAsStarted()
@@ -84,7 +84,7 @@ var _ = Describe("Application supervisor tears down a registry-deleted worker", 
 			"the registry-declared helloworld child must first spawn and reach Running")
 
 		// After Delete, hello-1 disappears from GetChildren() within a few ticks.
-		cw.Delete(ref)
+		w.Delete(ref)
 
 		Eventually(func() bool {
 			_ = sup.TestTick(ctx)
