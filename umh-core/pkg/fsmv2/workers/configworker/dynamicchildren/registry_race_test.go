@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package configworker
+package dynamicchildren
 
 import (
 	"fmt"
@@ -28,7 +28,7 @@ import (
 // that drops the lock surfaces here as a data race, not a rare production
 // `fatal error: concurrent map read and map write`.
 func TestRegistryConcurrentAccessIsRaceFree(t *testing.T) {
-	cw := NewConfigWorker()
+	cw := NewWriter()
 	reg := cw.Registry()
 
 	const goroutines = 8

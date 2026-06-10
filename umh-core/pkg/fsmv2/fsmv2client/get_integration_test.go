@@ -24,12 +24,12 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/configworker"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/fsmv2client"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/register"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/application"
 	appsnapshot "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/application/snapshot"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker/dynamicchildren"
 	hello_world "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/helloworld"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence/memory"
 
@@ -74,13 +74,13 @@ func TestGetReadsObservedStateWrittenByRealCollector(t *testing.T) {
 
 	// One shared registry, wired under both keys before the application worker is
 	// constructed, so the COS read sees a non-nil handle.
-	cw := configworker.NewConfigWorker()
-	configworker.WireSharedRegistry(cw.Registry(), appKey, configWorkerKey)
+	w := dynamicchildren.NewWriter()
+	dynamicchildren.WireSharedRegistry(w.Registry(), appKey, configWorkerKey)
 
 	// Upsert a helloworld child. Empty MoodFilePath means the worker never goes
 	// "sad", so it deterministically reaches Running.
-	childRef := configworker.Ref{WorkerType: "helloworld", Name: "hello-1"}
-	if err := cw.Upsert(childRef, map[string]any{"state": "running"}); err != nil {
+	childRef := dynamicchildren.Ref{WorkerType: "helloworld", Name: "hello-1"}
+	if err := w.Upsert(childRef, map[string]any{"state": "running"}); err != nil {
 		t.Fatalf("Upsert helloworld child: %v", err)
 	}
 
@@ -116,7 +116,7 @@ func TestGetReadsObservedStateWrittenByRealCollector(t *testing.T) {
 	sup.TestMarkAsStarted()
 
 	// The client holds the same store as a read-only StateReader.
-	client := fsmv2client.NewFSMv2Client(cw, store)
+	client := fsmv2client.NewFSMv2Client(w, store)
 
 	// Re-tick and re-Get until the collector's own cadence has persisted
 	// "Running" for the spawned child. Get reads exactly what the collector
@@ -135,7 +135,7 @@ func TestGetReadsObservedStateWrittenByRealCollector(t *testing.T) {
 
 	// Get for an undeclared ref (never Upserted, never spawned) must return a
 	// not-found error -- never a zero value masquerading as data.
-	undeclaredRef := configworker.Ref{WorkerType: "helloworld", Name: "never-spawned"}
+	undeclaredRef := dynamicchildren.Ref{WorkerType: "helloworld", Name: "never-spawned"}
 	_, err = fsmv2client.Get[hello_world.HelloworldStatus](ctx, client, undeclaredRef)
 	if !errors.Is(err, fsmv2client.ErrNotObserved) {
 		t.Fatalf("Get for undeclared ref returned %v; want a wrapped ErrNotObserved, not a zero value", err)

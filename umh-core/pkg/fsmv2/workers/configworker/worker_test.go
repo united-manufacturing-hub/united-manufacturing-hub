@@ -19,12 +19,12 @@ import (
 	"testing"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
-	registry "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/configworker"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/register"
 	worker "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker/dynamicchildren"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker/snapshot"
 	state "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker/state"
 )
@@ -48,8 +48,8 @@ func TestConfigWorkerRegistersHoldsRegistryAndRunsHealthy(t *testing.T) {
 
 	// Publish the shared registry under the worker type so the constructor's
 	// register.GetDeps wiring can pick it up; tear it down afterwards.
-	shared := registry.NewConfigWorker().Registry()
-	register.SetDeps[*registry.Registry](workerType, shared)
+	shared := dynamicchildren.NewWriter().Registry()
+	register.SetDeps[*dynamicchildren.Registry](workerType, shared)
 	t.Cleanup(func() { register.ClearDeps(workerType) })
 
 	identity := deps.Identity{ID: workerType + "-001", WorkerType: workerType}
@@ -146,8 +146,8 @@ func TestCollectObservedState(t *testing.T) {
 func newConstructedWorker(t *testing.T) *worker.ConfigworkerWorker {
 	t.Helper()
 
-	shared := registry.NewConfigWorker().Registry()
-	register.SetDeps[*registry.Registry](workerType, shared)
+	shared := dynamicchildren.NewWriter().Registry()
+	register.SetDeps[*dynamicchildren.Registry](workerType, shared)
 	t.Cleanup(func() { register.ClearDeps(workerType) })
 
 	identity := deps.Identity{ID: workerType + "-001", WorkerType: workerType}

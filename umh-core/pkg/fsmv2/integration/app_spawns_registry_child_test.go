@@ -24,7 +24,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/register"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
 
-	registry "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/configworker"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker/dynamicchildren"
 
 	// Blank-import the kernel config worker plus the dynamic worker the registry
 	// declares, so their init() registrations exist before the supervisor ticks.
@@ -52,13 +52,13 @@ var _ = Describe("Application supervisor spawns a registry-declared worker", fun
 
 		// (1) One shared registry, wired under both keys before the app supervisor
 		// constructs the application worker (so the COS read sees a non-nil handle).
-		cw := registry.NewConfigWorker()
-		registry.WireSharedRegistry(cw.Registry(), appKey, configWorkerKey)
+		w := dynamicchildren.NewWriter()
+		dynamicchildren.WireSharedRegistry(w.Registry(), appKey, configWorkerKey)
 
 		// (2) Upsert a helloworld child. Empty MoodFilePath means the worker never
 		// goes "sad", so it deterministically reaches Running.
-		ref := registry.Ref{WorkerType: "helloworld", Name: "hello-1"}
-		Expect(cw.Upsert(ref, map[string]any{"state": "running"})).To(Succeed())
+		ref := dynamicchildren.Ref{WorkerType: "helloworld", Name: "hello-1"}
+		Expect(w.Upsert(ref, map[string]any{"state": "running"})).To(Succeed())
 
 		// (3) Drive the application supervisor through the real tick loop. Mark it
 		// started so a spawned child is handed the supervisor's long-lived context

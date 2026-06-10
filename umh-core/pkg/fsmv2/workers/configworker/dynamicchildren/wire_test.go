@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package configworker
+package dynamicchildren
 
 import (
 	"testing"
@@ -42,16 +42,16 @@ func TestWireSharedRegistryPublishesOneInstanceAcrossKeys(t *testing.T) {
 		register.ClearDeps(configWorkerKey)
 	})
 
-	// One ConfigWorker owns one registry; publish that single instance under
+	// One Writer owns one registry; publish that single instance under
 	// both keys.
-	cw := NewConfigWorker()
-	reg := cw.Registry()
+	w := NewWriter()
+	reg := w.Registry()
 
 	WireSharedRegistry(reg, applicationKey, configWorkerKey)
 
 	// Write through the config-worker-owned handle.
 	ref := Ref{WorkerType: "example", Name: "foo"}
-	if err := cw.Upsert(ref, map[string]any{"greeting": "hello"}); err != nil {
+	if err := w.Upsert(ref, map[string]any{"greeting": "hello"}); err != nil {
 		t.Fatalf("Upsert returned error: %v", err)
 	}
 
