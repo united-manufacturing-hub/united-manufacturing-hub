@@ -248,23 +248,30 @@ func (a *DeployProtocolConverterAction) Execute() (interface{}, map[string]inter
 
 // createProtocolConverterConfig creates a ProtocolConverterConfig with templated configuration.
 func (a *DeployProtocolConverterAction) createProtocolConverterConfig() (config.ProtocolConverterConfig, error) {
+	return buildProtocolConverterConfig(a.payload)
+}
+
+// buildProtocolConverterConfig builds a ProtocolConverterConfig with templated
+// configuration from a parsed protocol converter payload. It is shared by the
+// deploy and save actions so both produce identical config from the same input.
+func buildProtocolConverterConfig(payload models.ProtocolConverter) (config.ProtocolConverterConfig, error) {
 	// Create variables bundle - start empty to allow user variables first
 	userVars := map[string]any{}
 
 	// Add any additional user-supplied variables from TemplateInfo.Variables
-	if a.payload.TemplateInfo != nil {
-		for _, variable := range a.payload.TemplateInfo.Variables {
+	if payload.TemplateInfo != nil {
+		for _, variable := range payload.TemplateInfo.Variables {
 			userVars[variable.Label] = variable.Value
 		}
 	}
 
 	// Enforce reserved connection variables after merging to prevent user overrides
-	userVars["IP"] = a.payload.Connection.IP                                     // Keep IP as string
-	userVars["PORT"] = strconv.FormatUint(uint64(a.payload.Connection.Port), 10) // Convert port to string
+	userVars["IP"] = payload.Connection.IP                                     // Keep IP as string
+	userVars["PORT"] = strconv.FormatUint(uint64(payload.Connection.Port), 10) // Convert port to string
 
 	// Extract UMH_TOPICS from write DFC payload if provided
-	if a.payload.WriteDFC != nil && len(a.payload.WriteDFC.UMHTopics) > 0 {
-		userVars["UMH_TOPICS"] = a.payload.WriteDFC.UMHTopics
+	if payload.WriteDFC != nil && len(payload.WriteDFC.UMHTopics) > 0 {
+		userVars["UMH_TOPICS"] = payload.WriteDFC.UMHTopics
 	}
 
 	variableBundle := variables.VariableBundle{
@@ -285,8 +292,8 @@ func (a *DeployProtocolConverterAction) createProtocolConverterConfig() (config.
 	}
 
 	// If a ReadDFC is provided in the payload, configure it immediately
-	if a.payload.ReadDFC != nil {
-		benthosConfig, err := CreateBenthosConfigFromCDFCPayload(dfcToPayload(a.payload.ReadDFC), a.payload.Name)
+	if payload.ReadDFC != nil {
+		benthosConfig, err := CreateBenthosConfigFromCDFCPayload(dfcToPayload(payload.ReadDFC), payload.Name)
 		if err != nil {
 			return config.ProtocolConverterConfig{}, fmt.Errorf("failed to create read DFC benthos config: %w", err)
 		}
@@ -296,8 +303,8 @@ func (a *DeployProtocolConverterAction) createProtocolConverterConfig() (config.
 	}
 
 	// If a WriteDFC is provided in the payload, configure it immediately
-	if a.payload.WriteDFC != nil {
-		benthosConfig, err := CreateBenthosConfigFromCDFCPayload(dfcToPayload(a.payload.WriteDFC), a.payload.Name)
+	if payload.WriteDFC != nil {
+		benthosConfig, err := CreateBenthosConfigFromCDFCPayload(dfcToPayload(payload.WriteDFC), payload.Name)
 		if err != nil {
 			return config.ProtocolConverterConfig{}, fmt.Errorf("failed to create write DFC benthos config: %w", err)
 		}
@@ -309,18 +316,18 @@ func (a *DeployProtocolConverterAction) createProtocolConverterConfig() (config.
 
 	// Determine per-DFC desired states and derive PC-level state.
 	var readDFCDesiredState, writeDFCDesiredState string
-	if a.payload.ReadDFC != nil {
-		readDFCDesiredState = a.payload.ReadDFC.State
+	if payload.ReadDFC != nil {
+		readDFCDesiredState = payload.ReadDFC.State
 	}
-	if a.payload.WriteDFC != nil {
-		writeDFCDesiredState = a.payload.WriteDFC.State
+	if payload.WriteDFC != nil {
+		writeDFCDesiredState = payload.WriteDFC.State
 	}
 
 	// Create the spec with template and variables
 	spec := protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
 		Config:               template,
 		Variables:            variableBundle,
-		Location:             convertIntMapToStringMap(a.payload.Location),
+		Location:             convertIntMapToStringMap(payload.Location),
 		ReadDFCDesiredState:  readDFCDesiredState,
 		WriteDFCDesiredState: writeDFCDesiredState,
 	}
@@ -328,7 +335,7 @@ func (a *DeployProtocolConverterAction) createProtocolConverterConfig() (config.
 	// Create the full config
 	return config.ProtocolConverterConfig{
 		FSMInstanceConfig: config.FSMInstanceConfig{
-			Name:            a.payload.Name,
+			Name:            payload.Name,
 			DesiredFSMState: protocolconverter.OperationalStateActive,
 		},
 		ProtocolConverterServiceConfig: spec,

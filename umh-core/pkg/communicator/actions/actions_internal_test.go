@@ -156,6 +156,7 @@ func allKnownActionTypes() []models.ActionType {
 		models.GetDataFlowComponentMetrics, //nolint:staticcheck // Deprecated but kept for back compat
 		models.DeployProtocolConverter,
 		models.EditProtocolConverter,
+		models.SaveProtocolConverter,
 		models.GetProtocolConverter,
 		models.GetMetrics,
 		models.DeleteProtocolConverter,

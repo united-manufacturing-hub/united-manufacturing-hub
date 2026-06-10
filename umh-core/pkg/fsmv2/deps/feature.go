@@ -82,6 +82,11 @@ const (
 	// FSMv2 worker pattern. Mirrors [FeatureFSMv1ConfigManager] for the other
 	// pre-FSMv2 package wired to FSMLogger.
 	FeatureFSMv1Communicator Feature = "fsmv1_communicator"
+
+	// FeatureDeploymentSaveConfig covers the "save config on deployment" feature:
+	// persisting a protocol converter configuration without waiting for the
+	// bridge to deploy, so the config is never lost on a failed deployment.
+	FeatureDeploymentSaveConfig Feature = "deployment_save_config"
 )
 
 // FeatureForWorker returns the Feature for a specific worker type.
