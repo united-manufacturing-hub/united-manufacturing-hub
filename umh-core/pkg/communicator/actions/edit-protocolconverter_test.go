@@ -17,7 +17,10 @@ package actions_test
 import (
 	"context"
 	"errors"
+	"fmt"
+	"strings"
 	"sync"
+	"time"
 
 	"github.com/google/uuid"
 	. "github.com/onsi/ginkgo/v2"
@@ -25,16 +28,95 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/encoding"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/benthosserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/connectionserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/protocolconverterserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/variables"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
+	benthosfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos"
+	dfcfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/dataflowcomponent"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/protocolconverter"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
+	dfcsvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/dataflowcomponent"
 	protocolconvertersvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/protocolconverter"
 )
+
+// recordedSentryEvent captures one SentryWarn/SentryError call: the event
+// name and the structured fields it carried.
+type recordedSentryEvent struct {
+	name   string
+	fields []deps.Field
+}
+
+// fieldKeys returns the keys of the event's structured fields.
+func (e recordedSentryEvent) fieldKeys() []string {
+	keys := make([]string, 0, len(e.fields))
+	for _, f := range e.fields {
+		keys = append(keys, f.Key)
+	}
+
+	return keys
+}
+
+// recordingFSMLogger is a deps.FSMLogger that records Sentry-bound events so
+// specs can pin which events fire and what they carry (and, in particular,
+// that no event carries the full config with its user variables).
+type recordingFSMLogger struct {
+	mu     sync.Mutex
+	events []recordedSentryEvent
+}
+
+func (l *recordingFSMLogger) Debug(msg string, fields ...deps.Field) {}
+func (l *recordingFSMLogger) Info(msg string, fields ...deps.Field)  {}
+
+func (l *recordingFSMLogger) SentryWarn(feature deps.Feature, hierarchyPath string, msg string, fields ...deps.Field) {
+	l.record(msg, fields)
+}
+
+func (l *recordingFSMLogger) SentryError(feature deps.Feature, hierarchyPath string, err error, msg string, fields ...deps.Field) {
+	l.record(msg, fields)
+}
+
+func (l *recordingFSMLogger) With(fields ...deps.Field) deps.FSMLogger { return l }
+
+func (l *recordingFSMLogger) record(name string, fields []deps.Field) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	l.events = append(l.events, recordedSentryEvent{name: name, fields: fields})
+}
+
+// eventNames returns the names of all recorded Sentry events in order.
+func (l *recordingFSMLogger) eventNames() []string {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	names := make([]string, 0, len(l.events))
+	for _, e := range l.events {
+		names = append(names, e.name)
+	}
+
+	return names
+}
+
+// eventsNamed returns all recorded Sentry events with the given name.
+func (l *recordingFSMLogger) eventsNamed(name string) []recordedSentryEvent {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	var matched []recordedSentryEvent
+
+	for _, e := range l.events {
+		if e.name == name {
+			matched = append(matched, e)
+		}
+	}
+
+	return matched
+}
 
 var _ = Describe("EditProtocolConverter", func() {
 	// Variables used across tests
@@ -1436,6 +1518,420 @@ var _ = Describe("EditProtocolConverter", func() {
 				Eventually(ch, "5s").Should(Receive(And(
 					WithTransform(func(r execResult) error { return r.err }, BeNil()),
 				)))
+			})
+		})
+
+		Context("fail-fast on persistent render failures", func() {
+			// ENG-5103: a deterministic render failure used to retry every
+			// tick for the full 30s timeout. The await loop must abort after
+			// 3 consecutive identical render failures instead — but never on
+			// the first failure (transient snapshot staleness), never while
+			// the error keeps changing, and any tick whose comparison runs
+			// without a render failure breaks the streak. Ticks that skip
+			// the comparison entirely (manager, instance or state info
+			// missing from the snapshot) leave the streak untouched.
+
+			// tick is the awaitRollout poll interval, injected via
+			// SetTickInterval. Short enough to keep these specs off the 1s
+			// production ticker, long enough that the reply collector has a
+			// comfortable window to mutate the snapshot before the next poll.
+			tick := 100 * time.Millisecond
+
+			type capturedReply struct {
+				state     string
+				message   string
+				errorCode string
+			}
+
+			var (
+				snapshotMgr   *fsm.SnapshotManager
+				localOutbound chan *models.UMHMessage
+				replyMu       sync.Mutex
+				replies       []capturedReply
+				sentryRec     *recordingFSMLogger
+			)
+
+			BeforeEach(func() {
+				snapshotMgr = fsm.NewSnapshotManager()
+				sentryRec = &recordingFSMLogger{}
+				// Dedicated outbound channel: in the no-fail-fast case the
+				// Execute goroutine keeps sending progress replies past this
+				// spec's lifetime, and the suite-level channel is closed in
+				// AfterEach. This one is collected forever and never closed.
+				localOutbound = make(chan *models.UMHMessage, 100)
+				replyMu.Lock()
+				replies = nil
+				replyMu.Unlock()
+			})
+
+			// observedStateWithInject builds a PC observed-state snapshot.
+			// A multi-line inject value (such as "x\nbroken: [") expands to
+			// a column-0 line inside a block scalar: yaml.Marshal and
+			// template execution succeed, unmarshalling the rendered output
+			// fails — deterministically, with an error message embedding the
+			// inject value. A single-line inject value renders fine; the
+			// comparison then fails without a render error because the
+			// observed Benthos config does not match the rendered desired
+			// config.
+			observedStateWithInject := func(inject string) *protocolconverter.ProtocolConverterObservedStateSnapshot {
+				input := map[string]interface{}{"http_client": map[string]interface{}{}}
+
+				return &protocolconverter.ProtocolConverterObservedStateSnapshot{
+					ObservedProtocolConverterSpecConfig: protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
+						Config: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
+							ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
+								NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
+									Target: "localhost",
+									Port:   "102",
+								},
+							},
+						},
+						Variables: variables.VariableBundle{
+							User: map[string]interface{}{"inject": inject},
+						},
+						Location: map[string]string{"0": "test-enterprise"},
+					},
+					ServiceInfo: protocolconvertersvc.ServiceInfo{
+						DataflowComponentReadFSMState: protocolconverter.OperationalStateIdle,
+						DataflowComponentReadObservedState: dfcfsm.DataflowComponentObservedState{
+							ServiceInfo: dfcsvc.ServiceInfo{
+								BenthosObservedState: benthosfsm.BenthosObservedState{
+									ObservedBenthosServiceConfig: benthosserviceconfig.BenthosServiceConfig{
+										Input: input,
+									},
+								},
+							},
+						},
+					},
+				}
+			}
+
+			updateSnapshot := func(observedState *protocolconverter.ProtocolConverterObservedStateSnapshot) {
+				instance := &fsm.FSMInstanceSnapshot{
+					ID:                pcName,
+					CurrentState:      protocolconverter.OperationalStateIdle,
+					DesiredState:      protocolconverter.OperationalStateActive,
+					LastObservedState: observedState,
+				}
+				snapshotMgr.UpdateSnapshot(&fsm.SystemSnapshot{
+					Managers: map[string]fsm.ManagerSnapshot{
+						constants.ProtocolConverterManagerName: &actions.MockManagerSnapshot{
+							Instances: map[string]*fsm.FSMInstanceSnapshot{pcName: instance},
+						},
+					},
+				})
+			}
+
+			getReplies := func() []capturedReply {
+				replyMu.Lock()
+				defer replyMu.Unlock()
+
+				return append([]capturedReply(nil), replies...)
+			}
+
+			countNotYetApplied := func() int {
+				count := 0
+				for _, r := range getReplies() {
+					if strings.Contains(r.message, "DFC config not yet applied") {
+						count++
+					}
+				}
+
+				return count
+			}
+
+			// startCollector decodes every outbound reply into replies and
+			// invokes onProgress with the running count of "DFC config not
+			// yet applied" ticks, letting tests mutate the snapshot between
+			// poll ticks (each progress reply follows one comparison, and
+			// the next comparison is a full tick away).
+			startCollector := func(onProgress func(notYetAppliedCount int)) {
+				go func() {
+					notYetApplied := 0
+					for msg := range localOutbound {
+						dec, err := encoding.DecodeMessageFromUMHInstanceToUser(msg.Content)
+						if err != nil {
+							continue
+						}
+						payload, ok := dec.Payload.(map[string]interface{})
+						if !ok {
+							continue
+						}
+						var r capturedReply
+						r.state, _ = payload["actionReplyState"].(string)
+						r.message, _ = payload["actionReplyPayload"].(string)
+						if v2, ok := payload["actionReplyPayloadV2"].(map[string]interface{}); ok {
+							r.errorCode, _ = v2["errorCode"].(string)
+						}
+						replyMu.Lock()
+						replies = append(replies, r)
+						replyMu.Unlock()
+						if onProgress != nil && strings.Contains(r.message, "DFC config not yet applied") {
+							notYetApplied++
+							onProgress(notYetApplied)
+						}
+					}
+				}()
+			}
+
+			brokenReadDFCPayload := func() map[string]interface{} {
+				return map[string]interface{}{
+					"name": pcName,
+					"uuid": pcUUID.String(),
+					"readDFC": map[string]interface{}{
+						"inputs": map[string]interface{}{
+							// multi-line value marshals as a block scalar;
+							// {{ .inject }} expands to a column-0 line that
+							// terminates it and breaks the YAML
+							"data": "input:\n  http_client:\n    url: |-\n      line1\n      {{ .inject }}",
+							"type": "http_client",
+						},
+						"pipeline": map[string]interface{}{
+							"processors": map[string]interface{}{
+								"0": map[string]interface{}{
+									"type": "bloblang",
+									"data": "bloblang: root = content()",
+								},
+							},
+						},
+						"state": "active",
+					},
+				}
+			}
+
+			runEdit := func(within time.Duration) (time.Duration, error) {
+				localAction := actions.NewEditProtocolConverterAction(userEmail, actionUUID, instanceUUID, localOutbound, mockConfig, snapshotMgr)
+				localAction.SetTickInterval(tick)
+				localAction.SetFSMLogger(sentryRec)
+
+				Expect(localAction.Parse(brokenReadDFCPayload())).To(Succeed())
+				Expect(localAction.Validate()).To(Succeed())
+
+				type execResult struct {
+					err error
+				}
+				ch := make(chan execResult, 1)
+				start := time.Now()
+				go func() {
+					_, _, err := localAction.Execute()
+					ch <- execResult{err}
+				}()
+
+				var result execResult
+				Eventually(ch, within).Should(Receive(&result))
+
+				return time.Since(start), result.err
+			}
+
+			// finalFailureReply waits for the terminal failure reply (sent
+			// just before Execute returns, so the collector may still be
+			// catching up) and returns it.
+			finalFailureReply := func() capturedReply {
+				var final capturedReply
+				Eventually(func() bool {
+					for _, r := range getReplies() {
+						if r.state == string(models.ActionFinishedWithFailure) {
+							final = r
+
+							return true
+						}
+					}
+
+					return false
+				}, "2s").Should(BeTrue(), "expected a final ActionFinishedWithFailure reply")
+
+				return final
+			}
+
+			It("aborts the rollout after 3 consecutive identical render failures, rolls back, and reports the error code", func() {
+				updateSnapshot(observedStateWithInject("x\nbroken: ["))
+				startCollector(nil)
+
+				// Without fail-fast this takes the full timeout; half of it
+				// splits the two outcomes safely.
+				elapsed, execErr := runEdit(constants.DataflowComponentWaitForActiveTimeout / 2)
+
+				Expect(execErr).To(HaveOccurred())
+				Expect(execErr.Error()).To(ContainSubstring("render"))
+				Expect(execErr.Error()).To(ContainSubstring("was rolled back"))
+				// Never on the first failure: three identical failures need
+				// at least two full ticks after the first.
+				Expect(elapsed).To(BeNumerically(">=", 2*tick))
+
+				// The rollback must actually write the pre-edit config back:
+				// call 1 persists the edit, call 2 is the rollback.
+				Expect(mockConfig.AtomicEditProtocolConverterCallCount).To(Equal(2))
+				Expect(mockConfig.AtomicEditProtocolConverterLastUUID).To(Equal(pcUUID))
+				Expect(mockConfig.AtomicEditProtocolConverterLastConfig.Name).To(Equal(pcName))
+				// The pre-edit config had no read DFC; the broken edit added one.
+				Expect(mockConfig.AtomicEditProtocolConverterLastConfig.ProtocolConverterServiceConfig.Config.DataflowComponentReadServiceConfig).
+					To(Equal(dataflowcomponentserviceconfig.DataflowComponentServiceConfig{}))
+
+				// The frontend uses the error code to decide retryability:
+				// the config was safely rolled back, so this is the
+				// fix-your-config case, not the retry case.
+				final := finalFailureReply()
+				Expect(final.errorCode).To(Equal(models.ErrConfigFileInvalid))
+				Expect(final.message).To(ContainSubstring("was rolled back"))
+
+				// Pin the threshold: 3 identical failures abort on the third
+				// tick, so exactly the first two ticks produced an ordinary
+				// progress reply before the rollback announcement.
+				Expect(countNotYetApplied()).To(Equal(2),
+					"fail-fast threshold moved: expected maxIdenticalRenderFails-1 progress ticks before rollback")
+
+				rollingBack := 0
+				for _, r := range getReplies() {
+					if strings.Contains(r.message, "persistent render failure detected. Rolling back...") {
+						rollingBack++
+					}
+				}
+				Expect(rollingBack).To(Equal(1))
+
+				// Pin what reaches Sentry: the render-failure event carries
+				// only the bridge name, UUID and render error — never the
+				// config, whose user variables can hold credentials — and
+				// the generic rollout_failed event (which carries the full
+				// old/new config) must not fire on top of it.
+				events := sentryRec.eventNames()
+				Expect(events).To(ContainElement("edit_protocol_converter_render_failure_rolled_back"))
+				Expect(events).NotTo(ContainElement("edit_protocol_converter_rollout_failed"))
+				rolledBack := sentryRec.eventsNamed("edit_protocol_converter_render_failure_rolled_back")
+				Expect(rolledBack).To(HaveLen(1))
+				Expect(rolledBack[0].fieldKeys()).To(ConsistOf(
+					"protocolConverter", "protocolConverterUUID", "renderErr"))
+			})
+
+			It("keeps waiting while the render error keeps changing, aborting only after it stabilises", func() {
+				updateSnapshot(observedStateWithInject("x\nbroken0: ["))
+
+				// Rotate to a fresh render error for the first 5 progress
+				// ticks, then hold it constant; each variant changes the
+				// rendered-output snippet embedded in the error, so the
+				// error string differs from the previous tick's.
+				const lastVariant = 5
+				startCollector(func(n int) {
+					if n <= lastVariant {
+						updateSnapshot(observedStateWithInject(fmt.Sprintf("x\nbroken%d: [", n)))
+					}
+				})
+
+				elapsed, execErr := runEdit(constants.DataflowComponentWaitForActiveTimeout - 5*time.Second)
+
+				Expect(execErr).To(HaveOccurred())
+				Expect(execErr.Error()).To(ContainSubstring("was rolled back"))
+				// Ticks 1-6 each saw a fresh error (streak never above 1);
+				// only ticks 7-8 repeat the held variant, so the abort fires
+				// on tick 8. An implementation that aborts while the error
+				// text is still changing returns around tick 3.
+				Expect(elapsed).To(BeNumerically(">=", 7*tick))
+				// Wait for the terminal reply before counting: the collector
+				// may still be draining the channel when runEdit returns.
+				finalFailureReply()
+				Expect(countNotYetApplied()).To(BeNumerically(">=", 7))
+			})
+
+			It("resets the consecutive counter when a tick fails without a render error", func() {
+				brokenInject := "x\nbroken: ["
+				updateSnapshot(observedStateWithInject(brokenInject))
+
+				// Alternate render-failure ticks with failed-without-render-
+				// error ticks (a benign inject renders fine, but the observed
+				// config has not caught up, so the comparison still fails)
+				// for the first 4 progress ticks, then hold the render
+				// failure. Render failures land on ticks 1, 3 and 5 — three
+				// identical failures, but never consecutive.
+				startCollector(func(n int) {
+					if n <= 4 {
+						if n%2 == 1 {
+							updateSnapshot(observedStateWithInject("benign"))
+						} else {
+							updateSnapshot(observedStateWithInject(brokenInject))
+						}
+					}
+				})
+
+				elapsed, execErr := runEdit(constants.DataflowComponentWaitForActiveTimeout - 5*time.Second)
+
+				Expect(execErr).To(HaveOccurred())
+				Expect(execErr.Error()).To(ContainSubstring("was rolled back"))
+				// Cumulative counting would abort on tick 5 (the third
+				// render failure overall); the first uninterrupted run of 3
+				// completes on tick 7.
+				Expect(elapsed).To(BeNumerically(">=", 6*tick))
+				// Wait for the terminal reply before counting: the collector
+				// may still be draining the channel when runEdit returns.
+				finalFailureReply()
+				Expect(countNotYetApplied()).To(BeNumerically(">=", 6))
+			})
+
+			It("returns the retryable rollback-failed code when the rollback itself fails", func() {
+				updateSnapshot(observedStateWithInject("x\nbroken: ["))
+				startCollector(nil)
+
+				// Call 1 is the initial persist of the edit; call 2 is the
+				// rollback — fail only that one.
+				mockConfig.WithAtomicEditProtocolConverterError(errors.New("simulated config write failure")).
+					WithAtomicEditProtocolConverterFailOnCall(2)
+
+				_, execErr := runEdit(constants.DataflowComponentWaitForActiveTimeout / 2)
+
+				Expect(execErr).To(HaveOccurred())
+				Expect(execErr.Error()).To(ContainSubstring("could not be rolled back"))
+				Expect(execErr.Error()).To(ContainSubstring("simulated config write failure"))
+				Expect(mockConfig.AtomicEditProtocolConverterCallCount).To(Equal(2))
+
+				// The system is left running the broken config — the one
+				// state needing manual intervention — so the frontend must
+				// not present this as "fix the config and retry"
+				// (ErrConfigFileInvalid).
+				final := finalFailureReply()
+				Expect(final.errorCode).To(Equal(models.ErrRetryRollbackTimeout))
+
+				// Pin what reaches Sentry: only the dedicated rollback-failed
+				// event (bridge name, UUID, render error), not the generic
+				// rollout_failed event with the full old/new config.
+				events := sentryRec.eventNames()
+				Expect(events).To(ContainElement("edit_protocol_converter_render_failure_rollback_failed"))
+				Expect(events).NotTo(ContainElement("edit_protocol_converter_rollout_failed"))
+				failed := sentryRec.eventsNamed("edit_protocol_converter_render_failure_rollback_failed")
+				Expect(failed).To(HaveLen(1))
+				Expect(failed[0].fieldKeys()).To(ConsistOf(
+					"protocolConverter", "protocolConverterUUID", "renderErr"))
+			})
+
+			It("keeps the render error sticky for the timeout message and clears it on the next successful render", func() {
+				// The awaitRollout timeout message names lastRenderErr as the
+				// root cause; this pins its lifecycle on the compare path
+				// directly, without wall-clock ticks: a failing render sets
+				// it, a comparison that skips the render leaves it sticky,
+				// and the next successful render clears it.
+				updateSnapshot(observedStateWithInject("benign"))
+
+				localAction := actions.NewEditProtocolConverterAction(userEmail, actionUUID, instanceUUID, localOutbound, mockConfig, snapshotMgr)
+				Expect(localAction.Parse(brokenReadDFCPayload())).To(Succeed())
+				Expect(localAction.Validate()).To(Succeed())
+
+				matched, renderErr := localAction.CompareProtocolConverterDFCConfig(observedStateWithInject("x\nbroken: ["))
+				Expect(matched).To(BeFalse())
+				Expect(renderErr).To(HaveOccurred())
+				Expect(localAction.LastRenderErr()).To(Equal(renderErr))
+
+				// A comparison that never reaches a render (no snapshot for
+				// the instance yet, e.g. while Benthos restarts) keeps the
+				// captured cause.
+				matched, renderErr = localAction.CompareProtocolConverterDFCConfig(nil)
+				Expect(matched).To(BeFalse())
+				Expect(renderErr).NotTo(HaveOccurred())
+				Expect(localAction.LastRenderErr()).To(HaveOccurred())
+
+				// A benign inject renders fine (the comparison itself still
+				// fails because the observed config lags the edit), so the
+				// stale root cause must be gone.
+				matched, renderErr = localAction.CompareProtocolConverterDFCConfig(observedStateWithInject("benign"))
+				Expect(matched).To(BeFalse())
+				Expect(renderErr).NotTo(HaveOccurred())
+				Expect(localAction.LastRenderErr()).NotTo(HaveOccurred())
 			})
 		})
 
