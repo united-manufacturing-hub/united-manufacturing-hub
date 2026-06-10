@@ -1821,11 +1821,11 @@ var _ = Describe("EditProtocolConverter", func() {
 				}
 				Expect(rollingBack).To(Equal(1))
 
-				// Pin what reaches Sentry: the render-failure event carries
-				// only the bridge name, UUID and render error — never the
-				// config, whose user variables can hold credentials — and
-				// the generic rollout_failed event (which carries the full
-				// old/new config) must not fire on top of it.
+				// Pin what reaches Sentry: the dedicated render-failure event
+				// carries the bridge name, UUID and render error (which includes
+				// the rendered-output snippet; that exposure is an accepted
+				// decision), and the generic rollout_failed event, which attaches
+				// the full old/new config, must not fire on top of it.
 				events := sentryRec.eventNames()
 				Expect(events).To(ContainElement("edit_protocol_converter_render_failure_rolled_back"))
 				Expect(events).NotTo(ContainElement("edit_protocol_converter_rollout_failed"))
@@ -1921,9 +1921,11 @@ var _ = Describe("EditProtocolConverter", func() {
 				final := finalFailureReply()
 				Expect(final.errorCode).To(Equal(models.ErrRetryRollbackTimeout))
 
-				// Pin what reaches Sentry: only the dedicated rollback-failed
-				// event (bridge name, UUID, render error), not the generic
-				// rollout_failed event with the full old/new config.
+				// Pin what reaches Sentry: the dedicated render-failure event
+				// carries the bridge name, UUID and render error (which includes
+				// the rendered-output snippet; that exposure is an accepted
+				// decision), and the generic rollout_failed event, which attaches
+				// the full old/new config, must not fire on top of it.
 				events := sentryRec.eventNames()
 				Expect(events).To(ContainElement("edit_protocol_converter_render_failure_rollback_failed"))
 				Expect(events).NotTo(ContainElement("edit_protocol_converter_rollout_failed"))
@@ -1984,6 +1986,30 @@ var _ = Describe("EditProtocolConverter", func() {
 				Expect(renderErr).NotTo(HaveOccurred())
 				Expect(matched).To(BeFalse())
 				Expect(localAction.LastRenderErr()).NotTo(HaveOccurred())
+			})
+
+			It("fires the generic rollout_failed Sentry event on a plain timeout", func() {
+				// The render succeeds every tick (benign inject) but the observed
+				// config never matches, so the rollout runs into the timeout and
+				// rolls back. This pre-existing path must keep its error-level
+				// generic Sentry event: only the render-failure abort paths, which
+				// fire their own dedicated events, suppress it.
+				updateSnapshot(observedStateWithInject("benign"))
+				startCollector(nil)
+
+				localAction := actions.NewEditProtocolConverterAction(userEmail, actionUUID, instanceUUID, localOutbound, mockConfig, snapshotMgr)
+				localAction.SetTickInterval(tick)
+				localAction.SetAwaitTimeout(500 * time.Millisecond)
+				localAction.SetFSMLogger(sentryRec)
+
+				Expect(localAction.Parse(brokenReadDFCPayload())).To(Succeed())
+				Expect(localAction.Validate()).To(Succeed())
+
+				_, _, execErr := localAction.Execute()
+				Expect(execErr).To(HaveOccurred())
+				Expect(execErr.Error()).To(ContainSubstring("did not become"))
+
+				Expect(sentryRec.eventNames()).To(ContainElement("edit_protocol_converter_rollout_failed"))
 			})
 		})
 

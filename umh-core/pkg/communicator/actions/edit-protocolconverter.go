@@ -96,6 +96,13 @@ type EditProtocolConverterAction struct {
 	// clears it only when a later render succeeds, so ticks that never reach
 	// a render (for example while Benthos restarts) keep the captured cause.
 	lastRenderErr error
+	// rolloutSentryReported tells Execute to skip the generic rollout_failed
+	// Sentry event for this abort. Every awaitRollout abort path fires its own
+	// dedicated event; only the render-failure paths (added for ENG-5103) set
+	// this flag and suppress the generic event. The pre-existing paths (plain
+	// timeout, Benthos config error) keep the generic event on top of their
+	// dedicated one for continuity with established alerting.
+	rolloutSentryReported bool
 
 	outboundChannel chan *models.UMHMessage
 	location        map[int]string
@@ -135,6 +142,11 @@ type EditProtocolConverterAction struct {
 	// constants.ActionTickerTime; tests inject a shorter interval so the
 	// fail-fast specs do not wait on the 1s production ticker.
 	tickInterval time.Duration
+
+	// awaitTimeout overrides the awaitRollout overall timeout. Zero means
+	// constants.DataflowComponentWaitForActiveTimeout; tests inject a
+	// shorter timeout so timeout-path specs do not wait the full 30s.
+	awaitTimeout time.Duration
 
 	ignoreHealthCheck bool
 }
@@ -313,12 +325,12 @@ func (a *EditProtocolConverterAction) Execute() (interface{}, map[string]interfa
 			errorMsg := fmt.Sprintf("Failed during rollout: %v", err)
 			SendActionReplyV2(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
 				errorMsg, errCode, nil, a.outboundChannel, models.EditProtocolConverter, nil)
-			// awaitRollout abort paths returning these codes already fired
-			// their own Sentry event scoped to the abort reason; the
-			// render-failure events deliberately carry only the bridge name,
-			// UUID and render error. Re-reporting here would attach the full
-			// old/new config, whose user variables can hold credentials.
-			if errCode != models.ErrConfigFileInvalid && errCode != models.ErrRetryRollbackTimeout {
+			// Every awaitRollout abort path fires its own dedicated Sentry
+			// event. Only the render-failure paths (added for ENG-5103) set
+			// rolloutSentryReported to suppress this generic event; the
+			// pre-existing paths (plain timeout, Benthos config error) keep
+			// it on top for continuity with established alerting.
+			if !a.rolloutSentryReported {
 				a.fsmLogger.SentryError(deps.FeatureDisableReadFlows, "", err, "edit_protocol_converter_rollout_failed",
 					deps.String("new pcConfig", newSpec.String()),
 					deps.String("old pcConfig", oldConfig.String()))
@@ -513,9 +525,14 @@ func (a *EditProtocolConverterAction) awaitRollout(pcConfig config.ProtocolConve
 	ticker := time.NewTicker(tickInterval)
 	defer ticker.Stop()
 
-	timeout := time.After(constants.DataflowComponentWaitForActiveTimeout)
+	timeoutInterval := a.awaitTimeout
+	if timeoutInterval == 0 {
+		timeoutInterval = constants.DataflowComponentWaitForActiveTimeout
+	}
+
+	timeout := time.After(timeoutInterval)
 	startTime := time.Now()
-	timeoutDuration := constants.DataflowComponentWaitForActiveTimeout
+	timeoutDuration := timeoutInterval
 
 	var (
 		logs     []s6.LogEntry
@@ -750,6 +767,8 @@ func (a *EditProtocolConverterAction) awaitRollout(pcConfig config.ProtocolConve
 									deps.String("protocolConverterUUID", a.protocolConverterUUID.String()),
 									deps.String("renderErr", renderErr.Error()))
 
+								a.rolloutSentryReported = true
+
 								return models.ErrRetryRollbackTimeout, fmt.Errorf("protocol converter '%s' has a persistent render failure (%w) but could not be rolled back: %w. Please check your logs and consider manually restoring the previous configuration", a.name, renderErr, rollbackErr)
 							}
 
@@ -757,6 +776,8 @@ func (a *EditProtocolConverterAction) awaitRollout(pcConfig config.ProtocolConve
 								deps.String("protocolConverter", a.name),
 								deps.String("protocolConverterUUID", a.protocolConverterUUID.String()),
 								deps.String("renderErr", renderErr.Error()))
+
+							a.rolloutSentryReported = true
 
 							return models.ErrConfigFileInvalid, fmt.Errorf("protocol converter '%s' was rolled back to its previous configuration after repeated render failures: %w. Please fix the configuration and try editing again", a.name, renderErr)
 						}

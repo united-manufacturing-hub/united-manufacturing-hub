@@ -30,6 +30,12 @@ func (a *EditProtocolConverterAction) SetTickInterval(d time.Duration) {
 	a.tickInterval = d
 }
 
+// SetAwaitTimeout overrides the awaitRollout overall timeout so timeout-path
+// specs do not wait the full 30s.
+func (a *EditProtocolConverterAction) SetAwaitTimeout(d time.Duration) {
+	a.awaitTimeout = d
+}
+
 // SetFSMLogger replaces the action's FSMLogger so specs can record which
 // Sentry events fire and what fields they carry.
 func (a *EditProtocolConverterAction) SetFSMLogger(l deps.FSMLogger) {
