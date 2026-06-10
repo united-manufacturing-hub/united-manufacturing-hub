@@ -26,6 +26,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 )
 
@@ -119,6 +120,53 @@ var _ = Describe("ConvertWorkerSnapshot (happy paths)", func() {
 		Expect(snap.LastActionResults[0].ActionType).To(Equal("connect"))
 		Expect(snap.ChildrenHealthy).To(Equal(3))
 		Expect(snap.ChildrenUnhealthy).To(Equal(1))
+	})
+
+	It("surfaces the desired ChildrenSpecs from WrappedDesiredState", func() {
+		children := []config.ChildSpec{
+			{Name: "child-a", WorkerType: "test", Enabled: true},
+			{Name: "child-b", WorkerType: "test", Enabled: true},
+		}
+		obs := fsmv2.Observation[workerTestStatus]{CollectedAt: now}
+		wds := &fsmv2.WrappedDesiredState[workerTestConfig]{
+			ChildrenSpecs: children,
+		}
+
+		raw := fsmv2.Snapshot{Observed: obs, Desired: wds, Identity: identity}
+		snap := fsmv2.ConvertWorkerSnapshot[workerTestConfig, workerTestStatus](raw)
+
+		Expect(snap.ChildrenSpecs).To(Equal(children))
+	})
+
+	// The nil vs empty-non-nil discriminator on ChildrenSpecs is load-bearing for
+	// the underlying WrappedDesiredState.ChildrenSpecs: nil means "no opinion"
+	// (the parent declares children via RenderChildren, so DeriveDesiredState no
+	// longer writes ChildrenSpecs) while an empty non-nil slice means "zero
+	// children". ConvertWorkerSnapshot must copy the field verbatim so a future
+	// nil<->empty normalization can never flip one into the other unnoticed.
+	It("preserves a nil ChildrenSpecs as nil through the convert path", func() {
+		obs := fsmv2.Observation[workerTestStatus]{CollectedAt: now}
+		wds := &fsmv2.WrappedDesiredState[workerTestConfig]{
+			ChildrenSpecs: nil,
+		}
+
+		raw := fsmv2.Snapshot{Observed: obs, Desired: wds, Identity: identity}
+		snap := fsmv2.ConvertWorkerSnapshot[workerTestConfig, workerTestStatus](raw)
+
+		Expect(snap.ChildrenSpecs).To(BeNil())
+	})
+
+	It("preserves an empty non-nil ChildrenSpecs as empty non-nil through the convert path", func() {
+		obs := fsmv2.Observation[workerTestStatus]{CollectedAt: now}
+		wds := &fsmv2.WrappedDesiredState[workerTestConfig]{
+			ChildrenSpecs: []config.ChildSpec{},
+		}
+
+		raw := fsmv2.Snapshot{Observed: obs, Desired: wds, Identity: identity}
+		snap := fsmv2.ConvertWorkerSnapshot[workerTestConfig, workerTestStatus](raw)
+
+		Expect(snap.ChildrenSpecs).NotTo(BeNil())
+		Expect(snap.ChildrenSpecs).To(HaveLen(0))
 	})
 })
 
