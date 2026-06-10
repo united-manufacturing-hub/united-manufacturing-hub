@@ -14,6 +14,10 @@
 
 // Package dynamicchildren owns the shared registry of child specs that the
 // application control surface reads to spawn dynamic children.
+//
+// The registry is created by parent wiring at process scope and published via
+// register.SetDeps (see WireSharedRegistry). Workers and clients hold handles
+// only, so the registry survives worker restarts; no worker owns its lifetime.
 package dynamicchildren
 
 import (
