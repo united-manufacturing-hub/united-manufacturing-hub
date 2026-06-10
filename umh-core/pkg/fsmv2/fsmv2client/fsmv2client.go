@@ -44,12 +44,19 @@ type FSMv2Client struct {
 }
 
 // NewFSMv2Client returns an FSMv2Client that writes through w and reads
-// observed state through sr.
+// observed state through sr. The client deliberately holds the plain Writer,
+// never the supervisor-managed config worker instance: worker instances can be
+// torn down and respawned, so a held instance would go stale after the first
+// restart.
 func NewFSMv2Client(w *dynamicchildren.Writer, sr deps.StateReader) *FSMv2Client {
 	return &FSMv2Client{w: w, sr: sr}
 }
 
-// Upsert records cfg for ref in the wrapped Writer.
+// Upsert records cfg for ref in the wrapped Writer. Validation errors return
+// synchronously from this call; callers rely on rejecting a bad spec at the
+// call site. When spec writes move into the config worker's tick (ENG-4400),
+// this client is the layer that absorbs the change, preserving or
+// renegotiating the synchronous error contract.
 func (c *FSMv2Client) Upsert(ref dynamicchildren.Ref, cfg map[string]any) error {
 	return c.w.Upsert(ref, cfg)
 }
