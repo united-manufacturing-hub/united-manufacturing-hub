@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+SRC_ROOT := $(shell git rev-parse --show-toplevel)
+
 .PHONY: build run clean test help test-graphql
 
 # Show available commands and common usage patterns
@@ -245,6 +247,44 @@ build build-pprof build-debug: build-protobuf download-docker-binaries
 # Usage: make build-depot DEPOT_PROJECT_ID=xxx TAGS="-t ghcr.io/.../umh-core:v1.0.0" VERSION=v1.0.0
 build-depot: download-docker-binaries
 	$(call DEPOT_BUILD)
+
+FOSSA_DEPS_PATH := $(SRC_ROOT)/.fossa-vendored
+
+# Regenerates fossa-deps.yml in .fossa-vendored/ at repo root.
+# Kept out of umh-core/ so the source-level FOSSA scan does not pick it up.
+.PHONY: fossa-deps
+fossa-deps:
+	@mkdir -p $(FOSSA_DEPS_PATH)
+	@printf '%s\n' \
+		'# Copyright 2025 UMH Systems GmbH' \
+		'#' \
+		'# Licensed under the Apache License, Version 2.0 (the "License");' \
+		'# you may not use this file except in compliance with the License.' \
+		'# You may obtain a copy of the License at' \
+		'#' \
+		'#     http://www.apache.org/licenses/LICENSE-2.0' \
+		'#' \
+		'# Unless required by applicable law or agreed to in writing, software' \
+		'# distributed under the License is distributed on an "AS IS" BASIS,' \
+		'# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.' \
+		'# See the License for the specific language governing permissions and' \
+		'# limitations under the License.' \
+		'' \
+		'# Generated via "make fossa-deps" — do not edit by hand.' \
+		'custom-dependencies:' \
+		'  - name: redpanda' \
+		'    version: "$(REDPANDA_VERSION)"' \
+		'    license: "BUSL-1.1"' \
+		'    metadata:' \
+		'      homepage: https://redpanda.com' \
+		'      description: Kafka-compatible streaming broker (raw COPY into image)' \
+		'  - name: s6-overlay' \
+		'    version: "$(S6_OVERLAY_VERSION)"' \
+		'    license: "ISC"' \
+		'    metadata:' \
+		'      homepage: https://github.com/just-containers/s6-overlay' \
+		'      description: Process supervisor init (tarball extracted)' \
+		> $(FOSSA_DEPS_PATH)/fossa-deps.yml
 
 FLAVOR ?=                         # empty → normal build
 BUILD_TARGET = $(if $(FLAVOR),build-$(FLAVOR),build)
