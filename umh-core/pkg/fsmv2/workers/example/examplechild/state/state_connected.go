@@ -15,6 +15,8 @@
 package state
 
 import (
+	"fmt"
+
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
 	example_child "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplechild"
@@ -28,15 +30,17 @@ type ConnectedState struct {
 func (s *ConnectedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := fsmv2.ConvertWorkerSnapshot[example_child.ExamplechildConfig, example_child.ExamplechildStatus](snapAny)
 
-	if snap.IsStopRequired() {
-		return fsmv2.Result[any, any](&TryingToStopState{}, fsmv2.SignalNone, nil, "Stop required, initiating shutdown")
+	if snap.ShouldStop() {
+		return fsmv2.Transition(&TryingToStopState{}, fsmv2.SignalNone, nil,
+			fmt.Sprintf("stop required: shutdown=%t, parentState=%s",
+				snap.IsShutdownRequested, snap.ParentMappedState), nil)
 	}
 
 	if snap.Status.ConnectionHealth != "healthy" {
-		return fsmv2.Result[any, any](&DisconnectedState{}, fsmv2.SignalNone, nil, "Connection lost, transitioning to disconnected")
+		return fsmv2.Transition(&DisconnectedState{}, fsmv2.SignalNone, nil, "Connection lost, transitioning to disconnected", nil)
 	}
 
-	return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil, "Active connection established")
+	return fsmv2.Transition(s, fsmv2.SignalNone, nil, "Active connection established", nil)
 }
 
 func (s *ConnectedState) String() string {

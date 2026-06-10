@@ -145,7 +145,7 @@ func (s *TryingToStartState) Next(snapAny any) fsmv2.NextResult[any, any] {
     snap := fsmv2.ConvertWorkerSnapshot[MyConfig, MyStatus](snapAny)
 
     // ALWAYS check shutdown first
-    if snap.IsStopRequired() {
+    if snap.ShouldStop() {
         return fsmv2.Result[any, any](&StoppedState{}, fsmv2.SignalNone, nil, "Shutdown requested")
     }
     // Check observation - did the process start?

@@ -97,6 +97,7 @@ func (s stubChildrenView) Get(name string) *config.ChildInfo {
 			return &s.children[i]
 		}
 	}
+
 	return nil
 }
 
@@ -108,6 +109,7 @@ func (s stubChildrenView) Counts() (healthy, unhealthy int) {
 			unhealthy++
 		}
 	}
+
 	return
 }
 
@@ -117,6 +119,7 @@ func (s stubChildrenView) AllHealthy() bool {
 			return false
 		}
 	}
+
 	return true
 }
 

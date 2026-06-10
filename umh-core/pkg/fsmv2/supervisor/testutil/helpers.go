@@ -136,7 +136,7 @@ type State struct {
 
 func (m *State) Next(snapshot any) fsmv2.NextResult[any, any] {
 	if m.NextState == nil {
-		return fsmv2.Result[any, any](m, fsmv2.SignalNone, nil, "test state")
+		return fsmv2.Result[any, any](m, fsmv2.SignalNone, nil, "test state", nil)
 	}
 
 	reason := m.Reason
@@ -144,7 +144,7 @@ func (m *State) Next(snapshot any) fsmv2.NextResult[any, any] {
 		reason = "test state"
 	}
 
-	return fsmv2.Result[any, any](m.NextState, m.Signal, m.Action, reason)
+	return fsmv2.Result[any, any](m.NextState, m.Signal, m.Action, reason, nil)
 }
 
 func (m *State) String() string { return "State" }

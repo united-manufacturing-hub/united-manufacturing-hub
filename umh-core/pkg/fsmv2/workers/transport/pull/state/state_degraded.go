@@ -34,15 +34,15 @@ type DegradedState struct {
 func (s *DegradedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := fsmv2.ConvertWorkerSnapshot[snapshot.PullDesiredState, snapshot.PullStatus](snapAny)
 
-	if snap.IsStopRequired() {
-		return fsmv2.Result[any, any](&StoppingState{}, fsmv2.SignalNone, nil,
-			fmt.Sprintf("stop required: shutdown=%t, parentState(observed)=%s", snap.IsShutdownRequested, snap.ParentMappedState))
+	if snap.ShouldStop() {
+		return fsmv2.Transition(&StoppingState{}, fsmv2.SignalNone, nil,
+			fmt.Sprintf("stop required: shutdown=%t, parentState(observed)=%s", snap.IsShutdownRequested, snap.ParentMappedState), nil)
 	}
 
 	if snap.Status.ConsecutiveErrors == 0 && snap.Status.PendingMessageCount < pendingDegradedThreshold {
-		return fsmv2.Result[any, any](&RunningState{}, fsmv2.SignalNone, nil,
+		return fsmv2.Transition(&RunningState{}, fsmv2.SignalNone, nil,
 			fmt.Sprintf("recovering to Running: consecutiveErrors=0, pendingMessages=%d (threshold=%d)",
-				snap.Status.PendingMessageCount, pendingDegradedThreshold))
+				snap.Status.PendingMessageCount, pendingDegradedThreshold), nil)
 	}
 
 	if snap.Status.HasTransport && snap.Status.HasValidToken {
@@ -60,21 +60,21 @@ func (s *DegradedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 		}
 
 		if shouldWait {
-			return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil,
+			return fsmv2.Transition(s, fsmv2.SignalNone, nil,
 				fmt.Sprintf("degraded (%d errors, %d pending), backoff %s",
 					snap.Status.ConsecutiveErrors, snap.Status.PendingMessageCount,
-					backoffDelay.Round(time.Second)))
+					backoffDelay.Round(time.Second)), nil)
 		}
 
-		return fsmv2.Result[any, any](s, fsmv2.SignalNone, &action.PullAction{},
+		return fsmv2.Transition(s, fsmv2.SignalNone, &action.PullAction{},
 			fmt.Sprintf("degraded (%d consecutive errors, %d pending), still pulling",
-				snap.Status.ConsecutiveErrors, snap.Status.PendingMessageCount))
+				snap.Status.ConsecutiveErrors, snap.Status.PendingMessageCount), nil)
 	}
 
-	return fsmv2.Result[any, any](s, fsmv2.SignalNone, nil,
+	return fsmv2.Transition(s, fsmv2.SignalNone, nil,
 		fmt.Sprintf("degraded (%d consecutive errors, %d pending), waiting: hasTransport=%t, hasValidToken=%t",
 			snap.Status.ConsecutiveErrors, snap.Status.PendingMessageCount,
-			snap.Status.HasTransport, snap.Status.HasValidToken))
+			snap.Status.HasTransport, snap.Status.HasValidToken), nil)
 }
 
 func (s *DegradedState) String() string {

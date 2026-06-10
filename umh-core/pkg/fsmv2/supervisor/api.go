@@ -108,7 +108,9 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity deps.Identity, work
 	// AddWorker bypasses the collector, so we must set CollectedAt here
 	// to prevent the freshness checker from declaring the observation stale.
 	if observed.GetTimestamp().IsZero() {
-		if setter, ok := observed.(interface{ SetCollectedAt(time.Time) fsmv2.ObservedState }); ok {
+		if setter, ok := observed.(interface {
+			SetCollectedAt(time.Time) fsmv2.ObservedState
+		}); ok {
 			observed = setter.SetCollectedAt(time.Now())
 		} else {
 			s.logger.SentryWarn(deps.FeatureFSMv2, identity.HierarchyPath,
@@ -211,8 +213,10 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity deps.Identity, work
 			if workerCtx == nil {
 				return "unknown"
 			}
+
 			workerCtx.mu.RLock()
 			defer workerCtx.mu.RUnlock()
+
 			if workerCtx.currentState == nil {
 				return "unknown"
 			}
@@ -227,6 +231,7 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity deps.Identity, work
 			if err := s.store.LoadDesiredTyped(ctx, s.workerType, identity.ID, &desired); err != nil {
 				s.logger.SentryWarn(deps.FeatureFSMv2, identity.HierarchyPath, "shutdown_requested_load_failed",
 					deps.Err(err))
+
 				return true
 			}
 
@@ -263,10 +268,12 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity deps.Identity, work
 			// the lock. The map values are pointer interfaces; copying gives
 			// safe per-child iteration once unlocked.
 			s.mu.RLock()
+
 			childrenCopy := make(map[string]SupervisorInterface, len(s.children))
 			for name, child := range s.children {
 				childrenCopy[name] = child
 			}
+
 			s.mu.RUnlock()
 
 			return NewChildrenManager(childrenCopy)
@@ -276,6 +283,7 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity deps.Identity, work
 			if workerCtx == nil {
 				return nil
 			}
+
 			workerCtx.mu.RLock()
 			defer workerCtx.mu.RUnlock()
 
@@ -306,10 +314,10 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity deps.Identity, work
 		},
 		FrameworkMetricsSetter: func(fm *deps.FrameworkMetrics) {
 			// Must use GetDependenciesAny() (returns any), not GetDependencies() (returns D).
-			// TODO(PR2): NoDeps workers (TDeps = register.NoDeps, i.e. struct{}) return
-			// struct{}{} here, which does not implement SetFrameworkState; so framework
-			// telemetry is silently skipped. Resolve before shipping the first NoDeps
-			// production worker (see worker_base.go BindDeps TODO for options).
+			// NoDeps workers (TDeps = struct{}) return struct{}{} here, which does not
+			// implement SetFrameworkState, so framework telemetry is silently skipped.
+			// ApplicationWorker overrides GetDependenciesAny() to return nil, which also
+			// skips injection but is intentional (no deps to inject into).
 			type depsGetter interface {
 				GetDependenciesAny() any
 			}
@@ -339,25 +347,27 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity deps.Identity, work
 				}
 			}
 		},
-		DesiredStateProvider: func() fsmv2.DesiredState {
+		DesiredStateProvider: func() (fsmv2.DesiredState, error) {
 			ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 			defer cancel()
 
 			var desired TDesired
 			if err := s.store.LoadDesiredTyped(ctx, s.workerType, identity.ID, &desired); err != nil {
 				// ErrNotFound is expected on first boot before the initial desired state
-				// has been written to CSE storage. Suppress the SentryWarn to avoid
-				// flooding Sentry with expected startup noise (fsmv2.ErrNoDesiredState
-				// documents this case; persistence.ErrNotFound is the store-level sentinel).
-				if !errors.Is(err, persistence.ErrNotFound) {
-					s.logger.SentryWarn(deps.FeatureFSMv2, identity.HierarchyPath, "desired_state_load_failed",
-						deps.Err(err))
+				// has been written to CSE storage. Return ErrNoDesiredState to signal
+				// the collector to skip collection without flooding Sentry with expected
+				// startup noise (persistence.ErrNotFound is the store-level sentinel).
+				if errors.Is(err, persistence.ErrNotFound) {
+					return nil, fsmv2.ErrNoDesiredState
 				}
 
-				return nil
+				s.logger.SentryWarn(deps.FeatureFSMv2, identity.HierarchyPath, "desired_state_load_failed",
+					deps.Err(err))
+
+				return nil, err
 			}
 
-			return desired
+			return desired, nil
 		},
 	})
 

@@ -22,9 +22,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/register"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/push/snapshot"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/push/state"
 
@@ -37,21 +35,23 @@ var _ fsmv2.Worker = (*PushWorker)(nil)
 // It drains the outbound channel and pushes messages to the backend relay server.
 // PushWorker is a child of TransportWorker and shares its parent's JWT token and transport.
 type PushWorker struct {
-	*helpers.BaseWorker[*PushDependencies]
-	logger   deps.FSMLogger
-	identity deps.Identity
+	fsmv2.WorkerBase[snapshot.PushDesiredState, snapshot.PushStatus, *PushDependencies]
 }
 
 // NewPushWorker creates a new PushWorker in Stopped state.
-// parentDeps must not be nil  -  the push worker delegates auth and transport to the parent.
+// dependencies must not be nil  -  the push worker delegates auth and transport to the parent.
 func NewPushWorker(
 	identity deps.Identity,
 	logger deps.FSMLogger,
 	stateReader deps.StateReader,
-	parentDeps *transport_pkg.TransportDependencies,
+	dependencies *PushDependencies,
 ) (*PushWorker, error) {
 	if logger == nil {
 		return nil, errors.New("logger must not be nil")
+	}
+
+	if dependencies == nil {
+		return nil, errors.New("push worker requires non-nil dependencies; ensure transport worker has published deps via register.SetDeps[*TransportDependencies] before push instantiation")
 	}
 
 	// Hardcode worker type to avoid DeriveWorkerType dependency on ObservedState struct name.
@@ -59,16 +59,24 @@ func NewPushWorker(
 		identity.WorkerType = "push"
 	}
 
-	dependencies, err := NewPushDependencies(parentDeps, identity, logger, stateReader)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create push dependencies: %w", err)
+	w := &PushWorker{}
+	w.InitBase(identity, logger, stateReader)
+	w.BindDeps(dependencies)
+
+	return w, nil
+}
+
+// GetDependencies returns the typed PushDependencies.
+// Panics with a clear message if BindDeps was not called before this worker is used.
+func (w *PushWorker) GetDependencies() *PushDependencies {
+	raw := w.GetDependenciesAny()
+
+	d, ok := raw.(*PushDependencies)
+	if !ok || d == nil {
+		panic("PushWorker: GetDependencies called before BindDeps")
 	}
 
-	return &PushWorker{
-		BaseWorker: helpers.NewBaseWorker(dependencies),
-		identity:   identity,
-		logger:     logger,
-	}, nil
+	return d
 }
 
 // CollectObservedState snapshots the current push worker state.
@@ -126,7 +134,7 @@ func (w *PushWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, e
 	}
 
 	return &fsmv2.WrappedDesiredState[snapshot.PushDesiredState]{
-		State: parsed.BaseUserSpec.GetState(),
+		State: parsed.GetState(),
 	}, nil
 }
 
@@ -136,31 +144,41 @@ func (w *PushWorker) GetInitialState() fsmv2.State[any, any] {
 }
 
 func init() {
-	if err := factory.RegisterWorkerAndSupervisorFactoryByType(
-		"push",
-		func(id deps.Identity, logger deps.FSMLogger, stateReader deps.StateReader, extraDeps map[string]any) fsmv2.Worker {
-			parentDepsRaw, ok := extraDeps["transport_deps"]
+	register.Worker[snapshot.PushDesiredState, snapshot.PushStatus, *PushDependencies]("push",
+		func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader) (fsmv2.Worker, error) {
+			builder, ok := register.GetDepsBuilder("push")
 			if !ok {
-				panic("push worker requires transport_deps in extraDeps")
+				return nil, errors.New("push worker requires deps builder; transport worker must initialise before push instantiation")
 			}
 
-			parentDeps, ok := parentDepsRaw.(*transport_pkg.TransportDependencies)
-			if !ok {
-				panic("transport_deps must be *TransportDependencies")
+			rawDeps := builder(id, logger, sr)
+
+			pdeps, ok := rawDeps.(*PushDependencies)
+			if !ok || pdeps == nil {
+				return nil, fmt.Errorf("push deps builder returned %T; want *PushDependencies (parent transport deps may not be published)", rawDeps)
 			}
 
-			worker, err := NewPushWorker(id, logger, stateReader, parentDeps)
+			return NewPushWorker(id, logger, sr, pdeps)
+		})
+
+	register.SetDepsBuilder[*PushDependencies]("push",
+		func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader) *PushDependencies {
+			parentDeps := register.GetDeps[*transport_pkg.TransportDependencies]("transport")
+			if parentDeps == nil {
+				logger.SentryError(deps.FeatureForWorker("push"), id.HierarchyPath,
+					errors.New("parent transport deps not published"),
+					"push_parent_transport_deps_missing")
+
+				return nil
+			}
+
+			d, err := NewPushDependencies(parentDeps, deps.NewBaseDependencies(logger, sr, id))
 			if err != nil {
-				panic(fmt.Sprintf("failed to create push worker: %v", err))
+				logger.SentryError(deps.FeatureForWorker("push"), id.HierarchyPath, err, "push_dependencies_creation_failed")
+
+				return nil
 			}
 
-			return worker
-		},
-		func(cfg interface{}) interface{} {
-			return supervisor.NewSupervisor[fsmv2.Observation[snapshot.PushStatus], *fsmv2.WrappedDesiredState[snapshot.PushDesiredState]](
-				cfg.(supervisor.Config))
-		},
-	); err != nil {
-		panic(fmt.Sprintf("failed to register push worker: %v", err))
-	}
+			return d
+		})
 }

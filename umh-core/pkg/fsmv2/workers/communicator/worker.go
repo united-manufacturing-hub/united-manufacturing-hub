@@ -49,6 +49,7 @@ package communicator
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"gopkg.in/yaml.v3"
@@ -56,9 +57,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	fsmv2types "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	depspkg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/register"
 	httpTransport "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/http"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/types"
 )
@@ -67,29 +66,47 @@ const workerTypeName = "communicator"
 
 // CommunicatorWorker implements the FSM v2 Worker interface for channel-based synchronization.
 type CommunicatorWorker struct {
-	*helpers.BaseWorker[*CommunicatorDependencies]
+	fsmv2.WorkerBase[CommunicatorConfig, CommunicatorStatus, *CommunicatorDependencies]
 }
 
 // NewCommunicatorWorker creates a new Channel-based Communicator worker in Stopped state.
+// The supervisor sets HierarchyPath on identity before instantiation; tests inject a
+// transport via transportParam (the factory path passes nil  -  transport is owned by
+// the TransportWorker child, ENG-4264).
 func NewCommunicatorWorker(
-	id string,
-	name string,
+	identity depspkg.Identity,
 	transportParam types.Transport,
 	logger depspkg.FSMLogger,
 	stateReader depspkg.StateReader,
 ) (*CommunicatorWorker, error) {
-	identity := depspkg.Identity{
-		ID:         id,
-		Name:       name,
-		WorkerType: workerTypeName,
-		// HierarchyPath is set by the supervisor when adding workers via factory.
+	if logger == nil {
+		return nil, errors.New("logger must not be nil")
 	}
 
-	dependencies := NewCommunicatorDependencies(transportParam, logger, stateReader, identity)
+	if identity.WorkerType == "" {
+		identity.WorkerType = workerTypeName
+	}
 
-	return &CommunicatorWorker{
-		BaseWorker: helpers.NewBaseWorker(dependencies),
-	}, nil
+	w := &CommunicatorWorker{}
+	bd := w.InitBase(identity, logger, stateReader)
+
+	dependencies := NewCommunicatorDependencies(transportParam, bd)
+	w.BindDeps(dependencies)
+
+	return w, nil
+}
+
+// GetDependencies returns the typed CommunicatorDependencies.
+// Panics with a clear message if BindDeps was not called before this worker is used.
+func (w *CommunicatorWorker) GetDependencies() *CommunicatorDependencies {
+	raw := w.GetDependenciesAny()
+
+	d, ok := raw.(*CommunicatorDependencies)
+	if !ok || d == nil {
+		panic("CommunicatorWorker: GetDependencies called before BindDeps")
+	}
+
+	return d
 }
 
 // CollectObservedState returns the current observed state of the communicator.
@@ -162,30 +179,11 @@ func makeTransportChildSpec(parentSpec fsmv2types.UserSpec) []fsmv2types.ChildSp
 	}}
 }
 
-// GetInitialState returns StoppedState as the initial FSM state.
-// Uses the initial state registry populated by the state package's init() function.
-// The caller must ensure the state package is imported (via blank import in main or test).
-func (w *CommunicatorWorker) GetInitialState() fsmv2.State[any, any] {
-	return fsmv2.LookupInitialState(workerTypeName)
-}
-
 func init() {
-	if err := factory.RegisterWorkerAndSupervisorFactoryByType(
-		workerTypeName,
-		func(id depspkg.Identity, logger depspkg.FSMLogger, stateReader depspkg.StateReader, _ map[string]any) fsmv2.Worker {
+	register.Worker[CommunicatorConfig, CommunicatorStatus, *CommunicatorDependencies](workerTypeName,
+		func(id depspkg.Identity, logger depspkg.FSMLogger, sr depspkg.StateReader) (fsmv2.Worker, error) {
 			// ChannelProvider must be set via global singleton before factory is called (will panic if not set).
 			// Transport creation and auth are handled by TransportWorker (ENG-4264).
-			commDeps := NewCommunicatorDependencies(nil, logger, stateReader, id)
-
-			return &CommunicatorWorker{
-				BaseWorker: helpers.NewBaseWorker(commDeps),
-			}
-		},
-		func(cfg interface{}) interface{} {
-			return supervisor.NewSupervisor[fsmv2.Observation[CommunicatorStatus], *fsmv2.WrappedDesiredState[CommunicatorConfig]](
-				cfg.(supervisor.Config))
-		},
-	); err != nil {
-		panic(fmt.Sprintf("failed to register communicator worker: %v", err))
-	}
+			return NewCommunicatorWorker(id, nil, logger, sr)
+		})
 }

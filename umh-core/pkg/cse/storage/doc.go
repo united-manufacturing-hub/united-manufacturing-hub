@@ -131,6 +131,15 @@
 // right naming convention, and storage operations work without registry or
 // mapping files.
 //
+// # Reflect.Type registry
+//
+// GlobalRegistry() returns a process-wide TypeRegistry that maps worker-type
+// strings to the reflect.Type of their observed and desired payloads. The
+// fsmv2/register package populates this registry from register.Worker, so
+// each worker registers its types in one location. TriangularStore uses the
+// registry to construct typed values when loading snapshots through the
+// runtime-polymorphic API.
+//
 // # Atomic LoadSnapshot
 //
 // LoadSnapshot uses a database transaction to atomically load all three parts:

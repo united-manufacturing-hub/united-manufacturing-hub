@@ -390,6 +390,12 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 			deps.String("observation_time", currentObsTime.Format(time.RFC3339Nano)))
 	}
 
+	// Even if the state hasn't changed, the reason might have (e.g.,
+	// "auth backoff: 42 errors (cloudflare_challenge), delay 60s" — the
+	// error count and delay grow each tick). So write currentStateReason
+	// on every reconcile. On state changes, the write goes inside the
+	// same lock as the state update so readers never see the new reason
+	// paired with the old state. See ENG-4991.
 	if result.State != currentState {
 		fromState := currentState.String()
 		toState := result.State.String()
@@ -425,8 +431,6 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 		workerCtx.stateTransitions[toState]++
 		workerCtx.totalTransitions++
 		workerCtx.currentState = result.State
-
-		// Exposed via FrameworkMetrics and GetCurrentStateNameAndReason
 		workerCtx.currentStateReason = result.Reason
 		workerCtx.stateEnteredAt = now
 
@@ -447,6 +451,10 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 		// Record Prometheus metric AFTER lock release
 		metrics.RecordStateTransition(s.GetHierarchyPathUnlocked(), fromState, toState)
 	} else {
+		workerCtx.mu.Lock()
+		workerCtx.currentStateReason = result.Reason
+		workerCtx.mu.Unlock()
+
 		s.logTrace("state_unchanged",
 			deps.String("state", currentState.String()))
 	}

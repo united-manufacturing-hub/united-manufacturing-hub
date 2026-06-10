@@ -45,7 +45,9 @@ func ParseHierarchyPath(path string) HierarchyInfo {
 	if strings.Contains(path, "(") {
 		info.FSMVersion = "v2"
 		segments := strings.Split(path, "/")
+
 		var types []string
+
 		for _, seg := range segments {
 			if start := strings.Index(seg, "("); start != -1 {
 				if end := strings.Index(seg, ")"); end > start {
@@ -55,6 +57,7 @@ func ParseHierarchyPath(path string) HierarchyInfo {
 				}
 			}
 		}
+
 		if len(types) > 0 {
 			info.WorkerType = types[len(types)-1]
 			info.WorkerChain = strings.Join(types, "/")

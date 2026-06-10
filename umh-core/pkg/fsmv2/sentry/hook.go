@@ -187,6 +187,7 @@ func (h *SentryHook) captureToSentry(entry zapcore.Entry, fields []zapcore.Field
 	if path, ok := fieldMap["hierarchy_path"].(string); ok && path != "" {
 		info := ParseHierarchyPath(path)
 		event.Tags["fsm_version"] = info.FSMVersion
+
 		event.Tags["worker_type"] = info.WorkerType
 		if info.WorkerChain != "" {
 			event.Tags["worker_chain"] = TruncateTag(info.WorkerChain, maxTagLen)
@@ -214,18 +215,23 @@ func (h *SentryHook) captureToSentry(entry zapcore.Entry, fields []zapcore.Field
 	if panicVal, ok := fieldMap["panic"].(string); ok && panicVal != "" {
 		umhContext["panic_value"] = panicVal
 	}
+
 	for k, v := range fieldMap {
 		if _, handled := handledKeys[k]; handled {
 			continue
 		}
+
 		if IsSensitiveKey(k) {
 			continue
 		}
+
 		if s, ok := v.(string); ok && len(s) > 1024 {
 			v = s[:1024] + "...[truncated]"
 		}
+
 		umhContext[k] = v
 	}
+
 	if len(umhContext) > 0 {
 		event.Contexts["umh_context"] = umhContext
 	}
@@ -348,6 +354,7 @@ func TruncateTag(value string, maxLen int) string {
 	if len(value) <= maxLen {
 		return value
 	}
+
 	return value[:maxLen-3] + "..."
 }
 
@@ -372,6 +379,7 @@ var sensitiveKeys = map[string]struct{}{
 // Uses exact match (not substring) to avoid blocking legitimate fields like "cache_key".
 func IsSensitiveKey(key string) bool {
 	_, ok := sensitiveKeys[strings.ToLower(key)]
+
 	return ok
 }
 

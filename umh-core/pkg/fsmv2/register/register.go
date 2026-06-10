@@ -1,0 +1,146 @@
+// Copyright 2025 UMH Systems GmbH
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+// Package register provides the one-line worker registration entry point.
+// Lives in its own package to resolve circular imports:
+// register → fsmv2 + factory + supervisor + cse/storage. No reverse deps.
+package register
+
+import (
+	"fmt"
+	"reflect"
+	"sync"
+
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
+)
+
+// depsBuilderRegistry stores typed deps builder functions keyed by worker type.
+var depsBuilderRegistry sync.Map
+
+// NoDeps is the TDeps sentinel for workers that have no custom dependencies.
+// Workers with no typed deps embed WorkerBase[TConfig, TStatus, NoDeps].
+type NoDeps = struct{}
+
+// Worker registers a worker type with the framework.
+// TConfig is the developer's configuration type.
+// TStatus is the developer's status/observation type.
+// TDeps is the worker's typed dependency payload; use register.NoDeps for workers with no custom deps.
+// The workerType string is the canonical name used in config YAML and CSE storage.
+//
+// Note: TDeps is a phantom type parameter at registration time. The compiler does not
+// verify that TDeps here matches the TDeps in the concrete WorkerBase[TConfig, TStatus, TDeps]
+// embed inside the worker struct. By convention, callers pass the same TDeps in both places.
+//
+// Constructor receives the standard framework dependencies (identity, logger, stateReader).
+// Workers that need parent-injected deps fetch them via register.GetDeps inside the
+// constructor closure. Workers with custom ObservedState types must use
+// factory.RegisterWorkerType directly.
+//
+// Panics at init time when:
+//   - workerType is the empty string,
+//   - constructor is nil,
+//   - TStatus carries a field name that collides with the framework wrapper
+//     (DetectFieldCollisions),
+//   - the factory or CSE TypeRegistry already has an entry for workerType.
+func Worker[TConfig any, TStatus any, TDeps any](
+	workerType string,
+	constructor func(deps.Identity, deps.FSMLogger, deps.StateReader) (fsmv2.Worker, error),
+) {
+	if workerType == "" {
+		panic("register.Worker: workerType must be non-empty")
+	}
+
+	if constructor == nil {
+		panic("register.Worker: constructor must be non-nil")
+	}
+
+	if err := fsmv2.DetectFieldCollisions[TStatus](); err != nil {
+		panic(fmt.Sprintf("register.Worker(%q): %v", workerType, err))
+	}
+
+	wrappedFactory := func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader, _ map[string]any) fsmv2.Worker {
+		w, err := constructor(id, logger, sr)
+		if err != nil {
+			panic(fmt.Sprintf("register.Worker(%q): constructor failed for %s: %v", workerType, id.String(), err))
+		}
+		if w == nil {
+			panic(fmt.Sprintf("register.Worker(%q): constructor returned nil worker for %s", workerType, id.String()))
+		}
+
+		return w
+	}
+
+	supervisorFactory := func(cfg interface{}) interface{} {
+		return supervisor.NewSupervisor[
+			fsmv2.Observation[TStatus],
+			*fsmv2.WrappedDesiredState[TConfig],
+		](cfg.(supervisor.Config))
+	}
+
+	// Factory first: if it panics on duplicate, CSE registration is skipped — avoids a partially registered type.
+	if err := factory.RegisterWorkerAndSupervisorFactoryByType(workerType, wrappedFactory, supervisorFactory); err != nil {
+		panic(fmt.Sprintf("register.Worker(%q): %v", workerType, err))
+	}
+
+	observedType := reflect.TypeOf(fsmv2.Observation[TStatus]{})
+	desiredType := reflect.TypeOf(fsmv2.WrappedDesiredState[TConfig]{})
+
+	if err := storage.GlobalRegistry().RegisterWorkerType(workerType, observedType, desiredType); err != nil {
+		panic(fmt.Sprintf("register.Worker(%q): %v", workerType, err))
+	}
+}
+
+// SetDepsBuilder registers a typed deps builder function for workerType.
+// The builder receives the standard framework deps so workers can wire per-instance
+// resources (metrics recorders keyed by identity, loggers, state readers).
+// T is the concrete deps type (e.g., *MyDeps).
+//
+// Panics if workerType is empty or builderFn is nil (fail-fast at init time).
+func SetDepsBuilder[T any](workerType string, builderFn func(deps.Identity, deps.FSMLogger, deps.StateReader) T) {
+	if workerType == "" {
+		panic("register.SetDepsBuilder: workerType must be non-empty")
+	}
+	if builderFn == nil {
+		panic("register.SetDepsBuilder: builderFn must be non-nil")
+	}
+
+	wrapped := func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader) any {
+		return builderFn(id, logger, sr)
+	}
+	depsBuilderRegistry.Store(workerType, wrapped)
+}
+
+// GetDepsBuilder retrieves the deps builder function for workerType.
+// Returns (nil, false) if no builder was registered for this worker type.
+func GetDepsBuilder(workerType string) (func(deps.Identity, deps.FSMLogger, deps.StateReader) any, bool) {
+	v, ok := depsBuilderRegistry.Load(workerType)
+	if !ok {
+		return nil, false
+	}
+
+	return v.(func(deps.Identity, deps.FSMLogger, deps.StateReader) any), true
+}
+
+// ResetDepsBuilderRegistry clears all registered deps builders.
+// For use in tests only.
+func ResetDepsBuilderRegistry() {
+	depsBuilderRegistry.Range(func(key, _ any) bool {
+		depsBuilderRegistry.Delete(key)
+		return true
+	})
+}

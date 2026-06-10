@@ -39,6 +39,7 @@ var _ = Describe("PushWorker", func() {
 		logger     depspkg.FSMLogger
 		identity   depspkg.Identity
 		parentDeps *transport.TransportDependencies
+		pushDeps   *push.PushDependencies
 	)
 
 	BeforeEach(func() {
@@ -46,6 +47,10 @@ var _ = Describe("PushWorker", func() {
 		identity = depspkg.Identity{ID: "test-push", Name: "Test Push"}
 		transport.SetChannelProvider(newTestChannelProvider())
 		parentDeps = createParentDeps(logger)
+
+		var err error
+		pushDeps, err = push.NewPushDependencies(parentDeps, depspkg.NewBaseDependencies(logger, nil, identity))
+		Expect(err).ToNot(HaveOccurred())
 	})
 
 	AfterEach(func() {
@@ -61,27 +66,28 @@ var _ = Describe("PushWorker", func() {
 	Describe("NewPushWorker", func() {
 		It("should create a worker with valid args", func() {
 			var err error
-			worker, err = push.NewPushWorker(identity, logger, nil, parentDeps)
+			worker, err = push.NewPushWorker(identity, logger, nil, pushDeps)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(worker).NotTo(BeNil())
 		})
 
 		It("should reject nil logger", func() {
-			_, err := push.NewPushWorker(identity, nil, nil, parentDeps)
+			_, err := push.NewPushWorker(identity, nil, nil, pushDeps)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("logger"))
 		})
 
-		It("should reject nil parentDeps", func() {
+		It("should reject nil dependencies", func() {
 			_, err := push.NewPushWorker(identity, logger, nil, nil)
 			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("non-nil dependencies"))
 		})
 	})
 
 	Describe("CollectObservedState", func() {
 		BeforeEach(func() {
 			var err error
-			worker, err = push.NewPushWorker(identity, logger, nil, parentDeps)
+			worker, err = push.NewPushWorker(identity, logger, nil, pushDeps)
 			Expect(err).ToNot(HaveOccurred())
 		})
 
@@ -163,7 +169,7 @@ var _ = Describe("PushWorker", func() {
 	Describe("DeriveDesiredState", func() {
 		BeforeEach(func() {
 			var err error
-			worker, err = push.NewPushWorker(identity, logger, nil, parentDeps)
+			worker, err = push.NewPushWorker(identity, logger, nil, pushDeps)
 			Expect(err).ToNot(HaveOccurred())
 		})
 
@@ -235,7 +241,7 @@ var _ = Describe("PushWorker", func() {
 	Describe("GetInitialState", func() {
 		BeforeEach(func() {
 			var err error
-			worker, err = push.NewPushWorker(identity, logger, nil, parentDeps)
+			worker, err = push.NewPushWorker(identity, logger, nil, pushDeps)
 			Expect(err).ToNot(HaveOccurred())
 		})
 

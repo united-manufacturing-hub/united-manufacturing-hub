@@ -47,26 +47,31 @@ func (o testWrappingObservedState) GetTimestamp() time.Time { return o.Collected
 
 func (o testWrappingObservedState) SetCollectedAt(t time.Time) fsmv2.ObservedState {
 	o.CollectedAt = t
+
 	return o
 }
 
 func (o testWrappingObservedState) SetFrameworkMetrics(fm deps.FrameworkMetrics) fsmv2.ObservedState {
 	o.Metrics.Framework = fm
+
 	return o
 }
 
 func (o testWrappingObservedState) SetActionHistory(h []deps.ActionResult) fsmv2.ObservedState {
 	o.ActionResults = h
+
 	return o
 }
 
 func (o testWrappingObservedState) SetWorkerMetrics(m deps.Metrics) fsmv2.ObservedState {
 	o.Metrics.Worker = m
+
 	return o
 }
 
 func (o testWrappingObservedState) SetState(s string) fsmv2.ObservedState {
 	o.State = s
+
 	return o
 }
 
@@ -118,9 +123,9 @@ func wrappingTestIdentity(id string) deps.Identity {
 	return deps.Identity{ID: id, WorkerType: "testwrapping", Name: id}
 }
 
-func wrappingDesiredProvider() func() fsmv2.DesiredState {
-	return func() fsmv2.DesiredState {
-		return &config.DesiredState{BaseDesiredState: config.BaseDesiredState{}}
+func wrappingDesiredProvider() func() (fsmv2.DesiredState, error) {
+	return func() (fsmv2.DesiredState, error) {
+		return &config.DesiredState{BaseDesiredState: config.BaseDesiredState{}}, nil
 	}
 }
 
@@ -177,12 +182,12 @@ var _ = Describe("Collector post-COS wrapping", func() {
 			}
 
 			c := collection.NewCollector[testWrappingObservedState](collection.CollectorConfig[testWrappingObservedState]{
-				Worker:                  worker,
-				Identity:                identity,
-				Store:                   store,
-				Logger:                  deps.NewNopFSMLogger(),
-				ObservationInterval:     50 * time.Millisecond,
-				ObservationTimeout:      3 * time.Second,
+				Worker:                   worker,
+				Identity:                 identity,
+				Store:                    store,
+				Logger:                   deps.NewNopFSMLogger(),
+				ObservationInterval:      50 * time.Millisecond,
+				ObservationTimeout:       3 * time.Second,
 				DesiredStateProvider:     wrappingDesiredProvider(),
 				FrameworkMetricsProvider: func() *deps.FrameworkMetrics { return expectedFM },
 				FrameworkMetricsSetter:   func(fm *deps.FrameworkMetrics) { bd.SetFrameworkState(fm) },
@@ -252,12 +257,12 @@ var _ = Describe("Collector post-COS wrapping", func() {
 			}
 
 			c := collection.NewCollector[testWrappingObservedState](collection.CollectorConfig[testWrappingObservedState]{
-				Worker:              worker,
-				Identity:            identity,
-				Store:               store,
-				Logger:              deps.NewNopFSMLogger(),
-				ObservationInterval: 50 * time.Millisecond,
-				ObservationTimeout:  3 * time.Second,
+				Worker:               worker,
+				Identity:             identity,
+				Store:                store,
+				Logger:               deps.NewNopFSMLogger(),
+				ObservationInterval:  50 * time.Millisecond,
+				ObservationTimeout:   3 * time.Second,
 				DesiredStateProvider: wrappingDesiredProvider(),
 			})
 
@@ -267,6 +272,7 @@ var _ = Describe("Collector post-COS wrapping", func() {
 			// Wait for at least one save.
 			Eventually(func() error {
 				var loaded testWrappingObservedState
+
 				return store.LoadObservedTyped(ctx, "testwrapping", identity.ID, &loaded)
 			}, 2*time.Second, 50*time.Millisecond).Should(Succeed())
 
@@ -284,12 +290,12 @@ var _ = Describe("Collector post-COS wrapping", func() {
 			store := supervisor.CreateTestTriangularStore()
 
 			c := collection.NewCollector[supervisor.TestObservedState](collection.CollectorConfig[supervisor.TestObservedState]{
-				Worker:              worker,
-				Identity:            supervisor.TestIdentity(),
-				Store:               store,
-				Logger:              deps.NewNopFSMLogger(),
-				ObservationInterval: 50 * time.Millisecond,
-				ObservationTimeout:  3 * time.Second,
+				Worker:               worker,
+				Identity:             supervisor.TestIdentity(),
+				Store:                store,
+				Logger:               deps.NewNopFSMLogger(),
+				ObservationInterval:  50 * time.Millisecond,
+				ObservationTimeout:   3 * time.Second,
 				DesiredStateProvider: wrappingDesiredProvider(),
 			})
 
@@ -319,12 +325,12 @@ var _ = Describe("Collector post-COS wrapping", func() {
 			}
 
 			c := collection.NewCollector[testWrappingObservedState](collection.CollectorConfig[testWrappingObservedState]{
-				Worker:              worker,
-				Identity:            identity,
-				Store:               store,
-				Logger:              deps.NewNopFSMLogger(),
-				ObservationInterval: 50 * time.Millisecond,
-				ObservationTimeout:  3 * time.Second,
+				Worker:               worker,
+				Identity:             identity,
+				Store:                store,
+				Logger:               deps.NewNopFSMLogger(),
+				ObservationInterval:  50 * time.Millisecond,
+				ObservationTimeout:   3 * time.Second,
 				DesiredStateProvider: wrappingDesiredProvider(),
 				FrameworkMetricsProvider: func() *deps.FrameworkMetrics {
 					return &deps.FrameworkMetrics{}
@@ -367,12 +373,12 @@ var _ = Describe("Collector post-COS wrapping", func() {
 			}
 
 			c := collection.NewCollector[testWrappingObservedState](collection.CollectorConfig[testWrappingObservedState]{
-				Worker:              worker,
-				Identity:            identity,
-				Store:               store,
-				Logger:              deps.NewNopFSMLogger(),
-				ObservationInterval: 50 * time.Millisecond,
-				ObservationTimeout:  3 * time.Second,
+				Worker:               worker,
+				Identity:             identity,
+				Store:                store,
+				Logger:               deps.NewNopFSMLogger(),
+				ObservationInterval:  50 * time.Millisecond,
+				ObservationTimeout:   3 * time.Second,
 				DesiredStateProvider: wrappingDesiredProvider(),
 				FrameworkMetricsProvider: func() *deps.FrameworkMetrics {
 					return &deps.FrameworkMetrics{}
@@ -407,12 +413,12 @@ var _ = Describe("Collector post-COS wrapping", func() {
 			}
 
 			c := collection.NewCollector[testWrappingObservedState](collection.CollectorConfig[testWrappingObservedState]{
-				Worker:              worker,
-				Identity:            identity,
-				Store:               store,
-				Logger:              deps.NewNopFSMLogger(),
-				ObservationInterval: 50 * time.Millisecond,
-				ObservationTimeout:  3 * time.Second,
+				Worker:               worker,
+				Identity:             identity,
+				Store:                store,
+				Logger:               deps.NewNopFSMLogger(),
+				ObservationInterval:  50 * time.Millisecond,
+				ObservationTimeout:   3 * time.Second,
 				DesiredStateProvider: wrappingDesiredProvider(),
 			})
 
