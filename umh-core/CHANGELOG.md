@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Fixes
+
+- Previously, a standalone data flow that writes to more than one destination (`switch`, `broker`, or `fallback`) showed zero or incomplete throughput in the Management Console even though it was processing data normally. The throughput, error, and connection counts now include every destination
+
 ## [0.44.22]
 
 ### Improvements

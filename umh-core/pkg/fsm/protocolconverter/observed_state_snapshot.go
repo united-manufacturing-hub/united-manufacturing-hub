@@ -24,8 +24,8 @@ import (
 
 // ProtocolConverterObservedStateSnapshot is a deep-copyable snapshot of ProtocolConverterObservedState.
 type ProtocolConverterObservedStateSnapshot struct {
-	ObservedProtocolConverterRuntimeConfig protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime
 	ObservedProtocolConverterSpecConfig    protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec
+	ObservedProtocolConverterRuntimeConfig protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime
 	ServiceInfo                            protocolconverter.ServiceInfo
 }
 

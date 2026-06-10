@@ -52,8 +52,9 @@ type MockDataFlowComponentService struct {
 	// State control for FSM testing
 	stateFlags map[string]*ComponentStateFlags
 
+	BenthosConfigs []config.BenthosConfig
+
 	GetConfigResult dataflowcomponentserviceconfig.DataflowComponentServiceConfig
-	BenthosConfigs  []config.BenthosConfig
 
 	// Return values for each method
 	GenerateBenthosConfigForDataFlowComponentResult benthosserviceconfig.BenthosServiceConfig
@@ -113,12 +114,16 @@ func (m *MockDataFlowComponentService) SetComponentState(componentName string, f
 						IsActive: flags.IsBenthosProcessingMetricsActive,
 					},
 					Metrics: benthos_monitor.Metrics{
-						Input: benthos_monitor.InputMetrics{
-							ConnectionUp:   boolToInt64(flags.IsBenthosProcessingMetricsActive),
-							ConnectionLost: 0,
+						Inputs: map[string]benthos_monitor.InputInstance{
+							"root.input": {
+								ConnectionUp:   boolToInt64(flags.IsBenthosProcessingMetricsActive),
+								ConnectionLost: 0,
+							},
 						},
-						Output: benthos_monitor.OutputMetrics{
-							ConnectionUp: 1,
+						Outputs: map[string]benthos_monitor.OutputInstance{
+							"root.output": {
+								ConnectionUp: 1,
+							},
 						},
 					},
 				},

@@ -407,11 +407,11 @@ func (i *Instance) safeBenthosMetrics() (input, output struct{ ConnectionUp, Con
 	metrics := i.ObservedState.ServiceInfo.DFCObservedState.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosMetrics.Metrics
 
 	return struct{ ConnectionUp, ConnectionLost int64 }{
-			ConnectionUp:   metrics.Input.ConnectionUp,
-			ConnectionLost: metrics.Input.ConnectionLost,
+			ConnectionUp:   metrics.InputConnectionUpTotal(),
+			ConnectionLost: metrics.InputConnectionLostTotal(),
 		}, struct{ ConnectionUp, ConnectionLost int64 }{
-			ConnectionUp:   metrics.Output.ConnectionUp,
-			ConnectionLost: metrics.Output.ConnectionLost,
+			ConnectionUp:   metrics.OutputConnectionUpTotal(),
+			ConnectionLost: metrics.OutputConnectionLostTotal(),
 		}
 }
 

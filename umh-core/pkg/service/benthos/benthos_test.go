@@ -63,27 +63,33 @@ var _ = Describe("Benthos Service", func() {
 		benthosMonitorMockService.SetReadyStatus(true, true, "")
 
 		benthosMonitorMockService.SetMetricsResponse(benthos_monitor.Metrics{
-			Input: benthos_monitor.InputMetrics{
-				Received:     10,
-				ConnectionUp: 1,
-				LatencyNS: benthos_monitor.Latency{
-					P50:   1000000,
-					P90:   2000000,
-					P99:   3000000,
-					Sum:   1500000,
-					Count: 5,
+			Inputs: map[string]benthos_monitor.InputInstance{
+				"root.input": {
+					Path:         "root.input",
+					Received:     10,
+					ConnectionUp: 1,
+					LatencyNS: benthos_monitor.Latency{
+						P50:   1000000,
+						P90:   2000000,
+						P99:   3000000,
+						Sum:   1500000,
+						Count: 5,
+					},
 				},
 			},
-			Output: benthos_monitor.OutputMetrics{
-				Sent:         8,
-				BatchSent:    2,
-				ConnectionUp: 1,
-				LatencyNS: benthos_monitor.Latency{
-					P50:   1000000,
-					P90:   2000000,
-					P99:   3000000,
-					Sum:   1500000,
-					Count: 5,
+			Outputs: map[string]benthos_monitor.OutputInstance{
+				"root.output": {
+					Path:         "root.output",
+					Sent:         8,
+					BatchSent:    2,
+					ConnectionUp: 1,
+					LatencyNS: benthos_monitor.Latency{
+						P50:   1000000,
+						P90:   2000000,
+						P99:   3000000,
+						Sum:   1500000,
+						Count: 5,
+					},
 				},
 			},
 			Process: benthos_monitor.ProcessMetrics{
@@ -438,19 +444,25 @@ var _ = Describe("Benthos Service", func() {
 			It("should return true when there are no errors", func() {
 				metrics := benthos_monitor.BenthosMetrics{
 					Metrics: benthos_monitor.Metrics{
-						Input: benthos_monitor.InputMetrics{
-							ConnectionFailed: 5,
-							ConnectionLost:   1,
-							ConnectionUp:     1,
-							Received:         100,
+						Inputs: map[string]benthos_monitor.InputInstance{
+							"root.input": {
+								Path:             "root.input",
+								ConnectionFailed: 5,
+								ConnectionLost:   1,
+								ConnectionUp:     1,
+								Received:         100,
+							},
 						},
-						Output: benthos_monitor.OutputMetrics{
-							Error:            0,
-							ConnectionFailed: 3,
-							ConnectionLost:   0,
-							ConnectionUp:     1,
-							Sent:             90,
-							BatchSent:        10,
+						Outputs: map[string]benthos_monitor.OutputInstance{
+							"root.output": {
+								Path:             "root.output",
+								Error:            0,
+								ConnectionFailed: 3,
+								ConnectionLost:   0,
+								ConnectionUp:     1,
+								Sent:             90,
+								BatchSent:        10,
+							},
 						},
 						Process: benthos_monitor.ProcessMetrics{
 							Processors: map[string]benthos_monitor.ProcessorMetrics{
@@ -471,8 +483,8 @@ var _ = Describe("Benthos Service", func() {
 			It("should detect output errors", func() {
 				metrics := benthos_monitor.BenthosMetrics{
 					Metrics: benthos_monitor.Metrics{
-						Output: benthos_monitor.OutputMetrics{
-							Error: 1,
+						Outputs: map[string]benthos_monitor.OutputInstance{
+							"root.output": {Error: 1},
 						},
 					},
 				}
@@ -483,11 +495,11 @@ var _ = Describe("Benthos Service", func() {
 			It("should ignore connection failures", func() {
 				metrics := benthos_monitor.BenthosMetrics{
 					Metrics: benthos_monitor.Metrics{
-						Input: benthos_monitor.InputMetrics{
-							ConnectionFailed: 1,
+						Inputs: map[string]benthos_monitor.InputInstance{
+							"root.input": {Path: "root.input", ConnectionFailed: 1},
 						},
-						Output: benthos_monitor.OutputMetrics{
-							ConnectionFailed: 1,
+						Outputs: map[string]benthos_monitor.OutputInstance{
+							"root.output": {Path: "root.output", ConnectionFailed: 1},
 						},
 					},
 				}
@@ -579,11 +591,11 @@ var _ = Describe("Benthos Service", func() {
 			benthosMonitorMockService.SetReadyStatus(true, true, "")
 			benthosMonitorMockService.SetBenthosMonitorRunning()
 			benthosMonitorMockService.SetMetricsResponse(benthos_monitor.Metrics{
-				Input: benthos_monitor.InputMetrics{
-					Received: 100,
+				Inputs: map[string]benthos_monitor.InputInstance{
+					"root.input": {Path: "root.input", Received: 100},
 				},
-				Output: benthos_monitor.OutputMetrics{
-					Sent: 100,
+				Outputs: map[string]benthos_monitor.OutputInstance{
+					"root.output": {Path: "root.output", Sent: 100},
 				},
 			})
 			benthosMonitorMockService.SetBenthosMonitorRunning()
@@ -799,11 +811,11 @@ logger:
 			benthosMonitorMockService.SetLiveStatus(true)
 			benthosMonitorMockService.SetReadyStatus(true, true, "")
 			benthosMonitorMockService.SetMetricsResponse(benthos_monitor.Metrics{
-				Input: benthos_monitor.InputMetrics{
-					Received: 100,
+				Inputs: map[string]benthos_monitor.InputInstance{
+					"root.input": {Path: "root.input", Received: 100},
 				},
-				Output: benthos_monitor.OutputMetrics{
-					Sent: 100,
+				Outputs: map[string]benthos_monitor.OutputInstance{
+					"root.output": {Path: "root.output", Sent: 100},
 				},
 			})
 			benthosMonitorMockService.SetBenthosMonitorRunning()
@@ -1009,12 +1021,11 @@ logger:
 
 			// Set up metrics with no errors
 			benthosMonitorMockService.SetMetricsResponse(benthos_monitor.Metrics{
-				Input: benthos_monitor.InputMetrics{
-					Received: 100,
+				Inputs: map[string]benthos_monitor.InputInstance{
+					"root.input": {Path: "root.input", Received: 100},
 				},
-				Output: benthos_monitor.OutputMetrics{
-					Sent:  100,
-					Error: 0,
+				Outputs: map[string]benthos_monitor.OutputInstance{
+					"root.output": {Path: "root.output", Sent: 100, Error: 0},
 				},
 			})
 
