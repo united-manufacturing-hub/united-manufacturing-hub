@@ -38,13 +38,11 @@ import (
 
 var _ = Describe("Migration-API seam capstone: example-worker churn end-to-end", func() {
 	const (
-		appKey          = "application"
 		configWorkerKey = "configworker"
 		kernelChildName = "config-worker"
 	)
 
 	AfterEach(func() {
-		register.ClearDeps(appKey)
 		register.ClearDeps(configWorkerKey)
 	})
 
@@ -52,12 +50,12 @@ var _ = Describe("Migration-API seam capstone: example-worker churn end-to-end",
 		ctx := context.Background()
 		logger := deps.NewNopFSMLogger()
 
-		// One shared registry, wired under both the application and config-worker
-		// keys before the application supervisor constructs its worker, so the COS
-		// read sees a non-nil handle and the kernel is emitted. The config-worker
-		// kernel and the application read the same registry instance.
+		// One shared registry, published under the config-worker key before the
+		// application supervisor constructs its worker, so the COS read sees a
+		// non-nil handle and the kernel is emitted. The config-worker kernel and
+		// the application read the same registry instance.
 		w := dynamicchildren.NewWriter()
-		dynamicchildren.WireSharedRegistry(w.Registry(), appKey, configWorkerKey)
+		register.SetDeps[*dynamicchildren.Registry](configWorkerKey, w.Registry())
 
 		// An fsmv2Client over that Writer (writes) and the supervisor's store
 		// (reads) -- built once the store exists below. HEADLESS: no Agent block,
