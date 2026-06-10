@@ -47,8 +47,11 @@ import (
 	_ "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker/state"
 )
 
-// workerType is the canonical name registered in init() and used as the folder name.
-const workerType = "configworker"
+// WorkerTypeName is the canonical worker-type identifier for the config
+// worker, registered in init() and used as the folder name. Exported (same
+// convention as the persistence worker) so the application worker can read
+// the shared registry published under this deps key.
+const WorkerTypeName = "configworker"
 
 // ConfigworkerWorker implements the FSMv2 Worker interface and holds a handle
 // to the shared dynamicchildren registry. See the package doc for why it does
@@ -60,7 +63,7 @@ type ConfigworkerWorker struct {
 }
 
 // NewConfigworkerWorker creates a config worker holding the registry published
-// under workerType via register.SetDeps. It fails when no registry was published,
+// under WorkerTypeName via register.SetDeps. It fails when no registry was published,
 // surfacing the missing wiring at construction instead of at the first registry
 // read (a nil *Registry would otherwise panic on a method call far from the cause).
 func NewConfigworkerWorker(
@@ -68,9 +71,9 @@ func NewConfigworkerWorker(
 	logger deps.FSMLogger,
 	stateReader deps.StateReader,
 ) (*ConfigworkerWorker, error) {
-	shared := register.GetDeps[*dynamicchildren.Registry](workerType)
+	shared := register.GetDeps[*dynamicchildren.Registry](WorkerTypeName)
 	if shared == nil {
-		return nil, fmt.Errorf("no registry published for worker type %q: call register.SetDeps before constructing", workerType)
+		return nil, fmt.Errorf("no registry published for worker type %q: call register.SetDeps before constructing", WorkerTypeName)
 	}
 
 	w := &ConfigworkerWorker{
@@ -104,7 +107,7 @@ func (w *ConfigworkerWorker) CollectObservedState(ctx context.Context, desired f
 }
 
 func init() {
-	register.Worker[snapshot.ConfigworkerConfig, snapshot.ConfigworkerStatus, register.NoDeps](workerType,
+	register.Worker[snapshot.ConfigworkerConfig, snapshot.ConfigworkerStatus, register.NoDeps](WorkerTypeName,
 		func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader) (fsmv2.Worker, error) {
 			return NewConfigworkerWorker(id, logger, sr)
 		})

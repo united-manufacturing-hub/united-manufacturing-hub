@@ -68,22 +68,22 @@ func newAppSupervisorWithStore(logger deps.FSMLogger) (
 }
 
 var _ = Describe("Application worker surfaces the shared registry into ApplicationStatus", func() {
-	const appKey = "application"
+	const configWorkerKey = "configworker"
 
 	AfterEach(func() {
-		register.ClearDeps(appKey)
+		register.ClearDeps(configWorkerKey)
 	})
 
 	It("carries DynamicChildren and sets RegistryConfigured=true when a registry is published", func() {
 		ctx := context.Background()
 		logger := deps.NewNopFSMLogger()
 
-		// Publish ONE shared registry under the application worker type and
-		// record a single ref so the COS read has something to surface.
+		// Publish ONE shared registry under the config-worker key and record a
+		// single ref so the COS read has something to surface.
 		reg := dynamicchildren.NewWriter()
 		ref := dynamicchildren.Ref{WorkerType: "example", Name: "example-child"}
 		Expect(reg.Upsert(ref, map[string]any{"value": 1})).To(Succeed())
-		register.SetDeps[*dynamicchildren.Registry](appKey, reg.Registry())
+		register.SetDeps[*dynamicchildren.Registry](configWorkerKey, reg.Registry())
 
 		sup, store, appID := newAppSupervisorWithStore(logger)
 
@@ -97,7 +97,7 @@ var _ = Describe("Application worker surfaces the shared registry into Applicati
 			observed = obs
 			return observed.Status.RegistryConfigured
 		}, "5s", "100ms").Should(BeTrue(),
-			"RegistryConfigured must be true once a non-nil registry is published under the application worker type")
+			"RegistryConfigured must be true once a non-nil registry is published under the config-worker key")
 
 		Expect(observed.Status.DynamicChildren).To(HaveLen(1),
 			"DynamicChildren must carry the single spec recorded in the shared registry")
@@ -114,8 +114,8 @@ var _ = Describe("Application worker surfaces the shared registry into Applicati
 		ctx := context.Background()
 		logger := deps.NewNopFSMLogger()
 
-		// No SetDeps: the constructor's register.GetDeps returns a nil handle.
-		register.ClearDeps(appKey)
+		// No SetDeps: the collector's register.GetDeps returns a nil handle.
+		register.ClearDeps(configWorkerKey)
 
 		sup, store, appID := newAppSupervisorWithStore(logger)
 
