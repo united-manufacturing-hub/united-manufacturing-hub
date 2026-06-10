@@ -116,11 +116,13 @@ func (a *SaveProtocolConverterAction) Validate() error {
 		return err
 	}
 
-	if err := validateProtocolConverterDFC(a.payload.ReadDFC, "read"); err != nil {
+	if err := validateReadProtocolConverterDFC(a.payload.ReadDFC); err != nil {
 		return err
 	}
-	if err := validateProtocolConverterDFC(a.payload.WriteDFC, "write"); err != nil {
-		return err
+	if w := a.payload.WriteDFCPayload; w != nil {
+		if err := validateWriteDFCConfig(&w.DataflowComponentWriteConfigInput, w.State); err != nil {
+			return err
+		}
 	}
 
 	return nil
