@@ -50,6 +50,30 @@ type WriteConfigDestination struct {
 	Code string `yaml:"code,omitempty" json:"code,omitempty" mapstructure:"code,omitempty"`
 }
 
+// toOutputMap builds the Benthos output map for this destination.
+// Protocol must be non-empty; Code may be empty (returns empty map config).
+// List-form YAML configs are preserved as []any; map-form as map[string]any;
+// unparseable code falls back to {"_raw": code}.
+func (d WriteConfigDestination) toOutputMap() map[string]any {
+	var destConfig any
+	if d.Code != "" {
+		var sliceVal []any
+		if err := yaml.Unmarshal([]byte(d.Code), &sliceVal); err == nil && sliceVal != nil {
+			destConfig = sliceVal
+		} else {
+			mapVal := map[string]any{}
+			if err := yaml.Unmarshal([]byte(d.Code), &mapVal); err != nil {
+				destConfig = map[string]any{"_raw": d.Code}
+			} else {
+				destConfig = mapVal
+			}
+		}
+	} else {
+		destConfig = map[string]any{}
+	}
+	return map[string]any{d.Protocol: destConfig}
+}
+
 // WriteConfigExtra holds extra Benthos YAML that is inlined verbatim into the generated
 // Benthos service config. Supported top-level keys: cache_resources, rate_limit_resources, buffer.
 type WriteConfigExtra struct {
@@ -181,20 +205,7 @@ func (c DataflowComponentWriteConfig) ToDataflowComponentServiceConfig(bridgedBy
 		}
 
 		if c.Destination.Protocol != "" {
-			if c.Destination.Code != "" {
-				var listConfig []any
-				if err := yaml.Unmarshal([]byte(c.Destination.Code), &listConfig); err == nil {
-					output = map[string]any{c.Destination.Protocol: listConfig}
-				} else {
-					destConfig := map[string]any{}
-					if err := yaml.Unmarshal([]byte(c.Destination.Code), &destConfig); err != nil {
-						destConfig = map[string]any{"_raw": c.Destination.Code}
-					}
-					output = map[string]any{c.Destination.Protocol: destConfig}
-				}
-			} else {
-				output = map[string]any{c.Destination.Protocol: map[string]any{}}
-			}
+			output = c.Destination.toOutputMap()
 		}
 	}
 
@@ -223,13 +234,7 @@ func (c DataflowComponentWriteConfig) ToDisplayDataflowComponentServiceConfig() 
 
 	var output map[string]any
 	if c.Destination.Protocol != "" {
-		destConfig := map[string]any{}
-		if c.Destination.Code != "" {
-			if err := yaml.Unmarshal([]byte(c.Destination.Code), &destConfig); err != nil {
-				destConfig = map[string]any{"_raw": c.Destination.Code}
-			}
-		}
-		output = map[string]any{c.Destination.Protocol: destConfig}
+		output = c.Destination.toOutputMap()
 	}
 
 	cacheResources, rateLimitResources, buffer := c.parseExtra()
