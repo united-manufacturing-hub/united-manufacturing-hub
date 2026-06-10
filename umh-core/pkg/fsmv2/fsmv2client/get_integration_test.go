@@ -47,7 +47,7 @@ import (
 // observed.
 //
 // The harness mirrors the A7/A8 application-spawn integration path: one shared
-// registry wired under the application and config-worker keys, a helloworld
+// registry published under the config-worker key, a helloworld
 // child Upserted into it, then the application supervisor driven through its
 // real tick loop (TestMarkAsStarted + TestTick) until the collector has
 // persisted the child's observed state under worker type "helloworld" and id
@@ -59,23 +59,19 @@ import (
 func TestGetReadsObservedStateWrittenByRealCollector(t *testing.T) {
 	g := gomega.NewWithT(t)
 
-	const (
-		appKey          = "application"
-		configWorkerKey = "configworker"
-	)
+	const configWorkerKey = "configworker"
 
 	ctx := context.Background()
 	logger := deps.NewNopFSMLogger()
 
 	t.Cleanup(func() {
-		register.ClearDeps(appKey)
 		register.ClearDeps(configWorkerKey)
 	})
 
-	// One shared registry, wired under both keys before the application worker is
-	// constructed, so the COS read sees a non-nil handle.
+	// One shared registry, published under the config-worker key before the
+	// application worker is constructed, so the COS read sees a non-nil handle.
 	w := dynamicchildren.NewWriter()
-	dynamicchildren.WireSharedRegistry(w.Registry(), appKey, configWorkerKey)
+	register.SetDeps[*dynamicchildren.Registry](configWorkerKey, w.Registry())
 
 	// Upsert a helloworld child. Empty MoodFilePath means the worker never goes
 	// "sad", so it deterministically reaches Running.

@@ -35,13 +35,11 @@ import (
 
 var _ = Describe("Application supervisor tears down a registry-deleted worker", func() {
 	const (
-		appKey          = "application"
 		configWorkerKey = "configworker"
 		kernelChildName = "config-worker"
 	)
 
 	AfterEach(func() {
-		register.ClearDeps(appKey)
 		register.ClearDeps(configWorkerKey)
 	})
 
@@ -49,10 +47,11 @@ var _ = Describe("Application supervisor tears down a registry-deleted worker", 
 		ctx := context.Background()
 		logger := deps.NewNopFSMLogger()
 
-		// One shared registry, wired under both keys before the app supervisor
-		// constructs the application worker (so the COS read sees a non-nil handle).
+		// One shared registry, published under the config-worker key before the
+		// app supervisor constructs the application worker (so the COS read sees
+		// a non-nil handle).
 		w := dynamicchildren.NewWriter()
-		dynamicchildren.WireSharedRegistry(w.Registry(), appKey, configWorkerKey)
+		register.SetDeps[*dynamicchildren.Registry](configWorkerKey, w.Registry())
 
 		// Upsert a helloworld child and drive the supervisor on its started
 		// context so the spawned child's action executor runs.

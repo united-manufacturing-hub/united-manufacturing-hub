@@ -36,13 +36,11 @@ import (
 
 var _ = Describe("Application supervisor spawns a registry-declared worker", func() {
 	const (
-		appKey          = "application"
 		configWorkerKey = "configworker"
 		kernelChildName = "config-worker"
 	)
 
 	AfterEach(func() {
-		register.ClearDeps(appKey)
 		register.ClearDeps(configWorkerKey)
 	})
 
@@ -50,10 +48,11 @@ var _ = Describe("Application supervisor spawns a registry-declared worker", fun
 		ctx := context.Background()
 		logger := deps.NewNopFSMLogger()
 
-		// (1) One shared registry, wired under both keys before the app supervisor
-		// constructs the application worker (so the COS read sees a non-nil handle).
+		// (1) One shared registry, published under the config-worker key before
+		// the app supervisor constructs the application worker (so the COS read
+		// sees a non-nil handle).
 		w := dynamicchildren.NewWriter()
-		dynamicchildren.WireSharedRegistry(w.Registry(), appKey, configWorkerKey)
+		register.SetDeps[*dynamicchildren.Registry](configWorkerKey, w.Registry())
 
 		// (2) Upsert a helloworld child. Empty MoodFilePath means the worker never
 		// goes "sad", so it deterministically reaches Running.
