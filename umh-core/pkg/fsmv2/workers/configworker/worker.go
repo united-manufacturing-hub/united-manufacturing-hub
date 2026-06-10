@@ -12,10 +12,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package configworker provides the kernel config worker. The worker holds the
-// shared registry published by the parent wiring (register.SetDeps ->
-// register.GetDeps) so the application control surface can read the dynamic
-// child specs recorded via the registry's Upsert.
+// Package configworker provides the config worker, the kernel child of the
+// application worker.
+//
+// Today the worker only anchors the application's children union: once the
+// shared registry is published, every application state emits this kernel
+// child (renderUnion in workers/application/state), so the children list can
+// never become empty. Nothing routes through this worker - child specs reach
+// the dynamicchildren registry via fsmv2client and its Writer, the
+// application's collector reads that registry directly, and no production
+// caller reads the worker's Registry accessor.
+//
+// TODO(ENG-4400): this worker becomes the config.yaml authority. It reads
+// config.yaml, validates and serializes changes to it, and materializes the
+// declared children into the dynamicchildren registry - the registry then
+// becomes the merged view of config-declared and runtime-requested children,
+// and spec writes move from direct Writer calls into this worker's tick.
+// TODO(ENG-4900): dynamicchildren.WithValidate is the hook for rejecting
+// invalid specs at Upsert; nothing installs a validator today.
 package configworker
 
 import (
@@ -36,8 +50,9 @@ import (
 // workerType is the canonical name registered in init() and used as the folder name.
 const workerType = "configworker"
 
-// ConfigworkerWorker implements the FSMv2 Worker interface and holds the shared
-// registry of dynamic child specs.
+// ConfigworkerWorker implements the FSMv2 Worker interface and holds a handle
+// to the shared dynamicchildren registry. See the package doc for why it does
+// nothing else yet.
 type ConfigworkerWorker struct {
 	registry *dynamicchildren.Registry
 
