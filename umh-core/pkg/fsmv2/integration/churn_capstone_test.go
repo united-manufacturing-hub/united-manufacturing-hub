@@ -26,7 +26,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
 	hello_world "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/helloworld"
 
-	registry "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/configworker"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker/dynamicchildren"
 
 	// Blank-import the kernel config worker plus the dynamic worker the registry
 	// declares, so their init() registrations exist before the supervisor ticks.
@@ -56,21 +56,21 @@ var _ = Describe("Migration-API seam capstone: example-worker churn end-to-end",
 		// keys before the application supervisor constructs its worker, so the COS
 		// read sees a non-nil handle and the kernel is emitted. The config-worker
 		// kernel and the application read the same registry instance.
-		cw := registry.NewConfigWorker()
-		registry.WireSharedRegistry(cw.Registry(), appKey, configWorkerKey)
+		w := dynamicchildren.NewWriter()
+		dynamicchildren.WireSharedRegistry(w.Registry(), appKey, configWorkerKey)
 
-		// An fsmv2Client over that ConfigWorker (writes) and the supervisor's store
+		// An fsmv2Client over that Writer (writes) and the supervisor's store
 		// (reads) -- built once the store exists below. HEADLESS: no Agent block,
 		// so no communicator child.
 		sup, store, _ := newAppSupervisorWithStore(logger)
 		sup.TestMarkAsStarted()
 
-		client := fsmv2client.NewFSMv2Client(cw, store)
+		client := fsmv2client.NewFSMv2Client(w, store)
 
 		// (1) Upsert K=3 helloworld workers through the client. Empty MoodFilePath
 		// (state "running") means each worker never goes "sad", so it
 		// deterministically reaches Running.
-		refs := []registry.Ref{
+		refs := []dynamicchildren.Ref{
 			{WorkerType: "helloworld", Name: "hello-1"},
 			{WorkerType: "helloworld", Name: "hello-2"},
 			{WorkerType: "helloworld", Name: "hello-3"},

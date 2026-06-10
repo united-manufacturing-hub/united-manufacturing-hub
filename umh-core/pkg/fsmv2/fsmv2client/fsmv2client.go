@@ -13,7 +13,7 @@
 // limitations under the License.
 
 // Package fsmv2client exposes the migration-API seam: a thin client that wraps
-// a ConfigWorker for writes.
+// a Writer for writes.
 package fsmv2client
 
 import (
@@ -23,8 +23,8 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/configworker"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker/dynamicchildren"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
 )
 
@@ -35,28 +35,28 @@ import (
 // real read error.
 var ErrNotObserved = errors.New("fsmv2client: ref not observed")
 
-// FSMv2Client delegates child-spec writes to the ConfigWorker it wraps and
+// FSMv2Client delegates child-spec writes to the Writer it wraps and
 // reads child observed state through the read-only StateReader it holds (see
 // the Get function).
 type FSMv2Client struct {
-	cw *configworker.ConfigWorker
+	w  *dynamicchildren.Writer
 	sr deps.StateReader
 }
 
-// NewFSMv2Client returns an FSMv2Client that writes through cw and reads
+// NewFSMv2Client returns an FSMv2Client that writes through w and reads
 // observed state through sr.
-func NewFSMv2Client(cw *configworker.ConfigWorker, sr deps.StateReader) *FSMv2Client {
-	return &FSMv2Client{cw: cw, sr: sr}
+func NewFSMv2Client(w *dynamicchildren.Writer, sr deps.StateReader) *FSMv2Client {
+	return &FSMv2Client{w: w, sr: sr}
 }
 
-// Upsert records cfg for ref in the wrapped ConfigWorker.
-func (c *FSMv2Client) Upsert(ref configworker.Ref, cfg map[string]any) error {
-	return c.cw.Upsert(ref, cfg)
+// Upsert records cfg for ref in the wrapped Writer.
+func (c *FSMv2Client) Upsert(ref dynamicchildren.Ref, cfg map[string]any) error {
+	return c.w.Upsert(ref, cfg)
 }
 
-// Delete removes ref from the wrapped ConfigWorker.
-func (c *FSMv2Client) Delete(ref configworker.Ref) {
-	c.cw.Delete(ref)
+// Delete removes ref from the wrapped Writer.
+func (c *FSMv2Client) Delete(ref dynamicchildren.Ref) {
+	c.w.Delete(ref)
 }
 
 // Get reads the observed state the collector persisted for ref's spawned child
@@ -71,7 +71,7 @@ func (c *FSMv2Client) Delete(ref configworker.Ref) {
 // that does not match the worker type decodes whatever fields overlap and is
 // the caller's responsibility; the worker registry that would enforce the
 // pairing is not wired here.
-func Get[TStatus any](ctx context.Context, c *FSMv2Client, ref configworker.Ref) (fsmv2.Observation[TStatus], error) {
+func Get[TStatus any](ctx context.Context, c *FSMv2Client, ref dynamicchildren.Ref) (fsmv2.Observation[TStatus], error) {
 	var obs fsmv2.Observation[TStatus]
 
 	if err := c.sr.LoadObservedTyped(ctx, ref.WorkerType, config.ChildID(ref.Name), &obs); err != nil {
