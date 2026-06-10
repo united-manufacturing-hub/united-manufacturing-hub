@@ -1035,6 +1035,31 @@ func (a *EditProtocolConverterAction) renderDesiredDFCConfig(pcSnapshot *protoco
 		modifiedSpec.Config.DataflowComponentWriteServiceConfig = *a.writeDFCInput
 	}
 
+	// Render with the edit's own template variables overlaid, the same merge
+	// applyMutation persists. The observed spec lags the persisted edit by one
+	// or more control-loop cycles (multiple seconds under CPU pressure), so
+	// an edit that introduces a new variable referenced by its DFC would fail
+	// this verification render with a missingkey error, identically every
+	// tick, until the snapshot catches up, and the fail-fast abort would roll
+	// back a valid edit. Variables the edit does not carry keep their
+	// observed values.
+	if len(a.templateVars) > 0 {
+		mergedVars := make(map[string]any)
+
+		if modifiedSpec.Variables.User != nil {
+			maps.Copy(mergedVars, modifiedSpec.Variables.User)
+		}
+
+		for _, variable := range a.templateVars {
+			mergedVars[variable.Label] = variable.Value
+		}
+
+		delete(mergedVars, "location")
+		delete(mergedVars, "location_path")
+
+		modifiedSpec.Variables.User = mergedVars
+	}
+
 	systemSnapshot := a.systemSnapshotManager.GetDeepCopySnapshot()
 
 	agentLocation := convertIntMapToStringMap(systemSnapshot.CurrentConfig.Agent.Location)

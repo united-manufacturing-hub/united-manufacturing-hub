@@ -1699,6 +1699,39 @@ var _ = Describe("EditProtocolConverter", func() {
 				}
 			}
 
+			// newVariablePayload is a VALID edit that introduces a template variable
+			// the observed spec does not have yet.
+			newVariablePayload := func() map[string]interface{} {
+				return map[string]interface{}{
+					"name": pcName,
+					"uuid": pcUUID.String(),
+					"templateInfo": map[string]interface{}{
+						"variables": []interface{}{
+							map[string]interface{}{"label": "newvar", "value": "example.com"},
+						},
+					},
+					"readDFC": map[string]interface{}{
+						"inputs": map[string]interface{}{
+							// References BOTH the edit-carried variable (newvar)
+							// and an observed-only one (inject): the render must
+							// merge the edit's variables OVER the observed ones,
+							// not replace them.
+							"data": "input:\n  http_client:\n    url: 'http://{{ .newvar }}/{{ .inject }}'",
+							"type": "http_client",
+						},
+						"pipeline": map[string]interface{}{
+							"processors": map[string]interface{}{
+								"0": map[string]interface{}{
+									"type": "bloblang",
+									"data": "bloblang: root = content()",
+								},
+							},
+						},
+						"state": "active",
+					},
+				}
+			}
+
 			runEdit := func(within time.Duration) (time.Duration, error) {
 				localAction := actions.NewEditProtocolConverterAction(userEmail, actionUUID, instanceUUID, localOutbound, mockConfig, snapshotMgr)
 				localAction.SetTickInterval(tick)
@@ -1931,6 +1964,25 @@ var _ = Describe("EditProtocolConverter", func() {
 				matched, renderErr = localAction.CompareProtocolConverterDFCConfig(observedStateWithInject("benign"))
 				Expect(matched).To(BeFalse())
 				Expect(renderErr).NotTo(HaveOccurred())
+				Expect(localAction.LastRenderErr()).NotTo(HaveOccurred())
+			})
+
+			It("renders with the edit's own template variables when the observed spec lacks them", func() {
+				// An edit that introduces a new variable races the control loop:
+				// the observed spec keeps the pre-edit variables until the FSM
+				// propagates the persisted edit (seconds, under CPU pressure).
+				// The verification render must use the edit's own variables, or a
+				// valid edit fails its render identically every tick and the
+				// fail-fast abort rolls it back.
+				localAction := actions.NewEditProtocolConverterAction(userEmail, actionUUID, instanceUUID, localOutbound, mockConfig, snapshotMgr)
+				Expect(localAction.Parse(newVariablePayload())).To(Succeed())
+				Expect(localAction.Validate()).To(Succeed())
+
+				// Observed spec has only the pre-edit "inject" variable, not "newvar".
+				matched, renderErr := localAction.CompareProtocolConverterDFCConfig(observedStateWithInject("benign"))
+
+				Expect(renderErr).NotTo(HaveOccurred())
+				Expect(matched).To(BeFalse())
 				Expect(localAction.LastRenderErr()).NotTo(HaveOccurred())
 			})
 		})
