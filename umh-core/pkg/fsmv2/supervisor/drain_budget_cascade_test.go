@@ -682,11 +682,16 @@ var _ = Describe("Graceful drain budget cascading (CLAUDE.md §Graceful Shutdown
 		Expect(spent).To(BeNumerically(">=", 2*cascadeTruncationBase),
 			"expected child_drain_elapsed to show the Phase-2 child drains spent at least the root's whole 2×base budget")
 
-		// Slop covers the four sequentially-torn-down supervisors (root plus
-		// three children).
-		Expect(elapsed).To(BeNumerically("<=", 3*cascadeTruncationBase+4*perLevelTeardownSlop),
-			"Shutdown took %v; three sequential 1×base child drains plus an immediate root break-out must stay within 3×base = %v (+%v teardown slop for 4 supervisors)",
-			elapsed, 3*cascadeTruncationBase, 4*perLevelTeardownSlop)
+		// The break-out must be immediate: time beyond the Phase-2 child
+		// drains (already measured internally as child_drain_elapsed) is one
+		// root teardown, never a fresh budget wait. Comparing the difference
+		// asserts the budget contract directly and keeps the bound off the
+		// load-sensitive 3×base floor (an absolute bound left only 2s of
+		// margin under -race); a root that re-arms after exhaustion adds
+		// ≥2×base here.
+		Expect(elapsed-spent).To(BeNumerically("<", 2*cascadeTruncationBase),
+			"Shutdown took %v beyond its %v of child drains; an immediate break-out leaves only root teardown here, a fresh budget wait adds at least 2×base = %v",
+			elapsed-spent, spent, 2*cascadeTruncationBase)
 	})
 
 	// Firing-direction counterpart to the exhaustion case above: a

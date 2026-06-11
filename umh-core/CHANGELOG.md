@@ -5,6 +5,7 @@
 ### Fixes
 
 - Previously, a standalone data flow that writes to more than one destination (`switch`, `broker`, or `fallback`) showed zero or incomplete throughput in the Management Console even though it was processing data normally. The throughput, error, and connection counts now include every destination
+- Stopping umh-core (`docker stop`, Kubernetes pod termination, CTRL-C) now shuts down workers gracefully on the first SIGTERM. Previously the signal killed the internal control loop before the graceful drain ran, so the drain waited out every timeout with nothing left to process — 33 s measured against Docker's 10 s grace period, ending in a hard kill mid-shutdown with workers never running their stopping steps. A second SIGTERM still forces an immediate exit
 
 ### Preview: Write Flows
 

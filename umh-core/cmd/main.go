@@ -532,7 +532,10 @@ type fsmv2Supervisor interface {
 // adapter used in FSMv2 transport mode.  It returns a cleanup function that
 // must be deferred by the caller to stop the SentryHook goroutine.
 // The returned appSup has NOT been started yet; the caller is responsible for
-// calling appSup.Run(ctx) (or Start+wait).
+// calling appSup.Run(ctx). Run detaches the tick loop from ctx and treats
+// ctx cancellation (the first SIGTERM here) as the trigger for a graceful
+// drain against the live loop (ENG-4971) — do not substitute Start(ctx),
+// which ties the loop's lifetime to the caller's cancel.
 func buildFSMv2Supervisor(
 	ctx context.Context,
 	configData *config.FullConfig,
@@ -553,7 +556,22 @@ func buildFSMv2Supervisor(
 		0,
 	)
 
-	// Start conversion goroutines.
+	// Start conversion goroutines. These run on the caller's signal ctx, NOT
+	// the supervisor's detached context: the first SIGTERM kills both bridge
+	// goroutines (fsmInbound→Router and legacyOutbound→push) immediately, while
+	// the detached tick loop keeps ticking pull and push for the whole drain
+	// window (ENG-4971). With no drain gate on the workers, that window drops:
+	//   - any fsmInbound batch the pull worker delivers after the Router-side
+	//     goroutine has died (the long-poll runs on the detached ctx, so an
+	//     in-flight poll completes server-side and its already-dequeued batch
+	//     lands in a channel nobody reads — never redelivered);
+	//   - Router replies queued onto legacyOutbound after the push-side
+	//     goroutine has died;
+	//   - the pull and push in-memory pendingMessages retry buffers, which die
+	//     when each worker is reaped at the end of the drain.
+	// This loss is bounded by the per-level drain budget (base × subtree height)
+	// and accepted here: the process is terminating, so an action arriving after
+	// SIGTERM could not complete or have its reply delivered anyway.
 	channelAdapter.Start(ctx)
 
 	// Set the global ChannelProvider singleton BEFORE creating the supervisor.

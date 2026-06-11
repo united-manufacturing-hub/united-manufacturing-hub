@@ -106,22 +106,34 @@ func (s *Supervisor[TObserved, TDesired]) startWorkerRunners(ctx context.Context
 	}
 }
 
-// Run starts the supervisor and blocks until ctx is canceled, the supervisor
-// stops on its own, or Shutdown is called externally. When ctx is canceled,
-// Run drives a graceful shutdown via Shutdown() before returning. Returns nil
-// on a clean shutdown.
+// Run starts the supervisor and blocks until ctx is canceled or Shutdown is
+// called externally. When ctx is canceled, Run drives a graceful shutdown via
+// Shutdown() before returning. Returns nil on a clean shutdown.
+//
+// Cancelling ctx does NOT stop the tick loop directly: the loop runs on a
+// context detached from the caller's cancellation (context.WithoutCancel),
+// and the cancel is the trigger for an orderly Shutdown executed against the
+// still-live loop. The drain depends on that liveness — only the tick loop
+// reaps workers that signal removal, so a loop sharing the caller's ctx dies
+// on the first cancel and the drain has nothing to reap until the budget
+// (sampled once at Shutdown entry as base × subtree height) expires
+// (ENG-4971). If a worker never signals removal, the supervisor logs
+// graceful_shutdown_timeout and removes it when the level's drain budget
+// expires.
 //
 // Run is the recommended entry point for top-level supervisors (e.g.,
 // cmd/main.go). For child supervisors, parents use StartAsChild instead.
 //
 // Composition:
 //
-//	done := s.Start(ctx)
-//	<-ctx.Done()   // OR <-done if supervisor stops on its own first
-//	s.Shutdown()
+//	done := s.Start(context.WithoutCancel(ctx)) // tick loop detached from caller cancel
+//	<-ctx.Done()   // OR <-done if an external Shutdown() stops the supervisor first
+//	s.Shutdown()   // graceful drain against the live tick loop
 //	<-done         // Shutdown waits for tickLoop; this read is a safe no-op
 func (s *Supervisor[TObserved, TDesired]) Run(ctx context.Context) error {
-	done := s.Start(ctx)
+	// Values are preserved; cancellation AND any caller deadline are discarded.
+	// Shutdown Phase 4 is the sole canceller of the supervisor context (ENG-4971).
+	done := s.Start(context.WithoutCancel(ctx))
 
 	select {
 	case <-ctx.Done():
@@ -133,8 +145,10 @@ func (s *Supervisor[TObserved, TDesired]) Run(ctx context.Context) error {
 
 		return nil
 	case <-done:
-		// tickLoop exited on its own (e.g., panic-circuit open or external stop).
-		// Call Shutdown to clean up executor + collectors (idempotent).
+		// tickLoop exited on its own: an external Shutdown() cancelled the
+		// supervisor context (Phase 4) — the detached loop cannot die via
+		// caller-ctx cancellation. Call Shutdown to clean up executor +
+		// collectors (idempotent).
 		s.Shutdown()
 
 		return nil
