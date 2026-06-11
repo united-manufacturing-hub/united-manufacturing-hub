@@ -172,6 +172,9 @@ spec, err := config.NewChildSpec[MyChildConfig]("name", "workertype", cfg, enabl
 ```
 
 **`enabled` controls per-tick run intent:**
+- Children are disabled by default: the zero value is `false`, so a ChildSpec that
+  never sets `Enabled` spawns a child held in Stopped with no validation error.
+  Set it explicitly in every spec.
 - Alive-trajectory states pass `true` (children run).
 - Stop states pass `false` (children stay resident via `IsDisabled=true`).
 - Stateless/cheap children (e.g., exampleparent's examplechild) emit `[]config.ChildSpec{}`

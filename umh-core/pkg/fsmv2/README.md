@@ -463,6 +463,8 @@ In your states' `Next()`:
 
 The supervisor reconciles from this slice. Omitting a child despawns it; including it with `Enabled=false` keeps it resident in Stopped.
 
+> **Note:** children are disabled by default. `Enabled` is a plain bool whose zero value is `false`, so a spec that never sets it produces a child that spawns but stays in Stopped — with no validation error. Set `Enabled` explicitly in every spec, or build specs via `config.NewChildSpec`, which requires it as a parameter.
+
 See `config/childspec.go` for `ChildSpec` fields (Enabled, ChildStartStates, UserSpec, Variables). For the despawn variant see `workers/example/exampleparent/children.go`. For the resident-disable variant see `workers/transport/snapshot/children.go`.
 
 **Accessing children's state from the parent**:

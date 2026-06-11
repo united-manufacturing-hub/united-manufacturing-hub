@@ -242,6 +242,11 @@ type ChildSpec struct {
 	// without being despawned. Setting Enabled=false then Enabled=true resumes
 	// the child on the next tick. Children read snap.IsDisabled, not Enabled
 	// directly; the disable-mapping pass translates Enabled to IsDisabled.
+	//
+	// Caution: children are disabled by default. A ChildSpec constructed
+	// without setting Enabled spawns a child that is held in Stopped, with
+	// no validation error. Every child that should run must set Enabled
+	// explicitly (NewChildSpec takes it as a required parameter).
 	Enabled bool `json:"enabled" yaml:"enabled"`
 }
 
