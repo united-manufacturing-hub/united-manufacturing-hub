@@ -1699,6 +1699,25 @@ var _ = Describe("EditProtocolConverter", func() {
 				}
 			}
 
+			// brokenWriteDFCPayload embeds a multi-line block-scalar
+			// value in the output map. yaml.Marshal turns it into a
+			// block literal; {{ .inject }} expands to a column-0 line
+			// that terminates the scalar and breaks YAML unmarshal.
+			brokenWriteDFCPayload := func() map[string]interface{} {
+				return map[string]interface{}{
+					"name": pcName,
+					"uuid": pcUUID.String(),
+					"writeDFC": map[string]interface{}{
+						"output": map[string]interface{}{
+							"http_client": map[string]interface{}{
+								"url": "line1\n{{ .inject }}",
+							},
+						},
+						"input_topics": "umh.v1.factory.*",
+					},
+				}
+			}
+
 			// newVariablePayload is a VALID edit that introduces a template variable
 			// the observed spec does not have yet.
 			newVariablePayload := func() map[string]interface{} {
@@ -2015,6 +2034,61 @@ var _ = Describe("EditProtocolConverter", func() {
 				Expect(localAction.LastRenderErr()).NotTo(HaveOccurred())
 			})
 
+			It("skips the render when the observed read Benthos config is absent", func() {
+				// While Benthos is stopped or restarting the observed Input map
+				// is nil. Such a tick must skip the render entirely: rendering
+				// against the not-yet-populated observed spec fails for reasons
+				// unrelated to the edit, so it must contribute neither to the
+				// fail-fast streak nor to lastRenderErr. Regression context:
+				// the absence guard used to compare an interface{} sentinel
+				// against nil, and a nil map stored in an interface is a typed
+				// nil that compares non-nil, so the guard never fired and the
+				// render ran anyway.
+				localAction := actions.NewEditProtocolConverterAction(userEmail, actionUUID, instanceUUID, localOutbound, mockConfig, snapshotMgr)
+				Expect(localAction.Parse(brokenReadDFCPayload())).To(Succeed())
+				Expect(localAction.Validate()).To(Succeed())
+
+				// Observed state with an empty spec and nil observed Input,
+				// normal while Benthos is stopped or restarting.
+				emptyObserved := &protocolconverter.ProtocolConverterObservedStateSnapshot{
+					ServiceInfo: protocolconvertersvc.ServiceInfo{
+						DataflowComponentReadFSMState: protocolconverter.OperationalStateIdle,
+						// DataflowComponentReadObservedState left zero:
+						// ObservedBenthosServiceConfig.Input is nil.
+					},
+				}
+
+				matched, renderErr := localAction.CompareProtocolConverterDFCConfig(emptyObserved)
+				Expect(matched).To(BeFalse())
+				Expect(renderErr).NotTo(HaveOccurred())
+				Expect(localAction.LastRenderErr()).NotTo(HaveOccurred())
+			})
+
+			It("skips the render when the observed write Benthos config is absent", func() {
+				// Write-side mirror of the spec above: the DFCTypeWrite branch
+				// carries its own absence check on the observed Output map, so
+				// a nil Output must skip the render just like a nil Input does
+				// on the read side.
+				localAction := actions.NewEditProtocolConverterAction(userEmail, actionUUID, instanceUUID, localOutbound, mockConfig, snapshotMgr)
+				Expect(localAction.Parse(brokenWriteDFCPayload())).To(Succeed())
+				Expect(localAction.Validate()).To(Succeed())
+
+				// Observed state with an empty spec and nil observed Output,
+				// normal while Benthos is stopped or restarting.
+				emptyObserved := &protocolconverter.ProtocolConverterObservedStateSnapshot{
+					ServiceInfo: protocolconvertersvc.ServiceInfo{
+						DataflowComponentWriteFSMState: protocolconverter.OperationalStateIdle,
+						// DataflowComponentWriteObservedState left zero:
+						// ObservedBenthosServiceConfig.Output is nil.
+					},
+				}
+
+				matched, renderErr := localAction.CompareProtocolConverterDFCConfig(emptyObserved)
+				Expect(matched).To(BeFalse())
+				Expect(renderErr).NotTo(HaveOccurred())
+				Expect(localAction.LastRenderErr()).NotTo(HaveOccurred())
+			})
+
 			It("renders with the edit's own template variables when the observed spec lacks them", func() {
 				// An edit that introduces a new variable races the control loop:
 				// the observed spec keeps the pre-edit variables until the FSM
@@ -2106,25 +2180,6 @@ var _ = Describe("EditProtocolConverter", func() {
 									},
 								},
 							},
-						},
-					}
-				}
-
-				// brokenWriteDFCPayload embeds a multi-line block-scalar
-				// value in the output map. yaml.Marshal turns it into a
-				// block literal; {{ .inject }} expands to a column-0 line
-				// that terminates the scalar and breaks YAML unmarshal.
-				brokenWriteDFCPayload := func() map[string]interface{} {
-					return map[string]interface{}{
-						"name": pcName,
-						"uuid": pcUUID.String(),
-						"writeDFC": map[string]interface{}{
-							"output": map[string]interface{}{
-								"http_client": map[string]interface{}{
-									"url": "line1\n{{ .inject }}",
-								},
-							},
-							"input_topics": "umh.v1.factory.*",
 						},
 					}
 				}

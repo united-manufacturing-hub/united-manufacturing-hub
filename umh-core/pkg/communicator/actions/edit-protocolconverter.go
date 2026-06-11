@@ -689,7 +689,7 @@ func (a *EditProtocolConverterAction) awaitRollout(pcConfig config.ProtocolConve
 				}
 
 				// When desired state is "stopped", the Benthos process is not running so
-				// compareProtocolConverterDFCConfig always returns false (observed Input is nil).
+				// compareProtocolConverterDFCConfig returns false (observed config not populated).
 				// Check the state first to avoid an infinite loop in this case.
 				if desiredPCState == protocolconverter.OperationalStateStopped {
 					if instance.CurrentState == protocolconverter.OperationalStateStopped {
@@ -974,8 +974,8 @@ func (a *EditProtocolConverterAction) compareSingleDFCConfig(pcSnapshot *protoco
 		desiredState      string
 		observedFSMState  string
 		observedDFCConfig dataflowcomponentserviceconfig.DataflowComponentServiceConfig
-		presenceField     interface{} // the field that indicates the observed config is available
-		excludeInput      bool        // true for write DFC (input is auto-generated)
+		hasObservedConfig bool // true when the observed Benthos config is populated
+		excludeInput      bool // true for write DFC (input is auto-generated)
 	)
 
 	switch dfcType {
@@ -983,13 +983,13 @@ func (a *EditProtocolConverterAction) compareSingleDFCConfig(pcSnapshot *protoco
 		desiredState = a.readDFCState
 		observedFSMState = pcSnapshot.ServiceInfo.DataflowComponentReadFSMState
 		obs := pcSnapshot.ServiceInfo.DataflowComponentReadObservedState.ServiceInfo.BenthosObservedState.ObservedBenthosServiceConfig
-		presenceField = obs.Input
+		hasObservedConfig = obs.Input != nil
 		observedDFCConfig = observedBenthosToServiceConfig(obs)
 	case DFCTypeWrite:
 		desiredState = a.writeDFCState
 		observedFSMState = pcSnapshot.ServiceInfo.DataflowComponentWriteFSMState
 		obs := pcSnapshot.ServiceInfo.DataflowComponentWriteObservedState.ServiceInfo.BenthosObservedState.ObservedBenthosServiceConfig
-		presenceField = obs.Output
+		hasObservedConfig = obs.Output != nil
 		observedDFCConfig = observedBenthosToServiceConfig(obs)
 		excludeInput = true
 	default:
@@ -1001,7 +1001,12 @@ func (a *EditProtocolConverterAction) compareSingleDFCConfig(pcSnapshot *protoco
 		return observedFSMState == protocolconverter.OperationalStateStopped, nil
 	}
 
-	if presenceField == nil {
+	// While Benthos is stopped or restarting the observed config is not
+	// populated yet. Skip the render entirely: rendering against the
+	// not-yet-populated observed state fails for reasons unrelated to the
+	// edit and must not count toward the fail-fast streak or overwrite
+	// lastRenderErr.
+	if !hasObservedConfig {
 		return false, nil
 	}
 
