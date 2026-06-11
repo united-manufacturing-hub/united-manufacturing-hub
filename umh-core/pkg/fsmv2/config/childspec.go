@@ -227,10 +227,10 @@ func (u UserSpec) Clone() UserSpec {
 //	    },
 //	}
 type ChildSpec struct {
-	Dependencies     map[string]any `json:"dependencies,omitempty"     yaml:"dependencies,omitempty"`     // Additional deps to merge with parent's deps (child overrides parent)
-	UserSpec         UserSpec       `json:"userSpec"                   yaml:"userSpec"`                   // Raw user config (input to DeriveDesiredState)
-	Name             string         `json:"name"                       yaml:"name"`                       // Unique name for this child (within parent scope)
-	WorkerType       string         `json:"workerType"                 yaml:"workerType"`                 // Type of worker to create (registered worker factory key)
+	Dependencies map[string]any `json:"dependencies,omitempty"     yaml:"dependencies,omitempty"` // Additional deps to merge with parent's deps (child overrides parent)
+	UserSpec     UserSpec       `json:"userSpec"                   yaml:"userSpec"`               // Raw user config (input to DeriveDesiredState)
+	Name         string         `json:"name"                       yaml:"name"`                   // Unique name for this child (within parent scope)
+	WorkerType   string         `json:"workerType"                 yaml:"workerType"`             // Type of worker to create (registered worker factory key)
 	// Deprecated. Only the application worker still consumes ChildStartStates
 	// (via computeMappedState in reconciliation.go). Other workers leave it
 	// empty. Remove together with computeMappedState when the application
@@ -386,14 +386,14 @@ type ChildInfo struct {
 //	    ChildrenUnhealthy int
 //	}
 //
-// 2. Implement SetChildrenView on your ObservedState (the supervisor calls it
-//    automatically through the ChildrenViewConsumer capability interface):
+//  2. Implement SetChildrenView on your ObservedState (the supervisor calls it
+//     automatically through the ChildrenViewConsumer capability interface):
 //
-//	func (o MyObservedState) SetChildrenView(view config.ChildrenView) fsmv2.ObservedState {
-//	    o.ChildrenHealthy = view.HealthyCount
-//	    o.ChildrenUnhealthy = view.UnhealthyCount
-//	    return o
-//	}
+//     func (o MyObservedState) SetChildrenView(view config.ChildrenView) fsmv2.ObservedState {
+//     o.ChildrenHealthy = view.HealthyCount
+//     o.ChildrenUnhealthy = view.UnhealthyCount
+//     return o
+//     }
 //
 // 3. Access children info in State.Next() via the snapshot:
 //
@@ -426,18 +426,17 @@ type ChildrenView struct {
 // slice is normalised to empty so CSE delta-sync produces a stable JSON shape
 // across ticks.
 func NewChildrenView(children []ChildInfo) ChildrenView {
-	if children == nil {
-		children = []ChildInfo{}
-	}
+	childrenCopy := make([]ChildInfo, len(children))
+	copy(childrenCopy, children)
 
 	view := ChildrenView{
-		Children:       children,
+		Children:       childrenCopy,
 		AllHealthy:     true,
 		AllOperational: true,
 		AllStopped:     true,
 	}
 
-	for _, c := range children {
+	for _, c := range childrenCopy {
 		if c.IsHealthy {
 			view.HealthyCount++
 		} else if !c.IsStopped {
