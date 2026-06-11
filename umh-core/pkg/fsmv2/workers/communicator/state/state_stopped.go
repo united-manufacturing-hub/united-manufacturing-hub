@@ -34,11 +34,25 @@ type StoppedState struct {
 func (s *StoppedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := fsmv2.ConvertWorkerSnapshot[communicator.CommunicatorConfig, communicator.CommunicatorStatus](snapAny)
 
-	if snap.IsShutdownRequested {
-		return fsmv2.Transition(s, fsmv2.SignalNeedsRemoval, nil, "Communicator is stopped and shutdown was requested", nil)
+	stopChildren, err := communicator.RenderChildren(snap.Config, false)
+	if err != nil {
+		stopChildren = nil
 	}
 
-	return fsmv2.Transition(&SyncingState{}, fsmv2.SignalNone, nil, "Starting sync orchestration", nil)
+	if snap.IsShutdownRequested {
+		return fsmv2.Transition(s, fsmv2.SignalNeedsRemoval, nil, "Communicator is stopped and shutdown was requested", stopChildren)
+	}
+
+	if snap.IsDisabled {
+		return fsmv2.Transition(s, fsmv2.SignalNone, nil, "Disabled by supervisor, staying stopped", stopChildren)
+	}
+
+	aliveChildren, err := communicator.RenderChildren(snap.Config, true)
+	if err != nil {
+		aliveChildren = nil
+	}
+
+	return fsmv2.Transition(&SyncingState{}, fsmv2.SignalNone, nil, "Starting sync orchestration", aliveChildren)
 }
 
 func (s *StoppedState) String() string {

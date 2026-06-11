@@ -32,6 +32,9 @@ children:
     userSpec:
       config: |
         children_count: 2
+        child_config: |
+          address: "{{ .IP }}:{{ .PORT }}"
+          device: "{{ .DEVICE_ID }}"
       variables:
         user:
           IP: "192.168.1.100"

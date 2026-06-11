@@ -161,9 +161,8 @@ func (w *TransportWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredSta
 	// a real spec is parsed.
 	if spec == nil {
 		return &fsmv2.WrappedDesiredState[snapshot.TransportDesiredState]{
-			State:         config.DesiredStateRunning,
-			ChildrenSpecs: append(makePushChildSpec(config.UserSpec{}), makePullChildSpec(config.UserSpec{})...),
-			Config:        snapshot.TransportDesiredState{},
+			State:  config.DesiredStateRunning,
+			Config: snapshot.TransportDesiredState{},
 		}, nil
 	}
 
@@ -206,8 +205,7 @@ func (w *TransportWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredSta
 
 	// Build desired state with valid state values only ("stopped" or "running")
 	return &fsmv2.WrappedDesiredState[snapshot.TransportDesiredState]{
-		State:         transportSpec.GetState(),
-		ChildrenSpecs: append(makePushChildSpec(userSpec), makePullChildSpec(userSpec)...),
+		State: transportSpec.GetState(),
 		Config: snapshot.TransportDesiredState{
 			RelayURL:     transportSpec.RelayURL,
 			InstanceUUID: transportSpec.InstanceUUID,
@@ -236,34 +234,4 @@ func init() {
 			register.SetDeps[*TransportDependencies](transportDepsKey, w.GetDependencies())
 			return w, nil
 		})
-}
-
-// makePushChildSpec creates the ChildSpec for the PushWorker child.
-// PushWorker runs when TransportWorker is in "Running" or "Degraded" states.
-// Including "Degraded" prevents an oscillation loop where Push stops on parent
-// degradation (caused by Push being unhealthy), parent recovers (no unhealthy children),
-// Push restarts, and the cycle repeats.
-func makePushChildSpec(parentSpec config.UserSpec) []config.ChildSpec {
-	return []config.ChildSpec{
-		{
-			Name:             "push",
-			WorkerType:       "push",
-			UserSpec:         config.UserSpec{Config: parentSpec.Config, Variables: parentSpec.Variables},
-			ChildStartStates: []string{"Running", "Degraded"},
-		},
-	}
-}
-
-// makePullChildSpec creates the ChildSpec for the PullWorker child.
-// PullWorker runs when TransportWorker is in "Running" or "Degraded" states,
-// mirroring PushWorker's lifecycle to prevent the same oscillation issue.
-func makePullChildSpec(parentSpec config.UserSpec) []config.ChildSpec {
-	return []config.ChildSpec{
-		{
-			Name:             "pull",
-			WorkerType:       "pull",
-			UserSpec:         config.UserSpec{Config: parentSpec.Config, Variables: parentSpec.Variables},
-			ChildStartStates: []string{"Running", "Degraded"},
-		},
-	}
 }
