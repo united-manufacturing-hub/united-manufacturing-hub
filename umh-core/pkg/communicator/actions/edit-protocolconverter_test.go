@@ -2464,6 +2464,375 @@ var _ = Describe("EditProtocolConverter", func() {
 				Expect(events).To(ContainElement("edit_protocol_converter_render_failure_rolled_back"))
 				Expect(events).NotTo(ContainElement("edit_protocol_converter_rollout_failed"))
 			})
+
+			// ── ENG-5103 templateVars/connectionIP divergence specs ──────────────
+
+			// observedStateWithIPPort builds a PC observed-state snapshot where
+			// the observed spec carries the given IP in Variables.User and the
+			// observed Benthos Input/Pipeline already contain the rendered values
+			// from that same IP. This models the normal steady-state: Benthos is
+			// running the config that was persisted before the current edit.
+			//
+			// IMPORTANT: the DFC payload string "input:\n  http_client:\n    url:
+			// ..." is parsed by yaml.Unmarshal into {"input": {"http_client": ...}}
+			// (outer "input" wrapper preserved). The observed Benthos Input must
+			// carry the same outer wrapper to match the render.
+			//
+			// The pipeline structure mirrors what connectionIPPayload produces
+			// after CreateBenthosConfigFromCDFCPayload + NormalizeBenthosConfig +
+			// RenderTemplate (YAML round-trip). This is essential for the Spec 2
+			// premature-match scenario: the comparison only fires when the
+			// observed pipeline matches the rendered desired pipeline, leaving the
+			// URL as the sole distinguishing field.
+			observedStateWithIPPort := func(observedIP string) *protocolconverter.ProtocolConverterObservedStateSnapshot {
+				// The outer "input" wrapper comes from the YAML string
+				// "input:\n  http_client:\n    url: 'http://{{ .IP }}'"
+				// which yaml.Unmarshal parses as {"input": {"http_client": ...}}.
+				renderedInput := map[string]interface{}{
+					"input": map[string]interface{}{
+						"http_client": map[string]interface{}{
+							"url": "http://" + observedIP,
+						},
+					},
+				}
+				// The pipeline here must exactly match what connectionIPPayload
+				// produces after parse + render.  The processor "bloblang: root =
+				// content()" is YAML-unmarshalled into {"bloblang": "root =
+				// content()"} by CreateBenthosConfigFromCDFCPayload, wrapped in
+				// {"processors": [...]}, and survives RenderTemplate unchanged
+				// (no template markers). NormalizeBenthosConfig does not alter it.
+				renderedPipeline := map[string]interface{}{
+					"processors": []interface{}{
+						map[string]interface{}{
+							"bloblang": "root = content()",
+						},
+					},
+				}
+				return &protocolconverter.ProtocolConverterObservedStateSnapshot{
+					ObservedProtocolConverterSpecConfig: protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
+						Config: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
+							ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
+								NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
+									Target: "localhost",
+									Port:   "80",
+								},
+							},
+							DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+								BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
+									Input: map[string]interface{}{
+										"http_client": map[string]interface{}{
+											"url": "http://{{ .IP }}",
+										},
+									},
+									Pipeline: map[string]interface{}{
+										"processors": []interface{}{
+											map[string]interface{}{
+												"bloblang": "root = content()",
+											},
+										},
+									},
+								},
+							},
+						},
+						Variables: variables.VariableBundle{
+							User: map[string]interface{}{
+								"IP": observedIP,
+							},
+						},
+						Location: map[string]string{"0": "test-enterprise"},
+					},
+					ServiceInfo: protocolconvertersvc.ServiceInfo{
+						DataflowComponentReadFSMState: protocolconverter.OperationalStateIdle,
+						DataflowComponentReadObservedState: dfcfsm.DataflowComponentObservedState{
+							ServiceInfo: dfcsvc.ServiceInfo{
+								BenthosObservedState: benthosfsm.BenthosObservedState{
+									ObservedBenthosServiceConfig: benthosserviceconfig.BenthosServiceConfig{
+										Input:    renderedInput,
+										Pipeline: renderedPipeline,
+									},
+								},
+							},
+						},
+					},
+				}
+			}
+
+			// observedStateNoIPInVars is like observedStateWithIPPort but the
+			// observed spec's Variables.User does NOT contain IP or PORT at all.
+			// This represents a bridge that was configured before the IP variable
+			// was introduced (or whose spec snapshot has not yet caught up).
+			observedStateNoIPInVars := func() *protocolconverter.ProtocolConverterObservedStateSnapshot {
+				// Observed Benthos is running with a literal URL (no template vars).
+				renderedInput := map[string]interface{}{
+					"http_client": map[string]interface{}{
+						"url": "http://example.com",
+					},
+				}
+				return &protocolconverter.ProtocolConverterObservedStateSnapshot{
+					ObservedProtocolConverterSpecConfig: protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
+						Config: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
+							ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
+								NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
+									Target: "localhost",
+									Port:   "80",
+								},
+							},
+							// DFC template references {{ .IP }} but observed Variables.User
+							// has no IP key — models the pre-edit snapshot that hasn't
+							// propagated yet, or a bridge never configured with IP.
+							DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+								BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
+									Input: map[string]interface{}{
+										"http_client": map[string]interface{}{
+											"url": "http://{{ .IP }}",
+										},
+									},
+									Pipeline: map[string]interface{}{
+										"processors": []interface{}{
+											map[string]interface{}{
+												"bloblang": "root = content()",
+											},
+										},
+									},
+								},
+							},
+						},
+						Variables: variables.VariableBundle{
+							User: map[string]interface{}{
+								// Deliberately empty: no IP, no PORT.
+							},
+						},
+						Location: map[string]string{"0": "test-enterprise"},
+					},
+					ServiceInfo: protocolconvertersvc.ServiceInfo{
+						DataflowComponentReadFSMState: protocolconverter.OperationalStateIdle,
+						DataflowComponentReadObservedState: dfcfsm.DataflowComponentObservedState{
+							ServiceInfo: dfcsvc.ServiceInfo{
+								BenthosObservedState: benthosfsm.BenthosObservedState{
+									ObservedBenthosServiceConfig: benthosserviceconfig.BenthosServiceConfig{
+										Input: renderedInput,
+									},
+								},
+							},
+						},
+					},
+				}
+			}
+
+			// connectionIPPayload returns a parse payload for an edit that sets
+			// a new connectionIP and carries the given extra templateVars (may be nil).
+			// The read DFC template references {{ .IP }} so the render is sensitive
+			// to whether connectionIP is overlaid into the variable scope.
+			connectionIPPayload := func(newIP string, extraVars []interface{}) map[string]interface{} {
+				payload := map[string]interface{}{
+					"name": pcName,
+					"uuid": pcUUID.String(),
+					"connection": map[string]interface{}{
+						"ip":   newIP,
+						"port": 80,
+					},
+					"readDFC": map[string]interface{}{
+						"inputs": map[string]interface{}{
+							"data": "input:\n  http_client:\n    url: 'http://{{ .IP }}'",
+							"type": "http_client",
+						},
+						"pipeline": map[string]interface{}{
+							"processors": map[string]interface{}{
+								"0": map[string]interface{}{
+									"type": "bloblang",
+									"data": "bloblang: root = content()",
+								},
+							},
+						},
+						"state": "active",
+					},
+				}
+				if len(extraVars) > 0 {
+					payload["templateInfo"] = map[string]interface{}{
+						"variables": extraVars,
+					}
+				}
+				return payload
+			}
+
+			It("verification render does not fail when the edit sets a connection IP that the observed spec lacks", func() {
+				// Consequence (a) of the applyMutation/renderDesiredDFCConfig divergence:
+				// an edit that sets connectionIP where the observed spec's Variables.User
+				// has no IP key causes every verification-render tick to fail with
+				// missingkey=error because renderDesiredDFCConfig never overlays the
+				// connection values. The fail-fast streak then rolls back a valid edit.
+				//
+				// This spec drives CompareProtocolConverterDFCConfig directly (no ticks)
+				// and asserts the render succeeds — it FAILS today because the IP overlay
+				// is absent from renderDesiredDFCConfig.
+				localAction := actions.NewEditProtocolConverterAction(userEmail, actionUUID, instanceUUID, localOutbound, mockConfig, snapshotMgr)
+
+				// Edit carries a new IP but no templateVars: the only way the render
+				// can know the IP is if renderDesiredDFCConfig overlays connectionIP.
+				Expect(localAction.Parse(connectionIPPayload("10.0.0.1", nil))).To(Succeed())
+				Expect(localAction.Validate()).To(Succeed())
+
+				// Observed spec has no IP in Variables.User; the template references {{ .IP }}.
+				matched, renderErr := localAction.CompareProtocolConverterDFCConfig(observedStateNoIPInVars())
+
+				// The render MUST succeed: a valid edit with a new IP must not produce
+				// a render failure. Today this assertion fails because renderDesiredDFCConfig
+				// skips the IP overlay (templateVars is empty).
+				Expect(renderErr).NotTo(HaveOccurred(),
+					"render must succeed using the edit's connectionIP, not fail with missingkey=error on {{ .IP }}")
+
+				// The comparison itself may or may not match (observed lags edit);
+				// the critical invariant is the absence of a render error.
+				_ = matched
+			})
+
+			It("connection-only edit renders the desired config with the new IP, not the stale observed IP", func() {
+				// Consequence (b) of the divergence: a connection-only edit (new IP,
+				// empty templateVars) renders with the stale observed IP because
+				// renderDesiredDFCConfig's overlay block is gated on
+				// len(a.templateVars) > 0. The rendered desired config therefore
+				// matches the already-deployed observed config, and compareProtocolConverterDFCConfig
+				// returns true prematurely — the action reports success while the
+				// bridge is still running the old IP.
+				//
+				// This spec asserts the comparison is false (not-yet-matched) when the
+				// edit's IP differs from the observed IP. It FAILS today because
+				// renderDesiredDFCConfig returns the stale render, making the configs equal.
+				oldIP := "10.0.0.1"
+				newIP := "10.0.0.2"
+
+				localAction := actions.NewEditProtocolConverterAction(userEmail, actionUUID, instanceUUID, localOutbound, mockConfig, snapshotMgr)
+
+				// Connection-only edit: new IP, no templateVars.
+				Expect(localAction.Parse(connectionIPPayload(newIP, nil))).To(Succeed())
+				Expect(localAction.Validate()).To(Succeed())
+
+				// Observed state: spec has old IP, Benthos already rendered with old IP.
+				matched, renderErr := localAction.CompareProtocolConverterDFCConfig(observedStateWithIPPort(oldIP))
+
+				Expect(renderErr).NotTo(HaveOccurred(), "render must not fail")
+
+				// The desired config (new IP) must NOT match the observed config (old IP).
+				// Today this assertion fails: renderDesiredDFCConfig produces the stale
+				// old-IP render (because the templateVars block is skipped), which equals
+				// the observed config, so matched is incorrectly true.
+				Expect(matched).To(BeFalse(),
+					"the desired config rendered with the new IP must not match the observed config rendered with the old IP")
+			})
+
+		})
+
+		Context("persisting merged user variables", func() {
+			// ENG-5103: applyMutation builds the persisted Variables.User via
+			// mergeUserVariables. These specs pin the persist-path contract:
+			// what ends up in config.yaml after a successful edit. The
+			// suite-level action carries no snapshot manager, so Execute()
+			// returns right after the atomic edit without awaiting rollout —
+			// the persisted config is the entire observable output.
+
+			editPayload := func(ip string, port int, vars []interface{}) map[string]interface{} {
+				payload := map[string]interface{}{
+					"name": pcName,
+					"uuid": pcUUID.String(),
+					"connection": map[string]interface{}{
+						"ip":   ip,
+						"port": port,
+					},
+					"readDFC": map[string]interface{}{
+						"inputs": map[string]interface{}{
+							"data": "input:\n  http_client:\n    url: 'http://{{ .IP }}'",
+							"type": "http_client",
+						},
+						"pipeline": map[string]interface{}{
+							"processors": map[string]interface{}{
+								"0": map[string]interface{}{
+									"type": "bloblang",
+									"data": "bloblang: root = content()",
+								},
+							},
+						},
+						"state": "active",
+					},
+				}
+				if len(vars) > 0 {
+					payload["templateInfo"] = map[string]interface{}{
+						"variables": vars,
+					}
+				}
+
+				return payload
+			}
+
+			persistedUserVars := func() map[string]any {
+				return mockConfig.AtomicEditProtocolConverterLastConfig.ProtocolConverterServiceConfig.Variables.User
+			}
+
+			It("does not persist templateVars named location or location_path", func() {
+				// BuildRuntimeConfig injects location and location_path into
+				// the variable scope on every render, so these agent-derived
+				// keys must never end up persisted in config.yaml's
+				// Variables.User. On the render path the injection makes the
+				// delete inert; the persist path is where the guard is
+				// load-bearing. This pins the delete(merged, "location") /
+				// delete(merged, "location_path") lines in mergeUserVariables.
+				vars := []interface{}{
+					map[string]interface{}{"label": "location", "value": "WRONG_LOCATION"},
+					map[string]interface{}{"label": "location_path", "value": "wrong.path"},
+					map[string]interface{}{"label": "benign", "value": "kept"},
+				}
+				Expect(action.Parse(editPayload("10.0.0.1", 80, vars))).To(Succeed())
+				Expect(action.Validate()).To(Succeed())
+
+				_, _, err := action.Execute()
+				Expect(err).NotTo(HaveOccurred())
+
+				user := persistedUserVars()
+				Expect(user).NotTo(HaveKey("location"))
+				Expect(user).NotTo(HaveKey("location_path"))
+				// The benign templateVar survives: the guard removes only the
+				// two agent-derived keys, not the whole overlay.
+				Expect(user).To(HaveKeyWithValue("benign", "kept"))
+			})
+
+			It("persists the connection IP over a templateVar named IP", func() {
+				// IP and PORT are exposed as flattened user variables, so a
+				// client can send a templateVar labelled "IP" alongside the
+				// authoritative Connection block. The connection value wins:
+				// mergeUserVariables overlays connectionIP/connectionPort
+				// after the templateVars loop.
+				vars := []interface{}{
+					map[string]interface{}{"label": "IP", "value": "10.0.0.99"},
+				}
+				Expect(action.Parse(editPayload("10.0.0.1", 80, vars))).To(Succeed())
+				Expect(action.Validate()).To(Succeed())
+
+				_, _, err := action.Execute()
+				Expect(err).NotTo(HaveOccurred())
+
+				Expect(persistedUserVars()).To(HaveKeyWithValue("IP", "10.0.0.1"))
+			})
+
+			It("persists templateVars and the connection IP and PORT into the user variables", func() {
+				// A successful edit writes the edit's own templateVars plus
+				// the connection-derived IP and PORT into Variables.User
+				// (PORT only when non-zero; happy path here). This is the
+				// persist-path coverage for the mergeUserVariables call in
+				// applyMutation: dropping that call keeps the pre-edit map
+				// ({IP: wttr.in, PORT: 80}) and loses the edit entirely.
+				vars := []interface{}{
+					map[string]interface{}{"label": "baudRate", "value": "9600"},
+				}
+				Expect(action.Parse(editPayload("10.0.0.5", 8080, vars))).To(Succeed())
+				Expect(action.Validate()).To(Succeed())
+
+				_, _, err := action.Execute()
+				Expect(err).NotTo(HaveOccurred())
+
+				user := persistedUserVars()
+				Expect(user).To(HaveKeyWithValue("baudRate", "9600"))
+				Expect(user).To(HaveKeyWithValue("IP", "10.0.0.5"))
+				Expect(user).To(HaveKeyWithValue("PORT", "8080"))
+			})
 		})
 
 		It("should handle config manager get config failure", func() {

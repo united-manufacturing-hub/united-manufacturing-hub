@@ -395,28 +395,13 @@ func (a *EditProtocolConverterAction) applyMutation() (config.ProtocolConverterC
 	var (
 		instanceToModify = targetPC
 		atomicEditUUID   = a.protocolConverterUUID
-		newVB            map[string]any
 	)
 
-	// Add the new variables and preserve existing variables
-	newVB = make(map[string]any)
-
-	// First copy existing variables (provides defaults)
-	if targetPC.ProtocolConverterServiceConfig.Variables.User != nil {
-		maps.Copy(newVB, targetPC.ProtocolConverterServiceConfig.Variables.User)
-	}
-
-	// Then add new variables (overwrites with updated values)
-	for _, variable := range a.templateVars {
-		newVB[variable.Label] = variable.Value
-	}
-
-	// As the BuildRuntimeConfig function always adds location and location_path to the user variables,
-	// we need to remove them from the variables here to avoid that they end up in the config file
-	delete(newVB, "location")
-	delete(newVB, "location_path")
-
-	instanceToModify.ProtocolConverterServiceConfig.Variables.User = newVB
+	// Merge template variables, connection IP/PORT, and strip agent-injected
+	// location keys using the shared helper so persist and verify stay in sync.
+	instanceToModify.ProtocolConverterServiceConfig.Variables.User = a.mergeUserVariables(
+		targetPC.ProtocolConverterServiceConfig.Variables.User,
+	)
 
 	// Apply read DFC config if provided.
 	if a.readDFCSvcCfg != nil {
@@ -434,19 +419,6 @@ func (a *EditProtocolConverterAction) applyMutation() (config.ProtocolConverterC
 	instanceToModify.ProtocolConverterServiceConfig.Config.ConnectionServiceConfig = newIPPortConnectionTemplate()
 
 	instanceToModify.ProtocolConverterServiceConfig.Location = convertIntMapToStringMap(a.location)
-
-	// Update the connection details of the protocol converter (IP and PORT variables).
-	// Only overwrite when non-empty: an edit that omits connection details should
-	// preserve the existing values rather than blanking them out.
-	if instanceToModify.ProtocolConverterServiceConfig.Variables.User != nil {
-		if a.connectionIP != "" {
-			instanceToModify.ProtocolConverterServiceConfig.Variables.User["IP"] = a.connectionIP
-		}
-
-		if a.connectionPort != "" && a.connectionPort != "0" {
-			instanceToModify.ProtocolConverterServiceConfig.Variables.User["PORT"] = a.connectionPort
-		}
-	}
 
 	// Only update the per-DFC desired states if the user provided new values.
 	if a.readDFCState != "" {
@@ -1054,6 +1026,48 @@ func (a *EditProtocolConverterAction) compareSingleDFCConfig(pcSnapshot *protoco
 	return dataflowcomponentserviceconfig.NewComparator().ConfigsEqual(observedDFCConfig, renderedDesiredConfig), nil
 }
 
+// mergeUserVariables produces the authoritative variable map for an edit, starting
+// from base (the caller-supplied existing User map), overlaying the edit's
+// templateVars, deleting the location/location_path keys, and finally overlaying
+// connectionIP as "IP" and connectionPort as "PORT" when those fields are
+// non-empty (and PORT is not "0"). The delete strips agent-injected copies (and
+// any templateVar-supplied copies) so they are not persisted to config.yaml; on
+// the verify path BuildRuntimeConfig overwrites these keys after the merge
+// regardless.
+//
+// Both applyMutation (persist path) and renderDesiredDFCConfig (verify path) call
+// this helper so their variable scopes cannot drift.  base is never modified;
+// the returned map is always a fresh allocation.
+func (a *EditProtocolConverterAction) mergeUserVariables(base map[string]any) map[string]any {
+	merged := make(map[string]any)
+
+	if base != nil {
+		maps.Copy(merged, base)
+	}
+
+	for _, variable := range a.templateVars {
+		merged[variable.Label] = variable.Value
+	}
+
+	// BuildRuntimeConfig always injects location and location_path into the
+	// template scope; strip them here so they do not end up persisted in
+	// config.yaml.
+	delete(merged, "location")
+	delete(merged, "location_path")
+
+	// Only overwrite when non-empty: an edit that omits connection details
+	// preserves the existing values rather than blanking them out.
+	if a.connectionIP != "" {
+		merged["IP"] = a.connectionIP
+	}
+
+	if a.connectionPort != "" && a.connectionPort != "0" {
+		merged["PORT"] = a.connectionPort
+	}
+
+	return merged
+}
+
 // renderDesiredDFCConfig renders the template variables in the desired DFC config
 // using the actual runtime values from the protocol converter observed state.
 // dfcTypeToReturn specifies which side (read or write) to return after rendering.
@@ -1082,30 +1096,16 @@ func (a *EditProtocolConverterAction) renderDesiredDFCConfig(pcSnapshot *protoco
 		modifiedSpec.Config.DataflowComponentWriteServiceConfig = *a.writeDFCInput
 	}
 
-	// Render with the edit's own template variables overlaid, the same merge
-	// applyMutation persists. The observed spec lags the persisted edit by one
-	// or more control-loop cycles (multiple seconds under CPU pressure), so
-	// an edit that introduces a new variable referenced by its DFC would fail
-	// this verification render with a missingkey error, identically every
-	// tick, until the snapshot catches up, and the fail-fast abort would roll
-	// back a valid edit. Variables the edit does not carry keep their
-	// observed values.
-	if len(a.templateVars) > 0 {
-		mergedVars := make(map[string]any)
-
-		if modifiedSpec.Variables.User != nil {
-			maps.Copy(mergedVars, modifiedSpec.Variables.User)
-		}
-
-		for _, variable := range a.templateVars {
-			mergedVars[variable.Label] = variable.Value
-		}
-
-		delete(mergedVars, "location")
-		delete(mergedVars, "location_path")
-
-		modifiedSpec.Variables.User = mergedVars
-	}
+	// Render with the same variable merge that applyMutation persists:
+	// mergeUserVariables overlays templateVars, strips agent-injected location
+	// keys, and overlays connectionIP/PORT.  The observed spec lags the
+	// persisted edit by one or more control-loop cycles (multiple seconds under
+	// CPU pressure), so an edit that introduces a new variable — or changes only
+	// the connection IP — referenced by its DFC would fail this verification
+	// render with a missingkey error on every tick until the snapshot catches up,
+	// and the fail-fast abort would roll back a valid edit.  Variables the edit
+	// does not carry keep their observed values.
+	modifiedSpec.Variables.User = a.mergeUserVariables(modifiedSpec.Variables.User)
 
 	systemSnapshot := a.systemSnapshotManager.GetDeepCopySnapshot()
 
