@@ -1837,65 +1837,111 @@ var _ = Describe("EditProtocolConverter", func() {
 
 			It("keeps waiting while the render error keeps changing, aborting only after it stabilises", func() {
 				updateSnapshot(observedStateWithInject("x\nbroken0: ["))
+				startCollector(nil)
 
-				// Rotate to a fresh render error for the first 5 progress
-				// ticks, then hold it constant; each variant changes the
-				// rendered-output snippet embedded in the error, so the
-				// error string differs from the previous tick's.
-				const lastVariant = 5
-				startCollector(func(n int) {
-					if n <= lastVariant {
+				// Drive snapshot swaps reactively: after each "DFC config
+				// not yet applied" reply confirms a tick ran with variant n,
+				// advance to variant n+1. This avoids the onProgress-callback
+				// race where the swap may land AFTER the next tick started
+				// reading the old snapshot under a loaded CI runner.
+				// After variant 5, the snapshot is held constant so the
+				// streak can finally build to 3 and trigger the abort.
+				go func() {
+					defer GinkgoRecover()
+					for n := 1; n <= 5; n++ {
+						// Wait until n "DFC config not yet applied" replies
+						// have arrived, confirming n ticks ran.
+						Eventually(func() int {
+							return countNotYetApplied()
+						}, "5s", "10ms").Should(BeNumerically(">=", n))
 						updateSnapshot(observedStateWithInject(fmt.Sprintf("x\nbroken%d: [", n)))
 					}
-				})
+				}()
 
-				elapsed, execErr := runEdit(constants.DataflowComponentWaitForActiveTimeout - 5*time.Second)
+				_, execErr := runEdit(constants.DataflowComponentWaitForActiveTimeout - 5*time.Second)
 
 				Expect(execErr).To(HaveOccurred())
 				Expect(execErr.Error()).To(ContainSubstring("was rolled back"))
-				// Ticks 1-6 each saw a fresh error (streak never above 1);
-				// only ticks 7-8 repeat the held variant, so the abort fires
-				// on tick 8. An implementation that aborts while the error
-				// text is still changing returns around tick 3.
-				Expect(elapsed).To(BeNumerically(">=", 7*tick))
+
 				// Wait for the terminal reply before counting: the collector
 				// may still be draining the channel when runEdit returns.
 				finalFailureReply()
+
+				// Each of the 5 rotating variants produced at least one
+				// "not yet applied" reply (streak never above 1 during that
+				// phase). Two more ticks with the held variant raise the
+				// streak to 2 and then 3. Total: at least 7.
 				Expect(countNotYetApplied()).To(BeNumerically(">=", 7))
+
+				// The abort must not have fired during the rotating phase;
+				// only one rollback announcement should appear in total.
+				rollingBack := 0
+				for _, r := range getReplies() {
+					if strings.Contains(r.message, "persistent render failure detected. Rolling back...") {
+						rollingBack++
+					}
+				}
+				Expect(rollingBack).To(Equal(1))
 			})
 
 			It("resets the consecutive counter when a tick fails without a render error", func() {
 				brokenInject := "x\nbroken: ["
 				updateSnapshot(observedStateWithInject(brokenInject))
+				startCollector(nil)
 
-				// Alternate render-failure ticks with failed-without-render-
-				// error ticks (a benign inject renders fine, but the observed
-				// config has not caught up, so the comparison still fails)
-				// for the first 4 progress ticks, then hold the render
-				// failure. Render failures land on ticks 1, 3 and 5 — three
-				// identical failures, but never consecutive.
-				startCollector(func(n int) {
-					if n <= 4 {
-						if n%2 == 1 {
-							updateSnapshot(observedStateWithInject("benign"))
-						} else {
-							updateSnapshot(observedStateWithInject(brokenInject))
-						}
-					}
-				})
+				// Drive snapshot swaps reactively to avoid the onProgress
+				// callback race. Phase 1: tick 1 sees the broken inject
+				// (streak=1). Phase 2: swap to benign; one tick runs with
+				// benign (render succeeds, streak resets to 0). Phase 3:
+				// swap back to broken; streak builds from 0, needing 3
+				// consecutive identical failures before the abort fires.
+				go func() {
+					defer GinkgoRecover()
+					// Wait for the first "DFC config not yet applied" reply
+					// confirming tick 1 ran with the broken inject (streak=1),
+					// then switch to benign.
+					Eventually(func() int {
+						return countNotYetApplied()
+					}, "5s", "10ms").Should(BeNumerically(">=", 1))
+					updateSnapshot(observedStateWithInject("benign"))
 
-				elapsed, execErr := runEdit(constants.DataflowComponentWaitForActiveTimeout - 5*time.Second)
+					// Wait for a second "DFC config not yet applied" reply
+					// confirming the benign tick ran (streak reset to 0),
+					// then restore the broken inject for phase 3.
+					Eventually(func() int {
+						return countNotYetApplied()
+					}, "5s", "10ms").Should(BeNumerically(">=", 2))
+					updateSnapshot(observedStateWithInject(brokenInject))
+				}()
+
+				_, execErr := runEdit(constants.DataflowComponentWaitForActiveTimeout - 5*time.Second)
 
 				Expect(execErr).To(HaveOccurred())
 				Expect(execErr.Error()).To(ContainSubstring("was rolled back"))
-				// Cumulative counting would abort on tick 5 (the third
-				// render failure overall); the first uninterrupted run of 3
-				// completes on tick 7.
-				Expect(elapsed).To(BeNumerically(">=", 6*tick))
+
 				// Wait for the terminal reply before counting: the collector
 				// may still be draining the channel when runEdit returns.
 				finalFailureReply()
-				Expect(countNotYetApplied()).To(BeNumerically(">=", 6))
+
+				// Phase 1 (broken): 1 "not yet applied" reply (streak=1).
+				// Phase 2 (benign): 1 "not yet applied" reply (streak reset
+				// to 0 because render succeeds).
+				// Phase 3 (broken again): 2 "not yet applied" replies
+				// (streak=1 and streak=2) before the abort fires on the
+				// third identical failure. The abort tick sends "Rolling
+				// back..." rather than "not yet applied", so the abort
+				// tick itself does not count. Total: at least 4.
+				Expect(countNotYetApplied()).To(BeNumerically(">=", 4))
+
+				// Exactly one rollback must appear, only after the streak
+				// rebuilt from zero in phase 3.
+				rollingBack := 0
+				for _, r := range getReplies() {
+					if strings.Contains(r.message, "persistent render failure detected. Rolling back...") {
+						rollingBack++
+					}
+				}
+				Expect(rollingBack).To(Equal(1))
 			})
 
 			It("returns the retryable rollback-failed code when the rollback itself fails", func() {
@@ -2010,6 +2056,233 @@ var _ = Describe("EditProtocolConverter", func() {
 				Expect(execErr.Error()).To(ContainSubstring("did not become"))
 
 				Expect(sentryRec.eventNames()).To(ContainElement("edit_protocol_converter_rollout_failed"))
+
+				// Drain the collector before the spec ends: without this, the
+				// terminal reply may still sit in the channel buffer when the
+				// next spec's BeforeEach resets the shared replies slice, and
+				// the still-running collector goroutine then leaks this spec's
+				// ErrRetryRollbackTimeout reply into the next spec's replies.
+				final := finalFailureReply()
+				Expect(final.errorCode).To(Equal(models.ErrRetryRollbackTimeout))
+			})
+
+			It("aborts on writeDFC-only render failure, rolls back, and reports ErrConfigFileInvalid", func() {
+				// The five existing fail-fast specs exercise the readDFC path.
+				// This spec covers the writeDFC-only tuple path in
+				// compareSingleDFCConfig (DFCTypeWrite branch): the Output
+				// presence check gates the render, and a broken template in
+				// the output map produces the same column-0 YAML-termination
+				// failure as the read-side trick.
+
+				// observedStateWithWriteInject mirrors observedStateWithInject
+				// but populates the write side: DataflowComponentWriteFSMState
+				// set and ObservedBenthosServiceConfig.Output non-nil so that
+				// compareSingleDFCConfig reaches the render path.
+				observedStateWithWriteInject := func(inject string) *protocolconverter.ProtocolConverterObservedStateSnapshot {
+					output := map[string]interface{}{"http_client": map[string]interface{}{}}
+					return &protocolconverter.ProtocolConverterObservedStateSnapshot{
+						ObservedProtocolConverterSpecConfig: protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
+							Config: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
+								ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
+									NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
+										Target: "localhost",
+										Port:   "102",
+									},
+								},
+							},
+							Variables: variables.VariableBundle{
+								User: map[string]interface{}{"inject": inject},
+							},
+							Location: map[string]string{"0": "test-enterprise"},
+						},
+						ServiceInfo: protocolconvertersvc.ServiceInfo{
+							DataflowComponentWriteFSMState: protocolconverter.OperationalStateIdle,
+							DataflowComponentWriteObservedState: dfcfsm.DataflowComponentObservedState{
+								ServiceInfo: dfcsvc.ServiceInfo{
+									BenthosObservedState: benthosfsm.BenthosObservedState{
+										ObservedBenthosServiceConfig: benthosserviceconfig.BenthosServiceConfig{
+											Output: output,
+										},
+									},
+								},
+							},
+						},
+					}
+				}
+
+				// brokenWriteDFCPayload embeds a multi-line block-scalar
+				// value in the output map. yaml.Marshal turns it into a
+				// block literal; {{ .inject }} expands to a column-0 line
+				// that terminates the scalar and breaks YAML unmarshal.
+				brokenWriteDFCPayload := func() map[string]interface{} {
+					return map[string]interface{}{
+						"name": pcName,
+						"uuid": pcUUID.String(),
+						"writeDFC": map[string]interface{}{
+							"output": map[string]interface{}{
+								"http_client": map[string]interface{}{
+									"url": "line1\n{{ .inject }}",
+								},
+							},
+							"input_topics": "umh.v1.factory.*",
+						},
+					}
+				}
+
+				updateSnapshot(observedStateWithWriteInject("x\nbroken: ["))
+
+				// Use a private outbound channel so this spec's replies cannot
+				// be contaminated by stale messages from the previous spec's
+				// collector goroutine draining the shared localOutbound.
+				privateOutbound := make(chan *models.UMHMessage, 100)
+				var (
+					privateRepliesMu sync.Mutex
+					privateReplies   []capturedReply
+				)
+				go func() {
+					for msg := range privateOutbound {
+						dec, err := encoding.DecodeMessageFromUMHInstanceToUser(msg.Content)
+						if err != nil {
+							continue
+						}
+						payload, ok := dec.Payload.(map[string]interface{})
+						if !ok {
+							continue
+						}
+						var r capturedReply
+						r.state, _ = payload["actionReplyState"].(string)
+						r.message, _ = payload["actionReplyPayload"].(string)
+						if v2, ok := payload["actionReplyPayloadV2"].(map[string]interface{}); ok {
+							r.errorCode, _ = v2["errorCode"].(string)
+						}
+						privateRepliesMu.Lock()
+						privateReplies = append(privateReplies, r)
+						privateRepliesMu.Unlock()
+					}
+				}()
+
+				localAction := actions.NewEditProtocolConverterAction(userEmail, actionUUID, instanceUUID, privateOutbound, mockConfig, snapshotMgr)
+				localAction.SetTickInterval(tick)
+				localAction.SetFSMLogger(sentryRec)
+				Expect(localAction.Parse(brokenWriteDFCPayload())).To(Succeed())
+				Expect(localAction.Validate()).To(Succeed())
+
+				type execResult struct{ err error }
+				ch := make(chan execResult, 1)
+				start := time.Now()
+				go func() {
+					_, _, err := localAction.Execute()
+					ch <- execResult{err}
+				}()
+
+				var result execResult
+				Eventually(ch, constants.DataflowComponentWaitForActiveTimeout/2).Should(Receive(&result))
+				elapsed := time.Since(start)
+				execErr := result.err
+
+				Expect(execErr).To(HaveOccurred())
+				Expect(execErr.Error()).To(ContainSubstring("render"))
+				Expect(execErr.Error()).To(ContainSubstring("was rolled back"))
+				// Abort requires at least 2 full ticks after the first failure.
+				Expect(elapsed).To(BeNumerically(">=", 2*tick))
+
+				// Wait for the terminal failure reply in the private slice.
+				var final capturedReply
+				Eventually(func() bool {
+					privateRepliesMu.Lock()
+					defer privateRepliesMu.Unlock()
+					for _, r := range privateReplies {
+						if r.state == string(models.ActionFinishedWithFailure) {
+							final = r
+							return true
+						}
+					}
+					return false
+				}, "2s").Should(BeTrue(), "expected a final ActionFinishedWithFailure reply")
+				Expect(final.errorCode).To(Equal(models.ErrConfigFileInvalid))
+			})
+
+			It("streak is preserved across ticks where the manager is absent from the snapshot", func() {
+				// Documents the invariant: ticks that skip the comparison
+				// because the protocol converter manager is missing from the
+				// snapshot leave the streak untouched. A broken render error
+				// that recurs across a manager-absent gap still counts as
+				// consecutive and aborts after 3 identical failures.
+
+				countManagerReplies := func() int {
+					count := 0
+					for _, r := range getReplies() {
+						if strings.Contains(r.message, "waiting for protocol converter manager to initialise") {
+							count++
+						}
+					}
+					return count
+				}
+
+				updateSnapshot(observedStateWithInject("x\nbroken: ["))
+				startCollector(nil)
+
+				// After the first "DFC config not yet applied" reply confirms
+				// tick 1 ran (streak=1), remove the manager for at least 2
+				// ticks. The loop sends "waiting for protocol converter manager
+				// to initialise" on those ticks; we gate on those replies as
+				// proof the gap actually happened (no sleeps). Then restore the
+				// broken snapshot so the streak can resume from 1 and reach 3.
+				go func() {
+					defer GinkgoRecover()
+					Eventually(func() int {
+						return countNotYetApplied()
+					}, "5s", "10ms").Should(BeNumerically(">=", 1))
+
+					snapshotMgr.UpdateSnapshot(&fsm.SystemSnapshot{
+						Managers: map[string]fsm.ManagerSnapshot{},
+					})
+
+					Eventually(func() int {
+						return countManagerReplies()
+					}, "5s", "10ms").Should(BeNumerically(">=", 2))
+
+					updateSnapshot(observedStateWithInject("x\nbroken: ["))
+				}()
+
+				_, execErr := runEdit(constants.DataflowComponentWaitForActiveTimeout / 2)
+
+				Expect(execErr).To(HaveOccurred())
+				Expect(execErr.Error()).To(ContainSubstring("render"))
+				Expect(execErr.Error()).To(ContainSubstring("was rolled back"))
+
+				final := finalFailureReply()
+				Expect(final.errorCode).To(Equal(models.ErrConfigFileInvalid))
+
+				// Confirm the gap was observable: at least 2 manager-absent
+				// ticks appeared before the streak completed.
+				Expect(countManagerReplies()).To(BeNumerically(">=", 2),
+					"at least 2 manager-gap ticks must be visible before abort")
+
+				// Prove the streak SURVIVED the gap, not merely that the abort
+				// eventually happened. Pre-gap the streak reached 1. If it
+				// survives, the first post-gap tick raises it to 2 (one "DFC
+				// config not yet applied" reply) and the next tick is the 3rd
+				// identical failure, which sends "Rolling back..." instead.
+				// A streak RESET by the gap would rebuild from 0 and emit 2
+				// "not yet applied" replies after the gap. Count the replies
+				// following the LAST manager-gap reply: exactly 1.
+				allReplies := getReplies()
+				lastManagerIdx := -1
+				for i, r := range allReplies {
+					if strings.Contains(r.message, "waiting for protocol converter manager to initialise") {
+						lastManagerIdx = i
+					}
+				}
+				Expect(lastManagerIdx).To(BeNumerically(">=", 0))
+				postGapNotYet := 0
+				for _, r := range allReplies[lastManagerIdx+1:] {
+					if strings.Contains(r.message, "DFC config not yet applied") {
+						postGapNotYet++
+					}
+				}
+				Expect(postGapNotYet).To(Equal(1),
+					"streak must survive the gap: exactly 1 not-yet-applied tick after the gap before the 3rd identical failure aborts")
 			})
 		})
 

@@ -727,13 +727,17 @@ func (a *EditProtocolConverterAction) awaitRollout(pcConfig config.ProtocolConve
 				// in the protocol converter snapshot.
 				matched, renderErr := a.compareProtocolConverterDFCConfig(pcSnapshot)
 
-				// Any tick whose comparison runs without a render failure —
-				// it succeeded, or it failed for a non-render reason such as
-				// Benthos still restarting — breaks the consecutive streak.
-				// Ticks that skip the comparison entirely (manager, instance
-				// or state info missing from the snapshot) leave the streak
-				// untouched, so identical failures spanning such gaps still
-				// count as consecutive.
+				// Any tick whose comparison runs without a render failure,
+				// because it succeeded or failed for a non-render reason such
+				// as Benthos still restarting, breaks the consecutive streak.
+				// Ticks that skip the comparison entirely (manager missing,
+				// instance missing, or the LastObservedState cast failing)
+				// leave the streak untouched, so identical failures spanning
+				// such gaps still count as consecutive. A comparison that
+				// reaches compareSingleDFCConfig without a render failure,
+				// including one where the observed Input or Output is nil
+				// because Benthos is stopped or restarting, resets the streak
+				// by design via the renderErr == nil branch below.
 				if renderErr == nil {
 					prevRenderErrMsg = ""
 					identicalRenderFails = 0
