@@ -17,15 +17,20 @@ package state
 import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	exampleparent "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleparent"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 )
 
-// yaml.Marshal of the static BaseUserSpec cannot fail in practice; on the
-// hypothetical error we still return nil so the supervisor falls back to
-// GetChildrenSpecs() rather than emitting an empty children set (which
-// would despawn all children).
+// Returning nil on a RenderChildren error is NOT safe: the supervisor falls
+// back to GetChildrenSpecs(), which is also nil for migrated workers, so
+// reconcileChildren(nil) marks every resident child pendingRemoval (despawn).
+// exampleparent's RenderChildren builds its specs literally and cannot fail
+// today; the guard and log are future-proofing for when it can. The semantic
+// fix (nil = keep last rendered children) is tracked in ENG-5115.
 func childrenAlive(cfg exampleparent.ExampleparentConfig) []config.ChildSpec {
 	specs, err := exampleparent.RenderChildren(cfg, true)
 	if err != nil {
+		logger.For("exampleparent").Errorf("RenderChildren(enabled=true) failed, all resident children will be despawned (ENG-5115): %v", err)
+
 		return nil
 	}
 
