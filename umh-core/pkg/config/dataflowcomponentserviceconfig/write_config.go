@@ -154,11 +154,9 @@ func (c DataflowComponentWriteConfigInput) ToDataflowComponentServiceConfig(brid
 	return c.ToWriteConfig().ToDataflowComponentServiceConfig(bridgedBy)
 }
 
-// splitTopics splits a newline- or comma-separated topic string into a trimmed,
+// splitTopics splits a newline-separated topic string into a trimmed,
 // non-empty []string. YAML list entries prefixed with "- " are also handled.
 func splitTopics(s string) []string {
-	// normalize commas to newlines, then split
-	s = strings.ReplaceAll(s, ",", "\n")
 	parts := strings.Split(s, "\n")
 	out := make([]string, 0, len(parts))
 	for _, p := range parts {

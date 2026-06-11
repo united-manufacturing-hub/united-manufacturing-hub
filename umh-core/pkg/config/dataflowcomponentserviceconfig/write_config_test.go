@@ -32,11 +32,9 @@ var _ = Describe("write_config", func() {
 				Expect(result).To(Equal(expected))
 			},
 			Entry("newline-separated", "a\nb\nc", []string{"a", "b", "c"}),
-			Entry("comma-separated", "a,b,c", []string{"a", "b", "c"}),
-			Entry("mixed newline and comma", "a,b\nc", []string{"a", "b", "c"}),
+			Entry("mixed newline and comma", "a,b\nc", []string{"a,b", "c"}),
 			Entry("trims whitespace", "  a  \n  b  ", []string{"a", "b"}),
 			Entry("skips empty lines", "a\n\nb", []string{"a", "b"}),
-			Entry("all commas (only-commas → empty)", ",,,,", []string{}),
 			Entry("single topic", "umh.v1.factory.*", []string{"umh.v1.factory.*"}),
 			Entry("empty string", "", []string{}),
 		)
