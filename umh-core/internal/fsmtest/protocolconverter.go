@@ -53,9 +53,11 @@ var (
 	}
 
 	goodDataflowComponentWriteConfig = dataflowcomponentserviceconfig.DataflowComponentWriteConfigInput{
-		InputTopics: "umh.v1.test.*",
-		Output: map[string]interface{}{
-			"stdout": map[string]interface{}{},
+		Source: dataflowcomponentserviceconfig.WriteConfigSource{
+			Topics: "umh.v1.test.*",
+		},
+		Destination: dataflowcomponentserviceconfig.WriteConfigDestination{
+			Protocol: "stdout",
 		},
 	}
 

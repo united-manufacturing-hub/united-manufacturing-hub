@@ -229,10 +229,12 @@ var _ = Describe("DeployProtocolConverter", func() {
 				},
 				"location": pcLocation,
 				"writeDFC": map[string]interface{}{
-					"output": map[string]interface{}{
-						"stdout": map[string]interface{}{},
+					"destination": map[string]interface{}{
+						"protocol": "stdout",
 					},
-					"input_topics": "umh.v1.{{ .location_path }}.{{ .IP }}.*",
+					"source": map[string]interface{}{
+						"topics": "umh.v1.{{ .location_path }}.{{ .IP }}.*",
+					},
 				},
 			}
 
@@ -376,7 +378,7 @@ var _ = Describe("DeployProtocolConverter", func() {
 			stateMocker.Stop()
 		})
 
-		It("should store InputTopics in write DFC config when deploying with write DFC", func() {
+		It("should store Source.Topics in write DFC config when deploying with write DFC", func() {
 			payload := map[string]any{
 				"name": pcName,
 				"connection": map[string]any{
@@ -385,10 +387,12 @@ var _ = Describe("DeployProtocolConverter", func() {
 				},
 				"location": pcLocation,
 				"writeDFC": map[string]any{
-					"output": map[string]any{
-						"stdout": map[string]any{},
+					"destination": map[string]any{
+						"protocol": "stdout",
 					},
-					"input_topics": "umh.v1.factory.*\numh.v1.plant.*",
+					"source": map[string]any{
+						"topics": "umh.v1.factory.*\numh.v1.plant.*",
+					},
 				},
 			}
 
@@ -409,7 +413,7 @@ var _ = Describe("DeployProtocolConverter", func() {
 			Expect(mockConfig.Config.ProtocolConverter).To(HaveLen(1))
 
 			addedPC := mockConfig.Config.ProtocolConverter[0]
-			Expect(addedPC.ProtocolConverterServiceConfig.Config.DataflowComponentWriteServiceConfig.InputTopics).To(Equal(
+			Expect(addedPC.ProtocolConverterServiceConfig.Config.DataflowComponentWriteServiceConfig.Source.Topics).To(Equal(
 				"umh.v1.factory.*\numh.v1.plant.*",
 			))
 		})
@@ -423,11 +427,13 @@ var _ = Describe("DeployProtocolConverter", func() {
 				},
 				"location": pcLocation,
 				"writeDFC": map[string]any{
-					"output": map[string]any{
-						"stdout": map[string]any{},
+					"destination": map[string]any{
+						"protocol": "stdout",
 					},
-					"input_topics": "umh.v1.factory.*",
-					"state":        "stopped",
+					"source": map[string]any{
+						"topics": "umh.v1.factory.*",
+					},
+					"state": "stopped",
 				},
 			}
 

@@ -26,38 +26,39 @@ var _ = Describe("write_config", func() {
 		DescribeTable("splits topic strings correctly",
 			func(input string, expected []string) {
 				cfg := dataflowcomponentserviceconfig.DataflowComponentWriteConfigInput{
-					InputTopics: input,
+					Source: dataflowcomponentserviceconfig.WriteConfigSource{Topics: input},
 				}
-				result := cfg.ToWriteConfig().InputTopics
+				result := cfg.ToWriteConfig().Topics
 				Expect(result).To(Equal(expected))
 			},
 			Entry("newline-separated", "a\nb\nc", []string{"a", "b", "c"}),
-			Entry("comma-separated", "a,b,c", []string{"a", "b", "c"}),
-			Entry("mixed newline and comma", "a,b\nc", []string{"a", "b", "c"}),
+			Entry("mixed newline and comma", "a,b\nc", []string{"a,b", "c"}),
 			Entry("trims whitespace", "  a  \n  b  ", []string{"a", "b"}),
 			Entry("skips empty lines", "a\n\nb", []string{"a", "b"}),
-			Entry("all commas (only-commas → empty)", ",,,,", []string{}),
 			Entry("single topic", "umh.v1.factory.*", []string{"umh.v1.factory.*"}),
 			Entry("empty string", "", []string{}),
 		)
 	})
 
 	Describe("HasOutput", func() {
-		It("returns false when Output is nil", func() {
+		It("returns false when Destination is empty", func() {
 			cfg := dataflowcomponentserviceconfig.DataflowComponentWriteConfigInput{}
 			Expect(cfg.HasOutput()).To(BeFalse())
 		})
 
-		It("returns false when Output is empty map", func() {
+		It("returns false when Destination has no Protocol or Code", func() {
 			cfg := dataflowcomponentserviceconfig.DataflowComponentWriteConfigInput{
-				Output: map[string]any{},
+				Destination: dataflowcomponentserviceconfig.WriteConfigDestination{},
 			}
 			Expect(cfg.HasOutput()).To(BeFalse())
 		})
 
-		It("returns true when Output has entries", func() {
+		It("returns true when Destination has Protocol", func() {
 			cfg := dataflowcomponentserviceconfig.DataflowComponentWriteConfigInput{
-				Output: map[string]any{"http_client": map[string]any{"url": "http://example.com"}},
+				Destination: dataflowcomponentserviceconfig.WriteConfigDestination{
+					Protocol: "http_client",
+					Code:     "url: http://example.com\nverb: POST",
+				},
 			}
 			Expect(cfg.HasOutput()).To(BeTrue())
 		})
@@ -66,8 +67,10 @@ var _ = Describe("write_config", func() {
 	Describe("ToDataflowComponentServiceConfig", func() {
 		It("builds UNS input with provided topics", func() {
 			cfg := dataflowcomponentserviceconfig.DataflowComponentWriteConfigInput{
-				InputTopics: "umh.v1.factory.*",
-				Output:      map[string]any{"stdout": map[string]any{}},
+				Source: dataflowcomponentserviceconfig.WriteConfigSource{Topics: "umh.v1.factory.*"},
+				Destination: dataflowcomponentserviceconfig.WriteConfigDestination{
+					Protocol: "stdout",
+				},
 			}
 			svc := cfg.ToDataflowComponentServiceConfig("my-bridge")
 			Expect(svc.BenthosConfig.Input).To(HaveKey("uns"))
@@ -76,10 +79,12 @@ var _ = Describe("write_config", func() {
 			Expect(uns["umh_topics"]).To(ContainElement("umh.v1.factory.*"))
 		})
 
-		It("uses sentinel when InputTopics is empty and Output is set", func() {
+		It("uses sentinel when Source.Topics is empty and Destination is set", func() {
 			cfg := dataflowcomponentserviceconfig.DataflowComponentWriteConfigInput{
-				InputTopics: "",
-				Output:      map[string]any{"stdout": map[string]any{}},
+				Source: dataflowcomponentserviceconfig.WriteConfigSource{Topics: ""},
+				Destination: dataflowcomponentserviceconfig.WriteConfigDestination{
+					Protocol: "stdout",
+				},
 			}
 			svc := cfg.ToDataflowComponentServiceConfig("my-bridge")
 			uns := svc.BenthosConfig.Input["uns"].(map[string]any)
@@ -88,16 +93,18 @@ var _ = Describe("write_config", func() {
 
 		It("produces no input when no output is configured", func() {
 			cfg := dataflowcomponentserviceconfig.DataflowComponentWriteConfigInput{
-				InputTopics: "umh.v1.factory.*",
+				Source: dataflowcomponentserviceconfig.WriteConfigSource{Topics: "umh.v1.factory.*"},
 			}
 			svc := cfg.ToDataflowComponentServiceConfig("my-bridge")
 			Expect(svc.BenthosConfig.Input).To(BeNil())
 		})
 
-		It("defaults ProcessingNoderedJS to 'return msg;' when empty", func() {
+		It("defaults Processing.Code to 'return msg;' when empty", func() {
 			cfg := dataflowcomponentserviceconfig.DataflowComponentWriteConfigInput{
-				InputTopics: "umh.v1.*",
-				Output:      map[string]any{"stdout": map[string]any{}},
+				Source: dataflowcomponentserviceconfig.WriteConfigSource{Topics: "umh.v1.*"},
+				Destination: dataflowcomponentserviceconfig.WriteConfigDestination{
+					Protocol: "stdout",
+				},
 			}
 			svc := cfg.ToDataflowComponentServiceConfig("b")
 			processors := svc.BenthosConfig.Pipeline["processors"].([]any)
@@ -110,16 +117,39 @@ var _ = Describe("write_config", func() {
 	Describe("ToWriteConfig round-trip", func() {
 		It("preserves all fields through ToWriteConfig", func() {
 			input := dataflowcomponentserviceconfig.DataflowComponentWriteConfigInput{
-				InputTopics:         "umh.v1.*\numh.v1.other.*",
-				ProcessingNoderedJS: "return msg;",
-				Output:              map[string]any{"kafka": map[string]any{}},
-				Buffer:              map[string]any{"none": map[string]any{}},
+				Source: dataflowcomponentserviceconfig.WriteConfigSource{
+					Topics: "umh.v1.*\numh.v1.other.*",
+				},
+				Processing: dataflowcomponentserviceconfig.WriteConfigProcessing{
+					Type: "nodered_js",
+					Code: "return msg;",
+				},
+				Destination: dataflowcomponentserviceconfig.WriteConfigDestination{
+					Protocol: "kafka",
+					Code:     "addresses:\n  - localhost:9092",
+				},
+				Extra: &dataflowcomponentserviceconfig.WriteConfigExtra{
+					Code: "buffer:\n  memory: {}\n",
+				},
 			}
 			got := input.ToWriteConfig()
-			Expect(got.InputTopics).To(ConsistOf("umh.v1.*", "umh.v1.other.*"))
-			Expect(got.ProcessingNoderedJS).To(Equal("return msg;"))
-			Expect(got.Output).To(HaveKey("kafka"))
-			Expect(got.Buffer).To(HaveKey("none"))
+			Expect(got.Topics).To(ConsistOf("umh.v1.*", "umh.v1.other.*"))
+			Expect(got.Processing.Code).To(Equal("return msg;"))
+			Expect(got.Destination.Protocol).To(Equal("kafka"))
+			Expect(got.Extra).NotTo(BeNil())
+			Expect(got.Extra.Code).To(ContainSubstring("buffer"))
+		})
+
+		It("injects buffer from Extra into BenthosConfig", func() {
+			input := dataflowcomponentserviceconfig.DataflowComponentWriteConfigInput{
+				Source:      dataflowcomponentserviceconfig.WriteConfigSource{Topics: "umh.v1.*"},
+				Destination: dataflowcomponentserviceconfig.WriteConfigDestination{Protocol: "stdout"},
+				Extra: &dataflowcomponentserviceconfig.WriteConfigExtra{
+					Code: "buffer:\n  memory: {}\n",
+				},
+			}
+			svc := input.ToDataflowComponentServiceConfig("b")
+			Expect(svc.BenthosConfig.Buffer).To(HaveKey("memory"))
 		})
 	})
 })

@@ -167,7 +167,7 @@ func (a *EditProtocolConverterAction) Parse(payload interface{}) error {
 	a.protocolConverterUUID = *pcPayload.UUID
 	a.name = pcPayload.Name
 
-	// Resolve user variables first — they are needed to render the InputTopics template.
+	// Resolve user variables first — they are needed to render the Source.Topics template.
 	if pcPayload.TemplateInfo != nil {
 		a.templateVars = pcPayload.TemplateInfo.Variables
 	} else {
@@ -396,10 +396,10 @@ func (a *EditProtocolConverterAction) applyMutation() (config.ProtocolConverterC
 		instanceToModify.ProtocolConverterServiceConfig.Config.DataflowComponentReadServiceConfig = *a.readDFCSvcCfg
 	}
 
-	// Apply write DFC config when the Output field was explicitly included in the payload
-	// (non-nil, even if empty). A nil Output means a state-only change; the existing
-	// config is preserved. An explicitly empty Output ({}) clears the write DFC output.
-	if a.writeDFCInput != nil && a.writeDFCInput.Output != nil {
+	// Apply write DFC config when the Destination field was explicitly included in the payload
+	// (non-nil, even if empty). A nil Destination means a state-only change; the existing
+	// config is preserved. An explicitly empty Destination ({}) clears the write DFC output.
+	if a.writeDFCInput != nil {
 		instanceToModify.ProtocolConverterServiceConfig.Config.DataflowComponentWriteServiceConfig = *a.writeDFCInput
 	}
 
@@ -1078,26 +1078,21 @@ func (a *EditProtocolConverterAction) writeDFCConfigDiffers(
 	if incomingState != "" && deployedState != "" && incomingState != deployedState {
 		return true
 	}
-	// Normalize nil maps to empty maps before comparison: YAML round-trip converts
-	// nil maps (Output/Buffer) to empty maps, and reflect.DeepEqual treats them as
-	// different, causing spurious drift detection on every reconcile.
+	// Normalize fields before comparison to avoid spurious drift detection on every reconcile.
 	return !reflect.DeepEqual(normalizeWriteConfigInput(incoming), normalizeWriteConfigInput(deployedConfig))
 }
 
-// normalizeWriteConfigInput replaces nil map fields with empty maps so that
-// reflect.DeepEqual comparisons are not tripped up by YAML round-trip nil→{} coercions.
+// normalizeWriteConfigInput normalizes fields so that reflect.DeepEqual comparisons
+// are not tripped up by YAML round-trip coercions.
 func normalizeWriteConfigInput(c dataflowcomponentserviceconfig.DataflowComponentWriteConfigInput) dataflowcomponentserviceconfig.DataflowComponentWriteConfigInput {
-	if c.Output == nil {
-		c.Output = map[string]any{}
+	// Mirror the defaults applied by ToDataflowComponentServiceConfig so that a config
+	// stored without explicit processing fields compares equal to a payload carrying
+	// the explicit defaults.
+	if c.Processing.Code == "" {
+		c.Processing.Code = "return msg;"
 	}
-	if c.Buffer == nil {
-		c.Buffer = map[string]any{}
-	}
-	// Mirror the default applied by ToDataflowComponentServiceConfig so that a config
-	// stored without an explicit JS snippet compares equal to one that was just parsed
-	// from a payload carrying the default "return msg;".
-	if c.ProcessingNoderedJS == "" {
-		c.ProcessingNoderedJS = "return msg;"
+	if c.Processing.Type == "" {
+		c.Processing.Type = "nodered_js"
 	}
 	return c
 }

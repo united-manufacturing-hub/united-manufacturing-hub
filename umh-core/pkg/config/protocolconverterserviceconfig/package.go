@@ -38,8 +38,8 @@ var (
 type ProtocolConverterServiceConfigTemplate struct {
 
 	// DataflowComponentWriteServiceConfig is the blueprint for the *write* side
-	// of the converter. InputTopics is a string that may contain Go template actions
-	// rendered at deploy time; use DataflowComponentWriteConfigInput.Render to resolve it.
+	// of the converter. Source.Topics is a string that may contain Go template actions
+	// rendered at deploy time.
 	DataflowComponentWriteServiceConfig dataflowcomponentserviceconfig.DataflowComponentWriteConfigInput `yaml:"dataflowcomponent_write,omitempty"`
 
 	// ConnectionServiceConfig describes how the converter connects to the
@@ -181,7 +181,7 @@ func SpecToRuntime(spec ProtocolConverterServiceConfigSpec) (ProtocolConverterSe
 		ConnectionServiceConfig:            connRuntime,
 		DataflowComponentReadServiceConfig: spec.Config.DataflowComponentReadServiceConfig,
 		// bridgedBy is intentionally empty: SpecToRuntime does structural conversion only,
-		// not full template rendering (InputTopics is split as-is). Use BuildRuntimeConfig for deploys.
+		// not full template rendering (Source.Topics is split as-is). Use BuildRuntimeConfig for deploys.
 		DataflowComponentWriteServiceConfig: spec.Config.DataflowComponentWriteServiceConfig.ToDataflowComponentServiceConfig(""),
 	}, nil
 }

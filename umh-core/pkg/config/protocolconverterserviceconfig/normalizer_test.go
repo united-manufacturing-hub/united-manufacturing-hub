@@ -115,7 +115,7 @@ var _ = Describe("ProtocolConverter YAML Normalizer", func() {
 
 			// Write DFC uses a typed struct; with no write config set, it should be zero value.
 			Expect(config.Config.DataflowComponentWriteServiceConfig.HasOutput()).To(BeFalse())
-			Expect(config.Config.DataflowComponentWriteServiceConfig.InputTopics).To(BeEmpty())
+			Expect(config.Config.DataflowComponentWriteServiceConfig.Source.Topics).To(BeEmpty())
 
 			// Buffer should have the none buffer set
 			Expect(config.Config.DataflowComponentReadServiceConfig.BenthosConfig.Buffer).To(HaveKey("none"))
