@@ -360,13 +360,15 @@ Workers record metrics via `deps.MetricsRecorder()`. There are two observation r
 
 ## Graceful Shutdown Cascading
 
-Each supervisor level has a `DefaultGracefulShutdownTimeout` of 5 seconds. For nested supervisors (parent-child workers), timeouts cascade:
+Each supervisor level has a `DefaultGracefulShutdownTimeout` of 5 seconds (the base). At `Shutdown()` entry a supervisor samples its subtree height and arms one drain budget of base × height; the synchronous child drains spend from that same budget before the level's own worker drain arms the remainder. Per-level budgets therefore do not sum — a chain of depth N drains within N × base total:
 
-| Nesting Level | Total Timeout |
+| Nesting Level (chain) | Total Drain Budget |
 |---------------|---------------|
 | 1 (single worker) | 5s |
 | 2 (parent + child) | 10s |
 | 3 (grandparent + parent + child) | 15s |
+
+Sibling subtrees drain sequentially, each on its own base × height budget, so a wide tree can spend more than the parent's budget on child drains alone; the parent then warns `graceful_shutdown_budget_exhausted` immediately and breaks out of its own drain (`graceful_shutdown_timeout` is reserved for a level whose own workers exhaust a budget that was actually available to them). The N × base table therefore bounds chains only — a wide tree's total drain time is the sum of its sibling subtree budgets, which can exceed the root's own base × height. A level that exhausts its budget always warns and breaks out — the cascade lengthens budgets, it never waits forever. Because budgets grow with tree height, the process's SIGTERM grace must be sized ≥ base × the maximum expected tree height (forceExit on a second SIGTERM is the operator escape when it is not).
 
 **Test implications**: When testing shutdown scenarios with parent-child workers, allow sufficient time:
 
@@ -376,9 +378,10 @@ Eventually(result.Done, 15*time.Second).Should(BeClosed())
 ```
 
 The shutdown flow:
-1. Phase 1: Request children to stop (waits for graceful timeout)
-2. Phase 2: Stop own workers (waits for graceful timeout)
-3. Phase 3: Cancel context
+1. Sample one drain budget at `Shutdown()` entry: base × subtree height
+2. Drain children synchronously, spending from that shared budget
+3. Request worker shutdown and drain on the remainder (warn and break out on exhaustion, including when the level has children but no workers of its own)
+4. Cancel context, join the tick loop and metrics reporter
 
 ## Testing Patterns
 
