@@ -54,12 +54,12 @@ import (
 //
 // The two fields carry different guarantees per scenario form. Done closes
 // when teardown is complete: for a v1 scenario that is when the supervisor
-// stops (plus the dump when DumpStore is set); for a v2 scenario it
-// additionally includes clearing the published configworker deps key, which
-// is what makes back-to-back v2 runs safe. Shutdown initiates teardown: the
-// v1 Shutdown does not wait for Done (the DumpStore summary may still be
-// printing when it returns), while the v2 Shutdown blocks until Done so the
-// deps key is already cleared when it returns.
+// has stopped and its cleanup ran (plus the dump when DumpStore is set); for
+// a v2 scenario it additionally includes clearing the published configworker
+// deps key, which is what makes back-to-back v2 runs safe. Shutdown initiates
+// teardown: the v1 Shutdown does not wait for Done (the DumpStore summary may
+// still be printing when it returns), while the v2 Shutdown blocks until Done
+// so the deps key is already cleared when it returns.
 type RunResult struct {
 	Done     <-chan struct{}
 	Shutdown func()
@@ -71,6 +71,11 @@ type RunResult struct {
 // YAML config, or delegates to CustomRunner if set. For a ScenarioV2 (Driver
 // set), takes the kernel-only v2 path (see runV2). Exactly one of Scenario
 // and ScenarioV2 may be populated; setting both is an error.
+//
+// On both the YAML and v2 paths the supervisor's tick loop runs on a context
+// detached from ctx: cancelling ctx triggers a graceful teardown against the
+// live tick loop instead of killing the loop and forcing the drain to wait
+// out its timeouts. CustomRunner scenarios own their supervisor lifecycle.
 //
 // If DumpStore is enabled, the YAML path prints a store changes summary
 // after the run. The v2 path does not support DumpStore yet: runV2 logs a
@@ -141,7 +146,27 @@ func Run(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 		return nil, err
 	}
 
-	done := appSup.Start(ctx)
+	// Detached from the caller's ctx so cancelling the caller's ctx triggers
+	// teardown (via the watcher below) instead of killing the tick loop;
+	// Shutdown cancels the supervisor's own derived context in its final phase.
+	supDone := appSup.Start(context.WithoutCancel(ctx))
+
+	done := make(chan struct{})
+
+	// Watcher: turns caller-ctx cancellation into a graceful teardown against
+	// the LIVE tick loop. Shutdown runs unconditionally on both arms because
+	// it is idempotent, and a supervisor that stopped on its own still needs
+	// its executor and collectors stopped.
+	go func() {
+		select {
+		case <-ctx.Done():
+		case <-supDone:
+		}
+
+		appSup.Shutdown()
+		<-supDone
+		close(done)
+	}()
 
 	shutdownFn := func() {
 		appSup.Shutdown()

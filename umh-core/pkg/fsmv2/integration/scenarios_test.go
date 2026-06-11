@@ -111,6 +111,15 @@ func verifyNoErrorsOrWarnings(t *integration.TestLogger) {
 	knownIssues := []string{
 		"data_stale",                   // Observation collector may report stale data briefly
 		"collector_observation_failed", // Collector may fail temporarily during shutdown
+		// The worker-removal handler stops a worker's collector after deleting
+		// the worker from the registry; Shutdown's drain sees the empty registry,
+		// cancels the supervisor ctx, and the collector self-stops before the
+		// handler's own Stop call, which then warns. Benign double-stop during
+		// teardown. The run ends via a graceful drain at ctx expiry (it
+		// previously ended via ctx-kill with no Shutdown at all), which is what
+		// exposes this race to the blanket check. graceful_shutdown_timeout is
+		// deliberately NOT whitelisted: it is the dead-loop-drain signature.
+		"collector_stop_skipped",
 	}
 
 	for _, entry := range errorsAndWarnings {
