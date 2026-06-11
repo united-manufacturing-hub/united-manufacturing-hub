@@ -27,8 +27,10 @@ import (
 // change (AuthToken, RelayURL, or InstanceUUID) before transitioning back to
 // StartingState for a fresh attempt.
 //
-// Uses StartingBase because the worker has not reached Running -- children remain
-// stopped (they only start when the parent enters RunningHealthy).
+// Uses StartingBase because the worker has not reached Running. Children stay
+// enabled (idle-but-resident): push/pull dispatch nothing without
+// HasTransport && HasValidToken, and keeping them resident avoids
+// despawn/spawn churn across auth windows. Only shutdown disables them.
 type AuthFailedState struct {
 	helpers.StartingBase
 }
