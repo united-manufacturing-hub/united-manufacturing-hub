@@ -1914,6 +1914,14 @@ var _ = Describe("EditProtocolConverter", func() {
 				// benign (render succeeds, streak resets to 0). Phase 3:
 				// swap back to broken; streak builds from 0, needing 3
 				// consecutive identical failures before the abort fires.
+				//
+				// benignFrom/benignTo bracket the benign phase: the running
+				// "not yet applied" counts when the benign snapshot landed
+				// and when the broken inject was restored. Guarded by
+				// replyMu; read back after the run to scope the
+				// render-failure-absence assertion to benign-phase replies.
+				var benignFrom, benignTo int
+
 				go func() {
 					defer GinkgoRecover()
 					// Wait for the first "DFC config not yet applied" reply
@@ -1922,6 +1930,10 @@ var _ = Describe("EditProtocolConverter", func() {
 					Eventually(func() int {
 						return countNotYetApplied()
 					}, "5s", "10ms").Should(BeNumerically(">=", 1))
+					n := countNotYetApplied()
+					replyMu.Lock()
+					benignFrom = n
+					replyMu.Unlock()
 					updateSnapshot(observedStateWithInject("benign"))
 
 					// Wait for a second "DFC config not yet applied" reply
@@ -1930,6 +1942,10 @@ var _ = Describe("EditProtocolConverter", func() {
 					Eventually(func() int {
 						return countNotYetApplied()
 					}, "5s", "10ms").Should(BeNumerically(">=", 2))
+					n = countNotYetApplied()
+					replyMu.Lock()
+					benignTo = n
+					replyMu.Unlock()
 					updateSnapshot(observedStateWithInject(brokenInject))
 				}()
 
@@ -1961,6 +1977,28 @@ var _ = Describe("EditProtocolConverter", func() {
 					}
 				}
 				Expect(rollingBack).To(Equal(1))
+
+				// Only render-failing ticks name the render error. The
+				// benign-phase replies, those whose 1-based ordinal among
+				// the "not yet applied" replies falls in (benignFrom,
+				// benignTo], ran with a successfully rendering snapshot and
+				// must not carry "Render failed". This pins the
+				// renderErr != nil guard on the per-tick append: a variant
+				// that appends stale render text on every tick fails here.
+				replyMu.Lock()
+				from, to := benignFrom, benignTo
+				replyMu.Unlock()
+				Expect(to).To(BeNumerically(">", from),
+					"the benign phase must contribute at least one not-yet-applied reply")
+				var notYet []capturedReply
+				for _, r := range getReplies() {
+					if strings.Contains(r.message, "DFC config not yet applied") {
+						notYet = append(notYet, r)
+					}
+				}
+				for _, r := range notYet[from:to] {
+					Expect(r.message).NotTo(ContainSubstring("Render failed"))
+				}
 			})
 
 			It("returns the retryable rollback-failed code when the rollback itself fails", func() {
@@ -2338,6 +2376,32 @@ var _ = Describe("EditProtocolConverter", func() {
 				}
 				Expect(postGapNotYet).To(Equal(1),
 					"streak must survive the gap: exactly 1 not-yet-applied tick after the gap before the 3rd identical failure aborts")
+			})
+
+			It("names the render failure in the per-tick progress replies, without the snippet", func() {
+				// The original incident showed an empty status reason for 30s; the
+				// user must see the render failure from the first failing tick.
+				// The full rendered-output snippet stays out of the per-tick
+				// replies and arrives once, in the terminal message.
+				updateSnapshot(observedStateWithInject("x\nbroken: ["))
+				startCollector(nil)
+
+				_, execErr := runEdit(constants.DataflowComponentWaitForActiveTimeout / 2)
+				Expect(execErr).To(HaveOccurred())
+
+				var progressWithRender []capturedReply
+				for _, r := range getReplies() {
+					if strings.Contains(r.message, "DFC config not yet applied") {
+						Expect(r.message).To(ContainSubstring("Render failed: "))
+						Expect(r.message).To(ContainSubstring("yaml:"))
+						Expect(r.message).NotTo(ContainSubstring("rendered output"))
+						progressWithRender = append(progressWithRender, r)
+					}
+				}
+				Expect(progressWithRender).NotTo(BeEmpty())
+
+				// The terminal message keeps the full error including the snippet.
+				Expect(execErr.Error()).To(ContainSubstring("rendered output"))
 			})
 		})
 

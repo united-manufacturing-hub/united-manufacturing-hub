@@ -37,6 +37,7 @@ import (
 	"reflect"
 	"slices"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -787,17 +788,33 @@ func (a *EditProtocolConverterAction) awaitRollout(pcConfig config.ProtocolConve
 						}
 					}
 
+					// Build the per-tick progress message. In the original ENG-5103
+					// incident the FSM status reason stayed empty for 30 seconds, so
+					// when this tick produced a render failure we append the first
+					// line of the render error to name the cause from the first
+					// failing tick. This append contributes only the first line,
+					// never the multi-line rendered-output snippet; the full snippet
+					// arrives once in the terminal message. The status reason itself
+					// may still carry the snippet when the FSM's own reconcile
+					// failure sets it (pkg/fsm/protocolconverter/actions.go).
+					notYetMsg := fmt.Sprintf(
+						"%s DFC config not yet applied. State: %s, Status reason: %s",
+						a.dfcType.String(),
+						instance.CurrentState,
+						pcSnapshot.ServiceInfo.StatusReason,
+					)
+
+					if renderErr != nil {
+						firstLine, _, _ := strings.Cut(renderErr.Error(), "\n")
+						notYetMsg += "; Render failed: " + firstLine
+					}
+
 					SendActionReply(
 						a.instanceUUID,
 						a.userEmail,
 						a.actionUUID,
 						models.ActionExecuting,
-						RemainingPrefixSec(remainingSeconds)+fmt.Sprintf(
-							"%s DFC config not yet applied. State: %s, Status reason: %s",
-							a.dfcType.String(),
-							instance.CurrentState,
-							pcSnapshot.ServiceInfo.StatusReason,
-						),
+						RemainingPrefixSec(remainingSeconds)+notYetMsg,
 						a.outboundChannel,
 						models.EditProtocolConverter,
 					)
