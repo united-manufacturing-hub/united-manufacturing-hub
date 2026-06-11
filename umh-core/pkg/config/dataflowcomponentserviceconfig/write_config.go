@@ -107,11 +107,11 @@ type WriteConfigExtra struct {
 //	    buffer:
 //	      memory: {}
 type DataflowComponentWriteConfig struct {
-	// Topics lists the UNS topics this write DFC subscribes to (parsed from Source.Topics).
-	Topics      []string
+	Extra       *WriteConfigExtra
 	Processing  WriteConfigProcessing
 	Destination WriteConfigDestination
-	Extra       *WriteConfigExtra
+	// Topics lists the UNS topics this write DFC subscribes to (parsed from Source.Topics).
+	Topics []string
 }
 
 // DataflowComponentWriteConfigInput is the wire/input form of write DFC config.
@@ -122,12 +122,12 @@ type DataflowComponentWriteConfig struct {
 // (e.g. fields from an older config format). They are round-tripped transparently
 // so that a config written in an older format is never silently erased on read/write.
 type DataflowComponentWriteConfigInput struct {
-	Source      WriteConfigSource      `yaml:"source,omitempty"      json:"source,omitempty"      mapstructure:"source,omitempty"`
-	Processing  WriteConfigProcessing  `yaml:"processing,omitempty"  json:"processing,omitempty"  mapstructure:"processing,omitempty"`
-	Destination WriteConfigDestination `yaml:"destination,omitempty" json:"destination,omitempty" mapstructure:"destination,omitempty"`
-	Extra       *WriteConfigExtra      `yaml:"extra,omitempty"       json:"extra,omitempty"       mapstructure:"extra,omitempty"`
+	Extra *WriteConfigExtra `yaml:"extra,omitempty"       json:"extra,omitempty"       mapstructure:"extra,omitempty"`
 	// UnrecognizedFields preserves unknown YAML keys for round-trip fidelity.
-	UnrecognizedFields map[string]any `yaml:",inline" json:"-" mapstructure:"-"`
+	UnrecognizedFields map[string]any         `yaml:",inline" json:"-" mapstructure:"-"`
+	Processing         WriteConfigProcessing  `yaml:"processing,omitempty"  json:"processing,omitempty"  mapstructure:"processing,omitempty"`
+	Destination        WriteConfigDestination `yaml:"destination,omitempty" json:"destination,omitempty" mapstructure:"destination,omitempty"`
+	Source             WriteConfigSource      `yaml:"source,omitempty"      json:"source,omitempty"      mapstructure:"source,omitempty"`
 }
 
 // HasOutput reports whether a write output is configured.
