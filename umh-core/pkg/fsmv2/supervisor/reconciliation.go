@@ -1699,7 +1699,8 @@ func (s *Supervisor[TObserved, TDesired]) reconcileChildren(specs []config.Child
 	}
 
 	// Second pass: release parent.mu around child.Shutdown(). Each Shutdown can
-	// block up to the child's own gracefulShutdownTimeout (~5s by default), and
+	// block up to the child's cascaded drain budget (gracefulShutdownTimeout ×
+	// the child's subtree height — ~5s per level by default), and
 	// holding parent.mu through it would stall this supervisor's tickLoop on
 	// any runtime spec-change that removes a child. The captured references stay
 	// valid: child.Shutdown() is idempotent, so concurrent callers are benign,

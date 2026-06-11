@@ -18,8 +18,6 @@ package supervisor
 import (
 	"bytes"
 	"context"
-	"encoding/json"
-	"strings"
 	"sync"
 	"time"
 
@@ -55,43 +53,22 @@ func (b *shutdownTestSyncBuffer) String() string {
 }
 
 // containsLogEvent returns true if any JSON log line has the given msg value.
+// Wraps findLogEvents (drain_budget_cascade_test.go) so the JSON-line parse
+// exists once.
 func containsLogEvent(logOutput, msg string) bool {
-	for _, line := range strings.Split(logOutput, "\n") {
-		if line == "" {
-			continue
-		}
-
-		var entry map[string]interface{}
-		if err := json.Unmarshal([]byte(line), &entry); err != nil {
-			continue
-		}
-
-		if entry["msg"] == msg {
-			return true
-		}
-	}
-
-	return false
+	return len(findLogEvents(logOutput, msg)) > 0
 }
 
 // findLogEvent returns the first log entry with the given msg, or nil.
+// Wraps findLogEvents (drain_budget_cascade_test.go) so the JSON-line parse
+// exists once.
 func findLogEvent(logOutput, msg string) map[string]interface{} {
-	for _, line := range strings.Split(logOutput, "\n") {
-		if line == "" {
-			continue
-		}
-
-		var entry map[string]interface{}
-		if err := json.Unmarshal([]byte(line), &entry); err != nil {
-			continue
-		}
-
-		if entry["msg"] == msg {
-			return entry
-		}
+	entries := findLogEvents(logOutput, msg)
+	if len(entries) == 0 {
+		return nil
 	}
 
-	return nil
+	return entries[0]
 }
 
 // shutdownHonoringState returns SignalNeedsRemoval when the snapshot's Desired
