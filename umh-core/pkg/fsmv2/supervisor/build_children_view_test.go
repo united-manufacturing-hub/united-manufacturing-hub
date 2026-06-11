@@ -36,10 +36,10 @@ var _ = Describe("ChildrenView lookup semantics vs legacy", func() {
 			IsOperational: true,
 		}
 		unhealthy = config.ChildInfo{
-			Name:        "beta",
-			WorkerType:  "examplechild",
-			StateName:   "Degraded",
-			IsHealthy:   false,
+			Name:          "beta",
+			WorkerType:    "examplechild",
+			StateName:     "Degraded",
+			IsHealthy:     false,
 			IsOperational: true,
 		}
 		stopped = config.ChildInfo{

@@ -67,7 +67,7 @@ var _ = Describe("communicator RenderChildren 4-field round-trip", func() {
 			"InstanceUUID must survive the round-trip")
 		Expect(recovered.AuthToken).To(Equal("secret-auth-token-xyz"),
 			"AuthToken missing = unauthenticated transport child after the cutover")
-		Expect(recovered.Timeout).To(Equal(42 * time.Second),
+		Expect(recovered.Timeout).To(Equal(42*time.Second),
 			"Timeout must survive the round-trip")
 	})
 
