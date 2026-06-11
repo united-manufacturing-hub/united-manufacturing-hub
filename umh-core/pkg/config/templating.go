@@ -17,7 +17,11 @@ package config
 import (
 	"bytes"
 	"fmt"
+	"regexp"
+	"strconv"
+	"strings"
 	"text/template"
+	"unicode/utf8"
 
 	"errors"
 
@@ -238,7 +242,7 @@ func RenderTemplate[T any](tmpl T, scope map[string]any) (T, error) {
 	// C. unmarshal back into the *same* Go type
 	var out T
 	if err := yaml.Unmarshal(buf.Bytes(), &out); err != nil {
-		return *new(T), fmt.Errorf("failed to unmarshal rendered template back to type %T: %w", tmpl, err)
+		return *new(T), fmt.Errorf("failed to unmarshal rendered template back to type %T: %w%s", tmpl, err, renderedRegionSnippet(buf.Bytes(), err))
 	}
 
 	// D. sanity-check – no {{ left over
@@ -247,4 +251,124 @@ func RenderTemplate[T any](tmpl T, scope map[string]any) (T, error) {
 	}
 
 	return out, nil
+}
+
+// yamlErrorLineRegex extracts the line number from yaml.v3 error messages,
+// which come as `yaml: line N: <reason>` (parser and scanner errors) or
+// `line N: <reason>` items inside a yaml.TypeError.
+var yamlErrorLineRegex = regexp.MustCompile(`\bline (\d+):`)
+
+// maxSnippetRegions caps how many error regions a single snippet shows when a
+// yaml.TypeError reports many failing lines.
+const maxSnippetRegions = 3
+
+// maxSnippetLineLength caps each emitted snippet line so a long single-line
+// value cannot balloon the error string (which is re-logged every reconcile
+// tick and pushed to the Management Console via the status reason).
+const maxSnippetLineLength = 160
+
+// renderedRegionSnippet returns the regions of the rendered output around the
+// lines a yaml unmarshal error points at, formatted with 1-based line numbers
+// and a `>` marker on each reported line. The marker is approximate: yaml.v3
+// parser errors report 0-based lines while scanner and type errors report
+// 1-based ones, so the malformed content can sit one line below the marker.
+// Reported lines outside the rendered output clamp to the nearest line
+// (parser errors on the first line report "line 0"). When the error carries
+// no line number at all, the head of the rendered output is shown instead.
+// Without this the rendered output is discarded on failure and the error is
+// undiagnosable from logs (ENG-5103).
+func renderedRegionSnippet(rendered []byte, yamlErr error) string {
+	var errLines []int
+
+	var typeErr *yaml.TypeError
+	if errors.As(yamlErr, &typeErr) {
+		seen := make(map[int]bool, len(typeErr.Errors))
+
+		for _, e := range typeErr.Errors {
+			match := yamlErrorLineRegex.FindStringSubmatch(e)
+			if match == nil {
+				continue
+			}
+
+			n, err := strconv.Atoi(match[1])
+			if err != nil || seen[n] {
+				continue
+			}
+
+			seen[n] = true
+			errLines = append(errLines, n)
+		}
+	} else if match := yamlErrorLineRegex.FindStringSubmatch(yamlErr.Error()); match != nil {
+		n, err := strconv.Atoi(match[1])
+		if err == nil {
+			errLines = append(errLines, n)
+		}
+	}
+
+	if len(errLines) > maxSnippetRegions {
+		errLines = errLines[:maxSnippetRegions]
+	}
+
+	// Rendered output ends with one trailing newline, or two when the last
+	// value is a keep-chomped (|+) block scalar; without trimming them the
+	// split leaves phantom empty last lines that out-of-range errors clamp
+	// to.
+	lines := strings.Split(strings.TrimRight(string(rendered), "\n"), "\n")
+
+	const contextLines = 3
+
+	var b strings.Builder
+
+	if len(errLines) == 0 {
+		// Some yaml.v3 errors carry no position (e.g. "mapping values are
+		// not allowed in this context", unknown anchors). Show the head of
+		// the rendered output rather than discarding it entirely.
+		b.WriteString("\nrendered output (yaml error reported no line number), first lines:\n")
+
+		end := min(len(lines), 1+2*contextLines)
+		for i := 1; i <= end; i++ {
+			fmt.Fprintf(&b, "  %4d | %s\n", i, truncateSnippetLine(lines[i-1]))
+		}
+
+		return strings.TrimSuffix(b.String(), "\n")
+	}
+
+	for _, errLine := range errLines {
+		errLine = min(max(errLine, 1), len(lines))
+
+		if b.Len() == 0 {
+			b.WriteString("\nrendered output around the reported line (yaml line numbers can be off by one):\n")
+		} else {
+			b.WriteString("...\n")
+		}
+
+		start := max(1, errLine-contextLines)
+		end := min(len(lines), errLine+contextLines)
+
+		for i := start; i <= end; i++ {
+			marker := "  "
+			if i == errLine {
+				marker = "> "
+			}
+
+			fmt.Fprintf(&b, "%s%4d | %s\n", marker, i, truncateSnippetLine(lines[i-1]))
+		}
+	}
+
+	return strings.TrimSuffix(b.String(), "\n")
+}
+
+// truncateSnippetLine shortens a single snippet line to maxSnippetLineLength,
+// cutting on a rune boundary so the result stays valid UTF-8.
+func truncateSnippetLine(line string) string {
+	if len(line) <= maxSnippetLineLength {
+		return line
+	}
+
+	cut := maxSnippetLineLength
+	for cut > 0 && !utf8.RuneStart(line[cut]) {
+		cut--
+	}
+
+	return line[:cut] + "…(truncated)"
 }
