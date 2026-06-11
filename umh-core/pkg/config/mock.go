@@ -54,19 +54,13 @@ type MockConfigManager struct {
 	MockFileSystem                     *filesystem.MockFileSystem
 	logger                             *zap.SugaredLogger
 	ConfigAsString                     string
-	Config                             FullConfig
-	ConfigDelay                        time.Duration
-	mutexReadOrWrite                   sync.Mutex
-	mutexReadAndWrite                  sync.Mutex
 
 	// AtomicEditProtocolConverterLastConfig records the config passed to the
 	// most recent AtomicEditProtocolConverter call. It is captured before the
 	// failure-injection check, so it reflects the arguments of a failed call too.
 	AtomicEditProtocolConverterLastConfig ProtocolConverterConfig
-	// AtomicEditProtocolConverterLastUUID records the component UUID passed to
-	// the most recent AtomicEditProtocolConverter call. It is captured before the
-	// failure-injection check, so it reflects the arguments of a failed call too.
-	AtomicEditProtocolConverterLastUUID uuid.UUID
+	Config                                FullConfig
+	ConfigDelay                           time.Duration
 	// AtomicEditProtocolConverterCallCount counts AtomicEditProtocolConverter
 	// calls, including calls that fail via AtomicEditProtocolConverterError:
 	// the counter increments before the failure-injection check, so failed
@@ -79,7 +73,14 @@ type MockConfigManager struct {
 	// AtomicEditProtocolConverterCallCount).
 	AtomicEditProtocolConverterFailOnCall int
 
-	GetConfigCalled                     int32 // Use atomic int32 for thread safety (0=false, 1=true)
+	mutexReadOrWrite  sync.Mutex
+	mutexReadAndWrite sync.Mutex
+
+	GetConfigCalled int32 // Use atomic int32 for thread safety (0=false, 1=true)
+	// AtomicEditProtocolConverterLastUUID records the component UUID passed to
+	// the most recent AtomicEditProtocolConverter call. It is captured before the
+	// failure-injection check, so it reflects the arguments of a failed call too.
+	AtomicEditProtocolConverterLastUUID uuid.UUID
 	AddDataflowcomponentCalled          bool
 	DeleteDataflowcomponentCalled       bool
 	EditDataflowcomponentCalled         bool

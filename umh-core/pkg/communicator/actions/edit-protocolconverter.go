@@ -97,13 +97,6 @@ type EditProtocolConverterAction struct {
 	// clears it only when a later render succeeds, so ticks that never reach
 	// a render (for example while Benthos restarts) keep the captured cause.
 	lastRenderErr error
-	// rolloutSentryReported tells Execute to skip the generic rollout_failed
-	// Sentry event for this abort. Every awaitRollout abort path fires its own
-	// dedicated event; only the render-failure paths (added for ENG-5103) set
-	// this flag and suppress the generic event. The pre-existing paths (plain
-	// timeout, Benthos config error) keep the generic event on top of their
-	// dedicated one for continuity with established alerting.
-	rolloutSentryReported bool
 
 	outboundChannel chan *models.UMHMessage
 	location        map[int]string
@@ -130,15 +123,6 @@ type EditProtocolConverterAction struct {
 
 	templateVars []models.ProtocolConverterVariable
 
-	actionUUID   uuid.UUID
-	instanceUUID uuid.UUID
-
-	// Parsed request payload (only populated after Parse)
-	protocolConverterUUID uuid.UUID
-
-	// Atomic edit UUID used for configuration updates and rollbacks
-	atomicEditUUID uuid.UUID
-
 	// tickInterval overrides the awaitRollout poll interval. Zero means
 	// constants.ActionTickerTime; tests inject a shorter interval so the
 	// fail-fast specs do not wait on the 1s production ticker.
@@ -148,6 +132,23 @@ type EditProtocolConverterAction struct {
 	// constants.DataflowComponentWaitForActiveTimeout; tests inject a
 	// shorter timeout so timeout-path specs do not wait the full 30s.
 	awaitTimeout time.Duration
+
+	actionUUID   uuid.UUID
+	instanceUUID uuid.UUID
+
+	// Parsed request payload (only populated after Parse)
+	protocolConverterUUID uuid.UUID
+
+	// Atomic edit UUID used for configuration updates and rollbacks
+	atomicEditUUID uuid.UUID
+
+	// rolloutSentryReported tells Execute to skip the generic rollout_failed
+	// Sentry event for this abort. Every awaitRollout abort path fires its own
+	// dedicated event; only the render-failure paths (added for ENG-5103) set
+	// this flag and suppress the generic event. The pre-existing paths (plain
+	// timeout, Benthos config error) keep the generic event on top of their
+	// dedicated one for continuity with established alerting.
+	rolloutSentryReported bool
 
 	ignoreHealthCheck bool
 }
