@@ -2403,6 +2403,67 @@ var _ = Describe("EditProtocolConverter", func() {
 				// The terminal message keeps the full error including the snippet.
 				Expect(execErr.Error()).To(ContainSubstring("rendered output"))
 			})
+
+			It("render-failure fail-fast: all four observables hold in a single run", func() {
+				// Capstone composition spec for ENG-5103. A broken config template
+				// (multi-line block scalar that produces invalid YAML after template
+				// expansion) causes every comparison tick to fail with a render error.
+				// After 3 consecutive identical failures the action must:
+				//   (a) have produced per-tick progress replies whose message ends with
+				//       "; Render failed: <first line of render error>" and never
+				//       contains the multi-line rendered-output snippet,
+				//   (b) produce a terminal failure reply that contains the snippet,
+				//   (c) abort after ~3 ticks rather than the full timeout,
+				//   (d) roll back (2 AtomicEditProtocolConverter calls) and surface
+				//       ErrConfigFileInvalid as the error code,
+				//   (e) fire the render-failure-specific Sentry event and suppress the
+				//       generic rollout_failed event.
+				updateSnapshot(observedStateWithInject("x\nbroken: ["))
+				startCollector(nil)
+
+				elapsed, execErr := runEdit(constants.DataflowComponentWaitForActiveTimeout / 2)
+
+				// (c) aborts well before the full timeout; needs at least 2 full
+				// ticks after the first failure to reach the third identical failure.
+				Expect(execErr).To(HaveOccurred())
+				Expect(elapsed).To(BeNumerically(">=", 2*tick))
+
+				// (d) rollback: call 1 = persisted edit, call 2 = rollback write.
+				Expect(mockConfig.AtomicEditProtocolConverterCallCount).To(Equal(2))
+				Expect(mockConfig.AtomicEditProtocolConverterLastUUID).To(Equal(pcUUID))
+				// The pre-edit config had no read DFC; the rollback restores it.
+				Expect(mockConfig.AtomicEditProtocolConverterLastConfig.ProtocolConverterServiceConfig.Config.DataflowComponentReadServiceConfig).
+					To(Equal(dataflowcomponentserviceconfig.DataflowComponentServiceConfig{}))
+
+				// (d) error code from Execute itself.
+				Expect(execErr.Error()).To(ContainSubstring("render"))
+				Expect(execErr.Error()).To(ContainSubstring("was rolled back"))
+
+				// (b) terminal failure reply carries the snippet.
+				final := finalFailureReply()
+				Expect(final.errorCode).To(Equal(models.ErrConfigFileInvalid))
+				Expect(final.message).To(ContainSubstring("rendered output around the reported line"))
+
+				// (a) every "DFC config not yet applied" progress reply names the
+				// render error on its first line and excludes the snippet.
+				var progressWithRender []capturedReply
+				for _, r := range getReplies() {
+					if strings.Contains(r.message, "DFC config not yet applied") {
+						Expect(r.message).To(ContainSubstring("Render failed: "))
+						Expect(r.message).To(ContainSubstring("yaml:"))
+						Expect(r.message).NotTo(ContainSubstring("rendered output around the reported line"))
+						progressWithRender = append(progressWithRender, r)
+					}
+				}
+				// There must be at least one progress reply (the first two failing
+				// ticks emit progress; the third sends "Rolling back...").
+				Expect(progressWithRender).NotTo(BeEmpty())
+
+				// (e) Sentry: dedicated event fires, generic event does not.
+				events := sentryRec.eventNames()
+				Expect(events).To(ContainElement("edit_protocol_converter_render_failure_rolled_back"))
+				Expect(events).NotTo(ContainElement("edit_protocol_converter_rollout_failed"))
+			})
 		})
 
 		It("should handle config manager get config failure", func() {
