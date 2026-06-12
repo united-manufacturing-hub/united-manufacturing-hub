@@ -490,6 +490,16 @@ func newActionFromPayload(
 			actionLogger:          log,
 			fsmLogger:             fsmLogger,
 		}
+	case models.SaveProtocolConverter:
+		return &SaveProtocolConverterAction{
+			userEmail:       sender,
+			actionUUID:      payload.ActionUUID,
+			instanceUUID:    instanceUUID,
+			outboundChannel: outboundChannel,
+			configManager:   configManager,
+			actionLogger:    log,
+			fsmLogger:       fsmLogger,
+		}
 	case models.GetProtocolConverter:
 		return NewGetProtocolConverterAction(sender, payload.ActionUUID, instanceUUID, outboundChannel, configManager, systemSnapshotManager)
 

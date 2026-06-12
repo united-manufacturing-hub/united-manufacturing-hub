@@ -276,9 +276,16 @@ func (a *DeployProtocolConverterAction) Execute() (interface{}, map[string]inter
 
 // createProtocolConverterConfig creates a ProtocolConverterConfig with templated configuration.
 func (a *DeployProtocolConverterAction) createProtocolConverterConfig() (config.ProtocolConverterConfig, error) {
-	userVars := buildUserScope(a.payload.TemplateInfo)
-	userVars["IP"] = a.payload.Connection.IP
-	userVars["PORT"] = strconv.FormatUint(uint64(a.payload.Connection.Port), 10)
+	return buildProtocolConverterConfig(a.payload)
+}
+
+// buildProtocolConverterConfig builds a ProtocolConverterConfig with templated
+// configuration from a parsed protocol converter payload. It is shared by the
+// deploy and save actions so both produce identical config from the same input.
+func buildProtocolConverterConfig(payload models.ProtocolConverter) (config.ProtocolConverterConfig, error) {
+	userVars := buildUserScope(payload.TemplateInfo)
+	userVars["IP"] = payload.Connection.IP
+	userVars["PORT"] = strconv.FormatUint(uint64(payload.Connection.Port), 10)
 
 	tmpl := protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
 		ConnectionServiceConfig:             newIPPortConnectionTemplate(),
@@ -286,37 +293,38 @@ func (a *DeployProtocolConverterAction) createProtocolConverterConfig() (config.
 		DataflowComponentWriteServiceConfig: dataflowcomponentserviceconfig.DataflowComponentWriteConfigInput{},
 	}
 
-	if a.payload.ReadDFC != nil {
-		readSvcCfg, err := buildReadDFCServiceConfig(dfcToPayload(a.payload.ReadDFC), a.payload.Name)
+	if payload.ReadDFC != nil {
+		readSvcCfg, err := buildReadDFCServiceConfig(dfcToPayload(payload.ReadDFC), payload.Name)
 		if err != nil {
 			return config.ProtocolConverterConfig{}, err
 		}
 		tmpl.DataflowComponentReadServiceConfig = readSvcCfg
 	}
 
-	if w := a.payload.WriteDFCPayload; w != nil {
+	if w := payload.WriteDFCPayload; w != nil {
 		tmpl.DataflowComponentWriteServiceConfig = w.DataflowComponentWriteConfigInput
 	}
 
 	var readDFCDesiredState, writeDFCDesiredState string
-	if a.payload.ReadDFC != nil {
-		readDFCDesiredState = a.payload.ReadDFC.State
+	if payload.ReadDFC != nil {
+		readDFCDesiredState = payload.ReadDFC.State
 	}
-	if a.payload.WriteDFCPayload != nil {
-		writeDFCDesiredState = a.payload.WriteDFCPayload.State
+
+	if payload.WriteDFCPayload != nil {
+		writeDFCDesiredState = payload.WriteDFCPayload.State
 	}
 
 	spec := protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
 		Config:               tmpl,
 		Variables:            variables.VariableBundle{User: userVars},
-		Location:             convertIntMapToStringMap(a.payload.Location),
+		Location:             convertIntMapToStringMap(payload.Location),
 		ReadDFCDesiredState:  readDFCDesiredState,
 		WriteDFCDesiredState: writeDFCDesiredState,
 	}
 
 	return config.ProtocolConverterConfig{
 		FSMInstanceConfig: config.FSMInstanceConfig{
-			Name:            a.payload.Name,
+			Name:            payload.Name,
 			DesiredFSMState: protocolconverter.OperationalStateActive,
 		},
 		ProtocolConverterServiceConfig: spec,

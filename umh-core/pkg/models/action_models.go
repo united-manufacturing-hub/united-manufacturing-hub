@@ -159,6 +159,9 @@ const (
 	DeleteProtocolConverter ActionType = "delete-protocol-converter"
 	// EditProtocolConverter represents the action type for editing a protocol converter.
 	EditProtocolConverter ActionType = "edit-protocol-converter"
+	// SaveProtocolConverter represents the action type for saving a protocol
+	// converter configuration without waiting for it to be deployed.
+	SaveProtocolConverter ActionType = "save-protocol-converter"
 	// GetProtocolConverter represents the action type for getting a protocol converter.
 	GetProtocolConverter ActionType = "get-protocol-converter"
 	// GetAuditLog represents the action type for getting the audit log.
