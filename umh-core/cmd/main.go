@@ -638,6 +638,16 @@ children:
 		YAMLConfig:   yamlConfig,
 		Dependencies: fsmv2Deps,
 		ForceExit:    forceExit,
+		// The production tree under USE_FSMV2_TRANSPORT is 4 levels
+		// (application -> communicator -> transport -> push/pull). The drain
+		// budget cascades base x subtree height (see pkg/fsmv2/CLAUDE.md
+		// "Graceful Shutdown Cascading"), so a base of 2s bounds the worst-case
+		// chain drain at 8s -- inside docker's default 10s SIGTERM grace, with
+		// headroom for s6 teardown and redpanda disk sync. Healthy drains
+		// complete in ticks and never touch the budget; this only shortens how
+		// long a STUCK worker delays shutdown before its level warns and moves
+		// on. The base propagates to every child supervisor unchanged.
+		GracefulShutdownTimeout: 2 * time.Second,
 	})
 	if err != nil {
 		fsmv2Hook.Stop()
