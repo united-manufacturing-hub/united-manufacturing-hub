@@ -32,15 +32,11 @@ func (s *DisconnectedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 
 	if snap.ShouldStop() {
 		return fsmv2.Transition(&TryingToStopState{}, fsmv2.SignalNone, nil,
-			fmt.Sprintf("stop required: shutdown=%t", snap.IsShutdownRequested), nil)
+			fmt.Sprintf("stop required: %s", snap.StopReason()), nil)
 	}
 
-	if !snap.ShouldStop() {
-		return fsmv2.Transition(&TryingToConnectState{}, fsmv2.SignalNone, nil,
-			"worker should be running, attempting to reconnect", nil)
-	}
-
-	return fsmv2.Transition(s, fsmv2.SignalNone, nil, "connection lost, waiting for reconnect conditions", nil)
+	return fsmv2.Transition(&TryingToConnectState{}, fsmv2.SignalNone, nil,
+		"worker should be running, attempting to reconnect", nil)
 }
 
 func (s *DisconnectedState) String() string {

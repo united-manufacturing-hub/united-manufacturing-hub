@@ -79,16 +79,9 @@ func (s *StartingState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	}
 
 	// Authenticated; transition to Running. Children remain enabled (childrenAlive);
-	// RunningState handles unhealthy children.
-	if snap.Status.HasValidToken() {
-		return fsmv2.Transition(&RunningState{}, fsmv2.SignalNone, nil, "Authenticated, transitioning to Running", childrenAlive(snap.Config))
-	}
-
-	// Unreachable: the !HasValidToken() block above returns in all paths, so
-	// control only reaches here when HasValidToken() is true. The catch-all is
-	// required by the architecture validator's MISSING_CATCHALL_RETURN rule.
-	return fsmv2.Transition(s, fsmv2.SignalNone, nil,
-		fmt.Sprintf("starting: awaiting token (hasValidToken=%t)", snap.Status.HasValidToken()), childrenAlive(snap.Config))
+	// RunningState handles unhealthy children. The !HasValidToken() block above
+	// returns in all paths, so reaching here means the token is valid.
+	return fsmv2.Transition(&RunningState{}, fsmv2.SignalNone, nil, "Authenticated, transitioning to Running", childrenAlive(snap.Config))
 }
 
 // isPermanentAuthError returns true for error types that indicate a configuration
