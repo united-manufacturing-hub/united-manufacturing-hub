@@ -138,11 +138,12 @@ var _ = Describe("TransportStatus", func() {
 
 var _ = Describe("RenderChildren", func() {
 	It("stamps AuthSession onto both push and pull children", func() {
+		expiry := time.Now().Add(time.Hour)
 		status := snapshot.TransportStatus{
 			AuthSession: types.AuthSession{
 				Token:        "jwt",
 				InstanceUUID: "be-uuid",
-				Expiry:       time.Now().Add(time.Hour),
+				Expiry:       expiry,
 			},
 		}
 		specs, err := snapshot.RenderChildren(snapshot.TransportDesiredState{}, status, true)
@@ -152,6 +153,8 @@ var _ = Describe("RenderChildren", func() {
 			var carrier types.ChildAuthUserSpec
 			Expect(yaml.Unmarshal([]byte(sp.UserSpec.Config), &carrier)).To(Succeed())
 			Expect(carrier.AuthSession.Token).To(Equal("jwt"))
+			Expect(carrier.AuthSession.InstanceUUID).To(Equal("be-uuid"))
+			Expect(carrier.AuthSession.Expiry).To(BeTemporally("==", expiry))
 		}
 	})
 

@@ -134,8 +134,6 @@ func (w *PullWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, e
 		Variables: userSpec.Variables,
 	}
 
-	// Parse the rendered config to validate it and extract the AuthSession
-	// stamped by the parent transport worker.
 	parsed, err := config.ParseUserSpec[PullUserSpec](renderedSpec)
 	if err != nil {
 		return nil, err

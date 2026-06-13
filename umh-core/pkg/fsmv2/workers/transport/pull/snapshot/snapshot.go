@@ -59,7 +59,9 @@ type PullDesiredState struct {
 }
 
 // GetState returns the desired lifecycle state, defaulting to "running" if empty.
-// For pull workers this is propagated from the parent's user spec.
+// Pull is a leaf child whose lifecycle is gated by the parent transport worker via
+// the Disabled bit, not by its own State. The transport worker therefore leaves State
+// unset when constructing PullDesiredState, and GetState defaults to running.
 func (s *PullDesiredState) GetState() string {
 	if s.State == "" {
 		return config.DesiredStateRunning

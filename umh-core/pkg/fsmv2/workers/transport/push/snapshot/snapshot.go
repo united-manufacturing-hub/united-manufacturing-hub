@@ -57,7 +57,9 @@ type PushDesiredState struct {
 }
 
 // GetState returns the desired lifecycle state, defaulting to "running" if empty.
-// For push workers this is propagated from the parent's user spec.
+// Push is a leaf child whose lifecycle is gated by the parent transport worker via
+// the Disabled bit, not by its own State. The transport worker therefore leaves State
+// unset when constructing PushDesiredState, and GetState defaults to running.
 func (s *PushDesiredState) GetState() string {
 	if s.State == "" {
 		return config.DesiredStateRunning

@@ -15,7 +15,6 @@
 package types_test
 
 import (
-	"testing"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -64,21 +63,19 @@ var _ = Describe("AuthSession.IsUsable", func() {
 	)
 })
 
-func TestChildAuthUserSpecRoundTrip(t *testing.T) {
-	exp := time.Date(2026, 6, 2, 12, 0, 0, 0, time.UTC)
-	in := types.ChildAuthUserSpec{AuthSession: types.AuthSession{Token: "jwt-abc", Expiry: exp, InstanceUUID: "be-uuid"}}
+var _ = Describe("ChildAuthUserSpec", func() {
+	It("round-trips Token, InstanceUUID, and Expiry through YAML", func() {
+		exp := time.Date(2026, 6, 2, 12, 0, 0, 0, time.UTC)
+		in := types.ChildAuthUserSpec{AuthSession: types.AuthSession{Token: "jwt-abc", Expiry: exp, InstanceUUID: "be-uuid"}}
 
-	data, err := yaml.Marshal(in)
-	if err != nil {
-		t.Fatalf("marshal: %v", err)
-	}
+		data, err := yaml.Marshal(in)
+		Expect(err).ToNot(HaveOccurred())
 
-	var out types.ChildAuthUserSpec
-	if err := yaml.Unmarshal(data, &out); err != nil {
-		t.Fatalf("unmarshal: %v", err)
-	}
+		var out types.ChildAuthUserSpec
+		Expect(yaml.Unmarshal(data, &out)).To(Succeed())
 
-	if out.AuthSession.Token != "jwt-abc" || out.AuthSession.InstanceUUID != "be-uuid" || !out.AuthSession.Expiry.Equal(exp) {
-		t.Fatalf("round-trip mismatch: got %+v", out.AuthSession)
-	}
-}
+		Expect(out.AuthSession.Token).To(Equal("jwt-abc"))
+		Expect(out.AuthSession.InstanceUUID).To(Equal("be-uuid"))
+		Expect(out.AuthSession.Expiry).To(BeTemporally("==", exp))
+	})
+})
