@@ -33,7 +33,7 @@ func (s *TryingToConnectState) Next(snapAny any) fsmv2.NextResult[any, any] {
 
 	if snap.ShouldStop() {
 		return fsmv2.Transition(&TryingToStopState{}, fsmv2.SignalNone, nil,
-			fmt.Sprintf("stop required: shutdown=%t", snap.IsShutdownRequested), nil)
+			fmt.Sprintf("stop required: %s", snap.StopReason()), nil)
 	}
 
 	if snap.Status.RestartAfterFailures > 0 &&

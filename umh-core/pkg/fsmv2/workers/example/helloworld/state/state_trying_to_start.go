@@ -35,7 +35,7 @@ func (s *TryingToStartState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	// 1. Check shutdown first
 	if snap.ShouldStop() {
 		return fsmv2.Transition(&StoppedState{}, fsmv2.SignalNone, nil,
-			fmt.Sprintf("stop required: shutdown=%t", snap.IsShutdownRequested), nil)
+			fmt.Sprintf("stop required: %s", snap.StopReason()), nil)
 	}
 
 	// 2. Check if action has already completed (observe the effect)

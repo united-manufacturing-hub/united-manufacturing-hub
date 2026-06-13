@@ -36,12 +36,8 @@ func (s *StoppedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 		return fsmv2.Transition(s, fsmv2.SignalNone, nil, "disabled by supervisor, staying stopped", nil)
 	}
 
-	if !snap.ShouldStop() {
-		return fsmv2.Transition(&RunningState{}, fsmv2.SignalNone, nil,
-			"parent wants running, transitioning to Running", nil)
-	}
-
-	return fsmv2.Transition(s, fsmv2.SignalNone, nil, "stopped, waiting for parent", nil)
+	return fsmv2.Transition(&RunningState{}, fsmv2.SignalNone, nil,
+		"parent wants running, transitioning to Running", nil)
 }
 
 func (s *StoppedState) String() string {

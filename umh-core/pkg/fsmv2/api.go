@@ -504,6 +504,14 @@ func (s WorkerSnapshot[TConfig, TStatus]) ShouldStop() bool {
 	return s.IsShutdownRequested || s.IsDisabled
 }
 
+// StopReason names every active cause behind ShouldStop() for use in transition
+// reason strings. ShouldStop() is true on either a shutdown request or an admin
+// disable, so a bare "shutdown=%t" reason misreports a disable-driven stop as
+// shutdown=false; this reports both terms so operators see the real cause.
+func (s WorkerSnapshot[TConfig, TStatus]) StopReason() string {
+	return fmt.Sprintf("shutdown=%t disabled=%t", s.IsShutdownRequested, s.IsDisabled)
+}
+
 // ConvertWorkerSnapshot type-asserts the raw snapshot from State.Next() into a
 // fully typed WorkerSnapshot. Panics with a descriptive message if the snapshot
 // contains unexpected types.

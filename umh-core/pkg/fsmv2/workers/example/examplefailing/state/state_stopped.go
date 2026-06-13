@@ -36,11 +36,11 @@ func (s *StoppedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 		return fsmv2.Transition(s, fsmv2.SignalNeedsRemoval, nil, "shutdown requested, signaling removal", nil)
 	}
 
-	if !snap.ShouldStop() {
-		return fsmv2.Transition(&TryingToConnectState{}, fsmv2.SignalNone, nil, "worker should be running, transitioning to connect", nil)
+	if snap.IsDisabled {
+		return fsmv2.Transition(s, fsmv2.SignalNone, nil, "disabled by supervisor, staying stopped", nil)
 	}
 
-	return fsmv2.Transition(s, fsmv2.SignalNone, nil, "worker is stopped, no connection", nil)
+	return fsmv2.Transition(&TryingToConnectState{}, fsmv2.SignalNone, nil, "worker should be running, transitioning to connect", nil)
 }
 
 func (s *StoppedState) String() string {

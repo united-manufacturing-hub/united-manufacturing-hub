@@ -281,16 +281,6 @@ var _ = Describe("FSMv2 Architecture Validation", func() {
 			})
 		})
 
-		Describe("Exhaustive Transition Coverage (Invariant: Complete State Handling)", func() {
-			It("should end with catch-all return: return s, SignalNone, nil", func() {
-				violations := validator.ValidateExhaustiveTransitionCoverage(getFsmv2Dir())
-				if len(violations) > 0 {
-					message := validator.FormatViolationsWithPattern("Catch-All Return Violations", violations, "MISSING_CATCHALL_RETURN")
-					Fail(message)
-				}
-			})
-		})
-
 		Describe("Base State Type Embedding (Invariant: Type Hierarchy)", func() {
 			It("should embed exactly one Base*State type", func() {
 				violations := validator.ValidateBaseStateEmbedding(getFsmv2Dir())

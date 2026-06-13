@@ -419,7 +419,7 @@
 //
 // # Best practices
 //
-//   - Check IsShutdownRequested() as first condition in state.Next()
+//   - Check ShouldStop() as first condition in state.Next()
 //   - Make all actions idempotent (check if work already done)
 //   - Use ChildSpec.Enabled to coordinate child lifecycle (not data passing)
 //   - Pass data to children via VariableBundle, not direct method calls
