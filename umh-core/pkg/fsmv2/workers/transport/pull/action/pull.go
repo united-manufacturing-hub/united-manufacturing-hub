@@ -31,7 +31,9 @@ const PullActionName = "pull"
 // PullAction pulls inbound messages from the backend via long-poll and delivers
 // them to the inbound channel. It manages a pending-message buffer for partial
 // deliveries and applies backpressure when the channel nears capacity.
-type PullAction struct{}
+type PullAction struct {
+	JWTToken string
+}
 
 // Execute runs one pull cycle: delivers pending messages, checks backpressure,
 // pulls new messages from the backend, and delivers them to the inbound channel.
@@ -45,10 +47,6 @@ func (a *PullAction) Execute(ctx context.Context, depsAny any) error {
 	pullDeps, ok := depsAny.(snapshot.PullDependencies)
 	if !ok {
 		return errors.New("invalid dependencies type: expected PullDependencies")
-	}
-
-	if !pullDeps.IsTokenValid() {
-		return errors.New("token not valid, skipping pull")
 	}
 
 	t := pullDeps.GetTransport()
@@ -142,7 +140,7 @@ func (a *PullAction) Execute(ctx context.Context, depsAny any) error {
 	}
 
 	// Phase 3: Pull from backend
-	jwtToken := pullDeps.GetJWTToken()
+	jwtToken := a.JWTToken
 
 	pullStart := time.Now()
 	messages, err := t.Pull(ctx, jwtToken)

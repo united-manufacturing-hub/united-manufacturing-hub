@@ -60,7 +60,6 @@ func (m *mockTransport) Reset() {}
 
 type mockPullDeps struct {
 	transport       types.Transport
-	jwtToken        string
 	metricsRecorder *deps.MetricsRecorder
 	logger          deps.FSMLogger
 
@@ -75,7 +74,6 @@ type mockPullDeps struct {
 	lastErrorType         types.ErrorType
 
 	pendingMessages   []*types.UMHMessage
-	tokenValid        bool
 	resetGeneration   uint64
 	resetCleared      bool
 	lastRetryAfter    time.Duration
@@ -94,7 +92,6 @@ func newMockPullDeps() *mockPullDeps {
 	return &mockPullDeps{
 		metricsRecorder: deps.NewMetricsRecorder(),
 		logger:          deps.NewNopFSMLogger(),
-		tokenValid:      true,
 		chanCapacity:    1000,
 		chanLength:      0,
 	}
@@ -144,10 +141,6 @@ func (m *mockPullDeps) GetTransport() types.Transport {
 	return m.transport
 }
 
-func (m *mockPullDeps) GetJWTToken() string {
-	return m.jwtToken
-}
-
 func (m *mockPullDeps) RecordTypedError(errType types.ErrorType, retryAfter time.Duration) {
 	m.recordTypedErrorCalls = append(m.recordTypedErrorCalls, typedErrorCall{
 		errType:    errType,
@@ -188,10 +181,6 @@ func (m *mockPullDeps) DrainPendingMessages() []*types.UMHMessage {
 
 func (m *mockPullDeps) PendingMessageCount() int {
 	return len(m.pendingMessages)
-}
-
-func (m *mockPullDeps) IsTokenValid() bool {
-	return m.tokenValid
 }
 
 func (m *mockPullDeps) GetResetGeneration() uint64 {
@@ -236,7 +225,6 @@ var _ = Describe("PullAction", func() {
 		mockDeps = newMockPullDeps()
 		mockDeps.inboundBi = inboundBi
 		mockDeps.transport = mockTrans
-		mockDeps.jwtToken = "test-jwt"
 	})
 
 	Describe("Successful pull", func() {
@@ -426,15 +414,20 @@ var _ = Describe("PullAction", func() {
 		})
 	})
 
-	Describe("Token pre-check", func() {
-		It("should skip pull when token is invalid (without pulling)", func() {
-			mockDeps.tokenValid = false
+	Describe("Token threading", func() {
+		It("should use JWTToken field from action struct for pulling (not deps.GetJWTToken)", func() {
+			tokenAct := &action.PullAction{JWTToken: "struct-token"}
 
-			err := act.Execute(context.Background(), mockDeps)
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("token not valid"))
+			var capturedToken string
+			mockTrans.pullFunc = func(_ context.Context, jwtToken string) ([]*types.UMHMessage, error) {
+				capturedToken = jwtToken
 
-			Expect(mockTrans.pullCallCount).To(Equal(0))
+				return nil, nil
+			}
+
+			err := tokenAct.Execute(context.Background(), mockDeps)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(capturedToken).To(Equal("struct-token"))
 		})
 	})
 

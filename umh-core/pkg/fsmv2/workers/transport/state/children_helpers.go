@@ -23,11 +23,11 @@ import (
 // Returning nil on a RenderChildren error is NOT safe: the supervisor falls
 // back to GetChildrenSpecs(), which is also nil for migrated workers, so
 // reconcileChildren(nil) marks every resident child pendingRemoval (despawn).
-// The only error source is yaml.Marshal of the static BaseUserSpec, which
+// The only error source is yaml.Marshal of the ChildAuthUserSpec carrier, which
 // fails deterministically and is covered by tests. The semantic fix
 // (nil = keep last rendered children) is tracked in ENG-5115.
-func childrenAlive(cfg snapshot.TransportDesiredState) []config.ChildSpec {
-	specs, err := snapshot.RenderChildren(cfg, true)
+func childrenAlive(cfg snapshot.TransportDesiredState, status snapshot.TransportStatus) []config.ChildSpec {
+	specs, err := snapshot.RenderChildren(cfg, status, true)
 	if err != nil {
 		logger.For("transport").Errorf("RenderChildren(enabled=true) failed, all resident children will be despawned (ENG-5115): %v", err)
 
@@ -37,8 +37,8 @@ func childrenAlive(cfg snapshot.TransportDesiredState) []config.ChildSpec {
 	return specs
 }
 
-func childrenStopped(cfg snapshot.TransportDesiredState) []config.ChildSpec {
-	specs, err := snapshot.RenderChildren(cfg, false)
+func childrenStopped(cfg snapshot.TransportDesiredState, status snapshot.TransportStatus) []config.ChildSpec {
+	specs, err := snapshot.RenderChildren(cfg, status, false)
 	if err != nil {
 		logger.For("transport").Errorf("RenderChildren(enabled=false) failed, all resident children will be despawned (ENG-5115): %v", err)
 
