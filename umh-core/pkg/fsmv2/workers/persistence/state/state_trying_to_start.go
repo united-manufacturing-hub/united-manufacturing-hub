@@ -32,7 +32,7 @@ func (s *TryingToStartState) Next(snapAny any) fsmv2.NextResult[any, any] {
 
 	if snap.ShouldStop() {
 		return fsmv2.Transition(&StoppedState{}, fsmv2.SignalNone, nil,
-			fmt.Sprintf("stop required: shutdown=%t, parentState=%s", snap.IsShutdownRequested, snap.ParentMappedState), nil)
+			fmt.Sprintf("stop required: %s", snap.StopReason()), nil)
 	}
 
 	maintenanceActionName := action.NewRunMaintenanceAction().Name()

@@ -125,7 +125,6 @@ var _ = Describe("CommunicatorWorker", func() {
 
 				desired, ok := desiredIface.(*fsmv2.WrappedDesiredState[communicator.CommunicatorConfig])
 				Expect(ok).To(BeTrue(), "expected *fsmv2.WrappedDesiredState[CommunicatorConfig]")
-				Expect(desired.GetState()).To(Equal("running"))
 				Expect(desired.IsShutdownRequested()).To(BeFalse())
 			})
 
@@ -160,7 +159,6 @@ state: "running"
 				Expect(desired.Config.InstanceUUID).To(Equal("test-uuid-12345"))
 				Expect(desired.Config.AuthToken).To(Equal("test-auth-token-secret"))
 				Expect(desired.Config.Timeout).To(Equal(15 * time.Second))
-				Expect(desired.GetState()).To(Equal("running"))
 				// ChildrenSpecs is nil: transport child is declared in RenderChildren (children.go),
 				// not in DeriveDesiredState. RenderChildren is the single source of truth.
 				Expect(desired.GetChildrenSpecs()).To(BeNil())
@@ -212,7 +210,6 @@ state: "running"
 				Expect(loadedDesired.Config.InstanceUUID).To(Equal("roundtrip-uuid-test"))
 				Expect(loadedDesired.Config.AuthToken).To(Equal("roundtrip-auth-token"))
 				Expect(loadedDesired.Config.Timeout).To(Equal(30 * time.Second))
-				Expect(loadedDesired.GetState()).To(Equal("running"))
 			})
 
 			It("should return clear error on invalid spec type", func() {

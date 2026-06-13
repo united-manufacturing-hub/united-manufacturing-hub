@@ -134,9 +134,9 @@ var _ = Describe("TransportDesiredState", func() {
 			desired := &snapshot.TransportDesiredState{
 				ChildrenSpecs: []config.ChildSpec{
 					{
-						Name:             "push",
-						WorkerType:       "push",
-						ChildStartStates: []string{"Running", "Degraded"},
+						Name:       "push",
+						WorkerType: "push",
+						Enabled:    true,
 					},
 				},
 			}
@@ -144,7 +144,7 @@ var _ = Describe("TransportDesiredState", func() {
 			Expect(specs).To(HaveLen(1))
 			Expect(specs[0].Name).To(Equal("push"))
 			Expect(specs[0].WorkerType).To(Equal("push"))
-			Expect(specs[0].ChildStartStates).To(ConsistOf("Running", "Degraded"))
+			Expect(specs[0].Enabled).To(BeTrue())
 		})
 
 		It("should implement config.ChildSpecProvider interface", func() {

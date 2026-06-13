@@ -35,8 +35,7 @@ func (s *RunningState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	// 1. Check shutdown - transition back to stopped
 	if snap.ShouldStop() {
 		return fsmv2.Transition(&StoppedState{}, fsmv2.SignalNone, nil,
-			fmt.Sprintf("stop required: shutdown=%t, parentState=%s",
-				snap.IsShutdownRequested, snap.ParentMappedState), nil)
+			fmt.Sprintf("stop required: %s", snap.StopReason()), nil)
 	}
 
 	// 2. Check mood from mood file (read in CollectObservedState)

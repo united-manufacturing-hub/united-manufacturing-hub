@@ -61,15 +61,21 @@ func makeSnapshotWithBackoff(
 	degradedEnteredAt time.Time,
 	lastErrorAt time.Time,
 ) fsmv2.Snapshot {
+	// L5b: parent-driven stop is now expressed via the disable-mapping pass
+	// (IsDisabled). A test that asks for a "stopped" parent maps to
+	// Disabled=true so ShouldStop() returns true.
+	disabled := parentMappedState == config.DesiredStateStopped
+
 	desired := &fsmv2.WrappedDesiredState[snapshot.PullDesiredState]{
 		Config: snapshot.PullDesiredState{
-			ParentMappedState: parentMappedState,
 			BaseDesiredState: config.BaseDesiredState{
 				ShutdownRequested: shutdownRequested,
+				Disabled:          disabled,
 			},
 		},
 		BaseDesiredState: config.BaseDesiredState{
 			ShutdownRequested: shutdownRequested,
+			Disabled:          disabled,
 		},
 	}
 
@@ -85,7 +91,6 @@ func makeSnapshotWithBackoff(
 			LastErrorAt:         lastErrorAt,
 		},
 	}
-	obs.ParentMappedState = parentMappedState
 
 	return fsmv2.Snapshot{
 		Observed: obs,
@@ -373,9 +378,9 @@ var _ = Describe("StoppingState", func() {
 	Describe("stop signal reverted during shutdown", func() {
 		It("should recover when parent transitions back to Running (token re-auth)", func() {
 			// Scenario: transport parent briefly enters Starting for JWT refresh.
-			// Children get ParentMappedState="stopped", enter Stopping.
+			// Children get disabled (IsDisabled=true), enter Stopping.
 			// Parent re-authenticates in one tick, returns to Running.
-			// Children now have ParentMappedState="running" but are in Stopping.
+			// Children are re-enabled but are in Stopping.
 
 			// Tick N: parent in Starting → child told to stop
 			snapParentStopped := makeSnapshot(config.DesiredStateStopped, false, 0, true, true)

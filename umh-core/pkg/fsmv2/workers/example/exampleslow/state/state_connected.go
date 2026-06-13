@@ -15,6 +15,8 @@
 package state
 
 import (
+	"fmt"
+
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
 	example_slow "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleslow"
@@ -28,7 +30,8 @@ func (s *ConnectedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := fsmv2.ConvertWorkerSnapshot[example_slow.ExampleslowConfig, example_slow.ExampleslowStatus](snapAny)
 
 	if snap.ShouldStop() {
-		return fsmv2.Transition(&TryingToStopState{}, fsmv2.SignalNone, nil, "stop required, transitioning to trying to stop", nil)
+		return fsmv2.Transition(&TryingToStopState{}, fsmv2.SignalNone, nil,
+			fmt.Sprintf("stop required: %s", snap.StopReason()), nil)
 	}
 
 	if snap.Status.ConnectionHealth == "no connection" {

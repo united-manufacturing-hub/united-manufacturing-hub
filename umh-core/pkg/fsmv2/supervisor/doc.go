@@ -99,10 +99,9 @@
 //   - Removes children after workers complete shutdown
 //   - Propagates errors (halts reconciliation on failure)
 //
-// Apply state mapping:
-//   - Parent state influences child desired state
-//   - ChildStartStates determines when children should run
-//   - Empty ChildStartStates means child always runs
+// Apply disable mapping:
+//   - ChildSpec.Enabled determines whether each child should run
+//   - Enabled=false leaves the child resident in Stopped (not despawned)
 //
 // Recursively tick children:
 //   - Ticks all children in hierarchy order
@@ -420,9 +419,9 @@
 //
 // # Best practices
 //
-//   - Check IsShutdownRequested() as first condition in state.Next()
+//   - Check ShouldStop() as first condition in state.Next()
 //   - Make all actions idempotent (check if work already done)
-//   - Use ChildStartStates to coordinate child lifecycle (not data passing)
+//   - Use ChildSpec.Enabled to coordinate child lifecycle (not data passing)
 //   - Pass data to children via VariableBundle, not direct method calls
 //   - Release locks before calling child methods (prevent deadlock)
 //   - Handle context cancellation in all async operations

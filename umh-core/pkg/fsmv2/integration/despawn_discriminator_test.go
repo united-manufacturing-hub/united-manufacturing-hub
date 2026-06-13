@@ -49,11 +49,10 @@ func (s *despawnPhaseState) Next(_ any) fsmv2.NextResult[any, any] {
 		return fsmv2.Transition(s, fsmv2.SignalNone, nil, "spawning child-0",
 			[]fsmconfig.ChildSpec{
 				{
-					Name:             "child-0",
-					WorkerType:       "examplechild",
-					UserSpec:         fsmconfig.UserSpec{},
-					Enabled:          true,
-					ChildStartStates: []string{"TryingToStart", "Running"},
+					Name:       "child-0",
+					WorkerType: "examplechild",
+					UserSpec:   fsmconfig.UserSpec{},
+					Enabled:    true,
 				},
 			})
 	}
@@ -77,14 +76,12 @@ func (w *despawnParentWorker) CollectObservedState(_ context.Context, _ fsmv2.De
 
 func (w *despawnParentWorker) DeriveDesiredState(_ interface{}) (fsmv2.DesiredState, error) {
 	return &fsmv2.WrappedDesiredState[exampleparent.ExampleparentConfig]{
-		State: fsmconfig.DesiredStateRunning,
 		ChildrenSpecs: []fsmconfig.ChildSpec{
 			{
-				Name:             "child-0",
-				WorkerType:       "examplechild",
-				UserSpec:         fsmconfig.UserSpec{},
-				Enabled:          true,
-				ChildStartStates: []string{"TryingToStart", "Running"},
+				Name:       "child-0",
+				WorkerType: "examplechild",
+				UserSpec:   fsmconfig.UserSpec{},
+				Enabled:    true,
 			},
 		},
 	}, nil
