@@ -283,7 +283,7 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 	lastActionObsTime := workerCtx.lastActionObsTime
 	workerCtx.mu.RUnlock()
 
-	if actionPending {
+	if actionPending && !isShutdownRequested {
 		// Observation must be NEWER than last action to unlock gating
 		var currentObsTime time.Time
 
