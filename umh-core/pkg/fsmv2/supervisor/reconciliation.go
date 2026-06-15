@@ -851,6 +851,14 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) (err error) 
 	// (shutdown request and the disable-mapping pass) that override DeriveDesiredState.
 	// Workers always re-derive these as false, so the persisted value must be carried
 	// forward or the disable bit would be clobbered every tick.
+	//
+	// The store full-replaces on write, so this load-and-rewrite races the
+	// explicit setters (requestShutdown / clearShutdownRequested / setDisabled).
+	// lifecycleFlagMu serializes them: held across the load and the save, a setter
+	// that commits in between is observed by the load on the next tick instead of
+	// being overwritten by a stale value (ENG-4971).
+	s.lifecycleFlagMu.Lock()
+
 	var existingDesiredTyped TDesired
 	if err := s.store.LoadDesiredTyped(ctx, s.workerType, firstWorkerID, &existingDesiredTyped); err == nil {
 		// Check the existing state's lifecycle flags via interface.
@@ -866,6 +874,9 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) (err error) 
 	}
 
 	_, err = s.store.SaveDesired(ctx, s.workerType, firstWorkerID, desiredDoc)
+
+	s.lifecycleFlagMu.Unlock()
+
 	if err != nil {
 		// Log the error but continue with the tick - the system can recover on the next tick
 		// The tickWorker will use the previously saved desired state
