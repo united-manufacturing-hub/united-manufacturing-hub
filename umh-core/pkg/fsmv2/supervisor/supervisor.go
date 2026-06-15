@@ -210,6 +210,7 @@ type Supervisor[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState] stru
 	panicCircuitOpen    atomic.Bool
 	started             atomic.Bool
 	noWorkersWarnedOnce atomic.Bool
+	drainTimedOut       atomic.Bool
 	enableTraceLogging  bool
 }
 
