@@ -13,9 +13,21 @@
 # limitations under the License.
 
 # Syncs each stable GitHub Release to a Linear release (continuous pipeline).
-# Skips pre-release tags (v*-pre.*) so the Linear release attribution lives
-# on the version that actually shipped to customers. The commit range from
-# the previous stable release captures every issue that landed during soak.
+# Skips pre-release tags (v*-pre.*) so the Linear release attribution lives on
+# the version that actually shipped to customers.
+#
+# Invokes the linear-release CLI directly rather than via the wrapper action,
+# so we can pass --release-notes-file. A single `sync` call creates the release
+# record, scans the commit range for ENG-XXXX identifiers, attaches the matching
+# issues, and sets the release description from umh-core/CHANGELOG.md. The CLI
+# reads its pipeline access key from the LINEAR_ACCESS_KEY env var.
+#
+# The description is the CHANGELOG section for the released version with images
+# stripped; the image-rich changelog lives at umh.app/insights/changelog.
+#
+# workflow_dispatch exposes dry_run and base_ref so a release can be re-tested
+# (including against historical tags) on the real CLI path without mutating
+# Linear. Both are inert on release: events.
 
 name: Linear Release
 
@@ -25,8 +37,17 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Existing stable release tag to (re)sync (e.g., v0.44.20).'
+        description: 'Stable release tag to (re)sync (e.g., v0.44.20).'
         required: true
+        type: string
+      dry_run:
+        description: 'Scan commits and call read-only Linear APIs, skip all mutations.'
+        required: false
+        default: false
+        type: boolean
+      base_ref:
+        description: 'Override the commit-scan base (tag or SHA). For testing historical ranges.'
+        required: false
         type: string
 
 jobs:
@@ -40,17 +61,87 @@ jobs:
     timeout-minutes: 5
     permissions:
       contents: read
+    env:
+      CLI_VERSION: v0.14.0
+      CLI_SHA256: 4ab208dc617fe53bb22dff68a4d48ed720ac51f868083182365bce4fd3559379
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           ref: ${{ inputs.tag || github.event.release.tag_name }}
-          # Required: the CLI walks the commit range from the previous release.
+          # Full history + tags: the CLI walks the commit range from the previous
+          # release, and base_ref may name a tag.
           fetch-depth: 0
+          fetch-tags: true
 
-      - uses: linear/linear-release-action@0917777589db006387af296dde440385f88d6ac4 # v0.10.0
+      # The step above checks out the released tag, whose tree predates these
+      # CI scripts (and won't contain them when re-syncing historical tags).
+      # Pull the scripts from the workflow file's own revision instead, into a
+      # sibling dir, so they exist regardless of which tag is being synced.
+      # workflow_sha (not github.sha): on a release: event github.sha is the
+      # released tag commit, which may not carry the scripts; workflow_sha is
+      # always the revision the running workflow came from, which does.
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          access_key: ${{ secrets.LINEAR_ACCESS_KEY_UMH_CORE }}
-          version: ${{ inputs.tag || github.event.release.tag_name }}
-          name: ${{ inputs.tag || github.event.release.tag_name }}
-          # Monorepo: scope to umh-core; ignore helm chart and classic commits.
-          include_paths: umh-core/**
+          ref: ${{ github.workflow_sha }}
+          path: .ci-tooling
+          sparse-checkout: .github/scripts
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+
+      - name: Compute release version
+        id: ver
+        env:
+          TAG: ${{ inputs.tag || github.event.release.tag_name }}
+        run: |
+          set -euo pipefail
+          # Keep the leading 'v': the Linear release version is the tag verbatim.
+          echo "version=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          # Strip it for the CHANGELOG lookup, which uses bare semver headings.
+          echo "semver=${TAG#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Build release notes from CHANGELOG.md
+        env:
+          # Bare semver: build-release-notes matches the `## [x.y.z]` heading.
+          VERSION: ${{ steps.ver.outputs.semver }}
+          CHANGELOG_FILE: umh-core/CHANGELOG.md
+          # Empty notes fail the step on a real sync, but stay a warning on
+          # dry-runs so historical/odd tags can still be exercised.
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: .ci-tooling/.github/scripts/build-release-notes.sh "$RUNNER_TEMP/notes.md"
+
+      - name: Install linear-release CLI
+        run: |
+          set -euo pipefail
+          curl -fsSL "https://github.com/linear/linear-release/releases/download/${CLI_VERSION}/linear-release-linux-x64" -o linear-release
+          echo "${CLI_SHA256}  linear-release" | sha256sum -c -
+          chmod +x linear-release
+
+      - name: Sync to Linear
+        env:
+          LINEAR_ACCESS_KEY: ${{ secrets.LINEAR_ACCESS_KEY_UMH_CORE }}
+          VERSION: ${{ steps.ver.outputs.version }}
+          CURRENT_TAG: ${{ steps.ver.outputs.tag }}
+          DRY_RUN: ${{ inputs.dry_run }}
+          BASE_REF: ${{ inputs.base_ref }}
+        run: |
+          set -euo pipefail
+          # Resolve the commit-scan base (empty = let the CLI pick its automatic
+          # baseline). The resolver prints the base to stdout and its rationale
+          # to stderr; a BASE_REF override short-circuits it. See the script.
+          BASE="$(.ci-tooling/.github/scripts/resolve-base-ref.sh)"
+
+          # Monorepo: scope the commit scan to umh-core; ignore helm chart and
+          # classic commits.
+          args=(sync --json
+            "--release-version=${VERSION}"
+            "--name=${VERSION}"
+            --release-notes-file "$RUNNER_TEMP/notes.md"
+            "--include-paths=umh-core/**")
+          if [ "${DRY_RUN:-false}" = "true" ]; then
+            args+=("--dry-run")
+          fi
+          if [ -n "$BASE" ]; then
+            args+=("--base-ref=${BASE}")
+          fi
+          ./linear-release "${args[@]}"

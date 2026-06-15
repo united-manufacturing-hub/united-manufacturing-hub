@@ -477,7 +477,6 @@ func (s *Supervisor[TObserved, TDesired]) requestShutdown(ctx context.Context, w
 		if !errors.Is(err, persistence.ErrNotFound) {
 			return fmt.Errorf("failed to load desired state: %w", err)
 		}
-		// No desired state in DB yet, nothing to update
 		return nil
 	}
 
@@ -678,6 +677,77 @@ func (s *Supervisor[TObserved, TDesired]) handleWorkerRestart(ctx context.Contex
 	s.logger.Info("worker_restart_complete",
 		deps.HierarchyPath(identity.HierarchyPath),
 		deps.String("to_state", toState))
+
+	return nil
+}
+
+// setDisabled mirrors requestShutdown but uses the Disableable interface.
+// The disable-mapping pass is the exclusive caller; no other subsystem may call this.
+func (s *Supervisor[TObserved, TDesired]) setDisabled(ctx context.Context, workerID string, disabled bool) error {
+	s.mu.RLock()
+	_, exists := s.workers[workerID]
+	s.mu.RUnlock()
+
+	if !exists {
+		return errors.New("worker not found")
+	}
+
+	var desired TDesired
+
+	err := s.store.LoadDesiredTyped(ctx, s.workerType, workerID, &desired)
+	if err != nil {
+		if !errors.Is(err, persistence.ErrNotFound) {
+			return fmt.Errorf("failed to load desired state: %w", err)
+		}
+		return nil
+	}
+
+	if d, ok := any(desired).(fsmv2.Disableable); ok {
+		d.SetDisabled(disabled)
+	} else if d, ok := any(&desired).(fsmv2.Disableable); ok {
+		d.SetDisabled(disabled)
+	} else {
+		return fmt.Errorf("desired state type %T does not implement Disableable", desired)
+	}
+
+	desiredJSON, err := json.Marshal(desired)
+	if err != nil {
+		return fmt.Errorf("failed to marshal desired state: %w", err)
+	}
+
+	desiredDoc := make(persistence.Document)
+	if err := json.Unmarshal(desiredJSON, &desiredDoc); err != nil {
+		return fmt.Errorf("failed to unmarshal to document: %w", err)
+	}
+
+	desiredDoc[FieldID] = workerID
+
+	if _, err := s.store.SaveDesired(ctx, s.workerType, workerID, desiredDoc); err != nil {
+		return fmt.Errorf("failed to save desired state with disabled flag: %w", err)
+	}
+
+	return nil
+}
+
+// SetDisabled writes the Disabled flag on every worker. disabled=true keeps
+// them resident in Stopped (no resume). The disable-mapping pass calls this per-tick.
+// Returns the first error; subsequent workers are still updated.
+func (s *Supervisor[TObserved, TDesired]) SetDisabled(ctx context.Context, disabled bool) error {
+	s.mu.RLock()
+
+	workerIDs := make([]string, 0, len(s.workers))
+
+	for workerID := range s.workers {
+		workerIDs = append(workerIDs, workerID)
+	}
+
+	s.mu.RUnlock()
+
+	for _, workerID := range workerIDs {
+		if err := s.setDisabled(ctx, workerID, disabled); err != nil {
+			return fmt.Errorf("worker %q: %w", workerID, err)
+		}
+	}
 
 	return nil
 }

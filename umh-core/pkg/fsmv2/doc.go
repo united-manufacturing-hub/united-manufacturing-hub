@@ -169,17 +169,30 @@
 //
 // ## Parent-child workers
 //
-// Parents declare children via ChildSpec in DeriveDesiredState().
-// The supervisor handles creation, updates, and cleanup automatically.
+// Parents declare children via a package-level RenderChildren function,
+// called from each state's Next(). RenderChildren returns the slice of
+// ChildSpec that should currently exist; the supervisor reconciles spawn,
+// update, and despawn from that slice.
 //
-// Key concepts:
-//   - Parent returns ChildrenSpecs in DeriveDesiredState()
-//   - Children run when the parent state is listed in ChildStartStates; to keep
-//     a child stopped, omit it from ChildStartStates or set ChildStartStates to
-//     a state the parent is not currently in
-//   - Use VariableBundle for passing data to children
+// Lifecycle:
 //
-// See workers/example/exampleparent/worker.go for a complete example.
+//   - Include a child in the slice: the supervisor creates it if absent,
+//     otherwise leaves it running.
+//   - Omit a child from the slice: the supervisor despawns it. Absence is
+//     the despawn signal; there is no separate remove-child call.
+//   - Include a child with Enabled=false: the child stays resident in its
+//     Stopped state without resuming, preserving dependency state (e.g.,
+//     the transport push worker's buffer).
+//
+// Per-child variables (e.g., DEVICE_ID, INDEX) are passed via UserSpec.Variables;
+// see VariableBundle. See config/childspec.go for the field-level definitions
+// of ChildSpec, Enabled, IsShutdownRequested, and IsDisabled.
+//
+// See workers/example/exampleparent/children.go for the despawn variant
+// (children are stateless, so the empty slice is correct in stop states).
+// See workers/transport/snapshot/children.go for the resident-disable
+// variant (children hold buffers, so Enabled=false keeps them in Stopped).
+// The matching child-side logic is in workers/example/examplechild/state/state_stopped.go.
 //
 // ## Helper functions
 //
@@ -230,19 +243,16 @@
 // Pattern 2: Full visibility (for inspecting individual children)
 //
 //	func (o MyObservedState) SetChildrenView(view config.ChildrenView) fsmv2.ObservedState {
-//	    healthy, unhealthy := view.Counts()
-//	    o.ChildrenHealthy = healthy
-//	    o.ChildrenUnhealthy = unhealthy
-//	    // Can also use: view.List(), view.Get(name), view.AllHealthy()
+//	    o.ChildrenHealthy = view.HealthyCount
+//	    o.ChildrenUnhealthy = view.UnhealthyCount
+//	    // Can also use: view.Children, view.AllHealthy
 //	    return o
 //	}
 //
-// ChildrenView interface provides:
-//   - Children []ChildInfo: All children with state info
-//   - List() []ChildInfo: Same as Children, kept for migration compatibility
-//   - Get(name string) *ChildInfo: Single child by name (nil if not found)
-//   - Counts() (healthy, unhealthy int): Aggregate health counts (stopped children excluded from unhealthy)
-//   - AllHealthy(): Aggregate predicate (true when all children are PhaseRunningHealthy)
+// ChildrenView is a value-type struct with pre-computed aggregate fields:
+//   - Children []ChildInfo: all children with state info
+//   - HealthyCount, UnhealthyCount int: per-tick aggregate counts (stopped children excluded from unhealthy)
+//   - AllHealthy, AllOperational, AllStopped bool: aggregate predicates derived from each child's lifecycle phase
 //
 // ChildInfo provides read-only info about each child:
 //   - Name, WorkerType, StateName, StateReason, IsHealthy, IsOperational, IsStopped, ErrorMsg, HierarchyPath
@@ -250,10 +260,10 @@
 // StateName is display-only (raw form like "Connected" or "TryingToConnect").
 // IsHealthy, IsOperational, and IsStopped are the canonical predicate fields; they are
 // populated from the child's cached lifecycle phase and are what
-// NewChildrenManager's aggregate predicates (Counts(), AllHealthy()) read.
-// Do NOT recompute predicates from StateName;
-// the prefix-only ParseLifecyclePhase parser cannot classify production raw
-// state names and would silently mis-aggregate.
+// config.NewChildrenView reads to derive HealthyCount, UnhealthyCount, and the
+// AllHealthy / AllOperational / AllStopped flags. Do NOT recompute predicates
+// from StateName; the prefix-only ParseLifecyclePhase parser cannot classify
+// production raw state names and would silently mis-aggregate.
 //
 // See observation.go (Observation.SetChildrenCounts / ChildrenHealthy /
 // ChildrenUnhealthy) for the canonical counts hook supplied by the framework.
@@ -327,6 +337,13 @@
 // If you are writing a new stop state and feel tempted to add a
 // "if !ShouldStop() { return GoTo{Running} }" branch - don't. That is the
 // bug this rule prevents.
+//
+// At Stopped, ShouldStop() returns true while IsDisabled is set on the
+// desired state. The worker stays resident in Stopped rather than resuming.
+// This is how parents pause children without despawning. See
+// workers/example/examplechild/state/state_stopped.go for the three-way
+// branch (IsShutdownRequested wins removal, IsDisabled stays resident,
+// otherwise observe the parent and resume when it is Running).
 //
 // ## Shutdown handling
 //

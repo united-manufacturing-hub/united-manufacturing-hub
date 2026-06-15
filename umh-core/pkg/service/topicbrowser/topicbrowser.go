@@ -105,6 +105,9 @@ func (st *Status) CopyBufferSnapshot(src RingBufferSnapshot) error {
 }
 
 type ServiceInfo struct {
+	// benthos state information
+	BenthosObservedState benthosfsm.BenthosObservedState
+
 	BenthosFSMState string
 
 	RedpandaFSMState string
@@ -116,8 +119,6 @@ type ServiceInfo struct {
 
 	// redpanda state information
 	RedpandaObservedState rpfsm.RedpandaObservedState
-	// benthos state information
-	BenthosObservedState benthosfsm.BenthosObservedState
 
 	// processing activities
 	BenthosProcessing  bool // is benthos active
@@ -575,7 +576,7 @@ func (svc *Service) ReconcileManager(
 				Benthos: svc.benthosConfigs,
 			},
 		},
-		Tick: snapshot.Tick,
+		Tick:         snapshot.Tick,
 		SnapshotTime: snapshot.SnapshotTime,
 	}, services)
 }
@@ -608,7 +609,6 @@ func (svc *Service) ForceRemove(
 	if ctx.Err() != nil {
 		svc.logger.Warnf("Parent context already expired for force removal of %s", tbName)
 	}
-	
 	ctx, cancel := context.WithTimeout(context.Background(), constants.ForceRemovalTimeout)
 	defer cancel()
 

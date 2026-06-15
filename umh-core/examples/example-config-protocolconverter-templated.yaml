@@ -30,10 +30,12 @@ templates:
             opcua:
               address: "opc.tcp://{{ .IP }}:{{ .PORT }}"
       dataflowcomponent_write:
-        input_topics: "umh.v1.{{ .location_path }}.temperature-sensor-pc.*"
-        output:
-          http_client:
-            url: "http://collector.local/ingest"   # static
+        source:
+          topics: "umh.v1.{{ .location_path }}.temperature-sensor-pc.*"
+        destination:
+          protocol: http_client
+          code: |
+            url: "http://collector.local/ingest"
 
 # ---------- Agent-wide settings ---------- #
 agent:

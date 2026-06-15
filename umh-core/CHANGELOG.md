@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+## [0.44.23]
+
+### Fixes
+
+- Previously, a standalone data flow that writes to more than one destination (`switch`, `broker`, or `fallback`) showed zero or incomplete throughput in the Management Console even though it was processing data normally. The throughput, error, and connection counts now include every destination
+
+### Preview: Write Flows
+
+- The write flow schema has been updated to use structured fields. The previous flat fields `input_topics` and `output` are replaced by `source.topics`, `destination.protocol`, `destination.code`, `processing`, and `extra`. Write flows configured before this release must be re-created from the UI; read flows and connection settings are not affected.
+
+
 ## [0.44.22]
 
 ### Improvements

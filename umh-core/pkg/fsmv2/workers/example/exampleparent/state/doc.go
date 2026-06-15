@@ -14,27 +14,26 @@
 
 // Package state provides FSM state implementations for the example parent worker.
 //
-// # WARNING: example/test workers only
+// # Patterns to copy
 //
-// This package contains example workers for demonstrating FSM concepts and for use in tests.
-// Do not copy these patterns into production code.
+// The state-machine shape and the RenderChildren-based parent-child pattern
+// in this package are the intended templates for new workers. See
+// pkg/fsmv2/doc.go § Parent-child workers for the contract.
 //
-// Package-level variables (e.g., StoppedWaitDuration, RunningDuration) allow tests to
-// override timing behavior. This is acceptable for test code but causes parallel test
-// interference and hidden dependencies in production.
+// # WARNING: do NOT copy the timing-variable test pattern
 //
-// # Production workers
-//
-// Use dependency injection instead:
+// Package-level variables (StoppedWaitDuration, RunningDuration) exist so
+// tests can override timing behavior. Production workers should not copy
+// this. Use dependency injection instead:
 //   - Pass durations/timeouts via constructor parameters
 //   - Use configuration structs that can be customized per-instance
 //   - Use interface-based time abstractions (like the Clock interface)
 //
 // # References
 //
-// pkg/fsmv2/doc.go references this package for:
-//   - Parent-child hierarchical composition
-//   - State coordination via ChildStartStates
+// pkg/fsmv2/doc.go § Parent-child workers points at this package as the
+// despawn example (children are stateless). For the variant where stopped
+// children stay resident (not despawned), see workers/transport.
 //
 // See workers/example/doc.go for full example worker documentation.
 package state

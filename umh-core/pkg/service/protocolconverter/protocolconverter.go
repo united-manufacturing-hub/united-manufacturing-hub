@@ -122,6 +122,12 @@ type IProtocolConverterService interface {
 // ServiceInfo holds information about the ProtocolConverters underlying health states.
 type ServiceInfo struct {
 
+	// DataflowComponentReadObservedState mirrors the DFC manager.
+	DataflowComponentReadObservedState dfcfsm.DataflowComponentObservedState
+
+	// DataflowComponentWriteObservedState mirrors the DFC manager.
+	DataflowComponentWriteObservedState dfcfsm.DataflowComponentObservedState
+
 	// ConnectionFSMState is the *current* FSM state string (e.g. "up", "stopped").
 	ConnectionFSMState string
 
@@ -140,12 +146,6 @@ type ServiceInfo struct {
 	RedpandaObservedState redpandafsm.RedpandaObservedState
 	// ConnectionObservedState is the last sample from the connection manager.
 	ConnectionObservedState connectionfsm.ConnectionObservedState
-
-	// DataflowComponentReadObservedState mirrors the DFC manager.
-	DataflowComponentReadObservedState dfcfsm.DataflowComponentObservedState
-
-	// DataflowComponentWriteObservedState mirrors the DFC manager.
-	DataflowComponentWriteObservedState dfcfsm.DataflowComponentObservedState
 }
 
 // ProtocolConverterService implements IProtocolConverterService using it's

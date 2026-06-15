@@ -159,11 +159,11 @@ var _ = Describe("Benthos Monitor FSM", func() {
 
 			// Add some example metrics
 			mockSvc.SetMetricsResponse(benthos_monitor_svc.Metrics{
-				Input: benthos_monitor_svc.InputMetrics{
-					ConnectionUp: 1,
+				Inputs: map[string]benthos_monitor_svc.InputInstance{
+					"root.input": {Path: "root.input", ConnectionUp: 1},
 				},
-				Output: benthos_monitor_svc.OutputMetrics{
-					ConnectionUp: 1,
+				Outputs: map[string]benthos_monitor_svc.OutputInstance{
+					"root.output": {Path: "root.output", ConnectionUp: 1},
 				},
 			})
 
@@ -260,11 +260,11 @@ var _ = Describe("Benthos Monitor FSM", func() {
 			mockSvc.SetReadyStatus(true, true, "")
 			mockSvc.SetLiveStatus(true)
 			mockSvc.SetMetricsResponse(benthos_monitor_svc.Metrics{
-				Input: benthos_monitor_svc.InputMetrics{
-					ConnectionUp: 1,
+				Inputs: map[string]benthos_monitor_svc.InputInstance{
+					"root.input": {Path: "root.input", ConnectionUp: 1},
 				},
-				Output: benthos_monitor_svc.OutputMetrics{
-					ConnectionUp: 1,
+				Outputs: map[string]benthos_monitor_svc.OutputInstance{
+					"root.output": {Path: "root.output", ConnectionUp: 1},
 				},
 			})
 

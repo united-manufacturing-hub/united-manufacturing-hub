@@ -90,7 +90,9 @@ type IStreamProcessorService interface {
 
 // ServiceInfo holds information about the StreamProcessor underlying health states.
 type ServiceInfo struct {
-	DFCFSMState string
+	// DFCObservedState mirrors the DFC manager.
+	DFCObservedState dfcfsm.DataflowComponentObservedState
+	DFCFSMState      string
 
 	RedpandaFSMState string
 
@@ -101,8 +103,6 @@ type ServiceInfo struct {
 	// RedpandaObservedState is included so a stream processor can degrade
 	// itself when the message bus is down.
 	RedpandaObservedState redpandafsm.RedpandaObservedState
-	// DFCObservedState mirrors the DFC manager.
-	DFCObservedState dfcfsm.DataflowComponentObservedState
 }
 
 // Service implements IStreamProcessorService using it's underlying components.
@@ -561,7 +561,7 @@ func (p *Service) ReconcileManager(
 		CurrentConfig: config.FullConfig{
 			DataFlow: p.dataflowComponentConfig,
 		},
-		Tick: snapshot.Tick,
+		Tick:         snapshot.Tick,
 		SnapshotTime: snapshot.SnapshotTime,
 	}, services)
 	if err != nil {
@@ -604,7 +604,6 @@ func (c *Service) ForceRemove(
 	if ctx.Err() != nil {
 		c.logger.Warnf("Parent context already expired for force removal of %s", spName)
 	}
-	
 	ctx, cancel := context.WithTimeout(context.Background(), constants.ForceRemovalTimeout)
 	defer cancel()
 

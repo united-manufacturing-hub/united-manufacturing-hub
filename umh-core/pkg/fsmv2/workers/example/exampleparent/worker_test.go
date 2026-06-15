@@ -79,7 +79,7 @@ var _ = Describe("ParentWorker", func() {
 			Expect(desired.ChildrenSpecs).To(BeNil())
 		})
 
-		It("should create child specs when children_count is specified", func() {
+		It("should not populate ChildrenSpecs — children are declared in RenderChildren", func() {
 			spec := fsmv2types.UserSpec{
 				Config:    "children_count: 3",
 				Variables: fsmv2types.VariableBundle{},
@@ -90,10 +90,11 @@ var _ = Describe("ParentWorker", func() {
 			Expect(err).ToNot(HaveOccurred())
 			desired := desiredIface.(*fsmv2.WrappedDesiredState[exampleparent.ExampleparentConfig])
 			Expect(desired.GetState()).To(Equal("running"))
-			Expect(desired.ChildrenSpecs).To(HaveLen(3))
-			Expect(desired.ChildrenSpecs[0].Name).To(Equal("child-0"))
-			Expect(desired.ChildrenSpecs[1].Name).To(Equal("child-1"))
-			Expect(desired.ChildrenSpecs[2].Name).To(Equal("child-2"))
+			// ChildrenSpecs is nil: children are declared in RenderChildren (children.go),
+			// not in DeriveDesiredState. RenderChildren is the single source of truth.
+			Expect(desired.ChildrenSpecs).To(BeNil())
+			// Config carries the count so states can pass it to RenderChildren.
+			Expect(desired.Config.ChildrenCount).To(Equal(3))
 		})
 	})
 

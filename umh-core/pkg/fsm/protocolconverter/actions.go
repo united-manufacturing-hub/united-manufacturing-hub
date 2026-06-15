@@ -531,11 +531,11 @@ func safeBenthosMetricsFrom(obs dataflowfsm.DataflowComponentObservedState) (inp
 	metrics := obs.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosMetrics.Metrics
 
 	return connectionMetrics{
-			ConnectionUp:   metrics.Input.ConnectionUp,
-			ConnectionLost: metrics.Input.ConnectionLost,
+			ConnectionUp:   metrics.InputConnectionUpTotal(),
+			ConnectionLost: metrics.InputConnectionLostTotal(),
 		}, connectionMetrics{
-			ConnectionUp:   metrics.Output.ConnectionUp,
-			ConnectionLost: metrics.Output.ConnectionLost,
+			ConnectionUp:   metrics.OutputConnectionUpTotal(),
+			ConnectionLost: metrics.OutputConnectionLostTotal(),
 		}
 }
 

@@ -103,35 +103,39 @@ func (a *GetDataflowcomponentMetricsAction) Execute() (interface{}, map[string]i
 		Metrics: []DfcMetric{},
 	}
 
-	// Process Input metrics
-	inputPath := "root.input"
-	dfcMetrics.Metrics = append(dfcMetrics.Metrics,
-		DfcMetric{ValueType: DfcMetricTypeNumber, Value: metrics.Input.ConnectionFailed, ComponentType: DfcMetricComponentTypeInput, Path: inputPath, Name: "connection_failed"},
-		DfcMetric{ValueType: DfcMetricTypeNumber, Value: metrics.Input.ConnectionLost, ComponentType: DfcMetricComponentTypeInput, Path: inputPath, Name: "connection_lost"},
-		DfcMetric{ValueType: DfcMetricTypeNumber, Value: metrics.Input.ConnectionUp, ComponentType: DfcMetricComponentTypeInput, Path: inputPath, Name: "connection_up"},
-		DfcMetric{ValueType: DfcMetricTypeNumber, Value: metrics.Input.Received, ComponentType: DfcMetricComponentTypeInput, Path: inputPath, Name: "received"},
-		DfcMetric{ValueType: DfcMetricTypeNumber, Value: metrics.Input.LatencyNS.P50, ComponentType: DfcMetricComponentTypeInput, Path: inputPath, Name: "latency_ns_p50"},
-		DfcMetric{ValueType: DfcMetricTypeNumber, Value: metrics.Input.LatencyNS.P90, ComponentType: DfcMetricComponentTypeInput, Path: inputPath, Name: "latency_ns_p90"},
-		DfcMetric{ValueType: DfcMetricTypeNumber, Value: metrics.Input.LatencyNS.P99, ComponentType: DfcMetricComponentTypeInput, Path: inputPath, Name: "latency_ns_p99"},
-		DfcMetric{ValueType: DfcMetricTypeNumber, Value: metrics.Input.LatencyNS.Sum, ComponentType: DfcMetricComponentTypeInput, Path: inputPath, Name: "latency_ns_sum"},
-		DfcMetric{ValueType: DfcMetricTypeNumber, Value: metrics.Input.LatencyNS.Count, ComponentType: DfcMetricComponentTypeInput, Path: inputPath, Name: "latency_ns_count"},
-	)
+	// Process Input metrics. Iterate the per-path map so switch / broker
+	// inputs emit one DfcMetric set per real benthos path instead of a
+	// single hardcoded "root.input" entry.
+	for inputPath, in := range metrics.Inputs {
+		dfcMetrics.Metrics = append(dfcMetrics.Metrics,
+			DfcMetric{ValueType: DfcMetricTypeNumber, Value: in.ConnectionFailed, ComponentType: DfcMetricComponentTypeInput, Path: inputPath, Name: "connection_failed"},
+			DfcMetric{ValueType: DfcMetricTypeNumber, Value: in.ConnectionLost, ComponentType: DfcMetricComponentTypeInput, Path: inputPath, Name: "connection_lost"},
+			DfcMetric{ValueType: DfcMetricTypeNumber, Value: in.ConnectionUp, ComponentType: DfcMetricComponentTypeInput, Path: inputPath, Name: "connection_up"},
+			DfcMetric{ValueType: DfcMetricTypeNumber, Value: in.Received, ComponentType: DfcMetricComponentTypeInput, Path: inputPath, Name: "received"},
+			DfcMetric{ValueType: DfcMetricTypeNumber, Value: in.LatencyNS.P50, ComponentType: DfcMetricComponentTypeInput, Path: inputPath, Name: "latency_ns_p50"},
+			DfcMetric{ValueType: DfcMetricTypeNumber, Value: in.LatencyNS.P90, ComponentType: DfcMetricComponentTypeInput, Path: inputPath, Name: "latency_ns_p90"},
+			DfcMetric{ValueType: DfcMetricTypeNumber, Value: in.LatencyNS.P99, ComponentType: DfcMetricComponentTypeInput, Path: inputPath, Name: "latency_ns_p99"},
+			DfcMetric{ValueType: DfcMetricTypeNumber, Value: in.LatencyNS.Sum, ComponentType: DfcMetricComponentTypeInput, Path: inputPath, Name: "latency_ns_sum"},
+			DfcMetric{ValueType: DfcMetricTypeNumber, Value: in.LatencyNS.Count, ComponentType: DfcMetricComponentTypeInput, Path: inputPath, Name: "latency_ns_count"},
+		)
+	}
 
-	// Process Output metrics
-	outputPath := "root.output"
-	dfcMetrics.Metrics = append(dfcMetrics.Metrics,
-		DfcMetric{ValueType: DfcMetricTypeNumber, Value: metrics.Output.BatchSent, ComponentType: DfcMetricComponentTypeOutput, Path: outputPath, Name: "batch_sent"},
-		DfcMetric{ValueType: DfcMetricTypeNumber, Value: metrics.Output.ConnectionFailed, ComponentType: DfcMetricComponentTypeOutput, Path: outputPath, Name: "connection_failed"},
-		DfcMetric{ValueType: DfcMetricTypeNumber, Value: metrics.Output.ConnectionLost, ComponentType: DfcMetricComponentTypeOutput, Path: outputPath, Name: "connection_lost"},
-		DfcMetric{ValueType: DfcMetricTypeNumber, Value: metrics.Output.ConnectionUp, ComponentType: DfcMetricComponentTypeOutput, Path: outputPath, Name: "connection_up"},
-		DfcMetric{ValueType: DfcMetricTypeNumber, Value: metrics.Output.Error, ComponentType: DfcMetricComponentTypeOutput, Path: outputPath, Name: "error"},
-		DfcMetric{ValueType: DfcMetricTypeNumber, Value: metrics.Output.Sent, ComponentType: DfcMetricComponentTypeOutput, Path: outputPath, Name: "sent"},
-		DfcMetric{ValueType: DfcMetricTypeNumber, Value: metrics.Output.LatencyNS.P50, ComponentType: DfcMetricComponentTypeOutput, Path: outputPath, Name: "latency_ns_p50"},
-		DfcMetric{ValueType: DfcMetricTypeNumber, Value: metrics.Output.LatencyNS.P90, ComponentType: DfcMetricComponentTypeOutput, Path: outputPath, Name: "latency_ns_p90"},
-		DfcMetric{ValueType: DfcMetricTypeNumber, Value: metrics.Output.LatencyNS.P99, ComponentType: DfcMetricComponentTypeOutput, Path: outputPath, Name: "latency_ns_p99"},
-		DfcMetric{ValueType: DfcMetricTypeNumber, Value: metrics.Output.LatencyNS.Sum, ComponentType: DfcMetricComponentTypeOutput, Path: outputPath, Name: "latency_ns_sum"},
-		DfcMetric{ValueType: DfcMetricTypeNumber, Value: metrics.Output.LatencyNS.Count, ComponentType: DfcMetricComponentTypeOutput, Path: outputPath, Name: "latency_ns_count"},
-	)
+	// Process Output metrics. Same per-path iteration as Inputs.
+	for outputPath, out := range metrics.Outputs {
+		dfcMetrics.Metrics = append(dfcMetrics.Metrics,
+			DfcMetric{ValueType: DfcMetricTypeNumber, Value: out.BatchSent, ComponentType: DfcMetricComponentTypeOutput, Path: outputPath, Name: "batch_sent"},
+			DfcMetric{ValueType: DfcMetricTypeNumber, Value: out.ConnectionFailed, ComponentType: DfcMetricComponentTypeOutput, Path: outputPath, Name: "connection_failed"},
+			DfcMetric{ValueType: DfcMetricTypeNumber, Value: out.ConnectionLost, ComponentType: DfcMetricComponentTypeOutput, Path: outputPath, Name: "connection_lost"},
+			DfcMetric{ValueType: DfcMetricTypeNumber, Value: out.ConnectionUp, ComponentType: DfcMetricComponentTypeOutput, Path: outputPath, Name: "connection_up"},
+			DfcMetric{ValueType: DfcMetricTypeNumber, Value: out.Error, ComponentType: DfcMetricComponentTypeOutput, Path: outputPath, Name: "error"},
+			DfcMetric{ValueType: DfcMetricTypeNumber, Value: out.Sent, ComponentType: DfcMetricComponentTypeOutput, Path: outputPath, Name: "sent"},
+			DfcMetric{ValueType: DfcMetricTypeNumber, Value: out.LatencyNS.P50, ComponentType: DfcMetricComponentTypeOutput, Path: outputPath, Name: "latency_ns_p50"},
+			DfcMetric{ValueType: DfcMetricTypeNumber, Value: out.LatencyNS.P90, ComponentType: DfcMetricComponentTypeOutput, Path: outputPath, Name: "latency_ns_p90"},
+			DfcMetric{ValueType: DfcMetricTypeNumber, Value: out.LatencyNS.P99, ComponentType: DfcMetricComponentTypeOutput, Path: outputPath, Name: "latency_ns_p99"},
+			DfcMetric{ValueType: DfcMetricTypeNumber, Value: out.LatencyNS.Sum, ComponentType: DfcMetricComponentTypeOutput, Path: outputPath, Name: "latency_ns_sum"},
+			DfcMetric{ValueType: DfcMetricTypeNumber, Value: out.LatencyNS.Count, ComponentType: DfcMetricComponentTypeOutput, Path: outputPath, Name: "latency_ns_count"},
+		)
+	}
 
 	// Process processor metrics
 	for path, proc := range metrics.Process.Processors {
