@@ -260,8 +260,18 @@ func (c *Collector[TObserved]) Stop(ctx context.Context) {
 		c.config.Logger.Debug("collector_stopped",
 			deps.String("result", "success"))
 	case <-ctx.Done():
-		c.config.Logger.SentryWarn(deps.FeatureForWorker(c.config.Identity.WorkerType), c.config.Identity.HierarchyPath, "collector_stopped",
-			deps.String("result", "context_cancelled"))
+		// Phase-4 teardown cancels this ctx and races the collector goroutine's
+		// own exit; the goroutine drains right after. This is the expected
+		// shutdown cancellation (the mirror of collector_stop_skipped), so log it
+		// at Debug. A non-cancellation ctx error would be unexpected and stays a
+		// warn.
+		if errors.Is(ctx.Err(), context.Canceled) {
+			c.config.Logger.Debug("collector_stopped",
+				deps.String("result", "context_cancelled"))
+		} else {
+			c.config.Logger.SentryWarn(deps.FeatureForWorker(c.config.Identity.WorkerType), c.config.Identity.HierarchyPath, "collector_stopped",
+				deps.String("result", "context_cancelled"))
+		}
 	case <-stopTimer.C:
 		c.config.Logger.SentryWarn(deps.FeatureForWorker(c.config.Identity.WorkerType), c.config.Identity.HierarchyPath, "collector_stopped",
 			deps.String("result", "timeout"))
@@ -302,8 +312,18 @@ func (c *Collector[TObserved]) CollectFinalObservation(ctx context.Context) erro
 	c.collectionMu.Unlock()
 
 	if err != nil {
-		c.config.Logger.SentryWarn(deps.FeatureForWorker(c.config.Identity.WorkerType), c.config.Identity.HierarchyPath, "collector_final_observation_failed",
-			deps.Err(err))
+		// A context cancellation here is the expected shutdown race: the
+		// supervisor's Phase-4 teardown cancels the collector ctx after the drain
+		// already completed, so the final observation is best-effort and no data
+		// is lost. Log it at Debug to keep Sentry quiet; any other failure stays a
+		// warn.
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			c.config.Logger.Debug("collector_final_observation_failed",
+				deps.Err(err))
+		} else {
+			c.config.Logger.SentryWarn(deps.FeatureForWorker(c.config.Identity.WorkerType), c.config.Identity.HierarchyPath, "collector_final_observation_failed",
+				deps.Err(err))
+		}
 
 		return err
 	}
