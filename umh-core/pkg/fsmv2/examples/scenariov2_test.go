@@ -357,6 +357,39 @@ var _ = Describe("ScenarioV2 framework", func() {
 			"the v2 runner must ClearDeps the configworker key during teardown")
 	})
 
+	It("reports ShutdownClean=true after a clean v2 run", func() {
+		// The runner exposes the supervisor's drain outcome so the CLI can
+		// exit non-zero on a degraded shutdown. A clean run must surface
+		// true and never the zero-value false, which would prove the field
+		// is unwired rather than genuinely clean.
+		logger := deps.NewNopFSMLogger()
+		store := examples.SetupStore(logger)
+
+		cleanRun := examples.ScenarioV2{
+			Name:        "clean-shutdown",
+			Description: "test-local driver for the ShutdownClean plumbing",
+			Driver: func(_ context.Context, _ examples.Env) error {
+				return nil
+			},
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+		defer cancel()
+
+		result, err := examples.Run(ctx, examples.RunConfig{
+			ScenarioV2:   cleanRun,
+			Duration:     2 * time.Second,
+			TickInterval: 50 * time.Millisecond,
+			Logger:       logger,
+			Store:        store,
+		})
+		Expect(err).NotTo(HaveOccurred())
+		Eventually(result.Done, "55s").Should(BeClosed())
+
+		Expect(result.ShutdownClean).To(BeTrue(),
+			"a clean v2 run must report ShutdownClean=true, proving the field is wired to the supervisor's drain outcome")
+	})
+
 	It("tears down and clears the deps key when the driver fails", func() {
 		logger := deps.NewNopFSMLogger()
 		store := examples.SetupStore(logger)
