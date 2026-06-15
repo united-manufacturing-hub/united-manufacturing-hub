@@ -208,6 +208,30 @@ func main() {
 	logger.Info("Scenario completed",
 		zap.String("name", *scenarioName),
 	)
+
+	// A degraded shutdown (the supervisor warned graceful_shutdown_timeout or
+	// graceful_shutdown_budget_exhausted) must surface as a non-zero exit so an
+	// outer harness/CI does not read it as success. A clean run returns
+	// normally so the deferred teardown (logger.Sync, cancels, close(runDone))
+	// still runs; os.Exit would skip those.
+	if code := shutdownExitCode(result); code != 0 {
+		logger.Sugar().Warnw("scenario_shutdown_unclean",
+			"scenario", *scenarioName,
+			"exit_code", code)
+		_ = logger.Sync()
+		os.Exit(code)
+	}
+}
+
+// shutdownExitCode returns the process exit code for a completed scenario run.
+// A scenario whose supervisor did not drain cleanly within its budget exits
+// non-zero so an outer harness/CI can detect a degraded shutdown.
+func shutdownExitCode(result *examples.RunResult) int {
+	if result != nil && !result.ShutdownClean {
+		return 1
+	}
+
+	return 0
 }
 
 // routeDuration decides how a --duration flag binds to a run. A v2 scenario

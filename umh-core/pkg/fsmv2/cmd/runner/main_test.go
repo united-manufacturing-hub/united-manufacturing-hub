@@ -22,7 +22,45 @@ import (
 	"syscall"
 	"testing"
 	"time"
+
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/examples"
 )
+
+// TestShutdownExitCode locks the exit-code mapping for a completed scenario
+// run. A run whose supervisor did not drain cleanly within its budget
+// (ShutdownClean=false) must exit non-zero so an outer harness/CI can detect a
+// degraded shutdown; every other case (nil result, or a clean drain) exits 0.
+func TestShutdownExitCode(t *testing.T) {
+	tests := []struct {
+		name   string
+		result *examples.RunResult
+		want   int
+	}{
+		{
+			name:   "nil result exits zero",
+			result: nil,
+			want:   0,
+		},
+		{
+			name:   "clean drain exits zero",
+			result: &examples.RunResult{ShutdownClean: true},
+			want:   0,
+		},
+		{
+			name:   "unclean drain exits non-zero",
+			result: &examples.RunResult{ShutdownClean: false},
+			want:   1,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := shutdownExitCode(tt.result); got != tt.want {
+				t.Errorf("shutdownExitCode(%+v) = %d, want %d", tt.result, got, tt.want)
+			}
+		})
+	}
+}
 
 // TestRunnerCLIRouting locks the three routing seams the runner must expose so
 // that duration routing and signal/exit routing are decidable without os.Exit

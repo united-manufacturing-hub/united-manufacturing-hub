@@ -63,6 +63,12 @@ import (
 type RunResult struct {
 	Done     <-chan struct{}
 	Shutdown func()
+	// ShutdownClean reports whether the run's supervisor drained cleanly: true
+	// if the most recent graceful shutdown reaped every worker within its
+	// budget, or if no graceful shutdown ran (the v1 path). It is false only
+	// when a drain phase warned graceful_shutdown_timeout or
+	// graceful_shutdown_budget_exhausted. Read it after Done closes.
+	ShutdownClean bool
 }
 
 // Run executes a scenario with the given configuration.
@@ -191,10 +197,10 @@ func Run(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 			close(wrappedDone)
 		}()
 
-		return &RunResult{Done: wrappedDone, Shutdown: shutdownFn}, nil
+		return &RunResult{Done: wrappedDone, Shutdown: shutdownFn, ShutdownClean: true}, nil
 	}
 
-	return &RunResult{Done: done, Shutdown: shutdownFn}, nil
+	return &RunResult{Done: done, Shutdown: shutdownFn, ShutdownClean: true}, nil
 }
 
 // runV2 executes a v2 scenario on the kernel-only application supervisor (no
@@ -257,12 +263,23 @@ func runV2(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 	// Shutdown cancels the supervisor's own derived context in its final phase.
 	supDone := appSup.Start(context.WithoutCancel(ctx))
 
+	// result is updated by the teardown goroutine before it closes done, so a
+	// caller that reads result.ShutdownClean after <-result.Done observes the
+	// supervisor's drain outcome. The close(done) at the end of the goroutine
+	// establishes the happens-before edge: the field write precedes the close,
+	// and the caller's receive synchronizes-with it.
+	result := &RunResult{}
+
 	// teardown is the single cleanup path: Shutdown is idempotent, so every
 	// exit calls it unconditionally rather than guessing whether the
 	// supervisor already stopped.
 	teardown := func() {
 		appSup.Shutdown()
 		<-supDone
+		// DrainOutcomeClean is valid only after supDone: the drain budget is
+		// spent during Shutdown's synchronous phases, which complete before
+		// the tick loop signals supDone.
+		result.ShutdownClean = appSup.DrainOutcomeClean()
 		// ClearDeps strictly after supDone: clearing earlier flips the
 		// application worker's RegistryConfigured observation mid-shutdown.
 		register.ClearDeps(configworker.WorkerTypeName)
@@ -289,6 +306,7 @@ func runV2(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 	teardownOwnedByGoroutine = true
 
 	done := make(chan struct{})
+	result.Done = done
 
 	go func() {
 		// The select only decides the wake-up reason; teardown then runs
@@ -327,12 +345,12 @@ func runV2(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 	// Shutdown waits for Done so the deps key is already cleared when the
 	// caller starts the next v2 run; returning earlier would let this run's
 	// late ClearDeps delete the next run's freshly published key.
-	shutdown := func() {
+	result.Shutdown = func() {
 		appSup.Shutdown()
 		<-done
 	}
 
-	return &RunResult{Done: done, Shutdown: shutdown}, nil
+	return result, nil
 }
 
 // SetupStore creates an in-memory TriangularStore for testing and CLI usage.
