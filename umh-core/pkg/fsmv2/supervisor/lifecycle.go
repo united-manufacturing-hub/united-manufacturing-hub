@@ -608,6 +608,12 @@ func (s *Supervisor[TObserved, TDesired]) requestShutdown(ctx context.Context, w
 		return errors.New("worker not found")
 	}
 
+	// Serialize with the per-tick derive's lifecycle-flag carry-forward so the
+	// derive cannot overwrite this ShutdownRequested write with a stale value
+	// (ENG-4971). See Supervisor.lifecycleFlagMu.
+	s.lifecycleFlagMu.Lock()
+	defer s.lifecycleFlagMu.Unlock()
+
 	// Load current desired state from database
 	var desired TDesired
 
@@ -831,6 +837,12 @@ func (s *Supervisor[TObserved, TDesired]) setDisabled(ctx context.Context, worke
 		return errors.New("worker not found")
 	}
 
+	// Serialize with the per-tick derive's lifecycle-flag carry-forward so the
+	// derive cannot overwrite this Disabled write with a stale value
+	// (ENG-4971). See Supervisor.lifecycleFlagMu.
+	s.lifecycleFlagMu.Lock()
+	defer s.lifecycleFlagMu.Unlock()
+
 	var desired TDesired
 
 	err := s.store.LoadDesiredTyped(ctx, s.workerType, workerID, &desired)
@@ -893,6 +905,12 @@ func (s *Supervisor[TObserved, TDesired]) SetDisabled(ctx context.Context, disab
 
 // clearShutdownRequested clears the ShutdownRequested flag in storage for restart.
 func (s *Supervisor[TObserved, TDesired]) clearShutdownRequested(ctx context.Context, workerID string) error {
+	// Serialize with the per-tick derive's lifecycle-flag carry-forward so the
+	// derive cannot overwrite this clear with a stale value (ENG-4971).
+	// See Supervisor.lifecycleFlagMu.
+	s.lifecycleFlagMu.Lock()
+	defer s.lifecycleFlagMu.Unlock()
+
 	// Load current desired state
 	var desired TDesired
 	if err := s.store.LoadDesiredTyped(ctx, s.workerType, workerID, &desired); err != nil {
