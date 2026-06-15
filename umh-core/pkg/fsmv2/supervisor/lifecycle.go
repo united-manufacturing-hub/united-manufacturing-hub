@@ -379,6 +379,8 @@ func (s *Supervisor[TObserved, TDesired]) Shutdown() {
 					deps.Duration("child_drain_elapsed", childDrainElapsed),
 					deps.Int("remaining_worker_count", remainingCount))
 
+				s.drainTimedOut.Store(true)
+
 				budgetWarned = true
 
 				break drainLoop
@@ -428,6 +430,8 @@ func (s *Supervisor[TObserved, TDesired]) Shutdown() {
 			deps.Duration("child_drain_elapsed", childDrainElapsed),
 			deps.Int("remaining_worker_count", remainingCount))
 
+		s.drainTimedOut.Store(true)
+
 		budgetWarned = true
 	}
 
@@ -463,6 +467,8 @@ func (s *Supervisor[TObserved, TDesired]) Shutdown() {
 			deps.Duration("timeout", drainBudget),
 			deps.Duration("child_drain_elapsed", childDrainElapsed),
 			deps.Duration("total_drain_elapsed", totalDrainElapsed))
+
+		s.drainTimedOut.Store(true)
 	}
 
 	// Re-acquire lock for cleanup
@@ -489,6 +495,14 @@ func (s *Supervisor[TObserved, TDesired]) Shutdown() {
 
 	s.logTrace("lifecycle",
 		deps.String("lifecycle_event", "shutdown_complete"))
+}
+
+// DrainOutcomeClean reports whether the most recent Shutdown drained every
+// worker within its budget. It is false if any drain phase warned
+// graceful_shutdown_timeout or graceful_shutdown_budget_exhausted. Read it
+// after Shutdown returns.
+func (s *Supervisor[TObserved, TDesired]) DrainOutcomeClean() bool {
+	return !s.drainTimedOut.Load()
 }
 
 // startMetricsReporter starts a goroutine that periodically records hierarchy metrics.
