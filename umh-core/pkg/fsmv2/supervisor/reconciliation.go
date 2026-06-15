@@ -1089,7 +1089,7 @@ func (s *Supervisor[TObserved, TDesired]) processSignal(ctx context.Context, wor
 				childrenToCleanup[name] = child // Capture children for cleanup outside lock
 			}
 
-			s.logger.SentryWarn(deps.FeatureFSMv2, s.GetHierarchyPathUnlocked(), "worker_removal_has_children",
+			s.logger.Debug("worker_removal_has_children",
 				deps.Int("child_count", childCount),
 				deps.Any("children", childNames))
 		}
