@@ -31,6 +31,8 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/register"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/application/snapshot"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker/dynamicchildren"
 
 	// Blank import for side effects: registers the initial state via
 	// fsmv2.RegisterInitialState in state/stopped_state.go init(). GetInitialState
@@ -83,10 +85,21 @@ func (w *ApplicationWorker) CollectObservedState(ctx context.Context, _ fsmv2.De
 	default:
 	}
 
-	return fsmv2.NewObservation(snapshot.ApplicationStatus{
+	status := snapshot.ApplicationStatus{
 		ID:   w.Identity().ID,
 		Name: w.Identity().Name,
-	}), nil
+	}
+
+	// The shared registry is published under the config worker's key (one key,
+	// one publisher; same pattern as pull/push reading the transport deps). When
+	// nothing publishes it, RegistryConfigured stays false and the application
+	// renders only its declared children: dynamic spawning is off, not broken.
+	if reg := register.GetDeps[*dynamicchildren.Registry](configworker.WorkerTypeName); reg != nil {
+		status.RegistryConfigured = true
+		status.DynamicChildren = reg.Specs()
+	}
+
+	return fsmv2.NewObservation(status), nil
 }
 
 // childrenConfig is the structure for parsing children from YAML.

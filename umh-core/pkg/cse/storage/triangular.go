@@ -155,7 +155,6 @@ func NewTriangularStoreWithClock(store persistence.Store, logger deps.FSMLogger,
 		c = clock.New()
 	}
 
-
 	return &TriangularStore{
 		store:            store,
 		syncID:           &atomic.Int64{},
@@ -1140,6 +1139,18 @@ func DeriveWorkerType[T any]() (string, error) {
 
 	if typeName == "" {
 		return "", errors.New("deriveWorkerType: type has empty name")
+	}
+
+	// fsmv2.Observation[TStatus] wraps a worker's Status type. Derive the worker
+	// type from the Status field's type by stripping the "Status" suffix
+	// (e.g. ApplicationStatus -> application).
+	if strings.HasPrefix(typeName, "Observation[") {
+		statusField, ok := t.FieldByName("Status")
+		if !ok || !strings.HasSuffix(statusField.Type.Name(), "Status") {
+			return "", fmt.Errorf("deriveWorkerType: Observation type %q has no Status field whose type ends in \"Status\"", typeName)
+		}
+
+		return strings.ToLower(strings.TrimSuffix(statusField.Type.Name(), "Status")), nil
 	}
 
 	if strings.HasSuffix(typeName, "DesiredState") {

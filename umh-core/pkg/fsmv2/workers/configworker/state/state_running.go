@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Package state holds the config worker's state machine states.
 package state
 
 import (
@@ -19,35 +20,32 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/application/snapshot"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker/snapshot"
 )
 
-// RunningState represents the normal operating state of the application supervisor.
+func init() {
+	fsmv2.RegisterInitialState("configworker", &RunningState{})
+}
+
+// RunningState represents the config worker actively running. This is the
+// steady state - the worker stays here until shutdown.
 type RunningState struct {
 	helpers.RunningHealthyBase
 }
 
+// Next implements state transition logic for RunningState.
 func (s *RunningState) Next(snapAny any) fsmv2.NextResult[any, any] {
-	snap := fsmv2.ConvertWorkerSnapshot[snapshot.ApplicationConfig, snapshot.ApplicationStatus](snapAny)
+	snap := fsmv2.ConvertWorkerSnapshot[snapshot.ConfigworkerConfig, snapshot.ConfigworkerStatus](snapAny)
 
 	if snap.ShouldStop() {
 		return fsmv2.Transition(&StoppedState{}, fsmv2.SignalNone, nil,
-			fmt.Sprintf("stop required: %s", snap.StopReason()), nil)
+			fmt.Sprintf("stop required: shutdown=%t disabled=%t", snap.IsShutdownRequested, snap.IsDisabled), nil)
 	}
 
-	circuitOpen, stale := snapshot.ChildrenViewToStatus(snap.ChildrenView)
-	status := snapshot.ApplicationStatus{
-		ChildrenCircuitOpen: circuitOpen,
-		ChildrenStale:       stale,
-	}
-
-	if status.HasInfrastructureIssues() {
-		return fsmv2.Transition(&DegradedState{}, fsmv2.SignalNone, nil, status.InfrastructureReason(), renderUnion(snap))
-	}
-
-	return fsmv2.Transition(s, fsmv2.SignalNone, nil, "Application supervisor is running and managing children", renderUnion(snap))
+	return fsmv2.Transition(s, fsmv2.SignalNone, nil, "config worker is running", nil)
 }
 
+// String returns the state name for logging and metrics.
 func (s *RunningState) String() string {
 	return helpers.DeriveStateName(s)
 }

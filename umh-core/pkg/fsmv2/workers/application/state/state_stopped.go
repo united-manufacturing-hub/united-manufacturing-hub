@@ -41,7 +41,15 @@ func (s *StoppedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 		return fsmv2.Transition(s, fsmv2.SignalNeedsRemoval, nil, "Application supervisor is stopped and shutdown requested", nil)
 	}
 
-	return fsmv2.Transition(s, fsmv2.SignalNone, nil, "Application supervisor is stopped", nil)
+	// The application worker is a root supervisor, so the disable-mapping pass
+	// never sets IsDisabled in production. Keep the branch separate from
+	// shutdown anyway, matching every other worker: disabled stays resident
+	// (no removal signal) should application ever be spawned as a child.
+	if snap.IsDisabled {
+		return fsmv2.Transition(s, fsmv2.SignalNone, nil, "Application supervisor is disabled, staying resident", nil)
+	}
+
+	return fsmv2.Transition(s, fsmv2.SignalNone, nil, "Application supervisor is stopped", renderUnion(snap))
 }
 
 func (s *StoppedState) String() string {

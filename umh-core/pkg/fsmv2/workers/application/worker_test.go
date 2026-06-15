@@ -23,7 +23,9 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/register"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/application/snapshot"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker"
 )
 
 // Compile-time interface verification.
@@ -54,6 +56,35 @@ var _ = Describe("ApplicationWorker", func() {
 			Expect(typedObs.Status.ID).To(Equal("root-1"))
 		})
 
+		It("reports the registry as unconfigured when nothing is published under the config worker's key", func() {
+			// Negative wiring test: when no registry is published under
+			// configworker.WorkerTypeName, the collector must not panic and must
+			// report dynamic spawning as off, leaving declared children untouched.
+			register.ClearDeps(configworker.WorkerTypeName)
+			DeferCleanup(func() { register.ClearDeps(configworker.WorkerTypeName) })
+
+			ctx := context.Background()
+			obs, err := worker.CollectObservedState(ctx, nil)
+			Expect(err).ToNot(HaveOccurred())
+
+			typedObs, ok := obs.(fsmv2.Observation[snapshot.ApplicationStatus])
+			Expect(ok).To(BeTrue(), "Expected fsmv2.Observation[ApplicationStatus], got %T", obs)
+			Expect(typedObs.Status.RegistryConfigured).To(BeFalse(),
+				"RegistryConfigured must stay false when no registry is published")
+			Expect(typedObs.Status.DynamicChildren).To(BeNil(),
+				"DynamicChildren must be nil when no registry is published")
+
+			// Declared children still flow through DeriveDesiredState untouched.
+			desiredIface, err := worker.DeriveDesiredState(config.UserSpec{Config: `
+children:
+  - name: "declared-1"
+    workerType: "example-child"
+`})
+			Expect(err).ToNot(HaveOccurred())
+			desired := desiredIface.(*fsmv2.WrappedDesiredState[snapshot.ApplicationConfig])
+			Expect(desired.ChildrenSpecs).To(HaveLen(1))
+			Expect(desired.ChildrenSpecs[0].Name).To(Equal("declared-1"))
+		})
 	})
 
 	Describe("DeriveDesiredState", func() {
