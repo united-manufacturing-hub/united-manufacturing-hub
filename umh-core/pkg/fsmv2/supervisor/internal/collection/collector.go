@@ -239,9 +239,19 @@ func (c *Collector[TObserved]) Stop(ctx context.Context) {
 	c.mu.Lock()
 
 	if c.state != collectorStateRunning {
-		c.config.Logger.SentryWarn(deps.FeatureForWorker(c.config.Identity.WorkerType), c.config.Identity.HierarchyPath, "collector_stop_skipped",
-			deps.Reason("not_running"),
-			deps.String("current_state", c.state.String()))
+		// Stopping a collector that never ran or already stopped is benign during a
+		// ctx-cancel teardown (a worker reaped before its collector started, or a
+		// double-stop). Log it at Debug then; an unexpected skip while the ctx is
+		// still live stays a warn.
+		if errors.Is(ctx.Err(), context.Canceled) {
+			c.config.Logger.Debug("collector_stop_skipped",
+				deps.Reason("not_running"),
+				deps.String("current_state", c.state.String()))
+		} else {
+			c.config.Logger.SentryWarn(deps.FeatureForWorker(c.config.Identity.WorkerType), c.config.Identity.HierarchyPath, "collector_stop_skipped",
+				deps.Reason("not_running"),
+				deps.String("current_state", c.state.String()))
+		}
 		c.mu.Unlock()
 
 		return
