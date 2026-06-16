@@ -84,7 +84,7 @@ func ChildrenViewToStatus(view any) (circuitOpen, stale int) {
 		return 0, 0
 	}
 
-	for _, child := range cv.List() {
+	for _, child := range cv.Children {
 		if child.IsCircuitOpen {
 			circuitOpen++
 		}

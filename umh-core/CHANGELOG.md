@@ -2,9 +2,24 @@
 
 ## Unreleased
 
+## [0.44.24]
+
+### Fixes
+
+- Sparkplug B output: a standard `tag_processor → sparkplug_b` flow now publishes its tags. The output read the value from a payload field named after the tag, but `tag_processor` emits it under `value`, so every message was silently dropped — leaving only an empty `NBIRTH` on the broker. The output now extracts the value the same way the Sparkplug B input does (`value`/`val`/`data`/`measurement`), makes `virtual_path` optional, and warns instead of dropping silently when a payload can't be turned into a metric
+- OPC-UA input now preserves string values exactly; previously, numeric-looking strings like serial codes were emitted as numbers and lost precision. For tags processed by `tag_processor`, also set `msg.meta.datatype = "string"` so auto-detection does not convert them back
+- Sparkplug B input: metric datatypes now survive from BIRTH to DATA. Per spec, `NDATA`/`DDATA` carries only alias + value while the BIRTH certificate defines name and datatype — but the input cached only the name, so DATA messages lost their `spb_datatype` metadata and signed integers decoded as their unsigned two's-complement wire value (an `Int32` of `-12` surfaced as `4294967284`). The alias cache now restores the datatype alongside the name, and `Int8`/`Int16`/`Int32`/`Int64` wire values are reinterpreted as signed
+
+## [0.44.23]
+
 ### Fixes
 
 - Previously, a standalone data flow that writes to more than one destination (`switch`, `broker`, or `fallback`) showed zero or incomplete throughput in the Management Console even though it was processing data normally. The throughput, error, and connection counts now include every destination
+
+### Preview: Write Flows
+
+- The write flow schema has been updated to use structured fields. The previous flat fields `input_topics` and `output` are replaced by `source.topics`, `destination.protocol`, `destination.code`, `processing`, and `extra`. Write flows configured before this release must be re-created from the UI; read flows and connection settings are not affected.
+
 
 ## [0.44.22]
 

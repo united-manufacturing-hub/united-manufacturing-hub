@@ -174,3 +174,11 @@ func (s *Supervisor[TObserved, TDesired]) TestSetPendingRemovalFlag(childName st
 func (s *Supervisor[TObserved, TDesired]) TestSetStarted(value bool) {
 	s.started.Store(value)
 }
+
+// TestApplyDisableMapping exposes applyDisableMapping() for testing. DO NOT USE in production code.
+func (s *Supervisor[TObserved, TDesired]) TestApplyDisableMapping(ctx context.Context, specs []config.ChildSpec) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.applyDisableMapping(ctx, specs)
+}

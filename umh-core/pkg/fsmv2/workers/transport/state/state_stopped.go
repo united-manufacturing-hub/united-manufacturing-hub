@@ -36,19 +36,42 @@ type StoppedState struct {
 func (s *StoppedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := fsmv2.ConvertWorkerSnapshot[snapshot.TransportDesiredState, snapshot.TransportStatus](snapAny)
 
+	// Stopped emits children with enabled=false (resident, not despawned).
+	// On IsShutdownRequested, SignalNeedsRemoval drives removal so the children arg is ignored.
+	stopChildren, err := snapshot.RenderChildren(snap.Config, false)
+	if err != nil {
+		stopChildren = nil
+	}
+
 	if snap.IsShutdownRequested {
 		return fsmv2.Transition(s, fsmv2.SignalNeedsRemoval, nil,
-			fmt.Sprintf("removal signaled: shouldBeRunning=%t", snap.Config.ShouldBeRunning()), nil)
+			fmt.Sprintf("removal signaled: shouldBeRunning=%t", snap.Config.ShouldBeRunning()),
+			stopChildren)
+	}
+
+	if snap.IsDisabled {
+		return fsmv2.Transition(s, fsmv2.SignalNone, nil,
+			fmt.Sprintf("staying stopped (disabled): shouldBeRunning=%t", snap.Config.ShouldBeRunning()),
+			stopChildren)
 	}
 
 	if snap.Config.ShouldBeRunning() {
+		// Transitioning to Starting: emit aliveChildren NOW (one tick early)
+		// so the supervisor flips enabled=true before Starting reads its first snapshot.
+		aliveChildren, aerr := snapshot.RenderChildren(snap.Config, true)
+		if aerr != nil {
+			aliveChildren = nil
+		}
+
 		return fsmv2.Transition(&StartingState{}, fsmv2.SignalNone, nil,
-			fmt.Sprintf("transitioning to Starting: shutdown=%t", snap.IsShutdownRequested), nil)
+			fmt.Sprintf("transitioning to Starting: shutdown=%t", snap.IsShutdownRequested),
+			aliveChildren)
 	}
 
 	return fsmv2.Transition(s, fsmv2.SignalNone, nil,
 		fmt.Sprintf("stopped, waiting: shouldBeRunning=%t, shutdown=%t",
-			snap.Config.ShouldBeRunning(), snap.IsShutdownRequested), nil)
+			snap.Config.ShouldBeRunning(), snap.IsShutdownRequested),
+		stopChildren)
 }
 
 // String returns the state name derived from the type.

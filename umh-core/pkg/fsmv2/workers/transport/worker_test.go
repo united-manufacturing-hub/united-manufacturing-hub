@@ -155,17 +155,13 @@ var _ = Describe("TransportWorker", func() {
 				Expect(typed.GetState()).To(Equal("running"))
 			})
 
-			It("should include PushWorker and PullWorker ChildrenSpecs even with nil spec", func() {
+			It("should not populate ChildrenSpecs — children are declared in snapshot.RenderChildren", func() {
 				desired, err := worker.DeriveDesiredState(nil)
 				Expect(err).ToNot(HaveOccurred())
 
 				transportDesired, ok := desired.(*fsmv2.WrappedDesiredState[snapshot.TransportDesiredState])
 				Expect(ok).To(BeTrue())
-				Expect(transportDesired.ChildrenSpecs).To(HaveLen(2))
-				Expect(transportDesired.ChildrenSpecs[0].Name).To(Equal("push"))
-				Expect(transportDesired.ChildrenSpecs[0].WorkerType).To(Equal("push"))
-				Expect(transportDesired.ChildrenSpecs[1].Name).To(Equal("pull"))
-				Expect(transportDesired.ChildrenSpecs[1].WorkerType).To(Equal("pull"))
+				Expect(transportDesired.ChildrenSpecs).To(BeNil())
 			})
 		})
 
@@ -189,7 +185,7 @@ authToken: "test-token"`,
 				Expect(transportDesired.Config.AuthToken).To(Equal("test-token"))
 			})
 
-			It("should include PushWorker and PullWorker ChildrenSpecs", func() {
+			It("should not populate ChildrenSpecs — children are declared in snapshot.RenderChildren", func() {
 				spec := fsmv2types.UserSpec{
 					Config: `relayURL: "https://relay.example.com"
 instanceUUID: "test-uuid"
@@ -202,17 +198,7 @@ authToken: "test-token"`,
 
 				transportDesired, ok := desired.(*fsmv2.WrappedDesiredState[snapshot.TransportDesiredState])
 				Expect(ok).To(BeTrue())
-				Expect(transportDesired.ChildrenSpecs).To(HaveLen(2))
-
-				pushSpec := transportDesired.ChildrenSpecs[0]
-				Expect(pushSpec.Name).To(Equal("push"))
-				Expect(pushSpec.WorkerType).To(Equal("push"))
-				Expect(pushSpec.ChildStartStates).To(ConsistOf("Running", "Degraded"))
-
-				pullSpec := transportDesired.ChildrenSpecs[1]
-				Expect(pullSpec.Name).To(Equal("pull"))
-				Expect(pullSpec.WorkerType).To(Equal("pull"))
-				Expect(pullSpec.ChildStartStates).To(ConsistOf("Running", "Degraded"))
+				Expect(transportDesired.ChildrenSpecs).To(BeNil())
 			})
 
 			It("should return stopped state when configured", func() {

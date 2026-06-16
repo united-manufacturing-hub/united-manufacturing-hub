@@ -19,6 +19,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"hash/fnv"
+
+	"gopkg.in/yaml.v3"
 )
 
 // BaseDesiredState provides common shutdown functionality for all DesiredState types.
@@ -37,7 +39,7 @@ import (
 // # Lifecycle Control Invariant
 //
 // The FSM controls worker lifecycle through state transitions, not through custom bool fields.
-// Do not add fields like ShouldRun, IsRunning, Enabled, Active, or State to your DesiredState.
+// Do not add fields like ShouldRun, IsRunning, Active, or State to your DesiredState.
 //
 // Correct lifecycle control:
 //   - ShutdownRequested: Inherited from this type. Set by supervisor for graceful shutdown.
@@ -64,6 +66,7 @@ import (
 // See ValidateNoCustomLifecycleFields in pkg/fsmv2/internal/validator/snapshot.go for enforcement.
 type BaseDesiredState struct {
 	ShutdownRequested bool `json:"ShutdownRequested" yaml:"ShutdownRequested"` //nolint:tagliatelle // Match JSON field name for API compatibility
+	Disabled          bool `json:"Disabled"          yaml:"Disabled"`          //nolint:tagliatelle // Match JSON field name for API compatibility
 }
 
 // IsShutdownRequested returns whether shutdown has been requested for this worker.
@@ -75,6 +78,16 @@ func (b *BaseDesiredState) IsShutdownRequested() bool {
 // This satisfies the ShutdownRequestable interface.
 func (b *BaseDesiredState) SetShutdownRequested(v bool) {
 	b.ShutdownRequested = v
+}
+
+// IsDisabled is written exclusively by the disable-mapping pass (see supervisor/reconciliation.go applyDisableMapping).
+// The restart subsystem never sets it.
+func (b *BaseDesiredState) IsDisabled() bool {
+	return b.Disabled
+}
+
+func (b *BaseDesiredState) SetDisabled(v bool) {
+	b.Disabled = v
 }
 
 // BaseUserSpec provides common fields for all user configuration types.
@@ -214,11 +227,27 @@ func (u UserSpec) Clone() UserSpec {
 //	    },
 //	}
 type ChildSpec struct {
-	Dependencies     map[string]any `json:"dependencies,omitempty"     yaml:"dependencies,omitempty"`     // Additional deps to merge with parent's deps (child overrides parent)
-	UserSpec         UserSpec       `json:"userSpec"                   yaml:"userSpec"`                   // Raw user config (input to DeriveDesiredState)
-	Name             string         `json:"name"                       yaml:"name"`                       // Unique name for this child (within parent scope)
-	WorkerType       string         `json:"workerType"                 yaml:"workerType"`                 // Type of worker to create (registered worker factory key)
-	ChildStartStates []string       `json:"childStartStates,omitempty" yaml:"childStartStates,omitempty"` // Parent FSM states where child should run (empty = always run)
+	Dependencies map[string]any `json:"dependencies,omitempty"     yaml:"dependencies,omitempty"` // Additional deps to merge with parent's deps (child overrides parent)
+	UserSpec     UserSpec       `json:"userSpec"                   yaml:"userSpec"`               // Raw user config (input to DeriveDesiredState)
+	Name         string         `json:"name"                       yaml:"name"`                   // Unique name for this child (within parent scope)
+	WorkerType   string         `json:"workerType"                 yaml:"workerType"`             // Type of worker to create (registered worker factory key)
+	// Deprecated. Only the application worker still consumes ChildStartStates
+	// (via computeMappedState in reconciliation.go). Other workers leave it
+	// empty. Remove together with computeMappedState when the application
+	// worker moves to RenderChildren.
+	ChildStartStates []string `json:"childStartStates,omitempty" yaml:"childStartStates,omitempty"` // Parent FSM states where child should run (empty = always run)
+
+	// Enabled is the parent's per-tick request for this child to run. Zero
+	// value (false) means "stopped but resident" — children stay in Stopped
+	// without being despawned. Setting Enabled=false then Enabled=true resumes
+	// the child on the next tick. Children read snap.IsDisabled, not Enabled
+	// directly; the disable-mapping pass translates Enabled to IsDisabled.
+	//
+	// Caution: children are disabled by default. A ChildSpec constructed
+	// without setting Enabled spawns a child that is held in Stopped, with
+	// no validation error. Every child that should run must set Enabled
+	// explicitly (NewChildSpec takes it as a required parameter).
+	Enabled bool `json:"enabled" yaml:"enabled"`
 }
 
 // Clone creates a deep copy of the ChildSpec.
@@ -249,7 +278,7 @@ func (c ChildSpec) Clone() ChildSpec {
 // enabling incremental validation (only re-validate specs whose hash changed).
 //
 // The hash is computed from all relevant fields: Name, WorkerType, UserSpec,
-// ChildStartStates, and Dependencies (excluding any unexported fields).
+// ChildStartStates, Enabled, and Dependencies (excluding any unexported fields).
 //
 // Returns a hex-encoded FNV-1a 64-bit hash string (16 characters) and an error
 // if Variables cannot be marshaled to JSON.
@@ -281,6 +310,13 @@ func (c ChildSpec) Hash() (string, error) {
 		h.Write([]byte(state))
 		h.Write([]byte{0}) // separator
 	}
+
+	if c.Enabled {
+		h.Write([]byte{1})
+	} else {
+		h.Write([]byte{0})
+	}
+	h.Write([]byte{0}) // separator
 
 	// Dependencies contain runtime objects (channels, etc.) that can't be meaningfully hashed,
 	// so we skip them. Changes to dependencies don't require re-validation anyway.
@@ -337,12 +373,11 @@ type ChildInfo struct {
 	IsCircuitOpen bool // True if infrastructure failure detected (circuit breaker open)
 }
 
-// ChildrenView provides read-only access to a parent worker's children.
-// This interface enables parent workers to observe their children's state
-// without being able to modify them.
+// ChildrenView is the per-tick snapshot of a parent's children. Aggregate
+// predicates (HealthyCount, UnhealthyCount, AllHealthy, AllOperational,
+// AllStopped) are computed at construction so callers can read them as fields.
 //
-// The supervisor injects ChildrenView via setter methods on ObservedState,
-// not through dependencies. To use it:
+// To consume a ChildrenView in a worker:
 //
 // 1. Add fields to your ObservedState to store children info:
 //
@@ -351,15 +386,14 @@ type ChildInfo struct {
 //	    ChildrenUnhealthy int
 //	}
 //
-// 2. Implement SetChildrenView on your ObservedState (called automatically by supervisor):
+//  2. Implement SetChildrenView on your ObservedState (the supervisor calls it
+//     automatically through the ChildrenViewConsumer capability interface):
 //
-//	func (o MyObservedState) SetChildrenView(view any) fsmv2.ObservedState {
-//	    if cv, ok := view.(config.ChildrenView); ok {
-//	        o.ChildrenHealthy, o.ChildrenUnhealthy = cv.Counts()
-//	        // Or use cv.List(), cv.Get(name), cv.AllHealthy()
-//	    }
-//	    return o
-//	}
+//     func (o MyObservedState) SetChildrenView(view config.ChildrenView) fsmv2.ObservedState {
+//     o.ChildrenHealthy = view.HealthyCount
+//     o.ChildrenUnhealthy = view.UnhealthyCount
+//     return o
+//     }
 //
 // 3. Access children info in State.Next() via the snapshot:
 //
@@ -379,118 +413,51 @@ type ChildInfo struct {
 //	}
 //
 // See workers/example/examplechild/snapshot/snapshot.go for the simple counts pattern.
-type ChildrenView interface {
-	// List returns info about all children.
-	List() []ChildInfo
-
-	// Get returns info about a specific child by name, or nil if not found.
-	Get(name string) *ChildInfo
-
-	// Counts returns the number of healthy and unhealthy children.
-	// healthy = PhaseRunningHealthy only (fully stable)
-	// unhealthy = everything except PhaseRunningHealthy and PhaseStopped
-	Counts() (healthy, unhealthy int)
-
-	// AllHealthy returns true if all children are PhaseRunningHealthy (or there are no children).
-	AllHealthy() bool
-
-	// AllOperational returns true if all children are operational (or there are no children).
-	// Operational = PhaseRunningHealthy OR PhaseRunningDegraded (can serve requests).
-	// Use this for "can system serve requests?" checks.
-	AllOperational() bool
-
-	// AllStopped returns true if all children are in PhaseStopped (or there are no children).
-	AllStopped() bool
+type ChildrenView struct {
+	Children       []ChildInfo `json:"children"`
+	HealthyCount   int         `json:"healthyCount"`
+	UnhealthyCount int         `json:"unhealthyCount"`
+	AllHealthy     bool        `json:"allHealthy"`
+	AllOperational bool        `json:"allOperational"`
+	AllStopped     bool        `json:"allStopped"`
 }
 
-// ChildrenViewSnapshot is a JSON-serializable concrete snapshot of ChildrenView.
-// The supervisor stores this to CSE storage on each tick; the reconciler deserializes
-// it back and uses it in State.Next(). The live *ChildrenManager (which holds supervisor
-// references) cannot round-trip through JSON, so this DTO carries the same data.
-//
-// Workers that access ChildrenView from snap.Observed will see a ChildrenViewSnapshot
-// between collector ticks; the supervisor re-injects a live *ChildrenManager via
-// SetChildrenView on each collector cycle.
-type ChildrenViewSnapshot struct {
-	Children []ChildInfo `json:"children"`
-}
+// NewChildrenView builds a ChildrenView from ChildInfo entries. A nil input
+// slice is normalised to empty so CSE delta-sync produces a stable JSON shape
+// across ticks.
+func NewChildrenView(children []ChildInfo) ChildrenView {
+	childrenCopy := make([]ChildInfo, len(children))
+	copy(childrenCopy, children)
 
-// List implements ChildrenView.
-func (s ChildrenViewSnapshot) List() []ChildInfo {
-	return s.Children
-}
-
-// Get implements ChildrenView.
-func (s ChildrenViewSnapshot) Get(name string) *ChildInfo {
-	for i := range s.Children {
-		if s.Children[i].Name == name {
-			return &s.Children[i]
-		}
+	view := ChildrenView{
+		Children:       childrenCopy,
+		AllHealthy:     true,
+		AllOperational: true,
+		AllStopped:     true,
 	}
 
-	return nil
-}
-
-// Counts implements ChildrenView.
-func (s ChildrenViewSnapshot) Counts() (healthy, unhealthy int) {
-	for _, c := range s.Children {
+	for _, c := range childrenCopy {
 		if c.IsHealthy {
-			healthy++
+			view.HealthyCount++
 		} else if !c.IsStopped {
-			unhealthy++
+			view.UnhealthyCount++
 		}
-	}
 
-	return healthy, unhealthy
-}
-
-// AllHealthy implements ChildrenView.
-func (s ChildrenViewSnapshot) AllHealthy() bool {
-	if len(s.Children) == 0 {
-		return true
-	}
-
-	for _, c := range s.Children {
 		if !c.IsHealthy {
-			return false
+			view.AllHealthy = false
 		}
-	}
 
-	return true
-}
-
-// AllOperational implements ChildrenView.
-func (s ChildrenViewSnapshot) AllOperational() bool {
-	if len(s.Children) == 0 {
-		return true
-	}
-
-	for _, c := range s.Children {
 		if !c.IsOperational {
-			return false
+			view.AllOperational = false
 		}
-	}
 
-	return true
-}
-
-// AllStopped implements ChildrenView.
-func (s ChildrenViewSnapshot) AllStopped() bool {
-	if len(s.Children) == 0 {
-		return true
-	}
-
-	for _, c := range s.Children {
 		if !c.IsStopped {
-			return false
+			view.AllStopped = false
 		}
 	}
 
-	return true
+	return view
 }
-
-// Compile-time check that ChildrenViewSnapshot implements ChildrenView.
-var _ ChildrenView = ChildrenViewSnapshot{}
 
 // DesiredState represents what we want the system to be.
 // This is returned by Worker.DeriveDesiredState() and used by State.Next() for decisions.
@@ -581,3 +548,28 @@ func (d *DesiredState) GetChildrenSpecs() []ChildSpec {
 
 // NOTE: GetState() is defined directly on DesiredState (above), not on the embedded BaseDesiredState.
 // The State field on DesiredState is the canonical source of truth for lifecycle state.
+
+// NewChildSpec creates a typed ChildSpec by marshalling cfg into UserSpec.Config (YAML).
+// Returns an error if YAML marshalling fails (unexpected for static struct types).
+// The ChildStartStates and Dependencies fields are left at their zero values; callers
+// that need them should set them on the returned spec.
+//
+// Use NewChildSpec to build typed child specs from a parent's RenderChildren body:
+//
+//	spec, err := config.NewChildSpec("push", "push", push.PushUserSpec{}, enabled)
+//	if err != nil {
+//	    return nil, err
+//	}
+func NewChildSpec[T any](name, workerType string, cfg T, enabled bool) (ChildSpec, error) {
+	data, err := yaml.Marshal(cfg)
+	if err != nil {
+		return ChildSpec{}, fmt.Errorf("NewChildSpec: marshal %q/%q: %w", name, workerType, err)
+	}
+
+	return ChildSpec{
+		Name:       name,
+		WorkerType: workerType,
+		UserSpec:   UserSpec{Config: string(data)},
+		Enabled:    enabled,
+	}, nil
+}

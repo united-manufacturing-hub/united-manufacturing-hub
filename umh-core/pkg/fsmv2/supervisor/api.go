@@ -262,21 +262,7 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity deps.Identity, work
 			return s.getMappedParentState()
 		},
 		ChildrenViewProvider: func() config.ChildrenView {
-			// Hold the RLock only long enough to snapshot the children map.
-			// NewChildrenManager calls multiple per-child accessors and would
-			// block AddWorker / RemoveWorker for the whole section if we kept
-			// the lock. The map values are pointer interfaces; copying gives
-			// safe per-child iteration once unlocked.
-			s.mu.RLock()
-
-			childrenCopy := make(map[string]SupervisorInterface, len(s.children))
-			for name, child := range s.children {
-				childrenCopy[name] = child
-			}
-
-			s.mu.RUnlock()
-
-			return NewChildrenManager(childrenCopy)
+			return config.NewChildrenView(s.childInfoSlice())
 		},
 		// Called BEFORE CollectObservedState to compute metrics.
 		FrameworkMetricsProvider: func() *deps.FrameworkMetrics {

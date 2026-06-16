@@ -19,11 +19,14 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplechild/action"
 	example_child "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplechild"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplechild/action"
 )
 
-// TryingToStopState represents the shutdown state where the worker is closing connections.
+// TryingToStopState commits to cleanup. It does NOT check IsShutdownRequested
+// to abort cleanup mid-flight. Once the worker enters this state, it runs
+// to completion (Stopped) before any resume can begin. See pkg/fsmv2/doc.go
+// § One-way stop trajectory for the rule and the architecture-validator name.
 type TryingToStopState struct {
 	helpers.StoppingBase
 }

@@ -177,10 +177,8 @@ var _ = Describe("GetProtocolConverter", func() {
 								},
 							},
 							DataflowComponentWriteServiceConfig: dataflowcomponentserviceconfig.DataflowComponentWriteConfigInput{
-								Output: map[string]interface{}{
-									"stdout": map[string]interface{}{},
-								},
-								InputTopics: "umh.v1.factory.line-1.*",
+								Destination: dataflowcomponentserviceconfig.WriteConfigDestination{Protocol: "stdout"},
+								Source:      dataflowcomponentserviceconfig.WriteConfigSource{Topics: "umh.v1.factory.line-1.*"},
 							},
 						},
 						Variables: variables.VariableBundle{
@@ -289,7 +287,7 @@ var _ = Describe("GetProtocolConverter", func() {
 
 				// Verify write DFC is populated with InputTopics
 				Expect(response.WriteDFCPayload).NotTo(BeNil())
-				Expect(response.WriteDFCPayload.InputTopics).To(Equal("umh.v1.factory.line-1.*"))
+				Expect(response.WriteDFCPayload.Source.Topics).To(Equal("umh.v1.factory.line-1.*"))
 
 				// Verify meta information
 				Expect(response.Meta).NotTo(BeNil())

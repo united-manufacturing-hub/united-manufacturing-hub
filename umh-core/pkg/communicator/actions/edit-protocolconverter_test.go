@@ -183,12 +183,13 @@ var _ = Describe("EditProtocolConverter", func() {
 				"name": pcName,
 				"uuid": pcUUID.String(),
 				"writeDFC": map[string]interface{}{
-					"output": map[string]interface{}{
-						"kafka": map[string]interface{}{
-							"addresses": []interface{}{"localhost:9092"},
-						},
+					"destination": map[string]interface{}{
+						"protocol": "kafka",
+						"code":     "addresses:\n- localhost:9092\n",
 					},
-					"input_topics": "umh.v1.factory.*",
+					"source": map[string]interface{}{
+						"topics": "umh.v1.factory.*",
+					},
 				},
 			}
 
@@ -201,8 +202,8 @@ var _ = Describe("EditProtocolConverter", func() {
 
 			writeCfg := action.GetDesiredWriteDFCConfig()
 			Expect(writeCfg).NotTo(BeNil())
-			Expect(writeCfg.Output).To(HaveKey("kafka"))
-			Expect(writeCfg.InputTopics).To(Equal("umh.v1.factory.*"))
+			Expect(writeCfg.Destination.Protocol).To(Equal("kafka"))
+			Expect(writeCfg.Source.Topics).To(Equal("umh.v1.factory.*"))
 		})
 
 		It("should return error for missing UUID", func() {
@@ -268,10 +269,12 @@ var _ = Describe("EditProtocolConverter", func() {
 					},
 				},
 				"writeDFC": map[string]interface{}{
-					"output": map[string]interface{}{
-						"stdout": map[string]interface{}{},
+					"destination": map[string]interface{}{
+						"protocol": "stdout",
 					},
-					"input_topics": "umh.v1.factory.*",
+					"source": map[string]interface{}{
+						"topics": "umh.v1.factory.*",
+					},
 				},
 			}
 
@@ -285,10 +288,12 @@ var _ = Describe("EditProtocolConverter", func() {
 				"name": pcName,
 				"uuid": pcUUID.String(),
 				"writeDFC": map[string]interface{}{
-					"output": map[string]interface{}{
-						"stdout": map[string]interface{}{},
+					"destination": map[string]interface{}{
+						"protocol": "stdout",
 					},
-					"input_topics": "umh.v1.factory.*\numh.v1.plant.*",
+					"source": map[string]interface{}{
+						"topics": "umh.v1.factory.*\numh.v1.plant.*",
+					},
 				},
 			}
 
@@ -298,7 +303,7 @@ var _ = Describe("EditProtocolConverter", func() {
 
 			writeCfg := action.GetDesiredWriteDFCConfig()
 			Expect(writeCfg).NotTo(BeNil())
-			Expect(writeCfg.InputTopics).To(Equal("umh.v1.factory.*\numh.v1.plant.*"))
+			Expect(writeCfg.Source.Topics).To(Equal("umh.v1.factory.*\numh.v1.plant.*"))
 		})
 
 		It("should parse write DFC with golang template vars in input_topics", func() {
@@ -312,10 +317,12 @@ var _ = Describe("EditProtocolConverter", func() {
 					"port": 502,
 				},
 				"writeDFC": map[string]interface{}{
-					"output": map[string]interface{}{
-						"stdout": map[string]interface{}{},
+					"destination": map[string]interface{}{
+						"protocol": "stdout",
 					},
-					"input_topics": "umh.v1.{{ .location_path }}.{{ .IP }}.*",
+					"source": map[string]interface{}{
+						"topics": "umh.v1.{{ .location_path }}.{{ .IP }}.*",
+					},
 				},
 			}
 
@@ -324,7 +331,7 @@ var _ = Describe("EditProtocolConverter", func() {
 
 			writeCfg := action.GetDesiredWriteDFCConfig()
 			Expect(writeCfg).NotTo(BeNil())
-			Expect(writeCfg.InputTopics).To(Equal("umh.v1.{{ .location_path }}.{{ .IP }}.*"))
+			Expect(writeCfg.Source.Topics).To(Equal("umh.v1.{{ .location_path }}.{{ .IP }}.*"))
 		})
 
 		It("should preserve explicit 'stopped' state on read DFC", func() {
@@ -401,10 +408,12 @@ var _ = Describe("EditProtocolConverter", func() {
 				"name": pcName,
 				"uuid": pcUUID.String(),
 				"writeDFC": map[string]interface{}{
-					"output": map[string]interface{}{
-						"stdout": map[string]interface{}{},
+					"destination": map[string]interface{}{
+						"protocol": "stdout",
 					},
-					"input_topics": "umh.v1.factory.*",
+					"source": map[string]interface{}{
+						"topics": "umh.v1.factory.*",
+					},
 				},
 			}
 
@@ -437,10 +446,10 @@ var _ = Describe("EditProtocolConverter", func() {
 				"name": pcName,
 				"uuid": pcUUID.String(),
 				"writeDFC": map[string]interface{}{
-					"output": map[string]interface{}{
-						"stdout": map[string]interface{}{},
+					"destination": map[string]interface{}{
+						"protocol": "stdout",
 					},
-					// no umh_topics
+					// no source/topics
 				},
 			}
 
@@ -449,7 +458,7 @@ var _ = Describe("EditProtocolConverter", func() {
 
 			err = action.Validate()
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("input_topics"))
+			Expect(err.Error()).To(ContainSubstring("input topic"))
 		})
 
 		It("should return error for invalid DFC configuration", func() {
@@ -558,15 +567,17 @@ var _ = Describe("EditProtocolConverter", func() {
 			Expect(updatedPC.ProtocolConverterServiceConfig.TemplateRef).To(Equal(pcName))
 		})
 
-		It("should store InputTopics in typed write config when adding write DFC", func() {
+		It("should store Source.Topics in typed write config when adding write DFC", func() {
 			payload := map[string]interface{}{
 				"name": pcName,
 				"uuid": pcUUID.String(),
 				"writeDFC": map[string]interface{}{
-					"output": map[string]interface{}{
-						"stdout": map[string]interface{}{},
+					"destination": map[string]interface{}{
+						"protocol": "stdout",
 					},
-					"input_topics": "umh.v1.factory.line-1.*\numh.v1.factory.line-2.*",
+					"source": map[string]interface{}{
+						"topics": "umh.v1.factory.line-1.*\numh.v1.factory.line-2.*",
+					},
 				},
 			}
 
@@ -599,7 +610,7 @@ var _ = Describe("EditProtocolConverter", func() {
 				}
 			}
 			Expect(updatedPC).NotTo(BeNil())
-			Expect(updatedPC.ProtocolConverterServiceConfig.Config.DataflowComponentWriteServiceConfig.InputTopics).To(Equal("umh.v1.factory.line-1.*\numh.v1.factory.line-2.*"))
+			Expect(updatedPC.ProtocolConverterServiceConfig.Config.DataflowComponentWriteServiceConfig.Source.Topics).To(Equal("umh.v1.factory.line-1.*\numh.v1.factory.line-2.*"))
 		})
 
 		Context("when protocol converter already has both DFCs configured", func() {
@@ -610,9 +621,6 @@ var _ = Describe("EditProtocolConverter", func() {
 						"url": "http://original.example.com",
 					},
 				}
-				existingWriteOutput := map[string]interface{}{
-					"stdout": map[string]interface{}{},
-				}
 
 				mockConfig.Config.ProtocolConverter[0].ProtocolConverterServiceConfig.Config.DataflowComponentReadServiceConfig = dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
 					BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
@@ -620,8 +628,8 @@ var _ = Describe("EditProtocolConverter", func() {
 					},
 				}
 				mockConfig.Config.ProtocolConverter[0].ProtocolConverterServiceConfig.Config.DataflowComponentWriteServiceConfig = dataflowcomponentserviceconfig.DataflowComponentWriteConfigInput{
-					Output:      existingWriteOutput,
-					InputTopics: "umh.v1.factory.*",
+					Destination: dataflowcomponentserviceconfig.WriteConfigDestination{Protocol: "stdout"},
+					Source:      dataflowcomponentserviceconfig.WriteConfigSource{Topics: "umh.v1.factory.*"},
 				}
 
 				stateMocker = actions.NewStateMocker(mockConfig)
@@ -634,12 +642,13 @@ var _ = Describe("EditProtocolConverter", func() {
 					"name": pcName,
 					"uuid": pcUUID.String(),
 					"writeDFC": map[string]interface{}{
-						"output": map[string]interface{}{
-							"kafka": map[string]interface{}{
-								"addresses": []interface{}{"localhost:9092"},
-							},
+						"destination": map[string]interface{}{
+							"protocol": "kafka",
+							"code":     "addresses:\n- localhost:9092\n",
 						},
-						"input_topics": "umh.v1.plant.*",
+						"source": map[string]interface{}{
+							"topics": "umh.v1.plant.*",
+						},
 					},
 				}
 
@@ -669,8 +678,8 @@ var _ = Describe("EditProtocolConverter", func() {
 				Expect(updatedPC).NotTo(BeNil())
 
 				// Write DFC output must have changed — new format stores directly without wrapper
-				writeOutput := updatedPC.ProtocolConverterServiceConfig.Config.DataflowComponentWriteServiceConfig.Output
-				Expect(writeOutput).To(HaveKey("kafka"))
+				writeDestType := updatedPC.ProtocolConverterServiceConfig.Config.DataflowComponentWriteServiceConfig.Destination.Protocol
+				Expect(writeDestType).To(Equal("kafka"))
 
 				// Read DFC input must be untouched — initial config set directly without wrapper
 				readInput := updatedPC.ProtocolConverterServiceConfig.Config.DataflowComponentReadServiceConfig.BenthosConfig.Input
@@ -730,11 +739,11 @@ var _ = Describe("EditProtocolConverter", func() {
 				Expect(readInput["input"].(map[string]interface{})["http_client"]).To(HaveKeyWithValue("url", "http://updated.example.com"))
 
 				// Write DFC output must be untouched — initial config set directly without wrapper
-				writeOutput := updatedPC.ProtocolConverterServiceConfig.Config.DataflowComponentWriteServiceConfig.Output
-				Expect(writeOutput).To(HaveKey("stdout"))
+				writeDestType := updatedPC.ProtocolConverterServiceConfig.Config.DataflowComponentWriteServiceConfig.Destination.Protocol
+				Expect(writeDestType).To(Equal("stdout"))
 
-				// InputTopics must be untouched
-				Expect(updatedPC.ProtocolConverterServiceConfig.Config.DataflowComponentWriteServiceConfig.InputTopics).To(Equal("umh.v1.factory.*"))
+				// Source.Topics must be untouched
+				Expect(updatedPC.ProtocolConverterServiceConfig.Config.DataflowComponentWriteServiceConfig.Source.Topics).To(Equal("umh.v1.factory.*"))
 			})
 		})
 
@@ -804,8 +813,8 @@ var _ = Describe("EditProtocolConverter", func() {
 					},
 				}
 				mockConfig.Config.ProtocolConverter[0].ProtocolConverterServiceConfig.Config.DataflowComponentWriteServiceConfig = dataflowcomponentserviceconfig.DataflowComponentWriteConfigInput{
-					Output:      map[string]interface{}{"stdout": map[string]interface{}{}},
-					InputTopics: "umh.v1.factory.*",
+					Destination: dataflowcomponentserviceconfig.WriteConfigDestination{Protocol: "stdout"},
+					Source:      dataflowcomponentserviceconfig.WriteConfigSource{Topics: "umh.v1.factory.*"},
 				}
 				mockConfig.Config.ProtocolConverter[0].ProtocolConverterServiceConfig.ReadDFCDesiredState = "active"
 				mockConfig.Config.ProtocolConverter[0].ProtocolConverterServiceConfig.WriteDFCDesiredState = "active"
@@ -1048,10 +1057,12 @@ var _ = Describe("EditProtocolConverter", func() {
 						"port": 80,
 					},
 					"writeDFC": map[string]interface{}{
-						"output": map[string]interface{}{
-							"stdout": map[string]interface{}{},
+						"destination": map[string]interface{}{
+							"protocol": "stdout",
 						},
-						"input_topics": "umh.v1.factory.*",
+						"source": map[string]interface{}{
+							"topics": "umh.v1.factory.*",
+						},
 					},
 				}
 				firstAction := actions.NewEditProtocolConverterAction(userEmail, uuid.New(), instanceUUID, outboundChannel, mockConfig, nil)
@@ -1072,10 +1083,12 @@ var _ = Describe("EditProtocolConverter", func() {
 						"port": 80,
 					},
 					"writeDFC": map[string]interface{}{
-						"output": map[string]interface{}{
-							"stdout": map[string]interface{}{},
+						"destination": map[string]interface{}{
+							"protocol": "stdout",
 						},
-						"input_topics": "umh.v1.plant.*", // different topic
+						"source": map[string]interface{}{
+							"topics": "umh.v1.plant.*", // different topic
+						},
 					},
 				}
 				err = action2.Parse(payload)
@@ -1113,8 +1126,8 @@ var _ = Describe("EditProtocolConverter", func() {
 						"state": "active",
 					},
 					"writeDFC": map[string]interface{}{
-						"output":       map[string]interface{}{"stdout": map[string]interface{}{}},
-						"input_topics": "umh.v1.factory.*",
+						"destination": map[string]interface{}{"protocol": "stdout"},
+						"source":      map[string]interface{}{"topics": "umh.v1.factory.*"},
 					},
 				}
 				firstAction := actions.NewEditProtocolConverterAction(userEmail, uuid.New(), instanceUUID, outboundChannel, mockConfig, nil)
@@ -1155,8 +1168,8 @@ var _ = Describe("EditProtocolConverter", func() {
 						"state": "active",
 					},
 					"writeDFC": map[string]interface{}{
-						"output":       map[string]interface{}{"stdout": map[string]interface{}{}},
-						"input_topics": "umh.v1.factory.*",
+						"destination": map[string]interface{}{"protocol": "stdout"},
+						"source":      map[string]interface{}{"topics": "umh.v1.factory.*"},
 					},
 				}
 				err = action2.Parse(payload)
@@ -1226,8 +1239,8 @@ var _ = Describe("EditProtocolConverter", func() {
 					},
 				}
 				mockConfig.Config.ProtocolConverter[0].ProtocolConverterServiceConfig.Config.DataflowComponentWriteServiceConfig = dataflowcomponentserviceconfig.DataflowComponentWriteConfigInput{
-					Output:      map[string]interface{}{"stdout": map[string]interface{}{}},
-					InputTopics: "umh.v1.factory.*",
+					Destination: dataflowcomponentserviceconfig.WriteConfigDestination{Protocol: "stdout"},
+					Source:      dataflowcomponentserviceconfig.WriteConfigSource{Topics: "umh.v1.factory.*"},
 				}
 				mockConfig.Config.ProtocolConverter[0].ProtocolConverterServiceConfig.ReadDFCDesiredState = "active"
 				mockConfig.Config.ProtocolConverter[0].ProtocolConverterServiceConfig.WriteDFCDesiredState = "active"
@@ -1256,12 +1269,13 @@ var _ = Describe("EditProtocolConverter", func() {
 						},
 					},
 					"writeDFC": map[string]interface{}{
-						"output": map[string]interface{}{
-							"kafka": map[string]interface{}{
-								"addresses": []interface{}{"localhost:9092"},
-							},
+						"destination": map[string]interface{}{
+							"protocol": "kafka",
+							"code":     "addresses:\n- localhost:9092\n",
 						},
-						"input_topics": "umh.v1.plant.*",
+						"source": map[string]interface{}{
+							"topics": "umh.v1.plant.*",
+						},
 					},
 				}
 
@@ -1299,11 +1313,11 @@ var _ = Describe("EditProtocolConverter", func() {
 				Expect(readInput["input"].(map[string]interface{})["http_client"]).To(HaveKeyWithValue("url", "http://new.example.com"))
 
 				// Write DFC: new format stores directly without wrapper
-				writeOutput := updatedPC.ProtocolConverterServiceConfig.Config.DataflowComponentWriteServiceConfig.Output
-				Expect(writeOutput).To(HaveKey("kafka"))
+				writeDestType := updatedPC.ProtocolConverterServiceConfig.Config.DataflowComponentWriteServiceConfig.Destination.Protocol
+				Expect(writeDestType).To(Equal("kafka"))
 
-				// InputTopics updated
-				Expect(updatedPC.ProtocolConverterServiceConfig.Config.DataflowComponentWriteServiceConfig.InputTopics).To(Equal("umh.v1.plant.*"))
+				// Source.Topics updated
+				Expect(updatedPC.ProtocolConverterServiceConfig.Config.DataflowComponentWriteServiceConfig.Source.Topics).To(Equal("umh.v1.plant.*"))
 			})
 		})
 
@@ -1386,8 +1400,8 @@ var _ = Describe("EditProtocolConverter", func() {
 			It("should complete when write DFC has reached the stopped state", Label("disable-bridges"), func() {
 				mockConfig.Config.ProtocolConverter[0].ProtocolConverterServiceConfig.WriteDFCDesiredState = "active"
 				mockConfig.Config.ProtocolConverter[0].ProtocolConverterServiceConfig.Config.DataflowComponentWriteServiceConfig = dataflowcomponentserviceconfig.DataflowComponentWriteConfigInput{
-					Output:      map[string]interface{}{"stdout": map[string]interface{}{}},
-					InputTopics: "umh.v1.factory.*",
+					Destination: dataflowcomponentserviceconfig.WriteConfigDestination{Protocol: "stdout"},
+					Source:      dataflowcomponentserviceconfig.WriteConfigSource{Topics: "umh.v1.factory.*"},
 				}
 
 				snapshotMgr := fsm.NewSnapshotManager()
