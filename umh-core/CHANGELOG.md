@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## [0.44.24]
+
 ### Fixes
 
 - Sparkplug B output: a standard `tag_processor → sparkplug_b` flow now publishes its tags. The output read the value from a payload field named after the tag, but `tag_processor` emits it under `value`, so every message was silently dropped — leaving only an empty `NBIRTH` on the broker. The output now extracts the value the same way the Sparkplug B input does (`value`/`val`/`data`/`measurement`), makes `virtual_path` optional, and warns instead of dropping silently when a payload can't be turned into a metric
