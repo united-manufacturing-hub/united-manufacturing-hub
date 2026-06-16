@@ -66,11 +66,11 @@ GOTESTSUM_VERSION = v1.13.0
 DLV_VERSION = v1.25.1
 
 # Default values for build arguments
-NMAP_VERSION = 7.97-r0
+NMAP_VERSION = 7.99-r0
 S6_OVERLAY_VERSION = 3.2.0.2
 REDPANDA_VERSION = 24.3.18
 ## Benthos version is a tag or a sha-<commit hash> (e.g. 0.9.4 or sha-a51a685) to be used in the docker image
-BENTHOS_UMH_VERSION = 0.12.6
+BENTHOS_UMH_VERSION = 0.12.7
 BUF_VERSION = 1.55.1
 PROTOC_GEN_GO_VERSION = 1.36.6
 
