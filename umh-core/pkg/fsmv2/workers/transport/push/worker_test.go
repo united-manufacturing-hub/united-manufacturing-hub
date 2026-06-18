@@ -183,7 +183,7 @@ var _ = Describe("PushWorker", func() {
 			Expect(typed).NotTo(BeNil())
 		})
 
-		It("should return correct state for valid spec", func() {
+		It("parses a valid spec into a PushDesiredState wrapper without error", func() {
 			spec := fsmv2config.UserSpec{
 				Config:    `state: stopped`,
 				Variables: fsmv2config.VariableBundle{},
@@ -192,13 +192,11 @@ var _ = Describe("PushWorker", func() {
 			desired, err := worker.DeriveDesiredState(spec)
 
 			Expect(err).ToNot(HaveOccurred())
-			Expect(desired).NotTo(BeNil())
-			typedStopped, okStopped := desired.(*fsmv2.WrappedDesiredState[snapshot.PushDesiredState])
-			Expect(okStopped).To(BeTrue())
-			Expect(typedStopped).NotTo(BeNil())
+			_, ok := desired.(*fsmv2.WrappedDesiredState[snapshot.PushDesiredState])
+			Expect(ok).To(BeTrue())
 		})
 
-		It("should return running state for empty config", func() {
+		It("parses empty config into a PushDesiredState wrapper without error", func() {
 			spec := fsmv2config.UserSpec{
 				Config:    "",
 				Variables: fsmv2config.VariableBundle{},
@@ -207,9 +205,8 @@ var _ = Describe("PushWorker", func() {
 			desired, err := worker.DeriveDesiredState(spec)
 
 			Expect(err).ToNot(HaveOccurred())
-			typedRunning, okRunning := desired.(*fsmv2.WrappedDesiredState[snapshot.PushDesiredState])
-			Expect(okRunning).To(BeTrue())
-			Expect(typedRunning).NotTo(BeNil())
+			_, ok := desired.(*fsmv2.WrappedDesiredState[snapshot.PushDesiredState])
+			Expect(ok).To(BeTrue())
 		})
 
 		It("should be deterministic", func() {

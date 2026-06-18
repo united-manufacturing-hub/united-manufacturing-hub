@@ -46,11 +46,11 @@ import (
 //   - Disabled: Inherited from this type. Set by the supervisor's disable-mapping pass
 //     from the parent's ChildSpec.Enabled; child workers stay resident in Stopped.
 //
-// The desired lifecycle state ("running"/"stopped") is read from the user spec
-// via BaseUserSpec.GetState() in DeriveDesiredState and stored directly on the
-// outer DesiredState type (not on BaseDesiredState). Callers that used to set
-// BaseDesiredState{State: x} should instead set the State field on the embedding
-// struct (e.g., MyDesiredState{State: x, ...}).
+// The desired lifecycle state ("running"/"stopped") lives on the user spec, not
+// on the DesiredState. Embed BaseUserSpec in your UserSpec config type to inherit
+// GetState(); DeriveDesiredState reads and validates it. As stated above, do not
+// add a State field to your DesiredState — the supervisor drives lifecycle through
+// ShutdownRequested and Disabled and never populates a custom State field.
 //
 // Correct ShouldBeRunning() implementation:
 //

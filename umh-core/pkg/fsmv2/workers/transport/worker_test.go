@@ -201,7 +201,7 @@ authToken: "test-token"`,
 				Expect(transportDesired.ChildrenSpecs).To(BeNil())
 			})
 
-			It("should return stopped state when configured", func() {
+			It("parses a stopped spec without requiring credentials", func() {
 				spec := fsmv2types.UserSpec{
 					Config: `state: stopped
 relayURL: "https://relay.example.com"`,
@@ -213,10 +213,10 @@ relayURL: "https://relay.example.com"`,
 				Expect(err).ToNot(HaveOccurred())
 				transportDesired, ok := desired.(*fsmv2.WrappedDesiredState[snapshot.TransportDesiredState])
 				Expect(ok).To(BeTrue())
-				Expect(transportDesired).NotTo(BeNil())
+				Expect(transportDesired.Config.RelayURL).To(Equal("https://relay.example.com"))
 			})
 
-			It("should return running state when configured", func() {
+			It("propagates credentials from a running spec into the derived config", func() {
 				spec := fsmv2types.UserSpec{
 					Config: `state: running
 relayURL: "https://relay.example.com"
@@ -230,7 +230,9 @@ authToken: "test-token"`,
 				Expect(err).ToNot(HaveOccurred())
 				transportDesired, ok := desired.(*fsmv2.WrappedDesiredState[snapshot.TransportDesiredState])
 				Expect(ok).To(BeTrue())
-				Expect(transportDesired).NotTo(BeNil())
+				Expect(transportDesired.Config.RelayURL).To(Equal("https://relay.example.com"))
+				Expect(transportDesired.Config.InstanceUUID).To(Equal("test-uuid"))
+				Expect(transportDesired.Config.AuthToken).To(Equal("test-token"))
 			})
 		})
 
