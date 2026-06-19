@@ -132,7 +132,7 @@ func (a *SaveProtocolConverterAction) Execute() (interface{}, map[string]interfa
 		a.fsmLogger.SentryError(deps.FeatureDeploymentSaveConfig, "", err, "save_protocol_converter_create_config_failed",
 			deps.String("name", a.payload.Name))
 
-		return nil, nil, fmt.Errorf("%s", errorMsg)
+		return nil, nil, fmt.Errorf("failed to create protocol converter configuration: %w", err)
 	}
 
 	// currently, we cannot reuse templates, so we need to create a new one
@@ -155,7 +155,7 @@ func (a *SaveProtocolConverterAction) Execute() (interface{}, map[string]interfa
 		a.fsmLogger.SentryError(deps.FeatureDeploymentSaveConfig, "", err, "save_protocol_converter_save_failed",
 			deps.String("pcConfig", pcConfig.String()))
 
-		return nil, nil, fmt.Errorf("%s", errorMsg)
+		return nil, nil, fmt.Errorf("failed to save protocol converter: %w", err)
 	}
 
 	pcUUID := dataflowcomponentserviceconfig.GenerateUUIDFromName(a.payload.Name)
