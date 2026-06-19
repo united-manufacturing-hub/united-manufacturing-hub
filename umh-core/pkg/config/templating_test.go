@@ -21,17 +21,11 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 )
 
-// renderFixture is a minimal struct whose string fields can carry template
-// directives, mirroring how tag_processor code blocks are stored in DFC configs.
 type renderFixture struct {
 	A string `yaml:"a"`
 	B string `yaml:"b"`
 }
 
-// typedRenderFixture adds int fields so a rendered output with string values
-// in their place produces a yaml.TypeError (valid YAML, failing decode).
-// omitempty keeps the zero-valued fields out of the marshalled template so
-// the injected keys do not collide with them.
 type typedRenderFixture struct {
 	A     string `yaml:"a"`
 	Port  int    `yaml:"port,omitempty"`
@@ -49,13 +43,6 @@ var _ = Describe("RenderTemplate", func() {
 	})
 
 	Describe("unmarshal failure of the rendered output", func() {
-		// A directive inside a multi-line string (stored as a YAML block
-		// scalar) whose expansion contains a column-0 line. The column-0
-		// line terminates the block scalar and becomes a malformed
-		// top-level node, so yaml.Marshal and template execution succeed
-		// but unmarshalling the rendered output fails. This is the failure
-		// mode seen in ENG-5103 (`yaml: line 25: did not find expected key`,
-		// where the logged error omitted the rendered output).
 		var (
 			in    renderFixture
 			scope map[string]any
@@ -69,33 +56,26 @@ var _ = Describe("RenderTemplate", func() {
 		It("fails at the unmarshal step", func() {
 			_, err := config.RenderTemplate(in, scope)
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("failed to unmarshal rendered template"))
+			Expect(err.Error()).To(ContainSubstring("failed to render template as valid YAML"))
 		})
 
 		It("includes the failing region of the rendered output in the error", func() {
 			_, err := config.RenderTemplate(in, scope)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("broken: ["))
-			// Line numbers let the reader correlate with the yaml error's
-			// "line N" reference.
 			Expect(err.Error()).To(MatchRegexp(`(?m)^\s*>?\s*\d+ \|`))
 		})
 
 		It("marks the yaml-reported line, one above the malformed content for this error class", func() {
 			_, err := config.RenderTemplate(in, scope)
 			Expect(err).To(HaveOccurred())
-			// The fixture renders `broken: [` on line 4 and yaml.v3 reports
-			// "yaml: line 3" (parser problem marks are 0-based). The marker
-			// follows the reported line; pinning the exact number catches a
-			// regression where the marker drifts to any other line in the
-			// window.
+			// yaml.v3 parser problem marks are 0-based: `broken: [` is on
+			// rendered line 4, but the error says "line 3".
 			Expect(err.Error()).To(ContainSubstring("yaml: line 3"))
 			Expect(err.Error()).To(MatchRegexp(`(?m)^> +3 \|`))
 		})
 
 		It("shows one region per failing line for type errors, capped", func() {
-			// Valid YAML whose values cannot decode into the typed fields:
-			// yaml.TypeError aggregates one "line N:" entry per field.
 			typedIn := typedRenderFixture{A: "line1\n{{ .inject }}"}
 			typedScope := map[string]any{"inject": "x\nport: notanumber\ncount: alsonot"}
 
@@ -104,7 +84,6 @@ var _ = Describe("RenderTemplate", func() {
 			Expect(err.Error()).To(ContainSubstring("cannot unmarshal"))
 			Expect(err.Error()).To(ContainSubstring("port: notanumber"))
 			Expect(err.Error()).To(ContainSubstring("count: alsonot"))
-			// One marker per reported line.
 			Expect(err.Error()).To(MatchRegexp(`(?m)^> +\d+ \| port: notanumber`))
 			Expect(err.Error()).To(MatchRegexp(`(?m)^> +\d+ \| count: alsonot`))
 		})

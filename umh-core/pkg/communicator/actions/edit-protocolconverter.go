@@ -85,6 +85,20 @@ func (d DFCType) IsValid() bool {
 	}
 }
 
+// flowName maps a DFCType to the user-facing noun used in error messages shown
+// in the Management Console. DFC is a legacy internal term; the UI calls these
+// "flow config".
+func (d DFCType) flowName() string {
+	switch d {
+	case DFCTypeRead:
+		return "read flow config"
+	case DFCTypeWrite:
+		return "write flow config"
+	default:
+		return d.String() + " flow config"
+	}
+}
+
 // EditProtocolConverterAction implements the Action interface for editing
 // protocol converter configurations, particularly for adding DFC configurations.
 type EditProtocolConverterAction struct {
@@ -97,6 +111,12 @@ type EditProtocolConverterAction struct {
 	// clears it only when a later render succeeds, so ticks that never reach
 	// a render (for example while Benthos restarts) keep the captured cause.
 	lastRenderErr error
+
+	// lastFailedDFCType records which DFC (read/write) produced the most
+	// recent render error. It is set alongside lastRenderErr and used to
+	// embed the flow name in the prose of user-facing error messages without
+	// prefixing the technical detail trail.
+	lastFailedDFCType DFCType
 
 	outboundChannel chan *models.UMHMessage
 	location        map[int]string
@@ -747,7 +767,12 @@ func (a *EditProtocolConverterAction) awaitRollout(pcConfig config.ProtocolConve
 
 								a.rolloutSentryReported = true
 
-								return models.ErrRetryRollbackTimeout, fmt.Errorf("protocol converter '%s' has a persistent render failure (%w) but could not be rolled back: %w. Please check your logs and consider manually restoring the previous configuration", a.name, renderErr, rollbackErr)
+								flowName := a.lastFailedDFCType.flowName()
+								detail := renderErrUserDetail(renderErr)
+								return models.ErrRetryRollbackTimeout, fmt.Errorf(
+									"Bridge '%s' couldn't be updated and the automatic rollback also failed, so it may need manual recovery. The new %s isn't valid YAML. Fix the highlighted line and try again.\n\n%s",
+									a.name, flowName, detail,
+								)
 							}
 
 							a.fsmLogger.SentryWarn(deps.FeatureDisableReadFlows, "", "edit_protocol_converter_render_failure_rolled_back",
@@ -757,7 +782,12 @@ func (a *EditProtocolConverterAction) awaitRollout(pcConfig config.ProtocolConve
 
 							a.rolloutSentryReported = true
 
-							return models.ErrConfigFileInvalid, fmt.Errorf("protocol converter '%s' was rolled back to its previous configuration after repeated render failures: %w. Please fix the configuration and try editing again", a.name, renderErr)
+							flowName := a.lastFailedDFCType.flowName()
+							detail := renderErrUserDetail(renderErr)
+							return models.ErrConfigFileInvalid, fmt.Errorf(
+								"Bridge '%s' was restored to its previous working configuration because the new %s isn't valid YAML. Fix the highlighted line and try again.\n\n%s",
+								a.name, flowName, detail,
+							)
 						}
 					}
 
@@ -771,14 +801,14 @@ func (a *EditProtocolConverterAction) awaitRollout(pcConfig config.ProtocolConve
 					// may still carry the snippet when the FSM's own reconcile
 					// failure sets it (pkg/fsm/protocolconverter/actions.go).
 					notYetMsg := fmt.Sprintf(
-						"%s DFC config not yet applied. State: %s, Status reason: %s",
-						a.dfcType.String(),
+						"%s not yet applied. State: %s, Status reason: %s",
+						a.dfcType.flowName(),
 						instance.CurrentState,
 						pcSnapshot.ServiceInfo.StatusReason,
 					)
 
 					if renderErr != nil {
-						firstLine, _, _ := strings.Cut(renderErr.Error(), "\n")
+						firstLine, _, _ := strings.Cut(renderErrUserDetail(renderErr), "\n")
 						notYetMsg += "; Render failed: " + firstLine
 					}
 
@@ -1004,6 +1034,7 @@ func (a *EditProtocolConverterAction) compareSingleDFCConfig(pcSnapshot *protoco
 	if err != nil {
 		a.actionLogger.Errorf("failed to render desired %s DFC config: %v", dfcType, err)
 		a.lastRenderErr = err
+		a.lastFailedDFCType = dfcType
 
 		return false, err
 	}
@@ -1304,4 +1335,19 @@ func (a *EditProtocolConverterAction) GetDFCType() string {
 // GetDesiredWriteDFCConfig returns the raw write DFC input config - exposed for testing purposes.
 func (a *EditProtocolConverterAction) GetDesiredWriteDFCConfig() *dataflowcomponentserviceconfig.DataflowComponentWriteConfigInput {
 	return a.writeDFCInput
+}
+
+// renderErrUserDetail returns the clean detail lines to embed in a
+// user-facing error message for a render failure. When err is a
+// *config.TemplateRenderError the output is the raw YAML error followed
+// by the rendered-region snippet (no "failed to render template as valid
+// YAML" wrapper). For any other error type the full error string is
+// returned unchanged so no information is lost.
+func renderErrUserDetail(err error) string {
+	var tre *config.TemplateRenderError
+	if errors.As(err, &tre) {
+		return tre.YAMLErr.Error() + tre.Snippet
+	}
+
+	return err.Error()
 }

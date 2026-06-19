@@ -211,6 +211,25 @@ func (d *StreamProcessorConfig) UnmarshalYAML(value *yaml.Node) error {
 	return nil
 }
 
+// TemplateRenderError is returned by RenderTemplate when YAML unmarshalling
+// of the rendered output fails. It carries the raw YAML error and the
+// rendered-region snippet separately so callers that compose user-facing
+// messages can present clean, un-prefixed detail without repackaging the
+// error string. Error() still returns the same string as the plain
+// fmt.Errorf wrapper it replaces, so all other callers are unaffected.
+type TemplateRenderError struct {
+	// YAMLErr is the raw yaml.Unmarshal error, e.g. "yaml: line 10: …".
+	YAMLErr error
+	// Snippet is the rendered-region context block (starts with "\n").
+	Snippet string
+}
+
+func (e *TemplateRenderError) Error() string {
+	return "failed to render template as valid YAML: " + e.YAMLErr.Error() + e.Snippet
+}
+
+func (e *TemplateRenderError) Unwrap() error { return e.YAMLErr }
+
 // RenderTemplate takes an *arbitrary* struct that still contains
 // {{ … }} actions, renders it with text/template and returns the same
 // struct type fully materialised.
@@ -225,29 +244,32 @@ func RenderTemplate[T any](tmpl T, scope map[string]any) (T, error) {
 	// A. serialise to YAML – keeps anchors & order stable for diffing
 	raw, err := yaml.Marshal(tmpl)
 	if err != nil {
-		return *new(T), fmt.Errorf("failed to marshal template of type %T to YAML: %w", tmpl, err)
+		return *new(T), fmt.Errorf("failed to marshal template to YAML: %w", err)
 	}
 
 	// B. parse + execute the template (no extra FuncMap – sandboxed!)
 	tpl, err := template.New("pc").Option("missingkey=error").Parse(string(raw))
 	if err != nil {
-		return *new(T), fmt.Errorf("failed to parse template for type %T: %w", tmpl, err)
+		return *new(T), fmt.Errorf("failed to parse template: %w", err)
 	}
 
 	var buf bytes.Buffer
 	if err := tpl.Execute(&buf, scope); err != nil {
-		return *new(T), fmt.Errorf("failed to execute template for type %T: %w", tmpl, err)
+		return *new(T), fmt.Errorf("failed to execute template: %w", err)
 	}
 
 	// C. unmarshal back into the *same* Go type
 	var out T
 	if err := yaml.Unmarshal(buf.Bytes(), &out); err != nil {
-		return *new(T), fmt.Errorf("failed to unmarshal rendered template back to type %T: %w%s", tmpl, err, renderedRegionSnippet(buf.Bytes(), err))
+		return *new(T), &TemplateRenderError{
+			YAMLErr: err,
+			Snippet: renderedRegionSnippet(buf.Bytes(), err),
+		}
 	}
 
 	// D. sanity-check – no {{ left over
 	if bytes.Contains(buf.Bytes(), []byte("{{")) {
-		return *new(T), fmt.Errorf("unresolved template markers in %T", tmpl)
+		return *new(T), fmt.Errorf("unresolved template markers in rendered output")
 	}
 
 	return out, nil

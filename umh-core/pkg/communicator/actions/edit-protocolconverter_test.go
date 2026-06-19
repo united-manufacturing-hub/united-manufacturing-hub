@@ -1536,19 +1536,6 @@ var _ = Describe("EditProtocolConverter", func() {
 		})
 
 		Context("fail-fast on persistent render failures", func() {
-			// ENG-5103: a deterministic render failure used to retry every
-			// tick for the full 30s timeout. The await loop must abort after
-			// 3 consecutive identical render failures instead — but never on
-			// the first failure (transient snapshot staleness), never while
-			// the error keeps changing, and any tick whose comparison runs
-			// without a render failure breaks the streak. Ticks that skip
-			// the comparison entirely (manager, instance or state info
-			// missing from the snapshot) leave the streak untouched.
-
-			// tick is the awaitRollout poll interval, injected via
-			// SetTickInterval. Short enough to keep these specs off the 1s
-			// production ticker, long enough that the reply collector has a
-			// comfortable window to mutate the snapshot before the next poll.
 			tick := 100 * time.Millisecond
 
 			type capturedReply struct {
@@ -1568,25 +1555,16 @@ var _ = Describe("EditProtocolConverter", func() {
 			BeforeEach(func() {
 				snapshotMgr = fsm.NewSnapshotManager()
 				sentryRec = &recordingFSMLogger{}
-				// Dedicated outbound channel: in the no-fail-fast case the
-				// Execute goroutine keeps sending progress replies past this
-				// spec's lifetime, and the suite-level channel is closed in
-				// AfterEach. This one is collected forever and never closed.
+				// Dedicated outbound so the no-fail-fast Execute goroutine
+				// cannot bleed replies into the next spec's collector.
 				localOutbound = make(chan *models.UMHMessage, 100)
 				replyMu.Lock()
 				replies = nil
 				replyMu.Unlock()
 			})
 
-			// observedStateWithInject builds a PC observed-state snapshot.
-			// A multi-line inject value (such as "x\nbroken: [") expands to
-			// a column-0 line inside a block scalar: yaml.Marshal and
-			// template execution succeed, unmarshalling the rendered output
-			// fails — deterministically, with an error message embedding the
-			// inject value. A single-line inject value renders fine; the
-			// comparison then fails without a render error because the
-			// observed Benthos config does not match the rendered desired
-			// config.
+			// observedStateWithInject: a multi-line inject value expands to a
+			// column-0 line inside a block scalar, breaking YAML unmarshal.
 			observedStateWithInject := func(inject string) *protocolconverter.ProtocolConverterObservedStateSnapshot {
 				input := map[string]interface{}{"http_client": map[string]interface{}{}}
 
@@ -1646,7 +1624,7 @@ var _ = Describe("EditProtocolConverter", func() {
 			countNotYetApplied := func() int {
 				count := 0
 				for _, r := range getReplies() {
-					if strings.Contains(r.message, "DFC config not yet applied") {
+					if strings.Contains(r.message, "not yet applied") {
 						count++
 					}
 				}
@@ -1654,11 +1632,6 @@ var _ = Describe("EditProtocolConverter", func() {
 				return count
 			}
 
-			// startCollector decodes every outbound reply into replies and
-			// invokes onProgress with the running count of "DFC config not
-			// yet applied" ticks, letting tests mutate the snapshot between
-			// poll ticks (each progress reply follows one comparison, and
-			// the next comparison is a full tick away).
 			startCollector := func(onProgress func(notYetAppliedCount int)) {
 				go func() {
 					notYetApplied := 0
@@ -1680,7 +1653,7 @@ var _ = Describe("EditProtocolConverter", func() {
 						replyMu.Lock()
 						replies = append(replies, r)
 						replyMu.Unlock()
-						if onProgress != nil && strings.Contains(r.message, "DFC config not yet applied") {
+						if onProgress != nil && strings.Contains(r.message, "not yet applied") {
 							notYetApplied++
 							onProgress(notYetApplied)
 						}
@@ -1694,9 +1667,7 @@ var _ = Describe("EditProtocolConverter", func() {
 					"uuid": pcUUID.String(),
 					"readDFC": map[string]interface{}{
 						"inputs": map[string]interface{}{
-							// multi-line value marshals as a block scalar;
-							// {{ .inject }} expands to a column-0 line that
-							// terminates it and breaks the YAML
+							// column-0 expansion of {{ .inject }} terminates the block scalar
 							"data": "input:\n  http_client:\n    url: |-\n      line1\n      {{ .inject }}",
 							"type": "http_client",
 						},
@@ -1713,10 +1684,6 @@ var _ = Describe("EditProtocolConverter", func() {
 				}
 			}
 
-			// brokenWriteDFCPayload embeds a multi-line block-scalar
-			// value in the destination.code field. yaml.Marshal turns it
-			// into a block literal; {{ .inject }} expands to a column-0
-			// line that terminates the scalar and breaks YAML unmarshal.
 			brokenWriteDFCPayload := func() map[string]interface{} {
 				return map[string]interface{}{
 					"name": pcName,
@@ -1733,8 +1700,6 @@ var _ = Describe("EditProtocolConverter", func() {
 				}
 			}
 
-			// newVariablePayload is a VALID edit that introduces a template variable
-			// the observed spec does not have yet.
 			newVariablePayload := func() map[string]interface{} {
 				return map[string]interface{}{
 					"name": pcName,
@@ -1746,10 +1711,6 @@ var _ = Describe("EditProtocolConverter", func() {
 					},
 					"readDFC": map[string]interface{}{
 						"inputs": map[string]interface{}{
-							// References BOTH the edit-carried variable (newvar)
-							// and an observed-only one (inject): the render must
-							// merge the edit's variables OVER the observed ones,
-							// not replace them.
 							"data": "input:\n  http_client:\n    url: 'http://{{ .newvar }}/{{ .inject }}'",
 							"type": "http_client",
 						},
@@ -1790,9 +1751,6 @@ var _ = Describe("EditProtocolConverter", func() {
 				return time.Since(start), result.err
 			}
 
-			// finalFailureReply waits for the terminal failure reply (sent
-			// just before Execute returns, so the collector may still be
-			// catching up) and returns it.
 			finalFailureReply := func() capturedReply {
 				var final capturedReply
 				Eventually(func() bool {
@@ -1814,36 +1772,27 @@ var _ = Describe("EditProtocolConverter", func() {
 				updateSnapshot(observedStateWithInject("x\nbroken: ["))
 				startCollector(nil)
 
-				// Without fail-fast this takes the full timeout; half of it
-				// splits the two outcomes safely.
 				elapsed, execErr := runEdit(constants.DataflowComponentWaitForActiveTimeout / 2)
 
 				Expect(execErr).To(HaveOccurred())
 				Expect(execErr.Error()).To(ContainSubstring("render"))
-				Expect(execErr.Error()).To(ContainSubstring("was rolled back"))
-				// Never on the first failure: three identical failures need
-				// at least two full ticks after the first.
+				Expect(execErr.Error()).To(ContainSubstring("was restored"))
 				Expect(elapsed).To(BeNumerically(">=", 2*tick))
 
-				// The rollback must actually write the pre-edit config back:
-				// call 1 persists the edit, call 2 is the rollback.
 				Expect(mockConfig.AtomicEditProtocolConverterCallCount).To(Equal(2))
 				Expect(mockConfig.AtomicEditProtocolConverterLastUUID).To(Equal(pcUUID))
 				Expect(mockConfig.AtomicEditProtocolConverterLastConfig.Name).To(Equal(pcName))
-				// The pre-edit config had no read DFC; the broken edit added one.
 				Expect(mockConfig.AtomicEditProtocolConverterLastConfig.ProtocolConverterServiceConfig.Config.DataflowComponentReadServiceConfig).
 					To(Equal(dataflowcomponentserviceconfig.DataflowComponentServiceConfig{}))
 
-				// The frontend uses the error code to decide retryability:
-				// the config was safely rolled back, so this is the
-				// fix-your-config case, not the retry case.
 				final := finalFailureReply()
 				Expect(final.errorCode).To(Equal(models.ErrConfigFileInvalid))
-				Expect(final.message).To(ContainSubstring("was rolled back"))
+				Expect(final.message).To(ContainSubstring("Bridge '" + pcName + "'"))
+				Expect(final.message).To(ContainSubstring("was restored to its previous working configuration"))
+				Expect(final.message).To(ContainSubstring("read flow config isn't valid YAML"))
+				Expect(final.message).To(ContainSubstring("Fix the highlighted line and try again"))
+				Expect(final.message).To(ContainSubstring("yaml:"))
 
-				// Pin the threshold: 3 identical failures abort on the third
-				// tick, so exactly the first two ticks produced an ordinary
-				// progress reply before the rollback announcement.
 				Expect(countNotYetApplied()).To(Equal(2),
 					"fail-fast threshold moved: expected maxIdenticalRenderFails-1 progress ticks before rollback")
 
@@ -1855,11 +1804,6 @@ var _ = Describe("EditProtocolConverter", func() {
 				}
 				Expect(rollingBack).To(Equal(1))
 
-				// Pin what reaches Sentry: the dedicated render-failure event
-				// carries the bridge name, UUID and render error (which includes
-				// the rendered-output snippet; that exposure is an accepted
-				// decision), and the generic rollout_failed event, which attaches
-				// the full old/new config, must not fire on top of it.
 				events := sentryRec.eventNames()
 				Expect(events).To(ContainElement("edit_protocol_converter_render_failure_rolled_back"))
 				Expect(events).NotTo(ContainElement("edit_protocol_converter_rollout_failed"))
@@ -1873,18 +1817,9 @@ var _ = Describe("EditProtocolConverter", func() {
 				updateSnapshot(observedStateWithInject("x\nbroken0: ["))
 				startCollector(nil)
 
-				// Drive snapshot swaps reactively: after each "DFC config
-				// not yet applied" reply confirms a tick ran with variant n,
-				// advance to variant n+1. This avoids the onProgress-callback
-				// race where the swap may land AFTER the next tick started
-				// reading the old snapshot under a loaded CI runner.
-				// After variant 5, the snapshot is held constant so the
-				// streak can finally build to 3 and trigger the abort.
 				go func() {
 					defer GinkgoRecover()
 					for n := 1; n <= 5; n++ {
-						// Wait until n "DFC config not yet applied" replies
-						// have arrived, confirming n ticks ran.
 						Eventually(func() int {
 							return countNotYetApplied()
 						}, "5s", "10ms").Should(BeNumerically(">=", n))
@@ -1895,20 +1830,12 @@ var _ = Describe("EditProtocolConverter", func() {
 				_, execErr := runEdit(constants.DataflowComponentWaitForActiveTimeout - 5*time.Second)
 
 				Expect(execErr).To(HaveOccurred())
-				Expect(execErr.Error()).To(ContainSubstring("was rolled back"))
+				Expect(execErr.Error()).To(ContainSubstring("was restored"))
 
-				// Wait for the terminal reply before counting: the collector
-				// may still be draining the channel when runEdit returns.
 				finalFailureReply()
 
-				// Each of the 5 rotating variants produced at least one
-				// "not yet applied" reply (streak never above 1 during that
-				// phase). Two more ticks with the held variant raise the
-				// streak to 2 and then 3. Total: at least 7.
 				Expect(countNotYetApplied()).To(BeNumerically(">=", 7))
 
-				// The abort must not have fired during the rotating phase;
-				// only one rollback announcement should appear in total.
 				rollingBack := 0
 				for _, r := range getReplies() {
 					if strings.Contains(r.message, "persistent render failure detected. Rolling back...") {
@@ -1923,25 +1850,10 @@ var _ = Describe("EditProtocolConverter", func() {
 				updateSnapshot(observedStateWithInject(brokenInject))
 				startCollector(nil)
 
-				// Drive snapshot swaps reactively to avoid the onProgress
-				// callback race. Phase 1: tick 1 sees the broken inject
-				// (streak=1). Phase 2: swap to benign; one tick runs with
-				// benign (render succeeds, streak resets to 0). Phase 3:
-				// swap back to broken; streak builds from 0, needing 3
-				// consecutive identical failures before the abort fires.
-				//
-				// benignFrom/benignTo bracket the benign phase: the running
-				// "not yet applied" counts when the benign snapshot landed
-				// and when the broken inject was restored. Guarded by
-				// replyMu; read back after the run to scope the
-				// render-failure-absence assertion to benign-phase replies.
 				var benignFrom, benignTo int
 
 				go func() {
 					defer GinkgoRecover()
-					// Wait for the first "DFC config not yet applied" reply
-					// confirming tick 1 ran with the broken inject (streak=1),
-					// then switch to benign.
 					Eventually(func() int {
 						return countNotYetApplied()
 					}, "5s", "10ms").Should(BeNumerically(">=", 1))
@@ -1951,9 +1863,6 @@ var _ = Describe("EditProtocolConverter", func() {
 					replyMu.Unlock()
 					updateSnapshot(observedStateWithInject("benign"))
 
-					// Wait for a second "DFC config not yet applied" reply
-					// confirming the benign tick ran (streak reset to 0),
-					// then restore the broken inject for phase 3.
 					Eventually(func() int {
 						return countNotYetApplied()
 					}, "5s", "10ms").Should(BeNumerically(">=", 2))
@@ -1967,24 +1876,12 @@ var _ = Describe("EditProtocolConverter", func() {
 				_, execErr := runEdit(constants.DataflowComponentWaitForActiveTimeout - 5*time.Second)
 
 				Expect(execErr).To(HaveOccurred())
-				Expect(execErr.Error()).To(ContainSubstring("was rolled back"))
+				Expect(execErr.Error()).To(ContainSubstring("was restored"))
 
-				// Wait for the terminal reply before counting: the collector
-				// may still be draining the channel when runEdit returns.
 				finalFailureReply()
 
-				// Phase 1 (broken): 1 "not yet applied" reply (streak=1).
-				// Phase 2 (benign): 1 "not yet applied" reply (streak reset
-				// to 0 because render succeeds).
-				// Phase 3 (broken again): 2 "not yet applied" replies
-				// (streak=1 and streak=2) before the abort fires on the
-				// third identical failure. The abort tick sends "Rolling
-				// back..." rather than "not yet applied", so the abort
-				// tick itself does not count. Total: at least 4.
 				Expect(countNotYetApplied()).To(BeNumerically(">=", 4))
 
-				// Exactly one rollback must appear, only after the streak
-				// rebuilt from zero in phase 3.
 				rollingBack := 0
 				for _, r := range getReplies() {
 					if strings.Contains(r.message, "persistent render failure detected. Rolling back...") {
@@ -1993,13 +1890,6 @@ var _ = Describe("EditProtocolConverter", func() {
 				}
 				Expect(rollingBack).To(Equal(1))
 
-				// Only render-failing ticks name the render error. The
-				// benign-phase replies, those whose 1-based ordinal among
-				// the "not yet applied" replies falls in (benignFrom,
-				// benignTo], ran with a successfully rendering snapshot and
-				// must not carry "Render failed". This pins the
-				// renderErr != nil guard on the per-tick append: a variant
-				// that appends stale render text on every tick fails here.
 				replyMu.Lock()
 				from, to := benignFrom, benignTo
 				replyMu.Unlock()
@@ -2007,7 +1897,7 @@ var _ = Describe("EditProtocolConverter", func() {
 					"the benign phase must contribute at least one not-yet-applied reply")
 				var notYet []capturedReply
 				for _, r := range getReplies() {
-					if strings.Contains(r.message, "DFC config not yet applied") {
+					if strings.Contains(r.message, "not yet applied") {
 						notYet = append(notYet, r)
 					}
 				}
@@ -2020,30 +1910,25 @@ var _ = Describe("EditProtocolConverter", func() {
 				updateSnapshot(observedStateWithInject("x\nbroken: ["))
 				startCollector(nil)
 
-				// Call 1 is the initial persist of the edit; call 2 is the
-				// rollback — fail only that one.
 				mockConfig.WithAtomicEditProtocolConverterError(errors.New("simulated config write failure")).
 					WithAtomicEditProtocolConverterFailOnCall(2)
 
 				_, execErr := runEdit(constants.DataflowComponentWaitForActiveTimeout / 2)
 
 				Expect(execErr).To(HaveOccurred())
-				Expect(execErr.Error()).To(ContainSubstring("could not be rolled back"))
-				Expect(execErr.Error()).To(ContainSubstring("simulated config write failure"))
+				Expect(execErr.Error()).To(ContainSubstring("automatic rollback also failed"))
 				Expect(mockConfig.AtomicEditProtocolConverterCallCount).To(Equal(2))
 
-				// The system is left running the broken config — the one
-				// state needing manual intervention — so the frontend must
-				// not present this as "fix the config and retry"
-				// (ErrConfigFileInvalid).
 				final := finalFailureReply()
 				Expect(final.errorCode).To(Equal(models.ErrRetryRollbackTimeout))
+				Expect(final.message).To(ContainSubstring("Bridge '" + pcName + "'"))
+				Expect(final.message).To(ContainSubstring("couldn't be updated"))
+				Expect(final.message).To(ContainSubstring("automatic rollback also failed"))
+				Expect(final.message).To(ContainSubstring("may need manual recovery"))
+				Expect(final.message).To(ContainSubstring("read flow config isn't valid YAML"))
+				Expect(final.message).To(ContainSubstring("Fix the highlighted line and try again"))
+				Expect(final.message).To(ContainSubstring("yaml:"))
 
-				// Pin what reaches Sentry: the dedicated render-failure event
-				// carries the bridge name, UUID and render error (which includes
-				// the rendered-output snippet; that exposure is an accepted
-				// decision), and the generic rollout_failed event, which attaches
-				// the full old/new config, must not fire on top of it.
 				events := sentryRec.eventNames()
 				Expect(events).To(ContainElement("edit_protocol_converter_render_failure_rollback_failed"))
 				Expect(events).NotTo(ContainElement("edit_protocol_converter_rollout_failed"))
@@ -2054,11 +1939,6 @@ var _ = Describe("EditProtocolConverter", func() {
 			})
 
 			It("keeps the render error sticky for the timeout message and clears it on the next successful render", func() {
-				// The awaitRollout timeout message names lastRenderErr as the
-				// root cause; this pins its lifecycle on the compare path
-				// directly, without wall-clock ticks: a failing render sets
-				// it, a comparison that skips the render leaves it sticky,
-				// and the next successful render clears it.
 				updateSnapshot(observedStateWithInject("benign"))
 
 				localAction := actions.NewEditProtocolConverterAction(userEmail, actionUUID, instanceUUID, localOutbound, mockConfig, snapshotMgr)
@@ -2070,17 +1950,11 @@ var _ = Describe("EditProtocolConverter", func() {
 				Expect(renderErr).To(HaveOccurred())
 				Expect(localAction.LastRenderErr()).To(Equal(renderErr))
 
-				// A comparison that never reaches a render (no snapshot for
-				// the instance yet, e.g. while Benthos restarts) keeps the
-				// captured cause.
 				matched, renderErr = localAction.CompareProtocolConverterDFCConfig(nil)
 				Expect(matched).To(BeFalse())
 				Expect(renderErr).NotTo(HaveOccurred())
 				Expect(localAction.LastRenderErr()).To(HaveOccurred())
 
-				// A benign inject renders fine (the comparison itself still
-				// fails because the observed config lags the edit), so the
-				// stale root cause must be gone.
 				matched, renderErr = localAction.CompareProtocolConverterDFCConfig(observedStateWithInject("benign"))
 				Expect(matched).To(BeFalse())
 				Expect(renderErr).NotTo(HaveOccurred())
@@ -2088,21 +1962,10 @@ var _ = Describe("EditProtocolConverter", func() {
 			})
 
 			It("skips the render when the observed read Benthos config is absent", func() {
-				// While Benthos is stopped or restarting the observed Input map
-				// is nil. Such a tick must skip the render entirely: rendering
-				// against the not-yet-populated observed spec fails for reasons
-				// unrelated to the edit, so it must contribute neither to the
-				// fail-fast streak nor to lastRenderErr. Regression context:
-				// the absence guard used to compare an interface{} sentinel
-				// against nil, and a nil map stored in an interface is a typed
-				// nil that compares non-nil, so the guard never fired and the
-				// render ran anyway.
 				localAction := actions.NewEditProtocolConverterAction(userEmail, actionUUID, instanceUUID, localOutbound, mockConfig, snapshotMgr)
 				Expect(localAction.Parse(brokenReadDFCPayload())).To(Succeed())
 				Expect(localAction.Validate()).To(Succeed())
 
-				// Observed state with an empty spec and nil observed Input,
-				// normal while Benthos is stopped or restarting.
 				emptyObserved := &protocolconverter.ProtocolConverterObservedStateSnapshot{
 					ServiceInfo: protocolconvertersvc.ServiceInfo{
 						DataflowComponentReadFSMState: protocolconverter.OperationalStateIdle,
@@ -2118,16 +1981,10 @@ var _ = Describe("EditProtocolConverter", func() {
 			})
 
 			It("skips the render when the observed write Benthos config is absent", func() {
-				// Write-side mirror of the spec above: the DFCTypeWrite branch
-				// carries its own absence check on the observed Output map, so
-				// a nil Output must skip the render just like a nil Input does
-				// on the read side.
 				localAction := actions.NewEditProtocolConverterAction(userEmail, actionUUID, instanceUUID, localOutbound, mockConfig, snapshotMgr)
 				Expect(localAction.Parse(brokenWriteDFCPayload())).To(Succeed())
 				Expect(localAction.Validate()).To(Succeed())
 
-				// Observed state with an empty spec and nil observed Output,
-				// normal while Benthos is stopped or restarting.
 				emptyObserved := &protocolconverter.ProtocolConverterObservedStateSnapshot{
 					ServiceInfo: protocolconvertersvc.ServiceInfo{
 						DataflowComponentWriteFSMState: protocolconverter.OperationalStateIdle,
@@ -2143,17 +2000,10 @@ var _ = Describe("EditProtocolConverter", func() {
 			})
 
 			It("renders with the edit's own template variables when the observed spec lacks them", func() {
-				// An edit that introduces a new variable races the control loop:
-				// the observed spec keeps the pre-edit variables until the FSM
-				// propagates the persisted edit (seconds, under CPU pressure).
-				// The verification render must use the edit's own variables, or a
-				// valid edit fails its render identically every tick and the
-				// fail-fast abort rolls it back.
 				localAction := actions.NewEditProtocolConverterAction(userEmail, actionUUID, instanceUUID, localOutbound, mockConfig, snapshotMgr)
 				Expect(localAction.Parse(newVariablePayload())).To(Succeed())
 				Expect(localAction.Validate()).To(Succeed())
 
-				// Observed spec has only the pre-edit "inject" variable, not "newvar".
 				matched, renderErr := localAction.CompareProtocolConverterDFCConfig(observedStateWithInject("benign"))
 
 				Expect(renderErr).NotTo(HaveOccurred())
@@ -2162,11 +2012,6 @@ var _ = Describe("EditProtocolConverter", func() {
 			})
 
 			It("fires the generic rollout_failed Sentry event on a plain timeout", func() {
-				// The render succeeds every tick (benign inject) but the observed
-				// config never matches, so the rollout runs into the timeout and
-				// rolls back. This pre-existing path must keep its error-level
-				// generic Sentry event: only the render-failure abort paths, which
-				// fire their own dedicated events, suppress it.
 				updateSnapshot(observedStateWithInject("benign"))
 				startCollector(nil)
 
@@ -2184,27 +2029,11 @@ var _ = Describe("EditProtocolConverter", func() {
 
 				Expect(sentryRec.eventNames()).To(ContainElement("edit_protocol_converter_rollout_failed"))
 
-				// Drain the collector before the spec ends: without this, the
-				// terminal reply may still sit in the channel buffer when the
-				// next spec's BeforeEach resets the shared replies slice, and
-				// the still-running collector goroutine then leaks this spec's
-				// ErrRetryRollbackTimeout reply into the next spec's replies.
 				final := finalFailureReply()
 				Expect(final.errorCode).To(Equal(models.ErrRetryRollbackTimeout))
 			})
 
 			It("aborts on writeDFC-only render failure, rolls back, and reports ErrConfigFileInvalid", func() {
-				// The five existing fail-fast specs exercise the readDFC path.
-				// This spec covers the writeDFC-only tuple path in
-				// compareSingleDFCConfig (DFCTypeWrite branch): the Output
-				// presence check gates the render, and a broken template in
-				// the output map produces the same column-0 YAML-termination
-				// failure as the read-side trick.
-
-				// observedStateWithWriteInject mirrors observedStateWithInject
-				// but populates the write side: DataflowComponentWriteFSMState
-				// set and ObservedBenthosServiceConfig.Output non-nil so that
-				// compareSingleDFCConfig reaches the render path.
 				observedStateWithWriteInject := func(inject string) *protocolconverter.ProtocolConverterObservedStateSnapshot {
 					output := map[string]interface{}{"http_client": map[string]interface{}{}}
 					return &protocolconverter.ProtocolConverterObservedStateSnapshot{
@@ -2239,9 +2068,6 @@ var _ = Describe("EditProtocolConverter", func() {
 
 				updateSnapshot(observedStateWithWriteInject("x\nbroken: ["))
 
-				// Use a private outbound channel so this spec's replies cannot
-				// be contaminated by stale messages from the previous spec's
-				// collector goroutine draining the shared localOutbound.
 				privateOutbound := make(chan *models.UMHMessage, 100)
 				var (
 					privateRepliesMu sync.Mutex
@@ -2290,7 +2116,7 @@ var _ = Describe("EditProtocolConverter", func() {
 
 				Expect(execErr).To(HaveOccurred())
 				Expect(execErr.Error()).To(ContainSubstring("render"))
-				Expect(execErr.Error()).To(ContainSubstring("was rolled back"))
+				Expect(execErr.Error()).To(ContainSubstring("was restored"))
 				// Abort requires at least 2 full ticks after the first failure.
 				Expect(elapsed).To(BeNumerically(">=", 2*tick))
 
@@ -2308,6 +2134,7 @@ var _ = Describe("EditProtocolConverter", func() {
 					return false
 				}, "2s").Should(BeTrue(), "expected a final ActionFinishedWithFailure reply")
 				Expect(final.errorCode).To(Equal(models.ErrConfigFileInvalid))
+				Expect(final.message).To(ContainSubstring("write flow config isn't valid YAML"))
 			})
 
 			It("streak is preserved across ticks where the manager is absent from the snapshot", func() {
@@ -2330,12 +2157,13 @@ var _ = Describe("EditProtocolConverter", func() {
 				updateSnapshot(observedStateWithInject("x\nbroken: ["))
 				startCollector(nil)
 
-				// After the first "DFC config not yet applied" reply confirms
-				// tick 1 ran (streak=1), remove the manager for at least 2
-				// ticks. The loop sends "waiting for protocol converter manager
-				// to initialise" on those ticks; we gate on those replies as
-				// proof the gap actually happened (no sleeps). Then restore the
-				// broken snapshot so the streak can resume from 1 and reach 3.
+				// After the first "not yet applied" reply confirms tick 1 ran
+				// (streak=1), remove the manager for at least 2 ticks. The
+				// loop sends "waiting for protocol converter manager to
+				// initialise" on those ticks; we gate on those replies as
+				// proof the gap actually happened (no sleeps). Then restore
+				// the broken snapshot so the streak can resume from 1 and
+				// reach 3.
 				go func() {
 					defer GinkgoRecover()
 					Eventually(func() int {
@@ -2357,7 +2185,7 @@ var _ = Describe("EditProtocolConverter", func() {
 
 				Expect(execErr).To(HaveOccurred())
 				Expect(execErr.Error()).To(ContainSubstring("render"))
-				Expect(execErr.Error()).To(ContainSubstring("was rolled back"))
+				Expect(execErr.Error()).To(ContainSubstring("was restored"))
 
 				final := finalFailureReply()
 				Expect(final.errorCode).To(Equal(models.ErrConfigFileInvalid))
@@ -2369,8 +2197,8 @@ var _ = Describe("EditProtocolConverter", func() {
 
 				// Prove the streak SURVIVED the gap, not merely that the abort
 				// eventually happened. Pre-gap the streak reached 1. If it
-				// survives, the first post-gap tick raises it to 2 (one "DFC
-				// config not yet applied" reply) and the next tick is the 3rd
+				// survives, the first post-gap tick raises it to 2 (one
+				// "not yet applied" reply) and the next tick is the 3rd
 				// identical failure, which sends "Rolling back..." instead.
 				// A streak RESET by the gap would rebuild from 0 and emit 2
 				// "not yet applied" replies after the gap. Count the replies
@@ -2385,7 +2213,7 @@ var _ = Describe("EditProtocolConverter", func() {
 				Expect(lastManagerIdx).To(BeNumerically(">=", 0))
 				postGapNotYet := 0
 				for _, r := range allReplies[lastManagerIdx+1:] {
-					if strings.Contains(r.message, "DFC config not yet applied") {
+					if strings.Contains(r.message, "not yet applied") {
 						postGapNotYet++
 					}
 				}
@@ -2406,7 +2234,7 @@ var _ = Describe("EditProtocolConverter", func() {
 
 				var progressWithRender []capturedReply
 				for _, r := range getReplies() {
-					if strings.Contains(r.message, "DFC config not yet applied") {
+					if strings.Contains(r.message, "not yet applied") {
 						Expect(r.message).To(ContainSubstring("Render failed: "))
 						Expect(r.message).To(ContainSubstring("yaml:"))
 						Expect(r.message).NotTo(ContainSubstring("rendered output"))
@@ -2420,61 +2248,41 @@ var _ = Describe("EditProtocolConverter", func() {
 			})
 
 			It("render-failure fail-fast: all four observables hold in a single run", func() {
-				// Capstone composition spec for ENG-5103. A broken config template
-				// (multi-line block scalar that produces invalid YAML after template
-				// expansion) causes every comparison tick to fail with a render error.
-				// After 3 consecutive identical failures the action must:
-				//   (a) have produced per-tick progress replies whose message ends with
-				//       "; Render failed: <first line of render error>" and never
-				//       contains the multi-line rendered-output snippet,
-				//   (b) produce a terminal failure reply that contains the snippet,
-				//   (c) abort after ~3 ticks rather than the full timeout,
-				//   (d) roll back (2 AtomicEditProtocolConverter calls) and surface
-				//       ErrConfigFileInvalid as the error code,
-				//   (e) fire the render-failure-specific Sentry event and suppress the
-				//       generic rollout_failed event.
 				updateSnapshot(observedStateWithInject("x\nbroken: ["))
 				startCollector(nil)
 
 				elapsed, execErr := runEdit(constants.DataflowComponentWaitForActiveTimeout / 2)
 
-				// (c) aborts well before the full timeout; needs at least 2 full
-				// ticks after the first failure to reach the third identical failure.
 				Expect(execErr).To(HaveOccurred())
 				Expect(elapsed).To(BeNumerically(">=", 2*tick))
 
-				// (d) rollback: call 1 = persisted edit, call 2 = rollback write.
 				Expect(mockConfig.AtomicEditProtocolConverterCallCount).To(Equal(2))
 				Expect(mockConfig.AtomicEditProtocolConverterLastUUID).To(Equal(pcUUID))
-				// The pre-edit config had no read DFC; the rollback restores it.
 				Expect(mockConfig.AtomicEditProtocolConverterLastConfig.ProtocolConverterServiceConfig.Config.DataflowComponentReadServiceConfig).
 					To(Equal(dataflowcomponentserviceconfig.DataflowComponentServiceConfig{}))
 
-				// (d) error code from Execute itself.
 				Expect(execErr.Error()).To(ContainSubstring("render"))
-				Expect(execErr.Error()).To(ContainSubstring("was rolled back"))
+				Expect(execErr.Error()).To(ContainSubstring("was restored"))
 
-				// (b) terminal failure reply carries the snippet.
 				final := finalFailureReply()
 				Expect(final.errorCode).To(Equal(models.ErrConfigFileInvalid))
+				Expect(final.message).To(ContainSubstring("Bridge '" + pcName + "'"))
+				Expect(final.message).To(ContainSubstring("was restored to its previous working configuration"))
+				Expect(final.message).To(ContainSubstring("read flow config isn't valid YAML"))
+				Expect(final.message).To(ContainSubstring("Fix the highlighted line and try again"))
 				Expect(final.message).To(ContainSubstring("rendered output around the reported line"))
 
-				// (a) every "DFC config not yet applied" progress reply names the
-				// render error on its first line and excludes the snippet.
 				var progressWithRender []capturedReply
 				for _, r := range getReplies() {
-					if strings.Contains(r.message, "DFC config not yet applied") {
+					if strings.Contains(r.message, "not yet applied") {
 						Expect(r.message).To(ContainSubstring("Render failed: "))
 						Expect(r.message).To(ContainSubstring("yaml:"))
 						Expect(r.message).NotTo(ContainSubstring("rendered output around the reported line"))
 						progressWithRender = append(progressWithRender, r)
 					}
 				}
-				// There must be at least one progress reply (the first two failing
-				// ticks emit progress; the third sends "Rolling back...").
 				Expect(progressWithRender).NotTo(BeEmpty())
 
-				// (e) Sentry: dedicated event fires, generic event does not.
 				events := sentryRec.eventNames()
 				Expect(events).To(ContainElement("edit_protocol_converter_render_failure_rolled_back"))
 				Expect(events).NotTo(ContainElement("edit_protocol_converter_rollout_failed"))
@@ -2482,27 +2290,10 @@ var _ = Describe("EditProtocolConverter", func() {
 
 			// ── ENG-5103 templateVars/connectionIP divergence specs ──────────────
 
-			// observedStateWithIPPort builds a PC observed-state snapshot where
-			// the observed spec carries the given IP in Variables.User and the
-			// observed Benthos Input/Pipeline already contain the rendered values
-			// from that same IP. This models the normal steady-state: Benthos is
-			// running the config that was persisted before the current edit.
-			//
-			// IMPORTANT: the DFC payload string "input:\n  http_client:\n    url:
-			// ..." is parsed by yaml.Unmarshal into {"input": {"http_client": ...}}
-			// (outer "input" wrapper preserved). The observed Benthos Input must
-			// carry the same outer wrapper to match the render.
-			//
-			// The pipeline structure mirrors what connectionIPPayload produces
-			// after CreateBenthosConfigFromCDFCPayload + NormalizeBenthosConfig +
-			// RenderTemplate (YAML round-trip). This is essential for the Spec 2
-			// premature-match scenario: the comparison only fires when the
-			// observed pipeline matches the rendered desired pipeline, leaving the
-			// URL as the sole distinguishing field.
 			observedStateWithIPPort := func(observedIP string) *protocolconverter.ProtocolConverterObservedStateSnapshot {
-				// The outer "input" wrapper comes from the YAML string
-				// "input:\n  http_client:\n    url: 'http://{{ .IP }}'"
-				// which yaml.Unmarshal parses as {"input": {"http_client": ...}}.
+				// The outer "input" wrapper is produced by yaml.Unmarshal of the
+				// YAML string "input:\n  http_client:\n    url: '...'" — the key
+				// "input" is preserved as the outer map key.
 				renderedInput := map[string]interface{}{
 					"input": map[string]interface{}{
 						"http_client": map[string]interface{}{
@@ -2510,12 +2301,6 @@ var _ = Describe("EditProtocolConverter", func() {
 						},
 					},
 				}
-				// The pipeline here must exactly match what connectionIPPayload
-				// produces after parse + render.  The processor "bloblang: root =
-				// content()" is YAML-unmarshalled into {"bloblang": "root =
-				// content()"} by CreateBenthosConfigFromCDFCPayload, wrapped in
-				// {"processors": [...]}, and survives RenderTemplate unchanged
-				// (no template markers). NormalizeBenthosConfig does not alter it.
 				renderedPipeline := map[string]interface{}{
 					"processors": []interface{}{
 						map[string]interface{}{
@@ -2572,12 +2357,7 @@ var _ = Describe("EditProtocolConverter", func() {
 				}
 			}
 
-			// observedStateNoIPInVars is like observedStateWithIPPort but the
-			// observed spec's Variables.User does NOT contain IP or PORT at all.
-			// This represents a bridge that was configured before the IP variable
-			// was introduced (or whose spec snapshot has not yet caught up).
 			observedStateNoIPInVars := func() *protocolconverter.ProtocolConverterObservedStateSnapshot {
-				// Observed Benthos is running with a literal URL (no template vars).
 				renderedInput := map[string]interface{}{
 					"http_client": map[string]interface{}{
 						"url": "http://example.com",
@@ -2592,9 +2372,6 @@ var _ = Describe("EditProtocolConverter", func() {
 									Port:   "80",
 								},
 							},
-							// DFC template references {{ .IP }} but observed Variables.User
-							// has no IP key — models the pre-edit snapshot that hasn't
-							// propagated yet, or a bridge never configured with IP.
 							DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
 								BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
 									Input: map[string]interface{}{
@@ -2613,9 +2390,7 @@ var _ = Describe("EditProtocolConverter", func() {
 							},
 						},
 						Variables: variables.VariableBundle{
-							User: map[string]interface{}{
-								// Deliberately empty: no IP, no PORT.
-							},
+							User: map[string]interface{}{},
 						},
 						Location: map[string]string{"0": "test-enterprise"},
 					},
@@ -2634,10 +2409,6 @@ var _ = Describe("EditProtocolConverter", func() {
 				}
 			}
 
-			// connectionIPPayload returns a parse payload for an edit that sets
-			// a new connectionIP and carries the given extra templateVars (may be nil).
-			// The read DFC template references {{ .IP }} so the render is sensitive
-			// to whether connectionIP is overlaid into the variable scope.
 			connectionIPPayload := func(newIP string, extraVars []interface{}) map[string]interface{} {
 				payload := map[string]interface{}{
 					"name": pcName,
@@ -2671,66 +2442,30 @@ var _ = Describe("EditProtocolConverter", func() {
 			}
 
 			It("verification render does not fail when the edit sets a connection IP that the observed spec lacks", func() {
-				// Consequence (a) of the applyMutation/renderDesiredDFCConfig divergence:
-				// an edit that sets connectionIP where the observed spec's Variables.User
-				// has no IP key causes every verification-render tick to fail with
-				// missingkey=error because renderDesiredDFCConfig never overlays the
-				// connection values. The fail-fast streak then rolls back a valid edit.
-				//
-				// This spec drives CompareProtocolConverterDFCConfig directly (no ticks)
-				// and asserts the render succeeds — it FAILS today because the IP overlay
-				// is absent from renderDesiredDFCConfig.
 				localAction := actions.NewEditProtocolConverterAction(userEmail, actionUUID, instanceUUID, localOutbound, mockConfig, snapshotMgr)
 
-				// Edit carries a new IP but no templateVars: the only way the render
-				// can know the IP is if renderDesiredDFCConfig overlays connectionIP.
 				Expect(localAction.Parse(connectionIPPayload("10.0.0.1", nil))).To(Succeed())
 				Expect(localAction.Validate()).To(Succeed())
 
-				// Observed spec has no IP in Variables.User; the template references {{ .IP }}.
 				matched, renderErr := localAction.CompareProtocolConverterDFCConfig(observedStateNoIPInVars())
 
-				// The render MUST succeed: a valid edit with a new IP must not produce
-				// a render failure. Today this assertion fails because renderDesiredDFCConfig
-				// skips the IP overlay (templateVars is empty).
 				Expect(renderErr).NotTo(HaveOccurred(),
 					"render must succeed using the edit's connectionIP, not fail with missingkey=error on {{ .IP }}")
-
-				// The comparison itself may or may not match (observed lags edit);
-				// the critical invariant is the absence of a render error.
 				_ = matched
 			})
 
 			It("connection-only edit renders the desired config with the new IP, not the stale observed IP", func() {
-				// Consequence (b) of the divergence: a connection-only edit (new IP,
-				// empty templateVars) renders with the stale observed IP because
-				// renderDesiredDFCConfig's overlay block is gated on
-				// len(a.templateVars) > 0. The rendered desired config therefore
-				// matches the already-deployed observed config, and compareProtocolConverterDFCConfig
-				// returns true prematurely — the action reports success while the
-				// bridge is still running the old IP.
-				//
-				// This spec asserts the comparison is false (not-yet-matched) when the
-				// edit's IP differs from the observed IP. It FAILS today because
-				// renderDesiredDFCConfig returns the stale render, making the configs equal.
 				oldIP := "10.0.0.1"
 				newIP := "10.0.0.2"
 
 				localAction := actions.NewEditProtocolConverterAction(userEmail, actionUUID, instanceUUID, localOutbound, mockConfig, snapshotMgr)
 
-				// Connection-only edit: new IP, no templateVars.
 				Expect(localAction.Parse(connectionIPPayload(newIP, nil))).To(Succeed())
 				Expect(localAction.Validate()).To(Succeed())
 
-				// Observed state: spec has old IP, Benthos already rendered with old IP.
 				matched, renderErr := localAction.CompareProtocolConverterDFCConfig(observedStateWithIPPort(oldIP))
 
 				Expect(renderErr).NotTo(HaveOccurred(), "render must not fail")
-
-				// The desired config (new IP) must NOT match the observed config (old IP).
-				// Today this assertion fails: renderDesiredDFCConfig produces the stale
-				// old-IP render (because the templateVars block is skipped), which equals
-				// the observed config, so matched is incorrectly true.
 				Expect(matched).To(BeFalse(),
 					"the desired config rendered with the new IP must not match the observed config rendered with the old IP")
 			})
@@ -2738,13 +2473,6 @@ var _ = Describe("EditProtocolConverter", func() {
 		})
 
 		Context("persisting merged user variables", func() {
-			// ENG-5103: applyMutation builds the persisted Variables.User via
-			// mergeUserVariables. These specs pin the persist-path contract:
-			// what ends up in config.yaml after a successful edit. The
-			// suite-level action carries no snapshot manager, so Execute()
-			// returns right after the atomic edit without awaiting rollout —
-			// the persisted config is the entire observable output.
-
 			editPayload := func(ip string, port int, vars []interface{}) map[string]interface{} {
 				payload := map[string]interface{}{
 					"name": pcName,
@@ -2783,13 +2511,6 @@ var _ = Describe("EditProtocolConverter", func() {
 			}
 
 			It("does not persist templateVars named location or location_path", func() {
-				// BuildRuntimeConfig injects location and location_path into
-				// the variable scope on every render, so these agent-derived
-				// keys must never end up persisted in config.yaml's
-				// Variables.User. On the render path the injection makes the
-				// delete inert; the persist path is where the guard is
-				// load-bearing. This pins the delete(merged, "location") /
-				// delete(merged, "location_path") lines in mergeUserVariables.
 				vars := []interface{}{
 					map[string]interface{}{"label": "location", "value": "WRONG_LOCATION"},
 					map[string]interface{}{"label": "location_path", "value": "wrong.path"},
@@ -2804,17 +2525,10 @@ var _ = Describe("EditProtocolConverter", func() {
 				user := persistedUserVars()
 				Expect(user).NotTo(HaveKey("location"))
 				Expect(user).NotTo(HaveKey("location_path"))
-				// The benign templateVar survives: the guard removes only the
-				// two agent-derived keys, not the whole overlay.
 				Expect(user).To(HaveKeyWithValue("benign", "kept"))
 			})
 
 			It("persists the connection IP over a templateVar named IP", func() {
-				// IP and PORT are exposed as flattened user variables, so a
-				// client can send a templateVar labelled "IP" alongside the
-				// authoritative Connection block. The connection value wins:
-				// mergeUserVariables overlays connectionIP/connectionPort
-				// after the templateVars loop.
 				vars := []interface{}{
 					map[string]interface{}{"label": "IP", "value": "10.0.0.99"},
 				}
@@ -2828,12 +2542,6 @@ var _ = Describe("EditProtocolConverter", func() {
 			})
 
 			It("persists templateVars and the connection IP and PORT into the user variables", func() {
-				// A successful edit writes the edit's own templateVars plus
-				// the connection-derived IP and PORT into Variables.User
-				// (PORT only when non-zero; happy path here). This is the
-				// persist-path coverage for the mergeUserVariables call in
-				// applyMutation: dropping that call keeps the pre-edit map
-				// ({IP: wttr.in, PORT: 80}) and loses the edit entirely.
 				vars := []interface{}{
 					map[string]interface{}{"label": "baudRate", "value": "9600"},
 				}
