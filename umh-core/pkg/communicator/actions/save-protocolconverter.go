@@ -46,7 +46,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"go.uber.org/zap"
 )
@@ -67,20 +66,6 @@ type SaveProtocolConverterAction struct {
 
 	actionUUID   uuid.UUID
 	instanceUUID uuid.UUID
-}
-
-// NewSaveProtocolConverterAction returns an un-parsed action instance.
-func NewSaveProtocolConverterAction(userEmail string, actionUUID uuid.UUID, instanceUUID uuid.UUID, outboundChannel chan *models.UMHMessage, configManager config.ConfigManager) *SaveProtocolConverterAction {
-	al := logger.For(logger.ComponentCommunicator)
-	return &SaveProtocolConverterAction{
-		userEmail:       userEmail,
-		actionUUID:      actionUUID,
-		instanceUUID:    instanceUUID,
-		outboundChannel: outboundChannel,
-		configManager:   configManager,
-		actionLogger:    al,
-		fsmLogger:       deps.NewFSMLogger(al),
-	}
 }
 
 // Parse implements the Action interface by extracting protocol converter configuration from the payload.
