@@ -252,9 +252,9 @@ func (a *EditProtocolConverterAction) Execute() (interface{}, map[string]interfa
 	// Send confirmation that action is starting
 	var confirmationMessage string
 	if a.dfcType == DFCTypeEmpty {
-		confirmationMessage = fmt.Sprintf("Starting edit of protocol converter %s to update connection and location", a.protocolConverterUUID)
+		confirmationMessage = fmt.Sprintf("Starting edit of bridge %s to update connection and location", a.protocolConverterUUID)
 	} else {
-		confirmationMessage = fmt.Sprintf("Starting edit of protocol converter %s to add %s DFC", a.protocolConverterUUID, a.dfcType.String())
+		confirmationMessage = fmt.Sprintf("Starting edit of bridge %s to add %s DFC", a.protocolConverterUUID, a.dfcType.String())
 	}
 
 	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionConfirmed,
@@ -264,11 +264,11 @@ func (a *EditProtocolConverterAction) Execute() (interface{}, map[string]interfa
 
 	if a.dfcType != DFCTypeEmpty {
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
-			fmt.Sprintf("Updating protocol converter configuration with %s DFC...", a.dfcType.String()),
+			fmt.Sprintf("Updating bridge configuration with %s DFC...", a.dfcType.String()),
 			a.outboundChannel, models.EditProtocolConverter)
 	} else {
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
-			"Updating protocol converter configuration (connection and location only)...",
+			"Updating bridge configuration (connection and location only)...",
 			a.outboundChannel, models.EditProtocolConverter)
 	}
 
@@ -314,7 +314,7 @@ func (a *EditProtocolConverterAction) Execute() (interface{}, map[string]interfa
 		}
 
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
-			"Protocol converter successfully updated", a.outboundChannel, models.EditProtocolConverter)
+			"Bridge successfully updated", a.outboundChannel, models.EditProtocolConverter)
 	}
 
 	newUUID := dataflowcomponentserviceconfig.GenerateUUIDFromName(a.name)
@@ -356,7 +356,7 @@ func (a *EditProtocolConverterAction) applyMutation() (config.ProtocolConverterC
 	}
 
 	if !found {
-		return config.ProtocolConverterConfig{}, uuid.Nil, "", fmt.Errorf("protocol converter with UUID %s not found", a.protocolConverterUUID)
+		return config.ProtocolConverterConfig{}, uuid.Nil, "", fmt.Errorf("bridge with UUID %s not found", a.protocolConverterUUID)
 	}
 
 	// Currently, we cannot reuse templates, so we need to create a new one
@@ -483,7 +483,7 @@ func (a *EditProtocolConverterAction) awaitRollout(pcConfig config.ProtocolConve
 		a.actionUUID,
 		models.ActionExecuting,
 		fmt.Sprintf(
-			"Waiting for protocol converter %s to be %s...",
+			"Waiting for bridge %s to be %s...",
 			a.name,
 			desiredPCState,
 		),
@@ -517,14 +517,14 @@ func (a *EditProtocolConverterAction) awaitRollout(pcConfig config.ProtocolConve
 			cancel()
 			if rollbackErr != nil {
 				a.actionLogger.Errorf("Failed to rollback to previous configuration: %v", rollbackErr)
-				stateMessage := fmt.Sprintf("Protocol converter '%s' edit timeout reached. It did not become %s in time. Rolling back to previous configuration failed: %v", a.name, desiredPCState, rollbackErr)
+				stateMessage := fmt.Sprintf("Bridge '%s' edit timeout reached. It did not become %s in time. Rolling back to previous configuration failed: %v", a.name, desiredPCState, rollbackErr)
 				a.fsmLogger.SentryError(deps.FeatureDisableReadFlows, "", rollbackErr, "edit_protocol_converter_rollback_failed",
 					deps.String("pcConfig", pcConfig.String()))
 
 				return models.ErrRetryRollbackTimeout, fmt.Errorf("%s", stateMessage)
 			}
 
-			stateMessage := fmt.Sprintf("Protocol converter '%s' edit timeout reached. It did not become %s in time. Rolled back to previous configuration", a.name, desiredPCState)
+			stateMessage := fmt.Sprintf("Bridge '%s' edit timeout reached. It did not become %s in time. Rolled back to previous configuration", a.name, desiredPCState)
 			if a.lastRenderErr != nil {
 				stateMessage += fmt.Sprintf(" (root cause: %v)", a.lastRenderErr)
 			}
@@ -546,7 +546,7 @@ func (a *EditProtocolConverterAction) awaitRollout(pcConfig config.ProtocolConve
 					a.userEmail,
 					a.actionUUID,
 					models.ActionExecuting,
-					RemainingPrefixSec(remainingSeconds)+"waiting for protocol converter manager to initialise",
+					RemainingPrefixSec(remainingSeconds)+"waiting for bridge manager to initialise",
 					a.outboundChannel,
 					models.EditProtocolConverter,
 				)
@@ -571,7 +571,7 @@ func (a *EditProtocolConverterAction) awaitRollout(pcConfig config.ProtocolConve
 						a.userEmail,
 						a.actionUUID,
 						models.ActionExecuting,
-						RemainingPrefixSec(remainingSeconds)+"waiting for state info of protocol converter instance",
+						RemainingPrefixSec(remainingSeconds)+"waiting for state info of bridge instance",
 						a.outboundChannel,
 						models.EditProtocolConverter,
 					)
@@ -657,7 +657,7 @@ func (a *EditProtocolConverterAction) awaitRollout(pcConfig config.ProtocolConve
 							a.userEmail,
 							a.actionUUID,
 							models.ActionExecuting,
-							RemainingPrefixSec(remainingSeconds)+"protocol converter successfully stopped",
+							RemainingPrefixSec(remainingSeconds)+"bridge successfully stopped",
 							a.outboundChannel,
 							models.EditProtocolConverter,
 						)
@@ -732,7 +732,7 @@ func (a *EditProtocolConverterAction) awaitRollout(pcConfig config.ProtocolConve
 						a.actionUUID,
 						models.ActionExecuting,
 						RemainingPrefixSec(remainingSeconds)+fmt.Sprintf(
-							"protocol converter successfully %s with state '%s', %s DFC configuration verified",
+							"bridge successfully %s with state '%s', %s DFC configuration verified",
 							terminal,
 							instance.CurrentState,
 							a.dfcType.String(),
@@ -790,13 +790,13 @@ func (a *EditProtocolConverterAction) awaitRollout(pcConfig config.ProtocolConve
 						a.fsmLogger.SentryError(deps.FeatureDisableReadFlows, "", err, "edit_protocol_converter_config_error_rollback_failed",
 							deps.String("pcConfig", pcConfig.String()))
 
-						return models.ErrConfigFileInvalid, fmt.Errorf("protocol converter '%s' has invalid configuration but could not be rolled back: %w. Please check your logs and consider manually restoring the previous configuration", a.name, err)
+						return models.ErrConfigFileInvalid, fmt.Errorf("bridge '%s' has invalid configuration but could not be rolled back: %w. Please check your logs and consider manually restoring the previous configuration", a.name, err)
 					}
 
 					a.fsmLogger.SentryWarn(deps.FeatureDisableReadFlows, "", "edit_protocol_converter_config_error_rolled_back",
 						deps.String("pcConfig", pcConfig.String()))
 
-					return models.ErrConfigFileInvalid, fmt.Errorf("protocol converter '%s' was rolled back to its previous configuration due to configuration errors. Please check the component logs, fix the configuration issues, and try editing again", a.name)
+					return models.ErrConfigFileInvalid, fmt.Errorf("bridge '%s' was rolled back to its previous configuration due to configuration errors. Please check the component logs, fix the configuration issues, and try editing again", a.name)
 				}
 
 				SendActionReply(
@@ -816,7 +816,7 @@ func (a *EditProtocolConverterAction) awaitRollout(pcConfig config.ProtocolConve
 					a.userEmail,
 					a.actionUUID,
 					models.ActionExecuting,
-					RemainingPrefixSec(remainingSeconds)+"waiting for protocol converter to appear in the system",
+					RemainingPrefixSec(remainingSeconds)+"waiting for bridge to appear in the system",
 					a.outboundChannel,
 					models.EditProtocolConverter,
 				)

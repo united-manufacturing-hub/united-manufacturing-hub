@@ -136,12 +136,12 @@ func (a *SaveProtocolConverterAction) Execute() (interface{}, map[string]interfa
 	a.actionLogger.Info("Executing SaveProtocolConverter action")
 
 	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionConfirmed,
-		"Starting save of protocol converter: "+a.payload.Name, a.outboundChannel, models.SaveProtocolConverter)
+		"Starting save of bridge: "+a.payload.Name, a.outboundChannel, models.SaveProtocolConverter)
 
 	// Build the protocol converter config (template + variables).
 	pcConfig, err := buildProtocolConverterConfig(a.payload)
 	if err != nil {
-		errorMsg := fmt.Sprintf("Failed to create protocol converter configuration: %v", err)
+		errorMsg := fmt.Sprintf("Failed to create bridge configuration: %v", err)
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
 			errorMsg, a.outboundChannel, models.SaveProtocolConverter)
 		a.fsmLogger.SentryError(deps.FeatureDeploymentSaveConfig, "", err, "save_protocol_converter_create_config_failed",
@@ -157,14 +157,14 @@ func (a *SaveProtocolConverterAction) Execute() (interface{}, map[string]interfa
 	defer cancel()
 
 	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
-		"Saving protocol converter configuration...", a.outboundChannel, models.SaveProtocolConverter)
+		"Saving bridge configuration...", a.outboundChannel, models.SaveProtocolConverter)
 
 	// First-time deployment only: create the new bridge. If one with this name
 	// already exists, AtomicAddProtocolConverter fails with a duplicate-name
 	// error - by design, since later updates go through the dedicated edit
 	// action, not this save path.
 	if err := a.configManager.AtomicAddProtocolConverter(ctx, pcConfig); err != nil {
-		errorMsg := fmt.Sprintf("Failed to save protocol converter: %v", err)
+		errorMsg := fmt.Sprintf("Failed to save bridge: %v", err)
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
 			errorMsg, a.outboundChannel, models.SaveProtocolConverter)
 		a.fsmLogger.SentryError(deps.FeatureDeploymentSaveConfig, "", err, "save_protocol_converter_save_failed",
@@ -183,7 +183,7 @@ func (a *SaveProtocolConverterAction) Execute() (interface{}, map[string]interfa
 	}
 
 	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
-		"Protocol converter configuration was saved successfully", a.outboundChannel, models.SaveProtocolConverter)
+		"Bridge configuration was saved successfully", a.outboundChannel, models.SaveProtocolConverter)
 
 	return response, nil, nil
 }
