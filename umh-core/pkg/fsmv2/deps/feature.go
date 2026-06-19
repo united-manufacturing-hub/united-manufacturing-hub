@@ -83,9 +83,10 @@ const (
 	// pre-FSMv2 package wired to FSMLogger.
 	FeatureFSMv1Communicator Feature = "fsmv1_communicator"
 
-	// FeatureDeploymentSaveConfig covers the "save config on deployment" feature:
-	// persisting a protocol converter configuration without waiting for the
-	// bridge to deploy, so the config is never lost on a failed deployment.
+	// FeatureDeploymentSaveConfig covers the decoupled save action: persisting a
+	// protocol converter configuration independently of the deployment pipeline,
+	// without waiting for the bridge to deploy, so the config is never lost on a
+	// failed deployment.
 	FeatureDeploymentSaveConfig Feature = "deployment_save_config"
 )
 
