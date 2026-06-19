@@ -31,7 +31,7 @@ import (
 // Unlike deploy, save persists the configuration without waiting for the bridge to
 // reach its desired state and never rolls the config back, so the configuration
 // survives a failed deployment. The save is idempotent: re-saving an existing
-// converter edits it in place instead of failing with a duplicate-name error.
+// converter edits it in place instead of failing with a duplicate-name error
 var _ = Describe("SaveProtocolConverter", func() {
 	var (
 		action          *actions.SaveProtocolConverterAction
