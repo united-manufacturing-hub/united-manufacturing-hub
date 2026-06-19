@@ -18,6 +18,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 )
 
@@ -533,6 +534,67 @@ var _ = Describe("ChildSpec Validation", func() {
 			err := config.ValidateChildSpec(spec, manyRegistry)
 			Expect(err).NotTo(HaveOccurred())
 		})
+	})
+})
+
+var _ = Describe("ChildSpec Enabled", func() {
+	Describe("zero value", func() {
+		It("is false on a bare struct literal", func() {
+			spec := config.ChildSpec{
+				Name:       "child-1",
+				WorkerType: "test-worker",
+			}
+
+			Expect(spec.Enabled).To(BeFalse())
+		})
+	})
+
+	Describe("explicit true", func() {
+		It("is reachable via field assignment in renderChildren bodies", func() {
+			spec := config.ChildSpec{
+				Name:       "child-1",
+				WorkerType: "test-worker",
+				Enabled:    true,
+			}
+
+			Expect(spec.Enabled).To(BeTrue())
+		})
+	})
+
+	Describe("Hash", func() {
+		It("differs when Enabled flips between two otherwise-identical specs", func() {
+			disabled := config.ChildSpec{
+				Name:       "child-1",
+				WorkerType: "test-worker",
+				UserSpec:   config.UserSpec{Config: "key: value"},
+				Enabled:    false,
+			}
+			enabled := disabled
+			enabled.Enabled = true
+
+			disabledHash, err := disabled.Hash()
+			Expect(err).NotTo(HaveOccurred())
+
+			enabledHash, err := enabled.Hash()
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(disabledHash).NotTo(Equal(enabledHash))
+		})
+	})
+})
+
+var _ = Describe("NextResult.Children scaffold", func() {
+	It("accepts a []config.ChildSpec slice carrying the 3-state vocabulary", func() {
+		result := fsmv2.NextResult[any, any]{
+			Children: []config.ChildSpec{
+				{Name: "running-child", WorkerType: "test-worker", Enabled: true},
+				{Name: "disabled-child", WorkerType: "test-worker", Enabled: false},
+			},
+		}
+
+		Expect(result.Children).To(HaveLen(2))
+		Expect(result.Children[0].Enabled).To(BeTrue())
+		Expect(result.Children[1].Enabled).To(BeFalse())
 	})
 })
 

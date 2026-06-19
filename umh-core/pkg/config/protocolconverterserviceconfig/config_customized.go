@@ -45,7 +45,7 @@ func (c ProtocolConverterServiceConfigSpec) GetDFCReadServiceConfig() dataflowco
 }
 
 // GetDFCWriteServiceConfig returns the write DFC input config from the spec.
-// InputTopics may contain Go template actions resolved at deploy time.
+// Source.Topics may contain Go template actions resolved at deploy time.
 func (c ProtocolConverterServiceConfigSpec) GetDFCWriteServiceConfig() dataflowcomponentserviceconfig.DataflowComponentWriteConfigInput {
 	return c.Config.DataflowComponentWriteServiceConfig
 }

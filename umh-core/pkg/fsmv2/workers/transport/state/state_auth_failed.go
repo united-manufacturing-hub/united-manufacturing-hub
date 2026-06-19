@@ -27,8 +27,10 @@ import (
 // change (AuthToken, RelayURL, or InstanceUUID) before transitioning back to
 // StartingState for a fresh attempt.
 //
-// Uses StartingBase because the worker has not reached Running -- children remain
-// stopped (they only start when the parent enters RunningHealthy).
+// Uses StartingBase because the worker has not reached Running. Children stay
+// enabled (idle-but-resident): push/pull dispatch nothing without
+// HasTransport && HasValidToken, and keeping them resident avoids
+// despawn/spawn churn across auth windows. Only shutdown disables them.
 type AuthFailedState struct {
 	helpers.StartingBase
 }
@@ -38,7 +40,7 @@ func (s *AuthFailedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := fsmv2.ConvertWorkerSnapshot[snapshot.TransportDesiredState, snapshot.TransportStatus](snapAny)
 
 	if snap.IsShutdownRequested {
-		return fsmv2.Transition(&StoppingState{}, fsmv2.SignalNone, nil, "Shutdown requested, transitioning to Stopping", nil)
+		return fsmv2.Transition(&StoppingState{}, fsmv2.SignalNone, nil, "Shutdown requested, transitioning to Stopping", childrenStopped(snap.Config))
 	}
 
 	// FailedAuthConfig is guaranteed populated here because only permanent errors
@@ -51,12 +53,12 @@ func (s *AuthFailedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	if tokenChanged || relayChanged || uuidChanged {
 		return fsmv2.Transition(&StartingState{}, fsmv2.SignalNone, nil,
 			fmt.Sprintf("config changed (token=%t, relay=%t, uuid=%t), retrying auth",
-				tokenChanged, relayChanged, uuidChanged), nil)
+				tokenChanged, relayChanged, uuidChanged), childrenAlive(snap.Config))
 	}
 
 	return fsmv2.Transition(s, fsmv2.SignalNone, nil,
 		fmt.Sprintf("auth failed (%s), waiting for config change",
-			snap.Status.LastErrorType), nil)
+			snap.Status.LastErrorType), childrenAlive(snap.Config))
 }
 
 // String returns the state name derived from the type.

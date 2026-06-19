@@ -16,14 +16,20 @@ package state
 
 import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleparent/action"
 	exampleparent "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleparent"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleparent/action"
 )
 
-// TryingToStopState represents the state during graceful shutdown.
-// Children without "TryingToStop" in ChildStartStates will have desired state "stopped".
-// Waits for all children to stop before transitioning to StoppedState.
+// TryingToStopState commits to cleanup. It does NOT check IsShutdownRequested
+// to abort cleanup mid-flight. Once the worker enters this state, it runs
+// to completion (Stopped) before any resume can begin. See pkg/fsmv2/doc.go
+// § One-way stop trajectory for the rule and the architecture-validator name.
+//
+// Returns an empty []config.ChildSpec{} so children despawn (exampleparent's
+// children are stateless). Then waits for all children to stop before
+// transitioning to StoppedState.
 type TryingToStopState struct {
 	helpers.StoppingBase
 }
@@ -31,15 +37,17 @@ type TryingToStopState struct {
 func (s *TryingToStopState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := fsmv2.ConvertWorkerSnapshot[exampleparent.ExampleparentConfig, exampleparent.ExampleparentStatus](snapAny)
 
+	despawnChildren := []config.ChildSpec{}
+
 	if snap.Status.ID == "" {
-		return fsmv2.Transition(s, fsmv2.SignalNone, &action.StopAction{}, "ID not set, executing StopAction", nil)
+		return fsmv2.Transition(s, fsmv2.SignalNone, &action.StopAction{}, "ID not set, executing StopAction", despawnChildren)
 	}
 
 	if snap.ChildrenHealthy == 0 && snap.ChildrenUnhealthy == 0 {
-		return fsmv2.Transition(&StoppedState{}, fsmv2.SignalNone, nil, "All children stopped, transitioning to Stopped", nil)
+		return fsmv2.Transition(&StoppedState{}, fsmv2.SignalNone, nil, "All children stopped, transitioning to Stopped", despawnChildren)
 	}
 
-	return fsmv2.Transition(s, fsmv2.SignalNone, nil, "Gracefully stopping all children", nil)
+	return fsmv2.Transition(s, fsmv2.SignalNone, nil, "Gracefully stopping all children", despawnChildren)
 }
 
 func (s *TryingToStopState) String() string {

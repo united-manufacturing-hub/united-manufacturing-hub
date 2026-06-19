@@ -17,7 +17,6 @@ package exampleparent
 import (
 	"context"
 	"errors"
-	"fmt"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
@@ -106,54 +105,14 @@ func (w *ParentWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState,
 		return nil, err
 	}
 
-	childrenCount := parentSpec.ChildrenCount
-
-	if childrenCount == 0 {
-		return &fsmv2.WrappedDesiredState[ExampleparentConfig]{
-			State: parentSpec.GetState(),
-			Config: ExampleparentConfig{
-				BaseUserSpec: parentSpec.BaseUserSpec,
-				ChildrenCount: 0,
-			},
-		}, nil
-	}
-
-	childrenSpecs := make([]config.ChildSpec, childrenCount)
-	childWorkerType := parentSpec.GetChildWorkerType()
-
-	for i := range childrenCount {
-		childVariables := config.VariableBundle{
-			User: map[string]any{
-				"DEVICE_ID": fmt.Sprintf("device-%d", i),
-			},
-		}
-
-		var childConfig string
-		if parentSpec.ChildConfig != "" {
-			childConfig = parentSpec.ChildConfig
-		} else {
-			childConfig = `address: {{ .IP }}:{{ .PORT }}
-device: {{ .DEVICE_ID }}`
-		}
-
-		childrenSpecs[i] = config.ChildSpec{
-			Name:       fmt.Sprintf("child-%d", i),
-			WorkerType: childWorkerType,
-			UserSpec: config.UserSpec{
-				Config:    childConfig,
-				Variables: childVariables,
-			},
-			ChildStartStates: []string{"TryingToStart", "Running"},
-		}
-	}
-
 	return &fsmv2.WrappedDesiredState[ExampleparentConfig]{
 		State: parentSpec.GetState(),
 		Config: ExampleparentConfig{
-			BaseUserSpec: parentSpec.BaseUserSpec,
-			ChildrenCount: childrenCount,
+			BaseUserSpec:    parentSpec.BaseUserSpec,
+			ChildWorkerType: parentSpec.ChildWorkerType,
+			ChildConfig:     parentSpec.ChildConfig,
+			ChildrenCount:   parentSpec.ChildrenCount,
 		},
-		ChildrenSpecs: childrenSpecs,
 	}, nil
 }
 

@@ -19,6 +19,13 @@ name: Build UMH Core
 
 on:
   workflow_call:
+    outputs:
+      short-sha:
+        description: "Short SHA for the image tag"
+        value: ${{ jobs.build.outputs.short-sha }}
+      digest:
+        description: "Image manifest digest (sha256:...) of the pushed image"
+        value: ${{ jobs.build.outputs.digest }}
   push:
     branches:
       - staging
@@ -38,8 +45,15 @@ jobs:
       packages: write
     timeout-minutes: 60
     runs-on: depot-ubuntu-24.04
+    outputs:
+      short-sha: ${{ steps.short-sha.outputs.sha }}
+      digest: ${{ steps.digest.outputs.digest }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Compute short SHA
+        id: short-sha
+        run: echo "sha=$(echo '${{ github.sha }}' | cut -c1-7)" >> "$GITHUB_OUTPUT"
 
       - name: Setup Depot
         uses: depot/setup-action@15c09a5f77a0840ad4bce955686522a257853461 # v1.7.1
@@ -93,6 +107,12 @@ jobs:
           make build-depot \
             VERSION=${{ steps.version.outputs.VERSION }} \
             TAGS="$TAGS"
+
+      - name: Get image digest
+        id: digest
+        run: |
+          DIGEST=$(docker buildx imagetools inspect "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:sha-${{ steps.short-sha.outputs.sha }}" --format '{{json .Manifest}}' | jq -r '.manifests[] | select(.platform.architecture=="amd64") | .digest')
+          echo "digest=$DIGEST" >> "$GITHUB_OUTPUT"
 
   verify-binaries:
     name: Verify ${{ matrix.arch }} Image

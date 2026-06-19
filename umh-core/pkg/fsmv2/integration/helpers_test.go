@@ -25,8 +25,8 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/application"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/application/snapshot"
@@ -197,6 +197,10 @@ func (m *MockDesiredState) IsShutdownRequested() bool {
 
 func (m *MockDesiredState) SetShutdownRequested(requested bool) {
 	m.shutdownRequested = requested
+}
+
+func (m *MockDesiredState) IsDisabled() bool {
+	return false
 }
 
 func ExpectNoGoroutineLeaks(before int) {

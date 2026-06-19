@@ -72,61 +72,14 @@ var _ = Describe("ApplicationStatus", func() {
 		})
 
 		It("counts circuit-open and stale children from a ChildrenView", func() {
-			view := stubChildrenView{children: []config.ChildInfo{
+			view := config.NewChildrenView([]config.ChildInfo{
 				{Name: "a", IsCircuitOpen: true},
 				{Name: "b", IsStale: true},
 				{Name: "c"},
-			}}
+			})
 			c, s := ChildrenViewToStatus(view)
 			Expect(c).To(Equal(1))
 			Expect(s).To(Equal(1))
 		})
 	})
 })
-
-// stubChildrenView is a test-only implementation of config.ChildrenView.
-type stubChildrenView struct {
-	children []config.ChildInfo
-}
-
-func (s stubChildrenView) List() []config.ChildInfo { return s.children }
-
-func (s stubChildrenView) Get(name string) *config.ChildInfo {
-	for i := range s.children {
-		if s.children[i].Name == name {
-			return &s.children[i]
-		}
-	}
-
-	return nil
-}
-
-func (s stubChildrenView) Counts() (healthy, unhealthy int) {
-	for _, c := range s.children {
-		if c.IsHealthy {
-			healthy++
-		} else {
-			unhealthy++
-		}
-	}
-
-	return
-}
-
-func (s stubChildrenView) AllHealthy() bool {
-	for _, c := range s.children {
-		if !c.IsHealthy {
-			return false
-		}
-	}
-
-	return true
-}
-
-func (s stubChildrenView) AllOperational() bool {
-	return s.AllHealthy()
-}
-
-func (s stubChildrenView) AllStopped() bool {
-	return len(s.children) == 0
-}

@@ -19,6 +19,7 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"os"
 	"path/filepath"
 	"strings"
 )
@@ -478,19 +479,60 @@ func checkChildSpecValidation(filename string) []Violation {
 		})
 
 		if !hasChildrenValidation && !hasProgrammaticChildren {
-			pos := fset.Position(funcDecl.Pos())
-			violations = append(violations, Violation{
-				File:    filename,
-				Line:    pos.Line,
-				Type:    "MISSING_CHILDSPEC_VALIDATION",
-				Message: "DeriveDesiredState() should validate ChildrenSpecs before returning",
-			})
+			// A parent that declares a top-level RenderChildren passes the
+			// no-children-in-DeriveDesiredState check, even if DeriveDesiredState
+			// has no range-over-Children loop.
+			if !dirHasRenderChildren(filepath.Dir(filename)) {
+				pos := fset.Position(funcDecl.Pos())
+				violations = append(violations, Violation{
+					File:    filename,
+					Line:    pos.Line,
+					Type:    "MISSING_CHILDSPEC_VALIDATION",
+					Message: "DeriveDesiredState() should validate ChildrenSpecs before returning",
+				})
+			}
 		}
 
 		return true
 	})
 
 	return violations
+}
+
+// dirHasRenderChildren reports whether any non-test .go file in dir or its
+// subdirectories declares a top-level RenderChildren function.
+func dirHasRenderChildren(dir string) bool {
+	found := false
+
+	_ = filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+		if err != nil || found {
+			return err
+		}
+
+		if info.IsDir() || !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
+			return nil
+		}
+
+		fset := token.NewFileSet()
+
+		node, parseErr := parser.ParseFile(fset, path, nil, 0)
+		if parseErr != nil {
+			return nil
+		}
+
+		for _, decl := range node.Decls {
+			funcDecl, ok := decl.(*ast.FuncDecl)
+			if ok && funcDecl.Recv == nil && funcDecl.Name.Name == "RenderChildren" {
+				found = true
+
+				return nil
+			}
+		}
+
+		return nil
+	})
+
+	return found
 }
 
 // ValidateDeriveDesiredStateReturns checks that DeriveDesiredState returns valid State values ("stopped" or "running").

@@ -32,19 +32,29 @@ type RecoveringState struct {
 func (s *RecoveringState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := fsmv2.ConvertWorkerSnapshot[communicator.CommunicatorConfig, communicator.CommunicatorStatus](snapAny)
 
+	aliveChildren, err := communicator.RenderChildren(snap.Config, true)
+	if err != nil {
+		aliveChildren = nil
+	}
+
+	stopChildren, err := communicator.RenderChildren(snap.Config, false)
+	if err != nil {
+		stopChildren = nil
+	}
+
 	if snap.IsShutdownRequested {
-		return fsmv2.Transition(&StoppedState{}, fsmv2.SignalNone, nil, "Shutdown requested during recovering state", nil)
+		return fsmv2.Transition(&StoppedState{}, fsmv2.SignalNone, nil, "Shutdown requested during recovering state", stopChildren)
 	}
 
 	if snap.ChildrenHealthy > 0 && snap.ChildrenUnhealthy == 0 {
 		return fsmv2.Transition(&SyncingState{}, fsmv2.SignalNone, nil,
 			fmt.Sprintf("recovered: healthy=%d, unhealthy=%d",
-				snap.ChildrenHealthy, snap.ChildrenUnhealthy), nil)
+				snap.ChildrenHealthy, snap.ChildrenUnhealthy), aliveChildren)
 	}
 
 	return fsmv2.Transition(s, fsmv2.SignalNone, nil,
 		fmt.Sprintf("recovering: healthy=%d, unhealthy=%d",
-			snap.ChildrenHealthy, snap.ChildrenUnhealthy), nil)
+			snap.ChildrenHealthy, snap.ChildrenUnhealthy), aliveChildren)
 }
 
 func (s *RecoveringState) String() string {
