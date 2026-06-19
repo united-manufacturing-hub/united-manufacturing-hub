@@ -18,20 +18,18 @@
 // -----------------------------------------------------------------------------
 // BUSINESS CONTEXT
 // -----------------------------------------------------------------------------
-// SaveProtocolConverter persists a protocol converter configuration WITHOUT
-// waiting for the bridge to actually reach its desired state, and WITHOUT
-// rolling the config back on failure. This decouples "configuration saved"
-// from "bridge deployed": clicking "Save & Deploy" must never lose the user's
-// configuration, even when the subsequent deployment fails.
+// SaveProtocolConverter exists solely for the first-time bridge deployment
+// experience. It covers the specific edge case where a user clicks
+// "Save & Deploy" for the first time and that initial deployment then fails:
+// the bridge configuration must not be lost. To guarantee that, the action
+// persists the new configuration without waiting for the bridge to reach its
+// desired state, and without rolling the config back on failure. Everything
+// after this initial save (later edits, restarts, etc.) goes through the normal
+// paths and is unaffected.
 //
 // Contrast with DeployProtocolConverter, which adds the config AND blocks until
 // the FSM reaches the desired state, deleting the config again on timeout. The
 // deployment status is observed separately through the normal FSM status feed.
-//
-// The save is idempotent: re-saving an already-existing converter updates it in
-// place instead of failing with a duplicate-name error. Identity is derived
-// deterministically from the name, so a matching name is the same logical
-// bridge.
 // -----------------------------------------------------------------------------
 
 package actions
@@ -161,11 +159,11 @@ func (a *SaveProtocolConverterAction) Execute() (interface{}, map[string]interfa
 	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
 		"Saving protocol converter configuration...", a.outboundChannel, models.SaveProtocolConverter)
 
-	// Idempotent upsert: identity is derived deterministically from the name, so
-	// an existing converter with the same name is the same logical bridge -
-	// update it in place instead of failing with a duplicate-name error. This
-	// also lets a retry after a failed deploy converge cleanly.
-	if err := a.upsertProtocolConverter(ctx, pcConfig); err != nil {
+	// First-time deployment only: create the new bridge. If one with this name
+	// already exists, AtomicAddProtocolConverter fails with a duplicate-name
+	// error - by design, since later updates go through the dedicated edit
+	// action, not this save path.
+	if err := a.configManager.AtomicAddProtocolConverter(ctx, pcConfig); err != nil {
 		errorMsg := fmt.Sprintf("Failed to save protocol converter: %v", err)
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
 			errorMsg, a.outboundChannel, models.SaveProtocolConverter)
@@ -188,28 +186,6 @@ func (a *SaveProtocolConverterAction) Execute() (interface{}, map[string]interfa
 		"Protocol converter configuration was saved successfully", a.outboundChannel, models.SaveProtocolConverter)
 
 	return response, nil, nil
-}
-
-// upsertProtocolConverter adds the protocol converter, or edits it in place when
-// one with the same name already exists, so the save is idempotent.
-func (a *SaveProtocolConverterAction) upsertProtocolConverter(ctx context.Context, pcConfig config.ProtocolConverterConfig) error {
-	currentConfig, err := a.configManager.GetConfig(ctx, 0)
-	if err != nil {
-		return fmt.Errorf("failed to read configuration: %w", err)
-	}
-
-	// Identity is derived deterministically from the name (UUIDv5), independent of
-	// whether we add or edit - it is the address of this logical bridge.
-	pcUUID := dataflowcomponentserviceconfig.GenerateUUIDFromName(pcConfig.Name)
-
-	for _, existing := range currentConfig.ProtocolConverter {
-		if existing.Name == pcConfig.Name {
-			_, err := a.configManager.AtomicEditProtocolConverter(ctx, pcUUID, pcConfig)
-			return err
-		}
-	}
-
-	return a.configManager.AtomicAddProtocolConverter(ctx, pcConfig)
 }
 
 // getUserEmail implements the Action interface by returning the user email associated with this action.
