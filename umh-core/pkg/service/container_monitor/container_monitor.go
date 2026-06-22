@@ -77,8 +77,8 @@ type ContainerMonitorService struct {
 	dataPath          string                       // Path to check for disk metrics and HWID file
 	throttleSnapshots []cgroupSnapshot             // Sliding window of cgroup counter snapshots
 	wasThrottled      bool                         // Previous throttle state for transition logging
-	windowState       *cpuhealth.WindowState       // Caller-held CPU-health verdict state (filled from rung 4)
-	sampler           cpuhealth.Sampler            // cgroup cpu.stat usage_usec sampler (rung 1b)
+	windowState       *cpuhealth.WindowState       // Caller-held CPU-health verdict state
+	sampler           cpuhealth.Sampler            // cgroup cpu.stat usage_usec sampler
 }
 
 // NewContainerMonitorService creates a new container monitor service instance.
@@ -292,13 +292,20 @@ func (c *ContainerMonitorService) getCPUMetrics(ctx context.Context) (*models.CP
 		c.wasThrottled = isThrottled
 	}
 
-	// Route the usage verdict through cpuhealth.Decide (the seam this rung opens).
-	// UsageCores is the cgroup sampler's container-relative usage (since 1b).
-	// CgroupCores is pinned to 1.0 here as a workaround: the CgroupCores
-	// zero-sentinel / uncapped handling is a type-design rung, and the 1.0
-	// pin makes Decide compute fraction = usageCores/1.0 = usageCores,
-	// preserving the degrade-at-70%-of-quota semantics now that usagePercent
-	// is cgroup-relative.
+	// Route the usage verdict through cpuhealth.Decide. UsageCores is the
+	// cgroup sampler's container-relative usage. CgroupCores is pinned to 1.0
+	// here and Quota is left nil: wiring the real cpu.max quota as Quota (and
+	// dropping this 1.0 pin) is pending production tests.
+	//
+	// The 1.0 pin is a correct pass-through, not a distortion: getRawCPUMetrics
+	// pre-normalizes usagePercent by the real QuotaCores
+	// (usagePercent = usageCores/QuotaCores*100), so UsageCores passed to Decide
+	// is already usageCores/QuotaCores. Decide then computes fraction =
+	// (usageCores/QuotaCores)/1.0 = usageCores/QuotaCores — the correct
+	// quota-relative fraction. A 4-core quota at 0.7 real cores yields 0.175
+	// (healthy, not spuriously degraded); a 0.5-core quota at 0.4 real cores
+	// yields 0.8 (degraded, not silent). The pin's only effect is that Decide's
+	// fraction equals the already-computed quota-relative fraction.
 	usageSample := cpuhealth.Sample{
 		Timestamp:   time.Now(),
 		UsageCores:  usagePercent / 100.0,
@@ -433,7 +440,7 @@ func (c *ContainerMonitorService) getRawCPUMetrics(ctx context.Context) (usageMC
 	// wall-clock, already in cores; multiply by 1000 for mCPU. On read
 	// failure (cgroup v1, non-container, transient) the error is logged at
 	// debug and usage reports zero; a host fallback / surfaceable error is
-	// a later rung.
+	// not implemented yet.
 	sample, err := c.sampler.Sample(ctx)
 	if err != nil {
 		c.logger.Debugf("cgroup cpu usage unavailable, reporting zero: %v", err)
