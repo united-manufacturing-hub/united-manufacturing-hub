@@ -160,6 +160,12 @@ type ProtocolConverterObservedState struct {
 
 	// ServiceInfo contains information about the ProtocolConverter service
 	ServiceInfo protocolconvertersvc.ServiceInfo
+
+	// ConfigDivergence describes the difference between the desired and the
+	// observed runtime configuration. It is reset to "" at the start of every
+	// UpdateObservedStateOfInstance call and set to the ConfigDiffRuntime text
+	// when a divergence is detected and the service exists.
+	ConfigDivergence string
 }
 
 // IsObservedState implements the ObservedState interface.

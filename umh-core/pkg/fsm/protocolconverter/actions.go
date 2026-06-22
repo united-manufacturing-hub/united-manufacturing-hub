@@ -24,6 +24,7 @@ import (
 
 	internalfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/protocolconverterserviceconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	connectionfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/connection"
 	dataflowfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/dataflowcomponent"
@@ -238,6 +239,11 @@ func (p *ProtocolConverterInstance) getServiceStatus(ctx context.Context, servic
 
 // UpdateObservedStateOfInstance updates the observed state of the service.
 func (p *ProtocolConverterInstance) UpdateObservedStateOfInstance(ctx context.Context, services serviceregistry.Provider, snapshot fsm.SystemSnapshot) error {
+	// Reset ConfigDivergence as the first statement, before the ctx.Err()
+	// guard, so a stale value from a previous tick is cleared even when the
+	// context is already expired.
+	p.ObservedState.ConfigDivergence = ""
+
 	if ctx.Err() != nil {
 		if p.baseFSMInstance.IsDeadlineExceededAndHandle(ctx.Err(), snapshot.Tick, "UpdateObservedStateOfInstance") {
 			return nil
@@ -352,6 +358,7 @@ func (p *ProtocolConverterInstance) UpdateObservedStateOfInstance(ctx context.Co
 		p.baseFSMInstance.GetLogger().Debugf("Observed bridge config is different from desired config, updating bridge configuration")
 
 		diffStr := protocolconverterserviceconfig.ConfigDiffRuntime(p.runtimeConfig, p.ObservedState.ObservedProtocolConverterRuntimeConfig)
+		p.ObservedState.ConfigDivergence = protocolconverterserviceconfig.BoundDiff(diffStr, constants.ProtocolConverterConfigDivergenceCapRunes)
 		p.baseFSMInstance.GetLogger().Debugf("Configuration differences: %s", diffStr)
 
 		// Update the config through the manager directly, without a prior

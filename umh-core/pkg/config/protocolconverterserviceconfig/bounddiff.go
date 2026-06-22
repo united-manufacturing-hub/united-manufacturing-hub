@@ -12,11 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:build test
-
-// BoundDiff has no production caller yet; the test build tag above keeps it
-// out of production binaries until the first non-test caller is added.
-
 package protocolconverterserviceconfig
 
 import (
