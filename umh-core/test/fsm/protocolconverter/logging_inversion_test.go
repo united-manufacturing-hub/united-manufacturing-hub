@@ -25,6 +25,9 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
+	"go.uber.org/zap/zaptest/observer"
 
 	internalfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsmtest"
@@ -32,6 +35,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	protocolconverterfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/protocolconverter"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	protocolconvertersvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/protocolconverter"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/protocolconverter/runtime_config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
@@ -430,5 +434,151 @@ var _ = Describe("ConfigDivergence composition into StatusReason", func() {
 
 		// Reset the injected error so downstream specs are not affected.
 		mockService.StartConnectionError = nil
+	})
+})
+
+var _ = Describe("Heartbeat WARN on the PC divergence branch", func() {
+	var (
+		instance       *protocolconverterfsm.ProtocolConverterInstance
+		mockService    *protocolconvertersvc.MockProtocolConverterService
+		componentName  string
+		ctx            context.Context
+		mockRegistry   *serviceregistry.Registry
+		startTime      time.Time
+		logs           *observer.ObservedLogs
+		restoreGlobals func()
+	)
+
+	BeforeEach(func() {
+		componentName = "test-pc-warn"
+		ctx = context.Background()
+		startTime = time.Now()
+
+		// logger.For binds the instance logger to the zap global at construction
+		// (machine.go calls zap.S().Named(...)). Its lazy Initialize runs once
+		// via sync.Once and would otherwise call zap.ReplaceGlobals AFTER we
+		// install the observer, wiping it. Consume the sync.Once first so the
+		// instance built below picks up our observer-backed global.
+		_ = logger.For("warmup")
+
+		core, obs := observer.New(zapcore.WarnLevel)
+		restoreGlobals = zap.ReplaceGlobals(zap.New(core))
+		logs = obs
+
+		instance, mockService, _ = fsmtest.SetupProtocolConverterInstance(componentName, protocolconverterfsm.OperationalStateStopped)
+		mockRegistry = serviceregistry.NewMockRegistry()
+	})
+
+	AfterEach(func() {
+		restoreGlobals()
+	})
+
+	// divergenceWarns returns every captured WARN whose message carries the
+	// divergence heartbeat text, across all ticks driven so far.
+	divergenceWarns := func() []observer.LoggedEntry {
+		return logs.FilterLevelExact(zapcore.WarnLevel).
+			FilterMessageSnippet("re-applying config").All()
+	}
+
+	c := uint64(constants.ProtocolConverterDivergenceWarnIntervalTicks)
+	It("fires one heartbeat WARN per bridge on ticks that are multiples of the interval and none in a window spanning no multiple (edges 6 and 7)", func() {
+		var err error
+		// Walk the lifecycle to operational stopped so the
+		// to_be_created/creating early-return no longer short-circuits
+		// UpdateObservedStateOfInstance before the divergence branch.
+		var tick uint64
+		tick, err = fsmtest.TestProtocolConverterStateTransition(
+			ctx, instance, mockService, mockRegistry, componentName,
+			internalfsm.LifecycleStateToBeCreated,
+			internalfsm.LifecycleStateCreating, 5, tick, startTime)
+		Expect(err).NotTo(HaveOccurred())
+
+		mockService.ExistingComponents[componentName] = true
+		fsmtest.TransitionToProtocolConverterState(mockService, componentName, protocolconverterfsm.OperationalStateStopped)
+
+		tick, err = fsmtest.TestProtocolConverterStateTransition(
+			ctx, instance, mockService, mockRegistry, componentName,
+			internalfsm.LifecycleStateCreating,
+			protocolconverterfsm.OperationalStateStopped, 5, tick, startTime)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Desired Active so the "both stopped" early-return does not skip the
+		// divergence evaluation.
+		Expect(instance.SetDesiredFSMState(protocolconverterfsm.OperationalStateActive)).To(Succeed())
+
+		mockService.ServiceExistsResult = true
+
+		// Converged baseline rendered exactly as UpdateObservedStateOfInstance
+		// renders it, assigned LAST (TransitionToProtocolConverterState
+		// clobbers GetConfigResult).
+		cfg := instance.GetConfig()
+		rendered, err := runtime_config.BuildRuntimeConfig(
+			cfg,
+			map[string]string{},
+			nil,
+			runtime_config.BridgedByPlaceholder,
+			componentName,
+		)
+		Expect(err).NotTo(HaveOccurred())
+
+		divergent := rendered
+		largeInput := make(map[string]any, 50)
+		longValue := strings.Repeat("x", 30)
+		for i := 0; i < 50; i++ {
+			largeInput[fmt.Sprintf("input_key_%02d", i)] = map[string]any{
+				"value":   longValue,
+				"mapping": `root = {"message":"diverged"}`,
+			}
+		}
+		divergent.DataflowComponentReadServiceConfig.BenthosConfig.Input = largeInput
+
+		mockService.GetConfigResult = divergent
+		Expect(instance.UpdateObservedStateOfInstance(
+			ctx, mockRegistry, fsm.SystemSnapshot{Tick: 1})).To(Succeed(),
+			"tick 1 is the first real production tick (loop.go increments before the first Reconcile, so tick 0 never reaches here)")
+		Expect(divergenceWarns()).To(HaveLen(0),
+			"tick 1 is not a multiple of the WARN interval, so no WARN fires")
+		Expect(instance.ObservedState.ConfigDivergence).NotTo(BeEmpty(),
+			"the divergence branch still ran and staged ConfigDivergence, just no WARN")
+
+		mockService.GetConfigResult = divergent
+		Expect(instance.UpdateObservedStateOfInstance(
+			ctx, mockRegistry, fsm.SystemSnapshot{Tick: c})).To(Succeed(),
+			"tick c (c %% c == 0) must reach the divergence branch")
+		warnsThroughC := divergenceWarns()
+		Expect(warnsThroughC).To(HaveLen(1),
+			"tick c must increment the WARN count by exactly one (1 total: tick c is the first multiple that fires)")
+		Expect(warnsThroughC[0].Message).To(ContainSubstring(componentName),
+			"the heartbeat WARN must carry the bridge ID")
+		Expect(warnsThroughC[0].Message).To(ContainSubstring("Input config differences"),
+			"the heartbeat WARN must carry the bounded ConfigDivergence text")
+
+		// Edge 7: a divergent window spanning no multiple of the interval must
+		// emit zero WARN while ConfigDivergence stays non-empty. GetConfigResult
+		// is already divergent from the tick-c setup above and MockProtocolConverterService.GetConfig
+		// does not mutate it, so the per-tick reassignment is unnecessary.
+		warnsBeforeWindow := len(divergenceWarns())
+		for t := uint64(c + 1); t <= 2*c-1; t++ {
+			Expect(instance.UpdateObservedStateOfInstance(
+				ctx, mockRegistry, fsm.SystemSnapshot{Tick: t})).To(Succeed())
+			Expect(instance.ObservedState.ConfigDivergence).NotTo(BeEmpty(),
+				"ConfigDivergence must be staged non-empty on every divergent tick in the window (tick %d)", t)
+		}
+		Expect(len(divergenceWarns())).To(Equal(warnsBeforeWindow),
+			"a divergent window spanning no multiple of the interval must emit ZERO WARN")
+
+		// Third multiple proves the heartbeat REPEATS at subsequent multiples
+		// rather than firing only at 0 and the first interval.
+		mockService.GetConfigResult = divergent
+		Expect(instance.UpdateObservedStateOfInstance(
+			ctx, mockRegistry, fsm.SystemSnapshot{Tick: 2 * c})).To(Succeed(),
+			"tick 2c (2c %% c == 0) must reach the divergence branch")
+		warnsThrough2C := divergenceWarns()
+		Expect(warnsThrough2C).To(HaveLen(2),
+			"tick 2c must increment the WARN count by exactly one (2 total: tick c + tick 2c)")
+		Expect(warnsThrough2C[1].Message).To(ContainSubstring(componentName),
+			"the heartbeat WARN must carry the bridge ID")
+		Expect(warnsThrough2C[1].Message).To(ContainSubstring("Input config differences"),
+			"the heartbeat WARN must carry the bounded ConfigDivergence text")
 	})
 })

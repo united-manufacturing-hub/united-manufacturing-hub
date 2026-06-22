@@ -361,6 +361,10 @@ func (p *ProtocolConverterInstance) UpdateObservedStateOfInstance(ctx context.Co
 		p.ObservedState.ConfigDivergence = protocolconverterserviceconfig.BoundDiff(diffStr, constants.ProtocolConverterConfigDivergenceCapRunes)
 		p.baseFSMInstance.GetLogger().Debugf("Configuration differences: %s", diffStr)
 
+		if snapshot.Tick%constants.ProtocolConverterDivergenceWarnIntervalTicks == 0 {
+			p.baseFSMInstance.GetLogger().Warnf("re-applying config: bridge %s config diverged: %s", p.baseFSMInstance.GetID(), p.ObservedState.ConfigDivergence)
+		}
+
 		// Update the config through the manager directly, without a prior
 		// ServiceExists check. A check-then-act pattern here is a TOCTOU race: the
 		// service can be created or removed between the check and the update.
