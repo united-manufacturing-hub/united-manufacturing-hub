@@ -12,6 +12,8 @@
 
 ![Bridge update failed dialog showing the failing region of the rendered config and the automatic rollback message](./changelog-images/2026-06-19-bridge-render-error.png)
 
+- The full bridge and stream-processor configuration is no longer written to the umh-core log at INFO on every internal re-apply (moved to DEBUG), removing a source of log flooding and CPU pressure when a config keeps being re-applied. While a bridge's observed config differs from its desired config, its status in the Management Console now shows a bounded summary of what differs, and the umh-core log carries one warning per bridge per minute, so the cause is visible without enabling debug logging
+
 ### Fixes
 
 - OPC UA: reading or subscribing to large tag sets (roughly a thousand or more) over an encrypted connection no longer drops the connection with an `EOF` error
