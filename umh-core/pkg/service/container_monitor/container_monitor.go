@@ -26,7 +26,6 @@ import (
 
 	"encoding/hex"
 
-	"github.com/shirou/gopsutil/v4/cpu"
 	"github.com/shirou/gopsutil/v4/disk"
 	"github.com/shirou/gopsutil/v4/mem"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
@@ -79,6 +78,7 @@ type ContainerMonitorService struct {
 	throttleSnapshots []cgroupSnapshot             // Sliding window of cgroup counter snapshots
 	wasThrottled      bool                         // Previous throttle state for transition logging
 	windowState       *cpuhealth.WindowState       // Caller-held CPU-health verdict state (filled from rung 4)
+	sampler           cpuhealth.Sampler            // cgroup cpu.stat usage_usec sampler (rung 1b)
 }
 
 // NewContainerMonitorService creates a new container monitor service instance.
@@ -96,6 +96,7 @@ func NewContainerMonitorServiceWithPath(fs filesystem.Service, dataPath string) 
 		instanceName: constants.CoreInstanceName, // Single container instance name
 		dataPath:     dataPath,
 		windowState:  &cpuhealth.WindowState{},
+		sampler:      cpuhealth.NewCgroupSampler(fs, "/sys/fs/cgroup"),
 	}
 }
 
@@ -292,10 +293,12 @@ func (c *ContainerMonitorService) getCPUMetrics(ctx context.Context) (*models.CP
 	}
 
 	// Route the usage verdict through cpuhealth.Decide (the seam this rung opens).
-	// The sample reproduces today's host-derived usage fraction —
-	// UsageCores/CgroupCores == usagePercent/100 — so Decide degrades iff
-	// usagePercent >= CPUHighThresholdPercent, preserving behavior. Rung 1 flips
-	// the sampler to cgroup-relative usage_usec; until then the host numerator stays.
+	// UsageCores is the cgroup sampler's container-relative usage (since 1b).
+	// CgroupCores is pinned to 1.0 here as a workaround: the CgroupCores
+	// zero-sentinel / uncapped handling is a type-design rung, and the 1.0
+	// pin makes Decide compute fraction = usageCores/1.0 = usageCores,
+	// preserving the degrade-at-70%-of-quota semantics now that usagePercent
+	// is cgroup-relative.
 	usageSample := cpuhealth.Sample{
 		Timestamp:   time.Now(),
 		UsageCores:  usagePercent / 100.0,
@@ -410,16 +413,6 @@ func (c *ContainerMonitorService) getRawCPUMetrics(ctx context.Context) (usageMC
 		return 0, 0, 0, ctx.Err()
 	}
 
-	// Get actual CPU usage
-	usagePercentages, err := cpu.PercentWithContext(ctx, 0, false)
-	if err != nil {
-		return 0, 0, 0, err
-	}
-
-	if len(usagePercentages) > 0 {
-		usagePercent = usagePercentages[0]
-	}
-
 	// Determine effective core count (keep as float64 to preserve fractional quotas)
 	// Use cgroup limit if available, otherwise fall back to host CPU count
 	effectiveCores := float64(runtime.NumCPU())
@@ -435,10 +428,24 @@ func (c *ContainerMonitorService) getRawCPUMetrics(ctx context.Context) (usageMC
 
 	coreCount = runtime.NumCPU() // Always report host cores for compatibility
 
-	// Convert usage percent to mCPU based on effective cores
-	// This gives us a more accurate representation when cgroups limit CPU
-	usageCores := (usagePercent / 100.0) * effectiveCores
+	// Read container-relative CPU usage from the cgroup cpu.stat usage_usec
+	// counter. The Sampler reports UsageCores as the usage_usec delta over
+	// wall-clock, already in cores; multiply by 1000 for mCPU. On read
+	// failure (cgroup v1, non-container, transient) the error is logged at
+	// debug and usage reports zero; a host fallback / surfaceable error is
+	// a later rung.
+	sample, err := c.sampler.Sample(ctx)
+	if err != nil {
+		c.logger.Debugf("cgroup cpu usage unavailable, reporting zero: %v", err)
+	}
+	if ctx.Err() != nil {
+		return 0, 0, 0, ctx.Err()
+	}
+
+	usageCores := sample.UsageCores
 	usageMCores = usageCores * 1000
+
+	usagePercent = (usageCores / effectiveCores) * 100.0
 
 	return usageMCores, coreCount, usagePercent, nil
 }
