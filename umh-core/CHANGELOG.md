@@ -9,6 +9,8 @@
 
 ![Bridge update failed dialog showing the failing region of the rendered config and the automatic rollback message](./changelog-images/2026-06-19-bridge-render-error.png)
 
+- Bridge deploy, edit, and delete progress messages and the bridge status feed now say "Bridge" instead of "Protocol converter", matching the Management Console terminology
+
 ## [0.44.24]
 
 ### Fixes
