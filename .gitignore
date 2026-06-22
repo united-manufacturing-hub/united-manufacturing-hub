@@ -21,3 +21,4 @@ finalization/
 *.result.txt
 .worktrees/
 .self-review/
+vsdd/
