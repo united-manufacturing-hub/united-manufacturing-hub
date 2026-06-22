@@ -91,12 +91,15 @@ type Verdict struct {
 	Causes      []Cause
 }
 
-// Decide computes a pure CPU-health verdict from a sample. When
-// thresholds.HighUsageFraction is not a positive finite value (<=0 or NaN),
-// it falls back to DefaultThresholds(). The negated-`>0` guard makes a NaN
-// threshold route to the default rather than silently disabling detection:
-// `NaN <= 0` is false, so a bare `<= 0` check would keep a NaN threshold, and
-// `fraction >= NaN` is always false, blinding the monitor.
+// Decide computes a pure CPU-health verdict from a sample. High usage alone
+// is not ill health: a capped container pinned at its quota with no
+// throttle/pressure/steal/host-contention signal is busy, not sick, so
+// Decide currently returns StateHealthy for any sample that has no other
+// cause. Saturation is reintroduced later, decided from a windowed average
+// of UsageFraction stored in WindowState rather than raw usage. The
+// thresholds argument is reserved for that later saturation logic and is
+// not read yet; when it is, a NaN HighUsageFraction must not silently
+// blind saturation detection (NaN >= threshold is always false).
 //
 // When Quota is non-nil, Decide uses it exclusively: a positive Quota yields
 // UsageCores/Quota, and a non-positive Quota (zero/negative/NaN) means
@@ -108,10 +111,6 @@ type Verdict struct {
 // returns StateHealthy regardless of UsageCores (uncapped cannot be
 // quota-saturated); host-contention attribution is not computed by Decide.
 func Decide(_ *WindowState, sample Sample, thresholds Thresholds) (Verdict, Signals) {
-	if !(thresholds.HighUsageFraction > 0) {
-		thresholds = DefaultThresholds()
-	}
-
 	var fraction float64
 	if sample.Quota != nil {
 		if *sample.Quota > 0 {
@@ -122,14 +121,6 @@ func Decide(_ *WindowState, sample Sample, thresholds Thresholds) (Verdict, Sign
 	}
 
 	signals := Signals{UsageFraction: fraction}
-
-	if fraction >= thresholds.HighUsageFraction {
-		return Verdict{
-			State:       StateDegraded,
-			Attribution: AttributionUnknown,
-			Causes:      []Cause{{Kind: CauseKindSaturation, Value: fraction}},
-		}, signals
-	}
 
 	return Verdict{State: StateHealthy}, signals
 }

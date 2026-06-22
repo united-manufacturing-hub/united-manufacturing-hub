@@ -23,19 +23,21 @@ import (
 )
 
 // TestDecide_SaturationOnly is the characterization test for the pure
-// pkg/cpuhealth library. It pins the four behaviors the saturation-only
-// verdict contracts. The usage fraction's denominator is the cgroup quota
-// (Sample.CgroupCores), not host cores; the test pins that.
+// pkg/cpuhealth library. It pins the behaviors the verdict contracts. The
+// usage fraction's denominator is the cgroup quota (Sample.CgroupCores),
+// not host cores; the test pins that.
+//
+// Decide no longer degrades on raw usage: high usage alone is healthy
+// (busy is not sick). The earlier degraded-on-high-usage assertions were
+// reshaped accordingly; the fraction computation, uncapped guardrail, and
+// low-usage healthy pins below are unchanged.
 //
 //  1. A high-usage sample (UsageCores >= 0.70 * CgroupCores, CgroupCores>0)
-//     yields State==degraded, Attribution==unknown, and exactly one Cause
-//     whose Kind==saturation and whose Value is the usage fraction
-//     (UsageCores/CgroupCores).
+//     yields State==healthy with no causes — high usage alone is not ill
+//     health. Signals.UsageFraction is still the quota-relative fraction.
 //  2. An idle/low-usage sample (UsageCores < 0.70 * CgroupCores) yields
 //     State==healthy, Attribution empty/zero, Causes nil-or-empty.
-//  3. When thresholds.HighUsageFraction <= 0, Decide falls back to
-//     DefaultThresholds() (HighUsageFraction 0.70).
-//  4. Signals.UsageFraction == UsageCores/CgroupCores when CgroupCores>0,
+//  3. Signals.UsageFraction == UsageCores/CgroupCores when CgroupCores>0,
 //     else 0.
 //
 // Saturation-only: no throttle/pressure/steal/host-contention/windowing/
@@ -77,34 +79,28 @@ func TestDecide_SaturationOnly(t *testing.T) {
 		}
 	})
 
-	// (1) High-usage sample crosses the 0.70 quota-relative threshold ->
-	// degraded / unknown / exactly one saturation cause carrying the fraction.
-	t.Run("high usage degrades with single saturation cause", func(t *testing.T) {
+	// (1) High-usage sample crosses the 0.70 quota-relative threshold but
+	// high usage alone is healthy — busy is not sick. The fraction is still
+	// computed and exposed on Signals (quota-relative denominator).
+	t.Run("high usage stays healthy with fraction computed", func(t *testing.T) {
 		st := &WindowState{}
 		// 1.5 of 2.0 cores = 0.75 fraction, >= 0.70.
 		sample := Sample{Timestamp: ts, UsageCores: 1.5, CgroupCores: 2.0}
 		verdict, signals := Decide(st, sample, defaultThresholds)
 
-		if verdict.State != StateDegraded {
-			t.Fatalf("State: got %q, want %q", verdict.State, StateDegraded)
+		if verdict.State != StateHealthy {
+			t.Fatalf("State: got %q, want %q (high usage alone is healthy)", verdict.State, StateHealthy)
 		}
-		if verdict.Attribution != AttributionUnknown {
-			t.Fatalf("Attribution: got %q, want %q", verdict.Attribution, AttributionUnknown)
+		if verdict.Attribution != Attribution("") {
+			t.Fatalf("Attribution: got %q, want empty (healthy carries no attribution)", verdict.Attribution)
 		}
-		if len(verdict.Causes) != 1 {
-			t.Fatalf("Causes length: got %d, want exactly 1", len(verdict.Causes))
-		}
-		c := verdict.Causes[0]
-		if c.Kind != CauseKindSaturation {
-			t.Fatalf("Cause.Kind: got %q, want %q", c.Kind, CauseKindSaturation)
-		}
-		if got, want := c.Value, signals.UsageFraction; !floatEq(got, want) {
-			t.Fatalf("Cause.Value: got %v, want usage fraction %v", got, want)
+		if len(verdict.Causes) != 0 {
+			t.Fatalf("Causes length: got %d, want 0 (no saturation cause on raw usage)", len(verdict.Causes))
 		}
 		// The fraction is the quota-relative one (1.5/2.0 = 0.75): the
 		// denominator is the cgroup quota, not host cores.
-		if got, want := c.Value, 0.75; !floatEq(got, want) {
-			t.Fatalf("Cause.Value (quota-relative): got %v, want 0.75", got)
+		if got, want := signals.UsageFraction, 0.75; !floatEq(got, want) {
+			t.Fatalf("Signals.UsageFraction (quota-relative): got %v, want 0.75", got)
 		}
 	})
 
@@ -127,48 +123,6 @@ func TestDecide_SaturationOnly(t *testing.T) {
 			t.Fatalf("Causes length: got %d, want 0 (healthy has no causes)", len(verdict.Causes))
 		}
 	})
-
-	// (3) When thresholds.HighUsageFraction <= 0, Decide falls back to
-	// DefaultThresholds() (HighUsageFraction 0.70).
-	t.Run("invalid thresholds fall back to DefaultThresholds", func(t *testing.T) {
-		// Distinguish fallback-to-default from an invalid <=0 threshold: the
-		// 0.69 just-below sample is the distinguishing assertion (stays
-		// healthy only under the 0.70 fallback, degrades under any <=0
-		// threshold); the 0.70 boundary is a complementary sanity check that
-		// degrades under both paths.
-		st := &WindowState{}
-		justBelow := Sample{Timestamp: ts, UsageCores: 1.38, CgroupCores: 2.0} // 0.69
-		verdict, _ := Decide(st, justBelow, Thresholds{HighUsageFraction: 0})
-		if verdict.State != StateHealthy {
-			t.Fatalf("just-below-default (0.69) under invalid threshold: State got %q, want %q (fallback to default 0.70)", verdict.State, StateHealthy)
-		}
-		st2 := &WindowState{}
-		atBoundary := Sample{Timestamp: ts, UsageCores: 1.4, CgroupCores: 2.0} // 0.70
-		verdictBoundary, _ := Decide(st2, atBoundary, Thresholds{HighUsageFraction: -1})
-		if verdictBoundary.State != StateDegraded {
-			t.Fatalf("boundary (0.70) under invalid threshold: State got %q, want %q (fallback to default 0.70)", verdictBoundary.State, StateDegraded)
-		}
-
-		// A NaN threshold must also fall back to DefaultThresholds, not blind
-		// the monitor. `NaN <= 0` is false, so a bare `<= 0` guard would keep
-		// the NaN and `fraction >= NaN` (always false) would force healthy
-		// even on a high-usage sample. The just-below-default sample stays
-		// healthy (distinguishing fallback-to-0.70 from a kept-NaN that would
-		// also read healthy — the high-usage sample below is the real pin).
-		st3 := &WindowState{}
-		nanThreshold := Thresholds{HighUsageFraction: math.NaN()}
-		justBelowDefault := Sample{Timestamp: ts, UsageCores: 1.38, CgroupCores: 2.0} // 0.69
-		verdictNanBelow, _ := Decide(st3, justBelowDefault, nanThreshold)
-		if verdictNanBelow.State != StateHealthy {
-			t.Fatalf("just-below-default (0.69) under NaN threshold: State got %q, want %q (fallback to default 0.70)", verdictNanBelow.State, StateHealthy)
-		}
-		st4 := &WindowState{}
-		highUsage := Sample{Timestamp: ts, UsageCores: 1.5, CgroupCores: 2.0} // 0.75
-		verdictNanHigh, _ := Decide(st4, highUsage, nanThreshold)
-		if verdictNanHigh.State != StateDegraded {
-			t.Fatalf("high-usage (0.75) under NaN threshold: State got %q, want %q (NaN must fall back to default, not blind)", verdictNanHigh.State, StateDegraded)
-		}
-	})
 }
 
 // TestDecide_QuotaPointerUncapped pins the Sample.Quota *float64 contract:
@@ -183,7 +137,8 @@ func TestDecide_SaturationOnly(t *testing.T) {
 // not the accidental fraction=0 → healthy of the sentinel.
 //
 // NOTE: Quota is not yet populated by the production caller (container_monitor
-// still pins CgroupCores=1.0 and leaves Quota nil). This test exercises the
+// does not currently call Decide; the cgroupSampler and windowState fields are
+// retained for the saturation wiring in WindowState). This test exercises the
 // Quota branch in isolation so the type-level seam is correct and safe to
 // wire; it is not a production-vetted path yet.
 //
@@ -191,14 +146,14 @@ func TestDecide_SaturationOnly(t *testing.T) {
 // exercises Quota only (TestDecide_SaturationOnly covers CgroupCores). Pinned
 // behaviors:
 //
-//  1. Capped sample (Quota → 2.0), UsageCores 1.5 → fraction 0.75 → degraded /
-//     unknown / exactly one saturation cause whose Value is 0.75.
+//  1. Capped sample (Quota → 2.0), UsageCores 1.5 → fraction 0.75 → healthy
+//     (high usage alone is not ill health); fraction still computed.
 //  2. Capped sample (Quota → 2.0), UsageCores 0.5 → fraction 0.25 → healthy.
 //  3. Uncapped sample (Quota nil), high UsageCores → DELIBERATE healthy: no
 //     fraction is computed (Signals.UsageFraction == 0), the same uncapped
 //     sample at a higher UsageCores also stays healthy, AND a capped sample at
-//     the same UsageCores degrades — proving Decide would degrade given a quota,
-//     so the uncapped healthy is the guardrail, not the fraction-zero accident.
+//     the same UsageCores computes a non-zero fraction — so the uncapped
+//     fraction-0 is the guardrail, not the fraction-zero accident.
 //  4. A non-nil non-positive Quota (zero, negative, NaN) is treated as
 //     uncapped — Decide does NOT divide by it (no +Inf/NaN poison fraction) and
 //     does NOT fall back to CgroupCores, so a zero quota (the unlimited-cgroup
@@ -210,29 +165,23 @@ func TestDecide_QuotaPointerUncapped(t *testing.T) {
 	ts := time.Date(2026, 6, 22, 12, 0, 0, 0, time.UTC)
 	defaultThresholds := DefaultThresholds()
 
-	// (1) Capped sample, Quota 2.0, UsageCores 1.5 → fraction 0.75 → degraded /
-	// unknown / one saturation cause carrying 0.75.
-	t.Run("capped high usage degrades with single saturation cause", func(t *testing.T) {
+	// (1) Capped sample, Quota 2.0, UsageCores 1.5 → fraction 0.75. High
+	// usage alone is healthy, so the verdict is healthy with no causes; the
+	// quota-relative fraction is still computed and exposed on Signals.
+	t.Run("capped high usage stays healthy with fraction computed", func(t *testing.T) {
 		quota := 2.0
 		st := &WindowState{}
 		sample := Sample{Timestamp: ts, UsageCores: 1.5, Quota: &quota}
 		verdict, signals := Decide(st, sample, defaultThresholds)
 
-		if verdict.State != StateDegraded {
-			t.Fatalf("State: got %q, want %q", verdict.State, StateDegraded)
+		if verdict.State != StateHealthy {
+			t.Fatalf("State: got %q, want %q (high usage alone is healthy)", verdict.State, StateHealthy)
 		}
-		if verdict.Attribution != AttributionUnknown {
-			t.Fatalf("Attribution: got %q, want %q", verdict.Attribution, AttributionUnknown)
+		if verdict.Attribution != Attribution("") {
+			t.Fatalf("Attribution: got %q, want empty (healthy carries no attribution)", verdict.Attribution)
 		}
-		if len(verdict.Causes) != 1 {
-			t.Fatalf("Causes length: got %d, want exactly 1", len(verdict.Causes))
-		}
-		c := verdict.Causes[0]
-		if c.Kind != CauseKindSaturation {
-			t.Fatalf("Cause.Kind: got %q, want %q", c.Kind, CauseKindSaturation)
-		}
-		if got, want := c.Value, 0.75; !floatEq(got, want) {
-			t.Fatalf("Cause.Value (quota-relative 1.5/2.0): got %v, want %v", got, want)
+		if len(verdict.Causes) != 0 {
+			t.Fatalf("Causes length: got %d, want 0 (no saturation cause on raw usage)", len(verdict.Causes))
 		}
 		if got, want := signals.UsageFraction, 0.75; !floatEq(got, want) {
 			t.Fatalf("Signals.UsageFraction: got %v, want %v", got, want)
@@ -294,15 +243,20 @@ func TestDecide_QuotaPointerUncapped(t *testing.T) {
 			t.Fatalf("uncapped higher-usage Signals.UsageFraction: got %v, want 0", got)
 		}
 
-		// (b) A capped sample at the same UsageCores (5.0) degrades — proving
-		// Decide would degrade given a quota, so the uncapped healthy above is
-		// the guardrail, not an accidental fraction-zero healthy.
+		// (b) A capped sample at the same UsageCores (5.0) also stays
+		// healthy (high usage alone is not ill health), but computes a
+		// non-zero UsageFraction where the uncapped sample computes none.
+		// That fraction difference is what the future saturation logic in
+		// WindowState will read.
 		quotaTwo := 2.0
 		stCapped := &WindowState{}
 		capped := Sample{Timestamp: ts, UsageCores: 5.0, Quota: &quotaTwo}
-		verdictCapped, _ := Decide(stCapped, capped, defaultThresholds)
-		if verdictCapped.State != StateDegraded {
-			t.Fatalf("capped same-usage State: got %q, want %q (proves Decide degrades given a quota; the uncapped healthy is deliberate)", verdictCapped.State, StateDegraded)
+		verdictCapped, signalsCapped := Decide(stCapped, capped, defaultThresholds)
+		if verdictCapped.State != StateHealthy {
+			t.Fatalf("capped same-usage State: got %q, want %q (high usage is healthy)", verdictCapped.State, StateHealthy)
+		}
+		if got, want := signalsCapped.UsageFraction, 5.0/2.0; !floatEq(got, want) {
+			t.Fatalf("capped same-usage UsageFraction: got %v, want %v (non-zero where uncapped computes none)", got, want)
 		}
 	})
 
@@ -409,23 +363,88 @@ func TestDecide_QuotaPointerUncapped(t *testing.T) {
 	// (5) Precedence: when both Quota (non-nil positive) and CgroupCores are
 	// set to differing values, Quota wins — the fraction is UsageCores/Quota,
 	// not UsageCores/CgroupCores. Pins the doc contract at decide.go: a future
-	// refactor flipping the branch order would otherwise pass CI.
+	// refactor flipping the branch order would otherwise pass CI. The verdict
+	// is healthy either way (high usage alone is not ill health), so
+	// precedence is pinned solely by the fraction value.
 	t.Run("both set: Quota wins over CgroupCores", func(t *testing.T) {
 		quota := 2.0
 		st := &WindowState{}
-		// Quota=2.0, CgroupCores=4.0, UsageCores=1.5 → Quota-derived 0.75
-		// (degraded), NOT CgroupCores-derived 0.375 (healthy).
+		// Quota=2.0, CgroupCores=4.0, UsageCores=1.5 → Quota-derived 0.75,
+		// NOT CgroupCores-derived 0.375.
 		sample := Sample{Timestamp: ts, UsageCores: 1.5, Quota: &quota, CgroupCores: 4.0}
 		verdict, signals := Decide(st, sample, defaultThresholds)
 
-		if verdict.State != StateDegraded {
-			t.Fatalf("both-set State: got %q, want %q (Quota-derived 0.75 >= 0.70 degrades; CgroupCores-derived 0.375 would stay healthy)", verdict.State, StateDegraded)
+		if verdict.State != StateHealthy {
+			t.Fatalf("both-set State: got %q, want %q (high usage is healthy)", verdict.State, StateHealthy)
 		}
 		if got, want := signals.UsageFraction, 0.75; !floatEq(got, want) {
 			t.Fatalf("both-set Signals.UsageFraction: got %v, want %v (Quota-derived 1.5/2.0, not CgroupCores-derived 1.5/4.0=0.375)", got, want)
 		}
-		if len(verdict.Causes) != 1 || !floatEq(verdict.Causes[0].Value, 0.75) {
-			t.Fatalf("both-set Cause: got %+v, want one saturation cause Value=0.75 (Quota-derived)", verdict.Causes)
+		if len(verdict.Causes) != 0 {
+			t.Fatalf("both-set Causes length: got %d, want 0 (no saturation cause on raw usage)", len(verdict.Causes))
+		}
+	})
+}
+
+// TestDecide_HighUsageAloneIsHealthy pins the Decide library thesis: high
+// CPU utilization is NOT ill health. A capped container pinned at 0.95 of
+// its quota with no throttle/pressure/steal/host-contention signal is
+// working, not sick — Decide must return StateHealthy with no causes.
+// Decide no longer degrades on raw usage >= HighUsageFraction; saturation
+// will be decided from a windowed average of UsageFraction in WindowState,
+// never from a single sample's raw usage. Throttling is a separate
+// starvation signal handled outside Decide.
+//
+// This test pins the pure cpuhealth.Decide contract, not the end-to-end
+// container monitor behavior: GetStatus still degrades on high raw
+// cpuPercent until saturation logic in WindowState replaces it.
+//
+// Pinned behaviors:
+//
+//  1. A capped sample (Quota 2.0) at very high usage (UsageCores 1.9 of 2.0
+//     = 0.95 fraction) and no other signals returns StateHealthy with no
+//     causes and no attribution — NOT degraded.
+//  2. A capped sample at low usage (0.5 of 2.0) still returns healthy
+//     (unchanged).
+func TestDecide_HighUsageAloneIsHealthy(t *testing.T) {
+	ts := time.Date(2026, 6, 22, 12, 0, 0, 0, time.UTC)
+	defaultThresholds := DefaultThresholds()
+
+	// (1) Capped at 0.95 quota-relative fraction: busy is not sick. Decide
+	// must not degrade on raw usage alone.
+	t.Run("capped very high usage is healthy with no causes", func(t *testing.T) {
+		quota := 2.0
+		st := &WindowState{}
+		sample := Sample{Timestamp: ts, UsageCores: 1.9, Quota: &quota}
+		verdict, _ := Decide(st, sample, defaultThresholds)
+
+		if verdict.State != StateHealthy {
+			t.Fatalf("State: got %q, want %q (high usage alone is not ill health; saturation cause removed from Decide)", verdict.State, StateHealthy)
+		}
+		if verdict.Attribution != Attribution("") {
+			t.Fatalf("Attribution: got %q, want empty (healthy carries no attribution)", verdict.Attribution)
+		}
+		if len(verdict.Causes) != 0 {
+			t.Fatalf("Causes length: got %d, want 0 (busy is not sick; no saturation cause on raw usage)", len(verdict.Causes))
+		}
+	})
+
+	// (2) Capped low-usage sample stays healthy: low usage was and remains
+	// healthy.
+	t.Run("capped low usage stays healthy", func(t *testing.T) {
+		quota := 2.0
+		st := &WindowState{}
+		sample := Sample{Timestamp: ts, UsageCores: 0.5, Quota: &quota}
+		verdict, _ := Decide(st, sample, defaultThresholds)
+
+		if verdict.State != StateHealthy {
+			t.Fatalf("State: got %q, want %q", verdict.State, StateHealthy)
+		}
+		if verdict.Attribution != Attribution("") {
+			t.Fatalf("Attribution: got %q, want empty", verdict.Attribution)
+		}
+		if len(verdict.Causes) != 0 {
+			t.Fatalf("Causes length: got %d, want 0", len(verdict.Causes))
 		}
 	})
 }

@@ -159,38 +159,17 @@ func (c *ContainerMonitorService) GetStatus(ctx context.Context) (*ServiceInfo, 
 	// Update last collected timestamp
 	c.lastCollectedAt = time.Now()
 
-	// Assess CPU health
-	// Check if CPU is already marked as degraded (e.g., due to throttling)
+	// Assess CPU health. CPUHealth/OverallHealth are Degraded ONLY when
+	// cpuStat.Health is already Degraded (i.e. throttling detected in
+	// getCPUMetrics). High usage alone is NOT ill health — a capped
+	// container pinned at its quota is busy, not sick — so raw-usage
+	// degradation is not applied here. Windowed saturation logic in
+	// cpuhealth.WindowState will reintroduce usage-based degradation
+	// later, gated on the dead-zone; until then the two fields stay
+	// consistent with cpuStat.Health.
 	if cpuStat.Health != nil && cpuStat.Health.Category == models.Degraded {
 		status.CPUHealth = models.Degraded
 		status.OverallHealth = models.Degraded
-	} else {
-		// Calculate CPU percentage against effective cores (cgroup limit if available)
-		//
-		// NOTE: CPU percentage is fundamentally misleading for understanding performance:
-		// 1. In containers, throttling matters more than usage percentage
-		// 2. CPU % doesn't scale linearly due to hyperthreading, turbo boost, etc.
-		// 3. Users need to know throttling status, not just usage
-		//
-		// See ENG-3423 for planned improvements to show mCPU instead of percentage
-		// See https://www.brendanlong.com/cpu-utilization-is-a-lie.html for why CPU % is misleading
-		//
-		// We maintain percentage calculation for API compatibility, but throttling
-		// detection (handled elsewhere) is the more important health signal.
-		effectiveCores := cpuStat.CgroupCores
-		if effectiveCores <= 0 {
-			// Fall back to host cores if cgroup info unavailable
-			effectiveCores = float64(cpuStat.CoreCount)
-		}
-
-		if effectiveCores > 0 {
-			cpuPercent := (cpuStat.TotalUsageMCpu / 1000.0) / effectiveCores * 100.0
-
-			if cpuPercent > constants.CPUHighThresholdPercent {
-				status.CPUHealth = models.Degraded
-				status.OverallHealth = models.Degraded
-			}
-		}
 	}
 
 	// Assess memory health
@@ -260,7 +239,7 @@ func (c *ContainerMonitorService) GetHealth(ctx context.Context) (*models.Health
 // By default, this retrieves host-level usage unless gopsutil is configured
 // to read from container cgroup data. See notes below for cgroup-limited usage.
 func (c *ContainerMonitorService) getCPUMetrics(ctx context.Context) (*models.CPU, error) {
-	usageMCores, coreCount, usagePercent, err := c.getRawCPUMetrics(ctx)
+	usageMCores, coreCount, _, err := c.getRawCPUMetrics(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -292,43 +271,17 @@ func (c *ContainerMonitorService) getCPUMetrics(ctx context.Context) (*models.CP
 		c.wasThrottled = isThrottled
 	}
 
-	// Route the usage verdict through cpuhealth.Decide. UsageCores is the
-	// cgroup sampler's container-relative usage. CgroupCores is pinned to 1.0
-	// here and Quota is left nil: wiring the real cpu.max quota as Quota (and
-	// dropping this 1.0 pin) is pending production tests.
-	//
-	// The 1.0 pin is a correct pass-through, not a distortion: getRawCPUMetrics
-	// pre-normalizes usagePercent by the real QuotaCores
-	// (usagePercent = usageCores/QuotaCores*100), so UsageCores passed to Decide
-	// is already usageCores/QuotaCores. Decide then computes fraction =
-	// (usageCores/QuotaCores)/1.0 = usageCores/QuotaCores — the correct
-	// quota-relative fraction. A 4-core quota at 0.7 real cores yields 0.175
-	// (healthy, not spuriously degraded); a 0.5-core quota at 0.4 real cores
-	// yields 0.8 (degraded, not silent). The pin's only effect is that Decide's
-	// fraction equals the already-computed quota-relative fraction.
-	usageSample := cpuhealth.Sample{
-		Timestamp:   time.Now(),
-		UsageCores:  usagePercent / 100.0,
-		CgroupCores: 1.0,
-	}
-	usageVerdict, _ := cpuhealth.Decide(
-		c.windowState,
-		usageSample,
-		cpuhealth.Thresholds{HighUsageFraction: constants.CPUHighThresholdPercent / 100.0},
-	)
-	usageDegraded := usageVerdict.State == cpuhealth.StateDegraded
-
-	switch {
-	case usageDegraded || isThrottled:
+	// CPU health here is driven by throttling alone: high usage alone is not
+	// ill health (a capped container pinned at its quota is busy, not sick),
+	// and raw-usage degradation is no longer applied in GetStatus either.
+	// cpuhealth.Decide is not called here because it returns StateHealthy for
+	// any sample until saturation logic is added. c.sampler is still live for
+	// usage reading in getRawCPUMetrics; only windowState is reserved for the
+	// future saturation
+	// wiring in cpuhealth.WindowState.
+	if isThrottled && cgroupInfo != nil {
 		category = models.Degraded
-
-		if isThrottled && cgroupInfo != nil {
-			message = fmt.Sprintf("CPU throttled (%.1f%% periods throttled)", cgroupInfo.ThrottleRatio*100)
-		} else {
-			message = "CPU utilization critical"
-		}
-	case usagePercent >= constants.CPUMediumThresholdPercent:
-		message = "CPU utilization warning"
+		message = fmt.Sprintf("CPU throttled (%.1f%% periods throttled)", cgroupInfo.ThrottleRatio*100)
 	}
 
 	cpuStat := &models.CPU{

@@ -29,8 +29,7 @@ const ContainerUpdateObservedStateTimeout = 10 * time.Millisecond
 
 // Health assessment thresholds.
 const (
-	CPUHighThresholdPercent   = 70.0 // Degraded if above this - lowered from 90% to prevent throttling
-	CPUMediumThresholdPercent = 60.0 // Warning level (but still Active)
+	CPUHighThresholdPercent = 70.0 // Degraded if above this - lowered from 90% to prevent throttling
 
 	MemoryHighThresholdPercent   = 80.0 // Degraded if above this - lowered from 90% for earlier detection
 	MemoryMediumThresholdPercent = 70.0 // Warning level (but still Active)
