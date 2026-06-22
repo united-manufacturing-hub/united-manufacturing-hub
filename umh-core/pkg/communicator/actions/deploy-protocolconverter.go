@@ -160,7 +160,7 @@ func (a *DeployProtocolConverterAction) Execute() (interface{}, map[string]inter
 
 	// Send confirmation that action is starting
 	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionConfirmed,
-		"Starting deployment of protocol converter: "+a.payload.Name, a.outboundChannel, models.DeployProtocolConverter)
+		"Starting deployment of Bridge: "+a.payload.Name, a.outboundChannel, models.DeployProtocolConverter)
 
 	// Create the protocol converter config with template and variables
 	pcConfig, err := a.createProtocolConverterConfig()
@@ -182,11 +182,11 @@ func (a *DeployProtocolConverterAction) Execute() (interface{}, map[string]inter
 	defer cancel()
 
 	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
-		"Adding protocol converter to configuration...", a.outboundChannel, models.DeployProtocolConverter)
+		"Adding Bridge to configuration...", a.outboundChannel, models.DeployProtocolConverter)
 
 	err = a.configManager.AtomicAddProtocolConverter(ctx, pcConfig)
 	if err != nil {
-		errorMsg := fmt.Sprintf("Failed to add protocol converter: %v", err)
+		errorMsg := fmt.Sprintf("Failed to add Bridge: %v", err)
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
 			errorMsg, a.outboundChannel, models.DeployProtocolConverter)
 		a.fsmLogger.SentryError(deps.FeatureDisableReadFlows, "", err, "deploy_protocol_converter_add_failed",
@@ -213,7 +213,7 @@ func (a *DeployProtocolConverterAction) Execute() (interface{}, map[string]inter
 		a.actionUUID,
 		models.ActionExecuting,
 		fmt.Sprintf(
-			"Waiting for protocol converter to be %s...",
+			"Waiting for Bridge to be %s...",
 			pcConfig.DesiredFSMState,
 		),
 		a.outboundChannel,
@@ -225,10 +225,12 @@ func (a *DeployProtocolConverterAction) Execute() (interface{}, map[string]inter
 		errCode, err := a.waitForComponentToAppear(pcConfig.DesiredFSMState)
 		if err != nil {
 			errorMsg := fmt.Sprintf(
-				"Failed to wait for protocol converter to reach state %s: %v",
+				"Failed to wait for Bridge to reach state %s: %v",
 				pcConfig.DesiredFSMState,
 				err,
 			)
+			// Config is kept (no rollback), so return the UUID. The frontend uses
+			// it to offer fixing the persisted bridge from the editing view.
 			SendActionReplyV2(
 				a.instanceUUID,
 				a.userEmail,
@@ -236,7 +238,7 @@ func (a *DeployProtocolConverterAction) Execute() (interface{}, map[string]inter
 				models.ActionFinishedWithFailure,
 				errorMsg,
 				errCode,
-				nil,
+				map[string]interface{}{"uuid": pcUUID.String()},
 				a.outboundChannel,
 				models.DeployProtocolConverter,
 				nil,
@@ -252,12 +254,12 @@ func (a *DeployProtocolConverterAction) Execute() (interface{}, map[string]inter
 	var successMsg string
 	if a.ignoreHealthCheck {
 		successMsg = fmt.Sprintf(
-			`Protocol converter deployed (health check skipped; state '%s' not verified)`,
+			`Bridge deployed (health check skipped; state '%s' not verified)`,
 			pcConfig.DesiredFSMState,
 		)
 	} else {
 		successMsg = fmt.Sprintf(
-			`Protocol converter was successfully deployed and reached the expected state '%s'`,
+			`Bridge was successfully deployed and reached the expected state '%s'`,
 			pcConfig.DesiredFSMState,
 		)
 	}
@@ -280,8 +282,7 @@ func (a *DeployProtocolConverterAction) createProtocolConverterConfig() (config.
 }
 
 // buildProtocolConverterConfig builds a ProtocolConverterConfig with templated
-// configuration from a parsed protocol converter payload. It is shared by the
-// deploy and save actions so both produce identical config from the same input.
+// configuration from a parsed protocol converter payload.
 func buildProtocolConverterConfig(payload models.ProtocolConverter) (config.ProtocolConverterConfig, error) {
 	userVars := buildUserScope(payload.TemplateInfo)
 	userVars["IP"] = payload.Connection.IP
@@ -369,32 +370,20 @@ func (a *DeployProtocolConverterAction) waitForComponentToAppear(desiredState st
 
 		select {
 		case <-timeout:
-			stateMessage := Label("deploy", a.payload.Name) + fmt.Sprintf("timeout reached. it did not become %s in time. removing", desiredState)
+			stateMessage := Label("deploy", a.payload.Name) + fmt.Sprintf("timeout reached. it did not become %s in time", desiredState)
 			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, stateMessage,
 				a.outboundChannel, models.DeployProtocolConverter)
 
-			ctx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
-			defer cancel()
-
-			err := a.configManager.AtomicDeleteProtocolConverter(ctx, dataflowcomponentserviceconfig.GenerateUUIDFromName(a.payload.Name))
-			if err != nil {
-				a.actionLogger.Errorf("failed to remove protocol converter %s: %v", a.payload.Name, err)
-				a.fsmLogger.SentryError(deps.FeatureDisableReadFlows, "", err, "deploy_protocol_converter_rollback_failed",
-					deps.String("name", a.payload.Name),
-					deps.String("desiredState", desiredState))
-
-				return models.ErrRetryRollbackTimeout, fmt.Errorf("protocol converter '%s' failed to reach state '%s' within timeout but could not be removed: %w. Please check system load and consider removing the component manually", a.payload.Name, desiredState, err)
-			}
-
-			// Build timeout error message with blocking reason if available
-			errorMsg := fmt.Sprintf("protocol converter '%s' was removed because it did not reach state '%s' within the timeout period", a.payload.Name, desiredState)
+			// Config is kept on failure so the user does not lose it; the bridge
+			// can be fixed from the editing view.
+			errorMsg := fmt.Sprintf("bridge '%s' did not reach state '%s' within the timeout period", a.payload.Name, desiredState)
 			if lastStatusReason != "" {
-				errorMsg = fmt.Sprintf("protocol converter '%s' was removed because: %s", a.payload.Name, lastStatusReason)
+				errorMsg = fmt.Sprintf("bridge '%s' did not become healthy: %s", a.payload.Name, lastStatusReason)
 			} else {
 				errorMsg += ". Please check system load or component configuration and try again"
 			}
 
-			a.fsmLogger.SentryWarn(deps.FeatureDisableReadFlows, "", "deploy_protocol_converter_rollback_on_timeout",
+			a.fsmLogger.SentryWarn(deps.FeatureDisableReadFlows, "", "deploy_protocol_converter_timeout",
 				deps.String("name", a.payload.Name),
 				deps.String("desiredState", desiredState),
 				deps.String("lastStatusReason", lastStatusReason))

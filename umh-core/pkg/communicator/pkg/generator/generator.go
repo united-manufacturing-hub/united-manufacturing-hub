@@ -287,7 +287,6 @@ func (s *StatusCollectorType) GenerateStatusMessage(ctx context.Context, isBoots
 					"action-get-metrics",
 					"action-delete-protocol-converter",
 					"action-edit-protocol-converter",
-					"action-save-protocol-converter",
 					"protocol-converter-range-template-mapping",
 					"protocol-converter-logs",
 					"protocol-converter-metrics",
