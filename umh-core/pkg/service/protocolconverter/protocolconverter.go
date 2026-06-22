@@ -466,8 +466,6 @@ func (p *ProtocolConverterService) AddToManager(
 		return errors.New("dataflowcomponent manager not initialized")
 	}
 
-	p.logger.Infof("Adding ProtocolConverter %s", protConvName)
-
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
@@ -482,6 +480,8 @@ func (p *ProtocolConverterService) AddToManager(
 			return ErrServiceAlreadyExists
 		}
 	}
+
+	p.logger.Infof("Adding ProtocolConverter %s", protConvName)
 
 	connServiceConfig := cfg.ConnectionServiceConfig
 	dfcReadServiceConfig := cfg.DataflowComponentReadServiceConfig
@@ -519,8 +519,8 @@ func (p *ProtocolConverterService) AddToManager(
 	p.dataflowComponentConfig = append(p.dataflowComponentConfig, dfcReadConfig, dfcWriteConfig)
 
 	p.logger.Infof("ProtocolConverter %s added to manager", protConvName)
-	p.logger.Infof("Connection config: %+v", p.connectionConfig)
-	p.logger.Infof("Dataflow component config: %+v", p.dataflowComponentConfig)
+	p.logger.Debugf("Connection config: %+v", p.connectionConfig)
+	p.logger.Debugf("Dataflow component config: %+v", p.dataflowComponentConfig)
 
 	return nil
 }
@@ -545,7 +545,7 @@ func (p *ProtocolConverterService) UpdateInManager(
 		return errors.New("config is nil")
 	}
 
-	p.logger.Infof("Updating protocolconverter %s", protConvName)
+	p.logger.Debugf("Updating protocolconverter %s", protConvName)
 
 	if ctx.Err() != nil {
 		return ctx.Err()
@@ -637,9 +637,9 @@ func (p *ProtocolConverterService) UpdateInManager(
 		}
 	}
 
-	p.logger.Info("Updated protocolconverter config in manager")
-	p.logger.Infof("Connection config: %+v", p.connectionConfig)
-	p.logger.Infof("Dataflow component config: %+v", p.dataflowComponentConfig)
+	p.logger.Debug("Updated protocolconverter config in manager")
+	p.logger.Debugf("Connection config: %+v", p.connectionConfig)
+	p.logger.Debugf("Dataflow component config: %+v", p.dataflowComponentConfig)
 
 	return nil
 }
@@ -658,7 +658,7 @@ func (p *ProtocolConverterService) RemoveFromManager(
 		return errors.New("dataflowcomponent manager not initialized")
 	}
 
-	p.logger.Infof("Removing dataflowcomponent %s", protConvName)
+	p.logger.Debugf("Removing dataflowcomponent %s", protConvName)
 
 	if ctx.Err() != nil {
 		return ctx.Err()
