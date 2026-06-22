@@ -38,6 +38,7 @@ func BoundDiff(diff string, capRunes int) string {
 	if diff == "" {
 		return EmptyDiffSentinel
 	}
+
 	if capRunes < 0 {
 		capRunes = 0
 	}
@@ -48,16 +49,21 @@ func BoundDiff(diff string, capRunes int) string {
 	}
 
 	var b strings.Builder
+
 	i := 0
 	for _, r := range diff {
 		if i >= capRunes {
 			break
 		}
+
 		b.WriteRune(r)
+
 		i++
 	}
+
 	b.WriteString(" …[truncated, ")
 	b.WriteString(strconv.Itoa(total))
 	b.WriteString(" chars total]")
+
 	return b.String()
 }
