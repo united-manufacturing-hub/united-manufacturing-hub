@@ -59,8 +59,6 @@ var _ = Describe("BoundDiff", func() {
 	})
 
 	It("treats capRunes of 0 as marker-only output", func() {
-		// Use a non-empty diff so the truncation path is taken; the empty-diff
-		// case is handled separately.
 		nonEmpty := "x"
 		Expect(BoundDiff(nonEmpty, 0)).To(Equal(" …[truncated, 1 chars total]"),
 			"capRunes 0 should yield marker-only output")
@@ -72,10 +70,10 @@ var _ = Describe("BoundDiff", func() {
 			"negative capRunes should be treated as 0 and yield marker-only output")
 	})
 
-	It("passes an empty diff through unchanged", func() {
-		// Empty diff is not special-cased: len([]rune("")) == 0 <= capRunes, so
-		// it is returned unchanged.
-		Expect(BoundDiff("", 400)).To(Equal(""),
-			"empty diff should pass through unchanged")
+	It("returns the empty-diff sentinel when diff is empty, regardless of capRunes", func() {
+		Expect(BoundDiff("", 400)).To(Equal(EmptyDiffSentinel),
+			"empty diff with capRunes=400 should return the sentinel")
+		Expect(BoundDiff("", 0)).To(Equal(EmptyDiffSentinel),
+			"empty diff with capRunes=0 should still return the sentinel, not the marker-only output")
 	})
 })
