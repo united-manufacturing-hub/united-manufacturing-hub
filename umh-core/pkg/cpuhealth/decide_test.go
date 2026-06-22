@@ -454,3 +454,327 @@ func TestDecide_HighUsageAloneIsHealthy(t *testing.T) {
 func floatEq(a, b float64) bool {
 	return math.Abs(a-b) < 1e-9
 }
+
+// TestDecide_ThrottleFlipLatch_WindowedSchmitt pins the windowed Schmitt
+// flip-latch throttle verdict in Decide. WindowState holds a 60s sample ring
+// and a dual-threshold flip-latch per signal. The sliding 60s window IS the
+// debounce (consecutive evaluations share ~60s of data, so the reduced value
+// moves slowly regardless of tick rate). The only extra mechanism is the
+// asymmetric (Schmitt) recover band: the throttle cause FIRES when the 60s
+// ratio rises above ThrottleHigh (0.05) and CLEARS only when it falls below
+// ThrottleRecover (0.03); between the two marks the latch holds its prior
+// state.
+//
+// The 60s ratio is the two-point counter delta (nr_throttled delta /
+// nr_periods delta, oldest-to-newest over the windowed ring). The window
+// prunes samples older than 60s; a sample exactly at the cutoff is kept
+// (Before(cutoff) is false).
+//
+// One linear scenario walks the flip-latch through every state:
+//
+//  1. TRANSIENT — a single spiked sample whose 60s cumulative ratio stays
+//     below 0.05 does NOT fire the latch (the window absorbs it): healthy,
+//     Signals.ThrottleFired false, no causes.
+//  2. FIRE — a second spike pushes the 60s ratio above 0.05 → latch fires:
+//     {degraded, unknown, [throttling]} with Cause Value = the 60s ratio,
+//     Signals.ThrottleFired true.
+//  3. HOLD (Schmitt) — calm samples bring the 60s ratio down to 0.045
+//     (between the 0.03 recover and 0.05 high marks) → latch stays fired:
+//     still degraded.
+//  4. CLEAR — further calm samples drop the 60s ratio below 0.03 → latch
+//     clears: healthy, Signals.ThrottleFired false, no causes.
+//
+// Steal/pressure/host-contention/saturation are later rungs and are not
+// exercised here; the Sample carries only throttle counters at this rung.
+func TestDecide_ThrottleFlipLatch_WindowedSchmitt(t *testing.T) {
+	// 10s tick; 60s window holds ~7 samples. cutoff = now - 60s; a sample
+	// exactly at cutoff is kept (Before(cutoff) is false).
+	base := time.Date(2026, 6, 22, 12, 0, 0, 0, time.UTC)
+	thresholds := DefaultThresholds()
+	st := &WindowState{}
+
+	type tick struct {
+		dt  time.Duration
+		nrP int64
+		nrT int64
+	}
+
+	// decide feeds one timestamped throttle sample into WindowState via Decide
+	// and returns the resulting verdict + signals. Decide mutates st in place
+	// (appends to the throttle ring, updates the flip-latch), so the sequence
+	// is stateful across calls — exactly the caller-held-state contract.
+	decide := func(tk tick) (Verdict, Signals) {
+		return Decide(st, Sample{
+			Timestamp:   base.Add(tk.dt),
+			NrPeriods:   tk.nrP,
+			NrThrottled: tk.nrT,
+		}, thresholds)
+	}
+
+	// (1) TRANSIENT — six calm ticks at ~0.01 instantaneous ratio, then one
+	// spike (+200 throttled in a single tick). The 60s cumulative ratio at
+	// t=60s is 250/6000 = 0.0417, below the 0.05 high mark, so the latch must
+	// NOT fire: the window absorbs the transient spike.
+	for _, tk := range []tick{
+		{0, 0, 0},
+		{10 * time.Second, 1000, 10},
+		{20 * time.Second, 2000, 20},
+		{30 * time.Second, 3000, 30},
+		{40 * time.Second, 4000, 40},
+		{50 * time.Second, 5000, 50},
+	} {
+		decide(tk)
+	}
+	v1, sig1 := decide(tick{60 * time.Second, 6000, 250})
+	if v1.State != StateHealthy {
+		t.Fatalf("transient State: got %q, want %q (60s ratio 0.0417 < 0.05; window absorbs the spike)", v1.State, StateHealthy)
+	}
+	if sig1.ThrottleFired {
+		t.Fatalf("transient ThrottleFired: got true, want false (latch must not fire on a transient breach the window absorbs)")
+	}
+	if len(v1.Causes) != 0 {
+		t.Fatalf("transient Causes length: got %d, want 0", len(v1.Causes))
+	}
+
+	// (2) FIRE — a second spike (+220 throttled this tick). The 60s cumulative
+	// ratio at t=70s is (470-10)/(7000-1000) = 460/6000 = 0.0767, above the
+	// 0.05 high mark, so the latch fires: degraded, unknown attribution, a
+	// single throttling cause whose Value is the 60s ratio.
+	v2, sig2 := decide(tick{70 * time.Second, 7000, 470})
+	if v2.State != StateDegraded {
+		t.Fatalf("fire State: got %q, want %q (60s ratio 0.0767 > 0.05 high mark)", v2.State, StateDegraded)
+	}
+	if v2.Attribution != AttributionUnknown {
+		t.Fatalf("fire Attribution: got %q, want %q", v2.Attribution, AttributionUnknown)
+	}
+	if !sig2.ThrottleFired {
+		t.Fatalf("fire ThrottleFired: got false, want true (latch fires above the high mark)")
+	}
+	if len(v2.Causes) != 1 {
+		t.Fatalf("fire Causes length: got %d, want 1 (single throttling cause)", len(v2.Causes))
+	}
+	if v2.Causes[0].Kind != CauseKindThrottling {
+		t.Fatalf("fire Cause Kind: got %q, want %q", v2.Causes[0].Kind, CauseKindThrottling)
+	}
+	wantRatio := 460.0 / 6000.0
+	if !floatEq(v2.Causes[0].Value, wantRatio) {
+		t.Fatalf("fire Cause Value: got %v, want %v (the 60s windowed ratio)", v2.Causes[0].Value, wantRatio)
+	}
+
+	// (3) HOLD (Schmitt) — calm ticks (+10 throttled each) until the spiked
+	// samples age partway out and the 60s cumulative ratio drops to 0.045,
+	// between the 0.03 recover and 0.05 high marks. The latch must hold its
+	// fired state: a ratio in the band does NOT clear it.
+	for _, tk := range []tick{
+		{80 * time.Second, 8000, 480},
+		{90 * time.Second, 9000, 490},
+		{100 * time.Second, 10000, 500},
+		{110 * time.Second, 11000, 510},
+	} {
+		decide(tk)
+	}
+	// At t=120s: cutoff=t=60s; window = t=60..t=120. Oldest=t=60 (6000,250),
+	// newest=t=120 (12000,520). Delta = (520-250)/(12000-6000) = 270/6000 =
+	// 0.045 — in the Schmitt band.
+	v3, sig3 := decide(tick{120 * time.Second, 12000, 520})
+	if v3.State != StateDegraded {
+		t.Fatalf("hold State: got %q, want %q (60s ratio 0.045 is in the Schmitt band; latch holds fired)", v3.State, StateDegraded)
+	}
+	if !sig3.ThrottleFired {
+		t.Fatalf("hold ThrottleFired: got false, want true (latch holds in the band; only drops below ThrottleRecover clears)")
+	}
+	if len(v3.Causes) != 1 || v3.Causes[0].Kind != CauseKindThrottling {
+		t.Fatalf("hold Causes: got %+v, want one throttling cause", v3.Causes)
+	}
+
+	// (4) CLEAR — one more calm tick. At t=130s: cutoff=t=70s; window =
+	// t=70..t=130. Oldest=t=70 (7000,470), newest=t=130 (13000,530). Delta =
+	// (530-470)/(13000-7000) = 60/6000 = 0.01, below the 0.03 recover mark, so
+	// the latch clears: healthy, ThrottleFired false, no causes.
+	v4, sig4 := decide(tick{130 * time.Second, 13000, 530})
+	if v4.State != StateHealthy {
+		t.Fatalf("clear State: got %q, want %q (60s ratio 0.01 < 0.03 recover mark; latch clears)", v4.State, StateHealthy)
+	}
+	if sig4.ThrottleFired {
+		t.Fatalf("clear ThrottleFired: got true, want false (latch clears below the recover mark)")
+	}
+	if len(v4.Causes) != 0 {
+		t.Fatalf("clear Causes length: got %d, want 0", len(v4.Causes))
+	}
+}
+
+// TestDecide_ThrottleFlipLatch_CounterReset pins the counter-reset behavior.
+// When a cgroup is recreated mid-incident (container restart), the
+// nr_throttled and/or nr_periods counters drop. Decide clears the ring before
+// appending when either counter regresses below the ring's newest entry
+// (mirroring production container_monitor.updateThrottleWindow), so the
+// reset sample becomes a fresh baseline: the ring holds a single point,
+// throttleRatio returns 0 (len < 2), and 0 < ThrottleRecover clears the latch.
+// In both scenarios no negative Cause Value is emitted.
+func TestDecide_ThrottleFlipLatch_CounterReset(t *testing.T) {
+	base := time.Date(2026, 6, 22, 12, 0, 0, 0, time.UTC)
+	thresholds := DefaultThresholds()
+
+	// Scenario A: both-counter reset (periods <= 0). The ring's oldest point
+	// has high counters; the newest has lower counters on both fields (cgroup
+	// recreated). The periods guard catches this: periods = newest.nrPeriods -
+	// oldest.nrPeriods < 0 → return 0. Without the guard, the double-negative
+	// (negative nrThrottled delta / negative period delta) would yield a
+	// spurious positive ratio that keeps the latch fired.
+	t.Run("both-counter reset clears latch with no negative Cause Value", func(t *testing.T) {
+		st := &WindowState{}
+		// Fire the latch: t=0 (1000, 100), t=10s (2000, 200) → ratio 0.1 > 0.05.
+		Decide(st, Sample{Timestamp: base, NrPeriods: 1000, NrThrottled: 100}, thresholds)
+		v1, sig1 := Decide(st, Sample{Timestamp: base.Add(10 * time.Second), NrPeriods: 2000, NrThrottled: 200}, thresholds)
+		if v1.State != StateDegraded || !sig1.ThrottleFired {
+			t.Fatalf("fire: state=%q fired=%v, want degraded/fired", v1.State, sig1.ThrottleFired)
+		}
+		// Both-counter reset: nrPeriods 2000→50, nrThrottled 200→5. The ring is
+		// cleared (50 < 2000 nrPeriods regresses), the reset sample becomes the
+		// sole ring entry, throttleRatio returns 0 (len < 2), and 0 <
+		// ThrottleRecover clears the latch. No stale pre-reset oldest remains.
+		v2, sig2 := Decide(st, Sample{Timestamp: base.Add(20 * time.Second), NrPeriods: 50, NrThrottled: 5}, thresholds)
+		if sig2.ThrottleFired {
+			t.Fatalf("both-counter reset ThrottleFired: got true, want false (periods < 0 → ratio 0 < ThrottleRecover → latch clears)")
+		}
+		if v2.State != StateHealthy {
+			t.Fatalf("both-counter reset State: got %q, want %q", v2.State, StateHealthy)
+		}
+		if len(v2.Causes) != 0 {
+			t.Fatalf("both-counter reset Causes length: got %d, want 0 (no negative Cause Value)", len(v2.Causes))
+		}
+	})
+
+	// Scenario B: nrThrottled-only reset (periods > 0, nrThrottled regresses).
+	// nrPeriods keeps growing but nrThrottled drops below the ring's newest
+	// value. Decide's clear-on-regression catches the nrThrottled regression
+	// (10 < 200) and clears the ring, so the reset sample becomes the sole ring
+	// entry, throttleRatio returns 0 (len < 2), and the latch clears with no
+	// negative Cause Value. Without the clear, the stale oldest (1000, 100)
+	// would remain and yield a negative ratio (10-100)/1100 = -0.0818.
+	t.Run("nrThrottled-only reset clears latch with no negative Cause Value", func(t *testing.T) {
+		st := &WindowState{}
+		// Fire the latch: t=0 (1000, 100), t=10s (2000, 200) → ratio 0.1 > 0.05.
+		Decide(st, Sample{Timestamp: base, NrPeriods: 1000, NrThrottled: 100}, thresholds)
+		v1, sig1 := Decide(st, Sample{Timestamp: base.Add(10 * time.Second), NrPeriods: 2000, NrThrottled: 200}, thresholds)
+		if v1.State != StateDegraded || !sig1.ThrottleFired {
+			t.Fatalf("fire: state=%q fired=%v, want degraded/fired", v1.State, sig1.ThrottleFired)
+		}
+		// nrThrottled-only reset: nrPeriods grows (2000→2100, periods > 0) but
+		// nrThrottled drops below the ring's newest 200 (2100, 10). The
+		// clear-on-regression fires (10 < 200), the ring is reset to the single
+		// new sample, throttleRatio returns 0, and the latch clears.
+		v2, sig2 := Decide(st, Sample{Timestamp: base.Add(20 * time.Second), NrPeriods: 2100, NrThrottled: 10}, thresholds)
+		if sig2.ThrottleFired {
+			t.Fatalf("nrThrottled-only reset ThrottleFired: got true, want false (negative ratio < ThrottleRecover → latch clears)")
+		}
+		if v2.State != StateHealthy {
+			t.Fatalf("nrThrottled-only reset State: got %q, want %q", v2.State, StateHealthy)
+		}
+		if len(v2.Causes) != 0 {
+			t.Fatalf("nrThrottled-only reset Causes length: got %d, want 0 (no negative Cause Value)", len(v2.Causes))
+		}
+	})
+}
+
+// TestDecide_ThrottleFlipLatch_CounterResetClearsRing is the RED test for the
+// clear-on-regression-before-append fix. The bug: Decide appended to the ring
+// before checking for counter regression and did NOT clear the ring when
+// counters regressed (a cgroup recreation / pod reschedule), diverging from
+// production container_monitor.updateThrottleWindow. After a counter reset,
+// the stale pre-reset oldest point stayed in the ring: nr_periods delta =
+// newest - oldest stayed <= 0 → throttleRatio returned 0 → latch forced CLEAR
+// (a blind spot), and once fresh counters regrew past the stale oldest the
+// denominator was inflated by pre-reset periods → ratio understated → throttle
+// silently missed during the cgroup cold-start window where throttling is most
+// likely. The fix clears the ring BEFORE appending when either counter
+// regresses below the ring's newest entry, turning the 60s blind spot into a
+// ~1-tick blind spot (the next fresh sample pair rebuilds the delta).
+//
+// Sequence (10s ticks, 60s window):
+//
+//  1. BUILD + FIRE — two large-counter samples whose 60s ratio is 0.1 > 0.05
+//     → latch fires.
+//  2. RESET — a sample whose NrPeriods and NrThrottled drop far below the
+//     ring's newest (cgroup recreated). The ring is cleared; the reset sample
+//     is the sole entry → ratio 0 → latch clears. The stale pre-reset oldest
+//     (nrPeriods 100000) does NOT stay in the ring.
+//  3. FRESH THROTTLE — one fresh post-reset sample pair at a 0.1 instantaneous
+//     ratio. With the fix, the ring holds only post-reset points, so the 60s
+//     ratio is 0.1 > 0.05 and the latch FIRES promptly. Without the fix, the
+//     stale pre-reset oldest (nrPeriods 100000) remains, nr_periods delta is
+//     -98990 <= 0, throttleRatio returns 0, and the latch STAYS CLEAR —
+//     throttle silently missed.
+//
+// Without the clear-on-regression fix, step 3 fails: the latch is clear where
+// it should be fired, and the ring still contains the stale pre-reset entry.
+func TestDecide_ThrottleFlipLatch_CounterResetClearsRing(t *testing.T) {
+	base := time.Date(2026, 6, 22, 12, 0, 0, 0, time.UTC)
+	thresholds := DefaultThresholds()
+	st := &WindowState{}
+
+	type tick struct {
+		dt  time.Duration
+		nrP int64
+		nrT int64
+	}
+
+	decide := func(tk tick) (Verdict, Signals) {
+		return Decide(st, Sample{
+			Timestamp:   base.Add(tk.dt),
+			NrPeriods:   tk.nrP,
+			NrThrottled: tk.nrT,
+		}, thresholds)
+	}
+
+	// (1) BUILD + FIRE — large pre-reset counters. t=0 (100000, 5000),
+	// t=10s (110000, 6000). 60s ratio = (6000-5000)/(110000-100000) =
+	// 1000/10000 = 0.1 > 0.05 → latch fires.
+	decide(tick{0, 100000, 5000})
+	v1, sig1 := decide(tick{10 * time.Second, 110000, 6000})
+	if v1.State != StateDegraded || !sig1.ThrottleFired {
+		t.Fatalf("fire: state=%q fired=%v, want degraded/fired (60s ratio 0.1 > 0.05)", v1.State, sig1.ThrottleFired)
+	}
+
+	// (2) RESET — cgroup recreated: NrPeriods 110000→10, NrThrottled 6000→1.
+	// The clear-on-regression fires (10 < 110000), the ring is reset to the
+	// sole new sample, throttleRatio returns 0 (len < 2), 0 < ThrottleRecover
+	// clears the latch. The stale pre-reset oldest (nrPeriods 100000) must NOT
+	// remain in the ring.
+	v2, sig2 := decide(tick{20 * time.Second, 10, 1})
+	if sig2.ThrottleFired {
+		t.Fatalf("reset ThrottleFired: got true, want false (ring cleared → ratio 0 < ThrottleRecover → latch clears)")
+	}
+	if v2.State != StateHealthy {
+		t.Fatalf("reset State: got %q, want %q", v2.State, StateHealthy)
+	}
+	if len(st.throttleRing) != 1 {
+		t.Fatalf("reset ring length: got %d, want 1 (stale pre-reset entries cleared; only the fresh reset sample remains)", len(st.throttleRing))
+	}
+	if got := st.throttleRing[0].nrPeriods; got != 10 {
+		t.Fatalf("reset ring oldest nrPeriods: got %d, want 10 (the fresh reset value, NOT the stale pre-reset 100000)", got)
+	}
+
+	// (3) FRESH THROTTLE — one fresh post-reset sample. t=30s (1010, 101):
+	// +1000 periods, +100 throttled over the reset baseline (10, 1). With the
+	// fix the ring holds only post-reset points: 60s ratio = (101-1)/(1010-10)
+	// = 100/1000 = 0.1 > 0.05 → latch FIRES promptly (one tick after reset).
+	// Without the fix the stale pre-reset oldest (nrPeriods 100000) remains,
+	// periods delta = 1010-100000 = -98990 <= 0, throttleRatio returns 0, and
+	// the latch STAYS CLEAR — throttle silently missed during the cold-start
+	// window.
+	v3, sig3 := decide(tick{30 * time.Second, 1010, 101})
+	if !sig3.ThrottleFired {
+		t.Fatalf("fresh-throttle ThrottleFired: got false, want true (ring cleared on reset → fresh 60s ratio 0.1 > 0.05 → latch fires promptly; without the fix the stale oldest keeps periods delta <= 0 and the latch stays clear)")
+	}
+	if v3.State != StateDegraded {
+		t.Fatalf("fresh-throttle State: got %q, want %q (fresh 60s ratio 0.1 > 0.05)", v3.State, StateDegraded)
+	}
+	if len(v3.Causes) != 1 || v3.Causes[0].Kind != CauseKindThrottling {
+		t.Fatalf("fresh-throttle Causes: got %+v, want one throttling cause", v3.Causes)
+	}
+	wantRatio := 100.0 / 1000.0
+	if !floatEq(v3.Causes[0].Value, wantRatio) {
+		t.Fatalf("fresh-throttle Cause Value: got %v, want %v (fresh post-reset 60s ratio, not an understated ratio inflated by pre-reset periods)", v3.Causes[0].Value, wantRatio)
+	}
+}
