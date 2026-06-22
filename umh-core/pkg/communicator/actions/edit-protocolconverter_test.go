@@ -1787,7 +1787,7 @@ var _ = Describe("EditProtocolConverter", func() {
 
 				final := finalFailureReply()
 				Expect(final.errorCode).To(Equal(models.ErrConfigFileInvalid))
-				Expect(final.message).To(ContainSubstring("Bridge '" + pcName + "'"))
+				Expect(final.message).To(ContainSubstring("bridge '" + pcName + "'"))
 				Expect(final.message).To(ContainSubstring("was restored to its previous working configuration"))
 				Expect(final.message).To(ContainSubstring("read flow config isn't valid YAML"))
 				Expect(final.message).To(ContainSubstring("Fix the highlighted line and try again"))
@@ -1921,7 +1921,7 @@ var _ = Describe("EditProtocolConverter", func() {
 
 				final := finalFailureReply()
 				Expect(final.errorCode).To(Equal(models.ErrRetryRollbackTimeout))
-				Expect(final.message).To(ContainSubstring("Bridge '" + pcName + "'"))
+				Expect(final.message).To(ContainSubstring("bridge '" + pcName + "'"))
 				Expect(final.message).To(ContainSubstring("couldn't be updated"))
 				Expect(final.message).To(ContainSubstring("automatic rollback also failed"))
 				Expect(final.message).To(ContainSubstring("may need manual recovery"))
@@ -2266,7 +2266,7 @@ var _ = Describe("EditProtocolConverter", func() {
 
 				final := finalFailureReply()
 				Expect(final.errorCode).To(Equal(models.ErrConfigFileInvalid))
-				Expect(final.message).To(ContainSubstring("Bridge '" + pcName + "'"))
+				Expect(final.message).To(ContainSubstring("bridge '" + pcName + "'"))
 				Expect(final.message).To(ContainSubstring("was restored to its previous working configuration"))
 				Expect(final.message).To(ContainSubstring("read flow config isn't valid YAML"))
 				Expect(final.message).To(ContainSubstring("Fix the highlighted line and try again"))

@@ -770,7 +770,7 @@ func (a *EditProtocolConverterAction) awaitRollout(pcConfig config.ProtocolConve
 								flowName := a.lastFailedDFCType.flowName()
 								detail := renderErrUserDetail(renderErr)
 								return models.ErrRetryRollbackTimeout, fmt.Errorf(
-									"Bridge '%s' couldn't be updated and the automatic rollback also failed, so it may need manual recovery. The new %s isn't valid YAML. Fix the highlighted line and try again.\n\n%s",
+									"bridge '%s' couldn't be updated and the automatic rollback also failed, so it may need manual recovery. The new %s isn't valid YAML. Fix the highlighted line and try again.\n\n%s",
 									a.name, flowName, detail,
 								)
 							}
@@ -785,7 +785,7 @@ func (a *EditProtocolConverterAction) awaitRollout(pcConfig config.ProtocolConve
 							flowName := a.lastFailedDFCType.flowName()
 							detail := renderErrUserDetail(renderErr)
 							return models.ErrConfigFileInvalid, fmt.Errorf(
-								"Bridge '%s' was restored to its previous working configuration because the new %s isn't valid YAML. Fix the highlighted line and try again.\n\n%s",
+								"bridge '%s' was restored to its previous working configuration because the new %s isn't valid YAML. Fix the highlighted line and try again.\n\n%s",
 								a.name, flowName, detail,
 							)
 						}
