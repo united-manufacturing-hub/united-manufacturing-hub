@@ -377,7 +377,7 @@ func (a *DeployProtocolConverterAction) waitForComponentToAppear(desiredState st
 			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, stateMessage,
 				a.outboundChannel, models.DeployProtocolConverter)
 
-			// Config is kept on failure so the user does not lose it; the bridge
+			// Config is kept on failure so the user does not lose it. The bridge
 			// can be fixed from the editing view.
 			errorMsg := fmt.Sprintf("bridge '%s' did not reach state '%s' within the timeout period", a.payload.Name, desiredState)
 			if lastStatusReason != "" {
@@ -391,7 +391,7 @@ func (a *DeployProtocolConverterAction) waitForComponentToAppear(desiredState st
 				deps.String("desiredState", desiredState),
 				deps.String("lastStatusReason", lastStatusReason))
 
-			return models.ErrRetryRollbackTimeout, fmt.Errorf("%s", errorMsg)
+			return models.ErrDeployTimeout, fmt.Errorf("%s", errorMsg)
 
 		case <-ticker.C:
 			// the snapshot manager holds the latest system snapshot which is asynchronously updated by the other goroutines

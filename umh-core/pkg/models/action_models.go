@@ -771,6 +771,11 @@ const (
 	// ErrRetryRollbackTimeout is the error code for a timeout during the dfc deployment.
 	// It is retryable because the timeout might be caused by a busy system.
 	ErrRetryRollbackTimeout = "ERR_RETRY_ROLLBACK_TIMEOUT"
+	// ErrDeployTimeout is the error code for a deploy that did not reach its
+	// desired state in time. The config is kept (no rollback) and it is not
+	// retryable because re-deploying the persisted bridge would conflict. The
+	// user recovers via the editing view.
+	ErrDeployTimeout = "ERR_DEPLOY_TIMEOUT"
 	// ErrConfigFileInvalid is sent when the deployment of a dfc fails because the config file is invalid.
 	ErrConfigFileInvalid = "ERR_CONFIG_FILE_INVALID"
 	// ErrRetryConfigWriteFailed is the error code for a config file write failure.
