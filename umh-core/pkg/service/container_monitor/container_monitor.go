@@ -30,6 +30,7 @@ import (
 	"github.com/shirou/gopsutil/v4/disk"
 	"github.com/shirou/gopsutil/v4/mem"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cpuhealth"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
@@ -77,6 +78,7 @@ type ContainerMonitorService struct {
 	dataPath          string                       // Path to check for disk metrics and HWID file
 	throttleSnapshots []cgroupSnapshot             // Sliding window of cgroup counter snapshots
 	wasThrottled      bool                         // Previous throttle state for transition logging
+	windowState       *cpuhealth.WindowState       // Caller-held CPU-health verdict state (filled from rung 4)
 }
 
 // NewContainerMonitorService creates a new container monitor service instance.
@@ -93,6 +95,7 @@ func NewContainerMonitorServiceWithPath(fs filesystem.Service, dataPath string) 
 		logger:       log,
 		instanceName: constants.CoreInstanceName, // Single container instance name
 		dataPath:     dataPath,
+		windowState:  &cpuhealth.WindowState{},
 	}
 }
 
@@ -288,8 +291,25 @@ func (c *ContainerMonitorService) getCPUMetrics(ctx context.Context) (*models.CP
 		c.wasThrottled = isThrottled
 	}
 
+	// Route the usage verdict through cpuhealth.Decide (the seam this rung opens).
+	// The sample reproduces today's host-derived usage fraction —
+	// UsageCores/CgroupCores == usagePercent/100 — so Decide degrades iff
+	// usagePercent >= CPUHighThresholdPercent, preserving behavior. Rung 1 flips
+	// the sampler to cgroup-relative usage_usec; until then the host numerator stays.
+	usageSample := cpuhealth.Sample{
+		Timestamp:   time.Now(),
+		UsageCores:  usagePercent / 100.0,
+		CgroupCores: 1.0,
+	}
+	usageVerdict, _ := cpuhealth.Decide(
+		c.windowState,
+		usageSample,
+		cpuhealth.Thresholds{HighUsageFraction: constants.CPUHighThresholdPercent / 100.0},
+	)
+	usageDegraded := usageVerdict.State == cpuhealth.StateDegraded
+
 	switch {
-	case usagePercent >= constants.CPUHighThresholdPercent || isThrottled:
+	case usageDegraded || isThrottled:
 		category = models.Degraded
 
 		if isThrottled && cgroupInfo != nil {
