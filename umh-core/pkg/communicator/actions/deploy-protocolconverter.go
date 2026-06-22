@@ -207,7 +207,7 @@ func (a *DeployProtocolConverterAction) Execute() (interface{}, map[string]inter
 		// ReadDFC, WriteDFC, and TemplateInfo are nil as they will be added later
 	}
 
-	SendActionReply(
+	SendActionReplyV2(
 		a.instanceUUID,
 		a.userEmail,
 		a.actionUUID,
@@ -216,8 +216,11 @@ func (a *DeployProtocolConverterAction) Execute() (interface{}, map[string]inter
 			"Waiting for Bridge to be %s...",
 			pcConfig.DesiredFSMState,
 		),
+		"",
+		map[string]interface{}{"uuid": pcUUID.String()},
 		a.outboundChannel,
 		models.DeployProtocolConverter,
+		nil,
 	)
 
 	// check against observedState
