@@ -363,6 +363,10 @@ func (p *ProtocolConverterInstance) UpdateObservedStateOfInstance(ctx context.Co
 			p.ObservedState.ConfigDivergence = protocolconverterserviceconfig.BoundDiff(diffStr, constants.ProtocolConverterConfigDivergenceCapRunes)
 			p.baseFSMInstance.GetLogger().Debugf("Configuration differences: %s", diffStr)
 
+			if snapshot.Tick%constants.ProtocolConverterDivergenceWarnIntervalTicks == 0 {
+				p.baseFSMInstance.GetLogger().Warnf("re-applying config: bridge %s config diverged: %s", p.baseFSMInstance.GetID(), p.ObservedState.ConfigDivergence)
+			}
+
 			// Update the config in the Benthos manager
 			err := p.service.UpdateInManager(ctx, services.GetFileSystem(), &p.runtimeConfig, p.baseFSMInstance.GetID(), p.debugLevel)
 			if err != nil {
