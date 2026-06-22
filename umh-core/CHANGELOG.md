@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### Improvements
+
+- When a bridge, flow, or stream processor config fails to render because the result is invalid YAML, the error now includes the failing lines of the rendered output. Previously the error named only a line number (for example `yaml: line 25: did not find expected key`) while the rendered output was discarded, so the failure could not be diagnosed from logs
+- Editing a bridge whose new configuration keeps failing to render now fails after three identical render failures (a few seconds) and rolls back to the previous configuration automatically, naming the render failure as the root cause; while the edit is still retrying, each progress update also names the render failure. Previously such an edit retried for the full 30-second timeout before rolling back, and progress updates gave no reason
+
+![Bridge update failed dialog showing the failing region of the rendered config and the automatic rollback message](./changelog-images/2026-06-19-bridge-render-error.png)
+
 ## [0.44.24]
 
 ### Fixes
