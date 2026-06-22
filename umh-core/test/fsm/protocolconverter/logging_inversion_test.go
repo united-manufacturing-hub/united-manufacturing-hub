@@ -582,3 +582,188 @@ var _ = Describe("Heartbeat WARN on the PC divergence branch", func() {
 			"the heartbeat WARN must carry the bounded ConfigDivergence text")
 	})
 })
+
+var _ = Describe("Capstone: full Reconcile lifecycle under sustained divergence", func() {
+	var (
+		instance       *protocolconverterfsm.ProtocolConverterInstance
+		mockService    *protocolconvertersvc.MockProtocolConverterService
+		componentName  string
+		ctx            context.Context
+		mockRegistry   *serviceregistry.Registry
+		startTime      time.Time
+		logs           *observer.ObservedLogs
+		restoreGlobals func()
+	)
+
+	BeforeEach(func() {
+		componentName = "test-pc-capstone"
+		ctx = context.Background()
+		startTime = time.Now()
+
+		_ = logger.For("capstone-warmup")
+
+		core, obs := observer.New(zapcore.DebugLevel)
+		restoreGlobals = zap.ReplaceGlobals(zap.New(core))
+		logs = obs
+
+		instance, mockService, _ = fsmtest.SetupProtocolConverterInstance(componentName, protocolconverterfsm.OperationalStateStopped)
+		mockRegistry = serviceregistry.NewMockRegistry()
+	})
+
+	AfterEach(func() {
+		restoreGlobals()
+	})
+
+	snapshotFor := func(t uint64) fsm.SystemSnapshot {
+		return fsm.SystemSnapshot{
+			Tick:         t,
+			SnapshotTime: startTime.Add(time.Duration(t) * constants.DefaultTickerTime),
+			CurrentConfig: config.FullConfig{
+				Agent: config.AgentConfig{
+					Location: map[int]string{},
+				},
+			},
+		}
+	}
+
+	It("drives a bridge through sustained divergence, two deadline-injection points, convergence, and diverge-into-removal, asserting end-of-tick StatusReason, WARN count, and removal boundedness", func() {
+		var err error
+		var tick uint64
+
+		tick, err = fsmtest.TestProtocolConverterStateTransition(
+			ctx, instance, mockService, mockRegistry, componentName,
+			internalfsm.LifecycleStateToBeCreated,
+			internalfsm.LifecycleStateCreating, 5, tick, startTime)
+		Expect(err).NotTo(HaveOccurred())
+
+		mockService.ExistingComponents[componentName] = true
+		fsmtest.TransitionToProtocolConverterState(mockService, componentName, protocolconverterfsm.OperationalStateStopped)
+
+		tick, err = fsmtest.TestProtocolConverterStateTransition(
+			ctx, instance, mockService, mockRegistry, componentName,
+			internalfsm.LifecycleStateCreating,
+			protocolconverterfsm.OperationalStateStopped, 5, tick, startTime)
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(instance.SetDesiredFSMState(protocolconverterfsm.OperationalStateActive)).To(Succeed())
+		mockService.ServiceExistsResult = true
+
+		cfg := instance.GetConfig()
+		rendered, err := runtime_config.BuildRuntimeConfig(
+			cfg,
+			map[string]string{},
+			nil,
+			runtime_config.BridgedByPlaceholder,
+			componentName,
+		)
+		Expect(err).NotTo(HaveOccurred())
+
+		divergent := rendered
+		largeInput := make(map[string]any, 50)
+		longValue := strings.Repeat("x", 30)
+		for i := 0; i < 50; i++ {
+			largeInput[fmt.Sprintf("input_key_%02d", i)] = map[string]any{
+				"value":   longValue,
+				"mapping": `root = {"message":"diverged"}`,
+			}
+		}
+		divergent.DataflowComponentReadServiceConfig.BenthosConfig.Input = largeInput
+
+		mockService.GetConfigResult = divergent
+
+		// --- Sustained divergence loop (ticks 1..1300) with two deadline
+		// injections at distinct points in UpdateObservedStateOfInstance. ---
+		for t := uint64(1); t <= 1300; t++ {
+			switch t {
+			case 250:
+				mockService.StatusError = context.DeadlineExceeded
+			case 850:
+				mockService.GetConfigError = context.DeadlineExceeded
+			case 251:
+				mockService.StatusError = nil
+			case 851:
+				mockService.GetConfigError = nil
+			}
+
+			reasonBefore := instance.ObservedState.ServiceInfo.StatusReason
+			rErr, _ := instance.Reconcile(ctx, snapshotFor(t), mockRegistry)
+			_ = rErr
+
+			switch t {
+			case 250:
+				// EDGE 11b-iii: deadline BEFORE the ServiceInfo store —
+				// composition did not run, StatusReason retains the previous
+				// tick's composed value (pre-existing staleness, no compounding).
+				Expect(instance.ObservedState.ServiceInfo.StatusReason).To(Equal(reasonBefore),
+					"tick 250 (11b-iii): pre-store deadline must preserve the previous tick's StatusReason")
+				Expect(strings.Count(instance.ObservedState.ServiceInfo.StatusReason, "re-applying config")).To(BeNumerically("<=", 1),
+					"tick 250 (11b-iii): no compounding — composition did not run")
+			case 850:
+				// EDGE 11b-ii: deadline AFTER the ServiceInfo store —
+				// ServiceInfo was refreshed to a fresh suffix-free Status()
+				// reason, composition did not run.
+				Expect(instance.ObservedState.ServiceInfo.StatusReason).NotTo(ContainSubstring("re-applying config"),
+					"tick 850 (11b-ii): post-store deadline must leave a suffix-free StatusReason")
+			default:
+				// Placement invariant: composition is the last StatusReason
+				// write of a non-deadline-exit divergent tick.
+				Expect(instance.ObservedState.ServiceInfo.StatusReason).To(ContainSubstring("re-applying config: "),
+					"tick %d: divergent tick must compose the divergence into StatusReason", t)
+			}
+		}
+
+		// --- Exact WARN count: only ticks 600 and 1200 are multiples of the
+		// 600-tick interval in 1..1300. Deadline ticks 250/850 are not
+		// multiples and exit before the divergence branch anyway. ---
+		warnCount := len(logs.FilterLevelExact(zapcore.WarnLevel).
+			FilterMessageSnippet("re-applying config").All())
+		Expect(warnCount).To(Equal(2),
+			"exactly two heartbeat WARNs expected (ticks 600 and 1200)")
+
+		// --- DEBUG diff present: the full untruncated diff logs at DEBUG on
+		// every divergent tick. ---
+		debugDiffCount := len(logs.FilterLevelExact(zapcore.DebugLevel).
+			FilterMessageSnippet("Configuration differences").All())
+		Expect(debugDiffCount).To(BeNumerically(">", 0),
+			"the full Configuration differences diff must log at DEBUG on divergent ticks")
+
+		// --- Convergence: after switching to the converged baseline, the
+		// next tick must be clean (no "re-applying config" suffix). ---
+		mockService.GetConfigResult = rendered
+		tick = 1301
+		rErr, _ := instance.Reconcile(ctx, snapshotFor(tick), mockRegistry)
+		_ = rErr
+		Expect(instance.ObservedState.ServiceInfo.StatusReason).NotTo(ContainSubstring("re-applying config"),
+			"tick 1301: converged tick must not carry the divergence suffix")
+
+		// --- Diverge-into-removal (edge 14 end-to-end): re-diverge, compose
+		// once, then enter removal with a pending RemoveFromManager that holds
+		// the FSM in removing across many ticks. The IsRemoving branch clears
+		// ConfigDivergence so composition does not stamp "re-applying config"
+		// on an instance being deleted. ---
+		mockService.GetConfigResult = divergent
+		tick = 1302
+		cErr, _ := instance.Reconcile(ctx, snapshotFor(tick), mockRegistry)
+		_ = cErr
+
+		Expect(instance.Remove(ctx)).To(Succeed())
+		fsmtest.TransitionToProtocolConverterState(mockService, componentName, protocolconverterfsm.OperationalStateStopped)
+		mockService.RemoveFromManagerError = standarderrors.ErrRemovalPending
+
+		removingTickCount := 0
+		for t := uint64(1303); t <= 1352; t++ {
+			if instance.IsRemoving() {
+				removingTickCount++
+			}
+			rErr, _ := instance.Reconcile(ctx, snapshotFor(t), mockRegistry)
+			_ = rErr
+		}
+
+		Expect(removingTickCount).To(BeNumerically(">=", 10),
+			"the pending removal must hold the FSM in removing for at least 10 ticks")
+		Expect(strings.Count(instance.ObservedState.ServiceInfo.StatusReason, "re-applying config")).To(BeNumerically("<=", 1),
+			"last removal tick: ConfigDivergence is cleared during removal, no suffix repetition")
+
+		mockService.RemoveFromManagerError = nil
+	})
+})
