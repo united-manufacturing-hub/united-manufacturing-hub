@@ -25,10 +25,24 @@ import (
 	"unicode/utf8"
 )
 
-// BoundDiff caps a config-diff string at capRunes runes, rune-safe, appending a
-// truncation marker when the diff exceeds the cap. capRunes values <= 0 are
-// treated as 0.
+// EmptyDiffSentinel is the exact string BoundDiff returns when the diff is empty
+// but the configs are known to differ — the silent-mismatch class that hid the
+// ENG-5090 re-apply cause. Surfaced verbatim in StatusReason and the WARN line.
+const EmptyDiffSentinel = "configs differ but field diff is empty (divergence outside compared fields)"
+
+// BoundDiff caps the prefix of a config-diff string at capRunes runes,
+// rune-safe. capRunes values <= 0 are treated as 0.
+//
+// When the diff exceeds the cap, BoundDiff returns the first capRunes runes
+// followed by a truncation marker carrying the total rune count; the marker is
+// additional and exempt from the cap. When the diff is empty, BoundDiff returns
+// EmptyDiffSentinel regardless of capRunes; the sentinel is also exempt from
+// the cap. An empty diff is surfaced explicitly rather than collapsing to an
+// empty string that is indistinguishable from "nothing to report".
 func BoundDiff(diff string, capRunes int) string {
+	if diff == "" {
+		return EmptyDiffSentinel
+	}
 	if capRunes < 0 {
 		capRunes = 0
 	}
