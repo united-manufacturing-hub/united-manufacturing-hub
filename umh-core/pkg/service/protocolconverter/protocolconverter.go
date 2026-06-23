@@ -545,11 +545,11 @@ func (p *ProtocolConverterService) UpdateInManager(
 		return errors.New("config is nil")
 	}
 
-	p.logger.Debugf("Updating protocolconverter %s", protConvName)
-
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
+
+	p.logger.Debugf("Updating protocolconverter %s", protConvName)
 
 	// Check if the connectionconfig exists
 	foundConn := false
@@ -658,11 +658,11 @@ func (p *ProtocolConverterService) RemoveFromManager(
 		return errors.New("dataflowcomponent manager not initialized")
 	}
 
-	p.logger.Debugf("Removing dataflowcomponent %s", protConvName)
-
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
+
+	p.logger.Debugf("Removing dataflowcomponent %s", protConvName)
 
 	connectionName := p.getUnderlyingConnectionName(protConvName)
 	dfcReadName := p.getUnderlyingDFCReadName(protConvName)
