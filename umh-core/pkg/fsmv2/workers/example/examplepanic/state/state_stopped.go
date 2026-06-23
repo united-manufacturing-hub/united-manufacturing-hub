@@ -15,10 +15,7 @@
 package state
 
 import (
-	"fmt"
-
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
 	example_panic "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplepanic"
 )
@@ -38,12 +35,12 @@ func (s *StoppedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 		return fsmv2.Transition(s, fsmv2.SignalNeedsRemoval, nil, "Shutdown requested, signaling removal", nil)
 	}
 
-	if !snap.IsShutdownRequested && snap.ParentMappedState == config.DesiredStateRunning {
-		return fsmv2.Transition(&TryingToConnectState{}, fsmv2.SignalNone, nil,
-			fmt.Sprintf("parentState=%q: should be running, transitioning to TryingToConnect", snap.ParentMappedState), nil)
+	if snap.IsDisabled {
+		return fsmv2.Transition(s, fsmv2.SignalNone, nil, "disabled by supervisor, staying stopped", nil)
 	}
 
-	return fsmv2.Transition(s, fsmv2.SignalNone, nil, "Panic worker is stopped, no connection", nil)
+	return fsmv2.Transition(&TryingToConnectState{}, fsmv2.SignalNone, nil,
+		"should be running, transitioning to TryingToConnect", nil)
 }
 
 func (s *StoppedState) String() string {

@@ -31,10 +31,12 @@ func buildUserScope(templateInfo *models.ProtocolConverterTemplateInfo) map[stri
 	if templateInfo == nil {
 		return map[string]any{}
 	}
+
 	scope := make(map[string]any, len(templateInfo.Variables))
 	for _, v := range templateInfo.Variables {
 		scope[v.Label] = v.Value
 	}
+
 	return scope
 }
 
@@ -43,11 +45,13 @@ func validateWriteDFCConfig(cfg *dataflowcomponentserviceconfig.DataflowComponen
 	if cfg != nil && cfg.HasOutput() && len(cfg.ToWriteConfig().Topics) == 0 {
 		return errors.New("write DFC requires at least one input topic (source.topics)")
 	}
+
 	if state != "" {
 		if err := ValidateDataFlowComponentState(state); err != nil {
 			return fmt.Errorf("invalid write DFC state: %w", err)
 		}
 	}
+
 	return nil
 }
 
@@ -57,15 +61,18 @@ func validateReadProtocolConverterDFC(dfc *models.ProtocolConverterDFC) error {
 	if dfc == nil {
 		return nil
 	}
+
 	if dfc.State != "" {
 		if err := ValidateDataFlowComponentState(dfc.State); err != nil {
 			return fmt.Errorf("invalid read DFC state: %w", err)
 		}
 	}
+
 	payload := dfcToPayload(dfc)
 	if err := ValidateCustomDataFlowComponentPayload(payload, true, false); err != nil {
 		return fmt.Errorf("invalid read DFC configuration: %w", err)
 	}
+
 	return nil
 }
 
@@ -86,10 +93,12 @@ func buildReadDFCServiceConfig(payload models.CDFCPayload, name string) (dataflo
 	if err := ValidateCustomDataFlowComponentPayload(payload, true, false); err != nil {
 		return dataflowcomponentserviceconfig.DataflowComponentServiceConfig{}, fmt.Errorf("invalid read DFC configuration: %w", err)
 	}
+
 	benthos, err := CreateBenthosConfigFromCDFCPayload(payload, name)
 	if err != nil {
 		return dataflowcomponentserviceconfig.DataflowComponentServiceConfig{}, fmt.Errorf("failed to create read DFC benthos config: %w", err)
 	}
+
 	return dataflowcomponentserviceconfig.DataflowComponentServiceConfig{BenthosConfig: benthos}, nil
 }
 
@@ -98,10 +107,12 @@ func convertIntMapToStringMap(intMap map[int]string) map[string]string {
 	if intMap == nil {
 		return nil
 	}
+
 	result := make(map[string]string, len(intMap))
 	for k, v := range intMap {
 		result[strconv.Itoa(k)] = v
 	}
+
 	return result
 }
 
@@ -124,6 +135,7 @@ func convertPipelineToMap(pipeline models.CommonDataFlowComponentPipelineConfig)
 			Type: processor.Type,
 		}
 	}
+
 	return result
 }
 
@@ -133,6 +145,7 @@ func extractInjectFromRawYAML(rawYAML *models.CommonDataFlowComponentRawYamlConf
 	if rawYAML == nil {
 		return ""
 	}
+
 	return rawYAML.Data
 }
 

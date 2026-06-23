@@ -61,15 +61,21 @@ func makeSnapshotWithBackoff(
 	degradedEnteredAt time.Time,
 	lastErrorAt time.Time,
 ) fsmv2.Snapshot {
+	// L5b: parent-driven stop is now expressed via the disable-mapping pass
+	// (IsDisabled). A test that asks for a "stopped" parent maps to
+	// Disabled=true so ShouldStop() returns true.
+	disabled := parentMappedState == config.DesiredStateStopped
+
 	desired := &fsmv2.WrappedDesiredState[snapshot.PushDesiredState]{
 		Config: snapshot.PushDesiredState{
-			ParentMappedState: parentMappedState,
 			BaseDesiredState: config.BaseDesiredState{
 				ShutdownRequested: shutdownRequested,
+				Disabled:          disabled,
 			},
 		},
 		BaseDesiredState: config.BaseDesiredState{
 			ShutdownRequested: shutdownRequested,
+			Disabled:          disabled,
 		},
 	}
 
@@ -85,7 +91,6 @@ func makeSnapshotWithBackoff(
 			LastErrorAt:         lastErrorAt,
 		},
 	}
-	obs.ParentMappedState = parentMappedState
 
 	return fsmv2.Snapshot{
 		Observed: obs,

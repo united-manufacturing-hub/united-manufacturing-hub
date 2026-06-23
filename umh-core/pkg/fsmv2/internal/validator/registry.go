@@ -322,20 +322,6 @@ func (s *TryingToConnectState) Next(snap any) (...) {
 }`,
 		ReferenceFile: "example-child/state/state_trying_to_connect.go",
 	},
-	"MISSING_CATCHALL_RETURN": {
-		Name: "Exhaustive Transition Coverage",
-		Why: `Next() methods should end with a catch-all return: "return s, SignalNone, nil".
-WHY: The FSM always has a valid transition. Without a catch-all,
-edge cases may cause undefined behavior. The catch-all is a safety net that
-maintains the current state when no explicit transition matches.`,
-		CorrectCode: `func (s *MyState) Next(snap any) (...) {
-    if condition1 { return &State1{}, ... }
-    if condition2 { return &State2{}, ... }
-    // Catch-all: stay in current state
-    return s, SignalNone, nil
-}`,
-		ReferenceFile: "example-child/state/state_connected.go",
-	},
 	"MISSING_BASE_STATE": {
 		Name: "Base State Type Embedding",
 		Why: `State structs should embed exactly one Base*State type.

@@ -128,14 +128,14 @@ func (w *PullWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, e
 		Variables: userSpec.Variables,
 	}
 
-	parsed, err := config.ParseUserSpec[PullUserSpec](renderedSpec)
-	if err != nil {
+	// Parse to validate the rendered config. The pull worker carries no
+	// lifecycle State of its own: it is a leaf child gated by the parent via
+	// Enabled/IsDisabled and routes lifecycle through snap.ShouldStop().
+	if _, err := config.ParseUserSpec[PullUserSpec](renderedSpec); err != nil {
 		return nil, err
 	}
 
-	return &fsmv2.WrappedDesiredState[snapshot.PullDesiredState]{
-		State: parsed.GetState(),
-	}, nil
+	return &fsmv2.WrappedDesiredState[snapshot.PullDesiredState]{}, nil
 }
 
 // GetInitialState returns StoppedState as the pull worker's initial FSM state.

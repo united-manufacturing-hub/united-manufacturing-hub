@@ -29,7 +29,8 @@ func (s *RunningState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := fsmv2.ConvertWorkerSnapshot[snapshot.ApplicationConfig, snapshot.ApplicationStatus](snapAny)
 
 	if snap.ShouldStop() {
-		return fsmv2.Transition(&StoppedState{}, fsmv2.SignalNone, nil, "Shutdown requested", nil)
+		return fsmv2.Transition(&StoppedState{}, fsmv2.SignalNone, nil,
+			"stop required: "+snap.StopReason(), nil)
 	}
 
 	circuitOpen, stale := snapshot.ChildrenViewToStatus(snap.ChildrenView)

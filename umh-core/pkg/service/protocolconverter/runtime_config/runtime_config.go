@@ -323,6 +323,7 @@ func renderConfig(
 	if internal, ok := scope["internal"].(map[string]any); ok {
 		bridgedBy, _ = internal["bridged_by"].(string)
 	}
+
 	if bridgedBy == "" && renderedWriteConfig.HasOutput() {
 		return protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime{},
 			errors.New("bridged_by is empty for a write DFC with output configured: the FSM must inject internal.bridged_by before calling BuildRuntimeConfig")

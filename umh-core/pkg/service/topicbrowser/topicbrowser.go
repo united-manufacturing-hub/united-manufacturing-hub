@@ -21,6 +21,8 @@ import (
 	"sync"
 	"time"
 
+	"go.uber.org/zap"
+
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	benthossvccfg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/benthosserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
@@ -34,7 +36,6 @@ import (
 	s6svc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/standarderrors"
-	"go.uber.org/zap"
 )
 
 type ITopicBrowserService interface {
@@ -609,6 +610,7 @@ func (svc *Service) ForceRemove(
 	if ctx.Err() != nil {
 		svc.logger.Warnf("Parent context already expired for force removal of %s", tbName)
 	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), constants.ForceRemovalTimeout)
 	defer cancel()
 
