@@ -41,6 +41,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"go.uber.org/zap"
+
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/protocolconverterserviceconfig"
@@ -52,7 +54,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
-	"go.uber.org/zap"
 )
 
 // DeployProtocolConverterAction implements the Action interface for deploying a
@@ -261,6 +262,7 @@ func (a *DeployProtocolConverterAction) Execute() (interface{}, map[string]inter
 			pcConfig.DesiredFSMState,
 		)
 	}
+
 	SendActionReply(
 		a.instanceUUID,
 		a.userEmail,
@@ -291,6 +293,7 @@ func (a *DeployProtocolConverterAction) createProtocolConverterConfig() (config.
 		if err != nil {
 			return config.ProtocolConverterConfig{}, err
 		}
+
 		tmpl.DataflowComponentReadServiceConfig = readSvcCfg
 	}
 
@@ -302,6 +305,7 @@ func (a *DeployProtocolConverterAction) createProtocolConverterConfig() (config.
 	if a.payload.ReadDFC != nil {
 		readDFCDesiredState = a.payload.ReadDFC.State
 	}
+
 	if a.payload.WriteDFCPayload != nil {
 		writeDFCDesiredState = a.payload.WriteDFCPayload.State
 	}

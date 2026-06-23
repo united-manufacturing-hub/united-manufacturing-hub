@@ -152,7 +152,7 @@ var _ = Describe("TransportWorker", func() {
 				// Default to running when spec is nil
 				typed, ok := desired.(*fsmv2.WrappedDesiredState[snapshot.TransportDesiredState])
 				Expect(ok).To(BeTrue())
-				Expect(typed.GetState()).To(Equal("running"))
+				Expect(typed).NotTo(BeNil())
 			})
 
 			It("should not populate ChildrenSpecs — children are declared in snapshot.RenderChildren", func() {
@@ -201,7 +201,7 @@ authToken: "test-token"`,
 				Expect(transportDesired.ChildrenSpecs).To(BeNil())
 			})
 
-			It("should return stopped state when configured", func() {
+			It("parses a stopped spec without requiring credentials", func() {
 				spec := fsmv2types.UserSpec{
 					Config: `state: stopped
 relayURL: "https://relay.example.com"`,
@@ -213,10 +213,10 @@ relayURL: "https://relay.example.com"`,
 				Expect(err).ToNot(HaveOccurred())
 				transportDesired, ok := desired.(*fsmv2.WrappedDesiredState[snapshot.TransportDesiredState])
 				Expect(ok).To(BeTrue())
-				Expect(transportDesired.GetState()).To(Equal("stopped"))
+				Expect(transportDesired.Config.RelayURL).To(Equal("https://relay.example.com"))
 			})
 
-			It("should return running state when configured", func() {
+			It("propagates credentials from a running spec into the derived config", func() {
 				spec := fsmv2types.UserSpec{
 					Config: `state: running
 relayURL: "https://relay.example.com"
@@ -230,7 +230,9 @@ authToken: "test-token"`,
 				Expect(err).ToNot(HaveOccurred())
 				transportDesired, ok := desired.(*fsmv2.WrappedDesiredState[snapshot.TransportDesiredState])
 				Expect(ok).To(BeTrue())
-				Expect(transportDesired.GetState()).To(Equal("running"))
+				Expect(transportDesired.Config.RelayURL).To(Equal("https://relay.example.com"))
+				Expect(transportDesired.Config.InstanceUUID).To(Equal("test-uuid"))
+				Expect(transportDesired.Config.AuthToken).To(Equal("test-token"))
 			})
 		})
 
@@ -252,7 +254,7 @@ authToken: "test-token"`,
 				Expect(ok1).To(BeTrue())
 				td2, ok2 := desired2.(*fsmv2.WrappedDesiredState[snapshot.TransportDesiredState])
 				Expect(ok2).To(BeTrue())
-				Expect(td1.GetState()).To(Equal(td2.GetState()))
+				Expect(td1).To(Equal(td2))
 			})
 		})
 
@@ -310,7 +312,7 @@ instanceUUID: "test-uuid"`,
 				Expect(err).ToNot(HaveOccurred())
 				transportDesired, ok := desired.(*fsmv2.WrappedDesiredState[snapshot.TransportDesiredState])
 				Expect(ok).To(BeTrue())
-				Expect(transportDesired.GetState()).To(Equal("stopped"))
+				Expect(transportDesired).NotTo(BeNil())
 			})
 
 			It("should default timeout when zero", func() {

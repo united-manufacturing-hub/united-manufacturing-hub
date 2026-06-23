@@ -16,7 +16,6 @@ package state
 
 import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
 	example_child "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplechild"
 )
@@ -29,7 +28,7 @@ func init() {
 //
 //  1. IsShutdownRequested=true → emit SignalNeedsRemoval (removal wins).
 //  2. IsDisabled=true → stay in Stopped (preserve dependency state).
-//  3. Otherwise check ParentMappedState: Running → TryingToConnect, else stay stopped.
+//  3. Otherwise → TryingToConnect (parent wants the child running).
 //
 // See also workers/transport for the production variant where stopped
 // children stay resident; workers/example/exampleparent/children.go
@@ -42,18 +41,14 @@ func (s *StoppedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := fsmv2.ConvertWorkerSnapshot[example_child.ExamplechildConfig, example_child.ExamplechildStatus](snapAny)
 
 	if snap.IsShutdownRequested {
-		return fsmv2.Transition(s, fsmv2.SignalNeedsRemoval, nil, "shutdown requested, stopping: parentState="+snap.ParentMappedState, nil)
+		return fsmv2.Transition(s, fsmv2.SignalNeedsRemoval, nil, "shutdown requested, stopping", nil)
 	}
 
 	if snap.IsDisabled {
-		return fsmv2.Transition(s, fsmv2.SignalNone, nil, "disabled by supervisor, staying stopped: parentState="+snap.ParentMappedState, nil)
+		return fsmv2.Transition(s, fsmv2.SignalNone, nil, "disabled by supervisor, staying stopped", nil)
 	}
 
-	if snap.ParentMappedState == config.DesiredStateRunning {
-		return fsmv2.Transition(&TryingToConnectState{}, fsmv2.SignalNone, nil, "parent wants running, attempting to connect: parentState="+snap.ParentMappedState, nil)
-	}
-
-	return fsmv2.Transition(s, fsmv2.SignalNone, nil, "Child is stopped, no connection", nil)
+	return fsmv2.Transition(&TryingToConnectState{}, fsmv2.SignalNone, nil, "parent wants running, attempting to connect", nil)
 }
 
 func (s *StoppedState) String() string {

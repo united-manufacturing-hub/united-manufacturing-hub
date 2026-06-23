@@ -66,8 +66,7 @@ type CollectorConfig[TObserved any] struct {
 	// consume ChildrenView instead and read HealthyCount / UnhealthyCount as fields.
 	// The collector still calls both setters during migration; counts agree because
 	// ChildrenView derives them from the same per-child Phase.
-	ChildrenCountsProvider    func() (healthy int, unhealthy int)
-	MappedParentStateProvider func() string // Returns mapped state from parent's StateMapping (injected by supervisor for child workers)
+	ChildrenCountsProvider func() (healthy int, unhealthy int)
 	// ChildrenViewProvider returns the full ChildrenView snapshot for parent
 	// workers that need per-child detail.
 	ChildrenViewProvider func() config.ChildrenView
@@ -490,16 +489,6 @@ func (c *Collector[TObserved]) collectAndSaveObservedState(ctx context.Context) 
 			SetChildrenCounts(int, int) fsmv2.ObservedState
 		}); ok {
 			observed = setter.SetChildrenCounts(healthy, unhealthy)
-		}
-	}
-
-	// Inject mapped parent state so child workers know when to start/stop via StateMapping
-	if c.config.MappedParentStateProvider != nil {
-		mappedState := c.config.MappedParentStateProvider()
-		if setter, ok := observed.(interface {
-			SetParentMappedState(string) fsmv2.ObservedState
-		}); ok {
-			observed = setter.SetParentMappedState(mappedState)
 		}
 	}
 

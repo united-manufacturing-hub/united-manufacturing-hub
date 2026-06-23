@@ -53,6 +53,8 @@ import (
 	"strconv"
 
 	"github.com/google/uuid"
+	"go.uber.org/zap"
+
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/protocolconverterserviceconfig"
@@ -61,7 +63,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/protocolconverter"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
-	"go.uber.org/zap"
 )
 
 // systemInjectedVarKeys are Variables.User keys that deploy/edit always write regardless
@@ -123,6 +124,7 @@ func NewGetProtocolConverterAction(userEmail string, actionUUID uuid.UUID, insta
 // happens later in Execute.
 func (a *GetProtocolConverterAction) Parse(payload interface{}) (err error) {
 	a.actionLogger.Info("Parsing the payload")
+
 	a.payload, err = ParseActionPayload[models.GetProtocolConverterPayload](payload)
 	if err == nil {
 		a.actionLogger.Info("Payload parsed, uuid: ", a.payload.UUID)
@@ -202,8 +204,10 @@ func connectionInfoFromSpec(
 	// hasConnectionVars tracks whether Variables.User contains IP/PORT so we know
 	// whether to fall back to the Nmap template for connection info.
 	hasConnectionVars := false
+
 	for key, value := range spec.Variables.User {
 		valueStr := fmt.Sprintf("%v", value)
+
 		switch key {
 		case "IP", "ip", "target", "Target":
 			ip = valueStr
@@ -215,6 +219,7 @@ func connectionInfoFromSpec(
 				logger.Warnw("Failed to parse port from variable", "port", valueStr, "error", err)
 			}
 		}
+
 		variables = append(variables, models.ProtocolConverterVariable{Label: key, Value: value})
 	}
 	// isTemplated is true only when the PC has custom variables beyond the system-injected ones.
@@ -222,6 +227,7 @@ func connectionInfoFromSpec(
 	for _, v := range variables {
 		if !systemInjectedVarKeys[v.Label] {
 			isTemplated = true
+
 			break
 		}
 	}
@@ -244,7 +250,8 @@ func connectionInfoFromSpec(
 		Variables:   variables,
 		RootUUID:    uuid.Nil,
 	}
-	return
+
+	return ip, port, templateInfo
 }
 
 // writeDFCFromSpec builds a WriteDFC from the raw spec config (as stored
@@ -256,6 +263,7 @@ func writeDFCFromSpec(specWrite dataflowcomponentserviceconfig.DataflowComponent
 	if !specWrite.HasOutput() && state == "" {
 		return nil
 	}
+
 	return &models.WriteDFCPayload{
 		DataflowComponentWriteConfigInput: specWrite,
 		State:                             state,
@@ -337,6 +345,7 @@ func (a *GetProtocolConverterAction) Execute() (interface{}, map[string]interfac
 
 				// Build ReadDFC from observed, rendered spec config, if present
 				var readDFC *models.ProtocolConverterDFC
+
 				if readDFCConfig := specConfig.Config.DataflowComponentReadServiceConfig; len(readDFCConfig.BenthosConfig.Input) > 0 {
 					var err error
 
@@ -345,6 +354,7 @@ func (a *GetProtocolConverterAction) Execute() (interface{}, map[string]interfac
 						errMsg := fmt.Sprintf("Failed to build read DFC for protocol converter '%s': %v", instance.ID, err)
 						SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
 							errMsg, a.outboundChannel, models.GetProtocolConverter)
+
 						return nil, nil, fmt.Errorf("%s", errMsg)
 					}
 
@@ -364,6 +374,7 @@ func (a *GetProtocolConverterAction) Execute() (interface{}, map[string]interfac
 
 				// Extract location from observed spec config
 				location := make(map[int]string)
+
 				if len(specConfig.Location) > 0 {
 					for k, v := range specConfig.Location {
 						var intKey int

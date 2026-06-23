@@ -96,7 +96,7 @@
 //	        Variables: config.VariableBundle{
 //	            User: map[string]any{"URL": "tcp://localhost:1883"},
 //	        },
-//	        ChildStartStates: []string{"Running", "TryingToStart"},
+//	        Enabled: true,
 //	    },
 //	}
 //
@@ -104,18 +104,14 @@
 // how to create them. The supervisor handles creation, deletion, and updates.
 // Children can be added or removed by changing ChildrenSpecs in DeriveDesiredState().
 //
-// # ChildStartStates
+// # Child lifecycle gating
 //
-// ChildStartStates specifies which parent FSM states cause the child to run:
+// A parent gates each child's lifecycle through ChildSpec.Enabled. The
+// supervisor's disable-mapping pass translates Enabled into the child's
+// Disabled bit, and state files route lifecycle through snap.ShouldStop().
+// Setting Enabled=false leaves the child resident in Stopped; flipping it back
+// to true resumes the child on the next tick.
 //
-//	ChildStartStates: []string{"Running", "TryingToStart"}
-//	// Child runs when parent is in "Running" or "TryingToStart"
-//	// Child stops when parent is in any other state
-//
-// The child runs if the parent state is in the list, stops otherwise.
-// An empty list means the child always runs.
-//
-// ChildStartStates handles lifecycle coordination, not data passing.
 // Use VariableBundle to pass data from parent to child.
 //
 // # DesiredState and shutdown control

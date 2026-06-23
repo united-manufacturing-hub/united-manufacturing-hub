@@ -322,9 +322,10 @@ func ValidateStateFieldExists(baseDir string) []Violation {
 // checkStateFieldExists parses a snapshot file and checks for State string field.
 // Both DesiredState and ObservedState types must have an explicit State string field.
 // BaseDesiredState no longer carries State (F4 refactor); each embedding type owns it.
-// Child worker desired states (PushDesiredState, PullDesiredState) that are controlled
-// entirely by ParentMappedState are exempt: they embed BaseDesiredState only for
-// ShutdownRequested and do not participate in the running/stopped lifecycle transition.
+// Child worker desired states (PushDesiredState, PullDesiredState) whose lifecycle
+// is driven by the supervisor (ShutdownRequested/Disabled) are exempt: they embed
+// BaseDesiredState only for ShutdownRequested and do not participate in the
+// running/stopped lifecycle transition through their own State field.
 func checkStateFieldExists(filename string) []Violation {
 	var violations []Violation
 
@@ -376,7 +377,7 @@ func checkStateFieldExists(filename string) []Violation {
 		}
 
 		// Child worker DesiredState types that embed only BaseDesiredState (for
-		// ShutdownRequested) and rely solely on ParentMappedState for lifecycle
+		// ShutdownRequested) and have their lifecycle driven by the supervisor
 		// are exempt from the State field requirement. They are identified by
 		// embedding BaseDesiredState without having a State string field of their own.
 		// This is a valid pattern for push/pull child workers.
@@ -629,7 +630,7 @@ func checkFolderMatchesWorkerType(filename string) []Violation {
 }
 
 // ValidateNoCustomLifecycleFields checks that DesiredState structs do NOT have custom lifecycle fields.
-// Lifecycle is controlled by BaseDesiredState.ShutdownRequested and ParentMappedState.
+// Lifecycle is controlled by BaseDesiredState.ShutdownRequested and Disabled.
 func ValidateNoCustomLifecycleFields(baseDir string) []Violation {
 	var violations []Violation
 
@@ -684,8 +685,8 @@ func checkNoCustomLifecycleFields(filename string) []Violation {
 							Line: pos.Line,
 							Type: "CUSTOM_LIFECYCLE_FIELD",
 							Message: fmt.Sprintf("DesiredState %s has forbidden lifecycle field '%s' - "+
-								"lifecycle is controlled by ShutdownRequested (from BaseDesiredState) "+
-								"and ParentMappedState (for child workers). "+
+								"lifecycle is controlled by ShutdownRequested and Disabled "+
+								"(from BaseDesiredState). "+
 								"Custom lifecycle fields are never populated correctly and break parent-child coordination.",
 								typeSpec.Name.Name, name.Name),
 						})

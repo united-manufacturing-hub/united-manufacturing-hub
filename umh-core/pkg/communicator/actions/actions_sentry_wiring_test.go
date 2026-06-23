@@ -19,9 +19,10 @@ import (
 	"strings"
 	"testing"
 
+	"go.uber.org/zap/zapcore"
+
 	deps "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	fsmv2sentry "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/sentry"
-	"go.uber.org/zap/zapcore"
 )
 
 // TestCommunicatorFSMLoggerWiredToSentryHook locks the invariant that the
@@ -38,6 +39,7 @@ import (
 // the debouncer's lastSeen map was updated for the expected fingerprint.
 func TestCommunicatorFSMLoggerWiredToSentryHook(t *testing.T) {
 	logger := communicatorFSMLogger()
+
 	if communicatorSentryHook == nil {
 		t.Fatal("communicatorSentryHook nil after communicatorFSMLogger() — Once.Do did not run")
 	}

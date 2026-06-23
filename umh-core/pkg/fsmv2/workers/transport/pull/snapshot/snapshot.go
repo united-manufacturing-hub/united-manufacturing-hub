@@ -56,8 +56,6 @@ type PullDependencies interface {
 
 // PullDesiredState represents the target configuration for the pull worker.
 type PullDesiredState struct {
-	ParentMappedState string `json:"parent_mapped_state"`
-
 	State string `json:"state" yaml:"state"`
 	config.BaseDesiredState
 }
@@ -70,15 +68,6 @@ func (s *PullDesiredState) GetState() string {
 	}
 
 	return s.State
-}
-
-// ShouldBeRunning returns true if the pull worker should be in a running state.
-func (s *PullDesiredState) ShouldBeRunning() bool {
-	if s.ShutdownRequested {
-		return false
-	}
-
-	return s.ParentMappedState == config.DesiredStateRunning
 }
 
 // PullStatus holds the runtime observation data for the pull worker.

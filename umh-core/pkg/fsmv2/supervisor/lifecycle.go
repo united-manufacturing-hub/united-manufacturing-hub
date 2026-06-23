@@ -477,6 +477,7 @@ func (s *Supervisor[TObserved, TDesired]) requestShutdown(ctx context.Context, w
 		if !errors.Is(err, persistence.ErrNotFound) {
 			return fmt.Errorf("failed to load desired state: %w", err)
 		}
+
 		return nil
 	}
 
@@ -699,6 +700,7 @@ func (s *Supervisor[TObserved, TDesired]) setDisabled(ctx context.Context, worke
 		if !errors.Is(err, persistence.ErrNotFound) {
 			return fmt.Errorf("failed to load desired state: %w", err)
 		}
+
 		return nil
 	}
 

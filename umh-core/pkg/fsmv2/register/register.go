@@ -78,6 +78,7 @@ func Worker[TConfig any, TStatus any, TDeps any](
 		if err != nil {
 			panic(fmt.Sprintf("register.Worker(%q): constructor failed for %s: %v", workerType, id.String(), err))
 		}
+
 		if w == nil {
 			panic(fmt.Sprintf("register.Worker(%q): constructor returned nil worker for %s", workerType, id.String()))
 		}
@@ -115,6 +116,7 @@ func SetDepsBuilder[T any](workerType string, builderFn func(deps.Identity, deps
 	if workerType == "" {
 		panic("register.SetDepsBuilder: workerType must be non-empty")
 	}
+
 	if builderFn == nil {
 		panic("register.SetDepsBuilder: builderFn must be non-nil")
 	}
@@ -141,6 +143,7 @@ func GetDepsBuilder(workerType string) (func(deps.Identity, deps.FSMLogger, deps
 func ResetDepsBuilderRegistry() {
 	depsBuilderRegistry.Range(func(key, _ any) bool {
 		depsBuilderRegistry.Delete(key)
+
 		return true
 	})
 }
