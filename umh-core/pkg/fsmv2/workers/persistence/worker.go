@@ -232,6 +232,7 @@ func init() {
 	register.Worker[snapshot.PersistenceConfig, snapshot.PersistenceStatus, *PersistenceDependencies](WorkerTypeName,
 		func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader) (fsmv2.Worker, error) {
 			d := register.GetDeps[*PersistenceDependencies](WorkerTypeName)
+
 			return NewPersistenceWorker(id, logger, sr, d)
 		})
 }

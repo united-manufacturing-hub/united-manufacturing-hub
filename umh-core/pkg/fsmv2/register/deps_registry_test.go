@@ -106,7 +106,7 @@ var _ = Describe("register deps registry", func() {
 		It("returns Go-native nil for pointer TDeps when never SetDeps", func() {
 			got := register.GetDeps[*depsRegistryDeps]("never-set")
 
-			Expect(got == nil).To(BeTrue())
+			Expect(got).To(BeNil())
 		})
 
 		It("returns struct{} zero value for register.NoDeps when never SetDeps", func() {
@@ -131,7 +131,7 @@ var _ = Describe("register deps registry", func() {
 
 			got := register.GetDeps[someIface]("never-set-iface")
 
-			Expect(got == nil).To(BeTrue())
+			Expect(got).To(BeNil())
 		})
 	})
 
@@ -143,11 +143,11 @@ var _ = Describe("register deps registry", func() {
 			var wg sync.WaitGroup
 			wg.Add(goroutines * 2)
 
-			for g := 0; g < goroutines; g++ {
+			for g := range goroutines {
 				go func(id int) {
 					defer wg.Done()
 
-					for k := 0; k < keysPerGoroutine; k++ {
+					for k := range keysPerGoroutine {
 						key := "concurrent-writer-" + strconv.Itoa(id) + "-" + strconv.Itoa(k)
 						register.SetDeps[*depsRegistryDeps](key, &depsRegistryDeps{
 							Label: key,
@@ -159,7 +159,7 @@ var _ = Describe("register deps registry", func() {
 				go func(id int) {
 					defer wg.Done()
 
-					for k := 0; k < keysPerGoroutine; k++ {
+					for k := range keysPerGoroutine {
 						key := "concurrent-reader-" + strconv.Itoa(id) + "-" + strconv.Itoa(k)
 						_ = register.GetDeps[*depsRegistryDeps](key)
 					}
@@ -186,16 +186,16 @@ var _ = Describe("register deps registry", func() {
 			go func() {
 				defer wg.Done()
 
-				for i := 0; i < iterations; i++ {
+				for range iterations {
 					register.ClearDeps(key)
 				}
 			}()
 
-			for w := 0; w < writers; w++ {
+			for w := range writers {
 				go func(id int) {
 					defer wg.Done()
 
-					for i := 0; i < iterations; i++ {
+					for i := range iterations {
 						register.SetDeps[*depsRegistryDeps](key, &depsRegistryDeps{
 							Label: key,
 							Value: id*1000 + i,
@@ -204,11 +204,11 @@ var _ = Describe("register deps registry", func() {
 				}(w)
 			}
 
-			for r := 0; r < readers; r++ {
+			for range readers {
 				go func() {
 					defer wg.Done()
 
-					for i := 0; i < iterations; i++ {
+					for range iterations {
 						_ = register.GetDeps[*depsRegistryDeps](key)
 					}
 				}()
@@ -287,7 +287,7 @@ var _ = Describe("register deps registry", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(w).NotTo(BeNil())
 			Expect(constructorRan).To(BeTrue())
-			Expect(capturedDeps == nil).To(BeTrue())
+			Expect(capturedDeps).To(BeNil())
 		})
 	})
 })

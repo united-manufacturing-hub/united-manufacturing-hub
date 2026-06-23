@@ -15,8 +15,6 @@
 package state
 
 import (
-	"fmt"
-
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
 	hello_world "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/helloworld"
@@ -35,7 +33,7 @@ func (s *TryingToStartState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	// 1. Check shutdown first
 	if snap.ShouldStop() {
 		return fsmv2.Transition(&StoppedState{}, fsmv2.SignalNone, nil,
-			fmt.Sprintf("stop required: %s", snap.StopReason()), nil)
+			"stop required: "+snap.StopReason(), nil)
 	}
 
 	// 2. Check if action has already completed (observe the effect)

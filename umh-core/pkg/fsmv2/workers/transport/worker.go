@@ -228,7 +228,9 @@ func init() {
 			if err != nil {
 				return nil, err
 			}
+
 			register.SetDeps[*TransportDependencies](transportDepsKey, w.GetDependencies())
+
 			return w, nil
 		})
 }

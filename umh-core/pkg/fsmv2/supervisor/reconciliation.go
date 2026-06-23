@@ -1762,7 +1762,7 @@ func (s *Supervisor[TObserved, TDesired]) applyDisableMapping(ctx context.Contex
 	}
 
 	for _, spec := range specs {
-		spec := spec // capture for closure
+		// capture for closure
 
 		// Per-iteration panic recovery: one misbehaving child must not stop all reductions.
 		func() {
@@ -1804,6 +1804,7 @@ func (s *Supervisor[TObserved, TDesired]) handleDisableMappingError(spec config.
 	now := time.Now()
 	if now.Sub(entry.lastSeen) < disableMappingErrorSuppressionWindow {
 		s.disableMappingErrors[key] = entry
+
 		return
 	}
 
@@ -1819,6 +1820,7 @@ func (s *Supervisor[TObserved, TDesired]) handleDisableMappingError(spec config.
 		s.logger.Debug("reducer_child_not_found_disabled",
 			deps.String("child_name", spec.Name),
 			deps.Int("suppressed_count", entry.count))
+
 		return
 	}
 

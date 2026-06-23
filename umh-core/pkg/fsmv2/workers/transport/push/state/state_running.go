@@ -38,7 +38,7 @@ func (s *RunningState) Next(snapAny any) fsmv2.NextResult[any, any] {
 
 	if snap.ShouldStop() {
 		return fsmv2.Transition(&StoppingState{}, fsmv2.SignalNone, nil,
-			fmt.Sprintf("stop required: %s", snap.StopReason()), nil)
+			"stop required: "+snap.StopReason(), nil)
 	}
 
 	if snap.Status.ConsecutiveErrors >= errorDegradedThreshold {

@@ -54,22 +54,25 @@ func (f *fakeFSMInstance) GetCurrentFSMState() string { return f.currentState }
 func (f *fakeFSMInstance) GetDesiredFSMState() string { return f.desiredState }
 func (f *fakeFSMInstance) SetDesiredFSMState(s string) error {
 	f.setDesiredCalls++
+
 	f.desiredState = s
 	if f.flapDesired != "" {
 		f.desiredState = f.flapDesired
 	}
+
 	return nil
 }
 func (f *fakeFSMInstance) IsTransientStreakCounterMaxed() bool { return false }
 func (f *fakeFSMInstance) Reconcile(ctx context.Context, _ publicfsm.SystemSnapshot, _ serviceregistry.Provider) (error, bool) {
 	f.reconcileCalls++
+
 	return nil, false
 }
 func (f *fakeFSMInstance) Remove(_ context.Context) error                { return nil }
 func (f *fakeFSMInstance) GetLastObservedState() publicfsm.ObservedState { return nil }
 func (f *fakeFSMInstance) GetMinimumRequiredTime() time.Duration         { return 0 }
 
-// FSMInstanceActions
+// FSMInstanceActions.
 func (f *fakeFSMInstance) CreateInstance(_ context.Context, _ filesystem.Service) error { return nil }
 func (f *fakeFSMInstance) RemoveInstance(_ context.Context, _ filesystem.Service) error { return nil }
 func (f *fakeFSMInstance) StartInstance(_ context.Context, _ filesystem.Service) error  { return nil }
@@ -110,12 +113,14 @@ func newFix4cManager(initial map[string]*fakeFSMInstance, configs []fix4cTestCon
 	for name, inst := range initial {
 		mgr.AddInstanceForTest(name, inst)
 	}
+
 	return mgr
 }
 
 func runFix4cReconcile(mgr *publicfsm.BaseFSMManager[fix4cTestConfig]) (error, bool) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
+
 	return mgr.Reconcile(ctx, publicfsm.SystemSnapshot{}, nil)
 }
 
@@ -135,6 +140,7 @@ var _ = Describe("BaseFSMManager fix 4c — manager-recreate guard (ENG-4862)", 
 
 			Eventually(func() int {
 				_, _ = runFix4cReconcile(mgr)
+
 				return len(mgr.GetInstances())
 			}, "2s", "10ms").Should(Equal(0), "Removed instance should be deleted by Step 3 even with continuous desired-state flapping")
 
@@ -180,6 +186,7 @@ var _ = Describe("BaseFSMManager fix 4c — manager-recreate guard (ENG-4862)", 
 			Eventually(func() bool {
 				_, _ = runFix4cReconcile(mgr)
 				_, hasWedged := mgr.GetInstances()["bridge-3"]
+
 				return !hasWedged || mgr.GetInstances()["bridge-3"] != publicfsm.FSMInstance(wedged)
 			}, "2s", "10ms").Should(BeTrue(), "wedged Removed instance must be cleaned out")
 
@@ -189,6 +196,7 @@ var _ = Describe("BaseFSMManager fix 4c — manager-recreate guard (ENG-4862)", 
 				if !ok {
 					return ""
 				}
+
 				return inst.GetCurrentFSMState()
 			}, "2s", "10ms").Should(Equal("to_be_created"), "manager must recreate the instance from config after deletion")
 
