@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## [0.44.25]
+
 ### Improvements
 
 - OPC UA: encrypted connections (`Basic256Sha256`, both `Sign` and `Sign & Encrypt`) now complete reliably, including signing-only mode which previously failed to connect
