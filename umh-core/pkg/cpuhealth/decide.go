@@ -14,7 +14,10 @@
 
 package cpuhealth
 
-import "time"
+import (
+	"math"
+	"time"
+)
 
 // State is the overall CPU health state.
 type State string
@@ -37,6 +40,7 @@ type CauseKind string
 const (
 	CauseKindSaturation CauseKind = "saturation"
 	CauseKindThrottling CauseKind = "throttling"
+	CauseKindPressure   CauseKind = "pressure"
 )
 
 // Cause is a single degradation reason with an associated numeric value.
@@ -50,15 +54,20 @@ type Thresholds struct {
 	HighUsageFraction float64
 	ThrottleHigh      float64
 	ThrottleRecover   float64
+	PressureHigh      float64
+	PressureRecover   float64
 }
 
 // DefaultThresholds returns the canonical thresholds (HighUsageFraction 0.70,
-// ThrottleHigh 0.05, ThrottleRecover 0.03).
+// ThrottleHigh 0.05, ThrottleRecover 0.03, PressureHigh 0.20, PressureRecover
+// 0.12).
 func DefaultThresholds() Thresholds {
 	return Thresholds{
 		HighUsageFraction: 0.70,
 		ThrottleHigh:      0.05,
 		ThrottleRecover:   0.03,
+		PressureHigh:      0.20,
+		PressureRecover:   0.12,
 	}
 }
 
@@ -87,6 +96,27 @@ type Sample struct {
 	Quota       *float64
 	NrPeriods   int64
 	NrThrottled int64
+	// PressureAvg60 is the kernel's cpu.pressure "some avg60" running 60s
+	// average, thresholded DIRECTLY by Decide (no extra windowing — the kernel
+	// already smoothed it over 60s). The value is a FRACTION in [0,1], not the
+	// raw kernel percentage: /proc/pressure/cpu reports avg60 in 0..100, so the
+	// reader MUST divide by 100 before assigning this field (DefaultThresholds
+	// PressureHigh 0.20 / PressureRecover 0.12 are fractions; passing a raw
+	// kernel percentage would fire at 0.2%, essentially always-on). A NaN,
+	// negative, OR +Inf value (malformed PSI line, div-by-zero, transient read
+	// failure) is clamped to 0 before thresholding and before exposure as a
+	// Cause Value via the `!(p >= 0) || math.IsInf(p, 1)` guard (catches NaN AND
+	// negatives in one test via the `!(p >= 0)` idiom, plus +Inf via the
+	// IsInf check since `+Inf >= 0` is true and would otherwise skip the clamp):
+	// NaN `> PressureHigh` and NaN `< PressureRecover` are both false, so without
+	// the guard a NaN reading would stick the latch at its prior state
+	// indefinitely (a fired cause could never self-clear), and a NaN or +Inf
+	// Cause Value would break JSON marshalling of the whole Verdict. This clamp
+	// is intentionally stricter than the throttle ratio clamp (`ratio < 0`,
+	// which only catches negatives): PressureAvg60 is a raw float64 input that
+	// can be NaN or +Inf, unlike the integer-derived throttle ratio whose clamp
+	// is NaN-safe only because throttleRatio() structurally cannot produce NaN.
+	PressureAvg60 float64
 }
 
 // throttlePoint is one timestamped throttle-counter observation in the
@@ -103,12 +133,12 @@ type throttlePoint struct {
 type WindowState struct {
 	throttleRing  []throttlePoint
 	throttleFired bool
+	pressureFired bool
 }
 
 // Signals holds derived intermediate values computed during Decide.
 type Signals struct {
 	UsageFraction float64
-	ThrottleFired bool
 	// ThrottleRatio is the computed 60s cumulative throttle ratio
 	// (nr_throttled delta / nr_periods delta, oldest-to-newest over the pruned
 	// window), populated UNCONDITIONALLY — independent of the flip-latch state —
@@ -116,6 +146,11 @@ type Signals struct {
 	// not fired. Negatives are clamped to 0 before assignment so a residual
 	// negative ratio from any edge case cannot leak to the wire.
 	ThrottleRatio float64
+	ThrottleFired bool
+	// PressureFired is the pressure Schmitt latch state (fires above
+	// PressureHigh, clears only below PressureRecover), independent of the
+	// throttle latch.
+	PressureFired bool
 }
 
 // Verdict is the output of Decide.
@@ -137,7 +172,12 @@ type Verdict struct {
 //
 // Decide reads thresholds.ThrottleHigh and thresholds.ThrottleRecover for the
 // throttle Schmitt flip-latch (the latch fires above ThrottleHigh and clears
-// only below ThrottleRecover). HighUsageFraction remains reserved for the
+// only below ThrottleRecover). Decide also thresholds sample.PressureAvg60
+// DIRECTLY (no ring — the kernel already smoothed it over 60s) against
+// thresholds.PressureHigh and thresholds.PressureRecover via a second Schmitt
+// flip-latch, emitting a pressure Cause when that latch fires; a NaN/negative
+// PressureAvg60 is clamped to 0 before thresholding (see PressureAvg60 doc for
+// the failure mode). HighUsageFraction remains reserved for the
 // later windowed-saturation logic and is not read yet; when it is, a NaN
 // HighUsageFraction must not silently blind saturation detection
 // (NaN >= threshold is always false).
@@ -153,6 +193,7 @@ type Verdict struct {
 // quota-saturated); host-contention attribution is not computed by Decide.
 func Decide(st *WindowState, sample Sample, thresholds Thresholds) (Verdict, Signals) {
 	var fraction float64
+
 	if sample.Quota != nil {
 		if *sample.Quota > 0 {
 			fraction = sample.UsageCores / *sample.Quota
@@ -191,6 +232,7 @@ func Decide(st *WindowState, sample Sample, thresholds Thresholds) (Verdict, Sig
 			st.throttleRing = st.throttleRing[:0]
 		}
 	}
+
 	st.throttleRing = append(st.throttleRing, throttlePoint{
 		ts:          sample.Timestamp,
 		nrPeriods:   sample.NrPeriods,
@@ -199,12 +241,14 @@ func Decide(st *WindowState, sample Sample, thresholds Thresholds) (Verdict, Sig
 	cutoff := sample.Timestamp.Add(-throttleWindow)
 	ring := st.throttleRing
 	n := 0
+
 	for _, p := range ring {
 		if !p.ts.Before(cutoff) {
 			ring[n] = p
 			n++
 		}
 	}
+
 	ring = ring[:n]
 	st.throttleRing = ring
 
@@ -215,6 +259,7 @@ func Decide(st *WindowState, sample Sample, thresholds Thresholds) (Verdict, Sig
 	if ratio < 0 {
 		ratio = 0
 	}
+
 	signals.ThrottleRatio = ratio
 	switch {
 	case ratio > thresholds.ThrottleHigh:
@@ -222,13 +267,45 @@ func Decide(st *WindowState, sample Sample, thresholds Thresholds) (Verdict, Sig
 	case ratio < thresholds.ThrottleRecover:
 		st.throttleFired = false
 	}
+
 	signals.ThrottleFired = st.throttleFired
 
+	// Pressure flip-latch: pressure is the kernel's own 60s running average
+	// (cpu.pressure "some avg60"), so it is thresholded DIRECTLY — no additional
+	// windowing/ring (unlike throttle, which needs the counter-delta ring). The
+	// Schmitt flip-latch is the only state: it fires above PressureHigh and
+	// clears only below PressureRecover; between the two marks it holds.
+	// NaN/negative/+Inf clamped to 0 before thresholding and before exposure as
+	// a Cause Value; see PressureAvg60 doc for the failure mode and the
+	// stricter-than-throttle clamp rationale.
+	p := sample.PressureAvg60
+	if !(p >= 0) || math.IsInf(p, 1) {
+		p = 0
+	}
+
+	switch {
+	case p > thresholds.PressureHigh:
+		st.pressureFired = true
+	case p < thresholds.PressureRecover:
+		st.pressureFired = false
+	}
+
+	signals.PressureFired = st.pressureFired
+
+	var causes []Cause
 	if signals.ThrottleFired {
+		causes = append(causes, Cause{Kind: CauseKindThrottling, Value: ratio})
+	}
+
+	if signals.PressureFired {
+		causes = append(causes, Cause{Kind: CauseKindPressure, Value: p})
+	}
+
+	if len(causes) > 0 {
 		return Verdict{
 			State:       StateDegraded,
 			Attribution: AttributionUnknown,
-			Causes:      []Cause{{Kind: CauseKindThrottling, Value: ratio}},
+			Causes:      causes,
 		}, signals
 	}
 
@@ -248,11 +325,14 @@ func throttleRatio(ring []throttlePoint) float64 {
 	if len(ring) < 2 {
 		return 0
 	}
+
 	oldest := ring[0]
 	newest := ring[len(ring)-1]
+
 	periods := newest.nrPeriods - oldest.nrPeriods
 	if periods <= 0 {
 		return 0
 	}
+
 	return float64(newest.nrThrottled-oldest.nrThrottled) / float64(periods)
 }

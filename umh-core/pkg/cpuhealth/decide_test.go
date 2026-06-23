@@ -776,3 +776,275 @@ func TestDecide_ThrottleFlipLatch_CounterResetClearsRing(t *testing.T) {
 		t.Fatalf("fresh-throttle Cause Value: got %v, want %v (fresh post-reset 60s ratio, not an understated ratio inflated by pre-reset periods)", v3.Causes[0].Value, wantRatio)
 	}
 }
+
+// TestDecide_PressureCause_Avg60DirectSchmitt pins the pressure starvation
+// cause in Decide. Pressure is the kernel's own 60s running average
+// (cpu.pressure "some avg60"), so it is thresholded DIRECTLY — no additional
+// windowing/ring/p95 (unlike throttle, which needs the counter-delta ring).
+// The Schmitt flip-latch is the ONLY state.
+//
+// Pinned behaviors:
+//  1. A pressure reading above PressureHigh (0.20) FIRES a pressure cause:
+//     {degraded, unknown, [pressure]} with Cause Value = PressureAvg60.
+//  2. A pressure reading below PressureRecover (0.12) CLEARS the latch.
+//  3. The latch HOLDS (stays degraded) for a reading in the Schmitt band
+//     (0.12 <= reading <= 0.20) after firing — the band is the debounce.
+//  4. When throttle is ALSO firing, BOTH causes appear in the list (throttle
+//     and pressure can co-fire).
+//  5. A transient pressure spike at 0.21 that is immediately followed by a
+//     band reading fires and then holds (the latch requires crossing
+//     PressureHigh to fire; once fired it holds until < PressureRecover) —
+//     the Schmitt band IS the debounce, since the kernel already smoothed
+//     over 60s.
+func TestDecide_PressureCause_Avg60DirectSchmitt(t *testing.T) {
+	base := time.Date(2026, 6, 22, 12, 0, 0, 0, time.UTC)
+	thresholds := DefaultThresholds()
+	st := &WindowState{}
+
+	decide := func(dt time.Duration, pressureAvg60 float64) (Verdict, Signals) {
+		return Decide(st, Sample{
+			Timestamp:     base.Add(dt),
+			PressureAvg60: pressureAvg60,
+		}, thresholds)
+	}
+
+	// (1) FIRE — a single pressure reading at 0.21 (> PressureHigh 0.20) fires
+	// the pressure cause: degraded, unknown attribution, one pressure cause
+	// whose Value is the raw avg60 (NOT a re-percentiled value).
+	v1, sig1 := decide(10*time.Second, 0.21)
+	if v1.State != StateDegraded {
+		t.Fatalf("fire State: got %q, want %q (pressure 0.21 > PressureHigh 0.20 → degraded)", v1.State, StateDegraded)
+	}
+	if v1.Attribution != AttributionUnknown {
+		t.Fatalf("fire Attribution: got %q, want %q (pressure is internal → unknown)", v1.Attribution, AttributionUnknown)
+	}
+	if !sig1.PressureFired {
+		t.Fatalf("fire PressureFired: got false, want true (latch fires above PressureHigh)")
+	}
+	if len(v1.Causes) != 1 {
+		t.Fatalf("fire Causes length: got %d, want 1 (single pressure cause)", len(v1.Causes))
+	}
+	if v1.Causes[0].Kind != CauseKindPressure {
+		t.Fatalf("fire Cause Kind: got %q, want %q", v1.Causes[0].Kind, CauseKindPressure)
+	}
+	if !floatEq(v1.Causes[0].Value, 0.21) {
+		t.Fatalf("fire Cause Value: got %v, want 0.21 (the raw avg60, thresholded directly — no p95)", v1.Causes[0].Value)
+	}
+
+	// (2) HOLD — a reading at 0.15 (in the Schmitt band 0.12..0.20) must NOT
+	// clear the latch: the latch holds fired. (The kernel already smoothed over
+	// 60s; the band is the only debounce.)
+	v2, sig2 := decide(20*time.Second, 0.15)
+	if v2.State != StateDegraded {
+		t.Fatalf("hold State: got %q, want %q (pressure 0.15 is in the Schmitt band; latch holds fired)", v2.State, StateDegraded)
+	}
+	if !sig2.PressureFired {
+		t.Fatalf("hold PressureFired: got false, want true (latch holds in the band; only drops below PressureRecover clears)")
+	}
+	if len(v2.Causes) != 1 || v2.Causes[0].Kind != CauseKindPressure {
+		t.Fatalf("hold Causes: got %+v, want one pressure cause", v2.Causes)
+	}
+
+	// (3) CLEAR — a reading at 0.10 (< PressureRecover 0.12) clears the latch:
+	// healthy, PressureFired false, no causes.
+	v3, sig3 := decide(30*time.Second, 0.10)
+	if v3.State != StateHealthy {
+		t.Fatalf("clear State: got %q, want %q (pressure 0.10 < PressureRecover 0.12 → latch clears)", v3.State, StateHealthy)
+	}
+	if sig3.PressureFired {
+		t.Fatalf("clear PressureFired: got true, want false (latch clears below PressureRecover)")
+	}
+	if len(v3.Causes) != 0 {
+		t.Fatalf("clear Causes length: got %d, want 0", len(v3.Causes))
+	}
+
+	// (4) CO-FIRE with throttle — when throttle is ALSO firing, BOTH causes
+	// appear in the list (throttle and pressure can co-fire). Feed a sample
+	// with both a sustained throttle ratio above ThrottleHigh and a pressure
+	// reading above PressureHigh. Two ticks are needed to build the throttle
+	// ring delta; the first tick establishes the baseline.
+	st2 := &WindowState{}
+	tNow := base
+	// Baseline throttle counters.
+	Decide(st2, Sample{
+		Timestamp:     tNow,
+		NrPeriods:     1000,
+		NrThrottled:   10,
+		PressureAvg60: 0.0,
+	}, thresholds)
+	tNow = tNow.Add(10 * time.Second)
+	// Second tick: +1000 periods, +100 throttled → 60s ratio 0.10 > 0.05
+	// (throttle fires), AND pressure 0.25 > 0.20 (pressure fires).
+	v4, sig4 := Decide(st2, Sample{
+		Timestamp:     tNow,
+		NrPeriods:     2000,
+		NrThrottled:   110,
+		PressureAvg60: 0.25,
+	}, thresholds)
+	if v4.State != StateDegraded {
+		t.Fatalf("cofire State: got %q, want %q (both throttle and pressure fire)", v4.State, StateDegraded)
+	}
+	if !sig4.ThrottleFired {
+		t.Fatalf("cofire ThrottleFired: got false, want true (throttle ratio 0.10 > 0.05)")
+	}
+	if !sig4.PressureFired {
+		t.Fatalf("cofire PressureFired: got false, want true (pressure 0.25 > 0.20)")
+	}
+	if len(v4.Causes) != 2 {
+		t.Fatalf("cofire Causes length: got %d, want 2 (both throttle and pressure causes present)", len(v4.Causes))
+	}
+	kinds := map[CauseKind]bool{}
+	for _, c := range v4.Causes {
+		kinds[c.Kind] = true
+	}
+	if !kinds[CauseKindThrottling] || !kinds[CauseKindPressure] {
+		t.Fatalf("cofire Causes: got %+v, want both throttling and pressure present", v4.Causes)
+	}
+
+	// (5) BOUNDARY — the latch uses strict `>` (fire) and strict `<` (clear), so
+	// a reading of exactly PressureHigh (0.20) must NOT fire from a healthy
+	// latch, and a reading of exactly PressureRecover (0.12) must NOT clear from
+	// a fired latch. The hold band is [0.12, 0.20] inclusive on both ends.
+	// Pinning the strict-comparison contract prevents a future refactor flipping
+	// `>` to `>=` (or `<` to `<=`) from silently shifting the band.
+	stB := &WindowState{}
+	// Exactly PressureHigh (0.20) from healthy: must NOT fire.
+	vb1, sigb1 := Decide(stB, Sample{
+		Timestamp:     base.Add(40 * time.Second),
+		PressureAvg60: thresholds.PressureHigh, // 0.20
+	}, thresholds)
+	if vb1.State != StateHealthy {
+		t.Fatalf("boundary-high State: got %q, want %q (exactly PressureHigh 0.20, strict `>` must NOT fire)", vb1.State, StateHealthy)
+	}
+	if sigb1.PressureFired {
+		t.Fatalf("boundary-high PressureFired: got true, want false (strict `>`: 0.20 is not > 0.20)")
+	}
+	if len(vb1.Causes) != 0 {
+		t.Fatalf("boundary-high Causes: got %+v, want none (0.20 does not fire)", vb1.Causes)
+	}
+	// Fire the latch for the next boundary check.
+	Decide(stB, Sample{
+		Timestamp:     base.Add(50 * time.Second),
+		PressureAvg60: 0.21,
+	}, thresholds)
+	if !stB.pressureFired {
+		t.Fatalf("boundary setup: latch should have fired at 0.21")
+	}
+	// Exactly PressureRecover (0.12) from fired: must NOT clear (strict `<`).
+	vb2, sigb2 := Decide(stB, Sample{
+		Timestamp:     base.Add(60 * time.Second),
+		PressureAvg60: thresholds.PressureRecover, // 0.12
+	}, thresholds)
+	if vb2.State != StateDegraded {
+		t.Fatalf("boundary-recover State: got %q, want %q (exactly PressureRecover 0.12, strict `<` must NOT clear)", vb2.State, StateDegraded)
+	}
+	if !sigb2.PressureFired {
+		t.Fatalf("boundary-recover PressureFired: got false, want true (strict `<`: 0.12 is not < 0.12, latch holds fired)")
+	}
+
+	// (6) NaN GUARD — a NaN PressureAvg60 is clamped to 0 before thresholding.
+	// On a FRESH (healthy) latch, NaN must NOT fire (treated as 0, which is <
+	// PressureRecover → latch stays/clears). On an already-FIRED latch, NaN
+	// must CLEAR (treated as 0 < PressureRecover) — the pre-clamp bug stuck the
+	// latch fired indefinitely. NaN must also never leak as a Cause Value.
+	nan := math.NaN()
+	stN := &WindowState{}
+	// Fresh latch + NaN: stays healthy, no cause, no NaN Value.
+	vn1, sign1 := Decide(stN, Sample{
+		Timestamp:     base.Add(70 * time.Second),
+		PressureAvg60: nan,
+	}, thresholds)
+	if vn1.State != StateHealthy {
+		t.Fatalf("nan-fresh State: got %q, want %q (NaN clamped to 0, does not fire)", vn1.State, StateHealthy)
+	}
+	if sign1.PressureFired {
+		t.Fatalf("nan-fresh PressureFired: got true, want false (NaN→0 does not fire)")
+	}
+	if len(vn1.Causes) != 0 {
+		t.Fatalf("nan-fresh Causes: got %+v, want none", vn1.Causes)
+	}
+	// Fire the latch, then feed NaN: must CLEAR (NaN→0 < PressureRecover).
+	Decide(stN, Sample{
+		Timestamp:     base.Add(80 * time.Second),
+		PressureAvg60: 0.21,
+	}, thresholds)
+	if !stN.pressureFired {
+		t.Fatalf("nan setup: latch should have fired at 0.21")
+	}
+	vn2, sign2 := Decide(stN, Sample{
+		Timestamp:     base.Add(90 * time.Second),
+		PressureAvg60: nan,
+	}, thresholds)
+	if vn2.State != StateHealthy {
+		t.Fatalf("nan-fired State: got %q, want %q (NaN clamped to 0 < PressureRecover → latch clears)", vn2.State, StateHealthy)
+	}
+	if sign2.PressureFired {
+		t.Fatalf("nan-fired PressureFired: got true, want false (NaN→0 clears the latch, does not stick fired)")
+	}
+	if len(vn2.Causes) != 0 {
+		t.Fatalf("nan-fired Causes: got %+v, want none (NaN does not leak as a Cause Value)", vn2.Causes)
+	}
+
+	// (7) +INF GUARD — a +Inf PressureAvg60 is clamped to 0 before thresholding.
+	// The `!(p >= 0)` idiom catches NaN and negatives but NOT +Inf (`+Inf >= 0`
+	// is true), so without the math.IsInf(p, 1) guard a +Inf would leak into
+	// Cause.Value and break json.Marshal of the whole Verdict
+	// (`json: unsupported value: +Inf`). On a FRESH (healthy) latch, +Inf must
+	// NOT fire (clamped to 0, which is < PressureRecover). On an already-FIRED
+	// latch, +Inf must CLEAR (clamped to 0 < PressureRecover). +Inf must also
+	// never leak as a Cause Value.
+	inf := math.Inf(1)
+	stI := &WindowState{}
+	// Fresh latch + +Inf: stays healthy, no cause, no +Inf Value.
+	vi1, sigi1 := Decide(stI, Sample{
+		Timestamp:     base.Add(110 * time.Second),
+		PressureAvg60: inf,
+	}, thresholds)
+	if vi1.State != StateHealthy {
+		t.Fatalf("inf-fresh State: got %q, want %q (+Inf clamped to 0, does not fire)", vi1.State, StateHealthy)
+	}
+	if sigi1.PressureFired {
+		t.Fatalf("inf-fresh PressureFired: got true, want false (+Inf→0 does not fire)")
+	}
+	if len(vi1.Causes) != 0 {
+		t.Fatalf("inf-fresh Causes: got %+v, want none", vi1.Causes)
+	}
+	// Fire the latch, then feed +Inf: must CLEAR (+Inf→0 < PressureRecover).
+	Decide(stI, Sample{
+		Timestamp:     base.Add(120 * time.Second),
+		PressureAvg60: 0.21,
+	}, thresholds)
+	if !stI.pressureFired {
+		t.Fatalf("inf setup: latch should have fired at 0.21")
+	}
+	vi2, sigi2 := Decide(stI, Sample{
+		Timestamp:     base.Add(130 * time.Second),
+		PressureAvg60: inf,
+	}, thresholds)
+	if vi2.State != StateHealthy {
+		t.Fatalf("inf-fired State: got %q, want %q (+Inf clamped to 0 < PressureRecover → latch clears)", vi2.State, StateHealthy)
+	}
+	if sigi2.PressureFired {
+		t.Fatalf("inf-fired PressureFired: got true, want false (+Inf→0 clears the latch)")
+	}
+	if len(vi2.Causes) != 0 {
+		t.Fatalf("inf-fired Causes: got %+v, want none (+Inf does not leak as a Cause Value)", vi2.Causes)
+	}
+
+	// (8) DEFAULT-ZERO — a zero PressureAvg60 (the unset/zero-value case) never
+	// fires: 0 < PressureRecover so the latch is forced CLEAR on every tick.
+	stZ := &WindowState{}
+	vz, sigz := Decide(stZ, Sample{
+		Timestamp:     base.Add(100 * time.Second),
+		PressureAvg60: 0.0,
+	}, thresholds)
+	if vz.State != StateHealthy {
+		t.Fatalf("zero State: got %q, want %q (0 < PressureRecover, never fires)", vz.State, StateHealthy)
+	}
+	if sigz.PressureFired {
+		t.Fatalf("zero PressureFired: got true, want false (0 never fires)")
+	}
+	if len(vz.Causes) != 0 {
+		t.Fatalf("zero Causes: got %+v, want none", vz.Causes)
+	}
+}

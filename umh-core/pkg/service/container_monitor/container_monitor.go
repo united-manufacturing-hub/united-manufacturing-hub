@@ -255,6 +255,8 @@ func (c *ContainerMonitorService) getCPUMetrics(ctx context.Context) (*models.CP
 	// preserve wasThrottled state.
 	var (
 		isThrottled bool
+		verdict     cpuhealth.Verdict
+		signals     cpuhealth.Signals
 	)
 	if cgroupErr == nil && cgroupInfo != nil {
 		sample := cpuhealth.Sample{
@@ -262,7 +264,7 @@ func (c *ContainerMonitorService) getCPUMetrics(ctx context.Context) (*models.CP
 			NrPeriods:   cgroupInfo.NrPeriods,
 			NrThrottled: cgroupInfo.NrThrottled,
 		}
-		_, signals := cpuhealth.Decide(c.windowState, sample, cpuhealth.DefaultThresholds())
+		verdict, signals = cpuhealth.Decide(c.windowState, sample, cpuhealth.DefaultThresholds())
 		isThrottled = signals.ThrottleFired
 		// ThrottleRatio is read unconditionally from signals, decoupling the
 		// numeric metric from latch state. Negatives are already clamped to 0
@@ -278,22 +280,26 @@ func (c *ContainerMonitorService) getCPUMetrics(ctx context.Context) (*models.CP
 		c.wasThrottled = isThrottled
 	}
 
-	// CPU health here is driven by throttling alone: high usage alone is not
-	// ill health (a capped container pinned at its quota is busy, not sick),
-	// and raw-usage degradation is no longer applied in GetStatus either. The
-	// throttle verdict flows through cpuhealth.Decide's Schmitt flip-latch
+	// CPU health is driven from verdict.State, not throttle alone. High usage
+	// alone is not ill health (a capped container pinned at its quota is busy,
+	// not sick), and raw-usage degradation is no longer applied in GetStatus
+	// either. The verdict flows through cpuhealth.Decide's Schmitt flip-latches
 	// (c.windowState); c.sampler remains live for usage reading in
 	// getRawCPUMetrics.
 	//
-	// The category is driven from signals.ThrottleFired rather than
-	// verdict.State. Today StateDegraded iff ThrottleFired (Decide returns
-	// StateDegraded only for the throttle cause), so they are equivalent.
-	// When Decide later reintroduces saturation/host-contention causes (per
-	// the decide.go docstring), this branch must be revisited to drive
-	// category from verdict.State so non-throttle degradation is reflected.
-	if isThrottled && cgroupInfo != nil {
+	// StateDegraded now covers throttle OR pressure (and any future cause
+	// Decide returns a degraded verdict for), so category is driven from
+	// verdict.State so every degradation cause flows to Degraded — not just
+	// throttle. isThrottled is retained for the cgroupInfo.IsThrottled wire
+	// field, the wasThrottled transition log above, and the throttle-specific
+	// message below; a pressure-only degrade uses a generic message.
+	if verdict.State == cpuhealth.StateDegraded && cgroupInfo != nil {
 		category = models.Degraded
-		message = fmt.Sprintf("CPU throttled (%.1f%% periods throttled)", cgroupInfo.ThrottleRatio*100)
+		if isThrottled {
+			message = fmt.Sprintf("CPU throttled (%.1f%% periods throttled)", cgroupInfo.ThrottleRatio*100)
+		} else {
+			message = "CPU degraded"
+		}
 	}
 
 	cpuStat := &models.CPU{
