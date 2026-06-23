@@ -59,26 +59,18 @@ type Service interface {
 	GetStatus(ctx context.Context) (*ServiceInfo, error)
 }
 
-// cgroupSnapshot stores cgroup CPU counters at a point in time for sliding window calculation.
-type cgroupSnapshot struct {
-	timestamp   time.Time
-	nrPeriods   int64
-	nrThrottled int64
-}
-
 // ContainerMonitorService implements the Service interface.
 type ContainerMonitorService struct {
-	fs                filesystem.Service
-	logger            *zap.SugaredLogger
-	instanceName      string
-	lastCollectedAt   time.Time
-	hwid              string
-	architecture      models.ContainerArchitecture //nolint:unused // will be used in the future
-	dataPath          string                       // Path to check for disk metrics and HWID file
-	throttleSnapshots []cgroupSnapshot             // Sliding window of cgroup counter snapshots
-	wasThrottled      bool                         // Previous throttle state for transition logging
-	windowState       *cpuhealth.WindowState       // Caller-held CPU-health verdict state
-	sampler           cpuhealth.Sampler            // cgroup cpu.stat usage_usec sampler
+	fs              filesystem.Service
+	logger          *zap.SugaredLogger
+	instanceName    string
+	lastCollectedAt time.Time
+	hwid            string
+	architecture    models.ContainerArchitecture //nolint:unused // will be used in the future
+	dataPath        string                       // Path to check for disk metrics and HWID file
+	wasThrottled    bool                         // Previous throttle state for transition logging
+	windowState     *cpuhealth.WindowState       // Caller-held CPU-health verdict state
+	sampler         cpuhealth.Sampler            // cgroup cpu.stat usage_usec sampler
 }
 
 // NewContainerMonitorService creates a new container monitor service instance.
@@ -254,14 +246,29 @@ func (c *ContainerMonitorService) getCPUMetrics(ctx context.Context) (*models.CP
 	category := models.Active
 	message := "CPU utilization normal"
 
-	// Compute windowed throttle ratio; skip entirely on cgroup read failure to preserve wasThrottled state
+	// Compute the throttle verdict through cpuhealth.Decide's Schmitt flip-latch
+	// (fires above ThrottleHigh 0.05, clears only below ThrottleRecover 0.03,
+	// holds between). Decide mutates c.windowState in place, maintaining the
+	// 60s throttle-counter ring. The numeric ThrottleRatio is read
+	// unconditionally from signals (independent of latch state); IsThrottled
+	// comes from signals.ThrottleFired. Skip entirely on cgroup read failure to
+	// preserve wasThrottled state.
 	var (
-		windowedRatio float64
-		isThrottled   bool
+		isThrottled bool
 	)
 	if cgroupErr == nil && cgroupInfo != nil {
-		windowedRatio, isThrottled = c.updateThrottleWindow(cgroupInfo)
-		cgroupInfo.ThrottleRatio = windowedRatio
+		sample := cpuhealth.Sample{
+			Timestamp:   time.Now(),
+			NrPeriods:   cgroupInfo.NrPeriods,
+			NrThrottled: cgroupInfo.NrThrottled,
+		}
+		_, signals := cpuhealth.Decide(c.windowState, sample, cpuhealth.DefaultThresholds())
+		isThrottled = signals.ThrottleFired
+		// ThrottleRatio is read unconditionally from signals, decoupling the
+		// numeric metric from latch state. Negatives are already clamped to 0
+		// inside Decide, so the wire never sees a negative ratio. IsThrottled
+		// still comes from signals.ThrottleFired (the Schmitt latch).
+		cgroupInfo.ThrottleRatio = signals.ThrottleRatio
 		cgroupInfo.IsThrottled = isThrottled
 
 		if isThrottled && !c.wasThrottled {
@@ -273,12 +280,17 @@ func (c *ContainerMonitorService) getCPUMetrics(ctx context.Context) (*models.CP
 
 	// CPU health here is driven by throttling alone: high usage alone is not
 	// ill health (a capped container pinned at its quota is busy, not sick),
-	// and raw-usage degradation is no longer applied in GetStatus either.
-	// cpuhealth.Decide is not called here because it returns StateHealthy for
-	// any sample until saturation logic is added. c.sampler is still live for
-	// usage reading in getRawCPUMetrics; only windowState is reserved for the
-	// future saturation
-	// wiring in cpuhealth.WindowState.
+	// and raw-usage degradation is no longer applied in GetStatus either. The
+	// throttle verdict flows through cpuhealth.Decide's Schmitt flip-latch
+	// (c.windowState); c.sampler remains live for usage reading in
+	// getRawCPUMetrics.
+	//
+	// The category is driven from signals.ThrottleFired rather than
+	// verdict.State. Today StateDegraded iff ThrottleFired (Decide returns
+	// StateDegraded only for the throttle cause), so they are equivalent.
+	// When Decide later reintroduces saturation/host-contention causes (per
+	// the decide.go docstring), this branch must be revisited to drive
+	// category from verdict.State so non-throttle degradation is reflected.
 	if isThrottled && cgroupInfo != nil {
 		category = models.Degraded
 		message = fmt.Sprintf("CPU throttled (%.1f%% periods throttled)", cgroupInfo.ThrottleRatio*100)
@@ -303,67 +315,6 @@ func (c *ContainerMonitorService) getCPUMetrics(ctx context.Context) (*models.CP
 	}
 
 	return cpuStat, nil
-}
-
-// updateThrottleWindow appends a cgroup snapshot and computes the throttle ratio
-// over a sliding window defined by constants.CPUThrottleWindow.
-// Returns (0.0, false) when there is insufficient data, nil input, or counter reset.
-func (c *ContainerMonitorService) updateThrottleWindow(cgroupInfo *CPUCgroupInfo) (ratio float64, isThrottled bool) {
-	// Guard: nil input or zero periods (cpu.stat unreadable)
-	if cgroupInfo == nil || cgroupInfo.NrPeriods <= 0 {
-		return 0.0, false
-	}
-
-	now := time.Now()
-
-	// Detect counter reset: if new counters are lower than the newest snapshot,
-	// the cgroup was recreated (pod rescheduled). Clear buffer and start fresh.
-	if len(c.throttleSnapshots) > 0 {
-		newest := c.throttleSnapshots[len(c.throttleSnapshots)-1]
-		if cgroupInfo.NrPeriods < newest.nrPeriods || cgroupInfo.NrThrottled < newest.nrThrottled {
-			c.throttleSnapshots = nil
-		}
-	}
-
-	// Append current snapshot
-	c.throttleSnapshots = append(c.throttleSnapshots, cgroupSnapshot{
-		timestamp:   now,
-		nrPeriods:   cgroupInfo.NrPeriods,
-		nrThrottled: cgroupInfo.NrThrottled,
-	})
-
-	// Prune entries older than the window
-	cutoff := now.Add(-constants.CPUThrottleWindow)
-
-	pruneIdx := 0
-	for pruneIdx < len(c.throttleSnapshots) && c.throttleSnapshots[pruneIdx].timestamp.Before(cutoff) {
-		pruneIdx++
-	}
-
-	if pruneIdx > 0 {
-		c.throttleSnapshots = c.throttleSnapshots[pruneIdx:]
-	}
-
-	// Need at least 2 snapshots for a delta
-	if len(c.throttleSnapshots) < 2 {
-		return 0.0, false
-	}
-
-	// Compute delta between newest and oldest snapshot in window
-	oldest := c.throttleSnapshots[0]
-	current := c.throttleSnapshots[len(c.throttleSnapshots)-1]
-
-	deltaPeriods := current.nrPeriods - oldest.nrPeriods
-	deltaThrottled := current.nrThrottled - oldest.nrThrottled
-
-	if deltaPeriods <= 0 {
-		return 0.0, false
-	}
-
-	ratio = float64(deltaThrottled) / float64(deltaPeriods)
-	isThrottled = ratio > constants.CPUThrottleRatioThreshold
-
-	return ratio, isThrottled
 }
 
 func (c *ContainerMonitorService) getRawCPUMetrics(ctx context.Context) (usageMCores float64, coreCount int, usagePercent float64, err error) {

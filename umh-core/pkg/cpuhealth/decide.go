@@ -109,6 +109,13 @@ type WindowState struct {
 type Signals struct {
 	UsageFraction float64
 	ThrottleFired bool
+	// ThrottleRatio is the computed 60s cumulative throttle ratio
+	// (nr_throttled delta / nr_periods delta, oldest-to-newest over the pruned
+	// window), populated UNCONDITIONALLY — independent of the flip-latch state —
+	// so the numeric metric is observable on the wire even when the latch has
+	// not fired. Negatives are clamped to 0 before assignment so a residual
+	// negative ratio from any edge case cannot leak to the wire.
+	ThrottleRatio float64
 }
 
 // Verdict is the output of Decide.
@@ -162,18 +169,22 @@ func Decide(st *WindowState, sample Sample, thresholds Thresholds) (Verdict, Sig
 	// (nr_throttled delta / nr_periods delta, oldest-to-newest over the pruned
 	// window). A sample exactly at the cutoff is kept (Before(cutoff) is false).
 	var ratio float64
-	// Clear the ring on counter regression BEFORE appending, mirroring
-	// production container_monitor.updateThrottleWindow: a cgroup recreation /
-	// pod reschedule drops nr_periods and/or nr_throttled below the ring's
-	// newest entry, so the pre-reset samples are no longer on the same counter
-	// baseline. Without this clear, the stale pre-reset oldest point stays in
-	// the ring for up to 60s: nr_periods delta = newest - oldest stays <= 0
-	// (throttleRatio returns 0 → latch forced CLEAR, a blind spot), and once the
-	// fresh counters regrow past the stale oldest the denominator is inflated by
-	// pre-reset periods → ratio understated → throttle silently missed during
-	// the cgroup cold-start window where throttling is most likely. Clearing
-	// turns the 60s blind spot into a ~1-tick blind spot (the next fresh sample
-	// pair rebuilds the delta from the new baseline).
+	// Clear the ring on EITHER counter regression BEFORE appending: a cgroup
+	// recreation / pod reschedule drops nr_periods and/or nr_throttled below the
+	// ring's newest entry, so the pre-reset samples are no longer on the same
+	// counter baseline. Without this clear, the stale pre-reset oldest point
+	// stays in the ring for up to 60s: nr_periods delta = newest - oldest stays
+	// <= 0 (throttleRatio returns 0 → latch forced CLEAR, a blind spot), and
+	// once the fresh counters regrow past the stale oldest the denominator is
+	// inflated by pre-reset periods → ratio understated → throttle silently
+	// missed during the cgroup cold-start window where throttling is most
+	// likely. Clearing turns the 60s blind spot into a ~1-tick blind spot (the
+	// next fresh sample pair rebuilds the delta from the new baseline).
+	//
+	// Either counter regressing triggers the clear. A nrThrottled-only drop
+	// with a growing nrPeriods is treated the same as a nrPeriods regression:
+	// the counters are no longer on the same baseline, so the ring is rebuilt
+	// from the fresh sample.
 	if len(st.throttleRing) > 0 {
 		newest := st.throttleRing[len(st.throttleRing)-1]
 		if sample.NrPeriods < newest.nrPeriods || sample.NrThrottled < newest.nrThrottled {
@@ -198,6 +209,13 @@ func Decide(st *WindowState, sample Sample, thresholds Thresholds) (Verdict, Sig
 	st.throttleRing = ring
 
 	ratio = throttleRatio(ring)
+	// Clamp negatives to 0 before exposing on the wire: a residual negative
+	// ratio from any edge case must not leak to callers (the numeric metric is
+	// observable independent of latch state).
+	if ratio < 0 {
+		ratio = 0
+	}
+	signals.ThrottleRatio = ratio
 	switch {
 	case ratio > thresholds.ThrottleHigh:
 		st.throttleFired = true
@@ -220,14 +238,12 @@ func Decide(st *WindowState, sample Sample, thresholds Thresholds) (Verdict, Sig
 // throttleRatio computes the 60s cumulative throttle ratio as the two-point
 // counter delta (nr_throttled delta / nr_periods delta, oldest-to-newest). It
 // returns 0 when there are fewer than two points or the period delta is
-// non-positive. The non-positive-periods branch is now only a safe divide-guard
-// for the genuinely-empty / ring-rebuilding case: Decide clears the ring on any
-// counter regression (nrPeriods OR nrThrottled dropping below the ring's newest
-// entry) before appending, so a partial reset (nrThrottled-only regression with
-// a positive period delta) cannot leave a stale oldest point that would yield a
-// negative ratio here. A negative nrThrottled delta with a positive period delta
-// is therefore unreachable after the clear-on-regression; the guard remains as a
-// defensive divide-guard, not the reset path.
+// non-positive. The non-positive-periods branch is a safe divide-guard for the
+// genuinely-empty / ring-rebuilding case. Decide clears the ring when either
+// counter regresses below the ring's newest entry before appending, so a
+// post-reset ring holds only fresh-baseline points. The guard remains as a
+// defensive divide-guard for the empty/ring-rebuilding case. Decide clamps any
+// residual negative ratio to 0 before exposing it on Signals.ThrottleRatio.
 func throttleRatio(ring []throttlePoint) float64 {
 	if len(ring) < 2 {
 		return 0

@@ -606,9 +606,8 @@ func TestDecide_ThrottleFlipLatch_WindowedSchmitt(t *testing.T) {
 // TestDecide_ThrottleFlipLatch_CounterReset pins the counter-reset behavior.
 // When a cgroup is recreated mid-incident (container restart), the
 // nr_throttled and/or nr_periods counters drop. Decide clears the ring before
-// appending when either counter regresses below the ring's newest entry
-// (mirroring production container_monitor.updateThrottleWindow), so the
-// reset sample becomes a fresh baseline: the ring holds a single point,
+// appending when either counter regresses below the ring's newest entry, so
+// the reset sample becomes a fresh baseline: the ring holds a single point,
 // throttleRatio returns 0 (len < 2), and 0 < ThrottleRecover clears the latch.
 // In both scenarios no negative Cause Value is emitted.
 func TestDecide_ThrottleFlipLatch_CounterReset(t *testing.T) {
@@ -680,8 +679,7 @@ func TestDecide_ThrottleFlipLatch_CounterReset(t *testing.T) {
 // TestDecide_ThrottleFlipLatch_CounterResetClearsRing is the RED test for the
 // clear-on-regression-before-append fix. The bug: Decide appended to the ring
 // before checking for counter regression and did NOT clear the ring when
-// counters regressed (a cgroup recreation / pod reschedule), diverging from
-// production container_monitor.updateThrottleWindow. After a counter reset,
+// counters regressed (a cgroup recreation / pod reschedule). After a counter reset,
 // the stale pre-reset oldest point stayed in the ring: nr_periods delta =
 // newest - oldest stayed <= 0 → throttleRatio returned 0 → latch forced CLEAR
 // (a blind spot), and once fresh counters regrew past the stale oldest the
