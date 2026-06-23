@@ -4,10 +4,19 @@
 
 ### Improvements
 
+- OPC UA: encrypted connections (`Basic256Sha256`, both `Sign` and `Sign & Encrypt`) now complete reliably, including signing-only mode which previously failed to connect
 - When a bridge, flow, or stream processor config fails to render because the result is invalid YAML, the error now includes the failing lines of the rendered output. Previously the error named only a line number (for example `yaml: line 25: did not find expected key`) while the rendered output was discarded, so the failure could not be diagnosed from logs
 - Editing a bridge whose new configuration keeps failing to render now fails after three identical render failures (a few seconds) and rolls back to the previous configuration automatically, naming the render failure as the root cause; while the edit is still retrying, each progress update also names the render failure. Previously such an edit retried for the full 30-second timeout before rolling back, and progress updates gave no reason
 
 ![Bridge update failed dialog showing the failing region of the rendered config and the automatic rollback message](./changelog-images/2026-06-19-bridge-render-error.png)
+
+### Fixes
+
+- OPC UA: reading or subscribing to large tag sets (roughly a thousand or more) over an encrypted connection no longer drops the connection with an `EOF` error
+- OPC UA: subscriptions now survive a reconnect, so data collection resumes automatically after a network interruption instead of stalling until the input is restarted
+- OPC UA: connecting to servers that present their certificate as a chain (leaf plus intermediates), such as Siemens WinCC Unified, now works
+- OPC UA: a single unreadable or invalid node ID no longer blocks monitoring the rest of a subscribed batch
+- OPC UA: browsing certain servers no longer crashes the input
 
 ## [0.44.24]
 
