@@ -484,8 +484,8 @@ func floatEq(a, b float64) bool {
 //  4. CLEAR — further calm samples drop the 60s ratio below 0.03 → latch
 //     clears: healthy, Signals.ThrottleFired false, no causes.
 //
-// Steal/pressure/host-contention/saturation are later rungs and are not
-// exercised here; the Sample carries only throttle counters at this rung.
+// Steal/pressure/host-contention/saturation are not exercised here; the
+// Sample carries only throttle counters.
 func TestDecide_ThrottleFlipLatch_WindowedSchmitt(t *testing.T) {
 	// 10s tick; 60s window holds ~7 samples. cutoff = now - 60s; a sample
 	// exactly at cutoff is kept (Before(cutoff) is false).
@@ -1048,3 +1048,409 @@ func TestDecide_PressureCause_Avg60DirectSchmitt(t *testing.T) {
 		t.Fatalf("zero Causes: got %+v, want none", vz.Causes)
 	}
 }
+
+// TestDecide_StealCause_VirtualizedRingP95Schmitt pins the steal starvation
+// cause in Decide — an EXTERNAL/host-attributed cause. Steal is the
+// fraction of wall-time the hypervisor gave this VM's vCPU to other VMs
+// (Sample.StealFraction, 0.0-1.0), read from the 8th field of /proc/stat's
+// `cpu ` line. Unlike throttle (counter-delta) and pressure (kernel-avg60
+// direct), steal uses a 60s RING of per-tick StealFraction samples reduced by
+// p95 (near-worst-of-window via nearest-rank: a sustained spike fires, a
+// single isolated spike is absorbed). A THIRD Schmitt flip-latch fires when
+// the p95 > StealHigh (0.10) and clears only when it drops below StealRecover
+// (0.06); between the marks it holds.
+//
+// Steal is only readable on a virtualized box. Sample.Virtualized is set by
+// the sampler from /proc/cpuinfo's hypervisor flag. When Virtualized is
+// FALSE, Decide skips the steal ring entirely — it does not append, does not
+// evaluate the latch, and does not reset the ring or clear the latch (steal
+// is structurally 0 on bare metal, so reading 0 there is the absence of a
+// signal, not evidence of a healthy host). When Virtualized is TRUE, steal is
+// processed even when it reads 0 (0 on a VM = the host is serving us fine →
+// contributes to healthy, not a dead-zone). Readable iff virtualized, not
+// "/proc/stat parses."
+//
+// When steal fires the verdict is {degraded, HOST, [steal]} with the Cause
+// Value = the steal p95. HOST is the external attribution. When steal and an
+// internal cause (throttle/pressure) BOTH fire, attribution is HOST
+// (external-steal currently wins attribution when it fires; the full
+// dominance ordering is not yet implemented) and causes lists both.
+//
+// Pinned behaviors:
+//
+//  1. FIRE — virtualized, 20 sustained ticks at 0.15 (> StealHigh 0.10) →
+//     degraded, HOST, one steal cause whose Value is the p95 (0.15: all
+//     samples identical → p95 is 0.15 under any reduction method).
+//  2. BARE-METAL PREDICATE — Virtualized=false with a nonzero StealFraction
+//     (0.15) on every tick: steal is NOT processed → healthy, no steal cause,
+//     StealFired false, AND the steal ring is reset (remains empty).
+//     This is the spec's "readable iff virtualized, not /proc/stat parses."
+//  3. VM ZERO → HEALTHY — Virtualized=true, StealFraction=0.0 for 20 ticks:
+//     steal IS processed (ring appended, non-empty) but 0 < StealRecover so
+//     the latch stays clear and the verdict is healthy. A quiescent VM is
+//     healthy, not a dead-zone — the contrast with case 2 is the predicate.
+//  4. TRANSIENT SPIKE ABSORBED — Virtualized=true, 20 ticks at 0.0 then ONE
+//     tick at 0.15: with 21 samples the p95 (near-worst-of-window via
+//     nearest-rank) stays below StealHigh 0.10 (nearest-rank p95 of twenty 0s
+//     + one 0.15 = 0.0), so the latch does NOT fire and the verdict is
+//     healthy. The p95 window absorbs a single isolated spike; a sustained
+//     spike (case 1) fires.
+//  5. CO-FIRE WITH THROTTLE → HOST — steal firing AND throttle firing on the
+//     same sample: both causes appear, attribution is HOST (external wins
+//     attribution when it fires; the full dominance ordering is not yet
+//     implemented).
+func TestDecide_StealCause_VirtualizedRingP95Schmitt(t *testing.T) {
+	base := time.Date(2026, 6, 23, 12, 0, 0, 0, time.UTC)
+	thresholds := DefaultThresholds()
+
+	// feedSteal pushes n ticks of the given StealFraction onto st's steal ring
+	// at 1s spacing (well inside the 60s window), Virtualized=virt, returning
+	// the final verdict+signals. NrPeriods/NrThrottled are left zero so the
+	// throttle ring (which needs a 2-point delta) stays quiet unless a
+	// throttle baseline is established by the caller.
+	feedSteal := func(st *WindowState, n int, steal float64, virt bool, startOff time.Duration) (Verdict, Signals) {
+		var v Verdict
+		var s Signals
+		for i := 0; i < n; i++ {
+			v, s = Decide(st, Sample{
+				Timestamp:     base.Add(startOff).Add(time.Duration(i) * time.Second),
+				StealFraction: steal,
+				Virtualized:   virt,
+			}, thresholds)
+		}
+		return v, s
+	}
+
+	// (1) FIRE — 20 sustained ticks at 0.15 on a virtualized box: p95 = 0.15
+	// (> StealHigh 0.10) → latch fires, degraded, HOST, one steal cause with
+	// Value = the p95.
+	st1 := &WindowState{}
+	v1, sig1 := feedSteal(st1, 20, 0.15, true, 0)
+	if v1.State != StateDegraded {
+		t.Fatalf("fire State: got %q, want %q (steal p95 0.15 > StealHigh 0.10 → degraded)", v1.State, StateDegraded)
+	}
+	if v1.Attribution != AttributionHost {
+		t.Fatalf("fire Attribution: got %q, want %q (steal is external → host, the first non-unknown attribution)", v1.Attribution, AttributionHost)
+	}
+	if !sig1.StealFired {
+		t.Fatalf("fire StealFired: got false, want true (p95 0.15 > StealHigh 0.10 fires the latch)")
+	}
+	if len(v1.Causes) != 1 {
+		t.Fatalf("fire Causes length: got %d, want 1 (single steal cause)", len(v1.Causes))
+	}
+	if v1.Causes[0].Kind != CauseKindSteal {
+		t.Fatalf("fire Cause Kind: got %q, want %q", v1.Causes[0].Kind, CauseKindSteal)
+	}
+	if !floatEq(v1.Causes[0].Value, 0.15) {
+		t.Fatalf("fire Cause Value: got %v, want 0.15 (the steal p95; 20 identical samples → p95 is 0.15 under any reduction)", v1.Causes[0].Value)
+	}
+
+	// (2) BARE-METAL PREDICATE — Virtualized=false with a nonzero
+	// StealFraction (0.15) on every tick: steal is NOT processed. The latch
+	// stays unfired, no steal cause, verdict healthy, AND the steal ring is
+	// NOT appended (remains empty — the structural-0-on-bare-metal case is
+	// the absence of a signal, not evidence of health).
+	st2 := &WindowState{}
+	v2, sig2 := feedSteal(st2, 20, 0.15, false, 100*time.Second)
+	if v2.State != StateHealthy {
+		t.Fatalf("baremetal State: got %q, want %q (Virtualized=false → steal not processed → healthy)", v2.State, StateHealthy)
+	}
+	if sig2.StealFired {
+		t.Fatalf("baremetal StealFired: got true, want false (steal not processed on bare metal)")
+	}
+	if len(v2.Causes) != 0 {
+		t.Fatalf("baremetal Causes: got %+v, want none (no steal cause when Virtualized=false)", v2.Causes)
+	}
+	if len(st2.stealRing) != 0 {
+		t.Fatalf("baremetal stealRing length: got %d, want 0 (ring must NOT be appended when Virtualized=false — steal is not a readable signal on bare metal)", len(st2.stealRing))
+	}
+
+	// (3) VM ZERO → HEALTHY — Virtualized=true, StealFraction=0.0 for 20
+	// ticks: steal IS processed (ring appended, non-empty) but 0 <
+	// StealRecover so the latch stays clear and the verdict is healthy. A
+	// quiescent VM is healthy, NOT a dead-zone. The contrast with case 2
+	// (same zeros, but Virtualized=false → ring empty) is the readability
+	// predicate: on a VM the 0 is a real "host is serving us" signal.
+	st3 := &WindowState{}
+	v3, sig3 := feedSteal(st3, 20, 0.0, true, 200*time.Second)
+	if v3.State != StateHealthy {
+		t.Fatalf("vm-zero State: got %q, want %q (steal 0 on a VM is processed but does not fire → healthy)", v3.State, StateHealthy)
+	}
+	if sig3.StealFired {
+		t.Fatalf("vm-zero StealFired: got true, want false (0 < StealRecover 0.06, latch stays clear)")
+	}
+	if len(v3.Causes) != 0 {
+		t.Fatalf("vm-zero Causes: got %+v, want none", v3.Causes)
+	}
+	if len(st3.stealRing) == 0 {
+		t.Fatalf("vm-zero stealRing length: got 0, want non-zero (steal IS processed on a VM even at 0 — 0 is a real healthy signal, not a dead-zone)")
+	}
+
+	// (4) TRANSIENT SPIKE ABSORBED — 20 ticks at 0.0 then ONE tick at 0.15
+	// (Virtualized=true). With 21 samples the p95 stays below StealHigh 0.10
+	// (nearest-rank p95 of twenty 0s + one 0.15 = 0.0), so the latch does NOT
+	// fire and the verdict is healthy. The p95 window absorbs a single
+	// isolated spike; a sustained spike (case 1) fires.
+	st4 := &WindowState{}
+	v4a, _ := feedSteal(st4, 20, 0.0, true, 300*time.Second)
+	if v4a.State != StateHealthy {
+		t.Fatalf("spike-pre State: got %q, want %q (20 zero ticks → healthy)", v4a.State, StateHealthy)
+	}
+	v4, sig4 := Decide(st4, Sample{
+		Timestamp:     base.Add(300 * time.Second).Add(20 * time.Second),
+		StealFraction: 0.15,
+		Virtualized:   true,
+	}, thresholds)
+	if v4.State != StateHealthy {
+		t.Fatalf("spike State: got %q, want %q (one 0.15 spike among 20 zeros: p95 < 0.10 → does not fire)", v4.State, StateHealthy)
+	}
+	if sig4.StealFired {
+		t.Fatalf("spike StealFired: got true, want false (single isolated spike: p95 of mostly-0 + one 0.15 stays below StealHigh)")
+	}
+	if len(v4.Causes) != 0 {
+		t.Fatalf("spike Causes: got %+v, want none (transient spike absorbed by the p95 window)", v4.Causes)
+	}
+
+	// (5) CO-FIRE WITH THROTTLE → HOST — steal firing AND throttle firing on
+	// the same sample: both causes appear, attribution is HOST (external-steal
+	// wins attribution when it fires). Two ticks build the throttle ring
+	// delta; the steal ring is filled with sustained-high steal so its p95
+	// fires too.
+	st5 := &WindowState{}
+	// Baseline throttle counters at t0.
+	Decide(st5, Sample{
+		Timestamp:     base.Add(400 * time.Second),
+		NrPeriods:     1000,
+		NrThrottled:   10,
+		StealFraction: 0.0,
+		Virtualized:   true,
+	}, thresholds)
+	// 18 more sustained-high-steal ticks to build the steal p95 (all 0.15).
+	// The intermediate ticks carry forward NrPeriods/NrThrottled (1000+i, 10+i)
+	// so they do NOT regress below the t0 baseline (1000, 10) and trigger the
+	// counter-regression ring-clear; with zero-value counters the ring would be
+	// rebuilt from (0,0) and the actual throttle ratio would be 0.055, not the
+	// intended 0.10.
+	for i := 1; i < 19; i++ {
+		Decide(st5, Sample{
+			Timestamp:     base.Add(400 * time.Second).Add(time.Duration(i) * time.Second),
+			NrPeriods:     1000 + int64(i),
+			NrThrottled:   10 + int64(i),
+			StealFraction: 0.15,
+			Virtualized:   true,
+		}, thresholds)
+	}
+	// Final tick: +1000 periods, +100 throttled → 60s throttle ratio
+	// (110-10)/(2000-1000) = 0.10 > ThrottleHigh 0.05 (throttle fires), AND
+	// steal 0.15 continues (p95 > StealHigh → steal fires).
+	v5, sig5 := Decide(st5, Sample{
+		Timestamp:     base.Add(400 * time.Second).Add(19 * time.Second),
+		NrPeriods:     2000,
+		NrThrottled:   110,
+		StealFraction: 0.15,
+		Virtualized:   true,
+	}, thresholds)
+	if v5.State != StateDegraded {
+		t.Fatalf("cofire State: got %q, want %q (both steal and throttle fire)", v5.State, StateDegraded)
+	}
+	if v5.Attribution != AttributionHost {
+		t.Fatalf("cofire Attribution: got %q, want %q (external-steal wins attribution when it fires)", v5.Attribution, AttributionHost)
+	}
+	if !sig5.StealFired {
+		t.Fatalf("cofire StealFired: got false, want true (sustained steal 0.15 → p95 > 0.10)")
+	}
+	if !sig5.ThrottleFired {
+		t.Fatalf("cofire ThrottleFired: got false, want true (throttle ratio 0.10 > 0.05)")
+	}
+	if len(v5.Causes) != 2 {
+		t.Fatalf("cofire Causes length: got %d, want 2 (both steal and throttling present)", len(v5.Causes))
+	}
+	kinds := map[CauseKind]bool{}
+	var throttleVal float64
+	for _, c := range v5.Causes {
+		kinds[c.Kind] = true
+		if c.Kind == CauseKindThrottling {
+			throttleVal = c.Value
+		}
+	}
+	if !kinds[CauseKindSteal] || !kinds[CauseKindThrottling] {
+		t.Fatalf("cofire Causes: got %+v, want both steal and throttling present", v5.Causes)
+	}
+	wantThrottle := 100.0 / 1000.0
+	if !floatEq(throttleVal, wantThrottle) {
+		t.Fatalf("cofire throttle Cause Value: got %v, want %v (clean two-point delta 0.10, not the 0.055 a zero-intermediate ring-clear produces)", throttleVal, wantThrottle)
+	}
+}
+
+// TestDecide_StealCause_FireThenRecover is the round-trip test for the steal
+// Schmitt latch's CLEAR branch (StealRecover). Without a recover branch, once
+// the steal latch fires it is permanently stuck at {degraded, host} until
+// restart — the latch only ever sets stealFired=true and never clears it. This
+// test feeds sustained-high steal to FIRE the latch, then sustained-low steal
+// for long enough that the 60s window's p95 drops below StealRecover (0.06),
+// and asserts the latch CLEARS (healthy, no steal cause). This test MUST fail
+// when FIX 1 (the StealRecover clear branch) is reverted.
+func TestDecide_StealCause_FireThenRecover(t *testing.T) {
+	base := time.Date(2026, 6, 23, 12, 0, 0, 0, time.UTC)
+	thresholds := DefaultThresholds()
+	st := &WindowState{}
+
+	// FIRE — 20 sustained ticks at 0.15 (> StealHigh 0.10) at 1s spacing
+	// (t=0..t=19, all within the 60s window). p95 = 0.15 → latch fires.
+	for i := 0; i < 20; i++ {
+		Decide(st, Sample{
+			Timestamp:     base.Add(time.Duration(i) * time.Second),
+			StealFraction: 0.15,
+			Virtualized:   true,
+		}, thresholds)
+	}
+	vFire, sigFire := Decide(st, Sample{
+		Timestamp:     base.Add(20 * time.Second),
+		StealFraction: 0.15,
+		Virtualized:   true,
+	}, thresholds)
+	if vFire.State != StateDegraded {
+		t.Fatalf("fire State: got %q, want %q (sustained steal 0.15 → p95 > StealHigh 0.10)", vFire.State, StateDegraded)
+	}
+	if vFire.Attribution != AttributionHost {
+		t.Fatalf("fire Attribution: got %q, want %q", vFire.Attribution, AttributionHost)
+	}
+	if !sigFire.StealFired {
+		t.Fatalf("fire StealFired: got false, want true (latch must fire above StealHigh)")
+	}
+
+	// RECOVER — feed sustained-low steal (0.0) at 10s spacing so that after
+	// enough ticks the 60s window contains only low samples. At 10s spacing:
+	// the high-steal samples (t=0..t=20) age out once they exceed 60s from the
+	// newest timestamp. By t=130s, cutoff = t=70s, so all high-steal samples
+	// (t<=20) are pruned; the window holds only 0.0 samples from t=70 onward.
+	// p95 of all-zeros = 0.0 < StealRecover 0.06 → latch CLEARS.
+	for i := 0; i < 12; i++ {
+		Decide(st, Sample{
+			Timestamp:     base.Add(time.Duration(30+i*10) * time.Second),
+			StealFraction: 0.0,
+			Virtualized:   true,
+		}, thresholds)
+	}
+	// Final tick at t=160s: cutoff = t=100s; window holds only 0.0 samples.
+	vClear, sigClear := Decide(st, Sample{
+		Timestamp:     base.Add(160 * time.Second),
+		StealFraction: 0.0,
+		Virtualized:   true,
+	}, thresholds)
+	if vClear.State != StateHealthy {
+		t.Fatalf("recover State: got %q, want %q (p95 dropped below StealRecover 0.06 → latch clears)", vClear.State, StateHealthy)
+	}
+	if sigClear.StealFired {
+		t.Fatalf("recover StealFired: got true, want false (latch must clear below StealRecover; without FIX 1 the latch never clears)")
+	}
+	if len(vClear.Causes) != 0 {
+		t.Fatalf("recover Causes length: got %d, want 0 (no steal cause once latch clears)", len(vClear.Causes))
+	}
+}
+
+// TestDecide_StealCause_RingPruning pins the 60s pruning of the steal ring
+// (FIX 2). Without pruning, stealPoint.ts is dead data — the ring is appended
+// every virtualized tick but never trimmed, so the p95 becomes an all-history
+// p95 (unbounded growth, old high-steal entries never drop). This test feeds
+// enough virtualized samples spanning > 60s of timestamps that old entries
+// should be pruned, asserts the ring length stays bounded, AND asserts that a
+// stale high-steal entry from > 60s ago does NOT keep the p95 elevated after
+// it ages out. This test MUST fail when FIX 2 (pruning) is reverted.
+func TestDecide_StealCause_RingPruning(t *testing.T) {
+	base := time.Date(2026, 6, 23, 12, 0, 0, 0, time.UTC)
+	thresholds := DefaultThresholds()
+
+	// Scenario A: ring length is bounded by pruning. Feed 10s-spaced
+	// virtualized samples for 130s (14 samples). With a 60s window, the ring
+	// should hold at most ~7 entries (t=70..t=130). Without pruning it grows to
+	// 14.
+	stA := &WindowState{}
+	for i := 0; i < 14; i++ {
+		Decide(stA, Sample{
+			Timestamp:     base.Add(time.Duration(i*10) * time.Second),
+			StealFraction: 0.0,
+			Virtualized:   true,
+		}, thresholds)
+	}
+	if len(stA.stealRing) > 8 {
+		t.Fatalf("ring length after pruning: got %d, want <= 8 (60s window at 10s spacing = ~7 entries; without FIX 2 the ring grows to 14)", len(stA.stealRing))
+	}
+
+	// Scenario B: a stale high-steal entry from > 60s ago does NOT keep the p95
+	// elevated after it ages out. Feed a burst of high-steal samples early
+	// (t=0..t=10), then enough low-steal samples that the high entries age out
+	// of the 60s window AND the ring holds >= 2 low samples (so the latch is
+	// actually evaluated and clears). At t=80s, cutoff = t=20s, so the high-steal
+	// samples (t=0, t=10) are pruned. Feed low samples at t=70 and t=80 so the
+	// window holds 2 zero entries → p95 = 0.0 < StealRecover → latch clears.
+	stB := &WindowState{}
+	// High-steal burst at t=0 and t=10 (2 samples, 0.15 each). Ring size 2 >=
+	// floor → latch fires.
+	Decide(stB, Sample{
+		Timestamp:     base,
+		StealFraction: 0.15,
+		Virtualized:   true,
+	}, thresholds)
+	Decide(stB, Sample{
+		Timestamp:     base.Add(10 * time.Second),
+		StealFraction: 0.15,
+		Virtualized:   true,
+	}, thresholds)
+	if !stB.stealFired {
+		t.Fatalf("setup: latch should have fired after 2 high-steal samples")
+	}
+	// Low-steal samples at t=70 and t=80 (10s spacing). At t=80 cutoff=t=20,
+	// so the two 0.15 entries (t=0, t=10) are pruned. Window = [t=70, t=80],
+	// two 0.0 samples. p95 = 0.0 < StealRecover → latch CLEARS.
+	Decide(stB, Sample{
+		Timestamp:     base.Add(70 * time.Second),
+		StealFraction: 0.0,
+		Virtualized:   true,
+	}, thresholds)
+	vB, sigB := Decide(stB, Sample{
+		Timestamp:     base.Add(80 * time.Second),
+		StealFraction: 0.0,
+		Virtualized:   true,
+	}, thresholds)
+	if sigB.StealFired {
+		t.Fatalf("aged-out high-steal StealFired: got true, want false (stale 0.15 entries from t=0/t=10 pruned at t=80; p95 of 2 zeros = 0.0 < StealRecover; without FIX 2 they linger and keep the p95 elevated)")
+	}
+	if vB.State != StateHealthy {
+		t.Fatalf("aged-out high-steal State: got %q, want %q (stale entries pruned → p95 low → healthy)", vB.State, StateHealthy)
+	}
+}
+
+// TestDecide_StealCause_SmallNFloor pins the small-N degeneracy floor (FIX 3).
+// The nearest-rank p95 with N=1 returns the single sample's value, so without
+// a floor a first-tick high-steal sample (0.15) fires the latch immediately —
+// contradicting "sustained fires, isolated absorbed." A 2-sample floor (matching
+// throttle's two-point delta floor) prevents a single first-tick spike from
+// firing. This test MUST fail when FIX 3 (the floor) is reverted.
+func TestDecide_StealCause_SmallNFloor(t *testing.T) {
+	base := time.Date(2026, 6, 23, 12, 0, 0, 0, time.UTC)
+	thresholds := DefaultThresholds()
+	st := &WindowState{}
+
+	// A single virtualized first-tick high-steal sample (0.15 > StealHigh 0.10).
+	// Ring size = 1, below the 2-sample floor, so the latch must NOT evaluate
+	// and must NOT fire.
+	v, sig := Decide(st, Sample{
+		Timestamp:     base,
+		StealFraction:  0.15,
+		Virtualized:   true,
+	}, thresholds)
+	if sig.StealFired {
+		t.Fatalf("small-N StealFired: got true, want false (ring size 1 < floor 2; a single first-tick spike must not fire; without FIX 3 the N=1 p95=0.15 fires immediately)")
+	}
+	if v.State != StateHealthy {
+		t.Fatalf("small-N State: got %q, want %q (ring size 1 < floor 2 → latch not evaluated → healthy)", v.State, StateHealthy)
+	}
+	if len(v.Causes) != 0 {
+		t.Fatalf("small-N Causes length: got %d, want 0", len(v.Causes))
+	}
+	if len(st.stealRing) != 1 {
+		t.Fatalf("small-N ring length: got %d, want 1 (the sample IS appended; only the latch evaluation is skipped)", len(st.stealRing))
+	}
+}
+

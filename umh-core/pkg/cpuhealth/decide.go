@@ -16,6 +16,7 @@ package cpuhealth
 
 import (
 	"math"
+	"sort"
 	"time"
 )
 
@@ -32,6 +33,7 @@ type Attribution string
 
 const (
 	AttributionUnknown Attribution = "unknown"
+	AttributionHost    Attribution = "host"
 )
 
 // CauseKind enumerates the reason classes that can degrade CPU health.
@@ -41,6 +43,7 @@ const (
 	CauseKindSaturation CauseKind = "saturation"
 	CauseKindThrottling CauseKind = "throttling"
 	CauseKindPressure   CauseKind = "pressure"
+	CauseKindSteal      CauseKind = "steal"
 )
 
 // Cause is a single degradation reason with an associated numeric value.
@@ -56,11 +59,13 @@ type Thresholds struct {
 	ThrottleRecover   float64
 	PressureHigh      float64
 	PressureRecover   float64
+	StealHigh         float64
+	StealRecover      float64
 }
 
 // DefaultThresholds returns the canonical thresholds (HighUsageFraction 0.70,
 // ThrottleHigh 0.05, ThrottleRecover 0.03, PressureHigh 0.20, PressureRecover
-// 0.12).
+// 0.12, StealHigh 0.10, StealRecover 0.06).
 func DefaultThresholds() Thresholds {
 	return Thresholds{
 		HighUsageFraction: 0.70,
@@ -68,12 +73,20 @@ func DefaultThresholds() Thresholds {
 		ThrottleRecover:   0.03,
 		PressureHigh:      0.20,
 		PressureRecover:   0.12,
+		StealHigh:         0.10,
+		StealRecover:      0.06,
 	}
 }
 
 // throttleWindow is the sliding window length over which the throttle ratio
 // is computed.
 const throttleWindow = 60 * time.Second
+
+// stealWindow is the sliding window length over which the steal p95 is
+// computed. It matches throttleWindow (60s) so both rings cover the same
+// observation horizon; they are kept as separate consts so they can diverge
+// if the debounce needs ever call for it.
+const stealWindow = 60 * time.Second
 
 // Sample is a single point-in-time CPU usage observation.
 //
@@ -117,6 +130,17 @@ type Sample struct {
 	// can be NaN or +Inf, unlike the integer-derived throttle ratio whose clamp
 	// is NaN-safe only because throttleRatio() structurally cannot produce NaN.
 	PressureAvg60 float64
+	// StealFraction is the fraction of wall-time the hypervisor gave this VM's
+	// vCPU to other VMs (0.0-1.0), read from the 8th field of /proc/stat's
+	// `cpu ` line. It is only readable on a virtualized box; when Virtualized
+	// is false Decide does not process steal (it is not a readable signal on
+	// bare metal).
+	StealFraction float64
+	// Virtualized is set by the sampler from /proc/cpuinfo's hypervisor flag.
+	// When false, steal is not a readable signal (it is structurally 0 on bare
+	// metal, so reading 0 there is the absence of a signal, not evidence of a
+	// healthy host).
+	Virtualized bool
 }
 
 // throttlePoint is one timestamped throttle-counter observation in the
@@ -132,8 +156,17 @@ type throttlePoint struct {
 // debounce; the asymmetric (Schmitt) recover band is the only extra mechanism.
 type WindowState struct {
 	throttleRing  []throttlePoint
+	stealRing     []stealPoint
 	throttleFired bool
 	pressureFired bool
+	stealFired    bool
+}
+
+// stealPoint is one timestamped steal-fraction observation in the WindowState
+// ring.
+type stealPoint struct {
+	ts    time.Time
+	steal float64
 }
 
 // Signals holds derived intermediate values computed during Decide.
@@ -151,6 +184,10 @@ type Signals struct {
 	// PressureHigh, clears only below PressureRecover), independent of the
 	// throttle latch.
 	PressureFired bool
+	// StealFired is the steal Schmitt latch state (fires above StealHigh,
+	// clears below StealRecover; holds between), independent of the
+	// throttle/pressure latches.
+	StealFired bool
 }
 
 // Verdict is the output of Decide.
@@ -161,14 +198,14 @@ type Verdict struct {
 }
 
 // Decide computes a CPU-health verdict from a sample. Decide mutates st
-// (*WindowState) in place — appending to the throttle ring and updating the
-// flip-latch — so the caller must not share st across goroutines without
-// external synchronization. High usage alone is not ill health: a capped
-// container pinned at its quota with no throttle/pressure/steal/host-contention
-// signal is busy, not sick, so Decide currently returns StateHealthy for any
-// sample that has no other cause. Saturation is reintroduced later, decided
-// from a windowed average of UsageFraction stored in WindowState rather than
-// raw usage.
+// (*WindowState) in place — appending to the throttle and steal rings and
+// updating the flip-latches — so the caller must not share st across goroutines
+// without external synchronization. High usage alone is not ill health: a
+// capped container pinned at its quota with no throttle/pressure/steal/host-
+// contention signal is busy, not sick, so Decide currently returns StateHealthy
+// for any sample that has no other cause. Saturation is reintroduced later,
+// decided from a windowed average of UsageFraction stored in WindowState
+// rather than raw usage.
 //
 // Decide reads thresholds.ThrottleHigh and thresholds.ThrottleRecover for the
 // throttle Schmitt flip-latch (the latch fires above ThrottleHigh and clears
@@ -182,6 +219,16 @@ type Verdict struct {
 // HighUsageFraction must not silently blind saturation detection
 // (NaN >= threshold is always false).
 //
+// Decide also maintains a steal ring of per-tick StealFraction samples
+// (virtualized-only: when Sample.Virtualized is false, steal is not processed).
+// The steal latch fires when the p95 of the ring exceeds thresholds.StealHigh
+// and clears only when the p95 drops below thresholds.StealRecover; between the
+// two marks it holds (Schmitt), emitting a steal Cause with AttributionHost
+// (host-contention attribution IS computed by Decide when the steal latch
+// fires). The ring is pruned to a 60s window (stealWindow) so the p95 is a
+// 60s-windowed p95, not an all-history p95; the latch is not evaluated until
+// the ring holds at least 2 samples (a first-tick spike cannot fire).
+//
 // When Quota is non-nil, Decide uses it exclusively: a positive Quota yields
 // UsageCores/Quota, and a non-positive Quota (zero/negative/NaN) means
 // uncapped (the `> 0` guard rejects all three), so the unlimited-cgroup case
@@ -190,7 +237,7 @@ type Verdict struct {
 // non-nil. When Quota is nil, the fraction is derived from CgroupCores when
 // positive. When neither is available the sample is uncapped and Decide
 // returns StateHealthy regardless of UsageCores (uncapped cannot be
-// quota-saturated); host-contention attribution is not computed by Decide.
+// quota-saturated).
 func Decide(st *WindowState, sample Sample, thresholds Thresholds) (Verdict, Signals) {
 	var fraction float64
 
@@ -292,6 +339,61 @@ func Decide(st *WindowState, sample Sample, thresholds Thresholds) (Verdict, Sig
 
 	signals.PressureFired = st.pressureFired
 
+	// Steal flip-latch (virtualized-only): steal is the fraction of wall-time
+	// the hypervisor gave this VM's vCPU to other VMs (Sample.StealFraction).
+	// Unlike throttle (counter-delta) and pressure (kernel-avg60 direct), steal
+	// uses a ring of per-tick StealFraction samples reduced by p95
+	// (near-worst-of-window via nearest-rank: a sustained spike fires, a single
+	// isolated spike is absorbed). The latch fires when the p95 > StealHigh and
+	// clears only when the p95 drops below StealRecover; between the two marks it
+	// holds (Schmitt). Steal is only processed on a virtualized box: when
+	// Virtualized is false, steal is not a readable signal (it is structurally 0
+	// on bare metal, so reading 0 there is the absence of a signal, not evidence
+	// of a healthy host), so Decide skips the steal ring entirely.
+	var stealP95Val float64
+
+	if sample.Virtualized {
+		st.stealRing = append(st.stealRing, stealPoint{
+			ts:    sample.Timestamp,
+			steal: sample.StealFraction,
+		})
+
+		// Prune entries older than the steal window. This mirrors the throttle
+		// ring's pruning: a sample exactly at the cutoff is kept (Before(cutoff)
+		// is false). stealPoint.ts is read here — without pruning the ring grows
+		// unbounded and the p95 becomes an all-history p95, not a 60s-windowed
+		// p95.
+		stealCutoff := sample.Timestamp.Add(-stealWindow)
+		stealRing := st.stealRing
+		stealN := 0
+		for _, sp := range stealRing {
+			if !sp.ts.Before(stealCutoff) {
+				stealRing[stealN] = sp
+				stealN++
+			}
+		}
+		stealRing = stealRing[:stealN]
+		st.stealRing = stealRing
+
+		// Small-N floor: do NOT evaluate the steal latch until the ring holds at
+		// least 2 samples. With a single sample the nearest-rank p95 is that
+		// sample's value, so a first-tick high-steal reading (0.15) would fire the
+		// latch immediately — contradicting "sustained fires, isolated absorbed."
+		// A 2-sample floor mirrors throttle's two-point delta floor
+		// (throttleRatio returns 0 when len < 2) for consistency.
+		if len(st.stealRing) >= 2 {
+			stealP95Val = stealP95(st.stealRing)
+			switch {
+			case stealP95Val > thresholds.StealHigh:
+				st.stealFired = true
+			case stealP95Val < thresholds.StealRecover:
+				st.stealFired = false
+			}
+		}
+	}
+
+	signals.StealFired = st.stealFired
+
 	var causes []Cause
 	if signals.ThrottleFired {
 		causes = append(causes, Cause{Kind: CauseKindThrottling, Value: ratio})
@@ -301,10 +403,19 @@ func Decide(st *WindowState, sample Sample, thresholds Thresholds) (Verdict, Sig
 		causes = append(causes, Cause{Kind: CauseKindPressure, Value: p})
 	}
 
+	if signals.StealFired {
+		causes = append(causes, Cause{Kind: CauseKindSteal, Value: stealP95Val})
+	}
+
 	if len(causes) > 0 {
+		attr := AttributionUnknown
+		if signals.StealFired {
+			attr = AttributionHost
+		}
+
 		return Verdict{
 			State:       StateDegraded,
-			Attribution: AttributionUnknown,
+			Attribution: attr,
 			Causes:      causes,
 		}, signals
 	}
@@ -335,4 +446,31 @@ func throttleRatio(ring []throttlePoint) float64 {
 	}
 
 	return float64(newest.nrThrottled-oldest.nrThrottled) / float64(periods)
+}
+
+// stealP95 returns the nearest-rank p95 of the steal fractions in the ring
+// (near-worst-of-window via nearest-rank). Nearest-rank: rank = ceil(0.95 * N),
+// value at sorted[rank-1] (0-indexed). Returns 0 when the ring is empty. With
+// 20 identical samples the p95 is that value; a single spike among 20 zeros
+// yields p95 0.0 (the spike is absorbed), so the window absorbs a transient
+// isolated spike while a sustained spike fires.
+func stealP95(ring []stealPoint) float64 {
+	n := len(ring)
+	if n == 0 {
+		return 0
+	}
+
+	vals := make([]float64, n)
+	for i, p := range ring {
+		vals[i] = p.steal
+	}
+
+	sort.Float64s(vals)
+
+	rank := int(math.Ceil(0.95 * float64(n)))
+	if rank < 1 {
+		rank = 1
+	}
+
+	return vals[rank-1]
 }
