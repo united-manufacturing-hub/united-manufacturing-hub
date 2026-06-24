@@ -1680,6 +1680,502 @@ func TestDecide_HostContentionCause_ThrottleOnlyDemandGate(t *testing.T) {
 	}
 }
 
+// TestDecide_SaturationBackstop_DeadZoneFireThenClearGuardrail pins the
+// saturation backstop cause and the guardrail — the whole rebuild's reason.
+// Rung 2 deleted the raw-usage degrade (busy is not sick). This test
+// re-introduces a usage-based degrade BUT ONLY in the dead-zone — the one
+// case where no starvation signal exists (no CPU limit → no throttle; no PSI
+// → no pressure; not virtualized → no steal; and host-contention can't fire
+// without a demand signal). There, sustained high usage is the last-resort
+// proxy.
+//
+// The dead-zone predicate: Quota is nil (no limit) AND PsiAvailable is false
+// (no PSI) AND Virtualized is false (not virtualized). Sample.PsiAvailable is
+// the readability flag that distinguishes "PSI compiled in + present" from
+// "PressureAvg60 reads 0 because PSI is absent" — without it the dead-zone
+// branch is unreachable dead code (a naive "PressureAvg60 == 0" is true both
+// when PSI is absent AND when PSI is present but reading 0).
+//
+// In the dead-zone, Decide computes a 60s-AVERAGE usage fraction (NOT p95 — a
+// sustained-headroom proxy; a brief spike must not trip it) over a usage ring
+// in WindowState. When the 60s-avg >= HighUsageFraction (0.70) the saturation
+// cause fires: {degraded, unknown, [saturation]} with Cause Value = the 60s-avg
+// usage fraction. A Schmitt latch (fire >= 0.70, clear < SaturationRecover 0.60)
+// prevents boundary dither. The 60s usage ring is pruned (reusing the
+// throttle/steal pruning pattern) — no unbounded growth.
+//
+// Pinned behaviors (the (b) discipline: fire-then-clear REQUIRED, avg-not-p95,
+// no-false-fire):
+//
+//  1. FIRE-THEN-CLEAR (REQUIRED round-trip): dead-zone, sustained high usage
+//     (60s-avg >= 0.70) → saturation fires (degraded/unknown/[saturation]).
+//     Then sustained low usage (60s-avg < 0.60 for enough ticks the 60s window
+//     drops) → saturation clears (healthy). This is the critical round-trip.
+//  2. THE GUARDRAIL: below 70% avg in the dead-zone → healthy. NEVER a
+//     distinct unknown state. Blind-but-quiet = healthy. Do NOT manufacture
+//     degraded from a monitoring gap.
+//  3. LIMITED VISIBILITY: when in the dead-zone, Signals.LimitedVisibility is
+//     true (a signal for the caller's message, NOT a state). It is false
+//     outside the dead-zone.
+//  4. AVG-NOT-P95: a brief spike to 0.95 that recovers (60s-avg stays < 0.70)
+//     must NOT fire saturation (avg-not-p95 is the explicit decision — p95
+//     would re-create the flicker).
+//  5. NON-DEAD-ZONE: a limited container (Quota set) at 95% usage with no
+//     throttle → healthy (saturation not evaluated; busy is not sick). This
+//     re-confirms rung 2's thesis holds outside the dead-zone.
+//  6. Saturation is the SOLE cause when it fires (no other cause can fire in
+//     the dead-zone by definition).
+func TestDecide_SaturationBackstop_DeadZoneFireThenClearGuardrail(t *testing.T) {
+	base := time.Date(2026, 6, 24, 12, 0, 0, 0, time.UTC)
+	thresholds := DefaultThresholds()
+
+	// deadZoneSample constructs a dead-zone sample: Quota nil (no limit),
+	// PsiAvailable false (no PSI), Virtualized false (not virtualized).
+	// CgroupCores 4.0 provides the denominator for the usage fraction
+	// (UsageCores/CgroupCores) — it is NOT a limit (Quota is the limit; nil
+	// here means uncapped). The dead-zone is the ONLY place saturation is
+	// evaluated.
+	deadZoneSample := func(dt time.Duration, usageCores float64) Sample {
+		return Sample{
+			Timestamp:    base.Add(dt),
+			UsageCores:   usageCores,
+			CgroupCores:  4.0,
+			PsiAvailable: false,
+			Virtualized:  false,
+		}
+	}
+
+	// (1) FIRE-THEN-CLEAR — the REQUIRED round-trip. Feed sustained high usage
+	// (0.80 fraction = 3.2/4.0) at 10s spacing for 80s so the 60s-avg is
+	// representative, then assert saturation fires. Then feed sustained low
+	// usage (0.40 fraction = 1.6/4.0) for enough ticks that the 60s window
+	// holds only low samples (avg < SaturationRecover 0.60), and assert
+	// saturation clears (healthy).
+	st := &WindowState{}
+
+	// FIRE — 8 ticks at 0.80 fraction (t=0..t=70), then the 9th at t=80. At
+	// t=80 the 60s window (cutoff=t=20) holds 7 samples all at 0.80 → avg
+	// 0.80 >= HighUsageFraction 0.70 → saturation fires.
+	for i := 0; i < 8; i++ {
+		Decide(st, deadZoneSample(time.Duration(i*10)*time.Second, 3.2), thresholds)
+	}
+	vFire, sigFire := Decide(st, deadZoneSample(80*time.Second, 3.2), thresholds)
+	if vFire.State != StateDegraded {
+		t.Fatalf("fire State: got %q, want %q (dead-zone, 60s-avg usage 0.80 >= HighUsageFraction 0.70 → saturation fires)", vFire.State, StateDegraded)
+	}
+	if vFire.Attribution != AttributionUnknown {
+		t.Fatalf("fire Attribution: got %q, want %q (saturation is internal → unknown)", vFire.Attribution, AttributionUnknown)
+	}
+	// (6) Saturation is the SOLE cause — no other cause can fire in the
+	// dead-zone by definition (no limit → no throttle; no PSI → no pressure;
+	// not virtualized → no steal; no demand signal → no host-contention).
+	// NOTE: "no limit → no throttle" describes the production invariant
+	// (uncapped cgroups report nr_throttled=0), NOT a code-level Quota gate
+	// on the throttle latch — throttle is evaluated unconditionally from
+	// cpu.stat counter deltas regardless of Quota and CAN co-fire in the
+	// dead-zone when throttle counters are non-zero (see test 13).
+	if len(vFire.Causes) != 1 {
+		t.Fatalf("fire Causes length: got %d, want 1 (saturation is the sole cause in the dead-zone — no other cause can fire there by definition)", len(vFire.Causes))
+	}
+	if vFire.Causes[0].Kind != CauseKindSaturation {
+		t.Fatalf("fire Cause Kind: got %q, want %q", vFire.Causes[0].Kind, CauseKindSaturation)
+	}
+	// Cause Value = the 60s-avg usage fraction (0.80).
+	if !floatEq(vFire.Causes[0].Value, 0.80) {
+		t.Fatalf("fire Cause Value: got %v, want 0.80 (the 60s-avg usage fraction)", vFire.Causes[0].Value)
+	}
+	// (3) LimitedVisibility is true in the dead-zone (a signal, NOT a state).
+	if !sigFire.LimitedVisibility {
+		t.Fatalf("fire LimitedVisibility: got false, want true (dead-zone = blind state; signal the caller to note limited visibility)")
+	}
+
+	// CLEAR — feed sustained low usage (0.40 fraction) at 10s spacing past the
+	// last high-usage tick so the 60s window eventually holds only low samples.
+	// By t=170s, cutoff=t=110s, ring holds only 0.40 samples → avg 0.40 <
+	// SaturationRecover 0.60 → latch clears.
+	for i := 0; i < 8; i++ {
+		Decide(st, deadZoneSample(time.Duration(90+i*10)*time.Second, 1.6), thresholds)
+	}
+	vClear, sigClear := Decide(st, deadZoneSample(170*time.Second, 1.6), thresholds)
+	// (2) THE GUARDRAIL — below 70% avg in the dead-zone → healthy. NEVER a
+	// distinct unknown state. State is binary healthy|degraded; blind-but-quiet
+	// is healthy. Do NOT manufacture degraded from a monitoring gap.
+	if vClear.State != StateHealthy {
+		t.Fatalf("clear State: got %q, want %q (60s-avg usage 0.40 < SaturationRecover 0.60 → latch clears → healthy; the guardrail: blind-but-quiet = healthy, never a distinct unknown state)", vClear.State, StateHealthy)
+	}
+	if len(vClear.Causes) != 0 {
+		t.Fatalf("clear Causes length: got %d, want 0 (no causes when healthy)", len(vClear.Causes))
+	}
+	// (3) LimitedVisibility is STILL true in the dead-zone when healthy — the
+	// blind state persists regardless of the verdict.
+	if !sigClear.LimitedVisibility {
+		t.Fatalf("clear LimitedVisibility: got false, want true (still in the dead-zone; blind-but-quiet signals limited visibility even when healthy)")
+	}
+
+	// (4) AVG-NOT-P95 — a brief spike to 0.95 that recovers (60s-avg stays <
+	// 0.70) must NOT fire saturation. 6 ticks at 0.40, 1 tick at 0.95, then 1
+	// more 0.40 tick. The 60s-avg never reaches 0.70; a p95 would have
+	// returned 0.95 (nearest-rank of mostly-0.40 + one 0.95) and fired — the
+	// average is what prevents the flicker.
+	st2 := &WindowState{}
+	for i := 0; i < 6; i++ {
+		Decide(st2, deadZoneSample(time.Duration(i*10)*time.Second, 1.6), thresholds)
+	}
+	Decide(st2, deadZoneSample(60*time.Second, 3.8), thresholds) // 3.8/4.0 = 0.95 spike
+	vSpike, sigSpike := Decide(st2, deadZoneSample(70*time.Second, 1.6), thresholds)
+	// At t=70: cutoff=t=10, ring = t=10..t=70 (7 samples: 6 at 0.40, 1 at
+	// 0.95) → avg = (6*0.40 + 0.95)/7 = 3.35/7 = 0.479 < 0.70. Does NOT fire.
+	if vSpike.State != StateHealthy {
+		t.Fatalf("spike State: got %q, want %q (60s-avg 0.479 < 0.70; a brief spike is absorbed by the average — avg-not-p95: p95 would have been 0.95 and fired)", vSpike.State, StateHealthy)
+	}
+	if len(vSpike.Causes) != 0 {
+		t.Fatalf("spike Causes length: got %d, want 0 (spike absorbed; no false fire)", len(vSpike.Causes))
+	}
+	if !sigSpike.LimitedVisibility {
+		t.Fatalf("spike LimitedVisibility: got false, want true (dead-zone)")
+	}
+
+	// (5) NON-DEAD-ZONE — a limited container (Quota set) at 95% usage with no
+	// throttle → healthy (saturation not evaluated; busy is not sick). This
+	// re-confirms rung 2's thesis holds outside the dead-zone. Quota non-nil
+	// means a limit is set → NOT the dead-zone → saturation is NOT evaluated.
+	// PsiAvailable true (PSI present) also disqualifies the dead-zone.
+	quota := 2.0
+	st3 := &WindowState{}
+	for i := 0; i < 8; i++ {
+		Decide(st3, Sample{
+			Timestamp:    base.Add(time.Duration(i*10) * time.Second),
+			UsageCores:   1.9, // 0.95 of 2.0 quota
+			Quota:        &quota,
+			PsiAvailable: true,
+			Virtualized:  false,
+		}, thresholds)
+	}
+	vNonDz, sigNonDz := Decide(st3, Sample{
+		Timestamp:    base.Add(80 * time.Second),
+		UsageCores:   1.9,
+		Quota:        &quota,
+		PsiAvailable: true,
+		Virtualized:  false,
+	}, thresholds)
+	if vNonDz.State != StateHealthy {
+		t.Fatalf("non-dead-zone State: got %q, want %q (Quota set + PSI available → NOT the dead-zone → saturation NOT evaluated; 0.95 usage with no throttle is busy, not sick)", vNonDz.State, StateHealthy)
+	}
+	if len(vNonDz.Causes) != 0 {
+		t.Fatalf("non-dead-zone Causes length: got %d, want 0 (saturation does not fire outside the dead-zone)", len(vNonDz.Causes))
+	}
+	// LimitedVisibility is false outside the dead-zone (PSI is available → not
+	// a blind state).
+	if sigNonDz.LimitedVisibility {
+		t.Fatalf("non-dead-zone LimitedVisibility: got true, want false (PSI available → not a blind state → no limited-visibility signal)")
+	}
+
+	// (7) TRANSITION-OUT-OF-DEAD-ZONE — fire saturation in the dead-zone on a
+	// WindowState, then feed a non-dead-zone sample (Quota set, PsiAvailable
+	// true) on the SAME WindowState and assert the stale latch is cleared on
+	// the very next tick: StateHealthy + 0 causes + SaturationFired false.
+	// This is the guard against a latch leak: without a reset on dead-zone
+	// exit, a prior fire would emit {saturation, Value: 0} on every subsequent
+	// healthy tick (saturationAvg is only recomputed inside the dead-zone
+	// block). blind-but-quiet is healthy, never a stuck false-degrade.
+	st4 := &WindowState{}
+	for i := 0; i < 8; i++ {
+		Decide(st4, deadZoneSample(time.Duration(i*10)*time.Second, 3.2), thresholds)
+	}
+	vFire4, _ := Decide(st4, deadZoneSample(80*time.Second, 3.2), thresholds)
+	if vFire4.State != StateDegraded {
+		t.Fatalf("transition fire State: got %q, want %q (dead-zone 60s-avg 0.80 >= 0.70 → saturation fires before transition)", vFire4.State, StateDegraded)
+	}
+	// Flip out of the dead-zone on the SAME st4: set Quota, PsiAvailable true.
+	quota4 := 2.0
+	vTrans, sigTrans := Decide(st4, Sample{
+		Timestamp:    base.Add(90 * time.Second),
+		UsageCores:   1.9, // 0.95 of 2.0 quota — busy, not sick
+		Quota:        &quota4,
+		PsiAvailable: true,
+		Virtualized:  false,
+	}, thresholds)
+	if vTrans.State != StateHealthy {
+		t.Fatalf("transition State: got %q, want %q (dead-zone→non-dead-zone: latch MUST clear on the very next tick; a stale fire must not leak a false-degrade)", vTrans.State, StateHealthy)
+	}
+	if len(vTrans.Causes) != 0 {
+		t.Fatalf("transition Causes length: got %d, want 0 (stale saturation latch must not append a zero-valued cause outside the dead-zone)", len(vTrans.Causes))
+	}
+	if sigTrans.SaturationFired {
+		t.Fatalf("transition SaturationFired: got true, want false (latch cleared on dead-zone exit)")
+	}
+	if sigTrans.LimitedVisibility {
+		t.Fatalf("transition LimitedVisibility: got true, want false (Quota set + PSI available → not the dead-zone)")
+	}
+
+	// (8) HOLD (Schmitt) — fire saturation at 0.80, then cool the 60s-avg into
+	// the hold band (0.60..0.70) and assert the latch STAYS fired. This is the
+	// core Schmitt guarantee: a regression that collapses SaturationRecover to
+	// HighUsageFraction (clearing as soon as avg drops below 0.70) would pass
+	// the fire-then-clear test but fail here. Mirrors the throttle HOLD assertion
+	// at the throttle flip-latch test.
+	st5 := &WindowState{}
+	for i := 0; i < 8; i++ {
+		Decide(st5, deadZoneSample(time.Duration(i*10)*time.Second, 3.2), thresholds) // 0.80
+	}
+	vFire5, _ := Decide(st5, deadZoneSample(80*time.Second, 3.2), thresholds)
+	if vFire5.State != StateDegraded {
+		t.Fatalf("hold fire State: got %q, want %q (dead-zone 60s-avg 0.80 >= 0.70 → saturation fires)", vFire5.State, StateDegraded)
+	}
+	// Cool to 0.65 (2.6/4.0) — inside the hold band (SaturationRecover 0.60 ..
+	// HighUsageFraction 0.70). Feed enough ticks that all 0.80 samples age out
+	// and the 60s window holds only 0.65 samples.
+	for i := 0; i < 7; i++ {
+		Decide(st5, deadZoneSample(time.Duration(90+i*10)*time.Second, 2.6), thresholds) // 0.65
+	}
+	vHold, sigHold := Decide(st5, deadZoneSample(160*time.Second, 2.6), thresholds)
+	// At t=160: cutoff=t=100; ring = t=100..t=160 (7 samples at 0.65) → avg
+	// 0.65, inside the Schmitt band. Latch holds fired.
+	if vHold.State != StateDegraded {
+		t.Fatalf("hold State: got %q, want %q (60s-avg 0.65 is in the Schmitt band 0.60..0.70; latch holds fired)", vHold.State, StateDegraded)
+	}
+	if !sigHold.SaturationFired {
+		t.Fatalf("hold SaturationFired: got false, want true (latch holds in the band; only drops below SaturationRecover 0.60 clears)")
+	}
+	if len(vHold.Causes) != 1 || vHold.Causes[0].Kind != CauseKindSaturation {
+		t.Fatalf("hold Causes: got %+v, want one saturation cause (latch held)", vHold.Causes)
+	}
+
+	// (9) GAP-CLEAR — fire saturation, then a >60s sampling gap prunes the ring
+	// to a single low sample. The latch MUST clear: a single sample is
+	// insufficient evidence to sustain a prior fire. Without the inner else
+	// (clear on len < 2) the latch would hold indefinitely and emit a
+	// {saturation, Value: 0.40} cause while HighUsageFraction is 0.70 —
+	// contradicting the documented "clears when the 60s-average drops below
+	// SaturationRecover."
+	st6 := &WindowState{}
+	for i := 0; i < 8; i++ {
+		Decide(st6, deadZoneSample(time.Duration(i*10)*time.Second, 3.2), thresholds) // 0.80
+	}
+	vFire6, _ := Decide(st6, deadZoneSample(80*time.Second, 3.2), thresholds)
+	if vFire6.State != StateDegraded {
+		t.Fatalf("gap-clear fire State: got %q, want %q (saturation fires before gap)", vFire6.State, StateDegraded)
+	}
+	// >60s gap: next tick at t=150 (70s after t=80). cutoff=90; all 0.80
+	// samples (t=0..80) are pruned. Ring holds only the t=150 sample.
+	vGap, sigGap := Decide(st6, deadZoneSample(150*time.Second, 1.6), thresholds) // 0.40
+	if vGap.State != StateHealthy {
+		t.Fatalf("gap-clear State: got %q, want %q (single-sample ring after >60s gap: insufficient evidence to sustain fire → latch clears → healthy)", vGap.State, StateHealthy)
+	}
+	if sigGap.SaturationFired {
+		t.Fatalf("gap-clear SaturationFired: got true, want false (latch cleared: single sample cannot sustain a prior fire)")
+	}
+	if len(vGap.Causes) != 0 {
+		t.Fatalf("gap-clear Causes length: got %d, want 0 (latch cleared, no cause emitted)", len(vGap.Causes))
+	}
+
+	// (10) NON-POSITIVE QUOTA DEAD-ZONE — a non-nil but non-positive Quota
+	// (Quota=&0, the unlimited-cgroup case from parseCPUMax for cpu.max="max")
+	// on bare metal without PSI is uncapped AND blind. The dead-zone predicate
+	// must treat non-positive Quota as nil-equivalent so LimitedVisibility is
+	// true (the caller is told it is blind). A naive `Quota == nil` check would
+	// exclude this case: LimitedVisibility false (caller not told it is blind)
+	// AND the saturation backstop skipped. NOTE: Quota=&0 is signal-only here
+	// (LimitedVisibility=true, no backstop fire) — the backstop only fires for
+	// the Quota==nil + CgroupCores>0 sub-case where a fraction is computable;
+	// Quota=&0 cannot compute a fraction (the `>0` guard rejects it and there
+	// is no CgroupCores fallback when Quota is non-nil), so the proxy is inert
+	// by design (blind-but-quiet=healthy per the model).
+	zeroQuota := 0.0
+	st7 := &WindowState{}
+	vZeroQ, sigZeroQ := Decide(st7, Sample{
+		Timestamp:    base,
+		UsageCores:   1.5,
+		Quota:        &zeroQuota,
+		PsiAvailable: false,
+		Virtualized:  false,
+	}, thresholds)
+	if !sigZeroQ.LimitedVisibility {
+		t.Fatalf("non-positive Quota LimitedVisibility: got false, want true (Quota=&0 is uncapped: non-positive Quota is nil-equivalent for the dead-zone predicate; the caller must be told it is blind)")
+	}
+	if vZeroQ.State != StateHealthy {
+		t.Fatalf("non-positive Quota State: got %q, want %q (uncapped: no fraction computed, no cause)", vZeroQ.State, StateHealthy)
+	}
+	if len(vZeroQ.Causes) != 0 {
+		t.Fatalf("non-positive Quota Causes length: got %d, want 0 (uncapped, no fire)", len(vZeroQ.Causes))
+	}
+
+	// (11) NAN USAGE INPUT CLAMP — a NaN UsageCores reading produces a NaN
+	// fraction that poisons the 60s running sum until the sample ages out.
+	// The input clamp (mirroring the PressureAvg60 clamp) stores 0 instead, so
+	// subsequent averages are not corrupted. Without the input clamp the ring
+	// stays NaN-corrupted: sum is NaN → saturationAvg NaN → NaN >= 0.70 is
+	// false → the latch cannot fire AND an existing fire holds/clears, blinding
+	// saturation for up to 60s. This test forces the input clamp by feeding
+	// NaN then enough normal high-usage samples that the avg reaches 0.70 ONLY
+	// if the NaN was clamped to 0 (if it stayed NaN, the sum would be NaN → no
+	// fire).
+	st8 := &WindowState{}
+	// NaN sample at t=0 (5s spacing keeps it in the 60s window through t=35).
+	Decide(st8, Sample{
+		Timestamp:   base,
+		UsageCores:  math.NaN(),
+		CgroupCores: 4.0,
+	}, thresholds)
+	// 7 normal high-usage samples at 5s spacing (0.80 fraction = 3.2/4.0).
+	for i := 1; i <= 7; i++ {
+		Decide(st8, deadZoneSample(time.Duration(i*5)*time.Second, 3.2), thresholds)
+	}
+	// At t=35s: cutoff = t-60s = before t=0, so all 8 samples survive. Ring =
+	// [0 (clamped NaN), 0.80, 0.80, 0.80, 0.80, 0.80, 0.80, 0.80] → avg =
+	// (0 + 7*0.80)/8 = 0.70 >= HighUsageFraction → fires. Without the input
+	// clamp the ring holds NaN → sum NaN → saturationAvg NaN → NaN >= 0.70 is
+	// false → does NOT fire.
+	vNaN, sigNaN := Decide(st8, deadZoneSample(35*time.Second, 3.2), thresholds)
+	if vNaN.State != StateDegraded {
+		t.Fatalf("NaN-clamp State: got %q, want %q (NaN was input-clamped to 0; avg = (0+7*0.80)/8 = 0.70 >= 0.70 → fires; without the input clamp the NaN would poison the sum and prevent firing)", vNaN.State, StateDegraded)
+	}
+	if !sigNaN.SaturationFired {
+		t.Fatalf("NaN-clamp SaturationFired: got false, want true (input clamp prevented ring corruption; saturation can fire)")
+	}
+
+	// (12) RE-ENTRY RING CLEAR — fire saturation in the dead-zone, exit to a
+	// non-dead-zone sample, then RE-ENTER the dead-zone with low usage. The
+	// usage ring MUST have been cleared on exit (the dead-zone else-branch):
+	// without the clear, stale 0.80 samples from the first dead-zone period
+	// would corrupt the 60s average on re-entry and false-fire saturation. This
+	// pins the ring clear that the transition-out test (7) does not exercise
+	// (it checks only the single non-dead-zone tick after exit).
+	//
+	// The false fire occurs at the FIRST re-entry tick (t=100s), NOT at the
+	// steady state: at t=100, cutoff=40s, so stale t=40..80 samples (5×0.80)
+	// survive and avg = (5*0.80+0.40)/6 = 0.733 >= 0.70. By t=170 the stale
+	// samples have aged out naturally (cutoff=110), so asserting only at t=170
+	// is a no-op pin — a regression that deletes the ring-clear leaves t=170
+	// PASSING. Assert at t=100 instead (and continue to t=170 for the steady
+	// state).
+	st9 := &WindowState{}
+	for i := 0; i < 8; i++ {
+		Decide(st9, deadZoneSample(time.Duration(i*10)*time.Second, 3.2), thresholds) // 0.80
+	}
+	vFire9, _ := Decide(st9, deadZoneSample(80*time.Second, 3.2), thresholds)
+	if vFire9.State != StateDegraded {
+		t.Fatalf("re-entry fire State: got %q, want %q (saturation fires before exit)", vFire9.State, StateDegraded)
+	}
+	// Exit the dead-zone (Quota set, PSI available).
+	quota9 := 2.0
+	Decide(st9, Sample{
+		Timestamp:    base.Add(90 * time.Second),
+		UsageCores:   1.9,
+		Quota:        &quota9,
+		PsiAvailable: true,
+		Virtualized:  false,
+	}, thresholds)
+	// FIRST re-entry tick (t=100s): the ring-clear pin. With the clear, the
+	// ring holds 1 sample (0.40) → len<2 → latch cleared → healthy. WITHOUT the
+	// clear, stale t=40..80 samples survive (cutoff=40s) and avg =
+	// (5*0.80+0.40)/6 = 0.733 >= 0.70 → false fire → degraded.
+	vReentry, sigReentry := Decide(st9, deadZoneSample(100*time.Second, 1.6), thresholds)
+	if vReentry.State != StateHealthy {
+		t.Fatalf("re-entry State (first tick t=100): got %q, want %q (usage ring was cleared on dead-zone exit; first re-entry tick holds 1 sample → len<2 → healthy; without the clear, stale 0.80 samples would false-fire at avg 0.733)", vReentry.State, StateHealthy)
+	}
+	if sigReentry.SaturationFired {
+		t.Fatalf("re-entry SaturationFired (first tick t=100): got true, want false (ring cleared on exit; no stale samples to sustain a fire)")
+	}
+	// Continue re-entry to the steady state and confirm it stays healthy.
+	for i := 1; i < 8; i++ {
+		Decide(st9, deadZoneSample(time.Duration(100+i*10)*time.Second, 1.6), thresholds) // 0.40
+	}
+	vSteady, sigSteady := Decide(st9, deadZoneSample(170*time.Second, 1.6), thresholds)
+	if vSteady.State != StateHealthy {
+		t.Fatalf("re-entry steady State (t=170): got %q, want %q (ring holds only 0.40 samples → avg 0.40 < 0.60 → healthy)", vSteady.State, StateHealthy)
+	}
+	if sigSteady.SaturationFired {
+		t.Fatalf("re-entry steady SaturationFired (t=170): got true, want false (no stale samples to sustain a fire)")
+	}
+
+	// (13) CO-FIRE SEVERITY ORDERING — in the dead-zone, throttle and
+	// saturation can co-fire (throttle is evaluated regardless of Quota). When
+	// both fire, the dominance sort orders by severity. This pins the
+	// severity(saturationAvg, ...) call and the sort comparator for saturation
+	// (the fire-then-clear test always has saturation as the sole cause, so the
+	// sort is a no-op there). Throttle sev (0.80-0.05)/0.95 = 0.789 >
+	// saturation sev (0.80-0.70)/0.30 = 0.333 → throttle dominant →
+	// causes[0]=throttling, causes[1]=saturation, attribution=unknown (both
+	// internal).
+	st10 := &WindowState{}
+	// Dead-zone samples with high throttle (ratio 0.80) AND high usage (0.80).
+	deadZoneThrottleSample := func(dt time.Duration, nrPeriods, nrThrottled int64) Sample {
+		return Sample{
+			Timestamp:    base.Add(dt),
+			UsageCores:   3.2, // 0.80 of 4.0
+			CgroupCores:  4.0,
+			NrPeriods:    nrPeriods,
+			NrThrottled:  nrThrottled,
+			PsiAvailable: false,
+			Virtualized:  false,
+		}
+	}
+	for i := 0; i < 8; i++ {
+		Decide(st10, deadZoneThrottleSample(time.Duration(i*10)*time.Second, int64(i+1)*1000, int64(i+1)*800), thresholds)
+	}
+	vCo, sigCo := Decide(st10, deadZoneThrottleSample(80*time.Second, 9000, 7200), thresholds)
+	if vCo.State != StateDegraded {
+		t.Fatalf("co-fire State: got %q, want %q (both throttle and saturation fire)", vCo.State, StateDegraded)
+	}
+	if len(vCo.Causes) != 2 {
+		t.Fatalf("co-fire Causes length: got %d, want 2 (throttle + saturation)", len(vCo.Causes))
+	}
+	if vCo.Causes[0].Kind != CauseKindThrottling {
+		t.Fatalf("co-fire causes[0]: got %q, want %q (throttle sev 0.789 > saturation sev 0.333 → throttle dominant)", vCo.Causes[0].Kind, CauseKindThrottling)
+	}
+	if vCo.Causes[1].Kind != CauseKindSaturation {
+		t.Fatalf("co-fire causes[1]: got %q, want %q (saturation is lower severity → second)", vCo.Causes[1].Kind, CauseKindSaturation)
+	}
+	if vCo.Attribution != AttributionUnknown {
+		t.Fatalf("co-fire Attribution: got %q, want %q (both throttle and saturation are internal → unknown)", vCo.Attribution, AttributionUnknown)
+	}
+	if !sigCo.ThrottleFired || !sigCo.SaturationFired {
+		t.Fatalf("co-fire latches: ThrottleFired=%v SaturationFired=%v, want both true", sigCo.ThrottleFired, sigCo.SaturationFired)
+	}
+}
+
+// TestDecide_SaturationBackstop_TwoSampleFloor pins the 2-sample floor on the
+// saturation backstop latch: the latch is NOT evaluated when the usage ring
+// holds fewer than 2 samples. A lone first-tick dead-zone high-usage reading
+// (60s-avg would be 0.95, well above HighUsageFraction 0.70) must NOT fire —
+// "sustained fires, isolated absorbed." Without the floor a single 0.95 sample
+// would fire immediately on the first tick. This test is the (b)-discipline pin
+// for the floor guard: it MUST fail if the `len(st.usageRing) >= 2` guard is
+// removed (the lone 0.95 sample would fire). The existing fire-then-clear test
+// only fires after 8 ticks, so a regression deleting the floor would pass there
+// — this test closes that gap.
+func TestDecide_SaturationBackstop_TwoSampleFloor(t *testing.T) {
+	base := time.Date(2026, 6, 24, 12, 0, 0, 0, time.UTC)
+	thresholds := DefaultThresholds()
+
+	// A SINGLE dead-zone high-usage sample: 3.8/4.0 = 0.95 fraction, well into
+	// the fire band (>= HighUsageFraction 0.70). Quota nil, PsiAvailable false,
+	// Virtualized false → dead-zone. The ring holds 1 entry after this tick →
+	// below the 2-sample floor → latch NOT evaluated → healthy.
+	st := &WindowState{}
+	v, sig := Decide(st, Sample{
+		Timestamp:    base,
+		UsageCores:   3.8, // 0.95 of 4.0
+		CgroupCores:  4.0,
+		PsiAvailable: false,
+		Virtualized:  false,
+	}, thresholds)
+	if v.State != StateHealthy {
+		t.Fatalf("State: got %q, want %q (single dead-zone high-usage sample: ring holds 1 entry, below the 2-sample floor → latch not evaluated → healthy; a lone first-tick reading must not fire — sustained fires, isolated absorbed)", v.State, StateHealthy)
+	}
+	if len(v.Causes) != 0 {
+		t.Fatalf("Causes length: got %d, want 0 (floor guard prevents the lone 0.95 sample from firing saturation)", len(v.Causes))
+	}
+	if sig.SaturationFired {
+		t.Fatalf("SaturationFired: got true, want false (2-sample floor: a single sample is insufficient evidence to fire)")
+	}
+	// The dead-zone is still signalled to the caller regardless of the floor.
+	if !sig.LimitedVisibility {
+		t.Fatalf("LimitedVisibility: got false, want true (dead-zone blind state is signalled independent of the latch)")
+	}
+}
+
 // TestDecide_DominanceBySeverity pins the dominance rule: when several causes
 // fire, the highest-severity one sets attribution. Severity =
 // (value - high_threshold) / (1 - high_threshold) — the fraction into the

@@ -56,6 +56,7 @@ type Cause struct {
 // Thresholds holds the tunable cutoffs for the Decide verdict.
 type Thresholds struct {
 	HighUsageFraction float64
+	SaturationRecover float64
 	ThrottleHigh      float64
 	ThrottleRecover   float64
 	PressureHigh      float64
@@ -66,11 +67,13 @@ type Thresholds struct {
 }
 
 // DefaultThresholds returns the canonical thresholds (HighUsageFraction 0.70,
-// ThrottleHigh 0.05, ThrottleRecover 0.03, PressureHigh 0.20, PressureRecover
-// 0.12, StealHigh 0.10, StealRecover 0.06, HostBusyHigh 0.70).
+// SaturationRecover 0.60, ThrottleHigh 0.05, ThrottleRecover 0.03, PressureHigh
+// 0.20, PressureRecover 0.12, StealHigh 0.10, StealRecover 0.06, HostBusyHigh
+// 0.70).
 func DefaultThresholds() Thresholds {
 	return Thresholds{
 		HighUsageFraction: 0.70,
+		SaturationRecover: 0.60,
 		ThrottleHigh:      0.05,
 		ThrottleRecover:   0.03,
 		PressureHigh:      0.20,
@@ -156,6 +159,16 @@ type Sample struct {
 	// Quota / CgroupCores guards.
 	HostBusyCores float64
 	LogicalCpus   float64
+	// PsiAvailable is the readability flag for PSI (cpu.pressure). It
+	// distinguishes "PSI compiled in + present" (true) from "PressureAvg60
+	// reads 0 because PSI is absent" (false). Without it the dead-zone
+	// saturation backstop branch is unreachable dead code: a naive
+	// "PressureAvg60 == 0" is true both when PSI is absent AND when PSI is
+	// present but reading 0. When PsiAvailable is false (and Quota is nil and
+	// Virtualized is false) the sample is in the dead-zone — the one case where
+	// no starvation signal exists, so sustained high usage is the last-resort
+	// proxy via the saturation backstop latch.
+	PsiAvailable bool
 }
 
 // throttlePoint is one timestamped throttle-counter observation in the
@@ -172,10 +185,12 @@ type throttlePoint struct {
 type WindowState struct {
 	throttleRing        []throttlePoint
 	stealRing           []stealPoint
+	usageRing           []usagePoint
 	throttleFired       bool
 	pressureFired       bool
 	stealFired          bool
 	hostContentionFired bool
+	saturationFired     bool
 }
 
 // stealPoint is one timestamped steal-fraction observation in the WindowState
@@ -183,6 +198,13 @@ type WindowState struct {
 type stealPoint struct {
 	ts    time.Time
 	steal float64
+}
+
+// usagePoint is one timestamped usage-fraction observation in the WindowState
+// usage ring, used by the dead-zone saturation backstop latch.
+type usagePoint struct {
+	ts       time.Time
+	fraction float64
 }
 
 // Signals holds derived intermediate values computed during Decide.
@@ -207,6 +229,18 @@ type Signals struct {
 	// HostContentionFired is the host-contention latch state. See the inline
 	// comment at the latch in Decide for the fire/clear conditions.
 	HostContentionFired bool
+	// LimitedVisibility is true when the sample is in the dead-zone (Quota nil
+	// or non-positive, PsiAvailable false, Virtualized false) — the blind state
+	// where no starvation signal exists. It is a signal for the caller's
+	// message, NOT a
+	// state: the verdict State is binary healthy|degraded (blind-but-quiet is
+	// healthy). It is false outside the dead-zone.
+	LimitedVisibility bool
+	// SaturationFired is the dead-zone saturation backstop latch state. It
+	// fires when the 60s-average usage fraction >= HighUsageFraction and clears
+	// when the 60s-average drops below SaturationRecover (Schmitt). It is only
+	// evaluated in the dead-zone.
+	SaturationFired bool
 }
 
 // Verdict is the output of Decide.
@@ -221,10 +255,16 @@ type Verdict struct {
 // updating the flip-latches — so the caller must not share st across goroutines
 // without external synchronization. High usage alone is not ill health: a
 // capped container pinned at its quota with no throttle/pressure/steal/host-
-// contention signal is busy, not sick, so Decide currently returns StateHealthy
-// for any sample that has no other cause. Saturation is reintroduced later,
-// decided from a windowed average of UsageFraction stored in WindowState
-// rather than raw usage.
+// contention signal is busy, not sick, so Decide returns StateHealthy for any
+// sample that has no other cause. The ONE exception is the dead-zone
+// saturation backstop: when the sample is in the dead-zone (Quota nil or
+// non-positive, PSI absent, not virtualized — no starvation signal exists),
+// Decide maintains a
+// 60s-average usage fraction over a usage ring in WindowState and fires a
+// saturation Cause when that average >= HighUsageFraction (Schmitt: fires at
+// >= HighUsageFraction, clears below SaturationRecover). Outside the dead-zone
+// high usage alone is never ill health, and a prior dead-zone fire is cleared
+// on the first non-dead-zone tick (the latch and ring do not leak).
 //
 // Decide reads thresholds.ThrottleHigh and thresholds.ThrottleRecover for the
 // throttle Schmitt flip-latch (the latch fires above ThrottleHigh and clears
@@ -233,10 +273,10 @@ type Verdict struct {
 // thresholds.PressureHigh and thresholds.PressureRecover via a second Schmitt
 // flip-latch, emitting a pressure Cause when that latch fires; a NaN/negative
 // PressureAvg60 is clamped to 0 before thresholding (see PressureAvg60 doc for
-// the failure mode). HighUsageFraction remains reserved for the
-// later windowed-saturation logic and is not read yet; when it is, a NaN
-// HighUsageFraction must not silently blind saturation detection
-// (NaN >= threshold is always false).
+// the failure mode). HighUsageFraction is read by the dead-zone saturation
+// backstop latch (fires when the 60s-avg usage fraction >= HighUsageFraction,
+// clears below SaturationRecover); a NaN HighUsageFraction must not silently
+// blind saturation detection (NaN >= threshold is always false).
 //
 // Decide also maintains a steal ring of per-tick StealFraction samples
 // (virtualized-only: when Sample.Virtualized is false, steal is not processed).
@@ -479,6 +519,109 @@ func Decide(st *WindowState, sample Sample, thresholds Thresholds) (Verdict, Sig
 
 	signals.HostContentionFired = st.hostContentionFired
 
+	// Saturation backstop (dead-zone-only): the dead-zone is the one case where
+	// no starvation signal exists — Quota is nil or non-positive (uncapped → no
+	// limit), PsiAvailable is false (no PSI → pressure is structurally absent),
+	// and Virtualized is false (no steal). There, sustained high usage is the
+	// last-resort proxy. Decide computes a 60s-AVERAGE usage fraction (NOT p95 —
+	// a sustained-headroom proxy; a brief spike must not trip it) over a usage
+	// ring in WindowState. A Schmitt latch fires when the 60s-avg >=
+	// HighUsageFraction and clears only when it drops below SaturationRecover;
+	// between the marks it holds. The 60s usage ring is pruned (reusing the
+	// throttle/steal pruning pattern). Saturation is the only NEW cause the
+	// dead-zone introduces (the only cause whose signal is absent elsewhere);
+	// throttle can co-fire from cpu.stat counter deltas regardless of Quota, so
+	// it is NOT the sole cause that can fire in the dead-zone. The backstop
+	// only fires for the Quota==nil + CgroupCores>0 sub-case, where a fraction
+	// is computable; Quota=&0 (truly uncapped, cpu.max="max") cannot compute a
+	// fraction (the `>0` guard rejects it and there is no CgroupCores fallback
+	// when Quota is non-nil), so the proxy is inert there by design —
+	// blind-but-quiet is healthy per the model. The guardrail: below the fire
+	// mark in the dead-zone the verdict is healthy — blind-but-quiet is
+	// healthy, never a distinct unknown state. LimitedVisibility signals the
+	// blind state to the caller regardless of the verdict.
+	var saturationAvg float64
+
+	deadZone := (sample.Quota == nil || !(*sample.Quota > 0)) && !sample.PsiAvailable && !sample.Virtualized
+	signals.LimitedVisibility = deadZone
+
+	if deadZone {
+		// Input clamp: a NaN or +Inf UsageCores reading produces a NaN/+Inf
+		// fraction that would poison the 60s running sum until the sample ages
+		// out (NaN propagates through sum/len, making every subsequent average
+		// NaN — the latch could never fire and an existing fire would silently
+		// clear, blinding saturation for up to 60s). Clamp the stored fraction
+		// before insertion, mirroring the PressureAvg60 input clamp. The emitted
+		// signals.UsageFraction is reassigned to the clamped value so the wire
+		// field stays consistent with the ring copy.
+		if !(fraction >= 0) || math.IsInf(fraction, 1) {
+			fraction = 0
+		}
+
+		signals.UsageFraction = fraction
+		st.usageRing = append(st.usageRing, usagePoint{
+			ts:       sample.Timestamp,
+			fraction: fraction,
+		})
+
+		usageCutoff := sample.Timestamp.Add(-throttleWindow)
+		usageRing := st.usageRing
+		usageN := 0
+
+		for _, up := range usageRing {
+			if !up.ts.Before(usageCutoff) {
+				usageRing[usageN] = up
+				usageN++
+			}
+		}
+
+		usageRing = usageRing[:usageN]
+		st.usageRing = usageRing
+
+		var sum float64
+		for _, up := range st.usageRing {
+			sum += up.fraction
+		}
+
+		saturationAvg = sum / float64(len(st.usageRing))
+		// Small-N floor: do NOT evaluate the saturation latch until the ring
+		// holds at least 2 samples. With a single sample the 60s-avg is that
+		// sample's value, so a first-tick high-usage reading would fire
+		// immediately — contradicting "sustained fires, isolated absorbed."
+		// A 2-sample floor mirrors the steal ring's floor and throttle's
+		// two-point delta floor for consistency. When the ring holds fewer
+		// than 2 samples (e.g. after a >60s sampling gap pruned the ring to a
+		// single sample), there is insufficient evidence to sustain a prior
+		// fire — clear the latch so a stale fire does not emit a
+		// {saturation, Value: <lone-sample>} cause contradicting the
+		// documented "clears when the 60s-average drops below
+		// SaturationRecover."
+		if len(st.usageRing) >= 2 {
+			switch {
+			case saturationAvg >= thresholds.HighUsageFraction:
+				st.saturationFired = true
+			case saturationAvg < thresholds.SaturationRecover:
+				st.saturationFired = false
+			}
+		} else {
+			st.saturationFired = false
+		}
+	} else {
+		// Outside the dead-zone the saturation backstop is not evaluated.
+		// Mirror the host-contention latch's demand-gate-close clear: reset
+		// the latch AND the usage ring so a prior dead-zone fire cannot leak a
+		// stale {saturation, Value: 0} cause on every subsequent non-dead-zone
+		// tick (saturationAvg is only computed inside the dead-zone block, so a
+		// stale latch would emit a zero-valued cause). Clearing the ring is
+		// required, not optional: a dead-zone→non-dead-zone→dead-zone
+		// transition changes the fraction denominator, so stale samples would
+		// corrupt the 60s average on re-entry.
+		st.saturationFired = false
+		st.usageRing = st.usageRing[:0]
+	}
+
+	signals.SaturationFired = st.saturationFired
+
 	var causes []Cause
 
 	type firedCause struct {
@@ -502,6 +645,10 @@ func Decide(st *WindowState, sample Sample, thresholds Thresholds) (Verdict, Sig
 
 	if signals.HostContentionFired {
 		fired = append(fired, firedCause{Cause{Kind: CauseKindHostContention, Value: contentionCores}, severity(hostBusyRatio, thresholds.HostBusyHigh), true})
+	}
+
+	if signals.SaturationFired {
+		fired = append(fired, firedCause{Cause{Kind: CauseKindSaturation, Value: saturationAvg}, severity(saturationAvg, thresholds.HighUsageFraction), false})
 	}
 
 	if len(fired) > 0 {
