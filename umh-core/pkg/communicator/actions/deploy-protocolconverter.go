@@ -379,9 +379,9 @@ func (a *DeployProtocolConverterAction) waitForComponentToAppear(desiredState st
 
 			// Config is kept on failure so the user does not lose it. The bridge
 			// can be fixed from the editing view.
-			errorMsg := fmt.Sprintf("bridge '%s' did not reach state '%s' within the timeout period", a.payload.Name, desiredState)
+			errorMsg := fmt.Sprintf("Bridge '%s' did not reach state '%s' within the timeout period", a.payload.Name, desiredState)
 			if lastStatusReason != "" {
-				errorMsg = fmt.Sprintf("bridge '%s' did not become healthy: %s", a.payload.Name, lastStatusReason)
+				errorMsg = fmt.Sprintf("Bridge '%s' did not become healthy: %s", a.payload.Name, lastStatusReason)
 			} else {
 				errorMsg += ". Please check system load or component configuration and try again"
 			}
