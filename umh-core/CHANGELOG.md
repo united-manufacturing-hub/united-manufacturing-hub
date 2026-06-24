@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Improvements
+
+- The full bridge and stream-processor configuration is no longer written to the umh-core log at INFO on every internal re-apply (moved to DEBUG), removing a source of log flooding and CPU pressure when a config keeps being re-applied. While a bridge's observed config differs from its desired config, its status in the Management Console now shows a bounded summary of what differs, and the umh-core log carries one warning per bridge per minute, so the cause is visible without enabling debug logging
+
 ## [0.44.25]
 
 ### Improvements
@@ -11,8 +15,6 @@
 - Editing a bridge whose new configuration keeps failing to render now fails after three identical render failures (a few seconds) and rolls back to the previous configuration automatically, naming the render failure as the root cause; while the edit is still retrying, each progress update also names the render failure. Previously such an edit retried for the full 30-second timeout before rolling back, and progress updates gave no reason
 
 ![Bridge update failed dialog showing the failing region of the rendered config and the automatic rollback message](./changelog-images/2026-06-19-bridge-render-error.png)
-
-- The full bridge and stream-processor configuration is no longer written to the umh-core log at INFO on every internal re-apply (moved to DEBUG), removing a source of log flooding and CPU pressure when a config keeps being re-applied. While a bridge's observed config differs from its desired config, its status in the Management Console now shows a bounded summary of what differs, and the umh-core log carries one warning per bridge per minute, so the cause is visible without enabling debug logging
 
 ### Fixes
 
