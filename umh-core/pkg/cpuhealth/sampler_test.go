@@ -21,6 +21,7 @@ import (
 	"context"
 	"errors"
 	"math"
+	"runtime"
 	"strconv"
 	"strings"
 	"testing"
@@ -29,6 +30,204 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cpuhealth"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 )
+
+// TestCgroupSampler_PopulatesAllSignals pins the cgroupSampler reading every
+// CPU-health signal — cpu.pressure (PSI avg60), /proc/cpuinfo
+// (virtualization), cpu.max (quota), /proc/stat (steal + host-busy) — and
+// populating the full Sample, not just usage_usec/nr_periods/nr_throttled.
+// Decide reads the cause fields, but the sampler was not writing them, so the
+// causes never fired; this rung makes the sampler READ them. The production
+// wiring — merging these signals into the Decide-bound Sample at the
+// container_monitor call site — is a later rung; this rung does not make the
+// non-throttle causes live in production.
+//
+// Each signal is read via the injected filesystem.Service, parsed, and set on
+// the returned Sample. Pinned behaviors:
+//
+//  1. PSI: read <basePath>/cpu.pressure, parse the "some" line's avg60 (the
+//     file is "some avg10=X avg60=Y avg300=Z total=T"). The raw kernel value is
+//     0..100; DIVIDE BY 100 before assigning to PressureAvg60 (a 0..1 fraction).
+//     PsiAvailable=true when the file exists+parses; false (PressureAvg60=0)
+//     when absent/unreadable. A transient read error does NOT fail the whole
+//     Sample — just PsiAvailable=false.
+//  2. VIRTUALIZATION: read /proc/cpuinfo, look for "hypervisor" in the flags
+//     line. Set Virtualized=true if found, false otherwise. CACHED — read once on
+//     the first Sample() call, reused after (virtualization doesn't change at
+//     runtime); the test asserts /proc/cpuinfo is NOT re-read on the second
+//     call.
+//  3. QUOTA: read <basePath>/cpu.max, parse "quota period" (e.g. "200000
+//     100000" = 2.0 cores). Set Quota=&quotaCores (quota/period) when a numeric
+//     quota is set; Quota=nil for "max <period>" (no limit) or absent/unreadable.
+//  4. STEAL: read /proc/stat first "cpu " line's 10 fields; per-tick steal
+//     fraction = steal_jiffies_delta / total_jiffies_delta (total = sum of ALL
+//     fields). First read (no delta) → StealFraction=0. Counter reset (total
+//     decreases) → re-baseline, StealFraction=0.
+//  5. HOST-BUSY: from the same /proc/stat read, HostBusyCores =
+//     (sum of non-idle fields EXCLUDING steal AND guest/guest_nice) ÷ USER_HZ ÷
+//     elapsed_seconds. The exclusion of steal is critical (it's its own cause;
+//     folding it in double-counts); guest/guest_nice are excluded because the
+//     kernel double-counts them inside user/nice.
+//  6. LOGICAL_CPUS: LogicalCpus = float64(runtime.NumCPU()) (stdlib call, not
+//     an I/O read).
+//  7. The Sample carries ALL fields. (8) A read failure on ONE non-primary
+//     signal does NOT fail the whole Sample — cpu.stat failure still errors
+//     (primary signal), but cpu.pressure/cpu.max/cpuinfo/proc.stat failures
+//     just zero that field + set the readability flag false and the Sample is
+//     still returned.
+//
+// This is an integration test against the real cgroupSampler via its public
+// constructor + the real filesystem mock (no verdict mocking, no over-mocking).
+func TestCgroupSampler_PopulatesAllSignals(t *testing.T) {
+	const basePath = "/sys/fs/cgroup"
+	cpuStatPath := basePath + "/cpu.stat"
+	cpuMaxPath := basePath + "/cpu.max"
+	cpuPressurePath := basePath + "/cpu.pressure"
+	procStatPath := "/proc/stat"
+	procCpuinfoPath := "/proc/cpuinfo"
+	ctx := context.Background()
+
+	// A scripted /proc/stat series with a real steal column + non-idle fields.
+	// Fields: user nice system idle iowait irq softirq steal guest guest_nice.
+	// Tick 0: total = 1000+1000+1000+8000+0+0+0+50+0+0 = 11050; steal=50.
+	// Tick 1: steal grows to 150 (delta 100), total grows to 22050 (delta
+	// 11000) → steal fraction = 100/11000 ≈ 0.00909.
+	// Tick 1 non-idle (excluding steal, guest, guest_nice) delta:
+	//   (2000-1000)+(1500-1000)+(2000-1000)+0+0+0 = 2500 jiffies busy.
+	//   USER_HZ=100 → 2500/100 = 25 core-seconds of host busy.
+	procStatTick0 := "cpu  1000 1000 1000 8000 0 0 0 50 0 0\n"
+	procStatTick1 := "cpu  2000 1500 2000 16400 0 0 0 150 0 0\n"
+
+	cpuMaxContent := "200000 100000\n" // quota=200000 period=100000 → 2.0 cores
+	cpuPressureContent := "some avg10=5.00 avg60=25.00 avg300=10.00 total=12345\n" +
+		"full avg10=1.00 avg60=2.00 avg300=1.00 total=1234\n"
+	cpuInfoContent := "processor\t: 0\nflags\t: fpu vme de pse tsc msr hypervisor lm\n"
+
+	// Mutate the cpu.stat usage_usec + /proc/stat per call to drive deltas.
+	usageUsec := int64(1_000_000)
+	procStat := procStatTick0
+	var pathsRead []string
+	cpuinfoReads := 0
+
+	fs := filesystem.NewMockFileSystem().WithReadFileFunc(func(_ context.Context, path string) ([]byte, error) {
+		pathsRead = append(pathsRead, path)
+		switch path {
+		case cpuStatPath:
+			return []byte(cpuStatContent(usageUsec)), nil
+		case cpuMaxPath:
+			return []byte(cpuMaxContent), nil
+		case cpuPressurePath:
+			return []byte(cpuPressureContent), nil
+		case procStatPath:
+			return []byte(procStat), nil
+		case procCpuinfoPath:
+			cpuinfoReads++
+			return []byte(cpuInfoContent), nil
+		default:
+			return nil, errors.New("unexpected path read: " + path)
+		}
+	})
+
+	s := cpuhealth.NewCgroupSampler(fs, basePath)
+
+	// (1) First Sample: baselines usage + /proc/stat, no deltas yet. Still
+	// must populate Quota/Pressure/Virtualized/LogicalCpus (no-delta fields are
+	// 0, but the readability flags + cached reads must already be set).
+	sample1, err := s.Sample(ctx)
+	if err != nil {
+		t.Fatalf("first Sample: unexpected error: %v", err)
+	}
+
+	// Quota: 200000/100000 = 2.0 cores.
+	if sample1.Quota == nil {
+		t.Fatalf("first Sample Quota: got nil, want non-nil (cpu.max=200000 100000 → 2.0 cores)")
+	}
+	if !approx(*sample1.Quota, 2.0, 0.01) {
+		t.Fatalf("first Sample Quota: got %v, want 2.0 (quota/period)", *sample1.Quota)
+	}
+
+	// PSI: avg60=25.00 (kernel 0..100) ÷ 100 = 0.25 fraction. PsiAvailable=true.
+	if !sample1.PsiAvailable {
+		t.Fatalf("first Sample PsiAvailable: got false, want true (cpu.pressure present + parsed)")
+	}
+	if !approx(sample1.PressureAvg60, 0.25, 0.01) {
+		t.Fatalf("first Sample PressureAvg60: got %v, want 0.25 (avg60=25.00 ÷ 100; "+
+			"raw kernel percentage must be divided by 100 before assignment)", sample1.PressureAvg60)
+	}
+
+	// Virtualized: /proc/cpuinfo flags line contains "hypervisor".
+	if !sample1.Virtualized {
+		t.Fatalf("first Sample Virtualized: got false, want true (/proc/cpuinfo flags line has hypervisor)")
+	}
+	if cpuinfoReads != 1 {
+		t.Fatalf("first Sample: /proc/cpuinfo read %d time(s), want exactly 1 (cached after first read)", cpuinfoReads)
+	}
+
+	// LogicalCpus: runtime.NumCPU() (not an I/O read).
+	if sample1.LogicalCpus != float64(runtime.NumCPU()) {
+		t.Fatalf("first Sample LogicalCpus: got %v, want %v (runtime.NumCPU())",
+			sample1.LogicalCpus, float64(runtime.NumCPU()))
+	}
+
+	// First-read deltas are 0 (no baseline): StealFraction=0, HostBusyCores=0.
+	if sample1.StealFraction != 0 {
+		t.Fatalf("first Sample StealFraction: got %v, want 0 (first read: no delta)", sample1.StealFraction)
+	}
+	if sample1.HostBusyCores != 0 {
+		t.Fatalf("first Sample HostBusyCores: got %v, want 0 (first read: no delta)", sample1.HostBusyCores)
+	}
+
+	// (2) Second Sample: deltas exist. Quota/Virtualized/LogicalCpus unchanged
+	// (Virtualized CACHED — /proc/cpuinfo must NOT be re-read).
+	time.Sleep(80 * time.Millisecond)
+	usageUsec = 1_000_000 + 100_000 // +0.1 core-seconds of cgroup CPU
+	procStat = procStatTick1
+
+	sample2, err := s.Sample(ctx)
+	if err != nil {
+		t.Fatalf("second Sample: unexpected error: %v", err)
+	}
+
+	// Virtualized cached: /proc/cpuinfo NOT re-read.
+	if cpuinfoReads != 1 {
+		t.Fatalf("second Sample: /proc/cpuinfo read %d time(s) total, want still 1 (virtualization is cached after first read)", cpuinfoReads)
+	}
+	if !sample2.Virtualized {
+		t.Fatalf("second Sample Virtualized: got false, want true (cached from first read)")
+	}
+
+	// Steal fraction = steal_delta / total_delta = 100/11000 ≈ 0.0090909.
+	wantSteal := 100.0 / 11000.0
+	if !approx(sample2.StealFraction, wantSteal, 0.02) {
+		t.Fatalf("second Sample StealFraction: got %v, want %v (steal_jiffies_delta/total_jiffies_delta = 100/11000)",
+			sample2.StealFraction, wantSteal)
+	}
+
+	// HostBusyCores: non-idle (excl steal, guest, guest_nice) delta jiffies ÷
+	// USER_HZ(100) ÷ elapsed. Non-idle-excl fields delta:
+	//   user (2000-1000)=1000 + nice (1500-1000)=500 + system (2000-1000)=1000
+	//   + iowait 0 + irq 0 + softirq 0 = 2500 jiffies.
+	elapsed := sample2.Timestamp.Sub(sample1.Timestamp).Seconds()
+	if elapsed <= 0 {
+		t.Fatalf("elapsed between samples non-positive: %v", elapsed)
+	}
+	wantHostBusy := 2500.0 / 100.0 / elapsed // USER_HZ=100
+	if !approx(sample2.HostBusyCores, wantHostBusy, 0.05) {
+		t.Fatalf("second Sample HostBusyCores: got %v, want %v (non-idle-excl-steal-guest jiffies_delta(2500)/USER_HZ(100)/elapsed); "+
+			"steal MUST be excluded (folding it in double-counts steal, its own cause)",
+			sample2.HostBusyCores, wantHostBusy)
+	}
+
+	// Quota + PSI + LogicalCpus still set on the second sample.
+	if sample2.Quota == nil || !approx(*sample2.Quota, 2.0, 0.01) {
+		t.Fatalf("second Sample Quota: got %v, want 2.0 (cpu.max unchanged)", sample2.Quota)
+	}
+	if !sample2.PsiAvailable || !approx(sample2.PressureAvg60, 0.25, 0.01) {
+		t.Fatalf("second Sample PSI: PsiAvailable=%v PressureAvg60=%v, want true/0.25", sample2.PsiAvailable, sample2.PressureAvg60)
+	}
+	if sample2.LogicalCpus != float64(runtime.NumCPU()) {
+		t.Fatalf("second Sample LogicalCpus: got %v, want %v", sample2.LogicalCpus, float64(runtime.NumCPU()))
+	}
+}
 
 // TestCgroupSampler_UsageCores pins the cgroup Sampler behavior.
 //
@@ -47,9 +246,10 @@ import (
 //     OWN returned Timestamps (same clock the divisor uses), so the assertion
 //     pins the 1e6 divisor + wall-clock denominator precisely; a USER_HZ (100)
 //     divisor would be ~10000x off.
-//  3. The sampler reads ONLY <basePath>/cpu.stat via filesystem.Service --
-//     every path handed to the mock is the cgroup cpu.stat path; a host
-//     /proc/stat read would surface here as an unexpected path.
+//  3. The sampler does NOT fall back to a gopsutil host-numerator for
+//     UsageCores: reported UsageCores tracks the mock cpuStatContent value, not
+//     host load, so it must not call gopsutil/host cpu.PercentWithContext.
+//     Asserted at (2): a host-derived value would not track the mock value.
 //  4. Counter reset (usage_usec decreases between reads, e.g. cgroup recreated
 //     / pod rescheduled): the sampler re-baselines -> UsageCores == 0, stores
 //     the new counter + time.
@@ -137,18 +337,21 @@ func TestCgroupSampler_UsageCores(t *testing.T) {
 		t.Fatalf("second Sample UsageCores impossibly high: got %v (divisor likely USER_HZ not 1e6)", sample2.UsageCores)
 	}
 
-	// (3) The sampler read only <basePath>/cpu.stat via filesystem.Service --
-	// no host /proc/stat, no other cgroup file. (Reported UsageCores matching
-	// the mock cpuStatContent delta above is what proves the sampler did not
-	// fall back to a gopsutil host read; a host-derived value would not track
-	// the mock value.)
-	for i, p := range pathsRead {
-		if p != cpuStatPath {
-			t.Fatalf("pathsRead[%d]: got %q, want %q (sampler must read only cpu.stat)", i, p, cpuStatPath)
+	// (3) The sampler reads <basePath>/cpu.stat via filesystem.Service on every
+	// Sample (it also reads cpu.max/cpu.pressure//proc/stat//proc/cpuinfo, so
+	// cpu.stat is no longer the only path read). The protective intent here is
+	// the absence of a gopsutil host-numerator fallback: reported UsageCores
+	// must track the mock cpuStatContent delta above, not host load (asserted
+	// at (2)); a host-derived value would not track the mock value.
+	// Assert cpu.stat was read exactly once per Sample (the usage_usec source).
+	cpuStatReads := 0
+	for _, p := range pathsRead {
+		if p == cpuStatPath {
+			cpuStatReads++
 		}
 	}
-	if len(pathsRead) != 2 {
-		t.Fatalf("pathsRead length after two samples: got %d, want 2", len(pathsRead))
+	if cpuStatReads != 2 {
+		t.Fatalf("cpu.stat reads after two samples: got %d, want 2 (one cpu.stat read per Sample)", cpuStatReads)
 	}
 
 	// (4) Counter reset: usage_usec decreases (cgroup recreated / pod
@@ -315,4 +518,253 @@ func approx(got, want, tol float64) bool {
 		diff = -diff
 	}
 	return diff/math.Abs(want) <= tol
+}
+
+// TestCgroupSampler_CPUMaxKeyword pins the readCPUMax "max" contract: cpu.max
+// "max <period>" (unlimited quota) MUST yield a non-nil zero Quota, not nil.
+// The Decide contract (decide_test.go TestDecide_QuotaPointerUncapped) treats
+// Quota=&0 as uncapped (no CgroupCores fallback); a nil Quota falls back to
+// CgroupCores, which can false-degrade an uncapped container. The "max" keyword
+// is detected explicitly before the ParseInt attempt.
+func TestCgroupSampler_CPUMaxKeyword(t *testing.T) {
+	const basePath = "/sys/fs/cgroup"
+	cpuStatPath := basePath + "/cpu.stat"
+	cpuMaxPath := basePath + "/cpu.max"
+	ctx := context.Background()
+
+	fs := filesystem.NewMockFileSystem().WithReadFileFunc(func(_ context.Context, path string) ([]byte, error) {
+		switch path {
+		case cpuStatPath:
+			return []byte(cpuStatContent(1_000_000)), nil
+		case cpuMaxPath:
+			return []byte("max 100000\n"), nil // unlimited quota
+		default:
+			return nil, errors.New("unexpected path read: " + path)
+		}
+	})
+
+	s := cpuhealth.NewCgroupSampler(fs, basePath)
+
+	sample, err := s.Sample(ctx)
+	if err != nil {
+		t.Fatalf("Sample: unexpected error: %v", err)
+	}
+
+	if sample.Quota == nil {
+		t.Fatalf("Quota: got nil for cpu.max=\"max 100000\", want non-nil &0.0 " +
+			"(nil would make Decide fall back to CgroupCores and false-degrade an uncapped container)")
+	}
+
+	if *sample.Quota != 0.0 {
+		t.Fatalf("Quota: got %v, want 0.0 (cpu.max=\"max\" is uncapped → non-nil zero, "+
+			"matching the Decide Quota=&0 contract)", *sample.Quota)
+	}
+}
+
+// TestCgroupSampler_VirtualizedDMIFallback pins the ARM64 virtualization
+// detection fallback: ARM64 /proc/cpuinfo has a "Features" line (no "hypervisor"
+// bit), so the x86-only flags check misses hypervisors there. The sampler must
+// fall back to /sys/class/dmi/id/product_name and set Virtualized=true when a
+// known vendor token (KVM, VMware, Xen, Hyper-V, VirtualBox, QEMU) is present.
+// Both the cpuinfo and DMI reads are cached (read-once).
+func TestCgroupSampler_VirtualizedDMIFallback(t *testing.T) {
+	const basePath = "/sys/fs/cgroup"
+	cpuStatPath := basePath + "/cpu.stat"
+	procStatPath := "/proc/stat"
+	procCpuinfoPath := "/proc/cpuinfo"
+	dmiPath := "/sys/class/dmi/id/product_name"
+	ctx := context.Background()
+
+	// ARM64-style /proc/cpuinfo: "Features" line, no "hypervisor" flag.
+	arm64Cpuinfo := "processor\t: 0\nFeatures\t: fp asimd evtstrm aes pmull sha1 sha2 crc32 atomics\n"
+
+	// Baseline + delta /proc/stat so Sample does not fail on a missing cpu stat.
+	procStatTick0 := "cpu  1000 1000 1000 8000 0 0 0 50 0 0\n"
+	procStatTick1 := "cpu  1100 1100 1100 8100 0 0 0 60 0 0\n"
+
+	t.Run("arm64_cpuinfo_plus_dmi_kvm_sets_virtualized", func(t *testing.T) {
+		cpuinfoReads := 0
+		dmiReads := 0
+		procStat := procStatTick0
+
+		fs := filesystem.NewMockFileSystem().WithReadFileFunc(func(_ context.Context, path string) ([]byte, error) {
+			switch path {
+			case cpuStatPath:
+				return []byte(cpuStatContent(1_000_000)), nil
+			case procStatPath:
+				return []byte(procStat), nil
+			case procCpuinfoPath:
+				cpuinfoReads++
+				return []byte(arm64Cpuinfo), nil
+			case dmiPath:
+				dmiReads++
+				return []byte("KVM Virtual Machine\n"), nil
+			default:
+				return nil, errors.New("unexpected path read: " + path)
+			}
+		})
+
+		s := cpuhealth.NewCgroupSampler(fs, basePath)
+
+		sample1, err := s.Sample(ctx)
+		if err != nil {
+			t.Fatalf("first Sample: unexpected error: %v", err)
+		}
+
+		if !sample1.Virtualized {
+			t.Fatalf("first Sample Virtualized: got false, want true " +
+				"(ARM64 cpuinfo has no hypervisor flag; DMI product_name=\"KVM Virtual Machine\" must set Virtualized via the fallback)")
+		}
+
+		if cpuinfoReads != 1 {
+			t.Fatalf("first Sample: /proc/cpuinfo read %d time(s), want 1", cpuinfoReads)
+		}
+
+		if dmiReads != 1 {
+			t.Fatalf("first Sample: DMI product_name read %d time(s), want 1 (fallback triggered when cpuinfo check failed)", dmiReads)
+		}
+
+		// Second Sample: both reads cached — neither path re-read.
+		procStat = procStatTick1
+		_, err = s.Sample(ctx)
+		if err != nil {
+			t.Fatalf("second Sample: unexpected error: %v", err)
+		}
+
+		if cpuinfoReads != 1 {
+			t.Fatalf("second Sample: /proc/cpuinfo read %d time(s) total, want still 1 (cached)", cpuinfoReads)
+		}
+
+		if dmiReads != 1 {
+			t.Fatalf("second Sample: DMI product_name read %d time(s) total, want still 1 (cached after first successful read)", dmiReads)
+		}
+	})
+
+	t.Run("no_flags_no_dmi_virtualized_false", func(t *testing.T) {
+		cpuinfoReads := 0
+		dmiReads := 0
+		procStat := procStatTick0
+
+		fs := filesystem.NewMockFileSystem().WithReadFileFunc(func(_ context.Context, path string) ([]byte, error) {
+			switch path {
+			case cpuStatPath:
+				return []byte(cpuStatContent(1_000_000)), nil
+			case procStatPath:
+				return []byte(procStat), nil
+			case procCpuinfoPath:
+				cpuinfoReads++
+				return []byte(arm64Cpuinfo), nil
+			case dmiPath:
+				dmiReads++
+				// Bare-metal DMI product_name — no vendor token.
+				return []byte("Raspberry Pi 4 Model B Rev 1.4\n"), nil
+			default:
+				return nil, errors.New("unexpected path read: " + path)
+			}
+		})
+
+		s := cpuhealth.NewCgroupSampler(fs, basePath)
+
+		sample, err := s.Sample(ctx)
+		if err != nil {
+			t.Fatalf("Sample: unexpected error: %v", err)
+		}
+
+		if sample.Virtualized {
+			t.Fatalf("Virtualized: got true, want false (no hypervisor flag in cpuinfo, no vendor token in DMI product_name)")
+		}
+
+		if cpuinfoReads != 1 {
+			t.Fatalf("/proc/cpuinfo read %d time(s), want 1", cpuinfoReads)
+		}
+
+		if dmiReads != 1 {
+			t.Fatalf("DMI product_name read %d time(s), want 1 (fallback attempted when cpuinfo check did not prove virtualization)", dmiReads)
+		}
+	})
+}
+
+// TestCgroupSampler_ProcStatCounterReset pins the HostBusyCores counter-reset
+// guard: when /proc/stat's total jiffies DECREASE between reads (host reboot,
+// /proc/stat wrap), both StealFraction and HostBusyCores MUST be 0 (not
+// negative). The reset sample becomes the new baseline, so the following tick
+// produces a delta-relative value again.
+func TestCgroupSampler_ProcStatCounterReset(t *testing.T) {
+	const basePath = "/sys/fs/cgroup"
+	cpuStatPath := basePath + "/cpu.stat"
+	procStatPath := "/proc/stat"
+	ctx := context.Background()
+
+	// Tick 0: baseline. total = 1000+1000+1000+8000+0+0+0+50+0+0 = 11050.
+	procStatTick0 := "cpu  1000 1000 1000 8000 0 0 0 50 0 0\n"
+	// Tick 1: total grows to 22050 (delta 11000) — normal positive delta.
+	procStatTick1 := "cpu  2000 1500 2000 16400 0 0 0 150 0 0\n"
+	// Tick 2: total DROPS to 5000 (counter reset / host reboot). Without the
+	// guard, busy - lastBusy goes negative → negative HostBusyCores published.
+	procStatReset := "cpu  300 300 300 3900 0 0 0 10 0 0\n"
+
+	usageUsec := int64(1_000_000)
+	procStat := procStatTick0
+
+	fs := filesystem.NewMockFileSystem().WithReadFileFunc(func(_ context.Context, path string) ([]byte, error) {
+		switch path {
+		case cpuStatPath:
+			return []byte(cpuStatContent(usageUsec)), nil
+		case procStatPath:
+			return []byte(procStat), nil
+		default:
+			return nil, errors.New("unexpected path read: " + path)
+		}
+	})
+
+	s := cpuhealth.NewCgroupSampler(fs, basePath)
+
+	// (1) Baseline.
+	_, err := s.Sample(ctx)
+	if err != nil {
+		t.Fatalf("baseline Sample: unexpected error: %v", err)
+	}
+
+	// (2) Normal positive-delta tick — sanity (non-zero StealFraction + HostBusyCores).
+	time.Sleep(40 * time.Millisecond)
+	usageUsec = 1_100_000
+	procStat = procStatTick1
+
+	sample2, err := s.Sample(ctx)
+	if err != nil {
+		t.Fatalf("delta Sample: unexpected error: %v", err)
+	}
+
+	if sample2.StealFraction == 0 {
+		t.Fatalf("delta Sample StealFraction: got 0, want non-zero (sanity: positive total delta)")
+	}
+
+	if sample2.HostBusyCores == 0 {
+		t.Fatalf("delta Sample HostBusyCores: got 0, want non-zero (sanity: positive busy delta)")
+	}
+
+	// (3) Counter reset: total decreases. Both StealFraction and HostBusyCores
+	// MUST be 0 — a negative HostBusyCores would be published without the guard.
+	time.Sleep(40 * time.Millisecond)
+	usageUsec = 1_200_000
+	procStat = procStatReset
+
+	sample3, err := s.Sample(ctx)
+	if err != nil {
+		t.Fatalf("reset Sample: unexpected error: %v", err)
+	}
+
+	if sample3.StealFraction != 0 {
+		t.Fatalf("reset Sample StealFraction: got %v, want 0 (total decreased → counter reset guard must zero BOTH steal and host-busy)",
+			sample3.StealFraction)
+	}
+
+	if sample3.HostBusyCores != 0 {
+		t.Fatalf("reset Sample HostBusyCores: got %v, want 0 (total decreased → busy delta negative → guard must zero, "+
+			"not publish a negative core count)", sample3.HostBusyCores)
+	}
+
+	if sample3.HostBusyCores < 0 {
+		t.Fatalf("reset Sample HostBusyCores: got negative %v (the exact bug the guard prevents)", sample3.HostBusyCores)
+	}
 }
