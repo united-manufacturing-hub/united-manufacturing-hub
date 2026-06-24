@@ -833,13 +833,20 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) (err error) 
 		}
 	}
 
-	// Preserve ShutdownRequested: shutdown is a supervisor operation that overrides DeriveDesiredState
+	// Preserve ShutdownRequested and Disabled: both are supervisor operations
+	// (shutdown request and the disable-mapping pass) that override DeriveDesiredState.
+	// Workers always re-derive these as false, so the persisted value must be carried
+	// forward or the disable bit would be clobbered every tick.
 	var existingDesiredTyped TDesired
 	if err := s.store.LoadDesiredTyped(ctx, s.workerType, firstWorkerID, &existingDesiredTyped); err == nil {
-		// Check if existing state had shutdown requested via interface
+		// Check the existing state's lifecycle flags via interface.
 		if ds, ok := any(existingDesiredTyped).(fsmv2.DesiredState); ok {
 			if ds.IsShutdownRequested() {
 				desiredDoc[FieldShutdownRequested] = true
+			}
+
+			if ds.IsDisabled() {
+				desiredDoc[FieldDisabled] = true
 			}
 		}
 	}
@@ -954,8 +961,6 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) (err error) 
 	if err := s.reconcileChildren(childrenSpecs); err != nil {
 		return fmt.Errorf("failed to reconcile children: %w", err)
 	}
-
-	s.applyStateMapping()
 
 	// Tick children; errors logged but don't fail parent
 	s.mu.RLock()
@@ -1477,7 +1482,6 @@ func (s *Supervisor[TObserved, TDesired]) reconcileChildren(specs []config.Child
 			childUserSpec := spec.UserSpec
 			childUserSpec.Variables = config.Merge(s.userSpec.Variables, spec.UserSpec.Variables)
 			child.updateUserSpec(childUserSpec)
-			child.setChildStartStates(spec.ChildStartStates)
 
 			updatedCount++
 		} else {
@@ -1541,7 +1545,6 @@ func (s *Supervisor[TObserved, TDesired]) reconcileChildren(specs []config.Child
 			childUserSpec := spec.UserSpec
 			childUserSpec.Variables = config.Merge(s.userSpec.Variables, spec.UserSpec.Variables)
 			childSupervisor.updateUserSpec(childUserSpec)
-			childSupervisor.setChildStartStates(spec.ChildStartStates)
 			childSupervisor.setParent(s, s.workerType)
 
 			// Compute child's hierarchy path: parent path + child segment
@@ -1745,39 +1748,6 @@ func (s *Supervisor[TObserved, TDesired]) reconcileChildren(specs []config.Child
 	return nil
 }
 
-func (s *Supervisor[TObserved, TDesired]) applyStateMapping() {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	if len(s.workers) == 0 {
-		return
-	}
-
-	var parentState string
-
-	for _, workerCtx := range s.workers {
-		workerCtx.mu.RLock()
-
-		if workerCtx.currentState != nil {
-			parentState = workerCtx.currentState.String()
-		}
-
-		workerCtx.mu.RUnlock()
-
-		break
-	}
-
-	for childName, child := range s.children {
-		mappedState := s.computeMappedState(parentState, child)
-
-		child.setMappedParentState(mappedState)
-		s.logTrace("state_mapped",
-			deps.String("child_name", childName),
-			deps.String("parent_state", parentState),
-			deps.String("mapped_state", mappedState))
-	}
-}
-
 // applyDisableMapping propagates ChildSpec.Enabled into each child's IsDisabled bit.
 // Called inside reconcileChildren (parent.mu held). Acquires per-child locks internally.
 // Nil specs are a no-op: leaf workers return nil from GetChildrenSpecs every tick.
@@ -1792,7 +1762,7 @@ func (s *Supervisor[TObserved, TDesired]) applyDisableMapping(ctx context.Contex
 	}
 
 	for _, spec := range specs {
-		spec := spec // capture for closure
+		// capture for closure
 
 		// Per-iteration panic recovery: one misbehaving child must not stop all reductions.
 		func() {
@@ -1834,6 +1804,7 @@ func (s *Supervisor[TObserved, TDesired]) handleDisableMappingError(spec config.
 	now := time.Now()
 	if now.Sub(entry.lastSeen) < disableMappingErrorSuppressionWindow {
 		s.disableMappingErrors[key] = entry
+
 		return
 	}
 
@@ -1849,6 +1820,7 @@ func (s *Supervisor[TObserved, TDesired]) handleDisableMappingError(spec config.
 		s.logger.Debug("reducer_child_not_found_disabled",
 			deps.String("child_name", spec.Name),
 			deps.Int("suppressed_count", entry.count))
+
 		return
 	}
 
@@ -1868,28 +1840,4 @@ func (s *Supervisor[TObserved, TDesired]) classifyDisableMappingError(err error)
 	}
 
 	return "other"
-}
-
-// computeMappedState determines the desired state for a child based on parent's current state.
-//
-// ChildStartStates logic:
-//   - If empty: child always runs (follows parent's DesiredState.State)
-//   - If parentState is in the list: child should run (returns "running")
-//   - Otherwise: child should stop (returns "stopped")
-func (s *Supervisor[TObserved, TDesired]) computeMappedState(parentState string, child SupervisorInterface) string {
-	childStartStates := child.getChildStartStates()
-
-	// Empty ChildStartStates = child always runs (follows parent's desired state)
-	if len(childStartStates) == 0 {
-		return config.DesiredStateRunning
-	}
-
-	// Check if parent state is in the list of states where child should run
-	for _, state := range childStartStates {
-		if state == parentState {
-			return config.DesiredStateRunning
-		}
-	}
-
-	return config.DesiredStateStopped
 }

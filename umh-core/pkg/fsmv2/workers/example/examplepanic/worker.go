@@ -110,9 +110,7 @@ func (w *ExamplepanicWorker) CollectObservedState(ctx context.Context, desired f
 
 func (w *ExamplepanicWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, error) {
 	if spec == nil {
-		return &fsmv2.WrappedDesiredState[ExamplepanicConfig]{
-			State: config.DesiredStateRunning,
-		}, nil
+		return &fsmv2.WrappedDesiredState[ExamplepanicConfig]{}, nil
 	}
 
 	userSpec, ok := spec.(config.UserSpec)
@@ -125,10 +123,7 @@ func (w *ExamplepanicWorker) DeriveDesiredState(spec interface{}) (fsmv2.Desired
 		return nil, fmt.Errorf("failed to parse examplepanic spec: %w", err)
 	}
 
-	state := parsed.GetState()
-
 	return &fsmv2.WrappedDesiredState[ExamplepanicConfig]{
-		State:  state,
 		Config: parsed,
 	}, nil
 }

@@ -17,6 +17,7 @@ package models
 import (
 	"github.com/Masterminds/semver/v3"
 	"github.com/google/uuid"
+
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 )
 
@@ -831,13 +832,13 @@ type WriteDFCPayload struct {
 // ProtocolConverter is the wire format for protocol converter configuration,
 // used by deploy/edit actions and GET responses.
 type ProtocolConverter struct {
-	UUID            *uuid.UUID                     `binding:"required"     json:"uuid"`
+	UUID            *uuid.UUID                     `binding:"required"  json:"uuid"`
 	Location        map[int]string                 `json:"location"`
 	ReadDFC         *ProtocolConverterDFC          `json:"readDFC"`
 	WriteDFCPayload *WriteDFCPayload               `json:"writeDFC"`
 	TemplateInfo    *ProtocolConverterTemplateInfo `json:"templateInfo"`
 	Meta            *ProtocolConverterMeta         `json:"meta"`
-	Name            string                         `binding:"required" json:"name"`
+	Name            string                         `binding:"required"  json:"name"`
 	Connection      ProtocolConverterConnection    `json:"connection"`
 }
 

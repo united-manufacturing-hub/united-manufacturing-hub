@@ -17,10 +17,11 @@ package protocolconverterserviceconfig
 import (
 	"fmt"
 
+	"gopkg.in/yaml.v3"
+
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/connectionserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/variables"
-	"gopkg.in/yaml.v3"
 )
 
 // Generator handles the generation of DFC YAML configurations
@@ -39,6 +40,7 @@ func (g *Generator) RenderConfig(cfg ProtocolConverterServiceConfigSpec) (string
 	if err != nil {
 		return "", err
 	}
+
 	normalizedMap := normalizeConfig(configMap)
 
 	yamlBytes, err := yaml.Marshal(normalizedMap)
@@ -71,8 +73,8 @@ func (g *Generator) configToMap(cfg ProtocolConverterServiceConfigSpec) (map[str
 	variableBundleConfigMap := variableBundleGenerator.ConfigToMap(cfg.Variables)
 
 	templateMap := map[string]any{
-		"connection":             connectionConfigMap,
-		"dataflowcomponent_read": dfcReadConfigMap,
+		"connection":              connectionConfigMap,
+		"dataflowcomponent_read":  dfcReadConfigMap,
 		"dataflowcomponent_write": dfcWriteConfigMap,
 	}
 
@@ -162,9 +164,11 @@ func writeConfigToMap(cfg dataflowcomponentserviceconfig.DataflowComponentWriteC
 	if err != nil {
 		return nil, fmt.Errorf("writeConfigToMap: failed to marshal write DFC config: %w", err)
 	}
+
 	var m map[string]any
 	if err := yaml.Unmarshal(data, &m); err != nil {
 		return nil, fmt.Errorf("writeConfigToMap: failed to unmarshal write DFC config: %w", err)
 	}
+
 	return m, nil
 }

@@ -28,7 +28,8 @@ func (s *ConnectedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := fsmv2.ConvertWorkerSnapshot[example_slow.ExampleslowConfig, example_slow.ExampleslowStatus](snapAny)
 
 	if snap.ShouldStop() {
-		return fsmv2.Transition(&TryingToStopState{}, fsmv2.SignalNone, nil, "stop required, transitioning to trying to stop", nil)
+		return fsmv2.Transition(&TryingToStopState{}, fsmv2.SignalNone, nil,
+			"stop required: "+snap.StopReason(), nil)
 	}
 
 	if snap.Status.ConnectionHealth == "no connection" {

@@ -28,26 +28,26 @@ const PlaceholderUMHTopicUnset = "TOPIC_NOT_SET_BY_USER"
 type WriteConfigSource struct {
 	// Topics is either a plain topic list (newline- or comma-separated, each line
 	// optionally prefixed with "- ") or a Go template string that renders to such a list.
-	Topics string `yaml:"topics,omitempty" json:"topics,omitempty" mapstructure:"topics,omitempty"`
+	Topics string `json:"topics,omitempty" mapstructure:"topics,omitempty" yaml:"topics,omitempty"`
 }
 
 // WriteConfigProcessing holds the processing configuration for a write DFC.
 type WriteConfigProcessing struct {
 	// Type is the processor type. Currently hardcoded to "nodered_js".
-	Type string `yaml:"type,omitempty" json:"type,omitempty" mapstructure:"type,omitempty"`
+	Type string `json:"type,omitempty" mapstructure:"type,omitempty" yaml:"type,omitempty"`
 	// Code is the processor code snippet (e.g. Node-RED JS).
 	// Might contain a Go template string that renders to a processor code snippet.
-	Code string `yaml:"code,omitempty" json:"code,omitempty" mapstructure:"code,omitempty"`
+	Code string `json:"code,omitempty" mapstructure:"code,omitempty" yaml:"code,omitempty"`
 }
 
 // WriteConfigDestination holds the destination (output) configuration for a write DFC.
 type WriteConfigDestination struct {
 	// Protocol is the Benthos output plugin name (e.g. "http_client", "kafka").
 	// Currently hardcoded to "http_client".
-	Protocol string `yaml:"protocol,omitempty" json:"protocol,omitempty" mapstructure:"protocol,omitempty"`
+	Protocol string `json:"protocol,omitempty" mapstructure:"protocol,omitempty" yaml:"protocol,omitempty"`
 	// Code is the YAML body of the Benthos output plugin config.
 	// Might contain a Go template string that renders to a YAML body.
-	Code string `yaml:"code,omitempty" json:"code,omitempty" mapstructure:"code,omitempty"`
+	Code string `json:"code,omitempty" mapstructure:"code,omitempty" yaml:"code,omitempty"`
 }
 
 // toOutputMap builds the Benthos output map for this destination.
@@ -71,6 +71,7 @@ func (d WriteConfigDestination) toOutputMap() map[string]any {
 	} else {
 		destConfig = map[string]any{}
 	}
+
 	return map[string]any{d.Protocol: destConfig}
 }
 
@@ -80,7 +81,7 @@ type WriteConfigExtra struct {
 	// Code is any extra Benthos YAML that is inlined verbatim into the generated
 	// Benthos service config.
 	// Might contain a Go template string that renders to a YAML body.
-	Code string `yaml:"code,omitempty" json:"code,omitempty" mapstructure:"code,omitempty"`
+	Code string `json:"code,omitempty" mapstructure:"code,omitempty" yaml:"code,omitempty"`
 }
 
 // DataflowComponentWriteConfig is the typed, validated configuration for write-side DFCs.
@@ -122,12 +123,12 @@ type DataflowComponentWriteConfig struct {
 // (e.g. fields from an older config format). They are round-tripped transparently
 // so that a config written in an older format is never silently erased on read/write.
 type DataflowComponentWriteConfigInput struct {
-	Extra *WriteConfigExtra `yaml:"extra,omitempty"       json:"extra,omitempty"       mapstructure:"extra,omitempty"`
+	Extra *WriteConfigExtra `json:"extra,omitempty" mapstructure:"extra,omitempty" yaml:"extra,omitempty"`
 	// UnrecognizedFields preserves unknown YAML keys for round-trip fidelity.
-	UnrecognizedFields map[string]any         `yaml:",inline" json:"-" mapstructure:"-"`
-	Processing         WriteConfigProcessing  `yaml:"processing,omitempty"  json:"processing,omitempty"  mapstructure:"processing,omitempty"`
-	Destination        WriteConfigDestination `yaml:"destination,omitempty" json:"destination,omitempty" mapstructure:"destination,omitempty"`
-	Source             WriteConfigSource      `yaml:"source,omitempty"      json:"source,omitempty"      mapstructure:"source,omitempty"`
+	UnrecognizedFields map[string]any         `json:"-"                     mapstructure:"-"                     yaml:",inline"`
+	Processing         WriteConfigProcessing  `json:"processing,omitempty"  mapstructure:"processing,omitempty"  yaml:"processing,omitempty"`
+	Destination        WriteConfigDestination `json:"destination,omitempty" mapstructure:"destination,omitempty" yaml:"destination,omitempty"`
+	Source             WriteConfigSource      `json:"source,omitempty"      mapstructure:"source,omitempty"      yaml:"source,omitempty"`
 }
 
 // HasOutput reports whether a write output is configured.
@@ -158,15 +159,18 @@ func (c DataflowComponentWriteConfigInput) ToDataflowComponentServiceConfig(brid
 // non-empty []string. YAML list entries prefixed with "- " are also handled.
 func splitTopics(s string) []string {
 	parts := strings.Split(s, "\n")
+
 	out := make([]string, 0, len(parts))
 	for _, p := range parts {
 		t := strings.TrimSpace(p)
 		t = strings.TrimPrefix(t, "- ")
+
 		t = strings.TrimSpace(t)
 		if t != "" {
 			out = append(out, t)
 		}
 	}
+
 	return out
 }
 
@@ -185,16 +189,20 @@ func (c DataflowComponentWriteConfig) ToDataflowComponentServiceConfig(bridgedBy
 	if processorType == "" {
 		processorType = "nodered_js"
 	}
+
 	pipeline := c.codeToPipeline(c.Processing.Code, processorType)
 
-	var input map[string]any
-	var output map[string]any
+	var (
+		input  map[string]any
+		output map[string]any
+	)
 
 	if c.HasOutput() {
 		topics := c.Topics
 		if len(topics) == 0 {
 			topics = []string{PlaceholderUMHTopicUnset}
 		}
+
 		input = map[string]any{
 			"uns": map[string]any{
 				"consumer_group": bridgedBy,
@@ -208,6 +216,7 @@ func (c DataflowComponentWriteConfig) ToDataflowComponentServiceConfig(bridgedBy
 	}
 
 	cacheResources, rateLimitResources, buffer := c.parseExtra()
+
 	return DataflowComponentServiceConfig{
 		BenthosConfig: BenthosConfig{
 			Input:              input,
@@ -228,6 +237,7 @@ func (c DataflowComponentWriteConfig) ToDisplayDataflowComponentServiceConfig() 
 	if processorType == "" {
 		processorType = "nodered_js"
 	}
+
 	pipeline := c.codeToPipeline(c.Processing.Code, processorType)
 
 	var output map[string]any
@@ -236,6 +246,7 @@ func (c DataflowComponentWriteConfig) ToDisplayDataflowComponentServiceConfig() 
 	}
 
 	cacheResources, rateLimitResources, buffer := c.parseExtra()
+
 	return DataflowComponentServiceConfig{
 		BenthosConfig: BenthosConfig{
 			Pipeline:           pipeline,
@@ -254,10 +265,12 @@ func (c DataflowComponentWriteConfig) parseExtra() (cacheResources []map[string]
 	if c.Extra == nil || c.Extra.Code == "" {
 		return nil, nil, nil
 	}
+
 	var parsed map[string]any
 	if err := yaml.Unmarshal([]byte(c.Extra.Code), &parsed); err != nil {
 		return nil, nil, nil
 	}
+
 	if raw, ok := parsed["cache_resources"].([]any); ok {
 		for _, item := range raw {
 			if m, ok := item.(map[string]any); ok {
@@ -265,6 +278,7 @@ func (c DataflowComponentWriteConfig) parseExtra() (cacheResources []map[string]
 			}
 		}
 	}
+
 	if raw, ok := parsed["rate_limit_resources"].([]any); ok {
 		for _, item := range raw {
 			if m, ok := item.(map[string]any); ok {
@@ -272,9 +286,11 @@ func (c DataflowComponentWriteConfig) parseExtra() (cacheResources []map[string]
 			}
 		}
 	}
+
 	if m, ok := parsed["buffer"].(map[string]any); ok {
 		buffer = m
 	}
+
 	return cacheResources, rateLimitResources, buffer
 }
 
@@ -283,6 +299,7 @@ func (c DataflowComponentWriteConfig) codeToPipeline(code, processorType string)
 	if code == "" {
 		code = "return msg;"
 	}
+
 	return map[string]any{
 		"processors": []any{
 			map[string]any{

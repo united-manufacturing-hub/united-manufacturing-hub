@@ -55,7 +55,6 @@ func expectChildren(specs []config.ChildSpec, enabled bool) {
 // StoppedState's IsDisabled branch is reachable.
 func makeDisabledSnapshot() fsmv2.Snapshot {
 	desired := &fsmv2.WrappedDesiredState[snapshot.TransportDesiredState]{
-		State: config.DesiredStateStopped,
 		BaseDesiredState: config.BaseDesiredState{
 			Disabled: true,
 		},

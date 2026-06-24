@@ -737,91 +737,6 @@ func checkTryingToStatesReturnActions(filename string) []Violation {
 	return violations
 }
 
-// ValidateExhaustiveTransitionCoverage checks that Next() methods end with catch-all return.
-func ValidateExhaustiveTransitionCoverage(baseDir string) []Violation {
-	var violations []Violation
-
-	stateFiles := FindStateFiles(baseDir)
-
-	for _, file := range stateFiles {
-		fileViolations := checkExhaustiveTransitionCoverage(file)
-		violations = append(violations, fileViolations...)
-	}
-
-	return violations
-}
-
-// checkExhaustiveTransitionCoverage checks for catch-all return (TryingTo states exempt).
-// This now checks for fsmv2.Result(s, fsmv2.SignalNone, nil, "reason") pattern.
-func checkExhaustiveTransitionCoverage(filename string) []Violation {
-	var violations []Violation
-
-	baseName := filepath.Base(filename)
-	// TryingTo and stopping states are active-transition states exempt from the catch-all rule.
-	// Stopped states are also exempt because they legitimately transition out when desired state
-	// changes (e.g., StoppedState -> TryingToStartState).
-	if strings.Contains(baseName, "trying_to") || strings.Contains(baseName, "stopping") || strings.Contains(baseName, "stopped") {
-		return violations
-	}
-
-	fset := token.NewFileSet()
-
-	node, err := parser.ParseFile(fset, filename, nil, parser.ParseComments)
-	if err != nil {
-		return violations
-	}
-
-	ast.Inspect(node, func(n ast.Node) bool {
-		funcDecl, ok := n.(*ast.FuncDecl)
-		if !ok || funcDecl.Name.Name != "Next" {
-			return true
-		}
-
-		if funcDecl.Body == nil || len(funcDecl.Body.List) == 0 {
-			return true
-		}
-
-		lastStmt := funcDecl.Body.List[len(funcDecl.Body.List)-1]
-
-		retStmt, ok := lastStmt.(*ast.ReturnStmt)
-		if !ok || len(retStmt.Results) != 1 {
-			return true
-		}
-
-		// Extract state, signal, action from fsmv2.Result() call
-		stateResult, signalResult, actionResult := extractResultArgsWithSignal(retStmt.Results[0])
-		if stateResult == nil || signalResult == nil || actionResult == nil {
-			return true
-		}
-
-		isCatchAll := false
-
-		if ident, ok := stateResult.(*ast.Ident); ok && ident.Name == "s" {
-			if selExpr, ok := signalResult.(*ast.SelectorExpr); ok {
-				if selExpr.Sel.Name == "SignalNone" {
-					if nilIdent, ok := actionResult.(*ast.Ident); ok && nilIdent.Name == "nil" {
-						isCatchAll = true
-					}
-				}
-			}
-		}
-
-		if !isCatchAll {
-			pos := fset.Position(retStmt.Pos())
-			violations = append(violations, Violation{
-				File:    filename,
-				Line:    pos.Line,
-				Type:    "MISSING_CATCHALL_RETURN",
-				Message: "Next() should end with catch-all: fsmv2.Result(s, fsmv2.SignalNone, nil, reason)",
-			})
-		}
-
-		return true
-	})
-
-	return violations
-}
-
 // ValidateBaseStateEmbedding checks that state structs embed Base*State.
 func ValidateBaseStateEmbedding(baseDir string) []Violation {
 	var violations []Violation
@@ -849,11 +764,11 @@ func checkBaseStateEmbedding(filename string) []Violation {
 
 	// Valid phase-specific base types from helpers package
 	validPhaseBaseTypes := map[string]bool{
-		"StartingBase":       true,
-		"RunningHealthyBase": true,
+		"StartingBase":        true,
+		"RunningHealthyBase":  true,
 		"RunningDegradedBase": true,
-		"StoppingBase":       true,
-		"StoppedBase":        true,
+		"StoppingBase":        true,
+		"StoppedBase":         true,
 	}
 
 	ast.Inspect(node, func(n ast.Node) bool {

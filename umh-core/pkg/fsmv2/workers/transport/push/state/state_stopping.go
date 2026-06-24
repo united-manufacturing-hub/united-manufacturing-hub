@@ -15,8 +15,6 @@
 package state
 
 import (
-	"fmt"
-
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/push/snapshot"
@@ -35,8 +33,7 @@ func (s *StoppingState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	// See CLAUDE.md "State Transition Traps" for the full pattern.
 
 	return fsmv2.Transition(&StoppedState{}, fsmv2.SignalNone, nil,
-		fmt.Sprintf("stop complete: shutdown=%t, parentState(observed)=%s",
-			snap.IsShutdownRequested, snap.ParentMappedState), nil)
+		"stop complete: "+snap.StopReason(), nil)
 }
 
 func (s *StoppingState) String() string {

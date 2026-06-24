@@ -25,6 +25,7 @@ import (
 	"github.com/google/uuid"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/encoding"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
@@ -2036,6 +2037,7 @@ var _ = Describe("EditProtocolConverter", func() {
 			It("aborts on writeDFC-only render failure, rolls back, and reports ErrConfigFileInvalid", func() {
 				observedStateWithWriteInject := func(inject string) *protocolconverter.ProtocolConverterObservedStateSnapshot {
 					output := map[string]interface{}{"http_client": map[string]interface{}{}}
+
 					return &protocolconverter.ProtocolConverterObservedStateSnapshot{
 						ObservedProtocolConverterSpecConfig: protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
 							Config: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
@@ -2128,9 +2130,11 @@ var _ = Describe("EditProtocolConverter", func() {
 					for _, r := range privateReplies {
 						if r.state == string(models.ActionFinishedWithFailure) {
 							final = r
+
 							return true
 						}
 					}
+
 					return false
 				}, "2s").Should(BeTrue(), "expected a final ActionFinishedWithFailure reply")
 				Expect(final.errorCode).To(Equal(models.ErrConfigFileInvalid))
@@ -2151,6 +2155,7 @@ var _ = Describe("EditProtocolConverter", func() {
 							count++
 						}
 					}
+
 					return count
 				}
 
@@ -2308,6 +2313,7 @@ var _ = Describe("EditProtocolConverter", func() {
 						},
 					},
 				}
+
 				return &protocolconverter.ProtocolConverterObservedStateSnapshot{
 					ObservedProtocolConverterSpecConfig: protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
 						Config: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
@@ -2363,6 +2369,7 @@ var _ = Describe("EditProtocolConverter", func() {
 						"url": "http://example.com",
 					},
 				}
+
 				return &protocolconverter.ProtocolConverterObservedStateSnapshot{
 					ObservedProtocolConverterSpecConfig: protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
 						Config: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
@@ -2438,6 +2445,7 @@ var _ = Describe("EditProtocolConverter", func() {
 						"variables": extraVars,
 					}
 				}
+
 				return payload
 			}
 

@@ -75,7 +75,6 @@ var _ = Describe("ParentWorker", func() {
 
 			Expect(err).ToNot(HaveOccurred())
 			desired := desiredIface.(*fsmv2.WrappedDesiredState[exampleparent.ExampleparentConfig])
-			Expect(desired.GetState()).To(Equal("running"))
 			Expect(desired.ChildrenSpecs).To(BeNil())
 		})
 
@@ -89,7 +88,6 @@ var _ = Describe("ParentWorker", func() {
 
 			Expect(err).ToNot(HaveOccurred())
 			desired := desiredIface.(*fsmv2.WrappedDesiredState[exampleparent.ExampleparentConfig])
-			Expect(desired.GetState()).To(Equal("running"))
 			// ChildrenSpecs is nil: children are declared in RenderChildren (children.go),
 			// not in DeriveDesiredState. RenderChildren is the single source of truth.
 			Expect(desired.ChildrenSpecs).To(BeNil())

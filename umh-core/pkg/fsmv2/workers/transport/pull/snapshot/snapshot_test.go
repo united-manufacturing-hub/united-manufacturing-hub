@@ -22,30 +22,17 @@ import (
 )
 
 var _ = Describe("PullDesiredState", func() {
-	Describe("ShouldBeRunning", func() {
-		It("should return true when ParentMappedState is running and shutdown is not requested", func() {
-			desired := &snapshot.PullDesiredState{
-				ParentMappedState: "running",
-			}
+	Describe("GetState", func() {
+		It("should default to running when State is empty", func() {
+			desired := &snapshot.PullDesiredState{}
 
-			Expect(desired.ShouldBeRunning()).To(BeTrue())
+			Expect(desired.GetState()).To(Equal("running"))
 		})
 
-		It("should return false when ShutdownRequested is true", func() {
-			desired := &snapshot.PullDesiredState{
-				ParentMappedState: "running",
-			}
-			desired.SetShutdownRequested(true)
+		It("should return the explicit State when set", func() {
+			desired := &snapshot.PullDesiredState{State: "stopped"}
 
-			Expect(desired.ShouldBeRunning()).To(BeFalse())
-		})
-
-		It("should return false when ParentMappedState is stopped", func() {
-			desired := &snapshot.PullDesiredState{
-				ParentMappedState: "stopped",
-			}
-
-			Expect(desired.ShouldBeRunning()).To(BeFalse())
+			Expect(desired.GetState()).To(Equal("stopped"))
 		})
 	})
 })
