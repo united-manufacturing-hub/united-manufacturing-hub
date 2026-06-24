@@ -227,11 +227,8 @@ func (a *DeployProtocolConverterAction) Execute() (interface{}, map[string]inter
 	if a.systemSnapshotManager != nil && !a.ignoreHealthCheck {
 		errCode, err := a.waitForComponentToAppear(pcConfig.DesiredFSMState)
 		if err != nil {
-			errorMsg := fmt.Sprintf(
-				"Failed to wait for Bridge to reach state %s: %v",
-				pcConfig.DesiredFSMState,
-				err,
-			)
+			// err is already a self-contained user message, so send it as-is
+			// instead of wrapping it again.
 			// Config is kept (no rollback), so return the UUID. The frontend uses
 			// it to offer fixing the persisted bridge from the editing view.
 			SendActionReplyV2(
@@ -239,7 +236,7 @@ func (a *DeployProtocolConverterAction) Execute() (interface{}, map[string]inter
 				a.userEmail,
 				a.actionUUID,
 				models.ActionFinishedWithFailure,
-				errorMsg,
+				err.Error(),
 				errCode,
 				map[string]interface{}{"uuid": pcUUID.String()},
 				a.outboundChannel,
@@ -250,7 +247,7 @@ func (a *DeployProtocolConverterAction) Execute() (interface{}, map[string]inter
 				deps.String("pcConfig", pcConfig.String()),
 				deps.String("desiredState", pcConfig.DesiredFSMState))
 
-			return nil, nil, fmt.Errorf("%s", errorMsg)
+			return nil, nil, err
 		}
 	}
 
@@ -373,7 +370,7 @@ func (a *DeployProtocolConverterAction) waitForComponentToAppear(desiredState st
 
 		select {
 		case <-timeout:
-			stateMessage := Label("deploy", a.payload.Name) + fmt.Sprintf("timeout reached. it did not become %s in time", desiredState)
+			stateMessage := Label("deploy", a.payload.Name) + "timeout reached"
 			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, stateMessage,
 				a.outboundChannel, models.DeployProtocolConverter)
 
