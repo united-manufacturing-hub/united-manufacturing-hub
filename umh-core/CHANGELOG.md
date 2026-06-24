@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Improvements
+
+- The full bridge and stream-processor configuration is no longer written to the umh-core log at INFO on every internal re-apply (moved to DEBUG), removing a source of log flooding and CPU pressure when a config keeps being re-applied. While a bridge's observed config differs from its desired config, its status in the Management Console now shows a bounded summary of what differs, and the umh-core log carries one warning per bridge per minute, so the cause is visible without enabling debug logging
+
 ## [0.44.25]
 
 ### Improvements

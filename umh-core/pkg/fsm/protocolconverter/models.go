@@ -151,6 +151,12 @@ func IsRunningState(state string) bool {
 // ProtocolConverterObservedState contains the observed runtime state of a ProtocolConverter instance.
 type ProtocolConverterObservedState struct {
 
+	// ConfigDivergence describes the difference between the desired and the
+	// observed runtime configuration. It is reset to "" at the start of every
+	// UpdateObservedStateOfInstance call and set to the ConfigDiffRuntime text
+	// when a divergence is detected and the service exists.
+	ConfigDivergence string
+
 	// ObservedProtocolConverterSpecConfig contains the observed ProtocolConverter service config spec with variables
 	// it is here for the purpose of the UI to display the variables and the location
 	ObservedProtocolConverterSpecConfig protocolconverterconfig.ProtocolConverterServiceConfigSpec
