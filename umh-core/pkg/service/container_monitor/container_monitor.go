@@ -231,7 +231,7 @@ func (c *ContainerMonitorService) GetHealth(ctx context.Context) (*models.Health
 // By default, this retrieves host-level usage unless gopsutil is configured
 // to read from container cgroup data. See notes below for cgroup-limited usage.
 func (c *ContainerMonitorService) getCPUMetrics(ctx context.Context) (*models.CPU, error) {
-	usageMCores, coreCount, _, err := c.getRawCPUMetrics(ctx)
+	usageMCores, coreCount, _, sample, err := c.getRawCPUMetrics(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -258,12 +258,22 @@ func (c *ContainerMonitorService) getCPUMetrics(ctx context.Context) (*models.CP
 		verdict     cpuhealth.Verdict
 		signals     cpuhealth.Signals
 	)
+
 	if cgroupErr == nil && cgroupInfo != nil {
-		sample := cpuhealth.Sample{
-			Timestamp:   time.Now(),
-			NrPeriods:   cgroupInfo.NrPeriods,
-			NrThrottled: cgroupInfo.NrThrottled,
-		}
+		// Calling c.sampler.Sample here twice re-baselines usage_usec, zeroing
+		// the StealFraction/HostBusyCores deltas; reuse the Sample from
+		// getRawCPUMetrics (the only c.sampler.Sample call per GetStatus)
+		// instead. NrPeriods/NrThrottled are overlaid from cgroupInfo (the
+		// authoritative throttle counters the sampler does not parse). On a
+		// sampler failure getRawCPUMetrics returns a zero-valued Sample
+		// (dead-zone: Quota nil, PSI absent, not virtualized); Decide still
+		// evaluates the throttle ring from the overlaid NrPeriods/NrThrottled
+		// counters, and the dead-zone saturation backstop runs harmlessly
+		// (UsageCores=0 yields fraction=0). This invariant is test-pinned by the
+		// "sampler failure dead-zone" spec in sampler_full_sample_wire_test.go.
+		sample.Timestamp = time.Now()
+		sample.NrPeriods = cgroupInfo.NrPeriods
+		sample.NrThrottled = cgroupInfo.NrThrottled
 		verdict, signals = cpuhealth.Decide(c.windowState, sample, cpuhealth.DefaultThresholds())
 		isThrottled = signals.ThrottleFired
 		// ThrottleRatio is read unconditionally from signals, decoupling the
@@ -295,6 +305,7 @@ func (c *ContainerMonitorService) getCPUMetrics(ctx context.Context) (*models.CP
 	// message below; a pressure-only degrade uses a generic message.
 	if verdict.State == cpuhealth.StateDegraded && cgroupInfo != nil {
 		category = models.Degraded
+
 		if isThrottled {
 			message = fmt.Sprintf("CPU throttled (%.1f%% periods throttled)", cgroupInfo.ThrottleRatio*100)
 		} else {
@@ -323,11 +334,11 @@ func (c *ContainerMonitorService) getCPUMetrics(ctx context.Context) (*models.CP
 	return cpuStat, nil
 }
 
-func (c *ContainerMonitorService) getRawCPUMetrics(ctx context.Context) (usageMCores float64, coreCount int, usagePercent float64, err error) {
+func (c *ContainerMonitorService) getRawCPUMetrics(ctx context.Context) (usageMCores float64, coreCount int, usagePercent float64, sample cpuhealth.Sample, err error) {
 	// Try to get cgroup info first for accurate container limits
 	cgroupInfo, cgroupErr := c.getCgroupCPUInfo(ctx)
 	if ctx.Err() != nil {
-		return 0, 0, 0, ctx.Err()
+		return 0, 0, 0, cpuhealth.Sample{}, ctx.Err()
 	}
 
 	// Determine effective core count (keep as float64 to preserve fractional quotas)
@@ -346,17 +357,21 @@ func (c *ContainerMonitorService) getRawCPUMetrics(ctx context.Context) (usageMC
 	coreCount = runtime.NumCPU() // Always report host cores for compatibility
 
 	// Read container-relative CPU usage from the cgroup cpu.stat usage_usec
-	// counter. The Sampler reports UsageCores as the usage_usec delta over
-	// wall-clock, already in cores; multiply by 1000 for mCPU. On read
-	// failure (cgroup v1, non-container, transient) the error is logged at
-	// debug and usage reports zero; a host fallback / surfaceable error is
-	// not implemented yet.
-	sample, err := c.sampler.Sample(ctx)
+	// counter. This is the ONLY c.sampler.Sample call per GetStatus; the
+	// returned Sample (carrying Quota, PressureAvg60, PsiAvailable,
+	// StealFraction, Virtualized, HostBusyCores, LogicalCpus in addition to
+	// UsageCores) is threaded through to the Decide call site in
+	// getCPUMetrics so the delta-based signals survive. On read failure
+	// (cgroup v1, non-container, transient) the error is logged at debug and
+	// a zero-valued Sample is returned; a host fallback / surfaceable error
+	// is not implemented yet.
+	sample, err = c.sampler.Sample(ctx)
 	if err != nil {
 		c.logger.Debugf("cgroup cpu usage unavailable, reporting zero: %v", err)
 	}
+
 	if ctx.Err() != nil {
-		return 0, 0, 0, ctx.Err()
+		return 0, 0, 0, cpuhealth.Sample{}, ctx.Err()
 	}
 
 	usageCores := sample.UsageCores
@@ -364,7 +379,7 @@ func (c *ContainerMonitorService) getRawCPUMetrics(ctx context.Context) (usageMC
 
 	usagePercent = (usageCores / effectiveCores) * 100.0
 
-	return usageMCores, coreCount, usagePercent, nil
+	return usageMCores, coreCount, usagePercent, sample, nil
 }
 
 // getMemoryMetrics collects memory metrics, preferring cgroup values when available.
