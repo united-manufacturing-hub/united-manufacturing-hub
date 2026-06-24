@@ -88,11 +88,10 @@ type TransportDesiredState struct {
 
 	// State is the desired lifecycle state ("stopped" or "running").
 	//
-	// Deprecated: Never populated in production. Lifecycle is owned by
-	// WrappedDesiredState.State, set from TransportUserSpec.GetState() in
-	// DeriveDesiredState. Forward-deletion candidate alongside ChildrenSpecs /
-	// GetChildrenSpecs / GetState / ShouldBeRunning — slated for the L9
-	// transport-snapshot cleanup.
+	// Deprecated: Never populated in production. Lifecycle is owned by the
+	// framework via TransportUserSpec.GetState() in DeriveDesiredState.
+	// Forward-deletion candidate alongside ChildrenSpecs / GetChildrenSpecs /
+	// GetState / ShouldBeRunning — slated for the L9 transport-snapshot cleanup.
 	State string `json:"state" yaml:"state"`
 
 	// Deprecated: ChildrenSpecs on TransportDesiredState is never populated. Child specs are
@@ -173,8 +172,8 @@ type TransportStatus struct {
 // Token buffer architecture: the parent TransportWorker uses a 10-minute buffer (proactive
 // refresh trigger) while child workers (push/pull) use a 1-minute buffer via IsTokenValid().
 // The 9-minute gap is safe by design: when IsTokenExpired triggers here, the parent
-// transitions Running → Starting, which causes children to stop (they are not in ChildStartStates
-// while the parent is Starting). Children never push or pull during the refresh window.
+// transitions Running → Starting and re-authenticates, propagating a fresh token to its
+// children well before their own 1-minute buffer would consider the token invalid.
 // The children's 1-minute buffer is a last-resort safety net for edge cases only.
 func (s TransportStatus) IsTokenExpired() bool {
 	if s.JWTExpiry.IsZero() {

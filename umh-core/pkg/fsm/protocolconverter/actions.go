@@ -330,11 +330,10 @@ func (p *ProtocolConverterInstance) UpdateObservedStateOfInstance(ctx context.Co
 	p.runtimeConfig, err = runtime_config.BuildRuntimeConfig(
 		p.specConfig,
 		agentLocationStr,
-		nil,             // TODO: add global vars
+		nil, // TODO: add global vars
 		runtime_config.BridgedByPlaceholder,
 		p.baseFSMInstance.GetID(),
 	)
-
 	if err != nil {
 		p.baseFSMInstance.GetLogger().Errorf("failed to build runtime config: %v", err)
 		// Capture the configuration error in StatusReason for troubleshooting
@@ -496,6 +495,7 @@ func (p *ProtocolConverterInstance) areBothDFCsIntentionallyStopped() bool {
 
 	readHasConfig := len(p.specConfig.Config.DataflowComponentReadServiceConfig.BenthosConfig.Input) > 0
 	writeHasConfig := p.specConfig.Config.DataflowComponentWriteServiceConfig.HasOutput()
+
 	return readHasConfig || writeHasConfig
 }
 

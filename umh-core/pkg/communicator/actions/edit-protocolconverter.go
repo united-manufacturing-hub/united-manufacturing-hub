@@ -42,6 +42,8 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/tiendc/go-deepcopy"
+	"go.uber.org/zap"
+
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/protocolconverterserviceconfig"
@@ -53,7 +55,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/protocolconverter/runtime_config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
-	"go.uber.org/zap"
 )
 
 // DFCType represents the type of dataflow component configuration.
@@ -222,12 +223,15 @@ func (a *EditProtocolConverterAction) Parse(payload interface{}) error {
 		if err != nil {
 			return fmt.Errorf("failed to build read DFC configuration: %w", err)
 		}
+
 		a.readDFCSvcCfg = &svcCfg
+
 		a.readDFCState = pcPayload.ReadDFC.State
 		if pcPayload.ReadDFC.IgnoreErrors != nil {
 			a.ignoreHealthCheck = *pcPayload.ReadDFC.IgnoreErrors
 		}
 	}
+
 	if pcPayload.WriteDFCPayload != nil {
 		input := pcPayload.WriteDFCPayload.DataflowComponentWriteConfigInput
 		a.writeDFCInput = &input
@@ -563,6 +567,7 @@ func (a *EditProtocolConverterAction) awaitRollout(pcConfig config.ProtocolConve
 			if a.lastRenderErr != nil {
 				stateMessage += fmt.Sprintf(" (root cause: %v)", a.lastRenderErr)
 			}
+
 			a.fsmLogger.SentryWarn(deps.FeatureDisableReadFlows, "", "edit_protocol_converter_rollback_on_timeout",
 				deps.String("pcConfig", pcConfig.String()),
 				deps.String("desiredPCState", desiredPCState),
@@ -769,6 +774,7 @@ func (a *EditProtocolConverterAction) awaitRollout(pcConfig config.ProtocolConve
 
 								flowName := a.lastFailedDFCType.flowName()
 								detail := renderErrUserDetail(renderErr)
+
 								return models.ErrRetryRollbackTimeout, fmt.Errorf(
 									"bridge '%s' couldn't be updated and the automatic rollback also failed, so it may need manual recovery. The new %s isn't valid YAML. Fix the highlighted line and try again.\n\n%s",
 									a.name, flowName, detail,
@@ -784,6 +790,7 @@ func (a *EditProtocolConverterAction) awaitRollout(pcConfig config.ProtocolConve
 
 							flowName := a.lastFailedDFCType.flowName()
 							detail := renderErrUserDetail(renderErr)
+
 							return models.ErrConfigFileInvalid, fmt.Errorf(
 								"bridge '%s' was restored to its previous working configuration because the new %s isn't valid YAML. Fix the highlighted line and try again.\n\n%s",
 								a.name, flowName, detail,
@@ -1216,23 +1223,29 @@ func (a *EditProtocolConverterAction) deriveDFCType() DFCType {
 	for _, v := range a.templateVars {
 		incomingVars[v.Label] = v.Value
 	}
+
 	if a.connectionIP != "" {
 		incomingVars["IP"] = a.connectionIP
 	}
+
 	if a.connectionPort != "" && a.connectionPort != "0" {
 		incomingVars["PORT"] = a.connectionPort
 	}
 
 	connectionChanged := false
+
 	for k, incomingVal := range incomingVars {
 		if deployedVal, ok := deployedVars[k]; ok {
 			if fmt.Sprint(deployedVal) != fmt.Sprint(incomingVal) {
 				a.actionLogger.Debugf("Variable %q changed (%v → %v), all present DFCs need redeploy", k, deployedVal, incomingVal)
+
 				connectionChanged = true
+
 				break
 			}
 		}
 	}
+
 	if connectionChanged {
 		return dfcTypeFromPresence(hasRead, hasWrite)
 	}
@@ -1269,6 +1282,7 @@ func (a *EditProtocolConverterAction) readDFCSvcCfgDiffers(
 	if incomingState != "" && deployedState != "" && incomingState != deployedState {
 		return true
 	}
+
 	return !deployedConfig.Equal(incoming)
 }
 
@@ -1296,9 +1310,11 @@ func normalizeWriteConfigInput(c dataflowcomponentserviceconfig.DataflowComponen
 	if c.Processing.Code == "" {
 		c.Processing.Code = "return msg;"
 	}
+
 	if c.Processing.Type == "" {
 		c.Processing.Type = "nodered_js"
 	}
+
 	return c
 }
 

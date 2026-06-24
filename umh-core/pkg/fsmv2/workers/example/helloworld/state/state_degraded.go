@@ -15,8 +15,6 @@
 package state
 
 import (
-	"fmt"
-
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
 	hello_world "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/helloworld"
@@ -36,8 +34,7 @@ func (s *DegradedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	// 1. Check shutdown
 	if snap.ShouldStop() {
 		return fsmv2.Transition(&StoppedState{}, fsmv2.SignalNone, nil,
-			fmt.Sprintf("stop required: shutdown=%t, parentState=%s",
-				snap.IsShutdownRequested, snap.ParentMappedState), nil)
+			"stop required: "+snap.StopReason(), nil)
 	}
 
 	// 2. Check if mood has recovered (no longer "sad")

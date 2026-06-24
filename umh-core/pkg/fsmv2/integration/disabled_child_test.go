@@ -103,7 +103,7 @@ var _ = Describe("Resident-disabled child stays in Stopped, not removed", func()
 		err := parentSup.AddWorker(identity, &residentDisabledParentWorker{})
 		Expect(err).ToNot(HaveOccurred())
 
-		for i := 0; i < 3; i++ {
+		for range 3 {
 			Expect(parentSup.TestTick(ctx)).To(Succeed())
 		}
 

@@ -25,6 +25,8 @@ import (
 
 	"github.com/google/uuid"
 
+	"go.uber.org/zap"
+
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/encoding"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
@@ -32,7 +34,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
-	"go.uber.org/zap"
 )
 
 // panickingAction is a minimal Action used in tests to drive HandleActionMessage
@@ -88,7 +89,9 @@ func captureStderr(t *testing.T, fn func()) string {
 	// blocking forever on io.ReadAll. t.Cleanup belt-and-braces for the
 	// case where the panic kills the test process before defer fires.
 	os.Stderr = w
+
 	t.Cleanup(func() { os.Stderr = orig })
+
 	defer func() {
 		os.Stderr = orig
 		_ = w.Close()
@@ -312,7 +315,9 @@ func TestRecoverActionPanicDoublePanicGuardFiresWhenMetricPanics(t *testing.T) {
 	log := logger.For(logger.ComponentCommunicator)
 
 	prev := recordActionPanicFn
+
 	t.Cleanup(func() { recordActionPanicFn = prev })
+
 	recordActionPanicFn = func(string, string) { panic("metric boom") }
 
 	stderr := captureStderr(t, func() {
@@ -526,6 +531,7 @@ func TestHandleActionMessageRecoversFromPanic(t *testing.T) {
 
 		if state, _ := reply["actionReplyState"].(string); state == string(models.ActionFinishedWithFailure) {
 			sawFailureReply = true
+
 			break
 		}
 	}

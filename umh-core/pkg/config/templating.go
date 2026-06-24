@@ -269,7 +269,7 @@ func RenderTemplate[T any](tmpl T, scope map[string]any) (T, error) {
 
 	// D. sanity-check – no {{ left over
 	if bytes.Contains(buf.Bytes(), []byte("{{")) {
-		return *new(T), fmt.Errorf("unresolved template markers in rendered output")
+		return *new(T), errors.New("unresolved template markers in rendered output")
 	}
 
 	return out, nil

@@ -11,7 +11,7 @@ The `architecture_test.go` validates ALL workers via file-system scanning (not r
 | Rule | Description |
 |------|-------------|
 | Empty State Structs | States have no fields (except embedded base) |
-| Shutdown Check First | Check `IsShutdownRequested()` as FIRST conditional in `Next()` |
+| Shutdown Check First | Check `ShouldStop()` as FIRST conditional in `Next()` |
 | State XOR Action | Return state OR action, never both |
 | Single Type Assertion | `Next()` has exactly one type assertion at entry |
 | Pure DeriveDesiredState | No dependency access - only use `spec` parameter |
@@ -70,11 +70,10 @@ type RunningState struct {
 func (s *RunningState) Next(snapAny any) fsmv2.NextResult[any, any] {
     snap := fsmv2.ConvertWorkerSnapshot[MyConfig, MyStatus](snapAny)
 
-    // Shutdown check FIRST. Build the reason from snapshot fields so operators
-    // can see why the worker stopped without reading code.
+    // Stop check FIRST. Use snap.StopReason() so operators see why the worker
+    // stopped (shutdown vs disable) without reading code.
     if snap.ShouldStop() {
-        reason := fmt.Sprintf("stop required: shutdown=%t, parentState=%q",
-            snap.IsShutdownRequested(), snap.Observed.ParentMappedState)
+        reason := fmt.Sprintf("stop required: %s", snap.StopReason())
         return fsmv2.Transition(&ShuttingDownState{}, fsmv2.SignalNone, nil, reason, nil)
     }
 
@@ -100,10 +99,9 @@ The `Reason` parameter in `fsmv2.Transition()` is visible in structured JSON log
 
 **Rules:**
 - Include dynamic snapshot values via `fmt.Sprintf` — never hardcode values that exist in the snapshot
-- For "stop required" transitions: `fmt.Sprintf("stop required: shutdown=%t, parentState=%s", ...)`
+- For "stop required"/"stop complete" transitions: `fmt.Sprintf("stop required: %s", snap.StopReason())` — names both stop causes (shutdown + disabled)
 - For "waiting" catch-alls: include which preconditions are missing (`hasTransport=%t, hasValidToken=%t`)
 - For degraded/error states: include the consecutive error count
-- For child lifecycle: include the parent mapped state (`parentState=%q`)
 
 **Gold standard** — communicator worker's `buildRecoveringReason()` in `state_recovering.go`:
 ```go
@@ -112,7 +110,7 @@ fmt.Sprintf("sync recovering: %d consecutive errors (%s), backoff %s",
 ```
 
 **Bad**: `"Stop required"`, `"Waiting for transport or token"`, `"Degraded, still pushing"`
-**Good**: `"stop required: shutdown=false, parentState=stopped"`, `"waiting: hasTransport=true, hasValidToken=false"`, `"degraded (5 consecutive errors), still pushing"`
+**Good**: `"stop required: shutdown=false disabled=true"`, `"waiting: hasTransport=true, hasValidToken=false"`, `"degraded (5 consecutive errors), still pushing"`
 
 ## Children-in-Next Pattern
 
@@ -467,7 +465,3 @@ This prevents failure rate dilution: if idle ticks feed phantom "successes" into
 - Self-return WITH an action (e.g., `&FlushAction{}`) is allowed (active cleanup)
 - CI enforced: `ValidateStoppingStateNoCatchAllSelfReturn` in `internal/validator/state.go`
 - See any `state_stopping.go` for the pattern
-
-### Observed vs Desired ParentMappedState
-
-`ParentMappedState` is only populated on the **observed** state (via `SetParentMappedState()`). The **desired** state copy is always empty. Use `snap.Observed.ParentMappedState` in reason strings, never `snap.Desired.ParentMappedState`.

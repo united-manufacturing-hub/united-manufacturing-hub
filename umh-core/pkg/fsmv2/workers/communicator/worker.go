@@ -132,7 +132,6 @@ func (w *CommunicatorWorker) CollectObservedState(ctx context.Context, _ fsmv2.D
 func (w *CommunicatorWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, error) {
 	if spec == nil {
 		return &fsmv2.WrappedDesiredState[CommunicatorConfig]{
-			State: fsmv2types.DesiredStateRunning,
 			Config: CommunicatorConfig{
 				Timeout: httpTransport.LongPollingDuration + httpTransport.LongPollingBuffer,
 			},
@@ -159,7 +158,6 @@ func (w *CommunicatorWorker) DeriveDesiredState(spec interface{}) (fsmv2.Desired
 	}
 
 	return &fsmv2.WrappedDesiredState[CommunicatorConfig]{
-		State:  commSpec.GetState(),
 		Config: commSpec,
 	}, nil
 }
