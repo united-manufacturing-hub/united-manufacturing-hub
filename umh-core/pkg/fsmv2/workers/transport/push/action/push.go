@@ -27,6 +27,17 @@ import (
 
 const PushActionName = "push"
 
+// PushAction carries the JWT and instance UUID for one push attempt.
+//
+// Precondition: JWTToken is non-empty. The dispatching state validates it:
+// RunningState and DegradedState only emit a PushAction when
+// snap.Status.HasTransport && snap.Status.HasValidToken is true
+// (state_running.go, state_degraded.go), so
+// Execute never runs with an empty token in production. Do not construct a
+// PushAction outside that gate. There is intentionally no in-action
+// revalidation: an action reaching Execute with an empty token would mean the
+// dispatch gate regressed, and that should surface rather than be silently
+// turned into a no-op.
 type PushAction struct {
 	JWTToken     string
 	InstanceUUID string

@@ -154,6 +154,13 @@ func (f FailedAuthConfig) IsEmpty() bool {
 // The token also rides into the push/pull child UserSpec.Config via
 // RenderChildren stamping ChildAuthUserSpec, so a future CSE secret-tier scrub
 // must cover the parent status AND both child-config copies.
+//
+// Upgrade note: auth_session replaces the previously-flat CSE keys
+// (jwt_token / jwt_expiry / authenticated_uuid). State written by a prior
+// version carries the old flat keys, which will not load into this nested
+// field, so on the first post-upgrade tick the parent reads an empty
+// AuthSession and re-authenticates once. This one-time re-auth is intended and
+// self-healing; no consumer reads the old flat keys.
 type TransportStatus struct {
 	AuthSession         types.AuthSession `json:"auth_session"`
 	LastAuthAttemptAt   time.Time         `json:"last_auth_attempt_at,omitempty"`
