@@ -40,10 +40,11 @@ const (
 type CauseKind string
 
 const (
-	CauseKindSaturation CauseKind = "saturation"
-	CauseKindThrottling CauseKind = "throttling"
-	CauseKindPressure   CauseKind = "pressure"
-	CauseKindSteal      CauseKind = "steal"
+	CauseKindSaturation     CauseKind = "saturation"
+	CauseKindThrottling     CauseKind = "throttling"
+	CauseKindPressure       CauseKind = "pressure"
+	CauseKindSteal          CauseKind = "steal"
+	CauseKindHostContention CauseKind = "host-contention"
 )
 
 // Cause is a single degradation reason with an associated numeric value.
@@ -61,11 +62,12 @@ type Thresholds struct {
 	PressureRecover   float64
 	StealHigh         float64
 	StealRecover      float64
+	HostBusyHigh      float64
 }
 
 // DefaultThresholds returns the canonical thresholds (HighUsageFraction 0.70,
 // ThrottleHigh 0.05, ThrottleRecover 0.03, PressureHigh 0.20, PressureRecover
-// 0.12, StealHigh 0.10, StealRecover 0.06).
+// 0.12, StealHigh 0.10, StealRecover 0.06, HostBusyHigh 0.70).
 func DefaultThresholds() Thresholds {
 	return Thresholds{
 		HighUsageFraction: 0.70,
@@ -75,6 +77,7 @@ func DefaultThresholds() Thresholds {
 		PressureRecover:   0.12,
 		StealHigh:         0.10,
 		StealRecover:      0.06,
+		HostBusyHigh:      0.70,
 	}
 }
 
@@ -141,6 +144,18 @@ type Sample struct {
 	// metal, so reading 0 there is the absence of a signal, not evidence of a
 	// healthy host).
 	Virtualized bool
+	// HostBusyCores is the count of host-level busy CPU cores, readable
+	// independent of virtualization. The sampler computes it from /proc/stat's
+	// non-idle fields EXCLUDING the steal, guest, and guest_nice columns, so
+	// steal is not double-counted (steal is already its own cause). LogicalCpus
+	// is the host's total logical CPU count; their ratio
+	// (HostBusyCores/LogicalCpus) is the host busyness fraction thresholded
+	// against HostBusyHigh for the host-contention latch. LogicalCpus MUST be
+	// positive for the ratio to be meaningful; Decide treats LogicalCpus <= 0
+	// as no-signal (the latch is not evaluated), mirroring the non-positive
+	// Quota / CgroupCores guards.
+	HostBusyCores float64
+	LogicalCpus   float64
 }
 
 // throttlePoint is one timestamped throttle-counter observation in the
@@ -155,11 +170,12 @@ type throttlePoint struct {
 // flip-latch that Decide mutates in place. The sliding 60s window is the
 // debounce; the asymmetric (Schmitt) recover band is the only extra mechanism.
 type WindowState struct {
-	throttleRing  []throttlePoint
-	stealRing     []stealPoint
-	throttleFired bool
-	pressureFired bool
-	stealFired    bool
+	throttleRing        []throttlePoint
+	stealRing           []stealPoint
+	throttleFired       bool
+	pressureFired       bool
+	stealFired          bool
+	hostContentionFired bool
 }
 
 // stealPoint is one timestamped steal-fraction observation in the WindowState
@@ -188,6 +204,9 @@ type Signals struct {
 	// clears below StealRecover; holds between), independent of the
 	// throttle/pressure latches.
 	StealFired bool
+	// HostContentionFired is the host-contention latch state. See the inline
+	// comment at the latch in Decide for the fire/clear conditions.
+	HostContentionFired bool
 }
 
 // Verdict is the output of Decide.
@@ -223,11 +242,21 @@ type Verdict struct {
 // (virtualized-only: when Sample.Virtualized is false, steal is not processed).
 // The steal latch fires when the p95 of the ring exceeds thresholds.StealHigh
 // and clears only when the p95 drops below thresholds.StealRecover; between the
-// two marks it holds (Schmitt), emitting a steal Cause with AttributionHost
-// (host-contention attribution IS computed by Decide when the steal latch
-// fires). The ring is pruned to a 60s window (stealWindow) so the p95 is a
-// 60s-windowed p95, not an all-history p95; the latch is not evaluated until
-// the ring holds at least 2 samples (a first-tick spike cannot fire).
+// two marks it holds (Schmitt), emitting a steal Cause. Steal is an external
+// cause (AttributionHost when it is the dominant cause), distinct from the
+// separate CauseKindHostContention cause (host-contention the cause) computed
+// by the host-contention latch below. The ring is pruned to a 60s window
+// (stealWindow) so the p95 is a 60s-windowed p95, not an all-history p95; the
+// latch is not evaluated until the ring holds at least 2 samples (a first-tick
+// spike cannot fire).
+//
+// Decide also maintains a demand-gated host-contention latch (see the inline
+// comment at the latch for the fire/clear conditions).
+//
+// When several causes fire, the DOMINANT (highest-severity) one sets
+// Attribution: external causes (steal, host-contention) yield AttributionHost,
+// internal causes (throttle, pressure) yield AttributionUnknown. Ties go to the
+// external/host side. Verdict.Causes is ordered dominant-first.
 //
 // When Quota is non-nil, Decide uses it exclusively: a positive Quota yields
 // UsageCores/Quota, and a non-positive Quota (zero/negative/NaN) means
@@ -366,12 +395,14 @@ func Decide(st *WindowState, sample Sample, thresholds Thresholds) (Verdict, Sig
 		stealCutoff := sample.Timestamp.Add(-stealWindow)
 		stealRing := st.stealRing
 		stealN := 0
+
 		for _, sp := range stealRing {
 			if !sp.ts.Before(stealCutoff) {
 				stealRing[stealN] = sp
 				stealN++
 			}
 		}
+
 		stealRing = stealRing[:stealN]
 		st.stealRing = stealRing
 
@@ -383,6 +414,16 @@ func Decide(st *WindowState, sample Sample, thresholds Thresholds) (Verdict, Sig
 		// (throttleRatio returns 0 when len < 2) for consistency.
 		if len(st.stealRing) >= 2 {
 			stealP95Val = stealP95(st.stealRing)
+			// Clamp NaN/negative/+Inf to 0 before thresholding and before
+			// exposure as a Cause Value, mirroring the PressureAvg60 clamp: a
+			// NaN StealFraction (malformed /proc/stat parse) makes stealP95
+			// return NaN, which would hold the steal latch (NaN > StealHigh and
+			// NaN < StealRecover both false), break json.Marshal of the whole
+			// Verdict (NaN Cause Value), and corrupt the sort comparator.
+			if !(stealP95Val >= 0) || math.IsInf(stealP95Val, 1) {
+				stealP95Val = 0
+			}
+
 			switch {
 			case stealP95Val > thresholds.StealHigh:
 				st.stealFired = true
@@ -394,22 +435,91 @@ func Decide(st *WindowState, sample Sample, thresholds Thresholds) (Verdict, Sig
 
 	signals.StealFired = st.stealFired
 
+	// Host-contention latch: fires when the demand gate (pressure OR throttle)
+	// is open AND host_busy_ratio > HostBusyHigh. Clears when the demand gate
+	// drops — it cannot stay fired once every demand signal is gone, even if
+	// the host is still busy (the light-workload false-degrade guard). The
+	// demand gate is pressure OR throttle: a throttled container is
+	// unambiguously demanding CPU, so host-contention can fire under a
+	// throttle-only demand too, not just pressure. The host_busy_ratio divide
+	// is guarded: LogicalCpus <= 0 means no-signal (the latch is not
+	// evaluated), mirroring the non-positive Quota / CgroupCores guards and
+	// preventing a +Inf false-fire or NaN silent-disable. The Cause Value is
+	// contentionCores (HostBusyCores - UsageCores), clamped to finite >= 0 so
+	// a NaN or +Inf reading cannot break JSON marshalling of the whole Verdict
+	// (same discipline as the PressureAvg60 clamp).
+	var (
+		contentionCores float64
+		hostBusyRatio   float64
+	)
+
+	demandGateOpen := signals.PressureFired || signals.ThrottleFired
+	if !demandGateOpen {
+		st.hostContentionFired = false
+	} else if sample.LogicalCpus > 0 && !math.IsInf(sample.LogicalCpus, 0) {
+		hostBusyRatio = sample.HostBusyCores / sample.LogicalCpus
+		// Clamp NaN/negative/+Inf to 0 before using hostBusyRatio for the
+		// severity call and the latch comparison, mirroring the
+		// PressureAvg60/stealP95 clamps: a NaN HostBusyCores would produce a
+		// NaN hostBusyRatio that escapes the severity clamps (NaN comparisons
+		// are false), corrupting the sort comparator and the latch.
+		if !(hostBusyRatio >= 0) || math.IsInf(hostBusyRatio, 1) {
+			hostBusyRatio = 0
+		}
+
+		contentionCores = sample.HostBusyCores - sample.UsageCores
+		if !(contentionCores >= 0) || math.IsInf(contentionCores, 0) {
+			contentionCores = 0
+		}
+
+		if hostBusyRatio > thresholds.HostBusyHigh {
+			st.hostContentionFired = true
+		}
+	}
+
+	signals.HostContentionFired = st.hostContentionFired
+
 	var causes []Cause
+
+	type firedCause struct {
+		cause    Cause
+		severity float64
+		external bool
+	}
+
+	var fired []firedCause
 	if signals.ThrottleFired {
-		causes = append(causes, Cause{Kind: CauseKindThrottling, Value: ratio})
+		fired = append(fired, firedCause{Cause{Kind: CauseKindThrottling, Value: ratio}, severity(ratio, thresholds.ThrottleHigh), false})
 	}
 
 	if signals.PressureFired {
-		causes = append(causes, Cause{Kind: CauseKindPressure, Value: p})
+		fired = append(fired, firedCause{Cause{Kind: CauseKindPressure, Value: p}, severity(p, thresholds.PressureHigh), false})
 	}
 
 	if signals.StealFired {
-		causes = append(causes, Cause{Kind: CauseKindSteal, Value: stealP95Val})
+		fired = append(fired, firedCause{Cause{Kind: CauseKindSteal, Value: stealP95Val}, severity(stealP95Val, thresholds.StealHigh), true})
 	}
 
-	if len(causes) > 0 {
+	if signals.HostContentionFired {
+		fired = append(fired, firedCause{Cause{Kind: CauseKindHostContention, Value: contentionCores}, severity(hostBusyRatio, thresholds.HostBusyHigh), true})
+	}
+
+	if len(fired) > 0 {
+		sort.SliceStable(fired, func(i, j int) bool {
+			if fired[i].severity != fired[j].severity {
+				return fired[i].severity > fired[j].severity
+			}
+			// Ties go to the external side (host).
+			return fired[i].external && !fired[j].external
+		})
+
+		causes = make([]Cause, len(fired))
+		for i, fc := range fired {
+			causes[i] = fc.cause
+		}
+
 		attr := AttributionUnknown
-		if signals.StealFired {
+		if fired[0].external {
 			attr = AttributionHost
 		}
 
@@ -473,4 +583,38 @@ func stealP95(ring []stealPoint) float64 {
 	}
 
 	return vals[rank-1]
+}
+
+// severity returns the fraction into the danger band toward maximum: (value -
+// high) / (1 - high). A value just above high yields ~0; a value at 1.0 yields
+// 1.0 when high < 1.0. This is the shared scale that puts every cause on one
+// axis for dominance comparison.
+//
+// Preconditions: high must be in [0, 1) for the scale to be finite and
+// meaningful; DefaultThresholds honors this today. severity is NaN-safe to
+// keep the dominance sort well-defined when a feed produces a NaN/+Inf reading
+// or a caller mis-configures a threshold: any NaN/+Inf input, or a high >= 1.0,
+// yields 0 (treat as not-firing, lowest severity) so a malformed reading or
+// threshold never dominates a valid one and NaN never reaches the sort
+// comparator. host-contention's severity numerator is host_busy_ratio
+// (HostBusyCores/LogicalCpus), NOT its wire Cause Value (contentionCores =
+// HostBusyCores-UsageCores) — the two are different axes.
+//
+// A HELD cause (Schmitt latch fired, current reading in the hold band below the
+// High mark) yields a negative raw severity. That negative is clamped to 0 so
+// held causes tie at 0 and the external tie-break decides deterministically
+// (Host whenever an external cause is held), rather than the least-negative
+// held cause winning and making Attribution flap tick-to-tick as held readings
+// jitter.
+func severity(value, high float64) float64 {
+	if math.IsNaN(value) || math.IsInf(value, 0) || math.IsNaN(high) || math.IsInf(high, 0) || high >= 1.0 {
+		return 0
+	}
+
+	sev := (value - high) / (1 - high)
+	if sev < 0 {
+		return 0
+	}
+
+	return sev
 }
