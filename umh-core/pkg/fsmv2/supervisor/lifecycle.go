@@ -334,7 +334,7 @@ func (s *Supervisor[TObserved, TDesired]) Shutdown() {
 			}
 		}
 
-		ticker := time.NewTicker(100 * time.Millisecond)
+		ticker := time.NewTicker(drainTickInterval)
 		defer ticker.Stop()
 
 		// Arm what is left of the cascaded budget at arming time — re-measured
@@ -454,22 +454,9 @@ func (s *Supervisor[TObserved, TDesired]) Shutdown() {
 	// Wait for metrics reporter to finish (it exits on ctx.Done())
 	s.metricsWg.Wait()
 
-	// Budget re-check after the Phase-4 joins: a child drain that a
-	// tick-goroutine reap entered first early-returns in Phase 2 (see the
-	// child.Shutdown comment above) and its real spend completes inside the
-	// tickLoop, invisible to the Phase-3 timer — only the total elapsed
-	// measured here catches it. An overrun that reaches this point without a
-	// drain-loop warn never came from this level's own workers exhausting an
-	// available window, so per the event-name rule above childDrainElapsed it
-	// reports as budget exhaustion.
-	if totalDrainElapsed := time.Since(drainStart); !budgetWarned && totalDrainElapsed > drainBudget {
-		s.logger.SentryWarn(deps.FeatureFSMv2, s.GetHierarchyPath(), "graceful_shutdown_budget_exhausted",
-			deps.Duration("timeout", drainBudget),
-			deps.Duration("child_drain_elapsed", childDrainElapsed),
-			deps.Duration("total_drain_elapsed", totalDrainElapsed))
-
-		s.drainTimedOut.Store(true)
-	}
+	// Budget re-check after the Phase-4 joins. See recordPostJoinBudgetOverrun
+	// for why post-join bookkeeping is charged one ticker interval of slack.
+	s.recordPostJoinBudgetOverrun(time.Since(drainStart), drainBudget, childDrainElapsed, budgetWarned)
 
 	// Re-acquire lock for cleanup
 	s.mu.Lock()
@@ -495,6 +482,32 @@ func (s *Supervisor[TObserved, TDesired]) Shutdown() {
 
 	s.logTrace("lifecycle",
 		deps.String("lifecycle_event", "shutdown_complete"))
+}
+
+// recordPostJoinBudgetOverrun runs the Phase-4 post-join budget re-check. A
+// child drain entered first by a tick-goroutine reap early-returns in Phase 2
+// and its real spend completes inside the tickLoop, invisible to the Phase-3
+// timer; only totalDrainElapsed, measured after the joins, catches it. The
+// drain ticker observes reaps at drainTickInterval granularity, so a worker
+// reaped just inside the budget still leaves the tickLoop join and
+// metricsWg.Wait to run after the ticker last fired. That join overhead is
+// charged against one ticker interval of slack (postJoinSlack) so post-join
+// bookkeeping on an otherwise clean drain does not report a budget overrun; a
+// genuine overrun (whole seconds at production budgets) still warns.
+// budgetWarned short-circuits the check when a drain phase already warned.
+func (s *Supervisor[TObserved, TDesired]) recordPostJoinBudgetOverrun(totalDrainElapsed, drainBudget, childDrainElapsed time.Duration, budgetWarned bool) {
+	const postJoinSlack = drainTickInterval
+
+	if budgetWarned || totalDrainElapsed <= drainBudget+postJoinSlack {
+		return
+	}
+
+	s.logger.SentryWarn(deps.FeatureFSMv2, s.GetHierarchyPath(), "graceful_shutdown_budget_exhausted",
+		deps.Duration("timeout", drainBudget),
+		deps.Duration("child_drain_elapsed", childDrainElapsed),
+		deps.Duration("total_drain_elapsed", totalDrainElapsed))
+
+	s.drainTimedOut.Store(true)
 }
 
 // DrainOutcomeClean reports whether the most recent Shutdown drained every

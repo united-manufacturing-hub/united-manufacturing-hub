@@ -46,6 +46,13 @@ const (
 	// DefaultGracefulShutdownTimeout is the default time to wait for workers to complete graceful shutdown.
 	DefaultGracefulShutdownTimeout = 5 * time.Second
 
+	// drainTickInterval is the granularity at which the drain loop polls for
+	// reaped workers. It sets the worst-case reap-observation lag: a worker
+	// removed just after a tick is not noticed until the next tick. The
+	// post-join budget slack (postJoinSlack) derives from this value, which
+	// keeps the slack one tick interval wide as the granularity changes.
+	drainTickInterval = 100 * time.Millisecond
+
 	// DefaultMetricsReportInterval is the default interval for recording hierarchy metrics.
 	// Longer intervals reduce Prometheus cardinality at the cost of staler metrics.
 	DefaultMetricsReportInterval = 10 * time.Second
