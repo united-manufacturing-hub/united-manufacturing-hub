@@ -21,6 +21,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/internal/collection"
@@ -132,5 +133,86 @@ var _ = Describe("Collector log severity", func() {
 				return context.WithCancel(context.Background())
 			}),
 		)
+	})
+
+	Context("CollectFinalObservation() that times out", func() {
+		// CollectFinalObservation runs from the reap on every worker
+		// removal (reconciliation.go:1131) with a context whose deadline is
+		// already expired wrapped in a local WithTimeout. A genuinely stuck
+		// collector produces context.DeadlineExceeded,
+		// which is a real fault and must stay visible in Sentry — only
+		// context.Canceled (the shutdown race) is downgraded to Debug. A regression
+		// that downgrades DeadlineExceeded to Debug must fail this spec.
+		It("logs collector_final_observation_failed at SentryWarn on DeadlineExceeded", func() {
+			logger := &severityCapturingLogger{}
+			collector := collection.NewCollector[supervisor.TestObservedState](collection.CollectorConfig[supervisor.TestObservedState]{
+				Worker:              &supervisor.TestWorker{},
+				Identity:            supervisor.TestIdentity(),
+				Store:               supervisor.CreateTestTriangularStore(),
+				Logger:              logger,
+				ObservationInterval: 1 * time.Second,
+				ObservationTimeout:  3 * time.Second,
+				DesiredStateProvider: func() (fsmv2.DesiredState, error) {
+					return &supervisor.TestDesiredState{}, nil
+				},
+			})
+
+			Expect(collector.Start(context.Background())).To(Succeed())
+			defer collector.Stop(context.Background())
+
+			// A context whose deadline is already in the past: the local
+			// context.WithTimeout(ctx, ObservationTimeout) inside
+			// CollectFinalObservation inherits the expired deadline, so the
+			// collection fails with context.DeadlineExceeded — a genuinely stuck
+			// collector, not a cancellation.
+			expiredCtx, cancel := context.WithDeadline(context.Background(), time.Now().Add(-time.Hour))
+			defer cancel()
+
+			err := collector.CollectFinalObservation(expiredCtx)
+			Expect(err).To(MatchError(context.DeadlineExceeded))
+
+			Expect(logger.levelFor("collector_final_observation_failed")).To(Equal("sentrywarn"),
+				"a DeadlineExceeded final observation is a genuinely stuck collector and must stay visible in Sentry, not Debug")
+			Expect(logger.has("debug", "collector_final_observation_failed")).To(BeFalse(),
+				"only context.Canceled (the shutdown race) is downgraded to Debug; DeadlineExceeded must not be")
+		})
+
+		// The Canceled->Debug arm is the shutdown-race downgrade this change
+		// exists to preserve. Without this spec a regression dropping the
+		// errors.Is(err, context.Canceled) check would route clean-shutdown
+		// cancellations back to SentryWarn — the exact Sentry noise the split
+		// suppresses — and the suite would stay green.
+		It("logs collector_final_observation_failed at Debug on context.Canceled", func() {
+			logger := &severityCapturingLogger{}
+			collector := collection.NewCollector[supervisor.TestObservedState](collection.CollectorConfig[supervisor.TestObservedState]{
+				Worker:              &supervisor.TestWorker{},
+				Identity:            supervisor.TestIdentity(),
+				Store:               supervisor.CreateTestTriangularStore(),
+				Logger:              logger,
+				ObservationInterval: 1 * time.Second,
+				ObservationTimeout:  3 * time.Second,
+				DesiredStateProvider: func() (fsmv2.DesiredState, error) {
+					return &supervisor.TestDesiredState{}, nil
+				},
+			})
+
+			Expect(collector.Start(context.Background())).To(Succeed())
+			defer collector.Stop(context.Background())
+
+			// A context cancelled before the call: the local WithTimeout inside
+			// CollectFinalObservation inherits the cancellation, so the collection
+			// fails with context.Canceled — the benign shutdown race that is
+			// deliberately downgraded to Debug.
+			cancelledCtx, cancel := context.WithCancel(context.Background())
+			cancel()
+
+			err := collector.CollectFinalObservation(cancelledCtx)
+			Expect(err).To(MatchError(context.Canceled))
+
+			Expect(logger.levelFor("collector_final_observation_failed")).To(Equal("debug"),
+				"context.Canceled is the benign shutdown race and must be downgraded to Debug")
+			Expect(logger.has("sentrywarn", "collector_final_observation_failed")).To(BeFalse(),
+				"context.Canceled must not raise a SentryWarn (that would re-noise Sentry on clean shutdown)")
+		})
 	})
 })
