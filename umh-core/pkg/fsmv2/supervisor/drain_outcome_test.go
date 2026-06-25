@@ -161,4 +161,63 @@ var _ = Describe("DrainOutcomeClean (ENG-4971 structured drain-outcome signal)",
 		Expect(root.DrainOutcomeClean()).To(BeTrue(),
 			"DrainOutcomeClean must be true after a warn-free drain")
 	})
+
+	// The post-join budget re-check is exercised directly through
+	// recordPostJoinBudgetOverrun with fixed durations. A live integration test
+	// of the slack window is inherently flaky: to land totalDrainElapsed inside
+	// (drainBudget, drainBudget+slack] the budget must be sized at ~one reap
+	// tick, which races the graceful timer against the reap ticker at the same
+	// instant. The two specs above cover the live clean and timed-out drains;
+	// these pin the slack arithmetic deterministically.
+	newDrainSupervisor := func() *Supervisor[*TestObservedState, *TestDesiredState] {
+		basicStore := memory.NewInMemoryStore()
+		triangularStore := storage.NewTriangularStore(basicStore, deps.NewNopFSMLogger())
+
+		return NewSupervisor[*TestObservedState, *TestDesiredState](Config{
+			WorkerType:              drainOutcomeType,
+			Store:                   triangularStore,
+			Logger:                  deps.NewJSONFSMLogger(buf, deps.LevelDebug),
+			TickInterval:            cascadeTickInterval,
+			GracefulShutdownTimeout: cascadeTruncationBase,
+		})
+	}
+
+	const budget = time.Second
+
+	It("stays clean when post-join bookkeeping tips total elapsed past the budget but within the slack", func() {
+		root := newDrainSupervisor()
+
+		// Workers drained within budget; the tickLoop join + metricsWg.Wait then
+		// push total elapsed just past the raw budget. This is the false-positive
+		// the slack absorbs: no warn, drain stays clean.
+		root.recordPostJoinBudgetOverrun(budget+drainTickInterval/2, budget, 0, false)
+
+		Expect(findLogEvents(buf.String(), "graceful_shutdown_budget_exhausted")).To(BeEmpty(),
+			"post-join overhead within drainBudget+slack must not fire graceful_shutdown_budget_exhausted")
+		Expect(root.DrainOutcomeClean()).To(BeTrue(),
+			"a drain whose total elapsed lands inside drainBudget+slack must report clean")
+	})
+
+	It("reports not-clean when total elapsed overruns the budget beyond the slack", func() {
+		root := newDrainSupervisor()
+
+		// A genuine overrun, larger than any plausible join overhead, still warns.
+		root.recordPostJoinBudgetOverrun(budget+2*drainTickInterval, budget, 0, false)
+
+		Expect(findLogEvents(buf.String(), "graceful_shutdown_budget_exhausted")).ToNot(BeEmpty(),
+			"an overrun beyond drainBudget+slack must fire graceful_shutdown_budget_exhausted")
+		Expect(root.DrainOutcomeClean()).To(BeFalse(),
+			"an overrun beyond the slack must report not-clean")
+	})
+
+	It("does not re-warn at the post-join check when an earlier drain phase already warned", func() {
+		root := newDrainSupervisor()
+
+		// budgetWarned short-circuits the re-check so a level that already warned
+		// graceful_shutdown_timeout in the drain loop does not double-report here.
+		root.recordPostJoinBudgetOverrun(budget+2*drainTickInterval, budget, 0, true)
+
+		Expect(findLogEvents(buf.String(), "graceful_shutdown_budget_exhausted")).To(BeEmpty(),
+			"a prior drain-phase warn must short-circuit the post-join re-check")
+	})
 })
