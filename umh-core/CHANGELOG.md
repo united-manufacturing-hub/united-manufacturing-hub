@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## [0.44.26]
+
 ### Improvements
 
 - Bridge deploy, edit, and delete progress messages and the bridge status feed now say "Bridge" instead of "Protocol converter", matching the Management Console terminology
