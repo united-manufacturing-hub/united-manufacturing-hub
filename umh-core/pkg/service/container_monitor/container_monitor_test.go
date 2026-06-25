@@ -16,6 +16,7 @@ package container_monitor_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -299,6 +300,52 @@ var _ = Describe("Container Monitor Service", func() {
 				// "CPU degraded: CPU utilization normal" false-block.
 				Expect(strings.ToLower(status.CPU.Health.Message)).NotTo(ContainSubstring("degraded"),
 					"CPU.Health.Message must not say degraded when CPUHealth is Active")
+			})
+		})
+
+		Context("when the cgroup is unreadable", func() {
+			BeforeEach(func() {
+				mockFS.WithFileExistsFunc(func(_ context.Context, path string) (bool, error) {
+					if path == filepath.Join(testDataPath, "hwid") {
+						return true, nil
+					}
+
+					return false, nil
+				})
+				mockFS.WithReadFileFunc(func(_ context.Context, path string) ([]byte, error) {
+					if path == filepath.Join(testDataPath, "hwid") {
+						return []byte(defaultHWID), nil
+					}
+					// Every cgroup/proc read fails — the cgroup-v1 /
+					// non-container / transient-read-failure path.
+					return nil, errors.New("file not found: " + path)
+				})
+			})
+
+			It("emits State=healthy on the wire (no empty-string contract violation)", func() {
+				status, err := service.GetStatus(ctx)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(status.CPU.State).To(Equal("healthy"),
+					"a cgroup-read failure must default State to healthy, not the empty string")
+				Expect(status.CPU.Attribution).To(BeEmpty(),
+					"Attribution is omitempty and must be absent when not degraded")
+				Expect(status.CPU.Causes).To(BeEmpty(),
+					"Causes is omitempty and must be absent when not degraded")
+				// Guard against a vacuous pass: the cgroup-read failure path
+				// must actually have been taken, so CgroupCores (populated only
+				// when cgroupErr == nil) stays zero on the wire.
+				Expect(status.CPU.CgroupCores).To(BeZero(),
+					"CgroupCores must be absent when the cgroup read failed")
+
+				// Wire contract: "state" present, "attribution"/"causes" absent.
+				wireJSON, err := json.Marshal(status.CPU)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(wireJSON).To(ContainSubstring(`"state":"healthy"`),
+					"the JSON wire must always carry state (no omitempty)")
+				Expect(wireJSON).NotTo(ContainSubstring(`"attribution"`),
+					"attribution is omitempty and must be absent when healthy")
+				Expect(wireJSON).NotTo(ContainSubstring(`"causes"`),
+					"causes is omitempty and must be absent when healthy")
 			})
 		})
 	})

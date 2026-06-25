@@ -61,16 +61,16 @@ type Service interface {
 
 // ContainerMonitorService implements the Service interface.
 type ContainerMonitorService struct {
-	fs              filesystem.Service
-	logger          *zap.SugaredLogger
-	instanceName    string
 	lastCollectedAt time.Time
+	fs              filesystem.Service
+	sampler         cpuhealth.Sampler // cgroup cpu.stat usage_usec sampler
+	logger          *zap.SugaredLogger
+	windowState     *cpuhealth.WindowState // Caller-held CPU-health verdict state
+	instanceName    string
 	hwid            string
 	architecture    models.ContainerArchitecture //nolint:unused // will be used in the future
 	dataPath        string                       // Path to check for disk metrics and HWID file
 	wasThrottled    bool                         // Previous throttle state for transition logging
-	windowState     *cpuhealth.WindowState       // Caller-held CPU-health verdict state
-	sampler         cpuhealth.Sampler            // cgroup cpu.stat usage_usec sampler
 }
 
 // NewContainerMonitorService creates a new container monitor service instance.
@@ -255,8 +255,13 @@ func (c *ContainerMonitorService) getCPUMetrics(ctx context.Context) (*models.CP
 	// preserve wasThrottled state.
 	var (
 		isThrottled bool
-		verdict     cpuhealth.Verdict
-		signals     cpuhealth.Signals
+		// Default to healthy so a cgroup-read failure (cgroup v1, non-container,
+		// transient read error) — which skips the Decide call below — still
+		// emits State="healthy" on the wire. State has no omitempty, so without
+		// this default the zero-value "" would be emitted, violating the
+		// always-emitted healthy|degraded contract.
+		verdict = cpuhealth.Verdict{State: cpuhealth.StateHealthy}
+		signals cpuhealth.Signals
 	)
 
 	if cgroupErr == nil && cgroupInfo != nil {
@@ -322,6 +327,20 @@ func (c *ContainerMonitorService) getCPUMetrics(ctx context.Context) (*models.CP
 		},
 		TotalUsageMCpu: usageMCores,
 		CoreCount:      coreCount,
+		State:          string(verdict.State),
+	}
+
+	if verdict.State == cpuhealth.StateDegraded {
+		cpuStat.Attribution = string(verdict.Attribution)
+		if len(verdict.Causes) > 0 {
+			cpuStat.Causes = make([]models.Cause, len(verdict.Causes))
+			for i, c := range verdict.Causes {
+				cpuStat.Causes[i] = models.Cause{
+					Kind:  models.CauseKind(c.Kind),
+					Value: c.Value,
+				}
+			}
+		}
 	}
 
 	// Add cgroup info if available
@@ -330,6 +349,14 @@ func (c *ContainerMonitorService) getCPUMetrics(ctx context.Context) (*models.CP
 		cpuStat.ThrottleRatio = cgroupInfo.ThrottleRatio
 		cpuStat.IsThrottled = cgroupInfo.IsThrottled
 	}
+
+	// Percentile mCPU fields are observability-only mirrors of the dead-zone
+	// usage ring (signals.*UsageFraction * 1000). They are 0 when the ring
+	// holds < 2 entries (outside the dead-zone, or first tick) — omitempty
+	// then drops them from the wire. They do not change the verdict.
+	cpuStat.AvgMCpu = signals.AvgUsageFraction * 1000
+	cpuStat.P95MCpu = signals.P95UsageFraction * 1000
+	cpuStat.P99MCpu = signals.P99UsageFraction * 1000
 
 	return cpuStat, nil
 }
