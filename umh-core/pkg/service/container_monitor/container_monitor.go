@@ -242,9 +242,12 @@ func (c *ContainerMonitorService) getCPUMetrics(ctx context.Context) (*models.CP
 		return nil, ctx.Err()
 	}
 
-	// Default to Active health
+	// Default to Active health. The curated per-cause message is composed
+	// below from the verdict + signals (headline + "Technical Details:" +
+	// why + what-to-do from the supertable when degraded, "CPU healthy" +
+	// optional limited-visibility note when healthy), replacing the generic
+	// "CPU degraded" / "CPU utilization normal" strings.
 	category := models.Active
-	message := "CPU utilization normal"
 
 	// Compute the throttle verdict through cpuhealth.Decide's Schmitt flip-latch
 	// (fires above ThrottleHigh 0.05, clears only below ThrottleRecover 0.03,
@@ -295,6 +298,13 @@ func (c *ContainerMonitorService) getCPUMetrics(ctx context.Context) (*models.CP
 		c.wasThrottled = isThrottled
 	}
 
+	// ComposeMessage returns the curated per-cause two-layer message (headline
+	// + "Technical Details:" + why + what-to-do from the supertable) when
+	// degraded, and "CPU healthy" (plus an optional limited-visibility note
+	// when the sample is in the dead-zone) when healthy — replacing the
+	// generic "CPU degraded" / "CPU utilization normal" strings.
+	message := cpuhealth.ComposeMessage(verdict, signals)
+
 	// CPU health is driven from verdict.State, not throttle alone. High usage
 	// alone is not ill health (a capped container pinned at its quota is busy,
 	// not sick), and raw-usage degradation is no longer applied in GetStatus
@@ -305,17 +315,12 @@ func (c *ContainerMonitorService) getCPUMetrics(ctx context.Context) (*models.CP
 	// StateDegraded now covers throttle OR pressure (and any future cause
 	// Decide returns a degraded verdict for), so category is driven from
 	// verdict.State so every degradation cause flows to Degraded — not just
-	// throttle. isThrottled is retained for the cgroupInfo.IsThrottled wire
-	// field, the wasThrottled transition log above, and the throttle-specific
-	// message below; a pressure-only degrade uses a generic message.
+	// throttle. The curated per-cause message is composed above via
+	// ComposeMessage(verdict, signals); isThrottled is retained for the
+	// cgroupInfo.IsThrottled wire field and the wasThrottled transition log
+	// above.
 	if verdict.State == cpuhealth.StateDegraded && cgroupInfo != nil {
 		category = models.Degraded
-
-		if isThrottled {
-			message = fmt.Sprintf("CPU throttled (%.1f%% periods throttled)", cgroupInfo.ThrottleRatio*100)
-		} else {
-			message = "CPU degraded"
-		}
 	}
 
 	cpuStat := &models.CPU{
