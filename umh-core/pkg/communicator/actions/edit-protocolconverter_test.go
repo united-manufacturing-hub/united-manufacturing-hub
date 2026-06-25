@@ -1011,7 +1011,7 @@ var _ = Describe("EditProtocolConverter", func() {
 			// Execute the action - should fail with protocol converter not found
 			_, metadata, err := action.Execute()
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("protocol converter with UUID"))
+			Expect(err.Error()).To(ContainSubstring("bridge with UUID"))
 			Expect(err.Error()).To(ContainSubstring("not found"))
 			Expect(metadata).To(BeNil())
 		})
@@ -2151,7 +2151,7 @@ var _ = Describe("EditProtocolConverter", func() {
 				countManagerReplies := func() int {
 					count := 0
 					for _, r := range getReplies() {
-						if strings.Contains(r.message, "waiting for protocol converter manager to initialise") {
+						if strings.Contains(r.message, "waiting for bridge manager to initialise") {
 							count++
 						}
 					}
@@ -2164,7 +2164,7 @@ var _ = Describe("EditProtocolConverter", func() {
 
 				// After the first "not yet applied" reply confirms tick 1 ran
 				// (streak=1), remove the manager for at least 2 ticks. The
-				// loop sends "waiting for protocol converter manager to
+				// loop sends "waiting for bridge manager to
 				// initialise" on those ticks; we gate on those replies as
 				// proof the gap actually happened (no sleeps). Then restore
 				// the broken snapshot so the streak can resume from 1 and
@@ -2211,7 +2211,7 @@ var _ = Describe("EditProtocolConverter", func() {
 				allReplies := getReplies()
 				lastManagerIdx := -1
 				for i, r := range allReplies {
-					if strings.Contains(r.message, "waiting for protocol converter manager to initialise") {
+					if strings.Contains(r.message, "waiting for bridge manager to initialise") {
 						lastManagerIdx = i
 					}
 				}

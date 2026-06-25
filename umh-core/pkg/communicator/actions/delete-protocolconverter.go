@@ -127,17 +127,17 @@ func (a *DeleteProtocolConverterAction) Execute() (interface{}, map[string]inter
 	a.actionLogger.Info("Executing DeleteProtocolConverter action")
 
 	// ─── 1  Tell the UI we are about to start ──────────────────────────────
-	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionConfirmed, "Starting deletion of protocol converter with UUID: "+a.componentUUID.String(), a.outboundChannel, models.DeleteProtocolConverter)
+	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionConfirmed, "Starting deletion of bridge with UUID: "+a.componentUUID.String(), a.outboundChannel, models.DeleteProtocolConverter)
 
 	// ─── 2  Remove the config atomically ───────────────────────────────────-
 	ctx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
 	defer cancel()
 
-	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, "Removing protocol converter from configuration...", a.outboundChannel, models.DeleteProtocolConverter)
+	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, "Removing bridge from configuration...", a.outboundChannel, models.DeleteProtocolConverter)
 
 	err := a.configManager.AtomicDeleteProtocolConverter(ctx, a.componentUUID)
 	if err != nil {
-		errorMsg := fmt.Sprintf("Failed to delete protocol converter: %v", err)
+		errorMsg := fmt.Sprintf("Failed to delete bridge: %v", err)
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, errorMsg, a.outboundChannel, models.DeleteProtocolConverter)
 
 		return nil, nil, fmt.Errorf("%s", errorMsg)
@@ -145,11 +145,11 @@ func (a *DeleteProtocolConverterAction) Execute() (interface{}, map[string]inter
 
 	// ─── 3  Observe the runtime until the FSM forgets the instance ─────────
 	if a.systemSnapshotManager != nil { // skipping this for the unit tests
-		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, "Configuration updated. Waiting for protocol converter to be fully removed from the system...", a.outboundChannel, models.DeleteProtocolConverter)
+		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, "Configuration updated. Waiting for bridge to be fully removed from the system...", a.outboundChannel, models.DeleteProtocolConverter)
 
 		err = a.waitForComponentToBeRemoved()
 		if err != nil {
-			errorMsg := fmt.Sprintf("Failed to wait for protocol converter to be removed: %v", err)
+			errorMsg := fmt.Sprintf("Failed to wait for bridge to be removed: %v", err)
 			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure, errorMsg, a.outboundChannel, models.DeleteProtocolConverter)
 
 			return nil, nil, fmt.Errorf("%s", errorMsg)
@@ -157,7 +157,7 @@ func (a *DeleteProtocolConverterAction) Execute() (interface{}, map[string]inter
 	}
 
 	// ─── 4  Tell the caller we are done (caller will send FinishedSuccessful) ──
-	successMsg := fmt.Sprintf("Successfully deleted protocol converter with UUID: %s", a.componentUUID)
+	successMsg := fmt.Sprintf("Successfully deleted bridge with UUID: %s", a.componentUUID)
 
 	return successMsg, nil, nil
 }
@@ -204,14 +204,14 @@ func (a *DeleteProtocolConverterAction) waitForComponentToBeRemoved() error {
 	for {
 		select {
 		case <-timeout:
-			return fmt.Errorf("protocol converter %s was not removed within the timeout period", componentName)
+			return fmt.Errorf("bridge %s was not removed within the timeout period", componentName)
 		case <-ticker.C:
 			elapsed := time.Since(startTime)
 			remaining := timeoutDuration - elapsed
 			remainingSeconds := int(remaining.Seconds())
 
 			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
-				fmt.Sprintf("Verifying removal of protocol converter '%s' (%ds remaining)...",
+				fmt.Sprintf("Verifying removal of bridge '%s' (%ds remaining)...",
 					componentName, remainingSeconds), a.outboundChannel, models.DeleteProtocolConverter)
 
 			systemSnapshot := a.systemSnapshotManager.GetDeepCopySnapshot()
@@ -234,7 +234,7 @@ func (a *DeleteProtocolConverterAction) waitForComponentToBeRemoved() error {
 
 			if removed {
 				SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
-					fmt.Sprintf("Protocol converter '%s' has been successfully removed from the system.", componentName),
+					fmt.Sprintf("Bridge '%s' has been successfully removed from the system.", componentName),
 					a.outboundChannel, models.DeleteProtocolConverter)
 
 				return nil
