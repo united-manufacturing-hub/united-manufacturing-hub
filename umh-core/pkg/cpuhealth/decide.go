@@ -241,6 +241,18 @@ type Signals struct {
 	// when the 60s-average drops below SaturationRecover (Schmitt). It is only
 	// evaluated in the dead-zone.
 	SaturationFired bool
+	// AvgUsageFraction, P95UsageFraction, P99UsageFraction are the avg/p95/p99
+	// of the dead-zone usage ring — fractions relative to 1 core, typically in
+	// [0,1] but may exceed 1 when observed usage exceeds CgroupCores
+	// (oversubscription); callers that surface mCPU multiply by 1000. Computed
+	// UNCONDITIONALLY whenever the ring holds >= 2 entries (observability-only,
+	// like ThrottleRatio); 0 otherwise. They do NOT change the verdict — the
+	// saturation latch still fires on the AVG, not p95. Outside the dead-zone
+	// the usage ring is cleared, so these are 0 there (usage is not a health
+	// signal outside the dead-zone currently).
+	AvgUsageFraction float64
+	P95UsageFraction float64
+	P99UsageFraction float64
 }
 
 // Verdict is the output of Decide.
@@ -621,6 +633,32 @@ func Decide(st *WindowState, sample Sample, thresholds Thresholds) (Verdict, Sig
 	}
 
 	signals.SaturationFired = st.saturationFired
+
+	if n := len(st.usageRing); n >= 2 {
+		vals := make([]float64, n)
+		for i, up := range st.usageRing {
+			vals[i] = up.fraction
+		}
+
+		sort.Float64s(vals)
+
+		// AvgUsageFraction is the arithmetic mean of the same vals slice used
+		// for p95/p99, computed UNCONDITIONALLY when the ring holds >= 2
+		// entries (independent of the dead-zone saturation latch). This is
+		// the same value as saturationAvg when in the dead-zone, but it does
+		// not depend on the dead-zone-only local.
+		var sum float64
+		for _, v := range vals {
+			sum += v
+		}
+
+		signals.AvgUsageFraction = sum / float64(n)
+
+		p95Rank := int(math.Ceil(0.95 * float64(n)))
+		signals.P95UsageFraction = vals[p95Rank-1]
+		p99Rank := int(math.Ceil(0.99 * float64(n)))
+		signals.P99UsageFraction = vals[p99Rank-1]
+	}
 
 	var causes []Cause
 

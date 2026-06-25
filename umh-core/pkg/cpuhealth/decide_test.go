@@ -2466,3 +2466,240 @@ func TestDecide_DominanceBySeverity(t *testing.T) {
 		}
 	})
 }
+
+// TestDecide_UsagePercentiles_FromSaturationRing pins the avg/p95/p99
+// usage-fraction fields derived from WindowState.usageRing (the dead-zone
+// saturation backstop's 60s usage ring) and asserts they are observability-only
+// (do not change the verdict). The caller multiplies each fraction by 1000 for
+// mCPU relative to 1 core.
+//
+// Pinned behaviors:
+//
+//  1. Signals gains AvgUsageFraction, P95UsageFraction, P99UsageFraction float64
+//     (fractions relative to 1 core; typically in [0,1] but may exceed 1 when
+//     observed usage exceeds CgroupCores — oversubscription).
+//  2. avg = mean of the ring entries; p95/p99 = nearest-rank
+//     (sort, rank = ceil(p*N), value at sorted[rank-1]).
+//  3. Computed UNCONDITIONALLY whenever the ring holds >= 2 entries — observable
+//     regardless of latch state (the ThrottleRatio observability discipline).
+//  4. When the ring holds < 2 entries (first tick, or post-reset empty) → all 0.
+//  5. These are observability-only: they do NOT change the verdict. The
+//     saturation latch still fires on the AVG (not p95) per the spec.
+//  6. Computed from the SAME ring the saturation backstop uses (no separate ring).
+//     Outside the dead-zone the usage ring is cleared, so the percentiles are 0
+//     there (usage is not a health signal outside the dead-zone currently).
+//
+// The ramp: feed 5 dead-zone ticks at fractions 0.1, 0.5, 0.9, 0.3, 0.7 (all
+// within the 60s window) and then a 6th tick (0.1 at t=50s), also within the
+// window, so the ring holds all 6 entries [0.1, 0.5, 0.9, 0.3, 0.7, 0.1].
+// Sorted = [0.1, 0.1, 0.3, 0.5, 0.7, 0.9]; avg = 2.6/6 = 0.4333;
+// p95 rank = ceil(0.95*6) = ceil(5.7) = 6 → sorted[5] = 0.9;
+// p99 rank = ceil(0.99*6) = ceil(5.94) = 6 → sorted[5] = 0.9. avg 0.4333 < 0.70 →
+// the saturation latch does NOT fire, so the verdict stays StateHealthy — the
+// percentiles are surfaced on a healthy verdict (observability-only).
+func TestDecide_UsagePercentiles_FromSaturationRing(t *testing.T) {
+	base := time.Date(2026, 6, 24, 12, 0, 0, 0, time.UTC)
+	thresholds := DefaultThresholds()
+
+	// deadZoneSample constructs a dead-zone sample (Quota nil, PsiAvailable
+	// false, Virtualized false) with a usage fraction = usageCores/4.0. The
+	// dead-zone is the ONLY place the usage ring is populated currently.
+	deadZoneSample := func(dt time.Duration, fraction float64) Sample {
+		return Sample{
+			Timestamp:    base.Add(dt),
+			UsageCores:   fraction * 4.0,
+			CgroupCores:  4.0,
+			PsiAvailable: false,
+			Virtualized:  false,
+		}
+	}
+
+	// (1) FIRST-TICK floor — a single dead-zone sample leaves the ring with 1
+	// entry (< 2), so avg/p95/p99 MUST all be 0. A lone first-tick reading
+	// carries no percentile information.
+	st1 := &WindowState{}
+	_, sig1 := Decide(st1, deadZoneSample(0, 0.9), thresholds)
+	if sig1.AvgUsageFraction != 0 {
+		t.Fatalf("first-tick AvgUsageFraction: got %v, want 0 (ring holds < 2 entries → no percentile)", sig1.AvgUsageFraction)
+	}
+	if sig1.P95UsageFraction != 0 {
+		t.Fatalf("first-tick P95UsageFraction: got %v, want 0 (ring holds < 2 entries → no percentile)", sig1.P95UsageFraction)
+	}
+	if sig1.P99UsageFraction != 0 {
+		t.Fatalf("first-tick P99UsageFraction: got %v, want 0 (ring holds < 2 entries → no percentile)", sig1.P99UsageFraction)
+	}
+
+	// (2) RAMP — feed the 5-fraction ramp. All 5 ticks land within the 60s
+	// window (10s spacing → cutoff at t=40s keeps t=40..t=80, but the ramp is
+	// t=0..t=40 so all 5 are retained). After the final tick the ring holds
+	// [0.1, 0.5, 0.9, 0.3, 0.7] → avg 0.5, p95 0.9, p99 0.9.
+	st := &WindowState{}
+	ramp := []float64{0.1, 0.5, 0.9, 0.3, 0.7}
+	for i, frac := range ramp {
+		Decide(st, deadZoneSample(time.Duration(i*10)*time.Second, frac), thresholds)
+	}
+	v, sig := Decide(st, deadZoneSample(50*time.Second, 0.1), thresholds)
+
+	// The 6th tick (0.1 at t=50s) is within the 60s window, so the ring now
+	// holds 6 entries: [0.1, 0.5, 0.9, 0.3, 0.7, 0.1]. Recompute the expected
+	// values over the 6-entry ring so the assertion is exact, not approximate.
+	// Sorted = [0.1, 0.1, 0.3, 0.5, 0.7, 0.9]; avg = 2.6/6 = 0.4333...;
+	// p95 rank = ceil(0.95*6) = ceil(5.7) = 6 → sorted[5] = 0.9;
+	// p99 rank = ceil(0.99*6) = ceil(5.94) = 6 → sorted[5] = 0.9.
+	wantAvg := 0.0
+	for _, frac := range []float64{0.1, 0.5, 0.9, 0.3, 0.7, 0.1} {
+		wantAvg += frac
+	}
+	wantAvg /= 6.0
+	if !floatEq(sig.AvgUsageFraction, wantAvg) {
+		t.Fatalf("AvgUsageFraction: got %v, want %v (mean of the 6-entry usage ring)", sig.AvgUsageFraction, wantAvg)
+	}
+	if !floatEq(sig.P95UsageFraction, 0.9) {
+		t.Fatalf("P95UsageFraction: got %v, want 0.9 (nearest-rank p95: rank=ceil(0.95*6)=6 → sorted[5]=0.9)", sig.P95UsageFraction)
+	}
+	if !floatEq(sig.P99UsageFraction, 0.9) {
+		t.Fatalf("P99UsageFraction: got %v, want 0.9 (nearest-rank p99: rank=ceil(0.99*6)=6 → sorted[5]=0.9)", sig.P99UsageFraction)
+	}
+
+	// (3) FRACTIONS, not mCPU — non-negative fractions relative to 1 core
+	// (the caller multiplies by 1000 for the wire). They are typically in
+	// [0,1] but may exceed 1 when observed usage exceeds CgroupCores
+	// (oversubscription); only the lower bound is asserted here, and the
+	// oversubscription case below pins the >1 behavior.
+	if sig.AvgUsageFraction < 0 {
+		t.Fatalf("AvgUsageFraction negative: got %v (fractions are non-negative)", sig.AvgUsageFraction)
+	}
+	if sig.P95UsageFraction < 0 {
+		t.Fatalf("P95UsageFraction negative: got %v (fractions are non-negative)", sig.P95UsageFraction)
+	}
+	if sig.P99UsageFraction < 0 {
+		t.Fatalf("P99UsageFraction negative: got %v (fractions are non-negative)", sig.P99UsageFraction)
+	}
+
+	// (3b) OVERSUBSCRIPTION — a dead-zone sample whose UsageCores exceeds
+	// CgroupCores yields a fraction > 1.0 (multi-core mCPU after *1000). The
+	// input clamp rejects only NaN/+Inf/negative, so a finite >1.0 value
+	// passes through into the ring and surfaces on the wire; the caller must
+	// NOT add an upper clamp (the >1.0 value is meaningful). With
+	// UsageCores=2.0 and CgroupCores=0.5 the fraction is 4.0; feed two such
+	// samples so the ring holds >= 2 entries and all three percentiles pin to
+	// 4.0.
+	stOvs := &WindowState{}
+	ovsSample := func(dt time.Duration) Sample {
+		return Sample{
+			Timestamp:    base.Add(120 * time.Second).Add(dt),
+			UsageCores:   2.0,
+			CgroupCores:  0.5,
+			PsiAvailable: false,
+			Virtualized:  false,
+		}
+	}
+	Decide(stOvs, ovsSample(0), thresholds)
+	vOvs, sigOvs := Decide(stOvs, ovsSample(10*time.Second), thresholds)
+	if !floatEq(sigOvs.AvgUsageFraction, 4.0) {
+		t.Fatalf("oversubscription AvgUsageFraction: got %v, want 4.0 (UsageCores=2.0 / CgroupCores=0.5 — >1.0 is legitimate, no upper clamp)", sigOvs.AvgUsageFraction)
+	}
+	if !floatEq(sigOvs.P95UsageFraction, 4.0) {
+		t.Fatalf("oversubscription P95UsageFraction: got %v, want 4.0", sigOvs.P95UsageFraction)
+	}
+	if !floatEq(sigOvs.P99UsageFraction, 4.0) {
+		t.Fatalf("oversubscription P99UsageFraction: got %v, want 4.0", sigOvs.P99UsageFraction)
+	}
+	// The oversubscription ring (4.0, 4.0) has avg 4.0 >= HighUsageFraction
+	// 0.70, so the saturation latch fires and the verdict degrades — pin the
+	// interaction so a regression that suppresses percentiles when
+	// SaturationFired=true, or drops the saturation cause when percentiles are
+	// populated, cannot pass undetected.
+	if !sigOvs.SaturationFired {
+		t.Fatalf("oversubscription SaturationFired: got false, want true (avg 4.0 >= HighUsageFraction 0.70)")
+	}
+	if vOvs.State != StateDegraded {
+		t.Fatalf("oversubscription State: got %q, want %q (saturation latch fired)", vOvs.State, StateDegraded)
+	}
+	if len(vOvs.Causes) < 1 {
+		t.Fatalf("oversubscription Causes length: got %d, want >= 1 (saturation cause must be present)", len(vOvs.Causes))
+	}
+
+	// (4) OBSERVABILITY-ONLY — the percentiles do NOT change the verdict. With
+	// avg 0.4333 < HighUsageFraction 0.70 the saturation latch does not fire, so
+	// the verdict is StateHealthy with zero causes. The percentiles are surfaced
+	// on a healthy verdict (they are a numeric metric, like ThrottleRatio).
+	if v.State != StateHealthy {
+		t.Fatalf("State: got %q, want %q (percentiles are observability-only; the saturation latch fires on the AVG (0.4333 < 0.70) not p95, so the verdict stays healthy)", v.State, StateHealthy)
+	}
+	if len(v.Causes) != 0 {
+		t.Fatalf("Causes length: got %d, want 0 (percentiles do not introduce a cause; observability-only)", len(v.Causes))
+	}
+	if sig.SaturationFired {
+		t.Fatalf("SaturationFired: got true, want false (the percentiles do NOT fire the saturation latch; avg 0.4333 < 0.70)")
+	}
+
+	// (5) p99 >= p95 — the real nearest-rank invariant (both pick high-rank
+	// indices, so p99 is never below p95). p95 >= avg is NOT a universal
+	// invariant of nearest-rank at larger N (e.g. 19 zeros + one spike: mean
+	// 50 but p95 rank resolves to a zero), so it is deliberately not asserted
+	// here; p99 >= p95 holds by nearest-rank construction (both index the same
+	// sorted slice at high ranks), not by a runtime check — the test pins the
+	// invariant so a formula change that breaks it fails here.
+	if sig.P99UsageFraction < sig.P95UsageFraction {
+		t.Fatalf("p99 < p95: p99=%v p95=%v (p99 must be >= p95 by nearest-rank construction)", sig.P99UsageFraction, sig.P95UsageFraction)
+	}
+
+	// (6) OUTSIDE THE DEAD-ZONE — the usage ring is cleared on a non-dead-zone
+	// tick, so the percentiles MUST be 0 there (usage is not a health signal
+	// outside the dead-zone currently). Re-use the populated st and flip to a
+	// capped, PSI-available sample on the SAME WindowState.
+	quota := 2.0
+	_, sigNdz := Decide(st, Sample{
+		Timestamp:    base.Add(60 * time.Second),
+		UsageCores:   1.9,
+		Quota:        &quota,
+		PsiAvailable: true,
+		Virtualized:  false,
+	}, thresholds)
+	if sigNdz.AvgUsageFraction != 0 {
+		t.Fatalf("non-dead-zone AvgUsageFraction: got %v, want 0 (usage ring cleared outside the dead-zone → no percentile)", sigNdz.AvgUsageFraction)
+	}
+	if sigNdz.P95UsageFraction != 0 {
+		t.Fatalf("non-dead-zone P95UsageFraction: got %v, want 0 (usage ring cleared outside the dead-zone → no percentile)", sigNdz.P95UsageFraction)
+	}
+	if sigNdz.P99UsageFraction != 0 {
+		t.Fatalf("non-dead-zone P99UsageFraction: got %v, want 0 (usage ring cleared outside the dead-zone → no percentile)", sigNdz.P99UsageFraction)
+	}
+
+	// (7) p95 vs p99 DISTINGUISHED — at N=6 (and N=5) both ranks collapse to
+	// the same sorted index, so a p99-formula regression (e.g. reusing the
+	// 0.95 multiplier) would pass undetected. A larger ring (N=100) separates
+	// the ranks: p95 rank = ceil(0.95*100) = 95 → sorted[94]; p99 rank =
+	// ceil(0.99*100) = 99 → sorted[98]. Feed 100 distinct fractions
+	// 0.01..1.00 so the two percentiles land on different values and are
+	// independently validated.
+	stBig := &WindowState{}
+	bigFracs := make([]float64, 100)
+	var sigBig Signals
+	for i := 1; i <= 100; i++ {
+		frac := float64(i) / 100.0
+		bigFracs[i-1] = frac
+		_, sigBig = Decide(stBig, Sample{
+			Timestamp:    base.Add(180 * time.Second).Add(time.Duration(i-1) * 500 * time.Millisecond),
+			UsageCores:   frac,
+			CgroupCores:  1.0,
+			PsiAvailable: false,
+			Virtualized:  false,
+		}, thresholds)
+	}
+	wantBigAvg := 0.0
+	for _, f := range bigFracs {
+		wantBigAvg += f
+	}
+	wantBigAvg /= 100.0
+	if !floatEq(sigBig.AvgUsageFraction, wantBigAvg) {
+		t.Fatalf("large-N AvgUsageFraction: got %v, want %v (mean of the 100-entry ring)", sigBig.AvgUsageFraction, wantBigAvg)
+	}
+	if !floatEq(sigBig.P95UsageFraction, 0.95) {
+		t.Fatalf("large-N P95UsageFraction: got %v, want 0.95 (rank=ceil(0.95*100)=95 → sorted[94]=0.95)", sigBig.P95UsageFraction)
+	}
+	if !floatEq(sigBig.P99UsageFraction, 0.99) {
+		t.Fatalf("large-N P99UsageFraction: got %v, want 0.99 (rank=ceil(0.99*100)=99 → sorted[98]=0.99 — distinct from p95, guards a p99-formula regression)", sigBig.P99UsageFraction)
+	}
+}
