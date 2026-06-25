@@ -316,12 +316,14 @@ func (c *Collector[TObserved]) CollectFinalObservation(ctx context.Context) erro
 	c.collectionMu.Unlock()
 
 	if err != nil {
-		// A context cancellation here is the expected shutdown race: the
-		// supervisor's Phase-4 teardown cancels the collector ctx after the drain
-		// already completed, so the final observation is best-effort and no data
-		// is lost. Log it at Debug to keep Sentry quiet; any other failure stays a
-		// warn.
-		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		// The reap path (reconciliation.go) wraps the live reconcile context in a
+		// local WithTimeout and cancels it only after this returns. context.Canceled
+		// here therefore means that reconcile context was cancelled (the expected
+		// shutdown race where the worker is already going away and no data is lost),
+		// so log it at Debug to keep Sentry quiet. Any other failure stays a warn;
+		// notably context.DeadlineExceeded means the collection overran
+		// ObservationTimeout (a genuinely stuck collector), which must stay visible.
+		if errors.Is(err, context.Canceled) {
 			c.config.Logger.Debug("collector_final_observation_failed",
 				deps.Err(err))
 		} else {
