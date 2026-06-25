@@ -227,23 +227,23 @@ func getProtocolConverterStatusMessage(state string, statusReason string, connec
 	// Get base message from protocol converter state
 	switch state {
 	case protocolconverter.OperationalStateActive:
-		baseMessage = "Protocol converter is active and processing data"
+		baseMessage = "Bridge is active and processing data"
 	case protocolconverter.OperationalStateIdle:
-		baseMessage = "Protocol converter is idle"
+		baseMessage = "Bridge is idle"
 	case protocolconverter.OperationalStateStopped:
-		baseMessage = "Protocol converter is stopped"
+		baseMessage = "Bridge is stopped"
 	case protocolconverter.OperationalStateDegradedConnection:
-		baseMessage = "Protocol converter connection is degraded"
+		baseMessage = "Bridge connection is degraded"
 	case protocolconverter.OperationalStateDegradedRedpanda:
-		baseMessage = "Protocol converter Redpanda connection is degraded"
+		baseMessage = "Bridge Redpanda connection is degraded"
 	case protocolconverter.OperationalStateDegradedDFC:
-		baseMessage = "Protocol converter data flow component is degraded"
+		baseMessage = "Bridge data flow component is degraded"
 	case protocolconverter.OperationalStateDegradedOther:
-		baseMessage = "Protocol converter has other degradation issues"
+		baseMessage = "Bridge has other degradation issues"
 	case protocolconverter.OperationalStateStartingFailedDFCMissing:
 		baseMessage = "No DFC added yet"
 	default:
-		baseMessage = "Protocol converter state: " + state
+		baseMessage = "Bridge state: " + state
 	}
 
 	// Add connection state information if available
