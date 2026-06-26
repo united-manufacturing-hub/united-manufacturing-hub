@@ -37,7 +37,7 @@
 // reconcileChildren(nil) despawn that would clear the bad child, so the open
 // circuit is self-sustaining and the drain rides its full budget — no
 // sleep-racing, the outcome is forced by the gate, not by scheduling.
-package supervisor
+package supervisor_test
 
 import (
 	"context"
@@ -47,6 +47,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
 )
 
@@ -65,7 +66,7 @@ var _ = Describe("Shutdown reap past an open infrastructure circuit (ENG-4971)",
 	})
 
 	It("reaps its worker during Shutdown() even when a child's circuit is open", func() {
-		triangularStore := CreateTestTriangularStoreForWorkerType(circuitWorkerType)
+		triangularStore := supervisor.CreateTestTriangularStoreForWorkerType(circuitWorkerType)
 		logger := deps.NewJSONFSMLogger(buf, deps.LevelDebug)
 
 		// Short graceful timeout: without the bypass the drain rides this whole
@@ -74,7 +75,7 @@ var _ = Describe("Shutdown reap past an open infrastructure circuit (ENG-4971)",
 		// fires.
 		const gracefulTimeout = 500 * time.Millisecond
 
-		s := NewSupervisor[*TestObservedState, *TestDesiredState](Config{
+		s := supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
 			WorkerType:              circuitWorkerType,
 			Store:                   triangularStore,
 			Logger:                  logger,
@@ -91,14 +92,14 @@ var _ = Describe("Shutdown reap past an open infrastructure circuit (ENG-4971)",
 		// SignalNeedsRemoval the moment its Next() observes ShutdownRequested.
 		// The only thing that can keep it from reaping is a gate upstream of the
 		// worker tick — here, the open infrastructure circuit.
-		worker := &TestWorker{
+		worker := &supervisor.TestWorker{
 			InitialState: shutdownHonoringState{},
 		}
 		Expect(s.AddWorker(identity, worker)).To(Succeed())
 
 		ctx := context.Background()
 		desiredDoc := persistence.Document{
-			FieldID:             circuitWorkerID,
+			supervisor.FieldID:  circuitWorkerID,
 			"ShutdownRequested": false,
 			"state":             "running",
 		}
@@ -112,10 +113,7 @@ var _ = Describe("Shutdown reap past an open infrastructure circuit (ENG-4971)",
 
 		// Worker must be alive first.
 		Eventually(func() int {
-			s.mu.RLock()
-			defer s.mu.RUnlock()
-
-			return len(s.workers)
+			return s.TestWorkerCount()
 		}, 1*time.Second, 10*time.Millisecond).Should(Equal(1))
 
 		// Inject a real child supervisor whose circuit is forced open.
@@ -124,7 +122,7 @@ var _ = Describe("Shutdown reap past an open infrastructure circuit (ENG-4971)",
 		// every tick. The child has no worker of its own, so once the parent
 		// reaches its shutdown reconcile (post-fix) the bad child reaps
 		// immediately (ListWorkers() is empty).
-		badChild := NewSupervisor[*TestObservedState, *TestDesiredState](Config{
+		badChild := supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
 			WorkerType:              badChildType,
 			Store:                   triangularStore,
 			Logger:                  logger,
@@ -133,9 +131,7 @@ var _ = Describe("Shutdown reap past an open infrastructure circuit (ENG-4971)",
 		})
 		badChild.TestSetCircuitOpen(true)
 
-		s.mu.Lock()
-		s.children[badChildName] = badChild
-		s.mu.Unlock()
+		s.TestLinkChild(badChildName, badChild)
 
 		// Sequence the open circuit BEFORE Shutdown: wait until the parent's own
 		// circuit has opened off the bad child, proving CheckChildConsistency is
@@ -143,7 +139,7 @@ var _ = Describe("Shutdown reap past an open infrastructure circuit (ENG-4971)",
 		// the gate before it can reconcile the bad child away), so this is
 		// ordering only, not a timing race on the outcome.
 		Eventually(func() bool {
-			return s.circuitOpen.Load()
+			return s.TestIsInfraCircuitOpen()
 		}, 1*time.Second, 10*time.Millisecond).Should(BeTrue(),
 			"the parent's circuit never opened, so CheckChildConsistency did not fail on the injected child and the gate under test was never armed")
 
@@ -153,9 +149,7 @@ var _ = Describe("Shutdown reap past an open infrastructure circuit (ENG-4971)",
 		// circuit gate returns ErrInfraCircuitOpen before the worker tick, the
 		// shutdown check never runs, and the worker is left resident when the
 		// Shutdown() loop returns.
-		s.mu.RLock()
-		remaining := len(s.workers)
-		s.mu.RUnlock()
+		remaining := s.TestWorkerCount()
 		Expect(remaining).To(Equal(0),
 			"expected the worker to be reaped during the Shutdown() loop despite the open circuit (got %d remaining)", remaining)
 

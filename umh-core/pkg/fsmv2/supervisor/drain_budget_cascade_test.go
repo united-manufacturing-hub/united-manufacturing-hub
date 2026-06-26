@@ -18,7 +18,7 @@
 // from that same budget, so per-level budgets do not sum — a chain of depth N
 // drains within N×base total (depth 1 = base, depth 2 = 2×base, depth 3 =
 // 3×base).
-package supervisor
+package supervisor_test
 
 import (
 	"context"
@@ -36,6 +36,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence/memory"
 )
@@ -172,10 +173,10 @@ type cascadeTreeWorker struct {
 }
 
 func (w *cascadeTreeWorker) CollectObservedState(_ context.Context, _ fsmv2.DesiredState) (fsmv2.ObservedState, error) {
-	return &TestObservedState{
+	return &supervisor.TestObservedState{
 		ID:          w.id,
 		CollectedAt: time.Now(),
-		Desired:     &TestDesiredState{},
+		Desired:     &supervisor.TestDesiredState{},
 	}, nil
 }
 
@@ -231,7 +232,7 @@ var _ = Describe("Graceful drain budget cascading (CLAUDE.md §Graceful Shutdown
 
 		for _, wt := range []string{cascadeDrainMidType, cascadeDrainLeafType, cascadeStuckMidType} {
 			_ = factory.RegisterSupervisorFactoryByType(wt, func(cfg interface{}) interface{} {
-				return NewSupervisor[*TestObservedState, *TestDesiredState](cfg.(Config))
+				return supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](cfg.(supervisor.Config))
 			})
 		}
 	})
@@ -254,7 +255,7 @@ var _ = Describe("Graceful drain budget cascading (CLAUDE.md §Graceful Shutdown
 
 		logger := deps.NewJSONFSMLogger(buf, deps.LevelDebug)
 
-		root := NewSupervisor[*TestObservedState, *TestDesiredState](Config{
+		root := supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
 			WorkerType:              cascadeDrainRootType,
 			Store:                   triangularStore,
 			Logger:                  logger,
@@ -278,7 +279,7 @@ var _ = Describe("Graceful drain budget cascading (CLAUDE.md §Graceful Shutdown
 		Expect(root.AddWorker(rootIdentity, rootWorker)).To(Succeed())
 
 		desiredDoc := persistence.Document{
-			FieldID:             rootIdentity.ID,
+			supervisor.FieldID:  rootIdentity.ID,
 			"ShutdownRequested": false,
 			"state":             "running",
 		}
@@ -292,7 +293,7 @@ var _ = Describe("Graceful drain budget cascading (CLAUDE.md §Graceful Shutdown
 
 		// Wait until the full depth-3 tree is alive: root worker, mid
 		// supervisor + worker, leaf supervisor + worker.
-		var midSup, leafSup SupervisorInterface
+		var midSup, leafSup supervisor.SupervisorInterface
 		Eventually(func() bool {
 			children := root.GetChildren()
 			mid, ok := children["mid"]
@@ -332,9 +333,7 @@ var _ = Describe("Graceful drain budget cascading (CLAUDE.md §Graceful Shutdown
 
 		// Assertion 2: every level fully drained — no worker leaked behind a
 		// truncated drain.
-		root.mu.RLock()
-		rootRemaining := len(root.workers)
-		root.mu.RUnlock()
+		rootRemaining := root.TestWorkerCount()
 		Expect(rootRemaining).To(BeZero(), "root supervisor leaked workers after Shutdown")
 		Expect(midSup.ListWorkers()).To(BeEmpty(),
 			"mid supervisor leaked its slow-stopping worker: its drain budget was exhausted before the worker's 1.1×base graceful stop finished")
@@ -361,7 +360,7 @@ var _ = Describe("Graceful drain budget cascading (CLAUDE.md §Graceful Shutdown
 
 		logger := deps.NewJSONFSMLogger(buf, deps.LevelDebug)
 
-		root := NewSupervisor[*TestObservedState, *TestDesiredState](Config{
+		root := supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
 			WorkerType:              cascadeDrainRootType,
 			Store:                   triangularStore,
 			Logger:                  logger,
@@ -389,7 +388,7 @@ var _ = Describe("Graceful drain budget cascading (CLAUDE.md §Graceful Shutdown
 		Expect(root.AddWorker(rootIdentity, rootWorker)).To(Succeed())
 
 		desiredDoc := persistence.Document{
-			FieldID:             rootIdentity.ID,
+			supervisor.FieldID:  rootIdentity.ID,
 			"ShutdownRequested": false,
 			"state":             "running",
 		}
@@ -465,7 +464,7 @@ var _ = Describe("Graceful drain budget cascading (CLAUDE.md §Graceful Shutdown
 
 		logger := deps.NewJSONFSMLogger(buf, deps.LevelDebug)
 
-		root := NewSupervisor[*TestObservedState, *TestDesiredState](Config{
+		root := supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
 			WorkerType:              cascadeDrainRootType,
 			Store:                   triangularStore,
 			Logger:                  logger,
@@ -493,7 +492,7 @@ var _ = Describe("Graceful drain budget cascading (CLAUDE.md §Graceful Shutdown
 		Expect(root.AddWorker(rootIdentity, rootWorker)).To(Succeed())
 
 		desiredDoc := persistence.Document{
-			FieldID:             rootIdentity.ID,
+			supervisor.FieldID:  rootIdentity.ID,
 			"ShutdownRequested": false,
 			"state":             "running",
 		}
@@ -595,7 +594,7 @@ var _ = Describe("Graceful drain budget cascading (CLAUDE.md §Graceful Shutdown
 
 		logger := deps.NewJSONFSMLogger(buf, deps.LevelDebug)
 
-		root := NewSupervisor[*TestObservedState, *TestDesiredState](Config{
+		root := supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
 			WorkerType:              cascadeDrainRootType,
 			Store:                   triangularStore,
 			Logger:                  logger,
@@ -613,7 +612,7 @@ var _ = Describe("Graceful drain budget cascading (CLAUDE.md §Graceful Shutdown
 		// riding the boundary.
 		for i := range 3 {
 			name := fmt.Sprintf("stuck-%d", i)
-			child := NewSupervisor[*TestObservedState, *TestDesiredState](Config{
+			child := supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
 				WorkerType:              cascadeStuckLeafType,
 				Store:                   triangularStore,
 				Logger:                  logger,
@@ -632,7 +631,7 @@ var _ = Describe("Graceful drain budget cascading (CLAUDE.md §Graceful Shutdown
 			})).To(Succeed())
 
 			childDoc := persistence.Document{
-				FieldID:             childIdentity.ID,
+				supervisor.FieldID:  childIdentity.ID,
 				"ShutdownRequested": false,
 				"state":             "running",
 			}
@@ -641,9 +640,7 @@ var _ = Describe("Graceful drain budget cascading (CLAUDE.md §Graceful Shutdown
 
 			_ = child.Start(runCtx)
 
-			root.mu.Lock()
-			root.children[name] = child
-			root.mu.Unlock()
+			root.TestLinkChild(name, child)
 		}
 
 		_ = root.Start(runCtx)
@@ -713,7 +710,7 @@ var _ = Describe("Graceful drain budget cascading (CLAUDE.md §Graceful Shutdown
 
 		logger := deps.NewJSONFSMLogger(buf, deps.LevelDebug)
 
-		root := NewSupervisor[*TestObservedState, *TestDesiredState](Config{
+		root := supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
 			WorkerType:              cascadeDrainRootType,
 			Store:                   triangularStore,
 			Logger:                  logger,
@@ -726,7 +723,7 @@ var _ = Describe("Graceful drain budget cascading (CLAUDE.md §Graceful Shutdown
 
 		// One fast-draining child, linked directly (the spawn path needs a
 		// parent worker, which this level deliberately lacks).
-		child := NewSupervisor[*TestObservedState, *TestDesiredState](Config{
+		child := supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
 			WorkerType:              cascadeDrainLeafType,
 			Store:                   triangularStore,
 			Logger:                  logger,
@@ -745,7 +742,7 @@ var _ = Describe("Graceful drain budget cascading (CLAUDE.md §Graceful Shutdown
 		})).To(Succeed())
 
 		childDoc := persistence.Document{
-			FieldID:             childIdentity.ID,
+			supervisor.FieldID:  childIdentity.ID,
 			"ShutdownRequested": false,
 			"state":             "running",
 		}
@@ -754,9 +751,7 @@ var _ = Describe("Graceful drain budget cascading (CLAUDE.md §Graceful Shutdown
 
 		_ = child.Start(runCtx)
 
-		root.mu.Lock()
-		root.children["prompt"] = child
-		root.mu.Unlock()
+		root.TestLinkChild("prompt", child)
 
 		_ = root.Start(runCtx)
 		defer root.Shutdown() // Idempotent; reaps the child if an assertion fails early.
@@ -778,23 +773,20 @@ var _ = Describe("Graceful drain budget cascading (CLAUDE.md §Graceful Shutdown
 })
 
 var _ = Describe("calculateSubtreeHeight", func() {
-	newBareSupervisor := func() *Supervisor[*TestObservedState, *TestDesiredState] {
-		return NewSupervisor[*TestObservedState, *TestDesiredState](Config{
+	newBareSupervisor := func() *supervisor.Supervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState] {
+		return supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
 			WorkerType: "heighttest",
-			Store:      CreateTestTriangularStore(),
+			Store:      supervisor.CreateTestTriangularStore(),
 			Logger:     deps.NewNopFSMLogger(),
 		})
 	}
 
-	link := func(parent, child *Supervisor[*TestObservedState, *TestDesiredState], name string) {
-		parent.mu.Lock()
-		defer parent.mu.Unlock()
-
-		parent.children[name] = child
+	link := func(parent, child *supervisor.Supervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState], name string) {
+		parent.TestLinkChild(name, child)
 	}
 
 	It("returns 1 for a supervisor with no children", func() {
-		Expect(newBareSupervisor().calculateSubtreeHeight()).To(Equal(1))
+		Expect(newBareSupervisor().TestCalculateSubtreeHeight()).To(Equal(1))
 	})
 
 	It("takes the max over sibling subtrees, not the sum", func() {
@@ -810,6 +802,6 @@ var _ = Describe("calculateSubtreeHeight", func() {
 		// 1 + max(2, 1) = 3. A max→sum regression would return 4 and arm an
 		// oversized drain budget for every wide tree, invisibly to the
 		// warn-free cascade test above.
-		Expect(root.calculateSubtreeHeight()).To(Equal(3))
+		Expect(root.TestCalculateSubtreeHeight()).To(Equal(3))
 	})
 })

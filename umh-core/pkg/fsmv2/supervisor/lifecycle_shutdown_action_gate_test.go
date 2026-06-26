@@ -25,7 +25,7 @@
 // Two specs constrain the one-line change from both sides: the first proves a
 // mid-action worker reaps under shutdown; the second proves the gate still
 // holds without shutdown, so the bypass is the reason the first reaps.
-package supervisor
+package supervisor_test
 
 import (
 	"context"
@@ -37,6 +37,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
 )
 
@@ -98,7 +99,7 @@ var _ = Describe("Shutdown reap past action gating (ENG-4971)", func() {
 	})
 
 	It("reaps a mid-action worker during the Shutdown() loop instead of timing out", func() {
-		triangularStore := CreateTestTriangularStoreForWorkerType(workerType)
+		triangularStore := supervisor.CreateTestTriangularStoreForWorkerType(workerType)
 		logger := deps.NewJSONFSMLogger(buf, deps.LevelDebug)
 
 		// Short graceful timeout: without the bypass the Shutdown() loop runs to
@@ -107,7 +108,7 @@ var _ = Describe("Shutdown reap past action gating (ENG-4971)", func() {
 		// fires.
 		const gracefulTimeout = 500 * time.Millisecond
 
-		s := NewSupervisor[*TestObservedState, *TestDesiredState](Config{
+		s := supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
 			WorkerType:              workerType,
 			Store:                   triangularStore,
 			Logger:                  logger,
@@ -127,13 +128,13 @@ var _ = Describe("Shutdown reap past action gating (ENG-4971)", func() {
 		// action is pending. The gate then stays armed deterministically, with
 		// no sleep-racing.
 		frozen := time.Now()
-		worker := &TestWorker{
+		worker := &supervisor.TestWorker{
 			InitialState: gatedActionState{},
 			CollectFunc: func(_ context.Context) (fsmv2.ObservedState, error) {
-				return &TestObservedState{
+				return &supervisor.TestObservedState{
 					ID:          workerID,
 					CollectedAt: frozen,
-					Desired:     &TestDesiredState{},
+					Desired:     &supervisor.TestDesiredState{},
 				}, nil
 			},
 		}
@@ -141,7 +142,7 @@ var _ = Describe("Shutdown reap past action gating (ENG-4971)", func() {
 
 		ctx := context.Background()
 		desiredDoc := persistence.Document{
-			FieldID:             workerID,
+			supervisor.FieldID:  workerID,
 			"ShutdownRequested": false,
 			"state":             "running",
 		}
@@ -154,12 +155,7 @@ var _ = Describe("Shutdown reap past action gating (ENG-4971)", func() {
 		defer s.Shutdown() // Idempotent; reaps if an assertion fails early.
 
 		// Worker must be alive first.
-		Eventually(func() int {
-			s.mu.RLock()
-			defer s.mu.RUnlock()
-
-			return len(s.workers)
-		}, 1*time.Second, 10*time.Millisecond).Should(Equal(1))
+		Eventually(s.TestWorkerCount, 1*time.Second, 10*time.Millisecond).Should(Equal(1))
 
 		// Sequence the action BEFORE shutdown: wait until the worker has
 		// dispatched its action and the gate is pending. The frozen timestamp
@@ -176,9 +172,7 @@ var _ = Describe("Shutdown reap past action gating (ENG-4971)", func() {
 		// Without the bypass the action gate blocks Next(), the shutdown check
 		// never runs, and the worker is left resident when the Shutdown() loop
 		// returns.
-		s.mu.RLock()
-		remaining := len(s.workers)
-		s.mu.RUnlock()
+		remaining := s.TestWorkerCount()
 		Expect(remaining).To(Equal(0),
 			"expected the mid-action worker to be reaped during the Shutdown() loop (got %d remaining)", remaining)
 
@@ -198,14 +192,14 @@ var _ = Describe("Shutdown reap past action gating (ENG-4971)", func() {
 	})
 
 	It("holds the action gate when no shutdown is requested so the worker does not progress", func() {
-		triangularStore := CreateTestTriangularStoreForWorkerType(workerType)
+		triangularStore := supervisor.CreateTestTriangularStoreForWorkerType(workerType)
 		logger := deps.NewJSONFSMLogger(buf, deps.LevelDebug)
 
 		// EnableTraceLogging makes the blocked-gate path observable:
 		// action_gating_blocked is logged via logTrace, which only emits when
 		// trace logging is on. The first spec does not need it; this one asserts
 		// the blocked-path log line directly, so it must enable it.
-		s := NewSupervisor[*TestObservedState, *TestDesiredState](Config{
+		s := supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
 			WorkerType:         workerType,
 			Store:              triangularStore,
 			Logger:             logger,
@@ -223,13 +217,13 @@ var _ = Describe("Shutdown reap past action gating (ENG-4971)", func() {
 		// pending the gating predicate currentObsTime.After(lastActionObsTime)
 		// stays false, so the gate holds for as many ticks as we run.
 		frozen := time.Now()
-		worker := &TestWorker{
+		worker := &supervisor.TestWorker{
 			InitialState: gatedActionState{},
 			CollectFunc: func(_ context.Context) (fsmv2.ObservedState, error) {
-				return &TestObservedState{
+				return &supervisor.TestObservedState{
 					ID:          workerID,
 					CollectedAt: frozen,
-					Desired:     &TestDesiredState{},
+					Desired:     &supervisor.TestDesiredState{},
 				}, nil
 			},
 		}
@@ -237,7 +231,7 @@ var _ = Describe("Shutdown reap past action gating (ENG-4971)", func() {
 
 		ctx := context.Background()
 		desiredDoc := persistence.Document{
-			FieldID:             workerID,
+			supervisor.FieldID:  workerID,
 			"ShutdownRequested": false,
 			"state":             "running",
 		}
@@ -250,12 +244,7 @@ var _ = Describe("Shutdown reap past action gating (ENG-4971)", func() {
 		defer s.Shutdown()
 
 		// Worker must be alive first.
-		Eventually(func() int {
-			s.mu.RLock()
-			defer s.mu.RUnlock()
-
-			return len(s.workers)
-		}, 1*time.Second, 10*time.Millisecond).Should(Equal(1))
+		Eventually(s.TestWorkerCount, 1*time.Second, 10*time.Millisecond).Should(Equal(1))
 
 		// Wait until the action is dispatched and the gate is armed. The frozen
 		// timestamp then keeps it armed every following tick.
@@ -278,12 +267,7 @@ var _ = Describe("Shutdown reap past action gating (ENG-4971)", func() {
 		// The worker must stay resident and never reap: with no shutdown the
 		// gatedActionState shutdown branch is unreachable, so SignalNeedsRemoval
 		// is never emitted while the gate holds.
-		Consistently(func() int {
-			s.mu.RLock()
-			defer s.mu.RUnlock()
-
-			return len(s.workers)
-		}, 300*time.Millisecond, 20*time.Millisecond).Should(Equal(1),
+		Consistently(s.TestWorkerCount, 300*time.Millisecond, 20*time.Millisecond).Should(Equal(1),
 			"the worker reaped without a shutdown request, which means the gate did not hold")
 	})
 })
