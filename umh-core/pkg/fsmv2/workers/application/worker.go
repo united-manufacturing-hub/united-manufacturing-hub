@@ -171,12 +171,15 @@ type SupervisorConfig struct {
 	// ForceExit, when non-nil, lets the caller short-circuit the drain phase of
 	// shutdown across the full supervisor hierarchy. cmd/main.go closes this
 	// channel on a second SIGTERM. See supervisor.Config.ForceExit.
-	ForceExit          <-chan struct{}
-	ID                 string
-	Name               string
-	YAMLConfig         string        // Raw YAML containing children specifications
-	TickInterval       time.Duration // Defaults to 100ms
-	EnableTraceLogging bool          // Verbose lifecycle event logging for debugging
+	ForceExit    <-chan struct{}
+	ID           string
+	Name         string
+	YAMLConfig   string        // Raw YAML containing children specifications
+	TickInterval time.Duration // Defaults to 100ms
+	// GracefulShutdownTimeout is the per-level drain base propagated to the whole
+	// subtree. Zero falls back to supervisor.DefaultGracefulShutdownTimeout.
+	GracefulShutdownTimeout time.Duration
+	EnableTraceLogging      bool // Verbose lifecycle event logging for debugging
 }
 
 // NewApplicationSupervisor creates a supervisor with an application worker already added.
@@ -191,14 +194,15 @@ func NewApplicationSupervisor(cfg SupervisorConfig) (*supervisor.Supervisor[fsmv
 		fsmv2.Observation[snapshot.ApplicationStatus],
 		*fsmv2.WrappedDesiredState[snapshot.ApplicationConfig],
 	](supervisor.Config{
-		WorkerType:         workerType,
-		Store:              cfg.Store,
-		Logger:             cfg.Logger,
-		TickInterval:       tickInterval,
-		UserSpec:           config.UserSpec{Config: cfg.YAMLConfig},
-		EnableTraceLogging: cfg.EnableTraceLogging,
-		Dependencies:       cfg.Dependencies,
-		ForceExit:          cfg.ForceExit,
+		WorkerType:              workerType,
+		Store:                   cfg.Store,
+		Logger:                  cfg.Logger,
+		TickInterval:            tickInterval,
+		UserSpec:                config.UserSpec{Config: cfg.YAMLConfig},
+		EnableTraceLogging:      cfg.EnableTraceLogging,
+		Dependencies:            cfg.Dependencies,
+		ForceExit:               cfg.ForceExit,
+		GracefulShutdownTimeout: cfg.GracefulShutdownTimeout,
 	})
 
 	appIdentity := deps.Identity{

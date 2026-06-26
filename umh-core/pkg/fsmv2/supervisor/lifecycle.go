@@ -106,22 +106,34 @@ func (s *Supervisor[TObserved, TDesired]) startWorkerRunners(ctx context.Context
 	}
 }
 
-// Run starts the supervisor and blocks until ctx is canceled, the supervisor
-// stops on its own, or Shutdown is called externally. When ctx is canceled,
-// Run drives a graceful shutdown via Shutdown() before returning. Returns nil
-// on a clean shutdown.
+// Run starts the supervisor and blocks until ctx is canceled or Shutdown is
+// called externally. When ctx is canceled, Run drives a graceful shutdown via
+// Shutdown() before returning. Returns nil on a clean shutdown.
+//
+// Cancelling ctx does NOT stop the tick loop directly: the loop runs on a
+// context detached from the caller's cancellation (context.WithoutCancel),
+// and the cancel is the trigger for an orderly Shutdown executed against the
+// still-live loop. The drain depends on that liveness — only the tick loop
+// reaps workers that signal removal, so a loop sharing the caller's ctx dies
+// on the first cancel and the drain has nothing to reap until the budget
+// (sampled once at Shutdown entry as base × subtree height) expires
+// (ENG-4971). If a worker never signals removal, the supervisor logs
+// graceful_shutdown_timeout and removes it when the level's drain budget
+// expires.
 //
 // Run is the recommended entry point for top-level supervisors (e.g.,
 // cmd/main.go). For child supervisors, parents use StartAsChild instead.
 //
 // Composition:
 //
-//	done := s.Start(ctx)
-//	<-ctx.Done()   // OR <-done if supervisor stops on its own first
-//	s.Shutdown()
+//	done := s.Start(context.WithoutCancel(ctx)) // tick loop detached from caller cancel
+//	<-ctx.Done()   // OR <-done if an external Shutdown() stops the supervisor first
+//	s.Shutdown()   // graceful drain against the live tick loop
 //	<-done         // Shutdown waits for tickLoop; this read is a safe no-op
 func (s *Supervisor[TObserved, TDesired]) Run(ctx context.Context) error {
-	done := s.Start(ctx)
+	// Values are preserved; cancellation AND any caller deadline are discarded.
+	// Shutdown Phase 4 is the sole canceller of the supervisor context (ENG-4971).
+	done := s.Start(context.WithoutCancel(ctx))
 
 	select {
 	case <-ctx.Done():
@@ -133,8 +145,10 @@ func (s *Supervisor[TObserved, TDesired]) Run(ctx context.Context) error {
 
 		return nil
 	case <-done:
-		// tickLoop exited on its own (e.g., panic-circuit open or external stop).
-		// Call Shutdown to clean up executor + collectors (idempotent).
+		// tickLoop exited on its own: an external Shutdown() cancelled the
+		// supervisor context (Phase 4) — the detached loop cannot die via
+		// caller-ctx cancellation. Call Shutdown to clean up executor +
+		// collectors (idempotent).
 		s.Shutdown()
 
 		return nil
@@ -233,6 +247,22 @@ func (s *Supervisor[TObserved, TDesired]) Shutdown() {
 	// Release lock before graceful shutdown operations
 	s.mu.Unlock()
 
+	// Sample the cascaded drain budget once, at entry (pkg/fsmv2/CLAUDE.md
+	// §"Graceful Shutdown Cascading"): base × subtree height, so a leaf keeps
+	// the base budget and every level above adds one base. Sampling before
+	// Phase 2 matters twice over: the synchronous child drains below spend
+	// from this same budget (Phase 3 arms only the remainder, so per-level
+	// budgets do not sum across a chain), and the tickLoop keeps running
+	// during the drain — its shutdown reap (reconcileChildren with nil specs)
+	// prunes s.children mid-cascade, so a later sample could see a shrunken
+	// tree and undersize the budget. The tree can also GROW between sampling
+	// and Phase 2 — the still-running tickLoop can spawn a child that is
+	// absent from both the childrenToShutdown snapshot and the sampled
+	// height, so its later tick-driven drain eats the Phase-3 remainder
+	// uncounted: a known, bounded residual (deferred to ENG-5141).
+	drainBudget := s.gracefulShutdownTimeout * time.Duration(s.calculateSubtreeHeight())
+	drainStart := time.Now()
+
 	if len(childrenToShutdown) > 0 {
 		s.logger.Debug("graceful_shutdown_children_starting",
 			deps.Int("child_count", len(childrenToShutdown)))
@@ -247,9 +277,15 @@ func (s *Supervisor[TObserved, TDesired]) Shutdown() {
 				deps.String("child_name", childName))
 
 			// child.Shutdown() is idempotent (lifecycle.go: see Shutdown's started-flag guard)
-			// and synchronous — bounded by the child's own gracefulShutdownTimeout. Calls
+			// and synchronous — bounded by the child's own cascaded drain budget
+			// (gracefulShutdownTimeout × the child's subtree height). Calls
 			// from this cascade and from later tick-driven reconcileChildren(nil) paths
-			// converge on the same early-return.
+			// converge on the same early-return — which makes this budget blind to
+			// in-flight reap drains: when a tick-goroutine reap entered the child
+			// first, this call returns immediately while the child's real drain
+			// completes inside the tickLoop, absorbed by the Phase-4 join below.
+			// The post-join budget re-check after Phase 4 is what surfaces that
+			// spend.
 			child.Shutdown()
 
 			s.logTrace("lifecycle",
@@ -260,6 +296,23 @@ func (s *Supervisor[TObserved, TDesired]) Shutdown() {
 
 		s.logger.Debug("graceful_shutdown_children_complete")
 	}
+
+	// Phase-2 spend, captured once for both the Phase-3 remainder and the
+	// timeout warn: when child drains pre-spend the budget, the warn must show
+	// how much of the window this level's own workers actually had left —
+	// otherwise an exhausted-by-children level is indistinguishable from a
+	// stuck worker.
+	childDrainElapsed := time.Since(drainStart)
+
+	// Event-name rule, shared by all three warn sites below:
+	// graceful_shutdown_budget_exhausted means the budget was already spent
+	// by child drains before this level's own workers had a window (or, at
+	// the post-join re-check, by drains the Phase-3 timer never saw);
+	// graceful_shutdown_timeout is reserved for a level whose OWN workers
+	// exhausted a budget that was actually available to them. budgetWarned
+	// keeps the post-join re-check from double-reporting an overrun a
+	// drain-loop branch already warned about.
+	budgetWarned := false
 
 	if len(workerIDs) > 0 {
 		s.logger.Debug("graceful_shutdown_workers_starting",
@@ -281,10 +334,20 @@ func (s *Supervisor[TObserved, TDesired]) Shutdown() {
 			}
 		}
 
-		ticker := time.NewTicker(100 * time.Millisecond)
+		ticker := time.NewTicker(drainTickInterval)
 		defer ticker.Stop()
 
-		gracefulTimer := time.NewTimer(s.gracefulShutdownTimeout)
+		// Arm what is left of the cascaded budget at arming time — re-measured
+		// here rather than reusing childDrainElapsed, so the per-worker
+		// requestShutdown store round-trips above are also charged against the
+		// budget. The height factor exists because deeper subtrees imply
+		// parent workers whose own graceful stops take intrinsically longer,
+		// and because on the tick-driven removal cascade (reconciliation.go,
+		// the pendingRemoval reap) a child supervisor's full drain genuinely
+		// nests inside this window. A level that exhausts its budget still
+		// warns and breaks out: a spent budget arms a non-positive timer,
+		// which fires immediately.
+		gracefulTimer := time.NewTimer(drainBudget - time.Since(drainStart))
 		defer gracefulTimer.Stop()
 
 		// Phase 3 drain loop intentionally does NOT watch s.ctx.Done() — Phase 4
@@ -304,9 +367,21 @@ func (s *Supervisor[TObserved, TDesired]) Shutdown() {
 				remainingCount := len(s.workers)
 				s.mu.RUnlock()
 
-				s.logger.SentryWarn(deps.FeatureFSMv2, s.GetHierarchyPath(), "graceful_shutdown_timeout",
-					deps.Duration("timeout", s.gracefulShutdownTimeout),
+				// Event name per the rule above childDrainElapsed: a budget the
+				// children pre-spent is exhaustion, not an own-worker timeout.
+				event := "graceful_shutdown_timeout"
+				if childDrainElapsed >= drainBudget {
+					event = "graceful_shutdown_budget_exhausted"
+				}
+
+				s.logger.SentryWarn(deps.FeatureFSMv2, s.GetHierarchyPath(), event,
+					deps.Duration("timeout", drainBudget),
+					deps.Duration("child_drain_elapsed", childDrainElapsed),
 					deps.Int("remaining_worker_count", remainingCount))
+
+				s.drainTimedOut.Store(true)
+
+				budgetWarned = true
 
 				break drainLoop
 			case <-ticker.C:
@@ -327,9 +402,37 @@ func (s *Supervisor[TObserved, TDesired]) Shutdown() {
 				s.logger.SentryWarn(deps.FeatureFSMv2, s.GetHierarchyPath(), "graceful_shutdown_force_exit",
 					deps.Int("remaining_worker_count", remainingCount))
 
+				// The operator forced the exit; the post-join budget re-check
+				// must not re-report the truncated drain as an overrun.
+				budgetWarned = true
+
 				break drainLoop
 			}
 		}
+	} else if childDrainElapsed >= drainBudget {
+		// No own workers to drain, but the Phase-2 child drains exhausted this
+		// level's budget. Zero workers on a started supervisor is a normal
+		// transient (see tick's no-worker skip in reconciliation.go), so the
+		// exhaustion warn must not hide behind the worker drain: a shutdown
+		// overrun that blows the process's SIGTERM grace would otherwise leave
+		// no Sentry signal at the level that overran. The worker count is
+		// re-read live (mirroring the timer branch): a worker raced in by
+		// handleWorkerRestart after the entry snapshot stays registered and
+		// undrained, and the warn must not claim a clean zero.
+		// Children pre-spent the budget, so the event name is the
+		// exhaustion one (see the rule above childDrainElapsed).
+		s.mu.RLock()
+		remainingCount := len(s.workers)
+		s.mu.RUnlock()
+
+		s.logger.SentryWarn(deps.FeatureFSMv2, s.GetHierarchyPath(), "graceful_shutdown_budget_exhausted",
+			deps.Duration("timeout", drainBudget),
+			deps.Duration("child_drain_elapsed", childDrainElapsed),
+			deps.Int("remaining_worker_count", remainingCount))
+
+		s.drainTimedOut.Store(true)
+
+		budgetWarned = true
 	}
 
 	// Phase 4: Terminate context, wait for tickLoop, stop executor + collectors.
@@ -350,6 +453,10 @@ func (s *Supervisor[TObserved, TDesired]) Shutdown() {
 
 	// Wait for metrics reporter to finish (it exits on ctx.Done())
 	s.metricsWg.Wait()
+
+	// Budget re-check after the Phase-4 joins. See recordPostJoinBudgetOverrun
+	// for why post-join bookkeeping is charged one ticker interval of slack.
+	s.recordPostJoinBudgetOverrun(time.Since(drainStart), drainBudget, childDrainElapsed, budgetWarned)
 
 	// Re-acquire lock for cleanup
 	s.mu.Lock()
@@ -375,6 +482,40 @@ func (s *Supervisor[TObserved, TDesired]) Shutdown() {
 
 	s.logTrace("lifecycle",
 		deps.String("lifecycle_event", "shutdown_complete"))
+}
+
+// recordPostJoinBudgetOverrun runs the Phase-4 post-join budget re-check. A
+// child drain entered first by a tick-goroutine reap early-returns in Phase 2
+// and its real spend completes inside the tickLoop, invisible to the Phase-3
+// timer; only totalDrainElapsed, measured after the joins, catches it. The
+// drain ticker observes reaps at drainTickInterval granularity, so a worker
+// reaped just inside the budget still leaves the tickLoop join and
+// metricsWg.Wait to run after the ticker last fired. That join overhead is
+// charged against one ticker interval of slack (postJoinSlack) so post-join
+// bookkeeping on an otherwise clean drain does not report a budget overrun; a
+// genuine overrun (whole seconds at production budgets) still warns.
+// budgetWarned short-circuits the check when a drain phase already warned.
+func (s *Supervisor[TObserved, TDesired]) recordPostJoinBudgetOverrun(totalDrainElapsed, drainBudget, childDrainElapsed time.Duration, budgetWarned bool) {
+	const postJoinSlack = drainTickInterval
+
+	if budgetWarned || totalDrainElapsed <= drainBudget+postJoinSlack {
+		return
+	}
+
+	s.logger.SentryWarn(deps.FeatureFSMv2, s.GetHierarchyPath(), "graceful_shutdown_budget_exhausted",
+		deps.Duration("timeout", drainBudget),
+		deps.Duration("child_drain_elapsed", childDrainElapsed),
+		deps.Duration("total_drain_elapsed", totalDrainElapsed))
+
+	s.drainTimedOut.Store(true)
+}
+
+// DrainOutcomeClean reports whether the most recent Shutdown drained every
+// worker within its budget. It is false if any drain phase warned
+// graceful_shutdown_timeout or graceful_shutdown_budget_exhausted. Read it
+// after Shutdown returns.
+func (s *Supervisor[TObserved, TDesired]) DrainOutcomeClean() bool {
+	return !s.drainTimedOut.Load()
 }
 
 // startMetricsReporter starts a goroutine that periodically records hierarchy metrics.
@@ -424,6 +565,32 @@ func (s *Supervisor[TObserved, TDesired]) calculateHierarchyDepth() int {
 	return 1 + s.parent.calculateHierarchyDepth()
 }
 
+// calculateSubtreeHeight returns the number of supervisor levels in this
+// supervisor's subtree, including itself. A supervisor with no child
+// supervisors has height 1.
+func (s *Supervisor[TObserved, TDesired]) calculateSubtreeHeight() int {
+	// Copy the children under RLock, then recurse unlocked: LOCK ORDER rule 3
+	// (supervisor.go) forbids holding Supervisor.mu across child method calls.
+	s.mu.RLock()
+
+	children := make([]SupervisorInterface, 0, len(s.children))
+	for _, child := range s.children {
+		children = append(children, child)
+	}
+
+	s.mu.RUnlock()
+
+	height := 1
+
+	for _, child := range children {
+		if h := 1 + child.calculateSubtreeHeight(); h > height {
+			height = h
+		}
+	}
+
+	return height
+}
+
 func (s *Supervisor[TObserved, TDesired]) calculateHierarchySize() int {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -467,6 +634,12 @@ func (s *Supervisor[TObserved, TDesired]) requestShutdown(ctx context.Context, w
 	if !exists {
 		return errors.New("worker not found")
 	}
+
+	// Serialize with the per-tick derive's lifecycle-flag carry-forward so the
+	// derive cannot overwrite this ShutdownRequested write with a stale value
+	// (ENG-4971). See Supervisor.lifecycleFlagMu.
+	s.lifecycleFlagMu.Lock()
+	defer s.lifecycleFlagMu.Unlock()
 
 	// Load current desired state from database
 	var desired TDesired
@@ -691,6 +864,12 @@ func (s *Supervisor[TObserved, TDesired]) setDisabled(ctx context.Context, worke
 		return errors.New("worker not found")
 	}
 
+	// Serialize with the per-tick derive's lifecycle-flag carry-forward so the
+	// derive cannot overwrite this Disabled write with a stale value
+	// (ENG-4971). See Supervisor.lifecycleFlagMu.
+	s.lifecycleFlagMu.Lock()
+	defer s.lifecycleFlagMu.Unlock()
+
 	var desired TDesired
 
 	err := s.store.LoadDesiredTyped(ctx, s.workerType, workerID, &desired)
@@ -753,6 +932,12 @@ func (s *Supervisor[TObserved, TDesired]) SetDisabled(ctx context.Context, disab
 
 // clearShutdownRequested clears the ShutdownRequested flag in storage for restart.
 func (s *Supervisor[TObserved, TDesired]) clearShutdownRequested(ctx context.Context, workerID string) error {
+	// Serialize with the per-tick derive's lifecycle-flag carry-forward so the
+	// derive cannot overwrite this clear with a stale value (ENG-4971).
+	// See Supervisor.lifecycleFlagMu.
+	s.lifecycleFlagMu.Lock()
+	defer s.lifecycleFlagMu.Unlock()
+
 	// Load current desired state
 	var desired TDesired
 	if err := s.store.LoadDesiredTyped(ctx, s.workerType, workerID, &desired); err != nil {
