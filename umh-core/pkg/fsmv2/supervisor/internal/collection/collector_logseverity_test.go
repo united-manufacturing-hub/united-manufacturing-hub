@@ -46,6 +46,7 @@ type severityCapturingLogger struct {
 func (l *severityCapturingLogger) record(level, msg string) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
+
 	l.entries = append(l.entries, logEntry{level: level, msg: msg})
 }
 
@@ -68,11 +69,13 @@ func (l *severityCapturingLogger) With(_ ...deps.Field) deps.FSMLogger { return 
 func (l *severityCapturingLogger) levelFor(msg string) string {
 	l.mu.Lock()
 	defer l.mu.Unlock()
+
 	for _, e := range l.entries {
 		if e.msg == msg {
 			return e.level
 		}
 	}
+
 	return ""
 }
 
@@ -80,11 +83,13 @@ func (l *severityCapturingLogger) levelFor(msg string) string {
 func (l *severityCapturingLogger) has(level, msg string) bool {
 	l.mu.Lock()
 	defer l.mu.Unlock()
+
 	for _, e := range l.entries {
 		if e.level == level && e.msg == msg {
 			return true
 		}
 	}
+
 	return false
 }
 
@@ -124,6 +129,7 @@ var _ = Describe("Collector log severity", func() {
 			Entry("cancelled context (Err()==context.Canceled)", func() (context.Context, context.CancelFunc) {
 				ctx, cancel := context.WithCancel(context.Background())
 				cancel()
+
 				return ctx, func() {}
 			}),
 			Entry("deadline-exceeded context (Err()==context.DeadlineExceeded)", func() (context.Context, context.CancelFunc) {
