@@ -161,9 +161,11 @@ func ConfigDiffRuntime(desired, observed ProtocolConverterServiceConfigRuntime) 
 	if d := comparatorDFC.ConfigDiff(desired.DataflowComponentReadServiceConfig, observed.DataflowComponentReadServiceConfig); d != "" {
 		diff += "ReadDFC: " + d + "\n"
 	}
+
 	if d := comparatorDFC.ConfigDiff(desired.DataflowComponentWriteServiceConfig, observed.DataflowComponentWriteServiceConfig); d != "" {
 		diff += "WriteDFC: " + d + "\n"
 	}
+
 	return diff
 }
 

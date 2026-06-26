@@ -88,6 +88,7 @@ func (c *Comparator) ConfigDiff(desired, observed ProtocolConverterServiceConfig
 	// diff for dfc's
 	comparatorDFC := dataflowcomponentserviceconfig.NewComparator()
 	dfcReadDiff := comparatorDFC.ConfigDiff(dfcReadD, dfcReadO)
+
 	dfcWriteDiff := ""
 	if !reflect.DeepEqual(dfcWriteD, dfcWriteO) {
 		dfcWriteDiff = fmt.Sprintf("WriteDFC: %v vs %v", dfcWriteD, dfcWriteO)

@@ -186,7 +186,6 @@ func (w *PersistenceWorker) CollectObservedState(ctx context.Context, _ fsmv2.De
 func (w *PersistenceWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, error) {
 	if spec == nil {
 		return &fsmv2.WrappedDesiredState[snapshot.PersistenceConfig]{
-			State: fsmv2config.DesiredStateRunning,
 			Config: snapshot.PersistenceConfig{
 				CompactionInterval:  DefaultCompactionInterval,
 				RetentionWindow:     DefaultRetentionWindow,
@@ -224,10 +223,7 @@ func (w *PersistenceWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredS
 		cfg.MaintenanceInterval = DefaultMaintenanceInterval
 	}
 
-	state := cfg.GetState()
-
 	return &fsmv2.WrappedDesiredState[snapshot.PersistenceConfig]{
-		State:  state,
 		Config: cfg,
 	}, nil
 }
@@ -236,6 +232,7 @@ func init() {
 	register.Worker[snapshot.PersistenceConfig, snapshot.PersistenceStatus, *PersistenceDependencies](WorkerTypeName,
 		func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader) (fsmv2.Worker, error) {
 			d := register.GetDeps[*PersistenceDependencies](WorkerTypeName)
+
 			return NewPersistenceWorker(id, logger, sr, d)
 		})
 }

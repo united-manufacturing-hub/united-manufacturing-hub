@@ -330,7 +330,7 @@ var _ = Describe("DeployProtocolConverter", func() {
 			// Execute the action - should fail
 			result, metadata, err := action.Execute()
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("Failed to add protocol converter: mock add protocol converter failure"))
+			Expect(err.Error()).To(ContainSubstring("Failed to add Bridge: mock add protocol converter failure"))
 			Expect(result).To(BeNil())
 			Expect(metadata).To(BeNil())
 

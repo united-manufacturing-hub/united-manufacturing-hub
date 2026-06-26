@@ -80,16 +80,6 @@ func (d *PushDependencies) GetTransport() types.Transport {
 	return d.parentDeps.GetTransport()
 }
 
-// GetJWTToken returns the parent's current JWT token.
-func (d *PushDependencies) GetJWTToken() string {
-	return d.parentDeps.GetJWTToken()
-}
-
-// GetAuthenticatedUUID returns the parent's currently authenticated instance UUID.
-func (d *PushDependencies) GetAuthenticatedUUID() string {
-	return d.parentDeps.GetAuthenticatedUUID()
-}
-
 // RecordTypedError records a typed error for this child, propagates it to the parent
 // transport tracker, and emits a Sentry warning when the failure rate escalates.
 func (d *PushDependencies) RecordTypedError(errType types.ErrorType, retryAfter time.Duration) {
@@ -185,24 +175,6 @@ func (d *PushDependencies) PendingMessageCount() int {
 	defer d.pendingMu.RUnlock()
 
 	return len(d.pendingMessages)
-}
-
-// IsTokenValid reports whether the JWT token exists and has not expired
-// (with a 1-minute safety buffer).
-func (d *PushDependencies) IsTokenValid() bool {
-	token := d.parentDeps.GetJWTToken()
-	if token == "" {
-		return false
-	}
-
-	expiry := d.parentDeps.GetJWTExpiry()
-	if expiry.IsZero() {
-		return false
-	}
-
-	const safetyBuffer = 1 * time.Minute
-
-	return !time.Now().Add(safetyBuffer).After(expiry)
 }
 
 // GetLastRetryAfter returns the retry-after duration from the most recent error.

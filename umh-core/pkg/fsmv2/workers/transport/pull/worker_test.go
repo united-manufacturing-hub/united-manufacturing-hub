@@ -20,6 +20,8 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"gopkg.in/yaml.v3"
+
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	fsmv2config "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	depspkg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
@@ -28,6 +30,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/pull"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/pull/snapshot"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/pull/state"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/types"
 )
 
 var _ fsmv2.Worker = (*pull.PullWorker)(nil)
@@ -127,16 +130,43 @@ var _ = Describe("PullWorker", func() {
 			Expect(typedObs.Status.HasTransport).To(BeTrue())
 		})
 
-		It("should report JWT token availability from parent deps", func() {
-			parentDeps.SetJWT("test-token", time.Now().Add(time.Hour))
-
+		It("HasValidToken is true when the desired AuthSession token is present and unexpired", func() {
+			desired := &fsmv2.WrappedDesiredState[snapshot.PullDesiredState]{
+				Config: snapshot.PullDesiredState{AuthSession: types.AuthSession{Token: "t", Expiry: time.Now().Add(time.Hour)}},
+			}
 			ctx := context.Background()
-			observed, err := worker.CollectObservedState(ctx, nil)
+			observed, err := worker.CollectObservedState(ctx, desired)
 
 			Expect(err).ToNot(HaveOccurred())
 			typedObs, ok := observed.(fsmv2.Observation[snapshot.PullStatus])
 			Expect(ok).To(BeTrue())
 			Expect(typedObs.Status.HasValidToken).To(BeTrue())
+		})
+
+		It("HasValidToken is false when the desired AuthSession token is expired", func() {
+			desired := &fsmv2.WrappedDesiredState[snapshot.PullDesiredState]{
+				Config: snapshot.PullDesiredState{AuthSession: types.AuthSession{Token: "expired-token", Expiry: time.Now().Add(-1 * time.Hour)}},
+			}
+			ctx := context.Background()
+			observed, err := worker.CollectObservedState(ctx, desired)
+
+			Expect(err).ToNot(HaveOccurred())
+			typedObs, ok := observed.(fsmv2.Observation[snapshot.PullStatus])
+			Expect(ok).To(BeTrue())
+			Expect(typedObs.Status.HasValidToken).To(BeFalse())
+		})
+
+		It("HasValidToken is false when the desired AuthSession token is empty", func() {
+			desired := &fsmv2.WrappedDesiredState[snapshot.PullDesiredState]{
+				Config: snapshot.PullDesiredState{AuthSession: types.AuthSession{Token: "", Expiry: time.Now().Add(time.Hour)}},
+			}
+			ctx := context.Background()
+			observed, err := worker.CollectObservedState(ctx, desired)
+
+			Expect(err).ToNot(HaveOccurred())
+			typedObs, ok := observed.(fsmv2.Observation[snapshot.PullStatus])
+			Expect(ok).To(BeTrue())
+			Expect(typedObs.Status.HasValidToken).To(BeFalse())
 		})
 
 		It("should report consecutive errors from child deps", func() {
@@ -187,10 +217,10 @@ var _ = Describe("PullWorker", func() {
 			Expect(desired).NotTo(BeNil())
 			typed, ok := desired.(*fsmv2.WrappedDesiredState[snapshot.PullDesiredState])
 			Expect(ok).To(BeTrue())
-			Expect(typed.GetState()).To(Equal("running"))
+			Expect(typed).NotTo(BeNil())
 		})
 
-		It("should return correct state for valid spec", func() {
+		It("parses a valid spec into a PullDesiredState wrapper without error", func() {
 			spec := fsmv2config.UserSpec{
 				Config:    `state: stopped`,
 				Variables: fsmv2config.VariableBundle{},
@@ -199,13 +229,11 @@ var _ = Describe("PullWorker", func() {
 			desired, err := worker.DeriveDesiredState(spec)
 
 			Expect(err).ToNot(HaveOccurred())
-			Expect(desired).NotTo(BeNil())
-			typedStopped, okStopped := desired.(*fsmv2.WrappedDesiredState[snapshot.PullDesiredState])
-			Expect(okStopped).To(BeTrue())
-			Expect(typedStopped.GetState()).To(Equal("stopped"))
+			_, ok := desired.(*fsmv2.WrappedDesiredState[snapshot.PullDesiredState])
+			Expect(ok).To(BeTrue())
 		})
 
-		It("should return running state for empty config", func() {
+		It("parses empty config into a PullDesiredState wrapper without error", func() {
 			spec := fsmv2config.UserSpec{
 				Config:    "",
 				Variables: fsmv2config.VariableBundle{},
@@ -214,9 +242,8 @@ var _ = Describe("PullWorker", func() {
 			desired, err := worker.DeriveDesiredState(spec)
 
 			Expect(err).ToNot(HaveOccurred())
-			typedRunning, okRunning := desired.(*fsmv2.WrappedDesiredState[snapshot.PullDesiredState])
-			Expect(okRunning).To(BeTrue())
-			Expect(typedRunning.GetState()).To(Equal("running"))
+			_, ok := desired.(*fsmv2.WrappedDesiredState[snapshot.PullDesiredState])
+			Expect(ok).To(BeTrue())
 		})
 
 		It("should be deterministic", func() {
@@ -234,7 +261,7 @@ var _ = Describe("PullWorker", func() {
 			Expect(pullOk1).To(BeTrue())
 			pull2, pullOk2 := desired2.(*fsmv2.WrappedDesiredState[snapshot.PullDesiredState])
 			Expect(pullOk2).To(BeTrue())
-			Expect(pull1.GetState()).To(Equal(pull2.GetState()))
+			Expect(pull1).To(Equal(pull2))
 		})
 
 		It("should return error for invalid spec type", func() {
@@ -252,6 +279,28 @@ var _ = Describe("PullWorker", func() {
 
 			_, err := worker.DeriveDesiredState(spec)
 			Expect(err).To(HaveOccurred())
+		})
+
+		It("should bind AuthSession from parsed ChildAuthUserSpec into PullDesiredState", func() {
+			carrier := types.ChildAuthUserSpec{
+				AuthSession: types.AuthSession{
+					Token: "test-token-pull",
+				},
+			}
+			raw, err := yaml.Marshal(carrier)
+			Expect(err).ToNot(HaveOccurred())
+
+			spec := fsmv2config.UserSpec{
+				Config:    string(raw),
+				Variables: fsmv2config.VariableBundle{},
+			}
+
+			desired, err := worker.DeriveDesiredState(spec)
+
+			Expect(err).ToNot(HaveOccurred())
+			typed, ok := desired.(*fsmv2.WrappedDesiredState[snapshot.PullDesiredState])
+			Expect(ok).To(BeTrue())
+			Expect(typed.Config.AuthSession.Token).To(Equal("test-token-pull"))
 		})
 	})
 

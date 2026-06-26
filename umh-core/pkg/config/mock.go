@@ -35,30 +35,52 @@ import (
 
 // MockConfigManager is a mock implementation of ConfigManager for testing.
 type MockConfigManager struct {
-	CacheModTime                        time.Time
-	ConfigError                         error
-	AddDataflowcomponentError           error
-	DeleteDataflowcomponentError        error
-	EditDataflowcomponentError          error
-	AtomicAddProtocolConverterError     error
-	AtomicEditProtocolConverterError    error
-	AtomicDeleteProtocolConverterError  error
-	AtomicAddStreamProcessorError       error
-	AtomicEditStreamProcessorError      error
-	AtomicDeleteStreamProcessorError    error
-	AtomicAddDataModelError             error
-	AtomicEditDataModelError            error
-	AtomicDeleteDataModelError          error
-	AtomicAddDataContractError          error
-	GetConfigAsStringError              error
-	MockFileSystem                      *filesystem.MockFileSystem
-	logger                              *zap.SugaredLogger
-	ConfigAsString                      string
-	Config                              FullConfig
-	ConfigDelay                         time.Duration
-	mutexReadOrWrite                    sync.Mutex
-	mutexReadAndWrite                   sync.Mutex
-	GetConfigCalled                     int32 // Use atomic int32 for thread safety (0=false, 1=true)
+	CacheModTime                       time.Time
+	ConfigError                        error
+	AddDataflowcomponentError          error
+	DeleteDataflowcomponentError       error
+	EditDataflowcomponentError         error
+	AtomicAddProtocolConverterError    error
+	AtomicEditProtocolConverterError   error
+	AtomicDeleteProtocolConverterError error
+	AtomicAddStreamProcessorError      error
+	AtomicEditStreamProcessorError     error
+	AtomicDeleteStreamProcessorError   error
+	AtomicAddDataModelError            error
+	AtomicEditDataModelError           error
+	AtomicDeleteDataModelError         error
+	AtomicAddDataContractError         error
+	GetConfigAsStringError             error
+	MockFileSystem                     *filesystem.MockFileSystem
+	logger                             *zap.SugaredLogger
+	ConfigAsString                     string
+
+	// AtomicEditProtocolConverterLastConfig records the config passed to the
+	// most recent AtomicEditProtocolConverter call. It is captured before the
+	// failure-injection check, so it reflects the arguments of a failed call too.
+	AtomicEditProtocolConverterLastConfig ProtocolConverterConfig
+	Config                                FullConfig
+	ConfigDelay                           time.Duration
+	// AtomicEditProtocolConverterCallCount counts AtomicEditProtocolConverter
+	// calls, including calls that fail via AtomicEditProtocolConverterError:
+	// the counter increments before the failure-injection check, so failed
+	// calls participate in AtomicEditProtocolConverterFailOnCall's 1-based
+	// numbering.
+	AtomicEditProtocolConverterCallCount int
+	// AtomicEditProtocolConverterFailOnCall, when non-zero, restricts
+	// AtomicEditProtocolConverterError to the call with this 1-based number;
+	// zero fails every call. Failed calls count toward the numbering (see
+	// AtomicEditProtocolConverterCallCount).
+	AtomicEditProtocolConverterFailOnCall int
+
+	mutexReadOrWrite  sync.Mutex
+	mutexReadAndWrite sync.Mutex
+
+	GetConfigCalled int32 // Use atomic int32 for thread safety (0=false, 1=true)
+	// AtomicEditProtocolConverterLastUUID records the component UUID passed to
+	// the most recent AtomicEditProtocolConverter call. It is captured before the
+	// failure-injection check, so it reflects the arguments of a failed call too.
+	AtomicEditProtocolConverterLastUUID uuid.UUID
 	AddDataflowcomponentCalled          bool
 	DeleteDataflowcomponentCalled       bool
 	EditDataflowcomponentCalled         bool
@@ -246,6 +268,17 @@ func (m *MockConfigManager) WithAtomicEditProtocolConverterError(err error) *Moc
 	return m
 }
 
+// WithAtomicEditProtocolConverterFailOnCall restricts AtomicEditProtocolConverterError
+// to the call with the given 1-based number; earlier and later calls succeed.
+func (m *MockConfigManager) WithAtomicEditProtocolConverterFailOnCall(callNumber int) *MockConfigManager {
+	m.mutexReadAndWrite.Lock()
+	defer m.mutexReadAndWrite.Unlock()
+
+	m.AtomicEditProtocolConverterFailOnCall = callNumber
+
+	return m
+}
+
 // WithAtomicDeleteProtocolConverterError configures the mock to return the given error when AtomicDeleteProtocolConverter is called.
 func (m *MockConfigManager) WithAtomicDeleteProtocolConverterError(err error) *MockConfigManager {
 	m.mutexReadAndWrite.Lock()
@@ -337,6 +370,7 @@ func (m *MockConfigManager) ResetCalls() {
 	m.EditDataflowcomponentCalled = false
 	m.AtomicAddProtocolConverterCalled = false
 	m.AtomicEditProtocolConverterCalled = false
+	m.AtomicEditProtocolConverterCallCount = 0
 	m.AtomicDeleteProtocolConverterCalled = false
 	m.AtomicAddStreamProcessorCalled = false
 	m.AtomicEditStreamProcessorCalled = false
@@ -596,8 +630,13 @@ func (m *MockConfigManager) AtomicEditProtocolConverter(ctx context.Context, com
 	defer m.mutexReadAndWrite.Unlock()
 
 	m.AtomicEditProtocolConverterCalled = true
+	m.AtomicEditProtocolConverterCallCount++
+	m.AtomicEditProtocolConverterLastUUID = componentUUID
+	m.AtomicEditProtocolConverterLastConfig = pc
 
-	if m.AtomicEditProtocolConverterError != nil {
+	if m.AtomicEditProtocolConverterError != nil &&
+		(m.AtomicEditProtocolConverterFailOnCall == 0 ||
+			m.AtomicEditProtocolConverterFailOnCall == m.AtomicEditProtocolConverterCallCount) {
 		return ProtocolConverterConfig{}, m.AtomicEditProtocolConverterError
 	}
 

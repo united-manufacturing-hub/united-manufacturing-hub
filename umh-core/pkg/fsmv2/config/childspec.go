@@ -43,25 +43,24 @@ import (
 //
 // Correct lifecycle control:
 //   - ShutdownRequested: Inherited from this type. Set by supervisor for graceful shutdown.
-//   - ParentMappedState: For child workers only. Injected by supervisor from parent's ChildStartStates.
+//   - Disabled: Inherited from this type. Set by the supervisor's disable-mapping pass
+//     from the parent's ChildSpec.Enabled; child workers stay resident in Stopped.
 //
-// The desired lifecycle state ("running"/"stopped") is read from the user spec
-// via BaseUserSpec.GetState() in DeriveDesiredState and stored directly on the
-// outer DesiredState type (not on BaseDesiredState). Callers that used to set
-// BaseDesiredState{State: x} should instead set the State field on the embedding
-// struct (e.g., MyDesiredState{State: x, ...}).
+// The desired lifecycle state ("running"/"stopped") lives on the user spec, not
+// on the DesiredState. Embed BaseUserSpec in your UserSpec config type to inherit
+// GetState(); DeriveDesiredState reads and validates it. As stated above, do not
+// add a State field to your DesiredState — the supervisor drives lifecycle through
+// ShutdownRequested and Disabled and never populates a custom State field.
 //
-// Correct ShouldBeRunning() implementations:
+// Correct ShouldBeRunning() implementation:
 //
-//	// Root/leaf workers (no parent):
 //	func (s *MyDesiredState) ShouldBeRunning() bool {
 //	    return !s.ShutdownRequested
 //	}
 //
-//	// Child workers (have parent):
-//	func (s *MyDesiredState) ShouldBeRunning() bool {
-//	    return !s.ShutdownRequested && s.ParentMappedState == config.DesiredStateRunning
-//	}
+// Child workers do not gate on a parent-supplied field: the supervisor's
+// disable-mapping pass sets Disabled from the parent's ChildSpec.Enabled, and
+// state files route lifecycle through snap.ShouldStop().
 //
 // See ValidateNoCustomLifecycleFields in pkg/fsmv2/internal/validator/snapshot.go for enforcement.
 type BaseDesiredState struct {
@@ -166,31 +165,13 @@ func (u UserSpec) Clone() UserSpec {
 //   - Supervisor handles "how to make it exist"
 //   - Children run independently in their own FSMs
 //
-// # Child Start States
+// # Child Lifecycle Gating
 //
-// ChildStartStates coordinates parent state with child lifecycle.
-//
-// ChildStartStates specifies which parent FSM states cause children to run.
-// When the parent is in a listed state, children run. Otherwise, they stop.
-//
-// INVARIANT: If a parent state checks ChildrenHealthy/ChildrenUnhealthy to gate
-// its own transitions, that state MUST be listed in ChildStartStates. Otherwise,
-// children are mapped to "stopped" and can never satisfy the health check,
-// creating a permanent deadlock.
-//
-// Example use case: Children should only run when parent is in "Running" or "TryingToStart" states.
-//
-// Format:
-//
-//	ChildStartStates: []string{"Running", "TryingToStart"}
-//
-// When to use:
-// - Parent lifecycle controls child lifecycle (children run only in certain parent states)
-// - Simple "run when parent is active" patterns
-//
-// When not to use:
-// - Passing data between states (use VariableBundle instead)
-// - Triggering actions (use signals instead)
+// A child runs while the parent sets ChildSpec.Enabled=true for it. The
+// supervisor's disable-mapping pass translates Enabled into the child's
+// Disabled bit, and state files route lifecycle through snap.ShouldStop().
+// Setting Enabled=false leaves the child resident in Stopped (not despawned);
+// flipping it back to true resumes the child on the next tick.
 //
 // # Dependency Inheritance
 //
@@ -206,7 +187,7 @@ func (u UserSpec) Clone() UserSpec {
 //	    Name:       "mqtt-connection",
 //	    WorkerType: "mqtt_client",
 //	    UserSpec:   UserSpec{Config: "url: tcp://localhost:1883"},
-//	    ChildStartStates: []string{"Running", "TryingToStart"}, // Child runs when parent is active
+//	    Enabled:    true, // Parent wants this child running
 //	}
 //
 // Example - Benthos managing connections and data flows:
@@ -217,25 +198,20 @@ func (u UserSpec) Clone() UserSpec {
 //	        Name:       "modbus-connection",
 //	        WorkerType: "modbus_client",
 //	        UserSpec:   UserSpec{Config: "address: 192.168.1.100:502"},
-//	        // Empty ChildStartStates = child always runs (follows parent's DesiredState.State)
+//	        Enabled:    true,
 //	    },
 //	    {
 //	        Name:       "source-flow",
 //	        WorkerType: "benthos_flow",
 //	        UserSpec:   UserSpec{Config: "input: {...}"},
-//	        ChildStartStates: []string{"Running"}, // Child only runs when parent is Running
+//	        Enabled:    true,
 //	    },
 //	}
 type ChildSpec struct {
-	Dependencies map[string]any `json:"dependencies,omitempty"     yaml:"dependencies,omitempty"` // Additional deps to merge with parent's deps (child overrides parent)
-	UserSpec     UserSpec       `json:"userSpec"                   yaml:"userSpec"`               // Raw user config (input to DeriveDesiredState)
-	Name         string         `json:"name"                       yaml:"name"`                   // Unique name for this child (within parent scope)
-	WorkerType   string         `json:"workerType"                 yaml:"workerType"`             // Type of worker to create (registered worker factory key)
-	// Deprecated. Only the application worker still consumes ChildStartStates
-	// (via computeMappedState in reconciliation.go). Other workers leave it
-	// empty. Remove together with computeMappedState when the application
-	// worker moves to RenderChildren.
-	ChildStartStates []string `json:"childStartStates,omitempty" yaml:"childStartStates,omitempty"` // Parent FSM states where child should run (empty = always run)
+	Dependencies map[string]any `json:"dependencies,omitempty" yaml:"dependencies,omitempty"` // Additional deps to merge with parent's deps (child overrides parent)
+	UserSpec     UserSpec       `json:"userSpec"               yaml:"userSpec"`               // Raw user config (input to DeriveDesiredState)
+	Name         string         `json:"name"                   yaml:"name"`                   // Unique name for this child (within parent scope)
+	WorkerType   string         `json:"workerType"             yaml:"workerType"`             // Type of worker to create (registered worker factory key)
 
 	// Enabled is the parent's per-tick request for this child to run. Zero
 	// value (false) means "stopped but resident" — children stay in Stopped
@@ -258,11 +234,6 @@ func (c ChildSpec) Clone() ChildSpec {
 
 	clone.UserSpec = c.UserSpec.Clone()
 
-	if c.ChildStartStates != nil {
-		clone.ChildStartStates = make([]string, len(c.ChildStartStates))
-		copy(clone.ChildStartStates, c.ChildStartStates)
-	}
-
 	if c.Dependencies != nil {
 		clone.Dependencies = make(map[string]any, len(c.Dependencies))
 		for k, v := range c.Dependencies {
@@ -278,7 +249,7 @@ func (c ChildSpec) Clone() ChildSpec {
 // enabling incremental validation (only re-validate specs whose hash changed).
 //
 // The hash is computed from all relevant fields: Name, WorkerType, UserSpec,
-// ChildStartStates, Enabled, and Dependencies (excluding any unexported fields).
+// Enabled, and Dependencies (excluding any unexported fields).
 //
 // Returns a hex-encoded FNV-1a 64-bit hash string (16 characters) and an error
 // if Variables cannot be marshaled to JSON.
@@ -305,52 +276,18 @@ func (c ChildSpec) Hash() (string, error) {
 	h.Write(varsBytes)
 	h.Write([]byte{0}) // separator
 
-	// Hash ChildStartStates
-	for _, state := range c.ChildStartStates {
-		h.Write([]byte(state))
-		h.Write([]byte{0}) // separator
-	}
-
 	if c.Enabled {
 		h.Write([]byte{1})
 	} else {
 		h.Write([]byte{0})
 	}
+
 	h.Write([]byte{0}) // separator
 
 	// Dependencies contain runtime objects (channels, etc.) that can't be meaningfully hashed,
 	// so we skip them. Changes to dependencies don't require re-validation anyway.
 
 	return fmt.Sprintf("%016x", h.Sum64()), nil
-}
-
-// GetMappedChildState returns the desired state for this child based on the parent's current FSM state.
-//
-// Logic:
-//   - If ChildStartStates is empty: child always runs (returns "running")
-//   - If parentState is in ChildStartStates: child should run (returns "running")
-//   - Otherwise: child should stop (returns "stopped")
-//
-// Example:
-//
-//	spec := ChildSpec{ChildStartStates: []string{"Running", "TryingToStart"}}
-//	spec.GetMappedChildState("Running")        // returns "running"
-//	spec.GetMappedChildState("TryingToStop")   // returns "stopped"
-//	spec.GetMappedChildState("Stopped")        // returns "stopped"
-//
-// Note: This replaces the deprecated StateMapping approach with direct state checks.
-func (c *ChildSpec) GetMappedChildState(parentState string) string {
-	if len(c.ChildStartStates) == 0 {
-		return DesiredStateRunning
-	}
-
-	for _, state := range c.ChildStartStates {
-		if state == parentState {
-			return DesiredStateRunning
-		}
-	}
-
-	return DesiredStateStopped
 }
 
 // ChildInfo provides a read-only snapshot of a child worker's current state.
@@ -381,19 +318,19 @@ type ChildInfo struct {
 //
 // 1. Add fields to your ObservedState to store children info:
 //
-//	type MyObservedState struct {
-//	    ChildrenHealthy   int
-//	    ChildrenUnhealthy int
-//	}
+//			type MyObservedState struct {
+//			    ChildrenHealthy   int
+//			    ChildrenUnhealthy int
+//			}
 //
-//  2. Implement SetChildrenView on your ObservedState (the supervisor calls it
-//     automatically through the ChildrenViewConsumer capability interface):
+//	 2. Implement SetChildrenView on your ObservedState (the supervisor calls it
+//	    automatically through the ChildrenViewConsumer capability interface):
 //
-//     func (o MyObservedState) SetChildrenView(view config.ChildrenView) fsmv2.ObservedState {
-//     o.ChildrenHealthy = view.HealthyCount
-//     o.ChildrenUnhealthy = view.UnhealthyCount
-//     return o
-//     }
+//	    func (o MyObservedState) SetChildrenView(view config.ChildrenView) fsmv2.ObservedState {
+//	    o.ChildrenHealthy = view.HealthyCount
+//	    o.ChildrenUnhealthy = view.UnhealthyCount
+//	    return o
+//	    }
 //
 // 3. Access children info in State.Next() via the snapshot:
 //
@@ -551,8 +488,8 @@ func (d *DesiredState) GetChildrenSpecs() []ChildSpec {
 
 // NewChildSpec creates a typed ChildSpec by marshalling cfg into UserSpec.Config (YAML).
 // Returns an error if YAML marshalling fails (unexpected for static struct types).
-// The ChildStartStates and Dependencies fields are left at their zero values; callers
-// that need them should set them on the returned spec.
+// The Dependencies field is left at its zero value; callers that need it should
+// set it on the returned spec.
 //
 // Use NewChildSpec to build typed child specs from a parent's RenderChildren body:
 //

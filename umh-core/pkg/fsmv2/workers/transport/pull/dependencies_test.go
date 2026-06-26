@@ -247,40 +247,6 @@ var _ = Describe("PullDependencies", func() {
 		})
 	})
 
-	Describe("IsTokenValid", func() {
-		var d *pull.PullDependencies
-
-		BeforeEach(func() {
-			var err error
-			d, err = pull.NewPullDependencies(parentDeps, deps.NewBaseDependencies(logger, nil, identity))
-			Expect(err).NotTo(HaveOccurred())
-		})
-
-		It("should return false when token is empty", func() {
-			Expect(d.IsTokenValid()).To(BeFalse())
-		})
-
-		It("should return false when expiry is zero", func() {
-			parentDeps.SetJWT("some-token", time.Time{})
-			Expect(d.IsTokenValid()).To(BeFalse())
-		})
-
-		It("should return false when token is expired", func() {
-			parentDeps.SetJWT("some-token", time.Now().Add(-10*time.Minute))
-			Expect(d.IsTokenValid()).To(BeFalse())
-		})
-
-		It("should return false when token expires within the safety buffer", func() {
-			parentDeps.SetJWT("some-token", time.Now().Add(30*time.Second))
-			Expect(d.IsTokenValid()).To(BeFalse())
-		})
-
-		It("should return true when token is valid and not near expiry", func() {
-			parentDeps.SetJWT("some-token", time.Now().Add(10*time.Minute))
-			Expect(d.IsTokenValid()).To(BeTrue())
-		})
-	})
-
 	Describe("CheckAndClearOnReset", func() {
 		var d *pull.PullDependencies
 
@@ -345,17 +311,6 @@ var _ = Describe("PullDependencies", func() {
 				newMt := &mockTransport{}
 				parentDeps.SetTransport(newMt)
 				Expect(d.GetTransport()).To(Equal(newMt))
-			})
-		})
-
-		Describe("GetJWTToken", func() {
-			It("should return empty when parent has no token", func() {
-				Expect(d.GetJWTToken()).To(BeEmpty())
-			})
-
-			It("should reflect parent JWT changes", func() {
-				parentDeps.SetJWT("test-token", time.Now().Add(time.Hour))
-				Expect(d.GetJWTToken()).To(Equal("test-token"))
 			})
 		})
 

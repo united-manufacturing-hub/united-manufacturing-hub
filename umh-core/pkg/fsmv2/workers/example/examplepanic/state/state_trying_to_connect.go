@@ -17,8 +17,8 @@ package state
 import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplepanic/action"
 	example_panic "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplepanic"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplepanic/action"
 )
 
 type TryingToConnectState struct {
@@ -29,7 +29,8 @@ func (s *TryingToConnectState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := fsmv2.ConvertWorkerSnapshot[example_panic.ExamplepanicConfig, example_panic.ExamplepanicStatus](snapAny)
 
 	if snap.ShouldStop() {
-		return fsmv2.Transition(&TryingToStopState{}, fsmv2.SignalNone, nil, "Stop required, transitioning to TryingToStop", nil)
+		return fsmv2.Transition(&TryingToStopState{}, fsmv2.SignalNone, nil,
+			"stop required: "+snap.StopReason(), nil)
 	}
 
 	if snap.Status.ConnectionHealth == "healthy" {

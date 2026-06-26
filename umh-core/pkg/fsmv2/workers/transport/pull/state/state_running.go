@@ -43,7 +43,7 @@ func (s *RunningState) Next(snapAny any) fsmv2.NextResult[any, any] {
 
 	if snap.ShouldStop() {
 		return fsmv2.Transition(&StoppingState{}, fsmv2.SignalNone, nil,
-			fmt.Sprintf("stop required: shutdown=%t, parentState(observed)=%s", snap.IsShutdownRequested, snap.ParentMappedState), nil)
+			"stop required: "+snap.StopReason(), nil)
 	}
 
 	if snap.Status.ConsecutiveErrors >= errorDegradedThreshold {
@@ -58,7 +58,9 @@ func (s *RunningState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	}
 
 	if snap.Status.HasTransport && snap.Status.HasValidToken {
-		return fsmv2.Transition(s, fsmv2.SignalNone, &action.PullAction{}, "pulling messages (transport and token available)", nil)
+		return fsmv2.Transition(s, fsmv2.SignalNone, &action.PullAction{
+			JWTToken: snap.Config.AuthSession.Token,
+		}, "pulling messages (transport and token available)", nil)
 	}
 
 	return fsmv2.Transition(s, fsmv2.SignalNone, nil,

@@ -26,8 +26,7 @@ import (
 // The worker is not authenticated and no children are spawned.
 //
 // Transport is a top-level worker, not a child. Reason strings show
-// snap.Config.ShouldBeRunning() and snap.IsShutdownRequested directly;
-// snap.Observed.ParentMappedState is not applicable here (and is deleted in L5b).
+// snap.Config.ShouldBeRunning() and snap.IsShutdownRequested directly.
 type StoppedState struct {
 	helpers.StoppedBase
 }
@@ -38,7 +37,7 @@ func (s *StoppedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 
 	// Stopped emits children with enabled=false (resident, not despawned).
 	// On IsShutdownRequested, SignalNeedsRemoval drives removal so the children arg is ignored.
-	stopChildren, err := snapshot.RenderChildren(snap.Config, false)
+	stopChildren, err := snapshot.RenderChildren(snap.Config, snap.Status, false)
 	if err != nil {
 		stopChildren = nil
 	}
@@ -58,7 +57,7 @@ func (s *StoppedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	if snap.Config.ShouldBeRunning() {
 		// Transitioning to Starting: emit aliveChildren NOW (one tick early)
 		// so the supervisor flips enabled=true before Starting reads its first snapshot.
-		aliveChildren, aerr := snapshot.RenderChildren(snap.Config, true)
+		aliveChildren, aerr := snapshot.RenderChildren(snap.Config, snap.Status, true)
 		if aerr != nil {
 			aliveChildren = nil
 		}

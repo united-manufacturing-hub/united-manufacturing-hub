@@ -34,6 +34,12 @@ const (
 	// PascalCase matches struct tag: `json:"ShutdownRequested"`.
 	FieldShutdownRequested = "ShutdownRequested"
 
+	// FieldDisabled is the resident-disable flag set by the disable-mapping pass.
+	// Like ShutdownRequested, it is a supervisor operation that must be preserved
+	// across DeriveDesiredState re-derivation (workers always re-derive Disabled=false).
+	// PascalCase matches struct tag: `json:"Disabled"`.
+	FieldDisabled = "Disabled"
+
 	// FieldParentID is the parent supervisor ID (renamed from "bridged_by").
 	FieldParentID = "parent_id"
 )

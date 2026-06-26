@@ -20,6 +20,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"gopkg.in/yaml.v3"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	fsmv2config "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
@@ -29,6 +30,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/push"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/push/snapshot"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/push/state"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/types"
 )
 
 var _ fsmv2.Worker = (*push.PushWorker)(nil)
@@ -128,11 +130,12 @@ var _ = Describe("PushWorker", func() {
 			Expect(typedObs.Status.HasTransport).To(BeTrue())
 		})
 
-		It("should report JWT token availability from parent deps", func() {
-			parentDeps.SetJWT("test-token", time.Now().Add(time.Hour))
-
+		It("HasValidToken is true when the desired AuthSession token is present and unexpired", func() {
+			desired := &fsmv2.WrappedDesiredState[snapshot.PushDesiredState]{
+				Config: snapshot.PushDesiredState{AuthSession: types.AuthSession{Token: "t", Expiry: time.Now().Add(time.Hour)}},
+			}
 			ctx := context.Background()
-			observed, err := worker.CollectObservedState(ctx, nil)
+			observed, err := worker.CollectObservedState(ctx, desired)
 
 			Expect(err).ToNot(HaveOccurred())
 			typedObs, ok := observed.(fsmv2.Observation[snapshot.PushStatus])
@@ -140,11 +143,25 @@ var _ = Describe("PushWorker", func() {
 			Expect(typedObs.Status.HasValidToken).To(BeTrue())
 		})
 
-		It("should report HasValidToken false for expired token", func() {
-			parentDeps.SetJWT("expired-token", time.Now().Add(-1*time.Hour))
-
+		It("HasValidToken is false when the desired AuthSession token is expired", func() {
+			desired := &fsmv2.WrappedDesiredState[snapshot.PushDesiredState]{
+				Config: snapshot.PushDesiredState{AuthSession: types.AuthSession{Token: "expired-token", Expiry: time.Now().Add(-1 * time.Hour)}},
+			}
 			ctx := context.Background()
-			observed, err := worker.CollectObservedState(ctx, nil)
+			observed, err := worker.CollectObservedState(ctx, desired)
+
+			Expect(err).ToNot(HaveOccurred())
+			typedObs, ok := observed.(fsmv2.Observation[snapshot.PushStatus])
+			Expect(ok).To(BeTrue())
+			Expect(typedObs.Status.HasValidToken).To(BeFalse())
+		})
+
+		It("HasValidToken is false when the desired AuthSession token is empty", func() {
+			desired := &fsmv2.WrappedDesiredState[snapshot.PushDesiredState]{
+				Config: snapshot.PushDesiredState{AuthSession: types.AuthSession{Token: "", Expiry: time.Now().Add(time.Hour)}},
+			}
+			ctx := context.Background()
+			observed, err := worker.CollectObservedState(ctx, desired)
 
 			Expect(err).ToNot(HaveOccurred())
 			typedObs, ok := observed.(fsmv2.Observation[snapshot.PushStatus])
@@ -180,10 +197,10 @@ var _ = Describe("PushWorker", func() {
 			Expect(desired).NotTo(BeNil())
 			typed, ok := desired.(*fsmv2.WrappedDesiredState[snapshot.PushDesiredState])
 			Expect(ok).To(BeTrue())
-			Expect(typed.GetState()).To(Equal("running"))
+			Expect(typed).NotTo(BeNil())
 		})
 
-		It("should return correct state for valid spec", func() {
+		It("parses a valid spec into a PushDesiredState wrapper without error", func() {
 			spec := fsmv2config.UserSpec{
 				Config:    `state: stopped`,
 				Variables: fsmv2config.VariableBundle{},
@@ -192,13 +209,11 @@ var _ = Describe("PushWorker", func() {
 			desired, err := worker.DeriveDesiredState(spec)
 
 			Expect(err).ToNot(HaveOccurred())
-			Expect(desired).NotTo(BeNil())
-			typedStopped, okStopped := desired.(*fsmv2.WrappedDesiredState[snapshot.PushDesiredState])
-			Expect(okStopped).To(BeTrue())
-			Expect(typedStopped.GetState()).To(Equal("stopped"))
+			_, ok := desired.(*fsmv2.WrappedDesiredState[snapshot.PushDesiredState])
+			Expect(ok).To(BeTrue())
 		})
 
-		It("should return running state for empty config", func() {
+		It("parses empty config into a PushDesiredState wrapper without error", func() {
 			spec := fsmv2config.UserSpec{
 				Config:    "",
 				Variables: fsmv2config.VariableBundle{},
@@ -207,9 +222,8 @@ var _ = Describe("PushWorker", func() {
 			desired, err := worker.DeriveDesiredState(spec)
 
 			Expect(err).ToNot(HaveOccurred())
-			typedRunning, okRunning := desired.(*fsmv2.WrappedDesiredState[snapshot.PushDesiredState])
-			Expect(okRunning).To(BeTrue())
-			Expect(typedRunning.GetState()).To(Equal("running"))
+			_, ok := desired.(*fsmv2.WrappedDesiredState[snapshot.PushDesiredState])
+			Expect(ok).To(BeTrue())
 		})
 
 		It("should be deterministic", func() {
@@ -227,7 +241,7 @@ var _ = Describe("PushWorker", func() {
 			Expect(pdOk1).To(BeTrue())
 			pd2, pdOk2 := desired2.(*fsmv2.WrappedDesiredState[snapshot.PushDesiredState])
 			Expect(pdOk2).To(BeTrue())
-			Expect(pd1.GetState()).To(Equal(pd2.GetState()))
+			Expect(pd1).To(Equal(pd2))
 		})
 
 		It("should return error for invalid spec type", func() {
@@ -235,6 +249,30 @@ var _ = Describe("PushWorker", func() {
 
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("invalid spec type"))
+		})
+
+		It("should bind AuthSession from parsed ChildAuthUserSpec into PushDesiredState", func() {
+			carrier := types.ChildAuthUserSpec{
+				AuthSession: types.AuthSession{
+					Token:        "test-token-push",
+					InstanceUUID: "inst-uuid-push",
+				},
+			}
+			raw, err := yaml.Marshal(carrier)
+			Expect(err).ToNot(HaveOccurred())
+
+			spec := fsmv2config.UserSpec{
+				Config:    string(raw),
+				Variables: fsmv2config.VariableBundle{},
+			}
+
+			desired, err := worker.DeriveDesiredState(spec)
+
+			Expect(err).ToNot(HaveOccurred())
+			typed, ok := desired.(*fsmv2.WrappedDesiredState[snapshot.PushDesiredState])
+			Expect(ok).To(BeTrue())
+			Expect(typed.Config.AuthSession.Token).To(Equal("test-token-push"))
+			Expect(typed.Config.AuthSession.InstanceUUID).To(Equal("inst-uuid-push"))
 		})
 	})
 

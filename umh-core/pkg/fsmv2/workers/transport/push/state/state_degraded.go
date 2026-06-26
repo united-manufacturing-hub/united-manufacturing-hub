@@ -35,7 +35,7 @@ func (s *DegradedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 
 	if snap.ShouldStop() {
 		return fsmv2.Transition(&StoppingState{}, fsmv2.SignalNone, nil,
-			fmt.Sprintf("stop required: shutdown=%t, parentState(observed)=%s", snap.IsShutdownRequested, snap.ParentMappedState), nil)
+			"stop required: "+snap.StopReason(), nil)
 	}
 
 	if snap.Status.ConsecutiveErrors == 0 {
@@ -63,7 +63,10 @@ func (s *DegradedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 					backoffDelay.Round(time.Second)), nil)
 		}
 
-		return fsmv2.Transition(s, fsmv2.SignalNone, &action.PushAction{},
+		return fsmv2.Transition(s, fsmv2.SignalNone, &action.PushAction{
+			JWTToken:     snap.Config.AuthSession.Token,
+			InstanceUUID: snap.Config.AuthSession.InstanceUUID,
+		},
 			fmt.Sprintf("degraded (%d consecutive errors, %d pending), still pushing",
 				snap.Status.ConsecutiveErrors, snap.Status.PendingMessageCount), nil)
 	}

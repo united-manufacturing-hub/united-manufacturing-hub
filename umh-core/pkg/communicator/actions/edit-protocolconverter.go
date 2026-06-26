@@ -37,10 +37,13 @@ import (
 	"reflect"
 	"slices"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/tiendc/go-deepcopy"
+	"go.uber.org/zap"
+
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/protocolconverterserviceconfig"
@@ -52,7 +55,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/protocolconverter/runtime_config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
-	"go.uber.org/zap"
 )
 
 // DFCType represents the type of dataflow component configuration.
@@ -84,6 +86,20 @@ func (d DFCType) IsValid() bool {
 	}
 }
 
+// flowName maps a DFCType to the user-facing noun used in error messages shown
+// in the Management Console. DFC is a legacy internal term; the UI calls these
+// "flow config".
+func (d DFCType) flowName() string {
+	switch d {
+	case DFCTypeRead:
+		return "read flow config"
+	case DFCTypeWrite:
+		return "write flow config"
+	default:
+		return d.String() + " flow config"
+	}
+}
+
 // EditProtocolConverterAction implements the Action interface for editing
 // protocol converter configurations, particularly for adding DFC configurations.
 type EditProtocolConverterAction struct {
@@ -92,8 +108,16 @@ type EditProtocolConverterAction struct {
 	fsmLogger deps.FSMLogger
 	// lastRenderErr holds the most recent renderDesiredDFCConfig error so the
 	// awaitRollout timeout message can surface the real cause instead of just
-	// "did not become active in time".
+	// "did not become active in time". It is sticky: compareSingleDFCConfig
+	// clears it only when a later render succeeds, so ticks that never reach
+	// a render (for example while Benthos restarts) keep the captured cause.
 	lastRenderErr error
+
+	// lastFailedDFCType records which DFC (read/write) produced the most
+	// recent render error. It is set alongside lastRenderErr and used to
+	// embed the flow name in the prose of user-facing error messages without
+	// prefixing the technical detail trail.
+	lastFailedDFCType DFCType
 
 	outboundChannel chan *models.UMHMessage
 	location        map[int]string
@@ -120,6 +144,16 @@ type EditProtocolConverterAction struct {
 
 	templateVars []models.ProtocolConverterVariable
 
+	// tickInterval overrides the awaitRollout poll interval. Zero means
+	// constants.ActionTickerTime; tests inject a shorter interval so the
+	// fail-fast specs do not wait on the 1s production ticker.
+	tickInterval time.Duration
+
+	// awaitTimeout overrides the awaitRollout overall timeout. Zero means
+	// constants.DataflowComponentWaitForActiveTimeout; tests inject a
+	// shorter timeout so timeout-path specs do not wait the full 30s.
+	awaitTimeout time.Duration
+
 	actionUUID   uuid.UUID
 	instanceUUID uuid.UUID
 
@@ -128,6 +162,14 @@ type EditProtocolConverterAction struct {
 
 	// Atomic edit UUID used for configuration updates and rollbacks
 	atomicEditUUID uuid.UUID
+
+	// rolloutSentryReported tells Execute to skip the generic rollout_failed
+	// Sentry event for this abort. Every awaitRollout abort path fires its own
+	// dedicated event; only the render-failure paths (added for ENG-5103) set
+	// this flag and suppress the generic event. The pre-existing paths (plain
+	// timeout, Benthos config error) keep the generic event on top of their
+	// dedicated one for continuity with established alerting.
+	rolloutSentryReported bool
 
 	ignoreHealthCheck bool
 }
@@ -181,12 +223,15 @@ func (a *EditProtocolConverterAction) Parse(payload interface{}) error {
 		if err != nil {
 			return fmt.Errorf("failed to build read DFC configuration: %w", err)
 		}
+
 		a.readDFCSvcCfg = &svcCfg
+
 		a.readDFCState = pcPayload.ReadDFC.State
 		if pcPayload.ReadDFC.IgnoreErrors != nil {
 			a.ignoreHealthCheck = *pcPayload.ReadDFC.IgnoreErrors
 		}
 	}
+
 	if pcPayload.WriteDFCPayload != nil {
 		input := pcPayload.WriteDFCPayload.DataflowComponentWriteConfigInput
 		a.writeDFCInput = &input
@@ -252,9 +297,9 @@ func (a *EditProtocolConverterAction) Execute() (interface{}, map[string]interfa
 	// Send confirmation that action is starting
 	var confirmationMessage string
 	if a.dfcType == DFCTypeEmpty {
-		confirmationMessage = fmt.Sprintf("Starting edit of protocol converter %s to update connection and location", a.protocolConverterUUID)
+		confirmationMessage = fmt.Sprintf("Starting edit of bridge %s to update connection and location", a.protocolConverterUUID)
 	} else {
-		confirmationMessage = fmt.Sprintf("Starting edit of protocol converter %s to add %s DFC", a.protocolConverterUUID, a.dfcType.String())
+		confirmationMessage = fmt.Sprintf("Starting edit of bridge %s to add %s DFC", a.protocolConverterUUID, a.dfcType.String())
 	}
 
 	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionConfirmed,
@@ -264,11 +309,11 @@ func (a *EditProtocolConverterAction) Execute() (interface{}, map[string]interfa
 
 	if a.dfcType != DFCTypeEmpty {
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
-			fmt.Sprintf("Updating protocol converter configuration with %s DFC...", a.dfcType.String()),
+			fmt.Sprintf("Updating bridge configuration with %s DFC...", a.dfcType.String()),
 			a.outboundChannel, models.EditProtocolConverter)
 	} else {
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
-			"Updating protocol converter configuration (connection and location only)...",
+			"Updating bridge configuration (connection and location only)...",
 			a.outboundChannel, models.EditProtocolConverter)
 	}
 
@@ -306,15 +351,22 @@ func (a *EditProtocolConverterAction) Execute() (interface{}, map[string]interfa
 			errorMsg := fmt.Sprintf("Failed during rollout: %v", err)
 			SendActionReplyV2(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
 				errorMsg, errCode, nil, a.outboundChannel, models.EditProtocolConverter, nil)
-			a.fsmLogger.SentryError(deps.FeatureDisableReadFlows, "", err, "edit_protocol_converter_rollout_failed",
-				deps.String("new pcConfig", newSpec.String()),
-				deps.String("old pcConfig", oldConfig.String()))
+			// Every awaitRollout abort path fires its own dedicated Sentry
+			// event. Only the render-failure paths (added for ENG-5103) set
+			// rolloutSentryReported to suppress this generic event; the
+			// pre-existing paths (plain timeout, Benthos config error) keep
+			// it on top for continuity with established alerting.
+			if !a.rolloutSentryReported {
+				a.fsmLogger.SentryError(deps.FeatureDisableReadFlows, "", err, "edit_protocol_converter_rollout_failed",
+					deps.String("new pcConfig", newSpec.String()),
+					deps.String("old pcConfig", oldConfig.String()))
+			}
 
 			return nil, nil, fmt.Errorf("%s", errorMsg)
 		}
 
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
-			"Protocol converter successfully updated", a.outboundChannel, models.EditProtocolConverter)
+			"Bridge successfully updated", a.outboundChannel, models.EditProtocolConverter)
 	}
 
 	newUUID := dataflowcomponentserviceconfig.GenerateUUIDFromName(a.name)
@@ -356,7 +408,7 @@ func (a *EditProtocolConverterAction) applyMutation() (config.ProtocolConverterC
 	}
 
 	if !found {
-		return config.ProtocolConverterConfig{}, uuid.Nil, "", fmt.Errorf("protocol converter with UUID %s not found", a.protocolConverterUUID)
+		return config.ProtocolConverterConfig{}, uuid.Nil, "", fmt.Errorf("bridge with UUID %s not found", a.protocolConverterUUID)
 	}
 
 	// Currently, we cannot reuse templates, so we need to create a new one
@@ -368,28 +420,13 @@ func (a *EditProtocolConverterAction) applyMutation() (config.ProtocolConverterC
 	var (
 		instanceToModify = targetPC
 		atomicEditUUID   = a.protocolConverterUUID
-		newVB            map[string]any
 	)
 
-	// Add the new variables and preserve existing variables
-	newVB = make(map[string]any)
-
-	// First copy existing variables (provides defaults)
-	if targetPC.ProtocolConverterServiceConfig.Variables.User != nil {
-		maps.Copy(newVB, targetPC.ProtocolConverterServiceConfig.Variables.User)
-	}
-
-	// Then add new variables (overwrites with updated values)
-	for _, variable := range a.templateVars {
-		newVB[variable.Label] = variable.Value
-	}
-
-	// As the BuildRuntimeConfig function always adds location and location_path to the user variables,
-	// we need to remove them from the variables here to avoid that they end up in the config file
-	delete(newVB, "location")
-	delete(newVB, "location_path")
-
-	instanceToModify.ProtocolConverterServiceConfig.Variables.User = newVB
+	// Merge template variables, connection IP/PORT, and strip agent-injected
+	// location keys using the shared helper so persist and verify stay in sync.
+	instanceToModify.ProtocolConverterServiceConfig.Variables.User = a.mergeUserVariables(
+		targetPC.ProtocolConverterServiceConfig.Variables.User,
+	)
 
 	// Apply read DFC config if provided.
 	if a.readDFCSvcCfg != nil {
@@ -407,19 +444,6 @@ func (a *EditProtocolConverterAction) applyMutation() (config.ProtocolConverterC
 	instanceToModify.ProtocolConverterServiceConfig.Config.ConnectionServiceConfig = newIPPortConnectionTemplate()
 
 	instanceToModify.ProtocolConverterServiceConfig.Location = convertIntMapToStringMap(a.location)
-
-	// Update the connection details of the protocol converter (IP and PORT variables).
-	// Only overwrite when non-empty: an edit that omits connection details should
-	// preserve the existing values rather than blanking them out.
-	if instanceToModify.ProtocolConverterServiceConfig.Variables.User != nil {
-		if a.connectionIP != "" {
-			instanceToModify.ProtocolConverterServiceConfig.Variables.User["IP"] = a.connectionIP
-		}
-
-		if a.connectionPort != "" && a.connectionPort != "0" {
-			instanceToModify.ProtocolConverterServiceConfig.Variables.User["PORT"] = a.connectionPort
-		}
-	}
 
 	// Only update the per-DFC desired states if the user provided new values.
 	if a.readDFCState != "" {
@@ -483,7 +507,7 @@ func (a *EditProtocolConverterAction) awaitRollout(pcConfig config.ProtocolConve
 		a.actionUUID,
 		models.ActionExecuting,
 		fmt.Sprintf(
-			"Waiting for protocol converter %s to be %s...",
+			"Waiting for bridge %s to be %s...",
 			a.name,
 			desiredPCState,
 		),
@@ -491,17 +515,35 @@ func (a *EditProtocolConverterAction) awaitRollout(pcConfig config.ProtocolConve
 		models.EditProtocolConverter,
 	)
 
-	ticker := time.NewTicker(constants.ActionTickerTime)
+	tickInterval := a.tickInterval
+	if tickInterval == 0 {
+		tickInterval = constants.ActionTickerTime
+	}
+
+	ticker := time.NewTicker(tickInterval)
 	defer ticker.Stop()
 
-	timeout := time.After(constants.DataflowComponentWaitForActiveTimeout)
+	timeoutInterval := a.awaitTimeout
+	if timeoutInterval == 0 {
+		timeoutInterval = constants.DataflowComponentWaitForActiveTimeout
+	}
+
+	timeout := time.After(timeoutInterval)
 	startTime := time.Now()
-	timeoutDuration := constants.DataflowComponentWaitForActiveTimeout
+	timeoutDuration := timeoutInterval
 
 	var (
 		logs     []s6.LogEntry
 		lastLogs []s6.LogEntry
+
+		// Fail-fast on persistent render failures (ENG-5103): a deterministic
+		// render error repeats identically every tick; abort after a few
+		// consecutive identical failures instead of burning the full timeout.
+		prevRenderErrMsg     string
+		identicalRenderFails int
 	)
+
+	const maxIdenticalRenderFails = 3
 
 	for {
 		elapsed := time.Since(startTime)
@@ -511,23 +553,21 @@ func (a *EditProtocolConverterAction) awaitRollout(pcConfig config.ProtocolConve
 		select {
 		case <-timeout:
 			// rollback to previous configuration
-			ctx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
-
-			_, rollbackErr := a.configManager.AtomicEditProtocolConverter(ctx, a.atomicEditUUID, pcConfig)
-			cancel()
+			rollbackErr := a.rollbackEdit(pcConfig)
 			if rollbackErr != nil {
 				a.actionLogger.Errorf("Failed to rollback to previous configuration: %v", rollbackErr)
-				stateMessage := fmt.Sprintf("Protocol converter '%s' edit timeout reached. It did not become %s in time. Rolling back to previous configuration failed: %v", a.name, desiredPCState, rollbackErr)
+				stateMessage := fmt.Sprintf("Bridge '%s' edit timeout reached. It did not become %s in time. Rolling back to previous configuration failed: %v", a.name, desiredPCState, rollbackErr)
 				a.fsmLogger.SentryError(deps.FeatureDisableReadFlows, "", rollbackErr, "edit_protocol_converter_rollback_failed",
 					deps.String("pcConfig", pcConfig.String()))
 
 				return models.ErrRetryRollbackTimeout, fmt.Errorf("%s", stateMessage)
 			}
 
-			stateMessage := fmt.Sprintf("Protocol converter '%s' edit timeout reached. It did not become %s in time. Rolled back to previous configuration", a.name, desiredPCState)
+			stateMessage := fmt.Sprintf("Bridge '%s' edit timeout reached. It did not become %s in time. Rolled back to previous configuration", a.name, desiredPCState)
 			if a.lastRenderErr != nil {
 				stateMessage += fmt.Sprintf(" (root cause: %v)", a.lastRenderErr)
 			}
+
 			a.fsmLogger.SentryWarn(deps.FeatureDisableReadFlows, "", "edit_protocol_converter_rollback_on_timeout",
 				deps.String("pcConfig", pcConfig.String()),
 				deps.String("desiredPCState", desiredPCState),
@@ -546,7 +586,7 @@ func (a *EditProtocolConverterAction) awaitRollout(pcConfig config.ProtocolConve
 					a.userEmail,
 					a.actionUUID,
 					models.ActionExecuting,
-					RemainingPrefixSec(remainingSeconds)+"waiting for protocol converter manager to initialise",
+					RemainingPrefixSec(remainingSeconds)+"waiting for bridge manager to initialise",
 					a.outboundChannel,
 					models.EditProtocolConverter,
 				)
@@ -571,7 +611,7 @@ func (a *EditProtocolConverterAction) awaitRollout(pcConfig config.ProtocolConve
 						a.userEmail,
 						a.actionUUID,
 						models.ActionExecuting,
-						RemainingPrefixSec(remainingSeconds)+"waiting for state info of protocol converter instance",
+						RemainingPrefixSec(remainingSeconds)+"waiting for state info of bridge instance",
 						a.outboundChannel,
 						models.EditProtocolConverter,
 					)
@@ -648,7 +688,7 @@ func (a *EditProtocolConverterAction) awaitRollout(pcConfig config.ProtocolConve
 				}
 
 				// When desired state is "stopped", the Benthos process is not running so
-				// compareProtocolConverterDFCConfig always returns false (observed Input is nil).
+				// compareProtocolConverterDFCConfig returns false (observed config not populated).
 				// Check the state first to avoid an infinite loop in this case.
 				if desiredPCState == protocolconverter.OperationalStateStopped {
 					if instance.CurrentState == protocolconverter.OperationalStateStopped {
@@ -657,7 +697,7 @@ func (a *EditProtocolConverterAction) awaitRollout(pcConfig config.ProtocolConve
 							a.userEmail,
 							a.actionUUID,
 							models.ActionExecuting,
-							RemainingPrefixSec(remainingSeconds)+"protocol converter successfully stopped",
+							RemainingPrefixSec(remainingSeconds)+"bridge successfully stopped",
 							a.outboundChannel,
 							models.EditProtocolConverter,
 						)
@@ -684,18 +724,107 @@ func (a *EditProtocolConverterAction) awaitRollout(pcConfig config.ProtocolConve
 				// Verify that the protocol converter has applied the desired DFC configuration.
 				// We compare the desired DFC config with the observed DFC configuration
 				// in the protocol converter snapshot.
-				if !a.compareProtocolConverterDFCConfig(pcSnapshot) {
+				matched, renderErr := a.compareProtocolConverterDFCConfig(pcSnapshot)
+
+				// Any tick whose comparison runs without a render failure,
+				// because it succeeded or failed for a non-render reason such
+				// as Benthos still restarting, breaks the consecutive streak.
+				// Ticks that skip the comparison entirely (manager missing,
+				// instance missing, or the LastObservedState cast failing)
+				// leave the streak untouched, so identical failures spanning
+				// such gaps still count as consecutive. A comparison that
+				// reaches compareSingleDFCConfig without a render failure,
+				// including one where the observed Input or Output is nil
+				// because Benthos is stopped or restarting, resets the streak
+				// by design via the renderErr == nil branch below.
+				if renderErr == nil {
+					prevRenderErrMsg = ""
+					identicalRenderFails = 0
+				}
+
+				if !matched {
+					if renderErr != nil {
+						if renderErr.Error() == prevRenderErrMsg {
+							identicalRenderFails++
+						} else {
+							prevRenderErrMsg = renderErr.Error()
+							identicalRenderFails = 1
+						}
+
+						if identicalRenderFails >= maxIdenticalRenderFails {
+							SendActionReply(
+								a.instanceUUID,
+								a.userEmail,
+								a.actionUUID,
+								models.ActionExecuting,
+								Label("edit", a.name)+"persistent render failure detected. Rolling back...",
+								a.outboundChannel,
+								models.EditProtocolConverter,
+							)
+
+							rollbackErr := a.rollbackEdit(pcConfig)
+							if rollbackErr != nil {
+								a.actionLogger.Errorf("failed to roll back protocol converter %s: %v", a.name, rollbackErr)
+								a.fsmLogger.SentryError(deps.FeatureDisableReadFlows, "", rollbackErr, "edit_protocol_converter_render_failure_rollback_failed",
+									deps.String("protocolConverter", a.name),
+									deps.String("protocolConverterUUID", a.protocolConverterUUID.String()),
+									deps.String("renderErr", renderErr.Error()))
+
+								a.rolloutSentryReported = true
+
+								flowName := a.lastFailedDFCType.flowName()
+								detail := renderErrUserDetail(renderErr)
+
+								return models.ErrRetryRollbackTimeout, fmt.Errorf(
+									"bridge '%s' couldn't be updated and the automatic rollback also failed, so it may need manual recovery. The new %s isn't valid YAML. Fix the highlighted line and try again.\n\n%s",
+									a.name, flowName, detail,
+								)
+							}
+
+							a.fsmLogger.SentryWarn(deps.FeatureDisableReadFlows, "", "edit_protocol_converter_render_failure_rolled_back",
+								deps.String("protocolConverter", a.name),
+								deps.String("protocolConverterUUID", a.protocolConverterUUID.String()),
+								deps.String("renderErr", renderErr.Error()))
+
+							a.rolloutSentryReported = true
+
+							flowName := a.lastFailedDFCType.flowName()
+							detail := renderErrUserDetail(renderErr)
+
+							return models.ErrConfigFileInvalid, fmt.Errorf(
+								"bridge '%s' was restored to its previous working configuration because the new %s isn't valid YAML. Fix the highlighted line and try again.\n\n%s",
+								a.name, flowName, detail,
+							)
+						}
+					}
+
+					// Build the per-tick progress message. In the original ENG-5103
+					// incident the FSM status reason stayed empty for 30 seconds, so
+					// when this tick produced a render failure we append the first
+					// line of the render error to name the cause from the first
+					// failing tick. This append contributes only the first line,
+					// never the multi-line rendered-output snippet; the full snippet
+					// arrives once in the terminal message. The status reason itself
+					// may still carry the snippet when the FSM's own reconcile
+					// failure sets it (pkg/fsm/protocolconverter/actions.go).
+					notYetMsg := fmt.Sprintf(
+						"%s not yet applied. State: %s, Status reason: %s",
+						a.dfcType.flowName(),
+						instance.CurrentState,
+						pcSnapshot.ServiceInfo.StatusReason,
+					)
+
+					if renderErr != nil {
+						firstLine, _, _ := strings.Cut(renderErrUserDetail(renderErr), "\n")
+						notYetMsg += "; Render failed: " + firstLine
+					}
+
 					SendActionReply(
 						a.instanceUUID,
 						a.userEmail,
 						a.actionUUID,
 						models.ActionExecuting,
-						RemainingPrefixSec(remainingSeconds)+fmt.Sprintf(
-							"%s DFC config not yet applied. State: %s, Status reason: %s",
-							a.dfcType.String(),
-							instance.CurrentState,
-							pcSnapshot.ServiceInfo.StatusReason,
-						),
+						RemainingPrefixSec(remainingSeconds)+notYetMsg,
 						a.outboundChannel,
 						models.EditProtocolConverter,
 					)
@@ -732,7 +861,7 @@ func (a *EditProtocolConverterAction) awaitRollout(pcConfig config.ProtocolConve
 						a.actionUUID,
 						models.ActionExecuting,
 						RemainingPrefixSec(remainingSeconds)+fmt.Sprintf(
-							"protocol converter successfully %s with state '%s', %s DFC configuration verified",
+							"bridge successfully %s with state '%s', %s DFC configuration verified",
 							terminal,
 							instance.CurrentState,
 							a.dfcType.String(),
@@ -779,24 +908,21 @@ func (a *EditProtocolConverterAction) awaitRollout(pcConfig config.ProtocolConve
 						models.EditProtocolConverter,
 					)
 
-					ctx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
-
 					a.actionLogger.Infof("rolling back to previous configuration with user variables: %v", pcConfig.ProtocolConverterServiceConfig.Variables.User)
 
-					_, err := a.configManager.AtomicEditProtocolConverter(ctx, a.atomicEditUUID, pcConfig)
-					cancel()
+					err := a.rollbackEdit(pcConfig)
 					if err != nil {
 						a.actionLogger.Errorf("failed to roll back protocol converter %s: %v", a.name, err)
 						a.fsmLogger.SentryError(deps.FeatureDisableReadFlows, "", err, "edit_protocol_converter_config_error_rollback_failed",
 							deps.String("pcConfig", pcConfig.String()))
 
-						return models.ErrConfigFileInvalid, fmt.Errorf("protocol converter '%s' has invalid configuration but could not be rolled back: %w. Please check your logs and consider manually restoring the previous configuration", a.name, err)
+						return models.ErrConfigFileInvalid, fmt.Errorf("bridge '%s' has invalid configuration but could not be rolled back: %w. Please check your logs and consider manually restoring the previous configuration", a.name, err)
 					}
 
 					a.fsmLogger.SentryWarn(deps.FeatureDisableReadFlows, "", "edit_protocol_converter_config_error_rolled_back",
 						deps.String("pcConfig", pcConfig.String()))
 
-					return models.ErrConfigFileInvalid, fmt.Errorf("protocol converter '%s' was rolled back to its previous configuration due to configuration errors. Please check the component logs, fix the configuration issues, and try editing again", a.name)
+					return models.ErrConfigFileInvalid, fmt.Errorf("bridge '%s' was rolled back to its previous configuration due to configuration errors. Please check the component logs, fix the configuration issues, and try editing again", a.name)
 				}
 
 				SendActionReply(
@@ -816,7 +942,7 @@ func (a *EditProtocolConverterAction) awaitRollout(pcConfig config.ProtocolConve
 					a.userEmail,
 					a.actionUUID,
 					models.ActionExecuting,
-					RemainingPrefixSec(remainingSeconds)+"waiting for protocol converter to appear in the system",
+					RemainingPrefixSec(remainingSeconds)+"waiting for bridge to appear in the system",
 					a.outboundChannel,
 					models.EditProtocolConverter,
 				)
@@ -825,36 +951,58 @@ func (a *EditProtocolConverterAction) awaitRollout(pcConfig config.ProtocolConve
 	}
 }
 
+// rollbackEdit restores the pre-edit configuration via the same
+// AtomicEditProtocolConverter call that persisted the edit. Every awaitRollout
+// abort path shares it so a change to the rollback semantics lands in one
+// place; the error codes and Sentry events stay at the call sites because
+// they intentionally differ per abort reason.
+func (a *EditProtocolConverterAction) rollbackEdit(pcConfig config.ProtocolConverterConfig) error {
+	ctx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
+	defer cancel()
+
+	_, err := a.configManager.AtomicEditProtocolConverter(ctx, a.atomicEditUUID, pcConfig)
+
+	return err
+}
+
 // compareProtocolConverterDFCConfig compares the desired DFC configuration with the observed
 // DFC configuration in the protocol converter snapshot.
-func (a *EditProtocolConverterAction) compareProtocolConverterDFCConfig(pcSnapshot *protocolconverter.ProtocolConverterObservedStateSnapshot) bool {
+// It returns whether the configurations match and, when the mismatch was caused
+// by a render failure, the render error.
+func (a *EditProtocolConverterAction) compareProtocolConverterDFCConfig(pcSnapshot *protocolconverter.ProtocolConverterObservedStateSnapshot) (bool, error) {
 	if pcSnapshot == nil {
-		return false
+		return false, nil
 	}
 
 	switch a.dfcType {
 	case DFCTypeEmpty:
-		return true
+		return true, nil
 	case DFCTypeRead:
 		return a.compareSingleDFCConfig(pcSnapshot, DFCTypeRead)
 	case DFCTypeWrite:
 		return a.compareSingleDFCConfig(pcSnapshot, DFCTypeWrite)
 	case DFCTypeBoth:
-		return a.compareSingleDFCConfig(pcSnapshot, DFCTypeRead) &&
-			a.compareSingleDFCConfig(pcSnapshot, DFCTypeWrite)
+		readMatched, readRenderErr := a.compareSingleDFCConfig(pcSnapshot, DFCTypeRead)
+		if !readMatched {
+			return false, readRenderErr
+		}
+
+		return a.compareSingleDFCConfig(pcSnapshot, DFCTypeWrite)
 	default:
-		return false
+		return false, nil
 	}
 }
 
 // compareSingleDFCConfig compares a single DFC (read or write) against its observed state.
-func (a *EditProtocolConverterAction) compareSingleDFCConfig(pcSnapshot *protocolconverter.ProtocolConverterObservedStateSnapshot, dfcType DFCType) bool {
+// It returns whether the configurations match and, when the mismatch was caused
+// by a render failure, the render error.
+func (a *EditProtocolConverterAction) compareSingleDFCConfig(pcSnapshot *protocolconverter.ProtocolConverterObservedStateSnapshot, dfcType DFCType) (bool, error) {
 	var (
 		desiredState      string
 		observedFSMState  string
 		observedDFCConfig dataflowcomponentserviceconfig.DataflowComponentServiceConfig
-		presenceField     interface{} // the field that indicates the observed config is available
-		excludeInput      bool        // true for write DFC (input is auto-generated)
+		hasObservedConfig bool // true when the observed Benthos config is populated
+		excludeInput      bool // true for write DFC (input is auto-generated)
 	)
 
 	switch dfcType {
@@ -862,34 +1010,45 @@ func (a *EditProtocolConverterAction) compareSingleDFCConfig(pcSnapshot *protoco
 		desiredState = a.readDFCState
 		observedFSMState = pcSnapshot.ServiceInfo.DataflowComponentReadFSMState
 		obs := pcSnapshot.ServiceInfo.DataflowComponentReadObservedState.ServiceInfo.BenthosObservedState.ObservedBenthosServiceConfig
-		presenceField = obs.Input
+		hasObservedConfig = obs.Input != nil
 		observedDFCConfig = observedBenthosToServiceConfig(obs)
 	case DFCTypeWrite:
 		desiredState = a.writeDFCState
 		observedFSMState = pcSnapshot.ServiceInfo.DataflowComponentWriteFSMState
 		obs := pcSnapshot.ServiceInfo.DataflowComponentWriteObservedState.ServiceInfo.BenthosObservedState.ObservedBenthosServiceConfig
-		presenceField = obs.Output
+		hasObservedConfig = obs.Output != nil
 		observedDFCConfig = observedBenthosToServiceConfig(obs)
 		excludeInput = true
 	default:
-		return false
+		return false, nil
 	}
 
 	// When DFC is being stopped, check FSM state instead of Benthos config.
 	if desiredState == protocolconverter.OperationalStateStopped {
-		return observedFSMState == protocolconverter.OperationalStateStopped
+		return observedFSMState == protocolconverter.OperationalStateStopped, nil
 	}
 
-	if presenceField == nil {
-		return false
+	// While Benthos is stopped or restarting the observed config is not
+	// populated yet. Skip the render entirely: rendering against the
+	// not-yet-populated observed state fails for reasons unrelated to the
+	// edit and must not count toward the fail-fast streak or overwrite
+	// lastRenderErr.
+	if !hasObservedConfig {
+		return false, nil
 	}
 
 	renderedDesiredConfig, err := a.renderDesiredDFCConfig(pcSnapshot, dfcType)
 	if err != nil {
 		a.actionLogger.Errorf("failed to render desired %s DFC config: %v", dfcType, err)
 		a.lastRenderErr = err
-		return false
+		a.lastFailedDFCType = dfcType
+
+		return false, err
 	}
+
+	// The render succeeded: clear the sticky root cause so a stale render
+	// error cannot leak into a later timeout message.
+	a.lastRenderErr = nil
 
 	// Exclude the auto-generated field (output for read, input for write) from comparison.
 	if excludeInput {
@@ -903,7 +1062,49 @@ func (a *EditProtocolConverterAction) compareSingleDFCConfig(pcSnapshot *protoco
 	a.actionLogger.Debugf("observed %s DFC config: %+v", dfcType, observedDFCConfig)
 	a.actionLogger.Debugf("rendered desired %s DFC config: %+v", dfcType, renderedDesiredConfig)
 
-	return dataflowcomponentserviceconfig.NewComparator().ConfigsEqual(observedDFCConfig, renderedDesiredConfig)
+	return dataflowcomponentserviceconfig.NewComparator().ConfigsEqual(observedDFCConfig, renderedDesiredConfig), nil
+}
+
+// mergeUserVariables produces the authoritative variable map for an edit, starting
+// from base (the caller-supplied existing User map), overlaying the edit's
+// templateVars, deleting the location/location_path keys, and finally overlaying
+// connectionIP as "IP" and connectionPort as "PORT" when those fields are
+// non-empty (and PORT is not "0"). The delete strips agent-injected copies (and
+// any templateVar-supplied copies) so they are not persisted to config.yaml; on
+// the verify path BuildRuntimeConfig overwrites these keys after the merge
+// regardless.
+//
+// Both applyMutation (persist path) and renderDesiredDFCConfig (verify path) call
+// this helper so their variable scopes cannot drift.  base is never modified;
+// the returned map is always a fresh allocation.
+func (a *EditProtocolConverterAction) mergeUserVariables(base map[string]any) map[string]any {
+	merged := make(map[string]any)
+
+	if base != nil {
+		maps.Copy(merged, base)
+	}
+
+	for _, variable := range a.templateVars {
+		merged[variable.Label] = variable.Value
+	}
+
+	// BuildRuntimeConfig always injects location and location_path into the
+	// template scope; strip them here so they do not end up persisted in
+	// config.yaml.
+	delete(merged, "location")
+	delete(merged, "location_path")
+
+	// Only overwrite when non-empty: an edit that omits connection details
+	// preserves the existing values rather than blanking them out.
+	if a.connectionIP != "" {
+		merged["IP"] = a.connectionIP
+	}
+
+	if a.connectionPort != "" && a.connectionPort != "0" {
+		merged["PORT"] = a.connectionPort
+	}
+
+	return merged
 }
 
 // renderDesiredDFCConfig renders the template variables in the desired DFC config
@@ -933,6 +1134,17 @@ func (a *EditProtocolConverterAction) renderDesiredDFCConfig(pcSnapshot *protoco
 	if a.writeDFCInput != nil && a.writeDFCInput.HasOutput() {
 		modifiedSpec.Config.DataflowComponentWriteServiceConfig = *a.writeDFCInput
 	}
+
+	// Render with the same variable merge that applyMutation persists:
+	// mergeUserVariables overlays templateVars, strips agent-injected location
+	// keys, and overlays connectionIP/PORT.  The observed spec lags the
+	// persisted edit by one or more control-loop cycles (multiple seconds under
+	// CPU pressure), so an edit that introduces a new variable — or changes only
+	// the connection IP — referenced by its DFC would fail this verification
+	// render with a missingkey error on every tick until the snapshot catches up,
+	// and the fail-fast abort would roll back a valid edit.  Variables the edit
+	// does not carry keep their observed values.
+	modifiedSpec.Variables.User = a.mergeUserVariables(modifiedSpec.Variables.User)
 
 	systemSnapshot := a.systemSnapshotManager.GetDeepCopySnapshot()
 
@@ -1011,23 +1223,29 @@ func (a *EditProtocolConverterAction) deriveDFCType() DFCType {
 	for _, v := range a.templateVars {
 		incomingVars[v.Label] = v.Value
 	}
+
 	if a.connectionIP != "" {
 		incomingVars["IP"] = a.connectionIP
 	}
+
 	if a.connectionPort != "" && a.connectionPort != "0" {
 		incomingVars["PORT"] = a.connectionPort
 	}
 
 	connectionChanged := false
+
 	for k, incomingVal := range incomingVars {
 		if deployedVal, ok := deployedVars[k]; ok {
 			if fmt.Sprint(deployedVal) != fmt.Sprint(incomingVal) {
 				a.actionLogger.Debugf("Variable %q changed (%v → %v), all present DFCs need redeploy", k, deployedVal, incomingVal)
+
 				connectionChanged = true
+
 				break
 			}
 		}
 	}
+
 	if connectionChanged {
 		return dfcTypeFromPresence(hasRead, hasWrite)
 	}
@@ -1064,6 +1282,7 @@ func (a *EditProtocolConverterAction) readDFCSvcCfgDiffers(
 	if incomingState != "" && deployedState != "" && incomingState != deployedState {
 		return true
 	}
+
 	return !deployedConfig.Equal(incoming)
 }
 
@@ -1091,9 +1310,11 @@ func normalizeWriteConfigInput(c dataflowcomponentserviceconfig.DataflowComponen
 	if c.Processing.Code == "" {
 		c.Processing.Code = "return msg;"
 	}
+
 	if c.Processing.Type == "" {
 		c.Processing.Type = "nodered_js"
 	}
+
 	return c
 }
 
@@ -1130,4 +1351,19 @@ func (a *EditProtocolConverterAction) GetDFCType() string {
 // GetDesiredWriteDFCConfig returns the raw write DFC input config - exposed for testing purposes.
 func (a *EditProtocolConverterAction) GetDesiredWriteDFCConfig() *dataflowcomponentserviceconfig.DataflowComponentWriteConfigInput {
 	return a.writeDFCInput
+}
+
+// renderErrUserDetail returns the clean detail lines to embed in a
+// user-facing error message for a render failure. When err is a
+// *config.TemplateRenderError the output is the raw YAML error followed
+// by the rendered-region snippet (no "failed to render template as valid
+// YAML" wrapper). For any other error type the full error string is
+// returned unchanged so no information is lost.
+func renderErrUserDetail(err error) string {
+	var tre *config.TemplateRenderError
+	if errors.As(err, &tre) {
+		return tre.YAMLErr.Error() + tre.Snippet
+	}
+
+	return err.Error()
 }

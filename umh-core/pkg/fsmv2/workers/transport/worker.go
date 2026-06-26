@@ -131,11 +131,10 @@ func (w *TransportWorker) CollectObservedState(ctx context.Context, _ fsmv2.Desi
 	d := w.GetDependencies()
 
 	failedToken, failedRelay, failedUUID := d.GetFailedAuthConfig()
+	as := d.GetAuthSession()
 
 	status := snapshot.TransportStatus{
-		JWTToken:          d.GetJWTToken(),
-		JWTExpiry:         d.GetJWTExpiry(),
-		AuthenticatedUUID: d.GetAuthenticatedUUID(),
+		AuthSession:       as,
 		ConsecutiveErrors: d.GetConsecutiveErrors(),
 		LastErrorType:     d.GetLastErrorType(),
 		LastAuthAttemptAt: d.GetLastAuthAttemptAt(),
@@ -161,7 +160,6 @@ func (w *TransportWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredSta
 	// a real spec is parsed.
 	if spec == nil {
 		return &fsmv2.WrappedDesiredState[snapshot.TransportDesiredState]{
-			State:  config.DesiredStateRunning,
 			Config: snapshot.TransportDesiredState{},
 		}, nil
 	}
@@ -203,9 +201,7 @@ func (w *TransportWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredSta
 		}
 	}
 
-	// Build desired state with valid state values only ("stopped" or "running")
 	return &fsmv2.WrappedDesiredState[snapshot.TransportDesiredState]{
-		State: transportSpec.GetState(),
 		Config: snapshot.TransportDesiredState{
 			RelayURL:     transportSpec.RelayURL,
 			InstanceUUID: transportSpec.InstanceUUID,
@@ -231,7 +227,9 @@ func init() {
 			if err != nil {
 				return nil, err
 			}
+
 			register.SetDeps[*TransportDependencies](transportDepsKey, w.GetDependencies())
+
 			return w, nil
 		})
 }

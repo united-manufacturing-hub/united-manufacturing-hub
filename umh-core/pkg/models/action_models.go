@@ -17,6 +17,7 @@ package models
 import (
 	"github.com/Masterminds/semver/v3"
 	"github.com/google/uuid"
+
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 )
 
@@ -771,6 +772,11 @@ const (
 	// ErrRetryRollbackTimeout is the error code for a timeout during the dfc deployment.
 	// It is retryable because the timeout might be caused by a busy system.
 	ErrRetryRollbackTimeout = "ERR_RETRY_ROLLBACK_TIMEOUT"
+	// ErrDeployTimeout is the error code for a deploy that did not reach its
+	// desired state in time. The config is kept (no rollback) and it is not
+	// retryable because re-deploying the persisted bridge would conflict. The
+	// user recovers via the editing view.
+	ErrDeployTimeout = "ERR_DEPLOY_TIMEOUT"
 	// ErrConfigFileInvalid is sent when the deployment of a dfc fails because the config file is invalid.
 	ErrConfigFileInvalid = "ERR_CONFIG_FILE_INVALID"
 	// ErrRetryConfigWriteFailed is the error code for a config file write failure.
@@ -826,13 +832,13 @@ type WriteDFCPayload struct {
 // ProtocolConverter is the wire format for protocol converter configuration,
 // used by deploy/edit actions and GET responses.
 type ProtocolConverter struct {
-	UUID            *uuid.UUID                     `binding:"required"     json:"uuid"`
+	UUID            *uuid.UUID                     `binding:"required"  json:"uuid"`
 	Location        map[int]string                 `json:"location"`
 	ReadDFC         *ProtocolConverterDFC          `json:"readDFC"`
 	WriteDFCPayload *WriteDFCPayload               `json:"writeDFC"`
 	TemplateInfo    *ProtocolConverterTemplateInfo `json:"templateInfo"`
 	Meta            *ProtocolConverterMeta         `json:"meta"`
-	Name            string                         `binding:"required" json:"name"`
+	Name            string                         `binding:"required"  json:"name"`
 	Connection      ProtocolConverterConnection    `json:"connection"`
 }
 

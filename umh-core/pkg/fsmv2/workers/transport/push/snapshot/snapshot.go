@@ -27,8 +27,6 @@ type PushDependencies interface {
 	deps.Dependencies
 	GetOutboundChan() <-chan *types.UMHMessage
 	GetTransport() types.Transport
-	GetJWTToken() string
-	GetAuthenticatedUUID() string
 	RecordTypedError(errType types.ErrorType, retryAfter time.Duration)
 	RecordSuccess()
 	RecordError()
@@ -40,9 +38,6 @@ type PushDependencies interface {
 	StorePendingMessages(msgs []*types.UMHMessage)
 	DrainPendingMessages() []*types.UMHMessage
 	PendingMessageCount() int
-
-	// Token pre-check (1-minute safety buffer)
-	IsTokenValid() bool
 
 	// Parent transport reset detection
 	GetResetGeneration() uint64
@@ -56,29 +51,21 @@ type PushDependencies interface {
 
 // PushDesiredState represents the target configuration for the push worker.
 type PushDesiredState struct {
-	ParentMappedState string `json:"parent_mapped_state"`
-
-	State string `json:"state" yaml:"state"`
+	AuthSession types.AuthSession `json:"auth_session,omitempty" yaml:"auth_session,omitempty"`
+	State       string            `json:"state"                  yaml:"state"`
 	config.BaseDesiredState
 }
 
 // GetState returns the desired lifecycle state, defaulting to "running" if empty.
-// For push workers this is propagated from the parent's user spec.
+// Push is a leaf child whose lifecycle is gated by the parent transport worker via
+// the Disabled bit, not by its own State. The transport worker therefore leaves State
+// unset when constructing PushDesiredState, and GetState defaults to running.
 func (s *PushDesiredState) GetState() string {
 	if s.State == "" {
 		return config.DesiredStateRunning
 	}
 
 	return s.State
-}
-
-// ShouldBeRunning returns true if the push worker should be in a running state.
-func (s *PushDesiredState) ShouldBeRunning() bool {
-	if s.ShutdownRequested {
-		return false
-	}
-
-	return s.ParentMappedState == config.DesiredStateRunning
 }
 
 // PushStatus holds the runtime observation data for the push worker.

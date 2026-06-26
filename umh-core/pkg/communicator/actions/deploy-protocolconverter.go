@@ -41,6 +41,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"go.uber.org/zap"
+
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/protocolconverterserviceconfig"
@@ -52,7 +54,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
-	"go.uber.org/zap"
 )
 
 // DeployProtocolConverterAction implements the Action interface for deploying a
@@ -160,7 +161,7 @@ func (a *DeployProtocolConverterAction) Execute() (interface{}, map[string]inter
 
 	// Send confirmation that action is starting
 	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionConfirmed,
-		"Starting deployment of protocol converter: "+a.payload.Name, a.outboundChannel, models.DeployProtocolConverter)
+		"Starting deployment of Bridge: "+a.payload.Name, a.outboundChannel, models.DeployProtocolConverter)
 
 	// Create the protocol converter config with template and variables
 	pcConfig, err := a.createProtocolConverterConfig()
@@ -182,11 +183,11 @@ func (a *DeployProtocolConverterAction) Execute() (interface{}, map[string]inter
 	defer cancel()
 
 	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
-		"Adding protocol converter to configuration...", a.outboundChannel, models.DeployProtocolConverter)
+		"Adding Bridge to configuration...", a.outboundChannel, models.DeployProtocolConverter)
 
 	err = a.configManager.AtomicAddProtocolConverter(ctx, pcConfig)
 	if err != nil {
-		errorMsg := fmt.Sprintf("Failed to add protocol converter: %v", err)
+		errorMsg := fmt.Sprintf("Failed to add Bridge: %v", err)
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
 			errorMsg, a.outboundChannel, models.DeployProtocolConverter)
 		a.fsmLogger.SentryError(deps.FeatureDisableReadFlows, "", err, "deploy_protocol_converter_add_failed",
@@ -207,36 +208,38 @@ func (a *DeployProtocolConverterAction) Execute() (interface{}, map[string]inter
 		// ReadDFC, WriteDFC, and TemplateInfo are nil as they will be added later
 	}
 
-	SendActionReply(
+	SendActionReplyV2(
 		a.instanceUUID,
 		a.userEmail,
 		a.actionUUID,
 		models.ActionExecuting,
 		fmt.Sprintf(
-			"Waiting for protocol converter to be %s...",
+			"Waiting for Bridge to be %s...",
 			pcConfig.DesiredFSMState,
 		),
+		"",
+		map[string]interface{}{"uuid": pcUUID.String()},
 		a.outboundChannel,
 		models.DeployProtocolConverter,
+		nil,
 	)
 
 	// check against observedState
 	if a.systemSnapshotManager != nil && !a.ignoreHealthCheck {
 		errCode, err := a.waitForComponentToAppear(pcConfig.DesiredFSMState)
 		if err != nil {
-			errorMsg := fmt.Sprintf(
-				"Failed to wait for protocol converter to reach state %s: %v",
-				pcConfig.DesiredFSMState,
-				err,
-			)
+			// err is already a self-contained user message, so send it as-is
+			// instead of wrapping it again.
+			// Config is kept (no rollback), so return the UUID. The frontend uses
+			// it to offer fixing the persisted bridge from the editing view.
 			SendActionReplyV2(
 				a.instanceUUID,
 				a.userEmail,
 				a.actionUUID,
 				models.ActionFinishedWithFailure,
-				errorMsg,
+				err.Error(),
 				errCode,
-				nil,
+				map[string]interface{}{"uuid": pcUUID.String()},
 				a.outboundChannel,
 				models.DeployProtocolConverter,
 				nil,
@@ -245,22 +248,23 @@ func (a *DeployProtocolConverterAction) Execute() (interface{}, map[string]inter
 				deps.String("pcConfig", pcConfig.String()),
 				deps.String("desiredState", pcConfig.DesiredFSMState))
 
-			return nil, nil, fmt.Errorf("%s", errorMsg)
+			return nil, nil, err
 		}
 	}
 
 	var successMsg string
 	if a.ignoreHealthCheck {
 		successMsg = fmt.Sprintf(
-			`Protocol converter deployed (health check skipped; state '%s' not verified)`,
+			`Bridge deployed (health check skipped; state '%s' not verified)`,
 			pcConfig.DesiredFSMState,
 		)
 	} else {
 		successMsg = fmt.Sprintf(
-			`Protocol converter was successfully deployed and reached the expected state '%s'`,
+			`Bridge was successfully deployed and reached the expected state '%s'`,
 			pcConfig.DesiredFSMState,
 		)
 	}
+
 	SendActionReply(
 		a.instanceUUID,
 		a.userEmail,
@@ -276,9 +280,15 @@ func (a *DeployProtocolConverterAction) Execute() (interface{}, map[string]inter
 
 // createProtocolConverterConfig creates a ProtocolConverterConfig with templated configuration.
 func (a *DeployProtocolConverterAction) createProtocolConverterConfig() (config.ProtocolConverterConfig, error) {
-	userVars := buildUserScope(a.payload.TemplateInfo)
-	userVars["IP"] = a.payload.Connection.IP
-	userVars["PORT"] = strconv.FormatUint(uint64(a.payload.Connection.Port), 10)
+	return buildProtocolConverterConfig(a.payload)
+}
+
+// buildProtocolConverterConfig builds a ProtocolConverterConfig with templated
+// configuration from a parsed protocol converter payload.
+func buildProtocolConverterConfig(payload models.ProtocolConverter) (config.ProtocolConverterConfig, error) {
+	userVars := buildUserScope(payload.TemplateInfo)
+	userVars["IP"] = payload.Connection.IP
+	userVars["PORT"] = strconv.FormatUint(uint64(payload.Connection.Port), 10)
 
 	tmpl := protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
 		ConnectionServiceConfig:             newIPPortConnectionTemplate(),
@@ -286,37 +296,39 @@ func (a *DeployProtocolConverterAction) createProtocolConverterConfig() (config.
 		DataflowComponentWriteServiceConfig: dataflowcomponentserviceconfig.DataflowComponentWriteConfigInput{},
 	}
 
-	if a.payload.ReadDFC != nil {
-		readSvcCfg, err := buildReadDFCServiceConfig(dfcToPayload(a.payload.ReadDFC), a.payload.Name)
+	if payload.ReadDFC != nil {
+		readSvcCfg, err := buildReadDFCServiceConfig(dfcToPayload(payload.ReadDFC), payload.Name)
 		if err != nil {
 			return config.ProtocolConverterConfig{}, err
 		}
+
 		tmpl.DataflowComponentReadServiceConfig = readSvcCfg
 	}
 
-	if w := a.payload.WriteDFCPayload; w != nil {
+	if w := payload.WriteDFCPayload; w != nil {
 		tmpl.DataflowComponentWriteServiceConfig = w.DataflowComponentWriteConfigInput
 	}
 
 	var readDFCDesiredState, writeDFCDesiredState string
-	if a.payload.ReadDFC != nil {
-		readDFCDesiredState = a.payload.ReadDFC.State
+	if payload.ReadDFC != nil {
+		readDFCDesiredState = payload.ReadDFC.State
 	}
-	if a.payload.WriteDFCPayload != nil {
-		writeDFCDesiredState = a.payload.WriteDFCPayload.State
+
+	if payload.WriteDFCPayload != nil {
+		writeDFCDesiredState = payload.WriteDFCPayload.State
 	}
 
 	spec := protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
 		Config:               tmpl,
 		Variables:            variables.VariableBundle{User: userVars},
-		Location:             convertIntMapToStringMap(a.payload.Location),
+		Location:             convertIntMapToStringMap(payload.Location),
 		ReadDFCDesiredState:  readDFCDesiredState,
 		WriteDFCDesiredState: writeDFCDesiredState,
 	}
 
 	return config.ProtocolConverterConfig{
 		FSMInstanceConfig: config.FSMInstanceConfig{
-			Name:            a.payload.Name,
+			Name:            payload.Name,
 			DesiredFSMState: protocolconverter.OperationalStateActive,
 		},
 		ProtocolConverterServiceConfig: spec,
@@ -361,37 +373,25 @@ func (a *DeployProtocolConverterAction) waitForComponentToAppear(desiredState st
 
 		select {
 		case <-timeout:
-			stateMessage := Label("deploy", a.payload.Name) + fmt.Sprintf("timeout reached. it did not become %s in time. removing", desiredState)
+			stateMessage := Label("deploy", a.payload.Name) + "timeout reached"
 			SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting, stateMessage,
 				a.outboundChannel, models.DeployProtocolConverter)
 
-			ctx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
-			defer cancel()
-
-			err := a.configManager.AtomicDeleteProtocolConverter(ctx, dataflowcomponentserviceconfig.GenerateUUIDFromName(a.payload.Name))
-			if err != nil {
-				a.actionLogger.Errorf("failed to remove protocol converter %s: %v", a.payload.Name, err)
-				a.fsmLogger.SentryError(deps.FeatureDisableReadFlows, "", err, "deploy_protocol_converter_rollback_failed",
-					deps.String("name", a.payload.Name),
-					deps.String("desiredState", desiredState))
-
-				return models.ErrRetryRollbackTimeout, fmt.Errorf("protocol converter '%s' failed to reach state '%s' within timeout but could not be removed: %w. Please check system load and consider removing the component manually", a.payload.Name, desiredState, err)
-			}
-
-			// Build timeout error message with blocking reason if available
-			errorMsg := fmt.Sprintf("protocol converter '%s' was removed because it did not reach state '%s' within the timeout period", a.payload.Name, desiredState)
+			// Config is kept on failure so the user does not lose it. The bridge
+			// can be fixed from the editing view.
+			errorMsg := fmt.Sprintf("Bridge '%s' did not reach state '%s' within the timeout period", a.payload.Name, desiredState)
 			if lastStatusReason != "" {
-				errorMsg = fmt.Sprintf("protocol converter '%s' was removed because: %s", a.payload.Name, lastStatusReason)
+				errorMsg = fmt.Sprintf("Bridge '%s' did not become healthy: %s", a.payload.Name, lastStatusReason)
 			} else {
 				errorMsg += ". Please check system load or component configuration and try again"
 			}
 
-			a.fsmLogger.SentryWarn(deps.FeatureDisableReadFlows, "", "deploy_protocol_converter_rollback_on_timeout",
+			a.fsmLogger.SentryWarn(deps.FeatureDisableReadFlows, "", "deploy_protocol_converter_timeout",
 				deps.String("name", a.payload.Name),
 				deps.String("desiredState", desiredState),
 				deps.String("lastStatusReason", lastStatusReason))
 
-			return models.ErrRetryRollbackTimeout, fmt.Errorf("%s", errorMsg)
+			return models.ErrDeployTimeout, fmt.Errorf("%s", errorMsg)
 
 		case <-ticker.C:
 			// the snapshot manager holds the latest system snapshot which is asynchronously updated by the other goroutines

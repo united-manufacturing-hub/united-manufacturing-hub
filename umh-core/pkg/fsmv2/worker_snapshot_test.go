@@ -15,9 +15,7 @@
 // Tests for WorkerSnapshot construction, ShouldStop semantics, and ExtractConfig.
 // ShouldStop covers the 2-way OR:
 //
-//	ShouldStop() == IsShutdownRequested || ParentMappedState == "stopped"
-//
-// Additional ShouldStop conditions are added in later lifecycle layers.
+//	ShouldStop() == IsShutdownRequested || IsDisabled
 
 package fsmv2_test
 
@@ -28,7 +26,6 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 )
 
@@ -102,7 +99,7 @@ var _ = Describe("ConvertWorkerSnapshot (happy paths)", func() {
 		Expect(snap.IsShutdownRequested).To(BeTrue())
 	})
 
-	It("copies framework fields (action results, children counts, ParentMappedState)", func() {
+	It("copies framework fields (action results, children counts)", func() {
 		actionResults := []deps.ActionResult{
 			{ActionType: "connect", Success: true, Timestamp: now},
 		}
@@ -112,7 +109,6 @@ var _ = Describe("ConvertWorkerSnapshot (happy paths)", func() {
 			LastActionResults: actionResults,
 			ChildrenHealthy:   3,
 			ChildrenUnhealthy: 1,
-			ParentMappedState: config.DesiredStateStopped,
 		}
 		wds := &fsmv2.WrappedDesiredState[workerTestConfig]{}
 
@@ -123,13 +119,11 @@ var _ = Describe("ConvertWorkerSnapshot (happy paths)", func() {
 		Expect(snap.LastActionResults[0].ActionType).To(Equal("connect"))
 		Expect(snap.ChildrenHealthy).To(Equal(3))
 		Expect(snap.ChildrenUnhealthy).To(Equal(1))
-		Expect(snap.ParentMappedState).To(Equal(config.DesiredStateStopped))
 	})
 })
 
 var _ = Describe("ShouldStop", func() {
-	// ShouldStop covers 2-way OR: IsShutdownRequested || ParentMappedState=="stopped".
-	// Additional conditions are added in later lifecycle layers.
+	// ShouldStop covers 2-way OR: IsShutdownRequested || IsDisabled.
 
 	It("returns false when both signals are absent", func() {
 		snap := fsmv2.WorkerSnapshot[workerTestConfig, workerTestStatus]{}
@@ -143,9 +137,9 @@ var _ = Describe("ShouldStop", func() {
 		Expect(snap.ShouldStop()).To(BeTrue())
 	})
 
-	It("returns true when ParentMappedState is 'stopped'", func() {
+	It("returns true when IsDisabled is true (resident disable)", func() {
 		snap := fsmv2.WorkerSnapshot[workerTestConfig, workerTestStatus]{
-			ParentMappedState: config.DesiredStateStopped,
+			IsDisabled: true,
 		}
 		Expect(snap.ShouldStop()).To(BeTrue())
 	})
@@ -153,16 +147,9 @@ var _ = Describe("ShouldStop", func() {
 	It("returns true when both signals are present (OR semantics)", func() {
 		snap := fsmv2.WorkerSnapshot[workerTestConfig, workerTestStatus]{
 			IsShutdownRequested: true,
-			ParentMappedState:   config.DesiredStateStopped,
+			IsDisabled:          true,
 		}
 		Expect(snap.ShouldStop()).To(BeTrue())
-	})
-
-	It("is unaffected by a non-stop ParentMappedState value", func() {
-		snap := fsmv2.WorkerSnapshot[workerTestConfig, workerTestStatus]{
-			ParentMappedState: config.DesiredStateRunning,
-		}
-		Expect(snap.ShouldStop()).To(BeFalse())
 	})
 })
 

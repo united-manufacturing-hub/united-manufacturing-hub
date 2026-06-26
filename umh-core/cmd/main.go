@@ -25,6 +25,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"go.uber.org/zap"
+
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/pprof"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions"
 	v2 "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/api/v2"
@@ -60,7 +62,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/version"
-	"go.uber.org/zap"
 )
 
 func main() {
@@ -605,6 +606,7 @@ children:
 	fsmv2Logger = fsmv2Logger.Desugar().WithOptions(zap.WrapCore(fsmv2Hook.Wrap)).Sugar()
 
 	fsmv2Deps := map[string]any{}
+
 	if configData.Agent.UseFSMv2MemoryCleanup {
 		register.SetDeps[*persistenceWorker.PersistenceDependencies](persistenceWorker.WorkerTypeName, persistenceWorker.NewStoreOnlyDependencies(store))
 	}
@@ -689,11 +691,11 @@ func wireFSMv2Communicator(
 					continue
 				}
 
-				if observed.Status.AuthenticatedUUID != "" && observed.Status.AuthenticatedUUID != placeholderUUID {
+				if observed.Status.AuthSession.InstanceUUID != "" && observed.Status.AuthSession.InstanceUUID != placeholderUUID {
 					logger.Infow("Detected real UUID from TransportWorker ObservedState, updating LoginResponse",
-						"realUUID", observed.Status.AuthenticatedUUID,
+						"realUUID", observed.Status.AuthSession.InstanceUUID,
 						"placeholderUUID", placeholderUUID)
-					communicationState.SetLoginResponseForFSMv2(observed.Status.AuthenticatedUUID)
+					communicationState.SetLoginResponseForFSMv2(observed.Status.AuthSession.InstanceUUID)
 
 					return
 				}

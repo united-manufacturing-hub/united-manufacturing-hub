@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
@@ -82,7 +83,7 @@ func (w *PushWorker) GetDependencies() *PushDependencies {
 // CollectObservedState snapshots the current push worker state.
 // Returns NewObservation; the collector handles CollectedAt, framework metrics,
 // action history, and metric accumulation automatically.
-func (w *PushWorker) CollectObservedState(ctx context.Context, _ fsmv2.DesiredState) (fsmv2.ObservedState, error) {
+func (w *PushWorker) CollectObservedState(ctx context.Context, desired fsmv2.DesiredState) (fsmv2.ObservedState, error) {
 	select {
 	case <-ctx.Done():
 		return nil, ctx.Err()
@@ -91,9 +92,14 @@ func (w *PushWorker) CollectObservedState(ctx context.Context, _ fsmv2.DesiredSt
 
 	d := w.GetDependencies()
 
+	var cfg snapshot.PushDesiredState
+	if desired != nil {
+		cfg = fsmv2.ExtractConfig[snapshot.PushDesiredState](desired)
+	}
+
 	status := snapshot.PushStatus{
 		HasTransport:        d.GetTransport() != nil,
-		HasValidToken:       d.IsTokenValid(),
+		HasValidToken:       cfg.AuthSession.IsUsable(time.Minute),
 		ConsecutiveErrors:   d.GetConsecutiveErrors(),
 		PendingMessageCount: d.PendingMessageCount(),
 		LastErrorType:       d.GetLastErrorType(),
@@ -134,7 +140,7 @@ func (w *PushWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState, e
 	}
 
 	return &fsmv2.WrappedDesiredState[snapshot.PushDesiredState]{
-		State: parsed.GetState(),
+		Config: snapshot.PushDesiredState{AuthSession: parsed.AuthSession},
 	}, nil
 }
 
