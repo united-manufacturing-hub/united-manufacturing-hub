@@ -16,6 +16,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -59,16 +60,17 @@ func main() {
 	if *listFlag {
 		fmt.Println("Available scenarios:")
 
-		names := make([]string, 0, len(examples.Registry))
-		for name := range examples.Registry {
+		scenarios := examples.ListScenarios()
+
+		names := make([]string, 0, len(scenarios))
+		for name := range scenarios {
 			names = append(names, name)
 		}
 
 		sort.Strings(names)
 
 		for _, name := range names {
-			scenario := examples.Registry[name]
-			fmt.Printf("  %-15s - %s\n", name, scenario.Description)
+			fmt.Printf("  %-15s - %s\n", name, scenarios[name])
 		}
 
 		return
@@ -109,23 +111,61 @@ func main() {
 
 	defer func() { _ = logger.Sync() }()
 
-	scenario, exists := examples.Registry[*scenarioName]
-	if !exists {
+	v1Scenario, isV1 := examples.Registry[*scenarioName]
+	v2Scenario, isV2 := examples.RegistryV2[*scenarioName]
+
+	if !isV1 && !isV2 {
 		logger.Fatal("Scenario not found",
 			zap.String("scenario", *scenarioName),
 			zap.String("hint", "Use --list to see available scenarios"),
 		)
 	}
 
+	description := v1Scenario.Description
+	if isV2 {
+		description = v2Scenario.Description
+	}
+
+	// One signal owner: the CLI creates the cancellable ctx and is the only
+	// signal.Notify site, installed BEFORE examples.Run so a SIGINT during a
+	// running driver cannot kill the process without teardown. The first
+	// SIGINT cancels the ctx (a v2 driver sees it, the runner tears down
+	// gracefully); a second SIGINT force-exits.
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	if *duration > 0 {
+	runDuration, applyCtxTimeout := routeDuration(isV2, *duration)
+	if applyCtxTimeout {
 		var timeoutCancel context.CancelFunc
 
 		ctx, timeoutCancel = context.WithTimeout(ctx, *duration)
 		defer timeoutCancel()
 	}
+
+	// runDone closes once main returns, i.e. once the run has fully torn down.
+	// The signal owner waits on it so a second SIGINT can still force-exit
+	// while teardown is in flight; cancelling the ctx (the first SIGINT) does
+	// not close runDone.
+	runDone := make(chan struct{})
+	defer close(runDone)
+
+	sigChan := make(chan os.Signal, 2)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+
+	go handleSignals(
+		sigChan,
+		runDone,
+		func() {
+			logger.Info("Received signal, initiating graceful shutdown...",
+				zap.String("hint", "Press Ctrl+C again to force immediate exit"))
+			cancel()
+		},
+		func() {
+			logger.Sugar().Warnw("forced_exit_second_signal",
+				"reason", "received_second_signal")
+			os.Exit(1)
+		},
+	)
 
 	store := examples.SetupStore(deps.NewFSMLogger(logger.Sugar()))
 
@@ -136,13 +176,15 @@ func main() {
 
 	logger.Info("Starting scenario",
 		zap.String("name", *scenarioName),
-		zap.String("description", scenario.Description),
+		zap.String("description", description),
 		zap.String("duration", durationStr),
 		zap.Duration("tick", *tickInterval),
 	)
 
 	result, err := examples.Run(ctx, examples.RunConfig{
-		Scenario:           scenario,
+		Scenario:           v1Scenario,
+		ScenarioV2:         v2Scenario,
+		Duration:           runDuration,
 		TickInterval:       *tickInterval,
 		Logger:             deps.NewFSMLogger(logger.Sugar()),
 		Store:              store,
@@ -150,37 +192,85 @@ func main() {
 		DumpStore:          *dumpStore,
 	})
 	if err != nil {
+		if isCleanInterruptExit(err, ctx.Err()) {
+			logger.Info("Scenario interrupted",
+				zap.String("name", *scenarioName),
+			)
+
+			return
+		}
+
 		logger.Fatal("Failed to start scenario", zap.Error(err))
 	}
-
-	// First signal: graceful shutdown. Second signal: force exit.
-	sigChan := make(chan os.Signal, 2)
-	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
-
-	go func() {
-		sugar := logger.Sugar()
-		sig := <-sigChan
-		logger.Info("Received signal, initiating graceful shutdown...",
-			zap.String("signal", sig.String()),
-			zap.String("hint", "Press Ctrl+C again to force immediate exit"))
-
-		go result.Shutdown()
-
-		select {
-		case sig := <-sigChan:
-			sugar.Warnw("forced_exit_second_signal",
-				"reason", "received_second_signal",
-				"signal", sig.String())
-			os.Exit(1)
-		case <-result.Done:
-		}
-	}()
 
 	<-result.Done
 
 	logger.Info("Scenario completed",
 		zap.String("name", *scenarioName),
 	)
+
+	// A degraded shutdown (the supervisor warned graceful_shutdown_timeout or
+	// graceful_shutdown_budget_exhausted) must surface as a non-zero exit so an
+	// outer harness/CI does not read it as success. A clean run returns
+	// normally so the deferred teardown (logger.Sync, cancels, close(runDone))
+	// still runs; os.Exit would skip those.
+	if code := shutdownExitCode(result); code != 0 {
+		logger.Sugar().Warnw("scenario_shutdown_unclean",
+			"scenario", *scenarioName,
+			"exit_code", code)
+		_ = logger.Sync()
+		os.Exit(code)
+	}
+}
+
+// shutdownExitCode returns the process exit code for a completed scenario run.
+// A scenario whose supervisor did not drain cleanly within its budget exits
+// non-zero so an outer harness/CI can detect a degraded shutdown.
+func shutdownExitCode(result *examples.RunResult) int {
+	if result != nil && !result.ShutdownClean {
+		return 1
+	}
+
+	return 0
+}
+
+// routeDuration decides how a --duration flag binds to a run. A v2 scenario
+// treats the duration as a post-driver settle window, so it flows into
+// RunConfig.Duration and never bounds the run with a ctx timeout. A v1 scenario
+// has no settle window, so the duration bounds the whole run via a ctx timeout.
+// A zero duration stays endless on both paths.
+func routeDuration(isV2 bool, duration time.Duration) (runDuration time.Duration, applyCtxTimeout bool) {
+	if duration <= 0 {
+		return 0, false
+	}
+
+	if isV2 {
+		return duration, false
+	}
+
+	return 0, true
+}
+
+// isCleanInterruptExit reports whether a run error is an interrupt-induced
+// context cancellation rather than a genuine startup failure. An interrupt
+// cancels the context and surfaces as a runErr that wraps ctxErr; that is a
+// clean exit, not a fatal exit-1.
+func isCleanInterruptExit(runErr error, ctxErr error) bool {
+	return ctxErr != nil && errors.Is(runErr, ctxErr)
+}
+
+// handleSignals tears down on the first signal and force-exits on the second.
+// The first signal calls onFirstSignal to start graceful teardown; a second
+// signal calls forceExit instead of waiting for done to close.
+func handleSignals(sigCh <-chan os.Signal, done <-chan struct{}, onFirstSignal func(), forceExit func()) {
+	<-sigCh
+	onFirstSignal()
+
+	select {
+	case <-sigCh:
+		forceExit()
+	case <-done:
+	}
 }
 
 // parseLogLevel converts string log level to zap level using zap's built-in parser.

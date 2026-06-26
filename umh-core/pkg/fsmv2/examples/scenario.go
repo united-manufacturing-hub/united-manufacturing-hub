@@ -305,16 +305,22 @@ type RunConfig struct {
 	Store              storage.TriangularStoreInterface
 	Logger             deps.FSMLogger
 	Scenario           Scenario
+	ScenarioV2         ScenarioV2    // When Driver is set, Run takes the v2 kernel-only path
 	Duration           time.Duration // 0 means run forever (until context cancelled)
 	TickInterval       time.Duration
 	EnableTraceLogging bool
 	DumpStore          bool // Dump store deltas and final state after completion
 }
 
-// ListScenarios returns all registered scenario names and descriptions.
+// ListScenarios returns all registered scenario names and descriptions,
+// merging the v1 Registry and the v2 RegistryV2 into one listing.
 func ListScenarios() map[string]string {
-	result := make(map[string]string, len(Registry))
+	result := make(map[string]string, len(Registry)+len(RegistryV2))
 	for name, scenario := range Registry {
+		result[name] = scenario.Description
+	}
+
+	for name, scenario := range RegistryV2 {
 		result[name] = scenario.Description
 	}
 

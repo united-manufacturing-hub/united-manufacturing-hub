@@ -22,6 +22,14 @@ import (
 	hello_world "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/helloworld"
 )
 
+// StateNameRunning is the observed-state string a helloworld worker reports
+// while it is running. It is derived from RunningState's type name (the same
+// path String() uses), so a rename of RunningState moves this constant with it
+// instead of leaving a stale literal behind. Drivers and tests that wait for
+// the worker to reach running compare against this rather than a bare
+// "Running" literal.
+var StateNameRunning = helpers.DeriveStateName(&RunningState{})
+
 // RunningState represents the worker actively running.
 // This is the steady state - worker stays here until shutdown.
 type RunningState struct {

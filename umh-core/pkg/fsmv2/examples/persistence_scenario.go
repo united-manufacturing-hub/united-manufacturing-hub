@@ -118,7 +118,11 @@ children:
 		}
 	}
 
-	supDone := appSup.Start(ctx)
+	// Detached from the caller's ctx so cancelling the caller's ctx triggers
+	// teardown (via the watcher goroutine below) instead of killing the tick
+	// loop; a loop killed by the cancel would force every graceful-drain phase
+	// of the subsequent Shutdown to wait out its full timeout.
+	supDone := appSup.Start(context.WithoutCancel(ctx))
 
 	result := &PersistenceRunResult{
 		Done:     done,
