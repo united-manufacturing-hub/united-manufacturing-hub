@@ -35,8 +35,6 @@ type TransportDependencies interface {
 
 	// JWT token management
 	SetJWT(token string, expiry time.Time)
-	GetJWTToken() string
-	GetJWTExpiry() time.Time
 
 	// Error tracking for intelligent backoff
 	RecordError()
@@ -54,7 +52,6 @@ type TransportDependencies interface {
 
 	// Instance identity from backend
 	SetAuthenticatedUUID(uuid string)
-	GetAuthenticatedUUID() string
 
 	// Reset generation for parent-level transport reset signaling to children
 	GetResetGeneration() uint64
@@ -148,44 +145,64 @@ func (f FailedAuthConfig) IsEmpty() bool {
 }
 
 // TransportStatus holds the runtime observation data for the transport worker.
-// NOTE: JWTToken must NOT use json:"-" — the supervisor reconciliation loop
+// NOTE: AuthSession must NOT use json:"-" — the supervisor reconciliation loop
 // serializes observed state to CSE storage between ticks and deserializes it
-// via LoadObservedTyped(). Excluding JWTToken from JSON would force
+// via LoadObservedTyped(). Excluding AuthSession from JSON would force
 // re-authentication on every tick (~10ms), hammering the relay server.
-// TODO(security): JWTToken included in CSE sync payloads. ENG-4405 tracks
+// TODO(security): AuthSession included in CSE sync payloads. ENG-4405 tracks
 // adding a CSE secret tier to persist locally but exclude from delta sync.
+// The token also rides into the push/pull child UserSpec.Config via
+// RenderChildren stamping ChildAuthUserSpec, so a future CSE secret-tier scrub
+// must cover the parent status AND both child-config copies.
+//
+// Upgrade note: auth_session replaces the previously-flat CSE keys
+// (jwt_token / jwt_expiry / authenticated_uuid). State written by a prior
+// version carries the old flat keys, which will not load into this nested
+// field, so on the first post-upgrade tick the parent reads an empty
+// AuthSession and re-authenticates once. This one-time re-auth is intended and
+// self-healing; no consumer reads the old flat keys.
 type TransportStatus struct {
-	JWTExpiry           time.Time        `json:"jwt_expiry,omitempty"`
-	LastAuthAttemptAt   time.Time        `json:"last_auth_attempt_at,omitempty"`
-	FailedAuthConfig    FailedAuthConfig `json:"failed_auth_config,omitempty"`
-	JWTToken            string           `json:"jwt_token,omitempty"`
-	AuthenticatedUUID   string           `json:"authenticated_uuid,omitempty"`
-	LastErrorType       types.ErrorType  `json:"last_error_type"`
-	LastRetryAfter      time.Duration    `json:"last_retry_after,omitempty"`
-	TotalMessagesPushed int64            `json:"total_messages_pushed"`
-	TotalMessagesPulled int64            `json:"total_messages_pulled"`
-	ConsecutiveErrors   int              `json:"consecutive_errors"`
+	AuthSession         types.AuthSession `json:"auth_session"`
+	LastAuthAttemptAt   time.Time         `json:"last_auth_attempt_at,omitempty"`
+	FailedAuthConfig    FailedAuthConfig  `json:"failed_auth_config,omitempty"`
+	LastErrorType       types.ErrorType   `json:"last_error_type"`
+	LastRetryAfter      time.Duration     `json:"last_retry_after,omitempty"`
+	TotalMessagesPushed int64             `json:"total_messages_pushed"`
+	TotalMessagesPulled int64             `json:"total_messages_pulled"`
+	ConsecutiveErrors   int               `json:"consecutive_errors"`
 }
 
 // IsTokenExpired returns true if the JWT token is expired or will expire within 10 minutes.
+// A zero Expiry is treated as NOT expired — the parent has not yet authenticated and there
+// is nothing to refresh. This is intentionally different from AuthSession.IsUsable, which
+// treats zero Expiry as unusable: IsUsable is a child-side gate ("can I use this token
+// right now?"), while IsTokenExpired is a parent-side trigger ("should I re-authenticate?").
+// Triggering re-auth on zero Expiry would cause the parent to loop before it has ever
+// obtained a token.
 //
 // Token buffer architecture: the parent TransportWorker uses a 10-minute buffer (proactive
-// refresh trigger) while child workers (push/pull) use a 1-minute buffer via IsTokenValid().
-// The 9-minute gap is safe by design: when IsTokenExpired triggers here, the parent
-// transitions Running → Starting and re-authenticates, propagating a fresh token to its
-// children well before their own 1-minute buffer would consider the token invalid.
-// The children's 1-minute buffer is a last-resort safety net for edge cases only.
+// refresh trigger) while child workers (push/pull) use a 1-minute buffer via
+// AuthSession.IsUsable(time.Minute) in their COS. The 9-minute gap is safe by design:
+// when IsTokenExpired triggers here, the parent transitions Running → Starting and
+// re-authenticates, propagating a fresh token to its children well before their own
+// 1-minute buffer would consider the token invalid. The children's 1-minute buffer is
+// a last-resort safety net for edge cases only.
 func (s TransportStatus) IsTokenExpired() bool {
-	if s.JWTExpiry.IsZero() {
+	if s.AuthSession.Expiry.IsZero() {
 		return false
 	}
 
 	const refreshBuffer = 10 * time.Minute
 
-	return time.Now().Add(refreshBuffer).After(s.JWTExpiry)
+	return time.Now().Add(refreshBuffer).After(s.AuthSession.Expiry)
 }
 
-// HasValidToken returns true if there is a valid JWT token that hasn't expired.
+// HasValidToken returns true if there is a non-empty JWT token and IsTokenExpired is false.
+// Note: a token with zero Expiry and non-empty Token returns true here (IsTokenExpired
+// treats zero Expiry as not-expired). Children use AuthSession.IsUsable(time.Minute) in
+// their COS, which treats zero Expiry as unusable. This deliberate asymmetry lets the
+// parent hold a "just authenticated, expiry not yet set" window without triggering child
+// action dispatches.
 func (s TransportStatus) HasValidToken() bool {
-	return s.JWTToken != "" && !s.IsTokenExpired()
+	return s.AuthSession.Token != "" && !s.IsTokenExpired()
 }

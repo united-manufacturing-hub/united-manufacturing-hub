@@ -23,6 +23,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/pull/action"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/pull/snapshot"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/pull/state"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/types"
@@ -102,6 +103,83 @@ func makeSnapshotWithBackoff(
 		},
 	}
 }
+
+func makeSnapshotWithAuthSession(authSession types.AuthSession) fsmv2.Snapshot {
+	desired := &fsmv2.WrappedDesiredState[snapshot.PullDesiredState]{
+		Config: snapshot.PullDesiredState{
+			BaseDesiredState: config.BaseDesiredState{},
+			AuthSession:      authSession,
+		},
+		BaseDesiredState: config.BaseDesiredState{},
+	}
+
+	obs := fsmv2.Observation[snapshot.PullStatus]{
+		Status: snapshot.PullStatus{
+			HasTransport:  true,
+			HasValidToken: true,
+		},
+	}
+
+	return fsmv2.Snapshot{
+		Observed: obs,
+		Desired:  desired,
+		Identity: deps.Identity{
+			ID:         "test-pull-worker",
+			Name:       "pull",
+			WorkerType: "pull",
+		},
+	}
+}
+
+var _ = Describe("RunningState AuthSession threading", func() {
+	It("should carry Token from snap.Config.AuthSession into PullAction", func() {
+		snap := makeSnapshotWithAuthSession(types.AuthSession{
+			Token:        "jwt",
+			InstanceUUID: "u",
+		})
+
+		result := (&state.RunningState{}).Next(snap)
+
+		Expect(result.Action).NotTo(BeNil())
+		pullAction, ok := result.Action.(*action.PullAction)
+		Expect(ok).To(BeTrue(), "expected *action.PullAction but got %T", result.Action)
+		Expect(pullAction.JWTToken).To(Equal("jwt"))
+	})
+
+	It("should carry Token from snap.Config.AuthSession into PullAction from DegradedState", func() {
+		snap := makeSnapshotWithAuthSession(types.AuthSession{
+			Token:        "degraded-jwt",
+			InstanceUUID: "u",
+		})
+		// Inject consecutive errors so DegradedState skips the backoff wait
+		desired := snap.Desired.(*fsmv2.WrappedDesiredState[snapshot.PullDesiredState])
+		obs := fsmv2.Observation[snapshot.PullStatus]{
+			Status: snapshot.PullStatus{
+				HasTransport:      true,
+				HasValidToken:     true,
+				ConsecutiveErrors: 1,
+				// DegradedEnteredAt zero → shouldWait=false → action is dispatched
+				DegradedEnteredAt: time.Time{},
+			},
+		}
+		snap = fsmv2.Snapshot{
+			Observed: obs,
+			Desired:  desired,
+			Identity: deps.Identity{
+				ID:         "test-pull-worker",
+				Name:       "pull",
+				WorkerType: "pull",
+			},
+		}
+
+		result := (&state.DegradedState{}).Next(snap)
+
+		Expect(result.Action).NotTo(BeNil())
+		pullAction, ok := result.Action.(*action.PullAction)
+		Expect(ok).To(BeTrue(), "expected *action.PullAction but got %T", result.Action)
+		Expect(pullAction.JWTToken).To(Equal("degraded-jwt"))
+	})
+})
 
 var _ = Describe("StoppedState", func() {
 	var s *state.StoppedState

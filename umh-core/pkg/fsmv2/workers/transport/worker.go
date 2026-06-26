@@ -131,11 +131,10 @@ func (w *TransportWorker) CollectObservedState(ctx context.Context, _ fsmv2.Desi
 	d := w.GetDependencies()
 
 	failedToken, failedRelay, failedUUID := d.GetFailedAuthConfig()
+	as := d.GetAuthSession()
 
 	status := snapshot.TransportStatus{
-		JWTToken:          d.GetJWTToken(),
-		JWTExpiry:         d.GetJWTExpiry(),
-		AuthenticatedUUID: d.GetAuthenticatedUUID(),
+		AuthSession:       as,
 		ConsecutiveErrors: d.GetConsecutiveErrors(),
 		LastErrorType:     d.GetLastErrorType(),
 		LastAuthAttemptAt: d.GetLastAuthAttemptAt(),

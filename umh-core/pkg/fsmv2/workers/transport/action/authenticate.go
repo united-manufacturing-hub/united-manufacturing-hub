@@ -150,6 +150,10 @@ func (a *AuthenticateAction) Execute(ctx context.Context, depsAny any) error {
 		depspkg.Bool("has_token", authResp.Token != ""),
 	)
 
+	// Only overwrite InstanceUUID when the re-auth response includes one. An
+	// omitted UUID means "unchanged" (the instance identity is stable across
+	// re-auths), not "cleared", so keeping the previous value is correct; clearing
+	// it here would drop a valid identity on a routine token refresh.
 	if authResp.InstanceUUID != "" {
 		logger.Info("authenticated_uuid_stored",
 			depspkg.String("uuid", authResp.InstanceUUID),
