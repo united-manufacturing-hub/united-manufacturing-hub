@@ -17,7 +17,7 @@
 // from one that warned graceful_shutdown_timeout or
 // graceful_shutdown_budget_exhausted, without scraping logs. The signal is
 // pinned to the real warn via findLogEvents so it cannot pass by coincidence.
-package supervisor
+package supervisor_test
 
 import (
 	"context"
@@ -28,6 +28,7 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence/memory"
 )
@@ -52,7 +53,7 @@ var _ = Describe("DrainOutcomeClean (ENG-4971 structured drain-outcome signal)",
 
 		logger := deps.NewJSONFSMLogger(buf, deps.LevelDebug)
 
-		root := NewSupervisor[*TestObservedState, *TestDesiredState](Config{
+		root := supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
 			WorkerType:              drainOutcomeType,
 			Store:                   triangularStore,
 			Logger:                  logger,
@@ -72,7 +73,7 @@ var _ = Describe("DrainOutcomeClean (ENG-4971 structured drain-outcome signal)",
 		})).To(Succeed())
 
 		desiredDoc := persistence.Document{
-			FieldID:             identity.ID,
+			supervisor.FieldID:  identity.ID,
 			"ShutdownRequested": false,
 			"state":             "running",
 		}
@@ -114,7 +115,7 @@ var _ = Describe("DrainOutcomeClean (ENG-4971 structured drain-outcome signal)",
 
 		logger := deps.NewJSONFSMLogger(buf, deps.LevelDebug)
 
-		root := NewSupervisor[*TestObservedState, *TestDesiredState](Config{
+		root := supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
 			WorkerType:              drainOutcomeType,
 			Store:                   triangularStore,
 			Logger:                  logger,
@@ -134,7 +135,7 @@ var _ = Describe("DrainOutcomeClean (ENG-4971 structured drain-outcome signal)",
 		})).To(Succeed())
 
 		desiredDoc := persistence.Document{
-			FieldID:             identity.ID,
+			supervisor.FieldID:  identity.ID,
 			"ShutdownRequested": false,
 			"state":             "running",
 		}
@@ -169,11 +170,11 @@ var _ = Describe("DrainOutcomeClean (ENG-4971 structured drain-outcome signal)",
 	// tick, which races the graceful timer against the reap ticker at the same
 	// instant. The two specs above cover the live clean and timed-out drains;
 	// these pin the slack arithmetic deterministically.
-	newDrainSupervisor := func() *Supervisor[*TestObservedState, *TestDesiredState] {
+	newDrainSupervisor := func() *supervisor.Supervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState] {
 		basicStore := memory.NewInMemoryStore()
 		triangularStore := storage.NewTriangularStore(basicStore, deps.NewNopFSMLogger())
 
-		return NewSupervisor[*TestObservedState, *TestDesiredState](Config{
+		return supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
 			WorkerType:              drainOutcomeType,
 			Store:                   triangularStore,
 			Logger:                  deps.NewJSONFSMLogger(buf, deps.LevelDebug),
@@ -190,7 +191,7 @@ var _ = Describe("DrainOutcomeClean (ENG-4971 structured drain-outcome signal)",
 		// Workers drained within budget; the tickLoop join + metricsWg.Wait then
 		// push total elapsed just past the raw budget. This is the false-positive
 		// the slack absorbs: no warn, drain stays clean.
-		root.recordPostJoinBudgetOverrun(budget+drainTickInterval/2, budget, 0, false)
+		root.TestRecordPostJoinBudgetOverrun(budget+supervisor.TestDrainTickInterval()/2, budget, 0, false)
 
 		Expect(findLogEvents(buf.String(), "graceful_shutdown_budget_exhausted")).To(BeEmpty(),
 			"post-join overhead within drainBudget+slack must not fire graceful_shutdown_budget_exhausted")
@@ -202,7 +203,7 @@ var _ = Describe("DrainOutcomeClean (ENG-4971 structured drain-outcome signal)",
 		root := newDrainSupervisor()
 
 		// A genuine overrun, larger than any plausible join overhead, still warns.
-		root.recordPostJoinBudgetOverrun(budget+2*drainTickInterval, budget, 0, false)
+		root.TestRecordPostJoinBudgetOverrun(budget+2*supervisor.TestDrainTickInterval(), budget, 0, false)
 
 		Expect(findLogEvents(buf.String(), "graceful_shutdown_budget_exhausted")).ToNot(BeEmpty(),
 			"an overrun beyond drainBudget+slack must fire graceful_shutdown_budget_exhausted")
@@ -215,7 +216,7 @@ var _ = Describe("DrainOutcomeClean (ENG-4971 structured drain-outcome signal)",
 
 		// budgetWarned short-circuits the re-check so a level that already warned
 		// graceful_shutdown_timeout in the drain loop does not double-report here.
-		root.recordPostJoinBudgetOverrun(budget+2*drainTickInterval, budget, 0, true)
+		root.TestRecordPostJoinBudgetOverrun(budget+2*supervisor.TestDrainTickInterval(), budget, 0, true)
 
 		Expect(findLogEvents(buf.String(), "graceful_shutdown_budget_exhausted")).To(BeEmpty(),
 			"a prior drain-phase warn must short-circuit the post-join re-check")

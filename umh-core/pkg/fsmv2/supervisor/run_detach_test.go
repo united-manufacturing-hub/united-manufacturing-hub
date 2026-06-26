@@ -20,7 +20,7 @@
 // full budget, fires graceful_shutdown_timeout, and docker SIGKILLs the
 // process mid-drain. This test is the ticket's acceptance gate: ctx-cancel
 // combined with live workers nested across supervisor levels.
-package supervisor
+package supervisor_test
 
 import (
 	"context"
@@ -34,6 +34,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence/memory"
 )
@@ -83,7 +84,7 @@ var _ = Describe("Run(ctx) cancel with live nested workers (ENG-4971)", func() {
 
 		for _, wt := range []string{runDetachMidType, runDetachLeafType} {
 			_ = factory.RegisterSupervisorFactoryByType(wt, func(cfg interface{}) interface{} {
-				return NewSupervisor[*TestObservedState, *TestDesiredState](cfg.(Config))
+				return supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](cfg.(supervisor.Config))
 			})
 		}
 	})
@@ -110,7 +111,7 @@ var _ = Describe("Run(ctx) cancel with live nested workers (ENG-4971)", func() {
 
 		logger := deps.NewJSONFSMLogger(buf, deps.LevelDebug)
 
-		root := NewSupervisor[*TestObservedState, *TestDesiredState](Config{
+		root := supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
 			WorkerType:              runDetachRootType,
 			Store:                   triangularStore,
 			Logger:                  logger,
@@ -134,7 +135,7 @@ var _ = Describe("Run(ctx) cancel with live nested workers (ENG-4971)", func() {
 		Expect(root.AddWorker(rootIdentity, rootWorker)).To(Succeed())
 
 		desiredDoc := persistence.Document{
-			FieldID:             rootIdentity.ID,
+			supervisor.FieldID:  rootIdentity.ID,
 			"ShutdownRequested": false,
 			"state":             "running",
 		}
@@ -157,7 +158,7 @@ var _ = Describe("Run(ctx) cancel with live nested workers (ENG-4971)", func() {
 		// Settle gate: the full depth-3 tree is alive AND every level's worker
 		// is observably running — polled from supervisor state, never a blind
 		// sleep (a blind sleep was a flake source here before).
-		var midSup, leafSup SupervisorInterface
+		var midSup, leafSup supervisor.SupervisorInterface
 		Eventually(func() bool {
 			if root.GetCurrentStateName() != "running" {
 				return false
@@ -213,9 +214,7 @@ var _ = Describe("Run(ctx) cancel with live nested workers (ENG-4971)", func() {
 				"the loop was already dead when Shutdown's drain ran (ENG-4971)")
 
 		// Every level fully drained — no worker left behind a dead-loop drain.
-		root.mu.RLock()
-		rootRemaining := len(root.workers)
-		root.mu.RUnlock()
+		rootRemaining := root.TestWorkerCount()
 		Expect(rootRemaining).To(BeZero(), "root supervisor leaked workers after Run returned")
 		Expect(midSup.ListWorkers()).To(BeEmpty(), "mid supervisor leaked workers after Run returned")
 		Expect(leafSup.ListWorkers()).To(BeEmpty(), "leaf supervisor leaked workers after Run returned")
