@@ -25,6 +25,39 @@ import (
 	depspkg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 )
 
+// AuthSession groups the auth fields that travel together from parent transport status
+// to push/pull child config: the JWT bearer token, its expiry, and the backend-confirmed
+// instance UUID. Atomic token+expiry update is provided by the SetJWT setter on
+// TransportDependencies, not enforced by the struct. Children read the session from
+// their own snapshot instead of reaching into parent dependencies.
+//
+// Defined here (a leaf package imported by snapshot, push, and pull) to avoid an
+// import cycle: RenderChildren (in the snapshot package) stamps it and push/pull
+// parse it, but snapshot cannot import push/pull.
+type AuthSession struct {
+	Expiry       time.Time `json:"expiry,omitempty"       yaml:"expiry,omitempty"`
+	Token        string    `json:"token,omitempty"        yaml:"token,omitempty"`
+	InstanceUUID string    `json:"instanceUUID,omitempty" yaml:"instanceUUID,omitempty"`
+}
+
+// IsUsable reports whether the session has a token that will still be valid after
+// the given safety buffer. Pass 1*time.Minute for child-worker COS checks or
+// 10*time.Minute for the parent's proactive refresh trigger.
+func (a AuthSession) IsUsable(buffer time.Duration) bool {
+	if a.Token == "" || a.Expiry.IsZero() {
+		return false
+	}
+
+	return !time.Now().Add(buffer).After(a.Expiry)
+}
+
+// ChildAuthUserSpec is the YAML carrier for the auth session that transport's
+// RenderChildren stamps onto its push/pull children. push/pull embed it in their
+// UserSpec so the marshal-then-parse round trip is structurally identical on both sides.
+type ChildAuthUserSpec struct {
+	AuthSession AuthSession `json:"authSession,omitempty" yaml:"authSession,omitempty"`
+}
+
 // UMHMessage represents a message in the umh-core push/pull protocol.
 // Note: InstanceUUID uses json tag "umhInstance" to match backend API (models.UMHMessage).
 type UMHMessage struct {

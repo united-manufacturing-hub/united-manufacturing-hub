@@ -144,7 +144,7 @@ var _ = Describe("AuthenticateAction", func() {
 			err := act.Execute(ctx, dependencies)
 			Expect(err).NotTo(HaveOccurred())
 
-			Expect(dependencies.GetJWTToken()).To(Equal(expectedToken))
+			Expect(dependencies.GetAuthSession().Token).To(Equal(expectedToken))
 		})
 
 		It("should store JWT expiry in dependencies after successful authentication", func() {
@@ -159,8 +159,7 @@ var _ = Describe("AuthenticateAction", func() {
 			err := act.Execute(ctx, dependencies)
 			Expect(err).NotTo(HaveOccurred())
 
-			storedExpiry := dependencies.GetJWTExpiry()
-			Expect(storedExpiry.Unix()).To(Equal(expectedExpiry))
+			Expect(dependencies.GetAuthSession().Expiry.Unix()).To(Equal(expectedExpiry))
 		})
 	})
 
@@ -177,7 +176,7 @@ var _ = Describe("AuthenticateAction", func() {
 			err := act.Execute(ctx, dependencies)
 			Expect(err).NotTo(HaveOccurred())
 
-			Expect(dependencies.GetAuthenticatedUUID()).To(Equal(expectedUUID))
+			Expect(dependencies.GetAuthSession().InstanceUUID).To(Equal(expectedUUID))
 		})
 
 		It("should handle missing instance UUID gracefully", func() {

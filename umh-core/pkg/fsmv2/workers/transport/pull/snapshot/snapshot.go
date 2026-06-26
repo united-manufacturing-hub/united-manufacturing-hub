@@ -29,7 +29,6 @@ type PullDependencies interface {
 	GetInboundChan() chan<- *types.UMHMessage
 	GetInboundChanStats() (capacity int, length int)
 	GetTransport() types.Transport
-	GetJWTToken() string
 	RecordTypedError(errType types.ErrorType, retryAfter time.Duration)
 	RecordSuccess()
 	RecordError()
@@ -44,8 +43,6 @@ type PullDependencies interface {
 	IsBackpressured() bool
 	SetBackpressured(v bool)
 
-	IsTokenValid() bool
-
 	GetResetGeneration() uint64
 	CheckAndClearOnReset() bool
 
@@ -56,12 +53,15 @@ type PullDependencies interface {
 
 // PullDesiredState represents the target configuration for the pull worker.
 type PullDesiredState struct {
-	State string `json:"state" yaml:"state"`
+	AuthSession types.AuthSession `json:"auth_session,omitempty" yaml:"auth_session,omitempty"`
+	State       string            `json:"state"                  yaml:"state"`
 	config.BaseDesiredState
 }
 
 // GetState returns the desired lifecycle state, defaulting to "running" if empty.
-// For pull workers this is propagated from the parent's user spec.
+// Pull is a leaf child whose lifecycle is gated by the parent transport worker via
+// the Disabled bit, not by its own State. The transport worker therefore leaves State
+// unset when constructing PullDesiredState, and GetState defaults to running.
 func (s *PullDesiredState) GetState() string {
 	if s.State == "" {
 		return config.DesiredStateRunning

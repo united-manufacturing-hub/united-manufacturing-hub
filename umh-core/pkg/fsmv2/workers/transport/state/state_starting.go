@@ -40,7 +40,7 @@ func (s *StartingState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := fsmv2.ConvertWorkerSnapshot[snapshot.TransportDesiredState, snapshot.TransportStatus](snapAny)
 
 	if snap.IsShutdownRequested {
-		return fsmv2.Transition(&StoppingState{}, fsmv2.SignalNone, nil, "Shutdown requested, transitioning to Stopping", childrenStopped(snap.Config))
+		return fsmv2.Transition(&StoppingState{}, fsmv2.SignalNone, nil, "Shutdown requested, transitioning to Stopping", childrenStopped(snap.Config, snap.Status))
 	}
 
 	// If we don't have a valid token, authenticate (with backoff on repeated failures)
@@ -53,7 +53,7 @@ func (s *StartingState) Next(snapAny any) fsmv2.NextResult[any, any] {
 			if isPermanentAuthError(snap.Status.LastErrorType) {
 				return fsmv2.Transition(&AuthFailedState{}, fsmv2.SignalNone, nil,
 					fmt.Sprintf("permanent auth failure (%s after %d errors), entering AuthFailed",
-						snap.Status.LastErrorType, snap.Status.ConsecutiveErrors), childrenAlive(snap.Config))
+						snap.Status.LastErrorType, snap.Status.ConsecutiveErrors), childrenAlive(snap.Config, snap.Status))
 			}
 
 			delay := backoff.CalculateDelayForErrorType(
@@ -64,7 +64,7 @@ func (s *StartingState) Next(snapAny any) fsmv2.NextResult[any, any] {
 			if time.Since(snap.Status.LastAuthAttemptAt) < delay {
 				return fsmv2.Transition(s, fsmv2.SignalNone, nil,
 					fmt.Sprintf("auth backoff: %d errors (%s), delay %s",
-						snap.Status.ConsecutiveErrors, snap.Status.LastErrorType, delay.Round(time.Second)), childrenAlive(snap.Config))
+						snap.Status.ConsecutiveErrors, snap.Status.LastErrorType, delay.Round(time.Second)), childrenAlive(snap.Config, snap.Status))
 			}
 		}
 
@@ -75,13 +75,13 @@ func (s *StartingState) Next(snapAny any) fsmv2.NextResult[any, any] {
 			snap.Config.Timeout,
 		)
 
-		return fsmv2.Transition(s, fsmv2.SignalNone, authAction, "No valid token, authenticating with relay", childrenAlive(snap.Config))
+		return fsmv2.Transition(s, fsmv2.SignalNone, authAction, "No valid token, authenticating with relay", childrenAlive(snap.Config, snap.Status))
 	}
 
 	// Authenticated; transition to Running. Children remain enabled (childrenAlive);
 	// RunningState handles unhealthy children. The !HasValidToken() block above
 	// returns in all paths, so reaching here means the token is valid.
-	return fsmv2.Transition(&RunningState{}, fsmv2.SignalNone, nil, "Authenticated, transitioning to Running", childrenAlive(snap.Config))
+	return fsmv2.Transition(&RunningState{}, fsmv2.SignalNone, nil, "Authenticated, transitioning to Running", childrenAlive(snap.Config, snap.Status))
 }
 
 // isPermanentAuthError returns true for error types that indicate a configuration

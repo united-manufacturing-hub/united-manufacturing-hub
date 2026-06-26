@@ -27,7 +27,21 @@ import (
 
 const PushActionName = "push"
 
-type PushAction struct{}
+// PushAction carries the JWT and instance UUID for one push attempt.
+//
+// Precondition: JWTToken is non-empty. The dispatching state validates it:
+// RunningState and DegradedState only emit a PushAction when
+// snap.Status.HasTransport && snap.Status.HasValidToken is true
+// (state_running.go, state_degraded.go), so
+// Execute never runs with an empty token in production. Do not construct a
+// PushAction outside that gate. There is intentionally no in-action
+// revalidation: an action reaching Execute with an empty token would mean the
+// dispatch gate regressed, and that should surface rather than be silently
+// turned into a no-op.
+type PushAction struct {
+	JWTToken     string
+	InstanceUUID string
+}
 
 func (a *PushAction) Execute(ctx context.Context, depsAny any) error {
 	select {
@@ -39,10 +53,6 @@ func (a *PushAction) Execute(ctx context.Context, depsAny any) error {
 	pushDeps, ok := depsAny.(snapshot.PushDependencies)
 	if !ok {
 		return errors.New("invalid dependencies type: expected PushDependencies")
-	}
-
-	if !pushDeps.IsTokenValid() {
-		return errors.New("token not valid, skipping push")
 	}
 
 	t := pushDeps.GetTransport()
@@ -112,8 +122,8 @@ drainLoop:
 		return nil
 	}
 
-	jwtToken := pushDeps.GetJWTToken()
-	authenticatedUUID := pushDeps.GetAuthenticatedUUID()
+	jwtToken := a.JWTToken
+	authenticatedUUID := a.InstanceUUID
 
 	for _, msg := range messagesToPush {
 		if msg != nil && authenticatedUUID != "" {
@@ -191,8 +201,8 @@ drainLoop:
 // returns the unsent tail of pending so the caller can buffer them for
 // the next tick.
 func (a *PushAction) retryPending(ctx context.Context, t types.Transport, pushDeps snapshot.PushDependencies, pending []*types.UMHMessage, metrics *depspkg.MetricsRecorder) ([]*types.UMHMessage, error) {
-	jwtToken := pushDeps.GetJWTToken()
-	authenticatedUUID := pushDeps.GetAuthenticatedUUID()
+	jwtToken := a.JWTToken
+	authenticatedUUID := a.InstanceUUID
 
 	for i, msg := range pending {
 		if msg == nil {
