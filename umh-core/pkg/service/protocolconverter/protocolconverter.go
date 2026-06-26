@@ -26,6 +26,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/protocolconverterserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cpuhealth"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	connectionfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/connection"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/container"
@@ -1157,6 +1158,17 @@ func (p *ProtocolConverterService) IsResourceLimited(snapshot fsm.SystemSnapshot
 	// Check if container FSM state is degraded (overall system state)
 	currentState := containerInstance.CurrentState
 	if currentState == "degraded" {
+		if containerInstance.LastObservedState != nil {
+			if containerObserved, ok := containerInstance.LastObservedState.(*container.ContainerObservedStateSnapshot); ok {
+				serviceInfo := &containerObserved.ServiceInfoSnapshot
+				if cpu := serviceInfo.CPU; cpu != nil && len(cpu.Causes) > 0 &&
+					serviceInfo.MemoryHealth != models.Degraded && serviceInfo.DiskHealth != models.Degraded {
+					// Causes[0] is the dominant cause; see decide.go severity sort.
+					return true, cpuhealth.BlockReason(cpuhealth.CauseKind(cpu.Causes[0].Kind))
+				}
+			}
+		}
+
 		return true, "System in degraded state"
 	}
 

@@ -118,6 +118,12 @@ func defaultContainer() models.Container {
 			Category:      models.Neutral,
 		},
 		CPU: &models.CPU{
+			// State has no omitempty, so the zero-value "" would marshal as
+			// "state":"" — a third value outside the {healthy,degraded}
+			// contract that reaches MC on every nil-snapshot/error path. The
+			// "status unknown" default is healthy (blind-but-quiet = healthy,
+			// never a distinct unknown state).
+			State: "healthy",
 			Health: &models.Health{
 				Message:       "CPU status unknown",
 				ObservedState: "unknown",

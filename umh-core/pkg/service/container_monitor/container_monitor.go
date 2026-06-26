@@ -26,10 +26,10 @@ import (
 
 	"encoding/hex"
 
-	"github.com/shirou/gopsutil/v4/cpu"
 	"github.com/shirou/gopsutil/v4/disk"
 	"github.com/shirou/gopsutil/v4/mem"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cpuhealth"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
@@ -59,24 +59,18 @@ type Service interface {
 	GetStatus(ctx context.Context) (*ServiceInfo, error)
 }
 
-// cgroupSnapshot stores cgroup CPU counters at a point in time for sliding window calculation.
-type cgroupSnapshot struct {
-	timestamp   time.Time
-	nrPeriods   int64
-	nrThrottled int64
-}
-
 // ContainerMonitorService implements the Service interface.
 type ContainerMonitorService struct {
-	fs                filesystem.Service
-	logger            *zap.SugaredLogger
-	instanceName      string
-	lastCollectedAt   time.Time
-	hwid              string
-	architecture      models.ContainerArchitecture //nolint:unused // will be used in the future
-	dataPath          string                       // Path to check for disk metrics and HWID file
-	throttleSnapshots []cgroupSnapshot             // Sliding window of cgroup counter snapshots
-	wasThrottled      bool                         // Previous throttle state for transition logging
+	lastCollectedAt time.Time
+	fs              filesystem.Service
+	sampler         cpuhealth.Sampler // cgroup cpu.stat usage_usec sampler
+	logger          *zap.SugaredLogger
+	windowState     *cpuhealth.WindowState // Caller-held CPU-health verdict state
+	instanceName    string
+	hwid            string
+	architecture    models.ContainerArchitecture //nolint:unused // will be used in the future
+	dataPath        string                       // Path to check for disk metrics and HWID file
+	wasThrottled    bool                         // Previous throttle state for transition logging
 }
 
 // NewContainerMonitorService creates a new container monitor service instance.
@@ -93,6 +87,8 @@ func NewContainerMonitorServiceWithPath(fs filesystem.Service, dataPath string) 
 		logger:       log,
 		instanceName: constants.CoreInstanceName, // Single container instance name
 		dataPath:     dataPath,
+		windowState:  &cpuhealth.WindowState{},
+		sampler:      cpuhealth.NewCgroupSampler(fs, "/sys/fs/cgroup"),
 	}
 }
 
@@ -155,38 +151,17 @@ func (c *ContainerMonitorService) GetStatus(ctx context.Context) (*ServiceInfo, 
 	// Update last collected timestamp
 	c.lastCollectedAt = time.Now()
 
-	// Assess CPU health
-	// Check if CPU is already marked as degraded (e.g., due to throttling)
+	// Assess CPU health. CPUHealth/OverallHealth are Degraded ONLY when
+	// cpuStat.Health is already Degraded (i.e. throttling detected in
+	// getCPUMetrics). High usage alone is NOT ill health — a capped
+	// container pinned at its quota is busy, not sick — so raw-usage
+	// degradation is not applied here. Windowed saturation logic in
+	// cpuhealth.WindowState will reintroduce usage-based degradation
+	// later, gated on the dead-zone; until then the two fields stay
+	// consistent with cpuStat.Health.
 	if cpuStat.Health != nil && cpuStat.Health.Category == models.Degraded {
 		status.CPUHealth = models.Degraded
 		status.OverallHealth = models.Degraded
-	} else {
-		// Calculate CPU percentage against effective cores (cgroup limit if available)
-		//
-		// NOTE: CPU percentage is fundamentally misleading for understanding performance:
-		// 1. In containers, throttling matters more than usage percentage
-		// 2. CPU % doesn't scale linearly due to hyperthreading, turbo boost, etc.
-		// 3. Users need to know throttling status, not just usage
-		//
-		// See ENG-3423 for planned improvements to show mCPU instead of percentage
-		// See https://www.brendanlong.com/cpu-utilization-is-a-lie.html for why CPU % is misleading
-		//
-		// We maintain percentage calculation for API compatibility, but throttling
-		// detection (handled elsewhere) is the more important health signal.
-		effectiveCores := cpuStat.CgroupCores
-		if effectiveCores <= 0 {
-			// Fall back to host cores if cgroup info unavailable
-			effectiveCores = float64(cpuStat.CoreCount)
-		}
-
-		if effectiveCores > 0 {
-			cpuPercent := (cpuStat.TotalUsageMCpu / 1000.0) / effectiveCores * 100.0
-
-			if cpuPercent > constants.CPUHighThresholdPercent {
-				status.CPUHealth = models.Degraded
-				status.OverallHealth = models.Degraded
-			}
-		}
 	}
 
 	// Assess memory health
@@ -256,7 +231,7 @@ func (c *ContainerMonitorService) GetHealth(ctx context.Context) (*models.Health
 // By default, this retrieves host-level usage unless gopsutil is configured
 // to read from container cgroup data. See notes below for cgroup-limited usage.
 func (c *ContainerMonitorService) getCPUMetrics(ctx context.Context) (*models.CPU, error) {
-	usageMCores, coreCount, usagePercent, err := c.getRawCPUMetrics(ctx)
+	usageMCores, coreCount, _, sample, err := c.getRawCPUMetrics(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -267,18 +242,53 @@ func (c *ContainerMonitorService) getCPUMetrics(ctx context.Context) (*models.CP
 		return nil, ctx.Err()
 	}
 
-	// Default to Active health
+	// Default to Active health. The curated per-cause message is composed
+	// below from the verdict + signals (headline + "Technical Details:" +
+	// why + what-to-do from the supertable when degraded, "CPU healthy" +
+	// optional limited-visibility note when healthy), replacing the generic
+	// "CPU degraded" / "CPU utilization normal" strings.
 	category := models.Active
-	message := "CPU utilization normal"
 
-	// Compute windowed throttle ratio; skip entirely on cgroup read failure to preserve wasThrottled state
+	// Compute the throttle verdict through cpuhealth.Decide's Schmitt flip-latch
+	// (fires above ThrottleHigh 0.05, clears only below ThrottleRecover 0.03,
+	// holds between). Decide mutates c.windowState in place, maintaining the
+	// 60s throttle-counter ring. The numeric ThrottleRatio is read
+	// unconditionally from signals (independent of latch state); IsThrottled
+	// comes from signals.ThrottleFired. Skip entirely on cgroup read failure to
+	// preserve wasThrottled state.
 	var (
-		windowedRatio float64
-		isThrottled   bool
+		isThrottled bool
+		// Default to healthy so a cgroup-read failure (cgroup v1, non-container,
+		// transient read error) — which skips the Decide call below — still
+		// emits State="healthy" on the wire. State has no omitempty, so without
+		// this default the zero-value "" would be emitted, violating the
+		// always-emitted healthy|degraded contract.
+		verdict = cpuhealth.Verdict{State: cpuhealth.StateHealthy}
+		signals cpuhealth.Signals
 	)
+
 	if cgroupErr == nil && cgroupInfo != nil {
-		windowedRatio, isThrottled = c.updateThrottleWindow(cgroupInfo)
-		cgroupInfo.ThrottleRatio = windowedRatio
+		// Calling c.sampler.Sample here twice re-baselines usage_usec, zeroing
+		// the StealFraction/HostBusyCores deltas; reuse the Sample from
+		// getRawCPUMetrics (the only c.sampler.Sample call per GetStatus)
+		// instead. NrPeriods/NrThrottled are overlaid from cgroupInfo (the
+		// authoritative throttle counters the sampler does not parse). On a
+		// sampler failure getRawCPUMetrics returns a zero-valued Sample
+		// (dead-zone: Quota nil, PSI absent, not virtualized); Decide still
+		// evaluates the throttle ring from the overlaid NrPeriods/NrThrottled
+		// counters, and the dead-zone saturation backstop runs harmlessly
+		// (UsageCores=0 yields fraction=0). This invariant is test-pinned by the
+		// "sampler failure dead-zone" spec in sampler_full_sample_wire_test.go.
+		sample.Timestamp = time.Now()
+		sample.NrPeriods = cgroupInfo.NrPeriods
+		sample.NrThrottled = cgroupInfo.NrThrottled
+		verdict, signals = cpuhealth.Decide(c.windowState, sample, cpuhealth.DefaultThresholds())
+		isThrottled = signals.ThrottleFired
+		// ThrottleRatio is read unconditionally from signals, decoupling the
+		// numeric metric from latch state. Negatives are already clamped to 0
+		// inside Decide, so the wire never sees a negative ratio. IsThrottled
+		// still comes from signals.ThrottleFired (the Schmitt latch).
+		cgroupInfo.ThrottleRatio = signals.ThrottleRatio
 		cgroupInfo.IsThrottled = isThrottled
 
 		if isThrottled && !c.wasThrottled {
@@ -288,17 +298,29 @@ func (c *ContainerMonitorService) getCPUMetrics(ctx context.Context) (*models.CP
 		c.wasThrottled = isThrottled
 	}
 
-	switch {
-	case usagePercent >= constants.CPUHighThresholdPercent || isThrottled:
-		category = models.Degraded
+	// ComposeMessage returns the curated per-cause two-layer message (headline
+	// + "Technical Details:" + why + what-to-do from the supertable) when
+	// degraded, and "CPU healthy" (plus an optional limited-visibility note
+	// when the sample is in the dead-zone) when healthy — replacing the
+	// generic "CPU degraded" / "CPU utilization normal" strings.
+	message := cpuhealth.ComposeMessage(verdict, signals)
 
-		if isThrottled && cgroupInfo != nil {
-			message = fmt.Sprintf("CPU throttled (%.1f%% periods throttled)", cgroupInfo.ThrottleRatio*100)
-		} else {
-			message = "CPU utilization critical"
-		}
-	case usagePercent >= constants.CPUMediumThresholdPercent:
-		message = "CPU utilization warning"
+	// CPU health is driven from verdict.State, not throttle alone. High usage
+	// alone is not ill health (a capped container pinned at its quota is busy,
+	// not sick), and raw-usage degradation is no longer applied in GetStatus
+	// either. The verdict flows through cpuhealth.Decide's Schmitt flip-latches
+	// (c.windowState); c.sampler remains live for usage reading in
+	// getRawCPUMetrics.
+	//
+	// StateDegraded now covers throttle OR pressure (and any future cause
+	// Decide returns a degraded verdict for), so category is driven from
+	// verdict.State so every degradation cause flows to Degraded — not just
+	// throttle. The curated per-cause message is composed above via
+	// ComposeMessage(verdict, signals); isThrottled is retained for the
+	// cgroupInfo.IsThrottled wire field and the wasThrottled transition log
+	// above.
+	if verdict.State == cpuhealth.StateDegraded && cgroupInfo != nil {
+		category = models.Degraded
 	}
 
 	cpuStat := &models.CPU{
@@ -310,6 +332,20 @@ func (c *ContainerMonitorService) getCPUMetrics(ctx context.Context) (*models.CP
 		},
 		TotalUsageMCpu: usageMCores,
 		CoreCount:      coreCount,
+		State:          string(verdict.State),
+	}
+
+	if verdict.State == cpuhealth.StateDegraded {
+		cpuStat.Attribution = string(verdict.Attribution)
+		if len(verdict.Causes) > 0 {
+			cpuStat.Causes = make([]models.Cause, len(verdict.Causes))
+			for i, c := range verdict.Causes {
+				cpuStat.Causes[i] = models.Cause{
+					Kind:  models.CauseKind(c.Kind),
+					Value: c.Value,
+				}
+			}
+		}
 	}
 
 	// Add cgroup info if available
@@ -319,85 +355,22 @@ func (c *ContainerMonitorService) getCPUMetrics(ctx context.Context) (*models.CP
 		cpuStat.IsThrottled = cgroupInfo.IsThrottled
 	}
 
+	// Percentile mCPU fields are observability-only mirrors of the dead-zone
+	// usage ring (signals.*UsageFraction * 1000). They are 0 when the ring
+	// holds < 2 entries (outside the dead-zone, or first tick) — omitempty
+	// then drops them from the wire. They do not change the verdict.
+	cpuStat.AvgMCpu = signals.AvgUsageFraction * 1000
+	cpuStat.P95MCpu = signals.P95UsageFraction * 1000
+	cpuStat.P99MCpu = signals.P99UsageFraction * 1000
+
 	return cpuStat, nil
 }
 
-// updateThrottleWindow appends a cgroup snapshot and computes the throttle ratio
-// over a sliding window defined by constants.CPUThrottleWindow.
-// Returns (0.0, false) when there is insufficient data, nil input, or counter reset.
-func (c *ContainerMonitorService) updateThrottleWindow(cgroupInfo *CPUCgroupInfo) (ratio float64, isThrottled bool) {
-	// Guard: nil input or zero periods (cpu.stat unreadable)
-	if cgroupInfo == nil || cgroupInfo.NrPeriods <= 0 {
-		return 0.0, false
-	}
-
-	now := time.Now()
-
-	// Detect counter reset: if new counters are lower than the newest snapshot,
-	// the cgroup was recreated (pod rescheduled). Clear buffer and start fresh.
-	if len(c.throttleSnapshots) > 0 {
-		newest := c.throttleSnapshots[len(c.throttleSnapshots)-1]
-		if cgroupInfo.NrPeriods < newest.nrPeriods || cgroupInfo.NrThrottled < newest.nrThrottled {
-			c.throttleSnapshots = nil
-		}
-	}
-
-	// Append current snapshot
-	c.throttleSnapshots = append(c.throttleSnapshots, cgroupSnapshot{
-		timestamp:   now,
-		nrPeriods:   cgroupInfo.NrPeriods,
-		nrThrottled: cgroupInfo.NrThrottled,
-	})
-
-	// Prune entries older than the window
-	cutoff := now.Add(-constants.CPUThrottleWindow)
-
-	pruneIdx := 0
-	for pruneIdx < len(c.throttleSnapshots) && c.throttleSnapshots[pruneIdx].timestamp.Before(cutoff) {
-		pruneIdx++
-	}
-
-	if pruneIdx > 0 {
-		c.throttleSnapshots = c.throttleSnapshots[pruneIdx:]
-	}
-
-	// Need at least 2 snapshots for a delta
-	if len(c.throttleSnapshots) < 2 {
-		return 0.0, false
-	}
-
-	// Compute delta between newest and oldest snapshot in window
-	oldest := c.throttleSnapshots[0]
-	current := c.throttleSnapshots[len(c.throttleSnapshots)-1]
-
-	deltaPeriods := current.nrPeriods - oldest.nrPeriods
-	deltaThrottled := current.nrThrottled - oldest.nrThrottled
-
-	if deltaPeriods <= 0 {
-		return 0.0, false
-	}
-
-	ratio = float64(deltaThrottled) / float64(deltaPeriods)
-	isThrottled = ratio > constants.CPUThrottleRatioThreshold
-
-	return ratio, isThrottled
-}
-
-func (c *ContainerMonitorService) getRawCPUMetrics(ctx context.Context) (usageMCores float64, coreCount int, usagePercent float64, err error) {
+func (c *ContainerMonitorService) getRawCPUMetrics(ctx context.Context) (usageMCores float64, coreCount int, usagePercent float64, sample cpuhealth.Sample, err error) {
 	// Try to get cgroup info first for accurate container limits
 	cgroupInfo, cgroupErr := c.getCgroupCPUInfo(ctx)
 	if ctx.Err() != nil {
-		return 0, 0, 0, ctx.Err()
-	}
-
-	// Get actual CPU usage
-	usagePercentages, err := cpu.PercentWithContext(ctx, 0, false)
-	if err != nil {
-		return 0, 0, 0, err
-	}
-
-	if len(usagePercentages) > 0 {
-		usagePercent = usagePercentages[0]
+		return 0, 0, 0, cpuhealth.Sample{}, ctx.Err()
 	}
 
 	// Determine effective core count (keep as float64 to preserve fractional quotas)
@@ -415,12 +388,30 @@ func (c *ContainerMonitorService) getRawCPUMetrics(ctx context.Context) (usageMC
 
 	coreCount = runtime.NumCPU() // Always report host cores for compatibility
 
-	// Convert usage percent to mCPU based on effective cores
-	// This gives us a more accurate representation when cgroups limit CPU
-	usageCores := (usagePercent / 100.0) * effectiveCores
+	// Read container-relative CPU usage from the cgroup cpu.stat usage_usec
+	// counter. This is the ONLY c.sampler.Sample call per GetStatus; the
+	// returned Sample (carrying Quota, PressureAvg60, PsiAvailable,
+	// StealFraction, Virtualized, HostBusyCores, LogicalCpus in addition to
+	// UsageCores) is threaded through to the Decide call site in
+	// getCPUMetrics so the delta-based signals survive. On read failure
+	// (cgroup v1, non-container, transient) the error is logged at debug and
+	// a zero-valued Sample is returned; a host fallback / surfaceable error
+	// is not implemented yet.
+	sample, err = c.sampler.Sample(ctx)
+	if err != nil {
+		c.logger.Debugf("cgroup cpu usage unavailable, reporting zero: %v", err)
+	}
+
+	if ctx.Err() != nil {
+		return 0, 0, 0, cpuhealth.Sample{}, ctx.Err()
+	}
+
+	usageCores := sample.UsageCores
 	usageMCores = usageCores * 1000
 
-	return usageMCores, coreCount, usagePercent, nil
+	usagePercent = (usageCores / effectiveCores) * 100.0
+
+	return usageMCores, coreCount, usagePercent, sample, nil
 }
 
 // getMemoryMetrics collects memory metrics, preferring cgroup values when available.
