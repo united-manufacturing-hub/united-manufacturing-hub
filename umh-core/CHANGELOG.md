@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Fixes
+
+- CPU health no longer flags a container as degraded just because its CPU usage is high. Previously, any container crossing 70% CPU showed as degraded and could block new bridges, even under healthy high load; CPU health is now based on actual starvation (CFS throttling, CPU pressure, steal) rather than raw utilization, so a busy container stays healthy and bridges are not blocked under normal load
+
 ## [0.44.24]
 
 ### Fixes
