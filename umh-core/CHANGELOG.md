@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Fixes
+
+- Deploying a stand-alone flow now returns its component ID in the action reply, so the Management Console's "Continue Editing" button opens the flow's editing view instead of only closing the dialog.
+
 ## [0.44.26]
 
 ### Improvements

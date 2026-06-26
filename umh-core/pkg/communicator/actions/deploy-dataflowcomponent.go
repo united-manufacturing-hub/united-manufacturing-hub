@@ -256,7 +256,11 @@ func (a *DeployDataflowComponentAction) Execute() (interface{}, map[string]inter
 	// return success message, but do not send it as this is done by the caller
 	successMsg := Label("deploy", a.name) + "component successfully deployed"
 
-	return successMsg, nil, nil
+	componentUUID := dataflowcomponentserviceconfig.GenerateUUIDFromName(a.name)
+
+	return successMsg, map[string]interface{}{
+		"dataflowcomponentUUID": componentUUID.String(),
+	}, nil
 }
 
 // getUserEmail implements the Action interface by returning the user email associated with this action.

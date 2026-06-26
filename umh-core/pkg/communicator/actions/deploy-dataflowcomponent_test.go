@@ -481,7 +481,8 @@ var _ = Describe("DeployDataflowComponent", func() {
 			result, metadata, err := action.Execute()
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result).To(ContainSubstring("success"))
-			Expect(metadata).To(BeNil())
+			Expect(metadata).To(HaveKey("dataflowcomponentUUID"))
+			Expect(metadata["dataflowcomponentUUID"]).NotTo(BeEmpty())
 
 			// Stop the state mocker
 			stateMocker.Stop()
@@ -703,7 +704,8 @@ buffer:
 			result, metadata, err := action.Execute()
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result).To(ContainSubstring("success"))
-			Expect(metadata).To(BeNil())
+			Expect(metadata).To(HaveKey("dataflowcomponentUUID"))
+			Expect(metadata["dataflowcomponentUUID"]).NotTo(BeEmpty())
 
 			// Stop the state mocker
 			stateMocker.Stop()
@@ -770,7 +772,8 @@ buffer:
 			result, metadata, err := action.Execute()
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result).To(ContainSubstring("success"))
-			Expect(metadata).To(BeNil())
+			Expect(metadata).To(HaveKey("dataflowcomponentUUID"))
+			Expect(metadata["dataflowcomponentUUID"]).NotTo(BeEmpty())
 
 			// Stop the state mocker
 			stateMocker.Stop()
