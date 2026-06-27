@@ -239,3 +239,209 @@ func TestObserve_MetricsHTTPFailureKeepsHealthAndDoesNotClaimMetrics(t *testing.
 		t.Fatalf("len(ConnectionStatuses) = %d, want 2 (health endpoints still populated despite /metrics failing)", len(hc.ConnectionStatuses))
 	}
 }
+
+// TestObserve_MetricsParseFailurePreservesHealth verifies that a 200 /metrics
+// response whose body cannot be parsed soft-skips: MetricsAvailable stays false,
+// Metrics stays zero, the error is nil, and the already-collected /ping, /ready
+// and /version HealthCheck fields are preserved (a failing /metrics endpoint
+// must not clear the others).
+func TestObserve_MetricsParseFailurePreservesHealth(t *testing.T) {
+	readyBody := `{"statuses":[{"label":"tcp_server","path":"root.input","connected":true},{"label":"http_client","path":"root.output","connected":true}]}`
+	versionBody := `{"version":"3.71.0","built":"2023-08-15T12:00:00Z"}`
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/ping", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte("pong"))
+	})
+	mux.HandleFunc("/ready", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(readyBody))
+	})
+	mux.HandleFunc("/version", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(versionBody))
+	})
+	mux.HandleFunc("/metrics", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/plain; version=0.0.4")
+		_, _ = w.Write([]byte("input_received{path=\"root.input\"} NOTANUMBER\n"))
+	})
+
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	port := portFromURL(t, srv.URL)
+
+	scan, err := benthosmetrics.Observe(context.Background(), http.DefaultClient, port)
+	if err != nil {
+		t.Fatalf("Observe returned error: %v (an unparseable /metrics body must soft-skip, not return an error)", err)
+	}
+
+	if scan.MetricsAvailable {
+		t.Errorf("MetricsAvailable = true, want false (unparseable /metrics body must not set MetricsAvailable)")
+	}
+
+	if !reflect.DeepEqual(scan.Metrics, benthosmetrics.Metrics{}) {
+		t.Errorf("Metrics = %+v, want zero value (unparseable /metrics body must not return partial metrics)", scan.Metrics)
+	}
+
+	hc := scan.HealthCheck
+	if !hc.IsLive {
+		t.Errorf("HealthCheck.IsLive = false, want true (200 /ping must be preserved despite /metrics parse failure)")
+	}
+
+	if !hc.IsReady {
+		t.Errorf("HealthCheck.IsReady = false, want true (200 /ready must be preserved despite /metrics parse failure)")
+	}
+
+	if hc.Version != "3.71.0" {
+		t.Errorf("HealthCheck.Version = %q, want %q (200 /version must be preserved despite /metrics parse failure)", hc.Version, "3.71.0")
+	}
+
+	if len(hc.ConnectionStatuses) != 2 {
+		t.Fatalf("len(ConnectionStatuses) = %d, want 2 (HealthCheck must be preserved despite /metrics parse failure)", len(hc.ConnectionStatuses))
+	}
+}
+
+// TestObserve_MetricsBodyReadFailurePreservesHealth verifies that a 200
+// /metrics response whose body read fails (truncated mid-stream) soft-skips:
+// MetricsAvailable stays false, Metrics stays zero, the error is nil, and the
+// already-collected /ping, /ready and /version HealthCheck fields are
+// preserved (a failing /metrics endpoint must not clear the others).
+func TestObserve_MetricsBodyReadFailurePreservesHealth(t *testing.T) {
+	readyBody := `{"statuses":[{"label":"tcp_server","path":"root.input","connected":true},{"label":"http_client","path":"root.output","connected":true}]}`
+	versionBody := `{"version":"3.71.0","built":"2023-08-15T12:00:00Z"}`
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/ping", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte("pong"))
+	})
+	mux.HandleFunc("/ready", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(readyBody))
+	})
+	mux.HandleFunc("/version", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(versionBody))
+	})
+	mux.HandleFunc("/metrics", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Length", "1024")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("partial"))
+		if f, ok := w.(http.Flusher); ok {
+			f.Flush()
+		}
+		hj, ok := w.(http.Hijacker)
+		if !ok {
+			t.Fatalf("server does not support hijacking")
+		}
+		conn, _, err := hj.Hijack()
+		if err != nil {
+			t.Fatalf("hijack: %v", err)
+		}
+		conn.Close()
+	})
+
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	port := portFromURL(t, srv.URL)
+
+	scan, err := benthosmetrics.Observe(context.Background(), http.DefaultClient, port)
+	if err != nil {
+		t.Fatalf("Observe returned error: %v (a /metrics body-read failure must soft-skip, not return an error)", err)
+	}
+
+	if scan.MetricsAvailable {
+		t.Errorf("MetricsAvailable = true, want false (/metrics body-read failure must not set MetricsAvailable)")
+	}
+
+	if !reflect.DeepEqual(scan.Metrics, benthosmetrics.Metrics{}) {
+		t.Errorf("Metrics = %+v, want zero value (/metrics body-read failure must not return partial metrics)", scan.Metrics)
+	}
+
+	hc := scan.HealthCheck
+	if !hc.IsLive {
+		t.Errorf("HealthCheck.IsLive = false, want true (200 /ping must be preserved despite /metrics body-read failure)")
+	}
+
+	if !hc.IsReady {
+		t.Errorf("HealthCheck.IsReady = false, want true (200 /ready must be preserved despite /metrics body-read failure)")
+	}
+
+	if hc.Version != "3.71.0" {
+		t.Errorf("HealthCheck.Version = %q, want %q (200 /version must be preserved despite /metrics body-read failure)", hc.Version, "3.71.0")
+	}
+
+	if len(hc.ConnectionStatuses) != 2 {
+		t.Fatalf("len(ConnectionStatuses) = %d, want 2 (HealthCheck must be preserved despite /metrics body-read failure)", len(hc.ConnectionStatuses))
+	}
+}
+
+// TestObserve_MetricsTransportFailurePreservesHealth verifies that a /metrics
+// transport failure (the GET itself errors, e.g. connection reset) soft-skips:
+// MetricsAvailable stays false, Metrics stays zero, the error is nil, and the
+// already-collected /ping, /ready and /version HealthCheck fields are
+// preserved (a failing /metrics endpoint must not clear the others).
+func TestObserve_MetricsTransportFailurePreservesHealth(t *testing.T) {
+	readyBody := `{"statuses":[{"label":"tcp_server","path":"root.input","connected":true},{"label":"http_client","path":"root.output","connected":true}]}`
+	versionBody := `{"version":"3.71.0","built":"2023-08-15T12:00:00Z"}`
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/ping", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte("pong"))
+	})
+	mux.HandleFunc("/ready", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(readyBody))
+	})
+	mux.HandleFunc("/version", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(versionBody))
+	})
+	mux.HandleFunc("/metrics", func(w http.ResponseWriter, _ *http.Request) {
+		hj, ok := w.(http.Hijacker)
+		if !ok {
+			t.Fatalf("server does not support hijacking")
+		}
+		conn, _, err := hj.Hijack()
+		if err != nil {
+			t.Fatalf("hijack: %v", err)
+		}
+		conn.Close()
+	})
+
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	port := portFromURL(t, srv.URL)
+
+	scan, err := benthosmetrics.Observe(context.Background(), http.DefaultClient, port)
+	if err != nil {
+		t.Fatalf("Observe returned error: %v (a /metrics transport failure must soft-skip, not return an error)", err)
+	}
+
+	if scan.MetricsAvailable {
+		t.Errorf("MetricsAvailable = true, want false (/metrics transport failure must not set MetricsAvailable)")
+	}
+
+	if !reflect.DeepEqual(scan.Metrics, benthosmetrics.Metrics{}) {
+		t.Errorf("Metrics = %+v, want zero value (/metrics transport failure must not return partial metrics)", scan.Metrics)
+	}
+
+	hc := scan.HealthCheck
+	if !hc.IsLive {
+		t.Errorf("HealthCheck.IsLive = false, want true (200 /ping must be preserved despite /metrics transport failure)")
+	}
+
+	if !hc.IsReady {
+		t.Errorf("HealthCheck.IsReady = false, want true (200 /ready must be preserved despite /metrics transport failure)")
+	}
+
+	if hc.Version != "3.71.0" {
+		t.Errorf("HealthCheck.Version = %q, want %q (200 /version must be preserved despite /metrics transport failure)", hc.Version, "3.71.0")
+	}
+
+	if len(hc.ConnectionStatuses) != 2 {
+		t.Fatalf("len(ConnectionStatuses) = %d, want 2 (HealthCheck must be preserved despite /metrics transport failure)", len(hc.ConnectionStatuses))
+	}
+}

@@ -26,9 +26,9 @@ import (
 // HTTP endpoints over the given port and returns a Scan carrying the parsed
 // metrics and health check.
 //
-// A non-200 /metrics response yields a nil error with MetricsAvailable=false
-// and a populated HealthCheck; callers must check MetricsAvailable rather than
-// rely on err != nil.
+// A non-200, transport, body-read, or parse failure on /metrics yields a nil
+// error with MetricsAvailable=false and a populated HealthCheck; callers must
+// check MetricsAvailable rather than rely on err != nil.
 func Observe(ctx context.Context, client *http.Client, port uint16) (Scan, error) {
 	base := fmt.Sprintf("http://localhost:%d", port)
 
@@ -88,7 +88,7 @@ func Observe(ctx context.Context, client *http.Client, port uint16) (Scan, error
 	// /metrics -> Metrics
 	metricsResp, err := get(ctx, client, base+"/metrics")
 	if err != nil {
-		return Scan{}, fmt.Errorf("metrics: %w", err)
+		return scan, nil
 	}
 
 	defer func() { _ = metricsResp.Body.Close() }()
@@ -99,12 +99,12 @@ func Observe(ctx context.Context, client *http.Client, port uint16) (Scan, error
 
 	metricsBody, err := io.ReadAll(metricsResp.Body)
 	if err != nil {
-		return Scan{}, fmt.Errorf("metrics body: %w", err)
+		return scan, nil
 	}
 
 	metrics, err := ParseMetricsFromBytes(metricsBody)
 	if err != nil {
-		return Scan{}, fmt.Errorf("metrics parse: %w", err)
+		return scan, nil
 	}
 
 	scan.Metrics = metrics
