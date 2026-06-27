@@ -154,9 +154,10 @@ type CPU struct {
 	// unconditionally (observability-only, like ThrottleRatio); 0 when not
 	// virtualized. It does not change the verdict.
 	StealP95 float64 `json:"stealP95,omitempty"`
-	// PressureAvg60 is the PSI cpu.pressure some-avg60 value (percent 0-100),
-	// populated unconditionally (observability-only, like ThrottleRatio); 0 when
-	// PSI is unavailable. It does not change the verdict.
+	// PressureAvg60 is the PSI cpu.pressure some-avg60 value as a fraction 0-1
+	// (the raw kernel 0-100 percentage divided by 100, same convention as
+	// ThrottleRatio), populated unconditionally (observability-only, like
+	// ThrottleRatio); 0 when PSI is unavailable. It does not change the verdict.
 	PressureAvg60 float64 `json:"pressureAvg60,omitempty"`
 }
 

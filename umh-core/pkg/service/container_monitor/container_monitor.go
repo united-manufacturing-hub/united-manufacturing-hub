@@ -363,7 +363,8 @@ func (c *ContainerMonitorService) getCPUMetrics(ctx context.Context) (*models.CP
 	cpuStat.P95MCpu = signals.P95UsageFraction * 1000
 	cpuStat.P99MCpu = signals.P99UsageFraction * 1000
 
-	// StealP95 (steal fraction 0-1) and PressureAvg60 (PSI some-avg60 percent)
+	// StealP95 (steal fraction 0-1) and PressureAvg60 (PSI some-avg60 as a
+	// fraction 0-1; the sampler divides the raw kernel 0-100 percentage by 100)
 	// are observability-only mirrors of the corresponding Signals fields,
 	// populated unconditionally like ThrottleRatio. They are 0 (omitempty drops
 	// them) when not virtualized / when PSI is unavailable. They do not change

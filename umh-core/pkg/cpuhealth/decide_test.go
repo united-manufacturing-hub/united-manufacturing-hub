@@ -2704,15 +2704,14 @@ func TestDecide_UsagePercentiles_FromSaturationRing(t *testing.T) {
 	}
 }
 
-// TestDecide_StealAndPressure_UnconditionalSignals pins the PR1 observability
-// widening: the steal p95 (the existing stealP95Val local) and the pressure
-// value (sample.PressureAvg60) are surfaced as UNCONDITIONAL Signals fields
-// (Signals.StealP95, Signals.PressureAvg60Out), populated regardless of the
-// StealFired/PressureFired latch state — exactly the pattern Signals.ThrottleRatio
-// already follows (read off signals even when ThrottleFired is false). This is
-// observability-only: the verdict (State/Attribution/Causes) is NOT changed by
-// these fields, so each sub-case also pins that the verdict stays healthy with
-// no causes when only sub-threshold steal/pressure are present.
+// TestDecide_StealAndPressure_UnconditionalSignals pins the new unconditional
+// Signals fields: the steal p95 (the existing stealP95Val local) and the
+// pressure value (sample.PressureAvg60) populate Signals.StealP95 and
+// Signals.PressureAvg60Out regardless of the StealFired/PressureFired latch
+// state, the same way Signals.ThrottleRatio populates regardless of
+// ThrottleFired. The verdict (State/Attribution/Causes) does not change, so
+// each sub-case also pins that the verdict stays healthy with no causes when
+// only sub-threshold steal/pressure are present.
 //
 //  1. STEAL BELOW FIRE → STILL REPORTED. On a virtualized box, a sustained
 //     steal of 0.08 keeps the steal latch UNFIRED (p95 0.08 is not > StealHigh

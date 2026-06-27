@@ -16,6 +16,7 @@ package container_monitor_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -130,6 +131,93 @@ var _ = Describe("sampler full Sample wired into Decide (rung 12b)", func() {
 			"OverallHealth must co-set with CPUHealth on a CPU degrade")
 		Expect(status2.CPU.Health.Category).To(Equal(models.Degraded),
 			"the CPU Health category must reflect the degraded verdict")
+
+		// PressureAvg60 (observability-only, populated unconditionally) must reach
+		// the wire carrying the same fraction Decide thresholded: some avg60=25.00
+		// → 0.25 fraction. This proves the value crosses the container_monitor
+		// adapter onto models.CPU, not just the internal Signals struct.
+		Expect(status2.CPU.PressureAvg60).To(BeNumerically("~", 0.25, 1e-9),
+			"PressureAvg60 reaches the wire as a fraction (some avg60=25.00 / 100)")
+		pressureJSON, err := json.Marshal(status2.CPU)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(pressureJSON).To(ContainSubstring(`"pressureAvg60":0.25`),
+			"pressureAvg60 must be present on the JSON wire when non-zero")
+	})
+})
+
+var _ = Describe("steal p95 wired onto the wire via the sampler", func() {
+	It("carries StealP95 from the sampler's /proc/stat steal delta onto models.CPU, populated unconditionally even when the steal latch has not fired", func() {
+		// StealP95 is observability-only and populated UNCONDITIONALLY (like
+		// ThrottleRatio), independent of the steal latch. This test drives a
+		// virtualized box (/proc/cpuinfo "hypervisor" flag) with a /proc/stat
+		// steal delta through the real sampler and pins that the computed steal
+		// p95 reaches models.CPU.StealP95 on the wire — proving the value crosses
+		// the container_monitor adapter, not just the internal Signals struct.
+		//
+		// cpu.max is capped (Quota=2.0) so the sample is outside the dead-zone
+		// (no saturation backstop), nr_throttled is pinned at 0 (no throttle), and
+		// cpu.pressure is absent (no pressure) — steal is the only signal moving.
+		mockFS := filesystem.NewMockFileSystem()
+		ctx := context.Background()
+
+		testDataPath, err := os.MkdirTemp("", "steal-p95-wire-test")
+		Expect(err).NotTo(HaveOccurred())
+		defer func() { _ = os.RemoveAll(testDataPath) }()
+
+		const cpuMax = "200000 100000\n"
+		const cpuInfo = "processor\t: 0\nflags\t\t: fpu vme hypervisor\n"
+
+		// /proc/stat first "cpu " line: 10 counters; index 7 is steal. Tick 1
+		// baselines (steal=0, total=1000). Tick 2 advances total by 200 and steal
+		// by 100 → StealFraction = 100/200 = 0.5. With Virtualized=true the steal
+		// ring then holds [0, 0.5], so the nearest-rank p95 is ~0.5.
+		var procStat = "cpu 0 0 0 1000 0 0 0 0 0 0\n"
+
+		var nrPeriods int64 = 1000
+		var usageUsec int64 = 1_000_000
+
+		mockFS.WithReadFileFunc(func(_ context.Context, path string) ([]byte, error) {
+			switch path {
+			case "/sys/fs/cgroup/cpu.max":
+				return []byte(cpuMax), nil
+			case "/sys/fs/cgroup/cpu.stat":
+				return []byte(fmt.Sprintf(
+					"usage_usec %d\nnr_periods %d\nnr_throttled 0\nthrottled_usec 0\n",
+					usageUsec, nrPeriods,
+				)), nil
+			case "/proc/cpuinfo":
+				return []byte(cpuInfo), nil
+			case "/proc/stat":
+				return []byte(procStat), nil
+			default:
+				return nil, errors.New("file not found: " + path)
+			}
+		})
+
+		svc := container_monitor.NewContainerMonitorServiceWithPath(mockFS, testDataPath)
+
+		// Tick 1 — baselines /proc/stat (StealFraction=0); the steal ring holds a
+		// single 0 sample, below the 2-sample floor, so StealP95 is 0.
+		nrPeriods, usageUsec = 1000, 1_000_000
+		status1, err := svc.GetStatus(ctx)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(status1.CPU.StealP95).To(BeZero(),
+			"StealP95 is 0 on the baseline tick (single sample, below the 2-sample floor)")
+
+		// Tick 2 — steal delta 100/200 = 0.5; the ring now holds [0, 0.5] and the
+		// p95 reaches the wire. The steal latch need not have fired — StealP95 is
+		// populated unconditionally.
+		procStat = "cpu 0 0 0 1100 0 0 0 100 0 0\n"
+		nrPeriods, usageUsec = 2000, 2_000_000
+		status2, err := svc.GetStatus(ctx)
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(status2.CPU.StealP95).To(BeNumerically("~", 0.5, 1e-9),
+			"StealP95 reaches the wire as a fraction (steal delta 100 / total delta 200)")
+		stealJSON, err := json.Marshal(status2.CPU)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(stealJSON).To(ContainSubstring(`"stealP95":0.5`),
+			"stealP95 must be present on the JSON wire when non-zero")
 	})
 })
 
