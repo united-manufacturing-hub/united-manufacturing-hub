@@ -180,6 +180,10 @@ var _ = Describe("BenthosMonitorWorker CollectObservedState", func() {
 			typedObs, ok := obs.(fsmv2.Observation[benthos_monitor.BenthosMonitorStatus])
 			Expect(ok).To(BeTrue(), "expected fsmv2.Observation[BenthosMonitorStatus], got %T", obs)
 			Expect(typedObs.Status.Scan.HealthCheck.IsLive).To(BeFalse())
+			// A down benthos is an observed scrape that came back all-false, NOT a
+			// stopped worker: Stopped must be false so a read path can tell a
+			// crashed bridge from an admin-paused one.
+			Expect(typedObs.Status.Stopped).To(BeFalse(), "a down benthos must not read as Stopped")
 		})
 	})
 
@@ -233,6 +237,10 @@ var _ = Describe("BenthosMonitorWorker CollectObservedState", func() {
 			typedObs, ok := obs.(fsmv2.Observation[benthos_monitor.BenthosMonitorStatus])
 			Expect(ok).To(BeTrue(), "expected fsmv2.Observation[BenthosMonitorStatus], got %T", obs)
 			Expect(typedObs.Status.Scan).To(Equal(benthosmetrics.Scan{}), "a stopped worker must return a fully zero Scan with no stale fields leaking through")
+			// The zero Scan alone is indistinguishable from a down benthos (which
+			// also yields a zero Scan); Stopped is the marker that distinguishes an
+			// admin-paused instance from a crashed one.
+			Expect(typedObs.Status.Stopped).To(BeTrue(), "a stopped worker must mark Stopped so a read path does not treat a paused bridge as down")
 			Expect(atomic.LoadInt32(&pingHits)).To(Equal(int32(0)), "Observe must NOT be called for a stopped worker (no /ping request)")
 			Expect(atomic.LoadInt32(&readyHits)).To(Equal(int32(0)), "Observe must NOT be called for a stopped worker (no /ready request)")
 			Expect(atomic.LoadInt32(&versionHits)).To(Equal(int32(0)), "Observe must NOT be called for a stopped worker (no /version request)")

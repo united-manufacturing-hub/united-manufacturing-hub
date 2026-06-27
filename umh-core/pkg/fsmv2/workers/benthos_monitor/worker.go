@@ -106,7 +106,10 @@ func (w *BenthosMonitorWorker) CollectObservedState(ctx context.Context, desired
 	cfg := fsmv2.ExtractConfig[BenthosMonitorConfig](desired)
 
 	if cfg.State == "stopped" {
-		return fsmv2.NewObservation(BenthosMonitorStatus{Scan: benthosmetrics.Scan{}}), nil
+		return fsmv2.NewObservation(BenthosMonitorStatus{
+			Stopped: true,
+			Scan:    benthosmetrics.Scan{},
+		}), nil
 	}
 
 	scan, err := benthosmetrics.Observe(ctx, w.client, cfg.MetricsPort)

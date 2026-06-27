@@ -34,4 +34,12 @@ type BenthosMonitorConfig struct {
 type BenthosMonitorStatus struct {
 	// Scan is the most recent parsed observation of the benthos instance.
 	Scan benthosmetrics.Scan `json:"scan"`
+	// Stopped is true when the worker's desired State is "stopped" and the
+	// scrape was therefore skipped this tick. It distinguishes an
+	// admin-paused instance (Stopped=true, Scan is the zero value) from a
+	// benthos that is down or unreachable (Stopped=false, Scan.IsLive=false),
+	// which the scrape path also reports as a zero Scan. State files and read
+	// paths must consult Stopped before treating a zero Scan as a benthos
+	// outage, or a stopped bridge reads as crashed.
+	Stopped bool `json:"stopped"`
 }
