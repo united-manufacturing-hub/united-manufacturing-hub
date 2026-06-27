@@ -20,13 +20,16 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"strconv"
+	"sync/atomic"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	benthos_monitor "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/benthos_monitor"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthosmetrics"
 )
 
 // sampleMetrics is copied verbatim from
@@ -179,6 +182,64 @@ var _ = Describe("BenthosMonitorWorker CollectObservedState", func() {
 			Expect(typedObs.Status.Scan.HealthCheck.IsLive).To(BeFalse())
 		})
 	})
+
+	Describe("when the userSpec State is stopped", func() {
+		It("skips the scrape entirely and does not call Observe", func() {
+			readyBody := `{"statuses":[{"label":"tcp_server","path":"root.input","connected":true},{"label":"http_client","path":"root.output","connected":true}]}`
+			versionBody := `{"version":"3.71.0","built":"2023-08-15T12:00:00Z"}`
+
+			var pingHits, readyHits, versionHits, metricsHits int32
+			mux := http.NewServeMux()
+			mux.HandleFunc("/ping", func(w http.ResponseWriter, _ *http.Request) {
+				atomic.AddInt32(&pingHits, 1)
+				_, _ = w.Write([]byte("pong"))
+			})
+			mux.HandleFunc("/ready", func(w http.ResponseWriter, _ *http.Request) {
+				atomic.AddInt32(&readyHits, 1)
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(readyBody))
+			})
+			mux.HandleFunc("/version", func(w http.ResponseWriter, _ *http.Request) {
+				atomic.AddInt32(&versionHits, 1)
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(versionBody))
+			})
+			mux.HandleFunc("/metrics", func(w http.ResponseWriter, _ *http.Request) {
+				atomic.AddInt32(&metricsHits, 1)
+				w.Header().Set("Content-Type", "text/plain; version=0.0.4")
+				_, _ = w.Write([]byte(sampleMetrics))
+			})
+
+			srv := httptest.NewServer(mux)
+			DeferCleanup(srv.Close)
+
+			port := portFromServerURL(srv.URL)
+
+			identity := deps.Identity{ID: "benthos-monitor-stopped", WorkerType: "benthos_monitor"}
+			worker, err := benthos_monitor.NewBenthosMonitorWorker(identity, logger, nil, http.DefaultClient)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(worker).NotTo(BeNil())
+
+			desired := &fsmv2.WrappedDesiredState[benthos_monitor.BenthosMonitorConfig]{
+				Config: benthos_monitor.BenthosMonitorConfig{
+					BaseUserSpec: config.BaseUserSpec{State: "stopped"},
+					MetricsPort:  port,
+				},
+			}
+
+			obs, err := worker.CollectObservedState(context.Background(), desired)
+
+			Expect(err).NotTo(HaveOccurred())
+			typedObs, ok := obs.(fsmv2.Observation[benthos_monitor.BenthosMonitorStatus])
+			Expect(ok).To(BeTrue(), "expected fsmv2.Observation[BenthosMonitorStatus], got %T", obs)
+			Expect(typedObs.Status.Scan).To(Equal(benthosmetrics.Scan{}), "a stopped worker must return a fully zero Scan with no stale fields leaking through")
+			Expect(atomic.LoadInt32(&pingHits)).To(Equal(int32(0)), "Observe must NOT be called for a stopped worker (no /ping request)")
+			Expect(atomic.LoadInt32(&readyHits)).To(Equal(int32(0)), "Observe must NOT be called for a stopped worker (no /ready request)")
+			Expect(atomic.LoadInt32(&versionHits)).To(Equal(int32(0)), "Observe must NOT be called for a stopped worker (no /version request)")
+			Expect(atomic.LoadInt32(&metricsHits)).To(Equal(int32(0)), "Observe must NOT be called for a stopped worker (no /metrics request)")
+		})
+	})
+
 })
 
 // portFromServerURL extracts the port from an httptest server URL.

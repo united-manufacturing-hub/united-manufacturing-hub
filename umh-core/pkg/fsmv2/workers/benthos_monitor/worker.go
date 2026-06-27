@@ -84,6 +84,14 @@ func (w *BenthosMonitorWorker) GetDependencies() *BenthosMonitorDependencies {
 // CollectObservedState scrapes the benthos instance configured on the desired
 // state and publishes a BenthosMonitorStatus carrying the parsed Scan.
 //
+// When cfg.State is "stopped" the method returns a zero Scan
+// (MetricsAvailable=false, IsLive=false) without calling benthosmetrics.Observe
+// — no /ping, /ready, /version or /metrics request is issued. Any other state
+// scrapes as before. The zero Scan here is not a crash or unreachable signal:
+// the benthos process is intentionally stopped, so there is nothing to scrape,
+// and the admin-pause status is carried by desired State and framework
+// lifecycle rather than by the Scan.
+//
 // Uses fsmv2.NewObservation which signals the supervisor's collector to perform
 // post-COS wrapping (CollectedAt, framework metrics, action history). A
 // canceled context is propagated as context.Canceled alongside a nil
@@ -96,6 +104,10 @@ func (w *BenthosMonitorWorker) CollectObservedState(ctx context.Context, desired
 	}
 
 	cfg := fsmv2.ExtractConfig[BenthosMonitorConfig](desired)
+
+	if cfg.State == "stopped" {
+		return fsmv2.NewObservation(BenthosMonitorStatus{Scan: benthosmetrics.Scan{}}), nil
+	}
 
 	scan, err := benthosmetrics.Observe(ctx, w.client, cfg.MetricsPort)
 	if err != nil {
