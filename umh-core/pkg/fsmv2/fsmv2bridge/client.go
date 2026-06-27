@@ -49,8 +49,9 @@ type Client struct {
 	c *fsmv2client.FSMv2Client
 	w *dynamicchildren.Writer
 
-	mu         sync.Mutex
 	lastEnsure map[dynamicchildren.Ref]time.Time
+
+	mu sync.Mutex
 }
 
 // New returns a Client that reads observed state through an FSMv2Client built
