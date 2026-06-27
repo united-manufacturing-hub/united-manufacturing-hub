@@ -29,10 +29,13 @@ import (
 // A /ping transport failure (including a fully-down benthos where every
 // endpoint is unreachable) yields an all-false/zero Scan with a nil error: a
 // down benthos is an observed state, not an aborted observation. A canceled
-// context is distinguished from an ordinary transport failure and propagated as
-// a non-nil error wrapping ctx.Err() (errors.Is(err, context.Canceled) or
-// errors.Is(err, context.DeadlineExceeded) depending on the cancel source);
-// cancellation is a caller-side fault, not an observed benthos-down state.
+// context is propagated as a non-nil error so the caller can distinguish an
+// aborted observation from the nil-error Scan a down benthos returns. On
+// transport-level GET failures (all four endpoints) and the /metrics body-read,
+// the error wraps ctx.Err() (errors.Is(err, context.Canceled) or
+// errors.Is(err, context.DeadlineExceeded)); on /ready and /version body-read
+// the cancel surfaces as the body-read error, still non-nil. Cancellation is a
+// caller-side fault, not an observed benthos-down state.
 //
 // A /ready transport failure occurring after a successful /ping is folded into
 // a nil-error partial Scan with IsLive preserved and IsReady/MetricsAvailable
