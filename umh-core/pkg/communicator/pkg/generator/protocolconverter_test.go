@@ -22,6 +22,8 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/protocolconverter"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
+	"go.uber.org/zap/zaptest/observer"
 )
 
 var _ = Describe("buildProtocolConverterAsDfc", func() {
@@ -199,5 +201,62 @@ var _ = Describe("regression: no FSM behavior change from Bridge population", fu
 		Expect(dfc.ReadFlowHealth).To(BeNil())
 		Expect(dfc.Bridge).NotTo(BeNil(), "Bridge populated regardless of the transient")
 		Expect(dfc.Bridge.InputType).To(Equal("http_client"))
+	})
+})
+
+var _ = Describe("auditability: debug-logs when a protocol id is derivable-looking but empty", func() {
+	// The spec's Behavioral Contract + cases 7 and 11 require the generator to
+	// debug-log when BenthosPluginID returns "" for a non-empty read input
+	// (compound/malformed) and when a configured write side has no Protocol
+	// (Code-without-Protocol divergence). These are the only diagnostic channel
+	// for an operator chasing "why does my configured bridge render as
+	// not-configured?" once ENG-5249 gates on bridge.inputType/outputType.
+
+	It("logs when read input is non-empty but BenthosPluginID returns empty (compound, case 7)", func() {
+		core, logs := observer.New(zapcore.DebugLevel)
+		log := zap.New(core).Sugar()
+
+		compound := &protocolconverter.ProtocolConverterObservedStateSnapshot{
+			ObservedProtocolConverterSpecConfig: protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
+				Config: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
+					DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+						BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
+							Input: map[string]any{
+								"mqtt":  map[string]any{"url": "tcp://x"},
+								"opcua": map[string]any{"endpoint": "opc.tcp://y"},
+							},
+						},
+					},
+				},
+			},
+		}
+		_, err := buildProtocolConverterAsDfc(toInstance("pc-compound", compound), log)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(logs.FilterMessageSnippet("BenthosPluginID").All()).
+			To(HaveLen(1), "must debug-log the empty-result-for-non-empty-read-input case (spec case 7)")
+	})
+
+	It("logs when write side is configured (HasOutput) but Destination.Protocol is empty (Code-without-Protocol, case 11)", func() {
+		core, logs := observer.New(zapcore.DebugLevel)
+		log := zap.New(core).Sugar()
+
+		codeOnly := &protocolconverter.ProtocolConverterObservedStateSnapshot{
+			ObservedProtocolConverterSpecConfig: protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
+				Config: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
+					DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+						BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
+							Input: map[string]any{"input": map[string]any{"http_client": map[string]any{"url": "http://x"}}},
+						},
+					},
+					DataflowComponentWriteServiceConfig: dataflowcomponentserviceconfig.DataflowComponentWriteConfigInput{
+						Destination: dataflowcomponentserviceconfig.WriteConfigDestination{Code: "self|json"},
+					},
+				},
+			},
+		}
+		_, err := buildProtocolConverterAsDfc(toInstance("pc-code", codeOnly), log)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(logs.FilterMessageSnippet("Code-without-Protocol").All()).
+			To(HaveLen(1), "must debug-log the HasOutput-true/Protocol-empty divergence (spec case 11)")
 	})
 })

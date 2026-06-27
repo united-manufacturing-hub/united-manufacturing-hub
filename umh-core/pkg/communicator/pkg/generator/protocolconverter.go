@@ -170,12 +170,30 @@ func buildProtocolConverterAsDfc(
 	inputType := dataflowcomponentserviceconfig.BenthosPluginID(input)
 	outputType := observed.ObservedProtocolConverterSpecConfig.Config.DataflowComponentWriteServiceConfig.Destination.Protocol
 
+	// Bridge carries the per-side benthos plugin names so the frontend (ENG-5249)
+	// can render per-side "configured" state. DfcBridgeInfo fields deliberately
+	// lack omitempty: an unconfigured side must serialize as "" (present) so the
+	// frontend's `bridge.outputType != ""` proxy sees "not configured" rather than
+	// "absent". Do not add omitempty to DfcBridgeInfo fields.
 	var bridge *models.DfcBridgeInfo
 	if inputType != "" || outputType != "" {
 		bridge = &models.DfcBridgeInfo{
 			InputType:  inputType,
 			OutputType: outputType,
 		}
+	}
+
+	// Spec Behavioral Contract + cases 7 and 11: debug-log when a protocol id is
+	// derivable-looking (input present / write configured) but resolves empty —
+	// the only diagnostic for an operator chasing a bridge that renders as
+	// not-configured despite a configured side.
+	if inputType == "" && len(input) > 0 {
+		log.Debugf("protocol-converter %q: read input present but BenthosPluginID returned empty (compound or malformed input): %v", instance.ID, input)
+	}
+
+	writeCfg := observed.ObservedProtocolConverterSpecConfig.Config.DataflowComponentWriteServiceConfig
+	if outputType == "" && writeCfg.HasOutput() {
+		log.Debugf("protocol-converter %q: write side configured (HasOutput) but Destination.Protocol empty — Code-without-Protocol, OutputType emitted as empty", instance.ID)
 	}
 
 	dfc := models.Dfc{
