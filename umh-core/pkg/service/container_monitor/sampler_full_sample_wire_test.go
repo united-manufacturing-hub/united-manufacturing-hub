@@ -146,17 +146,18 @@ var _ = Describe("sampler full Sample wired into Decide (rung 12b)", func() {
 })
 
 var _ = Describe("steal p95 wired onto the wire via the sampler", func() {
-	It("carries StealP95 from the sampler's /proc/stat steal delta onto models.CPU, populated unconditionally even when the steal latch has not fired", func() {
+	It("carries a sub-threshold StealP95 onto models.CPU even though the steal latch never fires, proving the value is populated unconditionally", func() {
 		// StealP95 is observability-only and populated UNCONDITIONALLY (like
-		// ThrottleRatio), independent of the steal latch. This test drives a
-		// virtualized box (/proc/cpuinfo "hypervisor" flag) with a /proc/stat
-		// steal delta through the real sampler and pins that the computed steal
-		// p95 reaches models.CPU.StealP95 on the wire — proving the value crosses
-		// the container_monitor adapter, not just the internal Signals struct.
+		// ThrottleRatio), independent of the steal latch. To prove that, this
+		// test drives a steal delta that stays BELOW StealHigh (0.10): the latch
+		// does NOT fire, yet the computed steal p95 must still reach
+		// models.CPU.StealP95 on the wire — proving the value crosses the
+		// container_monitor adapter without a fired latch to carry it.
 		//
 		// cpu.max is capped (Quota=2.0) so the sample is outside the dead-zone
 		// (no saturation backstop), nr_throttled is pinned at 0 (no throttle), and
-		// cpu.pressure is absent (no pressure) — steal is the only signal moving.
+		// cpu.pressure is absent (no pressure) — steal is the only signal moving,
+		// and it stays sub-threshold, so the verdict stays healthy.
 		mockFS := filesystem.NewMockFileSystem()
 		ctx := context.Background()
 
@@ -167,10 +168,11 @@ var _ = Describe("steal p95 wired onto the wire via the sampler", func() {
 		const cpuMax = "200000 100000\n"
 		const cpuInfo = "processor\t: 0\nflags\t\t: fpu vme hypervisor\n"
 
-		// /proc/stat first "cpu " line: 10 counters; index 7 is steal. Tick 1
-		// baselines (steal=0, total=1000). Tick 2 advances total by 200 and steal
-		// by 100 → StealFraction = 100/200 = 0.5. With Virtualized=true the steal
-		// ring then holds [0, 0.5], so the nearest-rank p95 is ~0.5.
+		// /proc/stat first "cpu " line: 10 counters; total is their sum, index 7
+		// is steal. Tick 1 baselines (steal=0, total=1000). Tick 2 advances total
+		// by 200 and steal by 1 → StealFraction = 1/200 = 0.005, well below
+		// StealHigh 0.10. With Virtualized=true the steal ring then holds
+		// [0, 0.005], so the nearest-rank p95 is ~0.005 — the latch does NOT fire.
 		var procStat = "cpu 0 0 0 1000 0 0 0 0 0 0\n"
 
 		var nrPeriods int64 = 1000
@@ -204,20 +206,26 @@ var _ = Describe("steal p95 wired onto the wire via the sampler", func() {
 		Expect(status1.CPU.StealP95).To(BeZero(),
 			"StealP95 is 0 on the baseline tick (single sample, below the 2-sample floor)")
 
-		// Tick 2 — steal delta 100/200 = 0.5; the ring now holds [0, 0.5] and the
-		// p95 reaches the wire. The steal latch need not have fired — StealP95 is
-		// populated unconditionally.
-		procStat = "cpu 0 0 0 1100 0 0 0 100 0 0\n"
+		// Tick 2 — steal delta 1, total delta 200 → StealFraction = 0.005; the ring
+		// now holds [0, 0.005] and the p95 (~0.005) reaches the wire. This p95 is
+		// below StealHigh 0.10, so the steal latch does NOT fire, yet StealP95 is
+		// still populated — proving the value is carried unconditionally, not
+		// gated on a fired latch.
+		procStat = "cpu 0 0 0 1199 0 0 0 1 0 0\n"
 		nrPeriods, usageUsec = 2000, 2_000_000
 		status2, err := svc.GetStatus(ctx)
 		Expect(err).NotTo(HaveOccurred())
 
-		Expect(status2.CPU.StealP95).To(BeNumerically("~", 0.5, 1e-9),
-			"StealP95 reaches the wire as a fraction (steal delta 100 / total delta 200)")
+		Expect(status2.CPU.StealP95).To(BeNumerically("~", 0.005, 1e-9),
+			"StealP95 reaches the wire as a fraction (steal delta 1 / total delta 200)")
+		Expect(status2.CPUHealth).To(Equal(models.Active),
+			"a sub-threshold steal p95 (0.005 < StealHigh 0.10) must not fire the steal latch, so CPUHealth stays Active")
+		Expect(status2.CPU.IsThrottled).To(BeFalse(),
+			"nr_throttled is pinned at 0; no throttle degrade either")
 		stealJSON, err := json.Marshal(status2.CPU)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(stealJSON).To(ContainSubstring(`"stealP95":0.5`),
-			"stealP95 must be present on the JSON wire when non-zero")
+		Expect(stealJSON).To(ContainSubstring(`"stealP95":0.005`),
+			"stealP95 must be present on the JSON wire when non-zero, even sub-threshold")
 	})
 })
 
