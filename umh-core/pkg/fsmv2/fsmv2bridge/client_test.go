@@ -201,3 +201,28 @@ func TestGetFresh_RespawnGuardServesStaleNotFresh(t *testing.T) {
 		t.Fatalf("post-respawn GetFresh = %v, want Stale", got)
 	}
 }
+
+// TestSetGet_ProcessScopedAccessor asserts the process-scoped singleton: Get
+// returns nil before Set and after Set(nil), and returns the published Client
+// after Set. This is the seam any FSMv1 benthos manager reads via
+// fsmv2bridge.Get() regardless of which manager constructed it.
+func TestSetGet_ProcessScopedAccessor(t *testing.T) {
+	fsmv2bridge.Set(nil)
+
+	if got := fsmv2bridge.Get(); got != nil {
+		t.Fatalf("Get before Set = %v, want nil", got)
+	}
+
+	client := fsmv2bridge.New(dynamicchildren.NewWriter(), &stubStateReader{})
+	fsmv2bridge.Set(client)
+
+	if got := fsmv2bridge.Get(); got != client {
+		t.Fatalf("Get after Set = %p, want %p", got, client)
+	}
+
+	fsmv2bridge.Set(nil)
+
+	if got := fsmv2bridge.Get(); got != nil {
+		t.Fatalf("Get after Set(nil) = %v, want nil", got)
+	}
+}

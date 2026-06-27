@@ -98,6 +98,38 @@ func (c *Client) ensureGeneration(ref dynamicchildren.Ref) time.Time {
 	return c.lastEnsure[ref]
 }
 
+// globalClient is the process-scoped Client published once at startup so any
+// FSMv1 component (regardless of which benthos manager constructed it) can
+// reach the FSMv2 child-observation bridge via Get. NewBenthosManager is built
+// at three independent sites, so threading the handle through a single
+// constructor would miss most instances; a process-scoped accessor is the only
+// thing that reaches them all.
+var (
+	globalMu  sync.RWMutex
+	globalCli *Client
+)
+
+// Set publishes c as the process-scoped Client. Pass nil to clear it (e.g. on
+// shutdown). Not safe for concurrent re-publication; call once at startup and
+// once on shutdown.
+func Set(c *Client) {
+	globalMu.Lock()
+
+	globalCli = c
+
+	globalMu.Unlock()
+}
+
+// Get returns the process-scoped Client, or nil if Set has not been called (or
+// was cleared). FF-off paths never call Set, so Get returns nil and callers
+// must treat nil as "FSMv2 bridge unavailable".
+func Get() *Client {
+	globalMu.RLock()
+	defer globalMu.RUnlock()
+
+	return globalCli
+}
+
 // GetFresh reads the observed state for ref's spawned child and maps it to a
 // Freshness reason. A ref that was never Upserted is Unregistered; a registered
 // ref with no persisted observation is NeverObserved; an observation older than
