@@ -626,3 +626,52 @@ func TestObserve_ContextCanceledDuringReadyAfterPingIsPropagated(t *testing.T) {
 		t.Errorf("err does not wrap context.Canceled; got %v, want errors.Is(err, context.Canceled) == true", err)
 	}
 }
+
+// TestObserve_ContextCanceledDuringMetricsAfterPingIsPropagated verifies
+// that a context canceled mid-scrape during /metrics (after /ping, /ready and
+// /version succeeded) is propagated as a non-nil error wrapping
+// context.Canceled, not folded into a nil-error Scan. Mirrors the /ready
+// mid-scrape case: a cancel during shutdown drain must abort the observation,
+// not publish a fabricated all-false Scan as if benthos went down.
+func TestObserve_ContextCanceledDuringMetricsAfterPingIsPropagated(t *testing.T) {
+	readyBody := `{"statuses":[{"label":"tcp_server","path":"root.input","connected":true},{"label":"http_client","path":"root.output","connected":true}]}`
+	versionBody := `{"version":"3.71.0","built":"2023-08-15T12:00:00Z"}`
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/ping", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte("pong"))
+	})
+	mux.HandleFunc("/ready", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(readyBody))
+	})
+	mux.HandleFunc("/version", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(versionBody))
+	})
+	// /metrics blocks until the request's context is done (the client canceled),
+	// then drops the connection without writing a response.
+	mux.HandleFunc("/metrics", func(_ http.ResponseWriter, r *http.Request) {
+		<-r.Context().Done()
+	})
+
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	port := portFromURL(t, srv.URL)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	go func() {
+		time.Sleep(50 * time.Millisecond)
+		cancel()
+	}()
+
+	_, err := benthosmetrics.Observe(ctx, http.DefaultClient, port)
+	if err == nil {
+		t.Fatalf("Observe returned nil error for a context canceled mid-scrape during /metrics (after /ping, /ready and /version succeeded); want a non-nil error wrapping context.Canceled (a mid-scrape cancel must be propagated, not folded into a nil-error Scan)")
+	}
+
+	if !errors.Is(err, context.Canceled) {
+		t.Errorf("err does not wrap context.Canceled; got %v, want errors.Is(err, context.Canceled) == true", err)
+	}
+}
