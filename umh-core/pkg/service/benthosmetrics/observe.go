@@ -69,6 +69,9 @@ func Observe(ctx context.Context, client *http.Client, port uint16) (Scan, error
 	// /ready -> IsReady + ConnectionStatuses
 	readyResp, err := get(ctx, client, base+"/ready")
 	if err != nil {
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return scan, fmt.Errorf("ready: %w", ctxErr)
+		}
 		return scan, nil
 	}
 

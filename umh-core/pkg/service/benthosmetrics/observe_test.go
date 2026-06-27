@@ -24,6 +24,7 @@ import (
 	"reflect"
 	"strconv"
 	"testing"
+	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthosmetrics"
 )
@@ -573,6 +574,52 @@ func TestObserve_CanceledContextPropagatedAsError(t *testing.T) {
 	_, err := benthosmetrics.Observe(ctx, http.DefaultClient, port)
 	if err == nil {
 		t.Fatalf("Observe returned nil error for a canceled context; want a non-nil error wrapping context.Canceled (a canceled context must be propagated, not folded)")
+	}
+
+	if !errors.Is(err, context.Canceled) {
+		t.Errorf("err does not wrap context.Canceled; got %v, want errors.Is(err, context.Canceled) == true", err)
+	}
+}
+
+// TestObserve_ContextCanceledDuringReadyAfterPingIsPropagated verifies that a
+// context canceled MID-SCRAPE — after /ping has already succeeded (200 pong),
+// while /ready is in flight — is PROPAGATED as a non-nil error wrapping
+// context.Canceled, NOT folded into a nil-error all-false Scan.
+//
+// The godoc on Observe promises UNCONDITIONALLY that a canceled context is
+// propagated as a non-nil error wrapping ctx.Err() (errors.Is(err,
+// context.Canceled) true). The current implementation folds ctx.Canceled at
+// the /ready transport branch (return scan, nil), swallowing a mid-scrape
+// cancel. This matters because the FSMv2 worker calls Observe with the
+// supervisor's per-tick context, and shutdown drains by canceling that context;
+// a folded cancel would publish a fabricated all-false Scan as if benthos went
+// down during shutdown instead of aborting the observation.
+func TestObserve_ContextCanceledDuringReadyAfterPingIsPropagated(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/ping", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte("pong"))
+	})
+	// /ready blocks until the request's context is done (i.e. the client
+	// canceled), then drops the connection without writing a response.
+	mux.HandleFunc("/ready", func(_ http.ResponseWriter, r *http.Request) {
+		<-r.Context().Done()
+	})
+
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	port := portFromURL(t, srv.URL)
+
+	// 2s timeout so the test fails fast if the cancel never lands on /ready.
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	go func() {
+		time.Sleep(50 * time.Millisecond)
+		cancel()
+	}()
+
+	_, err := benthosmetrics.Observe(ctx, http.DefaultClient, port)
+	if err == nil {
+		t.Fatalf("Observe returned nil error for a context canceled mid-scrape during /ready (after /ping succeeded); want a non-nil error wrapping context.Canceled (a mid-scrape cancel must be propagated, not folded into a nil-error Scan)")
 	}
 
 	if !errors.Is(err, context.Canceled) {
