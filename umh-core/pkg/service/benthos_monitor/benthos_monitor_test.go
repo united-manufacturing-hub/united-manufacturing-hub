@@ -31,6 +31,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos_monitor"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthosmetrics"
 	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
@@ -478,14 +479,14 @@ var _ = Describe("Benthos Monitor Service", func() {
 
 	Describe("TailInt", func() {
 		It("should parse a simple integer at the end of the line", func() {
-			val, err := benthos_monitor.TailInt([]byte("foo 50000"))
+			val, err := benthosmetrics.TailInt([]byte("foo 50000"))
 			Expect(err).NotTo(HaveOccurred())
 			Expect(val).To(Equal(int64(50000)))
 		})
 
 		It("should parse a float in scientific notation", func() {
 			line := []byte(`input_received{label="",path="root.input"} 1.074682e+06`)
-			val, err := benthos_monitor.TailInt(line)
+			val, err := benthosmetrics.TailInt(line)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(val).To(Equal(int64(1074682)))
 		})
@@ -495,7 +496,7 @@ var _ = Describe("Benthos Monitor Service", func() {
 		It("should extract port from monitor script pattern", func() {
 			// Test the regex parsing logic directly using sample script content
 			testCases := []struct {
-				name         string
+				name          string
 				scriptContent string
 				expectedPort  uint16
 				expectError   bool
@@ -512,16 +513,16 @@ done`,
 					expectError:  false,
 				},
 				{
-					name: "should parse different port numbers",
+					name:          "should parse different port numbers",
 					scriptContent: `curl -sSL --max-time 1 http://localhost:8080/ping`,
-					expectedPort: 8080,
-					expectError:  false,
+					expectedPort:  8080,
+					expectError:   false,
 				},
 				{
-					name: "should handle port 65535",
+					name:          "should handle port 65535",
 					scriptContent: `curl -sSL http://localhost:65535/ping`,
-					expectedPort: 65535,
-					expectError:  false,
+					expectedPort:  65535,
+					expectError:   false,
 				},
 				{
 					name: "should return error when no port pattern found",
@@ -536,7 +537,7 @@ echo "No curl commands here"`,
 				// Use regex pattern from the actual implementation
 				portRegex := regexp.MustCompile(`http://localhost:(\d+)/ping`)
 				matches := portRegex.FindStringSubmatch(tc.scriptContent)
-				
+
 				if tc.expectError {
 					Expect(len(matches)).To(BeNumerically("<", 2), "Test case: %s", tc.name)
 				} else {

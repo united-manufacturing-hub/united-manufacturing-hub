@@ -19,6 +19,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos_monitor"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthosmetrics"
 )
 
 var _ = Describe("MetricsState", Label("metrics_state"), func() {
@@ -28,7 +29,7 @@ var _ = Describe("MetricsState", Label("metrics_state"), func() {
 	)
 
 	BeforeEach(func() {
-		state = benthos_monitor.NewBenthosMetricsState()
+		state = benthosmetrics.NewBenthosMetricsState()
 		tick = 0
 	})
 
@@ -182,7 +183,7 @@ var _ = Describe("MetricsState", Label("metrics_state"), func() {
 			Expect(state.IsActive).To(BeTrue()) // Still active as we had throughput previously
 
 			// No new input activity for a while
-			for range uint64(benthos_monitor.ThroughputWindowSize + 1) {
+			for range uint64(benthosmetrics.ThroughputWindowSize + 1) {
 				state.UpdateFromMetrics(benthos_monitor.Metrics{
 					Inputs: map[string]benthos_monitor.InputInstance{
 						"root.input": {Received: 200},
