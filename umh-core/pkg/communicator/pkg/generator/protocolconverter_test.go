@@ -62,4 +62,71 @@ var _ = Describe("buildProtocolConverterAsDfc", func() {
 		Expect(dfc.Bridge).To(BeNil(), "uninitialized PC emits no Bridge (preserves prior wire behavior — empty bridge{} would serialize on the wire since DfcBridgeInfo fields lack omitempty)")
 		Expect(dfc.IsInitialized).To(BeFalse())
 	})
+
+	It("read-only PC emits Bridge with InputType set, OutputType empty", func() {
+		snap := &protocolconverter.ProtocolConverterObservedStateSnapshot{
+			ObservedProtocolConverterSpecConfig: protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
+				Config: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
+					DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+						BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
+							Input: map[string]any{"input": map[string]any{"modbus": map[string]any{"address": "1"}}},
+						},
+					},
+					DataflowComponentWriteServiceConfig: dataflowcomponentserviceconfig.DataflowComponentWriteConfigInput{},
+				},
+			},
+		}
+		instance := fsm.FSMInstanceSnapshot{ID: "pc-ro", CurrentState: protocolconverter.OperationalStateActive, DesiredState: protocolconverter.OperationalStateActive, LastObservedState: snap}
+
+		dfc, err := buildProtocolConverterAsDfc(instance, log)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(dfc.Bridge).NotTo(BeNil())
+		Expect(dfc.Bridge.InputType).To(Equal("modbus"))
+		Expect(dfc.Bridge.OutputType).To(BeEmpty(), "no write configured")
+	})
+
+	It("write-only PC emits Bridge with OutputType set, InputType empty (gate is not read-biased)", func() {
+		snap := &protocolconverter.ProtocolConverterObservedStateSnapshot{
+			ObservedProtocolConverterSpecConfig: protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
+				Config: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
+					DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{},
+					DataflowComponentWriteServiceConfig: dataflowcomponentserviceconfig.DataflowComponentWriteConfigInput{
+						Destination: dataflowcomponentserviceconfig.WriteConfigDestination{Protocol: "questdb"},
+					},
+				},
+			},
+		}
+		instance := fsm.FSMInstanceSnapshot{ID: "pc-wo", CurrentState: protocolconverter.OperationalStateActive, DesiredState: protocolconverter.OperationalStateActive, LastObservedState: snap}
+
+		dfc, err := buildProtocolConverterAsDfc(instance, log)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(dfc.Bridge).NotTo(BeNil(), "write-only PC has a protocol id to emit (OutputType)")
+		Expect(dfc.Bridge.InputType).To(BeEmpty(), "no read configured")
+		Expect(dfc.Bridge.OutputType).To(Equal("questdb"))
+		Expect(dfc.IsInitialized).To(BeFalse(), "isInitialized is read-biased; write-only stays false until ENG-5251")
+	})
+
+	It("Code-without-Protocol emits OutputType empty (diverges from HasOutput)", func() {
+		snap := &protocolconverter.ProtocolConverterObservedStateSnapshot{
+			ObservedProtocolConverterSpecConfig: protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
+				Config: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
+					DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+						BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
+							Input: map[string]any{"input": map[string]any{"mqtt": map[string]any{}}},
+						},
+					},
+					DataflowComponentWriteServiceConfig: dataflowcomponentserviceconfig.DataflowComponentWriteConfigInput{
+						Destination: dataflowcomponentserviceconfig.WriteConfigDestination{Code: "kafka:\n  topic: t"},
+					},
+				},
+			},
+		}
+		instance := fsm.FSMInstanceSnapshot{ID: "pc-code", CurrentState: protocolconverter.OperationalStateActive, DesiredState: protocolconverter.OperationalStateActive, LastObservedState: snap}
+
+		dfc, err := buildProtocolConverterAsDfc(instance, log)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(dfc.Bridge).NotTo(BeNil(), "read configured → InputType non-empty → Bridge populated")
+		Expect(dfc.Bridge.InputType).To(Equal("mqtt"))
+		Expect(dfc.Bridge.OutputType).To(BeEmpty(), "OutputType is Destination.Protocol, which is empty; HasOutput()=true but the gate uses Protocol, not HasOutput")
+	})
 })
