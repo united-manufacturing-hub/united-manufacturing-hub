@@ -16,6 +16,7 @@ package benthosmetrics_test
 
 import (
 	"context"
+	"errors"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -494,5 +495,87 @@ func TestObserve_BenthosFullyDownFoldsIntoScanNoError(t *testing.T) {
 
 	if !reflect.DeepEqual(scan.Metrics, benthosmetrics.Metrics{}) {
 		t.Errorf("Metrics = %+v, want zero value (no /metrics reached a down benthos)", scan.Metrics)
+	}
+}
+
+// TestObserve_ReadyFailureAfterPingFoldsPreservesIsLive verifies that a /ready
+// transport failure occurring AFTER a successful /ping is FOLDED into a
+// nil-error partial Scan: the already-collected IsLive=true is preserved,
+// IsReady stays false, and MetricsAvailable stays false (the contract pins a
+// fold, NOT a non-nil error return, on a /ready failure after /ping
+// succeeded — mirroring how /metrics failures fold).
+func TestObserve_ReadyFailureAfterPingFoldsPreservesIsLive(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/ping", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte("pong"))
+	})
+	// /ready hijacks and closes the connection -> transport failure on /ready
+	// only, after /ping already succeeded.
+	mux.HandleFunc("/ready", func(w http.ResponseWriter, _ *http.Request) {
+		hj, ok := w.(http.Hijacker)
+		if !ok {
+			t.Fatalf("server does not support hijacking")
+		}
+		conn, _, err := hj.Hijack()
+		if err != nil {
+			t.Fatalf("hijack: %v", err)
+		}
+		conn.Close()
+	})
+	// /metrics also hijacks+closes so MetricsAvailable is deterministically
+	// false regardless of whether Observe continues past the /ready failure.
+	mux.HandleFunc("/metrics", func(w http.ResponseWriter, _ *http.Request) {
+		hj, ok := w.(http.Hijacker)
+		if !ok {
+			t.Fatalf("server does not support hijacking")
+		}
+		conn, _, err := hj.Hijack()
+		if err != nil {
+			t.Fatalf("hijack: %v", err)
+		}
+		conn.Close()
+	})
+
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	port := portFromURL(t, srv.URL)
+
+	scan, err := benthosmetrics.Observe(context.Background(), http.DefaultClient, port)
+	if err != nil {
+		t.Fatalf("Observe returned error: %v (a /ready transport failure after a successful /ping must fold into a nil-error Scan, not return an error)", err)
+	}
+
+	if !scan.HealthCheck.IsLive {
+		t.Errorf("HealthCheck.IsLive = false, want true (the successful /ping result MUST be preserved when /ready fails)")
+	}
+
+	if scan.HealthCheck.IsReady {
+		t.Errorf("HealthCheck.IsReady = true, want false (/ready failed)")
+	}
+
+	if scan.MetricsAvailable {
+		t.Errorf("MetricsAvailable = true, want false (/metrics failed)")
+	}
+}
+
+// TestObserve_CanceledContextPropagatedAsError verifies that a canceled context
+// is PROPAGATED as a non-nil error wrapping context.Canceled — NOT folded into
+// a nil-error Scan. A canceled context is a programming/cancellation fault, not
+// an observed benthos-down state, and must surface to the caller via
+// errors.Is(err, context.Canceled).
+func TestObserve_CanceledContextPropagatedAsError(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	port := freePort(t)
+
+	_, err := benthosmetrics.Observe(ctx, http.DefaultClient, port)
+	if err == nil {
+		t.Fatalf("Observe returned nil error for a canceled context; want a non-nil error wrapping context.Canceled (a canceled context must be propagated, not folded)")
+	}
+
+	if !errors.Is(err, context.Canceled) {
+		t.Errorf("err does not wrap context.Canceled; got %v, want errors.Is(err, context.Canceled) == true", err)
 	}
 }

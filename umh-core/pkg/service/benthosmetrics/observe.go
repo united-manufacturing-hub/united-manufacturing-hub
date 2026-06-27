@@ -28,21 +28,26 @@ import (
 //
 // A /ping transport failure (including a fully-down benthos where every
 // endpoint is unreachable) yields an all-false/zero Scan with a nil error: a
-// down benthos is an observed state, not an aborted observation. The HTTP
-// requests are bound to ctx, so a cancelled context surfaces as a transport
-// error from the GET and is folded into the same nil-error Scan return the
-// same way a connection refusal is; Observe does not distinguish ctx.Canceled
-// from a genuinely-down benthos. Callers that need to honor cancellation must
-// branch on ctx.Err() before trusting a nil-error Scan.
+// down benthos is an observed state, not an aborted observation. A canceled
+// context is distinguished from an ordinary transport failure and propagated as
+// a non-nil error wrapping ctx.Err() (errors.Is(err, context.Canceled) or
+// errors.Is(err, context.DeadlineExceeded) depending on the cancel source);
+// cancellation is a caller-side fault, not an observed benthos-down state.
+//
+// A /ready transport failure occurring after a successful /ping is folded into
+// a nil-error partial Scan with IsLive preserved and IsReady/MetricsAvailable
+// false, mirroring the /metrics fold. A /ready body-read or parse failure,
+// however, is propagated as a non-nil error wrapping the cause, alongside the
+// partial Scan collected so far.
+//
+// A /version transport, body-read, or parse failure is propagated as a non-nil
+// error wrapping the cause, alongside the partial Scan collected so far (e.g.
+// IsLive when /ping succeeded); /version is not folded.
 //
 // A /metrics non-200, transport, body-read, or parse failure yields a nil
 // error with MetricsAvailable=false and the already-collected /ping, /ready
 // and /version HealthCheck fields preserved; callers must check
 // MetricsAvailable rather than rely on err != nil.
-//
-// A /ready or /version transport, body-read, or parse failure is propagated as
-// a non-nil error wrapping the cause, alongside the partial Scan collected so
-// far (e.g. IsLive when /ping succeeded); these endpoints are not folded.
 func Observe(ctx context.Context, client *http.Client, port uint16) (Scan, error) {
 	base := fmt.Sprintf("http://localhost:%d", port)
 
@@ -51,6 +56,9 @@ func Observe(ctx context.Context, client *http.Client, port uint16) (Scan, error
 	// /ping -> IsLive
 	pingResp, err := get(ctx, client, base+"/ping")
 	if err != nil {
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return scan, fmt.Errorf("ping: %w", ctxErr)
+		}
 		return scan, nil
 	}
 
@@ -61,7 +69,7 @@ func Observe(ctx context.Context, client *http.Client, port uint16) (Scan, error
 	// /ready -> IsReady + ConnectionStatuses
 	readyResp, err := get(ctx, client, base+"/ready")
 	if err != nil {
-		return scan, fmt.Errorf("ready: %w", err)
+		return scan, nil
 	}
 
 	defer func() { _ = readyResp.Body.Close() }()
