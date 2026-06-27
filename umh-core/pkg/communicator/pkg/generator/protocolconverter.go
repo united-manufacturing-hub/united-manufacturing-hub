@@ -167,6 +167,17 @@ func buildProtocolConverterAsDfc(
 		writeDesiredState,
 	)
 
+	inputType := dataflowcomponentserviceconfig.BenthosPluginID(input)
+	outputType := observed.ObservedProtocolConverterSpecConfig.Config.DataflowComponentWriteServiceConfig.Destination.Protocol
+
+	var bridge *models.DfcBridgeInfo
+	if inputType != "" || outputType != "" {
+		bridge = &models.DfcBridgeInfo{
+			InputType:  inputType,
+			OutputType: outputType,
+		}
+	}
+
 	dfc := models.Dfc{
 		Type:        models.DfcTypeProtocolConverter,
 		UUID:        uuid.String(),
@@ -181,9 +192,8 @@ func buildProtocolConverterAsDfc(
 		ReadFlowHealth:  readFlowHealth,
 		WriteFlowHealth: writeFlowHealth,
 		// Metrics are added below
-		Metrics: nil,
-		// Bridge info is not applicable for protocol converters
-		Bridge:        nil,
+		Metrics:       nil,
+		Bridge:        bridge,
 		IsInitialized: isInitialized,
 	}
 
