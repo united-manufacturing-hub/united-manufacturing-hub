@@ -50,6 +50,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/examples"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/fsmv2bridge"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/register"
 	fsmv2sentry "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/sentry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/application"
@@ -629,6 +630,15 @@ children:
 		register.SetDeps[*persistenceWorker.PersistenceDependencies](persistenceWorker.WorkerTypeName, persistenceWorker.NewStoreOnlyDependencies(store))
 	}
 
+	// Publish the dynamicchildren registry under the configworker deps key and
+	// the process-scoped fsmv2bridge Client before constructing the supervisor,
+	// so the application worker's first CollectObservedState observes
+	// RegistryConfigured=true (the configworker kernel child spawns and dynamic
+	// child spawning is enabled) and FSMv1 components can reach the bridge via
+	// fsmv2bridge.Get(). The cleanup clears both and must run after the
+	// supervisor has stopped.
+	bridgeCleanup := fsmv2bridge.PublishForProduction(store)
+
 	appSup, err = application.NewApplicationSupervisor(application.SupervisorConfig{
 		ID:           "application-fsmv2",
 		Name:         "Application FSMv2",
@@ -650,6 +660,7 @@ children:
 		GracefulShutdownTimeout: 2 * time.Second,
 	})
 	if err != nil {
+		bridgeCleanup()
 		fsmv2Hook.Stop()
 
 		return nil, nil, nil, "", func() {}, fmt.Errorf("failed to create FSMv2 supervisor: %w", err)
@@ -658,7 +669,12 @@ children:
 	// Register supervisor for debug introspection (/debug/fsmv2 endpoint).
 	metrics.RegisterFSMv2DebugProvider("application", appSup)
 
-	cleanup = fsmv2Hook.Stop
+	cleanup = func() {
+		// Clear the bridge and the configworker deps key after the supervisor
+		// has stopped (the caller runs cleanup after appSup.Run returns).
+		bridgeCleanup()
+		fsmv2Hook.Stop()
+	}
 
 	return appSup, channelAdapter, store, placeholderUUID, cleanup, nil
 }
