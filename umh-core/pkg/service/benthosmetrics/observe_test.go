@@ -329,19 +329,23 @@ func TestObserve_MetricsBodyReadFailurePreservesHealth(t *testing.T) {
 	mux.HandleFunc("/metrics", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Length", "1024")
 		w.WriteHeader(http.StatusOK)
+
 		_, _ = w.Write([]byte("partial"))
 		if f, ok := w.(http.Flusher); ok {
 			f.Flush()
 		}
+
 		hj, ok := w.(http.Hijacker)
 		if !ok {
 			t.Fatalf("server does not support hijacking")
 		}
+
 		conn, _, err := hj.Hijack()
 		if err != nil {
 			t.Fatalf("hijack: %v", err)
 		}
-		conn.Close()
+
+		_ = conn.Close()
 	})
 
 	srv := httptest.NewServer(mux)
@@ -406,11 +410,13 @@ func TestObserve_MetricsTransportFailurePreservesHealth(t *testing.T) {
 		if !ok {
 			t.Fatalf("server does not support hijacking")
 		}
+
 		conn, _, err := hj.Hijack()
 		if err != nil {
 			t.Fatalf("hijack: %v", err)
 		}
-		conn.Close()
+
+		_ = conn.Close()
 	})
 
 	srv := httptest.NewServer(mux)
@@ -459,10 +465,12 @@ func freePort(t *testing.T) uint16 {
 	if err != nil {
 		t.Fatalf("listen: %v", err)
 	}
+
 	port := uint16(l.Addr().(*net.TCPAddr).Port)
 	if err := l.Close(); err != nil {
 		t.Fatalf("close listener: %v", err)
 	}
+
 	return port
 }
 
@@ -517,11 +525,13 @@ func TestObserve_ReadyFailureAfterPingFoldsPreservesIsLive(t *testing.T) {
 		if !ok {
 			t.Fatalf("server does not support hijacking")
 		}
+
 		conn, _, err := hj.Hijack()
 		if err != nil {
 			t.Fatalf("hijack: %v", err)
 		}
-		conn.Close()
+
+		_ = conn.Close()
 	})
 	// /metrics also hijacks+closes so MetricsAvailable is deterministically
 	// false regardless of whether Observe continues past the /ready failure.
@@ -530,11 +540,13 @@ func TestObserve_ReadyFailureAfterPingFoldsPreservesIsLive(t *testing.T) {
 		if !ok {
 			t.Fatalf("server does not support hijacking")
 		}
+
 		conn, _, err := hj.Hijack()
 		if err != nil {
 			t.Fatalf("hijack: %v", err)
 		}
-		conn.Close()
+
+		_ = conn.Close()
 	})
 
 	srv := httptest.NewServer(mux)
@@ -613,6 +625,7 @@ func TestObserve_ContextCanceledDuringReadyAfterPingIsPropagated(t *testing.T) {
 	// 2s timeout so the test fails fast if the cancel never lands on /ready.
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
+
 	go func() {
 		time.Sleep(50 * time.Millisecond)
 		cancel()
@@ -663,6 +676,7 @@ func TestObserve_ContextCanceledDuringMetricsAfterPingIsPropagated(t *testing.T)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
+
 	go func() {
 		time.Sleep(50 * time.Millisecond)
 		cancel()
@@ -708,9 +722,11 @@ func TestObserve_ContextCanceledDuringMetricsBodyReadAfterPingIsPropagated(t *te
 		w.Header().Set("Content-Type", "text/plain; version=0.0.4")
 		w.Header().Set("Content-Length", "999999")
 		w.WriteHeader(http.StatusOK)
+
 		if f, ok := w.(http.Flusher); ok {
 			f.Flush()
 		}
+
 		<-r.Context().Done()
 	})
 
@@ -722,6 +738,7 @@ func TestObserve_ContextCanceledDuringMetricsBodyReadAfterPingIsPropagated(t *te
 	// 2s timeout so the test fails fast if the cancel never lands on /metrics.
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
+
 	go func() {
 		time.Sleep(50 * time.Millisecond)
 		cancel()

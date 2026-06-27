@@ -64,6 +64,7 @@ func Observe(ctx context.Context, client *http.Client, port uint16) (Scan, error
 		if ctxErr := ctx.Err(); ctxErr != nil {
 			return scan, fmt.Errorf("ping: %w", ctxErr)
 		}
+
 		return scan, nil
 	}
 
@@ -77,6 +78,7 @@ func Observe(ctx context.Context, client *http.Client, port uint16) (Scan, error
 		if ctxErr := ctx.Err(); ctxErr != nil {
 			return scan, fmt.Errorf("ready: %w", ctxErr)
 		}
+
 		return scan, nil
 	}
 
@@ -122,6 +124,7 @@ func Observe(ctx context.Context, client *http.Client, port uint16) (Scan, error
 		if ctxErr := ctx.Err(); ctxErr != nil {
 			return scan, fmt.Errorf("metrics: %w", ctxErr)
 		}
+
 		return scan, nil
 	}
 
@@ -136,6 +139,7 @@ func Observe(ctx context.Context, client *http.Client, port uint16) (Scan, error
 		if ctxErr := ctx.Err(); ctxErr != nil {
 			return scan, fmt.Errorf("metrics body: %w", ctxErr)
 		}
+
 		return scan, nil
 	}
 

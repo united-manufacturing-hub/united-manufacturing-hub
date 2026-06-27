@@ -256,5 +256,6 @@ func portFromServerURL(rawURL string) uint16 {
 	Expect(err).NotTo(HaveOccurred())
 	p, err := strconv.ParseUint(u.Port(), 10, 16)
 	Expect(err).NotTo(HaveOccurred())
+
 	return uint16(p)
 }
