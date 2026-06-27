@@ -2703,3 +2703,105 @@ func TestDecide_UsagePercentiles_FromSaturationRing(t *testing.T) {
 		t.Fatalf("large-N P99UsageFraction: got %v, want 0.99 (rank=ceil(0.99*100)=99 → sorted[98]=0.99 — distinct from p95, guards a p99-formula regression)", sigBig.P99UsageFraction)
 	}
 }
+
+// TestDecide_StealAndPressure_UnconditionalSignals pins the PR1 observability
+// widening: the steal p95 (the existing stealP95Val local) and the pressure
+// value (sample.PressureAvg60) are surfaced as UNCONDITIONAL Signals fields
+// (Signals.StealP95, Signals.PressureAvg60Out), populated regardless of the
+// StealFired/PressureFired latch state — exactly the pattern Signals.ThrottleRatio
+// already follows (read off signals even when ThrottleFired is false). This is
+// observability-only: the verdict (State/Attribution/Causes) is NOT changed by
+// these fields, so each sub-case also pins that the verdict stays healthy with
+// no causes when only sub-threshold steal/pressure are present.
+//
+//  1. STEAL BELOW FIRE → STILL REPORTED. On a virtualized box, a sustained
+//     steal of 0.08 keeps the steal latch UNFIRED (p95 0.08 is not > StealHigh
+//     0.10), yet Signals.StealP95 must carry the p95 0.08. (The latch state and
+//     the numeric metric are decoupled, like ThrottleRatio vs ThrottleFired.)
+//  2. PRESSURE BELOW FIRE → STILL REPORTED. A PressureAvg60 of 0.10 keeps the
+//     pressure latch UNFIRED (0.10 is not > PressureHigh 0.20), yet
+//     Signals.PressureAvg60Out must carry 0.10.
+//  3. SOURCE ABSENT → 0. A bare-metal sample (Virtualized=false) reports
+//     StealP95 0 (steal is not a readable signal), and a sample with no PSI
+//     pressure (PressureAvg60 0) reports PressureAvg60Out 0.
+//  4. NEGATIVE CLAMP → 0. A negative PressureAvg60 is clamped to 0 on the
+//     PressureAvg60Out field (mirroring the ThrottleRatio negative clamp).
+func TestDecide_StealAndPressure_UnconditionalSignals(t *testing.T) {
+	base := time.Date(2026, 6, 27, 12, 0, 0, 0, time.UTC)
+	thresholds := DefaultThresholds()
+
+	// (1) STEAL BELOW FIRE → STILL REPORTED. 20 sustained ticks at 0.08 on a
+	// virtualized box: p95 = 0.08, below StealHigh 0.10, so the latch never
+	// fires — but the numeric p95 must still be surfaced on the wire.
+	st1 := &WindowState{}
+	var sig1 Signals
+	var v1 Verdict
+	for i := 0; i < 20; i++ {
+		v1, sig1 = Decide(st1, Sample{
+			Timestamp:     base.Add(time.Duration(i) * time.Second),
+			StealFraction: 0.08,
+			Virtualized:   true,
+		}, thresholds)
+	}
+	if sig1.StealFired {
+		t.Fatalf("steal-below StealFired: got true, want false (p95 0.08 is not > StealHigh 0.10)")
+	}
+	if !floatEq(sig1.StealP95, 0.08) {
+		t.Fatalf("steal-below StealP95: got %v, want 0.08 (the p95 must be surfaced UNCONDITIONALLY even when the latch has not fired, mirroring ThrottleRatio)", sig1.StealP95)
+	}
+	if v1.State != StateHealthy {
+		t.Fatalf("steal-below State: got %q, want %q (observability field must not change the verdict)", v1.State, StateHealthy)
+	}
+	if len(v1.Causes) != 0 {
+		t.Fatalf("steal-below Causes: got %+v, want none (sub-threshold steal is not a cause)", v1.Causes)
+	}
+
+	// (2) PRESSURE BELOW FIRE → STILL REPORTED. PressureAvg60 0.10 is below
+	// PressureHigh 0.20 (and below PressureRecover 0.12), so the latch never
+	// fires — but the value must still be surfaced.
+	st2 := &WindowState{}
+	v2, sig2 := Decide(st2, Sample{
+		Timestamp:     base.Add(200 * time.Second),
+		PressureAvg60: 0.10,
+	}, thresholds)
+	if sig2.PressureFired {
+		t.Fatalf("pressure-below PressureFired: got true, want false (0.10 is not > PressureHigh 0.20)")
+	}
+	if !floatEq(sig2.PressureAvg60Out, 0.10) {
+		t.Fatalf("pressure-below PressureAvg60Out: got %v, want 0.10 (the pressure value must be surfaced UNCONDITIONALLY even when the latch has not fired)", sig2.PressureAvg60Out)
+	}
+	if v2.State != StateHealthy {
+		t.Fatalf("pressure-below State: got %q, want %q (observability field must not change the verdict)", v2.State, StateHealthy)
+	}
+	if len(v2.Causes) != 0 {
+		t.Fatalf("pressure-below Causes: got %+v, want none (sub-threshold pressure is not a cause)", v2.Causes)
+	}
+
+	// (3) SOURCE ABSENT → 0. Bare metal (Virtualized=false) → steal not a
+	// readable signal → StealP95 0. No PSI pressure (PressureAvg60 0) →
+	// PressureAvg60Out 0.
+	st3 := &WindowState{}
+	_, sig3 := Decide(st3, Sample{
+		Timestamp:     base.Add(400 * time.Second),
+		StealFraction: 0.50, // nonzero, but Virtualized=false so it is not processed
+		Virtualized:   false,
+		PressureAvg60: 0.0,
+	}, thresholds)
+	if !floatEq(sig3.StealP95, 0) {
+		t.Fatalf("absent StealP95: got %v, want 0 (bare metal → steal is not a readable signal → 0)", sig3.StealP95)
+	}
+	if !floatEq(sig3.PressureAvg60Out, 0) {
+		t.Fatalf("absent PressureAvg60Out: got %v, want 0 (no PSI pressure → 0)", sig3.PressureAvg60Out)
+	}
+
+	// (4) NEGATIVE CLAMP → 0. A negative PressureAvg60 is clamped to 0 before
+	// exposure, mirroring the ThrottleRatio negative clamp.
+	st4 := &WindowState{}
+	_, sig4 := Decide(st4, Sample{
+		Timestamp:     base.Add(600 * time.Second),
+		PressureAvg60: -0.5,
+	}, thresholds)
+	if !floatEq(sig4.PressureAvg60Out, 0) {
+		t.Fatalf("negative-clamp PressureAvg60Out: got %v, want 0 (negatives clamp to 0, mirroring the ThrottleRatio clamp)", sig4.PressureAvg60Out)
+	}
+}

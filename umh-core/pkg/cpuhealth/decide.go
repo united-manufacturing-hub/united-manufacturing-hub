@@ -110,9 +110,9 @@ const stealWindow = 60 * time.Second
 // that still populate it (it remains the live production path).
 type Sample struct {
 	Timestamp   time.Time
+	Quota       *float64
 	UsageCores  float64
 	CgroupCores float64
-	Quota       *float64
 	NrPeriods   int64
 	NrThrottled int64
 	// PressureAvg60 is the kernel's cpu.pressure "some avg60" running 60s
@@ -142,11 +142,6 @@ type Sample struct {
 	// is false Decide does not process steal (it is not a readable signal on
 	// bare metal).
 	StealFraction float64
-	// Virtualized is set by the sampler from /proc/cpuinfo's hypervisor flag.
-	// When false, steal is not a readable signal (it is structurally 0 on bare
-	// metal, so reading 0 there is the absence of a signal, not evidence of a
-	// healthy host).
-	Virtualized bool
 	// HostBusyCores is the count of host-level busy CPU cores, readable
 	// independent of virtualization. The sampler computes it from /proc/stat's
 	// non-idle fields EXCLUDING the steal, guest, and guest_nice columns, so
@@ -159,6 +154,11 @@ type Sample struct {
 	// Quota / CgroupCores guards.
 	HostBusyCores float64
 	LogicalCpus   float64
+	// Virtualized is set by the sampler from /proc/cpuinfo's hypervisor flag.
+	// When false, steal is not a readable signal (it is structurally 0 on bare
+	// metal, so reading 0 there is the absence of a signal, not evidence of a
+	// healthy host).
+	Virtualized bool
 	// PsiAvailable is the readability flag for PSI (cpu.pressure). It
 	// distinguishes "PSI compiled in + present" (true) from "PressureAvg60
 	// reads 0 because PSI is absent" (false). Without it the dead-zone
@@ -217,7 +217,31 @@ type Signals struct {
 	// not fired. Negatives are clamped to 0 before assignment so a residual
 	// negative ratio from any edge case cannot leak to the wire.
 	ThrottleRatio float64
-	ThrottleFired bool
+	// PressureAvg60Out is the clamped pressure avg60 value populated
+	// UNCONDITIONALLY — independent of the PressureFired latch state — so a
+	// follow-up consumer can surface the numeric metric even when the latch has
+	// not fired (mirroring how ThrottleRatio is populated). NaN/negative/+Inf
+	// are clamped to 0.
+	PressureAvg60Out float64
+	// StealP95 is the 60s-windowed steal p95 populated UNCONDITIONALLY —
+	// independent of the StealFired latch state — so a follow-up consumer can
+	// surface the numeric metric even when the latch has not fired (mirroring
+	// how ThrottleRatio is populated). It is 0 on a non-virtualized box (steal
+	// is not a readable signal) and 0 until the ring holds at least 2 samples.
+	StealP95 float64
+	// AvgUsageFraction, P95UsageFraction, P99UsageFraction are the avg/p95/p99
+	// of the dead-zone usage ring — fractions relative to 1 core, typically in
+	// [0,1] but may exceed 1 when observed usage exceeds CgroupCores
+	// (oversubscription); callers that surface mCPU multiply by 1000. Computed
+	// UNCONDITIONALLY whenever the ring holds >= 2 entries (observability-only,
+	// like ThrottleRatio); 0 otherwise. They do NOT change the verdict — the
+	// saturation latch still fires on the AVG, not p95. Outside the dead-zone
+	// the usage ring is cleared, so these are 0 there (usage is not a health
+	// signal outside the dead-zone currently).
+	AvgUsageFraction float64
+	P95UsageFraction float64
+	P99UsageFraction float64
+	ThrottleFired    bool
 	// PressureFired is the pressure Schmitt latch state (fires above
 	// PressureHigh, clears only below PressureRecover), independent of the
 	// throttle latch.
@@ -241,18 +265,6 @@ type Signals struct {
 	// when the 60s-average drops below SaturationRecover (Schmitt). It is only
 	// evaluated in the dead-zone.
 	SaturationFired bool
-	// AvgUsageFraction, P95UsageFraction, P99UsageFraction are the avg/p95/p99
-	// of the dead-zone usage ring — fractions relative to 1 core, typically in
-	// [0,1] but may exceed 1 when observed usage exceeds CgroupCores
-	// (oversubscription); callers that surface mCPU multiply by 1000. Computed
-	// UNCONDITIONALLY whenever the ring holds >= 2 entries (observability-only,
-	// like ThrottleRatio); 0 otherwise. They do NOT change the verdict — the
-	// saturation latch still fires on the AVG, not p95. Outside the dead-zone
-	// the usage ring is cleared, so these are 0 there (usage is not a health
-	// signal outside the dead-zone currently).
-	AvgUsageFraction float64
-	P95UsageFraction float64
-	P99UsageFraction float64
 }
 
 // Verdict is the output of Decide.
@@ -411,6 +423,7 @@ func Decide(st *WindowState, sample Sample, thresholds Thresholds) (Verdict, Sig
 		p = 0
 	}
 
+	signals.PressureAvg60Out = p
 	switch {
 	case p > thresholds.PressureHigh:
 		st.pressureFired = true
@@ -486,6 +499,7 @@ func Decide(st *WindowState, sample Sample, thresholds Thresholds) (Verdict, Sig
 	}
 
 	signals.StealFired = st.stealFired
+	signals.StealP95 = stealP95Val
 
 	// Host-contention latch: fires when the demand gate (pressure OR throttle)
 	// is open AND host_busy_ratio > HostBusyHigh. Clears when the demand gate

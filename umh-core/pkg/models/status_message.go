@@ -150,6 +150,14 @@ type CPU struct {
 	CgroupCores   float64 `json:"cgroupCores,omitempty"`   // CPU quota from cgroup (e.g., 2.0 = 2 cores)
 	ThrottleRatio float64 `json:"throttleRatio,omitempty"` // Ratio of throttled periods (0.0-1.0)
 	IsThrottled   bool    `json:"isThrottled,omitempty"`   // True if recently throttled
+	// StealP95 is the 60s-windowed steal p95 as a fraction 0-1, populated
+	// unconditionally (observability-only, like ThrottleRatio); 0 when not
+	// virtualized. It does not change the verdict.
+	StealP95 float64 `json:"stealP95,omitempty"`
+	// PressureAvg60 is the PSI cpu.pressure some-avg60 value (percent 0-100),
+	// populated unconditionally (observability-only, like ThrottleRatio); 0 when
+	// PSI is unavailable. It does not change the verdict.
+	PressureAvg60 float64 `json:"pressureAvg60,omitempty"`
 }
 
 type Disk struct {
