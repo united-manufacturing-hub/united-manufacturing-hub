@@ -19,6 +19,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"reflect"
 	"strconv"
 	"testing"
 
@@ -176,5 +177,65 @@ func TestObserve_HappyPath(t *testing.T) {
 
 	if got := m.OutputBatchSentTotal(); got != 18 {
 		t.Errorf("Metrics.OutputBatchSentTotal() = %d, want 18", got)
+	}
+}
+
+// TestObserve_MetricsHTTPFailureKeepsHealthAndDoesNotClaimMetrics verifies
+// that a failed /metrics scrape (HTTP 500) does not set MetricsAvailable and
+// does not clear the /ping, /ready and /version fields on the HealthCheck.
+func TestObserve_MetricsHTTPFailureKeepsHealthAndDoesNotClaimMetrics(t *testing.T) {
+	readyBody := `{"statuses":[{"label":"tcp_server","path":"root.input","connected":true},{"label":"http_client","path":"root.output","connected":true}]}`
+	versionBody := `{"version":"3.71.0","built":"2023-08-15T12:00:00Z"}`
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/ping", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte("pong"))
+	})
+	mux.HandleFunc("/ready", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(readyBody))
+	})
+	mux.HandleFunc("/version", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(versionBody))
+	})
+	mux.HandleFunc("/metrics", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte("internal server error\n"))
+	})
+
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	port := portFromURL(t, srv.URL)
+
+	scan, err := benthosmetrics.Observe(context.Background(), http.DefaultClient, port)
+	if err != nil {
+		t.Fatalf("Observe returned error: %v (a failed /metrics scrape must not be a returned error)", err)
+	}
+
+	if scan.MetricsAvailable {
+		t.Errorf("MetricsAvailable = true, want false (failed /metrics scrape must not set MetricsAvailable)")
+	}
+
+	if !reflect.DeepEqual(scan.Metrics, benthosmetrics.Metrics{}) {
+		t.Errorf("Metrics = %+v, want zero value (failed /metrics scrape must not return stale or partial metrics)", scan.Metrics)
+	}
+
+	hc := scan.HealthCheck
+	if !hc.IsLive {
+		t.Errorf("HealthCheck.IsLive = false, want true (200 /ping must still populate despite /metrics failing)")
+	}
+
+	if !hc.IsReady {
+		t.Errorf("HealthCheck.IsReady = false, want true (200 /ready must still populate despite /metrics failing)")
+	}
+
+	if hc.Version != "3.71.0" {
+		t.Errorf("HealthCheck.Version = %q, want %q", hc.Version, "3.71.0")
+	}
+
+	if len(hc.ConnectionStatuses) != 2 {
+		t.Fatalf("len(ConnectionStatuses) = %d, want 2 (health endpoints still populated despite /metrics failing)", len(hc.ConnectionStatuses))
 	}
 }

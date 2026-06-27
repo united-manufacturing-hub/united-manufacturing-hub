@@ -25,6 +25,10 @@ import (
 // Observe scrapes a benthos instance's /ping, /ready, /version and /metrics
 // HTTP endpoints over the given port and returns a Scan carrying the parsed
 // metrics and health check.
+//
+// A non-200 /metrics response yields a nil error with MetricsAvailable=false
+// and a populated HealthCheck; callers must check MetricsAvailable rather than
+// rely on err != nil.
 func Observe(ctx context.Context, client *http.Client, port uint16) (Scan, error) {
 	base := fmt.Sprintf("http://localhost:%d", port)
 
@@ -88,6 +92,10 @@ func Observe(ctx context.Context, client *http.Client, port uint16) (Scan, error
 	}
 
 	defer func() { _ = metricsResp.Body.Close() }()
+
+	if metricsResp.StatusCode != http.StatusOK {
+		return scan, nil
+	}
 
 	metricsBody, err := io.ReadAll(metricsResp.Body)
 	if err != nil {
