@@ -612,6 +612,7 @@ func TestObserve_ContextCanceledDuringReadyAfterPingIsPropagated(t *testing.T) {
 
 	// 2s timeout so the test fails fast if the cancel never lands on /ready.
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
 	go func() {
 		time.Sleep(50 * time.Millisecond)
 		cancel()
@@ -661,6 +662,7 @@ func TestObserve_ContextCanceledDuringMetricsAfterPingIsPropagated(t *testing.T)
 	port := portFromURL(t, srv.URL)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
 	go func() {
 		time.Sleep(50 * time.Millisecond)
 		cancel()
@@ -669,6 +671,65 @@ func TestObserve_ContextCanceledDuringMetricsAfterPingIsPropagated(t *testing.T)
 	_, err := benthosmetrics.Observe(ctx, http.DefaultClient, port)
 	if err == nil {
 		t.Fatalf("Observe returned nil error for a context canceled mid-scrape during /metrics (after /ping, /ready and /version succeeded); want a non-nil error wrapping context.Canceled (a mid-scrape cancel must be propagated, not folded into a nil-error Scan)")
+	}
+
+	if !errors.Is(err, context.Canceled) {
+		t.Errorf("err does not wrap context.Canceled; got %v, want errors.Is(err, context.Canceled) == true", err)
+	}
+}
+
+// TestObserve_ContextCanceledDuringMetricsBodyReadAfterPingIsPropagated
+// verifies that a context canceled after /ping, /ready and /version succeeded
+// and /metrics returned a 200 with headers, but before io.ReadAll returns the
+// /metrics body, is propagated as a non-nil error wrapping context.Canceled
+// rather than folded into a nil-error partial Scan.
+func TestObserve_ContextCanceledDuringMetricsBodyReadAfterPingIsPropagated(t *testing.T) {
+	readyBody := `{"statuses":[{"label":"tcp_server","path":"root.input","connected":true},{"label":"http_client","path":"root.output","connected":true}]}`
+	versionBody := `{"version":"3.71.0","built":"2023-08-15T12:00:00Z"}`
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/ping", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte("pong"))
+	})
+	mux.HandleFunc("/ready", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(readyBody))
+	})
+	mux.HandleFunc("/version", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(versionBody))
+	})
+	// /metrics writes a 200 status + headers (so the GET succeeds and the
+	// transport branch is NOT exercised), then blocks on the request's context
+	// being done (the client canceled) before writing the body. The client's
+	// io.ReadAll therefore fails mid-body-read — exercising the body-read
+	// branch rather than the transport branch.
+	mux.HandleFunc("/metrics", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/plain; version=0.0.4")
+		w.Header().Set("Content-Length", "999999")
+		w.WriteHeader(http.StatusOK)
+		if f, ok := w.(http.Flusher); ok {
+			f.Flush()
+		}
+		<-r.Context().Done()
+	})
+
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	port := portFromURL(t, srv.URL)
+
+	// 2s timeout so the test fails fast if the cancel never lands on /metrics.
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	go func() {
+		time.Sleep(50 * time.Millisecond)
+		cancel()
+	}()
+
+	_, err := benthosmetrics.Observe(ctx, http.DefaultClient, port)
+	if err == nil {
+		t.Fatalf("Observe returned nil error for a context canceled mid-scrape during the /metrics body read (after /ping, /ready and /version succeeded and /metrics returned 200); want a non-nil error wrapping context.Canceled (a mid-scrape cancel during the body read must be propagated, not folded into a nil-error partial Scan)")
 	}
 
 	if !errors.Is(err, context.Canceled) {

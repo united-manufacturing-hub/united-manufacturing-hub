@@ -47,7 +47,9 @@ import (
 // A /metrics non-200, transport, body-read, or parse failure yields a nil
 // error with MetricsAvailable=false and the already-collected /ping, /ready
 // and /version HealthCheck fields preserved; callers must check
-// MetricsAvailable rather than rely on err != nil.
+// MetricsAvailable rather than rely on err != nil. A canceled-context
+// body-read failure, however, is propagated as a non-nil error wrapping
+// ctx.Err().
 func Observe(ctx context.Context, client *http.Client, port uint16) (Scan, error) {
 	base := fmt.Sprintf("http://localhost:%d", port)
 
@@ -128,6 +130,9 @@ func Observe(ctx context.Context, client *http.Client, port uint16) (Scan, error
 
 	metricsBody, err := io.ReadAll(metricsResp.Body)
 	if err != nil {
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return scan, fmt.Errorf("metrics body: %w", ctxErr)
+		}
 		return scan, nil
 	}
 
