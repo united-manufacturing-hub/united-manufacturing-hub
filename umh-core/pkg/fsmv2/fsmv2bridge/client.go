@@ -19,6 +19,7 @@ package fsmv2bridge
 import (
 	"context"
 	"errors"
+	"sync"
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
@@ -47,15 +48,54 @@ const (
 type Client struct {
 	c *fsmv2client.FSMv2Client
 	w *dynamicchildren.Writer
+
+	mu         sync.Mutex
+	lastEnsure map[dynamicchildren.Ref]time.Time
 }
 
 // New returns a Client that reads observed state through an FSMv2Client built
 // from w and sr, and checks registration through w.
 func New(w *dynamicchildren.Writer, sr deps.StateReader) *Client {
 	return &Client{
-		c: fsmv2client.NewFSMv2Client(w, sr),
-		w: w,
+		c:          fsmv2client.NewFSMv2Client(w, sr),
+		w:          w,
+		lastEnsure: make(map[dynamicchildren.Ref]time.Time),
 	}
+}
+
+// Ensure Upserts the child spec for ref and records the Ensure time as the
+// ref's generation marker. GetFresh treats any observation whose CollectedAt
+// predates the most recent Ensure as Stale, so a leftover observation from a
+// previous incarnation (after Remove + re-Ensure) is never served as Fresh.
+func (c *Client) Ensure(ref dynamicchildren.Ref, spec map[string]any) error {
+	if err := c.c.Upsert(ref, spec); err != nil {
+		return err
+	}
+
+	c.mu.Lock()
+	c.lastEnsure[ref] = time.Now()
+	c.mu.Unlock()
+
+	return nil
+}
+
+// Remove deletes the child spec for ref and drops its generation marker.
+func (c *Client) Remove(ref dynamicchildren.Ref) {
+	c.c.Delete(ref)
+
+	c.mu.Lock()
+	delete(c.lastEnsure, ref)
+	c.mu.Unlock()
+}
+
+// ensureGeneration returns the most recent Ensure time for ref, or the zero
+// time if Ensure was never called for it (e.g. the ref was registered directly
+// via the writer).
+func (c *Client) ensureGeneration(ref dynamicchildren.Ref) time.Time {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	return c.lastEnsure[ref]
 }
 
 // GetFresh reads the observed state for ref's spawned child and maps it to a
@@ -81,6 +121,13 @@ func GetFresh[TStatus any](ctx context.Context, c *Client, ref dynamicchildren.R
 		}
 
 		return zero, Fresh, err
+	}
+
+	// Respawn guard: an observation older than the most recent Ensure is from a
+	// previous incarnation (the store does not clear a despawned child's
+	// observation). Serve it as Stale so a leftover is never reported Fresh.
+	if obs.CollectedAt.Before(c.ensureGeneration(ref)) {
+		return obs.Status, Stale, nil
 	}
 
 	if time.Since(obs.CollectedAt) > maxAge {

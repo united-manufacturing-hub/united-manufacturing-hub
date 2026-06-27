@@ -143,3 +143,61 @@ func TestGetFresh_MapsChildObservationToReason(t *testing.T) {
 		})
 	}
 }
+
+// TestGetFresh_RespawnGuardServesStaleNotFresh asserts the lastEnsure respawn
+// guard: after Remove + re-Ensure, GetFresh must not serve the pre-Remove
+// observation as Fresh even when it is still within maxAge. The store does not
+// clear a despawned child's observation (ENG-5107 is not built), so the guard
+// is what prevents a stale leftover from a previous incarnation being reported
+// as healthy.
+func TestGetFresh_RespawnGuardServesStaleNotFresh(t *testing.T) {
+	const maxAge = 10 * time.Second
+
+	ref := dynamicchildren.Ref{WorkerType: "benthos_monitor", Name: "benthos-bridge-1"}
+
+	writer := dynamicchildren.NewWriter()
+	stubSr := &stubStateReader{}
+	client := fsmv2bridge.New(writer, stubSr)
+
+	ctx := context.Background()
+
+	// First Ensure spawns the child. A freshly-collected observation arrives
+	// AFTER the Ensure (CollectedAt is set here, post-Ensure), so the baseline
+	// read is Fresh — proving the guard does not false-fire on a normal first
+	// Ensure.
+	if err := client.Ensure(ref, map[string]any{}); err != nil {
+		t.Fatalf("Ensure: %v", err)
+	}
+
+	stubSr.obs = &fsmv2.Observation[testStatus]{
+		CollectedAt: time.Now(),
+		Status:      testStatus{V: "pre-remove"},
+	}
+
+	if _, got, err := fsmv2bridge.GetFresh[testStatus](ctx, client, ref, maxAge); err != nil {
+		t.Fatalf("baseline GetFresh: %v", err)
+	} else if got != fsmv2bridge.Fresh {
+		t.Fatalf("baseline GetFresh = %v, want Fresh", got)
+	}
+
+	// Remove + re-Ensure. The store still holds the pre-Remove observation
+	// (within maxAge), but its CollectedAt now predates the new lastEnsure.
+	client.Remove(ref)
+
+	if err := client.Ensure(ref, map[string]any{}); err != nil {
+		t.Fatalf("re-Ensure: %v", err)
+	}
+
+	_, got, err := fsmv2bridge.GetFresh[testStatus](ctx, client, ref, maxAge)
+	if err != nil {
+		t.Fatalf("post-respawn GetFresh: %v", err)
+	}
+
+	if got == fsmv2bridge.Fresh {
+		t.Fatalf("respawn guard failed: GetFresh = Fresh, want Stale (pre-Remove observation must not be served as Fresh after re-Ensure)")
+	}
+
+	if got != fsmv2bridge.Stale {
+		t.Fatalf("post-respawn GetFresh = %v, want Stale", got)
+	}
+}
