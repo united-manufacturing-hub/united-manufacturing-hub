@@ -130,3 +130,74 @@ var _ = Describe("buildProtocolConverterAsDfc", func() {
 		Expect(dfc.Bridge.OutputType).To(BeEmpty(), "OutputType is Destination.Protocol, which is empty; HasOutput()=true but the gate uses Protocol, not HasOutput")
 	})
 })
+
+func bidirectionalSnap() *protocolconverter.ProtocolConverterObservedStateSnapshot {
+	return &protocolconverter.ProtocolConverterObservedStateSnapshot{
+		ObservedProtocolConverterSpecConfig: protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
+			Config: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
+				DataflowComponentReadServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+					BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
+						Input: map[string]any{"input": map[string]any{"http_client": map[string]any{"url": "http://x"}}},
+					},
+				},
+				DataflowComponentWriteServiceConfig: dataflowcomponentserviceconfig.DataflowComponentWriteConfigInput{
+					Destination: dataflowcomponentserviceconfig.WriteConfigDestination{Protocol: "kafka"},
+				},
+			},
+		},
+	}
+}
+
+func toInstance(id string, snap *protocolconverter.ProtocolConverterObservedStateSnapshot) fsm.FSMInstanceSnapshot {
+	return fsm.FSMInstanceSnapshot{
+		ID:                id,
+		CurrentState:      protocolconverter.OperationalStateActive,
+		DesiredState:      protocolconverter.OperationalStateActive,
+		LastObservedState: snap,
+	}
+}
+
+var _ = Describe("regression: no FSM behavior change from Bridge population", func() {
+	log := zap.NewNop().Sugar()
+
+	It("isInitialized keys off read input presence, not Bridge", func() {
+		dfc, err := buildProtocolConverterAsDfc(toInstance("pc-init", bidirectionalSnap()), log)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(dfc.IsInitialized).To(BeTrue(), "read input present")
+
+		writeOnly := &protocolconverter.ProtocolConverterObservedStateSnapshot{
+			ObservedProtocolConverterSpecConfig: protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
+				Config: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
+					DataflowComponentWriteServiceConfig: dataflowcomponentserviceconfig.DataflowComponentWriteConfigInput{
+						Destination: dataflowcomponentserviceconfig.WriteConfigDestination{Protocol: "questdb"},
+					},
+				},
+			},
+		}
+		dfc2, err := buildProtocolConverterAsDfc(toInstance("pc-wo", writeOnly), log)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(dfc2.IsInitialized).To(BeFalse(), "read-biased; write-only stays false until ENG-5251")
+	})
+
+	It("Health reflects instance.CurrentState, not Bridge", func() {
+		dfc, err := buildProtocolConverterAsDfc(toInstance("pc-health", bidirectionalSnap()), log)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(dfc.Health).NotTo(BeNil())
+		Expect(dfc.Health.ObservedState).To(Equal(protocolconverter.OperationalStateActive))
+	})
+
+	It("Metrics stays nil when no benthos metrics observed", func() {
+		dfc, err := buildProtocolConverterAsDfc(toInstance("pc-metrics", bidirectionalSnap()), log)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(dfc.Metrics).To(BeNil())
+	})
+
+	It("reconcile transient: empty write FSM state leaves writeFlowHealth nil, Bridge still populated (case 15)", func() {
+		dfc, err := buildProtocolConverterAsDfc(toInstance("pc-transient", bidirectionalSnap()), log)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(dfc.WriteFlowHealth).To(BeNil(), "buildDFCFlowHealth returns nil on empty FSM state")
+		Expect(dfc.ReadFlowHealth).To(BeNil())
+		Expect(dfc.Bridge).NotTo(BeNil(), "Bridge populated regardless of the transient")
+		Expect(dfc.Bridge.InputType).To(Equal("http_client"))
+	})
+})
