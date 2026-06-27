@@ -16,6 +16,7 @@ package benthosmetrics_test
 
 import (
 	"context"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -443,5 +444,55 @@ func TestObserve_MetricsTransportFailurePreservesHealth(t *testing.T) {
 
 	if len(hc.ConnectionStatuses) != 2 {
 		t.Fatalf("len(ConnectionStatuses) = %d, want 2 (HealthCheck must be preserved despite /metrics transport failure)", len(hc.ConnectionStatuses))
+	}
+}
+
+// freePort reserves a TCP port and immediately releases it so that nothing is
+// listening: every endpoint GET returns connection-refused, modeling a fully
+// down benthos instance.
+func freePort(t *testing.T) uint16 {
+	t.Helper()
+
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	port := uint16(l.Addr().(*net.TCPAddr).Port)
+	if err := l.Close(); err != nil {
+		t.Fatalf("close listener: %v", err)
+	}
+	return port
+}
+
+// TestObserve_BenthosFullyDownFoldsIntoScanNoError verifies that a fully down
+// benthos (connection refused on every endpoint) folds into the Scan with NO
+// returned error: the caller must see an all-false/zero Scan, not an error.
+// A down benthos is an observed state, not an aborted observation.
+func TestObserve_BenthosFullyDownFoldsIntoScanNoError(t *testing.T) {
+	port := freePort(t)
+
+	scan, err := benthosmetrics.Observe(context.Background(), http.DefaultClient, port)
+	if err != nil {
+		t.Fatalf("Observe returned error: %v (a fully down benthos must fold into the Scan, not return an error)", err)
+	}
+
+	if scan.HealthCheck.IsLive {
+		t.Errorf("HealthCheck.IsLive = true, want false (no /ping reached a down benthos)")
+	}
+
+	if scan.HealthCheck.IsReady {
+		t.Errorf("HealthCheck.IsReady = true, want false (no /ready reached a down benthos)")
+	}
+
+	if scan.HealthCheck.Version != "" {
+		t.Errorf("HealthCheck.Version = %q, want %q (no /version reached a down benthos)", scan.HealthCheck.Version, "")
+	}
+
+	if scan.MetricsAvailable {
+		t.Errorf("MetricsAvailable = true, want false (no /metrics reached a down benthos)")
+	}
+
+	if !reflect.DeepEqual(scan.Metrics, benthosmetrics.Metrics{}) {
+		t.Errorf("Metrics = %+v, want zero value (no /metrics reached a down benthos)", scan.Metrics)
 	}
 }

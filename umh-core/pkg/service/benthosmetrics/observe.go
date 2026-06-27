@@ -26,9 +26,23 @@ import (
 // HTTP endpoints over the given port and returns a Scan carrying the parsed
 // metrics and health check.
 //
-// A non-200, transport, body-read, or parse failure on /metrics yields a nil
-// error with MetricsAvailable=false and a populated HealthCheck; callers must
-// check MetricsAvailable rather than rely on err != nil.
+// A /ping transport failure (including a fully-down benthos where every
+// endpoint is unreachable) yields an all-false/zero Scan with a nil error: a
+// down benthos is an observed state, not an aborted observation. The HTTP
+// requests are bound to ctx, so a cancelled context surfaces as a transport
+// error from the GET and is folded into the same nil-error Scan return the
+// same way a connection refusal is; Observe does not distinguish ctx.Canceled
+// from a genuinely-down benthos. Callers that need to honor cancellation must
+// branch on ctx.Err() before trusting a nil-error Scan.
+//
+// A /metrics non-200, transport, body-read, or parse failure yields a nil
+// error with MetricsAvailable=false and the already-collected /ping, /ready
+// and /version HealthCheck fields preserved; callers must check
+// MetricsAvailable rather than rely on err != nil.
+//
+// A /ready or /version transport, body-read, or parse failure is propagated as
+// a non-nil error wrapping the cause, alongside the partial Scan collected so
+// far (e.g. IsLive when /ping succeeded); these endpoints are not folded.
 func Observe(ctx context.Context, client *http.Client, port uint16) (Scan, error) {
 	base := fmt.Sprintf("http://localhost:%d", port)
 
@@ -37,7 +51,7 @@ func Observe(ctx context.Context, client *http.Client, port uint16) (Scan, error
 	// /ping -> IsLive
 	pingResp, err := get(ctx, client, base+"/ping")
 	if err != nil {
-		return Scan{}, fmt.Errorf("ping: %w", err)
+		return scan, nil
 	}
 
 	defer func() { _ = pingResp.Body.Close() }()
@@ -47,40 +61,41 @@ func Observe(ctx context.Context, client *http.Client, port uint16) (Scan, error
 	// /ready -> IsReady + ConnectionStatuses
 	readyResp, err := get(ctx, client, base+"/ready")
 	if err != nil {
-		return Scan{}, fmt.Errorf("ready: %w", err)
+		return scan, fmt.Errorf("ready: %w", err)
 	}
 
 	defer func() { _ = readyResp.Body.Close() }()
 
 	readyBody, err := io.ReadAll(readyResp.Body)
 	if err != nil {
-		return Scan{}, fmt.Errorf("ready body: %w", err)
+		return scan, fmt.Errorf("ready body: %w", err)
 	}
 
 	var rr ReadyResponse
 	if err := json.Unmarshal(readyBody, &rr); err != nil {
-		return Scan{}, fmt.Errorf("ready unmarshal: %w", err)
+		return scan, fmt.Errorf("ready unmarshal: %w", err)
 	}
 
 	scan.HealthCheck.IsReady = rr.Error == ""
+	scan.HealthCheck.ReadyError = rr.Error
 	scan.HealthCheck.ConnectionStatuses = rr.Statuses
 
 	// /version -> Version
 	versionResp, err := get(ctx, client, base+"/version")
 	if err != nil {
-		return Scan{}, fmt.Errorf("version: %w", err)
+		return scan, fmt.Errorf("version: %w", err)
 	}
 
 	defer func() { _ = versionResp.Body.Close() }()
 
 	versionBody, err := io.ReadAll(versionResp.Body)
 	if err != nil {
-		return Scan{}, fmt.Errorf("version body: %w", err)
+		return scan, fmt.Errorf("version body: %w", err)
 	}
 
 	var vr VersionResponse
 	if err := json.Unmarshal(versionBody, &vr); err != nil {
-		return Scan{}, fmt.Errorf("version unmarshal: %w", err)
+		return scan, fmt.Errorf("version unmarshal: %w", err)
 	}
 
 	scan.HealthCheck.Version = vr.Version
