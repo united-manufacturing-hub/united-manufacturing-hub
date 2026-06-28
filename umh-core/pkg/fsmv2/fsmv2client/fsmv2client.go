@@ -20,6 +20,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
+	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
@@ -46,7 +48,7 @@ type FSMv2Client struct {
 // NewFSMv2Client returns an FSMv2Client that writes through w and reads
 // observed state through sr. The client deliberately holds the plain Writer,
 // never the supervisor-managed config worker instance: worker instances can be
-// torn down and respawned, so a held instance would go stale after the first
+// torn down and recreated, so a held instance would go stale after the first
 // restart.
 func NewFSMv2Client(w *dynamicchildren.Writer, sr deps.StateReader) *FSMv2Client {
 	return &FSMv2Client{w: w, sr: sr}
@@ -97,4 +99,92 @@ func Get[TStatus any](ctx context.Context, c *FSMv2Client, ref dynamicchildren.R
 	}
 
 	return obs, nil
+}
+
+// Freshness is the read-side reason GetFresh assigns to a child observation.
+// It lets a caller map an absent or stale read to a distinct recovery policy
+// instead of collapsing every non-fresh case into a single error.
+type Freshness int
+
+const (
+	// Fresh means the child was observed within maxAge.
+	Fresh Freshness = iota
+	// Unregistered means the ref was never Upserted into the writer.
+	Unregistered
+	// NeverObserved means the ref is registered but no observation exists yet.
+	NeverObserved
+	// Stale means the child was observed but CollectedAt is older than maxAge
+	// (the watcher is wedged or slow).
+	Stale
+)
+
+// GetFresh reads the observed state for ref's spawned child and maps it to a
+// Freshness reason. A ref that was never Upserted is Unregistered; a registered
+// ref with no persisted observation is NeverObserved; an observation older than
+// maxAge is Stale; otherwise Fresh.
+//
+// A non-ErrNotObserved read error is returned verbatim alongside the zero
+// Freshness. Callers must check err before reading Freshness or the returned
+// status: both are meaningless when err is non-nil, and the returned status is
+// only meaningful when Freshness is Fresh or Stale.
+//
+// GetFresh does NOT detect a stale observation left over from a previous
+// incarnation after Delete + re-Upsert: the CSE store does not clear a
+// despawned child's observation until ENG-5107 (store-side despawn tombstone)
+// lands. Until then, such a leftover within maxAge is served as Fresh. ENG-5107
+// fixes this store-side (Get returns ErrWorkerDeleted) regardless of which
+// client performed the Delete, which a client-side guard cannot.
+func GetFresh[TStatus any](ctx context.Context, c *FSMv2Client, ref dynamicchildren.Ref, maxAge time.Duration) (TStatus, Freshness, error) {
+	var zero TStatus
+
+	if _, ok := c.w.Registry().Lookup(ref); !ok {
+		return zero, Unregistered, nil
+	}
+
+	obs, err := Get[TStatus](ctx, c, ref)
+	if err != nil {
+		if errors.Is(err, ErrNotObserved) {
+			return zero, NeverObserved, nil
+		}
+
+		return zero, Fresh, err
+	}
+
+	if time.Since(obs.CollectedAt) > maxAge {
+		return obs.Status, Stale, nil
+	}
+
+	return obs.Status, Fresh, nil
+}
+
+// globalCli is the process-scoped FSMv2Client published once at startup so any
+// FSMv1 component (regardless of which benthos manager constructed it) can
+// reach the FSMv2 child-observation read path via GetClient. NewBenthosManager
+// is built at three independent sites, so threading the handle through a single
+// constructor would miss most instances; a process-scoped accessor is the only
+// thing that reaches them all.
+var (
+	globalMu  sync.RWMutex
+	globalCli *FSMv2Client
+)
+
+// SetClient publishes c as the process-scoped FSMv2Client. Pass nil to clear it
+// (e.g. on shutdown). Not safe for concurrent re-publication; call once at
+// startup and once on shutdown.
+func SetClient(c *FSMv2Client) {
+	globalMu.Lock()
+
+	globalCli = c
+
+	globalMu.Unlock()
+}
+
+// GetClient returns the process-scoped FSMv2Client, or nil if SetClient has not
+// been called (or was cleared). FF-off paths never call SetClient, so GetClient
+// returns nil and callers must treat nil as "FSMv2 client unavailable".
+func GetClient() *FSMv2Client {
+	globalMu.RLock()
+	defer globalMu.RUnlock()
+
+	return globalCli
 }
