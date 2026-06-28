@@ -78,14 +78,17 @@ output_sent{label="",path="root.output"} 18
 // benchPortFromURL extracts the port from an httptest server URL.
 func benchPortFromURL(t *testing.B, rawURL string) uint16 {
 	t.Helper()
+
 	u, err := url.Parse(rawURL)
 	if err != nil {
 		t.Fatalf("parse server URL: %v", err)
 	}
+
 	p, err := strconv.ParseUint(u.Port(), 10, 16)
 	if err != nil {
 		t.Fatalf("parse port: %v", err)
 	}
+
 	return uint16(p)
 }
 
@@ -121,7 +124,8 @@ func BenchmarkObserve(b *testing.B) {
 
 	b.ResetTimer()
 	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
+
+	for range b.N {
 		_, _ = benthosmetrics.Observe(ctx, http.DefaultClient, port)
 	}
 }

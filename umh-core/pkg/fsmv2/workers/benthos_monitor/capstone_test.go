@@ -114,42 +114,53 @@ func newSwappableServer(st *serverState) *httptest.Server {
 		if !ok {
 			panic("server does not support hijacking")
 		}
+
 		conn, _, err := hj.Hijack()
 		if err != nil {
 			panic("hijack: " + err.Error())
 		}
+
 		_ = conn.Close()
 	}
 
 	mux.HandleFunc("/ping", func(w http.ResponseWriter, _ *http.Request) {
 		if !st.up.Load() {
 			closeConn(w)
+
 			return
 		}
+
 		_, _ = w.Write([]byte("pong"))
 	})
 	mux.HandleFunc("/ready", func(w http.ResponseWriter, _ *http.Request) {
 		if !st.up.Load() {
 			closeConn(w)
+
 			return
 		}
+
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(capstoneReadyBody))
 	})
 	mux.HandleFunc("/version", func(w http.ResponseWriter, _ *http.Request) {
 		if !st.up.Load() {
 			closeConn(w)
+
 			return
 		}
+
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(capstoneVersionBody))
 	})
 	mux.HandleFunc("/metrics", func(w http.ResponseWriter, _ *http.Request) {
 		st.metricsHits.Add(1)
+
 		if !st.up.Load() {
 			closeConn(w)
+
 			return
 		}
+
 		w.Header().Set("Content-Type", "text/plain; version=0.0.4")
 		_, _ = w.Write([]byte(capstoneMetricsBody))
 	})
@@ -163,6 +174,7 @@ func capstonePortFromURL(rawURL string) uint16 {
 	Expect(err).NotTo(HaveOccurred())
 	p, err := strconv.ParseUint(u.Port(), 10, 16)
 	Expect(err).NotTo(HaveOccurred())
+
 	return uint16(p)
 }
 
@@ -188,6 +200,7 @@ func cos(
 
 	typedObs, ok := obs.(fsmv2.Observation[benthos_monitor.BenthosMonitorStatus])
 	Expect(ok).To(BeTrue(), "expected fsmv2.Observation[BenthosMonitorStatus], got %T", obs)
+
 	return typedObs
 }
 
