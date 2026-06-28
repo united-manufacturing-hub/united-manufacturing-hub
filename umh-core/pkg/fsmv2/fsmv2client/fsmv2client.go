@@ -133,6 +133,9 @@ const (
 // status: both are meaningless when err is non-nil, and the returned status is
 // only meaningful when Freshness is Fresh or Stale.
 //
+// The store read is bounded by the passed ctx; callers SHOULD pass a
+// deadline-bounded ctx (see the StateReader non-blocking contract).
+//
 // GetFresh does NOT detect a stale observation left over from a previous
 // incarnation after Delete + re-Upsert: the CSE store does not clear a
 // despawned child's observation until ENG-5107 (store-side despawn tombstone)
@@ -144,7 +147,7 @@ const (
 func GetFresh[TStatus any](ctx context.Context, c *FSMv2Client, ref dynamicchildren.Ref, maxAge time.Duration) (TStatus, Freshness, error) {
 	var zero TStatus
 
-	if _, ok := c.w.Registry().Lookup(ref); !ok {
+	if !c.w.Registry().Contains(ref) {
 		return zero, Unregistered, nil
 	}
 
