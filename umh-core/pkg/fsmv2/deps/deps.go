@@ -49,6 +49,8 @@ func (i Identity) String() string {
 type StateReader interface {
 	// LoadObservedTyped loads observed state into result pointer.
 	// Returns error if state doesn't exist or unmarshaling fails.
+	// Implementations MUST respect ctx (return promptly when ctx is cancelled)
+	// and MUST NOT block the caller (no unbounded I/O on the read path).
 	LoadObservedTyped(ctx context.Context, workerType string, id string, result interface{}) error
 }
 
