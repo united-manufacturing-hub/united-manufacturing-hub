@@ -598,14 +598,14 @@ func TestObserve_CanceledContextPropagatedAsError(t *testing.T) {
 // while /ready is in flight — is PROPAGATED as a non-nil error wrapping
 // context.Canceled, NOT folded into a nil-error all-false Scan.
 //
-// The godoc on Observe promises UNCONDITIONALLY that a canceled context is
-// propagated as a non-nil error wrapping ctx.Err() (errors.Is(err,
-// context.Canceled) true). The current implementation folds ctx.Canceled at
-// the /ready transport branch (return scan, nil), swallowing a mid-scrape
-// cancel. This matters because the FSMv2 worker calls Observe with the
-// supervisor's per-tick context, and shutdown drains by canceling that context;
-// a folded cancel would publish a fabricated all-false Scan as if benthos went
-// down during shutdown instead of aborting the observation.
+// The godoc on Observe promises that a canceled context is propagated as a
+// non-nil error wrapping ctx.Err() (errors.Is(err, context.Canceled) true).
+// Observe checks ctx.Err() at the /ready transport branch and propagates a
+// mid-scrape cancel rather than folding it. This matters because the FSMv2
+// worker calls Observe with the supervisor's per-tick context, and shutdown
+// drains by canceling that context; a folded cancel would publish a fabricated
+// all-false Scan as if benthos went down during shutdown instead of aborting
+// the observation.
 func TestObserve_ContextCanceledDuringReadyAfterPingIsPropagated(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/ping", func(w http.ResponseWriter, _ *http.Request) {
@@ -689,6 +689,131 @@ func TestObserve_ContextCanceledDuringMetricsAfterPingIsPropagated(t *testing.T)
 
 	if !errors.Is(err, context.Canceled) {
 		t.Errorf("err does not wrap context.Canceled; got %v, want errors.Is(err, context.Canceled) == true", err)
+	}
+}
+
+// TestObserve_ReadyTransportFailureDoesNotZeroVersionAndMetrics verifies that a
+// /ready transport failure folds into the Scan (IsReady=false, nil error) while
+// /version and /metrics are still scraped independently, so Version and
+// MetricsAvailable reflect those endpoints rather than being zeroed by the
+// /ready fold.
+//
+// Load-bearing assertions: Version=="3.71.0" AND MetricsAvailable==true (the
+// /ready failure must not zero /version or /metrics).
+func TestObserve_ReadyTransportFailureDoesNotZeroVersionAndMetrics(t *testing.T) {
+	versionBody := `{"version":"3.71.0","built":"2023-08-15T12:00:00Z"}`
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/ping", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte("pong"))
+	})
+	// /ready hijacks and closes the connection -> transport failure on /ready
+	// only, after /ping already succeeded.
+	mux.HandleFunc("/ready", func(w http.ResponseWriter, _ *http.Request) {
+		hj, ok := w.(http.Hijacker)
+		if !ok {
+			t.Fatalf("server does not support hijacking")
+		}
+
+		conn, _, err := hj.Hijack()
+		if err != nil {
+			t.Fatalf("hijack: %v", err)
+		}
+
+		_ = conn.Close()
+	})
+	mux.HandleFunc("/version", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(versionBody))
+	})
+	mux.HandleFunc("/metrics", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/plain; version=0.0.4")
+		_, _ = w.Write([]byte(sampleMetrics))
+	})
+
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	port := portFromURL(t, srv.URL)
+
+	scan, err := benthosmetrics.Observe(context.Background(), http.DefaultClient, port)
+	if err != nil {
+		t.Fatalf("Observe returned error: %v (a /ready transport failure must fold into a nil-error Scan, not return an error)", err)
+	}
+
+	if !scan.HealthCheck.IsLive {
+		t.Errorf("HealthCheck.IsLive = false, want true (the successful /ping result MUST be preserved when /ready fails)")
+	}
+
+	if scan.HealthCheck.IsReady {
+		t.Errorf("HealthCheck.IsReady = true, want false (/ready failed)")
+	}
+
+	if scan.HealthCheck.Version != "3.71.0" {
+		t.Errorf("HealthCheck.Version = %q, want %q (/version MUST still be scraped despite the /ready transport failure)", scan.HealthCheck.Version, "3.71.0")
+	}
+
+	if !scan.MetricsAvailable {
+		t.Errorf("MetricsAvailable = false, want true (/metrics MUST still be scraped despite the /ready transport failure)")
+	}
+
+	if got := scan.Metrics.InputReceivedTotal(); got != 18 {
+		t.Errorf("Metrics.InputReceivedTotal() = %d, want 18 (/metrics MUST still be parsed despite the /ready transport failure)", got)
+	}
+}
+
+// TestObserve_VersionNon200LeavesVersionEmptyAndContinuesToMetrics pins the
+// non-200 /version guard: a 500 /version response leaves Version empty and
+// continues to /metrics (which is still scraped), with a nil error. A non-200
+// /version is an observed state, not an aborted observation.
+func TestObserve_VersionNon200LeavesVersionEmptyAndContinuesToMetrics(t *testing.T) {
+	readyBody := `{"statuses":[{"label":"tcp_server","path":"root.input","connected":true},{"label":"http_client","path":"root.output","connected":true}]}`
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/ping", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte("pong"))
+	})
+	mux.HandleFunc("/ready", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(readyBody))
+	})
+	mux.HandleFunc("/version", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte("internal server error\n"))
+	})
+	mux.HandleFunc("/metrics", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/plain; version=0.0.4")
+		_, _ = w.Write([]byte(sampleMetrics))
+	})
+
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	port := portFromURL(t, srv.URL)
+
+	scan, err := benthosmetrics.Observe(context.Background(), http.DefaultClient, port)
+	if err != nil {
+		t.Fatalf("Observe returned error: %v (a non-200 /version must not return an error)", err)
+	}
+
+	if scan.HealthCheck.Version != "" {
+		t.Errorf("HealthCheck.Version = %q, want %q (a non-200 /version must leave Version empty)", scan.HealthCheck.Version, "")
+	}
+
+	if !scan.MetricsAvailable {
+		t.Errorf("MetricsAvailable = false, want true (/metrics MUST still be scraped despite the non-200 /version)")
+	}
+
+	if got := scan.Metrics.InputReceivedTotal(); got != 18 {
+		t.Errorf("Metrics.InputReceivedTotal() = %d, want 18 (/metrics MUST still be parsed despite the non-200 /version)", got)
+	}
+
+	if !scan.HealthCheck.IsLive {
+		t.Errorf("HealthCheck.IsLive = false, want true (200 /ping must be preserved despite the non-200 /version)")
+	}
+
+	if !scan.HealthCheck.IsReady {
+		t.Errorf("HealthCheck.IsReady = false, want true (200 /ready must be preserved despite the non-200 /version)")
 	}
 }
 

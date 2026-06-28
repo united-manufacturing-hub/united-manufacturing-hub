@@ -30,22 +30,28 @@ import (
 // endpoint is unreachable) yields an all-false/zero Scan with a nil error: a
 // down benthos is an observed state, not an aborted observation. A canceled
 // context is propagated as a non-nil error so the caller can distinguish an
-// aborted observation from the nil-error Scan a down benthos returns. On
-// transport-level GET failures (all four endpoints) and the /metrics body-read,
-// the error wraps ctx.Err() (errors.Is(err, context.Canceled) or
+// aborted observation from the nil-error Scan a down benthos returns. When the
+// context is canceled, the GET failure (or, for /metrics, the body-read
+// failure) wraps ctx.Err() (errors.Is(err, context.Canceled) or
 // errors.Is(err, context.DeadlineExceeded)); on /ready and /version body-read
 // the cancel surfaces as the body-read error, still non-nil. Cancellation is a
-// caller-side fault, not an observed benthos-down state.
+// caller-side fault, not an observed benthos-down state. With a live context,
+// transport GET failures fold on /ping, /ready and /metrics (see below) but
+// propagate as a non-nil error on /version.
 //
 // A /ready transport failure occurring after a successful /ping is folded into
-// a nil-error partial Scan with IsLive preserved and IsReady/MetricsAvailable
-// false, mirroring the /metrics fold. A /ready body-read or parse failure,
-// however, is propagated as a non-nil error wrapping the cause, alongside the
-// partial Scan collected so far.
+// a partial Scan with IsLive preserved and IsReady false; /version and /metrics
+// are scraped independently, so MetricsAvailable reflects the /metrics result
+// (it is not forced false by the /ready fold). The fold yields a nil error only
+// when /version and /metrics do not subsequently transport-fail; a /version
+// transport, body-read, or parse failure is propagated as a non-nil error (see
+// below). A /ready body-read or parse failure is likewise propagated as a
+// non-nil error wrapping the cause, alongside the partial Scan collected so far.
 //
 // A /version transport, body-read, or parse failure is propagated as a non-nil
 // error wrapping the cause, alongside the partial Scan collected so far (e.g.
-// IsLive when /ping succeeded); /version is not folded.
+// IsLive when /ping succeeded); /version is not folded. A non-200 /version
+// response leaves Version empty and continues to /metrics.
 //
 // A /metrics non-200, transport, body-read, or parse failure yields a nil
 // error with MetricsAvailable=false and the already-collected /ping, /ready
@@ -78,25 +84,26 @@ func Observe(ctx context.Context, client *http.Client, port uint16) (Scan, error
 		if ctxErr := ctx.Err(); ctxErr != nil {
 			return scan, fmt.Errorf("ready: %w", ctxErr)
 		}
+		// Fold: a /ready transport failure after a successful /ping preserves
+		// IsLive and leaves IsReady false; /version and /metrics are scraped
+		// independently.
+	} else {
+		defer func() { _ = readyResp.Body.Close() }()
 
-		return scan, nil
+		readyBody, err := io.ReadAll(readyResp.Body)
+		if err != nil {
+			return scan, fmt.Errorf("ready body: %w", err)
+		}
+
+		var rr ReadyResponse
+		if err := json.Unmarshal(readyBody, &rr); err != nil {
+			return scan, fmt.Errorf("ready unmarshal: %w", err)
+		}
+
+		scan.HealthCheck.IsReady = rr.Error == ""
+		scan.HealthCheck.ReadyError = rr.Error
+		scan.HealthCheck.ConnectionStatuses = rr.Statuses
 	}
-
-	defer func() { _ = readyResp.Body.Close() }()
-
-	readyBody, err := io.ReadAll(readyResp.Body)
-	if err != nil {
-		return scan, fmt.Errorf("ready body: %w", err)
-	}
-
-	var rr ReadyResponse
-	if err := json.Unmarshal(readyBody, &rr); err != nil {
-		return scan, fmt.Errorf("ready unmarshal: %w", err)
-	}
-
-	scan.HealthCheck.IsReady = rr.Error == ""
-	scan.HealthCheck.ReadyError = rr.Error
-	scan.HealthCheck.ConnectionStatuses = rr.Statuses
 
 	// /version -> Version
 	versionResp, err := get(ctx, client, base+"/version")
@@ -106,17 +113,23 @@ func Observe(ctx context.Context, client *http.Client, port uint16) (Scan, error
 
 	defer func() { _ = versionResp.Body.Close() }()
 
-	versionBody, err := io.ReadAll(versionResp.Body)
-	if err != nil {
-		return scan, fmt.Errorf("version body: %w", err)
-	}
+	if versionResp.StatusCode == http.StatusOK {
+		versionBody, err := io.ReadAll(versionResp.Body)
+		if err != nil {
+			return scan, fmt.Errorf("version body: %w", err)
+		}
 
-	var vr VersionResponse
-	if err := json.Unmarshal(versionBody, &vr); err != nil {
-		return scan, fmt.Errorf("version unmarshal: %w", err)
-	}
+		var vr VersionResponse
+		if err := json.Unmarshal(versionBody, &vr); err != nil {
+			return scan, fmt.Errorf("version unmarshal: %w", err)
+		}
 
-	scan.HealthCheck.Version = vr.Version
+		scan.HealthCheck.Version = vr.Version
+	} else {
+		// Drain the body so the deferred Close returns the connection to the
+		// pool instead of discarding an unread body (which forfeits keep-alive).
+		_, _ = io.Copy(io.Discard, versionResp.Body)
+	}
 
 	// /metrics -> Metrics
 	metricsResp, err := get(ctx, client, base+"/metrics")
