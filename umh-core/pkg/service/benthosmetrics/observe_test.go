@@ -878,3 +878,173 @@ func TestObserve_ContextCanceledDuringMetricsBodyReadAfterPingIsPropagated(t *te
 		t.Errorf("err does not wrap context.Canceled; got %v, want errors.Is(err, context.Canceled) == true", err)
 	}
 }
+
+// TestObserve_VersionTransportFailureDoesNotZeroMetrics verifies that a /version
+// transport failure (after /ping and /ready succeeded) folds into a nil-error
+// Scan and does NOT zero /metrics: IsLive and IsReady are preserved, Version is
+// empty, and MetricsAvailable stays true (D1: a non-ctx failure folds, the
+// other endpoints are scraped independently).
+func TestObserve_VersionTransportFailureDoesNotZeroMetrics(t *testing.T) {
+	readyBody := `{"statuses":[{"label":"tcp_server","path":"root.input","connected":true},{"label":"http_client","path":"root.output","connected":true}]}`
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/ping", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte("pong"))
+	})
+	mux.HandleFunc("/ready", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(readyBody))
+	})
+	// /version hijacks and closes -> transport failure on /version only.
+	mux.HandleFunc("/version", func(w http.ResponseWriter, _ *http.Request) {
+		hj, ok := w.(http.Hijacker)
+		if !ok {
+			t.Fatalf("server does not support hijacking")
+		}
+
+		conn, _, err := hj.Hijack()
+		if err != nil {
+			t.Fatalf("hijack: %v", err)
+		}
+
+		_ = conn.Close()
+	})
+	mux.HandleFunc("/metrics", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/plain; version=0.0.4")
+		_, _ = w.Write([]byte(sampleMetrics))
+	})
+
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	port := portFromURL(t, srv.URL)
+
+	scan, err := benthosmetrics.Observe(context.Background(), http.DefaultClient, port)
+	if err != nil {
+		t.Fatalf("Observe returned error: %v (a /version transport failure must fold into a nil-error Scan, not return an error)", err)
+	}
+
+	if !scan.HealthCheck.IsLive {
+		t.Errorf("HealthCheck.IsLive = false, want true (the /ping result MUST be preserved when /version fails)")
+	}
+
+	if !scan.HealthCheck.IsReady {
+		t.Errorf("HealthCheck.IsReady = false, want true (the /ready result MUST be preserved when /version fails)")
+	}
+
+	if scan.HealthCheck.Version != "" {
+		t.Errorf("HealthCheck.Version = %q, want \"\" (/version failed)", scan.HealthCheck.Version)
+	}
+
+	if !scan.MetricsAvailable {
+		t.Errorf("MetricsAvailable = false, want true (/metrics MUST still be scraped despite the /version transport failure)")
+	}
+
+	if got := scan.Metrics.InputReceivedTotal(); got != 18 {
+		t.Errorf("Metrics.InputReceivedTotal() = %d, want 18", got)
+	}
+}
+
+// TestObserve_ReadyParseFailureFoldsPreservingOthers verifies that a /ready
+// parse failure (200 with an unparseable body) folds into a nil-error Scan
+// (NOT a non-nil error) and preserves /ping, /version, /metrics. D1: a non-ctx
+// failure folds; only ctx cancellation propagates as a non-nil error.
+func TestObserve_ReadyParseFailureFoldsPreservingOthers(t *testing.T) {
+	versionBody := `{"version":"3.71.0","built":"2023-08-15T12:00:00Z"}`
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/ping", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte("pong"))
+	})
+	// /ready returns 200 with an unparseable body.
+	mux.HandleFunc("/ready", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte("NOT-JSON{"))
+	})
+	mux.HandleFunc("/version", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(versionBody))
+	})
+	mux.HandleFunc("/metrics", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/plain; version=0.0.4")
+		_, _ = w.Write([]byte(sampleMetrics))
+	})
+
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	port := portFromURL(t, srv.URL)
+
+	scan, err := benthosmetrics.Observe(context.Background(), http.DefaultClient, port)
+	if err != nil {
+		t.Fatalf("Observe returned error: %v (a /ready parse failure must fold into a nil-error Scan, not return an error)", err)
+	}
+
+	if !scan.HealthCheck.IsLive {
+		t.Errorf("HealthCheck.IsLive = false, want true (the /ping result MUST be preserved when /ready parse fails)")
+	}
+
+	if scan.HealthCheck.IsReady {
+		t.Errorf("HealthCheck.IsReady = true, want false (/ready parse failed)")
+	}
+
+	if scan.HealthCheck.Version != "3.71.0" {
+		t.Errorf("HealthCheck.Version = %q, want %q (/version MUST still be scraped despite the /ready parse failure)", scan.HealthCheck.Version, "3.71.0")
+	}
+
+	if !scan.MetricsAvailable {
+		t.Errorf("MetricsAvailable = false, want true (/metrics MUST still be scraped despite the /ready parse failure)")
+	}
+}
+
+// TestObserve_SlowButAliveBenthosCompletesUnderCollectorTimeout verifies V4
+// v6.1a's mandate: a slow-but-alive benthos whose /metrics takes ~1.5s completes
+// under the collector's 2.2s ObservationTimeout (mimicked here via a 2.2s ctx)
+// and yields a fresh, healthy Scan (no blip, no error). Observe has no inner
+// deadline of its own; the collector's collectCtx is the bound.
+func TestObserve_SlowButAliveBenthosCompletesUnderCollectorTimeout(t *testing.T) {
+	readyBody := `{"statuses":[{"label":"tcp_server","path":"root.input","connected":true},{"label":"http_client","path":"root.output","connected":true}]}`
+	versionBody := `{"version":"3.71.0","built":"2023-08-15T12:00:00Z"}`
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/ping", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte("pong"))
+	})
+	mux.HandleFunc("/ready", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(readyBody))
+	})
+	mux.HandleFunc("/version", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(versionBody))
+	})
+	// /metrics responds 200 after ~1.5s (under the 2.2s collector bound).
+	mux.HandleFunc("/metrics", func(w http.ResponseWriter, _ *http.Request) {
+		time.Sleep(1500 * time.Millisecond)
+		w.Header().Set("Content-Type", "text/plain; version=0.0.4")
+		_, _ = w.Write([]byte(sampleMetrics))
+	})
+
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	port := portFromURL(t, srv.URL)
+
+	// Mimic the collector's 2.2s collectCtx (reconciliation.go / collector.go
+	// observationLoop wrap each per-tick COS in WithTimeout(ctx, ObservationTimeout)).
+	ctx, cancel := context.WithTimeout(context.Background(), 2200*time.Millisecond)
+	defer cancel()
+
+	scan, err := benthosmetrics.Observe(ctx, http.DefaultClient, port)
+	if err != nil {
+		t.Fatalf("Observe returned error: %v (a slow-but-alive benthos completing under the collector timeout must not error)", err)
+	}
+
+	if !scan.MetricsAvailable {
+		t.Errorf("MetricsAvailable = false, want true (the slow /metrics scrape completed under the 2.2s bound)")
+	}
+
+	if !scan.HealthCheck.IsLive {
+		t.Errorf("HealthCheck.IsLive = false, want true (the slow scrape must not blip IsLive)")
+	}
+}
