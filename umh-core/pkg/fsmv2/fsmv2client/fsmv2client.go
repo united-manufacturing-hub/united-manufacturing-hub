@@ -100,8 +100,13 @@ func Get[TStatus any](ctx context.Context, c *FSMv2Client, ref dynamicchildren.R
 type Freshness int
 
 const (
+	// Unknown is the zero value of Freshness. It is returned when a read error
+	// prevents GetFresh from classifying the observation, so the healthy reason
+	// Fresh is never the default. Freshness is only meaningful when the
+	// accompanying error is nil.
+	Unknown Freshness = iota
 	// Fresh means the child was observed within maxAge.
-	Fresh Freshness = iota
+	Fresh
 	// Unregistered means the ref was never Upserted into the writer.
 	Unregistered
 	// NeverObserved means the ref is registered but no observation exists yet.
@@ -116,7 +121,7 @@ const (
 // ref with no persisted observation is NeverObserved; an observation older than
 // maxAge is Stale; otherwise Fresh.
 //
-// A non-ErrNotObserved read error is returned verbatim alongside the zero
+// A non-ErrNotObserved read error is returned verbatim alongside the Unknown
 // Freshness. Callers must check err before reading Freshness or the returned
 // status: both are meaningless when err is non-nil, and the returned status is
 // only meaningful when Freshness is Fresh or Stale.
@@ -124,9 +129,11 @@ const (
 // GetFresh does NOT detect a stale observation left over from a previous
 // incarnation after Delete + re-Upsert: the CSE store does not clear a
 // despawned child's observation until ENG-5107 (store-side despawn tombstone)
-// lands. Until then, such a leftover within maxAge is served as Fresh. ENG-5107
-// fixes this store-side (Get returns ErrWorkerDeleted) regardless of which
-// client performed the Delete, which a client-side guard cannot.
+// lands. Until then, such a leftover within maxAge is served as Fresh. When
+// ENG-5107 lands, the store will return a typed ErrWorkerDeleted on a
+// despawned ref; Get/GetFresh must then map ErrWorkerDeleted to NeverObserved
+// (today Get only maps persistence.ErrNotFound → ErrNotObserved, so a
+// tombstone read would currently surface as Unknown+err, not NeverObserved).
 func GetFresh[TStatus any](ctx context.Context, c *FSMv2Client, ref dynamicchildren.Ref, maxAge time.Duration) (TStatus, Freshness, error) {
 	var zero TStatus
 
@@ -140,7 +147,7 @@ func GetFresh[TStatus any](ctx context.Context, c *FSMv2Client, ref dynamicchild
 			return zero, NeverObserved, nil
 		}
 
-		return zero, Fresh, err
+		return zero, Unknown, err
 	}
 
 	if time.Since(obs.CollectedAt) > maxAge {

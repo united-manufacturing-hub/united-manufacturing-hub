@@ -79,6 +79,7 @@ func TestGetFresh_MapsChildObservationToReason(t *testing.T) {
 		collected  time.Time // CollectedAt of the staged observation when stubErr == nil
 		want       fsmv2client.Freshness
 		wantStatus testStatus
+		wantErr    bool // whether GetFresh is expected to return a non-nil error
 	}{
 		{
 			name:       "Unregistered when ref was never Upserted",
@@ -107,6 +108,14 @@ func TestGetFresh_MapsChildObservationToReason(t *testing.T) {
 			want:       fsmv2client.Fresh,
 			wantStatus: testStatus{V: "observed"},
 		},
+		{
+			name:       "Unknown when store returns a non-ErrNotFound error",
+			upsert:     true,
+			stubErr:    errors.New("generic store failure"),
+			want:       fsmv2client.Unknown,
+			wantStatus: testStatus{},
+			wantErr:    true,
+		},
 	}
 
 	for _, tc := range cases {
@@ -130,7 +139,15 @@ func TestGetFresh_MapsChildObservationToReason(t *testing.T) {
 			client := fsmv2client.NewFSMv2Client(writer, stubSr)
 
 			gotStatus, got, err := fsmv2client.GetFresh[testStatus](context.Background(), client, ref, maxAge)
-			if err != nil {
+			if tc.wantErr {
+				if err == nil {
+					t.Fatalf("GetFresh returned nil error, want non-nil")
+				}
+
+				if !errors.Is(err, tc.stubErr) {
+					t.Fatalf("GetFresh err = %v, want %v (not propagated verbatim)", err, tc.stubErr)
+				}
+			} else if err != nil {
 				t.Fatalf("GetFresh returned unexpected error: %v", err)
 			}
 
