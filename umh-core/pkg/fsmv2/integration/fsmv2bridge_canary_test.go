@@ -149,8 +149,11 @@ var _ = Describe("fsmv2bridge helloworld canary", func() {
 		// observation on re-Upsert; until the store-side despawn tombstone
 		// lands, this interim read serves the frozen leftover as Fresh. Remove
 		// or update this assertion once ENG-5107 clears the leftover on
-		// re-Upsert (Get would return ErrWorkerDeleted, mapping to
-		// NeverObserved here).
+		// re-Upsert. NOTE: ENG-5107 must also add an ErrWorkerDeleted →
+		// ErrNotObserved mapping in Get/GetFresh for a tombstone read to surface
+		// as NeverObserved here; today Get only maps persistence.ErrNotFound →
+		// ErrNotObserved, so a tombstone read would currently surface as
+		// Unknown+err, not NeverObserved.
 		leftoverStatus, leftoverFresh, err := fsmv2client.GetFresh[hello_world.HelloworldStatus](ctx, bridge, ref, maxAge)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(leftoverFresh).To(Equal(fsmv2client.Fresh),
