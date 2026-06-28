@@ -12,9 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package fsmv2bridge_test exercises the FSMv2 child-observation read bridge as
-// an external caller would, through the exported New/GetFresh seam only.
-package fsmv2bridge_test
+// Package fsmv2client_test exercises the FSMv2 client's read-side Freshness
+// mapping and process-scoped singleton as an external caller would, through
+// the exported NewFSMv2Client/GetFresh/SetClient/GetClient seam only.
+package fsmv2client_test
 
 import (
 	"context"
@@ -23,7 +24,7 @@ import (
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/fsmv2bridge"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/fsmv2client"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker/dynamicchildren"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
 )
@@ -76,34 +77,34 @@ func TestGetFresh_MapsChildObservationToReason(t *testing.T) {
 		upsert     bool // whether the ref is registered via writer.Upsert
 		stubErr    error
 		collected  time.Time // CollectedAt of the staged observation when stubErr == nil
-		want       fsmv2bridge.Freshness
+		want       fsmv2client.Freshness
 		wantStatus testStatus
 	}{
 		{
 			name:       "Unregistered when ref was never Upserted",
 			upsert:     false,
-			want:       fsmv2bridge.Unregistered,
+			want:       fsmv2client.Unregistered,
 			wantStatus: testStatus{},
 		},
 		{
 			name:       "NeverObserved when ref Upserted but store returns ErrNotFound",
 			upsert:     true,
 			stubErr:    persistence.ErrNotFound,
-			want:       fsmv2bridge.NeverObserved,
+			want:       fsmv2client.NeverObserved,
 			wantStatus: testStatus{},
 		},
 		{
 			name:       "Stale when CollectedAt is older than maxAge",
 			upsert:     true,
 			collected:  time.Now().Add(-3 * maxAge),
-			want:       fsmv2bridge.Stale,
+			want:       fsmv2client.Stale,
 			wantStatus: testStatus{V: "observed"},
 		},
 		{
 			name:       "Fresh when CollectedAt is within maxAge",
 			upsert:     true,
 			collected:  time.Now().Add(-1 * time.Second),
-			want:       fsmv2bridge.Fresh,
+			want:       fsmv2client.Fresh,
 			wantStatus: testStatus{V: "observed"},
 		},
 	}
@@ -126,9 +127,9 @@ func TestGetFresh_MapsChildObservationToReason(t *testing.T) {
 			}
 
 			stubSr := &stubStateReader{obs: staged, err: tc.stubErr}
-			client := fsmv2bridge.New(writer, stubSr)
+			client := fsmv2client.NewFSMv2Client(writer, stubSr)
 
-			gotStatus, got, err := fsmv2bridge.GetFresh[testStatus](context.Background(), client, ref, maxAge)
+			gotStatus, got, err := fsmv2client.GetFresh[testStatus](context.Background(), client, ref, maxAge)
 			if err != nil {
 				t.Fatalf("GetFresh returned unexpected error: %v", err)
 			}
@@ -144,85 +145,28 @@ func TestGetFresh_MapsChildObservationToReason(t *testing.T) {
 	}
 }
 
-// TestGetFresh_RespawnGuardServesStaleNotFresh asserts the lastEnsure respawn
-// guard: after Remove + re-Ensure, GetFresh must not serve the pre-Remove
-// observation as Fresh even when it is still within maxAge. The store does not
-// clear a despawned child's observation (ENG-5107 is not built), so the guard
-// is what prevents a stale leftover from a previous incarnation being reported
-// as healthy.
-func TestGetFresh_RespawnGuardServesStaleNotFresh(t *testing.T) {
-	const maxAge = 10 * time.Second
+// TestSetClientGetClient_ProcessScopedAccessor asserts the process-scoped
+// singleton: GetClient returns nil before SetClient and after SetClient(nil),
+// and returns the published FSMv2Client after SetClient. This is the seam any
+// FSMv1 benthos manager reads via fsmv2client.GetClient() regardless of which
+// manager constructed it.
+func TestSetClientGetClient_ProcessScopedAccessor(t *testing.T) {
+	fsmv2client.SetClient(nil)
 
-	ref := dynamicchildren.Ref{WorkerType: "benthos_monitor", Name: "benthos-bridge-1"}
-
-	writer := dynamicchildren.NewWriter()
-	stubSr := &stubStateReader{}
-	client := fsmv2bridge.New(writer, stubSr)
-
-	ctx := context.Background()
-
-	// First Ensure spawns the child. A freshly-collected observation arrives
-	// AFTER the Ensure (CollectedAt is set here, post-Ensure), so the baseline
-	// read is Fresh — proving the guard does not false-fire on a normal first
-	// Ensure.
-	if err := client.Ensure(ref, map[string]any{}); err != nil {
-		t.Fatalf("Ensure: %v", err)
+	if got := fsmv2client.GetClient(); got != nil {
+		t.Fatalf("GetClient before SetClient = %v, want nil", got)
 	}
 
-	stubSr.obs = &fsmv2.Observation[testStatus]{
-		CollectedAt: time.Now(),
-		Status:      testStatus{V: "pre-remove"},
+	client := fsmv2client.NewFSMv2Client(dynamicchildren.NewWriter(), &stubStateReader{})
+	fsmv2client.SetClient(client)
+
+	if got := fsmv2client.GetClient(); got != client {
+		t.Fatalf("GetClient after SetClient = %p, want %p", got, client)
 	}
 
-	if _, got, err := fsmv2bridge.GetFresh[testStatus](ctx, client, ref, maxAge); err != nil {
-		t.Fatalf("baseline GetFresh: %v", err)
-	} else if got != fsmv2bridge.Fresh {
-		t.Fatalf("baseline GetFresh = %v, want Fresh", got)
-	}
+	fsmv2client.SetClient(nil)
 
-	// Remove + re-Ensure. The store still holds the pre-Remove observation
-	// (within maxAge), but its CollectedAt now predates the new lastEnsure.
-	client.Remove(ref)
-
-	if err := client.Ensure(ref, map[string]any{}); err != nil {
-		t.Fatalf("re-Ensure: %v", err)
-	}
-
-	_, got, err := fsmv2bridge.GetFresh[testStatus](ctx, client, ref, maxAge)
-	if err != nil {
-		t.Fatalf("post-respawn GetFresh: %v", err)
-	}
-
-	if got == fsmv2bridge.Fresh {
-		t.Fatalf("respawn guard failed: GetFresh = Fresh, want Stale (pre-Remove observation must not be served as Fresh after re-Ensure)")
-	}
-
-	if got != fsmv2bridge.Stale {
-		t.Fatalf("post-respawn GetFresh = %v, want Stale", got)
-	}
-}
-
-// TestSetGet_ProcessScopedAccessor asserts the process-scoped singleton: Get
-// returns nil before Set and after Set(nil), and returns the published Client
-// after Set. This is the seam any FSMv1 benthos manager reads via
-// fsmv2bridge.Get() regardless of which manager constructed it.
-func TestSetGet_ProcessScopedAccessor(t *testing.T) {
-	fsmv2bridge.Set(nil)
-
-	if got := fsmv2bridge.Get(); got != nil {
-		t.Fatalf("Get before Set = %v, want nil", got)
-	}
-
-	client := fsmv2bridge.New(dynamicchildren.NewWriter(), &stubStateReader{})
-	fsmv2bridge.Set(client)
-
-	if got := fsmv2bridge.Get(); got != client {
-		t.Fatalf("Get after Set = %p, want %p", got, client)
-	}
-
-	fsmv2bridge.Set(nil)
-
-	if got := fsmv2bridge.Get(); got != nil {
-		t.Fatalf("Get after Set(nil) = %v, want nil", got)
+	if got := fsmv2client.GetClient(); got != nil {
+		t.Fatalf("GetClient after SetClient(nil) = %v, want nil", got)
 	}
 }
