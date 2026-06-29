@@ -170,11 +170,9 @@ func buildProtocolConverterAsDfc(
 	inputType := dataflowcomponentserviceconfig.BenthosPluginID(input)
 	outputType := observed.ObservedProtocolConverterSpecConfig.Config.DataflowComponentWriteServiceConfig.Destination.Protocol
 
-	// Bridge carries the per-side benthos plugin names so the frontend (ENG-5249)
-	// can render per-side "configured" state. DfcBridgeInfo fields deliberately
-	// lack omitempty: an unconfigured side must serialize as "" (present) so the
-	// frontend's `bridge.outputType != ""` proxy sees "not configured" rather than
-	// "absent". Do not add omitempty to DfcBridgeInfo fields.
+	// No omitempty on DfcBridgeInfo fields: an unconfigured side must serialize as
+	// "" (present). The frontend reads bridge.outputType == "" as "not configured";
+	// omitting it would read as "absent" and fall back to the wrong render.
 	var bridge *models.DfcBridgeInfo
 	if inputType != "" || outputType != "" {
 		bridge = &models.DfcBridgeInfo{
@@ -183,14 +181,20 @@ func buildProtocolConverterAsDfc(
 		}
 	}
 
-	// Spec Behavioral Contract + cases 7 and 11: debug-log when a protocol id is
-	// derivable-looking (input present / write configured) but resolves empty —
-	// the only diagnostic for an operator chasing a bridge that renders as
-	// not-configured despite a configured side.
+	// These two debug logs are the only signal for an operator whose bridge shows
+	// "not configured" despite a configured side: a compound/malformed read input,
+	// or a write side with no Destination.Protocol (Code-without-Protocol).
 	if inputType == "" && len(input) > 0 {
 		log.Debugf("protocol-converter %q: read input present but BenthosPluginID returned empty (compound or malformed input): %v", instance.ID, input)
 	}
 
+	// A Code-only write (Destination.Code set, Protocol empty) leaves outputType
+	// empty, so a write-only Code bridge keeps Bridge nil above. That is deliberate:
+	// there is no protocol id to report, and the frontend falls back to per-side
+	// flow health, which renders the running write correctly. The MC editor can't
+	// produce this (Protocol is a required field); it only arises from a
+	// hand-edited config. Do not gate on HasOutput() to force a non-nil Bridge —
+	// that emits outputType "" for a configured side, which renders as "add write flow".
 	writeCfg := observed.ObservedProtocolConverterSpecConfig.Config.DataflowComponentWriteServiceConfig
 	if outputType == "" && writeCfg.HasOutput() {
 		log.Debugf("protocol-converter %q: write side configured (HasOutput) but Destination.Protocol empty — Code-without-Protocol, OutputType emitted as empty", instance.ID)

@@ -204,15 +204,15 @@ var _ = Describe("regression: no FSM behavior change from Bridge population", fu
 	})
 })
 
-var _ = Describe("auditability: debug-logs when a protocol id is derivable-looking but empty", func() {
-	// The spec's Behavioral Contract + cases 7 and 11 require the generator to
-	// debug-log when BenthosPluginID returns "" for a non-empty read input
-	// (compound/malformed) and when a configured write side has no Protocol
-	// (Code-without-Protocol divergence). These are the only diagnostic channel
-	// for an operator chasing "why does my configured bridge render as
-	// not-configured?" once ENG-5249 gates on bridge.inputType/outputType.
+var _ = Describe("auditability: debug-logs when a configured side resolves to an empty protocol id", func() {
+	// The generator debug-logs two divergences that otherwise leave an operator
+	// asking "why does my configured bridge render as not-configured?" once
+	// ENG-5249 gates on bridge.inputType/outputType: a non-empty read input whose
+	// BenthosPluginID resolves to "" (compound/malformed), and a configured write
+	// side with no Destination.Protocol (Code-without-Protocol). These logs are
+	// the only signal for either case.
 
-	It("logs when read input is non-empty but BenthosPluginID returns empty (compound, case 7)", func() {
+	It("logs when read input is non-empty but BenthosPluginID returns empty (compound input)", func() {
 		core, logs := observer.New(zapcore.DebugLevel)
 		log := zap.New(core).Sugar()
 
@@ -233,10 +233,10 @@ var _ = Describe("auditability: debug-logs when a protocol id is derivable-looki
 		_, err := buildProtocolConverterAsDfc(toInstance("pc-compound", compound), log)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(logs.FilterMessageSnippet("BenthosPluginID").All()).
-			To(HaveLen(1), "must debug-log the empty-result-for-non-empty-read-input case (spec case 7)")
+			To(HaveLen(1), "must debug-log the empty-result-for-non-empty-read-input case")
 	})
 
-	It("logs when write side is configured (HasOutput) but Destination.Protocol is empty (Code-without-Protocol, case 11)", func() {
+	It("logs when write side is configured (HasOutput) but Destination.Protocol is empty (Code-without-Protocol)", func() {
 		core, logs := observer.New(zapcore.DebugLevel)
 		log := zap.New(core).Sugar()
 
@@ -257,6 +257,6 @@ var _ = Describe("auditability: debug-logs when a protocol id is derivable-looki
 		_, err := buildProtocolConverterAsDfc(toInstance("pc-code", codeOnly), log)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(logs.FilterMessageSnippet("Code-without-Protocol").All()).
-			To(HaveLen(1), "must debug-log the HasOutput-true/Protocol-empty divergence (spec case 11)")
+			To(HaveLen(1), "must debug-log the HasOutput-true/Protocol-empty divergence")
 	})
 })
