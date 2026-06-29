@@ -210,7 +210,7 @@ type BenthosService struct {
 
 	s6Manager *s6fsm.S6Manager
 
-	benthosMonitorManager *benthos_monitor_fsm.BenthosMonitorManager
+	benthosMonitorManager BenthosMonitorReconciler
 
 	// window is the per-bridge BenthosMetricsState owned by BenthosService.
 	// On the FF-off path it is fed from the metrics returned by the S6 monitor
@@ -283,7 +283,7 @@ func WithS6Service(s6Service s6service.Service) BenthosServiceOption {
 }
 
 // WithMonitorManager sets a custom monitor manager for the BenthosService.
-func WithMonitorManager(monitorManager *benthos_monitor_fsm.BenthosMonitorManager) BenthosServiceOption {
+func WithMonitorManager(monitorManager BenthosMonitorReconciler) BenthosServiceOption {
 	return func(s *BenthosService) {
 		s.benthosMonitorManager = monitorManager
 	}
@@ -948,6 +948,13 @@ func (s *BenthosService) RemoveBenthosFromS6Manager(
 	s.s6ServiceConfigs = sliceRemoveByName(s.s6ServiceConfigs, s6Name)
 	s.benthosMonitorConfigs = sliceRemoveMonitorByName(s.benthosMonitorConfigs, s6Name)
 
+	// R9: under FF-on, tell the FSMv2 watcher to drop this child-spec. The ref
+	// Name is s6Name (the s6ServiceName the config was keyed on, NOT raw
+	// benthosName). Idempotent: Delete on an already-removed ref is a no-op.
+	if fsmv2BenthosMonitorEnabled {
+		s.fsmv2Watcher.Delete(dynamicchildren.Ref{WorkerType: "benthos_monitor", Name: s6Name})
+	}
+
 	// ------------------------------------------------------------------
 	// 2) Are the instances already gone?
 	// ------------------------------------------------------------------
@@ -1088,6 +1095,25 @@ func (s *BenthosService) ReconcileManager(ctx context.Context, services servicer
 	s6Err, s6Reconciled := s.s6Manager.Reconcile(ctx, s6Snapshot, services)
 	if s6Err != nil {
 		return fmt.Errorf("failed to reconcile S6 manager: %w", s6Err), false
+	}
+
+	if fsmv2BenthosMonitorEnabled {
+		// R8 + R11: under FF-on, push each monitor config to the FSMv2 watcher
+		// via Upsert and SKIP the S6 monitor manager.Reconcile entirely. The S6
+		// fork tree never spawns — this is the CPU win. Upsert errors are logged
+		// and swallowed (non-fatal): the next tick re-Upserts, so a single bad
+		// config must not fail the whole reconcile.
+		for _, cfg := range s.benthosMonitorConfigs {
+			ref := dynamicchildren.Ref{WorkerType: "benthos_monitor", Name: cfg.Name}
+			if upsertErr := s.fsmv2Watcher.Upsert(ref, map[string]any{
+				"state":       mapFromBenthosMonitorState(cfg.DesiredFSMState),
+				"metricsPort": cfg.MetricsPort,
+			}); upsertErr != nil {
+				s.logger.Errorf("fsmv2 watcher Upsert failed for %s: %v", cfg.Name, upsertErr)
+			}
+		}
+
+		return nil, true
 	}
 
 	// Also reconcile the benthos monitor

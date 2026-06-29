@@ -21,22 +21,36 @@ import (
 	"testing"
 	"time"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+	public_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
+	benthos_monitor_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos_monitor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/fsmv2client"
 	bmworker "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/benthos_monitor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker/dynamicchildren"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthosmetrics"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
 
 // fakeBenthosMonitorWatcher is a test double for benthosMonitorWatcher. It
 // returns a canned (status, res, err) and records the ref/maxAge it was called
 // with so the test can assert the FF-on read path used s6ServiceName (not raw
-// benthosName) for the ref Name.
+// benthosName) for the ref Name. Upsert/Delete calls are recorded so the R8/R9
+// lifecycle tests can assert the refs and maps they were called with.
 type fakeBenthosMonitorWatcher struct {
 	status    bmworker.BenthosMonitorStatus
 	res       fsmv2client.Freshness
 	err       error
 	gotRef    dynamicchildren.Ref
 	gotMaxAge time.Duration
+
+	upsertCalls []upsertCall
+	deleteCalls []dynamicchildren.Ref
+}
+
+// upsertCall records one Upsert invocation's ref and config map.
+type upsertCall struct {
+	ref dynamicchildren.Ref
+	cfg map[string]any
 }
 
 func (f *fakeBenthosMonitorWatcher) GetFresh(_ context.Context, ref dynamicchildren.Ref, maxAge time.Duration) (bmworker.BenthosMonitorStatus, fsmv2client.Freshness, error) {
@@ -46,8 +60,15 @@ func (f *fakeBenthosMonitorWatcher) GetFresh(_ context.Context, ref dynamicchild
 	return f.status, f.res, f.err
 }
 
-func (f *fakeBenthosMonitorWatcher) Upsert(_ dynamicchildren.Ref, _ map[string]any) error { return nil }
-func (f *fakeBenthosMonitorWatcher) Delete(_ dynamicchildren.Ref)                         {}
+func (f *fakeBenthosMonitorWatcher) Upsert(ref dynamicchildren.Ref, cfg map[string]any) error {
+	f.upsertCalls = append(f.upsertCalls, upsertCall{ref: ref, cfg: cfg})
+
+	return nil
+}
+
+func (f *fakeBenthosMonitorWatcher) Delete(ref dynamicchildren.Ref) {
+	f.deleteCalls = append(f.deleteCalls, ref)
+}
 
 // TestFSMv2Watcher_GetHealthCheckAndMetrics_FreshReadPath verifies the FF-on
 // (USE_FSMV2_BENTHOS_MONITOR) Fresh branch of GetHealthCheckAndMetrics:
@@ -374,5 +395,279 @@ func TestFSMv2Watcher_GetHealthCheckAndMetrics_Fresh_Stopped_NotUnhealthy(t *tes
 	want := BenthosStatus{}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("got = %+v, want %+v (Fresh+Stopped must return empty BenthosStatus, not Degraded)", got, want)
+	}
+}
+
+// fakeBenthosMonitorManager is a test double for BenthosMonitorReconciler. It
+// records Reconcile calls so the R11 test can assert the FF-on path SKIPS the
+// S6 monitor reconcile. GetInstance and GetLastObservedState return
+// not-found/nil so the Remove path proceeds to the window reset.
+type fakeBenthosMonitorManager struct {
+	reconcileCalls int
+}
+
+func (f *fakeBenthosMonitorManager) Reconcile(_ context.Context, _ public_fsm.SystemSnapshot, _ serviceregistry.Provider) (error, bool) {
+	f.reconcileCalls++
+
+	return nil, false
+}
+
+func (f *fakeBenthosMonitorManager) GetInstance(_ string) (public_fsm.FSMInstance, bool) {
+	return nil, false
+}
+
+func (f *fakeBenthosMonitorManager) GetLastObservedState(_ string) (public_fsm.ObservedState, error) {
+	return nil, nil
+}
+
+// TestFSMv2Watcher_ReconcileManager_FFOn_UpsertsEachConfig_SkipsS6MonitorReconcile
+// verifies R8 (Upsert each config + mapFrom) and R11 (skip the S6 monitor
+// reconcile) under FF-on:
+//
+//   - R8: for each cfg in s.benthosMonitorConfigs, the watcher's Upsert is
+//     called with ref{WorkerType:"benthos_monitor", Name:cfg.Name} and a map
+//     {state: mapFrom(cfg.DesiredFSMState), metricsPort: cfg.MetricsPort}.
+//     Active→"running", Stopped→"stopped".
+//   - R11: benthosMonitorManager.Reconcile is NOT called (the S6 fork tree
+//     never spawns — the CPU win).
+//
+// Forcing assertion: fake.upsertCalls has exactly 2 entries with the right
+// refs/maps AND fakeBenthosMonitorManager.reconcileCalls == 0. Before the FF-on
+// branch exists, no Upsert is called (upsertCalls is empty) and Reconcile IS
+// called (reconcileCalls == 1), so both halves fail RED.
+func TestFSMv2Watcher_ReconcileManager_FFOn_UpsertsEachConfig_SkipsS6MonitorReconcile(t *testing.T) {
+	prev := fsmv2BenthosMonitorEnabled
+	fsmv2BenthosMonitorEnabled = true
+
+	t.Cleanup(func() { fsmv2BenthosMonitorEnabled = prev })
+
+	fake := &fakeBenthosMonitorWatcher{}
+	monMgr := &fakeBenthosMonitorManager{}
+	s := NewDefaultBenthosService("test",
+		WithFSMv2BenthosWatcher(fake),
+		WithMonitorManager(monMgr),
+	)
+
+	// cfg.Name IS s6ServiceName (set at AddBenthosToS6Manager:706/:765 — NOT raw
+	// benthosName). Directly set two monitor configs with Active + Stopped.
+	s.benthosMonitorConfigs = []config.BenthosMonitorConfig{
+		{
+			FSMInstanceConfig: config.FSMInstanceConfig{
+				Name:            "benthos-a",
+				DesiredFSMState: benthos_monitor_fsm.OperationalStateActive,
+			},
+			MetricsPort: 4195,
+		},
+		{
+			FSMInstanceConfig: config.FSMInstanceConfig{
+				Name:            "benthos-b",
+				DesiredFSMState: benthos_monitor_fsm.OperationalStateStopped,
+			},
+			MetricsPort: 4196,
+		},
+	}
+
+	// The s6 manager's Reconcile requires a context with a deadline (it enforces
+	// a per-tick time budget). Use a generous deadline so the empty-config
+	// reconcile completes instantly.
+	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(100*time.Second))
+	defer cancel()
+
+	_, _ = s.ReconcileManager(
+		ctx,
+		serviceregistry.NewMockRegistry(),
+		public_fsm.SystemSnapshot{Tick: 1, SnapshotTime: time.Now()},
+	)
+
+	// --- R8: Upsert called twice with correct refs + maps ---
+
+	if len(fake.upsertCalls) != 2 {
+		t.Fatalf("upsertCalls = %d, want 2 (one per config)", len(fake.upsertCalls))
+	}
+
+	wantRefA := dynamicchildren.Ref{WorkerType: "benthos_monitor", Name: "benthos-a"}
+	if fake.upsertCalls[0].ref != wantRefA {
+		t.Errorf("upsertCalls[0].ref = %+v, want %+v", fake.upsertCalls[0].ref, wantRefA)
+	}
+
+	if state, ok := fake.upsertCalls[0].cfg["state"].(string); !ok || state != "running" {
+		t.Errorf("upsertCalls[0].cfg[\"state\"] = %v, want \"running\" (Active→running)", fake.upsertCalls[0].cfg["state"])
+	}
+
+	if port, ok := fake.upsertCalls[0].cfg["metricsPort"].(uint16); !ok || port != 4195 {
+		t.Errorf("upsertCalls[0].cfg[\"metricsPort\"] = %v, want uint16(4195)", fake.upsertCalls[0].cfg["metricsPort"])
+	}
+
+	wantRefB := dynamicchildren.Ref{WorkerType: "benthos_monitor", Name: "benthos-b"}
+	if fake.upsertCalls[1].ref != wantRefB {
+		t.Errorf("upsertCalls[1].ref = %+v, want %+v", fake.upsertCalls[1].ref, wantRefB)
+	}
+
+	if state, ok := fake.upsertCalls[1].cfg["state"].(string); !ok || state != "stopped" {
+		t.Errorf("upsertCalls[1].cfg[\"state\"] = %v, want \"stopped\" (Stopped→stopped)", fake.upsertCalls[1].cfg["state"])
+	}
+
+	if port, ok := fake.upsertCalls[1].cfg["metricsPort"].(uint16); !ok || port != 4196 {
+		t.Errorf("upsertCalls[1].cfg[\"metricsPort\"] = %v, want uint16(4196)", fake.upsertCalls[1].cfg["metricsPort"])
+	}
+
+	// --- R11: benthosMonitorManager.Reconcile NOT called (the skip) ---
+
+	if monMgr.reconcileCalls != 0 {
+		t.Errorf("monitor manager.Reconcile called %d time(s), want 0 (FF-on must SKIP the S6 monitor reconcile)", monMgr.reconcileCalls)
+	}
+}
+
+// TestFSMv2Watcher_ReconcileManager_FFOff_CallsS6MonitorReconcile is the FF-off
+// characterization complement to the R11 skip test: with the feature flag OFF,
+// ReconcileManager calls benthosMonitorManager.Reconcile (the existing path).
+// This pins that the FF-on early-return did not accidentally swallow the FF-off
+// branch — the two paths are mutually exclusive on the flag.
+func TestFSMv2Watcher_ReconcileManager_FFOff_CallsS6MonitorReconcile(t *testing.T) {
+	prev := fsmv2BenthosMonitorEnabled
+	fsmv2BenthosMonitorEnabled = false
+
+	t.Cleanup(func() { fsmv2BenthosMonitorEnabled = prev })
+
+	fake := &fakeBenthosMonitorWatcher{}
+	monMgr := &fakeBenthosMonitorManager{}
+	s := NewDefaultBenthosService("test",
+		WithFSMv2BenthosWatcher(fake),
+		WithMonitorManager(monMgr),
+	)
+
+	s.benthosMonitorConfigs = []config.BenthosMonitorConfig{
+		{
+			FSMInstanceConfig: config.FSMInstanceConfig{
+				Name:            "benthos-a",
+				DesiredFSMState: benthos_monitor_fsm.OperationalStateActive,
+			},
+			MetricsPort: 4195,
+		},
+	}
+
+	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(100*time.Second))
+	defer cancel()
+
+	_, _ = s.ReconcileManager(
+		ctx,
+		serviceregistry.NewMockRegistry(),
+		public_fsm.SystemSnapshot{Tick: 1, SnapshotTime: time.Now()},
+	)
+
+	// FF-off: benthosMonitorManager.Reconcile IS called.
+	if monMgr.reconcileCalls != 1 {
+		t.Errorf("monitor manager.Reconcile called %d time(s), want 1 (FF-off must call the S6 monitor reconcile)", monMgr.reconcileCalls)
+	}
+
+	// FF-off: the watcher's Upsert is NOT called (the FF-on lifecycle is off).
+	if len(fake.upsertCalls) != 0 {
+		t.Errorf("upsertCalls = %d, want 0 (FF-off must not use the fsmv2 watcher lifecycle)", len(fake.upsertCalls))
+	}
+}
+
+// TestFSMv2Watcher_Remove_FFOn_DeletesRef verifies R9: when a config leaves the
+// slice during RemoveBenthosFromS6Manager and FF-on is active, the watcher's
+// Delete is called with ref{WorkerType:"benthos_monitor", Name:s6ServiceName}.
+//
+// Forcing assertion: fake.deleteCalls has exactly one entry with the right ref.
+// Before the FF-on Delete branch exists, deleteCalls is empty → fails RED.
+func TestFSMv2Watcher_Remove_FFOn_DeletesRef(t *testing.T) {
+	prev := fsmv2BenthosMonitorEnabled
+	fsmv2BenthosMonitorEnabled = true
+
+	t.Cleanup(func() { fsmv2BenthosMonitorEnabled = prev })
+
+	fake := &fakeBenthosMonitorWatcher{}
+	monMgr := &fakeBenthosMonitorManager{}
+	s := NewDefaultBenthosService("test",
+		WithFSMv2BenthosWatcher(fake),
+		WithMonitorManager(monMgr),
+	)
+
+	// cfg.Name = s6ServiceName = "benthos-" + benthosName. For benthosName "a",
+	// the s6ServiceName is "benthos-a".
+	s.benthosMonitorConfigs = []config.BenthosMonitorConfig{
+		{
+			FSMInstanceConfig: config.FSMInstanceConfig{
+				Name:            "benthos-a",
+				DesiredFSMState: benthos_monitor_fsm.OperationalStateActive,
+			},
+			MetricsPort: 4195,
+		},
+	}
+
+	err := s.RemoveBenthosFromS6Manager(context.Background(), nil, "a")
+	if err != nil {
+		t.Fatalf("err = %v, want nil (Remove is idempotent, no instances to block)", err)
+	}
+
+	wantRef := dynamicchildren.Ref{WorkerType: "benthos_monitor", Name: "benthos-a"}
+
+	if len(fake.deleteCalls) != 1 {
+		t.Fatalf("deleteCalls = %d, want 1 (the removed config's ref)", len(fake.deleteCalls))
+	}
+
+	if fake.deleteCalls[0] != wantRef {
+		t.Errorf("deleteCalls[0] = %+v, want %+v", fake.deleteCalls[0], wantRef)
+	}
+}
+
+// TestFSMv2Watcher_Remove_FFOn_ResetsWindow verifies R10: A1's window reset on
+// Remove — after RemoveBenthosFromS6Manager, s.window is a FRESH instance
+// (LastTick==0, IsActive==false). A1 already implements this reset; this test
+// PINS it so a future refactor cannot silently drop the reset.
+//
+// Forcing assertion: s.window.LastTick == 0 after the call. A1's reset at
+// benthos.go:967 assigns NewBenthosMetricsState(), so this passes GREEN from
+// the start — it's a pin, not a RED→GREEN rung.
+func TestFSMv2Watcher_Remove_FFOn_ResetsWindow(t *testing.T) {
+	prev := fsmv2BenthosMonitorEnabled
+	fsmv2BenthosMonitorEnabled = true
+
+	t.Cleanup(func() { fsmv2BenthosMonitorEnabled = prev })
+
+	fake := &fakeBenthosMonitorWatcher{}
+	monMgr := &fakeBenthosMonitorManager{}
+	s := NewDefaultBenthosService("test",
+		WithFSMv2BenthosWatcher(fake),
+		WithMonitorManager(monMgr),
+	)
+
+	// Pre-seed the window so "fresh" is a meaningful assertion (not just the
+	// zero default). Feed it non-zero metrics + a known LastTick.
+	s.window.UpdateFromMetrics(benthosmetrics.Metrics{
+		Inputs: map[string]benthosmetrics.InputInstance{
+			"in1": {Received: 5},
+		},
+	}, 99)
+
+	if s.window.LastTick != 99 || !s.window.IsActive {
+		t.Fatalf("pre-condition: window not seeded (LastTick=%d, IsActive=%v)", s.window.LastTick, s.window.IsActive)
+	}
+
+	// Add a config so Remove has something to remove.
+	s.benthosMonitorConfigs = []config.BenthosMonitorConfig{
+		{
+			FSMInstanceConfig: config.FSMInstanceConfig{
+				Name:            "benthos-a",
+				DesiredFSMState: benthos_monitor_fsm.OperationalStateActive,
+			},
+			MetricsPort: 4195,
+		},
+	}
+
+	err := s.RemoveBenthosFromS6Manager(context.Background(), nil, "a")
+	if err != nil {
+		t.Fatalf("err = %v, want nil", err)
+	}
+
+	// R10: window is a FRESH instance.
+	if s.window.LastTick != 0 {
+		t.Errorf("window.LastTick = %d, want 0 (window must be reset on Remove)", s.window.LastTick)
+	}
+
+	if s.window.IsActive {
+		t.Errorf("window.IsActive = true, want false (fresh window must be inactive)")
 	}
 }

@@ -28,9 +28,12 @@ import (
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/env"
+	public_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
+	benthos_monitor_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos_monitor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/fsmv2client"
 	bmworker "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/benthos_monitor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker/dynamicchildren"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
 
 // fsmv2BenthosMonitorEnabled gates the FF-on read + lifecycle paths. It is read
@@ -58,6 +61,19 @@ type benthosMonitorWatcher interface {
 	GetFresh(ctx context.Context, ref dynamicchildren.Ref, maxAge time.Duration) (bmworker.BenthosMonitorStatus, fsmv2client.Freshness, error)
 	Upsert(ref dynamicchildren.Ref, cfg map[string]any) error
 	Delete(ref dynamicchildren.Ref)
+}
+
+// BenthosMonitorReconciler is the subset of *BenthosMonitorManager that
+// BenthosService calls. Defining it as an interface (rather than the concrete
+// *benthos_monitor_fsm.BenthosMonitorManager pointer) lets tests inject a fake
+// that records Reconcile calls — which is how R11 asserts the FF-on path SKIPS
+// the S6 monitor reconcile. The concrete manager satisfies this interface via
+// its embedded *fsm.BaseFSMManager. The FF-off call sites are byte-identical
+// whether the field holds a concrete pointer or this interface.
+type BenthosMonitorReconciler interface {
+	Reconcile(ctx context.Context, snapshot public_fsm.SystemSnapshot, services serviceregistry.Provider) (error, bool)
+	GetInstance(name string) (public_fsm.FSMInstance, bool)
+	GetLastObservedState(serviceName string) (public_fsm.ObservedState, error)
 }
 
 // defaultBenthosMonitorWatcher is the production implementation: it reaches the
@@ -93,4 +109,26 @@ func (defaultBenthosMonitorWatcher) Delete(ref dynamicchildren.Ref) {
 	}
 
 	c.Delete(ref)
+}
+
+// mapFromBenthosMonitorState translates a benthos_monitor desired FSM state
+// (the vocabulary the v1 monitor manager used) into the worker's child-spec
+// state vocabulary that the dynamicchildren Upsert expects.
+//
+// "active" maps to "running" (the monitor is running and metrics are OK).
+// "benthos_monitoring_stopped", "benthos_monitoring_stopping", and
+// "benthos_monitoring_starting" all map to "stopped" (the monitor is not in a
+// steady running state). Any other value (including lifecycle states and
+// "degraded") defaults to "stopped".
+func mapFromBenthosMonitorState(state string) string {
+	switch state {
+	case benthos_monitor_fsm.OperationalStateActive:
+		return "running"
+	case benthos_monitor_fsm.OperationalStateStopped,
+		benthos_monitor_fsm.OperationalStateStopping,
+		benthos_monitor_fsm.OperationalStateStarting:
+		return "stopped"
+	default:
+		return "stopped"
+	}
 }
