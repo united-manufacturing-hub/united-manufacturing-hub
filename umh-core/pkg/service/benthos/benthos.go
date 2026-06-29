@@ -41,6 +41,8 @@ import (
 
 	benthos_monitor_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos_monitor"
 	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/fsmv2client"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker/dynamicchildren"
 	"gopkg.in/yaml.v3"
 
 	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
@@ -65,6 +67,12 @@ const (
 	//
 	// Reference: https://github.com/gopcua/opcua/blob/main/debug/debug.go
 	OPCDebugEnvVar = "OPC_DEBUG"
+
+	// benthosMonitorMaxAge is the Freshness window the FF-on read path passes
+	// to GetFresh: an observation older than this is Stale (the watcher is
+	// wedged or slow). 10s mirrors the v1 monitor's scrape cadence so a single
+	// missed scrape does not flip a healthy bridge to Stale.
+	benthosMonitorMaxAge = 10 * time.Second
 )
 
 // IBenthosService is the interface for managing Benthos services.
@@ -206,10 +214,17 @@ type BenthosService struct {
 
 	// window is the per-bridge BenthosMetricsState owned by BenthosService.
 	// On the FF-off path it is fed from the metrics returned by the S6 monitor
-	// during GetHealthCheckAndMetrics; on the FF-on path it will be fed from
-	// GetFresh (wired in a later commit). One BenthosService exists per bridge,
-	// so one window per bridge.
+	// during GetHealthCheckAndMetrics; on the FF-on path it is fed from
+	// GetFresh (wired behind USE_FSMV2_BENTHOS_MONITOR). One BenthosService
+	// exists per bridge, so one window per bridge.
 	window *benthosmetrics.BenthosMetricsState
+
+	// fsmv2Watcher is the FF-on read seam: behind USE_FSMV2_BENTHOS_MONITOR
+	// GetHealthCheckAndMetrics reads the benthos_monitor worker's published
+	// BenthosMonitorStatus through it instead of the v1 monitor manager. The
+	// production default delegates to the process-scoped fsmv2client; tests
+	// inject a fake via WithFSMv2BenthosWatcher.
+	fsmv2Watcher benthosMonitorWatcher
 
 	// -----------------------------------------------------------------------------
 	// 🌶️  Hot-path YAML-parsing cache
@@ -274,6 +289,16 @@ func WithMonitorManager(monitorManager *benthos_monitor_fsm.BenthosMonitorManage
 	}
 }
 
+// WithFSMv2BenthosWatcher injects a fake benthosMonitorWatcher for tests of the
+// FF-on (USE_FSMV2_BENTHOS_MONITOR) read path. Production code leaves the
+// default (defaultBenthosMonitorWatcher, which delegates to fsmv2client) in
+// place.
+func WithFSMv2BenthosWatcher(w benthosMonitorWatcher) BenthosServiceOption {
+	return func(s *BenthosService) {
+		s.fsmv2Watcher = w
+	}
+}
+
 // WithS6Manager sets a custom S6 manager for the BenthosService.
 func WithS6Manager(s6Manager *s6fsm.S6Manager) BenthosServiceOption {
 	return func(s *BenthosService) {
@@ -291,6 +316,7 @@ func NewDefaultBenthosService(benthosName string, opts ...BenthosServiceOption) 
 		s6Service:             s6service.NewDefaultService(),
 		benthosMonitorManager: benthos_monitor_fsm.NewBenthosMonitorManager(benthosName),
 		window:                benthosmetrics.NewBenthosMetricsState(),
+		fsmv2Watcher:          defaultBenthosMonitorWatcher{},
 	}
 
 	// Apply options
@@ -622,6 +648,58 @@ func (s *BenthosService) GetHealthCheckAndMetrics(ctx context.Context, filesyste
 
 	// Get the last observed state of the benthos monitor
 	s6ServiceName := s.GetS6ServiceName(benthosName)
+
+	if fsmv2BenthosMonitorEnabled {
+		// FF-on: read the benthos_monitor worker's published
+		// BenthosMonitorStatus through the fsmv2 watcher instead of the v1
+		// monitor manager. The ref Name MUST be s6ServiceName ("benthos-"+name)
+		// — the monitor FSM keys on it; using raw benthosName makes Contains
+		// false and every read returns Unregistered.
+		ref := dynamicchildren.Ref{WorkerType: "benthos_monitor", Name: s6ServiceName}
+
+		status, res, err := s.fsmv2Watcher.GetFresh(ctx, ref, benthosMonitorMaxAge)
+		if err != nil {
+			// Unknown: GetFresh could not classify the observation (store read
+			// error). Return it raw; reconcile.go catches this non-fatally so
+			// the read path degrades rather than fatals.
+			return BenthosStatus{}, err
+		}
+
+		switch res {
+		case fsmv2client.Fresh:
+			if status.Stopped {
+				// v6.1c: a stopped bridge is Fresh + Stopped=true — the worker
+				// skipped the scrape so Scan is the zero value. Do NOT treat
+				// IsLive=false as Degraded; return a not-unhealthy empty status.
+				return BenthosStatus{}, nil
+			}
+
+			// C2: feed the window ONLY when the scrape produced metrics, so a
+			// benthos-down observation (MetricsAvailable=false) does not freeze
+			// the throughput window on a counter-reset spike.
+			if status.Scan.MetricsAvailable {
+				s.window.UpdateFromMetrics(status.Scan.Metrics, tick)
+			}
+
+			// C3: no last-good cache — the store IS the cache via the Stale
+			// branch (R3). Return the raw IsLive with no debounce.
+			return BenthosStatus{
+				HealthCheck: status.Scan.HealthCheck,
+				BenthosMetrics: benthosmetrics.BenthosMetrics{
+					Metrics:      status.Scan.Metrics,
+					MetricsState: s.window,
+				},
+			}, nil
+
+		default:
+			// Stale / Unregistered / NeverObserved — R2-R7 fill these in.
+			// TODO(R2-R7): Stale→serve the stale obs GetFresh returned + override
+			// IsLive=false (NO cache — C3: the store is the cache via this branch);
+			// Unregistered/NeverObserved→serve empty/not-ready (warming); Unknown
+			// is already handled above (err != nil).
+			return BenthosStatus{}, nil
+		}
+	}
 
 	lastObservedState, err := s.benthosMonitorManager.GetLastObservedState(s6ServiceName)
 	if err != nil {
