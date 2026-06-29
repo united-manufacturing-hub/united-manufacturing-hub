@@ -29,7 +29,7 @@ Payload shapes have no UI component:
 
 ## Built-in Shapes
 
-UMH provides two built-in shapes that handle 90% of industrial data:
+UMH provides three built-in shapes that handle 90% of industrial data:
 
 ### timeseries-number
 
@@ -58,6 +58,20 @@ For text-based status and identifiers.
 ```
 
 **Use cases:** Machine states, batch IDs, product codes, operator names
+
+### timeseries-boolean
+
+For on/off process values.
+
+**Structure:**
+```json
+{
+  "timestamp_ms": 1733904005123,
+  "value": true
+}
+```
+
+**Use cases:** Machine running, alarm active, valve open/closed, any true/false state
 
 ## When to Use Custom Shapes
 
