@@ -136,8 +136,8 @@ var _ = Describe("sampler full Sample wired into Decide (rung 12b)", func() {
 		// the wire carrying the same fraction Decide thresholded: some avg60=25.00
 		// → 0.25 fraction. This proves the value crosses the container_monitor
 		// adapter onto models.CPU, not just the internal Signals struct.
-		Expect(status2.CPU.PressureAvg60).To(BeNumerically("~", 0.25, 1e-9),
-			"PressureAvg60 reaches the wire as a fraction (some avg60=25.00 / 100)")
+		Expect(status2.CPU.PressureAvg60).To(HaveValue(BeNumerically("~", 0.25, 1e-9)),
+			"PressureAvg60 reaches the wire as a fraction (some avg60=25.00 / 100); fetchable (PSI present) → non-nil pointer")
 		pressureJSON, err := json.Marshal(status2.CPU)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(pressureJSON).To(ContainSubstring(`"pressureAvg60":0.25`),
@@ -199,12 +199,21 @@ var _ = Describe("steal p95 wired onto the wire via the sampler", func() {
 		svc := container_monitor.NewContainerMonitorServiceWithPath(mockFS, testDataPath)
 
 		// Tick 1 — baselines /proc/stat (StealFraction=0); the steal ring holds a
-		// single 0 sample, below the 2-sample floor, so StealP95 is 0.
+		// single 0 sample, below the 2-sample floor, so signals.StealP95 is 0.
+		// StealP95 is *float64: the box is virtualized (hypervisor flag present),
+		// so steal is FETCHABLE → the field is a non-nil pointer to 0.0 (emitted
+		// on the wire as 0, not omitted). This is the fetchability-based
+		// discipline: a real 0 ("we measured, nothing's stolen") is emitted,
+		// distinguishing it from an absent signal (bare metal → nil → omitted).
 		nrPeriods, usageUsec = 1000, 1_000_000
 		status1, err := svc.GetStatus(ctx)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(status1.CPU.StealP95).To(BeZero(),
-			"StealP95 is 0 on the baseline tick (single sample, below the 2-sample floor)")
+		Expect(status1.CPU.StealP95).To(HaveValue(BeNumerically("~", 0.0, 1e-9)),
+			"StealP95 is 0 on the baseline tick (single sample, below the 2-sample floor); fetchable-0: virtualized → non-nil pointer to 0")
+		stealBaselineJSON, err := json.Marshal(status1.CPU)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(stealBaselineJSON).To(ContainSubstring(`"stealP95":0`),
+			"stealP95 is emitted as 0 on the wire when fetchable (virtualized), not omitted")
 
 		// Tick 2 — steal delta 1, total delta 200 → StealFraction = 0.005; the ring
 		// now holds [0, 0.005] and the p95 (~0.005) reaches the wire. This p95 is
@@ -216,7 +225,7 @@ var _ = Describe("steal p95 wired onto the wire via the sampler", func() {
 		status2, err := svc.GetStatus(ctx)
 		Expect(err).NotTo(HaveOccurred())
 
-		Expect(status2.CPU.StealP95).To(BeNumerically("~", 0.005, 1e-9),
+		Expect(status2.CPU.StealP95).To(HaveValue(BeNumerically("~", 0.005, 1e-9)),
 			"StealP95 reaches the wire as a fraction (steal delta 1 / total delta 200)")
 		Expect(status2.CPUHealth).To(Equal(models.Active),
 			"a sub-threshold steal p95 (0.005 < StealHigh 0.10) must not fire the steal latch, so CPUHealth stays Active")
@@ -317,7 +326,7 @@ var _ = Describe("sampler failure dead-zone (rung 12b invariant)", func() {
 			"a throttle fire must degrade CPUHealth via verdict.State even on a sampler failure")
 		Expect(status2.OverallHealth).To(Equal(models.Degraded),
 			"OverallHealth must co-set with CPUHealth on a CPU degrade")
-		Expect(status2.CPU.ThrottleRatio).To(BeNumerically("~", 0.10, 1e-9),
+		Expect(status2.CPU.ThrottleRatio).To(HaveValue(BeNumerically("~", 0.10, 1e-9)),
 			"ThrottleRatio is the Decide-computed windowed ratio from the overlaid counters")
 	})
 })

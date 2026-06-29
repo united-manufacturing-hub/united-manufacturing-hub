@@ -348,29 +348,50 @@ func (c *ContainerMonitorService) getCPUMetrics(ctx context.Context) (*models.CP
 		}
 	}
 
-	// Add cgroup info if available
+	// Add cgroup info if available. ThrottleRatio is a *float64: non-nil
+	// (pointer to the computed ratio, even 0) when the cgroup is readable
+	// (limit mode — throttling is fetchable), nil when cgroupErr != nil (the
+	// dead-zone: no quota, so throttling cannot be measured). CgroupCores and
+	// IsThrottled remain value-typed (CgroupCores keeps its omitempty-on-0
+	// semantics since a 0 quota means uncapped, not "measured 0"; IsThrottled
+	// is a bool with no zero-ambiguity).
 	if cgroupErr == nil {
 		cpuStat.CgroupCores = cgroupInfo.QuotaCores
-		cpuStat.ThrottleRatio = cgroupInfo.ThrottleRatio
+		cpuStat.ThrottleRatio = ptr(cgroupInfo.ThrottleRatio)
 		cpuStat.IsThrottled = cgroupInfo.IsThrottled
 	}
 
 	// Percentile mCPU fields are observability-only mirrors of the dead-zone
-	// usage ring (signals.*UsageFraction * 1000). They are 0 when the ring
-	// holds < 2 entries (outside the dead-zone, or first tick) — omitempty
-	// then drops them from the wire. They do not change the verdict.
-	cpuStat.AvgMCpu = signals.AvgUsageFraction * 1000
-	cpuStat.P95MCpu = signals.P95UsageFraction * 1000
-	cpuStat.P99MCpu = signals.P99UsageFraction * 1000
+	// usage ring (signals.*UsageFraction * 1000). They are *float64: non-nil
+	// (pointer to the computed percentile, even 0) when signals.UsageRingActive
+	// is true (the ring holds >= 2 entries — the dead-zone with enough samples),
+	// nil otherwise (outside the dead-zone, or the first dead-zone tick before
+	// the ring has 2 entries). The UsageRingActive flag distinguishes a real 0
+	// from an absent signal, which the value-based 0/omitempty discipline
+	// cannot. They do not change the verdict.
+	if signals.UsageRingActive {
+		cpuStat.AvgMCpu = ptr(signals.AvgUsageFraction * 1000)
+		cpuStat.P95MCpu = ptr(signals.P95UsageFraction * 1000)
+		cpuStat.P99MCpu = ptr(signals.P99UsageFraction * 1000)
+	}
 
 	// StealP95 (steal fraction 0-1) and PressureAvg60 (PSI some-avg60 as a
 	// fraction 0-1; the sampler divides the raw kernel 0-100 percentage by 100)
-	// are observability-only mirrors of the corresponding Signals fields,
-	// populated unconditionally like ThrottleRatio. They are 0 (omitempty drops
-	// them) when not virtualized / when PSI is unavailable. They do not change
-	// the verdict.
-	cpuStat.StealP95 = signals.StealP95
-	cpuStat.PressureAvg60 = signals.PressureAvg60Out
+	// are observability-only mirrors of the corresponding Signals fields. They
+	// are *float64: non-nil (pointer to the value, even 0) when the underlying
+	// signal is fetchable (StealP95 when sample.Virtualized is true — steal is
+	// not a readable signal on bare metal; PressureAvg60 when sample.PsiAvailable
+	// is true — PSI may be absent on kernels without CONFIG_PSI), nil otherwise.
+	// This distinguishes a real 0 ("we measured, nothing's stolen / no pressure")
+	// from an absent signal ("we can't measure this at all"), which the
+	// value-based 0/omitempty discipline cannot. They do not change the verdict.
+	if sample.Virtualized {
+		cpuStat.StealP95 = ptr(signals.StealP95)
+	}
+
+	if sample.PsiAvailable {
+		cpuStat.PressureAvg60 = ptr(signals.PressureAvg60Out)
+	}
 
 	return cpuStat, nil
 }
@@ -595,4 +616,12 @@ func (c *ContainerMonitorService) generateNewHWID(ctx context.Context) (string, 
 	}
 
 	return hwid, nil
+}
+
+// ptr returns a pointer to v. It is the helper for the *float64 wire fields on
+// models.CPU: a non-nil pointer (even to 0) is emitted by encoding/json's
+// omitempty, while a nil pointer is omitted, giving the fetchability-based
+// emission discipline (emit when fetchable, even 0; omit when un-fetchable).
+func ptr(v float64) *float64 {
+	return &v
 }

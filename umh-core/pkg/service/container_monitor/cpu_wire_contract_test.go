@@ -91,8 +91,8 @@ var _ = Describe("three-field CPU-health wire contract on models.CPU", func() {
 
 		Expect(status1.CPU.Health).NotTo(BeNil(),
 			"the existing Health field must remain populated")
-		Expect(status1.CPU.ThrottleRatio).To(BeNumerically("~", 0.0, 1e-9),
-			"existing ThrottleRatio field preserved on the healthy path")
+		Expect(status1.CPU.ThrottleRatio).To(HaveValue(BeNumerically("~", 0.0, 1e-9)),
+			"existing ThrottleRatio field preserved on the healthy path (fetchable-0: cgroup readable → non-nil pointer to 0)")
 		Expect(status1.CPU.IsThrottled).To(BeFalse(),
 			"existing IsThrottled field preserved on the healthy path")
 
@@ -131,7 +131,7 @@ var _ = Describe("three-field CPU-health wire contract on models.CPU", func() {
 			"existing Health category reflects the degrade")
 		Expect(status2.CPU.IsThrottled).To(BeTrue(),
 			"existing IsThrottled field preserved and reflects the throttle latch")
-		Expect(status2.CPU.ThrottleRatio).To(BeNumerically("~", 0.10, 1e-9),
+		Expect(status2.CPU.ThrottleRatio).To(HaveValue(BeNumerically("~", 0.10, 1e-9)),
 			"existing ThrottleRatio field preserved")
 		Expect(status2.CPU.CgroupCores).To(BeNumerically("~", 2.0, 1e-9),
 			"existing CgroupCores field preserved")
@@ -140,20 +140,22 @@ var _ = Describe("three-field CPU-health wire contract on models.CPU", func() {
 		// usage ring. This throttle-degrade scenario uses cpu.max="200000
 		// 100000" (Quota=2.0 cores), which is NOT the dead-zone — Decide clears
 		// the usage ring on every tick outside the dead-zone, so the ring is
-		// empty and the three fields are 0 (omitempty drops them from the wire).
-		// The contract: non-zero only when the ring holds >= 2 entries (the
-		// dead-zone); 0/omitempty otherwise.
+		// empty and signals.UsageRingActive is false. The three *float64 fields
+		// are therefore nil (un-fetchable: no dead-zone → no usage ring → no
+		// percentiles to report), and omitempty drops them from the wire. The
+		// contract: non-nil (emitted, even 0) only when the ring holds >= 2
+		// entries (the dead-zone); nil/omitted otherwise.
 		Expect(status2.CPU.AvgMCpu).To(BeZero(),
-			"AvgMCpu is 0 outside the dead-zone (ring cleared)")
+			"AvgMCpu is nil outside the dead-zone (ring cleared → un-fetchable)")
 		Expect(status2.CPU.P95MCpu).To(BeZero(),
-			"P95MCpu is 0 outside the dead-zone (ring cleared)")
+			"P95MCpu is nil outside the dead-zone (ring cleared → un-fetchable)")
 		Expect(status2.CPU.P99MCpu).To(BeZero(),
-			"P99MCpu is 0 outside the dead-zone (ring cleared)")
+			"P99MCpu is nil outside the dead-zone (ring cleared → un-fetchable)")
 		Expect(degradedJSON).NotTo(ContainSubstring(`"avgMCpu"`),
-			"AvgMCpu is omitempty and absent when 0")
+			"AvgMCpu is omitempty and absent when nil (un-fetchable)")
 		Expect(degradedJSON).NotTo(ContainSubstring(`"p95MCpu"`),
-			"P95MCpu is omitempty and absent when 0")
+			"P95MCpu is omitempty and absent when nil (un-fetchable)")
 		Expect(degradedJSON).NotTo(ContainSubstring(`"p99MCpu"`),
-			"P99MCpu is omitempty and absent when 0")
+			"P99MCpu is omitempty and absent when nil (un-fetchable)")
 	})
 })

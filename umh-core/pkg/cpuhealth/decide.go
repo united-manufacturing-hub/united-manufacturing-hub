@@ -238,9 +238,19 @@ type Signals struct {
 	// saturation latch still fires on the AVG, not p95. Outside the dead-zone
 	// the usage ring is cleared, so these are 0 there (usage is not a health
 	// signal outside the dead-zone currently).
+	//
+	// UsageRingActive is the fetchability flag for the three percentile fields
+	// above: true when the usage ring holds >= 2 entries (the dead-zone with
+	// enough samples to compute percentiles), false otherwise (outside the
+	// dead-zone, or the first dead-zone tick before the ring has 2 entries).
+	// Callers that mirror the percentiles onto a wire use this flag to decide
+	// whether to emit a 0 (fetchable) or omit (un-fetchable), instead of the
+	// value-based 0/omitempty discipline that cannot distinguish a real 0 from
+	// an absent signal.
 	AvgUsageFraction float64
 	P95UsageFraction float64
 	P99UsageFraction float64
+	UsageRingActive  bool
 	ThrottleFired    bool
 	// PressureFired is the pressure Schmitt latch state (fires above
 	// PressureHigh, clears only below PressureRecover), independent of the
@@ -649,6 +659,8 @@ func Decide(st *WindowState, sample Sample, thresholds Thresholds) (Verdict, Sig
 	signals.SaturationFired = st.saturationFired
 
 	if n := len(st.usageRing); n >= 2 {
+		signals.UsageRingActive = true
+
 		vals := make([]float64, n)
 		for i, up := range st.usageRing {
 			vals[i] = up.fraction

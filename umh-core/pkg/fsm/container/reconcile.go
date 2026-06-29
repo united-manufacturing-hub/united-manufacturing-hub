@@ -178,11 +178,17 @@ func (c *ContainerInstance) printSystemState(instanceName string, tick uint64) {
 		if status.CPU != nil {
 			logger.Infof("CPU: Usage=%.2fm cores, Cores=%d", status.CPU.TotalUsageMCpu, status.CPU.CoreCount)
 			
-			// Log cgroup CPU info if available
+			// Log cgroup CPU info if available. ThrottleRatio is a *float64
+			// (nil when the cgroup is unreadable); dereference only when non-nil.
 			if status.CPU.CgroupCores > 0 {
-				logger.Infof("CPU Cgroup: Quota=%.2f cores, Throttle Ratio=%.4f, Throttled=%v", 
-					status.CPU.CgroupCores, 
-					status.CPU.ThrottleRatio,
+				var throttleRatio float64
+				if status.CPU.ThrottleRatio != nil {
+					throttleRatio = *status.CPU.ThrottleRatio
+				}
+
+				logger.Infof("CPU Cgroup: Quota=%.2f cores, Throttle Ratio=%.4f, Throttled=%v",
+					status.CPU.CgroupCores,
+					throttleRatio,
 					status.CPU.IsThrottled)
 			}
 		}

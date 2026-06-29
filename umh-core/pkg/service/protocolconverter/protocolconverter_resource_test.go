@@ -260,8 +260,8 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 										DiskHealth:    models.Active,
 										CPU: &models.CPU{
 											IsThrottled:   true,
-											ThrottleRatio: 0.15, // 15% throttled
-											CgroupCores:   2.0,  // Limited to 2 cores
+											ThrottleRatio: ptrFloat64(0.15), // 15% throttled
+											CgroupCores:   2.0,             // Limited to 2 cores
 										},
 									},
 								},
@@ -652,7 +652,7 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 									DiskHealth:    models.Active,
 									CPU: &models.CPU{
 										IsThrottled:   true, // CPU is throttled
-										ThrottleRatio: 0.20,
+										ThrottleRatio: ptrFloat64(0.20),
 										CgroupCores:   2.0,
 									},
 								},
@@ -689,7 +689,7 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 									DiskHealth:    models.Active,
 									CPU: &models.CPU{
 										IsThrottled:   false,
-										ThrottleRatio: 0.0,
+										ThrottleRatio: ptrFloat64(0.0),
 									},
 								},
 							},
@@ -901,3 +901,10 @@ func (m *MockManagerSnapshot) GetManagerTick() uint64 {
 type wrongTypeObservedState struct{}
 
 func (wrongTypeObservedState) IsObservedStateSnapshot() {}
+
+// ptrFloat64 returns a pointer to v. Used to construct *float64 wire fields on
+// models.CPU in test fixtures (the production ptr helper lives in the
+// container_monitor package, which is not importable from this _test package).
+func ptrFloat64(v float64) *float64 {
+	return &v
+}

@@ -139,26 +139,30 @@ type CPU struct {
 	TotalUsageMCpu float64 `json:"totalUsageMCpu"` // Total usage in milli-cores (1000m = 1 core)
 	CoreCount      int     `json:"coreCount"`      // Number of CPU cores
 	// AvgMCpu/P95MCpu/P99MCpu are the avg/p95/p99 of the dead-zone usage ring
-	// in milli-cores (signals.*UsageFraction * 1000). Computed unconditionally
-	// whenever the ring holds >= 2 entries; 0 (omitempty) when the ring is
-	// empty (no dead-zone) or holds < 2 entries. Observability-only — they do
-	// not change the verdict.
-	AvgMCpu float64 `json:"avgMCpu,omitempty"`
-	P95MCpu float64 `json:"p95MCpu,omitempty"`
-	P99MCpu float64 `json:"p99MCpu,omitempty"`
+	// in milli-cores (signals.*UsageFraction * 1000). They are *float64 so
+	// omitempty emits a real 0 (non-nil pointer) when the metric is fetchable
+	// (the ring holds >= 2 entries) and omits it when un-fetchable (nil pointer:
+	// outside the dead-zone, or the first dead-zone tick before the ring has 2
+	// entries). Observability-only — they do not change the verdict.
+	AvgMCpu *float64 `json:"avgMCpu,omitempty"`
+	P95MCpu *float64 `json:"p95MCpu,omitempty"`
+	P99MCpu *float64 `json:"p99MCpu,omitempty"`
 	// Cgroup-specific fields for container resource limits
 	CgroupCores   float64 `json:"cgroupCores,omitempty"`   // CPU quota from cgroup (e.g., 2.0 = 2 cores)
-	ThrottleRatio float64 `json:"throttleRatio,omitempty"` // Ratio of throttled periods (0.0-1.0)
+	ThrottleRatio *float64 `json:"throttleRatio,omitempty"` // Ratio of throttled periods (0.0-1.0); nil when cgroup unreadable
 	IsThrottled   bool    `json:"isThrottled,omitempty"`   // True if recently throttled
-	// StealP95 is the 60s-windowed steal p95 as a fraction 0-1, populated
-	// unconditionally (observability-only, like ThrottleRatio); 0 when not
-	// virtualized. It does not change the verdict.
-	StealP95 float64 `json:"stealP95,omitempty"`
+	// StealP95 is the 60s-windowed steal p95 as a fraction 0-1. It is *float64
+	// so omitempty emits a real 0 (non-nil pointer) when steal is fetchable
+	// (the box is virtualized) and omits it when un-fetchable (nil pointer: bare
+	// metal, where steal is not a readable signal). It does not change the verdict.
+	StealP95 *float64 `json:"stealP95,omitempty"`
 	// PressureAvg60 is the PSI cpu.pressure some-avg60 value as a fraction 0-1
 	// (the raw kernel 0-100 percentage divided by 100, same convention as
-	// ThrottleRatio), populated unconditionally (observability-only, like
-	// ThrottleRatio); 0 when PSI is unavailable. It does not change the verdict.
-	PressureAvg60 float64 `json:"pressureAvg60,omitempty"`
+	// ThrottleRatio). It is *float64 so omitempty emits a real 0 (non-nil
+	// pointer) when PSI is fetchable (the cpu.pressure file is present) and
+	// omits it when un-fetchable (nil pointer: PSI absent). It does not change
+	// the verdict.
+	PressureAvg60 *float64 `json:"pressureAvg60,omitempty"`
 }
 
 type Disk struct {

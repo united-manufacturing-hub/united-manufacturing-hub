@@ -105,7 +105,7 @@ var _ = Describe("throttle verdict wired through cpuhealth.Decide (rung 4b)", fu
 		Expect(err).NotTo(HaveOccurred())
 		Expect(status3.CPU.IsThrottled).To(BeTrue(),
 			"Schmitt latch must hold in the [0.03, 0.05) band after firing; the raw ratio is %.4f", 0.035)
-		Expect(status3.CPU.ThrottleRatio).To(BeNumerically("~", 0.035, 1e-9),
+		Expect(status3.CPU.ThrottleRatio).To(HaveValue(BeNumerically("~", 0.035, 1e-9)),
 			"ThrottleRatio is the Decide-computed windowed ratio, read unconditionally of latch state")
 	})
 

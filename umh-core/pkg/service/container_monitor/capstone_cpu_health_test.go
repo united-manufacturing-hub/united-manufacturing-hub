@@ -176,7 +176,7 @@ var _ = Describe("capstone: end-to-end CPU-health model through GetStatus (rung 
 			"THROTTLE-DEGRADE: OverallHealth must co-set Degraded")
 		Expect(status.CPU.IsThrottled).To(BeTrue(),
 			"THROTTLE-DEGRADE: IsThrottled must be true when the latch fires")
-		Expect(status.CPU.ThrottleRatio).To(BeNumerically("~", 0.10, 1e-9),
+		Expect(status.CPU.ThrottleRatio).To(HaveValue(BeNumerically("~", 0.10, 1e-9)),
 			"THROTTLE-DEGRADE: ThrottleRatio is the windowed ratio")
 		Expect(status.CPU.Health).NotTo(BeNil())
 		Expect(status.CPU.Health.Message).To(ContainSubstring("CPU limited"),

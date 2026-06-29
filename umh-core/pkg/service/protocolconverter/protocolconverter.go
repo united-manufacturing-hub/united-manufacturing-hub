@@ -1206,10 +1206,17 @@ func (p *ProtocolConverterService) IsResourceLimited(snapshot fsm.SystemSnapshot
 				return true, "Disk resources degraded"
 			}
 
-			// Also check for CPU throttling specifically with improved message
+			// Also check for CPU throttling specifically with improved message.
+			// ThrottleRatio is a *float64 (nil when the cgroup is unreadable); it
+			// is non-nil here because IsThrottled can only be true when the cgroup
+			// was readable (the throttle latch is evaluated inside the cgroupErr==nil
+			// branch of getCPUMetrics), but guard the dereference for safety.
 			if serviceInfo.CPU != nil && serviceInfo.CPU.IsThrottled {
-				// Provide detailed throttling message as per ENG-3423
-				throttlePercent := serviceInfo.CPU.ThrottleRatio * 100
+				var throttlePercent float64
+				if serviceInfo.CPU.ThrottleRatio != nil {
+					throttlePercent = *serviceInfo.CPU.ThrottleRatio * 100
+				}
+
 				cgroupCores := serviceInfo.CPU.CgroupCores
 				hostCores := runtime.NumCPU()
 
