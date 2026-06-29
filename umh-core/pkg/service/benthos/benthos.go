@@ -691,12 +691,28 @@ func (s *BenthosService) GetHealthCheckAndMetrics(ctx context.Context, filesyste
 				},
 			}, nil
 
+		case fsmv2client.Stale:
+			// Wedged watcher (CollectedAt > maxAge). The store IS the cache — Stale
+			// is the one branch that surfaces stored last-good: serve the stale obs's
+			// Metrics + override IsLive=false. No error (reconcile.go:104-115 catches
+			// non-fatal; serving last-good+unhealthy is the round4 #7 fix). v6.3d:
+			// Degraded-for-all on wedge (incl stopped) — a wedged watcher is a global
+			// alarm; do NOT exempt stopped bridges. Do NOT feed s.window (C2: feed
+			// only on Fresh+MetricsAvailable; Stale is not Fresh).
+			staleHC := status.Scan.HealthCheck
+			staleHC.IsLive = false
+
+			return BenthosStatus{
+				HealthCheck: staleHC,
+				BenthosMetrics: benthosmetrics.BenthosMetrics{
+					Metrics:      status.Scan.Metrics,
+					MetricsState: s.window,
+				},
+			}, nil
+
 		default:
-			// Stale / Unregistered / NeverObserved — R2-R7 fill these in.
-			// TODO(R2-R7): Stale→serve the stale obs GetFresh returned + override
-			// IsLive=false (NO cache — C3: the store is the cache via this branch);
-			// Unregistered/NeverObserved→serve empty/not-ready (warming); Unknown
-			// is already handled above (err != nil).
+			// Unregistered / NeverObserved → serve empty/not-ready (warming);
+			// Unknown handled above (err != nil).
 			return BenthosStatus{}, nil
 		}
 	}
