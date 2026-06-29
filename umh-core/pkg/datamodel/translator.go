@@ -69,9 +69,9 @@ func NewTranslator() *Translator {
 // The function first validates the data model structure, then extracts virtual paths,
 // groups them by payload shape, and generates JSON schemas for each payload shape.
 //
-// Default payload shapes (timeseries-number and timeseries-string) are automatically
-// injected if not present in the payloadShapes map. Existing payload shapes are never
-// overridden, ensuring custom definitions take precedence.
+// Default payload shapes (timeseries-number, timeseries-string, and timeseries-boolean)
+// are automatically injected if not present in the payloadShapes map. Existing payload
+// shapes are never overridden, ensuring custom definitions take precedence.
 //
 // If allDataModels is provided (non-nil and non-empty), the function will perform full
 // reference validation and resolve model references. If allDataModels is nil or empty,
