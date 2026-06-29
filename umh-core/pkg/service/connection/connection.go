@@ -32,6 +32,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
@@ -40,6 +41,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	nmapfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/nmap"
+	fsmv2nmap "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2nmap"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
@@ -158,13 +160,23 @@ type ServiceInfo struct {
 	IsFlaky bool
 }
 
+// NmapManagerProvider is the interface for the nmap manager used by ConnectionService.
+type NmapManagerProvider interface {
+	GetInstances() map[string]fsm.FSMInstance
+	GetInstance(name string) (fsm.FSMInstance, bool)
+	GetLastObservedState(serviceName string) (fsm.ObservedState, error)
+	GetCurrentFSMState(serviceName string) (string, error)
+	Reconcile(ctx context.Context, snapshot fsm.SystemSnapshot, services serviceregistry.Provider) (error, bool)
+	GetManagerName() string
+}
+
 // ConnectionService implements IConnectionService using Nmap as the underlying
 // connectivity probe mechanism. It maintains a history of recent states to detect
 // flaky connections and provides a higher-level abstraction over raw Nmap results.
 type ConnectionService struct {
 	nmapService      nmap.INmapService
 	logger           *zap.SugaredLogger
-	nmapManager      *nmapfsm.NmapManager
+	nmapManager      NmapManagerProvider
 	recentNmapStates map[string][]string
 	nmapConfigs      []config.NmapConfig
 }
@@ -177,7 +189,7 @@ func WithNmapService(nmapService nmap.INmapService) ConnectionServiceOption {
 	return func(c *ConnectionService) { c.nmapService = nmapService }
 }
 
-func WithNmapManager(mgr *nmapfsm.NmapManager) ConnectionServiceOption {
+func WithNmapManager(mgr NmapManagerProvider) ConnectionServiceOption {
 	return func(c *ConnectionService) { c.nmapManager = mgr }
 }
 
@@ -197,10 +209,17 @@ func NewDefaultConnectionService(connectionName string, opts ...ConnectionServic
 	managerName := fmt.Sprintf("%s%s", logger.ComponentConnectionService, connectionName)
 	service := &ConnectionService{
 		logger:           logger.For(managerName),
-		nmapManager:      nmapfsm.NewNmapManager(managerName),
-		nmapService:      nmap.NewDefaultNmapService(connectionName),
 		nmapConfigs:      []config.NmapConfig{},
 		recentNmapStates: make(map[string][]string),
+	}
+
+	// NMAP_BACKEND selects the connection scanning implementation.
+	switch os.Getenv("NMAP_BACKEND") {
+	case "fsmv2":
+		service.nmapManager = fsmv2nmap.NewFsmv2NmapManager(managerName)
+	default:
+		service.nmapManager = nmapfsm.NewNmapManager(managerName)
+		service.nmapService = nmap.NewDefaultNmapService(connectionName)
 	}
 
 	// Apply options
@@ -237,6 +256,24 @@ func (c *ConnectionService) GetConfig(
 	}
 
 	nmapName := c.getNmapName(connectionName)
+
+	// When using fsmv2-based nmap, return the desired config from our local
+	// nmapConfigs slice. We can't read from the actor's observed state because
+	// the actor may have been created with empty config (the real config arrives
+	// later via UpdateConnectionInNmapManager after template rendering).
+	// Returning the desired config here ensures the protocol converter's
+	// UpdateObservedStateOfInstance doesn't bail out early, allowing
+	// BuildRuntimeConfig to run and populate the real target/port.
+	if c.nmapService == nil {
+		for _, cfg := range c.nmapConfigs {
+			if cfg.Name == nmapName {
+				return connectionserviceconfig.FromNmapServiceConfig(cfg.NmapServiceConfig), nil
+			}
+		}
+		// Instance not in our configs yet — return empty config without error
+		// so the caller doesn't treat this as a fatal failure.
+		return connectionserviceconfig.ConnectionServiceConfig{}, nil
+	}
 
 	// Get the Nmap config
 	nmapCfg, err := c.nmapService.GetConfig(ctx, filesystemService, nmapName)
@@ -582,7 +619,7 @@ func (c *ConnectionService) ReconcileManager(
 			Internal: config.InternalConfig{
 				Nmap: c.nmapConfigs,
 			}},
-		Tick: snapshot.Tick,
+		Tick:         snapshot.Tick,
 		SnapshotTime: snapshot.SnapshotTime,
 	}, services)
 }
@@ -602,6 +639,12 @@ func (c *ConnectionService) ServiceExists(
 
 	nmapName := c.getNmapName(connectionName)
 
+	// When using fsmv2-based nmap, check the manager for the instance
+	if c.nmapService == nil {
+		_, exists := c.nmapManager.GetInstance(nmapName)
+		return exists
+	}
+
 	// Check if the actual service exists
 	return c.nmapService.ServiceExists(ctx, filesystemService, nmapName)
 }
@@ -619,12 +662,22 @@ func (c *ConnectionService) ForceRemoveConnection(
 	if ctx.Err() != nil {
 		c.logger.Warnf("Parent context already expired for force removal of %s", connectionName)
 	}
-	
+
 	ctx, cancel := context.WithTimeout(context.Background(), constants.ForceRemovalTimeout)
 	defer cancel()
 
+	nmapName := c.getNmapName(connectionName)
+
+	// When using fsmv2-based nmap, remove via the manager
+	if c.nmapService == nil {
+		if inst, ok := c.nmapManager.GetInstance(nmapName); ok {
+			return inst.Remove(ctx)
+		}
+		return nil // already gone
+	}
+
 	// force remove from Nmap manager
-	return c.nmapService.ForceRemoveNmap(ctx, filesystemService, c.getNmapName(connectionName))
+	return c.nmapService.ForceRemoveNmap(ctx, filesystemService, nmapName)
 }
 
 // updateRecentScans adds a new scan result to the history for flakiness detection.

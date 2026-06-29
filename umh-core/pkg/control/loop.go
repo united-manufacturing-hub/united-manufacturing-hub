@@ -38,6 +38,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"sync"
 	"time"
 
@@ -123,13 +124,28 @@ func NewControlLoop(configManager config.ConfigManager) *ControlLoop {
 		container.NewContainerManager(constants.DefaultManagerName),
 		redpanda.NewRedpandaManager(constants.DefaultManagerName),
 		agent_monitor.NewAgentManager(constants.DefaultManagerName),
-		nmap.NewNmapManager(constants.DefaultManagerName),
+	}
+
+	// NMAP_BACKEND selects the connection scanning implementation:
+	//   "fsm"   (default) — legacy FSM + S6 + nmap binary
+	//   "fsmv2" — fsmv2 worker with net.DialTimeout (no S6)
+	//
+	// The nmap manager is created inside each ConnectionService instance
+	// (pkg/service/connection/connection.go) based on NMAP_BACKEND. Only the
+	// legacy "fsm" backend additionally registers a top-level NmapManager here
+	// for global state tracking; the fsmv2 backend is self-contained inside
+	// ConnectionService.
+	if os.Getenv("NMAP_BACKEND") != "fsmv2" {
+		managers = append(managers, nmap.NewNmapManager(constants.DefaultManagerName))
+	}
+
+	managers = append(managers,
 		dataflowcomponent.NewDataflowComponentManager(constants.DefaultManagerName),
 		connection.NewConnectionManager(constants.DefaultManagerName),
 		protocolconverter.NewProtocolConverterManager(constants.DefaultManagerName),
 		topicbrowser.NewTopicBrowserManager(constants.DefaultManagerName),
 		streamprocessor.NewManager(constants.DefaultManagerName),
-	}
+	)
 
 	// Create a starvation checker
 	starvationChecker := starvationchecker.NewStarvationChecker(constants.StarvationThreshold)

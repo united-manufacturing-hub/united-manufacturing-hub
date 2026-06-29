@@ -350,22 +350,24 @@ func (p *ProtocolConverterInstance) UpdateObservedStateOfInstance(ctx context.Co
 	metrics.ObserveReconcileTime(logger.ComponentProtocolConverterInstance, p.baseFSMInstance.GetID()+".buildRuntimeConfig", time.Since(start))
 
 	if !protocolconverterserviceconfig.ConfigsEqualRuntime(p.runtimeConfig, p.ObservedState.ObservedProtocolConverterRuntimeConfig) {
-		// Check if the service exists before attempting to update
-		if p.service.ServiceExists(ctx, services.GetFileSystem(), p.baseFSMInstance.GetID()) {
-			p.baseFSMInstance.GetLogger().Debugf("Observed bridge config is different from desired config, updating bridge configuration")
+		p.baseFSMInstance.GetLogger().Debugf("Observed bridge config is different from desired config, updating bridge configuration")
 
-			diffStr := protocolconverterserviceconfig.ConfigDiffRuntime(p.runtimeConfig, p.ObservedState.ObservedProtocolConverterRuntimeConfig)
-			p.baseFSMInstance.GetLogger().Debugf("Configuration differences: %s", diffStr)
+		diffStr := protocolconverterserviceconfig.ConfigDiffRuntime(p.runtimeConfig, p.ObservedState.ObservedProtocolConverterRuntimeConfig)
+		p.baseFSMInstance.GetLogger().Debugf("Configuration differences: %s", diffStr)
 
-			// Update the config in the Benthos manager
-			err := p.service.UpdateInManager(ctx, services.GetFileSystem(), &p.runtimeConfig, p.baseFSMInstance.GetID(), p.debugLevel)
-			if err != nil {
+		// UpdateInManager updates in-memory config slices and is safe to call even
+		// when S6 services are not yet created.  If the service is not yet registered
+		// in memory (ErrServiceNotExist), we skip silently — the condition above will
+		// be true again on the next tick and we retry automatically.
+		err := p.service.UpdateInManager(ctx, services.GetFileSystem(), &p.runtimeConfig, p.baseFSMInstance.GetID(), p.debugLevel)
+		if err != nil {
+			if errors.Is(err, protocolconvertersvc.ErrServiceNotExist) {
+				p.baseFSMInstance.GetLogger().Debugf("Service not yet registered, skipping config update (will retry)")
+			} else {
 				return fmt.Errorf("failed to update bridge configuration: %w", err)
 			}
-
-			p.baseFSMInstance.GetLogger().Debugf("config updated")
 		} else {
-			p.baseFSMInstance.GetLogger().Debugf("Config differences detected but service does not exist yet, skipping update")
+			p.baseFSMInstance.GetLogger().Debugf("config updated")
 		}
 	}
 
