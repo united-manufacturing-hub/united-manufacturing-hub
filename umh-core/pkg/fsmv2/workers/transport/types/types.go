@@ -20,7 +20,10 @@ package types
 import (
 	"context"
 	"errors"
+	"strings"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	depspkg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 )
@@ -289,4 +292,35 @@ func CounterForErrorType(t ErrorType) depspkg.CounterName {
 	}
 
 	return depspkg.CounterNetworkErrorsTotal
+}
+
+// sanitizeErrorDetail strips control characters to spaces, collapses runs of
+// whitespace to a single space, trims surrounding whitespace, and caps the
+// result to 256 bytes on a UTF-8 rune boundary so the output is always
+// valid UTF-8.
+//
+// It does not redact credentials. Callers must not assume secrets are
+// scrubbed from the output (ENG-5289 tracks adding redaction).
+func sanitizeErrorDetail(s string) string {
+	s = strings.Map(func(r rune) rune {
+		if unicode.IsControl(r) {
+			return ' '
+		}
+
+		return r
+	}, s)
+
+	s = strings.Join(strings.Fields(s), " ")
+
+	if len(s) <= 256 {
+		return s
+	}
+
+	end := 256
+
+	for end > 0 && !utf8.RuneStart(s[end]) {
+		end--
+	}
+
+	return strings.TrimSpace(s[:end])
 }
