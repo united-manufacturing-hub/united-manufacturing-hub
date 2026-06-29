@@ -33,6 +33,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos_monitor"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthosmetrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/standarderrors"
@@ -203,6 +204,13 @@ type BenthosService struct {
 
 	benthosMonitorManager *benthos_monitor_fsm.BenthosMonitorManager
 
+	// window is the per-bridge BenthosMetricsState owned by BenthosService.
+	// On the FF-off path it is fed from the metrics returned by the S6 monitor
+	// during GetHealthCheckAndMetrics; on the FF-on path it will be fed from
+	// GetFresh (wired in a later commit). One BenthosService exists per bridge,
+	// so one window per bridge.
+	window *benthosmetrics.BenthosMetricsState
+
 	// -----------------------------------------------------------------------------
 	// 🌶️  Hot-path YAML-parsing cache
 	// -----------------------------------------------------------------------------
@@ -282,6 +290,7 @@ func NewDefaultBenthosService(benthosName string, opts ...BenthosServiceOption) 
 		s6Manager:             s6fsm.NewS6Manager(managerName),
 		s6Service:             s6service.NewDefaultService(),
 		benthosMonitorManager: benthos_monitor_fsm.NewBenthosMonitorManager(benthosName),
+		window:                benthosmetrics.NewBenthosMetricsState(),
 	}
 
 	// Apply options
@@ -650,6 +659,15 @@ func (s *BenthosService) GetHealthCheckAndMetrics(ctx context.Context, filesyste
 		return BenthosStatus{}, ErrBenthosMonitorNotRunning
 	}
 
+	// Feed BenthosService's own window from the metrics the S6 monitor returned
+	// and point the status at it. This replaces the monitor's window pointer
+	// (which is now nil) with this service's owned window. The feed cadence
+	// (every GetHealthCheckAndMetrics call that returns metrics) and the data
+	// (the monitor's returned Metrics) match the previous ProcessMetricsData
+	// feed, so behavior is preserved on the FF-off path.
+	s.window.UpdateFromMetrics(benthosStatus.BenthosMetrics.Metrics, tick)
+	benthosStatus.BenthosMetrics.MetricsState = s.window
+
 	return benthosStatus, nil
 }
 
@@ -848,6 +866,11 @@ func (s *BenthosService) RemoveBenthosFromS6Manager(
 		return fmt.Errorf("%w: monitor instance state=%s",
 			standarderrors.ErrRemovalPending, inst.GetCurrentFSMState())
 	}
+
+	// Reset the per-bridge window now that the bridge is really gone. This
+	// mirrors the previous monitor-side reset (benthos_monitor.go) and keeps
+	// the window idempotent across a remove → re-add cycle for the same name.
+	s.window = benthosmetrics.NewBenthosMetricsState()
 
 	// Everything really removed ➜ success, idempotent
 	return nil

@@ -139,7 +139,6 @@ var _ IBenthosMonitorService = (*BenthosMonitorService)(nil)
 
 type BenthosMonitorService struct {
 	logger          *zap.SugaredLogger
-	metricsState    *BenthosMetricsState
 	s6Manager       *s6fsm.S6Manager
 	s6Service       s6service.Service
 	s6ServiceConfig *config.S6FSMConfig // There can only be one monitor per benthos instance
@@ -171,11 +170,10 @@ func NewBenthosMonitorService(benthosName string, opts ...BenthosMonitorServiceO
 	managerName := fmt.Sprintf("%s%s", logger.ComponentBenthosService, "benthos-monitor-"+benthosName)
 
 	service := &BenthosMonitorService{
-		logger:       logger.For(managerName),
-		metricsState: benthosmetrics.NewBenthosMetricsState(),
-		s6Manager:    s6fsm.NewS6Manager(logger.ComponentBenthosMonitorService),
-		s6Service:    s6service.NewDefaultService(),
-		benthosName:  benthosName,
+		logger:      logger.For(managerName),
+		s6Manager:   s6fsm.NewS6Manager(logger.ComponentBenthosMonitorService),
+		s6Service:   s6service.NewDefaultService(),
+		benthosName: benthosName,
 	}
 	for _, opt := range opts {
 		opt(service)
@@ -797,12 +795,11 @@ func (s *BenthosMonitorService) ProcessMetricsData(metricsDataBytes []byte, tick
 		return nil, fmt.Errorf("failed to parse metrics data: %w", err)
 	}
 
-	// Update the metrics state
-	s.metricsState.UpdateFromMetrics(metrics, tick)
-
+	// The window is no longer the monitor's concern: BenthosService owns and
+	// feeds its own per-bridge window from the Metrics returned here.
 	return &BenthosMetrics{
 		Metrics:      metrics,
-		MetricsState: s.metricsState,
+		MetricsState: nil,
 	}, nil
 }
 
@@ -1001,9 +998,6 @@ func (s *BenthosMonitorService) RemoveBenthosMonitorFromS6Manager(ctx context.Co
 		return fmt.Errorf("%w: S6 instance state=%s",
 			standarderrors.ErrRemovalPending, inst.GetCurrentFSMState())
 	}
-
-	// Clean up the metrics state
-	s.metricsState = benthosmetrics.NewBenthosMetricsState()
 
 	return nil
 }
