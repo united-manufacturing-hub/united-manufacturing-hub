@@ -36,7 +36,7 @@
 //
 //	┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
 //	│  FSMv2 Worker   │────▶│  Legacy Bridge  │────▶│     Router      │
-//	│  (transport.*)  │◀────│   (converts)    │◀────│  (models.*)     │
+//	│  (types.*)  │◀────│   (converts)    │◀────│  (models.*)     │
 //	└─────────────────┘     └─────────────────┘     └─────────────────┘
 //
 // Flow:
@@ -268,4 +268,9 @@ func (b *LegacyChannelBridge) GetInboundStats(_ string) (capacity int, length in
 // Used for Priority 0: Remove Pusher from FSMv2 flow.
 func (b *LegacyChannelBridge) GetOutboundWriteChannel() chan<- *types.UMHMessage {
 	return b.fsmOutbound
+}
+
+// RawChannels returns the raw bidirectional FSMv2 channels for the gatekeeper.
+func (b *LegacyChannelBridge) RawChannels() (inbound chan *types.UMHMessage, outbound chan *types.UMHMessage) {
+	return b.fsmInbound, b.fsmOutbound
 }
