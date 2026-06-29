@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"runtime"
 	"time"
 
@@ -1077,6 +1078,14 @@ func (p *ProtocolConverterService) ServiceExists(
 	connExists := p.connectionService.ServiceExists(ctx, filesystemService, connectionName)
 	dfcReadExists := p.dataflowComponentService.ServiceExists(ctx, filesystemService, dfcReadName)
 	dfcWriteExists := p.dataflowComponentService.ServiceExists(ctx, filesystemService, dfcWriteName)
+
+	// When using fsmv2-based nmap, the connection always exists in memory (no S6).
+	// DFC S6 services may still be initializing. Allow partial existence so that
+	// Status() can return connection state while DFCs are being created.
+	nmapBackend := os.Getenv("NMAP_BACKEND")
+	if nmapBackend == "fsmv2" {
+		return connExists || dfcReadExists || dfcWriteExists
+	}
 
 	// if one of the services doesn't exist we should return that
 	return connExists && (dfcReadExists || dfcWriteExists)
