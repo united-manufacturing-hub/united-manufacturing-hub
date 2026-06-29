@@ -613,6 +613,13 @@ func (s *Supervisor[TObserved, TDesired]) IsObservationStale() bool {
 	return true
 }
 
+// UpdateUserSpec sets the user specification for this supervisor.
+// Config changes are reflected on the next tick when DeriveDesiredState is called.
+// Use this when the supervisor is owned by an external manager rather than a parent worker.
+func (s *Supervisor[TObserved, TDesired]) UpdateUserSpec(spec config.UserSpec) {
+	s.updateUserSpec(spec)
+}
+
 // updateUserSpec implements SupervisorInterface.
 func (s *Supervisor[TObserved, TDesired]) updateUserSpec(spec config.UserSpec) {
 	s.mu.Lock()
