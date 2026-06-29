@@ -23,6 +23,7 @@ import (
 	"time"
 
 	depspkg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 )
 
 // AuthSession groups the auth fields that travel together from parent transport status
@@ -58,13 +59,29 @@ type ChildAuthUserSpec struct {
 	AuthSession AuthSession `json:"authSession,omitempty" yaml:"authSession,omitempty"`
 }
 
+// ProtocolVersion indicates the message protocol version.
+type ProtocolVersion string
+
+const (
+	V0    ProtocolVersion = ""       // legacy, no encryption
+	CseV1 ProtocolVersion = "cse_v1" // client-side encryption v1
+)
+
 // UMHMessage represents a message in the umh-core push/pull protocol.
 // Note: InstanceUUID uses json tag "umhInstance" to match backend API (models.UMHMessage).
 type UMHMessage struct {
-	InstanceUUID string `json:"umhInstance"`
-	Content      string `json:"content"`
-	Email        string `json:"email"`
-	TraceID      string `json:"traceId,omitempty"`
+	InstanceUUID    string          `json:"umhInstance"`
+	Content         string          `json:"content"`
+	Email           string          `json:"email"`
+	TraceID         string          `json:"traceId,omitempty"`
+	ProtocolVersion ProtocolVersion `json:"protocolVersion,omitempty"`
+}
+
+// MessageWithSender is the internal transport format between gatekeeper and business logic.
+type MessageWithSender struct {
+	Content     models.UMHMessageContent
+	SenderEmail string
+	TraceID     string
 }
 
 // AuthRequest represents an authentication request.

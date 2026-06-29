@@ -26,6 +26,7 @@ require (
 	github.com/shirou/gopsutil/v4 v4.26.5
 	github.com/testcontainers/testcontainers-go/modules/redpanda v0.42.0
 	github.com/tiendc/go-deepcopy v1.7.2
+	github.com/united-manufacturing-hub/ManagementConsole/cryptolib v0.0.0-00010101000000-000000000000
 	github.com/united-manufacturing-hub/expiremap/v2 v2.1.0
 	github.com/united-manufacturing-hub/umh-utils v0.2.2
 	github.com/vektah/gqlparser/v2 v2.5.34
@@ -39,6 +40,7 @@ require (
 
 require (
 	dario.cat/mergo v1.0.2 // indirect
+	filippo.io/edwards25519 v1.2.0 // indirect
 	github.com/Azure/go-ansiterm v0.0.0-20250102033503-faa5f7b0171c // indirect
 	github.com/Microsoft/go-winio v0.6.2 // indirect
 	github.com/agnivade/levenshtein v1.2.1 // indirect
@@ -128,4 +130,9 @@ require (
 	golang.org/x/net v0.55.0 // indirect
 	golang.org/x/text v0.38.0 // indirect
 	golang.org/x/tools v0.45.0 // indirect
+)
+
+replace (
+	github.com/united-manufacturing-hub/ManagementConsole/cryptolib => ../../ManagementConsole/cryptolib
+	github.com/united-manufacturing-hub/ManagementConsole/shared => ../../ManagementConsole/shared
 )

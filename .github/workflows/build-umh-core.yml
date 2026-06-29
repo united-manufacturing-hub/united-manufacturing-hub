@@ -55,6 +55,21 @@ jobs:
         id: short-sha
         run: echo "sha=$(echo '${{ github.sha }}' | cut -c1-7)" >> "$GITHUB_OUTPUT"
 
+      - name: Generate token for ManagementConsole checkout
+        id: mc-token
+        uses: actions/create-github-app-token@29824e69f54612133e76f7eaac726eef6c875baf # v2
+        with:
+          app-id: ${{ secrets.CHECKOUT_APP_ID }}
+          private-key: ${{ secrets.CHECKOUT_APP_PK }}
+          repositories: ManagementConsole
+
+      - name: Checkout ManagementConsole
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          repository: united-manufacturing-hub/ManagementConsole
+          path: ../ManagementConsole
+          token: ${{ steps.mc-token.outputs.token }}
+
       - name: Setup Depot
         uses: depot/setup-action@15c09a5f77a0840ad4bce955686522a257853461 # v1.7.1
 
