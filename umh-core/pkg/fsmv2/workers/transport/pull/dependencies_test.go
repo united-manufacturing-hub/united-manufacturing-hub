@@ -453,7 +453,7 @@ var _ = Describe("RecordTypedError status_code and error_detail emission (pull)"
 		}
 	})
 
-	It("omits status_code and error_detail when there was no HTTP response", func() {
+	It("omits status_code and error_detail when the caller passes a zero status and empty detail", func() {
 		for range transportpkg.ChildFailureRateConfig.MinSamples {
 			d.RecordTypedError(types.ErrorTypeNetwork, 0, 0, "")
 		}
