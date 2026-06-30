@@ -97,12 +97,16 @@ func (w *PushWorker) CollectObservedState(ctx context.Context, desired fsmv2.Des
 		cfg = fsmv2.ExtractConfig[snapshot.PushDesiredState](desired)
 	}
 
+	lastErrType, lastSc, lastDetail := d.GetLastErrorSnapshot()
+
 	status := snapshot.PushStatus{
 		HasTransport:        d.GetTransport() != nil,
 		HasValidToken:       cfg.AuthSession.IsUsable(time.Minute),
 		ConsecutiveErrors:   d.GetConsecutiveErrors(),
 		PendingMessageCount: d.PendingMessageCount(),
-		LastErrorType:       d.GetLastErrorType(),
+		LastErrorType:       lastErrType,
+		LastStatusCode:      lastSc,
+		LastErrorDetail:     lastDetail,
 		LastRetryAfter:      d.GetLastRetryAfter(),
 		DegradedEnteredAt:   d.GetDegradedEnteredAt(),
 		LastErrorAt:         d.GetLastErrorAt(),

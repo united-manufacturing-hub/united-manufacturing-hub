@@ -155,9 +155,6 @@ func (d *PushDependencies) GetLastErrorType() types.ErrorType {
 
 // GetLastStatusCode returns the HTTP status code from the most recent error
 // recorded for this child, or 0 if none has been recorded.
-//
-// TODO(R7): surface onto PushStatus in CollectObservedState so this reaches
-// observed status / durable store.
 func (d *PushDependencies) GetLastStatusCode() int {
 	d.errorMu.RLock()
 	defer d.errorMu.RUnlock()
@@ -167,14 +164,22 @@ func (d *PushDependencies) GetLastStatusCode() int {
 
 // GetLastErrorDetail returns the sanitized detail string from the most recent
 // error recorded for this child, or "" if none has been recorded.
-//
-// TODO(R7): surface onto PushStatus in CollectObservedState so this reaches
-// observed status / durable store.
 func (d *PushDependencies) GetLastErrorDetail() string {
 	d.errorMu.RLock()
 	defer d.errorMu.RUnlock()
 
 	return d.lastErrorDetail
+}
+
+// GetLastErrorSnapshot returns the last error type, status code, and detail in
+// a single read under errorMu so CollectObservedState observes a consistent
+// triple across the concurrent action goroutine that writes all three under one
+// lock in RecordTypedError.
+func (d *PushDependencies) GetLastErrorSnapshot() (types.ErrorType, int, string) {
+	d.errorMu.RLock()
+	defer d.errorMu.RUnlock()
+
+	return d.lastErrorType, d.lastStatusCode, d.lastErrorDetail
 }
 
 // StorePendingMessages appends messages to the pending buffer for retry on the next tick.
