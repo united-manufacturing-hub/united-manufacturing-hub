@@ -378,6 +378,14 @@ var _ = Describe("RecordTypedError status_code and error_detail emission", func(
 		Expect(m["status_code"]).To(BeEquivalentTo(502))
 		Expect(m["error_detail"]).To(Equal(detail))
 	})
+
+	It("RecordSuccess clears status_code and error_detail", func() {
+		d.RecordTypedError(types.ErrorTypeServerError, 0, 502, "HTTP 502 (server_error): error code: 502")
+		Expect(d.GetLastStatusCode()).To(Equal(502))
+		d.RecordSuccess()
+		Expect(d.GetLastStatusCode()).To(Equal(0))
+		Expect(d.GetLastErrorDetail()).To(Equal(""))
+	})
 })
 
 func parseLastJSONLine(buf *bytes.Buffer) map[string]interface{} {

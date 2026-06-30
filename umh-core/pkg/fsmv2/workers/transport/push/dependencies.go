@@ -119,6 +119,8 @@ func (d *PushDependencies) RecordTypedError(errType types.ErrorType, retryAfter 
 func (d *PushDependencies) RecordSuccess() {
 	d.errorMu.Lock()
 	d.lastErrorType = 0
+	d.lastStatusCode = 0
+	d.lastErrorDetail = ""
 	d.errorMu.Unlock()
 
 	d.RetryTracker().RecordSuccess()
