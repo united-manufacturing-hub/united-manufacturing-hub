@@ -2972,3 +2972,171 @@ func TestDecide_HostBusy60sMean_RingDiscipline(t *testing.T) {
 		}
 	})
 }
+
+// TestDecide_Headroom_Computation pins the headroom-in-cores number
+// Signals.HeadroomCores = capacity − measured_use − reserve, exposed
+// alongside HostBusyCores60sMean with no verdict change. capacity =
+// Sample.Quota when non-nil and >0, else Sample.LogicalCpus (the uncapped
+// box on the host). measured_use = Signals.HostBusyCores60sMean (the 60s
+// mean). reserve = 1.0 core (the cpuReserveCores package const). This
+// computation does not change the verdict — headroom < 0 means "box is
+// full" but it does not act on the number yet.
+func TestDecide_Headroom_Computation(t *testing.T) {
+	base := time.Date(2026, 6, 30, 12, 0, 0, 0, time.UTC)
+	thresholds := DefaultThresholds()
+
+	// feedHeadroom pushes n ticks of the given HostBusyCores onto st's
+	// hostBusyRing at 1s spacing (well inside the 60s window) with the given
+	// Quota/LogicalCpus, returning the final signals. The demand gate
+	// (PressureFired||ThrottleFired) is closed (PressureAvg60=0, throttle
+	// counters unset → ratio=0), so no latch fires; the assertion target is
+	// solely sig.HeadroomCores.
+	// feedHeadroom returns the final Verdict too so sub-blocks can pin the
+	// no-verdict-change contract (State==StateHealthy, no Causes): the
+	// headroom computation in Decide() writes only signals.HeadroomCores and
+	// must not touch any latch or Verdict field.
+	// NOTE: a demand-gated headroom latch is NOT caught here because the
+	// demand gate is closed; cover such a latch separately if added.
+	feedHeadroom := func(st *WindowState, n int, quota *float64, logical float64, busy ...float64) (Verdict, Signals) {
+		var (
+			v Verdict
+			s Signals
+		)
+		for i := 0; i < n; i++ {
+			b := 0.0
+			if i < len(busy) {
+				b = busy[i]
+			}
+			v, s = Decide(st, Sample{
+				Timestamp:     base.Add(time.Duration(i) * time.Second),
+				HostBusyCores: b,
+				LogicalCpus:   logical,
+				Quota:         quota,
+			}, thresholds)
+		}
+		return v, s
+	}
+
+	// (1) QUOTA-SET — 2 ticks HostBusyCores=2.0 (mean=2.0), Quota=&4.0,
+	// LogicalCpus=8.0 → headroom = 4 − 2 − 1 = 1.0. Forcing: a stub using
+	// LogicalCpus as capacity yields 8 − 2 − 1 = 5.0 (!floatEq 1.0).
+	t.Run("QuotaSet", func(t *testing.T) {
+		quota := 4.0
+		st := &WindowState{}
+		_, sig := feedHeadroom(st, 2, &quota, 8.0, 2.0, 2.0)
+		if !floatEq(sig.HeadroomCores, 1.0) {
+			t.Fatalf("HeadroomCores: got %v, want 1.0 (capacity=Quota 4.0 − mean 2.0 − reserve 1.0; using LogicalCpus 8.0 yields 5.0)", sig.HeadroomCores)
+		}
+	})
+
+	// (2) QUOTA-NIL — 2 ticks mean=6.0, Quota=nil, Logical=8 → headroom =
+	// 8 − 6 − 1 = 1.0. Forcing: without the nil-fallback to LogicalCpus,
+	// capacity is 0 → headroom −7.0 (!floatEq 1.0).
+	t.Run("QuotaNil", func(t *testing.T) {
+		st := &WindowState{}
+		v, sig := feedHeadroom(st, 2, nil, 8.0, 6.0, 6.0)
+		if !floatEq(sig.HeadroomCores, 1.0) {
+			t.Fatalf("HeadroomCores: got %v, want 1.0 (capacity=LogicalCpus 8.0 (Quota nil fallback) − mean 6.0 − reserve 1.0; without nil-fallback capacity is 0 → −7.0)", sig.HeadroomCores)
+		}
+		// Quota=nil + PsiAvailable=false + Virtualized=false → dead-zone active
+		// (decide.go deadZone predicate). Pin the no-verdict-change contract
+		// in the dead-zone case, where the saturation backstop branch runs: a
+		// future change wiring headroom negativity or the dead-zone saturation
+		// path into a verdict/Cause would otherwise slip past this sub-block
+		// silently.
+		if v.State != StateHealthy {
+			t.Fatalf("State: got %q, want %q (adds no verdict in the dead-zone; headroom is observability-only)", v.State, StateHealthy)
+		}
+		if len(v.Causes) != 0 {
+			t.Fatalf("Causes length: got %d, want 0 (adds no cause in the dead-zone; headroom is observability-only)", len(v.Causes))
+		}
+	})
+
+	// (3) QUOTA-ZERO — 2 ticks mean=2.0, Quota=&0.0, Logical=4 → headroom =
+	// 4 − 2 − 1 = 1.0 (quota<=0 falls back to logical). Forcing: using quota 0
+	// as capacity yields 0 − 2 − 1 = −3.0 (!floatEq 1.0).
+	t.Run("QuotaZero", func(t *testing.T) {
+		zero := 0.0
+		st := &WindowState{}
+		v, sig := feedHeadroom(st, 2, &zero, 4.0, 2.0, 2.0)
+		if !floatEq(sig.HeadroomCores, 1.0) {
+			t.Fatalf("HeadroomCores: got %v, want 1.0 (Quota=&0.0 <= 0 → fallback to LogicalCpus 4.0 − mean 2.0 − reserve 1.0; using quota 0 as capacity yields −3.0)", sig.HeadroomCores)
+		}
+		// Quota=&0.0 (non-positive) + PsiAvailable=false + Virtualized=false →
+		// dead-zone active. Pin the no-verdict-change contract here too
+		// (mirrors QuotaNil): the dead-zone saturation backstop branch runs.
+		if v.State != StateHealthy {
+			t.Fatalf("State: got %q, want %q (adds no verdict in the dead-zone; headroom is observability-only)", v.State, StateHealthy)
+		}
+		if len(v.Causes) != 0 {
+			t.Fatalf("Causes length: got %d, want 0 (adds no cause in the dead-zone; headroom is observability-only)", len(v.Causes))
+		}
+	})
+
+	// (4) MEAN-NOT-LAST-TICK — ticks [2.0, 6.0] (mean=4.0), Quota=8 → headroom =
+	// 8 − 4 − 1 = 3.0. Forcing: using the last tick 6.0 yields 8 − 6 − 1 = 1.0
+	// (!floatEq 3.0).
+	t.Run("MeanNotLastTick", func(t *testing.T) {
+		quota := 8.0
+		st := &WindowState{}
+		_, sig := feedHeadroom(st, 2, &quota, 8.0, 2.0, 6.0)
+		if !floatEq(sig.HeadroomCores, 3.0) {
+			t.Fatalf("HeadroomCores: got %v, want 3.0 (capacity 8.0 − mean(2,6)=4.0 − reserve 1.0; using the last tick 6.0 yields 1.0)", sig.HeadroomCores)
+		}
+	})
+
+	// (5) RESERVE-EXACTLY-ONE — 2 ticks mean=3.5, Quota=8 → headroom =
+	// 8 − 3.5 − 1 = 3.5. Forcing: reserve 0 yields 4.5, reserve 2 yields 2.5
+	// (!floatEq 3.5) — pins the 1.0 cpuReserveCores const.
+	t.Run("ReserveExactlyOne", func(t *testing.T) {
+		quota := 8.0
+		st := &WindowState{}
+		_, sig := feedHeadroom(st, 2, &quota, 8.0, 3.5, 3.5)
+		if !floatEq(sig.HeadroomCores, 3.5) {
+			t.Fatalf("HeadroomCores: got %v, want 3.5 (capacity 8.0 − mean 3.5 − reserve 1.0; reserve 0 → 4.5, reserve 2 → 2.5 — pins the 1.0 cpuReserveCores const)", sig.HeadroomCores)
+		}
+	})
+
+	// (6) FULL-BOX — 2 ticks mean=4.0, Quota=4 → headroom = 4 − 4 − 1 = −1.0
+	// AND < 0. TWO forcing assertions: !(<0) → Fatalf (headroom can't go
+	// negative); then !floatEq(..., −1.0) → Fatalf. Also pins the
+	// no-verdict-change contract: a negative headroom must NOT fire any latch
+	// (the verdict is unchanged) — State stays StateHealthy with no Causes.
+	t.Run("FullBox", func(t *testing.T) {
+		quota := 4.0
+		st := &WindowState{}
+		v, sig := feedHeadroom(st, 2, &quota, 4.0, 4.0, 4.0)
+		if !(sig.HeadroomCores < 0) {
+			t.Fatalf("HeadroomCores: got %v, want < 0 (a full box must produce negative headroom; a clamp-at-zero stub yields 0.0)", sig.HeadroomCores)
+		}
+		if !floatEq(sig.HeadroomCores, -1.0) {
+			t.Fatalf("HeadroomCores: got %v, want -1.0 (capacity 4.0 − mean 4.0 − reserve 1.0 = −1.0; headroom must go negative, not clamp)", sig.HeadroomCores)
+		}
+		if v.State != StateHealthy {
+			t.Fatalf("State: got %q, want %q (only computes the number; a negative headroom must not fire any latch; the verdict is unchanged)", v.State, StateHealthy)
+		}
+		if len(v.Causes) != 0 {
+			t.Fatalf("Causes length: got %d, want 0 (adds no cause; a negative headroom must not produce a saturation cause; the verdict is unchanged)", len(v.Causes))
+		}
+	})
+
+	// (7) FRESH-STATE-MEAN-ZERO — 1 tick HostBusyCores=6.0 (ring<2 → mean 0
+	// via the 2-sample floor), Quota=4 → headroom = 4 − 0 − 1 = 3.0. Forcing:
+	// using the raw 1-tick 6.0 instead of the floored mean yields 4 − 6 − 1 =
+	// −3.0 (!floatEq 3.0). Also pins the no-verdict-change contract on a
+	// fresh state: State stays StateHealthy with no Causes.
+	t.Run("FreshStateMeanZero", func(t *testing.T) {
+		quota := 4.0
+		st := &WindowState{}
+		v, sig := feedHeadroom(st, 1, &quota, 4.0, 6.0)
+		if !floatEq(sig.HeadroomCores, 3.0) {
+			t.Fatalf("HeadroomCores: got %v, want 3.0 (capacity 4.0 − floored mean 0.0 (ring<2) − reserve 1.0; using the raw 1-tick 6.0 yields −3.0)", sig.HeadroomCores)
+		}
+		if v.State != StateHealthy {
+			t.Fatalf("State: got %q, want %q (only computes the number; on a fresh state the verdict must stay healthy)", v.State, StateHealthy)
+		}
+		if len(v.Causes) != 0 {
+			t.Fatalf("Causes length: got %d, want 0 (adds no cause; on a fresh state there must be no saturation cause)", len(v.Causes))
+		}
+	})
+}

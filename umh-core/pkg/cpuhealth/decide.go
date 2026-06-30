@@ -94,6 +94,12 @@ const throttleWindow = 60 * time.Second
 // if the debounce needs ever call for it.
 const stealWindow = 60 * time.Second
 
+// cpuReserveCores is the headroom reserve: one core set aside (for Redpanda
+// and system overhead) when computing Signals.HeadroomCores so the number
+// reflects capacity available to UMH workloads, not raw free capacity.
+// TODO: calibrate.
+const cpuReserveCores = 1.0
+
 // Sample is a single point-in-time CPU usage observation.
 //
 // Quota is the cgroup CPU quota as a pointer so that nil distinguishes "no
@@ -288,6 +294,13 @@ type Signals struct {
 	// clamped (NaN/negative/+Inf → 0) because a malformed value poisons the
 	// running sum until it ages out.
 	HostBusyCores60sMean float64
+	// HeadroomCores is the free-capacity-in-cores number: capacity minus
+	// measured use minus the cpuReserveCores reserve. capacity is Sample.Quota
+	// when non-nil and positive, else Sample.LogicalCpus (the uncapped host).
+	// measured use is Signals.HostBusyCores60sMean (the 60s mean). It is
+	// observability-only (does not change the verdict) and is NOT clamped — a
+	// full or over-full box produces a negative number, not 0.
+	HeadroomCores float64
 }
 
 // Verdict is the output of Decide.
@@ -618,6 +631,18 @@ func Decide(st *WindowState, sample Sample, thresholds Thresholds) (Verdict, Sig
 	}
 
 	signals.HostBusyCores60sMean = hostBusyMean
+
+	// Headroom uses hostBusyMean, which is 0 until the ring holds >= 2
+	// entries, so headroom reads capacity - 0 - reserve on a fresh state,
+	// matching the floor. Not clamped: a full box yields a negative number.
+	var capacity float64
+	if sample.Quota != nil && *sample.Quota > 0 {
+		capacity = *sample.Quota
+	} else {
+		capacity = sample.LogicalCpus
+	}
+
+	signals.HeadroomCores = capacity - hostBusyMean - cpuReserveCores
 
 	// Saturation backstop (dead-zone-only): the dead-zone is the one case where
 	// no starvation signal exists — Quota is nil or non-positive (uncapped → no
