@@ -182,6 +182,17 @@ func (d *PullDependencies) GetLastErrorDetail() string {
 	return d.lastErrorDetail
 }
 
+// GetLastErrorSnapshot returns the last error type, status code, and detail in
+// a single read under errorMu so CollectObservedState observes a consistent
+// triple across the concurrent action goroutine that writes all three under one
+// lock in RecordTypedError.
+func (d *PullDependencies) GetLastErrorSnapshot() (types.ErrorType, int, string) {
+	d.errorMu.RLock()
+	defer d.errorMu.RUnlock()
+
+	return d.lastErrorType, d.lastStatusCode, d.lastErrorDetail
+}
+
 // StorePendingMessages appends messages to the pending buffer for retry on the next tick.
 // Nil messages are filtered out. If the buffer exceeds maxPendingMessages, the oldest
 // messages are dropped.

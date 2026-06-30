@@ -39,9 +39,9 @@ const fNginxCapstone = "<html>\r\n<head><title>502 Bad Gateway</title></head>\r\
 var _ = Describe("ENG-5275 incident reproduction (P8 capstone)", func() {
 	It("surfaces a 502 response body on persistent_push_failure and the degraded reason", func() {
 		// The shape of the ENG-5275 incident: a reverse proxy returning a 502
-		// nginx page. ExtractErrorDetails is what the push action calls on the
-		// transport error (verified by R5); this capstone drives the real
-		// dependency path past escalation and checks the body survives.
+		// nginx page. Drive the real dependency path past the escalation
+		// threshold and confirm the upstream response surfaces on the failure
+		// event and the degraded reason.
 		fNginxErr := &types.TransportError{
 			Type:       types.ErrorTypeServerError,
 			StatusCode: 502,

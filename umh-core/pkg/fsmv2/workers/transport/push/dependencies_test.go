@@ -379,6 +379,21 @@ var _ = Describe("RecordTypedError status_code and error_detail emission", func(
 		Expect(m["error_detail"]).To(Equal(detail))
 	})
 
+	It("omits status_code and error_detail when there was no HTTP response", func() {
+		for range transportpkg.ChildFailureRateConfig.MinSamples {
+			d.RecordTypedError(types.ErrorTypeNetwork, 0, 0, "")
+		}
+
+		m := parseLastJSONLine(buf)
+		Expect(m).NotTo(BeNil())
+		Expect(m["msg"]).To(Equal("persistent_push_failure"))
+		Expect(m["error_type"]).To(Equal("network"))
+		_, hasStatusCode := m["status_code"]
+		Expect(hasStatusCode).To(BeFalse())
+		_, hasErrorDetail := m["error_detail"]
+		Expect(hasErrorDetail).To(BeFalse())
+	})
+
 	It("RecordSuccess clears status_code and error_detail", func() {
 		d.RecordTypedError(types.ErrorTypeServerError, 0, 502, "HTTP 502 (server_error): error code: 502")
 		Expect(d.GetLastStatusCode()).To(Equal(502))
