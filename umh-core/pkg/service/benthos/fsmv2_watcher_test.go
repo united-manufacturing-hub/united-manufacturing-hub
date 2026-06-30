@@ -851,3 +851,80 @@ func TestFSMv2Watcher_GetHealthCheckAndMetrics_FFOff_OutageFreezesWindow(t *test
 		t.Errorf("step 3: len(window.Input.Window) = %d, want >= 2 (count 20 > last 18 must NOT trip the counter-reset wipe)", len(s.window.Input.Window))
 	}
 }
+
+// TestFSMv2Watcher_GetHealthCheckAndMetrics_FFOff_FreshScanSameCountFeeds is the
+// triangulation companion to OutageFreezesWindow. It discriminates the
+// LastUpdatedAt-advancement gate (the shipped M1 fix) from a wrong
+// count-change gate ("feed only when count != LastCount"): a fresh, healthy
+// scan whose count is UNCHANGED (benthos up, producing fresh scans, but no new
+// messages arrived) must STILL feed the window — advancing LastTick and
+// recording MessagesPerTick=0 for the idle interval (the truthful rate).
+//
+// The OutageFreezesWindow test cannot tell the two gates apart because its
+// outage holds BOTH LastUpdatedAt and count fixed, and its recovery advances
+// BOTH. A count-change gate would green OutageFreezesWindow (count unchanged →
+// no feed → freeze) while REGRESSING this healthy-idle case (count unchanged →
+// no feed → LastTick stalls → throughput window freezes at a stale rate even
+// though benthos is healthy and publishing fresh scans).
+//
+// Forcing assertion: after a fresh scan with LastUpdatedAt advanced (t2) but
+// count still 18, s.window.LastTick MUST advance past the prior feed tick AND
+// MessagesPerTick MUST be 0 (the truthful idle rate), NOT the retained
+// pre-idle rate. A count-change gate would leave LastTick frozen + the rate
+// retained → fails RED.
+func TestFSMv2Watcher_GetHealthCheckAndMetrics_FFOff_FreshScanSameCountFeeds(t *testing.T) {
+	prev := fsmv2BenthosMonitorEnabled
+	fsmv2BenthosMonitorEnabled = false
+
+	t.Cleanup(func() { fsmv2BenthosMonitorEnabled = prev })
+
+	const benthosName = "testbridge"
+
+	t1 := time.Now()
+	t2 := t1.Add(time.Second) // fresh scan: LastUpdatedAt advanced, count UNCHANGED
+
+	monMgr := &fakeBenthosMonitorManager{
+		observedStates: []public_fsm.ObservedState{
+			ffOffObservedState(t1, 18, true), // tick 1: healthy, count=18
+			ffOffObservedState(t2, 18, true), // tick 2: fresh scan (t2 advanced), count STILL 18 (idle)
+		},
+	}
+	s := NewDefaultBenthosService(benthosName, WithMonitorManager(monMgr))
+	s.s6Manager.AddInstanceForTest(s.GetS6ServiceName(benthosName), nil)
+
+	// Tick 1: healthy scan seeds the window (count=18, non-zero rate).
+	const tick1 uint64 = 1
+	if _, err := s.GetHealthCheckAndMetrics(context.Background(), nil, tick1, time.Now(), benthosName, nil); err != nil {
+		t.Fatalf("tick 1: err = %v, want nil", err)
+	}
+
+	if s.window.Input.LastCount != 18 {
+		t.Fatalf("tick 1: LastCount = %d, want 18 (healthy scan must seed the window)", s.window.Input.LastCount)
+	}
+
+	// Tick 2: fresh scan (LastUpdatedAt advanced to t2) with count UNCHANGED.
+	// The LastUpdatedAt-advancement gate MUST feed — the scan is fresh even
+	// though idle. LastTick advances; MessagesPerTick is 0 (countDiff=0 over
+	// the interval — the truthful idle rate). A count-change gate would NOT
+	// feed (count unchanged) → LastTick stays at tick1 + the rate stays
+	// non-zero → this assertion fails.
+	const tick2 uint64 = 2
+	if _, err := s.GetHealthCheckAndMetrics(context.Background(), nil, tick2, time.Now(), benthosName, nil); err != nil {
+		t.Fatalf("tick 2: err = %v, want nil (fresh idle scan is served, not an error)", err)
+	}
+
+	if s.window.LastTick != tick2 {
+		t.Errorf("tick 2: window.LastTick = %d, want %d (a fresh scan MUST feed even when count is unchanged — the LastUpdatedAt-advancement gate fires; a count-change gate would leave it frozen at tick1)",
+			s.window.LastTick, tick2)
+	}
+
+	if s.window.Input.MessagesPerTick != 0 {
+		t.Errorf("tick 2: MessagesPerTick = %v, want 0 (fresh idle scan: count unchanged over the interval → the truthful rate is 0; a count-change gate would retain the stale non-zero rate)",
+			s.window.Input.MessagesPerTick)
+	}
+
+	// LastCount must still be 18 (no counter-reset: 18 is not < 18).
+	if s.window.Input.LastCount != 18 {
+		t.Errorf("tick 2: LastCount = %d, want 18 (unchanged count must not trip counter-reset)", s.window.Input.LastCount)
+	}
+}
