@@ -113,6 +113,7 @@ func (d *PullDependencies) RecordTypedError(errType types.ErrorType, retryAfter 
 		if statusCode > 0 {
 			fields = append(fields, deps.Int("status_code", statusCode))
 		}
+
 		if errorDetail != "" {
 			fields = append(fields, deps.String("error_detail", errorDetail))
 		}

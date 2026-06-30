@@ -104,6 +104,8 @@ func (w *PullWorker) CollectObservedState(ctx context.Context, desired fsmv2.Des
 		ConsecutiveErrors:   d.GetConsecutiveErrors(),
 		PendingMessageCount: d.PendingMessageCount(),
 		LastErrorType:       d.GetLastErrorType(),
+		LastStatusCode:      d.GetLastStatusCode(),
+		LastErrorDetail:     d.GetLastErrorDetail(),
 		LastRetryAfter:      d.GetLastRetryAfter(),
 		DegradedEnteredAt:   d.GetDegradedEnteredAt(),
 		LastErrorAt:         d.GetLastErrorAt(),

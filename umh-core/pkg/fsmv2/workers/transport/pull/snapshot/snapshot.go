@@ -74,8 +74,10 @@ func (s *PullDesiredState) GetState() string {
 type PullStatus struct {
 	DegradedEnteredAt   time.Time       `json:"degraded_entered_at,omitempty"`
 	LastErrorAt         time.Time       `json:"last_error_at,omitempty"`
+	LastErrorDetail     string          `json:"last_error_detail,omitempty"`
 	LastRetryAfter      time.Duration   `json:"last_retry_after,omitempty"`
 	LastErrorType       types.ErrorType `json:"last_error_type"`
+	LastStatusCode      int             `json:"last_status_code"`
 	ConsecutiveErrors   int             `json:"consecutive_errors"`
 	PendingMessageCount int             `json:"pending_message_count"`
 	HasTransport        bool            `json:"has_transport"`
