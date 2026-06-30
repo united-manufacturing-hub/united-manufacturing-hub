@@ -27,6 +27,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"time"
+	"unicode/utf8"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/hash"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/types"
@@ -158,8 +159,17 @@ func newTransportError(statusCode int, body []byte, headers http.Header, baseErr
 	retryAfter := parseRetryAfter(headers)
 
 	msg := fmt.Sprintf("HTTP %d: %s", statusCode, errType.String())
-	if len(body) > 0 && len(body) < 200 {
-		msg = fmt.Sprintf("HTTP %d (%s): %s", statusCode, errType.String(), string(body))
+
+	if len(body) > 0 {
+		end := len(body)
+		if end > 256 {
+			end = 256
+			for end > 0 && !utf8.RuneStart(body[end]) {
+				end--
+			}
+		}
+
+		msg = fmt.Sprintf("HTTP %d (%s): %s", statusCode, errType.String(), string(body[:end]))
 	}
 
 	return &types.TransportError{
