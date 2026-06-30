@@ -671,9 +671,14 @@ func (s *BenthosService) GetHealthCheckAndMetrics(ctx context.Context, filesyste
 
 		status, res, err := s.fsmv2Watcher.GetFresh(ctx, ref, benthosMonitorMaxAge)
 		if err != nil {
-			// Unknown: GetFresh could not classify the observation (store read
-			// error). Return it raw; reconcile.go catches this non-fatally so
-			// the read path degrades rather than fatals.
+			// Unknown: GetFresh could not classify the observation (a nil
+			// fsmv2 client — USE_FSMV2_BENTHOS_MONITOR=ON requires
+			// USE_FSMV2_TRANSPORT=ON, so a nil client is misconfig — or a
+			// store read error). Return the raw err; it hard-propagates
+			// through Status() as a "failed to get health check" error
+			// (benthos.go Status -> actions.go getServiceStatus), which is
+			// consistent with the FF-off path's treatment of unrecognized
+			// monitor errors. It does NOT degrade silently.
 			return BenthosStatus{}, err
 		}
 
