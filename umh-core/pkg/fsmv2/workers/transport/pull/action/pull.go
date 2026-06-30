@@ -158,7 +158,7 @@ func (a *PullAction) Execute(ctx context.Context, depsAny any) error {
 
 	if err != nil {
 		errType, retryAfter := types.ExtractErrorType(err)
-		pullDeps.RecordTypedError(errType, retryAfter)
+		pullDeps.RecordTypedError(errType, retryAfter, 0, "")
 		metrics.IncrementCounter(types.CounterForErrorType(errType), 1)
 
 		metrics.IncrementCounter(depspkg.CounterPullOps, 1)

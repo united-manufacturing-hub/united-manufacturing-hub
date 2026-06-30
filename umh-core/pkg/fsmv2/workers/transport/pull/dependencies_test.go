@@ -15,7 +15,10 @@
 package pull_test
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
+	"strings"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -316,7 +319,7 @@ var _ = Describe("PullDependencies", func() {
 
 		Describe("RecordTypedError", func() {
 			It("should record on both child and parent", func() {
-				d.RecordTypedError(types.ErrorTypeBackendRateLimit, 30*time.Second)
+				d.RecordTypedError(types.ErrorTypeBackendRateLimit, 30*time.Second, 0, "")
 				Expect(d.GetConsecutiveErrors()).To(Equal(1))
 				Expect(parentDeps.GetConsecutiveErrors()).To(Equal(1))
 				Expect(parentDeps.GetLastErrorType()).To(Equal(types.ErrorTypeBackendRateLimit))
@@ -361,7 +364,7 @@ var _ = Describe("PullDependencies", func() {
 
 		Describe("GetLastErrorType", func() {
 			It("should read from child field", func() {
-				d.RecordTypedError(types.ErrorTypeNetwork, 0)
+				d.RecordTypedError(types.ErrorTypeNetwork, 0, 0, "")
 				Expect(d.GetLastErrorType()).To(Equal(types.ErrorTypeNetwork))
 				d.RecordSuccess()
 				Expect(d.GetLastErrorType()).To(Equal(types.ErrorType(0)))
@@ -381,14 +384,14 @@ var _ = Describe("PullDependencies", func() {
 		Describe("GetLastErrorAt", func() {
 			It("should read from child tracker", func() {
 				before := time.Now()
-				d.RecordTypedError(types.ErrorTypeNetwork, 0)
+				d.RecordTypedError(types.ErrorTypeNetwork, 0, 0, "")
 				Expect(d.GetLastErrorAt()).To(BeTemporally(">=", before))
 			})
 		})
 
 		Describe("GetLastRetryAfter", func() {
 			It("should read from child tracker", func() {
-				d.RecordTypedError(types.ErrorTypeBackendRateLimit, 30*time.Second)
+				d.RecordTypedError(types.ErrorTypeBackendRateLimit, 30*time.Second, 0, "")
 				Expect(d.GetLastRetryAfter()).To(Equal(30 * time.Second))
 			})
 		})
@@ -402,3 +405,95 @@ var _ = Describe("PullDependencies", func() {
 		})
 	})
 })
+
+var _ = Describe("RecordTypedError status_code and error_detail emission (pull)", func() {
+	var (
+		buf        *bytes.Buffer
+		jsonLogger deps.FSMLogger
+		d          *pull.PullDependencies
+	)
+
+	BeforeEach(func() {
+		buf = new(bytes.Buffer)
+		jsonLogger = deps.NewJSONFSMLogger(buf, deps.LevelDebug)
+		transportpkg.SetChannelProvider(newTestChannelProvider())
+		parentDeps := createParentDeps(jsonLogger)
+		identity := deps.Identity{ID: "pull-child-id", WorkerType: "pull"}
+		var err error
+		d, err = pull.NewPullDependencies(parentDeps, deps.NewBaseDependencies(jsonLogger, nil, identity))
+		Expect(err).NotTo(HaveOccurred())
+	})
+
+	AfterEach(func() {
+		transportpkg.ClearChannelProvider()
+	})
+
+	It("emits status_code and error_detail on persistent_pull_failure after escalation", func() {
+		detail := "HTTP 502 (server_error): error code: 502"
+		for range transportpkg.ChildFailureRateConfig.MinSamples {
+			d.RecordTypedError(types.ErrorTypeServerError, 0, 502, detail)
+		}
+
+		Expect(d.GetLastStatusCode()).To(Equal(502))
+		Expect(d.GetLastErrorDetail()).To(Equal(detail))
+
+		m := parsePersistentPullFailureLinePull(buf)
+		Expect(m).NotTo(BeNil())
+		Expect(m["msg"]).To(Equal("persistent_pull_failure"))
+		Expect(m["error_type"]).To(Equal("server_error"))
+		Expect(m["failure_rate"]).To(BeNumerically(">", 0))
+		Expect(m["status_code"]).To(BeEquivalentTo(502))
+		Expect(m["error_detail"]).To(Equal(detail))
+	})
+
+	It("does not emit persistent_pull_failure before escalation threshold", func() {
+		for i := range transportpkg.ChildFailureRateConfig.MinSamples - 1 {
+			d.RecordTypedError(types.ErrorTypeServerError, 0, 502, "pre-escalation")
+			Expect(parsePersistentPullFailureLinePull(buf)).To(BeNil(), "no escalation before threshold, iteration %d", i)
+		}
+	})
+
+	It("omits status_code and error_detail when there was no HTTP response", func() {
+		for range transportpkg.ChildFailureRateConfig.MinSamples {
+			d.RecordTypedError(types.ErrorTypeNetwork, 0, 0, "")
+		}
+
+		m := parsePersistentPullFailureLinePull(buf)
+		Expect(m).NotTo(BeNil())
+		Expect(m["msg"]).To(Equal("persistent_pull_failure"))
+		Expect(m["error_type"]).To(Equal("network"))
+		_, hasStatusCode := m["status_code"]
+		Expect(hasStatusCode).To(BeFalse())
+		_, hasErrorDetail := m["error_detail"]
+		Expect(hasErrorDetail).To(BeFalse())
+	})
+
+	It("RecordSuccess clears status_code and error_detail", func() {
+		d.RecordTypedError(types.ErrorTypeServerError, 0, 502, "HTTP 502 (server_error): error code: 502")
+		Expect(d.GetLastStatusCode()).To(Equal(502))
+		d.RecordSuccess()
+		Expect(d.GetLastStatusCode()).To(Equal(0))
+		Expect(d.GetLastErrorDetail()).To(Equal(""))
+	})
+})
+
+func parsePersistentPullFailureLinePull(buf *bytes.Buffer) map[string]interface{} {
+	lines := strings.Split(strings.TrimSpace(buf.String()), "\n")
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+
+		m := make(map[string]interface{})
+		if err := json.Unmarshal([]byte(line), &m); err != nil {
+			continue
+		}
+
+		if msg, ok := m["msg"].(string); ok && msg == "persistent_pull_failure" {
+			return m
+		}
+	}
+
+	return nil
+}

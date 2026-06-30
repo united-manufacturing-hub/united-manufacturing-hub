@@ -29,7 +29,7 @@ type PullDependencies interface {
 	GetInboundChan() chan<- *types.UMHMessage
 	GetInboundChanStats() (capacity int, length int)
 	GetTransport() types.Transport
-	RecordTypedError(errType types.ErrorType, retryAfter time.Duration)
+	RecordTypedError(errType types.ErrorType, retryAfter time.Duration, statusCode int, errorDetail string)
 	RecordSuccess()
 	RecordError()
 	GetConsecutiveErrors() int

@@ -141,7 +141,7 @@ func (m *mockPullDeps) GetTransport() types.Transport {
 	return m.transport
 }
 
-func (m *mockPullDeps) RecordTypedError(errType types.ErrorType, retryAfter time.Duration) {
+func (m *mockPullDeps) RecordTypedError(errType types.ErrorType, retryAfter time.Duration, _ int, _ string) {
 	m.recordTypedErrorCalls = append(m.recordTypedErrorCalls, typedErrorCall{
 		errType:    errType,
 		retryAfter: retryAfter,
