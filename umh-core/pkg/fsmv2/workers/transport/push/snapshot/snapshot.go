@@ -27,7 +27,7 @@ type PushDependencies interface {
 	deps.Dependencies
 	GetOutboundChan() <-chan *types.UMHMessage
 	GetTransport() types.Transport
-	RecordTypedError(errType types.ErrorType, retryAfter time.Duration)
+	RecordTypedError(errType types.ErrorType, retryAfter time.Duration, statusCode int, errorDetail string)
 	RecordSuccess()
 	RecordError()
 	GetConsecutiveErrors() int

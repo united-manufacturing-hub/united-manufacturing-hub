@@ -137,8 +137,8 @@ drainLoop:
 
 		pushDeps.StorePendingMessages(messagesToPush)
 
-		errType, retryAfter := types.ExtractErrorType(err)
-		pushDeps.RecordTypedError(errType, retryAfter)
+		errType, retryAfter, statusCode, detail := types.ExtractErrorDetails(err)
+		pushDeps.RecordTypedError(errType, retryAfter, statusCode, detail)
 		metrics.IncrementCounter(types.CounterForErrorType(errType), 1)
 
 		metrics.IncrementCounter(depspkg.CounterPushOps, 1)
@@ -222,8 +222,8 @@ func (a *PushAction) retryPending(ctx context.Context, t types.Transport, pushDe
 		pushStart := time.Now()
 		if err := t.Push(ctx, jwtToken, []*types.UMHMessage{msg}); err != nil {
 			pushLatency := time.Since(pushStart)
-			errType, retryAfter := types.ExtractErrorType(err)
-			pushDeps.RecordTypedError(errType, retryAfter)
+			errType, retryAfter, statusCode, detail := types.ExtractErrorDetails(err)
+			pushDeps.RecordTypedError(errType, retryAfter, statusCode, detail)
 			metrics.IncrementCounter(types.CounterForErrorType(errType), 1)
 			metrics.IncrementCounter(depspkg.CounterPushOps, 1)
 			metrics.IncrementCounter(depspkg.CounterPushFailures, 1)

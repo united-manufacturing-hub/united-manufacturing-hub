@@ -42,17 +42,19 @@ type PushDependencies struct {
 	// does not cover them, so both reset to zero when this child is re-created or the
 	// process restarts, even once a durable (SQLite) store backend lands. To preserve
 	// counters across re-creates, model them into status.
-	failureRate *failurerate.Tracker
+	failureRate     *failurerate.Tracker
+	lastErrorDetail string
 	// TODO(ENG-5018): pendingMessages holds messages destructively drained from the
 	// outbound channel but not yet delivered. It lives in deps, not in observed status,
 	// so it is not covered by the store: up to maxPendingMessages messages are discarded
 	// on child re-create or process restart, even once a durable (SQLite) store backend
 	// lands. To survive re-creates, back this buffer with the durable queue.
 	pendingMessages         []*types.UMHMessage
-	errorMu                 sync.RWMutex
-	pendingMu               sync.RWMutex
 	lastSeenResetGeneration uint64
 	lastErrorType           types.ErrorType
+	lastStatusCode          int
+	errorMu                 sync.RWMutex
+	pendingMu               sync.RWMutex
 }
 
 // NewPushDependencies creates a PushDependencies backed by the given parent transport dependencies.
@@ -82,18 +84,31 @@ func (d *PushDependencies) GetTransport() types.Transport {
 
 // RecordTypedError records a typed error for this child, propagates it to the parent
 // transport tracker, and emits a Sentry warning when the failure rate escalates.
-func (d *PushDependencies) RecordTypedError(errType types.ErrorType, retryAfter time.Duration) {
+// statusCode and errorDetail carry the HTTP status code and sanitized body from the
+// failed operation so they are available on the persistent_push_failure event.
+func (d *PushDependencies) RecordTypedError(errType types.ErrorType, retryAfter time.Duration, statusCode int, errorDetail string) {
 	d.errorMu.Lock()
 	d.lastErrorType = errType
+	d.lastStatusCode = statusCode
+	d.lastErrorDetail = errorDetail
 	d.errorMu.Unlock()
 
 	d.RetryTracker().RecordError(retry.WithClass(errType.String()), retry.WithRetryAfter(retryAfter))
 	d.parentDeps.RecordTypedError(errType, retryAfter)
 
 	if d.failureRate.RecordOutcome(false) {
-		d.BaseDependencies.GetLogger().SentryWarn(deps.FeatureForWorker(d.GetWorkerType()), d.GetHierarchyPath(), "persistent_push_failure",
+		fields := []deps.Field{
 			deps.String("error_type", errType.String()),
-			deps.Float64("failure_rate", d.failureRate.FailureRate()))
+			deps.Float64("failure_rate", d.failureRate.FailureRate()),
+		}
+		if statusCode > 0 {
+			fields = append(fields, deps.Int("status_code", statusCode))
+		}
+		if errorDetail != "" {
+			fields = append(fields, deps.String("error_detail", errorDetail))
+		}
+		d.BaseDependencies.GetLogger().SentryWarn(deps.FeatureForWorker(d.GetWorkerType()), d.GetHierarchyPath(), "persistent_push_failure",
+			fields...)
 	}
 }
 
@@ -134,6 +149,30 @@ func (d *PushDependencies) GetLastErrorType() types.ErrorType {
 	defer d.errorMu.RUnlock()
 
 	return d.lastErrorType
+}
+
+// GetLastStatusCode returns the HTTP status code from the most recent error
+// recorded for this child, or 0 if none has been recorded.
+//
+// TODO(R7): surface onto PushStatus in CollectObservedState so this reaches
+// observed status / durable store.
+func (d *PushDependencies) GetLastStatusCode() int {
+	d.errorMu.RLock()
+	defer d.errorMu.RUnlock()
+
+	return d.lastStatusCode
+}
+
+// GetLastErrorDetail returns the sanitized detail string from the most recent
+// error recorded for this child, or "" if none has been recorded.
+//
+// TODO(R7): surface onto PushStatus in CollectObservedState so this reaches
+// observed status / durable store.
+func (d *PushDependencies) GetLastErrorDetail() string {
+	d.errorMu.RLock()
+	defer d.errorMu.RUnlock()
+
+	return d.lastErrorDetail
 }
 
 // StorePendingMessages appends messages to the pending buffer for retry on the next tick.
