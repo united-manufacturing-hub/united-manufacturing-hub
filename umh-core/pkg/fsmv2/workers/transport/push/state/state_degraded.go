@@ -57,18 +57,25 @@ func (s *DegradedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 		}
 
 		if shouldWait {
-			return fsmv2.Transition(s, fsmv2.SignalNone, nil,
-				fmt.Sprintf("degraded (%d errors, %d pending), backoff %s",
-					snap.Status.ConsecutiveErrors, snap.Status.PendingMessageCount,
-					backoffDelay.Round(time.Second)), nil)
+			reason := fmt.Sprintf("degraded (%d errors, %d pending), backoff %s",
+				snap.Status.ConsecutiveErrors, snap.Status.PendingMessageCount,
+				backoffDelay.Round(time.Second))
+			if snap.Status.LastErrorDetail != "" {
+				reason += "; last: " + snap.Status.LastErrorDetail
+			}
+
+			return fsmv2.Transition(s, fsmv2.SignalNone, nil, reason, nil)
 		}
 
+		stillPushingReason := fmt.Sprintf("degraded (%d consecutive errors, %d pending), still pushing",
+			snap.Status.ConsecutiveErrors, snap.Status.PendingMessageCount)
+		if snap.Status.LastErrorDetail != "" {
+			stillPushingReason += "; last: " + snap.Status.LastErrorDetail
+		}
 		return fsmv2.Transition(s, fsmv2.SignalNone, &action.PushAction{
 			JWTToken:     snap.Config.AuthSession.Token,
 			InstanceUUID: snap.Config.AuthSession.InstanceUUID,
-		},
-			fmt.Sprintf("degraded (%d consecutive errors, %d pending), still pushing",
-				snap.Status.ConsecutiveErrors, snap.Status.PendingMessageCount), nil)
+		}, stillPushingReason, nil)
 	}
 
 	return fsmv2.Transition(s, fsmv2.SignalNone, nil,
