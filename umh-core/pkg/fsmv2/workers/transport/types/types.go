@@ -245,6 +245,10 @@ func (e *TransportError) Unwrap() error {
 
 // Is implements errors.Is() for type-based error comparison (Go 1.13+ idiom).
 func (e *TransportError) Is(target error) bool {
+	if e == nil {
+		return false
+	}
+
 	t, ok := target.(*TransportError)
 	if !ok {
 		return false
@@ -257,12 +261,38 @@ func (e *TransportError) Is(target error) bool {
 // and RetryAfter duration. If err does not wrap a *TransportError, it returns
 // ErrorTypeUnknown, a persistent type that propagates to the FSM and fires
 // SentryError, ensuring unclassified errors are never silently suppressed.
+//
+// It is a thin shim over ExtractErrorDetails so the nil and typed-nil-wrapped
+// handling lives in one place.
 func ExtractErrorType(err error) (ErrorType, time.Duration) {
-	if transportErr, ok := errors.AsType[*TransportError](err); ok {
-		return transportErr.Type, transportErr.RetryAfter
+	t, ra, _, _ := ExtractErrorDetails(err)
+	return t, ra
+}
+
+// ExtractErrorDetails unwraps a *TransportError from err and returns its
+// ErrorType, RetryAfter duration, HTTP status code, and a sanitized detail
+// string derived from the error's message. If err does not wrap a
+// *TransportError, it returns ErrorTypeUnknown, zero RetryAfter, a zero status
+// code, and a sanitized version of err's message. A nil err yields zero values
+// and an empty detail string.
+//
+// The detail string is sanitized for control characters only; it does NOT
+// redact credentials. Callers must not assume secrets are scrubbed from the
+// output (ENG-5289 tracks adding redaction).
+func ExtractErrorDetails(err error) (ErrorType, time.Duration, int, string) {
+	if err == nil {
+		return ErrorTypeUnknown, 0, 0, ""
 	}
 
-	return ErrorTypeUnknown, 0
+	var te *TransportError
+	if errors.As(err, &te) {
+		if te == nil {
+			return ErrorTypeUnknown, 0, 0, ""
+		}
+		return te.Type, te.RetryAfter, te.StatusCode, sanitizeErrorDetail(te.Error())
+	}
+
+	return ErrorTypeUnknown, 0, 0, sanitizeErrorDetail(err.Error())
 }
 
 // ErrorTypeCounters maps every known ErrorType to its Prometheus counter.
