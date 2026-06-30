@@ -186,6 +186,7 @@ type WindowState struct {
 	throttleRing        []throttlePoint
 	stealRing           []stealPoint
 	usageRing           []usagePoint
+	hostBusyRing        []hostBusyPoint
 	throttleFired       bool
 	pressureFired       bool
 	stealFired          bool
@@ -205,6 +206,13 @@ type stealPoint struct {
 type usagePoint struct {
 	ts       time.Time
 	fraction float64
+}
+
+// hostBusyPoint is one timestamped HostBusyCores observation in the WindowState
+// hostBusyRing, used to compute Signals.HostBusyCores60sMean.
+type hostBusyPoint struct {
+	ts       time.Time
+	hostBusy float64
 }
 
 // Signals holds derived intermediate values computed during Decide.
@@ -275,6 +283,11 @@ type Signals struct {
 	// when the 60s-average drops below SaturationRecover (Schmitt). It is only
 	// evaluated in the dead-zone.
 	SaturationFired bool
+	// HostBusyCores60sMean is the 60s arithmetic mean of per-tick HostBusyCores;
+	// observability-only (does not change the verdict). The per-tick input is
+	// clamped (NaN/negative/+Inf → 0) because a malformed value poisons the
+	// running sum until it ages out.
+	HostBusyCores60sMean float64
 }
 
 // Verdict is the output of Decide.
@@ -554,6 +567,57 @@ func Decide(st *WindowState, sample Sample, thresholds Thresholds) (Verdict, Sig
 	}
 
 	signals.HostContentionFired = st.hostContentionFired
+
+	// Host-busy 60s mean ring: maintain a 60s sliding window of per-tick
+	// HostBusyCores samples and expose the arithmetic mean as
+	// Signals.HostBusyCores60sMean: append-per-tick, prune entries older than
+	// 60s with the cutoff sample KEPT (!ts.Before(cutoff)), a 2-sample floor
+	// emitting 0. The input HostBusyCores is clamped BEFORE insert
+	// (NaN/negative/+Inf → 0). This is an INPUT clamp, DISTINCT from the steal
+	// ring's OUTPUT clamp: steal appends StealFraction raw and clamps the p95
+	// AFTER computation, whereas hostBusy clamps the per-tick value BEFORE
+	// append. The disciplines differ on purpose — a NaN/negative in a running
+	// MEAN poisons the sum until the sample ages out (60s), unlike a p95 which
+	// can be clamped post-hoc. hostBusy also runs UNCONDITIONALLY every tick
+	// (no virtualization gate, unlike steal which is skipped when
+	// sample.Virtualized is false), so the input clamp is the only defense.
+	// This rung ONLY computes and exposes the mean — NO verdict change, NO
+	// new/changed cause, NO headroom formula.
+	var hostBusyMean float64
+
+	hb := sample.HostBusyCores
+	if !(hb >= 0) || math.IsInf(hb, 1) {
+		hb = 0
+	}
+
+	st.hostBusyRing = append(st.hostBusyRing, hostBusyPoint{
+		ts:       sample.Timestamp,
+		hostBusy: hb,
+	})
+	hostBusyCutoff := sample.Timestamp.Add(-stealWindow)
+	hostBusyRing := st.hostBusyRing
+	hostBusyN := 0
+
+	for _, hp := range hostBusyRing {
+		if !hp.ts.Before(hostBusyCutoff) {
+			hostBusyRing[hostBusyN] = hp
+			hostBusyN++
+		}
+	}
+
+	hostBusyRing = hostBusyRing[:hostBusyN]
+	st.hostBusyRing = hostBusyRing
+
+	if len(st.hostBusyRing) >= 2 {
+		var sum float64
+		for _, hp := range st.hostBusyRing {
+			sum += hp.hostBusy
+		}
+
+		hostBusyMean = sum / float64(len(st.hostBusyRing))
+	}
+
+	signals.HostBusyCores60sMean = hostBusyMean
 
 	// Saturation backstop (dead-zone-only): the dead-zone is the one case where
 	// no starvation signal exists — Quota is nil or non-positive (uncapped → no

@@ -2804,3 +2804,171 @@ func TestDecide_StealAndPressure_UnconditionalSignals(t *testing.T) {
 		t.Fatalf("negative-clamp PressureAvg60Out: got %v, want 0 (negatives clamp to 0, mirroring the ThrottleRatio clamp)", sig4.PressureAvg60Out)
 	}
 }
+
+// TestDecide_HostBusy60sMean_RingDiscipline pins the 60s sliding-window MEAN
+// of per-tick Sample.HostBusyCores that Decide maintains on a hostBusyRing in
+// WindowState, exposed as Signals.HostBusyCores60sMean. It mirrors the steal
+// ring discipline (decide.go:459-491): append-per-tick, prune entries older
+// than 60s with the cutoff sample KEPT (Before(cutoff) is false), a 2-sample
+// floor emitting 0, and NaN/negative/+Inf clamped to 0 BEFORE insert (an
+// INPUT clamp, distinct from the steal ring's OUTPUT clamp on the p95).
+func TestDecide_HostBusy60sMean_RingDiscipline(t *testing.T) {
+	base := time.Date(2026, 6, 29, 12, 0, 0, 0, time.UTC)
+	thresholds := DefaultThresholds()
+
+	// feedHostBusy pushes n ticks of the given HostBusyCores onto st's
+	// hostBusyRing at 1s spacing (well inside the 60s window), with
+	// LogicalCpus=8.0, returning the final signals. The demand gate
+	// (PressureFired||ThrottleFired) is closed in these samples (PressureAvg60=0,
+	// throttle counters unset → ratio=0), so no latch is evaluated; the
+	// assertion target is solely sig.HostBusyCores60sMean.
+	feedHostBusy := func(st *WindowState, n int, startOff time.Duration, vals ...float64) Signals {
+		var s Signals
+		for i := 0; i < n; i++ {
+			v := 0.0
+			if i < len(vals) {
+				v = vals[i]
+			}
+			_, s = Decide(st, Sample{
+				Timestamp:     base.Add(startOff).Add(time.Duration(i) * time.Second),
+				HostBusyCores: v,
+				LogicalCpus:   8.0,
+			}, thresholds)
+		}
+		return s
+	}
+
+	// (1) WINDOW MEAN — 3 ticks [2.0, 4.0, 6.0] within 60s on a fresh
+	// &WindowState{} → arithmetic mean 4.0. Forcing assertion: a stub
+	// returning 0 or the last value (6.0) fails (!floatEq 4.0).
+	t.Run("WindowMean", func(t *testing.T) {
+		st := &WindowState{}
+		sig := feedHostBusy(st, 3, 0, 2.0, 4.0, 6.0)
+		if !floatEq(sig.HostBusyCores60sMean, 4.0) {
+			t.Fatalf("HostBusyCores60sMean: got %v, want 4.0 (mean of [2,4,6] over the 60s window; a stub returning 0 or the last value 6.0 fails)", sig.HostBusyCores60sMean)
+		}
+	})
+
+	// (2) PRUNE-TO-ONE — A=2.0@t0, B=8.0@t0+61s → 0.0. A is older than 60s
+	// (pruned), only B survives, 1 sample < 2-sample floor → 0. Forcing
+	// assertion: a non-pruning mean yields (2+8)/2=5.0 (!floatEq 0.0).
+	t.Run("PruneToOne", func(t *testing.T) {
+		st := &WindowState{}
+		_, _ = Decide(st, Sample{
+			Timestamp:     base,
+			HostBusyCores: 2.0,
+			LogicalCpus:   8.0,
+		}, thresholds)
+		_, sig := Decide(st, Sample{
+			Timestamp:     base.Add(61 * time.Second),
+			HostBusyCores: 8.0,
+			LogicalCpus:   8.0,
+		}, thresholds)
+		if !floatEq(sig.HostBusyCores60sMean, 0.0) {
+			t.Fatalf("HostBusyCores60sMean: got %v, want 0.0 (A@t0 pruned >60s, only B@t0+61s survives, 1 sample < 2-sample floor; a non-pruning mean yields (2+8)/2=5.0)", sig.HostBusyCores60sMean)
+		}
+	})
+
+	// (3) CUTOFF-KEPT — A=4.0@t0, B=4.0@exactly t0+60s → 4.0. A sits on the
+	// cutoff edge and is KEPT per !ts.Before(cutoff), so 2 samples survive →
+	// mean 4.0. Forcing assertion: an off-by-one Before/After prune drops A
+	// → 1 sample → 0 (!floatEq 4.0).
+	t.Run("CutoffKept", func(t *testing.T) {
+		st := &WindowState{}
+		_, _ = Decide(st, Sample{
+			Timestamp:     base,
+			HostBusyCores: 4.0,
+			LogicalCpus:   8.0,
+		}, thresholds)
+		_, sig := Decide(st, Sample{
+			Timestamp:     base.Add(60 * time.Second),
+			HostBusyCores: 4.0,
+			LogicalCpus:   8.0,
+		}, thresholds)
+		if !floatEq(sig.HostBusyCores60sMean, 4.0) {
+			t.Fatalf("HostBusyCores60sMean: got %v, want 4.0 (A@t0 on cutoff edge KEPT per !ts.Before(cutoff), 2 samples survive; an off-by-one Before/After prune drops A → 1 sample → 0)", sig.HostBusyCores60sMean)
+		}
+	})
+
+	// (4) SINGLE-SAMPLE FLOOR — 1 tick [6.0] → 0.0 (ring size 1 < floor 2).
+	// Forcing assertion: without the floor a 1-sample mean is 6.0
+	// (sig.HostBusyCores60sMean != 0.0 → Fatalf).
+	t.Run("SingleSampleFloor", func(t *testing.T) {
+		st := &WindowState{}
+		sig := feedHostBusy(st, 1, 0, 6.0)
+		if !floatEq(sig.HostBusyCores60sMean, 0.0) {
+			t.Fatalf("HostBusyCores60sMean: got %v, want 0.0 (ring size 1 < 2-sample floor; without the floor a 1-sample mean is 6.0)", sig.HostBusyCores60sMean)
+		}
+	})
+
+	// (5) NAN CLAMP — A=4.0, B=NaN, C=4.0 within 60s → finite AND 8.0/3.0
+	// (NaN clamps to 0 before insert → (4+0+4)/3). TWO forcing assertions:
+	// math.IsNaN(...) → Fatalf (NaN inserted unclamped poisons the mean for
+	// 60s); then !floatEq(..., 8.0/3.0) → Fatalf.
+	t.Run("NaNClamp", func(t *testing.T) {
+		st := &WindowState{}
+		sig := feedHostBusy(st, 3, 0, 4.0, math.NaN(), 4.0)
+		if math.IsNaN(sig.HostBusyCores60sMean) {
+			t.Fatalf("HostBusyCores60sMean: got NaN, want finite (NaN must clamp to 0 BEFORE insert; an unclamped NaN poisons the 60s running mean)")
+		}
+		if !floatEq(sig.HostBusyCores60sMean, 8.0/3.0) {
+			t.Fatalf("HostBusyCores60sMean: got %v, want 8.0/3.0 (NaN clamps to 0 before insert → (4+0+4)/3)", sig.HostBusyCores60sMean)
+		}
+	})
+
+	// (5b) NEGATIVE CLAMP — A=1.0, B=-10.0, C=1.0 within 60s → 2.0/3.0. A
+	// negative HostBusyCores (e.g. from a malformed /proc/stat parse) clamps
+	// to 0 BEFORE insert → (1+0+1)/3. The inputs are chosen so an UNCLAMPED
+	// mean is (1-10+1)/3 = -8/3 < 0: TWO forcing assertions each pin a
+	// distinct regression — the mean is non-negative (!(mean >= 0) → Fatalf;
+	// removing the clamp makes the unclamped mean -8/3 which fires this);
+	// then !floatEq(..., 2.0/3.0) → Fatalf (pins the clamped value). Pins the
+	// !(hb >= 0) branch so a maintainer who narrows the clamp to math.IsNaN
+	// only lets a negative busy-core count poison the mean uncaught by CI.
+	t.Run("NegativeClamp", func(t *testing.T) {
+		st := &WindowState{}
+		sig := feedHostBusy(st, 3, 0, 1.0, -10.0, 1.0)
+		if !(sig.HostBusyCores60sMean >= 0) {
+			t.Fatalf("HostBusyCores60sMean: got %v, want >= 0 (a negative HostBusyCores must clamp to 0 BEFORE insert; an unclamped negative drives the mean to -8/3)", sig.HostBusyCores60sMean)
+		}
+		if !floatEq(sig.HostBusyCores60sMean, 2.0/3.0) {
+			t.Fatalf("HostBusyCores60sMean: got %v, want 2.0/3.0 (negative -10.0 clamps to 0 before insert → (1+0+1)/3)", sig.HostBusyCores60sMean)
+		}
+	})
+
+	// (5c) +INF CLAMP — A=4.0, B=+Inf, C=4.0 within 60s → finite AND 8.0/3.0.
+	// +Inf clamps to 0 BEFORE insert → (4+0+4)/3. TWO forcing assertions:
+	// math.IsInf(..., 1) → Fatalf (+Inf inserted unclamped makes the mean
+	// +Inf for 60s); then !floatEq(..., 8.0/3.0) → Fatalf. Pins the
+	// math.IsInf(hb, 1) branch of the clamp.
+	t.Run("PosInfClamp", func(t *testing.T) {
+		st := &WindowState{}
+		sig := feedHostBusy(st, 3, 0, 4.0, math.Inf(1), 4.0)
+		if math.IsInf(sig.HostBusyCores60sMean, 1) {
+			t.Fatalf("HostBusyCores60sMean: got +Inf, want finite (+Inf must clamp to 0 BEFORE insert; an unclamped +Inf makes the 60s running mean +Inf)")
+		}
+		if !floatEq(sig.HostBusyCores60sMean, 8.0/3.0) {
+			t.Fatalf("HostBusyCores60sMean: got %v, want 8.0/3.0 (+Inf clamps to 0 before insert → (4+0+4)/3)", sig.HostBusyCores60sMean)
+		}
+	})
+
+	// (6) GAP-PRUNE-TO-<2 — 3 samples [4,4,4]→4.0 (setup assert), then one
+	// tick @t0+120s (>60s gap prunes the ring to 1 sample → floor re-met) →
+	// 0.0. Forcing assertion: a stale-cached mean keeps the old 4.0
+	// (sigGap.HostBusyCores60sMean != 0.0 → Fatalf).
+	t.Run("GapPruneToUnderTwo", func(t *testing.T) {
+		st := &WindowState{}
+		sigSetup := feedHostBusy(st, 3, 0, 4.0, 4.0, 4.0)
+		if !floatEq(sigSetup.HostBusyCores60sMean, 4.0) {
+			t.Fatalf("setup HostBusyCores60sMean: got %v, want 4.0 (mean of [4,4,4] within 60s before the gap)", sigSetup.HostBusyCores60sMean)
+		}
+		_, sigGap := Decide(st, Sample{
+			Timestamp:     base.Add(120 * time.Second),
+			HostBusyCores: 4.0,
+			LogicalCpus:   8.0,
+		}, thresholds)
+		if !floatEq(sigGap.HostBusyCores60sMean, 0.0) {
+			t.Fatalf("gap HostBusyCores60sMean: got %v, want 0.0 (>60s gap prunes the ring to 1 sample → 2-sample floor re-met; a stale-cached mean keeps the old 4.0)", sigGap.HostBusyCores60sMean)
+		}
+	})
+}
