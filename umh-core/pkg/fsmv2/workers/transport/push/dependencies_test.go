@@ -366,7 +366,7 @@ var _ = Describe("RecordTypedError status_code and error_detail emission", func(
 
 	It("emits status_code and error_detail on persistent_push_failure after escalation", func() {
 		detail := "HTTP 502 (server_error): error code: 502"
-		for i := 0; i < transportpkg.ChildFailureRateConfig.MinSamples; i++ {
+		for range transportpkg.ChildFailureRateConfig.MinSamples {
 			d.RecordTypedError(types.ErrorTypeServerError, 0, 502, detail)
 		}
 
@@ -393,11 +393,14 @@ func parseLastJSONLine(buf *bytes.Buffer) map[string]interface{} {
 	if len(lines) == 0 {
 		return nil
 	}
+
 	last := strings.TrimSpace(lines[len(lines)-1])
 	if last == "" {
 		return nil
 	}
+
 	m := make(map[string]interface{})
 	ExpectWithOffset(1, json.Unmarshal([]byte(last), &m)).To(Succeed())
+
 	return m
 }

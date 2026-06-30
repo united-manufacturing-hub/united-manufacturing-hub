@@ -266,6 +266,7 @@ func (e *TransportError) Is(target error) bool {
 // handling lives in one place.
 func ExtractErrorType(err error) (ErrorType, time.Duration) {
 	t, ra, _, _ := ExtractErrorDetails(err)
+
 	return t, ra
 }
 
@@ -289,6 +290,7 @@ func ExtractErrorDetails(err error) (ErrorType, time.Duration, int, string) {
 		if te == nil {
 			return ErrorTypeUnknown, 0, 0, ""
 		}
+
 		return te.Type, te.RetryAfter, te.StatusCode, sanitizeErrorDetail(te.Error())
 	}
 

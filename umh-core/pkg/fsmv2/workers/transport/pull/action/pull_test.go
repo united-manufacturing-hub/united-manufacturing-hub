@@ -172,6 +172,7 @@ func (m *mockPullDeps) GetLastStatusCode() int {
 	if len(m.recordTypedErrorCalls) == 0 {
 		return 0
 	}
+
 	return m.recordTypedErrorCalls[len(m.recordTypedErrorCalls)-1].statusCode
 }
 
@@ -179,6 +180,7 @@ func (m *mockPullDeps) GetLastErrorDetail() string {
 	if len(m.recordTypedErrorCalls) == 0 {
 		return ""
 	}
+
 	return m.recordTypedErrorCalls[len(m.recordTypedErrorCalls)-1].errorDetail
 }
 

@@ -72,6 +72,7 @@ func (s *DegradedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 		if snap.Status.LastErrorDetail != "" {
 			stillPushingReason += "; last: " + snap.Status.LastErrorDetail
 		}
+
 		return fsmv2.Transition(s, fsmv2.SignalNone, &action.PushAction{
 			JWTToken:     snap.Config.AuthSession.Token,
 			InstanceUUID: snap.Config.AuthSession.InstanceUUID,
