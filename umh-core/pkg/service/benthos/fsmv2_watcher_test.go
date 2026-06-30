@@ -27,6 +27,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/fsmv2client"
 	bmworker "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/benthos_monitor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker/dynamicchildren"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos_monitor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthosmetrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
@@ -400,10 +401,17 @@ func TestFSMv2Watcher_GetHealthCheckAndMetrics_Fresh_Stopped_NotUnhealthy(t *tes
 
 // fakeBenthosMonitorManager is a test double for BenthosMonitorReconciler. It
 // records Reconcile calls so the R11 test can assert the FF-on path SKIPS the
-// S6 monitor reconcile. GetInstance and GetLastObservedState return
-// not-found/nil so the Remove path proceeds to the window reset.
+// S6 monitor reconcile. GetInstance returns not-found so the Remove path
+// proceeds to the window reset.
+//
+// GetLastObservedState drains a queue of scripted observed states
+// (observedStates) so the FF-off down→recovery parity test can drive the read
+// path through a healthy scan, a retained-last-good outage, and a fresh
+// recovery scan. When the queue is empty it returns (nil, nil) — preserving
+// the behavior the R10/R11 tests rely on.
 type fakeBenthosMonitorManager struct {
 	reconcileCalls int
+	observedStates []public_fsm.ObservedState
 }
 
 func (f *fakeBenthosMonitorManager) Reconcile(_ context.Context, _ public_fsm.SystemSnapshot, _ serviceregistry.Provider) (error, bool) {
@@ -417,7 +425,14 @@ func (f *fakeBenthosMonitorManager) GetInstance(_ string) (public_fsm.FSMInstanc
 }
 
 func (f *fakeBenthosMonitorManager) GetLastObservedState(_ string) (public_fsm.ObservedState, error) {
-	return nil, nil
+	if len(f.observedStates) == 0 {
+		return nil, nil
+	}
+
+	state := f.observedStates[0]
+	f.observedStates = f.observedStates[1:]
+
+	return state, nil
 }
 
 // TestFSMv2Watcher_ReconcileManager_FFOn_UpsertsEachConfig_SkipsS6MonitorReconcile
@@ -669,5 +684,170 @@ func TestFSMv2Watcher_Remove_FFOn_ResetsWindow(t *testing.T) {
 
 	if s.window.IsActive {
 		t.Errorf("window.IsActive = true, want false (fresh window must be inactive)")
+	}
+}
+
+// ffOffObservedState builds a BenthosMonitorObservedState carrying a single
+// input scan with the given LastUpdatedAt, received-count, and liveness. The
+// monitor FSM is marked Running (the FF-off read path's IsRunning guard at
+// benthos.go:752 must pass for the feed site at :762 to be reached). Used by
+// the FF-off down→recovery parity test to script the monitor's
+// GetLastObservedState return values across the healthy → outage → recovery
+// sequence.
+func ffOffObservedState(lastUpdatedAt time.Time, count int64, isLive bool) benthos_monitor_fsm.BenthosMonitorObservedState {
+	return benthos_monitor_fsm.BenthosMonitorObservedState{
+		ServiceInfo: &benthos_monitor.ServiceInfo{
+			BenthosStatus: benthos_monitor.BenthosMonitorStatus{
+				IsRunning: true,
+				LastScan: &benthos_monitor.BenthosMetricsScan{
+					LastUpdatedAt: lastUpdatedAt,
+					HealthCheck: benthosmetrics.HealthCheck{
+						IsLive:  isLive,
+						IsReady: true,
+					},
+					BenthosMetrics: &benthos_monitor.BenthosMetrics{
+						Metrics: benthosmetrics.Metrics{
+							Inputs: map[string]benthosmetrics.InputInstance{
+								"in1": {Received: count},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
+// TestFSMv2Watcher_GetHealthCheckAndMetrics_FFOff_OutageFreezesWindow is the
+// FF-off mirror of the R12a capstone. It pins the M1 parity fix: the A1
+// window-move relocated the throughput feed from monitor-side
+// ProcessMetricsData (fired only on a successful parse) to
+// GetHealthCheckAndMetrics (benthos.go:762, every read tick). On a benthos-down
+// outage the monitor retains last-good (UpdateObservedStateOfInstance returns
+// err without updating ObservedState.ServiceInfo), so LastScan.LastUpdatedAt
+// stops advancing. The feed must therefore be gated on scan-freshness — feeding
+// only when LastUpdatedAt advances since the last feed — so the window FREEZES
+// on outage (MessagesPerTick retains its pre-outage value) instead of re-feeding
+// last-good every tick (which would drive MessagesPerTick to 0).
+//
+// Sequence:
+//  1. Healthy tick (count=18, t1): window fed, MetricsState non-nil, IsLive.
+//  2. Outage ticks 2-5: monitor RETAINS the same last-good scan (same t1, same
+//     count=18, IsRunning=true). The window must FREEZE — MessagesPerTick
+//     retains the pre-outage value and LastTick does not advance past tick 1.
+//     THIS IS THE RED ASSERTION: on the ungated code the re-feed drives
+//     MessagesPerTick to 0 and advances LastTick, so these fail.
+//  3. Recovery tick (count=20, t2 advanced): window fed the new scan, no
+//     counter-reset wipe (20 > 18 → LastCount advances to 20), IsLive.
+//
+// Forcing assertion: MessagesPerTick after the outage == the pre-outage value
+// (NOT 0) AND s.window.LastTick == the healthy tick. Without the
+// LastUpdatedAt gate at benthos.go:762, the outage re-feeds last-good every
+// tick → count==LastCount → MessagesPerTick drops to 0 → fails RED.
+func TestFSMv2Watcher_GetHealthCheckAndMetrics_FFOff_OutageFreezesWindow(t *testing.T) {
+	prev := fsmv2BenthosMonitorEnabled
+	fsmv2BenthosMonitorEnabled = false
+
+	t.Cleanup(func() { fsmv2BenthosMonitorEnabled = prev })
+
+	const benthosName = "testbridge"
+
+	t1 := time.Now()
+	t2 := t1.Add(time.Second)
+
+	monMgr := &fakeBenthosMonitorManager{
+		observedStates: []public_fsm.ObservedState{
+			ffOffObservedState(t1, 18, true), // tick 1: healthy
+			ffOffObservedState(t1, 18, true), // ticks 2-5: retained last-good
+			ffOffObservedState(t1, 18, true),
+			ffOffObservedState(t1, 18, true),
+			ffOffObservedState(t1, 18, true),
+			ffOffObservedState(t2, 20, true), // tick 6: recovery (fresh scan)
+		},
+	}
+	s := NewDefaultBenthosService(benthosName, WithMonitorManager(monMgr))
+
+	// The GetInstance guard runs before the FF-off branch, so the s6 service
+	// must be registered for the read path to reach the monitor manager.
+	s.s6Manager.AddInstanceForTest(s.GetS6ServiceName(benthosName), nil)
+
+	// --- Step 1: healthy tick (count=18, t1) — window fed ---
+	const healthyTick uint64 = 1
+
+	got1, err := s.GetHealthCheckAndMetrics(context.Background(), nil, healthyTick, time.Now(), benthosName, nil)
+	if err != nil {
+		t.Fatalf("step 1: err = %v, want nil", err)
+	}
+
+	if !got1.HealthCheck.IsLive {
+		t.Fatalf("step 1: IsLive = false, want true (healthy scan)")
+	}
+
+	if got1.BenthosMetrics.MetricsState == nil {
+		t.Fatalf("step 1: MetricsState = nil, want the live window (fed on a healthy scan)")
+	}
+
+	if s.window.Input.LastCount != 18 {
+		t.Fatalf("step 1: window.Input.LastCount = %d, want 18 (window must be fed the healthy scan)", s.window.Input.LastCount)
+	}
+
+	preOutageRate := s.window.Input.MessagesPerTick
+	if preOutageRate == 0 {
+		t.Fatalf("step 1: pre-outage MessagesPerTick = 0, want non-zero (healthy scan with count=18 must seed a non-zero rate)")
+	}
+
+	// --- Step 2: outage ticks 2-5 — monitor retains last-good (same t1) ---
+	// The feed must NOT re-feed last-good: the window FREEZES (MessagesPerTick
+	// retains the pre-outage value, LastTick stays at the healthy tick). On the
+	// ungated code the re-feed drives MessagesPerTick to 0 and advances LastTick.
+	for outageTick := uint64(2); outageTick <= 5; outageTick++ {
+		got, err := s.GetHealthCheckAndMetrics(context.Background(), nil, outageTick, time.Now(), benthosName, nil)
+		if err != nil {
+			t.Fatalf("step 2 (tick %d): err = %v, want nil (retained last-good is served, not an error)", outageTick, err)
+		}
+
+		if !got.HealthCheck.IsLive {
+			t.Errorf("step 2 (tick %d): IsLive = false, want true (retained last-good is healthy)", outageTick)
+		}
+	}
+
+	if s.window.LastTick != healthyTick {
+		t.Errorf("step 2: window.LastTick = %d, want %d (the outage must NOT re-feed the window — LastUpdatedAt did not advance)",
+			s.window.LastTick, healthyTick)
+	}
+
+	if s.window.Input.MessagesPerTick != preOutageRate {
+		t.Errorf("step 2: window.Input.MessagesPerTick = %v, want %v (the pre-outage rate must be RETAINED — re-feeding last-good drives it to 0)",
+			s.window.Input.MessagesPerTick, preOutageRate)
+	}
+
+	if s.window.Input.LastCount != 18 {
+		t.Errorf("step 2: window.Input.LastCount = %d, want 18 (LastCount must survive the outage — no counter-reset wipe)", s.window.Input.LastCount)
+	}
+
+	// --- Step 3: recovery tick (count=20, t2 advanced) — window fed, no wipe ---
+	const recoveryTick uint64 = 6
+
+	got3, err := s.GetHealthCheckAndMetrics(context.Background(), nil, recoveryTick, time.Now(), benthosName, nil)
+	if err != nil {
+		t.Fatalf("step 3: err = %v, want nil", err)
+	}
+
+	if !got3.HealthCheck.IsLive {
+		t.Errorf("step 3: IsLive = false, want true (recovery scan is healthy)")
+	}
+
+	if s.window.Input.LastCount != 20 {
+		t.Errorf("step 3: window.Input.LastCount = %d, want 20 (the fresh recovery scan must feed the window)", s.window.Input.LastCount)
+	}
+
+	if s.window.LastTick != recoveryTick {
+		t.Errorf("step 3: window.LastTick = %d, want %d (the fresh recovery scan must advance LastTick)", s.window.LastTick, recoveryTick)
+	}
+
+	// 20 > 18 → counter-reset branch must NOT fire; the pre-outage window
+	// entry survives (the window is not wiped to a single reset entry).
+	if len(s.window.Input.Window) < 2 {
+		t.Errorf("step 3: len(window.Input.Window) = %d, want >= 2 (count 20 > last 18 must NOT trip the counter-reset wipe)", len(s.window.Input.Window))
 	}
 }

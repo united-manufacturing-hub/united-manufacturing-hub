@@ -219,6 +219,18 @@ type BenthosService struct {
 	// exists per bridge, so one window per bridge.
 	window *benthosmetrics.BenthosMetricsState
 
+	// lastFedScanAt is the LastUpdatedAt of the last scan fed into window on
+	// the FF-off path. The FF-off feed (GetHealthCheckAndMetrics) is gated on
+	// it so the window is fed only when the monitor produced a NEW scan —
+	// restoring the pre-A1 parity where the feed lived inside ProcessMetricsData
+	// and fired only on a successful parse. On a benthos-down outage the monitor
+	// retains last-good (its action returns err without updating
+	// ObservedState.ServiceInfo), so LastUpdatedAt stops advancing and the
+	// window freezes instead of re-feeding last-good every tick (which would
+	// drive MessagesPerTick to 0). Reset to the zero time alongside the window
+	// on Remove so a re-added bridge feeds fresh.
+	lastFedScanAt time.Time
+
 	// fsmv2Watcher is the FF-on read seam: behind USE_FSMV2_BENTHOS_MONITOR
 	// GetHealthCheckAndMetrics reads the benthos_monitor worker's published
 	// BenthosMonitorStatus through it instead of the v1 monitor manager. The
@@ -755,11 +767,21 @@ func (s *BenthosService) GetHealthCheckAndMetrics(ctx context.Context, filesyste
 
 	// Feed BenthosService's own window from the metrics the S6 monitor returned
 	// and point the status at it. This replaces the monitor's window pointer
-	// (which is now nil) with this service's owned window. The feed cadence
-	// (every GetHealthCheckAndMetrics call that returns metrics) and the data
-	// (the monitor's returned Metrics) match the previous ProcessMetricsData
-	// feed, so behavior is preserved on the FF-off path.
-	s.window.UpdateFromMetrics(benthosStatus.BenthosMetrics.Metrics, tick)
+	// (which is now nil) with this service's owned window. The feed is gated on
+	// scan-freshness: feed ONLY when the monitor produced a NEW scan
+	// (LastUpdatedAt advanced since the last feed). This restores the pre-A1
+	// parity where the feed lived inside ProcessMetricsData and fired only on a
+	// successful parse — on a benthos-down outage the monitor retains
+	// last-good (its action returns err without updating
+	// ObservedState.ServiceInfo), so LastUpdatedAt stops advancing and the
+	// window freezes instead of re-feeding last-good every tick (which would
+	// drive MessagesPerTick to 0).
+	lastScan := lastBenthosMonitorObservedState.ServiceInfo.BenthosStatus.LastScan
+	if lastScan.LastUpdatedAt.After(s.lastFedScanAt) {
+		s.window.UpdateFromMetrics(benthosStatus.BenthosMetrics.Metrics, tick)
+		s.lastFedScanAt = lastScan.LastUpdatedAt
+	}
+
 	benthosStatus.BenthosMetrics.MetricsState = s.window
 
 	return benthosStatus, nil
@@ -971,7 +993,10 @@ func (s *BenthosService) RemoveBenthosFromS6Manager(
 	// Reset the per-bridge window now that the bridge is really gone. This
 	// mirrors the previous monitor-side reset (benthos_monitor.go) and keeps
 	// the window idempotent across a remove → re-add cycle for the same name.
+	// lastFedScanAt is reset alongside so a re-added bridge (whose first scan
+	// lands with a LastUpdatedAt > zero time) feeds the window fresh.
 	s.window = benthosmetrics.NewBenthosMetricsState()
+	s.lastFedScanAt = time.Time{}
 
 	// Everything really removed ➜ success, idempotent
 	return nil
