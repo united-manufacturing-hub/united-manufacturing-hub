@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/register"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthosmetrics"
@@ -84,13 +85,13 @@ func (w *BenthosMonitorWorker) GetDependencies() *BenthosMonitorDependencies {
 // CollectObservedState scrapes the benthos instance configured on the desired
 // state and publishes a BenthosMonitorStatus carrying the parsed Scan.
 //
-// When cfg.State is "stopped" the method returns a zero Scan
-// (MetricsAvailable=false, IsLive=false) without calling benthosmetrics.Observe
-// — no /ping, /ready, /version or /metrics request is issued. Any other state
-// scrapes as before. The zero Scan here is not a crash or unreachable signal:
-// the benthos process is intentionally stopped, so there is nothing to scrape,
-// and the admin-pause status is carried by desired State and framework
-// lifecycle rather than by the Scan.
+// When cfg is in the stopped desired state (config.DesiredStateStopped) the
+// method returns a zero Scan (MetricsAvailable=false, IsLive=false) without
+// calling benthosmetrics.Observe — no /ping, /ready, /version or /metrics
+// request is issued. Any other state scrapes as before. The zero Scan here is
+// not a crash or unreachable signal: the benthos process is intentionally
+// stopped, so there is nothing to scrape, and the admin-pause status is
+// carried by desired State and framework lifecycle rather than by the Scan.
 //
 // Uses fsmv2.NewObservation which signals the supervisor's collector to perform
 // post-COS wrapping (CollectedAt, framework metrics, action history). A
@@ -105,7 +106,7 @@ func (w *BenthosMonitorWorker) CollectObservedState(ctx context.Context, desired
 
 	cfg := fsmv2.ExtractConfig[BenthosMonitorConfig](desired)
 
-	if cfg.State == "stopped" {
+	if cfg.GetState() == config.DesiredStateStopped {
 		return fsmv2.NewObservation(BenthosMonitorStatus{
 			Stopped: true,
 			Scan:    benthosmetrics.Scan{},
