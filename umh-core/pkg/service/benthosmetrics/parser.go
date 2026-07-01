@@ -24,7 +24,7 @@ import (
 
 // --- helpers ---------------------------------------------------------------
 
-// TailInt returns the integer found **after the final space** in a Prometheus
+// TailInt returns the integer found after the final space in a Prometheus
 // text-formatted line.
 //
 // Benthos' metric stream is deliberately terse; for counters and gauges the
@@ -399,9 +399,9 @@ func ParseMetricsFromBytes(raw []byte) (Metrics, error) {
 // extractLabel scans the raw label-set of a Prometheus series (the `{…}`
 // portion) and returns the *value* of a given label key.
 //
-// We read **only** the labels we care about (e.g. `path` or `quantile`), so
-// this hand-rolled matcher is an order of magnitude faster than allocating a
-// full `map[string]string` for every series.
+// Reads only the labels it cares about (e.g. `path` or `quantile`), so this
+// hand-rolled matcher is an order of magnitude faster than allocating a full
+// `map[string]string` for every series.
 func extractLabel(b []byte, key string) string {
 	// expects {label="...",path="..."} order irrelevant
 	key += "=\""
