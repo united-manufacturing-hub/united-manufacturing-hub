@@ -190,7 +190,7 @@ func (a *DeployProtocolConverterAction) Execute() (interface{}, map[string]inter
 		errorMsg := fmt.Sprintf("Failed to add Bridge: %v", err)
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
 			errorMsg, a.outboundChannel, models.DeployProtocolConverter)
-		a.fsmLogger.SentryError(deps.FeatureDisableReadFlows, "", err, "deploy_protocol_converter_add_failed",
+		a.fsmLogger.SentryError(deps.FeatureDeploymentSaveConfig, "", err, "deploy_protocol_converter_add_failed",
 			deps.String("pcConfig", pcConfig.String()))
 
 		return nil, nil, fmt.Errorf("%s", errorMsg)
@@ -244,9 +244,20 @@ func (a *DeployProtocolConverterAction) Execute() (interface{}, map[string]inter
 				models.DeployProtocolConverter,
 				nil,
 			)
-			a.fsmLogger.SentryError(deps.FeatureDisableReadFlows, "", err, "deploy_protocol_converter_wait_failed",
+			a.fsmLogger.SentryError(deps.FeatureDeploymentSaveConfig, "", err, "deploy_protocol_converter_wait_failed",
 				deps.String("pcConfig", pcConfig.String()),
 				deps.String("desiredState", pcConfig.DesiredFSMState))
+
+			// Flip config state to stopped so it stays put until the user fixes and
+			// redeploys from the editing view.
+			stopCtx, stopCancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
+			defer stopCancel()
+
+			pcConfig.DesiredFSMState = protocolconverter.OperationalStateStopped
+			if _, editErr := a.configManager.AtomicEditProtocolConverter(stopCtx, pcUUID, pcConfig); editErr != nil {
+				a.fsmLogger.SentryError(deps.FeatureDeploymentSaveConfig, "", editErr, "deploy_protocol_converter_stop_on_failure_failed",
+					deps.String("name", a.payload.Name))
+			}
 
 			return nil, nil, err
 		}
@@ -386,7 +397,7 @@ func (a *DeployProtocolConverterAction) waitForComponentToAppear(desiredState st
 				errorMsg += ". Please check system load or component configuration and try again"
 			}
 
-			a.fsmLogger.SentryWarn(deps.FeatureDisableReadFlows, "", "deploy_protocol_converter_timeout",
+			a.fsmLogger.SentryWarn(deps.FeatureDeploymentSaveConfig, "", "deploy_protocol_converter_timeout",
 				deps.String("name", a.payload.Name),
 				deps.String("desiredState", desiredState),
 				deps.String("lastStatusReason", lastStatusReason))
