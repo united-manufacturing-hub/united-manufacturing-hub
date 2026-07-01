@@ -18,8 +18,8 @@
 //
 // Callers register a worker type with Register[TConfig, TStatus], supplying
 // a function called once per interval with the current config and a context.
-// The framework manages started/stopped lifecycle, interval tracking, and
-// result storage automatically.
+// The framework manages started/stopped lifecycle automatically; interval
+// tracking and result storage live directly on the worker.
 //
 // Example:
 //
@@ -31,7 +31,6 @@ package simple
 
 import (
 	"context"
-	"sync"
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
@@ -40,123 +39,53 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/register"
 )
 
-// --- private dependencies ---
-
-// simpleDeps holds mutable state shared between CollectObservedState ticks.
-// All fields are protected by mu.
-type simpleDeps[TConfig any, TStatus any] struct {
-	*deps.BaseDependencies
-
-	fn        func(ctx context.Context, cfg TConfig) (TStatus, error)
-	mu        sync.RWMutex
-	cfg       TConfig
-	lastResult TStatus
-	lastRunAt time.Time
-	interval  time.Duration
-}
-
-func newSimpleDeps[TConfig any, TStatus any](
-	bd *deps.BaseDependencies,
-	fn func(ctx context.Context, cfg TConfig) (TStatus, error),
-	interval time.Duration,
-) *simpleDeps[TConfig, TStatus] {
-	return &simpleDeps[TConfig, TStatus]{
-		BaseDependencies: bd,
-		fn:               fn,
-		interval:         interval,
-	}
-}
-
-func (d *simpleDeps[TConfig, TStatus]) setConfig(cfg TConfig) {
-	d.mu.Lock()
-	defer d.mu.Unlock()
-
-	d.cfg = cfg
-}
-
-func (d *simpleDeps[TConfig, TStatus]) getConfig() TConfig {
-	d.mu.RLock()
-	defer d.mu.RUnlock()
-
-	return d.cfg
-}
-
-func (d *simpleDeps[TConfig, TStatus]) shouldRun() bool {
-	d.mu.RLock()
-	defer d.mu.RUnlock()
-
-	return d.lastRunAt.IsZero() || time.Since(d.lastRunAt) >= d.interval
-}
-
-func (d *simpleDeps[TConfig, TStatus]) setResult(r TStatus) {
-	d.mu.Lock()
-	defer d.mu.Unlock()
-
-	d.lastResult = r
-	d.lastRunAt = time.Now()
-}
-
-// markRunAttempt records the current time regardless of success, so a failed
-// fn call still advances the interval instead of hammering on every tick.
-func (d *simpleDeps[TConfig, TStatus]) markRunAttempt() {
-	d.mu.Lock()
-	defer d.mu.Unlock()
-
-	d.lastRunAt = time.Now()
-}
-
-func (d *simpleDeps[TConfig, TStatus]) getResult() TStatus {
-	d.mu.RLock()
-	defer d.mu.RUnlock()
-
-	return d.lastResult
-}
-
 // --- worker ---
 
+// simpleWorker is a no-deps worker that calls fn once per interval in
+// CollectObservedState. All mutable state lives directly on the struct; no
+// separate deps layer is needed because COS runs single-threaded in the
+// worker's own goroutine.
 type simpleWorker[TConfig any, TStatus any] struct {
-	fsmv2.WorkerBase[TConfig, TStatus, *simpleDeps[TConfig, TStatus]]
+	fsmv2.WorkerBase[TConfig, TStatus, struct{}]
+
+	fn         func(ctx context.Context, cfg TConfig) (TStatus, error)
+	lastResult TStatus
+	lastRunAt  time.Time
+	interval   time.Duration
 }
 
-func (w *simpleWorker[TConfig, TStatus]) GetDependencies() *simpleDeps[TConfig, TStatus] {
-	raw := w.GetDependenciesAny()
-
-	d, ok := raw.(*simpleDeps[TConfig, TStatus])
-	if !ok || d == nil {
-		panic("simpleWorker: GetDependencies called before BindDeps")
-	}
-
-	return d
-}
-
-// CollectObservedState extracts the current config from the desired state and,
-// when the configured interval has elapsed, calls the user function in-place.
-// The result is returned as the observation; no action dispatch is needed.
-func (w *simpleWorker[TConfig, TStatus]) CollectObservedState(ctx context.Context, desired fsmv2.DesiredState) (fsmv2.ObservedState, error) {
-	d := w.GetDependencies()
-
-	cfg := fsmv2.ExtractConfig[TConfig](desired)
-	d.setConfig(cfg)
-
-	if d.shouldRun() {
-		d.markRunAttempt()
-
-		result, err := d.fn(ctx, d.getConfig())
-		if err != nil {
-			return nil, err
-		}
-
-		d.setResult(result)
-	}
-
-	return fsmv2.NewObservation(d.getResult()), nil
-}
+// GetDependenciesAny returns nil so the framework does not inject metrics into
+// a struct{} deps box (WorkerBase boxes struct{}{} into a non-nil any, which
+// silently skips injection without this override).
+func (w *simpleWorker[TConfig, TStatus]) GetDependenciesAny() any { return nil }
 
 // GetInitialState returns a fresh stoppedState without touching the global
 // initial-state registry, so simple workers do not pollute the registry with
 // per-instance generic instantiations.
 func (w *simpleWorker[TConfig, TStatus]) GetInitialState() fsmv2.State[any, any] {
 	return &stoppedState[TConfig, TStatus]{}
+}
+
+// CollectObservedState reads the current config from the desired state and,
+// when the configured interval has elapsed, calls fn in-place. The result is
+// returned as the observation; no action dispatch is needed.
+func (w *simpleWorker[TConfig, TStatus]) CollectObservedState(ctx context.Context, desired fsmv2.DesiredState) (fsmv2.ObservedState, error) {
+	cfg := fsmv2.ExtractConfig[TConfig](desired)
+
+	if w.lastRunAt.IsZero() || time.Since(w.lastRunAt) >= w.interval {
+		// Record the attempt before calling fn so a failure still advances the
+		// interval and avoids hammering a broken dependency on every tick.
+		w.lastRunAt = time.Now()
+
+		result, err := w.fn(ctx, cfg)
+		if err != nil {
+			return nil, err
+		}
+
+		w.lastResult = result
+	}
+
+	return fsmv2.NewObservation(w.lastResult), nil
 }
 
 // --- states ---
@@ -219,12 +148,13 @@ func Register[TConfig any, TStatus any](
 	interval time.Duration,
 	fn func(ctx context.Context, cfg TConfig) (TStatus, error),
 ) {
-	register.Worker[TConfig, TStatus, *simpleDeps[TConfig, TStatus]](workerType,
+	register.Worker[TConfig, TStatus, struct{}](workerType,
 		func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader) (fsmv2.Worker, error) {
-			w := &simpleWorker[TConfig, TStatus]{}
-			bd := w.InitBase(id, logger, sr)
-			d := newSimpleDeps(bd, fn, interval)
-			w.BindDeps(d)
+			w := &simpleWorker[TConfig, TStatus]{
+				fn:       fn,
+				interval: interval,
+			}
+			w.InitBase(id, logger, sr)
 
 			return w, nil
 		})
