@@ -513,6 +513,14 @@ func newActionFromPayload(
 		return NewDeployStreamProcessorAction(sender, payload.ActionUUID, instanceUUID, outboundChannel, configManager, systemSnapshotManager)
 	case models.GetStreamProcessor:
 		return NewGetStreamProcessorAction(sender, payload.ActionUUID, instanceUUID, outboundChannel, configManager, systemSnapshotManager)
+	case models.DeployHistorian:
+		return NewDeployHistorianAction(sender, payload.ActionUUID, instanceUUID, outboundChannel, configManager)
+	case models.EditHistorian:
+		return NewEditHistorianAction(sender, payload.ActionUUID, instanceUUID, outboundChannel, configManager)
+	case models.GetHistorian:
+		return NewGetHistorianAction(sender, payload.ActionUUID, instanceUUID, outboundChannel, configManager)
+	case models.DeleteHistorian:
+		return NewDeleteHistorianAction(sender, payload.ActionUUID, instanceUUID, outboundChannel, configManager)
 	}
 
 	return nil

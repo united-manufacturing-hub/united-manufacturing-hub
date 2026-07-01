@@ -82,6 +82,10 @@ const (
 	// FSMv2 worker pattern. Mirrors [FeatureFSMv1ConfigManager] for the other
 	// pre-FSMv2 package wired to FSMLogger.
 	FeatureFSMv1Communicator Feature = "fsmv1_communicator"
+
+	// FeatureSupportHistorian covers the historian feature: reading, writing, and
+	// managing historian configurations.
+	FeatureSupportHistorian Feature = "support_historian"
 )
 
 // FeatureForWorker returns the Feature for a specific worker type.

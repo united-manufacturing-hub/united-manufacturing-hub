@@ -112,6 +112,10 @@ type ConfigManager interface {
 	WriteYAMLConfigFromString(ctx context.Context, configStr string, expectedModTime string) error
 	// GetBackupCount returns the number of config backups created since startup.
 	GetBackupCount() uint64
+	// AtomicSetHistorian writes or replaces the historian section in the config atomically.
+	AtomicSetHistorian(ctx context.Context, historian HistorianConfig) error
+	// AtomicDeleteHistorian removes the historian section from the config atomically.
+	AtomicDeleteHistorian(ctx context.Context) error
 
 	// TODO: Add AtomicUnlinkFromTemplate method
 	// AtomicUnlinkFromTemplate converts a templated configuration (using YAML anchors/aliases)
@@ -1296,6 +1300,68 @@ func (m *FileConfigManager) getLatestBackupContent(ctx context.Context) []byte {
 	}
 
 	return data
+}
+
+// AtomicSetHistorian writes or replaces the historian section in the config atomically.
+func (m *FileConfigManager) AtomicSetHistorian(ctx context.Context, historian HistorianConfig) error {
+	err := m.mutexAtomicUpdate.Lock(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to lock config file: %w", err)
+	}
+	defer m.mutexAtomicUpdate.Unlock()
+
+	cfg, err := m.GetConfig(ctx, 0)
+	if err != nil {
+		return fmt.Errorf("failed to get config: %w", err)
+	}
+
+	cfg.Historian = &historian
+
+	if err := m.writeConfig(ctx, cfg); err != nil {
+		return fmt.Errorf("failed to write config: %w", err)
+	}
+
+	return nil
+}
+
+// AtomicSetHistorian delegates to the underlying FileConfigManager.
+func (m *FileConfigManagerWithBackoff) AtomicSetHistorian(ctx context.Context, historian HistorianConfig) error {
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+
+	return m.configManager.AtomicSetHistorian(ctx, historian)
+}
+
+// AtomicDeleteHistorian removes the historian section from the config atomically.
+func (m *FileConfigManager) AtomicDeleteHistorian(ctx context.Context) error {
+	err := m.mutexAtomicUpdate.Lock(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to lock config file: %w", err)
+	}
+	defer m.mutexAtomicUpdate.Unlock()
+
+	cfg, err := m.GetConfig(ctx, 0)
+	if err != nil {
+		return fmt.Errorf("failed to get config: %w", err)
+	}
+
+	cfg.Historian = nil
+
+	if err := m.writeConfig(ctx, cfg); err != nil {
+		return fmt.Errorf("failed to write config: %w", err)
+	}
+
+	return nil
+}
+
+// AtomicDeleteHistorian delegates to the underlying FileConfigManager.
+func (m *FileConfigManagerWithBackoff) AtomicDeleteHistorian(ctx context.Context) error {
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+
+	return m.configManager.AtomicDeleteHistorian(ctx)
 }
 
 // cleanupOldBackups removes the oldest backup files when the total count

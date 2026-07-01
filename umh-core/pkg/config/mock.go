@@ -1291,6 +1291,26 @@ func (m *MockConfigManager) GetBackupCount() uint64 {
 	return 0
 }
 
+// AtomicSetHistorian writes or replaces the historian section in the mock config.
+func (m *MockConfigManager) AtomicSetHistorian(_ context.Context, historian HistorianConfig) error {
+	m.mutexReadAndWrite.Lock()
+	defer m.mutexReadAndWrite.Unlock()
+
+	m.Config.Historian = &historian
+
+	return nil
+}
+
+// AtomicDeleteHistorian removes the historian section from the mock config.
+func (m *MockConfigManager) AtomicDeleteHistorian(_ context.Context) error {
+	m.mutexReadAndWrite.Lock()
+	defer m.mutexReadAndWrite.Unlock()
+
+	m.Config.Historian = nil
+
+	return nil
+}
+
 // IsGetConfigCalled returns true if GetConfig has been called (thread-safe).
 func (m *MockConfigManager) IsGetConfigCalled() bool {
 	return atomic.LoadInt32(&m.GetConfigCalled) != 0

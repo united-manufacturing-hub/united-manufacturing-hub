@@ -40,6 +40,7 @@ type FullConfig struct {
 	ProtocolConverter []ProtocolConverterConfig `yaml:"protocolConverter,omitempty"` // ProtocolConverter config, can be updated while runnnig
 	StreamProcessor   []StreamProcessorConfig   `yaml:"streamProcessor,omitempty"`   // StreamProcessor config, can be updated while running
 	Internal          InternalConfig            `yaml:"internal,omitempty"`          // Internal config, not to be used by the user, only to be used for testing internal components
+	Historian         *HistorianConfig          `yaml:"historian,omitempty"`         // Historian config for TimescaleDB/Postgres connection
 }
 
 // TemplatesConfig defines the structure for the templates section.
@@ -362,6 +363,13 @@ func (c FullConfig) Clone() FullConfig {
 	err = deepcopy.Copy(&clone.Internal, &c.Internal)
 	if err != nil {
 		return FullConfig{}
+	}
+
+	if c.Historian != nil {
+		err = deepcopy.Copy(&clone.Historian, &c.Historian)
+		if err != nil {
+			return FullConfig{}
+		}
 	}
 
 	return clone
