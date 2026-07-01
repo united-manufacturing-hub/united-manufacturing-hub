@@ -160,6 +160,33 @@ func GetFresh[TStatus any](ctx context.Context, c *FSMv2Client, ref dynamicchild
 	return obs.Status, Fresh, nil
 }
 
+// GetFreshObs is like GetFresh but returns the full Observation so callers can
+// access CollectedAt and other framework fields alongside the Freshness reason.
+// A non-ErrNotObserved read error is returned verbatim alongside Unknown
+// Freshness; the returned observation is the zero value in all error paths.
+func GetFreshObs[TStatus any](ctx context.Context, c *FSMv2Client, ref dynamicchildren.Ref, maxAge time.Duration) (fsmv2.Observation[TStatus], Freshness, error) {
+	var zero fsmv2.Observation[TStatus]
+
+	if !c.w.Registry().Contains(ref) {
+		return zero, Unregistered, nil
+	}
+
+	obs, err := Get[TStatus](ctx, c, ref)
+	if err != nil {
+		if errors.Is(err, ErrNotObserved) {
+			return zero, NeverObserved, nil
+		}
+
+		return zero, Unknown, err
+	}
+
+	if time.Since(obs.CollectedAt) > maxAge {
+		return obs, Stale, nil
+	}
+
+	return obs, Fresh, nil
+}
+
 // globalCli is the process-scoped FSMv2Client published once at startup so any
 // FSMv1 component (regardless of which benthos manager constructed it) can
 // reach the FSMv2 child-observation read path via GetClient. NewBenthosManager

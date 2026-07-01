@@ -30,3 +30,8 @@ const FSMTransitionTimeout = 200 * time.Millisecond
 // Set to 5 seconds to allow thorough cleanup including file operations and service stops.
 // See Linear ticket ENG-3420 for full context.
 const ForceRemovalTimeout = 5 * time.Second
+
+// NmapBackendFSMv2 is the NMAP_BACKEND env-var value that selects the fsmv2
+// TCP-connect scanner (no S6, no nmap binary). Three files branch on this
+// value; a single constant prevents typo-induced split-backend states.
+const NmapBackendFSMv2 = "fsmv2"

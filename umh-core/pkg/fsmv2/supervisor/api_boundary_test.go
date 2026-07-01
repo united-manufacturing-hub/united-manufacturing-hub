@@ -78,6 +78,7 @@ var _ = Describe("Supervisor API Boundary", func() {
 		It("should export configuration methods", func() {
 			publicMethods := []string{
 				"SetGlobalVariables",
+				"UpdateUserSpec",
 			}
 
 			for _, methodName := range publicMethods {
