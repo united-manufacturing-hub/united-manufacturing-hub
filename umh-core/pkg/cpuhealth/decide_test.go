@@ -1468,9 +1468,15 @@ func TestDecide_HostContentionCause_DemandGateFireThenClear(t *testing.T) {
 	base := time.Date(2026, 6, 24, 12, 0, 0, 0, time.UTC)
 	thresholds := DefaultThresholds()
 
-	const hostBusyCores = 3.2
+	// 8-core box at 80% host-busy (6.4/8.0): same busy ratio the v3 scenario
+	// used, but on a box with headroom = 8.0 − 6.4 − 1.0 = 0.6 > 0. This keeps
+	// the dead-zone saturation backstop from firing (headroom >= 0) so the test
+	// isolates the demand-gate behavior — which is this test's concern — rather
+	// than the v4 headroom trigger (R3), which would otherwise fire here and
+	// confound the host-contention assertions.
+	const hostBusyCores = 6.4
 	const ourUsageCores = 0.5
-	const wantContentionCores = 2.7
+	const wantContentionCores = 5.9
 
 	feedHost := func(st *WindowState, n int, pressure float64, startOff time.Duration) (Verdict, Signals) {
 		var v Verdict
@@ -1480,7 +1486,7 @@ func TestDecide_HostContentionCause_DemandGateFireThenClear(t *testing.T) {
 				Timestamp:     base.Add(startOff).Add(time.Duration(i) * time.Second),
 				UsageCores:    ourUsageCores,
 				HostBusyCores: hostBusyCores,
-				LogicalCpus:   4.0,
+				LogicalCpus:   8.0,
 				PressureAvg60: pressure,
 			}, thresholds)
 		}
@@ -1537,7 +1543,7 @@ func TestDecide_HostContentionCause_DemandGateFireThenClear(t *testing.T) {
 		t.Fatalf("fire Causes: pressure MISSING from %+v (the co-firing demand-signal cause must also appear)", vB.Causes)
 	}
 	if !floatEq(hostContentionVal, wantContentionCores) {
-		t.Fatalf("fire host-contention Cause Value: got %v, want %v (contention_cores = max(0, HostBusyCores - UsageCores) = 3.2 - 0.5)", hostContentionVal, wantContentionCores)
+		t.Fatalf("fire host-contention Cause Value: got %v, want %v (contention_cores = max(0, HostBusyCores - UsageCores) = 6.4 - 0.5)", hostContentionVal, wantContentionCores)
 	}
 
 	// (C) CLEAR — demand gate drops, host stays busy. host-contention must
@@ -3137,6 +3143,246 @@ func TestDecide_Headroom_Computation(t *testing.T) {
 		}
 		if len(v.Causes) != 0 {
 			t.Fatalf("Causes length: got %d, want 0 (adds no cause; on a fresh state there must be no saturation cause)", len(v.Causes))
+		}
+	})
+}
+
+// TestDecide_Saturation_HeadroomTrigger pins the dead-zone saturation
+// backstop's headroom trigger: in the dead-zone the latch fires when
+// HeadroomCores < 0 (hostBusyMean > capacity − cpuReserveCores, i.e. less than
+// one core free), holds in [0, headroomRecoverCores], and clears when
+// HeadroomCores > headroomRecoverCores, instead of the 60s-avg usage
+// fraction (>= HighUsageFraction). The cause stays CauseKindSaturation —
+// only the trigger changes. All sub-blocks run in the dead-zone (Quota nil,
+// PsiAvailable false, Virtualized false = zero-value Sample), where
+// capacity=LogicalCpus and headroom=LogicalCpus − 60s-mean(HostBusyCores) −
+// cpuReserveCores.
+func TestDecide_Saturation_HeadroomTrigger(t *testing.T) {
+	base := time.Date(2026, 6, 30, 12, 0, 0, 0, time.UTC)
+	thresholds := DefaultThresholds()
+
+	// dzSample builds a dead-zone sample (Quota nil, PsiAvailable false,
+	// Virtualized false — the zero-value Sample) so capacity=LogicalCpus and
+	// headroom=LogicalCpus − 60s-mean(HostBusyCores) − cpuReserveCores. The
+	// usageCores/cgroupCores pair populates the 60s-avg usage-fraction path
+	// (UsageCores/CgroupCores); passing 0,0 yields fraction 0 (clamped from
+	// 0/0 NaN), which never trips the fraction trigger.
+	dzSample := func(dt time.Duration, logical, hostBusy, usageCores, cgroupCores float64) Sample {
+		return Sample{
+			Timestamp:     base.Add(dt),
+			HostBusyCores: hostBusy,
+			LogicalCpus:   logical,
+			UsageCores:    usageCores,
+			CgroupCores:   cgroupCores,
+		}
+	}
+
+	// (1) FULL_BOX_FIRES — 2 ticks HostBusyCores=8.0, LogicalCpus=8.0 →
+	// mean=8.0, headroom=8−8−1=−1.0 < 0 (hostBusyMean 8.0 > capacity−reserve
+	// 7.0). The fraction trigger reads saturationAvg=0 (zero usage) and stays
+	// healthy; the headroom trigger must fire.
+	t.Run("FULL_BOX_FIRES", func(t *testing.T) {
+		st := &WindowState{}
+		var (
+			v   Verdict
+			sig Signals
+		)
+		for i := 0; i < 2; i++ {
+			v, sig = Decide(st, dzSample(time.Duration(i)*time.Second, 8.0, 8.0, 0, 0), thresholds)
+		}
+		if !sig.SaturationFired {
+			t.Fatalf("SaturationFired: got false, want true (headroom=8−8−1=−1.0 < 0 → hostBusyMean 8.0 > capacity−reserve 7.0 → must fire)")
+		}
+		if v.State != StateDegraded {
+			t.Fatalf("State: got %q, want %q (a full box degrades)", v.State, StateDegraded)
+		}
+		hasSat := false
+		for _, c := range v.Causes {
+			if c.Kind == CauseKindSaturation {
+				hasSat = true
+			}
+		}
+		if !hasSat {
+			t.Fatalf("Causes: no CauseKindSaturation present (headroom<=−cpuReserveCores must emit the saturation cause; got %v)", v.Causes)
+		}
+	})
+
+	// (2) SPARE_CORE_DOESNT_FIRE — 2 ticks HostBusyCores=6.0, LogicalCpus=8.0
+	// → headroom=8−6−1=1.0 > 0. The trigger must NOT fire when there is a spare
+	// core.
+	t.Run("SPARE_CORE_DOESNT_FIRE", func(t *testing.T) {
+		st := &WindowState{}
+		var (
+			v   Verdict
+			sig Signals
+		)
+		for i := 0; i < 2; i++ {
+			v, sig = Decide(st, dzSample(time.Duration(i)*time.Second, 8.0, 6.0, 0, 0), thresholds)
+		}
+		if sig.SaturationFired {
+			t.Fatalf("SaturationFired: got true, want false (headroom=8−6−1=1.0 > 0 → must not fire)")
+		}
+		if v.State != StateHealthy {
+			t.Fatalf("State: got %q, want %q (spare core → healthy)", v.State, StateHealthy)
+		}
+		if len(v.Causes) != 0 {
+			t.Fatalf("Causes length: got %d, want 0 (spare core → no causes)", len(v.Causes))
+		}
+	})
+
+	// (3) FRACTION_TRIGGER_REPLACED — 2 ticks with UsageCores=5.6,
+	// CgroupCores=8.0 (→ fraction=5.6/8.0=0.70=HighUsageFraction, the fraction
+	// fire condition) AND HostBusyCores=5.6, LogicalCpus=8.0 (→ headroom=8−5.6−1=1.4
+	// > 0). The fraction trigger would fire here (0.70) but the headroom
+	// trigger must NOT (headroom 1.4 > 0): the fraction trigger is replaced,
+	// not kept, when the host CPU count is known.
+	t.Run("FRACTION_TRIGGER_REPLACED", func(t *testing.T) {
+		st := &WindowState{}
+		var (
+			v   Verdict
+			sig Signals
+		)
+		for i := 0; i < 2; i++ {
+			v, sig = Decide(st, dzSample(time.Duration(i)*time.Second, 8.0, 5.6, 5.6, 8.0), thresholds)
+		}
+		if sig.SaturationFired {
+			t.Fatalf("SaturationFired: got true, want false (fraction=5.6/8.0=0.70 hits the fraction fire condition, but headroom=8−5.6−1=1.4 > 0 → the headroom trigger must NOT fire)")
+		}
+		if v.State != StateHealthy {
+			t.Fatalf("State: got %q, want %q (headroom 1.4 > 0 → healthy)", v.State, StateHealthy)
+		}
+	})
+
+	// (4) PARKED_ON_LINE_FRESH — 2 ticks HostBusyCores=3.0, LogicalCpus=4.0 →
+	// headroom=4−3−1=0.0, the bottom of the hold interval. A host at headroom
+	// 0.0 is exactly at the reserve boundary (one core free == the reserve);
+	// fire is strictly headroom < 0, so 0.0 must NOT fire (it holds if already
+	// fired, and stays healthy if fresh).
+	t.Run("PARKED_ON_LINE_FRESH", func(t *testing.T) {
+		st := &WindowState{}
+		var (
+			v   Verdict
+			sig Signals
+		)
+		for i := 0; i < 2; i++ {
+			v, sig = Decide(st, dzSample(time.Duration(i)*time.Second, 4.0, 3.0, 0, 0), thresholds)
+		}
+		if sig.SaturationFired {
+			t.Fatalf("SaturationFired: got true, want false (headroom=4−3−1=0.0; fire is strictly < 0, not <= 0 → must not fire)")
+		}
+		if v.State != StateHealthy {
+			t.Fatalf("State: got %q, want %q (headroom=0.0 is not < 0 → healthy)", v.State, StateHealthy)
+		}
+	})
+
+	// (5) SCHMITT_HOLD_THEN_CLEAR — (a) fire, (b) hold at a strictly-positive
+	// headroom inside the hold interval, (c) clear just past headroomRecoverCores.
+	// (b) holds at headroom=0.25 (in (0, headroomRecoverCores]): a no-hysteresis
+	// stub clearing at >0 would drop the latch here, so the assertion pins
+	// headroomRecoverCores. (c) clears at headroom=0.6 (just > 0.5): a
+	// never-clear stub keeps the latch fired here.
+	t.Run("SCHMITT_HOLD_THEN_CLEAR", func(t *testing.T) {
+		st := &WindowState{}
+
+		// (a) fire: 2 ticks HostBusyCores=4.0, LogicalCpus=4.0 → headroom=−1.0.
+		for i := 0; i < 2; i++ {
+			Decide(st, dzSample(time.Duration(i)*time.Second, 4.0, 4.0, 0, 0), thresholds)
+		}
+		_, sig1 := Decide(st, dzSample(2*time.Second, 4.0, 4.0, 0, 0), thresholds)
+		if !sig1.SaturationFired {
+			t.Fatalf("(a) fire SaturationFired: got false, want true (headroom=4−4−1=−1.0 < 0 → must fire)")
+		}
+
+		// (b) hold: 70 ticks HostBusyCores=2.75 (i=3..72) → mean settles to
+		// 2.75, headroom=4−2.75−1=0.25 (in (0, headroomRecoverCores]) → MUST
+		// stay fired (hold interval). A no-hysteresis stub clearing at >0
+		// would clear here (0.25 > 0).
+		for i := 3; i <= 72; i++ {
+			Decide(st, dzSample(time.Duration(i)*time.Second, 4.0, 2.75, 0, 0), thresholds)
+		}
+		_, sig2 := Decide(st, dzSample(73*time.Second, 4.0, 2.75, 0, 0), thresholds)
+		if !sig2.SaturationFired {
+			t.Fatalf("(b) hold SaturationFired: got false, want true (headroom=4−2.75−1=0.25 is in (0, headroomRecoverCores] → hold interval → must NOT clear)")
+		}
+		if sig2.HeadroomCores > 0.5 || sig2.HeadroomCores <= 0 {
+			t.Fatalf("(b) hold HeadroomCores: got %v, want in (0, 0.5] (setup check: headroom must be inside the hold interval)", sig2.HeadroomCores)
+		}
+
+		// (c) clear: 70 ticks HostBusyCores=2.4 (i=74..144) → mean=2.4,
+		// headroom=4−2.4−1=0.6 > headroomRecoverCores → MUST clear.
+		for i := 74; i <= 144; i++ {
+			Decide(st, dzSample(time.Duration(i)*time.Second, 4.0, 2.4, 0, 0), thresholds)
+		}
+		_, sig3 := Decide(st, dzSample(145*time.Second, 4.0, 2.4, 0, 0), thresholds)
+		if sig3.SaturationFired {
+			t.Fatalf("(c) clear SaturationFired: got true, want false (headroom=4−2.4−1=0.6 > headroomRecoverCores → latch must clear)")
+		}
+		if sig3.HeadroomCores <= 0.5 {
+			t.Fatalf("(c) clear HeadroomCores: got %v, want > 0.5 (setup check: headroom must exceed headroomRecoverCores to force clear)", sig3.HeadroomCores)
+		}
+	})
+
+	// (6) FRACTION_FALLBACK_LOGICALCPUS_UNKNOWN — the host CPU count is
+	// unknown (LogicalCpus == 0, the cgroup-known-only sub-case), so the
+	// 60s-avg usage fraction remains the trigger. (6a) a fraction at
+	// HighUsageFraction fires; (6b) a fraction below SaturationRecover clears a
+	// prior fire. This pins the retained fraction fallback that the headroom
+	// branch does not replace when LogicalCpus is unknown.
+	t.Run("FRACTION_FALLBACK_LOGICALCPUS_UNKNOWN", func(t *testing.T) {
+		// (6a) fire: 2 ticks UsageCores/CgroupCores = 0.70 → fraction 0.70 =
+		// HighUsageFraction. HostBusyCores 0 (irrelevant under the fallback),
+		// LogicalCpus 0 selects the fraction branch.
+		st := &WindowState{}
+		var (
+			vFire Verdict
+			sig   Signals
+		)
+		for i := 0; i < 2; i++ {
+			vFire, sig = Decide(st, dzSample(time.Duration(i)*time.Second, 0, 0, 5.6, 8.0), thresholds)
+		}
+		if !sig.SaturationFired {
+			t.Fatalf("(6a) fire SaturationFired: got false, want true (LogicalCpus==0 → fraction trigger; 5.6/8.0=0.70 >= HighUsageFraction → must fire)")
+		}
+		if vFire.State != StateDegraded {
+			t.Fatalf("(6a) fire State: got %q, want %q (fraction 0.70 >= HighUsageFraction → degraded)", vFire.State, StateDegraded)
+		}
+
+		// (6b) clear: 70 ticks UsageCores/CgroupCores = 0.40 → fraction 0.40 <
+		// SaturationRecover (0.60) → latch clears.
+		for i := 3; i <= 72; i++ {
+			Decide(st, dzSample(time.Duration(i)*time.Second, 0, 0, 3.2, 8.0), thresholds)
+		}
+		vClear, sigClear := Decide(st, dzSample(73*time.Second, 0, 0, 3.2, 8.0), thresholds)
+		if sigClear.SaturationFired {
+			t.Fatalf("(6b) clear SaturationFired: got true, want false (fraction=3.2/8.0=0.40 < SaturationRecover 0.60 → latch must clear)")
+		}
+		if vClear.State != StateHealthy {
+			t.Fatalf("(6b) clear State: got %q, want %q (fraction 0.40 < SaturationRecover → healthy)", vClear.State, StateHealthy)
+		}
+	})
+
+	// (7) NEAR_FULL_FIRES — a box with less than one core free (but not
+	// literally full) fires under headroom<0. 2 ticks HostBusyCores=7.5,
+	// LogicalCpus=8.0 → mean=7.5, headroom=8−7.5−1=−0.5 < 0 (hostBusyMean 7.5
+	// > capacity−reserve 7.0). A fire-at-hostBusyMean>=capacity stub (i.e.
+	// HeadroomCores <= −cpuReserveCores) would NOT fire here (7.5 < 8); the
+	// spec's headroom<0 MUST fire (less than one core free). This pins the
+	// fire threshold at < 0, not <= −reserve, and makes cpuReserveCores a
+	// fire-sensitivity knob (raising it fires earlier).
+	t.Run("NEAR_FULL_FIRES", func(t *testing.T) {
+		st := &WindowState{}
+		var (
+			v   Verdict
+			sig Signals
+		)
+		for i := 0; i < 2; i++ {
+			v, sig = Decide(st, dzSample(time.Duration(i)*time.Second, 8.0, 7.5, 0, 0), thresholds)
+		}
+		if !sig.SaturationFired {
+			t.Fatalf("SaturationFired: got false, want true (headroom=%v < 0 → less than one core free → must fire; a fire-at-hostBusyMean>=capacity stub fails here)", sig.HeadroomCores)
+		}
+		if v.State != StateDegraded {
+			t.Fatalf("State: got %q, want %q (near-full box with <1 core free degrades)", v.State, StateDegraded)
 		}
 	})
 }

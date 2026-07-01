@@ -96,9 +96,22 @@ const stealWindow = 60 * time.Second
 
 // cpuReserveCores is the headroom reserve: one core set aside (for Redpanda
 // and system overhead) when computing Signals.HeadroomCores so the number
-// reflects capacity available to UMH workloads, not raw free capacity.
+// reflects capacity available to UMH workloads, not raw free capacity. The
+// saturation latch fires when HeadroomCores < 0, i.e. when hostBusyMean >
+// capacity - cpuReserveCores (less than one core free), so cpuReserveCores is
+// the fire-sensitivity knob: raising it fires earlier (a fuller reserve
+// demands more spare capacity before the box reads healthy). Calibrate it
+// against the measured idle+working distribution of real UMH hosts before
+// committing the threshold.
 // TODO: calibrate.
 const cpuReserveCores = 1.0
+
+// headroomRecoverCores is the Schmitt clear threshold for the headroom-based
+// saturation trigger: the latch fires when HeadroomCores < 0, holds in
+// [0, headroomRecoverCores], and clears only when HeadroomCores >
+// headroomRecoverCores. It prevents a host parked on the line (headroom near
+// 0) from dithering the latch on every tick.
+const headroomRecoverCores = 0.5
 
 // Sample is a single point-in-time CPU usage observation.
 //
@@ -284,10 +297,18 @@ type Signals struct {
 	// state: the verdict State is binary healthy|degraded (blind-but-quiet is
 	// healthy). It is false outside the dead-zone.
 	LimitedVisibility bool
-	// SaturationFired is the dead-zone saturation backstop latch state. It
-	// fires when the 60s-average usage fraction >= HighUsageFraction and clears
-	// when the 60s-average drops below SaturationRecover (Schmitt). It is only
-	// evaluated in the dead-zone.
+	// SaturationFired is the dead-zone saturation backstop latch state. The
+	// trigger has two branches selected by whether the host CPU count is known
+	// (Sample.LogicalCpus > 0): the headroom branch fires when HeadroomCores
+	// < 0 (hostBusyMean > capacity − cpuReserveCores, i.e. less than one core
+	// free) and clears when HeadroomCores > headroomRecoverCores (Schmitt);
+	// the fraction branch (LogicalCpus <= 0, the cgroup-known-only sub-case)
+	// fires when the 60s-average usage fraction >= HighUsageFraction and
+	// clears when it drops below SaturationRecover (Schmitt). The headroom
+	// branch also covers the Quota=&0 (truly uncapped, cpu.max="max") case
+	// when the host count is known: an uncapped container on a host with no
+	// spare core has no headroom, so it degrades. It is only evaluated in the
+	// dead-zone.
 	SaturationFired bool
 	// HostBusyCores60sMean is the 60s arithmetic mean of per-tick HostBusyCores;
 	// observability-only (does not change the verdict). The per-tick input is
@@ -299,7 +320,7 @@ type Signals struct {
 	// when non-nil and positive, else Sample.LogicalCpus (the uncapped host).
 	// measured use is Signals.HostBusyCores60sMean (the 60s mean). It is
 	// observability-only (does not change the verdict) and is NOT clamped — a
-	// full or over-full box produces a negative number, not 0.
+	// host with hostBusyMean >= capacity produces a negative number, not 0.
 	HeadroomCores float64
 }
 
@@ -319,12 +340,18 @@ type Verdict struct {
 // sample that has no other cause. The ONE exception is the dead-zone
 // saturation backstop: when the sample is in the dead-zone (Quota nil or
 // non-positive, PSI absent, not virtualized — no starvation signal exists),
-// Decide maintains a
-// 60s-average usage fraction over a usage ring in WindowState and fires a
-// saturation Cause when that average >= HighUsageFraction (Schmitt: fires at
-// >= HighUsageFraction, clears below SaturationRecover). Outside the dead-zone
-// high usage alone is never ill health, and a prior dead-zone fire is cleared
-// on the first non-dead-zone tick (the latch and ring do not leak).
+// Decide maintains a 60s-average usage fraction over a usage ring in
+// WindowState and a 60s mean of HostBusyCores. The saturation latch trigger
+// has two branches: when the host CPU count is known (LogicalCpus > 0) it
+// fires on headroom (HeadroomCores < 0, i.e. hostBusyMean >
+// capacity − cpuReserveCores — less than one core free; Schmitt clears above
+// headroomRecoverCores), covering the Quota=&0 truly-uncapped case too; when
+// the host count is unknown (LogicalCpus <= 0, the cgroup-known-only
+// sub-case) it fires on the 60s-average usage fraction >= HighUsageFraction
+// (Schmitt clears below SaturationRecover). Outside the dead-zone high usage
+// alone is never ill
+// health, and a prior dead-zone fire is cleared on the first non-dead-zone
+// tick (the latch and ring do not leak).
 //
 // Decide reads thresholds.ThrottleHigh and thresholds.ThrottleRecover for the
 // throttle Schmitt flip-latch (the latch fires above ThrottleHigh and clears
@@ -656,15 +683,20 @@ func Decide(st *WindowState, sample Sample, thresholds Thresholds) (Verdict, Sig
 	// throttle/steal pruning pattern). Saturation is the only NEW cause the
 	// dead-zone introduces (the only cause whose signal is absent elsewhere);
 	// throttle can co-fire from cpu.stat counter deltas regardless of Quota, so
-	// it is NOT the sole cause that can fire in the dead-zone. The backstop
-	// only fires for the Quota==nil + CgroupCores>0 sub-case, where a fraction
-	// is computable; Quota=&0 (truly uncapped, cpu.max="max") cannot compute a
-	// fraction (the `>0` guard rejects it and there is no CgroupCores fallback
-	// when Quota is non-nil), so the proxy is inert there by design —
-	// blind-but-quiet is healthy per the model. The guardrail: below the fire
-	// mark in the dead-zone the verdict is healthy — blind-but-quiet is
-	// healthy, never a distinct unknown state. LimitedVisibility signals the
-	// blind state to the caller regardless of the verdict.
+	// it is NOT the sole cause that can fire in the dead-zone. The trigger has
+	// two branches: when the host CPU count is known (LogicalCpus > 0) the
+	// backstop retriggers on headroom (fires when HeadroomCores < 0, i.e.
+	// hostBusyMean > capacity − cpuReserveCores — less than one core free;
+	// Schmitt clears above headroomRecoverCores), which covers the Quota=&0
+	// (truly uncapped, cpu.max="max") case — an uncapped container on a host
+	// with no spare core has no headroom, so it degrades; when the host count
+	// is unknown (LogicalCpus <= 0, the cgroup-known-only sub-case where a
+	// fraction is computable via CgroupCores>0) the 60s-average usage fraction
+	// remains the trigger. The guardrail: below the fire condition in the
+	// dead-zone the verdict is healthy — blind-but-quiet is healthy, never a
+	// distinct unknown state.
+	// LimitedVisibility signals the blind state to the caller regardless of
+	// the verdict.
 	var saturationAvg float64
 
 	deadZone := (sample.Quota == nil || !(*sample.Quota > 0)) && !sample.PsiAvailable && !sample.Virtualized
@@ -722,11 +754,27 @@ func Decide(st *WindowState, sample Sample, thresholds Thresholds) (Verdict, Sig
 		// documented "clears when the 60s-average drops below
 		// SaturationRecover."
 		if len(st.usageRing) >= 2 {
-			switch {
-			case saturationAvg >= thresholds.HighUsageFraction:
-				st.saturationFired = true
-			case saturationAvg < thresholds.SaturationRecover:
-				st.saturationFired = false
+			// When the host CPU count is known (LogicalCpus > 0) the
+			// saturation backstop retriggers on headroom: fire when
+			// HeadroomCores < 0 (hostBusyMean > capacity − cpuReserveCores,
+			// i.e. less than one core free), clear when HeadroomCores >
+			// headroomRecoverCores, hold between (Schmitt). When the host
+			// count is unknown (LogicalCpus <= 0, the cgroup-known-only
+			// sub-case) the 60s-avg usage fraction remains the trigger.
+			if sample.LogicalCpus > 0 {
+				switch {
+				case signals.HeadroomCores < 0:
+					st.saturationFired = true
+				case signals.HeadroomCores > headroomRecoverCores:
+					st.saturationFired = false
+				}
+			} else {
+				switch {
+				case saturationAvg >= thresholds.HighUsageFraction:
+					st.saturationFired = true
+				case saturationAvg < thresholds.SaturationRecover:
+					st.saturationFired = false
+				}
 			}
 		} else {
 			st.saturationFired = false
