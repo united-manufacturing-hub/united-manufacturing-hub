@@ -492,5 +492,19 @@ var _ = Describe("Validator", func() {
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("context canceled"))
 		})
+
+		It("should validate timeseries-boolean via default injection", func() {
+			dataModel := config.DataModelVersion{
+				Structure: map[string]config.Field{
+					"running": {
+						PayloadShape: "timeseries-boolean",
+					},
+				},
+			}
+
+			// Empty payload shapes: timeseries-boolean must resolve via default injection.
+			err := validator.ValidateWithReferences(ctx, dataModel, dataModels, map[string]config.PayloadShape{})
+			Expect(err).ToNot(HaveOccurred())
+		})
 	})
 })

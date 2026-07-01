@@ -20,6 +20,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"gopkg.in/yaml.v3"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	fsmv2config "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
@@ -29,6 +30,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/push"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/push/snapshot"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/push/state"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/types"
 )
 
 var _ fsmv2.Worker = (*push.PushWorker)(nil)
@@ -128,11 +130,12 @@ var _ = Describe("PushWorker", func() {
 			Expect(typedObs.Status.HasTransport).To(BeTrue())
 		})
 
-		It("should report JWT token availability from parent deps", func() {
-			parentDeps.SetJWT("test-token", time.Now().Add(time.Hour))
-
+		It("HasValidToken is true when the desired AuthSession token is present and unexpired", func() {
+			desired := &fsmv2.WrappedDesiredState[snapshot.PushDesiredState]{
+				Config: snapshot.PushDesiredState{AuthSession: types.AuthSession{Token: "t", Expiry: time.Now().Add(time.Hour)}},
+			}
 			ctx := context.Background()
-			observed, err := worker.CollectObservedState(ctx, nil)
+			observed, err := worker.CollectObservedState(ctx, desired)
 
 			Expect(err).ToNot(HaveOccurred())
 			typedObs, ok := observed.(fsmv2.Observation[snapshot.PushStatus])
@@ -140,11 +143,25 @@ var _ = Describe("PushWorker", func() {
 			Expect(typedObs.Status.HasValidToken).To(BeTrue())
 		})
 
-		It("should report HasValidToken false for expired token", func() {
-			parentDeps.SetJWT("expired-token", time.Now().Add(-1*time.Hour))
-
+		It("HasValidToken is false when the desired AuthSession token is expired", func() {
+			desired := &fsmv2.WrappedDesiredState[snapshot.PushDesiredState]{
+				Config: snapshot.PushDesiredState{AuthSession: types.AuthSession{Token: "expired-token", Expiry: time.Now().Add(-1 * time.Hour)}},
+			}
 			ctx := context.Background()
-			observed, err := worker.CollectObservedState(ctx, nil)
+			observed, err := worker.CollectObservedState(ctx, desired)
+
+			Expect(err).ToNot(HaveOccurred())
+			typedObs, ok := observed.(fsmv2.Observation[snapshot.PushStatus])
+			Expect(ok).To(BeTrue())
+			Expect(typedObs.Status.HasValidToken).To(BeFalse())
+		})
+
+		It("HasValidToken is false when the desired AuthSession token is empty", func() {
+			desired := &fsmv2.WrappedDesiredState[snapshot.PushDesiredState]{
+				Config: snapshot.PushDesiredState{AuthSession: types.AuthSession{Token: "", Expiry: time.Now().Add(time.Hour)}},
+			}
+			ctx := context.Background()
+			observed, err := worker.CollectObservedState(ctx, desired)
 
 			Expect(err).ToNot(HaveOccurred())
 			typedObs, ok := observed.(fsmv2.Observation[snapshot.PushStatus])
@@ -232,6 +249,30 @@ var _ = Describe("PushWorker", func() {
 
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("invalid spec type"))
+		})
+
+		It("should bind AuthSession from parsed ChildAuthUserSpec into PushDesiredState", func() {
+			carrier := types.ChildAuthUserSpec{
+				AuthSession: types.AuthSession{
+					Token:        "test-token-push",
+					InstanceUUID: "inst-uuid-push",
+				},
+			}
+			raw, err := yaml.Marshal(carrier)
+			Expect(err).ToNot(HaveOccurred())
+
+			spec := fsmv2config.UserSpec{
+				Config:    string(raw),
+				Variables: fsmv2config.VariableBundle{},
+			}
+
+			desired, err := worker.DeriveDesiredState(spec)
+
+			Expect(err).ToNot(HaveOccurred())
+			typed, ok := desired.(*fsmv2.WrappedDesiredState[snapshot.PushDesiredState])
+			Expect(ok).To(BeTrue())
+			Expect(typed.Config.AuthSession.Token).To(Equal("test-token-push"))
+			Expect(typed.Config.AuthSession.InstanceUUID).To(Equal("inst-uuid-push"))
 		})
 	})
 

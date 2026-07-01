@@ -32,6 +32,7 @@ type mockTransport struct {
 	pushErr       error
 	pushCallCount int
 	pushedMsgs    []*types.UMHMessage
+	capturedToken string
 	pushFunc      func(ctx context.Context, jwtToken string, messages []*types.UMHMessage) error
 }
 
@@ -46,6 +47,7 @@ func (m *mockTransport) Pull(_ context.Context, _ string) ([]*types.UMHMessage, 
 func (m *mockTransport) Push(ctx context.Context, jwtToken string, messages []*types.UMHMessage) error {
 	m.pushCallCount++
 	m.pushedMsgs = messages
+	m.capturedToken = jwtToken
 
 	if m.pushFunc != nil {
 		return m.pushFunc(ctx, jwtToken, messages)
@@ -61,7 +63,6 @@ func (m *mockTransport) Reset() {}
 type mockPushDeps struct {
 	outboundChan    <-chan *types.UMHMessage
 	transport       types.Transport
-	jwtToken        string
 	metricsRecorder *deps.MetricsRecorder
 	logger          deps.FSMLogger
 
@@ -72,13 +73,11 @@ type mockPushDeps struct {
 	lastErrorType         types.ErrorType
 
 	pendingMessages   []*types.UMHMessage
-	tokenValid        bool
 	resetGeneration   uint64
 	resetCleared      bool
 	lastRetryAfter    time.Duration
 	degradedEnteredAt time.Time
 	lastErrorAt       time.Time
-	authenticatedUUID string
 }
 
 type typedErrorCall struct {
@@ -90,7 +89,6 @@ func newMockPushDeps() *mockPushDeps {
 	return &mockPushDeps{
 		metricsRecorder: deps.NewMetricsRecorder(),
 		logger:          deps.NewNopFSMLogger(),
-		tokenValid:      true,
 	}
 }
 
@@ -120,10 +118,6 @@ func (m *mockPushDeps) GetOutboundChan() <-chan *types.UMHMessage {
 
 func (m *mockPushDeps) GetTransport() types.Transport {
 	return m.transport
-}
-
-func (m *mockPushDeps) GetJWTToken() string {
-	return m.jwtToken
 }
 
 func (m *mockPushDeps) RecordTypedError(errType types.ErrorType, retryAfter time.Duration) {
@@ -168,10 +162,6 @@ func (m *mockPushDeps) PendingMessageCount() int {
 	return len(m.pendingMessages)
 }
 
-func (m *mockPushDeps) IsTokenValid() bool {
-	return m.tokenValid
-}
-
 func (m *mockPushDeps) GetResetGeneration() uint64 {
 	return m.resetGeneration
 }
@@ -199,10 +189,6 @@ func (m *mockPushDeps) GetLastErrorAt() time.Time {
 	return m.lastErrorAt
 }
 
-func (m *mockPushDeps) GetAuthenticatedUUID() string {
-	return m.authenticatedUUID
-}
-
 var _ = Describe("PushAction", func() {
 	var (
 		act        *action.PushAction
@@ -218,7 +204,6 @@ var _ = Describe("PushAction", func() {
 		mockDeps = newMockPushDeps()
 		mockDeps.outboundChan = outboundBi
 		mockDeps.transport = mockTrans
-		mockDeps.jwtToken = "test-jwt"
 	})
 
 	Describe("Successful push", func() {
@@ -355,17 +340,20 @@ var _ = Describe("PushAction", func() {
 		})
 	})
 
-	Describe("Token pre-check", func() {
-		It("should skip push when token is invalid (without draining)", func() {
+	Describe("Token threading (no in-action pre-check)", func() {
+		It("should use JWTToken from action struct field, not from deps", func() {
+			// The State gates on HasValidToken before dispatching; the action
+			// trusts its own field and never calls deps.IsTokenValid.
+			act.JWTToken = "struct-jwt"
 			outboundBi <- &types.UMHMessage{Content: "msg1"}
-			mockDeps.tokenValid = false
 
 			err := act.Execute(context.Background(), mockDeps)
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("token not valid"))
+			Expect(err).NotTo(HaveOccurred())
 
-			Expect(mockTrans.pushCallCount).To(Equal(0))
-			Expect(outboundBi).To(HaveLen(1))
+			Expect(mockTrans.pushCallCount).To(Equal(1))
+			Expect(mockTrans.pushedMsgs).To(HaveLen(1))
+			// The token set on the action struct must reach the transport.
+			Expect(mockTrans.capturedToken).To(Equal("struct-jwt"))
 		})
 	})
 
@@ -748,10 +736,11 @@ var _ = Describe("PushAction", func() {
 	})
 
 	Describe("UUID consistency (403 prevention)", func() {
-		It("should overwrite message InstanceUUID with authenticated UUID from dependencies", func() {
+		It("should overwrite message InstanceUUID with authenticated UUID from action struct field", func() {
 			// Scenario: SubscriberHandler created messages with placeholder UUID before
 			// authentication completed. The backend validates JWT claims match message UUID.
 			// If they don't match → 403 Forbidden.
+			// The State sets act.InstanceUUID from snap.Config.AuthSession.InstanceUUID.
 			placeholderUUID := "placeholder-uuid-before-auth"
 			authenticatedUUID := "real-uuid-from-backend-jwt"
 
@@ -761,7 +750,7 @@ var _ = Describe("PushAction", func() {
 				Email:        "user@example.com",
 			}
 
-			mockDeps.authenticatedUUID = authenticatedUUID
+			act.InstanceUUID = authenticatedUUID
 
 			err := act.Execute(context.Background(), mockDeps)
 			Expect(err).NotTo(HaveOccurred())
@@ -780,7 +769,7 @@ var _ = Describe("PushAction", func() {
 				{InstanceUUID: placeholderUUID, Content: "pending1"},
 				{InstanceUUID: placeholderUUID, Content: "pending2"},
 			}
-			mockDeps.authenticatedUUID = authenticatedUUID
+			act.InstanceUUID = authenticatedUUID
 
 			err := act.Execute(context.Background(), mockDeps)
 			Expect(err).NotTo(HaveOccurred())
@@ -804,14 +793,15 @@ var _ = Describe("PushAction", func() {
 				Email:        "user@example.com",
 			}
 
-			mockDeps.authenticatedUUID = "" // Empty - authentication not complete
+			// act.InstanceUUID is "" by default — authentication not complete.
+			// The action skips UUID overwrite when InstanceUUID is empty.
 
 			err := act.Execute(context.Background(), mockDeps)
 			Expect(err).NotTo(HaveOccurred())
 
 			Expect(mockTrans.pushCallCount).To(Equal(1))
 			Expect(mockTrans.pushedMsgs).To(HaveLen(1))
-			// Original UUID should be preserved when authenticatedUUID is empty
+			// Original UUID should be preserved when InstanceUUID is empty
 			Expect(mockTrans.pushedMsgs[0].InstanceUUID).To(Equal(originalUUID))
 		})
 	})
