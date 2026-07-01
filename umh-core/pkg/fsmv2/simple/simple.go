@@ -104,12 +104,21 @@ func (d *simpleDeps[TConfig, TStatus]) ShouldRun() bool {
 	return time.Since(d.lastRunAt) >= d.interval
 }
 
+// markRunAttempt records the current time as the last run attempt regardless of
+// success or failure, so ShouldRun respects the configured cadence even when the
+// user function errors.
+func (d *simpleDeps[TConfig, TStatus]) markRunAttempt() {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	d.lastRunAt = time.Now()
+}
+
 func (d *simpleDeps[TConfig, TStatus]) setResult(r TStatus) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
 	d.lastResult = r
-	d.lastRunAt = time.Now()
 }
 
 func (d *simpleDeps[TConfig, TStatus]) getResult() TStatus {
@@ -139,13 +148,7 @@ func (w *simpleWorker[TConfig, TStatus]) GetDependencies() *simpleDeps[TConfig, 
 // CollectObservedState extracts the current config from the desired state,
 // checks whether the interval has elapsed, and returns an observation that the
 // state machine uses to decide whether to dispatch a run action.
-func (w *simpleWorker[TConfig, TStatus]) CollectObservedState(ctx context.Context, desired fsmv2.DesiredState) (fsmv2.ObservedState, error) {
-	select {
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	default:
-	}
-
+func (w *simpleWorker[TConfig, TStatus]) CollectObservedState(_ context.Context, desired fsmv2.DesiredState) (fsmv2.ObservedState, error) {
 	d := w.GetDependencies()
 
 	cfg := fsmv2.ExtractConfig[TConfig](desired)
@@ -227,11 +230,7 @@ func (s *stoppingState[TC, TS]) String() string { return "stopping" }
 type runAction[TC any, TS any] struct{}
 
 func (a *runAction[TC, TS]) Execute(ctx context.Context, d *simpleDeps[TC, TS]) error {
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	default:
-	}
+	d.markRunAttempt()
 
 	result, err := d.fn(ctx, d.getConfig())
 	if err != nil {

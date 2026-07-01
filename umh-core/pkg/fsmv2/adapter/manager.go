@@ -71,6 +71,7 @@ type WorkerManager[TDomainConfig any] struct {
 	spec          WorkerManagerSpec[TDomainConfig]
 	instances     map[string]publicfsm.FSMInstance
 	domainConfigs map[string]TDomainConfig
+	tick          uint64
 }
 
 // NewWorkerManager creates a WorkerManager from spec.
@@ -105,6 +106,7 @@ func (m *WorkerManager[TDomainConfig]) Reconcile(ctx context.Context, snapshot p
 		return ctx.Err(), false
 	}
 
+	m.tick++
 	client := fsmv2client.GetClient()
 
 	desired := m.spec.ExtractConfigs(snapshot)
@@ -132,30 +134,38 @@ func (m *WorkerManager[TDomainConfig]) Reconcile(ctx context.Context, snapshot p
 	for _, cfg := range desired {
 		name := m.spec.NameOf(cfg)
 		existing, exists := m.domainConfigs[name]
+		enabled := m.spec.DesiredStateOf(cfg) != "stopped"
 
 		if !exists {
 			if client != nil {
-				cfgMap, err := m.spec.CfgFor(cfg)
-				if err != nil {
-					m.spec.Log.Warnf("fsmv2: build spec for %s: %v", name, err)
-				} else if err := client.Upsert(m.spec.RefFor(cfg), cfgMap); err != nil {
-					m.spec.Log.Warnf("fsmv2: upsert %s: %v", name, err)
+				if enabled {
+					cfgMap, err := m.spec.CfgFor(cfg)
+					if err != nil {
+						m.spec.Log.Warnf("fsmv2: build spec for %s: %v", name, err)
+					} else if err := client.Upsert(m.spec.RefFor(cfg), cfgMap); err != nil {
+						m.spec.Log.Warnf("fsmv2: upsert %s: %v", name, err)
+					}
 				}
+				// stopped configs are never registered in the fsmv2 runtime
 			}
 			m.instances[name] = m.spec.NewInstance(cfg)
 			m.domainConfigs[name] = cfg
-			m.spec.Log.Infof("Created worker %s", name)
+			m.spec.Log.Infof("Created worker %s (enabled=%v)", name, enabled)
 			changed = true
 			continue
 		}
 
 		if !m.spec.ConfigEqual(existing, cfg) {
 			if client != nil {
-				cfgMap, err := m.spec.CfgFor(cfg)
-				if err != nil {
-					m.spec.Log.Warnf("fsmv2: build spec for %s: %v", name, err)
-				} else if err := client.Upsert(m.spec.RefFor(cfg), cfgMap); err != nil {
-					m.spec.Log.Warnf("fsmv2: upsert %s: %v", name, err)
+				if enabled {
+					cfgMap, err := m.spec.CfgFor(cfg)
+					if err != nil {
+						m.spec.Log.Warnf("fsmv2: build spec for %s: %v", name, err)
+					} else if err := client.Upsert(m.spec.RefFor(cfg), cfgMap); err != nil {
+						m.spec.Log.Warnf("fsmv2: upsert %s: %v", name, err)
+					}
+				} else {
+					client.Delete(m.spec.RefFor(cfg))
 				}
 			}
 			m.instances[name] = m.spec.NewInstance(cfg)
@@ -187,6 +197,7 @@ func (m *WorkerManager[TDomainConfig]) CreateSnapshot() publicfsm.ManagerSnapsho
 		name:      m.spec.ManagerName,
 		instances: make(map[string]*publicfsm.FSMInstanceSnapshot, len(m.instances)),
 		snapTime:  time.Now(),
+		tick:      m.tick,
 	}
 	for name, inst := range m.instances {
 		snap.instances[name] = &publicfsm.FSMInstanceSnapshot{

@@ -125,6 +125,10 @@ func (i *AdaptedInstance[TStatus, TDomainConfig]) Reconcile(_ context.Context, _
 }
 
 func (i *AdaptedInstance[TStatus, TDomainConfig]) Remove(_ context.Context) error {
+	if c := fsmv2client.GetClient(); c != nil {
+		c.Delete(i.ref)
+	}
+
 	return nil
 }
 

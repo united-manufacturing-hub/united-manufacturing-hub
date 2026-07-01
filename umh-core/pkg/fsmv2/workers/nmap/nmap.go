@@ -64,15 +64,9 @@ type NmapStatus struct {
 }
 
 // scan performs a TCP connect scan against cfg.Target:cfg.Port and returns the
-// port state. It returns an error only for context cancellation; network
-// failures are represented as "closed" or "filtered" states.
+// port state. Network failures are represented as "closed" or "filtered" states,
+// never as errors, so the caller only sees an error on context cancellation.
 func scan(ctx context.Context, cfg NmapConfig) (NmapStatus, error) {
-	select {
-	case <-ctx.Done():
-		return NmapStatus{}, ctx.Err()
-	default:
-	}
-
 	if cfg.Target == "" || cfg.Port == 0 {
 		return NmapStatus{Target: cfg.Target, Port: cfg.Port, PortState: "degraded"}, nil
 	}
@@ -80,10 +74,17 @@ func scan(ctx context.Context, cfg NmapConfig) (NmapStatus, error) {
 	start := time.Now()
 	addr := net.JoinHostPort(cfg.Target, strconv.Itoa(int(cfg.Port)))
 
-	conn, dialErr := net.DialTimeout("tcp", addr, scanTimeout)
+	dialCtx, cancel := context.WithTimeout(ctx, scanTimeout)
+	defer cancel()
+
+	conn, dialErr := (&net.Dialer{}).DialContext(dialCtx, "tcp", addr)
 	latencyMs := float64(time.Since(start).Milliseconds())
 
 	if dialErr != nil {
+		if ctx.Err() != nil {
+			return NmapStatus{}, ctx.Err()
+		}
+
 		portState := "closed"
 
 		var netErr net.Error
@@ -96,6 +97,7 @@ func scan(ctx context.Context, cfg NmapConfig) (NmapStatus, error) {
 			Port:      cfg.Port,
 			PortState: portState,
 			LatencyMs: latencyMs,
+			ScanError: dialErr.Error(),
 		}, nil
 	}
 
@@ -111,5 +113,5 @@ func scan(ctx context.Context, cfg NmapConfig) (NmapStatus, error) {
 }
 
 func init() {
-	simple.Register[NmapConfig, NmapStatus]("nmap", defaultScanInterval, scan)
+	simple.Register("nmap", defaultScanInterval, scan)
 }
