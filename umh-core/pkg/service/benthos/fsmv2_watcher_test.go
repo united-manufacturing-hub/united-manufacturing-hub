@@ -1023,3 +1023,56 @@ func TestFSMv2Watcher_GetHealthCheckAndMetrics_FFOff_BackwardsScanFeeds(t *testi
 		t.Errorf("tick 2: len(window.Input.Window) = %d, want >= 2 (count 20 > last 18 must NOT trip the counter-reset wipe)", len(s.window.Input.Window))
 	}
 }
+
+// TestFSMv2Watcher_DefaultWatcher_NilClientSoftFails characterizes the nil-client
+// soft-fail in defaultBenthosMonitorWatcher. USE_FSMV2_BENTHOS_MONITOR=ON without
+// USE_FSMV2_TRANSPORT=ON (or before the supervisor publishes the client) leaves
+// the process-scoped fsmv2client nil. Each method must fail soft rather than
+// nil-dereference: GetFresh returns a zero status + Unknown + a non-nil err;
+// Upsert returns a non-nil err; Delete is a no-op. This branch is the misconfig
+// guard for FF-on without transport and had no coverage.
+//
+// Mutation-verify: removing any `if c == nil` guard makes the method dereference
+// c.w on a nil *FSMv2Client (GetFresh at fsmv2client.go:143, Upsert at :63,
+// Delete at :68) and panic. This test fails on that panic.
+func TestFSMv2Watcher_DefaultWatcher_NilClientSoftFails(t *testing.T) {
+	// The client is a process singleton; no test in this package publishes one,
+	// so it is nil by default. Force nil explicitly and restore the prior value
+	// so the test stays self-contained.
+	prev := fsmv2client.GetClient()
+	fsmv2client.SetClient(nil)
+	t.Cleanup(func() { fsmv2client.SetClient(prev) })
+
+	w := defaultBenthosMonitorWatcher{}
+	ctx := context.Background()
+	ref := dynamicchildren.Ref{WorkerType: "benthos_monitor", Name: "nilclientbridge"}
+
+	// GetFresh: zero status, Unknown freshness, non-nil err.
+	status, freshness, err := w.GetFresh(ctx, ref, time.Second)
+	if err == nil {
+		t.Fatal("GetFresh: err = nil, want non-nil (nil client must soft-fail, not dereference)")
+	}
+
+	if freshness != fsmv2client.Unknown {
+		t.Errorf("GetFresh: freshness = %v, want Unknown (a nil client cannot classify the observation)", freshness)
+	}
+
+	if !reflect.DeepEqual(status, bmworker.BenthosMonitorStatus{}) {
+		t.Errorf("GetFresh: status = %+v, want zero BenthosMonitorStatus (no observation to return)", status)
+	}
+
+	// Upsert: non-nil err (a nil client cannot record the spec).
+	if upsertErr := w.Upsert(ref, map[string]any{"state": "running"}); upsertErr == nil {
+		t.Fatal("Upsert: err = nil, want non-nil (nil client must soft-fail, not dereference)")
+	}
+
+	// Delete: no panic, no-op. The deferred recover turns a removed nil guard
+	// (which would dereference c.w) into a test failure.
+	defer func() {
+		if r := recover(); r != nil {
+			t.Fatalf("Delete: panicked on nil client (%v); the nil guard must short-circuit to a no-op", r)
+		}
+	}()
+
+	w.Delete(ref)
+}
