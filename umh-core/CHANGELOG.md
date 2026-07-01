@@ -4,7 +4,7 @@
 
 ### Improvements
 
-- Persistent connection-failure diagnostics now include the HTTP status code and a sanitized snippet of the upstream response on both the Sentry event and the worker's degraded-state log line. A failure injected by an upstream proxy, such as a 502, can now be identified without shell access to the instance
+- Persistent connection failures now log the HTTP status code and a sanitized snippet of the upstream response, so the cause of a flapping connection (such as a 502 from a reverse proxy) is visible in the worker's logs
 
 ## [0.44.26]
 

@@ -163,6 +163,8 @@ func newTransportError(statusCode int, body []byte, headers http.Header, baseErr
 	if len(body) > 0 {
 		end := len(body)
 		if end > 256 {
+			// Cap at 256 bytes and back off to a UTF-8 rune boundary so the
+			// body preview never splits a multibyte sequence.
 			end = 256
 			for end > 0 && !utf8.RuneStart(body[end]) {
 				end--
