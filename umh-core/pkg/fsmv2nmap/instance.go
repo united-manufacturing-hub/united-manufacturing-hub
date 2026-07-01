@@ -34,8 +34,9 @@ const (
 	nmapMinRequiredTime = 5 * time.Second
 
 	// nmapMaxAge is how old a nmap observation may be before the child is
-	// considered stale (unreachable). Three missed 1-second scan intervals.
-	nmapMaxAge = 3 * time.Second
+	// considered stale. Formula: scanTimeout + 2*defaultScanInterval = 1.5s + 2s = 3.5s,
+	// which covers a slow-but-successful scan without a spurious stale flip.
+	nmapMaxAge = 3500 * time.Millisecond
 )
 
 // newNmapInstance creates an AdaptedInstance for one nmap scan target.

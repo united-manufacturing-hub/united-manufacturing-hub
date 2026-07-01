@@ -137,7 +137,14 @@ type stoppingState[TC any, TS any] struct {
 func (s *stoppingState[TC, TS]) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := fsmv2.ConvertWorkerSnapshot[TC, TS](snapAny)
 
-	return fsmv2.Transition(&stoppedState[TC, TS]{}, fsmv2.SignalNeedsRemoval, nil,
+	if snap.IsShutdownRequested {
+		return fsmv2.Transition(&stoppedState[TC, TS]{}, fsmv2.SignalNeedsRemoval, nil,
+			"stopping complete: "+snap.StopReason(), nil)
+	}
+
+	// Disabled-only stop: stay resident in stoppedState so the worker can resume
+	// when re-enabled, rather than being removed entirely.
+	return fsmv2.Transition(&stoppedState[TC, TS]{}, fsmv2.SignalNone, nil,
 		"stopping complete: "+snap.StopReason(), nil)
 }
 

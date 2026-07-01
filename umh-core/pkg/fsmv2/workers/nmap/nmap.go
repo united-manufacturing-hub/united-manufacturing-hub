@@ -34,7 +34,9 @@ import (
 
 const (
 	defaultScanInterval = 1 * time.Second
-	scanTimeout         = 3 * time.Second
+	// scanTimeout must be < DefaultObservationTimeout (interval + MaxCgroupThrottlePeriod + 1s ≈ 2.2s)
+	// so the parent context deadline never fires before the dial can return a "filtered" result.
+	scanTimeout = 1500 * time.Millisecond
 )
 
 // NmapConfig holds the user-provided configuration for the nmap worker.
