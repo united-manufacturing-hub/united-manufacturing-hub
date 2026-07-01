@@ -32,6 +32,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos_monitor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthosmetrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
@@ -203,6 +204,13 @@ func (bs *BenthosStatus) CopyBenthosLogs(src []s6service.LogEntry) error {
 	return nil
 }
 
+// upsertStuckThreshold is the number of consecutive FF-on watcher Upsert
+// failures for one bridge after which a single Sentry warning is emitted, so
+// a bridge whose monitor child-spec never lands (stuck Unregistered) is
+// distinguishable from a transient per-tick Upsert blip in logs and Sentry.
+// The counter resets on the next successful Upsert and on Remove.
+const upsertStuckThreshold = 3
+
 // BenthosService is the default implementation of the IBenthosService interface.
 type BenthosService struct {
 	s6Service s6service.Service // S6 service for direct S6 operations
@@ -237,6 +245,13 @@ type BenthosService struct {
 	// production default delegates to the process-scoped fsmv2client; tests
 	// inject a fake via WithFSMv2BenthosWatcher.
 	fsmv2Watcher benthosMonitorWatcher
+
+	// upsertFailures counts consecutive FF-on watcher Upsert failures per
+	// bridge (keyed by cfg.Name, the S6 service name). It only surfaces a
+	// Sentry warning at upsertStuckThreshold; Upsert stays non-fatal and the
+	// next tick re-Upserts. Reset on a successful Upsert and on Remove.
+	// ReconcileManager is the only writer, so no mutex is needed.
+	upsertFailures map[string]int
 
 	// -----------------------------------------------------------------------------
 	// 🌶️  Hot-path YAML-parsing cache
@@ -329,6 +344,7 @@ func NewDefaultBenthosService(benthosName string, opts ...BenthosServiceOption) 
 		benthosMonitorManager: benthos_monitor_fsm.NewBenthosMonitorManager(benthosName),
 		window:                benthosmetrics.NewBenthosMetricsState(),
 		fsmv2Watcher:          defaultBenthosMonitorWatcher{},
+		upsertFailures:        make(map[string]int),
 	}
 
 	// Apply options
@@ -989,6 +1005,7 @@ func (s *BenthosService) RemoveBenthosFromS6Manager(
 	// benthosName). Idempotent: Delete on an already-removed ref is a no-op.
 	if fsmv2BenthosMonitorEnabled {
 		s.fsmv2Watcher.Delete(dynamicchildren.Ref{WorkerType: "benthos_monitor", Name: s6Name})
+		delete(s.upsertFailures, s6Name)
 	}
 
 	// ------------------------------------------------------------------
@@ -1149,6 +1166,20 @@ func (s *BenthosService) ReconcileManager(ctx context.Context, services servicer
 				"metricsPort": cfg.MetricsPort,
 			}); upsertErr != nil {
 				s.logger.Errorf("fsmv2 watcher Upsert failed for %s: %v", cfg.Name, upsertErr)
+
+				s.upsertFailures[cfg.Name]++
+				if s.upsertFailures[cfg.Name] == upsertStuckThreshold {
+					// A persistently-failing Upsert leaves the bridge's monitor
+					// child-spec Unregistered, so the read path serves an empty
+					// (not-unhealthy) BenthosStatus and the bridge reads as
+					// healthy to MC. Surface one warning at the threshold so a
+					// stuck bridge is distinguishable from a transient blip.
+					sentry.ReportIssuef(sentry.IssueTypeWarning, s.logger,
+						"benthos_monitor child-spec Upsert stuck for %s: %d consecutive reconcile failures (last: %v)",
+						cfg.Name, s.upsertFailures[cfg.Name], upsertErr)
+				}
+			} else {
+				delete(s.upsertFailures, cfg.Name)
 			}
 		}
 

@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -27,9 +28,13 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/fsmv2client"
 	bmworker "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/benthos_monitor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker/dynamicchildren"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos_monitor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthosmetrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
+	"go.uber.org/zap/zaptest/observer"
 )
 
 // fakeBenthosMonitorWatcher is a test double for benthosMonitorWatcher. It
@@ -1075,4 +1080,122 @@ func TestFSMv2Watcher_DefaultWatcher_NilClientSoftFails(t *testing.T) {
 	}()
 
 	w.Delete(ref)
+}
+
+// upsertSeqWatcher is a benthosMonitorWatcher whose Upsert returns the next
+// error in upsertErrs, then nil once the sequence is exhausted. GetFresh/Delete
+// are unused by ReconcileManager. Used to drive the FF-on Upsert loop through a
+// run of consecutive failures and then a success.
+type upsertSeqWatcher struct {
+	upsertErrs []error
+	calls      int
+}
+
+func (w *upsertSeqWatcher) GetFresh(context.Context, dynamicchildren.Ref, time.Duration) (bmworker.BenthosMonitorStatus, fsmv2client.Freshness, error) {
+	return bmworker.BenthosMonitorStatus{}, fsmv2client.Unknown, nil
+}
+
+func (w *upsertSeqWatcher) Upsert(dynamicchildren.Ref, map[string]any) error {
+	i := w.calls
+	w.calls++
+
+	if i < len(w.upsertErrs) {
+		return w.upsertErrs[i]
+	}
+
+	return nil
+}
+
+func (w *upsertSeqWatcher) Delete(dynamicchildren.Ref) {}
+
+// TestFSMv2Watcher_ReconcileManager_FFOn_UpsertStuckWarnsAtThreshold verifies
+// the stuck-Upsert signal: a bridge whose watcher.Upsert fails on every
+// reconcile for upsertStuckThreshold consecutive ticks emits ONE distinct
+// warning (not a per-tick flood), and the counter resets on the next
+// successful Upsert. Reconcile stays non-fatal throughout (returns nil, true).
+//
+// The service logger is replaced with a zap observer so the Warn-level report
+// emitted by sentry.ReportIssuef(IssueTypeWarning) is observable. Sentry's
+// warning debounce is disabled (InitSentry("", false), which short-circuits
+// before initializing the Sentry client, so no network) so the threshold
+// crossing is emitted; restored in t.Cleanup.
+func TestFSMv2Watcher_ReconcileManager_FFOn_UpsertStuckWarnsAtThreshold(t *testing.T) {
+	prev := fsmv2BenthosMonitorEnabled
+	fsmv2BenthosMonitorEnabled = true
+
+	t.Cleanup(func() { fsmv2BenthosMonitorEnabled = prev })
+
+	// Disable Sentry's 2h warning debounce so the threshold crossing is emitted;
+	// InitSentry("") short-circuits before initializing the Sentry client.
+	sentry.InitSentry("", false)
+	t.Cleanup(func() { sentry.InitSentry("", true) })
+
+	core, logs := observer.New(zapcore.WarnLevel)
+	watcher := &upsertSeqWatcher{
+		upsertErrs: []error{
+			errors.New("upsert failed 1"),
+			errors.New("upsert failed 2"),
+			errors.New("upsert failed 3"),
+			// 4th call succeeds: counter resets.
+		},
+	}
+	s := NewDefaultBenthosService("test",
+		WithFSMv2BenthosWatcher(watcher),
+		WithMonitorManager(&fakeBenthosMonitorManager{}),
+	)
+	s.logger = zap.New(core).Sugar()
+	s.benthosMonitorConfigs = []config.BenthosMonitorConfig{
+		{
+			FSMInstanceConfig: config.FSMInstanceConfig{
+				Name:            "benthos-stuck",
+				DesiredFSMState: benthos_monitor_fsm.OperationalStateActive,
+			},
+			MetricsPort: 4195,
+		},
+	}
+
+	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(100*time.Second))
+	defer cancel()
+
+	snap := public_fsm.SystemSnapshot{Tick: 1, SnapshotTime: time.Now()}
+	registry := serviceregistry.NewMockRegistry()
+
+	// Ticks 1-3: Upsert fails. The 3rd failure crosses the threshold and emits
+	// one warning; reconcile stays non-fatal.
+	for tick := uint64(1); tick <= 3; tick++ {
+		snap.Tick = tick
+
+		err, _ := s.ReconcileManager(ctx, registry, snap)
+		if err != nil {
+			t.Fatalf("tick %d: ReconcileManager err = %v, want nil (Upsert failure is non-fatal)", tick, err)
+		}
+	}
+
+	if got := s.upsertFailures["benthos-stuck"]; got != upsertStuckThreshold {
+		t.Errorf("upsertFailures after 3 failures = %d, want %d", got, upsertStuckThreshold)
+	}
+
+	warns := logs.FilterLevelExact(zapcore.WarnLevel).All()
+	if len(warns) != 1 {
+		t.Fatalf("warn logs after 3 failures = %d, want 1 (one distinct stuck signal, not a per-tick flood); got %#v",
+			len(warns), warns)
+	}
+
+	if msg := warns[0].Message; !strings.Contains(msg, "benthos-stuck") || !strings.Contains(msg, "Upsert stuck") {
+		t.Errorf("warn message = %q, want substrings \"benthos-stuck\" and \"Upsert stuck\"", msg)
+	}
+
+	// Tick 4: Upsert succeeds. The counter resets and no NEW warning fires.
+	snap.Tick = 4
+	if err, _ := s.ReconcileManager(ctx, registry, snap); err != nil {
+		t.Fatalf("tick 4: ReconcileManager err = %v, want nil", err)
+	}
+
+	if _, ok := s.upsertFailures["benthos-stuck"]; ok {
+		t.Errorf("upsertFailures still has benthos-stuck after a successful Upsert (counter must reset)")
+	}
+
+	if got := logs.FilterLevelExact(zapcore.WarnLevel).Len(); got != 1 {
+		t.Errorf("warn logs after recovery = %d, want 1 (the successful Upsert must not emit a new warning)", got)
+	}
 }
