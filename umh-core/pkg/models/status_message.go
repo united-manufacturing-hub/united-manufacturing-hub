@@ -131,26 +131,16 @@ type Cause struct {
 
 type CPU struct {
 	Health *Health `json:"health"`
-	// State is always emitted (no omitempty), even when healthy. Attribution
-	// and Causes are set only when State == "degraded".
-	State          string  `json:"state"`                 // "healthy" | "degraded"
-	Attribution    string  `json:"attribution,omitempty"` // "host" | "unknown" (set only when degraded)
-	Causes         []Cause `json:"causes,omitempty"`      // each {kind, value} (set only when degraded)
-	TotalUsageMCpu float64 `json:"totalUsageMCpu"` // Total usage in milli-cores (1000m = 1 core)
-	CoreCount      int     `json:"coreCount"`      // Number of CPU cores
 	// AvgMCpu/P95MCpu/P99MCpu are the avg/p95/p99 of the dead-zone usage ring
 	// in milli-cores (signals.*UsageFraction * 1000). They are *float64 so
 	// omitempty emits a real 0 (non-nil pointer) when the metric is fetchable
 	// (the ring holds >= 2 entries) and omits it when un-fetchable (nil pointer:
 	// outside the dead-zone, or the first dead-zone tick before the ring has 2
 	// entries). Observability-only — they do not change the verdict.
-	AvgMCpu *float64 `json:"avgMCpu,omitempty"`
-	P95MCpu *float64 `json:"p95MCpu,omitempty"`
-	P99MCpu *float64 `json:"p99MCpu,omitempty"`
-	// Cgroup-specific fields for container resource limits
-	CgroupCores   float64 `json:"cgroupCores,omitempty"`   // CPU quota from cgroup (e.g., 2.0 = 2 cores)
+	AvgMCpu       *float64 `json:"avgMCpu,omitempty"`
+	P95MCpu       *float64 `json:"p95MCpu,omitempty"`
+	P99MCpu       *float64 `json:"p99MCpu,omitempty"`
 	ThrottleRatio *float64 `json:"throttleRatio,omitempty"` // Ratio of throttled periods (0.0-1.0); nil when cgroup unreadable
-	IsThrottled   bool    `json:"isThrottled,omitempty"`   // True if recently throttled
 	// StealP95 is the 60s-windowed steal p95 as a fraction 0-1. It is *float64
 	// so omitempty emits a real 0 (non-nil pointer) when steal is fetchable
 	// (the box is virtualized) and omits it when un-fetchable (nil pointer: bare
@@ -163,6 +153,24 @@ type CPU struct {
 	// omits it when un-fetchable (nil pointer: PSI absent). It does not change
 	// the verdict.
 	PressureAvg60 *float64 `json:"pressureAvg60,omitempty"`
+	// HostBusyCores is the count of host-level busy CPU cores computed from
+	// /proc/stat's non-idle jiffies. It is *float64 so omitempty emits a real 0
+	// (non-nil pointer) when /proc/stat is readable (even on the baseline tick
+	// where the delta is 0) and omits it when un-fetchable (nil pointer: cpu.stat
+	// or /proc/stat unreadable — readProcStat runs only after the primary cpu.stat
+	// read succeeds, so a cpu.stat failure also yields nil). It does not change
+	// the verdict.
+	HostBusyCores *float64 `json:"hostBusyCores,omitempty"`
+	// State is always emitted (no omitempty), even when healthy. Attribution
+	// and Causes are set only when State == "degraded".
+	State          string  `json:"state"`                 // "healthy" | "degraded"
+	Attribution    string  `json:"attribution,omitempty"` // "host" | "unknown" (set only when degraded)
+	Causes         []Cause `json:"causes,omitempty"`      // each {kind, value} (set only when degraded)
+	TotalUsageMCpu float64 `json:"totalUsageMCpu"`        // Total usage in milli-cores (1000m = 1 core)
+	CoreCount      int     `json:"coreCount"`             // Number of CPU cores
+	// Cgroup-specific fields for container resource limits
+	CgroupCores float64 `json:"cgroupCores,omitempty"` // CPU quota from cgroup (e.g., 2.0 = 2 cores)
+	IsThrottled bool    `json:"isThrottled,omitempty"` // True if recently throttled
 }
 
 type Disk struct {

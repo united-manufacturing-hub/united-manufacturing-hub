@@ -298,6 +298,8 @@ func (s *cgroupSampler) readProcStat(ctx context.Context, now time.Time, sample 
 		return
 	}
 
+	sample.HostBusyCoresAvailable = true
+
 	if !s.hasStatBaseline {
 		s.lastStatTotal = total
 		s.lastStatSteal = steal

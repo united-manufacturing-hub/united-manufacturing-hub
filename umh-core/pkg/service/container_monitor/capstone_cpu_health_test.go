@@ -295,15 +295,10 @@ var _ = Describe("capstone: end-to-end CPU-health model through GetStatus (rung 
 			"HEALTHY-DEAD-ZONE: CPUHealth must be Active (the guardrail)")
 	})
 
-	// NOTE: the dead-zone SATURATION-DEGRADE scenario (sustained high usage in
-	// the blind state fires a saturation cause) is intentionally NOT asserted
-	// here. That contract is a NEW design behavior (the dead-zone saturation
-	// backstop) that requires its own RED->GREEN rung with its own production
-	// change and RED test — it is not "already-built behavior" a proof capstone
-	// should pin. Asserting it here would force production changes (the
-	// CgroupCores dead-zone override and the 0-fraction usage-ring skip) into a
-	// proof commit, which is a minimality violation. See the deferred findings
-	// for the rung that owns the saturation backstop.
+	// NOTE: scenario (4) above asserts blind-but-quiet is healthy. The
+	// dead-zone SATURATION-DEGRADE backstop is asserted in scenario (5) below,
+	// which sets the CgroupCores dead-zone override and the 0-fraction
+	// usage-ring skip.
 
 	// --- (6) HOST-CONTENTION: a VM (hypervisor flag) with a busy host
 	// (high /proc/stat) + pressure firing -> State=degraded,
@@ -501,5 +496,137 @@ var _ = Describe("capstone: end-to-end CPU-health model through GetStatus (rung 
 			"STEAL-DEGRADE: CPUHealth must be Degraded")
 		Expect(status.CPU.IsThrottled).To(BeFalse(),
 			"STEAL-DEGRADE: nr_throttled=0 -> IsThrottled false (degrade is from steal, not throttle)")
+	})
+
+	// --- (5) SATURATION-DEGRADE-DEAD-ZONE: the dead-zone saturation backstop
+	// fires on a full dead-zone box — bare-metal (no hypervisor flag), uncapped
+	// (cpu.max = "max"), no PSI (no cpu.pressure), no throttle — with the host
+	// at capacity (HostBusyCores fills every core leaving less than one core of
+	// reserve). Two invariants the assertions below cannot convey by
+	// themselves are pinned by the setup:
+	//
+	// 1. NumCPU-decoupling. LogicalCpus = runtime.NumCPU() (sampler.go, no
+	//    override seam), so the headroom trigger fires when hostBusyMean (the
+	//    60s mean of per-tick HostBusyCores) > NumCPU - 1.0. To exceed NumCPU -
+	//    1 on ANY host — including 256+-core CI runners — the busy delta is
+	//    made far larger than 100*elapsed*NumCPU can ever consume (the same
+	//    overwhelming-margin pattern as scenario 6), so the test does not
+	//    depend on the host it runs on.
+	//
+	// 2. Demand-gate-closed => Attribution unambiguous. nr_throttled=0 and no
+	//    PSI => the host-contention demand gate (pressure OR throttle) stays
+	//    CLOSED, so host-contention cannot co-fire. Saturation is the SOLE
+	//    fired cause, so Attribution=host comes from the host/container split
+	//    (the host share of HostBusyCores exceeds the UMH share), not a
+	//    severity tie-break against host-contention.
+	It("(5) SATURATION-DEGRADE-DEAD-ZONE: full dead-zone box (uncapped, no PSI, host at capacity) degrades with attribution host, cause saturation, and a non-nil hostBusyCores on the wire", func() {
+		mockFS := filesystem.NewMockFileSystem()
+		ctx := context.Background()
+		testDataPath, err := os.MkdirTemp("", "saturation-dead-zone")
+		Expect(err).NotTo(HaveOccurred())
+		defer func() { _ = os.RemoveAll(testDataPath) }()
+
+		// cpu.max="max 100000" yields Quota=&0.0; with no cpu.pressure,
+		// PsiAvailable=false, so the sample is full dead-zone (no CPU limit, no
+		// PSI).
+		const cpuMax = "max 100000\n"
+		// No /proc/cpuinfo hypervisor flag and no DMI product_name (the mock's
+		// default "file not found" for both) => Virtualized=false => steal is
+		// not a readable signal and is not processed, so steal cannot co-fire
+		// and muddle Attribution. Bare metal is valid here because
+		// HostBusyCores is readable independent of virtualization.
+		var nrPeriods, usageUsec int64
+
+		// /proc/stat first "cpu " line. Fields: user nice system idle iowait
+		// irq softirq steal guest guest_nice. Tick 0 baselines; tick 1 makes
+		// the host very busy (huge non-idle delta) so HostBusyCores fills every
+		// core. The busy delta is 5,000,000 jiffies (see invariant 1 above for
+		// the NumCPU-decoupling margin); the test sleeps ~1s between ticks, so
+		// HostBusyCores ~= 5,000,000 / 100 / 1 ~= 50,000 and hostBusyMean (the
+		// mean of [0, ~50000]) ~= 25,000 — far above the NumCPU-1 fire floor on
+		// any plausible host, so the saturation backstop fires.
+		procStatTick0 := "cpu  1000 1000 1000 8000 0 0 0 50 0 0\n"
+		// Tick 1: busy delta (user+nice+system+iowait+irq+softirq, EXCL
+		// steal/guest/guest_nice) = 5,000,000 jiffies; idle grew 1,000; steal
+		// unchanged (delta 0 -> StealFraction = 0, irrelevant on bare metal).
+		procStatTick1 := "cpu  5001000 1000 1000 9000 0 0 0 50 0 0\n"
+
+		procStat := procStatTick0
+
+		mockFS.WithReadFileFunc(func(_ context.Context, path string) ([]byte, error) {
+			switch path {
+			case "/sys/fs/cgroup/cpu.max":
+				return []byte(cpuMax), nil
+			case "/sys/fs/cgroup/cpu.stat":
+				return []byte(fmt.Sprintf(
+					"usage_usec %d\nnr_periods %d\nnr_throttled 0\nthrottled_usec 0\n",
+					usageUsec, nrPeriods,
+				)), nil
+			case "/proc/stat":
+				return []byte(procStat), nil
+			default:
+				return nil, errors.New("file not found: " + path)
+			}
+		})
+
+		svc := container_monitor.NewContainerMonitorServiceWithPath(mockFS, testDataPath)
+
+		// Tick 1 — baselines the sampler's usage_usec + /proc/stat (no deltas
+		// yet). HostBusyCores is 0 (first /proc/stat read baselines), so
+		// hostBusyMean is 0 (the 2-sample floor keeps the ring at 1 entry) and
+		// HeadroomCores = NumCPU - 0 - 1 > 0 => saturation does NOT fire yet.
+		// Pressure/throttle are absent => the verdict is healthy here.
+		usageUsec, nrPeriods, procStat = 1_000_000, 1000, procStatTick0
+		status1, err := svc.GetStatus(ctx)
+		Expect(err).NotTo(HaveOccurred())
+		// Pin the no-false-fire invariant the comment above relies on: on the
+		// single-entry baseline tick the saturation backstop must NOT fire
+		// (hostBusyMean=0 => HeadroomCores>0; usage ring below its 2-sample
+		// floor). A regression that evaluated the rings on a single entry would
+		// false-degrade every dead-zone container on its first status tick
+		// (cold start) and still leave the tick-2 assertions green.
+		Expect(status1.CPU.State).To(Equal("healthy"),
+			"SATURATION-DEGRADE-DEAD-ZONE: tick-1 baseline (single ring entry) must be healthy — the saturation backstop must not false-fire before the 2-sample floor")
+		Expect(status1.CPU.Causes).To(BeEmpty(),
+			"SATURATION-DEGRADE-DEAD-ZONE: tick-1 baseline must carry no degrade causes")
+
+		// Tick 2 puts the host at capacity, so saturation fires as the sole
+		// cause; with the demand gate closed (no pressure/throttle),
+		// attribution=host.
+		usageUsec, nrPeriods, procStat = 2_000_000, 2000, procStatTick1
+		time.Sleep(1 * time.Second)
+		status, err := svc.GetStatus(ctx)
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(status.CPU.State).To(Equal("degraded"),
+			"SATURATION-DEGRADE-DEAD-ZONE: a full dead-zone box (host at capacity, less than one core of reserve) must degrade via the saturation backstop")
+		Expect(status.CPU.Causes).To(ContainElement(
+			HaveField("Kind", BeEquivalentTo("saturation")),
+		), "SATURATION-DEGRADE-DEAD-ZONE: Causes must contain {kind:'saturation'} (the dead-zone backstop)")
+		Expect(status.CPU.Causes).ToNot(ContainElement(
+			HaveField("Kind", BeEquivalentTo("host-contention")),
+		), "SATURATION-DEGRADE-DEAD-ZONE: Causes must NOT contain {kind:'host-contention'} — the demand gate (pressure OR throttle) is closed in the dead-zone")
+		Expect(status.CPU.Attribution).To(BeEquivalentTo("host"),
+			"SATURATION-DEGRADE-DEAD-ZONE: attribution is host via the host/container split — the host (non-UMH) share of HostBusyCores exceeds the UMH share")
+		// Limited-visibility wire equivalent: the dead-zone (no CPU limit, no
+		// PSI) surfaces on the wire as the absence of the fetchable cgroup/PSI
+		// signals — CgroupCores=0 (uncapped, omitted via omitempty) and
+		// PressureAvg60 nil (PSI absent, omitted). This is the same
+		// no-limit/no-pressure state the limitedVisibilityNote names; in the
+		// degraded case ComposeMessage does not append the note, so the
+		// dead-zone is read off these wire fields instead.
+		Expect(status.CPU.CgroupCores).To(BeZero(),
+			"SATURATION-DEGRADE-DEAD-ZONE: CgroupCores is 0 (uncapped, cpu.max='max') — the wire signature of the no-CPU-limit half of the dead-zone")
+		Expect(status.CPU.PressureAvg60).To(BeNil(),
+			"SATURATION-DEGRADE-DEAD-ZONE: PressureAvg60 is nil (PSI absent) — the wire signature of the no-PSI half of the dead-zone")
+		// HostBusyCores wire field: non-nil (fetchable) because /proc/stat was
+		// readable, and the value is the large computed delta (not 0) — pinning
+		// both the fetchability and that the wire carries the real value.
+		Expect(status.CPU.HostBusyCores).ToNot(BeNil(),
+			"SATURATION-DEGRADE-DEAD-ZONE: HostBusyCores must be non-nil (fetchable) on the wire when /proc/stat is readable")
+		Expect(status.CPU.HostBusyCores).To(HaveValue(BeNumerically(">", 0)),
+			"SATURATION-DEGRADE-DEAD-ZONE: HostBusyCores must carry the computed host-busy value (> 0) on the degraded tick, not a placeholder 0")
+		Expect(status.CPUHealth).To(Equal(models.Degraded),
+			"SATURATION-DEGRADE-DEAD-ZONE: CPUHealth must be Degraded (consistent with scenarios 2/3/6/7)")
 	})
 })

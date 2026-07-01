@@ -188,6 +188,12 @@ type Sample struct {
 	// cgroup limit, so sustained high usage is the last-resort proxy via the
 	// saturation backstop latch.
 	PsiAvailable bool
+	// HostBusyCoresAvailable is the readability flag for /proc/stat's host-busy
+	// signal. It distinguishes "we read /proc/stat, the host was idle"
+	// (HostBusyCores == 0, true) from "we can't read /proc/stat at all"
+	// (HostBusyCores == 0, false). Set true by readProcStat only when the
+	// /proc/stat read+parse succeeded.
+	HostBusyCoresAvailable bool
 }
 
 // throttlePoint is one timestamped throttle-counter observation in the
