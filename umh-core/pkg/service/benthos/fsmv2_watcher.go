@@ -68,7 +68,7 @@ type benthosMonitorWatcher interface {
 // BenthosMonitorReconciler is the subset of *BenthosMonitorManager that
 // BenthosService calls. Defining it as an interface (rather than the concrete
 // *benthos_monitor_fsm.BenthosMonitorManager pointer) lets tests inject a fake
-// that records Reconcile calls — which is how the FF-on path is asserted to
+// that records Reconcile calls, which is how the FF-on path is asserted to
 // SKIP the S6 monitor reconcile. The concrete manager satisfies this interface
 // via its embedded *fsm.BaseFSMManager. The FF-off call sites are byte-identical
 // whether the field holds a concrete pointer or this interface.
@@ -81,7 +81,7 @@ type BenthosMonitorReconciler interface {
 // defaultBenthosMonitorWatcher is the production implementation: it reaches the
 // process-scoped fsmv2client singleton published at startup (inside the
 // USE_FSMV2_TRANSPORT block, cmd/main.go:278/644). USE_FSMV2_BENTHOS_MONITOR=ON
-// therefore REQUIRES USE_FSMV2_TRANSPORT=ON — if the client is nil (transport FF
+// therefore REQUIRES USE_FSMV2_TRANSPORT=ON; if the client is nil (transport FF
 // off / supervisor not built), every method fails soft (GetFresh → Unknown+err,
 // Upsert → err, Delete → no-op) rather than dereferencing nil.
 type defaultBenthosMonitorWatcher struct{}
