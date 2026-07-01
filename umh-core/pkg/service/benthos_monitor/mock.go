@@ -24,6 +24,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthosmetrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
@@ -90,7 +91,7 @@ func NewMockBenthosMonitorService() *MockBenthosMonitorService {
 		ServiceExistsFlag: false,
 		S6ServiceConfig:   nil,
 		stateFlags:        &ServiceStateFlags{},
-		metricsState:      NewBenthosMetricsState(),
+		metricsState:      benthosmetrics.NewBenthosMetricsState(),
 	}
 }
 
@@ -260,16 +261,16 @@ func (m *MockBenthosMonitorService) GenerateS6ConfigForBenthosMonitor(s6ServiceN
 // GetConfig mocks the GetConfig method for the BenthosMonitor.
 func (m *MockBenthosMonitorService) GetConfig(ctx context.Context, filesystemService filesystem.Service) (config.BenthosMonitorConfig, error) {
 	m.GetConfigCalled = true
-	
+
 	if m.GetConfigError != nil {
 		return config.BenthosMonitorConfig{}, m.GetConfigError
 	}
-	
+
 	// If a result is preset, return it
 	if m.GetConfigResult.MetricsPort != 0 {
 		return m.GetConfigResult, nil
 	}
-	
+
 	// Return a default config with the last updated port
 	return config.BenthosMonitorConfig{
 		FSMInstanceConfig: config.FSMInstanceConfig{
@@ -471,7 +472,7 @@ func (m *MockBenthosMonitorService) ServiceExists(ctx context.Context, services 
 // SetMetricsState allows tests to directly set the metrics state.
 func (m *MockBenthosMonitorService) SetMetricsState(isActive bool) {
 	if m.metricsState == nil {
-		m.metricsState = NewBenthosMetricsState()
+		m.metricsState = benthosmetrics.NewBenthosMetricsState()
 	}
 
 	m.metricsState.IsActive = isActive

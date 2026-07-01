@@ -28,6 +28,8 @@ package benthos_monitor
 import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthosmetrics"
 )
 
 // switchOutputMetrics models the prometheus output benthos emits for the
@@ -76,7 +78,7 @@ const (
 
 var _ = Describe("ENG-5006 switch output metrics", func() {
 	It("aggregates output_sent across switch routes", func() {
-		m, err := ParseMetricsFromBytes([]byte(switchOutputMetrics))
+		m, err := benthosmetrics.ParseMetricsFromBytes([]byte(switchOutputMetrics))
 		Expect(err).NotTo(HaveOccurred())
 
 		By("summing totals across all three switch routes via Total helpers")

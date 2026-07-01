@@ -61,6 +61,8 @@ import (
 	"time"
 
 	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
+
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthosmetrics"
 )
 
 var sampleMetrics = `# HELP input_connection_failed Benthos Counter metric
@@ -236,7 +238,7 @@ func BenchmarkMetricsParsing(b *testing.B) {
 	b.ResetTimer()
 
 	for range b.N {
-		_, err := ParseMetricsFromBytes([]byte(sampleMetrics))
+		_, err := benthosmetrics.ParseMetricsFromBytes([]byte(sampleMetrics))
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -270,7 +272,7 @@ func BenchmarkCompleteProcessing(b *testing.B) {
 		}
 
 		// Step 3: Parse metrics
-		_, err = ParseMetricsFromBytes(decompressedData)
+		_, err = benthosmetrics.ParseMetricsFromBytes(decompressedData)
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -328,7 +330,7 @@ func BenchmarkParseBenthosLogsWithPercentiles(b *testing.B) {
 // BenchmarkUpdateFromMetricsWithPercentiles benchmarks the UpdateFromMetrics method and reports percentiles.
 func BenchmarkUpdateFromMetricsWithPercentiles(b *testing.B) {
 	// Create a metrics state
-	metricsState := NewBenthosMetricsState()
+	metricsState := benthosmetrics.NewBenthosMetricsState()
 
 	// Create sample metrics
 	metrics := Metrics{
