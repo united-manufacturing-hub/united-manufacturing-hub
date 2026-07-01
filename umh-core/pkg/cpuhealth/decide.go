@@ -183,10 +183,10 @@ type Sample struct {
 	// reads 0 because PSI is absent" (false). Without it the dead-zone
 	// saturation backstop branch is unreachable dead code: a naive
 	// "PressureAvg60 == 0" is true both when PSI is absent AND when PSI is
-	// present but reading 0. When PsiAvailable is false (and Quota is nil and
-	// Virtualized is false) the sample is in the dead-zone — the one case where
-	// no starvation signal exists, so sustained high usage is the last-resort
-	// proxy via the saturation backstop latch.
+	// present but reading 0. When PsiAvailable is false (and Quota is nil or
+	// non-positive) the sample is in the dead-zone — no PSI signal and no
+	// cgroup limit, so sustained high usage is the last-resort proxy via the
+	// saturation backstop latch.
 	PsiAvailable bool
 }
 
@@ -291,11 +291,11 @@ type Signals struct {
 	// comment at the latch in Decide for the fire/clear conditions.
 	HostContentionFired bool
 	// LimitedVisibility is true when the sample is in the dead-zone (Quota nil
-	// or non-positive, PsiAvailable false, Virtualized false) — the blind state
-	// where no starvation signal exists. It is a signal for the caller's
-	// message, NOT a
-	// state: the verdict State is binary healthy|degraded (blind-but-quiet is
-	// healthy). It is false outside the dead-zone.
+	// or non-positive and PsiAvailable false) — a pure no-PSI/no-limit
+	// annotation independent of virtualization. It is a signal for the caller's
+	// message, NOT a state: the verdict State is binary healthy|degraded
+	// (an unsaturated dead-zone sample is healthy). It is false outside the
+	// dead-zone.
 	LimitedVisibility bool
 	// SaturationFired is the dead-zone saturation backstop latch state. The
 	// trigger has two branches selected by whether the host CPU count is known
@@ -339,7 +339,7 @@ type Verdict struct {
 // contention signal is busy, not sick, so Decide returns StateHealthy for any
 // sample that has no other cause. The ONE exception is the dead-zone
 // saturation backstop: when the sample is in the dead-zone (Quota nil or
-// non-positive, PSI absent, not virtualized — no starvation signal exists),
+// non-positive, PSI absent — no PSI signal and no cgroup limit),
 // Decide maintains a 60s-average usage fraction over a usage ring in
 // WindowState and a 60s mean of HostBusyCores. The saturation latch trigger
 // has two branches: when the host CPU count is known (LogicalCpus > 0) it
@@ -671,19 +671,21 @@ func Decide(st *WindowState, sample Sample, thresholds Thresholds) (Verdict, Sig
 
 	signals.HeadroomCores = capacity - hostBusyMean - cpuReserveCores
 
-	// Saturation backstop (dead-zone-only): the dead-zone is the one case where
-	// no starvation signal exists — Quota is nil or non-positive (uncapped → no
-	// limit), PsiAvailable is false (no PSI → pressure is structurally absent),
-	// and Virtualized is false (no steal). There, sustained high usage is the
-	// last-resort proxy. Decide computes a 60s-AVERAGE usage fraction (NOT p95 —
+	// Saturation backstop (dead-zone-only): the dead-zone is the case where no
+	// PSI signal and no cgroup limit are present — Quota is nil or non-positive
+	// (uncapped → no limit) and PsiAvailable is false (no PSI → pressure is
+	// structurally absent). On a virtualized box the steal latch may
+	// independently co-fire.
+	// There, sustained high usage is the last-resort proxy. Decide computes a 60s-AVERAGE usage fraction (NOT p95 —
 	// a sustained-headroom proxy; a brief spike must not trip it) over a usage
 	// ring in WindowState. A Schmitt latch fires when the 60s-avg >=
 	// HighUsageFraction and clears only when it drops below SaturationRecover;
 	// between the marks it holds. The 60s usage ring is pruned (reusing the
 	// throttle/steal pruning pattern). Saturation is the only NEW cause the
 	// dead-zone introduces (the only cause whose signal is absent elsewhere);
-	// throttle can co-fire from cpu.stat counter deltas regardless of Quota, so
-	// it is NOT the sole cause that can fire in the dead-zone. The trigger has
+	// throttle can co-fire from cpu.stat counter deltas regardless of Quota, and
+	// steal can co-fire on a virtualized box, so it is NOT the sole cause that
+	// can fire in the dead-zone. The trigger has
 	// two branches: when the host CPU count is known (LogicalCpus > 0) the
 	// backstop retriggers on headroom (fires when HeadroomCores < 0, i.e.
 	// hostBusyMean > capacity − cpuReserveCores — less than one core free;
@@ -693,13 +695,13 @@ func Decide(st *WindowState, sample Sample, thresholds Thresholds) (Verdict, Sig
 	// is unknown (LogicalCpus <= 0, the cgroup-known-only sub-case where a
 	// fraction is computable via CgroupCores>0) the 60s-average usage fraction
 	// remains the trigger. The guardrail: below the fire condition in the
-	// dead-zone the verdict is healthy — blind-but-quiet is healthy, never a
-	// distinct unknown state.
-	// LimitedVisibility signals the blind state to the caller regardless of
-	// the verdict.
+	// dead-zone the verdict is healthy — an unsaturated dead-zone sample is
+	// healthy, never a distinct unknown state.
+	// LimitedVisibility signals the no-PSI/no-limit state to the caller
+	// regardless of the verdict.
 	var saturationAvg float64
 
-	deadZone := (sample.Quota == nil || !(*sample.Quota > 0)) && !sample.PsiAvailable && !sample.Virtualized
+	deadZone := (sample.Quota == nil || !(*sample.Quota > 0)) && !sample.PsiAvailable
 	signals.LimitedVisibility = deadZone
 
 	if deadZone {

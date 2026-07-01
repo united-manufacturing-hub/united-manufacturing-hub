@@ -1696,7 +1696,7 @@ func TestDecide_HostContentionCause_ThrottleOnlyDemandGate(t *testing.T) {
 // proxy.
 //
 // The dead-zone predicate: Quota is nil (no limit) AND PsiAvailable is false
-// (no PSI) AND Virtualized is false (not virtualized). Sample.PsiAvailable is
+// (no PSI). Sample.PsiAvailable is
 // the readability flag that distinguishes "PSI compiled in + present" from
 // "PressureAvg60 reads 0 because PSI is absent" — without it the dead-zone
 // branch is unreachable dead code (a naive "PressureAvg60 == 0" is true both
@@ -3383,6 +3383,127 @@ func TestDecide_Saturation_HeadroomTrigger(t *testing.T) {
 		}
 		if v.State != StateDegraded {
 			t.Fatalf("State: got %q, want %q (near-full box with <1 core free degrades)", v.State, StateDegraded)
+		}
+	})
+}
+
+// TestDecide_Saturation_FiresOnVirtualizedBox pins the dead-zone admission of
+// a virtualized box: dropping the !Virtualized clause from the dead-zone
+// predicate at decide.go so the headroom-based saturation backstop fires
+// on a virtualized box with no PSI and no cgroup limit (the common UMH VM
+// deployment). The predicate is `(Quota==nil || !(*Quota>0)) && !PsiAvailable`;
+// a virtualized dead-zone sample now enters the dead-zone, headroom is
+// evaluated, and saturation fires when the box has no spare core.
+// `signals.LimitedVisibility = deadZone` is a pure no-PSI/no-limit annotation,
+// independent of virtualization.
+//
+// All sub-blocks use PsiAvailable=false + Quota=nil + CgroupCores=0 (so the
+// LogicalCpus<=0 fraction sub-case is inert) + StealFraction=0 (so the steal
+// latch at decide.go does not co-fire) + PressureAvg60=0 (so the demand
+// gate at decide.go stays closed and host-contention does not co-fire).
+// Only Virtualized and the headroom inputs (HostBusyCores, LogicalCpus) vary.
+func TestDecide_Saturation_FiresOnVirtualizedBox(t *testing.T) {
+	base := time.Date(2026, 6, 30, 12, 0, 0, 0, time.UTC)
+	thresholds := DefaultThresholds()
+
+	// virtSample builds a dead-zone sample: Quota nil (no limit), PsiAvailable
+	// false (no PSI), CgroupCores 0 (so the fraction sub-case is inert),
+	// StealFraction 0 (so the steal latch does not co-fire), PressureAvg60 0
+	// (so the demand gate stays closed and host-contention does not co-fire).
+	// capacity=LogicalCpus and headroom=LogicalCpus − 60s-mean(HostBusyCores) −
+	// cpuReserveCores. virt selects Sample.Virtualized.
+	virtSample := func(dt time.Duration, logical, hostBusy float64, virt bool) Sample {
+		return Sample{
+			Timestamp:     base.Add(dt),
+			HostBusyCores: hostBusy,
+			LogicalCpus:   logical,
+			Virtualized:   virt,
+		}
+	}
+
+	// (1) A virtualized full box degrades. 2 ticks HostBusyCores=8.0,
+	// LogicalCpus=8.0, Virtualized=true → mean=8.0, headroom=8−8−1=−1.0 < 0.
+	// With the !Virtualized clause dropped, the virtualized box enters the
+	// dead-zone, saturation is evaluated, and headroom fires. A stub that keeps
+	// `!Virtualized` fails here (healthy + no saturation + no limitedVisibility).
+	t.Run("VIRTUALIZED_FULL_BOX_DEGRADES", func(t *testing.T) {
+		st := &WindowState{}
+		var (
+			v   Verdict
+			sig Signals
+		)
+		for i := 0; i < 2; i++ {
+			v, sig = Decide(st, virtSample(time.Duration(i)*time.Second, 8.0, 8.0, true), thresholds)
+		}
+		if !sig.SaturationFired {
+			t.Fatalf("SaturationFired: got false, want true (Virtualized=true, headroom=%v < 0 → the dead-zone must admit a virtualized box with no PSI and no limit so headroom fires)", sig.HeadroomCores)
+		}
+		if v.State != StateDegraded {
+			t.Fatalf("State: got %q, want %q (a virtualized full box with no spare core degrades)", v.State, StateDegraded)
+		}
+		if !sig.LimitedVisibility {
+			t.Fatalf("LimitedVisibility: got false, want true (no PSI AND no limit → blind state; the annotation is now independent of virtualization)")
+		}
+		hasSat := false
+		for _, c := range v.Causes {
+			if c.Kind == CauseKindSaturation {
+				hasSat = true
+			}
+		}
+		if !hasSat {
+			t.Fatalf("Causes: no CauseKindSaturation present (headroom < 0 must emit the saturation cause; got %v)", v.Causes)
+		}
+	})
+
+	// (2) LimitedVisibility is an annotation INDEPENDENT of the verdict: it
+	// shows on a virtualized dead-zone sample EVEN WHEN HEALTHY. 2 ticks
+	// HostBusyCores=4.0, LogicalCpus=8.0, Virtualized=true → headroom=8−4−1=3.0
+	// > 0 → healthy, saturation does NOT fire. LimitedVisibility is true (no PSI
+	// and no limit, regardless of virtualization). A stub gating
+	// limitedVisibility on `!Virtualized` OR on the degraded verdict fails here.
+	t.Run("LIMITED_VISIBILITY_WHEN_HEALTHY", func(t *testing.T) {
+		st := &WindowState{}
+		var (
+			v   Verdict
+			sig Signals
+		)
+		for i := 0; i < 2; i++ {
+			v, sig = Decide(st, virtSample(time.Duration(i)*time.Second, 8.0, 4.0, true), thresholds)
+		}
+		if sig.SaturationFired {
+			t.Fatalf("SaturationFired: got true, want false (headroom=%v > 0 → spare core → must not fire)", sig.HeadroomCores)
+		}
+		if v.State != StateHealthy {
+			t.Fatalf("State: got %q, want %q (spare core → healthy)", v.State, StateHealthy)
+		}
+		if !sig.LimitedVisibility {
+			t.Fatalf("LimitedVisibility: got false, want true (virtualized dead-zone sample with no PSI and no limit — the annotation shows even when healthy)")
+		}
+	})
+
+	// (3) The non-virtualized dead-zone path is preserved. 2 ticks
+	// HostBusyCores=8.0, LogicalCpus=8.0, Virtualized=false → headroom=−1.0 < 0.
+	// The dead-zone admits non-virtualized boxes; it must continue to. This is a
+	// regression guard. A stub that lifts `!Virtualized` by ALSO dropping the
+	// `!PsiAvailable` clause (over-lifting) would still pass here, so this block
+	// alone does not guard the PSI clause; it guards the non-virtualized path.
+	t.Run("NON_VIRTUALIZED_REGRESSION", func(t *testing.T) {
+		st := &WindowState{}
+		var (
+			v   Verdict
+			sig Signals
+		)
+		for i := 0; i < 2; i++ {
+			v, sig = Decide(st, virtSample(time.Duration(i)*time.Second, 8.0, 8.0, false), thresholds)
+		}
+		if !sig.SaturationFired {
+			t.Fatalf("SaturationFired: got false, want true (Virtualized=false, headroom=%v < 0 → the non-virtualized dead-zone path must still fire)", sig.HeadroomCores)
+		}
+		if v.State != StateDegraded {
+			t.Fatalf("State: got %q, want %q (non-virtualized full box degrades — non-virtualized path preserved)", v.State, StateDegraded)
+		}
+		if !sig.LimitedVisibility {
+			t.Fatalf("LimitedVisibility: got false, want true (non-virtualized dead-zone sample — non-virtualized path preserved)")
 		}
 	})
 }
