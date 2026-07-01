@@ -782,7 +782,13 @@ func (s *BenthosService) GetHealthCheckAndMetrics(ctx context.Context, filesyste
 	// window freezes instead of re-feeding last-good every tick (which would
 	// drive MessagesPerTick to 0).
 	lastScan := lastBenthosMonitorObservedState.ServiceInfo.BenthosStatus.LastScan
-	if lastScan.LastUpdatedAt.After(s.lastFedScanAt) {
+	// Feed only when the scan's LastUpdatedAt CHANGED since the last feed
+	// (not strictly advancing): a backwards NTP step produces a fresh scan
+	// whose timestamp is older than the prior peak, and that must still feed
+	// (the throughput math uses count + monotonic read tick, not LastUpdatedAt).
+	// Same timestamp → Equal → skip (freezes the window on a retained
+	// last-good outage).
+	if !lastScan.LastUpdatedAt.Equal(s.lastFedScanAt) {
 		s.window.UpdateFromMetrics(benthosStatus.BenthosMetrics.Metrics, tick)
 		s.lastFedScanAt = lastScan.LastUpdatedAt
 	}

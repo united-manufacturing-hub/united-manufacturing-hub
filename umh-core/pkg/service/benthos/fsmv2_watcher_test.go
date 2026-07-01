@@ -928,3 +928,96 @@ func TestFSMv2Watcher_GetHealthCheckAndMetrics_FFOff_FreshScanSameCountFeeds(t *
 		t.Errorf("tick 2: LastCount = %d, want 18 (unchanged count must not trip counter-reset)", s.window.Input.LastCount)
 	}
 }
+
+// TestFSMv2Watcher_GetHealthCheckAndMetrics_FFOff_BackwardsScanFeeds pins the
+// ff-off-feed-backwards-parity rung: a FRESH FF-off benthos_monitor scan whose
+// LastUpdatedAt went BACKWARDS (e.g. an NTP step correction while benthos is
+// running) must STILL feed the BenthosService throughput window — advancing
+// s.window.LastTick and updating s.window.Input.LastCount to the scan's count —
+// matching pre-A1 behavior, where the feed lived inside ProcessMetricsData and
+// fired on every successful scrape regardless of timestamp direction.
+//
+// The shipped gate at benthos.go:785 (`if lastScan.LastUpdatedAt.After(
+// s.lastFedScanAt)`) wrongly skips a backwards timestamp (t0 is not After t1),
+// causing a persistent freeze until the clock re-climbs above the prior peak.
+// The throughput math (metrics_state.go updateComponentThroughput) takes only
+// count + the monotonic read tick, NOT LastUpdatedAt, so feeding a backwards
+// timestamp is safe (no corruption). The fix gates on LastUpdatedAt CHANGING
+// (!Equal) instead of strictly advancing (After).
+//
+// Forcing assertions (RED on the shipped After() gate): tick2's backwards-t0
+// scan must (a) advance s.window.LastTick to 2 (on After it stays 1 — RED),
+// (b) update s.window.Input.LastCount to 20 (on After it stays 18 — RED), and
+// (c) leave >= 2 window entries (20 > 18 → no counter-reset wipe). The existing
+// OutageFreezesWindow (same LastUpdatedAt → Equal → no feed → freeze) and
+// FreshScanSameCountFeeds (forward change → !Equal → feed) regression guards
+// MUST stay green: !Equal preserves both (same → Equal → no feed; forward →
+// !Equal → feed).
+func TestFSMv2Watcher_GetHealthCheckAndMetrics_FFOff_BackwardsScanFeeds(t *testing.T) {
+	prev := fsmv2BenthosMonitorEnabled
+	fsmv2BenthosMonitorEnabled = false
+
+	t.Cleanup(func() { fsmv2BenthosMonitorEnabled = prev })
+
+	const benthosName = "testbridge"
+
+	t1 := time.Now()
+	t0 := t1.Add(-1 * time.Second) // BEFORE t1 — an NTP backward step
+
+	monMgr := &fakeBenthosMonitorManager{
+		observedStates: []public_fsm.ObservedState{
+			ffOffObservedState(t1, 18, true), // tick 1: healthy scan (feeds + seeds)
+			ffOffObservedState(t0, 20, true), // tick 2: FRESH scan, LastUpdatedAt went BACKWARDS, count advanced to 20
+		},
+	}
+	s := NewDefaultBenthosService(benthosName, WithMonitorManager(monMgr))
+	s.s6Manager.AddInstanceForTest(s.GetS6ServiceName(benthosName), nil)
+
+	// --- Tick 1: healthy scan (t1, count=18) — feeds + seeds ---
+	const tick1 uint64 = 1
+	got1, err := s.GetHealthCheckAndMetrics(context.Background(), nil, tick1, time.Now(), benthosName, nil)
+	if err != nil {
+		t.Fatalf("tick 1: err = %v, want nil", err)
+	}
+
+	if !got1.HealthCheck.IsLive {
+		t.Fatalf("tick 1: IsLive = false, want true (healthy scan)")
+	}
+
+	if s.window.Input.LastCount != 18 {
+		t.Fatalf("tick 1: LastCount = %d, want 18 (healthy scan must seed the window)", s.window.Input.LastCount)
+	}
+
+	if !s.lastFedScanAt.Equal(t1) {
+		t.Fatalf("tick 1: lastFedScanAt = %v, want %v (must be seeded to the scan's LastUpdatedAt)", s.lastFedScanAt, t1)
+	}
+
+	// --- Tick 2: FRESH scan with LastUpdatedAt BACKWARDS (t0 < t1), count=20 ---
+	// The shipped After() gate skips t0 (t0 is not After t1) → LastTick stays 1
+	// and LastCount stays 18 — RED. The !Equal fix feeds (t0 != t1) → advances.
+	const tick2 uint64 = 2
+	got2, err := s.GetHealthCheckAndMetrics(context.Background(), nil, tick2, time.Now(), benthosName, nil)
+	if err != nil {
+		t.Fatalf("tick 2: err = %v, want nil (fresh backwards scan is served, not an error)", err)
+	}
+
+	if !got2.HealthCheck.IsLive {
+		t.Errorf("tick 2: IsLive = false, want true (the backwards scan is healthy)")
+	}
+
+	if s.window.LastTick != tick2 {
+		t.Errorf("tick 2: window.LastTick = %d, want %d (a fresh backwards-timestamp scan MUST feed — LastUpdatedAt CHANGED; the shipped After() gate wrongly skips it because t0 is not After t1, leaving LastTick frozen at 1)",
+			s.window.LastTick, tick2)
+	}
+
+	if s.window.Input.LastCount != 20 {
+		t.Errorf("tick 2: window.Input.LastCount = %d, want 20 (the backwards scan's count must be fed; the shipped After() gate skips the feed so LastCount stays 18 — RED)",
+			s.window.Input.LastCount)
+	}
+
+	// 20 > 18 → counter-reset branch must NOT fire; the prior window entry
+	// survives (the window is not wiped to a single reset entry).
+	if len(s.window.Input.Window) < 2 {
+		t.Errorf("tick 2: len(window.Input.Window) = %d, want >= 2 (count 20 > last 18 must NOT trip the counter-reset wipe)", len(s.window.Input.Window))
+	}
+}
