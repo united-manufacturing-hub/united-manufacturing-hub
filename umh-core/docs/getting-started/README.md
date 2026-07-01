@@ -10,7 +10,7 @@ No kubectl, no Kubernetes setup, just a single Docker container. Almost anything
 
 **Minimum:**
 
-* 2 vCPU
+* 4 vCPU
 * 4 GB RAM
 * 40 GB SSD
 

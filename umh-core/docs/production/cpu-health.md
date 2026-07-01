@@ -4,14 +4,15 @@ UMH watches the CPU health of each instance, reports a status, and refuses to st
 when CPU is constrained. The status tells you whether work is actually being delayed and what to do
 about it.
 
-UMH does not treat *high* CPU usage as a problem on its own. As long as it can measure whether work is
-being delayed, an instance can run near 100% and stay healthy; it's just busy. UMH raises a status
-when work is being **starved**: hitting its CPU limit, waiting for a free core, or losing CPU to
-something else on the machine. The one exception is an instance UMH can't measure at all, with no CPU
-limit and no operating-system pressure stats; there, sustained high usage is the only signal left, so
-UMH reports it as a low-confidence "CPU running near full" (see the table below) rather than staying
-silent. (For the reasoning behind this, see our write-up on why average CPU utilization is the wrong
-signal: `<!-- TODO: insert published article URL -->`.)
+UMH does not treat *high* CPU usage as a problem on its own. As long as the host has a spare core
+of headroom and can measure whether work is being delayed, an instance can run near 100% and stay
+healthy; it's just busy. UMH raises a status when work is being **starved** (hitting its CPU limit,
+waiting for a free core, or losing CPU to something else on the machine) **or when the host has no
+spare core left** — a full box has no room to absorb the next burst of work, so UMH reports it as
+degraded regardless of whether starvation can be confirmed directly. The minimum recommendation is
+4 vCPU; below that the 1-core headroom reserve leaves too little room for work. (For the reasoning
+behind this, see our write-up on why average CPU utilization is the wrong signal:
+`<!-- TODO: insert published article URL -->`.)
 
 ## What each CPU status means
 
@@ -23,7 +24,7 @@ signal: `<!-- TODO: insert published article URL -->`.)
 | **CPU contention** | Tasks inside the instance spent time waiting for a free CPU core (for example, 23% of the last minute). | Reduce the load on the instance, or give it more CPU. If other workloads share this server, they may be competing for it. |
 | **CPU taken by the server** | Other virtual machines on the same physical server took CPU this instance needed. This is outside UMH's control. | On your virtualization platform, give this VM more guaranteed CPU, or reduce the other VMs sharing the server. |
 | **Host CPU taken by other software** | The machine ran near full and most of the CPU went to software outside UMH; this instance has no reserved CPU here, so it competes for what's left. | Check what else runs on this host. Give UMH dedicated CPU (reserve or pin cores), or reduce what else runs here. A CPU *limit* caps UMH; it does not protect it from neighbours. |
-| **CPU running near full** | CPU averaged high over the last minute with no limit set and no pressure statistics, so starvation can't be confirmed, but there's little headroom left. | Set a CPU limit (the simplest fix, and it lets UMH measure starvation directly), or enable Linux pressure stats (`psi=1`). Consider adding CPU capacity. |
+| **CPU full (no headroom)** | The host had no spare CPU core for the last minute: sustained usage left less than one core free, so there is no room to absorb the next burst of work. This fires even without a CPU limit or pressure statistics (a full box is at risk regardless of whether starvation can be confirmed directly). | Add CPU capacity, reduce load, or raise the instance's CPU limit. If UMH could not confirm starvation directly (no CPU limit, no pressure stats), setting a limit or enabling Linux pressure stats (`psi=1`) adds the richer starvation causes on top. |
 
 {% hint style="info" %}
 **No CPU limit and no pressure stats?** UMH says so plainly ("limited visibility") rather than
@@ -53,10 +54,11 @@ won't flip the status, and a status won't clear until the condition actually eas
 stays stable instead of flickering.
 
 It looks at whether work is being **delayed** (throttling, waiting for a core, or CPU lost to the
-host) rather than at raw CPU usage, so an instance running near 100% can still read healthy: busy is
-not the same as starved. The exception is an instance where UMH can't measure delay at all (no CPU
-limit and no pressure stats); there it falls back to flagging sustained high usage, because it's the
-only signal left.
+host) and whether the host has a **spare core** of headroom, rather than at raw CPU usage, so an
+instance running near 100% can still read healthy: busy is not the same as starved or full. A full
+box (less than one core free for a sustained minute) reads degraded even when UMH cannot measure
+delay directly (no CPU limit, no pressure stats), because a host with no spare core has no room to
+absorb the next burst of work.
 
 ## Glossary
 
