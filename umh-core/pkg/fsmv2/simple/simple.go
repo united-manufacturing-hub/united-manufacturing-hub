@@ -40,13 +40,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/register"
 )
 
-// Status wraps the user-defined status type with the last result produced by
-// the user function.
-type Status[TStatus any] struct {
-	// Inner holds the result of the last successful user function call.
-	Inner TStatus `json:"inner"`
-}
-
 // --- private dependencies ---
 
 // simpleDeps holds mutable state shared between CollectObservedState ticks.
@@ -122,7 +115,7 @@ func (d *simpleDeps[TConfig, TStatus]) getResult() TStatus {
 // --- worker ---
 
 type simpleWorker[TConfig any, TStatus any] struct {
-	fsmv2.WorkerBase[TConfig, Status[TStatus], *simpleDeps[TConfig, TStatus]]
+	fsmv2.WorkerBase[TConfig, TStatus, *simpleDeps[TConfig, TStatus]]
 }
 
 func (w *simpleWorker[TConfig, TStatus]) GetDependencies() *simpleDeps[TConfig, TStatus] {
@@ -156,7 +149,7 @@ func (w *simpleWorker[TConfig, TStatus]) CollectObservedState(ctx context.Contex
 		d.setResult(result)
 	}
 
-	return fsmv2.NewObservation(Status[TStatus]{Inner: d.getResult()}), nil
+	return fsmv2.NewObservation(d.getResult()), nil
 }
 
 // GetInitialState returns a fresh stoppedState without touching the global
@@ -173,7 +166,7 @@ type stoppedState[TC any, TS any] struct {
 }
 
 func (s *stoppedState[TC, TS]) Next(snapAny any) fsmv2.NextResult[any, any] {
-	snap := fsmv2.ConvertWorkerSnapshot[TC, Status[TS]](snapAny)
+	snap := fsmv2.ConvertWorkerSnapshot[TC, TS](snapAny)
 
 	if snap.IsShutdownRequested {
 		return fsmv2.Transition(s, fsmv2.SignalNeedsRemoval, nil,
@@ -191,7 +184,7 @@ type runningState[TC any, TS any] struct {
 }
 
 func (s *runningState[TC, TS]) Next(snapAny any) fsmv2.NextResult[any, any] {
-	snap := fsmv2.ConvertWorkerSnapshot[TC, Status[TS]](snapAny)
+	snap := fsmv2.ConvertWorkerSnapshot[TC, TS](snapAny)
 
 	if snap.ShouldStop() {
 		return fsmv2.Transition(&stoppingState[TC, TS]{}, fsmv2.SignalNone, nil,
@@ -208,7 +201,7 @@ type stoppingState[TC any, TS any] struct {
 }
 
 func (s *stoppingState[TC, TS]) Next(snapAny any) fsmv2.NextResult[any, any] {
-	snap := fsmv2.ConvertWorkerSnapshot[TC, Status[TS]](snapAny)
+	snap := fsmv2.ConvertWorkerSnapshot[TC, TS](snapAny)
 
 	return fsmv2.Transition(&stoppedState[TC, TS]{}, fsmv2.SignalNeedsRemoval, nil,
 		"stopping complete: "+snap.StopReason(), nil)
@@ -226,7 +219,7 @@ func Register[TConfig any, TStatus any](
 	interval time.Duration,
 	fn func(ctx context.Context, cfg TConfig) (TStatus, error),
 ) {
-	register.Worker[TConfig, Status[TStatus], *simpleDeps[TConfig, TStatus]](workerType,
+	register.Worker[TConfig, TStatus, *simpleDeps[TConfig, TStatus]](workerType,
 		func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader) (fsmv2.Worker, error) {
 			w := &simpleWorker[TConfig, TStatus]{}
 			bd := w.InitBase(id, logger, sr)

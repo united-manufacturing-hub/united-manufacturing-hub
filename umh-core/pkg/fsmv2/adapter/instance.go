@@ -38,7 +38,7 @@ import (
 // The instance reads state via GetFreshObs, distinguishing Unregistered,
 // NeverObserved, Stale, and Fresh so mappers can produce clean FSMv1 states.
 //
-// TStatus is the worker's status type (e.g. simple.Status[NmapStatus]).
+// TStatus is the worker's status type (e.g. nmap_worker.NmapStatus).
 // TDomainConfig is the domain config type flowing through the fsmv1 control
 // loop (e.g. config.NmapConfig).
 type AdaptedInstance[TStatus any, TDomainConfig any] struct {

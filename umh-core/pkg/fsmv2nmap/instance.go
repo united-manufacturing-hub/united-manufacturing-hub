@@ -24,13 +24,12 @@ import (
 	fsmv2adapter "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/adapter"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/fsmv2client"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker/dynamicchildren"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/simple"
 	nmap_worker "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/nmap"
 	nmapservice "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/nmap"
 )
 
 // nmapStatusType is the observation type stored by the simple nmap worker.
-type nmapStatusType = simple.Status[nmap_worker.NmapStatus]
+type nmapStatusType = nmap_worker.NmapStatus
 
 // newNmapInstance creates an AdaptedInstance for one nmap scan target.
 // It reads via the global FSMv2Client; no local store is needed.
@@ -56,7 +55,7 @@ func nmapMapState(obs fsmv2.Observation[nmapStatusType], freshness fsmv2client.F
 	}
 
 	// Fresh — map port state.
-	portState := obs.Status.Inner.PortState
+	portState := obs.Status.PortState
 	switch portState {
 	case "open", "closed", "filtered", "unfiltered", "open|filtered", "closed|filtered", "degraded":
 		return portState
@@ -75,7 +74,7 @@ func nmapMapObservedState(cfg config.NmapConfig, obs fsmv2.Observation[nmapStatu
 		return result
 	}
 
-	inner := obs.Status.Inner
+	inner := obs.Status
 	if inner.PortState != "" || inner.ScanError != "" {
 		result.ServiceInfo = nmapservice.ServiceInfo{
 			NmapStatus: nmapservice.NmapServiceInfo{
