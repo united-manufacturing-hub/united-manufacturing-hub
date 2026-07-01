@@ -24,72 +24,87 @@ import (
 
 	publicfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/fsmv2client"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker/dynamicchildren"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
 
-// AdaptedInstance wraps a fsmv2 child worker observed via a shared StateReader
+// AdaptedInstance wraps a fsmv2 child worker observed via the global FSMv2Client
 // and satisfies publicfsm.FSMInstance.
 //
 // All lifecycle methods (CreateInstance, RemoveInstance, etc.) are no-ops
-// because fsmv2 manages its own lifecycle through the ApplicationSupervisor.
-// Callers supply MapState and MapObservedState to translate fsmv2 observations
-// into the legacy state vocabulary the rest of the system expects.
+// because fsmv2 manages its own lifecycle through the shared global runtime.
+// The instance reads state via GetFreshObs, distinguishing Unregistered,
+// NeverObserved, Stale, and Fresh so mappers can produce clean FSMv1 states.
 //
 // TStatus is the worker's status type (e.g. simple.Status[NmapStatus]).
-// TDomainConfig is the domain config type that flows through the fsmv1 control
+// TDomainConfig is the domain config type flowing through the fsmv1 control
 // loop (e.g. config.NmapConfig).
 type AdaptedInstance[TStatus any, TDomainConfig any] struct {
-	sr               deps.StateReader
-	mapState         func(fsmv2.Observation[TStatus], TDomainConfig) string
-	mapObservedState func(TDomainConfig, fsmv2.Observation[TStatus]) publicfsm.ObservedState
-	domainConfig     TDomainConfig
-	workerType       string
-	childID          string
-	desiredState     string
-	minRequiredTime  time.Duration
+	// mapState maps an observation + freshness reason to an FSMv1 state string.
+	// Unregistered/NeverObserved → return a "starting" equivalent.
+	// Stale → return a "degraded" equivalent.
+	// Fresh → inspect status fields for the actual port/process state.
+	mapState func(fsmv2.Observation[TStatus], fsmv2client.Freshness, TDomainConfig) string
+
+	// mapObservedState builds the full FSMv1 ObservedState from an observation.
+	mapObservedState func(TDomainConfig, fsmv2.Observation[TStatus], fsmv2client.Freshness) publicfsm.ObservedState
+
+	domainConfig    TDomainConfig
+	ref             dynamicchildren.Ref
+	desiredState    string
+	minRequiredTime time.Duration
+	maxAge          time.Duration
 }
 
-// NewAdaptedInstance creates an AdaptedInstance. workerType and childID must
-// match the values used when building the ApplicationSupervisor's children spec.
+// NewAdaptedInstance creates an AdaptedInstance. ref must match the Ref used in
+// Upsert/Delete calls so reads resolve to the correct child observation.
 func NewAdaptedInstance[TStatus any, TDomainConfig any](
-	sr deps.StateReader,
-	workerType, childID string,
+	ref dynamicchildren.Ref,
 	cfg TDomainConfig,
 	desiredState string,
 	minTime time.Duration,
-	mapState func(fsmv2.Observation[TStatus], TDomainConfig) string,
-	mapObs func(TDomainConfig, fsmv2.Observation[TStatus]) publicfsm.ObservedState,
+	mapState func(fsmv2.Observation[TStatus], fsmv2client.Freshness, TDomainConfig) string,
+	mapObs func(TDomainConfig, fsmv2.Observation[TStatus], fsmv2client.Freshness) publicfsm.ObservedState,
 ) *AdaptedInstance[TStatus, TDomainConfig] {
 	return &AdaptedInstance[TStatus, TDomainConfig]{
-		sr:               sr,
-		workerType:       workerType,
-		childID:          childID,
+		ref:              ref,
 		domainConfig:     cfg,
 		desiredState:     desiredState,
 		minRequiredTime:  minTime,
+		maxAge:           minTime,
 		mapState:         mapState,
 		mapObservedState: mapObs,
 	}
 }
 
-// UpdateDomainConfig replaces the stored domain config without touching the
-// childID or mappers. Call this when config values change but the identity
-// (name/workerType) stays the same.
+// UpdateDomainConfig replaces the stored domain config without touching the ref
+// or mappers. Call when config values change but identity stays the same.
 func (i *AdaptedInstance[TStatus, TDomainConfig]) UpdateDomainConfig(cfg TDomainConfig, desiredState string) {
 	i.domainConfig = cfg
 	i.desiredState = desiredState
 }
 
+func (i *AdaptedInstance[TStatus, TDomainConfig]) getFreshObs(ctx context.Context) (fsmv2.Observation[TStatus], fsmv2client.Freshness) {
+	c := fsmv2client.GetClient()
+	if c == nil {
+		return fsmv2.Observation[TStatus]{}, fsmv2client.Unregistered
+	}
+
+	obs, freshness, err := fsmv2client.GetFreshObs[TStatus](ctx, c, i.ref, i.maxAge)
+	if err != nil {
+		return fsmv2.Observation[TStatus]{}, fsmv2client.Unknown
+	}
+
+	return obs, freshness
+}
+
 // --- publicfsm.FSMInstance implementation ---
 
 func (i *AdaptedInstance[TStatus, TDomainConfig]) GetCurrentFSMState() string {
-	var obs fsmv2.Observation[TStatus]
-
-	_ = i.sr.LoadObservedTyped(context.Background(), i.workerType, i.childID, &obs)
-
-	return i.mapState(obs, i.domainConfig)
+	obs, freshness := i.getFreshObs(context.Background())
+	return i.mapState(obs, freshness, i.domainConfig)
 }
 
 func (i *AdaptedInstance[TStatus, TDomainConfig]) GetDesiredFSMState() string {
@@ -98,7 +113,6 @@ func (i *AdaptedInstance[TStatus, TDomainConfig]) GetDesiredFSMState() string {
 
 func (i *AdaptedInstance[TStatus, TDomainConfig]) SetDesiredFSMState(s string) error {
 	i.desiredState = s
-
 	return nil
 }
 
@@ -115,11 +129,8 @@ func (i *AdaptedInstance[TStatus, TDomainConfig]) Remove(_ context.Context) erro
 }
 
 func (i *AdaptedInstance[TStatus, TDomainConfig]) GetLastObservedState() publicfsm.ObservedState {
-	var obs fsmv2.Observation[TStatus]
-
-	_ = i.sr.LoadObservedTyped(context.Background(), i.workerType, i.childID, &obs)
-
-	return i.mapObservedState(i.domainConfig, obs)
+	obs, freshness := i.getFreshObs(context.Background())
+	return i.mapObservedState(i.domainConfig, obs, freshness)
 }
 
 func (i *AdaptedInstance[TStatus, TDomainConfig]) GetMinimumRequiredTime() time.Duration {

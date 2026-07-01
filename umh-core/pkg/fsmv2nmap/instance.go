@@ -21,25 +21,24 @@ import (
 	publicfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	nmapfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/nmap"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
-	fsmv2config "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/adapter"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
+	fsmv2adapter "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/adapter"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/fsmv2client"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker/dynamicchildren"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/simple"
 	nmap_worker "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/nmap"
 	nmapservice "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/nmap"
-	v2config "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 )
 
 // nmapStatusType is the observation type stored by the simple nmap worker.
 type nmapStatusType = simple.Status[nmap_worker.NmapStatus]
 
 // newNmapInstance creates an AdaptedInstance for one nmap scan target.
-func newNmapInstance(cfg config.NmapConfig, sr deps.StateReader) publicfsm.FSMInstance {
-	childID := v2config.ChildID(cfg.Name)
+// It reads via the global FSMv2Client; no local store is needed.
+func newNmapInstance(cfg config.NmapConfig) publicfsm.FSMInstance {
+	ref := dynamicchildren.Ref{WorkerType: "nmap", Name: cfg.Name}
 
-	return fsmv2config.NewAdaptedInstance[nmapStatusType, config.NmapConfig](
-		sr,
-		"nmap",
-		childID,
+	return fsmv2adapter.NewAdaptedInstance(
+		ref,
 		cfg,
 		cfg.DesiredFSMState,
 		5*time.Second,
@@ -48,9 +47,16 @@ func newNmapInstance(cfg config.NmapConfig, sr deps.StateReader) publicfsm.FSMIn
 	)
 }
 
-func nmapMapState(obs fsmv2.Observation[nmapStatusType], _ config.NmapConfig) string {
-	portState := obs.Status.Inner.PortState
+func nmapMapState(obs fsmv2.Observation[nmapStatusType], freshness fsmv2client.Freshness, _ config.NmapConfig) string {
+	switch freshness {
+	case fsmv2client.Unregistered, fsmv2client.NeverObserved, fsmv2client.Unknown:
+		return nmapfsm.OperationalStateStarting
+	case fsmv2client.Stale:
+		return "degraded"
+	}
 
+	// Fresh — map port state.
+	portState := obs.Status.Inner.PortState
 	switch portState {
 	case "open", "closed", "filtered", "unfiltered", "open|filtered", "closed|filtered", "degraded":
 		return portState
@@ -59,10 +65,14 @@ func nmapMapState(obs fsmv2.Observation[nmapStatusType], _ config.NmapConfig) st
 	}
 }
 
-func nmapMapObservedState(cfg config.NmapConfig, obs fsmv2.Observation[nmapStatusType]) publicfsm.ObservedState {
+func nmapMapObservedState(cfg config.NmapConfig, obs fsmv2.Observation[nmapStatusType], freshness fsmv2client.Freshness) publicfsm.ObservedState {
 	result := nmapfsm.NmapObservedState{
 		ObservedNmapServiceConfig: cfg.NmapServiceConfig,
 		LastStateChange:           time.Now().Unix(),
+	}
+
+	if freshness != fsmv2client.Fresh && freshness != fsmv2client.Stale {
+		return result
 	}
 
 	inner := obs.Status.Inner

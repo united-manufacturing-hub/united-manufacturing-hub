@@ -22,7 +22,8 @@ import (
 	"go.uber.org/zap"
 
 	publicfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
-	fsmv2config "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/fsmv2client"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker/dynamicchildren"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
 
@@ -38,10 +39,6 @@ type WorkerManagerSpec[TDomainConfig any] struct {
 	// Log is the sugared logger for the manager.
 	Log *zap.SugaredLogger
 
-	// UpdateSpec pushes a new children spec to the ApplicationSupervisor.
-	// Typically: func(spec) { sup.UpdateUserSpec(spec) }
-	UpdateSpec func(fsmv2config.UserSpec)
-
 	// ExtractConfigs pulls the relevant config slice from a SystemSnapshot.
 	ExtractConfigs func(snapshot publicfsm.SystemSnapshot) []TDomainConfig
 
@@ -55,17 +52,18 @@ type WorkerManagerSpec[TDomainConfig any] struct {
 	ConfigEqual func(a, b TDomainConfig) bool
 
 	// NewInstance creates an FSMInstance adapter for a config entry.
-	// The implementation typically calls adapter.NewAdaptedInstance with the
-	// domain-specific mapper functions.
 	NewInstance func(cfg TDomainConfig) publicfsm.FSMInstance
 
-	// BuildSpec marshals the current domain config map into the YAML envelope
-	// that ApplicationWorker.DeriveDesiredState expects.
-	BuildSpec func(configs map[string]TDomainConfig) fsmv2config.UserSpec
+	// RefFor builds the dynamicchildren.Ref for a config entry.
+	RefFor func(cfg TDomainConfig) dynamicchildren.Ref
+
+	// CfgFor builds the map[string]any payload for Upsert from a config entry.
+	CfgFor func(cfg TDomainConfig) (map[string]any, error)
 }
 
-// WorkerManager is a generic fsmv1-compatible manager that owns a fleet of
-// fsmv2 child workers, each wrapped in an FSMInstance adapter.
+// WorkerManager is a generic fsmv1-compatible manager that drives a fleet of
+// fsmv2 child workers via the global FSMv2Client (Upsert/Delete) and exposes
+// each child as an FSMInstance adapter.
 //
 // It satisfies the superset of publicfsm.FSMManager[any] required by provider
 // interfaces such as NmapManagerProvider.
@@ -73,20 +71,14 @@ type WorkerManager[TDomainConfig any] struct {
 	spec          WorkerManagerSpec[TDomainConfig]
 	instances     map[string]publicfsm.FSMInstance
 	domainConfigs map[string]TDomainConfig
-	cancel        context.CancelFunc
 }
 
 // NewWorkerManager creates a WorkerManager from spec.
-// cancel is called by Stop() to cancel the supervisor's context.
-func NewWorkerManager[TDomainConfig any](
-	spec WorkerManagerSpec[TDomainConfig],
-	cancel context.CancelFunc,
-) *WorkerManager[TDomainConfig] {
+func NewWorkerManager[TDomainConfig any](spec WorkerManagerSpec[TDomainConfig]) *WorkerManager[TDomainConfig] {
 	return &WorkerManager[TDomainConfig]{
 		spec:          spec,
 		instances:     make(map[string]publicfsm.FSMInstance),
 		domainConfigs: make(map[string]TDomainConfig),
-		cancel:        cancel,
 	}
 }
 
@@ -96,7 +88,6 @@ func (m *WorkerManager[TDomainConfig]) GetInstances() map[string]publicfsm.FSMIn
 
 func (m *WorkerManager[TDomainConfig]) GetInstance(n string) (publicfsm.FSMInstance, bool) {
 	inst, ok := m.instances[n]
-
 	return inst, ok
 }
 
@@ -104,12 +95,17 @@ func (m *WorkerManager[TDomainConfig]) GetManagerName() string {
 	return m.spec.ManagerName
 }
 
-// Reconcile syncs the instance map to the desired configs from the snapshot,
-// then pushes an updated children spec to the supervisor when anything changed.
+// Reconcile diffs the desired configs from the snapshot against the current
+// instance map, calling client.Upsert for new/changed entries and client.Delete
+// for removed entries. When the global client is nil (fsmv2 runtime not yet
+// started) the instance map is still updated but no Upsert/Delete calls are
+// made.
 func (m *WorkerManager[TDomainConfig]) Reconcile(ctx context.Context, snapshot publicfsm.SystemSnapshot, _ serviceregistry.Provider) (error, bool) {
 	if ctx.Err() != nil {
 		return ctx.Err(), false
 	}
+
+	client := fsmv2client.GetClient()
 
 	desired := m.spec.ExtractConfigs(snapshot)
 	changed := false
@@ -120,12 +116,14 @@ func (m *WorkerManager[TDomainConfig]) Reconcile(ctx context.Context, snapshot p
 	}
 
 	// Remove workers no longer in config.
-	for name := range m.instances {
+	for name, existing := range m.domainConfigs {
 		if _, exists := desiredNames[name]; !exists {
 			m.spec.Log.Infof("Removing worker %s (no longer in config)", name)
+			if client != nil {
+				client.Delete(m.spec.RefFor(existing))
+			}
 			delete(m.instances, name)
 			delete(m.domainConfigs, name)
-
 			changed = true
 		}
 	}
@@ -136,25 +134,34 @@ func (m *WorkerManager[TDomainConfig]) Reconcile(ctx context.Context, snapshot p
 		existing, exists := m.domainConfigs[name]
 
 		if !exists {
+			if client != nil {
+				cfgMap, err := m.spec.CfgFor(cfg)
+				if err != nil {
+					m.spec.Log.Warnf("fsmv2: build spec for %s: %v", name, err)
+				} else if err := client.Upsert(m.spec.RefFor(cfg), cfgMap); err != nil {
+					m.spec.Log.Warnf("fsmv2: upsert %s: %v", name, err)
+				}
+			}
 			m.instances[name] = m.spec.NewInstance(cfg)
 			m.domainConfigs[name] = cfg
 			m.spec.Log.Infof("Created worker %s", name)
-
 			changed = true
-
 			continue
 		}
 
 		if !m.spec.ConfigEqual(existing, cfg) {
+			if client != nil {
+				cfgMap, err := m.spec.CfgFor(cfg)
+				if err != nil {
+					m.spec.Log.Warnf("fsmv2: build spec for %s: %v", name, err)
+				} else if err := client.Upsert(m.spec.RefFor(cfg), cfgMap); err != nil {
+					m.spec.Log.Warnf("fsmv2: upsert %s: %v", name, err)
+				}
+			}
 			m.instances[name] = m.spec.NewInstance(cfg)
 			m.domainConfigs[name] = cfg
-
 			changed = true
 		}
-	}
-
-	if changed {
-		m.spec.UpdateSpec(m.spec.BuildSpec(m.domainConfigs))
 	}
 
 	return nil, changed
@@ -164,7 +171,6 @@ func (m *WorkerManager[TDomainConfig]) GetLastObservedState(serviceName string) 
 	if inst, exists := m.instances[serviceName]; exists {
 		return inst.GetLastObservedState(), nil
 	}
-
 	return nil, fmt.Errorf("instance %s not found", serviceName)
 }
 
@@ -172,7 +178,6 @@ func (m *WorkerManager[TDomainConfig]) GetCurrentFSMState(serviceName string) (s
 	if inst, exists := m.instances[serviceName]; exists {
 		return inst.GetCurrentFSMState(), nil
 	}
-
 	return "", fmt.Errorf("instance %s not found", serviceName)
 }
 
@@ -183,7 +188,6 @@ func (m *WorkerManager[TDomainConfig]) CreateSnapshot() publicfsm.ManagerSnapsho
 		instances: make(map[string]*publicfsm.FSMInstanceSnapshot, len(m.instances)),
 		snapTime:  time.Now(),
 	}
-
 	for name, inst := range m.instances {
 		snap.instances[name] = &publicfsm.FSMInstanceSnapshot{
 			ID:           name,
@@ -191,16 +195,11 @@ func (m *WorkerManager[TDomainConfig]) CreateSnapshot() publicfsm.ManagerSnapsho
 			DesiredState: inst.GetDesiredFSMState(),
 		}
 	}
-
 	return snap
 }
 
-// Stop cancels the supervisor's context.
-func (m *WorkerManager[TDomainConfig]) Stop() {
-	if m.cancel != nil {
-		m.cancel()
-	}
-}
+// Stop is a no-op: the fsmv2 global runtime is managed externally.
+func (m *WorkerManager[TDomainConfig]) Stop() {}
 
 // workerManagerSnapshot implements publicfsm.ManagerSnapshot.
 type workerManagerSnapshot struct {
