@@ -52,6 +52,15 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/register"
 	fsmv2sentry "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/sentry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/application"
+	// Blank-import the benthos_monitor state subpackage so its init() registers
+	// the worker's initial state (fsmv2.RegisterInitialState). Unlike the
+	// application worker, benthos_monitor/worker.go cannot blank-import its own
+	// state subpackage (state imports the parent for WorkerTypeName + the
+	// Config/Status types, which would be an import cycle), so the registration
+	// must happen here at the binary root. Without this, the supervisor cannot
+	// instantiate a benthos_monitor child and GetFresh returns Unregistered for
+	// every bridge under USE_FSMV2_BENTHOS_MONITOR.
+	_ "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/benthos_monitor/state"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker/dynamicchildren"
@@ -626,6 +635,7 @@ children:
 	fsmv2Logger = fsmv2Logger.Desugar().WithOptions(zap.WrapCore(fsmv2Hook.Wrap)).Sugar()
 
 	fsmv2Deps := map[string]any{}
+
 	if configData.Agent.UseFSMv2MemoryCleanup {
 		register.SetDeps[*persistenceWorker.PersistenceDependencies](persistenceWorker.WorkerTypeName, persistenceWorker.NewStoreOnlyDependencies(store))
 	}
