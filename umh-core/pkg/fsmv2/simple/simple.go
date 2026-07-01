@@ -40,29 +40,26 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/register"
 )
 
-// Status wraps the user-defined status type with framework metadata produced
-// by the simple worker on each observation cycle.
+// Status wraps the user-defined status type with the last result produced by
+// the user function.
 type Status[TStatus any] struct {
 	// Inner holds the result of the last successful user function call.
 	Inner TStatus `json:"inner"`
-	// ShouldRun indicates whether the interval has elapsed and the function
-	// will be dispatched on the next tick.
-	ShouldRun bool `json:"shouldRun"`
 }
 
 // --- private dependencies ---
 
-// simpleDeps holds mutable state shared between CollectObservedState and the
-// runAction. All fields are protected by mu.
+// simpleDeps holds mutable state shared between CollectObservedState ticks.
+// All fields are protected by mu.
 type simpleDeps[TConfig any, TStatus any] struct {
 	*deps.BaseDependencies
 
-	fn         func(ctx context.Context, cfg TConfig) (TStatus, error)
-	mu         sync.RWMutex
-	cfg        TConfig
+	fn        func(ctx context.Context, cfg TConfig) (TStatus, error)
+	mu        sync.RWMutex
+	cfg       TConfig
 	lastResult TStatus
-	lastRunAt  time.Time
-	interval   time.Duration
+	lastRunAt time.Time
+	interval  time.Duration
 }
 
 func newSimpleDeps[TConfig any, TStatus any](
@@ -91,27 +88,11 @@ func (d *simpleDeps[TConfig, TStatus]) getConfig() TConfig {
 	return d.cfg
 }
 
-// ShouldRun returns true when the interval has elapsed since the last run.
-// On the very first call (lastRunAt is zero) it returns true immediately.
-func (d *simpleDeps[TConfig, TStatus]) ShouldRun() bool {
+func (d *simpleDeps[TConfig, TStatus]) shouldRun() bool {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
 
-	if d.lastRunAt.IsZero() {
-		return true
-	}
-
-	return time.Since(d.lastRunAt) >= d.interval
-}
-
-// markRunAttempt records the current time as the last run attempt regardless of
-// success or failure, so ShouldRun respects the configured cadence even when the
-// user function errors.
-func (d *simpleDeps[TConfig, TStatus]) markRunAttempt() {
-	d.mu.Lock()
-	defer d.mu.Unlock()
-
-	d.lastRunAt = time.Now()
+	return d.lastRunAt.IsZero() || time.Since(d.lastRunAt) >= d.interval
 }
 
 func (d *simpleDeps[TConfig, TStatus]) setResult(r TStatus) {
@@ -119,6 +100,16 @@ func (d *simpleDeps[TConfig, TStatus]) setResult(r TStatus) {
 	defer d.mu.Unlock()
 
 	d.lastResult = r
+	d.lastRunAt = time.Now()
+}
+
+// markRunAttempt records the current time regardless of success, so a failed
+// fn call still advances the interval instead of hammering on every tick.
+func (d *simpleDeps[TConfig, TStatus]) markRunAttempt() {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	d.lastRunAt = time.Now()
 }
 
 func (d *simpleDeps[TConfig, TStatus]) getResult() TStatus {
@@ -145,21 +136,27 @@ func (w *simpleWorker[TConfig, TStatus]) GetDependencies() *simpleDeps[TConfig, 
 	return d
 }
 
-// CollectObservedState extracts the current config from the desired state,
-// checks whether the interval has elapsed, and returns an observation that the
-// state machine uses to decide whether to dispatch a run action.
-func (w *simpleWorker[TConfig, TStatus]) CollectObservedState(_ context.Context, desired fsmv2.DesiredState) (fsmv2.ObservedState, error) {
+// CollectObservedState extracts the current config from the desired state and,
+// when the configured interval has elapsed, calls the user function in-place.
+// The result is returned as the observation; no action dispatch is needed.
+func (w *simpleWorker[TConfig, TStatus]) CollectObservedState(ctx context.Context, desired fsmv2.DesiredState) (fsmv2.ObservedState, error) {
 	d := w.GetDependencies()
 
 	cfg := fsmv2.ExtractConfig[TConfig](desired)
 	d.setConfig(cfg)
 
-	status := Status[TStatus]{
-		Inner:     d.getResult(),
-		ShouldRun: d.ShouldRun(),
+	if d.shouldRun() {
+		d.markRunAttempt()
+
+		result, err := d.fn(ctx, d.getConfig())
+		if err != nil {
+			return nil, err
+		}
+
+		d.setResult(result)
 	}
 
-	return fsmv2.NewObservation(status), nil
+	return fsmv2.NewObservation(Status[TStatus]{Inner: d.getResult()}), nil
 }
 
 // GetInitialState returns a fresh stoppedState without touching the global
@@ -201,13 +198,7 @@ func (s *runningState[TC, TS]) Next(snapAny any) fsmv2.NextResult[any, any] {
 			"stop required: "+snap.StopReason(), nil)
 	}
 
-	if snap.Status.ShouldRun {
-		return fsmv2.Transition(s, fsmv2.SignalNone,
-			&runAction[TC, TS]{},
-			"interval elapsed, dispatching run", nil)
-	}
-
-	return fsmv2.Transition(s, fsmv2.SignalNone, nil, "running: waiting for interval", nil)
+	return fsmv2.Transition(s, fsmv2.SignalNone, nil, "running", nil)
 }
 
 func (s *runningState[TC, TS]) String() string { return "running" }
@@ -224,25 +215,6 @@ func (s *stoppingState[TC, TS]) Next(snapAny any) fsmv2.NextResult[any, any] {
 }
 
 func (s *stoppingState[TC, TS]) String() string { return "stopping" }
-
-// --- action ---
-
-type runAction[TC any, TS any] struct{}
-
-func (a *runAction[TC, TS]) Execute(ctx context.Context, d *simpleDeps[TC, TS]) error {
-	d.markRunAttempt()
-
-	result, err := d.fn(ctx, d.getConfig())
-	if err != nil {
-		return err
-	}
-
-	d.setResult(result)
-
-	return nil
-}
-
-func (a *runAction[TC, TS]) Name() string { return "run" }
 
 // --- public registration ---
 
