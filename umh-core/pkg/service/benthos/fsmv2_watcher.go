@@ -29,6 +29,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/env"
 	public_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	benthos_monitor_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos_monitor"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/fsmv2client"
 	bmworker "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/benthos_monitor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker/dynamicchildren"
@@ -113,23 +114,25 @@ func (defaultBenthosMonitorWatcher) Delete(ref dynamicchildren.Ref) {
 }
 
 // mapFromBenthosMonitorState translates a benthos_monitor desired FSM state
-// (the vocabulary the v1 monitor manager used) into the worker's child-spec
-// state vocabulary that the dynamicchildren Upsert expects.
+// (the vocabulary the v1 monitor manager used) into the child-spec desired
+// state vocabulary (config.DesiredStateRunning / config.DesiredStateStopped)
+// that the dynamicchildren Upsert stores on BaseUserSpec.State.
 //
-// "active" maps to "running" (the monitor is running and metrics are OK).
-// "benthos_monitoring_stopped", "benthos_monitoring_stopping", and
-// "benthos_monitoring_starting" all map to "stopped" (the monitor is not in a
-// steady running state). Any other value (including lifecycle states and
-// "degraded") defaults to "stopped".
+// "active" maps to DesiredStateRunning. "benthos_monitoring_stopped",
+// "benthos_monitoring_stopping", and "benthos_monitoring_starting" all map to
+// DesiredStateStopped (the monitor is not in a steady running state). Any
+// other value (including lifecycle states and "degraded") defaults to
+// DesiredStateStopped. Returning the typed constants means a typo in the
+// return value is a compile error, not a silently misrouted child lifecycle.
 func mapFromBenthosMonitorState(state string) string {
 	switch state {
 	case benthos_monitor_fsm.OperationalStateActive:
-		return "running"
+		return config.DesiredStateRunning
 	case benthos_monitor_fsm.OperationalStateStopped,
 		benthos_monitor_fsm.OperationalStateStopping,
 		benthos_monitor_fsm.OperationalStateStarting:
-		return "stopped"
+		return config.DesiredStateStopped
 	default:
-		return "stopped"
+		return config.DesiredStateStopped
 	}
 }
