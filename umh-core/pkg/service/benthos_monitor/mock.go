@@ -24,7 +24,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthosmetrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
@@ -50,8 +49,6 @@ type MockBenthosMonitorService struct {
 	// State control for FSM testing
 	stateFlags *ServiceStateFlags
 
-	// Mock metrics state
-	metricsState *BenthosMetricsState
 	// Return values for each method
 	GenerateS6ConfigForBenthosMonitorResult s6serviceconfig.S6ServiceConfig
 	GetConfigResult                         config.BenthosMonitorConfig
@@ -91,7 +88,6 @@ func NewMockBenthosMonitorService() *MockBenthosMonitorService {
 		ServiceExistsFlag: false,
 		S6ServiceConfig:   nil,
 		stateFlags:        &ServiceStateFlags{},
-		metricsState:      benthosmetrics.NewBenthosMetricsState(),
 	}
 }
 
@@ -102,9 +98,7 @@ func (m *MockBenthosMonitorService) SetServiceState(flags ServiceStateFlags) {
 		m.ServiceState = &ServiceInfo{
 			BenthosStatus: BenthosMonitorStatus{
 				LastScan: &BenthosMetricsScan{
-					BenthosMetrics: &BenthosMetrics{
-						MetricsState: m.metricsState,
-					},
+					BenthosMetrics: &BenthosMetrics{},
 				},
 			},
 		}
@@ -117,14 +111,9 @@ func (m *MockBenthosMonitorService) SetServiceState(flags ServiceStateFlags) {
 		m.ServiceState.S6FSMState = s6fsm.OperationalStateStopped
 	}
 
-	// Update the metrics state based on IsMetricsActive
-	if flags.IsMetricsActive {
-		m.metricsState.IsActive = true
-	} else {
-		m.metricsState.IsActive = false
-	}
-
-	// Store the flags
+	// Store the flags. IsMetricsActive is retained on the flags (read via
+	// GetServiceState); the mock no longer carries a MetricsState —
+	// BenthosService owns and feeds the window from the returned Metrics.
 	m.stateFlags = &flags
 }
 
@@ -303,7 +292,9 @@ func (m *MockBenthosMonitorService) Status(ctx context.Context, services service
 			LastUpdatedAt:  m.LastScanTime,
 		}
 		if m.ServiceState.BenthosStatus.LastScan.BenthosMetrics != nil {
-			m.ServiceState.BenthosStatus.LastScan.BenthosMetrics.MetricsState = m.metricsState
+			// BenthosService owns and feeds the window now; the mock returns
+			// a nil MetricsState so the service's own window is used.
+			m.ServiceState.BenthosStatus.LastScan.BenthosMetrics.MetricsState = nil
 		}
 
 		return *m.ServiceState, m.StatusError
@@ -470,26 +461,32 @@ func (m *MockBenthosMonitorService) ServiceExists(ctx context.Context, services 
 }
 
 // SetMetricsState allows tests to directly set the metrics state.
+//
+// After the window ownership moved from BenthosMonitorService to
+// BenthosService, the mock no longer carries a MetricsState. Instead it
+// returns Metrics whose counters yield the requested IsActive when
+// BenthosService feeds its own window via UpdateFromMetrics: a non-zero
+// Received makes the first feed active (MessagesPerTick > 0), zero makes it
+// inactive.
 func (m *MockBenthosMonitorService) SetMetricsState(isActive bool) {
-	if m.metricsState == nil {
-		m.metricsState = benthosmetrics.NewBenthosMetricsState()
-	}
-
-	m.metricsState.IsActive = isActive
-
-	// Update the service state if it existsSetMetricsState
 	if m.ServiceState != nil && m.ServiceState.BenthosStatus.LastScan != nil {
+		var received int64
+		if isActive {
+			received = 1
+		}
+
 		m.ServiceState.BenthosStatus.LastScan.BenthosMetrics = &BenthosMetrics{
 			Metrics: Metrics{
 				Inputs: map[string]InputInstance{
-					"root.input": {Path: "root.input", ConnectionUp: 1},
+					"root.input": {Path: "root.input", Received: received, ConnectionUp: 1},
 				},
 				Outputs: map[string]OutputInstance{
-					"root.output": {Path: "root.output", ConnectionUp: 1},
+					"root.output": {Path: "root.output", Sent: received, ConnectionUp: 1},
 				},
 			},
+			// nil: BenthosService owns and feeds the window now.
+			MetricsState: nil,
 		}
-		m.ServiceState.BenthosStatus.LastScan.BenthosMetrics.MetricsState = m.metricsState
 	}
 }
 
@@ -499,9 +496,7 @@ func (m *MockBenthosMonitorService) SetMockLogs(logs []s6service.LogEntry) {
 		m.ServiceState = &ServiceInfo{
 			BenthosStatus: BenthosMonitorStatus{
 				LastScan: &BenthosMetricsScan{
-					BenthosMetrics: &BenthosMetrics{
-						MetricsState: m.metricsState,
-					},
+					BenthosMetrics: &BenthosMetrics{},
 				},
 			},
 		}

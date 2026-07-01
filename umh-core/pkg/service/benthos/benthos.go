@@ -32,7 +32,9 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos_monitor"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthosmetrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/standarderrors"
@@ -40,6 +42,8 @@ import (
 
 	benthos_monitor_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos_monitor"
 	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/fsmv2client"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker/dynamicchildren"
 	"gopkg.in/yaml.v3"
 
 	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
@@ -64,6 +68,12 @@ const (
 	//
 	// Reference: https://github.com/gopcua/opcua/blob/main/debug/debug.go
 	OPCDebugEnvVar = "OPC_DEBUG"
+
+	// benthosMonitorMaxAge is the Freshness window the FF-on read path passes
+	// to GetFresh: an observation older than this is Stale (the watcher is
+	// wedged or slow). 10s mirrors the v1 monitor's scrape cadence so a single
+	// missed scrape does not flip a healthy bridge to Stale.
+	benthosMonitorMaxAge = 10 * time.Second
 )
 
 // IBenthosService is the interface for managing Benthos services.
@@ -194,6 +204,13 @@ func (bs *BenthosStatus) CopyBenthosLogs(src []s6service.LogEntry) error {
 	return nil
 }
 
+// upsertStuckThreshold is the number of consecutive FF-on watcher Upsert
+// failures for one bridge after which a single Sentry warning is emitted, so
+// a bridge whose monitor child-spec never lands (stuck Unregistered) is
+// distinguishable from a transient per-tick Upsert blip in logs and Sentry.
+// The counter resets on the next successful Upsert and on Remove.
+const upsertStuckThreshold = 3
+
 // BenthosService is the default implementation of the IBenthosService interface.
 type BenthosService struct {
 	s6Service s6service.Service // S6 service for direct S6 operations
@@ -201,7 +218,40 @@ type BenthosService struct {
 
 	s6Manager *s6fsm.S6Manager
 
-	benthosMonitorManager *benthos_monitor_fsm.BenthosMonitorManager
+	benthosMonitorManager BenthosMonitorReconciler
+
+	// window is the per-bridge BenthosMetricsState owned by BenthosService.
+	// On the FF-off path it is fed from the metrics returned by the S6 monitor
+	// during GetHealthCheckAndMetrics; on the FF-on path it is fed from
+	// GetFresh (wired behind USE_FSMV2_BENTHOS_MONITOR). One BenthosService
+	// exists per bridge, so one window per bridge.
+	window *benthosmetrics.BenthosMetricsState
+
+	// lastFedScanAt is the LastUpdatedAt of the last scan fed into the window
+	// on the FF-off path. The FF-off feed (GetHealthCheckAndMetrics) is gated
+	// on it so the window is fed only when the monitor produced a new scan,
+	// matching the earlier behavior where the feed lived inside
+	// ProcessMetricsData and fired only on a successful parse. On a benthos-down
+	// outage the monitor retains last-good (its action returns err without
+	// updating ObservedState.ServiceInfo), so LastUpdatedAt stops changing and
+	// the window freezes instead of re-feeding last-good every tick (which
+	// would drive MessagesPerTick to 0). Reset to the zero time alongside the
+	// window on Remove so a re-added bridge feeds fresh.
+	lastFedScanAt time.Time
+
+	// fsmv2Watcher is the FF-on read seam: behind USE_FSMV2_BENTHOS_MONITOR
+	// GetHealthCheckAndMetrics reads the benthos_monitor worker's published
+	// BenthosMonitorStatus through it instead of the v1 monitor manager. The
+	// production default delegates to the process-scoped fsmv2client; tests
+	// inject a fake via WithFSMv2BenthosWatcher.
+	fsmv2Watcher benthosMonitorWatcher
+
+	// upsertFailures counts consecutive FF-on watcher Upsert failures per
+	// bridge (keyed by cfg.Name, the S6 service name). It only surfaces a
+	// Sentry warning at upsertStuckThreshold; Upsert stays non-fatal and the
+	// next tick re-Upserts. Reset on a successful Upsert and on Remove.
+	// ReconcileManager is the only writer, so no mutex is needed.
+	upsertFailures map[string]int
 
 	// -----------------------------------------------------------------------------
 	// 🌶️  Hot-path YAML-parsing cache
@@ -260,9 +310,19 @@ func WithS6Service(s6Service s6service.Service) BenthosServiceOption {
 }
 
 // WithMonitorManager sets a custom monitor manager for the BenthosService.
-func WithMonitorManager(monitorManager *benthos_monitor_fsm.BenthosMonitorManager) BenthosServiceOption {
+func WithMonitorManager(monitorManager BenthosMonitorReconciler) BenthosServiceOption {
 	return func(s *BenthosService) {
 		s.benthosMonitorManager = monitorManager
+	}
+}
+
+// WithFSMv2BenthosWatcher injects a fake benthosMonitorWatcher for tests of the
+// FF-on (USE_FSMV2_BENTHOS_MONITOR) read path. Production code leaves the
+// default (defaultBenthosMonitorWatcher, which delegates to fsmv2client) in
+// place.
+func WithFSMv2BenthosWatcher(w benthosMonitorWatcher) BenthosServiceOption {
+	return func(s *BenthosService) {
+		s.fsmv2Watcher = w
 	}
 }
 
@@ -282,6 +342,9 @@ func NewDefaultBenthosService(benthosName string, opts ...BenthosServiceOption) 
 		s6Manager:             s6fsm.NewS6Manager(managerName),
 		s6Service:             s6service.NewDefaultService(),
 		benthosMonitorManager: benthos_monitor_fsm.NewBenthosMonitorManager(benthosName),
+		window:                benthosmetrics.NewBenthosMetricsState(),
+		fsmv2Watcher:          defaultBenthosMonitorWatcher{},
+		upsertFailures:        make(map[string]int),
 	}
 
 	// Apply options
@@ -614,6 +677,82 @@ func (s *BenthosService) GetHealthCheckAndMetrics(ctx context.Context, filesyste
 	// Get the last observed state of the benthos monitor
 	s6ServiceName := s.GetS6ServiceName(benthosName)
 
+	if fsmv2BenthosMonitorEnabled {
+		// FF-on: read the benthos_monitor worker's published
+		// BenthosMonitorStatus through the fsmv2 watcher instead of the v1
+		// monitor manager. The ref Name MUST be s6ServiceName ("benthos-"+name):
+		// the monitor FSM keys on it; using raw benthosName makes Contains
+		// false and every read returns Unregistered.
+		ref := dynamicchildren.Ref{WorkerType: "benthos_monitor", Name: s6ServiceName}
+
+		status, res, err := s.fsmv2Watcher.GetFresh(ctx, ref, benthosMonitorMaxAge)
+		if err != nil {
+			// Unknown: GetFresh could not classify the observation (a nil
+			// fsmv2 client, since USE_FSMV2_BENTHOS_MONITOR=ON requires
+			// USE_FSMV2_TRANSPORT=ON so a nil client is misconfig, or a
+			// store read error). Return the raw err; it hard-propagates
+			// through Status() as a "failed to get health check" error
+			// (benthos.go Status -> actions.go getServiceStatus), which is
+			// consistent with the FF-off path's treatment of unrecognized
+			// monitor errors. It does NOT degrade silently.
+			return BenthosStatus{}, err
+		}
+
+		switch res {
+		case fsmv2client.Fresh:
+			if status.Stopped {
+				// A stopped bridge reads Fresh with Stopped=true, so Scan is
+				// the zero value (no scrape ran). Return a not-unhealthy empty
+				// status; do not treat the zero IsLive as Degraded (a stopped
+				// bridge is not a down bridge).
+				return BenthosStatus{}, nil
+			}
+
+			// Feed the window only when the scrape produced metrics. A
+			// benthos-down observation has MetricsAvailable=false; feeding those
+			// zeros would trip the counter-reset branch and wipe the window,
+			// spiking the rate on recovery.
+			if status.Scan.MetricsAvailable {
+				s.window.UpdateFromMetrics(status.Scan.Metrics, tick)
+			}
+
+			// No client-side last-good cache: the store is the cache (the Stale
+			// branch below returns stored last-good). Return the raw IsLive.
+			return BenthosStatus{
+				HealthCheck: status.Scan.HealthCheck,
+				BenthosMetrics: benthosmetrics.BenthosMetrics{
+					Metrics:      status.Scan.Metrics,
+					MetricsState: s.window,
+				},
+			}, nil
+
+		case fsmv2client.Stale:
+			// CollectedAt is older than maxAge. The store is the cache, so
+			// Stale is the one branch that returns stored last-good: serve the
+			// stale scan's metrics but override IsLive=false. A slow collector
+			// affects every bridge, not just one, so stopped bridges are not
+			// exempted (they read unhealthy too). Do not feed the window; only a
+			// Fresh scan with metrics feeds. Returning last-good + unhealthy
+			// (rather than an error) lets the reconcile path degrade
+			// non-fatally.
+			staleHC := status.Scan.HealthCheck
+			staleHC.IsLive = false
+
+			return BenthosStatus{
+				HealthCheck: staleHC,
+				BenthosMetrics: benthosmetrics.BenthosMetrics{
+					Metrics:      status.Scan.Metrics,
+					MetricsState: s.window,
+				},
+			}, nil
+
+		default:
+			// Unregistered / NeverObserved → serve empty/not-ready (warming);
+			// Unknown handled above (err != nil).
+			return BenthosStatus{}, nil
+		}
+	}
+
 	lastObservedState, err := s.benthosMonitorManager.GetLastObservedState(s6ServiceName)
 	if err != nil {
 		return BenthosStatus{}, fmt.Errorf("failed to get last observed state in GetHealthCheckAndMetrics: %w", err)
@@ -649,6 +788,31 @@ func (s *BenthosService) GetHealthCheckAndMetrics(ctx context.Context, filesyste
 	if !lastBenthosMonitorObservedState.ServiceInfo.BenthosStatus.IsRunning {
 		return BenthosStatus{}, ErrBenthosMonitorNotRunning
 	}
+
+	// Feed BenthosService's own window from the metrics the S6 monitor returned
+	// and point the status at it. This replaces the monitor's window pointer
+	// (which is now nil) with this service's owned window. The feed is gated on
+	// scan-freshness: feed only when the monitor produced a new scan
+	// (LastUpdatedAt changed since the last feed). This matches the earlier
+	// behavior where the feed lived inside ProcessMetricsData and fired only on
+	// a successful parse. On a benthos-down outage the monitor retains
+	// last-good (its action returns err without updating
+	// ObservedState.ServiceInfo), so LastUpdatedAt stops changing and the
+	// window freezes instead of re-feeding last-good every tick (which would
+	// drive MessagesPerTick to 0).
+	lastScan := lastBenthosMonitorObservedState.ServiceInfo.BenthosStatus.LastScan
+	// Feed only when the scan's LastUpdatedAt CHANGED since the last feed
+	// (not strictly advancing): a backwards NTP step produces a fresh scan
+	// whose timestamp is older than the prior peak, and that must still feed
+	// (the throughput math uses count + monotonic read tick, not LastUpdatedAt).
+	// Same timestamp → Equal → skip (freezes the window on a retained
+	// last-good outage).
+	if !lastScan.LastUpdatedAt.Equal(s.lastFedScanAt) {
+		s.window.UpdateFromMetrics(benthosStatus.BenthosMetrics.Metrics, tick)
+		s.lastFedScanAt = lastScan.LastUpdatedAt
+	}
+
+	benthosStatus.BenthosMetrics.MetricsState = s.window
 
 	return benthosStatus, nil
 }
@@ -836,6 +1000,14 @@ func (s *BenthosService) RemoveBenthosFromS6Manager(
 	s.s6ServiceConfigs = sliceRemoveByName(s.s6ServiceConfigs, s6Name)
 	s.benthosMonitorConfigs = sliceRemoveMonitorByName(s.benthosMonitorConfigs, s6Name)
 
+	// Under FF-on, tell the FSMv2 watcher to drop this child-spec. The ref
+	// Name is s6Name (the s6ServiceName the config was keyed on, NOT raw
+	// benthosName). Idempotent: Delete on an already-removed ref is a no-op.
+	if fsmv2BenthosMonitorEnabled {
+		s.fsmv2Watcher.Delete(dynamicchildren.Ref{WorkerType: "benthos_monitor", Name: s6Name})
+		delete(s.upsertFailures, s6Name)
+	}
+
 	// ------------------------------------------------------------------
 	// 2) Are the instances already gone?
 	// ------------------------------------------------------------------
@@ -848,6 +1020,14 @@ func (s *BenthosService) RemoveBenthosFromS6Manager(
 		return fmt.Errorf("%w: monitor instance state=%s",
 			standarderrors.ErrRemovalPending, inst.GetCurrentFSMState())
 	}
+
+	// Reset the per-bridge window now that the bridge is really gone. This
+	// mirrors the previous monitor-side reset (benthos_monitor.go) and keeps
+	// the window idempotent across a remove → re-add cycle for the same name.
+	// lastFedScanAt is reset alongside so a re-added bridge (whose first scan
+	// lands with a LastUpdatedAt > zero time) feeds the window fresh.
+	s.window = benthosmetrics.NewBenthosMetricsState()
+	s.lastFedScanAt = time.Time{}
 
 	// Everything really removed ➜ success, idempotent
 	return nil
@@ -971,6 +1151,39 @@ func (s *BenthosService) ReconcileManager(ctx context.Context, services servicer
 	s6Err, s6Reconciled := s.s6Manager.Reconcile(ctx, s6Snapshot, services)
 	if s6Err != nil {
 		return fmt.Errorf("failed to reconcile S6 manager: %w", s6Err), false
+	}
+
+	if fsmv2BenthosMonitorEnabled {
+		// Under FF-on, push each monitor config to the FSMv2 watcher via Upsert
+		// and SKIP the S6 monitor manager.Reconcile entirely, so the S6 fork
+		// tree never spawns (the CPU saving). Upsert errors are logged and
+		// swallowed (non-fatal): the next tick re-Upserts, so a single bad
+		// config must not fail the whole reconcile.
+		for _, cfg := range s.benthosMonitorConfigs {
+			ref := dynamicchildren.Ref{WorkerType: "benthos_monitor", Name: cfg.Name}
+			if upsertErr := s.fsmv2Watcher.Upsert(ref, map[string]any{
+				"state":       mapFromBenthosMonitorState(cfg.DesiredFSMState),
+				"metricsPort": cfg.MetricsPort,
+			}); upsertErr != nil {
+				s.logger.Errorf("fsmv2 watcher Upsert failed for %s: %v", cfg.Name, upsertErr)
+
+				s.upsertFailures[cfg.Name]++
+				if s.upsertFailures[cfg.Name] == upsertStuckThreshold {
+					// A persistently-failing Upsert leaves the bridge's monitor
+					// child-spec Unregistered, so the read path serves an empty
+					// (not-unhealthy) BenthosStatus and the bridge reads as
+					// healthy to MC. Surface one warning at the threshold so a
+					// stuck bridge is distinguishable from a transient blip.
+					sentry.ReportIssuef(sentry.IssueTypeWarning, s.logger,
+						"benthos_monitor child-spec Upsert stuck for %s: %d consecutive reconcile failures (last: %v)",
+						cfg.Name, s.upsertFailures[cfg.Name], upsertErr)
+				}
+			} else {
+				delete(s.upsertFailures, cfg.Name)
+			}
+		}
+
+		return nil, true
 	}
 
 	// Also reconcile the benthos monitor
