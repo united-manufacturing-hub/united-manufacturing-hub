@@ -126,6 +126,6 @@ func BenchmarkObserve(b *testing.B) {
 	b.ReportAllocs()
 
 	for range b.N {
-		_, _ = benthosmetrics.Observe(ctx, http.DefaultClient, port)
+		_, _ = benthosmetrics.Observe(ctx, http.DefaultClient, port, nil)
 	}
 }

@@ -112,7 +112,7 @@ func (w *BenthosMonitorWorker) CollectObservedState(ctx context.Context, desired
 		}), nil
 	}
 
-	scan, err := benthosmetrics.Observe(ctx, w.client, cfg.MetricsPort)
+	scan, err := benthosmetrics.Observe(ctx, w.client, cfg.MetricsPort, w.Logger())
 	if err != nil {
 		return nil, err
 	}

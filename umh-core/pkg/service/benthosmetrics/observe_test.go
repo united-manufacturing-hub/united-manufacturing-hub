@@ -15,7 +15,9 @@
 package benthosmetrics_test
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"net"
 	"net/http"
@@ -23,9 +25,11 @@ import (
 	"net/url"
 	"reflect"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthosmetrics"
 )
 
@@ -123,7 +127,7 @@ func TestObserve_HappyPath(t *testing.T) {
 
 	port := portFromURL(t, srv.URL)
 
-	scan, err := benthosmetrics.Observe(context.Background(), http.DefaultClient, port)
+	scan, err := benthosmetrics.Observe(context.Background(), http.DefaultClient, port, nil)
 	if err != nil {
 		t.Fatalf("Observe returned error: %v", err)
 	}
@@ -212,7 +216,7 @@ func TestObserve_MetricsHTTPFailureKeepsHealthAndDoesNotClaimMetrics(t *testing.
 
 	port := portFromURL(t, srv.URL)
 
-	scan, err := benthosmetrics.Observe(context.Background(), http.DefaultClient, port)
+	scan, err := benthosmetrics.Observe(context.Background(), http.DefaultClient, port, nil)
 	if err != nil {
 		t.Fatalf("Observe returned error: %v (a failed /metrics scrape must not be a returned error)", err)
 	}
@@ -274,7 +278,7 @@ func TestObserve_MetricsParseFailurePreservesHealth(t *testing.T) {
 
 	port := portFromURL(t, srv.URL)
 
-	scan, err := benthosmetrics.Observe(context.Background(), http.DefaultClient, port)
+	scan, err := benthosmetrics.Observe(context.Background(), http.DefaultClient, port, nil)
 	if err != nil {
 		t.Fatalf("Observe returned error: %v (an unparseable /metrics body must soft-skip, not return an error)", err)
 	}
@@ -353,7 +357,7 @@ func TestObserve_MetricsBodyReadFailurePreservesHealth(t *testing.T) {
 
 	port := portFromURL(t, srv.URL)
 
-	scan, err := benthosmetrics.Observe(context.Background(), http.DefaultClient, port)
+	scan, err := benthosmetrics.Observe(context.Background(), http.DefaultClient, port, nil)
 	if err != nil {
 		t.Fatalf("Observe returned error: %v (a /metrics body-read failure must soft-skip, not return an error)", err)
 	}
@@ -424,7 +428,7 @@ func TestObserve_MetricsTransportFailurePreservesHealth(t *testing.T) {
 
 	port := portFromURL(t, srv.URL)
 
-	scan, err := benthosmetrics.Observe(context.Background(), http.DefaultClient, port)
+	scan, err := benthosmetrics.Observe(context.Background(), http.DefaultClient, port, nil)
 	if err != nil {
 		t.Fatalf("Observe returned error: %v (a /metrics transport failure must soft-skip, not return an error)", err)
 	}
@@ -481,7 +485,7 @@ func freePort(t *testing.T) uint16 {
 func TestObserve_BenthosFullyDownFoldsIntoScanNoError(t *testing.T) {
 	port := freePort(t)
 
-	scan, err := benthosmetrics.Observe(context.Background(), http.DefaultClient, port)
+	scan, err := benthosmetrics.Observe(context.Background(), http.DefaultClient, port, nil)
 	if err != nil {
 		t.Fatalf("Observe returned error: %v (a fully down benthos must fold into the Scan, not return an error)", err)
 	}
@@ -554,7 +558,7 @@ func TestObserve_ReadyFailureAfterPingFoldsPreservesIsLive(t *testing.T) {
 
 	port := portFromURL(t, srv.URL)
 
-	scan, err := benthosmetrics.Observe(context.Background(), http.DefaultClient, port)
+	scan, err := benthosmetrics.Observe(context.Background(), http.DefaultClient, port, nil)
 	if err != nil {
 		t.Fatalf("Observe returned error: %v (a /ready transport failure after a successful /ping must fold into a nil-error Scan, not return an error)", err)
 	}
@@ -583,7 +587,7 @@ func TestObserve_CanceledContextPropagatedAsError(t *testing.T) {
 
 	port := freePort(t)
 
-	_, err := benthosmetrics.Observe(ctx, http.DefaultClient, port)
+	_, err := benthosmetrics.Observe(ctx, http.DefaultClient, port, nil)
 	if err == nil {
 		t.Fatalf("Observe returned nil error for a canceled context; want a non-nil error wrapping context.Canceled (a canceled context must be propagated, not folded)")
 	}
@@ -631,7 +635,7 @@ func TestObserve_ContextCanceledDuringReadyAfterPingIsPropagated(t *testing.T) {
 		cancel()
 	}()
 
-	_, err := benthosmetrics.Observe(ctx, http.DefaultClient, port)
+	_, err := benthosmetrics.Observe(ctx, http.DefaultClient, port, nil)
 	if err == nil {
 		t.Fatalf("Observe returned nil error for a context canceled mid-scrape during /ready (after /ping succeeded); want a non-nil error wrapping context.Canceled (a mid-scrape cancel must be propagated, not folded into a nil-error Scan)")
 	}
@@ -682,7 +686,7 @@ func TestObserve_ContextCanceledDuringMetricsAfterPingIsPropagated(t *testing.T)
 		cancel()
 	}()
 
-	_, err := benthosmetrics.Observe(ctx, http.DefaultClient, port)
+	_, err := benthosmetrics.Observe(ctx, http.DefaultClient, port, nil)
 	if err == nil {
 		t.Fatalf("Observe returned nil error for a context canceled mid-scrape during /metrics (after /ping, /ready and /version succeeded); want a non-nil error wrapping context.Canceled (a mid-scrape cancel must be propagated, not folded into a nil-error Scan)")
 	}
@@ -736,7 +740,7 @@ func TestObserve_ReadyTransportFailureDoesNotZeroVersionAndMetrics(t *testing.T)
 
 	port := portFromURL(t, srv.URL)
 
-	scan, err := benthosmetrics.Observe(context.Background(), http.DefaultClient, port)
+	scan, err := benthosmetrics.Observe(context.Background(), http.DefaultClient, port, nil)
 	if err != nil {
 		t.Fatalf("Observe returned error: %v (a /ready transport failure must fold into a nil-error Scan, not return an error)", err)
 	}
@@ -791,7 +795,7 @@ func TestObserve_VersionNon200LeavesVersionEmptyAndContinuesToMetrics(t *testing
 
 	port := portFromURL(t, srv.URL)
 
-	scan, err := benthosmetrics.Observe(context.Background(), http.DefaultClient, port)
+	scan, err := benthosmetrics.Observe(context.Background(), http.DefaultClient, port, nil)
 	if err != nil {
 		t.Fatalf("Observe returned error: %v (a non-200 /version must not return an error)", err)
 	}
@@ -869,7 +873,7 @@ func TestObserve_ContextCanceledDuringMetricsBodyReadAfterPingIsPropagated(t *te
 		cancel()
 	}()
 
-	_, err := benthosmetrics.Observe(ctx, http.DefaultClient, port)
+	_, err := benthosmetrics.Observe(ctx, http.DefaultClient, port, nil)
 	if err == nil {
 		t.Fatalf("Observe returned nil error for a context canceled mid-scrape during the /metrics body read (after /ping, /ready and /version succeeded and /metrics returned 200); want a non-nil error wrapping context.Canceled (a mid-scrape cancel during the body read must be propagated, not folded into a nil-error partial Scan)")
 	}
@@ -919,7 +923,7 @@ func TestObserve_VersionTransportFailureDoesNotZeroMetrics(t *testing.T) {
 
 	port := portFromURL(t, srv.URL)
 
-	scan, err := benthosmetrics.Observe(context.Background(), http.DefaultClient, port)
+	scan, err := benthosmetrics.Observe(context.Background(), http.DefaultClient, port, nil)
 	if err != nil {
 		t.Fatalf("Observe returned error: %v (a /version transport failure must fold into a nil-error Scan, not return an error)", err)
 	}
@@ -975,7 +979,7 @@ func TestObserve_ReadyParseFailureFoldsPreservingOthers(t *testing.T) {
 
 	port := portFromURL(t, srv.URL)
 
-	scan, err := benthosmetrics.Observe(context.Background(), http.DefaultClient, port)
+	scan, err := benthosmetrics.Observe(context.Background(), http.DefaultClient, port, nil)
 	if err != nil {
 		t.Fatalf("Observe returned error: %v (a /ready parse failure must fold into a nil-error Scan, not return an error)", err)
 	}
@@ -1035,7 +1039,7 @@ func TestObserve_SlowButAliveBenthosCompletesUnderCollectorTimeout(t *testing.T)
 	ctx, cancel := context.WithTimeout(context.Background(), 2200*time.Millisecond)
 	defer cancel()
 
-	scan, err := benthosmetrics.Observe(ctx, http.DefaultClient, port)
+	scan, err := benthosmetrics.Observe(ctx, http.DefaultClient, port, nil)
 	if err != nil {
 		t.Fatalf("Observe returned error: %v (a slow-but-alive benthos completing under the collector timeout must not error)", err)
 	}
@@ -1046,5 +1050,146 @@ func TestObserve_SlowButAliveBenthosCompletesUnderCollectorTimeout(t *testing.T)
 
 	if !scan.HealthCheck.IsLive {
 		t.Errorf("HealthCheck.IsLive = false, want true (the slow scrape must not blip IsLive)")
+	}
+}
+
+// lastJSONLine parses the trailing JSON log line out of buf. NewJSONFSMLogger
+// writes one JSON object per log call, so the last non-empty line is the most
+// recent warning.
+func lastJSONLine(t *testing.T, buf *bytes.Buffer) map[string]any {
+	t.Helper()
+
+	lines := strings.Split(strings.TrimSpace(buf.String()), "\n")
+	if len(lines) == 0 {
+		t.Fatalf("no log output captured")
+	}
+
+	m := make(map[string]any)
+	if err := json.Unmarshal([]byte(strings.TrimSpace(lines[len(lines)-1])), &m); err != nil {
+		t.Fatalf("last log line is not valid JSON (%v): %q", err, buf.String())
+	}
+
+	return m
+}
+
+// TestObserve_MetricsParseFailureLogsRegression pins finding #3: a 200 /metrics
+// whose body cannot be parsed is a regression, not an observed-down state, so
+// Observe must emit a SentryWarn carrying the parse error, the raw body length
+// and a short snippet, while still returning a nil error and
+// MetricsAvailable=false (the worker must stay non-degraded).
+func TestObserve_MetricsParseFailureLogsRegression(t *testing.T) {
+	readyBody := `{"statuses":[{"label":"tcp_server","path":"root.input","connected":true},{"label":"http_client","path":"root.output","connected":true}]}`
+	versionBody := `{"version":"3.71.0","built":"2023-08-15T12:00:00Z"}`
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/ping", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte("pong"))
+	})
+	mux.HandleFunc("/ready", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(readyBody))
+	})
+	mux.HandleFunc("/version", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(versionBody))
+	})
+	mux.HandleFunc("/metrics", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/plain; version=0.0.4")
+		_, _ = w.Write([]byte("input_received{path=\"root.input\"} NOTANUMBER\n"))
+	})
+
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	port := portFromURL(t, srv.URL)
+
+	buf := new(bytes.Buffer)
+	logger := deps.NewJSONFSMLogger(buf, deps.LevelDebug)
+
+	scan, err := benthosmetrics.Observe(context.Background(), http.DefaultClient, port, logger)
+	if err != nil {
+		t.Fatalf("Observe returned error: %v (an unparseable /metrics body must fold with a nil error, not a worker crash)", err)
+	}
+
+	if scan.MetricsAvailable {
+		t.Errorf("MetricsAvailable = true, want false (an unparseable /metrics body must not claim metrics are available)")
+	}
+
+	m := lastJSONLine(t, buf)
+	if got := m["msg"]; got != "benthos_metrics_parse_failed" {
+		t.Errorf("log msg = %v, want %q (a parse regression must be logged distinctly, not folded silently like a transport failure)", got, "benthos_metrics_parse_failed")
+	}
+
+	if got := m["level"]; got != "warn" {
+		t.Errorf("log level = %v, want %q", got, "warn")
+	}
+
+	if _, ok := m["body_len"]; !ok {
+		t.Errorf("log line missing body_len field (the raw body length must accompany the parse failure so operators can scope the regression): %v", m)
+	}
+
+	snippet, _ := m["snippet"].(string)
+	if !strings.Contains(snippet, "NOTANUMBER") {
+		t.Errorf("log snippet = %q, want it to contain the unparseable token NOTANUMBER (a short body snippet lets an operator eyeball the format break)", snippet)
+	}
+
+	if _, ok := m["error"]; !ok {
+		t.Errorf("log line missing error field (the parse error must be carried so operators can see why parsing broke): %v", m)
+	}
+}
+
+// TestObserve_MetricsNon200LogsRegression pins finding #3 for the non-200 path:
+// a /metrics that responds non-200 while /ping is 200 is a regression, so
+// Observe emits a SentryWarn carrying the status code, with a distinct message
+// from the parse-failure regression, and still returns a nil error.
+func TestObserve_MetricsNon200LogsRegression(t *testing.T) {
+	readyBody := `{"statuses":[{"label":"tcp_server","path":"root.input","connected":true},{"label":"http_client","path":"root.output","connected":true}]}`
+	versionBody := `{"version":"3.71.0","built":"2023-08-15T12:00:00Z"}`
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/ping", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte("pong"))
+	})
+	mux.HandleFunc("/ready", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(readyBody))
+	})
+	mux.HandleFunc("/version", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(versionBody))
+	})
+	mux.HandleFunc("/metrics", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte("internal server error\n"))
+	})
+
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	port := portFromURL(t, srv.URL)
+
+	buf := new(bytes.Buffer)
+	logger := deps.NewJSONFSMLogger(buf, deps.LevelDebug)
+
+	scan, err := benthosmetrics.Observe(context.Background(), http.DefaultClient, port, logger)
+	if err != nil {
+		t.Fatalf("Observe returned error: %v (a non-200 /metrics must fold with a nil error)", err)
+	}
+
+	if scan.MetricsAvailable {
+		t.Errorf("MetricsAvailable = true, want false (a non-200 /metrics must not claim metrics are available)")
+	}
+
+	if !scan.HealthCheck.IsLive {
+		t.Errorf("HealthCheck.IsLive = false, want true (the 200 /ping must be preserved despite the non-200 /metrics)")
+	}
+
+	m := lastJSONLine(t, buf)
+	if got := m["msg"]; got != "benthos_metrics_non_200" {
+		t.Errorf("log msg = %v, want %q (a non-200 /metrics must be logged with a message distinct from the parse regression)", got, "benthos_metrics_non_200")
+	}
+
+	if got := m["status_code"]; got != float64(http.StatusInternalServerError) {
+		t.Errorf("log status_code = %v, want %d", got, http.StatusInternalServerError)
 	}
 }
