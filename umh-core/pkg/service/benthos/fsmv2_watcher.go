@@ -18,9 +18,8 @@ package benthos
 // BenthosService read/lifecycle paths call behind USE_FSMV2_BENTHOS_MONITOR,
 // the production default that delegates to the process-scoped fsmv2client, and
 // the feature-flag cache. The monitor→worker state vocabulary translation
-// (mapFrom) lands in R8 alongside its first call site. The seam is wired into
-// GetHealthCheckAndMetrics by the PR3b rungs; FF-off stays byte-identical
-// because every branch is guarded by fsmv2BenthosMonitorEnabled.
+// (mapFrom) sits alongside its first call site below. Every branch is guarded
+// by fsmv2BenthosMonitorEnabled, so FF-off is byte-identical to the v1 path.
 
 import (
 	"context"
@@ -40,8 +39,9 @@ import (
 // once at package init from USE_FSMV2_BENTHOS_MONITOR (default OFF). env.GetAsBool
 // reads os.Getenv directly (no config-file parsing), so init-time is correct and
 // the value is fixed for the process lifetime. It is NOT threaded through
-// NewBenthosManager (honors C-Inject: the CPU-target benthos runs through the
-// DataFlowComponent manager, which the ctor wouldn't reach).
+// NewBenthosManager: the CPU-target benthos runs through the DataFlowComponent
+// manager, which the constructor would not reach, so a process-scoped flag is
+// the only thing every BenthosService instance sees.
 var fsmv2BenthosMonitorEnabled bool
 
 func init() {
@@ -53,10 +53,11 @@ func init() {
 // production default (defaultBenthosMonitorWatcher) delegates to the
 // process-scoped fsmv2client; tests inject a fake via WithFSMv2BenthosWatcher.
 //
-// GetFresh returns the worker's published BenthosMonitorStatus{Scan, Stopped}
-// (NOT a bare Scan — Scan has no Stopped field, and decoding the flat
-// {scan,stopped} JSON into a bare Scan yields a zero Scan for every bridge,
-// breaking v6.1c). Upsert/Delete drive the watcher's child-spec lifecycle.
+// GetFresh returns the worker's published BenthosMonitorStatus{Scan, Stopped}.
+// It must NOT decode into a bare Scan: Scan has no Stopped field, and decoding
+// the flat {scan,stopped} JSON into a bare Scan yields a zero Scan for every
+// bridge (a stopped bridge would lose its Stopped flag). Upsert/Delete drive
+// the watcher's child-spec lifecycle.
 type benthosMonitorWatcher interface {
 	GetFresh(ctx context.Context, ref dynamicchildren.Ref, maxAge time.Duration) (bmworker.BenthosMonitorStatus, fsmv2client.Freshness, error)
 	Upsert(ref dynamicchildren.Ref, cfg map[string]any) error
@@ -66,9 +67,9 @@ type benthosMonitorWatcher interface {
 // BenthosMonitorReconciler is the subset of *BenthosMonitorManager that
 // BenthosService calls. Defining it as an interface (rather than the concrete
 // *benthos_monitor_fsm.BenthosMonitorManager pointer) lets tests inject a fake
-// that records Reconcile calls — which is how R11 asserts the FF-on path SKIPS
-// the S6 monitor reconcile. The concrete manager satisfies this interface via
-// its embedded *fsm.BaseFSMManager. The FF-off call sites are byte-identical
+// that records Reconcile calls — which is how the FF-on path is asserted to
+// SKIP the S6 monitor reconcile. The concrete manager satisfies this interface
+// via its embedded *fsm.BaseFSMManager. The FF-off call sites are byte-identical
 // whether the field holds a concrete pointer or this interface.
 type BenthosMonitorReconciler interface {
 	Reconcile(ctx context.Context, snapshot public_fsm.SystemSnapshot, services serviceregistry.Provider) (error, bool)
