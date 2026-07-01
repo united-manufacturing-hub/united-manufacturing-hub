@@ -65,6 +65,11 @@ type AdaptedInstance[TStatus any, TDomainConfig any] struct {
 	// fsmv2 read concept (how old an observation can be before the child is
 	// considered unreachable).
 	maxAge time.Duration
+
+	// isDisabled is set when the worker is deliberately disabled (not running).
+	// GetCurrentFSMState returns desiredState directly so the fsmv1 control loop
+	// sees current==desired and does not wait for a non-existent state transition.
+	isDisabled bool
 }
 
 // NewAdaptedInstance creates an AdaptedInstance. ref must match the Ref used in
@@ -79,6 +84,7 @@ func NewAdaptedInstance[TStatus any, TDomainConfig any](
 	maxAge time.Duration,
 	mapState func(fsmv2.Observation[TStatus], fsmv2client.Freshness, TDomainConfig) string,
 	mapObs func(TDomainConfig, fsmv2.Observation[TStatus], fsmv2client.Freshness) publicfsm.ObservedState,
+	isDisabled bool,
 ) *AdaptedInstance[TStatus, TDomainConfig] {
 	return &AdaptedInstance[TStatus, TDomainConfig]{
 		ref:              ref,
@@ -88,6 +94,7 @@ func NewAdaptedInstance[TStatus any, TDomainConfig any](
 		maxAge:           maxAge,
 		mapState:         mapState,
 		mapObservedState: mapObs,
+		isDisabled:       isDisabled,
 	}
 }
 
@@ -111,6 +118,9 @@ func (i *AdaptedInstance[TStatus, TDomainConfig]) getFreshObs() (fsmv2.Observati
 // --- publicfsm.FSMInstance implementation ---
 
 func (i *AdaptedInstance[TStatus, TDomainConfig]) GetCurrentFSMState() string {
+	if i.isDisabled {
+		return i.desiredState
+	}
 	obs, freshness := i.getFreshObs()
 	return i.mapState(obs, freshness, i.domainConfig)
 }

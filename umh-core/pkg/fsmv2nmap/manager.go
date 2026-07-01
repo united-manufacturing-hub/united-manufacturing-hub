@@ -50,8 +50,7 @@ func NewFsmv2NmapManager(name string) *adapter.WorkerManager[config.NmapConfig] 
 		ExtractConfigs: func(snapshot publicfsm.SystemSnapshot) []config.NmapConfig {
 			return snapshot.CurrentConfig.Internal.Nmap
 		},
-		NameOf:         func(cfg config.NmapConfig) string { return cfg.Name },
-		DesiredStateOf: func(cfg config.NmapConfig) string { return cfg.DesiredFSMState },
+		NameOf:      func(cfg config.NmapConfig) string { return cfg.Name },
 		ConfigEqual: func(a, b config.NmapConfig) bool {
 			return a.FSMInstanceConfig == b.FSMInstanceConfig &&
 				a.NmapServiceConfig.Equal(b.NmapServiceConfig)

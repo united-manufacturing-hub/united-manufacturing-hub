@@ -179,6 +179,7 @@ type ConnectionService struct {
 	nmapManager      NmapManagerProvider
 	recentNmapStates map[string][]string
 	nmapConfigs      []config.NmapConfig
+	usesFsmv2Backend bool
 }
 
 // ConnectionServiceOption is a function that configures a ConnectionService.
@@ -215,8 +216,9 @@ func NewDefaultConnectionService(connectionName string, opts ...ConnectionServic
 
 	// NMAP_BACKEND selects the connection scanning implementation.
 	switch os.Getenv("NMAP_BACKEND") {
-	case "fsmv2":
+	case constants.NmapBackendFSMv2:
 		service.nmapManager = fsmv2nmap.NewFsmv2NmapManager(managerName)
+		service.usesFsmv2Backend = true
 	default:
 		service.nmapManager = nmapfsm.NewNmapManager(managerName)
 		service.nmapService = nmap.NewDefaultNmapService(connectionName)
@@ -264,7 +266,7 @@ func (c *ConnectionService) GetConfig(
 	// Returning the desired config here ensures the protocol converter's
 	// UpdateObservedStateOfInstance doesn't bail out early, allowing
 	// BuildRuntimeConfig to run and populate the real target/port.
-	if c.nmapService == nil {
+	if c.usesFsmv2Backend {
 		for _, cfg := range c.nmapConfigs {
 			if cfg.Name == nmapName {
 				return connectionserviceconfig.FromNmapServiceConfig(cfg.NmapServiceConfig), nil
@@ -640,7 +642,7 @@ func (c *ConnectionService) ServiceExists(
 	nmapName := c.getNmapName(connectionName)
 
 	// When using fsmv2-based nmap, check the manager for the instance
-	if c.nmapService == nil {
+	if c.usesFsmv2Backend {
 		_, exists := c.nmapManager.GetInstance(nmapName)
 		return exists
 	}
@@ -669,7 +671,7 @@ func (c *ConnectionService) ForceRemoveConnection(
 	nmapName := c.getNmapName(connectionName)
 
 	// When using fsmv2-based nmap, remove via the manager
-	if c.nmapService == nil {
+	if c.usesFsmv2Backend {
 		if inst, ok := c.nmapManager.GetInstance(nmapName); ok {
 			return inst.Remove(ctx)
 		}

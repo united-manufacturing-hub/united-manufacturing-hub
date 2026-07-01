@@ -43,6 +43,7 @@ const (
 // It reads via the global FSMv2Client; no local store is needed.
 func newNmapInstance(cfg config.NmapConfig) publicfsm.FSMInstance {
 	ref := dynamicchildren.Ref{WorkerType: "nmap", Name: cfg.Name}
+	isDisabled := cfg.DesiredFSMState == "stopped"
 
 	return fsmv2adapter.NewAdaptedInstance(
 		ref,
@@ -52,6 +53,7 @@ func newNmapInstance(cfg config.NmapConfig) publicfsm.FSMInstance {
 		nmapMaxAge,
 		nmapMapState,
 		nmapMapObservedState,
+		isDisabled,
 	)
 }
 
@@ -66,7 +68,7 @@ func nmapMapState(obs fsmv2.Observation[nmap_worker.NmapStatus], freshness fsmv2
 	// Fresh — map port state.
 	portState := obs.Status.PortState
 	switch portState {
-	case "open", "closed", "filtered", "unfiltered", "open|filtered", "closed|filtered", "degraded":
+	case "open", "closed", "filtered", "degraded":
 		return portState
 	default:
 		return nmapfsm.OperationalStateStarting
@@ -76,7 +78,10 @@ func nmapMapState(obs fsmv2.Observation[nmap_worker.NmapStatus], freshness fsmv2
 func nmapMapObservedState(cfg config.NmapConfig, obs fsmv2.Observation[nmap_worker.NmapStatus], freshness fsmv2client.Freshness) publicfsm.ObservedState {
 	result := nmapfsm.NmapObservedState{
 		ObservedNmapServiceConfig: cfg.NmapServiceConfig,
-		LastStateChange:           time.Now().Unix(),
+	}
+
+	if freshness == fsmv2client.Fresh {
+		result.LastStateChange = obs.CollectedAt.Unix()
 	}
 
 	if freshness != fsmv2client.Fresh && freshness != fsmv2client.Stale {

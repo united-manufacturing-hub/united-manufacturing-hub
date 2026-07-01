@@ -45,9 +45,6 @@ type WorkerManagerSpec[TDomainConfig any] struct {
 	// NameOf returns the unique name for a config entry.
 	NameOf func(cfg TDomainConfig) string
 
-	// DesiredStateOf returns the desired FSM state string from a config entry.
-	DesiredStateOf func(cfg TDomainConfig) string
-
 	// ConfigEqual returns true when two configs are semantically identical.
 	ConfigEqual func(a, b TDomainConfig) bool
 
@@ -143,16 +140,16 @@ func (m *WorkerManager[TDomainConfig]) Reconcile(ctx context.Context, snapshot p
 		enabled := m.spec.IsEnabled == nil || m.spec.IsEnabled(cfg)
 
 		if !exists {
-			if client != nil {
-				if enabled {
-					cfgMap, err := m.spec.CfgFor(cfg)
-					if err != nil {
-						m.spec.Log.Warnf("fsmv2: build spec for %s: %v", name, err)
-					} else if err := client.Upsert(m.spec.RefFor(cfg), cfgMap); err != nil {
-						m.spec.Log.Warnf("fsmv2: upsert %s: %v", name, err)
-					}
+			if client != nil && enabled {
+				cfgMap, err := m.spec.CfgFor(cfg)
+				if err != nil {
+					m.spec.Log.Warnf("fsmv2: build spec for %s: %v — will retry next tick", name, err)
+					continue
 				}
-				// stopped configs are never registered in the fsmv2 runtime
+				if err := client.Upsert(m.spec.RefFor(cfg), cfgMap); err != nil {
+					m.spec.Log.Warnf("fsmv2: upsert %s: %v — will retry next tick", name, err)
+					continue
+				}
 			}
 			m.instances[name] = m.spec.NewInstance(cfg)
 			m.domainConfigs[name] = cfg

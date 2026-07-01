@@ -135,7 +135,7 @@ func NewControlLoop(configManager config.ConfigManager) *ControlLoop {
 	// legacy "fsm" backend additionally registers a top-level NmapManager here
 	// for global state tracking; the fsmv2 backend is self-contained inside
 	// ConnectionService.
-	if os.Getenv("NMAP_BACKEND") != "fsmv2" {
+	if os.Getenv("NMAP_BACKEND") != constants.NmapBackendFSMv2 {
 		managers = append(managers, nmap.NewNmapManager(constants.DefaultManagerName))
 	}
 

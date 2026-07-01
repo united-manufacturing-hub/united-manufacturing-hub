@@ -70,6 +70,10 @@ func (w *simpleWorker[TConfig, TStatus]) GetInitialState() fsmv2.State[any, any]
 // when the configured interval has elapsed, calls fn in-place. The result is
 // returned as the observation; no action dispatch is needed.
 func (w *simpleWorker[TConfig, TStatus]) CollectObservedState(ctx context.Context, desired fsmv2.DesiredState) (fsmv2.ObservedState, error) {
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
+
 	cfg := fsmv2.ExtractConfig[TConfig](desired)
 
 	if w.lastRunAt.IsZero() || time.Since(w.lastRunAt) >= w.interval {
