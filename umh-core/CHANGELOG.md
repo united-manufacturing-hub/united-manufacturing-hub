@@ -6,6 +6,10 @@
 
 - Timeseries Data models can now reference `timeseries-boolean` as a payload shape, alongside the built-in `timeseries-number` and `timeseries-string`. Previously only number and string shapes existed, so a model referencing `timeseries-boolean` was rejected at deploy time and boolean process values like machine-running, alarm-active, or valve-open had to be faked as 0/1 numbers, losing type fidelity.
 
+### Improvements
+
+- When a bridge fails to reach a running state on first deploy, its configuration is now left in a stopped state instead of being continuously retried. The config is still saved so you can fix it from the editing view, but the system no longer loops trying to redeploy a bridge that needs manual attention.
+
 ## [0.44.26]
 
 ### Improvements
