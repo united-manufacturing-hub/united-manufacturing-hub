@@ -975,6 +975,7 @@ func TestFSMv2Watcher_GetHealthCheckAndMetrics_FFOff_BackwardsScanFeeds(t *testi
 
 	// --- Tick 1: healthy scan (t1, count=18) — feeds + seeds ---
 	const tick1 uint64 = 1
+
 	got1, err := s.GetHealthCheckAndMetrics(context.Background(), nil, tick1, time.Now(), benthosName, nil)
 	if err != nil {
 		t.Fatalf("tick 1: err = %v, want nil", err)
@@ -996,6 +997,7 @@ func TestFSMv2Watcher_GetHealthCheckAndMetrics_FFOff_BackwardsScanFeeds(t *testi
 	// The shipped After() gate skips t0 (t0 is not After t1) → LastTick stays 1
 	// and LastCount stays 18 — RED. The !Equal fix feeds (t0 != t1) → advances.
 	const tick2 uint64 = 2
+
 	got2, err := s.GetHealthCheckAndMetrics(context.Background(), nil, tick2, time.Now(), benthosName, nil)
 	if err != nil {
 		t.Fatalf("tick 2: err = %v, want nil (fresh backwards scan is served, not an error)", err)
