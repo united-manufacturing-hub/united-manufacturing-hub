@@ -30,6 +30,10 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
 
+// storeReadTimeout bounds how long getFreshObs blocks on a CSE store read.
+// The StateReader non-blocking contract requires a deadline-bounded context.
+const storeReadTimeout = 100 * time.Millisecond
+
 // AdaptedInstance wraps a fsmv2 child worker observed via the global FSMv2Client
 // and satisfies publicfsm.FSMInstance.
 //
@@ -55,16 +59,24 @@ type AdaptedInstance[TStatus any, TDomainConfig any] struct {
 	ref             dynamicchildren.Ref
 	desiredState    string
 	minRequiredTime time.Duration
-	maxAge          time.Duration
+	// maxAge is the observation age threshold for Stale classification.
+	// Kept separate from minRequiredTime: minRequiredTime is an fsmv1 concept
+	// (how long before a state change is considered stable); maxAge is an
+	// fsmv2 read concept (how old an observation can be before the child is
+	// considered unreachable).
+	maxAge time.Duration
 }
 
 // NewAdaptedInstance creates an AdaptedInstance. ref must match the Ref used in
 // Upsert/Delete calls so reads resolve to the correct child observation.
+// minRequiredTime and maxAge serve distinct purposes and should be set
+// independently (see field docs above).
 func NewAdaptedInstance[TStatus any, TDomainConfig any](
 	ref dynamicchildren.Ref,
 	cfg TDomainConfig,
 	desiredState string,
-	minTime time.Duration,
+	minRequiredTime time.Duration,
+	maxAge time.Duration,
 	mapState func(fsmv2.Observation[TStatus], fsmv2client.Freshness, TDomainConfig) string,
 	mapObs func(TDomainConfig, fsmv2.Observation[TStatus], fsmv2client.Freshness) publicfsm.ObservedState,
 ) *AdaptedInstance[TStatus, TDomainConfig] {
@@ -72,25 +84,21 @@ func NewAdaptedInstance[TStatus any, TDomainConfig any](
 		ref:              ref,
 		domainConfig:     cfg,
 		desiredState:     desiredState,
-		minRequiredTime:  minTime,
-		maxAge:           minTime,
+		minRequiredTime:  minRequiredTime,
+		maxAge:           maxAge,
 		mapState:         mapState,
 		mapObservedState: mapObs,
 	}
 }
 
-// UpdateDomainConfig replaces the stored domain config without touching the ref
-// or mappers. Call when config values change but identity stays the same.
-func (i *AdaptedInstance[TStatus, TDomainConfig]) UpdateDomainConfig(cfg TDomainConfig, desiredState string) {
-	i.domainConfig = cfg
-	i.desiredState = desiredState
-}
-
-func (i *AdaptedInstance[TStatus, TDomainConfig]) getFreshObs(ctx context.Context) (fsmv2.Observation[TStatus], fsmv2client.Freshness) {
+func (i *AdaptedInstance[TStatus, TDomainConfig]) getFreshObs() (fsmv2.Observation[TStatus], fsmv2client.Freshness) {
 	c := fsmv2client.GetClient()
 	if c == nil {
 		return fsmv2.Observation[TStatus]{}, fsmv2client.Unregistered
 	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), storeReadTimeout)
+	defer cancel()
 
 	obs, freshness, err := fsmv2client.GetFreshObs[TStatus](ctx, c, i.ref, i.maxAge)
 	if err != nil {
@@ -103,7 +111,7 @@ func (i *AdaptedInstance[TStatus, TDomainConfig]) getFreshObs(ctx context.Contex
 // --- publicfsm.FSMInstance implementation ---
 
 func (i *AdaptedInstance[TStatus, TDomainConfig]) GetCurrentFSMState() string {
-	obs, freshness := i.getFreshObs(context.Background())
+	obs, freshness := i.getFreshObs()
 	return i.mapState(obs, freshness, i.domainConfig)
 }
 
@@ -133,7 +141,7 @@ func (i *AdaptedInstance[TStatus, TDomainConfig]) Remove(_ context.Context) erro
 }
 
 func (i *AdaptedInstance[TStatus, TDomainConfig]) GetLastObservedState() publicfsm.ObservedState {
-	obs, freshness := i.getFreshObs(context.Background())
+	obs, freshness := i.getFreshObs()
 	return i.mapObservedState(i.domainConfig, obs, freshness)
 }
 

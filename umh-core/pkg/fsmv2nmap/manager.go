@@ -68,5 +68,8 @@ func NewFsmv2NmapManager(name string) *adapter.WorkerManager[config.NmapConfig] 
 				"port":   cfg.NmapServiceConfig.Port,
 			}, nil
 		},
+		IsEnabled: func(cfg config.NmapConfig) bool {
+			return cfg.DesiredFSMState != "stopped"
+		},
 	})
 }

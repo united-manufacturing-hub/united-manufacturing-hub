@@ -102,6 +102,11 @@ func (s *stoppedState[TC, TS]) Next(snapAny any) fsmv2.NextResult[any, any] {
 			"shutdown requested while stopped", nil)
 	}
 
+	if snap.IsDisabled {
+		return fsmv2.Transition(s, fsmv2.SignalNone, nil,
+			"disabled, staying resident", nil)
+	}
+
 	return fsmv2.Transition(&runningState[TC, TS]{}, fsmv2.SignalNone, nil,
 		"starting worker", nil)
 }

@@ -28,8 +28,15 @@ import (
 	nmapservice "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/nmap"
 )
 
-// nmapStatusType is the observation type stored by the simple nmap worker.
-type nmapStatusType = nmap_worker.NmapStatus
+const (
+	// nmapMinRequiredTime is how long the fsmv1 control loop waits before
+	// considering a state transition stable.
+	nmapMinRequiredTime = 5 * time.Second
+
+	// nmapMaxAge is how old a nmap observation may be before the child is
+	// considered stale (unreachable). Three missed 1-second scan intervals.
+	nmapMaxAge = 3 * time.Second
+)
 
 // newNmapInstance creates an AdaptedInstance for one nmap scan target.
 // It reads via the global FSMv2Client; no local store is needed.
@@ -40,13 +47,14 @@ func newNmapInstance(cfg config.NmapConfig) publicfsm.FSMInstance {
 		ref,
 		cfg,
 		cfg.DesiredFSMState,
-		5*time.Second,
+		nmapMinRequiredTime,
+		nmapMaxAge,
 		nmapMapState,
 		nmapMapObservedState,
 	)
 }
 
-func nmapMapState(obs fsmv2.Observation[nmapStatusType], freshness fsmv2client.Freshness, _ config.NmapConfig) string {
+func nmapMapState(obs fsmv2.Observation[nmap_worker.NmapStatus], freshness fsmv2client.Freshness, _ config.NmapConfig) string {
 	switch freshness {
 	case fsmv2client.Unregistered, fsmv2client.NeverObserved, fsmv2client.Unknown:
 		return nmapfsm.OperationalStateStarting
@@ -64,7 +72,7 @@ func nmapMapState(obs fsmv2.Observation[nmapStatusType], freshness fsmv2client.F
 	}
 }
 
-func nmapMapObservedState(cfg config.NmapConfig, obs fsmv2.Observation[nmapStatusType], freshness fsmv2client.Freshness) publicfsm.ObservedState {
+func nmapMapObservedState(cfg config.NmapConfig, obs fsmv2.Observation[nmap_worker.NmapStatus], freshness fsmv2client.Freshness) publicfsm.ObservedState {
 	result := nmapfsm.NmapObservedState{
 		ObservedNmapServiceConfig: cfg.NmapServiceConfig,
 		LastStateChange:           time.Now().Unix(),

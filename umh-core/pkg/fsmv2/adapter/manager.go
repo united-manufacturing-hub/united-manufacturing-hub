@@ -59,6 +59,12 @@ type WorkerManagerSpec[TDomainConfig any] struct {
 
 	// CfgFor builds the map[string]any payload for Upsert from a config entry.
 	CfgFor func(cfg TDomainConfig) (map[string]any, error)
+
+	// IsEnabled reports whether a config entry should be running in the fsmv2
+	// runtime. Disabled entries are kept in the fsmv1 instance map (so their
+	// state is visible) but are not Upserted; existing registrations are
+	// deleted. If nil, all entries are treated as enabled.
+	IsEnabled func(cfg TDomainConfig) bool
 }
 
 // WorkerManager is a generic fsmv1-compatible manager that drives a fleet of
@@ -134,7 +140,7 @@ func (m *WorkerManager[TDomainConfig]) Reconcile(ctx context.Context, snapshot p
 	for _, cfg := range desired {
 		name := m.spec.NameOf(cfg)
 		existing, exists := m.domainConfigs[name]
-		enabled := m.spec.DesiredStateOf(cfg) != "stopped"
+		enabled := m.spec.IsEnabled == nil || m.spec.IsEnabled(cfg)
 
 		if !exists {
 			if client != nil {
