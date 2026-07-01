@@ -2134,10 +2134,51 @@ func TestDecide_SaturationBackstop_DeadZoneFireThenClearGuardrail(t *testing.T) 
 		t.Fatalf("co-fire causes[1]: got %q, want %q (saturation is lower severity → second)", vCo.Causes[1].Kind, CauseKindSaturation)
 	}
 	if vCo.Attribution != AttributionUnknown {
-		t.Fatalf("co-fire Attribution: got %q, want %q (both throttle and saturation are internal → unknown)", vCo.Attribution, AttributionUnknown)
+		t.Fatalf("co-fire Attribution: got %q, want %q (throttle and saturation both internal; HostBusyCores=0 makes the host share 0−3.2 negative, so the split resolves to Unknown)", vCo.Attribution, AttributionUnknown)
 	}
 	if !sigCo.ThrottleFired || !sigCo.SaturationFired {
 		t.Fatalf("co-fire latches: ThrottleFired=%v SaturationFired=%v, want both true", sigCo.ThrottleFired, sigCo.SaturationFired)
+	}
+
+	// (14) CO-FIRE ATTRIBUTION REPIVOT — same throttle-dominant co-fire as
+	// (13), but HostBusyCores=8.0 (>2*UsageCores=6.4) so the host/container
+	// split resolves to Host (host share 8.0−3.2=4.8 > our share 3.2). This
+	// pins that the split applies to a throttle-dominant internal cause too
+	// (not only pure saturation): a refactor that gates the split on
+	// fired[0].Kind==CauseKindSaturation, or drops the repivot for
+	// throttle-dominant, would leave attribution Unknown and fail here.
+	// LogicalCpus stays 0 so the demand-gated host-contention latch is skipped
+	// (LogicalCpus<=0 guard) and cannot fire to make the cause external.
+	highHostSample := func(dt time.Duration, nrPeriods, nrThrottled int64) Sample {
+		s := deadZoneThrottleSample(dt, nrPeriods, nrThrottled)
+		s.HostBusyCores = 8.0
+		return s
+	}
+	st10b := &WindowState{}
+	for i := 0; i < 8; i++ {
+		Decide(st10b, highHostSample(time.Duration(i*10)*time.Second, int64(i+1)*1000, int64(i+1)*800), thresholds)
+	}
+	vCoB, sigCoB := Decide(st10b, highHostSample(80*time.Second, 9000, 7200), thresholds)
+	if vCoB.State != StateDegraded {
+		t.Fatalf("co-fire repivot State: got %q, want %q", vCoB.State, StateDegraded)
+	}
+	if vCoB.Causes[0].Kind != CauseKindThrottling {
+		t.Fatalf("co-fire repivot causes[0]: got %q, want %q (throttle stays dominant)", vCoB.Causes[0].Kind, CauseKindThrottling)
+	}
+	if vCoB.Attribution != AttributionHost {
+		t.Fatalf("co-fire repivot Attribution: got %q, want %q (throttle-dominant internal + SaturationFired; host share 4.8 > our share 3.2 → Host via the split)", vCoB.Attribution, AttributionHost)
+	}
+	hasHostContentionCoB := false
+	for _, c := range vCoB.Causes {
+		if c.Kind == CauseKindHostContention {
+			hasHostContentionCoB = true
+		}
+	}
+	if hasHostContentionCoB {
+		t.Fatalf("co-fire repivot Causes: CauseKindHostContention present, want absent (LogicalCpus=0 skips the host-contention latch; got %v)", vCoB.Causes)
+	}
+	if !sigCoB.ThrottleFired || !sigCoB.SaturationFired {
+		t.Fatalf("co-fire repivot latches: ThrottleFired=%v SaturationFired=%v, want both true", sigCoB.ThrottleFired, sigCoB.SaturationFired)
 	}
 }
 
@@ -3504,6 +3545,220 @@ func TestDecide_Saturation_FiresOnVirtualizedBox(t *testing.T) {
 		}
 		if !sig.LimitedVisibility {
 			t.Fatalf("LimitedVisibility: got false, want true (non-virtualized dead-zone sample — non-virtualized path preserved)")
+		}
+	})
+}
+
+// TestDecide_DeadZoneSaturation_HostContainerAttribution pins that a dead-zone
+// full box is attributed to Host when the host (non-UMH) share exceeds the UMH
+// share, else Unknown. CauseKindHostContention stays absent here because the
+// demand gate is closed in the dead-zone. Sub-blocks: NEIGHBOUR_FILLS (host
+// share dominant -> Host), WE_FILL (UMH share dominant -> Unknown, guards
+// against a host-always stub), STEAL_CO_FIRES (steal + saturation co-fire ->
+// Host), PRESSURE_ONLY_NO_HOST_CONTENTION (pressure degrades without
+// saturation or host-contention on a low-host-busy box).
+func TestDecide_DeadZoneSaturation_HostContainerAttribution(t *testing.T) {
+	base := time.Date(2026, 6, 30, 12, 0, 0, 0, time.UTC)
+	thresholds := DefaultThresholds()
+
+	// feedTicks runs n Decide ticks at 1s spacing on st with the given sample
+	// template, returning the final (Verdict, Signals). It exists to reach the
+	// 2-sample floor of the hostBusyRing/usageRing/stealRing in one call so each
+	// sub-block's headroom/steal latch is actually evaluated.
+	feedTicks := func(st *WindowState, n int, tpl Sample) (Verdict, Signals) {
+		var (
+			v   Verdict
+			sig Signals
+		)
+		for i := 0; i < n; i++ {
+			s := tpl
+			s.Timestamp = base.Add(time.Duration(i) * time.Second)
+			v, sig = Decide(st, s, thresholds)
+		}
+		return v, sig
+	}
+
+	// hasCause reports whether a Cause with the given Kind appears in v.Causes.
+	hasCause := func(v Verdict, kind CauseKind) bool {
+		for _, c := range v.Causes {
+			if c.Kind == kind {
+				return true
+			}
+		}
+		return false
+	}
+
+	// (1) NEIGHBOUR_FILLS — dead-zone (Quota nil, PsiAvailable false), 8-core,
+	// 2 ticks HostBusyCores=8.0, UsageCores=0.5, LogicalCpus=8.0 →
+	// headroom=8−8−1=−1.0 < 0 → saturation fires. The host (non-UMH) share is
+	// HostBusyCores−UsageCores = 7.5, which exceeds the UMH share 0.5, so
+	// attribution MUST be AttributionHost via the host/container split. The
+	// demand gate is closed in the dead-zone (no pressure/throttle), so
+	// host-contention cannot fire here and is not emitted.
+	t.Run("NEIGHBOUR_FILLS", func(t *testing.T) {
+		st := &WindowState{}
+		v, sig := feedTicks(st, 2, Sample{
+			UsageCores:    0.5,
+			HostBusyCores: 8.0,
+			LogicalCpus:   8.0,
+			// Quota nil + PsiAvailable false → dead-zone; Virtualized false → no steal.
+		})
+		if !sig.SaturationFired {
+			t.Fatalf("SaturationFired: got false, want true (headroom=8−8−1=−1.0 < 0 → dead-zone saturation fires)")
+		}
+		if v.State != StateDegraded {
+			t.Fatalf("State: got %q, want %q (a full box degrades)", v.State, StateDegraded)
+		}
+		if v.Attribution != AttributionHost {
+			t.Fatalf("Attribution: got %q, want %q (host/container split: host share 7.5 > our share 0.5 → host)", v.Attribution, AttributionHost)
+		}
+		if !hasCause(v, CauseKindSaturation) {
+			t.Fatalf("Causes: no CauseKindSaturation present (a full dead-zone box is expressed as saturation; got %v)", v.Causes)
+		}
+		if hasCause(v, CauseKindHostContention) {
+			t.Fatalf("Causes: CauseKindHostContention present, want it absent in the dead-zone (demand gate closed; got %v)", v.Causes)
+		}
+	})
+
+	// (2) WE_FILL — dead-zone, 8-core, 2 ticks HostBusyCores=8.0,
+	// UsageCores=6.0, LogicalCpus=8.0 → headroom=−1.0 < 0 → saturation fires.
+	// Our share 6.0 > host share 2.0 → us → AttributionUnknown. A stub that
+	// always attributes host fails here (it would give Host, not Unknown).
+	t.Run("WE_FILL", func(t *testing.T) {
+		st := &WindowState{}
+		v, sig := feedTicks(st, 2, Sample{
+			UsageCores:    6.0,
+			HostBusyCores: 8.0,
+			LogicalCpus:   8.0,
+		})
+		if !sig.SaturationFired {
+			t.Fatalf("SaturationFired: got false, want true (headroom=8−8−1=−1.0 < 0 → saturation fires)")
+		}
+		if v.State != StateDegraded {
+			t.Fatalf("State: got %q, want %q (a full box degrades regardless of who fills it)", v.State, StateDegraded)
+		}
+		if v.Attribution != AttributionUnknown {
+			t.Fatalf("Attribution: got %q, want %q (host/container split: our share 6.0 > host share 2.0 → us → unknown; a host-always stub fails here)", v.Attribution, AttributionUnknown)
+		}
+		if hasCause(v, CauseKindHostContention) {
+			t.Fatalf("Causes: CauseKindHostContention present, want it absent in the dead-zone (demand gate closed; got %v)", v.Causes)
+		}
+	})
+
+	// (3) STEAL_CO_FIRES — virtualized (Virtualized=true), no PSI, no limit,
+	// 2 ticks StealFraction=0.20 (>StealHigh 0.10 → steal fires),
+	// HostBusyCores=8.0, LogicalCpus=8.0, UsageCores=0 → headroom=8−8−1=−1.0 < 0
+	// (saturation co-fires). With UsageCores=0 the saturation severity is 0
+	// while steal severity is severity(0.20,0.10)=0.111, so steal (external=true)
+	// is the DOMINANT cause and ranks above saturation in the sort. Attribution
+	// is therefore set by the external-cause branch (fired[0].external → Host),
+	// NOT by the host/container split — the split branch is only reached when the
+	// dominant cause is internal, so it is not evaluated here. This sub-block
+	// pins that steal stays external=true for cause ORDERING (ranks above
+	// saturation) and that steal remains a cause when it co-fires with
+	// saturation. A stub that drops steal from causes, or attributes Unknown when
+	// steal is dominant, fails here. STEAL_DOMINANT_OVERRIDES_SPLIT below isolates
+	// the external-cause path against a split that would otherwise disagree.
+	t.Run("STEAL_CO_FIRES", func(t *testing.T) {
+		st := &WindowState{}
+		v, sig := feedTicks(st, 2, Sample{
+			StealFraction: 0.20,
+			Virtualized:   true,
+			HostBusyCores: 8.0,
+			LogicalCpus:   8.0,
+			UsageCores:    0,
+			// Quota nil + PsiAvailable false → dead-zone; Virtualized true → steal processed.
+		})
+		if !sig.StealFired {
+			t.Fatalf("StealFired: got false, want true (p95 of [0.20,0.20] = 0.20 > StealHigh 0.10)")
+		}
+		if !sig.SaturationFired {
+			t.Fatalf("SaturationFired: got false, want true (headroom=8−8−1=−1.0 < 0 → saturation co-fires with steal)")
+		}
+		if v.State != StateDegraded {
+			t.Fatalf("State: got %q, want %q (steal + saturation both fire → degraded)", v.State, StateDegraded)
+		}
+		if v.Causes[0].Kind != CauseKindSteal {
+			t.Fatalf("Causes[0]: got %q, want %q (steal sev 0.111 > saturation sev 0 → steal is dominant and ranks first)", v.Causes[0].Kind, CauseKindSteal)
+		}
+		if v.Attribution != AttributionHost {
+			t.Fatalf("Attribution: got %q, want %q (steal is the dominant external cause → AttributionHost via the external-cause branch; the host/container split branch is not reached here)", v.Attribution, AttributionHost)
+		}
+		if !hasCause(v, CauseKindSteal) {
+			t.Fatalf("Causes: no CauseKindSteal present (steal must remain a cause; got %v)", v.Causes)
+		}
+		if !hasCause(v, CauseKindSaturation) {
+			t.Fatalf("Causes: no CauseKindSaturation present (saturation co-fires; got %v)", v.Causes)
+		}
+		if hasCause(v, CauseKindHostContention) {
+			t.Fatalf("Causes: CauseKindHostContention present, want it absent in the dead-zone (demand gate closed; got %v)", v.Causes)
+		}
+	})
+
+	// (3b) STEAL_DOMINANT_OVERRIDES_SPLIT — same steal-dominant co-fire as
+	// STEAL_CO_FIRES, but UsageCores=5.0 so the host/container split ALONE would
+	// resolve to Unknown (host share 8.0−5.0=3.0 < our share 5.0). The
+	// external-cause branch (steal dominant) still yields AttributionHost, so
+	// the two branches DISAGREE and this sub-block isolates that the
+	// external-cause branch takes precedence over the split when steal is
+	// dominant. A regression that reorders the split before the external check,
+	// or flips steal to external=false (so the split path takes over and yields
+	// Unknown), fails here. Saturation severity stays 0 (Quota nil, CgroupCores
+	// unset → fraction 0 → saturationAvg 0), so steal remains dominant.
+	t.Run("STEAL_DOMINANT_OVERRIDES_SPLIT", func(t *testing.T) {
+		st := &WindowState{}
+		v, sig := feedTicks(st, 2, Sample{
+			StealFraction: 0.20,
+			Virtualized:   true,
+			HostBusyCores: 8.0,
+			LogicalCpus:   8.0,
+			UsageCores:    5.0,
+		})
+		if !sig.StealFired || !sig.SaturationFired {
+			t.Fatalf("latches: StealFired=%v SaturationFired=%v, want both true", sig.StealFired, sig.SaturationFired)
+		}
+		if v.Causes[0].Kind != CauseKindSteal {
+			t.Fatalf("Causes[0]: got %q, want %q (steal must stay dominant so the external-cause branch is taken)", v.Causes[0].Kind, CauseKindSteal)
+		}
+		if v.Attribution != AttributionHost {
+			t.Fatalf("Attribution: got %q, want %q (steal dominant external → Host via the external-cause branch, even though the split alone would yield Unknown: host share 3.0 < our share 5.0)", v.Attribution, AttributionHost)
+		}
+	})
+
+	// (4) PRESSURE_ONLY_NO_HOST_CONTENTION — NOT dead-zone (Quota=&8.0 set,
+	// PsiAvailable true), 2 ticks PressureAvg60=0.30 (>PressureHigh 0.20 →
+	// pressure fires), UsageCores=1.0, HostBusyCores=2.0, LogicalCpus=8.0 →
+	// headroom=8−2−1=5.0 > 0 (no saturation). Pins that a pressure-only degrade
+	// stays degraded without saturation and without host-contention: the demand
+	// gate is open (pressure fires) but hostBusyRatio 0.25 < HostBusyHigh 0.70,
+	// so hostContentionFired is false. This guards that the attribution split
+	// does not make a pressure-only degrade spill into saturation, and that
+	// host-contention is not emitted on a low-host-busy pressure degrade.
+	t.Run("PRESSURE_ONLY_NO_HOST_CONTENTION", func(t *testing.T) {
+		quota := 8.0
+		st := &WindowState{}
+		v, sig := feedTicks(st, 2, Sample{
+			Quota:         &quota,
+			PsiAvailable:  true,
+			PressureAvg60: 0.30,
+			UsageCores:    1.0,
+			HostBusyCores: 2.0,
+			LogicalCpus:   8.0,
+		})
+		if !sig.PressureFired {
+			t.Fatalf("PressureFired: got false, want true (PressureAvg60 0.30 > PressureHigh 0.20 → pressure fires)")
+		}
+		if sig.SaturationFired {
+			t.Fatalf("SaturationFired: got true, want false (headroom=8−2−1=5.0 > 0 → no saturation; the split must not make pressure spill into saturation)")
+		}
+		if v.State != StateDegraded {
+			t.Fatalf("State: got %q, want %q (pressure fires → degraded)", v.State, StateDegraded)
+		}
+		if !hasCause(v, CauseKindPressure) {
+			t.Fatalf("Causes: no CauseKindPressure present (pressure must remain a cause; got %v)", v.Causes)
+		}
+		if hasCause(v, CauseKindHostContention) {
+			t.Fatalf("Causes: CauseKindHostContention present, want it absent (hostBusyRatio 0.25 < HostBusyHigh 0.70 → host-contention does not fire on a low-host-busy pressure degrade; got %v)", v.Causes)
 		}
 	})
 }

@@ -385,6 +385,13 @@ type Verdict struct {
 // internal causes (throttle, pressure) yield AttributionUnknown. Ties go to the
 // external/host side. Verdict.Causes is ordered dominant-first.
 //
+// Exception: when the dominant cause is internal AND SaturationFired is true
+// (the dead-zone saturation backstop), attribution repivots to the
+// host/container split — AttributionHost when the host (non-UMH) share
+// (HostBusyCores - UsageCores) exceeds the UMH share (UsageCores), else
+// AttributionUnknown. Outside the dead-zone saturation case, attribution still
+// falls back to the dominant cause's external flag as above.
+//
 // When Quota is non-nil, Decide uses it exclusively: a positive Quota yields
 // UsageCores/Quota, and a non-positive Quota (zero/negative/NaN) means
 // uncapped (the `> 0` guard rejects all three), so the unlimited-cgroup case
@@ -871,6 +878,20 @@ func Decide(st *WindowState, sample Sample, thresholds Thresholds) (Verdict, Sig
 		attr := AttributionUnknown
 		if fired[0].external {
 			attr = AttributionHost
+		} else if signals.SaturationFired {
+			// Clamp UsageCores the same way HostBusyCores is clamped at the
+			// ring insert (NaN/negative/+Inf -> 0): a corrupt negative reading
+			// would otherwise make hb-UsageCores = hb+|x| and force
+			// AttributionHost from corrupt input, mirroring the discipline the
+			// saturation latch applies to its own UsageCores-derived fraction.
+			uc := sample.UsageCores
+			if !(uc >= 0) || math.IsInf(uc, 1) {
+				uc = 0
+			}
+
+			if hb-uc > uc {
+				attr = AttributionHost
+			}
 		}
 
 		return Verdict{
