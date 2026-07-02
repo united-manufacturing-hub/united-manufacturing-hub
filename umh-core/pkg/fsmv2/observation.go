@@ -177,6 +177,10 @@ type Observation[TStatus any] struct {
 	ChildrenUnhealthy int `json:"children_unhealthy"`
 	// ShutdownRequested mirrors the desired state's shutdown flag.
 	ShutdownRequested bool `json:"ShutdownRequested"` //nolint:tagliatelle // Match existing API field name
+	// Degraded is the worker's health verdict for this observation: true when the
+	// target is unhealthy or could not be determined. The fsmv2 state and the
+	// fsmv1 adapter read it as the one authoritative verdict.
+	Degraded bool `json:"health_degraded"`
 }
 
 // observationFrameworkFields is the shared alias type used by MarshalJSON and UnmarshalJSON
@@ -188,13 +192,15 @@ type Observation[TStatus any] struct {
 // fields, so omitting an entry here would silently allow a collision.
 type observationFrameworkFields struct {
 	CollectedAt       time.Time           `json:"collected_at"`
-	ChildrenView      config.ChildrenView `json:"childrenView"`
 	State             string              `json:"state"`
+	Reason            string              `json:"health_reason"`
 	LastActionResults []deps.ActionResult `json:"last_action_results,omitempty"`
+	ChildrenView      config.ChildrenView `json:"childrenView"`
 	deps.MetricsEmbedder
 	ChildrenHealthy   int  `json:"children_healthy"`
 	ChildrenUnhealthy int  `json:"children_unhealthy"`
 	ShutdownRequested bool `json:"ShutdownRequested"` //nolint:tagliatelle
+	Degraded          bool `json:"health_degraded"`
 }
 
 // MarshalJSON produces flat JSON with framework fields and TStatus fields at the same level.
@@ -209,6 +215,8 @@ func (o Observation[TStatus]) MarshalJSON() ([]byte, error) {
 		ChildrenHealthy:   o.ChildrenHealthy,
 		ChildrenUnhealthy: o.ChildrenUnhealthy,
 		MetricsEmbedder:   o.MetricsEmbedder,
+		Reason:            o.Reason,
+		Degraded:          o.Degraded,
 	}
 
 	fwBytes, err := json.Marshal(fw)
@@ -257,6 +265,8 @@ func (o *Observation[TStatus]) UnmarshalJSON(data []byte) error {
 	o.ChildrenHealthy = fw.ChildrenHealthy
 	o.ChildrenUnhealthy = fw.ChildrenUnhealthy
 	o.MetricsEmbedder = fw.MetricsEmbedder
+	o.Reason = fw.Reason
+	o.Degraded = fw.Degraded
 
 	// TStatus fields coexist at the same level as framework fields;
 	// json.Unmarshal ignores unknown keys for struct targets.
