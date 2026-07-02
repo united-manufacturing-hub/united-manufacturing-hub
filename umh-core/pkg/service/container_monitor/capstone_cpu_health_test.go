@@ -380,31 +380,23 @@ var _ = Describe("capstone: end-to-end CPU-health model through GetStatus (rung 
 		status, err := svc.GetStatus(ctx)
 		Expect(err).NotTo(HaveOccurred())
 
-		// Both pressure (internal) and host-contention (external) fire
-		// simultaneously here. Pressure is the demand gate that lets
-		// host-contention fire (demandGateOpen = PressureFired ||
-		// ThrottleFired in Decide), so pressure CANNOT be made sub-threshold
-		// without also closing the host-contention latch — the scenario
-		// inherently runs both. Attribution=host depends on host-contention's
-		// severity exceeding pressure's. host-contention severity =
-		// severity(hostBusyRatio, 0.70) where hostBusyRatio ~=
-		// 50000/(elapsed*NumCPU) — on any plausible host this is tens-to-
-		// thousands, vs pressure's severity(0.25, 0.20)=0.0625. The margin is
-		// overwhelming and stable, so no plausible threshold retune flips
-		// Attribution here. (The prior comment's 0.88 busy-ratio / 0.60
-		// severity was wrong on two counts: the busy delta was 12,000 not
-		// 8,000 — it dropped the system-column delta — AND Decide uses
-		// hostBusyRatio = HostBusyCores/LogicalCpus, NOT the busy/total
-		// ratio.)
+		// R5 fold: host-contention is folded into saturation + the
+		// host/container attribution split. This scenario (busy host + pressure
+		// firing, our load light) degrades on the pressure cause, with
+		// Attribution=host via the split (host share > our share). No
+		// host-contention cause is emitted.
 		Expect(status.CPU.State).To(Equal("degraded"),
-			"HOST-CONTENTION: busy host + pressure firing (demand gate open) must degrade")
+			"HOST-CONTENTION: busy host + pressure firing must degrade")
 		Expect(status.CPU.Attribution).To(BeEquivalentTo("host"),
-			"HOST-CONTENTION: host-contention is external -> attribution host")
+			"HOST-CONTENTION: host share > our share -> attribution host via the split")
 		Expect(status.CPU.Causes).To(ContainElement(
+			HaveField("Kind", BeEquivalentTo("pressure")),
+		), "HOST-CONTENTION: Causes must contain {kind:'pressure'}")
+		Expect(status.CPU.Causes).NotTo(ContainElement(
 			HaveField("Kind", BeEquivalentTo("host-contention")),
-		), "HOST-CONTENTION: Causes must contain {kind:'host-contention'}")
+		), "HOST-CONTENTION: host-contention is folded (R5) — must not appear")
 		Expect(status.CPUHealth).To(Equal(models.Degraded),
-			"HOST-CONTENTION: CPUHealth must be Degraded (consistent with scenarios 1-4)")
+			"HOST-CONTENTION: CPUHealth must be Degraded")
 	})
 
 	// --- (7) STEAL-DEGRADE: a VM (hypervisor flag) with a high steal fraction

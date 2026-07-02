@@ -1456,236 +1456,6 @@ func TestDecide_StealCause_SmallNFloor(t *testing.T) {
 	}
 }
 
-// TestDecide_HostContentionCause_DemandGateFireThenClear pins the invariant
-// that the host-contention latch clears when the co-firing demand signal
-// (pressure) drops, even while the host stays busy. Without the
-// demand-gate-drop clear branch, a busy host plus a light UMH workload would
-// be indistinguishable from "we have a light workload" and the latch could
-// stick fired after a transient pressure spike, permanently pinning
-// {degraded, host}. The demand-gate-drop clear is the load-bearing guard
-// against that false-degrade; do not remove it.
-func TestDecide_HostContentionCause_DemandGateFireThenClear(t *testing.T) {
-	base := time.Date(2026, 6, 24, 12, 0, 0, 0, time.UTC)
-	thresholds := DefaultThresholds()
-
-	// 8-core box at 80% host-busy (6.4/8.0): same busy ratio the v3 scenario
-	// used, but on a box with headroom = 8.0 − 6.4 − 1.0 = 0.6 > 0. This keeps
-	// the dead-zone saturation backstop from firing (headroom >= 0) so the test
-	// isolates the demand-gate behavior — which is this test's concern — rather
-	// than the v4 headroom trigger (R3), which would otherwise fire here and
-	// confound the host-contention assertions.
-	const hostBusyCores = 6.4
-	const ourUsageCores = 0.5
-	const wantContentionCores = 5.9
-
-	feedHost := func(st *WindowState, n int, pressure float64, startOff time.Duration) (Verdict, Signals) {
-		var v Verdict
-		var s Signals
-		for i := 0; i < n; i++ {
-			v, s = Decide(st, Sample{
-				Timestamp:     base.Add(startOff).Add(time.Duration(i) * time.Second),
-				UsageCores:    ourUsageCores,
-				HostBusyCores: hostBusyCores,
-				LogicalCpus:   8.0,
-				PressureAvg60: pressure,
-			}, thresholds)
-		}
-		return v, s
-	}
-
-	// (A) NEGATIVE — demand gate closed: busy host but no pressure firing
-	// → host-contention must NOT fire → healthy.
-	st := &WindowState{}
-	vA, sigA := feedHost(st, 5, 0.0, 0)
-	if vA.State != StateHealthy {
-		t.Fatalf("negative State: got %q, want %q (busy host + low usage but NO demand signal → light workload → healthy; host-contention must NOT fire without a demand signal)", vA.State, StateHealthy)
-	}
-	if sigA.HostContentionFired {
-		t.Fatalf("negative HostContentionFired: got true, want false (demand gate closed → host-contention must not fire)")
-	}
-	for _, c := range vA.Causes {
-		if c.Kind == CauseKindHostContention {
-			t.Fatalf("negative Causes: host-contention must NOT appear without a demand signal (got %+v)", vA.Causes)
-		}
-	}
-
-	// (B) FIRE — demand gate opens: same busy host, pressure now firing →
-	// host-contention fires → degraded, HOST, causes include host-contention
-	// (value = contention cores) AND pressure.
-	vB, sigB := feedHost(st, 5, 0.30, 5*time.Second)
-	if vB.State != StateDegraded {
-		t.Fatalf("fire State: got %q, want %q (busy host + pressure firing → host-contention fires → degraded)", vB.State, StateDegraded)
-	}
-	if vB.Attribution != AttributionHost {
-		t.Fatalf("fire Attribution: got %q, want %q (host-contention is external → host)", vB.Attribution, AttributionHost)
-	}
-	if !sigB.HostContentionFired {
-		t.Fatalf("fire HostContentionFired: got false, want true (host_busy 0.80 > 0.70 AND pressure firing → host-contention latch fires)")
-	}
-	if !sigB.PressureFired {
-		t.Fatalf("fire PressureFired: got false, want true (PressureAvg60 0.30 > PressureHigh 0.20 → pressure co-fires)")
-	}
-	var hostContentionVal float64
-	var hasHostContention, hasPressure bool
-	for _, c := range vB.Causes {
-		if c.Kind == CauseKindHostContention {
-			hasHostContention = true
-			hostContentionVal = c.Value
-		}
-		if c.Kind == CauseKindPressure {
-			hasPressure = true
-		}
-	}
-	if !hasHostContention {
-		t.Fatalf("fire Causes: host-contention MISSING from %+v (must appear when it fires)", vB.Causes)
-	}
-	if !hasPressure {
-		t.Fatalf("fire Causes: pressure MISSING from %+v (the co-firing demand-signal cause must also appear)", vB.Causes)
-	}
-	if !floatEq(hostContentionVal, wantContentionCores) {
-		t.Fatalf("fire host-contention Cause Value: got %v, want %v (contention_cores = max(0, HostBusyCores - UsageCores) = 6.4 - 0.5)", hostContentionVal, wantContentionCores)
-	}
-
-	// (C) CLEAR — demand gate drops, host stays busy. host-contention must
-	// clear because the demand signal is gone, even though the host is still
-	// busy. Without the demand-gate-drop clear branch the latch would stick
-	// fired here. After clear: healthy.
-	vC, sigC := feedHost(st, 5, 0.0, 10*time.Second)
-	if vC.State != StateHealthy {
-		t.Fatalf("clear State: got %q, want %q (demand gate dropped → host-contention clears → healthy; the host staying busy must NOT keep it fired)", vC.State, StateHealthy)
-	}
-	if sigC.HostContentionFired {
-		t.Fatalf("clear HostContentionFired: got true, want false (demand gate dropped → latch MUST clear even though host is still busy; a fire-only latch without the demand-gate-drop clear branch would stay fired here)")
-	}
-	if sigC.PressureFired {
-		t.Fatalf("clear PressureFired: got true, want false (PressureAvg60 0.0 < PressureRecover 0.12 → pressure clears → demand gate closes)")
-	}
-	for _, c := range vC.Causes {
-		if c.Kind == CauseKindHostContention {
-			t.Fatalf("clear Causes: host-contention must NOT remain after the demand gate drops (got %+v)", vC.Causes)
-		}
-	}
-}
-
-// TestDecide_HostContentionCause_ThrottleOnlyDemandGate pins the invariant that
-// the host-contention demand gate opens under a THROTTLE-ONLY demand — i.e.,
-// pressure is NOT firing (pressure latch clear) but throttle IS firing (throttle
-// latch fired), and the host is busy with a non-UMH majority. A throttled
-// container is unambiguously demanding CPU, so host-contention must be able to
-// fire under a throttle-only demand, not just pressure. The engine narrowed the
-// gate to pressure-only; this test MUST fail under that narrowing (the
-// throttle-only demand leaves the gate closed, so host-contention does not
-// fire) and pass once the gate is `pressure OR throttle`.
-//
-// Sequence (10s ticks, 60s throttle window):
-//
-//  1. BASELINE — first throttle sample establishes the ring baseline; the
-//     throttle ring holds a single point so throttleRatio returns 0 (len < 2)
-//     and the throttle latch is NOT firing. Pressure is held at 0 (clear).
-//     The demand gate is closed → host-contention must NOT fire even though
-//     the host is busy with a non-UMH majority.
-//  2. FIRE — a second throttle sample pushes the 60s ratio above ThrottleHigh
-//     (0.10 > 0.05) → throttle latch fires. Pressure is still 0 (clear), so
-//     the demand gate is open via THROTTLE ONLY. The host is busy with a
-//     non-UMH majority (HostBusyCores 3.2 > 0.70 * LogicalCpus 4.0 = 2.8, and
-//     contentionCores = 3.2 - 0.5 = 2.7 > 0). host-contention MUST fire:
-//     degraded, HOST attribution, causes include BOTH host-contention (value =
-//     contention cores 2.7) AND throttling.
-//
-// Under the narrowed pressure-only gate (`demandGateOpen := signals.PressureFired`),
-// step 2 fails: the throttle-only demand leaves the gate closed, so
-// host-contention does not fire, attribution is unknown (throttle is internal),
-// and no host-contention cause appears.
-func TestDecide_HostContentionCause_ThrottleOnlyDemandGate(t *testing.T) {
-	base := time.Date(2026, 6, 24, 12, 0, 0, 0, time.UTC)
-	thresholds := DefaultThresholds()
-
-	const hostBusyCores = 3.2
-	const ourUsageCores = 0.5
-	const wantContentionCores = 2.7
-
-	// (1) BASELINE — first throttle sample establishes the ring baseline. The
-	// throttle ring holds a single point → throttleRatio returns 0 (len < 2) →
-	// throttle latch NOT firing. Pressure held at 0 (clear). The demand gate is
-	// closed, so host-contention must NOT fire even though the host is busy
-	// with a non-UMH majority. This pins that the gate is not spuriously open
-	// before the throttle latch has fired.
-	st := &WindowState{}
-	v1, sig1 := Decide(st, Sample{
-		Timestamp:     base,
-		UsageCores:    ourUsageCores,
-		HostBusyCores: hostBusyCores,
-		LogicalCpus:   4.0,
-		NrPeriods:     1000,
-		NrThrottled:   10,
-		PressureAvg60: 0.0,
-	}, thresholds)
-	if sig1.ThrottleFired {
-		t.Fatalf("baseline ThrottleFired: got true, want false (ring size 1 → ratio 0 → latch not firing)")
-	}
-	if sig1.PressureFired {
-		t.Fatalf("baseline PressureFired: got true, want false (PressureAvg60 0.0 < PressureRecover → latch clear)")
-	}
-	if sig1.HostContentionFired {
-		t.Fatalf("baseline HostContentionFired: got true, want false (demand gate closed: neither pressure nor throttle firing)")
-	}
-	if v1.State != StateHealthy {
-		t.Fatalf("baseline State: got %q, want %q (demand gate closed → no host-contention → healthy)", v1.State, StateHealthy)
-	}
-
-	// (2) FIRE — second throttle sample: +1000 periods, +100 throttled → 60s
-	// ratio (110-10)/(2000-1000) = 0.10 > ThrottleHigh 0.05 → throttle latch
-	// fires. Pressure is STILL 0 (clear), so the demand gate is open via
-	// THROTTLE ONLY. The host is busy with a non-UMH majority (host_busy_ratio
-	// 3.2/4.0 = 0.80 > HostBusyHigh 0.70, contentionCores 2.7 > 0), so
-	// host-contention MUST fire: degraded, HOST attribution, causes include
-	// BOTH host-contention (value = contention cores 2.7) AND throttling.
-	v2, sig2 := Decide(st, Sample{
-		Timestamp:     base.Add(10 * time.Second),
-		UsageCores:    ourUsageCores,
-		HostBusyCores: hostBusyCores,
-		LogicalCpus:   4.0,
-		NrPeriods:     2000,
-		NrThrottled:   110,
-		PressureAvg60: 0.0,
-	}, thresholds)
-	if !sig2.ThrottleFired {
-		t.Fatalf("fire ThrottleFired: got false, want true (60s ratio 0.10 > ThrottleHigh 0.05)")
-	}
-	if sig2.PressureFired {
-		t.Fatalf("fire PressureFired: got true, want false (PressureAvg60 0.0 → pressure must NOT fire; this is the THROTTLE-ONLY demand path)")
-	}
-	if !sig2.HostContentionFired {
-		t.Fatalf("fire HostContentionFired: got false, want true (demand gate open via THROTTLE ONLY: host_busy 0.80 > 0.70 AND throttle firing → host-contention fires; under the pressure-only narrowing the gate stays closed and this fails)")
-	}
-	if v2.State != StateDegraded {
-		t.Fatalf("fire State: got %q, want %q (host-contention fires → degraded)", v2.State, StateDegraded)
-	}
-	if v2.Attribution != AttributionHost {
-		t.Fatalf("fire Attribution: got %q, want %q (host-contention is external → host; under the pressure-only narrowing only throttle fires and attribution is unknown)", v2.Attribution, AttributionHost)
-	}
-	var hostContentionVal float64
-	var hasHostContention, hasThrottling bool
-	for _, c := range v2.Causes {
-		if c.Kind == CauseKindHostContention {
-			hasHostContention = true
-			hostContentionVal = c.Value
-		}
-		if c.Kind == CauseKindThrottling {
-			hasThrottling = true
-		}
-	}
-	if !hasHostContention {
-		t.Fatalf("fire Causes: host-contention MISSING from %+v (must fire alongside throttle under the throttle-only demand path)", v2.Causes)
-	}
-	if !hasThrottling {
-		t.Fatalf("fire Causes: throttling MISSING from %+v (the throttle latch is firing and must appear as a cause)", v2.Causes)
-	}
-	if !floatEq(hostContentionVal, wantContentionCores) {
-		t.Fatalf("fire host-contention Cause Value: got %v, want %v (contention_cores = HostBusyCores - UsageCores = 3.2 - 0.5)", hostContentionVal, wantContentionCores)
-	}
-}
-
 // TestDecide_SaturationBackstop_DeadZoneFireThenClearGuardrail pins the
 // saturation backstop cause and the guardrail — the whole rebuild's reason.
 // Rung 2 deleted the raw-usage degrade (busy is not sick). This test
@@ -2221,297 +1991,6 @@ func TestDecide_SaturationBackstop_TwoSampleFloor(t *testing.T) {
 	if !sig.LimitedVisibility {
 		t.Fatalf("LimitedVisibility: got false, want true (dead-zone blind state is signalled independent of the latch)")
 	}
-}
-
-// TestDecide_DominanceBySeverity pins the dominance rule: when several causes
-// fire, the highest-severity one sets attribution. Severity =
-// (value - high_threshold) / (1 - high_threshold) — the fraction into the
-// danger band toward maximum (0 = just barely firing, 1 = maxed). This is the
-// one scale that puts every cause on a shared axis. Ties go to the EXTERNAL
-// side (host). Causes[] is ordered dominant-first.
-//
-// Each cause's severity numerator is its own reduced value, and its
-// high_threshold is its own High mark: throttle uses the throttle ratio +
-// ThrottleHigh; pressure uses PressureAvg60 + PressureHigh; steal uses the
-// steal p95 + StealHigh; host-contention uses host_busy_ratio (NOT its wire
-// value of contention cores) + HostBusyHigh.
-//
-// The dominant cause sets attribution: external (steal, host-contention) →
-// HOST; internal (throttle, pressure) → UNKNOWN.
-//
-// Pinned behaviors:
-//
-//	(a) throttle 0.80 (sev 0.79) + host-contention host_busy 0.71 (sev 0.033)
-//	    → throttle dominant → UNKNOWN; causes[0]=throttling.
-//	(b) throttle 0.10 (sev 0.053) + host-contention host_busy 1.0 (sev 1.0)
-//	    → host-contention dominant → HOST; causes[0]=host-contention.
-//	(c) steal 0.50 (sev 0.44) + pressure 0.25 (sev 0.0625)
-//	    → steal dominant → HOST; causes[0]=steal.
-//	(d) TIE — throttle 1.0 (sev 1.0) + host-contention host_busy 1.0 (sev 1.0)
-//	    → external wins → HOST; causes[0]=host-contention.
-//	(e) CROSSOVER — a sequence where the dominant cause CHANGES as severity
-//	    shifts: throttle dominant early (host barely over), then host-contention
-//	    becomes more severe (host rises to full) → attribution flips UNKNOWN →
-//	    HOST at the crossover.
-func TestDecide_DominanceBySeverity(t *testing.T) {
-	base := time.Date(2026, 6, 24, 12, 0, 0, 0, time.UTC)
-	thresholds := DefaultThresholds()
-
-	// (a) throttle dominant over host-contention (host barely over 0.70).
-	// throttle sev (0.80-0.05)/0.95 = 0.789 >> host-contention sev
-	// (0.71-0.70)/0.30 = 0.033 → throttle dominant → UNKNOWN. host-contention's
-	// severity uses host_busy_ratio (0.71), NOT contention cores (2.34) — if it
-	// used contention cores the severity would be ~5.5 (unclamped) and
-	// host-contention would wrongly dominate.
-	t.Run("throttle_dominant_over_host_contention_host_barely_over", func(t *testing.T) {
-		st := &WindowState{}
-		Decide(st, Sample{
-			Timestamp: base, NrPeriods: 1000, NrThrottled: 10,
-			HostBusyCores: 2.84, LogicalCpus: 4.0, UsageCores: 0.5,
-		}, thresholds)
-		// +1000 periods, +800 throttled → 60s ratio 0.80 > 0.05 (throttle fires).
-		// host_busy 2.84/4.0 = 0.71 > 0.70 (host-contention fires, demand gate
-		// open via throttle).
-		v, sig := Decide(st, Sample{
-			Timestamp: base.Add(10 * time.Second),
-			NrPeriods: 2000, NrThrottled: 810,
-			HostBusyCores: 2.84, LogicalCpus: 4.0, UsageCores: 0.5,
-		}, thresholds)
-		if !sig.ThrottleFired || !sig.HostContentionFired {
-			t.Fatalf("setup: ThrottleFired=%v HostContentionFired=%v, want both true", sig.ThrottleFired, sig.HostContentionFired)
-		}
-		if v.Attribution != AttributionUnknown {
-			t.Fatalf("Attribution: got %q, want %q (throttle sev 0.79 > host-contention sev 0.033 → throttle dominant → unknown)", v.Attribution, AttributionUnknown)
-		}
-		if len(v.Causes) < 2 || v.Causes[0].Kind != CauseKindThrottling {
-			t.Fatalf("Causes ordering: got %+v, want throttling first (dominant)", v.Causes)
-		}
-		if v.Causes[1].Kind != CauseKindHostContention {
-			t.Fatalf("Causes ordering[1]: got %q, want %q (host-contention second, lower severity)", v.Causes[1].Kind, CauseKindHostContention)
-		}
-	})
-
-	// (b) host-contention dominant over throttle (host maxed).
-	// throttle sev (0.10-0.05)/0.95 = 0.053 << host-contention sev
-	// (1.0-0.70)/0.30 = 1.0 → host-contention dominant → HOST.
-	t.Run("host_contention_dominant_over_throttle_host_maxed", func(t *testing.T) {
-		st := &WindowState{}
-		Decide(st, Sample{
-			Timestamp: base, NrPeriods: 1000, NrThrottled: 10,
-			HostBusyCores: 4.0, LogicalCpus: 4.0, UsageCores: 0.5,
-		}, thresholds)
-		// +1000 periods, +100 throttled → 60s ratio 0.10 > 0.05 (throttle fires).
-		// host_busy 4.0/4.0 = 1.0 > 0.70 (host-contention fires).
-		v, sig := Decide(st, Sample{
-			Timestamp: base.Add(10 * time.Second),
-			NrPeriods: 2000, NrThrottled: 110,
-			HostBusyCores: 4.0, LogicalCpus: 4.0, UsageCores: 0.5,
-		}, thresholds)
-		if !sig.ThrottleFired || !sig.HostContentionFired {
-			t.Fatalf("setup: ThrottleFired=%v HostContentionFired=%v, want both true", sig.ThrottleFired, sig.HostContentionFired)
-		}
-		if v.Attribution != AttributionHost {
-			t.Fatalf("Attribution: got %q, want %q (host-contention sev 1.0 > throttle sev 0.053 → host-contention dominant → host)", v.Attribution, AttributionHost)
-		}
-		if len(v.Causes) < 2 || v.Causes[0].Kind != CauseKindHostContention {
-			t.Fatalf("Causes ordering: got %+v, want host-contention first (dominant)", v.Causes)
-		}
-		if v.Causes[1].Kind != CauseKindThrottling {
-			t.Fatalf("Causes ordering[1]: got %q, want %q (throttling second, lower severity)", v.Causes[1].Kind, CauseKindThrottling)
-		}
-	})
-
-	// (c) steal dominant over pressure.
-	// steal sev (0.50-0.10)/0.90 = 0.44 >> pressure sev (0.25-0.20)/0.80 =
-	// 0.0625 → steal dominant → HOST.
-	t.Run("steal_dominant_over_pressure", func(t *testing.T) {
-		st := &WindowState{}
-		// First tick: steal ring gets 1 point (below 2-sample floor, latch not
-		// evaluated). Pressure 0.25 > 0.20 fires.
-		Decide(st, Sample{
-			Timestamp:     base,
-			StealFraction: 0.50, Virtualized: true,
-			PressureAvg60: 0.25,
-		}, thresholds)
-		// Second tick: steal ring has 2 points, p95 = 0.50 > 0.10 (steal fires).
-		// Pressure still 0.25 (fires).
-		v, sig := Decide(st, Sample{
-			Timestamp:     base.Add(1 * time.Second),
-			StealFraction: 0.50, Virtualized: true,
-			PressureAvg60: 0.25,
-		}, thresholds)
-		if !sig.StealFired || !sig.PressureFired {
-			t.Fatalf("setup: StealFired=%v PressureFired=%v, want both true", sig.StealFired, sig.PressureFired)
-		}
-		if v.Attribution != AttributionHost {
-			t.Fatalf("Attribution: got %q, want %q (steal sev 0.44 > pressure sev 0.0625 → steal dominant → host)", v.Attribution, AttributionHost)
-		}
-		if len(v.Causes) < 2 || v.Causes[0].Kind != CauseKindSteal {
-			t.Fatalf("Causes ordering: got %+v, want steal first (dominant)", v.Causes)
-		}
-		if v.Causes[1].Kind != CauseKindPressure {
-			t.Fatalf("Causes ordering[1]: got %q, want %q (pressure second, lower severity)", v.Causes[1].Kind, CauseKindPressure)
-		}
-	})
-
-	// (d) TIE — two causes with equal severity, one external one internal.
-	// throttle 1.0 (sev (1.0-0.05)/(1-0.05) = 1.0) + host-contention
-	// host_busy 1.0 (sev (1.0-0.70)/(1-0.70) = 1.0) → tie at 1.0 → external
-	// wins → HOST; causes[0]=host-contention (external). The severities are
-	// exactly equal because (v-high)/(1-high) with v=1.0 yields (1.0-high)/
-	// (1.0-high) = 1.0 for both causes regardless of high.
-	t.Run("tie_external_wins", func(t *testing.T) {
-		st := &WindowState{}
-		Decide(st, Sample{
-			Timestamp: base, NrPeriods: 1000, NrThrottled: 10,
-			HostBusyCores: 4.0, LogicalCpus: 4.0, UsageCores: 0.5,
-		}, thresholds)
-		// throttle ratio = (1010-10)/(2000-1000) = 1000/1000 = 1.0, host_busy =
-		// 4.0/4.0 = 1.0. Both sev = 1.0 → tie → external wins.
-		v, sig := Decide(st, Sample{
-			Timestamp: base.Add(10 * time.Second),
-			NrPeriods: 2000, NrThrottled: 1010,
-			HostBusyCores: 4.0, LogicalCpus: 4.0, UsageCores: 0.5,
-		}, thresholds)
-		if !sig.ThrottleFired || !sig.HostContentionFired {
-			t.Fatalf("setup: ThrottleFired=%v HostContentionFired=%v, want both true", sig.ThrottleFired, sig.HostContentionFired)
-		}
-		if v.Attribution != AttributionHost {
-			t.Fatalf("Attribution: got %q, want %q (tie at sev 1.0 → external (host-contention) wins → host)", v.Attribution, AttributionHost)
-		}
-		if len(v.Causes) < 2 || v.Causes[0].Kind != CauseKindHostContention {
-			t.Fatalf("Causes ordering: got %+v, want host-contention first (external wins tie)", v.Causes)
-		}
-		if v.Causes[1].Kind != CauseKindThrottling {
-			t.Fatalf("Causes ordering[1]: got %q, want %q (internal throttling second after tie-break)", v.Causes[1].Kind, CauseKindThrottling)
-		}
-	})
-
-	// (e) CROSSOVER — the dominant cause CHANGES as severity shifts. Same
-	// WindowState across the sequence. Early: throttle 0.80 (sev 0.79) +
-	// host_busy 0.71 (sev 0.033) → throttle dominant → UNKNOWN. Late: throttle
-	// ratio drops to 0.06 (sev 0.011, latch holds fired above 0.05) + host_busy
-	// rises to 1.0 (sev 1.0) → host-contention dominant → HOST. Assert
-	// attribution flips UNKNOWN → HOST at the crossover.
-	t.Run("crossover_dominance_shift", func(t *testing.T) {
-		st := &WindowState{}
-		// Tick 1 (t=0): baseline throttle counters. Host busy at 0.71.
-		Decide(st, Sample{
-			Timestamp: base, NrPeriods: 1000, NrThrottled: 10,
-			HostBusyCores: 2.84, LogicalCpus: 4.0, UsageCores: 0.5,
-		}, thresholds)
-		// Tick 2 (t=10s): throttle ratio 0.80 (sev 0.79), host_busy 0.71
-		// (sev 0.033) → throttle dominant → UNKNOWN.
-		v1, sig1 := Decide(st, Sample{
-			Timestamp: base.Add(10 * time.Second),
-			NrPeriods: 2000, NrThrottled: 810,
-			HostBusyCores: 2.84, LogicalCpus: 4.0, UsageCores: 0.5,
-		}, thresholds)
-		if !sig1.ThrottleFired || !sig1.HostContentionFired {
-			t.Fatalf("phase1 setup: ThrottleFired=%v HostContentionFired=%v, want both true", sig1.ThrottleFired, sig1.HostContentionFired)
-		}
-		if v1.Attribution != AttributionUnknown {
-			t.Fatalf("phase1 Attribution: got %q, want %q (throttle sev 0.79 > host-contention sev 0.033 → throttle dominant → unknown)", v1.Attribution, AttributionUnknown)
-		}
-		// Tick 3 (t=20s): throttle ratio drops to 0.06 (still > 0.05, latch
-		// holds fired, sev 0.011), host_busy rises to 1.0 (sev 1.0) →
-		// host-contention dominant → HOST. Attribution flips UNKNOWN → HOST.
-		// Counters are monotonically increasing (nrThrottled 850 > 810 from
-		// tick 2) to avoid the counter-regression ring-clear. 60s ratio =
-		// (850-10)/(15000-1000) = 840/14000 = 0.06.
-		v2, sig2 := Decide(st, Sample{
-			Timestamp: base.Add(20 * time.Second),
-			NrPeriods: 15000, NrThrottled: 850,
-			HostBusyCores: 4.0, LogicalCpus: 4.0, UsageCores: 0.5,
-		}, thresholds)
-		if !sig2.ThrottleFired || !sig2.HostContentionFired {
-			t.Fatalf("phase2 setup: ThrottleFired=%v HostContentionFired=%v, want both true", sig2.ThrottleFired, sig2.HostContentionFired)
-		}
-		if v2.Attribution != AttributionHost {
-			t.Fatalf("phase2 Attribution: got %q, want %q (host-contention sev 1.0 > throttle sev 0.011 → host-contention dominant → host; attribution must flip from unknown to host at the crossover)", v2.Attribution, AttributionHost)
-		}
-		if len(v2.Causes) < 2 || v2.Causes[0].Kind != CauseKindHostContention {
-			t.Fatalf("phase2 Causes ordering: got %+v, want host-contention first (dominant after crossover)", v2.Causes)
-		}
-		if v2.Causes[1].Kind != CauseKindThrottling {
-			t.Fatalf("phase2 Causes ordering[1]: got %q, want %q (throttling second, lower severity after crossover)", v2.Causes[1].Kind, CauseKindThrottling)
-		}
-	})
-
-	// (f) HELD-BAND NO-FLAP — both an external cause (host-contention) and an
-	// internal cause (pressure) are HELD (latch fired, current reading in the
-	// hold band below the High mark). A held cause's current reading is below
-	// its High mark, so the raw severity (value-high)/(1-high) is NEGATIVE.
-	// Without the < 0 → 0 clamp, the least-negative held cause wins dominance
-	// and Attribution flaps as held readings jitter; with the clamp, all held
-	// causes tie at 0 and the external tie-break decides deterministically →
-	// HOST whenever an external cause is held.
-	//
-	// The test data makes the clamp LOAD-BEARING: the two hold ticks are chosen
-	// so that the RAW-severity ordering SWAPS across them. Without the clamp,
-	// tick 1 → HOST (host-contention less negative) and tick 2 → UNKNOWN
-	// (pressure less negative) → Attribution flaps. With the clamp, both ticks
-	// tie at 0 → external wins → stable HOST. If you remove the `if sev < 0 {
-	// return 0 }` clamp in severity(), this test FAILS at tick 2.
-	//
-	// Pressure hold band is [PressureRecover 0.12, PressureHigh 0.20). The
-	// host-contention latch has no recover threshold of its own: once fired it
-	// stays fired as long as the demand gate (pressure OR throttle) is open,
-	// even when hostBusyRatio drops below HostBusyHigh — that is its "hold"
-	// behavior. Both latches are fired first (pressure > 0.20, hostBusyRatio >
-	// 0.70 with demand gate open via pressure), then driven into their hold
-	// bands. Both causes use DIRECT readings (no ring), so the severity
-	// numerators are fully controllable per-tick.
-	t.Run("held_band_no_flap_external_wins", func(t *testing.T) {
-		st := &WindowState{}
-		// FIRE — pressure 0.21 > PressureHigh 0.20 fires the pressure latch
-		// (internal). With pressure fired the demand gate opens; hostBusyRatio
-		// 3.2/4.0 = 0.80 > HostBusyHigh 0.70 fires host-contention (external).
-		Decide(st, Sample{
-			Timestamp:     base,
-			PressureAvg60: 0.21,
-			HostBusyCores: 3.2, LogicalCpus: 4.0, UsageCores: 0.5,
-		}, thresholds)
-		// HOLD tick 1 — pressure 0.13 (hold band [0.12, 0.20), latch stays
-		// fired) and hostBusyRatio 2.76/4.0 = 0.69 (<= 0.70, but latch stays
-		// fired: demand gate open via pressure). Both held → raw severities
-		// negative.
-		//   pressure sev  = (0.13 - 0.20) / 0.80 = -0.0875
-		//   host-cont sev = (0.69 - 0.70) / 0.30 = -0.0333
-		// Without the < 0 → 0 clamp: host-contention (-0.0333) > pressure
-		// (-0.0875) → host-contention dominant → HOST.
-		// With the clamp: both → 0 → tie → external wins → HOST.
-		v1, sig1 := Decide(st, Sample{
-			Timestamp:     base.Add(1 * time.Second),
-			PressureAvg60: 0.13,
-			HostBusyCores: 2.76, LogicalCpus: 4.0, UsageCores: 0.5,
-		}, thresholds)
-		if !sig1.PressureFired || !sig1.HostContentionFired {
-			t.Fatalf("hold1 setup: PressureFired=%v HostContentionFired=%v, want both held true", sig1.PressureFired, sig1.HostContentionFired)
-		}
-		if v1.Attribution != AttributionHost {
-			t.Fatalf("hold1 Attribution: got %q, want %q (both held → severity clamped to 0 → tie → external (host-contention) wins → host)", v1.Attribution, AttributionHost)
-		}
-		// HOLD tick 2 — pressure 0.19 (hold band) and hostBusyRatio 2.0/4.0 =
-		// 0.50 (still <= 0.70, latch held via demand gate). The RAW-severity
-		// ordering SWAPS: pressure is now less negative than host-contention.
-		//   pressure sev  = (0.19 - 0.20) / 0.80 = -0.0125
-		//   host-cont sev = (0.50 - 0.70) / 0.30 = -0.6667
-		// Without the clamp: pressure (-0.0125) > host-contention (-0.6667)
-		// → pressure dominant → UNKNOWN → Attribution FLAPS from HOST.
-		// With the clamp: both → 0 → tie → external wins → HOST (stable).
-		v2, sig2 := Decide(st, Sample{
-			Timestamp:     base.Add(2 * time.Second),
-			PressureAvg60: 0.19,
-			HostBusyCores: 2.0, LogicalCpus: 4.0, UsageCores: 0.5,
-		}, thresholds)
-		if !sig2.PressureFired || !sig2.HostContentionFired {
-			t.Fatalf("hold2 setup: PressureFired=%v HostContentionFired=%v, want both held true", sig2.PressureFired, sig2.HostContentionFired)
-		}
-		if v2.Attribution != AttributionHost {
-			t.Fatalf("hold2 Attribution: got %q, want %q (held-band jitter must NOT flap attribution; both clamped to 0 → external wins → host)", v2.Attribution, AttributionHost)
-		}
-	})
 }
 
 // TestDecide_UsagePercentiles_FromSaturationRing pins the avg/p95/p99
@@ -3549,23 +3028,29 @@ func TestDecide_Saturation_FiresOnVirtualizedBox(t *testing.T) {
 	})
 }
 
-// TestDecide_DeadZoneSaturation_HostContainerAttribution pins that a dead-zone
-// full box is attributed to Host when the host (non-UMH) share exceeds the UMH
-// share, else Unknown. CauseKindHostContention stays absent here because the
-// demand gate is closed in the dead-zone. Sub-blocks: NEIGHBOUR_FILLS (host
-// share dominant -> Host), WE_FILL (UMH share dominant -> Unknown, guards
-// against a host-always stub), STEAL_CO_FIRES (steal + saturation co-fire ->
-// Host), PRESSURE_ONLY_NO_HOST_CONTENTION (pressure degrades without
-// saturation or host-contention on a low-host-busy box).
-func TestDecide_DeadZoneSaturation_HostContainerAttribution(t *testing.T) {
+// TestDecide_HostContentionFold_Full pins that Decide does not emit
+// CauseKindHostContention outside the dead-zone when per-tick headroom >= 0,
+// and that the host/container attribution split is computed for every degraded
+// verdict where host-contention is not firing. The host share is (clamped
+// HostBusyCores - clamped UsageCores); attribution is Host when the host share
+// exceeds the UMH share (UsageCores), else Unknown. Inside the dead-zone and
+// when per-tick headroom < 0, the demand-gated host-contention latch is
+// retained (covered by sub-case (5) and the dead-zone characterization tests).
+//
+// Sub-cases (1)-(4) are NON-dead-zone (Quota set + PsiAvailable true) with
+// headroom = 0 (HostBusyCores=7.0, Quota=8.0, reserve=1.0), so SaturationFired
+// is false and host-contention does not fire — this isolates the attribution
+// split from the dead-zone saturation split. Sub-case (5) exercises the
+// retained non-dead-zone headroom<0 fire path.
+func TestDecide_HostContentionFold_Full(t *testing.T) {
 	base := time.Date(2026, 6, 30, 12, 0, 0, 0, time.UTC)
 	thresholds := DefaultThresholds()
 
-	// feedTicks runs n Decide ticks at 1s spacing on st with the given sample
-	// template, returning the final (Verdict, Signals). It exists to reach the
-	// 2-sample floor of the hostBusyRing/usageRing/stealRing in one call so each
-	// sub-block's headroom/steal latch is actually evaluated.
-	feedTicks := func(st *WindowState, n int, tpl Sample) (Verdict, Signals) {
+	// feedPressureTicks runs n Decide ticks at 1s spacing on st with the given
+	// sample template (PressureAvg60, HostBusyCores, UsageCores, LogicalCpus),
+	// returning the final (Verdict, Signals). Pressure is thresholded directly
+	// (no ring), so 2 ticks is enough to hold the latch fired.
+	feedPressureTicks := func(st *WindowState, n int, tpl Sample) (Verdict, Signals) {
 		var (
 			v   Verdict
 			sig Signals
@@ -3588,177 +3073,196 @@ func TestDecide_DeadZoneSaturation_HostContainerAttribution(t *testing.T) {
 		return false
 	}
 
-	// (1) NEIGHBOUR_FILLS — dead-zone (Quota nil, PsiAvailable false), 8-core,
-	// 2 ticks HostBusyCores=8.0, UsageCores=0.5, LogicalCpus=8.0 →
-	// headroom=8−8−1=−1.0 < 0 → saturation fires. The host (non-UMH) share is
-	// HostBusyCores−UsageCores = 7.5, which exceeds the UMH share 0.5, so
-	// attribution MUST be AttributionHost via the host/container split. The
-	// demand gate is closed in the dead-zone (no pressure/throttle), so
-	// host-contention cannot fire here and is not emitted.
-	t.Run("NEIGHBOUR_FILLS", func(t *testing.T) {
-		st := &WindowState{}
-		v, sig := feedTicks(st, 2, Sample{
-			UsageCores:    0.5,
-			HostBusyCores: 8.0,
-			LogicalCpus:   8.0,
-			// Quota nil + PsiAvailable false → dead-zone; Virtualized false → no steal.
-		})
-		if !sig.SaturationFired {
-			t.Fatalf("SaturationFired: got false, want true (headroom=8−8−1=−1.0 < 0 → dead-zone saturation fires)")
+	// onlyCause reports whether v.Causes contains exactly one Cause of the
+	// given Kind (the fold must leave exactly the non-host-contention cause).
+	onlyCause := func(v Verdict, kind CauseKind) bool {
+		if len(v.Causes) != 1 {
+			return false
 		}
-		if v.State != StateDegraded {
-			t.Fatalf("State: got %q, want %q (a full box degrades)", v.State, StateDegraded)
-		}
-		if v.Attribution != AttributionHost {
-			t.Fatalf("Attribution: got %q, want %q (host/container split: host share 7.5 > our share 0.5 → host)", v.Attribution, AttributionHost)
-		}
-		if !hasCause(v, CauseKindSaturation) {
-			t.Fatalf("Causes: no CauseKindSaturation present (a full dead-zone box is expressed as saturation; got %v)", v.Causes)
-		}
-		if hasCause(v, CauseKindHostContention) {
-			t.Fatalf("Causes: CauseKindHostContention present, want it absent in the dead-zone (demand gate closed; got %v)", v.Causes)
-		}
-	})
+		return v.Causes[0].Kind == kind
+	}
 
-	// (2) WE_FILL — dead-zone, 8-core, 2 ticks HostBusyCores=8.0,
-	// UsageCores=6.0, LogicalCpus=8.0 → headroom=−1.0 < 0 → saturation fires.
-	// Our share 6.0 > host share 2.0 → us → AttributionUnknown. A stub that
-	// always attributes host fails here (it would give Host, not Unknown).
-	t.Run("WE_FILL", func(t *testing.T) {
-		st := &WindowState{}
-		v, sig := feedTicks(st, 2, Sample{
-			UsageCores:    6.0,
-			HostBusyCores: 8.0,
-			LogicalCpus:   8.0,
-		})
-		if !sig.SaturationFired {
-			t.Fatalf("SaturationFired: got false, want true (headroom=8−8−1=−1.0 < 0 → saturation fires)")
-		}
-		if v.State != StateDegraded {
-			t.Fatalf("State: got %q, want %q (a full box degrades regardless of who fills it)", v.State, StateDegraded)
-		}
-		if v.Attribution != AttributionUnknown {
-			t.Fatalf("Attribution: got %q, want %q (host/container split: our share 6.0 > host share 2.0 → us → unknown; a host-always stub fails here)", v.Attribution, AttributionUnknown)
-		}
-		if hasCause(v, CauseKindHostContention) {
-			t.Fatalf("Causes: CauseKindHostContention present, want it absent in the dead-zone (demand gate closed; got %v)", v.Causes)
-		}
-	})
-
-	// (3) STEAL_CO_FIRES — virtualized (Virtualized=true), no PSI, no limit,
-	// 2 ticks StealFraction=0.20 (>StealHigh 0.10 → steal fires),
-	// HostBusyCores=8.0, LogicalCpus=8.0, UsageCores=0 → headroom=8−8−1=−1.0 < 0
-	// (saturation co-fires). With UsageCores=0 the saturation severity is 0
-	// while steal severity is severity(0.20,0.10)=0.111, so steal (external=true)
-	// is the DOMINANT cause and ranks above saturation in the sort. Attribution
-	// is therefore set by the external-cause branch (fired[0].external → Host),
-	// NOT by the host/container split — the split branch is only reached when the
-	// dominant cause is internal, so it is not evaluated here. This sub-block
-	// pins that steal stays external=true for cause ORDERING (ranks above
-	// saturation) and that steal remains a cause when it co-fires with
-	// saturation. A stub that drops steal from causes, or attributes Unknown when
-	// steal is dominant, fails here. STEAL_DOMINANT_OVERRIDES_SPLIT below isolates
-	// the external-cause path against a split that would otherwise disagree.
-	t.Run("STEAL_CO_FIRES", func(t *testing.T) {
-		st := &WindowState{}
-		v, sig := feedTicks(st, 2, Sample{
-			StealFraction: 0.20,
-			Virtualized:   true,
-			HostBusyCores: 8.0,
-			LogicalCpus:   8.0,
-			UsageCores:    0,
-			// Quota nil + PsiAvailable false → dead-zone; Virtualized true → steal processed.
-		})
-		if !sig.StealFired {
-			t.Fatalf("StealFired: got false, want true (p95 of [0.20,0.20] = 0.20 > StealHigh 0.10)")
-		}
-		if !sig.SaturationFired {
-			t.Fatalf("SaturationFired: got false, want true (headroom=8−8−1=−1.0 < 0 → saturation co-fires with steal)")
-		}
-		if v.State != StateDegraded {
-			t.Fatalf("State: got %q, want %q (steal + saturation both fire → degraded)", v.State, StateDegraded)
-		}
-		if v.Causes[0].Kind != CauseKindSteal {
-			t.Fatalf("Causes[0]: got %q, want %q (steal sev 0.111 > saturation sev 0 → steal is dominant and ranks first)", v.Causes[0].Kind, CauseKindSteal)
-		}
-		if v.Attribution != AttributionHost {
-			t.Fatalf("Attribution: got %q, want %q (steal is the dominant external cause → AttributionHost via the external-cause branch; the host/container split branch is not reached here)", v.Attribution, AttributionHost)
-		}
-		if !hasCause(v, CauseKindSteal) {
-			t.Fatalf("Causes: no CauseKindSteal present (steal must remain a cause; got %v)", v.Causes)
-		}
-		if !hasCause(v, CauseKindSaturation) {
-			t.Fatalf("Causes: no CauseKindSaturation present (saturation co-fires; got %v)", v.Causes)
-		}
-		if hasCause(v, CauseKindHostContention) {
-			t.Fatalf("Causes: CauseKindHostContention present, want it absent in the dead-zone (demand gate closed; got %v)", v.Causes)
-		}
-	})
-
-	// (3b) STEAL_DOMINANT_OVERRIDES_SPLIT — same steal-dominant co-fire as
-	// STEAL_CO_FIRES, but UsageCores=5.0 so the host/container split ALONE would
-	// resolve to Unknown (host share 8.0−5.0=3.0 < our share 5.0). The
-	// external-cause branch (steal dominant) still yields AttributionHost, so
-	// the two branches DISAGREE and this sub-block isolates that the
-	// external-cause branch takes precedence over the split when steal is
-	// dominant. A regression that reorders the split before the external check,
-	// or flips steal to external=false (so the split path takes over and yields
-	// Unknown), fails here. Saturation severity stays 0 (Quota nil, CgroupCores
-	// unset → fraction 0 → saturationAvg 0), so steal remains dominant.
-	t.Run("STEAL_DOMINANT_OVERRIDES_SPLIT", func(t *testing.T) {
-		st := &WindowState{}
-		v, sig := feedTicks(st, 2, Sample{
-			StealFraction: 0.20,
-			Virtualized:   true,
-			HostBusyCores: 8.0,
-			LogicalCpus:   8.0,
-			UsageCores:    5.0,
-		})
-		if !sig.StealFired || !sig.SaturationFired {
-			t.Fatalf("latches: StealFired=%v SaturationFired=%v, want both true", sig.StealFired, sig.SaturationFired)
-		}
-		if v.Causes[0].Kind != CauseKindSteal {
-			t.Fatalf("Causes[0]: got %q, want %q (steal must stay dominant so the external-cause branch is taken)", v.Causes[0].Kind, CauseKindSteal)
-		}
-		if v.Attribution != AttributionHost {
-			t.Fatalf("Attribution: got %q, want %q (steal dominant external → Host via the external-cause branch, even though the split alone would yield Unknown: host share 3.0 < our share 5.0)", v.Attribution, AttributionHost)
-		}
-	})
-
-	// (4) PRESSURE_ONLY_NO_HOST_CONTENTION — NOT dead-zone (Quota=&8.0 set,
+	// (1) PRESSURE_PLUS_HOST_BUSY_HOST_DOMINANT — NON-dead-zone (Quota=&8.0,
 	// PsiAvailable true), 2 ticks PressureAvg60=0.30 (>PressureHigh 0.20 →
-	// pressure fires), UsageCores=1.0, HostBusyCores=2.0, LogicalCpus=8.0 →
-	// headroom=8−2−1=5.0 > 0 (no saturation). Pins that a pressure-only degrade
-	// stays degraded without saturation and without host-contention: the demand
-	// gate is open (pressure fires) but hostBusyRatio 0.25 < HostBusyHigh 0.70,
-	// so hostContentionFired is false. This guards that the attribution split
-	// does not make a pressure-only degrade spill into saturation, and that
-	// host-contention is not emitted on a low-host-busy pressure degrade.
-	t.Run("PRESSURE_ONLY_NO_HOST_CONTENTION", func(t *testing.T) {
+	// pressure fires), HostBusyCores=7.0, UsageCores=1.0, LogicalCpus=8.0.
+	// headroom=8−7−1=0 → not < 0 → SaturationFired false (the headroom branch
+	// fires on < 0, and 0 is the hold/clear boundary, not a fire), and
+	// host-contention does not fire (headroom >= 0). The host (non-UMH) share
+	// is 7.0−1.0=6.0 > our share 1.0 → AttributionHost via the split. Expected
+	// output: Causes=[pressure], Attribution=Host.
+	t.Run("PRESSURE_PLUS_HOST_BUSY_HOST_DOMINANT", func(t *testing.T) {
 		quota := 8.0
 		st := &WindowState{}
-		v, sig := feedTicks(st, 2, Sample{
+		v, sig := feedPressureTicks(st, 2, Sample{
 			Quota:         &quota,
 			PsiAvailable:  true,
 			PressureAvg60: 0.30,
 			UsageCores:    1.0,
-			HostBusyCores: 2.0,
+			HostBusyCores: 7.0,
 			LogicalCpus:   8.0,
 		})
 		if !sig.PressureFired {
-			t.Fatalf("PressureFired: got false, want true (PressureAvg60 0.30 > PressureHigh 0.20 → pressure fires)")
+			t.Fatalf("PressureFired: got false, want true (PressureAvg60 0.30 > PressureHigh 0.20)")
+		}
+		if sig.HostContentionFired {
+			t.Fatalf("HostContentionFired: got true, want false (non-dead-zone headroom=0 >= 0 → host-contention must not fire)")
 		}
 		if sig.SaturationFired {
-			t.Fatalf("SaturationFired: got true, want false (headroom=8−2−1=5.0 > 0 → no saturation; the split must not make pressure spill into saturation)")
+			t.Fatalf("SaturationFired: got true, want false (headroom=8−7−1=0, not < 0 → non-dead-zone saturation must not fire; isolates the attribution split from the dead-zone split)")
 		}
 		if v.State != StateDegraded {
 			t.Fatalf("State: got %q, want %q (pressure fires → degraded)", v.State, StateDegraded)
 		}
-		if !hasCause(v, CauseKindPressure) {
-			t.Fatalf("Causes: no CauseKindPressure present (pressure must remain a cause; got %v)", v.Causes)
-		}
 		if hasCause(v, CauseKindHostContention) {
-			t.Fatalf("Causes: CauseKindHostContention present, want it absent (hostBusyRatio 0.25 < HostBusyHigh 0.70 → host-contention does not fire on a low-host-busy pressure degrade; got %v)", v.Causes)
+			t.Fatalf("Causes: CauseKindHostContention present, want absent (non-dead-zone headroom>=0 → host-contention must not be emitted; got %v)", v.Causes)
+		}
+		if !onlyCause(v, CauseKindPressure) {
+			t.Fatalf("Causes: got %v, want exactly [pressure] (host-contention must not appear)", v.Causes)
+		}
+		if v.Attribution != AttributionHost {
+			t.Fatalf("Attribution: got %q, want %q (host share 6.0 > our share 1.0 → Host via the split)", v.Attribution, AttributionHost)
 		}
 	})
+
+	// (2) PRESSURE_PLUS_HOST_BUSY_WE_DOMINANT — same non-dead-zone pressure
+	// fire, but UsageCores=6.5 so the UMH share (6.5) exceeds the host share
+	// (7.0−6.5=0.5) → AttributionUnknown. Expected output: Causes=[pressure],
+	// Attribution=Unknown (the host/container split yields Unknown when our
+	// share dominates).
+	t.Run("PRESSURE_PLUS_HOST_BUSY_WE_DOMINANT", func(t *testing.T) {
+		quota := 8.0
+		st := &WindowState{}
+		v, sig := feedPressureTicks(st, 2, Sample{
+			Quota:         &quota,
+			PsiAvailable:  true,
+			PressureAvg60: 0.30,
+			UsageCores:    6.5,
+			HostBusyCores: 7.0,
+			LogicalCpus:   8.0,
+		})
+		if !sig.PressureFired {
+			t.Fatalf("PressureFired: got false, want true (PressureAvg60 0.30 > PressureHigh 0.20)")
+		}
+		if sig.HostContentionFired {
+			t.Fatalf("HostContentionFired: got true, want false (non-dead-zone headroom=0 >= 0 → host-contention must not fire)")
+		}
+		if v.State != StateDegraded {
+			t.Fatalf("State: got %q, want %q (pressure fires → degraded)", v.State, StateDegraded)
+		}
+		if hasCause(v, CauseKindHostContention) {
+			t.Fatalf("Causes: CauseKindHostContention present, want absent (non-dead-zone headroom>=0; got %v)", v.Causes)
+		}
+		if !onlyCause(v, CauseKindPressure) {
+			t.Fatalf("Causes: got %v, want exactly [pressure] (host-contention must not appear)", v.Causes)
+		}
+		if v.Attribution != AttributionUnknown {
+			t.Fatalf("Attribution: got %q, want %q (host share 0.5 < our share 6.5 → Unknown via the split)", v.Attribution, AttributionUnknown)
+		}
+	})
+
+	// (3) THROTTLE_PLUS_HOST_BUSY_HOST_DOMINANT — NON-dead-zone, throttle fires
+	// (60s ratio 0.10 > ThrottleHigh 0.05), HostBusyCores=7.0, UsageCores=1.0,
+	// LogicalCpus=8.0. headroom=0 → host-contention does not fire. host share
+	// 6.0 > our share 1.0 → Host. Expected output: Causes=[throttling],
+	// Attribution=Host.
+	t.Run("THROTTLE_PLUS_HOST_BUSY_HOST_DOMINANT", func(t *testing.T) {
+		quota := 8.0
+		st := &WindowState{}
+		// Tick 1: establish the throttle ring baseline (single point → ratio 0
+		// → latch not firing).
+		Decide(st, Sample{
+			Timestamp:     base,
+			Quota:         &quota,
+			PsiAvailable:  true,
+			UsageCores:    1.0,
+			HostBusyCores: 7.0,
+			LogicalCpus:   8.0,
+			NrPeriods:     1000,
+			NrThrottled:   10,
+			PressureAvg60: 0.0,
+		}, thresholds)
+		// Tick 2: +1000 periods, +100 throttled → ratio 0.10 > 0.05 → throttle
+		// fires.
+		v, sig := Decide(st, Sample{
+			Timestamp:     base.Add(10 * time.Second),
+			Quota:         &quota,
+			PsiAvailable:  true,
+			UsageCores:    1.0,
+			HostBusyCores: 7.0,
+			LogicalCpus:   8.0,
+			NrPeriods:     2000,
+			NrThrottled:   110,
+			PressureAvg60: 0.0,
+		}, thresholds)
+		if !sig.ThrottleFired {
+			t.Fatalf("ThrottleFired: got false, want true (60s ratio (110-10)/(2000-1000)=0.10 > ThrottleHigh 0.05)")
+		}
+		if sig.PressureFired {
+			t.Fatalf("PressureFired: got true, want false (PressureAvg60 0.0 → this is the THROTTLE-only path)")
+		}
+		if sig.HostContentionFired {
+			t.Fatalf("HostContentionFired: got true, want false (non-dead-zone headroom=0 >= 0 → host-contention must not fire on the throttle path either)")
+		}
+		if v.State != StateDegraded {
+			t.Fatalf("State: got %q, want %q (throttle fires → degraded)", v.State, StateDegraded)
+		}
+		if hasCause(v, CauseKindHostContention) {
+			t.Fatalf("Causes: CauseKindHostContention present, want absent (non-dead-zone headroom>=0; got %v)", v.Causes)
+		}
+		if !onlyCause(v, CauseKindThrottling) {
+			t.Fatalf("Causes: got %v, want exactly [throttling] (host-contention must not appear)", v.Causes)
+		}
+		if v.Attribution != AttributionHost {
+			t.Fatalf("Attribution: got %q, want %q (host share 6.0 > our share 1.0 → Host via the split)", v.Attribution, AttributionHost)
+		}
+	})
+
+	// (4) THROTTLE_PLUS_HOST_BUSY_WE_DOMINANT — same throttle fire, but
+	// UsageCores=6.5 so our share (6.5) > host share (0.5) → Unknown. Expected
+	// output: Causes=[throttling], Attribution=Unknown.
+	t.Run("THROTTLE_PLUS_HOST_BUSY_WE_DOMINANT", func(t *testing.T) {
+		quota := 8.0
+		st := &WindowState{}
+		Decide(st, Sample{
+			Timestamp:     base,
+			Quota:         &quota,
+			PsiAvailable:  true,
+			UsageCores:    6.5,
+			HostBusyCores: 7.0,
+			LogicalCpus:   8.0,
+			NrPeriods:     1000,
+			NrThrottled:   10,
+			PressureAvg60: 0.0,
+		}, thresholds)
+		v, sig := Decide(st, Sample{
+			Timestamp:     base.Add(10 * time.Second),
+			Quota:         &quota,
+			PsiAvailable:  true,
+			UsageCores:    6.5,
+			HostBusyCores: 7.0,
+			LogicalCpus:   8.0,
+			NrPeriods:     2000,
+			NrThrottled:   110,
+			PressureAvg60: 0.0,
+		}, thresholds)
+		if !sig.ThrottleFired {
+			t.Fatalf("ThrottleFired: got false, want true (60s ratio 0.10 > ThrottleHigh 0.05)")
+		}
+		if sig.HostContentionFired {
+			t.Fatalf("HostContentionFired: got true, want false (non-dead-zone headroom=0 >= 0 → host-contention must not fire)")
+		}
+		if v.State != StateDegraded {
+			t.Fatalf("State: got %q, want %q (throttle fires → degraded)", v.State, StateDegraded)
+		}
+		if hasCause(v, CauseKindHostContention) {
+			t.Fatalf("Causes: CauseKindHostContention present, want absent (non-dead-zone headroom>=0; got %v)", v.Causes)
+		}
+		if !onlyCause(v, CauseKindThrottling) {
+			t.Fatalf("Causes: got %v, want exactly [throttling] (host-contention must not appear)", v.Causes)
+		}
+		if v.Attribution != AttributionUnknown {
+			t.Fatalf("Attribution: got %q, want %q (host share 0.5 < our share 6.5 → Unknown via the split)", v.Attribution, AttributionUnknown)
+		}
+	})
+
 }

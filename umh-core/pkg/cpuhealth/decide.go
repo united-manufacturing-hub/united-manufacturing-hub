@@ -215,7 +215,6 @@ type WindowState struct {
 	throttleFired       bool
 	pressureFired       bool
 	stealFired          bool
-	hostContentionFired bool
 	saturationFired     bool
 }
 
@@ -577,49 +576,16 @@ func Decide(st *WindowState, sample Sample, thresholds Thresholds) (Verdict, Sig
 	signals.StealFired = st.stealFired
 	signals.StealP95 = stealP95Val
 
-	// Host-contention latch: fires when the demand gate (pressure OR throttle)
-	// is open AND host_busy_ratio > HostBusyHigh. Clears when the demand gate
-	// drops — it cannot stay fired once every demand signal is gone, even if
-	// the host is still busy (the light-workload false-degrade guard). The
-	// demand gate is pressure OR throttle: a throttled container is
-	// unambiguously demanding CPU, so host-contention can fire under a
-	// throttle-only demand too, not just pressure. The host_busy_ratio divide
-	// is guarded: LogicalCpus <= 0 means no-signal (the latch is not
-	// evaluated), mirroring the non-positive Quota / CgroupCores guards and
-	// preventing a +Inf false-fire or NaN silent-disable. The Cause Value is
-	// contentionCores (HostBusyCores - UsageCores), clamped to finite >= 0 so
-	// a NaN or +Inf reading cannot break JSON marshalling of the whole Verdict
-	// (same discipline as the PressureAvg60 clamp).
-	var (
-		contentionCores float64
-		hostBusyRatio   float64
-	)
+	// deadZone is the no-PSI, no-cgroup-limit state (independent of
+	// virtualization since R4). It gates the saturation backstop below and
+	// drives LimitedVisibility. R5 folded the host-contention cause into
+	// saturation + the host/container attribution split: the
+	// CauseKindHostContention constant stays defined (no hard wire break) but
+	// Decide never emits it. A neighbour filling the box is now expressed as
+	// saturation (headroom < 0) + AttributionHost from the host/container split.
+	deadZone := (sample.Quota == nil || !(*sample.Quota > 0)) && !sample.PsiAvailable
 
-	demandGateOpen := signals.PressureFired || signals.ThrottleFired
-	if !demandGateOpen {
-		st.hostContentionFired = false
-	} else if sample.LogicalCpus > 0 && !math.IsInf(sample.LogicalCpus, 0) {
-		hostBusyRatio = sample.HostBusyCores / sample.LogicalCpus
-		// Clamp NaN/negative/+Inf to 0 before using hostBusyRatio for the
-		// severity call and the latch comparison, mirroring the
-		// PressureAvg60/stealP95 clamps: a NaN HostBusyCores would produce a
-		// NaN hostBusyRatio that escapes the severity clamps (NaN comparisons
-		// are false), corrupting the sort comparator and the latch.
-		if !(hostBusyRatio >= 0) || math.IsInf(hostBusyRatio, 1) {
-			hostBusyRatio = 0
-		}
-
-		contentionCores = sample.HostBusyCores - sample.UsageCores
-		if !(contentionCores >= 0) || math.IsInf(contentionCores, 0) {
-			contentionCores = 0
-		}
-
-		if hostBusyRatio > thresholds.HostBusyHigh {
-			st.hostContentionFired = true
-		}
-	}
-
-	signals.HostContentionFired = st.hostContentionFired
+	signals.HostContentionFired = false
 
 	// Host-busy 60s mean ring: maintain a 60s sliding window of per-tick
 	// HostBusyCores samples and expose the arithmetic mean as
@@ -714,7 +680,6 @@ func Decide(st *WindowState, sample Sample, thresholds Thresholds) (Verdict, Sig
 	// regardless of the verdict.
 	var saturationAvg float64
 
-	deadZone := (sample.Quota == nil || !(*sample.Quota > 0)) && !sample.PsiAvailable
 	signals.LimitedVisibility = deadZone
 
 	if deadZone {
@@ -859,10 +824,6 @@ func Decide(st *WindowState, sample Sample, thresholds Thresholds) (Verdict, Sig
 		fired = append(fired, firedCause{Cause{Kind: CauseKindSteal, Value: stealP95Val}, severity(stealP95Val, thresholds.StealHigh), true})
 	}
 
-	if signals.HostContentionFired {
-		fired = append(fired, firedCause{Cause{Kind: CauseKindHostContention, Value: contentionCores}, severity(hostBusyRatio, thresholds.HostBusyHigh), true})
-	}
-
 	if signals.SaturationFired {
 		fired = append(fired, firedCause{Cause{Kind: CauseKindSaturation, Value: saturationAvg}, severity(saturationAvg, thresholds.HighUsageFraction), false})
 	}
@@ -882,14 +843,15 @@ func Decide(st *WindowState, sample Sample, thresholds Thresholds) (Verdict, Sig
 		}
 
 		attr := AttributionUnknown
+		// Attribution (R5 fold): steal is a host/hypervisor signal, so when it
+		// is the dominant cause attribution is Host. For every other dominant
+		// cause (pressure, throttle, saturation) attribution comes from the
+		// host/container split: Host when the host (non-UMH) share exceeds the
+		// UMH share, else Unknown. Clamp UsageCores the same way HostBusyCores
+		// (hb) is clamped at the ring insert (NaN/negative/+Inf -> 0).
 		if fired[0].external {
 			attr = AttributionHost
-		} else if signals.SaturationFired {
-			// Clamp UsageCores the same way HostBusyCores is clamped at the
-			// ring insert (NaN/negative/+Inf -> 0): a corrupt negative reading
-			// would otherwise make hb-UsageCores = hb+|x| and force
-			// AttributionHost from corrupt input, mirroring the discipline the
-			// saturation latch applies to its own UsageCores-derived fraction.
+		} else {
 			uc := sample.UsageCores
 			if !(uc >= 0) || math.IsInf(uc, 1) {
 				uc = 0
