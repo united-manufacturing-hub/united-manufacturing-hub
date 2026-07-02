@@ -682,15 +682,14 @@ func Decide(st *WindowState, sample Sample, thresholds Thresholds) (Verdict, Sig
 
 	signals.LimitedVisibility = deadZone
 
+	// Usage ring (dead-zone only): maintains the 60s-avg usage fraction for the
+	// fraction fallback (LogicalCpus <= 0 below) and the AvgUsageFraction/P95/P99
+	// wire signals. Outside the dead-zone the ring is cleared so stale fraction
+	// samples do not corrupt a later dead-zone re-entry (the fraction
+	// denominator changes across the transition).
 	if deadZone {
-		// Input clamp: a NaN or +Inf UsageCores reading produces a NaN/+Inf
-		// fraction that would poison the 60s running sum until the sample ages
-		// out (NaN propagates through sum/len, making every subsequent average
-		// NaN — the latch could never fire and an existing fire would silently
-		// clear, blinding saturation for up to 60s). Clamp the stored fraction
-		// before insertion, mirroring the PressureAvg60 input clamp. The emitted
-		// signals.UsageFraction is reassigned to the clamped value so the wire
-		// field stays consistent with the ring copy.
+		// Input clamp: a NaN or +Inf UsageCores fraction poisons the 60s running
+		// sum until the sample ages out. Mirror the PressureAvg60 input clamp.
 		if !(fraction >= 0) || math.IsInf(fraction, 1) {
 			fraction = 0
 		}
@@ -721,56 +720,39 @@ func Decide(st *WindowState, sample Sample, thresholds Thresholds) (Verdict, Sig
 		}
 
 		saturationAvg = sum / float64(len(st.usageRing))
-		// Small-N floor: do NOT evaluate the saturation latch until the ring
-		// holds at least 2 samples. With a single sample the 60s-avg is that
-		// sample's value, so a first-tick high-usage reading would fire
-		// immediately — contradicting "sustained fires, isolated absorbed."
-		// A 2-sample floor mirrors the steal ring's floor and throttle's
-		// two-point delta floor for consistency. When the ring holds fewer
-		// than 2 samples (e.g. after a >60s sampling gap pruned the ring to a
-		// single sample), there is insufficient evidence to sustain a prior
-		// fire — clear the latch so a stale fire does not emit a
-		// {saturation, Value: <lone-sample>} cause contradicting the
-		// documented "clears when the 60s-average drops below
-		// SaturationRecover."
-		if len(st.usageRing) >= 2 {
-			// When the host CPU count is known (LogicalCpus > 0) the
-			// saturation backstop retriggers on headroom: fire when
-			// HeadroomCores < 0 (hostBusyMean > capacity − cpuReserveCores,
-			// i.e. less than one core free), clear when HeadroomCores >
-			// headroomRecoverCores, hold between (Schmitt). When the host
-			// count is unknown (LogicalCpus <= 0, the cgroup-known-only
-			// sub-case) the 60s-avg usage fraction remains the trigger.
-			if sample.LogicalCpus > 0 {
-				switch {
-				case signals.HeadroomCores < 0:
-					st.saturationFired = true
-				case signals.HeadroomCores > headroomRecoverCores:
-					st.saturationFired = false
-				}
-			} else {
-				switch {
-				case saturationAvg >= thresholds.HighUsageFraction:
-					st.saturationFired = true
-				case saturationAvg < thresholds.SaturationRecover:
-					st.saturationFired = false
-				}
+	} else {
+		st.usageRing = st.usageRing[:0]
+	}
+
+	// Saturation latch (Position B, R4 option B): a full box degrades on
+	// headroom ALONE, regardless of PSI/limit, so the headroom Schmitt latch
+	// runs ALWAYS when the host CPU count is known (LogicalCpus > 0), with a
+	// 2-sample floor on the hostBusyRing (maintained unconditionally by R1).
+	// PSI/throttle/steal stack on top as additional causes — a full+PSI box
+	// yields [pressure, saturation]. The fraction fallback (LogicalCpus <= 0,
+	// cgroup-known-only — no host count to derive headroom from) is
+	// dead-zone-only. Below the fire condition the verdict is healthy.
+	switch {
+	case sample.LogicalCpus > 0:
+		if len(st.hostBusyRing) >= 2 {
+			switch {
+			case signals.HeadroomCores < 0:
+				st.saturationFired = true
+			case signals.HeadroomCores > headroomRecoverCores:
+				st.saturationFired = false
 			}
 		} else {
 			st.saturationFired = false
 		}
-	} else {
-		// Outside the dead-zone the saturation backstop is not evaluated.
-		// Mirror the host-contention latch's demand-gate-close clear: reset
-		// the latch AND the usage ring so a prior dead-zone fire cannot leak a
-		// stale {saturation, Value: 0} cause on every subsequent non-dead-zone
-		// tick (saturationAvg is only computed inside the dead-zone block, so a
-		// stale latch would emit a zero-valued cause). Clearing the ring is
-		// required, not optional: a dead-zone→non-dead-zone→dead-zone
-		// transition changes the fraction denominator, so stale samples would
-		// corrupt the 60s average on re-entry.
+	case deadZone && len(st.usageRing) >= 2:
+		switch {
+		case saturationAvg >= thresholds.HighUsageFraction:
+			st.saturationFired = true
+		case saturationAvg < thresholds.SaturationRecover:
+			st.saturationFired = false
+		}
+	default:
 		st.saturationFired = false
-		st.usageRing = st.usageRing[:0]
 	}
 
 	signals.SaturationFired = st.saturationFired

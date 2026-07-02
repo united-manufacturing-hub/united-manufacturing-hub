@@ -2624,10 +2624,11 @@ func TestDecide_Headroom_Computation(t *testing.T) {
 	})
 
 	// (6) FULL-BOX — 2 ticks mean=4.0, Quota=4 → headroom = 4 − 4 − 1 = −1.0
-	// AND < 0. TWO forcing assertions: !(<0) → Fatalf (headroom can't go
-	// negative); then !floatEq(..., −1.0) → Fatalf. Also pins the
-	// no-verdict-change contract: a negative headroom must NOT fire any latch
-	// (the verdict is unchanged) — State stays StateHealthy with no Causes.
+	// AND < 0. TWO forcing assertions on the number: !(<0) → Fatalf;
+	// !floatEq(..., −1.0) → Fatalf. Under R4 option B (headroom fires always,
+	// not just in the dead-zone), a full box WITH a cgroup limit ALSO degrades
+	// on [saturation] — this case has Quota set (not dead-zone) and still
+	// fires, pinning option B.
 	t.Run("FullBox", func(t *testing.T) {
 		quota := 4.0
 		st := &WindowState{}
@@ -2638,11 +2639,17 @@ func TestDecide_Headroom_Computation(t *testing.T) {
 		if !floatEq(sig.HeadroomCores, -1.0) {
 			t.Fatalf("HeadroomCores: got %v, want -1.0 (capacity 4.0 − mean 4.0 − reserve 1.0 = −1.0; headroom must go negative, not clamp)", sig.HeadroomCores)
 		}
-		if v.State != StateHealthy {
-			t.Fatalf("State: got %q, want %q (only computes the number; a negative headroom must not fire any latch; the verdict is unchanged)", v.State, StateHealthy)
+		if v.State != StateDegraded {
+			t.Fatalf("State: got %q, want %q (R4 option B: headroom<0 fires saturation always, not just dead-zone — a full box with a limit degrades too)", v.State, StateDegraded)
 		}
-		if len(v.Causes) != 0 {
-			t.Fatalf("Causes length: got %d, want 0 (adds no cause; a negative headroom must not produce a saturation cause; the verdict is unchanged)", len(v.Causes))
+		hasSat := false
+		for _, c := range v.Causes {
+			if c.Kind == CauseKindSaturation {
+				hasSat = true
+			}
+		}
+		if !hasSat {
+			t.Fatalf("Causes: no saturation in %v (headroom<0 must emit saturation under option B)", v.Causes)
 		}
 	})
 
@@ -3024,6 +3031,47 @@ func TestDecide_Saturation_FiresOnVirtualizedBox(t *testing.T) {
 		}
 		if !sig.LimitedVisibility {
 			t.Fatalf("LimitedVisibility: got false, want true (non-virtualized dead-zone sample — non-virtualized path preserved)")
+		}
+	})
+
+	// (4) FULL_PLUS_PSI — R4 option B: a full box WITH PSI degrades on BOTH
+	// pressure and saturation (headroom fires always, not just dead-zone; PSI
+	// stacks on top as an additional cause). 2 ticks HostBusyCores=8.0,
+	// LogicalCpus=8.0, PsiAvailable=true, PressureAvg60=0.30 (>PressureHigh
+	// 0.20 → pressure fires), Quota=nil → headroom=8−8−1=−1.0<0 → saturation
+	// fires. NOT dead-zone (PsiAvailable true) → LimitedVisibility=false. Under
+	// option A (pre-option-B) this was [pressure] only; option B adds
+	// saturation. A stub keeping headroom dead-zone-only fails here (no
+	// saturation).
+	t.Run("FULL_PLUS_PSI", func(t *testing.T) {
+		st := &WindowState{}
+		s := Sample{Timestamp: base, HostBusyCores: 8.0, LogicalCpus: 8.0, PsiAvailable: true, PressureAvg60: 0.30}
+		Decide(st, s, thresholds)
+		s.Timestamp = base.Add(1 * time.Second)
+		v, sig := Decide(st, s, thresholds)
+		if !sig.PressureFired {
+			t.Fatalf("PressureFired: got false, want true (PressureAvg60 0.30 > 0.20)")
+		}
+		if !sig.SaturationFired {
+			t.Fatalf("SaturationFired: got false, want true (R4 option B: headroom=%v < 0 fires always, not just dead-zone; a full+PSI box yields [pressure, saturation])", sig.HeadroomCores)
+		}
+		if v.State != StateDegraded {
+			t.Fatalf("State: got %q, want %q (full + PSI → degraded)", v.State, StateDegraded)
+		}
+		if sig.LimitedVisibility {
+			t.Fatalf("LimitedVisibility: got true, want false (PSI present → not blind → no limited visibility)")
+		}
+		hasPressure, hasSat := false, false
+		for _, c := range v.Causes {
+			if c.Kind == CauseKindPressure {
+				hasPressure = true
+			}
+			if c.Kind == CauseKindSaturation {
+				hasSat = true
+			}
+		}
+		if !hasPressure || !hasSat {
+			t.Fatalf("Causes: got %v, want both pressure AND saturation (option B: full+PSI → [pressure, saturation])", v.Causes)
 		}
 	})
 }
