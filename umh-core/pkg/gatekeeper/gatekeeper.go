@@ -186,7 +186,7 @@ func (g *Gatekeeper) processInbound(ctx context.Context) {
 		r := recover()
 		if r != nil {
 			g.logger.Errorw("panic in processInbound", "panic", r)
-			sentry.ReportIssuefWithContext(sentry.IssueTypeError, g.logger, map[string]interface{}{"feature": string(deps.FeatureGatekeeper)}, "gatekeeper processInbound panic: %v", r)
+			sentry.ReportIssuefWithContext(sentry.IssueTypeError, g.logger, map[string]any{"feature": string(deps.FeatureGatekeeper)}, "gatekeeper processInbound panic: %v", r)
 		}
 	}()
 
@@ -240,14 +240,14 @@ func (g *Gatekeeper) handleInbound(ctx context.Context, msg *types.UMHMessage) {
 		rootCA := g.certHandler.RootCA()
 		if rootCA == nil {
 			g.logger.Warnw("Root CA not yet available, dropping message", "email", msg.Email)
-			sentry.ReportIssuefWithContext(sentry.IssueTypeWarning, g.logger, map[string]interface{}{"feature": string(deps.FeatureGatekeeper)}, "gatekeeper: Root CA not yet available, dropping message for %s", msg.Email)
+			sentry.ReportIssuefWithContext(sentry.IssueTypeWarning, g.logger, map[string]any{"feature": string(deps.FeatureGatekeeper)}, "gatekeeper: Root CA not yet available, dropping message for %s", msg.Email)
 			return
 		}
 		intermediates := g.certHandler.IntermediateCerts(msg.Email)
 
 		actionStr := string(messageContent.MessageType)
 		if messageContent.MessageType == models.Action {
-			if payloadMap, ok := messageContent.Payload.(map[string]interface{}); ok {
+			if payloadMap, ok := messageContent.Payload.(map[string]any); ok {
 				if at, ok := payloadMap["actionType"].(string); ok && at != "" {
 					actionStr = at
 				}
@@ -282,7 +282,7 @@ func (g *Gatekeeper) processOutbound(ctx context.Context) {
 		r := recover()
 		if r != nil {
 			g.logger.Errorw("panic in processOutbound", "panic", r)
-			sentry.ReportIssuefWithContext(sentry.IssueTypeError, g.logger, map[string]interface{}{"feature": string(deps.FeatureGatekeeper)}, "gatekeeper processOutbound panic: %v", r)
+			sentry.ReportIssuefWithContext(sentry.IssueTypeError, g.logger, map[string]any{"feature": string(deps.FeatureGatekeeper)}, "gatekeeper processOutbound panic: %v", r)
 		}
 	}()
 
@@ -333,7 +333,7 @@ func (g *Gatekeeper) processLegacyOutbound(ctx context.Context) {
 		r := recover()
 		if r != nil {
 			g.logger.Errorw("panic in processLegacyOutbound", "panic", r)
-			sentry.ReportIssuefWithContext(sentry.IssueTypeError, g.logger, map[string]interface{}{"feature": string(deps.FeatureGatekeeper)}, "gatekeeper processLegacyOutbound panic: %v", r)
+			sentry.ReportIssuefWithContext(sentry.IssueTypeError, g.logger, map[string]any{"feature": string(deps.FeatureGatekeeper)}, "gatekeeper processLegacyOutbound panic: %v", r)
 		}
 	}()
 
