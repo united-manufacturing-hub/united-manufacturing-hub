@@ -825,13 +825,17 @@ func Decide(st *WindowState, sample Sample, thresholds Thresholds) (Verdict, Sig
 		}
 
 		attr := AttributionUnknown
-		// Attribution (R5 fold): steal is a host/hypervisor signal, so when it
-		// is the dominant cause attribution is Host. For every other dominant
-		// cause (pressure, throttle, saturation) attribution comes from the
-		// host/container split: Host when the host (non-UMH) share exceeds the
-		// UMH share, else Unknown. Clamp UsageCores the same way HostBusyCores
-		// (hb) is clamped at the ring insert (NaN/negative/+Inf -> 0).
-		if fired[0].external {
+		// Attribution (R5 fold): steal is a host/hypervisor signal — the
+		// hypervisor took vCPU time this instance needed, and the fix is always
+		// host-side (give the VM real/guaranteed CPU, stop the steal). So
+		// whenever steal fires, attribution is Host, regardless of whether our
+		// own workload is also the majority of host-busy (the cause list still
+		// surfaces the other causes; the label names where to act). When no
+		// steal is present, attribution comes from the host/container split:
+		// Host when the host (non-UMH) share exceeds the UMH share, else
+		// Unknown. Clamp UsageCores the same way HostBusyCores (hb) is clamped
+		// at the ring insert (NaN/negative/+Inf -> 0).
+		if signals.StealFired {
 			attr = AttributionHost
 		} else {
 			uc := sample.UsageCores

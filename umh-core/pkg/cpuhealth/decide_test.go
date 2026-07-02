@@ -3313,4 +3313,31 @@ func TestDecide_HostContentionFold_Full(t *testing.T) {
 		}
 	})
 
+	// (5) STEAL_PLUS_OUR_MAJORITY — the steal-present→host edge case: a full
+	// box where OUR workload is the majority (UsageCores=6.0, HostBusyCores=8.0
+	// → host share 2 < our share 6) AND the hypervisor is stealing
+	// (StealFraction=0.20 > StealHigh 0.10). The split alone would yield
+	// Unknown (our share wins), but steal firing → Host, because the fix is
+	// host-side (give the VM real CPU, stop the steal), not "reduce your load."
+	// Pins the steal-present→host rule over the dominance-based one.
+	t.Run("STEAL_PLUS_OUR_MAJORITY", func(t *testing.T) {
+		st := &WindowState{}
+		s := Sample{Timestamp: base, HostBusyCores: 8.0, UsageCores: 6.0, LogicalCpus: 8.0, Virtualized: true, StealFraction: 0.20}
+		Decide(st, s, thresholds)
+		s.Timestamp = base.Add(1 * time.Second)
+		v, sig := Decide(st, s, thresholds)
+		if !sig.StealFired {
+			t.Fatalf("StealFired: got false, want true (StealFraction 0.20 > StealHigh 0.10)")
+		}
+		if !sig.SaturationFired {
+			t.Fatalf("SaturationFired: got false, want true (headroom=%v < 0)", sig.HeadroomCores)
+		}
+		if v.State != StateDegraded {
+			t.Fatalf("State: got %q, want %q (steal + saturation → degraded)", v.State, StateDegraded)
+		}
+		if v.Attribution != AttributionHost {
+			t.Fatalf("Attribution: got %q, want %q (steal present → Host: the hypervisor is the root cause; the fix is host-side, not 'reduce your load' — even though our workload is the majority of host-busy)", v.Attribution, AttributionHost)
+		}
+	})
+
 }
