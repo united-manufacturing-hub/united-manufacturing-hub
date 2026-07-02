@@ -3062,16 +3062,24 @@ func TestDecide_Saturation_FiresOnVirtualizedBox(t *testing.T) {
 			t.Fatalf("LimitedVisibility: got true, want false (PSI present → not blind → no limited visibility)")
 		}
 		hasPressure, hasSat := false, false
+		var satValue float64
 		for _, c := range v.Causes {
 			if c.Kind == CauseKindPressure {
 				hasPressure = true
 			}
 			if c.Kind == CauseKindSaturation {
 				hasSat = true
+				satValue = c.Value
 			}
 		}
 		if !hasPressure || !hasSat {
 			t.Fatalf("Causes: got %v, want both pressure AND saturation (option B: full+PSI → [pressure, saturation])", v.Causes)
+		}
+		// The saturation cause Value is the negative headroom in cores (not 0):
+		// saturationAvg is 0 outside the dead-zone (usage ring is dead-zone-only),
+		// so the Value must come from HeadroomCores to read "N cores over capacity."
+		if !floatEq(satValue, sig.HeadroomCores) {
+			t.Fatalf("saturation Value: got %v, want %v (HeadroomCores — 'cores over capacity'; saturationAvg is 0 outside the dead-zone)", satValue, sig.HeadroomCores)
 		}
 	})
 }

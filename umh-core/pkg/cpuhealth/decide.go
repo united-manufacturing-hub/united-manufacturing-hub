@@ -807,7 +807,20 @@ func Decide(st *WindowState, sample Sample, thresholds Thresholds) (Verdict, Sig
 	}
 
 	if signals.SaturationFired {
-		fired = append(fired, firedCause{Cause{Kind: CauseKindSaturation, Value: saturationAvg}, severity(saturationAvg, thresholds.HighUsageFraction), false})
+		// Cause Value: negative headroom in cores ("0.5 cores over capacity")
+		// when the host CPU count is known (LogicalCpus > 0 — the headroom
+		// path), so the detail string is meaningful on every box where
+		// saturation fires (including full+PSI/full+capped under option B,
+		// where saturationAvg is 0 because the usage ring is dead-zone-only).
+		// For the cgroup-known-only fraction fallback (LogicalCpus <= 0),
+		// headroom can't be computed (no host count), so fall back to the
+		// 60s-avg usage fraction as the Value.
+		satValue := signals.HeadroomCores
+		if sample.LogicalCpus <= 0 {
+			satValue = saturationAvg
+		}
+
+		fired = append(fired, firedCause{Cause{Kind: CauseKindSaturation, Value: satValue}, severity(saturationAvg, thresholds.HighUsageFraction), false})
 	}
 
 	if len(fired) > 0 {
