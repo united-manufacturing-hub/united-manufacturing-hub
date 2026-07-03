@@ -25,11 +25,13 @@ import (
 
 // simpleWorker runs a Spec's Poll on the framework's collection cadence. It
 // holds only the immutable Spec: the worker carries no mutable state, so the
-// same logic serves every simple worker type. TDeps is the worker's WorkerBase
-// deps sentinel (struct{}); the Spec's own TDeps flows to Poll, not through
-// WorkerBase.
+// same logic serves every simple worker type.
+//
+// The framework-facing status is Status[TStatus]: the developer's poll result
+// wrapped with the health verdict. WorkerBase's deps sentinel is struct{}; the
+// Spec's own TDeps flows to Poll, not through WorkerBase.
 type simpleWorker[TConfig, TStatus, TDeps any] struct {
-	fsmv2.WorkerBase[TConfig, TStatus, struct{}]
+	fsmv2.WorkerBase[TConfig, Status[TStatus], struct{}]
 	spec Spec[TConfig, TStatus, TDeps]
 }
 
@@ -74,10 +76,10 @@ func (w *simpleWorker[TConfig, TStatus, TDeps]) CollectObservedState(ctx context
 
 	status, err := w.spec.Poll(ctx, w.spec.Deps, cfg)
 	if err != nil {
-		return fsmv2.Observation[TStatus]{
+		return fsmv2.NewObservation(Status[TStatus]{
 			Degraded: true,
 			Reason:   fmt.Sprintf("poll error: %v", err),
-		}, nil
+		}), nil
 	}
 
 	verdict := Healthy(reasonNoHealthCheck)
@@ -85,11 +87,11 @@ func (w *simpleWorker[TConfig, TStatus, TDeps]) CollectObservedState(ctx context
 		verdict = w.spec.Health(cfg, status)
 	}
 
-	return fsmv2.Observation[TStatus]{
-		Status:   status,
+	return fsmv2.NewObservation(Status[TStatus]{
+		Result:   status,
 		Degraded: verdict.Degraded,
 		Reason:   verdict.Reason,
-	}, nil
+	}), nil
 }
 
 // GetDependenciesAny returns a true nil: simpleWorker has no per-instance

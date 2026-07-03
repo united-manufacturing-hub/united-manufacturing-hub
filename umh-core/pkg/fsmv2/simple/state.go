@@ -19,21 +19,52 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
 )
 
-// runningState is the shared steady state of every simple worker. It is a
-// framework-owned singleton registered per worker type by Register. Rung 3 adds
-// the degraded branch and rung 5 splits the states into sub-files and derives
-// their cadence; for now the worker stays running once observed.
-type runningState struct {
+// runningState is the healthy steady state of a simple worker. It is generic
+// over the developer's config and status so Next can read the verdict off the
+// wrapped Status the worker persists each tick; the generic Register
+// instantiates one per worker type. Rung "states in sub-files" (later) may split
+// these; for now the machine flips between running and degraded on the verdict.
+type runningState[TConfig, TStatus any] struct {
 	helpers.RunningHealthyBase
 }
 
-// Next keeps the worker running. Lifecycle and health branching arrive in later
-// rungs; the reason string is static until the state reads the verdict.
-func (s *runningState) Next(_ any) fsmv2.NextResult[any, any] {
-	return fsmv2.Transition(s, fsmv2.SignalNone, nil, "simple worker running", nil)
+// Next stays running while the verdict is healthy and flips to degraded when the
+// worker reports Degraded. The verdict's Reason is emitted via Transition so it
+// reaches logs, heartbeats, and the frontend.
+func (s *runningState[TConfig, TStatus]) Next(snapAny any) fsmv2.NextResult[any, any] {
+	snap := fsmv2.ConvertWorkerSnapshot[TConfig, Status[TStatus]](snapAny)
+
+	if snap.Status.Degraded {
+		return fsmv2.Transition(&degradedState[TConfig, TStatus]{}, fsmv2.SignalNone, nil, snap.Status.Reason, nil)
+	}
+
+	return fsmv2.Transition(s, fsmv2.SignalNone, nil, snap.Status.Reason, nil)
 }
 
 // String returns the observed-state name, derived from the type name.
-func (s *runningState) String() string {
+func (s *runningState[TConfig, TStatus]) String() string {
+	return helpers.DeriveStateName(s)
+}
+
+// degradedState is the unhealthy-but-operational state of a simple worker,
+// entered when the verdict reports Degraded (a poll error or a Health verdict).
+type degradedState[TConfig, TStatus any] struct {
+	helpers.RunningDegradedBase
+}
+
+// Next returns to running once the verdict clears and otherwise stays degraded,
+// carrying the verdict's Reason on every Transition.
+func (s *degradedState[TConfig, TStatus]) Next(snapAny any) fsmv2.NextResult[any, any] {
+	snap := fsmv2.ConvertWorkerSnapshot[TConfig, Status[TStatus]](snapAny)
+
+	if !snap.Status.Degraded {
+		return fsmv2.Transition(&runningState[TConfig, TStatus]{}, fsmv2.SignalNone, nil, snap.Status.Reason, nil)
+	}
+
+	return fsmv2.Transition(s, fsmv2.SignalNone, nil, snap.Status.Reason, nil)
+}
+
+// String returns the observed-state name, derived from the type name.
+func (s *degradedState[TConfig, TStatus]) String() string {
 	return helpers.DeriveStateName(s)
 }

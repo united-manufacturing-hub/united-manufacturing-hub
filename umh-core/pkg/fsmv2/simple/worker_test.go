@@ -64,9 +64,9 @@ var _ = Describe("simpleWorker", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(gotCfg.Target).To(Equal("1.2.3.4"), "Poll receives the developer's config")
 
-			o, ok := obs.(fsmv2.Observation[probeStatus])
+			o, ok := obs.(fsmv2.Observation[Status[probeStatus]])
 			Expect(ok).To(BeTrue(), "observation is wrapped by the framework")
-			Expect(o.Status.Reachable).To(BeTrue())
+			Expect(o.Status.Result.Reachable).To(BeTrue())
 		})
 
 		It("persists a Poll error as a degraded verdict instead of returning it", func() {
@@ -90,9 +90,9 @@ var _ = Describe("simpleWorker", func() {
 			obs, err := w.CollectObservedState(context.Background(), &fsmv2.WrappedDesiredState[probeConfig]{})
 			Expect(err).NotTo(HaveOccurred(), "poll error becomes a verdict, not a returned error")
 
-			o := obs.(fsmv2.Observation[probeStatus])
-			Expect(o.Degraded).To(BeTrue())
-			Expect(o.Reason).To(Equal("poll error: dial timeout"))
+			o := obs.(fsmv2.Observation[Status[probeStatus]])
+			Expect(o.Status.Degraded).To(BeTrue())
+			Expect(o.Status.Reason).To(Equal("poll error: dial timeout"))
 			Expect(healthCalled).To(BeFalse(), "Health is not called on a poll error")
 		})
 
@@ -117,9 +117,9 @@ var _ = Describe("simpleWorker", func() {
 			obs, err := w.CollectObservedState(context.Background(), &fsmv2.WrappedDesiredState[probeConfig]{})
 			Expect(err).NotTo(HaveOccurred())
 
-			o := obs.(fsmv2.Observation[probeStatus])
-			Expect(o.Degraded).To(BeTrue())
-			Expect(o.Reason).To(Equal("port 502 unreachable"))
+			o := obs.(fsmv2.Observation[Status[probeStatus]])
+			Expect(o.Status.Degraded).To(BeTrue())
+			Expect(o.Status.Reason).To(Equal("port 502 unreachable"))
 		})
 
 		It("defaults to healthy with a fixed reason when Health is omitted", func() {
@@ -136,9 +136,9 @@ var _ = Describe("simpleWorker", func() {
 			obs, err := w.CollectObservedState(context.Background(), &fsmv2.WrappedDesiredState[probeConfig]{})
 			Expect(err).NotTo(HaveOccurred())
 
-			o := obs.(fsmv2.Observation[probeStatus])
-			Expect(o.Degraded).To(BeFalse())
-			Expect(o.Reason).To(Equal("running (no health check)"))
+			o := obs.(fsmv2.Observation[Status[probeStatus]])
+			Expect(o.Status.Degraded).To(BeFalse())
+			Expect(o.Status.Reason).To(Equal("running (no health check)"))
 		})
 
 		It("honours context cancellation", func() {

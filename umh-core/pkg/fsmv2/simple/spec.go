@@ -63,12 +63,12 @@ func Register[TConfig, TStatus, TDeps any](spec Spec[TConfig, TStatus, TDeps]) {
 		panic("simple.Register: Poll must be non-nil")
 	}
 
-	register.Worker[TConfig, TStatus, register.NoDeps](spec.WorkerType,
+	register.Worker[TConfig, Status[TStatus], register.NoDeps](spec.WorkerType,
 		func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader) (fsmv2.Worker, error) {
 			return newSimpleWorker(spec, id, logger, sr)
 		})
 
-	fsmv2.RegisterInitialState(spec.WorkerType, &runningState{})
+	fsmv2.RegisterInitialState(spec.WorkerType, &runningState[TConfig, TStatus]{})
 
 	// A non-positive Interval is ignored by the registry, so the collector
 	// falls back to its DefaultObservationInterval.
