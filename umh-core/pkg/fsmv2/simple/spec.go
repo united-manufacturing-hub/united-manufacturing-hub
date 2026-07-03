@@ -40,6 +40,10 @@ type Spec[TConfig, TStatus, TDeps any] struct {
 	// nil, a good poll is healthy with reason "running (no health check)". Never
 	// called on a poll error.
 	Health func(cfg TConfig, status TStatus) Health
+	// Deps is the dependency value passed to every Poll. Optional: use struct{}
+	// when the poll needs none. It is shared across ticks and instances, so it
+	// must be stateless (e.g. an *http.Client, not a per-tick buffer).
+	Deps TDeps
 }
 
 // Register wires a Spec into the framework: it registers the worker factory,

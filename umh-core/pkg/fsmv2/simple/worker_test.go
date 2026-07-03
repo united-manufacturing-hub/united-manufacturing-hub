@@ -159,6 +159,35 @@ var _ = Describe("simpleWorker", func() {
 		})
 	})
 
+	Describe("Deps", func() {
+		type probeDeps struct {
+			token string
+		}
+
+		It("passes the Spec's Deps value to Poll", func() {
+			var gotToken string
+
+			spec := Spec[probeConfig, probeStatus, probeDeps]{
+				WorkerType: "simpleworker_deps_pass",
+				Deps:       probeDeps{token: "s3cret"},
+				Poll: func(_ context.Context, d probeDeps, _ probeConfig) (probeStatus, error) {
+					gotToken = d.token
+
+					return probeStatus{}, nil
+				},
+			}
+
+			w, err := newSimpleWorker(spec,
+				deps.Identity{ID: "probe", WorkerType: spec.WorkerType},
+				deps.NewNopFSMLogger(), nil)
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err = w.CollectObservedState(context.Background(), &fsmv2.WrappedDesiredState[probeConfig]{})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(gotToken).To(Equal("s3cret"))
+		})
+	})
+
 	Describe("dependencies", func() {
 		It("reports a true-nil GetDependenciesAny so metrics injection is not skipped", func() {
 			w, err := newProbeWorker(Spec[probeConfig, probeStatus, struct{}]{

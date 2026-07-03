@@ -72,11 +72,7 @@ func (w *simpleWorker[TConfig, TStatus, TDeps]) CollectObservedState(ctx context
 
 	cfg := fsmv2.ExtractConfig[TConfig](desired)
 
-	// Poll deps arrive on the Spec in rung 4; until then the poll runs with the
-	// zero value.
-	var d TDeps
-
-	status, err := w.spec.Poll(ctx, d, cfg)
+	status, err := w.spec.Poll(ctx, w.spec.Deps, cfg)
 	if err != nil {
 		return fsmv2.Observation[TStatus]{
 			Degraded: true,
