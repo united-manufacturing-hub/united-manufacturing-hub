@@ -616,13 +616,11 @@ var _ = Describe("capstone: end-to-end CPU-health model through GetStatus (rung 
 			"SATURATION-DEGRADE-DEAD-ZONE: verdictBasis is present (Decide ran on a capped-cpu dead-zone box)")
 		Expect(status.CPU.VerdictBasis.Pressure.Applies).To(BeFalse(),
 			"SATURATION-DEGRADE-DEAD-ZONE: verdictBasis.pressure.applies is false (PSI absent) — the wire signature of the no-PSI half of the dead-zone")
-		// HostBusyCores wire field: non-nil (fetchable) because /proc/stat was
-		// readable, and the value is the large computed delta (not 0) — pinning
-		// both the fetchability and that the wire carries the real value.
-		Expect(status.CPU.HostBusyCores).ToNot(BeNil(),
-			"SATURATION-DEGRADE-DEAD-ZONE: HostBusyCores must be non-nil (fetchable) on the wire when /proc/stat is readable")
-		Expect(status.CPU.HostBusyCores).To(HaveValue(BeNumerically(">", 0)),
-			"SATURATION-DEGRADE-DEAD-ZONE: HostBusyCores must carry the computed host-busy value (> 0) on the degraded tick, not a placeholder 0")
+		// verdictBasis.headroom.hostBusyMean carries the 60s mean of host-busy
+		// cores (the verdict's saturation input) — non-nil because Decide ran,
+		// and > 0 because the degraded tick computed a large host-busy delta.
+		Expect(status.CPU.VerdictBasis.Headroom.HostBusyMean).To(BeNumerically(">", 0),
+			"SATURATION-DEGRADE-DEAD-ZONE: verdictBasis.headroom.hostBusyMean must carry the computed host-busy value (> 0) on the degraded tick")
 		Expect(status.CPUHealth).To(Equal(models.Degraded),
 			"SATURATION-DEGRADE-DEAD-ZONE: CPUHealth must be Degraded (consistent with scenarios 2/3/6/7)")
 	})

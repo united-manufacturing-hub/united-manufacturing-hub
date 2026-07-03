@@ -141,14 +141,6 @@ type CPU struct {
 	P95MCpu       *float64 `json:"p95MCpu,omitempty"`
 	P99MCpu       *float64 `json:"p99MCpu,omitempty"`
 	ThrottleRatio *float64 `json:"throttleRatio,omitempty"` // Ratio of throttled periods (0.0-1.0); nil when cgroup unreadable
-	// HostBusyCores is the count of host-level busy CPU cores computed from
-	// /proc/stat's non-idle jiffies. It is *float64 so omitempty emits a real 0
-	// (non-nil pointer) when /proc/stat is readable (even on the baseline tick
-	// where the delta is 0) and omits it when un-fetchable (nil pointer: cpu.stat
-	// or /proc/stat unreadable — readProcStat runs only after the primary cpu.stat
-	// read succeeds, so a cpu.stat failure also yields nil). It does not change
-	// the verdict.
-	HostBusyCores *float64 `json:"hostBusyCores,omitempty"`
 	// State is always emitted (no omitempty), even when healthy. Attribution
 	// and Causes are set only when State == "degraded".
 	State          string  `json:"state"`                 // "healthy" | "degraded"

@@ -19,7 +19,6 @@ import (
 	"crypto/rand"
 	"crypto/sha3"
 	"fmt"
-	"math"
 	"runtime"
 	"time"
 
@@ -374,21 +373,6 @@ func (c *ContainerMonitorService) getCPUMetrics(ctx context.Context) (*models.CP
 		cpuStat.AvgMCpu = ptr(signals.AvgUsageCores * 1000)
 		cpuStat.P95MCpu = ptr(signals.P95UsageCores * 1000)
 		cpuStat.P99MCpu = ptr(signals.P99UsageCores * 1000)
-	}
-
-	// Emit the per-tick sample.HostBusyCores (even 0) when /proc/stat is
-	// readable, nil when un-fetchable. The 60s mean is consumed internally by
-	// the saturation latch, not carried on the wire. Clamp the per-tick value
-	// to 0 on NaN/negative/+Inf before emitting, mirroring the ring-insert
-	// clamp in Decide (a malformed /proc/stat reading must not reach the wire
-	// as a poison value). This field does not change the verdict.
-	if sample.HostBusyCoresAvailable {
-		hb := sample.HostBusyCores
-		if !(hb >= 0) || math.IsInf(hb, 1) {
-			hb = 0
-		}
-
-		cpuStat.HostBusyCores = ptr(hb)
 	}
 
 	// Emit the verdict basis — the decision variables the verdict acted on

@@ -160,158 +160,68 @@ var _ = Describe("three-field CPU-health wire contract on models.CPU", func() {
 	})
 })
 
-// HostBusyCores fetchability wire contract. HostBusyCores is an always-on
-// *float64 wire field populated via the fetchability pattern (mirrors
-// AvgMCpu/P95MCpu/P99MCpu/ThrottleRatio): non-nil (pointer to the value, even 0)
-// and JSON-present when /proc/stat is readable, nil and JSON-omitted via omitempty
-// when /proc/stat is unreadable. The fetchability flag (HostBusyCoresAvailable on
-// cpuhealth.Sample, set true in readProcStat only when the /proc/stat read+parse
-// succeeded) distinguishes a real 0 ("we read /proc/stat, the host was idle") from
-// an absent signal ("we can't read /proc/stat at all"), which the value-based
-// 0/omitempty discipline cannot. It does not change the verdict.
-var _ = Describe("HostBusyCores fetchability wire contract on models.CPU", func() {
-	DescribeTable("emits hostBusyCores per the /proc/stat read+parse outcome",
-		func(procStatData string, procStatErr error, cpuStatErr error, expectFetchable bool) {
-			mockFS := filesystem.NewMockFileSystem()
-			ctx := context.Background()
+// /proc/stat counter-reset guard (sampler.go: totalDelta <= 0 on host reboot
+// or /proc/stat wrap). On a reset tick the busy delta would be negative, so the
+// reset guard zeroes it; the 60s mean of host-busy cores (now carried on
+// verdictBasis.headroom.hostBusyMean) is therefore 0, NOT negative. This pins
+// the reset guard via the basis: a malformed/wrapped /proc/stat reading must
+// not reach the verdict's saturation input as a poison negative value.
+var _ = It("emits a non-negative verdictBasis.headroom.hostBusyMean on a /proc/stat counter-reset tick", func() {
+	mockFS := filesystem.NewMockFileSystem()
+	ctx := context.Background()
 
-			testDataPath, err := os.MkdirTemp("", "cpu-wire-hostbusy")
-			Expect(err).NotTo(HaveOccurred())
-			defer func() { _ = os.RemoveAll(testDataPath) }()
+	testDataPath, err := os.MkdirTemp("", "cpu-wire-hostbusy-reset")
+	Expect(err).NotTo(HaveOccurred())
+	defer func() { _ = os.RemoveAll(testDataPath) }()
 
-			// cpu.max capped (not the dead-zone) so the verdict is healthy and the
-			// only thing under test is the HostBusyCores fetchability, not the
-			// verdict logic.
-			const cpuMax = "200000 100000\n"
-			usageUsec := int64(1_000_000)
+	const cpuMax = "200000 100000\n"
+	usageUsec := int64(1_000_000)
 
-			mockFS.WithReadFileFunc(func(_ context.Context, path string) ([]byte, error) {
-				switch path {
-				case "/sys/fs/cgroup/cpu.max":
-					return []byte(cpuMax), nil
-				case "/sys/fs/cgroup/cpu.stat":
-					if cpuStatErr != nil {
-						return nil, cpuStatErr
-					}
+	// procStat is mutated between ticks; tick 1 baselines, tick 2 has a
+	// SMALLER total (counter reset / wrap) so the reset guard fires.
+	procStatTick0 := "cpu  5001000 1000 1000 9000 0 0 0 50 0 0\n"
+	procStatTick1 := "cpu  1000 1000 1000 8000 0 0 0 50 0 0\n"
+	procStat := procStatTick0
 
-					return []byte(fmt.Sprintf(
-						"usage_usec %d\nnr_periods 1000\nnr_throttled 0\nthrottled_usec 0\n",
-						usageUsec,
-					)), nil
-				case "/proc/stat":
-					if procStatErr != nil {
-						return nil, procStatErr
-					}
-
-					return []byte(procStatData), nil
-				default:
-					return nil, errors.New("file not found: " + path)
-				}
-			})
-
-			svc := container_monitor.NewContainerMonitorServiceWithPath(mockFS, testDataPath)
-
-			// Single tick: readProcStat baselines /proc/stat (no delta) so
-			// HostBusyCores is 0 when the read+parse succeeded.
-			status, err := svc.GetStatus(ctx)
-			Expect(err).NotTo(HaveOccurred())
-
-			wireJSON, err := json.Marshal(status.CPU)
-			Expect(err).NotTo(HaveOccurred())
-
-			if expectFetchable {
-				// Fetchable: non-nil pointer, even though the value is 0 (baseline
-				// tick, no delta yet). omitempty keeps a non-nil *float64 on the
-				// wire even when it points at 0 (it only drops a nil pointer).
-				Expect(status.CPU.HostBusyCores).ToNot(BeNil(),
-					"HostBusyCores must be non-nil (fetchable) when /proc/stat is readable — even when the value is 0")
-				Expect(status.CPU.HostBusyCores).To(HaveValue(BeNumerically("~", 0.0, 1e-9)),
-					"HostBusyCores is 0 on the baseline tick (no /proc/stat delta yet), but still fetchable")
-				Expect(wireJSON).To(ContainSubstring(`"hostBusyCores"`),
-					"hostBusyCores must be JSON-present (non-nil pointer, omitempty keeps it) when /proc/stat is readable")
-			} else {
-				// Un-fetchable: nil pointer, JSON-omitted via omitempty.
-				Expect(status.CPU.HostBusyCores).To(BeNil(),
-					"HostBusyCores must be nil (un-fetchable) when /proc/stat is unreadable or malformed")
-				Expect(wireJSON).NotTo(ContainSubstring(`"hostBusyCores"`),
-					"hostBusyCores must be JSON-omitted (nil pointer, omitempty drops it) when /proc/stat is unreadable or malformed")
-			}
-		},
-		Entry("readable /proc/stat -> fetchable (non-nil pointer to 0, JSON-present)",
-			"cpu  1000 1000 1000 8000 0 0 0 50 0 0\n", nil, nil, true),
-		Entry("unreadable /proc/stat (read error at ReadFile) -> un-fetchable (nil, JSON-omitted)",
-			"", errors.New("permission denied: /proc/stat"), nil, false),
-		Entry("readable but malformed /proc/stat (parse failure: short cpu line) -> un-fetchable (nil, JSON-omitted)",
-			"cpu  1000 1000\n", nil, nil, false),
-		Entry("cpu.stat read failure -> un-fetchable (nil, JSON-omitted) even when /proc/stat is readable",
-			"cpu  1000 1000 1000 8000 0 0 0 50 0 0\n", nil, errors.New("permission denied: cpu.stat"), false),
-	)
-
-	// Counter-reset branch (sampler.go: totalDelta <= 0 on host reboot /
-	// /proc/stat wrap). A reset tick still sets HostBusyCoresAvailable true
-	// and emits a non-nil pointer to 0 (fetchable-0, JSON-present) — NOT nil.
-	// This pins the fetchability contract on the reset-guard branch: a reset
-	// is a readable /proc/stat reading (the flag is set), so the wire field
-	// stays non-nil even though the busy-delta is 0.
-	It("emits a fetchable-0 hostBusyCores (non-nil, JSON-present) on a /proc/stat counter-reset tick", func() {
-		mockFS := filesystem.NewMockFileSystem()
-		ctx := context.Background()
-
-		testDataPath, err := os.MkdirTemp("", "cpu-wire-hostbusy-reset")
-		Expect(err).NotTo(HaveOccurred())
-		defer func() { _ = os.RemoveAll(testDataPath) }()
-
-		const cpuMax = "200000 100000\n"
-		usageUsec := int64(1_000_000)
-
-		// procStat is mutated between ticks; tick 1 baselines, tick 2 has a
-		// SMALLER total (counter reset / wrap) so the reset guard fires.
-		procStatTick0 := "cpu  5001000 1000 1000 9000 0 0 0 50 0 0\n"
-		procStatTick1 := "cpu  1000 1000 1000 8000 0 0 0 50 0 0\n"
-		procStat := procStatTick0
-
-		mockFS.WithReadFileFunc(func(_ context.Context, path string) ([]byte, error) {
-			switch path {
-			case "/sys/fs/cgroup/cpu.max":
-				return []byte(cpuMax), nil
-			case "/sys/fs/cgroup/cpu.stat":
-				return []byte(fmt.Sprintf(
-					"usage_usec %d\nnr_periods 1000\nnr_throttled 0\nthrottled_usec 0\n",
-					usageUsec,
-				)), nil
-			case "/proc/stat":
-				return []byte(procStat), nil
-			default:
-				return nil, errors.New("file not found: " + path)
-			}
-		})
-
-		svc := container_monitor.NewContainerMonitorServiceWithPath(mockFS, testDataPath)
-
-		// Tick 1 — baseline /proc/stat.
-		usageUsec = 1_000_000
-		procStat = procStatTick0
-		_, err = svc.GetStatus(ctx)
-		Expect(err).NotTo(HaveOccurred())
-
-		// Tick 2 — total jiffies DECREASED (reset). The reset guard zeros
-		// HostBusyCores but HostBusyCoresAvailable stays true, so the wire
-		// emits a fetchable-0 (non-nil pointer to 0, JSON-present).
-		usageUsec = 2_000_000
-		procStat = procStatTick1
-		status, err := svc.GetStatus(ctx)
-		Expect(err).NotTo(HaveOccurred())
-
-		Expect(status.CPU.HostBusyCores).ToNot(BeNil(),
-			"HostBusyCores must be non-nil (fetchable) on a counter-reset tick — HostBusyCoresAvailable is set before the reset guard returns")
-		Expect(status.CPU.HostBusyCores).To(HaveValue(BeNumerically("~", 0.0, 1e-9)),
-			"HostBusyCores is 0 on a reset tick (guard zeroes the negative busy delta), but still fetchable")
-
-		wireJSON, err := json.Marshal(status.CPU)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(wireJSON).To(ContainSubstring(`"hostBusyCores"`),
-			"hostBusyCores must be JSON-present (non-nil pointer to 0, omitempty keeps it) on a counter-reset tick")
+	mockFS.WithReadFileFunc(func(_ context.Context, path string) ([]byte, error) {
+		switch path {
+		case "/sys/fs/cgroup/cpu.max":
+			return []byte(cpuMax), nil
+		case "/sys/fs/cgroup/cpu.stat":
+			return []byte(fmt.Sprintf(
+				"usage_usec %d\nnr_periods 1000\nnr_throttled 0\nthrottled_usec 0\n",
+				usageUsec,
+			)), nil
+		case "/proc/stat":
+			return []byte(procStat), nil
+		default:
+			return nil, errors.New("file not found: " + path)
+		}
 	})
+
+	svc := container_monitor.NewContainerMonitorServiceWithPath(mockFS, testDataPath)
+
+	// Tick 1 — baseline /proc/stat (busy delta 0, first read).
+	usageUsec = 1_000_000
+	procStat = procStatTick0
+	_, err = svc.GetStatus(ctx)
+	Expect(err).NotTo(HaveOccurred())
+
+	// Tick 2 — total jiffies DECREASED (reset). The reset guard zeroes the
+	// negative busy delta, so the per-tick host-busy is 0 and the 60s mean
+	// (the verdict's saturation input, on verdictBasis.headroom.hostBusyMean)
+	// is 0, not negative.
+	usageUsec = 2_000_000
+	procStat = procStatTick1
+	status, err := svc.GetStatus(ctx)
+	Expect(err).NotTo(HaveOccurred())
+
+	Expect(status.CPU.VerdictBasis).ToNot(BeNil(),
+		"verdictBasis is present (Decide ran: cpu.max capped and cgroup readable) on a counter-reset tick")
+	Expect(status.CPU.VerdictBasis.Headroom.HostBusyMean).To(BeNumerically("~", 0.0, 1e-9),
+		"hostBusyMean is 0 on a reset tick (guard zeroes the negative busy delta → 60s mean is 0)")
+	Expect(status.CPU.VerdictBasis.Headroom.HostBusyMean).To(BeNumerically(">=", 0.0),
+		"hostBusyMean must be non-negative on a reset tick — the reset guard prevents a poison negative value reaching the verdict's saturation input")
 })
 
 // VerdictBasis wire contract. verdictBasis is the machine-readable why behind
