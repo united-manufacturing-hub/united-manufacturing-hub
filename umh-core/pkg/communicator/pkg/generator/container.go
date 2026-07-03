@@ -59,7 +59,7 @@ func buildContainer(
 	out := defaultContainer() // start with defaults, then override
 
 	out.Health = &models.Health{
-		Message:       getContainerHealthMessage(status.OverallHealth),
+		Message:       composeContainerHealthMessage(status.OverallHealth, status.CPUHealth, status.CPU),
 		ObservedState: instance.CurrentState,
 		DesiredState:  instance.DesiredState,
 		Category:      status.OverallHealth,
@@ -150,6 +150,35 @@ func defaultContainer() models.Container {
 		Hwid:         "unknown",
 		Architecture: models.ArchitectureAmd64,
 	}
+}
+
+// composeContainerHealthMessage returns the container health message for the
+// wire's container.health.message (the field MC renders in the badge tooltip),
+// preferring the CPU's curated message (cpuhealth.ComposeMessage output, stored
+// on cpu.Health.Message by getCPUMetrics) when CPU is the health driver.
+//
+// The CPU's message carries the rich two-layer text (headline + "Technical
+// Details:" + per-cause what-to-do) and, for a healthy dead-zone box, the
+// limitedVisibility note ("enable PSI / set a limit"). Without this propagation
+// the generic per-category string ("Container degraded" / "Container operating
+// normally") would reach MC and the curated CPU message — already on the wire
+// as container.cpu.health.message — would never be rendered.
+//
+// CPU is the health driver when the container is healthy (CPU is the only
+// subsystem with a rich composer today, so its healthy message is the most
+// informative line) OR when CPU is the degraded subsystem. When memory or disk
+// is the degraded driver, the generic line is used.
+//
+// TODO: when memory/disk get rich composers (like CPU's ComposeMessage),
+// propagate their messages here for memory/disk-degraded containers, and
+// compose an overall healthy message from all subsystems instead of CPU-only.
+func composeContainerHealthMessage(overall, cpuHealth models.HealthCategory, cpu *models.CPU) string {
+	if cpu != nil && cpu.Health != nil && cpu.Health.Message != "" &&
+		(overall != models.Degraded || cpuHealth == models.Degraded) {
+		return cpu.Health.Message
+	}
+
+	return getContainerHealthMessage(overall)
 }
 
 // getHealthMessage is container-specific.
