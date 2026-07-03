@@ -230,6 +230,13 @@ type stealPoint struct {
 type usagePoint struct {
 	ts       time.Time
 	fraction float64
+	// cores is the absolute UsageCores at this tick (clamped like fraction).
+	// The percentile wire signals (AvgUsageFraction/P95/P99, mirrored to mCPU)
+	// are computed from cores, not fraction: on a no-limit dead-zone box the
+	// fraction has no denominator (CgroupCores 0) and collapses to 0, but the
+	// box still uses real cores. fraction stays the saturation-latch input
+	// (60s-avg fraction vs HighUsageFraction) in the cgroup-known sub-case.
+	cores float64
 }
 
 // hostBusyPoint is one timestamped HostBusyCores observation in the WindowState
@@ -282,8 +289,18 @@ type Signals struct {
 	AvgUsageFraction float64
 	P95UsageFraction float64
 	P99UsageFraction float64
-	UsageRingActive  bool
-	ThrottleFired    bool
+	// AvgUsageCores, P95UsageCores, P99UsageCores are the avg/p95/p99 of the
+	// ABSOLUTE per-tick core usage over the dead-zone ring, mirrored to mCPU
+	// (*1000) on the wire. Separate from the *Fraction fields because on a
+	// no-limit dead-zone box the cgroup-relative fraction collapses to 0 (no
+	// denominator) while the box still uses real cores; the fraction fields
+	// stay the saturation-latch input and the "CPU averaged N%" message value.
+	// 0 until the ring holds >= 2 entries (gated by UsageRingActive).
+	AvgUsageCores   float64
+	P95UsageCores   float64
+	P99UsageCores   float64
+	UsageRingActive bool
+	ThrottleFired   bool
 	// PressureFired is the pressure Schmitt latch state (fires above
 	// PressureHigh, clears only below PressureRecover), independent of the
 	// throttle latch.
@@ -715,10 +732,16 @@ func Decide(st *WindowState, sample Sample, thresholds Thresholds) (Verdict, Sig
 			fraction = 0
 		}
 
+		usageCores := sample.UsageCores
+		if !(usageCores >= 0) || math.IsInf(usageCores, 1) {
+			usageCores = 0
+		}
+
 		signals.UsageFraction = fraction
 		st.usageRing = append(st.usageRing, usagePoint{
 			ts:       sample.Timestamp,
 			fraction: fraction,
+			cores:    usageCores,
 		})
 
 		usageCutoff := sample.Timestamp.Add(-throttleWindow)
@@ -781,6 +804,8 @@ func Decide(st *WindowState, sample Sample, thresholds Thresholds) (Verdict, Sig
 	if n := len(st.usageRing); n >= 2 {
 		signals.UsageRingActive = true
 
+		// Fraction-based percentiles (cgroup-relative, 0-1): the saturation
+		// latch input and the "CPU averaged N%" message number. Unchanged.
 		vals := make([]float64, n)
 		for i, up := range st.usageRing {
 			vals[i] = up.fraction
@@ -788,11 +813,6 @@ func Decide(st *WindowState, sample Sample, thresholds Thresholds) (Verdict, Sig
 
 		sort.Float64s(vals)
 
-		// AvgUsageFraction is the arithmetic mean of the same vals slice used
-		// for p95/p99, computed UNCONDITIONALLY when the ring holds >= 2
-		// entries (independent of the dead-zone saturation latch). This is
-		// the same value as saturationAvg when in the dead-zone, but it does
-		// not depend on the dead-zone-only local.
 		var sum float64
 		for _, v := range vals {
 			sum += v
@@ -804,6 +824,27 @@ func Decide(st *WindowState, sample Sample, thresholds Thresholds) (Verdict, Sig
 		signals.P95UsageFraction = vals[p95Rank-1]
 		p99Rank := int(math.Ceil(0.99 * float64(n)))
 		signals.P99UsageFraction = vals[p99Rank-1]
+
+		// Cores-based percentiles (absolute per-tick core usage): the wire's
+		// avg/p95/p99 mCPU rows. Separate from the fraction percentiles because
+		// on a no-limit dead-zone box the fraction collapses to 0 (no cgroup
+		// denominator) while the box still uses real cores. Mirrored to mCPU
+		// (*1000) by the caller.
+		coreVals := make([]float64, n)
+		for i, up := range st.usageRing {
+			coreVals[i] = up.cores
+		}
+
+		sort.Float64s(coreVals)
+
+		var coreSum float64
+		for _, v := range coreVals {
+			coreSum += v
+		}
+
+		signals.AvgUsageCores = coreSum / float64(n)
+		signals.P95UsageCores = coreVals[p95Rank-1]
+		signals.P99UsageCores = coreVals[p99Rank-1]
 	}
 
 	var causes []Cause

@@ -371,9 +371,9 @@ func (c *ContainerMonitorService) getCPUMetrics(ctx context.Context) (*models.CP
 	// from an absent signal, which the value-based 0/omitempty discipline
 	// cannot. They do not change the verdict.
 	if signals.UsageRingActive {
-		cpuStat.AvgMCpu = ptr(signals.AvgUsageFraction * 1000)
-		cpuStat.P95MCpu = ptr(signals.P95UsageFraction * 1000)
-		cpuStat.P99MCpu = ptr(signals.P99UsageFraction * 1000)
+		cpuStat.AvgMCpu = ptr(signals.AvgUsageCores * 1000)
+		cpuStat.P95MCpu = ptr(signals.P95UsageCores * 1000)
+		cpuStat.P99MCpu = ptr(signals.P99UsageCores * 1000)
 	}
 
 	// StealP95 (steal fraction 0-1) and PressureAvg60 (PSI some-avg60 as a

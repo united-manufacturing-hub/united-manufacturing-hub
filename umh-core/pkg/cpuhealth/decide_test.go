@@ -3427,3 +3427,54 @@ func TestDecide_HealthyMessageApplicabilitySignals(t *testing.T) {
 		}
 	})
 }
+
+// TestDecide_UsagePercentilesAreAbsoluteCores pins R8: the avg/p95/p99 usage
+// signals are absolute core counts (mirrored to mCPU by the wire via *1000),
+// NOT the cgroup-relative usage fraction. On a no-limit dead-zone box
+// (CgroupCores == 0, no Quota), the fraction is 0 (no denominator), so a
+// fraction-based percentile would collapse to 0 even though the box is using
+// real cores. The percentile must reflect the actual core usage.
+func TestDecide_UsagePercentilesAreAbsoluteCores(t *testing.T) {
+	base := time.Date(2026, 7, 3, 12, 0, 0, 0, time.UTC)
+	thresholds := DefaultThresholds()
+
+	// No-limit dead-zone box (mirrors the live VM): no Quota, CgroupCores 0,
+	// no PSI, 8 logical host cores. Feed a steady 2.75 cores of usage.
+	noLimitDeadZone := func(dt time.Duration, usageCores float64) Sample {
+		return Sample{
+			Timestamp:    base.Add(dt),
+			UsageCores:   usageCores,
+			CgroupCores:  0,
+			LogicalCpus:  8.0,
+			PsiAvailable: false,
+			Virtualized:  false,
+		}
+	}
+
+	st := &WindowState{}
+	var sig Signals
+	for i := 0; i < 6; i++ {
+		_, sig = Decide(st, noLimitDeadZone(time.Duration(i*10)*time.Second, 2.75), thresholds)
+	}
+
+	if !sig.UsageRingActive {
+		t.Fatalf("UsageRingActive: got false, want true (dead-zone ring holds >= 2 samples)")
+	}
+	// The box uses 2.75 cores every tick. avg/p95/p99 CORES must reflect that
+	// (→ 2750 mCPU on the wire), NOT 0 (which is what UsageCores/CgroupCores
+	// gives when CgroupCores is 0). The *Fraction fields stay 0 here (no cgroup
+	// denominator) — correct for the latch/message, and exactly why the wire
+	// needs the separate *Cores fields.
+	if !floatEq(sig.AvgUsageCores, 2.75) {
+		t.Fatalf("AvgUsageCores: got %v, want 2.75 (absolute cores, not the collapsed cgroup fraction 0)", sig.AvgUsageCores)
+	}
+	if !floatEq(sig.P95UsageCores, 2.75) {
+		t.Fatalf("P95UsageCores: got %v, want 2.75 (absolute cores)", sig.P95UsageCores)
+	}
+	if !floatEq(sig.P99UsageCores, 2.75) {
+		t.Fatalf("P99UsageCores: got %v, want 2.75 (absolute cores)", sig.P99UsageCores)
+	}
+	if !floatEq(sig.AvgUsageFraction, 0) {
+		t.Fatalf("AvgUsageFraction: got %v, want 0 (no cgroup denominator on a no-limit box)", sig.AvgUsageFraction)
+	}
+}
