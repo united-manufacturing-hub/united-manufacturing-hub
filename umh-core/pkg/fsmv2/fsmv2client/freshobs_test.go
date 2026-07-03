@@ -37,15 +37,14 @@ var _ = Describe("GetFreshObs", func() {
 
 	ref := dynamicchildren.Ref{WorkerType: "benthos_monitor", Name: "benthos-bridge-1"}
 
-	It("returns the full Observation with the framework verdict when Fresh", func() {
+	It("returns the full Observation, including CollectedAt, when Fresh", func() {
 		writer := dynamicchildren.NewWriter()
 		Expect(writer.Upsert(ref, map[string]any{})).To(Succeed())
 
+		collectedAt := time.Now().Add(-1 * time.Second)
 		staged := &fsmv2.Observation[testStatus]{
-			CollectedAt: time.Now().Add(-1 * time.Second),
+			CollectedAt: collectedAt,
 			Status:      testStatus{V: "observed"},
-			Degraded:    true,
-			Reason:      "x",
 		}
 		client := fsmv2client.NewFSMv2Client(writer, &stubStateReader{obs: staged})
 
@@ -54,9 +53,9 @@ var _ = Describe("GetFreshObs", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(fresh).To(Equal(fsmv2client.Fresh))
 		Expect(obs.Status).To(Equal(testStatus{V: "observed"}))
-		Expect(obs.Degraded).To(BeTrue())
-		Expect(obs.Reason).To(Equal("x"))
-		Expect(obs.CollectedAt.IsZero()).To(BeFalse())
+		// The differentiator vs GetFresh: the full Observation carries CollectedAt
+		// (and any other framework fields), which GetFresh drops.
+		Expect(obs.CollectedAt).To(BeTemporally("==", collectedAt))
 	})
 
 	It("returns Unregistered and a zero Observation when the ref was never Upserted", func() {
@@ -86,11 +85,10 @@ var _ = Describe("GetFreshObs", func() {
 		writer := dynamicchildren.NewWriter()
 		Expect(writer.Upsert(ref, map[string]any{})).To(Succeed())
 
+		collectedAt := time.Now().Add(-3 * maxAge)
 		staged := &fsmv2.Observation[testStatus]{
-			CollectedAt: time.Now().Add(-3 * maxAge),
+			CollectedAt: collectedAt,
 			Status:      testStatus{V: "observed"},
-			Degraded:    true,
-			Reason:      "stale target",
 		}
 		client := fsmv2client.NewFSMv2Client(writer, &stubStateReader{obs: staged})
 
@@ -99,9 +97,8 @@ var _ = Describe("GetFreshObs", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(fresh).To(Equal(fsmv2client.Stale))
 		Expect(obs.Status).To(Equal(testStatus{V: "observed"}))
-		// Stale, like Fresh, returns the full Observation: the verdict must survive.
-		Expect(obs.Degraded).To(BeTrue())
-		Expect(obs.Reason).To(Equal("stale target"))
+		// Stale, like Fresh, returns the full Observation (not the zero value).
+		Expect(obs.CollectedAt).To(BeTemporally("==", collectedAt))
 	})
 
 	It("returns Unknown and the error verbatim on a non-ErrNotObserved store read error", func() {
