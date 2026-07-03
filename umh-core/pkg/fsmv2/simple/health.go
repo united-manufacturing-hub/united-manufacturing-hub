@@ -12,9 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package simple lets a developer write a polling monitor worker in one file:
-// a struct-literal Spec registered at type level, with the framework owning the
-// state machine, freshness, and health-verdict resolution (ENG-5305).
 package simple
 
 // Health is the verdict a worker's optional Health function returns for one

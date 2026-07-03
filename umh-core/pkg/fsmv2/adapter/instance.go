@@ -12,11 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package adapter bridges fsmv2 workers to the fsmv1 FSMInstance / FSMManager
-// interfaces so that fsmv2-backed components can be used as drop-in
-// replacements inside the existing control loop without writing boilerplate
-// per worker type. The framework owns state resolution; the developer supplies
-// only the Fresh-case mapping.
 package adapter
 
 import (
