@@ -208,14 +208,14 @@ type throttlePoint struct {
 // flip-latch that Decide mutates in place. The sliding 60s window is the
 // debounce; the asymmetric (Schmitt) recover band is the only extra mechanism.
 type WindowState struct {
-	throttleRing        []throttlePoint
-	stealRing           []stealPoint
-	usageRing           []usagePoint
-	hostBusyRing        []hostBusyPoint
-	throttleFired       bool
-	pressureFired       bool
-	stealFired          bool
-	saturationFired     bool
+	throttleRing    []throttlePoint
+	stealRing       []stealPoint
+	usageRing       []usagePoint
+	hostBusyRing    []hostBusyPoint
+	throttleFired   bool
+	pressureFired   bool
+	stealFired      bool
+	saturationFired bool
 }
 
 // stealPoint is one timestamped steal-fraction observation in the WindowState
@@ -327,6 +327,23 @@ type Signals struct {
 	// observability-only (does not change the verdict) and is NOT clamped — a
 	// host with hostBusyMean >= capacity produces a negative number, not 0.
 	HeadroomCores float64
+	// CapacityCores is the core budget used as the headroom denominator: the
+	// cgroup Quota when set and positive, else Sample.LogicalCpus (the uncapped
+	// host). It is the "total cores" the healthy budget message reports, and the
+	// value HeadroomCores is derived from.
+	CapacityCores float64
+	// LimitApplies is true when a CPU limit is set (Sample.Quota non-nil and
+	// positive), i.e. the throttle rule is applicable to this box. The healthy
+	// budget message lists the throttle budget only when it applies.
+	LimitApplies bool
+	// PsiApplies is true when PSI (cpu.pressure) is readable
+	// (Sample.PsiAvailable), i.e. the pressure rule is applicable. The healthy
+	// budget message lists the pressure budget only when it applies.
+	PsiApplies bool
+	// StealApplies is true when the box is virtualized (Sample.Virtualized),
+	// i.e. the steal rule is applicable. The healthy budget message lists the
+	// steal budget only when it applies.
+	StealApplies bool
 }
 
 // Verdict is the output of Decide.
@@ -649,6 +666,10 @@ func Decide(st *WindowState, sample Sample, thresholds Thresholds) (Verdict, Sig
 	}
 
 	signals.HeadroomCores = capacity - hostBusyMean - cpuReserveCores
+	signals.CapacityCores = capacity
+	signals.LimitApplies = sample.Quota != nil && *sample.Quota > 0
+	signals.PsiApplies = sample.PsiAvailable
+	signals.StealApplies = sample.Virtualized
 
 	// Saturation backstop (dead-zone-only): the dead-zone is the case where no
 	// PSI signal and no cgroup limit are present — Quota is nil or non-positive

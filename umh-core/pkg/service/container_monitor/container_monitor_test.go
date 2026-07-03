@@ -294,12 +294,19 @@ var _ = Describe("Container Monitor Service", func() {
 				Expect(status.CPU.Health.Category).To(Equal(models.Active),
 					"CPU.Health.Category must be Active when not throttled")
 
-				// The two verdicts must agree: no "degraded" wording in
-				// the health message while CPUHealth is Active. This is
-				// the contradiction that produced the downstream
-				// "CPU degraded: CPU utilization normal" false-block.
-				Expect(strings.ToLower(status.CPU.Health.Message)).NotTo(ContainSubstring("degraded"),
-					"CPU.Health.Message must not say degraded when CPUHealth is Active")
+				// The two verdicts must agree: while CPUHealth is Active
+				// the health message must read as a healthy verdict, not a
+				// degraded one. This is the contradiction that produced the
+				// downstream "CPU degraded: CPU utilization normal"
+				// false-block. The v4 healthy budget message names the
+				// degraded THRESHOLD ("before it is marked degraded",
+				// "degraded below 0"), so pin the healthy headline prefix
+				// and guard against a "CPU degraded" verdict rather than the
+				// bare word "degraded".
+				Expect(status.CPU.Health.Message).To(HavePrefix("CPU healthy"),
+					"CPU.Health.Message must render the healthy headline when CPUHealth is Active")
+				Expect(strings.ToLower(status.CPU.Health.Message)).NotTo(ContainSubstring("cpu degraded"),
+					"CPU.Health.Message must not read as a degraded verdict when CPUHealth is Active")
 			})
 		})
 

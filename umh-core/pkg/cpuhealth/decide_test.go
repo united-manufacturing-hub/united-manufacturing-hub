@@ -3349,3 +3349,81 @@ func TestDecide_HostContentionFold_Full(t *testing.T) {
 	})
 
 }
+
+// TestDecide_HealthyMessageApplicabilitySignals pins the applicability data the
+// healthy message's budget dashboard reads: CapacityCores (the headroom
+// denominator) and the three per-rule applicability booleans (LimitApplies,
+// PsiApplies, StealApplies). The dashboard lists a rule's budget only when its
+// applicability flag is set, so Decide must populate them from the sample's
+// Quota / PsiAvailable / Virtualized fields.
+func TestDecide_HealthyMessageApplicabilitySignals(t *testing.T) {
+	ts := time.Date(2026, 7, 3, 12, 0, 0, 0, time.UTC)
+	thresholds := DefaultThresholds()
+
+	// (a) Limited box: a positive Quota → LimitApplies true, CapacityCores is
+	// the Quota (not LogicalCpus). PSI/steal do not apply.
+	t.Run("LimitedBox", func(t *testing.T) {
+		quota := 4.0
+		st := &WindowState{}
+		_, sig := Decide(st, Sample{Timestamp: ts, Quota: &quota, LogicalCpus: 8.0}, thresholds)
+		if !floatEq(sig.CapacityCores, 4.0) {
+			t.Fatalf("CapacityCores: got %v, want 4.0 (Quota set → capacity is Quota, not LogicalCpus 8.0)", sig.CapacityCores)
+		}
+		if !sig.LimitApplies {
+			t.Fatalf("LimitApplies: got false, want true (a positive Quota means the throttle rule applies)")
+		}
+		if sig.PsiApplies {
+			t.Fatalf("PsiApplies: got true, want false (PsiAvailable is false)")
+		}
+		if sig.StealApplies {
+			t.Fatalf("StealApplies: got true, want false (not virtualized)")
+		}
+	})
+
+	// (b) PSI box: PsiAvailable → PsiApplies true. No Quota → LimitApplies
+	// false and CapacityCores is LogicalCpus.
+	t.Run("PsiBox", func(t *testing.T) {
+		st := &WindowState{}
+		_, sig := Decide(st, Sample{Timestamp: ts, LogicalCpus: 8.0, PsiAvailable: true}, thresholds)
+		if !sig.PsiApplies {
+			t.Fatalf("PsiApplies: got false, want true (PsiAvailable true means the pressure rule applies)")
+		}
+		if sig.LimitApplies {
+			t.Fatalf("LimitApplies: got true, want false (no Quota set)")
+		}
+		if sig.StealApplies {
+			t.Fatalf("StealApplies: got true, want false (not virtualized)")
+		}
+		if !floatEq(sig.CapacityCores, 8.0) {
+			t.Fatalf("CapacityCores: got %v, want 8.0 (no Quota → capacity is LogicalCpus)", sig.CapacityCores)
+		}
+	})
+
+	// (c) Virtualized box: Virtualized → StealApplies true.
+	t.Run("VirtualizedBox", func(t *testing.T) {
+		st := &WindowState{}
+		_, sig := Decide(st, Sample{Timestamp: ts, LogicalCpus: 8.0, Virtualized: true}, thresholds)
+		if !sig.StealApplies {
+			t.Fatalf("StealApplies: got false, want true (virtualized means the steal rule applies)")
+		}
+		if sig.LimitApplies {
+			t.Fatalf("LimitApplies: got true, want false (no Quota set)")
+		}
+		if sig.PsiApplies {
+			t.Fatalf("PsiApplies: got true, want false (PsiAvailable false)")
+		}
+	})
+
+	// (d) Bare dead-zone box: no Quota, no PSI, not virtualized → all three
+	// false and CapacityCores == LogicalCpus.
+	t.Run("BareDeadZoneBox", func(t *testing.T) {
+		st := &WindowState{}
+		_, sig := Decide(st, Sample{Timestamp: ts, LogicalCpus: 8.0}, thresholds)
+		if sig.LimitApplies || sig.PsiApplies || sig.StealApplies {
+			t.Fatalf("bare dead-zone box: LimitApplies=%v PsiApplies=%v StealApplies=%v, want all false", sig.LimitApplies, sig.PsiApplies, sig.StealApplies)
+		}
+		if !floatEq(sig.CapacityCores, 8.0) {
+			t.Fatalf("CapacityCores: got %v, want 8.0 (dead-zone → capacity is LogicalCpus)", sig.CapacityCores)
+		}
+	})
+}

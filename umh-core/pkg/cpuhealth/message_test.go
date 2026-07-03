@@ -181,31 +181,12 @@ func TestComposeMessage_StealTwoLayerC2(t *testing.T) {
 	}
 }
 
-func TestComposeMessage_HostContentionTwoLayerC2(t *testing.T) {
-	verdict := cpuhealth.Verdict{
-		State:       cpuhealth.StateDegraded,
-		Attribution: cpuhealth.AttributionHost,
-		Causes: []cpuhealth.Cause{
-			{Kind: cpuhealth.CauseKindHostContention, Value: 3.0},
-		},
-	}
-	signals := cpuhealth.Signals{HostContentionFired: true}
-
-	msg := cpuhealth.ComposeMessage(verdict, signals)
-	details := assertTwoLayer(t, msg, "Host CPU taken by other software",
-		"cores are used by software outside UMH",
-		"Give UMH dedicated CPU",
-		"does not protect it from neighbours",
-	)
-
-	// 3 contention cores => 300% busy (Linux CPU% convention) and 3 cores.
-	if !strings.Contains(details, "300%") {
-		t.Fatalf("Technical Details missing the host-busy percentage 300%%: details=%q", details)
-	}
-	if !strings.Contains(details, "3 cores") {
-		t.Fatalf("Technical Details missing the contention core count 3 cores: details=%q", details)
-	}
-}
+// NOTE: TestComposeMessage_HostContentionTwoLayerC2 was removed with the v4
+// host-contention fold: CauseKindHostContention is never emitted (Decide folds
+// a neighbour filling the box into saturation + the host/container attribution
+// split), so its headline/details copy is dead code and its strings were
+// deleted from causeHeadline/causeDetails. A test asserting those strings would
+// pin dead code.
 
 func TestComposeMessage_SaturationTwoLayerC2(t *testing.T) {
 	verdict := cpuhealth.Verdict{
@@ -215,7 +196,10 @@ func TestComposeMessage_SaturationTwoLayerC2(t *testing.T) {
 			{Kind: cpuhealth.CauseKindSaturation, Value: 0.82},
 		},
 	}
-	signals := cpuhealth.Signals{SaturationFired: true, AvgUsageFraction: 0.82}
+	// LimitedVisibility true selects the blind saturation copy this test's
+	// phrases assert (no limit + no PSI). The non-blind variant is pinned
+	// separately in TestComposeMessage_SaturationDetailsPsiConditional.
+	signals := cpuhealth.Signals{SaturationFired: true, AvgUsageFraction: 0.82, LimitedVisibility: true}
 
 	msg := cpuhealth.ComposeMessage(verdict, signals)
 	details := assertTwoLayer(t, msg, "CPU running near full",
@@ -228,6 +212,44 @@ func TestComposeMessage_SaturationTwoLayerC2(t *testing.T) {
 	if !strings.Contains(details, "82%") {
 		t.Fatalf("Technical Details missing the live saturation number 82%%: details=%q", details)
 	}
+}
+
+// TestComposeMessage_SaturationDetailsPsiConditional pins the saturation
+// Technical-Details copy split on signals.LimitedVisibility. When blind (no
+// limit, no PSI) the copy names the missing signals and remediation; when NOT
+// blind (a PSI-only box, LimitedVisibility false) it must NOT claim PSI is
+// missing — it gives the actionable capacity/limit advice instead.
+func TestComposeMessage_SaturationDetailsPsiConditional(t *testing.T) {
+	verdict := cpuhealth.Verdict{
+		State:       cpuhealth.StateDegraded,
+		Attribution: cpuhealth.AttributionUnknown,
+		Causes: []cpuhealth.Cause{
+			{Kind: cpuhealth.CauseKindSaturation, Value: 0.82},
+		},
+	}
+
+	t.Run("Blind", func(t *testing.T) {
+		signals := cpuhealth.Signals{SaturationFired: true, AvgUsageFraction: 0.82, LimitedVisibility: true}
+		msg := cpuhealth.ComposeMessage(verdict, signals)
+		want := "CPU running near full\nTechnical Details: CPU averaged 82% over the last minute, with little headroom left. This instance has no CPU limit set and its operating system is not reporting CPU-pressure stats, so we cannot confirm whether work is waiting for a free core. Set a CPU limit, which also lets us measure that wait directly, or enable Linux pressure stats (boot with psi=1). Consider adding CPU capacity."
+		if msg != want {
+			t.Fatalf("blind saturation message:\n got: %q\nwant: %q", msg, want)
+		}
+	})
+
+	// PSI-only box: LimitedVisibility false → the non-blind variant, which does
+	// NOT claim PSI is missing.
+	t.Run("NonBlindPsiPresent", func(t *testing.T) {
+		signals := cpuhealth.Signals{SaturationFired: true, AvgUsageFraction: 0.82, LimitedVisibility: false}
+		msg := cpuhealth.ComposeMessage(verdict, signals)
+		want := "CPU running near full\nTechnical Details: CPU averaged 82% over the last minute and this instance has little headroom left. Add CPU capacity, or raise its CPU limit if one is set and this load is expected."
+		if msg != want {
+			t.Fatalf("non-blind saturation message:\n got: %q\nwant: %q", msg, want)
+		}
+		if strings.Contains(msg, "pressure stats") || strings.Contains(msg, "psi=1") {
+			t.Fatalf("non-blind saturation copy must not claim PSI is missing: %q", msg)
+		}
+	})
 }
 
 func TestComposeMessage_MultipleCausesListsAllDetailsDominantFirst(t *testing.T) {
@@ -259,43 +281,125 @@ func TestComposeMessage_MultipleCausesListsAllDetailsDominantFirst(t *testing.T)
 	}
 }
 
-func TestComposeMessage_HealthyReturnsHeadlineNotEmpty(t *testing.T) {
-	verdict := cpuhealth.Verdict{State: cpuhealth.StateHealthy}
-	signals := cpuhealth.Signals{}
+// limitedVisibilityNoteText is the exact rewritten limited-visibility note the
+// healthy budget dashboard appends when the box is blind (no CPU limit, no
+// PSI). It is duplicated here (the package const is unexported) so the exact
+// wording is pinned from the caller's side.
+const limitedVisibilityNoteText = "Limited visibility: this instance has no CPU limit set and its operating system is not reporting CPU-pressure stats, so we cannot fully tell when work is waiting for a free core. Set a CPU limit or enable Linux pressure stats (boot with psi=1) to turn on full monitoring."
 
-	msg := cpuhealth.ComposeMessage(verdict, signals)
+// TestComposeMessage_HealthyBudgetDashboard pins the two-layer healthy message:
+// a headline stating current use against the degraded budget, and a Technical
+// Details dashboard listing ONLY the applicable per-rule budgets. The displayed
+// headroom is computed from the already-rounded total/used/reserve so the
+// printed arithmetic is exact by construction (no independent rounding of
+// HeadroomCores). One subtest per applicability configuration; each asserts the
+// exact string.
+func TestComposeMessage_HealthyBudgetDashboard(t *testing.T) {
+	healthy := cpuhealth.Verdict{State: cpuhealth.StateHealthy}
 
-	if msg == "" {
-		t.Fatalf("ComposeMessage returned empty string for a healthy verdict: the healthy case must render the %q headline, not a blank Console headline", "CPU healthy")
-	}
-	if msg != "CPU healthy" {
-		t.Fatalf("healthy message: got %q, want %q (no limited-visibility note when LimitedVisibility is false)", msg, "CPU healthy")
-	}
-}
+	// Fully-instrumented: limit + PSI + virtualized, not blind. All four
+	// dashboard rules appear (headroom always, then throttle/pressure/steal).
+	t.Run("FullyInstrumented", func(t *testing.T) {
+		signals := cpuhealth.Signals{
+			HostBusyCores60sMean: 2.8,
+			CapacityCores:        8,
+			LimitApplies:         true,
+			PsiApplies:           true,
+			StealApplies:         true,
+			ThrottleRatio:        0.0,
+			PressureAvg60Out:     0.03,
+			StealP95:             0.0,
+		}
+		want := "CPU healthy. This instance is using 2.8 of 8 cores and can use 4.2 more before it is marked degraded.\nTechnical Details: Headroom 4.2 cores = 8 total - 2.8 used - 1.0 reserved (degraded below 0). Throttling 0% (degraded above 5%). Pressure 3% (degraded above 20%). Steal 0% (degraded above 10%)."
+		if got := cpuhealth.ComposeMessage(healthy, signals); got != want {
+			t.Fatalf("fully-instrumented healthy message:\n got: %q\nwant: %q", got, want)
+		}
+	})
 
-func TestComposeMessage_HealthyLimitedVisibilityAppendsNote(t *testing.T) {
-	verdict := cpuhealth.Verdict{State: cpuhealth.StateHealthy}
-	signals := cpuhealth.Signals{LimitedVisibility: true}
+	// Limit-only: only the throttle budget joins the headroom line.
+	t.Run("LimitOnly", func(t *testing.T) {
+		signals := cpuhealth.Signals{
+			HostBusyCores60sMean: 2.8,
+			CapacityCores:        8,
+			LimitApplies:         true,
+			ThrottleRatio:        0.0,
+		}
+		want := "CPU healthy. This instance is using 2.8 of 8 cores and can use 4.2 more before it is marked degraded.\nTechnical Details: Headroom 4.2 cores = 8 total - 2.8 used - 1.0 reserved (degraded below 0). Throttling 0% (degraded above 5%)."
+		if got := cpuhealth.ComposeMessage(healthy, signals); got != want {
+			t.Fatalf("limit-only healthy message:\n got: %q\nwant: %q", got, want)
+		}
+	})
 
-	msg := cpuhealth.ComposeMessage(verdict, signals)
+	// PSI-only: only the pressure budget joins the headroom line.
+	t.Run("PsiOnly", func(t *testing.T) {
+		signals := cpuhealth.Signals{
+			HostBusyCores60sMean: 2.8,
+			CapacityCores:        8,
+			PsiApplies:           true,
+			PressureAvg60Out:     0.03,
+		}
+		want := "CPU healthy. This instance is using 2.8 of 8 cores and can use 4.2 more before it is marked degraded.\nTechnical Details: Headroom 4.2 cores = 8 total - 2.8 used - 1.0 reserved (degraded below 0). Pressure 3% (degraded above 20%)."
+		if got := cpuhealth.ComposeMessage(healthy, signals); got != want {
+			t.Fatalf("PSI-only healthy message:\n got: %q\nwant: %q", got, want)
+		}
+	})
 
-	if msg == "" {
-		t.Fatalf("ComposeMessage returned empty string for a healthy dead-zone verdict: must render the healthy headline + limited-visibility note")
-	}
+	// Virtualized-only: only the steal budget joins the headroom line.
+	t.Run("VirtualizedOnly", func(t *testing.T) {
+		signals := cpuhealth.Signals{
+			HostBusyCores60sMean: 2.8,
+			CapacityCores:        8,
+			StealApplies:         true,
+			StealP95:             0.0,
+		}
+		want := "CPU healthy. This instance is using 2.8 of 8 cores and can use 4.2 more before it is marked degraded.\nTechnical Details: Headroom 4.2 cores = 8 total - 2.8 used - 1.0 reserved (degraded below 0). Steal 0% (degraded above 10%)."
+		if got := cpuhealth.ComposeMessage(healthy, signals); got != want {
+			t.Fatalf("virtualized-only healthy message:\n got: %q\nwant: %q", got, want)
+		}
+	})
 
-	firstLine, rest, found := strings.Cut(msg, "\n")
-	if !found {
-		t.Fatalf("healthy limited-visibility message is a single line with no note separator: %q", msg)
-	}
-	if firstLine != "CPU healthy" {
-		t.Fatalf("headline: got %q, want %q", firstLine, "CPU healthy")
-	}
-	if !strings.Contains(rest, "Limited visibility:") {
-		t.Fatalf("limited-visibility note missing from message: %q", msg)
-	}
-	if !strings.Contains(rest, "psi=1") {
-		t.Fatalf("limited-visibility note missing the psi=1 remediation: %q", msg)
-	}
+	// Bare dead-zone: no rule applies, blind → only the headroom line, and the
+	// rewritten limited-visibility note between the headline and Technical
+	// Details.
+	t.Run("BareDeadZone", func(t *testing.T) {
+		signals := cpuhealth.Signals{
+			HostBusyCores60sMean: 2.8,
+			CapacityCores:        8,
+			LimitedVisibility:    true,
+		}
+		want := "CPU healthy. This instance is using 2.8 of 8 cores and can use 4.2 more before it is marked degraded.\n" + limitedVisibilityNoteText + "\nTechnical Details: Headroom 4.2 cores = 8 total - 2.8 used - 1.0 reserved (degraded below 0)."
+		if got := cpuhealth.ComposeMessage(healthy, signals); got != want {
+			t.Fatalf("bare dead-zone healthy message:\n got: %q\nwant: %q", got, want)
+		}
+	})
+
+	// Headroom rounds to exactly 0.0 → the headline switches to the "close to
+	// being marked degraded" phrasing (no "can use X more").
+	t.Run("HeadroomZeroBoundary", func(t *testing.T) {
+		signals := cpuhealth.Signals{
+			HostBusyCores60sMean: 3.0,
+			CapacityCores:        4,
+		}
+		want := "CPU healthy. This instance is using 3.0 of 4 cores and is close to being marked degraded.\nTechnical Details: Headroom 0.0 cores = 4 total - 3.0 used - 1.0 reserved (degraded below 0)."
+		if got := cpuhealth.ComposeMessage(healthy, signals); got != want {
+			t.Fatalf("headroom-zero-boundary healthy message:\n got: %q\nwant: %q", got, want)
+		}
+	})
+
+	// Rounding consistency: raw used 2.75 rounds to 2.8, and headroom is
+	// total-used-reserve on the ALREADY-ROUNDED values (8 - 2.8 - 1.0 = 4.2).
+	// Independently rounding raw headroom (8 - 2.75 - 1.0 = 4.25 → 4.3) would
+	// disagree; the exact string pins the by-construction 4.2.
+	t.Run("RoundingConsistency", func(t *testing.T) {
+		signals := cpuhealth.Signals{
+			HostBusyCores60sMean: 2.75,
+			CapacityCores:        8,
+		}
+		want := "CPU healthy. This instance is using 2.8 of 8 cores and can use 4.2 more before it is marked degraded.\nTechnical Details: Headroom 4.2 cores = 8 total - 2.8 used - 1.0 reserved (degraded below 0)."
+		if got := cpuhealth.ComposeMessage(healthy, signals); got != want {
+			t.Fatalf("rounding-consistency healthy message:\n got: %q\nwant: %q", got, want)
+		}
+	})
 }
 
 func TestBlockReason_PerCause(t *testing.T) {
@@ -306,7 +410,9 @@ func TestBlockReason_PerCause(t *testing.T) {
 		{cpuhealth.CauseKindThrottling, "Can't add another bridge: this instance is already hitting its CPU limit. Raise the limit or reduce load first."},
 		{cpuhealth.CauseKindPressure, "Can't add another bridge: tasks on this instance are already waiting for a free CPU core. Reduce load, or give this instance more CPU, first."},
 		{cpuhealth.CauseKindSteal, "Can't add another bridge: the server isn't giving this instance enough CPU (other VMs are using it). Free up CPU on the server first."},
-		{cpuhealth.CauseKindHostContention, "Can't add another bridge: other software on this host is using most of the CPU. Give UMH dedicated CPU, or reduce what else runs here, first."},
+		// Host-contention is folded in v4 (never emitted): its BlockReason case
+		// was deleted, so it falls through to the generic degraded default.
+		{cpuhealth.CauseKindHostContention, "Can't add another bridge: CPU is degraded."},
 		{cpuhealth.CauseKindSaturation, "Can't add another bridge: CPU has been running near full and we can't determine the cause. Add CPU capacity, or set a CPU limit, first."},
 		{cpuhealth.CauseKind("bogus"), "Can't add another bridge: CPU is degraded."},
 	}

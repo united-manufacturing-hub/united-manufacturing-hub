@@ -261,7 +261,7 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 										CPU: &models.CPU{
 											IsThrottled:   true,
 											ThrottleRatio: ptrFloat64(0.15), // 15% throttled
-											CgroupCores:   2.0,             // Limited to 2 cores
+											CgroupCores:   2.0,              // Limited to 2 cores
 										},
 									},
 								},
@@ -463,12 +463,13 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 				// Pin the literal wire-level message for each kind so drift
 				// between cpuhealth.BlockReason and its copy is caught here
 				// rather than re-asserting the same function the unit calls.
+				// Host-contention is folded in v4 (never emitted) and its BlockReason
+				// case was deleted, so it is not pinned here.
 				expectedReasons := map[cpuhealth.CauseKind]string{
-					cpuhealth.CauseKindThrottling:     "Can't add another bridge: this instance is already hitting its CPU limit. Raise the limit or reduce load first.",
-					cpuhealth.CauseKindPressure:       "Can't add another bridge: tasks on this instance are already waiting for a free CPU core. Reduce load, or give this instance more CPU, first.",
-					cpuhealth.CauseKindSteal:          "Can't add another bridge: the server isn't giving this instance enough CPU (other VMs are using it). Free up CPU on the server first.",
-					cpuhealth.CauseKindHostContention: "Can't add another bridge: other software on this host is using most of the CPU. Give UMH dedicated CPU, or reduce what else runs here, first.",
-					cpuhealth.CauseKindSaturation:     "Can't add another bridge: CPU has been running near full and we can't determine the cause. Add CPU capacity, or set a CPU limit, first.",
+					cpuhealth.CauseKindThrottling: "Can't add another bridge: this instance is already hitting its CPU limit. Raise the limit or reduce load first.",
+					cpuhealth.CauseKindPressure:   "Can't add another bridge: tasks on this instance are already waiting for a free CPU core. Reduce load, or give this instance more CPU, first.",
+					cpuhealth.CauseKindSteal:      "Can't add another bridge: the server isn't giving this instance enough CPU (other VMs are using it). Free up CPU on the server first.",
+					cpuhealth.CauseKindSaturation: "Can't add another bridge: CPU has been running near full and we can't determine the cause. Add CPU capacity, or set a CPU limit, first.",
 				}
 
 				for kind, expected := range expectedReasons {
@@ -597,10 +598,10 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 				snapshot.Managers[constants.ContainerManagerName] = &MockManagerSnapshot{
 					Instances: map[string]*pkgfsm.FSMInstanceSnapshot{
 						constants.CoreInstanceName: {
-							ID:                 constants.CoreInstanceName,
-							CurrentState:       "degraded",
-							DesiredState:       "active",
-							LastObservedState:  &wrongTypeObservedState{},
+							ID:                constants.CoreInstanceName,
+							CurrentState:      "degraded",
+							DesiredState:      "active",
+							LastObservedState: &wrongTypeObservedState{},
 						},
 					},
 				}
