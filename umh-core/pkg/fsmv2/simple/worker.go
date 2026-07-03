@@ -50,9 +50,19 @@ func newSimpleWorker[TConfig, TStatus, TDeps any](
 	return w, nil
 }
 
-// CollectObservedState runs the Spec's Poll and wraps the returned status into a
-// framework Observation. A Poll error propagates for now; rung 3 will persist it
-// as a degraded verdict instead of returning (nil, err).
+// reasonNoHealthCheck is the verdict reason for a good poll on a worker that
+// declared no Health function.
+const reasonNoHealthCheck = "running (no health check)"
+
+// CollectObservedState runs the two-phase Poll → Health cycle and returns an
+// Observation carrying the polled status plus the health verdict.
+//
+// Poll runs first. On a Poll error the worker is degraded with reason
+// "poll error: <err>" and Health is NOT called — the error is persisted as a
+// verdict on the Observation rather than returned, so the fsmv1 layer sees a
+// degraded worker with a reason instead of "starting" forever. On a good poll
+// the optional Health function decides the verdict; when it is nil the worker
+// is healthy with reason "running (no health check)".
 func (w *simpleWorker[TConfig, TStatus, TDeps]) CollectObservedState(ctx context.Context, desired fsmv2.DesiredState) (fsmv2.ObservedState, error) {
 	select {
 	case <-ctx.Done():
@@ -68,10 +78,22 @@ func (w *simpleWorker[TConfig, TStatus, TDeps]) CollectObservedState(ctx context
 
 	status, err := w.spec.Poll(ctx, d, cfg)
 	if err != nil {
-		return nil, fmt.Errorf("poll: %w", err)
+		return fsmv2.Observation[TStatus]{
+			Degraded: true,
+			Reason:   fmt.Sprintf("poll error: %v", err),
+		}, nil
 	}
 
-	return fsmv2.NewObservation(status), nil
+	verdict := Healthy(reasonNoHealthCheck)
+	if w.spec.Health != nil {
+		verdict = w.spec.Health(cfg, status)
+	}
+
+	return fsmv2.Observation[TStatus]{
+		Status:   status,
+		Degraded: verdict.Degraded,
+		Reason:   verdict.Reason,
+	}, nil
 }
 
 // GetDependenciesAny returns a true nil: simpleWorker has no per-instance

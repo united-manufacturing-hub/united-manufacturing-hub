@@ -34,8 +34,12 @@ type Spec[TConfig, TStatus, TDeps any] struct {
 	// storage. Required.
 	WorkerType string
 	// Poll observes the target once and returns the status. A non-nil error
-	// drives the worker degraded (rung 3). Required.
+	// drives the worker degraded with reason "poll error: <err>". Required.
 	Poll func(ctx context.Context, d TDeps, cfg TConfig) (TStatus, error)
+	// Health turns a good poll's status into a health verdict. Optional: when
+	// nil, a good poll is healthy with reason "running (no health check)". Never
+	// called on a poll error.
+	Health func(cfg TConfig, status TStatus) Health
 }
 
 // Register wires a Spec into the framework: it registers the worker factory,

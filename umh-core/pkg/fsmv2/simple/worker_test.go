@@ -68,22 +68,76 @@ var _ = Describe("simpleWorker", func() {
 			Expect(o.Status.Reachable).To(BeTrue())
 		})
 
-		It("propagates a Poll error", func() {
+		It("persists a Poll error as a degraded verdict instead of returning it", func() {
+			healthCalled := false
+
 			spec := Spec[probeConfig, probeStatus, struct{}]{
 				WorkerType: "simpleworker_pollerr",
 				Poll: func(_ context.Context, _ struct{}, _ probeConfig) (probeStatus, error) {
 					return probeStatus{}, errors.New("dial timeout")
+				},
+				Health: func(_ probeConfig, _ probeStatus) Health {
+					healthCalled = true
+
+					return Healthy("unreachable")
 				},
 			}
 
 			w, err := newProbeWorker(spec)
 			Expect(err).NotTo(HaveOccurred())
 
-			desired := &fsmv2.WrappedDesiredState[probeConfig]{}
+			obs, err := w.CollectObservedState(context.Background(), &fsmv2.WrappedDesiredState[probeConfig]{})
+			Expect(err).NotTo(HaveOccurred(), "poll error becomes a verdict, not a returned error")
 
-			_, err = w.CollectObservedState(context.Background(), desired)
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("dial timeout"))
+			o := obs.(fsmv2.Observation[probeStatus])
+			Expect(o.Degraded).To(BeTrue())
+			Expect(o.Reason).To(Equal("poll error: dial timeout"))
+			Expect(healthCalled).To(BeFalse(), "Health is not called on a poll error")
+		})
+
+		It("stamps the Health verdict on the Observation after a good poll", func() {
+			spec := Spec[probeConfig, probeStatus, struct{}]{
+				WorkerType: "simpleworker_health",
+				Poll: func(_ context.Context, _ struct{}, _ probeConfig) (probeStatus, error) {
+					return probeStatus{Reachable: false}, nil
+				},
+				Health: func(_ probeConfig, s probeStatus) Health {
+					if !s.Reachable {
+						return Degraded("port 502 unreachable")
+					}
+
+					return Healthy("reachable")
+				},
+			}
+
+			w, err := newProbeWorker(spec)
+			Expect(err).NotTo(HaveOccurred())
+
+			obs, err := w.CollectObservedState(context.Background(), &fsmv2.WrappedDesiredState[probeConfig]{})
+			Expect(err).NotTo(HaveOccurred())
+
+			o := obs.(fsmv2.Observation[probeStatus])
+			Expect(o.Degraded).To(BeTrue())
+			Expect(o.Reason).To(Equal("port 502 unreachable"))
+		})
+
+		It("defaults to healthy with a fixed reason when Health is omitted", func() {
+			spec := Spec[probeConfig, probeStatus, struct{}]{
+				WorkerType: "simpleworker_nohealth",
+				Poll: func(_ context.Context, _ struct{}, _ probeConfig) (probeStatus, error) {
+					return probeStatus{Reachable: true}, nil
+				},
+			}
+
+			w, err := newProbeWorker(spec)
+			Expect(err).NotTo(HaveOccurred())
+
+			obs, err := w.CollectObservedState(context.Background(), &fsmv2.WrappedDesiredState[probeConfig]{})
+			Expect(err).NotTo(HaveOccurred())
+
+			o := obs.(fsmv2.Observation[probeStatus])
+			Expect(o.Degraded).To(BeFalse())
+			Expect(o.Reason).To(Equal("running (no health check)"))
 		})
 
 		It("honours context cancellation", func() {
