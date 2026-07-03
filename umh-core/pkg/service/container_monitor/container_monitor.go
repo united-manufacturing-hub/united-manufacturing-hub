@@ -376,24 +376,6 @@ func (c *ContainerMonitorService) getCPUMetrics(ctx context.Context) (*models.CP
 		cpuStat.P99MCpu = ptr(signals.P99UsageCores * 1000)
 	}
 
-	// StealP95 (steal fraction 0-1) and PressureAvg60 (PSI some-avg60 as a
-	// fraction 0-1; the sampler divides the raw kernel 0-100 percentage by 100)
-	// are observability-only mirrors of the corresponding Signals fields. They
-	// are *float64: non-nil (pointer to the value, even 0) when the underlying
-	// signal is fetchable (StealP95 when sample.Virtualized is true — steal is
-	// not a readable signal on bare metal; PressureAvg60 when sample.PsiAvailable
-	// is true — PSI may be absent on kernels without CONFIG_PSI), nil otherwise.
-	// This distinguishes a real 0 ("we measured, nothing's stolen / no pressure")
-	// from an absent signal ("we can't measure this at all"), which the
-	// value-based 0/omitempty discipline cannot. They do not change the verdict.
-	if sample.Virtualized {
-		cpuStat.StealP95 = ptr(signals.StealP95)
-	}
-
-	if sample.PsiAvailable {
-		cpuStat.PressureAvg60 = ptr(signals.PressureAvg60Out)
-	}
-
 	// Emit the per-tick sample.HostBusyCores (even 0) when /proc/stat is
 	// readable, nil when un-fetchable. The 60s mean is consumed internally by
 	// the saturation latch, not carried on the wire. Clamp the per-tick value

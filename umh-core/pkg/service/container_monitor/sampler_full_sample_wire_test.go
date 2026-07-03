@@ -132,16 +132,21 @@ var _ = Describe("sampler full Sample wired into Decide (rung 12b)", func() {
 		Expect(status2.CPU.Health.Category).To(Equal(models.Degraded),
 			"the CPU Health category must reflect the degraded verdict")
 
-		// PressureAvg60 (observability-only, populated unconditionally) must reach
-		// the wire carrying the same fraction Decide thresholded: some avg60=25.00
-		// → 0.25 fraction. This proves the value crosses the container_monitor
-		// adapter onto models.CPU, not just the internal Signals struct.
-		Expect(status2.CPU.PressureAvg60).To(HaveValue(BeNumerically("~", 0.25, 1e-9)),
-			"PressureAvg60 reaches the wire as a fraction (some avg60=25.00 / 100); fetchable (PSI present) → non-nil pointer")
+		// The verdict basis carries the pressure value Decide thresholded: some
+		// avg60=25.00 → 0.25 fraction. basis.pressure.value is populated
+		// unconditionally (whenever Decide ran), so the value crosses the
+		// container_monitor adapter onto models.CPU inside the verdict basis, not
+		// as a separate flat mirror.
+		Expect(status2.CPU.VerdictBasis).ToNot(BeNil(),
+			"verdictBasis is emitted whenever Decide ran (cgroup read succeeded here)")
+		Expect(status2.CPU.VerdictBasis.Pressure.Value).To(BeNumerically("~", 0.25, 1e-9),
+			"verdictBasis.pressure.value carries the same fraction Decide thresholded (some avg60=25.00 / 100)")
+		Expect(status2.CPU.VerdictBasis.Pressure.Applies).To(BeTrue(),
+			"verdictBasis.pressure.applies is true when PSI is fetchable (cpu.pressure present)")
 		pressureJSON, err := json.Marshal(status2.CPU)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(pressureJSON).To(ContainSubstring(`"pressureAvg60":0.25`),
-			"pressureAvg60 must be present on the JSON wire when non-zero")
+		Expect(pressureJSON).To(ContainSubstring(`"pressure":{"value":0.25`),
+			"verdictBasis.pressure.value is present on the JSON wire carrying 0.25")
 	})
 })
 
@@ -200,41 +205,44 @@ var _ = Describe("steal p95 wired onto the wire via the sampler", func() {
 
 		// Tick 1 — baselines /proc/stat (StealFraction=0); the steal ring holds a
 		// single 0 sample, below the 2-sample floor, so signals.StealP95 is 0.
-		// StealP95 is *float64: the box is virtualized (hypervisor flag present),
-		// so steal is FETCHABLE → the field is a non-nil pointer to 0.0 (emitted
-		// on the wire as 0, not omitted). This is the fetchability-based
-		// discipline: a real 0 ("we measured, nothing's stolen") is emitted,
-		// distinguishing it from an absent signal (bare metal → nil → omitted).
+		// The basis is emitted whenever Decide ran; basis.steal.value mirrors
+		// signals.StealP95, which is populated unconditionally (the box is
+		// virtualized, so applies=true and value=0 on the baseline tick). This is
+		// the "populated unconditionally" intent carried by the basis.
 		nrPeriods, usageUsec = 1000, 1_000_000
 		status1, err := svc.GetStatus(ctx)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(status1.CPU.StealP95).To(HaveValue(BeNumerically("~", 0.0, 1e-9)),
-			"StealP95 is 0 on the baseline tick (single sample, below the 2-sample floor); fetchable-0: virtualized → non-nil pointer to 0")
+		Expect(status1.CPU.VerdictBasis).ToNot(BeNil(),
+			"verdictBasis is emitted whenever Decide ran (cgroup read succeeded here)")
+		Expect(status1.CPU.VerdictBasis.Steal.Value).To(BeNumerically("~", 0.0, 1e-9),
+			"verdictBasis.steal.value is 0 on the baseline tick (single sample, below the 2-sample floor)")
+		Expect(status1.CPU.VerdictBasis.Steal.Applies).To(BeTrue(),
+			"verdictBasis.steal.applies is true when the box is virtualized (hypervisor flag present)")
 		stealBaselineJSON, err := json.Marshal(status1.CPU)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(stealBaselineJSON).To(ContainSubstring(`"stealP95":0`),
-			"stealP95 is emitted as 0 on the wire when fetchable (virtualized), not omitted")
+		Expect(stealBaselineJSON).To(ContainSubstring(`"steal":{"value":0`),
+			"verdictBasis.steal.value is emitted as 0 on the wire when virtualized (applies=true), even on the baseline tick")
 
 		// Tick 2 — steal delta 1, total delta 200 → StealFraction = 0.005; the ring
-		// now holds [0, 0.005] and the p95 (~0.005) reaches the wire. This p95 is
-		// below StealHigh 0.10, so the steal latch does NOT fire, yet StealP95 is
-		// still populated — proving the value is carried unconditionally, not
-		// gated on a fired latch.
+		// now holds [0, 0.005] and the p95 (~0.005) reaches the wire inside the
+		// verdict basis. This p95 is below StealHigh 0.10, so the steal latch does
+		// NOT fire, yet basis.steal.value is still populated — proving the value
+		// is carried unconditionally, not gated on a fired latch.
 		procStat = "cpu 0 0 0 1199 0 0 0 1 0 0\n"
 		nrPeriods, usageUsec = 2000, 2_000_000
 		status2, err := svc.GetStatus(ctx)
 		Expect(err).NotTo(HaveOccurred())
 
-		Expect(status2.CPU.StealP95).To(HaveValue(BeNumerically("~", 0.005, 1e-9)),
-			"StealP95 reaches the wire as a fraction (steal delta 1 / total delta 200)")
+		Expect(status2.CPU.VerdictBasis.Steal.Value).To(BeNumerically("~", 0.005, 1e-9),
+			"verdictBasis.steal.value carries the steal p95 as a fraction (steal delta 1 / total delta 200)")
 		Expect(status2.CPUHealth).To(Equal(models.Active),
 			"a sub-threshold steal p95 (0.005 < StealHigh 0.10) must not fire the steal latch, so CPUHealth stays Active")
 		Expect(status2.CPU.IsThrottled).To(BeFalse(),
 			"nr_throttled is pinned at 0; no throttle degrade either")
 		stealJSON, err := json.Marshal(status2.CPU)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(stealJSON).To(ContainSubstring(`"stealP95":0.005`),
-			"stealP95 must be present on the JSON wire when non-zero, even sub-threshold")
+		Expect(stealJSON).To(ContainSubstring(`"steal":{"value":0.005`),
+			"verdictBasis.steal.value must be present on the JSON wire when non-zero, even sub-threshold")
 	})
 })
 

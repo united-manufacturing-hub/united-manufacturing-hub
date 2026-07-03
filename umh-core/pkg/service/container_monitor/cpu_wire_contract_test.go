@@ -162,14 +162,13 @@ var _ = Describe("three-field CPU-health wire contract on models.CPU", func() {
 
 // HostBusyCores fetchability wire contract. HostBusyCores is an always-on
 // *float64 wire field populated via the fetchability pattern (mirrors
-// AvgMCpu/P95MCpu/P99MCpu/ThrottleRatio/StealP95/PressureAvg60): non-nil (pointer
-// to the value, even 0) and JSON-present when /proc/stat is readable, nil and
-// JSON-omitted via omitempty when /proc/stat is unreadable. The fetchability flag
-// (HostBusyCoresAvailable on cpuhealth.Sample, set true in readProcStat only when
-// the /proc/stat read+parse succeeded) distinguishes a real 0 ("we read /proc/stat,
-// the host was idle") from an absent signal ("we can't read /proc/stat at all"),
-// which the value-based 0/omitempty discipline cannot. It does not change the
-// verdict.
+// AvgMCpu/P95MCpu/P99MCpu/ThrottleRatio): non-nil (pointer to the value, even 0)
+// and JSON-present when /proc/stat is readable, nil and JSON-omitted via omitempty
+// when /proc/stat is unreadable. The fetchability flag (HostBusyCoresAvailable on
+// cpuhealth.Sample, set true in readProcStat only when the /proc/stat read+parse
+// succeeded) distinguishes a real 0 ("we read /proc/stat, the host was idle") from
+// an absent signal ("we can't read /proc/stat at all"), which the value-based
+// 0/omitempty discipline cannot. It does not change the verdict.
 var _ = Describe("HostBusyCores fetchability wire contract on models.CPU", func() {
 	DescribeTable("emits hostBusyCores per the /proc/stat read+parse outcome",
 		func(procStatData string, procStatErr error, cpuStatErr error, expectFetchable bool) {

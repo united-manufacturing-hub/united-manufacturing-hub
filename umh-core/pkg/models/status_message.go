@@ -141,18 +141,6 @@ type CPU struct {
 	P95MCpu       *float64 `json:"p95MCpu,omitempty"`
 	P99MCpu       *float64 `json:"p99MCpu,omitempty"`
 	ThrottleRatio *float64 `json:"throttleRatio,omitempty"` // Ratio of throttled periods (0.0-1.0); nil when cgroup unreadable
-	// StealP95 is the 60s-windowed steal p95 as a fraction 0-1. It is *float64
-	// so omitempty emits a real 0 (non-nil pointer) when steal is fetchable
-	// (the box is virtualized) and omits it when un-fetchable (nil pointer: bare
-	// metal, where steal is not a readable signal). It does not change the verdict.
-	StealP95 *float64 `json:"stealP95,omitempty"`
-	// PressureAvg60 is the PSI cpu.pressure some-avg60 value as a fraction 0-1
-	// (the raw kernel 0-100 percentage divided by 100, same convention as
-	// ThrottleRatio). It is *float64 so omitempty emits a real 0 (non-nil
-	// pointer) when PSI is fetchable (the cpu.pressure file is present) and
-	// omits it when un-fetchable (nil pointer: PSI absent). It does not change
-	// the verdict.
-	PressureAvg60 *float64 `json:"pressureAvg60,omitempty"`
 	// HostBusyCores is the count of host-level busy CPU cores computed from
 	// /proc/stat's non-idle jiffies. It is *float64 so omitempty emits a real 0
 	// (non-nil pointer) when /proc/stat is readable (even on the baseline tick

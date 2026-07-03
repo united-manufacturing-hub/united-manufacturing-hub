@@ -603,14 +603,19 @@ var _ = Describe("capstone: end-to-end CPU-health model through GetStatus (rung 
 		// Limited-visibility wire equivalent: the dead-zone (no CPU limit, no
 		// PSI) surfaces on the wire as the absence of the fetchable cgroup/PSI
 		// signals — CgroupCores=0 (uncapped, omitted via omitempty) and
-		// PressureAvg60 nil (PSI absent, omitted). This is the same
-		// no-limit/no-pressure state the limitedVisibilityNote names; in the
-		// degraded case ComposeMessage does not append the note, so the
-		// dead-zone is read off these wire fields instead.
+		// verdictBasis.pressure.applies=false (PSI absent). The verdict basis is
+		// present whenever Decide ran; on a PSI-absent box pressure.applies=false
+		// and pressure.value=0, which is the wire signature of the no-PSI half of
+		// the dead-zone. This is the same no-limit/no-pressure state the
+		// limitedVisibilityNote names; in the degraded case ComposeMessage does
+		// not append the note, so the dead-zone is read off these wire fields
+		// instead.
 		Expect(status.CPU.CgroupCores).To(BeZero(),
 			"SATURATION-DEGRADE-DEAD-ZONE: CgroupCores is 0 (uncapped, cpu.max='max') — the wire signature of the no-CPU-limit half of the dead-zone")
-		Expect(status.CPU.PressureAvg60).To(BeNil(),
-			"SATURATION-DEGRADE-DEAD-ZONE: PressureAvg60 is nil (PSI absent) — the wire signature of the no-PSI half of the dead-zone")
+		Expect(status.CPU.VerdictBasis).ToNot(BeNil(),
+			"SATURATION-DEGRADE-DEAD-ZONE: verdictBasis is present (Decide ran on a capped-cpu dead-zone box)")
+		Expect(status.CPU.VerdictBasis.Pressure.Applies).To(BeFalse(),
+			"SATURATION-DEGRADE-DEAD-ZONE: verdictBasis.pressure.applies is false (PSI absent) — the wire signature of the no-PSI half of the dead-zone")
 		// HostBusyCores wire field: non-nil (fetchable) because /proc/stat was
 		// readable, and the value is the large computed delta (not 0) — pinning
 		// both the fetchability and that the wire carries the real value.
