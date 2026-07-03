@@ -349,6 +349,13 @@ type Signals struct {
 	// host). It is the "total cores" the healthy budget message reports, and the
 	// value HeadroomCores is derived from.
 	CapacityCores float64
+	// ReserveCores is the headroom reserve (cpuReserveCores) Decide subtracted
+	// alongside hostBusyMean to compute HeadroomCores. It is stamped into
+	// Signals so the wire's verdict-basis block can publish the exact reserve
+	// the verdict used (the value is a constant today — 1.0 core — and is
+	// user-visible via the budget message, which raises the stakes on
+	// calibrating it with fleet data; TODO calibrate).
+	ReserveCores float64
 	// LimitApplies is true when a CPU limit is set (Sample.Quota non-nil and
 	// positive), i.e. the throttle rule is applicable to this box. The healthy
 	// budget message lists the throttle budget only when it applies.
@@ -684,6 +691,7 @@ func Decide(st *WindowState, sample Sample, thresholds Thresholds) (Verdict, Sig
 
 	signals.HeadroomCores = capacity - hostBusyMean - cpuReserveCores
 	signals.CapacityCores = capacity
+	signals.ReserveCores = cpuReserveCores
 	signals.LimitApplies = sample.Quota != nil && *sample.Quota > 0
 	signals.PsiApplies = sample.PsiAvailable
 	signals.StealApplies = sample.Virtualized

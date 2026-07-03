@@ -409,6 +409,46 @@ func (c *ContainerMonitorService) getCPUMetrics(ctx context.Context) (*models.CP
 		cpuStat.HostBusyCores = ptr(hb)
 	}
 
+	// Emit the verdict basis — the decision variables the verdict acted on
+	// (headroom plus the three starvation causes), always when a verdict was
+	// computed (cgroupErr == nil, so Decide ran). It is the machine-readable
+	// counterpart to health.message: the same numbers, structured so the MC
+	// renders the headline, the host/container split, and the alert-rule
+	// budget dashboard from the verdict's own inputs rather than parsing the
+	// message text or mirroring per-tick samples. Nil only when no verdict
+	// exists (a cgroup read failure, where Decide is not called); the legacy
+	// display path covers that case.
+	if cgroupErr == nil {
+		th := cpuhealth.DefaultThresholds()
+		cpuStat.VerdictBasis = &models.VerdictBasis{
+			Headroom: models.VerdictBasisHeadroom{
+				Cores:        signals.HeadroomCores,
+				HostBusyMean: signals.HostBusyCores60sMean,
+				Capacity:     signals.CapacityCores,
+				Reserve:      signals.ReserveCores,
+				Fired:        signals.SaturationFired,
+			},
+			Throttle: models.VerdictBasisCause{
+				Value:     signals.ThrottleRatio,
+				Threshold: th.ThrottleHigh,
+				Fired:     signals.ThrottleFired,
+				Applies:   signals.LimitApplies,
+			},
+			Pressure: models.VerdictBasisCause{
+				Value:     signals.PressureAvg60Out,
+				Threshold: th.PressureHigh,
+				Fired:     signals.PressureFired,
+				Applies:   signals.PsiApplies,
+			},
+			Steal: models.VerdictBasisCause{
+				Value:     signals.StealP95,
+				Threshold: th.StealHigh,
+				Fired:     signals.StealFired,
+				Applies:   signals.StealApplies,
+			},
+		}
+	}
+
 	return cpuStat, nil
 }
 

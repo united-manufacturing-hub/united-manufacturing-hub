@@ -314,3 +314,214 @@ var _ = Describe("HostBusyCores fetchability wire contract on models.CPU", func(
 			"hostBusyCores must be JSON-present (non-nil pointer to 0, omitempty keeps it) on a counter-reset tick")
 	})
 })
+
+// VerdictBasis wire contract. verdictBasis is the machine-readable why behind
+// the CPU-health verdict: the decision variables (headroom + the three
+// starvation causes) the verdict acted on. It is always emitted when a verdict
+// was computed (healthy AND degraded), so the MC renders the headline, the
+// host/container split, and the alert-rule budget dashboard from the verdict's
+// own inputs rather than parsing the message text or mirroring per-tick samples.
+// It is nil (JSON-omitted) only when no verdict exists — a cgroup read failure,
+// where Decide is not called.
+var _ = Describe("verdictBasis wire contract on models.CPU", func() {
+	// cpu.max "200000 100000" => quota 2.0 cores (capped, NOT the dead-zone — a
+	// limit is set, so LimitApplies=true; PSI absent and not virtualized, so
+	// PsiApplies=StealApplies=false). The only degrade cause reachable here is
+	// throttle.
+	const cpuMax = "200000 100000\n"
+
+	// Shared mock-fs factory: cpu.max fixed, cpu.stat driven by the counters,
+	// /proc/stat intentionally absent (readProcStat fails → HostBusyCores=0,
+	// so Headroom.Cores = capacity 2.0 − 0 − reserve 1.0 = 1.0, deterministic).
+	newSvc := func(nrPeriods, nrThrottled int64, usageUsec int64) (*container_monitor.ContainerMonitorService, string) {
+		mockFS := filesystem.NewMockFileSystem()
+		mockFS.WithReadFileFunc(func(_ context.Context, path string) ([]byte, error) {
+			switch path {
+			case "/sys/fs/cgroup/cpu.max":
+				return []byte(cpuMax), nil
+			case "/sys/fs/cgroup/cpu.stat":
+				return []byte(fmt.Sprintf(
+					"usage_usec %d\nnr_periods %d\nnr_throttled %d\nthrottled_usec 0\n",
+					usageUsec, nrPeriods, nrThrottled,
+				)), nil
+			default:
+				return nil, errors.New("file not found: " + path)
+			}
+		})
+		testDataPath, err := os.MkdirTemp("", "cpu-wire-verdictbasis")
+		Expect(err).NotTo(HaveOccurred())
+
+		return container_monitor.NewContainerMonitorServiceWithPath(mockFS, testDataPath), testDataPath
+	}
+
+	It("emits the full verdictBasis on a HEALTHY verdict with all fired flags false", func() {
+		ctx := context.Background()
+		svc, dir := newSvc(1000, 0, 1_000_000)
+		defer func() { _ = os.RemoveAll(dir) }()
+
+		status, err := svc.GetStatus(ctx)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(status.CPU.State).To(Equal("healthy"),
+			"precondition: the verdict is healthy")
+
+		Expect(status.CPU.VerdictBasis).NotTo(BeNil(),
+			"verdictBasis is emitted on a healthy verdict (always when Decide ran)")
+
+		b := status.CPU.VerdictBasis
+		// Headroom: capacity=quota 2.0, reserve=1.0, hostBusyMean=0 (/proc/stat
+		// absent → HostBusyCores 0 → 60s mean 0), so Cores=1.0. Fired=false
+		// (SaturationFired is dead-zone-only; a capped box is not the dead-zone).
+		Expect(b.Headroom.Capacity).To(BeNumerically("~", 2.0, 1e-9))
+		Expect(b.Headroom.Reserve).To(BeNumerically("~", 1.0, 1e-9))
+		Expect(b.Headroom.HostBusyMean).To(BeNumerically("~", 0.0, 1e-9))
+		Expect(b.Headroom.Cores).To(BeNumerically("~", 1.0, 1e-9))
+		Expect(b.Headroom.Fired).To(BeFalse(),
+			"headroom fired is false on a healthy capped box (saturation latch is dead-zone-only)")
+
+		// Throttle: fetchable (limit set → Applies=true), value 0 (no throttled
+		// periods), threshold 0.05, latch false.
+		Expect(b.Throttle.Value).To(BeNumerically("~", 0.0, 1e-9))
+		Expect(b.Throttle.Threshold).To(BeNumerically("~", 0.05, 1e-9))
+		Expect(b.Throttle.Fired).To(BeFalse())
+		Expect(b.Throttle.Applies).To(BeTrue(),
+			"throttle applies: a cgroup limit is set")
+
+		// Pressure: PSI absent → Applies=false, latch false, threshold 0.20.
+		Expect(b.Pressure.Threshold).To(BeNumerically("~", 0.20, 1e-9))
+		Expect(b.Pressure.Fired).To(BeFalse())
+		Expect(b.Pressure.Applies).To(BeFalse(),
+			"pressure does not apply: PSI is absent")
+
+		// Steal: not virtualized → Applies=false, latch false, threshold 0.10.
+		Expect(b.Steal.Threshold).To(BeNumerically("~", 0.10, 1e-9))
+		Expect(b.Steal.Fired).To(BeFalse())
+		Expect(b.Steal.Applies).To(BeFalse(),
+			"steal does not apply: the box is not virtualized")
+
+		// Wire: verdictBasis is JSON-present on the healthy path.
+		wireJSON, err := json.Marshal(status.CPU)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(wireJSON).To(ContainSubstring(`"verdictBasis"`),
+			"verdictBasis must be JSON-present on a healthy verdict")
+		Expect(wireJSON).To(ContainSubstring(`"headroom"`))
+		Expect(wireJSON).To(ContainSubstring(`"hostBusyMean"`))
+	})
+
+	It("emits the verdictBasis on a DEGRADED verdict with the fired cause's flag set", func() {
+		ctx := context.Background()
+
+		// Drive a real throttle fire across two ticks on a single shared
+		// service (so the 60s throttle ring persists): tick 1 baselines the
+		// ring (ratio 0, healthy); tick 2 advances nr_throttled so the windowed
+		// ratio is 0.10 > 0.05 → the throttle Schmitt latch fires → degraded.
+		status2, err := throttleFireStatus(ctx)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(status2.CPU.State).To(Equal("degraded"),
+			"precondition: the verdict is degraded")
+
+		b := status2.CPU.VerdictBasis
+		Expect(b).NotTo(BeNil(), "verdictBasis is emitted on a degraded verdict too")
+		Expect(b.Throttle.Fired).To(BeTrue(),
+			"the throttle latch fired is reflected in the basis")
+		Expect(b.Throttle.Value).To(BeNumerically("~", 0.10, 1e-9),
+			"the basis carries the windowed throttle ratio (the verdict's input)")
+		Expect(b.Throttle.Threshold).To(BeNumerically("~", 0.05, 1e-9))
+		Expect(b.Throttle.Applies).To(BeTrue())
+		// Headroom stays populated (numbers always computed); saturation did not
+		// fire (capped box, not the dead-zone).
+		Expect(b.Headroom.Capacity).To(BeNumerically("~", 2.0, 1e-9))
+		Expect(b.Headroom.Reserve).To(BeNumerically("~", 1.0, 1e-9))
+		Expect(b.Headroom.Fired).To(BeFalse())
+		// Pressure/steal remain non-firing and non-applicable.
+		Expect(b.Pressure.Fired).To(BeFalse())
+		Expect(b.Pressure.Applies).To(BeFalse())
+		Expect(b.Steal.Fired).To(BeFalse())
+		Expect(b.Steal.Applies).To(BeFalse())
+
+		wireJSON, err := json.Marshal(status2.CPU)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(wireJSON).To(ContainSubstring(`"verdictBasis"`),
+			"verdictBasis must be JSON-present on a degraded verdict")
+	})
+
+	It("omits verdictBasis (nil) when no verdict exists (cgroup read failure)", func() {
+		mockFS := filesystem.NewMockFileSystem()
+		ctx := context.Background()
+
+		testDataPath, err := os.MkdirTemp("", "cpu-wire-verdictbasis-noverdict")
+		Expect(err).NotTo(HaveOccurred())
+		defer func() { _ = os.RemoveAll(testDataPath) }()
+
+		// cpu.max read failure → getCgroupCPUInfo returns (nil, err) →
+		// cgroupErr != nil → Decide is not called → no verdict → no basis.
+		// State defaults to "healthy" (the always-emitted contract), but
+		// verdictBasis must be nil/omitted (the omitempty contract).
+		mockFS.WithReadFileFunc(func(_ context.Context, path string) ([]byte, error) {
+			switch path {
+			case "/sys/fs/cgroup/cpu.max":
+				return nil, errors.New("permission denied: cpu.max")
+			default:
+				return nil, errors.New("file not found: " + path)
+			}
+		})
+
+		svc := container_monitor.NewContainerMonitorServiceWithPath(mockFS, testDataPath)
+		status, err := svc.GetStatus(ctx)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(status.CPU.State).To(Equal("healthy"),
+			"State defaults to healthy when Decide was not called")
+
+		Expect(status.CPU.VerdictBasis).To(BeNil(),
+			"verdictBasis is nil when no verdict exists (cgroup read failure)")
+		wireJSON, err := json.Marshal(status.CPU)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(wireJSON).NotTo(ContainSubstring(`"verdictBasis"`),
+			"verdictBasis is omitempty and must be absent when no verdict exists")
+	})
+})
+
+// throttleFireStatus drives a real throttle fire across two ticks on a single
+// shared service (so the 60s throttle ring persists) and returns the degraded
+// status. cpu.max="200000 100000" (quota 2.0); tick 1 baselines the ring
+// (ratio 0, healthy); tick 2 advances nr_throttled so the windowed ratio is
+// 0.10 > 0.05 → the throttle Schmitt latch fires → Decide returns degraded.
+func throttleFireStatus(ctx context.Context) (*container_monitor.ServiceInfo, error) {
+	mockFS := filesystem.NewMockFileSystem()
+
+	testDataPath, err := os.MkdirTemp("", "cpu-wire-verdictbasis-fire")
+	if err != nil {
+		return nil, err
+	}
+
+	defer func() { _ = os.RemoveAll(testDataPath) }()
+
+	var nrPeriods, nrThrottled int64 = 1000, 0
+
+	var usageUsec int64 = 1_000_000
+
+	mockFS.WithReadFileFunc(func(_ context.Context, path string) ([]byte, error) {
+		switch path {
+		case "/sys/fs/cgroup/cpu.max":
+			return []byte("200000 100000\n"), nil
+		case "/sys/fs/cgroup/cpu.stat":
+			return []byte(fmt.Sprintf(
+				"usage_usec %d\nnr_periods %d\nnr_throttled %d\nthrottled_usec 0\n",
+				usageUsec, nrPeriods, nrThrottled,
+			)), nil
+		default:
+			return nil, errors.New("file not found: " + path)
+		}
+	})
+
+	svc := container_monitor.NewContainerMonitorServiceWithPath(mockFS, testDataPath)
+
+	// Tick 1 — baseline.
+	if _, err := svc.GetStatus(ctx); err != nil {
+		return nil, err
+	}
+
+	// Tick 2 — fire: 100 throttled / 1000 new periods = 0.10 > 0.05.
+	nrPeriods, nrThrottled, usageUsec = 2000, 100, 2_000_000
+
+	return svc.GetStatus(ctx)
+}

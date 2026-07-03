@@ -169,8 +169,48 @@ type CPU struct {
 	TotalUsageMCpu float64 `json:"totalUsageMCpu"`        // Total usage in milli-cores (1000m = 1 core)
 	CoreCount      int     `json:"coreCount"`             // Number of CPU cores
 	// Cgroup-specific fields for container resource limits
-	CgroupCores float64 `json:"cgroupCores,omitempty"` // CPU quota from cgroup (e.g., 2.0 = 2 cores)
-	IsThrottled bool    `json:"isThrottled,omitempty"` // True if recently throttled
+	CgroupCores  float64       `json:"cgroupCores,omitempty"`  // CPU quota from cgroup (e.g., 2.0 = 2 cores)
+	IsThrottled  bool          `json:"isThrottled,omitempty"`  // True if recently throttled
+	VerdictBasis *VerdictBasis `json:"verdictBasis,omitempty"` // The verdict's decision variables (nil when no verdict: cgroup read failure)
+}
+
+// VerdictBasis is the machine-readable why behind the CPU-health verdict: the
+// exact decision variables (inputs, outputs, applicability, and thresholds)
+// the verdict acted on. It is always emitted when a verdict was computed
+// (healthy AND degraded), so the Management Console renders the headline, the
+// host/container split, and the alert-rule budget dashboard from the same
+// source the verdict used — the human-readable health.message and this block
+// cannot silently diverge. It is nil only when no verdict exists (a cgroup
+// read failure, where Decide is not called); the legacy display path covers
+// that case.
+type VerdictBasis struct {
+	Headroom VerdictBasisHeadroom `json:"headroom"`
+	Throttle VerdictBasisCause    `json:"throttle"`
+	Pressure VerdictBasisCause    `json:"pressure"`
+	Steal    VerdictBasisCause    `json:"steal"`
+}
+
+// VerdictBasisHeadroom is the primary saturation signal: how many cores of
+// free capacity the box has, the inputs that produced it, and whether the
+// Schmitt latch has fired. Cores is negative when the box is over-subscribed
+// (hostBusyMean exceeds capacity minus the reserve); it is not clamped to 0.
+type VerdictBasisHeadroom struct {
+	Cores        float64 `json:"cores"`        // HeadroomCores = capacity - hostBusyMean - reserve; may be negative
+	HostBusyMean float64 `json:"hostBusyMean"` // 60s mean of host-level busy cores (the verdict's saturation input)
+	Capacity     float64 `json:"capacity"`     // cgroup quota if set and positive, else host logical CPU count
+	Reserve      float64 `json:"reserve"`      // the CPU reserve set aside (1.0 core; TODO calibrate with fleet data)
+	Fired        bool    `json:"fired"`        // SaturationFired: headroom < 0 latched, clears above the recover threshold
+}
+
+// VerdictBasisCause is one secondary starvation signal: the measured value,
+// the fire threshold the latch compares against, the latch state, and whether
+// the rule is applicable to this box (a rule that cannot be measured here —
+// no cgroup limit, no PSI, bare metal — has applies=false).
+type VerdictBasisCause struct {
+	Value     float64 `json:"value"`     // the metric (ThrottleRatio / PressureAvg60Out / StealP95)
+	Threshold float64 `json:"threshold"` // the Schmitt fire threshold (0.05 / 0.20 / 0.10)
+	Fired     bool    `json:"fired"`     // the Schmitt latch state
+	Applies   bool    `json:"applies"`   // whether this rule is live for this box
 }
 
 type Disk struct {
