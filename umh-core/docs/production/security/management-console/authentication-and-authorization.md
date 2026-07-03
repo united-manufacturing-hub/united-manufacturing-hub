@@ -82,6 +82,8 @@ The first user who creates a company becomes the **Account Owner**. This role ha
 > The Account Owner has permanent Admin access and cannot be transferred or demoted. This ensures a guaranteed recovery path if other admins lose access.
 >
 > **Best practice:** Treat Account Owner as a break-glass account - use only for initial setup and emergency access. Enable MFA via Auth0, store credentials in a secure password manager, and create separate admin accounts for daily work.
+>
+> **Enterprise setup:** Decide before registering which account becomes the Owner. Use a dedicated account your organization controls centrally - not the personal account of an employee who might leave, and never a shared login. Invite everyday users from there.
 
 **Why this design**: The Account Owner provides a guaranteed recovery path if other admins lose access or permissions become misconfigured. Since it cannot be removed or demoted, it ensures at least one account always has full control.
 
@@ -135,6 +137,12 @@ When an admin invites a new user:
 The invite key can only be used once and enables secure key exchange without the backend ever seeing the user's private credentials.
 
 **Why two pieces?** The invite link proves email ownership (via Auth0). The invite key, shared separately, ensures the inviting admin intended this specific person to receive access. This prevents email forwarding attacks.
+
+##### Inviting UMH Personnel
+
+Invite UMH team members - for example a Value Engineer supporting your deployment - through the normal invitation flow, using their `@umh.app` email address. These invitations are automatically issued against UMH's Google Workspace connection instead of your default connection, because UMH staff don't have accounts in your identity provider.
+
+Control stays on both sides. You decide who to invite and can remove them at any time. UMH manages the `@umh.app` identities centrally: when an employee leaves UMH, disabling their Google Workspace account also cuts their access to your company.
 
 ### Access Revocation
 
@@ -244,6 +252,7 @@ Security is a shared responsibility between UMH and our customers. This section 
 | Secure Defaults               | Password complexity requirements, invite key separation, double-hash storage |
 | Platform Security             | ManagementConsole application security, API security, session management     |
 | Audit Logging                 | Recording authentication events and permission changes (see note below)      |
+| UMH Personnel Access          | Identity, authentication, and offboarding of `@umh.app` accounts invited to your company |
 
 > **Known Limitation: Audit Logging**
 >
@@ -259,6 +268,7 @@ Security is a shared responsibility between UMH and our customers. This section 
 | User Lifecycle          | Promptly removing users who leave your organization           |
 | Access Reviews          | Periodic review of user permissions and access levels         |
 | Enterprise SSO          | Configuration and security of your SAML/SSO identity provider |
+| UMH Personnel           | Deciding which UMH personnel to invite and removing them when no longer needed |
 
 ### Shared Responsibilities
 
@@ -345,3 +355,5 @@ Each company can be linked to an Auth0 organization, enabling:
 - Multi-company access with one email (each company links to its own Auth0 org)
 
 The link is established during company setup and validated during every user onboarding - users can only join companies that match their Auth0 organization.
+
+**Connections**: An Auth0 organization authenticates its members through one or more _connections_ - the identity sources it accepts, such as your corporate SAML/OIDC provider, a social login like Google, or email one-time passwords. Enterprise companies set a **default connection** that applies to everyone: all your employees sign in through it, and every invitation is issued against it. Point it at your own identity provider, and your existing SSO, MFA, and offboarding policies govern access to ManagementConsole. Your UMH Value Engineering team sets this up with you.
