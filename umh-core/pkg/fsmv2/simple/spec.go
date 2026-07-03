@@ -16,6 +16,7 @@ package simple
 
 import (
 	"context"
+	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
@@ -44,6 +45,9 @@ type Spec[TConfig, TStatus, TDeps any] struct {
 	// when the poll needs none. It is shared across ticks and instances, so it
 	// must be stateless (e.g. an *http.Client, not a per-tick buffer).
 	Deps TDeps
+	// Interval is the poll cadence. Optional: a non-positive value leaves the
+	// worker type unregistered so the collector falls back to its default (1s).
+	Interval time.Duration
 }
 
 // Register wires a Spec into the framework: it registers the worker factory,
@@ -65,4 +69,8 @@ func Register[TConfig, TStatus, TDeps any](spec Spec[TConfig, TStatus, TDeps]) {
 		})
 
 	fsmv2.RegisterInitialState(spec.WorkerType, &runningState{})
+
+	// A non-positive Interval is ignored by the registry, so the collector
+	// falls back to its DefaultObservationInterval.
+	fsmv2.RegisterObservationInterval(spec.WorkerType, spec.Interval)
 }

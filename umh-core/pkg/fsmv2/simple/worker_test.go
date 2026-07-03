@@ -18,6 +18,7 @@ package simple
 import (
 	"context"
 	"errors"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -231,5 +232,31 @@ var _ = Describe("Register", func() {
 			},
 		})
 		Expect(fsmv2.LookupInitialState("simpleworker_register")).NotTo(BeNil())
+	})
+
+	It("records Spec.Interval as the worker type's collection cadence", func() {
+		Register(Spec[probeConfig, probeStatus, struct{}]{
+			WorkerType: "simpleworker_interval",
+			Interval:   5 * time.Second,
+			Poll: func(_ context.Context, _ struct{}, _ probeConfig) (probeStatus, error) {
+				return probeStatus{}, nil
+			},
+		})
+
+		got, ok := fsmv2.ObservationIntervalFor("simpleworker_interval")
+		Expect(ok).To(BeTrue())
+		Expect(got).To(Equal(5 * time.Second))
+	})
+
+	It("leaves the cadence unset when Interval is zero so the collector defaults", func() {
+		Register(Spec[probeConfig, probeStatus, struct{}]{
+			WorkerType: "simpleworker_nointerval",
+			Poll: func(_ context.Context, _ struct{}, _ probeConfig) (probeStatus, error) {
+				return probeStatus{}, nil
+			},
+		})
+
+		_, ok := fsmv2.ObservationIntervalFor("simpleworker_nointerval")
+		Expect(ok).To(BeFalse())
 	})
 })
