@@ -787,12 +787,6 @@ func Decide(st *WindowState, sample Sample, thresholds Thresholds) (Verdict, Sig
 
 	var causes []Cause
 
-	type firedCause struct {
-		cause    Cause
-		severity float64
-		external bool
-	}
-
 	var fired []firedCause
 	if signals.ThrottleFired {
 		fired = append(fired, firedCause{Cause{Kind: CauseKindThrottling, Value: ratio}, severity(ratio, thresholds.ThrottleHigh), false})
@@ -824,13 +818,7 @@ func Decide(st *WindowState, sample Sample, thresholds Thresholds) (Verdict, Sig
 	}
 
 	if len(fired) > 0 {
-		sort.SliceStable(fired, func(i, j int) bool {
-			if fired[i].severity != fired[j].severity {
-				return fired[i].severity > fired[j].severity
-			}
-			// Ties go to the external side (host).
-			return fired[i].external && !fired[j].external
-		})
+		sortFiredCauses(fired)
 
 		causes = make([]Cause, len(fired))
 		for i, fc := range fired {
@@ -944,6 +932,53 @@ func stealP95(ring []stealPoint) float64 {
 // (Host whenever an external cause is held), rather than the least-negative
 // held cause winning and making Attribution flap tick-to-tick as held readings
 // jitter.
+// firedCause pairs a Cause with its computed severity and whether it is an
+// external (host/hypervisor) signal, for dominant-first ordering.
+type firedCause struct {
+	cause    Cause
+	severity float64
+	external bool
+}
+
+// causeKindTier ranks starvation causes (throttle/pressure/steal) above
+// saturation (capacity), per the spec's kind-priority ("throttle/pressure/
+// steal — the serious signals — rank above saturation/no-headroom —
+// capacity", spec line 126). Lower tier = higher priority (ranks first).
+// host-contention is scaffolded (never in `fired` after the R5 fold) and
+// defaults to the starvation tier.
+func causeKindTier(k CauseKind) int {
+	if k == CauseKindSaturation {
+		return 1
+	}
+
+	return 0
+}
+
+// sortFiredCauses orders the fired causes dominant-first: kind-tier first
+// (starvation above saturation), severity as a tiebreaker within a tier
+// (higher severity first), then ties to the external (host) side. Mutates the
+// slice in place. The pre-R4b sort was severity-magnitude only, which
+// accidentally satisfied the kind-priority when saturation's severity was 0
+// (outside the dead-zone) but deviated in the dead-zone where saturationAvg
+// is non-zero: a low-severity starvation cause would rank below a
+// high-severity saturation, headlining capacity instead of the actionable
+// starvation signal.
+func sortFiredCauses(fired []firedCause) {
+	sort.SliceStable(fired, func(i, j int) bool {
+		ti, tj := causeKindTier(fired[i].cause.Kind), causeKindTier(fired[j].cause.Kind)
+		if ti != tj {
+			return ti < tj
+		}
+
+		if fired[i].severity != fired[j].severity {
+			return fired[i].severity > fired[j].severity
+		}
+
+		// Ties go to the external side (host).
+		return fired[i].external && !fired[j].external
+	})
+}
+
 func severity(value, high float64) float64 {
 	if math.IsNaN(value) || math.IsInf(value, 0) || math.IsNaN(high) || math.IsInf(high, 0) || high >= 1.0 {
 		return 0
