@@ -34,6 +34,11 @@ type runningState[TConfig, TStatus any] struct {
 func (s *runningState[TConfig, TStatus]) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := fsmv2.ConvertWorkerSnapshot[TConfig, Status[TStatus]](snapAny)
 
+	if snap.ShouldStop() {
+		return fsmv2.Transition(&stoppedState[TConfig, TStatus]{}, fsmv2.SignalNone, nil,
+			"stop required: "+snap.StopReason(), nil)
+	}
+
 	if snap.Status.Degraded {
 		return fsmv2.Transition(&degradedState[TConfig, TStatus]{}, fsmv2.SignalNone, nil, snap.Status.Reason, nil)
 	}
@@ -57,6 +62,11 @@ type degradedState[TConfig, TStatus any] struct {
 func (s *degradedState[TConfig, TStatus]) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := fsmv2.ConvertWorkerSnapshot[TConfig, Status[TStatus]](snapAny)
 
+	if snap.ShouldStop() {
+		return fsmv2.Transition(&stoppedState[TConfig, TStatus]{}, fsmv2.SignalNone, nil,
+			"stop required: "+snap.StopReason(), nil)
+	}
+
 	if !snap.Status.Degraded {
 		return fsmv2.Transition(&runningState[TConfig, TStatus]{}, fsmv2.SignalNone, nil, snap.Status.Reason, nil)
 	}
@@ -66,5 +76,31 @@ func (s *degradedState[TConfig, TStatus]) Next(snapAny any) fsmv2.NextResult[any
 
 // String returns the observed-state name, derived from the type name.
 func (s *degradedState[TConfig, TStatus]) String() string {
+	return helpers.DeriveStateName(s)
+}
+
+// stoppedState is the resting state of a simple worker: a monitor has nothing to
+// release, so shutdown or disable moves it straight here (no stopping state). It
+// resumes running once the stop is lifted (e.g. a disabled worker re-enabled);
+// a terminal shutdown keeps it here until the supervisor removes it.
+type stoppedState[TConfig, TStatus any] struct {
+	helpers.StoppedBase
+}
+
+// Next stays stopped while a stop is still required and resumes running once it
+// clears.
+func (s *stoppedState[TConfig, TStatus]) Next(snapAny any) fsmv2.NextResult[any, any] {
+	snap := fsmv2.ConvertWorkerSnapshot[TConfig, Status[TStatus]](snapAny)
+
+	if snap.ShouldStop() {
+		return fsmv2.Transition(s, fsmv2.SignalNone, nil,
+			"stopped: "+snap.StopReason(), nil)
+	}
+
+	return fsmv2.Transition(&runningState[TConfig, TStatus]{}, fsmv2.SignalNone, nil, "resuming after stop cleared", nil)
+}
+
+// String returns the observed-state name, derived from the type name.
+func (s *stoppedState[TConfig, TStatus]) String() string {
 	return helpers.DeriveStateName(s)
 }

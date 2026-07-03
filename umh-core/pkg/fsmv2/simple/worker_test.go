@@ -224,6 +224,17 @@ var _ = Describe("Register", func() {
 		}).To(PanicWith(ContainSubstring("Poll")))
 	})
 
+	It("panics when TStatus is not a struct", func() {
+		Expect(func() {
+			Register(Spec[probeConfig, map[string]any, struct{}]{
+				WorkerType: "simpleworker_mapstatus",
+				Poll: func(_ context.Context, _ struct{}, _ probeConfig) (map[string]any, error) {
+					return nil, nil
+				},
+			})
+		}).To(PanicWith(ContainSubstring("struct")))
+	})
+
 	It("registers an initial state for the worker type", func() {
 		Register(Spec[probeConfig, probeStatus, struct{}]{
 			WorkerType: "simpleworker_register",

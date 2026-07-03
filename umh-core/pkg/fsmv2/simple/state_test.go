@@ -28,6 +28,16 @@ func snapWith(status Status[probeStatus]) fsmv2.Snapshot {
 	}
 }
 
+func stoppingSnap() fsmv2.Snapshot {
+	desired := &fsmv2.WrappedDesiredState[probeConfig]{}
+	desired.SetShutdownRequested(true)
+
+	return fsmv2.Snapshot{
+		Observed: fsmv2.Observation[Status[probeStatus]]{Status: Status[probeStatus]{}},
+		Desired:  desired,
+	}
+}
+
 var _ = Describe("state machine", func() {
 	Describe("runningState", func() {
 		It("stays running and emits the reason when the verdict is healthy", func() {
@@ -46,6 +56,14 @@ var _ = Describe("state machine", func() {
 
 			Expect(res.State).To(BeAssignableToTypeOf(&degradedState[probeConfig, probeStatus]{}))
 			Expect(res.Reason).To(Equal("poll error: dial timeout"))
+		})
+
+		It("stops on shutdown before considering the verdict", func() {
+			s := &runningState[probeConfig, probeStatus]{}
+
+			res := s.Next(stoppingSnap())
+
+			Expect(res.State).To(BeAssignableToTypeOf(&stoppedState[probeConfig, probeStatus]{}))
 		})
 	})
 
@@ -66,6 +84,32 @@ var _ = Describe("state machine", func() {
 
 			Expect(res.State).To(BeIdenticalTo(s))
 			Expect(res.Reason).To(Equal("still unreachable"))
+		})
+
+		It("stops on shutdown even while degraded", func() {
+			s := &degradedState[probeConfig, probeStatus]{}
+
+			res := s.Next(stoppingSnap())
+
+			Expect(res.State).To(BeAssignableToTypeOf(&stoppedState[probeConfig, probeStatus]{}))
+		})
+	})
+
+	Describe("stoppedState", func() {
+		It("stays stopped while shutdown is requested", func() {
+			s := &stoppedState[probeConfig, probeStatus]{}
+
+			res := s.Next(stoppingSnap())
+
+			Expect(res.State).To(BeIdenticalTo(s))
+		})
+
+		It("resumes running once shutdown clears", func() {
+			s := &stoppedState[probeConfig, probeStatus]{}
+
+			res := s.Next(snapWith(Status[probeStatus]{Degraded: false, Reason: "reachable"}))
+
+			Expect(res.State).To(BeAssignableToTypeOf(&runningState[probeConfig, probeStatus]{}))
 		})
 	})
 })

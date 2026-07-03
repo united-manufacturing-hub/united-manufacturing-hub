@@ -16,6 +16,8 @@ package simple
 
 import (
 	"context"
+	"fmt"
+	"reflect"
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
@@ -61,6 +63,13 @@ func Register[TConfig, TStatus, TDeps any](spec Spec[TConfig, TStatus, TDeps]) {
 
 	if spec.Poll == nil {
 		panic("simple.Register: Poll must be non-nil")
+	}
+
+	// TStatus must be a struct: Status[TStatus] flattens it to top-level JSON and
+	// round-trips it through CSE. A map would let the verdict keys leak into the
+	// developer's status on Unmarshal, and a scalar would not marshal to an object.
+	if k := reflect.TypeFor[TStatus]().Kind(); k != reflect.Struct {
+		panic(fmt.Sprintf("simple.Register(%q): TStatus must be a struct, got %s", spec.WorkerType, k))
 	}
 
 	register.Worker[TConfig, Status[TStatus], register.NoDeps](spec.WorkerType,
