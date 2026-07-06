@@ -53,6 +53,7 @@ var _ = Describe("DeleteHistorian", func() {
 
 		action = actions.NewDeleteHistorianAction(userEmail, actionUUID, instanceUUID, outboundChannel, mockConfig)
 
+		messages = nil
 		go actions.ConsumeOutboundMessages(outboundChannel, &messages, &mu, true)
 	})
 
@@ -74,11 +75,18 @@ var _ = Describe("DeleteHistorian", func() {
 		It("should remove an existing historian config", func() {
 			result, metadata, err := action.Execute()
 			Expect(err).NotTo(HaveOccurred())
-			Expect(result).To(BeNil())
+			Expect(result).To(Equal("Historian deleted successfully"))
 			Expect(metadata).To(BeNil())
 
 			Expect(mockConfig.AtomicDeleteHistorianCalled).To(BeTrue())
 			Expect(mockConfig.Config.Historian).To(BeNil())
+
+			// Execute emits only the progress replies; the terminal success reply is
+			// the dispatcher's job. A self-sent ActionFinishedSuccessfull here would be
+			// the double-reply regression.
+			Eventually(func() []models.ActionReplyState {
+				return historianReplyStates(&messages, &mu)
+			}).Should(Equal([]models.ActionReplyState{models.ActionConfirmed, models.ActionExecuting}))
 		})
 
 		It("should succeed when no historian is configured (idempotent)", func() {
@@ -86,11 +94,15 @@ var _ = Describe("DeleteHistorian", func() {
 
 			result, metadata, err := action.Execute()
 			Expect(err).NotTo(HaveOccurred())
-			Expect(result).To(BeNil())
+			Expect(result).To(Equal("Historian deleted successfully"))
 			Expect(metadata).To(BeNil())
 
 			Expect(mockConfig.AtomicDeleteHistorianCalled).To(BeTrue())
 			Expect(mockConfig.Config.Historian).To(BeNil())
+
+			Eventually(func() []models.ActionReplyState {
+				return historianReplyStates(&messages, &mu)
+			}).Should(Equal([]models.ActionReplyState{models.ActionConfirmed, models.ActionExecuting}))
 		})
 
 		It("should handle AtomicDeleteHistorian failure", func() {
@@ -101,6 +113,10 @@ var _ = Describe("DeleteHistorian", func() {
 			Expect(err.Error()).To(ContainSubstring("Failed to delete Historian configuration"))
 			Expect(result).To(BeNil())
 			Expect(metadata).To(BeNil())
+
+			Eventually(func() []models.ActionReplyState {
+				return historianReplyStates(&messages, &mu)
+			}).Should(Equal([]models.ActionReplyState{models.ActionConfirmed, models.ActionExecuting, models.ActionFinishedWithFailure}))
 		})
 	})
 })

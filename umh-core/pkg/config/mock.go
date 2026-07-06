@@ -51,6 +51,7 @@ type MockConfigManager struct {
 	AtomicDeleteDataModelError         error
 	AtomicAddDataContractError         error
 	AtomicSetHistorianError            error
+	AtomicEditHistorianError           error
 	AtomicDeleteHistorianError         error
 	GetConfigAsStringError             error
 	MockFileSystem                     *filesystem.MockFileSystem
@@ -97,6 +98,7 @@ type MockConfigManager struct {
 	AtomicDeleteDataModelCalled         bool
 	AtomicAddDataContractCalled         bool
 	AtomicSetHistorianCalled            bool
+	AtomicEditHistorianCalled           bool
 	AtomicDeleteHistorianCalled         bool
 	GetConfigAsStringCalled             bool
 }
@@ -373,6 +375,16 @@ func (m *MockConfigManager) WithAtomicSetHistorianError(err error) *MockConfigMa
 	return m
 }
 
+// WithAtomicEditHistorianError configures the mock to return the given error when AtomicEditHistorian is called.
+func (m *MockConfigManager) WithAtomicEditHistorianError(err error) *MockConfigManager {
+	m.mutexReadAndWrite.Lock()
+	defer m.mutexReadAndWrite.Unlock()
+
+	m.AtomicEditHistorianError = err
+
+	return m
+}
+
 // WithAtomicDeleteHistorianError configures the mock to return the given error when AtomicDeleteHistorian is called.
 func (m *MockConfigManager) WithAtomicDeleteHistorianError(err error) *MockConfigManager {
 	m.mutexReadAndWrite.Lock()
@@ -404,6 +416,7 @@ func (m *MockConfigManager) ResetCalls() {
 	m.AtomicDeleteDataModelCalled = false
 	m.AtomicAddDataContractCalled = false
 	m.AtomicSetHistorianCalled = false
+	m.AtomicEditHistorianCalled = false
 	m.AtomicDeleteHistorianCalled = false
 }
 
@@ -1326,6 +1339,27 @@ func (m *MockConfigManager) AtomicSetHistorian(_ context.Context, historian Hist
 
 	if m.AtomicSetHistorianError != nil {
 		return m.AtomicSetHistorianError
+	}
+
+	m.Config.Historian = &historian
+
+	return nil
+}
+
+// AtomicEditHistorian replaces an existing historian section in the mock config,
+// returning ErrHistorianNotConfigured when none is present.
+func (m *MockConfigManager) AtomicEditHistorian(_ context.Context, historian HistorianConfig) error {
+	m.mutexReadAndWrite.Lock()
+	defer m.mutexReadAndWrite.Unlock()
+
+	m.AtomicEditHistorianCalled = true
+
+	if m.AtomicEditHistorianError != nil {
+		return m.AtomicEditHistorianError
+	}
+
+	if m.Config.Historian == nil {
+		return ErrHistorianNotConfigured
 	}
 
 	m.Config.Historian = &historian

@@ -55,6 +55,7 @@ var _ = Describe("DeployHistorian", func() {
 
 		action = actions.NewDeployHistorianAction(userEmail, actionUUID, instanceUUID, outboundChannel, mockConfig)
 
+		messages = nil
 		go actions.ConsumeOutboundMessages(outboundChannel, &messages, &mu, true)
 	})
 
@@ -138,6 +139,13 @@ var _ = Describe("DeployHistorian", func() {
 
 			Expect(mockConfig.Config.Historian).NotTo(BeNil())
 			Expect(mockConfig.Config.Historian.Host).To(Equal("timescale.example.com"))
+
+			// Execute emits only the progress replies; the terminal success reply is
+			// the dispatcher's job. A self-sent ActionFinishedSuccessfull here would be
+			// the double-reply regression.
+			Eventually(func() []models.ActionReplyState {
+				return historianReplyStates(&messages, &mu)
+			}).Should(Equal([]models.ActionReplyState{models.ActionConfirmed, models.ActionExecuting}))
 		})
 
 		It("should handle AtomicSetHistorian failure", func() {
@@ -150,6 +158,10 @@ var _ = Describe("DeployHistorian", func() {
 			Expect(err.Error()).To(ContainSubstring("Failed to write Historian configuration"))
 			Expect(result).To(BeNil())
 			Expect(metadata).To(BeNil())
+
+			Eventually(func() []models.ActionReplyState {
+				return historianReplyStates(&messages, &mu)
+			}).Should(Equal([]models.ActionReplyState{models.ActionConfirmed, models.ActionExecuting, models.ActionFinishedWithFailure}))
 		})
 	})
 })

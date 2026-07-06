@@ -1580,6 +1580,80 @@ var _ = Describe("ConfigManager historian mutations", func() {
 			Expect(err).To(MatchError(context.Canceled))
 		})
 	})
+
+	Describe("FileConfigManager persistence round-trip", func() {
+		It("writes the historian to disk, reads it back, then deletes it", func() {
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+
+			// Stateful in-memory file: writes replace the stored bytes, and each Stat
+			// returns a strictly increasing mtime so GetConfig always misses its cache
+			// and re-parses the persisted YAML — exercising real serialization, not the
+			// in-memory cache the write left behind.
+			var stored []byte
+
+			statCalls := 0
+			baseTime := time.Unix(1_000_000, 0)
+
+			mockFS := filesystem.NewMockFileSystem()
+			mockFS.WithEnsureDirectoryFunc(func(_ context.Context, _ string) error { return nil })
+			mockFS.WithFileExistsFunc(func(_ context.Context, _ string) (bool, error) { return stored != nil, nil })
+			mockFS.WithReadFileFunc(func(_ context.Context, _ string) ([]byte, error) { return stored, nil })
+			mockFS.WithWriteFileFunc(func(_ context.Context, _ string, data []byte, _ os.FileMode) error {
+				stored = data
+
+				return nil
+			})
+			mockFS.WithStatFunc(func(_ context.Context, _ string) (os.FileInfo, error) {
+				statCalls++
+
+				return mockFS.NewMockFileInfo("config.yaml", int64(len(stored)), 0644,
+					baseTime.Add(time.Duration(statCalls)*time.Second), false), nil
+			})
+
+			manager := NewFileConfigManager().WithFileSystemService(mockFS)
+
+			// Seed a valid, non-empty serialized config so the read-modify-write cycle
+			// has a base. It must be non-empty: GetConfig reports an empty cached config
+			// as an error.
+			seed := FullConfig{Agent: AgentConfig{Location: map[int]string{0: "enterprise"}}}
+			Expect(manager.writeConfig(ctx, seed)).To(Succeed())
+
+			// The manager was constructed against the real filesystem before the mock
+			// was attached, so its cache carries a stale stat error. Drive GetConfig
+			// until the background refresh reparses the seeded file and clears it.
+			Eventually(func() error {
+				_, err := manager.GetConfig(ctx, 0)
+
+				return err
+			}, 2*time.Second, 10*time.Millisecond).Should(Succeed())
+
+			historian := HistorianConfig{
+				Host:     "timescale.example.com",
+				Password: "s3cret",
+				Database: "umh",
+				Username: "umh_owner",
+				SSLMode:  HistorianSSLModeVerifyFull,
+				Port:     5432,
+			}
+
+			Expect(manager.AtomicSetHistorian(ctx, historian)).To(Succeed())
+
+			Eventually(func() (*HistorianConfig, error) {
+				cfg, err := manager.GetConfig(ctx, 0)
+
+				return cfg.Historian, err
+			}, 2*time.Second, 10*time.Millisecond).Should(HaveValue(Equal(historian)))
+
+			Expect(manager.AtomicDeleteHistorian(ctx)).To(Succeed())
+
+			Eventually(func() (*HistorianConfig, error) {
+				cfg, err := manager.GetConfig(ctx, 0)
+
+				return cfg.Historian, err
+			}, 2*time.Second, 10*time.Millisecond).Should(BeNil())
+		})
+	})
 })
 
 // filterBackupDirPaths returns only paths that start with the backup directory.

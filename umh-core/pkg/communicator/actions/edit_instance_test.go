@@ -649,6 +649,10 @@ func (w *writeFailingMockConfigManager) AtomicSetHistorian(_ context.Context, _ 
 	return w.writeConfig(context.Background(), config.FullConfig{})
 }
 
+func (w *writeFailingMockConfigManager) AtomicEditHistorian(_ context.Context, _ config.HistorianConfig) error {
+	return w.writeConfig(context.Background(), config.FullConfig{})
+}
+
 func (w *writeFailingMockConfigManager) AtomicDeleteHistorian(_ context.Context) error {
 	return w.writeConfig(context.Background(), config.FullConfig{})
 }

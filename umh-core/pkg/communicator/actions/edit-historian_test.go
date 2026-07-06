@@ -66,6 +66,7 @@ var _ = Describe("EditHistorian", func() {
 
 		action = actions.NewEditHistorianAction(userEmail, actionUUID, instanceUUID, outboundChannel, mockConfig)
 
+		messages = nil
 		go actions.ConsumeOutboundMessages(outboundChannel, &messages, &mu, true)
 	})
 
@@ -97,7 +98,7 @@ var _ = Describe("EditHistorian", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(metadata).To(BeNil())
 
-			Expect(mockConfig.AtomicSetHistorianCalled).To(BeTrue())
+			Expect(mockConfig.AtomicEditHistorianCalled).To(BeTrue())
 
 			cfg, ok := result.(config.HistorianConfig)
 			Expect(ok).To(BeTrue(), "Result should be a HistorianConfig")
@@ -105,6 +106,13 @@ var _ = Describe("EditHistorian", func() {
 			Expect(cfg.Port).To(Equal(uint16(6543)))
 
 			Expect(mockConfig.Config.Historian.Host).To(Equal("new-host.example.com"))
+
+			// Execute emits only the progress replies; the terminal success reply is
+			// the dispatcher's job. A self-sent ActionFinishedSuccessfull here would be
+			// the double-reply regression.
+			Eventually(func() []models.ActionReplyState {
+				return historianReplyStates(&messages, &mu)
+			}).Should(Equal([]models.ActionReplyState{models.ActionConfirmed, models.ActionExecuting}))
 		})
 
 		It("should fail when no historian is configured yet", func() {
@@ -118,23 +126,16 @@ var _ = Describe("EditHistorian", func() {
 			Expect(result).To(BeNil())
 			Expect(metadata).To(BeNil())
 
-			Expect(mockConfig.AtomicSetHistorianCalled).To(BeFalse())
+			Expect(mockConfig.AtomicEditHistorianCalled).To(BeTrue())
+			Expect(mockConfig.Config.Historian).To(BeNil())
+
+			Eventually(func() []models.ActionReplyState {
+				return historianReplyStates(&messages, &mu)
+			}).Should(Equal([]models.ActionReplyState{models.ActionConfirmed, models.ActionExecuting, models.ActionFinishedWithFailure}))
 		})
 
-		It("should fail when the current config cannot be read", func() {
-			mockConfig.WithConfigError(errors.New("mock read failure"))
-
-			Expect(action.Parse(validPayload())).To(Succeed())
-
-			result, metadata, err := action.Execute()
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("Failed to read current configuration"))
-			Expect(result).To(BeNil())
-			Expect(metadata).To(BeNil())
-		})
-
-		It("should handle AtomicSetHistorian failure", func() {
-			mockConfig.WithAtomicSetHistorianError(errors.New("mock write failure"))
+		It("should handle AtomicEditHistorian failure", func() {
+			mockConfig.WithAtomicEditHistorianError(errors.New("mock write failure"))
 
 			Expect(action.Parse(validPayload())).To(Succeed())
 
@@ -143,6 +144,10 @@ var _ = Describe("EditHistorian", func() {
 			Expect(err.Error()).To(ContainSubstring("Failed to update Historian configuration"))
 			Expect(result).To(BeNil())
 			Expect(metadata).To(BeNil())
+
+			Eventually(func() []models.ActionReplyState {
+				return historianReplyStates(&messages, &mu)
+			}).Should(Equal([]models.ActionReplyState{models.ActionConfirmed, models.ActionExecuting, models.ActionFinishedWithFailure}))
 		})
 	})
 })

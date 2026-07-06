@@ -57,6 +57,7 @@ var _ = Describe("GetHistorian", func() {
 
 		action = actions.NewGetHistorianAction(userEmail, actionUUID, instanceUUID, outboundChannel, mockConfig)
 
+		messages = nil
 		go actions.ConsumeOutboundMessages(outboundChannel, &messages, &mu, true)
 	})
 
@@ -86,15 +87,29 @@ var _ = Describe("GetHistorian", func() {
 			Expect(cfg.Port).To(Equal(uint16(5432)))
 			Expect(cfg.Database).To(Equal("umh"))
 			Expect(cfg.SSLMode).To(Equal(config.HistorianSSLModeRequire))
+
+			// A successful read emits no reply of its own; the dispatcher sends the sole
+			// terminal ActionFinishedSuccessfull carrying the returned config.
+			Consistently(func() []models.ActionReplyState {
+				return historianReplyStates(&messages, &mu)
+			}).Should(BeEmpty())
 		})
 
-		It("should return nil result when no historian is configured", func() {
+		It("should fail when no historian is configured", func() {
 			mockConfig.WithConfig(config.FullConfig{})
 
 			result, metadata, err := action.Execute()
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("not configured"))
 			Expect(result).To(BeNil())
 			Expect(metadata).To(BeNil())
+
+			// The not-configured branch must return a non-nil error so the dispatcher
+			// short-circuits; otherwise it would append a spurious success reply after
+			// this failure.
+			Eventually(func() []models.ActionReplyState {
+				return historianReplyStates(&messages, &mu)
+			}).Should(Equal([]models.ActionReplyState{models.ActionFinishedWithFailure}))
 		})
 
 		It("should fail when the config cannot be read", func() {
@@ -105,6 +120,10 @@ var _ = Describe("GetHistorian", func() {
 			Expect(err.Error()).To(ContainSubstring("Failed to read configuration"))
 			Expect(result).To(BeNil())
 			Expect(metadata).To(BeNil())
+
+			Eventually(func() []models.ActionReplyState {
+				return historianReplyStates(&messages, &mu)
+			}).Should(Equal([]models.ActionReplyState{models.ActionFinishedWithFailure}))
 		})
 	})
 })
