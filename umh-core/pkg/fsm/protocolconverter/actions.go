@@ -349,22 +349,28 @@ func (p *ProtocolConverterInstance) UpdateObservedStateOfInstance(ctx context.Co
 	metrics.ObserveReconcileTime(logger.ComponentProtocolConverterInstance, p.baseFSMInstance.GetID()+".buildRuntimeConfig", time.Since(start))
 
 	if !protocolconverterserviceconfig.ConfigsEqualRuntime(p.runtimeConfig, p.ObservedState.ObservedProtocolConverterRuntimeConfig) {
-		// Check if the service exists before attempting to update
-		if p.service.ServiceExists(ctx, services.GetFileSystem(), p.baseFSMInstance.GetID()) {
-			p.baseFSMInstance.GetLogger().Debugf("Observed bridge config is different from desired config, updating bridge configuration")
+		p.baseFSMInstance.GetLogger().Debugf("Observed bridge config is different from desired config, updating bridge configuration")
 
-			diffStr := protocolconverterserviceconfig.ConfigDiffRuntime(p.runtimeConfig, p.ObservedState.ObservedProtocolConverterRuntimeConfig)
-			p.baseFSMInstance.GetLogger().Debugf("Configuration differences: %s", diffStr)
+		diffStr := protocolconverterserviceconfig.ConfigDiffRuntime(p.runtimeConfig, p.ObservedState.ObservedProtocolConverterRuntimeConfig)
+		p.baseFSMInstance.GetLogger().Debugf("Configuration differences: %s", diffStr)
 
-			// Update the config in the Benthos manager
-			err := p.service.UpdateInManager(ctx, services.GetFileSystem(), &p.runtimeConfig, p.baseFSMInstance.GetID(), p.debugLevel)
-			if err != nil {
+		// Update the config through the manager directly, without a prior
+		// ServiceExists check. A check-then-act pattern here is a TOCTOU race: the
+		// service can be created or removed between the check and the update.
+		// UpdateInManager only mutates in-memory config slices, so it is safe to call
+		// even before the S6 services exist, and it returns ErrServiceNotExist when
+		// the service is not yet registered. That case is treated as "retry next
+		// tick" (the ConfigsEqualRuntime guard above stays true until the update
+		// succeeds); any other error is surfaced.
+		err := p.service.UpdateInManager(ctx, services.GetFileSystem(), &p.runtimeConfig, p.baseFSMInstance.GetID(), p.debugLevel)
+		if err != nil {
+			if errors.Is(err, protocolconvertersvc.ErrServiceNotExist) {
+				p.baseFSMInstance.GetLogger().Debugf("Service not yet registered, skipping config update (will retry)")
+			} else {
 				return fmt.Errorf("failed to update bridge configuration: %w", err)
 			}
-
-			p.baseFSMInstance.GetLogger().Debugf("config updated")
 		} else {
-			p.baseFSMInstance.GetLogger().Debugf("Config differences detected but service does not exist yet, skipping update")
+			p.baseFSMInstance.GetLogger().Debugf("config updated")
 		}
 	}
 

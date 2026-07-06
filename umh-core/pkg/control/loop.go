@@ -47,6 +47,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/ctxutil"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/env"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/agent_monitor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos"
@@ -102,6 +103,16 @@ type ControlLoop struct {
 //
 // The control loop runs at a fixed interval (defaultTickerTime) and orchestrates
 // all components according to the configuration.
+// globalNmapManagerEnabled reports whether NewControlLoop should append the
+// global fsmv1 nmap manager. It returns false only when NMAP_BACKEND=fsmv2, in
+// which case the connection service owns an embedded fsmv2 nmap manager and the
+// global one would double-manage config.Internal.Nmap.
+func globalNmapManagerEnabled() bool {
+	backend, _ := env.GetAsString("NMAP_BACKEND", false, constants.NmapBackendFSMv1)
+
+	return backend != constants.NmapBackendFSMv2
+}
+
 func NewControlLoop(configManager config.ConfigManager) *ControlLoop {
 	// Get a component-specific logger
 	log := logger.For(logger.ComponentControlLoop)
@@ -123,13 +134,24 @@ func NewControlLoop(configManager config.ConfigManager) *ControlLoop {
 		container.NewContainerManager(constants.DefaultManagerName),
 		redpanda.NewRedpandaManager(constants.DefaultManagerName),
 		agent_monitor.NewAgentManager(constants.DefaultManagerName),
-		nmap.NewNmapManager(constants.DefaultManagerName),
+	}
+
+	// Append the global fsmv1 nmap manager at its original position only when the
+	// fsmv2 backend is off. With NMAP_BACKEND=fsmv2 the connection service owns an
+	// embedded fsmv2 nmap manager, so the global fsmv1 manager must be skipped to
+	// avoid two managers double-managing config.Internal.Nmap. When off, the
+	// manager order is byte-identical to before this gate.
+	if globalNmapManagerEnabled() {
+		managers = append(managers, nmap.NewNmapManager(constants.DefaultManagerName))
+	}
+
+	managers = append(managers,
 		dataflowcomponent.NewDataflowComponentManager(constants.DefaultManagerName),
 		connection.NewConnectionManager(constants.DefaultManagerName),
 		protocolconverter.NewProtocolConverterManager(constants.DefaultManagerName),
 		topicbrowser.NewTopicBrowserManager(constants.DefaultManagerName),
 		streamprocessor.NewManager(constants.DefaultManagerName),
-	}
+	)
 
 	// Create a starvation checker
 	starvationChecker := starvationchecker.NewStarvationChecker(constants.StarvationThreshold)

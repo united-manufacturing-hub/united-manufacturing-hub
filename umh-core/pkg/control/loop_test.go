@@ -160,6 +160,7 @@ var _ = Describe("ControlLoop", func() {
 
 			err := controlLoop.Reconcile(ctx, tick)
 			tick++
+
 			Expect(err).NotTo(HaveOccurred())
 			Expect(mockConfig.IsGetConfigCalled()).To(BeTrue())
 			Expect(mockManager.ReconcileCalled).To(BeTrue())
@@ -170,6 +171,7 @@ var _ = Describe("ControlLoop", func() {
 
 			err := controlLoop.Reconcile(ctx, tick)
 			tick++
+
 			Expect(err).NotTo(HaveOccurred())
 			Expect(mockConfig.IsGetConfigCalled()).To(BeTrue())
 			Expect(mockManager.ReconcileCalled).To(BeFalse())
@@ -195,6 +197,7 @@ var _ = Describe("ControlLoop", func() {
 
 			err := controlLoop.Reconcile(canceledCtx, tick)
 			tick++
+
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("context canceled"))
 		})
@@ -237,12 +240,14 @@ var _ = Describe("ControlLoop", func() {
 							return
 						}
 					}
+
 					time.Sleep(1 * time.Millisecond) // Small sleep to avoid tight loop
 				}
 			}()
 
 			// Start executing in a goroutine
 			execDone := make(chan error)
+
 			go func() {
 				execDone <- testLoop.Execute(ctx)
 			}()
@@ -269,6 +274,7 @@ var _ = Describe("ControlLoop", func() {
 
 			// Start executing in a goroutine
 			execDone := make(chan error)
+
 			go func() {
 				execDone <- controlLoop.Execute(ctx)
 			}()
@@ -301,6 +307,7 @@ var _ = Describe("ControlLoop", func() {
 
 			// Start executing in a goroutine
 			execDone := make(chan error)
+
 			go func() {
 				execDone <- timeoutLoop.Execute(ctx)
 			}()
@@ -322,10 +329,12 @@ var _ = Describe("ControlLoop", func() {
 					// If GetConfigCalled becomes true after we cleared the error
 					if timeoutConfig.IsGetConfigCalled() {
 						atomic.AddInt32(&callCount, 1)
+
 						continuedExecution <- struct{}{}
 
 						return
 					}
+
 					time.Sleep(1 * time.Millisecond)
 					timeoutConfig.ResetCalls()
 				}
@@ -481,6 +490,7 @@ var _ = Describe("ControlLoop", func() {
 				// Run the control loop
 				err := controlLoop.Reconcile(complexCtx, tick)
 				tick++
+
 				if err != nil {
 					GinkgoWriter.Println("Complex fuzz error:", err.Error())
 				}
