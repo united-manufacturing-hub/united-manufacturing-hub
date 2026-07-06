@@ -172,7 +172,7 @@ func desiredStateOf[TConfig any](cfg TConfig) string {
 		}
 	}
 
-	return runningState
+	return defaultDesiredState
 }
 
 // refFor builds the ref for a config entry from the worker type and its name.
@@ -182,7 +182,7 @@ func (m *WorkerManager[TConfig, TStatus]) refFor(cfg TConfig) dynamicchildren.Re
 
 // buildInstance constructs an AdaptedInstance for a config entry.
 func (m *WorkerManager[TConfig, TStatus]) buildInstance(cfg TConfig, enabled bool) publicfsm.FSMInstance {
-	return newAdaptedInstance[TConfig, TStatus](
+	return newAdaptedInstance(
 		m.refFor(cfg),
 		cfg,
 		desiredStateOf(cfg),
@@ -190,6 +190,7 @@ func (m *WorkerManager[TConfig, TStatus]) buildInstance(cfg TConfig, enabled boo
 		m.spec.MapFresh,
 		m.spec.MapObserved,
 		!enabled,
+		m.spec.Log,
 	)
 }
 
@@ -245,6 +246,8 @@ func (m *WorkerManager[TConfig, TStatus]) Reconcile(ctx context.Context, snapsho
 	desired := m.spec.ExtractConfigs(snapshot)
 	changed := false
 
+	m.spec.Log.Debugw("reconcile", "desired", len(desired), "instances", len(m.instances), "clientReady", client != nil)
+
 	desiredNames := make(map[string]struct{}, len(desired))
 	for _, cfg := range desired {
 		desiredNames[m.spec.NameOf(cfg)] = struct{}{}
@@ -256,7 +259,7 @@ func (m *WorkerManager[TConfig, TStatus]) Reconcile(ctx context.Context, snapsho
 			continue
 		}
 
-		m.spec.Log.Infow("removing worker no longer in config", "worker", name)
+		m.spec.Log.Debugw("removing worker no longer in config", "worker", name)
 
 		if client != nil {
 			client.Delete(m.refFor(existing))
@@ -281,7 +284,7 @@ func (m *WorkerManager[TConfig, TStatus]) Reconcile(ctx context.Context, snapsho
 
 			m.instances[name] = m.buildInstance(cfg, enabled)
 			m.domainConfigs[name] = cfg
-			m.spec.Log.Infow("created worker", "worker", name, "enabled", enabled)
+			m.spec.Log.Debugw("created worker", "worker", name, "enabled", enabled)
 
 			changed = true
 
@@ -298,7 +301,7 @@ func (m *WorkerManager[TConfig, TStatus]) Reconcile(ctx context.Context, snapsho
 
 		m.instances[name] = m.buildInstance(cfg, enabled)
 		m.domainConfigs[name] = cfg
-		m.spec.Log.Infow("updated worker", "worker", name, "enabled", enabled)
+		m.spec.Log.Debugw("updated worker", "worker", name, "enabled", enabled)
 
 		changed = true
 	}

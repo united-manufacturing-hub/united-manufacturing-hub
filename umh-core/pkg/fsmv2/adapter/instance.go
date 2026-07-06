@@ -20,6 +20,8 @@ import (
 	"sync"
 	"time"
 
+	"go.uber.org/zap"
+
 	publicfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/fsmv2client"
@@ -38,11 +40,20 @@ const (
 	// the supervisor's DefaultObservationInterval) to keep the adapter cycle-free.
 	unregisteredStaleFallback = 1 * time.Second
 
-	// runningState and degradedState are the hardcoded fsmv1 state literals the
-	// resolution ladder returns outside the Fresh+healthy leaf. Drawn from the
-	// {running, degraded, stopped} vocabulary — there is no "starting" state.
-	runningState  = "running"
+	// startingState and degradedState are the fsmv1 state literals the resolution
+	// ladder returns outside the Fresh+healthy leaf. They are the fleet-wide
+	// fsmv1 lifecycle literals every consuming FSM understands (e.g. the
+	// connection FSM's IsStartingState/IsRunningState, nmap's OperationalState*):
+	// a not-yet-observed worker reads as "starting" and a degraded/stale one as
+	// "degraded". This is the adapter's fsmv1 output vocabulary, distinct from the
+	// simple worker's own {running, degraded, stopped} state machine.
+	startingState = "starting"
 	degradedState = "degraded"
+
+	// defaultDesiredState is the desired fsmv1 state used when a config exposes no
+	// desired state of its own. It is a lifecycle target ("running"), distinct
+	// from the observed-ladder literals above.
+	defaultDesiredState = "running"
 )
 
 // HealthReporter is the verdict-reading seam the adapter owns. The stored status
@@ -67,6 +78,7 @@ type HealthReporter interface {
 type AdaptedInstance[TConfig, TStatus any] struct {
 	mapFresh    func(cfg TConfig, status TStatus) string
 	mapObserved func(cfg TConfig, status TStatus) publicfsm.ObservedState
+	log         *zap.SugaredLogger
 
 	cfg TConfig
 
@@ -104,7 +116,12 @@ func newAdaptedInstance[TConfig, TStatus any](
 	mapFresh func(cfg TConfig, status TStatus) string,
 	mapObserved func(cfg TConfig, status TStatus) publicfsm.ObservedState,
 	isDisabled bool,
+	log *zap.SugaredLogger,
 ) *AdaptedInstance[TConfig, TStatus] {
+	if log == nil {
+		log = zap.NewNop().Sugar()
+	}
+
 	return &AdaptedInstance[TConfig, TStatus]{
 		ref:             ref,
 		cfg:             cfg,
@@ -114,6 +131,7 @@ func newAdaptedInstance[TConfig, TStatus any](
 		mapFresh:        mapFresh,
 		mapObserved:     mapObserved,
 		isDisabled:      isDisabled,
+		log:             log,
 	}
 }
 
@@ -166,6 +184,15 @@ func (i *AdaptedInstance[TConfig, TStatus]) GetCurrentFSMState() string {
 	resolved := i.resolve(obs, freshness)
 	i.lastState = resolved
 
+	var reason string
+	if hr, ok := any(obs.Status).(HealthReporter); ok {
+		_, reason = hr.HealthVerdict()
+	}
+
+	i.log.Debugw("adapter resolve",
+		"workerType", i.ref.WorkerType, "name", i.ref.Name,
+		"freshness", freshness, "resolved", resolved, "reason", reason)
+
 	return resolved
 }
 
@@ -174,7 +201,7 @@ func (i *AdaptedInstance[TConfig, TStatus]) resolve(obs fsmv2.Observation[TStatu
 	// Rung 2: Unknown (nil client / read error) → hold last known state.
 	if freshness == fsmv2client.Unknown {
 		if i.lastState == "" {
-			return runningState
+			return startingState
 		}
 
 		return i.lastState
@@ -187,9 +214,11 @@ func (i *AdaptedInstance[TConfig, TStatus]) resolve(obs fsmv2.Observation[TStatu
 		}
 	}
 
-	// Rung 4: bootstrap (no observation yet) → running, not "starting".
+	// Rung 4: bootstrap (no observation yet) → starting. The consuming fsmv1 FSM
+	// reads this as "coming up" (e.g. nmap's IsStartingState) until the first
+	// observation lands.
 	if freshness == fsmv2client.Unregistered || freshness == fsmv2client.NeverObserved {
-		return runningState
+		return startingState
 	}
 
 	// Rung 5: stale (missed polls) → degraded.

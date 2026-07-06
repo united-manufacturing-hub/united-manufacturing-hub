@@ -29,11 +29,15 @@
 // resolves in this precedence; the developer only ever touches the last case:
 //
 //  1. disabled (desired state stopped)          -> the desired state, no store read
-//  2. Unknown (nil client / read hiccup)        -> hold the last known state
+//  2. Unknown (nil client / read hiccup)        -> hold the last known state ("starting" if none)
 //  3. degraded verdict (poll error or Health)   -> "degraded"
-//  4. Unregistered / NeverObserved (bootstrap)  -> "running"
+//  4. Unregistered / NeverObserved (bootstrap)  -> "starting"
 //  5. Stale (~3 missed polls)                    -> "degraded"
 //  6. Fresh and healthy                          -> the developer's MapFresh
+//
+// The non-Fresh literals ("starting"/"degraded") are the fleet-wide fsmv1
+// lifecycle states every consuming FSM understands; they are the adapter's
+// output vocabulary, distinct from a simple worker's own state machine.
 //
 // The verdict is read off the stored status through the HealthReporter interface,
 // so the adapter imports nothing from the worker package and stays generic over

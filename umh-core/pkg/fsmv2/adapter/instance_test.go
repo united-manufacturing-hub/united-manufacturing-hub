@@ -123,7 +123,7 @@ var _ = Describe("AdaptedInstance", func() {
 	// newInstance builds the instance under test with the assumed constructor.
 	newInstance := func(desiredState string, isDisabled bool) *AdaptedInstance[testConfig, probeStatus] {
 		return newAdaptedInstance(
-			ref, cfg, desiredState, 0, mapFresh, mapObserved, isDisabled,
+			ref, cfg, desiredState, 0, mapFresh, mapObserved, isDisabled, nil,
 		)
 	}
 
@@ -164,12 +164,12 @@ var _ = Describe("AdaptedInstance", func() {
 		Expect(inst.GetCurrentFSMState()).To(Equal("stopped"))
 	})
 
-	It("rung 2: GetClient()==nil with no prior state returns running", func() {
+	It("rung 2: GetClient()==nil with no prior state returns starting", func() {
 		fsmv2client.SetClient(nil)
 
 		inst := newInstance("running", false)
 
-		Expect(inst.GetCurrentFSMState()).To(Equal("running"))
+		Expect(inst.GetCurrentFSMState()).To(Equal("starting"))
 	})
 
 	It("rung 3: a degraded verdict on a Fresh observation returns degraded", func() {
@@ -180,20 +180,20 @@ var _ = Describe("AdaptedInstance", func() {
 		Expect(inst.GetCurrentFSMState()).To(Equal("degraded"))
 	})
 
-	It("rung 4: Unregistered (ref never upserted) returns running (bootstrap, not starting)", func() {
+	It("rung 4: Unregistered (ref never upserted) returns starting (bootstrap)", func() {
 		stageClient(false, nil, nil)
 
 		inst := newInstance("running", false)
 
-		Expect(inst.GetCurrentFSMState()).To(Equal("running"))
+		Expect(inst.GetCurrentFSMState()).To(Equal("starting"))
 	})
 
-	It("rung 4: NeverObserved (upserted but store ErrNotFound) returns running", func() {
+	It("rung 4: NeverObserved (upserted but store ErrNotFound) returns starting", func() {
 		stageClient(true, nil, persistence.ErrNotFound)
 
 		inst := newInstance("running", false)
 
-		Expect(inst.GetCurrentFSMState()).To(Equal("running"))
+		Expect(inst.GetCurrentFSMState()).To(Equal("starting"))
 	})
 
 	It("rung 5: a Stale observation (older than staleAfter) returns degraded", func() {
