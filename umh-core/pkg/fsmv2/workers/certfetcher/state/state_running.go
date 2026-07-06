@@ -40,8 +40,8 @@ type RunningState struct {
 func (s *RunningState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := fsmv2.ConvertWorkerSnapshot[certfetcher.CertFetcherConfig, certfetcher.CertFetcherStatus](snapAny)
 
-	if snap.IsShutdownRequested {
-		return fsmv2.Transition(&StoppedState{}, fsmv2.SignalNone, nil, "shutdown requested", nil)
+	if snap.ShouldStop() {
+		return fsmv2.Transition(&StoppedState{}, fsmv2.SignalNone, nil, fmt.Sprintf("stop required: %s", snap.StopReason()), nil)
 	}
 
 	if !snap.Status.HasSubHandler {
