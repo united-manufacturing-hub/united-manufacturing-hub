@@ -378,6 +378,15 @@ type Signals struct {
 	// SaturationRecover (Schmitt). False when host stats are readable (the
 	// host-headroom latch handles it) or in limit mode.
 	DRowFired bool
+	// NoLimitHostFired is the no-limit host-stats-readable saturation latch
+	// (scenario A degraded: the host itself is full — LogicalCpus −
+	// hostBusyMean − cpuReserveCores < 0). It is the fourth internal sub-latch
+	// whose OR (with limitSaturationFired/hostFullFired/dRowFired) is the
+	// emitted SaturationFired. Exposed on the wire so MC can rank the firings
+	// without inferring from ceiling+hostBusy.available (the wire contract
+	// holds: fired == limitSaturationFired || hostFullFired || dRowFired ||
+	// noLimitHostFired). False in limit mode and when host stats are unreadable.
+	NoLimitHostFired bool
 	// DFraction is the D-row fraction (usageCores60sMean/LogicalCpus, 0..1),
 	// the saturation cause Value when DRowFired is true. Computed locally from
 	// the one blessed average (usageCores60sMean) and LogicalCpus — NOT
@@ -984,6 +993,7 @@ func Decide(st *WindowState, sample Sample, thresholds Thresholds) (Verdict, Sig
 	signals.LimitSaturationFired = st.limitSaturationFired
 	signals.HostFullFired = st.hostFullFired
 	signals.DRowFired = st.dRowFired
+	signals.NoLimitHostFired = st.noLimitHostFired
 
 	// Percentile block: set UsageRingActive, AvgUsageFraction, AvgUsageCores
 	// from the already-computed early values (one blessed average — do NOT

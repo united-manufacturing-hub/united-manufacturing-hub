@@ -404,6 +404,7 @@ func (c *ContainerMonitorService) getCPUMetrics(ctx context.Context) (*models.CP
 				LimitSaturationFired: signals.LimitSaturationFired,
 				HostFullFired:        signals.HostFullFired,
 				DRowFired:            signals.DRowFired,
+				NoLimitHostFired:     signals.NoLimitHostFired,
 			},
 			HostBusy: models.VerdictBasisHostBusy{
 				Mean:      signals.HostBusyCores60sMean,
