@@ -196,16 +196,16 @@ func TestComposeMessage_SaturationTwoLayerC2(t *testing.T) {
 			{Kind: cpuhealth.CauseKindSaturation, Value: 0.82},
 		},
 	}
-	// LimitedVisibility true selects the blind saturation copy this test's
-	// phrases assert (no limit + no PSI). The non-blind variant is pinned
-	// separately in TestComposeMessage_SaturationDetailsPsiConditional.
-	signals := cpuhealth.Signals{SaturationFired: true, AvgUsageFraction: 0.82, LimitedVisibility: true}
+	// DRowFired true selects the D-row (no-limit, no-host-stats) copy this
+	// test's phrases assert. The non-D-row variant is pinned separately in
+	// TestComposeMessage_SaturationDetailsPsiConditional.
+	signals := cpuhealth.Signals{SaturationFired: true, DRowFired: true, LimitedVisibility: true}
 
 	msg := cpuhealth.ComposeMessage(verdict, signals)
 	details := assertTwoLayer(t, msg, "CPU running near full",
+		"of the machine",
+		"Host contention is not visible",
 		"no CPU limit",
-		"CPU-pressure stats",
-		"Set a CPU limit",
 		"psi=1",
 	)
 
@@ -229,20 +229,27 @@ func TestComposeMessage_SaturationDetailsPsiConditional(t *testing.T) {
 	}
 
 	t.Run("Blind", func(t *testing.T) {
-		signals := cpuhealth.Signals{SaturationFired: true, AvgUsageFraction: 0.82, LimitedVisibility: true}
+		// D-row: no limit, no host stats, no PSI. The detail carries the
+		// "Host contention is not visible" caveat and psi=1 guidance.
+		signals := cpuhealth.Signals{SaturationFired: true, DRowFired: true, LimitedVisibility: true}
 		msg := cpuhealth.ComposeMessage(verdict, signals)
-		want := "CPU running near full\nTechnical Details: CPU averaged 82% over the last minute, with little headroom left. This instance has no CPU limit set and its operating system is not reporting CPU-pressure stats, so we cannot confirm whether work is waiting for a free core. Set a CPU limit, which also lets us measure that wait directly, or enable Linux pressure stats (boot with psi=1). Consider adding CPU capacity."
+		want := "CPU running near full\nTechnical Details: CPU averaged 82% of the machine over the last minute and this instance has little headroom left. Host contention is not visible here (no CPU limit set, no pressure stats). Set a CPU limit or enable Linux pressure stats (boot with psi=1) for more detail. Consider adding CPU capacity."
 		if msg != want {
 			t.Fatalf("blind saturation message:\n got: %q\nwant: %q", msg, want)
 		}
 	})
 
-	// PSI-only box: LimitedVisibility false → the non-blind variant, which does
-	// NOT claim PSI is missing.
+	// No-limit, host-stats-readable, PSI present: the no-limit host-headroom
+	// copy. It must NOT claim PSI is missing or carry the D-row caveat.
 	t.Run("NonBlindPsiPresent", func(t *testing.T) {
-		signals := cpuhealth.Signals{SaturationFired: true, AvgUsageFraction: 0.82, LimitedVisibility: false}
+		signals := cpuhealth.Signals{
+			SaturationFired:      true,
+			HostBusyCores60sMean: 6.56,
+			CapacityCores:        8.0,
+			LimitedVisibility:    false,
+		}
 		msg := cpuhealth.ComposeMessage(verdict, signals)
-		want := "CPU running near full\nTechnical Details: CPU averaged 82% over the last minute and this instance has little headroom left. Add CPU capacity, or raise its CPU limit if one is set and this load is expected."
+		want := "CPU running near full\nTechnical Details: CPU averaged 82% of the machine over the last minute and this instance has little headroom left. Add CPU capacity, or reduce the load on it."
 		if msg != want {
 			t.Fatalf("non-blind saturation message:\n got: %q\nwant: %q", msg, want)
 		}
@@ -285,7 +292,7 @@ func TestComposeMessage_MultipleCausesListsAllDetailsDominantFirst(t *testing.T)
 // healthy budget dashboard appends when the box is blind (no CPU limit, no
 // PSI). It is duplicated here (the package const is unexported) so the exact
 // wording is pinned from the caller's side.
-const limitedVisibilityNoteText = "Limited visibility: this instance has no CPU limit set and its operating system is not reporting CPU-pressure stats, so we cannot fully tell when work is waiting for a free core. Set a CPU limit or enable Linux pressure stats (boot with psi=1) to turn on full monitoring."
+const limitedVisibilityNoteText = "Limited visibility: this instance has no CPU limit set and its operating system is not reporting CPU-pressure stats, so UMH cannot fully tell when work is waiting for a free core. Set a CPU limit or enable Linux pressure stats (boot with psi=1) to turn on full monitoring."
 
 // TestComposeMessage_HealthyBudgetDashboard pins the two-layer healthy message:
 // a headline stating current use against the degraded budget, and a Technical
@@ -299,18 +306,21 @@ func TestComposeMessage_HealthyBudgetDashboard(t *testing.T) {
 
 	// Fully-instrumented: limit + PSI + virtualized, not blind. All four
 	// dashboard rules appear (headroom always, then throttle/pressure/steal).
+	// In limit mode the headline carries the "(Z% of its limit)" suffix and
+	// the budget uses container-scope values (AvgUsageCores, ReserveCores).
 	t.Run("FullyInstrumented", func(t *testing.T) {
 		signals := cpuhealth.Signals{
-			HostBusyCores60sMean: 2.8,
-			CapacityCores:        8,
-			LimitApplies:         true,
-			PsiApplies:           true,
-			StealApplies:         true,
-			ThrottleRatio:        0.0,
-			PressureAvg60Out:     0.03,
-			StealP95:             0.0,
+			LimitApplies:     true,
+			AvgUsageCores:    2.8,
+			CapacityCores:    8,
+			ReserveCores:     0.8,
+			PsiApplies:       true,
+			StealApplies:     true,
+			ThrottleRatio:    0.0,
+			PressureAvg60Out: 0.03,
+			StealP95:         0.0,
 		}
-		want := "CPU healthy. This instance is using 2.8 of 8 cores and can use 4.2 more before it is marked degraded.\nTechnical Details: Headroom 4.2 cores = 8 total - 2.8 used - 1.0 reserved (degraded below 0). Throttling 0% (degraded above 5%). Pressure 3% (degraded above 20%). Steal 0% (degraded above 10%)."
+		want := "CPU healthy. This instance is using 2.8 of 8 cores (35% of its limit) and can use 4.4 more before it is marked degraded.\nTechnical Details: Headroom 4.4 cores = 8 total - 2.8 used - 0.8 reserved (degraded below 0). Throttling 0% (degraded above 5%). Pressure 3% (degraded above 20%). Steal 0% (degraded above 10%)."
 		if got := cpuhealth.ComposeMessage(healthy, signals); got != want {
 			t.Fatalf("fully-instrumented healthy message:\n got: %q\nwant: %q", got, want)
 		}
@@ -319,12 +329,13 @@ func TestComposeMessage_HealthyBudgetDashboard(t *testing.T) {
 	// Limit-only: only the throttle budget joins the headroom line.
 	t.Run("LimitOnly", func(t *testing.T) {
 		signals := cpuhealth.Signals{
-			HostBusyCores60sMean: 2.8,
-			CapacityCores:        8,
-			LimitApplies:         true,
-			ThrottleRatio:        0.0,
+			LimitApplies:  true,
+			AvgUsageCores: 2.8,
+			CapacityCores: 8,
+			ReserveCores:  0.8,
+			ThrottleRatio: 0.0,
 		}
-		want := "CPU healthy. This instance is using 2.8 of 8 cores and can use 4.2 more before it is marked degraded.\nTechnical Details: Headroom 4.2 cores = 8 total - 2.8 used - 1.0 reserved (degraded below 0). Throttling 0% (degraded above 5%)."
+		want := "CPU healthy. This instance is using 2.8 of 8 cores (35% of its limit) and can use 4.4 more before it is marked degraded.\nTechnical Details: Headroom 4.4 cores = 8 total - 2.8 used - 0.8 reserved (degraded below 0). Throttling 0% (degraded above 5%)."
 		if got := cpuhealth.ComposeMessage(healthy, signals); got != want {
 			t.Fatalf("limit-only healthy message:\n got: %q\nwant: %q", got, want)
 		}
@@ -424,4 +435,307 @@ func TestBlockReason_PerCause(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestComposeMessage_HealthyBudget_LimitMode pins the limit-mode healthy
+// budget dashboard: the used/total/reserve come from the container-scope
+// signals (AvgUsageCores, CapacityCores, ReserveCores), and the headline
+// carries the "(Z% of its limit)" suffix. At headroom 0.0 the boundary
+// "close to being marked degraded" variant fires.
+func TestComposeMessage_HealthyBudget_LimitMode(t *testing.T) {
+	healthy := cpuhealth.Verdict{State: cpuhealth.StateHealthy}
+	signals := cpuhealth.Signals{
+		LimitApplies:  true,
+		AvgUsageCores: 1.8,
+		CapacityCores: 2.0,
+		ReserveCores:  0.2,
+	}
+
+	msg := cpuhealth.ComposeMessage(healthy, signals)
+
+	if !strings.Contains(msg, "1.8 of 2 cores") {
+		t.Fatalf("limit-mode healthy headline must contain the used/total: %q", msg)
+	}
+	if !strings.Contains(msg, "(90% of its limit)") {
+		t.Fatalf("limit-mode healthy headline must carry the percentage-of-limit suffix: %q", msg)
+	}
+	if !strings.Contains(msg, "Headroom 0.0 cores = 2 total - 1.8 used - 0.2 reserved") {
+		t.Fatalf("limit-mode headroom line must use container-scope values: %q", msg)
+	}
+	if !strings.Contains(msg, "close to being marked degraded") {
+		t.Fatalf("headroom=0.0 must trigger the boundary variant: %q", msg)
+	}
+}
+
+// TestComposeMessage_HealthyBudget_NoLimit_Unchanged is a regression guard:
+// the no-limit healthy budget dashboard keeps the R7 shape (host-busy as
+// used, cpuReserveCores as reserve, no limit-percentage suffix).
+func TestComposeMessage_HealthyBudget_NoLimit_Unchanged(t *testing.T) {
+	healthy := cpuhealth.Verdict{State: cpuhealth.StateHealthy}
+	signals := cpuhealth.Signals{
+		LimitApplies:         false,
+		HostBusyCores60sMean: 4.0,
+		CapacityCores:        8.0,
+	}
+
+	msg := cpuhealth.ComposeMessage(healthy, signals)
+
+	if !strings.Contains(msg, "using 4.0 of 8 cores") {
+		t.Fatalf("no-limit healthy headline must use host-busy as used: %q", msg)
+	}
+	if !strings.Contains(msg, "can use 3.0 more") {
+		t.Fatalf("no-limit healthy headroom must be 8 - 4.0 - 1.0 = 3.0: %q", msg)
+	}
+	if strings.Contains(msg, "of its limit") {
+		t.Fatalf("no-limit healthy headline must NOT carry the limit suffix: %q", msg)
+	}
+}
+
+// TestComposeMessage_HealthyBudget_ZeroSignalsGuard pins the cgroup-read-
+// failure path: when CapacityCores is 0 (Decide never ran, signals zero-
+// valued), composeHealthy must NOT emit the garbled "0.0 of 0 cores, -1.0
+// headroom" budget dashboard. It returns a safe healthy string instead.
+func TestComposeMessage_HealthyBudget_ZeroSignalsGuard(t *testing.T) {
+	healthy := cpuhealth.Verdict{State: cpuhealth.StateHealthy}
+	signals := cpuhealth.Signals{}
+
+	msg := cpuhealth.ComposeMessage(healthy, signals)
+
+	if strings.Contains(msg, "0.0 of 0 cores") {
+		t.Fatalf("zero-signals guard must prevent the garbled budget dashboard: %q", msg)
+	}
+	if strings.Contains(msg, "-1.0") {
+		t.Fatalf("zero-signals guard must prevent the negative headroom: %q", msg)
+	}
+	if !strings.Contains(msg, "healthy") {
+		t.Fatalf("zero-signals guard must still return a healthy string: %q", msg)
+	}
+}
+
+// TestComposeMessage_Saturation_LimitMode pins the limit-saturation detail:
+// the percentage is container-usage vs the limit (not AvgUsageFraction), and
+// the guidance says "raise its CPU limit" (degraded = no room to grow, not
+// broken).
+func TestComposeMessage_Saturation_LimitMode(t *testing.T) {
+	verdict := cpuhealth.Verdict{
+		State:       cpuhealth.StateDegraded,
+		Attribution: cpuhealth.AttributionUnknown,
+		Causes: []cpuhealth.Cause{
+			{Kind: cpuhealth.CauseKindSaturation, Value: -0.1},
+		},
+	}
+	signals := cpuhealth.Signals{
+		LimitApplies:         true,
+		LimitSaturationFired: true,
+		HostFullFired:        false,
+		DRowFired:            false,
+		AvgUsageCores:        1.9,
+		CapacityCores:        2.0,
+	}
+
+	msg := cpuhealth.ComposeMessage(verdict, signals)
+	_, details, _ := strings.Cut(msg, "Technical Details: ")
+	details = strings.TrimSpace(details)
+
+	if !strings.Contains(details, "of its limit") {
+		t.Fatalf("limit-saturation detail must say 'of its limit': %q", details)
+	}
+	if !strings.Contains(details, "Raise its CPU limit") {
+		t.Fatalf("limit-saturation detail must advise raising the limit: %q", details)
+	}
+	if strings.Contains(details, "0%") {
+		t.Fatalf("limit-saturation detail must NOT show 0%% (AvgUsageFraction=0 bug): %q", details)
+	}
+	if !strings.Contains(details, "95%") {
+		t.Fatalf("limit-saturation detail must show 95%% (1.9/2.0): %q", details)
+	}
+}
+
+// TestComposeMessage_Saturation_HostFull pins the host-full detail: it leads
+// with "The machine is full" (the un-fixable-from-inside condition dominates),
+// and when both host-full and limit-saturation fire the limit fact appears as
+// detail.
+func TestComposeMessage_Saturation_HostFull(t *testing.T) {
+	verdict := cpuhealth.Verdict{
+		State:       cpuhealth.StateDegraded,
+		Attribution: cpuhealth.AttributionHost,
+		Causes: []cpuhealth.Cause{
+			{Kind: cpuhealth.CauseKindSaturation, Value: -0.5},
+		},
+	}
+	signals := cpuhealth.Signals{
+		LimitApplies:         true,
+		LimitSaturationFired: true,
+		HostFullFired:        true,
+		DRowFired:            false,
+		CapacityCores:        2.0,
+	}
+
+	msg := cpuhealth.ComposeMessage(verdict, signals)
+	_, details, _ := strings.Cut(msg, "Technical Details: ")
+	details = strings.TrimSpace(details)
+
+	if !strings.HasPrefix(details, "The machine is full") {
+		t.Fatalf("host-full detail must lead with the machine: %q", details)
+	}
+	if !strings.Contains(details, "at its 2-core limit") {
+		t.Fatalf("both-fire detail must carry the limit fact: %q", details)
+	}
+	if !strings.Contains(details, "Add CPU to the machine") {
+		t.Fatalf("host-full detail must advise adding CPU to the machine: %q", details)
+	}
+}
+
+// TestComposeMessage_Saturation_DRow pins the D-row detail (no-limit, no host
+// stats): it carries the "host contention is not visible" caveat and the
+// psi=1 guidance.
+func TestComposeMessage_Saturation_DRow(t *testing.T) {
+	verdict := cpuhealth.Verdict{
+		State:       cpuhealth.StateDegraded,
+		Attribution: cpuhealth.AttributionUnknown,
+		Causes: []cpuhealth.Cause{
+			{Kind: cpuhealth.CauseKindSaturation, Value: 0.82},
+		},
+	}
+	signals := cpuhealth.Signals{
+		LimitSaturationFired: false,
+		HostFullFired:        false,
+		DRowFired:            true,
+		LimitedVisibility:    true,
+	}
+
+	msg := cpuhealth.ComposeMessage(verdict, signals)
+	_, details, _ := strings.Cut(msg, "Technical Details: ")
+	details = strings.TrimSpace(details)
+
+	if !strings.Contains(details, "Host contention is not visible") {
+		t.Fatalf("D-row detail must carry the host-contention caveat: %q", details)
+	}
+	if !strings.Contains(details, "psi=1") {
+		t.Fatalf("D-row detail must carry the psi=1 guidance: %q", details)
+	}
+	if !strings.Contains(details, "82%") {
+		t.Fatalf("D-row detail must show 82%%: %q", details)
+	}
+	if !strings.Contains(details, "of the machine") {
+		t.Fatalf("D-row detail must say 'of the machine': %q", details)
+	}
+}
+
+// TestComposeMessage_Saturation_NoLimitHostHeadroom pins the no-limit
+// host-stats-readable saturation detail: the percentage is host-busy vs host
+// cores (not AvgUsageFraction=0), and the guidance says "Add CPU capacity".
+func TestComposeMessage_Saturation_NoLimitHostHeadroom(t *testing.T) {
+	verdict := cpuhealth.Verdict{
+		State:       cpuhealth.StateDegraded,
+		Attribution: cpuhealth.AttributionHost,
+		Causes: []cpuhealth.Cause{
+			{Kind: cpuhealth.CauseKindSaturation, Value: -0.5},
+		},
+	}
+	signals := cpuhealth.Signals{
+		LimitApplies:         false,
+		LimitSaturationFired: false,
+		HostFullFired:        false,
+		DRowFired:            false,
+		HostBusyCores60sMean: 6.56,
+		CapacityCores:        8.0,
+	}
+
+	msg := cpuhealth.ComposeMessage(verdict, signals)
+	_, details, _ := strings.Cut(msg, "Technical Details: ")
+	details = strings.TrimSpace(details)
+
+	if strings.Contains(details, "0%") {
+		t.Fatalf("no-limit-host-headroom detail must NOT show 0%% (AvgUsageFraction bug): %q", details)
+	}
+	if !strings.Contains(details, "82%") {
+		t.Fatalf("no-limit-host-headroom detail must show 82%% (6.56/8.0): %q", details)
+	}
+	if !strings.Contains(details, "of the machine") {
+		t.Fatalf("no-limit-host-headroom detail must say 'of the machine': %q", details)
+	}
+	if !strings.Contains(details, "Add CPU capacity") {
+		t.Fatalf("no-limit-host-headroom detail must advise adding CPU capacity: %q", details)
+	}
+}
+
+// TestComposeMessage_Steal_NoEmDash pins the steal detail: no em-dash (use a
+// comma), and the %d reflects a peak phrasing ("up to N% at peak").
+func TestComposeMessage_Steal_NoEmDash(t *testing.T) {
+	verdict := cpuhealth.Verdict{
+		State:       cpuhealth.StateDegraded,
+		Attribution: cpuhealth.AttributionHost,
+		Causes: []cpuhealth.Cause{
+			{Kind: cpuhealth.CauseKindSteal, Value: 0.15},
+		},
+	}
+	signals := cpuhealth.Signals{StealFired: true, StealApplies: true}
+
+	msg := cpuhealth.ComposeMessage(verdict, signals)
+
+	if strings.Contains(msg, "—") {
+		t.Fatalf("steal detail must NOT contain an em-dash: %q", msg)
+	}
+	if !strings.Contains(msg, "up to 15% at peak") {
+		t.Fatalf("steal detail must use peak phrasing: %q", msg)
+	}
+}
+
+// TestComposeMessage_LimitedVisibilityNote_ProductVoice pins the
+// limited-visibility note: it uses "UMH cannot" (product voice), not
+// "we cannot" (first-person).
+func TestComposeMessage_LimitedVisibilityNote_ProductVoice(t *testing.T) {
+	healthy := cpuhealth.Verdict{State: cpuhealth.StateHealthy}
+	signals := cpuhealth.Signals{
+		HostBusyCores60sMean: 2.8,
+		CapacityCores:        8.0,
+		LimitedVisibility:    true,
+	}
+
+	msg := cpuhealth.ComposeMessage(healthy, signals)
+
+	if !strings.Contains(msg, "UMH cannot") {
+		t.Fatalf("limited-visibility note must use product voice 'UMH cannot': %q", msg)
+	}
+	if strings.Contains(msg, "we cannot") {
+		t.Fatalf("limited-visibility note must NOT use first-person 'we cannot': %q", msg)
+	}
+}
+
+// TestComposeMessage_Saturation_CScenarioHonestyNote pins the C-scenario
+// "host stats unavailable" note on the real HostBusyCoresAvailable flag (R10.5
+// fix: was a HostBusyCores60sMean==0 proxy, unreliable on a readable idle host).
+func TestComposeMessage_Saturation_CScenarioHonestyNote(t *testing.T) {
+	verdict := cpuhealth.Verdict{
+		State: cpuhealth.StateDegraded, Attribution: cpuhealth.AttributionUnknown,
+		Causes: []cpuhealth.Cause{{Kind: cpuhealth.CauseKindSaturation, Value: -0.1}},
+	}
+	t.Run("HostStatsUnavailable", func(t *testing.T) {
+		// Limit-saturation fired; /proc/stat unreadable → the note must appear.
+		signals := cpuhealth.Signals{
+			SaturationFired: true, LimitSaturationFired: true, LimitApplies: true,
+			AvgUsageCores: 1.9, CapacityCores: 2.0, ReserveCores: 0.2,
+			HostBusyCoresAvailable: false,
+		}
+		msg := cpuhealth.ComposeMessage(verdict, signals)
+		if !strings.Contains(msg, "Host stats are unavailable") {
+			t.Fatalf("C-scenario note must appear when HostBusyCoresAvailable=false: %q", msg)
+		}
+	})
+	t.Run("HostStatsReadable_NoNote", func(t *testing.T) {
+		// Limit-saturation fired; /proc/stat readable (even if host is idle,
+		// HostBusyCores60sMean ~0) → the note must NOT appear (the proxy would
+		// have falsely appended it on a readable idle host).
+		signals := cpuhealth.Signals{
+			SaturationFired: true, LimitSaturationFired: true, LimitApplies: true,
+			AvgUsageCores: 1.9, CapacityCores: 2.0, ReserveCores: 0.2,
+			HostBusyCores60sMean:   0, // idle readable host — the old proxy fired here
+			HostBusyCoresAvailable: true,
+		}
+		msg := cpuhealth.ComposeMessage(verdict, signals)
+		if strings.Contains(msg, "Host stats are unavailable") {
+			t.Fatalf("C-scenario note must NOT appear when HostBusyCoresAvailable=true (readable idle host): %q", msg)
+		}
+	})
 }

@@ -390,6 +390,12 @@ type Signals struct {
 	// saturation cause Value when host-full dominates. NOT clamped (negative on
 	// a full host). Computed whenever LogicalCpus > 0.
 	HostHeadroomCores float64
+	// HostBusyCoresAvailable mirrors Sample.HostBusyCoresAvailable (the
+	// sampler's /proc/stat readability flag) onto Signals so the message
+	// (R10.5) can gate the C-scenario "host stats unavailable" note on the real
+	// flag, not a HostBusyCores60sMean==0 proxy (which is unreliable on a
+	// readable idle host). It is signal plumbing, not a verdict input.
+	HostBusyCoresAvailable bool
 	// HostBusyCores60sMean is the 60s arithmetic mean of per-tick HostBusyCores;
 	// observability-only (does not change the verdict). The per-tick input is
 	// clamped (NaN/negative/+Inf → 0) because a malformed value poisons the
@@ -851,6 +857,7 @@ func Decide(st *WindowState, sample Sample, thresholds Thresholds) (Verdict, Sig
 	signals.LimitApplies = limitMode
 	signals.PsiApplies = sample.PsiAvailable
 	signals.StealApplies = sample.Virtualized
+	signals.HostBusyCoresAvailable = sample.HostBusyCoresAvailable
 
 	signals.LimitedVisibility = deadZone
 

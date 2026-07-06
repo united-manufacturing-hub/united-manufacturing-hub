@@ -26,7 +26,7 @@ import (
 // not virtualized). It is the caller-facing "blind state" signal: the verdict
 // State is binary healthy|degraded, so the blind state cannot be a state — it
 // surfaces here as message text instead.
-const limitedVisibilityNote = "Limited visibility: this instance has no CPU limit set and its operating system is not reporting CPU-pressure stats, so we cannot fully tell when work is waiting for a free core. Set a CPU limit or enable Linux pressure stats (boot with psi=1) to turn on full monitoring."
+const limitedVisibilityNote = "Limited visibility: this instance has no CPU limit set and its operating system is not reporting CPU-pressure stats, so UMH cannot fully tell when work is waiting for a free core. Set a CPU limit or enable Linux pressure stats (boot with psi=1) to turn on full monitoring."
 
 // ComposeMessage turns a Verdict and its derived Signals into the C2 two-layer
 // Console message: a one-line headline naming the dominant cause, followed by
@@ -73,10 +73,29 @@ func ComposeMessage(verdict Verdict, signals Signals) string {
 // Details dashboard lists only the applicable alert-rule budgets: headroom
 // always, then throttle/pressure/steal each only when its rule applies.
 func composeHealthy(signals Signals) string {
-	usedDisp := round1(signals.HostBusyCores60sMean)
+	// Zero-signals guard: when CapacityCores is 0 (cgroup read failure, Decide
+	// never ran, signals zero-valued), do not compose the garbled "0.0 of 0
+	// cores, -1.0 headroom" budget dashboard. Return a safe healthy string.
+	if signals.CapacityCores == 0 {
+		return "CPU status healthy; CPU usage is not available."
+	}
+
+	var usedDisp, reserveDisp float64
+	if signals.LimitApplies {
+		usedDisp = round1(signals.AvgUsageCores)
+		reserveDisp = round1(signals.ReserveCores)
+	} else {
+		usedDisp = round1(signals.HostBusyCores60sMean)
+		reserveDisp = round1(cpuReserveCores)
+	}
+
 	totalDisp := round1(signals.CapacityCores)
-	reserveDisp := round1(cpuReserveCores)
 	headroomDisp := totalDisp - usedDisp - reserveDisp
+	// Clean up floating-point residue from subtracting rounded values (e.g.
+	// 2.0 - 1.8 - 0.2 yields -4.4e-16, not 0). This is not an independent
+	// rounding of signals.HeadroomCores; it makes the by-construction exact
+	// arithmetic actually exact in float64.
+	headroomDisp = round1(headroomDisp)
 
 	usedStr := fmtCores1(usedDisp)
 	totalStr := fmtCoresTotal(totalDisp)
@@ -84,10 +103,20 @@ func composeHealthy(signals Signals) string {
 	reserveStr := fmtCores1(reserveDisp)
 
 	var headline string
-	if math.Abs(headroomDisp) < 0.05 {
-		headline = fmt.Sprintf("CPU healthy. This instance is using %s of %s cores and is close to being marked degraded.", usedStr, totalStr)
+
+	if signals.LimitApplies {
+		pctOfLimit := pctOf(usedDisp / totalDisp)
+		if math.Abs(headroomDisp) < 0.05 {
+			headline = fmt.Sprintf("CPU healthy. This instance is using %s of %s cores (%d%% of its limit) and is close to being marked degraded.", usedStr, totalStr, pctOfLimit)
+		} else {
+			headline = fmt.Sprintf("CPU healthy. This instance is using %s of %s cores (%d%% of its limit) and can use %s more before it is marked degraded.", usedStr, totalStr, pctOfLimit, headroomStr)
+		}
 	} else {
-		headline = fmt.Sprintf("CPU healthy. This instance is using %s of %s cores and can use %s more before it is marked degraded.", usedStr, totalStr, headroomStr)
+		if math.Abs(headroomDisp) < 0.05 {
+			headline = fmt.Sprintf("CPU healthy. This instance is using %s of %s cores and is close to being marked degraded.", usedStr, totalStr)
+		} else {
+			headline = fmt.Sprintf("CPU healthy. This instance is using %s of %s cores and can use %s more before it is marked degraded.", usedStr, totalStr, headroomStr)
+		}
 	}
 
 	msg := headline
@@ -182,14 +211,42 @@ func causeDetails(c Cause, signals Signals) string {
 	case CauseKindSteal:
 		pct := pctOf(c.Value)
 
-		return fmt.Sprintf("Other virtual machines on the same physical server took CPU this instance needed — %d%% of the last minute. This is outside UMH's control. On your virtualization platform, give this VM more guaranteed CPU, or reduce the other VMs sharing the server.", pct)
+		return fmt.Sprintf("Other virtual machines on the same physical server took CPU this instance needed, up to %d%% at peak over the last minute. This is outside UMH's control. On your virtualization platform, give this VM more guaranteed CPU, or reduce the other VMs sharing the server.", pct)
 	case CauseKindSaturation:
-		pct := pctOf(signals.AvgUsageFraction)
-		if signals.LimitedVisibility {
-			return fmt.Sprintf("CPU averaged %d%% over the last minute, with little headroom left. This instance has no CPU limit set and its operating system is not reporting CPU-pressure stats, so we cannot confirm whether work is waiting for a free core. Set a CPU limit, which also lets us measure that wait directly, or enable Linux pressure stats (boot with psi=1). Consider adding CPU capacity.", pct)
-		}
+		switch {
+		case signals.HostFullFired:
+			limitStr := fmtCoresTotal(round1(signals.CapacityCores))
+			if signals.LimitSaturationFired {
+				return fmt.Sprintf("The machine is full and this instance's CPU limit cannot help. Add CPU to the machine, or reduce other software running on it. (This instance is also at its %s-core limit.)", limitStr)
+			}
 
-		return fmt.Sprintf("CPU averaged %d%% over the last minute and this instance has little headroom left. Add CPU capacity, or raise its CPU limit if one is set and this load is expected.", pct)
+			return "The machine is full. Add CPU to the machine, or reduce other software running on it."
+		case signals.DRowFired:
+			pct := pctOf(c.Value)
+
+			return fmt.Sprintf("CPU averaged %d%% of the machine over the last minute and this instance has little headroom left. Host contention is not visible here (no CPU limit set, no pressure stats). Set a CPU limit or enable Linux pressure stats (boot with psi=1) for more detail. Consider adding CPU capacity.", pct)
+		case signals.LimitSaturationFired:
+			pct := pctOf(signals.AvgUsageCores / signals.CapacityCores)
+			detail := fmt.Sprintf("CPU averaged %d%% of its limit over the last minute and this instance has little headroom left. Raise its CPU limit, or reduce the load to grow.", pct)
+			// C-scenario honesty note: when host stats are unavailable in
+			// limit mode (the sampler could not read /proc/stat), host-side
+			// contention is invisible. Gate on the real readability flag, not
+			// a HostBusyCores60sMean==0 proxy (which is unreliable on a
+			// readable idle host).
+			if !signals.HostBusyCoresAvailable {
+				detail += " Host stats are unavailable, so host-side contention is not visible."
+			}
+
+			return detail
+		default:
+			// No-limit host-headroom (host stats readable, not D-row). The
+			// percentage is host-busy vs host cores (LogicalCpus, surfaced as
+			// CapacityCores in no-limit mode), NOT AvgUsageFraction (which is 0
+			// in no-limit).
+			pct := pctOf(signals.HostBusyCores60sMean / signals.CapacityCores)
+
+			return fmt.Sprintf("CPU averaged %d%% of the machine over the last minute and this instance has little headroom left. Add CPU capacity, or reduce the load on it.", pct)
+		}
 	default:
 		return "CPU is degraded."
 	}
