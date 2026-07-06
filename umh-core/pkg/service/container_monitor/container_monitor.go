@@ -379,13 +379,35 @@ func (c *ContainerMonitorService) getCPUMetrics(ctx context.Context) (*models.CP
 	// display path covers that case.
 	if cgroupErr == nil {
 		th := cpuhealth.DefaultThresholds()
+		// The headroom's Used and Ceiling follow the mode: limit set →
+		// ceiling="limit", used=the container's own 60s-avg usage; no limit →
+		// ceiling="host", used=the host-busy 60s mean. HostBusy.Mean is the host
+		// observation in BOTH modes (context for the display split and the
+		// host-full stacking check); Available mirrors the sampler's
+		// /proc/stat readability flag.
+		ceiling := "host"
+
+		used := signals.HostBusyCores60sMean
+		if signals.LimitApplies {
+			ceiling = "limit"
+			used = signals.AvgUsageCores
+		}
+
 		cpuStat.VerdictBasis = &models.VerdictBasis{
 			Headroom: models.VerdictBasisHeadroom{
-				Cores:        signals.HeadroomCores,
-				HostBusyMean: signals.HostBusyCores60sMean,
-				Capacity:     signals.CapacityCores,
-				Reserve:      signals.ReserveCores,
-				Fired:        signals.SaturationFired,
+				Ceiling:              ceiling,
+				Capacity:             signals.CapacityCores,
+				Used:                 used,
+				Reserve:              signals.ReserveCores,
+				Cores:                signals.HeadroomCores,
+				Fired:                signals.SaturationFired,
+				LimitSaturationFired: signals.LimitSaturationFired,
+				HostFullFired:        signals.HostFullFired,
+				DRowFired:            signals.DRowFired,
+			},
+			HostBusy: models.VerdictBasisHostBusy{
+				Mean:      signals.HostBusyCores60sMean,
+				Available: sample.HostBusyCoresAvailable,
 			},
 			Throttle: models.VerdictBasisCause{
 				Value:     signals.ThrottleRatio,
@@ -405,6 +427,7 @@ func (c *ContainerMonitorService) getCPUMetrics(ctx context.Context) (*models.CP
 				Fired:     signals.StealFired,
 				Applies:   signals.StealApplies,
 			},
+			LimitedVisibility: signals.LimitedVisibility,
 		}
 	}
 

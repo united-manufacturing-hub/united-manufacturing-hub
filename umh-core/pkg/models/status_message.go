@@ -162,22 +162,43 @@ type CPU struct {
 // read failure, where Decide is not called); the legacy display path covers
 // that case.
 type VerdictBasis struct {
-	Headroom VerdictBasisHeadroom `json:"headroom"`
-	Throttle VerdictBasisCause    `json:"throttle"`
-	Pressure VerdictBasisCause    `json:"pressure"`
-	Steal    VerdictBasisCause    `json:"steal"`
+	Headroom          VerdictBasisHeadroom `json:"headroom"`
+	HostBusy          VerdictBasisHostBusy `json:"hostBusy"`
+	Throttle          VerdictBasisCause    `json:"throttle"`
+	Pressure          VerdictBasisCause    `json:"pressure"`
+	Steal             VerdictBasisCause    `json:"steal"`
+	LimitedVisibility bool                 `json:"limitedVisibility"`
 }
 
-// VerdictBasisHeadroom is the primary saturation signal: how many cores of
-// free capacity the box has, the inputs that produced it, and whether the
-// Schmitt latch has fired. Cores is negative when the box is over-subscribed
-// (hostBusyMean exceeds capacity minus the reserve); it is not clamped to 0.
+// VerdictBasisHeadroom is the primary saturation signal, mode-generic: which
+// ceiling the headroom was measured against, the capacity/used/reserve inputs,
+// the resulting free-cores decision variable, and the Schmitt latch state plus
+// its three sub-latches. Cores is negative when the box is over-subscribed
+// (used exceeds capacity minus the reserve); it is not clamped to 0. The
+// sub-latch flags let the Management Console rank the firings (container-at-
+// quota vs full-host vs no-host-stats blind). Fired is the OR of the
+// sub-latches.
 type VerdictBasisHeadroom struct {
-	Cores        float64 `json:"cores"`        // HeadroomCores = capacity - hostBusyMean - reserve; may be negative
-	HostBusyMean float64 `json:"hostBusyMean"` // 60s mean of host-level busy cores (the verdict's saturation input)
-	Capacity     float64 `json:"capacity"`     // cgroup quota if set and positive, else host logical CPU count
-	Reserve      float64 `json:"reserve"`      // the CPU reserve set aside (1.0 core; TODO calibrate with fleet data)
-	Fired        bool    `json:"fired"`        // SaturationFired: headroom < 0 latched, clears above the recover threshold
+	Ceiling              string  `json:"ceiling"`              // "host" | "limit" — which rule applied
+	Capacity             float64 `json:"capacity"`             // the ceiling in cores (host logical count or cgroup quota)
+	Used                 float64 `json:"used"`                 // the mode's 60s-mean use (host-busy OR container usage)
+	Reserve              float64 `json:"reserve"`              // in cores (host: 1.0; limit: LimitReserveFraction × quota)
+	Cores                float64 `json:"cores"`                // Capacity − Used − Reserve (the decision variable; may be negative)
+	Fired                bool    `json:"fired"`                // SaturationFired (the OR of the three sub-latches)
+	LimitSaturationFired bool    `json:"limitSaturationFired"` // container-scope sub-latch (limit mode: usage inside the fractional reserve)
+	HostFullFired        bool    `json:"hostFullFired"`        // host-scope sub-latch (limit mode: the host itself is full)
+	DRowFired            bool    `json:"dRowFired"`            // no-host-stats no-limit sub-latch (scenario D: usage/hostLogical ≥ 0.70)
+}
+
+// VerdictBasisHostBusy is the host-level busy-cores observation, carried in
+// both modes (it feeds the host/container display split, the host-full
+// stacking check, and the "host stats unavailable" note). Available is false
+// when /proc/stat is unreadable; in limit mode Mean is still the host
+// observation (context), not the headroom Used (which is the container's own
+// usage).
+type VerdictBasisHostBusy struct {
+	Mean      float64 `json:"mean"`      // 60s mean of host-level busy cores (the host observation)
+	Available bool    `json:"available"` // /proc/stat readable (HostBusyCoresAvailable)
 }
 
 // VerdictBasisCause is one secondary starvation signal: the measured value,

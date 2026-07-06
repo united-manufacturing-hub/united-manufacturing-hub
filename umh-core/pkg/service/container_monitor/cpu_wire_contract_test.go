@@ -171,10 +171,10 @@ var _ = Describe("three-field CPU-health wire contract on models.CPU", func() {
 // /proc/stat counter-reset guard (sampler.go: totalDelta <= 0 on host reboot
 // or /proc/stat wrap). On a reset tick the busy delta would be negative, so the
 // reset guard zeroes it; the 60s mean of host-busy cores (now carried on
-// verdictBasis.headroom.hostBusyMean) is therefore 0, NOT negative. This pins
+// verdictBasis.hostBusy.mean) is therefore 0, NOT negative. This pins
 // the reset guard via the basis: a malformed/wrapped /proc/stat reading must
 // not reach the verdict's saturation input as a poison negative value.
-var _ = It("emits a non-negative verdictBasis.headroom.hostBusyMean on a /proc/stat counter-reset tick", func() {
+var _ = It("emits a non-negative verdictBasis.hostBusy.mean on a /proc/stat counter-reset tick", func() {
 	mockFS := filesystem.NewMockFileSystem()
 	ctx := context.Background()
 
@@ -217,7 +217,7 @@ var _ = It("emits a non-negative verdictBasis.headroom.hostBusyMean on a /proc/s
 
 	// Tick 2 — total jiffies DECREASED (reset). The reset guard zeroes the
 	// negative busy delta, so the per-tick host-busy is 0 and the 60s mean
-	// (the verdict's saturation input, on verdictBasis.headroom.hostBusyMean)
+	// (the host observation, on verdictBasis.hostBusy.mean)
 	// is 0, not negative.
 	usageUsec = 2_000_000
 	procStat = procStatTick1
@@ -226,10 +226,10 @@ var _ = It("emits a non-negative verdictBasis.headroom.hostBusyMean on a /proc/s
 
 	Expect(status.CPU.VerdictBasis).ToNot(BeNil(),
 		"verdictBasis is present (Decide ran: cpu.max capped and cgroup readable) on a counter-reset tick")
-	Expect(status.CPU.VerdictBasis.Headroom.HostBusyMean).To(BeNumerically("~", 0.0, 1e-9),
-		"hostBusyMean is 0 on a reset tick (guard zeroes the negative busy delta → 60s mean is 0)")
-	Expect(status.CPU.VerdictBasis.Headroom.HostBusyMean).To(BeNumerically(">=", 0.0),
-		"hostBusyMean must be non-negative on a reset tick — the reset guard prevents a poison negative value reaching the verdict's saturation input")
+	Expect(status.CPU.VerdictBasis.HostBusy.Mean).To(BeNumerically("~", 0.0, 1e-9),
+		"hostBusy.mean is 0 on a reset tick (guard zeroes the negative busy delta → 60s mean is 0)")
+	Expect(status.CPU.VerdictBasis.HostBusy.Mean).To(BeNumerically(">=", 0.0),
+		"hostBusy.mean must be non-negative on a reset tick — the reset guard prevents a poison negative value reaching the verdict's saturation input")
 })
 
 // VerdictBasis wire contract. verdictBasis is the machine-readable why behind
@@ -285,17 +285,32 @@ var _ = Describe("verdictBasis wire contract on models.CPU", func() {
 			"verdictBasis is emitted on a healthy verdict (always when Decide ran)")
 
 		b := status.CPU.VerdictBasis
-		// Headroom (limit mode): capacity=quota 2.0, reserve=0.2
-		// (LimitReserveFraction 0.10 × quota 2.0), used=0 (single tick → usage
-		// ring < 2 → usageCores60sMean 0; /proc/stat absent → hostBusyMean 0),
-		// so Cores=2.0 − 0 − 0.2=1.8. Fired=false (single tick, ring < 2 → the
-		// limit-mode latch is not evaluated).
+		// Headroom (limit mode): ceiling="limit", capacity=quota 2.0,
+		// reserve=0.2 (LimitReserveFraction 0.10 × quota 2.0), used=0 (single
+		// tick → usage ring < 2 → usageCores60sMean 0), so Cores=2.0 − 0 −
+		// 0.2=1.8. Fired=false (single tick, ring < 2 → the limit-mode latch
+		// is not evaluated). The sub-latch flags are all false.
+		Expect(b.Headroom.Ceiling).To(Equal("limit"),
+			"ceiling names the rule that applied (limit set → \"limit\")")
 		Expect(b.Headroom.Capacity).To(BeNumerically("~", 2.0, 1e-9))
 		Expect(b.Headroom.Reserve).To(BeNumerically("~", 0.2, 1e-9))
-		Expect(b.Headroom.HostBusyMean).To(BeNumerically("~", 0.0, 1e-9))
+		Expect(b.Headroom.Used).To(BeNumerically("~", 0.0, 1e-9),
+			"used is the container's 60s-avg usage in limit mode (0: usage ring < 2)")
 		Expect(b.Headroom.Cores).To(BeNumerically("~", 1.8, 1e-9))
 		Expect(b.Headroom.Fired).To(BeFalse(),
 			"headroom fired is false on a healthy capped box (single tick, ring < 2 → latch not evaluated)")
+		Expect(b.Headroom.LimitSaturationFired).To(BeFalse())
+		Expect(b.Headroom.HostFullFired).To(BeFalse())
+		Expect(b.Headroom.DRowFired).To(BeFalse())
+
+		// HostBusy observation: /proc/stat absent → Available=false, Mean=0.
+		Expect(b.HostBusy.Mean).To(BeNumerically("~", 0.0, 1e-9))
+		Expect(b.HostBusy.Available).To(BeFalse(),
+			"hostBusy.available is false when /proc/stat is absent")
+
+		// limitedVisibility: a limit is set → not the dead-zone → false.
+		Expect(b.LimitedVisibility).To(BeFalse(),
+			"limitedVisibility is false in limit mode (a limit is set → not the dead-zone)")
 
 		// Throttle: fetchable (limit set → Applies=true), value 0 (no throttled
 		// periods), threshold 0.05, latch false.
@@ -317,13 +332,17 @@ var _ = Describe("verdictBasis wire contract on models.CPU", func() {
 		Expect(b.Steal.Applies).To(BeFalse(),
 			"steal does not apply: the box is not virtualized")
 
-		// Wire: verdictBasis is JSON-present on the healthy path.
+		// Wire: verdictBasis is JSON-present on the healthy path, carrying the
+		// new mode-generic shape (ceiling/used/hostBusy/limitedVisibility).
 		wireJSON, err := json.Marshal(status.CPU)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(wireJSON).To(ContainSubstring(`"verdictBasis"`),
 			"verdictBasis must be JSON-present on a healthy verdict")
 		Expect(wireJSON).To(ContainSubstring(`"headroom"`))
-		Expect(wireJSON).To(ContainSubstring(`"hostBusyMean"`))
+		Expect(wireJSON).To(ContainSubstring(`"ceiling":"limit"`))
+		Expect(wireJSON).To(ContainSubstring(`"used":`))
+		Expect(wireJSON).To(ContainSubstring(`"hostBusy":{`))
+		Expect(wireJSON).To(ContainSubstring(`"limitedVisibility":false`))
 	})
 
 	It("emits the verdictBasis on a DEGRADED verdict with the fired cause's flag set", func() {
@@ -346,12 +365,24 @@ var _ = Describe("verdictBasis wire contract on models.CPU", func() {
 			"the basis carries the windowed throttle ratio (the verdict's input)")
 		Expect(b.Throttle.Threshold).To(BeNumerically("~", 0.05, 1e-9))
 		Expect(b.Throttle.Applies).To(BeTrue())
-		// Headroom stays populated (numbers always computed); saturation did not
+		// Headroom (limit mode, new shape): ceiling="limit"; saturation did not
 		// co-fire (usage_usec pinned in throttleFireStatus → UsageCores 0 →
-		// limit-mode headroom 1.8 > 0, so the throttle degrade is the sole cause).
+		// limit-mode headroom 1.8 > 0, so the throttle degrade is the sole
+		// cause). All three sub-latch flags are false.
+		Expect(b.Headroom.Ceiling).To(Equal("limit"))
 		Expect(b.Headroom.Capacity).To(BeNumerically("~", 2.0, 1e-9))
 		Expect(b.Headroom.Reserve).To(BeNumerically("~", 0.2, 1e-9))
+		Expect(b.Headroom.Used).To(BeNumerically("~", 0.0, 1e-9))
+		Expect(b.Headroom.Cores).To(BeNumerically("~", 1.8, 1e-9))
 		Expect(b.Headroom.Fired).To(BeFalse())
+		Expect(b.Headroom.LimitSaturationFired).To(BeFalse())
+		Expect(b.Headroom.HostFullFired).To(BeFalse())
+		Expect(b.Headroom.DRowFired).To(BeFalse())
+		// HostBusy: /proc/stat absent in throttleFireStatus → Available=false.
+		Expect(b.HostBusy.Available).To(BeFalse())
+		Expect(b.HostBusy.Mean).To(BeNumerically("~", 0.0, 1e-9))
+		// limitedVisibility false (limit set → not the dead-zone).
+		Expect(b.LimitedVisibility).To(BeFalse())
 		// Pressure/steal remain non-firing and non-applicable.
 		Expect(b.Pressure.Fired).To(BeFalse())
 		Expect(b.Pressure.Applies).To(BeFalse())
@@ -362,6 +393,9 @@ var _ = Describe("verdictBasis wire contract on models.CPU", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(wireJSON).To(ContainSubstring(`"verdictBasis"`),
 			"verdictBasis must be JSON-present on a degraded verdict")
+		Expect(wireJSON).To(ContainSubstring(`"ceiling":"limit"`))
+		Expect(wireJSON).To(ContainSubstring(`"hostBusy":{`))
+		Expect(wireJSON).To(ContainSubstring(`"limitedVisibility":false`))
 	})
 
 	It("omits verdictBasis (nil) when no verdict exists (cgroup read failure)", func() {
@@ -449,3 +483,379 @@ func throttleFireStatus(ctx context.Context) (*container_monitor.ServiceInfo, er
 
 	return svc.GetStatus(ctx)
 }
+
+// R10.4 reshapes the wire VerdictBasis to be mode-generic: the Headroom block
+// becomes {ceiling, capacity, used, reserve, cores, fired, limitSaturationFired,
+// hostFullFired, dRowFired} (hostBusyMean leaves the block — its old name
+// hard-coded host-mode semantics); a new HostBusy {mean, available} observation
+// block joins the basis; a top-level limitedVisibility flag joins the basis.
+// These tests pin the new shape in both modes, the hostBusy.available=false
+// omission on unreadable /proc/stat, and the three sub-latch flags.
+var _ = Describe("verdictBasis R10.4 mode-generic shape", func() {
+	It("emits the headroom shape in LIMIT mode (ceiling=limit, used=container usage)", func() {
+		mockFS := filesystem.NewMockFileSystem()
+		ctx := context.Background()
+
+		testDataPath, err := os.MkdirTemp("", "cpu-wire-r104-limit")
+		Expect(err).NotTo(HaveOccurred())
+		defer func() { _ = os.RemoveAll(testDataPath) }()
+
+		// cpu.max "200000 100000" => quota 2.0 cores (limit mode).
+		const cpuMax = "200000 100000\n"
+		var nrPeriods, nrThrottled int64 = 1000, 0
+		var usageUsec int64 = 1_000_000
+
+		mockFS.WithReadFileFunc(func(_ context.Context, path string) ([]byte, error) {
+			switch path {
+			case "/sys/fs/cgroup/cpu.max":
+				return []byte(cpuMax), nil
+			case "/sys/fs/cgroup/cpu.stat":
+				return []byte(fmt.Sprintf(
+					"usage_usec %d\nnr_periods %d\nnr_throttled %d\nthrottled_usec 0\n",
+					usageUsec, nrPeriods, nrThrottled,
+				)), nil
+			default:
+				return nil, errors.New("file not found: " + path)
+			}
+		})
+
+		svc := container_monitor.NewContainerMonitorServiceWithPath(mockFS, testDataPath)
+
+		// Tick 1 — baseline the usage ring (first read → UsageCores 0, ring=[0]).
+		nrPeriods, nrThrottled, usageUsec = 1000, 0, 1_000_000
+		_, err = svc.GetStatus(ctx)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Tick 2 — usage_usec pinned (no delta → UsageCores 0; ring=[0,0] → mean 0).
+		// Limit-mode headroom = 2.0 − 0 − 0.2 = 1.8 > 0 → saturation does not fire.
+		nrPeriods, nrThrottled, usageUsec = 2000, 0, 1_000_000
+		status, err := svc.GetStatus(ctx)
+		Expect(err).NotTo(HaveOccurred())
+
+		b := status.CPU.VerdictBasis
+		Expect(b).NotTo(BeNil(),
+			"verdictBasis is emitted (Decide ran: cgroup readable)")
+		// Headroom (limit mode): ceiling="limit", capacity=quota 2.0,
+		// reserve=0.2 (LimitReserveFraction 0.10 × 2.0), used=0 (usage pinned),
+		// cores=1.8. All sub-latches false (headroom 1.8 > 0; /proc/stat absent
+		// → host-full not evaluated; limit set → D-row not evaluated).
+		Expect(b.Headroom.Ceiling).To(Equal("limit"))
+		Expect(b.Headroom.Capacity).To(BeNumerically("~", 2.0, 1e-9))
+		Expect(b.Headroom.Reserve).To(BeNumerically("~", 0.2, 1e-9))
+		Expect(b.Headroom.Used).To(BeNumerically("~", 0.0, 1e-9))
+		Expect(b.Headroom.Cores).To(BeNumerically("~", 1.8, 1e-9))
+		Expect(b.Headroom.Fired).To(BeFalse(),
+			"headroom fired is false (headroom 1.8 > 0 → saturation does not fire)")
+		Expect(b.Headroom.LimitSaturationFired).To(BeFalse())
+		Expect(b.Headroom.HostFullFired).To(BeFalse())
+		Expect(b.Headroom.DRowFired).To(BeFalse())
+		// HostBusy: /proc/stat absent → Available=false, Mean=0.
+		Expect(b.HostBusy.Mean).To(BeNumerically("~", 0.0, 1e-9))
+		Expect(b.HostBusy.Available).To(BeFalse())
+		// limitedVisibility false (limit set → not the dead-zone).
+		Expect(b.LimitedVisibility).To(BeFalse())
+
+		// New wire shape: ceiling/used/hostBusy/limitedVisibility/sub-latch flags.
+		wireJSON, err := json.Marshal(status.CPU)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(wireJSON).To(ContainSubstring(`"ceiling":"limit"`),
+			"headroom.ceiling names the rule that applied (limit set → \"limit\")")
+		Expect(wireJSON).To(ContainSubstring(`"used":`),
+			"headroom.used carries the mode's 60s-mean use (limit mode: container usage)")
+		Expect(wireJSON).To(ContainSubstring(`"hostBusy":{`),
+			"the hostBusy observation block is emitted on the basis (both modes)")
+		Expect(wireJSON).To(ContainSubstring(`"limitedVisibility":false`),
+			"limitedVisibility is false in limit mode (a limit is set → not the dead-zone)")
+		Expect(wireJSON).To(ContainSubstring(`"limitSaturationFired":false`),
+			"the limit-saturation sub-latch flag is on the wire (false: headroom 1.8 > 0)")
+		Expect(wireJSON).To(ContainSubstring(`"hostFullFired":false`),
+			"the host-full sub-latch flag is on the wire (false: /proc/stat absent → host not full)")
+		Expect(wireJSON).To(ContainSubstring(`"dRowFired":false`),
+			"the D-row sub-latch flag is on the wire (false: limit set → D-row not evaluated)")
+	})
+
+	It("emits the headroom shape in NO-LIMIT mode (ceiling=host, used=hostBusyMean, hostBusy.available=true)", func() {
+		mockFS := filesystem.NewMockFileSystem()
+		ctx := context.Background()
+
+		testDataPath, err := os.MkdirTemp("", "cpu-wire-r104-nolimit")
+		Expect(err).NotTo(HaveOccurred())
+		defer func() { _ = os.RemoveAll(testDataPath) }()
+
+		// cpu.max "max 100000" => no limit (host mode): parseCPUMax returns
+		// QuotaCores=0 and readCPUMax returns &0 (the uncapped contract), so
+		// LimitApplies=false. /proc/stat present and parseable
+		// so HostBusyCoresAvailable=true. Both ticks carry the SAME busy total so
+		// the busy delta is 0 → HostBusyCores 0 (deterministic; the host is not
+		// full — this test pins the shape, not a fire).
+		const cpuMax = "max 100000\n"
+		var usageUsec int64 = 1_000_000
+		procStat := "cpu 0 0 0 1000 0 0 0 0 0 0\n"
+
+		mockFS.WithReadFileFunc(func(_ context.Context, path string) ([]byte, error) {
+			switch path {
+			case "/sys/fs/cgroup/cpu.max":
+				return []byte(cpuMax), nil
+			case "/sys/fs/cgroup/cpu.stat":
+				return []byte(fmt.Sprintf(
+					"usage_usec %d\nnr_periods 1000\nnr_throttled 0\nthrottled_usec 0\n",
+					usageUsec,
+				)), nil
+			case "/proc/stat":
+				return []byte(procStat), nil
+			default:
+				return nil, errors.New("file not found: " + path)
+			}
+		})
+
+		svc := container_monitor.NewContainerMonitorServiceWithPath(mockFS, testDataPath)
+
+		// Tick 1 — baseline /proc/stat.
+		usageUsec = 1_000_000
+		_, err = svc.GetStatus(ctx)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Tick 2 — /proc/stat unchanged (busyDelta 0 → HostBusyCores 0; host not full).
+		usageUsec = 1_000_000
+		status, err := svc.GetStatus(ctx)
+		Expect(err).NotTo(HaveOccurred())
+
+		b := status.CPU.VerdictBasis
+		Expect(b).NotTo(BeNil(),
+			"verdictBasis is emitted (Decide ran: cgroup readable)")
+		// Headroom (no-limit mode): ceiling="host", used=hostBusyMean (the
+		// host-busy 60s mean — 0 here since busyDelta 0). HostBusy.Available=true
+		// (/proc/stat readable). limitedVisibility=true (no limit + no PSI).
+		Expect(b.Headroom.Ceiling).To(Equal("host"))
+		Expect(b.Headroom.Used).To(BeNumerically("~", b.HostBusy.Mean, 1e-9),
+			"no-limit mode: used equals hostBusyMean (the host observation)")
+		Expect(b.HostBusy.Available).To(BeTrue(),
+			"hostBusy.available is true when /proc/stat is readable")
+		Expect(b.LimitedVisibility).To(BeTrue(),
+			"limitedVisibility is true in the no-limit no-PSI dead-zone")
+
+		wireJSON, err := json.Marshal(status.CPU)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(wireJSON).To(ContainSubstring(`"ceiling":"host"`),
+			"headroom.ceiling is \"host\" when no CPU limit is set")
+		Expect(wireJSON).To(ContainSubstring(`"hostBusy":{`),
+			"the hostBusy observation block is emitted (both modes)")
+		Expect(wireJSON).To(ContainSubstring(`"available":true`),
+			"hostBusy.available is true when /proc/stat is readable")
+		Expect(wireJSON).To(ContainSubstring(`"limitedVisibility":true`),
+			"limitedVisibility is true in the no-limit no-PSI dead-zone")
+	})
+
+	It("emits hostBusy.available=false when /proc/stat is unreadable", func() {
+		mockFS := filesystem.NewMockFileSystem()
+		ctx := context.Background()
+
+		testDataPath, err := os.MkdirTemp("", "cpu-wire-r104-nostat")
+		Expect(err).NotTo(HaveOccurred())
+		defer func() { _ = os.RemoveAll(testDataPath) }()
+
+		// cpu.max "max 100000" => no limit (host mode). /proc/stat absent →
+		// usage_usec pinned so the D-row fraction is 0 (no fire) — this test pins
+		// the hostBusy.available=false shape, not a D-row fire.
+		const cpuMax = "max 100000\n"
+		var usageUsec int64 = 1_000_000
+
+		mockFS.WithReadFileFunc(func(_ context.Context, path string) ([]byte, error) {
+			switch path {
+			case "/sys/fs/cgroup/cpu.max":
+				return []byte(cpuMax), nil
+			case "/sys/fs/cgroup/cpu.stat":
+				return []byte(fmt.Sprintf(
+					"usage_usec %d\nnr_periods 1000\nnr_throttled 0\nthrottled_usec 0\n",
+					usageUsec,
+				)), nil
+			default:
+				return nil, errors.New("file not found: " + path)
+			}
+		})
+
+		svc := container_monitor.NewContainerMonitorServiceWithPath(mockFS, testDataPath)
+
+		// Two ticks so the usage ring holds >= 2 entries (the D-row latch
+		// evaluates only with 2+ samples; usage_usec pinned → no fire here).
+		usageUsec = 1_000_000
+		_, err = svc.GetStatus(ctx)
+		Expect(err).NotTo(HaveOccurred())
+
+		usageUsec = 1_000_000
+		status, err := svc.GetStatus(ctx)
+		Expect(err).NotTo(HaveOccurred())
+
+		b := status.CPU.VerdictBasis
+		Expect(b).NotTo(BeNil(),
+			"verdictBasis is emitted (Decide ran: cgroup readable)")
+		// No limit → ceiling="host"; /proc/stat absent → HostBusy.Available=false,
+		// Mean=0; no limit + no PSI → dead-zone → limitedVisibility=true.
+		Expect(b.Headroom.Ceiling).To(Equal("host"))
+		Expect(b.HostBusy.Available).To(BeFalse(),
+			"hostBusy.available is false when /proc/stat is unreadable")
+		Expect(b.HostBusy.Mean).To(BeNumerically("~", 0.0, 1e-9))
+		Expect(b.LimitedVisibility).To(BeTrue())
+
+		wireJSON, err := json.Marshal(status.CPU)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(wireJSON).To(ContainSubstring(`"ceiling":"host"`),
+			"no limit → ceiling is \"host\"")
+		Expect(wireJSON).To(ContainSubstring(`"hostBusy":{"mean":0,"available":false}`),
+			"hostBusy is {mean:0, available:false} when /proc/stat is unreadable")
+		Expect(wireJSON).To(ContainSubstring(`"limitedVisibility":true`),
+			"no limit + no PSI → dead-zone → limitedVisibility true")
+	})
+
+	It("carries the host-full sub-latch flag when the host is full in limit mode", func() {
+		mockFS := filesystem.NewMockFileSystem()
+		ctx := context.Background()
+
+		testDataPath, err := os.MkdirTemp("", "cpu-wire-r104-hostfull")
+		Expect(err).NotTo(HaveOccurred())
+		defer func() { _ = os.RemoveAll(testDataPath) }()
+
+		// cpu.max "200000 100000" => quota 2.0 (limit mode). usage_usec pinned →
+		// container idle → limit-saturation does NOT fire (headroom 2−0−0.2=1.8).
+		// /proc/stat: tick 0 low busy (baseline), tick 1 huge busy delta →
+		// HostBusyCores enormous → hostBusyMean enormous → host-full fires
+		// (LogicalCpus − enormous − 1.0 < 0) regardless of the host's core count.
+		const cpuMax = "200000 100000\n"
+		var usageUsec int64 = 1_000_000
+		procStatTick0 := "cpu 0 0 0 1000 0 0 0 0 0 0\n"
+		procStatTick1 := "cpu 100000 0 0 1100 0 0 0 0 0 0\n"
+		procStat := procStatTick0
+
+		mockFS.WithReadFileFunc(func(_ context.Context, path string) ([]byte, error) {
+			switch path {
+			case "/sys/fs/cgroup/cpu.max":
+				return []byte(cpuMax), nil
+			case "/sys/fs/cgroup/cpu.stat":
+				return []byte(fmt.Sprintf(
+					"usage_usec %d\nnr_periods 1000\nnr_throttled 0\nthrottled_usec 0\n",
+					usageUsec,
+				)), nil
+			case "/proc/stat":
+				return []byte(procStat), nil
+			default:
+				return nil, errors.New("file not found: " + path)
+			}
+		})
+
+		svc := container_monitor.NewContainerMonitorServiceWithPath(mockFS, testDataPath)
+
+		// Tick 1 — baseline /proc/stat (busy 0).
+		usageUsec = 1_000_000
+		procStat = procStatTick0
+		_, err = svc.GetStatus(ctx)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Tick 2 — host busy delta huge → host-full fires. usage_usec pinned →
+		// limit-sat does NOT fire. So HostFullFired=true and
+		// LimitSaturationFired=false — the ranking the basis must carry.
+		usageUsec = 1_000_000
+		procStat = procStatTick1
+		status, err := svc.GetStatus(ctx)
+		Expect(err).NotTo(HaveOccurred())
+
+		b := status.CPU.VerdictBasis
+		Expect(b).NotTo(BeNil(),
+			"verdictBasis is emitted (Decide ran: cgroup readable)")
+		// Host-full fired (host busy enormous), limit-sat did NOT fire
+		// (container idle), D-row not evaluated (limit set). Fired=true (the OR
+		// of the sub-latches; host-full fired). /proc/stat readable → Available=true.
+		Expect(b.Headroom.Ceiling).To(Equal("limit"),
+			"limit set → ceiling is \"limit\"")
+		Expect(b.Headroom.HostFullFired).To(BeTrue(),
+			"the host-full sub-latch fired (host busy enormous → host-full in limit mode)")
+		Expect(b.Headroom.LimitSaturationFired).To(BeFalse(),
+			"container idle (usage pinned) → limit-saturation does NOT fire")
+		Expect(b.Headroom.DRowFired).To(BeFalse(),
+			"limit set → D-row not evaluated")
+		Expect(b.Headroom.Fired).To(BeTrue(),
+			"Fired is the OR of the sub-latches (host-full fired → true)")
+		Expect(b.HostBusy.Available).To(BeTrue(),
+			"hostBusy.available is true (/proc/stat readable)")
+
+		wireJSON, err := json.Marshal(status.CPU)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(wireJSON).To(ContainSubstring(`"hostFullFired":true`),
+			"the host-full sub-latch fired (host busy enormous → host-full in limit mode)")
+		Expect(wireJSON).To(ContainSubstring(`"limitSaturationFired":false`),
+			"container idle (usage pinned) → limit-saturation does NOT fire")
+		Expect(wireJSON).To(ContainSubstring(`"dRowFired":false`),
+			"limit set → D-row not evaluated")
+		Expect(wireJSON).To(ContainSubstring(`"available":true`),
+			"hostBusy.available is true (/proc/stat readable)")
+	})
+
+	It("carries the D-row sub-latch flag on a no-limit no-host-stats box with sustained high usage", func() {
+		mockFS := filesystem.NewMockFileSystem()
+		ctx := context.Background()
+
+		testDataPath, err := os.MkdirTemp("", "cpu-wire-r104-drow")
+		Expect(err).NotTo(HaveOccurred())
+		defer func() { _ = os.RemoveAll(testDataPath) }()
+
+		// No limit (cpu.max "max 100000"), /proc/stat absent (HostBusyCoresAvailable=false
+		// → D-row branch reachable). usage_usec pinned on tick 1 (baseline), then a
+		// huge delta on tick 2 → usageCores60sMean enormous → usage/LogicalCpus
+		// >= 0.70 for any real host → D-row fires.
+		const cpuMax = "max 100000\n"
+		var usageUsec int64 = 1_000_000
+
+		mockFS.WithReadFileFunc(func(_ context.Context, path string) ([]byte, error) {
+			switch path {
+			case "/sys/fs/cgroup/cpu.max":
+				return []byte(cpuMax), nil
+			case "/sys/fs/cgroup/cpu.stat":
+				return []byte(fmt.Sprintf(
+					"usage_usec %d\nnr_periods 1000\nnr_throttled 0\nthrottled_usec 0\n",
+					usageUsec,
+				)), nil
+			default:
+				return nil, errors.New("file not found: " + path)
+			}
+		})
+
+		svc := container_monitor.NewContainerMonitorServiceWithPath(mockFS, testDataPath)
+
+		// Tick 1 — baseline usage_usec (UsageCores 0, ring=[0]).
+		usageUsec = 1_000_000
+		_, err = svc.GetStatus(ctx)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Tick 2 — usage_usec delta huge (1e9 µs = 1000s of CPU time) → UsageCores
+		// enormous → usageCores60sMean/LogicalCpus >= 0.70 → D-row fires. No
+		// /proc/stat → host-full not evaluated; no limit → limit-sat not evaluated.
+		usageUsec = 1_000_000_001
+		status, err := svc.GetStatus(ctx)
+		Expect(err).NotTo(HaveOccurred())
+
+		b := status.CPU.VerdictBasis
+		Expect(b).NotTo(BeNil(),
+			"verdictBasis is emitted (Decide ran: cgroup readable)")
+		// D-row fired (sustained high usage, no host stats, no limit). Fired=true
+		// (the OR; D-row fired). No /proc/stat → Available=false. No limit + no
+		// PSI → dead-zone → limitedVisibility=true.
+		Expect(b.Headroom.Ceiling).To(Equal("host"),
+			"no limit → ceiling is \"host\"")
+		Expect(b.Headroom.DRowFired).To(BeTrue(),
+			"the D-row sub-latch fired (no limit, no host stats, sustained high usage)")
+		Expect(b.Headroom.Fired).To(BeTrue(),
+			"Fired is the OR of the sub-latches (D-row fired → true)")
+		Expect(b.HostBusy.Available).To(BeFalse(),
+			"hostBusy.available is false (no /proc/stat)")
+		Expect(b.LimitedVisibility).To(BeTrue(),
+			"no limit + no PSI → dead-zone → limitedVisibility true")
+
+		wireJSON, err := json.Marshal(status.CPU)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(wireJSON).To(ContainSubstring(`"dRowFired":true`),
+			"the D-row sub-latch fired (no limit, no host stats, sustained high usage)")
+		Expect(wireJSON).To(ContainSubstring(`"available":false`),
+			"hostBusy.available is false (no /proc/stat)")
+		Expect(wireJSON).To(ContainSubstring(`"limitedVisibility":true`),
+			"no limit + no PSI → dead-zone → limitedVisibility true")
+	})
+})
