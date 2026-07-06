@@ -101,7 +101,10 @@ var _ = Describe("three-field CPU-health wire contract on models.CPU", func() {
 		// Tick 2 — throttle fires (ratio 0.10 > 0.05). Decide returns
 		// {degraded, unknown, [{throttling, 0.10}]}; getCPUMetrics must map the
 		// verdict onto the new wire fields AND keep the existing fields.
-		nrPeriods, nrThrottled, usageUsec = 2000, 100, 2_000_000
+		// usage_usec is pinned (no delta → UsageCores 0) so the limit-mode
+		// headroom stays positive (2 − 0 − 0.2 = 1.8) and saturation does NOT
+		// co-fire — isolating the throttle degrade from the two-rule headroom.
+		nrPeriods, nrThrottled, usageUsec = 2000, 100, 1_000_000
 		status2, err := svc.GetStatus(ctx)
 		Expect(err).NotTo(HaveOccurred())
 
@@ -138,27 +141,30 @@ var _ = Describe("three-field CPU-health wire contract on models.CPU", func() {
 		Expect(status2.CPU.CgroupCores).To(BeNumerically("~", 2.0, 1e-9),
 			"existing CgroupCores field preserved")
 
-		// Percentile mCPU fields (AvgMCpu/P95MCpu/P99MCpu) mirror the dead-zone
-		// usage ring. This throttle-degrade scenario uses cpu.max="200000
-		// 100000" (Quota=2.0 cores), which is NOT the dead-zone — Decide clears
-		// the usage ring on every tick outside the dead-zone, so the ring is
-		// empty and signals.UsageRingActive is false. The three *float64 fields
-		// are therefore nil (un-fetchable: no dead-zone → no usage ring → no
-		// percentiles to report), and omitempty drops them from the wire. The
-		// contract: non-nil (emitted, even 0) only when the ring holds >= 2
-		// entries (the dead-zone); nil/omitted otherwise.
-		Expect(status2.CPU.AvgMCpu).To(BeZero(),
-			"AvgMCpu is nil outside the dead-zone (ring cleared → un-fetchable)")
-		Expect(status2.CPU.P95MCpu).To(BeZero(),
-			"P95MCpu is nil outside the dead-zone (ring cleared → un-fetchable)")
-		Expect(status2.CPU.P99MCpu).To(BeZero(),
-			"P99MCpu is nil outside the dead-zone (ring cleared → un-fetchable)")
-		Expect(degradedJSON).NotTo(ContainSubstring(`"avgMCpu"`),
-			"AvgMCpu is omitempty and absent when nil (un-fetchable)")
-		Expect(degradedJSON).NotTo(ContainSubstring(`"p95MCpu"`),
-			"P95MCpu is omitempty and absent when nil (un-fetchable)")
-		Expect(degradedJSON).NotTo(ContainSubstring(`"p99MCpu"`),
-			"P99MCpu is omitempty and absent when nil (un-fetchable)")
+		// Percentile mCPU fields (AvgMCpu/P95MCpu/P99MCpu) mirror the usage
+		// ring. Since R10.1 the ring fills every tick in ALL modes, so the
+		// percentiles are fetchable (non-nil) outside the dead-zone too — the
+		// container's own usage is available in limit mode. With usage_usec
+		// pinned (UsageCores 0), the two-tick ring holds [0, 0] → AvgMCpu=0
+		// (non-nil pointer to 0, emitted on the wire as 0). The contract: non-nil
+		// (emitted, even 0) whenever the ring holds >= 2 entries; nil/omitted
+		// only on the first tick before the ring has 2 entries.
+		Expect(status2.CPU.AvgMCpu).ToNot(BeNil(),
+			"AvgMCpu is non-nil outside the dead-zone (ring fills every tick under R10.1 → fetchable)")
+		Expect(*status2.CPU.AvgMCpu).To(BeNumerically("~", 0.0, 1e-9),
+			"AvgMCpu is 0 (usage_usec pinned → UsageCores 0 → 60s mean 0)")
+		Expect(status2.CPU.P95MCpu).ToNot(BeNil(),
+			"P95MCpu is non-nil outside the dead-zone (ring fills every tick)")
+		Expect(*status2.CPU.P95MCpu).To(BeNumerically("~", 0.0, 1e-9))
+		Expect(status2.CPU.P99MCpu).ToNot(BeNil(),
+			"P99MCpu is non-nil outside the dead-zone (ring fills every tick)")
+		Expect(*status2.CPU.P99MCpu).To(BeNumerically("~", 0.0, 1e-9))
+		Expect(degradedJSON).To(ContainSubstring(`"avgMCpu"`),
+			"AvgMCpu is emitted on the wire (non-nil, fetchable)")
+		Expect(degradedJSON).To(ContainSubstring(`"p95MCpu"`),
+			"P95MCpu is emitted on the wire (non-nil, fetchable)")
+		Expect(degradedJSON).To(ContainSubstring(`"p99MCpu"`),
+			"P99MCpu is emitted on the wire (non-nil, fetchable)")
 	})
 })
 
@@ -279,15 +285,17 @@ var _ = Describe("verdictBasis wire contract on models.CPU", func() {
 			"verdictBasis is emitted on a healthy verdict (always when Decide ran)")
 
 		b := status.CPU.VerdictBasis
-		// Headroom: capacity=quota 2.0, reserve=1.0, hostBusyMean=0 (/proc/stat
-		// absent → HostBusyCores 0 → 60s mean 0), so Cores=1.0. Fired=false
-		// (SaturationFired is dead-zone-only; a capped box is not the dead-zone).
+		// Headroom (limit mode): capacity=quota 2.0, reserve=0.2
+		// (LimitReserveFraction 0.10 × quota 2.0), used=0 (single tick → usage
+		// ring < 2 → usageCores60sMean 0; /proc/stat absent → hostBusyMean 0),
+		// so Cores=2.0 − 0 − 0.2=1.8. Fired=false (single tick, ring < 2 → the
+		// limit-mode latch is not evaluated).
 		Expect(b.Headroom.Capacity).To(BeNumerically("~", 2.0, 1e-9))
-		Expect(b.Headroom.Reserve).To(BeNumerically("~", 1.0, 1e-9))
+		Expect(b.Headroom.Reserve).To(BeNumerically("~", 0.2, 1e-9))
 		Expect(b.Headroom.HostBusyMean).To(BeNumerically("~", 0.0, 1e-9))
-		Expect(b.Headroom.Cores).To(BeNumerically("~", 1.0, 1e-9))
+		Expect(b.Headroom.Cores).To(BeNumerically("~", 1.8, 1e-9))
 		Expect(b.Headroom.Fired).To(BeFalse(),
-			"headroom fired is false on a healthy capped box (saturation latch is dead-zone-only)")
+			"headroom fired is false on a healthy capped box (single tick, ring < 2 → latch not evaluated)")
 
 		// Throttle: fetchable (limit set → Applies=true), value 0 (no throttled
 		// periods), threshold 0.05, latch false.
@@ -339,9 +347,10 @@ var _ = Describe("verdictBasis wire contract on models.CPU", func() {
 		Expect(b.Throttle.Threshold).To(BeNumerically("~", 0.05, 1e-9))
 		Expect(b.Throttle.Applies).To(BeTrue())
 		// Headroom stays populated (numbers always computed); saturation did not
-		// fire (capped box, not the dead-zone).
+		// co-fire (usage_usec pinned in throttleFireStatus → UsageCores 0 →
+		// limit-mode headroom 1.8 > 0, so the throttle degrade is the sole cause).
 		Expect(b.Headroom.Capacity).To(BeNumerically("~", 2.0, 1e-9))
-		Expect(b.Headroom.Reserve).To(BeNumerically("~", 1.0, 1e-9))
+		Expect(b.Headroom.Reserve).To(BeNumerically("~", 0.2, 1e-9))
 		Expect(b.Headroom.Fired).To(BeFalse())
 		// Pressure/steal remain non-firing and non-applicable.
 		Expect(b.Pressure.Fired).To(BeFalse())
@@ -432,7 +441,11 @@ func throttleFireStatus(ctx context.Context) (*container_monitor.ServiceInfo, er
 	}
 
 	// Tick 2 — fire: 100 throttled / 1000 new periods = 0.10 > 0.05.
-	nrPeriods, nrThrottled, usageUsec = 2000, 100, 2_000_000
+	// usage_usec is pinned (no delta → UsageCores 0) so the limit-mode headroom
+	// stays positive (2 − 0 − 0.2 = 1.8) and saturation does NOT co-fire — the
+	// throttle degrade is the sole cause (the helper's callers assert
+	// Headroom.Fired=false, which only holds when usage is pinned).
+	nrPeriods, nrThrottled, usageUsec = 2000, 100, 1_000_000
 
 	return svc.GetStatus(ctx)
 }

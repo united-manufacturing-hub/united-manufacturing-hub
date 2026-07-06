@@ -64,23 +64,39 @@ type Thresholds struct {
 	StealHigh         float64
 	StealRecover      float64
 	HostBusyHigh      float64
+	// LimitReserveFraction is the fractional reserve of the quota subtracted
+	// alongside the container's 60s-avg usage when computing limit-mode
+	// HeadroomCores (headroom = quota − containerUsage60s −
+	// LimitReserveFraction × quota). The latch fires when headroom < 0, i.e.
+	// when sustained usage enters the reserve band. Strawman 0.10 (10% of the
+	// quota); same calibrate-later class as cpuReserveCores.
+	// TODO: calibrate.
+	LimitReserveFraction float64
+	// LimitReserveRecoverFraction is the Schmitt clear threshold for the
+	// limit-mode headroom latch, as a fraction of the quota. The latch clears
+	// when headroom > LimitReserveRecoverFraction × quota (~half the reserve
+	// above 0). Strawman 0.05.
+	// TODO: calibrate.
+	LimitReserveRecoverFraction float64
 }
 
 // DefaultThresholds returns the canonical thresholds (HighUsageFraction 0.70,
 // SaturationRecover 0.60, ThrottleHigh 0.05, ThrottleRecover 0.03, PressureHigh
 // 0.20, PressureRecover 0.12, StealHigh 0.10, StealRecover 0.06, HostBusyHigh
-// 0.70).
+// 0.70, LimitReserveFraction 0.10, LimitReserveRecoverFraction 0.05).
 func DefaultThresholds() Thresholds {
 	return Thresholds{
-		HighUsageFraction: 0.70,
-		SaturationRecover: 0.60,
-		ThrottleHigh:      0.05,
-		ThrottleRecover:   0.03,
-		PressureHigh:      0.20,
-		PressureRecover:   0.12,
-		StealHigh:         0.10,
-		StealRecover:      0.06,
-		HostBusyHigh:      0.70,
+		HighUsageFraction:           0.70,
+		SaturationRecover:           0.60,
+		ThrottleHigh:                0.05,
+		ThrottleRecover:             0.03,
+		PressureHigh:                0.20,
+		PressureRecover:             0.12,
+		StealHigh:                   0.10,
+		StealRecover:                0.06,
+		HostBusyHigh:                0.70,
+		LimitReserveFraction:        0.10,
+		LimitReserveRecoverFraction: 0.05,
 	}
 }
 
@@ -269,32 +285,33 @@ type Signals struct {
 	// is not a readable signal) and 0 until the ring holds at least 2 samples.
 	StealP95 float64
 	// AvgUsageFraction, P95UsageFraction, P99UsageFraction are the avg/p95/p99
-	// of the dead-zone usage ring — fractions relative to 1 core, typically in
-	// [0,1] but may exceed 1 when observed usage exceeds CgroupCores
-	// (oversubscription); callers that surface mCPU multiply by 1000. Computed
-	// UNCONDITIONALLY whenever the ring holds >= 2 entries (observability-only,
-	// like ThrottleRatio); 0 otherwise. They do NOT change the verdict — the
-	// saturation latch still fires on the AVG, not p95. Outside the dead-zone
-	// the usage ring is cleared, so these are 0 there (usage is not a health
-	// signal outside the dead-zone currently).
+	// of the usage ring — fractions relative to 1 core, typically in [0,1] but
+	// may exceed 1 when observed usage exceeds the denominator (oversubscription);
+	// callers that surface mCPU multiply by 1000. Computed UNCONDITIONALLY
+	// whenever the ring holds >= 2 entries (observability-only, like
+	// ThrottleRatio); 0 otherwise. They do NOT change the verdict — the
+	// saturation latch still fires on the AVG, not p95. Since R10.1 the ring
+	// fills every tick in ALL modes, so these are non-zero in every mode once
+	// the window holds >= 2 entries (usage is a health signal in limit mode —
+	// the container's own 60s-avg usage vs the quota — and an observability
+	// signal in no-limit mode).
 	//
 	// UsageRingActive is the fetchability flag for the three percentile fields
-	// above: true when the usage ring holds >= 2 entries (the dead-zone with
-	// enough samples to compute percentiles), false otherwise (outside the
-	// dead-zone, or the first dead-zone tick before the ring has 2 entries).
-	// Callers that mirror the percentiles onto a wire use this flag to decide
-	// whether to emit a 0 (fetchable) or omit (un-fetchable), instead of the
-	// value-based 0/omitempty discipline that cannot distinguish a real 0 from
-	// an absent signal.
+	// above: true when the usage ring holds >= 2 entries, false otherwise (the
+	// first tick of any mode before the ring has 2 entries). Callers that mirror
+	// the percentiles onto a wire use this flag to decide whether to emit a 0
+	// (fetchable) or omit (un-fetchable), instead of the value-based 0/omitempty
+	// discipline that cannot distinguish a real 0 from an absent signal.
 	AvgUsageFraction float64
 	P95UsageFraction float64
 	P99UsageFraction float64
 	// AvgUsageCores, P95UsageCores, P99UsageCores are the avg/p95/p99 of the
-	// ABSOLUTE per-tick core usage over the dead-zone ring, mirrored to mCPU
-	// (*1000) on the wire. Separate from the *Fraction fields because on a
-	// no-limit dead-zone box the cgroup-relative fraction collapses to 0 (no
-	// denominator) while the box still uses real cores; the fraction fields
-	// stay the saturation-latch input and the "CPU averaged N%" message value.
+	// ABSOLUTE per-tick core usage over the usage ring, mirrored to mCPU
+	// (*1000) on the wire. AvgUsageCores is the "one blessed average" R10.1
+	// reads identically for the limit-mode headroom `used` and the wire's
+	// avgMCpu — computed once, reused (no divergence). Separate from the
+	// *Fraction fields because on a no-limit box the cgroup-relative fraction
+	// collapses to 0 (no denominator) while the box still uses real cores.
 	// 0 until the ring holds >= 2 entries (gated by UsageRingActive).
 	AvgUsageCores   float64
 	P95UsageCores   float64
@@ -319,18 +336,18 @@ type Signals struct {
 	// (an unsaturated dead-zone sample is healthy). It is false outside the
 	// dead-zone.
 	LimitedVisibility bool
-	// SaturationFired is the dead-zone saturation backstop latch state. The
-	// trigger has two branches selected by whether the host CPU count is known
-	// (Sample.LogicalCpus > 0): the headroom branch fires when HeadroomCores
-	// < 0 (hostBusyMean > capacity − cpuReserveCores, i.e. less than one core
-	// free) and clears when HeadroomCores > headroomRecoverCores (Schmitt);
-	// the fraction branch (LogicalCpus <= 0, the cgroup-known-only sub-case)
-	// fires when the 60s-average usage fraction >= HighUsageFraction and
-	// clears when it drops below SaturationRecover (Schmitt). The headroom
-	// branch also covers the Quota=&0 (truly uncapped, cpu.max="max") case
-	// when the host count is known: an uncapped container on a host with no
-	// spare core has no headroom, so it degrades. It is only evaluated in the
-	// dead-zone.
+	// SaturationFired is the saturation latch state. The trigger is mode-aware
+	// (R10.1, the two-rule model): in limit mode (Quota non-nil and > 0) the
+	// latch fires when HeadroomCores < 0 (container usage inside the fractional
+	// reserve band: usage > quota − LimitReserveFraction×quota) and clears when
+	// HeadroomCores > LimitReserveRecoverFraction×quota (Schmitt); in no-limit
+	// mode (host CPU count known, LogicalCpus > 0) it fires when HeadroomCores
+	// < 0 (hostBusyMean > capacity − cpuReserveCores, less than one core free)
+	// and clears when HeadroomCores > headroomRecoverCores (Schmitt); the
+	// fraction fallback (dead-zone, LogicalCpus <= 0 — the cgroup-known-only
+	// sub-case) fires when the 60s-average usage fraction >= HighUsageFraction
+	// and clears below SaturationRecover. The limit-mode case is evaluated
+	// first so a limit-set sample never hits the no-limit host-headroom branch.
 	SaturationFired bool
 	// HostBusyCores60sMean is the 60s arithmetic mean of per-tick HostBusyCores;
 	// observability-only (does not change the verdict). The per-tick input is
@@ -338,23 +355,26 @@ type Signals struct {
 	// running sum until it ages out.
 	HostBusyCores60sMean float64
 	// HeadroomCores is the free-capacity-in-cores number: capacity minus
-	// measured use minus the cpuReserveCores reserve. capacity is Sample.Quota
-	// when non-nil and positive, else Sample.LogicalCpus (the uncapped host).
-	// measured use is Signals.HostBusyCores60sMean (the 60s mean). It is
-	// observability-only (does not change the verdict) and is NOT clamped — a
-	// host with hostBusyMean >= capacity produces a negative number, not 0.
+	// measured use minus the reserve. The inputs are mode-aware (R10.1):
+	// limit mode (Quota non-nil and > 0) — capacity = Quota, measured use =
+	// AvgUsageCores (the container's own 60s-avg usage), reserve =
+	// LimitReserveFraction×Quota; no-limit mode — capacity = LogicalCpus,
+	// measured use = HostBusyCores60sMean, reserve = cpuReserveCores (1.0).
+	// It is the decision variable (latch fires at < 0) and is NOT clamped — a
+	// full box yields a negative number, not 0.
 	HeadroomCores float64
 	// CapacityCores is the core budget used as the headroom denominator: the
 	// cgroup Quota when set and positive, else Sample.LogicalCpus (the uncapped
 	// host). It is the "total cores" the healthy budget message reports, and the
 	// value HeadroomCores is derived from.
 	CapacityCores float64
-	// ReserveCores is the headroom reserve (cpuReserveCores) Decide subtracted
-	// alongside hostBusyMean to compute HeadroomCores. It is stamped into
-	// Signals so the wire's verdict-basis block can publish the exact reserve
-	// the verdict used (the value is a constant today — 1.0 core — and is
-	// user-visible via the budget message, which raises the stakes on
-	// calibrating it with fleet data; TODO calibrate).
+	// ReserveCores is the headroom reserve Decide subtracted alongside the
+	// measured use to compute HeadroomCores. Mode-aware (R10.1): no-limit mode
+	// uses cpuReserveCores (1.0 core); limit mode uses
+	// LimitReserveFraction×Quota (strawman 0.10). Stamped into Signals so the
+	// wire's verdict-basis block can publish the exact reserve the verdict used
+	// (user-visible via the budget message, which raises the stakes on
+	// calibrating both with fleet data; TODO calibrate).
 	ReserveCores float64
 	// LimitApplies is true when a CPU limit is set (Sample.Quota non-nil and
 	// positive), i.e. the throttle rule is applicable to this box. The healthy
@@ -377,27 +397,30 @@ type Verdict struct {
 	Causes      []Cause
 }
 
-// Decide computes a CPU-health verdict from a sample. Decide mutates st
-// (*WindowState) in place — appending to the throttle and steal rings and
-// updating the flip-latches — so the caller must not share st across goroutines
-// without external synchronization. High usage alone is not ill health: a
-// capped container pinned at its quota with no throttle/pressure/steal/host-
-// contention signal is busy, not sick, so Decide returns StateHealthy for any
-// sample that has no other cause. The ONE exception is the dead-zone
-// saturation backstop: when the sample is in the dead-zone (Quota nil or
-// non-positive, PSI absent — no PSI signal and no cgroup limit),
-// Decide maintains a 60s-average usage fraction over a usage ring in
-// WindowState and a 60s mean of HostBusyCores. The saturation latch trigger
-// has two branches: when the host CPU count is known (LogicalCpus > 0) it
-// fires on headroom (HeadroomCores < 0, i.e. hostBusyMean >
-// capacity − cpuReserveCores — less than one core free; Schmitt clears above
-// headroomRecoverCores), covering the Quota=&0 truly-uncapped case too; when
-// the host count is unknown (LogicalCpus <= 0, the cgroup-known-only
-// sub-case) it fires on the 60s-average usage fraction >= HighUsageFraction
-// (Schmitt clears below SaturationRecover). Outside the dead-zone high usage
-// alone is never ill
-// health, and a prior dead-zone fire is cleared on the first non-dead-zone
-// tick (the latch and ring do not leak).
+// Decide computes a CPU-health verdict from a sample using the two-rule model
+// (R10.1): the ceiling headroom is measured against follows whether a CPU
+// limit is set. Decide mutates st (*WindowState) in place — appending to the
+// throttle, steal, usage, and hostBusy rings and updating the flip-latches —
+// so the caller must not share st across goroutines without external
+// synchronization. In limit mode (Quota non-nil and > 0) the ceiling is the
+// quota, measured use is the container's own 60s-avg usage (AvgUsageCores),
+// and the reserve is LimitReserveFraction×quota — headroom < 0 (sustained
+// usage inside the fractional reserve band) degrades; in no-limit mode the
+// ceiling is the host (LogicalCpus), measured use is hostBusyMean, and the
+// reserve is cpuReserveCores (1.0) — headroom < 0 (less than one core free)
+// degrades. Throttle stacks above limit-headroom exactly as PSI stacks above
+// host-headroom (kind-tier cause sort, unchanged). Decide maintains a usage
+// ring in WindowState that fills EVERY tick in ALL modes (one blessed 60s
+// mean of the ring's cores samples, read identically by the limit-mode
+// headroom, AvgUsageCores, and the wire's avgMCpu) and a 60s mean of
+// HostBusyCores. The saturation latch trigger has three branches selected in
+// order: limit mode (headroom < 0, Schmitt clears above
+// LimitReserveRecoverFraction×quota); no-limit mode with the host CPU count
+// known (LogicalCpus > 0 — headroom < 0, Schmitt clears above
+// headroomRecoverCores), covering the Quota=&0 truly-uncapped case; and the
+// fraction fallback (dead-zone, LogicalCpus <= 0 — 60s-avg usage fraction >=
+// HighUsageFraction, Schmitt clears below SaturationRecover). Below the fire
+// condition in any mode the verdict is healthy.
 //
 // Decide reads thresholds.ThrottleHigh and thresholds.ThrottleRecover for the
 // throttle Schmitt flip-latch (the latch fires above ThrottleHigh and clears
@@ -679,9 +702,72 @@ func Decide(st *WindowState, sample Sample, thresholds Thresholds) (Verdict, Sig
 
 	signals.HostBusyCores60sMean = hostBusyMean
 
-	// Headroom uses hostBusyMean, which is 0 until the ring holds >= 2
-	// entries, so headroom reads capacity - 0 - reserve on a fresh state,
-	// matching the floor. Not clamped: a full box yields a negative number.
+	// Usage ring (unconditional, all modes): maintains the 60s-avg usage
+	// fraction (saturationAvg) AND the 60s-avg absolute core usage
+	// (usageCores60sMean) over a ring in WindowState. The ring fills EVERY
+	// tick in ALL modes (the fill-gate moved out of the dead-zone block) so
+	// the limit-mode headroom and the wire's AvgUsageCores are available
+	// everywhere. Input clamps on fraction and usageCores stay (NaN/+Inf/
+	// negative → 0). A 2-sample floor emits 0 for both means when the ring
+	// holds < 2 entries.
+	if !(fraction >= 0) || math.IsInf(fraction, 1) {
+		fraction = 0
+	}
+
+	usageCores := sample.UsageCores
+	if !(usageCores >= 0) || math.IsInf(usageCores, 1) {
+		usageCores = 0
+	}
+
+	signals.UsageFraction = fraction
+	st.usageRing = append(st.usageRing, usagePoint{
+		ts:       sample.Timestamp,
+		fraction: fraction,
+		cores:    usageCores,
+	})
+
+	usageCutoff := sample.Timestamp.Add(-throttleWindow)
+	usageRing := st.usageRing
+	usageN := 0
+
+	for _, up := range usageRing {
+		if !up.ts.Before(usageCutoff) {
+			usageRing[usageN] = up
+			usageN++
+		}
+	}
+
+	usageRing = usageRing[:usageN]
+	st.usageRing = usageRing
+
+	var saturationAvg float64
+
+	var usageCores60sMean float64
+
+	if len(st.usageRing) >= 2 {
+		var fracSum float64
+
+		var coreSum float64
+
+		for _, up := range st.usageRing {
+			fracSum += up.fraction
+			coreSum += up.cores
+		}
+
+		saturationAvg = fracSum / float64(len(st.usageRing))
+		usageCores60sMean = coreSum / float64(len(st.usageRing))
+	}
+
+	// Headroom: mode-aware. In limit mode (Quota non-nil and > 0) the ceiling
+	// is the quota, the measured use is the container's own 60s-avg usage
+	// (usageCores60sMean), and the reserve is a FRACTION of the quota
+	// (LimitReserveFraction). In no-limit mode the ceiling is LogicalCpus, the
+	// measured use is hostBusyMean, and the reserve is cpuReserveCores (1.0).
+	// Not clamped: a full box yields a negative number. Both means are 0 until
+	// their respective rings hold >= 2 entries, so headroom reads
+	// capacity − 0 − reserve on a fresh state, matching the floor.
+	limitMode := sample.Quota != nil && *sample.Quota > 0
+
 	var capacity float64
 	if sample.Quota != nil && *sample.Quota > 0 {
 		capacity = *sample.Quota
@@ -689,102 +775,45 @@ func Decide(st *WindowState, sample Sample, thresholds Thresholds) (Verdict, Sig
 		capacity = sample.LogicalCpus
 	}
 
-	signals.HeadroomCores = capacity - hostBusyMean - cpuReserveCores
+	if limitMode {
+		quota := *sample.Quota
+		reserve := thresholds.LimitReserveFraction * quota
+		signals.HeadroomCores = capacity - usageCores60sMean - reserve
+		signals.ReserveCores = reserve
+	} else {
+		signals.HeadroomCores = capacity - hostBusyMean - cpuReserveCores
+		signals.ReserveCores = cpuReserveCores
+	}
+
 	signals.CapacityCores = capacity
-	signals.ReserveCores = cpuReserveCores
-	signals.LimitApplies = sample.Quota != nil && *sample.Quota > 0
+	signals.LimitApplies = limitMode
 	signals.PsiApplies = sample.PsiAvailable
 	signals.StealApplies = sample.Virtualized
 
-	// Saturation backstop (dead-zone-only): the dead-zone is the case where no
-	// PSI signal and no cgroup limit are present — Quota is nil or non-positive
-	// (uncapped → no limit) and PsiAvailable is false (no PSI → pressure is
-	// structurally absent). On a virtualized box the steal latch may
-	// independently co-fire.
-	// There, sustained high usage is the last-resort proxy. Decide computes a 60s-AVERAGE usage fraction (NOT p95 —
-	// a sustained-headroom proxy; a brief spike must not trip it) over a usage
-	// ring in WindowState. A Schmitt latch fires when the 60s-avg >=
-	// HighUsageFraction and clears only when it drops below SaturationRecover;
-	// between the marks it holds. The 60s usage ring is pruned (reusing the
-	// throttle/steal pruning pattern). Saturation is the only NEW cause the
-	// dead-zone introduces (the only cause whose signal is absent elsewhere);
-	// throttle can co-fire from cpu.stat counter deltas regardless of Quota, and
-	// steal can co-fire on a virtualized box, so it is NOT the sole cause that
-	// can fire in the dead-zone. The trigger has
-	// two branches: when the host CPU count is known (LogicalCpus > 0) the
-	// backstop retriggers on headroom (fires when HeadroomCores < 0, i.e.
-	// hostBusyMean > capacity − cpuReserveCores — less than one core free;
-	// Schmitt clears above headroomRecoverCores), which covers the Quota=&0
-	// (truly uncapped, cpu.max="max") case — an uncapped container on a host
-	// with no spare core has no headroom, so it degrades; when the host count
-	// is unknown (LogicalCpus <= 0, the cgroup-known-only sub-case where a
-	// fraction is computable via CgroupCores>0) the 60s-average usage fraction
-	// remains the trigger. The guardrail: below the fire condition in the
-	// dead-zone the verdict is healthy — an unsaturated dead-zone sample is
-	// healthy, never a distinct unknown state.
-	// LimitedVisibility signals the no-PSI/no-limit state to the caller
-	// regardless of the verdict.
-	var saturationAvg float64
-
 	signals.LimitedVisibility = deadZone
 
-	// Usage ring (dead-zone only): maintains the 60s-avg usage fraction for the
-	// fraction fallback (LogicalCpus <= 0 below) and the AvgUsageFraction/P95/P99
-	// wire signals. Outside the dead-zone the ring is cleared so stale fraction
-	// samples do not corrupt a later dead-zone re-entry (the fraction
-	// denominator changes across the transition).
-	if deadZone {
-		// Input clamp: a NaN or +Inf UsageCores fraction poisons the 60s running
-		// sum until the sample ages out. Mirror the PressureAvg60 input clamp.
-		if !(fraction >= 0) || math.IsInf(fraction, 1) {
-			fraction = 0
-		}
-
-		usageCores := sample.UsageCores
-		if !(usageCores >= 0) || math.IsInf(usageCores, 1) {
-			usageCores = 0
-		}
-
-		signals.UsageFraction = fraction
-		st.usageRing = append(st.usageRing, usagePoint{
-			ts:       sample.Timestamp,
-			fraction: fraction,
-			cores:    usageCores,
-		})
-
-		usageCutoff := sample.Timestamp.Add(-throttleWindow)
-		usageRing := st.usageRing
-		usageN := 0
-
-		for _, up := range usageRing {
-			if !up.ts.Before(usageCutoff) {
-				usageRing[usageN] = up
-				usageN++
-			}
-		}
-
-		usageRing = usageRing[:usageN]
-		st.usageRing = usageRing
-
-		var sum float64
-		for _, up := range st.usageRing {
-			sum += up.fraction
-		}
-
-		saturationAvg = sum / float64(len(st.usageRing))
-	} else {
-		st.usageRing = st.usageRing[:0]
-	}
-
-	// Saturation latch (Position B, R4 option B): a full box degrades on
-	// headroom ALONE, regardless of PSI/limit, so the headroom Schmitt latch
-	// runs ALWAYS when the host CPU count is known (LogicalCpus > 0), with a
-	// 2-sample floor on the hostBusyRing (maintained unconditionally by R1).
-	// PSI/throttle/steal stack on top as additional causes — a full+PSI box
-	// yields [pressure, saturation]. The fraction fallback (LogicalCpus <= 0,
-	// cgroup-known-only — no host count to derive headroom from) is
-	// dead-zone-only. Below the fire condition the verdict is healthy.
+	// Saturation latch: mode-aware switch. In limit mode the latch fires on
+	// limit-headroom < 0 (container usage inside the fractional reserve band)
+	// and clears at headroom > LimitReserveRecoverFraction × quota. In
+	// no-limit mode the host-headroom latch fires on HeadroomCores < 0 (less
+	// than one core free) and clears above headroomRecoverCores. The fraction
+	// fallback (dead-zone, LogicalCpus <= 0) is unchanged. The limitMode case
+	// MUST come first so limit-set samples never hit the host-headroom branch
+	// (which would re-introduce the B false fire). Below the fire condition the
+	// verdict is healthy.
 	switch {
+	case limitMode:
+		if len(st.usageRing) >= 2 {
+			recoverCores := thresholds.LimitReserveRecoverFraction * *sample.Quota
+			switch {
+			case signals.HeadroomCores < 0:
+				st.saturationFired = true
+			case signals.HeadroomCores > recoverCores:
+				st.saturationFired = false
+			}
+		} else {
+			st.saturationFired = false
+		}
 	case sample.LogicalCpus > 0:
 		if len(st.hostBusyRing) >= 2 {
 			switch {
@@ -809,11 +838,21 @@ func Decide(st *WindowState, sample Sample, thresholds Thresholds) (Verdict, Sig
 
 	signals.SaturationFired = st.saturationFired
 
+	// Percentile block: set UsageRingActive, AvgUsageFraction, AvgUsageCores
+	// from the already-computed early values (one blessed average — do NOT
+	// recompute the mean). p95/p99 still sort+nearest-rank from the ring.
+	// When len < 2, leave all at 0 and UsageRingActive false (as today).
+	// Because the ring now fills every tick, these signals become non-zero in
+	// ALL modes once 2 samples are in the window — this is intended (unblocks
+	// the display's "this container" row outside the dead-zone).
 	if n := len(st.usageRing); n >= 2 {
 		signals.UsageRingActive = true
+		signals.AvgUsageFraction = saturationAvg
+		signals.AvgUsageCores = usageCores60sMean
 
-		// Fraction-based percentiles (cgroup-relative, 0-1): the saturation
-		// latch input and the "CPU averaged N%" message number. Unchanged.
+		// Fraction-based p95/p99 (cgroup-relative, 0-1): nearest-rank from the
+		// sorted ring. The saturation latch input and the "CPU averaged N%"
+		// message number use the avg (above), not p95.
 		vals := make([]float64, n)
 		for i, up := range st.usageRing {
 			vals[i] = up.fraction
@@ -821,23 +860,13 @@ func Decide(st *WindowState, sample Sample, thresholds Thresholds) (Verdict, Sig
 
 		sort.Float64s(vals)
 
-		var sum float64
-		for _, v := range vals {
-			sum += v
-		}
-
-		signals.AvgUsageFraction = sum / float64(n)
-
 		p95Rank := int(math.Ceil(0.95 * float64(n)))
 		signals.P95UsageFraction = vals[p95Rank-1]
 		p99Rank := int(math.Ceil(0.99 * float64(n)))
 		signals.P99UsageFraction = vals[p99Rank-1]
 
-		// Cores-based percentiles (absolute per-tick core usage): the wire's
-		// avg/p95/p99 mCPU rows. Separate from the fraction percentiles because
-		// on a no-limit dead-zone box the fraction collapses to 0 (no cgroup
-		// denominator) while the box still uses real cores. Mirrored to mCPU
-		// (*1000) by the caller.
+		// Cores-based p95/p99 (absolute per-tick core usage): the wire's
+		// p95/p99 mCPU rows. Mirrored to mCPU (*1000) by the caller.
 		coreVals := make([]float64, n)
 		for i, up := range st.usageRing {
 			coreVals[i] = up.cores
@@ -845,12 +874,6 @@ func Decide(st *WindowState, sample Sample, thresholds Thresholds) (Verdict, Sig
 
 		sort.Float64s(coreVals)
 
-		var coreSum float64
-		for _, v := range coreVals {
-			coreSum += v
-		}
-
-		signals.AvgUsageCores = coreSum / float64(n)
 		signals.P95UsageCores = coreVals[p95Rank-1]
 		signals.P99UsageCores = coreVals[p99Rank-1]
 	}

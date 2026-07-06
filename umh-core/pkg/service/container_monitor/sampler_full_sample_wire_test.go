@@ -228,8 +228,12 @@ var _ = Describe("steal p95 wired onto the wire via the sampler", func() {
 		// verdict basis. This p95 is below StealHigh 0.10, so the steal latch does
 		// NOT fire, yet basis.steal.value is still populated — proving the value
 		// is carried unconditionally, not gated on a fired latch.
+		// usage_usec is pinned (no delta → UsageCores 0) so the limit-mode
+		// headroom stays positive (2 − 0 − 0.2 = 1.8) under R10.1's two-rule
+		// model — isolating the steal assertion from the headroom verdict (the
+		// test's intent is "sub-threshold steal → Active," not a usage check).
 		procStat = "cpu 0 0 0 1199 0 0 0 1 0 0\n"
-		nrPeriods, usageUsec = 2000, 2_000_000
+		nrPeriods, usageUsec = 2000, 1_000_000
 		status2, err := svc.GetStatus(ctx)
 		Expect(err).NotTo(HaveOccurred())
 
