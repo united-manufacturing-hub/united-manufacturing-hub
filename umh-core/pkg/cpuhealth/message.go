@@ -244,8 +244,14 @@ func causeDetails(c Cause, signals Signals) string {
 			// CapacityCores in no-limit mode), NOT AvgUsageFraction (which is 0
 			// in no-limit).
 			pct := pctOf(signals.HostBusyCores60sMean / signals.CapacityCores)
+			detail := fmt.Sprintf("CPU averaged %d%% of the machine over the last minute and this instance has little headroom left. Add CPU capacity, or reduce the load on it.", pct)
+			// When PSI is also absent (limitedVisibility, the experiment case),
+			// note that richer detail is available by enabling PSI.
+			if signals.LimitedVisibility {
+				detail += " Pressure stats are unavailable; enable Linux pressure stats (boot with psi=1) for richer detail."
+			}
 
-			return fmt.Sprintf("CPU averaged %d%% of the machine over the last minute and this instance has little headroom left. Add CPU capacity, or reduce the load on it.", pct)
+			return detail
 		}
 	default:
 		return "CPU is degraded."
