@@ -3734,3 +3734,220 @@ func TestDecide_LimitMode_ContainerIdleHostFull_NoSaturation(t *testing.T) {
 		t.Fatalf("SaturationFired: got true, want false (container usage 0.3 → headroom 1.5 > 0 → no saturation)")
 	}
 }
+
+// TestDecide_LimitMode_HostFullStacks pins R10.2: in limit mode, when the HOST
+// itself is full (the rule-1 test at host scope: LogicalCpus − hostBusyMean −
+// cpuReserveCores < 0, readable via HostBusyCoresAvailable), that stacks as a
+// second saturation condition on the limited container. A limit is a ceiling,
+// not a reservation, so a full host starves a container below its limit. Two
+// internal latches (limitSaturationFired container-scope + hostFullFired
+// host-scope) emit ONE saturation cause; when both fire, HOST-FULL DOMINATES
+// (attribution host, cause Value = the host-scope negative headroom). The
+// host-full test is the TRUE host-scope test — NEVER quota-scoped (that was
+// the B false fire R10.1 killed).
+func TestDecide_LimitMode_HostFullStacks(t *testing.T) {
+	base := time.Date(2026, 7, 6, 12, 0, 0, 0, time.UTC)
+	thresholds := DefaultThresholds()
+
+	// feedLimitHost pushes n ticks at 1s spacing with the given Quota,
+	// LogicalCpus, HostBusyCores, HostBusyCoresAvailable, and UsageCores,
+	// returning the final (Verdict, Signals).
+	feedLimitHost := func(st *WindowState, n int, quota, logical, hostBusy, usage float64, hostStats bool) (Verdict, Signals) {
+		var (
+			v Verdict
+			s Signals
+		)
+		for i := 0; i < n; i++ {
+			v, s = Decide(st, Sample{
+				Timestamp:              base.Add(time.Duration(i) * time.Second),
+				Quota:                  &quota,
+				LogicalCpus:            logical,
+				HostBusyCores:          hostBusy,
+				HostBusyCoresAvailable: hostStats,
+				UsageCores:             usage,
+			}, thresholds)
+		}
+		return v, s
+	}
+
+	// (1) HostFullFires — 2 ticks Quota=2.0, LogicalCpus=8.0, HostBusyCores=7.5
+	// (host full: 8−7.5−1=−0.5 < 0), HostBusyCoresAvailable=true, UsageCores=0.0
+	// (container idle → limit-sat does NOT fire: 2−0−0.2=1.8 > 0). The host-full
+	// latch fires alone → degraded, attribution host, ONE saturation cause whose
+	// Value is the host-scope negative headroom (−0.5, the dominant). Forcing: a
+	// stub that doesn't add the host-full latch leaves the container healthy (the
+	// B-regression resurfaces); a stub that quota-scopes the host-full test
+	// (2−7.5−1 < 0) would also fire here but is the WRONG test — pinned via the
+	// next sub-test.
+	t.Run("HostFullFires", func(t *testing.T) {
+		quota := 2.0
+		st := &WindowState{}
+		v, sig := feedLimitHost(st, 2, quota, 8.0, 7.5, 0.0, true)
+		if v.State != StateDegraded {
+			t.Fatalf("State: got %q, want %q (host full: 8−7.5−1=−0.5 < 0 stacks on the limited container → degraded)", v.State, StateDegraded)
+		}
+		if !sig.SaturationFired {
+			t.Fatalf("SaturationFired: got false, want true (host-full latch fires → emitted saturation)")
+		}
+		if !sig.HostFullFired {
+			t.Fatalf("HostFullFired: got false, want true (host 8−7.5−1=−0.5 < 0 with HostBusyCoresAvailable → host-full latch fires)")
+		}
+		if sig.LimitSaturationFired {
+			t.Fatalf("LimitSaturationFired: got true, want false (container idle: 2−0−0.2=1.8 > 0 → limit-sat does NOT fire)")
+		}
+		if v.Attribution != AttributionHost {
+			t.Fatalf("Attribution: got %q, want %q (host-full fires → host-scope condition → attribution host)", v.Attribution, AttributionHost)
+		}
+		if len(v.Causes) != 1 {
+			t.Fatalf("Causes length: got %d, want 1 (ONE saturation cause, not two)", len(v.Causes))
+		}
+		if v.Causes[0].Kind != CauseKindSaturation {
+			t.Fatalf("Cause Kind: got %q, want %q", v.Causes[0].Kind, CauseKindSaturation)
+		}
+		if !floatEq(v.Causes[0].Value, -0.5) {
+			t.Fatalf("Cause Value: got %v, want -0.5 (the host-scope negative headroom, the dominant ceiling; NOT the limit-scope 1.8)", v.Causes[0].Value)
+		}
+	})
+
+	// (2) HostNotFullDoesntFire — 2 ticks Quota=2.0, LogicalCpus=8.0,
+	// HostBusyCores=5.0 (host 5/8 → 8−5−1=2 > 0 → host-full does NOT fire),
+	// UsageCores=0.0 (limit-sat 1.8 > 0 → doesn't fire). HEALTHY. The B-regression
+	// stays killed: host busyness alone does not fire saturation in limit mode.
+	t.Run("HostNotFullDoesntFire", func(t *testing.T) {
+		quota := 2.0
+		st := &WindowState{}
+		v, sig := feedLimitHost(st, 2, quota, 8.0, 5.0, 0.0, true)
+		if v.State != StateHealthy {
+			t.Fatalf("State: got %q, want %q (host 8−5−1=2 > 0 → host-full does NOT fire; limit-sat 1.8 > 0 → does NOT fire → healthy)", v.State, StateHealthy)
+		}
+		if sig.HostFullFired {
+			t.Fatalf("HostFullFired: got true, want false (host 8−5−1=2 > 0 → host not full)")
+		}
+		if sig.SaturationFired {
+			t.Fatalf("SaturationFired: got true, want false (neither latch fires)")
+		}
+	})
+
+	// (3) BothFireHostFullDominates — 2 ticks Quota=2.0, LogicalCpus=8.0,
+	// HostBusyCores=7.5, UsageCores=1.9 (limit-sat fires: 2−1.9−0.2=−0.1 < 0;
+	// host-full fires: 8−7.5−1=−0.5 < 0). Both latches fire → ONE saturation
+	// cause, attribution host, cause Value = the host-scope −0.5 (the dominant —
+	// NOT the limit-scope −0.1). Forcing: a stub that emits two saturation
+	// causes fails the "ONE cause" pin; a stub that uses the limit-scope headroom
+	// as the Value when both fire yields −0.1 (!floatEq −0.5).
+	t.Run("BothFireHostFullDominates", func(t *testing.T) {
+		quota := 2.0
+		st := &WindowState{}
+		v, sig := feedLimitHost(st, 2, quota, 8.0, 7.5, 1.9, true)
+		if v.State != StateDegraded {
+			t.Fatalf("State: got %q, want %q (both latches fire → degraded)", v.State, StateDegraded)
+		}
+		if len(v.Causes) != 1 {
+			t.Fatalf("Causes length: got %d, want 1 (ONE saturation cause, not two — host-full dominates but does not add a second cause)", len(v.Causes))
+		}
+		if v.Causes[0].Kind != CauseKindSaturation {
+			t.Fatalf("Cause Kind: got %q, want %q", v.Causes[0].Kind, CauseKindSaturation)
+		}
+		if v.Attribution != AttributionHost {
+			t.Fatalf("Attribution: got %q, want %q (host-full fires → host-scope condition → attribution host)", v.Attribution, AttributionHost)
+		}
+		if !floatEq(v.Causes[0].Value, -0.5) {
+			t.Fatalf("Cause Value: got %v, want -0.5 (host-scope negative headroom, the dominant ceiling — NOT the limit-scope −0.1)", v.Causes[0].Value)
+		}
+		if !sig.HostFullFired {
+			t.Fatalf("HostFullFired: got false, want true (host 8−7.5−1=−0.5 < 0)")
+		}
+		if !sig.LimitSaturationFired {
+			t.Fatalf("LimitSaturationFired: got false, want true (limit-sat 2−1.9−0.2=−0.1 < 0)")
+		}
+		if !sig.SaturationFired {
+			t.Fatalf("SaturationFired: got false, want true (OR of both latches)")
+		}
+	})
+
+	// (4) HostFullNoHostStats_Cleared — scenario C: /proc/stat unreadable
+	// (HostBusyCoresAvailable=false, HostBusyCores=0). (4a) container idle →
+	// HEALTHY (host-full can't fire without host stats; limit-sat 1.8 > 0 →
+	// doesn't fire). (4b) container near limit (UsageCores=1.9) → DEGRADED via
+	// limit-sat ONLY (HostFullFired==false, LimitSaturationFired==true),
+	// attribution from the split (hb=0, uc=1.9 → 0−1.9 < 1.9 → not host →
+	// unknown).
+	t.Run("HostFullNoHostStats_Cleared", func(t *testing.T) {
+		quota := 2.0
+
+		// (4a) container idle, no host stats → healthy.
+		stA := &WindowState{}
+		vA, sigA := feedLimitHost(stA, 2, quota, 8.0, 0.0, 0.0, false)
+		if vA.State != StateHealthy {
+			t.Fatalf("(4a) State: got %q, want %q (no host stats → host-full can't fire; limit-sat 1.8 > 0 → doesn't fire → healthy)", vA.State, StateHealthy)
+		}
+		if sigA.HostFullFired {
+			t.Fatalf("(4a) HostFullFired: got true, want false (HostBusyCoresAvailable=false → host-full latch cleared/not evaluated)")
+		}
+		if sigA.SaturationFired {
+			t.Fatalf("(4a) SaturationFired: got true, want false (neither latch fires without host stats and container idle)")
+		}
+
+		// (4b) container near limit, no host stats → degraded via limit-sat ONLY.
+		stB := &WindowState{}
+		vB, sigB := feedLimitHost(stB, 2, quota, 8.0, 0.0, 1.9, false)
+		if vB.State != StateDegraded {
+			t.Fatalf("(4b) State: got %q, want %q (limit-sat 2−1.9−0.2=−0.1 < 0 → degraded)", vB.State, StateDegraded)
+		}
+		if !sigB.LimitSaturationFired {
+			t.Fatalf("(4b) LimitSaturationFired: got false, want true (limit-sat fires without host stats)")
+		}
+		if sigB.HostFullFired {
+			t.Fatalf("(4b) HostFullFired: got true, want false (HostBusyCoresAvailable=false → host-full can't fire)")
+		}
+		if vB.Attribution != AttributionUnknown {
+			t.Fatalf("(4b) Attribution: got %q, want %q (no host stats → hb=0, uc=1.9 → 0−1.9 < 1.9 → not host → unknown)", vB.Attribution, AttributionUnknown)
+		}
+	})
+}
+
+// TestDecide_Saturation_HeadroomTrigger_NoLimitByteIdentity re-confirms the
+// no-limit path is byte-identical after R10.2: the existing FULL_BOX_FIRES
+// (Quota nil, host 8/8) still yields StateDegraded, attribution host (via the
+// split: hb 8 − uc 0 > uc 0 → host), ONE saturation cause. The no-limit branch
+// body is unchanged; only the two latch-clears (limitSaturationFired=false,
+// hostFullFired=false) were added, which don't affect no-limit's
+// st.saturationFired.
+func TestDecide_Saturation_HeadroomTrigger_NoLimitByteIdentity(t *testing.T) {
+	base := time.Date(2026, 7, 6, 12, 0, 0, 0, time.UTC)
+	thresholds := DefaultThresholds()
+
+	st := &WindowState{}
+	var (
+		v   Verdict
+		sig Signals
+	)
+	for i := 0; i < 2; i++ {
+		v, sig = Decide(st, Sample{
+			Timestamp:     base.Add(time.Duration(i) * time.Second),
+			HostBusyCores: 8.0,
+			LogicalCpus:   8.0,
+		}, thresholds)
+	}
+	if v.State != StateDegraded {
+		t.Fatalf("State: got %q, want %q (no-limit full box: headroom=8−8−1=−1.0 < 0 → degraded; byte-identical to R10.1)", v.State, StateDegraded)
+	}
+	if !sig.SaturationFired {
+		t.Fatalf("SaturationFired: got false, want true (no-limit headroom < 0 → saturation fires; byte-identical)")
+	}
+	if v.Attribution != AttributionHost {
+		t.Fatalf("Attribution: got %q, want %q (no-limit split: hb 8 − uc 0 = 8 > 0 → host; byte-identical — HostFullFired is false in no-limit mode, so the host-full attribution rule does not engage)", v.Attribution, AttributionHost)
+	}
+	if sig.HostFullFired {
+		t.Fatalf("HostFullFired: got true, want false (no-limit mode → host-full latch cleared, not evaluated)")
+	}
+	if sig.LimitSaturationFired {
+		t.Fatalf("LimitSaturationFired: got true, want false (no-limit mode → limit-sat latch cleared, not evaluated)")
+	}
+	if len(v.Causes) != 1 {
+		t.Fatalf("Causes length: got %d, want 1 (ONE saturation cause; byte-identical)", len(v.Causes))
+	}
+	if v.Causes[0].Kind != CauseKindSaturation {
+		t.Fatalf("Cause Kind: got %q, want %q", v.Causes[0].Kind, CauseKindSaturation)
+	}
+}

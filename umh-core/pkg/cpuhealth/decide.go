@@ -224,14 +224,16 @@ type throttlePoint struct {
 // flip-latch that Decide mutates in place. The sliding 60s window is the
 // debounce; the asymmetric (Schmitt) recover band is the only extra mechanism.
 type WindowState struct {
-	throttleRing    []throttlePoint
-	stealRing       []stealPoint
-	usageRing       []usagePoint
-	hostBusyRing    []hostBusyPoint
-	throttleFired   bool
-	pressureFired   bool
-	stealFired      bool
-	saturationFired bool
+	throttleRing         []throttlePoint
+	stealRing            []stealPoint
+	usageRing            []usagePoint
+	hostBusyRing         []hostBusyPoint
+	throttleFired        bool
+	pressureFired        bool
+	stealFired           bool
+	saturationFired      bool
+	limitSaturationFired bool
+	hostFullFired        bool
 }
 
 // stealPoint is one timestamped steal-fraction observation in the WindowState
@@ -349,6 +351,25 @@ type Signals struct {
 	// and clears below SaturationRecover. The limit-mode case is evaluated
 	// first so a limit-set sample never hits the no-limit host-headroom branch.
 	SaturationFired bool
+	// LimitSaturationFired is the limit-mode container-scope saturation latch
+	// (container usage inside the fractional reserve band). It is one of the two
+	// internal latches whose OR is the emitted SaturationFired in limit mode;
+	// exposed so the basis (R10.4) and message (R10.5) can rank the firings.
+	// False in no-limit mode.
+	LimitSaturationFired bool
+	// HostFullFired is the limit-mode host-scope latch: the host itself is full
+	// (LogicalCpus − hostBusyMean − cpuReserveCores < 0, readable via
+	// HostBusyCoresAvailable). A limit is a ceiling not a reservation, so a full
+	// host stacks as a cause on a limited container. When both latches fire,
+	// host-full dominates (attribution host, cause Value = HostHeadroomCores).
+	// False when host stats are unavailable (scenario C) and in no-limit mode.
+	HostFullFired bool
+	// HostHeadroomCores is the host-scope headroom: LogicalCpus − hostBusyMean
+	// − cpuReserveCores. In no-limit mode it equals HeadroomCores (same formula);
+	// in limit mode it is the host-full latch's decision variable and the
+	// saturation cause Value when host-full dominates. NOT clamped (negative on
+	// a full host). Computed whenever LogicalCpus > 0.
+	HostHeadroomCores float64
 	// HostBusyCores60sMean is the 60s arithmetic mean of per-tick HostBusyCores;
 	// observability-only (does not change the verdict). The per-tick input is
 	// clamped (NaN/negative/+Inf → 0) because a malformed value poisons the
@@ -785,6 +806,13 @@ func Decide(st *WindowState, sample Sample, thresholds Thresholds) (Verdict, Sig
 		signals.ReserveCores = cpuReserveCores
 	}
 
+	// Host-scope headroom (the rule-1 test at host scope): always computed when
+	// the host CPU count is known, used by the host-full latch in limit mode and
+	// as the saturation cause Value when host-full dominates. In no-limit mode
+	// it equals HeadroomCores (same formula).
+	hostHeadroomCores := sample.LogicalCpus - hostBusyMean - cpuReserveCores
+	signals.HostHeadroomCores = hostHeadroomCores
+
 	signals.CapacityCores = capacity
 	signals.LimitApplies = limitMode
 	signals.PsiApplies = sample.PsiAvailable
@@ -803,18 +831,39 @@ func Decide(st *WindowState, sample Sample, thresholds Thresholds) (Verdict, Sig
 	// verdict is healthy.
 	switch {
 	case limitMode:
+		// Container-scope latch (R10.1's limit latch, now split out).
+		recoverCores := thresholds.LimitReserveRecoverFraction * *sample.Quota
+
 		if len(st.usageRing) >= 2 {
-			recoverCores := thresholds.LimitReserveRecoverFraction * *sample.Quota
 			switch {
 			case signals.HeadroomCores < 0:
-				st.saturationFired = true
+				st.limitSaturationFired = true
 			case signals.HeadroomCores > recoverCores:
-				st.saturationFired = false
+				st.limitSaturationFired = false
 			}
 		} else {
-			st.saturationFired = false
+			st.limitSaturationFired = false
 		}
+		// Host-scope latch: the host itself is full (rule-1 test at host scope).
+		// Only when /proc/stat is readable (HostBusyCoresAvailable); a limit is
+		// a ceiling not a reservation, so a full host stacks on a limited
+		// container. NEVER quota-scoped (that was the B false fire).
+		if sample.HostBusyCoresAvailable && len(st.hostBusyRing) >= 2 {
+			switch {
+			case hostHeadroomCores < 0:
+				st.hostFullFired = true
+			case hostHeadroomCores > headroomRecoverCores:
+				st.hostFullFired = false
+			}
+		} else {
+			st.hostFullFired = false
+		}
+
+		st.saturationFired = st.limitSaturationFired || st.hostFullFired
 	case sample.LogicalCpus > 0:
+		st.limitSaturationFired = false
+		st.hostFullFired = false
+
 		if len(st.hostBusyRing) >= 2 {
 			switch {
 			case signals.HeadroomCores < 0:
@@ -826,6 +875,9 @@ func Decide(st *WindowState, sample Sample, thresholds Thresholds) (Verdict, Sig
 			st.saturationFired = false
 		}
 	case deadZone && len(st.usageRing) >= 2:
+		st.limitSaturationFired = false
+		st.hostFullFired = false
+
 		switch {
 		case saturationAvg >= thresholds.HighUsageFraction:
 			st.saturationFired = true
@@ -833,10 +885,14 @@ func Decide(st *WindowState, sample Sample, thresholds Thresholds) (Verdict, Sig
 			st.saturationFired = false
 		}
 	default:
+		st.limitSaturationFired = false
+		st.hostFullFired = false
 		st.saturationFired = false
 	}
 
 	signals.SaturationFired = st.saturationFired
+	signals.LimitSaturationFired = st.limitSaturationFired
+	signals.HostFullFired = st.hostFullFired
 
 	// Percentile block: set UsageRingActive, AvgUsageFraction, AvgUsageCores
 	// from the already-computed early values (one blessed average — do NOT
@@ -905,6 +961,8 @@ func Decide(st *WindowState, sample Sample, thresholds Thresholds) (Verdict, Sig
 		satValue := signals.HeadroomCores
 		if sample.LogicalCpus <= 0 {
 			satValue = saturationAvg
+		} else if signals.HostFullFired {
+			satValue = signals.HostHeadroomCores
 		}
 
 		fired = append(fired, firedCause{Cause{Kind: CauseKindSaturation, Value: satValue}, severity(saturationAvg, thresholds.HighUsageFraction), false})
@@ -929,9 +987,12 @@ func Decide(st *WindowState, sample Sample, thresholds Thresholds) (Verdict, Sig
 		// Host when the host (non-UMH) share exceeds the UMH share, else
 		// Unknown. Clamp UsageCores the same way HostBusyCores (hb) is clamped
 		// at the ring insert (NaN/negative/+Inf -> 0).
-		if signals.StealFired {
+		switch {
+		case signals.StealFired:
 			attr = AttributionHost
-		} else {
+		case signals.HostFullFired:
+			attr = AttributionHost
+		default:
 			uc := sample.UsageCores
 			if !(uc >= 0) || math.IsInf(uc, 1) {
 				uc = 0
