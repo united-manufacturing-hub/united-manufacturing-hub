@@ -180,6 +180,20 @@ func (g *Gatekeeper) CertificateHandler() certificatehandler.Handler {
 	return g.certHandler
 }
 
+// dispatchSafely runs fn, recovering from a panic so a single malformed message
+// does not permanently kill the processing goroutine and halt that direction.
+func (g *Gatekeeper) dispatchSafely(direction string, fn func()) {
+	defer func() {
+		r := recover()
+		if r != nil {
+			g.logger.Errorw("panic handling message, continuing", "direction", direction, "panic", r)
+			sentry.ReportIssuefWithContext(sentry.IssueTypeError, g.logger, map[string]any{"feature": string(deps.FeatureGatekeeper)}, "gatekeeper %s message panic: %v", direction, r)
+		}
+	}()
+
+	fn()
+}
+
 func (g *Gatekeeper) processInbound(ctx context.Context) {
 	defer g.wg.Done()
 	defer func() {
@@ -198,7 +212,7 @@ func (g *Gatekeeper) processInbound(ctx context.Context) {
 			if !ok {
 				return
 			}
-			g.handleInbound(ctx, msg)
+			g.dispatchSafely("inbound", func() { g.handleInbound(ctx, msg) })
 		}
 	}
 }
@@ -294,7 +308,7 @@ func (g *Gatekeeper) processOutbound(ctx context.Context) {
 			if !ok {
 				return
 			}
-			g.handleOutbound(ctx, msg)
+			g.dispatchSafely("outbound", func() { g.handleOutbound(ctx, msg) })
 		}
 	}
 }
@@ -345,19 +359,24 @@ func (g *Gatekeeper) processLegacyOutbound(ctx context.Context) {
 			if !ok {
 				return
 			}
-			g.mu.RLock()
-			instanceUUID := g.instanceUUID
-			g.mu.RUnlock()
-			transportMsg := &types.UMHMessage{
-				InstanceUUID: instanceUUID,
-				Content:      msg.Content,
-				Email:        msg.Email,
-			}
-			select {
-			case g.outboundChan <- transportMsg:
-			case <-ctx.Done():
-				return
-			}
+			g.dispatchSafely("legacy_outbound", func() { g.handleLegacyOutbound(ctx, msg) })
 		}
+	}
+}
+
+func (g *Gatekeeper) handleLegacyOutbound(ctx context.Context, msg *models.UMHMessage) {
+	g.mu.RLock()
+	instanceUUID := g.instanceUUID
+	g.mu.RUnlock()
+
+	transportMsg := &types.UMHMessage{
+		InstanceUUID: instanceUUID,
+		Content:      msg.Content,
+		Email:        msg.Email,
+	}
+
+	select {
+	case g.outboundChan <- transportMsg:
+	case <-ctx.Done():
 	}
 }

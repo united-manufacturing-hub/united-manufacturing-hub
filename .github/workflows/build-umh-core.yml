@@ -51,6 +51,7 @@ jobs:
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
+          persist-credentials: false
           filter: blob:none
           sparse-checkout: |
             umh-core
@@ -74,6 +75,7 @@ jobs:
           repository: united-manufacturing-hub/ManagementConsole
           path: ../ManagementConsole
           token: ${{ steps.mc-token.outputs.token }}
+          persist-credentials: false
 
       - name: Setup Depot
         uses: depot/setup-action@15c09a5f77a0840ad4bce955686522a257853461 # v1.7.1
