@@ -17,14 +17,14 @@
 // A monitor worker only polls something and reports health. simple removes the
 // boilerplate that shape otherwise costs (a config, a deps struct, a worker, an
 // action, and a handful of state files): the developer fills a struct-literal
-// Spec and registers it once from an init(). The framework owns the state
+// MonitorSpec and registers it once from an init(). The framework owns the state
 // machine, the collection cadence, and the health-verdict resolution.
 //
-// # The Spec
+// # The MonitorSpec
 //
 // Two fields are required, three are optional:
 //
-//	Spec[TConfig, TStatus, TDeps]{
+//	MonitorSpec[TConfig, TStatus, TDeps]{
 //	    WorkerType string                                                       // required
 //	    Poll       func(ctx, d TDeps, cfg TConfig) (TStatus, error)             // required
 //	    Health     func(cfg TConfig, status TStatus) Health                     // optional
@@ -44,11 +44,11 @@
 // Health function decides the verdict; when it is nil the worker is healthy with
 // reason "running (no health check)".
 //
-// The verdict rides in Status[TStatus] (Result + Degraded + Reason), which the
-// framework stamps onto the observation. The state machine reads it to flip
-// between running and degraded (emitting the reason via its Transition), and the
-// fsmv1 adapter reads it through the HealthReporter interface Status satisfies.
-// Nothing is added to the shared fsmv2.Observation API.
+// Status[TStatus] holds the verdict (Result + Degraded + Reason); the framework
+// sets it on the observation. The state machine reads it to switch between
+// running and degraded (emitting the reason on each Transition); the fsmv1
+// adapter reads it through the HealthReporter interface Status satisfies. Nothing
+// is added to the shared fsmv2.Observation API.
 //
 // # Example
 //
@@ -71,7 +71,7 @@
 //	}
 //
 //	func init() {
-//	    simple.Register(simple.Spec[Config, Status, struct{}]{
+//	    simple.Register(simple.MonitorSpec[Config, Status, struct{}]{
 //	        WorkerType: "port_monitor",
 //	        Interval:   5 * time.Second,
 //	        Poll: func(ctx context.Context, _ struct{}, cfg Config) (Status, error) {

@@ -202,7 +202,7 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity deps.Identity, work
 	// Declared early so closures can capture it by reference.
 	var workerCtx *WorkerContext[TObserved, TDesired]
 
-	// A worker type may register a custom collection cadence (simple.Spec.Interval);
+	// A worker type may register a custom collection cadence (simple.MonitorSpec.Interval);
 	// fall back to the default when it did not.
 	observationInterval := DefaultObservationInterval
 	if iv, ok := fsmv2.ObservationIntervalFor(s.workerType); ok {

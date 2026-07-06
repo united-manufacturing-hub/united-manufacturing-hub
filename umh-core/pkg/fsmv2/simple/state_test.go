@@ -38,6 +38,16 @@ func stoppingSnap() fsmv2.Snapshot {
 	}
 }
 
+func disabledSnap() fsmv2.Snapshot {
+	desired := &fsmv2.WrappedDesiredState[probeConfig]{}
+	desired.SetDisabled(true)
+
+	return fsmv2.Snapshot{
+		Observed: fsmv2.Observation[Status[probeStatus]]{Status: Status[probeStatus]{}},
+		Desired:  desired,
+	}
+}
+
 var _ = Describe("state machine", func() {
 	Describe("runningState", func() {
 		It("stays running and emits the reason when the verdict is healthy", func() {
@@ -96,15 +106,25 @@ var _ = Describe("state machine", func() {
 	})
 
 	Describe("stoppedState", func() {
-		It("stays stopped while shutdown is requested", func() {
+		It("signals removal on a terminal shutdown", func() {
 			s := &stoppedState[probeConfig, probeStatus]{}
 
 			res := s.Next(stoppingSnap())
 
 			Expect(res.State).To(BeIdenticalTo(s))
+			Expect(res.Signal).To(Equal(fsmv2.SignalNeedsRemoval))
 		})
 
-		It("resumes running once shutdown clears", func() {
+		It("stays parked without signalling removal when only disabled", func() {
+			s := &stoppedState[probeConfig, probeStatus]{}
+
+			res := s.Next(disabledSnap())
+
+			Expect(res.State).To(BeIdenticalTo(s))
+			Expect(res.Signal).To(Equal(fsmv2.SignalNone))
+		})
+
+		It("resumes running once the stop clears", func() {
 			s := &stoppedState[probeConfig, probeStatus]{}
 
 			res := s.Next(snapWith(Status[probeStatus]{Degraded: false, Reason: "reachable"}))

@@ -30,7 +30,7 @@ import (
 )
 
 const (
-	// storeReadTimeout bounds how long getFreshObs blocks on a CSE store read.
+	// storeReadTimeout bounds how long getFreshStatus blocks on a CSE store read.
 	// The StateReader non-blocking contract requires a deadline-bounded context.
 	storeReadTimeout = 100 * time.Millisecond
 
@@ -68,7 +68,7 @@ type HealthReporter interface {
 //
 // All lifecycle methods (CreateInstance, RemoveInstance, etc.) are no-ops: an
 // fsmv2 worker manages its own lifecycle through the shared global runtime. The
-// instance reads state via GetFreshObs and resolves it through a fixed
+// instance reads state via GetFresh and resolves it through a fixed
 // framework-owned ladder; the developer supplies only mapFresh (the Fresh +
 // healthy leaf) and mapObserved (the full ObservedState).
 //
@@ -145,24 +145,26 @@ func staleAfterFor(workerType string) time.Duration {
 	return unregisteredStaleFallback
 }
 
-// getFreshObs reads the child observation for ref, bounded by storeReadTimeout.
+// getFreshStatus reads the child status for ref, bounded by storeReadTimeout.
 // A nil client (FF-off) or any read error maps to Unknown so the caller can hold
 // the last known state instead of flapping.
-func (i *AdaptedInstance[TConfig, TStatus]) getFreshObs() (fsmv2.Observation[TStatus], fsmv2client.Freshness) {
+func (i *AdaptedInstance[TConfig, TStatus]) getFreshStatus() (TStatus, fsmv2client.Freshness) {
+	var zero TStatus
+
 	c := fsmv2client.GetClient()
 	if c == nil {
-		return fsmv2.Observation[TStatus]{}, fsmv2client.Unknown
+		return zero, fsmv2client.Unknown
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), storeReadTimeout)
 	defer cancel()
 
-	obs, freshness, err := fsmv2client.GetFreshObs[TStatus](ctx, c, i.ref, i.staleAfter)
+	status, freshness, err := fsmv2client.GetFresh[TStatus](ctx, c, i.ref, i.staleAfter)
 	if err != nil {
-		return fsmv2.Observation[TStatus]{}, fsmv2client.Unknown
+		return zero, fsmv2client.Unknown
 	}
 
-	return obs, freshness
+	return status, freshness
 }
 
 // --- publicfsm.FSMInstance implementation ---
@@ -179,12 +181,12 @@ func (i *AdaptedInstance[TConfig, TStatus]) GetCurrentFSMState() string {
 	i.mu.Lock()
 	defer i.mu.Unlock()
 
-	obs, freshness := i.getFreshObs()
-	resolved := i.resolve(obs, freshness)
+	status, freshness := i.getFreshStatus()
+	resolved := i.resolve(status, freshness)
 	i.lastState = resolved
 
 	var reason string
-	if hr, ok := any(obs.Status).(HealthReporter); ok {
+	if hr, ok := any(status).(HealthReporter); ok {
 		_, reason = hr.HealthVerdict()
 	}
 
@@ -196,7 +198,7 @@ func (i *AdaptedInstance[TConfig, TStatus]) GetCurrentFSMState() string {
 }
 
 // resolve implements rungs 2–6 of the ladder. mu is held by the caller.
-func (i *AdaptedInstance[TConfig, TStatus]) resolve(obs fsmv2.Observation[TStatus], freshness fsmv2client.Freshness) string {
+func (i *AdaptedInstance[TConfig, TStatus]) resolve(status TStatus, freshness fsmv2client.Freshness) string {
 	// Rung 2: Unknown (nil client / read error) → hold last known state.
 	if freshness == fsmv2client.Unknown {
 		if i.lastState == "" {
@@ -207,7 +209,7 @@ func (i *AdaptedInstance[TConfig, TStatus]) resolve(obs fsmv2.Observation[TStatu
 	}
 
 	// Rung 3: degraded verdict on the stored status → degraded.
-	if hr, ok := any(obs.Status).(HealthReporter); ok {
+	if hr, ok := any(status).(HealthReporter); ok {
 		if degraded, _ := hr.HealthVerdict(); degraded {
 			return degradedState
 		}
@@ -226,7 +228,7 @@ func (i *AdaptedInstance[TConfig, TStatus]) resolve(obs fsmv2.Observation[TStatu
 	}
 
 	// Rung 6: Fresh + not degraded → developer's Fresh-case mapping.
-	return i.mapFresh(i.cfg, obs.Status)
+	return i.mapFresh(i.cfg, status)
 }
 
 // GetDesiredFSMState returns the configured desired state.
@@ -262,14 +264,14 @@ func (i *AdaptedInstance[TConfig, TStatus]) Remove(_ context.Context) error {
 
 // GetLastObservedState maps the observation to the developer's ObservedState.
 // It always delegates to mapObserved so the returned concrete type is the same
-// on every tick: on a non-Fresh read getFreshObs yields a zero Observation, so
+// on every tick: on a non-Fresh read getFreshStatus yields a zero status, so
 // mapObserved receives a zero status and produces the developer's type with
 // empty content rather than a foreign framework type a consumer's type
 // assertion would trip on. mapObserved must tolerate a zero status.
 func (i *AdaptedInstance[TConfig, TStatus]) GetLastObservedState() publicfsm.ObservedState {
-	obs, _ := i.getFreshObs()
+	status, _ := i.getFreshStatus()
 
-	return i.mapObserved(i.cfg, obs.Status)
+	return i.mapObserved(i.cfg, status)
 }
 
 // GetMinimumRequiredTime returns the configured minimum required time.
@@ -300,7 +302,7 @@ func (i *AdaptedInstance[TConfig, TStatus]) StopInstance(_ context.Context, _ fi
 }
 
 // UpdateObservedStateOfInstance is a no-op: observations are read on demand via
-// getFreshObs, not pushed by the control loop.
+// getFreshStatus, not pushed by the control loop.
 func (i *AdaptedInstance[TConfig, TStatus]) UpdateObservedStateOfInstance(_ context.Context, _ serviceregistry.Provider, _ publicfsm.SystemSnapshot) error {
 	return nil
 }

@@ -167,45 +167,6 @@ func GetFresh[TStatus any](ctx context.Context, c *FSMv2Client, ref dynamicchild
 	return obs.Status, Fresh, nil
 }
 
-// GetFreshObs mirrors GetFresh but returns the full fsmv2.Observation[TStatus]
-// instead of just its Status, so callers see the framework fields (the
-// Degraded/Reason health verdict and CollectedAt) alongside the Freshness
-// classification. The Freshness ladder is identical to GetFresh: a ref that was
-// never Upserted is Unregistered; a registered ref with no persisted
-// observation is NeverObserved; an observation older than maxAge is Stale;
-// otherwise Fresh.
-//
-// A non-ErrNotObserved read error is returned verbatim alongside the Unknown
-// Freshness. Callers must check err before reading Freshness or the returned
-// Observation: both are meaningless when err is non-nil, and the returned
-// Observation is only meaningful when Freshness is Fresh or Stale.
-//
-// The store read is bounded by the passed ctx; callers SHOULD pass a
-// deadline-bounded ctx (see the StateReader non-blocking contract). The
-// ENG-5107 stale-tombstone caveat documented on GetFresh applies identically.
-func GetFreshObs[TStatus any](ctx context.Context, c *FSMv2Client, ref dynamicchildren.Ref, maxAge time.Duration) (fsmv2.Observation[TStatus], Freshness, error) {
-	var zero fsmv2.Observation[TStatus]
-
-	if !c.w.Registry().Contains(ref) {
-		return zero, Unregistered, nil
-	}
-
-	obs, err := Get[TStatus](ctx, c, ref)
-	if err != nil {
-		if errors.Is(err, ErrNotObserved) {
-			return zero, NeverObserved, nil
-		}
-
-		return zero, Unknown, err
-	}
-
-	if time.Since(obs.CollectedAt) > maxAge {
-		return obs, Stale, nil
-	}
-
-	return obs, Fresh, nil
-}
-
 // globalCli is the process-scoped FSMv2Client published once at startup so any
 // FSMv1 component (regardless of which benthos manager constructed it) can
 // reach the FSMv2 child-observation read path via GetClient. NewBenthosManager

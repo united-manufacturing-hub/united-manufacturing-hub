@@ -23,21 +23,21 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 )
 
-// simpleWorker runs a Spec's Poll on the framework's collection cadence. It
-// holds only the immutable Spec: the worker carries no mutable state, so the
-// same logic serves every simple worker type.
+// simpleWorker runs a MonitorSpec's Poll on the framework's collection cadence.
+// It holds only the immutable MonitorSpec: the worker carries no mutable state,
+// so the same logic serves every simple worker type.
 //
 // The framework-facing status is Status[TStatus]: the developer's poll result
 // wrapped with the health verdict. WorkerBase's deps sentinel is struct{}; the
-// Spec's own TDeps flows to Poll, not through WorkerBase.
+// MonitorSpec's own TDeps flows to Poll, not through WorkerBase.
 type simpleWorker[TConfig, TStatus, TDeps any] struct {
 	fsmv2.WorkerBase[TConfig, Status[TStatus], struct{}]
-	spec Spec[TConfig, TStatus, TDeps]
+	spec MonitorSpec[TConfig, TStatus, TDeps]
 }
 
-// newSimpleWorker builds a simpleWorker from its Spec and framework deps.
+// newSimpleWorker builds a simpleWorker from its MonitorSpec and framework deps.
 func newSimpleWorker[TConfig, TStatus, TDeps any](
-	spec Spec[TConfig, TStatus, TDeps],
+	spec MonitorSpec[TConfig, TStatus, TDeps],
 	id deps.Identity,
 	logger deps.FSMLogger,
 	sr deps.StateReader,
@@ -66,12 +66,6 @@ const reasonNoHealthCheck = "running (no health check)"
 // the optional Health function decides the verdict; when it is nil the worker
 // is healthy with reason "running (no health check)".
 func (w *simpleWorker[TConfig, TStatus, TDeps]) CollectObservedState(ctx context.Context, desired fsmv2.DesiredState) (fsmv2.ObservedState, error) {
-	select {
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	default:
-	}
-
 	cfg := fsmv2.ExtractConfig[TConfig](desired)
 
 	status, err := w.spec.Poll(ctx, w.spec.Deps, cfg)

@@ -19,13 +19,13 @@ import (
 	"fmt"
 )
 
-// Status wraps a developer's poll result with the health verdict the framework
-// resolved for that tick. simple owns this type (unlike the opaque developer
-// TStatus), so it can set the verdict on both a good poll (from the Health
-// function) and a poll error (Degraded, a reason, and a zero Result). Keeping
-// the verdict here instead of on fsmv2.Observation leaves the supervisor/core
-// API untouched (ENG-5305): the fsmv2 state reads Degraded/Reason off the
-// snapshot, and the fsmv1 adapter reads them through the HealthReporter
+// Status wraps a developer's poll result with the tick's degraded/reason verdict.
+// Those two fields are the Health value from health.go, flattened in here: on a
+// good poll they come from the developer's Health function; on a poll error the
+// framework sets them directly (Degraded, a reason, and a zero Result) without
+// calling Health. simple owns this type (unlike the opaque developer TStatus), so
+// it can carry the verdict on both paths. The fsmv2 state reads Degraded/Reason
+// off the snapshot, and the fsmv1 adapter reads them through the HealthReporter
 // interface.
 //
 // Result is flattened to the top JSON level (see MarshalJSON) so CSE delta sync

@@ -24,7 +24,7 @@ import (
 )
 
 // The per-worker-type observation-interval registry lets a worker declare its
-// collection cadence once (via simple.Spec.Interval) so both the supervisor's
+// collection cadence once (via simple.MonitorSpec.Interval) so both the supervisor's
 // collector and the fsmv1 adapter (StaleAfter = 3×Interval) read one source of
 // truth. The getter returns (value, ok); the caller applies its own default so
 // this core package need not import the supervisor's DefaultObservationInterval

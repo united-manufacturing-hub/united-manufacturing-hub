@@ -80,21 +80,27 @@ func (s *degradedState[TConfig, TStatus]) String() string {
 }
 
 // stoppedState is the resting state of a simple worker: a monitor has nothing to
-// release, so shutdown or disable moves it straight here (no stopping state). It
-// resumes running once the stop is lifted (e.g. a disabled worker re-enabled);
-// a terminal shutdown keeps it here until the supervisor removes it.
+// release, so shutdown or disable moves it straight here (no stopping state). A
+// disable parks the worker here until it is re-enabled; a terminal shutdown emits
+// SignalNeedsRemoval so the supervisor reaps it.
 type stoppedState[TConfig, TStatus any] struct {
 	helpers.StoppedBase
 }
 
-// Next stays stopped while a stop is still required and resumes running once it
-// clears.
+// Next signals removal on a terminal shutdown, stays parked on a plain disable,
+// and resumes running once the stop clears.
 func (s *stoppedState[TConfig, TStatus]) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := fsmv2.ConvertWorkerSnapshot[TConfig, Status[TStatus]](snapAny)
 
 	if snap.ShouldStop() {
-		return fsmv2.Transition(s, fsmv2.SignalNone, nil,
-			"stopped: "+snap.StopReason(), nil)
+		// A shutdown is terminal, so signal removal; a monitor holds nothing to
+		// clean up first. A plain disable stays parked here until re-enabled.
+		signal := fsmv2.SignalNone
+		if snap.IsShutdownRequested {
+			signal = fsmv2.SignalNeedsRemoval
+		}
+
+		return fsmv2.Transition(s, signal, nil, "stopped: "+snap.StopReason(), nil)
 	}
 
 	return fsmv2.Transition(&runningState[TConfig, TStatus]{}, fsmv2.SignalNone, nil, "resuming after stop cleared", nil)

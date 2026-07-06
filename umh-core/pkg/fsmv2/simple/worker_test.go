@@ -35,7 +35,7 @@ type probeStatus struct {
 	Reachable bool `json:"reachable"`
 }
 
-func newProbeWorker(spec Spec[probeConfig, probeStatus, struct{}]) (*simpleWorker[probeConfig, probeStatus, struct{}], error) {
+func newProbeWorker(spec MonitorSpec[probeConfig, probeStatus, struct{}]) (*simpleWorker[probeConfig, probeStatus, struct{}], error) {
 	return newSimpleWorker(spec,
 		deps.Identity{ID: "probe", WorkerType: spec.WorkerType},
 		deps.NewNopFSMLogger(), nil)
@@ -46,7 +46,7 @@ var _ = Describe("simpleWorker", func() {
 		It("runs Poll and lands its status on the Observation", func() {
 			var gotCfg probeConfig
 
-			spec := Spec[probeConfig, probeStatus, struct{}]{
+			spec := MonitorSpec[probeConfig, probeStatus, struct{}]{
 				WorkerType: "simpleworker_collect",
 				Poll: func(_ context.Context, _ struct{}, cfg probeConfig) (probeStatus, error) {
 					gotCfg = cfg
@@ -72,7 +72,7 @@ var _ = Describe("simpleWorker", func() {
 		It("persists a Poll error as a degraded verdict instead of returning it", func() {
 			healthCalled := false
 
-			spec := Spec[probeConfig, probeStatus, struct{}]{
+			spec := MonitorSpec[probeConfig, probeStatus, struct{}]{
 				WorkerType: "simpleworker_pollerr",
 				Poll: func(_ context.Context, _ struct{}, _ probeConfig) (probeStatus, error) {
 					return probeStatus{}, errors.New("dial timeout")
@@ -97,7 +97,7 @@ var _ = Describe("simpleWorker", func() {
 		})
 
 		It("stamps the Health verdict on the Observation after a good poll", func() {
-			spec := Spec[probeConfig, probeStatus, struct{}]{
+			spec := MonitorSpec[probeConfig, probeStatus, struct{}]{
 				WorkerType: "simpleworker_health",
 				Poll: func(_ context.Context, _ struct{}, _ probeConfig) (probeStatus, error) {
 					return probeStatus{Reachable: false}, nil
@@ -123,7 +123,7 @@ var _ = Describe("simpleWorker", func() {
 		})
 
 		It("defaults to healthy with a fixed reason when Health is omitted", func() {
-			spec := Spec[probeConfig, probeStatus, struct{}]{
+			spec := MonitorSpec[probeConfig, probeStatus, struct{}]{
 				WorkerType: "simpleworker_nohealth",
 				Poll: func(_ context.Context, _ struct{}, _ probeConfig) (probeStatus, error) {
 					return probeStatus{Reachable: true}, nil
@@ -141,11 +141,11 @@ var _ = Describe("simpleWorker", func() {
 			Expect(o.Status.Reason).To(Equal("running (no health check)"))
 		})
 
-		It("honours context cancellation", func() {
-			spec := Spec[probeConfig, probeStatus, struct{}]{
+		It("passes context cancellation to Poll, surfacing it as a degraded verdict", func() {
+			spec := MonitorSpec[probeConfig, probeStatus, struct{}]{
 				WorkerType: "simpleworker_ctx",
-				Poll: func(_ context.Context, _ struct{}, _ probeConfig) (probeStatus, error) {
-					return probeStatus{}, nil
+				Poll: func(ctx context.Context, _ struct{}, _ probeConfig) (probeStatus, error) {
+					return probeStatus{}, ctx.Err()
 				},
 			}
 
@@ -155,8 +155,12 @@ var _ = Describe("simpleWorker", func() {
 			ctx, cancel := context.WithCancel(context.Background())
 			cancel()
 
-			_, err = w.CollectObservedState(ctx, &fsmv2.WrappedDesiredState[probeConfig]{})
-			Expect(err).To(MatchError(context.Canceled))
+			obs, err := w.CollectObservedState(ctx, &fsmv2.WrappedDesiredState[probeConfig]{})
+			Expect(err).NotTo(HaveOccurred())
+
+			o := obs.(fsmv2.Observation[Status[probeStatus]])
+			Expect(o.Status.Degraded).To(BeTrue())
+			Expect(o.Status.Reason).To(Equal("poll error: context canceled"))
 		})
 	})
 
@@ -165,10 +169,10 @@ var _ = Describe("simpleWorker", func() {
 			token string
 		}
 
-		It("passes the Spec's Deps value to Poll", func() {
+		It("passes the MonitorSpec's Deps value to Poll", func() {
 			var gotToken string
 
-			spec := Spec[probeConfig, probeStatus, probeDeps]{
+			spec := MonitorSpec[probeConfig, probeStatus, probeDeps]{
 				WorkerType: "simpleworker_deps_pass",
 				Deps:       probeDeps{token: "s3cret"},
 				Poll: func(_ context.Context, d probeDeps, _ probeConfig) (probeStatus, error) {
@@ -191,7 +195,7 @@ var _ = Describe("simpleWorker", func() {
 
 	Describe("dependencies", func() {
 		It("reports a true-nil GetDependenciesAny so metrics injection is not skipped", func() {
-			w, err := newProbeWorker(Spec[probeConfig, probeStatus, struct{}]{
+			w, err := newProbeWorker(MonitorSpec[probeConfig, probeStatus, struct{}]{
 				WorkerType: "simpleworker_deps",
 				Poll: func(_ context.Context, _ struct{}, _ probeConfig) (probeStatus, error) {
 					return probeStatus{}, nil
@@ -210,7 +214,7 @@ var _ = Describe("Register", func() {
 
 	It("panics when WorkerType is empty", func() {
 		Expect(func() {
-			Register(Spec[probeConfig, probeStatus, struct{}]{
+			Register(MonitorSpec[probeConfig, probeStatus, struct{}]{
 				Poll: func(_ context.Context, _ struct{}, _ probeConfig) (probeStatus, error) {
 					return probeStatus{}, nil
 				},
@@ -220,13 +224,13 @@ var _ = Describe("Register", func() {
 
 	It("panics when Poll is nil", func() {
 		Expect(func() {
-			Register(Spec[probeConfig, probeStatus, struct{}]{WorkerType: "simpleworker_nopoll"})
+			Register(MonitorSpec[probeConfig, probeStatus, struct{}]{WorkerType: "simpleworker_nopoll"})
 		}).To(PanicWith(ContainSubstring("Poll")))
 	})
 
 	It("panics when TStatus is not a struct", func() {
 		Expect(func() {
-			Register(Spec[probeConfig, map[string]any, struct{}]{
+			Register(MonitorSpec[probeConfig, map[string]any, struct{}]{
 				WorkerType: "simpleworker_mapstatus",
 				Poll: func(_ context.Context, _ struct{}, _ probeConfig) (map[string]any, error) {
 					return nil, nil
@@ -236,7 +240,7 @@ var _ = Describe("Register", func() {
 	})
 
 	It("registers an initial state for the worker type", func() {
-		Register(Spec[probeConfig, probeStatus, struct{}]{
+		Register(MonitorSpec[probeConfig, probeStatus, struct{}]{
 			WorkerType: "simpleworker_register",
 			Poll: func(_ context.Context, _ struct{}, _ probeConfig) (probeStatus, error) {
 				return probeStatus{}, nil
@@ -245,8 +249,8 @@ var _ = Describe("Register", func() {
 		Expect(fsmv2.LookupInitialState("simpleworker_register")).NotTo(BeNil())
 	})
 
-	It("records Spec.Interval as the worker type's collection cadence", func() {
-		Register(Spec[probeConfig, probeStatus, struct{}]{
+	It("records MonitorSpec.Interval as the worker type's collection cadence", func() {
+		Register(MonitorSpec[probeConfig, probeStatus, struct{}]{
 			WorkerType: "simpleworker_interval",
 			Interval:   5 * time.Second,
 			Poll: func(_ context.Context, _ struct{}, _ probeConfig) (probeStatus, error) {
@@ -260,7 +264,7 @@ var _ = Describe("Register", func() {
 	})
 
 	It("leaves the cadence unset when Interval is zero so the collector defaults", func() {
-		Register(Spec[probeConfig, probeStatus, struct{}]{
+		Register(MonitorSpec[probeConfig, probeStatus, struct{}]{
 			WorkerType: "simpleworker_nointerval",
 			Poll: func(_ context.Context, _ struct{}, _ probeConfig) (probeStatus, error) {
 				return probeStatus{}, nil

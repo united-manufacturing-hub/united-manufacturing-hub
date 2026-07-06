@@ -156,11 +156,6 @@ type Observation[TStatus any] struct {
 	Status TStatus `json:"-"`
 	// State is the current FSM state name (set by supervisor via SetState).
 	State string `json:"state"`
-	// Reason is the human-readable explanation for the current health verdict,
-	// shown in logs and the frontend (e.g. "poll error: dial timeout"). The JSON
-	// tag is framework-namespaced (health_) so it does not collide with a worker's
-	// own status fields (ENG-5305).
-	Reason string `json:"health_reason"`
 	// LastActionResults contains action history (managed by supervisor).
 	LastActionResults []deps.ActionResult `json:"last_action_results,omitempty"`
 	// ChildrenView is the per-tick snapshot of children state for parent
@@ -174,12 +169,6 @@ type Observation[TStatus any] struct {
 	// in-memory deps; see the two-goroutine architecture note in
 	// supervisor/internal/collection/collector.go.
 	ChildrenView config.ChildrenView `json:"childrenView"`
-	// Status is the developer's business data. Flattened to top level via custom MarshalJSON.
-	Status TStatus `json:"-"`
-	// State is the current FSM state name (set by supervisor via SetState).
-	State string `json:"state"`
-	// LastActionResults contains action history (managed by supervisor).
-	LastActionResults []deps.ActionResult `json:"last_action_results,omitempty"`
 	// MetricsEmbedder provides framework and worker metrics (anonymous embed, inline in JSON).
 	deps.MetricsEmbedder
 	// ChildrenHealthy is the count of healthy children.

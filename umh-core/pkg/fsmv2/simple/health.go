@@ -14,10 +14,13 @@
 
 package simple
 
-// Health is the verdict a worker's optional Health function returns for one
-// poll: whether the polled target is degraded and a human-readable reason. The
-// framework stamps it onto the Observation, where the fsmv2 state emits the
-// reason and the fsmv1 adapter reads the verdict (ENG-5305, Q2/Q9).
+// Health is the verdict for a poll that succeeded but found the target
+// unhealthy: whether it is degraded and a human-readable reason.
+//
+// A worker can go degraded two ways: the poll itself errors, or the poll
+// succeeds but the target is unhealthy. Both end up in the same degraded
+// Status[T], but Health only decides the second. Poll errors become a degraded
+// verdict directly, without calling Health (see simpleWorker.CollectObservedState).
 type Health struct {
 	// Reason is the human-readable explanation for the verdict, shown in logs
 	// and the frontend (e.g. "port 502 unreachable").
