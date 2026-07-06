@@ -24,6 +24,7 @@ import (
 	publicfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	nmapfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/nmap"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/adapter"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/simple"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	nmapservice "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/nmap"
@@ -40,7 +41,7 @@ const stoppedState = "stopped"
 func NewFsmv2NmapManager(managerName string) *adapter.WorkerManager[config.NmapConfig, simple.Status[NmapStatus]] {
 	return adapter.NewWorkerManager(adapter.WorkerManagerSpec[config.NmapConfig, simple.Status[NmapStatus]]{
 		WorkerType: WorkerType,
-		Log:        logger.For(managerName),
+		Log:        deps.NewFSMLogger(logger.For(managerName)),
 		ExtractConfigs: func(s publicfsm.SystemSnapshot) []config.NmapConfig {
 			return s.CurrentConfig.Internal.Nmap
 		},
