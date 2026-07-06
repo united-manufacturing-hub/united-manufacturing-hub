@@ -36,8 +36,12 @@ type DegradedState struct {
 func (s *DegradedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	snap := fsmv2.ConvertWorkerSnapshot[certfetcher.CertFetcherConfig, certfetcher.CertFetcherStatus](snapAny)
 
-	if snap.IsShutdownRequested {
-		return fsmv2.Transition(&StoppedState{}, fsmv2.SignalNone, nil, "shutdown requested", nil)
+	if snap.ShouldStop() {
+		return fsmv2.Transition(&StoppedState{}, fsmv2.SignalNone, nil, fmt.Sprintf("stop required: %s", snap.StopReason()), nil)
+	}
+
+	if !snap.Status.HasSubHandler {
+		return fsmv2.Transition(&StoppedState{}, fsmv2.SignalNone, nil, "sub handler lost", nil)
 	}
 
 	if snap.Status.ConsecutiveErrors == 0 {

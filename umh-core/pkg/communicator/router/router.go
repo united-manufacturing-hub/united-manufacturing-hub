@@ -210,10 +210,13 @@ func (r *Router) handleSub(message *types.MessageWithSender, watcherUUID uuid.UU
 	}
 
 	var subscribePayload models.SubscribeMessagePayload
-	if message.Content.Payload != nil {
-		// Try direct type assertion first
-		if payload, ok := message.Content.Payload.(models.SubscribeMessagePayload); ok {
-			subscribePayload = payload
+
+	switch payload := message.Content.Payload.(type) {
+	case models.SubscribeMessagePayload:
+		subscribePayload = payload
+	case map[string]any:
+		if err := maptostruct.MapToStruct(payload, &subscribePayload); err != nil {
+			r.routerLogger.Warnf("Failed to convert payload into SubscribeMessagePayload: %v", err)
 		}
 	}
 
