@@ -1564,6 +1564,24 @@ agent:
 	})
 })
 
+var _ = Describe("ConfigManager historian mutations", func() {
+	Describe("FileConfigManagerWithBackoff delegation", func() {
+		It("should return the context error when the context is already cancelled", func() {
+			backoffManager, err := NewFileConfigManagerWithBackoff()
+			Expect(err).NotTo(HaveOccurred())
+
+			cancelledCtx, cancelNow := context.WithCancel(context.Background())
+			cancelNow()
+
+			err = backoffManager.AtomicSetHistorian(cancelledCtx, HistorianConfig{Host: "h", Password: "p"})
+			Expect(err).To(MatchError(context.Canceled))
+
+			err = backoffManager.AtomicDeleteHistorian(cancelledCtx)
+			Expect(err).To(MatchError(context.Canceled))
+		})
+	})
+})
+
 // filterBackupDirPaths returns only paths that start with the backup directory.
 func filterBackupDirPaths(paths []string) []string {
 	var result []string

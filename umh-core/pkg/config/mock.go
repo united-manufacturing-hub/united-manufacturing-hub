@@ -50,6 +50,8 @@ type MockConfigManager struct {
 	AtomicEditDataModelError           error
 	AtomicDeleteDataModelError         error
 	AtomicAddDataContractError         error
+	AtomicSetHistorianError            error
+	AtomicDeleteHistorianError         error
 	GetConfigAsStringError             error
 	MockFileSystem                     *filesystem.MockFileSystem
 	logger                             *zap.SugaredLogger
@@ -94,6 +96,8 @@ type MockConfigManager struct {
 	AtomicEditDataModelCalled           bool
 	AtomicDeleteDataModelCalled         bool
 	AtomicAddDataContractCalled         bool
+	AtomicSetHistorianCalled            bool
+	AtomicDeleteHistorianCalled         bool
 	GetConfigAsStringCalled             bool
 }
 
@@ -359,6 +363,26 @@ func (m *MockConfigManager) WithAtomicAddDataContractError(err error) *MockConfi
 	return m
 }
 
+// WithAtomicSetHistorianError configures the mock to return the given error when AtomicSetHistorian is called.
+func (m *MockConfigManager) WithAtomicSetHistorianError(err error) *MockConfigManager {
+	m.mutexReadAndWrite.Lock()
+	defer m.mutexReadAndWrite.Unlock()
+
+	m.AtomicSetHistorianError = err
+
+	return m
+}
+
+// WithAtomicDeleteHistorianError configures the mock to return the given error when AtomicDeleteHistorian is called.
+func (m *MockConfigManager) WithAtomicDeleteHistorianError(err error) *MockConfigManager {
+	m.mutexReadAndWrite.Lock()
+	defer m.mutexReadAndWrite.Unlock()
+
+	m.AtomicDeleteHistorianError = err
+
+	return m
+}
+
 // ResetCalls clears the called flags for testing multiple calls.
 func (m *MockConfigManager) ResetCalls() {
 	m.mutexReadOrWrite.Lock()
@@ -379,6 +403,8 @@ func (m *MockConfigManager) ResetCalls() {
 	m.AtomicEditDataModelCalled = false
 	m.AtomicDeleteDataModelCalled = false
 	m.AtomicAddDataContractCalled = false
+	m.AtomicSetHistorianCalled = false
+	m.AtomicDeleteHistorianCalled = false
 }
 
 // atomic set location.
@@ -1296,6 +1322,12 @@ func (m *MockConfigManager) AtomicSetHistorian(_ context.Context, historian Hist
 	m.mutexReadAndWrite.Lock()
 	defer m.mutexReadAndWrite.Unlock()
 
+	m.AtomicSetHistorianCalled = true
+
+	if m.AtomicSetHistorianError != nil {
+		return m.AtomicSetHistorianError
+	}
+
 	m.Config.Historian = &historian
 
 	return nil
@@ -1305,6 +1337,12 @@ func (m *MockConfigManager) AtomicSetHistorian(_ context.Context, historian Hist
 func (m *MockConfigManager) AtomicDeleteHistorian(_ context.Context) error {
 	m.mutexReadAndWrite.Lock()
 	defer m.mutexReadAndWrite.Unlock()
+
+	m.AtomicDeleteHistorianCalled = true
+
+	if m.AtomicDeleteHistorianError != nil {
+		return m.AtomicDeleteHistorianError
+	}
 
 	m.Config.Historian = nil
 
