@@ -111,30 +111,23 @@ func (a *EditHistorianAction) Execute() (interface{}, map[string]interface{}, er
 	ctx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
 	defer cancel()
 
-	// Verify historian section already exists before overwriting.
-	currentCfg, err := a.configManager.GetConfig(ctx, 0)
-	if err != nil {
-		errorMsg := fmt.Sprintf("Failed to read current configuration: %v", err)
-		SendActionReplyV2(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
-			errorMsg, models.ErrConfigFileInvalid, nil, a.outboundChannel, models.EditHistorian, nil)
-
-		return nil, nil, fmt.Errorf("%s", errorMsg)
-	}
-
-	if currentCfg.Historian == nil {
-		errorMsg := "Historian is not configured; use deploy-historian to create it first"
-		SendActionReplyV2(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
-			errorMsg, models.ErrValidationFailed, nil, a.outboundChannel, models.EditHistorian, nil)
-
-		return nil, nil, errors.New(errorMsg)
-	}
-
 	cfg := a.payload.WithDefaults()
 
 	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
 		"Updating Historian configuration...", a.outboundChannel, models.EditHistorian)
 
-	if err := a.configManager.AtomicSetHistorian(ctx, cfg); err != nil {
+	// AtomicEditHistorian performs the existence check and write under a single lock,
+	// so a concurrent delete cannot slip between the two and let edit resurrect a
+	// removed historian.
+	if err := a.configManager.AtomicEditHistorian(ctx, cfg); err != nil {
+		if errors.Is(err, config.ErrHistorianNotConfigured) {
+			errorMsg := "Historian is not configured; use deploy-historian to create it first"
+			SendActionReplyV2(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
+				errorMsg, models.ErrValidationFailed, nil, a.outboundChannel, models.EditHistorian, nil)
+
+			return nil, nil, errors.New(errorMsg)
+		}
+
 		errorMsg := fmt.Sprintf("Failed to update Historian configuration: %v", err)
 		SendActionReplyV2(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
 			errorMsg, models.ErrRetryConfigWriteFailed, nil, a.outboundChannel, models.EditHistorian, nil)
@@ -142,9 +135,6 @@ func (a *EditHistorianAction) Execute() (interface{}, map[string]interface{}, er
 		return nil, nil, fmt.Errorf("%s", errorMsg)
 	}
 
-	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedSuccessfull,
-		"Historian updated successfully", a.outboundChannel, models.EditHistorian)
-
+	// The terminal ActionFinishedSuccessfull reply is sent by the caller (see actions.go).
 	return cfg, nil, nil
 }
-

@@ -114,6 +114,10 @@ type ConfigManager interface {
 	GetBackupCount() uint64
 	// AtomicSetHistorian writes or replaces the historian section in the config atomically.
 	AtomicSetHistorian(ctx context.Context, historian HistorianConfig) error
+	// AtomicEditHistorian replaces an existing historian section atomically, returning
+	// ErrHistorianNotConfigured if none exists. The existence check and write share a
+	// single lock, eliminating the check-then-write race of a separate GetConfig call.
+	AtomicEditHistorian(ctx context.Context, historian HistorianConfig) error
 	// AtomicDeleteHistorian removes the historian section from the config atomically.
 	AtomicDeleteHistorian(ctx context.Context) error
 
@@ -1331,6 +1335,43 @@ func (m *FileConfigManagerWithBackoff) AtomicSetHistorian(ctx context.Context, h
 	}
 
 	return m.configManager.AtomicSetHistorian(ctx, historian)
+}
+
+// AtomicEditHistorian replaces an existing historian section atomically. It returns
+// ErrHistorianNotConfigured if no historian is currently configured, so the existence
+// check and the write happen under a single lock and cannot race a concurrent delete.
+func (m *FileConfigManager) AtomicEditHistorian(ctx context.Context, historian HistorianConfig) error {
+	err := m.mutexAtomicUpdate.Lock(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to lock config file: %w", err)
+	}
+	defer m.mutexAtomicUpdate.Unlock()
+
+	cfg, err := m.GetConfig(ctx, 0)
+	if err != nil {
+		return fmt.Errorf("failed to get config: %w", err)
+	}
+
+	if cfg.Historian == nil {
+		return ErrHistorianNotConfigured
+	}
+
+	cfg.Historian = &historian
+
+	if err := m.writeConfig(ctx, cfg); err != nil {
+		return fmt.Errorf("failed to write config: %w", err)
+	}
+
+	return nil
+}
+
+// AtomicEditHistorian delegates to the underlying FileConfigManager.
+func (m *FileConfigManagerWithBackoff) AtomicEditHistorian(ctx context.Context, historian HistorianConfig) error {
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+
+	return m.configManager.AtomicEditHistorian(ctx, historian)
 }
 
 // AtomicDeleteHistorian removes the historian section from the config atomically.

@@ -109,8 +109,6 @@ func (a *DeleteHistorianAction) Execute() (interface{}, map[string]interface{}, 
 		return nil, nil, fmt.Errorf("%s", errorMsg)
 	}
 
-	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedSuccessfull,
-		"Historian deleted successfully", a.outboundChannel, models.DeleteHistorian)
-
-	return nil, nil, nil
+	// The terminal ActionFinishedSuccessfull reply is sent by the caller (see actions.go).
+	return "Historian deleted successfully", nil, nil
 }

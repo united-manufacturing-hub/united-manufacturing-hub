@@ -124,9 +124,6 @@ func (a *DeployHistorianAction) Execute() (interface{}, map[string]interface{}, 
 		return nil, nil, fmt.Errorf("%s", errorMsg)
 	}
 
-	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedSuccessfull,
-		"Historian deployed successfully", a.outboundChannel, models.DeployHistorian)
-
+	// The terminal ActionFinishedSuccessfull reply is sent by the caller (see actions.go).
 	return cfg, nil, nil
 }
-

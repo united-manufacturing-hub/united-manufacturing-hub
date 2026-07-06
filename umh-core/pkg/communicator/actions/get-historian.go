@@ -26,6 +26,7 @@ package actions
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/google/uuid"
@@ -107,13 +108,11 @@ func (a *GetHistorianAction) Execute() (interface{}, map[string]interface{}, err
 		SendActionReplyV2(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
 			"Historian is not configured", models.ErrValidationFailed, nil, a.outboundChannel, models.GetHistorian, nil)
 
-		return nil, nil, nil
+		return nil, nil, errors.New("historian is not configured")
 	}
 
 	response := *cfg.Historian
 
-	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedSuccessfull,
-		response, a.outboundChannel, models.GetHistorian)
-
+	// The terminal ActionFinishedSuccessfull reply is sent by the caller (see actions.go).
 	return response, nil, nil
 }

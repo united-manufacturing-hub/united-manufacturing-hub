@@ -19,6 +19,10 @@ import (
 	"fmt"
 )
 
+// ErrHistorianNotConfigured is returned by AtomicEditHistorian when no historian
+// section exists to edit.
+var ErrHistorianNotConfigured = errors.New("historian is not configured")
+
 // HistorianSSLMode controls TLS behaviour for the historian Postgres connection.
 type HistorianSSLMode string
 
