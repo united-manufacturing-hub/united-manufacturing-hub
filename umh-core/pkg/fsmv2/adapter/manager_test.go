@@ -21,10 +21,10 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"go.uber.org/zap"
 
 	publicfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/fsmv2client"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker/dynamicchildren"
 )
@@ -42,7 +42,7 @@ import (
 //	    CfgFor          func(cfg TConfig) (map[string]any, error)                  // optional, default JSON round-trip
 //	    IsEnabled       func(cfg TConfig) bool                                     // optional, default from desired state
 //	    MinRequiredTime time.Duration                                             // optional, default 0
-//	    Log             *zap.SugaredLogger                                        // logger (old manager.go used one; nil => no-op)
+//	    Log             deps.FSMLogger                                            // logger (nil => no-op)
 //	}
 //	func NewWorkerManager[TConfig, TStatus any](spec WorkerManagerSpec[TConfig, TStatus]) *WorkerManager[TConfig, TStatus]
 //
@@ -110,7 +110,7 @@ var _ = Describe("WorkerManager", func() {
 			NameOf:         nameOf,
 			MapFresh:       mapFresh,
 			MapObserved:    mapObserved,
-			Log:            zap.NewNop().Sugar(),
+			Log:            deps.NewNopFSMLogger(),
 		}
 	}
 

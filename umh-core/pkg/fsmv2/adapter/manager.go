@@ -22,9 +22,8 @@ import (
 	"sync"
 	"time"
 
-	"go.uber.org/zap"
-
 	publicfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/fsmv2client"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker/dynamicchildren"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
@@ -83,8 +82,8 @@ type WorkerManagerSpec[TConfig, TStatus any] struct {
 	// (GetState()=="stopped" => disabled, otherwise enabled).
 	IsEnabled func(cfg TConfig) bool
 
-	// Log is the sugared logger; optional, defaults to a no-op logger.
-	Log *zap.SugaredLogger
+	// Log is the FSMLogger; optional, defaults to a no-op logger.
+	Log deps.FSMLogger
 
 	// WorkerType builds the ref and names the manager. Required.
 	WorkerType string
@@ -125,7 +124,7 @@ func NewWorkerManager[TConfig, TStatus any](spec WorkerManagerSpec[TConfig, TSta
 	}
 
 	if spec.Log == nil {
-		spec.Log = zap.NewNop().Sugar()
+		spec.Log = deps.NewNopFSMLogger()
 	}
 
 	return &WorkerManager[TConfig, TStatus]{
@@ -246,7 +245,7 @@ func (m *WorkerManager[TConfig, TStatus]) Reconcile(ctx context.Context, snapsho
 	desired := m.spec.ExtractConfigs(snapshot)
 	changed := false
 
-	m.spec.Log.Debugw("reconcile", "desired", len(desired), "instances", len(m.instances), "clientReady", client != nil)
+	m.spec.Log.Debug("reconcile", deps.Int("desired", len(desired)), deps.Int("instances", len(m.instances)), deps.Bool("clientReady", client != nil))
 
 	desiredNames := make(map[string]struct{}, len(desired))
 	for _, cfg := range desired {
@@ -259,7 +258,7 @@ func (m *WorkerManager[TConfig, TStatus]) Reconcile(ctx context.Context, snapsho
 			continue
 		}
 
-		m.spec.Log.Debugw("removing worker no longer in config", "worker", name)
+		m.spec.Log.Debug("removing worker no longer in config", deps.String("worker", name))
 
 		if client != nil {
 			client.Delete(m.refFor(existing))
@@ -284,7 +283,7 @@ func (m *WorkerManager[TConfig, TStatus]) Reconcile(ctx context.Context, snapsho
 
 			m.instances[name] = m.buildInstance(cfg, enabled)
 			m.domainConfigs[name] = cfg
-			m.spec.Log.Debugw("created worker", "worker", name, "enabled", enabled)
+			m.spec.Log.Debug("created worker", deps.String("worker", name), deps.Bool("enabled", enabled))
 
 			changed = true
 
@@ -301,7 +300,7 @@ func (m *WorkerManager[TConfig, TStatus]) Reconcile(ctx context.Context, snapsho
 
 		m.instances[name] = m.buildInstance(cfg, enabled)
 		m.domainConfigs[name] = cfg
-		m.spec.Log.Debugw("updated worker", "worker", name, "enabled", enabled)
+		m.spec.Log.Debug("updated worker", deps.String("worker", name), deps.Bool("enabled", enabled))
 
 		changed = true
 	}
@@ -332,13 +331,13 @@ func (m *WorkerManager[TConfig, TStatus]) applyDesired(client *fsmv2client.FSMv2
 
 	cfgMap, err := m.spec.CfgFor(cfg)
 	if err != nil {
-		m.spec.Log.Warnw("build spec failed, will retry next tick", "worker", name, "error", err)
+		m.spec.Log.SentryWarn(deps.FeatureForWorker(m.spec.WorkerType), name, "build spec failed, will retry next tick", deps.String("worker", name), deps.Err(err))
 
 		return false
 	}
 
 	if err := client.Upsert(m.refFor(cfg), cfgMap); err != nil {
-		m.spec.Log.Warnw("upsert failed, will retry next tick", "worker", name, "error", err)
+		m.spec.Log.SentryWarn(deps.FeatureForWorker(m.spec.WorkerType), name, "upsert failed, will retry next tick", deps.String("worker", name), deps.Err(err))
 
 		return false
 	}

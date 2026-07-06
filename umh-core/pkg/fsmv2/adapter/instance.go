@@ -20,10 +20,9 @@ import (
 	"sync"
 	"time"
 
-	"go.uber.org/zap"
-
 	publicfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/fsmv2client"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker/dynamicchildren"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
@@ -78,7 +77,7 @@ type HealthReporter interface {
 type AdaptedInstance[TConfig, TStatus any] struct {
 	mapFresh    func(cfg TConfig, status TStatus) string
 	mapObserved func(cfg TConfig, status TStatus) publicfsm.ObservedState
-	log         *zap.SugaredLogger
+	log         deps.FSMLogger
 
 	cfg TConfig
 
@@ -116,10 +115,10 @@ func newAdaptedInstance[TConfig, TStatus any](
 	mapFresh func(cfg TConfig, status TStatus) string,
 	mapObserved func(cfg TConfig, status TStatus) publicfsm.ObservedState,
 	isDisabled bool,
-	log *zap.SugaredLogger,
+	log deps.FSMLogger,
 ) *AdaptedInstance[TConfig, TStatus] {
 	if log == nil {
-		log = zap.NewNop().Sugar()
+		log = deps.NewNopFSMLogger()
 	}
 
 	return &AdaptedInstance[TConfig, TStatus]{
@@ -189,9 +188,9 @@ func (i *AdaptedInstance[TConfig, TStatus]) GetCurrentFSMState() string {
 		_, reason = hr.HealthVerdict()
 	}
 
-	i.log.Debugw("adapter resolve",
-		"workerType", i.ref.WorkerType, "name", i.ref.Name,
-		"freshness", freshness, "resolved", resolved, "reason", reason)
+	i.log.Debug("adapter resolve",
+		deps.String("workerType", i.ref.WorkerType), deps.String("name", i.ref.Name),
+		deps.Any("freshness", freshness), deps.String("resolved", resolved), deps.String("reason", reason))
 
 	return resolved
 }
