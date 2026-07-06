@@ -123,7 +123,7 @@ var _ = Describe("sampler full Sample wired into Decide (rung 12b)", func() {
 		// The degrade must come from the pressure cause, not throttle: nr_throttled
 		// is pinned at 0, so IsThrottled must be false. This pins that the
 		// non-throttle path is the one firing.
-		Expect(status2.CPU.IsThrottled).To(BeFalse(),
+		Expect(status2.CPU.VerdictBasis.Throttle.Fired).To(BeFalse(),
 			"nr_throttled is pinned at 0; the degrade must not come from the throttle path")
 		Expect(status2.CPUHealth).To(Equal(models.Degraded),
 			"a PSI-pressure scenario (some avg60=0.25 > PressureHigh 0.20) must degrade CPUHealth via the sampler's full Sample wired to Decide")
@@ -237,7 +237,7 @@ var _ = Describe("steal p95 wired onto the wire via the sampler", func() {
 			"verdictBasis.steal.value carries the steal p95 as a fraction (steal delta 1 / total delta 200)")
 		Expect(status2.CPUHealth).To(Equal(models.Active),
 			"a sub-threshold steal p95 (0.005 < StealHigh 0.10) must not fire the steal latch, so CPUHealth stays Active")
-		Expect(status2.CPU.IsThrottled).To(BeFalse(),
+		Expect(status2.CPU.VerdictBasis.Throttle.Fired).To(BeFalse(),
 			"nr_throttled is pinned at 0; no throttle degrade either")
 		stealJSON, err := json.Marshal(status2.CPU)
 		Expect(err).NotTo(HaveOccurred())
@@ -316,7 +316,7 @@ var _ = Describe("sampler failure dead-zone (rung 12b invariant)", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(status1.CPUHealth).To(Equal(models.Active),
 			"sampler failure → dead-zone → UsageCores=0 → fraction=0 → saturation backstop must not fire; verdict healthy")
-		Expect(status1.CPU.IsThrottled).To(BeFalse(),
+		Expect(status1.CPU.VerdictBasis.Throttle.Fired).To(BeFalse(),
 			"baseline: single ring point, throttleRatio=0, latch false")
 
 		// Tick 2 — nr_throttled jumps so the 60s windowed ratio is 0.10
@@ -328,13 +328,13 @@ var _ = Describe("sampler failure dead-zone (rung 12b invariant)", func() {
 		nrPeriods, nrThrottled = 2000, 100
 		status2, err := svc.GetStatus(ctx)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(status2.CPU.IsThrottled).To(BeTrue(),
+		Expect(status2.CPU.VerdictBasis.Throttle.Fired).To(BeTrue(),
 			"throttle latch must fire from the overlaid cgroup counters even when the sampler fails (ratio 0.10 > 0.05)")
 		Expect(status2.CPUHealth).To(Equal(models.Degraded),
 			"a throttle fire must degrade CPUHealth via verdict.State even on a sampler failure")
 		Expect(status2.OverallHealth).To(Equal(models.Degraded),
 			"OverallHealth must co-set with CPUHealth on a CPU degrade")
-		Expect(status2.CPU.ThrottleRatio).To(HaveValue(BeNumerically("~", 0.10, 1e-9)),
-			"ThrottleRatio is the Decide-computed windowed ratio from the overlaid counters")
+		Expect(status2.CPU.VerdictBasis.Throttle.Value).To(BeNumerically("~", 0.10, 1e-9),
+			"basis.throttle.value is the Decide-computed windowed ratio from the overlaid counters")
 	})
 })

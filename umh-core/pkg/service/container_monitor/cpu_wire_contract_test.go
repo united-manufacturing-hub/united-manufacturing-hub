@@ -91,10 +91,12 @@ var _ = Describe("three-field CPU-health wire contract on models.CPU", func() {
 
 		Expect(status1.CPU.Health).NotTo(BeNil(),
 			"the existing Health field must remain populated")
-		Expect(status1.CPU.ThrottleRatio).To(HaveValue(BeNumerically("~", 0.0, 1e-9)),
-			"existing ThrottleRatio field preserved on the healthy path (fetchable-0: cgroup readable → non-nil pointer to 0)")
-		Expect(status1.CPU.IsThrottled).To(BeFalse(),
-			"existing IsThrottled field preserved on the healthy path")
+		Expect(status1.CPU.VerdictBasis).NotTo(BeNil(),
+			"verdictBasis is emitted on the healthy path (Decide ran: cgroup readable)")
+		Expect(status1.CPU.VerdictBasis.Throttle.Value).To(BeNumerically("~", 0.0, 1e-9),
+			"basis.throttle.value is 0 on the healthy path (no throttled periods)")
+		Expect(status1.CPU.VerdictBasis.Throttle.Fired).To(BeFalse(),
+			"basis.throttle.fired is false on the healthy path (latch not fired)")
 
 		// Tick 2 — throttle fires (ratio 0.10 > 0.05). Decide returns
 		// {degraded, unknown, [{throttling, 0.10}]}; getCPUMetrics must map the
@@ -129,10 +131,10 @@ var _ = Describe("three-field CPU-health wire contract on models.CPU", func() {
 			"existing Health field preserved")
 		Expect(status2.CPU.Health.Category).To(Equal(models.Degraded),
 			"existing Health category reflects the degrade")
-		Expect(status2.CPU.IsThrottled).To(BeTrue(),
-			"existing IsThrottled field preserved and reflects the throttle latch")
-		Expect(status2.CPU.ThrottleRatio).To(HaveValue(BeNumerically("~", 0.10, 1e-9)),
-			"existing ThrottleRatio field preserved")
+		Expect(status2.CPU.VerdictBasis.Throttle.Fired).To(BeTrue(),
+			"basis.throttle.fired reflects the throttle latch on the degraded path")
+		Expect(status2.CPU.VerdictBasis.Throttle.Value).To(BeNumerically("~", 0.10, 1e-9),
+			"basis.throttle.value carries the windowed ratio on the degraded path")
 		Expect(status2.CPU.CgroupCores).To(BeNumerically("~", 2.0, 1e-9),
 			"existing CgroupCores field preserved")
 

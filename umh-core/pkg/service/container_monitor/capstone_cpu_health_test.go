@@ -116,8 +116,8 @@ var _ = Describe("capstone: end-to-end CPU-health model through GetStatus (rung 
 			"BUSY-NOT-SICK: CPUHealth must be Active when the verdict is healthy")
 		Expect(status.CPU.Causes).To(BeEmpty(),
 			"BUSY-NOT-SICK: no causes when healthy")
-		Expect(status.CPU.IsThrottled).To(BeFalse(),
-			"BUSY-NOT-SICK: nr_throttled=0 -> IsThrottled false")
+		Expect(status.CPU.VerdictBasis.Throttle.Fired).To(BeFalse(),
+			"BUSY-NOT-SICK: nr_throttled=0 -> throttle latch false")
 	})
 
 	// --- (2) THROTTLE-DEGRADE: the same capped container but with high
@@ -174,10 +174,10 @@ var _ = Describe("capstone: end-to-end CPU-health model through GetStatus (rung 
 			"THROTTLE-DEGRADE: CPUHealth must be Degraded")
 		Expect(status.OverallHealth).To(Equal(models.Degraded),
 			"THROTTLE-DEGRADE: OverallHealth must co-set Degraded")
-		Expect(status.CPU.IsThrottled).To(BeTrue(),
-			"THROTTLE-DEGRADE: IsThrottled must be true when the latch fires")
-		Expect(status.CPU.ThrottleRatio).To(HaveValue(BeNumerically("~", 0.10, 1e-9)),
-			"THROTTLE-DEGRADE: ThrottleRatio is the windowed ratio")
+		Expect(status.CPU.VerdictBasis.Throttle.Fired).To(BeTrue(),
+			"THROTTLE-DEGRADE: throttle latch must be true when the latch fires")
+		Expect(status.CPU.VerdictBasis.Throttle.Value).To(BeNumerically("~", 0.10, 1e-9),
+			"THROTTLE-DEGRADE: basis.throttle.value is the windowed ratio")
 		Expect(status.CPU.Health).NotTo(BeNil())
 		Expect(status.CPU.Health.Message).To(ContainSubstring("CPU limited"),
 			"THROTTLE-DEGRADE: Health.Message must contain the 'CPU limited' headline")
@@ -232,8 +232,8 @@ var _ = Describe("capstone: end-to-end CPU-health model through GetStatus (rung 
 		), "PRESSURE-DEGRADE: Causes must contain {kind:'pressure'}")
 		Expect(status.CPUHealth).To(Equal(models.Degraded),
 			"PRESSURE-DEGRADE: CPUHealth must be Degraded")
-		Expect(status.CPU.IsThrottled).To(BeFalse(),
-			"PRESSURE-DEGRADE: nr_throttled=0 -> IsThrottled false (degrade is from pressure, not throttle)")
+		Expect(status.CPU.VerdictBasis.Throttle.Fired).To(BeFalse(),
+			"PRESSURE-DEGRADE: nr_throttled=0 -> throttle latch false (degrade is from pressure, not throttle)")
 		Expect(status.CPU.Health).NotTo(BeNil())
 		Expect(status.CPU.Health.Message).To(ContainSubstring("CPU contention"),
 			"PRESSURE-DEGRADE: Health.Message must contain the 'CPU contention' headline")
@@ -486,8 +486,8 @@ var _ = Describe("capstone: end-to-end CPU-health model through GetStatus (rung 
 		), "STEAL-DEGRADE: Causes must contain {kind:'steal'}")
 		Expect(status.CPUHealth).To(Equal(models.Degraded),
 			"STEAL-DEGRADE: CPUHealth must be Degraded")
-		Expect(status.CPU.IsThrottled).To(BeFalse(),
-			"STEAL-DEGRADE: nr_throttled=0 -> IsThrottled false (degrade is from steal, not throttle)")
+		Expect(status.CPU.VerdictBasis.Throttle.Fired).To(BeFalse(),
+			"STEAL-DEGRADE: nr_throttled=0 -> throttle latch false (degrade is from steal, not throttle)")
 	})
 
 	// --- (5) SATURATION-DEGRADE-DEAD-ZONE: the dead-zone saturation backstop

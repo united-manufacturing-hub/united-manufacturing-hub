@@ -137,10 +137,9 @@ type CPU struct {
 	// (the ring holds >= 2 entries) and omits it when un-fetchable (nil pointer:
 	// outside the dead-zone, or the first dead-zone tick before the ring has 2
 	// entries). Observability-only — they do not change the verdict.
-	AvgMCpu       *float64 `json:"avgMCpu,omitempty"`
-	P95MCpu       *float64 `json:"p95MCpu,omitempty"`
-	P99MCpu       *float64 `json:"p99MCpu,omitempty"`
-	ThrottleRatio *float64 `json:"throttleRatio,omitempty"` // Ratio of throttled periods (0.0-1.0); nil when cgroup unreadable
+	AvgMCpu *float64 `json:"avgMCpu,omitempty"`
+	P95MCpu *float64 `json:"p95MCpu,omitempty"`
+	P99MCpu *float64 `json:"p99MCpu,omitempty"`
 	// State is always emitted (no omitempty), even when healthy. Attribution
 	// and Causes are set only when State == "degraded".
 	State          string  `json:"state"`                 // "healthy" | "degraded"
@@ -150,7 +149,6 @@ type CPU struct {
 	CoreCount      int     `json:"coreCount"`             // Number of CPU cores
 	// Cgroup-specific fields for container resource limits
 	CgroupCores  float64       `json:"cgroupCores,omitempty"`  // CPU quota from cgroup (e.g., 2.0 = 2 cores)
-	IsThrottled  bool          `json:"isThrottled,omitempty"`  // True if recently throttled
 	VerdictBasis *VerdictBasis `json:"verdictBasis,omitempty"` // The verdict's decision variables (nil when no verdict: cgroup read failure)
 }
 

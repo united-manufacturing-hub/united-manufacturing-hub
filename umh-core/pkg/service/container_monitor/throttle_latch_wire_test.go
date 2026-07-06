@@ -81,7 +81,7 @@ var _ = Describe("throttle verdict wired through cpuhealth.Decide (rung 4b)", fu
 		nrPeriods, nrThrottled = 1000, 10
 		status1, err := svc.GetStatus(ctx)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(status1.CPU.IsThrottled).To(BeFalse(), "baseline: no delta yet")
+		Expect(status1.CPU.VerdictBasis.Throttle.Fired).To(BeFalse(), "baseline: no delta yet")
 
 		// Call 2 — windowed ratio 0.10 (100 throttled / 1000 periods) fires the
 		// latch above the 0.05 high mark. Both the old raw-ratio path and Decide
@@ -90,7 +90,7 @@ var _ = Describe("throttle verdict wired through cpuhealth.Decide (rung 4b)", fu
 		nrPeriods, nrThrottled = 2000, 110
 		status2, err := svc.GetStatus(ctx)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(status2.CPU.IsThrottled).To(BeTrue(), "ratio 0.10 > 0.05 fires the latch")
+		Expect(status2.CPU.VerdictBasis.Throttle.Fired).To(BeTrue(), "ratio 0.10 > 0.05 fires the latch")
 
 		// Call 3 — the windowed ratio drops to 0.035 (140 throttled / 4000
 		// periods over the full call-1-to-call-3 span), which is inside the
@@ -103,10 +103,10 @@ var _ = Describe("throttle verdict wired through cpuhealth.Decide (rung 4b)", fu
 		nrPeriods, nrThrottled = 5000, 150
 		status3, err := svc.GetStatus(ctx)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(status3.CPU.IsThrottled).To(BeTrue(),
+		Expect(status3.CPU.VerdictBasis.Throttle.Fired).To(BeTrue(),
 			"Schmitt latch must hold in the [0.03, 0.05) band after firing; the raw ratio is %.4f", 0.035)
-		Expect(status3.CPU.ThrottleRatio).To(HaveValue(BeNumerically("~", 0.035, 1e-9)),
-			"ThrottleRatio is the Decide-computed windowed ratio, read unconditionally of latch state")
+		Expect(status3.CPU.VerdictBasis.Throttle.Value).To(BeNumerically("~", 0.035, 1e-9),
+			"basis.throttle.value is the Decide-computed windowed ratio, read unconditionally of latch state")
 	})
 
 	// Keep the real 60s window honest: the calls above are milliseconds apart,

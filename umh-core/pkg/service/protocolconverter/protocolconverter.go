@@ -1207,15 +1207,12 @@ func (p *ProtocolConverterService) IsResourceLimited(snapshot fsm.SystemSnapshot
 			}
 
 			// Also check for CPU throttling specifically with improved message.
-			// ThrottleRatio is a *float64 (nil when the cgroup is unreadable); it
-			// is non-nil here because IsThrottled can only be true when the cgroup
-			// was readable (the throttle latch is evaluated inside the cgroupErr==nil
-			// branch of getCPUMetrics), but guard the dereference for safety.
-			if serviceInfo.CPU != nil && serviceInfo.CPU.IsThrottled {
-				var throttlePercent float64
-				if serviceInfo.CPU.ThrottleRatio != nil {
-					throttlePercent = *serviceInfo.CPU.ThrottleRatio * 100
-				}
+			// The throttle value and latch now ride verdictBasis.throttle (added
+			// in R9.1); the flat ThrottleRatio/IsThrottled mirrors were cut. The
+			// basis is non-nil whenever Decide ran (cgroup readable); the Fired
+			// guard means we only read Value when the latch actually fired.
+			if serviceInfo.CPU != nil && serviceInfo.CPU.VerdictBasis != nil && serviceInfo.CPU.VerdictBasis.Throttle.Fired {
+				throttlePercent := serviceInfo.CPU.VerdictBasis.Throttle.Value * 100
 
 				cgroupCores := serviceInfo.CPU.CgroupCores
 				hostCores := runtime.NumCPU()

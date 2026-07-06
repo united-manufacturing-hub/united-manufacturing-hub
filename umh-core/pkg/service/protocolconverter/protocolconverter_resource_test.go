@@ -259,9 +259,13 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 										MemoryHealth:  models.Active,
 										DiskHealth:    models.Active,
 										CPU: &models.CPU{
-											IsThrottled:   true,
-											ThrottleRatio: ptrFloat64(0.15), // 15% throttled
-											CgroupCores:   2.0,              // Limited to 2 cores
+											CgroupCores: 2.0, // Limited to 2 cores
+											VerdictBasis: &models.VerdictBasis{
+												Throttle: models.VerdictBasisCause{
+													Value: 0.15, // 15% throttled
+													Fired: true,
+												},
+											},
 										},
 									},
 								},
@@ -652,9 +656,13 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 									MemoryHealth:  models.Active,
 									DiskHealth:    models.Active,
 									CPU: &models.CPU{
-										IsThrottled:   true, // CPU is throttled
-										ThrottleRatio: ptrFloat64(0.20),
-										CgroupCores:   2.0,
+										CgroupCores: 2.0,
+										VerdictBasis: &models.VerdictBasis{
+											Throttle: models.VerdictBasisCause{
+												Value: 0.20,
+												Fired: true,
+											},
+										},
 									},
 								},
 							},
@@ -689,8 +697,12 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 									MemoryHealth:  models.Active,
 									DiskHealth:    models.Active,
 									CPU: &models.CPU{
-										IsThrottled:   false,
-										ThrottleRatio: ptrFloat64(0.0),
+										VerdictBasis: &models.VerdictBasis{
+											Throttle: models.VerdictBasisCause{
+												Value: 0.0,
+												Fired: false,
+											},
+										},
 									},
 								},
 							},
@@ -902,10 +914,3 @@ func (m *MockManagerSnapshot) GetManagerTick() uint64 {
 type wrongTypeObservedState struct{}
 
 func (wrongTypeObservedState) IsObservedStateSnapshot() {}
-
-// ptrFloat64 returns a pointer to v. Used to construct *float64 wire fields on
-// models.CPU in test fixtures (the production ptr helper lives in the
-// container_monitor package, which is not importable from this _test package).
-func ptrFloat64(v float64) *float64 {
-	return &v
-}

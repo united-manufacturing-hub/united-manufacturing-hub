@@ -289,7 +289,6 @@ func (c *ContainerMonitorService) getCPUMetrics(ctx context.Context) (*models.CP
 		// inside Decide, so the wire never sees a negative ratio. IsThrottled
 		// still comes from signals.ThrottleFired (the Schmitt latch).
 		cgroupInfo.ThrottleRatio = signals.ThrottleRatio
-		cgroupInfo.IsThrottled = isThrottled
 
 		if isThrottled && !c.wasThrottled {
 			c.logger.Warnf("CPU throttling detected: %.1f%% of periods throttled", cgroupInfo.ThrottleRatio*100)
@@ -316,9 +315,8 @@ func (c *ContainerMonitorService) getCPUMetrics(ctx context.Context) (*models.CP
 	// Decide returns a degraded verdict for), so category is driven from
 	// verdict.State so every degradation cause flows to Degraded — not just
 	// throttle. The curated per-cause message is composed above via
-	// ComposeMessage(verdict, signals); isThrottled is retained for the
-	// cgroupInfo.IsThrottled wire field and the wasThrottled transition log
-	// above.
+	// ComposeMessage(verdict, signals); isThrottled feeds the wasThrottled
+	// transition log above.
 	if verdict.State == cpuhealth.StateDegraded && cgroupInfo != nil {
 		category = models.Degraded
 	}
@@ -348,17 +346,12 @@ func (c *ContainerMonitorService) getCPUMetrics(ctx context.Context) (*models.CP
 		}
 	}
 
-	// Add cgroup info if available. ThrottleRatio is a *float64: non-nil
-	// (pointer to the computed ratio, even 0) when the cgroup is readable
-	// (limit mode — throttling is fetchable), nil when cgroupErr != nil (the
-	// dead-zone: no quota, so throttling cannot be measured). CgroupCores and
-	// IsThrottled remain value-typed (CgroupCores keeps its omitempty-on-0
-	// semantics since a 0 quota means uncapped, not "measured 0"; IsThrottled
-	// is a bool with no zero-ambiguity).
+	// Add cgroup info if available. CgroupCores keeps its omitempty-on-0
+	// semantics since a 0 quota means uncapped, not "measured 0". The throttle
+	// value and latch now ride verdictBasis.throttle (emitted in the block
+	// below); the flat ThrottleRatio/IsThrottled wire fields were cut in R9.2c.
 	if cgroupErr == nil {
 		cpuStat.CgroupCores = cgroupInfo.QuotaCores
-		cpuStat.ThrottleRatio = ptr(cgroupInfo.ThrottleRatio)
-		cpuStat.IsThrottled = cgroupInfo.IsThrottled
 	}
 
 	// Percentile mCPU fields are observability-only mirrors of the dead-zone
