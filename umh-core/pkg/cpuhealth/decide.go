@@ -234,6 +234,8 @@ type WindowState struct {
 	saturationFired      bool
 	limitSaturationFired bool
 	hostFullFired        bool
+	dRowFired            bool
+	noLimitHostFired     bool
 }
 
 // stealPoint is one timestamped steal-fraction observation in the WindowState
@@ -363,7 +365,25 @@ type Signals struct {
 	// host stacks as a cause on a limited container. When both latches fire,
 	// host-full dominates (attribution host, cause Value = HostHeadroomCores).
 	// False when host stats are unavailable (scenario C) and in no-limit mode.
+	// R10.3: holds on a transient /proc/stat outage (Schmitt latch holds its
+	// prior state on a missing reading; clears only on a confirmed-not-full
+	// reading or fresh state).
 	HostFullFired bool
+	// DRowFired is the no-limit no-host-stats saturation latch (scenario D:
+	// /proc/stat unreadable, no cgroup limit). R10.3 makes the fraction
+	// fallback reachable by gating on HostBusyCoresAvailable (not LogicalCpus,
+	// which is always > 0 via runtime.NumCPU) and rewrites the denominator to
+	// LogicalCpus (not Quota/CgroupCores, both 0 in no-limit). The latch fires
+	// when usageCores60sMean/LogicalCpus >= HighUsageFraction and clears below
+	// SaturationRecover (Schmitt). False when host stats are readable (the
+	// host-headroom latch handles it) or in limit mode.
+	DRowFired bool
+	// DFraction is the D-row fraction (usageCores60sMean/LogicalCpus, 0..1),
+	// the saturation cause Value when DRowFired is true. Computed locally from
+	// the one blessed average (usageCores60sMean) and LogicalCpus — NOT
+	// saturationAvg (which divides by Quota/CgroupCores, both 0 in no-limit,
+	// the bug R10.3 fixes). 0 when the D-row is not active.
+	DFraction float64
 	// HostHeadroomCores is the host-scope headroom: LogicalCpus − hostBusyMean
 	// − cpuReserveCores. In no-limit mode it equals HeadroomCores (same formula);
 	// in limit mode it is the host-full latch's decision variable and the
@@ -689,15 +709,29 @@ func Decide(st *WindowState, sample Sample, thresholds Thresholds) (Verdict, Sig
 	// new/changed cause, NO headroom formula.
 	var hostBusyMean float64
 
+	// hb is the clamped per-tick HostBusyCores, used both for the ring insert
+	// (when readable) and the attribution host/container split below. R10.3:
+	// only append to the hostBusyRing when /proc/stat was actually readable
+	// (HostBusyCoresAvailable). A missing reading is NOT a "host was idle"
+	// reading — appending HostBusyCores=0 on an outage tick poisons the 60s
+	// mean and corrupts the host-headroom computation when stats return (the
+	// diluted mean understates busyness → false-healthy flap). Skipping the
+	// append keeps the mean over real readings only; the 2-sample floor and 60s
+	// prune still hold. The latch hold-on-missing (the noLimitHost latch holds
+	// on !HostBusyCoresAvailable) complements this: the mean is not poisoned
+	// AND the latch does not clear.
 	hb := sample.HostBusyCores
 	if !(hb >= 0) || math.IsInf(hb, 1) {
 		hb = 0
 	}
 
-	st.hostBusyRing = append(st.hostBusyRing, hostBusyPoint{
-		ts:       sample.Timestamp,
-		hostBusy: hb,
-	})
+	if sample.HostBusyCoresAvailable {
+		st.hostBusyRing = append(st.hostBusyRing, hostBusyPoint{
+			ts:       sample.Timestamp,
+			hostBusy: hb,
+		})
+	}
+
 	hostBusyCutoff := sample.Timestamp.Add(-stealWindow)
 	hostBusyRing := st.hostBusyRing
 	hostBusyN := 0
@@ -823,16 +857,26 @@ func Decide(st *WindowState, sample Sample, thresholds Thresholds) (Verdict, Sig
 	// Saturation latch: mode-aware switch. In limit mode the latch fires on
 	// limit-headroom < 0 (container usage inside the fractional reserve band)
 	// and clears at headroom > LimitReserveRecoverFraction × quota. In
-	// no-limit mode the host-headroom latch fires on HeadroomCores < 0 (less
-	// than one core free) and clears above headroomRecoverCores. The fraction
-	// fallback (dead-zone, LogicalCpus <= 0) is unchanged. The limitMode case
-	// MUST come first so limit-set samples never hit the host-headroom branch
+	// no-limit mode the branch is gated on HostBusyCoresAvailable (R10.3):
+	// when /proc/stat is readable, the host-headroom latch fires on
+	// HeadroomCores < 0 and clears above headroomRecoverCores (unchanged);
+	// when /proc/stat is unreadable AND no limit, the D-row fraction fallback
+	// fires on usageCores60sMean/LogicalCpus >= HighUsageFraction and clears
+	// below SaturationRecover (REVISED from v3's "uncapped → healthy"). The
+	// old fraction branch (deadZone && LogicalCpus <= 0) is removed — it was
+	// doubly dead (unreachable AND fraction=0 in no-limit). The limitMode case
+	// MUST come first so limit-set samples never hit the no-limit branches
 	// (which would re-introduce the B false fire). Below the fire condition the
 	// verdict is healthy.
 	switch {
 	case limitMode:
 		// Container-scope latch (R10.1's limit latch, now split out).
 		recoverCores := thresholds.LimitReserveRecoverFraction * *sample.Quota
+
+		// No-limit sub-latches are inert in limit mode; clear them so a mode
+		// transition does not leak a prior no-limit fire (R10.3 Finding 2).
+		st.dRowFired = false
+		st.noLimitHostFired = false
 
 		if len(st.usageRing) >= 2 {
 			switch {
@@ -847,52 +891,92 @@ func Decide(st *WindowState, sample Sample, thresholds Thresholds) (Verdict, Sig
 		// Host-scope latch: the host itself is full (rule-1 test at host scope).
 		// Only when /proc/stat is readable (HostBusyCoresAvailable); a limit is
 		// a ceiling not a reservation, so a full host stacks on a limited
-		// container. NEVER quota-scoped (that was the B false fire).
-		if sample.HostBusyCoresAvailable && len(st.hostBusyRing) >= 2 {
+		// container. NEVER quota-scoped (that was the B false fire). R10.3:
+		// hold-on-uncertain-read — a transient /proc/stat outage holds the
+		// prior fire (Schmitt latch holds on a missing reading); clears only on
+		// a confirmed-not-full reading or fresh state (hostBusyRing < 2).
+		switch {
+		case sample.HostBusyCoresAvailable && len(st.hostBusyRing) >= 2:
 			switch {
 			case hostHeadroomCores < 0:
 				st.hostFullFired = true
 			case hostHeadroomCores > headroomRecoverCores:
 				st.hostFullFired = false
 			}
-		} else {
+		case sample.HostBusyCoresAvailable:
 			st.hostFullFired = false
+		default: // !HostBusyCoresAvailable: hold prior fire (no clear)
 		}
 
 		st.saturationFired = st.limitSaturationFired || st.hostFullFired
-	case sample.LogicalCpus > 0:
+	case !limitMode && sample.HostBusyCoresAvailable && sample.LogicalCpus > 0:
+		// No-limit, host stats readable: host-headroom latch. R10.3 splits this
+		// into its own st.noLimitHostFired latch (mirroring limit mode's
+		// split) so the D-row branch on a /proc/stat outage tick cannot clobber
+		// a prior host-headroom fire (Finding 1: the gate alone was not enough
+		// — the D-row wrote the shared st.saturationFired and cleared it on low
+		// container usage, flapping degraded→healthy). The D-row latch holds
+		// its own state independently; the emitted saturationFired is their OR.
+		// Hold-on-missing: a transient /proc/stat outage diverts to the D-row
+		// branch, which does NOT touch st.noLimitHostFired, so a prior
+		// host-headroom fire holds until a successful reading clears it.
 		st.limitSaturationFired = false
 		st.hostFullFired = false
+		st.dRowFired = false
 
 		if len(st.hostBusyRing) >= 2 {
 			switch {
 			case signals.HeadroomCores < 0:
-				st.saturationFired = true
+				st.noLimitHostFired = true
 			case signals.HeadroomCores > headroomRecoverCores:
-				st.saturationFired = false
+				st.noLimitHostFired = false
 			}
 		} else {
-			st.saturationFired = false
+			st.noLimitHostFired = false
 		}
-	case deadZone && len(st.usageRing) >= 2:
+
+		st.saturationFired = st.noLimitHostFired || st.dRowFired
+	case !limitMode && !sample.HostBusyCoresAvailable && sample.LogicalCpus > 0:
+		// D-row: no host stats, no limit. Fraction fallback with LogicalCpus
+		// denominator (REVISED from v3's "uncapped → healthy"). The usage ring
+		// fills every tick (R10.1), so usageCores60sMean/LogicalCpus is
+		// computable. saturationAvg (Quota/CgroupCores denominator) is NOT used
+		// — it's 0 in no-limit mode (the bug). dFraction is computed locally
+		// from the one blessed average (usageCores60sMean) and LogicalCpus.
+		// R10.3 Finding 1: this branch does NOT touch st.noLimitHostFired, so a
+		// prior host-headroom fire (from a readable tick) holds across the
+		// outage — the D-row evaluates its own st.dRowFired independently and
+		// the emitted saturationFired is their OR (no flap).
 		st.limitSaturationFired = false
 		st.hostFullFired = false
 
-		switch {
-		case saturationAvg >= thresholds.HighUsageFraction:
-			st.saturationFired = true
-		case saturationAvg < thresholds.SaturationRecover:
-			st.saturationFired = false
+		if len(st.usageRing) >= 2 {
+			dFraction := usageCores60sMean / sample.LogicalCpus
+
+			signals.DFraction = dFraction
+			switch {
+			case dFraction >= thresholds.HighUsageFraction:
+				st.dRowFired = true
+			case dFraction < thresholds.SaturationRecover:
+				st.dRowFired = false
+			}
+		} else {
+			st.dRowFired = false
 		}
+
+		st.saturationFired = st.noLimitHostFired || st.dRowFired
 	default:
 		st.limitSaturationFired = false
 		st.hostFullFired = false
+		st.noLimitHostFired = false
+		st.dRowFired = false
 		st.saturationFired = false
 	}
 
 	signals.SaturationFired = st.saturationFired
 	signals.LimitSaturationFired = st.limitSaturationFired
 	signals.HostFullFired = st.hostFullFired
+	signals.DRowFired = st.dRowFired
 
 	// Percentile block: set UsageRingActive, AvgUsageFraction, AvgUsageCores
 	// from the already-computed early values (one blessed average — do NOT
@@ -959,10 +1043,13 @@ func Decide(st *WindowState, sample Sample, thresholds Thresholds) (Verdict, Sig
 		// headroom can't be computed (no host count), so fall back to the
 		// 60s-avg usage fraction as the Value.
 		satValue := signals.HeadroomCores
-		if sample.LogicalCpus <= 0 {
+		switch {
+		case sample.LogicalCpus <= 0:
 			satValue = saturationAvg
-		} else if signals.HostFullFired {
+		case signals.HostFullFired:
 			satValue = signals.HostHeadroomCores
+		case signals.DRowFired:
+			satValue = signals.DFraction
 		}
 
 		fired = append(fired, firedCause{Cause{Kind: CauseKindSaturation, Value: satValue}, severity(saturationAvg, thresholds.HighUsageFraction), false})

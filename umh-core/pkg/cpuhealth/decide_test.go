@@ -1510,14 +1510,22 @@ func TestDecide_SaturationBackstop_DeadZoneFireThenClearGuardrail(t *testing.T) 
 	// CgroupCores 4.0 provides the denominator for the usage fraction
 	// (UsageCores/CgroupCores) — it is NOT a limit (Quota is the limit; nil
 	// here means uncapped). The dead-zone is the ONLY place saturation is
-	// evaluated.
+	// evaluated. R10.3: sets LogicalCpus=4.0 and HostBusyCoresAvailable=false
+	// so the sample routes to the D-row fraction fallback
+	// (usageCores60sMean/LogicalCpus), which replaces the old
+	// CgroupCores-denominator fraction branch (removed in R10.3 — it was doubly
+	// dead: unreachable AND fraction=0 in no-limit). LogicalCpus=4.0 matches
+	// CgroupCores=4.0 so the D-row fraction equals the old saturationAvg
+	// (UsageCores/4.0), preserving the test's intent.
 	deadZoneSample := func(dt time.Duration, usageCores float64) Sample {
 		return Sample{
-			Timestamp:    base.Add(dt),
-			UsageCores:   usageCores,
-			CgroupCores:  4.0,
-			PsiAvailable: false,
-			Virtualized:  false,
+			Timestamp:              base.Add(dt),
+			UsageCores:             usageCores,
+			CgroupCores:            4.0,
+			LogicalCpus:            4.0,
+			HostBusyCoresAvailable: false,
+			PsiAvailable:           false,
+			Virtualized:            false,
 		}
 	}
 
@@ -1800,9 +1808,13 @@ func TestDecide_SaturationBackstop_DeadZoneFireThenClearGuardrail(t *testing.T) 
 	st8 := &WindowState{}
 	// NaN sample at t=0 (5s spacing keeps it in the 60s window through t=35).
 	Decide(st8, Sample{
-		Timestamp:   base,
-		UsageCores:  math.NaN(),
-		CgroupCores: 4.0,
+		Timestamp:              base,
+		UsageCores:             math.NaN(),
+		CgroupCores:            4.0,
+		LogicalCpus:            4.0,
+		HostBusyCoresAvailable: false,
+		PsiAvailable:           false,
+		Virtualized:            false,
 	}, thresholds)
 	// 7 normal high-usage samples at 5s spacing (0.80 fraction = 3.2/4.0).
 	for i := 1; i <= 7; i++ {
@@ -1891,13 +1903,15 @@ func TestDecide_SaturationBackstop_DeadZoneFireThenClearGuardrail(t *testing.T) 
 	// Dead-zone samples with high throttle (ratio 0.80) AND high usage (0.80).
 	deadZoneThrottleSample := func(dt time.Duration, nrPeriods, nrThrottled int64) Sample {
 		return Sample{
-			Timestamp:    base.Add(dt),
-			UsageCores:   3.2, // 0.80 of 4.0
-			CgroupCores:  4.0,
-			NrPeriods:    nrPeriods,
-			NrThrottled:  nrThrottled,
-			PsiAvailable: false,
-			Virtualized:  false,
+			Timestamp:              base.Add(dt),
+			UsageCores:             3.2, // 0.80 of 4.0
+			CgroupCores:            4.0,
+			LogicalCpus:            4.0,
+			HostBusyCoresAvailable: false,
+			NrPeriods:              nrPeriods,
+			NrThrottled:            nrThrottled,
+			PsiAvailable:           false,
+			Virtualized:            false,
 		}
 	}
 	for i := 0; i < 8; i++ {
@@ -2041,15 +2055,19 @@ func TestDecide_UsagePercentiles_FromSaturationRing(t *testing.T) {
 	thresholds := DefaultThresholds()
 
 	// deadZoneSample constructs a dead-zone sample (Quota nil, PsiAvailable
-	// false, Virtualized false) with a usage fraction = usageCores/4.0. The
-	// dead-zone is the ONLY place the usage ring is populated currently.
+	// false, Virtualized false) with a usage fraction = usageCores/4.0. R10.3:
+	// sets LogicalCpus=4.0 and HostBusyCoresAvailable=false so the sample
+	// routes to the D-row (usageCores60sMean/LogicalCpus), preserving the
+	// test's fraction semantics (LogicalCpus matches CgroupCores=4.0).
 	deadZoneSample := func(dt time.Duration, fraction float64) Sample {
 		return Sample{
-			Timestamp:    base.Add(dt),
-			UsageCores:   fraction * 4.0,
-			CgroupCores:  4.0,
-			PsiAvailable: false,
-			Virtualized:  false,
+			Timestamp:              base.Add(dt),
+			UsageCores:             fraction * 4.0,
+			CgroupCores:            4.0,
+			LogicalCpus:            4.0,
+			HostBusyCoresAvailable: false,
+			PsiAvailable:           false,
+			Virtualized:            false,
 		}
 	}
 
@@ -2126,11 +2144,13 @@ func TestDecide_UsagePercentiles_FromSaturationRing(t *testing.T) {
 	stOvs := &WindowState{}
 	ovsSample := func(dt time.Duration) Sample {
 		return Sample{
-			Timestamp:    base.Add(120 * time.Second).Add(dt),
-			UsageCores:   2.0,
-			CgroupCores:  0.5,
-			PsiAvailable: false,
-			Virtualized:  false,
+			Timestamp:              base.Add(120 * time.Second).Add(dt),
+			UsageCores:             2.0,
+			CgroupCores:            0.5,
+			LogicalCpus:            0.5,
+			HostBusyCoresAvailable: false,
+			PsiAvailable:           false,
+			Virtualized:            false,
 		}
 	}
 	Decide(stOvs, ovsSample(0), thresholds)
@@ -2379,9 +2399,10 @@ func TestDecide_HostBusy60sMean_RingDiscipline(t *testing.T) {
 				v = vals[i]
 			}
 			_, s = Decide(st, Sample{
-				Timestamp:     base.Add(startOff).Add(time.Duration(i) * time.Second),
-				HostBusyCores: v,
-				LogicalCpus:   8.0,
+				Timestamp:              base.Add(startOff).Add(time.Duration(i) * time.Second),
+				HostBusyCores:          v,
+				HostBusyCoresAvailable: true, // R10.3: ring appends only when /proc/stat is readable
+				LogicalCpus:            8.0,
 			}, thresholds)
 		}
 		return s
@@ -2425,14 +2446,16 @@ func TestDecide_HostBusy60sMean_RingDiscipline(t *testing.T) {
 	t.Run("CutoffKept", func(t *testing.T) {
 		st := &WindowState{}
 		_, _ = Decide(st, Sample{
-			Timestamp:     base,
-			HostBusyCores: 4.0,
-			LogicalCpus:   8.0,
+			Timestamp:              base,
+			HostBusyCores:          4.0,
+			HostBusyCoresAvailable: true, // R10.3: ring appends only when /proc/stat is readable
+			LogicalCpus:            8.0,
 		}, thresholds)
 		_, sig := Decide(st, Sample{
-			Timestamp:     base.Add(60 * time.Second),
-			HostBusyCores: 4.0,
-			LogicalCpus:   8.0,
+			Timestamp:              base.Add(60 * time.Second),
+			HostBusyCores:          4.0,
+			HostBusyCoresAvailable: true,
+			LogicalCpus:            8.0,
 		}, thresholds)
 		if !floatEq(sig.HostBusyCores60sMean, 4.0) {
 			t.Fatalf("HostBusyCores60sMean: got %v, want 4.0 (A@t0 on cutoff edge KEPT per !ts.Before(cutoff), 2 samples survive; an off-by-one Before/After prune drops A → 1 sample → 0)", sig.HostBusyCores60sMean)
@@ -2557,10 +2580,11 @@ func TestDecide_Headroom_Computation(t *testing.T) {
 				b = busy[i]
 			}
 			v, s = Decide(st, Sample{
-				Timestamp:     base.Add(time.Duration(i) * time.Second),
-				HostBusyCores: b,
-				LogicalCpus:   logical,
-				Quota:         quota,
+				Timestamp:              base.Add(time.Duration(i) * time.Second),
+				HostBusyCores:          b,
+				HostBusyCoresAvailable: true, // R10.3: ring appends only when /proc/stat is readable
+				LogicalCpus:            logical,
+				Quota:                  quota,
 			}, thresholds)
 		}
 		return v, s
@@ -2748,14 +2772,18 @@ func TestDecide_Saturation_HeadroomTrigger(t *testing.T) {
 	// headroom=LogicalCpus − 60s-mean(HostBusyCores) − cpuReserveCores. The
 	// usageCores/cgroupCores pair populates the 60s-avg usage-fraction path
 	// (UsageCores/CgroupCores); passing 0,0 yields fraction 0 (clamped from
-	// 0/0 NaN), which never trips the fraction trigger.
+	// 0/0 NaN), which never trips the fraction trigger. R10.3: sets
+	// HostBusyCoresAvailable=true so the sample routes to the host-headroom
+	// branch (these tests exercise the host-headroom path, which requires
+	// readable host stats).
 	dzSample := func(dt time.Duration, logical, hostBusy, usageCores, cgroupCores float64) Sample {
 		return Sample{
-			Timestamp:     base.Add(dt),
-			HostBusyCores: hostBusy,
-			LogicalCpus:   logical,
-			UsageCores:    usageCores,
-			CgroupCores:   cgroupCores,
+			Timestamp:              base.Add(dt),
+			HostBusyCores:          hostBusy,
+			HostBusyCoresAvailable: true,
+			LogicalCpus:            logical,
+			UsageCores:             usageCores,
+			CgroupCores:            cgroupCores,
 		}
 	}
 
@@ -2905,41 +2933,28 @@ func TestDecide_Saturation_HeadroomTrigger(t *testing.T) {
 	})
 
 	// (6) FRACTION_FALLBACK_LOGICALCPUS_UNKNOWN — the host CPU count is
-	// unknown (LogicalCpus == 0, the cgroup-known-only sub-case), so the
-	// 60s-avg usage fraction remains the trigger. (6a) a fraction at
-	// HighUsageFraction fires; (6b) a fraction below SaturationRecover clears a
-	// prior fire. This pins the retained fraction fallback that the headroom
-	// branch does not replace when LogicalCpus is unknown.
+	// unknown (LogicalCpus == 0, the cgroup-known-only sub-case). R10.3 removed
+	// the old fraction fallback branch (case deadZone && len(usageRing)>=2,
+	// which divided by Quota/CgroupCores — both 0 in no-limit, the bug). The
+	// D-row requires LogicalCpus > 0, so LogicalCpus=0 falls through to the
+	// `default` branch → healthy (the unreachable-in-prod safety net, since
+	// runtime.NumCPU() always returns > 0). This sub-test now pins that
+	// unreachable behavior: a sample with LogicalCpus=0 stays healthy
+	// regardless of usage, and the saturation latch is cleared.
 	t.Run("FRACTION_FALLBACK_LOGICALCPUS_UNKNOWN", func(t *testing.T) {
-		// (6a) fire: 2 ticks UsageCores/CgroupCores = 0.70 → fraction 0.70 =
-		// HighUsageFraction. HostBusyCores 0 (irrelevant under the fallback),
-		// LogicalCpus 0 selects the fraction branch.
 		st := &WindowState{}
 		var (
-			vFire Verdict
-			sig   Signals
+			v   Verdict
+			sig Signals
 		)
 		for i := 0; i < 2; i++ {
-			vFire, sig = Decide(st, dzSample(time.Duration(i)*time.Second, 0, 0, 5.6, 8.0), thresholds)
+			v, sig = Decide(st, dzSample(time.Duration(i)*time.Second, 0, 0, 5.6, 8.0), thresholds)
 		}
-		if !sig.SaturationFired {
-			t.Fatalf("(6a) fire SaturationFired: got false, want true (LogicalCpus==0 → fraction trigger; 5.6/8.0=0.70 >= HighUsageFraction → must fire)")
+		if sig.SaturationFired {
+			t.Fatalf("(6) SaturationFired: got true, want false (LogicalCpus==0 → default branch → latch cleared; the old CgroupCores-denominator fraction fallback is removed in R10.3)")
 		}
-		if vFire.State != StateDegraded {
-			t.Fatalf("(6a) fire State: got %q, want %q (fraction 0.70 >= HighUsageFraction → degraded)", vFire.State, StateDegraded)
-		}
-
-		// (6b) clear: 70 ticks UsageCores/CgroupCores = 0.40 → fraction 0.40 <
-		// SaturationRecover (0.60) → latch clears.
-		for i := 3; i <= 72; i++ {
-			Decide(st, dzSample(time.Duration(i)*time.Second, 0, 0, 3.2, 8.0), thresholds)
-		}
-		vClear, sigClear := Decide(st, dzSample(73*time.Second, 0, 0, 3.2, 8.0), thresholds)
-		if sigClear.SaturationFired {
-			t.Fatalf("(6b) clear SaturationFired: got true, want false (fraction=3.2/8.0=0.40 < SaturationRecover 0.60 → latch must clear)")
-		}
-		if vClear.State != StateHealthy {
-			t.Fatalf("(6b) clear State: got %q, want %q (fraction 0.40 < SaturationRecover → healthy)", vClear.State, StateHealthy)
+		if v.State != StateHealthy {
+			t.Fatalf("(6) State: got %q, want %q (LogicalCpus==0 → default branch → healthy; unreachable in prod via runtime.NumCPU())", v.State, StateHealthy)
 		}
 	})
 
@@ -2993,13 +3008,17 @@ func TestDecide_Saturation_FiresOnVirtualizedBox(t *testing.T) {
 	// StealFraction 0 (so the steal latch does not co-fire), PressureAvg60 0
 	// (so the demand gate stays closed and host-contention does not co-fire).
 	// capacity=LogicalCpus and headroom=LogicalCpus − 60s-mean(HostBusyCores) −
-	// cpuReserveCores. virt selects Sample.Virtualized.
+	// cpuReserveCores. virt selects Sample.Virtualized. R10.3: sets
+	// HostBusyCoresAvailable=true so the sample routes to the host-headroom
+	// branch (these tests exercise the host-headroom path on virtualized
+	// boxes, which requires readable host stats).
 	virtSample := func(dt time.Duration, logical, hostBusy float64, virt bool) Sample {
 		return Sample{
-			Timestamp:     base.Add(dt),
-			HostBusyCores: hostBusy,
-			LogicalCpus:   logical,
-			Virtualized:   virt,
+			Timestamp:              base.Add(dt),
+			HostBusyCores:          hostBusy,
+			HostBusyCoresAvailable: true,
+			LogicalCpus:            logical,
+			Virtualized:            virt,
 		}
 	}
 
@@ -3100,7 +3119,7 @@ func TestDecide_Saturation_FiresOnVirtualizedBox(t *testing.T) {
 	// saturation).
 	t.Run("FULL_PLUS_PSI", func(t *testing.T) {
 		st := &WindowState{}
-		s := Sample{Timestamp: base, HostBusyCores: 8.0, LogicalCpus: 8.0, PsiAvailable: true, PressureAvg60: 0.30}
+		s := Sample{Timestamp: base, HostBusyCores: 8.0, HostBusyCoresAvailable: true, LogicalCpus: 8.0, PsiAvailable: true, PressureAvg60: 0.30}
 		Decide(st, s, thresholds)
 		s.Timestamp = base.Add(1 * time.Second)
 		v, sig := Decide(st, s, thresholds)
@@ -3924,9 +3943,10 @@ func TestDecide_Saturation_HeadroomTrigger_NoLimitByteIdentity(t *testing.T) {
 	)
 	for i := 0; i < 2; i++ {
 		v, sig = Decide(st, Sample{
-			Timestamp:     base.Add(time.Duration(i) * time.Second),
-			HostBusyCores: 8.0,
-			LogicalCpus:   8.0,
+			Timestamp:              base.Add(time.Duration(i) * time.Second),
+			HostBusyCores:          8.0,
+			HostBusyCoresAvailable: true,
+			LogicalCpus:            8.0,
 		}, thresholds)
 	}
 	if v.State != StateDegraded {
@@ -3949,5 +3969,444 @@ func TestDecide_Saturation_HeadroomTrigger_NoLimitByteIdentity(t *testing.T) {
 	}
 	if v.Causes[0].Kind != CauseKindSaturation {
 		t.Fatalf("Cause Kind: got %q, want %q", v.Causes[0].Kind, CauseKindSaturation)
+	}
+}
+
+// TestDecide_DRow_ReachableAndFires is THE key R10.3 test: the no-PSI/no-limit
+// fallback (scenario D) is reachable AND correct. /proc/stat unreadable
+// (HostBusyCoresAvailable=false, HostBusyCores=0), no limit (Quota nil),
+// PsiAvailable false, LogicalCpus 8.0, UsageCores 6.0 sustained (6.0/8.0=0.75
+// >= HighUsageFraction 0.70). 2+ ticks. Today the no-limit branch fires on
+// HeadroomCores (LogicalCpus − hostBusyMean − reserve = 8−0−1 = 7 > 0) and
+// reads healthy forever — the blind spot. R10.3 gates on
+// HostBusyCoresAvailable so the unreadable case falls through to the D-row
+// fraction fallback (usageCores60sMean/LogicalCpus >= 0.70).
+func TestDecide_DRow_ReachableAndFires(t *testing.T) {
+	base := time.Date(2026, 7, 6, 12, 0, 0, 0, time.UTC)
+	thresholds := DefaultThresholds()
+
+	st := &WindowState{}
+	var (
+		v   Verdict
+		sig Signals
+	)
+	for i := 0; i < 3; i++ {
+		v, sig = Decide(st, Sample{
+			Timestamp:              base.Add(time.Duration(i) * time.Second),
+			HostBusyCores:          0,
+			HostBusyCoresAvailable: false,
+			Quota:                  nil,
+			PsiAvailable:           false,
+			LogicalCpus:            8.0,
+			UsageCores:             6.0,
+		}, thresholds)
+	}
+	if v.State != StateDegraded {
+		t.Fatalf("State: got %q, want %q (D-row: usageCores60sMean 6.0 / LogicalCpus 8.0 = 0.75 >= 0.70 → degraded; today healthy — the blind spot)", v.State, StateDegraded)
+	}
+	if !sig.SaturationFired {
+		t.Fatalf("SaturationFired: got false, want true (D-row fraction >= 0.70)")
+	}
+	if !sig.DRowFired {
+		t.Fatalf("DRowFired: got false, want true (D-row branch fired)")
+	}
+	if !floatEq(sig.DFraction, 0.75) {
+		t.Fatalf("DFraction: got %v, want 0.75 (6.0/8.0)", sig.DFraction)
+	}
+	if len(v.Causes) != 1 || v.Causes[0].Kind != CauseKindSaturation {
+		t.Fatalf("Causes: got %+v, want one saturation cause", v.Causes)
+	}
+	if !floatEq(v.Causes[0].Value, 0.75) {
+		t.Fatalf("Cause Value: got %v, want 0.75 (the D-fraction)", v.Causes[0].Value)
+	}
+	if sig.HostFullFired {
+		t.Fatalf("HostFullFired: got true, want false (no host stats → host-full can't fire; holds false since it never fired)")
+	}
+}
+
+// TestDecide_DRow_BelowThresholdHealthy pins the guardrail: blind-but-quiet =
+// healthy (not a third state). Same as ReachableAndFires but UsageCores 3.0
+// (3.0/8.0 = 0.375 < 0.70) → HEALTHY, SaturationFired false, DRowFired false.
+func TestDecide_DRow_BelowThresholdHealthy(t *testing.T) {
+	base := time.Date(2026, 7, 6, 12, 0, 0, 0, time.UTC)
+	thresholds := DefaultThresholds()
+
+	st := &WindowState{}
+	var (
+		v   Verdict
+		sig Signals
+	)
+	for i := 0; i < 3; i++ {
+		v, sig = Decide(st, Sample{
+			Timestamp:              base.Add(time.Duration(i) * time.Second),
+			HostBusyCores:          0,
+			HostBusyCoresAvailable: false,
+			Quota:                  nil,
+			PsiAvailable:           false,
+			LogicalCpus:            8.0,
+			UsageCores:             3.0,
+		}, thresholds)
+	}
+	if v.State != StateHealthy {
+		t.Fatalf("State: got %q, want %q (D-row: 3.0/8.0 = 0.375 < 0.70 → healthy; blind-but-quiet = healthy)", v.State, StateHealthy)
+	}
+	if sig.SaturationFired {
+		t.Fatalf("SaturationFired: got true, want false (below threshold)")
+	}
+	if sig.DRowFired {
+		t.Fatalf("DRowFired: got true, want false (below threshold)")
+	}
+}
+
+// TestDecide_DRow_SchmittRecover pins the Schmitt recover band on the D-row
+// latch: fire at 0.75, drop to 0.40 (< SaturationRecover 0.60) → latch clears
+// → healthy. Then 0.65 (in the hold band 0.60..0.70) → latch stays fired
+// (Schmitt hold).
+func TestDecide_DRow_SchmittRecover(t *testing.T) {
+	base := time.Date(2026, 7, 6, 12, 0, 0, 0, time.UTC)
+	thresholds := DefaultThresholds()
+
+	dSample := func(dt time.Duration, usage float64) Sample {
+		return Sample{
+			Timestamp:              base.Add(dt),
+			HostBusyCores:          0,
+			HostBusyCoresAvailable: false,
+			Quota:                  nil,
+			PsiAvailable:           false,
+			LogicalCpus:            8.0,
+			UsageCores:             usage,
+		}
+	}
+
+	// (a) fire at 0.75 (6.0/8.0)
+	st := &WindowState{}
+	for i := 0; i < 3; i++ {
+		Decide(st, dSample(time.Duration(i)*time.Second, 6.0), thresholds)
+	}
+	vFire, sigFire := Decide(st, dSample(3*time.Second, 6.0), thresholds)
+	if vFire.State != StateDegraded {
+		t.Fatalf("(a) fire State: got %q, want %q (0.75 >= 0.70 → degraded)", vFire.State, StateDegraded)
+	}
+	if !sigFire.DRowFired {
+		t.Fatalf("(a) fire DRowFired: got false, want true")
+	}
+
+	// (b) drop to 0.40 (3.2/8.0) for enough ticks that the ring holds only 0.40
+	// → dFraction 0.40 < SaturationRecover 0.60 → latch clears.
+	for i := 0; i < 70; i++ {
+		Decide(st, dSample(time.Duration(4+i)*time.Second, 3.2), thresholds)
+	}
+	vClear, sigClear := Decide(st, dSample(73*time.Second, 3.2), thresholds)
+	if vClear.State != StateHealthy {
+		t.Fatalf("(b) clear State: got %q, want %q (0.40 < 0.60 SaturationRecover → latch clears)", vClear.State, StateHealthy)
+	}
+	if sigClear.DRowFired {
+		t.Fatalf("(b) clear DRowFired: got true, want false (latch cleared)")
+	}
+
+	// (c) re-fire at 0.75, then 0.65 (5.2/8.0, in the hold band 0.60..0.70)
+	// → latch stays fired (Schmitt hold).
+	st2 := &WindowState{}
+	for i := 0; i < 3; i++ {
+		Decide(st2, dSample(time.Duration(i)*time.Second, 6.0), thresholds)
+	}
+	for i := 0; i < 70; i++ {
+		Decide(st2, dSample(time.Duration(3+i)*time.Second, 5.2), thresholds)
+	}
+	vHold, sigHold := Decide(st2, dSample(72*time.Second, 5.2), thresholds)
+	if vHold.State != StateDegraded {
+		t.Fatalf("(c) hold State: got %q, want %q (0.65 in Schmitt band 0.60..0.70 → latch holds fired)", vHold.State, StateDegraded)
+	}
+	if !sigHold.DRowFired {
+		t.Fatalf("(c) hold DRowFired: got false, want true (Schmitt hold in the band)")
+	}
+}
+
+// TestDecide_NoLimit_HostStatsReadable_Unchanged (byte-identity): Quota nil,
+// HostBusyCoresAvailable true, HostBusyCores 7.5, LogicalCpus 8.0 → headroom
+// 8−7.5−1 = −0.5 < 0 → degraded via the host-headroom latch (unchanged). The
+// gate diverts only the unreadable case; the readable path is byte-identical.
+func TestDecide_NoLimit_HostStatsReadable_Unchanged(t *testing.T) {
+	base := time.Date(2026, 7, 6, 12, 0, 0, 0, time.UTC)
+	thresholds := DefaultThresholds()
+
+	st := &WindowState{}
+	var (
+		v   Verdict
+		sig Signals
+	)
+	for i := 0; i < 3; i++ {
+		v, sig = Decide(st, Sample{
+			Timestamp:              base.Add(time.Duration(i) * time.Second),
+			HostBusyCores:          7.5,
+			HostBusyCoresAvailable: true,
+			Quota:                  nil,
+			PsiAvailable:           false,
+			LogicalCpus:            8.0,
+			UsageCores:             0,
+		}, thresholds)
+	}
+	if v.State != StateDegraded {
+		t.Fatalf("State: got %q, want %q (host-headroom: 8−7.5−1=−0.5 < 0 → degraded; gate didn't break the readable path)", v.State, StateDegraded)
+	}
+	if !sig.SaturationFired {
+		t.Fatalf("SaturationFired: got false, want true (host-headroom latch fires)")
+	}
+	if sig.DRowFired {
+		t.Fatalf("DRowFired: got true, want false (host stats readable → host-headroom latch, not the D-row)")
+	}
+	if sig.HostFullFired {
+		t.Fatalf("HostFullFired: got true, want false (no-limit mode → host-full latch not evaluated)")
+	}
+}
+
+// TestDecide_ScenarioC_LimitNoHostStats verifies scenario C end-to-end: limit
+// set (Quota=2.0), /proc/stat unreadable, UsageCores 1.9 → limit-saturation
+// fires (2−1.9−0.2=−0.1 < 0), host-full can't fire (no host stats) → degraded
+// via limit-sat ONLY. Limit mode needs no host stats.
+func TestDecide_ScenarioC_LimitNoHostStats(t *testing.T) {
+	base := time.Date(2026, 7, 6, 12, 0, 0, 0, time.UTC)
+	thresholds := DefaultThresholds()
+
+	quota := 2.0
+	st := &WindowState{}
+	var (
+		v   Verdict
+		sig Signals
+	)
+	for i := 0; i < 3; i++ {
+		v, sig = Decide(st, Sample{
+			Timestamp:              base.Add(time.Duration(i) * time.Second),
+			Quota:                  &quota,
+			HostBusyCores:          0,
+			HostBusyCoresAvailable: false,
+			PsiAvailable:           false,
+			LogicalCpus:            8.0,
+			UsageCores:             1.9,
+		}, thresholds)
+	}
+	if v.State != StateDegraded {
+		t.Fatalf("State: got %q, want %q (limit-sat: 2−1.9−0.2=−0.1 < 0 → degraded; limit mode needs no host stats)", v.State, StateDegraded)
+	}
+	if !sig.LimitSaturationFired {
+		t.Fatalf("LimitSaturationFired: got false, want true (limit-sat fires without host stats)")
+	}
+	if sig.HostFullFired {
+		t.Fatalf("HostFullFired: got true, want false (no host stats → host-full can't fire)")
+	}
+	if sig.DRowFired {
+		t.Fatalf("DRowFired: got true, want false (limit mode, not the D-row)")
+	}
+}
+
+// TestDecide_HostFull_HoldOnMissing (self-review hunch): limit 2, host 7.5/8
+// full (HostBusyCoresAvailable=true), container idle → host-full fires
+// (degraded). Then a tick with HostBusyCoresAvailable=false (transient outage)
+// → latch HOLDS (stays degraded), does NOT clear. Then a tick with
+// HostBusyCoresAvailable=true, host 2.5/8 (not full, headroom=8−2.5−1=4.5 >
+// 0.5) → latch clears → healthy. Forcing: the old `else { clear }` would clear
+// on the outage tick (flap).
+func TestDecide_HostFull_HoldOnMissing(t *testing.T) {
+	base := time.Date(2026, 7, 6, 12, 0, 0, 0, time.UTC)
+	thresholds := DefaultThresholds()
+
+	quota := 2.0
+
+	// (a) fire: host full, container idle → host-full fires.
+	st := &WindowState{}
+	for i := 0; i < 3; i++ {
+		Decide(st, Sample{
+			Timestamp:              base.Add(time.Duration(i) * time.Second),
+			Quota:                  &quota,
+			HostBusyCores:          7.5,
+			HostBusyCoresAvailable: true,
+			PsiAvailable:           false,
+			LogicalCpus:            8.0,
+			UsageCores:             0,
+		}, thresholds)
+	}
+	vFire, sigFire := Decide(st, Sample{
+		Timestamp:              base.Add(3 * time.Second),
+		Quota:                  &quota,
+		HostBusyCores:          7.5,
+		HostBusyCoresAvailable: true,
+		PsiAvailable:           false,
+		LogicalCpus:            8.0,
+		UsageCores:             0,
+	}, thresholds)
+	if vFire.State != StateDegraded {
+		t.Fatalf("(a) fire State: got %q, want %q (host full: 8−7.5−1=−0.5 < 0)", vFire.State, StateDegraded)
+	}
+	if !sigFire.HostFullFired {
+		t.Fatalf("(a) fire HostFullFired: got false, want true")
+	}
+
+	// (b) transient outage: HostBusyCoresAvailable=false → latch HOLDS.
+	vHold, sigHold := Decide(st, Sample{
+		Timestamp:              base.Add(4 * time.Second),
+		Quota:                  &quota,
+		HostBusyCores:          0,
+		HostBusyCoresAvailable: false,
+		PsiAvailable:           false,
+		LogicalCpus:            8.0,
+		UsageCores:             0,
+	}, thresholds)
+	if !sigHold.HostFullFired {
+		t.Fatalf("(b) hold HostFullFired: got false, want true (transient /proc/stat outage → latch HOLDS, does not clear → no flap)")
+	}
+	if vHold.State != StateDegraded {
+		t.Fatalf("(b) hold State: got %q, want %q (latch held → still degraded)", vHold.State, StateDegraded)
+	}
+
+	// (c) recovery: HostBusyCoresAvailable=true, host not full (2.5/8) →
+	// headroom=8−2.5−1=4.5 > headroomRecoverCores 0.5 → latch clears → healthy.
+	for i := 0; i < 70; i++ {
+		Decide(st, Sample{
+			Timestamp:              base.Add(time.Duration(5+i) * time.Second),
+			Quota:                  &quota,
+			HostBusyCores:          2.5,
+			HostBusyCoresAvailable: true,
+			PsiAvailable:           false,
+			LogicalCpus:            8.0,
+			UsageCores:             0,
+		}, thresholds)
+	}
+	vClear, sigClear := Decide(st, Sample{
+		Timestamp:              base.Add(74 * time.Second),
+		Quota:                  &quota,
+		HostBusyCores:          2.5,
+		HostBusyCoresAvailable: true,
+		PsiAvailable:           false,
+		LogicalCpus:            8.0,
+		UsageCores:             0,
+	}, thresholds)
+	if sigClear.HostFullFired {
+		t.Fatalf("(c) clear HostFullFired: got true, want false (host not full, headroom 4.5 > 0.5 → latch clears)")
+	}
+	if vClear.State != StateHealthy {
+		t.Fatalf("(c) clear State: got %q, want %q (host-full cleared, container idle → healthy)", vClear.State, StateHealthy)
+	}
+}
+
+// TestDecide_NoLimit_HostHeadroom_HoldOnMissing pins R10.3 Finding 1: a no-limit
+// host-saturated box (host full, container idle) that suffers a transient
+// /proc/stat outage must NOT flap degraded→healthy→degraded. The host-headroom
+// fire holds across the outage tick (the D-row branch does not touch
+// st.noLimitHostFired), and the emitted saturationFired is the OR of the two
+// no-limit sub-latches.
+func TestDecide_NoLimit_HostHeadroom_HoldOnMissing(t *testing.T) {
+	base := time.Date(2026, 7, 6, 12, 0, 0, 0, time.UTC)
+	th := DefaultThresholds()
+
+	// (a) fire: no limit, host 7.5/8 full, container idle → host-headroom fires.
+	st := &WindowState{}
+	for i := 0; i < 3; i++ {
+		Decide(st, Sample{
+			Timestamp: base.Add(time.Duration(i) * time.Second),
+			Quota:     nil, LogicalCpus: 8.0, HostBusyCores: 7.5,
+			HostBusyCoresAvailable: true, UsageCores: 0,
+		}, th)
+	}
+	vFire, _ := Decide(st, Sample{
+		Timestamp: base.Add(3 * time.Second),
+		Quota:     nil, LogicalCpus: 8.0, HostBusyCores: 7.5,
+		HostBusyCoresAvailable: true, UsageCores: 0,
+	}, th)
+	if vFire.State != StateDegraded {
+		t.Fatalf("(a) fire State: got %q, want %q (host full: 8−7.5−1=−0.5 < 0)", vFire.State, StateDegraded)
+	}
+
+	// (b) transient outage: /proc/stat unreadable, container idle. The D-row
+	// branch runs (dFraction=0/8=0 < 0.60 → D-row clears) BUT the prior
+	// host-headroom fire (st.noLimitHostFired) HOLDS — the D-row does not touch
+	// it. Emitted saturationFired = noLimitHostFired || dRowFired = true.
+	vHold, sigHold := Decide(st, Sample{
+		Timestamp: base.Add(4 * time.Second),
+		Quota:     nil, LogicalCpus: 8.0, HostBusyCores: 0,
+		HostBusyCoresAvailable: false, UsageCores: 0,
+	}, th)
+	if vHold.State != StateDegraded {
+		t.Fatalf("(b) hold State: got %q, want %q (prior host-headroom fire holds across the /proc/stat outage → no flap)", vHold.State, StateDegraded)
+	}
+	if sigHold.SaturationFired {
+		// SaturationFired should still be true (held). This asserts the hold.
+	} else {
+		t.Fatalf("(b) hold SaturationFired: got false, want true (st.noLimitHostFired held; D-row clear must not clobber it)")
+	}
+	if sigHold.DRowFired {
+		t.Fatalf("(b) hold DRowFired: got true, want false (container idle → dFraction 0 < 0.60 → D-row does not fire)")
+	}
+
+	// (c) outage resolves, host still full → still degraded (host-headroom re-fires).
+	vBack, _ := Decide(st, Sample{
+		Timestamp: base.Add(5 * time.Second),
+		Quota:     nil, LogicalCpus: 8.0, HostBusyCores: 7.5,
+		HostBusyCoresAvailable: true, UsageCores: 0,
+	}, th)
+	if vBack.State != StateDegraded {
+		t.Fatalf("(c) back State: got %q, want %q (host full again → degraded)", vBack.State, StateDegraded)
+	}
+}
+
+// TestDecide_DRowToHostHeadroom_Transition pins R10.3 Finding 2: on a D-row →
+// host-headroom transition (/proc/stat becomes readable mid-fire), st.dRowFired
+// is cleared by the host-headroom branch, so the saturation cause Value is
+// signals.HeadroomCores (the host-scope headroom), NOT a stale
+// signals.DFraction=0 routed through a stale DRowFired=true.
+func TestDecide_DRowToHostHeadroom_Transition(t *testing.T) {
+	base := time.Date(2026, 7, 6, 12, 0, 0, 0, time.UTC)
+	th := DefaultThresholds()
+
+	// (a) D-row fires: no host stats, no limit, usage 6/8 = 0.75 >= 0.70.
+	st := &WindowState{}
+	for i := 0; i < 3; i++ {
+		Decide(st, Sample{
+			Timestamp: base.Add(time.Duration(i) * time.Second),
+			Quota:     nil, LogicalCpus: 8.0, HostBusyCores: 0,
+			HostBusyCoresAvailable: false, UsageCores: 6.0,
+		}, th)
+	}
+	vFire, sigFire := Decide(st, Sample{
+		Timestamp: base.Add(3 * time.Second),
+		Quota:     nil, LogicalCpus: 8.0, HostBusyCores: 0,
+		HostBusyCoresAvailable: false, UsageCores: 6.0,
+	}, th)
+	if vFire.State != StateDegraded {
+		t.Fatalf("(a) fire State: got %q, want %q (D-row: 6/8=0.75 >= 0.70)", vFire.State, StateDegraded)
+	}
+	if !sigFire.DRowFired {
+		t.Fatalf("(a) fire DRowFired: got false, want true")
+	}
+	// The cause Value is the D-fraction (0.75).
+	dRowVal := vFire.Causes[0].Value
+	if dRowVal < 0.74 || dRowVal > 0.76 {
+		t.Fatalf("(a) fire cause Value: got %v, want ~0.75 (the D-fraction)", dRowVal)
+	}
+
+	// (b) /proc/stat becomes readable, host IS full (7.5/8). Routes to the
+	// host-headroom branch. Feed 2 readable ticks (the 2-sample floor on
+	// hostBusyRing — a first-tick reading cannot fire). st.dRowFired MUST be
+	// cleared (Finding 2) so the cause Value is signals.HeadroomCores (−0.5),
+	// not a stale DFraction=0.
+	Decide(st, Sample{
+		Timestamp: base.Add(4 * time.Second),
+		Quota:     nil, LogicalCpus: 8.0, HostBusyCores: 7.5,
+		HostBusyCoresAvailable: true, UsageCores: 6.0,
+	}, th)
+	vTrans, sigTrans := Decide(st, Sample{
+		Timestamp: base.Add(5 * time.Second),
+		Quota:     nil, LogicalCpus: 8.0, HostBusyCores: 7.5,
+		HostBusyCoresAvailable: true, UsageCores: 6.0,
+	}, th)
+	if vTrans.State != StateDegraded {
+		t.Fatalf("(b) transition State: got %q, want %q (host full: 8−7.5−1=−0.5 < 0; 2 readable ticks satisfy the floor)", vTrans.State, StateDegraded)
+	}
+	if sigTrans.DRowFired {
+		t.Fatalf("(b) transition DRowFired: got true, want false (host-headroom branch must clear st.dRowFired on entry — Finding 2)")
+	}
+	// The cause Value is the host-scope headroom (−0.5), NOT 0.
+	transVal := vTrans.Causes[0].Value
+	if transVal > -0.49 || transVal < -0.51 {
+		t.Fatalf("(b) transition cause Value: got %v, want ~−0.5 (signals.HeadroomCores; a stale DRowFired would route to DFraction=0)", transVal)
 	}
 }
