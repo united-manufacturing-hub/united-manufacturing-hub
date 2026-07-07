@@ -142,6 +142,10 @@ type IConnectionService interface {
 	// Returns an error and a boolean indicating if reconciliation occurred.
 	// The boolean is false if reconciliation was skipped (e.g., due to an error).
 	ReconcileManager(ctx context.Context, services serviceregistry.Provider, snapshot fsm.SystemSnapshot) (error, bool)
+
+	// UsesFsmv2Backend reports whether the service selected the fsmv2-backed nmap
+	// manager (NMAP_BACKEND=fsmv2).
+	UsesFsmv2Backend() bool
 }
 
 // ServiceInfo holds information about the connection's health status.

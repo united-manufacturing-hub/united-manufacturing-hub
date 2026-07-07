@@ -12,11 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package fsmv2nmap is the minimal proof-of-concept nmap monitor built on the
-// fsmv2 simple framework. Behind the fsmv2 flag, it observes a single TCP
-// target by dialing it once per tick: a successful dial reports the port open,
-// a failed dial drives the worker degraded. Richer scanning (refused->closed,
-// timeout->filtered, DNS failure->degraded classification) is deferred to PR2.
+// Package fsmv2nmap is the nmap monitor built on the fsmv2 simple framework.
+// Behind the fsmv2 flag, it observes a single TCP target by dialing it once per
+// tick: a successful dial reports the port open, a failed dial drives the worker
+// degraded.
 package fsmv2nmap
 
 import (
@@ -40,8 +39,7 @@ const (
 
 // NmapStatus is the result of one TCP-dial observation of the target port.
 type NmapStatus struct {
-	// PortState is "open" on a successful dial; empty otherwise (PR2 adds
-	// closed/filtered/degraded classification).
+	// PortState is "open" on a successful dial; empty otherwise.
 	PortState string `json:"port_state"`
 	// LatencyMs is the dial round-trip time in milliseconds.
 	LatencyMs float64 `json:"latency_ms"`
@@ -55,8 +53,7 @@ type NmapStatus struct {
 // successful dial it returns an "open"/running status with the measured
 // latency; on a dial error it returns a non-open status carrying the port and
 // wraps the error, which the framework persists as a degraded verdict
-// ("poll error: ..."). Error->state classification (refused->closed,
-// timeout->filtered, DNS->degraded) is deferred to PR2.
+// ("poll error: ...").
 func Poll(ctx context.Context, _ struct{}, cfg config.NmapConfig) (NmapStatus, error) {
 	target := net.JoinHostPort(cfg.NmapServiceConfig.Target, strconv.Itoa(int(cfg.NmapServiceConfig.Port)))
 

@@ -14,21 +14,11 @@
 
 package control
 
-// RED-phase (TDD) spec for the loop.go global-nmap-manager gate.
-//
-// ASSUMED SEAM (drives GREEN — implement EXACTLY this in pkg/control):
-//
-//	func globalNmapManagerEnabled() bool {
-//	    return env.GetAsString("NMAP_BACKEND", false, "fsmv1") != constants.NmapBackendFSMv2
-//	}
-//
-// NewControlLoop appends the global fsmv1 nmap.NewNmapManager(...) only when
-// this helper reports true. When NMAP_BACKEND=fsmv2 the connection service owns
-// an embedded fsmv2 nmap manager, so the global fsmv1 manager MUST be skipped to
-// avoid double-managing config.Internal.Nmap.
-//
-// This file fails to compile until globalNmapManagerEnabled and
-// constants.NmapBackendFSMv2 exist.
+// Tests the global-nmap-manager gate: NewControlLoop appends the global fsmv1
+// nmap manager only when globalNmapManagerEnabled reports true. When
+// NMAP_BACKEND=fsmv2 the connection service owns an embedded fsmv2 nmap manager,
+// so the global fsmv1 manager must be skipped to avoid double-managing
+// config.Internal.Nmap.
 
 import (
 	"os"
@@ -46,8 +36,6 @@ var _ = Describe("globalNmapManagerEnabled", func() {
 
 	It("is disabled when NMAP_BACKEND=fsmv2 (fsmv2 manager owns nmap)", func() {
 		_ = os.Setenv("NMAP_BACKEND", constants.NmapBackendFSMv2)
-
-		defer func() { _ = os.Unsetenv("NMAP_BACKEND") }()
 
 		Expect(globalNmapManagerEnabled()).To(BeFalse(),
 			"the global fsmv1 nmap manager must be skipped when the fsmv2 backend is on")

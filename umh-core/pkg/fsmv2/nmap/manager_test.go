@@ -32,28 +32,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker/dynamicchildren"
 )
 
-// -----------------------------------------------------------------------------
-// ASSUMED API (drives GREEN — implement EXACTLY this):
-//
-//	func NewFsmv2NmapManager(managerName string) *adapter.WorkerManager[config.NmapConfig, simple.Status[NmapStatus]]
-//
-// Its internal WorkerManagerSpec must set:
-//   - WorkerType     = WorkerType ("nmap")
-//   - ExtractConfigs = snapshot.CurrentConfig.Internal.Nmap   (config.go:42 Internal, :85 Nmap)
-//   - NameOf         = cfg.Name (promoted from FSMInstanceConfig)
-//   - IsEnabled      = cfg.DesiredFSMState != "stopped"
-//   - MapFresh(cfg, s simple.Status[NmapStatus]) string
-//       maps s.Result.PortState -> the fsmv1 operational-state string
-//       (Fresh+healthy leaf only; degraded/stale/bootstrap are framework-owned).
-//   - MapObserved(cfg, s simple.Status[NmapStatus]) publicfsm.ObservedState
-//       builds a nmapfsm.NmapObservedState from s.Result (ObservedNmapServiceConfig
-//       from cfg; ServiceInfo.NmapStatus.LastScan.PortResult from the status).
-//
-// The stored status type is simple.Status[NmapStatus] (the verdict wrapper), so
-// the mappers read s.Result and the adapter reads the degraded verdict off the
-// wrapper via its HealthReporter interface.
-// -----------------------------------------------------------------------------
-
 // stubManagerReader is a deps.StateReader that returns a fixed
 // Observation[simple.Status[NmapStatus]] for every ref, or an error. It mirrors
 // the stubReader harness in adapter/instance_test.go but for the nmap stored

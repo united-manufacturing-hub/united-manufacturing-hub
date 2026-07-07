@@ -18,7 +18,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"runtime"
 	"time"
 
@@ -1082,7 +1081,7 @@ func (p *ProtocolConverterService) ServiceExists(
 	// Under fsmv2 the connection is an always-present in-memory worker; the
 	// adapter just reports it late (after its first reconcile), so treat it as
 	// existing and keep the standard connection+DFC invariant below.
-	if os.Getenv("NMAP_BACKEND") == constants.NmapBackendFSMv2 {
+	if p.connectionService.UsesFsmv2Backend() {
 		connExists = true
 	}
 
