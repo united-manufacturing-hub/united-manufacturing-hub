@@ -248,15 +248,9 @@ func (a *DeployProtocolConverterAction) Execute() (interface{}, map[string]inter
 				deps.String("pcConfig", pcConfig.String()),
 				deps.String("desiredState", pcConfig.DesiredFSMState))
 
-			// Flip only the failed flow(s) to stopped so the bridge stays put until the
-			// user fixes and redeploys from the editing view. Healthy flows keep running.
 			stopCtx, stopCancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
 			defer stopCancel()
 
-			// Read-modify-write against the latest persisted config: AtomicEdit replaces
-			// the whole entry, so reusing the pre-wait snapshot would clobber edits that
-			// landed during the health-check wait. Load current and mutate only the
-			// desired-state fields.
 			currentConfig, getErr := a.configManager.GetConfig(stopCtx, 0)
 			if getErr != nil {
 				a.fsmLogger.SentryError(deps.FeatureDeploymentSaveConfig, "", getErr, "deploy_protocol_converter_stop_on_failure_get_config_failed",
@@ -288,8 +282,6 @@ func (a *DeployProtocolConverterAction) Execute() (interface{}, map[string]inter
 			writeActive := pcToStop.ProtocolConverterServiceConfig.WriteDFCDesiredState == dataflowcomponent.OperationalStateActive
 
 			if !readActive && !writeActive {
-				// No flows to attribute the failure to (e.g. empty bridge): stop the
-				// whole bridge so it does not keep retrying.
 				pcToStop.DesiredFSMState = protocolconverter.OperationalStateStopped
 			} else {
 				stopRead, stopWrite := flowsToStop(lastSnapshot, readActive, writeActive)
@@ -425,7 +417,6 @@ func (a *DeployProtocolConverterAction) waitForComponentToAppear(desiredState st
 	// Track last known blocking reason for timeout error message
 	var lastStatusReason string
 
-	// Track last observed snapshot so the caller can tell which flow(s) failed.
 	var lastSnapshot *protocolconverter.ProtocolConverterObservedStateSnapshot
 
 	for {
@@ -533,9 +524,7 @@ func (a *DeployProtocolConverterAction) waitForComponentToAppear(desiredState st
 
 // flowsToStop decides which dataflow components to flip to stopped after a failed
 // deploy. A flow is stopped only when it was meant to run (desired active) and did
-// not reach a healthy state. When the snapshot is missing or the failure cannot be
-// attributed to a specific flow (e.g. connection-level), every active flow is
-// stopped so the bridge does not keep retrying.
+// not reach a healthy state.
 func flowsToStop(snapshot *protocolconverter.ProtocolConverterObservedStateSnapshot, readActive, writeActive bool) (stopRead, stopWrite bool) {
 	if snapshot == nil {
 		return readActive, writeActive
@@ -557,10 +546,7 @@ func flowsToStop(snapshot *protocolconverter.ProtocolConverterObservedStateSnaps
 	return stopRead, stopWrite
 }
 
-// isDFCFlowRunning reports whether a dataflow component FSM state means the flow
-// came up. Running (active, idle or degraded) is left alone; only a flow that
-// never came up (crash-looping, still starting) is stopped. Mirrors the running
-// states in dataflowcomponent.IsDataflowComponentBenthosRunning.
+// isDFCFlowRunning reports whether a dataflow component FSM state means the flow came up.
 func isDFCFlowRunning(state string) bool {
 	return state == dataflowcomponent.OperationalStateActive ||
 		state == dataflowcomponent.OperationalStateIdle ||
