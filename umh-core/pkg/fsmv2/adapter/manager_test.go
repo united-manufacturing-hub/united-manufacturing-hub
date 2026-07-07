@@ -138,6 +138,20 @@ var _ = Describe("WorkerManager", func() {
 		fsmv2client.SetClient(nil)
 	})
 
+	It("NewWorkerManager panics when WorkerType is empty", func() {
+		spec := baseSpec()
+		spec.WorkerType = ""
+
+		Expect(func() { NewWorkerManager(spec) }).To(PanicWith(ContainSubstring("WorkerType is required")))
+	})
+
+	It("NewWorkerManager panics when a required function is nil", func() {
+		spec := baseSpec()
+		spec.MapObserved = nil
+
+		Expect(func() { NewWorkerManager(spec) }).To(PanicWith(ContainSubstring("requires ExtractConfigs")))
+	})
+
 	It("Reconcile adds a new worker: instance registered and ref Upserted", func() {
 		w := setupClient(&stubReader{})
 		mgr := NewWorkerManager(baseSpec())

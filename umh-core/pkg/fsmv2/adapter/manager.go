@@ -109,8 +109,18 @@ type WorkerManager[TConfig, TStatus any] struct {
 // NewWorkerManager builds a WorkerManager, filling every optional spec field
 // with its default: ConfigEqual=reflect.DeepEqual, CfgFor=JSON round-trip,
 // IsEnabled=desired-state duck-typing (GetState()=="stopped" => disabled), and
-// Log=a no-op logger.
+// Log=a no-op logger. It panics when a required field is missing, so a
+// misconfigured spec fails at construction instead of a nil-call panic inside
+// Reconcile.
 func NewWorkerManager[TConfig, TStatus any](spec WorkerManagerSpec[TConfig, TStatus]) *WorkerManager[TConfig, TStatus] {
+	if spec.WorkerType == "" {
+		panic("adapter: WorkerManagerSpec.WorkerType is required")
+	}
+
+	if spec.ExtractConfigs == nil || spec.NameOf == nil || spec.MapFresh == nil || spec.MapObserved == nil {
+		panic("adapter: WorkerManagerSpec requires ExtractConfigs, NameOf, MapFresh, and MapObserved")
+	}
+
 	if spec.ConfigEqual == nil {
 		spec.ConfigEqual = func(a, b TConfig) bool { return reflect.DeepEqual(a, b) }
 	}
