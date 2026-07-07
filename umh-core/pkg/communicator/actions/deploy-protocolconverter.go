@@ -250,28 +250,59 @@ func (a *DeployProtocolConverterAction) Execute() (interface{}, map[string]inter
 
 			// Flip only the failed flow(s) to stopped so the bridge stays put until the
 			// user fixes and redeploys from the editing view. Healthy flows keep running.
-			readActive := pcConfig.ProtocolConverterServiceConfig.ReadDFCDesiredState == dataflowcomponent.OperationalStateActive
-			writeActive := pcConfig.ProtocolConverterServiceConfig.WriteDFCDesiredState == dataflowcomponent.OperationalStateActive
+			stopCtx, stopCancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
+			defer stopCancel()
+
+			// Read-modify-write against the latest persisted config: AtomicEdit replaces
+			// the whole entry, so reusing the pre-wait snapshot would clobber edits that
+			// landed during the health-check wait. Load current and mutate only the
+			// desired-state fields.
+			currentConfig, getErr := a.configManager.GetConfig(stopCtx, 0)
+			if getErr != nil {
+				a.fsmLogger.SentryError(deps.FeatureDeploymentSaveConfig, "", getErr, "deploy_protocol_converter_stop_on_failure_get_config_failed",
+					deps.String("name", a.payload.Name))
+
+				return nil, nil, err
+			}
+
+			var (
+				pcToStop config.ProtocolConverterConfig
+				found    bool
+			)
+
+			for _, pc := range currentConfig.ProtocolConverter {
+				if dataflowcomponentserviceconfig.GenerateUUIDFromName(pc.Name) == pcUUID {
+					pcToStop = pc
+					found = true
+
+					break
+				}
+			}
+
+			if !found {
+				// Bridge no longer exists (e.g. deleted during the wait): nothing to stop.
+				return nil, nil, err
+			}
+
+			readActive := pcToStop.ProtocolConverterServiceConfig.ReadDFCDesiredState == dataflowcomponent.OperationalStateActive
+			writeActive := pcToStop.ProtocolConverterServiceConfig.WriteDFCDesiredState == dataflowcomponent.OperationalStateActive
 
 			if !readActive && !writeActive {
 				// No flows to attribute the failure to (e.g. empty bridge): stop the
 				// whole bridge so it does not keep retrying.
-				pcConfig.DesiredFSMState = protocolconverter.OperationalStateStopped
+				pcToStop.DesiredFSMState = protocolconverter.OperationalStateStopped
 			} else {
 				stopRead, stopWrite := flowsToStop(lastSnapshot, readActive, writeActive)
 				if stopRead {
-					pcConfig.ProtocolConverterServiceConfig.ReadDFCDesiredState = dataflowcomponent.OperationalStateStopped
+					pcToStop.ProtocolConverterServiceConfig.ReadDFCDesiredState = dataflowcomponent.OperationalStateStopped
 				}
 
 				if stopWrite {
-					pcConfig.ProtocolConverterServiceConfig.WriteDFCDesiredState = dataflowcomponent.OperationalStateStopped
+					pcToStop.ProtocolConverterServiceConfig.WriteDFCDesiredState = dataflowcomponent.OperationalStateStopped
 				}
 			}
 
-			stopCtx, stopCancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
-			defer stopCancel()
-
-			if _, editErr := a.configManager.AtomicEditProtocolConverter(stopCtx, pcUUID, pcConfig); editErr != nil {
+			if _, editErr := a.configManager.AtomicEditProtocolConverter(stopCtx, pcUUID, pcToStop); editErr != nil {
 				a.fsmLogger.SentryError(deps.FeatureDeploymentSaveConfig, "", editErr, "deploy_protocol_converter_stop_on_failure_failed",
 					deps.String("name", a.payload.Name))
 			}
