@@ -81,7 +81,7 @@ func Poll(ctx context.Context, _ struct{}, cfg config.NmapConfig) (NmapStatus, e
 }
 
 func init() {
-	simple.Register(simple.Spec[config.NmapConfig, NmapStatus, struct{}]{
+	simple.Register(simple.MonitorSpec[config.NmapConfig, NmapStatus, struct{}]{
 		WorkerType: WorkerType,
 		Interval:   pollInterval,
 		Poll:       Poll,

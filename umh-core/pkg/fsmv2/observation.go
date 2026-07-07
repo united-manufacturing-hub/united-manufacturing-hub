@@ -152,12 +152,6 @@ func NewObservation[TStatus any](status TStatus) ObservedState {
 type Observation[TStatus any] struct {
 	// CollectedAt is when this observation was taken.
 	CollectedAt time.Time `json:"collected_at"`
-	// Status is the developer's business data. Flattened to top level via custom MarshalJSON.
-	Status TStatus `json:"-"`
-	// State is the current FSM state name (set by supervisor via SetState).
-	State string `json:"state"`
-	// LastActionResults contains action history (managed by supervisor).
-	LastActionResults []deps.ActionResult `json:"last_action_results,omitempty"`
 	// ChildrenView is the per-tick snapshot of children state for parent
 	// workers. The value round-trips through CSE storage between the collector
 	// goroutine and the reconciler goroutine, so the field MUST stay JSON-
