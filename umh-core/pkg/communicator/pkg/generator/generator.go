@@ -298,6 +298,9 @@ func (s *StatusCollectorType) GenerateStatusMessage(ctx context.Context, isBoots
 		},
 	}
 
+	// --- historian (fsmv2 monitor child, read from the fsmv2 store) -------------
+	statusMessage.Core.Historian = HistorianFromFSMv2(ctx, s.logger)
+
 	// Derive core health from other healths
 	statusMessage.Core.Health = DeriveCoreHealth(
 		statusMessage.Core.Agent.Health,

@@ -49,6 +49,25 @@ type Core struct {
 	Container         Container `json:"container"`
 	Redpanda          Redpanda  `json:"redpanda"`
 	Latency           Latency   `json:"latency"`
+	// Historian reports the reachability of the configured historian endpoint.
+	// Absent when no historian is configured or no observation exists yet.
+	Historian *Historian `json:"historian,omitempty"`
+}
+
+// Historian is the status of the historian endpoint monitor: its health verdict
+// plus the last dialed target and round-trip latency.
+type Historian struct {
+	Timescale Timescale `json:"timescale"`
+}
+
+type Timescale struct {
+	Health Health `json:"health"`
+	// Host is the dialed historian host.
+	Host string `json:"host"`
+	// Port is the dialed historian port.
+	Port uint16 `json:"port"`
+	// Latency in milliseconds.
+	Latency float64 `json:"latency"`
 }
 
 type Agent struct {

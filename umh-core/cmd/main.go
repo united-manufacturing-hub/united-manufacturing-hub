@@ -51,6 +51,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/examples"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/fsmv2client"
+	fsmv2timescale "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/historian"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/register"
 	fsmv2sentry "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/sentry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/application"
@@ -296,6 +297,10 @@ func main() {
 
 				sentry.SafeGoWithContext(ctx, func(ctx context.Context) {
 					wireFSMv2Communicator(ctx, appSup, channelAdapter, fsmv2Store, placeholderUUID, &configData, communicationState, log)
+				})
+
+				sentry.SafeGoWithContext(ctx, func(ctx context.Context) {
+					watchConfig(ctx, configManager, log)
 				})
 			}
 		} else {
@@ -607,6 +612,10 @@ children:
 `
 	}
 
+	// The historian monitor is NOT declared here: it is a dynamic child, upserted
+	// and deleted at runtime by watchConfig so live edits to the
+	// historian section are picked up without restarting umh-core.
+
 	// Setup store (in-memory for now).
 	store = examples.SetupStore(deps.NewFSMLogger(logger))
 
@@ -685,6 +694,56 @@ children:
 	}
 
 	return appSup, channelAdapter, store, placeholderUUID, cleanup, nil
+}
+
+// watchConfig keeps the config-driven fsmv2 monitor children in sync with the
+// live config. On each tick it re-reads the config once and hands it to a
+// per-worker sync helper; each helper independently upserts its child (creating
+// it, or reconfiguring it in place so edits are picked up without a restart) or
+// deletes it when its config section is absent. A read failure is the only
+// shared skip — with no config, no child can be synced. It returns when ctx is
+// cancelled.
+func watchConfig(ctx context.Context, configManager config.ConfigManager, logger *zap.SugaredLogger) {
+	ticker := time.NewTicker(2 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			client := fsmv2client.GetClient()
+			if client == nil {
+				continue
+			}
+
+			cfg, err := configManager.GetConfig(ctx, 0)
+			if err != nil {
+				logger.Warnw("config watch: failed to read config", "error", err)
+				continue
+			}
+
+			syncHistorian(client, cfg, logger)
+		}
+	}
+}
+
+// syncHistorian keeps the historian monitor child in sync with cfg: it upserts
+// the child with the current historian settings when the section is present, or
+// deletes it when the section is absent. Its early return exits only this
+// helper, so an absent historian section never blocks other workers' sync.
+func syncHistorian(client *fsmv2client.FSMv2Client, cfg config.FullConfig, logger *zap.SugaredLogger) {
+	if cfg.Historian == nil {
+		client.Delete(fsmv2timescale.Ref)
+
+		return
+	}
+
+	historianVars := cfg.Historian.ToTemplateMap()
+
+	if err := client.Upsert(fsmv2timescale.Ref, historianVars); err != nil {
+		logger.Warnw("historian watch: upsert failed", "error", err)
+	}
 }
 
 // wireFSMv2Communicator wires the legacy CommunicationState to the already-started
