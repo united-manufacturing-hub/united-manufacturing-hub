@@ -186,14 +186,15 @@ func (m *mockState) String() string { return "MockState" }
 func (m *mockState) LifecyclePhase() config.LifecyclePhase { return config.PhaseRunningHealthy }
 
 type mockStore struct {
-	mu           sync.RWMutex
-	identity     map[string]map[string]persistence.Document // workerType -> id -> document
-	desired      map[string]map[string]persistence.Document
-	observed     map[string]map[string]persistence.Document
-	saveErr      error
-	loadSnapshot func(ctx context.Context, workerType string, id string) (*storage.Snapshot, error)
-	saveDesired  func(ctx context.Context, workerType string, id string, desired persistence.Document) error
-	saveObserved func(ctx context.Context, workerType string, id string, observed interface{}) (bool, error)
+	mu               sync.RWMutex
+	identity         map[string]map[string]persistence.Document // workerType -> id -> document
+	desired          map[string]map[string]persistence.Document
+	observed         map[string]map[string]persistence.Document
+	saveErr          error
+	loadSnapshot     func(ctx context.Context, workerType string, id string) (*storage.Snapshot, error)
+	saveDesired      func(ctx context.Context, workerType string, id string, desired persistence.Document) error
+	saveObserved     func(ctx context.Context, workerType string, id string, observed interface{}) (bool, error)
+	afterLoadDesired func(ctx context.Context, workerType string, id string)
 }
 
 func newMockStore() *mockStore {
@@ -269,7 +270,18 @@ func (m *mockStore) LoadDesiredTyped(ctx context.Context, workerType string, id 
 
 	jsonBytes, _ := json.Marshal(doc)
 
-	return json.Unmarshal(jsonBytes, dest)
+	if unmarshalErr := json.Unmarshal(jsonBytes, dest); unmarshalErr != nil {
+		return unmarshalErr
+	}
+
+	// afterLoadDesired runs after the loaded value is materialized into dest,
+	// letting a test interleave a concurrent write into the load-modify-save
+	// window (the ENG-4971 TOCTOU race).
+	if m.afterLoadDesired != nil {
+		m.afterLoadDesired(ctx, workerType, id)
+	}
+
+	return nil
 }
 
 func (m *mockStore) SaveObserved(ctx context.Context, workerType string, id string, observed interface{}) (bool, error) {

@@ -196,11 +196,22 @@ type Supervisor[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState] stru
 	gracefulShutdownTimeout  time.Duration
 	metricsReportInterval    time.Duration
 	childShutdownTimeout     time.Duration
-	circuitOpen              atomic.Bool
-	panicCircuitOpen         atomic.Bool
-	started                  atomic.Bool
-	noWorkersWarnedOnce      atomic.Bool
-	enableTraceLogging       bool
+	// lifecycleFlagMu serializes the read-modify-write of the lifecycle flags
+	// (ShutdownRequested, Disabled) in the desired-state document. The per-tick
+	// derive carries these flags forward across re-derivation by loading the
+	// stored value and re-saving it; requestShutdown / clearShutdownRequested /
+	// setDisabled are the explicit setters. The store full-replaces on write, so
+	// without serialization a derive that loads the pre-shutdown value races a
+	// setter's commit and saves the stale value back over it (ENG-4971). Holding
+	// this mutex across each load-modify-save makes the sequences mutually
+	// exclusive so the explicit setters solely own the flag values.
+	lifecycleFlagMu     sync.Mutex
+	circuitOpen         atomic.Bool
+	panicCircuitOpen    atomic.Bool
+	started             atomic.Bool
+	noWorkersWarnedOnce atomic.Bool
+	drainTimedOut       atomic.Bool
+	enableTraceLogging  bool
 }
 
 func NewSupervisor[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState](cfg Config) *Supervisor[TObserved, TDesired] {

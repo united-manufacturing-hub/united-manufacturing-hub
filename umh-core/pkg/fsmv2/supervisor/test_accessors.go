@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
 )
 
 // TestMarkAsStarted sets the supervisor as started with a valid context and
@@ -200,4 +201,48 @@ func (s *Supervisor[TObserved, TDesired]) TestApplyDisableMapping(ctx context.Co
 	defer s.mu.Unlock()
 
 	s.applyDisableMapping(ctx, specs)
+}
+
+// TestWorkerCount returns the number of workers currently registered. DO NOT USE in production code.
+func (s *Supervisor[TObserved, TDesired]) TestWorkerCount() int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	return len(s.workers)
+}
+
+// TestIsInfraCircuitOpen returns true if the infrastructure circuit breaker is open. DO NOT USE in production code.
+func (s *Supervisor[TObserved, TDesired]) TestIsInfraCircuitOpen() bool {
+	return s.circuitOpen.Load()
+}
+
+// TestLinkChild inserts a child supervisor into the children map for testing,
+// modeling a nested tree without going through the spawn path. DO NOT USE in production code.
+func (s *Supervisor[TObserved, TDesired]) TestLinkChild(name string, child SupervisorInterface) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.children[name] = child
+}
+
+// TestCalculateSubtreeHeight exposes calculateSubtreeHeight() for testing. DO NOT USE in production code.
+func (s *Supervisor[TObserved, TDesired]) TestCalculateSubtreeHeight() int {
+	return s.calculateSubtreeHeight()
+}
+
+// TestRecordPostJoinBudgetOverrun exposes recordPostJoinBudgetOverrun() for testing. DO NOT USE in production code.
+func (s *Supervisor[TObserved, TDesired]) TestRecordPostJoinBudgetOverrun(totalDrainElapsed, drainBudget, childDrainElapsed time.Duration, budgetWarned bool) {
+	s.recordPostJoinBudgetOverrun(totalDrainElapsed, drainBudget, childDrainElapsed, budgetWarned)
+}
+
+// TestSaveDesired writes a desired-state document through the supervisor's store for testing. DO NOT USE in production code.
+func (s *Supervisor[TObserved, TDesired]) TestSaveDesired(ctx context.Context, workerType, workerID string, doc persistence.Document) error {
+	_, err := s.store.SaveDesired(ctx, workerType, workerID, doc)
+
+	return err
+}
+
+// TestDrainTickInterval returns the drain ticker granularity for testing. DO NOT USE in production code.
+func TestDrainTickInterval() time.Duration {
+	return drainTickInterval
 }
