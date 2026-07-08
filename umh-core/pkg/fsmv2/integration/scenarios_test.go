@@ -25,10 +25,10 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/examples"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/integration"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	exampleparent "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleparent"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleparent/state"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
@@ -111,6 +111,15 @@ func verifyNoErrorsOrWarnings(t *integration.TestLogger) {
 	knownIssues := []string{
 		"data_stale",                   // Observation collector may report stale data briefly
 		"collector_observation_failed", // Collector may fail temporarily during shutdown
+		// The worker-removal handler stops a worker's collector after deleting
+		// the worker from the registry; Shutdown's drain sees the empty registry,
+		// cancels the supervisor ctx, and the collector self-stops before the
+		// handler's own Stop call, which then warns. Benign double-stop during
+		// teardown. The run ends via a graceful drain at ctx expiry (it
+		// previously ended via ctx-kill with no Shutdown at all), which is what
+		// exposes this race to the blanket check. graceful_shutdown_timeout is
+		// deliberately NOT whitelisted: it is the dead-loop-drain signature.
+		"collector_stop_skipped",
 	}
 
 	for _, entry := range errorsAndWarnings {
@@ -354,6 +363,18 @@ func verifyStateFieldsAreValid(store storage.TriangularStoreInterface) {
 		"TryingToStop": true, "Stopped": true,
 		"unknown": true,
 	}
+	// helloworld is the dynamic child the v2 dynamic scenario churns; configworker
+	// is the kernel child every v2 run keeps resident. Before this entry both fell
+	// through the default and were validated against nothing.
+	validHelloworldStates := map[string]bool{
+		"TryingToStart": true, "Running": true,
+		"Degraded": true, "Stopped": true,
+		"unknown": true,
+	}
+	validConfigworkerStates := map[string]bool{
+		"Running": true, "Stopped": true,
+		"unknown": true,
+	}
 
 	for _, w := range workers {
 		if w.Observed == nil {
@@ -374,6 +395,10 @@ func verifyStateFieldsAreValid(store storage.TriangularStoreInterface) {
 			validStates = validParentStates
 		case "application":
 			validStates = validApplicationStates
+		case "helloworld":
+			validStates = validHelloworldStates
+		case "configworker":
+			validStates = validConfigworkerStates
 		default:
 			// Unknown worker type - skip validation
 			continue
