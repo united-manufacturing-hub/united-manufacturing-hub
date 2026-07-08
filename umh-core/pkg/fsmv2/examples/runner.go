@@ -16,6 +16,7 @@ package examples
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -104,7 +105,7 @@ func Run(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 	}
 
 	if cfg.ScenarioV2.Driver != nil && cfg.ScenarioV2.Name == "" {
-		return nil, fmt.Errorf("v2 scenario is not properly configured: " +
+		return nil, errors.New("v2 scenario is not properly configured: " +
 			"Driver is set but Name is empty, so logs and the supervisor ID could not name the scenario")
 	}
 
