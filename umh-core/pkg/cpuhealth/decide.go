@@ -724,17 +724,18 @@ func Decide(st *WindowState, sample Sample, thresholds Thresholds) (Verdict, Sig
 	// new/changed cause, NO headroom formula.
 	var hostBusyMean float64
 
-	// hb is the clamped per-tick HostBusyCores, used both for the ring insert
-	// (when readable) and the attribution host/container split below. R10.3:
-	// only append to the hostBusyRing when /proc/stat was actually readable
-	// (HostBusyCoresAvailable). A missing reading is NOT a "host was idle"
-	// reading — appending HostBusyCores=0 on an outage tick poisons the 60s
-	// mean and corrupts the host-headroom computation when stats return (the
-	// diluted mean understates busyness → false-healthy flap). Skipping the
-	// append keeps the mean over real readings only; the 2-sample floor and 60s
-	// prune still hold. The latch hold-on-missing (the noLimitHost latch holds
-	// on !HostBusyCoresAvailable) complements this: the mean is not poisoned
-	// AND the latch does not clear.
+	// hb is the clamped per-tick HostBusyCores, used for the ring insert
+	// (when readable); the attribution host/container split below uses the 60s
+	// mean (signals.HostBusyCores60sMean) for label stability, not this
+	// per-tick value. R10.3: only append to the hostBusyRing when /proc/stat
+	// was actually readable (HostBusyCoresAvailable). A missing reading is NOT
+	// a "host was idle" reading — appending HostBusyCores=0 on an outage tick
+	// poisons the 60s mean and corrupts the host-headroom computation when
+	// stats return (the diluted mean understates busyness → false-healthy
+	// flap). Skipping the append keeps the mean over real readings only; the
+	// 2-sample floor and 60s prune still hold. The latch hold-on-missing (the
+	// noLimitHost latch holds on !HostBusyCoresAvailable) complements this:
+	// the mean is not poisoned AND the latch does not clear.
 	hb := sample.HostBusyCores
 	if !(hb >= 0) || math.IsInf(hb, 1) {
 		hb = 0
@@ -1109,12 +1110,26 @@ func Decide(st *WindowState, sample Sample, thresholds Thresholds) (Verdict, Sig
 			// dominant cause.
 			attr = AttributionHost
 		default:
-			uc := sample.UsageCores
+			// Use the 60s means (signals.HostBusyCores60sMean,
+			// signals.AvgUsageCores) — NOT the per-tick instantaneous values —
+			// so the attribution label is as stable as the Schmitt-latched
+			// verdict it annotates. The instantaneous split flapped
+			// tick-to-tick: a single reconcile tick where host-busy spiked
+			// flipped Attribution Host→Unknown→Host on a stable degraded
+			// verdict, and the MC rendered a toggling attribution badge. Clamp
+			// the means the same way the ring insert clamps HostBusyCores
+			// (NaN/negative/+Inf → 0).
+			hbm := signals.HostBusyCores60sMean
+			if !(hbm >= 0) || math.IsInf(hbm, 1) {
+				hbm = 0
+			}
+
+			uc := signals.AvgUsageCores
 			if !(uc >= 0) || math.IsInf(uc, 1) {
 				uc = 0
 			}
 
-			if hb-uc > uc {
+			if hbm-uc > uc {
 				attr = AttributionHost
 			}
 		}

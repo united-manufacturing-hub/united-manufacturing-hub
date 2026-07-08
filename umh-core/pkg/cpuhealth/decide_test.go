@@ -1949,6 +1949,7 @@ func TestDecide_SaturationBackstop_DeadZoneFireThenClearGuardrail(t *testing.T) 
 	highHostSample := func(dt time.Duration, nrPeriods, nrThrottled int64) Sample {
 		s := deadZoneThrottleSample(dt, nrPeriods, nrThrottled)
 		s.HostBusyCores = 8.0
+		s.HostBusyCoresAvailable = true // ring fills with 8.0 → 60s mean = 8.0 (the smoothed split uses the mean, not the instantaneous value)
 		return s
 	}
 	st10b := &WindowState{}
@@ -3224,12 +3225,13 @@ func TestDecide_HostContentionFold_Full(t *testing.T) {
 		quota := 8.0
 		st := &WindowState{}
 		v, sig := feedPressureTicks(st, 2, Sample{
-			Quota:         &quota,
-			PsiAvailable:  true,
-			PressureAvg60: 0.30,
-			UsageCores:    1.0,
-			HostBusyCores: 7.0,
-			LogicalCpus:   8.0,
+			Quota:                  &quota,
+			PsiAvailable:           true,
+			PressureAvg60:          0.30,
+			UsageCores:             1.0,
+			HostBusyCores:          7.0,
+			HostBusyCoresAvailable: true, // ring fills with 7.0 → 60s mean = 7.0 (the smoothed split uses the mean)
+			LogicalCpus:            8.0,
 		})
 		if !sig.PressureFired {
 			t.Fatalf("PressureFired: got false, want true (PressureAvg60 0.30 > PressureHigh 0.20)")
@@ -3263,12 +3265,13 @@ func TestDecide_HostContentionFold_Full(t *testing.T) {
 		quota := 8.0
 		st := &WindowState{}
 		v, sig := feedPressureTicks(st, 2, Sample{
-			Quota:         &quota,
-			PsiAvailable:  true,
-			PressureAvg60: 0.30,
-			UsageCores:    6.5,
-			HostBusyCores: 7.0,
-			LogicalCpus:   8.0,
+			Quota:                  &quota,
+			PsiAvailable:           true,
+			PressureAvg60:          0.30,
+			UsageCores:             6.5,
+			HostBusyCores:          7.0,
+			HostBusyCoresAvailable: true, // ring fills with 7.0 → 60s mean = 7.0 (the smoothed split uses the mean)
+			LogicalCpus:            8.0,
 		})
 		if !sig.PressureFired {
 			t.Fatalf("PressureFired: got false, want true (PressureAvg60 0.30 > PressureHigh 0.20)")
@@ -3301,28 +3304,30 @@ func TestDecide_HostContentionFold_Full(t *testing.T) {
 		// Tick 1: establish the throttle ring baseline (single point → ratio 0
 		// → latch not firing).
 		Decide(st, Sample{
-			Timestamp:     base,
-			Quota:         &quota,
-			PsiAvailable:  true,
-			UsageCores:    1.0,
-			HostBusyCores: 7.0,
-			LogicalCpus:   8.0,
-			NrPeriods:     1000,
-			NrThrottled:   10,
-			PressureAvg60: 0.0,
+			Timestamp:              base,
+			Quota:                  &quota,
+			PsiAvailable:           true,
+			UsageCores:             1.0,
+			HostBusyCores:          7.0,
+			HostBusyCoresAvailable: true, // ring fills with 7.0 → 60s mean = 7.0 (the smoothed split uses the mean)
+			LogicalCpus:            8.0,
+			NrPeriods:              1000,
+			NrThrottled:            10,
+			PressureAvg60:          0.0,
 		}, thresholds)
 		// Tick 2: +1000 periods, +100 throttled → ratio 0.10 > 0.05 → throttle
 		// fires.
 		v, sig := Decide(st, Sample{
-			Timestamp:     base.Add(10 * time.Second),
-			Quota:         &quota,
-			PsiAvailable:  true,
-			UsageCores:    1.0,
-			HostBusyCores: 7.0,
-			LogicalCpus:   8.0,
-			NrPeriods:     2000,
-			NrThrottled:   110,
-			PressureAvg60: 0.0,
+			Timestamp:              base.Add(10 * time.Second),
+			Quota:                  &quota,
+			PsiAvailable:           true,
+			UsageCores:             1.0,
+			HostBusyCores:          7.0,
+			HostBusyCoresAvailable: true, // ring fills with 7.0 → 60s mean = 7.0 (the smoothed split uses the mean)
+			LogicalCpus:            8.0,
+			NrPeriods:              2000,
+			NrThrottled:            110,
+			PressureAvg60:          0.0,
 		}, thresholds)
 		if !sig.ThrottleFired {
 			t.Fatalf("ThrottleFired: got false, want true (60s ratio (110-10)/(2000-1000)=0.10 > ThrottleHigh 0.05)")
@@ -3354,26 +3359,28 @@ func TestDecide_HostContentionFold_Full(t *testing.T) {
 		quota := 8.0
 		st := &WindowState{}
 		Decide(st, Sample{
-			Timestamp:     base,
-			Quota:         &quota,
-			PsiAvailable:  true,
-			UsageCores:    6.5,
-			HostBusyCores: 7.0,
-			LogicalCpus:   8.0,
-			NrPeriods:     1000,
-			NrThrottled:   10,
-			PressureAvg60: 0.0,
+			Timestamp:              base,
+			Quota:                  &quota,
+			PsiAvailable:           true,
+			UsageCores:             6.5,
+			HostBusyCores:          7.0,
+			HostBusyCoresAvailable: true, // ring fills with 7.0 → 60s mean = 7.0 (the smoothed split uses the mean)
+			LogicalCpus:            8.0,
+			NrPeriods:              1000,
+			NrThrottled:            10,
+			PressureAvg60:          0.0,
 		}, thresholds)
 		v, sig := Decide(st, Sample{
-			Timestamp:     base.Add(10 * time.Second),
-			Quota:         &quota,
-			PsiAvailable:  true,
-			UsageCores:    6.5,
-			HostBusyCores: 7.0,
-			LogicalCpus:   8.0,
-			NrPeriods:     2000,
-			NrThrottled:   110,
-			PressureAvg60: 0.0,
+			Timestamp:              base.Add(10 * time.Second),
+			Quota:                  &quota,
+			PsiAvailable:           true,
+			UsageCores:             6.5,
+			HostBusyCores:          7.0,
+			HostBusyCoresAvailable: true, // ring fills with 7.0 → 60s mean = 7.0 (the smoothed split uses the mean)
+			LogicalCpus:            8.0,
+			NrPeriods:              2000,
+			NrThrottled:            110,
+			PressureAvg60:          0.0,
 		}, thresholds)
 		if !sig.ThrottleFired {
 			t.Fatalf("ThrottleFired: got false, want true (60s ratio 0.10 > ThrottleHigh 0.05)")
@@ -4521,5 +4528,97 @@ func TestDecide_DRowToHostHeadroom_Transition(t *testing.T) {
 	transVal := vTrans.Causes[0].Value
 	if transVal > -0.49 || transVal < -0.51 {
 		t.Fatalf("(b) transition cause Value: got %v, want ~−0.5 (signals.HeadroomCores; a stale DRowFired would route to DFraction=0)", transVal)
+	}
+}
+
+// TestDecide_Attribution_Uses60sMean_NotInstantaneous pins that the default
+// attribution host/container split uses the 60s MEAN host-busy and usage
+// (signals.HostBusyCores60sMean, signals.AvgUsageCores), NOT the per-tick
+// instantaneous values. The verdict State is Schmitt-latched (stable across a
+// transient spike), so the attribution label that annotates it must be equally
+// stable — otherwise a single reconcile tick where host-busy spikes flips
+// Attribution Host→Unknown→Host on a stable degraded verdict, and the MC would
+// render a toggling attribution badge.
+//
+// Setup: no-limit box, 8 logical cores. Feed 5 readable ticks at 1s spacing
+// with HostBusyCores=2.0 (mean 2.0) and UsageCores=1.0 (mean 1.0), plus a
+// firing throttle (internal cause → attribution comes from the default split,
+// not steal/host-full/no-limit-host). On the split: mean hb 2.0 − uc 1.0 = 1.0,
+// NOT > uc 1.0 → AttributionUnknown.
+//
+// Then a SPIKE tick: HostBusyCores=7.5 (instantaneous) but
+// HostBusyCoresAvailable=false so the hostBusyRing does NOT append it — the 60s
+// mean stays 2.0. The instantaneous-only (OLD) split uses hb=7.5 → 7.5−1.0=6.5
+// > 1.0 → AttributionHost (flap!). The 60s-mean (NEW) split uses hb=2.0 →
+// 2.0−1.0=1.0, not > 1.0 → AttributionUnknown (stable). Throttle keeps firing
+// on the spike tick so the verdict stays degraded and the split runs.
+func TestDecide_Attribution_Uses60sMean_NotInstantaneous(t *testing.T) {
+	base := time.Date(2026, 7, 6, 12, 0, 0, 0, time.UTC)
+	thresholds := DefaultThresholds()
+
+	st := &WindowState{}
+
+	// tick returns a no-limit Sample at base+dt with the given HostBusyCores
+	// (readable), UsageCores, and monotonic throttle counters. The throttle
+	// counters advance by 1000 periods / 100 throttled per tick so the 60s
+	// ratio is 0.10 (> ThrottleHigh 0.05) from tick 1 onward.
+	tick := func(dt time.Duration, hostBusy, usage float64, periods, throttled int64) Sample {
+		return Sample{
+			Timestamp:              base.Add(dt),
+			Quota:                  nil,
+			LogicalCpus:            8.0,
+			HostBusyCores:          hostBusy,
+			HostBusyCoresAvailable: true,
+			UsageCores:             usage,
+			PsiAvailable:           false,
+			NrPeriods:              periods,
+			NrThrottled:            throttled,
+		}
+	}
+
+	// (1) Establish the 60s means: 5 readable ticks at hb=2.0, uc=1.0, with a
+	// firing throttle. After tick 1 the throttle ratio is 0.10 > 0.05 → latch
+	// fires; the verdict is degraded (throttle, internal) and the default
+	// attribution split runs. mean hb=2.0, mean uc=1.0 → 2.0−1.0=1.0 not > 1.0
+	// → AttributionUnknown (the stable label).
+	var v Verdict
+	for i := 0; i < 5; i++ {
+		v, _ = Decide(st, tick(time.Duration(i)*time.Second, 2.0, 1.0,
+			int64(1000+i*1000), int64(i*100)), thresholds)
+	}
+	if v.State != StateDegraded {
+		t.Fatalf("steady State: got %q, want %q (throttle fires → degraded)", v.State, StateDegraded)
+	}
+	if v.Attribution != AttributionUnknown {
+		t.Fatalf("steady Attribution: got %q, want %q (mean hb 2.0 − uc 1.0 = 1.0, not > uc 1.0 → Unknown)", v.Attribution, AttributionUnknown)
+	}
+
+	// (2) SPIKE tick: instantaneous HostBusyCores=7.5 but
+	// HostBusyCoresAvailable=false so the hostBusyRing does NOT append it — the
+	// 60s mean stays 2.0. Throttle keeps firing (verdict stays degraded, split
+	// runs). The OLD split uses instantaneous hb=7.5 → 7.5−1.0=6.5 > 1.0 → Host
+	// (flap). The NEW split uses mean hb=2.0 → 2.0−1.0=1.0, not > 1.0 → Unknown
+	// (stable, matching the verdict).
+	spike := Sample{
+		Timestamp:              base.Add(5 * time.Second),
+		Quota:                  nil,
+		LogicalCpus:            8.0,
+		HostBusyCores:          7.5, // instantaneous spike
+		HostBusyCoresAvailable: false, // ring does NOT append → mean stays 2.0
+		UsageCores:             1.0,
+		PsiAvailable:           false,
+		NrPeriods:              6000,
+		NrThrottled:            500, // ratio (500-0)/(6000-1000)=0.10 > 0.05 → still firing
+	}
+	vSpike, sigSpike := Decide(st, spike, thresholds)
+	if vSpike.State != StateDegraded {
+		t.Fatalf("spike State: got %q, want %q (throttle still firing → still degraded; the verdict is stable)", vSpike.State, StateDegraded)
+	}
+	if vSpike.Attribution != AttributionUnknown {
+		t.Fatalf("spike Attribution: got %q, want %q (the 60s mean hb stayed 2.0 — HostBusyCoresAvailable=false so the spike was NOT appended; 2.0−1.0=1.0 not > 1.0 → Unknown. The OLD instantaneous split uses hb=7.5 → 6.5 > 1.0 → Host (flap). Attribution must be as stable as the verdict it annotates.)", vSpike.Attribution, AttributionUnknown)
+	}
+	// Sanity: the mean really did stay 2.0 (the spike was not appended).
+	if !floatEq(sigSpike.HostBusyCores60sMean, 2.0) {
+		t.Fatalf("spike HostBusyCores60sMean: got %v, want 2.0 (HostBusyCoresAvailable=false → ring did not append the 7.5 spike; a mean that moved to include 7.5 would make the test non-forcing)", sigSpike.HostBusyCores60sMean)
 	}
 }
