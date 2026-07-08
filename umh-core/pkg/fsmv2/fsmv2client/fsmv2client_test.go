@@ -15,6 +15,7 @@
 package fsmv2client
 
 import (
+	"context"
 	"testing"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker/dynamicchildren"
@@ -44,5 +45,19 @@ func TestUpsertAndDeletePassThroughToWriter(t *testing.T) {
 
 	if _, ok := w.Registry().Lookup(ref); ok {
 		t.Fatalf("Writer registry still holds ref %+v after client.Delete", ref)
+	}
+}
+
+// TestGetReturnsErrorOnNilStateReader verifies that Get on a write-only client
+// (one built with a nil StateReader, a documented and used construction) returns
+// an error instead of panicking on the nil dereference.
+func TestGetReturnsErrorOnNilStateReader(t *testing.T) {
+	w := dynamicchildren.NewWriter()
+	client := NewFSMv2Client(w, nil)
+
+	ref := dynamicchildren.Ref{WorkerType: "example", Name: "foo"}
+
+	if _, err := Get[struct{}](context.Background(), client, ref); err == nil {
+		t.Fatalf("Get on a nil-StateReader client returned nil error, want a non-nil error rather than a panic")
 	}
 }

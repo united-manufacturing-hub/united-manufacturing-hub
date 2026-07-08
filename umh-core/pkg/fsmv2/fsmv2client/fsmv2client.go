@@ -81,6 +81,13 @@ func (c *FSMv2Client) Delete(ref dynamicchildren.Ref) {
 func Get[TStatus any](ctx context.Context, c *FSMv2Client, ref dynamicchildren.Ref) (fsmv2.Observation[TStatus], error) {
 	var obs fsmv2.Observation[TStatus]
 
+	// A write-only client (built with a nil StateReader) has no read path. Return
+	// an error rather than dereferencing a nil reader, so the caller sees a
+	// diagnosable failure instead of a panic.
+	if c == nil || c.sr == nil {
+		return obs, fmt.Errorf("fsmv2client: Get requires a client with a StateReader (ref %s/%s)", ref.WorkerType, config.ChildID(ref.Name))
+	}
+
 	if err := c.sr.LoadObservedTyped(ctx, ref.WorkerType, config.ChildID(ref.Name), &obs); err != nil {
 		if errors.Is(err, persistence.ErrNotFound) {
 			return obs, fmt.Errorf("%w: %s/%s", ErrNotObserved, ref.WorkerType, config.ChildID(ref.Name))
