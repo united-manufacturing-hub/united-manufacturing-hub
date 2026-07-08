@@ -142,7 +142,7 @@ The invite key can only be used once and enables secure key exchange without the
 
 Some support requests go beyond what a quick call can answer - for example when the UMH team sets up bridges or data models for you. For this kind of longer setup work, it is easier if the UMH team member doing the work has access to your company in the Management Console.
 
-Invite UMH team members through the normal invitation flow, using their `@umh.app` email address. These invitations are automatically issued against UMH's Google Workspace connection (i.e. an identity provider, set up in Auth) instead of your default connection, because UMH staff don't have accounts in your identity provider.
+Invite UMH team members through the normal invitation flow, using their `@umh.app` email address. These invitations are automatically issued against UMH's Google Workspace connection (i.e. an identity provider, set up in Auth0) instead of your default connection, because UMH staff don't have accounts in your identity provider.
 
 Control stays on both sides. You decide who to invite and can remove them at any time. UMH manages the `@umh.app` identities centrally through Google Workspace, so access is bound to employment: when an employee leaves UMH, disabling their Google Workspace account also cuts their access to your company.
 
