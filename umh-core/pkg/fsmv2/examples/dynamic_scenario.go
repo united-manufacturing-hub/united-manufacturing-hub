@@ -71,7 +71,8 @@ func driveDynamicHello(ctx context.Context, env Env) error {
 	if err != nil {
 		return fmt.Errorf("create mood dir: %w", err)
 	}
-	defer os.RemoveAll(dir)
+
+	defer func() { _ = os.RemoveAll(dir) }()
 
 	initialMoodPath := filepath.Join(dir, "mood-initial")
 	if err := os.WriteFile(initialMoodPath, []byte(dynamicHelloInitialMood), 0o600); err != nil {

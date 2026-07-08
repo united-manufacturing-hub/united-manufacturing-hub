@@ -219,6 +219,7 @@ func main() {
 			"scenario", *scenarioName,
 			"exit_code", code)
 		_ = logger.Sync()
+		//nolint:gocritic // exitAfterDefer is intentional here: the degraded-shutdown path must exit non-zero, logger.Sync is flushed above, and the remaining defers (cancel, close(runDone)) are moot once the process exits.
 		os.Exit(code)
 	}
 }
