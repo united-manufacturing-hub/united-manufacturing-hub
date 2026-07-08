@@ -185,7 +185,11 @@ func buildProtocolConverterAsDfc(
 	// "not configured" despite a configured side: a compound/malformed read input,
 	// or a write side with no Destination.Protocol (Code-without-Protocol).
 	if inputType == "" && len(input) > 0 {
-		log.Debugf("protocol-converter %q: read input present but BenthosPluginID returned empty (compound or malformed input): %v", instance.ID, input)
+		keys := make([]string, 0, len(input))
+		for k := range input {
+			keys = append(keys, k)
+		}
+		log.Debugf("protocol-converter %q: read input present but BenthosPluginID returned empty (compound or malformed input), keys=%v", instance.ID, keys)
 	}
 
 	// A Code-only write (Destination.Code set, Protocol empty) leaves outputType
