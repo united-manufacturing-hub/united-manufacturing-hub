@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Improvements
+
+- The [Authentication and Authorization](https://docs.umh.app/production/security/management-console/authentication-and-authorization) documentation now covers enterprise Auth0 setup: how a default connection routes all logins through your own identity provider, how to choose the Account Owner as a break-glass account, and how inviting UMH personnel via their `@umh.app` address works, including who is responsible for their access
+
 ## [0.44.27]
 
 ### New Features
