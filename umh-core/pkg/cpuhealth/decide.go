@@ -110,6 +110,14 @@ const throttleWindow = 60 * time.Second
 // if the debounce needs ever call for it.
 const stealWindow = 60 * time.Second
 
+// hostBusyWindow is the sliding window length over which the host-busy
+// 60s mean (HostBusyCores60sMean) is computed. Kept as a separate const
+// from stealWindow so the host-busy ring's horizon is self-documenting
+// and decoupled from the steal p95's window — shortening stealWindow to
+// tune the steal p95 must not silently shorten the host-busy mean (which
+// feeds HeadroomCores in no-limit mode and drives the saturation latch).
+const hostBusyWindow = 60 * time.Second
+
 // cpuReserveCores is the headroom reserve: one core set aside (for Redpanda
 // and system overhead) when computing Signals.HeadroomCores so the number
 // reflects capacity available to UMH workloads, not raw free capacity. The
@@ -510,12 +518,17 @@ type Verdict struct {
 // internal causes (throttle, pressure) yield AttributionUnknown. Ties go to the
 // external/host side. Verdict.Causes is ordered dominant-first.
 //
-// Exception: when the dominant cause is internal AND SaturationFired is true
-// (the dead-zone saturation backstop), attribution repivots to the
-// host/container split — AttributionHost when the host (non-UMH) share
-// (HostBusyCores - UsageCores) exceeds the UMH share (UsageCores), else
-// AttributionUnknown. Outside the dead-zone saturation case, attribution still
-// falls back to the dominant cause's external flag as above.
+// The host/container split (the default branch of the attribution switch)
+// runs for every degraded verdict where neither steal nor host-full
+// dominates: AttributionHost when the host (non-UMH) 60s-mean share
+// (HostBusyCores60sMean - AvgUsageCores) exceeds the UMH share
+// (AvgUsageCores), else AttributionUnknown. This covers throttle-only,
+// pressure-only, and the readable saturation cases. The NoLimitHostFired
+// outage case (host stats unreadable) forces AttributionHost because the
+// 60s-mean heuristic can't run with hb=0; on readable ticks
+// NoLimitHostFired falls through to the default split so the heuristic
+// still yields AttributionUnknown when the container itself is the
+// dominant cause.
 //
 // When Quota is non-nil, Decide uses it exclusively: a positive Quota yields
 // UsageCores/Quota, and a non-positive Quota (zero/negative/NaN) means
@@ -748,7 +761,7 @@ func Decide(st *WindowState, sample Sample, thresholds Thresholds) (Verdict, Sig
 		})
 	}
 
-	hostBusyCutoff := sample.Timestamp.Add(-stealWindow)
+	hostBusyCutoff := sample.Timestamp.Add(-hostBusyWindow)
 	hostBusyRing := st.hostBusyRing
 	hostBusyN := 0
 
