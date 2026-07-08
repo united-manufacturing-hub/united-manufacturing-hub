@@ -101,11 +101,13 @@ func TestDeleteRemovesRef(t *testing.T) {
 func TestSpecsStableOrderAcrossReads(t *testing.T) {
 	w := NewWriter()
 
+	// Names are globally unique (Upsert rejects a Name reused across worker types);
+	// alpha holds two names so the secondary Name sort is still exercised.
 	refs := []Ref{
-		{WorkerType: "zeta", Name: "b"},
-		{WorkerType: "alpha", Name: "b"},
-		{WorkerType: "alpha", Name: "a"},
-		{WorkerType: "beta", Name: "a"},
+		{WorkerType: "zeta", Name: "z1"},
+		{WorkerType: "alpha", Name: "a2"},
+		{WorkerType: "alpha", Name: "a1"},
+		{WorkerType: "beta", Name: "b1"},
 	}
 	for _, ref := range refs {
 		if err := w.Upsert(ref, map[string]any{"v": 1}); err != nil {
@@ -114,10 +116,10 @@ func TestSpecsStableOrderAcrossReads(t *testing.T) {
 	}
 
 	want := []Ref{
-		{WorkerType: "alpha", Name: "a"},
-		{WorkerType: "alpha", Name: "b"},
-		{WorkerType: "beta", Name: "a"},
-		{WorkerType: "zeta", Name: "b"},
+		{WorkerType: "alpha", Name: "a1"},
+		{WorkerType: "alpha", Name: "a2"},
+		{WorkerType: "beta", Name: "b1"},
+		{WorkerType: "zeta", Name: "z1"},
 	}
 
 	for i := 0; i < 20; i++ {
@@ -279,5 +281,39 @@ func TestUpsertReplacesOnSameRef(t *testing.T) {
 	}
 	if got["greeting"] != "goodbye" {
 		t.Errorf("UserSpec.Config greeting = %v, want %q", got["greeting"], "goodbye")
+	}
+}
+
+// TestUpsertRejectsNameReuseAcrossWorkerTypes guards the identity mismatch
+// between this registry and the supervisor: the registry keys specs on the full
+// Ref (WorkerType+Name), but the supervisor keys its children on Name alone, so
+// two worker types sharing a Name store cleanly here yet can never reconcile.
+// Upsert must reject the second write at the call site rather than let the
+// collision surface later inside the parent's reconcile loop.
+func TestUpsertRejectsNameReuseAcrossWorkerTypes(t *testing.T) {
+	w := NewWriter()
+
+	held := Ref{WorkerType: "example", Name: "foo"}
+	if err := w.Upsert(held, map[string]any{"greeting": "hello"}); err != nil {
+		t.Fatalf("first Upsert returned error: %v", err)
+	}
+
+	clash := Ref{WorkerType: "other", Name: "foo"}
+	if err := w.Upsert(clash, map[string]any{"greeting": "hi"}); err == nil {
+		t.Fatalf("Upsert(%+v) returned nil, want error: name %q already held under worker type %q", clash, clash.Name, held.WorkerType)
+	}
+
+	snapshot := w.Registry().Snapshot()
+	if len(snapshot) != 1 {
+		t.Fatalf("registry has %d entries, want 1 (the clashing spec must not be stored)", len(snapshot))
+	}
+	if _, ok := snapshot[held]; !ok {
+		t.Fatalf("registry dropped the originally held ref %+v", held)
+	}
+
+	// A repeat write of the same Ref stays idempotent — the guard rejects only a
+	// Name reused under a different worker type, never a re-Upsert of the same Ref.
+	if err := w.Upsert(held, map[string]any{"greeting": "again"}); err != nil {
+		t.Fatalf("idempotent re-Upsert of held ref returned error: %v", err)
 	}
 }

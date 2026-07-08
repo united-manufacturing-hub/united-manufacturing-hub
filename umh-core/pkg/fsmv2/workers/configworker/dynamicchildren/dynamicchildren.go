@@ -22,6 +22,7 @@
 package dynamicchildren
 
 import (
+	"fmt"
 	"sort"
 	"sync"
 
@@ -147,6 +148,24 @@ func (w *Writer) Upsert(ref Ref, cfg map[string]any) error {
 
 	w.registry.mu.Lock()
 	defer w.registry.mu.Unlock()
+
+	// Reject a Name already held under a different WorkerType. The registry keys
+	// on the full Ref, but the supervisor keys s.children (and ValidateChildSpecs)
+	// on Name alone, so two worker types sharing a Name store fine here yet can
+	// never reconcile. Catch it at the write, where the caller can act, instead of
+	// poisoning the parent's whole child set downstream. Re-Upsert of the same Ref
+	// stays idempotent.
+	//
+	// TODO: unify the child-identity key domain so this guard is unnecessary —
+	// either key the supervisor and ValidateChildSpecs on the full Ref, or make
+	// the registry structurally enforce Name-uniqueness. This bridges the mismatch
+	// at the write boundary until the two layers agree on identity.
+	for existing := range w.registry.specs {
+		if existing.Name == ref.Name && existing.WorkerType != ref.WorkerType {
+			return fmt.Errorf("child name %q already registered under worker type %q; names must be unique across worker types", ref.Name, existing.WorkerType)
+		}
+	}
+
 	w.registry.specs[ref] = spec
 	return nil
 }
