@@ -6,6 +6,10 @@
 
 - The [Authentication and Authorization](https://docs.umh.app/production/security/management-console/authentication-and-authorization) documentation now covers enterprise Auth0 setup: how a default connection routes all logins through your own identity provider, how to choose the Account Owner as a break-glass account, and how inviting UMH personnel via their `@umh.app` address works, including who is responsible for their access
 
+### Fixes
+
+- Stopping umh-core (`docker stop`, Kubernetes pod termination, CTRL-C) now shuts down workers gracefully on the first SIGTERM. Previously the signal killed the internal control loop before the graceful drain ran, so the drain waited out every timeout with nothing left to process — 33 s measured against Docker's 10 s grace period, ending in a hard kill mid-shutdown with workers never running their stopping steps. The drain now keeps the control loop alive, sizes its budget to the depth of the worker tree, and reliably stops workers that were mid-action, blocked behind an unhealthy dependency, or racing the shutdown signal — so it finishes well within the grace period instead of timing out. A second SIGTERM still forces an immediate exit
+
 ## [0.44.27]
 
 ### New Features
@@ -49,7 +53,6 @@
 ### Fixes
 
 - Previously, a standalone data flow that writes to more than one destination (`switch`, `broker`, or `fallback`) showed zero or incomplete throughput in the Management Console even though it was processing data normally. The throughput, error, and connection counts now include every destination
-- Stopping umh-core (`docker stop`, Kubernetes pod termination, CTRL-C) now shuts down workers gracefully on the first SIGTERM. Previously the signal killed the internal control loop before the graceful drain ran, so the drain waited out every timeout with nothing left to process — 33 s measured against Docker's 10 s grace period, ending in a hard kill mid-shutdown with workers never running their stopping steps. The drain now keeps the control loop alive, sizes its budget to the depth of the worker tree, and reliably stops workers that were mid-action, blocked behind an unhealthy dependency, or racing the shutdown signal — so it finishes well within the grace period instead of timing out. A second SIGTERM still forces an immediate exit
 
 ### Preview: Write Flows
 
