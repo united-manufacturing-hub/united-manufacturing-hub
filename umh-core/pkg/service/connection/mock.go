@@ -69,9 +69,9 @@ type MockConnectionService struct {
 
 	StatusResult ServiceInfo
 
-	UsesFsmv2BackendResult bool
-
 	mu sync.RWMutex
+
+	UsesFsmv2BackendResult bool
 
 	GenerateNmapConfigForConnectionCalled bool
 	GetConfigCalled                       bool
