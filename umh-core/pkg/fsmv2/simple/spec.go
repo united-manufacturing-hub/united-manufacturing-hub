@@ -33,9 +33,10 @@ import (
 // TConfig is the developer's config type, TStatus the polled status type, and
 // TDeps the poll dependencies (use struct{} when the poll needs none).
 type MonitorSpec[TConfig, TStatus, TDeps any] struct {
-	// WorkerType is the canonical worker-type name used in config and CSE
-	// storage. Required.
-	WorkerType string
+	// Deps is the dependency value passed to every Poll. Optional: use struct{}
+	// when the poll needs none. It is shared across ticks and instances, so it
+	// must be stateless (e.g. an *http.Client, not a per-tick buffer).
+	Deps TDeps
 	// Poll observes the target once and returns the status. A non-nil error
 	// drives the worker degraded with reason "poll error: <err>". Required.
 	Poll func(ctx context.Context, d TDeps, cfg TConfig) (TStatus, error)
@@ -43,10 +44,9 @@ type MonitorSpec[TConfig, TStatus, TDeps any] struct {
 	// nil, a good poll is healthy with reason "running (no health check)". Never
 	// called on a poll error.
 	Health func(cfg TConfig, status TStatus) Health
-	// Deps is the dependency value passed to every Poll. Optional: use struct{}
-	// when the poll needs none. It is shared across ticks and instances, so it
-	// must be stateless (e.g. an *http.Client, not a per-tick buffer).
-	Deps TDeps
+	// WorkerType is the canonical worker-type name used in config and CSE
+	// storage. Required.
+	WorkerType string
 	// Interval is the poll cadence. Optional: a non-positive value leaves the
 	// worker type unregistered so the collector falls back to its default (1s).
 	Interval time.Duration

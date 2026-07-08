@@ -31,8 +31,8 @@ import (
 // wrapped with the health verdict. WorkerBase's deps sentinel is struct{}; the
 // MonitorSpec's own TDeps flows to Poll, not through WorkerBase.
 type simpleWorker[TConfig, TStatus, TDeps any] struct {
-	fsmv2.WorkerBase[TConfig, Status[TStatus], struct{}]
 	spec MonitorSpec[TConfig, TStatus, TDeps]
+	fsmv2.WorkerBase[TConfig, Status[TStatus], struct{}]
 }
 
 // newSimpleWorker builds a simpleWorker from its MonitorSpec and framework deps.
