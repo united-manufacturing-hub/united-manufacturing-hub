@@ -104,7 +104,14 @@ func composeHealthy(signals Signals) string {
 
 	var headline string
 
-	if signals.LimitApplies {
+	// Sub-0.05-core quotas (e.g. a 40m Kubernetes limit = 0.04 cores) pass the
+	// CapacityCores==0 guard above but collapse to totalDisp=0.0 after round1,
+	// which would make usedDisp/totalDisp = +Inf and pctOf(+Inf) render a
+	// garbled integer in the "(Z% of its limit)" suffix. When the rounded
+	// total is 0, skip the percentage and render a no-suffix headline variant.
+	totalTooSmallToPct := totalDisp <= 0
+
+	if signals.LimitApplies && !totalTooSmallToPct {
 		pctOfLimit := pctOf(usedDisp / totalDisp)
 		if math.Abs(headroomDisp) < 0.05 {
 			headline = fmt.Sprintf("CPU healthy. This instance is using %s of %s cores (%d%% of its limit) and is close to being marked degraded.", usedStr, totalStr, pctOfLimit)
@@ -112,6 +119,9 @@ func composeHealthy(signals Signals) string {
 			headline = fmt.Sprintf("CPU healthy. This instance is using %s of %s cores (%d%% of its limit) and can use %s more before it is marked degraded.", usedStr, totalStr, pctOfLimit, headroomStr)
 		}
 	} else {
+		// No-percentage variant: used either when no limit applies, or when the
+		// limit is so small (sub-0.05 cores) that totalDisp rounds to 0 and the
+		// percentage would divide by zero.
 		if math.Abs(headroomDisp) < 0.05 {
 			headline = fmt.Sprintf("CPU healthy. This instance is using %s of %s cores and is close to being marked degraded.", usedStr, totalStr)
 		} else {

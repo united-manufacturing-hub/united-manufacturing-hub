@@ -703,6 +703,39 @@ func TestComposeMessage_LimitedVisibilityNote_ProductVoice(t *testing.T) {
 	}
 }
 
+// TestComposeMessage_HealthyBudget_FractionalLimitRoundsToZero pins the
+// sub-0.05-core quota path (e.g. a 40m Kubernetes limit = 0.04 cores).
+// CapacityCores=0.04 passes the == 0 guard, but round1(0.04) collapses to 0.0,
+// so usedDisp/totalDisp = +Inf and pctOf(+Inf) renders a garbled negative int
+// in the "(Z% of its limit)" suffix. The healthy headline must NOT contain a
+// negative percentage, +Inf, or Infinity; it must render a sane no-percentage
+// variant when totalDisp rounds to 0.
+func TestComposeMessage_HealthyBudget_FractionalLimitRoundsToZero(t *testing.T) {
+	healthy := cpuhealth.Verdict{State: cpuhealth.StateHealthy}
+	signals := cpuhealth.Signals{
+		LimitApplies:  true,
+		AvgUsageCores: 0.05, // rounds to 0.1 (non-zero) so usedDisp/totalDisp = +Inf
+		CapacityCores: 0.04, // a 40m quota: passes the == 0 guard, rounds to 0.0
+		ReserveCores:  0.0,
+	}
+
+	msg := cpuhealth.ComposeMessage(healthy, signals)
+
+	if strings.Contains(msg, "-9223372036854775808") || strings.Contains(msg, "9223372036854775807") {
+		t.Fatalf("healthy headline must NOT contain the garbled int64 from pctOf(+Inf): %q", msg)
+	}
+	if strings.Contains(msg, "+Inf") || strings.Contains(msg, "Infinity") {
+		t.Fatalf("healthy headline must NOT contain +Inf/Infinity: %q", msg)
+	}
+	// The percentage suffix must not carry a negative number.
+	if strings.Contains(msg, "-") && strings.Contains(msg, "of its limit") {
+		t.Fatalf("healthy headline must NOT contain a negative percentage of its limit: %q", msg)
+	}
+	if !strings.Contains(msg, "healthy") {
+		t.Fatalf("healthy headline must still render a healthy string: %q", msg)
+	}
+}
+
 // TestComposeMessage_Saturation_CScenarioHonestyNote pins the C-scenario
 // "host stats unavailable" note on the real HostBusyCoresAvailable flag (R10.5
 // fix: was a HostBusyCores60sMean==0 proxy, unreliable on a readable idle host).
