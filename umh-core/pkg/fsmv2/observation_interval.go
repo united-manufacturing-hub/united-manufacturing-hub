@@ -27,7 +27,7 @@ import (
 var observationIntervals sync.Map // map[string]time.Duration
 
 // RegisterObservationInterval records the collection cadence for a worker type,
-// typically from simple.Spec.Interval at registration. A non-positive duration
+// typically from simple.MonitorSpec.Interval at registration. A non-positive duration
 // is ignored so the caller falls back to its own default. Safe for concurrent
 // use; last write wins.
 func RegisterObservationInterval(workerType string, interval time.Duration) {
