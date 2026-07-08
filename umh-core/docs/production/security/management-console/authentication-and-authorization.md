@@ -140,9 +140,11 @@ The invite key can only be used once and enables secure key exchange without the
 
 ##### Inviting UMH Personnel
 
-Invite UMH team members - for example a Value Engineer supporting your deployment - through the normal invitation flow, using their `@umh.app` email address. These invitations are automatically issued against UMH's Google Workspace connection instead of your default connection, because UMH staff don't have accounts in your identity provider.
+Some support requests go beyond what a quick call can answer - for example when the UMH team sets up connections or data models for you. For this kind of longer setup work, it is easier if the UMH team member doing the work has access to your company in the Management Console.
 
-Control stays on both sides. You decide who to invite and can remove them at any time. UMH manages the `@umh.app` identities centrally: when an employee leaves UMH, disabling their Google Workspace account also cuts their access to your company.
+Invite UMH team members through the normal invitation flow, using their `@umh.app` email address. These invitations are automatically issued against UMH's Google Workspace connection instead of your default connection, because UMH staff don't have accounts in your identity provider.
+
+Control stays on both sides. You decide who to invite and can remove them at any time. UMH manages the `@umh.app` identities centrally through Google Workspace, so access is bound to employment: when an employee leaves UMH, disabling their Google Workspace account also cuts their access to your company.
 
 ### Access Revocation
 
@@ -356,4 +358,4 @@ Each company can be linked to an Auth0 organization, enabling:
 
 The link is established during company setup and validated during every user onboarding - users can only join companies that match their Auth0 organization.
 
-**Connections**: An Auth0 organization authenticates its members through one or more _connections_ - the identity sources it accepts, such as your corporate SAML/OIDC provider, a social login like Google, or email one-time passwords. Enterprise companies set a **default connection** that applies to everyone: all your employees sign in through it, and every invitation is issued against it. Point it at your own identity provider, and your existing SSO, MFA, and offboarding policies govern access to ManagementConsole. Your UMH Value Engineering team sets this up with you.
+**Connections**: An Auth0 organization authenticates its members through one or more _connections_ - the identity sources it accepts, such as your corporate SAML/OIDC provider, a social login like Google, or email one-time passwords. Enterprise companies set a **default connection** for their own users: all your employees sign in through it, and invitations to them are issued against it. Invitations to UMH staff are the exception - they use UMH's Google Workspace connection instead (see [Inviting UMH Personnel](#inviting-umh-personnel)). Point the default connection at your own identity provider, and your existing SSO, MFA, and offboarding policies govern access to ManagementConsole. The UMH team sets this up with you.
