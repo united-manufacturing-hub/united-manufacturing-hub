@@ -302,14 +302,19 @@ var PersistenceScenarioEntry = Scenario{
 
 // RunConfig configures how a scenario is executed.
 type RunConfig struct {
-	Store              storage.TriangularStoreInterface
-	Logger             deps.FSMLogger
-	Scenario           Scenario
-	ScenarioV2         ScenarioV2    // When Driver is set, Run takes the v2 kernel-only path
-	Duration           time.Duration // 0 means run forever (until context cancelled)
-	TickInterval       time.Duration
-	EnableTraceLogging bool
-	DumpStore          bool // Dump store deltas and final state after completion
+	Store        storage.TriangularStoreInterface
+	Logger       deps.FSMLogger
+	Scenario     Scenario
+	ScenarioV2   ScenarioV2    // When Driver is set, Run takes the v2 kernel-only path
+	Duration     time.Duration // 0 means run forever (until context cancelled)
+	TickInterval time.Duration
+	// GracefulShutdownTimeout is the per-level drain base propagated to the
+	// supervisor subtree. Zero falls back to the supervisor default (5s). A
+	// tiny value forces a degraded drain, which is how tests exercise the
+	// ShutdownClean=false path deterministically.
+	GracefulShutdownTimeout time.Duration
+	EnableTraceLogging      bool
+	DumpStore               bool // Dump store deltas and final state after completion
 }
 
 // ListScenarios returns all registered scenario names and descriptions,

@@ -64,11 +64,11 @@ import (
 type RunResult struct {
 	Done     <-chan struct{}
 	Shutdown func()
-	// ShutdownClean reports whether the run's supervisor drained cleanly: true
-	// if the most recent graceful shutdown reaped every worker within its
-	// budget, or if no graceful shutdown ran (the v1 path). It is false only
-	// when a drain phase warned graceful_shutdown_timeout or
-	// graceful_shutdown_budget_exhausted. Read it after Done closes.
+	// ShutdownClean reports whether the run's supervisor drained cleanly on
+	// both the v1 and v2 paths: true if the graceful shutdown reaped every
+	// worker within its budget. It is false only when a drain phase warned
+	// graceful_shutdown_timeout or graceful_shutdown_budget_exhausted. Read it
+	// after Done closes.
 	ShutdownClean bool
 }
 
@@ -141,13 +141,14 @@ func Run(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 	}
 
 	appSup, err := application.NewApplicationSupervisor(application.SupervisorConfig{
-		ID:                 "scenario-" + cfg.Scenario.Name,
-		Name:               cfg.Scenario.Name,
-		Store:              cfg.Store,
-		Logger:             cfg.Logger,
-		TickInterval:       cfg.TickInterval,
-		YAMLConfig:         cfg.Scenario.YAMLConfig,
-		EnableTraceLogging: cfg.EnableTraceLogging,
+		ID:                      "scenario-" + cfg.Scenario.Name,
+		Name:                    cfg.Scenario.Name,
+		Store:                   cfg.Store,
+		Logger:                  cfg.Logger,
+		TickInterval:            cfg.TickInterval,
+		YAMLConfig:              cfg.Scenario.YAMLConfig,
+		EnableTraceLogging:      cfg.EnableTraceLogging,
+		GracefulShutdownTimeout: cfg.GracefulShutdownTimeout,
 	})
 	if err != nil {
 		return nil, err
@@ -159,6 +160,17 @@ func Run(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 	supDone := appSup.Start(context.WithoutCancel(ctx))
 
 	done := make(chan struct{})
+
+	shutdownFn := func() {
+		appSup.Shutdown()
+	}
+
+	// result is updated by the watcher goroutine before it closes done, so a
+	// caller that reads result.ShutdownClean after <-result.Done observes the
+	// supervisor's drain outcome. The close(done) at the end of the goroutine
+	// establishes the happens-before edge: the field write precedes the close,
+	// and the caller's receive synchronizes-with it.
+	result := &RunResult{Shutdown: shutdownFn}
 
 	// Watcher: turns caller-ctx cancellation into a graceful teardown against
 	// the LIVE tick loop. Shutdown runs unconditionally on both arms because
@@ -172,16 +184,20 @@ func Run(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 
 		appSup.Shutdown()
 		<-supDone
+		// DrainOutcomeClean is valid only after supDone: the drain budget is
+		// spent during Shutdown's synchronous phases, which complete before
+		// the tick loop signals supDone.
+		result.ShutdownClean = appSup.DrainOutcomeClean()
+
 		close(done)
 	}()
-
-	shutdownFn := func() {
-		appSup.Shutdown()
-	}
 
 	if cfg.DumpStore {
 		wrappedDone := make(chan struct{})
 
+		// wrappedDone waits on done, so the watcher's ShutdownClean write and
+		// close(done) happen-before this goroutine runs; a caller reading
+		// result.ShutdownClean after <-wrappedDone observes the drain outcome.
 		go func() {
 			<-done
 
@@ -198,10 +214,14 @@ func Run(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 			close(wrappedDone)
 		}()
 
-		return &RunResult{Done: wrappedDone, Shutdown: shutdownFn, ShutdownClean: true}, nil
+		result.Done = wrappedDone
+
+		return result, nil
 	}
 
-	return &RunResult{Done: done, Shutdown: shutdownFn, ShutdownClean: true}, nil
+	result.Done = done
+
+	return result, nil
 }
 
 // runV2 executes a v2 scenario on the kernel-only application supervisor (no
@@ -246,12 +266,13 @@ func runV2(ctx context.Context, cfg RunConfig) (*RunResult, error) {
 	register.SetDeps[*dynamicchildren.Registry](configworker.WorkerTypeName, writer.Registry())
 
 	appSup, err := application.NewApplicationSupervisor(application.SupervisorConfig{
-		ID:                 "scenariov2-" + cfg.ScenarioV2.Name,
-		Name:               cfg.ScenarioV2.Name,
-		Store:              cfg.Store,
-		Logger:             cfg.Logger,
-		TickInterval:       cfg.TickInterval,
-		EnableTraceLogging: cfg.EnableTraceLogging,
+		ID:                      "scenariov2-" + cfg.ScenarioV2.Name,
+		Name:                    cfg.ScenarioV2.Name,
+		Store:                   cfg.Store,
+		Logger:                  cfg.Logger,
+		TickInterval:            cfg.TickInterval,
+		EnableTraceLogging:      cfg.EnableTraceLogging,
+		GracefulShutdownTimeout: cfg.GracefulShutdownTimeout,
 	})
 	if err != nil {
 		register.ClearDeps(configworker.WorkerTypeName)
