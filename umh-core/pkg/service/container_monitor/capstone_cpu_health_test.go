@@ -303,7 +303,7 @@ var _ = Describe("capstone: end-to-end CPU-health model through GetStatus (rung 
 	// --- (6) HOST-CONTENTION: a VM (hypervisor flag) with a busy host
 	// (high /proc/stat) + pressure firing -> State=degraded,
 	// Attribution=host, Causes contains {kind:'host-contention'}. This is
-	// the Bollhoff scenario: the demand gate (pressure) is open AND the host
+	// the host-contention scenario: the demand gate (pressure) is open AND the host
 	// is busy (HostBusyCores/LogicalCpus > HostBusyHigh 0.70). ---
 	It("(6) HOST-CONTENTION: VM with busy host + pressure firing degrades with attribution host", func() {
 		mockFS := filesystem.NewMockFileSystem()
