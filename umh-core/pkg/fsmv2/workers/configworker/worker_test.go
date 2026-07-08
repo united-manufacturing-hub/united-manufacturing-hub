@@ -16,6 +16,7 @@ package configworker_test
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
@@ -132,7 +133,7 @@ func TestCollectObservedState(t *testing.T) {
 	cancel()
 
 	obs, err = w.CollectObservedState(ctx, desired)
-	if err != context.Canceled {
+	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("CollectObservedState with cancelled context: err = %v, want %v", err, context.Canceled)
 	}
 
