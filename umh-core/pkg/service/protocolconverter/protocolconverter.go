@@ -1078,6 +1078,13 @@ func (p *ProtocolConverterService) ServiceExists(
 	dfcReadExists := p.dataflowComponentService.ServiceExists(ctx, filesystemService, dfcReadName)
 	dfcWriteExists := p.dataflowComponentService.ServiceExists(ctx, filesystemService, dfcWriteName)
 
+	// Under fsmv2 the connection is an always-present in-memory worker; the
+	// adapter just reports it late (after its first reconcile), so treat it as
+	// existing and keep the standard connection+DFC invariant below.
+	if p.connectionService.UsesFsmv2Backend() {
+		connExists = true
+	}
+
 	// if one of the services doesn't exist we should return that
 	return connExists && (dfcReadExists || dfcWriteExists)
 }
