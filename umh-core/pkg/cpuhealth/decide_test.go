@@ -4348,6 +4348,119 @@ func TestDecide_NoLimit_HostHeadroom_HoldOnMissing(t *testing.T) {
 	}
 }
 
+// TestDecide_NoLimitHostFull_OutageHoldsAttributionHost pins the attribution
+// complement to R10.3 Finding 1: on a no-limit host-full box, the verdict STATE
+// holds across a transient /proc/stat outage (st.noLimitHostFired is not
+// cleared by the D-row branch), but the attribution switch had no
+// case signals.NoLimitHostFired — so the default branch ran with hb=0 (no
+// host-busy reading) and hb-uc=0-0=0, not > 0, flipping attribution to
+// AttributionUnknown. The MC would render a toggling Host→Unknown→Host badge
+// while the verdict stays degraded. This test pins attribution to stay Host.
+func TestDecide_NoLimitHostFull_OutageHoldsAttributionHost(t *testing.T) {
+	base := time.Date(2026, 7, 6, 12, 0, 0, 0, time.UTC)
+	th := DefaultThresholds()
+
+	// (a) fire: no limit, host 7.5/8 full, container idle → host-headroom fires,
+	// attribution is Host (host share 7.5 > container share 0).
+	st := &WindowState{}
+	for i := 0; i < 3; i++ {
+		Decide(st, Sample{
+			Timestamp: base.Add(time.Duration(i) * time.Second),
+			Quota:     nil, LogicalCpus: 8.0, HostBusyCores: 7.5,
+			HostBusyCoresAvailable: true, UsageCores: 0,
+		}, th)
+	}
+	vFire, sigFire := Decide(st, Sample{
+		Timestamp: base.Add(3 * time.Second),
+		Quota:     nil, LogicalCpus: 8.0, HostBusyCores: 7.5,
+		HostBusyCoresAvailable: true, UsageCores: 0,
+	}, th)
+	if vFire.State != StateDegraded {
+		t.Fatalf("(a) fire State: got %q, want %q (host full: 8−7.5−1=−0.5 < 0)", vFire.State, StateDegraded)
+	}
+	if vFire.Attribution != AttributionHost {
+		t.Fatalf("(a) fire Attribution: got %q, want %q (host share 7.5 > container share 0)", vFire.Attribution, AttributionHost)
+	}
+	if !sigFire.NoLimitHostFired {
+		t.Fatalf("(a) fire NoLimitHostFired: got false, want true (no-limit host-headroom fire)")
+	}
+
+	// (b) transient /proc/stat outage: HostBusyCoresAvailable=false, hb=0,
+	// container idle. st.noLimitHostFired HOLDS (D-row branch does not touch
+	// it) → State stays Degraded. Attribution must ALSO stay Host: the latched
+	// no-limit host-full verdict is a host-side problem regardless of whether
+	// /proc/stat is momentarily readable. Without a case for NoLimitHostFired
+	// in the attribution switch, the default branch runs with hb=0 → hb-uc=0,
+	// not > 0 → AttributionUnknown (the flap this test pins).
+	vHold, _ := Decide(st, Sample{
+		Timestamp: base.Add(4 * time.Second),
+		Quota:     nil, LogicalCpus: 8.0, HostBusyCores: 0,
+		HostBusyCoresAvailable: false, UsageCores: 0,
+	}, th)
+	if vHold.State != StateDegraded {
+		t.Fatalf("(b) hold State: got %q, want %q (noLimitHostFired latch holds across outage)", vHold.State, StateDegraded)
+	}
+	if vHold.Attribution != AttributionHost {
+		t.Fatalf("(b) hold Attribution: got %q, want %q (latched no-limit host-full verdict must keep AttributionHost through the /proc/stat outage — no flap)",
+			vHold.Attribution, AttributionHost)
+	}
+
+	// (c) outage resolves, host still full → still degraded, attribution Host.
+	vBack, _ := Decide(st, Sample{
+		Timestamp: base.Add(5 * time.Second),
+		Quota:     nil, LogicalCpus: 8.0, HostBusyCores: 7.5,
+		HostBusyCoresAvailable: true, UsageCores: 0,
+	}, th)
+	if vBack.State != StateDegraded {
+		t.Fatalf("(c) back State: got %q, want %q (host full again → degraded)", vBack.State, StateDegraded)
+	}
+	if vBack.Attribution != AttributionHost {
+		t.Fatalf("(c) back Attribution: got %q, want %q (host share 7.5 > container share 0)", vBack.Attribution, AttributionHost)
+	}
+}
+
+// TestDecide_NoLimitHostFull_ContainerIsCause_AttributionUnknown pins the
+// DA-found regression in the attribution fix: on a no-limit host-full box
+// where the CONTAINER ITSELF is the dominant cause (host-busy = container +
+// small neighbour), the default heuristic must run and yield
+// AttributionUnknown. NoLimitHostFired fires (headroom < 0), but on a READABLE
+// tick (HostBusyCoresAvailable=true) the host/container split is computable
+// (hb−uc = 0.5, not > uc=7.0) → AttributionUnknown (the container IS the
+// cause, not a host/neighbour problem). A fix that unconditionally forces
+// AttributionHost on every NoLimitHostFired tick breaks this case.
+func TestDecide_NoLimitHostFull_ContainerIsCause_AttributionUnknown(t *testing.T) {
+	base := time.Date(2026, 7, 6, 12, 0, 0, 0, time.UTC)
+	th := DefaultThresholds()
+
+	// no limit, host 7.5/8 full, container using 7.0 (7.0 container + 0.5
+	// neighbour). HeadroomCores = 8−7.5−1 = −0.5 < 0 → NoLimitHostFired.
+	// Default heuristic: hb−uc = 7.5−7.0 = 0.5, not > uc=7.0 →
+	// AttributionUnknown (container is the cause).
+	st := &WindowState{}
+	for i := 0; i < 3; i++ {
+		Decide(st, Sample{
+			Timestamp: base.Add(time.Duration(i) * time.Second),
+			Quota:     nil, LogicalCpus: 8.0, HostBusyCores: 7.5,
+			HostBusyCoresAvailable: true, UsageCores: 7.0,
+		}, th)
+	}
+	v, sig := Decide(st, Sample{
+		Timestamp: base.Add(3 * time.Second),
+		Quota:     nil, LogicalCpus: 8.0, HostBusyCores: 7.5,
+		HostBusyCoresAvailable: true, UsageCores: 7.0,
+	}, th)
+	if v.State != StateDegraded {
+		t.Fatalf("State: got %q, want %q (host full: 8−7.5−1=−0.5 < 0)", v.State, StateDegraded)
+	}
+	if !sig.NoLimitHostFired {
+		t.Fatalf("NoLimitHostFired: got false, want true (headroom −0.5 < 0)")
+	}
+	if v.Attribution != AttributionUnknown {
+		t.Fatalf("Attribution: got %q, want %q (container is the dominant cause: hb−uc=0.5 not > uc=7.0 → default heuristic → Unknown)",
+			v.Attribution, AttributionUnknown)
+	}
+}
+
 // TestDecide_DRowToHostHeadroom_Transition pins R10.3 Finding 2: on a D-row →
 // host-headroom transition (/proc/stat becomes readable mid-fire), st.dRowFired
 // is cleared by the host-headroom branch, so the saturation cause Value is

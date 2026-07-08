@@ -1096,6 +1096,18 @@ func Decide(st *WindowState, sample Sample, thresholds Thresholds) (Verdict, Sig
 			attr = AttributionHost
 		case signals.HostFullFired:
 			attr = AttributionHost
+		case signals.NoLimitHostFired && !sample.HostBusyCoresAvailable:
+			// NoLimitHostFired latches across a transient /proc/stat outage
+			// (the D-row branch does not clear st.noLimitHostFired), but on
+			// the outage tick HostBusyCores is 0, so the default hb−uc
+			// heuristic can't run and would flip attribution to Unknown.
+			// Force Host only on the unreadable tick: the latched verdict is
+			// a host-side problem regardless of a momentary /proc/stat
+			// outage. On readable ticks NoLimitHostFired falls through to
+			// the default so the host/container split (hb−uc > uc) still
+			// yields AttributionUnknown when the container itself is the
+			// dominant cause.
+			attr = AttributionHost
 		default:
 			uc := sample.UsageCores
 			if !(uc >= 0) || math.IsInf(uc, 1) {
