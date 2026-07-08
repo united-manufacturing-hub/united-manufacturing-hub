@@ -50,10 +50,13 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/examples"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/fsmv2client"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/register"
 	fsmv2sentry "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/sentry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/application"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker/dynamicchildren"
 	persistenceWorker "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/persistence"
 	transportWorker "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport"
 	transportSnapshot "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/snapshot"
@@ -629,6 +632,19 @@ children:
 		register.SetDeps[*persistenceWorker.PersistenceDependencies](persistenceWorker.WorkerTypeName, persistenceWorker.NewStoreOnlyDependencies(store))
 	}
 
+	// Publish the dynamicchildren registry under the configworker deps key and
+	// the process-scoped fsmv2client before constructing the supervisor, so the
+	// application worker's first CollectObservedState observes
+	// RegistryConfigured=true (the configworker kernel child spawns and dynamic
+	// child spawning is enabled) and FSMv1 components can reach the client via
+	// fsmv2client.GetClient(). Both must be published before
+	// NewApplicationSupervisor so the application worker's first COS sees the
+	// registry; the cleanup clears both and must run after the supervisor has
+	// stopped (the caller runs cleanup after appSup.Run returns).
+	dynWriter := dynamicchildren.NewWriter()
+	register.SetDeps[*dynamicchildren.Registry](configworker.WorkerTypeName, dynWriter.Registry())
+	fsmv2client.SetClient(fsmv2client.NewFSMv2Client(dynWriter, store))
+
 	appSup, err = application.NewApplicationSupervisor(application.SupervisorConfig{
 		ID:           "application-fsmv2",
 		Name:         "Application FSMv2",
@@ -650,6 +666,8 @@ children:
 		GracefulShutdownTimeout: 2 * time.Second,
 	})
 	if err != nil {
+		fsmv2client.SetClient(nil)
+		register.ClearDeps(configworker.WorkerTypeName)
 		fsmv2Hook.Stop()
 
 		return nil, nil, nil, "", func() {}, fmt.Errorf("failed to create FSMv2 supervisor: %w", err)
@@ -658,7 +676,13 @@ children:
 	// Register supervisor for debug introspection (/debug/fsmv2 endpoint).
 	metrics.RegisterFSMv2DebugProvider("application", appSup)
 
-	cleanup = fsmv2Hook.Stop
+	cleanup = func() {
+		// Clear the client and the configworker deps key after the supervisor
+		// has stopped (the caller runs cleanup after appSup.Run returns).
+		fsmv2client.SetClient(nil)
+		register.ClearDeps(configworker.WorkerTypeName)
+		fsmv2Hook.Stop()
+	}
 
 	return appSup, channelAdapter, store, placeholderUUID, cleanup, nil
 }

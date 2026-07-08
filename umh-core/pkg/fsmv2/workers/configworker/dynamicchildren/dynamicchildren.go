@@ -57,6 +57,18 @@ func (r *Registry) Lookup(ref Ref) (config.ChildSpec, bool) {
 	return spec.Clone(), true
 }
 
+// Contains reports whether a spec is recorded for ref, without allocating a
+// clone. Callers that only need existence (e.g. GetFresh's Unregistered guard)
+// should prefer Contains over Lookup to avoid the per-call Clone allocation.
+func (r *Registry) Contains(ref Ref) bool {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	_, ok := r.specs[ref]
+
+	return ok
+}
+
 // Snapshot returns a copy of the registry's specs, keyed by Ref.
 func (r *Registry) Snapshot() map[Ref]config.ChildSpec {
 	r.mu.RLock()

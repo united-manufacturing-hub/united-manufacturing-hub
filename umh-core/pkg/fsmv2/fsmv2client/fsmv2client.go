@@ -20,6 +20,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
+	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
@@ -46,7 +48,7 @@ type FSMv2Client struct {
 // NewFSMv2Client returns an FSMv2Client that writes through w and reads
 // observed state through sr. The client deliberately holds the plain Writer,
 // never the supervisor-managed config worker instance: worker instances can be
-// torn down and respawned, so a held instance would go stale after the first
+// torn down and recreated, so a held instance would go stale after the first
 // restart.
 func NewFSMv2Client(w *dynamicchildren.Writer, sr deps.StateReader) *FSMv2Client {
 	return &FSMv2Client{w: w, sr: sr}
@@ -97,4 +99,102 @@ func Get[TStatus any](ctx context.Context, c *FSMv2Client, ref dynamicchildren.R
 	}
 
 	return obs, nil
+}
+
+// Freshness is the read-side reason GetFresh assigns to a child observation.
+// It lets a caller map an absent or stale read to a distinct recovery policy
+// instead of collapsing every non-fresh case into a single error.
+type Freshness int
+
+const (
+	// Unknown is the zero value of Freshness. It is returned when a read error
+	// prevents GetFresh from classifying the observation, so the healthy reason
+	// Fresh is never the default. Freshness is only meaningful when the
+	// accompanying error is nil.
+	Unknown Freshness = iota
+	// Fresh means the child was observed within maxAge.
+	Fresh
+	// Unregistered means the ref was never Upserted into the writer.
+	Unregistered
+	// NeverObserved means the ref is registered but no observation exists yet.
+	NeverObserved
+	// Stale means the child was observed but CollectedAt is older than maxAge
+	// (the watcher is wedged or slow).
+	Stale
+)
+
+// GetFresh reads the observed state for ref's spawned child and maps it to a
+// Freshness reason. A ref that was never Upserted is Unregistered; a registered
+// ref with no persisted observation is NeverObserved; an observation older than
+// maxAge is Stale; otherwise Fresh.
+//
+// A non-ErrNotObserved read error is returned verbatim alongside the Unknown
+// Freshness. Callers must check err before reading Freshness or the returned
+// status: both are meaningless when err is non-nil, and the returned status is
+// only meaningful when Freshness is Fresh or Stale.
+//
+// The store read is bounded by the passed ctx; callers SHOULD pass a
+// deadline-bounded ctx (see the StateReader non-blocking contract).
+//
+// GetFresh does NOT detect a stale observation left over from a previous
+// incarnation after Delete + re-Upsert: the CSE store does not clear a
+// despawned child's observation until ENG-5107 (store-side despawn tombstone)
+// lands. Until then, such a leftover within maxAge is served as Fresh. When
+// ENG-5107 lands, the store will return a typed ErrWorkerDeleted on a
+// despawned ref; Get/GetFresh must then map ErrWorkerDeleted to NeverObserved
+// (today Get only maps persistence.ErrNotFound → ErrNotObserved, so a
+// tombstone read would currently surface as Unknown+err, not NeverObserved).
+func GetFresh[TStatus any](ctx context.Context, c *FSMv2Client, ref dynamicchildren.Ref, maxAge time.Duration) (TStatus, Freshness, error) {
+	var zero TStatus
+
+	if !c.w.Registry().Contains(ref) {
+		return zero, Unregistered, nil
+	}
+
+	obs, err := Get[TStatus](ctx, c, ref)
+	if err != nil {
+		if errors.Is(err, ErrNotObserved) {
+			return zero, NeverObserved, nil
+		}
+
+		return zero, Unknown, err
+	}
+
+	if time.Since(obs.CollectedAt) > maxAge {
+		return obs.Status, Stale, nil
+	}
+
+	return obs.Status, Fresh, nil
+}
+
+// globalCli is the process-scoped FSMv2Client published once at startup so any
+// FSMv1 component (regardless of which benthos manager constructed it) can
+// reach the FSMv2 child-observation read path via GetClient. NewBenthosManager
+// is built at three independent sites, so threading the handle through a single
+// constructor would miss most instances; a process-scoped accessor is the only
+// thing that reaches them all.
+var (
+	globalMu  sync.RWMutex
+	globalCli *FSMv2Client
+)
+
+// SetClient publishes c as the process-scoped FSMv2Client. Pass nil to clear it
+// (e.g. on shutdown). Not safe for concurrent re-publication; call once at
+// startup and once on shutdown.
+func SetClient(c *FSMv2Client) {
+	globalMu.Lock()
+
+	globalCli = c
+
+	globalMu.Unlock()
+}
+
+// GetClient returns the process-scoped FSMv2Client, or nil if SetClient has not
+// been called (or was cleared). FF-off paths never call SetClient, so GetClient
+// returns nil and callers must treat nil as "FSMv2 client unavailable".
+func GetClient() *FSMv2Client {
+	globalMu.RLock()
+	defer globalMu.RUnlock()
+
+	return globalCli
 }
