@@ -337,6 +337,9 @@ var _ = Describe("capstone: end-to-end CPU-health model through GetStatus (rung 
 		// steal unchanged (delta 0) -> StealFraction = 0 (steal negligible,
 		// does not fire). total delta = 6,000,000 -> busy/total = 0.833.
 		procStatTick1 := "cpu  5001000 1000 1000 1008000 0 0 0 50 0 0\n"
+		// Tick 2: another 5,000,000 busy jiffies (escalating) so the
+		// hostBusyRing clears its 2-sample floor on this tick.
+		procStatTick2 := "cpu 10001000 1000 1000 1008000 0 0 0 50 0 0\n"
 
 		var usageUsec int64
 		procStat := procStatTick0
@@ -371,11 +374,18 @@ var _ = Describe("capstone: end-to-end CPU-health model through GetStatus (rung 
 		_, err = svc.GetStatus(ctx)
 		Expect(err).NotTo(HaveOccurred())
 
-		// Tick 2 — /proc/stat advances so HostBusyCores is computed (busy
-		// host). The demand gate (pressure) is open, host_busy_ratio >
+		// Tick 2 — warmup: first real host-busy delta (ring gets 1 entry,
+		// still below the 2-sample floor so the mean is not published yet).
+		usageUsec, procStat = 2_000_000, procStatTick1
+		_, err = svc.GetStatus(ctx)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Tick 3 — /proc/stat advances again so the hostBusyRing clears the
+		// 2-sample floor and HostBusyCores is computed (busy host). The
+		// demand gate (pressure) is open, host_busy_ratio >
 		// HostBusyHigh -> host-contention fires. Steal is negligible (small
 		// delta) so it does not dominate.
-		usageUsec, procStat = 2_000_000, procStatTick1
+		usageUsec, procStat = 3_000_000, procStatTick2
 		time.Sleep(1 * time.Second)
 		status, err := svc.GetStatus(ctx)
 		Expect(err).NotTo(HaveOccurred())
@@ -530,18 +540,24 @@ var _ = Describe("capstone: end-to-end CPU-health model through GetStatus (rung 
 		var nrPeriods, usageUsec int64
 
 		// /proc/stat first "cpu " line. Fields: user nice system idle iowait
-		// irq softirq steal guest guest_nice. Tick 0 baselines; tick 1 makes
+		// irq softirq steal guest guest_nice. Tick 0 baselines; ticks 1+2 make
 		// the host very busy (huge non-idle delta) so HostBusyCores fills every
-		// core. The busy delta is 5,000,000 jiffies (see invariant 1 above for
-		// the NumCPU-decoupling margin); the test sleeps ~1s between ticks, so
-		// HostBusyCores ~= 5,000,000 / 100 / 1 ~= 50,000 and hostBusyMean (the
-		// mean of [0, ~50000]) ~= 25,000 — far above the NumCPU-1 fire floor on
-		// any plausible host, so the saturation backstop fires.
+		// core. The busy delta is 5,000,000 jiffies per tick (see invariant 1
+		// above for the NumCPU-decoupling margin); the test sleeps ~1s between
+		// ticks, so HostBusyCores ~= 5,000,000 / 100 / 1 ~= 50,000 and
+		// hostBusyMean (the mean of two real ~50,000 readings) ~= 50,000 —
+		// far above the NumCPU-1 fire floor on any plausible host, so the
+		// saturation backstop fires. Two delta ticks are needed so the
+		// hostBusyRing clears its 2-sample floor (the baseline tick no longer
+		// seeds the ring with a synthetic 0).
 		procStatTick0 := "cpu  1000 1000 1000 8000 0 0 0 50 0 0\n"
 		// Tick 1: busy delta (user+nice+system+iowait+irq+softirq, EXCL
 		// steal/guest/guest_nice) = 5,000,000 jiffies; idle grew 1,000; steal
 		// unchanged (delta 0 -> StealFraction = 0, irrelevant on bare metal).
 		procStatTick1 := "cpu  5001000 1000 1000 9000 0 0 0 50 0 0\n"
+		// Tick 2: another 5,000,000 busy jiffies (escalating) so the
+		// hostBusyRing clears its 2-sample floor on this tick.
+		procStatTick2 := "cpu 10001000 1000 1000 9000 0 0 0 50 0 0\n"
 
 		procStat := procStatTick0
 
@@ -582,10 +598,17 @@ var _ = Describe("capstone: end-to-end CPU-health model through GetStatus (rung 
 		Expect(status1.CPU.Causes).To(BeEmpty(),
 			"SATURATION-DEGRADE-DEAD-ZONE: tick-1 baseline must carry no degrade causes")
 
-		// Tick 2 puts the host at capacity, so saturation fires as the sole
-		// cause; with the demand gate closed (no pressure/throttle),
-		// attribution=host.
+		// Tick 2 — warmup: first real host-busy delta (ring gets 1 entry,
+		// still below the 2-sample floor so hostBusyMean stays 0 and
+		// saturation does not fire yet).
 		usageUsec, nrPeriods, procStat = 2_000_000, 2000, procStatTick1
+		_, err = svc.GetStatus(ctx)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Tick 3 puts the host at capacity again, so the hostBusyRing clears
+		// the 2-sample floor and saturation fires as the sole cause; with the
+		// demand gate closed (no pressure/throttle), attribution=host.
+		usageUsec, nrPeriods, procStat = 3_000_000, 3000, procStatTick2
 		time.Sleep(1 * time.Second)
 		status, err := svc.GetStatus(ctx)
 		Expect(err).NotTo(HaveOccurred())

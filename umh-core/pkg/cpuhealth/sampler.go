@@ -285,8 +285,10 @@ func parseDMIVirtualized(data []byte) bool {
 // readProcStat reads /proc/stat's first "cpu " line and computes StealFraction
 // (steal jiffies delta / total jiffies delta) and HostBusyCores (non-idle
 // jiffies delta EXCLUDING steal, guest, guest_nice ÷ USER_HZ ÷ elapsed). On the
-// first read it baselines and leaves both zero. On absence/error/parse-failure it
-// leaves both zero.
+// first read and on a counter reset it re-baselines and leaves
+// HostBusyCoresAvailable false (no usable reading); on a successful delta it
+// sets HostBusyCoresAvailable true and populates StealFraction + HostBusyCores.
+// On absence/error/parse-failure it leaves both zero and Available false.
 func (s *cgroupSampler) readProcStat(ctx context.Context, now time.Time, sample *Sample) {
 	data, err := s.fs.ReadFile(ctx, "/proc/stat")
 	if err != nil {
@@ -297,8 +299,6 @@ func (s *cgroupSampler) readProcStat(ctx context.Context, now time.Time, sample 
 	if !ok {
 		return
 	}
-
-	sample.HostBusyCoresAvailable = true
 
 	if !s.hasStatBaseline {
 		s.lastStatTotal = total
@@ -325,6 +325,7 @@ func (s *cgroupSampler) readProcStat(ctx context.Context, now time.Time, sample 
 		return
 	}
 
+	sample.HostBusyCoresAvailable = true
 	sample.StealFraction = (steal - s.lastStatSteal) / totalDelta
 
 	elapsed := now.Sub(s.lastStatTime).Seconds()

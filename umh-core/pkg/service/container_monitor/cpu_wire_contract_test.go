@@ -585,12 +585,17 @@ var _ = Describe("verdictBasis R10.4 mode-generic shape", func() {
 		// cpu.max "max 100000" => no limit (host mode): parseCPUMax returns
 		// QuotaCores=0 and readCPUMax returns &0 (the uncapped contract), so
 		// LimitApplies=false. /proc/stat present and parseable
-		// so HostBusyCoresAvailable=true. Both ticks carry the SAME busy total so
-		// the busy delta is 0 → HostBusyCores 0 (deterministic; the host is not
-		// full — this test pins the shape, not a fire).
+		// so HostBusyCoresAvailable=true. Tick 2 advances only the idle column
+		// (total increases, busy unchanged) so the busy delta is 0 →
+		// HostBusyCores 0 (deterministic; the host is not full — this test pins
+		// the shape, not a fire). A positive total delta keeps the sampler on
+		// the steady-state path (HostBusyCoresAvailable=true); an unchanged
+		// /proc/stat would hit the counter-reset guard and report Available=false.
 		const cpuMax = "max 100000\n"
 		var usageUsec int64 = 1_000_000
-		procStat := "cpu 0 0 0 1000 0 0 0 0 0 0\n"
+		procStatTick0 := "cpu 0 0 0 1000 0 0 0 0 0 0\n"
+		procStatTick1 := "cpu 0 0 0 2000 0 0 0 0 0 0\n"
+		procStat := procStatTick0
 
 		mockFS.WithReadFileFunc(func(_ context.Context, path string) ([]byte, error) {
 			switch path {
@@ -612,11 +617,14 @@ var _ = Describe("verdictBasis R10.4 mode-generic shape", func() {
 
 		// Tick 1 — baseline /proc/stat.
 		usageUsec = 1_000_000
+		procStat = procStatTick0
 		_, err = svc.GetStatus(ctx)
 		Expect(err).NotTo(HaveOccurred())
 
-		// Tick 2 — /proc/stat unchanged (busyDelta 0 → HostBusyCores 0; host not full).
+		// Tick 2 — idle advances (positive total delta, busyDelta 0 →
+		// HostBusyCores 0; host not full).
 		usageUsec = 1_000_000
+		procStat = procStatTick1
 		status, err := svc.GetStatus(ctx)
 		Expect(err).NotTo(HaveOccurred())
 
@@ -717,13 +725,16 @@ var _ = Describe("verdictBasis R10.4 mode-generic shape", func() {
 
 		// cpu.max "200000 100000" => quota 2.0 (limit mode). usage_usec pinned →
 		// container idle → limit-saturation does NOT fire (headroom 2−0−0.2=1.8).
-		// /proc/stat: tick 0 low busy (baseline), tick 1 huge busy delta →
+		// /proc/stat: tick 0 low busy (baseline), tick 1+2 huge busy delta →
 		// HostBusyCores enormous → hostBusyMean enormous → host-full fires
 		// (LogicalCpus − enormous − 1.0 < 0) regardless of the host's core count.
+		// Two delta ticks are needed so the hostBusyRing clears its 2-sample
+		// floor (the baseline tick no longer seeds the ring with a synthetic 0).
 		const cpuMax = "200000 100000\n"
 		var usageUsec int64 = 1_000_000
 		procStatTick0 := "cpu 0 0 0 1000 0 0 0 0 0 0\n"
 		procStatTick1 := "cpu 100000 0 0 1100 0 0 0 0 0 0\n"
+		procStatTick2 := "cpu 200000 0 0 1200 0 0 0 0 0 0\n"
 		procStat := procStatTick0
 
 		mockFS.WithReadFileFunc(func(_ context.Context, path string) ([]byte, error) {
@@ -750,11 +761,19 @@ var _ = Describe("verdictBasis R10.4 mode-generic shape", func() {
 		_, err = svc.GetStatus(ctx)
 		Expect(err).NotTo(HaveOccurred())
 
-		// Tick 2 — host busy delta huge → host-full fires. usage_usec pinned →
+		// Tick 2 — warmup: first real host-busy delta (ring gets 1 entry, still
+		// below the 2-sample floor so host-full does not fire yet).
+		usageUsec = 1_000_000
+		procStat = procStatTick1
+		_, err = svc.GetStatus(ctx)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Tick 3 — host busy delta huge again → ring clears the 2-sample floor,
+		// hostBusyMean enormous → host-full fires. usage_usec pinned →
 		// limit-sat does NOT fire. So HostFullFired=true and
 		// LimitSaturationFired=false — the ranking the basis must carry.
 		usageUsec = 1_000_000
-		procStat = procStatTick1
+		procStat = procStatTick2
 		status, err := svc.GetStatus(ctx)
 		Expect(err).NotTo(HaveOccurred())
 

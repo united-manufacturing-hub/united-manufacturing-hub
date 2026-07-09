@@ -768,3 +768,86 @@ func TestCgroupSampler_ProcStatCounterReset(t *testing.T) {
 		t.Fatalf("reset Sample HostBusyCores: got negative %v (the exact bug the guard prevents)", sample3.HostBusyCores)
 	}
 }
+
+// TestCgroupSampler_ProcStat_HostBusyCoresAvailableFalseOnBaselineAndReset
+// pins the ring-poisoning fix (F3): readProcStat must NOT set
+// HostBusyCoresAvailable=true on the first-baseline tick (no delta yet) nor on
+// a counter-reset tick (re-baselining, no usable delta). The decide.go
+// ring-append gate at :757 checks HostBusyCoresAvailable; if it is true on
+// either path with HostBusyCores=0, a synthetic 0 is appended to the
+// hostBusyRing, understating the 60s mean by ~50% for the warmup window.
+// Available must be true ONLY on the steady-state delta path.
+func TestCgroupSampler_ProcStat_HostBusyCoresAvailableFalseOnBaselineAndReset(t *testing.T) {
+	const basePath = "/sys/fs/cgroup"
+	cpuStatPath := basePath + "/cpu.stat"
+	procStatPath := "/proc/stat"
+	ctx := context.Background()
+
+	// Tick 0: baseline. total = 11050.
+	procStatTick0 := "cpu  1000 1000 1000 8000 0 0 0 50 0 0\n"
+	// Tick 1: total grows to 22050 (delta 11000) — normal positive delta.
+	procStatTick1 := "cpu  2000 1500 2000 16400 0 0 0 150 0 0\n"
+	// Tick 2: total DROPS to 5000 (counter reset / host reboot).
+	procStatReset := "cpu  300 300 300 3900 0 0 0 10 0 0\n"
+
+	usageUsec := int64(1_000_000)
+	procStat := procStatTick0
+
+	fs := filesystem.NewMockFileSystem().WithReadFileFunc(func(_ context.Context, path string) ([]byte, error) {
+		switch path {
+		case cpuStatPath:
+			return []byte(cpuStatContent(usageUsec)), nil
+		case procStatPath:
+			return []byte(procStat), nil
+		default:
+			return nil, errors.New("unexpected path read: " + path)
+		}
+	})
+
+	s := cpuhealth.NewCgroupSampler(fs, basePath)
+
+	// (1) First call: baseline. No delta can be computed yet, so there is no
+	// usable host-busy reading. HostBusyCoresAvailable MUST be false;
+	// otherwise the decide.go ring-append gate appends HostBusyCores=0 and
+	// poisons the 60s hostBusyMean.
+	sample1, err := s.Sample(ctx)
+	if err != nil {
+		t.Fatalf("baseline Sample: unexpected error: %v", err)
+	}
+	if sample1.HostBusyCoresAvailable {
+		t.Fatalf("baseline Sample HostBusyCoresAvailable: got true, want false (no delta on the first read; appending HostBusyCores=0 poisons the ring)")
+	}
+
+	// (2) Second call with a positive delta: the steady-state path. A real
+	// reading was computed, so HostBusyCoresAvailable MUST be true and
+	// HostBusyCores MUST be non-zero.
+	time.Sleep(40 * time.Millisecond)
+	usageUsec = 1_100_000
+	procStat = procStatTick1
+
+	sample2, err := s.Sample(ctx)
+	if err != nil {
+		t.Fatalf("delta Sample: unexpected error: %v", err)
+	}
+	if !sample2.HostBusyCoresAvailable {
+		t.Fatalf("delta Sample HostBusyCoresAvailable: got false, want true (a real delta was computed on the steady-state path)")
+	}
+	if sample2.HostBusyCores == 0 {
+		t.Fatalf("delta Sample HostBusyCores: got 0, want non-zero (steady-state path must still populate the reading)")
+	}
+
+	// (3) Third call with a counter reset (total decreases below baseline):
+	// re-baselining, no usable delta. HostBusyCoresAvailable MUST be false;
+	// otherwise the gate appends a synthetic 0 on every host reboot.
+	time.Sleep(40 * time.Millisecond)
+	usageUsec = 1_200_000
+	procStat = procStatReset
+
+	sample3, err := s.Sample(ctx)
+	if err != nil {
+		t.Fatalf("reset Sample: unexpected error: %v", err)
+	}
+	if sample3.HostBusyCoresAvailable {
+		t.Fatalf("reset Sample HostBusyCoresAvailable: got true, want false (counter reset re-baselines; appending HostBusyCores=0 poisons the ring)")
+	}
+}
