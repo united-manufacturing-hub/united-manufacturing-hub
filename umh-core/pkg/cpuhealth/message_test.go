@@ -622,6 +622,46 @@ func TestComposeMessage_Saturation_DRow(t *testing.T) {
 	}
 }
 
+// TestComposeMessage_Saturation_DRow_PsiAvailable pins the D-row detail when
+// PSI is available: /proc/stat may be transiently unreadable while
+// /proc/pressure/cpu is readable, so the D-row can fire with PsiApplies=true.
+// In that case the message must NOT claim "no pressure stats" (false: PSI is
+// on) and must NOT advise "enable psi=1" (PSI is already enabled). It must
+// still say "no CPU limit set" (the D-row's defining condition stays true).
+func TestComposeMessage_Saturation_DRow_PsiAvailable(t *testing.T) {
+	verdict := cpuhealth.Verdict{
+		State:       cpuhealth.StateDegraded,
+		Attribution: cpuhealth.AttributionUnknown,
+		Causes: []cpuhealth.Cause{
+			{Kind: cpuhealth.CauseKindSaturation, Value: 0.75},
+		},
+	}
+	signals := cpuhealth.Signals{
+		LimitSaturationFired: false,
+		HostFullFired:        false,
+		DRowFired:            true,
+		PsiApplies:           true,
+		LimitedVisibility:    false,
+	}
+
+	msg := cpuhealth.ComposeMessage(verdict, signals)
+	_, details, _ := strings.Cut(msg, "Technical Details: ")
+	details = strings.TrimSpace(details)
+
+	if strings.Contains(details, "no pressure stats") {
+		t.Fatalf("D-row detail with PSI available must not claim \"no pressure stats\": %q", details)
+	}
+	if strings.Contains(details, "psi=1") {
+		t.Fatalf("D-row detail with PSI available must not advise enabling psi=1: %q", details)
+	}
+	if !strings.Contains(details, "no CPU limit set") {
+		t.Fatalf("D-row detail must still state \"no CPU limit set\": %q", details)
+	}
+	if !strings.Contains(details, "75%") {
+		t.Fatalf("D-row detail must show 75%%: %q", details)
+	}
+}
+
 // TestComposeMessage_Saturation_NoLimitHostHeadroom pins the no-limit
 // host-stats-readable saturation detail: the percentage is host-busy vs host
 // cores (not AvgUsageFraction=0), and the guidance says "Add CPU capacity".

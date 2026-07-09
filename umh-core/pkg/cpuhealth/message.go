@@ -233,6 +233,9 @@ func causeDetails(c Cause, signals Signals) string {
 			return "The machine is full. Add CPU to the machine, or reduce other software running on it."
 		case signals.DRowFired:
 			pct := pctOf(c.Value)
+			if signals.PsiApplies {
+				return fmt.Sprintf("CPU averaged %d%% of the machine over the last minute and this instance has little headroom left. Host contention is not visible here (no CPU limit set). Set a CPU limit for more detail. Consider adding CPU capacity.", pct)
+			}
 
 			return fmt.Sprintf("CPU averaged %d%% of the machine over the last minute and this instance has little headroom left. Host contention is not visible here (no CPU limit set, no pressure stats). Set a CPU limit or enable Linux pressure stats (boot with psi=1) for more detail. Consider adding CPU capacity.", pct)
 		case signals.LimitSaturationFired:
