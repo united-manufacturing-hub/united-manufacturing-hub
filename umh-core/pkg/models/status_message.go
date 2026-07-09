@@ -131,12 +131,14 @@ type Cause struct {
 
 type CPU struct {
 	Health *Health `json:"health"`
-	// AvgMCpu/P95MCpu/P99MCpu are the avg/p95/p99 of the dead-zone usage ring
-	// in milli-cores (signals.*UsageFraction * 1000). They are *float64 so
+	// AvgMCpu/P95MCpu/P99MCpu are the avg/p95/p99 of the usage ring in
+	// milli-cores (signals.*UsageCores * 1000). They are *float64 so
 	// omitempty emits a real 0 (non-nil pointer) when the metric is fetchable
 	// (the ring holds >= 2 entries) and omits it when un-fetchable (nil pointer:
-	// outside the dead-zone, or the first dead-zone tick before the ring has 2
-	// entries). Observability-only — they do not change the verdict.
+	// the first tick of any mode before the ring has 2 entries; since R10.1
+	// the ring fills every tick in ALL modes, so the fields are non-nil
+	// outside the dead-zone once the window holds >= 2 entries).
+	// Observability-only. They do not change the verdict.
 	AvgMCpu *float64 `json:"avgMCpu,omitempty"`
 	P95MCpu *float64 `json:"p95MCpu,omitempty"`
 	P99MCpu *float64 `json:"p99MCpu,omitempty"`

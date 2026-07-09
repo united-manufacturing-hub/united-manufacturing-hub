@@ -276,7 +276,7 @@ func (c *ContainerMonitorService) getCPUMetrics(ctx context.Context) (*models.CP
 		// sampler failure getRawCPUMetrics returns a zero-valued Sample
 		// (dead-zone: Quota nil, PSI absent, not virtualized); Decide still
 		// evaluates the throttle ring from the overlaid NrPeriods/NrThrottled
-		// counters, and the dead-zone saturation backstop runs harmlessly
+		// counters, and the D-row latch runs harmlessly
 		// (UsageCores=0 yields fraction=0). This invariant is test-pinned by the
 		// "sampler failure dead-zone" spec in sampler_full_sample_wire_test.go.
 		sample.Timestamp = time.Now()
@@ -354,14 +354,15 @@ func (c *ContainerMonitorService) getCPUMetrics(ctx context.Context) (*models.CP
 		cpuStat.CgroupCores = cgroupInfo.QuotaCores
 	}
 
-	// Percentile mCPU fields are observability-only mirrors of the dead-zone
-	// usage ring (signals.*UsageFraction * 1000). They are *float64: non-nil
-	// (pointer to the computed percentile, even 0) when signals.UsageRingActive
-	// is true (the ring holds >= 2 entries — the dead-zone with enough samples),
-	// nil otherwise (outside the dead-zone, or the first dead-zone tick before
-	// the ring has 2 entries). The UsageRingActive flag distinguishes a real 0
-	// from an absent signal, which the value-based 0/omitempty discipline
-	// cannot. They do not change the verdict.
+	// Percentile mCPU fields are observability-only mirrors of the usage ring
+	// (signals.*UsageCores * 1000). They are *float64: non-nil (pointer to
+	// the computed percentile, even 0) when signals.UsageRingActive is true
+	// (the ring holds >= 2 entries), nil otherwise (the first tick of any mode
+	// before the ring has 2 entries; since R10.1 the ring fills every tick in
+	// ALL modes, so the percentiles are fetchable outside the dead-zone once
+	// the window holds >= 2 entries). The UsageRingActive flag distinguishes a
+	// real 0 from an absent signal, which the value-based 0/omitempty
+	// discipline cannot. They do not change the verdict.
 	if signals.UsageRingActive {
 		cpuStat.AvgMCpu = ptr(signals.AvgUsageCores * 1000)
 		cpuStat.P95MCpu = ptr(signals.P95UsageCores * 1000)
