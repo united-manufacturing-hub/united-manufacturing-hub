@@ -118,6 +118,12 @@ const stealWindow = 60 * time.Second
 // feeds HeadroomCores in no-limit mode and drives the saturation latch).
 const hostBusyWindow = 60 * time.Second
 
+// usageWindow is the sliding window length over which the usage-ring
+// 60s means (saturationAvg, usageCores60sMean) are computed. Kept as a
+// separate const from throttleWindow so the usage ring's horizon is
+// self-documenting and decoupled from the throttle-ratio window.
+const usageWindow = 60 * time.Second
+
 // cpuReserveCores is the headroom reserve: one core set aside (for Redpanda
 // and system overhead) when computing Signals.HeadroomCores so the number
 // reflects capacity available to UMH workloads, not raw free capacity. The
@@ -823,7 +829,7 @@ func Decide(st *WindowState, sample Sample, thresholds Thresholds) (Verdict, Sig
 		cores:    usageCores,
 	})
 
-	usageCutoff := sample.Timestamp.Add(-throttleWindow)
+	usageCutoff := sample.Timestamp.Add(-usageWindow)
 	usageRing := st.usageRing
 	usageN := 0
 
@@ -866,7 +872,7 @@ func Decide(st *WindowState, sample Sample, thresholds Thresholds) (Verdict, Sig
 	limitMode := sample.Quota != nil && *sample.Quota > 0
 
 	var capacity float64
-	if sample.Quota != nil && *sample.Quota > 0 {
+	if limitMode {
 		capacity = *sample.Quota
 	} else {
 		capacity = sample.LogicalCpus
