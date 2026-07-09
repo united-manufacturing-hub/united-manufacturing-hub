@@ -231,7 +231,7 @@ func causeDetails(c Cause, signals Signals) string {
 			}
 
 			return "The machine is full. Add CPU to the machine, or reduce other software running on it."
-		case signals.DRowFired:
+		case signals.NoHostStatsSaturationFired:
 			pct := pctOf(c.Value)
 			if signals.PsiApplies {
 				return fmt.Sprintf("CPU averaged %d%% of the machine over the last minute and this instance has little headroom left. Host contention is not visible here (no CPU limit set). Set a CPU limit for more detail. Consider adding CPU capacity.", pct)
@@ -252,7 +252,7 @@ func causeDetails(c Cause, signals Signals) string {
 
 			return detail
 		default:
-			// No-limit host-headroom (host stats readable, not D-row). The
+			// No-limit host-headroom (host stats readable, not no-host-stats saturation). The
 			// percentage is host-busy vs host cores (LogicalCpus, surfaced as
 			// CapacityCores in no-limit mode), NOT AvgUsageFraction (which is 0
 			// in no-limit).

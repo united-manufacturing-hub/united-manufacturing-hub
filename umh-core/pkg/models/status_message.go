@@ -181,16 +181,16 @@ type VerdictBasis struct {
 // quota vs limit-mode-host-full vs no-host-stats blind vs no-limit-host-full).
 // Fired is the OR of the four sub-latches.
 type VerdictBasisHeadroom struct {
-	Ceiling              string  `json:"ceiling"`              // "host" | "limit" — which rule applied
-	Capacity             float64 `json:"capacity"`             // the ceiling in cores (host logical count or cgroup quota)
-	Used                 float64 `json:"used"`                 // the mode's 60s-mean use (host-busy OR container usage)
-	Reserve              float64 `json:"reserve"`              // in cores (host: 1.0; limit: LimitReserveFraction × quota)
-	Cores                float64 `json:"cores"`                // Capacity − Used − Reserve (the decision variable; may be negative)
-	Fired                bool    `json:"fired"`                // SaturationFired (the OR of the four sub-latches below)
-	LimitSaturationFired bool    `json:"limitSaturationFired"` // container-scope sub-latch (limit mode: usage inside the fractional reserve)
-	HostFullFired        bool    `json:"hostFullFired"`        // host-scope sub-latch (limit mode: the host itself is full)
-	DRowFired            bool    `json:"dRowFired"`            // no-host-stats no-limit sub-latch (scenario D: usage/hostLogical ≥ 0.70)
-	NoLimitHostFired     bool    `json:"noLimitHostFired"`     // no-limit host-stats-readable sub-latch (scenario A degraded: the host has no spare core)
+	Ceiling                    string  `json:"ceiling"`                    // "host" | "limit" — which rule applied
+	Capacity                   float64 `json:"capacity"`                   // the ceiling in cores (host logical count or cgroup quota)
+	Used                       float64 `json:"used"`                       // the mode's 60s-mean use (host-busy OR container usage)
+	Reserve                    float64 `json:"reserve"`                    // in cores (host: 1.0; limit: LimitReserveFraction × quota)
+	Cores                      float64 `json:"cores"`                      // Capacity − Used − Reserve (the decision variable; may be negative)
+	Fired                      bool    `json:"fired"`                      // SaturationFired (the OR of the four sub-latches below)
+	LimitSaturationFired       bool    `json:"limitSaturationFired"`       // container-scope sub-latch (limit mode: usage inside the fractional reserve)
+	HostFullFired              bool    `json:"hostFullFired"`              // host-scope sub-latch (limit mode: the host itself is full)
+	NoHostStatsSaturationFired bool    `json:"noHostStatsSaturationFired"` // no-host-stats no-limit sub-latch (scenario D: usage/hostLogical ≥ 0.70)
+	NoLimitHostFired           bool    `json:"noLimitHostFired"`           // no-limit host-stats-readable sub-latch (scenario A degraded: the host has no spare core)
 }
 
 // VerdictBasisHostBusy is the host-level busy-cores observation, carried in

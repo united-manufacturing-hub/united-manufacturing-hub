@@ -196,10 +196,10 @@ func TestComposeMessage_SaturationTwoLayerC2(t *testing.T) {
 			{Kind: cpuhealth.CauseKindSaturation, Value: 0.82},
 		},
 	}
-	// DRowFired true selects the D-row (no-limit, no-host-stats) copy this
-	// test's phrases assert. The non-D-row variant is pinned separately in
+	// NoHostStatsSaturationFired true selects the no-host-stats saturation (no-limit, no-host-stats) copy this
+	// test's phrases assert. The host-headroom variant is pinned separately in
 	// TestComposeMessage_SaturationDetailsPsiConditional.
-	signals := cpuhealth.Signals{SaturationFired: true, DRowFired: true, LimitedVisibility: true}
+	signals := cpuhealth.Signals{SaturationFired: true, NoHostStatsSaturationFired: true, LimitedVisibility: true}
 
 	msg := cpuhealth.ComposeMessage(verdict, signals)
 	details := assertTwoLayer(t, msg, "CPU running near full",
@@ -229,9 +229,9 @@ func TestComposeMessage_SaturationDetailsPsiConditional(t *testing.T) {
 	}
 
 	t.Run("Blind", func(t *testing.T) {
-		// D-row: no limit, no host stats, no PSI. The detail carries the
+		// no-host-stats saturation: no limit, no host stats, no PSI. The detail carries the
 		// "Host contention is not visible" caveat and psi=1 guidance.
-		signals := cpuhealth.Signals{SaturationFired: true, DRowFired: true, LimitedVisibility: true}
+		signals := cpuhealth.Signals{SaturationFired: true, NoHostStatsSaturationFired: true, LimitedVisibility: true}
 		msg := cpuhealth.ComposeMessage(verdict, signals)
 		want := "CPU running near full\nTechnical Details: CPU averaged 82% of the machine over the last minute and this instance has little headroom left. Host contention is not visible here (no CPU limit set, no pressure stats). Set a CPU limit or enable Linux pressure stats (boot with psi=1) for more detail. Consider adding CPU capacity."
 		if msg != want {
@@ -240,7 +240,7 @@ func TestComposeMessage_SaturationDetailsPsiConditional(t *testing.T) {
 	})
 
 	// No-limit, host-stats-readable, PSI present: the no-limit host-headroom
-	// copy. It must NOT claim PSI is missing or carry the D-row caveat.
+	// copy. It must NOT claim PSI is missing or carry the no-host-stats saturation caveat.
 	t.Run("NonBlindPsiPresent", func(t *testing.T) {
 		signals := cpuhealth.Signals{
 			SaturationFired:      true,
@@ -525,12 +525,12 @@ func TestComposeMessage_Saturation_LimitMode(t *testing.T) {
 		},
 	}
 	signals := cpuhealth.Signals{
-		LimitApplies:         true,
-		LimitSaturationFired: true,
-		HostFullFired:        false,
-		DRowFired:            false,
-		AvgUsageCores:        1.9,
-		CapacityCores:        2.0,
+		LimitApplies:               true,
+		LimitSaturationFired:       true,
+		HostFullFired:              false,
+		NoHostStatsSaturationFired: false,
+		AvgUsageCores:              1.9,
+		CapacityCores:              2.0,
 	}
 
 	msg := cpuhealth.ComposeMessage(verdict, signals)
@@ -564,11 +564,11 @@ func TestComposeMessage_Saturation_HostFull(t *testing.T) {
 		},
 	}
 	signals := cpuhealth.Signals{
-		LimitApplies:         true,
-		LimitSaturationFired: true,
-		HostFullFired:        true,
-		DRowFired:            false,
-		CapacityCores:        2.0,
+		LimitApplies:               true,
+		LimitSaturationFired:       true,
+		HostFullFired:              true,
+		NoHostStatsSaturationFired: false,
+		CapacityCores:              2.0,
 	}
 
 	msg := cpuhealth.ComposeMessage(verdict, signals)
@@ -586,10 +586,10 @@ func TestComposeMessage_Saturation_HostFull(t *testing.T) {
 	}
 }
 
-// TestComposeMessage_Saturation_DRow pins the D-row detail (no-limit, no host
+// TestComposeMessage_Saturation_NoHostStatsSaturation pins the no-host-stats saturation detail (no-limit, no host
 // stats): it carries the "host contention is not visible" caveat and the
 // psi=1 guidance.
-func TestComposeMessage_Saturation_DRow(t *testing.T) {
+func TestComposeMessage_Saturation_NoHostStatsSaturation(t *testing.T) {
 	verdict := cpuhealth.Verdict{
 		State:       cpuhealth.StateDegraded,
 		Attribution: cpuhealth.AttributionUnknown,
@@ -598,10 +598,10 @@ func TestComposeMessage_Saturation_DRow(t *testing.T) {
 		},
 	}
 	signals := cpuhealth.Signals{
-		LimitSaturationFired: false,
-		HostFullFired:        false,
-		DRowFired:            true,
-		LimitedVisibility:    true,
+		LimitSaturationFired:       false,
+		HostFullFired:              false,
+		NoHostStatsSaturationFired: true,
+		LimitedVisibility:          true,
 	}
 
 	msg := cpuhealth.ComposeMessage(verdict, signals)
@@ -609,26 +609,26 @@ func TestComposeMessage_Saturation_DRow(t *testing.T) {
 	details = strings.TrimSpace(details)
 
 	if !strings.Contains(details, "Host contention is not visible") {
-		t.Fatalf("D-row detail must carry the host-contention caveat: %q", details)
+		t.Fatalf("no-host-stats saturation detail must carry the host-contention caveat: %q", details)
 	}
 	if !strings.Contains(details, "psi=1") {
-		t.Fatalf("D-row detail must carry the psi=1 guidance: %q", details)
+		t.Fatalf("no-host-stats saturation detail must carry the psi=1 guidance: %q", details)
 	}
 	if !strings.Contains(details, "82%") {
-		t.Fatalf("D-row detail must show 82%%: %q", details)
+		t.Fatalf("no-host-stats saturation detail must show 82%%: %q", details)
 	}
 	if !strings.Contains(details, "of the machine") {
-		t.Fatalf("D-row detail must say 'of the machine': %q", details)
+		t.Fatalf("no-host-stats saturation detail must say 'of the machine': %q", details)
 	}
 }
 
-// TestComposeMessage_Saturation_DRow_PsiAvailable pins the D-row detail when
+// TestComposeMessage_Saturation_NoHostStatsSaturation_PsiAvailable pins the no-host-stats saturation detail when
 // PSI is available: /proc/stat may be transiently unreadable while
-// /proc/pressure/cpu is readable, so the D-row can fire with PsiApplies=true.
+// /proc/pressure/cpu is readable, so the no-host-stats saturation can fire with PsiApplies=true.
 // In that case the message must NOT claim "no pressure stats" (false: PSI is
 // on) and must NOT advise "enable psi=1" (PSI is already enabled). It must
-// still say "no CPU limit set" (the D-row's defining condition stays true).
-func TestComposeMessage_Saturation_DRow_PsiAvailable(t *testing.T) {
+// still say "no CPU limit set" (the no-host-stats saturation's defining condition stays true).
+func TestComposeMessage_Saturation_NoHostStatsSaturation_PsiAvailable(t *testing.T) {
 	verdict := cpuhealth.Verdict{
 		State:       cpuhealth.StateDegraded,
 		Attribution: cpuhealth.AttributionUnknown,
@@ -637,11 +637,11 @@ func TestComposeMessage_Saturation_DRow_PsiAvailable(t *testing.T) {
 		},
 	}
 	signals := cpuhealth.Signals{
-		LimitSaturationFired: false,
-		HostFullFired:        false,
-		DRowFired:            true,
-		PsiApplies:           true,
-		LimitedVisibility:    false,
+		LimitSaturationFired:       false,
+		HostFullFired:              false,
+		NoHostStatsSaturationFired: true,
+		PsiApplies:                 true,
+		LimitedVisibility:          false,
 	}
 
 	msg := cpuhealth.ComposeMessage(verdict, signals)
@@ -649,16 +649,16 @@ func TestComposeMessage_Saturation_DRow_PsiAvailable(t *testing.T) {
 	details = strings.TrimSpace(details)
 
 	if strings.Contains(details, "no pressure stats") {
-		t.Fatalf("D-row detail with PSI available must not claim \"no pressure stats\": %q", details)
+		t.Fatalf("no-host-stats saturation detail with PSI available must not claim \"no pressure stats\": %q", details)
 	}
 	if strings.Contains(details, "psi=1") {
-		t.Fatalf("D-row detail with PSI available must not advise enabling psi=1: %q", details)
+		t.Fatalf("no-host-stats saturation detail with PSI available must not advise enabling psi=1: %q", details)
 	}
 	if !strings.Contains(details, "no CPU limit set") {
-		t.Fatalf("D-row detail must still state \"no CPU limit set\": %q", details)
+		t.Fatalf("no-host-stats saturation detail must still state \"no CPU limit set\": %q", details)
 	}
 	if !strings.Contains(details, "75%") {
-		t.Fatalf("D-row detail must show 75%%: %q", details)
+		t.Fatalf("no-host-stats saturation detail must show 75%%: %q", details)
 	}
 }
 
@@ -674,12 +674,12 @@ func TestComposeMessage_Saturation_NoLimitHostHeadroom(t *testing.T) {
 		},
 	}
 	signals := cpuhealth.Signals{
-		LimitApplies:         false,
-		LimitSaturationFired: false,
-		HostFullFired:        false,
-		DRowFired:            false,
-		HostBusyCores60sMean: 6.56,
-		CapacityCores:        8.0,
+		LimitApplies:               false,
+		LimitSaturationFired:       false,
+		HostFullFired:              false,
+		NoHostStatsSaturationFired: false,
+		HostBusyCores60sMean:       6.56,
+		CapacityCores:              8.0,
 	}
 
 	msg := cpuhealth.ComposeMessage(verdict, signals)

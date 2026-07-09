@@ -276,7 +276,7 @@ func (c *ContainerMonitorService) getCPUMetrics(ctx context.Context) (*models.CP
 		// sampler failure getRawCPUMetrics returns a zero-valued Sample
 		// (dead-zone: Quota nil, PSI absent, not virtualized); Decide still
 		// evaluates the throttle ring from the overlaid NrPeriods/NrThrottled
-		// counters, and the D-row latch runs harmlessly
+		// counters, and the no-host-stats saturation latch runs harmlessly
 		// (UsageCores=0 yields fraction=0). This invariant is test-pinned by the
 		// "sampler failure dead-zone" spec in sampler_full_sample_wire_test.go.
 		sample.Timestamp = time.Now()
@@ -396,16 +396,16 @@ func (c *ContainerMonitorService) getCPUMetrics(ctx context.Context) (*models.CP
 
 		cpuStat.VerdictBasis = &models.VerdictBasis{
 			Headroom: models.VerdictBasisHeadroom{
-				Ceiling:              ceiling,
-				Capacity:             signals.CapacityCores,
-				Used:                 used,
-				Reserve:              signals.ReserveCores,
-				Cores:                signals.HeadroomCores,
-				Fired:                signals.SaturationFired,
-				LimitSaturationFired: signals.LimitSaturationFired,
-				HostFullFired:        signals.HostFullFired,
-				DRowFired:            signals.DRowFired,
-				NoLimitHostFired:     signals.NoLimitHostFired,
+				Ceiling:                    ceiling,
+				Capacity:                   signals.CapacityCores,
+				Used:                       used,
+				Reserve:                    signals.ReserveCores,
+				Cores:                      signals.HeadroomCores,
+				Fired:                      signals.SaturationFired,
+				LimitSaturationFired:       signals.LimitSaturationFired,
+				HostFullFired:              signals.HostFullFired,
+				NoHostStatsSaturationFired: signals.NoHostStatsSaturationFired,
+				NoLimitHostFired:           signals.NoLimitHostFired,
 			},
 			HostBusy: models.VerdictBasisHostBusy{
 				Mean:      signals.HostBusyCores60sMean,
