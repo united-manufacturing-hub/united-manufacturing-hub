@@ -205,7 +205,7 @@ func TestComposeMessage_SaturationTwoLayerC2(t *testing.T) {
 	details := assertTwoLayer(t, msg, "CPU running near full",
 		"of the machine",
 		"Host contention is not visible",
-		"no CPU limit",
+		"host CPU usage is not readable",
 		"psi=1",
 	)
 
@@ -233,7 +233,7 @@ func TestComposeMessage_SaturationDetailsPsiConditional(t *testing.T) {
 		// "Host contention is not visible" caveat and psi=1 guidance.
 		signals := cpuhealth.Signals{SaturationFired: true, NoHostStatsSaturationFired: true, LimitedVisibility: true}
 		msg := cpuhealth.ComposeMessage(verdict, signals)
-		want := "CPU running near full\nTechnical Details: CPU averaged 82% of the machine over the last minute and this instance has little headroom left. Host contention is not visible here (no CPU limit set, no pressure stats). Set a CPU limit or enable Linux pressure stats (boot with psi=1) for more detail. Consider adding CPU capacity."
+		want := "CPU running near full\nTechnical Details: CPU averaged 82% of the machine over the last minute and this instance has little headroom left. Host contention is not visible here (host CPU usage is not readable). Enable Linux pressure stats (boot with psi=1) for richer detail. Consider adding CPU capacity."
 		if msg != want {
 			t.Fatalf("blind saturation message:\n got: %q\nwant: %q", msg, want)
 		}
@@ -627,7 +627,8 @@ func TestComposeMessage_Saturation_NoHostStatsSaturation(t *testing.T) {
 // /proc/pressure/cpu is readable, so the no-host-stats saturation can fire with PsiApplies=true.
 // In that case the message must NOT claim "no pressure stats" (false: PSI is
 // on) and must NOT advise "enable psi=1" (PSI is already enabled). It must
-// still say "no CPU limit set" (the no-host-stats saturation's defining condition stays true).
+// name the real reason host contention is invisible (host CPU usage is not
+// readable) and must NOT misattribute it to a missing CPU limit.
 func TestComposeMessage_Saturation_NoHostStatsSaturation_PsiAvailable(t *testing.T) {
 	verdict := cpuhealth.Verdict{
 		State:       cpuhealth.StateDegraded,
@@ -654,8 +655,11 @@ func TestComposeMessage_Saturation_NoHostStatsSaturation_PsiAvailable(t *testing
 	if strings.Contains(details, "psi=1") {
 		t.Fatalf("no-host-stats saturation detail with PSI available must not advise enabling psi=1: %q", details)
 	}
-	if !strings.Contains(details, "no CPU limit set") {
-		t.Fatalf("no-host-stats saturation detail must still state \"no CPU limit set\": %q", details)
+	if strings.Contains(details, "no CPU limit set") {
+		t.Fatalf("no-host-stats saturation detail must not misattribute the cause to a missing CPU limit: %q", details)
+	}
+	if !strings.Contains(details, "host CPU usage is not readable") {
+		t.Fatalf("no-host-stats saturation detail must name the real cause (host CPU usage is not readable): %q", details)
 	}
 	if !strings.Contains(details, "75%") {
 		t.Fatalf("no-host-stats saturation detail must show 75%%: %q", details)
