@@ -114,8 +114,8 @@ func (w *CertFetcherWorker) CollectObservedState(ctx context.Context, _ fsmv2.De
 	// Current-state gauges for potential later exposure on the UI. These are
 	// point-in-time values (not cumulative events), so they use SetGauge —
 	// IncrementCounter would accumulate additively on every COS tick.
-	d.MetricsRecorder().SetGauge("cached_certs", float64(cachedCount))
-	d.MetricsRecorder().SetGauge("consecutive_errors", float64(d.ConsecutiveErrors()))
+	d.MetricsRecorder().SetGauge(deps.GaugeCachedCerts, float64(cachedCount))
+	d.MetricsRecorder().SetGauge(deps.GaugeConsecutiveErrors, float64(d.ConsecutiveErrors()))
 
 	return fsmv2.NewObservation(CertFetcherStatus{
 		ConsecutiveErrors: d.ConsecutiveErrors(),
