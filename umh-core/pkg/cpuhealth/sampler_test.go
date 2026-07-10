@@ -14,6 +14,8 @@
 
 //go:build test
 
+// Run with -tags=test: this file is excluded from plain go test, which
+// reports green with 0 specs. CI passes -tags=test for this package.
 package cpuhealth_test
 
 import (
