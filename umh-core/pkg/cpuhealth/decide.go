@@ -409,12 +409,13 @@ type Signals struct {
 	// holds: fired == limitSaturationFired || hostFullFired || noHostStatsSaturationFired ||
 	// noLimitHostFired). False in limit mode and when host stats are unreadable.
 	NoLimitHostFired bool
-	// DFraction is the no-host-stats saturation fraction (usageCores60sMean/LogicalCpus, 0..1),
-	// the saturation cause Value when NoHostStatsSaturationFired is true. Computed locally from
-	// the one blessed average (usageCores60sMean) and LogicalCpus — NOT
-	// saturationAvg (which divides by Quota/CgroupCores, both 0 in no-limit,
-	// the bug R10.3 fixes). 0 when the no-host-stats saturation is not active.
-	DFraction float64
+	// NoHostStatsSaturationFraction is the no-host-stats saturation fraction
+	// (usageCores60sMean/LogicalCpus, 0..1), the saturation cause Value when
+	// NoHostStatsSaturationFired is true. Computed locally from the one blessed
+	// average (usageCores60sMean) and LogicalCpus — NOT saturationAvg (which
+	// divides by Quota/CgroupCores, both 0 in no-limit, the bug R10.3 fixes).
+	// 0 when the no-host-stats saturation is not active.
+	NoHostStatsSaturationFraction float64
 	// HostHeadroomCores is the host-scope headroom: LogicalCpus − hostBusyMean
 	// − cpuReserveCores. In no-limit mode it equals HeadroomCores (same formula);
 	// in limit mode it is the host-full latch's decision variable and the
@@ -990,8 +991,9 @@ func Decide(st *WindowState, sample Sample, thresholds Thresholds) (Verdict, Sig
 		// denominator (REVISED from v3's "uncapped → healthy"). The usage ring
 		// fills every tick (R10.1), so usageCores60sMean/LogicalCpus is
 		// computable. saturationAvg (Quota/CgroupCores denominator) is NOT used
-		// — it's 0 in no-limit mode (the bug). dFraction is computed locally
-		// from the one blessed average (usageCores60sMean) and LogicalCpus.
+		// — it's 0 in no-limit mode (the bug). noHostStatsSaturationFraction is
+		// computed locally from the one blessed average (usageCores60sMean) and
+		// LogicalCpus.
 		// R10.3 Finding 1: this branch does NOT touch st.noLimitHostFired, so a
 		// prior host-headroom fire (from a readable tick) holds across the
 		// outage — the no-host-stats saturation evaluates its own st.noHostStatsSaturationFired independently and
@@ -1000,13 +1002,13 @@ func Decide(st *WindowState, sample Sample, thresholds Thresholds) (Verdict, Sig
 		st.hostFullFired = false
 
 		if len(st.usageRing) >= 2 {
-			dFraction := usageCores60sMean / sample.LogicalCpus
+			noHostStatsSaturationFraction := usageCores60sMean / sample.LogicalCpus
 
-			signals.DFraction = dFraction
+			signals.NoHostStatsSaturationFraction = noHostStatsSaturationFraction
 			switch {
-			case dFraction >= thresholds.HighUsageFraction:
+			case noHostStatsSaturationFraction >= thresholds.HighUsageFraction:
 				st.noHostStatsSaturationFired = true
-			case dFraction < thresholds.SaturationRecover:
+			case noHostStatsSaturationFraction < thresholds.SaturationRecover:
 				st.noHostStatsSaturationFired = false
 			}
 		} else {
@@ -1097,7 +1099,7 @@ func Decide(st *WindowState, sample Sample, thresholds Thresholds) (Verdict, Sig
 		case signals.HostFullFired:
 			satValue = signals.HostHeadroomCores
 		case signals.NoHostStatsSaturationFired:
-			satValue = signals.DFraction
+			satValue = signals.NoHostStatsSaturationFraction
 		case signals.NoLimitHostFired && !sample.HostBusyCoresAvailable:
 			satValue = 0
 		}

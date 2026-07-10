@@ -1851,7 +1851,7 @@ func TestDecide_SaturationBackstop_DeadZoneFireThenClearGuardrail(t *testing.T) 
 	// resets (see (a)), so on re-entry the hold band preserves the reset value
 	// (false) -> Healthy. The Schmitt hold does NOT cross mode transitions.
 	//
-	// Note on dFraction: usageCores60sMean/LogicalCpus is denominator-
+	// Note on noHostStatsSaturationFraction: usageCores60sMean/LogicalCpus is denominator-
 	// independent (LogicalCpus is constant across transitions), so the prior
 	// skip rationale ("mixed-denominator fractions") was stale. The real reason
 	// the re-entry verdict is Healthy is the latch clearing at the t=90
@@ -1893,20 +1893,20 @@ func TestDecide_SaturationBackstop_DeadZoneFireThenClearGuardrail(t *testing.T) 
 		t.Fatalf("re-entry exit LimitSaturationFired (t=90): got false, want true (transient false fire: stale 3.2-core samples -> usageCores60sMean ~3.0 -> headroom 2.0-3.0-0.2 < 0)")
 	}
 	// Re-enter the dead-zone with low usage (1.6 cores -> 0.40 fraction). The
-	// latch was cleared at t=90, so it starts false. dFraction (~0.6964 from
+	// latch was cleared at t=90, so it starts false. noHostStatsSaturationFraction (~0.6964 from
 	// stale+fresh samples) lands in the Schmitt hold band [0.60, 0.70) which
 	// preserves the current value (false) -> Healthy. This pins that the
 	// Schmitt hold does NOT cross mode transitions: the latch reset, not the
 	// denominator, is why the re-entry verdict is Healthy.
 	vRe, sigRe := Decide(st9, deadZoneSample(100*time.Second, 1.6), thresholds)
 	if vRe.State != StateHealthy {
-		t.Fatalf("re-entry State (t=100): got %q, want %q (latch cleared at t=90; dFraction in hold band [0.60,0.70) preserves false -> Healthy)", vRe.State, StateHealthy)
+		t.Fatalf("re-entry State (t=100): got %q, want %q (latch cleared at t=90; noHostStatsSaturationFraction in hold band [0.60,0.70) preserves false -> Healthy)", vRe.State, StateHealthy)
 	}
 	if sigRe.SaturationFired {
 		t.Fatalf("re-entry SaturationFired (t=100): got true, want false (latch was cleared at t=90 limit-mode tick; hold band preserves the reset value)")
 	}
 	// Steady state: stale samples age out naturally (cutoff=110), the ring
-	// holds only 0.40-fraction samples, dFraction 0.40 < SaturationRecover
+	// holds only 0.40-fraction samples, noHostStatsSaturationFraction 0.40 < SaturationRecover
 	// 0.60 -> latch stays false -> healthy.
 	for i := 1; i < 8; i++ {
 		Decide(st9, deadZoneSample(time.Duration(100+i*10)*time.Second, 1.6), thresholds) // 0.40
@@ -3728,9 +3728,9 @@ func TestDecide_LimitMode_BFalseFireKilled(t *testing.T) {
 			Timestamp:              base.Add(time.Duration(i) * time.Second),
 			Quota:                  &quota,
 			LogicalCpus:            8.0,
-			HostBusyCores:          5.0, // host 62.5% busy
+			HostBusyCores:          5.0,  // host 62.5% busy
 			HostBusyCoresAvailable: true, // ring fills → hostBusyMean=5.0
-			UsageCores:             0.0, // container idle
+			UsageCores:             0.0,  // container idle
 		}, thresholds)
 	}
 	// Forcing: with HostBusyCoresAvailable=true the ring fills, so
@@ -4054,8 +4054,8 @@ func TestDecide_NoHostStatsSaturation_ReachableAndFires(t *testing.T) {
 	if !sig.NoHostStatsSaturationFired {
 		t.Fatalf("NoHostStatsSaturationFired: got false, want true (no-host-stats saturation branch fired)")
 	}
-	if !floatEq(sig.DFraction, 0.75) {
-		t.Fatalf("DFraction: got %v, want 0.75 (6.0/8.0)", sig.DFraction)
+	if !floatEq(sig.NoHostStatsSaturationFraction, 0.75) {
+		t.Fatalf("NoHostStatsSaturationFraction: got %v, want 0.75 (6.0/8.0)", sig.NoHostStatsSaturationFraction)
 	}
 	if len(v.Causes) != 1 || v.Causes[0].Kind != CauseKindSaturation {
 		t.Fatalf("Causes: got %+v, want one saturation cause", v.Causes)
@@ -4136,7 +4136,7 @@ func TestDecide_NoHostStatsSaturation_SchmittRecover(t *testing.T) {
 	}
 
 	// (b) drop to 0.40 (3.2/8.0) for enough ticks that the ring holds only 0.40
-	// → dFraction 0.40 < SaturationRecover 0.60 → latch clears.
+	// → noHostStatsSaturationFraction 0.40 < SaturationRecover 0.60 → latch clears.
 	for i := 0; i < 70; i++ {
 		Decide(st, dSample(time.Duration(4+i)*time.Second, 3.2), thresholds)
 	}
@@ -4361,7 +4361,7 @@ func TestDecide_NoLimit_HostHeadroom_HoldOnMissing(t *testing.T) {
 	}
 
 	// (b) transient outage: /proc/stat unreadable, container idle. The no-host-stats saturation
-	// branch runs (dFraction=0/8=0 < 0.60 → no-host-stats saturation clears) BUT the prior
+	// branch runs (noHostStatsSaturationFraction=0/8=0 < 0.60 → no-host-stats saturation clears) BUT the prior
 	// host-headroom fire (st.noLimitHostFired) HOLDS — the no-host-stats saturation does not touch
 	// it. Emitted saturationFired = noLimitHostFired || noHostStatsSaturationFired = true.
 	vHold, sigHold := Decide(st, Sample{
@@ -4378,7 +4378,7 @@ func TestDecide_NoLimit_HostHeadroom_HoldOnMissing(t *testing.T) {
 		t.Fatalf("(b) hold SaturationFired: got false, want true (st.noLimitHostFired held; no-host-stats saturation clear must not clobber it)")
 	}
 	if sigHold.NoHostStatsSaturationFired {
-		t.Fatalf("(b) hold NoHostStatsSaturationFired: got true, want false (container idle → dFraction 0 < 0.60 → no-host-stats saturation does not fire)")
+		t.Fatalf("(b) hold NoHostStatsSaturationFired: got true, want false (container idle → noHostStatsSaturationFraction 0 < 0.60 → no-host-stats saturation does not fire)")
 	}
 
 	// (c) outage resolves, host still full → still degraded (host-headroom re-fires).
@@ -4523,8 +4523,8 @@ func TestDecide_NoLimitHostOutage_SatValueNotPositiveHeadroom(t *testing.T) {
 // no-host-stats branch fills the usage ring and fires noHostStatsSaturationFired),
 // the NoLimitHostFired && !HostBusyCoresAvailable satValue gate must NOT shadow
 // the NoHostStatsSaturationFired arm. The overlap must fall through to
-// satValue = DFraction (matching the NoHostStatsSaturationFired message arm),
-// and the rendered message must show the DFraction percentage, not "0%".
+// satValue = NoHostStatsSaturationFraction (matching the NoHostStatsSaturationFired message arm),
+// and the rendered message must show the NoHostStatsSaturationFraction percentage, not "0%".
 func TestDecide_NoLimitHostOutage_OverlapWithNoHostStats(t *testing.T) {
 	base := time.Date(2026, 7, 6, 12, 0, 0, 0, time.UTC)
 	th := DefaultThresholds()
@@ -4547,7 +4547,7 @@ func TestDecide_NoLimitHostOutage_OverlapWithNoHostStats(t *testing.T) {
 	// noHostStatsSaturationFired. noLimitHostFired holds (the no-host-stats
 	// branch does not touch it). After 2 outage ticks the overlap is reached:
 	// NoLimitHostFired=true && NoHostStatsSaturationFired=true &&
-	// !HostBusyCoresAvailable, DFraction=0.75.
+	// !HostBusyCoresAvailable, NoHostStatsSaturationFraction=0.75.
 	Decide(st, Sample{
 		Timestamp: base.Add(65 * time.Second),
 		Quota:     nil, LogicalCpus: 8.0, HostBusyCores: 0,
@@ -4575,25 +4575,25 @@ func TestDecide_NoLimitHostOutage_OverlapWithNoHostStats(t *testing.T) {
 		t.Fatalf("expected at least one cause, got none")
 	}
 
-	// Regression pin: satValue must be DFraction (0.75), NOT 0. The new
+	// Regression pin: satValue must be NoHostStatsSaturationFraction (0.75), NOT 0. The new
 	// NoLimitHostFired && !HostBusyCoresAvailable gate sits AFTER the
 	// NoHostStatsSaturationFired arm, so the overlap falls through to
-	// satValue = DFraction.
+	// satValue = NoHostStatsSaturationFraction.
 	satVal := vHold.Causes[0].Value
 	if satVal != 0.75 {
-		t.Fatalf("Cause Value: got %v, want 0.75 (DFraction; the new NoLimitHostFired gate must not shadow NoHostStatsSaturationFired in the overlap)", satVal)
+		t.Fatalf("Cause Value: got %v, want 0.75 (NoHostStatsSaturationFraction; the new NoLimitHostFired gate must not shadow NoHostStatsSaturationFired in the overlap)", satVal)
 	}
 
-	// Message pin: the NoHostStatsSaturationFired arm renders the DFraction
+	// Message pin: the NoHostStatsSaturationFired arm renders the NoHostStatsSaturationFraction
 	// percentage (75%), not "0%" (which the pre-fix satValue=0 produced).
 	msg := ComposeMessage(vHold, sigHold)
 	_, details, _ := strings.Cut(msg, "Technical Details: ")
 	details = strings.TrimSpace(details)
 	if !strings.Contains(details, "75%") {
-		t.Fatalf("overlap detail must render the DFraction percentage 75%%: %q", details)
+		t.Fatalf("overlap detail must render the NoHostStatsSaturationFraction percentage 75%%: %q", details)
 	}
 	if strings.Contains(details, "0%") {
-		t.Fatalf("overlap detail must NOT render 0%% (the pre-fix satValue=0 shadowed DFraction): %q", details)
+		t.Fatalf("overlap detail must NOT render 0%% (the pre-fix satValue=0 shadowed NoHostStatsSaturationFraction): %q", details)
 	}
 }
 
@@ -4643,7 +4643,7 @@ func TestDecide_NoLimitHostFull_ContainerIsCause_AttributionUnknown(t *testing.T
 // host-headroom transition (/proc/stat becomes readable mid-fire), st.noHostStatsSaturationFired
 // is cleared by the host-headroom branch, so the saturation cause Value is
 // signals.HeadroomCores (the host-scope headroom), NOT a stale
-// signals.DFraction=0 routed through a stale NoHostStatsSaturationFired=true.
+// signals.NoHostStatsSaturationFraction=0 routed through a stale NoHostStatsSaturationFired=true.
 func TestDecide_NoHostStatsSaturationToHostHeadroom_Transition(t *testing.T) {
 	base := time.Date(2026, 7, 6, 12, 0, 0, 0, time.UTC)
 	th := DefaultThresholds()
@@ -4668,7 +4668,7 @@ func TestDecide_NoHostStatsSaturationToHostHeadroom_Transition(t *testing.T) {
 	if !sigFire.NoHostStatsSaturationFired {
 		t.Fatalf("(a) fire NoHostStatsSaturationFired: got false, want true")
 	}
-	// The cause Value is the no-host-stats saturation fraction (DFraction, 0.75).
+	// The cause Value is the no-host-stats saturation fraction (NoHostStatsSaturationFraction, 0.75).
 	noHostStatsVal := vFire.Causes[0].Value
 	if noHostStatsVal < 0.74 || noHostStatsVal > 0.76 {
 		t.Fatalf("(a) fire cause Value: got %v, want ~0.75 (the no-host-stats saturation fraction)", noHostStatsVal)
@@ -4678,7 +4678,7 @@ func TestDecide_NoHostStatsSaturationToHostHeadroom_Transition(t *testing.T) {
 	// host-headroom branch. Feed 2 readable ticks (the 2-sample floor on
 	// hostBusyRing — a first-tick reading cannot fire). st.noHostStatsSaturationFired MUST be
 	// cleared (Finding 2) so the cause Value is signals.HeadroomCores (−0.5),
-	// not a stale DFraction=0.
+	// not a stale NoHostStatsSaturationFraction=0.
 	Decide(st, Sample{
 		Timestamp: base.Add(4 * time.Second),
 		Quota:     nil, LogicalCpus: 8.0, HostBusyCores: 7.5,
@@ -4698,7 +4698,7 @@ func TestDecide_NoHostStatsSaturationToHostHeadroom_Transition(t *testing.T) {
 	// The cause Value is the host-scope headroom (−0.5), NOT 0.
 	transVal := vTrans.Causes[0].Value
 	if transVal > -0.49 || transVal < -0.51 {
-		t.Fatalf("(b) transition cause Value: got %v, want ~−0.5 (signals.HeadroomCores; a stale NoHostStatsSaturationFired would route to DFraction=0)", transVal)
+		t.Fatalf("(b) transition cause Value: got %v, want ~−0.5 (signals.HeadroomCores; a stale NoHostStatsSaturationFired would route to NoHostStatsSaturationFraction=0)", transVal)
 	}
 }
 
