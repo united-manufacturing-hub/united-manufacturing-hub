@@ -36,6 +36,7 @@ var _ = Describe("EditHistorian", func() {
 		mockConfig      *config.MockConfigManager
 		messages        []*models.UMHMessage
 		mu              sync.Mutex
+		consumerDone    chan struct{}
 	)
 
 	validPayload := func() map[string]interface{} {
@@ -75,14 +76,19 @@ var _ = Describe("EditHistorian", func() {
 		action = actions.NewEditHistorianAction(userEmail, actionUUID, instanceUUID, outboundChannel, mockConfig)
 
 		messages = nil
-		go actions.ConsumeOutboundMessages(outboundChannel, &messages, &mu, true)
+		consumerDone = make(chan struct{})
+		go func() {
+			defer GinkgoRecover()
+			actions.ConsumeOutboundMessages(outboundChannel, &messages, &mu, true)
+			close(consumerDone)
+		}()
 	})
 
 	AfterEach(func() {
-		for len(outboundChannel) > 0 {
-			<-outboundChannel
-		}
+		// Close the channel and wait for the consumer to drain and exit before the
+		// next spec resets `messages`, so the reset cannot race a running consumer.
 		close(outboundChannel)
+		<-consumerDone
 	})
 
 	Describe("Validate", func() {
