@@ -63,7 +63,6 @@ type Thresholds struct {
 	PressureRecover   float64
 	StealHigh         float64
 	StealRecover      float64
-	HostBusyHigh      float64
 	// LimitReserveFraction is the fractional reserve of the quota subtracted
 	// alongside the container's 60s-avg usage when computing limit-mode
 	// HeadroomCores (headroom = quota − containerUsage60s −
@@ -82,8 +81,8 @@ type Thresholds struct {
 
 // DefaultThresholds returns the canonical thresholds (HighUsageFraction 0.70,
 // SaturationRecover 0.60, ThrottleHigh 0.05, ThrottleRecover 0.03, PressureHigh
-// 0.20, PressureRecover 0.12, StealHigh 0.10, StealRecover 0.06, HostBusyHigh
-// 0.70, LimitReserveFraction 0.10, LimitReserveRecoverFraction 0.05).
+// 0.20, PressureRecover 0.12, StealHigh 0.10, StealRecover 0.06,
+// LimitReserveFraction 0.10, LimitReserveRecoverFraction 0.05).
 func DefaultThresholds() Thresholds {
 	return Thresholds{
 		HighUsageFraction:           0.70,
@@ -94,7 +93,6 @@ func DefaultThresholds() Thresholds {
 		PressureRecover:             0.12,
 		StealHigh:                   0.10,
 		StealRecover:                0.06,
-		HostBusyHigh:                0.70,
 		LimitReserveFraction:        0.10,
 		LimitReserveRecoverFraction: 0.05,
 	}
@@ -568,6 +566,10 @@ func Decide(st *WindowState, sample Sample, thresholds Thresholds) (Verdict, Sig
 			fraction = sample.UsageCores / *sample.Quota
 		}
 	} else if sample.CgroupCores > 0 {
+		// Retained: the production cgroup sampler sets Quota, not
+		// CgroupCores, so this branch is unreachable from the sampler
+		// path. Kept because tests pin the legacy CgroupCores fallback
+		// contract (Sample{CgroupCores:X, Quota:nil} computes a fraction).
 		fraction = sample.UsageCores / sample.CgroupCores
 	}
 

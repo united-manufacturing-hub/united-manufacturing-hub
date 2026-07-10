@@ -304,7 +304,7 @@ var _ = Describe("capstone: end-to-end CPU-health model through GetStatus (rung 
 	// (high /proc/stat) + pressure firing -> State=degraded,
 	// Attribution=host, Causes contains {kind:'host-contention'}. This is
 	// the host-contention scenario: the demand gate (pressure) is open AND the host
-	// is busy (HostBusyCores/LogicalCpus > HostBusyHigh 0.70). ---
+	// is busy (host headroom < 0: LogicalCpus - hostBusyMean - cpuReserveCores). ---
 	It("(6) HOST-CONTENTION: VM with busy host + pressure firing degrades with attribution host", func() {
 		mockFS := filesystem.NewMockFileSystem()
 		ctx := context.Background()
@@ -323,14 +323,14 @@ var _ = Describe("capstone: end-to-end CPU-health model through GetStatus (rung 
 		// irq softirq steal guest guest_nice. Tick 0 baselines; tick 1 makes
 		// the host very busy (high non-idle delta) so HostBusyCores is high.
 		// LogicalCpus = runtime.NumCPU() (sampler.go, no override seam), so
-		// hostBusyRatio = HostBusyCores/LogicalCpus = busy_delta/(100*elapsed*
-		// NumCPU) must exceed HostBusyHigh 0.70. To keep this > 0.70 (with an
-		// overwhelming margin) on ANY host — including 256+-core CI runners,
-		// where the prior small delta failed at >=171 cores (120/171 = 0.70) —
-		// we make the busy delta far larger than 100*elapsed*NumCPU can ever
-		// consume: busy_delta = 5,000,000 => at elapsed=4s on 256 cores,
-		// hostBusyRatio ~= 48, nowhere near the 0.70 floor. This removes the
-		// NumCPU coupling without needing a sampler-side test seam.
+		// the host-contention latch fires when headroom < 0, i.e. when
+		// hostBusyMean > LogicalCpus - cpuReserveCores (hostBusyMean is in
+		// cores = busy_delta/(100*elapsed)). To trigger this on ANY host,
+		// including 256+-core CI runners, we make the busy delta far larger
+		// than 100*elapsed*NumCPU can ever consume: busy_delta = 5,000,000
+		// => at elapsed=4s on 256 cores, hostBusyMean ~= 12,500 cores, well
+		// past the NumCPU-1 headroom floor. This removes the NumCPU coupling
+		// without needing a sampler-side test seam.
 		procStatTick0 := "cpu  1000 1000 1000 8000 0 0 0 50 0 0\n"
 		// Tick 1: busy delta (user+nice+system+iowait+irq+softirq, EXCL
 		// steal/guest/guest_nice) = 5,000,000 jiffies; idle grew 1,000,000;
@@ -383,7 +383,7 @@ var _ = Describe("capstone: end-to-end CPU-health model through GetStatus (rung 
 		// Tick 3 — /proc/stat advances again so the hostBusyRing clears the
 		// 2-sample floor and HostBusyCores is computed (busy host). The
 		// demand gate (pressure) is open, host_busy_ratio >
-		// HostBusyHigh -> host-contention fires. Steal is negligible (small
+		// headroom < 0 -> host-contention fires. Steal is negligible (small
 		// delta) so it does not dominate.
 		usageUsec, procStat = 3_000_000, procStatTick2
 		time.Sleep(1 * time.Second)
