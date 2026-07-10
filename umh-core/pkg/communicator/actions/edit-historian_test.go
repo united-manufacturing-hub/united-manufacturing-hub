@@ -57,7 +57,7 @@ var _ = Describe("EditHistorian", func() {
 	configWithHistorian := func() config.FullConfig {
 		return config.FullConfig{
 			Historian: &config.HistorianConfig{
-				Timescale: &config.TimescaleConfig{
+				Timescale: config.TimescaleConfig{
 					Host:     "old-host.example.com",
 					Password: "old-secret",
 				},
@@ -124,7 +124,7 @@ var _ = Describe("EditHistorian", func() {
 
 			cfg, ok := result.(config.HistorianConfig)
 			Expect(ok).To(BeTrue(), "Result should be a HistorianConfig")
-			Expect(cfg.Timescale).NotTo(BeNil())
+			Expect(cfg.Timescale).NotTo(Equal(config.TimescaleConfig{}))
 			Expect(cfg.Timescale.Host).To(Equal("new-host.example.com"))
 			Expect(cfg.Timescale.Port).To(Equal(uint16(6543)))
 
@@ -149,7 +149,7 @@ var _ = Describe("EditHistorian", func() {
 
 			cfg, ok := result.(config.HistorianConfig)
 			Expect(ok).To(BeTrue(), "Result should be a HistorianConfig")
-			Expect(cfg.Timescale).NotTo(BeNil())
+			Expect(cfg.Timescale).NotTo(Equal(config.TimescaleConfig{}))
 			Expect(cfg.Timescale.Host).To(Equal("new-host.example.com"))
 			// The reply never carries the password (write-only); the stored value
 			// (old-secret) is preserved, not blanked.

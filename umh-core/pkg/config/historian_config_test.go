@@ -266,8 +266,8 @@ var _ = Describe("TimescaleConfig", func() {
 })
 
 var _ = Describe("HistorianConfig", func() {
-	validTimescale := func() *TimescaleConfig {
-		return &TimescaleConfig{Host: "timescale.example.com", Password: "secret"}
+	validTimescale := func() TimescaleConfig {
+		return TimescaleConfig{Host: "timescale.example.com", Password: "secret"}
 	}
 
 	Describe("Validate", func() {
@@ -285,7 +285,7 @@ var _ = Describe("HistorianConfig", func() {
 		})
 
 		It("should surface an invalid timescale section", func() {
-			h := HistorianConfig{Timescale: &TimescaleConfig{Host: "h"}}
+			h := HistorianConfig{Timescale: TimescaleConfig{Host: "h"}}
 
 			err := h.Validate()
 			Expect(err).To(HaveOccurred())
@@ -295,7 +295,7 @@ var _ = Describe("HistorianConfig", func() {
 
 	Describe("ValidateForUpdate", func() {
 		It("should pass without a password when the timescale section is present", func() {
-			h := HistorianConfig{Timescale: &TimescaleConfig{Host: "timescale.example.com"}}
+			h := HistorianConfig{Timescale: TimescaleConfig{Host: "timescale.example.com"}}
 			Expect(h.ValidateForUpdate()).To(Succeed())
 		})
 
@@ -314,23 +314,21 @@ var _ = Describe("HistorianConfig", func() {
 			Expect(h.Timescale.Database).To(Equal("umh"))
 		})
 
-		It("should return a fresh Timescale pointer so the receiver is not mutated", func() {
-			original := validTimescale()
-			h := HistorianConfig{Timescale: original}
+		It("should not mutate the receiver", func() {
+			h := HistorianConfig{Timescale: validTimescale()}
 
-			out := h.WithDefaults()
-			Expect(out.Timescale).NotTo(BeIdenticalTo(original))
-			Expect(original.Port).To(Equal(uint16(0)))
+			_ = h.WithDefaults()
+			Expect(h.Timescale.Port).To(Equal(uint16(0)))
 		})
 
-		It("should tolerate a nil timescale section", func() {
+		It("should tolerate an empty timescale section", func() {
 			Expect(func() { _ = HistorianConfig{}.WithDefaults() }).NotTo(Panic())
 		})
 	})
 
 	Describe("logging", func() {
 		It("should mask the nested timescale password under %v", func() {
-			h := HistorianConfig{Timescale: &TimescaleConfig{Host: "h", Password: "super-secret"}}
+			h := HistorianConfig{Timescale: TimescaleConfig{Host: "h", Password: "super-secret"}}
 			Expect(fmt.Sprintf("%v", h)).NotTo(ContainSubstring("super-secret"))
 		})
 	})
@@ -339,7 +337,7 @@ var _ = Describe("HistorianConfig", func() {
 		It("should deep-copy the historian section", func() {
 			original := FullConfig{
 				Historian: &HistorianConfig{
-					Timescale: &TimescaleConfig{
+					Timescale: TimescaleConfig{
 						Host:     "orig-host",
 						Password: "orig-pass",
 						Port:     5432,
@@ -350,7 +348,7 @@ var _ = Describe("HistorianConfig", func() {
 			clone := original.Clone()
 			Expect(clone.Historian).NotTo(BeNil())
 			Expect(clone.Historian).NotTo(BeIdenticalTo(original.Historian))
-			Expect(*clone.Historian.Timescale).To(Equal(*original.Historian.Timescale))
+			Expect(clone.Historian.Timescale).To(Equal(original.Historian.Timescale))
 
 			// Mutating the clone must not affect the original.
 			clone.Historian.Timescale.Host = "changed"

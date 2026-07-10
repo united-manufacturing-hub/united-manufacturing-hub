@@ -151,7 +151,7 @@ var _ = Describe("DeployHistorian", func() {
 
 			cfg, ok := result.(config.HistorianConfig)
 			Expect(ok).To(BeTrue(), "Result should be a HistorianConfig")
-			Expect(cfg.Timescale).NotTo(BeNil())
+			Expect(cfg.Timescale).NotTo(Equal(config.TimescaleConfig{}))
 			Expect(cfg.Timescale.Host).To(Equal("timescale.example.com"))
 			Expect(cfg.Timescale.Port).To(Equal(uint16(5432)))
 			Expect(cfg.Timescale.Database).To(Equal("umh"))
@@ -191,7 +191,7 @@ var _ = Describe("DeployHistorian", func() {
 
 		It("should refuse to overwrite an already-configured historian", func() {
 			mockConfig.Config.Historian = &config.HistorianConfig{
-				Timescale: &config.TimescaleConfig{
+				Timescale: config.TimescaleConfig{
 					Host:     "existing.example.com",
 					Password: "existing-secret",
 				},
@@ -211,6 +211,31 @@ var _ = Describe("DeployHistorian", func() {
 			Eventually(func() []models.ActionReplyState {
 				return historianReplyStates(&messages, &mu)
 			}).Should(Equal([]models.ActionReplyState{models.ActionConfirmed, models.ActionExecuting, models.ActionFinishedWithFailure}))
+		})
+
+		It("should treat an identical redeploy as a successful no-op", func() {
+			// Seed the exact config a prior deploy would have written (defaults applied),
+			// modelling a replay after the first deploy's terminal reply was lost.
+			seeded := config.HistorianConfig{
+				Timescale: config.TimescaleConfig{Host: "timescale.example.com", Password: "secret"},
+			}.WithDefaults()
+			mockConfig.Config.Historian = &seeded
+
+			Expect(action.Parse(validPayload())).To(Succeed())
+
+			result, metadata, err := action.Execute()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(metadata).To(BeNil())
+
+			cfg, ok := result.(config.HistorianConfig)
+			Expect(ok).To(BeTrue(), "Result should be a HistorianConfig")
+			Expect(cfg.Timescale.Host).To(Equal("timescale.example.com"))
+			Expect(cfg.Timescale.Password).To(BeEmpty())
+			Expect(mockConfig.Config.Historian.Timescale).To(Equal(seeded.Timescale))
+
+			Eventually(func() []models.ActionReplyState {
+				return historianReplyStates(&messages, &mu)
+			}).Should(Equal([]models.ActionReplyState{models.ActionConfirmed, models.ActionExecuting}))
 		})
 	})
 })

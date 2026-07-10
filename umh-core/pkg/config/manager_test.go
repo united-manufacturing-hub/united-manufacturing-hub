@@ -1574,7 +1574,7 @@ var _ = Describe("ConfigManager historian mutations", func() {
 			cancelledCtx, cancelNow := context.WithCancel(context.Background())
 			cancelNow()
 
-			err = backoffManager.AtomicSetHistorian(cancelledCtx, HistorianConfig{Timescale: &TimescaleConfig{Host: "h", Password: "p"}})
+			err = backoffManager.AtomicSetHistorian(cancelledCtx, HistorianConfig{Timescale: TimescaleConfig{Host: "h", Password: "p"}})
 			Expect(err).To(MatchError(context.Canceled))
 
 			err = backoffManager.AtomicDeleteHistorian(cancelledCtx)
@@ -1590,7 +1590,7 @@ var _ = Describe("ConfigManager historian mutations", func() {
 			manager := newInMemoryConfigManager(ctx)
 
 			original := HistorianConfig{
-				Timescale: &TimescaleConfig{
+				Timescale: TimescaleConfig{
 					Host:        "timescale.example.com",
 					Password:    "secret",
 					SSLMode:     HistorianSSLModeVerifyFull,
@@ -1601,17 +1601,42 @@ var _ = Describe("ConfigManager historian mutations", func() {
 
 			// A second deploy must be refused, not silently overwrite the existing
 			// connection (which would blank its verify-full cert path).
-			second := HistorianConfig{Timescale: &TimescaleConfig{Host: "other.example.com", Password: "new"}}
+			second := HistorianConfig{Timescale: TimescaleConfig{Host: "other.example.com", Password: "new"}}
 			Expect(manager.AtomicSetHistorian(ctx, second)).To(MatchError(ErrHistorianAlreadyConfigured))
 
-			Eventually(func() (*TimescaleConfig, error) {
+			Eventually(func() (TimescaleConfig, error) {
 				cfg, err := manager.GetConfig(ctx, 0)
 				if cfg.Historian == nil {
-					return nil, err
+					return TimescaleConfig{}, err
 				}
 
 				return cfg.Historian.Timescale, err
-			}, 2*time.Second, 10*time.Millisecond).Should(HaveValue(Equal(*original.Timescale)))
+			}, 2*time.Second, 10*time.Millisecond).Should(Equal(original.Timescale))
+		})
+
+		It("treats an identical redeploy as a no-op success", func() {
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+
+			manager := newInMemoryConfigManager(ctx)
+
+			original := HistorianConfig{
+				Timescale: TimescaleConfig{Host: "timescale.example.com", Password: "secret"},
+			}
+			Expect(manager.AtomicSetHistorian(ctx, original)).To(Succeed())
+
+			// Replaying the same deploy (e.g. after a lost reply) must succeed, not
+			// conflict, and leave the stored connection unchanged.
+			Expect(manager.AtomicSetHistorian(ctx, original)).To(Succeed())
+
+			Eventually(func() (TimescaleConfig, error) {
+				cfg, err := manager.GetConfig(ctx, 0)
+				if cfg.Historian == nil {
+					return TimescaleConfig{}, err
+				}
+
+				return cfg.Historian.Timescale, err
+			}, 2*time.Second, 10*time.Millisecond).Should(Equal(original.Timescale))
 		})
 	})
 
@@ -1622,7 +1647,7 @@ var _ = Describe("ConfigManager historian mutations", func() {
 
 			manager := newInMemoryConfigManager(ctx)
 
-			err := manager.AtomicEditHistorian(ctx, HistorianConfig{Timescale: &TimescaleConfig{Host: "h", Password: "p"}})
+			err := manager.AtomicEditHistorian(ctx, HistorianConfig{Timescale: TimescaleConfig{Host: "h", Password: "p"}})
 			Expect(err).To(MatchError(ErrHistorianNotConfigured))
 		})
 
@@ -1633,7 +1658,7 @@ var _ = Describe("ConfigManager historian mutations", func() {
 			manager := newInMemoryConfigManager(ctx)
 
 			Expect(manager.AtomicSetHistorian(ctx, HistorianConfig{
-				Timescale: &TimescaleConfig{
+				Timescale: TimescaleConfig{
 					Host:     "timescale.example.com",
 					Password: "secret",
 					Port:     5432,
@@ -1643,7 +1668,7 @@ var _ = Describe("ConfigManager historian mutations", func() {
 			// Edit changes the port but sends no password, as get-historian gave the
 			// Management Console nothing to resend.
 			Expect(manager.AtomicEditHistorian(ctx, HistorianConfig{
-				Timescale: &TimescaleConfig{
+				Timescale: TimescaleConfig{
 					Host: "timescale.example.com",
 					Port: 6543,
 				},
@@ -1651,11 +1676,11 @@ var _ = Describe("ConfigManager historian mutations", func() {
 
 			Eventually(func() (TimescaleConfig, error) {
 				cfg, err := manager.GetConfig(ctx, 0)
-				if cfg.Historian == nil || cfg.Historian.Timescale == nil {
+				if cfg.Historian == nil {
 					return TimescaleConfig{}, err
 				}
 
-				return *cfg.Historian.Timescale, err
+				return cfg.Historian.Timescale, err
 			}, 2*time.Second, 10*time.Millisecond).Should(And(
 				HaveField("Port", uint16(6543)),
 				HaveField("Password", "secret"),
@@ -1669,14 +1694,14 @@ var _ = Describe("ConfigManager historian mutations", func() {
 			manager := newInMemoryConfigManager(ctx)
 
 			Expect(manager.AtomicSetHistorian(ctx, HistorianConfig{
-				Timescale: &TimescaleConfig{
+				Timescale: TimescaleConfig{
 					Host:     "timescale.example.com",
 					Password: "secret",
 				},
 			})).To(Succeed())
 
 			Expect(manager.AtomicEditHistorian(ctx, HistorianConfig{
-				Timescale: &TimescaleConfig{
+				Timescale: TimescaleConfig{
 					Host:     "timescale.example.com",
 					Password: "rotated",
 				},
@@ -1684,7 +1709,7 @@ var _ = Describe("ConfigManager historian mutations", func() {
 
 			Eventually(func() (string, error) {
 				cfg, err := manager.GetConfig(ctx, 0)
-				if cfg.Historian == nil || cfg.Historian.Timescale == nil {
+				if cfg.Historian == nil {
 					return "", err
 				}
 
@@ -1756,7 +1781,7 @@ var _ = Describe("ConfigManager historian mutations", func() {
 			}, 2*time.Second, 10*time.Millisecond).Should(Succeed())
 
 			historian := HistorianConfig{
-				Timescale: &TimescaleConfig{
+				Timescale: TimescaleConfig{
 					Host:     "timescale.example.com",
 					Password: "secret",
 					Database: "umh",
@@ -1768,14 +1793,14 @@ var _ = Describe("ConfigManager historian mutations", func() {
 
 			Expect(manager.AtomicSetHistorian(ctx, historian)).To(Succeed())
 
-			Eventually(func() (*TimescaleConfig, error) {
+			Eventually(func() (TimescaleConfig, error) {
 				cfg, err := manager.GetConfig(ctx, 0)
 				if cfg.Historian == nil {
-					return nil, err
+					return TimescaleConfig{}, err
 				}
 
 				return cfg.Historian.Timescale, err
-			}, 2*time.Second, 10*time.Millisecond).Should(HaveValue(Equal(*historian.Timescale)))
+			}, 2*time.Second, 10*time.Millisecond).Should(Equal(historian.Timescale))
 
 			Expect(manager.AtomicDeleteHistorian(ctx)).To(Succeed())
 

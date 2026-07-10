@@ -1310,10 +1310,11 @@ func (m *FileConfigManager) getLatestBackupContent(ctx context.Context) []byte {
 	return data
 }
 
-// AtomicSetHistorian creates the historian section in the config atomically. It
-// returns ErrHistorianAlreadyConfigured if one already exists so a retried or
-// misdirected deploy cannot silently overwrite an existing connection (and blank its
-// TLS cert paths); the existence check and the write share a single lock.
+// AtomicSetHistorian creates the historian section in the config atomically. An
+// identical redeploy returns nil (a lost-reply replay is a no-op success), while a
+// deploy that would change an existing connection returns ErrHistorianAlreadyConfigured
+// so a misdirected deploy cannot silently overwrite it (and blank its TLS cert paths);
+// the existence check and the write share a single lock.
 func (m *FileConfigManager) AtomicSetHistorian(ctx context.Context, historian HistorianConfig) error {
 	err := m.mutexAtomicUpdate.Lock(ctx)
 	if err != nil {
@@ -1327,6 +1328,13 @@ func (m *FileConfigManager) AtomicSetHistorian(ctx context.Context, historian Hi
 	}
 
 	if cfg.Historian != nil {
+		// An identical redeploy is a no-op success, not a conflict: a deploy whose
+		// terminal reply was lost can be safely replayed. The create-only guard still
+		// rejects a deploy that would change an existing connection.
+		if *cfg.Historian == historian {
+			return nil
+		}
+
 		return ErrHistorianAlreadyConfigured
 	}
 
@@ -1371,8 +1379,7 @@ func (m *FileConfigManager) AtomicEditHistorian(ctx context.Context, historian H
 	// returns the stored password, so the Management Console cannot resend it on edit.
 	// Preserving it here, under the same lock as the write, keeps the credential
 	// write-only without a separate read that could race a concurrent change.
-	if historian.Timescale != nil && historian.Timescale.Password == "" &&
-		cfg.Historian.Timescale != nil {
+	if historian.Timescale.Password == "" {
 		historian.Timescale.Password = cfg.Historian.Timescale.Password
 	}
 

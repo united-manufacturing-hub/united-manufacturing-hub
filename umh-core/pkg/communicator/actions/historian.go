@@ -17,15 +17,11 @@ package actions
 import "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 
 // redactHistorianReply returns a copy of the historian config that is safe to send
-// back to the Management Console: the timescale password is blanked (write-only) on
-// a fresh Timescale pointer, so no historian reply carries the credential and the
-// stored config is never mutated by the redaction.
+// back to the Management Console: the timescale password is blanked (write-only), so
+// no historian reply carries the credential. h and its Timescale are values, so
+// blanking the password on the copy never mutates the stored config.
 func redactHistorianReply(h config.HistorianConfig) config.HistorianConfig {
-	if h.Timescale != nil {
-		ts := *h.Timescale
-		ts.Password = ""
-		h.Timescale = &ts
-	}
+	h.Timescale.Password = ""
 
 	return h
 }

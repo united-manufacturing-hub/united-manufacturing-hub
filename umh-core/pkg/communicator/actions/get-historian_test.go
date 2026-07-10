@@ -47,7 +47,7 @@ var _ = Describe("GetHistorian", func() {
 
 		mockConfig = config.NewMockConfigManager().WithConfig(config.FullConfig{
 			Historian: &config.HistorianConfig{
-				Timescale: &config.TimescaleConfig{
+				Timescale: config.TimescaleConfig{
 					Host:     "timescale.example.com",
 					Password: "secret",
 					Port:     5432,
@@ -91,7 +91,7 @@ var _ = Describe("GetHistorian", func() {
 
 			cfg, ok := result.(config.HistorianConfig)
 			Expect(ok).To(BeTrue(), "Result should be a HistorianConfig")
-			Expect(cfg.Timescale).NotTo(BeNil())
+			Expect(cfg.Timescale).NotTo(Equal(config.TimescaleConfig{}))
 			Expect(cfg.Timescale.Host).To(Equal("timescale.example.com"))
 			Expect(cfg.Timescale.Port).To(Equal(uint16(5432)))
 			Expect(cfg.Timescale.Database).To(Equal("umh"))

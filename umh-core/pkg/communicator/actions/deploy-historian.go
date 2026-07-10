@@ -82,10 +82,8 @@ func (a *DeployHistorianAction) Parse(payload interface{}) error {
 
 	a.payload = parsed
 
-	if a.payload.Timescale != nil {
-		a.actionLogger.Debugf("Parsed DeployHistorian action payload: timescale host=%s port=%d database=%s",
-			a.payload.Timescale.Host, a.payload.Timescale.Port, a.payload.Timescale.Database)
-	}
+	a.actionLogger.Debugf("Parsed DeployHistorian action payload: timescale host=%s port=%d database=%s",
+		a.payload.Timescale.Host, a.payload.Timescale.Port, a.payload.Timescale.Database)
 
 	return nil
 }

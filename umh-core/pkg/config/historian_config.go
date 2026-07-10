@@ -53,8 +53,10 @@ func (s HistorianSSLMode) IsValid() bool {
 // flattening: today it holds the TimescaleDB connection under `timescale:`; a
 // `grafana:` block is expected to sit alongside it at the same level.
 type HistorianConfig struct {
-	// Timescale holds the TimescaleDB/Postgres connection settings.
-	Timescale *TimescaleConfig `yaml:"timescale,omitempty" json:"timescale,omitempty"`
+	// Timescale holds the TimescaleDB/Postgres connection settings. It is required:
+	// the historian section is optional as a whole (FullConfig.Historian is a pointer),
+	// but once present it always carries a timescale connection.
+	Timescale TimescaleConfig `yaml:"timescale" json:"timescale"`
 }
 
 // TimescaleConfig holds the connection settings for the TimescaleDB/Postgres
@@ -84,7 +86,7 @@ type TimescaleConfig struct {
 // Validate returns an error if the historian has no timescale section or that
 // section is invalid.
 func (h HistorianConfig) Validate() error {
-	if h.Timescale == nil {
+	if h.Timescale == (TimescaleConfig{}) {
 		return errors.New("missing required section timescale")
 	}
 
@@ -94,21 +96,18 @@ func (h HistorianConfig) Validate() error {
 // ValidateForUpdate validates an edit payload, requiring the timescale section but
 // not its password (see TimescaleConfig.ValidateForUpdate).
 func (h HistorianConfig) ValidateForUpdate() error {
-	if h.Timescale == nil {
+	if h.Timescale == (TimescaleConfig{}) {
 		return errors.New("missing required section timescale")
 	}
 
 	return h.Timescale.ValidateForUpdate()
 }
 
-// WithDefaults returns a copy of h with defaults applied to its sub-sections. The
-// returned copy owns a fresh Timescale pointer, so callers can redact the reply
-// copy without mutating stored config.
+// WithDefaults returns a copy of h with defaults applied to its sub-sections. Both
+// h and its Timescale are values, so the copy is independent of the receiver and
+// callers can redact the reply copy without mutating stored config.
 func (h HistorianConfig) WithDefaults() HistorianConfig {
-	if h.Timescale != nil {
-		ts := h.Timescale.WithDefaults()
-		h.Timescale = &ts
-	}
+	h.Timescale = h.Timescale.WithDefaults()
 
 	return h
 }
