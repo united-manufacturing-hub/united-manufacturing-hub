@@ -1834,28 +1834,36 @@ func TestDecide_SaturationBackstop_DeadZoneFireThenClearGuardrail(t *testing.T) 
 		t.Fatalf("NaN-clamp SaturationFired: got false, want true (input clamp prevented ring corruption; saturation can fire)")
 	}
 
-	// (12) RE-ENTRY RING (no clear) — fire saturation in the dead-zone, exit
-	// to a non-dead-zone sample, then RE-ENTER the dead-zone with low usage.
-	// Under R10.1 the ring is NOT cleared on dead-zone exit (the fill-gate
-	// moved out of `if deadZone` so the `cores` consumer — limit-mode headroom,
-	// AvgUsageCores — is filled every tick in all modes). The `fraction`
-	// consumer (saturationAvg, the fraction fallback) is denominator-dependent,
-	// so stale fractions across a mode transition mix denominators.
+	// (12) RE-ENTRY RING (latch reset across a mode transition) — fire
+	// saturation in the dead-zone, exit to a limit-mode sample, then RE-ENTER
+	// the dead-zone with low usage. This pins two design facts:
 	//
-	// The fraction fallback is unreachable in prod (LogicalCpus =
-	// runtime.NumCPU() > 0 always, so the `case deadZone && len(usageRing)>=2`
-	// branch is dead code today; R10.3 makes it reachable for the D-scenario
-	// only — a STABLE mode with no transitions). The mixed-denominator
-	// saturationAvg on a mode transition is therefore a test-only artifact,
-	// NOT a prod-reachable defect. The verdict itself is unaffected (limit-mode
-	// headroom uses usageCores60sMean, which is denominator-independent).
+	// (a) The limit-mode branch (decide.go:925-928) intentionally clears the
+	// no-limit sub-latches (noHostStatsSaturationFired, noLimitHostFired) so a
+	// prior no-limit fire does not leak into limit mode (Finding: prevent
+	// leaking a prior no-limit fire into limit mode). So on dead-zone re-entry
+	// the latch starts false, NOT held over from the dead-zone fire.
 	//
-	// TODO(R10.3): when R10.3 makes the fraction fallback reachable, decide
-	// whether a mode-transition `fraction` clear (or a filter-to-current-mode)
-	// is needed to keep saturationAvg denominator-consistent. Until then the
-	// first re-entry tick's verdict is NOT asserted here — locking the
-	// transient false-fire would codify a known defect. Only the steady state
-	// (stale samples age out → healthy) is pinned.
+	// (b) The Schmitt hold band [SaturationRecover 0.60, HighUsageFraction
+	// 0.70) preserves the CURRENT latch value: it fires only at >= 0.70 and
+	// clears only at < 0.60. Within a single mode session this is what makes a
+	// fired latch hold through the band. Across a mode transition the latch
+	// resets (see (a)), so on re-entry the hold band preserves the reset value
+	// (false) -> Healthy. The Schmitt hold does NOT cross mode transitions.
+	//
+	// Note on dFraction: usageCores60sMean/LogicalCpus is denominator-
+	// independent (LogicalCpus is constant across transitions), so the prior
+	// skip rationale ("mixed-denominator fractions") was stale. The real reason
+	// the re-entry verdict is Healthy is the latch clearing at the t=90
+	// limit-mode tick, not the denominator.
+	//
+	// The t=90 limit-mode tick itself fires a TRANSIENT FALSE FIRE: stale
+	// dead-zone samples (3.2 cores) inflate usageCores60sMean to ~3.0, making
+	// limit-mode headroom (quota 2.0 - 3.0 - reserve 0.2) negative, so
+	// limitSaturationFired fires even though instantaneous usage (1.9) is
+	// within quota. This self-corrects as the stale samples age out (<=60s). It
+	// is a known wart, acceptable for the rare dead-zone->limit-mode
+	// transition; flagged as a follow-up if mode transitions become common.
 	st9 := &WindowState{}
 	for i := 0; i < 8; i++ {
 		Decide(st9, deadZoneSample(time.Duration(i*10)*time.Second, 3.2), thresholds) // 0.80
@@ -1864,31 +1872,51 @@ func TestDecide_SaturationBackstop_DeadZoneFireThenClearGuardrail(t *testing.T) 
 	if vFire9.State != StateDegraded {
 		t.Fatalf("re-entry fire State: got %q, want %q (saturation fires before exit)", vFire9.State, StateDegraded)
 	}
-	// Exit the dead-zone (Quota set, PSI available), then re-enter with low
-	// usage. The first re-entry tick's verdict is NOT asserted (TODO R10.3
-	// above: stale mixed-denominator fractions can produce a transient
-	// false-fire that is unreachable in prod).
+	// Exit the dead-zone to a limit-mode tick (Quota set, PSI available). The
+	// limit-mode branch clears the no-limit sub-latches
+	// (noHostStatsSaturationFired, noLimitHostFired) at decide.go:925-928. The
+	// tick itself fires a transient false fire (stale dead-zone samples inflate
+	// usageCores60sMean -> negative limit headroom); pin the verdict to codify
+	// the actual behavior.
 	quota9 := 2.0
-	Decide(st9, Sample{
+	vExit, sigExit := Decide(st9, Sample{
 		Timestamp:    base.Add(90 * time.Second),
 		UsageCores:   1.9,
 		Quota:        &quota9,
 		PsiAvailable: true,
 		Virtualized:  false,
 	}, thresholds)
-	Decide(st9, deadZoneSample(100*time.Second, 1.6), thresholds)
+	if vExit.State != StateDegraded {
+		t.Fatalf("re-entry exit State (t=90): got %q, want %q (transient false fire: stale dead-zone samples inflate limit-mode headroom negative; self-corrects <=60s)", vExit.State, StateDegraded)
+	}
+	if !sigExit.LimitSaturationFired {
+		t.Fatalf("re-entry exit LimitSaturationFired (t=90): got false, want true (transient false fire: stale 3.2-core samples -> usageCores60sMean ~3.0 -> headroom 2.0-3.0-0.2 < 0)")
+	}
+	// Re-enter the dead-zone with low usage (1.6 cores -> 0.40 fraction). The
+	// latch was cleared at t=90, so it starts false. dFraction (~0.6964 from
+	// stale+fresh samples) lands in the Schmitt hold band [0.60, 0.70) which
+	// preserves the current value (false) -> Healthy. This pins that the
+	// Schmitt hold does NOT cross mode transitions: the latch reset, not the
+	// denominator, is why the re-entry verdict is Healthy.
+	vRe, sigRe := Decide(st9, deadZoneSample(100*time.Second, 1.6), thresholds)
+	if vRe.State != StateHealthy {
+		t.Fatalf("re-entry State (t=100): got %q, want %q (latch cleared at t=90; dFraction in hold band [0.60,0.70) preserves false -> Healthy)", vRe.State, StateHealthy)
+	}
+	if sigRe.SaturationFired {
+		t.Fatalf("re-entry SaturationFired (t=100): got true, want false (latch was cleared at t=90 limit-mode tick; hold band preserves the reset value)")
+	}
 	// Steady state: stale samples age out naturally (cutoff=110), the ring
-	// holds only 0.40-fraction samples, saturationAvg 0.40 < SaturationRecover
-	// 0.60 → latch clears → healthy.
+	// holds only 0.40-fraction samples, dFraction 0.40 < SaturationRecover
+	// 0.60 -> latch stays false -> healthy.
 	for i := 1; i < 8; i++ {
 		Decide(st9, deadZoneSample(time.Duration(100+i*10)*time.Second, 1.6), thresholds) // 0.40
 	}
 	vSteady, sigSteady := Decide(st9, deadZoneSample(170*time.Second, 1.6), thresholds)
 	if vSteady.State != StateHealthy {
-		t.Fatalf("re-entry steady State (t=170): got %q, want %q (stale samples aged out; ring holds only 0.40 samples → avg 0.40 < 0.60 → healthy)", vSteady.State, StateHealthy)
+		t.Fatalf("re-entry steady State (t=170): got %q, want %q (stale samples aged out; ring holds only 0.40 samples -> avg 0.40 < 0.60 -> healthy)", vSteady.State, StateHealthy)
 	}
 	if sigSteady.SaturationFired {
-		t.Fatalf("re-entry steady SaturationFired (t=170): got true, want false (stale samples aged out; avg 0.40 < SaturationRecover → latch clears)")
+		t.Fatalf("re-entry steady SaturationFired (t=170): got true, want false (stale samples aged out; avg 0.40 < SaturationRecover -> latch clears)")
 	}
 
 	// (13) CO-FIRE SEVERITY ORDERING — in the dead-zone, throttle and
