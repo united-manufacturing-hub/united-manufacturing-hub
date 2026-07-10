@@ -3677,11 +3677,14 @@ func TestDecide_LimitMode_Headroom(t *testing.T) {
 
 // TestDecide_LimitMode_BFalseFireKilled is the scenario-B regression test: a
 // limited container (Quota=2.0) on an 8-core host that is 62.5% busy
-// (HostBusyCores=5.0) with the container idle (UsageCores=0.0). Old code
-// paired hostBusyMean with the quota ceiling: headroom = 2−5−1 = −4 < 0 →
-// degraded (BUG — fired at 12.5% host busy on a 2-core quota). New code:
-// headroom = 2−0−0.2 = 1.8 > 0 → HEALTHY. This is THE key regression test for
-// the two-rule model.
+// (HostBusyCores=5.0) with the container idle (UsageCores=0.0).
+// HostBusyCoresAvailable is set true so the hostBusyRing fills with 5.0 and
+// hostBusyMean=5.0 (not 0). Old code paired hostBusyMean with the quota
+// ceiling: headroom = 2−5−1 = −4 < 0 → degraded (BUG — fired at 12.5% host
+// busy on a 2-core quota). New code pairs the container's own 60s-avg usage
+// (usageCores60sMean) with the quota: headroom = 2−0−0.2 = 1.8 > 0 → HEALTHY.
+// This is THE key regression test for the two-rule model: a revert to the old
+// formula fires Degraded (the bug), the current code stays Healthy.
 func TestDecide_LimitMode_BFalseFireKilled(t *testing.T) {
 	base := time.Date(2026, 7, 6, 12, 0, 0, 0, time.UTC)
 	thresholds := DefaultThresholds()
@@ -3694,15 +3697,19 @@ func TestDecide_LimitMode_BFalseFireKilled(t *testing.T) {
 	)
 	for i := 0; i < 2; i++ {
 		v, sig = Decide(st, Sample{
-			Timestamp:     base.Add(time.Duration(i) * time.Second),
-			Quota:         &quota,
-			LogicalCpus:   8.0,
-			HostBusyCores: 5.0, // host 62.5% busy
-			UsageCores:    0.0, // container idle
+			Timestamp:              base.Add(time.Duration(i) * time.Second),
+			Quota:                  &quota,
+			LogicalCpus:            8.0,
+			HostBusyCores:          5.0, // host 62.5% busy
+			HostBusyCoresAvailable: true, // ring fills → hostBusyMean=5.0
+			UsageCores:             0.0, // container idle
 		}, thresholds)
 	}
-	// Forcing: a stub still pairing hostBusyMean with the quota ceiling yields
-	// headroom 2−5−1=−4 < 0 and fires (the old bug).
+	// Forcing: with HostBusyCoresAvailable=true the ring fills, so
+	// hostBusyMean=5.0. A stub reverting to the old formula (pairing
+	// hostBusyMean with the quota ceiling) yields headroom 2−5−1=−4 < 0 and
+	// fires Degraded (the old bug). The current two-rule formula pairs
+	// usageCores60sMean (=0.0) with the quota: 2−0−0.2=1.8 > 0 → Healthy.
 	if v.State != StateHealthy {
 		t.Fatalf("State: got %q, want %q (limit mode: headroom=2−0−0.2=1.8 > 0 → healthy; old code paired hostBusyMean with quota → 2−5−1=−4 < 0 → false fire)", v.State, StateHealthy)
 	}
@@ -3737,13 +3744,14 @@ func TestDecide_LimitMode_ContainerIdleHostFull_NoSaturation(t *testing.T) {
 	)
 	for i := 0; i < 2; i++ {
 		v, sig = Decide(st, Sample{
-			Timestamp:     base.Add(time.Duration(i) * time.Second),
-			Quota:         &quota,
-			LogicalCpus:   8.0,
-			HostBusyCores: 5.0,
-			UsageCores:    0.3,
-			PressureAvg60: 0.25, // > PressureHigh 0.20 → pressure fires
-			PsiAvailable:  true,
+			Timestamp:              base.Add(time.Duration(i) * time.Second),
+			Quota:                  &quota,
+			LogicalCpus:            8.0,
+			HostBusyCores:          5.0,
+			HostBusyCoresAvailable: true, // ring fills → hostBusyMean=5.0
+			UsageCores:             0.3,
+			PressureAvg60:          0.25, // > PressureHigh 0.20 → pressure fires
+			PsiAvailable:           true,
 		}, thresholds)
 	}
 	if v.State != StateDegraded {
