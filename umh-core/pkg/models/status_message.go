@@ -162,7 +162,7 @@ type Dfc struct {
 	WriteFlowHealth    *Health        `json:"writeFlowHealth,omitempty"` // Health of the write (sink) data flow, only for protocol-converter type
 	Type               DfcType        `json:"dfcType"`                   // Type of the DFC
 	Metrics            *DfcMetrics    `json:"metrics"`
-	Bridge             *DfcBridgeInfo `json:"bridge,omitempty"` // Additional info for data-bridge type
+	Bridge             *DfcBridgeInfo `json:"bridge,omitempty"` // Additional info for data-bridge and protocol-converter types
 	// For 'protocol-converter' type, this array contains exactly one connection.
 	//
 	// For 'data-bridge' type, this array always contains exactly two connections.

@@ -125,12 +125,33 @@ func (e *Executor) DispatchOperation(
 		innerCtx = ctx
 
 		tmpResponseContext := graphql.WithResponseContext(ctx, e.errorPresenter, e.recoverFunc)
+
+		// If the schema implements the optional ExecutableSchemaWithEventContext
+		// interface AND this operation is a subscription (because at least one
+		// of its subscription fields is annotated with @subscriptionContext),
+		// use the event-aware dispatch path so AroundResponses interceptors see
+		// the per-event ctx as their ctx parameter. Queries and mutations
+		// continue down the default path even when the optional interface is
+		// implemented, so they remain byte-identical to the pre-directive
+		// behavior.
+		if opCtx.Operation.Operation == ast.Subscription {
+			if esEvent, ok := e.es.(graphql.ExecutableSchemaWithEventContext); ok {
+				return e.dispatchWithEventContext(tmpResponseContext, esEvent)
+			}
+		}
+
 		responses := e.es.Exec(tmpResponseContext)
 		if errs := graphql.GetErrors(tmpResponseContext); errs != nil {
 			return graphql.OneShot(&graphql.Response{Errors: errs})
 		}
 
 		return func(ctx context.Context) *graphql.Response {
+			// nil is the end-of-stream signal for transports that iterate on
+			// this handler; honor context cancellation by emitting it instead
+			// of producing further responses no consumer will receive.
+			if ctx.Err() != nil {
+				return nil
+			}
 			ctx = graphql.WithResponseContext(ctx, e.errorPresenter, e.recoverFunc)
 			resp := e.ext.responseMiddleware(ctx, func(ctx context.Context) *graphql.Response {
 				resp := responses(ctx)
@@ -150,6 +171,37 @@ func (e *Executor) DispatchOperation(
 	})
 
 	return res, innerCtx
+}
+
+// dispatchWithEventContext runs the event-aware dispatch loop used when the
+// generated schema reports a per-iteration context. The resolver is invoked
+// outside the responseMiddleware chain so that the chain can run with the
+// per-event ctx as its first argument; this is the trade-off documented on
+// [graphql.ExecutableSchemaWithEventContext].
+func (e *Executor) dispatchWithEventContext(
+	tmpResponseContext context.Context,
+	es graphql.ExecutableSchemaWithEventContext,
+) graphql.ResponseHandler {
+	responses := es.ExecWithEventContext(tmpResponseContext)
+	if errs := graphql.GetErrors(tmpResponseContext); errs != nil {
+		return graphql.OneShot(&graphql.Response{Errors: errs})
+	}
+
+	return func(ctx context.Context) *graphql.Response {
+		if ctx.Err() != nil {
+			return nil
+		}
+		ctx = graphql.WithResponseContext(ctx, e.errorPresenter, e.recoverFunc)
+		eventCtx, raw := responses(ctx)
+		if raw == nil {
+			return nil
+		}
+		return e.ext.responseMiddleware(eventCtx, func(ctx context.Context) *graphql.Response {
+			raw.Errors = append(raw.Errors, graphql.GetErrors(ctx)...)
+			raw.Extensions = graphql.GetExtensions(ctx)
+			return raw
+		})
+	}
 }
 
 func (e *Executor) DispatchError(ctx context.Context, list gqlerror.List) *graphql.Response {

@@ -28,6 +28,7 @@ func ResolveField[T any](
 		recoverFromPanic,
 		nonNull,
 		Null,
+		RequiredNull,
 		func(ctx context.Context, res T) Marshaler {
 			return marshal(ctx, field.Selections, res)
 		},
@@ -55,6 +56,7 @@ func ResolveFieldStream[T any](
 		recoverFromPanic,
 		nonNull,
 		nil,
+		nil,
 		func(ctx context.Context, res <-chan T) func(context.Context) Marshaler {
 			return func(ctx context.Context) Marshaler {
 				select {
@@ -77,6 +79,61 @@ func ResolveFieldStream[T any](
 	)
 }
 
+// ResolveFieldStreamWithEventContext is the streaming-field resolver used for
+// subscription fields marked with @subscriptionContext. Like
+// [ResolveFieldStream] it returns a function that yields one marshaler per
+// channel receive, but the channel element type is [Event][T] rather than T,
+// and the returned function emits both the per-event context (from
+// [Event].Context) and the marshaler. When [Event].Context is nil the input
+// context is passed through unchanged.
+func ResolveFieldStreamWithEventContext[T any](
+	ctx context.Context,
+	oc *OperationContext,
+	field CollectedField,
+	initializeFieldContext func(ctx context.Context, field CollectedField) (*FieldContext, error),
+	fieldResolver func(context.Context) (any, error),
+	middlewareChain func(ctx context.Context, next Resolver) Resolver,
+	marshal func(ctx context.Context, sel ast.SelectionSet, v T) Marshaler,
+	recoverFromPanic bool,
+	nonNull bool,
+) func(context.Context) (context.Context, Marshaler) {
+	return resolveField(
+		ctx,
+		oc,
+		field,
+		initializeFieldContext,
+		fieldResolver,
+		middlewareChain,
+		recoverFromPanic,
+		nonNull,
+		nil,
+		nil,
+		func(ctx context.Context, res <-chan Event[T]) func(context.Context) (context.Context, Marshaler) {
+			return func(ctx context.Context) (context.Context, Marshaler) {
+				select {
+				case ev, ok := <-res:
+					if !ok {
+						return ctx, nil
+					}
+					eventCtx := ev.Context
+					if eventCtx == nil {
+						eventCtx = ctx
+					}
+					return eventCtx, WriterFunc(func(w io.Writer) {
+						w.Write([]byte{'{'})
+						MarshalString(field.Alias).MarshalGQL(w)
+						w.Write([]byte{':'})
+						marshal(ctx, field.Selections, ev.Value).MarshalGQL(w)
+						w.Write([]byte{'}'})
+					})
+				case <-ctx.Done():
+					return ctx, nil
+				}
+			}
+		},
+	)
+}
+
 func resolveField[T, R any](
 	ctx context.Context,
 	oc *OperationContext,
@@ -87,6 +144,7 @@ func resolveField[T, R any](
 	recoverFromPanic bool,
 	nonNull bool,
 	defaultResult R,
+	requiredNullResult R,
 	result func(ctx context.Context, res T) R,
 ) (ret R) {
 	fc, err := initializeFieldContext(ctx, field)
@@ -116,13 +174,19 @@ func resolveField[T, R any](
 	resTmp, err := oc.ResolverMiddleware(ctx, next)
 	if err != nil {
 		oc.Error(ctx, AddFieldLocationToError(ctx, err))
+		if fc.NonNull && !nonNull {
+			return requiredNullResult
+		}
 		return defaultResult
 	}
 	if resTmp == nil {
-		if nonNull {
+		if nonNull || fc.NonNull {
 			if !HasFieldError(ctx, fc) {
 				oc.Errorf(ctx, "must not be null")
 			}
+		}
+		if fc.NonNull && !nonNull {
+			return requiredNullResult
 		}
 		return defaultResult
 	}

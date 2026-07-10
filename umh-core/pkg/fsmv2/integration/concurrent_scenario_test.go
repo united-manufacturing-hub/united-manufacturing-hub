@@ -17,6 +17,7 @@ package integration_test
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 
@@ -26,6 +27,15 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/examples"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/integration"
 )
+
+// interferenceSignatureRE matches genuine concurrency-failure signatures: the Go
+// race detector banner ("DATA RACE"), the runtime's "concurrent map" fatal, and the
+// word-boundary tokens for "race condition", "deadlock", and "panic". Word boundaries
+// keep it from firing on substrings of unrelated event names — notably
+// "graceful_shutdown_timeout" (contains "race" inside "graceful") and
+// "graceful_shutdown_budget_exhausted", both of which the shutdown-budget cascade can
+// emit under load and which a plain strings.Contains("race") check misreads as a race.
+var interferenceSignatureRE = regexp.MustCompile(`(?i)\b(data race|race condition|concurrent map|deadlock|panic)\b`)
 
 var _ = Describe("Concurrent Scenario Integration", func() {
 	It("should run multiple workers concurrently without interference", func() {
@@ -170,10 +180,7 @@ func verifyConcurrentNoInterference(t *integration.TestLogger) {
 
 		if !isKnown {
 			// Check if error indicates worker interference
-			if strings.Contains(entry.Message, "race") ||
-				strings.Contains(entry.Message, "concurrent") ||
-				strings.Contains(entry.Message, "deadlock") ||
-				strings.Contains(entry.Message, "panic") {
+			if interferenceSignatureRE.MatchString(entry.Message) {
 				unexpectedErrors = append(unexpectedErrors, entry.Message)
 			}
 		}

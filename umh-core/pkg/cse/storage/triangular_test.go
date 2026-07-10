@@ -25,7 +25,9 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/application/snapshot"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
 )
 
@@ -257,6 +259,13 @@ type InvalidType struct {
 }
 
 type EmptyNameType struct {
+	Name string
+}
+
+// BadStatusPayload is the inner type for the Observation negative case: its name
+// does not end with "Status", so DeriveWorkerType must report a dedicated
+// Observation error rather than the generic DesiredState/ObservedState message.
+type BadStatusPayload struct {
 	Name string
 }
 
@@ -909,6 +918,20 @@ var _ = Describe("TriangularStore", func() {
 			workerType, err := storage.DeriveWorkerType[ChildDesiredState]()
 			Expect(err).NotTo(HaveOccurred())
 			Expect(workerType).To(Equal("child"))
+		})
+
+		It("should derive application from Observation[ApplicationStatus]", func() {
+			workerType, err := storage.DeriveWorkerType[fsmv2.Observation[snapshot.ApplicationStatus]]()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(workerType).To(Equal("application"))
+		})
+
+		It("should return a dedicated error when the Observation Status type does not end with Status", func() {
+			_, err := storage.DeriveWorkerType[fsmv2.Observation[BadStatusPayload]]()
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("Observation type"))
+			Expect(err.Error()).To(ContainSubstring("has no Status field whose type ends in \"Status\""))
+			Expect(err.Error()).NotTo(ContainSubstring("does not end with DesiredState or ObservedState"))
 		})
 
 		It("should return error for type without DesiredState or ObservedState suffix", func() {

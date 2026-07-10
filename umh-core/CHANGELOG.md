@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+## [0.44.28]
+
+### New Features
+
+- Node-RED JS and tag processor expose a `protobuf` namespace (`protobuf.decode` / `protobuf.encode`) to decode and encode protobuf messages inline using an embedded base64 descriptor set, including proto2 extension fields
+- Sparkplug B input decodes proto2 extension fields from an inline schema, exposing them per metric as `spb_ext_*` and `spb_metric_decoded` metadata
+- TimescaleDB Historian output that saves a UNS data contract into TimescaleDB under a dedicated umh schema. By default every metadata key is stored; metadata_keys_exclude drops selected keys by exact name or prefix_* while keeping the rest.
+
+### Improvements
+
+- The [Authentication and Authorization](https://docs.umh.app/production/security/management-console/authentication-and-authorization) documentation now covers enterprise Auth0 setup: how a default connection routes all logins through your own identity provider, how to choose the Account Owner as a break-glass account, and how inviting UMH personnel via their `@umh.app` address works, including who is responsible for their access
+
+### Fixes
+
+- Stopping umh-core (`docker stop`, Kubernetes pod termination, CTRL-C) now shuts down workers gracefully on the first SIGTERM. Previously the signal killed the internal control loop before the graceful drain ran, so the drain waited out every timeout with nothing left to process — 33 s measured against Docker's 10 s grace period, ending in a hard kill mid-shutdown with workers never running their stopping steps. The drain now keeps the control loop alive, sizes its budget to the depth of the worker tree, and reliably stops workers that were mid-action, blocked behind an unhealthy dependency, or racing the shutdown signal — so it finishes well within the grace period instead of timing out. A second SIGTERM still forces an immediate exit
+- Sparkplug B input can nest device data under its edge node via include_edge_node_in_location, so identically-named devices on different edge nodes no longer collide at the top of the hierarchy
+
 ## [0.44.27]
 
 ### New Features

@@ -41,10 +41,10 @@ func (s *DegradedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	}
 
 	if !status.HasInfrastructureIssues() {
-		return fsmv2.Transition(&RunningState{}, fsmv2.SignalNone, nil, "Recovered from infrastructure issues", nil)
+		return fsmv2.Transition(&RunningState{}, fsmv2.SignalNone, nil, "Recovered from infrastructure issues", renderUnion(snap))
 	}
 
-	return fsmv2.Transition(s, fsmv2.SignalNone, nil, status.InfrastructureReason(), nil)
+	return fsmv2.Transition(s, fsmv2.SignalNone, nil, status.InfrastructureReason(), renderUnion(snap))
 }
 
 func (s *DegradedState) String() string {
