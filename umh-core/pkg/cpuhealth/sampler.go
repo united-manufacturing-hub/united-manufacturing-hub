@@ -40,7 +40,7 @@ type Sampler interface {
 // (cpu.max quota, cpu.pressure avg60, /proc/cpuinfo virtualization, /proc/stat
 // steal + host-busy) so the non-throttle causes in Decide are populated
 // instead of left at zero. cpu.stat is the primary signal: a read/parse failure
-// there fails the whole Sample. The other signals are best-effort — a read
+// there fails the whole Sample. The other signals are best-effort: a read
 // failure on any one of them zeros that field (and its readability flag) and
 // the Sample is still returned.
 type cgroupSampler struct {
@@ -60,7 +60,7 @@ type cgroupSampler struct {
 	hasStatBaseline bool
 
 	// /proc/cpuinfo virtualization flag (read on the first SUCCESSFUL Sample,
-	// then cached — virtualization does not change at runtime). A transient
+	// then cached; virtualization does not change at runtime). A transient
 	// read failure leaves virtualizedDone=false so the next Sample retries,
 	// rather than permanently caching Virtualized=false.
 	virtualized     bool
@@ -108,19 +108,19 @@ func (s *cgroupSampler) Sample(ctx context.Context) (Sample, error) {
 		}
 	}
 
-	// Quota (cpu.max) — non-primary; nil when absent/unreadable/uncapped.
+	// Quota (cpu.max), non-primary; nil when absent/unreadable/uncapped.
 	if q, ok := s.readCPUMax(ctx); ok {
 		sample.Quota = q
 	}
 
-	// PSI (cpu.pressure some avg60) — non-primary; PsiAvailable=false on
+	// PSI (cpu.pressure some avg60), non-primary; PsiAvailable=false on
 	// absence/error.
 	s.readPressure(ctx, &sample)
 
-	// Virtualization (/proc/cpuinfo hypervisor flag) — cached after first read.
+	// Virtualization (/proc/cpuinfo hypervisor flag), cached after first read.
 	s.readVirtualized(ctx, &sample)
 
-	// /proc/stat steal + host-busy deltas — non-primary.
+	// /proc/stat steal + host-busy deltas, non-primary.
 	s.readProcStat(ctx, now, &sample)
 
 	// LogicalCpus is a stdlib call, not an I/O read.
@@ -210,7 +210,7 @@ func (s *cgroupSampler) readPressure(ctx context.Context, sample *Sample) {
 // line), caches the result on the first SUCCESSFUL read, and sets Virtualized on
 // every Sample. A read failure leaves the cache unset so the next Sample retries
 // instead of permanently caching Virtualized=false (which would silently drop
-// the steal cause — the precise failure mode PsiAvailable was added to prevent).
+// the steal cause, the precise failure mode PsiAvailable was added to prevent).
 //
 // On ARM64 /proc/cpuinfo has no "flags" line (it exposes "Features" with no
 // "hypervisor" bit), so the cpuinfo check alone misses hypervisors there. As a
@@ -314,7 +314,7 @@ func (s *cgroupSampler) readProcStat(ctx context.Context, now time.Time, sample 
 	if totalDelta <= 0 {
 		// Counter reset / wrap (host reboot, /proc/stat wrap). Re-baseline
 		// against the new sample and emit 0 for BOTH StealFraction and
-		// HostBusyCores — a negative busy delta would publish a negative
+		// HostBusyCores; a negative busy delta would publish a negative
 		// HostBusyCores. The baseline update happens here (after the guard) so
 		// the reset sample becomes the new baseline.
 		s.lastStatTotal = total

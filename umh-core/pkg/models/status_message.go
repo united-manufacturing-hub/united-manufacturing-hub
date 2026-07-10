@@ -159,7 +159,7 @@ type CPU struct {
 // the verdict acted on. It is always emitted when a verdict was computed
 // (healthy AND degraded), so the Management Console renders the headline, the
 // host/container split, and the alert-rule budget dashboard from the same
-// source the verdict used — the human-readable health.message and this block
+// source the verdict used; the human-readable health.message and this block
 // cannot silently diverge. It is nil only when no verdict exists (a cgroup
 // read failure, where Decide is not called); the legacy display path covers
 // that case.
@@ -181,7 +181,7 @@ type VerdictBasis struct {
 // quota vs limit-mode-host-full vs no-host-stats blind vs no-limit-host-full).
 // Fired is the OR of the four sub-latches.
 type VerdictBasisHeadroom struct {
-	Ceiling                    string  `json:"ceiling"`                    // "host" | "limit" — which rule applied
+	Ceiling                    string  `json:"ceiling"`                    // "host" | "limit": which rule applied
 	Capacity                   float64 `json:"capacity"`                   // the ceiling in cores (host logical count or cgroup quota)
 	Used                       float64 `json:"used"`                       // the mode's 60s-mean use (host-busy OR container usage)
 	Reserve                    float64 `json:"reserve"`                    // in cores (host: 1.0; limit: LimitReserveFraction × quota)
@@ -206,8 +206,8 @@ type VerdictBasisHostBusy struct {
 
 // VerdictBasisCause is one secondary starvation signal: the measured value,
 // the fire threshold the latch compares against, the latch state, and whether
-// the rule is applicable to this box (a rule that cannot be measured here —
-// no cgroup limit, no PSI, bare metal — has applies=false).
+// the rule is applicable to this box (a rule that cannot be measured here,
+// no cgroup limit, no PSI, bare metal, has applies=false).
 type VerdictBasisCause struct {
 	Value     float64 `json:"value"`     // the metric (ThrottleRatio / PressureAvg60Out / StealP95)
 	Threshold float64 `json:"threshold"` // the Schmitt fire threshold (0.05 / 0.20 / 0.10)

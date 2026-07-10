@@ -153,8 +153,8 @@ func (c *ContainerMonitorService) GetStatus(ctx context.Context) (*ServiceInfo, 
 
 	// Assess CPU health. CPUHealth/OverallHealth are Degraded ONLY when
 	// cpuStat.Health is already Degraded (i.e. throttling detected in
-	// getCPUMetrics). High usage alone is NOT ill health — a capped
-	// container pinned at its quota is busy, not sick — so raw-usage
+	// getCPUMetrics). High usage alone is NOT ill health: a capped
+	// container pinned at its quota is busy, not sick, so raw-usage
 	// degradation is not applied here. Windowed saturation logic in
 	// cpuhealth.WindowState will reintroduce usage-based degradation
 	// later, gated on the dead-zone; until then the two fields stay
@@ -259,7 +259,7 @@ func (c *ContainerMonitorService) getCPUMetrics(ctx context.Context) (*models.CP
 	var (
 		isThrottled bool
 		// Default to healthy so a cgroup-read failure (cgroup v1, non-container,
-		// transient read error) — which skips the Decide call below — still
+		// transient read error), which skips the Decide call below, still
 		// emits State="healthy" on the wire. State has no omitempty, so without
 		// this default the zero-value "" would be emitted, violating the
 		// always-emitted healthy|degraded contract.
@@ -300,7 +300,7 @@ func (c *ContainerMonitorService) getCPUMetrics(ctx context.Context) (*models.CP
 	// ComposeMessage returns the curated per-cause two-layer message (headline
 	// + "Technical Details:" + why + what-to-do from the supertable) when
 	// degraded, and "CPU healthy" (plus an optional limited-visibility note
-	// when the sample is in the dead-zone) when healthy — replacing the
+	// when the sample is in the dead-zone) when healthy, replacing the
 	// generic "CPU degraded" / "CPU utilization normal" strings.
 	message := cpuhealth.ComposeMessage(verdict, signals)
 
@@ -313,7 +313,7 @@ func (c *ContainerMonitorService) getCPUMetrics(ctx context.Context) (*models.CP
 	//
 	// StateDegraded now covers throttle OR pressure (and any future cause
 	// Decide returns a degraded verdict for), so category is driven from
-	// verdict.State so every degradation cause flows to Degraded — not just
+	// verdict.State so every degradation cause flows to Degraded, not just
 	// throttle. The curated per-cause message is composed above via
 	// ComposeMessage(verdict, signals); isThrottled feeds the wasThrottled
 	// transition log above.
@@ -369,7 +369,7 @@ func (c *ContainerMonitorService) getCPUMetrics(ctx context.Context) (*models.CP
 		cpuStat.P99MCpu = ptr(signals.P99UsageCores * 1000)
 	}
 
-	// Emit the verdict basis — the decision variables the verdict acted on
+	// Emit the verdict basis: the decision variables the verdict acted on
 	// (headroom plus the three starvation causes), always when a verdict was
 	// computed (cgroupErr == nil, so Decide ran). It is the machine-readable
 	// counterpart to health.message: the same numbers, structured so the MC
