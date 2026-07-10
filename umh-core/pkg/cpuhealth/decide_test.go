@@ -18,6 +18,7 @@ package cpuhealth
 
 import (
 	"math"
+	"strings"
 	"testing"
 	"time"
 )
@@ -4423,6 +4424,140 @@ func TestDecide_NoLimitHostFull_OutageHoldsAttributionHost(t *testing.T) {
 	}
 	if vBack.Attribution != AttributionHost {
 		t.Fatalf("(c) back Attribution: got %q, want %q (host share 7.5 > container share 0)", vBack.Attribution, AttributionHost)
+	}
+}
+
+// TestDecide_NoLimitHostOutage_SatValueNotPositiveHeadroom pins the Cause
+// Value on a sustained /proc/stat outage in no-limit mode: NoLimitHostFired
+// latches (verdict stays Degraded), but the ring ages out past the 60s window
+// so hostBusyMean=0 and HeadroomCores=LogicalCpus-0-1=7 (large positive). The
+// satValue initial assignment (satValue := signals.HeadroomCores) carries this
+// large positive Value for a degraded saturation cause, which is semantically
+// backwards (Value is documented as negative headroom / over-capacity). The
+// Value must not be a large positive headroom on an outage tick.
+func TestDecide_NoLimitHostOutage_SatValueNotPositiveHeadroom(t *testing.T) {
+	base := time.Date(2026, 7, 6, 12, 0, 0, 0, time.UTC)
+	th := DefaultThresholds()
+
+	// (a) fire: no limit, host 7.5/8 full, container idle. 4 ticks fill the
+	// hostBusyRing so the 2-sample floor passes and host-headroom fires.
+	st := &WindowState{}
+	for i := 0; i < 4; i++ {
+		Decide(st, Sample{
+			Timestamp: base.Add(time.Duration(i) * time.Second),
+			Quota:     nil, LogicalCpus: 8.0, HostBusyCores: 7.5,
+			HostBusyCoresAvailable: true, UsageCores: 0,
+		}, th)
+	}
+
+	// (b) sustained outage: jump past the 60s hostBusyWindow so all readable
+	// readings age out. HostBusyCoresAvailable=false so the ring is not
+	// appended. hostBusyMean=0 (empty ring, 2-sample floor). HeadroomCores =
+	// 8 - 0 - 1 = 7 (large positive). noLimitHostFired holds (the no-host-stats
+	// saturation branch does not touch it). State stays Degraded.
+	vHold, sigHold := Decide(st, Sample{
+		Timestamp: base.Add(65 * time.Second),
+		Quota:     nil, LogicalCpus: 8.0, HostBusyCores: 0,
+		HostBusyCoresAvailable: false, UsageCores: 0,
+	}, th)
+
+	if vHold.State != StateDegraded {
+		t.Fatalf("State: got %q, want %q (noLimitHostFired latch holds across the sustained outage)", vHold.State, StateDegraded)
+	}
+	if !sigHold.NoLimitHostFired {
+		t.Fatalf("NoLimitHostFired: got false, want true (latch holds)")
+	}
+	if sigHold.HostBusyCoresAvailable {
+		t.Fatalf("HostBusyCoresAvailable: got true, want false (outage tick)")
+	}
+	if len(vHold.Causes) == 0 {
+		t.Fatalf("expected at least one cause, got none")
+	}
+	satVal := vHold.Causes[0].Value
+	if satVal > 0 {
+		t.Fatalf("Cause Value: got %v, want <= 0 (a degraded saturation cause must not carry a large positive headroom Value on an outage tick)", satVal)
+	}
+}
+
+// TestDecide_NoLimitHostOutage_OverlapWithNoHostStats pins the satValue switch
+// ordering fix: in the overlap NoLimitHostFired=true &&
+// NoHostStatsSaturationFired=true && !HostBusyCoresAvailable (reachable when a
+// host-headroom saturation latches noLimitHostFired on a readable tick, then
+// /proc/stat drops while the container keeps high cgroup usage so the
+// no-host-stats branch fills the usage ring and fires noHostStatsSaturationFired),
+// the NoLimitHostFired && !HostBusyCoresAvailable satValue gate must NOT shadow
+// the NoHostStatsSaturationFired arm. The overlap must fall through to
+// satValue = DFraction (matching the NoHostStatsSaturationFired message arm),
+// and the rendered message must show the DFraction percentage, not "0%".
+func TestDecide_NoLimitHostOutage_OverlapWithNoHostStats(t *testing.T) {
+	base := time.Date(2026, 7, 6, 12, 0, 0, 0, time.UTC)
+	th := DefaultThresholds()
+
+	// (a) fire: no limit, host 7.5/8 full, container idle. 4 ticks fill the
+	// hostBusyRing so the 2-sample floor passes and host-headroom fires
+	// (HeadroomCores = 8 - 7.5 - 1 = -0.5 < 0).
+	st := &WindowState{}
+	for i := 0; i < 4; i++ {
+		Decide(st, Sample{
+			Timestamp: base.Add(time.Duration(i) * time.Second),
+			Quota:     nil, LogicalCpus: 8.0, HostBusyCores: 7.5,
+			HostBusyCoresAvailable: true, UsageCores: 0,
+		}, th)
+	}
+
+	// (b) jump past the 60s window so the readable hostBusyRing and the
+	// zero-usage entries age out. Then outage ticks with high container usage
+	// (6.0/8 = 0.75 >= HighUsageFraction 0.70) fill the usage ring and fire
+	// noHostStatsSaturationFired. noLimitHostFired holds (the no-host-stats
+	// branch does not touch it). After 2 outage ticks the overlap is reached:
+	// NoLimitHostFired=true && NoHostStatsSaturationFired=true &&
+	// !HostBusyCoresAvailable, DFraction=0.75.
+	Decide(st, Sample{
+		Timestamp: base.Add(65 * time.Second),
+		Quota:     nil, LogicalCpus: 8.0, HostBusyCores: 0,
+		HostBusyCoresAvailable: false, UsageCores: 6.0,
+	}, th)
+	vHold, sigHold := Decide(st, Sample{
+		Timestamp: base.Add(66 * time.Second),
+		Quota:     nil, LogicalCpus: 8.0, HostBusyCores: 0,
+		HostBusyCoresAvailable: false, UsageCores: 6.0,
+	}, th)
+
+	if vHold.State != StateDegraded {
+		t.Fatalf("State: got %q, want %q (overlap must stay Degraded)", vHold.State, StateDegraded)
+	}
+	if !sigHold.NoLimitHostFired {
+		t.Fatalf("NoLimitHostFired: got false, want true (latch must hold across the outage)")
+	}
+	if !sigHold.NoHostStatsSaturationFired {
+		t.Fatalf("NoHostStatsSaturationFired: got false, want true (high container usage on outage tick must fire)")
+	}
+	if sigHold.HostBusyCoresAvailable {
+		t.Fatalf("HostBusyCoresAvailable: got true, want false (outage tick)")
+	}
+	if len(vHold.Causes) == 0 {
+		t.Fatalf("expected at least one cause, got none")
+	}
+
+	// Regression pin: satValue must be DFraction (0.75), NOT 0. The new
+	// NoLimitHostFired && !HostBusyCoresAvailable gate sits AFTER the
+	// NoHostStatsSaturationFired arm, so the overlap falls through to
+	// satValue = DFraction.
+	satVal := vHold.Causes[0].Value
+	if satVal != 0.75 {
+		t.Fatalf("Cause Value: got %v, want 0.75 (DFraction; the new NoLimitHostFired gate must not shadow NoHostStatsSaturationFired in the overlap)", satVal)
+	}
+
+	// Message pin: the NoHostStatsSaturationFired arm renders the DFraction
+	// percentage (75%), not "0%" (which the pre-fix satValue=0 produced).
+	msg := ComposeMessage(vHold, sigHold)
+	_, details, _ := strings.Cut(msg, "Technical Details: ")
+	details = strings.TrimSpace(details)
+	if !strings.Contains(details, "75%") {
+		t.Fatalf("overlap detail must render the DFraction percentage 75%%: %q", details)
+	}
+	if strings.Contains(details, "0%") {
+		t.Fatalf("overlap detail must NOT render 0%% (the pre-fix satValue=0 shadowed DFraction): %q", details)
 	}
 }
 

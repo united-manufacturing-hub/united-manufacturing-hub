@@ -1098,6 +1098,8 @@ func Decide(st *WindowState, sample Sample, thresholds Thresholds) (Verdict, Sig
 			satValue = signals.HostHeadroomCores
 		case signals.NoHostStatsSaturationFired:
 			satValue = signals.DFraction
+		case signals.NoLimitHostFired && !sample.HostBusyCoresAvailable:
+			satValue = 0
 		}
 
 		fired = append(fired, firedCause{Cause{Kind: CauseKindSaturation, Value: satValue}, severity(saturationAvg, thresholds.HighUsageFraction), false})

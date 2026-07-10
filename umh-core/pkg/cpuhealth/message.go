@@ -251,6 +251,8 @@ func causeDetails(c Cause, signals Signals) string {
 			}
 
 			return detail
+		case signals.NoLimitHostFired && !signals.HostBusyCoresAvailable:
+			return "CPU is degraded. Host CPU usage is not readable right now (host stats temporarily unavailable), so the host-busy percentage cannot be shown. Add CPU capacity, or reduce the load on it."
 		default:
 			// No-limit host-headroom (host stats readable, not no-host-stats saturation). The
 			// percentage is host-busy vs host cores (LogicalCpus, surfaced as

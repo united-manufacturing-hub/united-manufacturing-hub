@@ -700,6 +700,80 @@ func TestComposeMessage_Saturation_NoLimitHostHeadroom(t *testing.T) {
 	}
 }
 
+// TestComposeMessage_Saturation_NoLimitHostOutage pins the sustained
+// /proc/stat outage sub-case of the no-limit host-headroom saturation: when
+// NoLimitHostFired is latched but HostBusyCoresAvailable is false (outage),
+// the detail must NOT render "0% of the machine" (the default arm computes
+// pct from the aged-out HostBusyCores60sMean=0, yielding a self-contradictory
+// "0% but degraded" message) and must instead name the host-stats outage.
+func TestComposeMessage_Saturation_NoLimitHostOutage(t *testing.T) {
+	verdict := cpuhealth.Verdict{
+		State:       cpuhealth.StateDegraded,
+		Attribution: cpuhealth.AttributionHost,
+		Causes: []cpuhealth.Cause{
+			{Kind: cpuhealth.CauseKindSaturation, Value: 0},
+		},
+	}
+	signals := cpuhealth.Signals{
+		LimitApplies:               false,
+		LimitSaturationFired:       false,
+		HostFullFired:              false,
+		NoHostStatsSaturationFired: false,
+		NoLimitHostFired:           true,
+		HostBusyCoresAvailable:     false,
+		HostBusyCores60sMean:       0,
+		CapacityCores:              8.0,
+	}
+
+	msg := cpuhealth.ComposeMessage(verdict, signals)
+	_, details, _ := strings.Cut(msg, "Technical Details: ")
+	details = strings.TrimSpace(details)
+
+	if strings.Contains(details, "0% of the machine") {
+		t.Fatalf("no-limit-host-outage detail must NOT show 0%% of the machine (aged-out HostBusyCores60sMean=0 yields a self-contradictory 0%% but degraded): %q", details)
+	}
+	if !strings.Contains(details, "host stats") {
+		t.Fatalf("no-limit-host-outage detail must name the host-stats outage: %q", details)
+	}
+}
+
+// TestComposeMessage_Saturation_NoLimitHostReadableLatched pins the guard
+// against the new NoLimitHostFired && !HostBusyCoresAvailable arm shadowing
+// the default arm: when NoLimitHostFired is latched but HostBusyCoresAvailable
+// is true (host stats readable), the default arm must run and render the
+// host-busy percentage (HostBusyCores60sMean/CapacityCores), NOT the new
+// "host stats unavailable" arm.
+func TestComposeMessage_Saturation_NoLimitHostReadableLatched(t *testing.T) {
+	verdict := cpuhealth.Verdict{
+		State:       cpuhealth.StateDegraded,
+		Attribution: cpuhealth.AttributionHost,
+		Causes: []cpuhealth.Cause{
+			{Kind: cpuhealth.CauseKindSaturation, Value: 0.44},
+		},
+	}
+	signals := cpuhealth.Signals{
+		LimitApplies:               false,
+		LimitSaturationFired:       false,
+		HostFullFired:              false,
+		NoHostStatsSaturationFired: false,
+		NoLimitHostFired:           true,
+		HostBusyCoresAvailable:     true,
+		HostBusyCores60sMean:       6.56,
+		CapacityCores:              8.0,
+	}
+
+	msg := cpuhealth.ComposeMessage(verdict, signals)
+	_, details, _ := strings.Cut(msg, "Technical Details: ")
+	details = strings.TrimSpace(details)
+
+	if !strings.Contains(details, "82%") {
+		t.Fatalf("readable-latched detail must render the host-busy percentage 82%% (pctOf(6.56/8.0)): %q", details)
+	}
+	if strings.Contains(details, "host stats") || strings.Contains(details, "unavailable") {
+		t.Fatalf("readable-latched detail must NOT render the host-stats-unavailable arm (host stats are readable): %q", details)
+	}
+}
+
 // TestComposeMessage_Steal_NoEmDash pins the steal detail: no em-dash (use a
 // comma), and the %d reflects a peak phrasing ("up to N% at peak").
 func TestComposeMessage_Steal_NoEmDash(t *testing.T) {
