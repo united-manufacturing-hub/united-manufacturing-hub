@@ -1592,7 +1592,7 @@ var _ = Describe("ConfigManager historian mutations", func() {
 			original := HistorianConfig{
 				Timescale: &TimescaleConfig{
 					Host:        "timescale.example.com",
-					Password:    "s3cret",
+					Password:    "secret",
 					SSLMode:     HistorianSSLModeVerifyFull,
 					SSLRootCert: "/certs/ca.pem",
 				},
@@ -1635,7 +1635,7 @@ var _ = Describe("ConfigManager historian mutations", func() {
 			Expect(manager.AtomicSetHistorian(ctx, HistorianConfig{
 				Timescale: &TimescaleConfig{
 					Host:     "timescale.example.com",
-					Password: "s3cret",
+					Password: "secret",
 					Port:     5432,
 				},
 			})).To(Succeed())
@@ -1658,7 +1658,7 @@ var _ = Describe("ConfigManager historian mutations", func() {
 				return *cfg.Historian.Timescale, err
 			}, 2*time.Second, 10*time.Millisecond).Should(And(
 				HaveField("Port", uint16(6543)),
-				HaveField("Password", "s3cret"),
+				HaveField("Password", "secret"),
 			))
 		})
 
@@ -1671,7 +1671,7 @@ var _ = Describe("ConfigManager historian mutations", func() {
 			Expect(manager.AtomicSetHistorian(ctx, HistorianConfig{
 				Timescale: &TimescaleConfig{
 					Host:     "timescale.example.com",
-					Password: "s3cret",
+					Password: "secret",
 				},
 			})).To(Succeed())
 
@@ -1758,7 +1758,7 @@ var _ = Describe("ConfigManager historian mutations", func() {
 			historian := HistorianConfig{
 				Timescale: &TimescaleConfig{
 					Host:     "timescale.example.com",
-					Password: "s3cret",
+					Password: "secret",
 					Database: "umh",
 					Username: "umh_owner",
 					SSLMode:  HistorianSSLModeVerifyFull,
