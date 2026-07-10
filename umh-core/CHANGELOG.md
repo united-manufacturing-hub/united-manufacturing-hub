@@ -6,6 +6,7 @@
 
 - Node-RED JS and tag processor expose a `protobuf` namespace (`protobuf.decode` / `protobuf.encode`) to decode and encode protobuf messages inline using an embedded base64 descriptor set, including proto2 extension fields
 - Sparkplug B input decodes proto2 extension fields from an inline schema, exposing them per metric as `spb_ext_*` and `spb_metric_decoded` metadata
+- TimescaleDB Historian output that saves a UNS data contract into TimescaleDB under a dedicated umh schema. By default every metadata key is stored; metadata_keys_exclude drops selected keys by exact name or prefix_* while keeping the rest.
 
 ### Improvements
 
