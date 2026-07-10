@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### New Features
+
+- Gatekeeper (preview): instances can now validate that a user is authorized for a requested action before running it, rejecting unauthorized requests with a clear message instead of running them. Only affects instances started with `USE_GATEKEEPER=true`
+
 ## [0.44.27]
 
 ### New Features
