@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## [0.44.28]
+
 ### New Features
 
 - Node-RED JS and tag processor expose a `protobuf` namespace (`protobuf.decode` / `protobuf.encode`) to decode and encode protobuf messages inline using an embedded base64 descriptor set, including proto2 extension fields
