@@ -46,12 +46,14 @@ var _ = Describe("GetHistorian", func() {
 
 		mockConfig = config.NewMockConfigManager().WithConfig(config.FullConfig{
 			Historian: &config.HistorianConfig{
-				Host:     "timescale.example.com",
-				Password: "secret",
-				Port:     5432,
-				Database: "umh",
-				Username: "umh_owner",
-				SSLMode:  config.HistorianSSLModeRequire,
+				Timescale: &config.TimescaleConfig{
+					Host:     "timescale.example.com",
+					Password: "secret",
+					Port:     5432,
+					Database: "umh",
+					Username: "umh_owner",
+					SSLMode:  config.HistorianSSLModeRequire,
+				},
 			},
 		})
 
@@ -83,10 +85,14 @@ var _ = Describe("GetHistorian", func() {
 
 			cfg, ok := result.(config.HistorianConfig)
 			Expect(ok).To(BeTrue(), "Result should be a HistorianConfig")
-			Expect(cfg.Host).To(Equal("timescale.example.com"))
-			Expect(cfg.Port).To(Equal(uint16(5432)))
-			Expect(cfg.Database).To(Equal("umh"))
-			Expect(cfg.SSLMode).To(Equal(config.HistorianSSLModeRequire))
+			Expect(cfg.Timescale).NotTo(BeNil())
+			Expect(cfg.Timescale.Host).To(Equal("timescale.example.com"))
+			Expect(cfg.Timescale.Port).To(Equal(uint16(5432)))
+			Expect(cfg.Timescale.Database).To(Equal("umh"))
+			Expect(cfg.Timescale.SSLMode).To(Equal(config.HistorianSSLModeRequire))
+			// The password is write-only: get-historian never returns it, so it
+			// cannot leak through reply logs, the cloud backend, or the browser.
+			Expect(cfg.Timescale.Password).To(BeEmpty())
 
 			// A successful read emits no reply of its own; the dispatcher sends the sole
 			// terminal ActionFinishedSuccessfull carrying the returned config.
@@ -95,21 +101,22 @@ var _ = Describe("GetHistorian", func() {
 			}).Should(BeEmpty())
 		})
 
-		It("should fail when no historian is configured", func() {
+		It("should succeed with an absent result when no historian is configured", func() {
 			mockConfig.WithConfig(config.FullConfig{})
 
 			result, metadata, err := action.Execute()
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("not configured"))
+			// A missing historian is the normal empty state, not a failure: Execute
+			// succeeds with a nil result so the dispatcher sends a success reply
+			// carrying a null historian, and the frontend need not string-match errors.
+			Expect(err).NotTo(HaveOccurred())
 			Expect(result).To(BeNil())
 			Expect(metadata).To(BeNil())
 
-			// The not-configured branch must return a non-nil error so the dispatcher
-			// short-circuits; otherwise it would append a spurious success reply after
-			// this failure.
-			Eventually(func() []models.ActionReplyState {
+			// Execute emits no reply of its own; the dispatcher sends the sole terminal
+			// ActionFinishedSuccessfull.
+			Consistently(func() []models.ActionReplyState {
 				return historianReplyStates(&messages, &mu)
-			}).Should(Equal([]models.ActionReplyState{models.ActionFinishedWithFailure}))
+			}).Should(BeEmpty())
 		})
 
 		It("should fail when the config cannot be read", func() {

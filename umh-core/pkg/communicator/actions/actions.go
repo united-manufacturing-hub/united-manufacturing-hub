@@ -18,6 +18,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"regexp"
 	"runtime/debug"
 	"sync"
 	"time"
@@ -128,7 +129,7 @@ func HandleActionMessage(instanceUUID uuid.UUID, payload models.ActionMessagePay
 	}()
 
 	// Start a new transaction for this action
-	log.Debugf("Handling action message: Type: %s, Payload: %v", payload.ActionType, payload.ActionPayload)
+	log.Debugf("Handling action message: Type: %s, Payload: %v", payload.ActionType, redactSensitive(payload.ActionPayload))
 
 	action := newActionFromPayloadFn(instanceUUID, payload, sender, outboundChannel, systemSnapshotManager, configManager, log, fsmLogger)
 	if action == nil {
@@ -623,6 +624,41 @@ func generateUMHMessage(instanceUUID uuid.UUID, userEmail string, messageType mo
 // Example usage:
 //
 //	myPayload, err := ParseActionPayload[MyCustomStruct](actionPayload)
+//
+// sensitiveKeyPattern matches map keys whose values must never be logged, so a
+// debug-level payload dump cannot leak a historian password, connection secret,
+// or auth token into support bundles or Sentry.
+var sensitiveKeyPattern = regexp.MustCompile(`(?i)(passwd|password|secret|token|credential|api[_-]?key|private[_-]?key)`)
+
+// redactSensitive returns a copy of v with the values of sensitive-looking keys
+// masked, recursing into nested maps and slices. It only shapes what gets
+// logged — the original payload is untouched, so parsing and execution still see
+// the real values.
+func redactSensitive(v interface{}) interface{} {
+	switch val := v.(type) {
+	case map[string]interface{}:
+		out := make(map[string]interface{}, len(val))
+		for k, vv := range val {
+			if sensitiveKeyPattern.MatchString(k) {
+				out[k] = "[REDACTED]"
+			} else {
+				out[k] = redactSensitive(vv)
+			}
+		}
+
+		return out
+	case []interface{}:
+		out := make([]interface{}, len(val))
+		for i, vv := range val {
+			out[i] = redactSensitive(vv)
+		}
+
+		return out
+	default:
+		return v
+	}
+}
+
 func ParseActionPayload[T any](actionPayload interface{}) (T, error) {
 	var payload T
 

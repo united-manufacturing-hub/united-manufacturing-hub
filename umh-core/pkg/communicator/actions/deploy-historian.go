@@ -18,17 +18,19 @@
 // -----------------------------------------------------------------------------
 // BUSINESS CONTEXT
 // -----------------------------------------------------------------------------
-// "Deploying" a historian writes (or overwrites) the top-level `historian:`
-// section in config.yaml with the supplied TimescaleDB/Postgres connection
-// settings. The historian section is a singleton — there is at most one per
-// instance. If a historian is already configured, use the edit-historian action
-// instead to preserve the audit trail of intent.
+// "Deploying" a historian creates the top-level `historian:` section in
+// config.yaml with the supplied TimescaleDB/Postgres connection settings. The
+// section is a singleton: at most one per instance. Deploy is create-only and
+// fails with ErrHistorianAlreadyConfigured if a historian already exists, so a
+// retried or misdirected deploy cannot silently overwrite an existing connection
+// (which would also blank its TLS cert paths). Use edit-historian to change one.
 // -----------------------------------------------------------------------------
 
 package actions
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/google/uuid"
@@ -80,8 +82,10 @@ func (a *DeployHistorianAction) Parse(payload interface{}) error {
 
 	a.payload = parsed
 
-	a.actionLogger.Debugf("Parsed DeployHistorian action payload: host=%s port=%d database=%s",
-		a.payload.Host, a.payload.Port, a.payload.Database)
+	if a.payload.Timescale != nil {
+		a.actionLogger.Debugf("Parsed DeployHistorian action payload: timescale host=%s port=%d database=%s",
+			a.payload.Timescale.Host, a.payload.Timescale.Port, a.payload.Timescale.Database)
+	}
 
 	return nil
 }
@@ -117,6 +121,14 @@ func (a *DeployHistorianAction) Execute() (interface{}, map[string]interface{}, 
 		"Writing Historian configuration...", a.outboundChannel, models.DeployHistorian)
 
 	if err := a.configManager.AtomicSetHistorian(ctx, cfg); err != nil {
+		if errors.Is(err, config.ErrHistorianAlreadyConfigured) {
+			errorMsg := "Historian is already configured; use edit-historian to change it"
+			SendActionReplyV2(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
+				errorMsg, models.ErrValidationFailed, nil, a.outboundChannel, models.DeployHistorian, nil)
+
+			return nil, nil, errors.New(errorMsg)
+		}
+
 		errorMsg := fmt.Sprintf("Failed to write Historian configuration: %v", err)
 		SendActionReplyV2(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
 			errorMsg, models.ErrRetryConfigWriteFailed, nil, a.outboundChannel, models.DeployHistorian, nil)
@@ -124,6 +136,8 @@ func (a *DeployHistorianAction) Execute() (interface{}, map[string]interface{}, 
 		return nil, nil, fmt.Errorf("%s", errorMsg)
 	}
 
-	// The terminal ActionFinishedSuccessfull reply is sent by the caller (see actions.go).
-	return cfg, nil, nil
+	// Blank the password in the reply: no historian reply sent to the Management
+	// Console carries the credential (write-only), matching get-historian. Redact a
+	// fresh copy so the stored config keeps the real password.
+	return redactHistorianReply(cfg), nil, nil
 }

@@ -40,18 +40,26 @@ var _ = Describe("EditHistorian", func() {
 
 	validPayload := func() map[string]interface{} {
 		return map[string]interface{}{
-			"host":     "new-host.example.com",
-			"password": "new-secret",
-			"port":     6543,
+			"timescale": map[string]interface{}{
+				"host":     "new-host.example.com",
+				"password": "new-secret",
+				"port":     6543,
+			},
 		}
+	}
+
+	timescaleOf := func(payload map[string]interface{}) map[string]interface{} {
+		return payload["timescale"].(map[string]interface{})
 	}
 
 	// configWithHistorian returns a config that already has a historian section.
 	configWithHistorian := func() config.FullConfig {
 		return config.FullConfig{
 			Historian: &config.HistorianConfig{
-				Host:     "old-host.example.com",
-				Password: "old-secret",
+				Timescale: &config.TimescaleConfig{
+					Host:     "old-host.example.com",
+					Password: "old-secret",
+				},
 			},
 		}
 	}
@@ -78,15 +86,23 @@ var _ = Describe("EditHistorian", func() {
 	})
 
 	Describe("Validate", func() {
-		It("should fail validation when required fields are missing", func() {
+		It("should fail validation when host is missing", func() {
 			payload := validPayload()
-			delete(payload, "password")
+			delete(timescaleOf(payload), "host")
 
 			Expect(action.Parse(payload)).To(Succeed())
 
 			err := action.Validate()
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("missing required field password"))
+			Expect(err.Error()).To(ContainSubstring("missing required field host"))
+		})
+
+		It("should pass validation when the password is omitted (kept unchanged)", func() {
+			payload := validPayload()
+			delete(timescaleOf(payload), "password")
+
+			Expect(action.Parse(payload)).To(Succeed())
+			Expect(action.Validate()).To(Succeed())
 		})
 	})
 
@@ -102,10 +118,11 @@ var _ = Describe("EditHistorian", func() {
 
 			cfg, ok := result.(config.HistorianConfig)
 			Expect(ok).To(BeTrue(), "Result should be a HistorianConfig")
-			Expect(cfg.Host).To(Equal("new-host.example.com"))
-			Expect(cfg.Port).To(Equal(uint16(6543)))
+			Expect(cfg.Timescale).NotTo(BeNil())
+			Expect(cfg.Timescale.Host).To(Equal("new-host.example.com"))
+			Expect(cfg.Timescale.Port).To(Equal(uint16(6543)))
 
-			Expect(mockConfig.Config.Historian.Host).To(Equal("new-host.example.com"))
+			Expect(mockConfig.Config.Historian.Timescale.Host).To(Equal("new-host.example.com"))
 
 			// Execute emits only the progress replies; the terminal success reply is
 			// the dispatcher's job. A self-sent ActionFinishedSuccessfull here would be
@@ -113,6 +130,38 @@ var _ = Describe("EditHistorian", func() {
 			Eventually(func() []models.ActionReplyState {
 				return historianReplyStates(&messages, &mu)
 			}).Should(Equal([]models.ActionReplyState{models.ActionConfirmed, models.ActionExecuting}))
+		})
+
+		It("should keep the existing password when the edit omits it", func() {
+			payload := validPayload()
+			delete(timescaleOf(payload), "password")
+
+			Expect(action.Parse(payload)).To(Succeed())
+
+			result, _, err := action.Execute()
+			Expect(err).NotTo(HaveOccurred())
+
+			cfg, ok := result.(config.HistorianConfig)
+			Expect(ok).To(BeTrue(), "Result should be a HistorianConfig")
+			Expect(cfg.Timescale).NotTo(BeNil())
+			Expect(cfg.Timescale.Host).To(Equal("new-host.example.com"))
+			// The reply never carries the password (write-only); the stored value
+			// (old-secret) is preserved, not blanked.
+			Expect(cfg.Timescale.Password).To(BeEmpty())
+			Expect(mockConfig.Config.Historian.Timescale.Password).To(Equal("old-secret"))
+		})
+
+		It("should set a new password when the edit provides one", func() {
+			Expect(action.Parse(validPayload())).To(Succeed())
+
+			result, _, err := action.Execute()
+			Expect(err).NotTo(HaveOccurred())
+
+			cfg, ok := result.(config.HistorianConfig)
+			Expect(ok).To(BeTrue(), "Result should be a HistorianConfig")
+			// The reply is write-only, but the new password reaches storage.
+			Expect(cfg.Timescale.Password).To(BeEmpty())
+			Expect(mockConfig.Config.Historian.Timescale.Password).To(Equal("new-secret"))
 		})
 
 		It("should fail when no historian is configured yet", func() {

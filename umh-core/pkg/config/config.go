@@ -40,7 +40,7 @@ type FullConfig struct {
 	ProtocolConverter []ProtocolConverterConfig `yaml:"protocolConverter,omitempty"` // ProtocolConverter config, can be updated while runnnig
 	StreamProcessor   []StreamProcessorConfig   `yaml:"streamProcessor,omitempty"`   // StreamProcessor config, can be updated while running
 	Internal          InternalConfig            `yaml:"internal,omitempty"`          // Internal config, not to be used by the user, only to be used for testing internal components
-	Historian         *HistorianConfig          `yaml:"historian,omitempty"`         // Historian config for TimescaleDB/Postgres connection
+	Historian         *HistorianConfig          `yaml:"historian,omitempty"`         // Historian config; groups the timescale connection (and future backends) under historian:
 }
 
 // TemplatesConfig defines the structure for the templates section.

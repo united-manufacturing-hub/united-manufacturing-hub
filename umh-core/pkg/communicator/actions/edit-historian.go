@@ -80,15 +80,17 @@ func (a *EditHistorianAction) Parse(payload interface{}) error {
 
 	a.payload = parsed
 
-	a.actionLogger.Debugf("Parsed EditHistorian action payload: host=%s port=%d database=%s",
-		a.payload.Host, a.payload.Port, a.payload.Database)
+	if a.payload.Timescale != nil {
+		a.actionLogger.Debugf("Parsed EditHistorian action payload: timescale host=%s port=%d database=%s",
+			a.payload.Timescale.Host, a.payload.Timescale.Port, a.payload.Timescale.Database)
+	}
 
 	return nil
 }
 
 // Validate implements the Action interface.
 func (a *EditHistorianAction) Validate() error {
-	return a.payload.Validate()
+	return a.payload.ValidateForUpdate()
 }
 
 // getUserEmail implements the Action interface.
@@ -135,6 +137,8 @@ func (a *EditHistorianAction) Execute() (interface{}, map[string]interface{}, er
 		return nil, nil, fmt.Errorf("%s", errorMsg)
 	}
 
-	// The terminal ActionFinishedSuccessfull reply is sent by the caller (see actions.go).
-	return cfg, nil, nil
+	// Blank the password in the reply: no historian reply sent to the Management
+	// Console carries the credential (write-only), matching get-historian. When the
+	// edit omitted the password, the stored value is preserved by AtomicEditHistorian.
+	return redactHistorianReply(cfg), nil, nil
 }

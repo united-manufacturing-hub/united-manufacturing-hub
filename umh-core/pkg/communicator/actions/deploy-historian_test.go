@@ -40,9 +40,15 @@ var _ = Describe("DeployHistorian", func() {
 
 	validPayload := func() map[string]interface{} {
 		return map[string]interface{}{
-			"host":     "timescale.example.com",
-			"password": "secret",
+			"timescale": map[string]interface{}{
+				"host":     "timescale.example.com",
+				"password": "secret",
+			},
 		}
+	}
+
+	timescaleOf := func(payload map[string]interface{}) map[string]interface{} {
+		return payload["timescale"].(map[string]interface{})
 	}
 
 	BeforeEach(func() {
@@ -87,7 +93,7 @@ var _ = Describe("DeployHistorian", func() {
 
 		It("should fail validation when host is missing", func() {
 			payload := validPayload()
-			delete(payload, "host")
+			delete(timescaleOf(payload), "host")
 
 			Expect(action.Parse(payload)).To(Succeed())
 
@@ -98,7 +104,7 @@ var _ = Describe("DeployHistorian", func() {
 
 		It("should fail validation when password is missing", func() {
 			payload := validPayload()
-			delete(payload, "password")
+			delete(timescaleOf(payload), "password")
 
 			Expect(action.Parse(payload)).To(Succeed())
 
@@ -107,9 +113,17 @@ var _ = Describe("DeployHistorian", func() {
 			Expect(err.Error()).To(ContainSubstring("missing required field password"))
 		})
 
+		It("should fail validation when the timescale section is missing", func() {
+			Expect(action.Parse(map[string]interface{}{})).To(Succeed())
+
+			err := action.Validate()
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("timescale"))
+		})
+
 		It("should fail validation for an invalid sslmode", func() {
 			payload := validPayload()
-			payload["sslmode"] = "bogus"
+			timescaleOf(payload)["sslmode"] = "bogus"
 
 			Expect(action.Parse(payload)).To(Succeed())
 
@@ -131,14 +145,19 @@ var _ = Describe("DeployHistorian", func() {
 
 			cfg, ok := result.(config.HistorianConfig)
 			Expect(ok).To(BeTrue(), "Result should be a HistorianConfig")
-			Expect(cfg.Host).To(Equal("timescale.example.com"))
-			Expect(cfg.Port).To(Equal(uint16(5432)))
-			Expect(cfg.Database).To(Equal("umh"))
-			Expect(cfg.Username).To(Equal("umh_owner"))
-			Expect(cfg.SSLMode).To(Equal(config.HistorianSSLModeRequire))
+			Expect(cfg.Timescale).NotTo(BeNil())
+			Expect(cfg.Timescale.Host).To(Equal("timescale.example.com"))
+			Expect(cfg.Timescale.Port).To(Equal(uint16(5432)))
+			Expect(cfg.Timescale.Database).To(Equal("umh"))
+			Expect(cfg.Timescale.Username).To(Equal("umh_owner"))
+			Expect(cfg.Timescale.SSLMode).To(Equal(config.HistorianSSLModeRequire))
 
+			// The reply is write-only: it never carries the password back to the
+			// Management Console, but the credential does reach stored config.
+			Expect(cfg.Timescale.Password).To(BeEmpty())
 			Expect(mockConfig.Config.Historian).NotTo(BeNil())
-			Expect(mockConfig.Config.Historian.Host).To(Equal("timescale.example.com"))
+			Expect(mockConfig.Config.Historian.Timescale.Host).To(Equal("timescale.example.com"))
+			Expect(mockConfig.Config.Historian.Timescale.Password).To(Equal("secret"))
 
 			// Execute emits only the progress replies; the terminal success reply is
 			// the dispatcher's job. A self-sent ActionFinishedSuccessfull here would be
@@ -158,6 +177,30 @@ var _ = Describe("DeployHistorian", func() {
 			Expect(err.Error()).To(ContainSubstring("Failed to write Historian configuration"))
 			Expect(result).To(BeNil())
 			Expect(metadata).To(BeNil())
+
+			Eventually(func() []models.ActionReplyState {
+				return historianReplyStates(&messages, &mu)
+			}).Should(Equal([]models.ActionReplyState{models.ActionConfirmed, models.ActionExecuting, models.ActionFinishedWithFailure}))
+		})
+
+		It("should refuse to overwrite an already-configured historian", func() {
+			mockConfig.Config.Historian = &config.HistorianConfig{
+				Timescale: &config.TimescaleConfig{
+					Host:     "existing.example.com",
+					Password: "existing-secret",
+				},
+			}
+
+			Expect(action.Parse(validPayload())).To(Succeed())
+
+			result, metadata, err := action.Execute()
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("already configured"))
+			Expect(result).To(BeNil())
+			Expect(metadata).To(BeNil())
+
+			// The existing historian must be untouched, not overwritten.
+			Expect(mockConfig.Config.Historian.Timescale.Host).To(Equal("existing.example.com"))
 
 			Eventually(func() []models.ActionReplyState {
 				return historianReplyStates(&messages, &mu)

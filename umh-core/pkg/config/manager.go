@@ -112,11 +112,15 @@ type ConfigManager interface {
 	WriteYAMLConfigFromString(ctx context.Context, configStr string, expectedModTime string) error
 	// GetBackupCount returns the number of config backups created since startup.
 	GetBackupCount() uint64
-	// AtomicSetHistorian writes or replaces the historian section in the config atomically.
+	// AtomicSetHistorian creates the historian section in the config atomically,
+	// returning ErrHistorianAlreadyConfigured if one already exists. It is create-only;
+	// use AtomicEditHistorian to change an existing historian.
 	AtomicSetHistorian(ctx context.Context, historian HistorianConfig) error
 	// AtomicEditHistorian replaces an existing historian section atomically, returning
-	// ErrHistorianNotConfigured if none exists. The existence check and write share a
-	// single lock, eliminating the check-then-write race of a separate GetConfig call.
+	// ErrHistorianNotConfigured if none exists. An empty password is preserved from the
+	// existing section (get-historian never returns it, so edit cannot resend it). The
+	// existence check, password merge, and write share a single lock, eliminating the
+	// check-then-write race of a separate GetConfig call.
 	AtomicEditHistorian(ctx context.Context, historian HistorianConfig) error
 	// AtomicDeleteHistorian removes the historian section from the config atomically.
 	AtomicDeleteHistorian(ctx context.Context) error
@@ -1306,7 +1310,10 @@ func (m *FileConfigManager) getLatestBackupContent(ctx context.Context) []byte {
 	return data
 }
 
-// AtomicSetHistorian writes or replaces the historian section in the config atomically.
+// AtomicSetHistorian creates the historian section in the config atomically. It
+// returns ErrHistorianAlreadyConfigured if one already exists so a retried or
+// misdirected deploy cannot silently overwrite an existing connection (and blank its
+// TLS cert paths); the existence check and the write share a single lock.
 func (m *FileConfigManager) AtomicSetHistorian(ctx context.Context, historian HistorianConfig) error {
 	err := m.mutexAtomicUpdate.Lock(ctx)
 	if err != nil {
@@ -1317,6 +1324,10 @@ func (m *FileConfigManager) AtomicSetHistorian(ctx context.Context, historian Hi
 	cfg, err := m.GetConfig(ctx, 0)
 	if err != nil {
 		return fmt.Errorf("failed to get config: %w", err)
+	}
+
+	if cfg.Historian != nil {
+		return ErrHistorianAlreadyConfigured
 	}
 
 	cfg.Historian = &historian
@@ -1354,6 +1365,15 @@ func (m *FileConfigManager) AtomicEditHistorian(ctx context.Context, historian H
 
 	if cfg.Historian == nil {
 		return ErrHistorianNotConfigured
+	}
+
+	// An empty timescale password means "keep the existing one": get-historian never
+	// returns the stored password, so the Management Console cannot resend it on edit.
+	// Preserving it here, under the same lock as the write, keeps the credential
+	// write-only without a separate read that could race a concurrent change.
+	if historian.Timescale != nil && historian.Timescale.Password == "" &&
+		cfg.Historian.Timescale != nil {
+		historian.Timescale.Password = cfg.Historian.Timescale.Password
 	}
 
 	cfg.Historian = &historian

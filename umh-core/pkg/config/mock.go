@@ -1330,7 +1330,9 @@ func (m *MockConfigManager) GetBackupCount() uint64 {
 	return 0
 }
 
-// AtomicSetHistorian writes or replaces the historian section in the mock config.
+// AtomicSetHistorian creates the historian section in the mock config, returning
+// ErrHistorianAlreadyConfigured when one is already present (create-only, matching
+// the real FileConfigManager).
 func (m *MockConfigManager) AtomicSetHistorian(_ context.Context, historian HistorianConfig) error {
 	m.mutexReadAndWrite.Lock()
 	defer m.mutexReadAndWrite.Unlock()
@@ -1339,6 +1341,10 @@ func (m *MockConfigManager) AtomicSetHistorian(_ context.Context, historian Hist
 
 	if m.AtomicSetHistorianError != nil {
 		return m.AtomicSetHistorianError
+	}
+
+	if m.Config.Historian != nil {
+		return ErrHistorianAlreadyConfigured
 	}
 
 	m.Config.Historian = &historian
@@ -1360,6 +1366,12 @@ func (m *MockConfigManager) AtomicEditHistorian(_ context.Context, historian His
 
 	if m.Config.Historian == nil {
 		return ErrHistorianNotConfigured
+	}
+
+	// An empty timescale password keeps the existing one, matching the real FileConfigManager.
+	if historian.Timescale != nil && historian.Timescale.Password == "" &&
+		m.Config.Historian.Timescale != nil {
+		historian.Timescale.Password = m.Config.Historian.Timescale.Password
 	}
 
 	m.Config.Historian = &historian

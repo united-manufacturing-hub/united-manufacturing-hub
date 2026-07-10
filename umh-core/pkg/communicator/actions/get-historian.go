@@ -26,7 +26,6 @@ package actions
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
 	"github.com/google/uuid"
@@ -105,14 +104,17 @@ func (a *GetHistorianAction) Execute() (interface{}, map[string]interface{}, err
 	}
 
 	if cfg.Historian == nil {
-		SendActionReplyV2(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
-			"Historian is not configured", models.ErrValidationFailed, nil, a.outboundChannel, models.GetHistorian, nil)
-
-		return nil, nil, errors.New("historian is not configured")
+		// A missing historian is the normal starting state of the singleton, not an
+		// error. Report success with an absent (null) result so the Management Console
+		// shows the empty "add historian" form instead of a read error, without having
+		// to string-match an error message.
+		return nil, nil, nil
 	}
 
-	response := *cfg.Historian
-
+	// The password is write-only: it is never returned to the Management Console,
+	// so it cannot leak through reply logs, the cloud backend, or the browser. To
+	// change it the user sends a new one via edit-historian; an empty password on
+	// edit keeps the stored value.
 	// The terminal ActionFinishedSuccessfull reply is sent by the caller (see actions.go).
-	return response, nil, nil
+	return redactHistorianReply(*cfg.Historian), nil, nil
 }

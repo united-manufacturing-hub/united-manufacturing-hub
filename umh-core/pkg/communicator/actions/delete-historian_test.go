@@ -46,8 +46,10 @@ var _ = Describe("DeleteHistorian", func() {
 
 		mockConfig = config.NewMockConfigManager().WithConfig(config.FullConfig{
 			Historian: &config.HistorianConfig{
-				Host:     "timescale.example.com",
-				Password: "secret",
+				Timescale: &config.TimescaleConfig{
+					Host:     "timescale.example.com",
+					Password: "secret",
+				},
 			},
 		})
 
