@@ -240,7 +240,7 @@ func causeDetails(c Cause, signals Signals) string {
 			return fmt.Sprintf("CPU averaged %d%% of the machine over the last minute and this instance has little headroom left. Host contention is not visible here (host CPU usage is not readable). Enable Linux pressure stats (boot with psi=1) for richer detail. Consider adding CPU capacity.", pct)
 		case signals.LimitSaturationFired:
 			pct := pctOf(signals.AvgUsageCores / signals.CapacityCores)
-			detail := fmt.Sprintf("CPU averaged %d%% of its limit over the last minute and this instance has little headroom left. Raise its CPU limit, or reduce the load to grow.", pct)
+			detail := fmt.Sprintf("CPU averaged %d%% of its limit over the last minute and this instance has little headroom left. Raise its CPU limit, or reduce the load on it.", pct)
 			// C-scenario honesty note: when host stats are unavailable in
 			// limit mode (the sampler could not read /proc/stat), host-side
 			// contention is invisible. Gate on the real readability flag, not
