@@ -416,6 +416,11 @@ func TestComposeMessage_HealthyBudgetDashboard(t *testing.T) {
 }
 
 func TestBlockReason_PerCause(t *testing.T) {
+	// Throttling/Pressure/Steal/HostContention/bogus are signal-independent:
+	// their BlockReason case does not consult the signals, so the zero-value
+	// Signals is used. The saturation case is exercised separately in
+	// TestBlockReason_SaturationSubLatch because it dispatches on the sub-latch
+	// flags; here a zero-signals saturation hits the generic default.
 	cases := []struct {
 		kind cpuhealth.CauseKind
 		want string
@@ -426,14 +431,109 @@ func TestBlockReason_PerCause(t *testing.T) {
 		// Host-contention is folded in v4 (never emitted): its BlockReason case
 		// was deleted, so it falls through to the generic degraded default.
 		{cpuhealth.CauseKindHostContention, "Can't add another bridge: CPU is degraded."},
-		{cpuhealth.CauseKindSaturation, "Can't add another bridge: CPU has been running near full and we can't determine the cause. Add CPU capacity, or set a CPU limit, first."},
+		// Saturation with no sub-latch set (shouldn't happen for a real
+		// saturation cause, but BlockReason must not panic) hits the generic
+		// default remediation, dropping the pre-existing first-person "we".
+		{cpuhealth.CauseKindSaturation, "Can't add another bridge: CPU is running near full. Add CPU capacity, or set a CPU limit, first."},
 		{cpuhealth.CauseKind("bogus"), "Can't add another bridge: CPU is degraded."},
 	}
 	for _, tc := range cases {
 		t.Run(string(tc.kind), func(t *testing.T) {
-			got := cpuhealth.BlockReason(tc.kind)
+			got := cpuhealth.BlockReason(tc.kind, cpuhealth.Signals{})
 			if got != tc.want {
 				t.Fatalf("BlockReason(%q): got %q, want %q", tc.kind, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestBlockReason_SaturationSubLatch pins that BlockReason dispatches the
+// saturation cause on the sub-latch flags carried by Signals, instead of
+// returning one generic string for every saturation cause. The generic "set a
+// CPU limit" advice is useless for a full host (HostFullFired /
+// NoLimitHostFired: a limit caps the container, it does not protect it from a
+// full host) and backwards for LimitSaturationFired (the limit is what's
+// saturated, so it needs raising, not setting). NoHostStatsSaturationFired is
+// the one case where "set a CPU limit" is correct advice, since a limit gives
+// a scoping ceiling when host stats are unavailable.
+func TestBlockReason_SaturationSubLatch(t *testing.T) {
+	cases := []struct {
+		name    string
+		signals cpuhealth.Signals
+		// contains Asserts the dispatched message names the right remediation.
+		contains []string
+		// notContains Asserts the wrong-for-this-sub-latch remediation is absent.
+		notContains []string
+	}{
+		{
+			name:    "HostFullFired",
+			signals: cpuhealth.Signals{HostFullFired: true},
+			contains: []string{
+				"the machine is full",
+				"Add CPU to the machine",
+			},
+			notContains: []string{
+				// "set a CPU limit" is useless for a full host.
+				"set a CPU limit",
+				"Raise the limit",
+				"raise the limit",
+			},
+		},
+		{
+			name:    "LimitSaturationFired",
+			signals: cpuhealth.Signals{LimitSaturationFired: true},
+			contains: []string{
+				"at its CPU limit",
+				"Raise the limit",
+			},
+			notContains: []string{
+				// "set a CPU limit" is backwards here: the limit exists and is
+				// what's saturated, so it needs raising, not setting.
+				"set a CPU limit",
+				"the machine is full",
+			},
+		},
+		{
+			name:    "NoHostStatsSaturationFired",
+			signals: cpuhealth.Signals{NoHostStatsSaturationFired: true},
+			contains: []string{
+				"host stats are unavailable",
+				// A limit WOULD help here: it gives a scoping ceiling when host
+				// stats are unavailable.
+				"set a CPU limit",
+			},
+			notContains: []string{
+				"Raise the limit",
+				"the machine is full",
+			},
+		},
+		{
+			name:    "NoLimitHostFired",
+			signals: cpuhealth.Signals{NoLimitHostFired: true},
+			contains: []string{
+				"the machine is full",
+				"Add CPU to the machine",
+			},
+			notContains: []string{
+				// Same as HostFullFired: the host is full, a limit does not help.
+				"set a CPU limit",
+				"Raise the limit",
+				"raise the limit",
+			},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := cpuhealth.BlockReason(cpuhealth.CauseKindSaturation, tc.signals)
+			for _, want := range tc.contains {
+				if !strings.Contains(got, want) {
+					t.Errorf("BlockReason(saturation, %s): message must contain %q, got %q", tc.name, want, got)
+				}
+			}
+			for _, bad := range tc.notContains {
+				if strings.Contains(got, bad) {
+					t.Errorf("BlockReason(saturation, %s): message must NOT contain %q, got %q", tc.name, bad, got)
+				}
 			}
 		})
 	}

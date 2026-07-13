@@ -1164,7 +1164,21 @@ func (p *ProtocolConverterService) IsResourceLimited(snapshot fsm.SystemSnapshot
 				if cpu := serviceInfo.CPU; cpu != nil && len(cpu.Causes) > 0 &&
 					serviceInfo.MemoryHealth != models.Degraded && serviceInfo.DiskHealth != models.Degraded {
 					// Causes[0] is the dominant cause; see decide.go severity sort.
-					return true, cpuhealth.BlockReason(cpuhealth.CauseKind(cpu.Causes[0].Kind))
+					// BlockReason dispatches the saturation cause on the sub-latch
+					// flags (HostFullFired/LimitSaturationFired/
+					// NoHostStatsSaturationFired/NoLimitHostFired), carried on the
+					// verdict-basis headroom block so MC can rank the firings.
+					// VerdictBasis is nil only on a cgroup read failure, where
+					// Decide is not called and no causes are set, so the len>0 guard
+					// above already excludes that path; the nil check is defensive.
+					var signals cpuhealth.Signals
+					if cpu.VerdictBasis != nil {
+						signals.HostFullFired = cpu.VerdictBasis.Headroom.HostFullFired
+						signals.LimitSaturationFired = cpu.VerdictBasis.Headroom.LimitSaturationFired
+						signals.NoHostStatsSaturationFired = cpu.VerdictBasis.Headroom.NoHostStatsSaturationFired
+						signals.NoLimitHostFired = cpu.VerdictBasis.Headroom.NoLimitHostFired
+					}
+					return true, cpuhealth.BlockReason(cpuhealth.CauseKind(cpu.Causes[0].Kind), signals)
 				}
 			}
 		}

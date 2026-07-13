@@ -473,7 +473,12 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 					cpuhealth.CauseKindThrottling: "Can't add another bridge: this instance is already hitting its CPU limit. Raise the limit or reduce load first.",
 					cpuhealth.CauseKindPressure:   "Can't add another bridge: tasks on this instance are already waiting for a free CPU core. Reduce load, or give this instance more CPU, first.",
 					cpuhealth.CauseKindSteal:      "Can't add another bridge: the server isn't giving this instance enough CPU (other VMs are using it). Free up CPU on the server first.",
-					cpuhealth.CauseKindSaturation: "Can't add another bridge: CPU has been running near full and we can't determine the cause. Add CPU capacity, or set a CPU limit, first.",
+					// This fixture has no VerdictBasis, so the signals are
+					// zero-valued and BlockReason hits the saturation default
+					// (the generic remediation, dropping the pre-existing
+					// first-person "we"). The sub-latch dispatch is pinned
+					// directly in pkg/cpuhealth/message_test.go.
+					cpuhealth.CauseKindSaturation: "Can't add another bridge: CPU is running near full. Add CPU capacity, or set a CPU limit, first.",
 				}
 
 				for kind, expected := range expectedReasons {

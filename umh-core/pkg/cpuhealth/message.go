@@ -284,9 +284,15 @@ func pctOf(fraction float64) int {
 
 // BlockReason returns the per-cause bridge-block message shown when bridge
 // creation is refused because the instance's CPU is degraded. The dominant
-// cause kind selects the message; an unknown kind falls back to the generic
+// cause kind selects the message; the saturation kind further dispatches on
+// the sub-latch flags carried by signals, since the same CauseKindSaturation
+// covers four distinct sub-causes whose remediations diverge: a full host
+// needs CPU added to the machine (a limit does not protect it from a full
+// host), a saturated limit needs raising (not setting), and the no-host-stats
+// case is the one where setting a limit helps (it gives a scoping ceiling when
+// host stats are unavailable). An unknown kind falls back to the generic
 // degraded message.
-func BlockReason(dominantKind CauseKind) string {
+func BlockReason(dominantKind CauseKind, signals Signals) string {
 	switch dominantKind {
 	case CauseKindThrottling:
 		return "Can't add another bridge: this instance is already hitting its CPU limit. Raise the limit or reduce load first."
@@ -295,7 +301,18 @@ func BlockReason(dominantKind CauseKind) string {
 	case CauseKindSteal:
 		return "Can't add another bridge: the server isn't giving this instance enough CPU (other VMs are using it). Free up CPU on the server first."
 	case CauseKindSaturation:
-		return "Can't add another bridge: CPU has been running near full and we can't determine the cause. Add CPU capacity, or set a CPU limit, first."
+		switch {
+		case signals.HostFullFired:
+			return "Can't add another bridge: the machine is full. Add CPU to the machine, or reduce other software running on it, first."
+		case signals.LimitSaturationFired:
+			return "Can't add another bridge: this instance is at its CPU limit. Raise the limit, or reduce the load, first."
+		case signals.NoHostStatsSaturationFired:
+			return "Can't add another bridge: CPU is running near full and host stats are unavailable. Add CPU capacity, or set a CPU limit, first."
+		case signals.NoLimitHostFired:
+			return "Can't add another bridge: the machine is full. Add CPU to the machine, or reduce other software running on it, first."
+		default:
+			return "Can't add another bridge: CPU is running near full. Add CPU capacity, or set a CPU limit, first."
+		}
 	default:
 		return "Can't add another bridge: CPU is degraded."
 	}
