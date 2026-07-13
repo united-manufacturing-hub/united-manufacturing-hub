@@ -111,10 +111,6 @@ func (a *GetHistorianAction) Execute() (interface{}, map[string]interface{}, err
 		return nil, nil, nil
 	}
 
-	// The password is write-only: it is never returned to the Management Console,
-	// so it cannot leak through reply logs, the cloud backend, or the browser. To
-	// change it the user sends a new one via edit-historian; an empty password on
-	// edit keeps the stored value.
 	// The terminal ActionFinishedSuccessfull reply is sent by the caller (see actions.go).
-	return redactHistorianReply(*cfg.Historian), nil, nil
+	return withoutPasswords(*cfg.Historian), nil, nil
 }

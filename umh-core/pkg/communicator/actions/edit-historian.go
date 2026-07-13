@@ -135,8 +135,5 @@ func (a *EditHistorianAction) Execute() (interface{}, map[string]interface{}, er
 		return nil, nil, fmt.Errorf("%s", errorMsg)
 	}
 
-	// Blank the password in the reply: no historian reply sent to the Management
-	// Console carries the credential (write-only), matching get-historian. When the
-	// edit omitted the password, the stored value is preserved by AtomicEditHistorian.
-	return redactHistorianReply(cfg), nil, nil
+	return withoutPasswords(cfg), nil, nil
 }

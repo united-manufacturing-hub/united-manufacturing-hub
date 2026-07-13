@@ -134,8 +134,5 @@ func (a *DeployHistorianAction) Execute() (interface{}, map[string]interface{}, 
 		return nil, nil, fmt.Errorf("%s", errorMsg)
 	}
 
-	// Blank the password in the reply: no historian reply sent to the Management
-	// Console carries the credential (write-only), matching get-historian. Redact a
-	// fresh copy so the stored config keeps the real password.
-	return redactHistorianReply(cfg), nil, nil
+	return withoutPasswords(cfg), nil, nil
 }
