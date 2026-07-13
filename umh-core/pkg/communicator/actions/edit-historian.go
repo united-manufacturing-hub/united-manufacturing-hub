@@ -125,7 +125,7 @@ func (a *EditHistorianAction) Execute() (interface{}, map[string]interface{}, er
 			SendActionReplyV2(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
 				errorMsg, models.ErrValidationFailed, nil, a.outboundChannel, models.EditHistorian, nil)
 
-			return nil, nil, errors.New(errorMsg)
+			return nil, nil, fmt.Errorf("%s", errorMsg)
 		}
 
 		errorMsg := fmt.Sprintf("Failed to update Historian configuration: %v", err)
