@@ -295,6 +295,8 @@ func (c *ContainerMonitorService) getCPUMetrics(ctx context.Context) (*models.CP
 		}
 
 		c.wasThrottled = isThrottled
+	} else {
+		c.logger.Debugf("cgroup CPU info unavailable, defaulting to healthy: %v", cgroupErr)
 	}
 
 	// ComposeMessage returns the curated per-cause two-layer message (headline

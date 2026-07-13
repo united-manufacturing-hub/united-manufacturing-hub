@@ -75,9 +75,11 @@ func ComposeMessage(verdict Verdict, signals Signals) string {
 func composeHealthy(signals Signals) string {
 	// Zero-signals guard: when CapacityCores is 0 (cgroup read failure, Decide
 	// never ran, signals zero-valued), do not compose the garbled "0.0 of 0
-	// cores, -1.0 headroom" budget dashboard. Return a safe healthy string.
+	// cores, -1.0 headroom" budget dashboard. Return a safe string that conveys
+	// monitoring-unavailability first; the State on the wire stays healthy per
+	// the binary contract, so the message and the badge diverge honestly.
 	if signals.CapacityCores == 0 {
-		return "CPU status healthy; CPU usage is not available."
+		return "CPU monitoring unavailable: cgroup read failed. Defaulting to healthy."
 	}
 
 	var usedDisp, reserveDisp float64

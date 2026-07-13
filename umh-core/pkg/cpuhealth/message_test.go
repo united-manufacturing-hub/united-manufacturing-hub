@@ -496,7 +496,12 @@ func TestComposeMessage_HealthyBudget_NoLimit_Unchanged(t *testing.T) {
 // TestComposeMessage_HealthyBudget_ZeroSignalsGuard pins the cgroup-read-
 // failure path: when CapacityCores is 0 (Decide never ran, signals zero-
 // valued), composeHealthy must NOT emit the garbled "0.0 of 0 cores, -1.0
-// headroom" budget dashboard. It returns a safe healthy string instead.
+// headroom" budget dashboard. It returns a safe string instead. The State on
+// the wire stays healthy (binary contract), so the guard must still mention
+// healthy, but the message must NOT lead with "healthy" / "CPU status
+// healthy": it conveys monitoring-unavailability first (the operator sees
+// "unavailable" in the tooltip even though the badge stays green). It must
+// also name the cgroup read as the cause so the failure is diagnosable.
 func TestComposeMessage_HealthyBudget_ZeroSignalsGuard(t *testing.T) {
 	healthy := cpuhealth.Verdict{State: cpuhealth.StateHealthy}
 	signals := cpuhealth.Signals{}
@@ -508,6 +513,15 @@ func TestComposeMessage_HealthyBudget_ZeroSignalsGuard(t *testing.T) {
 	}
 	if strings.Contains(msg, "-1.0") {
 		t.Fatalf("zero-signals guard must prevent the negative headroom: %q", msg)
+	}
+	if strings.Contains(msg, "CPU status healthy") {
+		t.Fatalf("zero-signals guard must not lead with the healthy status: %q", msg)
+	}
+	if !strings.Contains(msg, "unavailable") {
+		t.Fatalf("zero-signals guard must convey monitoring-unavailability: %q", msg)
+	}
+	if !strings.Contains(msg, "cgroup") {
+		t.Fatalf("zero-signals guard must name the cgroup read failure: %q", msg)
 	}
 	if !strings.Contains(msg, "healthy") {
 		t.Fatalf("zero-signals guard must still return a healthy string: %q", msg)
