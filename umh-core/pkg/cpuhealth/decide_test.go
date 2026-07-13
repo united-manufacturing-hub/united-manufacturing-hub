@@ -4599,6 +4599,87 @@ func TestDecide_NoLimitHostOutage_OverlapWithNoHostStats(t *testing.T) {
 	}
 }
 
+// TestDecide_LimitHostOutage_SatValueNotPositiveHeadroom pins the Cause
+// Value on a sustained /proc/stat outage in LIMIT mode: HostFullFired latches
+// (the hold-on-missing default branch never clears it, so the verdict stays
+// Degraded), but the hostBusyRing is not appended to (the append gate keys on
+// HostBusyCoresAvailable) so once the readable samples age out past the 60s
+// window hostBusyMean=0 and HostHeadroomCores = LogicalCpus - 0 -
+// cpuReserveCores = 8 - 0 - 1 = 7 (large positive). The satValue switch
+// selected HostHeadroomCores for the held HostFullFired, so the wire's
+// Cause.Value read as +7 cores for a degraded saturation verdict
+// (semantically backwards: Value is documented as negative headroom / cores
+// over-capacity). The Value must not be a large positive headroom on an
+// outage tick. Q1 fixed the no-limit analogue (NoLimitHostFired); this pins
+// the limit-mode one (HostFullFired) that Q1 missed.
+func TestDecide_LimitHostOutage_SatValueNotPositiveHeadroom(t *testing.T) {
+	base := time.Date(2026, 7, 6, 12, 0, 0, 0, time.UTC)
+	th := DefaultThresholds()
+
+	quota := 2.0
+
+	// (a) fire: limit mode (Quota set), host 7.5/8 full, container idle. 4
+	// ticks fill the hostBusyRing so the 2-sample floor passes and the
+	// host-full latch fires (hostHeadroomCores = 8 - 7.5 - 1 = -0.5 < 0).
+	// LimitSaturationFired stays false (container idle: HeadroomCores =
+	// Quota - 0 - reserve > 0).
+	st := &WindowState{}
+	for i := 0; i < 4; i++ {
+		Decide(st, Sample{
+			Timestamp:              base.Add(time.Duration(i) * time.Second),
+			Quota:                  &quota,
+			LogicalCpus:            8.0,
+			HostBusyCores:          7.5,
+			HostBusyCoresAvailable: true,
+			UsageCores:             0,
+		}, th)
+	}
+
+	// (b) sustained outage: jump past the 60s hostBusyWindow so all readable
+	// readings age out. HostBusyCoresAvailable=false so the ring is not
+	// appended. hostBusyMean=0 (empty ring, 2-sample floor).
+	// HostHeadroomCores = 8 - 0 - 1 = 7 (large positive). hostFullFired holds
+	// (the hold-on-missing default branch never clears it). State stays
+	// Degraded.
+	vHold, sigHold := Decide(st, Sample{
+		Timestamp:              base.Add(65 * time.Second),
+		Quota:                  &quota,
+		LogicalCpus:            8.0,
+		HostBusyCores:          0,
+		HostBusyCoresAvailable: false,
+		UsageCores:             0,
+	}, th)
+
+	if vHold.State != StateDegraded {
+		t.Fatalf("State: got %q, want %q (hostFullFired latch holds across the sustained outage)", vHold.State, StateDegraded)
+	}
+	if !sigHold.HostFullFired {
+		t.Fatalf("HostFullFired: got false, want true (latch holds)")
+	}
+	if sigHold.HostBusyCoresAvailable {
+		t.Fatalf("HostBusyCoresAvailable: got true, want false (outage tick)")
+	}
+	if len(vHold.Causes) == 0 {
+		t.Fatalf("expected at least one cause, got none")
+	}
+	satVal := vHold.Causes[0].Value
+	if satVal > 0 {
+		t.Fatalf("Cause Value: got %v, want <= 0 (a degraded saturation cause must not carry a large positive headroom Value on an outage tick; HostHeadroomCores=+7 is the bug)", satVal)
+	}
+
+	// No-shadow pin: HostFullFired is limit-mode-only and
+	// NoHostStatsSaturationFired is no-limit-mode-only (the mode switch clears
+	// the other mode's latches), so the new HostFullFired && !HostBusyCoresAvailable
+	// satValue gate cannot shadow the NoHostStatsSaturationFired arm. Confirm
+	// the no-limit latch stays false in limit mode on the outage tick.
+	if sigHold.NoHostStatsSaturationFired {
+		t.Fatalf("NoHostStatsSaturationFired: got true, want false (limit mode clears the no-limit latches; HostFullFired and NoHostStatsSaturationFired are mutually exclusive by mode)")
+	}
+	if sigHold.NoLimitHostFired {
+		t.Fatalf("NoLimitHostFired: got true, want false (limit mode clears the no-limit latches)")
+	}
+}
+
 // TestDecide_NoLimitHostFull_ContainerIsCause_AttributionUnknown pins the
 // DA-found regression in the attribution fix: on a no-limit host-full box
 // where the CONTAINER ITSELF is the dominant cause (host-busy = container +

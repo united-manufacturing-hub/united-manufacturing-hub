@@ -1105,8 +1105,18 @@ func Decide(st *WindowState, sample Sample, thresholds Thresholds) (Verdict, Sig
 		switch {
 		case sample.LogicalCpus <= 0:
 			satValue = saturationAvg
-		case signals.HostFullFired:
+		// HostFullFired is limit-mode-only; NoHostStatsSaturationFired is
+		// no-limit-mode-only (each latch is cleared in the other mode's
+		// branch), so the two are mutually exclusive by mode and the outage
+		// sub-case below cannot shadow the NoHostStatsSaturationFired arm.
+		// Gate on HostBusyCoresAvailable so a held HostFullFired across a
+		// sustained /proc/stat outage (hostBusyRing ages out, hostBusyMean=0,
+		// HostHeadroomCores goes positive) does not select HostHeadroomCores
+		// for the Value; mirror Q1's NoLimitHostFired gate.
+		case signals.HostFullFired && sample.HostBusyCoresAvailable:
 			satValue = signals.HostHeadroomCores
+		case signals.HostFullFired && !sample.HostBusyCoresAvailable:
+			satValue = 0
 		case signals.NoHostStatsSaturationFired:
 			satValue = signals.NoHostStatsSaturationFraction
 		case signals.NoLimitHostFired && !sample.HostBusyCoresAvailable:
