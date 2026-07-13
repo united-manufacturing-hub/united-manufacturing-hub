@@ -31,7 +31,7 @@ jobs:
       code: ${{ steps.filter.outputs.code }}
       changelog: ${{ steps.filter.outputs.changelog }}
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d # v4.0.1
         id: filter
         with:
@@ -73,16 +73,16 @@ jobs:
       pull-requests: write
     steps:
       - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - name: FOSSA Analyze
-        uses: fossas/fossa-action@ff70fe9fe17cbd2040648f1c45e8ec4e4884dcf3 # v1
+        uses: fossas/fossa-action@29693cc50323968e039056be419b32989fc5880c # v2
         with:
           api-key: ${{ secrets.FOSSA_API_KEY }}
           project: united-manufacturing-hub
           working-directory: umh-core
       - name: FOSSA Test
         id: test
-        uses: fossas/fossa-action@ff70fe9fe17cbd2040648f1c45e8ec4e4884dcf3 # v1
+        uses: fossas/fossa-action@29693cc50323968e039056be419b32989fc5880c # v2
         with:
           api-key: ${{ secrets.FOSSA_API_KEY }}
           project: united-manufacturing-hub
@@ -108,7 +108,7 @@ jobs:
       contents: read
       packages: read
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
       - name: Login to GitHub Container Registry
         uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4
@@ -118,7 +118,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: FOSSA Container Analyze
-        uses: fossas/fossa-action@ff70fe9fe17cbd2040648f1c45e8ec4e4884dcf3 # v1
+        uses: fossas/fossa-action@29693cc50323968e039056be419b32989fc5880c # v2
         with:
           api-key: ${{ secrets.FOSSA_API_KEY }}
           project: united-manufacturing-hub-container
@@ -129,7 +129,7 @@ jobs:
 
       - name: FOSSA Container Test
         id: test
-        uses: fossas/fossa-action@ff70fe9fe17cbd2040648f1c45e8ec4e4884dcf3 # v1
+        uses: fossas/fossa-action@29693cc50323968e039056be419b32989fc5880c # v2
         with:
           api-key: ${{ secrets.FOSSA_API_KEY }}
           project: united-manufacturing-hub-container
@@ -143,17 +143,17 @@ jobs:
     runs-on: depot-ubuntu-24.04
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
       - name: FOSSA Analyze (vendored binaries)
-        uses: fossas/fossa-action@ff70fe9fe17cbd2040648f1c45e8ec4e4884dcf3 # v1
+        uses: fossas/fossa-action@29693cc50323968e039056be419b32989fc5880c # v2
         with:
           api-key: ${{ secrets.FOSSA_API_KEY }}
           project: united-manufacturing-hub-vendored
           working-directory: .fossa-vendored
 
       - name: FOSSA Test (vendored binaries)
-        uses: fossas/fossa-action@ff70fe9fe17cbd2040648f1c45e8ec4e4884dcf3 # v1
+        uses: fossas/fossa-action@29693cc50323968e039056be419b32989fc5880c # v2
         with:
           api-key: ${{ secrets.FOSSA_API_KEY }}
           project: united-manufacturing-hub-vendored
@@ -222,7 +222,7 @@ jobs:
     steps:
       # Check out THIS repo (fetch-depth: 0 fetches all tags + history, needed by
       # the changelog guard for tag lookup and merge-base computation)
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           fetch-depth: 0
       # Generate token for cross-repo access
@@ -234,7 +234,7 @@ jobs:
           private-key: ${{ secrets.CHANGELOG_SYNC_APP_PK }}
           repositories: changelog.umh.app
       # Check out the changelog.umh.app repo
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           repository: united-manufacturing-hub/changelog.umh.app
           token: ${{ steps.app-token.outputs.token }}
