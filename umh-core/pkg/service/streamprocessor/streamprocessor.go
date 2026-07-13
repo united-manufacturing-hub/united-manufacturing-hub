@@ -290,8 +290,6 @@ func (p *Service) AddToManager(
 		return errors.New("dataflowcomponent manager not initialized")
 	}
 
-	p.logger.Infof("Adding StreamProcessor %s", spName)
-
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
@@ -305,6 +303,8 @@ func (p *Service) AddToManager(
 		}
 	}
 
+	p.logger.Infof("Adding StreamProcessor %s", spName)
+
 	dfcConfig := config.DataFlowComponentConfig{
 		FSMInstanceConfig: config.FSMInstanceConfig{
 			Name:            underlyingDFCName,
@@ -317,7 +317,7 @@ func (p *Service) AddToManager(
 	p.dataflowComponentConfig = append(p.dataflowComponentConfig, dfcConfig)
 
 	p.logger.Infof("Stream Processor %s added to manager", spName)
-	p.logger.Infof("Dataflow component config: %+v", p.dataflowComponentConfig)
+	p.logger.Debugf("Dataflow component config: %+v", p.dataflowComponentConfig)
 
 	return nil
 }
@@ -337,11 +337,11 @@ func (p *Service) UpdateInManager(
 		return errors.New("config is nil")
 	}
 
-	p.logger.Infof("Updating streamprocessor %s", spName)
-
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
+
+	p.logger.Debugf("Updating streamprocessor %s", spName)
 
 	// Check if the dfcconfig exists
 	foundDFC := false
@@ -362,19 +362,17 @@ func (p *Service) UpdateInManager(
 	}
 
 	// Create a config.DataflowComponentConfig that wraps the DataflowComponentServiceConfig
-	if foundDFC {
-		dfcCurrentDesiredState := p.dataflowComponentConfig[indexDFC].DesiredFSMState
-		p.dataflowComponentConfig[indexDFC] = config.DataFlowComponentConfig{
-			FSMInstanceConfig: config.FSMInstanceConfig{
-				Name:            p.getUnderlyingDFCReadName(spName),
-				DesiredFSMState: dfcCurrentDesiredState,
-			},
-			DataFlowComponentServiceConfig: *cfg,
-		}
+	dfcCurrentDesiredState := p.dataflowComponentConfig[indexDFC].DesiredFSMState
+	p.dataflowComponentConfig[indexDFC] = config.DataFlowComponentConfig{
+		FSMInstanceConfig: config.FSMInstanceConfig{
+			Name:            p.getUnderlyingDFCReadName(spName),
+			DesiredFSMState: dfcCurrentDesiredState,
+		},
+		DataFlowComponentServiceConfig: *cfg,
 	}
 
-	p.logger.Info("Updated streamprocessor config in manager")
-	p.logger.Infof("Dataflow component config: %+v", p.dataflowComponentConfig)
+	p.logger.Debug("Updated streamprocessor config in manager")
+	p.logger.Debugf("Dataflow component config: %+v", p.dataflowComponentConfig)
 
 	return nil
 }
@@ -389,11 +387,11 @@ func (p *Service) RemoveFromManager(
 		return errors.New("dataflowcomponent manager not initialized")
 	}
 
-	p.logger.Infof("Removing dataflowcomponent %s", spName)
-
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
+
+	p.logger.Debugf("Removing dataflowcomponent %s", spName)
 
 	dfcName := p.getUnderlyingDFCReadName(spName)
 
