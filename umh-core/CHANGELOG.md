@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+### New Features
+- Preview: an instance can now store a connection to an external TimescaleDB or PostgreSQL historian database (host, port, database, login, and TLS mode), which can be created, viewed, updated, and removed. Storing the connection does not yet route any data to it
+
 ## [0.44.28]
 
 ### New Features
