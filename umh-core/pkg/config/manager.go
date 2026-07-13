@@ -170,14 +170,14 @@ type FileConfigManager struct {
 
 	cacheConfig FullConfig // struct obtained from that file
 
+	// backupCount tracks the number of config backups created since startup.
+	backupCount atomic.Uint64
+
 	// ---------- in-memory cache (read-only after RLock) ----------
 	cacheMu sync.RWMutex // guards the two fields below
 
 	// ---------- background refresh state ----------
 	refreshMu sync.Mutex // prevents concurrent background refreshes
-
-	// backupCount tracks the number of config backups created since startup.
-	backupCount atomic.Uint64
 
 	// backupEnabled controls whether config backups are created before writes.
 	backupEnabled bool

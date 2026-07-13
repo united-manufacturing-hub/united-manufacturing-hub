@@ -33,14 +33,14 @@ import (
 type FullConfig struct {
 	Templates         TemplatesConfig           `yaml:"templates,omitempty"`         // Templates section with enforced structure for protocol converter
 	PayloadShapes     map[string]PayloadShape   `yaml:"payloadShapes,omitempty"`     // PayloadShapes section with enforced structure for payload shapes
-	Agent             AgentConfig               `yaml:"agent"`                       // Agent config, requires restart to take effect
+	Historian         *HistorianConfig          `yaml:"historian,omitempty"`         // Historian config; groups the timescale connection (and future backends) under historian:
 	DataModels        []DataModelsConfig        `yaml:"dataModels,omitempty"`        // DataModels section with enforced structure for data models
 	DataContracts     []DataContractsConfig     `yaml:"dataContracts,omitempty"`     // DataContracts section with enforced structure for data contracts
 	DataFlow          []DataFlowComponentConfig `yaml:"dataFlow,omitempty"`          // DataFlow components to manage, can be updated while running
 	ProtocolConverter []ProtocolConverterConfig `yaml:"protocolConverter,omitempty"` // ProtocolConverter config, can be updated while runnnig
 	StreamProcessor   []StreamProcessorConfig   `yaml:"streamProcessor,omitempty"`   // StreamProcessor config, can be updated while running
 	Internal          InternalConfig            `yaml:"internal,omitempty"`          // Internal config, not to be used by the user, only to be used for testing internal components
-	Historian         *HistorianConfig          `yaml:"historian,omitempty"`         // Historian config; groups the timescale connection (and future backends) under historian:
+	Agent             AgentConfig               `yaml:"agent"`                       // Agent config, requires restart to take effect
 }
 
 // TemplatesConfig defines the structure for the templates section.
