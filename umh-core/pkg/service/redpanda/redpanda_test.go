@@ -22,6 +22,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/redpandaserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/s6serviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
@@ -75,7 +76,8 @@ var _ = Describe("Redpanda Service", func() {
 
 		schemaRegistry := NewSchemaRegistry(WithSchemaRegistryAddress(mockSchemaRegistry.URL()))
 
-		service = NewDefaultRedpandaService("redpanda",
+		service = NewDefaultRedpandaService(
+			"redpanda",
 			WithSchemaRegistryManager(schemaRegistry),
 		)
 		tick = 0
@@ -163,7 +165,8 @@ var _ = Describe("Redpanda Service", func() {
 
 			schemaRegistry := NewSchemaRegistry(WithSchemaRegistryAddress(mockSchemaRegistry.URL()))
 
-			service = NewDefaultRedpandaService("redpanda",
+			service = NewDefaultRedpandaService(
+				"redpanda",
 				WithS6Service(mockS6Service),
 				WithSchemaRegistryManager(schemaRegistry),
 			)
@@ -275,7 +278,8 @@ var _ = Describe("Redpanda Service", func() {
 
 			schemaRegistry := NewSchemaRegistry(WithSchemaRegistryAddress(mockSchemaRegistry.URL()))
 
-			service = NewDefaultRedpandaService("redpanda",
+			service = NewDefaultRedpandaService(
+				"redpanda",
 				WithSchemaRegistryManager(schemaRegistry),
 			)
 
@@ -405,7 +409,8 @@ var _ = Describe("Redpanda Service", func() {
 		)
 
 		BeforeEach(func() {
-			service = NewDefaultRedpandaService("redpanda",
+			service = NewDefaultRedpandaService(
+				"redpanda",
 				WithSchemaRegistryManager(NewNoOpSchemaRegistry()),
 			)
 			currentTime = time.Now()
@@ -618,7 +623,8 @@ var _ = Describe("Redpanda Service", func() {
 
 			schemaRegistry := NewSchemaRegistry(WithSchemaRegistryAddress(mockSchemaRegistry.URL()))
 
-			service = NewDefaultRedpandaService("redpanda",
+			service = NewDefaultRedpandaService(
+				"redpanda",
 				WithS6Service(mockS6Service),
 				WithSchemaRegistryManager(schemaRegistry),
 			)
@@ -661,6 +667,63 @@ var _ = Describe("Redpanda Service", func() {
 
 			// Verify error is propagated
 			Expect(err).To(MatchError(mockError))
+		})
+	})
+})
+
+var _ = Describe("SchemaRegistry translation", func() {
+	var registry *SchemaRegistry
+
+	BeforeEach(func() {
+		registry = NewSchemaRegistry()
+	})
+
+	Context("when one data contract references a missing model", func() {
+		It("still translates the valid contracts and reports the broken one", func() {
+			dataModels := []config.DataModelsConfig{
+				{
+					Name: "typevalidation",
+					Versions: map[string]config.DataModelVersion{
+						"v1": {Structure: map[string]config.Field{
+							"count": {PayloadShape: "timeseries-number"},
+							"name":  {PayloadShape: "timeseries-string"},
+							"truth": {PayloadShape: "timeseries-boolean"},
+						}},
+					},
+				},
+			}
+			dataContracts := []config.DataContractsConfig{
+				{Name: "_typevalidation_v1", Model: &config.ModelRef{Name: "typevalidation", Version: "v1"}},
+				{Name: "_work_order_v1", Model: &config.ModelRef{Name: "work_order", Version: "v1"}}, // model deleted
+			}
+
+			schemas, skipPrefixes, err := registry.translateToSchemas(context.Background(), dataModels, dataContracts, map[string]config.PayloadShape{})
+
+			Expect(schemas).To(HaveKey(SubjectName("_typevalidation_v1-timeseries-number")))
+			Expect(schemas).To(HaveKey(SubjectName("_typevalidation_v1-timeseries-string")))
+			Expect(schemas).To(HaveKey(SubjectName("_typevalidation_v1-timeseries-boolean")))
+			Expect(schemas).ToNot(HaveKey(SubjectName("_work_order_v1-timeseries-number")))
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("_work_order_v1"))
+			Expect(err.Error()).To(ContainSubstring("unknown model 'work_order'"))
+			Expect(skipPrefixes).To(ContainElement("_work_order_v1-"))
+		})
+	})
+
+	Context("when comparing against the registry", func() {
+		It("keeps a broken contract's subjects while still deleting truly orphaned ones", func() {
+			registry.skipPrefixes = []string{"_work_order_v1-"}
+			registry.registrySubjects = []SubjectName{
+				"_work_order_v1-timeseries-number",
+				"_orphan_v1-timeseries-number",
+			}
+
+			err, changePhase := registry.compare(context.Background(), map[SubjectName]JSONSchemaDefinition{})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(changePhase).To(BeTrue())
+
+			Expect(registry.inRegistryButUnknownLocally).ToNot(HaveKey(SubjectName("_work_order_v1-timeseries-number")))
+			Expect(registry.inRegistryButUnknownLocally).To(HaveKey(SubjectName("_orphan_v1-timeseries-number")))
 		})
 	})
 })

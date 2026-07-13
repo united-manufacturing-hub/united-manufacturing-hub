@@ -39,14 +39,13 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"strings"
 	"sync"
 	"time"
-
-	"errors"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/datamodel"
@@ -178,6 +177,9 @@ type SchemaRegistry struct {
 	// Comparison results (populated during reconcile with current expectedSubjects)
 	missingInRegistry           map[SubjectName]JSONSchemaDefinition // Subject -> schema (we have, registry doesn't)
 	inRegistryButUnknownLocally map[SubjectName]bool                 // Registry has, we don't expect
+
+	// used for broken contracts
+	skipPrefixes []string
 
 	httpClient http.Client
 
@@ -373,9 +375,10 @@ func WithSchemaRegistryAddress(address string) func(*SchemaRegistry) {
 //		// Handle reconciliation error
 //	}
 func (s *SchemaRegistry) Reconcile(ctx context.Context, dataModels []config.DataModelsConfig, dataContracts []config.DataContractsConfig, payloadShapes map[string]config.PayloadShape) error {
-	// Translate data models and contracts to expected schemas
-	expectedSubjects, err := s.translateToSchemas(ctx, dataModels, dataContracts, payloadShapes)
-	if err != nil {
+	expectedSubjects, skipPrefixes, err := s.translateToSchemas(ctx, dataModels, dataContracts, payloadShapes)
+
+	// On cancellation, don't touch the registry.
+	if expectedSubjects == nil && err != nil {
 		s.mu.Lock()
 		defer s.mu.Unlock()
 
@@ -387,7 +390,17 @@ func (s *SchemaRegistry) Reconcile(ctx context.Context, dataModels []config.Data
 		return fmt.Errorf("failed to translate data models to schemas: %w", err)
 	}
 
-	return s.ReconcileWithSchemas(ctx, expectedSubjects)
+	s.mu.Lock()
+	s.skipPrefixes = skipPrefixes
+	s.mu.Unlock()
+
+	reconcileErr := s.ReconcileWithSchemas(ctx, expectedSubjects)
+
+	if err != nil {
+		return fmt.Errorf("some data contracts could not be translated to schemas: %w", errors.Join(err, reconcileErr))
+	}
+
+	return reconcileErr
 }
 
 func (s *SchemaRegistry) ReconcileWithSchemas(ctx context.Context, schemas map[SubjectName]JSONSchemaDefinition) error {
@@ -426,20 +439,12 @@ func (s *SchemaRegistry) ReconcileWithSchemas(ctx context.Context, schemas map[S
 //  4. Extract the generated schemas and convert subject names to SubjectName type
 //  5. Aggregate all schemas from all contracts into a single map
 //
-// Error handling:
-//   - Missing model references: Contract references non-existent model or version
-//   - Translation failures: Invalid model structure, circular references, context cancellation
-//   - Empty contracts: Returns empty map (valid case for cleanup-only reconciliation)
+// Per-contract failures are collected and skipped so one broken contract can't block the valid ones;
+// only context cancellation is fatal (returns a nil map so the caller aborts without touching the registry).
 //
-// Performance characteristics:
-//   - Leverages high-performance datamodel.Translator (13K-400K translations/sec)
-//   - Builds model reference map once and reuses for all contracts
-//   - Pre-allocates result map based on contract count for efficiency
-//
-// Returns:
-//   - Map of SubjectName to JSONSchemaDefinition for use by existing reconciliation logic
-//   - Error if translation fails or model references are invalid
-func (s *SchemaRegistry) translateToSchemas(ctx context.Context, dataModels []config.DataModelsConfig, dataContracts []config.DataContractsConfig, payloadShapes map[string]config.PayloadShape) (map[SubjectName]JSONSchemaDefinition, error) {
+// Returns the valid contracts' schemas, the subject-name prefixes of the failed contracts (whose existing
+// schemas must be preserved from deletion), and the joined per-contract error.
+func (s *SchemaRegistry) translateToSchemas(ctx context.Context, dataModels []config.DataModelsConfig, dataContracts []config.DataContractsConfig, payloadShapes map[string]config.PayloadShape) (map[SubjectName]JSONSchemaDefinition, []string, error) {
 	// Build map of all available data models for reference resolution
 	allDataModels := make(map[string]config.DataModelsConfig, len(dataModels))
 	for _, model := range dataModels {
@@ -449,12 +454,18 @@ func (s *SchemaRegistry) translateToSchemas(ctx context.Context, dataModels []co
 	// Pre-allocate result map based on contract count (estimate 2-3 schemas per contract)
 	expectedSubjects := make(map[SubjectName]JSONSchemaDefinition, len(dataContracts)*3)
 
+	// Used for: broken contracts cannot block valid ones
+	var (
+		skipErrs     []error
+		skipPrefixes []string
+	)
+
 	// Translate each data contract to schemas
 	for _, contract := range dataContracts {
 		// Check context cancellation during translation loop
 		select {
 		case <-ctx.Done():
-			return nil, ctx.Err()
+			return nil, nil, ctx.Err()
 		default:
 		}
 
@@ -466,13 +477,19 @@ func (s *SchemaRegistry) translateToSchemas(ctx context.Context, dataModels []co
 		// Find the referenced data model
 		referencedModel, exists := allDataModels[contract.Model.Name]
 		if !exists {
-			return nil, fmt.Errorf("data contract '%s' references unknown model '%s'", contract.Name, contract.Model.Name)
+			skipErrs = append(skipErrs, fmt.Errorf("data contract '%s' references unknown model '%s'", contract.Name, contract.Model.Name))
+			skipPrefixes = append(skipPrefixes, contract.Name+"-")
+
+			continue
 		}
 
 		// Find the referenced version
 		modelVersion, versionExists := referencedModel.Versions[contract.Model.Version]
 		if !versionExists {
-			return nil, fmt.Errorf("data contract '%s' references unknown version '%s' of model '%s'", contract.Name, contract.Model.Version, contract.Model.Name)
+			skipErrs = append(skipErrs, fmt.Errorf("data contract '%s' references unknown version '%s' of model '%s'", contract.Name, contract.Model.Version, contract.Model.Name))
+			skipPrefixes = append(skipPrefixes, contract.Name+"-")
+
+			continue
 		}
 
 		// Translate the data model to JSON schemas
@@ -485,11 +502,17 @@ func (s *SchemaRegistry) translateToSchemas(ctx context.Context, dataModels []co
 			allDataModels,
 		)
 		if err != nil {
-			return nil, fmt.Errorf("failed to translate data contract '%s': %w", contract.Name, err)
+			skipErrs = append(skipErrs, fmt.Errorf("failed to translate data contract '%s': %w", contract.Name, err))
+			skipPrefixes = append(skipPrefixes, contract.Name+"-")
+
+			continue
 		}
 
 		if result == nil {
-			return nil, fmt.Errorf("translator returned nil result for data contract '%s'", contract.Name)
+			skipErrs = append(skipErrs, fmt.Errorf("translator returned nil result for data contract '%s'", contract.Name))
+			skipPrefixes = append(skipPrefixes, contract.Name+"-")
+
+			continue
 		}
 
 		// Add all generated schemas to the result map
@@ -497,14 +520,17 @@ func (s *SchemaRegistry) translateToSchemas(ctx context.Context, dataModels []co
 			// Convert schema to JSON string for registry format
 			schemaBytes, err := json.Marshal(schema)
 			if err != nil {
-				return nil, fmt.Errorf("failed to marshal schema for subject '%s': %w", subjectName, err)
+				skipErrs = append(skipErrs, fmt.Errorf("failed to marshal schema for subject '%s': %w", subjectName, err))
+				skipPrefixes = append(skipPrefixes, contract.Name+"-")
+
+				continue
 			}
 
 			expectedSubjects[SubjectName(subjectName)] = JSONSchemaDefinition(string(schemaBytes))
 		}
 	}
 
-	return expectedSubjects, nil
+	return expectedSubjects, skipPrefixes, errors.Join(skipErrs...)
 }
 
 // getNextPhase calculates the next phase based on current phase and whether to change phase.
@@ -854,14 +880,32 @@ func (s *SchemaRegistry) compare(ctx context.Context, expectedSubjects map[Subje
 		}
 	}
 
-	// Find unknown in registry (registry has, we don't expect)
+	// Find unknown in registry (registry has, we don't expect).
 	for _, subject := range s.registrySubjects {
-		if _, expected := expectedSubjects[subject]; !expected {
-			s.inRegistryButUnknownLocally[subject] = true
+		if _, expected := expectedSubjects[subject]; expected {
+			continue
 		}
+
+		if s.isSkippedSubject(subject) {
+			// do not delete schemas of broken ones
+			continue
+		}
+
+		s.inRegistryButUnknownLocally[subject] = true
 	}
 
 	return nil, true // Analyzed differences, advance to next phase
+}
+
+// isSkippedSubject guards a broken contract's subjects from deletion.
+func (s *SchemaRegistry) isSkippedSubject(subject SubjectName) bool {
+	for _, prefix := range s.skipPrefixes {
+		if strings.HasPrefix(string(subject), prefix) {
+			return true
+		}
+	}
+
+	return false
 }
 
 // removeUnknown deletes schemas from the registry that exist but are not in our expected set.
