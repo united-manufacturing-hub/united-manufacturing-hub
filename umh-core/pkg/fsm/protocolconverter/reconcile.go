@@ -101,8 +101,6 @@ func (p *ProtocolConverterInstance) Reconcile(ctx context.Context, snapshot fsm.
 	if p.baseFSMInstance.IsRemoving() {
 		// Skip external changes detection during removal - config files may be deleted
 		p.baseFSMInstance.GetLogger().Debugf("Skipping external changes detection during removal")
-		// Clear stale ConfigDivergence so the composition block below does not
-		// stamp "re-applying config" on an instance being deleted.
 		p.ObservedState.ConfigDivergence = ""
 	} else {
 		if err = p.reconcileExternalChanges(ctx, services, snapshot); err != nil {

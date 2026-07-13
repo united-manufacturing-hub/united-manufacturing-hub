@@ -153,8 +153,9 @@ type ProtocolConverterObservedState struct {
 
 	// ConfigDivergence describes the difference between the desired and the
 	// observed runtime configuration. It is reset to "" at the start of every
-	// UpdateObservedStateOfInstance call and set to the ConfigDiffRuntime text
-	// when a divergence is detected and the service exists.
+	// UpdateObservedStateOfInstance call and, when a divergence is detected and
+	// the service exists, set to a rune-capped, truncation-marked summary of the
+	// ConfigDiffRuntime text produced by BoundDiff.
 	ConfigDivergence string
 
 	// ObservedProtocolConverterSpecConfig contains the observed ProtocolConverter service config spec with variables

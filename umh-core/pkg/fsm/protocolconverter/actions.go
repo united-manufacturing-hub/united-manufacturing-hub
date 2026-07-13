@@ -239,9 +239,6 @@ func (p *ProtocolConverterInstance) getServiceStatus(ctx context.Context, servic
 
 // UpdateObservedStateOfInstance updates the observed state of the service.
 func (p *ProtocolConverterInstance) UpdateObservedStateOfInstance(ctx context.Context, services serviceregistry.Provider, snapshot fsm.SystemSnapshot) error {
-	// Reset ConfigDivergence as the first statement, before the ctx.Err()
-	// guard, so a stale value from a previous tick is cleared even when the
-	// context is already expired.
 	p.ObservedState.ConfigDivergence = ""
 
 	if ctx.Err() != nil {

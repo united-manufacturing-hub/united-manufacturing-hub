@@ -29,5 +29,5 @@ const (
 	// divergent protocol converter emits a heartbeat WARN to surface that its config
 	// is still being re-applied. The interval is tick-count-based; the nominal
 	// 1-minute cadence assumes the reconcile loop keeps up with DefaultTickerTime.
-	ProtocolConverterDivergenceWarnIntervalTicks = uint64(time.Minute / DefaultTickerTime) // 1 minute
+	ProtocolConverterDivergenceWarnIntervalTicks = uint64(time.Minute / DefaultTickerTime)
 )
