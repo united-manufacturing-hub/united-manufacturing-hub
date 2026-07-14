@@ -24,7 +24,7 @@
 
 ### Fixes
 
-- A data contract with a missing data model no longer blocks your other contracts from getting their schemas. Previously one broken contract stopped schema registration for all of them, so the UNS output skipped validation and accepted wrong data types. Valid contracts now register normally; broken ones are logged and skipped
+- A misconfigured data contract no longer stops your other data contracts from being set up. Valid contracts are now registered and validated as usual, while the misconfigured one is skipped and reported as a warning
 
 ## [0.44.28]
 
