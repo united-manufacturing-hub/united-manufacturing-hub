@@ -236,7 +236,13 @@ func (e *TemplateRenderError) Unwrap() error { return e.YAMLErr }
 //
 // Callers **must** supply a fully-merged variable scope; the function does
 // not fetch or inject `.global`, `.internal`, or `.location` keys.
-func RenderTemplate[T any](tmpl T, scope map[string]any) (T, error) {
+//
+// Any non-empty value in secrets is masked in the returned error snippet. The
+// snippet echoes the rendered output, which may contain substituted credentials
+// (e.g. a Postgres DSN with an inlined password), and that snippet is logged
+// every reconcile tick and forwarded to the Management Console via the status
+// reason, so secrets must not survive into it.
+func RenderTemplate[T any](tmpl T, scope map[string]any, secrets ...string) (T, error) {
 	if scope == nil {
 		return *new(T), errors.New("scope cannot be nil")
 	}
@@ -263,7 +269,7 @@ func RenderTemplate[T any](tmpl T, scope map[string]any) (T, error) {
 	if err := yaml.Unmarshal(buf.Bytes(), &out); err != nil {
 		return *new(T), &TemplateRenderError{
 			YAMLErr: err,
-			Snippet: renderedRegionSnippet(buf.Bytes(), err),
+			Snippet: redactSecrets(renderedRegionSnippet(buf.Bytes(), err), secrets),
 		}
 	}
 
@@ -273,6 +279,19 @@ func RenderTemplate[T any](tmpl T, scope map[string]any) (T, error) {
 	}
 
 	return out, nil
+}
+
+// redactSecrets replaces every non-empty secret value in s with a fixed marker.
+// It is a plain substring replacement, so it masks a secret wherever it lands in
+// the rendered output, including inside a connection string.
+func redactSecrets(s string, secrets []string) string {
+	for _, secret := range secrets {
+		if secret != "" {
+			s = strings.ReplaceAll(s, secret, "[REDACTED]")
+		}
+	}
+
+	return s
 }
 
 // yamlErrorLineRegex extracts the line number from yaml.v3 error messages,

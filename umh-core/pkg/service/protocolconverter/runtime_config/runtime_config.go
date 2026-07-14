@@ -81,6 +81,7 @@ func BuildRuntimeConfig(
 	spec protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec,
 	agentLocation map[string]string,
 	globalVars map[string]any,
+	historian *config.HistorianConfig,
 	nodeName string,
 	pcName string,
 ) (protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime, error) {
@@ -183,6 +184,29 @@ func BuildRuntimeConfig(
 	vb.User["location"] = loc
 	vb.User["location_path"] = locationPath
 
+	// Expose historian settings so bridge templates can reference the connection
+	// as `{{ .historian.timescale.host }}`, mirroring the `historian.timescale`
+	// shape in config.yaml. `historian` is a reserved template variable: like
+	// `location` and `location_path` above, it overrides any user variable of the
+	// same name.
+	//
+	// A present-but-invalid historian is treated as absent, so injection happens
+	// only when Validate passes. Injecting an invalid historian would render
+	// empty required fields (host/password) into a silently broken connection;
+	// leaving it out instead makes a template that references the historian fail
+	// the render with a missingkey error, which BuildRuntimeConfig rewrites into
+	// an actionable message below. A bridge that does not reference the historian
+	// is unaffected either way.
+	var secrets []string
+
+	historianUsable := historian != nil && historian.Validate() == nil
+	if historianUsable {
+		vb.User["historian"] = historian.ToTemplateMap()
+		if historian.Timescale.Password != "" {
+			secrets = append(secrets, historian.Timescale.Password)
+		}
+	}
+
 	if len(globalVars) != 0 {
 		vb.Global = globalVars
 	}
@@ -206,7 +230,20 @@ func BuildRuntimeConfig(
 	//----------------------------------------------------------------------
 	scope := vb.Flatten()
 
-	return renderConfig(spec, scope) // unexported helper that enforces UNS
+	runtime, err := renderConfig(spec, scope, secrets) // unexported helper that enforces UNS
+	if err != nil && !historianUsable && referencesMissingHistorian(err) {
+		return runtime, fmt.Errorf(
+			"this bridge references {{ .historian.* }} but no valid historian: section is configured in config.yaml; add or fix it: %w", err)
+	}
+
+	return runtime, err
+}
+
+// referencesMissingHistorian reports whether err is the text/template
+// missingkey failure raised when a template references `{{ .historian.* }}`
+// while the `historian` key is absent from the render scope.
+func referencesMissingHistorian(err error) bool {
+	return err != nil && strings.Contains(err.Error(), `no entry for key "historian"`)
 }
 
 // renderConfig turns the **author-facing** specification (*Spec*) into the
@@ -271,6 +308,7 @@ func BuildRuntimeConfig(
 func renderConfig(
 	spec protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec,
 	scope map[string]any,
+	secrets []string,
 ) (
 	protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime,
 	error,
@@ -284,7 +322,7 @@ func renderConfig(
 
 	// 1. Render the connection template with variable substitution
 	// This converts template strings like "{{ .PORT }}" to actual values
-	conn, err := config.RenderTemplate(spec.GetConnectionServiceConfig(), scope)
+	conn, err := config.RenderTemplate(spec.GetConnectionServiceConfig(), scope, secrets...)
 	if err != nil {
 		return protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime{}, err
 	}
@@ -296,7 +334,7 @@ func renderConfig(
 		return protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime{}, fmt.Errorf("failed to convert connection template to runtime: %w", err)
 	}
 
-	read, err := config.RenderTemplate(spec.GetDFCReadServiceConfig(), scope)
+	read, err := config.RenderTemplate(spec.GetDFCReadServiceConfig(), scope, secrets...)
 	if err != nil {
 		return protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime{}, err
 	}
@@ -310,7 +348,7 @@ func renderConfig(
 	}
 
 	// Render the write DFC template (resolves {{ .IP }}, {{ .PORT }}, etc. in Source.Topics and Destination.Code).
-	renderedWriteConfig, err := config.RenderTemplate(spec.Config.DataflowComponentWriteServiceConfig, scope)
+	renderedWriteConfig, err := config.RenderTemplate(spec.Config.DataflowComponentWriteServiceConfig, scope, secrets...)
 	if err != nil {
 		return protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime{}, err
 	}
