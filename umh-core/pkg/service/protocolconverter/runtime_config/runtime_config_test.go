@@ -212,6 +212,31 @@ var _ = Describe("BuildRuntimeConfig", func() {
 			Expect(result.ConnectionServiceConfig.NmapServiceConfig.Port).To(Equal(uint16(5432)))
 		})
 
+		It("should resolve a template referencing every historian field when the TLS certs are unset", func() {
+			historian := &config.HistorianConfig{
+				Timescale: config.TimescaleConfig{Host: "timescale.internal", Password: "secret"},
+			}
+
+			allFields := "{{ .historian.timescale.host }}|" +
+				"{{ .historian.timescale.port }}|" +
+				"{{ .historian.timescale.database }}|" +
+				"{{ .historian.timescale.username }}|" +
+				"{{ .historian.timescale.password }}|" +
+				"{{ .historian.timescale.sslmode }}|" +
+				"{{ .historian.timescale.sslrootcert }}|" +
+				"{{ .historian.timescale.sslcert }}|" +
+				"{{ .historian.timescale.sslkey }}"
+
+			result, err := runtime_config.BuildRuntimeConfig(
+				historianRefSpec(allFields, "{{ .historian.timescale.port }}"),
+				agentLocation, globalVars, historian, nodeName, pcName)
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(result.ConnectionServiceConfig.NmapServiceConfig.Target).To(
+				Equal("timescale.internal|5432|umh|umh_owner|secret|require|||"))
+			Expect(result.ConnectionServiceConfig.NmapServiceConfig.Port).To(Equal(uint16(5432)))
+		})
+
 		It("should fail with an actionable error when historian is referenced but not configured", func() {
 			_, err := runtime_config.BuildRuntimeConfig(
 				historianRefSpec("{{ .historian.timescale.host }}", "8080"),
