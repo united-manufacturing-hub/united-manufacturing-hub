@@ -282,8 +282,6 @@ var _ = Describe("TimescaleConfig", func() {
 			Expect(m).To(HaveKeyWithValue("sslrootcert", "/certs/ca.pem"))
 			Expect(m).To(HaveKeyWithValue("sslcert", "/certs/client.pem"))
 			Expect(m).To(HaveKeyWithValue("sslkey", "/certs/client.key"))
-			// Optional fields are resolved to their defaults before exposure.
-			// JSON round-trip decodes numbers as float64.
 			Expect(m).To(HaveKeyWithValue("port", float64(5432)))
 			Expect(m).To(HaveKeyWithValue("database", "umh"))
 			Expect(m).To(HaveKeyWithValue("username", "umh_owner"))

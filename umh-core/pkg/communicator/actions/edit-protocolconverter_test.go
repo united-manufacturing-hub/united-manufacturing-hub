@@ -2527,13 +2527,11 @@ var _ = Describe("EditProtocolConverter", func() {
 				Expect(localAction.Parse(historianRefPayload())).To(Succeed())
 				Expect(localAction.Validate()).To(Succeed())
 
-				// Fail the config read only for the verify render, after Parse.
 				mockConfig.WithConfigError(errors.New("mock get config failure"))
 
 				_, renderErr := localAction.CompareProtocolConverterDFCConfig(observedStateWithIPPort("10.0.0.1"))
 
 				Expect(renderErr).To(HaveOccurred())
-				// The read failure must not masquerade as a missingkey / invalid-YAML error.
 				Expect(renderErr.Error()).To(ContainSubstring("failed to read current config for historian variables"))
 			})
 

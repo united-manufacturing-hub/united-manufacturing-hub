@@ -96,8 +96,6 @@ var _ = Describe("RenderTemplate", func() {
 		)
 
 		BeforeEach(func() {
-			// The secret renders one line above the malformed YAML, so it lands
-			// in the reported snippet region.
 			in = renderFixture{A: "line1\n{{ .inject }}", B: "tail"}
 			scope = map[string]any{"inject": "s3cr3t-pw\nbroken: ["}
 		})
