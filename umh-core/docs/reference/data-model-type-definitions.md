@@ -1,4 +1,4 @@
-# Type Definitions
+# Data Model Type Definitions
 
 > This is a reference document. Use it to look up the types that a data model field accepts and the errors the validator may raise.
 
