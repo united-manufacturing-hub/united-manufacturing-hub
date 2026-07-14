@@ -112,7 +112,7 @@ payloadShapes:
 ```
 
 **Key points:**
-- Only two types: `string` and `number`
+- Field types are `string`, `number`, `integer`, `boolean` (see [Type Definitions](type-definitions.md))
 - All fields are required
 - Shape names must be unique
 
@@ -121,7 +121,7 @@ payloadShapes:
 Reference custom shapes in your data models to create CRUD-like endpoints:
 
 ```yaml
-datamodels:
+dataModels:
   - name: work-order
     version:
       v1:
