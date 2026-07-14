@@ -15,6 +15,7 @@
 package config
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 )
@@ -203,4 +204,41 @@ func (t TimescaleConfig) String() string {
 
 	type redacted TimescaleConfig
 	return fmt.Sprintf("%+v", redacted(t))
+}
+
+// ToTemplateMap returns the historian settings as a nested map for template
+// rendering, mirroring the `historian.timescale` shape in config.yaml. Bridge
+// templates reference the connection as `{{ .historian.timescale.host }}`,
+// `{{ .historian.timescale.port }}`, and the other fields. It returns an empty
+// map when no timescale section is present.
+func (h HistorianConfig) ToTemplateMap() map[string]any {
+	if h.Timescale == (TimescaleConfig{}) {
+		return map[string]any{}
+	}
+
+	return toTemplateMap(h.WithDefaults())
+}
+
+// ToTemplateMap returns the timescale connection settings as a flat map keyed by
+// the config.yaml field names, for template rendering. Defaults are applied first
+// so templates always see resolved values.
+func (t TimescaleConfig) ToTemplateMap() map[string]any {
+	return toTemplateMap(t.WithDefaults())
+}
+
+// toTemplateMap serialises a config value to a map keyed by its json field names.
+// A JSON round-trip keeps the exposed keys in step with the struct tags, so a new
+// field reaches templates without editing this function.
+func toTemplateMap(v any) map[string]any {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return map[string]any{}
+	}
+
+	m := map[string]any{}
+	if err := json.Unmarshal(b, &m); err != nil {
+		return map[string]any{}
+	}
+
+	return m
 }

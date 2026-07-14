@@ -6,6 +6,7 @@
 
 ### New Features
 - Preview: an instance can now store a connection to an external TimescaleDB or PostgreSQL historian database (host, port, database, login, and TLS mode), which can be created, viewed, updated, and removed. Storing the connection does not yet route any data to it
+- Bridge templates can now reference the stored historian connection through `{{ .historian.timescale.host }}`, `{{ .historian.timescale.port }}`, and the other connection fields, so a bridge that writes to the historian's TimescaleDB no longer needs those connection details duplicated in its own variables
 
 ### Improvements
 

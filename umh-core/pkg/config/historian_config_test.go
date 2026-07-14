@@ -263,6 +263,51 @@ var _ = Describe("TimescaleConfig", func() {
 			Expect(t.Password).To(Equal("super-secret"))
 		})
 	})
+
+	Describe("ToTemplateMap", func() {
+		It("exposes all nine keys with defaults applied", func() {
+			t := TimescaleConfig{
+				Host:        "timescale.example.com",
+				Password:    "secret",
+				SSLRootCert: "/certs/ca.pem",
+				SSLCert:     "/certs/client.pem",
+				SSLKey:      "/certs/client.key",
+			}
+
+			m := t.ToTemplateMap()
+
+			Expect(m).To(HaveLen(9))
+			Expect(m).To(HaveKeyWithValue("host", "timescale.example.com"))
+			Expect(m).To(HaveKeyWithValue("password", "secret"))
+			Expect(m).To(HaveKeyWithValue("sslrootcert", "/certs/ca.pem"))
+			Expect(m).To(HaveKeyWithValue("sslcert", "/certs/client.pem"))
+			Expect(m).To(HaveKeyWithValue("sslkey", "/certs/client.key"))
+			// Optional fields are resolved to their defaults before exposure.
+			// JSON round-trip decodes numbers as float64.
+			Expect(m).To(HaveKeyWithValue("port", float64(5432)))
+			Expect(m).To(HaveKeyWithValue("database", "umh"))
+			Expect(m).To(HaveKeyWithValue("username", "umh_owner"))
+			Expect(m).To(HaveKeyWithValue("sslmode", "require"))
+		})
+
+		It("keeps explicit optional values instead of defaults", func() {
+			t := TimescaleConfig{
+				Host:     "h",
+				Password: "p",
+				Port:     6432,
+				Database: "metrics",
+				Username: "svc",
+				SSLMode:  HistorianSSLModeDisable,
+			}
+
+			m := t.ToTemplateMap()
+
+			Expect(m).To(HaveKeyWithValue("port", float64(6432)))
+			Expect(m).To(HaveKeyWithValue("database", "metrics"))
+			Expect(m).To(HaveKeyWithValue("username", "svc"))
+			Expect(m).To(HaveKeyWithValue("sslmode", "disable"))
+		})
+	})
 })
 
 var _ = Describe("HistorianConfig", func() {
@@ -359,6 +404,23 @@ var _ = Describe("HistorianConfig", func() {
 			original := FullConfig{}
 			clone := original.Clone()
 			Expect(clone.Historian).To(BeNil())
+		})
+	})
+
+	Describe("ToTemplateMap", func() {
+		It("nests the timescale keys under a timescale sub-map", func() {
+			h := HistorianConfig{Timescale: TimescaleConfig{Host: "db", Password: "pw"}}
+
+			m := h.ToTemplateMap()
+
+			ts, ok := m["timescale"].(map[string]any)
+			Expect(ok).To(BeTrue())
+			Expect(ts).To(HaveKeyWithValue("host", "db"))
+			Expect(ts).To(HaveKeyWithValue("port", float64(5432)))
+		})
+
+		It("returns an empty map when no timescale section is present", func() {
+			Expect(HistorianConfig{}.ToTemplateMap()).To(BeEmpty())
 		})
 	})
 })
