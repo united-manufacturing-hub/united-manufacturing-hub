@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Improvements
+
+- New [Type Definitions](https://docs.umh.app/usage/data-modeling/type-definitions) documentation page listing the four field types (`string`, `number`, `integer`, `boolean`), how `number` (decimal) differs from `integer`, the three built-in payload shapes, and the data model validation errors. Previously this was split across the Payload Shapes and Payload Formats pages, which had slightly different type definitions and no mention of `integer`.
+
 ## [0.44.29]
 
 ### New Features
