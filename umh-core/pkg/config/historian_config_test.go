@@ -283,11 +283,49 @@ var _ = Describe("TimescaleConfig", func() {
 			Expect(m).To(HaveKeyWithValue("sslcert", "/certs/client.pem"))
 			Expect(m).To(HaveKeyWithValue("sslkey", "/certs/client.key"))
 			// Optional fields are resolved to their defaults before exposure.
-			// JSON round-trip decodes numbers as float64.
-			Expect(m).To(HaveKeyWithValue("port", float64(5432)))
+			Expect(m).To(HaveKeyWithValue("port", uint16(5432)))
 			Expect(m).To(HaveKeyWithValue("database", "umh"))
 			Expect(m).To(HaveKeyWithValue("username", "umh_owner"))
 			Expect(m).To(HaveKeyWithValue("sslmode", "require"))
+		})
+
+		It("locks the exposed key set to TimescaleTemplateKeys, regardless of values", func() {
+			keysOf := func(m map[string]any) []string {
+				ks := make([]string, 0, len(m))
+				for k := range m {
+					ks = append(ks, k)
+				}
+
+				return ks
+			}
+
+			// Value-independence is the point: a partially-populated config must
+			// expose exactly the same keys as a fully-populated one, so a template
+			// referencing any documented key never hits missingkey=error.
+			minimal := TimescaleConfig{Host: "h", Password: "p"}.ToTemplateMap()
+			full := TimescaleConfig{
+				Host:        "h",
+				Password:    "p",
+				Port:        6432,
+				Database:    "metrics",
+				Username:    "svc",
+				SSLMode:     HistorianSSLModeVerifyFull,
+				SSLRootCert: "/certs/ca.pem",
+				SSLCert:     "/certs/client.pem",
+				SSLKey:      "/certs/client.key",
+			}.ToTemplateMap()
+
+			Expect(keysOf(minimal)).To(ConsistOf(TimescaleTemplateKeys))
+			Expect(keysOf(full)).To(ConsistOf(TimescaleTemplateKeys))
+		})
+
+		It("exposes the optional TLS cert keys as empty strings when unset", func() {
+			m := validTimescale().ToTemplateMap()
+
+			Expect(m).To(HaveLen(9))
+			Expect(m).To(HaveKeyWithValue("sslrootcert", ""))
+			Expect(m).To(HaveKeyWithValue("sslcert", ""))
+			Expect(m).To(HaveKeyWithValue("sslkey", ""))
 		})
 
 		It("keeps explicit optional values instead of defaults", func() {
@@ -302,7 +340,7 @@ var _ = Describe("TimescaleConfig", func() {
 
 			m := t.ToTemplateMap()
 
-			Expect(m).To(HaveKeyWithValue("port", float64(6432)))
+			Expect(m).To(HaveKeyWithValue("port", uint16(6432)))
 			Expect(m).To(HaveKeyWithValue("database", "metrics"))
 			Expect(m).To(HaveKeyWithValue("username", "svc"))
 			Expect(m).To(HaveKeyWithValue("sslmode", "disable"))
@@ -416,11 +454,21 @@ var _ = Describe("HistorianConfig", func() {
 			ts, ok := m["timescale"].(map[string]any)
 			Expect(ok).To(BeTrue())
 			Expect(ts).To(HaveKeyWithValue("host", "db"))
-			Expect(ts).To(HaveKeyWithValue("port", float64(5432)))
+			Expect(ts).To(HaveKeyWithValue("port", uint16(5432)))
 		})
 
 		It("returns an empty map when no timescale section is present", func() {
 			Expect(HistorianConfig{}.ToTemplateMap()).To(BeEmpty())
+		})
+
+		It("exposes the optional TLS cert keys under timescale even when unset", func() {
+			h := HistorianConfig{Timescale: TimescaleConfig{Host: "db", Password: "pw"}}
+
+			ts, ok := h.ToTemplateMap()["timescale"].(map[string]any)
+			Expect(ok).To(BeTrue())
+			Expect(ts).To(HaveKeyWithValue("sslrootcert", ""))
+			Expect(ts).To(HaveKeyWithValue("sslcert", ""))
+			Expect(ts).To(HaveKeyWithValue("sslkey", ""))
 		})
 	})
 })

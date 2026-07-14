@@ -15,7 +15,6 @@
 package config
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 )
@@ -216,29 +215,41 @@ func (h HistorianConfig) ToTemplateMap() map[string]any {
 		return map[string]any{}
 	}
 
-	return toTemplateMap(h.WithDefaults())
+	return map[string]any{
+		"timescale": h.Timescale.ToTemplateMap(),
+	}
+}
+
+// TimescaleTemplateKeys is the complete set of keys TimescaleConfig.ToTemplateMap
+// exposes under {{ .historian.timescale.* }}. It is the template-variable contract:
+// bridge templates may reference exactly these keys. Keep it in step with
+// ToTemplateMap — the key-set lock test fails if the two diverge.
+var TimescaleTemplateKeys = []string{
+	"host", "port", "database", "username", "password",
+	"sslmode", "sslrootcert", "sslcert", "sslkey",
 }
 
 // ToTemplateMap returns the timescale connection settings as a flat map keyed by
 // the config.yaml field names, for template rendering. Defaults are applied first
 // so templates always see resolved values.
+//
+// The map is built explicitly, not by marshalling the struct. Bridge templates
+// reference every key unconditionally and RenderTemplate runs with
+// missingkey=error, so the exposed key set must be total and independent of field
+// values. A json:omitempty round-trip would drop an unset optional field (e.g. a
+// TLS certificate path left empty under sslmode=require) and fail the render.
 func (t TimescaleConfig) ToTemplateMap() map[string]any {
-	return toTemplateMap(t.WithDefaults())
-}
+	t = t.WithDefaults()
 
-// toTemplateMap serialises a config value to a map keyed by its json field names.
-// A JSON round-trip keeps the exposed keys in step with the struct tags, so a new
-// field reaches templates without editing this function.
-func toTemplateMap(v any) map[string]any {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return map[string]any{}
+	return map[string]any{
+		"host":        t.Host,
+		"port":        t.Port,
+		"database":    t.Database,
+		"username":    t.Username,
+		"password":    t.Password,
+		"sslmode":     string(t.SSLMode),
+		"sslrootcert": t.SSLRootCert,
+		"sslcert":     t.SSLCert,
+		"sslkey":      t.SSLKey,
 	}
-
-	m := map[string]any{}
-	if err := json.Unmarshal(b, &m); err != nil {
-		return map[string]any{}
-	}
-
-	return m
 }
