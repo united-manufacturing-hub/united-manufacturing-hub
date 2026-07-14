@@ -283,7 +283,8 @@ var _ = Describe("TimescaleConfig", func() {
 			Expect(m).To(HaveKeyWithValue("sslcert", "/certs/client.pem"))
 			Expect(m).To(HaveKeyWithValue("sslkey", "/certs/client.key"))
 			// Optional fields are resolved to their defaults before exposure.
-			Expect(m).To(HaveKeyWithValue("port", uint16(5432)))
+			// JSON round-trip decodes numbers as float64.
+			Expect(m).To(HaveKeyWithValue("port", float64(5432)))
 			Expect(m).To(HaveKeyWithValue("database", "umh"))
 			Expect(m).To(HaveKeyWithValue("username", "umh_owner"))
 			Expect(m).To(HaveKeyWithValue("sslmode", "require"))
@@ -340,7 +341,7 @@ var _ = Describe("TimescaleConfig", func() {
 
 			m := t.ToTemplateMap()
 
-			Expect(m).To(HaveKeyWithValue("port", uint16(6432)))
+			Expect(m).To(HaveKeyWithValue("port", float64(6432)))
 			Expect(m).To(HaveKeyWithValue("database", "metrics"))
 			Expect(m).To(HaveKeyWithValue("username", "svc"))
 			Expect(m).To(HaveKeyWithValue("sslmode", "disable"))
@@ -454,7 +455,7 @@ var _ = Describe("HistorianConfig", func() {
 			ts, ok := m["timescale"].(map[string]any)
 			Expect(ok).To(BeTrue())
 			Expect(ts).To(HaveKeyWithValue("host", "db"))
-			Expect(ts).To(HaveKeyWithValue("port", uint16(5432)))
+			Expect(ts).To(HaveKeyWithValue("port", float64(5432)))
 		})
 
 		It("returns an empty map when no timescale section is present", func() {

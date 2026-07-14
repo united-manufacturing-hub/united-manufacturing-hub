@@ -15,6 +15,7 @@
 package config
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 )
@@ -62,12 +63,18 @@ type HistorianConfig struct {
 // TimescaleConfig holds the connection settings for the TimescaleDB/Postgres
 // historian. It maps to `historian.timescale` in config.yaml.
 type TimescaleConfig struct {
+	// The three TLS certificate paths deliberately omit json:omitempty (keeping it
+	// only on the yaml tag). ToTemplateMap builds the template scope via a JSON
+	// round-trip, and RenderTemplate runs with missingkey=error: an unset cert must
+	// still surface as an empty key, or a bridge referencing {{ .historian.timescale.sslrootcert }}
+	// fails to render. The key-set lock test guards this.
+	//
 	// SSLRootCert is the path inside the container to the CA certificate file.
-	SSLRootCert string `yaml:"sslrootcert,omitempty" json:"sslrootcert,omitempty"`
+	SSLRootCert string `yaml:"sslrootcert,omitempty" json:"sslrootcert"`
 	// SSLCert is the path inside the container to the client certificate file.
-	SSLCert string `yaml:"sslcert,omitempty" json:"sslcert,omitempty"`
+	SSLCert string `yaml:"sslcert,omitempty" json:"sslcert"`
 	// SSLKey is the path inside the container to the client key file.
-	SSLKey string `yaml:"sslkey,omitempty" json:"sslkey,omitempty"`
+	SSLKey string `yaml:"sslkey,omitempty" json:"sslkey"`
 	// Host is the TimescaleDB/Postgres hostname or IP address (required).
 	Host string `yaml:"host" json:"host"`
 	// Password is the login role password (required). Masked by String() so it
@@ -215,41 +222,42 @@ func (h HistorianConfig) ToTemplateMap() map[string]any {
 		return map[string]any{}
 	}
 
-	return map[string]any{
-		"timescale": h.Timescale.ToTemplateMap(),
-	}
+	return toTemplateMap(h.WithDefaults())
 }
 
 // TimescaleTemplateKeys is the complete set of keys TimescaleConfig.ToTemplateMap
 // exposes under {{ .historian.timescale.* }}. It is the template-variable contract:
-// bridge templates may reference exactly these keys. Keep it in step with
-// ToTemplateMap — the key-set lock test fails if the two diverge.
+// bridge templates may reference exactly these keys. The key-set lock test asserts
+// ToTemplateMap emits exactly these regardless of field values, so it fails if a
+// json:omitempty tag is ever (re-)added to an optional field and drops a key.
 var TimescaleTemplateKeys = []string{
 	"host", "port", "database", "username", "password",
 	"sslmode", "sslrootcert", "sslcert", "sslkey",
 }
 
 // ToTemplateMap returns the timescale connection settings as a flat map keyed by
-// the config.yaml field names, for template rendering. Defaults are applied first
-// so templates always see resolved values.
-//
-// The map is built explicitly, not by marshalling the struct. Bridge templates
-// reference every key unconditionally and RenderTemplate runs with
-// missingkey=error, so the exposed key set must be total and independent of field
-// values. A json:omitempty round-trip would drop an unset optional field (e.g. a
-// TLS certificate path left empty under sslmode=require) and fail the render.
+// the json field names, for template rendering. Defaults are applied first so
+// templates always see resolved values.
 func (t TimescaleConfig) ToTemplateMap() map[string]any {
-	t = t.WithDefaults()
+	return toTemplateMap(t.WithDefaults())
+}
 
-	return map[string]any{
-		"host":        t.Host,
-		"port":        t.Port,
-		"database":    t.Database,
-		"username":    t.Username,
-		"password":    t.Password,
-		"sslmode":     string(t.SSLMode),
-		"sslrootcert": t.SSLRootCert,
-		"sslcert":     t.SSLCert,
-		"sslkey":      t.SSLKey,
+// toTemplateMap serialises a config value to a map keyed by its json field names.
+// A JSON round-trip keeps the exposed keys in step with the struct tags, so a new
+// field reaches templates without editing this function. This is why the optional
+// TLS certificate fields drop json:omitempty (see TimescaleConfig): under
+// RenderTemplate's missingkey=error an unset field must render as an empty value,
+// not vanish from the scope.
+func toTemplateMap(v any) map[string]any {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return map[string]any{}
 	}
+
+	m := map[string]any{}
+	if err := json.Unmarshal(b, &m); err != nil {
+		return map[string]any{}
+	}
+
+	return m
 }
