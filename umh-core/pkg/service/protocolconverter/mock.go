@@ -492,6 +492,12 @@ func (m *MockProtocolConverterService) RemoveFromManager(
 
 	m.RemoveFromManagerCalled = true
 
+	// Consult RemoveFromManagerError before mutating config so a pending
+	// removal holds the FSM in the removing state across many ticks.
+	if m.RemoveFromManagerError != nil {
+		return m.RemoveFromManagerError
+	}
+
 	underlyingName := "protocolconverter-" + protConvName
 
 	dfcFound := false

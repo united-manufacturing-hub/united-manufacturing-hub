@@ -101,6 +101,7 @@ func (p *ProtocolConverterInstance) Reconcile(ctx context.Context, snapshot fsm.
 	if p.baseFSMInstance.IsRemoving() {
 		// Skip external changes detection during removal - config files may be deleted
 		p.baseFSMInstance.GetLogger().Debugf("Skipping external changes detection during removal")
+		p.ObservedState.ConfigDivergence = ""
 	} else {
 		if err = p.reconcileExternalChanges(ctx, services, snapshot); err != nil {
 			if p.baseFSMInstance.IsDeadlineExceededAndHandle(err, snapshot.Tick, "reconcileExternalChanges") {
@@ -120,6 +121,27 @@ func (p *ProtocolConverterInstance) Reconcile(ctx context.Context, snapshot fsm.
 	currentTime := snapshot.SnapshotTime // this is used to check if the instance is degraded and for the log check
 
 	err, reconciled = p.reconcileStateTransition(ctx, services, snapshot, currentTime)
+
+	// Compose ConfigDivergence into StatusReason so a divergent config is
+	// visible on the instance status while it is being re-applied. This APPENDS
+	// to any operational reason that reconcileStateTransition just wrote
+	// (degraded/starting/stopping), joined with "; " so Step 3's reason is
+	// preserved in front. Placement here — BEFORE the err-block returns — is
+	// load-bearing: on Step-3 error ticks (deadline-exceeded, SendEvent
+	// failure, ErrInstanceRemoved), Reconcile returns inside the err block, so
+	// composition MUST run before it or the divergence diagnostic is lost on
+	// exactly the overload ticks ENG-5108 exists to fix. Guard on a non-empty
+	// divergence so converged ticks (and removal ticks, where the IsRemoving
+	// branch clears ConfigDivergence) retain the operational reason.
+	if p.ObservedState.ConfigDivergence != "" {
+		divergenceText := "re-applying config: " + p.ObservedState.ConfigDivergence
+		if p.ObservedState.ServiceInfo.StatusReason != "" {
+			p.ObservedState.ServiceInfo.StatusReason += "; " + divergenceText
+		} else {
+			p.ObservedState.ServiceInfo.StatusReason = divergenceText
+		}
+	}
+
 	if err != nil {
 		// If the instance is removed, we don't want to return an error here, because we want to continue reconciling
 		if errors.Is(err, standarderrors.ErrInstanceRemoved) {
