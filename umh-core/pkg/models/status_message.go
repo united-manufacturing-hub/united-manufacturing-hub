@@ -43,13 +43,12 @@ type Historian struct {
 }
 
 type Timescale struct {
-	Health *Health `json:"health"`
-	// Host is the dialed historian host.
-	Host string `json:"host"`
-	// Port is the dialed historian port.
-	Port uint16 `json:"port"`
-	// Latency in milliseconds.
-	Latency float64 `json:"latency"`
+	Health    *Health `json:"health"`
+	Host      string  `json:"host"`
+	Port      uint16  `json:"port"`
+	Latency   float64 `json:"latency"`
+	Reachable bool    `json:"reachable"`
+	AuthValid bool    `json:"authValid"`
 }
 
 type Agent struct {
