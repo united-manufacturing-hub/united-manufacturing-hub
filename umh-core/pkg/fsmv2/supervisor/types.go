@@ -60,6 +60,7 @@ type SupervisorInterface interface {
 	getUserSpec() config.UserSpec
 	calculateHierarchySize() int
 	calculateHierarchyDepth() int
+	calculateSubtreeHeight() int
 	GetChildren() map[string]SupervisorInterface
 	AddWorker(identity deps.Identity, worker fsmv2.Worker) error
 	setParent(parent SupervisorInterface, parentID string)

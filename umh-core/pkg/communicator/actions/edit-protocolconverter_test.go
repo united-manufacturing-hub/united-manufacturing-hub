@@ -2478,6 +2478,63 @@ var _ = Describe("EditProtocolConverter", func() {
 					"the desired config rendered with the new IP must not match the observed config rendered with the old IP")
 			})
 
+			historianRefPayload := func() map[string]interface{} {
+				return map[string]interface{}{
+					"name": pcName,
+					"uuid": pcUUID.String(),
+					"connection": map[string]interface{}{
+						"ip":   "10.0.0.1",
+						"port": 80,
+					},
+					"readDFC": map[string]interface{}{
+						"inputs": map[string]interface{}{
+							"data": "input:\n  http_client:\n    url: 'http://{{ .historian.timescale.host }}'",
+							"type": "http_client",
+						},
+						"pipeline": map[string]interface{}{
+							"processors": map[string]interface{}{
+								"0": map[string]interface{}{
+									"type": "bloblang",
+									"data": "bloblang: root = content()",
+								},
+							},
+						},
+						"state": "active",
+					},
+				}
+			}
+
+			It("verification render succeeds when the edit references the historian and one is configured", func() {
+				historianMock := config.NewMockConfigManager().WithConfig(config.FullConfig{
+					Historian: &config.HistorianConfig{
+						Timescale: config.TimescaleConfig{Host: "timescale.internal", Password: "secret"},
+					},
+				})
+				localAction := actions.NewEditProtocolConverterAction(userEmail, actionUUID, instanceUUID, localOutbound, historianMock, snapshotMgr)
+
+				Expect(localAction.Parse(historianRefPayload())).To(Succeed())
+				Expect(localAction.Validate()).To(Succeed())
+
+				_, renderErr := localAction.CompareProtocolConverterDFCConfig(observedStateWithIPPort("10.0.0.1"))
+
+				Expect(renderErr).NotTo(HaveOccurred(),
+					"render must succeed against a configured historian, not fail with missingkey on {{ .historian.timescale.host }}")
+			})
+
+			It("verification render surfaces the true cause when the historian config read fails", func() {
+				localAction := actions.NewEditProtocolConverterAction(userEmail, actionUUID, instanceUUID, localOutbound, mockConfig, snapshotMgr)
+
+				Expect(localAction.Parse(historianRefPayload())).To(Succeed())
+				Expect(localAction.Validate()).To(Succeed())
+
+				mockConfig.WithConfigError(errors.New("mock get config failure"))
+
+				_, renderErr := localAction.CompareProtocolConverterDFCConfig(observedStateWithIPPort("10.0.0.1"))
+
+				Expect(renderErr).To(HaveOccurred())
+				Expect(renderErr.Error()).To(ContainSubstring("failed to read current config for historian variables"))
+			})
+
 		})
 
 		Context("persisting merged user variables", func() {

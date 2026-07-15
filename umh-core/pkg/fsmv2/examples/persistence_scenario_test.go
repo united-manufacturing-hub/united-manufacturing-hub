@@ -16,6 +16,8 @@ package examples_test
 
 import (
 	"context"
+	"encoding/json"
+	"strings"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -202,6 +204,76 @@ var _ = Describe("Persistence Scenario", func() {
 			Expect(result.Error).NotTo(HaveOccurred())
 			Eventually(result.Done, 25*time.Second).Should(BeClosed())
 		})
+	})
+})
+
+// logHasWorkerTransition reports whether any JSON state_transition log line
+// names a worker containing workerSubstring entering toState.
+func logHasWorkerTransition(logOutput, workerSubstring, toState string) bool {
+	for _, line := range strings.Split(logOutput, "\n") {
+		if line == "" {
+			continue
+		}
+
+		var entry map[string]interface{}
+		if err := json.Unmarshal([]byte(line), &entry); err != nil {
+			continue
+		}
+
+		worker, _ := entry["worker"].(string)
+		if entry["msg"] == "state_transition" && entry["to_state"] == toState &&
+			strings.Contains(worker, workerSubstring) {
+			return true
+		}
+	}
+
+	return false
+}
+
+var _ = Describe("Persistence Scenario caller-ctx cancellation", func() {
+	It("tears down gracefully on a live tick loop when the caller ctx is cancelled mid-run", func() {
+		logBuf := &v2LogBuffer{}
+		logger := deps.NewJSONFSMLogger(logBuf, deps.LevelDebug)
+
+		runCtx, cancelRun := context.WithCancel(context.Background())
+		defer cancelRun()
+
+		result := examples.RunPersistenceScenario(runCtx, examples.PersistenceRunConfig{
+			Duration:     5 * time.Minute,
+			TickInterval: 50 * time.Millisecond,
+			Logger:       logger,
+		})
+		Expect(result.Error).NotTo(HaveOccurred())
+
+		// Settle gate: cancel only once the persistence worker is observably
+		// Running, so the cancellation lands mid-run on a live tick loop. A
+		// blind sleep can fire while the worker is still mid-startup, and a
+		// mid-spawn worker intermittently cannot finish draining within one
+		// graceful-shutdown phase budget. RunPersistenceScenario owns its
+		// store, so the gate reads the state_transition log instead of a
+		// store dump.
+		Eventually(func() bool {
+			return logHasWorkerTransition(logBuf.String(), "persistence-001", "Running")
+		}, "30s").Should(BeTrue(),
+			"the persistence worker must be running before the mid-run cancellation")
+
+		cancelRun()
+		Eventually(result.Done, "55s").Should(BeClosed(),
+			"cancelling the caller ctx must trigger a complete teardown")
+
+		// Positive marker first: the cancel must reach Shutdown. If the tick
+		// loop shared the caller's ctx, the loop could die and close supDone
+		// before the watcher's select runs, taking the supDone arm that skips
+		// Shutdown entirely.
+		Expect(logContainsEvent(logBuf.String(), "supervisor_shutting_down")).To(BeTrue(),
+			"the caller-ctx cancel must trigger an orderly Shutdown, not a silent tick-loop death")
+
+		// The graceful drain must run against a LIVE tick loop. If the tick
+		// loop shared the caller's ctx, the cancel would kill it before
+		// Shutdown, and every drain phase would wait out its timeout and
+		// emit this warning.
+		Expect(logContainsEvent(logBuf.String(), "graceful_shutdown_timeout")).To(BeFalse(),
+			"the supervisor must drain via a live tick loop, not time out against a dead one")
 	})
 })
 

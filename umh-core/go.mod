@@ -1,38 +1,38 @@
 module github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core
 
-go 1.26.4
+go 1.26.5
 
 require (
-	github.com/99designs/gqlgen v0.17.90
+	github.com/99designs/gqlgen v0.17.93
 	github.com/DataDog/gostackparse v0.7.0
 	github.com/Masterminds/semver/v3 v3.5.0
 	github.com/benbjohnson/clock v1.3.5
 	github.com/cactus/tai64 v1.0.4
 	github.com/cenkalti/backoff v2.2.1+incompatible
 	github.com/cespare/xxhash/v2 v2.3.0
-	github.com/getsentry/sentry-go v0.46.2
+	github.com/getsentry/sentry-go v0.47.0
 	github.com/gin-gonic/gin v1.12.0
 	github.com/goccy/go-json v0.10.6
 	github.com/google/uuid v1.6.0
 	github.com/h2non/gock v1.2.0
-	github.com/klauspost/compress v1.18.6
+	github.com/klauspost/compress v1.19.0
 	github.com/looplab/fsm v1.0.3
-	github.com/onsi/ginkgo/v2 v2.29.0
-	github.com/onsi/gomega v1.41.0
+	github.com/onsi/ginkgo/v2 v2.32.0
+	github.com/onsi/gomega v1.42.1
 	github.com/prometheus/client_golang v1.23.2
 	github.com/prometheus/client_model v0.6.2
-	github.com/prometheus/common v0.68.1
-	github.com/prometheus/prometheus v0.312.0
-	github.com/shirou/gopsutil/v4 v4.26.5
-	github.com/testcontainers/testcontainers-go/modules/redpanda v0.42.0
+	github.com/prometheus/common v0.69.0
+	github.com/prometheus/prometheus v0.313.0
+	github.com/shirou/gopsutil/v4 v4.26.6
+	github.com/testcontainers/testcontainers-go/modules/redpanda v0.43.0
 	github.com/tiendc/go-deepcopy v1.7.2
 	github.com/united-manufacturing-hub/expiremap/v2 v2.1.0
 	github.com/united-manufacturing-hub/umh-utils v0.2.2
-	github.com/vektah/gqlparser/v2 v2.5.34
+	github.com/vektah/gqlparser/v2 v2.5.36
 	go.uber.org/zap v1.28.0
 	golang.org/x/crypto v0.53.0
-	golang.org/x/sync v0.21.0
-	golang.org/x/sys v0.46.0
+	golang.org/x/sync v0.22.0
+	golang.org/x/sys v0.47.0
 	google.golang.org/protobuf v1.36.11
 	gopkg.in/yaml.v3 v3.0.1
 )
@@ -48,6 +48,7 @@ require (
 	github.com/bytedance/sonic/loader v0.5.1 // indirect
 	github.com/cenkalti/backoff/v4 v4.3.0 // indirect
 	github.com/cloudwego/base64x v0.1.6 // indirect
+	github.com/coder/websocket v1.8.15 // indirect
 	github.com/containerd/errdefs v1.0.0 // indirect
 	github.com/containerd/errdefs/pkg v0.3.0 // indirect
 	github.com/containerd/log v0.1.0 // indirect
@@ -72,8 +73,7 @@ require (
 	github.com/goccy/go-yaml v1.19.2 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/google/go-cmp v0.7.0 // indirect
-	github.com/google/pprof v0.0.0-20260507013755-92041b743c96 // indirect
-	github.com/gorilla/websocket v1.5.4-0.20250319132907-e064f32e3674 // indirect
+	github.com/google/pprof v0.0.0-20260604005048-7023385849c0 // indirect
 	github.com/grafana/regexp v0.0.0-20250905093917-f7b3be9d1853 // indirect
 	github.com/h2non/parth v0.0.0-20190131123155-b4df798d6542 // indirect
 	github.com/hashicorp/golang-lru/v2 v2.0.7 // indirect
@@ -108,7 +108,7 @@ require (
 	github.com/sirupsen/logrus v1.9.4 // indirect
 	github.com/sosodev/duration v1.4.0 // indirect
 	github.com/stretchr/testify v1.11.1 // indirect
-	github.com/testcontainers/testcontainers-go v0.42.0 // indirect
+	github.com/testcontainers/testcontainers-go v0.43.0 // indirect
 	github.com/tklauser/go-sysconf v0.3.16 // indirect
 	github.com/tklauser/numcpus v0.11.0 // indirect
 	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect
@@ -124,8 +124,8 @@ require (
 	go.uber.org/multierr v1.11.0 // indirect
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
 	golang.org/x/arch v0.22.0 // indirect
-	golang.org/x/mod v0.36.0 // indirect
-	golang.org/x/net v0.55.0 // indirect
+	golang.org/x/mod v0.37.0 // indirect
+	golang.org/x/net v0.56.0 // indirect
 	golang.org/x/text v0.38.0 // indirect
-	golang.org/x/tools v0.45.0 // indirect
+	golang.org/x/tools v0.46.0 // indirect
 )

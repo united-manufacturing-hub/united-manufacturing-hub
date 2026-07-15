@@ -72,7 +72,7 @@ RUN apk add --no-cache nmap=${NMAP_VERSION}
 # Cleanup all the files we don't need
 RUN rm -rf /s6-overlay /benthos /redpanda
 
-FROM golang:1.26.4-alpine@sha256:f1ddd9fe14fffc091dd98cb4bfa999f32c5fc77d2f2305ea9f0e2595c5437c14 AS build
+FROM golang:1.26.5-alpine@sha256:0178a641fbb4858c5f1b48e34bdaabe0350a330a1b1149aabd498d0699ff5fb2 AS build
 ARG S6_OVERLAY_VERSION=MUST_BE_SET_BY_MAKEFILE
 ARG BENTHOS_UMH_VERSION=MUST_BE_SET_BY_MAKEFILE
 ARG REDPANDA_VERSION=MUST_BE_SET_BY_MAKEFILE

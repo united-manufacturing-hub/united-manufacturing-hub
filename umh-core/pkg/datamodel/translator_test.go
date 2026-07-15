@@ -247,13 +247,15 @@ var _ = Describe("Translator", func() {
 		})
 
 		type defaultPayloadShapesTestCase struct {
-			description         string
-			payloadShapes       map[string]config.PayloadShape
-			dataModel           config.DataModelVersion
-			expectedSchemas     int
-			verifyDefaultFields bool
-			verifyCustomFields  bool
-			customFieldsToCheck []string
+			description           string
+			payloadShapes         map[string]config.PayloadShape
+			dataModel             config.DataModelVersion
+			expectedSchemas       int
+			verifyDefaultFields   bool
+			verifyCustomFields    bool
+			customFieldsToCheck   []string
+			verifyBooleanDefault  bool
+			verifyBooleanUserWins bool
 		}
 
 		DescribeTable("default payload shapes injection",
@@ -329,6 +331,36 @@ var _ = Describe("Translator", func() {
 					_, hasDefaultTimestamp := fieldProps["timestamp_ms"]
 					Expect(hasDefaultTimestamp).To(BeFalse(), "Default field should not be present")
 				}
+
+				if tc.verifyBooleanDefault {
+					// Verify the injected timeseries-boolean schema structure
+					boolSubject := "_pump_data_v1-timeseries-boolean"
+					boolSchema, boolExists := result.Schemas[boolSubject]
+					Expect(boolExists).To(BeTrue())
+
+					boolProps := boolSchema["properties"].(map[string]interface{})
+					boolFields := boolProps["fields"].(map[string]interface{})
+					boolFieldProps := boolFields["properties"].(map[string]interface{})
+
+					timestampField := boolFieldProps["timestamp_ms"].(map[string]interface{})
+					Expect(timestampField["type"]).To(Equal("number"))
+
+					valueField := boolFieldProps["value"].(map[string]interface{})
+					Expect(valueField["type"]).To(Equal("boolean"))
+				}
+
+				if tc.verifyBooleanUserWins {
+					boolSubject := "_pump_data_v1-timeseries-boolean"
+					boolSchema, boolExists := result.Schemas[boolSubject]
+					Expect(boolExists).To(BeTrue())
+
+					boolProps := boolSchema["properties"].(map[string]interface{})
+					boolFields := boolProps["fields"].(map[string]interface{})
+					boolFieldProps := boolFields["properties"].(map[string]interface{})
+
+					valueField := boolFieldProps["value"].(map[string]interface{})
+					Expect(valueField["type"]).To(Equal("number"), "user-defined timeseries-boolean must win over the injected default")
+				}
 			},
 			Entry("empty payload shapes map - defaults injected", defaultPayloadShapesTestCase{
 				description:   "should automatically inject default payload shapes when not provided",
@@ -367,6 +399,38 @@ var _ = Describe("Translator", func() {
 				expectedSchemas:     1,
 				verifyCustomFields:  true,
 				customFieldsToCheck: []string{"custom_timestamp", "extra_field"},
+			}),
+			Entry("timeseries-boolean default injected", defaultPayloadShapesTestCase{
+				description:   "should inject timeseries-boolean with value:boolean when not provided",
+				payloadShapes: map[string]config.PayloadShape{}, // Empty map
+				dataModel: config.DataModelVersion{
+					Structure: map[string]config.Field{
+						"running": {
+							PayloadShape: "timeseries-boolean",
+						},
+					},
+				},
+				expectedSchemas:      1,
+				verifyBooleanDefault: true,
+			}),
+			Entry("custom timeseries-boolean - not overridden", defaultPayloadShapesTestCase{
+				description: "should not override a user-defined timeseries-boolean with the boolean default",
+				payloadShapes: map[string]config.PayloadShape{
+					"timeseries-boolean": {
+						Fields: map[string]config.PayloadField{
+							"value": {Type: "number"},
+						},
+					},
+				},
+				dataModel: config.DataModelVersion{
+					Structure: map[string]config.Field{
+						"running": {
+							PayloadShape: "timeseries-boolean",
+						},
+					},
+				},
+				expectedSchemas:       1,
+				verifyBooleanUserWins: true,
 			}),
 		)
 	})

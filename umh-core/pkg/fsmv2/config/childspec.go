@@ -226,6 +226,20 @@ type ChildSpec struct {
 	Enabled bool `json:"enabled" yaml:"enabled"`
 }
 
+// childIDSuffix is appended to a child spec's name to form the store id the
+// supervisor spawns it under. The supervisor spawns a single child per spec, so
+// the suffix is fixed. It lives here, next to ChildSpec, so the spawn site and
+// any reader of the child's observed state share one definition.
+const childIDSuffix = "-001"
+
+// ChildID returns the store id of the supervisor-spawned child for the given
+// child-spec name. The supervisor keys the child's identity and observed-state
+// document by this id. The spawn site and any reader of that observed state
+// must build the id through this helper so the format lives in one place.
+func ChildID(name string) string {
+	return name + childIDSuffix
+}
+
 // Clone creates a deep copy of the ChildSpec.
 // Note: Dependencies is shallow-copied (values are shared intentionally since they
 // represent shared resources like channels and interfaces).

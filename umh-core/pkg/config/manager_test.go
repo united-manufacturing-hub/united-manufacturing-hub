@@ -23,6 +23,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -1563,6 +1564,317 @@ agent:
 		})
 	})
 })
+
+var _ = Describe("ConfigManager historian mutations", func() {
+	Describe("FileConfigManagerWithBackoff delegation", func() {
+		It("should return the context error when the context is already cancelled", func() {
+			backoffManager, err := NewFileConfigManagerWithBackoff()
+			Expect(err).NotTo(HaveOccurred())
+
+			cancelledCtx, cancelNow := context.WithCancel(context.Background())
+			cancelNow()
+
+			err = backoffManager.AtomicSetHistorian(cancelledCtx, HistorianConfig{Timescale: TimescaleConfig{Host: "h", Password: "p"}})
+			Expect(err).To(MatchError(context.Canceled))
+
+			err = backoffManager.AtomicDeleteHistorian(cancelledCtx)
+			Expect(err).To(MatchError(context.Canceled))
+		})
+	})
+
+	Describe("AtomicSetHistorian create-only guard", func() {
+		It("creates a historian when none exists, then rejects a second create", func() {
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+
+			manager := newInMemoryConfigManager(ctx)
+
+			original := HistorianConfig{
+				Timescale: TimescaleConfig{
+					Host:        "timescale.example.com",
+					Password:    "secret",
+					SSLMode:     HistorianSSLModeVerifyFull,
+					SSLRootCert: "/certs/ca.pem",
+				},
+			}
+			Expect(manager.AtomicSetHistorian(ctx, original)).To(Succeed())
+
+			// A second deploy must be refused, not silently overwrite the existing
+			// connection (which would blank its verify-full cert path).
+			second := HistorianConfig{Timescale: TimescaleConfig{Host: "other.example.com", Password: "new"}}
+			Expect(manager.AtomicSetHistorian(ctx, second)).To(MatchError(ErrHistorianAlreadyConfigured))
+
+			Eventually(func() (TimescaleConfig, error) {
+				cfg, err := manager.GetConfig(ctx, 0)
+				if cfg.Historian == nil {
+					return TimescaleConfig{}, err
+				}
+
+				return cfg.Historian.Timescale, err
+			}, 2*time.Second, 10*time.Millisecond).Should(Equal(original.Timescale))
+		})
+
+		It("treats an identical redeploy as a no-op success", func() {
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+
+			manager := newInMemoryConfigManager(ctx)
+
+			original := HistorianConfig{
+				Timescale: TimescaleConfig{Host: "timescale.example.com", Password: "secret"},
+			}
+			Expect(manager.AtomicSetHistorian(ctx, original)).To(Succeed())
+
+			// Replaying the same deploy (e.g. after a lost reply) must succeed, not
+			// conflict, and leave the stored connection unchanged.
+			Expect(manager.AtomicSetHistorian(ctx, original)).To(Succeed())
+
+			Eventually(func() (TimescaleConfig, error) {
+				cfg, err := manager.GetConfig(ctx, 0)
+				if cfg.Historian == nil {
+					return TimescaleConfig{}, err
+				}
+
+				return cfg.Historian.Timescale, err
+			}, 2*time.Second, 10*time.Millisecond).Should(Equal(original.Timescale))
+		})
+	})
+
+	Describe("AtomicEditHistorian", func() {
+		It("returns ErrHistorianNotConfigured when none exists", func() {
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+
+			manager := newInMemoryConfigManager(ctx)
+
+			err := manager.AtomicEditHistorian(ctx, HistorianConfig{Timescale: TimescaleConfig{Host: "h", Password: "p"}})
+			Expect(err).To(MatchError(ErrHistorianNotConfigured))
+		})
+
+		It("keeps the stored password when the edit omits it", func() {
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+
+			manager := newInMemoryConfigManager(ctx)
+
+			Expect(manager.AtomicSetHistorian(ctx, HistorianConfig{
+				Timescale: TimescaleConfig{
+					Host:     "timescale.example.com",
+					Password: "secret",
+					Port:     5432,
+				},
+			})).To(Succeed())
+
+			// Edit changes the port but sends no password, as get-historian gave the
+			// Management Console nothing to resend.
+			Expect(manager.AtomicEditHistorian(ctx, HistorianConfig{
+				Timescale: TimescaleConfig{
+					Host: "timescale.example.com",
+					Port: 6543,
+				},
+			})).To(Succeed())
+
+			Eventually(func() (TimescaleConfig, error) {
+				cfg, err := manager.GetConfig(ctx, 0)
+				if cfg.Historian == nil {
+					return TimescaleConfig{}, err
+				}
+
+				return cfg.Historian.Timescale, err
+			}, 2*time.Second, 10*time.Millisecond).Should(And(
+				HaveField("Port", uint16(6543)),
+				HaveField("Password", "secret"),
+			))
+		})
+
+		It("replaces the password when the edit provides a new one", func() {
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+
+			manager := newInMemoryConfigManager(ctx)
+
+			Expect(manager.AtomicSetHistorian(ctx, HistorianConfig{
+				Timescale: TimescaleConfig{
+					Host:     "timescale.example.com",
+					Password: "secret",
+				},
+			})).To(Succeed())
+
+			Expect(manager.AtomicEditHistorian(ctx, HistorianConfig{
+				Timescale: TimescaleConfig{
+					Host:     "timescale.example.com",
+					Password: "rotated",
+				},
+			})).To(Succeed())
+
+			Eventually(func() (string, error) {
+				cfg, err := manager.GetConfig(ctx, 0)
+				if cfg.Historian == nil {
+					return "", err
+				}
+
+				return cfg.Historian.Timescale.Password, err
+			}, 2*time.Second, 10*time.Millisecond).Should(Equal("rotated"))
+		})
+	})
+
+	Describe("FileConfigManager persistence round-trip", func() {
+		It("writes the historian to disk, reads it back, then deletes it", func() {
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+
+			// Stateful in-memory file: writes replace the stored bytes, and each Stat
+			// returns a strictly increasing mtime so GetConfig always misses its cache
+			// and re-parses the persisted YAML, exercising real serialization rather
+			// than the in-memory cache the write left behind. Reads below use Eventually
+			// to tolerate the resulting background refresh. The shared state is
+			// mutex-guarded because that refresh runs on its own goroutine.
+			var (
+				mu        sync.Mutex
+				stored    []byte
+				statCalls int
+			)
+
+			baseTime := time.Unix(1_000_000, 0)
+
+			mockFS := filesystem.NewMockFileSystem()
+			mockFS.WithEnsureDirectoryFunc(func(_ context.Context, _ string) error { return nil })
+			mockFS.WithFileExistsFunc(func(_ context.Context, _ string) (bool, error) {
+				mu.Lock()
+				defer mu.Unlock()
+
+				return stored != nil, nil
+			})
+			mockFS.WithReadFileFunc(func(_ context.Context, _ string) ([]byte, error) {
+				mu.Lock()
+				defer mu.Unlock()
+
+				return stored, nil
+			})
+			mockFS.WithWriteFileFunc(func(_ context.Context, _ string, data []byte, _ os.FileMode) error {
+				mu.Lock()
+				defer mu.Unlock()
+
+				stored = data
+
+				return nil
+			})
+			mockFS.WithStatFunc(func(_ context.Context, _ string) (os.FileInfo, error) {
+				mu.Lock()
+				defer mu.Unlock()
+
+				statCalls++
+
+				return mockFS.NewMockFileInfo("config.yaml", int64(len(stored)), 0644,
+					baseTime.Add(time.Duration(statCalls)*time.Second), false), nil
+			})
+
+			manager := NewFileConfigManager().WithFileSystemService(mockFS)
+
+			seed := FullConfig{Agent: AgentConfig{Location: map[int]string{0: "enterprise"}}}
+			Expect(manager.writeConfig(ctx, seed)).To(Succeed())
+
+			Eventually(func() error {
+				_, err := manager.GetConfig(ctx, 0)
+
+				return err
+			}, 2*time.Second, 10*time.Millisecond).Should(Succeed())
+
+			historian := HistorianConfig{
+				Timescale: TimescaleConfig{
+					Host:     "timescale.example.com",
+					Password: "secret",
+					Database: "umh",
+					Username: "umh_owner",
+					SSLMode:  HistorianSSLModeVerifyFull,
+					Port:     5432,
+				},
+			}
+
+			Expect(manager.AtomicSetHistorian(ctx, historian)).To(Succeed())
+
+			Eventually(func() (TimescaleConfig, error) {
+				cfg, err := manager.GetConfig(ctx, 0)
+				if cfg.Historian == nil {
+					return TimescaleConfig{}, err
+				}
+
+				return cfg.Historian.Timescale, err
+			}, 2*time.Second, 10*time.Millisecond).Should(Equal(historian.Timescale))
+
+			Expect(manager.AtomicDeleteHistorian(ctx)).To(Succeed())
+
+			Eventually(func() (*HistorianConfig, error) {
+				cfg, err := manager.GetConfig(ctx, 0)
+
+				return cfg.Historian, err
+			}, 2*time.Second, 10*time.Millisecond).Should(BeNil())
+		})
+	})
+})
+
+// newInMemoryConfigManager returns a FileConfigManager backed by a race-safe
+// in-memory config file, seeded with a minimal valid config and ready for
+// read-modify-write tests. The mtime advances once per write (not per Stat), so
+// reads between writes hit GetConfig's fast path and return the cache writeConfig
+// just set — deterministic for back-to-back mutations like Set-then-Edit, which
+// depend on the second call observing the first. The shared state is mutex-guarded
+// because GetConfig's background refresh goroutine can touch it concurrently.
+func newInMemoryConfigManager(ctx context.Context) *FileConfigManager {
+	var (
+		mu      sync.Mutex
+		stored  []byte
+		modTime = time.Unix(1_000_000, 0)
+	)
+
+	mockFS := filesystem.NewMockFileSystem()
+	mockFS.WithEnsureDirectoryFunc(func(_ context.Context, _ string) error { return nil })
+	mockFS.WithFileExistsFunc(func(_ context.Context, _ string) (bool, error) {
+		mu.Lock()
+		defer mu.Unlock()
+
+		return stored != nil, nil
+	})
+	mockFS.WithReadFileFunc(func(_ context.Context, _ string) ([]byte, error) {
+		mu.Lock()
+		defer mu.Unlock()
+
+		return stored, nil
+	})
+	mockFS.WithWriteFileFunc(func(_ context.Context, _ string, data []byte, _ os.FileMode) error {
+		mu.Lock()
+		defer mu.Unlock()
+
+		stored = data
+		modTime = modTime.Add(time.Second)
+
+		return nil
+	})
+	mockFS.WithStatFunc(func(_ context.Context, _ string) (os.FileInfo, error) {
+		mu.Lock()
+		defer mu.Unlock()
+
+		return mockFS.NewMockFileInfo("config.yaml", int64(len(stored)), 0644, modTime, false), nil
+	})
+
+	manager := NewFileConfigManager().WithFileSystemService(mockFS)
+
+	// Seed a valid, non-empty serialized config: GetConfig reports an empty cached
+	// config as an error, so the read-modify-write cycle needs a base to build on.
+	seed := FullConfig{Agent: AgentConfig{Location: map[int]string{0: "enterprise"}}}
+	ExpectWithOffset(1, manager.writeConfig(ctx, seed)).To(Succeed())
+
+	// The manager was constructed against the real filesystem before the mock was
+	// attached, so its cache carries a stale stat error. Drive GetConfig until the
+	// seeded file reads back cleanly.
+	EventuallyWithOffset(1, func() error {
+		_, err := manager.GetConfig(ctx, 0)
+
+		return err
+	}, 2*time.Second, 10*time.Millisecond).Should(Succeed())
+
+	return manager
+}
 
 // filterBackupDirPaths returns only paths that start with the backup directory.
 func filterBackupDirPaths(paths []string) []string {

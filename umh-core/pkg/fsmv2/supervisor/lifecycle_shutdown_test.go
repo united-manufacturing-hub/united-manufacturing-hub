@@ -12,14 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package supervisor internal tests for graceful-shutdown drain regression.
-package supervisor
+// Package supervisor_test contains black-box tests for graceful-shutdown drain regression.
+package supervisor_test
 
 import (
 	"bytes"
 	"context"
-	"encoding/json"
-	"strings"
 	"sync"
 	"time"
 
@@ -29,6 +27,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
 )
 
@@ -55,43 +54,22 @@ func (b *shutdownTestSyncBuffer) String() string {
 }
 
 // containsLogEvent returns true if any JSON log line has the given msg value.
+// Wraps findLogEvents (drain_budget_cascade_test.go) so the JSON-line parse
+// exists once.
 func containsLogEvent(logOutput, msg string) bool {
-	for _, line := range strings.Split(logOutput, "\n") {
-		if line == "" {
-			continue
-		}
-
-		var entry map[string]interface{}
-		if err := json.Unmarshal([]byte(line), &entry); err != nil {
-			continue
-		}
-
-		if entry["msg"] == msg {
-			return true
-		}
-	}
-
-	return false
+	return len(findLogEvents(logOutput, msg)) > 0
 }
 
 // findLogEvent returns the first log entry with the given msg, or nil.
+// Wraps findLogEvents (drain_budget_cascade_test.go) so the JSON-line parse
+// exists once.
 func findLogEvent(logOutput, msg string) map[string]interface{} {
-	for _, line := range strings.Split(logOutput, "\n") {
-		if line == "" {
-			continue
-		}
-
-		var entry map[string]interface{}
-		if err := json.Unmarshal([]byte(line), &entry); err != nil {
-			continue
-		}
-
-		if entry["msg"] == msg {
-			return entry
-		}
+	entries := findLogEvents(logOutput, msg)
+	if len(entries) == 0 {
+		return nil
 	}
 
-	return nil
+	return entries[0]
 }
 
 // shutdownHonoringState returns SignalNeedsRemoval when the snapshot's Desired
@@ -132,18 +110,17 @@ var _ = Describe("Shutdown drain regression", func() {
 	})
 
 	newStore := func() *storage.TriangularStore {
-		return CreateTestTriangularStoreForWorkerType(workerType)
+		return supervisor.CreateTestTriangularStoreForWorkerType(workerType)
 	}
 
-	seedDesiredState := func(s *Supervisor[*TestObservedState, *TestDesiredState]) {
+	seedDesiredState := func(s *supervisor.Supervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState]) {
 		ctx := context.Background()
 		desiredDoc := persistence.Document{
-			FieldID:             workerID,
+			supervisor.FieldID:  workerID,
 			"ShutdownRequested": false,
 			"state":             "running",
 		}
-		_, err := s.store.SaveDesired(ctx, workerType, workerID, desiredDoc)
-		Expect(err).ToNot(HaveOccurred())
+		Expect(s.TestSaveDesired(ctx, workerType, workerID, desiredDoc)).To(Succeed())
 	}
 
 	Describe("TestShutdown_DrainsWorkersViaReconciliation", func() {
@@ -151,7 +128,7 @@ var _ = Describe("Shutdown drain regression", func() {
 			triangularStore := newStore()
 			logger := deps.NewJSONFSMLogger(buf, deps.LevelDebug)
 
-			s := NewSupervisor[*TestObservedState, *TestDesiredState](Config{
+			s := supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
 				WorkerType:              workerType,
 				Store:                   triangularStore,
 				Logger:                  logger,
@@ -164,7 +141,7 @@ var _ = Describe("Shutdown drain regression", func() {
 				Name:       "Drain Test Worker",
 				WorkerType: workerType,
 			}
-			worker := &TestWorker{
+			worker := &supervisor.TestWorker{
 				InitialState: shutdownHonoringState{},
 			}
 			Expect(s.AddWorker(identity, worker)).To(Succeed())
@@ -176,12 +153,7 @@ var _ = Describe("Shutdown drain regression", func() {
 			_ = s.Start(ctx)
 
 			// Sanity: worker must be alive before Shutdown.
-			Eventually(func() int {
-				s.mu.RLock()
-				defer s.mu.RUnlock()
-
-				return len(s.workers)
-			}, 500*time.Millisecond, 10*time.Millisecond).Should(Equal(1))
+			Eventually(s.TestWorkerCount, 500*time.Millisecond, 10*time.Millisecond).Should(Equal(1))
 
 			start := time.Now()
 			s.Shutdown()
@@ -195,9 +167,7 @@ var _ = Describe("Shutdown drain regression", func() {
 					"This confirms the drain deadlock: tickLoop is cancelled before drain polls s.workers.", elapsed)
 
 			// Assertion 2: worker map empty after Shutdown returns.
-			s.mu.RLock()
-			remaining := len(s.workers)
-			s.mu.RUnlock()
+			remaining := s.TestWorkerCount()
 			Expect(remaining).To(Equal(0), "expected s.workers to be empty after graceful drain")
 
 			// Assertion 3: graceful_shutdown_timeout warn must NOT be emitted.
@@ -212,7 +182,7 @@ var _ = Describe("Shutdown drain regression", func() {
 			triangularStore := newStore()
 			logger := deps.NewJSONFSMLogger(buf, deps.LevelDebug)
 
-			s := NewSupervisor[*TestObservedState, *TestDesiredState](Config{
+			s := supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
 				WorkerType:              workerType,
 				Store:                   triangularStore,
 				Logger:                  logger,
@@ -226,7 +196,7 @@ var _ = Describe("Shutdown drain regression", func() {
 				WorkerType: workerType,
 			}
 			// Default TestWorker uses testutil.State which returns SignalNone indefinitely.
-			worker := &TestWorker{}
+			worker := &supervisor.TestWorker{}
 			Expect(s.AddWorker(identity, worker)).To(Succeed())
 
 			seedDesiredState(s)
@@ -235,12 +205,7 @@ var _ = Describe("Shutdown drain regression", func() {
 			defer cancel()
 			_ = s.Start(ctx)
 
-			Eventually(func() int {
-				s.mu.RLock()
-				defer s.mu.RUnlock()
-
-				return len(s.workers)
-			}, 500*time.Millisecond, 10*time.Millisecond).Should(Equal(1))
+			Eventually(s.TestWorkerCount, 500*time.Millisecond, 10*time.Millisecond).Should(Equal(1))
 
 			start := time.Now()
 			s.Shutdown()
@@ -251,9 +216,7 @@ var _ = Describe("Shutdown drain regression", func() {
 				"Shutdown blocked far beyond GracefulShutdownTimeout=200ms: %v", elapsed)
 
 			// Assertion 2: worker not drained (timeout path — correct pre-fix and post-fix behaviour).
-			s.mu.RLock()
-			remaining := len(s.workers)
-			s.mu.RUnlock()
+			remaining := s.TestWorkerCount()
 			Expect(remaining).To(BeNumerically(">", 0),
 				"expected worker still present after timeout-path Shutdown (worker never honored shutdown)")
 
@@ -278,7 +241,7 @@ var _ = Describe("Shutdown drain regression", func() {
 			triangularStore := newStore()
 			logger := deps.NewJSONFSMLogger(buf, deps.LevelDebug)
 
-			s := NewSupervisor[*TestObservedState, *TestDesiredState](Config{
+			s := supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
 				WorkerType:              workerType,
 				Store:                   triangularStore,
 				Logger:                  logger,
@@ -294,7 +257,7 @@ var _ = Describe("Shutdown drain regression", func() {
 				Name:       "Demotion Test Worker",
 				WorkerType: workerType,
 			}
-			worker := &TestWorker{
+			worker := &supervisor.TestWorker{
 				InitialState: shutdownHonoringState{},
 			}
 			Expect(s.AddWorker(identity, worker)).To(Succeed())
@@ -306,12 +269,7 @@ var _ = Describe("Shutdown drain regression", func() {
 			_ = s.Start(ctx)
 
 			// Wait for the worker to be registered as alive.
-			Eventually(func() int {
-				s.mu.RLock()
-				defer s.mu.RUnlock()
-
-				return len(s.workers)
-			}, 300*time.Millisecond, 10*time.Millisecond).Should(Equal(1))
+			Eventually(s.TestWorkerCount, 300*time.Millisecond, 10*time.Millisecond).Should(Equal(1))
 
 			// Mark the worker as pendingRestart BEFORE calling Shutdown().
 			// This simulates a restart signal arriving just before drain starts.
@@ -324,9 +282,7 @@ var _ = Describe("Shutdown drain regression", func() {
 			s.Shutdown()
 
 			// After Shutdown returns, the worker must be gone — NOT re-added.
-			s.mu.RLock()
-			remaining := len(s.workers)
-			s.mu.RUnlock()
+			remaining := s.TestWorkerCount()
 			Expect(remaining).To(Equal(0),
 				"worker should be removed during drain, not restarted (started=false gating)")
 
@@ -342,7 +298,7 @@ var _ = Describe("Shutdown drain regression", func() {
 			logger := deps.NewJSONFSMLogger(buf, deps.LevelDebug)
 			forceExit := make(chan struct{})
 
-			s := NewSupervisor[*TestObservedState, *TestDesiredState](Config{
+			s := supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
 				WorkerType: workerType,
 				Store:      triangularStore,
 				Logger:     logger,
@@ -359,7 +315,7 @@ var _ = Describe("Shutdown drain regression", func() {
 			}
 			// Worker never honours ShutdownRequested -> drain would otherwise
 			// run to its full 5-second timeout. ForceExit must cut it short.
-			worker := &TestWorker{}
+			worker := &supervisor.TestWorker{}
 			Expect(s.AddWorker(identity, worker)).To(Succeed())
 
 			seedDesiredState(s)
@@ -368,12 +324,7 @@ var _ = Describe("Shutdown drain regression", func() {
 			defer cancel()
 			_ = s.Start(ctx)
 
-			Eventually(func() int {
-				s.mu.RLock()
-				defer s.mu.RUnlock()
-
-				return len(s.workers)
-			}, 500*time.Millisecond, 10*time.Millisecond).Should(Equal(1))
+			Eventually(s.TestWorkerCount, 500*time.Millisecond, 10*time.Millisecond).Should(Equal(1))
 
 			// Close forceExit shortly after Shutdown enters Phase 3 drain.
 			go func() {

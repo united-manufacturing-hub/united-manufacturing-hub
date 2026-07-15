@@ -218,6 +218,14 @@ const (
 	DeleteStreamProcessor ActionType = "delete-stream-processor"
 	// GetStreamProcessor represents the action type for getting a stream processor.
 	GetStreamProcessor ActionType = "get-stream-processor"
+	// DeployHistorian represents the action type for deploying the historian configuration.
+	DeployHistorian ActionType = "deploy-historian"
+	// EditHistorian represents the action type for editing the historian configuration.
+	EditHistorian ActionType = "edit-historian"
+	// DeleteHistorian represents the action type for removing the historian configuration.
+	DeleteHistorian ActionType = "delete-historian"
+	// GetHistorian represents the action type for getting the historian configuration.
+	GetHistorian ActionType = "get-historian"
 )
 
 // TestNetworkConnectionPayload contains the necessary fields for executing a TestNetworkConnection action.
