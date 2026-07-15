@@ -20,9 +20,12 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"runtime"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cpuhealth"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/container_monitor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
@@ -817,9 +820,14 @@ var _ = Describe("verdictBasis R10.4 mode-generic shape", func() {
 		defer func() { _ = os.RemoveAll(testDataPath) }()
 
 		// No limit (cpu.max "max 100000"), /proc/stat absent (HostBusyCoresAvailable=false
-		// → no-host-stats saturation branch reachable). usage_usec pinned on tick 1 (baseline), then a
-		// huge delta on tick 2 → usageCores60sMean enormous → usage/LogicalCpus
-		// >= 0.70 for any real host → no-host-stats saturation fires.
+		// → no-host-stats saturation branch reachable). Tick 1 baselines usage_usec
+		// (UsageCores 0, ring=[0]); after a 1s sleep tick 2 advances usage_usec by
+		// 1.6*LogicalCpus core-seconds so the sampler reports ~1.6*LogicalCpus cores
+		// and the 60s-mean ring ([0, tick2]) averages to ~0.80*LogicalCpus →
+		// noHostStatsSaturationFraction ~0.80 (in the 70..87.5% band where the old
+		// fixed-ReserveCores Cores formula stayed positive) → no-host-stats
+		// saturation fires. LogicalCpus = runtime.NumCPU() (the host running the
+		// test), so the scenario scales to any core count.
 		const cpuMax = "max 100000\n"
 		var usageUsec int64 = 1_000_000
 
@@ -844,10 +852,18 @@ var _ = Describe("verdictBasis R10.4 mode-generic shape", func() {
 		_, err = svc.GetStatus(ctx)
 		Expect(err).NotTo(HaveOccurred())
 
-		// Tick 2 — usage_usec delta huge (1e9 µs = 1000s of CPU time) → UsageCores
-		// enormous → usageCores60sMean/LogicalCpus >= 0.70 → no-host-stats saturation fires. No
-		// /proc/stat → host-full not evaluated; no limit → limit-sat not evaluated.
-		usageUsec = 1_000_000_001
+		// 1s of wall-clock so the sampler's UsageCores = delta/1e6/elapsed is
+		// deterministic-ish (elapsed ≈ 1s; a few ms of jitter moves the fraction
+		// by < 1%, well inside the 0.70 fire / 0.60 clear band).
+		time.Sleep(1 * time.Second)
+
+		// Tick 2 — advance usage_usec by 1.6*LogicalCpus core-seconds so the
+		// sampler reports ~1.6*LogicalCpus cores and the 60s-mean ring ([0, tick2])
+		// averages to ~0.80*LogicalCpus → fraction ~0.80 >= 0.70 → no-host-stats
+		// saturation fires. No /proc/stat → host-full not evaluated; no limit →
+		// limit-sat not evaluated.
+		logicalCpus := float64(runtime.NumCPU())
+		usageUsec = 1_000_000 + int64(1.6*logicalCpus*1_000_000)
 		status, err := svc.GetStatus(ctx)
 		Expect(err).NotTo(HaveOccurred())
 
@@ -863,6 +879,31 @@ var _ = Describe("verdictBasis R10.4 mode-generic shape", func() {
 			"the no-host-stats saturation sub-latch fired (no limit, no host stats, sustained high usage)")
 		Expect(b.Headroom.Fired).To(BeTrue(),
 			"Fired is the OR of the sub-latches (no-host-stats saturation fired → true)")
+
+		// T3: the headroom block reflects the D-row decision variable
+		// (usageCores60sMean/LogicalCpus), not the aged-out hostBusyMean.
+		// The latch fires on the container's own 60s-avg usage vs LogicalCpus,
+		// but the pre-fix headroom block unconditionally sourced Used from
+		// HostBusyCores60sMean (ages to 0 during the outage) and Cores from
+		// HeadroomCores (LogicalCpus - 0 - 1, large positive), so the wire read
+		// positive headroom + Fired=true (backwards). Used must be the
+		// container's own usage (the decision variable, NOT 0); Cores must be
+		// the D-row headroom relative to its fire threshold
+		// (HighUsageFraction*Capacity - Used), which is non-positive when the
+		// latch fired (0 at 0.70, negative above). The old fixed-ReserveCores
+		// formula (Capacity - Used - Reserve) stays positive in the 70..87.5%
+		// band on multi-core hosts (e.g. 8 cores at 75%: 8 - 6 - 1 = +1 while
+		// Fired=true); the 0.80 mean here would give +0.40 with the old formula,
+		// so this test catches that regression.
+		highUsage := cpuhealth.DefaultThresholds().HighUsageFraction
+		Expect(b.Headroom.Used).To(BeNumerically(">", 0.0),
+			"Used is the container's own 60s-avg usage (the D-row decision variable), not the aged-out hostBusyMean (0)")
+		Expect(b.Headroom.Cores).To(BeNumerically("<", 0.0),
+			"Cores is the D-row headroom (HighUsageFraction*Capacity - Used), negative when the latch fired (usage > HighUsageFraction of LogicalCpus)")
+		Expect(b.Headroom.Cores).To(BeNumerically("~",
+			highUsage*b.Headroom.Capacity-b.Headroom.Used, 1e-9),
+			"Cores equals HighUsageFraction*Capacity - Used (the D-row fraction-based headroom formula)")
+
 		Expect(b.HostBusy.Available).To(BeFalse(),
 			"hostBusy.available is false (no /proc/stat)")
 		Expect(b.LimitedVisibility).To(BeTrue(),

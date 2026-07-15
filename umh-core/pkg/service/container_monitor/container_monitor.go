@@ -391,9 +391,32 @@ func (c *ContainerMonitorService) getCPUMetrics(ctx context.Context) (*models.CP
 		ceiling := "host"
 
 		used := signals.HostBusyCores60sMean
+		cores := signals.HeadroomCores
 		if signals.LimitApplies {
 			ceiling = "limit"
 			used = signals.AvgUsageCores
+		} else if signals.NoHostStatsSaturationFired {
+			// The no-host-stats saturation latch fires on the D-row
+			// fraction (usageCores60sMean/LogicalCpus >= HighUsageFraction),
+			// not on hostBusyMean (which ages to 0 during a sustained
+			// /proc/stat outage, so HeadroomCores reads as a large
+			// positive). Source Used from the container's own 60s-avg
+			// usage (the decision variable, NOT the aged-out 0) and Cores
+			// from the D-row headroom relative to its fire threshold
+			// (HighUsageFraction*Capacity - Used), which is non-positive
+			// exactly when the latch fired (0 at the threshold, negative
+			// above it). The fixed-ReserveCores formula
+			// (Capacity - Used - Reserve) stays positive on a multi-core
+			// host in the 70..87.5% band (e.g. 8 cores at 75%:
+			// 8 - 6 - 1 = +1) while Fired=true — the backwards condition
+			// this fixes; the D-row is fraction-based, not a fixed-reserve
+			// headroom. The MC's effectiveUsed bypasses headroom.used here
+			// (it uses avgMCpu = AvgUsageCores*1000) and never reads
+			// headroom.cores, so the display is unaffected. Q1/Q13 fixed
+			// the message + satValue; this fixes the third place (the wire
+			// basis block).
+			used = signals.AvgUsageCores
+			cores = th.HighUsageFraction*signals.CapacityCores - signals.AvgUsageCores
 		}
 
 		cpuStat.VerdictBasis = &models.VerdictBasis{
@@ -402,7 +425,7 @@ func (c *ContainerMonitorService) getCPUMetrics(ctx context.Context) (*models.CP
 				Capacity:                   signals.CapacityCores,
 				Used:                       used,
 				Reserve:                    signals.ReserveCores,
-				Cores:                      signals.HeadroomCores,
+				Cores:                      cores,
 				Fired:                      signals.SaturationFired,
 				LimitSaturationFired:       signals.LimitSaturationFired,
 				HostFullFired:              signals.HostFullFired,
