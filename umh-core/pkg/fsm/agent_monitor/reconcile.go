@@ -154,35 +154,41 @@ func (a *AgentInstance) printSystemState(instanceName string, tick uint64) {
 	logger := a.baseFSMInstance.GetLogger()
 	status := a.ObservedState.ServiceInfo
 
-	logger.Debugf("======= Agent Instance State: %s (tick: %d) =======", instanceName, tick)
-	logger.Debugf("FSM States: Current=%s, Desired=%s", a.baseFSMInstance.GetCurrentFSMState(), a.baseFSMInstance.GetDesiredFSMState())
+	kv := []any{
+		"instance", instanceName,
+		"tick", tick,
+		"current", a.baseFSMInstance.GetCurrentFSMState(),
+		"desired", a.baseFSMInstance.GetDesiredFSMState(),
+	}
 
 	if status == nil {
-		logger.Debugf("Agent Status: No data available")
-	} else {
-		logger.Debugf("Health: Overall=%s, Latency=%s, Release=%s",
-			healthCategoryToString(status.OverallHealth),
-			healthCategoryToString(status.LatencyHealth),
-			healthCategoryToString(status.ReleaseHealth))
+		kv = append(kv, "status", "no data available")
+		logger.Debugw("agent instance state", kv...)
+		return
+	}
 
-		if status.Location != nil {
-			logger.Debugf("Location: %v", status.Location)
-		}
+	kv = append(kv,
+		"health", healthCategoryToString(status.OverallHealth),
+		"latency_health", healthCategoryToString(status.LatencyHealth),
+		"release_health", healthCategoryToString(status.ReleaseHealth),
+	)
 
-		if status.Latency != nil {
-			logger.Debugf("Latency: %v", status.Latency)
-		}
+	if status.Location != nil {
+		kv = append(kv, "location", status.Location)
+	}
 
-		if status.Release != nil {
-			logger.Debugf("Release: Channel=%s, Version=%s", status.Release.Channel, status.Release.Version)
+	if status.Latency != nil {
+		kv = append(kv, "latency", status.Latency)
+	}
 
-			if len(status.Release.Versions) > 0 {
-				logger.Debugf("Component Versions: %v", status.Release.Versions)
-			}
+	if status.Release != nil {
+		kv = append(kv, "release_channel", status.Release.Channel, "release_version", status.Release.Version)
+		if len(status.Release.Versions) > 0 {
+			kv = append(kv, "component_versions", status.Release.Versions)
 		}
 	}
 
-	logger.Debugf("=================================================")
+	logger.Debugw("agent instance state", kv...)
 }
 
 // healthCategoryToString converts a HealthCategory to a human-readable string.
