@@ -26,16 +26,14 @@ import (
 )
 
 // historianMaxAge bounds how old an observation may be before it is treated as
-// stale. The monitor polls once per second; a read older than this means the
-// worker is wedged or gone, and the endpoint is reported degraded.
+// stale. The monitor polls once per second; an older read means the worker is
+// wedged or gone, so the endpoint is reported degraded.
 const historianMaxAge = 10 * time.Second
 
 // HistorianFromFSMv2 reads the historian monitor child's observed state from the
-// fsmv2 store via the process-scoped client and maps it to models.Historian. It
-// returns nil when no historian is configured, the client is unavailable, no
-// observation exists yet, or the read fails — in every one of these cases the
-// status message simply omits the historian section rather than reporting a
-// misleading state.
+// fsmv2 store and maps it to models.Historian. It returns nil (omitting the
+// section) when no historian is configured, the client is unavailable, no
+// observation exists yet, or the read fails.
 func HistorianFromFSMv2(ctx context.Context, log *zap.SugaredLogger) *models.Historian {
 	client := fsmv2client.GetClient()
 	if client == nil {

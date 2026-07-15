@@ -247,10 +247,9 @@ func (t TimescaleConfig) ToTemplateMap() map[string]any {
 
 // ToDSN builds a libpq/pgx connection string ("postgres://...") from the
 // connection settings, applying defaults first. Username and password are
-// percent-escaped so credentials containing reserved characters survive. The
-// sslmode and any configured TLS certificate paths are emitted as query
-// parameters. The returned string carries the raw password: never log it (see
-// String, which masks the password for %v logging).
+// percent-escaped so reserved characters survive; sslmode and any TLS cert paths
+// become query parameters. The returned string carries the raw password: never
+// log it (see String, which masks the password for %v logging).
 func (t TimescaleConfig) ToDSN() string {
 	t = t.WithDefaults()
 

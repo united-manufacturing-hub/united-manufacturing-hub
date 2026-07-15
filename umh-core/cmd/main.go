@@ -612,9 +612,8 @@ children:
 `
 	}
 
-	// The historian monitor is NOT declared here: it is a dynamic child, upserted
-	// and deleted at runtime by watchConfig so live edits to the
-	// historian section are picked up without restarting umh-core.
+	// The historian monitor is a dynamic child, upserted and deleted at runtime
+	// by watchConfig so live config edits apply without restarting umh-core.
 
 	// Setup store (in-memory for now).
 	store = examples.SetupStore(deps.NewFSMLogger(logger))
@@ -696,13 +695,9 @@ children:
 	return appSup, channelAdapter, store, placeholderUUID, cleanup, nil
 }
 
-// watchConfig keeps the config-driven fsmv2 monitor children in sync with the
-// live config. On each tick it re-reads the config once and hands it to a
-// per-worker sync helper; each helper independently upserts its child (creating
-// it, or reconfiguring it in place so edits are picked up without a restart) or
-// deletes it when its config section is absent. A read failure is the only
-// shared skip — with no config, no child can be synced. It returns when ctx is
-// cancelled.
+// watchConfig keeps the fsmv2 monitor children in sync with the live config,
+// re-reading it every tick and handing it to a per-worker sync helper. It
+// returns when ctx is cancelled.
 func watchConfig(ctx context.Context, configManager config.ConfigManager, logger *zap.SugaredLogger) {
 	ticker := time.NewTicker(2 * time.Second)
 	defer ticker.Stop()
@@ -728,10 +723,8 @@ func watchConfig(ctx context.Context, configManager config.ConfigManager, logger
 	}
 }
 
-// syncHistorian keeps the historian monitor child in sync with cfg: it upserts
-// the child with the current historian settings when the section is present, or
-// deletes it when the section is absent. Its early return exits only this
-// helper, so an absent historian section never blocks other workers' sync.
+// syncHistorian upserts the historian monitor child with the current settings
+// when the historian section is present, or deletes it when absent.
 func syncHistorian(client *fsmv2client.FSMv2Client, cfg config.FullConfig, logger *zap.SugaredLogger) {
 	if cfg.Historian == nil {
 		client.Delete(fsmv2timescale.Ref)

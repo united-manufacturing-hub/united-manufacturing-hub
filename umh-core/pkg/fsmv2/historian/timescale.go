@@ -13,14 +13,11 @@
 // limitations under the License.
 
 // Package fsmv2timescale is a standalone monitor built on the fsmv2 simple
-// framework. It watches the timescale's TimescaleDB/Postgres endpoint by
-// running a lightweight query over a shared connection pool once per tick: a
-// successful query reports the endpoint reachable and the credentials valid, a
-// failure drives the worker degraded. Authentication or missing-database errors
-// are classified as configuration faults (Reachable stays false with an
-// AuthValid=false status) versus transient network faults. Each check is logged
-// at INFO level. Unlike the nmap worker, it is not patched into an fsmv1 worker —
-// it runs purely on the fsmv2 runtime.
+// framework. Once per tick it runs a lightweight query over a shared connection
+// pool against the TimescaleDB/Postgres endpoint: a successful query reports the
+// endpoint reachable and credentials valid, a failure drives the worker
+// degraded. Authentication and missing-database errors are classified as
+// configuration faults (AuthValid=false) rather than transient network faults.
 package fsmv2timescale
 
 import (
@@ -44,19 +41,16 @@ const (
 	// WorkerType is the canonical worker-type name used in config and CSE storage.
 	WorkerType = "historian-timescale"
 
-	// InstanceName is the fixed dynamic-child name for the single timescale
-	// monitor configured per instance. Shared so writers (the config watcher)
-	// and readers (the status generator) address the same child without
-	// re-typing the literal.
+	// InstanceName is the fixed dynamic-child name for the single per-instance
+	// timescale monitor.
 	InstanceName = "timescale"
 
 	// pollInterval is the cadence at which the framework calls Poll.
 	pollInterval = 1 * time.Second
 )
 
-// Ref identifies the timescale monitor child in the fsmv2 runtime. It is the
-// single source of truth for the child's (WorkerType, Name) pair, shared by the
-// config watcher that upserts it and the status generator that reads it.
+// Ref is the (WorkerType, Name) pair identifying the timescale monitor child,
+// shared by the config watcher that upserts it and the status generator that reads it.
 var Ref = dynamicchildren.Ref{WorkerType: WorkerType, Name: InstanceName}
 
 const (
@@ -91,9 +85,9 @@ type TimescaleStatus struct {
 	AuthValid bool `json:"auth_valid"`
 }
 
-// Deps carries the poll dependencies. The logger and pool holder are shared
-// across ticks: the holder lazily builds and caches a pgx pool keyed by the
-// resolved DSN, so Poll reuses pooled connections instead of dialing every tick.
+// Deps carries the poll dependencies, shared across ticks. The pool holder
+// lazily builds and caches a pgx pool keyed by DSN, so Poll reuses pooled
+// connections instead of dialing every tick.
 type Deps struct {
 	Logger deps.FSMLogger
 	pool   *poolHolder
@@ -162,12 +156,12 @@ func isAuthFault(err error) bool {
 	}
 }
 
-// Poll runs a lightweight `SELECT 1` over the shared pool once and logs the
-// outcome at INFO level. A successful query returns a reachable, auth-valid
-// status with the measured latency. On error it returns an unreachable status
-// and wraps the error, which the framework persists as a degraded verdict; an
-// authentication or unknown-database error additionally sets AuthValid=false to
-// flag a configuration fault rather than a transient network problem.
+// Poll runs a `SELECT 1` over the shared pool once and logs the outcome. A
+// successful query returns a reachable, auth-valid status with the measured
+// latency. On error it returns an unreachable status and wraps the error, which
+// the framework persists as a degraded verdict; an authentication or
+// unknown-database error additionally sets AuthValid=false to flag a
+// configuration fault rather than a transient network problem.
 func Poll(ctx context.Context, d Deps, cfg config.HistorianConfig) (TimescaleStatus, error) {
 	cfg = cfg.WithDefaults()
 	host, port := cfg.Timescale.Host, cfg.Timescale.Port

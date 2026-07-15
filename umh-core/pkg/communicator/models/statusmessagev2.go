@@ -54,12 +54,12 @@ type Core struct {
 	Historian *Historian `json:"historian,omitempty"`
 }
 
-// Historian is the status of the historian endpoint monitor: its health verdict
-// plus the last dialed target and round-trip latency.
+// Historian is the status of the historian endpoint monitor.
 type Historian struct {
 	Timescale Timescale `json:"timescale"`
 }
 
+// Timescale holds the health verdict and last dialed target for the timescale endpoint.
 type Timescale struct {
 	Health    Health  `json:"health"`
 	Host      string  `json:"host"`
