@@ -338,8 +338,10 @@ func (p *ProtocolConverterService) getObservedConnectionConfig(ctx context.Conte
 	observed, err := p.connectionManager.GetLastObservedState(connectionName)
 	if err != nil {
 		// No observation yet (instance not created): treat as not-existing so the
-		// caller handles it like the fsmv1 ErrServiceNotExist path.
-		return connectionserviceconfig.ConnectionServiceConfig{}, connection.ErrServiceNotExist
+		// caller handles it like the fsmv1 ErrServiceNotExist path. Must return this
+		// package's own ErrServiceNotExist, not connection.ErrServiceNotExist — callers
+		// match against protocolconverter.ErrServiceNotExist's message/identity.
+		return connectionserviceconfig.ConnectionServiceConfig{}, ErrServiceNotExist
 	}
 
 	connObserved, ok := observed.(connectionfsm.ConnectionObservedState)
