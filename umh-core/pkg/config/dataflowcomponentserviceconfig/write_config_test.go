@@ -91,12 +91,20 @@ var _ = Describe("write_config", func() {
 			Expect(uns["umh_topics"]).To(ContainElement(dataflowcomponentserviceconfig.PlaceholderUMHTopicUnset))
 		})
 
-		It("produces no input when no output is configured", func() {
+		It("produces an empty config when no output is configured", func() {
+			// A write flow with no destination never starts and renders an empty
+			// benthos.yaml. The rendered config must be empty too — including the
+			// pipeline — so it matches the observed empty config and does not report
+			// permanent "Processors differ" divergence every tick.
 			cfg := dataflowcomponentserviceconfig.DataflowComponentWriteConfigInput{
-				Source: dataflowcomponentserviceconfig.WriteConfigSource{Topics: "umh.v1.factory.*"},
+				Source:     dataflowcomponentserviceconfig.WriteConfigSource{Topics: "umh.v1.factory.*"},
+				Processing: dataflowcomponentserviceconfig.WriteConfigProcessing{Code: "return msg;"},
 			}
 			svc := cfg.ToDataflowComponentServiceConfig("my-bridge")
 			Expect(svc.BenthosConfig.Input).To(BeNil())
+			Expect(svc.BenthosConfig.Output).To(BeNil())
+			Expect(svc.BenthosConfig.Pipeline).To(BeEmpty())
+			Expect(svc).To(Equal(dataflowcomponentserviceconfig.DataflowComponentServiceConfig{}))
 		})
 
 		It("defaults Processing.Code to 'return msg;' when empty", func() {

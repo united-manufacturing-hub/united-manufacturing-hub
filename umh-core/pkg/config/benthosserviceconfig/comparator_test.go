@@ -255,4 +255,47 @@ var _ = Describe("Benthos YAML Comparator", func() {
 			Expect(diff1).To(Equal(diff2))
 		})
 	})
+
+	Describe("type-representation canonicalization", func() {
+		// A config built natively in Go (e.g. []string, int) must compare equal to
+		// the same config read back from benthos.yaml (e.g. []interface{}). Without
+		// canonicalization these differ by type only and cause an endless re-apply
+		// loop.
+		It("treats a Go []string list as equal to a YAML-parsed []interface{} list", func() {
+			desired := BenthosServiceConfig{
+				Input: map[string]interface{}{
+					"uns": map[string]interface{}{
+						"consumer_group": "cg",
+						"umh_topics":     []string{"umh.v1.a", "umh.v1.b"},
+					},
+				},
+			}
+			observed := BenthosServiceConfig{
+				Input: map[string]interface{}{
+					"uns": map[string]interface{}{
+						"consumer_group": "cg",
+						"umh_topics":     []interface{}{"umh.v1.a", "umh.v1.b"},
+					},
+				},
+			}
+
+			Expect(ConfigsEqual(desired, observed)).To(BeTrue())
+			Expect(ConfigDiff(desired, observed)).To(Equal("No significant differences\n"))
+		})
+
+		It("still detects a genuine list difference", func() {
+			desired := BenthosServiceConfig{
+				Input: map[string]interface{}{
+					"uns": map[string]interface{}{"umh_topics": []string{"umh.v1.a"}},
+				},
+			}
+			observed := BenthosServiceConfig{
+				Input: map[string]interface{}{
+					"uns": map[string]interface{}{"umh_topics": []interface{}{"umh.v1.b"}},
+				},
+			}
+
+			Expect(ConfigsEqual(desired, observed)).To(BeFalse())
+		})
+	})
 })
