@@ -123,11 +123,21 @@ func composeHealthy(signals Signals) string {
 	} else {
 		// No-percentage variant: used either when no limit applies, or when the
 		// limit is so small (sub-0.05 cores) that totalDisp rounds to 0 and the
-		// percentage would divide by zero.
+		// percentage would divide by zero. The subject follows the usedDisp
+		// source, which branches on LimitApplies: in limit mode (incl. sub-0.05
+		// quotas) usedDisp = AvgUsageCores (instance-scoped), so the subject is
+		// "This instance"; in no-limit mode usedDisp = HostBusyCores60sMean
+		// (host-WIDE busy: all software on the machine), so the subject is
+		// "The machine" (attributing host-wide usage to the instance would
+		// mislead an operator on a shared box).
+		subject := "The machine"
+		if signals.LimitApplies {
+			subject = "This instance"
+		}
 		if math.Abs(headroomDisp) < 0.05 {
-			headline = fmt.Sprintf("CPU healthy. This instance is using %s of %s cores and is close to being marked degraded.", usedStr, totalStr)
+			headline = fmt.Sprintf("CPU healthy. %s is using %s of %s cores and is close to being marked degraded.", subject, usedStr, totalStr)
 		} else {
-			headline = fmt.Sprintf("CPU healthy. This instance is using %s of %s cores and can use %s more before it is marked degraded.", usedStr, totalStr, headroomStr)
+			headline = fmt.Sprintf("CPU healthy. %s is using %s of %s cores and can use %s more before it is marked degraded.", subject, usedStr, totalStr, headroomStr)
 		}
 	}
 

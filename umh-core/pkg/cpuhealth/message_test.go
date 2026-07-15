@@ -351,7 +351,7 @@ func TestComposeMessage_HealthyBudgetDashboard(t *testing.T) {
 			PsiApplies:           true,
 			PressureAvg60Out:     0.03,
 		}
-		want := "CPU healthy. This instance is using 2.8 of 8 cores and can use 4.2 more before it is marked degraded.\nTechnical Details: Headroom 4.2 cores = 8 total - 2.8 used - 1.0 reserved (degraded below 0). Pressure 3% (degraded above 20%)."
+		want := "CPU healthy. The machine is using 2.8 of 8 cores and can use 4.2 more before it is marked degraded.\nTechnical Details: Headroom 4.2 cores = 8 total - 2.8 used - 1.0 reserved (degraded below 0). Pressure 3% (degraded above 20%)."
 		if got := cpuhealth.ComposeMessage(healthy, signals); got != want {
 			t.Fatalf("PSI-only healthy message:\n got: %q\nwant: %q", got, want)
 		}
@@ -365,7 +365,7 @@ func TestComposeMessage_HealthyBudgetDashboard(t *testing.T) {
 			StealApplies:         true,
 			StealP95:             0.0,
 		}
-		want := "CPU healthy. This instance is using 2.8 of 8 cores and can use 4.2 more before it is marked degraded.\nTechnical Details: Headroom 4.2 cores = 8 total - 2.8 used - 1.0 reserved (degraded below 0). Steal 0% (degraded above 10%)."
+		want := "CPU healthy. The machine is using 2.8 of 8 cores and can use 4.2 more before it is marked degraded.\nTechnical Details: Headroom 4.2 cores = 8 total - 2.8 used - 1.0 reserved (degraded below 0). Steal 0% (degraded above 10%)."
 		if got := cpuhealth.ComposeMessage(healthy, signals); got != want {
 			t.Fatalf("virtualized-only healthy message:\n got: %q\nwant: %q", got, want)
 		}
@@ -380,7 +380,7 @@ func TestComposeMessage_HealthyBudgetDashboard(t *testing.T) {
 			CapacityCores:        8,
 			LimitedVisibility:    true,
 		}
-		want := "CPU healthy. This instance is using 2.8 of 8 cores and can use 4.2 more before it is marked degraded.\n" + limitedVisibilityNoteText + "\nTechnical Details: Headroom 4.2 cores = 8 total - 2.8 used - 1.0 reserved (degraded below 0)."
+		want := "CPU healthy. The machine is using 2.8 of 8 cores and can use 4.2 more before it is marked degraded.\n" + limitedVisibilityNoteText + "\nTechnical Details: Headroom 4.2 cores = 8 total - 2.8 used - 1.0 reserved (degraded below 0)."
 		if got := cpuhealth.ComposeMessage(healthy, signals); got != want {
 			t.Fatalf("bare dead-zone healthy message:\n got: %q\nwant: %q", got, want)
 		}
@@ -393,7 +393,7 @@ func TestComposeMessage_HealthyBudgetDashboard(t *testing.T) {
 			HostBusyCores60sMean: 3.0,
 			CapacityCores:        4,
 		}
-		want := "CPU healthy. This instance is using 3.0 of 4 cores and is close to being marked degraded.\nTechnical Details: Headroom 0.0 cores = 4 total - 3.0 used - 1.0 reserved (degraded below 0)."
+		want := "CPU healthy. The machine is using 3.0 of 4 cores and is close to being marked degraded.\nTechnical Details: Headroom 0.0 cores = 4 total - 3.0 used - 1.0 reserved (degraded below 0)."
 		if got := cpuhealth.ComposeMessage(healthy, signals); got != want {
 			t.Fatalf("headroom-zero-boundary healthy message:\n got: %q\nwant: %q", got, want)
 		}
@@ -408,7 +408,7 @@ func TestComposeMessage_HealthyBudgetDashboard(t *testing.T) {
 			HostBusyCores60sMean: 2.75,
 			CapacityCores:        8,
 		}
-		want := "CPU healthy. This instance is using 2.8 of 8 cores and can use 4.2 more before it is marked degraded.\nTechnical Details: Headroom 4.2 cores = 8 total - 2.8 used - 1.0 reserved (degraded below 0)."
+		want := "CPU healthy. The machine is using 2.8 of 8 cores and can use 4.2 more before it is marked degraded.\nTechnical Details: Headroom 4.2 cores = 8 total - 2.8 used - 1.0 reserved (degraded below 0)."
 		if got := cpuhealth.ComposeMessage(healthy, signals); got != want {
 			t.Fatalf("rounding-consistency healthy message:\n got: %q\nwant: %q", got, want)
 		}
@@ -567,6 +567,70 @@ func TestComposeMessage_HealthyBudget_LimitMode(t *testing.T) {
 	if !strings.Contains(msg, "close to being marked degraded") {
 		t.Fatalf("headroom=0.0 must trigger the boundary variant: %q", msg)
 	}
+}
+
+// TestComposeMessage_HealthyBudget_NoLimit_HeadlineSubject pins the
+// attribution fix: in no-limit mode composeHealthy sets usedDisp to
+// HostBusyCores60sMean (the host-WIDE busy: all software on the machine, not
+// just this instance), so the headline must say "The machine is using", not
+// "This instance is using" (which would misattribute host-wide usage to the
+// instance). Both the close-to-degraded and the has-headroom variants are
+// covered. The limit-mode headline keeps "This instance is using" (there
+// usedDisp = AvgUsageCores, the instance's own usage).
+func TestComposeMessage_HealthyBudget_NoLimit_HeadlineSubject(t *testing.T) {
+	healthy := cpuhealth.Verdict{State: cpuhealth.StateHealthy}
+
+	// No-limit, has-headroom: host-busy 4.0 of 8 cores, 3.0 headroom.
+	t.Run("NoLimit_HasHeadroom", func(t *testing.T) {
+		signals := cpuhealth.Signals{
+			LimitApplies:         false,
+			HostBusyCores60sMean: 4.0,
+			CapacityCores:        8.0,
+		}
+		msg := cpuhealth.ComposeMessage(healthy, signals)
+		firstLine, _, _ := strings.Cut(msg, "\n")
+		if !strings.Contains(firstLine, "The machine is using") {
+			t.Fatalf("no-limit has-headroom headline must say \"The machine is using\" (usedDisp is host-wide): %q", firstLine)
+		}
+		if strings.Contains(firstLine, "This instance is using") {
+			t.Fatalf("no-limit has-headroom headline must NOT say \"This instance is using\" (misattributes host-wide usage to the instance): %q", firstLine)
+		}
+	})
+
+	// No-limit, close-to-degraded: headroom rounds to 0.0.
+	t.Run("NoLimit_CloseToDegraded", func(t *testing.T) {
+		signals := cpuhealth.Signals{
+			LimitApplies:         false,
+			HostBusyCores60sMean: 3.0,
+			CapacityCores:        4.0,
+		}
+		msg := cpuhealth.ComposeMessage(healthy, signals)
+		firstLine, _, _ := strings.Cut(msg, "\n")
+		if !strings.Contains(firstLine, "The machine is using") {
+			t.Fatalf("no-limit close-to-degraded headline must say \"The machine is using\" (usedDisp is host-wide): %q", firstLine)
+		}
+		if strings.Contains(firstLine, "This instance is using") {
+			t.Fatalf("no-limit close-to-degraded headline must NOT say \"This instance is using\" (misattributes host-wide usage to the instance): %q", firstLine)
+		}
+	})
+
+	// Limit-mode regression guard: keeps "This instance is using" (instance-scoped).
+	t.Run("LimitMode_HasHeadroom", func(t *testing.T) {
+		signals := cpuhealth.Signals{
+			LimitApplies:  true,
+			AvgUsageCores: 2.8,
+			CapacityCores: 8,
+			ReserveCores:  0.8,
+		}
+		msg := cpuhealth.ComposeMessage(healthy, signals)
+		firstLine, _, _ := strings.Cut(msg, "\n")
+		if !strings.Contains(firstLine, "This instance is using") {
+			t.Fatalf("limit-mode has-headroom headline must keep \"This instance is using\" (usedDisp is instance-scoped): %q", firstLine)
+		}
+		if strings.Contains(firstLine, "The machine is using") {
+			t.Fatalf("limit-mode has-headroom headline must NOT say \"The machine is using\" (usedDisp is instance-scoped): %q", firstLine)
+		}
+	})
 }
 
 // TestComposeMessage_HealthyBudget_NoLimit_Unchanged is a regression guard:
@@ -967,6 +1031,17 @@ func TestComposeMessage_HealthyBudget_FractionalLimitRoundsToZero(t *testing.T) 
 	}
 	if !strings.Contains(msg, "healthy") {
 		t.Fatalf("healthy headline must still render a healthy string: %q", msg)
+	}
+	// sub-0.05 quota still has LimitApplies=true, so usedDisp comes from
+	// AvgUsageCores (instance-scoped): the no-percentage headline subject must
+	// be "This instance is using", NOT "The machine is using" (which would
+	// misattribute the instance's own usage to the host).
+	firstLine, _, _ := strings.Cut(msg, "\n")
+	if !strings.Contains(firstLine, "This instance is using") {
+		t.Fatalf("sub-0.05-quota headline must say \"This instance is using\" (LimitApplies=true, usedDisp=AvgUsageCores is instance-scoped): %q", firstLine)
+	}
+	if strings.Contains(firstLine, "The machine is using") {
+		t.Fatalf("sub-0.05-quota headline must NOT say \"The machine is using\" (usedDisp is instance-scoped, not host-wide): %q", firstLine)
 	}
 }
 
