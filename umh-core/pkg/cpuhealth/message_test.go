@@ -29,7 +29,7 @@ import (
 // ComposeMessage is a pure function turning a Verdict + Signals into the C2
 // two-layer format the Console alert adapter renders (first line = headline,
 // everything after a literal "Technical Details:" separator collapses into the
-// expandable panel). A degraded message MUST carry the separator — without it
+// expandable panel). A degraded message MUST carry the separator, without it
 // the whole message lands in the collapsed panel and the headline goes blank.
 //
 // This traces to the spec's "User-facing messages" supertable
@@ -68,7 +68,7 @@ func TestComposeMessage_ThrottleTwoLayerC2(t *testing.T) {
 		t.Fatalf("headline (first line): got %q, want %q (the throttle-cause headline from the supertable)", firstLine, "CPU limited")
 	}
 
-	// (2) The literal "Technical Details:" separator MUST be present — the
+	// (2) The literal "Technical Details:" separator MUST be present, the
 	// Console adapter splits on it; a degraded message without it renders with a
 	// blank headline.
 	sepLine, details, sepFound := strings.Cut(rest, "Technical Details:")
@@ -220,7 +220,7 @@ func TestComposeMessage_SaturationTwoLayerC2(t *testing.T) {
 // Technical-Details copy split on signals.LimitedVisibility. When blind (no
 // limit, no PSI) the copy names the missing signals and remediation; when NOT
 // blind (a PSI-only box, LimitedVisibility false) it must NOT claim PSI is
-// missing — it gives the actionable capacity/limit advice instead.
+// missing, it gives the actionable capacity/limit advice instead.
 func TestComposeMessage_SaturationDetailsPsiConditional(t *testing.T) {
 	verdict := cpuhealth.Verdict{
 		State:       cpuhealth.StateDegraded,
@@ -1046,8 +1046,8 @@ func TestComposeMessage_HealthyBudget_FractionalLimitRoundsToZero(t *testing.T) 
 }
 
 // TestComposeMessage_Saturation_CScenarioHonestyNote pins the C-scenario
-// "host stats unavailable" note on the real HostBusyCoresAvailable flag (R10.5
-// fix: was a HostBusyCores60sMean==0 proxy, unreliable on a readable idle host).
+// "host stats unavailable" note on the real HostBusyCoresAvailable flag (this
+// replaces a HostBusyCores60sMean==0 proxy, unreliable on a readable idle host).
 func TestComposeMessage_Saturation_CScenarioHonestyNote(t *testing.T) {
 	verdict := cpuhealth.Verdict{
 		State: cpuhealth.StateDegraded, Attribution: cpuhealth.AttributionUnknown,
@@ -1072,7 +1072,7 @@ func TestComposeMessage_Saturation_CScenarioHonestyNote(t *testing.T) {
 		signals := cpuhealth.Signals{
 			SaturationFired: true, LimitSaturationFired: true, LimitApplies: true,
 			AvgUsageCores: 1.9, CapacityCores: 2.0, ReserveCores: 0.2,
-			HostBusyCores60sMean:   0, // idle readable host — the old proxy fired here
+			HostBusyCores60sMean:   0, // idle readable host, the old proxy fired here
 			HostBusyCoresAvailable: true,
 		}
 		msg := cpuhealth.ComposeMessage(verdict, signals)

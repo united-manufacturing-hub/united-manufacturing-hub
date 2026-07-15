@@ -36,7 +36,7 @@ import (
 // low-usage healthy pins below are unchanged.
 //
 //  1. A high-usage sample (UsageCores >= 0.70 * CgroupCores, CgroupCores>0)
-//     yields State==healthy with no causes — high usage alone is not ill
+//     yields State==healthy with no causes, high usage alone is not ill
 //     health. Signals.UsageFraction is still the quota-relative fraction.
 //  2. An idle/low-usage sample (UsageCores < 0.70 * CgroupCores) yields
 //     State==healthy, Attribution empty/zero, Causes nil-or-empty.
@@ -83,7 +83,7 @@ func TestDecide_SaturationOnly(t *testing.T) {
 	})
 
 	// (1) High-usage sample crosses the 0.70 quota-relative threshold but
-	// high usage alone is healthy — busy is not sick. The fraction is still
+	// high usage alone is healthy, busy is not sick. The fraction is still
 	// computed and exposed on Signals (quota-relative denominator).
 	t.Run("high usage stays healthy with fraction computed", func(t *testing.T) {
 		st := &WindowState{}
@@ -155,10 +155,10 @@ func TestDecide_SaturationOnly(t *testing.T) {
 //  3. Uncapped sample (Quota nil), high UsageCores → DELIBERATE healthy: no
 //     fraction is computed (Signals.UsageFraction == 0), the same uncapped
 //     sample at a higher UsageCores also stays healthy, AND a capped sample at
-//     the same UsageCores computes a non-zero fraction — so the uncapped
+//     the same UsageCores computes a non-zero fraction, so the uncapped
 //     fraction-0 is the guardrail, not the fraction-zero accident.
 //  4. A non-nil non-positive Quota (zero, negative, NaN) is treated as
-//     uncapped — Decide does NOT divide by it (no +Inf/NaN poison fraction) and
+//     uncapped, Decide does NOT divide by it (no +Inf/NaN poison fraction) and
 //     does NOT fall back to CgroupCores, so a zero quota (the unlimited-cgroup
 //     case) stays healthy with no fraction even when CgroupCores is positive.
 //  5. When both Quota (non-nil positive) and CgroupCores are set, Quota wins
@@ -213,7 +213,7 @@ func TestDecide_QuotaPointerUncapped(t *testing.T) {
 	// Deliberateness proof has two prongs: (a) raising UsageCores on the same
 	// uncapped sample keeps it healthy with no fraction computed (uncapped
 	// cannot be quota-saturated, so no fraction is derived); (b) a capped
-	// sample at the same UsageCores degrades — proving Decide would degrade
+	// sample at the same UsageCores degrades, proving Decide would degrade
 	// given a quota, so the uncapped healthy is the guardrail, not the
 	// fraction-zero accident of the old CgroupCores sentinel.
 	t.Run("uncapped high usage is deliberately healthy", func(t *testing.T) {
@@ -234,7 +234,7 @@ func TestDecide_QuotaPointerUncapped(t *testing.T) {
 			t.Fatalf("uncapped Signals.UsageFraction: got %v, want 0 (no fraction computed when Quota nil)", got)
 		}
 
-		// (a) Higher UsageCores on the same uncapped sample stays healthy — no
+		// (a) Higher UsageCores on the same uncapped sample stays healthy, no
 		// fraction is computed, so the verdict cannot flip on usage magnitude.
 		stHigher := &WindowState{}
 		uncappedHigher := Sample{Timestamp: ts, UsageCores: 50.0, Quota: nil}
@@ -342,7 +342,7 @@ func TestDecide_QuotaPointerUncapped(t *testing.T) {
 
 		// (4e) The load-bearing pin: a non-positive Quota WITH a positive
 		// CgroupCores stays uncapped. Because Quota is non-nil, Decide must NOT
-		// fall back to CgroupCores — otherwise a wired Quota=&0 (unlimited
+		// fall back to CgroupCores, otherwise a wired Quota=&0 (unlimited
 		// cgroup) combined with a still-populated CgroupCores would compute
 		// UsageCores/CgroupCores and degrade, the exact blindness the seam
 		// exists to prevent. Quota=&0, CgroupCores=2.0, UsageCores=1.5 would
@@ -364,7 +364,7 @@ func TestDecide_QuotaPointerUncapped(t *testing.T) {
 	})
 
 	// (5) Precedence: when both Quota (non-nil positive) and CgroupCores are
-	// set to differing values, Quota wins — the fraction is UsageCores/Quota,
+	// set to differing values, Quota wins, the fraction is UsageCores/Quota,
 	// not UsageCores/CgroupCores. Pins the doc contract at decide.go: a future
 	// refactor flipping the branch order would otherwise pass CI. The verdict
 	// is healthy either way (high usage alone is not ill health), so
@@ -392,7 +392,7 @@ func TestDecide_QuotaPointerUncapped(t *testing.T) {
 // TestDecide_HighUsageAloneIsHealthy pins the Decide library thesis: high
 // CPU utilization is NOT ill health. A capped container pinned at 0.95 of
 // its quota with no throttle/pressure/steal/host-contention signal is
-// working, not sick — Decide must return StateHealthy with no causes.
+// working, not sick, Decide must return StateHealthy with no causes.
 // Decide no longer degrades on raw usage >= HighUsageFraction; saturation
 // will be decided from a windowed average of UsageFraction in WindowState,
 // never from a single sample's raw usage. Throttling is a separate
@@ -406,7 +406,7 @@ func TestDecide_QuotaPointerUncapped(t *testing.T) {
 //
 //  1. A capped sample (Quota 2.0) at very high usage (UsageCores 1.9 of 2.0
 //     = 0.95 fraction) and no other signals returns StateHealthy with no
-//     causes and no attribution — NOT degraded.
+//     causes and no attribution, NOT degraded.
 //  2. A capped sample at low usage (0.5 of 2.0) still returns healthy
 //     (unchanged).
 func TestDecide_HighUsageAloneIsHealthy(t *testing.T) {
@@ -475,16 +475,16 @@ func floatEq(a, b float64) bool {
 //
 // One linear scenario walks the flip-latch through every state:
 //
-//  1. TRANSIENT — a single spiked sample whose 60s cumulative ratio stays
+//  1. TRANSIENT, a single spiked sample whose 60s cumulative ratio stays
 //     below 0.05 does NOT fire the latch (the window absorbs it): healthy,
 //     Signals.ThrottleFired false, no causes.
-//  2. FIRE — a second spike pushes the 60s ratio above 0.05 → latch fires:
+//  2. FIRE, a second spike pushes the 60s ratio above 0.05 → latch fires:
 //     {degraded, unknown, [throttling]} with Cause Value = the 60s ratio,
 //     Signals.ThrottleFired true.
-//  3. HOLD (Schmitt) — calm samples bring the 60s ratio down to 0.045
+//  3. HOLD (Schmitt), calm samples bring the 60s ratio down to 0.045
 //     (between the 0.03 recover and 0.05 high marks) → latch stays fired:
 //     still degraded.
-//  4. CLEAR — further calm samples drop the 60s ratio below 0.03 → latch
+//  4. CLEAR, further calm samples drop the 60s ratio below 0.03 → latch
 //     clears: healthy, Signals.ThrottleFired false, no causes.
 //
 // Steal/pressure/host-contention/saturation are not exercised here; the
@@ -505,7 +505,7 @@ func TestDecide_ThrottleFlipLatch_WindowedSchmitt(t *testing.T) {
 	// decide feeds one timestamped throttle sample into WindowState via Decide
 	// and returns the resulting verdict + signals. Decide mutates st in place
 	// (appends to the throttle ring, updates the flip-latch), so the sequence
-	// is stateful across calls — exactly the caller-held-state contract.
+	// is stateful across calls, exactly the caller-held-state contract.
 	decide := func(tk tick) (Verdict, Signals) {
 		return Decide(st, Sample{
 			Timestamp:   base.Add(tk.dt),
@@ -514,7 +514,7 @@ func TestDecide_ThrottleFlipLatch_WindowedSchmitt(t *testing.T) {
 		}, thresholds)
 	}
 
-	// (1) TRANSIENT — six calm ticks at ~0.01 instantaneous ratio, then one
+	// (1) TRANSIENT, six calm ticks at ~0.01 instantaneous ratio, then one
 	// spike (+200 throttled in a single tick). The 60s cumulative ratio at
 	// t=60s is 250/6000 = 0.0417, below the 0.05 high mark, so the latch must
 	// NOT fire: the window absorbs the transient spike.
@@ -539,7 +539,7 @@ func TestDecide_ThrottleFlipLatch_WindowedSchmitt(t *testing.T) {
 		t.Fatalf("transient Causes length: got %d, want 0", len(v1.Causes))
 	}
 
-	// (2) FIRE — a second spike (+220 throttled this tick). The 60s cumulative
+	// (2) FIRE, a second spike (+220 throttled this tick). The 60s cumulative
 	// ratio at t=70s is (470-10)/(7000-1000) = 460/6000 = 0.0767, above the
 	// 0.05 high mark, so the latch fires: degraded, unknown attribution, a
 	// single throttling cause whose Value is the 60s ratio.
@@ -564,7 +564,7 @@ func TestDecide_ThrottleFlipLatch_WindowedSchmitt(t *testing.T) {
 		t.Fatalf("fire Cause Value: got %v, want %v (the 60s windowed ratio)", v2.Causes[0].Value, wantRatio)
 	}
 
-	// (3) HOLD (Schmitt) — calm ticks (+10 throttled each) until the spiked
+	// (3) HOLD (Schmitt), calm ticks (+10 throttled each) until the spiked
 	// samples age partway out and the 60s cumulative ratio drops to 0.045,
 	// between the 0.03 recover and 0.05 high marks. The latch must hold its
 	// fired state: a ratio in the band does NOT clear it.
@@ -578,7 +578,7 @@ func TestDecide_ThrottleFlipLatch_WindowedSchmitt(t *testing.T) {
 	}
 	// At t=120s: cutoff=t=60s; window = t=60..t=120. Oldest=t=60 (6000,250),
 	// newest=t=120 (12000,520). Delta = (520-250)/(12000-6000) = 270/6000 =
-	// 0.045 — in the Schmitt band.
+	// 0.045, in the Schmitt band.
 	v3, sig3 := decide(tick{120 * time.Second, 12000, 520})
 	if v3.State != StateDegraded {
 		t.Fatalf("hold State: got %q, want %q (60s ratio 0.045 is in the Schmitt band; latch holds fired)", v3.State, StateDegraded)
@@ -590,7 +590,7 @@ func TestDecide_ThrottleFlipLatch_WindowedSchmitt(t *testing.T) {
 		t.Fatalf("hold Causes: got %+v, want one throttling cause", v3.Causes)
 	}
 
-	// (4) CLEAR — one more calm tick. At t=130s: cutoff=t=70s; window =
+	// (4) CLEAR, one more calm tick. At t=130s: cutoff=t=70s; window =
 	// t=70..t=130. Oldest=t=70 (7000,470), newest=t=130 (13000,530). Delta =
 	// (530-470)/(13000-7000) = 60/6000 = 0.01, below the 0.03 recover mark, so
 	// the latch clears: healthy, ThrottleFired false, no causes.
@@ -694,17 +694,17 @@ func TestDecide_ThrottleFlipLatch_CounterReset(t *testing.T) {
 //
 // Sequence (10s ticks, 60s window):
 //
-//  1. BUILD + FIRE — two large-counter samples whose 60s ratio is 0.1 > 0.05
+//  1. BUILD + FIRE, two large-counter samples whose 60s ratio is 0.1 > 0.05
 //     → latch fires.
-//  2. RESET — a sample whose NrPeriods and NrThrottled drop far below the
+//  2. RESET, a sample whose NrPeriods and NrThrottled drop far below the
 //     ring's newest (cgroup recreated). The ring is cleared; the reset sample
 //     is the sole entry → ratio 0 → latch clears. The stale pre-reset oldest
 //     (nrPeriods 100000) does NOT stay in the ring.
-//  3. FRESH THROTTLE — one fresh post-reset sample pair at a 0.1 instantaneous
+//  3. FRESH THROTTLE, one fresh post-reset sample pair at a 0.1 instantaneous
 //     ratio. With the fix, the ring holds only post-reset points, so the 60s
 //     ratio is 0.1 > 0.05 and the latch FIRES promptly. Without the fix, the
 //     stale pre-reset oldest (nrPeriods 100000) remains, nr_periods delta is
-//     -98990 <= 0, throttleRatio returns 0, and the latch STAYS CLEAR —
+//     -98990 <= 0, throttleRatio returns 0, and the latch STAYS CLEAR,
 //     throttle silently missed.
 //
 // Without the clear-on-regression fix, step 3 fails: the latch is clear where
@@ -728,7 +728,7 @@ func TestDecide_ThrottleFlipLatch_CounterResetClearsRing(t *testing.T) {
 		}, thresholds)
 	}
 
-	// (1) BUILD + FIRE — large pre-reset counters. t=0 (100000, 5000),
+	// (1) BUILD + FIRE, large pre-reset counters. t=0 (100000, 5000),
 	// t=10s (110000, 6000). 60s ratio = (6000-5000)/(110000-100000) =
 	// 1000/10000 = 0.1 > 0.05 → latch fires.
 	decide(tick{0, 100000, 5000})
@@ -737,7 +737,7 @@ func TestDecide_ThrottleFlipLatch_CounterResetClearsRing(t *testing.T) {
 		t.Fatalf("fire: state=%q fired=%v, want degraded/fired (60s ratio 0.1 > 0.05)", v1.State, sig1.ThrottleFired)
 	}
 
-	// (2) RESET — cgroup recreated: NrPeriods 110000→10, NrThrottled 6000→1.
+	// (2) RESET, cgroup recreated: NrPeriods 110000→10, NrThrottled 6000→1.
 	// The clear-on-regression fires (10 < 110000), the ring is reset to the
 	// sole new sample, throttleRatio returns 0 (len < 2), 0 < ThrottleRecover
 	// clears the latch. The stale pre-reset oldest (nrPeriods 100000) must NOT
@@ -756,13 +756,13 @@ func TestDecide_ThrottleFlipLatch_CounterResetClearsRing(t *testing.T) {
 		t.Fatalf("reset ring oldest nrPeriods: got %d, want 10 (the fresh reset value, NOT the stale pre-reset 100000)", got)
 	}
 
-	// (3) FRESH THROTTLE — one fresh post-reset sample. t=30s (1010, 101):
+	// (3) FRESH THROTTLE, one fresh post-reset sample. t=30s (1010, 101):
 	// +1000 periods, +100 throttled over the reset baseline (10, 1). With the
 	// fix the ring holds only post-reset points: 60s ratio = (101-1)/(1010-10)
 	// = 100/1000 = 0.1 > 0.05 → latch FIRES promptly (one tick after reset).
 	// Without the fix the stale pre-reset oldest (nrPeriods 100000) remains,
 	// periods delta = 1010-100000 = -98990 <= 0, throttleRatio returns 0, and
-	// the latch STAYS CLEAR — throttle silently missed during the cold-start
+	// the latch STAYS CLEAR, throttle silently missed during the cold-start
 	// window.
 	v3, sig3 := decide(tick{30 * time.Second, 1010, 101})
 	if !sig3.ThrottleFired {
@@ -782,7 +782,7 @@ func TestDecide_ThrottleFlipLatch_CounterResetClearsRing(t *testing.T) {
 
 // TestDecide_PressureCause_Avg60DirectSchmitt pins the pressure starvation
 // cause in Decide. Pressure is the kernel's own 60s running average
-// (cpu.pressure "some avg60"), so it is thresholded DIRECTLY — no additional
+// (cpu.pressure "some avg60"), so it is thresholded DIRECTLY, no additional
 // windowing/ring/p95 (unlike throttle, which needs the counter-delta ring).
 // The Schmitt flip-latch is the ONLY state.
 //
@@ -791,12 +791,12 @@ func TestDecide_ThrottleFlipLatch_CounterResetClearsRing(t *testing.T) {
 //     {degraded, unknown, [pressure]} with Cause Value = PressureAvg60.
 //  2. A pressure reading below PressureRecover (0.12) CLEARS the latch.
 //  3. The latch HOLDS (stays degraded) for a reading in the Schmitt band
-//     (0.12 <= reading <= 0.20) after firing — the band is the debounce.
+//     (0.12 <= reading <= 0.20) after firing, the band is the debounce.
 //  4. When throttle is ALSO firing, BOTH causes appear in the list (throttle
 //     and pressure can co-fire).
 //  5. A transient pressure spike at 0.21 that is immediately followed by a
 //     band reading fires and then holds (the latch requires crossing
-//     PressureHigh to fire; once fired it holds until < PressureRecover) —
+//     PressureHigh to fire; once fired it holds until < PressureRecover),
 //     the Schmitt band IS the debounce, since the kernel already smoothed
 //     over 60s.
 func TestDecide_PressureCause_Avg60DirectSchmitt(t *testing.T) {
@@ -811,7 +811,7 @@ func TestDecide_PressureCause_Avg60DirectSchmitt(t *testing.T) {
 		}, thresholds)
 	}
 
-	// (1) FIRE — a single pressure reading at 0.21 (> PressureHigh 0.20) fires
+	// (1) FIRE, a single pressure reading at 0.21 (> PressureHigh 0.20) fires
 	// the pressure cause: degraded, unknown attribution, one pressure cause
 	// whose Value is the raw avg60 (NOT a re-percentiled value).
 	v1, sig1 := decide(10*time.Second, 0.21)
@@ -831,10 +831,10 @@ func TestDecide_PressureCause_Avg60DirectSchmitt(t *testing.T) {
 		t.Fatalf("fire Cause Kind: got %q, want %q", v1.Causes[0].Kind, CauseKindPressure)
 	}
 	if !floatEq(v1.Causes[0].Value, 0.21) {
-		t.Fatalf("fire Cause Value: got %v, want 0.21 (the raw avg60, thresholded directly — no p95)", v1.Causes[0].Value)
+		t.Fatalf("fire Cause Value: got %v, want 0.21 (the raw avg60, thresholded directly, no p95)", v1.Causes[0].Value)
 	}
 
-	// (2) HOLD — a reading at 0.15 (in the Schmitt band 0.12..0.20) must NOT
+	// (2) HOLD, a reading at 0.15 (in the Schmitt band 0.12..0.20) must NOT
 	// clear the latch: the latch holds fired. (The kernel already smoothed over
 	// 60s; the band is the only debounce.)
 	v2, sig2 := decide(20*time.Second, 0.15)
@@ -848,7 +848,7 @@ func TestDecide_PressureCause_Avg60DirectSchmitt(t *testing.T) {
 		t.Fatalf("hold Causes: got %+v, want one pressure cause", v2.Causes)
 	}
 
-	// (3) CLEAR — a reading at 0.10 (< PressureRecover 0.12) clears the latch:
+	// (3) CLEAR, a reading at 0.10 (< PressureRecover 0.12) clears the latch:
 	// healthy, PressureFired false, no causes.
 	v3, sig3 := decide(30*time.Second, 0.10)
 	if v3.State != StateHealthy {
@@ -861,7 +861,7 @@ func TestDecide_PressureCause_Avg60DirectSchmitt(t *testing.T) {
 		t.Fatalf("clear Causes length: got %d, want 0", len(v3.Causes))
 	}
 
-	// (4) CO-FIRE with throttle — when throttle is ALSO firing, BOTH causes
+	// (4) CO-FIRE with throttle, when throttle is ALSO firing, BOTH causes
 	// appear in the list (throttle and pressure can co-fire). Feed a sample
 	// with both a sustained throttle ratio above ThrottleHigh and a pressure
 	// reading above PressureHigh. Two ticks are needed to build the throttle
@@ -904,7 +904,7 @@ func TestDecide_PressureCause_Avg60DirectSchmitt(t *testing.T) {
 		t.Fatalf("cofire Causes: got %+v, want both throttling and pressure present", v4.Causes)
 	}
 
-	// (5) BOUNDARY — the latch uses strict `>` (fire) and strict `<` (clear), so
+	// (5) BOUNDARY, the latch uses strict `>` (fire) and strict `<` (clear), so
 	// a reading of exactly PressureHigh (0.20) must NOT fire from a healthy
 	// latch, and a reading of exactly PressureRecover (0.12) must NOT clear from
 	// a fired latch. The hold band is [0.12, 0.20] inclusive on both ends.
@@ -945,10 +945,10 @@ func TestDecide_PressureCause_Avg60DirectSchmitt(t *testing.T) {
 		t.Fatalf("boundary-recover PressureFired: got false, want true (strict `<`: 0.12 is not < 0.12, latch holds fired)")
 	}
 
-	// (6) NaN GUARD — a NaN PressureAvg60 is clamped to 0 before thresholding.
+	// (6) NaN GUARD, a NaN PressureAvg60 is clamped to 0 before thresholding.
 	// On a FRESH (healthy) latch, NaN must NOT fire (treated as 0, which is <
 	// PressureRecover → latch stays/clears). On an already-FIRED latch, NaN
-	// must CLEAR (treated as 0 < PressureRecover) — the pre-clamp bug stuck the
+	// must CLEAR (treated as 0 < PressureRecover), the pre-clamp bug stuck the
 	// latch fired indefinitely. NaN must also never leak as a Cause Value.
 	nan := math.NaN()
 	stN := &WindowState{}
@@ -988,7 +988,7 @@ func TestDecide_PressureCause_Avg60DirectSchmitt(t *testing.T) {
 		t.Fatalf("nan-fired Causes: got %+v, want none (NaN does not leak as a Cause Value)", vn2.Causes)
 	}
 
-	// (7) +INF GUARD — a +Inf PressureAvg60 is clamped to 0 before thresholding.
+	// (7) +INF GUARD, a +Inf PressureAvg60 is clamped to 0 before thresholding.
 	// The `!(p >= 0)` idiom catches NaN and negatives but NOT +Inf (`+Inf >= 0`
 	// is true), so without the math.IsInf(p, 1) guard a +Inf would leak into
 	// Cause.Value and break json.Marshal of the whole Verdict
@@ -1034,7 +1034,7 @@ func TestDecide_PressureCause_Avg60DirectSchmitt(t *testing.T) {
 		t.Fatalf("inf-fired Causes: got %+v, want none (+Inf does not leak as a Cause Value)", vi2.Causes)
 	}
 
-	// (8) DEFAULT-ZERO — a zero PressureAvg60 (the unset/zero-value case) never
+	// (8) DEFAULT-ZERO, a zero PressureAvg60 (the unset/zero-value case) never
 	// fires: 0 < PressureRecover so the latch is forced CLEAR on every tick.
 	stZ := &WindowState{}
 	vz, sigz := Decide(stZ, Sample{
@@ -1053,7 +1053,7 @@ func TestDecide_PressureCause_Avg60DirectSchmitt(t *testing.T) {
 }
 
 // TestDecide_StealCause_VirtualizedRingP95Schmitt pins the steal starvation
-// cause in Decide — an EXTERNAL/host-attributed cause. Steal is the
+// cause in Decide, an EXTERNAL/host-attributed cause. Steal is the
 // fraction of wall-time the hypervisor gave this VM's vCPU to other VMs
 // (Sample.StealFraction, 0.0-1.0), read from the 8th field of /proc/stat's
 // `cpu ` line. Unlike throttle (counter-delta) and pressure (kernel-avg60
@@ -1065,7 +1065,7 @@ func TestDecide_PressureCause_Avg60DirectSchmitt(t *testing.T) {
 //
 // Steal is only readable on a virtualized box. Sample.Virtualized is set by
 // the sampler from /proc/cpuinfo's hypervisor flag. When Virtualized is
-// FALSE, Decide skips the steal ring entirely — it does not append, does not
+// FALSE, Decide skips the steal ring entirely, it does not append, does not
 // evaluate the latch, and does not reset the ring or clear the latch (steal
 // is structurally 0 on bare metal, so reading 0 there is the absence of a
 // signal, not evidence of a healthy host). When Virtualized is TRUE, steal is
@@ -1081,24 +1081,24 @@ func TestDecide_PressureCause_Avg60DirectSchmitt(t *testing.T) {
 //
 // Pinned behaviors:
 //
-//  1. FIRE — virtualized, 20 sustained ticks at 0.15 (> StealHigh 0.10) →
+//  1. FIRE, virtualized, 20 sustained ticks at 0.15 (> StealHigh 0.10) →
 //     degraded, HOST, one steal cause whose Value is the p95 (0.15: all
 //     samples identical → p95 is 0.15 under any reduction method).
-//  2. BARE-METAL PREDICATE — Virtualized=false with a nonzero StealFraction
+//  2. BARE-METAL PREDICATE, Virtualized=false with a nonzero StealFraction
 //     (0.15) on every tick: steal is NOT processed → healthy, no steal cause,
 //     StealFired false, AND the steal ring is reset (remains empty).
 //     This is the spec's "readable iff virtualized, not /proc/stat parses."
-//  3. VM ZERO → HEALTHY — Virtualized=true, StealFraction=0.0 for 20 ticks:
+//  3. VM ZERO → HEALTHY, Virtualized=true, StealFraction=0.0 for 20 ticks:
 //     steal IS processed (ring appended, non-empty) but 0 < StealRecover so
 //     the latch stays clear and the verdict is healthy. A quiescent VM is
-//     healthy, not a dead-zone — the contrast with case 2 is the predicate.
-//  4. TRANSIENT SPIKE ABSORBED — Virtualized=true, 20 ticks at 0.0 then ONE
+//     healthy, not a dead-zone, the contrast with case 2 is the predicate.
+//  4. TRANSIENT SPIKE ABSORBED, Virtualized=true, 20 ticks at 0.0 then ONE
 //     tick at 0.15: with 21 samples the p95 (near-worst-of-window via
 //     nearest-rank) stays below StealHigh 0.10 (nearest-rank p95 of twenty 0s
 //     + one 0.15 = 0.0), so the latch does NOT fire and the verdict is
 //     healthy. The p95 window absorbs a single isolated spike; a sustained
 //     spike (case 1) fires.
-//  5. CO-FIRE WITH THROTTLE → HOST — steal firing AND throttle firing on the
+//  5. CO-FIRE WITH THROTTLE → HOST, steal firing AND throttle firing on the
 //     same sample: both causes appear, attribution is HOST (external wins
 //     attribution when it fires; the full dominance ordering is not yet
 //     implemented).
@@ -1124,7 +1124,7 @@ func TestDecide_StealCause_VirtualizedRingP95Schmitt(t *testing.T) {
 		return v, s
 	}
 
-	// (1) FIRE — 20 sustained ticks at 0.15 on a virtualized box: p95 = 0.15
+	// (1) FIRE, 20 sustained ticks at 0.15 on a virtualized box: p95 = 0.15
 	// (> StealHigh 0.10) → latch fires, degraded, HOST, one steal cause with
 	// Value = the p95.
 	st1 := &WindowState{}
@@ -1148,10 +1148,10 @@ func TestDecide_StealCause_VirtualizedRingP95Schmitt(t *testing.T) {
 		t.Fatalf("fire Cause Value: got %v, want 0.15 (the steal p95; 20 identical samples → p95 is 0.15 under any reduction)", v1.Causes[0].Value)
 	}
 
-	// (2) BARE-METAL PREDICATE — Virtualized=false with a nonzero
+	// (2) BARE-METAL PREDICATE, Virtualized=false with a nonzero
 	// StealFraction (0.15) on every tick: steal is NOT processed. The latch
 	// stays unfired, no steal cause, verdict healthy, AND the steal ring is
-	// NOT appended (remains empty — the structural-0-on-bare-metal case is
+	// NOT appended (remains empty, the structural-0-on-bare-metal case is
 	// the absence of a signal, not evidence of health).
 	st2 := &WindowState{}
 	v2, sig2 := feedSteal(st2, 20, 0.15, false, 100*time.Second)
@@ -1165,10 +1165,10 @@ func TestDecide_StealCause_VirtualizedRingP95Schmitt(t *testing.T) {
 		t.Fatalf("baremetal Causes: got %+v, want none (no steal cause when Virtualized=false)", v2.Causes)
 	}
 	if len(st2.stealRing) != 0 {
-		t.Fatalf("baremetal stealRing length: got %d, want 0 (ring must NOT be appended when Virtualized=false — steal is not a readable signal on bare metal)", len(st2.stealRing))
+		t.Fatalf("baremetal stealRing length: got %d, want 0 (ring must NOT be appended when Virtualized=false, steal is not a readable signal on bare metal)", len(st2.stealRing))
 	}
 
-	// (3) VM ZERO → HEALTHY — Virtualized=true, StealFraction=0.0 for 20
+	// (3) VM ZERO → HEALTHY, Virtualized=true, StealFraction=0.0 for 20
 	// ticks: steal IS processed (ring appended, non-empty) but 0 <
 	// StealRecover so the latch stays clear and the verdict is healthy. A
 	// quiescent VM is healthy, NOT a dead-zone. The contrast with case 2
@@ -1186,10 +1186,10 @@ func TestDecide_StealCause_VirtualizedRingP95Schmitt(t *testing.T) {
 		t.Fatalf("vm-zero Causes: got %+v, want none", v3.Causes)
 	}
 	if len(st3.stealRing) == 0 {
-		t.Fatalf("vm-zero stealRing length: got 0, want non-zero (steal IS processed on a VM even at 0 — 0 is a real healthy signal, not a dead-zone)")
+		t.Fatalf("vm-zero stealRing length: got 0, want non-zero (steal IS processed on a VM even at 0, 0 is a real healthy signal, not a dead-zone)")
 	}
 
-	// (4) TRANSIENT SPIKE ABSORBED — 20 ticks at 0.0 then ONE tick at 0.15
+	// (4) TRANSIENT SPIKE ABSORBED, 20 ticks at 0.0 then ONE tick at 0.15
 	// (Virtualized=true). With 21 samples the p95 stays below StealHigh 0.10
 	// (nearest-rank p95 of twenty 0s + one 0.15 = 0.0), so the latch does NOT
 	// fire and the verdict is healthy. The p95 window absorbs a single
@@ -1214,7 +1214,7 @@ func TestDecide_StealCause_VirtualizedRingP95Schmitt(t *testing.T) {
 		t.Fatalf("spike Causes: got %+v, want none (transient spike absorbed by the p95 window)", v4.Causes)
 	}
 
-	// (5) CO-FIRE WITH THROTTLE → HOST — steal firing AND throttle firing on
+	// (5) CO-FIRE WITH THROTTLE → HOST, steal firing AND throttle firing on
 	// the same sample: both causes appear, attribution is HOST (external-steal
 	// wins attribution when it fires). Two ticks build the throttle ring
 	// delta; the steal ring is filled with sustained-high steal so its p95
@@ -1234,7 +1234,7 @@ func TestDecide_StealCause_VirtualizedRingP95Schmitt(t *testing.T) {
 	// counter-regression ring-clear; with zero-value counters the ring would be
 	// rebuilt from (0,0) and the actual throttle ratio would be 0.055, not the
 	// intended 0.10. Steal is 0.50 (well above StealHigh 0.10) so its severity
-	// (0.50-0.10)/0.90 = 0.44 robustly dominates throttle sev 0.053 — the
+	// (0.50-0.10)/0.90 = 0.44 robustly dominates throttle sev 0.053, the
 	// attribution is HOST by a wide margin, not a near-tie.
 	for i := 1; i < 19; i++ {
 		Decide(st5, Sample{
@@ -1290,7 +1290,7 @@ func TestDecide_StealCause_VirtualizedRingP95Schmitt(t *testing.T) {
 // TestDecide_StealCause_FireThenRecover is the round-trip test for the steal
 // Schmitt latch's CLEAR branch (StealRecover). Without a recover branch, once
 // the steal latch fires it is permanently stuck at {degraded, host} until
-// restart — the latch only ever sets stealFired=true and never clears it. This
+// restart, the latch only ever sets stealFired=true and never clears it. This
 // test feeds sustained-high steal to FIRE the latch, then sustained-low steal
 // for long enough that the 60s window's p95 drops below StealRecover (0.06),
 // and asserts the latch CLEARS (healthy, no steal cause). This test MUST fail
@@ -1300,7 +1300,7 @@ func TestDecide_StealCause_FireThenRecover(t *testing.T) {
 	thresholds := DefaultThresholds()
 	st := &WindowState{}
 
-	// FIRE — 20 sustained ticks at 0.15 (> StealHigh 0.10) at 1s spacing
+	// FIRE, 20 sustained ticks at 0.15 (> StealHigh 0.10) at 1s spacing
 	// (t=0..t=19, all within the 60s window). p95 = 0.15 → latch fires.
 	for i := 0; i < 20; i++ {
 		Decide(st, Sample{
@@ -1324,7 +1324,7 @@ func TestDecide_StealCause_FireThenRecover(t *testing.T) {
 		t.Fatalf("fire StealFired: got false, want true (latch must fire above StealHigh)")
 	}
 
-	// RECOVER — feed sustained-low steal (0.0) at 10s spacing so that after
+	// RECOVER, feed sustained-low steal (0.0) at 10s spacing so that after
 	// enough ticks the 60s window contains only low samples. At 10s spacing:
 	// the high-steal samples (t=0..t=20) age out once they exceed 60s from the
 	// newest timestamp. By t=130s, cutoff = t=70s, so all high-steal samples
@@ -1355,7 +1355,7 @@ func TestDecide_StealCause_FireThenRecover(t *testing.T) {
 }
 
 // TestDecide_StealCause_RingPruning pins the 60s pruning of the steal ring
-// (FIX 2). Without pruning, stealPoint.ts is dead data — the ring is appended
+// (FIX 2). Without pruning, stealPoint.ts is dead data, the ring is appended
 // every virtualized tick but never trimmed, so the p95 becomes an all-history
 // p95 (unbounded growth, old high-steal entries never drop). This test feeds
 // enough virtualized samples spanning > 60s of timestamps that old entries
@@ -1428,7 +1428,7 @@ func TestDecide_StealCause_RingPruning(t *testing.T) {
 
 // TestDecide_StealCause_SmallNFloor pins the small-N degeneracy floor (FIX 3).
 // The nearest-rank p95 with N=1 returns the single sample's value, so without
-// a floor a first-tick high-steal sample (0.15) fires the latch immediately —
+// a floor a first-tick high-steal sample (0.15) fires the latch immediately,
 // contradicting "sustained fires, isolated absorbed." A 2-sample floor (matching
 // throttle's two-point delta floor) prevents a single first-tick spike from
 // firing. This test MUST fail when FIX 3 (the floor) is reverted.
@@ -1460,9 +1460,9 @@ func TestDecide_StealCause_SmallNFloor(t *testing.T) {
 }
 
 // TestDecide_SaturationBackstop_DeadZoneFireThenClearGuardrail pins the
-// saturation backstop cause and the guardrail — the whole rebuild's reason.
+// saturation backstop cause and the guardrail, the whole rebuild's reason.
 // Rung 2 deleted the raw-usage degrade (busy is not sick). This test
-// re-introduces a usage-based degrade BUT ONLY in the dead-zone — the one
+// re-introduces a usage-based degrade BUT ONLY in the dead-zone, the one
 // case where no starvation signal exists (no CPU limit → no throttle; no PSI
 // → no pressure; not virtualized → no steal; and host-contention can't fire
 // without a demand signal). There, sustained high usage is the last-resort
@@ -1471,17 +1471,17 @@ func TestDecide_StealCause_SmallNFloor(t *testing.T) {
 // The dead-zone predicate: Quota is nil (no limit) AND PsiAvailable is false
 // (no PSI). Sample.PsiAvailable is
 // the readability flag that distinguishes "PSI compiled in + present" from
-// "PressureAvg60 reads 0 because PSI is absent" — without it the dead-zone
+// "PressureAvg60 reads 0 because PSI is absent", without it the dead-zone
 // branch is unreachable dead code (a naive "PressureAvg60 == 0" is true both
 // when PSI is absent AND when PSI is present but reading 0).
 //
-// In the dead-zone, Decide computes a 60s-AVERAGE usage fraction (NOT p95 — a
+// In the dead-zone, Decide computes a 60s-AVERAGE usage fraction (NOT p95, a
 // sustained-headroom proxy; a brief spike must not trip it) over a usage ring
 // in WindowState. When the 60s-avg >= HighUsageFraction (0.70) the saturation
 // cause fires: {degraded, unknown, [saturation]} with Cause Value = the 60s-avg
 // usage fraction. A Schmitt latch (fire >= 0.70, clear < SaturationRecover 0.60)
 // prevents boundary dither. The 60s usage ring is pruned (reusing the
-// throttle/steal pruning pattern) — no unbounded growth.
+// throttle/steal pruning pattern), no unbounded growth.
 //
 // Pinned behaviors (the (b) discipline: fire-then-clear REQUIRED, avg-not-p95,
 // no-false-fire):
@@ -1497,7 +1497,7 @@ func TestDecide_StealCause_SmallNFloor(t *testing.T) {
 //     true (a signal for the caller's message, NOT a state). It is false
 //     outside the dead-zone.
 //  4. AVG-NOT-P95: a brief spike to 0.95 that recovers (60s-avg stays < 0.70)
-//     must NOT fire saturation (avg-not-p95 is the explicit decision — p95
+//     must NOT fire saturation (avg-not-p95 is the explicit decision, p95
 //     would re-create the flicker).
 //  5. NON-DEAD-ZONE: a limited container (Quota set) at 95% usage with no
 //     throttle → healthy (saturation not evaluated; busy is not sick). This
@@ -1511,12 +1511,12 @@ func TestDecide_SaturationBackstop_DeadZoneFireThenClearGuardrail(t *testing.T) 
 	// deadZoneSample constructs a dead-zone sample: Quota nil (no limit),
 	// PsiAvailable false (no PSI), Virtualized false (not virtualized).
 	// CgroupCores 4.0 provides the denominator for the usage fraction
-	// (UsageCores/CgroupCores) — it is NOT a limit (Quota is the limit; nil
+	// (UsageCores/CgroupCores), it is NOT a limit (Quota is the limit; nil
 	// here means uncapped). The dead-zone is the ONLY place saturation is
-	// evaluated. R10.3: sets LogicalCpus=4.0 and HostBusyCoresAvailable=false
+	// evaluated. Sets LogicalCpus=4.0 and HostBusyCoresAvailable=false
 	// so the sample routes to the no-host-stats saturation fraction fallback
 	// (usageCores60sMean/LogicalCpus), which replaces the old
-	// CgroupCores-denominator fraction branch (removed in R10.3 — it was doubly
+	// CgroupCores-denominator fraction branch (removed, it was doubly
 	// dead: unreachable AND fraction=0 in no-limit). LogicalCpus=4.0 matches
 	// CgroupCores=4.0 so the no-host-stats saturation fraction equals the old saturationAvg
 	// (UsageCores/4.0), preserving the test's intent.
@@ -1532,7 +1532,7 @@ func TestDecide_SaturationBackstop_DeadZoneFireThenClearGuardrail(t *testing.T) 
 		}
 	}
 
-	// (1) FIRE-THEN-CLEAR — the REQUIRED round-trip. Feed sustained high usage
+	// (1) FIRE-THEN-CLEAR, the REQUIRED round-trip. Feed sustained high usage
 	// (0.80 fraction = 3.2/4.0) at 10s spacing for 80s so the 60s-avg is
 	// representative, then assert saturation fires. Then feed sustained low
 	// usage (0.40 fraction = 1.6/4.0) for enough ticks that the 60s window
@@ -1540,7 +1540,7 @@ func TestDecide_SaturationBackstop_DeadZoneFireThenClearGuardrail(t *testing.T) 
 	// saturation clears (healthy).
 	st := &WindowState{}
 
-	// FIRE — 8 ticks at 0.80 fraction (t=0..t=70), then the 9th at t=80. At
+	// FIRE, 8 ticks at 0.80 fraction (t=0..t=70), then the 9th at t=80. At
 	// t=80 the 60s window (cutoff=t=20) holds 7 samples all at 0.80 → avg
 	// 0.80 >= HighUsageFraction 0.70 → saturation fires.
 	for i := 0; i < 8; i++ {
@@ -1553,16 +1553,16 @@ func TestDecide_SaturationBackstop_DeadZoneFireThenClearGuardrail(t *testing.T) 
 	if vFire.Attribution != AttributionUnknown {
 		t.Fatalf("fire Attribution: got %q, want %q (saturation is internal → unknown)", vFire.Attribution, AttributionUnknown)
 	}
-	// (6) Saturation is the SOLE cause — no other cause can fire in the
+	// (6) Saturation is the SOLE cause, no other cause can fire in the
 	// dead-zone by definition (no limit → no throttle; no PSI → no pressure;
 	// not virtualized → no steal; no demand signal → no host-contention).
 	// NOTE: "no limit → no throttle" describes the production invariant
 	// (uncapped cgroups report nr_throttled=0), NOT a code-level Quota gate
-	// on the throttle latch — throttle is evaluated unconditionally from
+	// on the throttle latch, throttle is evaluated unconditionally from
 	// cpu.stat counter deltas regardless of Quota and CAN co-fire in the
 	// dead-zone when throttle counters are non-zero (see test 13).
 	if len(vFire.Causes) != 1 {
-		t.Fatalf("fire Causes length: got %d, want 1 (saturation is the sole cause in the dead-zone — no other cause can fire there by definition)", len(vFire.Causes))
+		t.Fatalf("fire Causes length: got %d, want 1 (saturation is the sole cause in the dead-zone, no other cause can fire there by definition)", len(vFire.Causes))
 	}
 	if vFire.Causes[0].Kind != CauseKindSaturation {
 		t.Fatalf("fire Cause Kind: got %q, want %q", vFire.Causes[0].Kind, CauseKindSaturation)
@@ -1576,7 +1576,7 @@ func TestDecide_SaturationBackstop_DeadZoneFireThenClearGuardrail(t *testing.T) 
 		t.Fatalf("fire LimitedVisibility: got false, want true (dead-zone = blind state; signal the caller to note limited visibility)")
 	}
 
-	// CLEAR — feed sustained low usage (0.40 fraction) at 10s spacing past the
+	// CLEAR, feed sustained low usage (0.40 fraction) at 10s spacing past the
 	// last high-usage tick so the 60s window eventually holds only low samples.
 	// By t=170s, cutoff=t=110s, ring holds only 0.40 samples → avg 0.40 <
 	// SaturationRecover 0.60 → latch clears.
@@ -1584,7 +1584,7 @@ func TestDecide_SaturationBackstop_DeadZoneFireThenClearGuardrail(t *testing.T) 
 		Decide(st, deadZoneSample(time.Duration(90+i*10)*time.Second, 1.6), thresholds)
 	}
 	vClear, sigClear := Decide(st, deadZoneSample(170*time.Second, 1.6), thresholds)
-	// (2) THE GUARDRAIL — below 70% avg in the dead-zone → healthy. NEVER a
+	// (2) THE GUARDRAIL, below 70% avg in the dead-zone → healthy. NEVER a
 	// distinct unknown state. State is binary healthy|degraded; blind-but-quiet
 	// is healthy. Do NOT manufacture degraded from a monitoring gap.
 	if vClear.State != StateHealthy {
@@ -1593,16 +1593,16 @@ func TestDecide_SaturationBackstop_DeadZoneFireThenClearGuardrail(t *testing.T) 
 	if len(vClear.Causes) != 0 {
 		t.Fatalf("clear Causes length: got %d, want 0 (no causes when healthy)", len(vClear.Causes))
 	}
-	// (3) LimitedVisibility is STILL true in the dead-zone when healthy — the
+	// (3) LimitedVisibility is STILL true in the dead-zone when healthy, the
 	// blind state persists regardless of the verdict.
 	if !sigClear.LimitedVisibility {
 		t.Fatalf("clear LimitedVisibility: got false, want true (still in the dead-zone; blind-but-quiet signals limited visibility even when healthy)")
 	}
 
-	// (4) AVG-NOT-P95 — a brief spike to 0.95 that recovers (60s-avg stays <
+	// (4) AVG-NOT-P95, a brief spike to 0.95 that recovers (60s-avg stays <
 	// 0.70) must NOT fire saturation. 6 ticks at 0.40, 1 tick at 0.95, then 1
 	// more 0.40 tick. The 60s-avg never reaches 0.70; a p95 would have
-	// returned 0.95 (nearest-rank of mostly-0.40 + one 0.95) and fired — the
+	// returned 0.95 (nearest-rank of mostly-0.40 + one 0.95) and fired, the
 	// average is what prevents the flicker.
 	st2 := &WindowState{}
 	for i := 0; i < 6; i++ {
@@ -1613,7 +1613,7 @@ func TestDecide_SaturationBackstop_DeadZoneFireThenClearGuardrail(t *testing.T) 
 	// At t=70: cutoff=t=10, ring = t=10..t=70 (7 samples: 6 at 0.40, 1 at
 	// 0.95) → avg = (6*0.40 + 0.95)/7 = 3.35/7 = 0.479 < 0.70. Does NOT fire.
 	if vSpike.State != StateHealthy {
-		t.Fatalf("spike State: got %q, want %q (60s-avg 0.479 < 0.70; a brief spike is absorbed by the average — avg-not-p95: p95 would have been 0.95 and fired)", vSpike.State, StateHealthy)
+		t.Fatalf("spike State: got %q, want %q (60s-avg 0.479 < 0.70; a brief spike is absorbed by the average, avg-not-p95: p95 would have been 0.95 and fired)", vSpike.State, StateHealthy)
 	}
 	if len(vSpike.Causes) != 0 {
 		t.Fatalf("spike Causes length: got %d, want 0 (spike absorbed; no false fire)", len(vSpike.Causes))
@@ -1622,8 +1622,8 @@ func TestDecide_SaturationBackstop_DeadZoneFireThenClearGuardrail(t *testing.T) 
 		t.Fatalf("spike LimitedVisibility: got false, want true (dead-zone)")
 	}
 
-	// (5) NON-DEAD-ZONE (limit mode) — a limited container (Quota=2.0) at 95%
-	// usage (UsageCores=1.9) with no throttle. Under the two-rule model (R10.1),
+	// (5) NON-DEAD-ZONE (limit mode), a limited container (Quota=2.0) at 95%
+	// usage (UsageCores=1.9) with no throttle. Under the two-rule model,
 	// limit-mode headroom = 2−1.9−0.2=−0.1 < 0 → degraded + saturation cause.
 	// The old test expected healthy ("busy, not sick"), which was correct under
 	// the old model but is wrong under the two-rule model: sustained usage inside
@@ -1665,17 +1665,17 @@ func TestDecide_SaturationBackstop_DeadZoneFireThenClearGuardrail(t *testing.T) 
 		t.Fatalf("non-dead-zone LimitedVisibility: got true, want false (PSI available → not a blind state → no limited-visibility signal)")
 	}
 
-	// (7) TRANSITION-OUT-OF-DEAD-ZONE — fire saturation in the dead-zone, then
+	// (7) TRANSITION-OUT-OF-DEAD-ZONE, fire saturation in the dead-zone, then
 	// transition to limit mode (Quota=2.0, PsiAvailable=true, UsageCores=1.9).
-	// Under the two-rule model (R10.1), the ring fills every tick in all modes
+	// Under the two-rule model, the ring fills every tick in all modes
 	// (not cleared on dead-zone exit), so the old dead-zone samples (cores=3.2)
 	// persist. The limit-mode headroom = 2 − usageCores60sMean(~3.0) − 0.2 =
 	// ~−1.2 < 0 → saturation STILL fires. This is CORRECT: the container's
 	// 60s-avg usage (3.0) exceeds its new 2.0 limit, so it IS over its limit.
 	// The old test expected the latch to clear on dead-zone exit (ring was
 	// cleared), but the ring now fills every tick, and the limit-mode headroom
-	// correctly fires. See the spec-vs-code conflict surfaced in the R10.1
-	// return: the ring-fill move changes transition behavior.
+	// correctly fires. The spec-vs-code conflict: the ring-fill move changes
+	// transition behavior.
 	st4 := &WindowState{}
 	for i := 0; i < 8; i++ {
 		Decide(st4, deadZoneSample(time.Duration(i*10)*time.Second, 3.2), thresholds)
@@ -1706,7 +1706,7 @@ func TestDecide_SaturationBackstop_DeadZoneFireThenClearGuardrail(t *testing.T) 
 		t.Fatalf("transition LimitedVisibility: got true, want false (Quota set + PSI available → not the dead-zone)")
 	}
 
-	// (8) HOLD (Schmitt) — fire saturation at 0.80, then cool the 60s-avg into
+	// (8) HOLD (Schmitt), fire saturation at 0.80, then cool the 60s-avg into
 	// the hold band (0.60..0.70) and assert the latch STAYS fired. This is the
 	// core Schmitt guarantee: a regression that collapses SaturationRecover to
 	// HighUsageFraction (clearing as soon as avg drops below 0.70) would pass
@@ -1720,7 +1720,7 @@ func TestDecide_SaturationBackstop_DeadZoneFireThenClearGuardrail(t *testing.T) 
 	if vFire5.State != StateDegraded {
 		t.Fatalf("hold fire State: got %q, want %q (dead-zone 60s-avg 0.80 >= 0.70 → saturation fires)", vFire5.State, StateDegraded)
 	}
-	// Cool to 0.65 (2.6/4.0) — inside the hold band (SaturationRecover 0.60 ..
+	// Cool to 0.65 (2.6/4.0), inside the hold band (SaturationRecover 0.60 ..
 	// HighUsageFraction 0.70). Feed enough ticks that all 0.80 samples age out
 	// and the 60s window holds only 0.65 samples.
 	for i := 0; i < 7; i++ {
@@ -1739,11 +1739,11 @@ func TestDecide_SaturationBackstop_DeadZoneFireThenClearGuardrail(t *testing.T) 
 		t.Fatalf("hold Causes: got %+v, want one saturation cause (latch held)", vHold.Causes)
 	}
 
-	// (9) GAP-CLEAR — fire saturation, then a >60s sampling gap prunes the ring
+	// (9) GAP-CLEAR, fire saturation, then a >60s sampling gap prunes the ring
 	// to a single low sample. The latch MUST clear: a single sample is
 	// insufficient evidence to sustain a prior fire. Without the inner else
 	// (clear on len < 2) the latch would hold indefinitely and emit a
-	// {saturation, Value: 0.40} cause while HighUsageFraction is 0.70 —
+	// {saturation, Value: 0.40} cause while HighUsageFraction is 0.70,
 	// contradicting the documented "clears when the 60s-average drops below
 	// SaturationRecover."
 	st6 := &WindowState{}
@@ -1767,14 +1767,14 @@ func TestDecide_SaturationBackstop_DeadZoneFireThenClearGuardrail(t *testing.T) 
 		t.Fatalf("gap-clear Causes length: got %d, want 0 (latch cleared, no cause emitted)", len(vGap.Causes))
 	}
 
-	// (10) NON-POSITIVE QUOTA DEAD-ZONE — a non-nil but non-positive Quota
+	// (10) NON-POSITIVE QUOTA DEAD-ZONE, a non-nil but non-positive Quota
 	// (Quota=&0, the unlimited-cgroup case from parseCPUMax for cpu.max="max")
 	// on bare metal without PSI is uncapped AND blind. The dead-zone predicate
 	// must treat non-positive Quota as nil-equivalent so LimitedVisibility is
 	// true (the caller is told it is blind). A naive `Quota == nil` check would
 	// exclude this case: LimitedVisibility false (caller not told it is blind)
 	// AND the saturation backstop skipped. NOTE: Quota=&0 is signal-only here
-	// (LimitedVisibility=true, no backstop fire) — the backstop only fires for
+	// (LimitedVisibility=true, no backstop fire), the backstop only fires for
 	// the Quota==nil + CgroupCores>0 sub-case where a fraction is computable;
 	// Quota=&0 cannot compute a fraction (the `>0` guard rejects it and there
 	// is no CgroupCores fallback when Quota is non-nil), so the proxy is inert
@@ -1798,7 +1798,7 @@ func TestDecide_SaturationBackstop_DeadZoneFireThenClearGuardrail(t *testing.T) 
 		t.Fatalf("non-positive Quota Causes length: got %d, want 0 (uncapped, no fire)", len(vZeroQ.Causes))
 	}
 
-	// (11) NAN USAGE INPUT CLAMP — a NaN UsageCores reading produces a NaN
+	// (11) NAN USAGE INPUT CLAMP, a NaN UsageCores reading produces a NaN
 	// fraction that poisons the 60s running sum until the sample ages out.
 	// The input clamp (mirroring the PressureAvg60 clamp) stores 0 instead, so
 	// subsequent averages are not corrupted. Without the input clamp the ring
@@ -1836,7 +1836,7 @@ func TestDecide_SaturationBackstop_DeadZoneFireThenClearGuardrail(t *testing.T) 
 		t.Fatalf("NaN-clamp SaturationFired: got false, want true (input clamp prevented ring corruption; saturation can fire)")
 	}
 
-	// (12) RE-ENTRY RING (latch reset across a mode transition) — fire
+	// (12) RE-ENTRY RING (latch reset across a mode transition), fire
 	// saturation in the dead-zone, exit to a limit-mode sample, then RE-ENTER
 	// the dead-zone with low usage. This pins two design facts:
 	//
@@ -1921,7 +1921,7 @@ func TestDecide_SaturationBackstop_DeadZoneFireThenClearGuardrail(t *testing.T) 
 		t.Fatalf("re-entry steady SaturationFired (t=170): got true, want false (stale samples aged out; avg 0.40 < SaturationRecover -> latch clears)")
 	}
 
-	// (13) CO-FIRE SEVERITY ORDERING — in the dead-zone, throttle and
+	// (13) CO-FIRE SEVERITY ORDERING, in the dead-zone, throttle and
 	// saturation can co-fire (throttle is evaluated regardless of Quota). When
 	// both fire, the dominance sort orders by severity. This pins the
 	// severity(saturationAvg, ...) call and the sort comparator for saturation
@@ -1968,7 +1968,7 @@ func TestDecide_SaturationBackstop_DeadZoneFireThenClearGuardrail(t *testing.T) 
 		t.Fatalf("co-fire latches: ThrottleFired=%v SaturationFired=%v, want both true", sigCo.ThrottleFired, sigCo.SaturationFired)
 	}
 
-	// (14) CO-FIRE ATTRIBUTION REPIVOT — same throttle-dominant co-fire as
+	// (14) CO-FIRE ATTRIBUTION REPIVOT, same throttle-dominant co-fire as
 	// (13), but HostBusyCores=8.0 (>2*UsageCores=6.4) so the host/container
 	// split resolves to Host (host share 8.0−3.2=4.8 > our share 3.2). This
 	// pins that the split applies to a throttle-dominant internal cause too
@@ -2014,13 +2014,13 @@ func TestDecide_SaturationBackstop_DeadZoneFireThenClearGuardrail(t *testing.T) 
 // TestDecide_SaturationBackstop_TwoSampleFloor pins the 2-sample floor on the
 // saturation backstop latch: the latch is NOT evaluated when the usage ring
 // holds fewer than 2 samples. A lone first-tick dead-zone high-usage reading
-// (60s-avg would be 0.95, well above HighUsageFraction 0.70) must NOT fire —
+// (60s-avg would be 0.95, well above HighUsageFraction 0.70) must NOT fire,
 // "sustained fires, isolated absorbed." Without the floor a single 0.95 sample
 // would fire immediately on the first tick. This test is the (b)-discipline pin
 // for the floor guard: it MUST fail if the `len(st.usageRing) >= 2` guard is
 // removed (the lone 0.95 sample would fire). The existing fire-then-clear test
-// only fires after 8 ticks, so a regression deleting the floor would pass there
-// — this test closes that gap.
+// only fires after 8 ticks, so a regression deleting the floor would pass there.
+// This test closes that gap.
 func TestDecide_SaturationBackstop_TwoSampleFloor(t *testing.T) {
 	base := time.Date(2026, 6, 24, 12, 0, 0, 0, time.UTC)
 	thresholds := DefaultThresholds()
@@ -2038,7 +2038,7 @@ func TestDecide_SaturationBackstop_TwoSampleFloor(t *testing.T) {
 		Virtualized:  false,
 	}, thresholds)
 	if v.State != StateHealthy {
-		t.Fatalf("State: got %q, want %q (single dead-zone high-usage sample: ring holds 1 entry, below the 2-sample floor → latch not evaluated → healthy; a lone first-tick reading must not fire — sustained fires, isolated absorbed)", v.State, StateHealthy)
+		t.Fatalf("State: got %q, want %q (single dead-zone high-usage sample: ring holds 1 entry, below the 2-sample floor → latch not evaluated → healthy; a lone first-tick reading must not fire, sustained fires, isolated absorbed)", v.State, StateHealthy)
 	}
 	if len(v.Causes) != 0 {
 		t.Fatalf("Causes length: got %d, want 0 (floor guard prevents the lone 0.95 sample from firing saturation)", len(v.Causes))
@@ -2062,10 +2062,10 @@ func TestDecide_SaturationBackstop_TwoSampleFloor(t *testing.T) {
 //
 //  1. Signals gains AvgUsageFraction, P95UsageFraction, P99UsageFraction float64
 //     (fractions relative to 1 core; typically in [0,1] but may exceed 1 when
-//     observed usage exceeds CgroupCores — oversubscription).
+//     observed usage exceeds CgroupCores, oversubscription).
 //  2. avg = mean of the ring entries; p95/p99 = nearest-rank
 //     (sort, rank = ceil(p*N), value at sorted[rank-1]).
-//  3. Computed UNCONDITIONALLY whenever the ring holds >= 2 entries — observable
+//  3. Computed UNCONDITIONALLY whenever the ring holds >= 2 entries, observable
 //     regardless of latch state (the ThrottleRatio observability discipline).
 //  4. When the ring holds < 2 entries (first tick, or post-reset empty) → all 0.
 //  5. These are observability-only: they do NOT change the verdict. The
@@ -2080,15 +2080,15 @@ func TestDecide_SaturationBackstop_TwoSampleFloor(t *testing.T) {
 // Sorted = [0.1, 0.1, 0.3, 0.5, 0.7, 0.9]; avg = 2.6/6 = 0.4333;
 // p95 rank = ceil(0.95*6) = ceil(5.7) = 6 → sorted[5] = 0.9;
 // p99 rank = ceil(0.99*6) = ceil(5.94) = 6 → sorted[5] = 0.9. avg 0.4333 < 0.70 →
-// the saturation latch does NOT fire, so the verdict stays StateHealthy — the
+// the saturation latch does NOT fire, so the verdict stays StateHealthy, the
 // percentiles are surfaced on a healthy verdict (observability-only).
 func TestDecide_UsagePercentiles_FromSaturationRing(t *testing.T) {
 	base := time.Date(2026, 6, 24, 12, 0, 0, 0, time.UTC)
 	thresholds := DefaultThresholds()
 
 	// deadZoneSample constructs a dead-zone sample (Quota nil, PsiAvailable
-	// false, Virtualized false) with a usage fraction = usageCores/4.0. R10.3:
-	// sets LogicalCpus=4.0 and HostBusyCoresAvailable=false so the sample
+	// false, Virtualized false) with a usage fraction = usageCores/4.0.
+	// Sets LogicalCpus=4.0 and HostBusyCoresAvailable=false so the sample
 	// routes to the no-host-stats saturation (usageCores60sMean/LogicalCpus), preserving the
 	// test's fraction semantics (LogicalCpus matches CgroupCores=4.0).
 	deadZoneSample := func(dt time.Duration, fraction float64) Sample {
@@ -2103,7 +2103,7 @@ func TestDecide_UsagePercentiles_FromSaturationRing(t *testing.T) {
 		}
 	}
 
-	// (1) FIRST-TICK floor — a single dead-zone sample leaves the ring with 1
+	// (1) FIRST-TICK floor, a single dead-zone sample leaves the ring with 1
 	// entry (< 2), so avg/p95/p99 MUST all be 0. A lone first-tick reading
 	// carries no percentile information.
 	st1 := &WindowState{}
@@ -2118,7 +2118,7 @@ func TestDecide_UsagePercentiles_FromSaturationRing(t *testing.T) {
 		t.Fatalf("first-tick P99UsageFraction: got %v, want 0 (ring holds < 2 entries → no percentile)", sig1.P99UsageFraction)
 	}
 
-	// (2) RAMP — feed the 5-fraction ramp. All 5 ticks land within the 60s
+	// (2) RAMP, feed the 5-fraction ramp. All 5 ticks land within the 60s
 	// window (10s spacing → cutoff at t=40s keeps t=40..t=80, but the ramp is
 	// t=0..t=40 so all 5 are retained). After the final tick the ring holds
 	// [0.1, 0.5, 0.9, 0.3, 0.7] → avg 0.5, p95 0.9, p99 0.9.
@@ -2150,7 +2150,7 @@ func TestDecide_UsagePercentiles_FromSaturationRing(t *testing.T) {
 		t.Fatalf("P99UsageFraction: got %v, want 0.9 (nearest-rank p99: rank=ceil(0.99*6)=6 → sorted[5]=0.9)", sig.P99UsageFraction)
 	}
 
-	// (3) FRACTIONS, not mCPU — non-negative fractions relative to 1 core
+	// (3) FRACTIONS, not mCPU, non-negative fractions relative to 1 core
 	// (the caller multiplies by 1000 for the wire). They are typically in
 	// [0,1] but may exceed 1 when observed usage exceeds CgroupCores
 	// (oversubscription); only the lower bound is asserted here, and the
@@ -2165,7 +2165,7 @@ func TestDecide_UsagePercentiles_FromSaturationRing(t *testing.T) {
 		t.Fatalf("P99UsageFraction negative: got %v (fractions are non-negative)", sig.P99UsageFraction)
 	}
 
-	// (3b) OVERSUBSCRIPTION — a dead-zone sample whose UsageCores exceeds
+	// (3b) OVERSUBSCRIPTION, a dead-zone sample whose UsageCores exceeds
 	// CgroupCores yields a fraction > 1.0 (multi-core mCPU after *1000). The
 	// input clamp rejects only NaN/+Inf/negative, so a finite >1.0 value
 	// passes through into the ring and surfaces on the wire; the caller must
@@ -2188,7 +2188,7 @@ func TestDecide_UsagePercentiles_FromSaturationRing(t *testing.T) {
 	Decide(stOvs, ovsSample(0), thresholds)
 	vOvs, sigOvs := Decide(stOvs, ovsSample(10*time.Second), thresholds)
 	if !floatEq(sigOvs.AvgUsageFraction, 4.0) {
-		t.Fatalf("oversubscription AvgUsageFraction: got %v, want 4.0 (UsageCores=2.0 / CgroupCores=0.5 — >1.0 is legitimate, no upper clamp)", sigOvs.AvgUsageFraction)
+		t.Fatalf("oversubscription AvgUsageFraction: got %v, want 4.0 (UsageCores=2.0 / CgroupCores=0.5, >1.0 is legitimate, no upper clamp)", sigOvs.AvgUsageFraction)
 	}
 	if !floatEq(sigOvs.P95UsageFraction, 4.0) {
 		t.Fatalf("oversubscription P95UsageFraction: got %v, want 4.0", sigOvs.P95UsageFraction)
@@ -2197,7 +2197,7 @@ func TestDecide_UsagePercentiles_FromSaturationRing(t *testing.T) {
 		t.Fatalf("oversubscription P99UsageFraction: got %v, want 4.0", sigOvs.P99UsageFraction)
 	}
 	// The oversubscription ring (4.0, 4.0) has avg 4.0 >= HighUsageFraction
-	// 0.70, so the saturation latch fires and the verdict degrades — pin the
+	// 0.70, so the saturation latch fires and the verdict degrades, pin the
 	// interaction so a regression that suppresses percentiles when
 	// SaturationFired=true, or drops the saturation cause when percentiles are
 	// populated, cannot pass undetected.
@@ -2211,7 +2211,7 @@ func TestDecide_UsagePercentiles_FromSaturationRing(t *testing.T) {
 		t.Fatalf("oversubscription Causes length: got %d, want >= 1 (saturation cause must be present)", len(vOvs.Causes))
 	}
 
-	// (4) OBSERVABILITY-ONLY — the percentiles do NOT change the verdict. With
+	// (4) OBSERVABILITY-ONLY, the percentiles do NOT change the verdict. With
 	// avg 0.4333 < HighUsageFraction 0.70 the saturation latch does not fire, so
 	// the verdict is StateHealthy with zero causes. The percentiles are surfaced
 	// on a healthy verdict (they are a numeric metric, like ThrottleRatio).
@@ -2225,19 +2225,19 @@ func TestDecide_UsagePercentiles_FromSaturationRing(t *testing.T) {
 		t.Fatalf("SaturationFired: got true, want false (the percentiles do NOT fire the saturation latch; avg 0.4333 < 0.70)")
 	}
 
-	// (5) p99 >= p95 — the real nearest-rank invariant (both pick high-rank
+	// (5) p99 >= p95, the real nearest-rank invariant (both pick high-rank
 	// indices, so p99 is never below p95). p95 >= avg is NOT a universal
 	// invariant of nearest-rank at larger N (e.g. 19 zeros + one spike: mean
 	// 50 but p95 rank resolves to a zero), so it is deliberately not asserted
 	// here; p99 >= p95 holds by nearest-rank construction (both index the same
-	// sorted slice at high ranks), not by a runtime check — the test pins the
+	// sorted slice at high ranks), not by a runtime check, the test pins the
 	// invariant so a formula change that breaks it fails here.
 	if sig.P99UsageFraction < sig.P95UsageFraction {
 		t.Fatalf("p99 < p95: p99=%v p95=%v (p99 must be >= p95 by nearest-rank construction)", sig.P99UsageFraction, sig.P95UsageFraction)
 	}
 
-	// (6) OUTSIDE THE DEAD-ZONE — the usage ring now fills EVERY tick in ALL
-	// modes (R10.1 ring-fill move), so the percentiles are NON-ZERO outside
+	// (6) OUTSIDE THE DEAD-ZONE, the usage ring now fills EVERY tick in ALL
+	// modes (ring-fill move), so the percentiles are NON-ZERO outside
 	// the dead-zone (intended enrichment: unblocks the display's "this
 	// container" row outside the dead-zone). Re-use the populated st and flip
 	// to a capped, PSI-available sample on the SAME WindowState. The ring
@@ -2268,7 +2268,7 @@ func TestDecide_UsagePercentiles_FromSaturationRing(t *testing.T) {
 		t.Fatalf("non-dead-zone P99UsageFraction: got %v, want 0.95 (rank=ceil(0.99*7)=7 → sorted[6]=0.95)", sigNdz.P99UsageFraction)
 	}
 
-	// (7) p95 vs p99 DISTINGUISHED — at N=6 (and N=5) both ranks collapse to
+	// (7) p95 vs p99 DISTINGUISHED, at N=6 (and N=5) both ranks collapse to
 	// the same sorted index, so a p99-formula regression (e.g. reusing the
 	// 0.95 multiplier) would pass undetected. A larger ring (N=100) separates
 	// the ranks: p95 rank = ceil(0.95*100) = 95 → sorted[94]; p99 rank =
@@ -2301,7 +2301,7 @@ func TestDecide_UsagePercentiles_FromSaturationRing(t *testing.T) {
 		t.Fatalf("large-N P95UsageFraction: got %v, want 0.95 (rank=ceil(0.95*100)=95 → sorted[94]=0.95)", sigBig.P95UsageFraction)
 	}
 	if !floatEq(sigBig.P99UsageFraction, 0.99) {
-		t.Fatalf("large-N P99UsageFraction: got %v, want 0.99 (rank=ceil(0.99*100)=99 → sorted[98]=0.99 — distinct from p95, guards a p99-formula regression)", sigBig.P99UsageFraction)
+		t.Fatalf("large-N P99UsageFraction: got %v, want 0.99 (rank=ceil(0.99*100)=99 → sorted[98]=0.99, distinct from p95, guards a p99-formula regression)", sigBig.P99UsageFraction)
 	}
 }
 
@@ -2332,7 +2332,7 @@ func TestDecide_StealAndPressure_UnconditionalSignals(t *testing.T) {
 
 	// (1) STEAL BELOW FIRE → STILL REPORTED. 20 sustained ticks at 0.08 on a
 	// virtualized box: p95 = 0.08, below StealHigh 0.10, so the latch never
-	// fires — but the numeric p95 must still be surfaced on the wire.
+	// fires, but the numeric p95 must still be surfaced on the wire.
 	st1 := &WindowState{}
 	var sig1 Signals
 	var v1 Verdict
@@ -2358,7 +2358,7 @@ func TestDecide_StealAndPressure_UnconditionalSignals(t *testing.T) {
 
 	// (2) PRESSURE BELOW FIRE → STILL REPORTED. PressureAvg60 0.10 is below
 	// PressureHigh 0.20 (and below PressureRecover 0.12), so the latch never
-	// fires — but the value must still be surfaced.
+	// fires, but the value must still be surfaced.
 	st2 := &WindowState{}
 	v2, sig2 := Decide(st2, Sample{
 		Timestamp:     base.Add(200 * time.Second),
@@ -2433,14 +2433,14 @@ func TestDecide_HostBusy60sMean_RingDiscipline(t *testing.T) {
 			_, s = Decide(st, Sample{
 				Timestamp:              base.Add(startOff).Add(time.Duration(i) * time.Second),
 				HostBusyCores:          v,
-				HostBusyCoresAvailable: true, // R10.3: ring appends only when /proc/stat is readable
+				HostBusyCoresAvailable: true, // ring appends only when /proc/stat is readable
 				LogicalCpus:            8.0,
 			}, thresholds)
 		}
 		return s
 	}
 
-	// (1) WINDOW MEAN — 3 ticks [2.0, 4.0, 6.0] within 60s on a fresh
+	// (1) WINDOW MEAN, 3 ticks [2.0, 4.0, 6.0] within 60s on a fresh
 	// &WindowState{} → arithmetic mean 4.0. Forcing assertion: a stub
 	// returning 0 or the last value (6.0) fails (!floatEq 4.0).
 	t.Run("WindowMean", func(t *testing.T) {
@@ -2451,7 +2451,7 @@ func TestDecide_HostBusy60sMean_RingDiscipline(t *testing.T) {
 		}
 	})
 
-	// (2) PRUNE-TO-ONE — A=2.0@t0, B=8.0@t0+61s → 0.0. A is older than 60s
+	// (2) PRUNE-TO-ONE, A=2.0@t0, B=8.0@t0+61s → 0.0. A is older than 60s
 	// (pruned), only B survives, 1 sample < 2-sample floor → 0. Forcing
 	// assertion: a non-pruning mean yields (2+8)/2=5.0 (!floatEq 0.0).
 	// HostBusyCoresAvailable=true on both Samples so the ring actually
@@ -2463,13 +2463,13 @@ func TestDecide_HostBusy60sMean_RingDiscipline(t *testing.T) {
 		_, _ = Decide(st, Sample{
 			Timestamp:              base,
 			HostBusyCores:          2.0,
-			HostBusyCoresAvailable: true, // R10.3: ring appends only when /proc/stat is readable
+			HostBusyCoresAvailable: true, // ring appends only when /proc/stat is readable
 			LogicalCpus:            8.0,
 		}, thresholds)
 		_, sig := Decide(st, Sample{
 			Timestamp:              base.Add(61 * time.Second),
 			HostBusyCores:          8.0,
-			HostBusyCoresAvailable: true, // R10.3: ring appends only when /proc/stat is readable
+			HostBusyCoresAvailable: true, // ring appends only when /proc/stat is readable
 			LogicalCpus:            8.0,
 		}, thresholds)
 		if !floatEq(sig.HostBusyCores60sMean, 0.0) {
@@ -2477,7 +2477,7 @@ func TestDecide_HostBusy60sMean_RingDiscipline(t *testing.T) {
 		}
 	})
 
-	// (3) CUTOFF-KEPT — A=4.0@t0, B=4.0@exactly t0+60s → 4.0. A sits on the
+	// (3) CUTOFF-KEPT, A=4.0@t0, B=4.0@exactly t0+60s → 4.0. A sits on the
 	// cutoff edge and is KEPT per !ts.Before(cutoff), so 2 samples survive →
 	// mean 4.0. Forcing assertion: an off-by-one Before/After prune drops A
 	// → 1 sample → 0 (!floatEq 4.0).
@@ -2486,7 +2486,7 @@ func TestDecide_HostBusy60sMean_RingDiscipline(t *testing.T) {
 		_, _ = Decide(st, Sample{
 			Timestamp:              base,
 			HostBusyCores:          4.0,
-			HostBusyCoresAvailable: true, // R10.3: ring appends only when /proc/stat is readable
+			HostBusyCoresAvailable: true, // ring appends only when /proc/stat is readable
 			LogicalCpus:            8.0,
 		}, thresholds)
 		_, sig := Decide(st, Sample{
@@ -2500,7 +2500,7 @@ func TestDecide_HostBusy60sMean_RingDiscipline(t *testing.T) {
 		}
 	})
 
-	// (4) SINGLE-SAMPLE FLOOR — 1 tick [6.0] → 0.0 (ring size 1 < floor 2).
+	// (4) SINGLE-SAMPLE FLOOR, 1 tick [6.0] → 0.0 (ring size 1 < floor 2).
 	// Forcing assertion: without the floor a 1-sample mean is 6.0
 	// (sig.HostBusyCores60sMean != 0.0 → Fatalf).
 	t.Run("SingleSampleFloor", func(t *testing.T) {
@@ -2511,7 +2511,7 @@ func TestDecide_HostBusy60sMean_RingDiscipline(t *testing.T) {
 		}
 	})
 
-	// (5) NAN CLAMP — A=4.0, B=NaN, C=4.0 within 60s → finite AND 8.0/3.0
+	// (5) NAN CLAMP, A=4.0, B=NaN, C=4.0 within 60s → finite AND 8.0/3.0
 	// (NaN clamps to 0 before insert → (4+0+4)/3). TWO forcing assertions:
 	// math.IsNaN(...) → Fatalf (NaN inserted unclamped poisons the mean for
 	// 60s); then !floatEq(..., 8.0/3.0) → Fatalf.
@@ -2526,11 +2526,11 @@ func TestDecide_HostBusy60sMean_RingDiscipline(t *testing.T) {
 		}
 	})
 
-	// (5b) NEGATIVE CLAMP — A=1.0, B=-10.0, C=1.0 within 60s → 2.0/3.0. A
+	// (5b) NEGATIVE CLAMP, A=1.0, B=-10.0, C=1.0 within 60s → 2.0/3.0. A
 	// negative HostBusyCores (e.g. from a malformed /proc/stat parse) clamps
 	// to 0 BEFORE insert → (1+0+1)/3. The inputs are chosen so an UNCLAMPED
 	// mean is (1-10+1)/3 = -8/3 < 0: TWO forcing assertions each pin a
-	// distinct regression — the mean is non-negative (!(mean >= 0) → Fatalf;
+	// distinct regression, the mean is non-negative (!(mean >= 0) → Fatalf;
 	// removing the clamp makes the unclamped mean -8/3 which fires this);
 	// then !floatEq(..., 2.0/3.0) → Fatalf (pins the clamped value). Pins the
 	// !(hb >= 0) branch so a maintainer who narrows the clamp to math.IsNaN
@@ -2546,7 +2546,7 @@ func TestDecide_HostBusy60sMean_RingDiscipline(t *testing.T) {
 		}
 	})
 
-	// (5c) +INF CLAMP — A=4.0, B=+Inf, C=4.0 within 60s → finite AND 8.0/3.0.
+	// (5c) +INF CLAMP, A=4.0, B=+Inf, C=4.0 within 60s → finite AND 8.0/3.0.
 	// +Inf clamps to 0 BEFORE insert → (4+0+4)/3. TWO forcing assertions:
 	// math.IsInf(..., 1) → Fatalf (+Inf inserted unclamped makes the mean
 	// +Inf for 60s); then !floatEq(..., 8.0/3.0) → Fatalf. Pins the
@@ -2562,7 +2562,7 @@ func TestDecide_HostBusy60sMean_RingDiscipline(t *testing.T) {
 		}
 	})
 
-	// (6) GAP-PRUNE-TO-<2 — 3 samples [4,4,4]→4.0 (setup assert), then one
+	// (6) GAP-PRUNE-TO-<2, 3 samples [4,4,4]→4.0 (setup assert), then one
 	// tick @t0+120s (>60s gap prunes the ring to 1 sample → floor re-met) →
 	// 0.0. Forcing assertion: a stale-cached mean keeps the old 4.0
 	// (sigGap.HostBusyCores60sMean != 0.0 → Fatalf).
@@ -2575,7 +2575,7 @@ func TestDecide_HostBusy60sMean_RingDiscipline(t *testing.T) {
 		_, sigGap := Decide(st, Sample{
 			Timestamp:              base.Add(120 * time.Second),
 			HostBusyCores:          4.0,
-			HostBusyCoresAvailable: true, // R10.3: ring appends only when /proc/stat is readable; without it the gap tick is dropped and the ring empties rather than pruning to 1 sample
+			HostBusyCoresAvailable: true, // ring appends only when /proc/stat is readable; without it the gap tick is dropped and the ring empties rather than pruning to 1 sample
 			LogicalCpus:            8.0,
 		}, thresholds)
 		if !floatEq(sigGap.HostBusyCores60sMean, 0.0) {
@@ -2590,7 +2590,7 @@ func TestDecide_HostBusy60sMean_RingDiscipline(t *testing.T) {
 // Sample.Quota when non-nil and >0, else Sample.LogicalCpus (the uncapped
 // box on the host). measured_use = Signals.HostBusyCores60sMean (the 60s
 // mean). reserve = 1.0 core (the cpuReserveCores package const). This
-// computation does not change the verdict — headroom < 0 means "box is
+// computation does not change the verdict, headroom < 0 means "box is
 // full" but it does not act on the number yet.
 func TestDecide_Headroom_Computation(t *testing.T) {
 	base := time.Date(2026, 6, 30, 12, 0, 0, 0, time.UTC)
@@ -2621,7 +2621,7 @@ func TestDecide_Headroom_Computation(t *testing.T) {
 			v, s = Decide(st, Sample{
 				Timestamp:              base.Add(time.Duration(i) * time.Second),
 				HostBusyCores:          b,
-				HostBusyCoresAvailable: true, // R10.3: ring appends only when /proc/stat is readable
+				HostBusyCoresAvailable: true, // ring appends only when /proc/stat is readable
 				LogicalCpus:            logical,
 				Quota:                  quota,
 			}, thresholds)
@@ -2654,7 +2654,7 @@ func TestDecide_Headroom_Computation(t *testing.T) {
 		return v, s
 	}
 
-	// (1) QUOTA-SET (limit mode) — 2 ticks UsageCores=1.8, Quota=&4.0,
+	// (1) QUOTA-SET (limit mode), 2 ticks UsageCores=1.8, Quota=&4.0,
 	// LogicalCpus=8.0 → usageMean=1.8, reserve=LimitReserveFraction×4.0=0.4,
 	// headroom = 4 − 1.8 − 0.4 = 1.8. Forcing: a stub using hostBusyMean (0)
 	// yields 4−0−0.4=3.6 (!floatEq 1.8); a stub using the flat 1.0 reserve
@@ -2668,7 +2668,7 @@ func TestDecide_Headroom_Computation(t *testing.T) {
 		}
 	})
 
-	// (2) QUOTA-NIL — 2 ticks mean=6.0, Quota=nil, Logical=8 → headroom =
+	// (2) QUOTA-NIL, 2 ticks mean=6.0, Quota=nil, Logical=8 → headroom =
 	// 8 − 6 − 1 = 1.0. Forcing: without the nil-fallback to LogicalCpus,
 	// capacity is 0 → headroom −7.0 (!floatEq 1.0).
 	t.Run("QuotaNil", func(t *testing.T) {
@@ -2691,7 +2691,7 @@ func TestDecide_Headroom_Computation(t *testing.T) {
 		}
 	})
 
-	// (3) QUOTA-ZERO — 2 ticks mean=2.0, Quota=&0.0, Logical=4 → headroom =
+	// (3) QUOTA-ZERO, 2 ticks mean=2.0, Quota=&0.0, Logical=4 → headroom =
 	// 4 − 2 − 1 = 1.0 (quota<=0 falls back to logical). Forcing: using quota 0
 	// as capacity yields 0 − 2 − 1 = −3.0 (!floatEq 1.0).
 	t.Run("QuotaZero", func(t *testing.T) {
@@ -2712,7 +2712,7 @@ func TestDecide_Headroom_Computation(t *testing.T) {
 		}
 	})
 
-	// (4) MEAN-NOT-LAST-TICK (limit mode) — ticks [1.0, 3.0] (mean=2.0),
+	// (4) MEAN-NOT-LAST-TICK (limit mode), ticks [1.0, 3.0] (mean=2.0),
 	// Quota=8 → headroom = 8 − 2.0 − 0.8 = 5.2. Forcing: using the last tick
 	// 3.0 yields 8 − 3.0 − 0.8 = 4.2 (!floatEq 5.2).
 	t.Run("MeanNotLastTick", func(t *testing.T) {
@@ -2724,7 +2724,7 @@ func TestDecide_Headroom_Computation(t *testing.T) {
 		}
 	})
 
-	// (5) RESERVE-IS-FRACTION — 2 ticks UsageCores=3.6, Quota=4 → headroom =
+	// (5) RESERVE-IS-FRACTION, 2 ticks UsageCores=3.6, Quota=4 → headroom =
 	// 4 − 3.6 − 0.4 = 0.0 (boundary). Pins LimitReserveFraction=0.10: a stub
 	// using the flat 1.0 reserve yields 4−3.6−1.0=−0.6 (!floatEq 0.0).
 	t.Run("ReserveIsFraction", func(t *testing.T) {
@@ -2732,7 +2732,7 @@ func TestDecide_Headroom_Computation(t *testing.T) {
 		st := &WindowState{}
 		_, sig := feedLimit(st, 2, &quota, 8.0, 3.6, 3.6)
 		if !floatEq(sig.HeadroomCores, 0.0) {
-			t.Fatalf("HeadroomCores: got %v, want 0.0 (capacity 4.0 − usageMean 3.6 − LimitReserveFraction×4.0=0.4; a stub using flat 1.0 reserve yields −0.6 — pins LimitReserveFraction=0.10)", sig.HeadroomCores)
+			t.Fatalf("HeadroomCores: got %v, want 0.0 (capacity 4.0 − usageMean 3.6 − LimitReserveFraction×4.0=0.4; a stub using flat 1.0 reserve yields −0.6, pins LimitReserveFraction=0.10)", sig.HeadroomCores)
 		}
 		// The exact-boundary State is not asserted (mirrors LimitMode_Headroom/
 		// QuotaSet): 4.0 − 3.6 − 0.4 is a tiny negative (~−8.9e-17) in float64,
@@ -2740,7 +2740,7 @@ func TestDecide_Headroom_Computation(t *testing.T) {
 		// NearLimitFires (−0.1 → degraded) and FreshStateMeanZero (1.8 → healthy).
 	})
 
-	// (6) FULL-BOX (limit-saturation fire) — 2 ticks UsageCores=3.9, Quota=4 →
+	// (6) FULL-BOX (limit-saturation fire), 2 ticks UsageCores=3.9, Quota=4 →
 	// headroom = 4 − 3.9 − 0.4 = −0.3 < 0 → degraded + saturation cause. The
 	// old FullBox used hostBusy=4 to fire via the host-headroom branch; that
 	// path is now the B-false-fire regression (covered by
@@ -2771,7 +2771,7 @@ func TestDecide_Headroom_Computation(t *testing.T) {
 		}
 	})
 
-	// (7) FRESH-STATE-MEAN-ZERO (limit mode) — 1 tick UsageCores=3.9 (ring<2
+	// (7) FRESH-STATE-MEAN-ZERO (limit mode), 1 tick UsageCores=3.9 (ring<2
 	// → mean 0 via the 2-sample floor), Quota=4 → headroom = 4 − 0 − 0.4 =
 	// 3.6. Forcing: using the raw 1-tick 3.9 yields 4 − 3.9 − 0.4 = −0.3
 	// (!floatEq 3.6). Also pins the no-verdict-change contract on a fresh
@@ -2797,7 +2797,7 @@ func TestDecide_Headroom_Computation(t *testing.T) {
 // HeadroomCores < 0 (hostBusyMean > capacity − cpuReserveCores, i.e. less than
 // one core free), holds in [0, headroomRecoverCores], and clears when
 // HeadroomCores > headroomRecoverCores, instead of the 60s-avg usage
-// fraction (>= HighUsageFraction). The cause stays CauseKindSaturation —
+// fraction (>= HighUsageFraction). The cause stays CauseKindSaturation,
 // only the trigger changes. All sub-blocks run in the dead-zone (Quota nil,
 // PsiAvailable false, Virtualized false = zero-value Sample), where
 // capacity=LogicalCpus and headroom=LogicalCpus − 60s-mean(HostBusyCores) −
@@ -2807,11 +2807,11 @@ func TestDecide_Saturation_HeadroomTrigger(t *testing.T) {
 	thresholds := DefaultThresholds()
 
 	// dzSample builds a dead-zone sample (Quota nil, PsiAvailable false,
-	// Virtualized false — the zero-value Sample) so capacity=LogicalCpus and
+	// Virtualized false, the zero-value Sample) so capacity=LogicalCpus and
 	// headroom=LogicalCpus − 60s-mean(HostBusyCores) − cpuReserveCores. The
 	// usageCores/cgroupCores pair populates the 60s-avg usage-fraction path
 	// (UsageCores/CgroupCores); passing 0,0 yields fraction 0 (clamped from
-	// 0/0 NaN), which never trips the fraction trigger. R10.3: sets
+	// 0/0 NaN), which never trips the fraction trigger. Sets
 	// HostBusyCoresAvailable=true so the sample routes to the host-headroom
 	// branch (these tests exercise the host-headroom path, which requires
 	// readable host stats).
@@ -2826,7 +2826,7 @@ func TestDecide_Saturation_HeadroomTrigger(t *testing.T) {
 		}
 	}
 
-	// (1) FULL_BOX_FIRES — 2 ticks HostBusyCores=8.0, LogicalCpus=8.0 →
+	// (1) FULL_BOX_FIRES, 2 ticks HostBusyCores=8.0, LogicalCpus=8.0 →
 	// mean=8.0, headroom=8−8−1=−1.0 < 0 (hostBusyMean 8.0 > capacity−reserve
 	// 7.0). The fraction trigger reads saturationAvg=0 (zero usage) and stays
 	// healthy; the headroom trigger must fire.
@@ -2856,7 +2856,7 @@ func TestDecide_Saturation_HeadroomTrigger(t *testing.T) {
 		}
 	})
 
-	// (2) SPARE_CORE_DOESNT_FIRE — 2 ticks HostBusyCores=6.0, LogicalCpus=8.0
+	// (2) SPARE_CORE_DOESNT_FIRE, 2 ticks HostBusyCores=6.0, LogicalCpus=8.0
 	// → headroom=8−6−1=1.0 > 0. The trigger must NOT fire when there is a spare
 	// core.
 	t.Run("SPARE_CORE_DOESNT_FIRE", func(t *testing.T) {
@@ -2879,7 +2879,7 @@ func TestDecide_Saturation_HeadroomTrigger(t *testing.T) {
 		}
 	})
 
-	// (3) FRACTION_TRIGGER_REPLACED — 2 ticks with UsageCores=5.6,
+	// (3) FRACTION_TRIGGER_REPLACED, 2 ticks with UsageCores=5.6,
 	// CgroupCores=8.0 (→ fraction=5.6/8.0=0.70=HighUsageFraction, the fraction
 	// fire condition) AND HostBusyCores=5.6, LogicalCpus=8.0 (→ headroom=8−5.6−1=1.4
 	// > 0). The fraction trigger would fire here (0.70) but the headroom
@@ -2902,7 +2902,7 @@ func TestDecide_Saturation_HeadroomTrigger(t *testing.T) {
 		}
 	})
 
-	// (4) PARKED_ON_LINE_FRESH — 2 ticks HostBusyCores=3.0, LogicalCpus=4.0 →
+	// (4) PARKED_ON_LINE_FRESH, 2 ticks HostBusyCores=3.0, LogicalCpus=4.0 →
 	// headroom=4−3−1=0.0, the bottom of the hold interval. A host at headroom
 	// 0.0 is exactly at the reserve boundary (one core free == the reserve);
 	// fire is strictly headroom < 0, so 0.0 must NOT fire (it holds if already
@@ -2924,7 +2924,7 @@ func TestDecide_Saturation_HeadroomTrigger(t *testing.T) {
 		}
 	})
 
-	// (5) SCHMITT_HOLD_THEN_CLEAR — (a) fire, (b) hold at a strictly-positive
+	// (5) SCHMITT_HOLD_THEN_CLEAR, (a) fire, (b) hold at a strictly-positive
 	// headroom inside the hold interval, (c) clear just past headroomRecoverCores.
 	// (b) holds at headroom=0.25 (in (0, headroomRecoverCores]): a no-hysteresis
 	// stub clearing at >0 would drop the latch here, so the assertion pins
@@ -2971,10 +2971,10 @@ func TestDecide_Saturation_HeadroomTrigger(t *testing.T) {
 		}
 	})
 
-	// (6) FRACTION_FALLBACK_LOGICALCPUS_UNKNOWN — the host CPU count is
-	// unknown (LogicalCpus == 0, the cgroup-known-only sub-case). R10.3 removed
+	// (6) FRACTION_FALLBACK_LOGICALCPUS_UNKNOWN, the host CPU count is
+	// unknown (LogicalCpus == 0, the cgroup-known-only sub-case). Removed
 	// the old fraction fallback branch (case deadZone && len(usageRing)>=2,
-	// which divided by Quota/CgroupCores — both 0 in no-limit, the bug). The
+	// which divided by Quota/CgroupCores, both 0 in no-limit, the bug). The
 	// no-host-stats saturation requires LogicalCpus > 0, so LogicalCpus=0 falls through to the
 	// `default` branch → healthy (the unreachable-in-prod safety net, since
 	// runtime.NumCPU() always returns > 0). This sub-test now pins that
@@ -2990,14 +2990,14 @@ func TestDecide_Saturation_HeadroomTrigger(t *testing.T) {
 			v, sig = Decide(st, dzSample(time.Duration(i)*time.Second, 0, 0, 5.6, 8.0), thresholds)
 		}
 		if sig.SaturationFired {
-			t.Fatalf("(6) SaturationFired: got true, want false (LogicalCpus==0 → default branch → latch cleared; the old CgroupCores-denominator fraction fallback is removed in R10.3)")
+			t.Fatalf("(6) SaturationFired: got true, want false (LogicalCpus==0 → default branch → latch cleared; the old CgroupCores-denominator fraction fallback is removed)")
 		}
 		if v.State != StateHealthy {
 			t.Fatalf("(6) State: got %q, want %q (LogicalCpus==0 → default branch → healthy; unreachable in prod via runtime.NumCPU())", v.State, StateHealthy)
 		}
 	})
 
-	// (7) NEAR_FULL_FIRES — a box with less than one core free (but not
+	// (7) NEAR_FULL_FIRES, a box with less than one core free (but not
 	// literally full) fires under headroom<0. 2 ticks HostBusyCores=7.5,
 	// LogicalCpus=8.0 → mean=7.5, headroom=8−7.5−1=−0.5 < 0 (hostBusyMean 7.5
 	// > capacity−reserve 7.0). A fire-at-hostBusyMean>=capacity stub (i.e.
@@ -3047,7 +3047,7 @@ func TestDecide_Saturation_FiresOnVirtualizedBox(t *testing.T) {
 	// StealFraction 0 (so the steal latch does not co-fire), PressureAvg60 0
 	// (so the demand gate stays closed and host-contention does not co-fire).
 	// capacity=LogicalCpus and headroom=LogicalCpus − 60s-mean(HostBusyCores) −
-	// cpuReserveCores. virt selects Sample.Virtualized. R10.3: sets
+	// cpuReserveCores. virt selects Sample.Virtualized. Sets
 	// HostBusyCoresAvailable=true so the sample routes to the host-headroom
 	// branch (these tests exercise the host-headroom path on virtualized
 	// boxes, which requires readable host stats).
@@ -3117,7 +3117,7 @@ func TestDecide_Saturation_FiresOnVirtualizedBox(t *testing.T) {
 			t.Fatalf("State: got %q, want %q (spare core → healthy)", v.State, StateHealthy)
 		}
 		if !sig.LimitedVisibility {
-			t.Fatalf("LimitedVisibility: got false, want true (virtualized dead-zone sample with no PSI and no limit — the annotation shows even when healthy)")
+			t.Fatalf("LimitedVisibility: got false, want true (virtualized dead-zone sample with no PSI and no limit, the annotation shows even when healthy)")
 		}
 	})
 
@@ -3140,14 +3140,14 @@ func TestDecide_Saturation_FiresOnVirtualizedBox(t *testing.T) {
 			t.Fatalf("SaturationFired: got false, want true (Virtualized=false, headroom=%v < 0 → the non-virtualized dead-zone path must still fire)", sig.HeadroomCores)
 		}
 		if v.State != StateDegraded {
-			t.Fatalf("State: got %q, want %q (non-virtualized full box degrades — non-virtualized path preserved)", v.State, StateDegraded)
+			t.Fatalf("State: got %q, want %q (non-virtualized full box degrades, non-virtualized path preserved)", v.State, StateDegraded)
 		}
 		if !sig.LimitedVisibility {
-			t.Fatalf("LimitedVisibility: got false, want true (non-virtualized dead-zone sample — non-virtualized path preserved)")
+			t.Fatalf("LimitedVisibility: got false, want true (non-virtualized dead-zone sample, non-virtualized path preserved)")
 		}
 	})
 
-	// (4) FULL_PLUS_PSI — R4 option B: a full box WITH PSI degrades on BOTH
+	// (4) FULL_PLUS_PSI, R4 option B: a full box WITH PSI degrades on BOTH
 	// pressure and saturation (headroom fires always, not just dead-zone; PSI
 	// stacks on top as an additional cause). 2 ticks HostBusyCores=8.0,
 	// LogicalCpus=8.0, PsiAvailable=true, PressureAvg60=0.30 (>PressureHigh
@@ -3192,7 +3192,7 @@ func TestDecide_Saturation_FiresOnVirtualizedBox(t *testing.T) {
 		// saturationAvg is 0 outside the dead-zone (usage ring is dead-zone-only),
 		// so the Value must come from HeadroomCores to read "N cores over capacity."
 		if !floatEq(satValue, sig.HeadroomCores) {
-			t.Fatalf("saturation Value: got %v, want %v (HeadroomCores — 'cores over capacity'; saturationAvg is 0 outside the dead-zone)", satValue, sig.HeadroomCores)
+			t.Fatalf("saturation Value: got %v, want %v (HeadroomCores, 'cores over capacity'; saturationAvg is 0 outside the dead-zone)", satValue, sig.HeadroomCores)
 		}
 	})
 }
@@ -3208,7 +3208,7 @@ func TestDecide_Saturation_FiresOnVirtualizedBox(t *testing.T) {
 //
 // Sub-cases (1)-(4) are NON-dead-zone (Quota set + PsiAvailable true) with
 // headroom = 0 (HostBusyCores=7.0, Quota=8.0, reserve=1.0), so SaturationFired
-// is false and host-contention does not fire — this isolates the attribution
+// is false and host-contention does not fire, this isolates the attribution
 // split from the dead-zone saturation split. Sub-case (5) exercises the
 // retained non-dead-zone headroom<0 fire path.
 func TestDecide_HostContentionFold_Full(t *testing.T) {
@@ -3251,7 +3251,7 @@ func TestDecide_HostContentionFold_Full(t *testing.T) {
 		return v.Causes[0].Kind == kind
 	}
 
-	// (1) PRESSURE_PLUS_HOST_BUSY_HOST_DOMINANT — NON-dead-zone (Quota=&8.0,
+	// (1) PRESSURE_PLUS_HOST_BUSY_HOST_DOMINANT, NON-dead-zone (Quota=&8.0,
 	// PsiAvailable true), 2 ticks PressureAvg60=0.30 (>PressureHigh 0.20 →
 	// pressure fires), HostBusyCores=7.0, UsageCores=1.0, LogicalCpus=8.0.
 	// headroom=8−7−1=0 → not < 0 → SaturationFired false (the headroom branch
@@ -3294,7 +3294,7 @@ func TestDecide_HostContentionFold_Full(t *testing.T) {
 		}
 	})
 
-	// (2) PRESSURE_PLUS_HOST_BUSY_WE_DOMINANT — same non-dead-zone pressure
+	// (2) PRESSURE_PLUS_HOST_BUSY_WE_DOMINANT, same non-dead-zone pressure
 	// fire, but UsageCores=6.5 so the UMH share (6.5) exceeds the host share
 	// (7.0−6.5=0.5) → AttributionUnknown. Expected output: Causes=[pressure],
 	// Attribution=Unknown (the host/container split yields Unknown when our
@@ -3331,7 +3331,7 @@ func TestDecide_HostContentionFold_Full(t *testing.T) {
 		}
 	})
 
-	// (3) THROTTLE_PLUS_HOST_BUSY_HOST_DOMINANT — NON-dead-zone, throttle fires
+	// (3) THROTTLE_PLUS_HOST_BUSY_HOST_DOMINANT, NON-dead-zone, throttle fires
 	// (60s ratio 0.10 > ThrottleHigh 0.05), HostBusyCores=7.0, UsageCores=1.0,
 	// LogicalCpus=8.0. headroom=0 → host-contention does not fire. host share
 	// 6.0 > our share 1.0 → Host. Expected output: Causes=[throttling],
@@ -3390,7 +3390,7 @@ func TestDecide_HostContentionFold_Full(t *testing.T) {
 		}
 	})
 
-	// (4) THROTTLE_PLUS_HOST_BUSY_WE_DOMINANT — same throttle fire, but
+	// (4) THROTTLE_PLUS_HOST_BUSY_WE_DOMINANT, same throttle fire, but
 	// UsageCores=6.5 so our share (6.5) > host share (0.5) → Unknown. Expected
 	// output: Causes=[throttling], Attribution=Unknown.
 	t.Run("THROTTLE_PLUS_HOST_BUSY_WE_DOMINANT", func(t *testing.T) {
@@ -3440,7 +3440,7 @@ func TestDecide_HostContentionFold_Full(t *testing.T) {
 		}
 	})
 
-	// (5) STEAL_PLUS_OUR_MAJORITY — the steal-present→host edge case: a full
+	// (5) STEAL_PLUS_OUR_MAJORITY, the steal-present→host edge case: a full
 	// box where OUR workload is the majority (UsageCores=6.0, HostBusyCores=8.0
 	// → host share 2 < our share 6) AND the hypervisor is stealing
 	// (StealFraction=0.20 > StealHigh 0.10). The split alone would yield
@@ -3463,7 +3463,7 @@ func TestDecide_HostContentionFold_Full(t *testing.T) {
 			t.Fatalf("State: got %q, want %q (steal + saturation → degraded)", v.State, StateDegraded)
 		}
 		if v.Attribution != AttributionHost {
-			t.Fatalf("Attribution: got %q, want %q (steal present → Host: the hypervisor is the root cause; the fix is host-side, not 'reduce your load' — even though our workload is the majority of host-busy)", v.Attribution, AttributionHost)
+			t.Fatalf("Attribution: got %q, want %q (steal present → Host: the hypervisor is the root cause; the fix is host-side, not 'reduce your load', even though our workload is the majority of host-busy)", v.Attribution, AttributionHost)
 		}
 	})
 
@@ -3582,7 +3582,7 @@ func TestDecide_UsagePercentilesAreAbsoluteCores(t *testing.T) {
 	// The box uses 2.75 cores every tick. avg/p95/p99 CORES must reflect that
 	// (→ 2750 mCPU on the wire), NOT 0 (which is what UsageCores/CgroupCores
 	// gives when CgroupCores is 0). The *Fraction fields stay 0 here (no cgroup
-	// denominator) — correct for the latch/message, and exactly why the wire
+	// denominator), correct for the latch/message, and exactly why the wire
 	// needs the separate *Cores fields.
 	if !floatEq(sig.AvgUsageCores, 2.75) {
 		t.Fatalf("AvgUsageCores: got %v, want 2.75 (absolute cores, not the collapsed cgroup fraction 0)", sig.AvgUsageCores)
@@ -3633,9 +3633,9 @@ func TestDecide_LimitMode_Headroom(t *testing.T) {
 		return v, s
 	}
 
-	// (1) QuotaSet — 2 ticks UsageCores=1.8, Quota=2.0, LogicalCpus=8.0 →
+	// (1) QuotaSet, 2 ticks UsageCores=1.8, Quota=2.0, LogicalCpus=8.0 →
 	// usageMean=1.8, reserve=0.10×2=0.2, headroom=2−1.8−0.2=0.0. Pin
-	// HeadroomCores == 0.0 (the boundary — exactly at reserve, not < 0).
+	// HeadroomCores == 0.0 (the boundary, exactly at reserve, not < 0).
 	// Forcing: a stub using hostBusyMean (0 here) yields 2−0−0.2=1.8
 	// (!floatEq 0.0); a stub using the flat 1.0 reserve yields 2−1.8−1.0=−0.8
 	// (!floatEq 0.0).
@@ -3655,7 +3655,7 @@ func TestDecide_LimitMode_Headroom(t *testing.T) {
 		// exact → healthy).
 	})
 
-	// (2) NearLimitFires — 2 ticks UsageCores=1.9, Quota=2.0 → headroom =
+	// (2) NearLimitFires, 2 ticks UsageCores=1.9, Quota=2.0 → headroom =
 	// 2−1.9−0.2=−0.1 < 0 → degraded + saturation cause. Pins the fire
 	// boundary: sustained usage inside the fractional reserve band.
 	t.Run("NearLimitFires", func(t *testing.T) {
@@ -3682,7 +3682,7 @@ func TestDecide_LimitMode_Headroom(t *testing.T) {
 		}
 	})
 
-	// (3) FreshStateMeanZero — 1 tick UsageCores=1.9, Quota=2.0 (ring<2 →
+	// (3) FreshStateMeanZero, 1 tick UsageCores=1.9, Quota=2.0 (ring<2 →
 	// mean 0) → headroom=2−0−0.2=1.8 > 0, healthy, no causes. Pins the
 	// 2-sample floor in limit mode.
 	t.Run("FreshStateMeanZero", func(t *testing.T) {
@@ -3700,7 +3700,7 @@ func TestDecide_LimitMode_Headroom(t *testing.T) {
 		}
 	})
 
-	// (4) MeanNotLastTick — ticks [1.0, 1.8], Quota=2.0 → mean=1.4, headroom =
+	// (4) MeanNotLastTick, ticks [1.0, 1.8], Quota=2.0 → mean=1.4, headroom =
 	// 2−1.4−0.2=0.4. Forcing: last tick 1.8 yields 2−1.8−0.2=0.0 (!floatEq 0.4).
 	t.Run("MeanNotLastTick", func(t *testing.T) {
 		quota := 2.0
@@ -3717,7 +3717,7 @@ func TestDecide_LimitMode_Headroom(t *testing.T) {
 // (HostBusyCores=5.0) with the container idle (UsageCores=0.0).
 // HostBusyCoresAvailable is set true so the hostBusyRing fills with 5.0 and
 // hostBusyMean=5.0 (not 0). Old code paired hostBusyMean with the quota
-// ceiling: headroom = 2−5−1 = −4 < 0 → degraded (BUG — fired at 12.5% host
+// ceiling: headroom = 2−5−1 = −4 < 0 → degraded (BUG, fired at 12.5% host
 // busy on a 2-core quota). New code pairs the container's own 60s-avg usage
 // (usageCores60sMean) with the quota: headroom = 2−0−0.2 = 1.8 > 0 → HEALTHY.
 // This is THE key regression test for the two-rule model: a revert to the old
@@ -3766,9 +3766,9 @@ func TestDecide_LimitMode_BFalseFireKilled(t *testing.T) {
 // saturation": a limited container (Quota=2.0) on an 8-core host with
 // HostBusyCores=5.0, container usage 0.3, and pressure firing
 // (PressureAvg60=0.25 > PressureHigh 0.20). The verdict degrades on pressure
-// ALONE — container usage 0.3 → headroom 2−0.3−0.2=1.5 > 0 → saturation does
+// ALONE, container usage 0.3 → headroom 2−0.3−0.2=1.5 > 0 → saturation does
 // NOT co-fire. This pins that host busyness alone no longer fires saturation
-// in limit mode (the R10.1 core fix).
+// in limit mode (the core fix).
 func TestDecide_LimitMode_ContainerIdleHostFull_NoSaturation(t *testing.T) {
 	base := time.Date(2026, 7, 6, 12, 0, 0, 0, time.UTC)
 	thresholds := DefaultThresholds()
@@ -3794,7 +3794,7 @@ func TestDecide_LimitMode_ContainerIdleHostFull_NoSaturation(t *testing.T) {
 	if v.State != StateDegraded {
 		t.Fatalf("State: got %q, want %q (pressure fired → degraded)", v.State, StateDegraded)
 	}
-	// Pressure is the ONLY cause — no saturation co-fire (container usage 0.3
+	// Pressure is the ONLY cause, no saturation co-fire (container usage 0.3
 	// → headroom 2−0.3−0.2=1.5 > 0).
 	if len(v.Causes) != 1 {
 		t.Fatalf("Causes length: got %d, want 1 (pressure only; container usage 0.3 → headroom 1.5 > 0 → no saturation)", len(v.Causes))
@@ -3807,7 +3807,7 @@ func TestDecide_LimitMode_ContainerIdleHostFull_NoSaturation(t *testing.T) {
 	}
 }
 
-// TestDecide_LimitMode_HostFullStacks pins R10.2: in limit mode, when the HOST
+// TestDecide_LimitMode_HostFullStacks pins that in limit mode, when the HOST
 // itself is full (the rule-1 test at host scope: LogicalCpus − hostBusyMean −
 // cpuReserveCores < 0, readable via HostBusyCoresAvailable), that stacks as a
 // second saturation condition on the limited container. A limit is a ceiling,
@@ -3815,8 +3815,8 @@ func TestDecide_LimitMode_ContainerIdleHostFull_NoSaturation(t *testing.T) {
 // internal latches (limitSaturationFired container-scope + hostFullFired
 // host-scope) emit ONE saturation cause; when both fire, HOST-FULL DOMINATES
 // (attribution host, cause Value = the host-scope negative headroom). The
-// host-full test is the TRUE host-scope test — NEVER quota-scoped (that was
-// the B false fire R10.1 killed).
+// host-full test is the TRUE host-scope test, NEVER quota-scoped (that was
+// the B false fire, now removed).
 func TestDecide_LimitMode_HostFullStacks(t *testing.T) {
 	base := time.Date(2026, 7, 6, 12, 0, 0, 0, time.UTC)
 	thresholds := DefaultThresholds()
@@ -3842,14 +3842,14 @@ func TestDecide_LimitMode_HostFullStacks(t *testing.T) {
 		return v, s
 	}
 
-	// (1) HostFullFires — 2 ticks Quota=2.0, LogicalCpus=8.0, HostBusyCores=7.5
+	// (1) HostFullFires, 2 ticks Quota=2.0, LogicalCpus=8.0, HostBusyCores=7.5
 	// (host full: 8−7.5−1=−0.5 < 0), HostBusyCoresAvailable=true, UsageCores=0.0
 	// (container idle → limit-sat does NOT fire: 2−0−0.2=1.8 > 0). The host-full
 	// latch fires alone → degraded, attribution host, ONE saturation cause whose
 	// Value is the host-scope negative headroom (−0.5, the dominant). Forcing: a
 	// stub that doesn't add the host-full latch leaves the container healthy (the
 	// B-regression resurfaces); a stub that quota-scopes the host-full test
-	// (2−7.5−1 < 0) would also fire here but is the WRONG test — pinned via the
+	// (2−7.5−1 < 0) would also fire here but is the WRONG test, pinned via the
 	// next sub-test.
 	t.Run("HostFullFires", func(t *testing.T) {
 		quota := 2.0
@@ -3881,7 +3881,7 @@ func TestDecide_LimitMode_HostFullStacks(t *testing.T) {
 		}
 	})
 
-	// (2) HostNotFullDoesntFire — 2 ticks Quota=2.0, LogicalCpus=8.0,
+	// (2) HostNotFullDoesntFire, 2 ticks Quota=2.0, LogicalCpus=8.0,
 	// HostBusyCores=5.0 (host 5/8 → 8−5−1=2 > 0 → host-full does NOT fire),
 	// UsageCores=0.0 (limit-sat 1.8 > 0 → doesn't fire). HEALTHY. The B-regression
 	// stays killed: host busyness alone does not fire saturation in limit mode.
@@ -3900,10 +3900,10 @@ func TestDecide_LimitMode_HostFullStacks(t *testing.T) {
 		}
 	})
 
-	// (3) BothFireHostFullDominates — 2 ticks Quota=2.0, LogicalCpus=8.0,
+	// (3) BothFireHostFullDominates, 2 ticks Quota=2.0, LogicalCpus=8.0,
 	// HostBusyCores=7.5, UsageCores=1.9 (limit-sat fires: 2−1.9−0.2=−0.1 < 0;
 	// host-full fires: 8−7.5−1=−0.5 < 0). Both latches fire → ONE saturation
-	// cause, attribution host, cause Value = the host-scope −0.5 (the dominant —
+	// cause, attribution host, cause Value = the host-scope −0.5 (the dominant,
 	// NOT the limit-scope −0.1). Forcing: a stub that emits two saturation
 	// causes fails the "ONE cause" pin; a stub that uses the limit-scope headroom
 	// as the Value when both fire yields −0.1 (!floatEq −0.5).
@@ -3915,7 +3915,7 @@ func TestDecide_LimitMode_HostFullStacks(t *testing.T) {
 			t.Fatalf("State: got %q, want %q (both latches fire → degraded)", v.State, StateDegraded)
 		}
 		if len(v.Causes) != 1 {
-			t.Fatalf("Causes length: got %d, want 1 (ONE saturation cause, not two — host-full dominates but does not add a second cause)", len(v.Causes))
+			t.Fatalf("Causes length: got %d, want 1 (ONE saturation cause, not two, host-full dominates but does not add a second cause)", len(v.Causes))
 		}
 		if v.Causes[0].Kind != CauseKindSaturation {
 			t.Fatalf("Cause Kind: got %q, want %q", v.Causes[0].Kind, CauseKindSaturation)
@@ -3924,7 +3924,7 @@ func TestDecide_LimitMode_HostFullStacks(t *testing.T) {
 			t.Fatalf("Attribution: got %q, want %q (host-full fires → host-scope condition → attribution host)", v.Attribution, AttributionHost)
 		}
 		if !floatEq(v.Causes[0].Value, -0.5) {
-			t.Fatalf("Cause Value: got %v, want -0.5 (host-scope negative headroom, the dominant ceiling — NOT the limit-scope −0.1)", v.Causes[0].Value)
+			t.Fatalf("Cause Value: got %v, want -0.5 (host-scope negative headroom, the dominant ceiling, NOT the limit-scope −0.1)", v.Causes[0].Value)
 		}
 		if !sig.HostFullFired {
 			t.Fatalf("HostFullFired: got false, want true (host 8−7.5−1=−0.5 < 0)")
@@ -3937,7 +3937,7 @@ func TestDecide_LimitMode_HostFullStacks(t *testing.T) {
 		}
 	})
 
-	// (4) HostFullNoHostStats_Cleared — scenario C: /proc/stat unreadable
+	// (4) HostFullNoHostStats_Cleared, scenario C: /proc/stat unreadable
 	// (HostBusyCoresAvailable=false, HostBusyCores=0). (4a) container idle →
 	// HEALTHY (host-full can't fire without host stats; limit-sat 1.8 > 0 →
 	// doesn't fire). (4b) container near limit (UsageCores=1.9) → DEGRADED via
@@ -3979,7 +3979,7 @@ func TestDecide_LimitMode_HostFullStacks(t *testing.T) {
 }
 
 // TestDecide_Saturation_HeadroomTrigger_NoLimitByteIdentity re-confirms the
-// no-limit path is byte-identical after R10.2: the existing FULL_BOX_FIRES
+// no-limit path is byte-identical: the existing FULL_BOX_FIRES
 // (Quota nil, host 8/8) still yields StateDegraded, attribution host (via the
 // split: hb 8 − uc 0 > uc 0 → host), ONE saturation cause. The no-limit branch
 // body is unchanged; only the two latch-clears (limitSaturationFired=false,
@@ -4003,13 +4003,13 @@ func TestDecide_Saturation_HeadroomTrigger_NoLimitByteIdentity(t *testing.T) {
 		}, thresholds)
 	}
 	if v.State != StateDegraded {
-		t.Fatalf("State: got %q, want %q (no-limit full box: headroom=8−8−1=−1.0 < 0 → degraded; byte-identical to R10.1)", v.State, StateDegraded)
+		t.Fatalf("State: got %q, want %q (no-limit full box: headroom=8−8−1=−1.0 < 0 → degraded; byte-identical)", v.State, StateDegraded)
 	}
 	if !sig.SaturationFired {
 		t.Fatalf("SaturationFired: got false, want true (no-limit headroom < 0 → saturation fires; byte-identical)")
 	}
 	if v.Attribution != AttributionHost {
-		t.Fatalf("Attribution: got %q, want %q (no-limit split: hb 8 − uc 0 = 8 > 0 → host; byte-identical — HostFullFired is false in no-limit mode, so the host-full attribution rule does not engage)", v.Attribution, AttributionHost)
+		t.Fatalf("Attribution: got %q, want %q (no-limit split: hb 8 − uc 0 = 8 > 0 → host; byte-identical, HostFullFired is false in no-limit mode, so the host-full attribution rule does not engage)", v.Attribution, AttributionHost)
 	}
 	if sig.HostFullFired {
 		t.Fatalf("HostFullFired: got true, want false (no-limit mode → host-full latch cleared, not evaluated)")
@@ -4025,13 +4025,13 @@ func TestDecide_Saturation_HeadroomTrigger_NoLimitByteIdentity(t *testing.T) {
 	}
 }
 
-// TestDecide_NoHostStatsSaturation_ReachableAndFires is THE key R10.3 test: the no-PSI/no-limit
+// TestDecide_NoHostStatsSaturation_ReachableAndFires is THE key test: the no-PSI/no-limit
 // fallback (scenario D) is reachable AND correct. /proc/stat unreadable
 // (HostBusyCoresAvailable=false, HostBusyCores=0), no limit (Quota nil),
 // PsiAvailable false, LogicalCpus 8.0, UsageCores 6.0 sustained (6.0/8.0=0.75
 // >= HighUsageFraction 0.70). 2+ ticks. Today the no-limit branch fires on
 // HeadroomCores (LogicalCpus − hostBusyMean − reserve = 8−0−1 = 7 > 0) and
-// reads healthy forever — the blind spot. R10.3 gates on
+// reads healthy forever, the blind spot. The fix gates on
 // HostBusyCoresAvailable so the unreadable case falls through to the no-host-stats saturation
 // fraction fallback (usageCores60sMean/LogicalCpus >= 0.70).
 func TestDecide_NoHostStatsSaturation_ReachableAndFires(t *testing.T) {
@@ -4055,7 +4055,7 @@ func TestDecide_NoHostStatsSaturation_ReachableAndFires(t *testing.T) {
 		}, thresholds)
 	}
 	if v.State != StateDegraded {
-		t.Fatalf("State: got %q, want %q (no-host-stats saturation: usageCores60sMean 6.0 / LogicalCpus 8.0 = 0.75 >= 0.70 → degraded; today healthy — the blind spot)", v.State, StateDegraded)
+		t.Fatalf("State: got %q, want %q (no-host-stats saturation: usageCores60sMean 6.0 / LogicalCpus 8.0 = 0.75 >= 0.70 → degraded; today healthy, the blind spot)", v.State, StateDegraded)
 	}
 	if !sig.SaturationFired {
 		t.Fatalf("SaturationFired: got false, want true (no-host-stats saturation fraction >= 0.70)")
@@ -4341,7 +4341,7 @@ func TestDecide_HostFull_HoldOnMissing(t *testing.T) {
 	}
 }
 
-// TestDecide_NoLimit_HostHeadroom_HoldOnMissing pins R10.3 Finding 1: a no-limit
+// TestDecide_NoLimit_HostHeadroom_HoldOnMissing pins Finding 1: a no-limit
 // host-saturated box (host full, container idle) that suffers a transient
 // /proc/stat outage must NOT flap degraded→healthy→degraded. The host-headroom
 // fire holds across the outage tick (the no-host-stats saturation branch does not touch
@@ -4371,7 +4371,7 @@ func TestDecide_NoLimit_HostHeadroom_HoldOnMissing(t *testing.T) {
 
 	// (b) transient outage: /proc/stat unreadable, container idle. The no-host-stats saturation
 	// branch runs (noHostStatsSaturationFraction=0/8=0 < 0.60 → no-host-stats saturation clears) BUT the prior
-	// host-headroom fire (st.noLimitHostFired) HOLDS — the no-host-stats saturation does not touch
+	// host-headroom fire (st.noLimitHostFired) HOLDS, the no-host-stats saturation does not touch
 	// it. Emitted saturationFired = noLimitHostFired || noHostStatsSaturationFired = true.
 	vHold, sigHold := Decide(st, Sample{
 		Timestamp: base.Add(4 * time.Second),
@@ -4402,10 +4402,10 @@ func TestDecide_NoLimit_HostHeadroom_HoldOnMissing(t *testing.T) {
 }
 
 // TestDecide_NoLimitHostFull_OutageHoldsAttributionHost pins the attribution
-// complement to R10.3 Finding 1: on a no-limit host-full box, the verdict STATE
+// complement to Finding 1: on a no-limit host-full box, the verdict STATE
 // holds across a transient /proc/stat outage (st.noLimitHostFired is not
 // cleared by the no-host-stats saturation branch), but the attribution switch had no
-// case signals.NoLimitHostFired — so the default branch ran with hb=0 (no
+// case signals.NoLimitHostFired, so the default branch ran with hb=0 (no
 // host-busy reading) and hb-uc=0-0=0, not > 0, flipping attribution to
 // AttributionUnknown. The MC would render a toggling Host→Unknown→Host badge
 // while the verdict stays degraded. This test pins attribution to stay Host.
@@ -4454,7 +4454,7 @@ func TestDecide_NoLimitHostFull_OutageHoldsAttributionHost(t *testing.T) {
 		t.Fatalf("(b) hold State: got %q, want %q (noLimitHostFired latch holds across outage)", vHold.State, StateDegraded)
 	}
 	if vHold.Attribution != AttributionHost {
-		t.Fatalf("(b) hold Attribution: got %q, want %q (latched no-limit host-full verdict must keep AttributionHost through the /proc/stat outage — no flap)",
+		t.Fatalf("(b) hold Attribution: got %q, want %q (latched no-limit host-full verdict must keep AttributionHost through the /proc/stat outage, no flap)",
 			vHold.Attribution, AttributionHost)
 	}
 
@@ -4729,7 +4729,7 @@ func TestDecide_NoLimitHostFull_ContainerIsCause_AttributionUnknown(t *testing.T
 	}
 }
 
-// TestDecide_NoHostStatsSaturationToHostHeadroom_Transition pins R10.3 Finding 2: on a no-host-stats saturation →
+// TestDecide_NoHostStatsSaturationToHostHeadroom_Transition pins Finding 2: on a no-host-stats saturation →
 // host-headroom transition (/proc/stat becomes readable mid-fire), st.noHostStatsSaturationFired
 // is cleared by the host-headroom branch, so the saturation cause Value is
 // signals.HeadroomCores (the host-scope headroom), NOT a stale
@@ -4766,7 +4766,7 @@ func TestDecide_NoHostStatsSaturationToHostHeadroom_Transition(t *testing.T) {
 
 	// (b) /proc/stat becomes readable, host IS full (7.5/8). Routes to the
 	// host-headroom branch. Feed 2 readable ticks (the 2-sample floor on
-	// hostBusyRing — a first-tick reading cannot fire). st.noHostStatsSaturationFired MUST be
+	// hostBusyRing, a first-tick reading cannot fire). st.noHostStatsSaturationFired MUST be
 	// cleared (Finding 2) so the cause Value is signals.HeadroomCores (−0.5),
 	// not a stale NoHostStatsSaturationFraction=0.
 	Decide(st, Sample{
@@ -4783,7 +4783,7 @@ func TestDecide_NoHostStatsSaturationToHostHeadroom_Transition(t *testing.T) {
 		t.Fatalf("(b) transition State: got %q, want %q (host full: 8−7.5−1=−0.5 < 0; 2 readable ticks satisfy the floor)", vTrans.State, StateDegraded)
 	}
 	if sigTrans.NoHostStatsSaturationFired {
-		t.Fatalf("(b) transition NoHostStatsSaturationFired: got true, want false (host-headroom branch must clear st.noHostStatsSaturationFired on entry — Finding 2)")
+		t.Fatalf("(b) transition NoHostStatsSaturationFired: got true, want false (host-headroom branch must clear st.noHostStatsSaturationFired on entry, Finding 2)")
 	}
 	// The cause Value is the host-scope headroom (−0.5), NOT 0.
 	transVal := vTrans.Causes[0].Value
@@ -4797,7 +4797,7 @@ func TestDecide_NoHostStatsSaturationToHostHeadroom_Transition(t *testing.T) {
 // (signals.HostBusyCores60sMean, signals.AvgUsageCores), NOT the per-tick
 // instantaneous values. The verdict State is Schmitt-latched (stable across a
 // transient spike), so the attribution label that annotates it must be equally
-// stable — otherwise a single reconcile tick where host-busy spikes flips
+// stable, otherwise a single reconcile tick where host-busy spikes flips
 // Attribution Host→Unknown→Host on a stable degraded verdict, and the MC would
 // render a toggling attribution badge.
 //
@@ -4808,7 +4808,7 @@ func TestDecide_NoHostStatsSaturationToHostHeadroom_Transition(t *testing.T) {
 // NOT > uc 1.0 → AttributionUnknown.
 //
 // Then a SPIKE tick: HostBusyCores=7.5 (instantaneous) but
-// HostBusyCoresAvailable=false so the hostBusyRing does NOT append it — the 60s
+// HostBusyCoresAvailable=false so the hostBusyRing does NOT append it, the 60s
 // mean stays 2.0. The instantaneous-only (OLD) split uses hb=7.5 → 7.5−1.0=6.5
 // > 1.0 → AttributionHost (flap!). The 60s-mean (NEW) split uses hb=2.0 →
 // 2.0−1.0=1.0, not > 1.0 → AttributionUnknown (stable). Throttle keeps firing
@@ -4855,7 +4855,7 @@ func TestDecide_Attribution_Uses60sMean_NotInstantaneous(t *testing.T) {
 	}
 
 	// (2) SPIKE tick: instantaneous HostBusyCores=7.5 but
-	// HostBusyCoresAvailable=false so the hostBusyRing does NOT append it — the
+	// HostBusyCoresAvailable=false so the hostBusyRing does NOT append it, the
 	// 60s mean stays 2.0. Throttle keeps firing (verdict stays degraded, split
 	// runs). The OLD split uses instantaneous hb=7.5 → 7.5−1.0=6.5 > 1.0 → Host
 	// (flap). The NEW split uses mean hb=2.0 → 2.0−1.0=1.0, not > 1.0 → Unknown
@@ -4876,7 +4876,7 @@ func TestDecide_Attribution_Uses60sMean_NotInstantaneous(t *testing.T) {
 		t.Fatalf("spike State: got %q, want %q (throttle still firing → still degraded; the verdict is stable)", vSpike.State, StateDegraded)
 	}
 	if vSpike.Attribution != AttributionUnknown {
-		t.Fatalf("spike Attribution: got %q, want %q (the 60s mean hb stayed 2.0 — HostBusyCoresAvailable=false so the spike was NOT appended; 2.0−1.0=1.0 not > 1.0 → Unknown. The OLD instantaneous split uses hb=7.5 → 6.5 > 1.0 → Host (flap). Attribution must be as stable as the verdict it annotates.)", vSpike.Attribution, AttributionUnknown)
+		t.Fatalf("spike Attribution: got %q, want %q (the 60s mean hb stayed 2.0, HostBusyCoresAvailable=false so the spike was NOT appended; 2.0−1.0=1.0 not > 1.0 → Unknown. The OLD instantaneous split uses hb=7.5 → 6.5 > 1.0 → Host (flap). Attribution must be as stable as the verdict it annotates.)", vSpike.Attribution, AttributionUnknown)
 	}
 	// Sanity: the mean really did stay 2.0 (the spike was not appended).
 	if !floatEq(sigSpike.HostBusyCores60sMean, 2.0) {
