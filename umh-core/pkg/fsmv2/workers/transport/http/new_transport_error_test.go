@@ -20,15 +20,18 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/types"
 )
 
 var _ = Describe("newTransportError body capture", func() {
-	It("includes the first 256 bytes of a large body in the message", func() {
+	It("includes a capped preview of a large body in the message with a trailing ellipsis", func() {
 		fLarge := "<html><body>" + strings.Repeat("A", 4000) + "</body></html>"
 		te := newTransportError(502, []byte(fLarge), nil, nil)
 		Expect(te.Message).To(ContainSubstring(fLarge[:100]))
 		Expect(te.Message).NotTo(Equal("HTTP 502: server_error"))
-		Expect(te.Message).NotTo(ContainSubstring(strings.Repeat("A", 257)))
+		Expect(te.Message).NotTo(ContainSubstring(strings.Repeat("A", 254)))
+		Expect(strings.HasSuffix(te.Message, "…")).To(BeTrue())
 	})
 
 	It("keeps the short message when the body is empty", func() {
@@ -40,11 +43,20 @@ var _ = Describe("newTransportError body capture", func() {
 		body := strings.Repeat("a", 220)
 		te := newTransportError(502, []byte(body), nil, nil)
 		Expect(te.Message).To(ContainSubstring(body))
+		Expect(strings.HasSuffix(te.Message, "…")).To(BeFalse())
 	})
 
 	It("caps a multibyte body on a rune boundary so the message stays valid UTF-8", func() {
-		// 100 Euro signs = 300 bytes; the 256-byte cap lands mid-rune.
+		// 100 Euro signs = 300 bytes; the byte cap lands mid-rune.
 		te := newTransportError(502, []byte(strings.Repeat("€", 100)), nil, nil)
 		Expect(utf8.ValidString(te.Message)).To(BeTrue())
+	})
+
+	It("keeps the clipped preview within types.MaxErrorDetailBytes", func() {
+		te := newTransportError(502, []byte(strings.Repeat("A", 4000)), nil, nil)
+		preview := strings.TrimPrefix(te.Message, "HTTP 502 (server_error): ")
+		Expect(preview).NotTo(Equal(te.Message))
+		Expect(strings.HasSuffix(preview, "…")).To(BeTrue())
+		Expect(len(preview)).To(BeNumerically("<=", types.MaxErrorDetailBytes))
 	})
 })

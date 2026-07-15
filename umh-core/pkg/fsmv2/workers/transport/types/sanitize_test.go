@@ -40,24 +40,38 @@ var _ = Describe("sanitizeErrorDetail", func() {
 		Expect(sanitizeErrorDetail("\x00\x01\x02")).To(Equal(""))
 	})
 
-	It("caps to 256 bytes on a UTF-8 rune boundary", func() {
-		// 100 Euro signs = 300 bytes; the maximal valid prefix is 85 runes = 255 bytes.
-		Expect(sanitizeErrorDetail(strings.Repeat("€", 100))).To(Equal(strings.Repeat("€", 85)))
+	It("caps to MaxErrorDetailBytes on a UTF-8 rune boundary and appends an ellipsis", func() {
+		// 100 Euro signs = 300 bytes; the 253-byte content budget backs off to
+		// 84 runes = 252 bytes, then the 3-byte "…" brings the total to 255.
+		Expect(sanitizeErrorDetail(strings.Repeat("€", 100))).To(Equal(strings.Repeat("€", 84) + "…"))
 	})
 
-	It("passes through input of exactly 256 bytes unchanged", func() {
-		Expect(sanitizeErrorDetail(strings.Repeat("a", 256))).To(Equal(strings.Repeat("a", 256)))
+	It("passes through input of exactly MaxErrorDetailBytes unchanged", func() {
+		Expect(sanitizeErrorDetail(strings.Repeat("a", MaxErrorDetailBytes))).
+			To(Equal(strings.Repeat("a", MaxErrorDetailBytes)))
 	})
 
-	It("caps input of 257 bytes to 256", func() {
-		Expect(sanitizeErrorDetail(strings.Repeat("a", 257))).To(Equal(strings.Repeat("a", 256)))
+	It("caps input one byte over the limit to exactly MaxErrorDetailBytes", func() {
+		Expect(sanitizeErrorDetail(strings.Repeat("a", MaxErrorDetailBytes+1))).
+			To(Equal(strings.Repeat("a", 253) + "…"))
 	})
 
-	It("trims a trailing space left by the byte cap", func() {
-		// 255 single-byte 'a's + ' ' + 16 'b's: the 256-byte cut lands on the
-		// inter-word space, so the capped slice would end in a space without a re-trim.
-		Expect(sanitizeErrorDetail(strings.Repeat("a", 255) + " " + strings.Repeat("b", 16))).
-			To(Equal(strings.Repeat("a", 255)))
+	It("trims a trailing space left by the byte cap before appending the ellipsis", func() {
+		// 252 single-byte 'a's + ' ' + 16 'b's: the 253-byte content cut lands
+		// on the inter-word space, so the capped slice would end in a space
+		// without a re-trim.
+		Expect(sanitizeErrorDetail(strings.Repeat("a", 252) + " " + strings.Repeat("b", 16))).
+			To(Equal(strings.Repeat("a", 252) + "…"))
+	})
+
+	It("marks clipped output with a trailing ellipsis and stays within the cap", func() {
+		out := sanitizeErrorDetail(strings.Repeat("x", 1000))
+		Expect(strings.HasSuffix(out, "…")).To(BeTrue())
+		Expect(len(out)).To(BeNumerically("<=", MaxErrorDetailBytes))
+	})
+
+	It("does not append an ellipsis to unclipped output", func() {
+		Expect(strings.HasSuffix(sanitizeErrorDetail("short detail"), "…")).To(BeFalse())
 	})
 
 	It("coerces invalid UTF-8 to the replacement rune so output is always valid UTF-8", func() {
@@ -67,9 +81,9 @@ var _ = Describe("sanitizeErrorDetail", func() {
 	})
 
 	It("caps 4-byte runes on a rune boundary without splitting a rune", func() {
-		emoji := "😀" // U+1F600, 4 bytes each; 100 runes = 400 bytes, cap keeps 64 runes = 256 bytes.
+		emoji := "😀" // U+1F600, 4 bytes each; 100 runes = 400 bytes, the 253-byte budget keeps 63 runes = 252 bytes.
 		out := sanitizeErrorDetail(strings.Repeat(emoji, 100))
 		Expect(utf8.ValidString(out)).To(BeTrue())
-		Expect(out).To(Equal(strings.Repeat(emoji, 64)))
+		Expect(out).To(Equal(strings.Repeat(emoji, 63) + "…"))
 	})
 })

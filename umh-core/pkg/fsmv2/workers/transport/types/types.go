@@ -28,6 +28,11 @@ import (
 	depspkg "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 )
 
+// MaxErrorDetailBytes caps sanitized error details and HTTP body previews.
+// Truncation backs off to a UTF-8 rune boundary and appends "…" so operators
+// can tell the detail was clipped.
+const MaxErrorDetailBytes = 256
+
 // AuthSession groups the auth fields that travel together from parent transport status
 // to push/pull child config: the JWT bearer token, its expiry, and the backend-confirmed
 // instance UUID. Atomic token+expiry update is provided by the SetJWT setter on
@@ -328,8 +333,9 @@ func CounterForErrorType(t ErrorType) depspkg.CounterName {
 
 // sanitizeErrorDetail strips control characters to spaces, collapses runs of
 // whitespace to a single space, trims surrounding whitespace, and caps the
-// result to 256 bytes on a UTF-8 rune boundary so the output is always
-// valid UTF-8.
+// result to MaxErrorDetailBytes on a UTF-8 rune boundary so the output is
+// always valid UTF-8. Clipped results end in "…" and stay within the cap;
+// unclipped results are returned unchanged.
 //
 // It does not redact credentials. Callers must not assume secrets are
 // scrubbed from the output (ENG-5289 tracks adding redaction).
@@ -344,15 +350,17 @@ func sanitizeErrorDetail(s string) string {
 
 	s = strings.Join(strings.Fields(s), " ")
 
-	if len(s) <= 256 {
+	if len(s) <= MaxErrorDetailBytes {
 		return s
 	}
 
-	end := 256
+	const ellipsis = "…"
+
+	end := MaxErrorDetailBytes - len(ellipsis)
 
 	for end > 0 && !utf8.RuneStart(s[end]) {
 		end--
 	}
 
-	return strings.TrimSpace(s[:end])
+	return strings.TrimSpace(s[:end]) + ellipsis
 }
