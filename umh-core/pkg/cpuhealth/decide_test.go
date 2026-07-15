@@ -2454,17 +2454,23 @@ func TestDecide_HostBusy60sMean_RingDiscipline(t *testing.T) {
 	// (2) PRUNE-TO-ONE — A=2.0@t0, B=8.0@t0+61s → 0.0. A is older than 60s
 	// (pruned), only B survives, 1 sample < 2-sample floor → 0. Forcing
 	// assertion: a non-pruning mean yields (2+8)/2=5.0 (!floatEq 0.0).
+	// HostBusyCoresAvailable=true on both Samples so the ring actually
+	// receives the entries (the append is gated on the flag); without it the
+	// ring stays empty and the 0.0 passes trivially via the len<2 floor
+	// without exercising pruning.
 	t.Run("PruneToOne", func(t *testing.T) {
 		st := &WindowState{}
 		_, _ = Decide(st, Sample{
-			Timestamp:     base,
-			HostBusyCores: 2.0,
-			LogicalCpus:   8.0,
+			Timestamp:              base,
+			HostBusyCores:          2.0,
+			HostBusyCoresAvailable: true, // R10.3: ring appends only when /proc/stat is readable
+			LogicalCpus:            8.0,
 		}, thresholds)
 		_, sig := Decide(st, Sample{
-			Timestamp:     base.Add(61 * time.Second),
-			HostBusyCores: 8.0,
-			LogicalCpus:   8.0,
+			Timestamp:              base.Add(61 * time.Second),
+			HostBusyCores:          8.0,
+			HostBusyCoresAvailable: true, // R10.3: ring appends only when /proc/stat is readable
+			LogicalCpus:            8.0,
 		}, thresholds)
 		if !floatEq(sig.HostBusyCores60sMean, 0.0) {
 			t.Fatalf("HostBusyCores60sMean: got %v, want 0.0 (A@t0 pruned >60s, only B@t0+61s survives, 1 sample < 2-sample floor; a non-pruning mean yields (2+8)/2=5.0)", sig.HostBusyCores60sMean)
@@ -2567,9 +2573,10 @@ func TestDecide_HostBusy60sMean_RingDiscipline(t *testing.T) {
 			t.Fatalf("setup HostBusyCores60sMean: got %v, want 4.0 (mean of [4,4,4] within 60s before the gap)", sigSetup.HostBusyCores60sMean)
 		}
 		_, sigGap := Decide(st, Sample{
-			Timestamp:     base.Add(120 * time.Second),
-			HostBusyCores: 4.0,
-			LogicalCpus:   8.0,
+			Timestamp:              base.Add(120 * time.Second),
+			HostBusyCores:          4.0,
+			HostBusyCoresAvailable: true, // R10.3: ring appends only when /proc/stat is readable; without it the gap tick is dropped and the ring empties rather than pruning to 1 sample
+			LogicalCpus:            8.0,
 		}, thresholds)
 		if !floatEq(sigGap.HostBusyCores60sMean, 0.0) {
 			t.Fatalf("gap HostBusyCores60sMean: got %v, want 0.0 (>60s gap prunes the ring to 1 sample → 2-sample floor re-met; a stale-cached mean keeps the old 4.0)", sigGap.HostBusyCores60sMean)

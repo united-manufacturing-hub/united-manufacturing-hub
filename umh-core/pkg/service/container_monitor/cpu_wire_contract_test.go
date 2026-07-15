@@ -489,11 +489,16 @@ func throttleFireStatus(ctx context.Context) (*container_monitor.ServiceInfo, er
 
 // R10.4 reshapes the wire VerdictBasis to be mode-generic: the Headroom block
 // becomes {ceiling, capacity, used, reserve, cores, fired, limitSaturationFired,
-// hostFullFired, noHostStatsSaturationFired} (hostBusyMean leaves the block — its old name
-// hard-coded host-mode semantics); a new HostBusy {mean, available} observation
-// block joins the basis; a top-level limitedVisibility flag joins the basis.
-// These tests pin the new shape in both modes, the hostBusy.available=false
-// omission on unreadable /proc/stat, and the three sub-latch flags.
+// hostFullFired, noHostStatsSaturationFired, noLimitHostFired} (hostBusyMean
+// leaves the block — its old name hard-coded host-mode semantics); a new
+// HostBusy {mean, available} observation block joins the basis; a top-level
+// limitedVisibility flag joins the basis. These tests pin the new shape in both
+// modes, the hostBusy.available=false omission on unreadable /proc/stat, and
+// the four sub-latch flags (limitSaturationFired, hostFullFired,
+// noHostStatsSaturationFired, noLimitHostFired). noLimitHostFired is the fourth
+// sub-latch (no-limit + host stats readable + host full), the OR invariant in
+// decide.go: fired == limitSaturationFired || hostFullFired ||
+// noHostStatsSaturationFired || noLimitHostFired.
 var _ = Describe("verdictBasis R10.4 mode-generic shape", func() {
 	It("emits the headroom shape in LIMIT mode (ceiling=limit, used=container usage)", func() {
 		mockFS := filesystem.NewMockFileSystem()
@@ -552,6 +557,8 @@ var _ = Describe("verdictBasis R10.4 mode-generic shape", func() {
 		Expect(b.Headroom.LimitSaturationFired).To(BeFalse())
 		Expect(b.Headroom.HostFullFired).To(BeFalse())
 		Expect(b.Headroom.NoHostStatsSaturationFired).To(BeFalse())
+		Expect(b.Headroom.NoLimitHostFired).To(BeFalse(),
+			"noLimitHostFired is false in limit mode (the no-limit host latch is inert; cleared on limit-set samples)")
 		// HostBusy: /proc/stat absent → Available=false, Mean=0.
 		Expect(b.HostBusy.Mean).To(BeNumerically("~", 0.0, 1e-9))
 		Expect(b.HostBusy.Available).To(BeFalse())
@@ -575,6 +582,8 @@ var _ = Describe("verdictBasis R10.4 mode-generic shape", func() {
 			"the host-full sub-latch flag is on the wire (false: /proc/stat absent → host not full)")
 		Expect(wireJSON).To(ContainSubstring(`"noHostStatsSaturationFired":false`),
 			"the no-host-stats saturation sub-latch flag is on the wire (false: limit set → no-host-stats saturation not evaluated)")
+		Expect(wireJSON).To(ContainSubstring(`"noLimitHostFired":false`),
+			"the no-limit host sub-latch flag is on the wire (false: limit set → the no-limit host latch is inert)")
 	})
 
 	It("emits the headroom shape in NO-LIMIT mode (ceiling=host, used=hostBusyMean, hostBusy.available=true)", func() {
@@ -794,6 +803,8 @@ var _ = Describe("verdictBasis R10.4 mode-generic shape", func() {
 			"container idle (usage pinned) → limit-saturation does NOT fire")
 		Expect(b.Headroom.NoHostStatsSaturationFired).To(BeFalse(),
 			"limit set → no-host-stats saturation not evaluated")
+		Expect(b.Headroom.NoLimitHostFired).To(BeFalse(),
+			"noLimitHostFired is false in limit mode (the no-limit host latch is inert; cleared on limit-set samples)")
 		Expect(b.Headroom.Fired).To(BeTrue(),
 			"Fired is the OR of the sub-latches (host-full fired → true)")
 		Expect(b.HostBusy.Available).To(BeTrue(),
@@ -807,6 +818,8 @@ var _ = Describe("verdictBasis R10.4 mode-generic shape", func() {
 			"container idle (usage pinned) → limit-saturation does NOT fire")
 		Expect(wireJSON).To(ContainSubstring(`"noHostStatsSaturationFired":false`),
 			"limit set → no-host-stats saturation not evaluated")
+		Expect(wireJSON).To(ContainSubstring(`"noLimitHostFired":false`),
+			"the no-limit host sub-latch flag is false in limit mode (the no-limit host latch is inert)")
 		Expect(wireJSON).To(ContainSubstring(`"available":true`),
 			"hostBusy.available is true (/proc/stat readable)")
 	})
@@ -879,6 +892,13 @@ var _ = Describe("verdictBasis R10.4 mode-generic shape", func() {
 			"the no-host-stats saturation sub-latch fired (no limit, no host stats, sustained high usage)")
 		Expect(b.Headroom.Fired).To(BeTrue(),
 			"Fired is the OR of the sub-latches (no-host-stats saturation fired → true)")
+		// noLimitHostFired stays false: the no-host-stats branch (no /proc/stat)
+		// does NOT touch st.noLimitHostFired, and a fresh state reads false. The
+		// hold-on-missing invariant keeps a prior host-headroom fire across an
+		// outage, but this scenario starts clean, so the no-limit host latch is
+		// inert and the no-host-stats saturation is the sole fire.
+		Expect(b.Headroom.NoLimitHostFired).To(BeFalse(),
+			"noLimitHostFired is false on the no-host-stats branch (it does not touch the no-limit host latch; fresh state reads false)")
 
 		// T3: the headroom block reflects the D-row decision variable
 		// (usageCores60sMean/LogicalCpus), not the aged-out hostBusyMean.
@@ -913,9 +933,121 @@ var _ = Describe("verdictBasis R10.4 mode-generic shape", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(wireJSON).To(ContainSubstring(`"noHostStatsSaturationFired":true`),
 			"the no-host-stats saturation sub-latch fired (no limit, no host stats, sustained high usage)")
+		Expect(wireJSON).To(ContainSubstring(`"noLimitHostFired":false`),
+			"the no-limit host sub-latch flag is false on the no-host-stats branch (it does not touch the no-limit host latch)")
 		Expect(wireJSON).To(ContainSubstring(`"available":false`),
 			"hostBusy.available is false (no /proc/stat)")
 		Expect(wireJSON).To(ContainSubstring(`"limitedVisibility":true`),
 			"no limit + no PSI → dead-zone → limitedVisibility true")
+	})
+
+	// Scenario A on the wire: no limit + /proc/stat readable + host full.
+	// This is the fourth sub-latch (noLimitHostFired), the most common
+	// production degrade path on an uncapped VM / bare-metal with readable
+	// /proc/stat. The host-full-in-limit-mode test above pins hostFullFired;
+	// this one pins noLimitHostFired, the no-limit analogue (the host itself
+	// is full: LogicalCpus - hostBusyMean - cpuReserveCores < 0). cpu.max
+	// "max 100000" => no limit (host mode). usage_usec pinned so the
+	// container is idle (no limit-saturation co-fire; the no-limit branch
+	// clears limitSaturationFired anyway). /proc/stat: tick 0 low busy
+	// (baseline), tick 1+2 huge busy delta so HostBusyCores is enormous and
+	// hostBusyMean enormous, and HeadroomCores = LogicalCpus - enormous - 1.0
+	// < 0 regardless of the host's core count. Two delta ticks clear the
+	// 2-sample floor (the baseline tick no longer seeds the ring with a
+	// synthetic 0).
+	It("carries the no-limit host sub-latch flag when the host is full in no-limit mode with readable /proc/stat", func() {
+		mockFS := filesystem.NewMockFileSystem()
+		ctx := context.Background()
+
+		testDataPath, err := os.MkdirTemp("", "cpu-wire-r104-nolimithost")
+		Expect(err).NotTo(HaveOccurred())
+		defer func() { _ = os.RemoveAll(testDataPath) }()
+
+		const cpuMax = "max 100000\n"
+		var usageUsec int64 = 1_000_000
+		procStatTick0 := "cpu 0 0 0 1000 0 0 0 0 0 0\n"
+		procStatTick1 := "cpu 100000 0 0 1100 0 0 0 0 0 0\n"
+		procStatTick2 := "cpu 200000 0 0 1200 0 0 0 0 0 0\n"
+		procStat := procStatTick0
+
+		mockFS.WithReadFileFunc(func(_ context.Context, path string) ([]byte, error) {
+			switch path {
+			case "/sys/fs/cgroup/cpu.max":
+				return []byte(cpuMax), nil
+			case "/sys/fs/cgroup/cpu.stat":
+				return []byte(fmt.Sprintf(
+					"usage_usec %d\nnr_periods 1000\nnr_throttled 0\nthrottled_usec 0\n",
+					usageUsec,
+				)), nil
+			case "/proc/stat":
+				return []byte(procStat), nil
+			default:
+				return nil, errors.New("file not found: " + path)
+			}
+		})
+
+		svc := container_monitor.NewContainerMonitorServiceWithPath(mockFS, testDataPath)
+
+		// Tick 1 - baseline /proc/stat (busy 0).
+		usageUsec = 1_000_000
+		procStat = procStatTick0
+		_, err = svc.GetStatus(ctx)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Tick 2 - warmup: first real host-busy delta (ring gets 1 entry,
+		// still below the 2-sample floor so noLimitHostFired does not fire
+		// yet).
+		usageUsec = 1_000_000
+		procStat = procStatTick1
+		_, err = svc.GetStatus(ctx)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Tick 3 - host busy delta huge again so the ring clears the
+		// 2-sample floor, hostBusyMean enormous, HeadroomCores < 0, and
+		// noLimitHostFired fires. usage_usec pinned so the container is
+		// idle. So NoLimitHostFired=true, the other three sub-latches false.
+		usageUsec = 1_000_000
+		procStat = procStatTick2
+		status, err := svc.GetStatus(ctx)
+		Expect(err).NotTo(HaveOccurred())
+
+		b := status.CPU.VerdictBasis
+		Expect(b).NotTo(BeNil(),
+			"verdictBasis is emitted (Decide ran: cgroup readable)")
+		// No-limit host fired (host busy enormous). The other three sub-latches
+		// are false: limitSaturationFired (no limit set), hostFullFired (the
+		// no-limit branch clears it), noHostStatsSaturationFired (/proc/stat
+		// is readable, so the no-host-stats branch is not taken). Fired=true
+		// (the OR; noLimitHostFired fired). /proc/stat readable so
+		// Available=true. No limit + no PSI so dead-zone, limitedVisibility=true.
+		Expect(b.Headroom.Ceiling).To(Equal("host"),
+			"no limit set so ceiling is \"host\"")
+		Expect(b.Headroom.NoLimitHostFired).To(BeTrue(),
+			"the no-limit host sub-latch fired (no limit, /proc/stat readable, host busy enormous so HeadroomCores < 0)")
+		Expect(b.Headroom.LimitSaturationFired).To(BeFalse(),
+			"no limit set so limit-saturation is not evaluated (cleared by the no-limit branch)")
+		Expect(b.Headroom.HostFullFired).To(BeFalse(),
+			"hostFullFired is cleared by the no-limit branch (it is the limit-mode host-scope latch)")
+		Expect(b.Headroom.NoHostStatsSaturationFired).To(BeFalse(),
+			"/proc/stat is readable so the no-host-stats saturation branch is not taken")
+		Expect(b.Headroom.Fired).To(BeTrue(),
+			"Fired is the OR of the sub-latches (noLimitHostFired fired so true)")
+		Expect(b.HostBusy.Available).To(BeTrue(),
+			"hostBusy.available is true (/proc/stat readable)")
+
+		wireJSON, err := json.Marshal(status.CPU)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(wireJSON).To(ContainSubstring(`"noLimitHostFired":true`),
+			"the no-limit host sub-latch fired (no limit, /proc/stat readable, host full)")
+		Expect(wireJSON).To(ContainSubstring(`"limitSaturationFired":false`),
+			"no limit set so limit-saturation is not evaluated")
+		Expect(wireJSON).To(ContainSubstring(`"hostFullFired":false`),
+			"hostFullFired is cleared by the no-limit branch")
+		Expect(wireJSON).To(ContainSubstring(`"noHostStatsSaturationFired":false`),
+			"/proc/stat readable so the no-host-stats saturation branch is not taken")
+		Expect(wireJSON).To(ContainSubstring(`"available":true`),
+			"hostBusy.available is true (/proc/stat readable)")
+		Expect(wireJSON).To(ContainSubstring(`"limitedVisibility":true`),
+			"no limit + no PSI so dead-zone and limitedVisibility true")
 	})
 })

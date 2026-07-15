@@ -47,10 +47,13 @@ import (
 // from cpu_usage_cgroup_test.go); the assertions tolerate the resulting jitter
 // via band/ContainElement matchers rather than exact values.
 var _ = Describe("capstone: end-to-end CPU-health model through GetStatus (rung 16)", func() {
-	// --- (1) BUSY-NOT-SICK: a capped container at 95% usage with NO throttle
+	// --- (1) BUSY-NOT-SICK: a capped container at 80% usage with NO throttle
 	// and NO pressure -> State=healthy (busy is not sick), CPUHealth=Active,
-	// no causes, bridges would start. ---
-	It("(1) BUSY-NOT-SICK: capped container at ~95%% usage with no throttle/pressure is healthy", func() {
+	// no causes, bridges would start. 80% sits below the 10% limit-reserve
+	// threshold (LimitReserveFraction 0.10 -> headroom fires at >= 90%), so the
+	// healthy verdict holds in steady state, not only via the warmup ring
+	// dilution that halved the mean to 0.95 on the prior 95% scenario. ---
+	It("(1) BUSY-NOT-SICK: capped container at ~80%% usage with no throttle/pressure is healthy", func() {
 		mockFS := filesystem.NewMockFileSystem()
 		ctx := context.Background()
 		testDataPath, err := os.MkdirTemp("", "rung16-busy-not-sick")
@@ -58,8 +61,9 @@ var _ = Describe("capstone: end-to-end CPU-health model through GetStatus (rung 
 		defer func() { _ = os.RemoveAll(testDataPath) }()
 
 		const cpuMax = "200000 100000\n" // quota 2.0 cores (capped)
-		// usage_usec advances ~1.9 core-sec/s => ~0.95 fraction of 2.0 quota
-		// (high usage, but no throttle/pressure -> healthy).
+		// usage_usec advances ~1.6 core-sec/s => ~0.80 fraction of 2.0 quota
+		// (high usage, but below the 90% limit-reserve fire line, no
+		// throttle/pressure -> healthy in steady state, not only on warmup).
 		var usageUsec int64
 
 		mockFS.WithReadFileFunc(func(_ context.Context, path string) ([]byte, error) {
@@ -83,9 +87,14 @@ var _ = Describe("capstone: end-to-end CPU-health model through GetStatus (rung 
 		_, err = svc.GetStatus(ctx)
 		Expect(err).NotTo(HaveOccurred())
 
-		// Advance usage_usec by ~1.9 core-seconds over ~1s wall-clock =>
-		// ~0.95 of the 2.0-core quota (busy, not sick).
-		usageUsec = 1_900_000
+		// Advance usage_usec by ~1.6 core-seconds over ~1s wall-clock =>
+		// ~0.80 of the 2.0-core quota. The 60s-mean ring ([0, 1.6]) averages
+		// to 0.8 -> headroom 2.0 - 0.8 - 0.2 = 1.0 > 0, and once the window
+		// stabilizes on 1.6 the mean -> 1.6 -> headroom 2.0 - 1.6 - 0.2 = 0.2
+		// > 0, still healthy. Sustained >= 90% (1.8 cores) would instead give
+		// headroom 2.0 - 1.8 - 0.2 = 0.0, firing at -0.1 once the baseline 0
+		// ages out, so 80% is the band where "busy is not sick" holds genuinely.
+		usageUsec = 1_600_000
 		time.Sleep(1 * time.Second)
 
 		status, err := svc.GetStatus(ctx)
@@ -103,7 +112,7 @@ var _ = Describe("capstone: end-to-end CPU-health model through GetStatus (rung 
 			"BUSY-NOT-SICK: precondition — usage must be in a high-usage band (>= 500 mCPU) so the healthy verdict actually proves high usage alone does not degrade")
 
 		Expect(status.CPU.State).To(Equal("healthy"),
-			"BUSY-NOT-SICK: a capped container at ~95%% usage with no throttle/pressure must be healthy (busy is not sick)")
+			"BUSY-NOT-SICK: a capped container at ~80%% usage with no throttle/pressure must be healthy (busy is not sick)")
 		// CPUHealth (driven solely by the verdict) proves "busy is not sick".
 		// OverallHealth is intentionally NOT asserted here: GetStatus also runs
 		// the real gopsutil memory/disk paths (getMemoryMetrics/getDiskMetrics),
