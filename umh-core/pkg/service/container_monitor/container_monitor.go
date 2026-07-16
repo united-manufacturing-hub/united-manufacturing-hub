@@ -240,15 +240,9 @@ func (c *ContainerMonitorService) GetHealth(ctx context.Context) (*models.Health
 // By default, this retrieves host-level usage unless gopsutil is configured
 // to read from container cgroup data. See notes below for cgroup-limited usage.
 func (c *ContainerMonitorService) getCPUMetrics(ctx context.Context) (*models.CPU, error) {
-	usageMCores, coreCount, _, sample, samplerOK, err := c.getRawCPUMetrics(ctx)
+	usageMCores, coreCount, sample, samplerOK, err := c.getRawCPUMetrics(ctx)
 	if err != nil {
 		return nil, err
-	}
-
-	// Get cgroup info for throttling and limits
-	cgroupInfo, cgroupErr := c.getCgroupCPUInfo(ctx)
-	if ctx.Err() != nil {
-		return nil, ctx.Err()
 	}
 
 	// Default to Active health. The curated per-cause message is composed
@@ -263,17 +257,16 @@ func (c *ContainerMonitorService) getCPUMetrics(ctx context.Context) (*models.CP
 	// holds between). Decide mutates c.windowState in place, maintaining the
 	// 60s throttle-counter ring. The numeric ThrottleRatio is read
 	// unconditionally from signals (independent of latch state); IsThrottled
-	// comes from signals.ThrottleFired. Decide is gated on sampler success
-	// (not cgroupErr): a sampler failure means cpu.stat was unreadable, so
-	// the sample carries no usable reading (LogicalCpus=0, UsageCores=0,
+	// comes from signals.ThrottleFired. Decide is gated on sampler success:
+	// a sampler failure means cpu.stat was unreadable, so the sample carries
+	// no usable reading (LogicalCpus=0, UsageCores=0,
 	// HostBusyCoresAvailable=false); running Decide on that zero sample would
 	// hit the saturation default branch and clear all sub-latches, flapping a
 	// prior degraded verdict to healthy for the failure tick. Instead, hold
 	// the last verdict + signals (the windowState latches also hold since
-	// Decide is their only mutator). When the sampler succeeded but cpu.max
-	// is unreadable (cgroup v1, transient v2 fs hiccup), synthesize a zero
-	// CPUCgroupInfo so the no-limit saturation latches still evaluate from
-	// the sampler's HostBusyCores/LogicalCpus/usageCores60sMean.
+	// Decide is their only mutator). The sampler surfaces Quota, NrPeriods,
+	// NrThrottled, and NrPeriodsAvailable directly from its single cpu.stat +
+	// cpu.max read, so no second getCgroupCPUInfo call is needed.
 	var (
 		isThrottled bool
 		// Default to healthy so a sampler failure on the first tick (no prior
@@ -285,26 +278,15 @@ func (c *ContainerMonitorService) getCPUMetrics(ctx context.Context) (*models.CP
 	)
 
 	if samplerOK {
-		if cgroupInfo == nil {
-			cgroupInfo = &CPUCgroupInfo{}
-			if sample.Quota != nil {
-				cgroupInfo.QuotaCores = *sample.Quota
-			}
-		}
-
 		sample.Timestamp = time.Now()
-		sample.NrPeriods = cgroupInfo.NrPeriods
-		sample.NrThrottled = cgroupInfo.NrThrottled
-		sample.NrPeriodsAvailable = cgroupInfo.NrPeriodsAvailable
 		verdict, signals = cpuhealth.Decide(c.windowState, sample, cpuhealth.DefaultThresholds())
 		isThrottled = signals.ThrottleFired
-		cgroupInfo.ThrottleRatio = signals.ThrottleRatio
 
 		c.lastVerdict = verdict
 		c.lastSignals = signals
 		c.hasLastVerdict = true
 	} else {
-		c.logger.Warnf("cgroup cpu usage unavailable, holding last verdict: %v", cgroupErr)
+		c.logger.Warnf("cgroup cpu usage unavailable, holding last verdict")
 
 		if c.hasLastVerdict {
 			verdict = c.lastVerdict
@@ -369,10 +351,13 @@ func (c *ContainerMonitorService) getCPUMetrics(ctx context.Context) (*models.CP
 
 	// Add cgroup info if available. CgroupCores keeps its omitempty-on-0
 	// semantics since a 0 quota means uncapped, not "measured 0". The throttle
-	// value and latch now ride verdictBasis.throttle (emitted in the block
-	// below); the flat ThrottleRatio/IsThrottled wire fields were cut in R9.2c.
-	if cgroupErr == nil {
-		cpuStat.CgroupCores = cgroupInfo.QuotaCores
+	// CgroupCores carries the cgroup CPU quota (cores) on the wire. The
+	// sampler reads cpu.max via its injected basePath, so Quota is the
+	// consolidated single read. A nil Quota (cpu.max unreadable) or a
+	// zero Quota (cpu.max = "max", uncapped) yields CgroupCores=0, which
+	// omitempty drops from the wire.
+	if sample.Quota != nil && *sample.Quota > 0 {
+		cpuStat.CgroupCores = *sample.Quota
 	}
 
 	// Percentile mCPU fields are observability-only mirrors of the usage ring
@@ -472,41 +457,25 @@ func (c *ContainerMonitorService) getCPUMetrics(ctx context.Context) (*models.CP
 	return cpuStat, nil
 }
 
-func (c *ContainerMonitorService) getRawCPUMetrics(ctx context.Context) (usageMCores float64, coreCount int, usagePercent float64, sample cpuhealth.Sample, samplerOK bool, err error) {
-	// Try to get cgroup info first for accurate container limits
-	cgroupInfo, cgroupErr := c.getCgroupCPUInfo(ctx)
-	if ctx.Err() != nil {
-		return 0, 0, 0, cpuhealth.Sample{}, false, ctx.Err()
-	}
-
-	// Determine effective core count (keep as float64 to preserve fractional quotas)
-	// Use cgroup limit if available, otherwise fall back to host CPU count
-	effectiveCores := float64(runtime.NumCPU())
-	if cgroupErr == nil && cgroupInfo.QuotaCores > 0 {
-		// Use cgroup limit for more accurate mCPU calculation
-		// QuotaCores can be fractional (e.g., 0.5 for 500m, 1.5 for 1500m)
-		effectiveCores = cgroupInfo.QuotaCores
-		// Use a small minimum to avoid divide-by-zero, but preserve fractional limits
-		if effectiveCores < 0.1 {
-			effectiveCores = 0.1
-		}
-	}
-
+func (c *ContainerMonitorService) getRawCPUMetrics(ctx context.Context) (usageMCores float64, coreCount int, sample cpuhealth.Sample, samplerOK bool, err error) {
 	coreCount = runtime.NumCPU() // Always report host cores for compatibility
 
 	// Read container-relative CPU usage from the cgroup cpu.stat usage_usec
 	// counter. This is the ONLY c.sampler.Sample call per GetStatus; the
 	// returned Sample (carrying Quota, PressureAvg60, PsiAvailable,
-	// StealFraction, Virtualized, HostBusyCores, LogicalCpus in addition to
-	// UsageCores) is threaded through to the Decide call site in
-	// getCPUMetrics so the delta-based signals survive. On read failure
+	// StealFraction, Virtualized, HostBusyCores, LogicalCpus, NrPeriods,
+	// NrThrottled in addition to UsageCores) is threaded through to the Decide
+	// call site in getCPUMetrics so the delta-based signals survive. The
+	// sampler reads cpu.max and cpu.stat exactly once per tick via its
+	// injected basePath, consolidating what was previously three separate
+	// reads (two getCgroupCPUInfo calls + the sampler). On read failure
 	// (cgroup v1, non-container, transient) the error is logged and a
 	// zero-valued Sample is returned with samplerOK=false so the caller can
 	// hold the prior verdict instead of running Decide on a zero sample.
 	sample, sErr := c.sampler.Sample(ctx)
 	if sErr != nil {
 		if ctx.Err() != nil {
-			return 0, 0, 0, cpuhealth.Sample{}, false, ctx.Err()
+			return 0, 0, cpuhealth.Sample{}, false, ctx.Err()
 		}
 
 		c.logger.Debugf("cgroup cpu usage unavailable, reporting zero: %v", sErr)
@@ -515,15 +484,12 @@ func (c *ContainerMonitorService) getRawCPUMetrics(ctx context.Context) (usageMC
 	}
 
 	if ctx.Err() != nil {
-		return 0, 0, 0, cpuhealth.Sample{}, false, ctx.Err()
+		return 0, 0, cpuhealth.Sample{}, false, ctx.Err()
 	}
 
-	usageCores := sample.UsageCores
-	usageMCores = usageCores * 1000
+	usageMCores = sample.UsageCores * 1000
 
-	usagePercent = (usageCores / effectiveCores) * 100.0
-
-	return usageMCores, coreCount, usagePercent, sample, samplerOK, nil
+	return usageMCores, coreCount, sample, samplerOK, nil
 }
 
 // getMemoryMetrics collects memory metrics, preferring cgroup values when available.

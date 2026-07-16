@@ -95,6 +95,14 @@ func (s *cgroupSampler) Sample(ctx context.Context) (Sample, error) {
 	now := time.Now()
 	sample := Sample{Timestamp: now}
 
+	// Parse the throttle counters (nr_periods/nr_throttled) from the same
+	// cpu.stat data already read for usage_usec, so the caller does not need
+	// a second cpu.stat read. NrPeriodsAvailable=true marks a clean parse.
+	nrPeriods, nrThrottled := parseCPUStatCounters(data)
+	sample.NrPeriods = nrPeriods
+	sample.NrThrottled = nrThrottled
+	sample.NrPeriodsAvailable = true
+
 	if !s.hasBaseline || usage < s.lastUsage {
 		s.lastUsage = usage
 		s.lastTime = now
@@ -404,4 +412,32 @@ func parseUsageUsec(data []byte) (int64, error) {
 	}
 
 	return 0, errors.New("cpu.stat: usage_usec not found")
+}
+
+// parseCPUStatCounters extracts nr_periods and nr_throttled from a cgroup v2
+// cpu.stat body. Missing keys yield 0 (the file was read, but the keys are
+// absent). It reuses the data already read for parseUsageUsec so the sampler
+// does not need a second cpu.stat read.
+func parseCPUStatCounters(data []byte) (nrPeriods, nrThrottled int64) {
+	sc := bufio.NewScanner(bytes.NewReader(data))
+	for sc.Scan() {
+		fields := bytes.Fields(sc.Bytes())
+		if len(fields) < 2 {
+			continue
+		}
+
+		val, err := strconv.ParseInt(string(fields[1]), 10, 64)
+		if err != nil {
+			continue
+		}
+
+		switch string(fields[0]) {
+		case "nr_periods":
+			nrPeriods = val
+		case "nr_throttled":
+			nrThrottled = val
+		}
+	}
+
+	return nrPeriods, nrThrottled
 }
