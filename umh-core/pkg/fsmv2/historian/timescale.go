@@ -136,24 +136,30 @@ func (h *poolHolder) get(dsn string) (*pgxpool.Pool, error) {
 	return pool, nil
 }
 
-// isAuthFault reports whether err is a Postgres server error indicating the
-// supplied credentials or database name are wrong (as opposed to a network or
-// timeout fault). Class 28 covers invalid authorization / bad password; 3D000
-// is invalid_catalog_name (unknown database).
-func isAuthFault(err error) bool {
+const (
+	// pgClassInvalidAuthorization is Postgres SQLSTATE class 28: the server
+	// rejected the supplied credentials (bad password, invalid authorization).
+	pgClassInvalidAuthorization = "28"
+
+	// pgCodeInvalidCatalogName is Postgres SQLSTATE 3D000: the server rejected
+	// the connection because the requested database does not exist.
+	pgCodeInvalidCatalogName = "3D000"
+)
+
+// serverRejected reports whether err is the server rejecting the supplied
+// credentials or database name, rather than a network or timeout fault where
+// nothing answered. A rejection means the endpoint is reachable but the config
+// is wrong.
+func serverRejected(err error) bool {
 	var pgErr *pgconn.PgError
 	if !errors.As(err, &pgErr) {
 		return false
 	}
 
-	switch {
-	case strings.HasPrefix(pgErr.Code, "28"):
-		return true
-	case pgErr.Code == "3D000":
-		return true
-	default:
-		return false
-	}
+	badCredentials := strings.HasPrefix(pgErr.Code, pgClassInvalidAuthorization)
+	unknownDatabase := pgErr.Code == pgCodeInvalidCatalogName
+
+	return badCredentials || unknownDatabase
 }
 
 // Poll runs a `SELECT 1` over the shared pool once and logs the outcome. A
@@ -182,14 +188,14 @@ func Poll(ctx context.Context, d Deps, cfg config.HistorianConfig) (TimescaleSta
 	if err := pool.QueryRow(ctx, "SELECT 1").Scan(&one); err != nil {
 		// An auth fault means the server answered but rejected the credentials or
 		// database name: the endpoint is reachable, only the config is wrong.
-		authFault := isAuthFault(err)
+		reachable := serverRejected(err)
 		d.Logger.Info("timescale connection check",
 			deps.String("host", host),
-			deps.Bool("reachable", authFault),
-			deps.Bool("auth_valid", !authFault),
+			deps.Bool("reachable", reachable),
+			deps.Bool("auth_valid", false),
 			deps.Err(err))
 
-		return TimescaleStatus{Host: host, Port: port, Reachable: authFault, AuthValid: !authFault}, fmt.Errorf("timescale query %s: %w", host, err)
+		return TimescaleStatus{Host: host, Port: port, Reachable: reachable, AuthValid: false}, fmt.Errorf("timescale query %s: %w", host, err)
 	}
 
 	elapsedMs := float64(time.Since(start).Microseconds()) / 1000.0
