@@ -162,6 +162,14 @@ type Sample struct {
 	CgroupCores float64
 	NrPeriods   int64
 	NrThrottled int64
+	// NrPeriodsAvailable is the readability flag for the cgroup throttle
+	// counters (nr_periods/nr_throttled from cpu.stat). It distinguishes
+	// "cpu.stat read succeeded, NrPeriods=0 because the container is idle"
+	// from "cpu.stat read failed, NrPeriods=0 is a missing reading." Set by
+	// the caller from getCgroupCPUInfo's parse success; when false, Decide
+	// holds the throttle ring and latch instead of appending a zero point
+	// (which would read as a counter regression and wipe the 60s window).
+	NrPeriodsAvailable bool
 	// PressureAvg60 is the kernel's cpu.pressure "some avg60" running 60s
 	// average, thresholded DIRECTLY by Decide (no extra windowing; the kernel
 	// already smoothed it over 60s). The value is a FRACTION in [0,1], not the
@@ -597,18 +605,31 @@ func Decide(st *WindowState, sample Sample, thresholds Thresholds) (Verdict, Sig
 	// with a growing nrPeriods is treated the same as a nrPeriods regression:
 	// the counters are no longer on the same baseline, so the ring is rebuilt
 	// from the fresh sample.
-	if len(st.throttleRing) > 0 {
-		newest := st.throttleRing[len(st.throttleRing)-1]
-		if sample.NrPeriods < newest.nrPeriods || sample.NrThrottled < newest.nrThrottled {
-			st.throttleRing = st.throttleRing[:0]
+	// Gate the clear-on-regression AND the append on NrPeriodsAvailable,
+	// mirroring the hostBusyRing append-gate. A missing cpu.stat reading
+	// (NrPeriodsAvailable=false, NrPeriods=0) is NOT a counter regression: it
+	// is a transient read failure. Appending the zero point would read as
+	// 0 < newest.nrPeriods (regression), wipe the 60s window, and the
+	// empty-ring ratio=0 would clear the latch for ~60s of silent throttle
+	// miss. Skipping both the clear and the append holds the ring and the
+	// ratio (computed from the unchanged ring below); the latch holds via the
+	// Schmitt band. The prune still runs (entries age out naturally on a
+	// sustained outage, clearing the latch eventually).
+	if sample.NrPeriodsAvailable {
+		if len(st.throttleRing) > 0 {
+			newest := st.throttleRing[len(st.throttleRing)-1]
+			if sample.NrPeriods < newest.nrPeriods || sample.NrThrottled < newest.nrThrottled {
+				st.throttleRing = st.throttleRing[:0]
+			}
 		}
+
+		st.throttleRing = append(st.throttleRing, throttlePoint{
+			ts:          sample.Timestamp,
+			nrPeriods:   sample.NrPeriods,
+			nrThrottled: sample.NrThrottled,
+		})
 	}
 
-	st.throttleRing = append(st.throttleRing, throttlePoint{
-		ts:          sample.Timestamp,
-		nrPeriods:   sample.NrPeriods,
-		nrThrottled: sample.NrThrottled,
-	})
 	cutoff := sample.Timestamp.Add(-throttleWindow)
 	ring := st.throttleRing
 	n := 0

@@ -290,6 +290,7 @@ func (c *ContainerMonitorService) getCPUMetrics(ctx context.Context) (*models.CP
 		sample.Timestamp = time.Now()
 		sample.NrPeriods = cgroupInfo.NrPeriods
 		sample.NrThrottled = cgroupInfo.NrThrottled
+		sample.NrPeriodsAvailable = cgroupInfo.NrPeriodsAvailable
 		verdict, signals = cpuhealth.Decide(c.windowState, sample, cpuhealth.DefaultThresholds())
 		isThrottled = signals.ThrottleFired
 		cgroupInfo.ThrottleRatio = signals.ThrottleRatio

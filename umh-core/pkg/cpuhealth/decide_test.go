@@ -511,6 +511,7 @@ func TestDecide_ThrottleFlipLatch_WindowedSchmitt(t *testing.T) {
 			Timestamp:   base.Add(tk.dt),
 			NrPeriods:   tk.nrP,
 			NrThrottled: tk.nrT,
+			NrPeriodsAvailable: true,
 		}, thresholds)
 	}
 
@@ -626,8 +627,8 @@ func TestDecide_ThrottleFlipLatch_CounterReset(t *testing.T) {
 	t.Run("both-counter reset clears latch with no negative Cause Value", func(t *testing.T) {
 		st := &WindowState{}
 		// Fire the latch: t=0 (1000, 100), t=10s (2000, 200) → ratio 0.1 > 0.05.
-		Decide(st, Sample{Timestamp: base, NrPeriods: 1000, NrThrottled: 100}, thresholds)
-		v1, sig1 := Decide(st, Sample{Timestamp: base.Add(10 * time.Second), NrPeriods: 2000, NrThrottled: 200}, thresholds)
+		Decide(st, Sample{Timestamp: base, NrPeriods: 1000, NrThrottled: 100, NrPeriodsAvailable: true}, thresholds)
+		v1, sig1 := Decide(st, Sample{Timestamp: base.Add(10 * time.Second), NrPeriods: 2000, NrThrottled: 200, NrPeriodsAvailable: true}, thresholds)
 		if v1.State != StateDegraded || !sig1.ThrottleFired {
 			t.Fatalf("fire: state=%q fired=%v, want degraded/fired", v1.State, sig1.ThrottleFired)
 		}
@@ -635,7 +636,7 @@ func TestDecide_ThrottleFlipLatch_CounterReset(t *testing.T) {
 		// cleared (50 < 2000 nrPeriods regresses), the reset sample becomes the
 		// sole ring entry, throttleRatio returns 0 (len < 2), and 0 <
 		// ThrottleRecover clears the latch. No stale pre-reset oldest remains.
-		v2, sig2 := Decide(st, Sample{Timestamp: base.Add(20 * time.Second), NrPeriods: 50, NrThrottled: 5}, thresholds)
+		v2, sig2 := Decide(st, Sample{Timestamp: base.Add(20 * time.Second), NrPeriods: 50, NrThrottled: 5, NrPeriodsAvailable: true}, thresholds)
 		if sig2.ThrottleFired {
 			t.Fatalf("both-counter reset ThrottleFired: got true, want false (periods < 0 → ratio 0 < ThrottleRecover → latch clears)")
 		}
@@ -657,8 +658,8 @@ func TestDecide_ThrottleFlipLatch_CounterReset(t *testing.T) {
 	t.Run("nrThrottled-only reset clears latch with no negative Cause Value", func(t *testing.T) {
 		st := &WindowState{}
 		// Fire the latch: t=0 (1000, 100), t=10s (2000, 200) → ratio 0.1 > 0.05.
-		Decide(st, Sample{Timestamp: base, NrPeriods: 1000, NrThrottled: 100}, thresholds)
-		v1, sig1 := Decide(st, Sample{Timestamp: base.Add(10 * time.Second), NrPeriods: 2000, NrThrottled: 200}, thresholds)
+		Decide(st, Sample{Timestamp: base, NrPeriods: 1000, NrThrottled: 100, NrPeriodsAvailable: true}, thresholds)
+		v1, sig1 := Decide(st, Sample{Timestamp: base.Add(10 * time.Second), NrPeriods: 2000, NrThrottled: 200, NrPeriodsAvailable: true}, thresholds)
 		if v1.State != StateDegraded || !sig1.ThrottleFired {
 			t.Fatalf("fire: state=%q fired=%v, want degraded/fired", v1.State, sig1.ThrottleFired)
 		}
@@ -666,7 +667,7 @@ func TestDecide_ThrottleFlipLatch_CounterReset(t *testing.T) {
 		// nrThrottled drops below the ring's newest 200 (2100, 10). The
 		// clear-on-regression fires (10 < 200), the ring is reset to the single
 		// new sample, throttleRatio returns 0, and the latch clears.
-		v2, sig2 := Decide(st, Sample{Timestamp: base.Add(20 * time.Second), NrPeriods: 2100, NrThrottled: 10}, thresholds)
+		v2, sig2 := Decide(st, Sample{Timestamp: base.Add(20 * time.Second), NrPeriods: 2100, NrThrottled: 10, NrPeriodsAvailable: true}, thresholds)
 		if sig2.ThrottleFired {
 			t.Fatalf("nrThrottled-only reset ThrottleFired: got true, want false (negative ratio < ThrottleRecover → latch clears)")
 		}
@@ -725,6 +726,7 @@ func TestDecide_ThrottleFlipLatch_CounterResetClearsRing(t *testing.T) {
 			Timestamp:   base.Add(tk.dt),
 			NrPeriods:   tk.nrP,
 			NrThrottled: tk.nrT,
+			NrPeriodsAvailable: true,
 		}, thresholds)
 	}
 
@@ -873,6 +875,7 @@ func TestDecide_PressureCause_Avg60DirectSchmitt(t *testing.T) {
 		Timestamp:     tNow,
 		NrPeriods:     1000,
 		NrThrottled:   10,
+		NrPeriodsAvailable: true,
 		PressureAvg60: 0.0,
 	}, thresholds)
 	tNow = tNow.Add(10 * time.Second)
@@ -882,6 +885,7 @@ func TestDecide_PressureCause_Avg60DirectSchmitt(t *testing.T) {
 		Timestamp:     tNow,
 		NrPeriods:     2000,
 		NrThrottled:   110,
+		NrPeriodsAvailable: true,
 		PressureAvg60: 0.25,
 	}, thresholds)
 	if v4.State != StateDegraded {
@@ -1225,6 +1229,7 @@ func TestDecide_StealCause_VirtualizedRingP95Schmitt(t *testing.T) {
 		Timestamp:     base.Add(400 * time.Second),
 		NrPeriods:     1000,
 		NrThrottled:   10,
+		NrPeriodsAvailable: true,
 		StealFraction: 0.0,
 		Virtualized:   true,
 	}, thresholds)
@@ -1241,6 +1246,7 @@ func TestDecide_StealCause_VirtualizedRingP95Schmitt(t *testing.T) {
 			Timestamp:     base.Add(400 * time.Second).Add(time.Duration(i) * time.Second),
 			NrPeriods:     1000 + int64(i),
 			NrThrottled:   10 + int64(i),
+			NrPeriodsAvailable: true,
 			StealFraction: 0.50,
 			Virtualized:   true,
 		}, thresholds)
@@ -1252,6 +1258,7 @@ func TestDecide_StealCause_VirtualizedRingP95Schmitt(t *testing.T) {
 		Timestamp:     base.Add(400 * time.Second).Add(19 * time.Second),
 		NrPeriods:     2000,
 		NrThrottled:   110,
+		NrPeriodsAvailable: true,
 		StealFraction: 0.50,
 		Virtualized:   true,
 	}, thresholds)
@@ -1941,6 +1948,7 @@ func TestDecide_SaturationBackstop_DeadZoneFireThenClearGuardrail(t *testing.T) 
 			HostBusyCoresAvailable: false,
 			NrPeriods:              nrPeriods,
 			NrThrottled:            nrThrottled,
+			NrPeriodsAvailable: true,
 			PsiAvailable:           false,
 			Virtualized:            false,
 		}
@@ -3351,6 +3359,7 @@ func TestDecide_HostContentionFold_Full(t *testing.T) {
 			LogicalCpus:            8.0,
 			NrPeriods:              1000,
 			NrThrottled:            10,
+			NrPeriodsAvailable: true,
 			PressureAvg60:          0.0,
 		}, thresholds)
 		// Tick 2: +1000 periods, +100 throttled → ratio 0.10 > 0.05 → throttle
@@ -3365,6 +3374,7 @@ func TestDecide_HostContentionFold_Full(t *testing.T) {
 			LogicalCpus:            8.0,
 			NrPeriods:              2000,
 			NrThrottled:            110,
+			NrPeriodsAvailable: true,
 			PressureAvg60:          0.0,
 		}, thresholds)
 		if !sig.ThrottleFired {
@@ -3406,6 +3416,7 @@ func TestDecide_HostContentionFold_Full(t *testing.T) {
 			LogicalCpus:            8.0,
 			NrPeriods:              1000,
 			NrThrottled:            10,
+			NrPeriodsAvailable: true,
 			PressureAvg60:          0.0,
 		}, thresholds)
 		v, sig := Decide(st, Sample{
@@ -3418,6 +3429,7 @@ func TestDecide_HostContentionFold_Full(t *testing.T) {
 			LogicalCpus:            8.0,
 			NrPeriods:              2000,
 			NrThrottled:            110,
+			NrPeriodsAvailable: true,
 			PressureAvg60:          0.0,
 		}, thresholds)
 		if !sig.ThrottleFired {
@@ -4834,6 +4846,7 @@ func TestDecide_Attribution_Uses60sMean_NotInstantaneous(t *testing.T) {
 			PsiAvailable:           false,
 			NrPeriods:              periods,
 			NrThrottled:            throttled,
+			NrPeriodsAvailable: true,
 		}
 	}
 
@@ -4870,6 +4883,7 @@ func TestDecide_Attribution_Uses60sMean_NotInstantaneous(t *testing.T) {
 		PsiAvailable:           false,
 		NrPeriods:              6000,
 		NrThrottled:            500, // ratio (500-0)/(6000-1000)=0.10 > 0.05 → still firing
+		NrPeriodsAvailable:     true,
 	}
 	vSpike, sigSpike := Decide(st, spike, thresholds)
 	if vSpike.State != StateDegraded {
@@ -4881,5 +4895,44 @@ func TestDecide_Attribution_Uses60sMean_NotInstantaneous(t *testing.T) {
 	// Sanity: the mean really did stay 2.0 (the spike was not appended).
 	if !floatEq(sigSpike.HostBusyCores60sMean, 2.0) {
 		t.Fatalf("spike HostBusyCores60sMean: got %v, want 2.0 (HostBusyCoresAvailable=false → ring did not append the 7.5 spike; a mean that moved to include 7.5 would make the test non-forcing)", sigSpike.HostBusyCores60sMean)
+	}
+}
+
+// TestDecide_ThrottleLatch_HoldOnMissingCounters pins I3: a transient
+// cpu.stat read failure that yields NrPeriods=0 mid-history must NOT wipe the
+// 60s throttle window or clear the throttle latch. The NrPeriodsAvailable flag
+// (set only on a clean cpu.stat parse) gates the clear-on-regression AND the
+// append, mirroring the hostBusyRing append-gate. A read failure holds the
+// latch instead of wiping the window.
+func TestDecide_ThrottleLatch_HoldOnMissingCounters(t *testing.T) {
+	base := time.Date(2026, 7, 6, 12, 0, 0, 0, time.UTC)
+	thresholds := DefaultThresholds()
+
+	// (a) Fire the throttle latch: two ticks, ratio 0.10 > ThrottleHigh 0.05.
+	st := &WindowState{}
+	Decide(st, Sample{Timestamp: base, NrPeriods: 1000, NrThrottled: 100, NrPeriodsAvailable: true}, thresholds)
+	v1, sig1 := Decide(st, Sample{Timestamp: base.Add(10 * time.Second), NrPeriods: 2000, NrThrottled: 200, NrPeriodsAvailable: true}, thresholds)
+	if v1.State != StateDegraded || !sig1.ThrottleFired {
+		t.Fatalf("(a) fire: state=%q fired=%v, want degraded/fired (ratio 0.10 > 0.05)", v1.State, sig1.ThrottleFired)
+	}
+
+	// (b) Transient read failure: NrPeriodsAvailable=false (cpu.stat parse
+	// failed, NrPeriods=0 is a missing reading, not a real counter). The
+	// clear-on-regression (0 < 2000) must NOT fire, the append must NOT add a
+	// zero point, and the latch must HOLD (stays fired, verdict stays
+	// degraded). Without the fix, the zero NrPeriods reads as a counter
+	// regression, wipes the 60s window, and the empty-ring ratio=0 clears the
+	// latch for ~60s of silent throttle miss.
+	v2, sig2 := Decide(st, Sample{
+		Timestamp:          base.Add(20 * time.Second),
+		NrPeriods:          0,
+		NrThrottled:        0,
+		NrPeriodsAvailable: false,
+	}, thresholds)
+	if !sig2.ThrottleFired {
+		t.Fatalf("(b) hold ThrottleFired: got false, want true (transient cpu.stat read failure → NrPeriodsAvailable=false → latch HOLDS, no wipe)")
+	}
+	if v2.State != StateDegraded {
+		t.Fatalf("(b) hold State: got %q, want %q (latch held → still degraded)", v2.State, StateDegraded)
 	}
 }

@@ -24,13 +24,14 @@ import (
 
 // CPUCgroupInfo contains cgroup v2 CPU metrics including throttling information.
 type CPUCgroupInfo struct {
-	QuotaCores    float64 // CPU quota in cores (e.g., 2.0 = 2 cores)
-	PeriodMicros  int64   // CPU period in microseconds
-	NrPeriods     int64   // Total number of periods
-	NrThrottled   int64   // Number of throttled periods
-	ThrottledUsec int64   // Total throttled time in microseconds
-	ThrottleRatio float64 // Ratio of throttled periods (0.0 to 1.0)
-	IsThrottled   bool    // True if throttling detected (ratio > 0.05)
+	QuotaCores         float64 // CPU quota in cores (e.g., 2.0 = 2 cores)
+	PeriodMicros       int64   // CPU period in microseconds
+	NrPeriods          int64   // Total number of periods
+	NrThrottled        int64   // Number of throttled periods
+	ThrottledUsec      int64   // Total throttled time in microseconds
+	ThrottleRatio      float64 // Ratio of throttled periods (0.0 to 1.0)
+	IsThrottled        bool    // True if throttling detected (ratio > 0.05)
+	NrPeriodsAvailable bool    // True when cpu.stat parsed cleanly (NrPeriods/NrThrottled are real)
 }
 
 // parseCPUMax parses the cpu.max file content and returns quota cores and period.
@@ -135,6 +136,7 @@ func (c *ContainerMonitorService) getCgroupCPUInfo(ctx context.Context) (*CPUCgr
 	info.NrPeriods = nrPeriods
 	info.NrThrottled = nrThrottled
 	info.ThrottledUsec = throttledUsec
+	info.NrPeriodsAvailable = true
 
 	return info, nil
 }
