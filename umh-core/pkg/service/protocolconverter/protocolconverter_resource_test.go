@@ -250,7 +250,14 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 					Expect(reason).To(Equal("CPU degraded: CPU usage at 85%"))
 				})
 
-				It("should block when CPU is throttled with detailed message", func() {
+				It("should block a throttled container via the CPUHealth branch with the throttle health message", func() {
+					// A fired throttle latch always rides a degraded verdict:
+					// getCPUMetrics maps Throttle.Fired -> verdict degraded ->
+					// CPUHealth=Degraded, so the reachable wire state carries
+					// CPUHealth=Degraded plus the throttle-flavored health
+					// message composed by cpuhealth.ComposeMessage. (A snapshot
+					// with CPUHealth=Active and Throttle.Fired=true cannot be
+					// produced by the monitor.)
 					snapshot.Managers[constants.ContainerManagerName] = &MockManagerSnapshot{
 						Instances: map[string]*pkgfsm.FSMInstanceSnapshot{
 							constants.CoreInstanceName: {
@@ -259,11 +266,16 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 								DesiredState: "active",
 								LastObservedState: &container.ContainerObservedStateSnapshot{
 									ServiceInfoSnapshot: container_monitor.ServiceInfo{
-										OverallHealth: models.Active,
-										CPUHealth:     models.Active,
+										OverallHealth: models.Degraded,
+										CPUHealth:     models.Degraded,
 										MemoryHealth:  models.Active,
 										DiskHealth:    models.Active,
 										CPU: &models.CPU{
+											State: "degraded",
+											Health: &models.Health{
+												Message:  "CPU limited\nTechnical Details: This instance hit its CPU limit and was paused until the next cycle, in 15% of CPU scheduling periods over the last minute.",
+												Category: models.Degraded,
+											},
 											CgroupCores: 2.0, // Limited to 2 cores
 											VerdictBasis: &models.VerdictBasis{
 												Throttle: models.VerdictBasisCause{
@@ -281,10 +293,10 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 					limited, reason := service.IsResourceLimited(snapshot)
 
 					Expect(limited).To(BeTrue())
-					Expect(reason).To(ContainSubstring("CPU throttled (15% of time)"))
-					Expect(reason).To(ContainSubstring("Container limited to 2.0 cores"))
-					Expect(reason).To(ContainSubstring("needs more during peaks"))
-					Expect(reason).To(MatchRegexp(`host has \d+ cores available`))
+					Expect(reason).To(HavePrefix("CPU degraded: "),
+						"a throttled container blocks via the CPUHealth branch, not a separate throttle branch")
+					Expect(reason).To(ContainSubstring("CPU limited"))
+					Expect(reason).To(ContainSubstring("hit its CPU limit"))
 				})
 			})
 
@@ -421,32 +433,10 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 				})
 			})
 
-			Context("Overall Health Degradation", func() {
-				It("should use overall health as fallback when individual resources show active", func() {
-					snapshot.Managers[constants.ContainerManagerName] = &MockManagerSnapshot{
-						Instances: map[string]*pkgfsm.FSMInstanceSnapshot{
-							constants.CoreInstanceName: {
-								ID:           constants.CoreInstanceName,
-								CurrentState: "active",
-								DesiredState: "active",
-								LastObservedState: &container.ContainerObservedStateSnapshot{
-									ServiceInfoSnapshot: container_monitor.ServiceInfo{
-										OverallHealth: models.Degraded, // Overall degraded
-										CPUHealth:     models.Active,   // But individuals show active
-										MemoryHealth:  models.Active,
-										DiskHealth:    models.Active,
-									},
-								},
-							},
-						},
-					}
-
-					limited, reason := service.IsResourceLimited(snapshot)
-
-					Expect(limited).To(BeTrue())
-					Expect(reason).To(Equal("Overall system resources degraded"))
-				})
-			})
+			// No "Overall Health Degradation" fallback test: GetStatus only
+			// sets OverallHealth=Degraded together with a CPU/memory/disk
+			// degrade, all caught by the per-resource branches above, so the
+			// former fallback was unreachable and has been removed.
 		})
 
 		Describe("3. Container State Checks", func() {
@@ -652,7 +642,9 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 				// due to resource limits can still be removed. The actual removal logic is handled
 				// in the FSM reconciliation, not in IsResourceLimited.
 
-				// Setup: System at resource limits
+				// Setup: System at resource limits (a throttled container,
+				// which on the real wire carries CPUHealth=Degraded plus the
+				// throttle-flavored health message).
 				snapshot.Managers[constants.ContainerManagerName] = &MockManagerSnapshot{
 					Instances: map[string]*pkgfsm.FSMInstanceSnapshot{
 						constants.CoreInstanceName: {
@@ -661,11 +653,16 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 							DesiredState: "active",
 							LastObservedState: &container.ContainerObservedStateSnapshot{
 								ServiceInfoSnapshot: container_monitor.ServiceInfo{
-									OverallHealth: models.Active,
-									CPUHealth:     models.Active,
+									OverallHealth: models.Degraded,
+									CPUHealth:     models.Degraded,
 									MemoryHealth:  models.Active,
 									DiskHealth:    models.Active,
 									CPU: &models.CPU{
+										State: "degraded",
+										Health: &models.Health{
+											Message:  "CPU limited\nTechnical Details: This instance hit its CPU limit and was paused until the next cycle, in 20% of CPU scheduling periods over the last minute.",
+											Category: models.Degraded,
+										},
 										CgroupCores: 2.0,
 										VerdictBasis: &models.VerdictBasis{
 											Throttle: models.VerdictBasisCause{
@@ -684,7 +681,7 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 				limited, reason := service.IsResourceLimited(snapshot)
 
 				Expect(limited).To(BeTrue())
-				Expect(reason).To(ContainSubstring("CPU throttled"))
+				Expect(reason).To(ContainSubstring("CPU degraded"))
 
 				// Note: The FSM reconciliation logic (not tested here) should allow
 				// transition from to_be_created -> to_be_removed even when IsResourceLimited returns true

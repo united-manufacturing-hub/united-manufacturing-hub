@@ -1220,27 +1220,11 @@ func (p *ProtocolConverterService) IsResourceLimited(snapshot fsm.SystemSnapshot
 				return true, "Disk resources degraded"
 			}
 
-			// CPU throttling gets its own detailed message. The throttle
-			// value and latch ride VerdictBasis.Throttle; the basis is
-			// non-nil whenever Decide ran (cgroup readable), and the Fired
-			// guard reads Value only when the latch actually fired.
-			if serviceInfo.CPU != nil && serviceInfo.CPU.VerdictBasis != nil && serviceInfo.CPU.VerdictBasis.Throttle.Fired {
-				throttlePercent := serviceInfo.CPU.VerdictBasis.Throttle.Value * 100
-
-				cgroupCores := serviceInfo.CPU.CgroupCores
-				hostCores := runtime.NumCPU()
-
-				// Base message explaining the impact
-				message := fmt.Sprintf("CPU throttled (%.0f%% of time). Container limited to %.1f cores, needs more during peaks (host has %d cores available)",
-					throttlePercent, cgroupCores, hostCores)
-
-				return true, message
-			}
-
-			// Check overall health as a fallback
-			if serviceInfo.OverallHealth == models.Degraded {
-				return true, "Overall system resources degraded"
-			}
+			// No further health checks: a fired throttle latch always rides a
+			// degraded verdict (Throttle.Fired implies CPUHealth=Degraded,
+			// caught above), and OverallHealth is only ever Degraded when
+			// CPU, memory, or disk already set it, so a dedicated throttle
+			// message and an OverallHealth fallback here would be dead code.
 		}
 	}
 
