@@ -63,9 +63,9 @@ func NewLevelSampledCore(inner zapcore.Core, tick time.Duration, first, thereaft
 	high, err := zapcore.NewIncreaseLevelCore(inner, zapcore.WarnLevel)
 	if err != nil {
 		// Only happens when the core's minimum level is already above Warn
-		// (e.g. Error-only), so there is nothing below Warn to split off.
-		// Fall back to sampling the whole core rather than losing entries.
-		return zapcore.NewSamplerWithOptions(inner, tick, first, thereafter)
+		// (e.g. Error-only), so there is nothing below Warn to sample. Return
+		// inner unsampled so no errors are ever dropped.
+		return inner
 	}
 
 	return zapcore.NewTee(low, high)

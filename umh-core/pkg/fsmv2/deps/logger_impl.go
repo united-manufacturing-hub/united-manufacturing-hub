@@ -124,7 +124,10 @@ func NewJSONFSMLogger(w io.Writer, level LogLevel) FSMLogger {
 	)
 	core := logger.NewLevelSampledCore(baseCore, 10*time.Second, 2, 200)
 
-	return NewFSMLogger(zap.New(core).Sugar())
+	// core is already sampled, so bypass NewFSMLogger's samplerWrap to avoid
+	// sampling the JSON test output twice. There is no hook here for sampling
+	// to sit outside of.
+	return &zapLogger{sugar: zap.New(core).Sugar()}
 }
 
 // fieldsToArgs converts Fields to zap's variadic key-value args.

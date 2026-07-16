@@ -389,7 +389,6 @@ func snapshotFingerprint(snapshot *fsm.SystemSnapshot, extractStatusReason func(
 				managerName, instanceName, inst.CurrentState, inst.DesiredState, reason))
 		}
 
-		// Also capture instance count so adding/removing an instance is detected.
 		lines = append(lines, fmt.Sprintf("%s|count|%d", managerName, len(instances)))
 	}
 	return strings.Join(lines, "\n")
