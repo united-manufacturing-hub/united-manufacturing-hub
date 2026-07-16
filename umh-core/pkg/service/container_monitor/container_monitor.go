@@ -136,9 +136,15 @@ func (c *ContainerMonitorService) SetDataPath(path string) {
 	c.dataPath = path
 }
 
-// SetSampler replaces the CPU sampler - used for testing only.
-func (c *ContainerMonitorService) SetSampler(s cpuhealth.Sampler) {
-	c.sampler = s
+// NewContainerMonitorServiceWithSampler creates a new container monitor
+// service with a custom data path and an injected CPU sampler, for tests that
+// script the sampler's Sample output directly. The sampler is fixed at
+// construction; there is no setter, so it cannot change mid-lifecycle.
+func NewContainerMonitorServiceWithSampler(fs filesystem.Service, dataPath string, sampler cpuhealth.Sampler) *ContainerMonitorService {
+	svc := NewContainerMonitorServiceWithPath(fs, dataPath)
+	svc.sampler = sampler
+
+	return svc
 }
 
 // GetStatus collects and returns the current container metrics.

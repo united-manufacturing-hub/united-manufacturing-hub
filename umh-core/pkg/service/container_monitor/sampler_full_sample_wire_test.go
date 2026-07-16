@@ -501,8 +501,7 @@ var _ = Describe("VerdictBasis guard: zero LogicalCpus (I8)", func() {
 			}
 		})
 
-		svc := container_monitor.NewContainerMonitorServiceWithPath(mockFS, testDataPath)
-		svc.SetSampler(&mockSamplerLogicalCpusZero{})
+		svc := container_monitor.NewContainerMonitorServiceWithSampler(mockFS, testDataPath, &mockSamplerLogicalCpusZero{})
 
 		status, err := svc.GetStatus(ctx)
 		Expect(err).NotTo(HaveOccurred())
