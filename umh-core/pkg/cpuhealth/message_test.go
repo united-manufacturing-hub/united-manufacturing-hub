@@ -25,17 +25,15 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cpuhealth"
 )
 
-// TestComposeMessage_ThrottleTwoLayerC2 pins Rung 13's behavioral contract:
-// ComposeMessage is a pure function turning a Verdict + Signals into the C2
+// TestComposeMessage_ThrottleTwoLayerC2 pins the two-layer contract:
+// ComposeMessage is a pure function turning a Verdict + Signals into the
 // two-layer format the Console alert adapter renders (first line = headline,
-// everything after a literal "Technical Details:" separator collapses into the
-// expandable panel). A degraded message MUST carry the separator, without it
-// the whole message lands in the collapsed panel and the headline goes blank.
-//
-// This traces to the spec's "User-facing messages" supertable
-// (2026-06-18-eng5128-cpu-metric-pr1-design.md) and PLAN Rung 13: the throttle
-// cause composes headline "CPU limited" + the curated Technical-Details copy
-// (why + live number + what-to-do), NOT the generic "CPU degraded".
+// everything after a literal "Technical Details:" separator collapses into
+// the expandable panel). A degraded message MUST carry the separator: without
+// it the whole message lands in the collapsed panel and the headline goes
+// blank. The throttle cause composes headline "CPU limited" plus the curated
+// Technical-Details copy (why + live number + what-to-do), NOT the generic
+// "CPU degraded".
 func TestComposeMessage_ThrottleTwoLayerC2(t *testing.T) {
 	verdict := cpuhealth.Verdict{
 		State:       cpuhealth.StateDegraded,
@@ -99,7 +97,7 @@ func TestComposeMessage_ThrottleTwoLayerC2(t *testing.T) {
 	}
 }
 
-// assertTwoLayer enforces the C2 hard constraints shared by every degraded
+// assertTwoLayer enforces the hard constraints shared by every degraded
 // cause: a non-blank headline on the first line, the literal "Technical
 // Details:" separator, and a non-empty details section containing the given
 // key phrases. It returns the details body for cause-specific follow-up checks.
@@ -183,12 +181,11 @@ func TestComposeMessage_StealTwoLayerC2(t *testing.T) {
 	}
 }
 
-// NOTE: TestComposeMessage_HostContentionTwoLayerC2 was removed with the v4
-// host-contention fold: CauseKindHostContention is never emitted (Decide folds
-// a neighbour filling the box into saturation + the host/container attribution
-// split), so its headline/details copy is dead code and its strings were
-// deleted from causeHeadline/causeDetails. A test asserting those strings would
-// pin dead code.
+// NOTE: there is deliberately no host-contention message test:
+// CauseKindHostContention is never emitted (Decide folds a neighbor filling
+// the box into saturation + the host/container attribution split), so
+// causeHeadline/causeDetails carry no copy for it, and a test asserting such
+// strings would pin dead code.
 
 func TestComposeMessage_SaturationTwoLayerC2(t *testing.T) {
 	verdict := cpuhealth.Verdict{
@@ -428,8 +425,9 @@ func TestBlockReason_PerCause(t *testing.T) {
 		{cpuhealth.CauseKindThrottling, "Can't add another bridge: this instance is already hitting its CPU limit. Raise the limit or reduce load first."},
 		{cpuhealth.CauseKindPressure, "Can't add another bridge: tasks on this instance are already waiting for a free CPU core. Reduce load, or give this instance more CPU, first."},
 		{cpuhealth.CauseKindSteal, "Can't add another bridge: the server isn't giving this instance enough CPU (other VMs are using it). Free up CPU on the server first."},
-		// Host-contention is folded in v4 (never emitted): its BlockReason case
-		// was deleted, so it falls through to the generic degraded default.
+		// Host-contention is never emitted (folded into saturation +
+		// attribution): BlockReason has no case for it, so it falls through
+		// to the generic degraded default.
 		{cpuhealth.CauseKindHostContention, "Can't add another bridge: CPU is degraded."},
 		// Saturation with no sub-latch set (shouldn't happen for a real
 		// saturation cause, but BlockReason must not panic) hits the generic

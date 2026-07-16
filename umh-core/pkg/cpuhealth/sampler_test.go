@@ -34,14 +34,11 @@ import (
 )
 
 // TestCgroupSampler_PopulatesAllSignals pins the cgroupSampler reading every
-// CPU-health signal — cpu.pressure (PSI avg60), /proc/cpuinfo
-// (virtualization), cpu.max (quota), /proc/stat (steal + host-busy) — and
-// populating the full Sample, not just usage_usec/nr_periods/nr_throttled.
-// Decide reads the cause fields, but the sampler was not writing them, so the
-// causes never fired; this rung makes the sampler READ them. The production
-// wiring — merging these signals into the Decide-bound Sample at the
-// container_monitor call site — is a later rung; this rung does not make the
-// non-throttle causes live in production.
+// CPU-health signal (cpu.pressure PSI avg60, /proc/cpuinfo virtualization,
+// cpu.max quota, /proc/stat steal + host-busy) and populating the full
+// Sample, not just usage_usec/nr_periods/nr_throttled: Decide reads the
+// cause fields, so a sampler that leaves them zero silently disables the
+// non-throttle causes.
 //
 // Each signal is read via the injected filesystem.Service, parsed, and set on
 // the returned Sample. Pinned behaviors:
@@ -51,15 +48,16 @@ import (
 //     0..100; DIVIDE BY 100 before assigning to PressureAvg60 (a 0..1 fraction).
 //     PsiAvailable=true when the file exists+parses; false (PressureAvg60=0)
 //     when absent/unreadable. A transient read error does NOT fail the whole
-//     Sample — just PsiAvailable=false.
+//     Sample; it just leaves PsiAvailable=false.
 //  2. VIRTUALIZATION: read /proc/cpuinfo, look for "hypervisor" in the flags
-//     line. Set Virtualized=true if found, false otherwise. CACHED — read once on
+//     line. Set Virtualized=true if found, false otherwise. CACHED: read once on
 //     the first Sample() call, reused after (virtualization doesn't change at
 //     runtime); the test asserts /proc/cpuinfo is NOT re-read on the second
 //     call.
 //  3. QUOTA: read <basePath>/cpu.max, parse "quota period" (e.g. "200000
 //     100000" = 2.0 cores). Set Quota=&quotaCores (quota/period) when a numeric
-//     quota is set; Quota=nil for "max <period>" (no limit) or absent/unreadable.
+//     quota is set; Quota=&0 for "max <period>" (unlimited); Quota=nil when
+//     absent/unreadable.
 //  4. STEAL: read /proc/stat first "cpu " line's 10 fields; per-tick steal
 //     fraction = steal_jiffies_delta / total_jiffies_delta (total = sum of ALL
 //     fields). First read (no delta) → StealFraction=0. Counter reset (total
@@ -72,7 +70,7 @@ import (
 //  6. LOGICAL_CPUS: LogicalCpus = float64(runtime.NumCPU()) (stdlib call, not
 //     an I/O read).
 //  7. The Sample carries ALL fields. (8) A read failure on ONE non-primary
-//     signal does NOT fail the whole Sample — cpu.stat failure still errors
+//     signal does NOT fail the whole Sample: cpu.stat failure still errors
 //     (primary signal), but cpu.pressure/cpu.max/cpuinfo/proc.stat failures
 //     just zero that field + set the readability flag false and the Sample is
 //     still returned.
@@ -179,7 +177,7 @@ func TestCgroupSampler_PopulatesAllSignals(t *testing.T) {
 	}
 
 	// (2) Second Sample: deltas exist. Quota/Virtualized/LogicalCpus unchanged
-	// (Virtualized CACHED — /proc/cpuinfo must NOT be re-read).
+	// (Virtualized CACHED: /proc/cpuinfo must NOT be re-read).
 	time.Sleep(80 * time.Millisecond)
 	usageUsec = 1_000_000 + 100_000 // +0.1 core-seconds of cgroup CPU
 	procStat = procStatTick1
@@ -626,7 +624,7 @@ func TestCgroupSampler_VirtualizedDMIFallback(t *testing.T) {
 			t.Fatalf("first Sample: DMI product_name read %d time(s), want 1 (fallback triggered when cpuinfo check failed)", dmiReads)
 		}
 
-		// Second Sample: both reads cached — neither path re-read.
+		// Second Sample: both reads cached; neither path re-read.
 		procStat = procStatTick1
 		_, err = s.Sample(ctx)
 		if err != nil {
@@ -658,7 +656,7 @@ func TestCgroupSampler_VirtualizedDMIFallback(t *testing.T) {
 				return []byte(arm64Cpuinfo), nil
 			case dmiPath:
 				dmiReads++
-				// Bare-metal DMI product_name — no vendor token.
+				// Bare-metal DMI product_name: no vendor token.
 				return []byte("Raspberry Pi 4 Model B Rev 1.4\n"), nil
 			default:
 				return nil, errors.New("unexpected path read: " + path)
@@ -699,7 +697,7 @@ func TestCgroupSampler_ProcStatCounterReset(t *testing.T) {
 
 	// Tick 0: baseline. total = 1000+1000+1000+8000+0+0+0+50+0+0 = 11050.
 	procStatTick0 := "cpu  1000 1000 1000 8000 0 0 0 50 0 0\n"
-	// Tick 1: total grows to 22050 (delta 11000) — normal positive delta.
+	// Tick 1: total grows to 22050 (delta 11000), a normal positive delta.
 	procStatTick1 := "cpu  2000 1500 2000 16400 0 0 0 150 0 0\n"
 	// Tick 2: total DROPS to 5000 (counter reset / host reboot). Without the
 	// guard, busy - lastBusy goes negative → negative HostBusyCores published.
@@ -727,7 +725,7 @@ func TestCgroupSampler_ProcStatCounterReset(t *testing.T) {
 		t.Fatalf("baseline Sample: unexpected error: %v", err)
 	}
 
-	// (2) Normal positive-delta tick — sanity (non-zero StealFraction + HostBusyCores).
+	// (2) Normal positive-delta tick: sanity (non-zero StealFraction + HostBusyCores).
 	time.Sleep(40 * time.Millisecond)
 	usageUsec = 1_100_000
 	procStat = procStatTick1
@@ -746,7 +744,7 @@ func TestCgroupSampler_ProcStatCounterReset(t *testing.T) {
 	}
 
 	// (3) Counter reset: total decreases. Both StealFraction and HostBusyCores
-	// MUST be 0 — a negative HostBusyCores would be published without the guard.
+	// MUST be 0: a negative HostBusyCores would be published without the guard.
 	time.Sleep(40 * time.Millisecond)
 	usageUsec = 1_200_000
 	procStat = procStatReset
@@ -787,7 +785,7 @@ func TestCgroupSampler_ProcStat_HostBusyCoresAvailableFalseOnBaselineAndReset(t 
 
 	// Tick 0: baseline. total = 11050.
 	procStatTick0 := "cpu  1000 1000 1000 8000 0 0 0 50 0 0\n"
-	// Tick 1: total grows to 22050 (delta 11000) — normal positive delta.
+	// Tick 1: total grows to 22050 (delta 11000), a normal positive delta.
 	procStatTick1 := "cpu  2000 1500 2000 16400 0 0 0 150 0 0\n"
 	// Tick 2: total DROPS to 5000 (counter reset / host reboot).
 	procStatReset := "cpu  300 300 300 3900 0 0 0 10 0 0\n"

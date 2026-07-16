@@ -76,14 +76,14 @@ var _ = Describe("throttle verdict wired through cpuhealth.Decide (rung 4b)", fu
 
 		svc := container_monitor.NewContainerMonitorServiceWithPath(mockFS, testDataPath)
 
-		// Call 1 — baseline. The ring holds a single point, so the two-point
+		// Call 1: baseline. The ring holds a single point, so the two-point
 		// delta is 0 and the latch is false.
 		nrPeriods, nrThrottled = 1000, 10
 		status1, err := svc.GetStatus(ctx)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(status1.CPU.VerdictBasis.Throttle.Fired).To(BeFalse(), "baseline: no delta yet")
 
-		// Call 2 — windowed ratio 0.10 (100 throttled / 1000 periods) fires the
+		// Call 2: windowed ratio 0.10 (100 throttled / 1000 periods) fires the
 		// latch above the 0.05 high mark. Both the old raw-ratio path and Decide
 		// agree here, so this is a pre-condition, not the distinguishing
 		// assertion.
@@ -92,13 +92,13 @@ var _ = Describe("throttle verdict wired through cpuhealth.Decide (rung 4b)", fu
 		Expect(err).NotTo(HaveOccurred())
 		Expect(status2.CPU.VerdictBasis.Throttle.Fired).To(BeTrue(), "ratio 0.10 > 0.05 fires the latch")
 
-		// Call 3 — the windowed ratio drops to 0.035 (140 throttled / 4000
+		// Call 3: the windowed ratio drops to 0.035 (140 throttled / 4000
 		// periods over the full call-1-to-call-3 span), which is inside the
 		// Schmitt band [0.03, 0.05). Decide's flip-latch holds (ratio is neither
 		// > 0.05 nor < 0.03), so IsThrottled stays true. Both counters are
 		// monotonically increasing (nr_periods 1000→2000→5000, nr_throttled
 		// 10→110→150), so the clear-on-either-counter-regression guard does NOT
-		// fire and the ring keeps the call-1 anchor — the hold is exercised
+		// fire and the ring keeps the call-1 anchor, so the hold is exercised
 		// against a genuine two-point delta, not a rebuilt single-point ring.
 		nrPeriods, nrThrottled = 5000, 150
 		status3, err := svc.GetStatus(ctx)
@@ -112,5 +112,5 @@ var _ = Describe("throttle verdict wired through cpuhealth.Decide (rung 4b)", fu
 	// Keep the real 60s window honest: the calls above are milliseconds apart,
 	// so no pruning occurs and the oldest point (call 1) anchors the delta. A
 	// real wall-clock advance past 60s is not needed to distinguish the latch
-	// from the raw ratio — the band-hold is the pinned behavior.
+	// from the raw ratio; the band-hold is the pinned behavior.
 })

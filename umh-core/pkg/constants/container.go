@@ -46,10 +46,7 @@ const (
 	MaxBridgesPerCPUCore = 5
 )
 
-// CPU throttle thresholds and the 60s sliding window now live in pkg/cpuhealth
-// (DefaultThresholds' ThrottleHigh 0.05 / ThrottleRecover 0.03, and the
-// unexported cpuhealth.throttleWindow). The former CPUThrottleRatioThreshold /
-// CPUThrottleWindow constants here were removed because their only consumer
-// (container_monitor.updateThrottleWindow) was deleted; keeping them would
-// duplicate the magic numbers with no link, letting a developer tune one while
-// the other stayed put.
+// CPU throttle thresholds and the 60s sliding window live in pkg/cpuhealth
+// (DefaultThresholds' ThrottleHigh/ThrottleRecover and the unexported
+// throttleWindow), next to their only consumer, so the numbers cannot drift
+// from the code that applies them.

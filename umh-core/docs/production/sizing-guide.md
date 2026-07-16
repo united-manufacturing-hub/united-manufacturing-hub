@@ -19,7 +19,7 @@
 * **≈ 4 bridges instances** (e.g. OPC UA ➜ Redpanda) **plus one bridge instance** that forwards from the local Redpanda to an external MQTT broker
 * **≈ 900 tags at 1 message / second each**
 * Keeps **seven days** of history under the default cluster retention (`log_retention_ms = 7 days`)
-* Runs comfortably with CPU headroom (the CPU health monitor blocks new bridges only when the instance is actually being starved (throttling, pressure, or no spare core), not on raw usage)
+* Runs comfortably with CPU headroom; the CPU health monitor blocks new bridges only on actual starvation (throttling, pressure, or no spare core), not on raw usage
 
 #### Minimum
 

@@ -28,12 +28,12 @@ import (
 // surfaces here as message text instead.
 const limitedVisibilityNote = "Limited visibility: this instance has no CPU limit set and its operating system is not reporting CPU-pressure stats, so UMH cannot fully tell when work is waiting for a free core. Set a CPU limit or enable Linux pressure stats (boot with psi=1) to turn on full monitoring."
 
-// ComposeMessage turns a Verdict and its derived Signals into the C2 two-layer
+// ComposeMessage turns a Verdict and its derived Signals into the two-layer
 // Console message: a one-line headline naming the dominant cause, followed by
-// the literal "Technical Details:" separator and the curated per-cause copy the
-// alert adapter collapses into the expandable panel. When multiple causes fire,
-// each cause's detail paragraph is listed in the Technical Details section
-// (dominant first, separated by a blank line).
+// the literal "Technical Details:" separator and the curated per-cause copy
+// the alert adapter collapses into the expandable panel. When multiple causes
+// fire, each cause's detail paragraph is listed in the Technical Details
+// section (dominant first, separated by a blank line).
 //
 // A healthy verdict yields the budget dashboard: a headline stating how many
 // cores the instance uses of its total and how much headroom remains before it
@@ -121,15 +121,13 @@ func composeHealthy(signals Signals) string {
 			headline = fmt.Sprintf("CPU healthy. This instance is using %s of %s cores (%d%% of its limit) and can use %s more before it is marked degraded.", usedStr, totalStr, pctOfLimit, headroomStr)
 		}
 	} else {
-		// No-percentage variant: used either when no limit applies, or when the
-		// limit is so small (sub-0.05 cores) that totalDisp rounds to 0 and the
-		// percentage would divide by zero. The subject follows the usedDisp
-		// source, which branches on LimitApplies: in limit mode (incl. sub-0.05
-		// quotas) usedDisp = AvgUsageCores (instance-scoped), so the subject is
-		// "This instance"; in no-limit mode usedDisp = HostBusyCores60sMean
-		// (host-WIDE busy: all software on the machine), so the subject is
-		// "The machine" (attributing host-wide usage to the instance would
-		// mislead an operator on a shared box).
+		// No-percentage variant: no limit applies, or the limit is so small
+		// (sub-0.05 cores) that totalDisp rounds to 0 and the percentage
+		// would divide by zero. The subject follows the usedDisp source: in
+		// limit mode usedDisp is the instance's own usage, so "This
+		// instance"; in no-limit mode usedDisp is host-wide busy, and
+		// attributing host-wide usage to the instance would mislead an
+		// operator on a shared box, so "The machine".
 		subject := "The machine"
 		if signals.LimitApplies {
 			subject = "This instance"
@@ -215,7 +213,7 @@ func causeHeadline(kind CauseKind) string {
 // causeDetails returns the curated Technical-Details copy for a single cause,
 // interpolating the live number from the cause's Value or the derived Signals.
 //
-// Number sources per cause (see the 2026-06-18 supertable):
+// Number sources per cause:
 //   - throttling: signals.ThrottleRatio (60s cumulative ratio, 0..1)
 //   - pressure:   cause.Value (PressureAvg60 carried on the Cause; the raw
 //     signal lives on Sample, not Signals, so the Cause Value is the source)
@@ -254,11 +252,10 @@ func causeDetails(c Cause, signals Signals) string {
 		case signals.LimitSaturationFired:
 			pct := pctOf(signals.AvgUsageCores / signals.CapacityCores)
 			detail := fmt.Sprintf("CPU averaged %d%% of its limit over the last minute and this instance has little headroom left. Raise its CPU limit, or reduce the load on it.", pct)
-			// C-scenario honesty note: when host stats are unavailable in
-			// limit mode (the sampler could not read /proc/stat), host-side
-			// contention is invisible. Gate on the real readability flag, not
-			// a HostBusyCores60sMean==0 proxy (which is unreliable on a
-			// readable idle host).
+			// When host stats are unavailable in limit mode, host-side
+			// contention is invisible; say so. Gated on the real readability
+			// flag, not a HostBusyCores60sMean==0 proxy, which cannot tell
+			// an unreadable /proc/stat from a readable idle host.
 			if !signals.HostBusyCoresAvailable {
 				detail += " Host stats are unavailable, so host-side contention is not visible."
 			}
@@ -273,8 +270,8 @@ func causeDetails(c Cause, signals Signals) string {
 			// in no-limit).
 			pct := pctOf(signals.HostBusyCores60sMean / signals.CapacityCores)
 			detail := fmt.Sprintf("CPU averaged %d%% of the machine over the last minute and this instance has little headroom left. Add CPU capacity, or reduce the load on it.", pct)
-			// When PSI is also absent (limitedVisibility, the experiment case),
-			// note that richer detail is available by enabling PSI.
+			// When PSI is also absent (limited visibility), note that richer
+			// detail is available by enabling PSI.
 			if signals.LimitedVisibility {
 				detail += " Pressure stats are unavailable; enable Linux pressure stats (boot with psi=1) for richer detail."
 			}

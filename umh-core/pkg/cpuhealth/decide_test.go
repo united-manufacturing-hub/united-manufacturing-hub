@@ -702,11 +702,11 @@ func TestDecide_ThrottleFlipLatch_CounterReset(t *testing.T) {
 //     is the sole entry → ratio 0 → latch clears. The stale pre-reset oldest
 //     (nrPeriods 100000) does NOT stay in the ring.
 //  3. FRESH THROTTLE, one fresh post-reset sample pair at a 0.1 instantaneous
-//     ratio. With the fix, the ring holds only post-reset points, so the 60s
-//     ratio is 0.1 > 0.05 and the latch FIRES promptly. Without the fix, the
-//     stale pre-reset oldest (nrPeriods 100000) remains, nr_periods delta is
-//     -98990 <= 0, throttleRatio returns 0, and the latch STAYS CLEAR,
-//     throttle silently missed.
+//     ratio. With the clear-on-regression, the ring holds only post-reset
+//     points, so the 60s ratio is 0.1 > 0.05 and the latch FIRES promptly.
+//     Without it, the stale pre-reset oldest (nrPeriods 100000) remains,
+//     nr_periods delta is -98990 <= 0, throttleRatio returns 0, and the
+//     latch STAYS CLEAR, throttle silently missed.
 //
 // Without the clear-on-regression fix, step 3 fails: the latch is clear where
 // it should be fired, and the ring still contains the stale pre-reset entry.
@@ -759,10 +759,11 @@ func TestDecide_ThrottleFlipLatch_CounterResetClearsRing(t *testing.T) {
 	}
 
 	// (3) FRESH THROTTLE, one fresh post-reset sample. t=30s (1010, 101):
-	// +1000 periods, +100 throttled over the reset baseline (10, 1). With the
-	// fix the ring holds only post-reset points: 60s ratio = (101-1)/(1010-10)
+	// +1000 periods, +100 throttled over the reset baseline (10, 1). With
+	// the clear-on-regression the ring holds only post-reset points: 60s
+	// ratio = (101-1)/(1010-10)
 	// = 100/1000 = 0.1 > 0.05 → latch FIRES promptly (one tick after reset).
-	// Without the fix the stale pre-reset oldest (nrPeriods 100000) remains,
+	// Without it the stale pre-reset oldest (nrPeriods 100000) remains,
 	// periods delta = 1010-100000 = -98990 <= 0, throttleRatio returns 0, and
 	// the latch STAYS CLEAR, throttle silently missed during the cold-start
 	// window.
@@ -1480,10 +1481,9 @@ func TestDecide_StealCause_SmallNFloor(t *testing.T) {
 }
 
 // TestDecide_SaturationBackstop_DeadZoneFireThenClearGuardrail pins the
-// saturation backstop cause and the guardrail, the whole rebuild's reason.
-// Rung 2 deleted the raw-usage degrade (busy is not sick). This test
-// re-introduces a usage-based degrade BUT ONLY in the dead-zone, the one
-// case where no starvation signal exists (no CPU limit → no throttle; no PSI
+// saturation backstop cause and its guardrail: raw usage alone never
+// degrades (busy is not sick), EXCEPT in the dead-zone, the one case where
+// no starvation signal exists (no CPU limit → no throttle; no PSI
 // → no pressure; not virtualized → no steal; and host-contention can't fire
 // without a demand signal). There, sustained high usage is the last-resort
 // proxy.
@@ -1521,7 +1521,7 @@ func TestDecide_StealCause_SmallNFloor(t *testing.T) {
 //     would re-create the flicker).
 //  5. NON-DEAD-ZONE: a limited container (Quota set) at 95% usage with no
 //     throttle → healthy (saturation not evaluated; busy is not sick). This
-//     re-confirms rung 2's thesis holds outside the dead-zone.
+//     re-confirms busy-is-not-sick holds outside the dead-zone.
 //  6. Saturation is the SOLE cause when it fires (no other cause can fire in
 //     the dead-zone by definition).
 func TestDecide_SaturationBackstop_DeadZoneFireThenClearGuardrail(t *testing.T) {
@@ -3176,15 +3176,13 @@ func TestDecide_Saturation_FiresOnVirtualizedBox(t *testing.T) {
 		}
 	})
 
-	// (4) FULL_PLUS_PSI, R4 option B: a full box WITH PSI degrades on BOTH
-	// pressure and saturation (headroom fires always, not just dead-zone; PSI
+	// (4) FULL_PLUS_PSI: a full box WITH PSI degrades on BOTH pressure and
+	// saturation (headroom fires always, not just in the dead-zone; PSI
 	// stacks on top as an additional cause). 2 ticks HostBusyCores=8.0,
 	// LogicalCpus=8.0, PsiAvailable=true, PressureAvg60=0.30 (>PressureHigh
 	// 0.20 → pressure fires), Quota=nil → headroom=8−8−1=−1.0<0 → saturation
-	// fires. NOT dead-zone (PsiAvailable true) → LimitedVisibility=false. Under
-	// option A (pre-option-B) this was [pressure] only; option B adds
-	// saturation. A stub keeping headroom dead-zone-only fails here (no
-	// saturation).
+	// fires. NOT dead-zone (PsiAvailable true) → LimitedVisibility=false.
+	// A stub keeping headroom dead-zone-only fails here (no saturation).
 	t.Run("FULL_PLUS_PSI", func(t *testing.T) {
 		st := &WindowState{}
 		s := Sample{Timestamp: base, HostBusyCores: 8.0, HostBusyCoresAvailable: true, LogicalCpus: 8.0, PsiAvailable: true, PressureAvg60: 0.30, PsiReadable: true}
@@ -3217,9 +3215,10 @@ func TestDecide_Saturation_FiresOnVirtualizedBox(t *testing.T) {
 		if !hasPressure || !hasSat {
 			t.Fatalf("Causes: got %v, want both pressure AND saturation (option B: full+PSI → [pressure, saturation])", v.Causes)
 		}
-		// The saturation cause Value is the negative headroom in cores (not 0):
-		// saturationAvg is 0 outside the dead-zone (usage ring is dead-zone-only),
-		// so the Value must come from HeadroomCores to read "N cores over capacity."
+		// The saturation cause Value is the negative headroom in cores (not
+		// 0): saturationAvg is 0 in no-limit mode (its quota denominator is
+		// absent), so the Value must come from HeadroomCores to read "N
+		// cores over capacity."
 		if !floatEq(satValue, sig.HeadroomCores) {
 			t.Fatalf("saturation Value: got %v, want %v (HeadroomCores, 'cores over capacity'; saturationAvg is 0 outside the dead-zone)", satValue, sig.HeadroomCores)
 		}
@@ -4633,8 +4632,9 @@ func TestDecide_NoLimitHostOutage_OverlapWithNoHostStats(t *testing.T) {
 		t.Fatalf("Cause Value: got %v, want 0.75 (NoHostStatsSaturationFraction; the new NoLimitHostFired gate must not shadow NoHostStatsSaturationFired in the overlap)", satVal)
 	}
 
-	// Message pin: the NoHostStatsSaturationFired arm renders the NoHostStatsSaturationFraction
-	// percentage (75%), not "0%" (which the pre-fix satValue=0 produced).
+	// Message pin: the NoHostStatsSaturationFired arm renders the
+	// NoHostStatsSaturationFraction percentage (75%), not the "0%" a
+	// shadowed satValue of 0 would produce.
 	msg := ComposeMessage(vHold, sigHold)
 	_, details, _ := strings.Cut(msg, "Technical Details: ")
 	details = strings.TrimSpace(details)
@@ -4657,8 +4657,8 @@ func TestDecide_NoLimitHostOutage_OverlapWithNoHostStats(t *testing.T) {
 // Cause.Value read as +7 cores for a degraded saturation verdict
 // (semantically backwards: Value is documented as negative headroom / cores
 // over-capacity). The Value must not be a large positive headroom on an
-// outage tick. Q1 fixed the no-limit analogue (NoLimitHostFired); this pins
-// the limit-mode one (HostFullFired) that Q1 missed.
+// outage tick. A companion test pins the no-limit analogue
+// (NoLimitHostFired); this pins the limit-mode latch (HostFullFired).
 func TestDecide_LimitHostOutage_SatValueNotPositiveHeadroom(t *testing.T) {
 	base := time.Date(2026, 7, 6, 12, 0, 0, 0, time.UTC)
 	th := DefaultThresholds()
@@ -4715,10 +4715,11 @@ func TestDecide_LimitHostOutage_SatValueNotPositiveHeadroom(t *testing.T) {
 	}
 
 	// No-shadow pin: HostFullFired is limit-mode-only and
-	// NoHostStatsSaturationFired is no-limit-mode-only (the mode switch clears
-	// the other mode's latches), so the new HostFullFired && !HostBusyCoresAvailable
-	// satValue gate cannot shadow the NoHostStatsSaturationFired arm. Confirm
-	// the no-limit latch stays false in limit mode on the outage tick.
+	// NoHostStatsSaturationFired is no-limit-mode-only (the mode switch
+	// clears the other mode's latches), so the HostFullFired &&
+	// !HostBusyCoresAvailable satValue gate cannot shadow the
+	// NoHostStatsSaturationFired arm. Confirm the no-limit latch stays false
+	// in limit mode on the outage tick.
 	if sigHold.NoHostStatsSaturationFired {
 		t.Fatalf("NoHostStatsSaturationFired: got true, want false (limit mode clears the no-limit latches; HostFullFired and NoHostStatsSaturationFired are mutually exclusive by mode)")
 	}
@@ -4728,14 +4729,14 @@ func TestDecide_LimitHostOutage_SatValueNotPositiveHeadroom(t *testing.T) {
 }
 
 // TestDecide_NoLimitHostFull_ContainerIsCause_AttributionUnknown pins the
-// DA-found regression in the attribution fix: on a no-limit host-full box
-// where the CONTAINER ITSELF is the dominant cause (host-busy = container +
-// small neighbour), the default heuristic must run and yield
-// AttributionUnknown. NoLimitHostFired fires (headroom < 0), but on a READABLE
-// tick (HostBusyCoresAvailable=true) the host/container split is computable
-// (hb−uc = 0.5, not > uc=7.0) → AttributionUnknown (the container IS the
-// cause, not a host/neighbour problem). A fix that unconditionally forces
-// AttributionHost on every NoLimitHostFired tick breaks this case.
+// case where a no-limit host-full box has the CONTAINER ITSELF as the
+// dominant cause (host-busy = container + small neighbor): the default
+// heuristic must run and yield AttributionUnknown. NoLimitHostFired fires
+// (headroom < 0), but on a READABLE tick (HostBusyCoresAvailable=true) the
+// host/container split is computable (hb−uc = 0.5, not > uc=7.0) →
+// AttributionUnknown (the container IS the cause, not a host/neighbor
+// problem). Unconditionally forcing AttributionHost on every
+// NoLimitHostFired tick breaks this case.
 func TestDecide_NoLimitHostFull_ContainerIsCause_AttributionUnknown(t *testing.T) {
 	base := time.Date(2026, 7, 6, 12, 0, 0, 0, time.UTC)
 	th := DefaultThresholds()
@@ -4948,7 +4949,7 @@ func TestDecide_ThrottleLatch_HoldOnMissingCounters(t *testing.T) {
 	// failed, NrPeriods=0 is a missing reading, not a real counter). The
 	// clear-on-regression (0 < 2000) must NOT fire, the append must NOT add a
 	// zero point, and the latch must HOLD (stays fired, verdict stays
-	// degraded). Without the fix, the zero NrPeriods reads as a counter
+	// degraded). Without the NrPeriodsAvailable gate, the zero NrPeriods reads as a counter
 	// regression, wipes the 60s window, and the empty-ring ratio=0 clears the
 	// latch for ~60s of silent throttle miss.
 	v2, sig2 := Decide(st, Sample{
@@ -4990,9 +4991,9 @@ func TestDecide_PressureLatch_HoldOnMissingPSI(t *testing.T) {
 
 	// (b) Transient PSI read failure: PsiReadable=false (cpu.pressure read
 	// failed, PressureAvg60=0 is a missing reading, not a real zero). The
-	// latch must HOLD (stays fired, verdict stays degraded). Without the fix,
-	// 0 < PressureRecover 0.12 clears the latch and the verdict flaps to
-	// healthy for the failure tick.
+	// latch must HOLD (stays fired, verdict stays degraded). Without the
+	// PsiReadable hold, 0 < PressureRecover 0.12 clears the latch and the
+	// verdict flaps to healthy for the failure tick.
 	v2, sig2 := Decide(st, Sample{
 		Timestamp:     base.Add(10 * time.Second),
 		PressureAvg60: 0,

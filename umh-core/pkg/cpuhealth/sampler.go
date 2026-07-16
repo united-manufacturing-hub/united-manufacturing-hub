@@ -156,9 +156,9 @@ func (s *cgroupSampler) readCPUMax(ctx context.Context) (*float64, bool) {
 		return nil, false
 	}
 
-	// "max" keyword = unlimited quota. Return a non-nil zero so Decide treats
-	// the container as uncapped (no CgroupCores fallback), matching the
-	// Quota=&0 contract pinned in decide_test.go.
+	// "max" keyword = unlimited quota. Return a non-nil zero so Decide
+	// treats the container as uncapped, with no CgroupCores fallback (the
+	// Quota=&0 contract on Sample).
 	if string(fields[0]) == "max" {
 		zero := 0.0
 
@@ -216,10 +216,10 @@ func (s *cgroupSampler) readPressure(ctx context.Context, sample *Sample) {
 }
 
 // readVirtualized reads /proc/cpuinfo (looking for "hypervisor" in the flags
-// line), caches the result on the first SUCCESSFUL read, and sets Virtualized on
-// every Sample. A read failure leaves the cache unset so the next Sample retries
-// instead of permanently caching Virtualized=false (which would silently drop
-// the steal cause, the precise failure mode PsiAvailable was added to prevent).
+// line), caches the result on the first SUCCESSFUL read, and sets Virtualized
+// on every Sample. A read failure leaves the cache unset so the next Sample
+// retries; permanently caching Virtualized=false would silently disable the
+// steal cause.
 //
 // On ARM64 /proc/cpuinfo has no "flags" line (it exposes "Features" with no
 // "hypervisor" bit), so the cpuinfo check alone misses hypervisors there. As a

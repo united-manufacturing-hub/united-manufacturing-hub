@@ -28,11 +28,11 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 )
 
-// Rung 16 — the capstone. A PROOF (not RED->GREEN) integration test that drives
+// A proof-style integration test that drives
 // container_monitor.GetStatus with a mock filesystem through the full CPU-health
 // model: GetStatus -> sampler.Sample -> cpuhealth.Decide -> ComposeMessage ->
-// models.CPU. It pins the spec's end-to-end scenarios so a wiring break between
-// the rungs surfaces as a failing assertion here. Each scenario asserts the wire
+// models.CPU. It pins the end-to-end scenarios so a wiring break between the
+// layers surfaces as a failing assertion here. Each scenario asserts the wire
 // fields (State, Attribution, Causes, the existing Health/IsThrottled/
 // ThrottleRatio) are consistent with the model.
 //
@@ -82,7 +82,7 @@ var _ = Describe("capstone: end-to-end CPU-health model through GetStatus (rung 
 
 		svc := container_monitor.NewContainerMonitorServiceWithPath(mockFS, testDataPath)
 
-		// Tick 1 — baseline the sampler's usage_usec counter.
+		// Tick 1: baseline the sampler's usage_usec counter.
 		usageUsec = 0
 		_, err = svc.GetStatus(ctx)
 		Expect(err).NotTo(HaveOccurred())
@@ -100,7 +100,7 @@ var _ = Describe("capstone: end-to-end CPU-health model through GetStatus (rung 
 		status, err := svc.GetStatus(ctx)
 		Expect(err).NotTo(HaveOccurred())
 
-		// Precondition: the container IS busy — total usage is in a high-usage
+		// Precondition: the container IS busy; total usage is in a high-usage
 		// band (>= 0.5 core, i.e. >= 25%% of the 2.0-core quota). A band (not a
 		// hard >= 1.0 core) tolerates the elapsed-seconds jitter the 1s Sleep
 		// introduces on a loaded CI runner (TotalUsageMCpu = usage_usec_delta/
@@ -160,12 +160,12 @@ var _ = Describe("capstone: end-to-end CPU-health model through GetStatus (rung 
 
 		svc := container_monitor.NewContainerMonitorServiceWithPath(mockFS, testDataPath)
 
-		// Tick 1 — baseline the throttle ring (single point, ratio 0).
+		// Tick 1: baseline the throttle ring (single point, ratio 0).
 		nrPeriods, nrThrottled, usageUsec = 1000, 0, 1_000_000
 		_, err = svc.GetStatus(ctx)
 		Expect(err).NotTo(HaveOccurred())
 
-		// Tick 2 — nr_throttled jumps so the 60s windowed ratio is 0.10
+		// Tick 2: nr_throttled jumps so the 60s windowed ratio is 0.10
 		// (100 throttled / 1000 periods) > ThrottleHigh 0.05 -> latch fires.
 		nrPeriods, nrThrottled, usageUsec = 2000, 100, 2_000_000
 		time.Sleep(1 * time.Second)
@@ -290,7 +290,7 @@ var _ = Describe("capstone: end-to-end CPU-health model through GetStatus (rung 
 		Expect(err).NotTo(HaveOccurred())
 
 		// ~0.4 core of usage over ~1s on an uncapped bare-metal box (40% of
-		// 1 core) — well below the saturation backstop's 70% mark.
+		// 1 core), well below the saturation backstop's 70% mark.
 		usageUsec = 400_000
 		time.Sleep(1 * time.Second)
 		status, err := svc.GetStatus(ctx)
@@ -335,7 +335,7 @@ var _ = Describe("capstone: end-to-end CPU-health model through GetStatus (rung 
 		// the host-contention latch fires when headroom < 0, i.e. when
 		// hostBusyMean > LogicalCpus - cpuReserveCores (hostBusyMean is in
 		// cores = busy_delta/(100*elapsed)). To trigger this on ANY host,
-		// including 256+-core CI runners, we make the busy delta far larger
+		// including 256+-core CI runners, the test makes the busy delta far larger
 		// than 100*elapsed*NumCPU can ever consume: busy_delta = 5,000,000
 		// => at elapsed=4s on 256 cores, hostBusyMean ~= 12,500 cores, well
 		// past the NumCPU-1 headroom floor. This removes the NumCPU coupling
@@ -375,7 +375,7 @@ var _ = Describe("capstone: end-to-end CPU-health model through GetStatus (rung 
 
 		svc := container_monitor.NewContainerMonitorServiceWithPath(mockFS, testDataPath)
 
-		// Tick 1 — baselines the sampler's usage_usec + /proc/stat (no deltas
+		// Tick 1: baselines the sampler's usage_usec + /proc/stat (no deltas
 		// yet). Pressure fires immediately (direct threshold) -> the demand
 		// gate opens, but HostBusyCores is 0 (first /proc/stat read) so
 		// host-contention cannot fire yet.
@@ -383,13 +383,13 @@ var _ = Describe("capstone: end-to-end CPU-health model through GetStatus (rung 
 		_, err = svc.GetStatus(ctx)
 		Expect(err).NotTo(HaveOccurred())
 
-		// Tick 2 — warmup: first real host-busy delta (ring gets 1 entry,
+		// Tick 2: warmup, the first real host-busy delta (ring gets 1 entry,
 		// still below the 2-sample floor so the mean is not published yet).
 		usageUsec, procStat = 2_000_000, procStatTick1
 		_, err = svc.GetStatus(ctx)
 		Expect(err).NotTo(HaveOccurred())
 
-		// Tick 3 — /proc/stat advances again so the hostBusyRing clears the
+		// Tick 3: /proc/stat advances again so the hostBusyRing clears the
 		// 2-sample floor and HostBusyCores is computed (busy host). The
 		// demand gate (pressure) is open, host_busy_ratio >
 		// headroom < 0 -> host-contention fires. Steal is negligible (small
@@ -399,10 +399,10 @@ var _ = Describe("capstone: end-to-end CPU-health model through GetStatus (rung 
 		status, err := svc.GetStatus(ctx)
 		Expect(err).NotTo(HaveOccurred())
 
-		// R5 fold: host-contention is folded into saturation + the
-		// host/container attribution split. This scenario (busy host + pressure
-		// firing, our load light) degrades on the pressure cause, with
-		// Attribution=host via the split (host share > our share). No
+		// Host-contention is folded into saturation + the host/container
+		// attribution split. This scenario (busy host + pressure firing,
+		// light container load) degrades on the pressure cause, with
+		// Attribution=host via the split (host share > container share). No
 		// host-contention cause is emitted.
 		Expect(status.CPU.State).To(Equal("degraded"),
 			"HOST-CONTENTION: busy host + pressure firing must degrade")
@@ -422,11 +422,9 @@ var _ = Describe("capstone: end-to-end CPU-health model through GetStatus (rung 
 	// in /proc/stat (StealFraction > StealHigh 0.10 over the 2-sample p95
 	// floor) and NO pressure/throttle -> State=degraded, Attribution=host
 	// (steal is external), Causes contains {kind:'steal'}. Steal is already-
-	// built behavior (its own Schmitt latch + 60s ring at decide.go), so this
-	// scenario forces ZERO production changes — it is exactly the kind of
-	// already-built behavior a proof capstone should pin. Unlike saturation
-	// (scenario 5, deferred because it requires NEW production behavior), steal
-	// has no minimality reason to omit. ---
+	// built behavior (its own Schmitt latch + 60s ring in decide.go), so this
+	// scenario pins existing behavior end to end without touching
+	// production. ---
 	It("(7) STEAL-DEGRADE: VM with steal fraction > 0.10 degrades with attribution host and cause steal", func() {
 		mockFS := filesystem.NewMockFileSystem()
 		ctx := context.Background()
@@ -437,7 +435,7 @@ var _ = Describe("capstone: end-to-end CPU-health model through GetStatus (rung 
 		const cpuMax = "200000 100000\n" // capped (so the sample is not dead-zone)
 		// No cpu.pressure -> PsiAvailable=false -> pressure does not fire (and
 		// the host-contention demand gate stays closed, so host-contention
-		// cannot fire — only steal fires here, making Attribution=host
+		// cannot fire; only steal fires here, making Attribution=host
 		// unambiguous rather than a severity tie-break).
 		// /proc/cpuinfo with "hypervisor" flag -> Virtualized=true (a VM), the
 		// gate for the steal ring/latch.
@@ -447,7 +445,7 @@ var _ = Describe("capstone: end-to-end CPU-health model through GetStatus (rung 
 		// irq softirq steal guest guest_nice. Tick 0 baselines (StealFraction
 		// = 0 on the first read; the steal ring gets one sample). Tick 1 makes
 		// the steal delta a large fraction of the total delta so StealFraction
-		// > StealHigh 0.10. HostBusyCores is 0 (busy unchanged) — irrelevant
+		// > StealHigh 0.10. HostBusyCores is 0 (busy unchanged), irrelevant
 		// here since the demand gate is closed, but it also keeps
 		// host-contention off.
 		procStatTick0 := "cpu  1000 1000 1000 8000 0 0 0 50 0 0\n"
@@ -479,14 +477,14 @@ var _ = Describe("capstone: end-to-end CPU-health model through GetStatus (rung 
 
 		svc := container_monitor.NewContainerMonitorServiceWithPath(mockFS, testDataPath)
 
-		// Tick 1 — baselines the sampler's usage_usec + /proc/stat (no deltas
+		// Tick 1: baselines the sampler's usage_usec + /proc/stat (no deltas
 		// yet). Virtualized=true so the steal ring takes its first sample
 		// (steal=0); the 2-sample floor means the latch is NOT evaluated yet.
 		usageUsec, procStat = 1_000_000, procStatTick0
 		_, err = svc.GetStatus(ctx)
 		Expect(err).NotTo(HaveOccurred())
 
-		// Tick 2 — /proc/stat advances so StealFraction = 0.667. The steal
+		// Tick 2: /proc/stat advances so StealFraction = 0.667. The steal
 		// ring now holds 2 samples [0, 0.667]; nearest-rank p95 = 0.667 >
 		// StealHigh 0.10 -> the steal latch fires. Steal is external, and it
 		// is the only fired cause (no pressure/throttle/host-contention), so
@@ -510,8 +508,8 @@ var _ = Describe("capstone: end-to-end CPU-health model through GetStatus (rung 
 	})
 
 	// --- (5) SATURATION-DEGRADE-DEAD-ZONE: the dead-zone saturation backstop
-	// fires on a full dead-zone box — bare-metal (no hypervisor flag), uncapped
-	// (cpu.max = "max"), no PSI (no cpu.pressure), no throttle — with the host
+	// fires on a full dead-zone box (bare-metal with no hypervisor flag,
+	// uncapped cpu.max = "max", no PSI, no throttle) with the host
 	// at capacity (HostBusyCores fills every core leaving less than one core of
 	// reserve). Two invariants the assertions below cannot convey by
 	// themselves are pinned by the setup:
@@ -519,7 +517,7 @@ var _ = Describe("capstone: end-to-end CPU-health model through GetStatus (rung 
 	// 1. NumCPU-decoupling. LogicalCpus = runtime.NumCPU() (sampler.go, no
 	//    override seam), so the headroom trigger fires when hostBusyMean (the
 	//    60s mean of per-tick HostBusyCores) > NumCPU - 1.0. To exceed NumCPU -
-	//    1 on ANY host — including 256+-core CI runners — the busy delta is
+	//    1 on ANY host, including 256+-core CI runners, the busy delta is
 	//    made far larger than 100*elapsed*NumCPU can ever consume (the same
 	//    overwhelming-margin pattern as scenario 6), so the test does not
 	//    depend on the host it runs on.
@@ -554,7 +552,7 @@ var _ = Describe("capstone: end-to-end CPU-health model through GetStatus (rung 
 		// core. The busy delta is 5,000,000 jiffies per tick (see invariant 1
 		// above for the NumCPU-decoupling margin); the test sleeps ~1s between
 		// ticks, so HostBusyCores ~= 5,000,000 / 100 / 1 ~= 50,000 and
-		// hostBusyMean (the mean of two real ~50,000 readings) ~= 50,000 —
+		// hostBusyMean (the mean of two real ~50,000 readings) ~= 50,000,
 		// far above the NumCPU-1 fire floor on any plausible host, so the
 		// saturation backstop fires. Two delta ticks are needed so the
 		// hostBusyRing clears its 2-sample floor (the baseline tick no longer
@@ -588,7 +586,7 @@ var _ = Describe("capstone: end-to-end CPU-health model through GetStatus (rung 
 
 		svc := container_monitor.NewContainerMonitorServiceWithPath(mockFS, testDataPath)
 
-		// Tick 1 — baselines the sampler's usage_usec + /proc/stat (no deltas
+		// Tick 1: baselines the sampler's usage_usec + /proc/stat (no deltas
 		// yet). HostBusyCores is 0 (first /proc/stat read baselines), so
 		// hostBusyMean is 0 (the 2-sample floor keeps the ring at 1 entry) and
 		// HeadroomCores = NumCPU - 0 - 1 > 0 => saturation does NOT fire yet.
@@ -607,7 +605,7 @@ var _ = Describe("capstone: end-to-end CPU-health model through GetStatus (rung 
 		Expect(status1.CPU.Causes).To(BeEmpty(),
 			"SATURATION-DEGRADE-DEAD-ZONE: tick-1 baseline must carry no degrade causes")
 
-		// Tick 2 — warmup: first real host-busy delta (ring gets 1 entry,
+		// Tick 2: warmup, the first real host-busy delta (ring gets 1 entry,
 		// still below the 2-sample floor so hostBusyMean stays 0 and
 		// saturation does not fire yet).
 		usageUsec, nrPeriods, procStat = 2_000_000, 2000, procStatTick1
@@ -634,7 +632,7 @@ var _ = Describe("capstone: end-to-end CPU-health model through GetStatus (rung 
 			"SATURATION-DEGRADE-DEAD-ZONE: attribution is host via the host/container split — the host (non-UMH) share of HostBusyCores exceeds the UMH share")
 		// Limited-visibility wire equivalent: the dead-zone (no CPU limit, no
 		// PSI) surfaces on the wire as the absence of the fetchable cgroup/PSI
-		// signals — CgroupCores=0 (uncapped, omitted via omitempty) and
+		// signals: CgroupCores=0 (uncapped, omitted via omitempty) and
 		// verdictBasis.pressure.applies=false (PSI absent). The verdict basis is
 		// present whenever Decide ran; on a PSI-absent box pressure.applies=false
 		// and pressure.value=0, which is the wire signature of the no-PSI half of
@@ -649,7 +647,7 @@ var _ = Describe("capstone: end-to-end CPU-health model through GetStatus (rung 
 		Expect(status.CPU.VerdictBasis.Pressure.Applies).To(BeFalse(),
 			"SATURATION-DEGRADE-DEAD-ZONE: verdictBasis.pressure.applies is false (PSI absent) — the wire signature of the no-PSI half of the dead-zone")
 		// verdictBasis.hostBusy.mean carries the 60s mean of host-busy
-		// cores (the host observation) — non-nil because Decide ran,
+		// cores (the host observation), non-nil because Decide ran,
 		// and > 0 because the degraded tick computed a large host-busy delta.
 		Expect(status.CPU.VerdictBasis.HostBusy.Mean).To(BeNumerically(">", 0),
 			"SATURATION-DEGRADE-DEAD-ZONE: verdictBasis.hostBusy.mean must carry the computed host-busy value (> 0) on the degraded tick")

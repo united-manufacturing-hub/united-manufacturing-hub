@@ -32,20 +32,17 @@ import (
 
 var _ = Describe("sampler full Sample wired into Decide (rung 12b)", func() {
 	It("degrades on a PSI-pressure scenario via the sampler's full Sample, not the hand-built throttle-only Sample", func() {
-		// Rung 12b wires the sampler's full Sample() output into the
-		// cpuhealth.Decide call site in getCPUMetrics. Today getRawCPUMetrics
-		// calls c.sampler.Sample(ctx) and uses ONLY sample.UsageCores,
-		// discarding PressureAvg60/PsiAvailable/StealFraction/Virtualized/
-		// HostBusyCores/LogicalCpus/Quota. getCPUMetrics then hand-builds a
-		// Sample{Timestamp, NrPeriods, NrThrottled} from cgroupInfo (which lacks
-		// every non-throttle signal) and passes THAT to Decide. The non-throttle
-		// causes (pressure, steal, host-contention, saturation) are therefore
-		// inert in production: Decide never sees a non-zero PressureAvg60, so the
-		// pressure Schmitt flip-latch cannot fire.
+		// GetStatus must pass the sampler's full Sample() output to
+		// cpuhealth.Decide. If the call site rebuilt a throttle-only Sample
+		// (discarding PressureAvg60/PsiAvailable/StealFraction/Virtualized/
+		// HostBusyCores/LogicalCpus/Quota), the non-throttle causes
+		// (pressure, steal, saturation) would go inert in production: Decide
+		// would never see a non-zero PressureAvg60, so the pressure Schmitt
+		// flip-latch could not fire.
 		//
-		// This test injects a PSI-pressure scenario through the mock fs —
-		// cpu.pressure "some avg60=25.00" (0.25 fraction > PressureHigh 0.20) —
-		// alongside a capped cpu.max and a throttle-free cpu.stat (nr_throttled
+		// This test injects a PSI-pressure scenario through the mock fs
+		// (cpu.pressure "some avg60=25.00", a 0.25 fraction > PressureHigh
+		// 0.20) alongside a capped cpu.max and a throttle-free cpu.stat (nr_throttled
 		// pinned at 0 so the throttle latch cannot fire). With the sampler's full
 		// Sample wired to Decide, the pressure latch fires and GetStatus returns
 		// CPUHealth=Degraded via the non-throttle path. The sampler's full Sample
@@ -63,7 +60,7 @@ var _ = Describe("sampler full Sample wired into Decide (rung 12b)", func() {
 		defer func() { _ = os.RemoveAll(testDataPath) }()
 
 		// cpu.max: "200000 100000" => quota 2.0 cores (capped, so the sample is
-		// not in the dead-zone and the saturation backstop cannot fire — pressure
+		// not in the dead-zone and the saturation backstop cannot fire; pressure
 		// is the only cause that can degrade here).
 		const cpuMax = "200000 100000\n"
 
@@ -74,7 +71,7 @@ var _ = Describe("sampler full Sample wired into Decide (rung 12b)", func() {
 
 		// nr_throttled is pinned at 0 and nr_periods advances monotonically, so
 		// the throttle ratio is 0 across both ticks and the throttle latch cannot
-		// fire — the only possible degrade cause is pressure. usage_usec advances
+		// fire; the only possible degrade cause is pressure. usage_usec advances
 		// so the sampler reports a non-baseline UsageCores on tick 2 (irrelevant
 		// to pressure but exercises the real sampler path, not a no-op).
 		var nrPeriods int64 = 1000
@@ -95,14 +92,14 @@ var _ = Describe("sampler full Sample wired into Decide (rung 12b)", func() {
 				// /proc/cpuinfo and /proc/stat are absent: the sampler treats
 				// those reads as best-effort failures (Virtualized=false,
 				// StealFraction=0, HostBusyCores=0), so steal and host-contention
-				// cannot fire — pressure remains the sole degrade cause.
+				// cannot fire; pressure remains the sole degrade cause.
 				return nil, errors.New("file not found: " + path)
 			}
 		})
 
 		svc := container_monitor.NewContainerMonitorServiceWithPath(mockFS, testDataPath)
 
-		// Tick 1 — baselines the sampler's usage_usec counter; pressure is read
+		// Tick 1: baselines the sampler's usage_usec counter; pressure is read
 		// fresh and thresholded directly (no ring/small-N floor), so it fires
 		// on this very tick. Pin that the degrade is already visible on tick 1
 		// so a future change that delayed the pressure latch to tick 2 would
@@ -113,7 +110,7 @@ var _ = Describe("sampler full Sample wired into Decide (rung 12b)", func() {
 		Expect(status1.CPUHealth).To(Equal(models.Degraded),
 			"pressure is thresholded directly on tick 1 (some avg60=0.25 > PressureHigh 0.20); the latch must fire immediately")
 
-		// Tick 2 — pressure sustained; the latch is held above PressureHigh. With
+		// Tick 2: pressure sustained; the latch is held above PressureHigh. With
 		// the sampler's full Sample wired to Decide, verdict.State is degraded and
 		// GetStatus propagates CPUHealth=Degraded. The sampler's full Sample
 		// carries PressureAvg60=0.25 to Decide, so the pressure latch fires and
@@ -158,12 +155,12 @@ var _ = Describe("steal p95 wired onto the wire via the sampler", func() {
 		// ThrottleRatio), independent of the steal latch. To prove that, this
 		// test drives a steal delta that stays BELOW StealHigh (0.10): the latch
 		// does NOT fire, yet the computed steal p95 must still reach
-		// models.CPU.StealP95 on the wire — proving the value crosses the
+		// models.CPU.StealP95 on the wire, proving the value crosses the
 		// container_monitor adapter without a fired latch to carry it.
 		//
 		// cpu.max is capped (Quota=2.0) so the sample is outside the dead-zone
 		// (no saturation backstop), nr_throttled is pinned at 0 (no throttle), and
-		// cpu.pressure is absent (no pressure) — steal is the only signal moving,
+		// cpu.pressure is absent (no pressure); steal is the only signal moving,
 		// and it stays sub-threshold, so the verdict stays healthy.
 		mockFS := filesystem.NewMockFileSystem()
 		ctx := context.Background()
@@ -179,7 +176,7 @@ var _ = Describe("steal p95 wired onto the wire via the sampler", func() {
 		// is steal. Tick 1 baselines (steal=0, total=1000). Tick 2 advances total
 		// by 200 and steal by 1 → StealFraction = 1/200 = 0.005, well below
 		// StealHigh 0.10. With Virtualized=true the steal ring then holds
-		// [0, 0.005], so the nearest-rank p95 is ~0.005 — the latch does NOT fire.
+		// [0, 0.005], so the nearest-rank p95 is ~0.005; the latch does NOT fire.
 		var procStat = "cpu 0 0 0 1000 0 0 0 0 0 0\n"
 
 		var nrPeriods int64 = 1000
@@ -205,7 +202,7 @@ var _ = Describe("steal p95 wired onto the wire via the sampler", func() {
 
 		svc := container_monitor.NewContainerMonitorServiceWithPath(mockFS, testDataPath)
 
-		// Tick 1 — baselines /proc/stat (StealFraction=0); the steal ring holds a
+		// Tick 1: baselines /proc/stat (StealFraction=0); the steal ring holds a
 		// single 0 sample, below the 2-sample floor, so signals.StealP95 is 0.
 		// The basis is emitted whenever Decide ran; basis.steal.value mirrors
 		// signals.StealP95, which is populated unconditionally (the box is
@@ -225,14 +222,14 @@ var _ = Describe("steal p95 wired onto the wire via the sampler", func() {
 		Expect(stealBaselineJSON).To(ContainSubstring(`"steal":{"value":0`),
 			"verdictBasis.steal.value is emitted as 0 on the wire when virtualized (applies=true), even on the baseline tick")
 
-		// Tick 2 — steal delta 1, total delta 200 → StealFraction = 0.005; the ring
+		// Tick 2: steal delta 1, total delta 200 → StealFraction = 0.005; the ring
 		// now holds [0, 0.005] and the p95 (~0.005) reaches the wire inside the
 		// verdict basis. This p95 is below StealHigh 0.10, so the steal latch does
-		// NOT fire, yet basis.steal.value is still populated — proving the value
+		// NOT fire, yet basis.steal.value is still populated, proving the value
 		// is carried unconditionally, not gated on a fired latch.
 		// usage_usec is pinned (no delta → UsageCores 0) so the limit-mode
-		// headroom stays positive (2 − 0 − 0.2 = 1.8) under R10.1's two-rule
-		// model — isolating the steal assertion from the headroom verdict (the
+		// headroom stays positive (2 − 0 − 0.2 = 1.8), isolating the steal
+		// assertion from the headroom verdict (the
 		// test's intent is "sub-threshold steal → Active," not a usage check).
 		procStat = "cpu 0 0 0 1199 0 0 0 1 0 0\n"
 		nrPeriods, usageUsec = 2000, 1_000_000
@@ -405,7 +402,7 @@ var _ = Describe("Decide gate: sampler success independent of cpu.max (C1)", fun
 
 var _ = Describe("Decide gate: hold latches on sampler failure (C2)", func() {
 	It("holds a prior degraded verdict across a cpu.stat read failure (no flap to healthy)", func() {
-		// C2: a prior degraded verdict + a cpu.stat read failure on the next
+		// A prior degraded verdict + a cpu.stat read failure on the next
 		// tick. Without the Decide gate, the sampler would return Sample{}
 		// early (before setting LogicalCpus), and Decide would run on the
 		// zero sample: the saturation switch hits the default branch
@@ -457,9 +454,9 @@ var _ = Describe("Decide gate: hold latches on sampler failure (C2)", func() {
 		Expect(status1.CPU.State).To(Equal("degraded"),
 			"prior tick: noHostStatsSaturation must fire on high usage before the failure tick")
 
-		// Tick 2: cpu.stat read fails. Sampler fails. Before the fix Decide
-		// runs on the zero sample and flaps to healthy; after the fix Decide
-		// is skipped and the prior degraded verdict holds.
+		// Tick 2: cpu.stat read fails, so the sampler fails. Decide must be
+		// skipped and the prior degraded verdict held; running Decide on the
+		// zero sample would flap the verdict to healthy.
 		tick = 2
 		status2, err := svc.GetStatus(ctx)
 		Expect(err).NotTo(HaveOccurred())
@@ -477,15 +474,15 @@ func (m *mockSamplerLogicalCpusZero) Sample(_ context.Context) (cpuhealth.Sample
 
 var _ = Describe("VerdictBasis guard: zero LogicalCpus (I8)", func() {
 	It("does not emit VerdictBasis when sample.LogicalCpus is zero to avoid a self-contradictory wire", func() {
-		// I8: when the sampler returns a zero LogicalCpus (a synthetic scenario
-		// that Rung 1's gate prevents in production, but a future code path
+		// When the sampler returns a zero LogicalCpus (a synthetic scenario
+		// the samplerOK gate prevents in production, but a future code path
 		// could re-introduce), Decide runs in no-limit mode (Quota nil) with
 		// capacity=LogicalCpus=0. The VerdictBasis would emit Capacity=0 +
 		// Ceiling='host', while CgroupCores comes from sample.Quota (non-nil
-		// and positive). The machine-readable wire is self-contradictory:
-		// CgroupCores says a limit is known while VerdictBasis says no
-		// capacity / host ceiling. The belt-and-suspenders guard gates
-		// VerdictBasis emission on sample.LogicalCpus > 0.
+		// and positive). That wire is self-contradictory: CgroupCores says a
+		// limit is known while VerdictBasis says no capacity / host ceiling.
+		// The defensive guard gates VerdictBasis emission on
+		// sample.LogicalCpus > 0.
 		mockFS := filesystem.NewMockFileSystem()
 		ctx := context.Background()
 
@@ -579,11 +576,12 @@ var _ = Describe("CgroupCores/basis wire consistency on sampler failure (Rung 6)
 		Expect(status2.CPU.VerdictBasis.Headroom.Ceiling).To(Equal("limit"),
 			"precondition: tick 2 emits ceiling=limit in limit mode")
 
-		// Tick 3: sampler fails. Decide is skipped; the held verdict basis is
-		// re-emitted. The RED: before the fix, CgroupCores is absent (dropped
-		// by omitempty because the zero Sample has Quota==nil) while
-		// VerdictBasis.Headroom.Ceiling="limit" is present. The consistency
-		// assertion (CgroupCores present AND ceiling=limit) fails.
+		// Tick 3: sampler fails. Decide is skipped; the held verdict basis
+		// is re-emitted. Without the held CgroupCores, the failure tick
+		// drops CgroupCores (omitempty on the zero Sample's nil Quota) while
+		// VerdictBasis.Headroom.Ceiling="limit" is still present, and the
+		// consistency assertion (CgroupCores present AND ceiling=limit)
+		// fails.
 		samplerFails = true
 		status3, err := svc.GetStatus(ctx)
 		Expect(err).NotTo(HaveOccurred())
@@ -765,12 +763,12 @@ var _ = Describe("Verdict-hold sustained outage drift (Rung 7.2)", func() {
 
 var _ = Describe("Verdict-hold stale-healthy case (Rung 7.3)", func() {
 	It("holds a prior healthy verdict across a sampler failure (the held-healthy case)", func() {
-		// The C2 test covered stale-degraded (a prior degraded verdict held
-		// across a failure). This covers the stale-healthy complement: a prior
-		// healthy verdict held across a failure. The conservative hold-on-missing
-		// semantics (consistent with the hostBusy ring) holds the last verdict
-		// even if the host degraded during the outage. The sampler is down, so
-		// we cannot know. Holding the last verdict is the conservative choice.
+		// A companion test covers stale-degraded (a prior degraded verdict
+		// held across a failure). This covers the stale-healthy complement:
+		// a prior healthy verdict held across a failure. The hold-on-missing
+		// semantics (consistent with the hostBusy ring) hold the last
+		// verdict even if the host degraded during the outage; the sampler
+		// is down, so the current host state is unknowable.
 		mockFS := filesystem.NewMockFileSystem()
 		ctx := context.Background()
 
@@ -816,8 +814,9 @@ var _ = Describe("Verdict-hold stale-healthy case (Rung 7.3)", func() {
 
 		// Tick 1: sampler fails. The held healthy verdict persists. This is the
 		// conservative hold-on-missing semantics: a sampler outage holds the
-		// last verdict even if the host degraded during the outage (we cannot
-		// know, the sampler is down). Consistent with the hostBusy ring, whose
+		// last verdict even if the host degraded during the outage (the
+		// sampler is down, so the host state is unknowable). Consistent with
+		// the hostBusy ring, whose
 		// prune runs inside Decide (skipped on a sampler failure), so the ring
 		// does not age out during a sustained outage either.
 		samplerFails = true

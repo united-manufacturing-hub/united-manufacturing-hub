@@ -4,14 +4,14 @@
 
 ### Improvements
 
-- CPU health now reports a degraded status when the host has no spare CPU core for a sustained minute, even without a CPU limit or pressure statistics. A busy container with spare headroom still reads healthy. A full container (no spare core) now shows as degraded instead of staying silent and green. A box that cannot absorb the next burst of work no longer looks fine.
+- CPU health now reports a degraded status when the host has no spare CPU core for a sustained minute, even without a CPU limit or pressure statistics. A busy container with spare headroom still reads healthy; a box that cannot absorb the next burst of work now shows as degraded instead of staying green.
 - The CPU health message now states whether usage is measured against the host or the container's CPU limit, and reports pressure, throttling, and steal when those signals are available.
 - Minimum CPU recommendation raised to 4 vCPU (from 2). Below 4 cores the 1-core headroom reserve leaves too little room for UMH work.
 
 ### Fixes
 
-- CPU health no longer flags a container as degraded just because its CPU usage is high. Previously, any container crossing 70% CPU showed as degraded and could block new bridges, even under healthy high load. CPU health is now based on actual starvation (throttling, CPU pressure, steal) rather than raw utilization. A busy container stays healthy and bridges are not blocked under normal load. When the host's CPU stats are unreadable, sustained container usage above 70% of the machine's cores is still used as a degradation fallback.
-- The CPU panel no longer shows a garbled percentage on tiny Kubernetes CPU quotas. Very small CPU limits previously produced a broken percentage in the health message.
+- CPU health no longer flags a container as degraded just because its CPU usage is high. Previously, any container crossing 70% CPU showed as degraded and could block new bridges, even under healthy high load. CPU health is now based on actual starvation (throttling, CPU pressure, steal) rather than raw utilization. When the host's CPU stats are unreadable, sustained container usage above 70% of the machine's cores is still used as a degradation fallback.
+- The CPU health message no longer shows a garbled percentage on very small CPU limits, such as tiny Kubernetes CPU quotas.
 
 ## [0.44.24]
 

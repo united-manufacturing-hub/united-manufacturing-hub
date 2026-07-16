@@ -72,7 +72,7 @@ var _ = Describe("three-field CPU-health wire contract on models.CPU", func() {
 
 		svc := container_monitor.NewContainerMonitorServiceWithPath(mockFS, testDataPath)
 
-		// Tick 1 — baseline the throttle ring (single point, ratio 0, latch
+		// Tick 1: baseline the throttle ring (single point, ratio 0, latch
 		// false). Verdict is healthy: State must be "healthy" and always emitted
 		// (no omitempty) even though Attribution/Causes are absent.
 		nrPeriods, nrThrottled, usageUsec = 1000, 0, 1_000_000
@@ -101,12 +101,12 @@ var _ = Describe("three-field CPU-health wire contract on models.CPU", func() {
 		Expect(status1.CPU.VerdictBasis.Throttle.Fired).To(BeFalse(),
 			"basis.throttle.fired is false on the healthy path (latch not fired)")
 
-		// Tick 2 — throttle fires (ratio 0.10 > 0.05). Decide returns
+		// Tick 2: throttle fires (ratio 0.10 > 0.05). Decide returns
 		// {degraded, unknown, [{throttling, 0.10}]}; getCPUMetrics must map the
 		// verdict onto the new wire fields AND keep the existing fields.
 		// usage_usec is pinned (no delta → UsageCores 0) so the limit-mode
 		// headroom stays positive (2 − 0 − 0.2 = 1.8) and saturation does NOT
-		// co-fire — isolating the throttle degrade from the two-rule headroom.
+		// co-fire, isolating the throttle degrade from the headroom rule.
 		nrPeriods, nrThrottled, usageUsec = 2000, 100, 1_000_000
 		status2, err := svc.GetStatus(ctx)
 		Expect(err).NotTo(HaveOccurred())
@@ -145,9 +145,9 @@ var _ = Describe("three-field CPU-health wire contract on models.CPU", func() {
 			"existing CgroupCores field preserved")
 
 		// Percentile mCPU fields (AvgMCpu/P95MCpu/P99MCpu) mirror the usage
-		// ring. Since R10.1 the ring fills every tick in ALL modes, so the
-		// percentiles are fetchable (non-nil) outside the dead-zone too — the
-		// container's own usage is available in limit mode. With usage_usec
+		// ring. The ring fills every tick in ALL modes, so the percentiles
+		// are fetchable (non-nil) outside the dead-zone too: the container's
+		// own usage is available in limit mode. With usage_usec
 		// pinned (UsageCores 0), the two-tick ring holds [0, 0] → AvgMCpu=0
 		// (non-nil pointer to 0, emitted on the wire as 0). The contract: non-nil
 		// (emitted, even 0) whenever the ring holds >= 2 entries; nil/omitted
@@ -212,13 +212,13 @@ var _ = It("emits a non-negative verdictBasis.hostBusy.mean on a /proc/stat coun
 
 	svc := container_monitor.NewContainerMonitorServiceWithPath(mockFS, testDataPath)
 
-	// Tick 1 — baseline /proc/stat (busy delta 0, first read).
+	// Tick 1: baseline /proc/stat (busy delta 0, first read).
 	usageUsec = 1_000_000
 	procStat = procStatTick0
 	_, err = svc.GetStatus(ctx)
 	Expect(err).NotTo(HaveOccurred())
 
-	// Tick 2 — total jiffies DECREASED (reset). The reset guard zeroes the
+	// Tick 2: total jiffies DECREASED (reset). The reset guard zeroes the
 	// negative busy delta, so the per-tick host-busy is 0 and the 60s mean
 	// (the host observation, on verdictBasis.hostBusy.mean)
 	// is 0, not negative.
@@ -241,10 +241,10 @@ var _ = It("emits a non-negative verdictBasis.hostBusy.mean on a /proc/stat coun
 // was computed (healthy AND degraded), so the MC renders the headline, the
 // host/container split, and the alert-rule budget dashboard from the verdict's
 // own inputs rather than parsing the message text or mirroring per-tick samples.
-// It is nil (JSON-omitted) only when no verdict exists — a cgroup read failure,
+// It is nil (JSON-omitted) only when no verdict exists: a cgroup read failure,
 // where Decide is not called.
 var _ = Describe("verdictBasis wire contract on models.CPU", func() {
-	// cpu.max "200000 100000" => quota 2.0 cores (capped, NOT the dead-zone — a
+	// cpu.max "200000 100000" => quota 2.0 cores (capped, NOT the dead-zone: a
 	// limit is set, so LimitApplies=true; PSI absent and not virtualized, so
 	// PsiApplies=StealApplies=false). The only degrade cause reachable here is
 	// throttle.
@@ -474,14 +474,14 @@ func throttleFireStatus(ctx context.Context) (*container_monitor.ServiceInfo, er
 
 	svc := container_monitor.NewContainerMonitorServiceWithPath(mockFS, testDataPath)
 
-	// Tick 1 — baseline.
+	// Tick 1: baseline.
 	if _, err := svc.GetStatus(ctx); err != nil {
 		return nil, err
 	}
 
-	// Tick 2 — fire: 100 throttled / 1000 new periods = 0.10 > 0.05.
+	// Tick 2: fire: 100 throttled / 1000 new periods = 0.10 > 0.05.
 	// usage_usec is pinned (no delta → UsageCores 0) so the limit-mode headroom
-	// stays positive (2 − 0 − 0.2 = 1.8) and saturation does NOT co-fire — the
+	// stays positive (2 − 0 − 0.2 = 1.8) and saturation does NOT co-fire; the
 	// throttle degrade is the sole cause (the helper's callers assert
 	// Headroom.Fired=false, which only holds when usage is pinned).
 	nrPeriods, nrThrottled, usageUsec = 2000, 100, 1_000_000
@@ -489,16 +489,13 @@ func throttleFireStatus(ctx context.Context) (*container_monitor.ServiceInfo, er
 	return svc.GetStatus(ctx)
 }
 
-// R10.4 reshapes the wire VerdictBasis to be mode-generic: the Headroom block
-// becomes {ceiling, capacity, used, reserve, cores, fired, limitSaturationFired,
-// hostFullFired, noHostStatsSaturationFired, noLimitHostFired} (hostBusyMean
-// leaves the block — its old name hard-coded host-mode semantics); a new
-// HostBusy {mean, available} observation block joins the basis; a top-level
-// limitedVisibility flag joins the basis. These tests pin the new shape in both
-// modes, the hostBusy.available=false omission on unreadable /proc/stat, and
-// the four sub-latch flags (limitSaturationFired, hostFullFired,
-// noHostStatsSaturationFired, noLimitHostFired). noLimitHostFired is the fourth
-// sub-latch (no-limit + host stats readable + host full), the OR invariant in
+// The wire VerdictBasis is mode-generic: the Headroom block is {ceiling,
+// capacity, used, reserve, cores, fired, limitSaturationFired,
+// hostFullFired, noHostStatsSaturationFired, noLimitHostFired}, a HostBusy
+// {mean, available} observation block sits beside it, and a top-level
+// limitedVisibility flag completes the basis. These tests pin that shape in
+// both modes, the hostBusy.available=false omission on unreadable
+// /proc/stat, and the four sub-latch flags with the OR invariant from
 // decide.go: fired == limitSaturationFired || hostFullFired ||
 // noHostStatsSaturationFired || noLimitHostFired.
 var _ = Describe("verdictBasis R10.4 mode-generic shape", func() {
@@ -531,12 +528,12 @@ var _ = Describe("verdictBasis R10.4 mode-generic shape", func() {
 
 		svc := container_monitor.NewContainerMonitorServiceWithPath(mockFS, testDataPath)
 
-		// Tick 1 — baseline the usage ring (first read → UsageCores 0, ring=[0]).
+		// Tick 1: baseline the usage ring (first read → UsageCores 0, ring=[0]).
 		nrPeriods, nrThrottled, usageUsec = 1000, 0, 1_000_000
 		_, err = svc.GetStatus(ctx)
 		Expect(err).NotTo(HaveOccurred())
 
-		// Tick 2 — usage_usec pinned (no delta → UsageCores 0; ring=[0,0] → mean 0).
+		// Tick 2: usage_usec pinned (no delta → UsageCores 0; ring=[0,0] → mean 0).
 		// Limit-mode headroom = 2.0 − 0 − 0.2 = 1.8 > 0 → saturation does not fire.
 		nrPeriods, nrThrottled, usageUsec = 2000, 0, 1_000_000
 		status, err := svc.GetStatus(ctx)
@@ -600,7 +597,7 @@ var _ = Describe("verdictBasis R10.4 mode-generic shape", func() {
 		// &0 (the uncapped contract), so LimitApplies=false. /proc/stat present and parseable
 		// so HostBusyCoresAvailable=true. Tick 2 advances only the idle column
 		// (total increases, busy unchanged) so the busy delta is 0 →
-		// HostBusyCores 0 (deterministic; the host is not full — this test pins
+		// HostBusyCores 0 (deterministic; the host is not full: this test pins
 		// the shape, not a fire). A positive total delta keeps the sampler on
 		// the steady-state path (HostBusyCoresAvailable=true); an unchanged
 		// /proc/stat would hit the counter-reset guard and report Available=false.
@@ -628,13 +625,13 @@ var _ = Describe("verdictBasis R10.4 mode-generic shape", func() {
 
 		svc := container_monitor.NewContainerMonitorServiceWithPath(mockFS, testDataPath)
 
-		// Tick 1 — baseline /proc/stat.
+		// Tick 1: baseline /proc/stat.
 		usageUsec = 1_000_000
 		procStat = procStatTick0
 		_, err = svc.GetStatus(ctx)
 		Expect(err).NotTo(HaveOccurred())
 
-		// Tick 2 — idle advances (positive total delta, busyDelta 0 →
+		// Tick 2: idle advances (positive total delta, busyDelta 0 →
 		// HostBusyCores 0; host not full).
 		usageUsec = 1_000_000
 		procStat = procStatTick1
@@ -645,7 +642,7 @@ var _ = Describe("verdictBasis R10.4 mode-generic shape", func() {
 		Expect(b).NotTo(BeNil(),
 			"verdictBasis is emitted (Decide ran: cgroup readable)")
 		// Headroom (no-limit mode): ceiling="host", used=hostBusyMean (the
-		// host-busy 60s mean — 0 here since busyDelta 0). HostBusy.Available=true
+		// host-busy 60s mean, 0 here since busyDelta 0). HostBusy.Available=true
 		// (/proc/stat readable). limitedVisibility=true (no limit + no PSI).
 		Expect(b.Headroom.Ceiling).To(Equal("host"))
 		Expect(b.Headroom.Used).To(BeNumerically("~", b.HostBusy.Mean, 1e-9),
@@ -676,7 +673,7 @@ var _ = Describe("verdictBasis R10.4 mode-generic shape", func() {
 		defer func() { _ = os.RemoveAll(testDataPath) }()
 
 		// cpu.max "max 100000" => no limit (host mode). /proc/stat absent →
-		// usage_usec pinned so the no-host-stats saturation fraction is 0 (no fire) — this test pins
+		// usage_usec pinned so the no-host-stats saturation fraction is 0 (no fire): this test pins
 		// the hostBusy.available=false shape, not a no-host-stats saturation fire.
 		const cpuMax = "max 100000\n"
 		var usageUsec int64 = 1_000_000
@@ -768,23 +765,23 @@ var _ = Describe("verdictBasis R10.4 mode-generic shape", func() {
 
 		svc := container_monitor.NewContainerMonitorServiceWithPath(mockFS, testDataPath)
 
-		// Tick 1 — baseline /proc/stat (busy 0).
+		// Tick 1: baseline /proc/stat (busy 0).
 		usageUsec = 1_000_000
 		procStat = procStatTick0
 		_, err = svc.GetStatus(ctx)
 		Expect(err).NotTo(HaveOccurred())
 
-		// Tick 2 — warmup: first real host-busy delta (ring gets 1 entry, still
+		// Tick 2: warmup, the first real host-busy delta (ring gets 1 entry, still
 		// below the 2-sample floor so host-full does not fire yet).
 		usageUsec = 1_000_000
 		procStat = procStatTick1
 		_, err = svc.GetStatus(ctx)
 		Expect(err).NotTo(HaveOccurred())
 
-		// Tick 3 — host busy delta huge again → ring clears the 2-sample floor,
+		// Tick 3: host busy delta huge again → ring clears the 2-sample floor,
 		// hostBusyMean enormous → host-full fires. usage_usec pinned →
 		// limit-sat does NOT fire. So HostFullFired=true and
-		// LimitSaturationFired=false — the ranking the basis must carry.
+		// LimitSaturationFired=false: the ranking the basis must carry.
 		usageUsec = 1_000_000
 		procStat = procStatTick2
 		status, err := svc.GetStatus(ctx)
@@ -861,7 +858,7 @@ var _ = Describe("verdictBasis R10.4 mode-generic shape", func() {
 
 		svc := container_monitor.NewContainerMonitorServiceWithPath(mockFS, testDataPath)
 
-		// Tick 1 — baseline usage_usec (UsageCores 0, ring=[0]).
+		// Tick 1: baseline usage_usec (UsageCores 0, ring=[0]).
 		usageUsec = 1_000_000
 		_, err = svc.GetStatus(ctx)
 		Expect(err).NotTo(HaveOccurred())
@@ -871,7 +868,7 @@ var _ = Describe("verdictBasis R10.4 mode-generic shape", func() {
 		// by < 1%, well inside the 0.70 fire / 0.60 clear band).
 		time.Sleep(1 * time.Second)
 
-		// Tick 2 — advance usage_usec by 1.6*LogicalCpus core-seconds so the
+		// Tick 2: advance usage_usec by 1.6*LogicalCpus core-seconds so the
 		// sampler reports ~1.6*LogicalCpus cores and the 60s-mean ring ([0, tick2])
 		// averages to ~0.80*LogicalCpus → fraction ~0.80 >= 0.70 → no-host-stats
 		// saturation fires. No /proc/stat → host-full not evaluated; no limit →
@@ -901,21 +898,22 @@ var _ = Describe("verdictBasis R10.4 mode-generic shape", func() {
 		Expect(b.Headroom.NoLimitHostFired).To(BeFalse(),
 			"noLimitHostFired is false on the no-host-stats branch (it does not touch the no-limit host latch; fresh state reads false)")
 
-		// T3: the headroom block reflects the D-row decision variable
-		// (usageCores60sMean/LogicalCpus), not the aged-out hostBusyMean.
-		// The latch fires on the container's own 60s-avg usage vs LogicalCpus,
-		// but the pre-fix headroom block unconditionally sourced Used from
-		// HostBusyCores60sMean (ages to 0 during the outage) and Cores from
-		// HeadroomCores (LogicalCpus - 0 - 1, large positive), so the wire read
-		// positive headroom + Fired=true (backwards). Used must be the
-		// container's own usage (the decision variable, NOT 0); Cores must be
-		// the D-row headroom relative to its fire threshold
-		// (HighUsageFraction*Capacity - Used), which is non-positive when the
-		// latch fired (0 at 0.70, negative above). The old fixed-ReserveCores
-		// formula (Capacity - Used - Reserve) stays positive in the 70..87.5%
-		// band on multi-core hosts (e.g. 8 cores at 75%: 8 - 6 - 1 = +1 while
-		// Fired=true); the 0.80 mean here would give +0.40 with the old formula,
-		// so this test catches that regression.
+		// T3: the headroom block reflects the no-host-stats decision
+		// variable (usageCores60sMean/LogicalCpus), not the aged-out
+		// hostBusyMean. The latch fires on the container's own 60s-avg
+		// usage vs LogicalCpus; a headroom block that sources Used
+		// unconditionally from HostBusyCores60sMean (which ages to 0 during
+		// the outage) and Cores from HeadroomCores (LogicalCpus - 0 - 1,
+		// large positive) puts positive headroom + Fired=true on the wire
+		// (backwards). Used must be the container's own usage (the decision
+		// variable, NOT 0); Cores must be the headroom relative to the
+		// latch's fire threshold (HighUsageFraction*Capacity - Used), which
+		// is non-positive when the latch fired (0 at 0.70, negative above).
+		// A fixed-ReserveCores formula (Capacity - Used - Reserve) stays
+		// positive in the 70..87.5% band on multi-core hosts (e.g. 8 cores
+		// at 75%: 8 - 6 - 1 = +1 while Fired=true); the 0.80 mean here
+		// would give +0.40 with that formula, so this test catches the
+		// regression.
 		highUsage := cpuhealth.DefaultThresholds().HighUsageFraction
 		Expect(b.Headroom.Used).To(BeNumerically(">", 0.0),
 			"Used is the container's own 60s-avg usage (the D-row decision variable), not the aged-out hostBusyMean (0)")

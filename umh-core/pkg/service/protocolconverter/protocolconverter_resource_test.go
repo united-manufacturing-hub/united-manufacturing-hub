@@ -906,7 +906,7 @@ var _ = Describe("IsResourceLimited: held stale-degraded verdict blocks bridges 
 		const cpuMax = "200000 100000\n" // quota 2.0 cores (capped, limit mode)
 		var (
 			nrPeriods, nrThrottled, usageUsec int64
-			samplerFails                        bool
+			samplerFails                      bool
 		)
 
 		mockFS := filesystem.NewMockFileSystem()

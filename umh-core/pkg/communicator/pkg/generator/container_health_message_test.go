@@ -76,7 +76,7 @@ func TestComposeContainerHealthMessage(t *testing.T) {
 
 	t.Run("memory-degraded does NOT leak the CPU message (CPU is not the driver)", func(t *testing.T) {
 		// overall Degraded but CPU is Active (memory is the degraded driver): the
-		// CPU's healthy message must NOT propagate to the container message —
+		// CPU's healthy message must NOT propagate to the container message;
 		// memory/disk get the generic line until they have rich composers (TODO).
 		got := composeContainerHealthMessage(models.Degraded, models.Active, withCPUMessage("CPU healthy"))
 		if got != getContainerHealthMessage(models.Degraded) {

@@ -208,12 +208,11 @@ var _ = Describe("Container Monitor Service", func() {
 			})
 		})
 
-		// Regression pin for the raw-usage degrade override that was
-		// removed from GetStatus. A high-usage NON-throttled container
-		// must report CPUHealth == Active, matching cpuStat.Health (the
-		// "busy is not sick" thesis). Before the fix, the ELSE branch in
-		// GetStatus set CPUHealth = Degraded purely from cpuPercent > 70,
-		// contradicting the Active cpuStat.Health and causing downstream
+		// Pins the absence of a raw-usage degrade override in GetStatus:
+		// a high-usage NON-throttled container must report CPUHealth ==
+		// Active, matching cpuStat.Health (busy is not sick). An override
+		// that sets CPUHealth = Degraded purely from cpuPercent > 70
+		// contradicts the Active cpuStat.Health and causes downstream
 		// bridge-blocking under normal high load. OverallHealth is not
 		// asserted because getMemoryMetrics and getDiskMetrics read the
 		// real host via gopsutil, so a loaded CI box can flip those
@@ -237,7 +236,7 @@ var _ = Describe("Container Monitor Service", func() {
 				// cgroup Sampler measures a known usage_usec delta over
 				// wall-clock. nr_throttled stays at 0 across both
 				// snapshots so the throttle ratio is 0 (well below the
-				// 0.05 threshold) — i.e. NOT throttled.
+				// 0.05 threshold), i.e. NOT throttled.
 				cpuStatUsec := int64(0)
 				nrPeriods := int64(100)
 
@@ -298,7 +297,7 @@ var _ = Describe("Container Monitor Service", func() {
 				// the health message must read as a healthy verdict, not a
 				// degraded one. This is the contradiction that produced the
 				// downstream "CPU degraded: CPU utilization normal"
-				// false-block. The v4 healthy budget message names the
+				// false-block. The healthy budget message names the
 				// degraded THRESHOLD ("before it is marked degraded",
 				// "degraded below 0"), so pin the healthy headline prefix
 				// and guard against a "CPU degraded" verdict rather than the
@@ -323,7 +322,7 @@ var _ = Describe("Container Monitor Service", func() {
 					if path == filepath.Join(testDataPath, "hwid") {
 						return []byte(defaultHWID), nil
 					}
-					// Every cgroup/proc read fails — the cgroup-v1 /
+					// Every cgroup/proc read fails: the cgroup-v1 /
 					// non-container / transient-read-failure path.
 					return nil, errors.New("file not found: " + path)
 				})

@@ -1163,14 +1163,13 @@ func (p *ProtocolConverterService) IsResourceLimited(snapshot fsm.SystemSnapshot
 				serviceInfo := &containerObserved.ServiceInfoSnapshot
 				if cpu := serviceInfo.CPU; cpu != nil && len(cpu.Causes) > 0 &&
 					serviceInfo.MemoryHealth != models.Degraded && serviceInfo.DiskHealth != models.Degraded {
-					// Causes[0] is the dominant cause; see decide.go severity sort.
-					// BlockReason dispatches the saturation cause on the sub-latch
-					// flags (HostFullFired/LimitSaturationFired/
-					// NoHostStatsSaturationFired/NoLimitHostFired), carried on the
-					// verdict-basis headroom block so MC can rank the firings.
+					// Causes[0] is the dominant cause (see sortFiredCauses in
+					// cpuhealth). BlockReason dispatches the saturation cause
+					// on the sub-latch flags carried in VerdictBasis.Headroom.
 					// VerdictBasis is nil only on a cgroup read failure, where
-					// Decide is not called and no causes are set, so the len>0 guard
-					// above already excludes that path; the nil check is defensive.
+					// Decide is not called and no causes are set, so the
+					// len>0 guard above already excludes that path; the nil
+					// check is defensive.
 					var signals cpuhealth.Signals
 					if cpu.VerdictBasis != nil {
 						signals.HostFullFired = cpu.VerdictBasis.Headroom.HostFullFired
@@ -1221,11 +1220,10 @@ func (p *ProtocolConverterService) IsResourceLimited(snapshot fsm.SystemSnapshot
 				return true, "Disk resources degraded"
 			}
 
-			// Also check for CPU throttling specifically with improved message.
-			// The throttle value and latch now ride verdictBasis.throttle (added
-			// in R9.1); the flat ThrottleRatio/IsThrottled mirrors were cut. The
-			// basis is non-nil whenever Decide ran (cgroup readable); the Fired
-			// guard means we only read Value when the latch actually fired.
+			// CPU throttling gets its own detailed message. The throttle
+			// value and latch ride VerdictBasis.Throttle; the basis is
+			// non-nil whenever Decide ran (cgroup readable), and the Fired
+			// guard reads Value only when the latch actually fired.
 			if serviceInfo.CPU != nil && serviceInfo.CPU.VerdictBasis != nil && serviceInfo.CPU.VerdictBasis.Throttle.Fired {
 				throttlePercent := serviceInfo.CPU.VerdictBasis.Throttle.Value * 100
 

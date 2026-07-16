@@ -75,7 +75,7 @@ var _ = Describe("CPU usage from cgroup (rung 1b)", func() {
 
 		// Second GetStatus: reported TotalUsageMCpu must track the cgroup delta
 		// (~1000 mCPU for 1.0 core), NOT the host CPU percentage from gopsutil's
-		// cpu.PercentWithContext (the host numerator this rung removes).
+		// cpu.PercentWithContext (the host numerator the cgroup sampler replaces).
 		status, err := svc.GetStatus(ctx)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(status.CPU).NotTo(BeNil())
@@ -92,7 +92,7 @@ var _ = Describe("CPU usage from cgroup (rung 1b)", func() {
 		// (mCPU = 1000/elapsed), while the upper bound is never approached
 		// (UsageCores <= 1.0 by construction, so TotalUsageMCpu <= ~1000).
 		// With the gopsutil host numerator still in place (the pre-1b state),
-		// the reported value tracks host load instead — on an idle test host
+		// the reported value tracks host load instead: on an idle test host
 		// it is near 0, well outside this band.
 		Expect(status.CPU.TotalUsageMCpu).To(SatisfyAll(
 			BeNumerically(">=", 250.0),

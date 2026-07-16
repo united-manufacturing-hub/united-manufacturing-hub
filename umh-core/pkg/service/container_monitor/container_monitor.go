@@ -87,10 +87,9 @@ type ContainerMonitorService struct {
 	//     outage. This is the conservative choice: block rather than admit a
 	//     new bridge to a possibly-degraded host. The sampler is down, so the
 	//     current host state is unknowable.
-	//   - Recovery: the first successful sampler tick overwrites
-	//     hasLastVerdict and recomputes the verdict, basis, signals, and
-	//     CgroupCores fresh from the new sample. The hold is not sticky past
-	//     one successful tick.
+	//   - Recovery: the first successful sampler tick recomputes the
+	//     verdict, basis, signals, and CgroupCores fresh from the new
+	//     sample.
 	lastVerdict      cpuhealth.Verdict
 	lastSignals      cpuhealth.Signals
 	lastVerdictBasis *models.VerdictBasis
@@ -181,14 +180,10 @@ func (c *ContainerMonitorService) GetStatus(ctx context.Context) (*ServiceInfo, 
 	// Update last collected timestamp
 	c.lastCollectedAt = time.Now()
 
-	// Assess CPU health. CPUHealth/OverallHealth are Degraded ONLY when
-	// cpuStat.Health is already Degraded (i.e. throttling detected in
-	// getCPUMetrics). High usage alone is NOT ill health: a capped
-	// container pinned at its quota is busy, not sick, so raw-usage
-	// degradation is not applied here. Windowed saturation logic in
-	// cpuhealth.WindowState will reintroduce usage-based degradation
-	// later, gated on the dead-zone; until then the two fields stay
-	// consistent with cpuStat.Health.
+	// Assess CPU health: CPUHealth/OverallHealth mirror cpuStat.Health,
+	// which getCPUMetrics drives from the cpuhealth verdict. High usage
+	// alone is not ill health (a capped container pinned at its quota is
+	// busy, not sick), so no raw-usage degradation is applied here.
 	if cpuStat.Health != nil && cpuStat.Health.Category == models.Degraded {
 		status.CPUHealth = models.Degraded
 		status.OverallHealth = models.Degraded
@@ -266,28 +261,15 @@ func (c *ContainerMonitorService) getCPUMetrics(ctx context.Context) (*models.CP
 		return nil, err
 	}
 
-	// Default to Active health. The curated per-cause message is composed
-	// below from the verdict + signals (headline + "Technical Details:" +
-	// why + what-to-do from the supertable when degraded, "CPU healthy" +
-	// optional limited-visibility note when healthy), replacing the generic
-	// "CPU degraded" / "CPU utilization normal" strings.
+	// Default to Active health.
 	category := models.Active
 
-	// Compute the throttle verdict through cpuhealth.Decide's Schmitt flip-latch
-	// (fires above ThrottleHigh 0.05, clears only below ThrottleRecover 0.03,
-	// holds between). Decide mutates c.windowState in place, maintaining the
-	// 60s throttle-counter ring. The numeric ThrottleRatio is read
-	// unconditionally from signals (independent of latch state); IsThrottled
-	// comes from signals.ThrottleFired. Decide is gated on sampler success:
-	// a sampler failure means cpu.stat was unreadable, so the sample carries
-	// no usable reading (LogicalCpus=0, UsageCores=0,
-	// HostBusyCoresAvailable=false); running Decide on that zero sample would
-	// hit the saturation default branch and clear all sub-latches, flapping a
-	// prior degraded verdict to healthy for the failure tick. Instead, hold
-	// the last verdict + signals (the windowState latches also hold since
-	// Decide is their only mutator). The sampler surfaces Quota, NrPeriods,
-	// NrThrottled, and NrPeriodsAvailable directly from its single cpu.stat +
-	// cpu.max read per tick.
+	// Run the sample through cpuhealth.Decide, gated on sampler success: a
+	// sampler failure means cpu.stat was unreadable, and running Decide on
+	// the zero-valued sample would clear all saturation sub-latches,
+	// flapping a prior degraded verdict to healthy for the failure tick.
+	// Instead, hold the last verdict and signals; the windowState latches
+	// also hold, since Decide is their only mutator.
 	var (
 		isThrottled bool
 		// Default to healthy so a sampler failure on the first tick (no prior
@@ -321,26 +303,11 @@ func (c *ContainerMonitorService) getCPUMetrics(ctx context.Context) (*models.CP
 
 	c.wasThrottled = isThrottled
 
-	// ComposeMessage returns the curated per-cause two-layer message (headline
-	// + "Technical Details:" + why + what-to-do from the supertable) when
-	// degraded, and "CPU healthy" (plus an optional limited-visibility note
-	// when the sample is in the dead-zone) when healthy, replacing the
-	// generic "CPU degraded" / "CPU utilization normal" strings.
 	message := cpuhealth.ComposeMessage(verdict, signals)
 
-	// CPU health is driven from verdict.State, not throttle alone. High usage
-	// alone is not ill health (a capped container pinned at its quota is busy,
-	// not sick), and raw-usage degradation is no longer applied in GetStatus
-	// either. The verdict flows through cpuhealth.Decide's Schmitt flip-latches
-	// (c.windowState); c.sampler remains live for usage reading in
-	// getRawCPUMetrics.
-	//
-	// StateDegraded now covers throttle OR pressure (and any future cause
-	// Decide returns a degraded verdict for), so category is driven from
-	// verdict.State so every degradation cause flows to Degraded, not just
-	// throttle. The curated per-cause message is composed above via
-	// ComposeMessage(verdict, signals); isThrottled feeds the wasThrottled
-	// transition log above.
+	// Category follows verdict.State so every degradation cause flows to
+	// Degraded, not just throttle. High usage alone is not ill health: a
+	// capped container pinned at its quota is busy, not sick.
 	if verdict.State == cpuhealth.StateDegraded {
 		category = models.Degraded
 	}
@@ -370,25 +337,19 @@ func (c *ContainerMonitorService) getCPUMetrics(ctx context.Context) (*models.CP
 		}
 	}
 
-	// Add cgroup info if available. CgroupCores keeps its omitempty-on-0
-	// semantics since a 0 quota means uncapped, not "measured 0". The throttle
-	// CgroupCores carries the cgroup CPU quota (cores) on the wire. The
-	// sampler reads cpu.max via its injected basePath, so Quota is the
-	// consolidated single read. A nil Quota (cpu.max unreadable) or a
+	// CgroupCores carries the cgroup CPU quota (cores) on the wire and keeps
+	// its omitempty-on-0 semantics: a nil Quota (cpu.max unreadable) or a
 	// zero Quota (cpu.max = "max", uncapped) yields CgroupCores=0, which
 	// omitempty drops from the wire.
 	if sample.Quota != nil && *sample.Quota > 0 {
 		cpuStat.CgroupCores = *sample.Quota
 	}
 
-	// Percentile mCPU fields are observability-only mirrors of the usage ring
-	// (signals.*UsageCores * 1000). They are *float64: non-nil (pointer to
-	// the computed percentile, even 0) when signals.UsageRingActive is true
-	// (the ring holds >= 2 entries), nil otherwise (the first tick of any mode
-	// before the ring has 2 entries; since R10.1 the ring fills every tick in
-	// ALL modes, so the percentiles are fetchable outside the dead-zone once
-	// the window holds >= 2 entries). The UsageRingActive flag distinguishes a
-	// real 0 from an absent signal, which the value-based 0/omitempty
+	// Percentile mCPU fields are observability-only mirrors of the usage
+	// ring (signals.*UsageCores * 1000). They are *float64: non-nil (even
+	// when pointing at 0) once signals.UsageRingActive is true, nil on the
+	// first ticks before the ring holds 2 entries. The flag distinguishes a
+	// real 0 from an absent signal, which a value-based 0/omitempty
 	// discipline cannot. They do not change the verdict.
 	if signals.UsageRingActive {
 		cpuStat.AvgMCpu = ptr(signals.AvgUsageCores * 1000)
@@ -396,22 +357,18 @@ func (c *ContainerMonitorService) getCPUMetrics(ctx context.Context) (*models.CP
 		cpuStat.P99MCpu = ptr(signals.P99UsageCores * 1000)
 	}
 
-	// Emit the verdict basis: the decision variables the verdict acted on
-	// (headroom plus the three starvation causes), always when a verdict was
-	// computed (samplerOK, so Decide ran). It is the machine-readable
-	// counterpart to health.message: the same numbers, structured so the MC
-	// renders the headline, the host/container split, and the alert-rule
-	// budget dashboard from the verdict's own inputs rather than parsing the
-	// message text or mirroring per-tick samples. Nil only when no verdict
-	// exists (a sampler failure on the first tick, where Decide is not
-	// called and no prior verdict is held); the legacy display path covers
-	// that case. On a sampler failure after a prior successful verdict, the
-	// held basis is re-emitted so the wire stays consistent with the held
-	// verdict state. The sample.LogicalCpus > 0 guard is belt-and-suspenders:
-	// Rung 1's gate already skips Decide on a sampler failure (LogicalCpus=0),
-	// but a future code path could re-introduce a zero sample; without the
-	// guard, VerdictBasis would emit Capacity=0 + Ceiling='host' while
-	// CgroupCores>0 is on the wire, a self-contradictory machine-readable state.
+	// Emit the verdict basis whenever Decide ran: the decision variables the
+	// verdict acted on (headroom plus the three starvation causes),
+	// structured so the MC renders the headline, the host/container split,
+	// and the budget dashboard from the verdict's own inputs instead of
+	// parsing the message text. Nil only when no verdict exists (a sampler
+	// failure on the first tick); the legacy display path covers that case.
+	// On a sampler failure after a prior success, the held basis is
+	// re-emitted so the wire stays consistent with the held verdict. The
+	// sample.LogicalCpus > 0 guard is defensive: the samplerOK gate already
+	// keeps a zero sample out of Decide, but if a future code path let one
+	// through, VerdictBasis would emit Capacity=0 + Ceiling="host" while
+	// CgroupCores>0 is on the wire, a self-contradictory state.
 	if samplerOK && sample.LogicalCpus > 0 {
 		th := cpuhealth.DefaultThresholds()
 		// The headroom's Used and Ceiling follow the mode: limit set →
@@ -493,17 +450,11 @@ func (c *ContainerMonitorService) getCPUMetrics(ctx context.Context) (*models.CP
 func (c *ContainerMonitorService) getRawCPUMetrics(ctx context.Context) (usageMCores float64, coreCount int, sample cpuhealth.Sample, samplerOK bool, err error) {
 	coreCount = runtime.NumCPU() // Always report host cores for compatibility
 
-	// Read container-relative CPU usage from the cgroup cpu.stat usage_usec
-	// counter. This is the ONLY c.sampler.Sample call per GetStatus; the
-	// returned Sample (carrying Quota, PressureAvg60, PsiAvailable,
-	// StealFraction, Virtualized, HostBusyCores, LogicalCpus, NrPeriods,
-	// NrThrottled in addition to UsageCores) is threaded through to the Decide
-	// call site in getCPUMetrics so the delta-based signals survive. The
-	// sampler reads cpu.max and cpu.stat exactly once per tick via its
-	// injected basePath, consolidating the cgroup reads into a single
-	// Sample call. On read failure (cgroup v1, non-container, transient)
+	// The ONLY c.sampler.Sample call per GetStatus: the returned Sample is
+	// passed on to the Decide call in getCPUMetrics so the delta-based
+	// signals survive. On read failure (cgroup v1, non-container, transient)
 	// the error is logged and a zero-valued Sample is returned with
-	// samplerOK=false so the caller can hold the prior verdict instead of
+	// samplerOK=false so the caller holds the prior verdict instead of
 	// running Decide on a zero sample.
 	sample, sErr := c.sampler.Sample(ctx)
 	if sErr != nil {

@@ -22,16 +22,13 @@ import (
 	"testing"
 )
 
-// sortFiredCauses pins the spec's kind-priority cause ordering (spec line 126:
-// "throttle/pressure/steal — the serious signals — rank above saturation/no-
-// headroom — capacity"). The pre-R4b sort was severity-magnitude, which
-// accidentally satisfied the spec when saturation's severity was 0 (outside the
-// dead-zone) but deviated in the dead-zone where saturationAvg is non-zero: a
-// low-severity starvation cause would rank below a high-severity saturation,
-// headlining "CPU running near full" instead of e.g. "CPU taken by the server"
-// (steal) — a less-actionable headline on a box where the hypervisor is the
-// culprit. These tests pin the kind-tier sort directly on constructed
-// firedCause slices (no Decide/ring construction).
+// These tests pin the kind-priority cause ordering: throttle, pressure, and
+// steal (the serious signals) rank above saturation (capacity). A
+// severity-only sort lets a low-severity starvation cause rank below a
+// high-severity saturation, headlining "CPU running near full" instead of
+// e.g. "CPU taken by the server" (steal), a less actionable headline on a
+// box where the hypervisor is the culprit. The tests pin the kind-tier sort
+// directly on constructed firedCause slices (no Decide/ring construction).
 
 func fc(kind CauseKind, severity float64, external bool) firedCause {
 	return firedCause{cause: Cause{Kind: kind, Value: 0}, severity: severity, external: external}
@@ -50,8 +47,9 @@ func kindsAfterSort(fired []firedCause) []CauseKind {
 
 func TestSortFiredCauses_KindTier(t *testing.T) {
 	// Kind-priority overrides severity: starvation (tier 0) ranks above
-	// saturation (tier 1) EVEN when saturation's severity is higher — the
-	// narrow dead-zone+steal+our-usage-high deviation R4b fixes.
+	// saturation (tier 1) EVEN when saturation's severity is higher (the
+	// narrow dead-zone + steal + high-container-usage case where a
+	// severity-only sort deviates).
 	t.Run("steal ranks above saturation despite lower severity (the R4b fix case)", func(t *testing.T) {
 		got := kindsAfterSort([]firedCause{
 			fc(CauseKindSteal, 0.011, true),
