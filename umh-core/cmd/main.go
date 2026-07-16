@@ -374,6 +374,9 @@ func snapshotFingerprint(snapshot *fsm.SystemSnapshot, extractStatusReason func(
 
 	for _, managerName := range managerNames {
 		manager := snapshot.Managers[managerName]
+		if manager == nil {
+			continue
+		}
 		instances := manager.GetInstances()
 
 		instanceNames := make([]string, 0, len(instances))
@@ -384,6 +387,9 @@ func snapshotFingerprint(snapshot *fsm.SystemSnapshot, extractStatusReason func(
 
 		for _, instanceName := range instanceNames {
 			inst := instances[instanceName]
+			if inst == nil {
+				continue
+			}
 			reason := extractStatusReason(managerName, inst)
 			lines = append(lines, fmt.Sprintf("%s|%s|%s|%s|%s",
 				managerName, instanceName, inst.CurrentState, inst.DesiredState, reason))
@@ -474,6 +480,9 @@ func SystemSnapshotLogger(ctx context.Context, controlLoop *control.ControlLoop)
 
 			for _, managerName := range managerNames {
 				manager := snapshot.Managers[managerName]
+				if manager == nil {
+					continue
+				}
 				instances := manager.GetInstances()
 
 				if len(instances) == 0 {
@@ -491,6 +500,9 @@ func SystemSnapshotLogger(ctx context.Context, controlLoop *control.ControlLoop)
 
 					for _, instanceName := range instanceNames {
 						instance := instances[instanceName]
+						if instance == nil {
+							continue
+						}
 						statusReason := extractStatusReason(managerName, instance)
 
 						stateIcon := "⚠"

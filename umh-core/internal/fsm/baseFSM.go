@@ -37,6 +37,10 @@ import (
 // BaseFSMInstance implements the public fsm.FSM interface.
 type BaseFSMInstance struct {
 
+	// lastSuppressionSummary is the time the most recent suppression summary was
+	// emitted, used to throttle the periodic WARN summary.
+	lastSuppressionSummary time.Time
+
 	// fsm is the finite state machine that manages instance state
 	fsm *fsm.FSM
 
@@ -52,19 +56,15 @@ type BaseFSMInstance struct {
 	// lastObservedLifecycleState is the last state that was observed by the FSM
 	// Note: this is only temporary and should be replaced by a generalized implementation of the archive storage
 	lastObservedLifecycleState string
-	cfg                        BaseFSMInstanceConfig
-
-	// transientStreakCounter is the number of ticks a FSM has remained in a transient state
-	transientStreakCounter uint64
 
 	// lastLoggedErrorMsg is used to deduplicate error logs in the reconcile loop.
 	// Error on first/changed occurrence, Debug on repeats.
 	lastLoggedErrorMsg string
 
-	// errorSuppressionAnnounced records whether the "repeats suppressed" notice
-	// has already been logged for the current lastLoggedErrorMsg, so it is
-	// emitted exactly once (on the first repeat) rather than every repeat.
-	errorSuppressionAnnounced bool
+	cfg BaseFSMInstanceConfig
+
+	// transientStreakCounter is the number of ticks a FSM has remained in a transient state
+	transientStreakCounter uint64
 
 	// suppressedErrorCount counts repeats of lastLoggedErrorMsg that were
 	// demoted to Debug since the last periodic summary (or since suppression
@@ -72,12 +72,13 @@ type BaseFSMInstance struct {
 	// final summary emitted when the error changes or clears.
 	suppressedErrorCount uint64
 
-	// lastSuppressionSummary is the time the most recent suppression summary was
-	// emitted, used to throttle the periodic WARN summary.
-	lastSuppressionSummary time.Time
-
 	// mu is a mutex for protecting concurrent access to fields
 	mu sync.RWMutex
+
+	// errorSuppressionAnnounced records whether the "repeats suppressed" notice
+	// has already been logged for the current lastLoggedErrorMsg, so it is
+	// emitted exactly once (on the first repeat) rather than every repeat.
+	errorSuppressionAnnounced bool
 }
 
 type BaseFSMInstanceConfig struct {
