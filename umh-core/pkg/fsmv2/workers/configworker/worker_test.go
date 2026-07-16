@@ -19,9 +19,12 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/fsmv2client"
+	fsmv2timescale "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/historian"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/internal/helpers"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/register"
 	worker "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker"
@@ -139,6 +142,60 @@ func TestCollectObservedState(t *testing.T) {
 
 	if obs != nil {
 		t.Fatalf("CollectObservedState with cancelled context: want nil observation, got %v", obs)
+	}
+}
+
+// TestCollectObservedStateReconcilesHistorian verifies the per-tick historian
+// reconcile: with a config manager and client published, a config carrying a
+// historian section upserts the timescale child into the shared registry, and
+// clearing the section on a later tick deletes it.
+func TestCollectObservedStateReconcilesHistorian(t *testing.T) {
+	// One Writer backs both sides: its registry is published as the worker's
+	// deps and the same Writer wraps the client, so an Upsert routed through the
+	// client is observable via the worker's registry (as in production wiring).
+	dynWriter := dynamicchildren.NewWriter()
+	shared := dynWriter.Registry()
+	register.SetDeps[*dynamicchildren.Registry](workerType, shared)
+	t.Cleanup(func() { register.ClearDeps(workerType) })
+
+	historianCfg := config.FullConfig{
+		Historian: &config.HistorianConfig{
+			Timescale: config.TimescaleConfig{Host: "db", Password: "secret"},
+		},
+	}
+	mockCM := config.NewMockConfigManager().WithConfig(historianCfg)
+	register.SetDeps[config.ConfigManager](worker.ConfigManagerDepsKey, mockCM)
+	t.Cleanup(func() { register.ClearDeps(worker.ConfigManagerDepsKey) })
+
+	fsmv2client.SetClient(fsmv2client.NewFSMv2Client(dynWriter, nil))
+	t.Cleanup(func() { fsmv2client.SetClient(nil) })
+
+	identity := deps.Identity{ID: workerType + "-001", WorkerType: workerType}
+
+	w, err := worker.NewConfigworkerWorker(identity, deps.NewNopFSMLogger(), nil)
+	if err != nil {
+		t.Fatalf("NewConfigworkerWorker: %v", err)
+	}
+
+	desired := &fsmv2.WrappedDesiredState[snapshot.ConfigworkerConfig]{}
+
+	if _, err := w.CollectObservedState(context.Background(), desired); err != nil {
+		t.Fatalf("CollectObservedState (historian present): %v", err)
+	}
+
+	if !shared.Contains(fsmv2timescale.Ref) {
+		t.Fatalf("historian present: registry does not contain %v after reconcile", fsmv2timescale.Ref)
+	}
+
+	// Clear the historian section: the next reconcile deletes the child.
+	mockCM.WithConfig(config.FullConfig{})
+
+	if _, err := w.CollectObservedState(context.Background(), desired); err != nil {
+		t.Fatalf("CollectObservedState (historian absent): %v", err)
+	}
+
+	if shared.Contains(fsmv2timescale.Ref) {
+		t.Fatalf("historian absent: registry still contains %v after reconcile", fsmv2timescale.Ref)
 	}
 }
 

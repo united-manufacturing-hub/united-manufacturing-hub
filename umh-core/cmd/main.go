@@ -51,7 +51,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/examples"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/fsmv2client"
-	fsmv2timescale "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/historian"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/register"
 	fsmv2sentry "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/sentry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/application"
@@ -297,10 +296,6 @@ func main() {
 
 				sentry.SafeGoWithContext(ctx, func(ctx context.Context) {
 					wireFSMv2Communicator(ctx, appSup, channelAdapter, fsmv2Store, placeholderUUID, &configData, communicationState, log)
-				})
-
-				sentry.SafeGoWithContext(ctx, func(ctx context.Context) {
-					watchConfig(ctx, configManager, log)
 				})
 			}
 		} else {
@@ -613,7 +608,8 @@ children:
 	}
 
 	// The historian monitor is a dynamic child, upserted and deleted at runtime
-	// by watchConfig so live config edits apply without restarting umh-core.
+	// by the config worker's per-tick reconcile so live config edits apply
+	// without restarting umh-core.
 
 	// Setup store (in-memory for now).
 	store = examples.SetupStore(deps.NewFSMLogger(logger))
@@ -653,6 +649,15 @@ children:
 	register.SetDeps[*dynamicchildren.Registry](configworker.WorkerTypeName, dynWriter.Registry())
 	fsmv2client.SetClient(fsmv2client.NewFSMv2Client(dynWriter, store))
 
+	// Publish the config manager the config worker polls each tick to reconcile
+	// the historian monitor child (replacing the standalone watchConfig
+	// goroutine). Published before NewApplicationSupervisor so the config
+	// worker's first CollectObservedState sees it; cleared in cleanup and the
+	// error path below alongside the other deps keys.
+	// TODO(ENG-4400): remove this wiring once the config worker reads
+	// config.yaml directly instead of polling the manager.
+	register.SetDeps[config.ConfigManager](configworker.ConfigManagerDepsKey, communicationState.ConfigManager)
+
 	appSup, err = application.NewApplicationSupervisor(application.SupervisorConfig{
 		ID:           "application-fsmv2",
 		Name:         "Application FSMv2",
@@ -676,6 +681,7 @@ children:
 	if err != nil {
 		fsmv2client.SetClient(nil)
 		register.ClearDeps(configworker.WorkerTypeName)
+		register.ClearDeps(configworker.ConfigManagerDepsKey)
 		fsmv2Hook.Stop()
 
 		return nil, nil, nil, "", func() {}, fmt.Errorf("failed to create FSMv2 supervisor: %w", err)
@@ -689,55 +695,11 @@ children:
 		// has stopped (the caller runs cleanup after appSup.Run returns).
 		fsmv2client.SetClient(nil)
 		register.ClearDeps(configworker.WorkerTypeName)
+		register.ClearDeps(configworker.ConfigManagerDepsKey)
 		fsmv2Hook.Stop()
 	}
 
 	return appSup, channelAdapter, store, placeholderUUID, cleanup, nil
-}
-
-// watchConfig keeps the fsmv2 monitor children in sync with the live config,
-// re-reading it every tick and handing it to a per-worker sync helper. It
-// returns when ctx is cancelled.
-func watchConfig(ctx context.Context, configManager config.ConfigManager, logger *zap.SugaredLogger) {
-	ticker := time.NewTicker(2 * time.Second)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-			client := fsmv2client.GetClient()
-			if client == nil {
-				continue
-			}
-
-			cfg, err := configManager.GetConfig(ctx, 0)
-			if err != nil {
-				logger.Warnw("config watch: failed to read config", "error", err)
-				continue
-			}
-
-			if err := syncHistorian(client, cfg); err != nil {
-				logger.Warnw("historian watch: upsert failed", "error", err)
-			}
-		}
-	}
-}
-
-// syncHistorian upserts the historian monitor child with the current settings
-// when the historian section is present, or deletes it when absent. It returns
-// the upsert error so the caller can log it within the reconciliation loop.
-func syncHistorian(client *fsmv2client.FSMv2Client, cfg config.FullConfig) error {
-	if cfg.Historian == nil {
-		client.Delete(fsmv2timescale.Ref)
-
-		return nil
-	}
-
-	historianVars := cfg.Historian.ToTemplateMap()
-
-	return client.Upsert(fsmv2timescale.Ref, historianVars)
 }
 
 // wireFSMv2Communicator wires the legacy CommunicationState to the already-started
