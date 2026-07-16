@@ -112,7 +112,7 @@ payloadShapes:
 ```
 
 **Key points:**
-- Field types are `string`, `number`, `integer`, `boolean` (see [Type Definitions](type-definitions.md))
+- Field types are `string`, `number`, `boolean` (see [Type Definitions](type-definitions.md))
 - All fields are required
 - Shape names must be unique
 

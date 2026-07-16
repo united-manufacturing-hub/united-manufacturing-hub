@@ -8,14 +8,13 @@ A field's value type is declared at one of two levels. A data model field refere
 
 A [payload shape](payload-shapes.md) field's `_type` is one of:
 
-| `_type`   | Meaning                   | Example value |
-|-----------|---------------------------|---------------|
-| `string`  | Text                      | `"running"`   |
-| `number`  | Decimal / floating point  | `42.5`        |
-| `integer` | Whole number, no fraction | `42`          |
-| `boolean` | True / false              | `true`        |
+| `_type`   | Meaning                             | Example value |
+|-----------|-------------------------------------|---------------|
+| `string`  | Text                                | `"running"`   |
+| `number`  | Any numeric value, decimal or whole | `42.5`, `42`  |
+| `boolean` | True / false                        | `true`        |
 
-`number` and `integer` are distinct: `number` accepts a fraction, `integer` does not. Any other value is rejected: `unsupported UMH type: <type>`.
+Any other value is rejected: `unsupported UMH type: <type>`.
 
 ## Timeseries payload shapes are inherently typed
 
@@ -103,7 +102,7 @@ payloadShapes:
       orderId:
         _type: string
       quantity:
-        _type: integer
+        _type: number
       price:
         _type: number
       active:
@@ -128,7 +127,7 @@ Rules a data model field must follow:
 | Error message | Cause | Fix |
 |---------------|-------|-----|
 | `referenced payload shape '<name>' does not exist` | `_payloadshape` names a shape that is not built-in and not defined | Use a built-in, or define the shape first |
-| `unsupported UMH type: <type>` | A field `_type` is not `string`/`number`/`integer`/`boolean` | Use one of the four allowed types |
+| `unsupported UMH type: <type>` | A field `_type` is not a supported type | Use `string`, `number`, or `boolean` |
 | `field cannot have both _payloadshape and _refModel` | A leaf field sets both keys | Keep one |
 | `leaf nodes must contain _payloadshape, _relational, or _refModel` | A leaf field has no value-type key | Add `_payloadshape` or `_refModel`, or give the field subfields |
 | `non-leaf nodes (folders) cannot have _payloadshape` | A field with subfields also sets `_payloadshape` | Remove `_payloadshape` from the folder |
@@ -140,3 +139,8 @@ Rules a data model field must follow:
 - [Data Models](data-models.md) - Structure, `_refModel`, versions
 - [Data Contracts](data-contracts.md) - Enforcement at ingress
 - [Payload Formats](../unified-namespace/payload-formats.md) - UNS payload structure
+
+> ### Note: the `integer` type
+> The YAML validator also accepts `_type: integer` inside a custom payload shape defined in an instance's config file.
+> However, there is no built-in `timeseries-integer` shape and the data-model editor does not offer it, so most models never need it.
+> Use `number` for numeric values. `integer` is only relevant when a custom payload shape must reject fractional values (for example a discrete count or an ID).
