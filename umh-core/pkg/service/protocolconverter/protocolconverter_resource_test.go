@@ -918,6 +918,7 @@ var _ = Describe("IsResourceLimited: held stale-degraded verdict blocks bridges 
 				if samplerFails {
 					return nil, errors.New("cpu.stat transient read error")
 				}
+
 				return []byte(fmt.Sprintf(
 					"usage_usec %d\nnr_periods %d\nnr_throttled %d\nthrottled_usec 0\n",
 					usageUsec, nrPeriods, nrThrottled,

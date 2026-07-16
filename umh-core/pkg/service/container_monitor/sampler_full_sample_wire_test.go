@@ -548,6 +548,7 @@ var _ = Describe("CgroupCores/basis wire consistency on sampler failure (Rung 6)
 				if samplerFails {
 					return nil, errors.New("cpu.stat transient read error")
 				}
+
 				return []byte(fmt.Sprintf(
 					"usage_usec %d\nnr_periods %d\nnr_throttled %d\nthrottled_usec 0\n",
 					usageUsec, nrPeriods, nrThrottled,
@@ -628,6 +629,7 @@ var _ = Describe("Verdict-hold recovery on sampler success (Rung 7.1)", func() {
 				if samplerFails {
 					return nil, errors.New("cpu.stat transient read error")
 				}
+
 				return []byte(fmt.Sprintf(
 					"usage_usec %d\nnr_periods %d\nnr_throttled %d\nthrottled_usec 0\n",
 					usageUsec, nrPeriods, nrThrottled,
@@ -717,6 +719,7 @@ var _ = Describe("Verdict-hold sustained outage drift (Rung 7.2)", func() {
 				if samplerFails {
 					return nil, errors.New("cpu.stat transient read error")
 				}
+
 				return []byte(fmt.Sprintf(
 					"usage_usec %d\nnr_periods %d\nnr_throttled %d\nthrottled_usec 0\n",
 					usageUsec, nrPeriods, nrThrottled,
@@ -790,6 +793,7 @@ var _ = Describe("Verdict-hold stale-healthy case (Rung 7.3)", func() {
 				if samplerFails {
 					return nil, errors.New("cpu.stat transient read error")
 				}
+
 				return []byte(fmt.Sprintf(
 					"usage_usec %d\nnr_periods %d\nnr_throttled %d\nthrottled_usec 0\n",
 					usageUsec, nrPeriods, nrThrottled,
