@@ -41,8 +41,8 @@ var _ = Describe("CPU usage from cgroup (rung 1b)", func() {
 
 		// cpuStatUsec is the usage_usec value the mock returns for every cpu.stat
 		// read. It is held stable across all reads within a single GetStatus call
-		// (getCgroupCPUInfo may read cpu.stat more than once), then advanced
-		// between calls so the cgroup Sampler — wired in by this rung — measures
+		// (the sampler reads cpu.stat exactly once per tick), then advanced
+		// between calls so the cgroup Sampler measures
 		// a known delta over wall-clock.
 		cpuStatUsec := int64(0)
 
@@ -80,8 +80,9 @@ var _ = Describe("CPU usage from cgroup (rung 1b)", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(status.CPU).NotTo(BeNil())
 
-		// CgroupCores is populated from cpu.max (2.0 cores). This already holds
-		// pre-1b (getCgroupCPUInfo parses cpu.max); the assertion pins it as a
+		// CgroupCores is populated from cpu.max (2.0 cores). The sampler's
+		// readCPUMax parses cpu.max and surfaces the quota as sample.Quota;
+		// GetStatus copies it to CgroupCores. The assertion pins this as a
 		// preserved behavior.
 		Expect(status.CPU.CgroupCores).To(Equal(2.0))
 

@@ -149,10 +149,10 @@ const headroomRecoverCores = 0.5
 // fraction (UsageCores/Quota), and a non-positive value (zero, negative, or
 // NaN; the `> 0` guard rejects all three, mirroring the legacy CgroupCores
 // guard) means uncapped, so a zero quota (the unlimited-cgroup case returned
-// by parseCPUMax for `cpu.max = "max <period>"`) cannot produce a +Inf/NaN
-// poison fraction and stays healthy. When Quota is nil, Decide falls back to
-// CgroupCores when it is positive, and otherwise treats the sample as uncapped
-// (StateHealthy, no fraction computed).
+// by readCPUMax in sampler.go for `cpu.max = "max <period>"`) cannot produce a
+// +Inf/NaN poison fraction and stays healthy. When Quota is nil, Decide falls
+// back to CgroupCores when it is positive, and otherwise treats the sample as
+// uncapped (StateHealthy, no fraction computed).
 // CgroupCores is the legacy non-pointer representation retained for callers
 // that still populate it (it remains the live production path).
 type Sample struct {
@@ -166,7 +166,8 @@ type Sample struct {
 	// counters (nr_periods/nr_throttled from cpu.stat). It distinguishes
 	// "cpu.stat read succeeded, NrPeriods=0 because the container is idle"
 	// from "cpu.stat read failed, NrPeriods=0 is a missing reading." Set by
-	// the caller from getCgroupCPUInfo's parse success; when false, Decide
+	// the sampler (parseCPUStatCounters in sampler.go) from its cpu.stat parse
+	// success; when false, Decide
 	// holds the throttle ring and latch instead of appending a zero point
 	// (which would read as a counter regression and wipe the 60s window).
 	NrPeriodsAvailable bool
@@ -568,8 +569,8 @@ type Verdict struct {
 // When Quota is non-nil, Decide uses it exclusively: a positive Quota yields
 // UsageCores/Quota, and a non-positive Quota (zero/negative/NaN) means
 // uncapped (the `> 0` guard rejects all three), so the unlimited-cgroup case
-// (parseCPUMax quotaCores==0) is treated as uncapped instead of poisoning the
-// fraction with +Inf/NaN; there is no fallback to CgroupCores when Quota is
+// (readCPUMax returns &0 for cpu.max="max") is treated as uncapped instead of
+// poisoning the fraction with +Inf/NaN; there is no fallback to CgroupCores when Quota is
 // non-nil. When Quota is nil, the fraction is derived from CgroupCores when
 // positive. When neither is available the sample is uncapped and Decide
 // returns StateHealthy regardless of UsageCores (uncapped cannot be

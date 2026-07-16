@@ -287,7 +287,7 @@ func (c *ContainerMonitorService) getCPUMetrics(ctx context.Context) (*models.CP
 	// the last verdict + signals (the windowState latches also hold since
 	// Decide is their only mutator). The sampler surfaces Quota, NrPeriods,
 	// NrThrottled, and NrPeriodsAvailable directly from its single cpu.stat +
-	// cpu.max read, so no second getCgroupCPUInfo call is needed.
+	// cpu.max read per tick.
 	var (
 		isThrottled bool
 		// Default to healthy so a sampler failure on the first tick (no prior
@@ -500,11 +500,11 @@ func (c *ContainerMonitorService) getRawCPUMetrics(ctx context.Context) (usageMC
 	// NrThrottled in addition to UsageCores) is threaded through to the Decide
 	// call site in getCPUMetrics so the delta-based signals survive. The
 	// sampler reads cpu.max and cpu.stat exactly once per tick via its
-	// injected basePath, consolidating what was previously three separate
-	// reads (two getCgroupCPUInfo calls + the sampler). On read failure
-	// (cgroup v1, non-container, transient) the error is logged and a
-	// zero-valued Sample is returned with samplerOK=false so the caller can
-	// hold the prior verdict instead of running Decide on a zero sample.
+	// injected basePath, consolidating the cgroup reads into a single
+	// Sample call. On read failure (cgroup v1, non-container, transient)
+	// the error is logged and a zero-valued Sample is returned with
+	// samplerOK=false so the caller can hold the prior verdict instead of
+	// running Decide on a zero sample.
 	sample, sErr := c.sampler.Sample(ctx)
 	if sErr != nil {
 		if ctx.Err() != nil {

@@ -409,10 +409,12 @@ var _ = Describe("verdictBasis wire contract on models.CPU", func() {
 		Expect(err).NotTo(HaveOccurred())
 		defer func() { _ = os.RemoveAll(testDataPath) }()
 
-		// cpu.max read failure → getCgroupCPUInfo returns (nil, err) →
-		// cgroupErr != nil → Decide is not called → no verdict → no basis.
-		// State defaults to "healthy" (the always-emitted contract), but
-		// verdictBasis must be nil/omitted (the omitempty contract).
+		// cpu.max read failure: the sampler's readCPUMax fails, and cpu.stat
+		// also fails (the default case returns an error), so the sampler
+		// returns an error and samplerOK=false. Decide is not called, so no
+		// verdict and no VerdictBasis. State defaults to "healthy" (the
+		// always-emitted contract), but verdictBasis must be nil/omitted
+		// (the omitempty contract).
 		mockFS.WithReadFileFunc(func(_ context.Context, path string) ([]byte, error) {
 			switch path {
 			case "/sys/fs/cgroup/cpu.max":
@@ -594,9 +596,8 @@ var _ = Describe("verdictBasis R10.4 mode-generic shape", func() {
 		Expect(err).NotTo(HaveOccurred())
 		defer func() { _ = os.RemoveAll(testDataPath) }()
 
-		// cpu.max "max 100000" => no limit (host mode): parseCPUMax returns
-		// QuotaCores=0 and readCPUMax returns &0 (the uncapped contract), so
-		// LimitApplies=false. /proc/stat present and parseable
+		// cpu.max "max 100000" => no limit (host mode): readCPUMax returns
+		// &0 (the uncapped contract), so LimitApplies=false. /proc/stat present and parseable
 		// so HostBusyCoresAvailable=true. Tick 2 advances only the idle column
 		// (total increases, busy unchanged) so the busy delta is 0 →
 		// HostBusyCores 0 (deterministic; the host is not full — this test pins

@@ -54,7 +54,7 @@ var _ = Describe("throttle verdict wired through cpuhealth.Decide (rung 4b)", fu
 		const cpuMax = "200000 100000\n"
 
 		// cpuStat holds the cpu.stat body returned for every read within a single
-		// GetStatus call (getCgroupCPUInfo and the sampler both read cpu.stat),
+		// GetStatus call (the sampler reads cpu.stat once per tick),
 		// then is advanced between calls. usage_usec is held at a constant 0 so
 		// the sampler reports UsageCores == 0 (no saturation signal); only the
 		// throttle counters move.

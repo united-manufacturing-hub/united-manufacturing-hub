@@ -273,7 +273,7 @@ func TestDecide_QuotaPointerUncapped(t *testing.T) {
 	// (silent healthy). The guard makes all of these deliberate uncapped-healthy
 	// with no fraction computed, mirroring the legacy CgroupCores>0 guard. This
 	// is the case that matters when Quota is wired from the real cpu.max:
-	// parseCPUMax returns quotaCores==0 for `cpu.max = "max <period>"` (the
+	// readCPUMax returns &0 for `cpu.max = "max <period>"` (the
 	// default unlimited cgroup), so a Quota=&0 must not poison the verdict even
 	// if CgroupCores is still populated.
 	t.Run("non-positive Quota is treated as uncapped not divided", func(t *testing.T) {
@@ -1791,7 +1791,7 @@ func TestDecide_SaturationBackstop_DeadZoneFireThenClearGuardrail(t *testing.T) 
 	}
 
 	// (10) NON-POSITIVE QUOTA DEAD-ZONE, a non-nil but non-positive Quota
-	// (Quota=&0, the unlimited-cgroup case from parseCPUMax for cpu.max="max")
+	// (Quota=&0, the unlimited-cgroup case from readCPUMax for cpu.max="max")
 	// on bare metal without PSI is uncapped AND blind. The dead-zone predicate
 	// must treat non-positive Quota as nil-equivalent so LimitedVisibility is
 	// true (the caller is told it is blind). A naive `Quota == nil` check would

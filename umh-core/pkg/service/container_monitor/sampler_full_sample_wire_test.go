@@ -52,9 +52,9 @@ var _ = Describe("sampler full Sample wired into Decide (rung 12b)", func() {
 		// carries PressureAvg60=0.25 to Decide, so the pressure latch fires and
 		// GetStatus returns Degraded.
 		//
-		// The sampler reads the same cgroup files as getCgroupCPUInfo, so both
-		// reads see the injected bodies; the double-read of cpu.stat is the
-		// accepted rung-12b tradeoff (a later cleanup consolidates them).
+		// The sampler reads the cgroup files (cpu.max, cpu.stat) directly,
+		// so it sees the injected bodies. The consolidated read happens once
+		// per tick.
 		mockFS := filesystem.NewMockFileSystem()
 		ctx := context.Background()
 
@@ -265,8 +265,8 @@ var _ = Describe("sampler failure dead-zone (rung 12b invariant)", func() {
 		// The prior throttle fire comes from successful sampler ticks where
 		// cpu.stat carried usage_usec; the sampler-failure tick returns a
 		// cpu.stat body WITHOUT usage_usec so parseUsageUsec fails and
-		// Sample() returns an error. getCgroupCPUInfo's parseCPUStats ignores
-		// usage_usec, but that no longer matters: Decide is not called on the
+		// Sample() returns an error. The sampler's parseCPUStatCounters
+		// ignores usage_usec, but that no longer matters: Decide is not called on the
 		// failure tick.
 		mockFS := filesystem.NewMockFileSystem()
 		ctx := context.Background()
@@ -406,11 +406,10 @@ var _ = Describe("Decide gate: sampler success independent of cpu.max (C1)", fun
 var _ = Describe("Decide gate: hold latches on sampler failure (C2)", func() {
 	It("holds a prior degraded verdict across a cpu.stat read failure (no flap to healthy)", func() {
 		// C2: a prior degraded verdict + a cpu.stat read failure on the next
-		// tick. Today the sampler returns Sample{} early (before setting
-		// LogicalCpus), getCgroupCPUInfo swallows the same cpu.stat failure
-		// returning (info, nil) with NrPeriods=0, cgroupErr==nil, so Decide
-		// runs on the zero sample: the saturation switch hits the default
-		// branch (LogicalCpus=0) clearing all sub-latches, the throttle ring
+		// tick. Without the Decide gate, the sampler would return Sample{}
+		// early (before setting LogicalCpus), and Decide would run on the
+		// zero sample: the saturation switch hits the default branch
+		// (LogicalCpus=0) clearing all sub-latches, the throttle ring
 		// regresses (NrPeriods=0 < newest) and wipes, and the verdict flaps
 		// to healthy. The fix gates Decide on sampler success and holds the
 		// prior verdict when the sampler fails.
@@ -482,8 +481,8 @@ var _ = Describe("VerdictBasis guard: zero LogicalCpus (I8)", func() {
 		// that Rung 1's gate prevents in production, but a future code path
 		// could re-introduce), Decide runs in no-limit mode (Quota nil) with
 		// capacity=LogicalCpus=0. The VerdictBasis would emit Capacity=0 +
-		// Ceiling='host', while CgroupCores=QuotaCores>0 is emitted from
-		// getCgroupCPUInfo. The machine-readable wire is self-contradictory:
+		// Ceiling='host', while CgroupCores comes from sample.Quota (non-nil
+		// and positive). The machine-readable wire is self-contradictory:
 		// CgroupCores says a limit is known while VerdictBasis says no
 		// capacity / host ceiling. The belt-and-suspenders guard gates
 		// VerdictBasis emission on sample.LogicalCpus > 0.
