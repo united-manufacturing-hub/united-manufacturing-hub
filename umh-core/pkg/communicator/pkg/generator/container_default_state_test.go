@@ -25,12 +25,12 @@ import (
 )
 
 var _ = Describe("defaultContainer CPU State wire contract", func() {
-	// Verifies FIX 1: defaultContainer() — reached on the nil-snapshot and
-	// error paths that flow to MC — must set State="healthy" on models.CPU.
-	// State has no omitempty, so without the fix the zero-value "" marshals as
-	// "state":"" — a third value outside the {healthy,degraded} contract. The
-	// "status unknown" default is healthy (blind-but-quiet = healthy, never a
-	// distinct unknown state).
+	// defaultContainer (reached on the nil-snapshot and error paths that
+	// flow to MC) must set State="healthy" on models.CPU. State has no
+	// omitempty, so the zero-value "" would marshal as "state":"", a third
+	// value outside the {healthy,degraded} contract. The "status unknown"
+	// default is healthy (blind-but-quiet = healthy, never a distinct
+	// unknown state).
 	log := zap.NewNop().Sugar()
 
 	It("marshals state=\"healthy\" (never the zero-value \"\") for a nil snapshot", func() {

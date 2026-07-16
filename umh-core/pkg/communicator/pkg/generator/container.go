@@ -119,7 +119,7 @@ func defaultContainer() models.Container {
 		},
 		CPU: &models.CPU{
 			// State has no omitempty, so the zero-value "" would marshal as
-			// "state":"" — a third value outside the {healthy,degraded}
+			// "state":"", a third value outside the {healthy,degraded}
 			// contract that reaches MC on every nil-snapshot/error path. The
 			// "status unknown" default is healthy (blind-but-quiet = healthy,
 			// never a distinct unknown state).
@@ -152,22 +152,13 @@ func defaultContainer() models.Container {
 	}
 }
 
-// composeContainerHealthMessage returns the container health message for the
-// wire's container.health.message (the field MC renders in the badge tooltip),
-// preferring the CPU's curated message (cpuhealth.ComposeMessage output, stored
-// on cpu.Health.Message by getCPUMetrics) when CPU is the health driver.
-//
-// The CPU's message carries the rich two-layer text (headline + "Technical
-// Details:" + per-cause what-to-do) and, for a healthy dead-zone box, the
-// limitedVisibility note ("enable PSI / set a limit"). Without this propagation
-// the generic per-category string ("Container degraded" / "Container operating
-// normally") would reach MC and the curated CPU message — already on the wire
-// as container.cpu.health.message — would never be rendered.
-//
-// CPU is the health driver when the container is healthy (CPU is the only
-// subsystem with a rich composer today, so its healthy message is the most
-// informative line) OR when CPU is the degraded subsystem. When memory or disk
-// is the degraded driver, the generic line is used.
+// composeContainerHealthMessage returns the container health message,
+// preferring the CPU's ComposeMessage output (stored on cpu.Health.Message)
+// when CPU is the healthy or degraded subsystem. The CPU message carries
+// the two-layer text (headline + Technical Details + per-cause what-to-do),
+// which is more informative than the generic per-category string
+// ("Container degraded" / "Container operating normally"). When memory or
+// disk is the degraded subsystem, the generic line is used.
 //
 // TODO: when memory/disk get rich composers (like CPU's ComposeMessage),
 // propagate their messages here for memory/disk-degraded containers, and

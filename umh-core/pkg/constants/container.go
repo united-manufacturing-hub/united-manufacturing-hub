@@ -52,4 +52,4 @@ const (
 // CPUThrottleWindow constants here were removed because their only consumer
 // (container_monitor.updateThrottleWindow) was deleted; keeping them would
 // duplicate the magic numbers with no link, letting a developer tune one while
-// the other silently stayed put.
+// the other stayed put.
