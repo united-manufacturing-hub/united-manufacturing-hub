@@ -1178,6 +1178,7 @@ func (p *ProtocolConverterService) IsResourceLimited(snapshot fsm.SystemSnapshot
 						signals.NoHostStatsSaturationFired = cpu.VerdictBasis.Headroom.NoHostStatsSaturationFired
 						signals.NoLimitHostFired = cpu.VerdictBasis.Headroom.NoLimitHostFired
 					}
+
 					return true, cpuhealth.BlockReason(cpuhealth.CauseKind(cpu.Causes[0].Kind), signals)
 				}
 			}

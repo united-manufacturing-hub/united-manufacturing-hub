@@ -134,6 +134,7 @@ func composeHealthy(signals Signals) string {
 		if signals.LimitApplies {
 			subject = "This instance"
 		}
+
 		if math.Abs(headroomDisp) < 0.05 {
 			headline = fmt.Sprintf("CPU healthy. %s is using %s of %s cores and is close to being marked degraded.", subject, usedStr, totalStr)
 		} else {
