@@ -113,9 +113,14 @@ func composeHealthy(signals Signals) string {
 	// total is 0, skip the percentage and render a no-suffix headline variant.
 	totalTooSmallToPct := totalDisp <= 0
 
+	// The "close to being marked degraded" phrasing covers every non-positive
+	// and near-zero displayed headroom, not only |headroom| < 0.05:
+	// independent rounding of total/used/reserve can push the displayed
+	// headroom below -0.05 while the verdict is still healthy, and "can use
+	// -0.1 more before it is marked degraded" is nonsense.
 	if signals.LimitApplies && !totalTooSmallToPct {
 		pctOfLimit := pctOf(usedDisp / totalDisp)
-		if math.Abs(headroomDisp) < 0.05 {
+		if headroomDisp < 0.05 {
 			headline = fmt.Sprintf("CPU healthy. This instance is using %s of %s cores (%d%% of its limit) and is close to being marked degraded.", usedStr, totalStr, pctOfLimit)
 		} else {
 			headline = fmt.Sprintf("CPU healthy. This instance is using %s of %s cores (%d%% of its limit) and can use %s more before it is marked degraded.", usedStr, totalStr, pctOfLimit, headroomStr)
@@ -133,7 +138,7 @@ func composeHealthy(signals Signals) string {
 			subject = "This instance"
 		}
 
-		if math.Abs(headroomDisp) < 0.05 {
+		if headroomDisp < 0.05 {
 			headline = fmt.Sprintf("CPU healthy. %s is using %s of %s cores and is close to being marked degraded.", subject, usedStr, totalStr)
 		} else {
 			headline = fmt.Sprintf("CPU healthy. %s is using %s of %s cores and can use %s more before it is marked degraded.", subject, usedStr, totalStr, headroomStr)

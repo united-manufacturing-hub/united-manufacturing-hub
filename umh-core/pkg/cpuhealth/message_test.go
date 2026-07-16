@@ -1079,3 +1079,56 @@ func TestComposeMessage_Saturation_CScenarioHonestyNote(t *testing.T) {
 		}
 	})
 }
+
+// TestComposeHealthy_NegativeHeadroomDisplay pins the negative-headroom guard
+// in the healthy budget headline: independent rounding of total/used/reserve
+// can push the displayed headroom below -0.05 while the true (unrounded)
+// headroom is still non-negative and the verdict healthy. The near-zero guard
+// used math.Abs, so a displayed headroom of -0.1 skipped the "close to being
+// marked degraded" phrasing and printed "can use -0.1 more before it is
+// marked degraded". Any non-positive displayed headroom must route to the
+// "close to" phrasing, in the limit branch and the no-limit branch alike.
+func TestComposeHealthy_NegativeHeadroomDisplay(t *testing.T) {
+	healthy := cpuhealth.Verdict{State: cpuhealth.StateHealthy}
+
+	// Limit branch: used 1.75001 rounds UP to 1.8, reserve 0.25001 rounds UP
+	// to 0.3, total 2.0 -> displayed headroom 2.0 - 1.8 - 0.3 = -0.1, while
+	// the true headroom is 2 - 1.75001 - 0.25001 ~= 0.0 (healthy).
+	t.Run("LimitBranch", func(t *testing.T) {
+		signals := cpuhealth.Signals{
+			LimitApplies:  true,
+			CapacityCores: 2.0,
+			AvgUsageCores: 1.75001,
+			ReserveCores:  0.25001,
+		}
+
+		msg := cpuhealth.ComposeMessage(healthy, signals)
+		if strings.Contains(msg, "can use -") {
+			t.Fatalf("limit-branch healthy headline printed a negative headroom: %q", msg)
+		}
+
+		if !strings.Contains(msg, "close to being marked degraded") {
+			t.Fatalf("limit-branch healthy headline must route a non-positive displayed headroom to the 'close to' phrasing: %q", msg)
+		}
+	})
+
+	// No-limit branch: same rounding shape against the host ceiling. The
+	// no-limit reserve displays as the fixed 1.0-core reserve, so the
+	// negative display comes from used rounding up: total 4.0, used 3.05001
+	// rounds to 3.1 -> displayed headroom 4.0 - 3.1 - 1.0 = -0.1.
+	t.Run("NoLimitBranch", func(t *testing.T) {
+		signals := cpuhealth.Signals{
+			HostBusyCores60sMean: 3.05001,
+			CapacityCores:        4.0,
+		}
+
+		msg := cpuhealth.ComposeMessage(healthy, signals)
+		if strings.Contains(msg, "can use -") {
+			t.Fatalf("no-limit healthy headline printed a negative headroom: %q", msg)
+		}
+
+		if !strings.Contains(msg, "close to being marked degraded") {
+			t.Fatalf("no-limit healthy headline must route a non-positive displayed headroom to the 'close to' phrasing: %q", msg)
+		}
+	})
+}
