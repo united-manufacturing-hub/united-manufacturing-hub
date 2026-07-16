@@ -19,9 +19,16 @@ import (
 	"testing"
 	"time"
 
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
+
+func TestLogger(t *testing.T) {
+	RegisterFailHandler(Fail)
+	RunSpecs(t, "Logger Suite")
+}
 
 // countingCore records how many entries were written, per level.
 type countingCore struct {
@@ -49,41 +56,35 @@ func (c *countingCore) get(l zapcore.Level) int {
 	return c.counts[l]
 }
 
-func TestLevelSampledCore(t *testing.T) {
-	inner := newCountingCore()
-	// first=3, thereafter=100, huge tick so everything lands in one window.
-	log := zap.New(NewLevelSampledCore(inner, time.Hour, 3, 100))
+var _ = Describe("NewLevelSampledCore", func() {
+	It("samples below Warn but never drops Warn or Error", func() {
+		inner := newCountingCore()
+		// first=3, thereafter=100, huge tick so everything lands in one window.
+		log := zap.New(NewLevelSampledCore(inner, time.Hour, 3, 100))
 
-	const n = 250
-	for range n {
-		log.Info("same info message")
-		log.Warn("same warn message")
-		log.Error("same error message")
-	}
+		const n = 250
+		for range n {
+			log.Info("same info message")
+			log.Warn("same warn message")
+			log.Error("same error message")
+		}
 
-	// Info below Warn: first 3 logged, then every 100th -> 3 + floor((250-3)/100) = 5.
-	if got := inner.get(zapcore.InfoLevel); got != 5 {
-		t.Errorf("info sampled count = %d, want 5", got)
-	}
-	// Warn and Error must never be sampled.
-	if got := inner.get(zapcore.WarnLevel); got != n {
-		t.Errorf("warn count = %d, want %d (never sampled)", got, n)
-	}
-	if got := inner.get(zapcore.ErrorLevel); got != n {
-		t.Errorf("error count = %d, want %d (never sampled)", got, n)
-	}
-}
+		// Info below Warn: first 3 logged, then every 100th -> 3 + floor((250-3)/100) = 5.
+		Expect(inner.get(zapcore.InfoLevel)).To(Equal(5))
+		// Warn and Error must never be sampled.
+		Expect(inner.get(zapcore.WarnLevel)).To(Equal(n))
+		Expect(inner.get(zapcore.ErrorLevel)).To(Equal(n))
+	})
 
-func TestLevelSampledCoreDistinctMessagesNotGrouped(t *testing.T) {
-	inner := newCountingCore()
-	log := zap.New(NewLevelSampledCore(inner, time.Hour, 1, 100))
+	It("does not group distinct messages into one bucket", func() {
+		inner := newCountingCore()
+		log := zap.New(NewLevelSampledCore(inner, time.Hour, 1, 100))
 
-	// Distinct messages each get their own bucket -> each logged once.
-	log.Info("message A")
-	log.Info("message B")
-	log.Info("message A")
+		// Distinct messages each get their own bucket -> each logged once.
+		log.Info("message A")
+		log.Info("message B")
+		log.Info("message A")
 
-	if got := inner.get(zapcore.InfoLevel); got != 2 {
-		t.Errorf("info count = %d, want 2 (A once, B once)", got)
-	}
-}
+		Expect(inner.get(zapcore.InfoLevel)).To(Equal(2))
+	})
+})
