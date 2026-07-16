@@ -10,7 +10,8 @@
 
 ### Fixes
 
-- CPU health no longer flags a container as degraded just because its CPU usage is high. Previously, any container crossing 70% CPU showed as degraded and could block new bridges, even under healthy high load. CPU health is now based on actual starvation (throttling, CPU pressure, steal) rather than raw utilization. When the host's CPU stats are unreadable, sustained container usage above 70% of the machine's cores is still used as a degradation fallback.
+- CPU health no longer flags a container as degraded just because its CPU usage is high. Previously, any container crossing 70% CPU showed as degraded and could block new bridges, even under healthy high load. CPU health is now based on actual starvation (throttling, CPU pressure, steal) rather than raw utilization. Only when host CPU statistics are unreadable does sustained container usage above 70% of the machine's cores still count as degraded, as a fallback.
+- Waiting on disk I/O no longer counts as CPU load. A machine busy with disk reads or writes but with compute to spare now reads as healthy instead of blocking new bridges.
 - The CPU health message no longer shows a garbled percentage on very small CPU limits, such as tiny Kubernetes CPU quotas.
 
 ## [0.44.24]
