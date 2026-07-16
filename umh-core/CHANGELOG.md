@@ -2,8 +2,6 @@
 
 ## Unreleased
 
-- Preview: umh-core now exposes status message info about the historian connection.
-
 ## [0.44.29]
 
 ### New Features
