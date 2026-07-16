@@ -508,9 +508,9 @@ func TestDecide_ThrottleFlipLatch_WindowedSchmitt(t *testing.T) {
 	// is stateful across calls, exactly the caller-held-state contract.
 	decide := func(tk tick) (Verdict, Signals) {
 		return Decide(st, Sample{
-			Timestamp:   base.Add(tk.dt),
-			NrPeriods:   tk.nrP,
-			NrThrottled: tk.nrT,
+			Timestamp:          base.Add(tk.dt),
+			NrPeriods:          tk.nrP,
+			NrThrottled:        tk.nrT,
 			NrPeriodsAvailable: true,
 		}, thresholds)
 	}
@@ -723,9 +723,9 @@ func TestDecide_ThrottleFlipLatch_CounterResetClearsRing(t *testing.T) {
 
 	decide := func(tk tick) (Verdict, Signals) {
 		return Decide(st, Sample{
-			Timestamp:   base.Add(tk.dt),
-			NrPeriods:   tk.nrP,
-			NrThrottled: tk.nrT,
+			Timestamp:          base.Add(tk.dt),
+			NrPeriods:          tk.nrP,
+			NrThrottled:        tk.nrT,
 			NrPeriodsAvailable: true,
 		}, thresholds)
 	}
@@ -810,7 +810,7 @@ func TestDecide_PressureCause_Avg60DirectSchmitt(t *testing.T) {
 		return Decide(st, Sample{
 			Timestamp:     base.Add(dt),
 			PressureAvg60: pressureAvg60,
-			PsiReadable: true,
+			PsiReadable:   true,
 		}, thresholds)
 	}
 
@@ -873,23 +873,23 @@ func TestDecide_PressureCause_Avg60DirectSchmitt(t *testing.T) {
 	tNow := base
 	// Baseline throttle counters.
 	Decide(st2, Sample{
-		Timestamp:     tNow,
-		NrPeriods:     1000,
-		NrThrottled:   10,
+		Timestamp:          tNow,
+		NrPeriods:          1000,
+		NrThrottled:        10,
 		NrPeriodsAvailable: true,
-		PressureAvg60: 0.0,
-		PsiReadable: true,
+		PressureAvg60:      0.0,
+		PsiReadable:        true,
 	}, thresholds)
 	tNow = tNow.Add(10 * time.Second)
 	// Second tick: +1000 periods, +100 throttled → 60s ratio 0.10 > 0.05
 	// (throttle fires), AND pressure 0.25 > 0.20 (pressure fires).
 	v4, sig4 := Decide(st2, Sample{
-		Timestamp:     tNow,
-		NrPeriods:     2000,
-		NrThrottled:   110,
+		Timestamp:          tNow,
+		NrPeriods:          2000,
+		NrThrottled:        110,
 		NrPeriodsAvailable: true,
-		PressureAvg60: 0.25,
-		PsiReadable: true,
+		PressureAvg60:      0.25,
+		PsiReadable:        true,
 	}, thresholds)
 	if v4.State != StateDegraded {
 		t.Fatalf("cofire State: got %q, want %q (both throttle and pressure fire)", v4.State, StateDegraded)
@@ -922,7 +922,7 @@ func TestDecide_PressureCause_Avg60DirectSchmitt(t *testing.T) {
 	vb1, sigb1 := Decide(stB, Sample{
 		Timestamp:     base.Add(40 * time.Second),
 		PressureAvg60: thresholds.PressureHigh, // 0.20
-		PsiReadable: true,
+		PsiReadable:   true,
 	}, thresholds)
 	if vb1.State != StateHealthy {
 		t.Fatalf("boundary-high State: got %q, want %q (exactly PressureHigh 0.20, strict `>` must NOT fire)", vb1.State, StateHealthy)
@@ -937,7 +937,7 @@ func TestDecide_PressureCause_Avg60DirectSchmitt(t *testing.T) {
 	Decide(stB, Sample{
 		Timestamp:     base.Add(50 * time.Second),
 		PressureAvg60: 0.21,
-		PsiReadable: true,
+		PsiReadable:   true,
 	}, thresholds)
 	if !stB.pressureFired {
 		t.Fatalf("boundary setup: latch should have fired at 0.21")
@@ -946,7 +946,7 @@ func TestDecide_PressureCause_Avg60DirectSchmitt(t *testing.T) {
 	vb2, sigb2 := Decide(stB, Sample{
 		Timestamp:     base.Add(60 * time.Second),
 		PressureAvg60: thresholds.PressureRecover, // 0.12
-		PsiReadable: true,
+		PsiReadable:   true,
 	}, thresholds)
 	if vb2.State != StateDegraded {
 		t.Fatalf("boundary-recover State: got %q, want %q (exactly PressureRecover 0.12, strict `<` must NOT clear)", vb2.State, StateDegraded)
@@ -966,7 +966,7 @@ func TestDecide_PressureCause_Avg60DirectSchmitt(t *testing.T) {
 	vn1, sign1 := Decide(stN, Sample{
 		Timestamp:     base.Add(70 * time.Second),
 		PressureAvg60: nan,
-		PsiReadable: true,
+		PsiReadable:   true,
 	}, thresholds)
 	if vn1.State != StateHealthy {
 		t.Fatalf("nan-fresh State: got %q, want %q (NaN clamped to 0, does not fire)", vn1.State, StateHealthy)
@@ -981,7 +981,7 @@ func TestDecide_PressureCause_Avg60DirectSchmitt(t *testing.T) {
 	Decide(stN, Sample{
 		Timestamp:     base.Add(80 * time.Second),
 		PressureAvg60: 0.21,
-		PsiReadable: true,
+		PsiReadable:   true,
 	}, thresholds)
 	if !stN.pressureFired {
 		t.Fatalf("nan setup: latch should have fired at 0.21")
@@ -989,7 +989,7 @@ func TestDecide_PressureCause_Avg60DirectSchmitt(t *testing.T) {
 	vn2, sign2 := Decide(stN, Sample{
 		Timestamp:     base.Add(90 * time.Second),
 		PressureAvg60: nan,
-		PsiReadable: true,
+		PsiReadable:   true,
 	}, thresholds)
 	if vn2.State != StateHealthy {
 		t.Fatalf("nan-fired State: got %q, want %q (NaN clamped to 0 < PressureRecover → latch clears)", vn2.State, StateHealthy)
@@ -1015,7 +1015,7 @@ func TestDecide_PressureCause_Avg60DirectSchmitt(t *testing.T) {
 	vi1, sigi1 := Decide(stI, Sample{
 		Timestamp:     base.Add(110 * time.Second),
 		PressureAvg60: inf,
-		PsiReadable: true,
+		PsiReadable:   true,
 	}, thresholds)
 	if vi1.State != StateHealthy {
 		t.Fatalf("inf-fresh State: got %q, want %q (+Inf clamped to 0, does not fire)", vi1.State, StateHealthy)
@@ -1030,7 +1030,7 @@ func TestDecide_PressureCause_Avg60DirectSchmitt(t *testing.T) {
 	Decide(stI, Sample{
 		Timestamp:     base.Add(120 * time.Second),
 		PressureAvg60: 0.21,
-		PsiReadable: true,
+		PsiReadable:   true,
 	}, thresholds)
 	if !stI.pressureFired {
 		t.Fatalf("inf setup: latch should have fired at 0.21")
@@ -1038,7 +1038,7 @@ func TestDecide_PressureCause_Avg60DirectSchmitt(t *testing.T) {
 	vi2, sigi2 := Decide(stI, Sample{
 		Timestamp:     base.Add(130 * time.Second),
 		PressureAvg60: inf,
-		PsiReadable: true,
+		PsiReadable:   true,
 	}, thresholds)
 	if vi2.State != StateHealthy {
 		t.Fatalf("inf-fired State: got %q, want %q (+Inf clamped to 0 < PressureRecover → latch clears)", vi2.State, StateHealthy)
@@ -1056,7 +1056,7 @@ func TestDecide_PressureCause_Avg60DirectSchmitt(t *testing.T) {
 	vz, sigz := Decide(stZ, Sample{
 		Timestamp:     base.Add(100 * time.Second),
 		PressureAvg60: 0.0,
-		PsiReadable: true,
+		PsiReadable:   true,
 	}, thresholds)
 	if vz.State != StateHealthy {
 		t.Fatalf("zero State: got %q, want %q (0 < PressureRecover, never fires)", vz.State, StateHealthy)
@@ -1239,12 +1239,12 @@ func TestDecide_StealCause_VirtualizedRingP95Schmitt(t *testing.T) {
 	st5 := &WindowState{}
 	// Baseline throttle counters at t0.
 	Decide(st5, Sample{
-		Timestamp:     base.Add(400 * time.Second),
-		NrPeriods:     1000,
-		NrThrottled:   10,
+		Timestamp:          base.Add(400 * time.Second),
+		NrPeriods:          1000,
+		NrThrottled:        10,
 		NrPeriodsAvailable: true,
-		StealFraction: 0.0,
-		Virtualized:   true,
+		StealFraction:      0.0,
+		Virtualized:        true,
 	}, thresholds)
 	// 18 more sustained-high-steal ticks to build the steal p95 (all 0.50).
 	// The intermediate ticks carry forward NrPeriods/NrThrottled (1000+i, 10+i)
@@ -1256,24 +1256,24 @@ func TestDecide_StealCause_VirtualizedRingP95Schmitt(t *testing.T) {
 	// attribution is HOST by a wide margin, not a near-tie.
 	for i := 1; i < 19; i++ {
 		Decide(st5, Sample{
-			Timestamp:     base.Add(400 * time.Second).Add(time.Duration(i) * time.Second),
-			NrPeriods:     1000 + int64(i),
-			NrThrottled:   10 + int64(i),
+			Timestamp:          base.Add(400 * time.Second).Add(time.Duration(i) * time.Second),
+			NrPeriods:          1000 + int64(i),
+			NrThrottled:        10 + int64(i),
 			NrPeriodsAvailable: true,
-			StealFraction: 0.50,
-			Virtualized:   true,
+			StealFraction:      0.50,
+			Virtualized:        true,
 		}, thresholds)
 	}
 	// Final tick: +1000 periods, +100 throttled → 60s throttle ratio
 	// (110-10)/(2000-1000) = 0.10 > ThrottleHigh 0.05 (throttle fires), AND
 	// steal 0.50 continues (p95 > StealHigh → steal fires).
 	v5, sig5 := Decide(st5, Sample{
-		Timestamp:     base.Add(400 * time.Second).Add(19 * time.Second),
-		NrPeriods:     2000,
-		NrThrottled:   110,
+		Timestamp:          base.Add(400 * time.Second).Add(19 * time.Second),
+		NrPeriods:          2000,
+		NrThrottled:        110,
 		NrPeriodsAvailable: true,
-		StealFraction: 0.50,
-		Virtualized:   true,
+		StealFraction:      0.50,
+		Virtualized:        true,
 	}, thresholds)
 	if v5.State != StateDegraded {
 		t.Fatalf("cofire State: got %q, want %q (both steal and throttle fire)", v5.State, StateDegraded)
@@ -1657,7 +1657,7 @@ func TestDecide_SaturationBackstop_DeadZoneFireThenClearGuardrail(t *testing.T) 
 			UsageCores:   1.9, // 0.95 of 2.0 quota
 			Quota:        &quota,
 			PsiAvailable: true,
-			PsiReadable: true,
+			PsiReadable:  true,
 			Virtualized:  false,
 		}, thresholds)
 	}
@@ -1666,7 +1666,7 @@ func TestDecide_SaturationBackstop_DeadZoneFireThenClearGuardrail(t *testing.T) 
 		UsageCores:   1.9,
 		Quota:        &quota,
 		PsiAvailable: true,
-		PsiReadable: true,
+		PsiReadable:  true,
 		Virtualized:  false,
 	}, thresholds)
 	if vNonDz.State != StateDegraded {
@@ -1713,7 +1713,7 @@ func TestDecide_SaturationBackstop_DeadZoneFireThenClearGuardrail(t *testing.T) 
 		UsageCores:   1.9, // 0.95 of 2.0 quota
 		Quota:        &quota4,
 		PsiAvailable: true,
-		PsiReadable: true,
+		PsiReadable:  true,
 		Virtualized:  false,
 	}, thresholds)
 	// The ring retains old dead-zone samples (cores=3.2); usageCores60sMean
@@ -1909,7 +1909,7 @@ func TestDecide_SaturationBackstop_DeadZoneFireThenClearGuardrail(t *testing.T) 
 		UsageCores:   1.9,
 		Quota:        &quota9,
 		PsiAvailable: true,
-		PsiReadable: true,
+		PsiReadable:  true,
 		Virtualized:  false,
 	}, thresholds)
 	if vExit.State != StateDegraded {
@@ -1965,7 +1965,7 @@ func TestDecide_SaturationBackstop_DeadZoneFireThenClearGuardrail(t *testing.T) 
 			HostBusyCoresAvailable: false,
 			NrPeriods:              nrPeriods,
 			NrThrottled:            nrThrottled,
-			NrPeriodsAvailable: true,
+			NrPeriodsAvailable:     true,
 			PsiAvailable:           false,
 			Virtualized:            false,
 		}
@@ -2277,7 +2277,7 @@ func TestDecide_UsagePercentiles_FromSaturationRing(t *testing.T) {
 		UsageCores:   1.9,
 		Quota:        &quota,
 		PsiAvailable: true,
-		PsiReadable: true,
+		PsiReadable:  true,
 		Virtualized:  false,
 	}, thresholds)
 	if !sigNdz.UsageRingActive {
@@ -2389,7 +2389,7 @@ func TestDecide_StealAndPressure_UnconditionalSignals(t *testing.T) {
 	v2, sig2 := Decide(st2, Sample{
 		Timestamp:     base.Add(200 * time.Second),
 		PressureAvg60: 0.10,
-		PsiReadable: true,
+		PsiReadable:   true,
 	}, thresholds)
 	if sig2.PressureFired {
 		t.Fatalf("pressure-below PressureFired: got true, want false (0.10 is not > PressureHigh 0.20)")
@@ -2413,7 +2413,7 @@ func TestDecide_StealAndPressure_UnconditionalSignals(t *testing.T) {
 		StealFraction: 0.50, // nonzero, but Virtualized=false so it is not processed
 		Virtualized:   false,
 		PressureAvg60: 0.0,
-		PsiReadable: true,
+		PsiReadable:   true,
 	}, thresholds)
 	if !floatEq(sig3.StealP95, 0) {
 		t.Fatalf("absent StealP95: got %v, want 0 (bare metal → steal is not a readable signal → 0)", sig3.StealP95)
@@ -2428,7 +2428,7 @@ func TestDecide_StealAndPressure_UnconditionalSignals(t *testing.T) {
 	_, sig4 := Decide(st4, Sample{
 		Timestamp:     base.Add(600 * time.Second),
 		PressureAvg60: -0.5,
-		PsiReadable: true,
+		PsiReadable:   true,
 	}, thresholds)
 	if !floatEq(sig4.PressureAvg60Out, 0) {
 		t.Fatalf("negative-clamp PressureAvg60Out: got %v, want 0 (negatives clamp to 0, mirroring the ThrottleRatio clamp)", sig4.PressureAvg60Out)
@@ -3295,7 +3295,7 @@ func TestDecide_HostContentionFold_Full(t *testing.T) {
 			Quota:                  &quota,
 			PsiAvailable:           true,
 			PressureAvg60:          0.30,
-			PsiReadable: true,
+			PsiReadable:            true,
 			UsageCores:             1.0,
 			HostBusyCores:          7.0,
 			HostBusyCoresAvailable: true, // ring fills with 7.0 → 60s mean = 7.0 (the smoothed split uses the mean)
@@ -3336,7 +3336,7 @@ func TestDecide_HostContentionFold_Full(t *testing.T) {
 			Quota:                  &quota,
 			PsiAvailable:           true,
 			PressureAvg60:          0.30,
-			PsiReadable: true,
+			PsiReadable:            true,
 			UsageCores:             6.5,
 			HostBusyCores:          7.0,
 			HostBusyCoresAvailable: true, // ring fills with 7.0 → 60s mean = 7.0 (the smoothed split uses the mean)
@@ -3382,9 +3382,9 @@ func TestDecide_HostContentionFold_Full(t *testing.T) {
 			LogicalCpus:            8.0,
 			NrPeriods:              1000,
 			NrThrottled:            10,
-			NrPeriodsAvailable: true,
+			NrPeriodsAvailable:     true,
 			PressureAvg60:          0.0,
-			PsiReadable: true,
+			PsiReadable:            true,
 		}, thresholds)
 		// Tick 2: +1000 periods, +100 throttled → ratio 0.10 > 0.05 → throttle
 		// fires.
@@ -3398,9 +3398,9 @@ func TestDecide_HostContentionFold_Full(t *testing.T) {
 			LogicalCpus:            8.0,
 			NrPeriods:              2000,
 			NrThrottled:            110,
-			NrPeriodsAvailable: true,
+			NrPeriodsAvailable:     true,
 			PressureAvg60:          0.0,
-			PsiReadable: true,
+			PsiReadable:            true,
 		}, thresholds)
 		if !sig.ThrottleFired {
 			t.Fatalf("ThrottleFired: got false, want true (60s ratio (110-10)/(2000-1000)=0.10 > ThrottleHigh 0.05)")
@@ -3441,9 +3441,9 @@ func TestDecide_HostContentionFold_Full(t *testing.T) {
 			LogicalCpus:            8.0,
 			NrPeriods:              1000,
 			NrThrottled:            10,
-			NrPeriodsAvailable: true,
+			NrPeriodsAvailable:     true,
 			PressureAvg60:          0.0,
-			PsiReadable: true,
+			PsiReadable:            true,
 		}, thresholds)
 		v, sig := Decide(st, Sample{
 			Timestamp:              base.Add(10 * time.Second),
@@ -3455,9 +3455,9 @@ func TestDecide_HostContentionFold_Full(t *testing.T) {
 			LogicalCpus:            8.0,
 			NrPeriods:              2000,
 			NrThrottled:            110,
-			NrPeriodsAvailable: true,
+			NrPeriodsAvailable:     true,
 			PressureAvg60:          0.0,
-			PsiReadable: true,
+			PsiReadable:            true,
 		}, thresholds)
 		if !sig.ThrottleFired {
 			t.Fatalf("ThrottleFired: got false, want true (60s ratio 0.10 > ThrottleHigh 0.05)")
@@ -3827,7 +3827,7 @@ func TestDecide_LimitMode_ContainerIdleHostFull_NoSaturation(t *testing.T) {
 			HostBusyCoresAvailable: true, // ring fills → hostBusyMean=5.0
 			UsageCores:             0.3,
 			PressureAvg60:          0.25, // > PressureHigh 0.20 → pressure fires
-			PsiReadable: true,
+			PsiReadable:            true,
 			PsiAvailable:           true,
 		}, thresholds)
 	}
@@ -4874,7 +4874,7 @@ func TestDecide_Attribution_Uses60sMean_NotInstantaneous(t *testing.T) {
 			PsiAvailable:           false,
 			NrPeriods:              periods,
 			NrThrottled:            throttled,
-			NrPeriodsAvailable: true,
+			NrPeriodsAvailable:     true,
 		}
 	}
 

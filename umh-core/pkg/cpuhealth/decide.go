@@ -297,7 +297,10 @@ type hostBusyPoint struct {
 	hostBusy float64
 }
 
-// Signals holds derived intermediate values computed during Decide.
+// Signals holds derived intermediate values computed during Decide and
+// returned alongside the Verdict: numeric metrics for the wire and the
+// message, plus the per-latch Fired flags mirrored from WindowState.
+// Signals is a read-only output; it carries no state between ticks.
 type Signals struct {
 	UsageFraction float64
 	// ThrottleRatio is the computed 60s cumulative throttle ratio
@@ -493,8 +496,9 @@ type Verdict struct {
 }
 
 // Decide computes a CPU-health verdict from a sample using the two-rule model:
-// the ceiling headroom is measured against follows whether a CPU
-// limit is set. Decide mutates st (*WindowState) in place, appending to the
+// the ceiling that headroom is measured against follows whether a CPU
+// limit is set. Decide mutates st (*WindowState) in place and is its only
+// mutator, appending to the
 // throttle, steal, usage, and hostBusy rings and updating the flip-latches,
 // so the caller must not share st across goroutines without external
 // synchronization. In limit mode (Quota non-nil and > 0) the ceiling is the
