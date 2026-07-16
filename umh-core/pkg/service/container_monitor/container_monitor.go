@@ -71,6 +71,26 @@ type ContainerMonitorService struct {
 	architecture    models.ContainerArchitecture //nolint:unused // will be used in the future
 	dataPath        string                       // Path to check for disk metrics and HWID file
 	wasThrottled    bool                         // Previous throttle state for transition logging
+	// lastVerdict, lastSignals, lastVerdictBasis, lastCgroupCores, and
+	// hasLastVerdict hold the most recent successful sampler tick's verdict
+	// state so a sampler-failure tick can re-emit it on the wire instead of
+	// flapping to healthy.
+	//
+	// Hold semantics during a sustained sampler outage:
+	//
+	//   - The hold is indefinite (no max-hold window). This matches the
+	//     hostBusyRing and stealRing hold-on-missing discipline: the ring
+	//     prune runs inside cpuhealth.Decide, which the sampler-failure branch
+	//     skips, so the rings do not age out during a sustained outage either.
+	//   - A held stale-degraded verdict blocks bridge creation via
+	//     ProtocolConverterService.IsResourceLimited for the duration of the
+	//     outage. This is the conservative choice: block rather than admit a
+	//     new bridge to a possibly-degraded host. The sampler is down, so the
+	//     current host state is unknowable.
+	//   - Recovery: the first successful sampler tick overwrites
+	//     hasLastVerdict and recomputes the verdict, basis, signals, and
+	//     CgroupCores fresh from the new sample. The hold is not sticky past
+	//     one successful tick.
 	lastVerdict      cpuhealth.Verdict
 	lastSignals      cpuhealth.Signals
 	lastVerdictBasis *models.VerdictBasis
