@@ -113,6 +113,12 @@ type EditProtocolConverterAction struct {
 	// a render (for example while Benthos restarts) keep the captured cause.
 	lastRenderErr error
 
+	// lastFailedDFCType records which DFC (read/write) produced the most
+	// recent render error. It is set alongside lastRenderErr and used to
+	// embed the flow name in the prose of user-facing error messages without
+	// prefixing the technical detail trail.
+	lastFailedDFCType DFCType
+
 	outboundChannel chan *models.UMHMessage
 	location        map[int]string
 
@@ -127,12 +133,6 @@ type EditProtocolConverterAction struct {
 	// writeDFCInput is the raw template-string form of the write config, persisted to the spec.
 	// nil means no write DFC was provided.
 	writeDFCInput *dataflowcomponentserviceconfig.DataflowComponentWriteConfigInput
-
-	// lastFailedDFCType records which DFC (read/write) produced the most
-	// recent render error. It is set alongside lastRenderErr and used to
-	// embed the flow name in the prose of user-facing error messages without
-	// prefixing the technical detail trail.
-	lastFailedDFCType DFCType
 
 	userEmail      string
 	name           string // protocol converter name (optional for updates)
