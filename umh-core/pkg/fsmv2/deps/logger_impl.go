@@ -60,6 +60,18 @@ func NewFSMLogger(sugar *zap.SugaredLogger) FSMLogger {
 	return &zapLogger{sugar: sampled}
 }
 
+// NewUnsampledFSMLogger wraps sugar without the message-based sampler that
+// NewFSMLogger applies. Use it only in test harnesses that must observe every
+// log entry (sampling drops entries before they reach an observer core, which
+// breaks log-scraping assertions). Production code must use NewFSMLogger.
+func NewUnsampledFSMLogger(sugar *zap.SugaredLogger) FSMLogger {
+	if sugar == nil {
+		panic("NewUnsampledFSMLogger: sugar cannot be nil")
+	}
+
+	return &zapLogger{sugar: sugar}
+}
+
 func (l *zapLogger) Debug(msg string, fields ...Field) {
 	l.sugar.Debugw(msg, fieldsToArgs(l.baseFields, fields)...)
 }
@@ -117,17 +129,16 @@ func NewJSONFSMLogger(w io.Writer, level LogLevel) FSMLogger {
 		EncodeTime:     zapcore.ISO8601TimeEncoder,
 		EncodeDuration: zapcore.StringDurationEncoder,
 	}
-	baseCore := zapcore.NewCore(
+	core := zapcore.NewCore(
 		zapcore.NewJSONEncoder(encoderConfig),
 		zapcore.AddSync(w),
 		zapcore.Level(level),
 	)
-	core := logger.NewLevelSampledCore(baseCore, 10*time.Second, 2, 200)
 
-	// core is already sampled, so bypass NewFSMLogger's samplerWrap to avoid
-	// sampling the JSON test output twice. There is no hook here for sampling
-	// to sit outside of.
-	return &zapLogger{sugar: zap.New(core).Sugar()}
+	// No sampling: this logger exists to capture and verify log output in tests,
+	// which needs every entry to be deterministic. Production sampling lives in
+	// NewFSMLogger's samplerWrap.
+	return NewUnsampledFSMLogger(zap.New(core).Sugar())
 }
 
 // fieldsToArgs converts Fields to zap's variadic key-value args.
