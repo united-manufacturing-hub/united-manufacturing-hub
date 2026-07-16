@@ -148,6 +148,10 @@ func NewContainerMonitorServiceWithSampler(fs filesystem.Service, dataPath strin
 }
 
 // GetStatus collects and returns the current container metrics.
+//
+// GetStatus must only be called from the container FSM reconcile goroutine:
+// the WindowState rings/latches and the last-verdict hold fields are
+// unsynchronized and rely on this single-caller invariant.
 func (c *ContainerMonitorService) GetStatus(ctx context.Context) (*ServiceInfo, error) {
 	// Create a new status with default health (Active)
 	status := &ServiceInfo{

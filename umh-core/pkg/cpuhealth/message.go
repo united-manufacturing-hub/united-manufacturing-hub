@@ -22,8 +22,8 @@ import (
 )
 
 // limitedVisibilityNote is the limited-visibility advisory appended to the
-// healthy headline when the sample is in the dead-zone (no CPU limit, no PSI,
-// not virtualized). It is the caller-facing "blind state" signal: the verdict
+// healthy headline when the sample is in the dead-zone (no CPU limit, no
+// PSI). It is the caller-facing "blind state" signal: the verdict
 // State is binary healthy|degraded, so the blind state cannot be a state; it
 // surfaces here as message text instead.
 const limitedVisibilityNote = "Limited visibility: this instance has no CPU limit set and its operating system is not reporting CPU-pressure stats, so UMH cannot fully tell when work is waiting for a free core. Set a CPU limit or enable Linux pressure stats (boot with psi=1) to turn on full monitoring."
