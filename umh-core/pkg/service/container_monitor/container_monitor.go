@@ -71,10 +71,10 @@ type ContainerMonitorService struct {
 	architecture    models.ContainerArchitecture //nolint:unused // will be used in the future
 	dataPath        string                       // Path to check for disk metrics and HWID file
 	wasThrottled    bool                         // Previous throttle state for transition logging
-	// lastVerdict, lastSignals, lastVerdictBasis, lastCgroupCores, and
-	// hasLastVerdict hold the most recent successful sampler tick's verdict
-	// state so a sampler-failure tick can re-emit it on the wire instead of
-	// flapping to healthy.
+	// lastVerdict, lastSignals, lastVerdictBasis, lastCgroupCores,
+	// lastTotalUsageMCpu, and hasLastVerdict hold the most recent successful
+	// sampler tick's verdict state so a sampler-failure tick can re-emit it
+	// on the wire instead of flapping to healthy.
 	//
 	// Hold semantics during a sustained sampler outage:
 	//
@@ -90,11 +90,12 @@ type ContainerMonitorService struct {
 	//   - Recovery: the first successful sampler tick recomputes the
 	//     verdict, basis, signals, and CgroupCores fresh from the new
 	//     sample.
-	lastVerdict      cpuhealth.Verdict
-	lastSignals      cpuhealth.Signals
-	lastVerdictBasis *models.VerdictBasis
-	lastCgroupCores  float64
-	hasLastVerdict   bool
+	lastVerdict        cpuhealth.Verdict
+	lastSignals        cpuhealth.Signals
+	lastVerdictBasis   *models.VerdictBasis
+	lastCgroupCores    float64
+	lastTotalUsageMCpu float64
+	hasLastVerdict     bool
 }
 
 // NewContainerMonitorService creates a new container monitor service instance.
@@ -287,6 +288,7 @@ func (c *ContainerMonitorService) getCPUMetrics(ctx context.Context) (*models.CP
 
 		c.lastVerdict = verdict
 		c.lastSignals = signals
+		c.lastTotalUsageMCpu = usageMCores
 		c.hasLastVerdict = true
 	} else {
 		c.logger.Warnf("cgroup cpu usage unavailable, holding last verdict")
@@ -294,6 +296,11 @@ func (c *ContainerMonitorService) getCPUMetrics(ctx context.Context) (*models.CP
 		if c.hasLastVerdict {
 			verdict = c.lastVerdict
 			signals = c.lastSignals
+			// Hold TotalUsageMCpu like CgroupCores: the zero sample would
+			// emit 0 next to the held nonzero AvgMCpu/P95MCpu/P99MCpu, a
+			// self-contradictory wire (zero instantaneous usage under held
+			// nonzero averages).
+			usageMCores = c.lastTotalUsageMCpu
 		}
 	}
 

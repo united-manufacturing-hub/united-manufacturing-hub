@@ -832,3 +832,76 @@ var _ = Describe("Verdict-hold stale-healthy case (Rung 7.3)", func() {
 			"the held CgroupCores persists across the sampler failure (no drift to 0 / no flicker to legacy)")
 	})
 })
+
+var _ = Describe("TotalUsageMCpu hold on sampler failure", func() {
+	It("re-emits the held TotalUsageMCpu on a sampler-failure tick instead of a zero next to nonzero held averages", func() {
+		// On a sampler-failure tick the held verdict, basis, CgroupCores, and
+		// the AvgMCpu/P95MCpu/P99MCpu mirrors are all re-emitted from the last
+		// successful tick, but TotalUsageMCpu was computed from the zero
+		// Sample, emitting 0 next to nonzero held averages: a
+		// self-contradictory wire (zero instantaneous usage under a held
+		// degraded verdict whose 60s averages are nonzero). TotalUsageMCpu
+		// must be held exactly like CgroupCores: stored on the successful
+		// tick, re-emitted on the failure tick.
+		mockFS := filesystem.NewMockFileSystem()
+		ctx := context.Background()
+
+		testDataPath, err := os.MkdirTemp("", "total-usage-hold")
+		Expect(err).NotTo(HaveOccurred())
+		defer func() { _ = os.RemoveAll(testDataPath) }()
+
+		const cpuMax = "200000 100000\n" // quota 2.0 cores (capped, limit mode)
+		var (
+			nrPeriods, nrThrottled, usageUsec int64
+			samplerFails                      bool
+		)
+
+		mockFS.WithReadFileFunc(func(_ context.Context, path string) ([]byte, error) {
+			switch path {
+			case "/sys/fs/cgroup/cpu.max":
+				return []byte(cpuMax), nil
+			case "/sys/fs/cgroup/cpu.stat":
+				if samplerFails {
+					return nil, errors.New("cpu.stat transient read error")
+				}
+
+				return []byte(fmt.Sprintf(
+					"usage_usec %d\nnr_periods %d\nnr_throttled %d\nthrottled_usec 0\n",
+					usageUsec, nrPeriods, nrThrottled,
+				)), nil
+			default:
+				return nil, errors.New("file not found: " + path)
+			}
+		})
+
+		svc := container_monitor.NewContainerMonitorServiceWithPath(mockFS, testDataPath)
+
+		// Tick 1: baseline the usage counter and the throttle ring.
+		samplerFails = false
+		nrPeriods, nrThrottled, usageUsec = 1000, 0, 1_000_000
+		_, err = svc.GetStatus(ctx)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Tick 2: usage advances (~1 core over ~1s -> nonzero TotalUsageMCpu)
+		// and the throttle ratio 0.10 > 0.05 degrades the verdict.
+		nrPeriods, nrThrottled, usageUsec = 2000, 100, 2_000_000
+		time.Sleep(1 * time.Second)
+		status2, err := svc.GetStatus(ctx)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(status2.CPU.State).To(Equal("degraded"),
+			"precondition: tick 2 degrades so the verdict is held")
+		Expect(status2.CPU.TotalUsageMCpu).To(BeNumerically(">", 0),
+			"precondition: tick 2 carries a nonzero instantaneous usage")
+
+		// Tick 3: sampler fails. The failure tick must re-emit the held
+		// TotalUsageMCpu, not the zero sample's 0.
+		samplerFails = true
+		status3, err := svc.GetStatus(ctx)
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(status3.CPU.TotalUsageMCpu).To(BeNumerically("==", status2.CPU.TotalUsageMCpu),
+			"TotalUsageMCpu must be held from the last successful tick on a sampler failure (a zero here contradicts the held nonzero AvgMCpu/P95MCpu/P99MCpu)")
+		Expect(status3.CPU.TotalUsageMCpu).To(BeNumerically(">", 0),
+			"the held TotalUsageMCpu is nonzero, matching the held averages")
+	})
+})
