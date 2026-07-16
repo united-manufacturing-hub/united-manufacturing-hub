@@ -19,7 +19,7 @@
 * **≈ 4 bridges instances** (e.g. OPC UA ➜ Redpanda) **plus one bridge instance** that forwards from the local Redpanda to an external MQTT broker
 * **≈ 900 tags at 1 message / second each**
 * Keeps **seven days** of history under the default cluster retention (`log_retention_ms = 7 days`)
-* Runs comfortably with CPU headroom (the CPU health monitor blocks new bridges only when the instance is actually being starved — throttling, pressure, or no spare core — not on raw usage)
+* Runs comfortably with CPU headroom (the CPU health monitor blocks new bridges only when the instance is actually being starved (throttling, pressure, or no spare core), not on raw usage)
 
 #### Minimum
 
@@ -53,7 +53,7 @@ Shorten retention (either during install with `internal.redpanda.redpandaService
 **Dynamic Resource Protection:**
 Since every bridge has different resource requirements (OPC UA with 10,000 tags uses more CPU than MQTT with 100 tags), we also monitor actual resource usage:
 
-- **CPU Health**: Blocks new bridges when the instance is CPU-degraded (throttling, pressure, steal, or host-contention detected). High usage alone does not block — a busy container is not sick.
+- **CPU Health**: Blocks new bridges when the instance is CPU-degraded (throttling, pressure, steal, or host-contention detected). High usage alone does not block; a busy container is not sick.
 - **CPU Throttling**: Blocks if the container is being throttled. Throttling means the system needs brief CPU bursts (e.g., when processing message batches) but hits the CPU limit, causing delays and degraded performance even if average CPU usage looks acceptable
 - **Memory Usage**: Blocks if memory exceeds 80%
 - **Disk Usage**: Blocks if disk exceeds 85%
