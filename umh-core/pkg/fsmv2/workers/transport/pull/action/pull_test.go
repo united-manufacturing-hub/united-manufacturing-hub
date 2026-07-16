@@ -84,8 +84,10 @@ type mockPullDeps struct {
 }
 
 type typedErrorCall struct {
-	errType    types.ErrorType
-	retryAfter time.Duration
+	errType     types.ErrorType
+	retryAfter  time.Duration
+	statusCode  int
+	errorDetail string
 }
 
 func newMockPullDeps() *mockPullDeps {
@@ -141,10 +143,12 @@ func (m *mockPullDeps) GetTransport() types.Transport {
 	return m.transport
 }
 
-func (m *mockPullDeps) RecordTypedError(errType types.ErrorType, retryAfter time.Duration) {
+func (m *mockPullDeps) RecordTypedError(errType types.ErrorType, retryAfter time.Duration, statusCode int, errorDetail string) {
 	m.recordTypedErrorCalls = append(m.recordTypedErrorCalls, typedErrorCall{
-		errType:    errType,
-		retryAfter: retryAfter,
+		errType:     errType,
+		retryAfter:  retryAfter,
+		statusCode:  statusCode,
+		errorDetail: errorDetail,
 	})
 }
 
@@ -162,6 +166,22 @@ func (m *mockPullDeps) GetConsecutiveErrors() int {
 
 func (m *mockPullDeps) GetLastErrorType() types.ErrorType {
 	return m.lastErrorType
+}
+
+func (m *mockPullDeps) GetLastStatusCode() int {
+	if len(m.recordTypedErrorCalls) == 0 {
+		return 0
+	}
+
+	return m.recordTypedErrorCalls[len(m.recordTypedErrorCalls)-1].statusCode
+}
+
+func (m *mockPullDeps) GetLastErrorDetail() string {
+	if len(m.recordTypedErrorCalls) == 0 {
+		return ""
+	}
+
+	return m.recordTypedErrorCalls[len(m.recordTypedErrorCalls)-1].errorDetail
 }
 
 func (m *mockPullDeps) MetricsRecorder() *deps.MetricsRecorder {
@@ -255,8 +275,9 @@ var _ = Describe("PullAction", func() {
 		It("should record typed error and suppress transient errors", func() {
 			mockTrans.pullErr = &types.TransportError{
 				Type:       types.ErrorTypeServerError,
-				Message:    "HTTP 500: server_error",
+				Message:    "HTTP 500 (server_error): internal server error",
 				RetryAfter: 30 * time.Second,
+				StatusCode: 500,
 			}
 
 			err := act.Execute(context.Background(), mockDeps)
@@ -265,6 +286,8 @@ var _ = Describe("PullAction", func() {
 			Expect(mockDeps.recordTypedErrorCalls).To(HaveLen(1))
 			Expect(mockDeps.recordTypedErrorCalls[0].errType).To(Equal(types.ErrorTypeServerError))
 			Expect(mockDeps.recordTypedErrorCalls[0].retryAfter).To(Equal(30 * time.Second))
+			Expect(mockDeps.recordTypedErrorCalls[0].statusCode).To(Equal(500))
+			Expect(mockDeps.recordTypedErrorCalls[0].errorDetail).To(ContainSubstring("internal server error"))
 
 			drained := mockDeps.metricsRecorder.Drain()
 			Expect(drained.Counters[string(deps.CounterPullOps)]).To(Equal(int64(1)))

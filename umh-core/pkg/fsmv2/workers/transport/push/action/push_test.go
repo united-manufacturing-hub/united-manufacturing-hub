@@ -81,8 +81,10 @@ type mockPushDeps struct {
 }
 
 type typedErrorCall struct {
-	errType    types.ErrorType
-	retryAfter time.Duration
+	errType     types.ErrorType
+	retryAfter  time.Duration
+	statusCode  int
+	errorDetail string
 }
 
 func newMockPushDeps() *mockPushDeps {
@@ -120,10 +122,12 @@ func (m *mockPushDeps) GetTransport() types.Transport {
 	return m.transport
 }
 
-func (m *mockPushDeps) RecordTypedError(errType types.ErrorType, retryAfter time.Duration) {
+func (m *mockPushDeps) RecordTypedError(errType types.ErrorType, retryAfter time.Duration, statusCode int, errorDetail string) {
 	m.recordTypedErrorCalls = append(m.recordTypedErrorCalls, typedErrorCall{
-		errType:    errType,
-		retryAfter: retryAfter,
+		errType:     errType,
+		retryAfter:  retryAfter,
+		statusCode:  statusCode,
+		errorDetail: errorDetail,
 	})
 }
 
@@ -233,8 +237,9 @@ var _ = Describe("PushAction", func() {
 			outboundBi <- &types.UMHMessage{Content: "msg1"}
 			mockTrans.pushErr = &types.TransportError{
 				Type:       types.ErrorTypeServerError,
-				Message:    "HTTP 500: server_error",
+				Message:    "HTTP 500 (server_error): internal server error",
 				RetryAfter: 30 * time.Second,
+				StatusCode: 500,
 			}
 
 			err := act.Execute(context.Background(), mockDeps)
@@ -243,6 +248,8 @@ var _ = Describe("PushAction", func() {
 			Expect(mockDeps.recordTypedErrorCalls).To(HaveLen(1))
 			Expect(mockDeps.recordTypedErrorCalls[0].errType).To(Equal(types.ErrorTypeServerError))
 			Expect(mockDeps.recordTypedErrorCalls[0].retryAfter).To(Equal(30 * time.Second))
+			Expect(mockDeps.recordTypedErrorCalls[0].statusCode).To(Equal(500))
+			Expect(mockDeps.recordTypedErrorCalls[0].errorDetail).To(ContainSubstring("internal server error"))
 
 			drained := mockDeps.metricsRecorder.Drain()
 			Expect(drained.Counters[string(deps.CounterPushOps)]).To(Equal(int64(1)))
@@ -275,6 +282,8 @@ var _ = Describe("PushAction", func() {
 			Expect(mockDeps.recordTypedErrorCalls).To(HaveLen(1))
 			Expect(mockDeps.recordTypedErrorCalls[0].errType).To(Equal(types.ErrorTypeUnknown))
 			Expect(mockDeps.recordTypedErrorCalls[0].retryAfter).To(Equal(time.Duration(0)))
+			Expect(mockDeps.recordTypedErrorCalls[0].statusCode).To(Equal(0))
+			Expect(mockDeps.recordTypedErrorCalls[0].errorDetail).To(ContainSubstring("connection refused"))
 
 			drained := mockDeps.metricsRecorder.Drain()
 			Expect(drained.Counters[string(deps.CounterPushFailures)]).To(Equal(int64(1)))
@@ -464,6 +473,36 @@ var _ = Describe("PushAction", func() {
 			Expect(err.Error()).To(ContainSubstring("recoverable by parent"))
 
 			Expect(mockDeps.PendingMessageCount()).To(Equal(2))
+		})
+
+		It("should propagate statusCode and detail through retryPending failure", func() {
+			mockDeps.pendingMessages = []*types.UMHMessage{
+				{Content: "msg1"},
+				{Content: "msg2"},
+			}
+
+			callCount := 0
+			mockTrans.pushFunc = func(_ context.Context, _ string, _ []*types.UMHMessage) error {
+				callCount++
+				if callCount == 1 {
+					return &types.TransportError{
+						Type:       types.ErrorTypeServerError,
+						Message:    "HTTP 502 (server_error): bad gateway",
+						RetryAfter: 30 * time.Second,
+						StatusCode: 502,
+					}
+				}
+
+				return nil
+			}
+
+			err := act.Execute(context.Background(), mockDeps)
+			Expect(err).NotTo(HaveOccurred(), "transient server error should be suppressed")
+
+			Expect(mockDeps.recordTypedErrorCalls).To(HaveLen(1))
+			Expect(mockDeps.recordTypedErrorCalls[0].errType).To(Equal(types.ErrorTypeServerError))
+			Expect(mockDeps.recordTypedErrorCalls[0].statusCode).To(Equal(502))
+			Expect(mockDeps.recordTypedErrorCalls[0].errorDetail).To(ContainSubstring("bad gateway"))
 		})
 	})
 
