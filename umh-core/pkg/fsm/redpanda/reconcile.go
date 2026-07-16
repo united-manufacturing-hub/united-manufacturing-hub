@@ -109,7 +109,7 @@ func (r *RedpandaInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSna
 
 			// Log the error but always continue reconciling - we need reconcileStateTransition to run
 			// to restore services after restart, even if we can't read their status yet
-			r.baseFSMInstance.GetLogger().Warnf("failed to update observed state (continuing reconciliation): %s", err)
+			r.baseFSMInstance.GetLogger().Debugf("failed to update observed state (continuing reconciliation): %s", err)
 
 			// For all other errors, just continue reconciling without setting backoff
 
@@ -132,7 +132,7 @@ func (r *RedpandaInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSna
 		}
 
 		r.baseFSMInstance.SetError(err, snapshot.Tick)
-		r.baseFSMInstance.GetLogger().Errorf("error reconciling state: %s", err)
+		r.baseFSMInstance.LogErrorDedup("error reconciling state: %s", err)
 
 		return nil, false // We don't want to return an error here, because we want to continue reconciling
 	}
@@ -145,7 +145,7 @@ func (r *RedpandaInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSna
 			// For schema registry errors, only set the error if we're in running states
 			if r.IsRunning() {
 				r.baseFSMInstance.SetError(s6Err, snapshot.Tick)
-				r.baseFSMInstance.GetLogger().Errorf("error reconciling s6Manager: %s", s6Err)
+				r.baseFSMInstance.LogErrorDedup("error reconciling s6Manager: %s", s6Err)
 
 				return nil, false
 			}
@@ -157,7 +157,7 @@ func (r *RedpandaInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSna
 			}
 			// For non-schema registry errors, always set the error
 			r.baseFSMInstance.SetError(s6Err, snapshot.Tick)
-			r.baseFSMInstance.GetLogger().Errorf("error reconciling s6Manager: %s", s6Err)
+			r.baseFSMInstance.LogErrorDedup("error reconciling s6Manager: %s", s6Err)
 
 			return nil, false
 		}

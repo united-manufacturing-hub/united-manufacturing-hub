@@ -110,7 +110,7 @@ func (c *ConnectionInstance) Reconcile(ctx context.Context, snapshot fsm.SystemS
 
 			// Log the error but always continue reconciling - we need reconcileStateTransition to run
 			// to restore services after restart, even if we can't read their status yet
-			c.baseFSMInstance.GetLogger().Warnf("failed to update observed state (continuing reconciliation): %s", err)
+			c.baseFSMInstance.GetLogger().Debugf("failed to update observed state (continuing reconciliation): %s", err)
 
 			// For all other errors, just continue reconciling without setting backoff
 			err = nil
@@ -132,7 +132,7 @@ func (c *ConnectionInstance) Reconcile(ctx context.Context, snapshot fsm.SystemS
 		}
 
 		c.baseFSMInstance.SetError(err, snapshot.Tick)
-		c.baseFSMInstance.GetLogger().Errorf("error reconciling state: %s", err)
+		c.baseFSMInstance.LogErrorDedup("error reconciling state: %s", err)
 
 		return nil, false // We don't want to return an error here, because we want to continue reconciling
 	}
@@ -145,7 +145,7 @@ func (c *ConnectionInstance) Reconcile(ctx context.Context, snapshot fsm.SystemS
 		}
 
 		c.baseFSMInstance.SetError(nmapErr, snapshot.Tick)
-		c.baseFSMInstance.GetLogger().Errorf("error reconciling nmapManager: %s", nmapErr)
+		c.baseFSMInstance.LogErrorDedup("error reconciling nmapManager: %s", nmapErr)
 
 		return nil, false
 	}

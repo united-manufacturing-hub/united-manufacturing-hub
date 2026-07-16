@@ -129,7 +129,7 @@ func (s *S6Instance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapshot,
 
 		// Log the error but always continue reconciling - we need reconcileStateTransition to run
 		// to restore services after restart, even if we can't read their status yet
-		s.baseFSMInstance.GetLogger().Warnf("failed to update observed state (continuing reconciliation): %s", err)
+		s.baseFSMInstance.GetLogger().Debugf("failed to update observed state (continuing reconciliation): %s", err)
 
 		// For all other errors, just continue reconciling without setting backoff
 		err = nil
@@ -151,7 +151,7 @@ func (s *S6Instance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapshot,
 		}
 
 		s.baseFSMInstance.SetError(err, snapshot.Tick)
-		s.baseFSMInstance.GetLogger().Errorf("error reconciling state: %s", err)
+		s.baseFSMInstance.LogErrorDedup("error reconciling state: %s", err)
 
 		return nil, false // We don't want to return an error here, because we want to continue reconciling
 	}
@@ -376,7 +376,7 @@ func (s *S6Instance) reconcileTransitionToStopped(ctx context.Context, services 
 			// Send event to transition to Stopping (will be immediately considered stopped due to workaround below)
 			return s.baseFSMInstance.SendEvent(ctx, EventStop), true
 		}
-		
+
 		// Attempt to initiate a stop
 		if err := s.StopInstance(ctx, services.GetFileSystem()); err != nil {
 			return err, true
@@ -406,4 +406,3 @@ func (s *S6Instance) reconcileTransitionToStopped(ctx context.Context, services 
 
 	return nil, false
 }
-

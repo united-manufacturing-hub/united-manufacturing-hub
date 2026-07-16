@@ -20,7 +20,9 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"sort"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -41,6 +43,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/control"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/env"
+	fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/dataflowcomponent"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/protocolconverter"
@@ -359,8 +362,46 @@ func ensureS6RepositoryDirectory(log *zap.SugaredLogger) error {
 	return nil
 }
 
-// SystemSnapshotLogger logs the system snapshot every 5 seconds
-// It is an example on how to access the system snapshot and log it for communication with other components.
+// snapshotFingerprint builds a sorted, deterministic string from the current snapshot
+// state. Two fingerprints that are equal mean no meaningful change occurred.
+func snapshotFingerprint(snapshot *fsm.SystemSnapshot, extractStatusReason func(managerName string, instance *fsm.FSMInstanceSnapshot) string) string {
+	lines := make([]string, 0, 32)
+	managerNames := make([]string, 0, len(snapshot.Managers))
+	for name := range snapshot.Managers {
+		managerNames = append(managerNames, name)
+	}
+	sort.Strings(managerNames)
+
+	for _, managerName := range managerNames {
+		manager := snapshot.Managers[managerName]
+		if manager == nil {
+			continue
+		}
+		instances := manager.GetInstances()
+
+		instanceNames := make([]string, 0, len(instances))
+		for name := range instances {
+			instanceNames = append(instanceNames, name)
+		}
+		sort.Strings(instanceNames)
+
+		for _, instanceName := range instanceNames {
+			inst := instances[instanceName]
+			if inst == nil {
+				continue
+			}
+			reason := extractStatusReason(managerName, inst)
+			lines = append(lines, fmt.Sprintf("%s|%s|%s|%s|%s",
+				managerName, instanceName, inst.CurrentState, inst.DesiredState, reason))
+		}
+
+		lines = append(lines, fmt.Sprintf("%s|count|%d", managerName, len(instances)))
+	}
+	return strings.Join(lines, "\n")
+}
+
+// SystemSnapshotLogger logs the system snapshot every 5 seconds, but only when
+// the state has meaningfully changed since the last log.
 func SystemSnapshotLogger(ctx context.Context, controlLoop *control.ControlLoop) {
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
@@ -371,6 +412,41 @@ func SystemSnapshotLogger(ctx context.Context, controlLoop *control.ControlLoop)
 	}
 
 	snap_logger.Info("Starting system snapshot logger")
+
+	var lastFingerprint string
+
+	extractStatusReason := func(managerName string, instance *fsm.FSMInstanceSnapshot) string {
+		if instance.LastObservedState == nil {
+			return ""
+		}
+		switch managerName {
+		case "BenthosManagerCore":
+			if s, ok := instance.LastObservedState.(*benthos.BenthosObservedStateSnapshot); ok {
+				return s.ServiceInfo.BenthosStatus.StatusReason
+			}
+		case "StreamProcessorManagerCore":
+			if s, ok := instance.LastObservedState.(*streamprocessor.ObservedStateSnapshot); ok {
+				return s.ServiceInfo.StatusReason
+			}
+		case "TopicBrowserManagerCore":
+			if s, ok := instance.LastObservedState.(*topicbrowserfsm.ObservedStateSnapshot); ok {
+				return s.ServiceInfo.StatusReason
+			}
+		case "DataFlowCompManagerCore":
+			if s, ok := instance.LastObservedState.(*dataflowcomponent.DataflowComponentObservedStateSnapshot); ok {
+				return s.ServiceInfo.StatusReason
+			}
+		case "ProtocolConverterManagerCore":
+			if s, ok := instance.LastObservedState.(*protocolconverter.ProtocolConverterObservedStateSnapshot); ok {
+				return s.ServiceInfo.StatusReason
+			}
+		case "RedpandaManagerCore":
+			if s, ok := instance.LastObservedState.(*redpanda.RedpandaObservedStateSnapshot); ok {
+				return s.ServiceInfoSnapshot.StatusReason
+			}
+		}
+		return ""
+	}
 
 	for {
 		select {
@@ -386,11 +462,27 @@ func SystemSnapshotLogger(ctx context.Context, controlLoop *control.ControlLoop)
 				continue
 			}
 
+			fingerprint := snapshotFingerprint(snapshot, extractStatusReason)
+			if fingerprint == lastFingerprint {
+				continue
+			}
+			lastFingerprint = fingerprint
+
 			snap_logger.Infof("=== System Snapshot (Tick %d) - %d Managers ===",
 				snapshot.Tick, len(snapshot.Managers))
 
 			// Log manager information
-			for managerName, manager := range snapshot.Managers {
+			managerNames := make([]string, 0, len(snapshot.Managers))
+			for name := range snapshot.Managers {
+				managerNames = append(managerNames, name)
+			}
+			sort.Strings(managerNames)
+
+			for _, managerName := range managerNames {
+				manager := snapshot.Managers[managerName]
+				if manager == nil {
+					continue
+				}
 				instances := manager.GetInstances()
 
 				if len(instances) == 0 {
@@ -400,52 +492,27 @@ func SystemSnapshotLogger(ctx context.Context, controlLoop *control.ControlLoop)
 					snap_logger.Infof("📁 %s (tick: %d) - %d instance(s):",
 						managerName, manager.GetManagerTick(), len(instances))
 
-					// Log instance information with indentation
-					for instanceName, instance := range instances {
-						statusReason := ""
+					instanceNames := make([]string, 0, len(instances))
+					for name := range instances {
+						instanceNames = append(instanceNames, name)
+					}
+					sort.Strings(instanceNames)
 
-						// Extract StatusReason from LastObservedState based on manager type
-						if instance.LastObservedState != nil {
-							switch managerName {
-							case "BenthosManagerCore":
-								if benthosSnapshot, ok := instance.LastObservedState.(*benthos.BenthosObservedStateSnapshot); ok {
-									statusReason = benthosSnapshot.ServiceInfo.BenthosStatus.StatusReason
-								}
-							case "StreamProcessorManagerCore":
-								if spSnapshot, ok := instance.LastObservedState.(*streamprocessor.ObservedStateSnapshot); ok {
-									statusReason = spSnapshot.ServiceInfo.StatusReason
-								}
-							case "TopicBrowserManagerCore":
-								if tbSnapshot, ok := instance.LastObservedState.(*topicbrowserfsm.ObservedStateSnapshot); ok {
-									statusReason = tbSnapshot.ServiceInfo.StatusReason
-								}
-							case "DataFlowCompManagerCore":
-								if dfcSnapshot, ok := instance.LastObservedState.(*dataflowcomponent.DataflowComponentObservedStateSnapshot); ok {
-									statusReason = dfcSnapshot.ServiceInfo.StatusReason
-								}
-							case "ProtocolConverterManagerCore":
-								if pcSnapshot, ok := instance.LastObservedState.(*protocolconverter.ProtocolConverterObservedStateSnapshot); ok {
-									statusReason = pcSnapshot.ServiceInfo.StatusReason
-								}
-							case "RedpandaManagerCore":
-								if redpandaSnapshot, ok := instance.LastObservedState.(*redpanda.RedpandaObservedStateSnapshot); ok {
-									statusReason = redpandaSnapshot.ServiceInfoSnapshot.StatusReason
-								}
-							}
+					for _, instanceName := range instanceNames {
+						instance := instances[instanceName]
+						if instance == nil {
+							continue
 						}
+						statusReason := extractStatusReason(managerName, instance)
 
-						// Format state with emojis for better visibility
-						stateIcon := "⚠️"
-
+						stateIcon := "⚠"
 						switch instance.CurrentState {
 						case "active":
 							stateIcon = "✅"
 						case "stopped":
-							stateIcon = "⏹️"
+							stateIcon = "⏹"
 						case "idle":
 							stateIcon = "💤"
-						case "degraded":
-							stateIcon = "⚠️"
 						}
 
 						if statusReason != "" {

@@ -110,7 +110,7 @@ func (p *ProtocolConverterInstance) Reconcile(ctx context.Context, snapshot fsm.
 
 			// Log the error but always continue reconciling - we need reconcileStateTransition to run
 			// to restore services after restart, even if we can't read their status yet
-			p.baseFSMInstance.GetLogger().Warnf("failed to update observed state (continuing reconciliation): %s", err)
+			p.baseFSMInstance.GetLogger().Debugf("failed to update observed state (continuing reconciliation): %s", err)
 
 			// For all other errors, just continue reconciling without setting backoff
 			err = nil
@@ -155,7 +155,7 @@ func (p *ProtocolConverterInstance) Reconcile(ctx context.Context, snapshot fsm.
 		// Enhanced error logging with state context
 		currentState := p.baseFSMInstance.GetCurrentFSMState()
 		desiredState := p.baseFSMInstance.GetDesiredFSMState()
-		p.baseFSMInstance.GetLogger().Errorf("error reconciling state transition: current_state='%s', desired_state='%s', error: %s",
+		p.baseFSMInstance.LogErrorDedup("error reconciling state transition: current_state='%s', desired_state='%s', error: %s",
 			currentState, desiredState, err)
 
 		p.baseFSMInstance.SetError(err, snapshot.Tick)
@@ -176,7 +176,7 @@ func (p *ProtocolConverterInstance) Reconcile(ctx context.Context, snapshot fsm.
 		}
 
 		p.baseFSMInstance.SetError(managerErr, snapshot.Tick)
-		p.baseFSMInstance.GetLogger().Errorf("error reconciling manager: %s", managerErr)
+		p.baseFSMInstance.LogErrorDedup("error reconciling manager: %s", managerErr)
 
 		return nil, false
 	}
