@@ -12,6 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//go:build test
+
+// Run with -tags=test: this file is excluded from plain go test, which
+// reports green with 0 specs. CI passes -tags=test for this package.
 package cpuhealth
 
 import (

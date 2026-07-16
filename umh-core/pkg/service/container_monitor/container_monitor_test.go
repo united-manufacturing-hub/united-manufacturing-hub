@@ -210,14 +210,16 @@ var _ = Describe("Container Monitor Service", func() {
 
 		// Regression pin for the raw-usage degrade override that was
 		// removed from GetStatus. A high-usage NON-throttled container
-		// must report CPUHealth/OverallHealth == Active, matching
-		// cpuStat.Health (the "busy is not sick" thesis). Before the
-		// fix, the ELSE branch in GetStatus set CPUHealth = Degraded
-		// purely from cpuPercent > 70, contradicting the Active
-		// cpuStat.Health and causing downstream bridge-blocking under
-		// normal high load.
+		// must report CPUHealth == Active, matching cpuStat.Health (the
+		// "busy is not sick" thesis). Before the fix, the ELSE branch in
+		// GetStatus set CPUHealth = Degraded purely from cpuPercent > 70,
+		// contradicting the Active cpuStat.Health and causing downstream
+		// bridge-blocking under normal high load. OverallHealth is not
+		// asserted because getMemoryMetrics and getDiskMetrics read the
+		// real host via gopsutil, so a loaded CI box can flip those
+		// subsystems to Degraded independently of CPU.
 		Context("when cgroup CPU usage is high but not throttled", func() {
-			It("reports Active CPUHealth and OverallHealth, consistent with CPU.Health", func() {
+			It("reports Active CPUHealth, consistent with CPU.Health", func() {
 				mockFS = filesystem.NewMockFileSystem()
 				ctx = context.Background()
 
@@ -288,8 +290,6 @@ var _ = Describe("Container Monitor Service", func() {
 				// must NOT be Degraded.
 				Expect(status.CPUHealth).To(Equal(models.Active),
 					"CPUHealth must be Active for high-usage non-throttled container (busy is not sick)")
-				Expect(status.OverallHealth).To(Equal(models.Active),
-					"OverallHealth must be Active for high-usage non-throttled container")
 				Expect(status.CPU.Health).NotTo(BeNil())
 				Expect(status.CPU.Health.Category).To(Equal(models.Active),
 					"CPU.Health.Category must be Active when not throttled")
