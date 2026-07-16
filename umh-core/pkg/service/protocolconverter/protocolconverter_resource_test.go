@@ -15,6 +15,10 @@
 package protocolconverter_test
 
 import (
+	"context"
+	"errors"
+	"fmt"
+	"os"
 	"runtime"
 	"time"
 
@@ -28,6 +32,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/container"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/container_monitor"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/protocolconverter"
 )
 
@@ -878,6 +883,111 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 				Expect(reason).To(BeEmpty())
 			})
 		})
+	})
+})
+
+var _ = Describe("IsResourceLimited: held stale-degraded verdict blocks bridges during a sampler outage (Rung 7.4)", func() {
+	It("returns limited=true when the container monitor holds a stale degraded verdict across a sampler failure", func() {
+		// Integration bridge: drive a real ContainerMonitorService through a
+		// degraded tick then a sampler-failure tick, feed the failure-tick
+		// ServiceInfo into IsResourceLimited, and assert it blocks. This pins
+		// the design decision that a held stale-degraded verdict blocks bridge
+		// creation during a sampler outage. The conservative choice: block
+		// rather than admit a new bridge to a possibly-degraded host. The
+		// sampler is down, so we cannot know whether the host degraded during
+		// the outage. Holding the last verdict (degraded) blocks bridges until
+		// the sampler recovers and recomputes.
+		ctx := context.Background()
+
+		testDataPath, err := os.MkdirTemp("", "rung7-c2-isresourcelimited")
+		Expect(err).NotTo(HaveOccurred())
+		defer func() { _ = os.RemoveAll(testDataPath) }()
+
+		const cpuMax = "200000 100000\n" // quota 2.0 cores (capped, limit mode)
+		var (
+			nrPeriods, nrThrottled, usageUsec int64
+			samplerFails                        bool
+		)
+
+		mockFS := filesystem.NewMockFileSystem()
+		mockFS.WithReadFileFunc(func(_ context.Context, path string) ([]byte, error) {
+			switch path {
+			case "/sys/fs/cgroup/cpu.max":
+				return []byte(cpuMax), nil
+			case "/sys/fs/cgroup/cpu.stat":
+				if samplerFails {
+					return nil, errors.New("cpu.stat transient read error")
+				}
+				return []byte(fmt.Sprintf(
+					"usage_usec %d\nnr_periods %d\nnr_throttled %d\nthrottled_usec 0\n",
+					usageUsec, nrPeriods, nrThrottled,
+				)), nil
+			default:
+				return nil, errors.New("file not found: " + path)
+			}
+		})
+
+		monSvc := container_monitor.NewContainerMonitorServiceWithPath(mockFS, testDataPath)
+
+		// Tick 0: baseline the throttle ring (healthy, single point).
+		samplerFails = false
+		nrPeriods, nrThrottled, usageUsec = 1000, 0, 1_000_000
+		_, err = monSvc.GetStatus(ctx)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Tick 1: throttle fires (ratio 0.10 > 0.05), verdict degrades. The
+		// wire carries CPUHealth=Degraded + a verdict basis with a fired cause.
+		nrPeriods, nrThrottled, usageUsec = 2000, 100, 2_000_000
+		time.Sleep(1 * time.Second)
+		status1, err := monSvc.GetStatus(ctx)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(status1.CPUHealth).To(Equal(models.Degraded),
+			"precondition: tick 1 degrades so CPUHealth=Degraded is held")
+		Expect(status1.CPU.Causes).NotTo(BeEmpty(),
+			"precondition: tick 1 carries a verdict cause so the degraded-FSM branch's len>0 guard holds")
+
+		// Tick 2: sampler fails. The held degraded verdict + basis + causes
+		// persist on the wire (the failure-tick ServiceInfo).
+		samplerFails = true
+		status2, err := monSvc.GetStatus(ctx)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(status2.CPUHealth).To(Equal(models.Degraded),
+			"the held CPUHealth=Degraded persists across the sampler failure")
+		Expect(status2.CPU.Causes).NotTo(BeEmpty(),
+			"the held verdict causes persist across the sampler failure")
+
+		// Feed the failure-tick ServiceInfo into IsResourceLimited via a
+		// snapshot mirroring the FSM wire shape. The container FSM is in
+		// "active" (not "degraded"), so the degraded-FSM branch at line 1160
+		// is skipped and the per-resource CPUHealth check at line 1196 fires.
+		svc := protocolconverter.NewDefaultProtocolConverterService("test")
+		snap := pkgfsm.SystemSnapshot{
+			Managers: make(map[string]pkgfsm.ManagerSnapshot),
+			CurrentConfig: config.FullConfig{
+				Agent: config.AgentConfig{
+					EnableResourceLimitBlocking: true,
+				},
+			},
+		}
+		snap.Managers[constants.ContainerManagerName] = &MockManagerSnapshot{
+			Name: constants.ContainerManagerName,
+			Instances: map[string]*pkgfsm.FSMInstanceSnapshot{
+				constants.CoreInstanceName: {
+					ID:           constants.CoreInstanceName,
+					CurrentState: "active",
+					DesiredState: "active",
+					LastObservedState: &container.ContainerObservedStateSnapshot{
+						ServiceInfoSnapshot: *status2,
+					},
+				},
+			},
+		}
+
+		limited, reason := svc.IsResourceLimited(snap)
+		Expect(limited).To(BeTrue(),
+			"a held stale-degraded CPU verdict must block bridge creation during a sampler outage (conservative: block rather than admit to a possibly-degraded host)")
+		Expect(reason).NotTo(BeEmpty(),
+			"a block reason is surfaced so the MC can explain why bridge creation is blocked")
 	})
 })
 

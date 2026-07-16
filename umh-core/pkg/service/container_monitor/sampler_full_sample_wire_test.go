@@ -279,7 +279,7 @@ var _ = Describe("sampler failure dead-zone (rung 12b invariant)", func() {
 
 		var (
 			nrPeriods, nrThrottled, usageUsec int64
-			samplerFails                       bool
+			samplerFails                      bool
 		)
 
 		mockFS.WithReadFileFunc(func(_ context.Context, path string) ([]byte, error) {
@@ -537,7 +537,7 @@ var _ = Describe("CgroupCores/basis wire consistency on sampler failure (Rung 6)
 		const cpuMax = "200000 100000\n" // quota 2.0 cores (capped, limit mode)
 		var (
 			nrPeriods, nrThrottled, usageUsec int64
-			samplerFails                        bool
+			samplerFails                      bool
 		)
 
 		mockFS.WithReadFileFunc(func(_ context.Context, path string) ([]byte, error) {
@@ -596,5 +596,237 @@ var _ = Describe("CgroupCores/basis wire consistency on sampler failure (Rung 6)
 			"the held verdict basis carries the prior limit-mode ceiling")
 		Expect(status3.CPU.CgroupCores).To(BeNumerically("~", 2.0, 1e-9),
 			"CgroupCores must be held from tick 2 alongside the held verdict basis (no CgroupCores/basis divergence on a sampler failure)")
+	})
+})
+
+var _ = Describe("Verdict-hold recovery on sampler success (Rung 7.1)", func() {
+	It("overwrites the held verdict with a fresh computation on the first successful sampler tick after a failure", func() {
+		// The hold is not permanent: the first successful sampler tick after a
+		// sustained failure must recompute the verdict fresh from the new
+		// sample, overwriting lastVerdict/lastVerdictBasis/lastCgroupCores.
+		// This pins the recovery path at the integration level (hasLastVerdict
+		// is set true on the first success and the held state is replaced, not
+		// merged).
+		mockFS := filesystem.NewMockFileSystem()
+		ctx := context.Background()
+
+		testDataPath, err := os.MkdirTemp("", "rung7-recovery")
+		Expect(err).NotTo(HaveOccurred())
+		defer func() { _ = os.RemoveAll(testDataPath) }()
+
+		const cpuMax = "200000 100000\n" // quota 2.0 cores (capped, limit mode)
+		var (
+			nrPeriods, nrThrottled, usageUsec int64
+			samplerFails                      bool
+		)
+
+		mockFS.WithReadFileFunc(func(_ context.Context, path string) ([]byte, error) {
+			switch path {
+			case "/sys/fs/cgroup/cpu.max":
+				return []byte(cpuMax), nil
+			case "/sys/fs/cgroup/cpu.stat":
+				if samplerFails {
+					return nil, errors.New("cpu.stat transient read error")
+				}
+				return []byte(fmt.Sprintf(
+					"usage_usec %d\nnr_periods %d\nnr_throttled %d\nthrottled_usec 0\n",
+					usageUsec, nrPeriods, nrThrottled,
+				)), nil
+			default:
+				return nil, errors.New("file not found: " + path)
+			}
+		})
+
+		svc := container_monitor.NewContainerMonitorServiceWithPath(mockFS, testDataPath)
+
+		// Tick 0: baseline (healthy, single ring point).
+		samplerFails = false
+		nrPeriods, nrThrottled, usageUsec = 1000, 0, 1_000_000
+		_, err = svc.GetStatus(ctx)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Tick 1: throttle fires (ratio 0.10 > 0.05), verdict degrades.
+		nrPeriods, nrThrottled, usageUsec = 2000, 100, 2_000_000
+		time.Sleep(1 * time.Second)
+		status1, err := svc.GetStatus(ctx)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(status1.CPU.State).To(Equal("degraded"),
+			"precondition: tick 1 degrades so a verdict + basis + CgroupCores are held")
+		heldBasis := status1.CPU.VerdictBasis
+		Expect(heldBasis).NotTo(BeNil())
+		Expect(heldBasis.Throttle.Value).To(BeNumerically("~", 0.10, 1e-9))
+
+		// Tick 2: sampler fails. Held degraded verdict persists.
+		samplerFails = true
+		status2, err := svc.GetStatus(ctx)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(status2.CPU.State).To(Equal("degraded"),
+			"the held degraded verdict persists across the sampler failure")
+		Expect(status2.CPU.VerdictBasis.Throttle.Value).To(BeNumerically("~", 0.10, 1e-9),
+			"the held basis value persists across the sampler failure")
+
+		// Tick 3: sampler succeeds again. The verdict must be recomputed fresh
+		// from the new sample (nr_throttled unchanged at 100, nr_periods grows
+		// to 3000, so the windowed ratio drops and the throttle latch holds
+		// fired, but the basis value reflects the NEW sample, not the held
+		// tick-1 value). Crucially, lastVerdict/lastVerdictBasis/lastCgroupCores
+		// are overwritten, not merged.
+		samplerFails = false
+		nrPeriods, nrThrottled, usageUsec = 3000, 100, 3_000_000
+		time.Sleep(1 * time.Second)
+		status3, err := svc.GetStatus(ctx)
+		Expect(err).NotTo(HaveOccurred())
+
+		// The basis must be a fresh computation, not the held tick-1 basis. The
+		// throttle value on tick 3 reflects the windowed ratio from the new
+		// counters (the ring ingests the new point), which differs from the
+		// held 0.10.
+		Expect(status3.CPU.VerdictBasis).NotTo(BeNil(),
+			"a fresh verdict basis is emitted on the recovery tick")
+		Expect(status3.CPU.VerdictBasis).NotTo(BeIdenticalTo(heldBasis),
+			"the recovery tick emits a fresh basis, not the held tick-1 basis")
+		Expect(status3.CPU.CgroupCores).To(BeNumerically("~", 2.0, 1e-9),
+			"the recovery tick re-emits CgroupCores from the fresh successful sample")
+	})
+})
+
+var _ = Describe("Verdict-hold sustained outage drift (Rung 7.2)", func() {
+	It("holds the verdict + basis + CgroupCores across 5 consecutive sampler failures with no drift", func() {
+		// The hold must not drift across a sustained sampler outage: the wire's
+		// verdict + basis + CgroupCores stay held and consistent across N
+		// failure ticks (no slow degradation, no field drops). This pins that
+		// the hold is idempotent across repeated failure ticks.
+		mockFS := filesystem.NewMockFileSystem()
+		ctx := context.Background()
+
+		testDataPath, err := os.MkdirTemp("", "rung7-sustained-outage")
+		Expect(err).NotTo(HaveOccurred())
+		defer func() { _ = os.RemoveAll(testDataPath) }()
+
+		const cpuMax = "200000 100000\n"
+		var (
+			nrPeriods, nrThrottled, usageUsec int64
+			samplerFails                      bool
+		)
+
+		mockFS.WithReadFileFunc(func(_ context.Context, path string) ([]byte, error) {
+			switch path {
+			case "/sys/fs/cgroup/cpu.max":
+				return []byte(cpuMax), nil
+			case "/sys/fs/cgroup/cpu.stat":
+				if samplerFails {
+					return nil, errors.New("cpu.stat transient read error")
+				}
+				return []byte(fmt.Sprintf(
+					"usage_usec %d\nnr_periods %d\nnr_throttled %d\nthrottled_usec 0\n",
+					usageUsec, nrPeriods, nrThrottled,
+				)), nil
+			default:
+				return nil, errors.New("file not found: " + path)
+			}
+		})
+
+		svc := container_monitor.NewContainerMonitorServiceWithPath(mockFS, testDataPath)
+
+		// Tick 0: baseline the throttle ring (single point, ratio 0, healthy).
+		samplerFails = false
+		nrPeriods, nrThrottled, usageUsec = 1000, 0, 1_000_000
+		_, err = svc.GetStatus(ctx)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Tick 1: nr_throttled jumps so the 60s ratio is 0.10 > 0.05, the
+		// throttle latch fires, and the verdict degrades.
+		nrPeriods, nrThrottled, usageUsec = 2000, 100, 2_000_000
+		time.Sleep(1 * time.Second)
+		status1, err := svc.GetStatus(ctx)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(status1.CPU.State).To(Equal("degraded"),
+			"precondition: tick 1 degrades so a verdict + basis + CgroupCores are held")
+
+		// Ticks 2-6: 5 consecutive sampler failures. The held verdict, basis,
+		// and CgroupCores must persist across all 5 with no drift.
+		samplerFails = true
+		for i := 2; i <= 6; i++ {
+			status, err := svc.GetStatus(ctx)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(status.CPU.State).To(Equal("degraded"),
+				"tick %d: the held degraded verdict persists across sustained sampler failure %d")
+			Expect(status.CPU.VerdictBasis).NotTo(BeNil(),
+				"tick %d: the held verdict basis persists across sustained sampler failure %d")
+			Expect(status.CPU.VerdictBasis.Headroom.Ceiling).To(Equal("limit"),
+				"tick %d: the held ceiling persists across sustained sampler failure %d")
+			Expect(status.CPU.CgroupCores).To(BeNumerically("~", 2.0, 1e-9),
+				"tick %d: the held CgroupCores persists across sustained sampler failure %d (no CgroupCores/basis divergence across a sustained outage)")
+		}
+	})
+})
+
+var _ = Describe("Verdict-hold stale-healthy case (Rung 7.3)", func() {
+	It("holds a prior healthy verdict across a sampler failure (the held-healthy case)", func() {
+		// The C2 test covered stale-degraded (a prior degraded verdict held
+		// across a failure). This covers the stale-healthy complement: a prior
+		// healthy verdict held across a failure. The conservative hold-on-missing
+		// semantics (consistent with the hostBusy ring) holds the last verdict
+		// even if the host degraded during the outage. The sampler is down, so
+		// we cannot know. Holding the last verdict is the conservative choice.
+		mockFS := filesystem.NewMockFileSystem()
+		ctx := context.Background()
+
+		testDataPath, err := os.MkdirTemp("", "rung7-stale-healthy")
+		Expect(err).NotTo(HaveOccurred())
+		defer func() { _ = os.RemoveAll(testDataPath) }()
+
+		const cpuMax = "200000 100000\n"
+		var (
+			nrPeriods, nrThrottled, usageUsec int64
+			samplerFails                      bool
+		)
+
+		mockFS.WithReadFileFunc(func(_ context.Context, path string) ([]byte, error) {
+			switch path {
+			case "/sys/fs/cgroup/cpu.max":
+				return []byte(cpuMax), nil
+			case "/sys/fs/cgroup/cpu.stat":
+				if samplerFails {
+					return nil, errors.New("cpu.stat transient read error")
+				}
+				return []byte(fmt.Sprintf(
+					"usage_usec %d\nnr_periods %d\nnr_throttled %d\nthrottled_usec 0\n",
+					usageUsec, nrPeriods, nrThrottled,
+				)), nil
+			default:
+				return nil, errors.New("file not found: " + path)
+			}
+		})
+
+		svc := container_monitor.NewContainerMonitorServiceWithPath(mockFS, testDataPath)
+
+		// Tick 0: healthy (throttle ratio 0, single ring point).
+		samplerFails = false
+		nrPeriods, nrThrottled, usageUsec = 1000, 0, 1_000_000
+		status0, err := svc.GetStatus(ctx)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(status0.CPU.State).To(Equal("healthy"),
+			"precondition: tick 0 is healthy so a healthy verdict + basis + CgroupCores are held")
+		Expect(status0.CPU.VerdictBasis).NotTo(BeNil())
+		Expect(status0.CPU.CgroupCores).To(BeNumerically("~", 2.0, 1e-9))
+
+		// Tick 1: sampler fails. The held healthy verdict persists. This is the
+		// conservative hold-on-missing semantics: a sampler outage holds the
+		// last verdict even if the host degraded during the outage (we cannot
+		// know, the sampler is down). Consistent with the hostBusy ring, whose
+		// prune runs inside Decide (skipped on a sampler failure), so the ring
+		// does not age out during a sustained outage either.
+		samplerFails = true
+		status1, err := svc.GetStatus(ctx)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(status1.CPU.State).To(Equal("healthy"),
+			"the held healthy verdict persists across the sampler failure (conservative hold-on-missing)")
+		Expect(status1.CPU.VerdictBasis).NotTo(BeNil(),
+			"the held verdict basis persists across the sampler failure")
+		Expect(status1.CPU.VerdictBasis.Headroom.Ceiling).To(Equal("limit"),
+			"the held ceiling persists across the sampler failure")
+		Expect(status1.CPU.CgroupCores).To(BeNumerically("~", 2.0, 1e-9),
+			"the held CgroupCores persists across the sampler failure (no drift to 0 / no flicker to legacy)")
 	})
 })
