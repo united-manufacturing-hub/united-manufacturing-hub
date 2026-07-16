@@ -1,0 +1,7 @@
+reviews:
+  high_level_summary: false
+  poem: false
+  collapse_walkthrough: true
+  profile: chill # There is another profile called 'assertive' which is so nitpicky
+  path_filters:
+    - "!umh-core/vendor/**"
