@@ -365,7 +365,7 @@ func (c *ContainerMonitorService) getCPUMetrics(ctx context.Context) (*models.CP
 			cpuStat.Causes = make([]models.Cause, len(verdict.Causes))
 			for i, c := range verdict.Causes {
 				cpuStat.Causes[i] = models.Cause{
-					Kind:  models.CauseKind(c.Kind),
+					Kind:  causeKindToModel(c.Kind),
 					Value: c.Value,
 				}
 			}
@@ -690,6 +690,31 @@ func (c *ContainerMonitorService) generateNewHWID(ctx context.Context) (string, 
 	}
 
 	return hwid, nil
+}
+
+// causeKindToModel converts a cpuhealth.CauseKind to its wire representation.
+// The switch is exhaustive over the known kinds so a renamed or added cause
+// is confronted here instead of silently flowing through a blind string cast:
+// the consumer (ProtocolConverterService.IsResourceLimited) casts the wire
+// string back to cpuhealth.CauseKind for BlockReason, and an unknown kind
+// there drops the cause-specific remediation to the generic default.
+func causeKindToModel(k cpuhealth.CauseKind) models.CauseKind {
+	switch k {
+	case cpuhealth.CauseKindSaturation:
+		return models.CauseKind(cpuhealth.CauseKindSaturation)
+	case cpuhealth.CauseKindThrottling:
+		return models.CauseKind(cpuhealth.CauseKindThrottling)
+	case cpuhealth.CauseKindPressure:
+		return models.CauseKind(cpuhealth.CauseKindPressure)
+	case cpuhealth.CauseKindSteal:
+		return models.CauseKind(cpuhealth.CauseKindSteal)
+	case cpuhealth.CauseKindHostContention:
+		return models.CauseKind(cpuhealth.CauseKindHostContention)
+	default:
+		// Unknown kind: pass the string through unchanged. BlockReason falls
+		// back to its generic degraded message for kinds it does not know.
+		return models.CauseKind(k)
+	}
 }
 
 // ptr returns a pointer to v. It is the helper for the *float64 wire fields on
