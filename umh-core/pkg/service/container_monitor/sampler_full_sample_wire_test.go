@@ -24,6 +24,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cpuhealth"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/container_monitor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
@@ -466,5 +467,51 @@ var _ = Describe("Decide gate: hold latches on sampler failure (C2)", func() {
 
 		Expect(status2.CPU.State).To(Equal("degraded"),
 			"prior degraded verdict must hold across a cpu.stat read failure (no flap to healthy)")
+	})
+})
+
+type mockSamplerLogicalCpusZero struct{}
+
+func (m *mockSamplerLogicalCpusZero) Sample(_ context.Context) (cpuhealth.Sample, error) {
+	return cpuhealth.Sample{UsageCores: 1.0}, nil
+}
+
+var _ = Describe("VerdictBasis guard: zero LogicalCpus (I8)", func() {
+	It("does not emit VerdictBasis when sample.LogicalCpus is zero to avoid a self-contradictory wire", func() {
+		// I8: when the sampler returns a zero LogicalCpus (a synthetic scenario
+		// that Rung 1's gate prevents in production, but a future code path
+		// could re-introduce), Decide runs in no-limit mode (Quota nil) with
+		// capacity=LogicalCpus=0. The VerdictBasis would emit Capacity=0 +
+		// Ceiling='host', while CgroupCores=QuotaCores>0 is emitted from
+		// getCgroupCPUInfo. The machine-readable wire is self-contradictory:
+		// CgroupCores says a limit is known while VerdictBasis says no
+		// capacity / host ceiling. The belt-and-suspenders guard gates
+		// VerdictBasis emission on sample.LogicalCpus > 0.
+		mockFS := filesystem.NewMockFileSystem()
+		ctx := context.Background()
+
+		testDataPath, err := os.MkdirTemp("", "i8-zero-logicalcpus")
+		Expect(err).NotTo(HaveOccurred())
+		defer func() { _ = os.RemoveAll(testDataPath) }()
+
+		mockFS.WithReadFileFunc(func(_ context.Context, path string) ([]byte, error) {
+			switch path {
+			case "/sys/fs/cgroup/cpu.max":
+				return []byte("200000 100000\n"), nil
+			case "/sys/fs/cgroup/cpu.stat":
+				return []byte("usage_usec 1000000\nnr_periods 1000\nnr_throttled 0\nthrottled_usec 0\n"), nil
+			default:
+				return nil, errors.New("file not found: " + path)
+			}
+		})
+
+		svc := container_monitor.NewContainerMonitorServiceWithPath(mockFS, testDataPath)
+		svc.SetSampler(&mockSamplerLogicalCpusZero{})
+
+		status, err := svc.GetStatus(ctx)
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(status.CPU.VerdictBasis).To(BeNil(),
+			"a zero-sample (LogicalCpus=0) must not emit VerdictBasis (no self-contradictory wire: CgroupCores>0 with Capacity=0/Ceiling=host)")
 	})
 })

@@ -106,6 +106,11 @@ func (c *ContainerMonitorService) SetDataPath(path string) {
 	c.dataPath = path
 }
 
+// SetSampler replaces the CPU sampler - used for testing only.
+func (c *ContainerMonitorService) SetSampler(s cpuhealth.Sampler) {
+	c.sampler = s
+}
+
 // GetStatus collects and returns the current container metrics.
 func (c *ContainerMonitorService) GetStatus(ctx context.Context) (*ServiceInfo, error) {
 	// Create a new status with default health (Active)
@@ -396,8 +401,12 @@ func (c *ContainerMonitorService) getCPUMetrics(ctx context.Context) (*models.CP
 	// called and no prior verdict is held); the legacy display path covers
 	// that case. On a sampler failure after a prior successful verdict, the
 	// held basis is re-emitted so the wire stays consistent with the held
-	// verdict state.
-	if samplerOK {
+	// verdict state. The sample.LogicalCpus > 0 guard is belt-and-suspenders:
+	// Rung 1's gate already skips Decide on a sampler failure (LogicalCpus=0),
+	// but a future code path could re-introduce a zero sample; without the
+	// guard, VerdictBasis would emit Capacity=0 + Ceiling='host' while
+	// CgroupCores>0 is on the wire, a self-contradictory machine-readable state.
+	if samplerOK && sample.LogicalCpus > 0 {
 		th := cpuhealth.DefaultThresholds()
 		// The headroom's Used and Ceiling follow the mode: limit set →
 		// ceiling="limit", used=the container's own 60s-avg usage; no limit →
