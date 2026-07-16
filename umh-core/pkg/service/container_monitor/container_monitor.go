@@ -70,7 +70,16 @@ type ContainerMonitorService struct {
 	hwid            string
 	architecture    models.ContainerArchitecture //nolint:unused // will be used in the future
 	dataPath        string                       // Path to check for disk metrics and HWID file
-	wasThrottled    bool                         // Previous throttle state for transition logging
+	// wasThrottled is the previous throttle state for onset-transition
+	// logging. Updated only on successful sampler ticks: a failure tick
+	// carries no throttle reading, and resetting the flag there would re-fire
+	// the onset Warn on the next successful still-throttled tick.
+	wasThrottled bool
+	// inOutage tracks whether the sampler is currently failing, so the
+	// outage Warn fires once on the transition INTO the outage (with the
+	// sampler error as cause) and recovery is logged once at Info, instead
+	// of warning on every failure tick.
+	inOutage bool
 	// lastVerdict, lastSignals, lastVerdictBasis, lastCgroupCores,
 	// lastTotalUsageMCpu, and hasLastVerdict hold the most recent successful
 	// sampler tick's verdict state so a sampler-failure tick can re-emit it
@@ -257,7 +266,7 @@ func (c *ContainerMonitorService) GetHealth(ctx context.Context) (*models.Health
 // By default, this retrieves host-level usage unless gopsutil is configured
 // to read from container cgroup data. See notes below for cgroup-limited usage.
 func (c *ContainerMonitorService) getCPUMetrics(ctx context.Context) (*models.CPU, error) {
-	usageMCores, coreCount, sample, samplerOK, err := c.getRawCPUMetrics(ctx)
+	usageMCores, coreCount, sample, samplerOK, samplerErr, err := c.getRawCPUMetrics(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -272,7 +281,6 @@ func (c *ContainerMonitorService) getCPUMetrics(ctx context.Context) (*models.CP
 	// Instead, hold the last verdict and signals; the windowState latches
 	// also hold, since Decide is their only mutator.
 	var (
-		isThrottled bool
 		// Default to healthy so a sampler failure on the first tick (no prior
 		// verdict to hold) still emits State="healthy" on the wire. State has
 		// no omitempty, so without this default the zero-value "" would be
@@ -282,16 +290,36 @@ func (c *ContainerMonitorService) getCPUMetrics(ctx context.Context) (*models.CP
 	)
 
 	if samplerOK {
+		if c.inOutage {
+			c.inOutage = false
+			c.logger.Infof("cgroup cpu usage readable again, verdict recomputed from fresh samples")
+		}
+
 		sample.Timestamp = time.Now()
 		verdict, signals = cpuhealth.Decide(c.windowState, sample, cpuhealth.DefaultThresholds())
-		isThrottled = signals.ThrottleFired
+
+		// Throttle onset logging and its transition flag live on the
+		// successful path only: a failure tick has no throttle reading, and
+		// resetting wasThrottled there would re-fire the onset Warn on the
+		// next successful still-throttled tick.
+		if signals.ThrottleFired && !c.wasThrottled {
+			c.logger.Warnf("CPU throttling detected: %.1f%% of periods throttled", signals.ThrottleRatio*100)
+		}
+
+		c.wasThrottled = signals.ThrottleFired
 
 		c.lastVerdict = verdict
 		c.lastSignals = signals
 		c.lastTotalUsageMCpu = usageMCores
 		c.hasLastVerdict = true
 	} else {
-		c.logger.Warnf("cgroup cpu usage unavailable, holding last verdict")
+		// Warn once on the transition into the outage, with the sampler
+		// error as the cause; every further failure tick is silent (the
+		// recovery is logged at Info above).
+		if !c.inOutage {
+			c.inOutage = true
+			c.logger.Warnf("cgroup cpu usage unavailable, holding last verdict: %v", samplerErr)
+		}
 
 		if c.hasLastVerdict {
 			verdict = c.lastVerdict
@@ -303,12 +331,6 @@ func (c *ContainerMonitorService) getCPUMetrics(ctx context.Context) (*models.CP
 			usageMCores = c.lastTotalUsageMCpu
 		}
 	}
-
-	if isThrottled && !c.wasThrottled {
-		c.logger.Warnf("CPU throttling detected: %.1f%% of periods throttled", signals.ThrottleRatio*100)
-	}
-
-	c.wasThrottled = isThrottled
 
 	message := cpuhealth.ComposeMessage(verdict, signals)
 
@@ -460,33 +482,34 @@ func (c *ContainerMonitorService) getCPUMetrics(ctx context.Context) (*models.CP
 	return cpuStat, nil
 }
 
-func (c *ContainerMonitorService) getRawCPUMetrics(ctx context.Context) (usageMCores float64, coreCount int, sample cpuhealth.Sample, samplerOK bool, err error) {
+func (c *ContainerMonitorService) getRawCPUMetrics(ctx context.Context) (usageMCores float64, coreCount int, sample cpuhealth.Sample, samplerOK bool, samplerErr error, err error) {
 	coreCount = runtime.NumCPU() // Always report host cores for compatibility
 
 	// The ONLY c.sampler.Sample call per GetStatus: the returned Sample is
 	// passed on to the Decide call in getCPUMetrics so the delta-based
 	// signals survive. On read failure (cgroup v1, non-container, transient)
-	// the error is logged and a zero-valued Sample is returned with
-	// samplerOK=false so the caller holds the prior verdict instead of
-	// running Decide on a zero sample.
+	// a zero-valued Sample is returned with samplerOK=false and the error in
+	// samplerErr, so the caller holds the prior verdict instead of running
+	// Decide on a zero sample and can log the cause on the outage
+	// transition.
 	sample, sErr := c.sampler.Sample(ctx)
 	if sErr != nil {
 		if ctx.Err() != nil {
-			return 0, 0, cpuhealth.Sample{}, false, ctx.Err()
+			return 0, 0, cpuhealth.Sample{}, false, nil, ctx.Err()
 		}
 
-		c.logger.Debugf("cgroup cpu usage unavailable, reporting zero: %v", sErr)
+		samplerErr = sErr
 	} else {
 		samplerOK = true
 	}
 
 	if ctx.Err() != nil {
-		return 0, 0, cpuhealth.Sample{}, false, ctx.Err()
+		return 0, 0, cpuhealth.Sample{}, false, nil, ctx.Err()
 	}
 
 	usageMCores = sample.UsageCores * 1000
 
-	return usageMCores, coreCount, sample, samplerOK, nil
+	return usageMCores, coreCount, sample, samplerOK, samplerErr, nil
 }
 
 // getMemoryMetrics collects memory metrics, preferring cgroup values when available.
