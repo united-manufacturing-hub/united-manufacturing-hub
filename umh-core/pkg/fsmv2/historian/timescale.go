@@ -18,6 +18,34 @@
 // endpoint reachable and credentials valid, a failure drives the worker
 // degraded. Authentication and missing-database errors are classified as
 // configuration faults (AuthValid=false) rather than transient network faults.
+//
+// # Scope: connection health only
+//
+// This worker checks the connection and nothing else: reachability, latency,
+// and whether the credentials and database name are accepted. Its per-tick cost
+// is a single `SELECT 1` over one pooled, long-lived connection.
+//
+// Database metrics — long-running queries, compression ratios, background job
+// state (especially aborted compression jobs), and the rest of the operational
+// signals from Daniel's Grafana dashboard — are deliberately NOT collected here.
+// They belong to a separate future worker (TODO(ENG-5320): the timescale metrics
+// monitor), for two reasons:
+//
+//   - Cost. Those metrics need involved SQL that costs far more CPU on the
+//     server than a `SELECT 1`. The metrics worker will run on its own, slower
+//     tick so heavy queries never share this monitor's cadence. Splitting the
+//     workers keeps connection health cheap and always-fresh regardless of how
+//     expensive metrics collection becomes.
+//   - Sequencing. Which metrics to expose still needs discussion with the VEs.
+//     Keeping that out of this worker means it does not block Historian
+//     integration.
+//
+// Running two workers adds only one extra pooled connection to the database, so
+// the overhead is minimal and worth the isolation. When the metrics worker lands
+// it should reuse this package's DSN/pool conventions; consider renaming this
+// file to timescale_connection.go and the metrics one to timescale_metrics.go so
+// the split is obvious from the filenames (the current timescale.go name reads
+// as if it did both).
 package fsmv2timescale
 
 import (
