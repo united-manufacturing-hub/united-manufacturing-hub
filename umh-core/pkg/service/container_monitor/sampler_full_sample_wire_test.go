@@ -905,3 +905,65 @@ var _ = Describe("TotalUsageMCpu hold on sampler failure", func() {
 			"the held TotalUsageMCpu is nonzero, matching the held averages")
 	})
 })
+
+var _ = Describe("headroom invariant on the no-host-stats degraded wire", func() {
+	It("emits Reserve so that Capacity - Used - Reserve equals Cores when NoHostStatsSaturationFired", func() {
+		// status_message.go documents Headroom.Cores as exactly
+		// 'Capacity - Used - Reserve (the decision variable; may be
+		// negative)'. In the NoHostStatsSaturationFired branch the emitted
+		// Used is AvgUsageCores and Cores is
+		// HighUsageFraction*Capacity - AvgUsage, so the emitted Reserve must
+		// be (1 - HighUsageFraction)*Capacity for the documented invariant to
+		// hold; leaving the default reserve breaks the arithmetic the MC
+		// renders from.
+		mockFS := filesystem.NewMockFileSystem()
+		ctx := context.Background()
+
+		testDataPath, err := os.MkdirTemp("", "no-host-stats-headroom-invariant")
+		Expect(err).NotTo(HaveOccurred())
+		defer func() { _ = os.RemoveAll(testDataPath) }()
+
+		var usageUsec int64
+
+		mockFS.WithReadFileFunc(func(_ context.Context, path string) ([]byte, error) {
+			switch path {
+			case "/sys/fs/cgroup/cpu.max":
+				return []byte("max 100000\n"), nil // uncapped: no-limit mode
+			case "/sys/fs/cgroup/cpu.stat":
+				return []byte(fmt.Sprintf(
+					"usage_usec %d\nnr_periods 1000\nnr_throttled 0\nthrottled_usec 0\n",
+					usageUsec,
+				)), nil
+			default:
+				// /proc/stat absent: HostBusyCoresAvailable=false, so the
+				// no-host-stats fallback latch is the one that fires.
+				return nil, errors.New("file not found: " + path)
+			}
+		})
+
+		svc := container_monitor.NewContainerMonitorServiceWithPath(mockFS, testDataPath)
+
+		// Tick 1: baseline the usage counter.
+		usageUsec = 0
+		_, err = svc.GetStatus(ctx)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Tick 2: usage jumps far above HighUsageFraction*LogicalCpus on any
+		// host, so NoHostStatsSaturationFired fires and the verdict degrades.
+		usageUsec = 10_000_000_000
+		time.Sleep(1 * time.Second)
+		status, err := svc.GetStatus(ctx)
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(status.CPU.State).To(Equal("degraded"),
+			"precondition: the no-host-stats saturation latch fires on sustained high usage")
+		basis := status.CPU.VerdictBasis
+		Expect(basis).NotTo(BeNil())
+		Expect(basis.Headroom.NoHostStatsSaturationFired).To(BeTrue(),
+			"precondition: the wire marks the no-host-stats sub-latch")
+
+		h := basis.Headroom
+		Expect(h.Capacity-h.Used-h.Reserve).To(BeNumerically("~", h.Cores, 1e-9),
+			"the documented invariant Cores = Capacity - Used - Reserve must hold on the no-host-stats wire (Reserve must be (1-HighUsageFraction)*Capacity in this branch)")
+	})
+})

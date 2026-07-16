@@ -380,14 +380,19 @@ func (c *ContainerMonitorService) getCPUMetrics(ctx context.Context) (*models.CP
 		th := cpuhealth.DefaultThresholds()
 		// The headroom's Used and Ceiling follow the mode: limit set →
 		// ceiling="limit", used=the container's own 60s-avg usage; no limit →
-		// ceiling="host", used=the host-busy 60s mean. HostBusy.Mean is the host
-		// observation in BOTH modes (context for the display split and the
-		// host-full stacking check); Available mirrors the sampler's
-		// /proc/stat readability flag.
+		// ceiling="host", used=the host-busy 60s mean; no limit and no host
+		// stats with the fallback latch fired → used=the container's own
+		// 60s-avg usage measured against the HighUsageFraction budget, with
+		// reserve=(1−HighUsageFraction)×capacity so the documented invariant
+		// Cores = Capacity − Used − Reserve holds in this branch too.
+		// HostBusy.Mean is the host observation in BOTH modes (context for
+		// the display split and the host-full stacking check); Available
+		// mirrors the sampler's /proc/stat readability flag.
 		ceiling := "host"
 
 		used := signals.HostBusyCores60sMean
 		cores := signals.HeadroomCores
+		reserve := signals.ReserveCores
 
 		if signals.LimitApplies {
 			ceiling = "limit"
@@ -395,6 +400,7 @@ func (c *ContainerMonitorService) getCPUMetrics(ctx context.Context) (*models.CP
 		} else if signals.NoHostStatsSaturationFired {
 			used = signals.AvgUsageCores
 			cores = th.HighUsageFraction*signals.CapacityCores - signals.AvgUsageCores
+			reserve = (1 - th.HighUsageFraction) * signals.CapacityCores
 		}
 
 		cpuStat.VerdictBasis = &models.VerdictBasis{
@@ -402,7 +408,7 @@ func (c *ContainerMonitorService) getCPUMetrics(ctx context.Context) (*models.CP
 				Ceiling:                    ceiling,
 				Capacity:                   signals.CapacityCores,
 				Used:                       used,
-				Reserve:                    signals.ReserveCores,
+				Reserve:                    reserve,
 				Cores:                      cores,
 				Fired:                      signals.SaturationFired,
 				LimitSaturationFired:       signals.LimitSaturationFired,
