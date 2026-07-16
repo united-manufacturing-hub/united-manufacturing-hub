@@ -113,12 +113,6 @@ type EditProtocolConverterAction struct {
 	// a render (for example while Benthos restarts) keep the captured cause.
 	lastRenderErr error
 
-	// lastFailedDFCType records which DFC (read/write) produced the most
-	// recent render error. It is set alongside lastRenderErr and used to
-	// embed the flow name in the prose of user-facing error messages without
-	// prefixing the technical detail trail.
-	lastFailedDFCType DFCType
-
 	outboundChannel chan *models.UMHMessage
 	location        map[int]string
 
@@ -133,6 +127,12 @@ type EditProtocolConverterAction struct {
 	// writeDFCInput is the raw template-string form of the write config, persisted to the spec.
 	// nil means no write DFC was provided.
 	writeDFCInput *dataflowcomponentserviceconfig.DataflowComponentWriteConfigInput
+
+	// lastFailedDFCType records which DFC (read/write) produced the most
+	// recent render error. It is set alongside lastRenderErr and used to
+	// embed the flow name in the prose of user-facing error messages without
+	// prefixing the technical detail trail.
+	lastFailedDFCType DFCType
 
 	userEmail      string
 	name           string // protocol converter name (optional for updates)
@@ -162,6 +162,11 @@ type EditProtocolConverterAction struct {
 
 	// Atomic edit UUID used for configuration updates and rollbacks
 	atomicEditUUID uuid.UUID
+
+	// isHistorianBridge is set in applyMutation from the resulting write output. Historian
+	// bridges probe the shared historian DB, so awaitRollout must not wait for the Nmap port
+	// to equal the sent connectionPort (that port is ignored for them).
+	isHistorianBridge bool
 
 	// rolloutSentryReported tells Execute to skip the generic rollout_failed
 	// Sentry event for this abort. Every awaitRollout abort path fires its own
@@ -440,8 +445,12 @@ func (a *EditProtocolConverterAction) applyMutation() (config.ProtocolConverterC
 		instanceToModify.ProtocolConverterServiceConfig.Config.DataflowComponentWriteServiceConfig = *a.writeDFCInput
 	}
 
-	// Add the connection details to the template
-	instanceToModify.ProtocolConverterServiceConfig.Config.ConnectionServiceConfig = newIPPortConnectionTemplate()
+	// Select the connection template from the resulting write output. Reading it from the
+	// merged config (after the write DFC is applied above) covers state-only edits too, where
+	// writeDFCInput is nil and the existing Historian destination is preserved.
+	writeDestination := instanceToModify.ProtocolConverterServiceConfig.Config.DataflowComponentWriteServiceConfig.Destination
+	a.isHistorianBridge = inheritsHistorianConnection(writeDestination)
+	instanceToModify.ProtocolConverterServiceConfig.Config.ConnectionServiceConfig = connectionTemplateForWriteOutput(writeDestination)
 
 	instanceToModify.ProtocolConverterServiceConfig.Location = convertIntMapToStringMap(a.location)
 
@@ -625,8 +634,10 @@ func (a *EditProtocolConverterAction) awaitRollout(pcConfig config.ProtocolConve
 				if a.dfcType == DFCTypeEmpty {
 					// For empty DFC type (connection/location/state update only)
 					// Only check the nmap port when activating; when stopping, nmap is also
-					// stopped so it will never update to the new port.
-					if desiredPCState != protocolconverter.OperationalStateStopped {
+					// stopped so it will never update to the new port. Historian bridges probe
+					// the shared historian host/port (not the sent connectionPort), so the port
+					// equality check would never match — skip it and just wait for active.
+					if desiredPCState != protocolconverter.OperationalStateStopped && !a.isHistorianBridge {
 						nmapPort := strconv.FormatUint(
 							uint64(pcSnapshot.ServiceInfo.ConnectionObservedState.ServiceInfo.NmapObservedState.ObservedNmapServiceConfig.Port),
 							10,

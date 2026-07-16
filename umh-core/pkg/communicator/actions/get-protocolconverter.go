@@ -51,12 +51,14 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/google/uuid"
 	"go.uber.org/zap"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/nmapserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/protocolconverterserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
@@ -192,8 +194,12 @@ func determineProtocol(readDFC *models.ProtocolConverterDFC) string {
 // connectionInfoFromSpec extracts IP, port, and template metadata from a
 // ProtocolConverterServiceConfigSpec. Variables.User is the primary source; if
 // it is empty the Nmap connection template is used as a fallback for non-templated PCs.
+// resolvedConn is the connection's already-rendered config; it supplies the concrete
+// host:port for inferred-connection bridges whose template references a non-variable
+// namespace (e.g. {{ .historian.timescale.host }}) that has no user variable to resolve.
 func connectionInfoFromSpec(
 	spec protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec,
+	resolvedConn nmapserviceconfig.NmapServiceConfig,
 	logger *zap.SugaredLogger,
 ) (ip string, port uint32, templateInfo *models.ProtocolConverterTemplateInfo) {
 	var (
@@ -243,6 +249,18 @@ func connectionInfoFromSpec(
 				}
 			}
 		}
+	}
+
+	// Inferred-connection bridges (e.g. Historian auto-connect) carry system-injected
+	// but empty IP/PORT variables (IP:"", PORT:"0"), so hasConnectionVars is true yet the
+	// variable path yields no usable host:port; their connection template references a
+	// non-variable namespace like {{ .historian.timescale.host }}. Fall back to the
+	// rendered connection config, which holds the concrete host:port the connection FSM
+	// is probing. A normal bridge keeps its resolved IP/PORT (port != 0, ip set), so this
+	// never overrides a real connection.
+	if resolvedConn.Target != "" && (port == 0 || ip == "" || strings.Contains(ip, "{{")) {
+		ip = resolvedConn.Target
+		port = uint32(resolvedConn.Port)
 	}
 
 	templateInfo = &models.ProtocolConverterTemplateInfo{
@@ -341,7 +359,8 @@ func (a *GetProtocolConverterAction) Execute() (interface{}, map[string]interfac
 
 				// Get IP, port, and template info from observed, rendered spec config
 				specConfig := observedState.ObservedProtocolConverterSpecConfig
-				ip, port, templateInfo := connectionInfoFromSpec(specConfig, a.actionLogger)
+				resolvedConn := observedState.ServiceInfo.ConnectionObservedState.ObservedConnectionConfig.NmapServiceConfig
+				ip, port, templateInfo := connectionInfoFromSpec(specConfig, resolvedConn, a.actionLogger)
 
 				// Build ReadDFC from observed, rendered spec config, if present
 				var readDFC *models.ProtocolConverterDFC

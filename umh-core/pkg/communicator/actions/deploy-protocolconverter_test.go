@@ -218,6 +218,77 @@ var _ = Describe("DeployProtocolConverter", func() {
 			Expect(err.Error()).To(ContainSubstring("missing required field Name"))
 		})
 
+		It("should not require connection IP/port for a bridge that inherits the historian connection", func() {
+			// The auto-connect historian template references {{ .historian.* }} in its output,
+			// so the wizard sends no host/port and validation must not reject that.
+			payload := map[string]interface{}{
+				"name":     pcName,
+				"location": pcLocation,
+				"writeDFC": map[string]interface{}{
+					"destination": map[string]interface{}{
+						"protocol": "historian",
+						"code":     "host: '{{ .historian.timescale.host }}'\ndata_contract_name: historian",
+					},
+					"source": map[string]interface{}{
+						"topics": "umh.v1.*",
+					},
+				},
+			}
+
+			err := action.Parse(payload)
+			Expect(err).NotTo(HaveOccurred())
+
+			err = action.Validate()
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("should still require connection IP for a manual historian bridge (uses {{ .IP }})", func() {
+			// The manual TimescaleDB template writes through the historian plugin but supplies
+			// its own connection, so it must still require a host/port.
+			payload := map[string]interface{}{
+				"name":     pcName,
+				"location": pcLocation,
+				"writeDFC": map[string]interface{}{
+					"destination": map[string]interface{}{
+						"protocol": "historian",
+						"code":     "host: {{ .IP }}\ndata_contract_name: historian",
+					},
+					"source": map[string]interface{}{
+						"topics": "umh.v1.*",
+					},
+				},
+			}
+
+			err := action.Parse(payload)
+			Expect(err).NotTo(HaveOccurred())
+
+			err = action.Validate()
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("missing required field Connection.IP"))
+		})
+
+		It("should still require connection IP for a non-historian bridge", func() {
+			payload := map[string]interface{}{
+				"name":     pcName,
+				"location": pcLocation,
+				"writeDFC": map[string]interface{}{
+					"destination": map[string]interface{}{
+						"protocol": "kafka",
+					},
+					"source": map[string]interface{}{
+						"topics": "umh.v1.*",
+					},
+				},
+			}
+
+			err := action.Parse(payload)
+			Expect(err).NotTo(HaveOccurred())
+
+			err = action.Validate()
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("missing required field Connection.IP"))
+		})
+
 		It("should pass validation when input_topics contains golang template vars", func() {
 			// Regression test: {{ .IP }}, {{ .location_path }} etc. in input_topics must not
 			// cause validation to fail — full rendering happens later in BuildRuntimeConfig.

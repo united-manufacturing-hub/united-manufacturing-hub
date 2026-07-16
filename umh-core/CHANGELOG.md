@@ -5,6 +5,7 @@
 ### Improvements
 
 - Persistent connection failures now log the HTTP status code and a sanitized snippet of the upstream response, so the cause of a flapping connection (such as a 502 from a reverse proxy) is visible in the worker's logs
+- A bridge that writes to the historian now derives its connection health check from the instance's stored historian connection instead of a host/port entered on the bridge. The check targets the configured historian database automatically, so it can no longer be pointed at the wrong host, and it follows the historian connection if that is later changed. The bridges list and detail view show the resolved historian host and port for these bridges rather than the connection placeholder.
 
 ## [0.44.29]
 

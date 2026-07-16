@@ -17,10 +17,15 @@ package generator
 import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/connectionserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/nmapserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/protocolconverterserviceconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/variables"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
+	connectionfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/connection"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/protocolconverter"
+	pcservice "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/protocolconverter"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"go.uber.org/zap/zaptest/observer"
@@ -258,5 +263,53 @@ var _ = Describe("auditability: debug-logs when a configured side resolves to an
 		Expect(err).NotTo(HaveOccurred())
 		Expect(logs.FilterMessageSnippet("Code-without-Protocol").All()).
 			To(HaveLen(1), "must debug-log the HasOutput-true/Protocol-empty divergence")
+	})
+})
+
+var _ = Describe("connection URI resolution", func() {
+	log := zap.NewNop().Sugar()
+
+	connSnap := func(specTarget, specPort, resolvedTarget string, resolvedPort uint16, user map[string]any) *protocolconverter.ProtocolConverterObservedStateSnapshot {
+		return &protocolconverter.ProtocolConverterObservedStateSnapshot{
+			ObservedProtocolConverterSpecConfig: protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
+				Config: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
+					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
+						NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{Target: specTarget, Port: specPort},
+					},
+				},
+				Variables: variables.VariableBundle{User: user},
+			},
+			ServiceInfo: pcservice.ServiceInfo{
+				ConnectionObservedState: connectionfsm.ConnectionObservedState{
+					ObservedConnectionConfig: connectionserviceconfig.ConnectionServiceConfig{
+						NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{Target: resolvedTarget, Port: resolvedPort},
+					},
+				},
+			},
+		}
+	}
+
+	It("resolves an inferred-historian target from the rendered connection config", func() {
+		snap := connSnap("{{ .historian.timescale.host }}", "{{ .historian.timescale.port }}", "pgbouncer", 5432, nil)
+		dfc, err := buildProtocolConverterAsDfc(toInstance("pc-historian", snap), log)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(dfc.Connections).To(HaveLen(1))
+		Expect(dfc.Connections[0].URI).To(Equal("pgbouncer:5432"), "unresolved {{ .historian.* }} falls back to the rendered host:port")
+	})
+
+	It("leaves a normal bridge on user-variable substitution (no fallback)", func() {
+		snap := connSnap("{{ .IP }}", "{{ .PORT }}", "should-not-be-used", 9999, map[string]any{"IP": "10.0.0.5", "PORT": "502"})
+		dfc, err := buildProtocolConverterAsDfc(toInstance("pc-modbus", snap), log)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(dfc.Connections).To(HaveLen(1))
+		Expect(dfc.Connections[0].URI).To(Equal("10.0.0.5:502"), "user-variable path stays authoritative when it resolves")
+	})
+
+	It("does not fall back when the rendered config is still empty", func() {
+		snap := connSnap("{{ .historian.timescale.host }}", "{{ .historian.timescale.port }}", "", 0, nil)
+		dfc, err := buildProtocolConverterAsDfc(toInstance("pc-unrendered", snap), log)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(dfc.Connections).To(HaveLen(1))
+		Expect(dfc.Connections[0].URI).To(Equal("{{ .historian.timescale.host }}:{{ .historian.timescale.port }}"), "no regression: keeps prior raw behavior until the connection renders")
 	})
 })

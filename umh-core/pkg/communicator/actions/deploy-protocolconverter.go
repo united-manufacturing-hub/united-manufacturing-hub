@@ -128,12 +128,19 @@ func (a *DeployProtocolConverterAction) Validate() error {
 		return errors.New("missing required field Name")
 	}
 
-	if a.payload.Connection.IP == "" {
-		return errors.New("missing required field Connection.IP")
-	}
+	// A bridge that inherits the historian connection derives its health check from the
+	// shared historian configuration, so it does not require a user-supplied host/port.
+	isHistorian := a.payload.WriteDFCPayload != nil &&
+		inheritsHistorianConnection(a.payload.WriteDFCPayload.Destination)
 
-	if a.payload.Connection.Port == 0 {
-		return errors.New("missing required field Connection.Port")
+	if !isHistorian {
+		if a.payload.Connection.IP == "" {
+			return errors.New("missing required field Connection.IP")
+		}
+
+		if a.payload.Connection.Port == 0 {
+			return errors.New("missing required field Connection.Port")
+		}
 	}
 
 	if err := config.ValidateComponentName(a.payload.Name); err != nil {
@@ -290,8 +297,15 @@ func buildProtocolConverterConfig(payload models.ProtocolConverter) (config.Prot
 	userVars["IP"] = payload.Connection.IP
 	userVars["PORT"] = strconv.FormatUint(uint64(payload.Connection.Port), 10)
 
+	// Historian bridges get an Nmap target resolved from the shared historian section; all
+	// others get the standard {{ .IP }}/{{ .PORT }} template fed by the connection variables.
+	var writeDestination dataflowcomponentserviceconfig.WriteConfigDestination
+	if payload.WriteDFCPayload != nil {
+		writeDestination = payload.WriteDFCPayload.Destination
+	}
+
 	tmpl := protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
-		ConnectionServiceConfig:             newIPPortConnectionTemplate(),
+		ConnectionServiceConfig:             connectionTemplateForWriteOutput(writeDestination),
 		DataflowComponentReadServiceConfig:  dataflowcomponentserviceconfig.DataflowComponentServiceConfig{},
 		DataflowComponentWriteServiceConfig: dataflowcomponentserviceconfig.DataflowComponentWriteConfigInput{},
 	}

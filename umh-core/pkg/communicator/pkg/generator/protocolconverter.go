@@ -17,6 +17,8 @@ package generator
 import (
 	"fmt"
 	"regexp"
+	"strconv"
+	"strings"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
@@ -119,6 +121,15 @@ func buildProtocolConverterAsDfc(
 					port = strValue
 				}
 			}
+		}
+
+		// An unresolved {{ }} in target means the template references a non-variable
+		// namespace (inferred-connection bridge, e.g. {{ .historian.timescale.host }}).
+		// Use the rendered connection config, which holds the concrete host:port the
+		// connection FSM is probing.
+		if resolved := observed.ServiceInfo.ConnectionObservedState.ObservedConnectionConfig.NmapServiceConfig; strings.Contains(target, "{{") && resolved.Target != "" {
+			target = resolved.Target
+			port = strconv.Itoa(int(resolved.Port))
 		}
 
 		connection := models.Connection{

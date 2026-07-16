@@ -17,6 +17,7 @@ package actions
 import (
 	"errors"
 	"fmt"
+	"regexp"
 	"strconv"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/benthosserviceconfig"
@@ -76,6 +77,13 @@ func validateReadProtocolConverterDFC(dfc *models.ProtocolConverterDFC) error {
 	return nil
 }
 
+// historianConnectionRef matches a Go-template reference into the shared historian
+// namespace, e.g. {{ .historian.timescale.host }}. A bridge whose write output config
+// contains such a reference inherits its connection from the shared historian.timescale
+// section, so its health check targets the configured Historian rather than a
+// user-supplied host/port (see connectionTemplateForWriteOutput).
+var historianConnectionRef = regexp.MustCompile(`\{\{\s*\.historian\.`)
+
 // newIPPortConnectionTemplate returns the standard {{ .IP }}/{{ .PORT }} Nmap connection template
 // used by all protocol converters.
 func newIPPortConnectionTemplate() connectionserviceconfig.ConnectionServiceConfigTemplate {
@@ -85,6 +93,43 @@ func newIPPortConnectionTemplate() connectionserviceconfig.ConnectionServiceConf
 			Port:   "{{ .PORT }}",
 		},
 	}
+}
+
+// newHistorianConnectionTemplate returns the Nmap connection template for a Historian bridge.
+// The target resolves from the shared historian.timescale section at render time, so the
+// health check probes the configured Historian database without the user supplying a host/port.
+// The connection is rendered with the full scope (which includes the historian namespace), so
+// these placeholders resolve like the ones in the write output config.
+func newHistorianConnectionTemplate() connectionserviceconfig.ConnectionServiceConfigTemplate {
+	return connectionserviceconfig.ConnectionServiceConfigTemplate{
+		NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
+			Target: "{{ .historian.timescale.host }}",
+			Port:   "{{ .historian.timescale.port }}",
+		},
+	}
+}
+
+// inheritsHistorianConnection reports whether a write output inherits its connection from
+// the shared historian.timescale section — its config references {{ .historian.* }} (as the
+// "Historian (auto-connect)" template does). The manual TimescaleDB template writes through
+// the same historian plugin but uses {{ .IP }}/{{ .PORT }}, so it is treated as a normal
+// bridge that supplies its own connection.
+func inheritsHistorianConnection(dest dataflowcomponentserviceconfig.WriteConfigDestination) bool {
+	return historianConnectionRef.MatchString(dest.Code)
+}
+
+// connectionTemplateForWriteOutput selects the connection (Nmap) template for a bridge based on
+// its write output. A bridge that inherits the historian connection probes the shared Historian
+// database (resolved from the historian.timescale section); every other bridge uses the standard
+// {{ .IP }}/{{ .PORT }} template fed by the connection variables. Using one selector keeps the
+// deploy and edit paths in step so an inherited-connection bridge is never reverted to {{ .IP }}
+// on edit.
+func connectionTemplateForWriteOutput(dest dataflowcomponentserviceconfig.WriteConfigDestination) connectionserviceconfig.ConnectionServiceConfigTemplate {
+	if inheritsHistorianConnection(dest) {
+		return newHistorianConnectionTemplate()
+	}
+
+	return newIPPortConnectionTemplate()
 }
 
 // buildReadDFCServiceConfig validates a CDFCPayload and converts it into a

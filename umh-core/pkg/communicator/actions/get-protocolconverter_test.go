@@ -22,6 +22,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/connectionserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/nmapserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/protocolconverterserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/variables"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
@@ -294,6 +295,75 @@ var _ = Describe("GetProtocolConverter", func() {
 				Expect(response.Meta.ProcessingMode).To(Equal("custom")) // Determined from read DFC
 				Expect(response.Meta.Protocol).To(Equal("modbus"))       // Determined from read DFC input type
 
+			})
+		})
+
+		Context("when the bridge infers its connection from the historian", func() {
+			It("reports the rendered host:port instead of the raw {{ .historian.* }} template", func() {
+				testPCName := "test-historian-auto-connect"
+
+				observedState := &protocolconverter.ProtocolConverterObservedStateSnapshot{
+					ObservedProtocolConverterSpecConfig: protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
+						Config: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
+							ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
+								NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
+									Target: "{{ .historian.timescale.host }}",
+									Port:   "{{ .historian.timescale.port }}",
+								},
+							},
+						},
+						// Historian bridges still get system-injected IP/PORT variables, but empty
+						// (IP:"", PORT:"0"); the real connection comes from {{ .historian.* }}.
+						Variables: variables.VariableBundle{
+							User: map[string]interface{}{
+								"IP":   "",
+								"PORT": "0",
+							},
+						},
+					},
+					ServiceInfo: protocolconvertersvc.ServiceInfo{
+						ConnectionFSMState: "up",
+						ConnectionObservedState: connectionfsm.ConnectionObservedState{
+							// Rendered connection config the connection FSM is actually probing.
+							ObservedConnectionConfig: connectionserviceconfig.ConnectionServiceConfig{
+								NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
+									Target: "pgbouncer",
+									Port:   5432,
+								},
+							},
+						},
+					},
+				}
+
+				instance := &fsm.FSMInstanceSnapshot{
+					ID:                testPCName,
+					CurrentState:      protocolconverter.OperationalStateActive,
+					DesiredState:      protocolconverter.OperationalStateActive,
+					LastObservedState: observedState,
+				}
+
+				pcManagerSnapshot := &actions.MockManagerSnapshot{
+					Instances: map[string]*fsm.FSMInstanceSnapshot{testPCName: instance},
+				}
+				systemSnapshot := &fsm.SystemSnapshot{
+					Managers: map[string]fsm.ManagerSnapshot{
+						constants.ProtocolConverterManagerName: pcManagerSnapshot,
+					},
+					CurrentConfig: config.FullConfig{},
+				}
+				snapshotManager.UpdateSnapshot(systemSnapshot)
+
+				actualUUID := dataflowcomponentserviceconfig.GenerateUUIDFromName(testPCName)
+				err := action.Parse(map[string]interface{}{"uuid": actualUUID.String()})
+				Expect(err).NotTo(HaveOccurred())
+
+				result, _, err := action.Execute()
+				Expect(err).NotTo(HaveOccurred())
+
+				response, ok := result.(models.ProtocolConverter)
+				Expect(ok).To(BeTrue())
+				Expect(response.Connection.IP).To(Equal("pgbouncer"))
+				Expect(response.Connection.Port).To(Equal(uint32(5432)))
 			})
 		})
 
