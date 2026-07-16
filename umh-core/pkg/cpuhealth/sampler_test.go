@@ -59,14 +59,17 @@ import (
 //     quota is set; Quota=&0 for "max <period>" (unlimited); Quota=nil when
 //     absent/unreadable.
 //  4. STEAL: read /proc/stat first "cpu " line's 10 fields; per-tick steal
-//     fraction = steal_jiffies_delta / total_jiffies_delta (total = sum of ALL
-//     fields). First read (no delta) → StealFraction=0. Counter reset (total
-//     decreases) → re-baseline, StealFraction=0.
+//     fraction = steal_jiffies_delta / total_jiffies_delta (total = sum of
+//     fields 0..7, EXCLUDING guest/guest_nice, which the kernel already folds
+//     into user/nice). First read (no delta) → StealFraction=0. Counter reset
+//     (total decreases) → re-baseline, StealFraction=0.
 //  5. HOST-BUSY: from the same /proc/stat read, HostBusyCores =
-//     (sum of non-idle fields EXCLUDING steal AND guest/guest_nice) ÷ USER_HZ ÷
-//     elapsed_seconds. The exclusion of steal is critical (it's its own cause;
-//     folding it in double-counts); guest/guest_nice are excluded because the
-//     kernel double-counts them inside user/nice.
+//     (user+nice+system+irq+softirq, EXCLUDING idle, iowait, steal AND
+//     guest/guest_nice) ÷ USER_HZ ÷ elapsed_seconds. iowait is excluded
+//     because it is schedulable idle, not busy. The exclusion of steal is
+//     critical (it's its own cause; folding it in double-counts);
+//     guest/guest_nice are excluded because the kernel double-counts them
+//     inside user/nice.
 //  6. LOGICAL_CPUS: LogicalCpus = float64(runtime.NumCPU()) (stdlib call, not
 //     an I/O read).
 //  7. The Sample carries ALL fields. (8) A read failure on ONE non-primary
@@ -205,7 +208,7 @@ func TestCgroupSampler_PopulatesAllSignals(t *testing.T) {
 	// HostBusyCores: non-idle (excl steal, guest, guest_nice) delta jiffies ÷
 	// USER_HZ(100) ÷ elapsed. Non-idle-excl fields delta:
 	//   user (2000-1000)=1000 + nice (1500-1000)=500 + system (2000-1000)=1000
-	//   + iowait 0 + irq 0 + softirq 0 = 2500 jiffies.
+	//   + irq 0 + softirq 0 = 2500 jiffies (iowait excluded, 0 here anyway).
 	elapsed := sample2.Timestamp.Sub(sample1.Timestamp).Seconds()
 	if elapsed <= 0 {
 		t.Fatalf("elapsed between samples non-positive: %v", elapsed)
@@ -849,5 +852,130 @@ func TestCgroupSampler_ProcStat_HostBusyCoresAvailableFalseOnBaselineAndReset(t 
 	}
 	if sample3.HostBusyCoresAvailable {
 		t.Fatalf("reset Sample HostBusyCoresAvailable: got true, want false (counter reset re-baselines; appending HostBusyCores=0 poisons the ring)")
+	}
+}
+
+// TestCgroupSampler_IowaitExcludedFromHostBusy pins that iowait (field 4 of
+// /proc/stat's "cpu " line) is NOT counted as host-busy time. A task in iowait
+// occupies no CPU: the core is schedulable idle, free for another runnable
+// task. Counting iowait as busy makes an I/O-heavy host with spare compute
+// read as saturated, false-degrading no-limit hosts and blocking bridges with
+// CPU genuinely available.
+//
+// RED assertion: an iowait-heavy tick (iowait delta 100000 jiffies, real busy
+// delta 1000 jiffies) must yield HostBusyCores = 1000/USER_HZ/elapsed, not
+// 101000/USER_HZ/elapsed.
+func TestCgroupSampler_IowaitExcludedFromHostBusy(t *testing.T) {
+	const basePath = "/sys/fs/cgroup"
+	cpuStatPath := basePath + "/cpu.stat"
+	procStatPath := "/proc/stat"
+	ctx := context.Background()
+
+	// Fields: user nice system idle iowait irq softirq steal guest guest_nice.
+	procStatTick0 := "cpu  1000 1000 1000 8000 0 0 0 50 0 0\n"
+	// Tick 1: user +1000 (real busy), iowait +100000 (waiting on disk, NOT
+	// busy), idle unchanged.
+	procStatTick1 := "cpu  2000 1000 1000 8000 100000 0 0 50 0 0\n"
+
+	usageUsec := int64(1_000_000)
+	procStat := procStatTick0
+
+	fs := filesystem.NewMockFileSystem().WithReadFileFunc(func(_ context.Context, path string) ([]byte, error) {
+		switch path {
+		case cpuStatPath:
+			return []byte(cpuStatContent(usageUsec)), nil
+		case procStatPath:
+			return []byte(procStat), nil
+		default:
+			return nil, errors.New("unexpected path read: " + path)
+		}
+	})
+
+	s := cpuhealth.NewCgroupSampler(fs, basePath)
+
+	sample1, err := s.Sample(ctx)
+	if err != nil {
+		t.Fatalf("baseline Sample: unexpected error: %v", err)
+	}
+
+	time.Sleep(40 * time.Millisecond)
+	usageUsec = 1_100_000
+	procStat = procStatTick1
+
+	sample2, err := s.Sample(ctx)
+	if err != nil {
+		t.Fatalf("delta Sample: unexpected error: %v", err)
+	}
+
+	elapsed := sample2.Timestamp.Sub(sample1.Timestamp).Seconds()
+	if elapsed <= 0 {
+		t.Fatalf("elapsed between samples non-positive: %v", elapsed)
+	}
+
+	wantBusy := 1000.0 / 100.0 / elapsed // USER_HZ=100; iowait excluded
+	if !approx(sample2.HostBusyCores, wantBusy, 0.05) {
+		t.Fatalf("iowait-heavy Sample HostBusyCores: got %v, want %v "+
+			"(busy delta must be user-only 1000 jiffies; the 100000 iowait jiffies are schedulable idle, not busy)",
+			sample2.HostBusyCores, wantBusy)
+	}
+}
+
+// TestCgroupSampler_GuestExcludedFromStealTotal pins the StealFraction
+// denominator: Linux folds guest into user (field 0) and guest_nice into nice
+// (field 1), so a total that also adds guest (field 8) and guest_nice (field 9)
+// counts guest time twice, inflating the denominator and understating
+// StealFraction = steal_delta/total_delta on guest-heavy hosts.
+//
+// RED assertion: with steal delta 100, user delta 1000 (of which 900 is folded
+// guest time, mirrored in field 8), the total delta over fields 0..7 is 1100
+// and StealFraction must be 100/1100, not 100/2000 (the double-counted total
+// over all 10 fields).
+func TestCgroupSampler_GuestExcludedFromStealTotal(t *testing.T) {
+	const basePath = "/sys/fs/cgroup"
+	cpuStatPath := basePath + "/cpu.stat"
+	procStatPath := "/proc/stat"
+	ctx := context.Background()
+
+	// Fields: user nice system idle iowait irq softirq steal guest guest_nice.
+	procStatTick0 := "cpu  1000 1000 1000 8000 0 0 0 50 0 0\n"
+	// Tick 1: user +1000 (900 of it guest time, per the kernel's fold), steal
+	// +100, guest +900 (the mirror of the folded time).
+	procStatTick1 := "cpu  2000 1000 1000 8000 0 0 0 150 900 0\n"
+
+	usageUsec := int64(1_000_000)
+	procStat := procStatTick0
+
+	fs := filesystem.NewMockFileSystem().WithReadFileFunc(func(_ context.Context, path string) ([]byte, error) {
+		switch path {
+		case cpuStatPath:
+			return []byte(cpuStatContent(usageUsec)), nil
+		case procStatPath:
+			return []byte(procStat), nil
+		default:
+			return nil, errors.New("unexpected path read: " + path)
+		}
+	})
+
+	s := cpuhealth.NewCgroupSampler(fs, basePath)
+
+	if _, err := s.Sample(ctx); err != nil {
+		t.Fatalf("baseline Sample: unexpected error: %v", err)
+	}
+
+	time.Sleep(40 * time.Millisecond)
+	usageUsec = 1_100_000
+	procStat = procStatTick1
+
+	sample2, err := s.Sample(ctx)
+	if err != nil {
+		t.Fatalf("delta Sample: unexpected error: %v", err)
+	}
+
+	wantSteal := 100.0 / 1100.0 // fields 0..7 only: user 1000 + steal 100
+	if !approx(sample2.StealFraction, wantSteal, 0.005) {
+		t.Fatalf("guest-heavy Sample StealFraction: got %v, want %v "+
+			"(total delta must exclude guest/guest_nice, which the kernel already folds into user/nice; "+
+			"including them double-counts guest and understates steal)",
+			sample2.StealFraction, wantSteal)
 	}
 }

@@ -292,8 +292,9 @@ func parseDMIVirtualized(data []byte) bool {
 }
 
 // readProcStat reads /proc/stat's first "cpu " line and computes StealFraction
-// (steal jiffies delta / total jiffies delta) and HostBusyCores (non-idle
-// jiffies delta EXCLUDING steal, guest, guest_nice ÷ USER_HZ ÷ elapsed). On the
+// (steal jiffies delta / total jiffies delta, total excluding the guest fields)
+// and HostBusyCores (busy jiffies delta EXCLUDING iowait, steal, guest,
+// guest_nice ÷ USER_HZ ÷ elapsed; see parseProcStat). On the
 // first read and on a counter reset it re-baselines and leaves
 // HostBusyCoresAvailable false (no usable reading); on a successful delta it
 // sets HostBusyCoresAvailable true and populates StealFraction + HostBusyCores.
@@ -349,9 +350,10 @@ func (s *cgroupSampler) readProcStat(ctx context.Context, now time.Time, sample 
 }
 
 // parseProcStat parses the first "cpu " line of /proc/stat into total (sum of
-// all 10 fields), steal (field 8, the steal column), and busy (non-idle fields
-// EXCLUDING steal, guest, guest_nice: user+nice+system+iowait+irq+softirq). It
-// returns ok=false when the line is absent or malformed.
+// fields 0..7, EXCLUDING guest and guest_nice), steal (field 8 position, the
+// steal column), and busy (user+nice+system+irq+softirq, EXCLUDING idle,
+// iowait, steal, guest, guest_nice). It returns ok=false when the line is
+// absent or malformed.
 func parseProcStat(data []byte) (total, steal, busy float64, ok bool) {
 	sc := bufio.NewScanner(bytes.NewReader(data))
 	for sc.Scan() {
@@ -376,15 +378,27 @@ func parseProcStat(data []byte) (total, steal, busy float64, ok bool) {
 			vals[i] = v
 		}
 
-		for _, v := range vals {
-			total += v
+		// Indices: 0 user, 1 nice, 2 system, 3 idle, 4 iowait, 5 irq, 6 softirq,
+		// 7 steal, 8 guest, 9 guest_nice.
+		//
+		// total sums fields 0..7 only: the kernel folds guest into user (0) and
+		// guest_nice into nice (1), so adding fields 8 and 9 counts guest time
+		// twice, inflating the StealFraction denominator and understating steal
+		// on guest-heavy hosts.
+		//
+		// busy excludes idle (3), iowait (4), steal (7), guest (8), and
+		// guest_nice (9). iowait is schedulable idle: a task waiting on I/O
+		// occupies no CPU, so counting it as busy false-degrades I/O-heavy
+		// no-limit hosts and blocks bridges while compute is genuinely spare.
+		// steal is excluded because it is its own cause (folding it in
+		// double-counts it); guest/guest_nice are excluded because they are
+		// already inside user/nice.
+		for i := range 8 {
+			total += vals[i]
 		}
 
 		steal = vals[7]
-		// Indices: 0 user, 1 nice, 2 system, 3 idle, 4 iowait, 5 irq, 6 softirq,
-		// 7 steal, 8 guest, 9 guest_nice. Busy excludes idle (3), steal (7),
-		// guest (8), guest_nice (9).
-		busy = vals[0] + vals[1] + vals[2] + vals[4] + vals[5] + vals[6]
+		busy = vals[0] + vals[1] + vals[2] + vals[5] + vals[6]
 
 		return total, steal, busy, true
 	}

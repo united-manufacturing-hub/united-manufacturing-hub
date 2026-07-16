@@ -177,8 +177,9 @@ type Sample struct {
 	// false Decide skips steal entirely.
 	StealFraction float64
 	// HostBusyCores is the host-level busy core count. The sampler computes
-	// it from /proc/stat's non-idle fields EXCLUDING steal, guest, and
-	// guest_nice, so steal (already its own cause) is not double-counted.
+	// it from /proc/stat's busy fields EXCLUDING iowait (schedulable idle,
+	// not busy), steal (already its own cause, so it is not double-counted),
+	// and guest/guest_nice (already folded into user/nice by the kernel).
 	// LogicalCpus is the host's total logical CPU count; the hostFull and
 	// noLimitHost latches threshold on host headroom (LogicalCpus minus the
 	// 60s hostBusyMean minus cpuReserveCores). Decide treats LogicalCpus <= 0

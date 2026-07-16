@@ -341,8 +341,8 @@ var _ = Describe("capstone: end-to-end CPU-health model through GetStatus (rung 
 		// past the NumCPU-1 headroom floor. This removes the NumCPU coupling
 		// without needing a sampler-side test seam.
 		procStatTick0 := "cpu  1000 1000 1000 8000 0 0 0 50 0 0\n"
-		// Tick 1: busy delta (user+nice+system+iowait+irq+softirq, EXCL
-		// steal/guest/guest_nice) = 5,000,000 jiffies; idle grew 1,000,000;
+		// Tick 1: busy delta (user+nice+system+irq+softirq, EXCL
+		// iowait/steal/guest/guest_nice) = 5,000,000 jiffies; idle grew 1,000,000;
 		// steal unchanged (delta 0) -> StealFraction = 0 (steal negligible,
 		// does not fire). total delta = 6,000,000 -> busy/total = 0.833.
 		procStatTick1 := "cpu  5001000 1000 1000 1008000 0 0 0 50 0 0\n"
@@ -449,7 +449,7 @@ var _ = Describe("capstone: end-to-end CPU-health model through GetStatus (rung 
 		// here since the demand gate is closed, but it also keeps
 		// host-contention off.
 		procStatTick0 := "cpu  1000 1000 1000 8000 0 0 0 50 0 0\n"
-		// Tick 1: busy (user+nice+system+iowait+irq+softirq) unchanged =>
+		// Tick 1: busy (user+nice+system+irq+softirq) unchanged =>
 		// busy delta 0 (HostBusyCores 0). idle grew 1000; steal grew 2000 =>
 		// total delta 3000; StealFraction = 2000/3000 = 0.667 > StealHigh 0.10.
 		procStatTick1 := "cpu  1000 1000 1000 9000 0 0 0 2050 0 0\n"
@@ -558,8 +558,8 @@ var _ = Describe("capstone: end-to-end CPU-health model through GetStatus (rung 
 		// hostBusyRing clears its 2-sample floor (the baseline tick no longer
 		// seeds the ring with a synthetic 0).
 		procStatTick0 := "cpu  1000 1000 1000 8000 0 0 0 50 0 0\n"
-		// Tick 1: busy delta (user+nice+system+iowait+irq+softirq, EXCL
-		// steal/guest/guest_nice) = 5,000,000 jiffies; idle grew 1,000; steal
+		// Tick 1: busy delta (user+nice+system+irq+softirq, EXCL
+		// iowait/steal/guest/guest_nice) = 5,000,000 jiffies; idle grew 1,000; steal
 		// unchanged (delta 0 -> StealFraction = 0, irrelevant on bare metal).
 		procStatTick1 := "cpu  5001000 1000 1000 9000 0 0 0 50 0 0\n"
 		// Tick 2: another 5,000,000 busy jiffies (escalating) so the
