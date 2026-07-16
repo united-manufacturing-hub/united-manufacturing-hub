@@ -105,6 +105,14 @@ const throttleWindow = 60 * time.Second
 // tuning one window cannot silently change the other.
 const stealWindow = 60 * time.Second
 
+// stealMinSamples is the fire floor for the steal latch: the smallest ring
+// size at which the nearest-rank p95 is not the ring maximum
+// (ceil(0.95×20) = 19 < 20), so one isolated outlier cannot be the selected
+// rank and cannot fire the latch on its own. The FIRE arm is gated on this
+// floor; the RECOVER arm stays evaluable below it so an already-fired latch
+// can still clear from a small ring.
+const stealMinSamples = 20
+
 // hostBusyWindow is the sliding window length over which the host-busy
 // 60s mean (HostBusyCores60sMean) is computed. Separate from stealWindow
 // so tuning the steal p95's window cannot silently shorten the host-busy
@@ -442,8 +450,9 @@ type Verdict struct {
 // 60s counter-delta ratio. Pressure thresholds sample.PressureAvg60 directly
 // (the kernel already smoothed it over 60s), clamping NaN/negative/+Inf to 0
 // first. Steal latches on the 60s nearest-rank p95 of StealFraction; it is
-// processed only when sample.Virtualized is true, and only once the ring
-// holds at least 2 samples, so a first-tick spike cannot fire.
+// processed only when sample.Virtualized is true, and the fire arm is gated
+// on stealMinSamples ring entries, so an isolated early-tick spike cannot
+// fire (the recover arm still clears a fired latch below the floor).
 //
 // When several causes fire, Verdict.Causes is ordered dominant-first (see
 // sortFiredCauses) and the dominant cause sets Attribution. Steal and a full
@@ -597,10 +606,14 @@ func Decide(st *WindowState, sample Sample, thresholds Thresholds) (Verdict, Sig
 		stealRing = stealRing[:stealN]
 		st.stealRing = stealRing
 
-		// Do not evaluate the steal latch until the ring holds 2 samples:
-		// with one sample the nearest-rank p95 is that sample, so a
-		// first-tick spike would fire immediately, contradicting "sustained
-		// fires, isolated absorbed."
+		// Compute the p95 once the ring holds 2 samples (the wire carries it
+		// as an observability metric regardless of the latch), but gate the
+		// FIRE arm on stealMinSamples: for any n below it, ceil(0.95n) = n,
+		// so the nearest-rank p95 IS the ring maximum and one isolated spike
+		// (for example on the second tick) would fire the latch,
+		// contradicting "sustained fires, isolated absorbed." The RECOVER arm
+		// stays evaluable below the floor so an already-fired latch can clear
+		// from a small ring instead of holding degraded until it refills.
 		if len(st.stealRing) >= 2 {
 			stealP95Val = stealP95(st.stealRing)
 			// Clamp NaN/negative/+Inf to 0 before thresholding and before
@@ -613,7 +626,7 @@ func Decide(st *WindowState, sample Sample, thresholds Thresholds) (Verdict, Sig
 			}
 
 			switch {
-			case stealP95Val > thresholds.StealHigh:
+			case stealP95Val > thresholds.StealHigh && len(st.stealRing) >= stealMinSamples:
 				st.stealFired = true
 			case stealP95Val < thresholds.StealRecover:
 				st.stealFired = false

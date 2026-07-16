@@ -418,14 +418,14 @@ var _ = Describe("capstone: end-to-end CPU-health model through GetStatus (rung 
 			"HOST-CONTENTION: CPUHealth must be Degraded")
 	})
 
-	// --- (7) STEAL-DEGRADE: a VM (hypervisor flag) with a high steal fraction
-	// in /proc/stat (StealFraction > StealHigh 0.10 over the 2-sample p95
-	// floor) and NO pressure/throttle -> State=degraded, Attribution=host
-	// (steal is external), Causes contains {kind:'steal'}. Steal is already-
-	// built behavior (its own Schmitt latch + 60s ring in decide.go), so this
-	// scenario pins existing behavior end to end without touching
-	// production. ---
-	It("(7) STEAL-DEGRADE: VM with steal fraction > 0.10 degrades with attribution host and cause steal", func() {
+	// --- (7) STEAL-DEGRADE: a VM (hypervisor flag) with a sustained high
+	// steal fraction in /proc/stat (StealFraction > StealHigh 0.10 across the
+	// stealMinSamples fire floor of 20 ring entries) and NO pressure/throttle
+	// -> State=degraded, Attribution=host (steal is external), Causes
+	// contains {kind:'steal'}. Steal is already-built behavior (its own
+	// Schmitt latch + 60s ring in decide.go), so this scenario pins existing
+	// behavior end to end without touching production. ---
+	It("(7) STEAL-DEGRADE: VM with sustained steal fraction > 0.10 degrades with attribution host and cause steal", func() {
 		mockFS := filesystem.NewMockFileSystem()
 		ctx := context.Background()
 		testDataPath, err := os.MkdirTemp("", "rung16-steal")
@@ -443,19 +443,20 @@ var _ = Describe("capstone: end-to-end CPU-health model through GetStatus (rung 
 
 		// /proc/stat first "cpu " line. Fields: user nice system idle iowait
 		// irq softirq steal guest guest_nice. Tick 0 baselines (StealFraction
-		// = 0 on the first read; the steal ring gets one sample). Tick 1 makes
-		// the steal delta a large fraction of the total delta so StealFraction
-		// > StealHigh 0.10. HostBusyCores is 0 (busy unchanged), irrelevant
-		// here since the demand gate is closed, but it also keeps
-		// host-contention off.
-		procStatTick0 := "cpu  1000 1000 1000 8000 0 0 0 50 0 0\n"
-		// Tick 1: busy (user+nice+system+irq+softirq) unchanged =>
-		// busy delta 0 (HostBusyCores 0). idle grew 1000; steal grew 2000 =>
-		// total delta 3000; StealFraction = 2000/3000 = 0.667 > StealHigh 0.10.
-		procStatTick1 := "cpu  1000 1000 1000 9000 0 0 0 2050 0 0\n"
+		// = 0 on the first read; the steal ring gets one sample). Each delta
+		// tick advances idle by 1000 and steal by 2000 jiffies => total delta
+		// 3000, StealFraction = 2000/3000 = 0.667 > StealHigh 0.10, sustained
+		// across every tick. Busy (user+nice+system+irq+softirq) never moves
+		// => HostBusyCores 0, irrelevant here since the demand gate is closed,
+		// but it also keeps host-contention off. The steal fire arm is gated
+		// on stealMinSamples (20) ring entries, so the test drives 20 delta
+		// ticks (one isolated spike must not fire; a sustained one must).
+		procStatFor := func(tick int) string {
+			return fmt.Sprintf("cpu  1000 1000 1000 %d 0 0 0 %d 0 0\n", 8000+1000*tick, 50+2000*tick)
+		}
 
 		var usageUsec int64
-		procStat := procStatTick0
+		procStat := procStatFor(0)
 
 		mockFS.WithReadFileFunc(func(_ context.Context, path string) ([]byte, error) {
 			switch path {
@@ -479,23 +480,28 @@ var _ = Describe("capstone: end-to-end CPU-health model through GetStatus (rung 
 
 		// Tick 1: baselines the sampler's usage_usec + /proc/stat (no deltas
 		// yet). Virtualized=true so the steal ring takes its first sample
-		// (steal=0); the 2-sample floor means the latch is NOT evaluated yet.
-		usageUsec, procStat = 1_000_000, procStatTick0
+		// (steal=0); the latch cannot fire yet.
+		usageUsec, procStat = 1_000_000, procStatFor(0)
 		_, err = svc.GetStatus(ctx)
 		Expect(err).NotTo(HaveOccurred())
 
-		// Tick 2: /proc/stat advances so StealFraction = 0.667. The steal
-		// ring now holds 2 samples [0, 0.667]; nearest-rank p95 = 0.667 >
-		// StealHigh 0.10 -> the steal latch fires. Steal is external, and it
-		// is the only fired cause (no pressure/throttle/host-contention), so
-		// Attribution=host unambiguously.
-		usageUsec, procStat = 2_000_000, procStatTick1
-		time.Sleep(1 * time.Second)
-		status, err := svc.GetStatus(ctx)
-		Expect(err).NotTo(HaveOccurred())
+		// Ticks 2..21: /proc/stat advances each tick so StealFraction = 0.667
+		// on every delta. usage_usec is pinned (delta 0 -> UsageCores 0) so
+		// the limit-mode saturation latch stays quiet and steal is the only
+		// moving signal. On the final tick the ring holds 21 samples
+		// [0, 0.667 x20], past the stealMinSamples fire floor; nearest-rank
+		// p95 = 0.667 > StealHigh 0.10 -> the steal latch fires. Steal is
+		// external, and it is the only fired cause (no pressure/throttle/
+		// host-contention), so Attribution=host unambiguously.
+		var status *container_monitor.ServiceInfo
+		for i := 1; i <= 20; i++ {
+			procStat = procStatFor(i)
+			status, err = svc.GetStatus(ctx)
+			Expect(err).NotTo(HaveOccurred())
+		}
 
 		Expect(status.CPU.State).To(Equal("degraded"),
-			"STEAL-DEGRADE: steal fraction > 0.10 (p95 over the 2-sample floor) must degrade")
+			"STEAL-DEGRADE: sustained steal fraction > 0.10 (p95 over the stealMinSamples fire floor) must degrade")
 		Expect(status.CPU.Attribution).To(BeEquivalentTo("host"),
 			"STEAL-DEGRADE: steal is external (hypervisor stole vCPU time) -> attribution host")
 		Expect(status.CPU.Causes).To(ContainElement(

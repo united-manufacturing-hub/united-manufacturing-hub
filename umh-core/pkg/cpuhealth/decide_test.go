@@ -1405,42 +1405,41 @@ func TestDecide_StealCause_RingPruning(t *testing.T) {
 
 	// Scenario B: a stale high-steal entry from > 60s ago does NOT keep the p95
 	// elevated after it ages out. Feed a burst of high-steal samples early
-	// (t=0..t=10), then enough low-steal samples that the high entries age out
-	// of the 60s window AND the ring holds >= 2 low samples (so the latch is
-	// actually evaluated and clears). At t=80s, cutoff = t=20s, so the high-steal
-	// samples (t=0, t=10) are pruned. Feed low samples at t=70 and t=80 so the
-	// window holds 2 zero entries → p95 = 0.0 < StealRecover → latch clears.
+	// (t=0..t=19, enough to clear the stealMinSamples fire floor), then
+	// low-steal samples late enough that the high entries age out of the 60s
+	// window AND the ring holds >= 2 low samples (so the p95 is evaluated and
+	// the latch clears). At t=86s, cutoff = t=26s, so the high-steal samples
+	// (t=0..t=19) are pruned. Feed low samples at t=85 and t=86 so the window
+	// holds 2 zero entries → p95 = 0.0 < StealRecover → latch clears.
 	stB := &WindowState{}
-	// High-steal burst at t=0 and t=10 (2 samples, 0.15 each). Ring size 2 >=
-	// floor → latch fires.
-	Decide(stB, Sample{
-		Timestamp:     base,
-		StealFraction: 0.15,
-		Virtualized:   true,
-	}, thresholds)
-	Decide(stB, Sample{
-		Timestamp:     base.Add(10 * time.Second),
-		StealFraction: 0.15,
-		Virtualized:   true,
-	}, thresholds)
-	if !stB.stealFired {
-		t.Fatalf("setup: latch should have fired after 2 high-steal samples")
+	// High-steal burst at t=0..t=19 (20 samples at 1s spacing, 0.15 each).
+	// Ring size 20 >= stealMinSamples fire floor → latch fires.
+	for i := 0; i < 20; i++ {
+		Decide(stB, Sample{
+			Timestamp:     base.Add(time.Duration(i) * time.Second),
+			StealFraction: 0.15,
+			Virtualized:   true,
+		}, thresholds)
 	}
-	// Low-steal samples at t=70 and t=80 (10s spacing). At t=80 cutoff=t=20,
-	// so the two 0.15 entries (t=0, t=10) are pruned. Window = [t=70, t=80],
-	// two 0.0 samples. p95 = 0.0 < StealRecover → latch CLEARS.
+	if !stB.stealFired {
+		t.Fatalf("setup: latch should have fired after 20 high-steal samples")
+	}
+	// Low-steal samples at t=85 and t=86. At t=86 cutoff=t=26, so all twenty
+	// 0.15 entries (t=0..t=19) are pruned. Window = [t=85, t=86], two 0.0
+	// samples. p95 = 0.0 < StealRecover → latch CLEARS (the recover arm is
+	// evaluable below the fire floor).
 	Decide(stB, Sample{
-		Timestamp:     base.Add(70 * time.Second),
+		Timestamp:     base.Add(85 * time.Second),
 		StealFraction: 0.0,
 		Virtualized:   true,
 	}, thresholds)
 	vB, sigB := Decide(stB, Sample{
-		Timestamp:     base.Add(80 * time.Second),
+		Timestamp:     base.Add(86 * time.Second),
 		StealFraction: 0.0,
 		Virtualized:   true,
 	}, thresholds)
 	if sigB.StealFired {
-		t.Fatalf("aged-out high-steal StealFired: got true, want false (stale 0.15 entries from t=0/t=10 pruned at t=80; p95 of 2 zeros = 0.0 < StealRecover; without FIX 2 they linger and keep the p95 elevated)")
+		t.Fatalf("aged-out high-steal StealFired: got true, want false (stale 0.15 entries from t=0..t=19 pruned at t=86; p95 of 2 zeros = 0.0 < StealRecover; without FIX 2 they linger and keep the p95 elevated)")
 	}
 	if vB.State != StateHealthy {
 		t.Fatalf("aged-out high-steal State: got %q, want %q (stale entries pruned → p95 low → healthy)", vB.State, StateHealthy)
@@ -1450,27 +1449,28 @@ func TestDecide_StealCause_RingPruning(t *testing.T) {
 // TestDecide_StealCause_SmallNFloor pins the small-N degeneracy floor (FIX 3).
 // The nearest-rank p95 with N=1 returns the single sample's value, so without
 // a floor a first-tick high-steal sample (0.15) fires the latch immediately,
-// contradicting "sustained fires, isolated absorbed." A 2-sample floor (matching
-// throttle's two-point delta floor) prevents a single first-tick spike from
-// firing. This test MUST fail when FIX 3 (the floor) is reverted.
+// contradicting "sustained fires, isolated absorbed." The p95 is not evaluated
+// below 2 samples, and the fire arm is further gated on stealMinSamples (see
+// TestDecide_StealSpike_SecondTickDoesNotFire). This test MUST fail when the
+// floor is reverted.
 func TestDecide_StealCause_SmallNFloor(t *testing.T) {
 	base := time.Date(2026, 6, 23, 12, 0, 0, 0, time.UTC)
 	thresholds := DefaultThresholds()
 	st := &WindowState{}
 
 	// A single virtualized first-tick high-steal sample (0.15 > StealHigh 0.10).
-	// Ring size = 1, below the 2-sample floor, so the latch must NOT evaluate
-	// and must NOT fire.
+	// Ring size = 1, below the 2-sample p95 floor, so the latch must NOT
+	// evaluate and must NOT fire.
 	v, sig := Decide(st, Sample{
 		Timestamp:     base,
 		StealFraction: 0.15,
 		Virtualized:   true,
 	}, thresholds)
 	if sig.StealFired {
-		t.Fatalf("small-N StealFired: got true, want false (ring size 1 < floor 2; a single first-tick spike must not fire; without FIX 3 the N=1 p95=0.15 fires immediately)")
+		t.Fatalf("small-N StealFired: got true, want false (ring size 1 < the 2-sample p95 floor; a single first-tick spike must not fire; without FIX 3 the N=1 p95=0.15 fires immediately)")
 	}
 	if v.State != StateHealthy {
-		t.Fatalf("small-N State: got %q, want %q (ring size 1 < floor 2 → latch not evaluated → healthy)", v.State, StateHealthy)
+		t.Fatalf("small-N State: got %q, want %q (ring size 1 < the 2-sample p95 floor → latch not evaluated → healthy)", v.State, StateHealthy)
 	}
 	if len(v.Causes) != 0 {
 		t.Fatalf("small-N Causes length: got %d, want 0", len(v.Causes))
@@ -3488,8 +3488,13 @@ func TestDecide_HostContentionFold_Full(t *testing.T) {
 	t.Run("STEAL_PLUS_OUR_MAJORITY", func(t *testing.T) {
 		st := &WindowState{}
 		s := Sample{Timestamp: base, HostBusyCores: 8.0, UsageCores: 6.0, LogicalCpus: 8.0, Virtualized: true, StealFraction: 0.20}
-		Decide(st, s, thresholds)
-		s.Timestamp = base.Add(1 * time.Second)
+		// 20 sustained ticks (1s spacing) so the steal ring clears the
+		// stealMinSamples fire floor; the steal is sustained, not isolated.
+		for i := 0; i < 19; i++ {
+			s.Timestamp = base.Add(time.Duration(i) * time.Second)
+			Decide(st, s, thresholds)
+		}
+		s.Timestamp = base.Add(19 * time.Second)
 		v, sig := Decide(st, s, thresholds)
 		if !sig.StealFired {
 			t.Fatalf("StealFired: got false, want true (StealFraction 0.20 > StealHigh 0.10)")
@@ -5005,5 +5010,85 @@ func TestDecide_PressureLatch_HoldOnMissingPSI(t *testing.T) {
 	}
 	if v2.State != StateDegraded {
 		t.Fatalf("(b) hold State: got %q, want %q (latch held → still degraded)", v2.State, StateDegraded)
+	}
+}
+
+// TestDecide_StealSpike_SecondTickDoesNotFire pins the steal fire floor
+// (stealMinSamples): nearest-rank p95 at n=2 is ceil(0.95*2)=2, the ring MAX,
+// so a single isolated spike on the second tick would fire the latch and block
+// bridges until the outage-length window aged it out. The fire arm must be
+// gated on len(ring) >= stealMinSamples (20, the smallest n where
+// ceil(0.95n) < n, so one outlier can no longer be the selected rank), while
+// a sustained spike across a full ring still fires (pinned by
+// TestDecide_StealCause_VirtualizedRingP95Schmitt case 1).
+//
+// RED assertion: tick 1 steal 0.0, tick 2 steal 0.60 (one isolated spike,
+// far above StealHigh 0.10) must NOT fire the latch: StealFired=false,
+// verdict healthy.
+func TestDecide_StealSpike_SecondTickDoesNotFire(t *testing.T) {
+	base := time.Date(2026, 6, 23, 12, 0, 0, 0, time.UTC)
+	thresholds := DefaultThresholds()
+	st := &WindowState{}
+
+	Decide(st, Sample{
+		Timestamp:     base,
+		StealFraction: 0.0,
+		Virtualized:   true,
+	}, thresholds)
+
+	v, sig := Decide(st, Sample{
+		Timestamp:     base.Add(1 * time.Second),
+		StealFraction: 0.60,
+		Virtualized:   true,
+	}, thresholds)
+
+	if sig.StealFired {
+		t.Fatalf("second-tick spike StealFired: got true, want false (n=2 nearest-rank p95 IS the spike; one isolated outlier must not fire the latch below stealMinSamples)")
+	}
+
+	if v.State != StateHealthy {
+		t.Fatalf("second-tick spike State: got %q, want %q (an isolated spike below the fire floor must stay healthy)", v.State, StateHealthy)
+	}
+}
+
+// TestDecide_StealRecover_ClearsBelowFireFloor pins that the RECOVER arm stays
+// evaluable below stealMinSamples: an already-fired latch whose ring has been
+// pruned down by an outage or fresh low readings must still clear when the p95
+// drops below StealRecover, instead of holding degraded until the ring refills
+// to 20 entries.
+func TestDecide_StealRecover_ClearsBelowFireFloor(t *testing.T) {
+	base := time.Date(2026, 6, 23, 12, 0, 0, 0, time.UTC)
+	thresholds := DefaultThresholds()
+	st := &WindowState{}
+
+	// Fire: 20 sustained ticks at 0.15 (1s spacing, all within the 60s window).
+	for i := 0; i < 20; i++ {
+		Decide(st, Sample{
+			Timestamp:     base.Add(time.Duration(i) * time.Second),
+			StealFraction: 0.15,
+			Virtualized:   true,
+		}, thresholds)
+	}
+
+	if !st.stealFired {
+		t.Fatalf("setup: latch should have fired after 20 sustained high-steal samples")
+	}
+
+	// Clear with a SMALL ring: two low ticks at t=100s/t=101s (the 60s prune
+	// drops all 20 high entries, leaving a 2-entry ring). p95 of two zeros =
+	// 0.0 < StealRecover 0.06; the recover arm must run below the fire floor.
+	Decide(st, Sample{
+		Timestamp:     base.Add(100 * time.Second),
+		StealFraction: 0.0,
+		Virtualized:   true,
+	}, thresholds)
+	_, sig := Decide(st, Sample{
+		Timestamp:     base.Add(101 * time.Second),
+		StealFraction: 0.0,
+		Virtualized:   true,
+	}, thresholds)
+
+	if sig.StealFired {
+		t.Fatalf("small-ring recover StealFired: got true, want false (the RECOVER arm must stay evaluable below stealMinSamples so an already-fired latch can clear)")
 	}
 }
