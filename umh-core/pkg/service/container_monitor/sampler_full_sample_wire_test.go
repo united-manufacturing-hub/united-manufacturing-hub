@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -251,27 +252,21 @@ var _ = Describe("steal p95 wired onto the wire via the sampler", func() {
 })
 
 var _ = Describe("sampler failure dead-zone (rung 12b invariant)", func() {
-	It("keeps the verdict healthy and lets the throttle latch fire when the sampler fails but cgroup throttle counters are present", func() {
-		// Pinned invariant (see getCPUMetrics inline comment):
-		// when the sampler's cpu.stat read fails, getRawCPUMetrics returns a
-		// zero-valued Sample (Quota nil, PsiAvailable false, Virtualized false,
-		// UsageCores 0) — the dead-zone. Decide still evaluates the throttle ring
-		// from the NrPeriods/NrThrottled overlaid by getCgroupCPUInfo, and the
-		// dead-zone saturation backstop runs harmlessly (UsageCores=0 → fraction=0
-		// → never fires). The throttle latch therefore remains the only cause that
-		// can fire, driven entirely by the cgroup throttle counters — the sampler
-		// failure does NOT silently swallow a real throttle condition, nor does it
-		// false-fire a saturation/steal/pressure/host-contention cause.
+	It("holds a prior throttle fire across a sampler failure instead of running Decide on a zero sample", func() {
+		// Pinned invariant: when the sampler's cpu.stat read fails, Decide is
+		// skipped (gated on sampler success, not cgroupErr) and the prior
+		// verdict + signals are held. The windowState latches also hold
+		// because Decide is their only mutator. This prevents the zero sample
+		// (LogicalCpus=0, UsageCores=0) from hitting the saturation default
+		// branch and clearing all sub-latches, which would flap a prior
+		// degraded verdict to healthy for the failure tick.
 		//
-		// The mock fs returns a cpu.stat body WITHOUT a usage_usec line. The
-		// sampler's parseUsageUsec fails on that ("usage_usec not found") so
-		// Sample() returns an error → getRawCPUMetrics returns a zero-valued Sample.
-		// getCgroupCPUInfo's parseCPUStats ignores usage_usec entirely (it parses
-		// only nr_periods/nr_throttled/throttled_usec), so it succeeds on the SAME
-		// cpu.stat body — the cgroup throttle counters flow through to Decide and
-		// the throttle latch is evaluated against a real delta. This mirrors the
-		// production failure mode (cgroup v1 / transient read where the sampler
-		// cannot parse cpu.stat but getCgroupCPUInfo can).
+		// The prior throttle fire comes from successful sampler ticks where
+		// cpu.stat carried usage_usec; the sampler-failure tick returns a
+		// cpu.stat body WITHOUT usage_usec so parseUsageUsec fails and
+		// Sample() returns an error. getCgroupCPUInfo's parseCPUStats ignores
+		// usage_usec, but that no longer matters: Decide is not called on the
+		// failure tick.
 		mockFS := filesystem.NewMockFileSystem()
 		ctx := context.Background()
 
@@ -279,27 +274,28 @@ var _ = Describe("sampler failure dead-zone (rung 12b invariant)", func() {
 		Expect(err).NotTo(HaveOccurred())
 		defer func() { _ = os.RemoveAll(testDataPath) }()
 
-		// cpu.max: "200000 100000" => quota 2.0 cores (capped). This is read by
-		// getCgroupCPUInfo but the sampler's cpu.max read is irrelevant here — the
-		// sampler already failed at cpu.stat and returns a zero-valued Sample
-		// (Quota nil), so the sample is in the dead-zone regardless.
-		const cpuMax = "200000 100000\n"
+		const cpuMax = "200000 100000\n" // quota 2.0 cores (capped)
 
-		// cpu.stat body has nr_periods/nr_throttled/throttled_usec but NO
-		// usage_usec — the sampler's parseUsageUsec returns "usage_usec not
-		// found" (an error), so Sample() returns (Sample{}, err). getCgroupCPUInfo
-		// uses parseCPUStats which only looks at the three throttle keys, so it
-		// succeeds.
-		var nrPeriods, nrThrottled int64
+		var (
+			nrPeriods, nrThrottled, usageUsec int64
+			samplerFails                       bool
+		)
 
 		mockFS.WithReadFileFunc(func(_ context.Context, path string) ([]byte, error) {
 			switch path {
 			case "/sys/fs/cgroup/cpu.max":
 				return []byte(cpuMax), nil
 			case "/sys/fs/cgroup/cpu.stat":
+				if samplerFails {
+					return []byte(fmt.Sprintf(
+						"nr_periods %d\nnr_throttled %d\nthrottled_usec 0\n",
+						nrPeriods, nrThrottled,
+					)), nil
+				}
+
 				return []byte(fmt.Sprintf(
-					"nr_periods %d\nnr_throttled %d\nthrottled_usec 0\n",
-					nrPeriods, nrThrottled,
+					"usage_usec %d\nnr_periods %d\nnr_throttled %d\nthrottled_usec 0\n",
+					usageUsec, nrPeriods, nrThrottled,
 				)), nil
 			default:
 				return nil, errors.New("file not found: " + path)
@@ -308,37 +304,167 @@ var _ = Describe("sampler failure dead-zone (rung 12b invariant)", func() {
 
 		svc := container_monitor.NewContainerMonitorServiceWithPath(mockFS, testDataPath)
 
-		// Tick 1 — baseline the throttle ring. nr_throttled=0, nr_periods=1000.
-		// The ring holds a single point, so throttleRatio returns 0 and the latch
-		// is false. The verdict must be healthy: the dead-zone saturation backstop
-		// cannot fire (only one usage point → small-N floor clears it), and no
-		// other cause has a signal (Quota nil → no fraction; PsiAvailable false;
-		// Virtualized false → steal skipped; HostBusyCores 0 → host-contention
-		// cannot fire even if the demand gate were open, which it is not).
-		nrPeriods, nrThrottled = 1000, 0
+		// Tick 1: sampler succeeds, throttle baseline. nr_throttled=0,
+		// nr_periods=1000. The ring holds a single point, so throttleRatio
+		// returns 0 and the latch is false. Verdict healthy.
+		samplerFails = false
+		nrPeriods, nrThrottled, usageUsec = 1000, 0, 0
 		status1, err := svc.GetStatus(ctx)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(status1.CPUHealth).To(Equal(models.Active),
-			"sampler failure → dead-zone → UsageCores=0 → fraction=0 → saturation backstop must not fire; verdict healthy")
+			"baseline tick: throttle latch false, verdict healthy")
 		Expect(status1.CPU.VerdictBasis.Throttle.Fired).To(BeFalse(),
 			"baseline: single ring point, throttleRatio=0, latch false")
 
-		// Tick 2 — nr_throttled jumps so the 60s windowed ratio is 0.10
-		// (100 throttled / 1000 periods), above ThrottleHigh 0.05 → the throttle
-		// latch fires EVEN THOUGH the sampler failed. This proves the throttle
-		// path works when the sampler is down: the counters come from
-		// getCgroupCPUInfo, not the sampler. Both counters are monotonic so the
-		// clear-on-regression guard does not wipe the ring.
+		// Tick 2: sampler succeeds, nr_throttled jumps so the 60s windowed
+		// ratio is 0.10 (100 throttled / 1000 periods), above ThrottleHigh
+		// 0.05. The throttle latch fires. Verdict degrades.
 		nrPeriods, nrThrottled = 2000, 100
+		usageUsec = 1_000_000
+		time.Sleep(1 * time.Second)
 		status2, err := svc.GetStatus(ctx)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(status2.CPU.VerdictBasis.Throttle.Fired).To(BeTrue(),
-			"throttle latch must fire from the overlaid cgroup counters even when the sampler fails (ratio 0.10 > 0.05)")
+			"throttle latch must fire from the cgroup counters when the sampler succeeds (ratio 0.10 > 0.05)")
 		Expect(status2.CPUHealth).To(Equal(models.Degraded),
-			"a throttle fire must degrade CPUHealth via verdict.State even on a sampler failure")
+			"a throttle fire must degrade CPUHealth via verdict.State")
 		Expect(status2.OverallHealth).To(Equal(models.Degraded),
 			"OverallHealth must co-set with CPUHealth on a CPU degrade")
 		Expect(status2.CPU.VerdictBasis.Throttle.Value).To(BeNumerically("~", 0.10, 1e-9),
 			"basis.throttle.value is the Decide-computed windowed ratio from the overlaid counters")
+
+		// Tick 3: sampler fails (cpu.stat missing usage_usec). Decide is
+		// skipped. The throttle latch HOLDS (stays fired) and the verdict
+		// stays degraded. This proves the hold-on-missing discipline: a
+		// transient sampler failure does not flap the verdict to healthy.
+		samplerFails = true
+		status3, err := svc.GetStatus(ctx)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(status3.CPU.VerdictBasis.Throttle.Fired).To(BeTrue(),
+			"throttle latch must HOLD across a sampler failure (Decide skipped, latch not mutated)")
+		Expect(status3.CPUHealth).To(Equal(models.Degraded),
+			"prior degraded verdict must hold across a sampler failure (no flap to healthy)")
+		Expect(status3.OverallHealth).To(Equal(models.Degraded),
+			"OverallHealth must stay co-set with CPUHealth across a sampler failure")
+	})
+})
+
+var _ = Describe("Decide gate: sampler success independent of cpu.max (C1)", func() {
+	It("runs Decide and degrades on high usage when cpu.max is unreadable but the sampler succeeded", func() {
+		// C1: a cgroup-v1-style host where cpu.max is unreadable but the
+		// sampler read cpu.stat successfully. Today Decide is gated on
+		// cgroupErr == nil && cgroupInfo != nil, which is false when cpu.max
+		// is unreadable, so Decide is never called and the verdict stays
+		// healthy permanently. The fix gates Decide on sampler success, so
+		// the no-host-stats saturation latch evaluates and the verdict
+		// degrades on high usage.
+		mockFS := filesystem.NewMockFileSystem()
+		ctx := context.Background()
+
+		testDataPath, err := os.MkdirTemp("", "c1-cpu-max-unreadable")
+		Expect(err).NotTo(HaveOccurred())
+		defer func() { _ = os.RemoveAll(testDataPath) }()
+
+		var usageUsec int64
+
+		mockFS.WithReadFileFunc(func(_ context.Context, path string) ([]byte, error) {
+			switch path {
+			case "/sys/fs/cgroup/cpu.max":
+				return nil, errors.New("cpu.max not readable")
+			case "/sys/fs/cgroup/cpu.stat":
+				return []byte(fmt.Sprintf(
+					"usage_usec %d\nnr_periods 1000\nnr_throttled 0\nthrottled_usec 0\n",
+					usageUsec,
+				)), nil
+			default:
+				return nil, errors.New("file not found: " + path)
+			}
+		})
+
+		svc := container_monitor.NewContainerMonitorServiceWithPath(mockFS, testDataPath)
+
+		// Tick 1: baseline the sampler's usage_usec counter.
+		usageUsec = 0
+		_, err = svc.GetStatus(ctx)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Tick 2: advance usage_usec so usageCores is far above the
+		// HighUsageFraction*LogicalCpus threshold on any host. The
+		// no-host-stats saturation latch (no /proc/stat, no limit) fires on
+		// usageCores60sMean/LogicalCpus >= 0.70.
+		usageUsec = 10_000_000_000
+		time.Sleep(1 * time.Second)
+		status, err := svc.GetStatus(ctx)
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(status.CPU.State).To(Equal("degraded"),
+			"cgroup v1 host with unreadable cpu.max must still degrade on high usage (sampler succeeded, Decide must run)")
+	})
+})
+
+var _ = Describe("Decide gate: hold latches on sampler failure (C2)", func() {
+	It("holds a prior degraded verdict across a cpu.stat read failure (no flap to healthy)", func() {
+		// C2: a prior degraded verdict + a cpu.stat read failure on the next
+		// tick. Today the sampler returns Sample{} early (before setting
+		// LogicalCpus), getCgroupCPUInfo swallows the same cpu.stat failure
+		// returning (info, nil) with NrPeriods=0, cgroupErr==nil, so Decide
+		// runs on the zero sample: the saturation switch hits the default
+		// branch (LogicalCpus=0) clearing all sub-latches, the throttle ring
+		// regresses (NrPeriods=0 < newest) and wipes, and the verdict flaps
+		// to healthy. The fix gates Decide on sampler success and holds the
+		// prior verdict when the sampler fails.
+		mockFS := filesystem.NewMockFileSystem()
+		ctx := context.Background()
+
+		testDataPath, err := os.MkdirTemp("", "c2-cpu-stat-failure-hold")
+		Expect(err).NotTo(HaveOccurred())
+		defer func() { _ = os.RemoveAll(testDataPath) }()
+
+		var usageUsec int64
+		tick := 0
+
+		mockFS.WithReadFileFunc(func(_ context.Context, path string) ([]byte, error) {
+			switch path {
+			case "/sys/fs/cgroup/cpu.max":
+				return []byte("max 100000\n"), nil
+			case "/sys/fs/cgroup/cpu.stat":
+				if tick >= 2 {
+					return nil, errors.New("cpu.stat transient read error")
+				}
+
+				return []byte(fmt.Sprintf(
+					"usage_usec %d\nnr_periods 1000\nnr_throttled 0\nthrottled_usec 0\n",
+					usageUsec,
+				)), nil
+			default:
+				return nil, errors.New("file not found: " + path)
+			}
+		})
+
+		svc := container_monitor.NewContainerMonitorServiceWithPath(mockFS, testDataPath)
+
+		// Tick 0: baseline the sampler's usage_usec counter.
+		tick, usageUsec = 0, 0
+		_, err = svc.GetStatus(ctx)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Tick 1: advance usage_usec so noHostStatsSaturation fires
+		// (uncapped, no /proc/stat, high usage fraction). Verdict degrades.
+		tick, usageUsec = 1, 10_000_000_000
+		time.Sleep(1 * time.Second)
+		status1, err := svc.GetStatus(ctx)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(status1.CPU.State).To(Equal("degraded"),
+			"prior tick: noHostStatsSaturation must fire on high usage before the failure tick")
+
+		// Tick 2: cpu.stat read fails. Sampler fails. Before the fix Decide
+		// runs on the zero sample and flaps to healthy; after the fix Decide
+		// is skipped and the prior degraded verdict holds.
+		tick = 2
+		status2, err := svc.GetStatus(ctx)
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(status2.CPU.State).To(Equal("degraded"),
+			"prior degraded verdict must hold across a cpu.stat read failure (no flap to healthy)")
 	})
 })

@@ -71,6 +71,10 @@ type ContainerMonitorService struct {
 	architecture    models.ContainerArchitecture //nolint:unused // will be used in the future
 	dataPath        string                       // Path to check for disk metrics and HWID file
 	wasThrottled    bool                         // Previous throttle state for transition logging
+	lastVerdict     cpuhealth.Verdict
+	lastSignals     cpuhealth.Signals
+	lastVerdictBasis *models.VerdictBasis
+	hasLastVerdict  bool
 }
 
 // NewContainerMonitorService creates a new container monitor service instance.
@@ -231,7 +235,7 @@ func (c *ContainerMonitorService) GetHealth(ctx context.Context) (*models.Health
 // By default, this retrieves host-level usage unless gopsutil is configured
 // to read from container cgroup data. See notes below for cgroup-limited usage.
 func (c *ContainerMonitorService) getCPUMetrics(ctx context.Context) (*models.CPU, error) {
-	usageMCores, coreCount, _, sample, err := c.getRawCPUMetrics(ctx)
+	usageMCores, coreCount, _, sample, samplerOK, err := c.getRawCPUMetrics(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -254,50 +258,59 @@ func (c *ContainerMonitorService) getCPUMetrics(ctx context.Context) (*models.CP
 	// holds between). Decide mutates c.windowState in place, maintaining the
 	// 60s throttle-counter ring. The numeric ThrottleRatio is read
 	// unconditionally from signals (independent of latch state); IsThrottled
-	// comes from signals.ThrottleFired. Skip entirely on cgroup read failure to
-	// preserve wasThrottled state.
+	// comes from signals.ThrottleFired. Decide is gated on sampler success
+	// (not cgroupErr): a sampler failure means cpu.stat was unreadable, so
+	// the sample carries no usable reading (LogicalCpus=0, UsageCores=0,
+	// HostBusyCoresAvailable=false); running Decide on that zero sample would
+	// hit the saturation default branch and clear all sub-latches, flapping a
+	// prior degraded verdict to healthy for the failure tick. Instead, hold
+	// the last verdict + signals (the windowState latches also hold since
+	// Decide is their only mutator). When the sampler succeeded but cpu.max
+	// is unreadable (cgroup v1, transient v2 fs hiccup), synthesize a zero
+	// CPUCgroupInfo so the no-limit saturation latches still evaluate from
+	// the sampler's HostBusyCores/LogicalCpus/usageCores60sMean.
 	var (
 		isThrottled bool
-		// Default to healthy so a cgroup-read failure (cgroup v1, non-container,
-		// transient read error), which skips the Decide call below, still
-		// emits State="healthy" on the wire. State has no omitempty, so without
-		// this default the zero-value "" would be emitted, violating the
-		// always-emitted healthy|degraded contract.
+		// Default to healthy so a sampler failure on the first tick (no prior
+		// verdict to hold) still emits State="healthy" on the wire. State has
+		// no omitempty, so without this default the zero-value "" would be
+		// emitted, violating the always-emitted healthy|degraded contract.
 		verdict = cpuhealth.Verdict{State: cpuhealth.StateHealthy}
 		signals cpuhealth.Signals
 	)
 
-	if cgroupErr == nil && cgroupInfo != nil {
-		// Calling c.sampler.Sample here twice re-baselines usage_usec, zeroing
-		// the StealFraction/HostBusyCores deltas; reuse the Sample from
-		// getRawCPUMetrics (the only c.sampler.Sample call per GetStatus)
-		// instead. NrPeriods/NrThrottled are overlaid from cgroupInfo (the
-		// authoritative throttle counters the sampler does not parse). On a
-		// sampler failure getRawCPUMetrics returns a zero-valued Sample
-		// (dead-zone: Quota nil, PSI absent, not virtualized); Decide still
-		// evaluates the throttle ring from the overlaid NrPeriods/NrThrottled
-		// counters, and the no-host-stats saturation latch runs harmlessly
-		// (UsageCores=0 yields fraction=0). This invariant is test-pinned by the
-		// "sampler failure dead-zone" spec in sampler_full_sample_wire_test.go.
+	if samplerOK {
+		if cgroupInfo == nil {
+			cgroupInfo = &CPUCgroupInfo{}
+			if sample.Quota != nil {
+				cgroupInfo.QuotaCores = *sample.Quota
+			}
+		}
+
 		sample.Timestamp = time.Now()
 		sample.NrPeriods = cgroupInfo.NrPeriods
 		sample.NrThrottled = cgroupInfo.NrThrottled
 		verdict, signals = cpuhealth.Decide(c.windowState, sample, cpuhealth.DefaultThresholds())
 		isThrottled = signals.ThrottleFired
-		// ThrottleRatio is read unconditionally from signals, decoupling the
-		// numeric metric from latch state. Negatives are already clamped to 0
-		// inside Decide, so the wire never sees a negative ratio. IsThrottled
-		// still comes from signals.ThrottleFired (the Schmitt latch).
 		cgroupInfo.ThrottleRatio = signals.ThrottleRatio
 
-		if isThrottled && !c.wasThrottled {
-			c.logger.Warnf("CPU throttling detected: %.1f%% of periods throttled", cgroupInfo.ThrottleRatio*100)
-		}
-
-		c.wasThrottled = isThrottled
+		c.lastVerdict = verdict
+		c.lastSignals = signals
+		c.hasLastVerdict = true
 	} else {
-		c.logger.Debugf("cgroup CPU info unavailable, defaulting to healthy: %v", cgroupErr)
+		c.logger.Warnf("cgroup cpu usage unavailable, holding last verdict: %v", cgroupErr)
+
+		if c.hasLastVerdict {
+			verdict = c.lastVerdict
+			signals = c.lastSignals
+		}
 	}
+
+	if isThrottled && !c.wasThrottled {
+		c.logger.Warnf("CPU throttling detected: %.1f%% of periods throttled", signals.ThrottleRatio*100)
+	}
+
+	c.wasThrottled = isThrottled
 
 	// ComposeMessage returns the curated per-cause two-layer message (headline
 	// + "Technical Details:" + why + what-to-do from the supertable) when
@@ -319,7 +332,7 @@ func (c *ContainerMonitorService) getCPUMetrics(ctx context.Context) (*models.CP
 	// throttle. The curated per-cause message is composed above via
 	// ComposeMessage(verdict, signals); isThrottled feeds the wasThrottled
 	// transition log above.
-	if verdict.State == cpuhealth.StateDegraded && cgroupInfo != nil {
+	if verdict.State == cpuhealth.StateDegraded {
 		category = models.Degraded
 	}
 
@@ -373,14 +386,17 @@ func (c *ContainerMonitorService) getCPUMetrics(ctx context.Context) (*models.CP
 
 	// Emit the verdict basis: the decision variables the verdict acted on
 	// (headroom plus the three starvation causes), always when a verdict was
-	// computed (cgroupErr == nil, so Decide ran). It is the machine-readable
+	// computed (samplerOK, so Decide ran). It is the machine-readable
 	// counterpart to health.message: the same numbers, structured so the MC
 	// renders the headline, the host/container split, and the alert-rule
 	// budget dashboard from the verdict's own inputs rather than parsing the
 	// message text or mirroring per-tick samples. Nil only when no verdict
-	// exists (a cgroup read failure, where Decide is not called); the legacy
-	// display path covers that case.
-	if cgroupErr == nil {
+	// exists (a sampler failure on the first tick, where Decide is not
+	// called and no prior verdict is held); the legacy display path covers
+	// that case. On a sampler failure after a prior successful verdict, the
+	// held basis is re-emitted so the wire stays consistent with the held
+	// verdict state.
+	if samplerOK {
 		th := cpuhealth.DefaultThresholds()
 		// The headroom's Used and Ceiling follow the mode: limit set →
 		// ceiling="limit", used=the container's own 60s-avg usage; no limit →
@@ -392,29 +408,11 @@ func (c *ContainerMonitorService) getCPUMetrics(ctx context.Context) (*models.CP
 
 		used := signals.HostBusyCores60sMean
 		cores := signals.HeadroomCores
+
 		if signals.LimitApplies {
 			ceiling = "limit"
 			used = signals.AvgUsageCores
 		} else if signals.NoHostStatsSaturationFired {
-			// The no-host-stats saturation latch fires on the D-row
-			// fraction (usageCores60sMean/LogicalCpus >= HighUsageFraction),
-			// not on hostBusyMean (which ages to 0 during a sustained
-			// /proc/stat outage, so HeadroomCores reads as a large
-			// positive). Source Used from the container's own 60s-avg
-			// usage (the decision variable, NOT the aged-out 0) and Cores
-			// from the D-row headroom relative to its fire threshold
-			// (HighUsageFraction*Capacity - Used), which is non-positive
-			// exactly when the latch fired (0 at the threshold, negative
-			// above it). The fixed-ReserveCores formula
-			// (Capacity - Used - Reserve) stays positive on a multi-core
-			// host in the 70..87.5% band (e.g. 8 cores at 75%:
-			// 8 - 6 - 1 = +1) while Fired=true — the backwards condition
-			// this fixes; the D-row is fraction-based, not a fixed-reserve
-			// headroom. The MC's effectiveUsed bypasses headroom.used here
-			// (it uses avgMCpu = AvgUsageCores*1000) and never reads
-			// headroom.cores, so the display is unaffected. Q1/Q13 fixed
-			// the message + satValue; this fixes the third place (the wire
-			// basis block).
 			used = signals.AvgUsageCores
 			cores = th.HighUsageFraction*signals.CapacityCores - signals.AvgUsageCores
 		}
@@ -456,16 +454,19 @@ func (c *ContainerMonitorService) getCPUMetrics(ctx context.Context) (*models.CP
 			},
 			LimitedVisibility: signals.LimitedVisibility,
 		}
+		c.lastVerdictBasis = cpuStat.VerdictBasis
+	} else if c.hasLastVerdict {
+		cpuStat.VerdictBasis = c.lastVerdictBasis
 	}
 
 	return cpuStat, nil
 }
 
-func (c *ContainerMonitorService) getRawCPUMetrics(ctx context.Context) (usageMCores float64, coreCount int, usagePercent float64, sample cpuhealth.Sample, err error) {
+func (c *ContainerMonitorService) getRawCPUMetrics(ctx context.Context) (usageMCores float64, coreCount int, usagePercent float64, sample cpuhealth.Sample, samplerOK bool, err error) {
 	// Try to get cgroup info first for accurate container limits
 	cgroupInfo, cgroupErr := c.getCgroupCPUInfo(ctx)
 	if ctx.Err() != nil {
-		return 0, 0, 0, cpuhealth.Sample{}, ctx.Err()
+		return 0, 0, 0, cpuhealth.Sample{}, false, ctx.Err()
 	}
 
 	// Determine effective core count (keep as float64 to preserve fractional quotas)
@@ -489,16 +490,22 @@ func (c *ContainerMonitorService) getRawCPUMetrics(ctx context.Context) (usageMC
 	// StealFraction, Virtualized, HostBusyCores, LogicalCpus in addition to
 	// UsageCores) is threaded through to the Decide call site in
 	// getCPUMetrics so the delta-based signals survive. On read failure
-	// (cgroup v1, non-container, transient) the error is logged at debug and
-	// a zero-valued Sample is returned; a host fallback / surfaceable error
-	// is not implemented yet.
-	sample, err = c.sampler.Sample(ctx)
-	if err != nil {
-		c.logger.Debugf("cgroup cpu usage unavailable, reporting zero: %v", err)
+	// (cgroup v1, non-container, transient) the error is logged and a
+	// zero-valued Sample is returned with samplerOK=false so the caller can
+	// hold the prior verdict instead of running Decide on a zero sample.
+	sample, sErr := c.sampler.Sample(ctx)
+	if sErr != nil {
+		if ctx.Err() != nil {
+			return 0, 0, 0, cpuhealth.Sample{}, false, ctx.Err()
+		}
+
+		c.logger.Debugf("cgroup cpu usage unavailable, reporting zero: %v", sErr)
+	} else {
+		samplerOK = true
 	}
 
 	if ctx.Err() != nil {
-		return 0, 0, 0, cpuhealth.Sample{}, ctx.Err()
+		return 0, 0, 0, cpuhealth.Sample{}, false, ctx.Err()
 	}
 
 	usageCores := sample.UsageCores
@@ -506,7 +513,7 @@ func (c *ContainerMonitorService) getRawCPUMetrics(ctx context.Context) (usageMC
 
 	usagePercent = (usageCores / effectiveCores) * 100.0
 
-	return usageMCores, coreCount, usagePercent, sample, nil
+	return usageMCores, coreCount, usagePercent, sample, samplerOK, nil
 }
 
 // getMemoryMetrics collects memory metrics, preferring cgroup values when available.
