@@ -226,6 +226,14 @@ type Sample struct {
 	// usageCores60sMean/LogicalCpus >= HighUsageFraction; PsiAvailable is
 	// not in the no-host-stats saturation gate.
 	PsiAvailable bool
+	// PsiReadable is set ONLY on a clean cpu.pressure avg60 parse, DISTINCT
+	// from PsiAvailable which means "PSI is present on this host." A transient
+	// read failure (ReadFile error or parse failure) leaves PsiReadable=false
+	// even when PsiAvailable=true (PSI is known to exist on this host from
+	// prior ticks). Decide holds the pressure latch when PsiReadable is false
+	// instead of clearing on PressureAvg60=0, mirroring the hold-on-missing
+	// discipline on the hostBusy and throttle rings.
+	PsiReadable bool
 	// HostBusyCoresAvailable is the readability flag for /proc/stat's host-busy
 	// signal. It distinguishes "we read /proc/stat, the host was idle"
 	// (HostBusyCores == 0, true) from "we can't read /proc/stat at all"
@@ -676,11 +684,19 @@ func Decide(st *WindowState, sample Sample, thresholds Thresholds) (Verdict, Sig
 	}
 
 	signals.PressureAvg60Out = p
-	switch {
-	case p > thresholds.PressureHigh:
-		st.pressureFired = true
-	case p < thresholds.PressureRecover:
-		st.pressureFired = false
+	// Hold-on-missing: when PsiReadable is false (transient cpu.pressure read
+	// failure), do NOT evaluate the Schmitt latch. A missing reading yields
+	// PressureAvg60=0, which would fall below PressureRecover and clear a
+	// previously-fired latch, flapping the verdict to healthy for the failure
+	// tick. Skipping the evaluation holds the latch (mirrors the hostBusy and
+	// throttle ring hold-on-missing discipline).
+	if sample.PsiReadable {
+		switch {
+		case p > thresholds.PressureHigh:
+			st.pressureFired = true
+		case p < thresholds.PressureRecover:
+			st.pressureFired = false
+		}
 	}
 
 	signals.PressureFired = st.pressureFired

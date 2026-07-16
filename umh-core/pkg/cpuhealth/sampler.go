@@ -200,6 +200,7 @@ func (s *cgroupSampler) readPressure(ctx context.Context, sample *Sample) {
 
 			sample.PressureAvg60 = val / 100.0
 			sample.PsiAvailable = true
+			sample.PsiReadable = true
 
 			return
 		}
