@@ -71,17 +71,47 @@ var _ = Describe("Nmap Poll", func() {
 		Expect(status.LatencyMs).To(BeNumerically(">=", 0))
 	})
 
-	It("returns an error and a non-open status when the port is unreachable", func() {
-		// Port 0 is not connectable, so the dial fails deterministically with no
-		// listener to bind/free (avoids a port-reuse race between close and dial).
-		cfg := newNmapConfig("127.0.0.1", 0)
+	It("reports a closed port without an error when the connection is refused", func() {
+		// Bind a listener to grab a free loopback port, then close it so the
+		// kernel answers the dial with a TCP RST (connection refused). A refused
+		// connection is a legitimate scan outcome, not a poll failure, so Poll
+		// returns a nil error.
+		ln, err := net.Listen("tcp", "127.0.0.1:0")
+		Expect(err).NotTo(HaveOccurred())
+
+		host, port := hostPort(ln.Addr().String())
+		Expect(ln.Close()).To(Succeed())
+
+		cfg := newNmapConfig(host, port)
 
 		ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 		defer cancel()
 
 		status, err := fsmv2nmap.Poll(ctx, struct{}{}, cfg)
-		Expect(err).To(HaveOccurred())
-		Expect(status.PortState).NotTo(Equal("open"))
+		Expect(err).NotTo(HaveOccurred())
+		Expect(status.PortState).To(Equal("closed"))
+		Expect(status.IsRunning).To(BeFalse())
+	})
+
+	It("reports a closed port without an error when the deadline is already exceeded", func() {
+		// A deadline (the collector's ObservationTimeout) is not a shutdown: the
+		// dial fails with context.DeadlineExceeded, which must fall through to a
+		// closed port, not the cancelled-context error path. An expired deadline
+		// makes DialContext fail deterministically without a network round-trip.
+		ln, err := net.Listen("tcp", "127.0.0.1:0")
+		Expect(err).NotTo(HaveOccurred())
+
+		defer func() { _ = ln.Close() }()
+
+		host, port := hostPort(ln.Addr().String())
+		cfg := newNmapConfig(host, port)
+
+		ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(-time.Hour))
+		defer cancel()
+
+		status, err := fsmv2nmap.Poll(ctx, struct{}{}, cfg)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(status.PortState).To(Equal("closed"))
 		Expect(status.IsRunning).To(BeFalse())
 	})
 

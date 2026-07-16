@@ -51,11 +51,10 @@ import (
 //     Name: spec.NameOf(cfg)}. There is NO RefFor and NO NewInstance field; the
 //     manager constructs each AdaptedInstance via the internal newAdaptedInstance.
 //   - GetManagerName() returns spec.WorkerType (there is no ManagerName field).
-//   - The default IsEnabled (when nil) reads the config's desired state by
-//     duck-typing `interface{ GetState() string }`: GetState()=="stopped" =>
-//     disabled, otherwise enabled. mgrConfig below carries a GetState() so the
-//     default resolves.
-//   - The instance's desired state is derived from the config's GetState() (the
+//   - Every config must satisfy adapter.StateConfig (GetDesiredFSMState()). The
+//     default IsEnabled (when nil) reads it: GetDesiredFSMState()=="stopped" =>
+//     disabled, otherwise enabled. mgrConfig below implements it.
+//   - The instance's desired state is derived from GetDesiredFSMState() (the
 //     disabled shortcut in AdaptedInstance returns desiredState verbatim). A
 //     config with State "running" yields DesiredState "running".
 //   - RETRY FIX: on a CfgFor/Upsert failure in the config-CHANGE branch the
@@ -65,12 +64,12 @@ import (
 //     default CfgFor.
 //
 // TStatus reuses probeStatus / probeObserved / stubReader from instance_test.go
-// (same package). mgrConfig is local because the default IsEnabled needs a
-// GetState() accessor that testConfig (Target-only) lacks.
+// (same package). mgrConfig is local because it must satisfy adapter.StateConfig,
+// which testConfig (Target-only) does not.
 // -----------------------------------------------------------------------------
 
-// mgrConfig is a domain TConfig with a desired-state accessor so the default
-// IsEnabled (GetState()=="stopped" => disabled) resolves. Value forces a
+// mgrConfig is a domain TConfig satisfying adapter.StateConfig so the default
+// IsEnabled (GetDesiredFSMState()=="stopped" => disabled) resolves. Value forces a
 // ConfigEqual difference without touching name or state.
 type mgrConfig struct {
 	Name  string `json:"name"`
@@ -78,9 +77,9 @@ type mgrConfig struct {
 	Value string `json:"value"`
 }
 
-// GetState makes mgrConfig satisfy the duck-typed desired-state interface the
-// default IsEnabled reads.
-func (c mgrConfig) GetState() string { return c.State }
+// GetDesiredFSMState makes mgrConfig satisfy adapter.StateConfig, the constraint
+// every managed config must meet; the default IsEnabled and desiredStateOf read it.
+func (c mgrConfig) GetDesiredFSMState() string { return c.State }
 
 var _ = Describe("WorkerManager", func() {
 	const workerType = "adapter-mgr-probe" // unregistered => staleAfter 1s fallback
@@ -323,6 +322,24 @@ var _ = Describe("WorkerManager", func() {
 
 		_, ok = mgr.GetInstance("gamma")
 		Expect(ok).To(BeTrue()) // still visible in the map
+	})
+
+	It("a disabled instance reports its actual desired state, not a running fallback (nmap removal fix)", func() {
+		// The StateConfig constraint guarantees desiredStateOf reads the real
+		// desired state, so a stopped entry reports "stopped". Before the guard a
+		// config the adapter could not introspect fell back to "running": a
+		// stopped nmap was reported running and the connection FSM hung in
+		// stopping, never completing protocol-converter removal.
+		setupClient(&stubReader{})
+		mgr := NewWorkerManager(baseSpec())
+
+		desired = []mgrConfig{{Name: "beta", State: "stopped"}}
+		_, _ = mgr.Reconcile(ctx, publicfsm.SystemSnapshot{}, nil)
+
+		state, err := mgr.GetCurrentFSMState("beta")
+		Expect(err).ToNot(HaveOccurred())
+		Expect(state).To(Equal("stopped"),
+			"a disabled instance must report its actual desired state, not the running fallback")
 	})
 
 	It("GetManagerName returns WorkerType; CreateSnapshot exposes per-worker current/desired state", func() {

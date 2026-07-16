@@ -29,17 +29,18 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
 
-// stoppedState is the desired-state literal that marks a config as disabled and
-// serves as the default desired state's opposite: a config whose GetState()
-// returns this is not Upserted into the fsmv2 runtime.
+// stoppedState is the desired-state literal that disables a config: a config
+// whose desired state is this is not Upserted into the fsmv2 runtime.
 const stoppedState = "stopped"
 
-// stateAccessor is the duck-typed desired-state seam. A domain config that
-// carries a desired state satisfies it structurally, letting the manager derive
-// each instance's desired state and the default enabled/disabled decision
-// without importing the config package.
-type stateAccessor interface {
-	GetState() string
+// StateConfig is the compile-time desired-state seam every managed config must
+// satisfy. It replaces an optional duck-typed accessor whose absence silently
+// fell back to "running": a stopped worker was reported running and its fsmv1
+// FSM hung waiting for a stop that never came. Requiring the method makes that
+// case a compile error. config.FSMInstanceConfig satisfies it, so every config
+// embedding it (NmapConfig, BenthosConfig, …) qualifies for free.
+type StateConfig interface {
+	GetDesiredFSMState() string
 }
 
 // WorkerManagerSpec describes the domain-specific behaviour WorkerManager needs
@@ -48,9 +49,10 @@ type stateAccessor interface {
 // Upsert/Delete diffing; the developer supplies the required mapping functions
 // and may override the defaulted ones.
 //
-// TConfig is the domain config type flowing through the fsmv1 control loop.
+// TConfig is the domain config type flowing through the fsmv1 control loop; it
+// must satisfy StateConfig so the manager can always read its desired state.
 // TStatus is the worker's stored status type (e.g. simple.Status[Raw]).
-type WorkerManagerSpec[TConfig, TStatus any] struct {
+type WorkerManagerSpec[TConfig StateConfig, TStatus any] struct {
 	// ExtractConfigs pulls the relevant config slice from a SystemSnapshot.
 	// Required.
 	ExtractConfigs func(snapshot publicfsm.SystemSnapshot) []TConfig
@@ -78,8 +80,8 @@ type WorkerManagerSpec[TConfig, TStatus any] struct {
 	// IsEnabled reports whether a config entry should run in the fsmv2 runtime.
 	// Disabled entries stay in the fsmv1 instance map (so their state is
 	// visible) but are not Upserted; existing registrations are Deleted.
-	// Optional; defaults to duck-typing the config's desired state
-	// (GetState()=="stopped" => disabled, otherwise enabled).
+	// Optional; defaults to GetDesiredFSMState()=="stopped" => disabled,
+	// otherwise enabled.
 	IsEnabled func(cfg TConfig) bool
 
 	// Log is the FSMLogger; optional, defaults to a no-op logger.
@@ -95,7 +97,7 @@ type WorkerManagerSpec[TConfig, TStatus any] struct {
 // WorkerManager is a generic fsmv1-compatible manager that drives a fleet of
 // fsmv2 child workers via the global FSMv2Client (Upsert/Delete) and exposes
 // each child as an AdaptedInstance. It satisfies publicfsm.FSMManager[TConfig].
-type WorkerManager[TConfig, TStatus any] struct {
+type WorkerManager[TConfig StateConfig, TStatus any] struct {
 	instances     map[string]publicfsm.FSMInstance
 	domainConfigs map[string]TConfig
 	spec          WorkerManagerSpec[TConfig, TStatus]
@@ -108,11 +110,10 @@ type WorkerManager[TConfig, TStatus any] struct {
 
 // NewWorkerManager builds a WorkerManager, filling every optional spec field
 // with its default: ConfigEqual=reflect.DeepEqual, CfgFor=JSON round-trip,
-// IsEnabled=desired-state duck-typing (GetState()=="stopped" => disabled), and
-// Log=a no-op logger. It panics when a required field is missing, so a
-// misconfigured spec fails at construction instead of a nil-call panic inside
-// Reconcile.
-func NewWorkerManager[TConfig, TStatus any](spec WorkerManagerSpec[TConfig, TStatus]) *WorkerManager[TConfig, TStatus] {
+// IsEnabled=GetDesiredFSMState()=="stopped" => disabled, and Log=a no-op
+// logger. It panics when a required field is missing, so a misconfigured spec
+// fails at construction instead of a nil-call panic inside Reconcile.
+func NewWorkerManager[TConfig StateConfig, TStatus any](spec WorkerManagerSpec[TConfig, TStatus]) *WorkerManager[TConfig, TStatus] {
 	if spec.WorkerType == "" {
 		panic("adapter: WorkerManagerSpec.WorkerType is required")
 	}
@@ -160,25 +161,17 @@ func defaultCfgFor[TConfig any](cfg TConfig) (map[string]any, error) {
 	return out, nil
 }
 
-// defaultIsEnabled duck-types the config's desired state: a config whose
-// GetState() returns "stopped" is disabled, otherwise it is enabled. A config
-// without a GetState() accessor is always enabled.
-func defaultIsEnabled[TConfig any](cfg TConfig) bool {
-	if sa, ok := any(cfg).(stateAccessor); ok {
-		return sa.GetState() != stoppedState
-	}
-
-	return true
+// defaultIsEnabled reads the config's desired state: a config whose
+// GetDesiredFSMState() returns "stopped" is disabled, otherwise it is enabled.
+func defaultIsEnabled[TConfig StateConfig](cfg TConfig) bool {
+	return cfg.GetDesiredFSMState() != stoppedState
 }
 
-// desiredStateOf derives the instance desired state from the config's GetState()
-// accessor, falling back to runningState when the config has no accessor or
-// returns an empty string.
-func desiredStateOf[TConfig any](cfg TConfig) string {
-	if sa, ok := any(cfg).(stateAccessor); ok {
-		if s := sa.GetState(); s != "" {
-			return s
-		}
+// desiredStateOf returns the config's desired state, falling back to
+// defaultDesiredState ("running") only when the config leaves it empty.
+func desiredStateOf[TConfig StateConfig](cfg TConfig) string {
+	if s := cfg.GetDesiredFSMState(); s != "" {
+		return s
 	}
 
 	return defaultDesiredState
