@@ -21,9 +21,12 @@ type StatusMessage struct {
 }
 
 type Core struct {
-	Agent         Agent          `json:"agent"`
-	Health        *Health        `json:"health"`
-	FeatureUsage  *FeatureUsage  `json:"featureUsage,omitempty"`
+	Agent        Agent         `json:"agent"`
+	Health       *Health       `json:"health"`
+	FeatureUsage *FeatureUsage `json:"featureUsage,omitempty"`
+	// Historian reports the reachability of the configured historian endpoint.
+	// Nil when no historian is configured or no observation exists yet.
+	Historian     *Historian     `json:"historian,omitempty"`
 	Container     Container      `json:"container"`
 	TopicBrowser  TopicBrowser   `json:"topicBrowser"`
 	Release       Release        `json:"release"`
@@ -31,9 +34,6 @@ type Core struct {
 	Redpanda      Redpanda       `json:"redpanda"`
 	DataModels    []DataModel    `json:"dataModels"`
 	DataContracts []DataContract `json:"dataContracts"`
-	// Historian reports the reachability of the configured historian endpoint.
-	// Nil when no historian is configured or no observation exists yet.
-	Historian *Historian `json:"historian,omitempty"`
 }
 
 // Historian is the status of the historian endpoint monitor.
@@ -45,8 +45,8 @@ type Historian struct {
 type Timescale struct {
 	Health    *Health `json:"health"`
 	Host      string  `json:"host"`
-	Port      uint16  `json:"port"`
 	Latency   float64 `json:"latency"`
+	Port      uint16  `json:"port"`
 	Reachable bool    `json:"reachable"`
 	AuthValid bool    `json:"authValid"`
 }

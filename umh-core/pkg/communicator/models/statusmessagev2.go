@@ -36,8 +36,11 @@ type StatusMessage struct {
 }
 
 type Core struct {
-	EventsTable    EventTable `json:"eventsTable,omitempty"`
-	UnsTable       UnsTable   `json:"unsTable,omitempty"`
+	EventsTable EventTable `json:"eventsTable,omitempty"`
+	UnsTable    UnsTable   `json:"unsTable,omitempty"`
+	// Historian reports the reachability of the configured historian endpoint.
+	// Absent when no historian is configured or no observation exists yet.
+	Historian      *Historian `json:"historian,omitempty"`
 	Agent          Agent      `json:"agent"`
 	ReleaseChannel string     `json:"releaseChannel"`
 	Version        string     `json:"version"`
@@ -49,9 +52,6 @@ type Core struct {
 	Container         Container `json:"container"`
 	Redpanda          Redpanda  `json:"redpanda"`
 	Latency           Latency   `json:"latency"`
-	// Historian reports the reachability of the configured historian endpoint.
-	// Absent when no historian is configured or no observation exists yet.
-	Historian *Historian `json:"historian,omitempty"`
 }
 
 // Historian is the status of the historian endpoint monitor.
@@ -63,8 +63,8 @@ type Historian struct {
 type Timescale struct {
 	Health    Health  `json:"health"`
 	Host      string  `json:"host"`
-	Port      uint16  `json:"port"`
 	Latency   float64 `json:"latency"`
+	Port      uint16  `json:"port"`
 	Reachable bool    `json:"reachable"`
 	AuthValid bool    `json:"authValid"`
 }
