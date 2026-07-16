@@ -12,14 +12,18 @@
 
 ## Recommended Starting Point
 
-**Start with → 2 vCPU · 4 GB RAM · 40 GB SSD**
+**Start with → 4 vCPU · 4 GB RAM · 40 GB SSD**
 
 #### What that box handles
 
 * **≈ 4 bridges instances** (e.g. OPC UA ➜ Redpanda) **plus one bridge instance** that forwards from the local Redpanda to an external MQTT broker
 * **≈ 900 tags at 1 message / second each**
 * Keeps **seven days** of history under the default cluster retention (`log_retention_ms = 7 days`)
-* Runs comfortably below 70% CPU (automatic throttling protection kicks in above this)
+* Runs comfortably with CPU headroom (the CPU health monitor blocks new bridges only when the instance is actually being starved — throttling, pressure, or no spare core — not on raw usage)
+
+#### Minimum
+
+4 vCPU is the minimum. Below 4 cores the 1-core CPU headroom reserve (for system overhead and Redpanda) leaves too little room for UMH work, and the box can read degraded near idle.
 
 #### Disk usage in practice
 
@@ -43,13 +47,13 @@ Shorten retention (either during install with `internal.redpanda.redpandaService
 
 **Theoretical Bridge Limits:**
 - We recommend **5 bridges per CPU core** (after reserving 1 core for Redpanda)
-- Example: 2 CPU cores = (2-1) × 5 = **5 bridges maximum**
 - Example: 4 CPU cores = (4-1) × 5 = **15 bridges maximum**
+- Example: 8 CPU cores = (8-1) × 5 = **35 bridges maximum**
 
 **Dynamic Resource Protection:**
 Since every bridge has different resource requirements (OPC UA with 10,000 tags uses more CPU than MQTT with 100 tags), we also monitor actual resource usage:
 
-- **CPU Utilization**: Blocks new bridges if CPU usage exceeds 70%
+- **CPU Health**: Blocks new bridges when the instance is CPU-degraded (throttling, pressure, steal, or host-contention detected). High usage alone does not block — a busy container is not sick.
 - **CPU Throttling**: Blocks if the container is being throttled. Throttling means the system needs brief CPU bursts (e.g., when processing message batches) but hits the CPU limit, causing delays and degraded performance even if average CPU usage looks acceptable
 - **Memory Usage**: Blocks if memory exceeds 80%
 - **Disk Usage**: Blocks if disk exceeds 85%
@@ -60,7 +64,7 @@ UMH Core runs Redpanda with the `--overprovisioned` flag, which optimizes CPU us
 **Automatic Enforcement:**
 The system will prevent you from deploying new bridges if:
 1. You've reached the theoretical limit for your CPU allocation, OR
-2. The system detects resource degradation (high CPU, throttling, memory, or disk pressure)
+2. The system detects resource degradation (CPU starvation, throttling, memory, or disk pressure)
 
 This resource-based blocking is controlled by a feature flag and can be configured in your `config.yaml`:
 ```yaml
@@ -77,9 +81,9 @@ When enabled, this ensures system stability and prevents one bridge from impacti
 
 When the system blocks bridge creation, you'll see clear messages explaining why:
 
-- **Bridge limit**: `Cannot create bridge - limit exceeded (5 bridges maximum with 2.0 CPU cores, 1 core reserved for Redpanda)`
-- **CPU throttling**: `CPU throttled (15% of time). Container limited to 2.0 cores, needs more during peaks (host has 8 cores available)`
-- **High CPU**: `CPU degraded: CPU utilization critical`
+- **Bridge limit**: `Cannot create bridge - limit exceeded (15 bridges maximum with 4.0 CPU cores, 1 core reserved for Redpanda)`
+- **CPU throttling**: `CPU throttled (15% of time). Container limited to 4.0 cores, needs more during peaks (host has 8 cores available)`
+- **CPU degraded**: `Can't add another bridge: this instance is already hitting its CPU limit. Raise the limit or reduce load first.` (the message names the specific cause)
 - **High Memory**: `Memory degraded: Memory usage at 85%`
 - **High Disk**: `Disk degraded: Disk usage at 90%`
 

@@ -29,8 +29,7 @@ const ContainerUpdateObservedStateTimeout = 10 * time.Millisecond
 
 // Health assessment thresholds.
 const (
-	CPUHighThresholdPercent   = 70.0 // Degraded if above this - lowered from 90% to prevent throttling
-	CPUMediumThresholdPercent = 60.0 // Warning level (but still Active)
+	CPUHighThresholdPercent = 70.0 // Degraded if above this - lowered from 90% to prevent throttling
 
 	MemoryHighThresholdPercent   = 80.0 // Degraded if above this - lowered from 90% for earlier detection
 	MemoryMediumThresholdPercent = 70.0 // Warning level (but still Active)
@@ -45,13 +44,12 @@ const (
 	// This limit ensures stable performance and prevents resource exhaustion.
 	// See docs/production/sizing-guide.md for more details on resource planning.
 	MaxBridgesPerCPUCore = 5
-
-	// CPUThrottleRatioThreshold defines when CPU throttling is considered significant.
-	// If more than 5% of periods are throttled, the CPU is considered throttled.
-	CPUThrottleRatioThreshold = 0.05
-
-	// CPUThrottleWindow defines the sliding window duration for throttle ratio calculation.
-	// 60 seconds aligns with Prometheus/K8s rate windows for counter-derived metrics
-	// and avoids rapid Degraded/Active flips during bursty throttle events.
-	CPUThrottleWindow = 60 * time.Second
 )
+
+// CPU throttle thresholds and the 60s sliding window now live in pkg/cpuhealth
+// (DefaultThresholds' ThrottleHigh 0.05 / ThrottleRecover 0.03, and the
+// unexported cpuhealth.throttleWindow). The former CPUThrottleRatioThreshold /
+// CPUThrottleWindow constants here were removed because their only consumer
+// (container_monitor.updateThrottleWindow) was deleted; keeping them would
+// duplicate the magic numbers with no link, letting a developer tune one while
+// the other silently stayed put.

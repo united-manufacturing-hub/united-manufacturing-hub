@@ -23,6 +23,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cpuhealth"
 	pkgfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/container"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
@@ -258,9 +259,13 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 										MemoryHealth:  models.Active,
 										DiskHealth:    models.Active,
 										CPU: &models.CPU{
-											IsThrottled:   true,
-											ThrottleRatio: 0.15, // 15% throttled
-											CgroupCores:   2.0,  // Limited to 2 cores
+											CgroupCores: 2.0, // Limited to 2 cores
+											VerdictBasis: &models.VerdictBasis{
+												Throttle: models.VerdictBasisCause{
+													Value: 0.15, // 15% throttled
+													Fired: true,
+												},
+											},
 										},
 									},
 								},
@@ -458,6 +463,164 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 				Expect(reason).To(Equal("System in degraded state"))
 			})
 
+			It("should return the curated per-cause block reason when a degraded FSM has a CPU with a dominant cause", func() {
+				// Pin the literal wire-level message for each kind so drift
+				// between cpuhealth.BlockReason and its copy is caught here
+				// rather than re-asserting the same function the unit calls.
+				// Host-contention is folded in v4 (never emitted) and its BlockReason
+				// case was deleted, so it is not pinned here.
+				expectedReasons := map[cpuhealth.CauseKind]string{
+					cpuhealth.CauseKindThrottling: "Can't add another bridge: this instance is already hitting its CPU limit. Raise the limit or reduce load first.",
+					cpuhealth.CauseKindPressure:   "Can't add another bridge: tasks on this instance are already waiting for a free CPU core. Reduce load, or give this instance more CPU, first.",
+					cpuhealth.CauseKindSteal:      "Can't add another bridge: the server isn't giving this instance enough CPU (other VMs are using it). Free up CPU on the server first.",
+					// This fixture has no VerdictBasis, so the signals are
+					// zero-valued and BlockReason hits the saturation default
+					// (the generic remediation, dropping the pre-existing
+					// first-person "we"). The sub-latch dispatch is pinned
+					// directly in pkg/cpuhealth/message_test.go.
+					cpuhealth.CauseKindSaturation: "Can't add another bridge: CPU is running near full. Add CPU capacity, or set a CPU limit, first.",
+				}
+
+				for kind, expected := range expectedReasons {
+					snapshot.Managers[constants.ContainerManagerName] = &MockManagerSnapshot{
+						Instances: map[string]*pkgfsm.FSMInstanceSnapshot{
+							constants.CoreInstanceName: {
+								ID:           constants.CoreInstanceName,
+								CurrentState: "degraded",
+								DesiredState: "active",
+								LastObservedState: &container.ContainerObservedStateSnapshot{
+									ServiceInfoSnapshot: container_monitor.ServiceInfo{
+										OverallHealth: models.Degraded,
+										CPUHealth:     models.Degraded,
+										MemoryHealth:  models.Active,
+										DiskHealth:    models.Active,
+										CPU: &models.CPU{
+											State: "degraded",
+											Causes: []models.Cause{
+												{Kind: models.CauseKind(kind), Value: 0.5},
+											},
+										},
+									},
+								},
+							},
+						},
+					}
+
+					limited, reason := service.IsResourceLimited(snapshot)
+
+					Expect(limited).To(BeTrue(), "kind %s should block", kind)
+					Expect(reason).To(Equal(expected), "kind %s should map to its curated block reason", kind)
+				}
+			})
+
+			It("should fall back to the generic degraded reason when memory or disk is also degraded, even if a CPU cause is present", func() {
+				// Coincident degradation: when the FSM is degraded due to memory
+				// or disk (not solely CPU), the CPU-specific block reason would
+				// mislead the operator into raising the CPU limit, which would
+				// not unblock bridge creation. The generic reason must be used.
+				snapshot.Managers[constants.ContainerManagerName] = &MockManagerSnapshot{
+					Instances: map[string]*pkgfsm.FSMInstanceSnapshot{
+						constants.CoreInstanceName: {
+							ID:           constants.CoreInstanceName,
+							CurrentState: "degraded",
+							DesiredState: "active",
+							LastObservedState: &container.ContainerObservedStateSnapshot{
+								ServiceInfoSnapshot: container_monitor.ServiceInfo{
+									OverallHealth: models.Degraded,
+									CPUHealth:     models.Degraded,
+									MemoryHealth:  models.Degraded,
+									DiskHealth:    models.Active,
+									CPU: &models.CPU{
+										State: "degraded",
+										Causes: []models.Cause{
+											{Kind: models.CauseKind(cpuhealth.CauseKindThrottling), Value: 0.5},
+										},
+									},
+								},
+							},
+						},
+					},
+				}
+
+				limited, reason := service.IsResourceLimited(snapshot)
+
+				Expect(limited).To(BeTrue())
+				Expect(reason).To(Equal("System in degraded state"))
+			})
+
+			It("should fall back to the generic degraded reason when CPU is nil", func() {
+				snapshot.Managers[constants.ContainerManagerName] = &MockManagerSnapshot{
+					Instances: map[string]*pkgfsm.FSMInstanceSnapshot{
+						constants.CoreInstanceName: {
+							ID:           constants.CoreInstanceName,
+							CurrentState: "degraded",
+							DesiredState: "active",
+							LastObservedState: &container.ContainerObservedStateSnapshot{
+								ServiceInfoSnapshot: container_monitor.ServiceInfo{
+									OverallHealth: models.Degraded,
+									CPUHealth:     models.Degraded,
+									MemoryHealth:  models.Active,
+									DiskHealth:    models.Active,
+									CPU:           nil,
+								},
+							},
+						},
+					},
+				}
+
+				limited, reason := service.IsResourceLimited(snapshot)
+
+				Expect(limited).To(BeTrue())
+				Expect(reason).To(Equal("System in degraded state"))
+			})
+
+			It("should fall back to the generic degraded reason when CPU causes are empty", func() {
+				snapshot.Managers[constants.ContainerManagerName] = &MockManagerSnapshot{
+					Instances: map[string]*pkgfsm.FSMInstanceSnapshot{
+						constants.CoreInstanceName: {
+							ID:           constants.CoreInstanceName,
+							CurrentState: "degraded",
+							DesiredState: "active",
+							LastObservedState: &container.ContainerObservedStateSnapshot{
+								ServiceInfoSnapshot: container_monitor.ServiceInfo{
+									OverallHealth: models.Degraded,
+									CPUHealth:     models.Degraded,
+									MemoryHealth:  models.Active,
+									DiskHealth:    models.Active,
+									CPU: &models.CPU{
+										State:  "degraded",
+										Causes: []models.Cause{},
+									},
+								},
+							},
+						},
+					},
+				}
+
+				limited, reason := service.IsResourceLimited(snapshot)
+
+				Expect(limited).To(BeTrue())
+				Expect(reason).To(Equal("System in degraded state"))
+			})
+
+			It("should fall back to the generic degraded reason when LastObservedState is the wrong concrete type", func() {
+				snapshot.Managers[constants.ContainerManagerName] = &MockManagerSnapshot{
+					Instances: map[string]*pkgfsm.FSMInstanceSnapshot{
+						constants.CoreInstanceName: {
+							ID:                constants.CoreInstanceName,
+							CurrentState:      "degraded",
+							DesiredState:      "active",
+							LastObservedState: &wrongTypeObservedState{},
+						},
+					},
+				}
+
+				limited, reason := service.IsResourceLimited(snapshot)
+
+				Expect(limited).To(BeTrue())
+				Expect(reason).To(Equal("System in degraded state"))
+			})
+
 			It("should block when container manager not present", func() {
 				// No container manager at all
 				limited, reason := service.IsResourceLimited(snapshot)
@@ -498,9 +661,13 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 									MemoryHealth:  models.Active,
 									DiskHealth:    models.Active,
 									CPU: &models.CPU{
-										IsThrottled:   true, // CPU is throttled
-										ThrottleRatio: 0.20,
-										CgroupCores:   2.0,
+										CgroupCores: 2.0,
+										VerdictBasis: &models.VerdictBasis{
+											Throttle: models.VerdictBasisCause{
+												Value: 0.20,
+												Fired: true,
+											},
+										},
 									},
 								},
 							},
@@ -535,8 +702,12 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 									MemoryHealth:  models.Active,
 									DiskHealth:    models.Active,
 									CPU: &models.CPU{
-										IsThrottled:   false,
-										ThrottleRatio: 0.0,
+										VerdictBasis: &models.VerdictBasis{
+											Throttle: models.VerdictBasisCause{
+												Value: 0.0,
+												Fired: false,
+											},
+										},
 									},
 								},
 							},
@@ -741,3 +912,10 @@ func (m *MockManagerSnapshot) GetSnapshotTime() time.Time {
 func (m *MockManagerSnapshot) GetManagerTick() uint64 {
 	return m.Tick
 }
+
+// wrongTypeObservedState implements pkgfsm.ObservedStateSnapshot but is not a
+// *container.ContainerObservedStateSnapshot, used to pin the type-assertion
+// fall-through in the degraded-FSM branch of IsResourceLimited.
+type wrongTypeObservedState struct{}
+
+func (wrongTypeObservedState) IsObservedStateSnapshot() {}

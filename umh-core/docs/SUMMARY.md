@@ -37,6 +37,7 @@
       * [Advanced](production/deployment/docker-compose/advanced/README.md)
         * [Nginx](production/deployment/docker-compose/advanced/nginx.md)
   * [Sizing Guide](production/sizing-guide.md)
+  * [CPU Health](production/cpu-health.md)
   * [High Availability](production/high-availability.md)
   * [Corporate Firewalls](production/corporate-firewalls.md)
   * [Metrics](production/metrics.md)

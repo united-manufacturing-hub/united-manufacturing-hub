@@ -16,9 +16,13 @@ package container_monitor_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -201,6 +205,154 @@ var _ = Describe("Container Monitor Service", func() {
 				Expect(err).ToNot(HaveOccurred())
 				Expect(container).ToNot(BeNil())
 				Expect(container.Hwid).To(Equal(""))
+			})
+		})
+
+		// Regression pin for the raw-usage degrade override that was
+		// removed from GetStatus. A high-usage NON-throttled container
+		// must report CPUHealth/OverallHealth == Active, matching
+		// cpuStat.Health (the "busy is not sick" thesis). Before the
+		// fix, the ELSE branch in GetStatus set CPUHealth = Degraded
+		// purely from cpuPercent > 70, contradicting the Active
+		// cpuStat.Health and causing downstream bridge-blocking under
+		// normal high load.
+		Context("when cgroup CPU usage is high but not throttled", func() {
+			It("reports Active CPUHealth and OverallHealth, consistent with CPU.Health", func() {
+				mockFS = filesystem.NewMockFileSystem()
+				ctx = context.Background()
+
+				testDataPath, err := os.MkdirTemp("", "rung2-cpu-high-usage")
+				Expect(err).NotTo(HaveOccurred())
+				defer func() { _ = os.RemoveAll(testDataPath) }()
+
+				// cpu.max: "200000 100000" => quota 200000 / period 100000
+				// = 2.0 cores. With ~1.6 cores of sustained usage this
+				// yields cpuPercent ≈ 80%, comfortably above the 70%
+				// CPUHighThresholdPercent that the removed override used.
+				const cpuMax = "200000 100000\n"
+
+				// cpuStatUsec is advanced between GetStatus calls so the
+				// cgroup Sampler measures a known usage_usec delta over
+				// wall-clock. nr_throttled stays at 0 across both
+				// snapshots so the throttle ratio is 0 (well below the
+				// 0.05 threshold) — i.e. NOT throttled.
+				cpuStatUsec := int64(0)
+				nrPeriods := int64(100)
+
+				mockFS.WithReadFileFunc(func(_ context.Context, path string) ([]byte, error) {
+					switch path {
+					case "/sys/fs/cgroup/cpu.max":
+						return []byte(cpuMax), nil
+					case "/sys/fs/cgroup/cpu.stat":
+						return []byte(fmt.Sprintf(
+							"usage_usec %d\nnr_periods %d\nnr_throttled 0\nthrottled_usec 0\n",
+							cpuStatUsec, nrPeriods,
+						)), nil
+					default:
+						return nil, errors.New("file not found: " + path)
+					}
+				})
+
+				service = container_monitor.NewContainerMonitorServiceWithPath(mockFS, testDataPath)
+
+				// First GetStatus: establishes the Sampler's baseline
+				// usage_usec and the throttle window's first snapshot.
+				_, err = service.GetStatus(ctx)
+				Expect(err).NotTo(HaveOccurred())
+
+				// Advance usage_usec by 1_600_000 (1.6 core-seconds) and
+				// the period counter, then let ~1 second of wall-clock
+				// elapse so the Sampler reports ~1.6 cores of usage.
+				// cpuPercent = (1600 mCPU / 1000) / 2.0 * 100 = 80%.
+				cpuStatUsec = 1_600_000
+				nrPeriods = 200
+				time.Sleep(1 * time.Second)
+
+				status, err := service.GetStatus(ctx)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(status).NotTo(BeNil())
+				Expect(status.CPU).NotTo(BeNil())
+
+				// Sanity: the cgroup scenario actually produced high
+				// usage (cpuPercent > 70). Without this guard the
+				// regression pin below could pass vacuously.
+				effectiveCores := status.CPU.CgroupCores
+				if effectiveCores <= 0 {
+					effectiveCores = float64(status.CPU.CoreCount)
+				}
+				cpuPercent := (status.CPU.TotalUsageMCpu / 1000.0) / effectiveCores * 100.0
+				Expect(cpuPercent).To(BeNumerically(">", constants.CPUHighThresholdPercent),
+					"test setup must produce high usage; got cpuPercent=%.1f", cpuPercent)
+
+				// Regression pin: high-usage non-throttled container
+				// must NOT be Degraded.
+				Expect(status.CPUHealth).To(Equal(models.Active),
+					"CPUHealth must be Active for high-usage non-throttled container (busy is not sick)")
+				Expect(status.OverallHealth).To(Equal(models.Active),
+					"OverallHealth must be Active for high-usage non-throttled container")
+				Expect(status.CPU.Health).NotTo(BeNil())
+				Expect(status.CPU.Health.Category).To(Equal(models.Active),
+					"CPU.Health.Category must be Active when not throttled")
+
+				// The two verdicts must agree: while CPUHealth is Active
+				// the health message must read as a healthy verdict, not a
+				// degraded one. This is the contradiction that produced the
+				// downstream "CPU degraded: CPU utilization normal"
+				// false-block. The v4 healthy budget message names the
+				// degraded THRESHOLD ("before it is marked degraded",
+				// "degraded below 0"), so pin the healthy headline prefix
+				// and guard against a "CPU degraded" verdict rather than the
+				// bare word "degraded".
+				Expect(status.CPU.Health.Message).To(HavePrefix("CPU healthy"),
+					"CPU.Health.Message must render the healthy headline when CPUHealth is Active")
+				Expect(strings.ToLower(status.CPU.Health.Message)).NotTo(ContainSubstring("cpu degraded"),
+					"CPU.Health.Message must not read as a degraded verdict when CPUHealth is Active")
+			})
+		})
+
+		Context("when the cgroup is unreadable", func() {
+			BeforeEach(func() {
+				mockFS.WithFileExistsFunc(func(_ context.Context, path string) (bool, error) {
+					if path == filepath.Join(testDataPath, "hwid") {
+						return true, nil
+					}
+
+					return false, nil
+				})
+				mockFS.WithReadFileFunc(func(_ context.Context, path string) ([]byte, error) {
+					if path == filepath.Join(testDataPath, "hwid") {
+						return []byte(defaultHWID), nil
+					}
+					// Every cgroup/proc read fails — the cgroup-v1 /
+					// non-container / transient-read-failure path.
+					return nil, errors.New("file not found: " + path)
+				})
+			})
+
+			It("emits State=healthy on the wire (no empty-string contract violation)", func() {
+				status, err := service.GetStatus(ctx)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(status.CPU.State).To(Equal("healthy"),
+					"a cgroup-read failure must default State to healthy, not the empty string")
+				Expect(status.CPU.Attribution).To(BeEmpty(),
+					"Attribution is omitempty and must be absent when not degraded")
+				Expect(status.CPU.Causes).To(BeEmpty(),
+					"Causes is omitempty and must be absent when not degraded")
+				// Guard against a vacuous pass: the cgroup-read failure path
+				// must actually have been taken, so CgroupCores (populated only
+				// when cgroupErr == nil) stays zero on the wire.
+				Expect(status.CPU.CgroupCores).To(BeZero(),
+					"CgroupCores must be absent when the cgroup read failed")
+
+				// Wire contract: "state" present, "attribution"/"causes" absent.
+				wireJSON, err := json.Marshal(status.CPU)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(wireJSON).To(ContainSubstring(`"state":"healthy"`),
+					"the JSON wire must always carry state (no omitempty)")
+				Expect(wireJSON).NotTo(ContainSubstring(`"attribution"`),
+					"attribution is omitempty and must be absent when healthy")
+				Expect(wireJSON).NotTo(ContainSubstring(`"causes"`),
+					"causes is omitempty and must be absent when healthy")
 			})
 		})
 	})

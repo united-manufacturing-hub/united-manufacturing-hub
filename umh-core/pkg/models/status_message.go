@@ -120,14 +120,99 @@ type Container struct {
 	Architecture ContainerArchitecture `json:"architecture"` // Processor architecture
 }
 
+// CauseKind enumerates the reason classes that can degrade CPU health.
+type CauseKind string
+
+// Cause is a single degradation reason with an associated numeric value.
+type Cause struct {
+	Kind  CauseKind `json:"kind"`
+	Value float64   `json:"value"`
+}
+
 type CPU struct {
-	Health         *Health `json:"health"`
-	TotalUsageMCpu float64 `json:"totalUsageMCpu"` // Total usage in milli-cores (1000m = 1 core)
-	CoreCount      int     `json:"coreCount"`      // Number of CPU cores
+	Health *Health `json:"health"`
+	// AvgMCpu/P95MCpu/P99MCpu are the avg/p95/p99 of the usage ring in
+	// milli-cores (signals.*UsageCores * 1000). They are *float64 so
+	// omitempty emits a real 0 (non-nil pointer) when the metric is fetchable
+	// (the ring holds >= 2 entries) and omits it when un-fetchable (nil pointer:
+	// the first tick of any mode before the ring has 2 entries; since R10.1
+	// the ring fills every tick in ALL modes, so the fields are non-nil
+	// outside the dead-zone once the window holds >= 2 entries).
+	// Observability-only. They do not change the verdict.
+	AvgMCpu *float64 `json:"avgMCpu,omitempty"`
+	P95MCpu *float64 `json:"p95MCpu,omitempty"`
+	P99MCpu *float64 `json:"p99MCpu,omitempty"`
+	// State is always emitted (no omitempty), even when healthy. Attribution
+	// and Causes are set only when State == "degraded".
+	State          string  `json:"state"`                 // "healthy" | "degraded"
+	Attribution    string  `json:"attribution,omitempty"` // "host" | "unknown" (set only when degraded)
+	Causes         []Cause `json:"causes,omitempty"`      // each {kind, value} (set only when degraded)
+	TotalUsageMCpu float64 `json:"totalUsageMCpu"`        // Total usage in milli-cores (1000m = 1 core)
+	CoreCount      int     `json:"coreCount"`             // Number of CPU cores
 	// Cgroup-specific fields for container resource limits
-	CgroupCores   float64 `json:"cgroupCores,omitempty"`   // CPU quota from cgroup (e.g., 2.0 = 2 cores)
-	ThrottleRatio float64 `json:"throttleRatio,omitempty"` // Ratio of throttled periods (0.0-1.0)
-	IsThrottled   bool    `json:"isThrottled,omitempty"`   // True if recently throttled
+	CgroupCores  float64       `json:"cgroupCores,omitempty"`  // CPU quota from cgroup (e.g., 2.0 = 2 cores)
+	VerdictBasis *VerdictBasis `json:"verdictBasis,omitempty"` // The verdict's decision variables (nil when no verdict: cgroup read failure)
+}
+
+// VerdictBasis is the machine-readable why behind the CPU-health verdict: the
+// exact decision variables (inputs, outputs, applicability, and thresholds)
+// the verdict acted on. It is always emitted when a verdict was computed
+// (healthy AND degraded), so the Management Console renders the headline, the
+// host/container split, and the alert-rule budget dashboard from the same
+// source the verdict used; the human-readable health.message and this block
+// cannot silently diverge. It is nil only when no verdict exists (a cgroup
+// read failure, where Decide is not called); the legacy display path covers
+// that case.
+type VerdictBasis struct {
+	Headroom          VerdictBasisHeadroom `json:"headroom"`
+	HostBusy          VerdictBasisHostBusy `json:"hostBusy"`
+	Throttle          VerdictBasisCause    `json:"throttle"`
+	Pressure          VerdictBasisCause    `json:"pressure"`
+	Steal             VerdictBasisCause    `json:"steal"`
+	LimitedVisibility bool                 `json:"limitedVisibility"`
+}
+
+// VerdictBasisHeadroom is the primary saturation signal, mode-generic: which
+// ceiling the headroom was measured against, the capacity/used/reserve inputs,
+// the resulting free-cores decision variable, and the Schmitt latch state plus
+// its four sub-latches. Cores is negative when the box is over-subscribed
+// (used exceeds capacity minus the reserve); it is not clamped to 0. The
+// sub-latch flags let the Management Console rank the firings (container-at-
+// quota vs limit-mode-host-full vs no-host-stats blind vs no-limit-host-full).
+// Fired is the OR of the four sub-latches.
+type VerdictBasisHeadroom struct {
+	Ceiling                    string  `json:"ceiling"`                    // "host" | "limit": which rule applied
+	Capacity                   float64 `json:"capacity"`                   // the ceiling in cores (host logical count or cgroup quota)
+	Used                       float64 `json:"used"`                       // the mode's 60s-mean use (host-busy OR container usage)
+	Reserve                    float64 `json:"reserve"`                    // in cores (host: 1.0; limit: LimitReserveFraction × quota)
+	Cores                      float64 `json:"cores"`                      // Capacity − Used − Reserve (the decision variable; may be negative)
+	Fired                      bool    `json:"fired"`                      // SaturationFired (the OR of the four sub-latches below)
+	LimitSaturationFired       bool    `json:"limitSaturationFired"`       // container-scope sub-latch (limit mode: usage inside the fractional reserve)
+	HostFullFired              bool    `json:"hostFullFired"`              // host-scope sub-latch (limit mode: the host itself is full)
+	NoHostStatsSaturationFired bool    `json:"noHostStatsSaturationFired"` // no-host-stats no-limit sub-latch (scenario D: usage/hostLogical ≥ 0.70)
+	NoLimitHostFired           bool    `json:"noLimitHostFired"`           // no-limit host-stats-readable sub-latch (scenario A degraded: the host has no spare core)
+}
+
+// VerdictBasisHostBusy is the host-level busy-cores observation, carried in
+// both modes (it feeds the host/container display split, the host-full
+// stacking check, and the "host stats unavailable" note). Available is false
+// when /proc/stat is unreadable; in limit mode Mean is still the host
+// observation (context), not the headroom Used (which is the container's own
+// usage).
+type VerdictBasisHostBusy struct {
+	Mean      float64 `json:"mean"`      // 60s mean of host-level busy cores (the host observation)
+	Available bool    `json:"available"` // /proc/stat readable (HostBusyCoresAvailable)
+}
+
+// VerdictBasisCause is one secondary starvation signal: the measured value,
+// the fire threshold the latch compares against, the latch state, and whether
+// the rule is applicable to this box (a rule that cannot be measured here,
+// no cgroup limit, no PSI, bare metal, has applies=false).
+type VerdictBasisCause struct {
+	Value     float64 `json:"value"`     // the metric (ThrottleRatio / PressureAvg60Out / StealP95)
+	Threshold float64 `json:"threshold"` // the Schmitt fire threshold (0.05 / 0.20 / 0.10)
+	Fired     bool    `json:"fired"`     // the Schmitt latch state
+	Applies   bool    `json:"applies"`   // whether this rule is live for this box
 }
 
 type Disk struct {

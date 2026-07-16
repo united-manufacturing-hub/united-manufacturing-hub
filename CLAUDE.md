@@ -29,7 +29,7 @@ The United Manufacturing Hub (UMH) is an Industrial IoT platform for manufacturi
 - **Bridge = Connection + Source Flow + Sink Flow**: Connection only monitors network availability
 - **Data validation**: Happens at UNS output plugin, not at source
 - **Bridge states**: `starting_failed_dfc_missing` = no data flow configured yet
-- **Resource limiting**: Controlled by `agent.enableResourceLimitBlocking` and related settings. Default: ≤70% CPU; ~5 bridges per CPU core after reserving 1 for Redpanda
+- **Resource limiting**: Controlled by `agent.enableResourceLimitBlocking` and related settings. Default: CPU starvation (throttle/pressure/steal/host-contention); high usage alone is not degradation; ~5 bridges per CPU core after reserving 1 for Redpanda
 - **Template variables**: `{{ .IP }}`, `{{ .PORT }}` auto-injected from Connection config
 - **Location computation**: Agent location + bridge location = `{{ .location_path }}`
 

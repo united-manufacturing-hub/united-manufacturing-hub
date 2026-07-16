@@ -26,6 +26,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/protocolconverterserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cpuhealth"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	connectionfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/connection"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/container"
@@ -1157,6 +1158,31 @@ func (p *ProtocolConverterService) IsResourceLimited(snapshot fsm.SystemSnapshot
 	// Check if container FSM state is degraded (overall system state)
 	currentState := containerInstance.CurrentState
 	if currentState == "degraded" {
+		if containerInstance.LastObservedState != nil {
+			if containerObserved, ok := containerInstance.LastObservedState.(*container.ContainerObservedStateSnapshot); ok {
+				serviceInfo := &containerObserved.ServiceInfoSnapshot
+				if cpu := serviceInfo.CPU; cpu != nil && len(cpu.Causes) > 0 &&
+					serviceInfo.MemoryHealth != models.Degraded && serviceInfo.DiskHealth != models.Degraded {
+					// Causes[0] is the dominant cause; see decide.go severity sort.
+					// BlockReason dispatches the saturation cause on the sub-latch
+					// flags (HostFullFired/LimitSaturationFired/
+					// NoHostStatsSaturationFired/NoLimitHostFired), carried on the
+					// verdict-basis headroom block so MC can rank the firings.
+					// VerdictBasis is nil only on a cgroup read failure, where
+					// Decide is not called and no causes are set, so the len>0 guard
+					// above already excludes that path; the nil check is defensive.
+					var signals cpuhealth.Signals
+					if cpu.VerdictBasis != nil {
+						signals.HostFullFired = cpu.VerdictBasis.Headroom.HostFullFired
+						signals.LimitSaturationFired = cpu.VerdictBasis.Headroom.LimitSaturationFired
+						signals.NoHostStatsSaturationFired = cpu.VerdictBasis.Headroom.NoHostStatsSaturationFired
+						signals.NoLimitHostFired = cpu.VerdictBasis.Headroom.NoLimitHostFired
+					}
+					return true, cpuhealth.BlockReason(cpuhealth.CauseKind(cpu.Causes[0].Kind), signals)
+				}
+			}
+		}
+
 		return true, "System in degraded state"
 	}
 
@@ -1194,10 +1220,14 @@ func (p *ProtocolConverterService) IsResourceLimited(snapshot fsm.SystemSnapshot
 				return true, "Disk resources degraded"
 			}
 
-			// Also check for CPU throttling specifically with improved message
-			if serviceInfo.CPU != nil && serviceInfo.CPU.IsThrottled {
-				// Provide detailed throttling message as per ENG-3423
-				throttlePercent := serviceInfo.CPU.ThrottleRatio * 100
+			// Also check for CPU throttling specifically with improved message.
+			// The throttle value and latch now ride verdictBasis.throttle (added
+			// in R9.1); the flat ThrottleRatio/IsThrottled mirrors were cut. The
+			// basis is non-nil whenever Decide ran (cgroup readable); the Fired
+			// guard means we only read Value when the latch actually fired.
+			if serviceInfo.CPU != nil && serviceInfo.CPU.VerdictBasis != nil && serviceInfo.CPU.VerdictBasis.Throttle.Fired {
+				throttlePercent := serviceInfo.CPU.VerdictBasis.Throttle.Value * 100
+
 				cgroupCores := serviceInfo.CPU.CgroupCores
 				hostCores := runtime.NumCPU()
 

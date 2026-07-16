@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+### Improvements
+
+- CPU health now reports a degraded status when the host has no spare CPU core for a sustained minute, even without a CPU limit or pressure statistics. A busy container with spare headroom still reads healthy; a full container (no spare core) now shows as degraded instead of staying silent and green, so a box that cannot absorb the next burst of work no longer looks fine
+- The CPU health message now states whether usage is measured against the host or the container's CPU limit, and reports pressure, throttling, and steal when those signals are available
+- Minimum CPU recommendation raised to 4 vCPU (from 2); below 4 cores the 1-core headroom reserve leaves too little room for UMH work
+
+### Fixes
+
+- CPU health no longer flags a container as degraded just because its CPU usage is high. Previously, any container crossing 70% CPU showed as degraded and could block new bridges, even under healthy high load; CPU health is now based on actual starvation (CFS throttling, CPU pressure, steal) rather than raw utilization, so a busy container stays healthy and bridges are not blocked under normal load
+
 ## [0.44.24]
 
 ### Fixes
