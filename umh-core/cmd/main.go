@@ -718,25 +718,26 @@ func watchConfig(ctx context.Context, configManager config.ConfigManager, logger
 				continue
 			}
 
-			syncHistorian(client, cfg, logger)
+			if err := syncHistorian(client, cfg); err != nil {
+				logger.Warnw("historian watch: upsert failed", "error", err)
+			}
 		}
 	}
 }
 
 // syncHistorian upserts the historian monitor child with the current settings
-// when the historian section is present, or deletes it when absent.
-func syncHistorian(client *fsmv2client.FSMv2Client, cfg config.FullConfig, logger *zap.SugaredLogger) {
+// when the historian section is present, or deletes it when absent. It returns
+// the upsert error so the caller can log it within the reconciliation loop.
+func syncHistorian(client *fsmv2client.FSMv2Client, cfg config.FullConfig) error {
 	if cfg.Historian == nil {
 		client.Delete(fsmv2timescale.Ref)
 
-		return
+		return nil
 	}
 
 	historianVars := cfg.Historian.ToTemplateMap()
 
-	if err := client.Upsert(fsmv2timescale.Ref, historianVars); err != nil {
-		logger.Warnw("historian watch: upsert failed", "error", err)
-	}
+	return client.Upsert(fsmv2timescale.Ref, historianVars)
 }
 
 // wireFSMv2Communicator wires the legacy CommunicationState to the already-started
