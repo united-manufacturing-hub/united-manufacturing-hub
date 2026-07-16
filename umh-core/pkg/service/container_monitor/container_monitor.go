@@ -71,10 +71,11 @@ type ContainerMonitorService struct {
 	architecture    models.ContainerArchitecture //nolint:unused // will be used in the future
 	dataPath        string                       // Path to check for disk metrics and HWID file
 	wasThrottled    bool                         // Previous throttle state for transition logging
-	lastVerdict     cpuhealth.Verdict
-	lastSignals     cpuhealth.Signals
+	lastVerdict      cpuhealth.Verdict
+	lastSignals      cpuhealth.Signals
 	lastVerdictBasis *models.VerdictBasis
-	hasLastVerdict  bool
+	lastCgroupCores  float64
+	hasLastVerdict   bool
 }
 
 // NewContainerMonitorService creates a new container monitor service instance.
@@ -450,8 +451,20 @@ func (c *ContainerMonitorService) getCPUMetrics(ctx context.Context) (*models.CP
 			LimitedVisibility: signals.LimitedVisibility,
 		}
 		c.lastVerdictBasis = cpuStat.VerdictBasis
+		// Hold CgroupCores from the successful tick so a sampler-failure tick
+		// can re-emit it alongside the held verdict basis. Without this the
+		// failure tick drops CgroupCores (the zero Sample has Quota==nil, so
+		// the omitempty guard above leaves it at 0) while the held basis still
+		// carries the prior ceiling, a self-contradictory machine-readable wire.
+		c.lastCgroupCores = cpuStat.CgroupCores
 	} else if c.hasLastVerdict {
 		cpuStat.VerdictBasis = c.lastVerdictBasis
+		// Re-emit the held CgroupCores so the failure-tick wire stays
+		// consistent with the re-emitted verdict basis (both held from the
+		// last successful tick). The two are consistent by construction: a
+		// limit-mode tick stored CgroupCores>0 with ceiling="limit", and a
+		// host-mode tick stored CgroupCores=0 (omitted) with ceiling="host".
+		cpuStat.CgroupCores = c.lastCgroupCores
 	}
 
 	return cpuStat, nil

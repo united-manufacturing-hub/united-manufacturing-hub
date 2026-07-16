@@ -515,3 +515,86 @@ var _ = Describe("VerdictBasis guard: zero LogicalCpus (I8)", func() {
 			"a zero-sample (LogicalCpus=0) must not emit VerdictBasis (no self-contradictory wire: CgroupCores>0 with Capacity=0/Ceiling=host)")
 	})
 })
+
+var _ = Describe("CgroupCores/basis wire consistency on sampler failure (Rung 6)", func() {
+	It("holds CgroupCores alongside verdictBasis on a sampler failure so the wire stays self-consistent", func() {
+		// On a sampler failure, getRawCPUMetrics returns the zero Sample{}
+		// (sample.Quota == nil), so the CgroupCores assignment at
+		// container_monitor.go:359 drops the field (omitempty on 0). But the
+		// hasLastVerdict branch re-emits c.lastVerdictBasis, which carries the
+		// prior tick's Headroom.Ceiling="limit" + Capacity=2.0. The failure-tick
+		// wire is then self-contradictory: CgroupCores absent while
+		// VerdictBasis.Headroom.Ceiling="limit". The fix holds CgroupCores from
+		// the prior successful tick alongside the held verdict basis, so the
+		// wire stays consistent (both fields held from the same tick).
+		mockFS := filesystem.NewMockFileSystem()
+		ctx := context.Background()
+
+		testDataPath, err := os.MkdirTemp("", "rung6-cgroupcores-basis-divergence")
+		Expect(err).NotTo(HaveOccurred())
+		defer func() { _ = os.RemoveAll(testDataPath) }()
+
+		const cpuMax = "200000 100000\n" // quota 2.0 cores (capped, limit mode)
+		var (
+			nrPeriods, nrThrottled, usageUsec int64
+			samplerFails                        bool
+		)
+
+		mockFS.WithReadFileFunc(func(_ context.Context, path string) ([]byte, error) {
+			switch path {
+			case "/sys/fs/cgroup/cpu.max":
+				return []byte(cpuMax), nil
+			case "/sys/fs/cgroup/cpu.stat":
+				if samplerFails {
+					return nil, errors.New("cpu.stat transient read error")
+				}
+				return []byte(fmt.Sprintf(
+					"usage_usec %d\nnr_periods %d\nnr_throttled %d\nthrottled_usec 0\n",
+					usageUsec, nrPeriods, nrThrottled,
+				)), nil
+			default:
+				return nil, errors.New("file not found: " + path)
+			}
+		})
+
+		svc := container_monitor.NewContainerMonitorServiceWithPath(mockFS, testDataPath)
+
+		// Tick 1: baseline the throttle ring (single point, ratio 0, healthy).
+		samplerFails = false
+		nrPeriods, nrThrottled, usageUsec = 1000, 0, 1_000_000
+		_, err = svc.GetStatus(ctx)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Tick 2: nr_throttled jumps so the 60s ratio is 0.10 > 0.05 -> the
+		// throttle latch fires, verdict degrades. CgroupCores=2.0 (limit mode)
+		// and VerdictBasis.Headroom.Ceiling="limit" are both on the wire.
+		nrPeriods, nrThrottled, usageUsec = 2000, 100, 2_000_000
+		time.Sleep(1 * time.Second)
+		status2, err := svc.GetStatus(ctx)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(status2.CPU.State).To(Equal("degraded"),
+			"precondition: tick 2 degrades so a verdict basis is held")
+		Expect(status2.CPU.CgroupCores).To(BeNumerically("~", 2.0, 1e-9),
+			"precondition: tick 2 emits CgroupCores=2.0 in limit mode")
+		Expect(status2.CPU.VerdictBasis.Headroom.Ceiling).To(Equal("limit"),
+			"precondition: tick 2 emits ceiling=limit in limit mode")
+
+		// Tick 3: sampler fails. Decide is skipped; the held verdict basis is
+		// re-emitted. The RED: before the fix, CgroupCores is absent (dropped
+		// by omitempty because the zero Sample has Quota==nil) while
+		// VerdictBasis.Headroom.Ceiling="limit" is present. The consistency
+		// assertion (CgroupCores present AND ceiling=limit) fails.
+		samplerFails = true
+		status3, err := svc.GetStatus(ctx)
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(status3.CPU.State).To(Equal("degraded"),
+			"the held degraded verdict persists across the sampler failure")
+		Expect(status3.CPU.VerdictBasis).NotTo(BeNil(),
+			"the held verdict basis is re-emitted on a sampler failure after a prior verdict")
+		Expect(status3.CPU.VerdictBasis.Headroom.Ceiling).To(Equal("limit"),
+			"the held verdict basis carries the prior limit-mode ceiling")
+		Expect(status3.CPU.CgroupCores).To(BeNumerically("~", 2.0, 1e-9),
+			"CgroupCores must be held from tick 2 alongside the held verdict basis (no CgroupCores/basis divergence on a sampler failure)")
+	})
+})
