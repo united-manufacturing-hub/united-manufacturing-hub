@@ -81,10 +81,10 @@ func HistorianFromFSMv2(ctx context.Context, log *zap.SugaredLogger) *models.His
 				Category:      healthCat,
 			},
 			Host:      result.Host,
+			Auth:      result.Auth,
 			Latency:   result.LatencyMs,
 			Port:      result.Port,
 			Reachable: result.Reachable,
-			AuthValid: result.AuthValid,
 		},
 	}
 }

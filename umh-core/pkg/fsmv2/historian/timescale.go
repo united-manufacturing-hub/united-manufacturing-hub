@@ -17,7 +17,8 @@
 // pool against the TimescaleDB/Postgres endpoint: a successful query reports the
 // endpoint reachable and credentials valid, a failure drives the worker
 // degraded. Authentication and missing-database errors are classified as
-// configuration faults (AuthValid=false) rather than transient network faults.
+// configuration faults (Auth=TimescaleAuthInvalid) rather than transient network
+// faults, which leave authentication unverified (Auth=TimescaleAuthUnknown).
 //
 // # Scope: connection health only
 //
@@ -41,11 +42,7 @@
 //     integration.
 //
 // Running two workers adds only one extra pooled connection to the database, so
-// the overhead is minimal and worth the isolation. When the metrics worker lands
-// it should reuse this package's DSN/pool conventions; consider renaming this
-// file to timescale_connection.go and the metrics one to timescale_metrics.go so
-// the split is obvious from the filenames (the current timescale.go name reads
-// as if it did both).
+// the overhead is minimal and worth the isolation.
 package fsmv2timescale
 
 import (
@@ -63,6 +60,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/simple"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker/dynamicchildren"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 )
 
 const (
@@ -99,6 +97,11 @@ const (
 type TimescaleStatus struct {
 	// Host is the observed timescale host.
 	Host string `json:"host"`
+	// Auth reports whether the endpoint accepted the credentials and database
+	// name. It is TimescaleAuthUnknown when nothing answered (a network or timeout
+	// fault), TimescaleAuthInvalid when the server answered but rejected the
+	// config, and TimescaleAuthValid on a successful query.
+	Auth models.TimescaleAuthState `json:"auth"`
 	// LatencyMs is the query round-trip time in milliseconds.
 	LatencyMs float64 `json:"latency_ms"`
 	// Port is the observed timescale port.
@@ -107,10 +110,6 @@ type TimescaleStatus struct {
 	// or the server rejected the credentials/database (an auth fault). It is
 	// false only for network or timeout faults, where nothing answered.
 	Reachable bool `json:"reachable"`
-	// AuthValid is false when the endpoint answered but rejected the supplied
-	// credentials or database name (a configuration fault, not a network fault).
-	// It is true on a successful query.
-	AuthValid bool `json:"auth_valid"`
 }
 
 // Deps carries the poll dependencies, shared across ticks. The pool holder
@@ -172,6 +171,10 @@ const (
 	// pgCodeInvalidCatalogName is Postgres SQLSTATE 3D000: the server rejected
 	// the connection because the requested database does not exist.
 	pgCodeInvalidCatalogName = "3D000"
+
+	// pgBouncerCodeInvalidCatalogName is the SQLSTATE PgBouncer returns (08P01,
+	// protocol violation) when the requested database does not exist in its pool.
+	pgBouncerCodeInvalidCatalogName = "08P01"
 )
 
 // serverRejected reports whether err is the server rejecting the supplied
@@ -185,7 +188,7 @@ func serverRejected(err error) bool {
 	}
 
 	badCredentials := strings.HasPrefix(pgErr.Code, pgClassInvalidAuthorization)
-	unknownDatabase := pgErr.Code == pgCodeInvalidCatalogName
+	unknownDatabase := pgErr.Code == pgCodeInvalidCatalogName || pgErr.Code == pgBouncerCodeInvalidCatalogName
 
 	return badCredentials || unknownDatabase
 }
@@ -194,8 +197,9 @@ func serverRejected(err error) bool {
 // successful query returns a reachable, auth-valid status with the measured
 // latency. On error it returns an unreachable status and wraps the error, which
 // the framework persists as a degraded verdict; an authentication or
-// unknown-database error additionally sets AuthValid=false to flag a
-// configuration fault rather than a transient network problem.
+// unknown-database error additionally sets Auth=TimescaleAuthInvalid to flag a
+// configuration fault, while a network or timeout error leaves
+// Auth=TimescaleAuthUnknown.
 func Poll(ctx context.Context, d Deps, cfg config.HistorianConfig) (TimescaleStatus, error) {
 	cfg = cfg.WithDefaults()
 	host, port := cfg.Timescale.Host, cfg.Timescale.Port
@@ -207,7 +211,7 @@ func Poll(ctx context.Context, d Deps, cfg config.HistorianConfig) (TimescaleSta
 			deps.Bool("reachable", false),
 			deps.Err(err))
 
-		return TimescaleStatus{Host: host, Port: port}, fmt.Errorf("timescale pool: %w", err)
+		return TimescaleStatus{Host: host, Port: port, Auth: models.TimescaleAuthUnknown}, fmt.Errorf("timescale pool: %w", err)
 	}
 
 	start := time.Now()
@@ -215,30 +219,36 @@ func Poll(ctx context.Context, d Deps, cfg config.HistorianConfig) (TimescaleSta
 	var one int
 	if err := pool.QueryRow(ctx, "SELECT 1").Scan(&one); err != nil {
 		// An auth fault means the server answered but rejected the credentials or
-		// database name: the endpoint is reachable, only the config is wrong.
+		// database name: the endpoint is reachable, only the config is wrong. A
+		// non-rejection error (network, timeout) means nothing answered, so
+		// authentication stays unverified rather than proven invalid.
 		reachable := serverRejected(err)
+		auth := models.TimescaleAuthUnknown
+		if reachable {
+			auth = models.TimescaleAuthInvalid
+		}
 		d.Logger.Info("timescale connection check",
 			deps.String("host", host),
 			deps.Bool("reachable", reachable),
-			deps.Bool("auth_valid", false),
+			deps.String("auth", string(auth)),
 			deps.Err(err))
 
-		return TimescaleStatus{Host: host, Port: port, Reachable: reachable, AuthValid: false}, fmt.Errorf("timescale query %s: %w", host, err)
+		return TimescaleStatus{Host: host, Port: port, Reachable: reachable, Auth: auth}, fmt.Errorf("timescale query %s: %w", host, err)
 	}
 
 	elapsedMs := float64(time.Since(start).Microseconds()) / 1000.0
 	d.Logger.Info("timescale connection check",
 		deps.String("host", host),
 		deps.Bool("reachable", true),
-		deps.Bool("auth_valid", true),
+		deps.String("auth", string(models.TimescaleAuthValid)),
 		deps.Float64("latency_ms", elapsedMs))
 
 	return TimescaleStatus{
 		Host:      host,
+		Auth:      models.TimescaleAuthValid,
 		LatencyMs: elapsedMs,
 		Port:      port,
 		Reachable: true,
-		AuthValid: true,
 	}, nil
 }
 
