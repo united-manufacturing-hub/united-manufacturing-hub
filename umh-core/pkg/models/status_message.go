@@ -41,14 +41,26 @@ type Historian struct {
 	Timescale Timescale `json:"timescale"`
 }
 
+// TimescaleAuthState classifies whether the timescale endpoint accepted the
+// supplied credentials and database name. It is tri-state: a network or timeout
+// fault leaves authentication unverified (TimescaleAuthUnknown) rather than
+// proven invalid.
+type TimescaleAuthState string
+
+const (
+	TimescaleAuthUnknown TimescaleAuthState = "unknown"
+	TimescaleAuthValid   TimescaleAuthState = "valid"
+	TimescaleAuthInvalid TimescaleAuthState = "invalid"
+)
+
 // Timescale holds the health verdict and last dialed target for the timescale endpoint.
 type Timescale struct {
-	Health    *Health `json:"health"`
-	Host      string  `json:"host"`
-	Latency   float64 `json:"latency"`
-	Port      uint16  `json:"port"`
-	Reachable bool    `json:"reachable"`
-	AuthValid bool    `json:"authValid"`
+	Health    *Health            `json:"health"`
+	Host      string             `json:"host"`
+	Auth      TimescaleAuthState `json:"auth"`
+	Latency   float64            `json:"latency"`
+	Port      uint16             `json:"port"`
+	Reachable bool               `json:"reachable"`
 }
 
 type Agent struct {
