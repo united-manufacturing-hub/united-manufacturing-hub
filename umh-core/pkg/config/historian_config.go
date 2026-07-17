@@ -18,6 +18,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
+	"net/url"
+	"strconv"
 )
 
 // ErrHistorianNotConfigured is returned by AtomicEditHistorian when no historian
@@ -240,6 +243,40 @@ var TimescaleTemplateKeys = []string{
 // templates always see resolved values.
 func (t TimescaleConfig) ToTemplateMap() map[string]any {
 	return toTemplateMap(t.WithDefaults())
+}
+
+// ToDSN builds a libpq/pgx connection string ("postgres://...") from the
+// connection settings, applying defaults first. Username and password are
+// percent-escaped so reserved characters survive; sslmode and any TLS cert paths
+// become query parameters. The returned string carries the raw password: never
+// log it (see String, which masks the password for %v logging).
+func (t TimescaleConfig) ToDSN() string {
+	t = t.WithDefaults()
+
+	q := url.Values{}
+	q.Set("sslmode", string(t.SSLMode))
+
+	if t.SSLRootCert != "" {
+		q.Set("sslrootcert", t.SSLRootCert)
+	}
+
+	if t.SSLCert != "" {
+		q.Set("sslcert", t.SSLCert)
+	}
+
+	if t.SSLKey != "" {
+		q.Set("sslkey", t.SSLKey)
+	}
+
+	u := url.URL{
+		Scheme:   "postgres",
+		User:     url.UserPassword(t.Username, t.Password),
+		Host:     net.JoinHostPort(t.Host, strconv.Itoa(int(t.Port))),
+		Path:     "/" + t.Database,
+		RawQuery: q.Encode(),
+	}
+
+	return u.String()
 }
 
 // toTemplateMap serialises a config value to a map keyed by its json field names.

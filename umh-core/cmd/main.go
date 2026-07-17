@@ -674,6 +674,10 @@ children:
 `
 	}
 
+	// The historian monitor is a dynamic child, upserted and deleted at runtime
+	// by the config worker's per-tick reconcile so live config edits apply
+	// without restarting umh-core.
+
 	// Setup store (in-memory for now).
 	store = examples.SetupStore(deps.NewFSMLogger(logger))
 
@@ -712,6 +716,15 @@ children:
 	register.SetDeps[*dynamicchildren.Registry](configworker.WorkerTypeName, dynWriter.Registry())
 	fsmv2client.SetClient(fsmv2client.NewFSMv2Client(dynWriter, store))
 
+	// Publish the config manager the config worker polls each tick to reconcile
+	// the historian monitor child (replacing the standalone watchConfig
+	// goroutine). Published before NewApplicationSupervisor so the config
+	// worker's first CollectObservedState sees it; cleared in cleanup and the
+	// error path below alongside the other deps keys.
+	// TODO(ENG-4400): remove this wiring once the config worker reads
+	// config.yaml directly instead of polling the manager.
+	register.SetDeps[config.ConfigManager](configworker.ConfigManagerDepsKey, communicationState.ConfigManager)
+
 	appSup, err = application.NewApplicationSupervisor(application.SupervisorConfig{
 		ID:           "application-fsmv2",
 		Name:         "Application FSMv2",
@@ -735,6 +748,7 @@ children:
 	if err != nil {
 		fsmv2client.SetClient(nil)
 		register.ClearDeps(configworker.WorkerTypeName)
+		register.ClearDeps(configworker.ConfigManagerDepsKey)
 		fsmv2Hook.Stop()
 
 		return nil, nil, nil, "", func() {}, fmt.Errorf("failed to create FSMv2 supervisor: %w", err)
@@ -748,6 +762,7 @@ children:
 		// has stopped (the caller runs cleanup after appSup.Run returns).
 		fsmv2client.SetClient(nil)
 		register.ClearDeps(configworker.WorkerTypeName)
+		register.ClearDeps(configworker.ConfigManagerDepsKey)
 		fsmv2Hook.Stop()
 	}
 
