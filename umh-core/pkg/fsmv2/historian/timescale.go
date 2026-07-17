@@ -174,21 +174,40 @@ const (
 
 	// pgBouncerCodeInvalidCatalogName is the SQLSTATE PgBouncer returns (08P01,
 	// protocol violation) when the requested database does not exist in its pool.
+	// The bare code is also used for unrelated protocol violations, so a match
+	// requires pgBouncerMissingDBPrefix in the message as well.
 	pgBouncerCodeInvalidCatalogName = "08P01"
+
+	// pgBouncerMissingDBPrefix is the message prefix PgBouncer pairs with 08P01
+	// when the requested database is not in its pool. Requiring it prevents
+	// unrelated 08P01 protocol violations from being misread as a missing database.
+	pgBouncerMissingDBPrefix = "no such database"
 )
 
-// serverRejected reports whether err is the server rejecting the supplied
-// credentials or database name, rather than a network or timeout fault where
-// nothing answered. A rejection means the endpoint is reachable but the config
-// is wrong.
-func serverRejected(err error) bool {
+// serverAnswered reports whether err carries a server-side PgError, meaning the
+// endpoint is reachable, rather than a network or timeout fault where nothing
+// answered.
+func serverAnswered(err error) bool {
+	var pgErr *pgconn.PgError
+
+	return errors.As(err, &pgErr)
+}
+
+// authRejected reports whether err is the server rejecting the supplied
+// credentials or database name. It is a narrower condition than serverAnswered:
+// a server-side error outside the supported auth (class 28), missing-database
+// (3D000), and PgBouncer missing-database (08P01 with pgBouncerMissingDBPrefix)
+// classes leaves the endpoint reachable but the credentials unproven.
+func authRejected(err error) bool {
 	var pgErr *pgconn.PgError
 	if !errors.As(err, &pgErr) {
 		return false
 	}
 
 	badCredentials := strings.HasPrefix(pgErr.Code, pgClassInvalidAuthorization)
-	unknownDatabase := pgErr.Code == pgCodeInvalidCatalogName || pgErr.Code == pgBouncerCodeInvalidCatalogName
+	pgBouncerMissingDB := pgErr.Code == pgBouncerCodeInvalidCatalogName &&
+		strings.Contains(strings.ToLower(pgErr.Message), pgBouncerMissingDBPrefix)
+	unknownDatabase := pgErr.Code == pgCodeInvalidCatalogName || pgBouncerMissingDB
 
 	return badCredentials || unknownDatabase
 }
@@ -218,13 +237,13 @@ func Poll(ctx context.Context, d Deps, cfg config.HistorianConfig) (TimescaleSta
 
 	var one int
 	if err := pool.QueryRow(ctx, "SELECT 1").Scan(&one); err != nil {
-		// An auth fault means the server answered but rejected the credentials or
-		// database name: the endpoint is reachable, only the config is wrong. A
-		// non-rejection error (network, timeout) means nothing answered, so
-		// authentication stays unverified rather than proven invalid.
-		reachable := serverRejected(err)
+		// Any server-side PgError means the endpoint is reachable. Auth is proven
+		// invalid only when the server rejected the credentials or database name;
+		// other server errors leave the config unverified. A non-PgError (network,
+		// timeout) means nothing answered, so both stay false/unknown.
+		reachable := serverAnswered(err)
 		auth := models.TimescaleAuthUnknown
-		if reachable {
+		if authRejected(err) {
 			auth = models.TimescaleAuthInvalid
 		}
 		d.Logger.Info("timescale connection check",
