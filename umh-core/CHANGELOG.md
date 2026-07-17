@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## [0.44.30]
+
 ### Improvements
 
 - Persistent connection failures now log the HTTP status code and a sanitized snippet of the upstream response, so the cause of a flapping connection (such as a 502 from a reverse proxy) is visible in the worker's logs
