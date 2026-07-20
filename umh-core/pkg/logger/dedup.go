@@ -80,6 +80,14 @@ type DedupLogger struct {
 	// errorSuppressionAnnounced records whether the "repeats suppressed" notice
 	// was already logged for the current message, so it is emitted exactly once.
 	errorSuppressionAnnounced bool
+
+	// resetPending records that Reset was called since the last LogErrorDedup.
+	// The reset is applied lazily on the next LogErrorDedup call, and only if the
+	// message actually changed. A repeat of the same message cancels it, so a
+	// caller that reports success every tick (e.g. an FSM reconcile loop) while
+	// the same error keeps being logged from a swallowed path does not restart
+	// the dedup cycle and re-log at Error every tick.
+	resetPending bool
 }
 
 // NewDedupLogger returns a DedupLogger writing to l with the default summary and
@@ -106,8 +114,20 @@ func (d *DedupLogger) LogErrorDedup(format string, args ...any) {
 	// If the error has been quiet long enough, it is considered cleared: emit a
 	// final summary and start over.
 	if !d.lastLogTime.IsZero() && now.Sub(d.lastLogTime) >= d.resetInterval {
-		d.Reset()
+		d.endCycle()
 	}
+
+	// Apply a pending Reset lazily: honor it only when the message changed. A
+	// repeat of the same message means the caller's success signal was spurious
+	// (the error is still occurring), so the cycle continues and the repeat is
+	// suppressed as usual.
+	if d.resetPending {
+		if msg != d.lastLoggedErrorMsg {
+			d.endCycle()
+		}
+		d.resetPending = false
+	}
+
 	d.lastLogTime = now
 
 	switch {
@@ -146,12 +166,23 @@ func (d *DedupLogger) emitSuppressionSummary() {
 	d.suppressedErrorCount = 0
 }
 
-// Reset clears the dedup cycle, emitting a final summary of any suppressed
-// repeats. Callers with an explicit success signal (such as a reconcile loop
-// that just succeeded) may call it directly; otherwise the reset interval
-// handles it automatically.
+// Reset signals that the caller considers the current error cleared (for
+// example, a reconcile loop that just succeeded). The reset is applied lazily:
+// the cycle is not ended until the next LogErrorDedup call, and only if the
+// message has changed. This makes dedup robust to unreliable success signals —
+// a caller that reports success every tick while the same error keeps being
+// logged from a swallowed path does not restart the cycle. A genuinely cleared
+// error is also ended by the quiet reset interval automatically.
 func (d *DedupLogger) Reset() {
+	d.resetPending = true
+}
+
+// endCycle ends the current dedup cycle, emitting a final summary of any
+// suppressed repeats and clearing the message identity so the next call starts
+// a fresh cycle.
+func (d *DedupLogger) endCycle() {
 	d.emitSuppressionSummary()
 	d.lastLoggedErrorMsg = ""
 	d.errorSuppressionAnnounced = false
+	d.resetPending = false
 }
