@@ -65,8 +65,6 @@ Because you started from the "Generic via Generate" template, the protocol is al
 - **Data Type:** Select "Time Series" (the standard for PLC tags).
 - **Monitoring:** Shows the bridge state (currently `starting_failed_dfc_missing`) and throughput (currently zero).
 
-<!-- TODO screenshot: Read Flow tab on the template path. Existing bridge-read-*.png
-     come from the old protocol-dropdown flow — verify they still match. -->
 ![Bridge Read Input](./images/bridge-read-input.png)
 
 - **Input:** The template pre-fills a generator. For real protocols like "Modbus" or "Siemens S7" you'd see protocol-specific settings here. Keep the defaults: generate `hello world` every `1s`.
@@ -86,7 +84,8 @@ Three required fields:
 
 The **Always** section uses JavaScript to process messages. We're not modifying anything for now, just passing the data through.
 
-> 💡 **Tip:** You can modify data here later (e.g., unit conversions, > renaming). If you don't know JavaScript, any LLM (ChatGPT, Claude) > can help write the code.
+> 💡 **Tip:** You can modify data here later (e.g., unit conversions renaming). 
+> If you don't know JavaScript, any LLM (ChatGPT, Claude) can help write the code.
 
 ![Bridge Read Output](./images/bridge-read-output.png)
 
