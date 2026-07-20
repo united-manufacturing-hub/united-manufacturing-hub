@@ -155,7 +155,7 @@ func (p *ProtocolConverterInstance) Reconcile(ctx context.Context, snapshot fsm.
 		// Enhanced error logging with state context
 		currentState := p.baseFSMInstance.GetCurrentFSMState()
 		desiredState := p.baseFSMInstance.GetDesiredFSMState()
-		p.baseFSMInstance.LogErrorDedup("error reconciling state transition: current_state='%s', desired_state='%s', error: %s",
+		p.baseFSMInstance.Logger.LogErrorDedup("error reconciling state transition: current_state='%s', desired_state='%s', error: %s",
 			currentState, desiredState, err)
 
 		p.baseFSMInstance.SetError(err, snapshot.Tick)
@@ -176,7 +176,7 @@ func (p *ProtocolConverterInstance) Reconcile(ctx context.Context, snapshot fsm.
 		}
 
 		p.baseFSMInstance.SetError(managerErr, snapshot.Tick)
-		p.baseFSMInstance.LogErrorDedup("error reconciling manager: %s", managerErr)
+		p.baseFSMInstance.Logger.LogErrorDedup("error reconciling manager: %s", managerErr)
 
 		return nil, false
 	}

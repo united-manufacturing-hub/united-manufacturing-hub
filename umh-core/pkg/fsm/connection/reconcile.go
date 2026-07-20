@@ -132,7 +132,7 @@ func (c *ConnectionInstance) Reconcile(ctx context.Context, snapshot fsm.SystemS
 		}
 
 		c.baseFSMInstance.SetError(err, snapshot.Tick)
-		c.baseFSMInstance.LogErrorDedup("error reconciling state: %s", err)
+		c.baseFSMInstance.Logger.LogErrorDedup("error reconciling state: %s", err)
 
 		return nil, false // We don't want to return an error here, because we want to continue reconciling
 	}
@@ -145,7 +145,7 @@ func (c *ConnectionInstance) Reconcile(ctx context.Context, snapshot fsm.SystemS
 		}
 
 		c.baseFSMInstance.SetError(nmapErr, snapshot.Tick)
-		c.baseFSMInstance.LogErrorDedup("error reconciling nmapManager: %s", nmapErr)
+		c.baseFSMInstance.Logger.LogErrorDedup("error reconciling nmapManager: %s", nmapErr)
 
 		return nil, false
 	}

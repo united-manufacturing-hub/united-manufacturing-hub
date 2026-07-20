@@ -132,7 +132,7 @@ func (d *DataflowComponentInstance) Reconcile(ctx context.Context, snapshot fsm.
 		}
 
 		d.baseFSMInstance.SetError(err, snapshot.Tick)
-		d.baseFSMInstance.LogErrorDedup("error reconciling state: %s", err)
+		d.baseFSMInstance.Logger.LogErrorDedup("error reconciling state: %s", err)
 
 		return nil, false // We don't want to return an error here, because we want to continue reconciling
 	}
@@ -150,7 +150,7 @@ func (d *DataflowComponentInstance) Reconcile(ctx context.Context, snapshot fsm.
 		}
 
 		d.baseFSMInstance.SetError(benthosErr, snapshot.Tick)
-		d.baseFSMInstance.LogErrorDedup("error reconciling benthosManager: %s", benthosErr)
+		d.baseFSMInstance.Logger.LogErrorDedup("error reconciling benthosManager: %s", benthosErr)
 
 		return nil, false
 	}

@@ -51,8 +51,8 @@ func NewS6Instance(
 		MaxTicksToRemainInTransientState: 20, // 20 ticks = 20 * 100ms = 2s
 	}
 
-	logger := logger.For(config.Name)
-	backoffConfig := backoff.DefaultConfig(cfg.ID, logger)
+	logger := logger.NewDedupLogger(logger.For(config.Name))
+	backoffConfig := backoff.DefaultConfig(cfg.ID, logger.SugaredLogger)
 
 	instance := &S6Instance{
 		baseFSMInstance: internal_fsm.NewBaseFSMInstance(cfg, backoffConfig, logger),

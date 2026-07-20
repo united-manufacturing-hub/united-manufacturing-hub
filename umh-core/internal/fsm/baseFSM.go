@@ -38,9 +38,10 @@ import (
 // BaseFSMInstance implements the public fsm.FSM interface.
 type BaseFSMInstance struct {
 
-	// DedupLogger deduplicates repeating reconcile-loop error logs. Embedded so
-	// LogErrorDedup is promoted onto BaseFSMInstance.
-	*umhlogger.DedupLogger
+	// Logger is the FSM logger. It is a *zap.SugaredLogger with the added
+	// LogErrorDedup method, which deduplicates repeating reconcile-loop error
+	// logs so a persistent failure does not flood the log every tick.
+	Logger *umhlogger.DedupLogger
 
 	// fsm is the finite state machine that manages instance state
 	fsm *fsm.FSM
@@ -50,9 +51,6 @@ type BaseFSMInstance struct {
 
 	// backoffManager is the backoff manager for handling error retries and permanent failures
 	backoffManager *backoff.BackoffManager
-
-	// logger is the logger for the FSM
-	logger *zap.SugaredLogger
 
 	// lastObservedLifecycleState is the last state that was observed by the FSM
 	// Note: this is only temporary and should be replaced by a generalized implementation of the archive storage
@@ -91,17 +89,16 @@ type BaseFSMInstanceConfig struct {
 }
 
 // NewBaseFSMInstance creates a new FSM instance.
-func NewBaseFSMInstance(cfg BaseFSMInstanceConfig, backoffConfig backoff.Config, logger *zap.SugaredLogger) *BaseFSMInstance {
+func NewBaseFSMInstance(cfg BaseFSMInstanceConfig, backoffConfig backoff.Config, logger *umhlogger.DedupLogger) *BaseFSMInstance {
 	// Set default max ticks to remain in transient state if not set
 	if cfg.MaxTicksToRemainInTransientState == 0 {
 		cfg.MaxTicksToRemainInTransientState = constants.DefaultMaxTicksToRemainInTransientState
 	}
 
 	baseInstance := &BaseFSMInstance{
-		cfg:              cfg,
-		callbacks:        make(map[string]fsm.Callback),
-		logger:      logger,
-		DedupLogger: umhlogger.NewDedupLogger(logger),
+		cfg:       cfg,
+		callbacks: make(map[string]fsm.Callback),
+		Logger:    logger,
 	}
 
 	// Initialize backoff manager with appropriate configuration
@@ -134,19 +131,19 @@ func NewBaseFSMInstance(cfg BaseFSMInstanceConfig, backoffConfig backoff.Config,
 	// Register default lifecycle callbacks
 
 	baseInstance.AddCallback("enter_"+LifecycleStateRemoved, func(ctx context.Context, e *fsm.Event) {
-		baseInstance.logger.Debugf("Entering removed state for FSM %s", baseInstance.cfg.ID)
+		baseInstance.Logger.Debugf("Entering removed state for FSM %s", baseInstance.cfg.ID)
 	})
 
 	baseInstance.AddCallback("enter_"+LifecycleStateCreating, func(ctx context.Context, e *fsm.Event) {
-		baseInstance.logger.Debugf("Entering creating state for FSM %s", baseInstance.cfg.ID)
+		baseInstance.Logger.Debugf("Entering creating state for FSM %s", baseInstance.cfg.ID)
 	})
 
 	baseInstance.AddCallback("enter_"+LifecycleStateToBeCreated, func(ctx context.Context, e *fsm.Event) {
-		baseInstance.logger.Debugf("Entering to be created state for FSM %s", baseInstance.cfg.ID)
+		baseInstance.Logger.Debugf("Entering to be created state for FSM %s", baseInstance.cfg.ID)
 	})
 
 	baseInstance.AddCallback("enter_"+LifecycleStateRemoving, func(ctx context.Context, e *fsm.Event) {
-		baseInstance.logger.Debugf("Entering removing state for FSM %s", baseInstance.cfg.ID)
+		baseInstance.Logger.Debugf("Entering removing state for FSM %s", baseInstance.cfg.ID)
 	})
 
 	return baseInstance
@@ -167,7 +164,7 @@ func (s *BaseFSMInstance) GetError() error {
 func (s *BaseFSMInstance) SetError(err error, tick uint64) bool {
 	isPermanent := s.backoffManager.SetError(err, tick)
 	if isPermanent {
-		sentry.ReportFSMErrorf(s.logger, s.cfg.ID, "BaseFSM", "permanent_failure", "FSM has reached permanent failure state: %v", err)
+		sentry.ReportFSMErrorf(s.Logger.SugaredLogger, s.cfg.ID, "BaseFSM", "permanent_failure", "FSM has reached permanent failure state: %v", err)
 	}
 
 	return isPermanent
@@ -180,7 +177,7 @@ func (s *BaseFSMInstance) SetDesiredFSMState(state string) {
 	defer s.mu.Unlock()
 
 	s.cfg.DesiredFSMState = state
-	s.logger.Infof("Setting desired state of FSM %s to %s", s.cfg.ID, state)
+	s.Logger.Infof("Setting desired state of FSM %s to %s", s.cfg.ID, state)
 }
 
 // GetDesiredFSMState returns the desired state of the FSM.
@@ -242,7 +239,7 @@ func (s *BaseFSMInstance) SendEvent(ctx context.Context, eventName string, args 
 	instanceID := s.GetID()
 
 	// Log the transition attempt for debugging
-	s.logger.Debugf("FSM %s attempting transition: current_state='%s' -> event='%s' (desired_state='%s')",
+	s.Logger.Debugf("FSM %s attempting transition: current_state='%s' -> event='%s' (desired_state='%s')",
 		instanceID, currentState, eventName, desiredState)
 
 	// CRITICAL: Always give FSM a fresh context to prevent "previous transition did not complete" errors
@@ -258,7 +255,7 @@ func (s *BaseFSMInstance) SendEvent(ctx context.Context, eventName string, args 
 
 	// Check if parent context expired while we were executing
 	if err == nil && ctx.Err() != nil {
-		s.logger.Warnf("FSM transition completed successfully but parent context expired - prevented stuck transition but now outside of cycle time (preventing bigger impact)")
+		s.Logger.Warnf("FSM transition completed successfully but parent context expired - prevented stuck transition but now outside of cycle time (preventing bigger impact)")
 	}
 
 	if err != nil {
@@ -267,7 +264,7 @@ func (s *BaseFSMInstance) SendEvent(ctx context.Context, eventName string, args 
 			instanceID, currentState, eventName, desiredState, err)
 
 		// Log the failure with full context
-		s.logger.Errorf("FSM transition failed (test): %s", enhancedErr.Error())
+		s.Logger.Errorf("FSM transition failed (test): %s", enhancedErr.Error())
 
 		return enhancedErr
 	}
@@ -275,7 +272,7 @@ func (s *BaseFSMInstance) SendEvent(ctx context.Context, eventName string, args 
 	// Log successful transition
 	newState := s.fsm.Current()
 	if newState != currentState {
-		s.logger.Debugf("FSM %s successful transition: '%s' -> '%s' via event='%s' (desired_state='%s')",
+		s.Logger.Debugf("FSM %s successful transition: '%s' -> '%s' via event='%s' (desired_state='%s')",
 			instanceID, currentState, newState, eventName, desiredState)
 	}
 
@@ -323,7 +320,7 @@ func (s *BaseFSMInstance) Remove(ctx context.Context) error {
 
 				// Record it; tick value is irrelevant here (we pass 0)
 				s.SetError(perr, 0)
-				sentry.ReportFSMErrorf(s.logger, s.cfg.ID, "BaseFSM", "permanent_failure", "auto-remove of %s failed: %v", s.cfg.ID, err)
+				sentry.ReportFSMErrorf(s.Logger.SugaredLogger, s.cfg.ID, "BaseFSM", "permanent_failure", "auto-remove of %s failed: %v", s.cfg.ID, err)
 			}
 
 			delete(s.callbacks, cb) // detach – run only once
@@ -355,7 +352,7 @@ func (s *BaseFSMInstance) ShouldSkipReconcileBecauseOfError(tick uint64) bool {
 // repeats.
 func (s *BaseFSMInstance) ResetState() {
 	s.backoffManager.Reset()
-	s.DedupLogger.Reset()
+	s.Logger.Reset()
 }
 
 // IsPermanentlyFailed returns true if the FSM has reached a permanent failure state
@@ -376,7 +373,7 @@ func (s *BaseFSMInstance) GetID() string {
 }
 
 func (s *BaseFSMInstance) GetLogger() *zap.SugaredLogger {
-	return s.logger
+	return s.Logger.SugaredLogger
 }
 
 func (s *BaseFSMInstance) GetLastError() error {
@@ -591,7 +588,7 @@ func (s *BaseFSMInstance) IsDeadlineExceededAndHandle(err error, tick uint64, lo
 	if errors.Is(err, context.DeadlineExceeded) {
 		// Context deadline exceeded should be retried with backoff, not ignored
 		s.SetError(err, tick)
-		s.logger.Warnf("Context deadline exceeded in %s, will retry with backoff", location)
+		s.Logger.Warnf("Context deadline exceeded in %s, will retry with backoff", location)
 
 		return true // handled, return early
 	}

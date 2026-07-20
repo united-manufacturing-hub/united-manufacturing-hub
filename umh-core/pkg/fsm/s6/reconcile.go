@@ -151,7 +151,7 @@ func (s *S6Instance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapshot,
 		}
 
 		s.baseFSMInstance.SetError(err, snapshot.Tick)
-		s.baseFSMInstance.LogErrorDedup("error reconciling state: %s", err)
+		s.baseFSMInstance.Logger.LogErrorDedup("error reconciling state: %s", err)
 
 		return nil, false // We don't want to return an error here, because we want to continue reconciling
 	}
