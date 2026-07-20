@@ -112,7 +112,7 @@ payloadShapes:
 ```
 
 **Key points:**
-- Field types are `string`, `number`, `boolean` (see [Type Definitions](type-definitions.md))
+- Field types are `string`, `number`, `boolean` (see [Data Model Type Definitions](../../reference/data-model-type-definitions.md))
 - All fields are required
 - Shape names must be unique
 
