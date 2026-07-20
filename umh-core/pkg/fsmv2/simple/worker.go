@@ -62,7 +62,10 @@ const reasonNoHealthCheck = "running (no health check)"
 // Poll runs first. On a Poll error the worker is degraded with reason
 // "poll error: <err>" and Health is NOT called — the error is persisted as a
 // verdict on the Observation rather than returned, so the fsmv1 layer sees a
-// degraded worker with a reason instead of "starting" forever. On a good poll
+// degraded worker with a reason instead of "starting" forever. Any partial
+// status the failed Poll returned is preserved as the Result, so a poll that
+// observed detail before failing (e.g. reachable-but-unauthenticated) still
+// surfaces it. On a good poll
 // the optional Health function decides the verdict; when it is nil the worker
 // is healthy with reason "running (no health check)".
 func (w *simpleWorker[TConfig, TStatus, TDeps]) CollectObservedState(ctx context.Context, desired fsmv2.DesiredState) (fsmv2.ObservedState, error) {
@@ -71,6 +74,9 @@ func (w *simpleWorker[TConfig, TStatus, TDeps]) CollectObservedState(ctx context
 	status, err := w.spec.Poll(ctx, w.spec.Deps, cfg)
 	if err != nil {
 		return fsmv2.NewObservation(Status[TStatus]{
+			// We can use status here as the result, even on error, to preserve
+			// any partial state the failed poll returned.
+			Result:   status,
 			Degraded: true,
 			Reason:   fmt.Sprintf("poll error: %v", err),
 		}), nil

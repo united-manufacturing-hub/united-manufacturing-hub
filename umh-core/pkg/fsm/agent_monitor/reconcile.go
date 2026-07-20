@@ -90,7 +90,7 @@ func (a *AgentInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapsh
 
 		// Log the error but always continue reconciling - we need reconcileStateTransition to run
 		// to restore services after restart, even if we can't read their status yet
-		a.baseFSMInstance.GetLogger().Warnf("failed to update observed state (continuing reconciliation): %s", err)
+		a.baseFSMInstance.GetLogger().Debugf("failed to update observed state (continuing reconciliation): %s", err)
 
 		// For all other errors, just continue reconciling without setting backoff
 		err = nil
@@ -115,7 +115,7 @@ func (a *AgentInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapsh
 		}
 
 		a.baseFSMInstance.SetError(err, snapshot.Tick)
-		a.baseFSMInstance.GetLogger().Errorf("error reconciling state: %s", err)
+		a.baseFSMInstance.LogErrorDedup("error reconciling state: %s", err)
 
 		return nil, false // We don't want to return an error here, because we want to continue reconciling
 	}
@@ -154,35 +154,41 @@ func (a *AgentInstance) printSystemState(instanceName string, tick uint64) {
 	logger := a.baseFSMInstance.GetLogger()
 	status := a.ObservedState.ServiceInfo
 
-	logger.Infof("======= Agent Instance State: %s (tick: %d) =======", instanceName, tick)
-	logger.Infof("FSM States: Current=%s, Desired=%s", a.baseFSMInstance.GetCurrentFSMState(), a.baseFSMInstance.GetDesiredFSMState())
+	kv := []any{
+		"instance", instanceName,
+		"tick", tick,
+		"current", a.baseFSMInstance.GetCurrentFSMState(),
+		"desired", a.baseFSMInstance.GetDesiredFSMState(),
+	}
 
 	if status == nil {
-		logger.Infof("Agent Status: No data available")
-	} else {
-		logger.Infof("Health: Overall=%s, Latency=%s, Release=%s",
-			healthCategoryToString(status.OverallHealth),
-			healthCategoryToString(status.LatencyHealth),
-			healthCategoryToString(status.ReleaseHealth))
+		kv = append(kv, "status", "no data available")
+		logger.Debugw("agent instance state", kv...)
+		return
+	}
 
-		if status.Location != nil {
-			logger.Infof("Location: %v", status.Location)
-		}
+	kv = append(kv,
+		"health", healthCategoryToString(status.OverallHealth),
+		"latency_health", healthCategoryToString(status.LatencyHealth),
+		"release_health", healthCategoryToString(status.ReleaseHealth),
+	)
 
-		if status.Latency != nil {
-			logger.Infof("Latency: %v", status.Latency)
-		}
+	if status.Location != nil {
+		kv = append(kv, "location", status.Location)
+	}
 
-		if status.Release != nil {
-			logger.Infof("Release: Channel=%s, Version=%s", status.Release.Channel, status.Release.Version)
+	if status.Latency != nil {
+		kv = append(kv, "latency", status.Latency)
+	}
 
-			if len(status.Release.Versions) > 0 {
-				logger.Infof("Component Versions: %v", status.Release.Versions)
-			}
+	if status.Release != nil {
+		kv = append(kv, "release_channel", status.Release.Channel, "release_version", status.Release.Version)
+		if len(status.Release.Versions) > 0 {
+			kv = append(kv, "component_versions", status.Release.Versions)
 		}
 	}
 
-	logger.Infof("=================================================")
+	logger.Debugw("agent instance state", kv...)
 }
 
 // healthCategoryToString converts a HealthCategory to a human-readable string.

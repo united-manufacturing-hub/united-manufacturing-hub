@@ -30,10 +30,6 @@ import (
 	nmapservice "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/nmap"
 )
 
-// stoppedState is the desired-state literal that disables a config: an nmap
-// worker whose DesiredFSMState is this is not run in the fsmv2 runtime.
-const stoppedState = "stopped"
-
 // NewFsmv2NmapManager builds the fsmv1-compatible manager that drives the
 // fsmv2 nmap workers. It extracts NmapConfig entries from the snapshot, upserts
 // enabled workers into the fsmv2 runtime, and maps their stored status back to
@@ -45,11 +41,10 @@ func NewFsmv2NmapManager(managerName string) *adapter.WorkerManager[config.NmapC
 		ExtractConfigs: func(s publicfsm.SystemSnapshot) []config.NmapConfig {
 			return s.CurrentConfig.Internal.Nmap
 		},
-		NameOf:         func(c config.NmapConfig) string { return c.Name },
-		IsEnabled:      func(c config.NmapConfig) bool { return c.DesiredFSMState != stoppedState },
-		CfgFor:         cfgFor,
-		MapFresh:       mapFresh,
-		MapObserved:    mapObserved,
+		NameOf:      func(c config.NmapConfig) string { return c.Name },
+		CfgFor:      cfgFor,
+		MapFresh:    mapFresh,
+		MapObserved: mapObserved,
 	})
 }
 

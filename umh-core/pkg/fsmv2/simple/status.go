@@ -22,8 +22,8 @@ import (
 // Status wraps a developer's poll result with the tick's degraded/reason verdict.
 // Those two fields are the Health value from health.go, flattened in here: on a
 // good poll they come from the developer's Health function; on a poll error the
-// framework sets them directly (Degraded, a reason, and a zero Result) without
-// calling Health. simple owns this type (unlike the opaque developer TStatus), so
+// framework sets them directly (Degraded and a reason) without calling Health,
+// preserving whatever partial Result the failed Poll returned. simple owns this type (unlike the opaque developer TStatus), so
 // it can carry the verdict on both paths. The fsmv2 state reads Degraded/Reason
 // off the snapshot, and the fsmv1 adapter reads them through the HealthReporter
 // interface.

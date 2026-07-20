@@ -417,6 +417,68 @@ var _ = Describe("DegradedState", func() {
 	It("should return a valid String()", func() {
 		Expect(s.String()).To(Equal("Degraded"))
 	})
+
+	It("appends the last error detail to the backoff reason when degraded", func() {
+		snap := makeSnapshotWithBackoff(config.DesiredStateRunning, false, 3, true, true, 5, types.ErrorTypeServerError, 60*time.Second, time.Time{}, time.Now())
+		obs := snap.Observed.(fsmv2.Observation[snapshot.PullStatus])
+		obs.Status.LastErrorDetail = "HTTP 502 (server_error): error code: 502"
+		snap.Observed = obs
+		result := s.Next(snap)
+		Expect(result.Reason).To(ContainSubstring("backoff"))
+		Expect(result.Reason).To(ContainSubstring("; last: HTTP 502"))
+	})
+
+	It("does not append the last error detail when it is empty in the backoff path", func() {
+		snap := makeSnapshotWithBackoff(config.DesiredStateRunning, false, 3, true, true, 5, types.ErrorTypeServerError, 60*time.Second, time.Time{}, time.Now())
+		obs := snap.Observed.(fsmv2.Observation[snapshot.PullStatus])
+		obs.Status.LastErrorDetail = ""
+		snap.Observed = obs
+		result := s.Next(snap)
+		Expect(result.Reason).To(ContainSubstring("backoff"))
+		Expect(result.Reason).NotTo(ContainSubstring("; last:"))
+	})
+
+	It("appends the last error detail to the still-pulling reason when degraded", func() {
+		snap := makeSnapshotWithBackoff(config.DesiredStateRunning, false, 1, true, true, 2,
+			types.ErrorTypeNetwork, 0,
+			time.Now().Add(-10*time.Second), time.Time{})
+		obs := snap.Observed.(fsmv2.Observation[snapshot.PullStatus])
+		obs.Status.LastErrorDetail = "HTTP 502 (server_error): error code: 502"
+		snap.Observed = obs
+		result := s.Next(snap)
+		Expect(result.Reason).To(ContainSubstring("still pulling"))
+		Expect(result.Reason).To(ContainSubstring("; last: HTTP 502"))
+	})
+
+	It("does not append the last error detail when it is empty in the still-pulling path", func() {
+		snap := makeSnapshotWithBackoff(config.DesiredStateRunning, false, 1, true, true, 2,
+			types.ErrorTypeNetwork, 0,
+			time.Now().Add(-10*time.Second), time.Time{})
+		obs := snap.Observed.(fsmv2.Observation[snapshot.PullStatus])
+		obs.Status.LastErrorDetail = ""
+		snap.Observed = obs
+		result := s.Next(snap)
+		Expect(result.Reason).To(ContainSubstring("still pulling"))
+		Expect(result.Reason).NotTo(ContainSubstring("; last:"))
+	})
+
+	It("does not append the last error detail when recovering", func() {
+		snap := makeSnapshotFull(config.DesiredStateRunning, false, 0, true, true, 0)
+		obs := snap.Observed.(fsmv2.Observation[snapshot.PullStatus])
+		obs.Status.LastErrorDetail = "HTTP 502 (server_error): error code: 502"
+		snap.Observed = obs
+		result := s.Next(snap)
+		Expect(result.Reason).NotTo(ContainSubstring("; last:"))
+	})
+
+	It("does not append the last error detail when waiting for transport or token", func() {
+		snap := makeSnapshotFull(config.DesiredStateRunning, false, 5, false, false, 0)
+		obs := snap.Observed.(fsmv2.Observation[snapshot.PullStatus])
+		obs.Status.LastErrorDetail = "HTTP 502 (server_error): error code: 502"
+		snap.Observed = obs
+		result := s.Next(snap)
+		Expect(result.Reason).NotTo(ContainSubstring("; last:"))
+	})
 })
 
 var _ = Describe("StoppingState", func() {

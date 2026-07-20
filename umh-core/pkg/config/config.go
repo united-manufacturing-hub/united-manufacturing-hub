@@ -121,6 +121,13 @@ type FSMInstanceConfig struct {
 	DesiredFSMState string `yaml:"desiredState,omitempty"`
 }
 
+// GetDesiredFSMState returns the configured desired fsmv1 state, satisfying the
+// fsmv2 adapter's StateConfig constraint. The name differs from GetState() on
+// purpose: WorkerBase duck-types GetState() and validates it against the
+// lifecycle vocabulary ("running"/"stopped"), which a domain literal like
+// "open" would fail.
+func (c FSMInstanceConfig) GetDesiredFSMState() string { return c.DesiredFSMState }
+
 // ContainerConfig is the config for a container instance.
 type ContainerConfig struct {
 	Name            string `yaml:"name"`

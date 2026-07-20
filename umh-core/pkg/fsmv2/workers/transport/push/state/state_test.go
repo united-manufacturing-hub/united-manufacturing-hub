@@ -359,6 +359,46 @@ var _ = Describe("DegradedState", func() {
 	It("should return a valid String()", func() {
 		Expect(s.String()).To(Equal("Degraded"))
 	})
+
+	It("appends the last error detail to the backoff reason when degraded", func() {
+		snap := makeSnapshotWithBackoff(config.DesiredStateRunning, false, 3, true, true, 5, types.ErrorTypeServerError, 60*time.Second, time.Time{}, time.Now())
+		obs := snap.Observed.(fsmv2.Observation[snapshot.PushStatus])
+		obs.Status.LastErrorDetail = "HTTP 502 (server_error): error code: 502"
+		snap.Observed = obs
+		result := s.Next(snap)
+		Expect(result.Reason).To(ContainSubstring("; last: HTTP 502"))
+	})
+
+	It("does not append the last error detail when it is empty in the backoff path", func() {
+		snap := makeSnapshotWithBackoff(config.DesiredStateRunning, false, 3, true, true, 5, types.ErrorTypeServerError, 60*time.Second, time.Time{}, time.Now())
+		obs := snap.Observed.(fsmv2.Observation[snapshot.PushStatus])
+		obs.Status.LastErrorDetail = ""
+		snap.Observed = obs
+		result := s.Next(snap)
+		Expect(result.Reason).To(ContainSubstring("backoff"))
+		Expect(result.Reason).NotTo(ContainSubstring("; last:"))
+	})
+
+	It("appends the last error detail to the still-pushing reason when degraded", func() {
+		snap := makeSnapshotWithBackoff(config.DesiredStateRunning, false, 1, true, true, 2,
+			types.ErrorTypeNetwork, 0,
+			time.Now().Add(-10*time.Second), time.Time{})
+		obs := snap.Observed.(fsmv2.Observation[snapshot.PushStatus])
+		obs.Status.LastErrorDetail = "HTTP 502 (server_error): error code: 502"
+		snap.Observed = obs
+		result := s.Next(snap)
+		Expect(result.Reason).To(ContainSubstring("still pushing"))
+		Expect(result.Reason).To(ContainSubstring("; last: HTTP 502"))
+	})
+
+	It("does not append the last error detail when recovering", func() {
+		snap := makeSnapshot(config.DesiredStateRunning, false, 0, true, true)
+		obs := snap.Observed.(fsmv2.Observation[snapshot.PushStatus])
+		obs.Status.LastErrorDetail = "HTTP 502 (server_error): error code: 502"
+		snap.Observed = obs
+		result := s.Next(snap)
+		Expect(result.Reason).NotTo(ContainSubstring("; last:"))
+	})
 })
 
 var _ = Describe("StoppingState", func() {

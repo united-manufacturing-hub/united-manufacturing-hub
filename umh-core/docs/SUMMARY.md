@@ -22,6 +22,7 @@
     * [Data Models](usage/data-modeling/data-models.md)
     * [Data Contracts](usage/data-modeling/data-contracts.md)
     * [Payload Shapes](usage/data-modeling/payload-shapes.md)
+    * [Type Definitions](usage/data-modeling/type-definitions.md)
     * [Stream Processors](usage/data-modeling/stream-processors.md)
   * [Management Console](usage/management-console/README.md)
 * [Production](production/README.md)

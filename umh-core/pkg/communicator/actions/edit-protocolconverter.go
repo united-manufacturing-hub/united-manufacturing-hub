@@ -1150,12 +1150,27 @@ func (a *EditProtocolConverterAction) renderDesiredDFCConfig(pcSnapshot *protoco
 
 	agentLocation := convertIntMapToStringMap(systemSnapshot.CurrentConfig.Agent.Location)
 
+	// The stored system snapshot does not carry the top-level historian section,
+	// so read it straight from the config manager. A read failure is propagated
+	// rather than swallowed: leaving historian nil would make a template that
+	// references {{ .historian.* }} fail this verify render with a misleading
+	// missingkey error, masking the real read failure and rolling back an
+	// otherwise valid edit. Propagating surfaces the true cause to the user.
+	ctx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
+	defer cancel()
+
+	currentConfig, err := a.configManager.GetConfig(ctx, 0)
+	if err != nil {
+		return dataflowcomponentserviceconfig.DataflowComponentServiceConfig{}, fmt.Errorf("failed to read current config for historian variables: %w", err)
+	}
+
 	pcName := a.name
 
 	runtimeConfig, err := runtime_config.BuildRuntimeConfig(
 		modifiedSpec,
 		agentLocation,
 		nil, // TODO: add global vars
+		currentConfig.Historian,
 		runtime_config.BridgedByPlaceholder,
 		pcName,
 	)

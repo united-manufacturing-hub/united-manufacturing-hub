@@ -110,7 +110,7 @@ func (d *DataflowComponentInstance) Reconcile(ctx context.Context, snapshot fsm.
 
 			// Log the error but always continue reconciling - we need reconcileStateTransition to run
 			// to restore services after restart, even if we can't read their status yet
-			d.baseFSMInstance.GetLogger().Warnf("failed to update observed state (continuing reconciliation): %s", err)
+			d.baseFSMInstance.GetLogger().Debugf("failed to update observed state (continuing reconciliation): %s", err)
 
 			// For all other errors, just continue reconciling without setting backoff
 			err = nil
@@ -132,7 +132,7 @@ func (d *DataflowComponentInstance) Reconcile(ctx context.Context, snapshot fsm.
 		}
 
 		d.baseFSMInstance.SetError(err, snapshot.Tick)
-		d.baseFSMInstance.GetLogger().Errorf("error reconciling state: %s", err)
+		d.baseFSMInstance.LogErrorDedup("error reconciling state: %s", err)
 
 		return nil, false // We don't want to return an error here, because we want to continue reconciling
 	}
@@ -150,7 +150,7 @@ func (d *DataflowComponentInstance) Reconcile(ctx context.Context, snapshot fsm.
 		}
 
 		d.baseFSMInstance.SetError(benthosErr, snapshot.Tick)
-		d.baseFSMInstance.GetLogger().Errorf("error reconciling benthosManager: %s", benthosErr)
+		d.baseFSMInstance.LogErrorDedup("error reconciling benthosManager: %s", benthosErr)
 
 		return nil, false
 	}

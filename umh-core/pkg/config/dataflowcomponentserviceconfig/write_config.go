@@ -185,6 +185,14 @@ func (c DataflowComponentWriteConfig) HasOutput() bool {
 // bridgedBy is the resolved consumer-group identifier. When empty the consumer_group
 // field is left blank (acceptable for structural-only conversions).
 func (c DataflowComponentWriteConfig) ToDataflowComponentServiceConfig(bridgedBy string) DataflowComponentServiceConfig {
+	// A write flow with no destination produces no runtime benthos config: the
+	// underlying DFC never starts and renders an empty benthos.yaml. Return an
+	// empty config so the rendered desired config matches the observed empty one,
+	// avoiding permanent false "Processors differ" divergence on every tick.
+	if !c.HasOutput() {
+		return DataflowComponentServiceConfig{}
+	}
+
 	processorType := c.Processing.Type
 	if processorType == "" {
 		processorType = "nodered_js"
@@ -192,27 +200,22 @@ func (c DataflowComponentWriteConfig) ToDataflowComponentServiceConfig(bridgedBy
 
 	pipeline := c.codeToPipeline(c.Processing.Code, processorType)
 
-	var (
-		input  map[string]any
-		output map[string]any
-	)
+	var output map[string]any
 
-	if c.HasOutput() {
-		topics := c.Topics
-		if len(topics) == 0 {
-			topics = []string{PlaceholderUMHTopicUnset}
-		}
+	topics := c.Topics
+	if len(topics) == 0 {
+		topics = []string{PlaceholderUMHTopicUnset}
+	}
 
-		input = map[string]any{
-			"uns": map[string]any{
-				"consumer_group": bridgedBy,
-				"umh_topics":     topics,
-			},
-		}
+	input := map[string]any{
+		"uns": map[string]any{
+			"consumer_group": bridgedBy,
+			"umh_topics":     topics,
+		},
+	}
 
-		if c.Destination.Protocol != "" {
-			output = c.Destination.toOutputMap()
-		}
+	if c.Destination.Protocol != "" {
+		output = c.Destination.toOutputMap()
 	}
 
 	cacheResources, rateLimitResources, buffer := c.parseExtra()

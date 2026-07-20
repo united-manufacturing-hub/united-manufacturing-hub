@@ -15,8 +15,12 @@
 package config
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
+	"net/url"
+	"strconv"
 )
 
 // ErrHistorianNotConfigured is returned by AtomicEditHistorian when no historian
@@ -62,12 +66,18 @@ type HistorianConfig struct {
 // TimescaleConfig holds the connection settings for the TimescaleDB/Postgres
 // historian. It maps to `historian.timescale` in config.yaml.
 type TimescaleConfig struct {
+	// The three TLS certificate paths deliberately omit json:omitempty (keeping it
+	// only on the yaml tag). ToTemplateMap builds the template scope via a JSON
+	// round-trip, and RenderTemplate runs with missingkey=error: an unset cert must
+	// still surface as an empty key, or a bridge referencing {{ .historian.timescale.sslrootcert }}
+	// fails to render. The key-set lock test guards this.
+	//
 	// SSLRootCert is the path inside the container to the CA certificate file.
-	SSLRootCert string `yaml:"sslrootcert,omitempty" json:"sslrootcert,omitempty"`
+	SSLRootCert string `yaml:"sslrootcert,omitempty" json:"sslrootcert"`
 	// SSLCert is the path inside the container to the client certificate file.
-	SSLCert string `yaml:"sslcert,omitempty" json:"sslcert,omitempty"`
+	SSLCert string `yaml:"sslcert,omitempty" json:"sslcert"`
 	// SSLKey is the path inside the container to the client key file.
-	SSLKey string `yaml:"sslkey,omitempty" json:"sslkey,omitempty"`
+	SSLKey string `yaml:"sslkey,omitempty" json:"sslkey"`
 	// Host is the TimescaleDB/Postgres hostname or IP address (required).
 	Host string `yaml:"host" json:"host"`
 	// Password is the login role password (required). Masked by String() so it
@@ -203,4 +213,88 @@ func (t TimescaleConfig) String() string {
 
 	type redacted TimescaleConfig
 	return fmt.Sprintf("%+v", redacted(t))
+}
+
+// ToTemplateMap returns the historian settings as a nested map for template
+// rendering, mirroring the `historian.timescale` shape in config.yaml. Bridge
+// templates reference the connection as `{{ .historian.timescale.host }}`,
+// `{{ .historian.timescale.port }}`, and the other fields. It returns an empty
+// map when no timescale section is present.
+func (h HistorianConfig) ToTemplateMap() map[string]any {
+	if h.Timescale == (TimescaleConfig{}) {
+		return map[string]any{}
+	}
+
+	return toTemplateMap(h.WithDefaults())
+}
+
+// TimescaleTemplateKeys is the complete set of keys TimescaleConfig.ToTemplateMap
+// exposes under {{ .historian.timescale.* }}. It is the template-variable contract:
+// bridge templates may reference exactly these keys. The key-set lock test asserts
+// ToTemplateMap emits exactly these regardless of field values, so it fails if a
+// json:omitempty tag is ever (re-)added to an optional field and drops a key.
+var TimescaleTemplateKeys = []string{
+	"host", "port", "database", "username", "password",
+	"sslmode", "sslrootcert", "sslcert", "sslkey",
+}
+
+// ToTemplateMap returns the timescale connection settings as a flat map keyed by
+// the json field names, for template rendering. Defaults are applied first so
+// templates always see resolved values.
+func (t TimescaleConfig) ToTemplateMap() map[string]any {
+	return toTemplateMap(t.WithDefaults())
+}
+
+// ToDSN builds a libpq/pgx connection string ("postgres://...") from the
+// connection settings, applying defaults first. Username and password are
+// percent-escaped so reserved characters survive; sslmode and any TLS cert paths
+// become query parameters. The returned string carries the raw password: never
+// log it (see String, which masks the password for %v logging).
+func (t TimescaleConfig) ToDSN() string {
+	t = t.WithDefaults()
+
+	q := url.Values{}
+	q.Set("sslmode", string(t.SSLMode))
+
+	if t.SSLRootCert != "" {
+		q.Set("sslrootcert", t.SSLRootCert)
+	}
+
+	if t.SSLCert != "" {
+		q.Set("sslcert", t.SSLCert)
+	}
+
+	if t.SSLKey != "" {
+		q.Set("sslkey", t.SSLKey)
+	}
+
+	u := url.URL{
+		Scheme:   "postgres",
+		User:     url.UserPassword(t.Username, t.Password),
+		Host:     net.JoinHostPort(t.Host, strconv.Itoa(int(t.Port))),
+		Path:     "/" + t.Database,
+		RawQuery: q.Encode(),
+	}
+
+	return u.String()
+}
+
+// toTemplateMap serialises a config value to a map keyed by its json field names.
+// A JSON round-trip keeps the exposed keys in step with the struct tags, so a new
+// field reaches templates without editing this function. This is why the optional
+// TLS certificate fields drop json:omitempty (see TimescaleConfig): under
+// RenderTemplate's missingkey=error an unset field must render as an empty value,
+// not vanish from the scope.
+func toTemplateMap(v any) map[string]any {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return map[string]any{}
+	}
+
+	m := map[string]any{}
+	if err := json.Unmarshal(b, &m); err != nil {
+		return map[string]any{}
+	}
+
+	return m
 }

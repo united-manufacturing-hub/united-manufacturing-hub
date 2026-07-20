@@ -38,7 +38,8 @@ type MonitorSpec[TConfig, TStatus, TDeps any] struct {
 	// must be stateless (e.g. an *http.Client, not a per-tick buffer).
 	Deps TDeps
 	// Poll observes the target once and returns the status. A non-nil error
-	// drives the worker degraded with reason "poll error: <err>". Required.
+	// drives the worker degraded with reason "poll error: <err>"; any status
+	// returned alongside the error is still preserved as the Result. Required.
 	Poll func(ctx context.Context, d TDeps, cfg TConfig) (TStatus, error)
 	// Health turns a good poll's status into a health verdict. Optional: when
 	// nil, a good poll is healthy with reason "running (no health check)". Never

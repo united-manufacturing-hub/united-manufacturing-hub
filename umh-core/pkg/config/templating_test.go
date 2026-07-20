@@ -89,6 +89,37 @@ var _ = Describe("RenderTemplate", func() {
 		})
 	})
 
+	Describe("secret redaction in the failing snippet", func() {
+		var (
+			in    renderFixture
+			scope map[string]any
+		)
+
+		BeforeEach(func() {
+			in = renderFixture{A: "line1\n{{ .inject }}", B: "tail"}
+			scope = map[string]any{"inject": "s3cr3t-pw\nbroken: ["}
+		})
+
+		It("leaks the value into the snippet when no secrets are supplied", func() {
+			_, err := config.RenderTemplate(in, scope)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("s3cr3t-pw"))
+		})
+
+		It("masks the value when it is supplied as a secret", func() {
+			_, err := config.RenderTemplate(in, scope, "s3cr3t-pw")
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).NotTo(ContainSubstring("s3cr3t-pw"))
+			Expect(err.Error()).To(ContainSubstring("[REDACTED]"))
+		})
+
+		It("ignores empty secrets", func() {
+			_, err := config.RenderTemplate(in, scope, "")
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("s3cr3t-pw"))
+		})
+	})
+
 	Describe("errors before the unmarshal step", func() {
 		It("does not attach a snippet to template execution errors", func() {
 			in := renderFixture{A: "{{ .missing }}", B: "static"}

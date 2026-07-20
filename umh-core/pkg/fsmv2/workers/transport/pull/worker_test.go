@@ -201,6 +201,20 @@ var _ = Describe("PullWorker", func() {
 			Expect(ok).To(BeTrue())
 			Expect(typedObs.Status.IsBackpressured).To(BeFalse())
 		})
+
+		It("surfaces last status_code and error_detail from the child deps", func() {
+			worker.GetDependencies().RecordTypedError(types.ErrorTypeServerError, 0, 502, "HTTP 502 (server_error): error code: 502")
+
+			ctx := context.Background()
+			observed, err := worker.CollectObservedState(ctx, nil)
+
+			Expect(err).ToNot(HaveOccurred())
+			typedObs, ok := observed.(fsmv2.Observation[snapshot.PullStatus])
+			Expect(ok).To(BeTrue())
+			Expect(typedObs.Status.LastErrorType).To(Equal(types.ErrorTypeServerError))
+			Expect(typedObs.Status.LastStatusCode).To(Equal(502))
+			Expect(typedObs.Status.LastErrorDetail).To(Equal("HTTP 502 (server_error): error code: 502"))
+		})
 	})
 
 	Describe("DeriveDesiredState", func() {

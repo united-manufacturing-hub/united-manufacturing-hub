@@ -99,7 +99,7 @@ func (c *ContainerInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSn
 
 		// Log the error but always continue reconciling - we need reconcileStateTransition to run
 		// to restore services after restart, even if we can't read their status yet
-		c.baseFSMInstance.GetLogger().Warnf("failed to update observed state (continuing reconciliation): %s", err)
+		c.baseFSMInstance.GetLogger().Debugf("failed to update observed state (continuing reconciliation): %s", err)
 
 		// For all other errors, just continue reconciling without setting backoff
 		err = nil
@@ -124,7 +124,7 @@ func (c *ContainerInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSn
 		}
 
 		c.baseFSMInstance.SetError(err, snapshot.Tick)
-		c.baseFSMInstance.GetLogger().Errorf("error reconciling state: %s", err)
+		c.baseFSMInstance.LogErrorDedup("error reconciling state: %s", err)
 
 		return nil, false // We don't want to return an error here, because we want to continue reconciling
 	}
@@ -163,58 +163,64 @@ func (c *ContainerInstance) printSystemState(instanceName string, tick uint64) {
 	logger := c.baseFSMInstance.GetLogger()
 	status := c.ObservedState.ServiceInfo
 
-	logger.Infof("======= Container Instance State: %s (tick: %d) =======", instanceName, tick)
-	logger.Infof("FSM States: Current=%s, Desired=%s", c.baseFSMInstance.GetCurrentFSMState(), c.baseFSMInstance.GetDesiredFSMState())
-
-	if status == nil {
-		logger.Infof("Container Status: No data available")
-	} else {
-		logger.Infof("Health: Overall=%s, CPU=%s, Memory=%s, Disk=%s",
-			healthCategoryToString(status.OverallHealth),
-			healthCategoryToString(status.CPUHealth),
-			healthCategoryToString(status.MemoryHealth),
-			healthCategoryToString(status.DiskHealth))
-
-		if status.CPU != nil {
-			logger.Infof("CPU: Usage=%.2fm cores, Cores=%d", status.CPU.TotalUsageMCpu, status.CPU.CoreCount)
-			
-			// Log cgroup CPU info if available
-			if status.CPU.CgroupCores > 0 {
-				logger.Infof("CPU Cgroup: Quota=%.2f cores, Throttle Ratio=%.4f, Throttled=%v", 
-					status.CPU.CgroupCores, 
-					status.CPU.ThrottleRatio,
-					status.CPU.IsThrottled)
-			}
-		}
-
-		if status.Memory != nil {
-			usedMB := float64(status.Memory.CGroupUsedBytes) / 1024 / 1024
-			totalMB := float64(status.Memory.CGroupTotalBytes) / 1024 / 1024
-
-			usagePercent := 0.0
-			if status.Memory.CGroupTotalBytes > 0 {
-				usagePercent = float64(status.Memory.CGroupUsedBytes) / float64(status.Memory.CGroupTotalBytes) * 100
-			}
-
-			logger.Infof("Memory: Used=%.2f MB, Total=%.2f MB, Usage=%.2f%%", usedMB, totalMB, usagePercent)
-		}
-
-		if status.Disk != nil {
-			usedGB := float64(status.Disk.DataPartitionUsedBytes) / 1024 / 1024 / 1024
-			totalGB := float64(status.Disk.DataPartitionTotalBytes) / 1024 / 1024 / 1024
-
-			usagePercent := 0.0
-			if status.Disk.DataPartitionTotalBytes > 0 {
-				usagePercent = float64(status.Disk.DataPartitionUsedBytes) / float64(status.Disk.DataPartitionTotalBytes) * 100
-			}
-
-			logger.Infof("Disk: Used=%.2f GB, Total=%.2f GB, Usage=%.2f%%", usedGB, totalGB, usagePercent)
-		}
-
-		logger.Infof("Architecture: %s, HWID: %s", status.Architecture, status.Hwid)
+	kv := []any{
+		"instance", instanceName,
+		"tick", tick,
+		"current", c.baseFSMInstance.GetCurrentFSMState(),
+		"desired", c.baseFSMInstance.GetDesiredFSMState(),
 	}
 
-	logger.Infof("=================================================")
+	if status == nil {
+		kv = append(kv, "status", "no data available")
+		logger.Debugw("container instance state", kv...)
+		return
+	}
+
+	kv = append(kv,
+		"health", healthCategoryToString(status.OverallHealth),
+		"cpu_health", healthCategoryToString(status.CPUHealth),
+		"mem_health", healthCategoryToString(status.MemoryHealth),
+		"disk_health", healthCategoryToString(status.DiskHealth),
+	)
+
+	if status.CPU != nil {
+		kv = append(kv, "cpu_mcpu", status.CPU.TotalUsageMCpu, "cpu_cores", status.CPU.CoreCount)
+		if status.CPU.CgroupCores > 0 {
+			kv = append(kv,
+				"cgroup_cores", status.CPU.CgroupCores,
+				"throttle_ratio", status.CPU.ThrottleRatio,
+				"throttled", status.CPU.IsThrottled,
+			)
+		}
+	}
+
+	if status.Memory != nil {
+		usedMB := float64(status.Memory.CGroupUsedBytes) / 1024 / 1024
+		totalMB := float64(status.Memory.CGroupTotalBytes) / 1024 / 1024
+
+		usagePercent := 0.0
+		if status.Memory.CGroupTotalBytes > 0 {
+			usagePercent = float64(status.Memory.CGroupUsedBytes) / float64(status.Memory.CGroupTotalBytes) * 100
+		}
+
+		kv = append(kv, "mem_used_mb", usedMB, "mem_total_mb", totalMB, "mem_pct", usagePercent)
+	}
+
+	if status.Disk != nil {
+		usedGB := float64(status.Disk.DataPartitionUsedBytes) / 1024 / 1024 / 1024
+		totalGB := float64(status.Disk.DataPartitionTotalBytes) / 1024 / 1024 / 1024
+
+		usagePercent := 0.0
+		if status.Disk.DataPartitionTotalBytes > 0 {
+			usagePercent = float64(status.Disk.DataPartitionUsedBytes) / float64(status.Disk.DataPartitionTotalBytes) * 100
+		}
+
+		kv = append(kv, "disk_used_gb", usedGB, "disk_total_gb", totalGB, "disk_pct", usagePercent)
+	}
+
+	kv = append(kv, "arch", status.Architecture, "hwid", status.Hwid)
+
+	logger.Debugw("container instance state", kv...)
 }
 
 // healthCategoryToString converts a HealthCategory to a human-readable string.

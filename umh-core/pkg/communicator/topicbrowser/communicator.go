@@ -308,7 +308,7 @@ func (tbc *TopicBrowserCommunicator) processIncrementalBuffers(buffers []*topicb
 	}
 
 	result.DebugInfo = debugInfo
-	tbc.logger.Infof("TopicBrowserCommunicator: %s", result.DebugInfo)
+	tbc.logger.Debugf("TopicBrowserCommunicator: %s", result.DebugInfo)
 
 	return result, nil
 }
@@ -387,7 +387,7 @@ func (tbc *TopicBrowserCommunicator) GetSubscriberData(isBootstrapped bool) (*Su
 	}
 
 	data.Summary += fmt.Sprintf("%d incremental buffers", incrementalCount)
-	tbc.logger.Infof("TopicBrowserCommunicator: %s", data.Summary)
+	tbc.logger.Debugf("TopicBrowserCommunicator: %s", data.Summary)
 
 	return data, nil
 }

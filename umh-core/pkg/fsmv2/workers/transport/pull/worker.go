@@ -97,13 +97,17 @@ func (w *PullWorker) CollectObservedState(ctx context.Context, desired fsmv2.Des
 		cfg = fsmv2.ExtractConfig[snapshot.PullDesiredState](desired)
 	}
 
+	lastErrType, lastSc, lastDetail := d.GetLastErrorSnapshot()
+
 	status := snapshot.PullStatus{
 		HasTransport:        d.GetTransport() != nil,
 		HasValidToken:       cfg.AuthSession.IsUsable(time.Minute),
 		IsBackpressured:     d.IsBackpressured(),
 		ConsecutiveErrors:   d.GetConsecutiveErrors(),
 		PendingMessageCount: d.PendingMessageCount(),
-		LastErrorType:       d.GetLastErrorType(),
+		LastErrorType:       lastErrType,
+		LastStatusCode:      lastSc,
+		LastErrorDetail:     lastDetail,
 		LastRetryAfter:      d.GetLastRetryAfter(),
 		DegradedEnteredAt:   d.GetDegradedEnteredAt(),
 		LastErrorAt:         d.GetLastErrorAt(),

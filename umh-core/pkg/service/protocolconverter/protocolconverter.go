@@ -24,6 +24,7 @@ import (
 	internalfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/connectionserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/protocolconverterserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
@@ -299,7 +300,7 @@ func (p *ProtocolConverterService) GetConfig(
 	underlyingDFCWriteName := p.getUnderlyingDFCWriteName(protConvName)
 
 	// Get the Connection config
-	connConfig, err := p.connectionService.GetConfig(ctx, filesystemService, underlyingConnectionName)
+	connConfig, err := p.getObservedConnectionConfig(ctx, filesystemService, underlyingConnectionName)
 	if err != nil {
 		return protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime{}, fmt.Errorf("failed to get connection config: %w", err)
 	}
@@ -317,6 +318,38 @@ func (p *ProtocolConverterService) GetConfig(
 	actualConfig := protocolconverterserviceconfig.FromConnectionAndDFCServiceConfig(connConfig, dfcReadConfig, dfcWriteConfig)
 
 	return actualConfig, nil
+}
+
+// getObservedConnectionConfig returns the observed connection config.
+//
+// The fsmv1 nmap backend persists the rendered config to a shared on-disk file,
+// so p.connectionService.GetConfig reads it back correctly. The fsmv2 backend
+// keeps config only in the connection FSM instance's in-memory state;
+// p.connectionService is a standalone helper whose in-memory config is never
+// populated, so its GetConfig would return an empty target/port and the protocol
+// converter would report permanent connection divergence. For fsmv2 read the
+// observed config from the connection FSM instance via the manager, which is the
+// single source of truth for both backends.
+func (p *ProtocolConverterService) getObservedConnectionConfig(ctx context.Context, filesystemService filesystem.Service, connectionName string) (connectionserviceconfig.ConnectionServiceConfig, error) {
+	if !p.connectionService.UsesFsmv2Backend() {
+		return p.connectionService.GetConfig(ctx, filesystemService, connectionName)
+	}
+
+	observed, err := p.connectionManager.GetLastObservedState(connectionName)
+	if err != nil {
+		// No observation yet (instance not created): treat as not-existing so the
+		// caller handles it like the fsmv1 ErrServiceNotExist path. Must return this
+		// package's own ErrServiceNotExist, not connection.ErrServiceNotExist — callers
+		// match against protocolconverter.ErrServiceNotExist's message/identity.
+		return connectionserviceconfig.ConnectionServiceConfig{}, ErrServiceNotExist
+	}
+
+	connObserved, ok := observed.(connectionfsm.ConnectionObservedState)
+	if !ok {
+		return connectionserviceconfig.ConnectionServiceConfig{}, fmt.Errorf("connection observed state for %s is not a ConnectionObservedState", connectionName)
+	}
+
+	return connObserved.ObservedConnectionConfig, nil
 }
 
 // Status returns information about the connection health for the specified connection.
@@ -544,6 +577,8 @@ func (p *ProtocolConverterService) UpdateInManager(
 	if cfg == nil {
 		return errors.New("config is nil")
 	}
+
+	p.logger.Debugf("Updating protocolconverter %s", protConvName)
 
 	if ctx.Err() != nil {
 		return ctx.Err()

@@ -37,6 +37,10 @@ import (
 // BaseFSMInstance implements the public fsm.FSM interface.
 type BaseFSMInstance struct {
 
+	// lastSuppressionSummary is the time the most recent suppression summary was
+	// emitted, used to throttle the periodic WARN summary.
+	lastSuppressionSummary time.Time
+
 	// fsm is the finite state machine that manages instance state
 	fsm *fsm.FSM
 
@@ -52,13 +56,29 @@ type BaseFSMInstance struct {
 	// lastObservedLifecycleState is the last state that was observed by the FSM
 	// Note: this is only temporary and should be replaced by a generalized implementation of the archive storage
 	lastObservedLifecycleState string
-	cfg                        BaseFSMInstanceConfig
+
+	// lastLoggedErrorMsg is used to deduplicate error logs in the reconcile loop.
+	// Error on first/changed occurrence, Debug on repeats.
+	lastLoggedErrorMsg string
+
+	cfg BaseFSMInstanceConfig
 
 	// transientStreakCounter is the number of ticks a FSM has remained in a transient state
 	transientStreakCounter uint64
 
+	// suppressedErrorCount counts repeats of lastLoggedErrorMsg that were
+	// demoted to Debug since the last periodic summary (or since suppression
+	// began). It is reported and reset by the periodic WARN summary and by the
+	// final summary emitted when the error changes or clears.
+	suppressedErrorCount uint64
+
 	// mu is a mutex for protecting concurrent access to fields
 	mu sync.RWMutex
+
+	// errorSuppressionAnnounced records whether the "repeats suppressed" notice
+	// has already been logged for the current lastLoggedErrorMsg, so it is
+	// emitted exactly once (on the first repeat) rather than every repeat.
+	errorSuppressionAnnounced bool
 }
 
 type BaseFSMInstanceConfig struct {
@@ -346,6 +366,57 @@ func (s *BaseFSMInstance) ShouldSkipReconcileBecauseOfError(tick uint64) bool {
 // ResetState clears the error and backoff after a successful reconcile.
 func (s *BaseFSMInstance) ResetState() {
 	s.backoffManager.Reset()
+	s.emitSuppressionSummary()
+	s.lastLoggedErrorMsg = ""
+	s.errorSuppressionAnnounced = false
+}
+
+// errorSuppressionSummaryInterval bounds how often a periodic WARN summary is
+// emitted while identical reconcile errors keep repeating, so an ongoing
+// failure stays visible at normal log levels without flooding the log.
+const errorSuppressionSummaryInterval = 60 * time.Second
+
+// LogErrorDedup logs reconcile-loop errors without spamming: first occurrence
+// at Error, first repeat at Error with a suppression note, further repeats at
+// Debug plus a periodic Error summary (once per errorSuppressionSummaryInterval)
+// of the suppressed count. A changed message or ResetState resets the cycle and
+// emits a final Error summary of what was suppressed.
+func (s *BaseFSMInstance) LogErrorDedup(format string, args ...any) {
+	msg := fmt.Sprintf(format, args...)
+	switch {
+	case msg != s.lastLoggedErrorMsg:
+		s.emitSuppressionSummary()
+		s.logger.Errorf("%s", msg)
+		s.lastLoggedErrorMsg = msg
+		s.errorSuppressionAnnounced = false
+		s.suppressedErrorCount = 0
+		s.lastSuppressionSummary = time.Now()
+	case !s.errorSuppressionAnnounced:
+		s.logger.Errorf("%s (further repeats suppressed to debug until it changes or clears)", msg)
+		s.errorSuppressionAnnounced = true
+		s.lastSuppressionSummary = time.Now()
+	default:
+		s.logger.Debugf("%s", msg)
+		s.suppressedErrorCount++
+		if time.Since(s.lastSuppressionSummary) >= errorSuppressionSummaryInterval {
+			s.logger.Errorf("repeated reconcile error suppressed %d times in the last %s (still failing): %s",
+				s.suppressedErrorCount, time.Since(s.lastSuppressionSummary).Round(time.Second), msg)
+			s.suppressedErrorCount = 0
+			s.lastSuppressionSummary = time.Now()
+		}
+	}
+}
+
+// emitSuppressionSummary logs a final WARN summary when a suppressed error
+// changes or clears, so the scale of an ongoing failure is not hidden. It is a
+// no-op when no repeats were suppressed since the last summary.
+func (s *BaseFSMInstance) emitSuppressionSummary() {
+	if s.suppressedErrorCount == 0 {
+		return
+	}
+	s.logger.Errorf("previous reconcile error cleared or changed after %d further suppressed repeats: %s",
+		s.suppressedErrorCount, s.lastLoggedErrorMsg)
+	s.suppressedErrorCount = 0
 }
 
 // IsPermanentlyFailed returns true if the FSM has reached a permanent failure state

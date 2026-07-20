@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+## [0.44.30]
+
+### Improvements
+
+- Persistent connection failures now log the HTTP status code and a sanitized snippet of the upstream response, so the cause of a flapping connection (such as a 502 from a reverse proxy) is visible in the worker's logs
+- The umh-core log is now easier to scan: each entry lines up in fixed `[level] [caller] [component]` columns
+- Repeated reconcile errors no longer flood the umh-core log: the first occurrence is logged at ERROR with a note, then demoted to DEBUG until the error changes or clears, with an ERROR summary at most once a minute reporting how many repeats were suppressed so an ongoing failure stays visible
+- The umh-core log is quieter: high-frequency per-tick status detail moved from INFO to DEBUG, and repeated lines below WARN are rate-limited — warnings and errors are never dropped
+- Bridge templates can now reference the stored historian connection through `{{ .historian.timescale.host }}`, `{{ .historian.timescale.port }}`, and the other connection fields, so a bridge that writes to the historian's TimescaleDB no longer needs those connection details duplicated in its own variables
+
 ## [0.44.29]
 
 ### New Features
