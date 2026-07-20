@@ -49,6 +49,12 @@ const DefaultErrorDedupResetInterval = 5 * time.Minute
 type DedupLogger struct {
 	*zap.SugaredLogger
 
+	// dedupSugar is SugaredLogger with one extra caller-skip frame, used for the
+	// LogErrorDedup path so the reported caller is the code that called
+	// LogErrorDedup rather than dedup.go itself. Promoted methods on the embedded
+	// SugaredLogger keep the normal caller depth.
+	dedupSugar *zap.SugaredLogger
+
 	// lastSuppressionSummary is the time the most recent suppression summary was
 	// emitted, used to throttle the periodic summary.
 	lastSuppressionSummary time.Time
@@ -81,6 +87,7 @@ type DedupLogger struct {
 func NewDedupLogger(l *zap.SugaredLogger) *DedupLogger {
 	return &DedupLogger{
 		SugaredLogger:   l,
+		dedupSugar:      l.WithOptions(zap.AddCallerSkip(1)),
 		summaryInterval: DefaultErrorSuppressionSummaryInterval,
 		resetInterval:   DefaultErrorDedupResetInterval,
 	}
@@ -106,20 +113,20 @@ func (d *DedupLogger) LogErrorDedup(format string, args ...any) {
 	switch {
 	case msg != d.lastLoggedErrorMsg:
 		d.emitSuppressionSummary()
-		d.SugaredLogger.Errorf("%s", msg)
+		d.dedupSugar.Errorf("%s", msg)
 		d.lastLoggedErrorMsg = msg
 		d.errorSuppressionAnnounced = false
 		d.suppressedErrorCount = 0
 		d.lastSuppressionSummary = now
 	case !d.errorSuppressionAnnounced:
-		d.SugaredLogger.Errorf("%s (further repeats suppressed to debug until it changes or clears)", msg)
+		d.dedupSugar.Errorf("%s (further repeats suppressed to debug until it changes or clears)", msg)
 		d.errorSuppressionAnnounced = true
 		d.lastSuppressionSummary = now
 	default:
-		d.SugaredLogger.Debugf("%s", msg)
+		d.dedupSugar.Debugf("%s", msg)
 		d.suppressedErrorCount++
 		if now.Sub(d.lastSuppressionSummary) >= d.summaryInterval {
-			d.SugaredLogger.Errorf("repeated error suppressed %d times in the last %s (still failing): %s",
+			d.dedupSugar.Errorf("repeated error suppressed %d times in the last %s (still failing): %s",
 				d.suppressedErrorCount, now.Sub(d.lastSuppressionSummary).Round(time.Second), msg)
 			d.suppressedErrorCount = 0
 			d.lastSuppressionSummary = now
@@ -134,7 +141,7 @@ func (d *DedupLogger) emitSuppressionSummary() {
 	if d.suppressedErrorCount == 0 {
 		return
 	}
-	d.SugaredLogger.Errorf("previous error cleared or changed after %d further suppressed repeats: %s",
+	d.dedupSugar.Errorf("previous error cleared or changed after %d further suppressed repeats: %s",
 		d.suppressedErrorCount, d.lastLoggedErrorMsg)
 	d.suppressedErrorCount = 0
 }
