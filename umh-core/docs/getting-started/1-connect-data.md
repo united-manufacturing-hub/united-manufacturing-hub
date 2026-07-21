@@ -54,8 +54,6 @@ If connecting to a real PLC fails, the latency indicator turns orange:
 
 ![Bridge Latency Bad](./images/bridge-general-latency-bad.png)
 
-The status `starting_failed_dfc_missing` means no data flow is configured yet — we've only tested the connection. Let's get data flowing by configuring the **Read Flow** tab.
-
 ## Configure the Bridge - Read Flow Tab
 
 Because you started from the "Generic via Generate" template, the protocol is already set to **Generate** — no protocol dropdown to guess at.
