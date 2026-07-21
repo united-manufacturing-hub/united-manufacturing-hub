@@ -278,8 +278,10 @@ func (a *DeployProtocolConverterAction) Execute() (interface{}, map[string]inter
 				return nil, nil, err
 			}
 
-			readActive := pcToStop.ProtocolConverterServiceConfig.ReadDFCDesiredState == dataflowcomponent.OperationalStateActive
-			writeActive := pcToStop.ProtocolConverterServiceConfig.WriteDFCDesiredState == dataflowcomponent.OperationalStateActive
+			// Empty desired state ("") means active (pre-write flow), so gate vs
+			// stopped rather than active to avoid treating an active flow as stopped.
+			readActive := pcToStop.ProtocolConverterServiceConfig.ReadDFCDesiredState != dataflowcomponent.OperationalStateStopped
+			writeActive := pcToStop.ProtocolConverterServiceConfig.WriteDFCDesiredState != dataflowcomponent.OperationalStateStopped
 
 			if !readActive && !writeActive {
 				pcToStop.DesiredFSMState = protocolconverter.OperationalStateStopped
