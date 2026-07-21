@@ -39,7 +39,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/monitor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/redpanda_monitor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
-	"go.uber.org/zap"
 
 	redpanda_monitor_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/redpanda_monitor"
 	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
@@ -176,7 +175,7 @@ type RedpandaService struct {
 	httpClient httpclient.HTTPClient
 
 	schemaRegistryManager ISchemaRegistry
-	logger                *zap.SugaredLogger
+	logger                *logger.DedupLogger
 
 	s6Manager *s6fsm.S6Manager
 
@@ -239,8 +238,8 @@ func WithSchemaRegistryManager(schemaRegistryManager ISchemaRegistry) RedpandaSe
 func NewDefaultRedpandaService(redpandaName string, opts ...RedpandaServiceOption) *RedpandaService {
 	managerName := fmt.Sprintf("%s%s", logger.ComponentRedpandaService, redpandaName)
 	service := &RedpandaService{
-		logger:                 logger.For(managerName),
-		s6Manager:              s6fsm.NewS6Manager(managerName),
+		logger:    logger.NewDedupLogger(logger.For(managerName)),
+		s6Manager: s6fsm.NewS6Manager(managerName),
 		s6Service:              s6service.NewDefaultService(),
 		httpClient:             httpclient.NewDefaultHTTPClient(),
 		baseDir:                constants.DefaultRedpandaBaseDir,
@@ -945,8 +944,9 @@ func (s *RedpandaService) ReconcileManager(ctx context.Context, services service
 
 		schemaRegistryErr := s.schemaRegistryManager.Reconcile(ctx, dataModels, dataContracts, payloadShapes)
 		if schemaRegistryErr != nil {
-			// Only log them, don't return an error
-			s.logger.Warnf("failed to reconcile schema registry: %v", schemaRegistryErr)
+			// Only log them, don't return an error. Deduplicate so a persistent
+			// failure does not flood the log every tick.
+			s.logger.LogErrorDedup("failed to reconcile schema registry: %v", schemaRegistryErr)
 		}
 	} else {
 		s.logger.Debugf("Skipping schema registry reconciliation - no running redpanda services")
@@ -1033,7 +1033,7 @@ func (s *RedpandaService) ServiceExists(ctx context.Context, filesystemService f
 
 	exists, err := s.s6Service.ServiceExists(ctx, s6ServicePath, filesystemService)
 	if err != nil {
-		sentry.ReportIssuef(sentry.IssueTypeError, s.logger, "Error checking if service exists for %s: %v", s6ServiceName, err)
+		sentry.ReportIssuef(sentry.IssueTypeError, s.logger.SugaredLogger, "Error checking if service exists for %s: %v", s6ServiceName, err)
 
 		return false
 	}

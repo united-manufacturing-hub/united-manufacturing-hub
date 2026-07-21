@@ -115,7 +115,7 @@ func (a *AgentInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapsh
 		}
 
 		a.baseFSMInstance.SetError(err, snapshot.Tick)
-		a.baseFSMInstance.LogErrorDedup("error reconciling state: %s", err)
+		a.baseFSMInstance.Logger.LogErrorDedup("error reconciling state: %s", err)
 
 		return nil, false // We don't want to return an error here, because we want to continue reconciling
 	}

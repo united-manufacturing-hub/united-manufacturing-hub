@@ -148,8 +148,8 @@ func NewInstance(
 		},
 	}
 
-	logger := logger.For(config.Name)
-	backoffConfig := backoff.DefaultConfig(cfg.ID, logger)
+	logger := logger.NewDedupLogger(logger.For(config.Name))
+	backoffConfig := backoff.DefaultConfig(cfg.ID, logger.SugaredLogger)
 
 	instance := &TopicBrowserInstance{
 		baseFSMInstance: internal_fsm.NewBaseFSMInstance(cfg, backoffConfig, logger),

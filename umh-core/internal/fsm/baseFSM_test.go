@@ -27,6 +27,7 @@ import (
 	"go.uber.org/zap/zaptest"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/backoff"
+	umhlogger "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 )
 
 func TestBaseFSM(t *testing.T) {
@@ -58,7 +59,7 @@ var _ = Describe("BaseFSMInstance", func() {
 
 		logger := logger.Sugar()
 		backoffConfig := backoff.DefaultConfig(config.ID, logger)
-		fsmInstance = NewBaseFSMInstance(config, backoffConfig, logger)
+		fsmInstance = NewBaseFSMInstance(config, backoffConfig, umhlogger.NewDedupLogger(logger))
 
 		tick = 0
 	})
@@ -95,7 +96,7 @@ var _ = Describe("BaseFSMInstance", func() {
 
 			logger := logger.Sugar()
 			backoffConfig := backoff.NewBackoffConfig(config.ID, 1, 600, 2, logger)
-			specialInstance := NewBaseFSMInstance(config, backoffConfig, logger)
+			specialInstance := NewBaseFSMInstance(config, backoffConfig, umhlogger.NewDedupLogger(logger))
 			// Replace the default backoffManager with one that has fewer retries for testing
 			//	backoffConfig := backoff.DefaultConfig(specialInstance.cfg.ID, logger.Sugar())
 			//	backoffConfig.MaxRetries = 2 // Only allow 2 retries

@@ -55,7 +55,9 @@ func NewFSMLogger(sugar *zap.SugaredLogger) FSMLogger {
 		panic("NewFSMLogger: sugar cannot be nil")
 	}
 
-	sampled := sugar.Desugar().WithOptions(zap.WrapCore(samplerWrap)).Sugar()
+	// AddCallerSkip(1) so the reported caller is the code calling the FSMLogger
+	// method, not the zapLogger wrapper in this file.
+	sampled := sugar.Desugar().WithOptions(zap.WrapCore(samplerWrap), zap.AddCallerSkip(1)).Sugar()
 
 	return &zapLogger{sugar: sampled}
 }
@@ -69,7 +71,9 @@ func NewUnsampledFSMLogger(sugar *zap.SugaredLogger) FSMLogger {
 		panic("NewUnsampledFSMLogger: sugar cannot be nil")
 	}
 
-	return &zapLogger{sugar: sugar}
+	// AddCallerSkip(1) so the reported caller is the code calling the FSMLogger
+	// method, not the zapLogger wrapper in this file.
+	return &zapLogger{sugar: sugar.Desugar().WithOptions(zap.AddCallerSkip(1)).Sugar()}
 }
 
 func (l *zapLogger) Debug(msg string, fields ...Field) {

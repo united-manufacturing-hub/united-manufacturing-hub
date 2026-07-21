@@ -66,7 +66,7 @@ func NewAgentInstanceWithService(config config.AgentMonitorConfig, service agent
 	}
 
 	// Construct the base instance
-	baseFSM := internal_fsm.NewBaseFSMInstance(fsmCfg, backoff.DefaultConfig(metrics.ComponentAgentMonitor, logger.For(config.Name)), logger.For(config.Name))
+	baseFSM := internal_fsm.NewBaseFSMInstance(fsmCfg, backoff.DefaultConfig(metrics.ComponentAgentMonitor, logger.For(config.Name)), logger.NewDedupLogger(logger.For(config.Name)))
 
 	// Create our instance
 	instance := &AgentInstance{
