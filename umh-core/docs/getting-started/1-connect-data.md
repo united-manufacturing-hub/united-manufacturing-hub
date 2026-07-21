@@ -56,14 +56,12 @@ If connecting to a real PLC fails, the latency indicator turns orange:
 
 ## Configure the Bridge - Read Flow Tab
 
-Because you started from the "Generic via Generate" template, the protocol is already set to **Generate** — no protocol dropdown to guess at.
+Because you started from the "Generic via Generate" template, the protocol is already set to **Generate** and prefilled with a template generator configuration.
 
-![Bridge Read Header](./images/bridge-read-header.png)
-
-- **Data Type:** Select "Time Series" (the standard for PLC tags).
-- **Monitoring:** Shows the bridge state (currently `starting_failed_dfc_missing`) and throughput (currently zero).
+In Data Type, make sure that **Time-Series** is selected and that the **Activate Flow** toggle is enabled.
 
 ![Bridge Read Input](./images/bridge-read-input.png)
+
 
 - **Input:** The template pre-fills a generator. For real protocols like "Modbus" or "Siemens S7" you'd see protocol-specific settings here. Keep the defaults: generate `hello world` every `1s`.
 
@@ -71,7 +69,9 @@ Because you started from the "Generic via Generate" template, the protocol is al
 
 - **Processing:** The "Tag Processor" appears because we selected "Time Series" data type.
 
-Three required fields:
+Click the **Always** expansion panel to expand the view. The expand shows the processor code.
+
+There are three required fields:
 - **location_path:** Where the data goes (auto-filled from bridge location)
 - **data_contract:** Leave as `_raw` for now (no validation rules)
 - **tag_name:** Name your tag (data point) - we'll use `my_data`
