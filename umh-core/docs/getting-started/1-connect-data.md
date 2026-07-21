@@ -26,6 +26,7 @@ For this tutorial, pick **"From Scratch"**.
 You'll land on a list of curated templates. Type `generate` in the search bar and one template remains: **"Generic via Generate"** (Benthos `generate` input). Select it. 
 
 > 💡 **`generate`** is one of the inputs that Redpanda provides out of the box.
+>
 > [Learn more about the `generate` input here.](https://docs.redpanda.com/connect/components/inputs/generate/)
 
 By default, this template produces `hello world` messages, so you don't need a real PLC to finish the tutorial.
