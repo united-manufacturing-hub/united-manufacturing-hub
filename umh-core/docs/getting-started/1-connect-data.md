@@ -17,6 +17,8 @@ The UI will ask you how to start
 - **From Scratch**: Start building from one of our curated templates.
 - **From Existing Bridge**: Copy the configuration of an existing bridge.
 
+For this tutorial, pick **"From Scratch"**.
+
 ![Create a New Bridge](./images/bridge-create-new.png)
 
 ## Select the `generate` Template
