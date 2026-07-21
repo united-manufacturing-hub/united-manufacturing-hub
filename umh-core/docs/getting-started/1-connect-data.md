@@ -56,7 +56,7 @@ If connecting to a real PLC fails, the latency indicator turns orange:
 
 ## Configure the Bridge - Read Flow Tab
 
-Because you started from the "Generic via Generate" template, the protocol is already set to **Generate** and prefilled with a template generator configuration.
+Because you started from the "Generic via Generate" template, the protocol is already set to **Generate** and pre-filled with a template generator configuration.
 
 In Data Type, make sure that **Time-Series** is selected and that the **Activate Flow** toggle is enabled.
 
