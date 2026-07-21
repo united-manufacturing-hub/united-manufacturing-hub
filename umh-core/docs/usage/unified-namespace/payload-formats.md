@@ -24,7 +24,7 @@ Individual sensor values with timestamps. One value per message.
 **Requirements:**
 - Must have exactly `timestamp_ms` and `value` keys
 - `timestamp_ms`: Integer or float without fraction
-- `value`: number, boolean, or string (see [Type Definitions](../data-modeling/type-definitions.md))
+- `value`: number, boolean, or string (see [Data Model Type Definitions](../../reference/data-model-type-definitions.md))
 - No additional keys allowed
 - Max size: 1MiB
 
