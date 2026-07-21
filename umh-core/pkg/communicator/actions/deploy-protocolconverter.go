@@ -533,11 +533,11 @@ func flowsToStop(snapshot *protocolconverter.ProtocolConverterObservedStateSnaps
 	}
 
 	info := snapshot.ServiceInfo
-	if readActive && !dataflowcomponent.IsRunningState(info.DataflowComponentReadFSMState) {
+	if readActive && !isDFCHealthy(info.DataflowComponentReadFSMState) {
 		stopRead = true
 	}
 
-	if writeActive && !dataflowcomponent.IsRunningState(info.DataflowComponentWriteFSMState) {
+	if writeActive && !isDFCHealthy(info.DataflowComponentWriteFSMState) {
 		stopWrite = true
 	}
 
@@ -546,4 +546,12 @@ func flowsToStop(snapshot *protocolconverter.ProtocolConverterObservedStateSnaps
 	}
 
 	return stopRead, stopWrite
+}
+
+// isDFCHealthy reports whether a dataflow component FSM state is healthy.
+// Degraded is deliberately excluded: on a failed deploy a degraded flow should
+// be stopped, not left running.
+func isDFCHealthy(state string) bool {
+	return state == dataflowcomponent.OperationalStateActive ||
+		state == dataflowcomponent.OperationalStateIdle
 }
