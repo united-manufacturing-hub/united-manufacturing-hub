@@ -693,8 +693,8 @@ var _ = Describe("SchemaRegistry translation", func() {
 				},
 			}
 			dataContracts := []config.DataContractsConfig{
+				{Name: "_work_order_v1", Model: &config.ModelRef{Name: "work_order", Version: "v1"}},
 				{Name: "_typevalidation_v1", Model: &config.ModelRef{Name: "typevalidation", Version: "v1"}},
-				{Name: "_work_order_v1", Model: &config.ModelRef{Name: "work_order", Version: "v1"}}, // model deleted
 			}
 
 			schemas, skipPrefixes, err := registry.translateToSchemas(context.Background(), dataModels, dataContracts, map[string]config.PayloadShape{})

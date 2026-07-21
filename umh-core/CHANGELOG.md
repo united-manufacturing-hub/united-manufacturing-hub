@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Fixes
+
+- A misconfigured data contract no longer stops your other data contracts from being set up. Valid contracts are now registered and validated as usual, while the misconfigured one is skipped and reported as a warning
+
 ## [0.44.30]
 
 ### Improvements
@@ -15,16 +19,11 @@
 ## [0.44.29]
 
 ### New Features
-
 - Preview: an instance can now store a connection to an external TimescaleDB or PostgreSQL historian database (host, port, database, login, and TLS mode), which can be created, viewed, updated, and removed. Storing the connection does not yet route any data to it
 
 ### Improvements
 
 - The full bridge and stream-processor configuration is no longer written to the umh-core log at INFO on every internal re-apply (moved to DEBUG), removing a source of log flooding and CPU pressure when a config keeps being re-applied. While a bridge's observed config differs from its desired config, its status in the Management Console now shows a bounded summary of what differs, and the umh-core log carries one warning per bridge per minute, so the cause is visible without enabling debug logging
-
-### Fixes
-
-- A misconfigured data contract no longer stops your other data contracts from being set up. Valid contracts are now registered and validated as usual, while the misconfigured one is skipped and reported as a warning
 
 ## [0.44.28]
 
