@@ -16,10 +16,19 @@ package deps
 
 import (
 	"io"
+	"time"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
+
+// samplerWrap is used by NewFSMLogger to ensure sampling sits outside any hook
+// (e.g. SentryHook) that may override Check without delegating to its inner
+// core, which would otherwise bypass sampling entirely.
+func samplerWrap(core zapcore.Core) zapcore.Core {
+	return logger.NewLevelSampledCore(core, time.Second, 5, 100)
+}
 
 // LogLevel controls the minimum severity for log output.
 type LogLevel int8
@@ -38,12 +47,33 @@ type zapLogger struct {
 }
 
 // NewFSMLogger creates a new FSMLogger wrapping a zap.SugaredLogger.
+// It wraps the core with message-based sampling as the outermost layer so that
+// hooks like SentryHook (which override Check without delegating inward) cannot
+// bypass the rate limit.
 func NewFSMLogger(sugar *zap.SugaredLogger) FSMLogger {
 	if sugar == nil {
 		panic("NewFSMLogger: sugar cannot be nil")
 	}
 
-	return &zapLogger{sugar: sugar}
+	// AddCallerSkip(1) so the reported caller is the code calling the FSMLogger
+	// method, not the zapLogger wrapper in this file.
+	sampled := sugar.Desugar().WithOptions(zap.WrapCore(samplerWrap), zap.AddCallerSkip(1)).Sugar()
+
+	return &zapLogger{sugar: sampled}
+}
+
+// NewUnsampledFSMLogger wraps sugar without the message-based sampler that
+// NewFSMLogger applies. Use it only in test harnesses that must observe every
+// log entry (sampling drops entries before they reach an observer core, which
+// breaks log-scraping assertions). Production code must use NewFSMLogger.
+func NewUnsampledFSMLogger(sugar *zap.SugaredLogger) FSMLogger {
+	if sugar == nil {
+		panic("NewUnsampledFSMLogger: sugar cannot be nil")
+	}
+
+	// AddCallerSkip(1) so the reported caller is the code calling the FSMLogger
+	// method, not the zapLogger wrapper in this file.
+	return &zapLogger{sugar: sugar.Desugar().WithOptions(zap.AddCallerSkip(1)).Sugar()}
 }
 
 func (l *zapLogger) Debug(msg string, fields ...Field) {
@@ -109,7 +139,10 @@ func NewJSONFSMLogger(w io.Writer, level LogLevel) FSMLogger {
 		zapcore.Level(level),
 	)
 
-	return NewFSMLogger(zap.New(core).Sugar())
+	// No sampling: this logger exists to capture and verify log output in tests,
+	// which needs every entry to be deterministic. Production sampling lives in
+	// NewFSMLogger's samplerWrap.
+	return NewUnsampledFSMLogger(zap.New(core).Sugar())
 }
 
 // fieldsToArgs converts Fields to zap's variadic key-value args.

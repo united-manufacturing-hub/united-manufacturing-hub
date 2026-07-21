@@ -47,6 +47,7 @@
     * [umh-core Security](production/security/umh-core/deployment-security.md)
 * [Reference](reference/README.md)
   * [Configuration Reference](reference/configuration-reference.md)
+  * [Data Model Type Definitions](reference/data-model-type-definitions.md)
   * [Container Layout](reference/container-layout.md)
   * [State Machines](reference/state-machines.md)
   * [Environment Variables](reference/environment-variables.md)

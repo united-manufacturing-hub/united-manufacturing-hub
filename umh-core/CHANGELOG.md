@@ -5,6 +5,41 @@
 ### Improvements
 
 - When a bridge fails to reach a running state on first deploy, only the flow that actually failed (read, write, or both) is now left in a stopped state instead of being continuously retried, while a healthy flow keeps running. The config is still saved so you can fix it from the editing view, but the system no longer loops trying to redeploy a flow that needs manual attention.
+## [0.44.30]
+
+### Improvements
+
+- Persistent connection failures now log the HTTP status code and a sanitized snippet of the upstream response, so the cause of a flapping connection (such as a 502 from a reverse proxy) is visible in the worker's logs
+- The umh-core log is now easier to scan: each entry lines up in fixed `[level] [caller] [component]` columns
+- Repeated reconcile errors no longer flood the umh-core log: the first occurrence is logged at ERROR with a note, then demoted to DEBUG until the error changes or clears, with an ERROR summary at most once a minute reporting how many repeats were suppressed so an ongoing failure stays visible
+- The umh-core log is quieter: high-frequency per-tick status detail moved from INFO to DEBUG, and repeated lines below WARN are rate-limited — warnings and errors are never dropped
+- Bridge templates can now reference the stored historian connection through `{{ .historian.timescale.host }}`, `{{ .historian.timescale.port }}`, and the other connection fields, so a bridge that writes to the historian's TimescaleDB no longer needs those connection details duplicated in its own variables
+
+## [0.44.29]
+
+### New Features
+- Preview: an instance can now store a connection to an external TimescaleDB or PostgreSQL historian database (host, port, database, login, and TLS mode), which can be created, viewed, updated, and removed. Storing the connection does not yet route any data to it
+
+### Improvements
+
+- The full bridge and stream-processor configuration is no longer written to the umh-core log at INFO on every internal re-apply (moved to DEBUG), removing a source of log flooding and CPU pressure when a config keeps being re-applied. While a bridge's observed config differs from its desired config, its status in the Management Console now shows a bounded summary of what differs, and the umh-core log carries one warning per bridge per minute, so the cause is visible without enabling debug logging
+
+## [0.44.28]
+
+### New Features
+
+- Node-RED JS and tag processor expose a `protobuf` namespace (`protobuf.decode` / `protobuf.encode`) to decode and encode protobuf messages inline using an embedded base64 descriptor set, including proto2 extension fields
+- Sparkplug B input decodes proto2 extension fields from an inline schema, exposing them per metric as `spb_ext_*` and `spb_metric_decoded` metadata
+- TimescaleDB Historian output that saves a UNS data contract into TimescaleDB under a dedicated umh schema. By default every metadata key is stored; metadata_keys_exclude drops selected keys by exact name or prefix_* while keeping the rest.
+
+### Improvements
+
+- The [Authentication and Authorization](https://docs.umh.app/production/security/management-console/authentication-and-authorization) documentation now covers enterprise Auth0 setup: how a default connection routes all logins through your own identity provider, how to choose the Account Owner as a break-glass account, and how inviting UMH personnel via their `@umh.app` address works, including who is responsible for their access
+
+### Fixes
+
+- Stopping umh-core (`docker stop`, Kubernetes pod termination, CTRL-C) now shuts down workers gracefully on the first SIGTERM. Previously the signal killed the internal control loop before the graceful drain ran, so the drain waited out every timeout with nothing left to process — 33 s measured against Docker's 10 s grace period, ending in a hard kill mid-shutdown with workers never running their stopping steps. The drain now keeps the control loop alive, sizes its budget to the depth of the worker tree, and reliably stops workers that were mid-action, blocked behind an unhealthy dependency, or racing the shutdown signal — so it finishes well within the grace period instead of timing out. A second SIGTERM still forces an immediate exit
+- Sparkplug B input can nest device data under its edge node via include_edge_node_in_location, so identically-named devices on different edge nodes no longer collide at the top of the hierarchy
 
 ## [0.44.27]
 

@@ -112,6 +112,18 @@ type ConfigManager interface {
 	WriteYAMLConfigFromString(ctx context.Context, configStr string, expectedModTime string) error
 	// GetBackupCount returns the number of config backups created since startup.
 	GetBackupCount() uint64
+	// AtomicSetHistorian creates the historian section in the config atomically,
+	// returning ErrHistorianAlreadyConfigured if one already exists. It is create-only;
+	// use AtomicEditHistorian to change an existing historian.
+	AtomicSetHistorian(ctx context.Context, historian HistorianConfig) error
+	// AtomicEditHistorian replaces an existing historian section atomically, returning
+	// ErrHistorianNotConfigured if none exists. An empty password is preserved from the
+	// existing section (get-historian never returns it, so edit cannot resend it). The
+	// existence check, password merge, and write share a single lock, eliminating the
+	// check-then-write race of a separate GetConfig call.
+	AtomicEditHistorian(ctx context.Context, historian HistorianConfig) error
+	// AtomicDeleteHistorian removes the historian section from the config atomically.
+	AtomicDeleteHistorian(ctx context.Context) error
 
 	// TODO: Add AtomicUnlinkFromTemplate method
 	// AtomicUnlinkFromTemplate converts a templated configuration (using YAML anchors/aliases)
@@ -158,14 +170,14 @@ type FileConfigManager struct {
 
 	cacheConfig FullConfig // struct obtained from that file
 
+	// backupCount tracks the number of config backups created since startup.
+	backupCount atomic.Uint64
+
 	// ---------- in-memory cache (read-only after RLock) ----------
 	cacheMu sync.RWMutex // guards the two fields below
 
 	// ---------- background refresh state ----------
 	refreshMu sync.Mutex // prevents concurrent background refreshes
-
-	// backupCount tracks the number of config backups created since startup.
-	backupCount atomic.Uint64
 
 	// backupEnabled controls whether config backups are created before writes.
 	backupEnabled bool
@@ -1296,6 +1308,128 @@ func (m *FileConfigManager) getLatestBackupContent(ctx context.Context) []byte {
 	}
 
 	return data
+}
+
+// AtomicSetHistorian creates the historian section in the config atomically. An
+// identical redeploy returns nil (a lost-reply replay is a no-op success), while a
+// deploy that would change an existing connection returns ErrHistorianAlreadyConfigured
+// so a misdirected deploy cannot silently overwrite it (and blank its TLS cert paths);
+// the existence check and the write share a single lock.
+func (m *FileConfigManager) AtomicSetHistorian(ctx context.Context, historian HistorianConfig) error {
+	err := m.mutexAtomicUpdate.Lock(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to lock config file: %w", err)
+	}
+	defer m.mutexAtomicUpdate.Unlock()
+
+	cfg, err := m.GetConfig(ctx, 0)
+	if err != nil {
+		return fmt.Errorf("failed to get config: %w", err)
+	}
+
+	if cfg.Historian != nil {
+		// An identical redeploy is a no-op success, not a conflict: a deploy whose
+		// terminal reply was lost can be safely replayed. The create-only guard still
+		// rejects a deploy that would change an existing connection.
+		if *cfg.Historian == historian {
+			return nil
+		}
+
+		return ErrHistorianAlreadyConfigured
+	}
+
+	cfg.Historian = &historian
+
+	if err := m.writeConfig(ctx, cfg); err != nil {
+		return fmt.Errorf("failed to write config: %w", err)
+	}
+
+	return nil
+}
+
+// AtomicSetHistorian delegates to the underlying FileConfigManager.
+func (m *FileConfigManagerWithBackoff) AtomicSetHistorian(ctx context.Context, historian HistorianConfig) error {
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+
+	return m.configManager.AtomicSetHistorian(ctx, historian)
+}
+
+// AtomicEditHistorian replaces an existing historian section atomically. It returns
+// ErrHistorianNotConfigured if no historian is currently configured, so the existence
+// check and the write happen under a single lock and cannot race a concurrent delete.
+func (m *FileConfigManager) AtomicEditHistorian(ctx context.Context, historian HistorianConfig) error {
+	err := m.mutexAtomicUpdate.Lock(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to lock config file: %w", err)
+	}
+	defer m.mutexAtomicUpdate.Unlock()
+
+	cfg, err := m.GetConfig(ctx, 0)
+	if err != nil {
+		return fmt.Errorf("failed to get config: %w", err)
+	}
+
+	if cfg.Historian == nil {
+		return ErrHistorianNotConfigured
+	}
+
+	// An empty timescale password means "keep the existing one": get-historian never
+	// returns the stored password, so the Management Console cannot resend it on edit.
+	// Preserving it here, under the same lock as the write, keeps the credential
+	// write-only without a separate read that could race a concurrent change.
+	if historian.Timescale.Password == "" {
+		historian.Timescale.Password = cfg.Historian.Timescale.Password
+	}
+
+	cfg.Historian = &historian
+
+	if err := m.writeConfig(ctx, cfg); err != nil {
+		return fmt.Errorf("failed to write config: %w", err)
+	}
+
+	return nil
+}
+
+// AtomicEditHistorian delegates to the underlying FileConfigManager.
+func (m *FileConfigManagerWithBackoff) AtomicEditHistorian(ctx context.Context, historian HistorianConfig) error {
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+
+	return m.configManager.AtomicEditHistorian(ctx, historian)
+}
+
+// AtomicDeleteHistorian removes the historian section from the config atomically.
+func (m *FileConfigManager) AtomicDeleteHistorian(ctx context.Context) error {
+	err := m.mutexAtomicUpdate.Lock(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to lock config file: %w", err)
+	}
+	defer m.mutexAtomicUpdate.Unlock()
+
+	cfg, err := m.GetConfig(ctx, 0)
+	if err != nil {
+		return fmt.Errorf("failed to get config: %w", err)
+	}
+
+	cfg.Historian = nil
+
+	if err := m.writeConfig(ctx, cfg); err != nil {
+		return fmt.Errorf("failed to write config: %w", err)
+	}
+
+	return nil
+}
+
+// AtomicDeleteHistorian delegates to the underlying FileConfigManager.
+func (m *FileConfigManagerWithBackoff) AtomicDeleteHistorian(ctx context.Context) error {
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+
+	return m.configManager.AtomicDeleteHistorian(ctx)
 }
 
 // cleanupOldBackups removes the oldest backup files when the total count

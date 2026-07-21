@@ -50,11 +50,20 @@ type ApplicationStatus struct {
 	ID string `json:"id"`
 	// Name mirrors ApplicationConfig.Name for observability.
 	Name string `json:"name"`
+	// DynamicChildren carries the full child specs recorded in the shared
+	// registry that the application control surface reads to spawn dynamic
+	// children. Each spec carries Name, WorkerType, UserSpec.Config, and Enabled
+	// so a later step can emit it as a spawnable child from Next(), which only
+	// sees the snapshot; a Ref (WorkerType+Name only) cannot be spawned.
+	DynamicChildren []config.ChildSpec `json:"dynamic_children"`
 	// ChildrenCircuitOpen is the count of children with circuit breaker open.
 	ChildrenCircuitOpen int `json:"children_circuit_open"`
 	// ChildrenStale is the count of children whose observations are older than
 	// the stale threshold.
 	ChildrenStale int `json:"children_stale"`
+	// RegistryConfigured is true when a non-nil shared registry is published
+	// under the application worker type.
+	RegistryConfigured bool `json:"registry_configured"`
 }
 
 // HasInfrastructureIssues returns true if any children have circuit breaker

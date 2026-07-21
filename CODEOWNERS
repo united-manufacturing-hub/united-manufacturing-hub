@@ -4,7 +4,8 @@
 *       @JeremyTheocharis
 
 # Jeremy is responsible for the Go code
-/umh-core/ @JeremyTheocharis
+# Yannic Falke (@FalconTube) is co-owner of umh-core so he can approve PRs while Jeremy is on vacation
+/umh-core/ @JeremyTheocharis @FalconTube
 /deployment/ @JeremyTheocharis
 
 # Remaining files are owned by Jeremy

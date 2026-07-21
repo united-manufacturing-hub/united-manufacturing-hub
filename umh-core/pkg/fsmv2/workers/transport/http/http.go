@@ -27,6 +27,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"time"
+	"unicode/utf8"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/hash"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/types"
@@ -158,8 +159,23 @@ func newTransportError(statusCode int, body []byte, headers http.Header, baseErr
 	retryAfter := parseRetryAfter(headers)
 
 	msg := fmt.Sprintf("HTTP %d: %s", statusCode, errType.String())
-	if len(body) > 0 && len(body) < 200 {
-		msg = fmt.Sprintf("HTTP %d (%s): %s", statusCode, errType.String(), string(body))
+
+	if len(body) > 0 {
+		preview := string(body)
+
+		if len(body) > types.MaxErrorDetailBytes {
+			// Cap at types.MaxErrorDetailBytes (trailing "…" included) and back
+			// off to a UTF-8 rune boundary so the body preview never splits a
+			// multibyte sequence.
+			end := types.MaxErrorDetailBytes - len("…")
+			for end > 0 && !utf8.RuneStart(body[end]) {
+				end--
+			}
+
+			preview = string(body[:end]) + "…"
+		}
+
+		msg = fmt.Sprintf("HTTP %d (%s): %s", statusCode, errType.String(), preview)
 	}
 
 	return &types.TransportError{

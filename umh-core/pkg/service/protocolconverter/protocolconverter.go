@@ -24,6 +24,7 @@ import (
 	internalfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/connectionserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/protocolconverterserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
@@ -299,7 +300,7 @@ func (p *ProtocolConverterService) GetConfig(
 	underlyingDFCWriteName := p.getUnderlyingDFCWriteName(protConvName)
 
 	// Get the Connection config
-	connConfig, err := p.connectionService.GetConfig(ctx, filesystemService, underlyingConnectionName)
+	connConfig, err := p.getObservedConnectionConfig(ctx, filesystemService, underlyingConnectionName)
 	if err != nil {
 		return protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime{}, fmt.Errorf("failed to get connection config: %w", err)
 	}
@@ -317,6 +318,38 @@ func (p *ProtocolConverterService) GetConfig(
 	actualConfig := protocolconverterserviceconfig.FromConnectionAndDFCServiceConfig(connConfig, dfcReadConfig, dfcWriteConfig)
 
 	return actualConfig, nil
+}
+
+// getObservedConnectionConfig returns the observed connection config.
+//
+// The fsmv1 nmap backend persists the rendered config to a shared on-disk file,
+// so p.connectionService.GetConfig reads it back correctly. The fsmv2 backend
+// keeps config only in the connection FSM instance's in-memory state;
+// p.connectionService is a standalone helper whose in-memory config is never
+// populated, so its GetConfig would return an empty target/port and the protocol
+// converter would report permanent connection divergence. For fsmv2 read the
+// observed config from the connection FSM instance via the manager, which is the
+// single source of truth for both backends.
+func (p *ProtocolConverterService) getObservedConnectionConfig(ctx context.Context, filesystemService filesystem.Service, connectionName string) (connectionserviceconfig.ConnectionServiceConfig, error) {
+	if !p.connectionService.UsesFsmv2Backend() {
+		return p.connectionService.GetConfig(ctx, filesystemService, connectionName)
+	}
+
+	observed, err := p.connectionManager.GetLastObservedState(connectionName)
+	if err != nil {
+		// No observation yet (instance not created): treat as not-existing so the
+		// caller handles it like the fsmv1 ErrServiceNotExist path. Must return this
+		// package's own ErrServiceNotExist, not connection.ErrServiceNotExist — callers
+		// match against protocolconverter.ErrServiceNotExist's message/identity.
+		return connectionserviceconfig.ConnectionServiceConfig{}, ErrServiceNotExist
+	}
+
+	connObserved, ok := observed.(connectionfsm.ConnectionObservedState)
+	if !ok {
+		return connectionserviceconfig.ConnectionServiceConfig{}, fmt.Errorf("connection observed state for %s is not a ConnectionObservedState", connectionName)
+	}
+
+	return connObserved.ObservedConnectionConfig, nil
 }
 
 // Status returns information about the connection health for the specified connection.
@@ -466,8 +499,6 @@ func (p *ProtocolConverterService) AddToManager(
 		return errors.New("dataflowcomponent manager not initialized")
 	}
 
-	p.logger.Infof("Adding ProtocolConverter %s", protConvName)
-
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
@@ -482,6 +513,8 @@ func (p *ProtocolConverterService) AddToManager(
 			return ErrServiceAlreadyExists
 		}
 	}
+
+	p.logger.Infof("Adding ProtocolConverter %s", protConvName)
 
 	connServiceConfig := cfg.ConnectionServiceConfig
 	dfcReadServiceConfig := cfg.DataflowComponentReadServiceConfig
@@ -519,8 +552,8 @@ func (p *ProtocolConverterService) AddToManager(
 	p.dataflowComponentConfig = append(p.dataflowComponentConfig, dfcReadConfig, dfcWriteConfig)
 
 	p.logger.Infof("ProtocolConverter %s added to manager", protConvName)
-	p.logger.Infof("Connection config: %+v", p.connectionConfig)
-	p.logger.Infof("Dataflow component config: %+v", p.dataflowComponentConfig)
+	p.logger.Debugf("Connection config: %+v", p.connectionConfig)
+	p.logger.Debugf("Dataflow component config: %+v", p.dataflowComponentConfig)
 
 	return nil
 }
@@ -545,11 +578,13 @@ func (p *ProtocolConverterService) UpdateInManager(
 		return errors.New("config is nil")
 	}
 
-	p.logger.Infof("Updating protocolconverter %s", protConvName)
+	p.logger.Debugf("Updating protocolconverter %s", protConvName)
 
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
+
+	p.logger.Debugf("Updating protocolconverter %s", protConvName)
 
 	// Check if the connectionconfig exists
 	foundConn := false
@@ -637,9 +672,9 @@ func (p *ProtocolConverterService) UpdateInManager(
 		}
 	}
 
-	p.logger.Info("Updated protocolconverter config in manager")
-	p.logger.Infof("Connection config: %+v", p.connectionConfig)
-	p.logger.Infof("Dataflow component config: %+v", p.dataflowComponentConfig)
+	p.logger.Debug("Updated protocolconverter config in manager")
+	p.logger.Debugf("Connection config: %+v", p.connectionConfig)
+	p.logger.Debugf("Dataflow component config: %+v", p.dataflowComponentConfig)
 
 	return nil
 }
@@ -658,11 +693,11 @@ func (p *ProtocolConverterService) RemoveFromManager(
 		return errors.New("dataflowcomponent manager not initialized")
 	}
 
-	p.logger.Infof("Removing dataflowcomponent %s", protConvName)
-
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
+
+	p.logger.Debugf("Removing dataflowcomponent %s", protConvName)
 
 	connectionName := p.getUnderlyingConnectionName(protConvName)
 	dfcReadName := p.getUnderlyingDFCReadName(protConvName)
@@ -1077,6 +1112,13 @@ func (p *ProtocolConverterService) ServiceExists(
 	connExists := p.connectionService.ServiceExists(ctx, filesystemService, connectionName)
 	dfcReadExists := p.dataflowComponentService.ServiceExists(ctx, filesystemService, dfcReadName)
 	dfcWriteExists := p.dataflowComponentService.ServiceExists(ctx, filesystemService, dfcWriteName)
+
+	// Under fsmv2 the connection is an always-present in-memory worker; the
+	// adapter just reports it late (after its first reconcile), so treat it as
+	// existing and keep the standard connection+DFC invariant below.
+	if p.connectionService.UsesFsmv2Backend() {
+		connExists = true
+	}
 
 	// if one of the services doesn't exist we should return that
 	return connExists && (dfcReadExists || dfcWriteExists)

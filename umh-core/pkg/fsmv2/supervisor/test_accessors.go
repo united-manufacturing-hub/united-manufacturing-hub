@@ -19,18 +19,38 @@ import (
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
 )
 
-// TestMarkAsStarted sets the supervisor as started with a valid context. DO NOT USE in production code.
+// TestMarkAsStarted sets the supervisor as started with a valid context and
+// starts each worker's observation collector and action executor. Starting the
+// collectors is what lets the worker re-observe its world every tick (e.g. a
+// shared registry losing a ref), so a manually-ticked supervisor reaches the
+// same steady state the production tick loop does.
+//
+// Call-once-only, and mutually exclusive with Start()/StartAsChild() on the
+// same supervisor: all three call Collector.Start via startWorkerRunners, and
+// Collector.Start panics on a second invocation (Invariant I8). A test that
+// double-marks, or marks then starts, panics at runtime.
+//
+// Unlike Start()/StartAsChild(), this omits actionExecutor.Start and
+// startMetricsReporter. The supervisor-level action executor and metrics
+// reporter are not needed by a manually-ticked test, which drives reconcile
+// directly; per-worker collectors and executors are the load-bearing parts.
+//
+// DO NOT USE in production code.
 func (s *Supervisor[TObserved, TDesired]) TestMarkAsStarted() {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	s.ctxMu.Lock()
 	s.ctx = ctx
 	s.ctxCancel = cancel
+	supervisorCtx := s.ctx
 	s.ctxMu.Unlock()
 
 	s.started.Store(true)
+
+	s.startWorkerRunners(supervisorCtx)
 }
 
 // TestTick exposes tick() for testing. DO NOT USE in production code.
@@ -181,4 +201,48 @@ func (s *Supervisor[TObserved, TDesired]) TestApplyDisableMapping(ctx context.Co
 	defer s.mu.Unlock()
 
 	s.applyDisableMapping(ctx, specs)
+}
+
+// TestWorkerCount returns the number of workers currently registered. DO NOT USE in production code.
+func (s *Supervisor[TObserved, TDesired]) TestWorkerCount() int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	return len(s.workers)
+}
+
+// TestIsInfraCircuitOpen returns true if the infrastructure circuit breaker is open. DO NOT USE in production code.
+func (s *Supervisor[TObserved, TDesired]) TestIsInfraCircuitOpen() bool {
+	return s.circuitOpen.Load()
+}
+
+// TestLinkChild inserts a child supervisor into the children map for testing,
+// modeling a nested tree without going through the spawn path. DO NOT USE in production code.
+func (s *Supervisor[TObserved, TDesired]) TestLinkChild(name string, child SupervisorInterface) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.children[name] = child
+}
+
+// TestCalculateSubtreeHeight exposes calculateSubtreeHeight() for testing. DO NOT USE in production code.
+func (s *Supervisor[TObserved, TDesired]) TestCalculateSubtreeHeight() int {
+	return s.calculateSubtreeHeight()
+}
+
+// TestRecordPostJoinBudgetOverrun exposes recordPostJoinBudgetOverrun() for testing. DO NOT USE in production code.
+func (s *Supervisor[TObserved, TDesired]) TestRecordPostJoinBudgetOverrun(totalDrainElapsed, drainBudget, childDrainElapsed time.Duration, budgetWarned bool) {
+	s.recordPostJoinBudgetOverrun(totalDrainElapsed, drainBudget, childDrainElapsed, budgetWarned)
+}
+
+// TestSaveDesired writes a desired-state document through the supervisor's store for testing. DO NOT USE in production code.
+func (s *Supervisor[TObserved, TDesired]) TestSaveDesired(ctx context.Context, workerType, workerID string, doc persistence.Document) error {
+	_, err := s.store.SaveDesired(ctx, workerType, workerID, doc)
+
+	return err
+}
+
+// TestDrainTickInterval returns the drain ticker granularity for testing. DO NOT USE in production code.
+func TestDrainTickInterval() time.Duration {
+	return drainTickInterval
 }

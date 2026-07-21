@@ -283,7 +283,7 @@ func (s *Supervisor[TObserved, TDesired]) tickWorker(ctx context.Context, worker
 	lastActionObsTime := workerCtx.lastActionObsTime
 	workerCtx.mu.RUnlock()
 
-	if actionPending {
+	if actionPending && !isShutdownRequested {
 		// Observation must be NEWER than last action to unlock gating
 		var currentObsTime time.Time
 
@@ -611,71 +611,85 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) (err error) 
 
 	s.mu.RUnlock()
 
-	if err := s.healthChecker.CheckChildConsistency(childrenCopy); err != nil {
-		wasOpen := s.circuitOpen.Load()
-		s.circuitOpen.Store(true)
+	// Shutdown bypass: skip infrastructure-health gating once shutdown is
+	// requested (s.started.Load() == false; Shutdown() clears it at entry, see
+	// lifecycle.go). This is the third pre-Next() gate to gain the bypass, after
+	// the stale-data freshness gate and the action-observation gate above. An
+	// unhealthy subtree at SIGTERM otherwise opens the circuit and returns
+	// ErrInfraCircuitOpen before the worker is ticked, so the worker never
+	// reaches Next(), never honors IsShutdownRequested, never emits
+	// SignalNeedsRemoval, and the drain rides its full budget to a
+	// graceful_shutdown_timeout warn. The whole section is gated (not just the
+	// failure return) so the recovery branch never logs a false
+	// circuit_breaker_closed / infrastructure_recovered during shutdown — infra
+	// did not recover, it is simply no longer being gated.
+	if s.started.Load() {
+		if err := s.healthChecker.CheckChildConsistency(childrenCopy); err != nil {
+			wasOpen := s.circuitOpen.Load()
+			s.circuitOpen.Store(true)
 
-		// Extract child error info early for logging context.
-		var childErr *ChildHealthError
-		errors.As(err, &childErr)
+			// Extract child error info early for logging context.
+			var childErr *ChildHealthError
+			errors.As(err, &childErr)
 
-		if !wasOpen {
-			// Build fields with failed_child info if available.
-			logFields := []deps.Field{
-				deps.String("error_scope", "infrastructure"),
-				deps.String("impact", "all_workers"),
+			if !wasOpen {
+				// Build fields with failed_child info if available.
+				logFields := []deps.Field{
+					deps.String("error_scope", "infrastructure"),
+					deps.String("impact", "all_workers"),
+				}
+				if childErr != nil {
+					logFields = append(logFields, deps.String("failed_child", childErr.ChildName))
+				}
+
+				s.logger.SentryError(deps.FeatureFSMv2, s.GetHierarchyPathUnlocked(), err, "circuit_breaker_opened",
+					logFields...)
+				metrics.RecordCircuitOpen(s.GetHierarchyPathUnlocked(), true)
 			}
+
 			if childErr != nil {
-				logFields = append(logFields, deps.String("failed_child", childErr.ChildName))
+				attempts := s.healthChecker.backoff.GetAttempts()
+				nextDelay := s.healthChecker.backoff.NextDelay()
+
+				s.logger.SentryWarn(deps.FeatureFSMv2, s.GetHierarchyPathUnlocked(), "circuit_breaker_retry_scheduled",
+					deps.String("failed_child", childErr.ChildName),
+					deps.Attempts(attempts),
+					deps.Int("max_attempts", s.healthChecker.maxAttempts),
+					deps.String("elapsed_downtime", s.healthChecker.backoff.GetTotalDowntime().String()),
+					deps.String("next_retry_in", nextDelay.String()),
+					deps.String("recovery_status", s.getRecoveryStatus()))
+
+				if attempts == 4 {
+					s.logger.SentryWarn(deps.FeatureFSMv2, s.GetHierarchyPathUnlocked(), "escalation_warning_one_retry_remaining",
+						deps.String("child_name", childErr.ChildName),
+						deps.Int("attempts_remaining", 1),
+						deps.String("total_downtime", s.healthChecker.backoff.GetTotalDowntime().String()))
+				}
+
+				if attempts >= 5 {
+					s.logger.SentryError(deps.FeatureFSMv2, s.GetHierarchyPathUnlocked(), childErr, "escalation_required",
+						deps.String("child_name", childErr.ChildName),
+						deps.Int("max_attempts", 5),
+						deps.String("total_downtime", s.healthChecker.backoff.GetTotalDowntime().String()),
+						deps.String("runbook_url", "https://docs.umh.app/runbooks/supervisor-escalation"),
+						deps.String("manual_steps", s.getEscalationSteps(childErr.ChildName)))
+				}
 			}
 
-			s.logger.SentryError(deps.FeatureFSMv2, s.GetHierarchyPathUnlocked(), err, "circuit_breaker_opened",
-				logFields...)
-			metrics.RecordCircuitOpen(s.GetHierarchyPathUnlocked(), true)
+			return ErrInfraCircuitOpen
 		}
 
-		if childErr != nil {
-			attempts := s.healthChecker.backoff.GetAttempts()
-			nextDelay := s.healthChecker.backoff.NextDelay()
-
-			s.logger.SentryWarn(deps.FeatureFSMv2, s.GetHierarchyPathUnlocked(), "circuit_breaker_retry_scheduled",
-				deps.String("failed_child", childErr.ChildName),
-				deps.Attempts(attempts),
-				deps.Int("max_attempts", s.healthChecker.maxAttempts),
-				deps.String("elapsed_downtime", s.healthChecker.backoff.GetTotalDowntime().String()),
-				deps.String("next_retry_in", nextDelay.String()),
-				deps.String("recovery_status", s.getRecoveryStatus()))
-
-			if attempts == 4 {
-				s.logger.SentryWarn(deps.FeatureFSMv2, s.GetHierarchyPathUnlocked(), "escalation_warning_one_retry_remaining",
-					deps.String("child_name", childErr.ChildName),
-					deps.Int("attempts_remaining", 1),
-					deps.String("total_downtime", s.healthChecker.backoff.GetTotalDowntime().String()))
-			}
-
-			if attempts >= 5 {
-				s.logger.SentryError(deps.FeatureFSMv2, s.GetHierarchyPathUnlocked(), childErr, "escalation_required",
-					deps.String("child_name", childErr.ChildName),
-					deps.Int("max_attempts", 5),
-					deps.String("total_downtime", s.healthChecker.backoff.GetTotalDowntime().String()),
-					deps.String("runbook_url", "https://docs.umh.app/runbooks/supervisor-escalation"),
-					deps.String("manual_steps", s.getEscalationSteps(childErr.ChildName)))
-			}
+		if s.circuitOpen.Load() {
+			downtime := time.Since(s.healthChecker.backoff.GetStartTime())
+			s.logger.Info("circuit_breaker_closed",
+				deps.Reason("infrastructure_recovered"),
+				deps.String("total_downtime", downtime.String()))
+			metrics.RecordCircuitOpen(s.GetHierarchyPathUnlocked(), false)
+			metrics.RecordInfrastructureRecovery(s.GetHierarchyPathUnlocked(), downtime)
 		}
 
-		return ErrInfraCircuitOpen
+		s.circuitOpen.Store(false)
 	}
-
-	if s.circuitOpen.Load() {
-		downtime := time.Since(s.healthChecker.backoff.GetStartTime())
-		s.logger.Info("circuit_breaker_closed",
-			deps.Reason("infrastructure_recovered"),
-			deps.String("total_downtime", downtime.String()))
-		metrics.RecordCircuitOpen(s.GetHierarchyPathUnlocked(), false)
-		metrics.RecordInfrastructureRecovery(s.GetHierarchyPathUnlocked(), downtime)
-	}
-
-	s.circuitOpen.Store(false)
 
 	// For backwards compatibility, tick the first worker
 	s.mu.RLock()
@@ -837,6 +851,14 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) (err error) 
 	// (shutdown request and the disable-mapping pass) that override DeriveDesiredState.
 	// Workers always re-derive these as false, so the persisted value must be carried
 	// forward or the disable bit would be clobbered every tick.
+	//
+	// The store full-replaces on write, so this load-and-rewrite races the
+	// explicit setters (requestShutdown / clearShutdownRequested / setDisabled).
+	// lifecycleFlagMu serializes them: held across the load and the save, a setter
+	// that commits in between is observed by the load on the next tick instead of
+	// being overwritten by a stale value (ENG-4971).
+	s.lifecycleFlagMu.Lock()
+
 	var existingDesiredTyped TDesired
 	if err := s.store.LoadDesiredTyped(ctx, s.workerType, firstWorkerID, &existingDesiredTyped); err == nil {
 		// Check the existing state's lifecycle flags via interface.
@@ -852,6 +874,9 @@ func (s *Supervisor[TObserved, TDesired]) tick(ctx context.Context) (err error) 
 	}
 
 	_, err = s.store.SaveDesired(ctx, s.workerType, firstWorkerID, desiredDoc)
+
+	s.lifecycleFlagMu.Unlock()
+
 	if err != nil {
 		// Log the error but continue with the tick - the system can recover on the next tick
 		// The tickWorker will use the previously saved desired state
@@ -1075,7 +1100,7 @@ func (s *Supervisor[TObserved, TDesired]) processSignal(ctx context.Context, wor
 				childrenToCleanup[name] = child // Capture children for cleanup outside lock
 			}
 
-			s.logger.SentryWarn(deps.FeatureFSMv2, s.GetHierarchyPathUnlocked(), "worker_removal_has_children",
+			s.logger.Debug("worker_removal_has_children",
 				deps.Int("child_count", childCount),
 				deps.Any("children", childNames))
 		}
@@ -1417,7 +1442,7 @@ func (s *Supervisor[TObserved, TDesired]) logHeartbeat() {
 
 	s.mu.RUnlock()
 
-	s.logger.Info("supervisor_heartbeat",
+	s.logger.Debug("supervisor_heartbeat",
 		deps.HierarchyPath(s.GetHierarchyPathUnlocked()),
 		deps.Any("tick", atomic.LoadUint64(&s.tickCount)),
 		deps.Int("workers", workerCount),
@@ -1699,7 +1724,8 @@ func (s *Supervisor[TObserved, TDesired]) reconcileChildren(specs []config.Child
 	}
 
 	// Second pass: release parent.mu around child.Shutdown(). Each Shutdown can
-	// block up to the child's own gracefulShutdownTimeout (~5s by default), and
+	// block up to the child's cascaded drain budget (gracefulShutdownTimeout ×
+	// the child's subtree height — ~5s per level by default), and
 	// holding parent.mu through it would stall this supervisor's tickLoop on
 	// any runtime spec-change that removes a child. The captured references stay
 	// valid: child.Shutdown() is idempotent, so concurrent callers are benign,

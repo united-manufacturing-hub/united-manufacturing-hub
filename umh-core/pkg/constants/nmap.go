@@ -16,6 +16,18 @@ package constants
 
 import "time"
 
+// Nmap backend selectors for the NMAP_BACKEND environment variable. They pick
+// which manager the connection service drives for nmap probing.
+const (
+	// NmapBackendFSMv1 is the default backend: the S6-supervised fsmv1 nmap
+	// manager. Any value other than NmapBackendFSMv2 (including unset) selects it.
+	NmapBackendFSMv1 = "fsmv1"
+
+	// NmapBackendFSMv2 selects the fsmv2-backed nmap manager. Set
+	// NMAP_BACKEND=fsmv2 to enable it.
+	NmapBackendFSMv2 = "fsmv2"
+)
+
 // Nmap monitor constants.
 const (
 	// Nmap Operation Timeouts - Level 1 Service (depends on S6)

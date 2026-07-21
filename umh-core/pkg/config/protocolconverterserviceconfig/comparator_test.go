@@ -19,6 +19,7 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/connectionserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/nmapserviceconfig"
 )
 
 var _ = Describe("ProtocolConverter YAML Comparator", func() {
@@ -804,6 +805,44 @@ var _ = Describe("ProtocolConverter YAML Comparator", func() {
 			diff2 := comparator.ConfigDiff(config1, config2)
 
 			Expect(diff1).To(Equal(diff2))
+		})
+	})
+
+	Describe("ConfigsEqualRuntimeWithDFCState", func() {
+		// A desired-stopped DFC renders an empty benthos config on disk, so its
+		// observed config never matches the full desired config. These specs pin
+		// that the state-aware comparison skips such a DFC (ENG-5108 regression:
+		// a stopped write DFC otherwise reports permanent false divergence).
+		conn := connectionserviceconfig.ConnectionServiceConfigRuntime{
+			NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{Target: "google.com", Port: 80},
+		}
+		desired := ProtocolConverterServiceConfigRuntime{
+			ConnectionServiceConfig: conn,
+			DataflowComponentWriteServiceConfig: dataflowcomponentserviceconfig.DataflowComponentServiceConfig{
+				BenthosConfig: dataflowcomponentserviceconfig.BenthosConfig{
+					Output: map[string]any{"snowflake_put": map[string]any{"database": "db"}},
+				},
+			},
+		}
+		// observed reflects the empty benthos.yaml of a stopped write DFC.
+		observed := ProtocolConverterServiceConfigRuntime{ConnectionServiceConfig: conn}
+
+		It("reports divergence when the write DFC is not stopped", func() {
+			Expect(ConfigsEqualRuntimeWithDFCState(desired, observed, false, false)).To(BeFalse())
+			Expect(ConfigDiffRuntimeWithDFCState(desired, observed, false, false)).To(ContainSubstring("WriteDFC"))
+		})
+
+		It("skips the write DFC when it is desired-stopped", func() {
+			Expect(ConfigsEqualRuntimeWithDFCState(desired, observed, false, true)).To(BeTrue())
+			Expect(ConfigDiffRuntimeWithDFCState(desired, observed, false, true)).To(BeEmpty())
+		})
+
+		It("keeps comparing connection and read DFC even when write is stopped", func() {
+			divergentConn := desired
+			divergentConn.ConnectionServiceConfig = connectionserviceconfig.ConnectionServiceConfigRuntime{
+				NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{Target: "other.com", Port: 80},
+			}
+			Expect(ConfigsEqualRuntimeWithDFCState(divergentConn, observed, false, true)).To(BeFalse())
 		})
 	})
 })

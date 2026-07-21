@@ -20,7 +20,9 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"sort"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -41,6 +43,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/control"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/env"
+	fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/dataflowcomponent"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/protocolconverter"
@@ -50,10 +53,13 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/examples"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/fsmv2client"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/register"
 	fsmv2sentry "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/sentry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/application"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker/dynamicchildren"
 	persistenceWorker "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/persistence"
 	transportWorker "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport"
 	transportSnapshot "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/snapshot"
@@ -356,8 +362,46 @@ func ensureS6RepositoryDirectory(log *zap.SugaredLogger) error {
 	return nil
 }
 
-// SystemSnapshotLogger logs the system snapshot every 5 seconds
-// It is an example on how to access the system snapshot and log it for communication with other components.
+// snapshotFingerprint builds a sorted, deterministic string from the current snapshot
+// state. Two fingerprints that are equal mean no meaningful change occurred.
+func snapshotFingerprint(snapshot *fsm.SystemSnapshot, extractStatusReason func(managerName string, instance *fsm.FSMInstanceSnapshot) string) string {
+	lines := make([]string, 0, 32)
+	managerNames := make([]string, 0, len(snapshot.Managers))
+	for name := range snapshot.Managers {
+		managerNames = append(managerNames, name)
+	}
+	sort.Strings(managerNames)
+
+	for _, managerName := range managerNames {
+		manager := snapshot.Managers[managerName]
+		if manager == nil {
+			continue
+		}
+		instances := manager.GetInstances()
+
+		instanceNames := make([]string, 0, len(instances))
+		for name := range instances {
+			instanceNames = append(instanceNames, name)
+		}
+		sort.Strings(instanceNames)
+
+		for _, instanceName := range instanceNames {
+			inst := instances[instanceName]
+			if inst == nil {
+				continue
+			}
+			reason := extractStatusReason(managerName, inst)
+			lines = append(lines, fmt.Sprintf("%s|%s|%s|%s|%s",
+				managerName, instanceName, inst.CurrentState, inst.DesiredState, reason))
+		}
+
+		lines = append(lines, fmt.Sprintf("%s|count|%d", managerName, len(instances)))
+	}
+	return strings.Join(lines, "\n")
+}
+
+// SystemSnapshotLogger logs the system snapshot every 5 seconds, but only when
+// the state has meaningfully changed since the last log.
 func SystemSnapshotLogger(ctx context.Context, controlLoop *control.ControlLoop) {
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
@@ -368,6 +412,41 @@ func SystemSnapshotLogger(ctx context.Context, controlLoop *control.ControlLoop)
 	}
 
 	snap_logger.Info("Starting system snapshot logger")
+
+	var lastFingerprint string
+
+	extractStatusReason := func(managerName string, instance *fsm.FSMInstanceSnapshot) string {
+		if instance.LastObservedState == nil {
+			return ""
+		}
+		switch managerName {
+		case "BenthosManagerCore":
+			if s, ok := instance.LastObservedState.(*benthos.BenthosObservedStateSnapshot); ok {
+				return s.ServiceInfo.BenthosStatus.StatusReason
+			}
+		case "StreamProcessorManagerCore":
+			if s, ok := instance.LastObservedState.(*streamprocessor.ObservedStateSnapshot); ok {
+				return s.ServiceInfo.StatusReason
+			}
+		case "TopicBrowserManagerCore":
+			if s, ok := instance.LastObservedState.(*topicbrowserfsm.ObservedStateSnapshot); ok {
+				return s.ServiceInfo.StatusReason
+			}
+		case "DataFlowCompManagerCore":
+			if s, ok := instance.LastObservedState.(*dataflowcomponent.DataflowComponentObservedStateSnapshot); ok {
+				return s.ServiceInfo.StatusReason
+			}
+		case "ProtocolConverterManagerCore":
+			if s, ok := instance.LastObservedState.(*protocolconverter.ProtocolConverterObservedStateSnapshot); ok {
+				return s.ServiceInfo.StatusReason
+			}
+		case "RedpandaManagerCore":
+			if s, ok := instance.LastObservedState.(*redpanda.RedpandaObservedStateSnapshot); ok {
+				return s.ServiceInfoSnapshot.StatusReason
+			}
+		}
+		return ""
+	}
 
 	for {
 		select {
@@ -383,11 +462,27 @@ func SystemSnapshotLogger(ctx context.Context, controlLoop *control.ControlLoop)
 				continue
 			}
 
+			fingerprint := snapshotFingerprint(snapshot, extractStatusReason)
+			if fingerprint == lastFingerprint {
+				continue
+			}
+			lastFingerprint = fingerprint
+
 			snap_logger.Infof("=== System Snapshot (Tick %d) - %d Managers ===",
 				snapshot.Tick, len(snapshot.Managers))
 
 			// Log manager information
-			for managerName, manager := range snapshot.Managers {
+			managerNames := make([]string, 0, len(snapshot.Managers))
+			for name := range snapshot.Managers {
+				managerNames = append(managerNames, name)
+			}
+			sort.Strings(managerNames)
+
+			for _, managerName := range managerNames {
+				manager := snapshot.Managers[managerName]
+				if manager == nil {
+					continue
+				}
 				instances := manager.GetInstances()
 
 				if len(instances) == 0 {
@@ -397,52 +492,27 @@ func SystemSnapshotLogger(ctx context.Context, controlLoop *control.ControlLoop)
 					snap_logger.Infof("📁 %s (tick: %d) - %d instance(s):",
 						managerName, manager.GetManagerTick(), len(instances))
 
-					// Log instance information with indentation
-					for instanceName, instance := range instances {
-						statusReason := ""
+					instanceNames := make([]string, 0, len(instances))
+					for name := range instances {
+						instanceNames = append(instanceNames, name)
+					}
+					sort.Strings(instanceNames)
 
-						// Extract StatusReason from LastObservedState based on manager type
-						if instance.LastObservedState != nil {
-							switch managerName {
-							case "BenthosManagerCore":
-								if benthosSnapshot, ok := instance.LastObservedState.(*benthos.BenthosObservedStateSnapshot); ok {
-									statusReason = benthosSnapshot.ServiceInfo.BenthosStatus.StatusReason
-								}
-							case "StreamProcessorManagerCore":
-								if spSnapshot, ok := instance.LastObservedState.(*streamprocessor.ObservedStateSnapshot); ok {
-									statusReason = spSnapshot.ServiceInfo.StatusReason
-								}
-							case "TopicBrowserManagerCore":
-								if tbSnapshot, ok := instance.LastObservedState.(*topicbrowserfsm.ObservedStateSnapshot); ok {
-									statusReason = tbSnapshot.ServiceInfo.StatusReason
-								}
-							case "DataFlowCompManagerCore":
-								if dfcSnapshot, ok := instance.LastObservedState.(*dataflowcomponent.DataflowComponentObservedStateSnapshot); ok {
-									statusReason = dfcSnapshot.ServiceInfo.StatusReason
-								}
-							case "ProtocolConverterManagerCore":
-								if pcSnapshot, ok := instance.LastObservedState.(*protocolconverter.ProtocolConverterObservedStateSnapshot); ok {
-									statusReason = pcSnapshot.ServiceInfo.StatusReason
-								}
-							case "RedpandaManagerCore":
-								if redpandaSnapshot, ok := instance.LastObservedState.(*redpanda.RedpandaObservedStateSnapshot); ok {
-									statusReason = redpandaSnapshot.ServiceInfoSnapshot.StatusReason
-								}
-							}
+					for _, instanceName := range instanceNames {
+						instance := instances[instanceName]
+						if instance == nil {
+							continue
 						}
+						statusReason := extractStatusReason(managerName, instance)
 
-						// Format state with emojis for better visibility
-						stateIcon := "⚠️"
-
+						stateIcon := "⚠"
 						switch instance.CurrentState {
 						case "active":
 							stateIcon = "✅"
 						case "stopped":
-							stateIcon = "⏹️"
+							stateIcon = "⏹"
 						case "idle":
 							stateIcon = "💤"
-						case "degraded":
-							stateIcon = "⚠️"
 						}
 
 						if statusReason != "" {
@@ -533,7 +603,10 @@ type fsmv2Supervisor interface {
 // adapter used in FSMv2 transport mode.  It returns a cleanup function that
 // must be deferred by the caller to stop the SentryHook goroutine.
 // The returned appSup has NOT been started yet; the caller is responsible for
-// calling appSup.Run(ctx) (or Start+wait).
+// calling appSup.Run(ctx). Run detaches the tick loop from ctx and treats
+// ctx cancellation (the first SIGTERM here) as the trigger for a graceful
+// drain against the live loop (ENG-4971) — do not substitute Start(ctx),
+// which ties the loop's lifetime to the caller's cancel.
 func buildFSMv2Supervisor(
 	ctx context.Context,
 	configData *config.FullConfig,
@@ -554,7 +627,22 @@ func buildFSMv2Supervisor(
 		0,
 	)
 
-	// Start conversion goroutines.
+	// Start conversion goroutines. These run on the caller's signal ctx, NOT
+	// the supervisor's detached context: the first SIGTERM kills both bridge
+	// goroutines (fsmInbound→Router and legacyOutbound→push) immediately, while
+	// the detached tick loop keeps ticking pull and push for the whole drain
+	// window (ENG-4971). With no drain gate on the workers, that window drops:
+	//   - any fsmInbound batch the pull worker delivers after the Router-side
+	//     goroutine has died (the long-poll runs on the detached ctx, so an
+	//     in-flight poll completes server-side and its already-dequeued batch
+	//     lands in a channel nobody reads — never redelivered);
+	//   - Router replies queued onto legacyOutbound after the push-side
+	//     goroutine has died;
+	//   - the pull and push in-memory pendingMessages retry buffers, which die
+	//     when each worker is reaped at the end of the drain.
+	// This loss is bounded by the per-level drain budget (base × subtree height)
+	// and accepted here: the process is terminating, so an action arriving after
+	// SIGTERM could not complete or have its reply delivered anyway.
 	channelAdapter.Start(ctx)
 
 	// Set the global ChannelProvider singleton BEFORE creating the supervisor.
@@ -586,6 +674,10 @@ children:
 `
 	}
 
+	// The historian monitor is a dynamic child, upserted and deleted at runtime
+	// by the config worker's per-tick reconcile so live config edits apply
+	// without restarting umh-core.
+
 	// Setup store (in-memory for now).
 	store = examples.SetupStore(deps.NewFSMLogger(logger))
 
@@ -611,6 +703,28 @@ children:
 		register.SetDeps[*persistenceWorker.PersistenceDependencies](persistenceWorker.WorkerTypeName, persistenceWorker.NewStoreOnlyDependencies(store))
 	}
 
+	// Publish the dynamicchildren registry under the configworker deps key and
+	// the process-scoped fsmv2client before constructing the supervisor, so the
+	// application worker's first CollectObservedState observes
+	// RegistryConfigured=true (the configworker kernel child spawns and dynamic
+	// child spawning is enabled) and FSMv1 components can reach the client via
+	// fsmv2client.GetClient(). Both must be published before
+	// NewApplicationSupervisor so the application worker's first COS sees the
+	// registry; the cleanup clears both and must run after the supervisor has
+	// stopped (the caller runs cleanup after appSup.Run returns).
+	dynWriter := dynamicchildren.NewWriter()
+	register.SetDeps[*dynamicchildren.Registry](configworker.WorkerTypeName, dynWriter.Registry())
+	fsmv2client.SetClient(fsmv2client.NewFSMv2Client(dynWriter, store))
+
+	// Publish the config manager the config worker polls each tick to reconcile
+	// the historian monitor child (replacing the standalone watchConfig
+	// goroutine). Published before NewApplicationSupervisor so the config
+	// worker's first CollectObservedState sees it; cleared in cleanup and the
+	// error path below alongside the other deps keys.
+	// TODO(ENG-4400): remove this wiring once the config worker reads
+	// config.yaml directly instead of polling the manager.
+	register.SetDeps[config.ConfigManager](configworker.ConfigManagerDepsKey, communicationState.ConfigManager)
+
 	appSup, err = application.NewApplicationSupervisor(application.SupervisorConfig{
 		ID:           "application-fsmv2",
 		Name:         "Application FSMv2",
@@ -620,8 +734,21 @@ children:
 		YAMLConfig:   yamlConfig,
 		Dependencies: fsmv2Deps,
 		ForceExit:    forceExit,
+		// The production tree under USE_FSMV2_TRANSPORT is 4 levels
+		// (application -> communicator -> transport -> push/pull). The drain
+		// budget cascades base x subtree height (see pkg/fsmv2/CLAUDE.md
+		// "Graceful Shutdown Cascading"), so a base of 2s bounds the worst-case
+		// chain drain at 8s -- inside docker's default 10s SIGTERM grace, with
+		// headroom for s6 teardown and redpanda disk sync. Healthy drains
+		// complete in ticks and never touch the budget; this only shortens how
+		// long a STUCK worker delays shutdown before its level warns and moves
+		// on. The base propagates to every child supervisor unchanged.
+		GracefulShutdownTimeout: 2 * time.Second,
 	})
 	if err != nil {
+		fsmv2client.SetClient(nil)
+		register.ClearDeps(configworker.WorkerTypeName)
+		register.ClearDeps(configworker.ConfigManagerDepsKey)
 		fsmv2Hook.Stop()
 
 		return nil, nil, nil, "", func() {}, fmt.Errorf("failed to create FSMv2 supervisor: %w", err)
@@ -630,7 +757,14 @@ children:
 	// Register supervisor for debug introspection (/debug/fsmv2 endpoint).
 	metrics.RegisterFSMv2DebugProvider("application", appSup)
 
-	cleanup = fsmv2Hook.Stop
+	cleanup = func() {
+		// Clear the client and the configworker deps key after the supervisor
+		// has stopped (the caller runs cleanup after appSup.Run returns).
+		fsmv2client.SetClient(nil)
+		register.ClearDeps(configworker.WorkerTypeName)
+		register.ClearDeps(configworker.ConfigManagerDepsKey)
+		fsmv2Hook.Stop()
+	}
 
 	return appSup, channelAdapter, store, placeholderUUID, cleanup, nil
 }

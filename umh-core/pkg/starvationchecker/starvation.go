@@ -101,7 +101,7 @@ func (s *StarvationChecker) checkStarvationLoop() {
 				metrics.AddStarvationTime(starvationTime)
 				sentry.ReportIssuef(sentry.IssueTypeWarning, s.logger, "[StarvationChecker.checkStarvationLoop] Control loop starvation detected: %.2f seconds since last reconcile", starvationTime)
 			} else {
-				s.logger.Infof("Control loop is healthy, last reconcile was %.2f seconds ago", timeSinceLastReconcile.Seconds())
+				s.logger.Debugf("Control loop is healthy, last reconcile was %.2f seconds ago", timeSinceLastReconcile.Seconds())
 			}
 		}
 	}

@@ -21,9 +21,12 @@ type StatusMessage struct {
 }
 
 type Core struct {
-	Agent         Agent          `json:"agent"`
-	Health        *Health        `json:"health"`
-	FeatureUsage  *FeatureUsage  `json:"featureUsage,omitempty"`
+	Agent        Agent         `json:"agent"`
+	Health       *Health       `json:"health"`
+	FeatureUsage *FeatureUsage `json:"featureUsage,omitempty"`
+	// Historian reports the reachability of the configured historian endpoint.
+	// Nil when no historian is configured or no observation exists yet.
+	Historian     *Historian     `json:"historian,omitempty"`
 	Container     Container      `json:"container"`
 	TopicBrowser  TopicBrowser   `json:"topicBrowser"`
 	Release       Release        `json:"release"`
@@ -31,6 +34,33 @@ type Core struct {
 	Redpanda      Redpanda       `json:"redpanda"`
 	DataModels    []DataModel    `json:"dataModels"`
 	DataContracts []DataContract `json:"dataContracts"`
+}
+
+// Historian is the status of the historian endpoint monitor.
+type Historian struct {
+	Timescale Timescale `json:"timescale"`
+}
+
+// TimescaleAuthState classifies whether the timescale endpoint accepted the
+// supplied credentials and database name. It is tri-state: a network or timeout
+// fault leaves authentication unverified (TimescaleAuthUnknown) rather than
+// proven invalid.
+type TimescaleAuthState string
+
+const (
+	TimescaleAuthUnknown TimescaleAuthState = "unknown"
+	TimescaleAuthValid   TimescaleAuthState = "valid"
+	TimescaleAuthInvalid TimescaleAuthState = "invalid"
+)
+
+// Timescale holds the health verdict and last dialed target for the timescale endpoint.
+type Timescale struct {
+	Health    *Health            `json:"health"`
+	Host      string             `json:"host"`
+	Auth      TimescaleAuthState `json:"auth"`
+	Latency   float64            `json:"latency"`
+	Port      uint16             `json:"port"`
+	Reachable bool               `json:"reachable"`
 }
 
 type Agent struct {
@@ -162,7 +192,7 @@ type Dfc struct {
 	WriteFlowHealth    *Health        `json:"writeFlowHealth,omitempty"` // Health of the write (sink) data flow, only for protocol-converter type
 	Type               DfcType        `json:"dfcType"`                   // Type of the DFC
 	Metrics            *DfcMetrics    `json:"metrics"`
-	Bridge             *DfcBridgeInfo `json:"bridge,omitempty"` // Additional info for data-bridge type
+	Bridge             *DfcBridgeInfo `json:"bridge,omitempty"` // Additional info for data-bridge and protocol-converter types
 	// For 'protocol-converter' type, this array contains exactly one connection.
 	//
 	// For 'data-bridge' type, this array always contains exactly two connections.

@@ -180,7 +180,7 @@ func (c *Collector[TObserved]) TriggerNow() {
 		return
 	}
 
-	c.config.Logger.Info("collector_trigger_now_requested")
+	c.config.Logger.Debug("collector_trigger_now_requested")
 
 	select {
 	case c.restartChan <- struct{}{}:
@@ -239,7 +239,11 @@ func (c *Collector[TObserved]) Stop(ctx context.Context) {
 	c.mu.Lock()
 
 	if c.state != collectorStateRunning {
-		c.config.Logger.SentryWarn(deps.FeatureForWorker(c.config.Identity.WorkerType), c.config.Identity.HierarchyPath, "collector_stop_skipped",
+		// Stopping a collector that never ran or already stopped is benign on the
+		// teardown path: a worker reaped before its collector started, a
+		// double-stop, or the supervisor shutdown path passing context.Background(),
+		// whose Err() is always nil. Log it at Debug.
+		c.config.Logger.Debug("collector_stop_skipped",
 			deps.Reason("not_running"),
 			deps.String("current_state", c.state.String()))
 		c.mu.Unlock()
@@ -260,8 +264,18 @@ func (c *Collector[TObserved]) Stop(ctx context.Context) {
 		c.config.Logger.Debug("collector_stopped",
 			deps.String("result", "success"))
 	case <-ctx.Done():
-		c.config.Logger.SentryWarn(deps.FeatureForWorker(c.config.Identity.WorkerType), c.config.Identity.HierarchyPath, "collector_stopped",
-			deps.String("result", "context_cancelled"))
+		// Phase-4 teardown cancels this ctx and races the collector goroutine's
+		// own exit; the goroutine drains right after. This is the expected
+		// shutdown cancellation (the mirror of collector_stop_skipped), so log it
+		// at Debug. A non-cancellation ctx error would be unexpected and stays a
+		// warn.
+		if errors.Is(ctx.Err(), context.Canceled) {
+			c.config.Logger.Debug("collector_stopped",
+				deps.String("result", "context_cancelled"))
+		} else {
+			c.config.Logger.SentryWarn(deps.FeatureForWorker(c.config.Identity.WorkerType), c.config.Identity.HierarchyPath, "collector_stopped",
+				deps.String("result", "context_cancelled"))
+		}
 	case <-stopTimer.C:
 		c.config.Logger.SentryWarn(deps.FeatureForWorker(c.config.Identity.WorkerType), c.config.Identity.HierarchyPath, "collector_stopped",
 			deps.String("result", "timeout"))
@@ -302,8 +316,20 @@ func (c *Collector[TObserved]) CollectFinalObservation(ctx context.Context) erro
 	c.collectionMu.Unlock()
 
 	if err != nil {
-		c.config.Logger.SentryWarn(deps.FeatureForWorker(c.config.Identity.WorkerType), c.config.Identity.HierarchyPath, "collector_final_observation_failed",
-			deps.Err(err))
+		// The reap path (reconciliation.go) wraps the live reconcile context in a
+		// local WithTimeout and cancels it only after this returns. context.Canceled
+		// here therefore means that reconcile context was cancelled (the expected
+		// shutdown race where the worker is already going away and no data is lost),
+		// so log it at Debug to keep Sentry quiet. Any other failure stays a warn;
+		// notably context.DeadlineExceeded means the collection overran
+		// ObservationTimeout (a genuinely stuck collector), which must stay visible.
+		if errors.Is(err, context.Canceled) {
+			c.config.Logger.Debug("collector_final_observation_failed",
+				deps.Err(err))
+		} else {
+			c.config.Logger.SentryWarn(deps.FeatureForWorker(c.config.Identity.WorkerType), c.config.Identity.HierarchyPath, "collector_final_observation_failed",
+				deps.Err(err))
+		}
 
 		return err
 	}

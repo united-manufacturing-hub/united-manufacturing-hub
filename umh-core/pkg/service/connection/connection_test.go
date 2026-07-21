@@ -87,7 +87,6 @@ var _ = Describe("ConnectionService", func() {
 		})
 
 		It("should add a new connection to the nmap manager", func() {
-
 			err := service.AddConnectionToNmapManager(ctx, mockServices.GetFileSystem(), cfg, connectionName)
 			Expect(err).NotTo(HaveOccurred())
 
@@ -103,7 +102,6 @@ var _ = Describe("ConnectionService", func() {
 		})
 
 		It("should return error when connection already exists", func() {
-
 			err := service.AddConnectionToNmapManager(ctx, mockServices.GetFileSystem(), cfg, connectionName)
 			Expect(err).NotTo(HaveOccurred())
 
@@ -164,6 +162,7 @@ var _ = Describe("ConnectionService", func() {
 			if mockNmapService.ExistingServices == nil {
 				mockNmapService.ExistingServices = make(map[string]bool)
 			}
+
 			mockNmapService.ExistingServices[nmapName] = true
 		})
 
@@ -189,6 +188,7 @@ var _ = Describe("ConnectionService", func() {
 				10,
 			)
 			Expect(err).NotTo(HaveOccurred())
+
 			tick = newTick
 
 			// Now configure for transition to starting -> running
@@ -200,6 +200,7 @@ var _ = Describe("ConnectionService", func() {
 
 			// Wait for the instance to reach running state
 			By("before WaitForNmapManagerInstanceState 2")
+
 			newTick, err = WaitForNmapManagerInstanceState(
 				ctx,
 				fsm.SystemSnapshot{CurrentConfig: fullCfg, Tick: tick},
@@ -210,6 +211,7 @@ var _ = Describe("ConnectionService", func() {
 				15,
 			)
 			Expect(err).NotTo(HaveOccurred())
+
 			tick = newTick
 
 			mockNmapService.ServiceStates[nmapName].NmapStatus.IsRunning = true
@@ -235,7 +237,6 @@ var _ = Describe("ConnectionService", func() {
 			status, err = statusService.Status(ctx, mockServices.GetFileSystem(), connectionName, tick)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(status.IsFlaky).To(BeTrue())
-
 		})
 
 		It("should return error for non-existent component", func() {
@@ -289,15 +290,19 @@ var _ = Describe("ConnectionService", func() {
 
 			// Verify the config was updated but the desired state was preserved
 			nmapName := service.getNmapName(connectionName)
+
 			var found bool
+
 			for _, config := range service.nmapConfigs {
 				if config.Name == nmapName {
 					found = true
+
 					Expect(config.DesiredFSMState).To(Equal(nmapfsm.OperationalStateStopped))
 					// In a real test, we'd verify the ConnectionServiceConfig was updated as expected
 					break
 				}
 			}
+
 			Expect(found).To(BeTrue())
 		})
 
@@ -336,15 +341,19 @@ var _ = Describe("ConnectionService", func() {
 
 			// Verify the desired state was changed to stopped
 			nmapName := service.getNmapName(connectionName)
+
 			var foundStopped bool
+
 			for _, config := range service.nmapConfigs {
 				if config.Name == nmapName {
 					foundStopped = true
+
 					Expect(config.DesiredFSMState).To(Equal(nmapfsm.OperationalStateStopped))
 
 					break
 				}
 			}
+
 			Expect(foundStopped).To(BeTrue())
 
 			// Now start the component
@@ -353,14 +362,17 @@ var _ = Describe("ConnectionService", func() {
 
 			// Verify the desired state was changed to active
 			var foundStarted bool
+
 			for _, config := range service.nmapConfigs {
 				if config.Name == nmapName {
 					foundStarted = true
+
 					Expect(config.DesiredFSMState).To(Equal(nmapfsm.OperationalStateOpen))
 
 					break
 				}
 			}
+
 			Expect(foundStarted).To(BeTrue())
 		})
 
@@ -476,7 +488,7 @@ var _ = Describe("ConnectionService", func() {
 			mockNmapService.ReconcileManagerError = mockError
 
 			// Second reconcile - now that the instance exists, it will try to reconcile it
-			err, reconciled = testService.ReconcileManager(ctx, mockServices, fsm.SystemSnapshot{Tick: tick+1, SnapshotTime: time.Now()})
+			err, reconciled = testService.ReconcileManager(ctx, mockServices, fsm.SystemSnapshot{Tick: tick + 1, SnapshotTime: time.Now()})
 
 			// Assert
 			Expect(err).ToNot(HaveOccurred()) // it should not return an error

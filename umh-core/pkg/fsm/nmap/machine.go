@@ -189,7 +189,7 @@ func NewNmapInstanceWithService(config config.NmapConfig, service nmap_service.I
 		},
 	}
 
-	logger := logger.For(config.Name)
+	logger := logger.NewDedupLogger(logger.For(config.Name))
 
 	// Construct the base instance
 	// Adjust the Backoff-Configuration regarding to the FSM's needs
@@ -197,7 +197,7 @@ func NewNmapInstanceWithService(config config.NmapConfig, service nmap_service.I
 	// InitialInterval: 10 (ticks) -> 1 second
 	// MaxInterval: 40 (ticks) -> 4 seconds
 	// MaxRetries: 2  -> fails for 3rd error
-	backoffConfig := backoff.NewBackoffConfig(fsmCfg.ID, 10, 20, 2, logger)
+	backoffConfig := backoff.NewBackoffConfig(fsmCfg.ID, 10, 20, 2, logger.SugaredLogger)
 	baseFSM := internal_fsm.NewBaseFSMInstance(fsmCfg, backoffConfig, logger)
 
 	// Create our instance

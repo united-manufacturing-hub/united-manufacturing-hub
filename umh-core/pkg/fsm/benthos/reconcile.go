@@ -108,7 +108,7 @@ func (b *BenthosInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnap
 
 			// Log the error but always continue reconciling - we need reconcileStateTransition to run
 			// to restore services after restart, even if we can't read their status yet
-			b.baseFSMInstance.GetLogger().Warnf("failed to update observed state (continuing reconciliation): %s", err)
+			b.baseFSMInstance.GetLogger().Debugf("failed to update observed state (continuing reconciliation): %s", err)
 
 			// For all other errors, just continue reconciling without setting backoff
 			err = nil
@@ -130,7 +130,7 @@ func (b *BenthosInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnap
 		}
 
 		b.baseFSMInstance.SetError(err, snapshot.Tick)
-		b.baseFSMInstance.GetLogger().Errorf("error reconciling state: %s", err)
+		b.baseFSMInstance.Logger.LogErrorDedup("error reconciling state: %s", err)
 
 		return nil, false // We don't want to return an error here, because we want to continue reconciling
 	}
@@ -144,7 +144,7 @@ func (b *BenthosInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnap
 		}
 
 		b.baseFSMInstance.SetError(s6Err, snapshot.Tick)
-		b.baseFSMInstance.GetLogger().Errorf("error reconciling s6Manager: %s", s6Err)
+		b.baseFSMInstance.Logger.LogErrorDedup("error reconciling s6Manager: %s", s6Err)
 
 		return nil, false
 	}

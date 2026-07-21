@@ -457,6 +457,10 @@ func (t *Translator) generateFieldsSchema(payloadShape config.PayloadShape) (map
 }
 
 // convertTypeToJSONSchema converts UMH type names to JSON Schema types.
+//
+// Docs: keep the Data Model Type Definitions reference page in sync when adding or
+// removing a supported UMH type. It lives in this repo (not just on docs.umh.app):
+// umh-core/docs/reference/data-model-type-definitions.md
 func (t *Translator) convertTypeToJSONSchema(umhType string) (string, error) {
 	switch umhType {
 	case "number":

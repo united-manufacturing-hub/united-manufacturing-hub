@@ -33,13 +33,14 @@ import (
 type FullConfig struct {
 	Templates         TemplatesConfig           `yaml:"templates,omitempty"`         // Templates section with enforced structure for protocol converter
 	PayloadShapes     map[string]PayloadShape   `yaml:"payloadShapes,omitempty"`     // PayloadShapes section with enforced structure for payload shapes
-	Agent             AgentConfig               `yaml:"agent"`                       // Agent config, requires restart to take effect
+	Historian         *HistorianConfig          `yaml:"historian,omitempty"`         // Historian config; groups the timescale connection (and future backends) under historian:
 	DataModels        []DataModelsConfig        `yaml:"dataModels,omitempty"`        // DataModels section with enforced structure for data models
 	DataContracts     []DataContractsConfig     `yaml:"dataContracts,omitempty"`     // DataContracts section with enforced structure for data contracts
 	DataFlow          []DataFlowComponentConfig `yaml:"dataFlow,omitempty"`          // DataFlow components to manage, can be updated while running
 	ProtocolConverter []ProtocolConverterConfig `yaml:"protocolConverter,omitempty"` // ProtocolConverter config, can be updated while runnnig
 	StreamProcessor   []StreamProcessorConfig   `yaml:"streamProcessor,omitempty"`   // StreamProcessor config, can be updated while running
 	Internal          InternalConfig            `yaml:"internal,omitempty"`          // Internal config, not to be used by the user, only to be used for testing internal components
+	Agent             AgentConfig               `yaml:"agent"`                       // Agent config, requires restart to take effect
 }
 
 // TemplatesConfig defines the structure for the templates section.
@@ -119,6 +120,13 @@ type FSMInstanceConfig struct {
 	Name            string `yaml:"name,omitempty"`
 	DesiredFSMState string `yaml:"desiredState,omitempty"`
 }
+
+// GetDesiredFSMState returns the configured desired fsmv1 state, satisfying the
+// fsmv2 adapter's StateConfig constraint. The name differs from GetState() on
+// purpose: WorkerBase duck-types GetState() and validates it against the
+// lifecycle vocabulary ("running"/"stopped"), which a domain literal like
+// "open" would fail.
+func (c FSMInstanceConfig) GetDesiredFSMState() string { return c.DesiredFSMState }
 
 // ContainerConfig is the config for a container instance.
 type ContainerConfig struct {
@@ -362,6 +370,13 @@ func (c FullConfig) Clone() FullConfig {
 	err = deepcopy.Copy(&clone.Internal, &c.Internal)
 	if err != nil {
 		return FullConfig{}
+	}
+
+	if c.Historian != nil {
+		err = deepcopy.Copy(&clone.Historian, &c.Historian)
+		if err != nil {
+			return FullConfig{}
+		}
 	}
 
 	return clone

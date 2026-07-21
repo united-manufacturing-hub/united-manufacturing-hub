@@ -61,7 +61,7 @@ func NewTestLogger() *TestLogger {
 
 	return &TestLogger{
 		Logger:    logger,
-		FSMLogger: deps.NewFSMLogger(logger),
+		FSMLogger: deps.NewUnsampledFSMLogger(logger),
 		Logs:      logs,
 		hook:      hook,
 	}
