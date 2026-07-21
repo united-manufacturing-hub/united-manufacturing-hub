@@ -533,11 +533,11 @@ func flowsToStop(snapshot *protocolconverter.ProtocolConverterObservedStateSnaps
 	}
 
 	info := snapshot.ServiceInfo
-	if readActive && !isDFCFlowRunning(info.DataflowComponentReadFSMState) {
+	if readActive && !dataflowcomponent.IsRunningState(info.DataflowComponentReadFSMState) {
 		stopRead = true
 	}
 
-	if writeActive && !isDFCFlowRunning(info.DataflowComponentWriteFSMState) {
+	if writeActive && !dataflowcomponent.IsRunningState(info.DataflowComponentWriteFSMState) {
 		stopWrite = true
 	}
 
@@ -546,11 +546,4 @@ func flowsToStop(snapshot *protocolconverter.ProtocolConverterObservedStateSnaps
 	}
 
 	return stopRead, stopWrite
-}
-
-// isDFCFlowRunning reports whether a dataflow component FSM state means the flow came up.
-func isDFCFlowRunning(state string) bool {
-	return state == dataflowcomponent.OperationalStateActive ||
-		state == dataflowcomponent.OperationalStateIdle ||
-		state == dataflowcomponent.OperationalStateDegraded
 }
