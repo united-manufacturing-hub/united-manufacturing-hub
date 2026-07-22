@@ -542,6 +542,7 @@ func flowsToStop(snapshot *protocolconverter.ProtocolConverterObservedStateSnaps
 		stopWrite = true
 	}
 
+	// No active flow looks down, yet deploy failed: stop every active flow.
 	if !stopRead && !stopWrite {
 		return readActive, writeActive
 	}
