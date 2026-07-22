@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Fixes
+
+- A misconfigured data contract no longer stops your other data contracts from being set up. Valid contracts are now registered and validated as usual, while the misconfigured one is skipped and reported as a warning
+
 ## [0.44.30]
 
 ### Improvements

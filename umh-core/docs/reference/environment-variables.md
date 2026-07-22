@@ -4,7 +4,7 @@ This is the reference for all environment variables used by umh-core. These vari
 
 | Name             | Values                                                                 | Description                                          |
 | ---------------- | ---------------------------------------------------------------------- | ---------------------------------------------------- |
-| LOGGING\_LEVEL   | PRODUCTION, DEBUG                                                      | Controls log verbosity. DEBUG shows detailed internal operations |
+| LOGGING\_LEVEL   | ERROR, WARN, INFO, DEBUG                                                      | Controls log verbosity. DEBUG shows detailed internal operations |
 | AUTH\_TOKEN      | (Base64 encoded token)                                                 | Management Console authentication token. Overrides auth token from config.yaml |
 | API\_URL         | https://management.umh.app/api, https://staging.management.umh.app/api | Management Console API endpoint. Use staging for testing environments |
 | RELEASE\_CHANNEL | enterprise, stable, nightly                                            | Auto-update channel. Enterprise = most stable, nightly = latest features |
