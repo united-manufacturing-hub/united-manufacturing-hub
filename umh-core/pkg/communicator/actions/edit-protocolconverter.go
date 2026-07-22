@@ -422,10 +422,16 @@ func (a *EditProtocolConverterAction) applyMutation() (config.ProtocolConverterC
 		atomicEditUUID   = a.protocolConverterUUID
 	)
 
-	// Merge template variables, connection IP/PORT, and strip agent-injected
-	// location keys using the shared helper so persist and verify stay in sync.
+	inheritsConnection := a.inheritsHistorianConnection(targetPC.ProtocolConverterServiceConfig.Config.DataflowComponentWriteServiceConfig)
+
+	connectionTemplate := newIPPortConnectionTemplate()
+	if inheritsConnection {
+		connectionTemplate = historianConnectionTemplate()
+	}
+
 	instanceToModify.ProtocolConverterServiceConfig.Variables.User = a.mergeUserVariables(
 		targetPC.ProtocolConverterServiceConfig.Variables.User,
+		inheritsConnection,
 	)
 
 	// Apply read DFC config if provided.
@@ -440,8 +446,7 @@ func (a *EditProtocolConverterAction) applyMutation() (config.ProtocolConverterC
 		instanceToModify.ProtocolConverterServiceConfig.Config.DataflowComponentWriteServiceConfig = *a.writeDFCInput
 	}
 
-	// Add the connection details to the template
-	instanceToModify.ProtocolConverterServiceConfig.Config.ConnectionServiceConfig = newIPPortConnectionTemplate()
+	instanceToModify.ProtocolConverterServiceConfig.Config.ConnectionServiceConfig = connectionTemplate
 
 	instanceToModify.ProtocolConverterServiceConfig.Location = convertIntMapToStringMap(a.location)
 
@@ -1065,6 +1070,18 @@ func (a *EditProtocolConverterAction) compareSingleDFCConfig(pcSnapshot *protoco
 	return dataflowcomponentserviceconfig.NewComparator().ConfigsEqual(observedDFCConfig, renderedDesiredConfig), nil
 }
 
+// inheritsHistorianConnection reports whether the edit's resulting write DFC writes to the
+// historian. The desired write DFC is the payload's when the edit carries one (writeDFCInput),
+// otherwise existingWrite (the currently stored config), so a state- or read-only edit
+// preserves a historian bridge's inherited connection.
+func (a *EditProtocolConverterAction) inheritsHistorianConnection(existingWrite dataflowcomponentserviceconfig.DataflowComponentWriteConfigInput) bool {
+	if a.writeDFCInput != nil {
+		return writesToHistorian(*a.writeDFCInput)
+	}
+
+	return writesToHistorian(existingWrite)
+}
+
 // mergeUserVariables produces the authoritative variable map for an edit, starting
 // from base (the caller-supplied existing User map), overlaying the edit's
 // templateVars, deleting the location/location_path keys, and finally overlaying
@@ -1077,7 +1094,11 @@ func (a *EditProtocolConverterAction) compareSingleDFCConfig(pcSnapshot *protoco
 // Both applyMutation (persist path) and renderDesiredDFCConfig (verify path) call
 // this helper so their variable scopes cannot drift.  base is never modified;
 // the returned map is always a fresh allocation.
-func (a *EditProtocolConverterAction) mergeUserVariables(base map[string]any) map[string]any {
+//
+// inheritsConnection is true for a bridge whose connection is resolved from the shared
+// historian section: its connection template does not reference {{ .IP }}/{{ .PORT }}, so
+// those variables are neither set nor kept (stripping any left by an older deploy).
+func (a *EditProtocolConverterAction) mergeUserVariables(base map[string]any, inheritsConnection bool) map[string]any {
 	merged := make(map[string]any)
 
 	if base != nil {
@@ -1093,6 +1114,13 @@ func (a *EditProtocolConverterAction) mergeUserVariables(base map[string]any) ma
 	// config.yaml.
 	delete(merged, "location")
 	delete(merged, "location_path")
+
+	if inheritsConnection {
+		delete(merged, "IP")
+		delete(merged, "PORT")
+
+		return merged
+	}
 
 	// Only overwrite when non-empty: an edit that omits connection details
 	// preserves the existing values rather than blanking them out.
@@ -1144,7 +1172,10 @@ func (a *EditProtocolConverterAction) renderDesiredDFCConfig(pcSnapshot *protoco
 	// render with a missingkey error on every tick until the snapshot catches up,
 	// and the fail-fast abort would roll back a valid edit.  Variables the edit
 	// does not carry keep their observed values.
-	modifiedSpec.Variables.User = a.mergeUserVariables(modifiedSpec.Variables.User)
+	modifiedSpec.Variables.User = a.mergeUserVariables(
+		modifiedSpec.Variables.User,
+		a.inheritsHistorianConnection(specConfig.Config.DataflowComponentWriteServiceConfig),
+	)
 
 	systemSnapshot := a.systemSnapshotManager.GetDeepCopySnapshot()
 
@@ -1239,12 +1270,14 @@ func (a *EditProtocolConverterAction) deriveDFCType() DFCType {
 		incomingVars[v.Label] = v.Value
 	}
 
-	if a.connectionIP != "" {
-		incomingVars["IP"] = a.connectionIP
-	}
+	if !a.inheritsHistorianConnection(currentPC.ProtocolConverterServiceConfig.Config.DataflowComponentWriteServiceConfig) {
+		if a.connectionIP != "" {
+			incomingVars["IP"] = a.connectionIP
+		}
 
-	if a.connectionPort != "" && a.connectionPort != "0" {
-		incomingVars["PORT"] = a.connectionPort
+		if a.connectionPort != "" && a.connectionPort != "0" {
+			incomingVars["PORT"] = a.connectionPort
+		}
 	}
 
 	connectionChanged := false
