@@ -528,6 +528,7 @@ func (a *DeployProtocolConverterAction) waitForComponentToAppear(desiredState st
 // deploy. A flow is stopped only when it was meant to run (desired active) and did
 // not reach a healthy state.
 func flowsToStop(snapshot *protocolconverter.ProtocolConverterObservedStateSnapshot, readActive, writeActive bool) (stopRead, stopWrite bool) {
+	// No observed state: can't isolate the failure, so stop every active flow.
 	if snapshot == nil {
 		return readActive, writeActive
 	}
