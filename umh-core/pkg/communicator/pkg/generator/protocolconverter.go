@@ -17,6 +17,7 @@ package generator
 import (
 	"fmt"
 	"regexp"
+	"strconv"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
@@ -51,6 +52,32 @@ func ProtocolConvertersFromSnapshot(
 	}
 
 	return out
+}
+
+// connectionVarPattern captures the variable name from a single-variable Nmap template action
+// such as "{{ .IP }}".
+var connectionVarPattern = regexp.MustCompile(`{{\s*\.(\w+)\s*}}`)
+
+// resolveConnectionVar renders a single-variable Nmap template (e.g. "{{ .IP }}") against the
+// bridge's user variables and returns the concrete value. The unrendered spec is returned when it
+// is not a simple variable reference, or the variable is absent or not a string.
+func resolveConnectionVar(spec string, userVars map[string]any) string {
+	match := connectionVarPattern.FindStringSubmatch(spec)
+	if len(match) <= 1 {
+		return spec
+	}
+
+	userValue, ok := userVars[match[1]]
+	if !ok {
+		return spec
+	}
+
+	strValue, ok := userValue.(string)
+	if !ok {
+		return spec
+	}
+
+	return strValue
 }
 
 // buildProtocolConverterAsDfc translates one Protocol Converter FSMInstanceSnapshot into a models.Dfc
@@ -92,33 +119,24 @@ func buildProtocolConverterAsDfc(
 			lastLatencyMs = observed.ServiceInfo.ConnectionObservedState.ServiceInfo.NmapObservedState.ServiceInfo.NmapStatus.LastScan.PortResult.LatencyMs
 		}
 
-		// check the variables for the target and port
-
 		specTarget := observed.ObservedProtocolConverterSpecConfig.Config.ConnectionServiceConfig.NmapTemplate.Target
 		specPort := observed.ObservedProtocolConverterSpecConfig.Config.ConnectionServiceConfig.NmapTemplate.Port
 
-		// targetConfig is e.g. "{{ .IP }}" and portConfig is e.g. "{{ .PORT }}"
-		// we need to replace the variables with the actual values therefore we need to get the variable name and check the values in the user variables
-		// if the variable is not found, we use the default value
+		var target, port string
 
-		re := regexp.MustCompile(`{{\s*\.(\w+)\s*}}`)
-
-		target := specTarget
-		if match := re.FindStringSubmatch(specTarget); len(match) > 1 {
-			if userValue, ok := observed.ObservedProtocolConverterSpecConfig.Variables.User[match[1]]; ok {
-				if strValue, ok := userValue.(string); ok {
-					target = strValue
-				}
+		if observed.ObservedProtocolConverterSpecConfig.Config.DataflowComponentWriteServiceConfig.WritesToHistorian() {
+			resolved := observed.ServiceInfo.ConnectionObservedState.ObservedConnectionConfig.NmapServiceConfig
+			if resolved.Target != "" {
+				target = resolved.Target
+				port = strconv.Itoa(int(resolved.Port))
+			} else {
+				target = specTarget
+				port = specPort
 			}
-		}
-
-		port := specPort
-		if match := re.FindStringSubmatch(specPort); len(match) > 1 {
-			if userValue, ok := observed.ObservedProtocolConverterSpecConfig.Variables.User[match[1]]; ok {
-				if strValue, ok := userValue.(string); ok {
-					port = strValue
-				}
-			}
+		} else {
+			userVars := observed.ObservedProtocolConverterSpecConfig.Variables.User
+			target = resolveConnectionVar(specTarget, userVars)
+			port = resolveConnectionVar(specPort, userVars)
 		}
 
 		connection := models.Connection{
