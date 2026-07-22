@@ -83,6 +83,10 @@ const (
 	// pre-FSMv2 package wired to FSMLogger.
 	FeatureFSMv1Communicator Feature = "fsmv1_communicator"
 
+	// FeatureDeploymentSaveConfig covers save-on-deployment: config is persisted
+	// even when the first deploy fails, so the bridge is not lost.
+	FeatureDeploymentSaveConfig Feature = "deployment_save_config"
+  
 	// FeatureSupportHistorian covers the historian feature: reading, writing, and
 	// managing historian configurations.
 	FeatureSupportHistorian Feature = "support_historian"

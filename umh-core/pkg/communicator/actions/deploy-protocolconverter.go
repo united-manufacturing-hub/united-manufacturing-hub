@@ -190,7 +190,7 @@ func (a *DeployProtocolConverterAction) Execute() (interface{}, map[string]inter
 		errorMsg := fmt.Sprintf("Failed to add Bridge: %v", err)
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
 			errorMsg, a.outboundChannel, models.DeployProtocolConverter)
-		a.fsmLogger.SentryError(deps.FeatureDisableReadFlows, "", err, "deploy_protocol_converter_add_failed",
+		a.fsmLogger.SentryError(deps.FeatureDeploymentSaveConfig, "", err, "deploy_protocol_converter_add_failed",
 			deps.String("pcConfig", pcConfig.String()))
 
 		return nil, nil, fmt.Errorf("%s", errorMsg)
@@ -226,7 +226,7 @@ func (a *DeployProtocolConverterAction) Execute() (interface{}, map[string]inter
 
 	// check against observedState
 	if a.systemSnapshotManager != nil && !a.ignoreHealthCheck {
-		errCode, err := a.waitForComponentToAppear(pcConfig.DesiredFSMState)
+		errCode, lastSnapshot, err := a.waitForComponentToAppear(pcConfig.DesiredFSMState)
 		if err != nil {
 			// err is already a self-contained user message, so send it as-is
 			// instead of wrapping it again.
@@ -244,9 +244,62 @@ func (a *DeployProtocolConverterAction) Execute() (interface{}, map[string]inter
 				models.DeployProtocolConverter,
 				nil,
 			)
-			a.fsmLogger.SentryError(deps.FeatureDisableReadFlows, "", err, "deploy_protocol_converter_wait_failed",
+			a.fsmLogger.SentryError(deps.FeatureDeploymentSaveConfig, "", err, "deploy_protocol_converter_wait_failed",
 				deps.String("pcConfig", pcConfig.String()),
 				deps.String("desiredState", pcConfig.DesiredFSMState))
+
+			stopCtx, stopCancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
+			defer stopCancel()
+
+			currentConfig, getErr := a.configManager.GetConfig(stopCtx, 0)
+			if getErr != nil {
+				a.fsmLogger.SentryError(deps.FeatureDeploymentSaveConfig, "", getErr, "deploy_protocol_converter_stop_on_failure_get_config_failed",
+					deps.String("name", a.payload.Name))
+
+				return nil, nil, err
+			}
+
+			var (
+				pcToStop config.ProtocolConverterConfig
+				found    bool
+			)
+
+			for _, pc := range currentConfig.ProtocolConverter {
+				if dataflowcomponentserviceconfig.GenerateUUIDFromName(pc.Name) == pcUUID {
+					pcToStop = pc
+					found = true
+
+					break
+				}
+			}
+
+			if !found {
+				// Bridge no longer exists (e.g. deleted during the wait): nothing to stop.
+				return nil, nil, err
+			}
+
+			// Empty desired state ("") means active (pre-write flow), so gate vs
+			// stopped rather than active to avoid treating an active flow as stopped.
+			readActive := pcToStop.ProtocolConverterServiceConfig.ReadDFCDesiredState != dataflowcomponent.OperationalStateStopped
+			writeActive := pcToStop.ProtocolConverterServiceConfig.WriteDFCDesiredState != dataflowcomponent.OperationalStateStopped
+
+			if !readActive && !writeActive {
+				pcToStop.DesiredFSMState = protocolconverter.OperationalStateStopped
+			} else {
+				stopRead, stopWrite := flowsToStop(lastSnapshot, readActive, writeActive)
+				if stopRead {
+					pcToStop.ProtocolConverterServiceConfig.ReadDFCDesiredState = dataflowcomponent.OperationalStateStopped
+				}
+
+				if stopWrite {
+					pcToStop.ProtocolConverterServiceConfig.WriteDFCDesiredState = dataflowcomponent.OperationalStateStopped
+				}
+			}
+
+			if _, editErr := a.configManager.AtomicEditProtocolConverter(stopCtx, pcUUID, pcToStop); editErr != nil {
+				a.fsmLogger.SentryError(deps.FeatureDeploymentSaveConfig, "", editErr, "deploy_protocol_converter_stop_on_failure_failed",
+					deps.String("name", a.payload.Name))
+			}
 
 			return nil, nil, err
 		}
@@ -355,7 +408,7 @@ func (a *DeployProtocolConverterAction) GetParsedPayload() models.ProtocolConver
 // the function returns the error code and the error message via an error object
 // the error code is a string that is sent to the frontend to allow it to determine if the action can be retried or not
 // the error message is sent to the frontend to allow the user to see the error message.
-func (a *DeployProtocolConverterAction) waitForComponentToAppear(desiredState string) (string, error) {
+func (a *DeployProtocolConverterAction) waitForComponentToAppear(desiredState string) (string, *protocolconverter.ProtocolConverterObservedStateSnapshot, error) {
 	ticker := time.NewTicker(constants.ActionTickerTime)
 	defer ticker.Stop()
 
@@ -365,6 +418,8 @@ func (a *DeployProtocolConverterAction) waitForComponentToAppear(desiredState st
 
 	// Track last known blocking reason for timeout error message
 	var lastStatusReason string
+
+	var lastSnapshot *protocolconverter.ProtocolConverterObservedStateSnapshot
 
 	for {
 		elapsed := time.Since(startTime)
@@ -386,12 +441,12 @@ func (a *DeployProtocolConverterAction) waitForComponentToAppear(desiredState st
 				errorMsg += ". Please check system load or component configuration and try again"
 			}
 
-			a.fsmLogger.SentryWarn(deps.FeatureDisableReadFlows, "", "deploy_protocol_converter_timeout",
+			a.fsmLogger.SentryWarn(deps.FeatureDeploymentSaveConfig, "", "deploy_protocol_converter_timeout",
 				deps.String("name", a.payload.Name),
 				deps.String("desiredState", desiredState),
 				deps.String("lastStatusReason", lastStatusReason))
 
-			return models.ErrDeployTimeout, fmt.Errorf("%s", errorMsg)
+			return models.ErrDeployTimeout, lastSnapshot, fmt.Errorf("%s", errorMsg)
 
 		case <-ticker.C:
 			// the snapshot manager holds the latest system snapshot which is asynchronously updated by the other goroutines
@@ -431,7 +486,7 @@ func (a *DeployProtocolConverterAction) waitForComponentToAppear(desiredState st
 
 					for _, acceptedState := range acceptedStates {
 						if instance.CurrentState == acceptedState {
-							return "", nil
+							return "", lastSnapshot, nil
 						}
 					}
 
@@ -440,10 +495,14 @@ func (a *DeployProtocolConverterAction) waitForComponentToAppear(desiredState st
 
 					// Cast the instance LastObservedState to a protocolconverter instance
 					pcSnapshot, ok := instance.LastObservedState.(*protocolconverter.ProtocolConverterObservedStateSnapshot)
-					if ok && pcSnapshot != nil && pcSnapshot.ServiceInfo.StatusReason != "" {
-						// Use the raw status reason from FSM - frontend will handle enhancement
-						lastStatusReason = pcSnapshot.ServiceInfo.StatusReason
-						currentStateReason = pcSnapshot.ServiceInfo.StatusReason
+					if ok && pcSnapshot != nil {
+						lastSnapshot = pcSnapshot
+
+						if pcSnapshot.ServiceInfo.StatusReason != "" {
+							// Use the raw status reason from FSM - frontend will handle enhancement
+							lastStatusReason = pcSnapshot.ServiceInfo.StatusReason
+							currentStateReason = pcSnapshot.ServiceInfo.StatusReason
+						}
 					}
 
 					stateMessage := RemainingPrefixSec(remainingSeconds) + currentStateReason
@@ -463,4 +522,38 @@ func (a *DeployProtocolConverterAction) waitForComponentToAppear(desiredState st
 			}
 		}
 	}
+}
+
+// flowsToStop decides which dataflow components to flip to stopped after a failed
+// deploy. A flow is stopped only when it was meant to run (desired active) and did
+// not reach a healthy state.
+func flowsToStop(snapshot *protocolconverter.ProtocolConverterObservedStateSnapshot, readActive, writeActive bool) (stopRead, stopWrite bool) {
+	// No observed state: can't isolate the failure, so stop every active flow.
+	if snapshot == nil {
+		return readActive, writeActive
+	}
+
+	info := snapshot.ServiceInfo
+	if readActive && !isDFCHealthy(info.DataflowComponentReadFSMState) {
+		stopRead = true
+	}
+
+	if writeActive && !isDFCHealthy(info.DataflowComponentWriteFSMState) {
+		stopWrite = true
+	}
+
+	// No active flow looks down, yet deploy failed: stop every active flow.
+	if !stopRead && !stopWrite {
+		return readActive, writeActive
+	}
+
+	return stopRead, stopWrite
+}
+
+// isDFCHealthy reports whether a dataflow component FSM state is healthy.
+// Degraded is deliberately excluded: on a failed deploy a degraded flow should
+// be stopped, not left running.
+func isDFCHealthy(state string) bool {
+	return state == dataflowcomponent.OperationalStateActive ||
+		state == dataflowcomponent.OperationalStateIdle
 }
