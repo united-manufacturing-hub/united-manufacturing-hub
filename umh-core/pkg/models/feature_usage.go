@@ -17,16 +17,15 @@ package models
 // FeatureUsage reports which feature flags are active on this instance and
 // tracks per-feature usage metrics.
 //
-// Bool fields ending in Enabled are auto-mapped to feature_{snake_case} PostHog
-// properties by the MC frontend. To add a new flag: add a bool field ending in
-// Enabled here, set it in cmd/main.go, and add the field to the TS interface
-// in statusMessage.svelte.ts.
-//
-// Non-bool usage metrics (like ConfigBackupCount) are mapped manually with a
-// usage_ prefix in instanceTelemetry.ts.
+// The MC frontend auto-maps these fields to PostHog properties by JSON type: every
+// bool becomes feature_{snake_case}, every number becomes usage_{snake_case} (see
+// buildProperties in instanceTelemetry.ts). To add a metric: add a field here, set
+// it in cmd/main.go, and add the field to the TS FeatureUsage interface.
 type FeatureUsage struct {
 	// ConfigBackupCount tracks the number of config backups created since startup.
 	ConfigBackupCount int `json:"configBackupCount"`
+	// HistorianBridgeCount reports the number of bridges writing to the historian.
+	HistorianBridgeCount int `json:"historianBridgeCount"`
 	// ConfigBackupEnabled reports whether ENABLE_CONFIG_BACKUP is set.
 	ConfigBackupEnabled bool `json:"configBackupEnabled"`
 	// FSMv2TransportEnabled reports whether USE_FSMV2_TRANSPORT is set.
@@ -37,4 +36,6 @@ type FeatureUsage struct {
 	FSMv2ProtocolConverterEnabled bool `json:"fsmv2ProtocolConverterEnabled"`
 	// ResourceLimitBlockingEnabled reports the value of agent.enableResourceLimitBlocking in config.yaml (defaults to true).
 	ResourceLimitBlockingEnabled bool `json:"resourceLimitBlockingEnabled"`
+	// HistorianConfigured reports whether a historian section exists in config.yaml.
+	HistorianConfigured bool `json:"historianConfigured"`
 }
