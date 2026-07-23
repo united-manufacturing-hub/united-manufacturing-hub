@@ -124,7 +124,7 @@ func (c *ContainerInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSn
 		}
 
 		c.baseFSMInstance.SetError(err, snapshot.Tick)
-		c.baseFSMInstance.LogErrorDedup("error reconciling state: %s", err)
+		c.baseFSMInstance.Logger.LogErrorDedup("error reconciling state: %s", err)
 
 		return nil, false // We don't want to return an error here, because we want to continue reconciling
 	}

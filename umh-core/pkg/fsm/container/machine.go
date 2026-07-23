@@ -65,8 +65,8 @@ func NewContainerInstanceWithService(config config.ContainerConfig, service cont
 	}
 
 	// Construct the base instance
-	logger := logger.For(config.Name)
-	backoffConfig := backoff.DefaultConfig(fsmCfg.ID, logger)
+	logger := logger.NewDedupLogger(logger.For(config.Name))
+	backoffConfig := backoff.DefaultConfig(fsmCfg.ID, logger.SugaredLogger)
 	baseFSM := internal_fsm.NewBaseFSMInstance(fsmCfg, backoffConfig, logger)
 
 	// Create our instance

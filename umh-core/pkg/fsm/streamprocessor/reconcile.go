@@ -130,7 +130,7 @@ func (i *Instance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapshot, s
 		// Enhanced error logging with state context
 		currentState := i.baseFSMInstance.GetCurrentFSMState()
 		desiredState := i.baseFSMInstance.GetDesiredFSMState()
-		i.baseFSMInstance.LogErrorDedup("error reconciling state transition: current_state='%s', desired_state='%s', error: %s",
+		i.baseFSMInstance.Logger.LogErrorDedup("error reconciling state transition: current_state='%s', desired_state='%s', error: %s",
 			currentState, desiredState, err)
 
 		i.baseFSMInstance.SetError(err, snapshot.Tick)
@@ -142,7 +142,7 @@ func (i *Instance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapshot, s
 	managerErr, managerReconciled := i.service.ReconcileManager(ctx, services, snapshot)
 	if managerErr != nil {
 		i.baseFSMInstance.SetError(managerErr, snapshot.Tick)
-		i.baseFSMInstance.LogErrorDedup("error reconciling manager: %s", managerErr)
+		i.baseFSMInstance.Logger.LogErrorDedup("error reconciling manager: %s", managerErr)
 
 		return nil, false
 	}

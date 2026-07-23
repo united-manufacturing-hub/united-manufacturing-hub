@@ -141,7 +141,7 @@ func (i *TopicBrowserInstance) Reconcile(ctx context.Context, snapshot fsm.Syste
 		}
 
 		i.baseFSMInstance.SetError(err, snapshot.Tick)
-		i.baseFSMInstance.LogErrorDedup("error reconciling state: %s", err)
+		i.baseFSMInstance.Logger.LogErrorDedup("error reconciling state: %s", err)
 
 		return nil, false // We don't want to return an error here, because we want to continue reconciling
 	}
@@ -158,7 +158,7 @@ func (i *TopicBrowserInstance) Reconcile(ctx context.Context, snapshot fsm.Syste
 		}
 
 		i.baseFSMInstance.SetError(managerErr, snapshot.Tick)
-		i.baseFSMInstance.LogErrorDedup("error reconciling manager: %s", managerErr)
+		i.baseFSMInstance.Logger.LogErrorDedup("error reconciling manager: %s", managerErr)
 
 		return nil, false
 	}

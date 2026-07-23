@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## [0.44.31]
+
+### Improvements
+
+- When a bridge fails to reach a running state on first deploy, only the flow that actually failed (read, write, or both) is now left in a stopped state instead of being continuously retried, while a healthy flow keeps running. The config is still saved so you can fix it from the editing view, but the system no longer loops trying to redeploy a flow that needs manual attention.
+- A bridge that writes to the historian now derives its connection health check from the instance's stored historian connection instead of a host/port entered on the bridge. The check targets the configured historian database automatically and follows it if the historian connection is later changed, so it can no longer be pointed at the wrong host. The bridges list and detail view show the resolved historian host and port for these bridges rather than the connection placeholder.
+
 ## [0.44.30]
 
 ### Improvements

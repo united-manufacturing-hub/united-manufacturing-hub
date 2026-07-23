@@ -59,6 +59,10 @@ var versionRegex = regexp.MustCompile(`^v\d+$`)
 //
 // The function never overrides existing payload shapes, preserving any custom definitions provided by the user.
 // Default payload shapes include standard UMH timeseries fields (timestamp_ms and value) with appropriate types.
+//
+// Docs: keep the Data Model Type Definitions reference page in sync when adding or
+// changing a payload shape. It lives in this repo (not just on docs.umh.app):
+// umh-core/docs/reference/data-model-type-definitions.md
 func ensureDefaultPayloadShapes(payloadShapes map[string]config.PayloadShape) map[string]config.PayloadShape {
 	// Create a copy to avoid modifying the original map, pre-size for existing + 3 defaults
 	enriched := make(map[string]config.PayloadShape, len(payloadShapes)+3)
@@ -335,6 +339,10 @@ func (v *Validator) validateRefModelFormat(modelRef *config.ModelRef, path strin
 }
 
 // validateFieldCombinations validates invalid field combinations.
+//
+// Docs: keep the Data Model Type Definitions reference page in sync when adding or
+// changing a field-combination rule or its error message. It lives in this repo
+// (not just on docs.umh.app): umh-core/docs/reference/data-model-type-definitions.md
 func (v *Validator) validateFieldCombinations(field config.Field, path string, errors *[]ValidationError) {
 	hasPayloadShape := field.PayloadShape != ""
 	hasRefModel := field.ModelRef != nil

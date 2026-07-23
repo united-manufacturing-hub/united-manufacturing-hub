@@ -81,8 +81,8 @@ func NewDataflowComponentInstance(
 		},
 	}
 
-	logger := logger.For(config.Name)
-	backoffConfig := backoff.DefaultConfig(cfg.ID, logger)
+	logger := logger.NewDedupLogger(logger.For(config.Name))
+	backoffConfig := backoff.DefaultConfig(cfg.ID, logger.SugaredLogger)
 
 	serviceConfig := config.DataFlowComponentServiceConfig
 	serviceConfig.DebugLevel = config.DebugLevel

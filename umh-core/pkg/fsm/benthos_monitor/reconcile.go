@@ -120,7 +120,7 @@ func (b *BenthosMonitorInstance) Reconcile(ctx context.Context, snapshot fsm.Sys
 		}
 
 		b.baseFSMInstance.SetError(err, snapshot.Tick)
-		b.baseFSMInstance.LogErrorDedup("error reconciling state: %s", err)
+		b.baseFSMInstance.Logger.LogErrorDedup("error reconciling state: %s", err)
 
 		return nil, false // We don't want to return an error here, because we want to continue reconciling
 	}
@@ -136,7 +136,7 @@ func (b *BenthosMonitorInstance) Reconcile(ctx context.Context, snapshot fsm.Sys
 		}
 
 		b.baseFSMInstance.SetError(s6Err, snapshot.Tick)
-		b.baseFSMInstance.LogErrorDedup("error reconciling s6Manager: %s", s6Err)
+		b.baseFSMInstance.Logger.LogErrorDedup("error reconciling s6Manager: %s", s6Err)
 
 		return nil, false
 	}

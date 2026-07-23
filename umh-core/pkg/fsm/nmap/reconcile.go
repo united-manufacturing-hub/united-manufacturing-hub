@@ -121,7 +121,7 @@ func (n *NmapInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapsho
 		}
 
 		n.baseFSMInstance.SetError(err, snapshot.Tick)
-		n.baseFSMInstance.LogErrorDedup("error reconciling state: %s", err)
+		n.baseFSMInstance.Logger.LogErrorDedup("error reconciling state: %s", err)
 
 		return nil, false // We don't want to return an error here, because we want to continue reconciling
 	}
@@ -134,7 +134,7 @@ func (n *NmapInstance) Reconcile(ctx context.Context, snapshot fsm.SystemSnapsho
 		}
 
 		n.baseFSMInstance.SetError(s6Err, snapshot.Tick)
-		n.baseFSMInstance.LogErrorDedup("error reconciling monitorService: %s", s6Err)
+		n.baseFSMInstance.Logger.LogErrorDedup("error reconciling monitorService: %s", s6Err)
 
 		return nil, false
 	}
