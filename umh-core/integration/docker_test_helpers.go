@@ -54,6 +54,20 @@ var (
 var imageNameOnce sync.Once
 var imageName string
 
+// extraCreateArgs holds additional `docker create` arguments (e.g. extra `-e`
+// env flags or `--add-host`) injected just before the image name. Tests set it
+// in their BeforeAll to customize the container without touching every existing
+// caller. An empty slice leaves the create command identical to the default, so
+// existing integration tests are unaffected.
+var extraCreateArgs []string
+
+// skipConfigCopy tells BuildAndRunContainer not to `docker cp` the config into
+// the container. Set this when a test bind-mounts /data/config.yaml via
+// extraCreateArgs: `docker cp` onto a bind-mounted file fails with
+// "device or resource busy". The default (false) preserves the docker-cp
+// behavior for every existing caller.
+var skipConfigCopy bool
+
 func getImageName() string {
 	imageNameOnce.Do(func() {
 		imageName = "umh-core:latest-" + time.Now().Format("20060102150405")
@@ -168,6 +182,15 @@ func writeConfigFile(yamlContent string, containerName ...string) error {
 		return fmt.Errorf("failed to write config file: %w", err)
 	}
 
+	// WriteFile's mode is reduced by the process umask (typically 0022 → 0644).
+	// Force 0666 so the container user (uid 1000) can rewrite the docker-cp'd
+	// config on startup — the agent persists the env-merged config on load
+	// (LoadConfigWithEnvOverrides), and a 0644 root-owned copy would fail that
+	// write and crash-loop the agent before the communicator logs in.
+	if err := os.Chmod(configPath, 0o666); err != nil {
+		return fmt.Errorf("failed to chmod config file: %w", err)
+	}
+
 	// If container name is provided, also write directly to container
 	if len(containerName) > 0 && containerName[0] != "" {
 		container := containerName[0]
@@ -177,6 +200,13 @@ func writeConfigFile(yamlContent string, containerName ...string) error {
 		tmpFile := configPath + ".tmp"
 		if err := os.WriteFile(tmpFile, []byte(yamlContent), 0o666); err != nil {
 			return fmt.Errorf("failed to write temp config file: %w", err)
+		}
+
+		// Force 0666 (WriteFile is umask-reduced); docker cp preserves the mode,
+		// so the container's config.yaml lands world-writable and the agent (uid
+		// 1000) can rewrite it without waiting for the post-start chmod.
+		if err := os.Chmod(tmpFile, 0o666); err != nil {
+			return fmt.Errorf("failed to chmod temp config file: %w", err)
 		}
 
 		defer func() {
@@ -252,6 +282,17 @@ func buildContainer() error {
 	GinkgoWriter.Println("Docker build successful")
 
 	return nil
+}
+
+// umhLogLevel returns the LOGGING_LEVEL passed to the container-under-test.
+// Defaults to "debug"; override with the UMH_LOG_LEVEL env var (e.g.
+// UMH_LOG_LEVEL=info) when running the integration tests.
+func umhLogLevel() string {
+	if lvl := os.Getenv("UMH_LOG_LEVEL"); lvl != "" {
+		return lvl
+	}
+
+	return "debug"
 }
 
 // BuildAndRunContainer rebuilds your Docker image, starts the container, etc.
@@ -356,20 +397,25 @@ func BuildAndRunContainer(configYaml string, memory string, cpus uint) error {
 	// grant 40 ms every 20 ms → an average of 2 fully-loaded logical cores.
 	cpuQuota := cpus * cpuPeriod
 
-	out, err = runDockerCommand(
+	createArgs := []string{
 		"create",
 		"--name", containerName,
-		"-e", "LOGGING_LEVEL=debug",
+		"-e", "LOGGING_LEVEL=" + umhLogLevel(),
 		// Map the host ports to the container's fixed ports
 		"-p", fmt.Sprintf("%d:8080", metricsPrt), // Map host's dynamic port to container's fixed metrics port
 		"-p", fmt.Sprintf("%d:8082", goldenPrt), // Map host's dynamic port to container's golden service port
 		"--memory", memory,
 		"--cpu-period", strconv.FormatUint(uint64(cpuPeriod), 10), // 20 ms CFS window
 		"--cpu-quota", strconv.FormatUint(uint64(cpuQuota), 10), // e.g. 40 ms budget ⇒ 2 vCPUs
-		"-v", tmpRedpandaDir+":/data/redpanda",
-		"-v", tmpLogsDir+":/data/logs",
-		getImageName(),
-	)
+		"-v", tmpRedpandaDir + ":/data/redpanda",
+		"-v", tmpLogsDir + ":/data/logs",
+	}
+	// Inject any test-supplied extra create args (extra env, --add-host, ...)
+	// immediately before the image name. Empty slice → unchanged behavior.
+	createArgs = append(createArgs, extraCreateArgs...)
+	createArgs = append(createArgs, getImageName())
+
+	out, err = runDockerCommand(createArgs...)
 	if err != nil {
 		GinkgoWriter.Printf("Container creation failed: %v\n", err)
 		GinkgoWriter.Printf("Container create output:\n%s\n", out)
@@ -379,12 +425,19 @@ func BuildAndRunContainer(configYaml string, memory string, cpus uint) error {
 
 	GinkgoWriter.Printf("Container created with ID: %s\n", strings.TrimSpace(out))
 
-	// 6. Copy the config file to the container BEFORE starting it
-	GinkgoWriter.Println("Copying config file to container...")
+	// 6. Copy the config file to the container BEFORE starting it. When the
+	// caller bind-mounts /data/config.yaml, skip the copy (docker cp onto a
+	// bind-mounted file fails "device or resource busy"); the host file backing
+	// the mount was already written by the caller.
+	if skipConfigCopy {
+		GinkgoWriter.Println("Skipping config copy (config.yaml is bind-mounted)...")
+	} else {
+		GinkgoWriter.Println("Copying config file to container...")
 
-	err = writeConfigFile(configYaml, containerName)
-	if err != nil {
-		return fmt.Errorf("failed to write config to container: %w", err)
+		err = writeConfigFile(configYaml, containerName)
+		if err != nil {
+			return fmt.Errorf("failed to write config to container: %w", err)
+		}
 	}
 
 	// 7. Start the container

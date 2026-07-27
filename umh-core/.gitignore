@@ -2,6 +2,9 @@ data/
 
 integration/umh-config
 
+# Pulled from the private ManagementConsole repo by `make pull-managementconsole`
+integration/managementconsole
+
 *.test
 
 .docker-cache
