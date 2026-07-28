@@ -4,44 +4,6 @@ In this example you'll learn how to add Grafana to a umh-core Docker Compose sta
 
 [Grafana](https://grafana.com/) is an open-source visualization platform. It allows you to build dashboards showing real-time and historical data based on your umh-core configuration.
 
-## Adding Grafana
-
-Below are the changes to be made to the minimal configuration to deploy Grafana together with umh-core.
-
-```diff
-  services:
-    umh:
-      image: management.umh.app/oci/united-manufacturing-hub/umh-core:v0.40.31
-      restart: unless-stopped
-      volumes:
-        - umh-data:/data
-      environment:
-        - AUTH_TOKEN=your-auth-token
-        - LOCATION_0=your-location
-        - RELEASE_CHANNEL=stable
-        - API_URL=https://management.umh.app/api
-
-+   grafana:
-+     image: management.umh.app/oci/grafana/grafana:12.3.0
-+     restart: unless-stopped
-+     ports:
-+       - 3000:3000
-+     environment:
-+       - GF_SECURITY_ADMIN_USER=admin
-+       - GF_SECURITY_ADMIN_PASSWORD=admin
-+     volumes:
-+       - grafana-data:/var/lib/grafana
-+     healthcheck:
-+       test: ["CMD-SHELL", "curl --fail http://grafana:3000/api/health"]
-+       interval: 10s
-+       timeout: 5s
-+       retries: 3
-
-  volumes:
-    umh-data: {}
-+   grafana-data: {}
-```
-
 Grafana's admin account defaults to `admin` / `admin`. Port 3000 is published to the host, so set both values before you start the stack. The variable names follow Grafana's `GF_<SECTION>_<KEY>` convention, documented in the [Grafana configuration reference](https://grafana.com/docs/grafana/latest/setup-grafana/configure-grafana/).
 
 ## Complete docker-compose.yaml
@@ -96,6 +58,49 @@ volumes:
   umh-data: {}
   grafana-data: {}
 ```
+
+To start the stack, see [Starting the Stack](../setup.md#starting-the-stack).
+
+## Already running umh-core?
+
+Add the following to the `docker-compose.yaml` you already have. Your existing `umh:` service stays as it is.
+
+**1. One new service inside `services:`**
+
+```yaml
+  grafana:
+    image: management.umh.app/oci/grafana/grafana:12.3.0
+    restart: unless-stopped
+    ports:
+      - 3000:3000
+    environment:
+      # TODO: Set your desired username and password here
+      # You'll need these credentials to
+      # access your local Grafana instance
+      - GF_SECURITY_ADMIN_USER=admin     
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    volumes:
+      - grafana-data:/var/lib/grafana
+    healthcheck:
+      test: ["CMD-SHELL", "curl --fail http://grafana:3000/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+```
+
+**2. One more entry under `volumes:`**
+
+```yaml
+  grafana-data: {}
+```
+
+**3. Apply the changes**
+
+```bash
+docker compose up -d
+```
+
+See [Starting the Stack](../setup.md#starting-the-stack) for the other compose commands.
 
 ## Connecting to Grafana
 Once the stack is running, Grafana is reachable at `http://localhost:3000`.
