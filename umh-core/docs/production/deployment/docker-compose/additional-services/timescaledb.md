@@ -101,7 +101,9 @@ services:
     volumes:
       - umh-data:/data
     environment:
-      # TODO: Enter your instance's Auth Token. You'll find it in your instance's configuration file on management.umh.app.
+      # TODO: Enter your instance's Auth Token.
+      # You'll find it in your instance's configuration
+      # file on management.umh.app.
       - AUTH_TOKEN=your_auth_token
       # TODO: Change the LOCATION_0 parameter
       # to your desired Level 0 Location name
@@ -137,9 +139,11 @@ services:
     restart: unless-stopped
     environment:
       - DB_NAME=umh
-      # This has to be the same value as timescaledb.environment.POSTGRES_USER
+      # This has to be the same value as
+      # timescaledb.environment.POSTGRES_USER
       - DB_USER=postgres
-      # This has to be the same value as timescaledb.environment.POSTGRES_PASSWORD
+      # This has to be the same value as
+      # timescaledb.environment.POSTGRES_PASSWORD
       - DB_PASSWORD=postgres
       - DB_HOST=timescaledb
       - AUTH_TYPE=scram-sha-256

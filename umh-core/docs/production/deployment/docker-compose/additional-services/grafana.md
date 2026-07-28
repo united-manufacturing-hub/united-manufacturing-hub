@@ -58,7 +58,9 @@ services:
     volumes:
       - umh-data:/data
     environment:
-      # TODO: Enter your instance's Auth Token. You'll find it in your instance's configuration file on management.umh.app.
+      # TODO: Enter your instance's Auth Token. 
+      # You'll find it in your instance's configuration
+      # file on management.umh.app.
       - AUTH_TOKEN=your_auth_token
       # TODO: Change the LOCATION_0 parameter
       # to your desired Level 0 Location name
@@ -78,7 +80,8 @@ services:
       - 3000:3000
     environment:
       # TODO: Set your desired username and password here
-      # You'll need these credentials to access your local Grafana instance
+      # You'll need these credentials to
+      # access your local Grafana instance
       - GF_SECURITY_ADMIN_USER=admin     
       - GF_SECURITY_ADMIN_PASSWORD=admin
     volumes:

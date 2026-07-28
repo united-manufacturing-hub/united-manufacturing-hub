@@ -24,7 +24,9 @@ services:
     volumes:
       - umh-data:/data
     environment:
-      # TODO: Enter your instance's Auth Token. You'll find it in your instance's configuration file on management.umh.app.
+      # TODO: Enter your instance's Auth Token.
+      # You'll find it in your instance's
+      # configuration file on management.umh.app.
       - AUTH_TOKEN=your_auth_token
       # TODO: Change the LOCATION_0 parameter
       # to your desired Level 0 Location name
