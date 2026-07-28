@@ -19,6 +19,7 @@ Copy this into `docker-compose.yaml` and fill in the fields marked `TODO`. Find 
 > **IMPORTANT:** Change the database and Grafana credentials before using this in production!
 
 ```yaml
+services:
   umh:
     # TODO: set your desired container version here 
     # e.g. `umh-core:v0.44.31`
