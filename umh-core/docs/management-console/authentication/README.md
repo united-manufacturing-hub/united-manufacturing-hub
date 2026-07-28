@@ -56,7 +56,7 @@ A UMH instance authenticates using an AUTH_TOKEN that is generated during the in
 
 The AUTH_TOKEN is a cryptographically secure random token displayed once during instance creation. The user must copy this token and configure it in the UMH instance.
 
-**Security Note**: The user who creates an instance has one-time visibility of the AUTH_TOKEN. For secure AUTH_TOKEN storage and rotation procedures at the instance level, see [umh-core deployment security](../umh-core/deployment-security.md#auth_token-in-environment-variable).
+**Security Note**: The user who creates an instance has one-time visibility of the AUTH_TOKEN. For secure AUTH_TOKEN storage and rotation procedures at the instance level, see [umh-core deployment security](../../production/security/umh-core/deployment-security.md#auth_token-in-environment-variable).
 
 The AUTH_TOKEN serves two purposes:
 
@@ -112,7 +112,7 @@ Three roles control what actions users and instances can perform at their assign
 
 Users can have different roles at different locations. For example, a user can be an Admin at `ACME.Munich.Assembly.Line1` but only a Viewer at `ACME.Munich.Assembly.Line2`.
 
-**Security context**: These roles control ManagementConsole actions. At the instance level, anyone with write access (Editor or Admin) can deploy bridge configurations that have full access to all instance resources - see [umh-core deployment security](../umh-core/deployment-security.md) for details. The meaningful security boundary is between read-only (Viewer) and write access (Editor/Admin).
+**Security context**: These roles control ManagementConsole actions. At the instance level, anyone with write access (Editor or Admin) can deploy bridge configurations that have full access to all instance resources - see [umh-core deployment security](../../production/security/umh-core/deployment-security.md) for details. The meaningful security boundary is between read-only (Viewer) and write access (Editor/Admin).
 
 #### Permission Inheritance
 
@@ -235,7 +235,7 @@ The authentication system operates across three trust boundaries:
 
 ManagementConsole authentication does NOT protect against:
 
-- **Compromised umh-core instances**: Instance-level security is covered in [umh-core deployment security](../umh-core/deployment-security.md#threat-model-simplified)
+- **Compromised umh-core instances**: Instance-level security is covered in [umh-core deployment security](../../production/security/umh-core/deployment-security.md#threat-model-simplified)
 - **Physical access to user devices**: Users are responsible for device security
 - **Auth0 infrastructure compromise**: Auth0 is responsible for their platform security (see Shared Responsibility Model)
 
@@ -243,7 +243,7 @@ ManagementConsole authentication does NOT protect against:
 
 ## Shared Responsibility Model
 
-Security is a shared responsibility between UMH and our customers. This section clarifies who is responsible for what. For instance-level security responsibilities, see [umh-core deployment security - Shared Responsibility Model](../umh-core/deployment-security.md#shared-responsibility-model).
+Security is a shared responsibility between UMH and our customers. This section clarifies who is responsible for what. For instance-level security responsibilities, see [umh-core deployment security - Shared Responsibility Model](../../production/security/umh-core/deployment-security.md#shared-responsibility-model).
 
 ### We (UMH) Are Responsible For
 

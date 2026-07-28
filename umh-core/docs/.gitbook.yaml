@@ -17,3 +17,8 @@ root: ./
 ​structure:
   readme: README.md
   summary: SUMMARY.md​
+
+redirects:
+  usage/management-console: management-console/README.md
+  production/security/management-console: management-console/README.md
+  production/security/management-console/authentication-and-authorization: management-console/authentication/README.md
