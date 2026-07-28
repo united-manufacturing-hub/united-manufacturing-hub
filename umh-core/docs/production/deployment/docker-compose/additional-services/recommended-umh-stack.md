@@ -14,7 +14,7 @@ TimescaleDB is placed in an internal network that only PgBouncer can reach, so n
 
 ## The configuration
 
-Copy this into `docker-compose.yaml` and fill in the fields marked `TODO`. Find the latest umh-core version on the [Releases](https://github.com/united-manufacturing-hub/united-manufacturing-hub/releases) page and replace `<VERSION>`.
+Copy this into `docker-compose.yaml` and fill in the fields marked `TODO`. Find the latest umh-core version on the [Releases](https://github.com/united-manufacturing-hub/united-manufacturing-hub/releases) page and replace `ENTER_VERSION_HERE`.
 
 > **IMPORTANT:** Change the database and Grafana credentials before using this in production!
 
