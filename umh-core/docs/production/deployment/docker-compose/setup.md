@@ -17,7 +17,8 @@ This guide walks you through setting up umh-core with Docker Compose, starting f
 ```yaml
 services:
   umh:
-    # TODO: set your desired container version here
+    # TODO: set your desired container version here 
+    # e.g. `umh-core:v0.44.31`
     image: management.umh.app/oci/united-manufacturing-hub/umh-core:ENTER_VERSION_HERE
     restart: unless-stopped
     volumes:
