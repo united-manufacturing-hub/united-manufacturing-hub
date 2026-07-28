@@ -102,5 +102,3 @@ To log into Grafana, use the credentials that you defined in `docker-compose.yml
 
 > 💡 Without a persistent database behind it there is nothing to query, 
 > so most deployments run Grafana together with TimescaleDB. We call it the **[Recommended UMH Stack](recommended-umh-stack.md)**.
-
-To start the stack, see [Starting the Stack](../setup.md#starting-the-stack).
