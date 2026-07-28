@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-### New
+### New Features
 
 - Node-RED JavaScript processor can return an array of message objects to publish one output message per array element
 
