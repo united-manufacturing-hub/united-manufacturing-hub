@@ -11,13 +11,13 @@ Below are the changes to be made to the minimal configuration to deploy Grafana 
 ```diff
   services:
     umh:
-      image: management.umh.app/oci/united-manufacturing-hub/umh-core:<VERSION> # TODO: change this
+      image: management.umh.app/oci/united-manufacturing-hub/umh-core:v0.40.31
       restart: unless-stopped
       volumes:
         - umh-data:/data
       environment:
-        - AUTH_TOKEN=your-auth-token # TODO: change this
-        - LOCATION_0=your-location # TODO: change this
+        - AUTH_TOKEN=your-auth-token
+        - LOCATION_0=your-location
         - RELEASE_CHANNEL=stable
         - API_URL=https://management.umh.app/api
 
@@ -27,7 +27,6 @@ Below are the changes to be made to the minimal configuration to deploy Grafana 
 +     ports:
 +       - 3000:3000
 +     environment:
-+       # TODO: set your grafana password & username here
 +       - GF_SECURITY_ADMIN_USER=admin
 +       - GF_SECURITY_ADMIN_PASSWORD=admin
 +     volumes:
