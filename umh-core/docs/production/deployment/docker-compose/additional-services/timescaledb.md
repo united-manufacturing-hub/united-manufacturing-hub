@@ -114,9 +114,6 @@ services:
       - RELEASE_CHANNEL=stable
       - API_URL=https://management.umh.app/api
 
-volumes:
-  umh-data: {}
-
   timescaledb:
     image: management.umh.app/oci/timescale/timescaledb:2.24.0-pg17
     restart: unless-stopped
