@@ -9,7 +9,7 @@ To update umh-core, edit the image tag in your `docker-compose.yaml` and restart
 ```yaml
 services:
   umh:
-    # e.g umh-core:v0.44.31
+    # make sure to include 'v' in the version string like so: v0.44.31
     image: management.umh.app/oci/united-manufacturing-hub/umh-core:ENTER_VERSION_HERE
 ```
 
