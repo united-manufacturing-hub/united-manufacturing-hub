@@ -172,7 +172,7 @@ See [Starting the Stack](../setup.md#starting-the-stack) for the other compose c
 
 ## What this declares
 
-- 2 Services called `pgbouncer` and `timescaledb`: PgBouncer acts as a proxy to TimescaleDB. This means the Credentials have to match between these two Services. Healthchecks ensure that the Services are started in order. `timescaledb` is isolated in the Network `timescaledb-network`. `pgbouncer` is both in the `default` and the `timescaledb-network`. This makes PgBouncer the only Service which can talk to TimescaleDB directly.
+- 2 Services called `pgbouncer` and `timescaledb`: PgBouncer acts as a proxy to TimescaleDB. This means the Credentials have to match between these two Services. The `depends_on` entry with `condition: service_healthy` on `pgbouncer` enforces the startup order; the Healthchecks only report whether a Service is healthy. `timescaledb` is isolated in the Network `timescaledb-network`. `pgbouncer` is both in the `default` and the `timescaledb-network`. This makes PgBouncer the only Service which can talk to TimescaleDB directly.
 - 2 Networks called `timescaledb-network` and `default`: Without the Network section the Network `default` is always created by default. Services use the Network `default` if no explicit Network configuration is provided. The `timescaledb-network` is configured to be internal which means Services can't reach the internet or any Service outside this Network if they are only connected through this Network.
 - 1 Volume called `timescaledb-data`: This is where TimescaleDB stores its data.
 
