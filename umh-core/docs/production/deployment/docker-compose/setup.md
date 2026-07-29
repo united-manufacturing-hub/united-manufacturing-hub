@@ -57,7 +57,9 @@ We recommend that you familiarise yourself with the docker commands below. They'
 
 - `docker compose ps`: check the running state of all services
 - `docker compose stats`: check resource usage of all services
-- `docker compose pull`: attempt to pull new versions of all images used in the `docker-compose.yaml`
+- `docker compose pull`: re-pull the image tags currently listed in the `docker-compose.yaml`
+
+> **Note:** `docker compose pull` does not move you to a newer UMH release. The image tags here are pinned to a specific version, so the pull only refreshes that same version. To deploy a newer release, change the tag in `docker-compose.yaml` first. See [Updating](updating.md).
 
 For more refer to the [official Docker Compose documentation](https://docs.docker.com/compose/).
 
