@@ -4,7 +4,7 @@
 
 ### Fixes
 
-- Renaming a bridge whose deployment then fails no longer leaves it unsaveable. The rename was kept even though the deployment was reported as rolled back, so every later save (including Save Anyway) failed with "bridge not found" and the only way out was to leave the page. The rename is now reverted with the rest of the configuration, so retrying works
+- Renaming a bridge whose deployment then fails no longer leaves it unsaveable. The rename was kept even though the deployment was reported as rolled back, so every later save failed with "bridge not found" and the only way out was to leave the page. A failed deployment now reverts the rename along with the rest of the configuration, and Save Anyway stores the new name as before
 
 ## [0.44.34]
 

@@ -57,6 +57,8 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 )
 
+var errBridgeNotFound = errors.New("not found")
+
 // DFCType represents the type of dataflow component configuration.
 type DFCType string
 
@@ -318,8 +320,14 @@ func (a *EditProtocolConverterAction) Execute() (interface{}, map[string]interfa
 	newSpec, atomicEditUUID, desiredPCState, err := a.applyMutation()
 	if err != nil {
 		errorMsg := fmt.Sprintf("Failed to apply configuration mutation: %v", err)
-		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
-			errorMsg, a.outboundChannel, models.EditProtocolConverter)
+
+		errCode := ""
+		if errors.Is(err, errBridgeNotFound) {
+			errCode = models.ErrBridgeNotFound
+		}
+
+		SendActionReplyV2(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
+			errorMsg, errCode, nil, a.outboundChannel, models.EditProtocolConverter, nil)
 		a.fsmLogger.SentryError(deps.FeatureDisableReadFlows, "", err, "edit_protocol_converter_apply_mutation_failed",
 			deps.String("new pcConfig", newSpec.String()))
 
@@ -402,7 +410,7 @@ func (a *EditProtocolConverterAction) applyMutation() (config.ProtocolConverterC
 	}
 
 	if !found {
-		return config.ProtocolConverterConfig{}, uuid.Nil, "", fmt.Errorf("bridge with UUID %s not found", a.protocolConverterUUID)
+		return config.ProtocolConverterConfig{}, uuid.Nil, "", fmt.Errorf("bridge with UUID %s %w", a.protocolConverterUUID, errBridgeNotFound)
 	}
 
 	// Currently, we cannot reuse templates, so we need to create a new one

@@ -1113,6 +1113,100 @@ var _ = Describe("EditProtocolConverter", func() {
 				Expect(err.Error()).NotTo(ContainSubstring("not found"))
 				Expect(err.Error()).To(ContainSubstring("Rolled back to previous configuration"))
 			})
+
+			It("persists the rename when the read flow ignores errors, without waiting for the rollout", func() {
+				Expect(renameWithFailingRollout()).To(HaveOccurred())
+
+				saveAnyway := actions.NewEditProtocolConverterAction(
+					userEmail, actionUUID, instanceUUID, outboundChannel, mockConfig, snapshotMgr)
+				saveAnyway.SetTickInterval(50 * time.Millisecond)
+				saveAnyway.SetAwaitTimeout(300 * time.Millisecond)
+
+				payload := map[string]interface{}{
+					"name": renamedName,
+					"uuid": pcUUID.String(),
+					"connection": map[string]interface{}{
+						"ip":   "wttr.in",
+						"port": 80,
+					},
+					"readDFC": map[string]interface{}{
+						"inputs": map[string]interface{}{
+							"data": "input:\n  http_client:\n    url: http://example.com",
+							"type": "http_client",
+						},
+						"pipeline": map[string]interface{}{
+							"processors": map[string]interface{}{
+								"0": map[string]interface{}{
+									"type": "bloblang",
+									"data": "bloblang: |-\n  root = content()",
+								},
+							},
+						},
+						"ignoreErrors": true,
+					},
+				}
+
+				Expect(saveAnyway.Parse(payload)).To(Succeed())
+				Expect(saveAnyway.Validate()).To(Succeed())
+
+				start := time.Now()
+				response, _, err := saveAnyway.Execute()
+
+				Expect(err).NotTo(HaveOccurred())
+				Expect(time.Since(start)).To(BeNumerically("<", 300*time.Millisecond))
+				Expect(protocolConverterNames()).To(ConsistOf(renamedName))
+
+				reply, ok := response.(map[string]any)
+				Expect(ok).To(BeTrue())
+				Expect(reply["uuid"]).To(Equal(dataflowcomponentserviceconfig.GenerateUUIDFromName(renamedName)))
+			})
+
+			It("reports ERR_BRIDGE_NOT_FOUND when the targeted UUID no longer exists", func() {
+				localOut := make(chan *models.UMHMessage, 100)
+
+				stale := actions.NewEditProtocolConverterAction(
+					userEmail, actionUUID, instanceUUID, localOut, mockConfig, snapshotMgr)
+
+				payload := map[string]interface{}{
+					"name": renamedName,
+					"uuid": dataflowcomponentserviceconfig.GenerateUUIDFromName("never-deployed").String(),
+					"connection": map[string]interface{}{
+						"ip":   "wttr.in",
+						"port": 80,
+					},
+				}
+
+				Expect(stale.Parse(payload)).To(Succeed())
+				Expect(stale.Validate()).To(Succeed())
+
+				_, _, err := stale.Execute()
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("not found"))
+
+				var codes []string
+
+				for len(localOut) > 0 {
+					msg := <-localOut
+
+					dec, decErr := encoding.DecodeMessageFromUMHInstanceToUser(msg.Content)
+					if decErr != nil {
+						continue
+					}
+
+					reply, isMap := dec.Payload.(map[string]interface{})
+					if !isMap {
+						continue
+					}
+
+					if v2, hasV2 := reply["actionReplyPayloadV2"].(map[string]interface{}); hasV2 {
+						if code, isString := v2["errorCode"].(string); isString && code != "" {
+							codes = append(codes, code)
+						}
+					}
+				}
+
+				Expect(codes).To(ContainElement(models.ErrBridgeNotFound))
+			})
 		})
 
 		Context("deriveDFCType smart diff", func() {
