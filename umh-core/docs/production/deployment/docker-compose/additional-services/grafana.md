@@ -105,7 +105,7 @@ See [Starting the Stack](../setup.md#starting-the-stack) for the other compose c
 ## Connecting to Grafana
 Once the stack is running, Grafana is reachable at `http://localhost:3000`.
 
-To log into Grafana, use the credentials that you defined in `docker-compose.yml`.
+To log into Grafana, use the credentials that you defined in `docker-compose.yaml`.
 
 > 💡 Without a persistent database behind it there is nothing to query, 
 > so most deployments run Grafana together with TimescaleDB. We call it the **[Recommended UMH Stack](recommended-umh-stack.md)**.
