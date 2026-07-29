@@ -9,7 +9,7 @@ This guide walks you through setting up umh-core with Docker Compose, starting f
 
 ## Minimal Setup
 
-1. Find the latest version on the [Releases](https://github.com/united-manufacturing-hub/united-manufacturing-hub/releases) page and replace `<VERSION>` with your selected version.
+1. Find the latest version on the [Releases](https://github.com/united-manufacturing-hub/united-manufacturing-hub/releases) page and replace `ENTER_VERSION_HERE` with your selected version.
 2. Save this in `docker-compose.yaml`.
 
 > **Hint:** If your desired release is `v0.44.31`, the image tag is: `umh-core:v0.44.31`
