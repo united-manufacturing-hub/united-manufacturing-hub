@@ -160,9 +160,6 @@ type EditProtocolConverterAction struct {
 	// Parsed request payload (only populated after Parse)
 	protocolConverterUUID uuid.UUID
 
-	// Atomic edit UUID used for configuration updates and rollbacks
-	atomicEditUUID uuid.UUID
-
 	// rolloutSentryReported tells Execute to skip the generic rollout_failed
 	// Sentry event for this abort. Every awaitRollout abort path fires its own
 	// dedicated event; only the render-failure paths (added for ENG-5103) set
@@ -328,9 +325,6 @@ func (a *EditProtocolConverterAction) Execute() (interface{}, map[string]interfa
 
 		return nil, nil, fmt.Errorf("%s", errorMsg)
 	}
-
-	// Store the atomic edit UUID for use in rollback operations
-	a.atomicEditUUID = atomicEditUUID
 
 	oldConfig, err := a.persistConfig(atomicEditUUID, newSpec)
 	if err != nil {
@@ -965,7 +959,7 @@ func (a *EditProtocolConverterAction) rollbackEdit(pcConfig config.ProtocolConve
 	ctx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
 	defer cancel()
 
-	_, err := a.configManager.AtomicEditProtocolConverter(ctx, a.atomicEditUUID, pcConfig)
+	_, err := a.configManager.AtomicEditProtocolConverter(ctx, dataflowcomponentserviceconfig.GenerateUUIDFromName(a.name), pcConfig)
 
 	return err
 }

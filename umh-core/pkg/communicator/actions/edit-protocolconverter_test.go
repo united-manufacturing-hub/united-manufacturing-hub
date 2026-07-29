@@ -1049,6 +1049,72 @@ var _ = Describe("EditProtocolConverter", func() {
 			Expect(metadata).To(BeNil())
 		})
 
+		Context("when the edited bridge was renamed", func() {
+			var (
+				renamedName string
+				snapshotMgr *fsm.SnapshotManager
+			)
+
+			BeforeEach(func() {
+				renamedName = pcName + "-renamed"
+				snapshotMgr = fsm.NewSnapshotManager()
+			})
+
+			renameWithFailingRollout := func() error {
+				renameAction := actions.NewEditProtocolConverterAction(
+					userEmail, actionUUID, instanceUUID, outboundChannel, mockConfig, snapshotMgr)
+				renameAction.SetTickInterval(50 * time.Millisecond)
+				renameAction.SetAwaitTimeout(300 * time.Millisecond)
+
+				payload := map[string]interface{}{
+					"name": renamedName,
+					"uuid": pcUUID.String(),
+					"connection": map[string]interface{}{
+						"ip":   "wttr.in",
+						"port": 80,
+					},
+				}
+
+				Expect(renameAction.Parse(payload)).To(Succeed())
+				Expect(renameAction.Validate()).To(Succeed())
+
+				_, _, err := renameAction.Execute()
+
+				return err
+			}
+
+			protocolConverterNames := func() []string {
+				cfg, err := mockConfig.GetConfig(context.Background(), 0)
+				Expect(err).NotTo(HaveOccurred())
+
+				names := make([]string, 0, len(cfg.ProtocolConverter))
+				for _, pc := range cfg.ProtocolConverter {
+					names = append(names, pc.Name)
+				}
+
+				return names
+			}
+
+			It("rolls the rename back so the bridge keeps its pre-rename name", func() {
+				err := renameWithFailingRollout()
+
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("Rolled back to previous configuration"))
+				Expect(err.Error()).NotTo(ContainSubstring("Rolling back to previous configuration failed"))
+				Expect(protocolConverterNames()).To(ConsistOf(pcName))
+			})
+
+			It("keeps the pre-rename UUID resolvable, so a retry is not stuck", func() {
+				Expect(renameWithFailingRollout()).To(HaveOccurred())
+
+				err := renameWithFailingRollout()
+
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).NotTo(ContainSubstring("not found"))
+				Expect(err.Error()).To(ContainSubstring("Rolled back to previous configuration"))
+			})
+		})
+
 		Context("deriveDFCType smart diff", func() {
 			// deployReadDFC executes a first edit that stores the given read DFC payload
 			// into the mock config so the next Parse can detect "no change".
