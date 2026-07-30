@@ -4,10 +4,10 @@ The Historian stores data from the Unified Namespace in a TimescaleDB database, 
 history with SQL and build Grafana dashboards on it. The UNS keeps the live value of every tag; the
 Historian keeps the past.
 
-{% hint style="warning" %}
-**Preview.** The Historian is behind two feature flags that are off by default: `historian` and
-`disableReadFlow`. Enable both in the Management Console's Feature Flags panel, or the Historian
-plugin and the Historian bridge template stay hidden.
+{% hint style="info" %}
+**Early access.** The Historian is not switched on by default. If you want to use it, get in touch
+with us on [Discord](https://discord.gg/F9mqkZnm8U) or through your usual UMH contact, and we will
+show you how to get started.
 {% endhint %}
 
 ## How it fits together
