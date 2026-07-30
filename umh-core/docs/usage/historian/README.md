@@ -116,6 +116,9 @@ historian:
     sslmode: require
 ```
 
+This block is the one place the credentials are written. Every Historian bridge on the instance reads
+them from here instead of carrying its own copy.
+
 Bridge templates read it through the reserved `{{ .historian.timescale.* }}` scope: `host`, `port`,
 `database`, `username`, `password`, `sslmode`, `sslrootcert`, `sslcert`, and `sslkey`. See
 [Variables](../../reference/variables.md).
@@ -123,12 +126,6 @@ Bridge templates read it through the reserved `{{ .historian.timescale.* }}` sco
 A bridge counts as a Historian bridge when its write flow's destination protocol is `historian`.
 umh-core then targets the bridge's health check at the shared connection rather than at a host and
 port entered on the bridge, so the check follows the connection whenever you change it.
-
-## Limits
-
-- **One connection per instance**, and TimescaleDB/PostgreSQL only.
-- **Existing hand-built historian bridges are left alone.** Bridges written before this feature keep
-  running as ordinary bridges. They do not reference the shared connection and are not converted.
 
 ## Next steps
 
