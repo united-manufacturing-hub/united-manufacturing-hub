@@ -17,8 +17,17 @@ bridge has nothing to connect to and deployment fails with an error saying so.
 2. Pick the card **TimescaleDB (PostgreSQL, auto-connect) — Historian**.
 3. Select the instance. The connection host and port are prefilled read-only from that instance's
    Historian connection, so the bridge's health check always targets the configured database.
-4. In the write flow's output, set `data_contract_name` to the contract you want to store.
+4. In the write flow's output, set `data_contract_name` to the contract you want to store, written
+   **without the version suffix**: `pump`, not `pump_v1`.
 5. Deploy.
+
+{% hint style="warning" %}
+**Drop the version, and no dashes.** `data_contract_name` is the bare contract name: no leading
+underscore, no `_vN` suffix. For the UNS contract `_pump_v1`, write `pump`.
+
+A contract whose name contains a dash cannot be stored by the Historian at all. The name becomes a
+PostgreSQL table identifier, which allows only lowercase letters, numbers, and underscores.
+{% endhint %}
 
 The only value you normally change is `data_contract_name`. Credentials, database, and TLS mode come
 from the shared connection through `{{ .historian.timescale.* }}`, so they are never entered twice
@@ -26,14 +35,12 @@ and follow the connection if you later change it.
 
 ### Naming the data contract
 
-`data_contract_name` takes the **bare, lowercase** contract name: no leading underscore, no `_vN`
-suffix. For the UNS contract `_pump_v1`, write `pump`. Every version of a contract shares one set of
-tables, so `pump` also stores `_pump_v2`.
+Every version of a contract shares one set of tables, so `pump` stores `_pump_v1` and `_pump_v2`
+alike. That is why the version is left off: the tables hold the contract, not one version of it.
 
-The name becomes part of a PostgreSQL table identifier, so it is restricted to lowercase letters,
-numbers, and underscores. Hyphens do not work. The Management Console rejects new data model names
-containing them for this reason; models created before that check keep working elsewhere but cannot
-be stored by a Historian bridge under their own name.
+The Management Console rejects dashes in new data model names for the table-identifier reason above.
+Models created before that check keep working everywhere else, but a Historian bridge cannot store
+them under their own name.
 
 The default is `historian`, the generic UNS time-series contract.
 
