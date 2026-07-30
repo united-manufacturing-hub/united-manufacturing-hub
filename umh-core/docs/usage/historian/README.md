@@ -63,13 +63,17 @@ Three steps get you from a running UNS to a dashboard:
    | **Database** | `umh` | Must already exist. |
    | **User** | `umh_owner` | The login role from the prerequisites. |
    | **Password** | required | Stored in `config.yaml`, hidden in the UI, redacted in logs. |
-   | **SSL Mode** | `require` | `require`, `disable`, or `verify-full`. |
-   | **SSL Root Cert / SSL Cert / SSL Key** | empty | Paths *inside the container*. Only valid with `verify-full`. |
+   | **SSL Mode** | `require` | `require` or `disable`. |
 
 3. Save. The instance opens a connection and reports the result on the plugin's overview card.
 
-`require` encrypts the connection but does not verify the server certificate. Only `verify-full`
-does both, so certificate paths are rejected with any other mode rather than silently ignored.
+`require` encrypts the connection but does not verify the server certificate. `disable` turns TLS
+off entirely.
+
+Full certificate verification (`verify-full`) is not offered yet: it needs a CA and client
+certificate inside the container, and there is no way to upload those from the Management Console.
+A connection that already sets `sslmode: verify-full` in `config.yaml` keeps working, along with its
+`sslrootcert`, `sslcert`, and `sslkey` paths.
 
 ### Reading the connection status
 
