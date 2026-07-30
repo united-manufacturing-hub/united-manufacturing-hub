@@ -25,6 +25,8 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/watchdog"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/topicbrowser"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/protocolconverterserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/control"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
@@ -112,6 +114,58 @@ var _ = Describe("Backend Connection", Ordered, func() {
 			// runs in a separate goroutine (via 'go' keyword)
 			Eventually(controlLoopReached, 500*time.Millisecond).Should(Receive(BeTrue()),
 				"Control loop should be reached immediately, but was blocked by synchronous backend connection")
+		})
+	})
+
+	Context("counting historian bridges", func() {
+		historianBridge := func() config.ProtocolConverterConfig {
+			return config.ProtocolConverterConfig{
+				ProtocolConverterServiceConfig: protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
+					Config: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
+						DataflowComponentWriteServiceConfig: dataflowcomponentserviceconfig.DataflowComponentWriteConfigInput{
+							Destination: dataflowcomponentserviceconfig.WriteConfigDestination{
+								Protocol: dataflowcomponentserviceconfig.HistorianDestinationProtocol,
+							},
+						},
+					},
+				},
+			}
+		}
+
+		nonHistorianBridge := func() config.ProtocolConverterConfig {
+			return config.ProtocolConverterConfig{
+				ProtocolConverterServiceConfig: protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
+					Config: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
+						DataflowComponentWriteServiceConfig: dataflowcomponentserviceconfig.DataflowComponentWriteConfigInput{
+							Destination: dataflowcomponentserviceconfig.WriteConfigDestination{
+								Protocol: "kafka",
+							},
+						},
+					},
+				},
+			}
+		}
+
+		It("counts only bridges writing to the historian", func() {
+			cfg := config.FullConfig{
+				ProtocolConverter: []config.ProtocolConverterConfig{
+					historianBridge(),
+					nonHistorianBridge(),
+					historianBridge(),
+				},
+			}
+
+			Expect(countHistorianBridges(cfg)).To(Equal(2))
+		})
+
+		It("returns zero when no bridges write to the historian", func() {
+			cfg := config.FullConfig{
+				ProtocolConverter: []config.ProtocolConverterConfig{
+					nonHistorianBridge(),
+				},
+			}
+
+			Expect(countHistorianBridges(cfg)).To(Equal(0))
 		})
 	})
 

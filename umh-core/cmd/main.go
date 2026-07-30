@@ -178,6 +178,8 @@ func main() {
 		FSMv2MemoryCleanupEnabled:     configData.Agent.UseFSMv2MemoryCleanup,
 		FSMv2ProtocolConverterEnabled: configData.Agent.UseFSMv2ProtocolConverter,
 		ResourceLimitBlockingEnabled:  configData.Agent.EnableResourceLimitBlocking,
+		HistorianConfigured:           configData.Historian != nil,
+		HistorianBridgeCount:          countHistorianBridges(configData),
 	}
 
 	// Ensure the S6 repository directory exists
@@ -329,6 +331,19 @@ func main() {
 	<-fsmv2Done
 
 	log.Info("umh-core completed")
+}
+
+// countHistorianBridges returns the number of bridges whose write DFC targets the historian output.
+func countHistorianBridges(cfg config.FullConfig) int {
+	n := 0
+
+	for _, pc := range cfg.ProtocolConverter {
+		if pc.ProtocolConverterServiceConfig.GetDFCWriteServiceConfig().WritesToHistorian() {
+			n++
+		}
+	}
+
+	return n
 }
 
 // ensureS6RepositoryDirectory ensures that the S6 repository directory exists with proper permissions.
