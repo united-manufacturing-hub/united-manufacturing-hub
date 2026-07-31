@@ -307,6 +307,98 @@ var _ = Describe("simpleWorker", func() {
 			Expect(gotD).To(BeNil(),
 				"Poll receives TDeps' zero value when the spec declares no dependencies")
 		})
+
+		It("gives every instance its own deps value, even for a repeated identity", func() {
+			// One instance's state must not leak into another's. A throughput
+			// window stands in for that state: the kind of per-instance mutable
+			// value NewDeps exists for.
+			type window struct {
+				polls int
+			}
+
+			type windowStatus struct {
+				Polls int `json:"polls"`
+			}
+
+			// built records one entry per NewDeps call, in call order, so the
+			// assertions can name each instance's own value even when two
+			// instances carry the same identity.
+			var built []*window
+
+			spec := MonitorSpec[probeConfig, windowStatus, *window]{
+				WorkerType: "simpleworker_newdeps_isolation",
+				NewDeps: func(deps.Identity) *window {
+					w := &window{}
+					built = append(built, w)
+
+					return w
+				},
+				Poll: func(_ context.Context, w *window, _ probeConfig) (windowStatus, error) {
+					w.polls++
+
+					return windowStatus{Polls: w.polls}, nil
+				},
+			}
+
+			newInstance := func(id deps.Identity) *simpleWorker[probeConfig, windowStatus, *window] {
+				w, err := newSimpleWorker(spec, id, deps.NewNopFSMLogger(), nil)
+				Expect(err).NotTo(HaveOccurred())
+
+				return w
+			}
+
+			// pollCount ticks one instance and returns the poll count its own deps
+			// value reported, which is how a developer's code observes that state.
+			pollCount := func(w *simpleWorker[probeConfig, windowStatus, *window]) int {
+				obs, err := w.CollectObservedState(context.Background(), &fsmv2.WrappedDesiredState[probeConfig]{})
+				Expect(err).NotTo(HaveOccurred())
+
+				o, ok := obs.(fsmv2.Observation[Status[windowStatus]])
+				Expect(ok).To(BeTrue(), "observation is wrapped by the framework")
+
+				return o.Status.Result.Polls
+			}
+
+			// The supervisor builds a child's ID as "<name>-001", so two parents
+			// that give their child the same name hand out the same ID and Name,
+			// and only the hierarchy path tells the two children apart.
+			idA := deps.Identity{
+				ID:            "monitor-001",
+				Name:          "monitor",
+				WorkerType:    spec.WorkerType,
+				HierarchyPath: "parent-a(parent)/monitor-001(" + spec.WorkerType + ")",
+			}
+			idB := idA
+			idB.HierarchyPath = "parent-b(parent)/monitor-001(" + spec.WorkerType + ")"
+
+			// aAgain is idA a second time: a child respawned under its old name
+			// must not inherit the dead instance's state.
+			a, b, aAgain := newInstance(idA), newInstance(idB), newInstance(idA)
+
+			Expect(built).To(HaveLen(3),
+				"NewDeps runs once per instance, including for an instance whose identity another instance already used")
+			Expect(built[0]).NotTo(BeIdenticalTo(built[1]),
+				"two instances that differ only in hierarchy path get separate deps values")
+			Expect(built[0]).NotTo(BeIdenticalTo(built[2]),
+				"a respawned instance gets a fresh deps value, not the previous instance's")
+
+			Expect(pollCount(a)).To(Equal(1), "a's first poll mutates a's deps value")
+			Expect(pollCount(a)).To(Equal(2), "a keeps the same deps value across ticks")
+
+			Expect(built[0].polls).To(Equal(2),
+				"a's polls landed on the value NewDeps built for a")
+			Expect(built[1].polls).To(BeZero(), "a's two polls left b's deps value untouched")
+			Expect(built[2].polls).To(BeZero(), "a's two polls left the respawn's deps value untouched")
+
+			Expect(pollCount(b)).To(Equal(1),
+				"b counts its first poll as its first, unaffected by a's two polls")
+			Expect(built[1].polls).To(Equal(1), "b's poll landed on b's own deps value")
+
+			Expect(pollCount(aAgain)).To(Equal(1),
+				"the respawn starts from zero, not from a's count")
+			Expect(built[2].polls).To(Equal(1), "the respawn's poll landed on its own deps value")
+			Expect(built[0].polls).To(Equal(2), "neither b nor the respawn touched a's deps value")
+		})
 	})
 
 	Describe("dependencies", func() {
