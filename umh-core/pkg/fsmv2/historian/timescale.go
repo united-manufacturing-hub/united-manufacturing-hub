@@ -112,9 +112,11 @@ type TimescaleStatus struct {
 	Reachable bool `json:"reachable"`
 }
 
-// Deps carries the poll dependencies, shared across ticks. The pool holder
-// lazily builds and caches a pgx pool keyed by DSN, so Poll reuses pooled
-// connections instead of dialing every tick.
+// Deps carries the poll dependencies, built once per worker instance and reused
+// across that instance's ticks. The pool holder lazily builds and caches a pgx
+// pool keyed by DSN, so Poll reuses pooled connections instead of dialing every
+// tick. One holder per instance keeps each instance's pool independent of the
+// DSNs the others poll.
 type Deps struct {
 	Logger deps.FSMLogger
 	pool   *poolHolder
@@ -276,9 +278,16 @@ func init() {
 		WorkerType: WorkerType,
 		Interval:   pollInterval,
 		Poll:       Poll,
-		Deps: Deps{
-			Logger: deps.NewFSMLogger(logger.For(WorkerType)),
-			pool:   &poolHolder{},
+		// Each instance builds its own pool holder. A holder shared by two
+		// instances with different DSNs would tear down and rebuild the pool on
+		// every alternating poll, because get reuses its cached pool only while
+		// the DSN matches. The identity is unused: nothing here varies per
+		// instance except the holder's ownership.
+		NewDeps: func(deps.Identity) Deps {
+			return Deps{
+				Logger: deps.NewFSMLogger(logger.For(WorkerType)),
+				pool:   &poolHolder{},
+			}
 		},
 	})
 }
