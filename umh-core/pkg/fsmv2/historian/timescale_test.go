@@ -24,7 +24,9 @@ import (
 
 	"github.com/jackc/pgx/v5/pgconn"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 )
 
 var _ = Describe("Error classification", func() {
@@ -69,5 +71,30 @@ var _ = Describe("newDeps", func() {
 		Expect(a.pool).To(BeIdenticalTo(b.pool),
 			"one holder for the process: a per-instance pool would leak its pgxpool goroutine on every despawn, and nothing in the framework closes it")
 		Expect(a.Logger).NotTo(BeNil(), "Poll dereferences the logger on every tick")
+	})
+})
+
+var _ = Describe("Poll", func() {
+	It("reports unreachable with authentication unknown when the DSN does not parse", func() {
+		// A colon in the host reaches Poll in production: TimescaleConfig.Validate
+		// only requires host to be non-empty, and net.JoinHostPort then brackets the
+		// value into what pgx reads as a malformed IPv6 literal. Pool creation parses
+		// the DSN without dialling, so this covers the early return with no database
+		// and no network.
+		cfg := config.HistorianConfig{Timescale: config.TimescaleConfig{
+			Host:     "host:with:colons",
+			Password: "unlikely-to-appear-by-accident",
+		}}
+
+		status, err := Poll(context.Background(),
+			newDeps(deps.Identity{ID: "timescale", HierarchyPath: "historian/timescale"}), cfg)
+
+		Expect(err).To(MatchError(ContainSubstring("parse timescale dsn")),
+			"the error wraps the parse failure, so the degraded verdict names the cause")
+		Expect(err).NotTo(MatchError(ContainSubstring(cfg.Timescale.Password)),
+			"the error quotes the DSN, which carries the password: pgx masks it, and this error is logged")
+		Expect(status.Reachable).To(BeFalse(), "nothing was dialled, so the endpoint is not proven reachable")
+		Expect(status.Auth).To(Equal(models.TimescaleAuthUnknown),
+			"no server answered, so the credentials stay unverified rather than rejected")
 	})
 })
