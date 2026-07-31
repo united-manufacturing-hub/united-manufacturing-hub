@@ -25,6 +25,7 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
 )
 
 type probeConfig struct {
@@ -481,5 +482,68 @@ var _ = Describe("Register", func() {
 
 		_, ok := fsmv2.ObservationIntervalFor("simpleworker_nointerval")
 		Expect(ok).To(BeFalse())
+	})
+
+	It("gives every instance built through the registered factory its own deps value", func() {
+		// Production never calls newSimpleWorker: it reaches the constructor
+		// Register stored, through the factory, once per worker instance. A poll
+		// counter stands in for the per-instance mutable state NewDeps exists for,
+		// so each deps value can be traced back to the instance that received it.
+		type window struct {
+			polls int
+		}
+
+		const workerType = "simpleworker_register_factory"
+
+		var built []*window
+
+		Register(MonitorSpec[probeConfig, probeStatus, *window]{
+			WorkerType: workerType,
+			NewDeps: func(deps.Identity) *window {
+				w := &window{}
+				built = append(built, w)
+
+				return w
+			},
+			Poll: func(_ context.Context, w *window, _ probeConfig) (probeStatus, error) {
+				w.polls++
+
+				return probeStatus{}, nil
+			},
+		})
+
+		// The supervisor builds a child's ID as "<name>-001", so two children
+		// given the same name under different parents share ID and Name, and only
+		// the hierarchy path tells them apart.
+		idA := deps.Identity{
+			ID:            "monitor-001",
+			Name:          "monitor",
+			WorkerType:    workerType,
+			HierarchyPath: "parent-a(parent)/monitor-001(" + workerType + ")",
+		}
+		idB := idA
+		idB.HierarchyPath = "parent-b(parent)/monitor-001(" + workerType + ")"
+
+		newInstance := func(id deps.Identity) fsmv2.Worker {
+			w, err := factory.NewWorkerByType(workerType, id, deps.NewNopFSMLogger(), nil, nil)
+			Expect(err).NotTo(HaveOccurred(), "Register left an instantiable factory for the worker type")
+			Expect(w).NotTo(BeNil(), "an instance exists, so the assertions below are not vacuous")
+
+			return w
+		}
+
+		a, b := newInstance(idA), newInstance(idB)
+		Expect(a).NotTo(BeIdenticalTo(b),
+			"the factory builds a worker per instantiation, not one memoised per worker type")
+
+		Expect(built).To(HaveLen(2),
+			"NewDeps runs once per instance built through the factory, not once per worker type")
+		Expect(built[0]).NotTo(BeIdenticalTo(built[1]),
+			"two instances that differ only in hierarchy path get separate deps values")
+
+		_, err := a.CollectObservedState(context.Background(), &fsmv2.WrappedDesiredState[probeConfig]{})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(built[0].polls).To(Equal(1), "a's poll landed on the value NewDeps built for a")
+		Expect(built[1].polls).To(BeZero(), "a's poll left b's deps value untouched")
 	})
 })
