@@ -120,8 +120,13 @@ type TimescaleStatus struct {
 // framework closes what a worker holds, so a per-instance pool would leak its
 // pgxpool health-check goroutine every time a child that had already polled is
 // despawned. A child despawned before its first poll leaks nothing, because
-// poolHolder.get is reached only from Poll. Sharing the holder is safe because
-// this monitor is a singleton, one Ref under one writer.
+// poolHolder.get is reached only from Poll.
+//
+// Only one historian worker can run on this. Every instance would poll through
+// the same pgxpool, and the holder caches one pool at a time, so two instances
+// on different DSNs would rebuild each other's pool on every poll. Historian is
+// a singleton today, one Ref under one writer. Going multi-instance means a
+// holder per instance, which needs a teardown path first.
 //
 // Sharing has two consequences the config does not suggest. Removing the
 // historian config block despawns the child but does not close the pool: the
