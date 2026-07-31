@@ -51,14 +51,19 @@ type MonitorSpec[TConfig, TStatus, TDeps any] struct {
 	// every instance, declare it at package level and close over it here;
 	// anything constructed inside the builder body is per instance. Share it
 	// only when the worker type is a singleton, or when the resource does not
-	// depend on per-instance config: a shared resource keyed by config is
-	// rebuilt on every alternating poll once two instances disagree on the key,
-	// so a multi-instance worker whose instances differ must build the resource
-	// inside Poll instead. See pkg/fsmv2/historian for a worked example of the
-	// singleton case.
+	// depend on per-instance config: a single-slot cache keyed by config holds
+	// one resource at a time, so once two instances disagree on the key every
+	// poll evicts the other's and rebuilds its own. A multi-instance worker
+	// whose instances differ on the key needs a keyed package-level registry
+	// instead — a map[string]*resource guarded by a mutex, one entry per
+	// distinct key. It never thrashes, it bounds retention at one resource per
+	// key ever configured, and it needs no framework change. See
+	// pkg/fsmv2/historian for a worked example of the singleton case.
 	//
 	// It must not fail: NewDeps has no error return, so anything fallible
-	// belongs behind Poll.
+	// belongs behind Poll. A panic escapes into the parent supervisor's tick
+	// rather than being reported against this child, because construction runs
+	// inside that tick.
 	NewDeps func(id deps.Identity) TDeps
 	// Poll observes the target once and returns the status. d is a copy: TDeps is
 	// passed by value, so a resource assigned to a non-pointer field of d is

@@ -124,11 +124,13 @@ type TimescaleStatus struct {
 // this monitor is a singleton, one Ref under one writer.
 //
 // Sharing has two consequences the config does not suggest. Removing the
-// historian config block despawns the child but does not close the pool, so one
-// goroutine and up to maxConns server sessions survive until pgxpool's idle
-// timeout reaps them. A respawn with an identical DSN then inherits the cached
-// pool instead of reconnecting, which also means it does not re-read the TLS
-// material at the sslrootcert and sslcert paths.
+// historian config block despawns the child but does not close the pool: the
+// health-check goroutine returns only on Close, which nothing calls, so it
+// survives for the life of the process, and up to maxConns server sessions
+// survive until connMaxLifetime recycles them. A respawn with an identical DSN
+// then inherits the cached pool, and the DSN is parsed only when the pool is
+// built, so the TLS material at the sslrootcert and sslcert paths is never
+// re-read.
 type Deps struct {
 	Logger deps.FSMLogger
 	pool   *poolHolder

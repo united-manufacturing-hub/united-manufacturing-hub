@@ -18,18 +18,63 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
 	"reflect"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 )
+
+// The package global sharedPool is mutable, a polling spec fills it with a live
+// pool, and only Close stops that pool's health-check goroutine. Swapping a fresh
+// holder in for the duration of each spec keeps one spec's pool out of every
+// later spec, so the suite means the same thing in any order. The two sharing
+// specs still hold: they compare the holders handed to two instances against each
+// other, not against this package's initial value.
+var _ = BeforeEach(func() {
+	original, fresh := sharedPool, &poolHolder{}
+	sharedPool = fresh
+
+	DeferCleanup(func() {
+		sharedPool = original
+
+		if pool := pooledBy(fresh); pool != nil {
+			pool.Close()
+		}
+	})
+})
+
+// pooledBy reads the pool a holder ended up with. poolHolder.get assigns it under
+// the holder's mutex, so the read takes the same lock.
+func pooledBy(h *poolHolder) *pgxpool.Pool {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	return h.pool
+}
+
+// closedPort returns a loopback port with nothing listening on it: it binds one,
+// reads back the port the kernel assigned, and closes the listener. Dialling it is
+// refused immediately, so a spec can reach a real pool without a database.
+func closedPort() uint16 {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	Expect(err).NotTo(HaveOccurred(), "a loopback listener is available")
+
+	addr, ok := ln.Addr().(*net.TCPAddr)
+	Expect(ok).To(BeTrue(), "a tcp listener reports a *net.TCPAddr")
+	Expect(ln.Close()).To(Succeed())
+
+	return uint16(addr.Port)
+}
 
 var _ = Describe("Error classification", func() {
 	type tc struct {
@@ -142,5 +187,43 @@ var _ = Describe("Poll", func() {
 		Expect(status.Reachable).To(BeFalse(), "nothing was dialled, so the endpoint is not proven reachable")
 		Expect(status.Auth).To(Equal(models.TimescaleAuthUnknown),
 			"no server answered, so the credentials stay unverified rather than rejected")
+	})
+
+	It("reuses the pool cached by the holder it was handed", func() {
+		// The two sharing specs pin where the holder is stored, not that Poll
+		// reads it: a Poll that ignored d.pool and called (&poolHolder{}).get
+		// itself would pass them while dialling a fresh pool, and leaking its
+		// health-check goroutine, once per second. This one reads the pool back
+		// off the holder Poll was handed, so it fails on either rewiring.
+		//
+		// A closed port keeps the spec offline. pgxpool.NewWithConfig does not
+		// dial — MinConns and MinIdleConns both default to 0, so it builds the
+		// pool from the parsed DSN alone — and only the SELECT 1 reaches the
+		// network, where it is refused at once.
+		cfg := config.HistorianConfig{Timescale: config.TimescaleConfig{
+			Host:     "127.0.0.1",
+			Port:     closedPort(),
+			Password: "unlikely-to-appear-by-accident",
+			SSLMode:  config.HistorianSSLModeDisable,
+		}}
+
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		d := newDeps(idUnder("parent-a"))
+
+		_, err := Poll(ctx, d, cfg)
+		Expect(err).To(MatchError(ContainSubstring("timescale query")),
+			"the DSN parsed and the pool was built, so the failure is the refused SELECT 1")
+
+		first := pooledBy(d.pool)
+		Expect(first).NotTo(BeNil(),
+			"Poll went through the holder in its deps: a Poll that built its own pool leaves this nil")
+
+		_, err = Poll(ctx, d, cfg)
+		Expect(err).To(HaveOccurred(), "still nothing listening on the port")
+
+		Expect(pooledBy(d.pool)).To(BeIdenticalTo(first),
+			"the second poll reused the cached pool rather than building a second one")
 	})
 })
