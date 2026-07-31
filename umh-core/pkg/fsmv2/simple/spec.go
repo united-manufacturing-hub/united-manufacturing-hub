@@ -41,10 +41,16 @@ type MonitorSpec[TConfig, TStatus, TDeps any] struct {
 	Deps TDeps
 	// NewDeps builds the dependency value for one worker instance from its
 	// identity. Optional: when set, its result is what Poll receives instead of
-	// Deps. It must not fail: NewDeps has no error return, so anything fallible
-	// or resource-holding (dialling, opening a pool) belongs behind Poll.
-	// NewDeps is called on the poll path, and nothing yet pins how often it runs,
-	// so nothing may be cached in the value it returns.
+	// Deps. NewDeps runs once per instance, at construction, and the worker keeps
+	// the returned value for its lifetime, so that value may carry per-instance
+	// mutable state. Poll receives it by value: state that Poll mutates must sit
+	// behind a pointer (use *TDeps, or a pointer field), otherwise the mutation
+	// dies with the copy. A resource shared across instances stays stateless and
+	// is referenced by pointer (e.g. an *http.Client) from each per-instance
+	// value. Poll is never called concurrently with itself for one instance (the
+	// observation collector serialises it under a mutex), so per-instance state
+	// needs no locking. It must not fail: NewDeps has no error return, so anything
+	// fallible or resource-holding (dialling, opening a pool) belongs behind Poll.
 	NewDeps func(id deps.Identity) TDeps
 	// Poll observes the target once and returns the status. d is a copy: TDeps is
 	// passed by value, so a resource assigned to a non-pointer field of d is

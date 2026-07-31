@@ -24,14 +24,17 @@ import (
 )
 
 // simpleWorker runs a MonitorSpec's Poll on the framework's collection cadence.
-// It holds only the immutable MonitorSpec: the worker carries no mutable state,
-// so the same logic serves every simple worker type.
+// It holds the immutable MonitorSpec plus the dependency value built for this
+// instance at construction. Mutable state lives in that value, never in the
+// worker struct, so the same logic serves every simple worker type.
 //
 // The framework-facing status is Status[TStatus]: the developer's poll result
 // wrapped with the health verdict. WorkerBase's deps sentinel is struct{}; the
 // MonitorSpec's own TDeps flows to Poll, not through WorkerBase.
 type simpleWorker[TConfig, TStatus, TDeps any] struct {
 	spec MonitorSpec[TConfig, TStatus, TDeps]
+	// instDeps is the dependency value every Poll receives.
+	instDeps TDeps
 	fsmv2.WorkerBase[TConfig, Status[TStatus], struct{}]
 }
 
@@ -46,8 +49,12 @@ func newSimpleWorker[TConfig, TStatus, TDeps any](
 		return nil, errors.New("logger must not be nil")
 	}
 
-	w := &simpleWorker[TConfig, TStatus, TDeps]{spec: spec}
+	w := &simpleWorker[TConfig, TStatus, TDeps]{spec: spec, instDeps: spec.Deps}
 	w.InitBase(id, logger, sr)
+
+	if spec.NewDeps != nil {
+		w.instDeps = spec.NewDeps(id)
+	}
 
 	return w, nil
 }
@@ -71,12 +78,7 @@ const reasonNoHealthCheck = "running (no health check)"
 func (w *simpleWorker[TConfig, TStatus, TDeps]) CollectObservedState(ctx context.Context, desired fsmv2.DesiredState) (fsmv2.ObservedState, error) {
 	cfg := fsmv2.ExtractConfig[TConfig](desired)
 
-	d := w.spec.Deps
-	if w.spec.NewDeps != nil {
-		d = w.spec.NewDeps(w.Identity())
-	}
-
-	status, err := w.spec.Poll(ctx, d, cfg)
+	status, err := w.spec.Poll(ctx, w.instDeps, cfg)
 	if err != nil {
 		return fsmv2.NewObservation(Status[TStatus]{
 			// We can use status here as the result, even on error, to preserve

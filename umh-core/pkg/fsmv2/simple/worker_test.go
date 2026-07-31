@@ -232,6 +232,51 @@ var _ = Describe("simpleWorker", func() {
 			Expect(gotToken).To(Equal("token-for-probe"),
 				"NewDeps' return replaces Deps entirely, it is not a fallback for an unset Deps")
 		})
+
+		It("calls NewDeps once at construction and reuses the same deps every tick", func() {
+			type mutableDeps struct {
+				state int
+			}
+
+			var (
+				calls int
+				held  *mutableDeps
+			)
+
+			spec := MonitorSpec[probeConfig, probeStatus, *mutableDeps]{
+				WorkerType: "simpleworker_newdeps_persist",
+				Deps:       &mutableDeps{state: 100},
+				NewDeps: func(deps.Identity) *mutableDeps {
+					calls++
+					held = &mutableDeps{}
+
+					return held
+				},
+				Poll: func(_ context.Context, d *mutableDeps, _ probeConfig) (probeStatus, error) {
+					d.state++
+
+					return probeStatus{}, nil
+				},
+			}
+
+			w, err := newSimpleWorker(spec,
+				deps.Identity{ID: "probe", WorkerType: spec.WorkerType},
+				deps.NewNopFSMLogger(), nil)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(calls).To(Equal(1),
+				"NewDeps runs at construction, before any tick")
+
+			_, err = w.CollectObservedState(context.Background(), &fsmv2.WrappedDesiredState[probeConfig]{})
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err = w.CollectObservedState(context.Background(), &fsmv2.WrappedDesiredState[probeConfig]{})
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(calls).To(Equal(1),
+				"NewDeps runs once per instance, not once per tick")
+			Expect(held.state).To(Equal(2),
+				"both ticks mutated NewDeps' value, not Deps', so state accumulates across ticks")
+		})
 	})
 
 	Describe("dependencies", func() {
