@@ -40,13 +40,20 @@ type MonitorSpec[TConfig, TStatus, TDeps any] struct {
 	// worker keeps the returned value for its lifetime, so that value may carry
 	// per-instance mutable state. Poll receives it by value: state that Poll
 	// mutates must sit behind a pointer (use *TDeps, or a pointer field),
-	// otherwise the mutation dies with the copy. A resource shared across
-	// instances stays stateless and is referenced by pointer (e.g. an
-	// *http.Client) from each per-instance value. Poll is never called
+	// otherwise the mutation dies with the copy. Poll is never called
 	// concurrently with itself for one instance (the observation collector
-	// serialises it under a mutex), so per-instance state needs no locking. It
-	// must not fail: NewDeps has no error return, so anything fallible or
-	// resource-holding (dialling, opening a pool) belongs behind Poll.
+	// serializes it under a mutex), so per-instance state needs no locking.
+	//
+	// The framework never releases the returned value. A despawned worker is
+	// dropped without any teardown call, so whatever the value holds must be
+	// safe to abandon: a buffer or counter is, a connection pool or anything
+	// with a background goroutine is not. To share one such resource across
+	// every instance, declare it at package level and close over it here;
+	// anything constructed inside the builder body is per instance. See
+	// pkg/fsmv2/historian for a worked example.
+	//
+	// It must not fail: NewDeps has no error return, so anything fallible
+	// belongs behind Poll.
 	NewDeps func(id deps.Identity) TDeps
 	// Poll observes the target once and returns the status. d is a copy: TDeps is
 	// passed by value, so a resource assigned to a non-pointer field of d is

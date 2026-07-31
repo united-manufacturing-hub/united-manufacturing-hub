@@ -112,14 +112,35 @@ type TimescaleStatus struct {
 	Reachable bool `json:"reachable"`
 }
 
-// Deps carries the poll dependencies, built once per worker instance and reused
-// across that instance's ticks. The pool holder lazily builds and caches a pgx
-// pool keyed by DSN, so Poll reuses pooled connections instead of dialing every
-// tick. One holder per instance keeps each instance's pool independent of the
-// DSNs the others poll.
+// Deps carries the poll dependencies. The pool holder lazily builds and caches a
+// pgx pool keyed by DSN, so Poll reuses pooled connections instead of dialing
+// every tick.
+//
+// The holder is process-wide, not per worker instance: nothing in the worker
+// framework closes what a worker holds, so a per-instance pool would leak its
+// pgxpool health-check goroutine every time the child is despawned. Sharing it
+// is safe because this monitor is a singleton, one Ref under one writer.
 type Deps struct {
 	Logger deps.FSMLogger
 	pool   *poolHolder
+}
+
+// sharedPool is the process-wide holder every worker instance polls through. It
+// outlives any one instance on purpose: the framework has no hook that would let
+// a worker close a pool it owned, so the holder cannot be per instance without
+// leaking a goroutine on every despawn.
+var sharedPool = &poolHolder{}
+
+// newDeps builds one worker instance's poll dependencies. It defers logger.For
+// until construction so it reads the global logger after main has configured it
+// rather than at package init, and it hands out sharedPool rather than building a
+// holder, because the framework never releases what a worker holds. The identity
+// is unused: nothing here varies per instance.
+func newDeps(deps.Identity) Deps {
+	return Deps{
+		Logger: deps.NewFSMLogger(logger.For(WorkerType)),
+		pool:   sharedPool,
+	}
 }
 
 // poolHolder caches a single pgx pool, rebuilding it when the DSN changes (for
@@ -278,16 +299,6 @@ func init() {
 		WorkerType: WorkerType,
 		Interval:   pollInterval,
 		Poll:       Poll,
-		// Each instance builds its own pool holder. A holder shared by two
-		// instances with different DSNs would tear down and rebuild the pool on
-		// every alternating poll, because get reuses its cached pool only while
-		// the DSN matches. The identity is unused: nothing here varies per
-		// instance except the holder's ownership.
-		NewDeps: func(deps.Identity) Deps {
-			return Deps{
-				Logger: deps.NewFSMLogger(logger.For(WorkerType)),
-				pool:   &poolHolder{},
-			}
-		},
+		NewDeps:    newDeps,
 	})
 }

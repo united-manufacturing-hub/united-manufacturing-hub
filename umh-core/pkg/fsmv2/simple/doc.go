@@ -28,9 +28,14 @@
 //	    WorkerType string                                                       // required
 //	    Poll       func(ctx, d TDeps, cfg TConfig) (TStatus, error)             // required
 //	    Health     func(cfg TConfig, status TStatus) Health                     // optional
-//	    NewDeps    func(id deps.Identity) TDeps                                 // optional (deps per instance; struct{} if none)
+//	    NewDeps    func(id deps.Identity) TDeps                                 // optional (built once per instance)
 //	    Interval   time.Duration                                               // optional (collector default if 0)
 //	}
+//
+// A poll that needs no dependencies instantiates TDeps as struct{} and leaves
+// NewDeps unset, so Poll receives the zero value. Poll takes TDeps by value, so
+// state it mutates has to sit behind a pointer, and the framework never releases
+// what NewDeps returns — see the NewDeps godoc before holding a resource in it.
 //
 // TStatus must be a struct (Register panics otherwise): the framework flattens
 // it to top-level JSON for CSE delta sync.

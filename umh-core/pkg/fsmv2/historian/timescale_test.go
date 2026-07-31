@@ -23,6 +23,8 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/jackc/pgx/v5/pgconn"
+
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 )
 
 var _ = Describe("Error classification", func() {
@@ -56,4 +58,16 @@ var _ = Describe("Error classification", func() {
 		Entry("wrapped: pgbouncer missing database through fmt.Errorf",
 			tc{err: fmt.Errorf("timescale query: %w", &pgconn.PgError{Code: "08P01", Message: "no such database: nope"}), wantAnswered: true, wantAuth: true}),
 	)
+})
+
+var _ = Describe("newDeps", func() {
+	It("hands every instance the same pool holder", func() {
+		a, b := newDeps(deps.Identity{ID: "timescale-001", HierarchyPath: "parent-a/timescale-001"}),
+			newDeps(deps.Identity{ID: "timescale-001", HierarchyPath: "parent-b/timescale-001"})
+
+		Expect(a.pool).NotTo(BeNil(), "the holder exists, so the comparison below is not vacuous")
+		Expect(a.pool).To(BeIdenticalTo(b.pool),
+			"one holder for the process: a per-instance pool would leak its pgxpool goroutine on every despawn, and nothing in the framework closes it")
+		Expect(a.Logger).NotTo(BeNil(), "Poll dereferences the logger on every tick")
+	})
 })
