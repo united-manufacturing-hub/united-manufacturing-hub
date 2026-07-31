@@ -277,6 +277,36 @@ var _ = Describe("simpleWorker", func() {
 			Expect(held.state).To(Equal(2),
 				"both ticks mutated NewDeps' value, not Deps', so state accumulates across ticks")
 		})
+
+		It("passes the zero value to Poll when the spec builds no deps", func() {
+			var (
+				polled bool
+				gotD   *probeDeps
+			)
+
+			// The spec deliberately declares no dependencies: their absence is the test.
+			spec := MonitorSpec[probeConfig, probeStatus, *probeDeps]{
+				WorkerType: "simpleworker_nodeps_unset",
+				Poll: func(_ context.Context, d *probeDeps, _ probeConfig) (probeStatus, error) {
+					polled = true
+					gotD = d
+
+					return probeStatus{}, nil
+				},
+			}
+
+			w, err := newSimpleWorker(spec,
+				deps.Identity{ID: "probe", WorkerType: spec.WorkerType},
+				deps.NewNopFSMLogger(), nil)
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err = w.CollectObservedState(context.Background(), &fsmv2.WrappedDesiredState[probeConfig]{})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(polled).To(BeTrue(),
+				"Poll ran, so the nil assertion below is not vacuous")
+			Expect(gotD).To(BeNil(),
+				"Poll receives TDeps' zero value when the spec declares no dependencies")
+		})
 	})
 
 	Describe("dependencies", func() {
