@@ -44,26 +44,15 @@ func newSimpleWorker[TConfig, TStatus, TDeps any](
 	id deps.Identity,
 	logger deps.FSMLogger,
 	sr deps.StateReader,
-) (w *simpleWorker[TConfig, TStatus, TDeps], err error) {
+) (*simpleWorker[TConfig, TStatus, TDeps], error) {
 	if logger == nil {
 		return nil, errors.New("logger must not be nil")
 	}
 
-	w = &simpleWorker[TConfig, TStatus, TDeps]{spec: spec}
+	w := &simpleWorker[TConfig, TStatus, TDeps]{spec: spec}
 	w.InitBase(id, logger, sr)
 
 	if spec.NewDeps != nil {
-		// A panicking builder returns an error instead, because construction runs
-		// inside the parent supervisor's tick: an escaping panic trips the parent's
-		// panic circuit and suppresses the whole tick, including its other
-		// children, and recurs every tick because the child is never recorded. An
-		// error is logged against this child alone and its siblings still run.
-		defer func() {
-			if r := recover(); r != nil {
-				w, err = nil, fmt.Errorf("NewDeps panicked: %v", r)
-			}
-		}()
-
 		w.instDeps = spec.NewDeps(id)
 	}
 

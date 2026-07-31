@@ -247,25 +247,6 @@ var _ = Describe("simpleWorker", func() {
 				"both ticks mutated the same NewDeps value, so state accumulates across ticks")
 		})
 
-		It("turns a panicking NewDeps into a construction error", func() {
-			spec := MonitorSpec[probeConfig, probeStatus, *probeDeps]{
-				WorkerType: "simpleworker_newdeps_panic",
-				NewDeps: func(deps.Identity) *probeDeps {
-					panic("dsn missing")
-				},
-				Poll: func(_ context.Context, _ *probeDeps, _ probeConfig) (probeStatus, error) {
-					return probeStatus{}, nil
-				},
-			}
-
-			w, err := newSimpleWorker(spec,
-				deps.Identity{ID: "probe", WorkerType: spec.WorkerType},
-				deps.NewNopFSMLogger(), nil)
-			Expect(err).To(MatchError(ContainSubstring("dsn missing")),
-				"construction runs inside the parent's tick, where an escaping panic would trip its panic circuit and suppress every sibling")
-			Expect(w).To(BeNil(), "no half-built worker escapes")
-		})
-
 		It("passes the zero value to Poll when the spec builds no deps", func() {
 			var (
 				polled bool

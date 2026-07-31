@@ -118,17 +118,27 @@ type TimescaleStatus struct {
 //
 // The holder is process-wide, not per worker instance: nothing in the worker
 // framework closes what a worker holds, so a per-instance pool would leak its
-// pgxpool health-check goroutine every time the child is despawned. Sharing it
-// is safe because this monitor is a singleton, one Ref under one writer.
+// pgxpool health-check goroutine every time a child that had already polled is
+// despawned. A child despawned before its first poll leaks nothing, because
+// poolHolder.get is reached only from Poll. Sharing the holder is safe because
+// this monitor is a singleton, one Ref under one writer.
+//
+// Sharing has two consequences the config does not suggest. Removing the
+// historian config block despawns the child but does not close the pool, so one
+// goroutine and up to maxConns server sessions survive until pgxpool's idle
+// timeout reaps them. A respawn with an identical DSN then inherits the cached
+// pool instead of reconnecting, which also means it does not re-read the TLS
+// material at the sslrootcert and sslcert paths.
 type Deps struct {
 	Logger deps.FSMLogger
 	pool   *poolHolder
 }
 
 // sharedPool is the process-wide holder every worker instance polls through. It
-// outlives any one instance on purpose: the framework has no hook that would let
-// a worker close a pool it owned, so the holder cannot be per instance without
-// leaking a goroutine on every despawn.
+// outlives any one instance on purpose: fsmv2.GracefulShutdowner is declared but
+// never invoked, so a worker is never called at a point where it could close a
+// pool it owned, and a per-instance holder would leak a goroutine on every
+// despawn that followed a poll.
 var sharedPool = &poolHolder{}
 
 // newDeps builds one worker instance's poll dependencies. It defers logger.For

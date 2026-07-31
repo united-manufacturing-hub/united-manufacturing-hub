@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"reflect"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -26,6 +27,7 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 )
 
@@ -62,15 +64,59 @@ var _ = Describe("Error classification", func() {
 	)
 })
 
-var _ = Describe("newDeps", func() {
+// idUnder builds the identity the supervisor would hand a timescale child of the
+// named parent. A child's ID is "<name>-001", so two children of the same name
+// under different parents share ID and Name, and only the hierarchy path tells
+// them apart.
+func idUnder(parent string) deps.Identity {
+	return deps.Identity{
+		ID:            InstanceName + "-001",
+		Name:          InstanceName,
+		WorkerType:    WorkerType,
+		HierarchyPath: parent + "(historian)/" + InstanceName + "-001(" + WorkerType + ")",
+	}
+}
+
+var _ = Describe("newDeps, the helper", func() {
 	It("hands every instance the same pool holder", func() {
-		a, b := newDeps(deps.Identity{ID: "timescale-001", HierarchyPath: "parent-a/timescale-001"}),
-			newDeps(deps.Identity{ID: "timescale-001", HierarchyPath: "parent-b/timescale-001"})
+		a, b := newDeps(idUnder("parent-a")), newDeps(idUnder("parent-b"))
 
 		Expect(a.pool).NotTo(BeNil(), "the holder exists, so the comparison below is not vacuous")
 		Expect(a.pool).To(BeIdenticalTo(b.pool),
-			"one holder for the process: a per-instance pool would leak its pgxpool goroutine on every despawn, and nothing in the framework closes it")
+			"one holder for the process: a per-instance pool would leak its pgxpool goroutine on every despawn after a poll, and nothing in the framework closes it")
 		Expect(a.Logger).NotTo(BeNil(), "Poll dereferences the logger on every tick")
+	})
+})
+
+var _ = Describe("the registered worker type", func() {
+	// poolOf builds one instance the way production does — through the factory
+	// init() registered with, not by calling newDeps — and reads the pool holder
+	// out of the deps value the worker kept. simpleWorker.instDeps is unexported
+	// and lives in another package, so reflect is the only reader; IsNil and
+	// Pointer need no CanInterface.
+	poolOf := func(id deps.Identity) reflect.Value {
+		w, err := factory.NewWorkerByType(WorkerType, id, deps.NewNopFSMLogger(), nil, nil)
+		Expect(err).NotTo(HaveOccurred(), "init() left an instantiable factory for the worker type")
+
+		instDeps := reflect.ValueOf(w).Elem().FieldByName("instDeps")
+		Expect(instDeps.IsValid()).To(BeTrue(), "the worker keeps its poll deps in instDeps")
+
+		pool := instDeps.FieldByName("pool")
+		Expect(pool.IsValid()).To(BeTrue(), "the poll deps carry the pool holder")
+
+		return pool
+	}
+
+	It("hands every instance built through the factory the same pool holder", func() {
+		// Asserting on newDeps alone pins the helper, not the registration: a
+		// spec that calls newDeps and then overwrites pool with a fresh holder
+		// passes that assertion while restoring the goroutine leak. This one
+		// goes through the path a spawning supervisor takes.
+		a, b := poolOf(idUnder("parent-a")), poolOf(idUnder("parent-b"))
+
+		Expect(a.IsNil()).To(BeFalse(), "the holder exists, so the comparison below is not vacuous")
+		Expect(a.Pointer()).To(Equal(b.Pointer()),
+			"one holder for the process: a per-instance pool would leak its pgxpool goroutine on every despawn after a poll, and nothing in the framework closes it")
 	})
 })
 

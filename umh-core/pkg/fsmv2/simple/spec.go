@@ -49,8 +49,13 @@ type MonitorSpec[TConfig, TStatus, TDeps any] struct {
 	// safe to abandon: a buffer or counter is, a connection pool or anything
 	// with a background goroutine is not. To share one such resource across
 	// every instance, declare it at package level and close over it here;
-	// anything constructed inside the builder body is per instance. See
-	// pkg/fsmv2/historian for a worked example.
+	// anything constructed inside the builder body is per instance. Share it
+	// only when the worker type is a singleton, or when the resource does not
+	// depend on per-instance config: a shared resource keyed by config is
+	// rebuilt on every alternating poll once two instances disagree on the key,
+	// so a multi-instance worker whose instances differ must build the resource
+	// inside Poll instead. See pkg/fsmv2/historian for a worked example of the
+	// singleton case.
 	//
 	// It must not fail: NewDeps has no error return, so anything fallible
 	// belongs behind Poll.
