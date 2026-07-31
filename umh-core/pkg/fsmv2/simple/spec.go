@@ -35,11 +35,22 @@ import (
 type MonitorSpec[TConfig, TStatus, TDeps any] struct {
 	// Deps is the dependency value passed to every Poll. Optional: use struct{}
 	// when the poll needs none. It is shared across ticks and instances, so it
-	// must be stateless (e.g. an *http.Client, not a per-tick buffer).
+	// must be stateless (e.g. an *http.Client, not a per-tick buffer). Ignored
+	// when NewDeps is set: NewDeps' return replaces this value entirely, it is
+	// not merged into it.
 	Deps TDeps
-	// Poll observes the target once and returns the status. A non-nil error
-	// drives the worker degraded with reason "poll error: <err>"; any status
-	// returned alongside the error is still preserved as the Result. Required.
+	// NewDeps builds the dependency value for one worker instance from its
+	// identity. Optional: when set, its result is what Poll receives instead of
+	// Deps. It must not fail: NewDeps has no error return, so anything fallible
+	// or resource-holding (dialling, opening a pool) belongs behind Poll.
+	// NewDeps is called on the poll path, and nothing yet pins how often it runs,
+	// so nothing may be cached in the value it returns.
+	NewDeps func(id deps.Identity) TDeps
+	// Poll observes the target once and returns the status. d is a copy: TDeps is
+	// passed by value, so a resource assigned to a non-pointer field of d is
+	// discarded when Poll returns. A non-nil error drives the worker degraded
+	// with reason "poll error: <err>"; any status returned alongside the error is
+	// still preserved as the Result. Required.
 	Poll func(ctx context.Context, d TDeps, cfg TConfig) (TStatus, error)
 	// Health turns a good poll's status into a health verdict. Optional: when
 	// nil, a good poll is healthy with reason "running (no health check)". Never

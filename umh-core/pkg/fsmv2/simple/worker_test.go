@@ -191,6 +191,47 @@ var _ = Describe("simpleWorker", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(gotToken).To(Equal("s3cret"))
 		})
+
+	})
+
+	Describe("NewDeps", func() {
+		type probeDeps struct {
+			token string
+		}
+
+		It("builds the deps from the worker's identity and passes them to Poll", func() {
+			var (
+				gotToken string
+				gotID    deps.Identity
+			)
+
+			spec := MonitorSpec[probeConfig, probeStatus, probeDeps]{
+				WorkerType: "simpleworker_newdeps",
+				Deps:       probeDeps{token: "static-should-be-ignored"},
+				NewDeps: func(id deps.Identity) probeDeps {
+					gotID = id
+
+					return probeDeps{token: "token-for-" + id.ID}
+				},
+				Poll: func(_ context.Context, d probeDeps, _ probeConfig) (probeStatus, error) {
+					gotToken = d.token
+
+					return probeStatus{}, nil
+				},
+			}
+
+			w, err := newSimpleWorker(spec,
+				deps.Identity{ID: "probe", WorkerType: spec.WorkerType},
+				deps.NewNopFSMLogger(), nil)
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err = w.CollectObservedState(context.Background(), &fsmv2.WrappedDesiredState[probeConfig]{})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(gotID).To(Equal(deps.Identity{ID: "probe", WorkerType: spec.WorkerType}),
+				"NewDeps receives the worker's own identity, not a zero one")
+			Expect(gotToken).To(Equal("token-for-probe"),
+				"NewDeps' return replaces Deps entirely, it is not a fallback for an unset Deps")
+		})
 	})
 
 	Describe("dependencies", func() {

@@ -71,7 +71,12 @@ const reasonNoHealthCheck = "running (no health check)"
 func (w *simpleWorker[TConfig, TStatus, TDeps]) CollectObservedState(ctx context.Context, desired fsmv2.DesiredState) (fsmv2.ObservedState, error) {
 	cfg := fsmv2.ExtractConfig[TConfig](desired)
 
-	status, err := w.spec.Poll(ctx, w.spec.Deps, cfg)
+	d := w.spec.Deps
+	if w.spec.NewDeps != nil {
+		d = w.spec.NewDeps(w.Identity())
+	}
+
+	status, err := w.spec.Poll(ctx, d, cfg)
 	if err != nil {
 		return fsmv2.NewObservation(Status[TStatus]{
 			// We can use status here as the result, even on error, to preserve
