@@ -33,24 +33,20 @@ import (
 // TConfig is the developer's config type, TStatus the polled status type, and
 // TDeps the poll dependencies (use struct{} when the poll needs none).
 type MonitorSpec[TConfig, TStatus, TDeps any] struct {
-	// Deps is the dependency value passed to every Poll. Optional: use struct{}
-	// when the poll needs none. It is shared across ticks and instances, so it
-	// must be stateless (e.g. an *http.Client, not a per-tick buffer). Ignored
-	// when NewDeps is set: NewDeps' return replaces this value entirely, it is
-	// not merged into it.
-	Deps TDeps
 	// NewDeps builds the dependency value for one worker instance from its
-	// identity. Optional: when set, its result is what Poll receives instead of
-	// Deps. NewDeps runs once per instance, at construction, and the worker keeps
-	// the returned value for its lifetime, so that value may carry per-instance
-	// mutable state. Poll receives it by value: state that Poll mutates must sit
-	// behind a pointer (use *TDeps, or a pointer field), otherwise the mutation
-	// dies with the copy. A resource shared across instances stays stateless and
-	// is referenced by pointer (e.g. an *http.Client) from each per-instance
-	// value. Poll is never called concurrently with itself for one instance (the
-	// observation collector serialises it under a mutex), so per-instance state
-	// needs no locking. It must not fail: NewDeps has no error return, so anything
-	// fallible or resource-holding (dialling, opening a pool) belongs behind Poll.
+	// identity. Optional: when set, its result is what Poll receives; when unset,
+	// Poll receives TDeps' zero value (use struct{} when the poll needs no
+	// dependencies). NewDeps runs once per instance, at construction, and the
+	// worker keeps the returned value for its lifetime, so that value may carry
+	// per-instance mutable state. Poll receives it by value: state that Poll
+	// mutates must sit behind a pointer (use *TDeps, or a pointer field),
+	// otherwise the mutation dies with the copy. A resource shared across
+	// instances stays stateless and is referenced by pointer (e.g. an
+	// *http.Client) from each per-instance value. Poll is never called
+	// concurrently with itself for one instance (the observation collector
+	// serialises it under a mutex), so per-instance state needs no locking. It
+	// must not fail: NewDeps has no error return, so anything fallible or
+	// resource-holding (dialling, opening a pool) belongs behind Poll.
 	NewDeps func(id deps.Identity) TDeps
 	// Poll observes the target once and returns the status. d is a copy: TDeps is
 	// passed by value, so a resource assigned to a non-pointer field of d is

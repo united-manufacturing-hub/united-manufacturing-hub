@@ -22,14 +22,13 @@
 //
 // # The MonitorSpec
 //
-// Two fields are required, four are optional:
+// Two fields are required, three are optional:
 //
 //	MonitorSpec[TConfig, TStatus, TDeps]{
 //	    WorkerType string                                                       // required
 //	    Poll       func(ctx, d TDeps, cfg TConfig) (TStatus, error)             // required
 //	    Health     func(cfg TConfig, status TStatus) Health                     // optional
-//	    Deps       TDeps                                                        // optional (struct{} if none)
-//	    NewDeps    func(id deps.Identity) TDeps                                 // optional (replaces Deps per instance)
+//	    NewDeps    func(id deps.Identity) TDeps                                 // optional (deps per instance; struct{} if none)
 //	    Interval   time.Duration                                               // optional (collector default if 0)
 //	}
 //

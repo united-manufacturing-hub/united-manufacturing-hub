@@ -49,7 +49,7 @@ func newSimpleWorker[TConfig, TStatus, TDeps any](
 		return nil, errors.New("logger must not be nil")
 	}
 
-	w := &simpleWorker[TConfig, TStatus, TDeps]{spec: spec, instDeps: spec.Deps}
+	w := &simpleWorker[TConfig, TStatus, TDeps]{spec: spec}
 	w.InitBase(id, logger, sr)
 
 	if spec.NewDeps != nil {

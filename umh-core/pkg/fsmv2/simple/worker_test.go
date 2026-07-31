@@ -165,36 +165,6 @@ var _ = Describe("simpleWorker", func() {
 		})
 	})
 
-	Describe("Deps", func() {
-		type probeDeps struct {
-			token string
-		}
-
-		It("passes the MonitorSpec's Deps value to Poll", func() {
-			var gotToken string
-
-			spec := MonitorSpec[probeConfig, probeStatus, probeDeps]{
-				WorkerType: "simpleworker_deps_pass",
-				Deps:       probeDeps{token: "s3cret"},
-				Poll: func(_ context.Context, d probeDeps, _ probeConfig) (probeStatus, error) {
-					gotToken = d.token
-
-					return probeStatus{}, nil
-				},
-			}
-
-			w, err := newSimpleWorker(spec,
-				deps.Identity{ID: "probe", WorkerType: spec.WorkerType},
-				deps.NewNopFSMLogger(), nil)
-			Expect(err).NotTo(HaveOccurred())
-
-			_, err = w.CollectObservedState(context.Background(), &fsmv2.WrappedDesiredState[probeConfig]{})
-			Expect(err).NotTo(HaveOccurred())
-			Expect(gotToken).To(Equal("s3cret"))
-		})
-
-	})
-
 	Describe("NewDeps", func() {
 		type probeDeps struct {
 			token string
@@ -208,7 +178,6 @@ var _ = Describe("simpleWorker", func() {
 
 			spec := MonitorSpec[probeConfig, probeStatus, probeDeps]{
 				WorkerType: "simpleworker_newdeps",
-				Deps:       probeDeps{token: "static-should-be-ignored"},
 				NewDeps: func(id deps.Identity) probeDeps {
 					gotID = id
 
@@ -231,7 +200,7 @@ var _ = Describe("simpleWorker", func() {
 			Expect(gotID).To(Equal(deps.Identity{ID: "probe", WorkerType: spec.WorkerType}),
 				"NewDeps receives the worker's own identity, not a zero one")
 			Expect(gotToken).To(Equal("token-for-probe"),
-				"NewDeps' return replaces Deps entirely, it is not a fallback for an unset Deps")
+				"Poll receives NewDeps' return, built from the identity NewDeps was handed")
 		})
 
 		It("calls NewDeps once at construction and reuses the same deps every tick", func() {
@@ -246,7 +215,6 @@ var _ = Describe("simpleWorker", func() {
 
 			spec := MonitorSpec[probeConfig, probeStatus, *mutableDeps]{
 				WorkerType: "simpleworker_newdeps_persist",
-				Deps:       &mutableDeps{state: 100},
 				NewDeps: func(deps.Identity) *mutableDeps {
 					calls++
 					held = &mutableDeps{}
@@ -276,7 +244,7 @@ var _ = Describe("simpleWorker", func() {
 			Expect(calls).To(Equal(1),
 				"NewDeps runs once per instance, not once per tick")
 			Expect(held.state).To(Equal(2),
-				"both ticks mutated NewDeps' value, not Deps', so state accumulates across ticks")
+				"both ticks mutated the same NewDeps value, so state accumulates across ticks")
 		})
 
 		It("passes the zero value to Poll when the spec builds no deps", func() {
