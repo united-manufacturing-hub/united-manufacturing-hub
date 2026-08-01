@@ -59,7 +59,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/simple"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker/dynamicchildren"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 )
 
@@ -112,9 +111,10 @@ type TimescaleStatus struct {
 	Reachable bool `json:"reachable"`
 }
 
-// Deps carries the poll dependencies. The pool holder lazily builds and caches a
-// pgx pool keyed by DSN, so Poll reuses pooled connections instead of dialing
-// every tick.
+// Deps carries the poll dependencies: the framework's BaseDependencies for this
+// worker instance (the logger Poll writes to) plus the pool holder. The holder
+// lazily builds and caches a pgx pool keyed by DSN, so Poll reuses pooled
+// connections instead of dialing every tick.
 //
 // The holder is process-wide, not per worker instance: nothing in the worker
 // framework closes what a worker holds, so a per-instance pool would leak its
@@ -137,8 +137,9 @@ type TimescaleStatus struct {
 // built, so the TLS material at the sslrootcert and sslcert paths is never
 // re-read.
 type Deps struct {
-	Logger deps.FSMLogger
-	pool   *poolHolder
+	*deps.BaseDependencies
+
+	pool *poolHolder
 }
 
 // sharedPool is the process-wide holder every worker instance polls through. It
@@ -148,15 +149,15 @@ type Deps struct {
 // despawn that followed a poll.
 var sharedPool = &poolHolder{}
 
-// newDeps builds one worker instance's poll dependencies. It defers logger.For
-// until construction so it reads the global logger after main has configured it
-// rather than at package init, and it hands out sharedPool rather than building a
-// holder, because the framework never releases what a worker holds. The identity
-// is unused: nothing here varies per instance.
-func newDeps(deps.Identity) Deps {
+// newDeps builds one worker instance's poll dependencies. It keeps the
+// BaseDependencies the framework built for this instance, whose logger is
+// already enriched with the worker's identity, and it hands out sharedPool
+// rather than building a holder, because the framework never releases what a
+// worker holds. The identity is unused: nothing else here varies per instance.
+func newDeps(_ deps.Identity, bd *deps.BaseDependencies) Deps {
 	return Deps{
-		Logger: deps.NewFSMLogger(logger.For(WorkerType)),
-		pool:   sharedPool,
+		BaseDependencies: bd,
+		pool:             sharedPool,
 	}
 }
 
@@ -265,7 +266,7 @@ func Poll(ctx context.Context, d Deps, cfg config.HistorianConfig) (TimescaleSta
 
 	pool, err := d.pool.get(cfg.Timescale.ToDSN())
 	if err != nil {
-		d.Logger.Debug("timescale connection check",
+		d.GetLogger().Debug("timescale connection check",
 			deps.String("host", host),
 			deps.Bool("reachable", false),
 			deps.Err(err))
@@ -286,7 +287,7 @@ func Poll(ctx context.Context, d Deps, cfg config.HistorianConfig) (TimescaleSta
 		if authRejected(err) {
 			auth = models.TimescaleAuthInvalid
 		}
-		d.Logger.Debug("timescale connection check",
+		d.GetLogger().Debug("timescale connection check",
 			deps.String("host", host),
 			deps.Bool("reachable", reachable),
 			deps.String("auth", string(auth)),
@@ -296,7 +297,7 @@ func Poll(ctx context.Context, d Deps, cfg config.HistorianConfig) (TimescaleSta
 	}
 
 	elapsedMs := float64(time.Since(start).Microseconds()) / 1000.0
-	d.Logger.Debug("timescale connection check",
+	d.GetLogger().Debug("timescale connection check",
 		deps.String("host", host),
 		deps.Bool("reachable", true),
 		deps.String("auth", string(models.TimescaleAuthValid)),

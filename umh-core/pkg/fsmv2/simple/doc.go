@@ -28,7 +28,7 @@
 //	    WorkerType string                                                       // required
 //	    Poll       func(ctx, d TDeps, cfg TConfig) (TStatus, error)             // required
 //	    Health     func(cfg TConfig, status TStatus) Health                     // optional
-//	    NewDeps    func(id deps.Identity) TDeps                                 // optional (built once per instance)
+//	    NewDeps    func(id deps.Identity, bd *deps.BaseDependencies) TDeps      // optional (built once per instance)
 //	    Interval   time.Duration                                               // optional (collector default if 0)
 //	}
 //
@@ -36,6 +36,19 @@
 // NewDeps unset, so Poll receives the zero value. Poll takes TDeps by value, so
 // state it mutates has to sit behind a pointer, and the framework never releases
 // what NewDeps returns — see the NewDeps godoc before holding a resource in it.
+// NewDeps is handed the framework's BaseDependencies for the instance, so a
+// dependency value that needs the worker's logger takes it from there rather
+// than from a package-level logger.
+//
+// # Framework telemetry is automatic
+//
+// Framework metrics land on every simple worker's Observation, whatever TDeps
+// the spec declares and whether or not it declares NewDeps. The framework stores
+// the instance's BaseDependencies beside the author's poll value, so nothing
+// about the author's type earns or forfeits telemetry. Action history rides the
+// same path, but a simple worker dispatches no actions, so it stays empty. That
+// data is stored in CSE; it is not part of what a status generator or the fsmv1
+// adapter reads, both of which see the Status alone.
 //
 // TStatus must be a struct (Register panics otherwise): the framework flattens
 // it to top-level JSON for CSE delta sync.

@@ -23,19 +23,33 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 )
 
+// simpleDeps is what the framework puts in WorkerBase's deps slot for every
+// simple worker. It always carries the instance's BaseDependencies, so the
+// collector attaches framework metrics to the Observation no matter which TDeps
+// the spec's author chose — including struct{}, and including a spec with no
+// NewDeps at all. The collector attaches action history through the same
+// wrapper, but a simple worker dispatches no actions, so that stays empty. inst
+// is the author's own poll value, which the framework only stores and hands back
+// to Poll.
+type simpleDeps[TDeps any] struct {
+	*deps.BaseDependencies
+
+	inst TDeps
+}
+
 // simpleWorker runs a MonitorSpec's Poll on the framework's collection cadence.
-// It holds the immutable MonitorSpec plus the dependency value built for this
-// instance at construction. Mutable state lives in that value, never in the
+// It holds the immutable MonitorSpec; everything per-instance lives in the deps
+// slot WorkerBase already provides, the same slot the rest of the framework's
+// workers use. Mutable state lives in the author's poll value, never in the
 // worker struct, so the same logic serves every simple worker type.
 //
 // The framework-facing status is Status[TStatus]: the developer's poll result
-// wrapped with the health verdict. WorkerBase's deps sentinel is struct{}; the
-// MonitorSpec's own TDeps flows to Poll, not through WorkerBase.
+// wrapped with the health verdict. The bound deps are *simpleDeps[TDeps], not
+// the author's TDeps: the wrapper is what makes framework telemetry unconditional
+// here, and pollDeps unwraps it for Poll.
 type simpleWorker[TConfig, TStatus, TDeps any] struct {
 	spec MonitorSpec[TConfig, TStatus, TDeps]
-	// instDeps is the dependency value every Poll receives.
-	instDeps TDeps
-	fsmv2.WorkerBase[TConfig, Status[TStatus], struct{}]
+	fsmv2.WorkerBase[TConfig, Status[TStatus], *simpleDeps[TDeps]]
 }
 
 // newSimpleWorker builds a simpleWorker from its MonitorSpec and framework deps.
@@ -50,13 +64,37 @@ func newSimpleWorker[TConfig, TStatus, TDeps any](
 	}
 
 	w := &simpleWorker[TConfig, TStatus, TDeps]{spec: spec}
-	w.InitBase(id, logger, sr)
 
+	bd := w.InitBase(id, logger, sr)
+
+	d := &simpleDeps[TDeps]{BaseDependencies: bd}
 	if spec.NewDeps != nil {
-		w.instDeps = spec.NewDeps(id)
+		d.inst = spec.NewDeps(id, bd)
 	}
 
+	w.BindDeps(d)
+
 	return w, nil
+}
+
+// pollDeps returns the author's poll value out of the framework's wrapper. A
+// spec with no NewDeps leaves inst at TDeps' zero value, which is what Poll
+// expects.
+//
+// Panics when the slot holds anything other than a bound *simpleDeps.
+// newSimpleWorker always binds one, so an empty slot means the construction path
+// broke. Returning TDeps' zero value instead would hand Poll a plausible wrong
+// value, and the fault would surface frames deeper inside author code — or, for
+// a TDeps of struct{}, never.
+func (w *simpleWorker[TConfig, TStatus, TDeps]) pollDeps() TDeps {
+	raw := w.GetDependenciesAny()
+
+	d, ok := raw.(*simpleDeps[TDeps])
+	if !ok || d == nil {
+		panic("simpleWorker: pollDeps called before BindDeps")
+	}
+
+	return d.inst
 }
 
 // reasonNoHealthCheck is the verdict reason for a good poll on a worker that
@@ -78,7 +116,7 @@ const reasonNoHealthCheck = "running (no health check)"
 func (w *simpleWorker[TConfig, TStatus, TDeps]) CollectObservedState(ctx context.Context, desired fsmv2.DesiredState) (fsmv2.ObservedState, error) {
 	cfg := fsmv2.ExtractConfig[TConfig](desired)
 
-	status, err := w.spec.Poll(ctx, w.instDeps, cfg)
+	status, err := w.spec.Poll(ctx, w.pollDeps(), cfg)
 	if err != nil {
 		return fsmv2.NewObservation(Status[TStatus]{
 			// We can use status here as the result, even on error, to preserve
@@ -99,11 +137,4 @@ func (w *simpleWorker[TConfig, TStatus, TDeps]) CollectObservedState(ctx context
 		Degraded: verdict.Degraded,
 		Reason:   verdict.Reason,
 	}), nil
-}
-
-// GetDependenciesAny returns a true nil: simpleWorker has no per-instance
-// framework deps, and WorkerBase[..., struct{}] would otherwise box struct{}{}
-// into a non-nil any, silently skipping the collector's metrics injection.
-func (w *simpleWorker[TConfig, TStatus, TDeps]) GetDependenciesAny() any {
-	return nil
 }

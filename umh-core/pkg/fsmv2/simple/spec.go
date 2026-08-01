@@ -34,15 +34,34 @@ import (
 // TDeps the poll dependencies (use struct{} when the poll needs none).
 type MonitorSpec[TConfig, TStatus, TDeps any] struct {
 	// NewDeps builds the dependency value for one worker instance from its
-	// identity. Optional: when set, its result is what Poll receives; when unset,
-	// Poll receives TDeps' zero value (use struct{} when the poll needs no
-	// dependencies). NewDeps runs once per instance, at construction, and the
-	// worker keeps the returned value for its lifetime, so that value may carry
-	// per-instance mutable state. Poll receives it by value: state that Poll
-	// mutates must sit behind a pointer (use *TDeps, or a pointer field),
-	// otherwise the mutation dies with the copy. Poll is never called
-	// concurrently with itself for one instance (the observation collector
-	// serializes it under a mutex), so per-instance state needs no locking.
+	// identity and the framework's BaseDependencies for that instance. Optional:
+	// when set, its result is what Poll receives; when unset, Poll receives
+	// TDeps' zero value (use struct{} when the poll needs no dependencies).
+	// NewDeps runs once per instance, at construction, and the worker keeps the
+	// returned value for its lifetime, so that value may carry per-instance
+	// mutable state. Poll receives it by value: state that Poll mutates must sit
+	// behind a pointer (use *TDeps, or a pointer field), otherwise the mutation
+	// dies with the copy. Poll is never called concurrently with itself for one
+	// instance (the observation collector serializes it under a mutex), so
+	// per-instance state needs no locking.
+	//
+	// bd is this instance's framework dependencies, offered for the author's own
+	// use: the logger the framework built for this worker (already enriched with
+	// its identity), the state reader, and the metrics recorder. Take the logger
+	// from here rather than building one, so every line names the instance that
+	// wrote it. bd also exposes SetFrameworkState and SetActionHistory, which
+	// belong to the framework alone: calling either from author code overwrites
+	// what the collector reads back on the next tick.
+	//
+	// Ignoring bd costs nothing. Framework metrics are attached to every simple
+	// worker's Observation whichever TDeps the spec declares, because the
+	// framework keeps its own copy of bd alongside the value returned here.
+	// Action history rides the same path, but a simple worker dispatches no
+	// actions, so it stays empty. That data is stored in CSE; it is not part of
+	// what a status generator or the fsmv1 adapter reads, both of which see the
+	// Status alone. Worker metrics are the exception that does leave the process:
+	// counters and gauges recorded through bd.MetricsRecorder() are exported to
+	// the agent's Prometheus /metrics endpoint, labelled by hierarchy path.
 	//
 	// The framework never releases the returned value. A despawned worker is
 	// dropped without any teardown call, so whatever the value holds must be
@@ -64,7 +83,7 @@ type MonitorSpec[TConfig, TStatus, TDeps any] struct {
 	// belongs behind Poll. A panic escapes into the parent supervisor's tick
 	// rather than being reported against this child, because construction runs
 	// inside that tick.
-	NewDeps func(id deps.Identity) TDeps
+	NewDeps func(id deps.Identity, bd *deps.BaseDependencies) TDeps
 	// Poll observes the target once and returns the status. d is a copy: TDeps is
 	// passed by value, so a resource assigned to a non-pointer field of d is
 	// discarded when Poll returns. A non-nil error drives the worker degraded
@@ -103,7 +122,7 @@ func Register[TConfig, TStatus, TDeps any](spec MonitorSpec[TConfig, TStatus, TD
 		panic(fmt.Sprintf("simple.Register(%q): TStatus must be a struct, got %s", spec.WorkerType, k))
 	}
 
-	register.Worker[TConfig, Status[TStatus], register.NoDeps](spec.WorkerType,
+	register.Worker[TConfig, Status[TStatus], *simpleDeps[TDeps]](spec.WorkerType,
 		func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader) (fsmv2.Worker, error) {
 			return newSimpleWorker(spec, id, logger, sr)
 		})
