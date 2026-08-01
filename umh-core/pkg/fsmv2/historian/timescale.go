@@ -26,9 +26,9 @@
 // and whether the credentials and database name are accepted. Its per-tick cost
 // is a single `SELECT 1` over one pooled, long-lived connection.
 //
-// Database metrics — long-running queries, compression ratios, background job
-// state (especially aborted compression jobs), and the rest of the operational
-// signals from Daniel's Grafana dashboard — are deliberately NOT collected here.
+// Database metrics (long-running queries, compression ratios, background job
+// state, especially aborted compression jobs, and the rest of the operational
+// signals on the Timescale Grafana dashboard) are deliberately NOT collected here.
 // They belong to a separate future worker (TODO(ENG-5320): the timescale metrics
 // monitor), for two reasons:
 //

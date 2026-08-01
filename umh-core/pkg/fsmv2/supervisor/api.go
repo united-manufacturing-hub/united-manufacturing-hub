@@ -307,10 +307,12 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity deps.Identity, work
 			// Injection reaches a worker only when its bound deps implement
 			// SetFrameworkState. NoDeps workers (TDeps = struct{}) return struct{}{}
 			// here, which does not, so they get no framework telemetry and no error
-			// either. Workers that override GetDependenciesAny() to return nil
-			// (application, configworker) are skipped deliberately, having no deps to
-			// inject into. Workers built on pkg/fsmv2/simple bind a wrapper around
-			// BaseDependencies, so they are injected whatever TDeps their spec declares.
+			// either. Overriding GetDependenciesAny() to return nil has the same
+			// effect: correct for application, which holds no dependencies, and a
+			// mislabel for configworker, which holds two as plain struct fields and is
+			// skipped despite them. Workers built on pkg/fsmv2/simple bind a wrapper
+			// around BaseDependencies, so they are injected whatever TDeps their spec
+			// declares.
 			type depsGetter interface {
 				GetDependenciesAny() any
 			}
