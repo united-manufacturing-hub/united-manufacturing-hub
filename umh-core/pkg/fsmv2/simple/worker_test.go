@@ -268,7 +268,6 @@ var _ = Describe("simpleWorker", func() {
 				gotD   *probeDeps
 			)
 
-			// The spec deliberately declares no dependencies: their absence is the test.
 			spec := MonitorSpec[probeConfig, probeStatus, *probeDeps]{
 				WorkerType: "simpleworker_nodeps_unset",
 				Poll: func(_ context.Context, d *probeDeps, _ probeConfig) (probeStatus, error) {
@@ -293,9 +292,8 @@ var _ = Describe("simpleWorker", func() {
 		})
 
 		It("gives every instance its own deps value, even for a repeated identity", func() {
-			// One instance's state must not leak into another's. A throughput
-			// window stands in for that state: the kind of per-instance mutable
-			// value NewDeps exists for.
+			// A throughput window stands in for the per-instance mutable state
+			// NewDeps exists for: one instance's must not leak into another's.
 			type window struct {
 				polls int
 			}
@@ -305,8 +303,8 @@ var _ = Describe("simpleWorker", func() {
 			}
 
 			// built records one entry per NewDeps call, in call order, so the
-			// assertions can name each instance's own value even when two
-			// instances carry the same identity.
+			// assertions can name each instance's own value even when two instances
+			// carry the same identity.
 			var built []*window
 
 			spec := MonitorSpec[probeConfig, windowStatus, *window]{
@@ -331,8 +329,8 @@ var _ = Describe("simpleWorker", func() {
 				return w
 			}
 
-			// pollCount ticks one instance and returns the poll count its own deps
-			// value reported, which is how a developer's code observes that state.
+			// pollCount ticks one instance and returns the count its own deps value
+			// reported, the way a developer's code observes that state.
 			pollCount := func(w *simpleWorker[probeConfig, windowStatus, *window]) int {
 				obs, err := w.CollectObservedState(context.Background(), &fsmv2.WrappedDesiredState[probeConfig]{})
 				Expect(err).NotTo(HaveOccurred())
@@ -343,9 +341,9 @@ var _ = Describe("simpleWorker", func() {
 				return o.Status.Result.Polls
 			}
 
-			// The supervisor builds a child's ID as "<name>-001", so two parents
-			// that give their child the same name hand out the same ID and Name,
-			// and only the hierarchy path tells the two children apart.
+			// The supervisor builds a child's ID as "<name>-001", so two parents that
+			// give their child the same name hand out the same ID and Name, and only
+			// the hierarchy path tells the two children apart.
 			idA := deps.Identity{
 				ID:            "monitor-001",
 				Name:          "monitor",
@@ -455,9 +453,10 @@ var _ = Describe("simpleWorker", func() {
 		})
 
 		It("attaches framework telemetry to a worker whose spec declares no deps at all", func() {
-			// nmap's shape: TDeps is struct{} and there is no NewDeps. Under an
-			// opt-in design this worker would emit no framework metrics for the
-			// life of the process, and nothing in its own source would say so.
+			// nmap's shape: TDeps is struct{} and there is no NewDeps. Should
+			// telemetry ever depend on the spec declaring deps, this worker emits no
+			// framework metrics for the life of the process, and nothing in its own
+			// source says so.
 			w, err := newProbeWorker(MonitorSpec[probeConfig, probeStatus, struct{}]{
 				WorkerType: "simpleworker_deps_unset",
 				Poll: func(_ context.Context, _ struct{}, _ probeConfig) (probeStatus, error) {
@@ -482,11 +481,11 @@ var _ = Describe("simpleWorker", func() {
 		})
 
 		It("panics with a named message when no deps were bound", func() {
-			// newSimpleWorker always binds a wrapper, so this state is unreachable
-			// through the constructor; the spec hand-builds the worker to reach it.
-			// The slot then holds a nil *simpleDeps, which the comma-ok assertion
-			// accepts, so only the nil check turns it into a named fault instead of
-			// a nil poll value Poll would accept without complaint.
+			// newSimpleWorker always binds a wrapper, so the spec hand-builds the
+			// worker to reach this state. The slot then holds a nil *simpleDeps,
+			// which the comma-ok assertion accepts, so only the nil check turns it
+			// into a named fault rather than a nil poll value Poll takes without
+			// complaint.
 			w := &simpleWorker[probeConfig, probeStatus, *probeDepsPointerTarget]{}
 
 			Expect(func() { _ = w.pollDeps() }).
@@ -567,7 +566,7 @@ var _ = Describe("Register", func() {
 		// Production never calls newSimpleWorker: it reaches the constructor
 		// Register stored, through the factory, once per worker instance. A poll
 		// counter stands in for the per-instance mutable state NewDeps exists for,
-		// so each deps value can be traced back to the instance that received it.
+		// so each deps value traces back to the instance that received it.
 		type window struct {
 			polls int
 		}
@@ -591,9 +590,9 @@ var _ = Describe("Register", func() {
 			},
 		})
 
-		// The supervisor builds a child's ID as "<name>-001", so two children
-		// given the same name under different parents share ID and Name, and only
-		// the hierarchy path tells them apart.
+		// Two children given the same name under different parents share ID and
+		// Name (the supervisor builds both as "<name>-001"), so only the hierarchy
+		// path tells them apart.
 		idA := deps.Identity{
 			ID:            "monitor-001",
 			Name:          "monitor",

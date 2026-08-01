@@ -33,56 +33,33 @@ import (
 // TConfig is the developer's config type, TStatus the polled status type, and
 // TDeps the poll dependencies (use struct{} when the poll needs none).
 type MonitorSpec[TConfig, TStatus, TDeps any] struct {
-	// NewDeps builds the dependency value for one worker instance from its
-	// identity and the framework's BaseDependencies for that instance. Optional:
-	// when set, its result is what Poll receives; when unset, Poll receives
-	// TDeps' zero value (use struct{} when the poll needs no dependencies).
-	// NewDeps runs once per instance, at construction, and the worker keeps the
-	// returned value for its lifetime, so that value may carry per-instance
-	// mutable state. Poll receives it by value: state that Poll mutates must sit
-	// behind a pointer (use *TDeps, or a pointer field), otherwise the mutation
-	// dies with the copy. Poll is never called concurrently with itself for one
-	// instance (the observation collector serializes it under a mutex), so
-	// per-instance state needs no locking.
+	// NewDeps builds the value Poll receives, once per worker instance at
+	// construction. Optional: when unset, Poll receives TDeps' zero value (use
+	// struct{} when the poll needs no dependencies).
 	//
-	// bd is this instance's framework dependencies, offered for the author's own
-	// use: the logger the framework built for this worker (already enriched with
-	// its identity), the state reader, and the metrics recorder. Take the logger
-	// from here rather than building one, so every line names the instance that
-	// wrote it. bd also exposes SetFrameworkState and SetActionHistory, which
-	// belong to the framework alone: calling either from author code overwrites
-	// what the collector reads back on the next tick.
+	// The worker keeps the returned value for its lifetime, so it may carry
+	// per-instance mutable state. Poll receives it by value, so state Poll
+	// mutates must sit behind a pointer (use *TDeps, or a pointer field), or the
+	// mutation dies with the copy. Poll is never called concurrently with itself
+	// for one instance (the observation collector serializes it under a mutex),
+	// so that state needs no locking.
 	//
-	// Ignoring bd costs nothing. Framework metrics are attached to every simple
-	// worker's Observation whichever TDeps the spec declares, because the
-	// framework keeps its own copy of bd alongside the value returned here.
-	// Action history rides the same path, but a simple worker dispatches no
-	// actions, so it stays empty. That data is stored in CSE; it is not part of
-	// what a status generator or the fsmv1 adapter reads, both of which see the
-	// Status alone. Worker metrics are the exception that does leave the process:
-	// counters and gauges recorded through bd.MetricsRecorder() are exported to
-	// the agent's Prometheus /metrics endpoint, labelled by hierarchy path.
+	// bd is this instance's framework dependencies: the logger the framework
+	// already enriched with this worker's identity, the state reader, and the
+	// metrics recorder. Take the logger from there rather than building one, so
+	// every line names the instance that wrote it. bd also exposes
+	// SetFrameworkState and SetActionHistory, which belong to the framework
+	// alone: calling either from author code overwrites what the collector reads
+	// back on the next tick. Ignoring bd costs no telemetry: the framework keeps
+	// its own copy.
 	//
-	// The framework never releases the returned value. A despawned worker is
-	// dropped without any teardown call, so whatever the value holds must be
-	// safe to abandon: a buffer or counter is, a connection pool or anything
-	// with a background goroutine is not. To share one such resource across
-	// every instance, declare it at package level and close over it here;
-	// anything constructed inside the builder body is per instance. Share it
-	// only when the worker type is a singleton, or when the resource does not
-	// depend on per-instance config: a single-slot cache keyed by config holds
-	// one resource at a time, so once two instances disagree on the key every
-	// poll evicts the other's and rebuilds its own. A multi-instance worker
-	// whose instances differ on the key needs a keyed package-level registry
-	// instead — a map[string]*resource guarded by a mutex, one entry per
-	// distinct key. It never thrashes, it bounds retention at one resource per
-	// key ever configured, and it needs no framework change. See
-	// pkg/fsmv2/historian for a worked example of the singleton case.
+	// NewDeps has no error return, so anything fallible belongs behind Poll. A
+	// panic escapes into the parent supervisor's tick rather than being reported
+	// against this child, because construction runs inside that tick.
 	//
-	// It must not fail: NewDeps has no error return, so anything fallible
-	// belongs behind Poll. A panic escapes into the parent supervisor's tick
-	// rather than being reported against this child, because construction runs
-	// inside that tick.
+	// The framework never releases the returned value. Read "Resources in the
+	// deps value" in the package doc before holding a connection pool or
+	// anything else with a background goroutine.
 	NewDeps func(id deps.Identity, bd *deps.BaseDependencies) TDeps
 	// Poll observes the target once and returns the status. d is a copy: TDeps is
 	// passed by value, so a resource assigned to a non-pointer field of d is

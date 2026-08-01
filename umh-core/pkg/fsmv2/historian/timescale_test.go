@@ -35,12 +35,12 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 )
 
-// The package global sharedPool is mutable, a polling spec fills it with a live
-// pool, and only Close stops that pool's health-check goroutine. Swapping a fresh
-// holder in for the duration of each spec keeps one spec's pool out of every
-// later spec, so the suite means the same thing in any order. The two sharing
-// specs still hold: they compare the holders handed to two instances against each
-// other, not against this package's initial value.
+// A polling spec fills the package global sharedPool with a live pool, and only
+// Close stops that pool's health-check goroutine. Swapping a fresh holder in for
+// each spec keeps one spec's pool out of every later spec, so the suite means the
+// same thing in any order. The two sharing specs still hold: they compare the
+// holders handed to two instances against each other, not against this package's
+// initial value.
 var _ = BeforeEach(func() {
 	original, fresh := sharedPool, &poolHolder{}
 	sharedPool = fresh
@@ -154,17 +154,16 @@ var _ = Describe("newDeps, the helper", func() {
 })
 
 var _ = Describe("the registered worker type", func() {
-	// boundDepsOf builds one instance the way production does — through the
-	// factory init() registered with, not by calling newDeps — and returns what
-	// the worker put in its deps slot, read through the framework's own
-	// DependencyProvider.
+	// boundDepsOf builds one instance the way production does, through the factory
+	// init() registered with rather than by calling newDeps, and returns what the
+	// worker put in its deps slot.
 	//
-	// The simple framework wraps every worker's poll deps in an unexported type
-	// of its own, so this package cannot name what comes back and reflect is the
-	// only reader. The wrapper's own *deps.BaseDependencies field is exported and
-	// can be read out with Interface(); the author's value sits behind the
-	// wrapper's unexported inst field, whose contents can be inspected (IsNil,
-	// Pointer) but not converted back to a Deps.
+	// The simple framework wraps every worker's poll deps in an unexported type of
+	// its own, so this package cannot name what comes back and reflect is the only
+	// reader. The wrapper's *deps.BaseDependencies field is exported and reads out
+	// with Interface(); the author's value sits behind the wrapper's unexported
+	// inst field, which can be inspected (IsNil, Pointer) but not converted back to
+	// a Deps.
 	boundDepsOf := func(id deps.Identity) reflect.Value {
 		w, err := factory.NewWorkerByType(WorkerType, id, deps.NewNopFSMLogger(), nil, nil)
 		Expect(err).NotTo(HaveOccurred(), "init() left an instantiable factory for the worker type")
@@ -209,10 +208,10 @@ var _ = Describe("the registered worker type", func() {
 	})
 
 	It("hands every instance built through the factory the same pool holder", func() {
-		// Asserting on newDeps alone pins the helper, not the registration: a
-		// spec that calls newDeps and then overwrites pool with a fresh holder
-		// passes that assertion while restoring the goroutine leak. This one
-		// goes through the path a spawning supervisor takes.
+		// Asserting on newDeps alone pins the helper, not the registration: a spec
+		// that calls newDeps and then overwrites pool with a fresh holder passes
+		// that assertion while the goroutine leak is back. This one goes through
+		// the path a spawning supervisor takes.
 		a := instOf(boundDepsOf(idUnder("parent-a"))).FieldByName("pool")
 		b := instOf(boundDepsOf(idUnder("parent-b"))).FieldByName("pool")
 
@@ -247,16 +246,16 @@ var _ = Describe("Poll", func() {
 	})
 
 	It("reuses the pool cached by the holder it was handed", func() {
-		// The two sharing specs pin where the holder is stored, not that Poll
-		// reads it: a Poll that ignored d.pool and called (&poolHolder{}).get
-		// itself would pass them while dialling a fresh pool, and leaking its
-		// health-check goroutine, once per second. This one reads the pool back
-		// off the holder Poll was handed, so it fails on either rewiring.
+		// The two sharing specs pin where the holder is stored, not that Poll reads
+		// it: a Poll that ignored d.pool and called (&poolHolder{}).get itself would
+		// pass them while dialling a fresh pool, and leaking its health-check
+		// goroutine, once per second. This one reads the pool back off the holder
+		// Poll was handed, so it fails on either rewiring.
 		//
-		// A closed port keeps the spec offline. pgxpool.NewWithConfig does not
-		// dial — MinConns and MinIdleConns both default to 0, so it builds the
-		// pool from the parsed DSN alone — and only the SELECT 1 reaches the
-		// network, where it is refused at once.
+		// A closed port keeps the spec offline. pgxpool.NewWithConfig does not dial
+		// (MinConns and MinIdleConns both default to 0, so it builds the pool from
+		// the parsed DSN alone); only the SELECT 1 reaches the network, where it is
+		// refused at once.
 		cfg := config.HistorianConfig{Timescale: config.TimescaleConfig{
 			Host:     "127.0.0.1",
 			Port:     closedPort(),

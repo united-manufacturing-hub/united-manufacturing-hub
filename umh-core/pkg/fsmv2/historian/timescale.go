@@ -111,31 +111,24 @@ type TimescaleStatus struct {
 	Reachable bool `json:"reachable"`
 }
 
-// Deps carries the poll dependencies: the framework's BaseDependencies for this
-// worker instance (the logger Poll writes to) plus the pool holder. The holder
-// lazily builds and caches a pgx pool keyed by DSN, so Poll reuses pooled
-// connections instead of dialing every tick.
+// Deps carries the poll dependencies: this instance's BaseDependencies (the
+// logger Poll writes to) plus sharedPool, which lazily builds and caches a pgx
+// pool keyed by DSN so Poll reuses pooled connections instead of dialing every
+// tick.
 //
-// The holder is process-wide, not per worker instance: nothing in the worker
-// framework closes what a worker holds, so a per-instance pool would leak its
-// pgxpool health-check goroutine every time a child that had already polled is
-// despawned. A child despawned before its first poll leaks nothing, because
-// poolHolder.get is reached only from Poll.
-//
-// Only one historian worker can run on this. Every instance would poll through
-// the same pgxpool, and the holder caches one pool at a time, so two instances
-// on different DSNs would rebuild each other's pool on every poll. Historian is
-// a singleton today, one Ref under one writer. Going multi-instance means a
-// holder per instance, which needs a teardown path first.
+// Only one historian worker can run on that holder. Every instance polls through
+// the same one, and it caches a single pool, so two instances on different DSNs
+// rebuild each other's pool on every poll. Historian is a singleton today, one
+// Ref under one writer; going multi-instance needs a holder per instance, and
+// that needs a teardown path first.
 //
 // Sharing has two consequences the config does not suggest. Removing the
-// historian config block despawns the child but does not close the pool: the
-// health-check goroutine returns only on Close, which nothing calls, so it
-// survives for the life of the process, and up to maxConns server sessions
-// survive until connMaxLifetime recycles them. A respawn with an identical DSN
-// then inherits the cached pool, and the DSN is parsed only when the pool is
-// built, so the TLS material at the sslrootcert and sslcert paths is never
-// re-read.
+// historian config block despawns the child without closing the pool: only Close
+// stops the health-check goroutine, and nothing calls it, so the goroutine runs
+// for the life of the process and up to maxConns server sessions stay open until
+// connMaxLifetime recycles them. A respawn with an identical DSN then gets the
+// cached pool, and the DSN is parsed only when a pool is built, so the TLS
+// material at the sslrootcert and sslcert paths is never re-read.
 type Deps struct {
 	*deps.BaseDependencies
 
@@ -143,17 +136,18 @@ type Deps struct {
 }
 
 // sharedPool is the process-wide holder every worker instance polls through. It
-// outlives any one instance on purpose: fsmv2.GracefulShutdowner is declared but
-// never invoked, so a worker is never called at a point where it could close a
-// pool it owned, and a per-instance holder would leak a goroutine on every
-// despawn that followed a poll.
+// outlives any one instance deliberately: fsmv2.GracefulShutdowner is declared
+// but never invoked, so a worker is never called at a point where it could close
+// a pool it owned, and a per-instance holder would leak a pgxpool health-check
+// goroutine on every despawn that followed a poll. A child despawned before its
+// first poll leaks nothing, because only Poll reaches poolHolder.get.
 var sharedPool = &poolHolder{}
 
 // newDeps builds one worker instance's poll dependencies. It keeps the
-// BaseDependencies the framework built for this instance, whose logger is
-// already enriched with the worker's identity, and it hands out sharedPool
-// rather than building a holder, because the framework never releases what a
-// worker holds. The identity is unused: nothing else here varies per instance.
+// BaseDependencies the framework built for this instance, whose logger already
+// names the worker, and hands out sharedPool rather than building a holder,
+// because the framework never releases what a worker holds. The identity is
+// unused: nothing else here varies per instance.
 func newDeps(_ deps.Identity, bd *deps.BaseDependencies) Deps {
 	return Deps{
 		BaseDependencies: bd,

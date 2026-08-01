@@ -23,14 +23,13 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 )
 
-// simpleDeps is what the framework puts in WorkerBase's deps slot for every
-// simple worker. It always carries the instance's BaseDependencies, so the
-// collector attaches framework metrics to the Observation no matter which TDeps
-// the spec's author chose — including struct{}, and including a spec with no
-// NewDeps at all. The collector attaches action history through the same
-// wrapper, but a simple worker dispatches no actions, so that stays empty. inst
-// is the author's own poll value, which the framework only stores and hands back
-// to Poll.
+// simpleDeps is what every simple worker binds into WorkerBase's deps slot. It
+// always carries the instance's BaseDependencies, so the collector attaches
+// framework metrics to the Observation whatever TDeps the spec declares,
+// including struct{} and including a spec with no NewDeps. Action history is
+// attached the same way, but a simple worker dispatches no actions, so it stays
+// empty. inst holds the author's own poll value, which the framework stores and
+// hands back to Poll.
 type simpleDeps[TDeps any] struct {
 	*deps.BaseDependencies
 
@@ -38,15 +37,14 @@ type simpleDeps[TDeps any] struct {
 }
 
 // simpleWorker runs a MonitorSpec's Poll on the framework's collection cadence.
-// It holds the immutable MonitorSpec; everything per-instance lives in the deps
-// slot WorkerBase already provides, the same slot the rest of the framework's
-// workers use. Mutable state lives in the author's poll value, never in the
-// worker struct, so the same logic serves every simple worker type.
+// It holds the immutable MonitorSpec; per-instance mutable state lives in
+// WorkerBase's deps slot, never in the worker struct, so the same logic serves
+// every simple worker type.
 //
 // The framework-facing status is Status[TStatus]: the developer's poll result
-// wrapped with the health verdict. The bound deps are *simpleDeps[TDeps], not
-// the author's TDeps: the wrapper is what makes framework telemetry unconditional
-// here, and pollDeps unwraps it for Poll.
+// wrapped with the health verdict. The bound deps are *simpleDeps[TDeps] rather
+// than the author's TDeps, which is what makes framework telemetry
+// unconditional; pollDeps unwraps them for Poll.
 type simpleWorker[TConfig, TStatus, TDeps any] struct {
 	spec MonitorSpec[TConfig, TStatus, TDeps]
 	fsmv2.WorkerBase[TConfig, Status[TStatus], *simpleDeps[TDeps]]
@@ -81,11 +79,11 @@ func newSimpleWorker[TConfig, TStatus, TDeps any](
 // spec with no NewDeps leaves inst at TDeps' zero value, which is what Poll
 // expects.
 //
-// Panics when the slot holds anything other than a bound *simpleDeps.
-// newSimpleWorker always binds one, so an empty slot means the construction path
-// broke. Returning TDeps' zero value instead would hand Poll a plausible wrong
-// value, and the fault would surface frames deeper inside author code — or, for
-// a TDeps of struct{}, never.
+// When the slot holds anything other than a bound *simpleDeps, pollDeps panics
+// rather than returning TDeps' zero value. newSimpleWorker always binds one, so
+// an unbound slot means the construction path broke, and a zero value would hand
+// Poll a plausible wrong value whose fault surfaces frames deeper inside author
+// code, or for a TDeps of struct{} never at all.
 func (w *simpleWorker[TConfig, TStatus, TDeps]) pollDeps() TDeps {
 	raw := w.GetDependenciesAny()
 

@@ -33,25 +33,48 @@
 //	}
 //
 // A poll that needs no dependencies instantiates TDeps as struct{} and leaves
-// NewDeps unset, so Poll receives the zero value. Poll takes TDeps by value, so
-// state it mutates has to sit behind a pointer, and the framework never releases
-// what NewDeps returns — see the NewDeps godoc before holding a resource in it.
-// NewDeps is handed the framework's BaseDependencies for the instance, so a
-// dependency value that needs the worker's logger takes it from there rather
-// than from a package-level logger.
-//
-// # Framework telemetry is automatic
-//
-// Framework metrics land on every simple worker's Observation, whatever TDeps
-// the spec declares and whether or not it declares NewDeps. The framework stores
-// the instance's BaseDependencies beside the author's poll value, so nothing
-// about the author's type earns or forfeits telemetry. Action history rides the
-// same path, but a simple worker dispatches no actions, so it stays empty. That
-// data is stored in CSE; it is not part of what a status generator or the fsmv1
-// adapter reads, both of which see the Status alone.
+// NewDeps unset, so Poll receives the zero value. NewDeps is handed the
+// framework's BaseDependencies for the instance, so a dependency value that
+// needs the worker's logger takes it from there rather than from a package-level
+// logger. Poll takes TDeps by value, so state it mutates has to sit behind a
+// pointer.
 //
 // TStatus must be a struct (Register panics otherwise): the framework flattens
 // it to top-level JSON for CSE delta sync.
+//
+// # Resources in the deps value
+//
+// The framework never releases what NewDeps returns. A despawned worker is
+// dropped without any teardown call, so the value must be safe to abandon: a
+// buffer or a counter is, a connection pool or anything else holding a
+// background goroutine is not.
+//
+// To share one such resource across instances, declare it at package level and
+// close over it in NewDeps; anything constructed inside the builder body is per
+// instance. Share it only when the worker type is a singleton, or when the
+// resource does not depend on per-instance config. A single-slot cache keyed by
+// config holds one resource at a time, so once two instances disagree on the key
+// every poll evicts the other's and rebuilds its own.
+//
+// A multi-instance worker whose instances differ on the key needs a keyed
+// package-level registry instead: a map[string]*resource guarded by a mutex, one
+// entry per distinct key. It never thrashes, and it bounds retention at one
+// resource per key ever configured. Package historian is a worked example of the
+// singleton case.
+//
+// # Framework telemetry is automatic
+//
+// The framework attaches its metrics to every simple worker's Observation,
+// whatever TDeps the spec declares and whether or not it declares NewDeps. It
+// stores the instance's BaseDependencies beside the author's poll value, so
+// nothing about the author's type earns or forfeits telemetry. Action history is
+// attached the same way, but a simple worker dispatches no actions, so it stays
+// empty.
+//
+// Both stay in CSE: a status generator and the fsmv1 adapter see the Status
+// alone. Worker metrics are the exception that leaves the process. Counters and
+// gauges recorded through bd.MetricsRecorder() are exported to the agent's
+// Prometheus /metrics endpoint, labelled by hierarchy path.
 //
 // # Two-phase Poll then Health
 //

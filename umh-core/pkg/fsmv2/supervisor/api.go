@@ -304,13 +304,13 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity deps.Identity, work
 		},
 		FrameworkMetricsSetter: func(fm *deps.FrameworkMetrics) {
 			// Must use GetDependenciesAny() (returns any), not GetDependencies() (returns D).
-			// Injection reaches a worker only if its bound deps implement
+			// Injection reaches a worker only when its bound deps implement
 			// SetFrameworkState. NoDeps workers (TDeps = struct{}) return struct{}{}
-			// here, which does not, so framework telemetry is silently skipped. Workers
-			// that override GetDependenciesAny() to return nil (application,
-			// configworker) are skipped deliberately, having no deps to inject into.
-			// Workers built on pkg/fsmv2/simple bind a wrapper around BaseDependencies,
-			// so they are always injected whatever TDeps their spec declares.
+			// here, which does not, so they get no framework telemetry and no error
+			// either. Workers that override GetDependenciesAny() to return nil
+			// (application, configworker) are skipped deliberately, having no deps to
+			// inject into. Workers built on pkg/fsmv2/simple bind a wrapper around
+			// BaseDependencies, so they are injected whatever TDeps their spec declares.
 			type depsGetter interface {
 				GetDependenciesAny() any
 			}
