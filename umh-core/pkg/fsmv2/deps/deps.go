@@ -69,6 +69,24 @@ type Dependencies interface {
 	GetWorkerType() string
 }
 
+// FrameworkAccessor exposes the framework-owned data the supervisor's collector
+// reads back off a worker. The collector type-asserts the worker's bound
+// dependencies against it to decide whether to attach framework metrics and
+// action history to the observation; a value that fails the assertion is logged
+// at Debug and silently gets neither.
+//
+// *BaseDependencies satisfies it, so any dependencies value embedding
+// *BaseDependencies does too. Adding a method here therefore changes what the
+// collector accepts, which is why the interface is declared once here rather
+// than duplicated at each assertion site.
+type FrameworkAccessor interface {
+	GetFrameworkState() *FrameworkMetrics
+	GetActionHistory() []ActionResult
+	MetricsRecorder() *MetricsRecorder
+}
+
+var _ FrameworkAccessor = (*BaseDependencies)(nil)
+
 // BaseDependencies provides common tools for all workers.
 // Worker-specific dependencies should embed this struct.
 type BaseDependencies struct {

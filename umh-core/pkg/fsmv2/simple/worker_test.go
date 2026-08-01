@@ -40,17 +40,6 @@ type probeStatus struct {
 // value is an ordinary-looking nil that no caller downstream would flag.
 type probeDepsPointerTarget struct{}
 
-// baseDepsAccessor mirrors the unexported interface the observation collector
-// asserts a worker's deps against before it attaches framework metrics and
-// action history (supervisor/internal/collection/collector.go). The collector
-// lives under an internal/ path this package cannot import, so the shape is
-// duplicated here; keep the two in step.
-type baseDepsAccessor interface {
-	GetFrameworkState() *deps.FrameworkMetrics
-	GetActionHistory() []deps.ActionResult
-	MetricsRecorder() *deps.MetricsRecorder
-}
-
 func newProbeWorker(spec MonitorSpec[probeConfig, probeStatus, struct{}]) (*simpleWorker[probeConfig, probeStatus, struct{}], error) {
 	return newSimpleWorker(spec,
 		deps.Identity{ID: "probe", WorkerType: spec.WorkerType},
@@ -470,7 +459,7 @@ var _ = Describe("simpleWorker", func() {
 			Expect(bound.BaseDependencies).NotTo(BeNil(),
 				"the wrapper carries this instance's BaseDependencies even though the spec asked for none")
 
-			acc, ok := w.GetDependenciesAny().(baseDepsAccessor)
+			acc, ok := w.GetDependenciesAny().(deps.FrameworkAccessor)
 			Expect(ok).To(BeTrue(),
 				"the bound deps satisfy the interface the collector asserts before attaching framework metrics and action history")
 			Expect(acc.MetricsRecorder()).NotTo(BeNil(),

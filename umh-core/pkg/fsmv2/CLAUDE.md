@@ -243,7 +243,13 @@ func (w *MyWorker) GetDependencies() *MyDependencies {
 | `CollectObservedState` | Always — worker-specific snapshot |
 | `DeriveDesiredState` | Custom children specs (application, communicator) or non-standard config parsing |
 | `GetInitialState` | Worker does NOT register via fsmv2.RegisterInitialState (e.g., push, pull) |
-| `GetDependenciesAny() any { return nil }` | No-deps worker. `WorkerBase[..., struct{}]` boxes `struct{}{}` into `any`, which is non-nil and silently skips framework metrics injection. The override returns a true nil to prevent that. |
+
+Never override `GetDependenciesAny`. The collector asserts the bound deps against
+`deps.FrameworkAccessor` and attaches framework metrics and action history only on
+success; `struct{}{}` and `nil` both fail that assertion, so returning nil changes
+nothing. A worker that needs framework telemetry must bind a `TDeps` embedding
+`*deps.BaseDependencies`; leaving `TDeps` as `struct{}` means no telemetry, whatever
+the accessor returns.
 
 ## Worker Registration
 
