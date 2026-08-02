@@ -11,6 +11,7 @@ Bridges move data into and out of the Unified Namespace, providing connection mo
 | Create bridges | ✅ | Visual protocol configuration |
 | Select protocols | ✅ | OPC UA, Modbus, S7, MQTT, 50+ more |
 | Configure location path | ✅ | ISA-95 levels (0-4) |
+| Map addresses to topics | ✅ | Dropdown of data model fields for custom data contracts |
 | Monitor connection health | ✅ | Real-time status |
 | View logs | ✅ | Live log streaming |
 | View metrics | ✅ | Throughput monitoring |
@@ -62,7 +63,15 @@ Each protocol has specific settings. For example, S7:
 
 ![Siemens S7 Configuration](./images/bridges-read-no-dfc-data-type-selector-for-siemens.png)
 
-### Step 5: Deploy
+### Step 5: Map Addresses
+
+Each row in the address mapping table becomes one UNS topic: the protocol address, followed by the data contract, virtual path, and tag name that build the topic.
+
+![Address Mapping Table](./images/bridges-read-address-table-model-dropdown.png)
+
+With `_historian` or `_raw`, Virtual Path and Tag Name are free-text fields. Selecting a custom data contract merges both columns into a single dropdown listing every field the contract's [data model](../data-modeling/data-models.md) defines, so you pick a valid path instead of typing one. A value the model rejects, for example after switching contracts, stays in the row, is flagged red, and blocks deploy until you correct it. Contracts whose data model references other models keep free-text input.
+
+### Step 6: Deploy
 
 Click **Save & Deploy**. The bridge will start connecting to your device.
 
