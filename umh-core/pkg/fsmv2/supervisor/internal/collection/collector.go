@@ -591,6 +591,14 @@ func (c *Collector[TObserved]) collectAndSaveObservedState(ctx context.Context) 
 	return nil
 }
 
+// baseDepsAccessor is a duck-type interface for extracting framework data from
+// any worker's dependencies (BaseDependencies or a struct embedding it).
+type baseDepsAccessor interface {
+	GetFrameworkState() *deps.FrameworkMetrics
+	GetActionHistory() []deps.ActionResult
+	MetricsRecorder() *deps.MetricsRecorder
+}
+
 // wrapNewObservation fills framework fields on a NewObservation-based ObservedState.
 // Called only when the zero-time gate fires (CollectedAt is zero), meaning the
 // developer used NewObservation instead of WrapStatus/WrapStatusAccumulated.
@@ -605,7 +613,7 @@ func (c *Collector[TObserved]) wrapNewObservation(ctx context.Context, observed 
 		observed = setter.SetCollectedAt(time.Now())
 	}
 
-	// Step 2: Get BaseDependencies from worker via DependencyProvider → deps.FrameworkAccessor.
+	// Step 2: Get BaseDependencies from worker via DependencyProvider → baseDepsAccessor.
 	depProvider, ok := c.config.Worker.(fsmv2.DependencyProvider)
 	if !ok {
 		c.config.Logger.Debug("wrap_new_observation_no_dependency_provider",
@@ -616,7 +624,7 @@ func (c *Collector[TObserved]) wrapNewObservation(ctx context.Context, observed 
 
 	depsAny := depProvider.GetDependenciesAny()
 
-	bd, ok := depsAny.(deps.FrameworkAccessor)
+	bd, ok := depsAny.(baseDepsAccessor)
 	if !ok {
 		c.config.Logger.Debug("wrap_new_observation_no_base_deps_accessor",
 			deps.String("deps_type", fmt.Sprintf("%T", depsAny)))
