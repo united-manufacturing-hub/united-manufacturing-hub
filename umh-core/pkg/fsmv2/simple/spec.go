@@ -99,7 +99,7 @@ func Register[TConfig, TStatus, TDeps any](spec MonitorSpec[TConfig, TStatus, TD
 		panic(fmt.Sprintf("simple.Register(%q): TStatus must be a struct, got %s", spec.WorkerType, k))
 	}
 
-	register.Worker[TConfig, Status[TStatus], *simpleDeps[TDeps]](spec.WorkerType,
+	register.Worker[TConfig, Status[TStatus], TDeps](spec.WorkerType,
 		func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader) (fsmv2.Worker, error) {
 			return newSimpleWorker(spec, id, logger, sr)
 		})

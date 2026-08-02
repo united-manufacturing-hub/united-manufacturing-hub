@@ -23,31 +23,17 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 )
 
-// simpleDeps is what every simple worker binds into WorkerBase's deps slot. It
-// always carries the instance's BaseDependencies, so the collector attaches
-// framework metrics to the Observation whatever TDeps the spec declares,
-// including struct{} and including a spec with no NewDeps. Action history is
-// attached the same way, but a simple worker dispatches no actions, so it stays
-// empty. inst holds the author's own poll value, which the framework stores and
-// hands back to Poll.
-type simpleDeps[TDeps any] struct {
-	*deps.BaseDependencies
-
-	inst TDeps
-}
-
 // simpleWorker runs a MonitorSpec's Poll on the framework's collection cadence.
 // It holds the immutable MonitorSpec; per-instance mutable state lives in
 // WorkerBase's deps slot, never in the worker struct, so the same logic serves
 // every simple worker type.
 //
 // The framework-facing status is Status[TStatus]: the developer's poll result
-// wrapped with the health verdict. The bound deps are *simpleDeps[TDeps] rather
-// than the author's TDeps, which is what makes framework telemetry
-// unconditional; pollDeps unwraps them for Poll.
+// wrapped with the health verdict. The bound deps are the author's own TDeps,
+// which is what Poll receives.
 type simpleWorker[TConfig, TStatus, TDeps any] struct {
 	spec MonitorSpec[TConfig, TStatus, TDeps]
-	fsmv2.WorkerBase[TConfig, Status[TStatus], *simpleDeps[TDeps]]
+	fsmv2.WorkerBase[TConfig, Status[TStatus], TDeps]
 }
 
 // newSimpleWorker builds a simpleWorker from its MonitorSpec and framework deps.
@@ -65,34 +51,19 @@ func newSimpleWorker[TConfig, TStatus, TDeps any](
 
 	bd := w.InitBase(id, logger, sr)
 
-	d := &simpleDeps[TDeps]{BaseDependencies: bd}
 	if spec.NewDeps != nil {
-		d.inst = spec.NewDeps(id, bd)
+		w.BindDeps(spec.NewDeps(id, bd))
 	}
-
-	w.BindDeps(d)
 
 	return w, nil
 }
 
-// pollDeps returns the author's poll value out of the framework's wrapper. A
-// spec with no NewDeps leaves inst at TDeps' zero value, which is what Poll
-// expects.
-//
-// When the slot holds anything other than a bound *simpleDeps, pollDeps panics
-// rather than returning TDeps' zero value. newSimpleWorker always binds one, so
-// an unbound slot means the construction path broke, and a zero value would hand
-// Poll a plausible wrong value whose fault surfaces frames deeper inside author
-// code, or for a TDeps of struct{} never at all.
+// pollDeps returns the value Poll receives. A spec with no NewDeps never binds,
+// and WorkerBase then hands back TDeps' zero value, which is what Poll expects.
 func (w *simpleWorker[TConfig, TStatus, TDeps]) pollDeps() TDeps {
-	raw := w.GetDependenciesAny()
+	d, _ := w.GetDependenciesAny().(TDeps)
 
-	d, ok := raw.(*simpleDeps[TDeps])
-	if !ok || d == nil {
-		panic("simpleWorker: pollDeps called before BindDeps")
-	}
-
-	return d.inst
+	return d
 }
 
 // reasonNoHealthCheck is the verdict reason for a good poll on a worker that

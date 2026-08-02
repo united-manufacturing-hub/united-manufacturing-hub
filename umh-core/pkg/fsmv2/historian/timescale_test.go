@@ -19,7 +19,6 @@ import (
 	"errors"
 	"fmt"
 	"net"
-	"reflect"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -157,33 +156,17 @@ var _ = Describe("the registered worker type", func() {
 	// boundDepsOf builds one instance the way production does, through the factory
 	// init() registered with rather than by calling newDeps, and returns what the
 	// worker put in its deps slot.
-	//
-	// The simple framework wraps every worker's poll deps in an unexported type of
-	// its own, so this package cannot name what comes back and reflect is the only
-	// reader. The wrapper's *deps.BaseDependencies field is exported and reads out
-	// with Interface(); the author's value sits behind the wrapper's unexported
-	// inst field, which can be inspected (IsNil, Pointer) but not converted back to
-	// a Deps.
-	boundDepsOf := func(id deps.Identity) reflect.Value {
+	boundDepsOf := func(id deps.Identity) Deps {
 		w, err := factory.NewWorkerByType(WorkerType, id, deps.NewNopFSMLogger(), nil, nil)
 		Expect(err).NotTo(HaveOccurred(), "init() left an instantiable factory for the worker type")
 
 		dp, ok := w.(fsmv2.DependencyProvider)
 		Expect(ok).To(BeTrue(), "the worker reports its poll deps through fsmv2.DependencyProvider")
 
-		bound := reflect.ValueOf(dp.GetDependenciesAny())
-		Expect(bound.Kind()).To(Equal(reflect.Ptr), "the framework binds a pointer to its wrapper")
-		Expect(bound.IsNil()).To(BeFalse(), "the wrapper exists, so the reads below are not vacuous")
+		bound, ok := dp.GetDependenciesAny().(Deps)
+		Expect(ok).To(BeTrue(), "the framework binds newDeps' return, unwrapped")
 
-		return bound.Elem()
-	}
-
-	// instOf reads the author's Deps value out of the framework's wrapper.
-	instOf := func(bound reflect.Value) reflect.Value {
-		inst := bound.FieldByName("inst")
-		Expect(inst.IsValid()).To(BeTrue(), "the wrapper keeps the author's poll value in inst")
-
-		return inst
+		return bound
 	}
 
 	It("gives each instance the BaseDependencies the framework built for it", func() {
@@ -191,20 +174,12 @@ var _ = Describe("the registered worker type", func() {
 
 		bound := boundDepsOf(id)
 
-		frameworkBD, ok := bound.FieldByName("BaseDependencies").Interface().(*deps.BaseDependencies)
-		Expect(ok).To(BeTrue(), "the framework's wrapper carries the instance's BaseDependencies")
-		Expect(frameworkBD).NotTo(BeNil(),
-			"the collector reads framework metrics and action history off this, so the reads below are not vacuous")
-		Expect(frameworkBD.GetWorkerType()).To(Equal(id.WorkerType),
-			"the BaseDependencies was built from this instance's identity, not a fresh or shared one")
-		Expect(frameworkBD.GetWorkerID()).To(Equal(id.ID))
-		Expect(frameworkBD.GetHierarchyPath()).To(Equal(id.HierarchyPath))
-
-		instBD := instOf(bound).FieldByName("BaseDependencies")
-		Expect(instBD.IsNil()).To(BeFalse(),
-			"Poll logs through this on every tick, and a nil embed panics on the first call")
-		Expect(instBD.Pointer()).To(Equal(reflect.ValueOf(frameworkBD).Pointer()),
-			"newDeps kept the BaseDependencies the framework handed it, so Poll's logger is the framework's own rather than one built from a package global")
+		Expect(bound.BaseDependencies).NotTo(BeNil(),
+			"Poll logs through this on every tick, and a nil embed panics on the first call, so the reads below are not vacuous")
+		Expect(bound.GetWorkerType()).To(Equal(id.WorkerType),
+			"newDeps kept the BaseDependencies the framework built for this instance, so Poll's logger is the framework's own rather than one built from a package global")
+		Expect(bound.GetWorkerID()).To(Equal(id.ID))
+		Expect(bound.GetHierarchyPath()).To(Equal(id.HierarchyPath))
 	})
 
 	It("hands every instance built through the factory the same pool holder", func() {
@@ -212,11 +187,11 @@ var _ = Describe("the registered worker type", func() {
 		// that calls newDeps and then overwrites pool with a fresh holder passes
 		// that assertion while the goroutine leak is back. This one goes through
 		// the path a spawning supervisor takes.
-		a := instOf(boundDepsOf(idUnder("parent-a"))).FieldByName("pool")
-		b := instOf(boundDepsOf(idUnder("parent-b"))).FieldByName("pool")
+		a := boundDepsOf(idUnder("parent-a")).pool
+		b := boundDepsOf(idUnder("parent-b")).pool
 
-		Expect(a.IsNil()).To(BeFalse(), "the holder exists, so the comparison below is not vacuous")
-		Expect(a.Pointer()).To(Equal(b.Pointer()),
+		Expect(a).NotTo(BeNil(), "the holder exists, so the comparison below is not vacuous")
+		Expect(a).To(BeIdenticalTo(b),
 			"one holder for the process: a per-instance pool would leak its pgxpool goroutine on every despawn after a poll, and nothing in the framework closes it")
 	})
 })

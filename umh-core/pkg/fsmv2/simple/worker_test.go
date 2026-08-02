@@ -36,10 +36,6 @@ type probeStatus struct {
 	Reachable bool `json:"reachable"`
 }
 
-// probeDepsPointerTarget gives the unbound-deps spec a pointer TDeps, whose zero
-// value is an ordinary-looking nil that no caller downstream would flag.
-type probeDepsPointerTarget struct{}
-
 func newProbeWorker(spec MonitorSpec[probeConfig, probeStatus, struct{}]) (*simpleWorker[probeConfig, probeStatus, struct{}], error) {
 	return newSimpleWorker(spec,
 		deps.Identity{ID: "probe", WorkerType: spec.WorkerType},
@@ -407,17 +403,15 @@ var _ = Describe("simpleWorker", func() {
 			Expect(gotBD.GetLogger()).NotTo(BeNil(),
 				"the logger is the one the framework enriched with this worker's identity")
 
-			bound, ok := w.GetDependenciesAny().(*simpleDeps[*deps.BaseDependencies])
-			Expect(ok).To(BeTrue(), "the framework's wrapper is what sits in the deps slot")
-			Expect(bound.BaseDependencies).To(BeIdenticalTo(gotBD),
-				"the wrapper carries the same BaseDependencies NewDeps was handed, so the collector's telemetry and the author's logger are the same instance's")
-			Expect(bound.inst).To(BeIdenticalTo(gotBD),
-				"NewDeps' return is kept as the author's poll value")
+			bound, ok := w.GetDependenciesAny().(*deps.BaseDependencies)
+			Expect(ok).To(BeTrue(), "NewDeps' return is what sits in the deps slot")
+			Expect(bound).To(BeIdenticalTo(gotBD),
+				"the bound value is the same BaseDependencies NewDeps was handed, so the collector's telemetry and the author's logger are the same instance's")
 		})
 	})
 
 	Describe("dependencies", func() {
-		It("keeps the author's poll value in the framework's wrapper", func() {
+		It("binds the author's poll value into the framework's deps slot", func() {
 			type probeDeps struct {
 				token string
 			}
@@ -434,51 +428,11 @@ var _ = Describe("simpleWorker", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			Expect(w.pollDeps()).To(Equal(probeDeps{token: "token-for-probe"}),
-				"Poll receives the author's own value, unwrapped")
+				"Poll receives the author's own value")
 
-			bound, ok := w.GetDependenciesAny().(*simpleDeps[probeDeps])
-			Expect(ok).To(BeTrue(), "the deps slot holds the framework's wrapper, not the author's type")
-			Expect(bound.inst).To(Equal(probeDeps{token: "token-for-probe"}))
-		})
-
-		It("attaches framework telemetry to a worker whose spec declares no deps at all", func() {
-			// nmap's shape: TDeps is struct{} and there is no NewDeps. Should
-			// telemetry ever depend on the spec declaring deps, this worker emits no
-			// framework metrics for the life of the process, and nothing in its own
-			// source says so.
-			w, err := newProbeWorker(MonitorSpec[probeConfig, probeStatus, struct{}]{
-				WorkerType: "simpleworker_deps_unset",
-				Poll: func(_ context.Context, _ struct{}, _ probeConfig) (probeStatus, error) {
-					return probeStatus{}, nil
-				},
-			})
-			Expect(err).NotTo(HaveOccurred())
-
-			bound, ok := w.GetDependenciesAny().(*simpleDeps[struct{}])
-			Expect(ok).To(BeTrue(), "the deps slot holds the framework's wrapper")
-			Expect(bound.BaseDependencies).NotTo(BeNil(),
-				"the wrapper carries this instance's BaseDependencies even though the spec asked for none")
-
-			acc, ok := w.GetDependenciesAny().(deps.FrameworkAccessor)
-			Expect(ok).To(BeTrue(),
-				"the bound deps satisfy the interface the collector asserts before attaching framework metrics and action history")
-			Expect(acc.MetricsRecorder()).NotTo(BeNil(),
-				"the collector drains this recorder every tick, so a nil one would drop the worker's metrics")
-
-			Expect(w.pollDeps()).To(Equal(struct{}{}),
-				"the author still gets TDeps' zero value: the wrapper is invisible to Poll")
-		})
-
-		It("panics with a named message when no deps were bound", func() {
-			// newSimpleWorker always binds a wrapper, so the spec hand-builds the
-			// worker to reach this state. The slot then holds a nil *simpleDeps,
-			// which the comma-ok assertion accepts, so only the nil check turns it
-			// into a named fault rather than a nil poll value Poll takes without
-			// complaint.
-			w := &simpleWorker[probeConfig, probeStatus, *probeDepsPointerTarget]{}
-
-			Expect(func() { _ = w.pollDeps() }).
-				To(PanicWith("simpleWorker: pollDeps called before BindDeps"))
+			bound, ok := w.GetDependenciesAny().(probeDeps)
+			Expect(ok).To(BeTrue(), "the deps slot holds the author's type, with nothing wrapped around it")
+			Expect(bound).To(Equal(probeDeps{token: "token-for-probe"}))
 		})
 	})
 })
