@@ -87,6 +87,25 @@ func newIPPortConnectionTemplate() connectionserviceconfig.ConnectionServiceConf
 	}
 }
 
+// writesToHistorian reports whether a bridge's write DFC targets the built-in historian output
+// plugin. Such a bridge inherits the shared historian connection (host/port resolved at render
+// time) instead of a user-supplied host/port.
+func writesToHistorian(writeDFC dataflowcomponentserviceconfig.DataflowComponentWriteConfigInput) bool {
+	return writeDFC.WritesToHistorian()
+}
+
+// historianConnectionTemplate returns the Nmap connection template for a bridge that writes to
+// the historian: the health check targets the shared historian.timescale section, resolved at
+// render time, so it follows the historian connection and can't be pointed at the wrong host.
+func historianConnectionTemplate() connectionserviceconfig.ConnectionServiceConfigTemplate {
+	return connectionserviceconfig.ConnectionServiceConfigTemplate{
+		NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
+			Target: "{{ .historian.timescale.host }}",
+			Port:   "{{ .historian.timescale.port }}",
+		},
+	}
+}
+
 // buildReadDFCServiceConfig validates a CDFCPayload and converts it into a
 // DataflowComponentServiceConfig ready to be stored in a ProtocolConverterServiceConfigTemplate.
 func buildReadDFCServiceConfig(payload models.CDFCPayload, name string) (dataflowcomponentserviceconfig.DataflowComponentServiceConfig, error) {

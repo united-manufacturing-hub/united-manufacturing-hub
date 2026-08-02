@@ -2,9 +2,30 @@
 
 ## Unreleased
 
+## [0.44.32]
+
+### New Features
+
+- Node-RED JavaScript processor can return an array of message objects to publish one output message per array element
+
+### Fixes
+
+- A Node-RED JavaScript processor function or tag processor condition that throws now drops only the failing message (warn-logged) and lets the rest of the batch continue, instead of the whole batch failing and retrying
+- Node-RED JavaScript and tag processor counters now report throws accurately: messages_errored is gone, throws count in messages_dropped{reason=js_throw}, and messages_processed counts produced outputs instead of every input attempt
+- Metadata values in Kafka headers are now serialized consistently across the Node-RED JavaScript and tag processors; non-scalar and nested-null values serialize as JSON so a nested null no longer appears as the literal string <nil>, and in the Node-RED JavaScript processor numeric and boolean metadata values that were previously silently dropped now appear as strings
+- UNS schema validation now reports a clear datatype mismatch (e.g. sent timeseries-number, tag registered as timeseries-string) instead of a confusing error that listed the tag as both valid and invalid
+- Sparkplug B input derives `spb_timestamp` from each metric's own timestamp when present, falling back to the payload timestamp; multi-metric NDATA/DDATA no longer collapse to one timestamp
+- The TimescaleDB historian output no longer warns when a batch holds only other contracts' data; it logs once when it stores its first message, and once if data arrives but none matches the configured data contract
+- The tag processor no longer converts numeric-looking string values to numbers; a string read from the source stays a string in the UNS, and msg.meta.datatype = "number" remains available for explicit coercion
+- A misconfigured data contract no longer stops your other data contracts from being set up. Valid contracts are now registered and validated as usual, while the misconfigured one is skipped and reported as a warning
+
+## [0.44.31]
+
 ### Improvements
 
 - When a bridge fails to reach a running state on first deploy, only the flow that actually failed (read, write, or both) is now left in a stopped state instead of being continuously retried, while a healthy flow keeps running. The config is still saved so you can fix it from the editing view, but the system no longer loops trying to redeploy a flow that needs manual attention.
+- A bridge that writes to the historian now derives its connection health check from the instance's stored historian connection instead of a host/port entered on the bridge. The check targets the configured historian database automatically and follows it if the historian connection is later changed, so it can no longer be pointed at the wrong host. The bridges list and detail view show the resolved historian host and port for these bridges rather than the connection placeholder.
+
 ## [0.44.30]
 
 ### Improvements

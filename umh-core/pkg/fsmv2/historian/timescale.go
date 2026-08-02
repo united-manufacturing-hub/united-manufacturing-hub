@@ -225,7 +225,7 @@ func Poll(ctx context.Context, d Deps, cfg config.HistorianConfig) (TimescaleSta
 
 	pool, err := d.pool.get(cfg.Timescale.ToDSN())
 	if err != nil {
-		d.Logger.Info("timescale connection check",
+		d.Logger.Debug("timescale connection check",
 			deps.String("host", host),
 			deps.Bool("reachable", false),
 			deps.Err(err))
@@ -246,7 +246,7 @@ func Poll(ctx context.Context, d Deps, cfg config.HistorianConfig) (TimescaleSta
 		if authRejected(err) {
 			auth = models.TimescaleAuthInvalid
 		}
-		d.Logger.Info("timescale connection check",
+		d.Logger.Debug("timescale connection check",
 			deps.String("host", host),
 			deps.Bool("reachable", reachable),
 			deps.String("auth", string(auth)),
@@ -256,7 +256,7 @@ func Poll(ctx context.Context, d Deps, cfg config.HistorianConfig) (TimescaleSta
 	}
 
 	elapsedMs := float64(time.Since(start).Microseconds()) / 1000.0
-	d.Logger.Info("timescale connection check",
+	d.Logger.Debug("timescale connection check",
 		deps.String("host", host),
 		deps.Bool("reachable", true),
 		deps.String("auth", string(models.TimescaleAuthValid)),

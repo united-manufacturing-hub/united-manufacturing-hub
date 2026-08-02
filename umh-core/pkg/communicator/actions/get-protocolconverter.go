@@ -196,10 +196,9 @@ func connectionInfoFromSpec(
 	spec protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec,
 	logger *zap.SugaredLogger,
 ) (ip string, port uint32, templateInfo *models.ProtocolConverterTemplateInfo) {
-	var (
-		variables   []models.ProtocolConverterVariable
-		isTemplated bool
-	)
+	variables := []models.ProtocolConverterVariable{}
+
+	var isTemplated bool
 
 	// hasConnectionVars tracks whether Variables.User contains IP/PORT so we know
 	// whether to fall back to the Nmap template for connection info.
@@ -342,6 +341,12 @@ func (a *GetProtocolConverterAction) Execute() (interface{}, map[string]interfac
 				// Get IP, port, and template info from observed, rendered spec config
 				specConfig := observedState.ObservedProtocolConverterSpecConfig
 				ip, port, templateInfo := connectionInfoFromSpec(specConfig, a.actionLogger)
+
+				if writesToHistorian(specConfig.Config.DataflowComponentWriteServiceConfig) {
+					resolved := observedState.ServiceInfo.ConnectionObservedState.ObservedConnectionConfig.NmapServiceConfig
+					ip = resolved.Target
+					port = uint32(resolved.Port)
+				}
 
 				// Build ReadDFC from observed, rendered spec config, if present
 				var readDFC *models.ProtocolConverterDFC

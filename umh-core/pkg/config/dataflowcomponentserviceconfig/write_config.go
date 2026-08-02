@@ -20,6 +20,10 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// HistorianDestinationProtocol is the destination protocol of the built-in historian output
+// plugin. A write DFC targeting it renders against the shared historian: render scope.
+const HistorianDestinationProtocol = "historian"
+
 // PlaceholderUMHTopicUnset is used when no input topics were configured for a write DFC.
 // It makes the misconfiguration visible in Benthos logs rather than silently subscribing to nothing.
 const PlaceholderUMHTopicUnset = "TOPIC_NOT_SET_BY_USER"
@@ -134,6 +138,13 @@ type DataflowComponentWriteConfigInput struct {
 // HasOutput reports whether a write output is configured.
 func (c DataflowComponentWriteConfigInput) HasOutput() bool {
 	return c.Destination.Protocol != "" || c.Destination.Code != ""
+}
+
+// WritesToHistorian reports whether this write DFC targets the built-in historian output
+// plugin, the one case where the bridge inherits the shared historian connection instead of a
+// user-supplied host/port. Any other destination fills IP/PORT manually.
+func (c DataflowComponentWriteConfigInput) WritesToHistorian() bool {
+	return c.Destination.Protocol == HistorianDestinationProtocol
 }
 
 // ToWriteConfig converts the input to a typed DataflowComponentWriteConfig by splitting

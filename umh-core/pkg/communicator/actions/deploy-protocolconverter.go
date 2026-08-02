@@ -340,13 +340,28 @@ func (a *DeployProtocolConverterAction) createProtocolConverterConfig() (config.
 // configuration from a parsed protocol converter payload.
 func buildProtocolConverterConfig(payload models.ProtocolConverter) (config.ProtocolConverterConfig, error) {
 	userVars := buildUserScope(payload.TemplateInfo)
-	userVars["IP"] = payload.Connection.IP
-	userVars["PORT"] = strconv.FormatUint(uint64(payload.Connection.Port), 10)
+
+	var writeDFC dataflowcomponentserviceconfig.DataflowComponentWriteConfigInput
+	if w := payload.WriteDFCPayload; w != nil {
+		writeDFC = w.DataflowComponentWriteConfigInput
+	}
+
+	// Resolve the connection template once from the write DFC. A bridge that writes to the
+	// historian inherits the historian connection and stores no IP/PORT variables; any other
+	// bridge uses the {{ .IP }}/{{ .PORT }} template and stores them. The same decision drives
+	// both the variable merge and the stored connection template.
+	connectionTemplate := newIPPortConnectionTemplate()
+	if writesToHistorian(writeDFC) {
+		connectionTemplate = historianConnectionTemplate()
+	} else {
+		userVars["IP"] = payload.Connection.IP
+		userVars["PORT"] = strconv.FormatUint(uint64(payload.Connection.Port), 10)
+	}
 
 	tmpl := protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
-		ConnectionServiceConfig:             newIPPortConnectionTemplate(),
+		ConnectionServiceConfig:             connectionTemplate,
 		DataflowComponentReadServiceConfig:  dataflowcomponentserviceconfig.DataflowComponentServiceConfig{},
-		DataflowComponentWriteServiceConfig: dataflowcomponentserviceconfig.DataflowComponentWriteConfigInput{},
+		DataflowComponentWriteServiceConfig: writeDFC,
 	}
 
 	if payload.ReadDFC != nil {
@@ -356,10 +371,6 @@ func buildProtocolConverterConfig(payload models.ProtocolConverter) (config.Prot
 		}
 
 		tmpl.DataflowComponentReadServiceConfig = readSvcCfg
-	}
-
-	if w := payload.WriteDFCPayload; w != nil {
-		tmpl.DataflowComponentWriteServiceConfig = w.DataflowComponentWriteConfigInput
 	}
 
 	var readDFCDesiredState, writeDFCDesiredState string
