@@ -115,6 +115,35 @@ func (w *wrappingTestWorkerNoDeps) GetInitialState() fsmv2.State[any, any] {
 	return &supervisor.TestState{}
 }
 
+// wrappingTestWorkerStructDeps implements Worker + DependencyProvider but returns
+// struct{}{} — a non-accessor value that fails the baseDepsAccessor type
+// assertion. struct{}{} and nil fail the assertion identically, so the deps
+// guard in wrapNewObservation skips step 5 (worker-metric accumulation) for this
+// worker. Framework metrics and action history still reach its Observation
+// because they are injected from the collector's locals before the guard.
+type wrappingTestWorkerStructDeps struct {
+	observed fsmv2.ObservedState
+}
+
+func (w *wrappingTestWorkerStructDeps) CollectObservedState(_ context.Context, _ fsmv2.DesiredState) (fsmv2.ObservedState, error) {
+	return w.observed, nil
+}
+
+func (w *wrappingTestWorkerStructDeps) DeriveDesiredState(_ interface{}) (fsmv2.DesiredState, error) {
+	return &config.DesiredState{BaseDesiredState: config.BaseDesiredState{}}, nil
+}
+
+func (w *wrappingTestWorkerStructDeps) GetInitialState() fsmv2.State[any, any] {
+	return &supervisor.TestState{}
+}
+
+// GetDependenciesAny returns struct{}{}, the non-accessor value. This type
+// implements DependencyProvider but its deps carry no framework state, so it
+// must NOT satisfy baseDepsAccessor.
+func (w *wrappingTestWorkerStructDeps) GetDependenciesAny() any {
+	return struct{}{}
+}
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -127,6 +156,36 @@ func wrappingDesiredProvider() func() (fsmv2.DesiredState, error) {
 	return func() (fsmv2.DesiredState, error) {
 		return &config.DesiredState{BaseDesiredState: config.BaseDesiredState{}}, nil
 	}
+}
+
+// newWrappingCollector builds a collector with the shared wrapping-test defaults
+// (Hour interval so no background ticks fire; one synchronous tick runs via
+// CollectFinalObservation, 3s timeout, no-op desired provider) and the given
+// worker. The overrides closure sets the provider/setter fields under test.
+// It returns the collector and the freshly created store so the caller can load
+// the saved observation.
+func newWrappingCollector(worker fsmv2.Worker, id deps.Identity, logger deps.FSMLogger, overrides func(*collection.CollectorConfig[testWrappingObservedState])) (*collection.Collector[testWrappingObservedState], *storage.TriangularStore) {
+	store := supervisor.CreateTestTriangularStoreForWorkerType("testwrapping")
+	cfg := collection.CollectorConfig[testWrappingObservedState]{
+		Worker:               worker,
+		Identity:             id,
+		Store:                store,
+		Logger:               logger,
+		ObservationInterval:  time.Hour,
+		ObservationTimeout:   3 * time.Second,
+		DesiredStateProvider: wrappingDesiredProvider(),
+	}
+
+	overrides(&cfg)
+
+	return collection.NewCollector[testWrappingObservedState](cfg), store
+}
+
+// runSyncTick starts the collector, runs one synchronous observation, and stops it.
+func runSyncTick(ctx context.Context, coll *collection.Collector[testWrappingObservedState]) {
+	Expect(coll.Start(ctx)).To(Succeed())
+	defer coll.Stop(context.Background())
+	Expect(coll.CollectFinalObservation(context.Background())).To(Succeed())
 }
 
 // ---------------------------------------------------------------------------
@@ -440,6 +499,147 @@ var _ = Describe("Collector post-COS wrapping", func() {
 			Expect(store.LoadObservedTyped(ctx, "testwrapping", identity.ID, &loaded)).To(Succeed())
 			Expect(loaded.Metrics.Worker.Counters).To(BeEmpty())
 			Expect(loaded.Metrics.Worker.Gauges).To(BeEmpty())
+		})
+	})
+
+	// collectAndSaveObservedState captures framework metrics + action history
+	// into locals and passes them into wrapNewObservation, which injects them
+	// onto the Observation BEFORE the deps guard. The deps guard
+	// (DependencyProvider -> baseDepsAccessor) gates ONLY step 5 (worker-metric
+	// accumulation). The two pre-COS compound guards split: fetch when the
+	// Provider != nil, set when the Setter != nil.
+	//
+	// Assertions (a)-(d) verify the injection and split-guard behavior; (e) is a
+	// regression guard preserving the two distinct debug keys the deps guard
+	// emits.
+	Context("struct{}-deps worker gets framework metrics + action history; deps guard gates step 5; compound guard split; both debug keys preserved", func() {
+		// (a) A struct{}-deps worker must receive framework metrics from the
+		// collector's local, not from its deps (it has no MetricsRecorder). The
+		// FrameworkMetricsSetter is also asserted to fire exactly once per tick, so
+		// deleting the pre-COS Setter invocation silently redden this test.
+		It("(a) injects framework metrics from the collector local onto a struct{}-deps worker", func() {
+			id := wrappingTestIdentity("rung1-struct-deps-a")
+
+			var fmSetterCalls int
+
+			coll, store := newWrappingCollector(&wrappingTestWorkerStructDeps{observed: testWrappingObservedState{}}, id, deps.NewNopFSMLogger(), func(cfg *collection.CollectorConfig[testWrappingObservedState]) {
+				cfg.FrameworkMetricsProvider = func() *deps.FrameworkMetrics { return &deps.FrameworkMetrics{TimeInCurrentStateMs: 987654} }
+				cfg.FrameworkMetricsSetter = func(_ *deps.FrameworkMetrics) {
+					fmSetterCalls++
+				}
+				cfg.StateProvider = func() string { return "running" }
+			})
+			runSyncTick(ctx, coll)
+
+			Expect(fmSetterCalls).To(Equal(1),
+				"(a) FrameworkMetricsSetter must be called exactly once per tick (the pre-COS write that feeds workers reading deps.GetFrameworkState())")
+
+			var loaded testWrappingObservedState
+			Expect(store.LoadObservedTyped(ctx, "testwrapping", id.ID, &loaded)).To(Succeed())
+			Expect(loaded.Metrics.Framework.TimeInCurrentStateMs).To(Equal(int64(987654)),
+				"(a) struct{}-deps worker must carry framework metrics from the collector's local, not from its deps")
+		})
+
+		// (b) A struct{}-deps worker must receive the drained action history
+		// from the collector's local even when the Setter is nil (split guard:
+		// fetch on Provider != nil alone).
+		It("(b) injects action history from the collector local onto a struct{}-deps worker", func() {
+			id := wrappingTestIdentity("rung1-struct-deps-b")
+
+			coll, store := newWrappingCollector(&wrappingTestWorkerStructDeps{observed: testWrappingObservedState{}}, id, deps.NewNopFSMLogger(), func(cfg *collection.CollectorConfig[testWrappingObservedState]) {
+				cfg.ActionHistoryProvider = func() []deps.ActionResult {
+					return []deps.ActionResult{{ActionType: "test-action", Success: true}}
+				}
+				// ActionHistorySetter left nil: the split guard still fetches.
+				cfg.StateProvider = func() string { return "running" }
+			})
+			runSyncTick(ctx, coll)
+
+			var loaded testWrappingObservedState
+			Expect(store.LoadObservedTyped(ctx, "testwrapping", id.ID, &loaded)).To(Succeed())
+			Expect(loaded.ActionResults).To(HaveLen(1),
+				"(b) struct{}-deps worker must carry the pre-COS-drained action history")
+			Expect(loaded.ActionResults[0].ActionType).To(Equal("test-action"))
+		})
+
+		// (c) The split guard fetches on Provider != nil alone, so the provider
+		// is invoked exactly once per tick even when the Setter is nil. A second
+		// tick guards against cross-tick fetch suppression (e.g. a misguided
+		// sync.Once that fetches only on tick 1).
+		It("(c) calls ActionHistoryProvider exactly once per tick when the Setter is nil", func() {
+			id := wrappingTestIdentity("rung1-struct-deps-c")
+
+			var ahCalls int
+
+			coll, _ := newWrappingCollector(&wrappingTestWorkerStructDeps{observed: testWrappingObservedState{}}, id, deps.NewNopFSMLogger(), func(cfg *collection.CollectorConfig[testWrappingObservedState]) {
+				cfg.ActionHistoryProvider = func() []deps.ActionResult {
+					ahCalls++
+
+					return []deps.ActionResult{{ActionType: "test-action", Success: true}}
+				}
+				// ActionHistorySetter left nil: fetch must still happen once.
+				cfg.StateProvider = func() string { return "running" }
+			})
+
+			Expect(coll.Start(ctx)).To(Succeed())
+			defer coll.Stop(context.Background())
+
+			Expect(coll.CollectFinalObservation(context.Background())).To(Succeed())
+			Expect(ahCalls).To(Equal(1),
+				"(c) ActionHistoryProvider must be called exactly once on the first tick (not zero, not re-fetched)")
+
+			// Second tick: a cross-tick suppression regression (e.g. sync.Once)
+			// would leave the count at 1 instead of 2.
+			Expect(coll.CollectFinalObservation(context.Background())).To(Succeed())
+			Expect(ahCalls).To(Equal(2),
+				"(c) ActionHistoryProvider must be called exactly once per tick across ticks (no cross-tick suppression)")
+		})
+
+		// (d) Framework metrics reach the Observation when the
+		// FrameworkMetricsProvider is set but the Setter is nil (split guard:
+		// fetch on Provider != nil alone).
+		It("(d) puts framework metrics on the Observation when FrameworkMetricsSetter is nil", func() {
+			id := wrappingTestIdentity("rung1-split-guard")
+
+			coll, store := newWrappingCollector(&wrappingTestWorkerStructDeps{observed: testWrappingObservedState{}}, id, deps.NewNopFSMLogger(), func(cfg *collection.CollectorConfig[testWrappingObservedState]) {
+				cfg.FrameworkMetricsProvider = func() *deps.FrameworkMetrics { return &deps.FrameworkMetrics{TimeInCurrentStateMs: 111222} }
+				// FrameworkMetricsSetter left nil: the split-guard case.
+				cfg.StateProvider = func() string { return "running" }
+			})
+			runSyncTick(ctx, coll)
+
+			var loaded testWrappingObservedState
+			Expect(store.LoadObservedTyped(ctx, "testwrapping", id.ID, &loaded)).To(Succeed())
+			Expect(loaded.Metrics.Framework.TimeInCurrentStateMs).To(Equal(int64(111222)),
+				"(d) a collector with FrameworkMetricsProvider set but FrameworkMetricsSetter nil must still put framework metrics on the Observation (split-guard)")
+		})
+
+		// (e) Regression guard: the deps guard still emits its two distinct
+		// debug keys — no_dependency_provider for a worker without
+		// DependencyProvider, and no_base_deps_accessor for a struct{}-deps
+		// worker. These keys must survive the guard relocation.
+		It("(e) preserves both deps-guard debug keys", func() {
+			// key 1: worker without DependencyProvider emits no_dependency_provider.
+			noProvLogger := &severityCapturingLogger{}
+			noProvID := wrappingTestIdentity("rung1-no-provider")
+
+			noProvColl, _ := newWrappingCollector(&wrappingTestWorkerNoDeps{observed: testWrappingObservedState{}}, noProvID, noProvLogger, func(*collection.CollectorConfig[testWrappingObservedState]) {})
+			runSyncTick(ctx, noProvColl)
+
+			Expect(noProvLogger.has("debug", "wrap_new_observation_no_dependency_provider")).To(BeTrue(),
+				"(e) a worker without DependencyProvider must emit the wrap_new_observation_no_dependency_provider debug key")
+
+			// key 2: struct{}-deps worker emits no_base_deps_accessor.
+			structDepsLogger := &severityCapturingLogger{}
+			structDepsID := wrappingTestIdentity("rung1-struct-deps-e")
+
+			structDepsColl, _ := newWrappingCollector(&wrappingTestWorkerStructDeps{observed: testWrappingObservedState{}}, structDepsID, structDepsLogger, func(cfg *collection.CollectorConfig[testWrappingObservedState]) {
+				cfg.StateProvider = func() string { return "running" }
+			})
+			runSyncTick(ctx, structDepsColl)
+
+			Expect(structDepsLogger.has("debug", "wrap_new_observation_no_base_deps_accessor")).To(BeTrue(),
+				"(e) the struct{}-deps worker must emit the wrap_new_observation_no_base_deps_accessor debug key")
 		})
 	})
 })
