@@ -159,10 +159,13 @@ func NewEngine[S any](t Table[S]) (*Engine[S], error) {
 // NewReduction's own check is not the last word); an ordered reduction on a
 // boolean series; a mark pair whose clear mark is not on the holding side of
 // its fire mark under its polarity; a dividing reduction with no Against to
-// feed it. On a signal: a duplicate name. Within a signal: a duplicate
+// feed it; and a reduction whose minimum exceeds what its span can hold at the
+// table's interval — a p99 min of 100 over a 60s span at 1s holds 61 entries
+// and would sit at StateUntrusted forever. On a signal: a duplicate name.
+// Within a signal: a duplicate
 // instrument name. On a track: the instrument refusals that apply to it — a
-// nil Extract, a non-positive span, a minimum below one — plus a dividing
-// reduction, which a track declares no denominator series for.
+// nil Extract, a non-positive span, a minimum below one, span-at-interval — plus
+// a dividing reduction, which a track declares no denominator series for.
 func validate[S any](t Table[S]) error {
 	seenSignal := make(map[string]bool, len(t.Signals))
 	for _, s := range t.Signals {
@@ -196,6 +199,9 @@ func validate[S any](t Table[S]) error {
 			if worse(inst.Marks.Clear.At, inst.Marks) >= worse(inst.Marks.Fire.At, inst.Marks) {
 				return fmt.Errorf("signal %q instrument %q: clear mark is not on the holding side of its fire mark under its polarity", s.Name, inst.Name)
 			}
+			if t.Interval > 0 && int(inst.Span/t.Interval)+1 < inst.Red.Min {
+				return fmt.Errorf("signal %q instrument %q: reduction %q minimum sample count %d exceeds what its window span %v can hold at table interval %v", s.Name, inst.Name, inst.Red.Name, inst.Red.Min, inst.Span, t.Interval)
+			}
 		}
 	}
 
@@ -211,6 +217,9 @@ func validate[S any](t Table[S]) error {
 		}
 		if tr.Red.against {
 			return fmt.Errorf("track %q: reduction %q divides but a track declares no denominator series", tr.Name, tr.Red.Name)
+		}
+		if t.Interval > 0 && int(tr.Span/t.Interval)+1 < tr.Red.Min {
+			return fmt.Errorf("track %q: reduction %q minimum sample count %d exceeds what its window span %v can hold at table interval %v", tr.Name, tr.Red.Name, tr.Red.Min, tr.Span, t.Interval)
 		}
 	}
 	return nil
