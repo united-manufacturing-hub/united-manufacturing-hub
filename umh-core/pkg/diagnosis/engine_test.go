@@ -45,6 +45,12 @@ var _ = Describe("Engine", func() {
 					Extract:  extract,
 					Red:      P95,
 					Span:     60 * time.Second,
+					Marks: Marks{
+						Unit:     "ratio",
+						Fire:     Mark{At: 2.0, Inclusive: true},
+						Clear:    Mark{At: 1.0, Inclusive: true},
+						Polarity: HigherIsWorse,
+					},
 				},
 				{
 					Name:     "A-mean",
@@ -135,6 +141,12 @@ var _ = Describe("Engine", func() {
 					Extract:  func(s snap) Reading { return Known(s.v) },
 					Red:      Last,
 					Span:     60 * time.Second,
+					Marks: Marks{
+						Unit:     "u",
+						Fire:     Mark{At: 2, Inclusive: true},
+						Clear:    Mark{At: 1, Inclusive: true},
+						Polarity: HigherIsWorse,
+					},
 				},
 			},
 		}
@@ -222,6 +234,7 @@ var _ = Describe("Engine", func() {
 			Name: "N", DemoteSpan: 60 * time.Second,
 			Instruments: []Instrument[s9]{{
 				Name: "I", Requires: []Capability{"missing"}, Extract: ext, Red: Last, Span: 60 * time.Second,
+				Marks: Marks{Unit: "u", Fire: Mark{At: 2, Inclusive: true}, Clear: Mark{At: 1, Inclusive: true}, Polarity: HigherIsWorse},
 			}},
 		}
 

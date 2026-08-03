@@ -14,7 +14,10 @@
 
 package diagnosis
 
-import "time"
+import (
+	"fmt"
+	"time"
+)
 
 // Availability is what a signal's instruments could collectively say this tick.
 // It is the multi-instrument generalisation of one window's State, and it is the
@@ -90,7 +93,15 @@ type Engine[S any] struct {
 	interval time.Duration
 }
 
-// NewEngine builds the windows, the tracks and one latch per signal for a table.
+// NewEngine validates the table, then builds the windows, the tracks and one
+// latch per signal. It is the single place a malformed table is refused (S1 R8):
+// a caller writes marks and spans as a declarative literal and finds out at
+// construction, once, whether the whole table is buildable rather than learning
+// it tick by tick.
+//
+// Validation (see validate) refuses a signal, an instrument or a track that
+// could never hold a point or name itself twice, on the first offender, and
+// returns a descriptive error naming it.
 //
 // Each window is built as NewWindow(inst.Span, s.DemoteSpan, inst.Red,
 // inst.Counter) — the counter declaration is carried from the instrument to the
@@ -104,6 +115,10 @@ type Engine[S any] struct {
 // One latch is built per signal, keyed by name, so Observe can drive the
 // per-signal latch arms and report what fired without consulting the table.
 func NewEngine[S any](t Table[S]) (*Engine[S], error) {
+	if err := validate(t); err != nil {
+		return nil, err
+	}
+
 	e := &Engine[S]{
 		signals:  t.Signals,
 		tracks:   t.Tracks,
@@ -131,6 +146,74 @@ func NewEngine[S any](t Table[S]) (*Engine[S], error) {
 	}
 
 	return e, nil
+}
+
+// validate walks a table once and refuses the first signal, instrument or track
+// that could never produce a verdict, a window that could never hold a point,
+// or a name that is duplicated. Every refusal returns a descriptive error so a
+// malformed table names the row that is malformed.
+//
+// It refuses, on an instrument: a nil Extract (the observe loop would panic);
+// a zero or negative window span; a reduction whose minimum is below one (the
+// checked-twice rule — a caller can write a Reduction by literal, so
+// NewReduction's own check is not the last word); an ordered reduction on a
+// boolean series; a mark pair whose clear mark is not on the holding side of
+// its fire mark under its polarity; a dividing reduction with no Against to
+// feed it. On a signal: a duplicate name. Within a signal: a duplicate
+// instrument name. On a track: the instrument refusals that apply to it — a
+// nil Extract, a non-positive span, a minimum below one — plus a dividing
+// reduction, which a track declares no denominator series for.
+func validate[S any](t Table[S]) error {
+	seenSignal := make(map[string]bool, len(t.Signals))
+	for _, s := range t.Signals {
+		if seenSignal[s.Name] {
+			return fmt.Errorf("duplicate signal name %q", s.Name)
+		}
+		seenSignal[s.Name] = true
+
+		seenInstrument := make(map[string]bool, len(s.Instruments))
+		for _, inst := range s.Instruments {
+			if inst.Extract == nil {
+				return fmt.Errorf("signal %q instrument %q: nil extract", s.Name, inst.Name)
+			}
+			if seenInstrument[inst.Name] {
+				return fmt.Errorf("signal %q: duplicate instrument name %q", s.Name, inst.Name)
+			}
+			seenInstrument[inst.Name] = true
+
+			if inst.Span <= 0 {
+				return fmt.Errorf("signal %q instrument %q: window span %v is zero or negative", s.Name, inst.Name, inst.Span)
+			}
+			if inst.Red.Min < 1 {
+				return fmt.Errorf("signal %q instrument %q: reduction %q minimum sample count %d is below one", s.Name, inst.Name, inst.Red.Name, inst.Red.Min)
+			}
+			if inst.Red.ordered && inst.Boolean {
+				return fmt.Errorf("signal %q instrument %q: ordered reduction %q on a boolean series", s.Name, inst.Name, inst.Red.Name)
+			}
+			if inst.Red.against && inst.Against == nil {
+				return fmt.Errorf("signal %q instrument %q: reduction %q divides but the instrument declares no against extractor", s.Name, inst.Name, inst.Red.Name)
+			}
+			if worse(inst.Marks.Clear.At, inst.Marks) >= worse(inst.Marks.Fire.At, inst.Marks) {
+				return fmt.Errorf("signal %q instrument %q: clear mark is not on the holding side of its fire mark under its polarity", s.Name, inst.Name)
+			}
+		}
+	}
+
+	for _, tr := range t.Tracks {
+		if tr.Extract == nil {
+			return fmt.Errorf("track %q: nil extract", tr.Name)
+		}
+		if tr.Span <= 0 {
+			return fmt.Errorf("track %q: span %v is zero or negative", tr.Name, tr.Span)
+		}
+		if tr.Red.Min < 1 {
+			return fmt.Errorf("track %q: reduction %q minimum sample count %d is below one", tr.Name, tr.Red.Name, tr.Red.Min)
+		}
+		if tr.Red.against {
+			return fmt.Errorf("track %q: reduction %q divides but a track declares no denominator series", tr.Name, tr.Red.Name)
+		}
+	}
+	return nil
 }
 
 // Select applies the two gates, in order, and reports what they concluded.
