@@ -162,7 +162,7 @@ func (w *Window) Append(value, against Reading, at time.Time) {
 		}
 	}
 
-	w.points = append(w.points, Point{At: at, Value: v})
+	w.points = append(w.points, Point{At: at, Value: v, Against: against})
 	w.lastSuccess = at
 	w.lastAppendStored = true
 }
@@ -172,9 +172,12 @@ func (w *Window) Append(value, against Reading, at time.Time) {
 // instrument back in permits reducing a window under a reduction that is not its
 // own, and both types check, so nothing catches the mismatch.
 //
-// The reduced number is not yet computed: the fold is not wired, so StateValue
-// carries the zero value as a placeholder. The outcome — StateAbsent,
-// StateUntrusted, or StateValue — is the only load-bearing part until then.
+// The reduced number v is computed by the window's own fold and is carried under
+// StateValue; a below-minimum or stale StateUntrusted also carries the folded
+// number. Only an empty window (StateAbsent) and an against reduction whose
+// denominator delta is zero (StateUntrusted) void it — both carry v as zero. The
+// outcome — StateAbsent, StateUntrusted, or StateValue — is returned with the
+// number, never alone.
 //
 // Reduce must be called only after Age on the same tick. The window does not
 // verify recency itself; a Reduce without a preceding Age reports stale entries
@@ -184,17 +187,52 @@ func (w *Window) Reduce() Reduced {
 	if len(w.points) == 0 {
 		return Reduced{state: StateAbsent}
 	}
-	// Non-empty and recent, but below the reduction's minimum.
+	// The fold divides by a denominator whose delta is zero or negative — the
+	// counter did not move, or it reset backwards — so the number cannot be
+	// computed: the outcome is untrusted and the number carries zero.
+	if w.red.against && denominatorDelta(w.points) <= 0 {
+		return Reduced{v: 0, state: StateUntrusted}
+	}
+	// A window whose reduction has no fold — a bare Reduction{} literal handed
+	// to NewWindow directly — cannot compute a number. Treat it as untrusted
+	// rather than panicking; NewEngine refuses this shape at construction so
+	// this is a defensive backstop, not a supported route.
+	if w.red.fold == nil {
+		return Reduced{v: 0, state: StateUntrusted}
+	}
+
+	v := w.red.fold(w.points)
+
+	// A fold can emit NaN or ±Inf even though Append filtered non-finite inputs:
+	// a slope over a single instant divides by zero, and two equal timestamps
+	// divide by zero time. Such a number is not a value, so the outcome is
+	// untrusted and carries zero.
+	if math.IsNaN(v) || math.IsInf(v, 0) {
+		return Reduced{v: 0, state: StateUntrusted}
+	}
+
+	state := StateValue
+	// Below the reduction's minimum.
 	if len(w.points) < w.red.Min {
-		return Reduced{state: StateUntrusted}
+		state = StateUntrusted
 	}
 	// Nothing appended this tick: the window holds its contents but the newest
 	// sample is stale-by-one-tick, so the latch holds.
 	if !w.lastAppendStored {
-		return Reduced{state: StateUntrusted}
+		state = StateUntrusted
 	}
 
-	return Reduced{state: StateValue}
+	return Reduced{v: v, state: state}
+}
+
+// denominatorDelta is the denominator counter's delta across the window edges,
+// well-defined because both edges stored a present denominator under an against
+// reduction. The delta being zero is the normal case the Reduce gate detects.
+func denominatorDelta(points []Point) float64 {
+	first, _ := points[0].Against.Get()
+	last, _ := points[len(points)-1].Against.Get()
+
+	return last - first
 }
 
 // Coverage reports the window's extent, for the two latch arms that are gated on

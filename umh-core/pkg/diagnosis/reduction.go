@@ -14,7 +14,12 @@
 
 package diagnosis
 
-import "time"
+import (
+	"fmt"
+	"math"
+	"sort"
+	"time"
+)
 
 // Point is one stored entry, as a reduction sees it: the instant it was read,
 // the value, and the counter the value is divided by when the reduction is a
@@ -91,31 +96,93 @@ type Reduction struct {
 var (
 	// Last is the newest entry. One reading is the answer, so pressure can fire
 	// on tick 0.
-	Last = Reduction{Name: "last", Min: 1}
+	Last = Reduction{Name: "last", Min: 1, fold: foldLast}
 	// Mean is the arithmetic mean. Two points, or there is no average.
-	Mean = Reduction{Name: "mean", Min: 2}
+	Mean = Reduction{Name: "mean", Min: 2, fold: foldMean}
 	// Slope is (v_last − v_first) / (t_last − t_first) in seconds — the
 	// gradient over the window's own first and last timestamps. Two endpoints,
 	// never a least-squares fit.
-	Slope = Reduction{Name: "slope", Min: 2}
+	Slope = Reduction{Name: "slope", Min: 2, fold: foldSlope}
 	// DeltaRatio divides the numerator counter's delta by the denominator
 	// counter's delta, both taken at both window edges. It is the only
 	// reduction that reads Point.Against, and therefore the only one that
 	// declares against.
-	DeltaRatio = Reduction{Name: "deltaRatio", Min: 2, against: true}
+	DeltaRatio = Reduction{Name: "deltaRatio", Min: 2, fold: foldDeltaRatio, against: true}
 	// P95 is the nearest-rank 95th percentile. Below twenty samples the rank
 	// ceil(0.95n) equals n, so the percentile IS the maximum.
-	P95 = Reduction{Name: "p95", Min: 20, ordered: true}
+	P95 = Reduction{Name: "p95", Min: 20, fold: foldP95, ordered: true}
 	// P99 is the nearest-rank 99th percentile. Its minimum of 100 exceeds what
 	// a 60s window at 1s can hold, so NewEngine refuses it at that cadence.
-	P99 = Reduction{Name: "p99", Min: 100, ordered: true}
+	P99 = Reduction{Name: "p99", Min: 100, fold: foldP99, ordered: true}
 )
 
 // NewReduction builds a seventh reduction. It refuses a minimum below one and
-// a nil fold.
+// a nil fold — the same two checks NewEngine re-runs on every reduction in
+// the table, so both are checked twice on purpose.
 //
 // A reduction built here folds a SINGLE series: against stays false, so a
 // window under it stores points whose Against is absent.
 func NewReduction(name string, min int, fold func([]Point) float64) (Reduction, error) {
+	if min < 1 {
+		return Reduction{}, fmt.Errorf("reduction %q: minimum sample count %d is below one", name, min)
+	}
+	if fold == nil {
+		return Reduction{}, fmt.Errorf("reduction %q: nil fold", name)
+	}
+
 	return Reduction{Name: name, Min: min, fold: fold}, nil
 }
+
+// foldLast is the newest entry.
+func foldLast(points []Point) float64 { return points[len(points)-1].Value }
+
+// foldMean is the arithmetic mean of the stored values.
+func foldMean(points []Point) float64 {
+	var sum float64
+	for _, p := range points {
+		sum += p.Value
+	}
+	return sum / float64(len(points))
+}
+
+// foldSlope is (last value − first value) over (last time − first time) in
+// seconds, using the window's own first and last timestamps.
+func foldSlope(points []Point) float64 {
+	first, last := points[0], points[len(points)-1]
+	dt := last.At.Sub(first.At).Seconds()
+
+	return (last.Value - first.Value) / dt
+}
+
+// foldDeltaRatio is (numerator_last − numerator_first) over
+// (denominator_last − denominator_first), both counters at both window edges.
+// The denominator delta is well-defined because Reduce gates on a zero or
+// negative delta before folding.
+func foldDeltaRatio(points []Point) float64 {
+	first, last := points[0], points[len(points)-1]
+	firstD, _ := first.Against.Get()
+	lastD, _ := last.Against.Get()
+
+	return (last.Value - first.Value) / (lastD - firstD)
+}
+
+// nearestRank folds to the nearest-rank percentile: the value at the
+// 1-indexed rank ceil(p·n), sorted ascending.
+func nearestRank(p float64) func([]Point) float64 {
+	return func(points []Point) float64 {
+		values := make([]float64, len(points))
+		for i, pt := range points {
+			values[i] = pt.Value
+		}
+		sort.Float64s(values)
+		rank := int(math.Ceil(p * float64(len(values))))
+
+		return values[rank-1]
+	}
+}
+
+// foldP95 is the nearest-rank 95th percentile.
+var foldP95 = nearestRank(0.95)
+
+// foldP99 is the nearest-rank 99th percentile.
+var foldP99 = nearestRank(0.99)

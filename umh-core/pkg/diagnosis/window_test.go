@@ -26,7 +26,8 @@ import (
 //
 // These specs observe window behaviour through Reduce().Get() State
 // (StateAbsent/StateUntrusted/StateValue) and Coverage() (Full/Span) — never
-// through the fold-computed number v, which is not yet computed. The window
+// through the fold-computed number v. This file asserts State and Coverage
+// only; the correctness of v is covered in the reduction specs. The window
 // State logic under test:
 //   - empty                                  -> StateAbsent
 //   - newest older than the demote span       -> StateAbsent
@@ -34,7 +35,8 @@ import (
 //   - nothing appended this tick             -> StateUntrusted
 //   - otherwise                              -> StateValue
 //
-// The fold NUMBER v is left at 0/trivial; only State and Coverage are asserted.
+// Only State and Coverage are asserted here; the fold-computed number v is
+// covered in the reduction specs.
 var _ = Describe("Window", func() {
 	It("should append a reading and prune entries older than the span", func() {
 		const span = 10 * time.Second
