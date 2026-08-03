@@ -310,9 +310,9 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity deps.Identity, work
 			// either. Overriding GetDependenciesAny() to return nil has the same
 			// effect: correct for application, which holds no dependencies, and a
 			// mislabel for configworker, which holds two as plain struct fields and is
-			// skipped despite them. Workers built on pkg/fsmv2/simple bind a wrapper
-			// around BaseDependencies, so they are injected whatever TDeps their spec
-			// declares.
+			// skipped despite them. A worker built on pkg/fsmv2/simple is injected only
+			// when its spec declares a NewDeps returning a TDeps that embeds
+			// BaseDependencies: historian does, nmap does not.
 			type depsGetter interface {
 				GetDependenciesAny() any
 			}
