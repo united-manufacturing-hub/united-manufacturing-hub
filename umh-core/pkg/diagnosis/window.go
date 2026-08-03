@@ -123,14 +123,16 @@ func (w *Window) Age(now time.Time) {
 // One call carries both counters and one timestamp, so a delta ratio can never
 // be built from two counters read at two different moments.
 //
-// On a COUNTER window only, a value below the previous entry's discards the
-// stored entries and starts over from this one. A monotone counter that fell
-// was reset at the source, so a delta taken across the reset is arithmetic on
-// two different origins. On a window that is not a counter the same fall is the
-// quantity doing what it is supposed to do, and restarting there empties the
-// window on every dip: steal-mean would never reach twenty samples and
-// pressure-avg60 would restart on every decrease. The rule is gated on the
-// declaration, never applied to every window.
+// On a COUNTER window only, a backwards step discards the stored entries and
+// starts over from this one. A backwards step is a value below the previous
+// entry's, or — when the window also holds a denominator — a denominator below
+// the previous entry's: a monotone counter that fell was reset at the source,
+// so a delta taken across the reset is arithmetic on two different origins. On
+// a window that is not a counter the same fall is the quantity doing what it is
+// supposed to do, and restarting there empties the window on every dip:
+// steal-mean would never reach twenty samples and pressure-avg60 would restart
+// on every decrease. The rule is gated on the declaration, never applied to
+// every window.
 func (w *Window) Append(value, against Reading, at time.Time) {
 	w.lastAppendStored = false
 
@@ -150,14 +152,30 @@ func (w *Window) Append(value, against Reading, at time.Time) {
 		}
 	}
 
-	// Counter restart: a backwards step in the value series discards the stored
-	// entries and starts over from this one. A denominator counter that resets
-	// is NOT yet detected here — only the value series is checked. Detecting a
-	// denominator reset belongs with the fold that divides by it.
+	// Counter restart: a backwards step in either series discards the stored
+	// entries and starts over from this one — a source reset moves both counters
+	// at once, so a fall in either means the prior entries belong to a different
+	// origin and a delta across the reset is arithmetic on two. A window whose
+	// denominator is absent has no second series, so only the value fall matters.
+	//
+	// The denominator fall is examined only when the window's own reduction
+	// divides by the denominator; on any other counter window the argument is
+	// absent or meaningless, and a fall in it must not wipe the window. Both
+	// readings must be present — an absent denominator, which stores as zero,
+	// must never order or restart the window.
 	if w.counter && len(w.points) > 0 {
 		prev := w.points[len(w.points)-1]
 
-		if v < prev.Value {
+		restart := v < prev.Value
+		if w.red.against {
+			a, aok := against.Get()
+			pa, paok := prev.Against.Get()
+			if aok && paok && a < pa {
+				restart = true
+			}
+		}
+
+		if restart {
 			w.points = nil
 		}
 	}
