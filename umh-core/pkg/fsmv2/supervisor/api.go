@@ -133,6 +133,30 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity deps.Identity, work
 
 	s.logger.Debug("identity_saved")
 
+	// Read the prior StartupCount from the stored observation BEFORE the initial
+	// SaveObserved below overwrites it. The initial COS run (line 100) carries no
+	// framework metrics, so saving it first would clobber the count we are about
+	// to read back and StartupCount would never advance past 1 on re-created
+	// workers.
+	//
+	// Survives restarts, incremented on each AddWorker().
+	var startupCount int64 = 1
+
+	loadCtx, loadCancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer loadCancel()
+
+	var prevObserved TObserved
+
+	loadErr := s.store.LoadObservedTyped(loadCtx, s.workerType, identity.ID, &prevObserved)
+	if loadErr == nil {
+		if holder, ok := any(prevObserved).(deps.MetricsHolder); ok {
+			fm := holder.GetFrameworkMetrics()
+			if fm.StartupCount > 0 {
+				startupCount = fm.StartupCount + 1
+			}
+		}
+	}
+
 	observedJSON, err := json.Marshal(observed)
 	if err != nil {
 		s.logger.SentryError(deps.FeatureFSMv2, identity.HierarchyPath, err, "worker_add_marshal_observed_failed")
@@ -386,24 +410,6 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity deps.Identity, work
 			}
 		}
 	})
-
-	// Survives restarts, incremented on each AddWorker().
-	var startupCount int64 = 1
-
-	loadCtx, loadCancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer loadCancel()
-
-	var prevObserved TObserved
-
-	loadErr := s.store.LoadObservedTyped(loadCtx, s.workerType, identity.ID, &prevObserved)
-	if loadErr == nil {
-		if holder, ok := any(prevObserved).(deps.MetricsHolder); ok {
-			fm := holder.GetFrameworkMetrics()
-			if fm.StartupCount > 0 {
-				startupCount = fm.StartupCount + 1
-			}
-		}
-	}
 
 	initialState := worker.GetInitialState()
 
