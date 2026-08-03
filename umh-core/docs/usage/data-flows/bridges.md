@@ -44,7 +44,7 @@ The remaining steps describe the from-scratch path. Starting from an existing br
 
 Templates carry a working protocol configuration. Search by name, or narrow the list with the **Vendor** and **Protocol** filters.
 
-The list currently holds **84 templates**. Behind them we support **50+ industrial protocols** through [Benthos-UMH](https://docs.umh.app/benthos-umh/input) plus everything from [Redpanda Connect](https://docs.redpanda.com/redpanda-connect/components/inputs/about/):
+Behind the templates we support **50+ industrial protocols** through [Benthos-UMH](https://docs.umh.app/benthos-umh/input) plus everything from [Redpanda Connect](https://docs.redpanda.com/redpanda-connect/components/inputs/about/):
 
 Common industrial protocols:
 - **Modbus**: For PLCs and RTUs
