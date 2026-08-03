@@ -144,6 +144,42 @@ func (w *wrappingTestWorkerStructDeps) GetDependenciesAny() any {
 	return struct{}{}
 }
 
+// wrappingTestWorkerDepsReader implements Worker + DependencyProvider with a real
+// *BaseDependencies, and during CollectObservedState reads the pre-COS-written
+// framework state and action history out of it into worker-authored fields.
+// It is the GUARD fixture: it proves a worker that reads deps.GetFrameworkState()
+// / deps.GetActionHistory() during collection actually sees the values the
+// collector's Setters wrote before COS. Asserting on these worker-authored fields
+// (not Observation.Metrics.Framework, which the collector fills from its own
+// locals) is what makes a deleted Setter invocation visible.
+type wrappingTestWorkerDepsReader struct {
+	baseDeps *deps.BaseDependencies
+	fmSeen   int64
+	ahSeen   []deps.ActionResult
+}
+
+func (w *wrappingTestWorkerDepsReader) CollectObservedState(_ context.Context, _ fsmv2.DesiredState) (fsmv2.ObservedState, error) {
+	if fm := w.baseDeps.GetFrameworkState(); fm != nil {
+		w.fmSeen = fm.TimeInCurrentStateMs
+	}
+
+	w.ahSeen = w.baseDeps.GetActionHistory()
+
+	return testWrappingObservedState{}, nil
+}
+
+func (w *wrappingTestWorkerDepsReader) DeriveDesiredState(_ interface{}) (fsmv2.DesiredState, error) {
+	return &config.DesiredState{BaseDesiredState: config.BaseDesiredState{}}, nil
+}
+
+func (w *wrappingTestWorkerDepsReader) GetInitialState() fsmv2.State[any, any] {
+	return &supervisor.TestState{}
+}
+
+func (w *wrappingTestWorkerDepsReader) GetDependenciesAny() any {
+	return w.baseDeps
+}
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -640,6 +676,43 @@ var _ = Describe("Collector post-COS wrapping", func() {
 
 			Expect(structDepsLogger.has("debug", "wrap_new_observation_no_base_deps_accessor")).To(BeTrue(),
 				"(e) the struct{}-deps worker must emit the wrap_new_observation_no_base_deps_accessor debug key")
+		})
+	})
+
+	Context("pre-COS write reaches a worker that reads deps during COS (GUARD)", func() {
+		It("makes deps.GetFrameworkState and deps.GetActionHistory readable as worker-authored state during CollectObservedState", func() {
+			id := wrappingTestIdentity("rung2-precos")
+			store := supervisor.CreateTestTriangularStoreForWorkerType("testwrapping")
+
+			bd := deps.NewBaseDependencies(deps.NewNopFSMLogger(), nil, id)
+			worker := &wrappingTestWorkerDepsReader{baseDeps: bd}
+
+			c := collection.NewCollector[testWrappingObservedState](collection.CollectorConfig[testWrappingObservedState]{
+				Worker:                   worker,
+				Identity:                 id,
+				Store:                    store,
+				Logger:                   deps.NewNopFSMLogger(),
+				ObservationInterval:      time.Hour,
+				ObservationTimeout:       3 * time.Second,
+				DesiredStateProvider:     wrappingDesiredProvider(),
+				FrameworkMetricsProvider: func() *deps.FrameworkMetrics { return &deps.FrameworkMetrics{TimeInCurrentStateMs: 987654} },
+				FrameworkMetricsSetter:   func(fm *deps.FrameworkMetrics) { bd.SetFrameworkState(fm) },
+				ActionHistoryProvider: func() []deps.ActionResult {
+					return []deps.ActionResult{{ActionType: "rung2-action", Success: true}}
+				},
+				ActionHistorySetter: func(ah []deps.ActionResult) { bd.SetActionHistory(ah) },
+			})
+			runSyncTick(ctx, c)
+
+			// Assert on the worker's own read of the pre-COS write, not on
+			// Observation.Metrics.Framework (which the post-change collector fills
+			// from its locals, so it stays green even if the Setter were deleted).
+			// This is what makes a deleted Setter invocation visible.
+			Expect(worker.fmSeen).To(Equal(int64(987654)),
+				"(rung2) pre-COS FrameworkMetricsSetter write must be readable via deps.GetFrameworkState() during COS")
+			Expect(worker.ahSeen).To(HaveLen(1))
+			Expect(worker.ahSeen[0].ActionType).To(Equal("rung2-action"),
+				"(rung2) pre-COS ActionHistorySetter write must be readable via deps.GetActionHistory() during COS")
 		})
 	})
 })
