@@ -117,12 +117,6 @@ func (w *ConfigworkerWorker) Registry() *dynamicchildren.Registry {
 	return w.registry
 }
 
-// GetDependenciesAny returns nil so the framework skips metrics injection for
-// this no-deps worker (a boxed struct{}{} would be non-nil).
-func (w *ConfigworkerWorker) GetDependenciesAny() any {
-	return nil
-}
-
 // CollectObservedState reconciles the historian monitor child from the live
 // config, then returns the observed state. It reads config through the config
 // manager and upserts or deletes the historian child in the shared registry so

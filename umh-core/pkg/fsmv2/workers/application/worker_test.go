@@ -264,11 +264,4 @@ children:
 			Expect(cfg.YAMLConfig).To(ContainSubstring("child-1"))
 		})
 	})
-
-	Describe("GetDependenciesAny", func() {
-		It("should return nil because the application worker has no custom dependencies", func() {
-			w := &ApplicationWorker{}
-			Expect(w.GetDependenciesAny()).To(BeNil())
-		})
-	})
 })
