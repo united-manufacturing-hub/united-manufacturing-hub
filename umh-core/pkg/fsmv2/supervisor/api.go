@@ -134,12 +134,12 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity deps.Identity, work
 	s.logger.Debug("identity_saved")
 
 	// Read the prior StartupCount from the stored observation BEFORE the initial
-	// SaveObserved below overwrites it. The initial COS run (line 100) carries no
-	// framework metrics, so saving it first would clobber the count we are about
-	// to read back and StartupCount would never advance past 1 on re-created
-	// workers.
-	//
-	// Survives restarts, incremented on each AddWorker().
+	// SaveObserved below overwrites it. The initial COS run carries no framework
+	// metrics (AddWorker bypasses the collector), so saving it first would clobber
+	// the count we are about to read back and StartupCount would never advance
+	// past 1 on re-created workers. A load error other than "not yet present" is
+	// surfaced, so a transient store failure does not silently look like a fresh
+	// worker.
 	var startupCount int64 = 1
 
 	loadCtx, loadCancel := context.WithTimeout(context.Background(), 2*time.Second)
@@ -155,6 +155,17 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity deps.Identity, work
 				startupCount = fm.StartupCount + 1
 			}
 		}
+	} else if !errors.Is(loadErr, persistence.ErrNotFound) {
+		s.logger.SentryWarn(deps.FeatureFSMv2, identity.HierarchyPath, "worker_add_load_prev_observation_failed", deps.Err(loadErr))
+	}
+
+	// Persist the computed StartupCount on the initial observation so a crash
+	// between this save and the first collector tick does not reset it. The
+	// collector still owns the full framework metrics on every later tick.
+	if setter, ok := observed.(interface {
+		SetFrameworkMetrics(deps.FrameworkMetrics) fsmv2.ObservedState
+	}); ok {
+		observed = setter.SetFrameworkMetrics(deps.FrameworkMetrics{StartupCount: startupCount})
 	}
 
 	observedJSON, err := json.Marshal(observed)
@@ -328,15 +339,15 @@ func (s *Supervisor[TObserved, TDesired]) AddWorker(identity deps.Identity, work
 		},
 		FrameworkMetricsSetter: func(fm *deps.FrameworkMetrics) {
 			// Must use GetDependenciesAny() (returns any), not GetDependencies() (returns D).
-			// Injection reaches a worker only when its bound deps implement
-			// SetFrameworkState. NoDeps workers (TDeps = struct{}) return struct{}{}
-			// here, which does not, so they get no framework telemetry and no error
-			// either. Overriding GetDependenciesAny() to return nil has the same
-			// effect: correct for application, which holds no dependencies, and a
-			// mislabel for configworker, which holds two as plain struct fields and is
-			// skipped despite them. A worker built on pkg/fsmv2/simple is injected only
-			// when its spec declares a NewDeps returning a TDeps that embeds
-			// BaseDependencies: historian does, nmap does not.
+			// This write feeds a worker that reads deps.GetFrameworkState() during
+			// CollectObservedState, so it reaches only a bound deps that implements
+			// SetFrameworkState (a deps embedding *deps.BaseDependencies). It is
+			// separate from the Observation injection, which the collector performs
+			// from its own local in wrapNewObservation regardless of the deps shape —
+			// a struct{}-deps worker (nmap) still carries framework metrics on its
+			// Observation. Application and configworker bind no deps and so simply
+			// get no pre-COS write; returning nil or struct{}{} from
+			// GetDependenciesAny is equivalent and neither is overridden.
 			type depsGetter interface {
 				GetDependenciesAny() any
 			}

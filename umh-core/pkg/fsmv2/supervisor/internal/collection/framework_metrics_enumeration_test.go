@@ -12,16 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Rung 3 (RED) of PR B: proves property 1 of the design  -  every registered
-// worker type gets framework metrics on its Observation whatever its TDeps and
-// whatever GetDependenciesAny returns. The collector now injects framework
-// metrics from its own locals before the deps guard (rung 1), so this test is
-// green when written; it is red against the pre-rung-1 parent, which is how the
-// rung's own (a)-(d) assertions already prove the mechanism absent there.
+// Every registered worker type gets framework metrics on its Observation,
+// whatever its TDeps and whatever GetDependenciesAny returns. The collector
+// injects framework metrics from its own locals before the deps guard, so a
+// struct{}-deps worker (nmap) carries them like any other.
 //
-// The registry is populated by package init()  -  a missing blank import returns
-// zero types and this test would pass trivially  -  so the HaveLen(15) floor
-// below is mandatory, not cosmetic.
+// The registry is populated by package init(). A missing blank import leaves it
+// empty, so the HaveLen(15) floor below is what makes a forgotten import fail
+// loudly instead of passing trivially; a 16th registration also reddens it.
 
 package collection_test
 
@@ -81,20 +79,19 @@ const registeredFloor = 15
 // built via factory.NewWorkerByType in this isolated test process, because
 // register.Worker wraps constructor failure in a panic. Each constructor's
 // dependency is published by a parent or the transport channel singleton that
-// this test does not wire up. They are skipped below with the stated reason; a
-// silent continue would imply full coverage and hide a regression in the other
-// ten. transport, communicator and persistence are cheaply rescuable later;
-// pull and push follow once transport deps are published.
+// this test does not wire up. They are skipped below with the stated reason, and
+// the recovered panic is asserted to match that reason, so a skip cannot hide a
+// constructor regression inside one of them.
 var panicOnConstruction = map[string]string{
-	"communicator": "ChannelProvider is not set in this test process",
-	"transport":    "ChannelProvider is not set in this test process",
-	"persistence":  "requires a store, which only its parent's deployment publishes",
-	"pull":         "parent transport deps are not published",
-	"push":         "parent transport deps are not published",
+	"communicator": "ChannelProvider must be set",
+	"transport":    "ChannelProvider must be set",
+	"persistence":  "requires a store",
+	"pull":         "deps builder returned",
+	"push":         "deps builder returned",
 }
 
 // targetWorkers are the three workers the design exists to fix: they are the
-// types whose Observation carried no framework metrics before this change
+// types whose Observation lacked framework metrics before this change
 // (application and configworker return nil deps, nmap returns struct{}). They
 // are named explicitly here rather than relying on the enumeration to reach
 // them silently.
@@ -176,7 +173,7 @@ func constructWorker(workerType string) (fsmv2.Worker, interface{}) {
 
 // probeFrameworkMetrics drives one real synchronous collection tick through the
 // real collector, loading the saved Observation back out of the real store, and
-// returns the framework TimeInCurrentStateMs that survived. The provider
+// returns the framework TimeInCurrentStateMs on it. The provider
 // injects sentinel into the collector's FrameworkMetricsProvider; recovering
 // exactly sentinel back proves framework metrics are present on the
 // Observation, not merely that the worker produced an observation.
@@ -184,7 +181,12 @@ func constructWorker(workerType string) (fsmv2.Worker, interface{}) {
 // TObserved is fsmv2.ObservedState (the interface): every worker's
 // CollectObservedState returns the interface, so observed.(fsmv2.ObservedState)
 // always holds, and the generic save path marshals the underlying concrete
-// Observation  -  the same non-generic path the collector uses in production.
+// Observation, the same non-generic path the collector uses in production.
+//
+// This assumes the worker is a NewObservation worker (zero CollectedAt), so the
+// collector's zero-time gate fires and framework metrics are injected. All ten
+// buildable types are NewObservation workers today; a migration to WrapStatus
+// would fail this probe with a sentinel mismatch rather than a clear message.
 func probeFrameworkMetrics(workerType string, w fsmv2.Worker, sentinel int64) int64 {
 	id := deps.Identity{ID: workerType + "-probe", WorkerType: workerType, Name: workerType + "-probe"}
 	store := supervisor.CreateTestTriangularStoreForWorkerType(workerType)
@@ -243,6 +245,12 @@ var _ = Describe("Framework metrics on every registered worker type", func() {
 					Fail(fmt.Sprintf("unexpected construction panic for %q: %v", workerType, panick))
 				}
 
+				// The recovered panic must match the expected dependency-absence
+				// cause, so a constructor regression inside one of these workers
+				// cannot hide behind a silent skip.
+				Expect(fmt.Sprint(panick)).To(ContainSubstring(reason),
+					"worker %q panicked for an unexpected reason (want %q); actual: %q", workerType, reason, fmt.Sprint(panick))
+
 				skipped[workerType] = reason
 
 				continue
@@ -255,10 +263,10 @@ var _ = Describe("Framework metrics on every registered worker type", func() {
 			Expect(worker).NotTo(BeNil(), "construction of %q produced a nil worker", workerType)
 
 			// Deterministic, type-distinct sentinel: proves the exact injected value
-			// survived, not merely that some metric is non-zero.
+			// is present, not merely that some metric is non-zero.
 			sentinel := int64(900000) + int64(len(workerType))
 			Expect(probeFrameworkMetrics(workerType, worker, sentinel)).To(Equal(sentinel),
-				"framework TimeInCurrentStateMs sentinel did not survive on %q's Observation", workerType)
+				"framework TimeInCurrentStateMs sentinel is not present on %q's Observation", workerType)
 
 			covered[workerType] = sentinel
 		}

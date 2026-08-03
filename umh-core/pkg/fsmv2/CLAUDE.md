@@ -244,12 +244,13 @@ func (w *MyWorker) GetDependencies() *MyDependencies {
 | `DeriveDesiredState` | Custom children specs (application, communicator) or non-standard config parsing |
 | `GetInitialState` | Worker does NOT register via fsmv2.RegisterInitialState (e.g., push, pull) |
 
-Never override `GetDependenciesAny`. Before attaching framework metrics and action
-history, the collector checks whether the bound deps can carry framework state;
-`struct{}{}` and `nil` both fail that check identically, so returning nil changes
-nothing. A worker that needs framework telemetry must bind a `TDeps` embedding
-`*deps.BaseDependencies`; leaving `TDeps` as `struct{}` means no telemetry, whatever
-the accessor returns.
+Never override `GetDependenciesAny`. Framework metrics and action history are
+attached to the Observation by the collector from its own locals, before the deps
+guard, so every worker carries them on its Observation regardless of its `TDeps`
+and regardless of what `GetDependenciesAny` returns (`struct{}{}` and `nil` behave
+identically). The deps guard gates only worker-metric accumulation: a `TDeps`
+embedding `*deps.BaseDependencies` gives the collector a `MetricsRecorder` to drain
+for the worker's own counters; a `struct{}` deps worker simply records none.
 
 ## Worker Registration
 

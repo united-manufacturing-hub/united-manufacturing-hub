@@ -12,26 +12,26 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Rung 5 (capstone) of PR B: the positive-controlled end-to-end proof for
-// property 1 of the design -  a REAL nmap worker, built through its real
-// registration, driven through a REAL Collector and a REAL TriangularStore,
-// carrying framework metrics on its saved Observation.
+// Positive-controlled end-to-end proof that every registered worker gets
+// framework metrics on its Observation: a real nmap worker, built through its
+// real registration, driven through a real Collector and a real TriangularStore,
+// with framework metrics present on the saved Observation.
 //
-// nmap is the sharpest case the design exists to fix: it registers
+// nmap is the sharpest case the design addresses: it registers
 // MonitorSpec[config.NmapConfig, NmapStatus, struct{}] with no NewDeps
 // (nmap/nmap.go:101), so its bound deps are struct{} and fail the
-// baseDepsAccessor assertion. Before rung 1 the collector's guard sat in front
-// of the framework-metrics injection, so nmap's Observation carried a zero
-// FrameworkMetrics struct and its drained action history was discarded. After
-// rung 1 the collector injects both from its own locals before the deps guard.
+// baseDepsAccessor assertion. Without the collector change, the guard sat in
+// front of the framework-metrics injection, so nmap's Observation carried a zero
+// FrameworkMetrics struct and its drained action history was discarded. With it,
+// the collector injects both from its own locals before the deps guard.
 //
 // The assertion is a sentinel: the collector's FrameworkMetricsProvider returns
 // a value carrying TimeInCurrentStateMs = 987654, and recovering exactly that
 // back off the saved Observation proves framework metrics are present, not
 // merely that the worker produced an Observation. The sentinel is what makes
-// the positive control meaningful: the same spec reports ABSENT (the sentinel
-// is lost) against the pre-rung-1 parent commit 47062a084, where the guard
-// still sits in front of step 3.
+// the positive control meaningful: the same spec reports the sentinel absent
+// (TimeInCurrentStateMs is 0) against the parent commit 47062a084, where the
+// guard sat in front of the framework-metrics injection.
 
 package collection_test
 
@@ -111,9 +111,10 @@ var _ = Describe("Capstone: real nmap worker gets framework metrics through a re
 		var probe nmapObservedProbe
 		Expect(store.LoadObservedTyped(ctx, workerType, id.ID, &probe)).To(Succeed())
 
-		// The positive assertion: the sentinel survived the full pipeline. If the
-		// guard still sat in front of step 3, TimeInCurrentStateMs would be 0.
+		// The positive assertion: the sentinel is present after the full pipeline.
+		// If the guard sat in front of the framework-metrics injection,
+		// TimeInCurrentStateMs would be 0.
 		Expect(probe.Metrics.Framework.TimeInCurrentStateMs).To(Equal(nmapCapstoneSentinel),
-			"framework TimeInCurrentStateMs sentinel did not survive on the real nmap worker's Observation")
+			"framework TimeInCurrentStateMs sentinel is not present on the real nmap worker's Observation")
 	})
 })
