@@ -42,7 +42,7 @@ var _ = Describe("Reading", func() {
 	// The construction-encapsulation half of this spec — that a Reading is
 	// reachable only through Known and Unknown — is unobservable from inside
 	// the package (an internal test can reach the unexported fields directly),
-	// and SPEC §9 R1 defers it to S2 R5, where the `cpu` package crosses the
+	// and SPEC §9 R1 defers it to S2 R5, where a consumer package crosses the
 	// boundary. What S1 can observe is the return contract: the value and its
 	// presence arrive together for a known reading, and an absence arrives as
 	// presence-false with no usable value.

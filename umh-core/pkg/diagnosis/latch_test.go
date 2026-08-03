@@ -91,7 +91,7 @@ var _ = Describe("Latch", func() {
 
 	It("should carry the identity the engine stamped at construction into the Fired it reports", func() {
 		t0 := time.Unix(1_000_000, 0)
-		id := Identity{Signal: "cpu", Tier: 2, External: true, Index: 7}
+		id := Identity{Signal: "sig", Tier: 2, External: true, Index: 7}
 		l := NewLatch(id)
 
 		l.Update(Reduced{v: 0.20, state: StateValue}, full(), march(), t0)
@@ -103,7 +103,7 @@ var _ = Describe("Latch", func() {
 
 	It("should carry the value it fired under and the time it fired", func() {
 		t0 := time.Unix(1_000_000, 0)
-		l := NewLatch(Identity{Signal: "cpu", Tier: 1})
+		l := NewLatch(Identity{Signal: "sig", Tier: 1})
 
 		l.Update(Reduced{v: 0.20, state: StateValue}, full(), march(), t0)
 		f, fired := l.Fired()

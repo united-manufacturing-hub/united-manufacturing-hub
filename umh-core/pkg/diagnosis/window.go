@@ -56,7 +56,7 @@ type Window struct {
 // empty OR newest entry older than the demote span, and freeze-then-empty ends
 // at the same boundary, so a window that is not told it cannot report absence at
 // all. A window whose span is six hours and whose demote span is 60s must empty
-// after 60s. Both are 60s for every CPU signal, so a build that passes one
+// after 60s. Both are 60s for every consumer signal, so a build that passes one
 // value twice is green across all 33 scenarios — the test that proves they are
 // distinct needs spans that differ.
 //
@@ -114,9 +114,8 @@ func (w *Window) Age(now time.Time) {
 // window silently reports stale state.
 //
 // The denominator gate reads the window's reduction and nothing else. Under
-// Mean an absent Against is the ordinary case — six of the seven CPU
-// instruments fold a single series and pass Unknown() — and the point is
-// stored. Under DeltaRatio the same absence makes the point unusable and it is
+// Mean an absent Against is the ordinary case — six of the seven instruments
+// fold a single series and pass Unknown() — and the point is stored. Under DeltaRatio the same absence makes the point unusable and it is
 // dropped. Same two arguments, opposite outcome, and Reduction.against is the
 // only thing that separates them.
 //
@@ -129,10 +128,10 @@ func (w *Window) Age(now time.Time) {
 // the previous entry's: a monotone counter that fell was reset at the source,
 // so a delta taken across the reset is arithmetic on two different origins. On
 // a window that is not a counter the same fall is the quantity doing what it is
-// supposed to do, and restarting there empties the window on every dip:
-// steal-mean would never reach twenty samples and pressure-avg60 would restart
-// on every decrease. The rule is gated on the declaration, never applied to
-// every window.
+// supposed to do, and restarting there empties the window on every dip: a
+// percentile fallback would never reach its floor and a mean fallback would
+// restart on every decrease. The rule is gated on the declaration, never applied
+// to every window.
 func (w *Window) Append(value, against Reading, at time.Time) {
 	w.lastAppendStored = false
 
