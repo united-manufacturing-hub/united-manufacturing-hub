@@ -55,7 +55,7 @@ Common industrial protocols:
 
 ### Step 4: Configure General Settings
 
-Fill in the basic information and press **Save & Deploy**. A popup will appear. Only then you can proceed with Step 5.
+Fill in the basic information and proceed with Step 5.
 
 ![General Information](./images/bridges-general-information.png)
 
