@@ -1,0 +1,209 @@
+// Copyright 2025 UMH Systems GmbH
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package diagnosis
+
+import (
+	"math"
+	"time"
+)
+
+// Coverage is what a window can say about its own extent: the span it was built
+// with, and the time actually spanned by the entries it now holds.
+//
+// The latch needs both and can derive neither from a Reduced. Its clear arm is
+// gated on full coverage and its re-fire arm on the span itself, so a Latch
+// handed only a number cannot implement either.
+//
+// Coverage is NOT a readability fact and must never be made into one. It says
+// how much time the stored entries span; a window frozen through an outage still
+// spans its full 60s. The latch derives its state only from the reduction,
+// never from a readability flag, which is why Coverage is two durations and
+// nothing else.
+type Coverage struct {
+	span    time.Duration
+	spanned time.Duration
+}
+
+// Full reports whether the stored entries span the whole window duration.
+func (c Coverage) Full() bool { return c.span > 0 && c.spanned >= c.span }
+
+// Window is a time-bounded ring of readings for one (signal, instrument) pair.
+type Window struct {
+	lastSuccess      time.Time
+	points           []Point
+	red              Reduction
+	span             time.Duration
+	demote           time.Duration
+	counter          bool
+	lastAppendStored bool
+}
+
+// NewWindow builds a window from four facts, and all four are separate.
+//
+// The demote span is the signal's, not the window's: StateAbsent is defined as
+// empty OR newest entry older than the demote span, and freeze-then-empty ends
+// at the same boundary, so a window that is not told it cannot report absence at
+// all. A window whose span is six hours and whose demote span is 60s must empty
+// after 60s. Both are 60s for every CPU signal, so a build that passes one
+// value twice is green across all 33 scenarios — the test that proves they are
+// distinct needs spans that differ.
+//
+// counter is Instrument.Counter, carried through because the restart rule is
+// the window's to apply — only the window holds the previous Point. It is NOT
+// derivable here: a window sees floats, and a ratio that legitimately falls and
+// a counter that reset look identical.
+//
+// Span and demote span validation is the engine constructor's concern, not the
+// window's: refusing inside NewWindow would make a window unwritable as a
+// literal value, so NewWindow does not return an error.
+func NewWindow(span, demote time.Duration, red Reduction, counter bool) *Window {
+	return &Window{span: span, demote: demote, red: red, counter: counter}
+}
+
+// Age prunes entries older than the span. Called on EVERY tick, including ticks
+// where the read failed — a failed read appends nothing, a failed tick still
+// ages. A full ring holds span+1 entries: the prune keeps a sample landing
+// exactly on the cutoff.
+func (w *Window) Age(now time.Time) {
+	// Demote: once no successful read has landed for longer than the demote
+	// span, the window empties regardless of any freeze.
+	if !w.lastSuccess.IsZero() && now.Sub(w.lastSuccess) > w.demote {
+		w.points = nil
+
+		return
+	}
+	// Freeze: while the most recent read failed, hold the last known contents
+	// so the window does not shrink or empty through the outage.
+	if !w.lastAppendStored {
+		return
+	}
+	// Prune entries older than the span, keeping a sample landing exactly on
+	// the cutoff. Entries are appended in time order, so prune from the front.
+	cutoff := now.Add(-w.span)
+
+	i := 0
+	for i < len(w.points) && w.points[i].At.Before(cutoff) {
+		i++
+	}
+
+	w.points = w.points[i:]
+}
+
+// Append stores one instant's value, and gates on the denominator reading for a
+// delta-ratio reduction. It gates on the Readings internally — an absent value
+// appends nothing, and an absent or non-finite denominator appends nothing when
+// the window's own reduction declares against. Callers must NOT pre-filter, or
+// "absent is not zero" becomes every caller's responsibility again.
+//
+// Append must be called on every tick the engine advances the window, passing
+// Unknown() for a failed read. The window distinguishes a failed tick (frozen,
+// Untrusted) from a tick it was not polled only if every tick calls Append; a
+// tick with no call leaves the prior tick's stored/failed flag in place and the
+// window silently reports stale state.
+//
+// The denominator gate reads the window's reduction and nothing else. Under
+// Mean an absent Against is the ordinary case — six of the seven CPU
+// instruments fold a single series and pass Unknown() — and the point is
+// stored. Under DeltaRatio the same absence makes the point unusable and it is
+// dropped. Same two arguments, opposite outcome, and Reduction.against is the
+// only thing that separates them.
+//
+// One call carries both counters and one timestamp, so a delta ratio can never
+// be built from two counters read at two different moments.
+//
+// On a COUNTER window only, a value below the previous entry's discards the
+// stored entries and starts over from this one. A monotone counter that fell
+// was reset at the source, so a delta taken across the reset is arithmetic on
+// two different origins. On a window that is not a counter the same fall is the
+// quantity doing what it is supposed to do, and restarting there empties the
+// window on every dip: steal-mean would never reach twenty samples and
+// pressure-avg60 would restart on every decrease. The rule is gated on the
+// declaration, never applied to every window.
+func (w *Window) Append(value, against Reading, at time.Time) {
+	w.lastAppendStored = false
+
+	v, vok := value.Get()
+	// An absent value, or a value that is not a number, appends nothing.
+	if !vok || math.IsNaN(v) || math.IsInf(v, 0) {
+		return
+	}
+	// The denominator gate: a reduction that divides by a denominator drops the
+	// point when the denominator is absent or not a number.
+	if w.red.against {
+		a, aok := against.Get()
+		// A denominator that is absent, or a value that is not a number,
+		// appends nothing — mirroring the numerator guard.
+		if !aok || math.IsNaN(a) || math.IsInf(a, 0) {
+			return
+		}
+	}
+
+	// Counter restart: a backwards step in the value series discards the stored
+	// entries and starts over from this one. A denominator counter that resets
+	// is NOT yet detected here — only the value series is checked. Detecting a
+	// denominator reset belongs with the fold that divides by it.
+	if w.counter && len(w.points) > 0 {
+		prev := w.points[len(w.points)-1]
+
+		if v < prev.Value {
+			w.points = nil
+		}
+	}
+
+	w.points = append(w.points, Point{At: at, Value: v})
+	w.lastSuccess = at
+	w.lastAppendStored = true
+}
+
+// Reduce folds the window under its own reduction. It takes no argument: a
+// window is 1:1 with an instrument and is handed its reduction once. Passing the
+// instrument back in permits reducing a window under a reduction that is not its
+// own, and both types check, so nothing catches the mismatch.
+//
+// The reduced number is not yet computed: the fold is not wired, so StateValue
+// carries the zero value as a placeholder. The outcome — StateAbsent,
+// StateUntrusted, or StateValue — is the only load-bearing part until then.
+//
+// Reduce must be called only after Age on the same tick. The window does not
+// verify recency itself; a Reduce without a preceding Age reports stale entries
+// as trusted.
+func (w *Window) Reduce() Reduced {
+	// Empty — or demoted, which Age already turned into empty — is absence.
+	if len(w.points) == 0 {
+		return Reduced{state: StateAbsent}
+	}
+	// Non-empty and recent, but below the reduction's minimum.
+	if len(w.points) < w.red.Min {
+		return Reduced{state: StateUntrusted}
+	}
+	// Nothing appended this tick: the window holds its contents but the newest
+	// sample is stale-by-one-tick, so the latch holds.
+	if !w.lastAppendStored {
+		return Reduced{state: StateUntrusted}
+	}
+
+	return Reduced{state: StateValue}
+}
+
+// Coverage reports the window's extent, for the two latch arms that are gated on
+// it rather than on the reduced number.
+func (w *Window) Coverage() Coverage {
+	var spanned time.Duration
+	if len(w.points) >= 2 {
+		spanned = w.points[len(w.points)-1].At.Sub(w.points[0].At)
+	}
+
+	return Coverage{span: w.span, spanned: spanned}
+}
