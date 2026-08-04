@@ -454,6 +454,43 @@ var _ = Describe("WorkerManager", func() {
 		reconcile("r1-fresh")
 		Expect(stateOf("r1-fresh")).To(Equal("open"))
 	})
+
+	It("a config whose desired state is the declared Stopped word is disabled, not Upserted", func() {
+		w := setupClient(&stubReader{})
+		spec := baseSpec()
+		spec.States.Stopped = "benthos_monitoring_stopped"
+		mgr := NewWorkerManager(spec)
+
+		desired = []mgrConfig{{Name: "alpha", State: "benthos_monitoring_stopped"}}
+
+		err, changed := mgr.Reconcile(ctx, publicfsm.SystemSnapshot{}, nil)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(changed).To(BeTrue())
+
+		// A disabled worker is not Upserted into the fsmv2 runtime...
+		Expect(w.Registry().Contains(refFor("alpha"))).To(BeFalse())
+
+		// ...but it stays visible, reading as the desired (stopped) state.
+		inst, ok := mgr.GetInstance("alpha")
+		Expect(ok).To(BeTrue())
+		Expect(inst.GetCurrentFSMState()).To(Equal("benthos_monitoring_stopped"))
+	})
+
+	It("a config with an empty desired state reports the declared DesiredRunning word", func() {
+		setupClient(&stubReader{})
+		spec := baseSpec()
+		spec.States.DesiredRunning = "benthos_monitoring_active"
+		mgr := NewWorkerManager(spec)
+
+		desired = []mgrConfig{{Name: "alpha", State: ""}}
+
+		err, _ := mgr.Reconcile(ctx, publicfsm.SystemSnapshot{}, nil)
+		Expect(err).NotTo(HaveOccurred())
+
+		inst, ok := mgr.GetInstance("alpha")
+		Expect(ok).To(BeTrue())
+		Expect(inst.GetDesiredFSMState()).To(Equal("benthos_monitoring_active"))
+	})
 })
 
 // Compile-time proof that WorkerManager satisfies the fsmv1 FSMManager
