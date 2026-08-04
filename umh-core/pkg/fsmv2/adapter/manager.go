@@ -43,6 +43,31 @@ type StateConfig interface {
 	GetDesiredFSMState() string
 }
 
+// StateVocabulary is the set of fsmv1 state words a worker declares for every
+// exit the resolution decides on the worker's behalf. There are no
+// framework defaults — a worker must declare all four, so it never silently
+// reports a state its FSM does not have.
+//
+//   - Starting is the word for the not-yet-observed exits: bootstrap
+//     (Unregistered / NeverObserved) and an Unknown read with no prior state.
+//   - Degraded is the word for the degraded-verdict and Stale exits.
+//   - Stopped is the word this worker uses for a deliberately stopped instance;
+//     it is what the default disable gate (GetDesiredFSMState()=="stopped")
+//     no longer assumes — see IsEnabled.
+//   - DesiredRunning is the desired state reported when a config leaves its
+//     desired state empty.
+//
+// Each word must be one the consuming fsmv1 FSM's Is<State>State predicates
+// recognize (e.g. nmap's OperationalState*); the adapter does not validate it.
+// The isDisabled exit (returns desiredState) and the Fresh+healthy leaf (return
+// the developer's MapFresh) are developer-owned and outside this vocabulary.
+type StateVocabulary struct {
+	Starting       string
+	Degraded       string
+	Stopped        string
+	DesiredRunning string
+}
+
 // WorkerManagerSpec describes the domain-specific behaviour WorkerManager needs
 // to manage a fleet of fsmv2 child workers behind the fsmv1 FSMManager
 // interface. The framework owns ref derivation, instance construction, and the
@@ -92,6 +117,12 @@ type WorkerManagerSpec[TConfig StateConfig, TStatus any] struct {
 
 	// MinRequiredTime is passed to each built instance. Optional; defaults to 0.
 	MinRequiredTime time.Duration
+
+	// States overrides the fsmv1 state words the resolution returns for its
+	// adapter-decided exits (bootstrap, unknown, degraded verdict, stale).
+	// Optional; an empty word falls back to the adapter's default literals. See
+	// StateVocabulary for the contract with the consumer's predicate table.
+	States StateVocabulary
 }
 
 // WorkerManager is a generic fsmv1-compatible manager that drives a fleet of
@@ -184,7 +215,7 @@ func (m *WorkerManager[TConfig, TStatus]) refFor(cfg TConfig) dynamicchildren.Re
 
 // buildInstance constructs an AdaptedInstance for a config entry.
 func (m *WorkerManager[TConfig, TStatus]) buildInstance(cfg TConfig, enabled bool) publicfsm.FSMInstance {
-	return newAdaptedInstance(
+	inst := newAdaptedInstance(
 		m.refFor(cfg),
 		cfg,
 		desiredStateOf(cfg),
@@ -194,6 +225,9 @@ func (m *WorkerManager[TConfig, TStatus]) buildInstance(cfg TConfig, enabled boo
 		!enabled,
 		m.spec.Log,
 	)
+	inst.states = m.spec.States
+
+	return inst
 }
 
 // GetInstances returns a snapshot copy of the managed instances. A copy (not the

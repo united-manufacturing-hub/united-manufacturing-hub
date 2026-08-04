@@ -45,6 +45,15 @@ func NewFsmv2NmapManager(managerName string) *adapter.WorkerManager[config.NmapC
 		CfgFor:      cfgFor,
 		MapFresh:    mapFresh,
 		MapObserved: mapObserved,
+		// DesiredRunning is the state reported when a config leaves desiredState
+		// empty; it is nmap's "open", not "running" — nmap's own FSM accepts only
+		// open/stopped as a desired state (fsm/nmap/machine.go).
+		States: adapter.StateVocabulary{
+			Starting:       nmapfsm.OperationalStateStarting,
+			Degraded:       nmapfsm.OperationalStateDegraded,
+			Stopped:        nmapfsm.OperationalStateStopped,
+			DesiredRunning: nmapfsm.OperationalStateOpen,
+		},
 	})
 }
 
