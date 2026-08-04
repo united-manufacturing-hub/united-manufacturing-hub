@@ -16,6 +16,7 @@ package cpuhealth
 
 import (
 	"context"
+	"fmt"
 	"strconv"
 	"strings"
 
@@ -45,6 +46,12 @@ type Sample struct {
 	// PsiAvailable is sticky: it is set true on the first successful
 	// cpu.pressure read and never cleared, even when a later read fails.
 	PsiAvailable bool
+
+	// NrPeriods and NrThrottled come from the SAME cpu.stat read that carries
+	// usage. Each is present when its key is in cpu.stat and parses, and
+	// unavailable (never a trusted 0) when the key is absent or unparsable.
+	NrPeriods   diagnosis.Reading
+	NrThrottled diagnosis.Reading
 }
 
 // NewCgroupSampler returns a Sampler reading via fs from base.
@@ -85,6 +92,34 @@ func (s *cgroupSampler) readPSI(ctx context.Context) (float64, bool) {
 	return 0, false
 }
 
+// parseCounter reads one key's numeric value out of cpu.stat bytes. An absent
+// key or an unparsable value yields an unavailable Reading — never a trusted 0.
+func parseCounter(data []byte, key string) diagnosis.Reading {
+	for _, line := range strings.Split(string(data), "\n") {
+		fields := strings.Fields(line)
+		if len(fields) >= 2 && fields[0] == key {
+			v, err := strconv.ParseFloat(fields[1], 64)
+			if err != nil {
+				return diagnosis.Unknown()
+			}
+			return diagnosis.Known(v)
+		}
+	}
+	return diagnosis.Unknown()
+}
+
+// readThrottle reads cpu.stat once and yields both throttle counters. A non-nil
+// error reports a READ failure, which fails the whole sample; a counter's
+// Reading is independently present or unavailable on success.
+func (s *cgroupSampler) readThrottle(ctx context.Context) (periods, throttled diagnosis.Reading, err error) {
+	var data []byte
+	data, err = s.fs.ReadFile(ctx, s.base+"/cpu.stat")
+	if err != nil {
+		return diagnosis.Unknown(), diagnosis.Unknown(), err
+	}
+	return parseCounter(data, "nr_periods"), parseCounter(data, "nr_throttled"), nil
+}
+
 // Read samples the cgroup at base from cpu.max: a positive limit reads as a
 // capacity, "max" and non-positive limits as a present no-limit, and an
 // unreadable or unparsable cpu.max as absent no-signal.
@@ -100,6 +135,15 @@ func (s *cgroupSampler) Read(ctx context.Context) (Sample, error) {
 		smp.Pressure = diagnosis.Unknown()
 	}
 	smp.PsiAvailable = s.psiAvailable
+
+	periods, throttled, statErr := s.readThrottle(ctx)
+	if statErr != nil {
+		// cpu.stat is primary: a read failure there fails the WHOLE sample,
+		// never a silent drop of the throttle counters as absent no-signal.
+		return smp, fmt.Errorf("read %s/cpu.stat: %w", s.base, statErr)
+	}
+	smp.NrPeriods = periods
+	smp.NrThrottled = throttled
 
 	data, err := s.fs.ReadFile(ctx, s.base+"/cpu.max")
 	if err != nil {
