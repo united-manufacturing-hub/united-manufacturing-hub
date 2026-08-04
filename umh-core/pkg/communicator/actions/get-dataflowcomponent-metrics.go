@@ -58,15 +58,15 @@ func NewGetDataflowcomponentMetricsAction(userEmail string, actionUUID uuid.UUID
 }
 
 func (a *GetDataflowcomponentMetricsAction) Parse(payload interface{}) (err error) {
-	a.actionLogger.Info("Parsing the payload")
+	a.actionLogger.Debug("Parsing the payload")
 	a.payload, err = ParseActionPayload[models.GetDataflowcomponentMetricsRequest](payload) //nolint:staticcheck // Deprecated but kept for back compat
-	a.actionLogger.Info("Payload parsed: %v", a.payload)
+	a.actionLogger.Debugw("Payload parsed", "payload", a.payload)
 
 	return err
 }
 
 func (a *GetDataflowcomponentMetricsAction) Validate() (err error) {
-	a.actionLogger.Info("Validating the payload")
+	a.actionLogger.Debug("Validating the payload")
 
 	if a.payload.UUID == "" {
 		return errors.New("uuid must be set to retrieve metrics for a dataflowcomponent")
