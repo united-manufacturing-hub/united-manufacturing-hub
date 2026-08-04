@@ -16,7 +16,7 @@
 - The TimescaleDB historian output no longer warns when a batch holds only other contracts' data; it logs once when it stores its first message, and once if data arrives but none matches the configured data contract
 - The tag processor no longer converts numeric-looking string values to numbers; a string read from the source stays a string in the UNS, and msg.meta.datatype = "number" remains available for explicit coercion
 - A misconfigured data contract no longer stops your other data contracts from being set up. Valid contracts are now registered and validated as usual, while the misconfigured one is skipped and reported as a warning
-- Further suppression of noisy log messages, especially on CPU-starved instances
+- When the host is CPU-starved, reconciliation deadlines get exceeded and umh-core was logging "context deadline exceeded" and "not enough time to reconcile" once per instance per tick, flooding the log. These are now throttled to at most one warning per minute (with the suppressed count folded in) and escalate to an error when the overload persists, so a genuinely stuck host gets louder instead of drowning in noise
 
 ## [0.44.31]
 
