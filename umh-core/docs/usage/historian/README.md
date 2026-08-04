@@ -1,5 +1,10 @@
 # Historian
 
+A historian is the standard industrial term for the system that records process data over time, so
+operators can go back and ask what a machine was doing last Tuesday. Products like AVEVA PI and GE
+Proficy fill that role in a classic plant. This is our version of it, built on TimescaleDB and
+PostgreSQL instead of a proprietary store, so the data stays queryable with ordinary SQL.
+
 The Historian stores data from the Unified Namespace in a TimescaleDB database, so you can query
 history with SQL and build Grafana dashboards on it. The UNS keeps the live value of every tag; the
 Historian keeps the past.
@@ -72,12 +77,15 @@ Three steps get you from a running UNS to a dashboard:
 `require` encrypts the connection but does not verify the server certificate. `disable` turns TLS
 off entirely.
 
-Full certificate verification (`verify-full`) is not offered yet: it needs a CA and client
-certificate inside the container, and there is no way to upload those from the Management Console.
-A connection that already sets `sslmode: verify-full` in `config.yaml` keeps working, along with its
-`sslrootcert`, `sslcert`, and `sslkey` paths.
+Full certificate verification (`verify-full`) cannot be configured from the Management Console yet;
+support is coming in a later release. A connection that already sets `sslmode: verify-full` in
+`config.yaml` keeps working, along with its `sslrootcert`, `sslcert`, and `sslkey` paths.
 
 ### Reading the connection status
+
+The overview card is not shown in the plugin list. Go to **Instances** → your instance → **Plugins**
+→ **Historian** and click **Open**. Saving a new connection also leaves you on the plugin list, so
+that click is needed either way.
 
 The overview card shows the connection settings plus three live fields, refreshed once per second:
 

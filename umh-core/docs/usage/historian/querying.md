@@ -36,20 +36,48 @@ to `value_text` if the tag holds strings.
 
 Values are stored per contract; identity is shared across contracts.
 
-```text
-umh.value_pump (topic_id, ts, value_num, value_text)
-       │ topic_id
-       ▼
-umh.topic (topic_id, location_id, tag_id)
-       │ tag_id            │ location_id
-       ▼                   ▼
-umh.tag (tag_id, name,   umh.location (location_id, path)
-         virtual_path,
-         data_contract_name)
+```mermaid
+erDiagram
+    "umh.value_pump"     }o--|| "umh.topic" : topic_id
+    "umh.attribute_pump" }o--|| "umh.topic" : topic_id
+    "umh.topic"          }o--|| "umh.tag" : tag_id
+    "umh.topic"          }o--|| "umh.location" : location_id
+
+    "umh.value_pump" {
+        bigint      topic_id   PK
+        timestamptz ts         PK
+        double      value_num
+        text        value_text
+    }
+    "umh.attribute_pump" {
+        bigint      topic_id  PK
+        timestamptz ts        PK
+        jsonb       attribute
+    }
+    "umh.topic" {
+        bigserial topic_id    PK
+        bigint    location_id FK
+        bigint    tag_id      FK
+    }
+    "umh.tag" {
+        bigserial  tag_id             PK
+        text       name
+        text       virtual_path
+        text       data_contract_name
+        value_type value_type
+    }
+    "umh.location" {
+        bigserial location_id PK
+        ltree     path
+    }
 ```
 
-`umh.attribute_pump` holds the metadata for the same topics, as a JSON object queryable with
-`attribute->>'key'` and `attribute @> '{...}'`.
+`umh.value_pump` and `umh.attribute_pump` are the per-contract tables, named after
+`data_contract_name`; the three dimension tables are shared. `attribute` is a JSON object, queryable
+with `attribute->>'key'` and `attribute @> '{...}'`.
+
+`value_type` on `umh.tag` records whether a tag is numeric or text. It is set on first write and
+cannot change afterwards, which is why a tag that flips datatype is dropped rather than stored.
 
 ### Resolving a tag
 
@@ -102,9 +130,11 @@ Point the data source at PgBouncer rather than TimescaleDB directly if your depl
 
 ## Precision
 
-`value_num` is `DOUBLE PRECISION`. That is exact for sensor floats, but loses precision for integer
-counters above 2^53 and for exact decimals. Route those tags to a text contract, where the value is
-stored verbatim in `value_text`.
+`value_num` is `DOUBLE PRECISION`, a binary floating-point type. It stores an approximation of the
+value, which is close enough for sensor readings but wrong for anything that has to come back
+byte-for-byte: integer counters above 2^53 lose their low digits, and a decimal such as `0.1` is
+kept as the nearest binary fraction. Route those tags to a text contract, where the value is stored
+verbatim in `value_text`.
 
 The [Historian output reference](https://docs.umh.app/benthos-umh/output/historian) covers the rest
 of what the output plugin does: metrics, error classes, throughput tuning, and schema compatibility.
