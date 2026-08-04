@@ -76,6 +76,15 @@ One entry per rung. Conductor = main session; rungs built via `tdd-commit` workf
 - 12 local commits on `p1/diagnosis`, nothing pushed, no PR.
 - Handoff: `artifacts/2026-07-30_cpu-complexity-refactor-basis/P1_BUILD_HANDOFF_2026-08-04.md`.
 - **P1 NOT done — separate verifier session runs every gate with positive controls and breaks fixes.**
+
+## Post-open review (abstraction reviewer + self-review), 2026-08-04
+- Opened **draft PR #2679** (base `fsmv2-simple-newdeps`, assigned Aaron99B). gh stack SUBMIT blocked repo-wide ("Stacked PRs not enabled") — confirmed empirically; manual stacking.
+- **Abstraction review** (read all 25 files vs skeleton) raised 2 CRITICAL skeleton-contract violations:
+  1. `NewWindow` returned `*Window`; skeleton is `(*Window, error)` (refuses zero/negative span). → CONFORMED.
+  2. `Latch.Reset(now)`; skeleton is `Reset()`. → CONFORMED to no-arg; re-fire bar after reset re-anchored at lastUpdate; epoch-zero sentinel in the fire arm fixed. Positive-controlled.
+  - Committed as `8ab5b86f9` (14 commits from base) and pushed; CI running.
+  - Importants: AllAbsent `else ReleaseAfter` kept and acknowledged as a deliberate departure (time-bounds a hold the skeleton left unbounded, serving §8's "no latch outlives its evidence") · `Case` closed-set (3 hand-maintained sites, G7) noted · span-at-interval arithmetic duplicated (suggestion).
+  - Self-review workflow still running; results to be consolidated.
 - [ ] R3 — Reduction · tdd-commit · [F3, F4, F5]
 - [ ] R4 — Counter pairs · tdd-commit
 - [ ] R5 — Latch · tdd-commit (specs 1-5,7) + spec 6 by hand · [F4, F5, F7]
