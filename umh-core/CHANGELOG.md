@@ -4,7 +4,7 @@
 
 ### Improvements
 
-- The agent log is no longer polluted by the log viewer reading it: every auto-refresh poll used to append four INFO lines ("Parsing the payload", "Payload parsed", "Validating the payload", "Executing GetLogs action") to the very log being viewed. Those lines, and the equivalent ones on the frequently polled metrics actions, are now DEBUG, so real warnings and errors are easier to spot
+- The log viewer's and the metrics views' own polling messages are now DEBUG instead of INFO, which makes it easier to spot actual errors and warnings
 
 ## [0.44.32]
 
