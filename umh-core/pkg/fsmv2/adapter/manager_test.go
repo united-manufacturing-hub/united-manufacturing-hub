@@ -180,6 +180,16 @@ var _ = Describe("WorkerManager", func() {
 		}
 	})
 
+	It("NewWorkerManager panics when the StateVocabulary words are not distinct", func() {
+		// A vocabulary that reuses one word for two exits silently collapses the
+		// adapter-decided states together; reject it at construction.
+		spec := baseSpec()
+		spec.States.Starting = "monitor"
+		spec.States.Degraded = "monitor"
+
+		Expect(func() { NewWorkerManager(spec) }).To(PanicWith(ContainSubstring("distinct")))
+	})
+
 	It("Reconcile adds a new worker: instance registered and ref Upserted", func() {
 		w := setupClient(&stubReader{})
 		mgr := NewWorkerManager(baseSpec())

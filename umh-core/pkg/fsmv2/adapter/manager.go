@@ -55,8 +55,11 @@ type StateConfig interface {
 //
 // Each word must be one the consuming fsmv1 FSM's Is<State>State predicates
 // recognize (e.g. nmap's OperationalState*); the adapter does not validate it.
-// The isDisabled exit (returns desiredState) and the Fresh+healthy leaf (return
-// the developer's MapFresh) are developer-owned and outside this vocabulary.
+// The four words must be distinct: reusing one word for two exits would collapse
+// the lifecycle states the adapter reports into a single string, so construction
+// rejects any vocabulary that is not pairwise distinct. The isDisabled exit
+// (returns desiredState) and the Fresh+healthy leaf (return the developer's
+// MapFresh) are developer-owned and outside this vocabulary.
 type StateVocabulary struct {
 	Starting       string
 	Degraded       string
@@ -153,6 +156,15 @@ func NewWorkerManager[TConfig StateConfig, TStatus any](spec WorkerManagerSpec[T
 
 	if spec.States.Starting == "" || spec.States.Degraded == "" || spec.States.Stopped == "" || spec.States.DesiredRunning == "" {
 		panic("adapter: WorkerManagerSpec.States requires a full StateVocabulary (Starting, Degraded, Stopped, DesiredRunning)")
+	}
+
+	if spec.States.Starting == spec.States.Degraded ||
+		spec.States.Starting == spec.States.Stopped ||
+		spec.States.Starting == spec.States.DesiredRunning ||
+		spec.States.Degraded == spec.States.Stopped ||
+		spec.States.Degraded == spec.States.DesiredRunning ||
+		spec.States.Stopped == spec.States.DesiredRunning {
+		panic("adapter: WorkerManagerSpec.States words must be distinct")
 	}
 
 	if spec.ConfigEqual == nil {
