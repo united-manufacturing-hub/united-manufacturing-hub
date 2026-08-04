@@ -68,6 +68,22 @@ type Sample struct {
 	// reset) — never a confident zero from no measurement.
 	UsageCores diagnosis.Reading
 
+	// HostBusy is the host's busy cores as an instantaneous rate: the delta of
+	// the first aggregate "cpu " line's busy jiffies (user+nice+sys+irq+softirq)
+	// between this read and the previous one, divided by USER_HZ into seconds
+	// and by the interval's elapsed seconds. It is absent on the first read
+	// (that read only fixes a baseline), when /proc/stat is unreadable or
+	// unparsable, and when the busy counter falls (a host restart has reset it).
+	HostBusy diagnosis.Reading
+
+	// Steal is the host's CPU-steal fraction over the last poll interval: the
+	// interval's steal-jiffy delta over the interval's total-jiffy (fields 0..7)
+	// delta, read off the same first aggregate "cpu " line as HostBusy. It is
+	// absent on the baseline read, when that line is unavailable like HostBusy,
+	// when the steal counter falls (a reset), and when the denominator did not
+	// advance (nothing measured, not a NaN/Inf reading).
+	Steal diagnosis.Reading
+
 	// Timestamp is the time of this read. Every field off the same read carries
 	// the same Timestamp.
 	Timestamp time.Time
@@ -90,6 +106,58 @@ type cgroupSampler struct {
 	prevUsage float64
 	prevTime  time.Time
 	haveUsage bool
+
+	// prevHostBusy, prevHostSteal and prevHostDenom are the raw jiffy totals of
+	// the previous /proc/stat read, and prevHostTime its timestamp. These give
+	// the interval edges from which the instantaneous host-busy rate and the
+	// per-interval steal fraction are derived. haveHost reports whether a
+	// previous Read has fixed the /proc/stat baseline; only a read after that
+	// publishes host signals, and a falling counter (a host restart) re-baselines
+	// instead of publishing a nonsense value.
+	prevHostBusy  float64
+	prevHostSteal float64
+	prevHostDenom float64
+	prevHostTime  time.Time
+	haveHost      bool
+}
+
+// userHz matches the kernel's USER_HZ: the tick rate dividing /proc/stat jiffies
+// into seconds, hence cores.
+const userHz = 100.0
+
+// readHost reads the first aggregate "cpu " line of /proc/stat and yields the
+// raw busy, steal and denominator jiffy totals. busy counts user, nice, system,
+// irq and softirq jiffies (idle, iowait, steal, guest and guest_nice excluded).
+// The steal denominator is the sum of fields 0..7 only, since the kernel folds
+// guest and guest_nice into user and nice. Both totals are kept raw so the
+// caller can derive interval deltas. The trailing space in "cpu " keeps the
+// aggregate line from matching cpu0/cpu1.
+func (s *cgroupSampler) readHost(ctx context.Context) (busy, steal, denom float64, ok bool) {
+	data, err := s.fs.ReadFile(ctx, "/proc/stat")
+	if err != nil {
+		return 0, 0, 0, false
+	}
+	for _, line := range strings.Split(string(data), "\n") {
+		if !strings.HasPrefix(line, "cpu ") {
+			continue
+		}
+		fields := strings.Fields(line) // fields[0] == "cpu"
+		if len(fields) < 9 {
+			return 0, 0, 0, false
+		}
+		vals := make([]float64, len(fields))
+		for i := 1; i < len(fields); i++ {
+			v, err := strconv.ParseFloat(fields[i], 64)
+			if err != nil {
+				return 0, 0, 0, false
+			}
+			vals[i] = v
+		}
+		busy := vals[1] + vals[2] + vals[3] + vals[6] + vals[7]
+		denom := vals[1] + vals[2] + vals[3] + vals[4] + vals[5] + vals[6] + vals[7] + vals[8]
+		return busy, vals[8], denom, true
+	}
+	return 0, 0, 0, false
 }
 
 // readPSI reads cpu.pressure's "some" avg60 as a 0..1 fraction. The second
@@ -189,6 +257,39 @@ func (s *cgroupSampler) Read(ctx context.Context) (Sample, error) {
 		s.prevUsage = u
 		s.prevTime = smp.Timestamp
 		s.haveUsage = true
+	}
+
+	// Host signals: the first /proc/stat read fixes a baseline and publishes
+	// neither; a read after that publishes this tick's instantaneous host-busy
+	// rate and per-interval steal fraction, each derived from the delta of two
+	// consecutive reads. A falling cumulative counter (a host restart) is a
+	// reset: the baseline is re-established and nothing is published this tick.
+	if busy, steal, denom, ok := s.readHost(ctx); ok {
+		if s.haveHost {
+			// Busy cores over the interval is the busy-jiffy delta divided by
+			// USER_HZ into seconds; the interval's elapsed time turns that into
+			// a per-second rate. A falling busy counter (a reset) and a zero
+			// elapsed time each publish nothing.
+			if busy >= s.prevHostBusy {
+				if elapsed := smp.Timestamp.Sub(s.prevHostTime).Seconds(); elapsed > 0 {
+					smp.HostBusy = diagnosis.Known((busy - s.prevHostBusy) / userHz / elapsed)
+				}
+			}
+			// The steal fraction is the interval's steal-jiffy delta over the
+			// interval's total-jiffy delta. A falling steal counter (a reset)
+			// and a non-positive denominator delta (proc/stat did not advance,
+			// or is all zeros) publish nothing, never a NaN/Inf reading.
+			dDenom := denom - s.prevHostDenom
+			if steal >= s.prevHostSteal && dDenom > 0 {
+				frac := (steal - s.prevHostSteal) / dDenom
+				smp.Steal = diagnosis.Known(frac)
+			}
+		}
+		s.prevHostBusy = busy
+		s.prevHostSteal = steal
+		s.prevHostDenom = denom
+		s.prevHostTime = smp.Timestamp
+		s.haveHost = true
 	}
 
 	data, err := s.fs.ReadFile(ctx, s.base+"/cpu.max")
