@@ -36,11 +36,11 @@
 //  6. Fresh and healthy                          -> the developer's MapFresh
 //
 // Every managed worker declares its own fsmv1 state words via
-// WorkerManagerSpec.States for the exits the adapter decides (2-5); there are no
-// framework defaults, so a worker that does not declare its vocabulary reads as
-// an empty state. Each declared word must be one the consuming FSM's
-// Is<State>State predicates recognize. This output vocabulary is distinct from a
-// simple worker's own state machine.
+// WorkerManagerSpec.States for the exits the adapter decides (2-5). There are no
+// framework defaults: an incomplete vocabulary fails at construction, so a worker
+// always reports the words its own FSM recognizes. Each declared word must be one
+// the consuming FSM's Is<State>State predicates recognize. This output vocabulary
+// is distinct from a simple worker's own state machine.
 //
 // The verdict is read off the stored status through the HealthReporter interface,
 // so the adapter imports nothing from the worker package and stays generic over
@@ -51,7 +51,8 @@
 //
 // # The Spec
 //
-// Five functions and the state vocabulary are required; three fields default:
+// WorkerType, the four functions, and the state vocabulary are required;
+// ConfigEqual, CfgFor, IsEnabled, MinRequiredTime and Log default:
 //
 //	WorkerManagerSpec[TConfig, TStatus]{
 //	    WorkerType     string                                                    // required
@@ -82,6 +83,12 @@
 //	    },
 //	    MapObserved: func(_ Config, s simple.Status[Status]) publicfsm.ObservedState {
 //	        return ObservedState{Open: s.Result.Open}
+//	    },
+//	    States: adapter.StateVocabulary{
+//	        Starting:       "starting",
+//	        Degraded:       "degraded",
+//	        Stopped:        "stopped",
+//	        DesiredRunning: "running",
 //	    },
 //	})
 //

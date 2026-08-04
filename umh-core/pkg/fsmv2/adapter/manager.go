@@ -40,16 +40,16 @@ type StateConfig interface {
 }
 
 // StateVocabulary is the set of fsmv1 state words a worker declares for every
-// exit the resolution decides on the worker's behalf. There are no
-// framework defaults — a worker must declare all four, so it never silently
-// reports a state its FSM does not have.
+// exit the resolution decides on the worker's behalf. There are no framework
+// defaults; a worker must declare all four, so it can never report a state its
+// FSM does not have.
 //
 //   - Starting is the word for the not-yet-observed exits: bootstrap
 //     (Unregistered / NeverObserved) and an Unknown read with no prior state.
 //   - Degraded is the word for the degraded-verdict and Stale exits.
-//   - Stopped is the word this worker uses for a deliberately stopped instance;
-//     it is what the default disable gate (GetDesiredFSMState()=="stopped")
-//     no longer assumes — see IsEnabled.
+//   - Stopped is the word this worker uses for a deliberately stopped instance.
+//     The default disable gate treats a config whose desired state equals it as
+//     disabled. See IsEnabled.
 //   - DesiredRunning is the desired state reported when a config leaves its
 //     desired state empty.
 //
@@ -101,8 +101,7 @@ type WorkerManagerSpec[TConfig StateConfig, TStatus any] struct {
 	// IsEnabled reports whether a config entry should run in the fsmv2 runtime.
 	// Disabled entries stay in the fsmv1 instance map (so their state is
 	// visible) but are not Upserted; existing registrations are Deleted.
-	// Optional; defaults to GetDesiredFSMState()=="stopped" => disabled,
-	// otherwise enabled.
+	// Optional; defaults to GetDesiredFSMState() != States.Stopped => enabled.
 	IsEnabled func(cfg TConfig) bool
 
 	// Log is the FSMLogger; optional, defaults to a no-op logger.
@@ -152,7 +151,7 @@ func NewWorkerManager[TConfig StateConfig, TStatus any](spec WorkerManagerSpec[T
 	}
 
 	if spec.States.Starting == "" || spec.States.Degraded == "" || spec.States.Stopped == "" || spec.States.DesiredRunning == "" {
-		panic("adapter: WorkerManagerSpec.StateVocabulary requires Starting, Degraded, Stopped, and DesiredRunning")
+		panic("adapter: WorkerManagerSpec.States requires a full StateVocabulary (Starting, Degraded, Stopped, DesiredRunning)")
 	}
 
 	if spec.ConfigEqual == nil {
@@ -213,7 +212,7 @@ func (m *WorkerManager[TConfig, TStatus]) refFor(cfg TConfig) dynamicchildren.Re
 
 // buildInstance constructs an AdaptedInstance for a config entry.
 func (m *WorkerManager[TConfig, TStatus]) buildInstance(cfg TConfig, enabled bool) publicfsm.FSMInstance {
-	inst := newAdaptedInstance(
+	return newAdaptedInstance(
 		m.refFor(cfg),
 		cfg,
 		m.desiredStateOf(cfg),
@@ -222,10 +221,8 @@ func (m *WorkerManager[TConfig, TStatus]) buildInstance(cfg TConfig, enabled boo
 		m.spec.MapObserved,
 		!enabled,
 		m.spec.Log,
+		m.spec.States,
 	)
-	inst.states = m.spec.States
-
-	return inst
 }
 
 // GetInstances returns a snapshot copy of the managed instances. A copy (not the

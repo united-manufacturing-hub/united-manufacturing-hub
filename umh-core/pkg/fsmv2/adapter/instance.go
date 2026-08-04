@@ -99,8 +99,10 @@ type AdaptedInstance[TConfig, TStatus any] struct {
 }
 
 // newAdaptedInstance builds an AdaptedInstance. ref must match the Ref used in
-// Upsert/Delete so reads resolve to the correct child observation. Construction
-// is unexported: the WorkerManager builds instances internally from a spec.
+// Upsert/Delete so reads resolve to the correct child observation. states is the
+// worker's declared vocabulary, required so the adapter-decided exits always have
+// a word to return. Construction is unexported: the WorkerManager builds
+// instances internally from a spec.
 func newAdaptedInstance[TConfig, TStatus any](
 	ref dynamicchildren.Ref,
 	cfg TConfig,
@@ -110,6 +112,7 @@ func newAdaptedInstance[TConfig, TStatus any](
 	mapObserved func(cfg TConfig, status TStatus) publicfsm.ObservedState,
 	isDisabled bool,
 	log deps.FSMLogger,
+	states StateVocabulary,
 ) *AdaptedInstance[TConfig, TStatus] {
 	if log == nil {
 		log = deps.NewNopFSMLogger()
@@ -125,6 +128,7 @@ func newAdaptedInstance[TConfig, TStatus any](
 		mapObserved:     mapObserved,
 		isDisabled:      isDisabled,
 		log:             log,
+		states:          states,
 	}
 }
 
@@ -165,10 +169,9 @@ func (i *AdaptedInstance[TConfig, TStatus]) getFreshStatus() (TStatus, fsmv2clie
 
 // GetCurrentFSMState resolves the fsmv1 state via the framework-owned resolution.
 // The isDisabled exit returns desiredState; the adapter-decided Starting and
-// Degraded exits return the declared StateVocabulary word when set, defaulting
-// to "starting"/"degraded"; and the Fresh+healthy leaf returns the developer's
-// mapFresh output. Every resolved state (except the isDisabled shortcut) is
-// cached into lastState.
+// Degraded exits return the declared StateVocabulary words (required, so always
+// set); and the Fresh+healthy leaf returns the developer's mapFresh output.
+// Every resolved state (except the isDisabled shortcut) is cached into lastState.
 func (i *AdaptedInstance[TConfig, TStatus]) GetCurrentFSMState() string {
 	// Step 1: disabled → desired state directly, without reading the client.
 	if i.isDisabled {
@@ -205,21 +208,21 @@ func (i *AdaptedInstance[TConfig, TStatus]) resolve(status TStatus, freshness fs
 		return i.lastState
 	}
 
-	// Step 3: degraded verdict on the stored status → degraded.
+	// Step 3: degraded verdict on the stored status → the declared Degraded word.
 	if hr, ok := any(status).(HealthReporter); ok {
 		if degraded, _ := hr.HealthVerdict(); degraded {
 			return i.states.Degraded
 		}
 	}
 
-	// Step 4: bootstrap (no observation yet) → starting. The consuming fsmv1 FSM
-	// reads this as "coming up" (e.g. nmap's IsStartingState) until the first
-	// observation lands.
+	// Step 4: bootstrap (no observation yet) → the declared Starting word. The
+	// consuming fsmv1 FSM reads this as "coming up" (e.g. nmap's IsStartingState)
+	// until the first observation lands.
 	if freshness == fsmv2client.Unregistered || freshness == fsmv2client.NeverObserved {
 		return i.states.Starting
 	}
 
-	// Step 5: stale (missed polls) → degraded.
+	// Step 5: stale (missed polls) → the declared Degraded word.
 	if freshness == fsmv2client.Stale {
 		return i.states.Degraded
 	}
