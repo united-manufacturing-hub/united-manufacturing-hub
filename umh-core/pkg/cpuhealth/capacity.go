@@ -110,6 +110,14 @@ type Sample struct {
 	// read. It is never ScopeHost on an unreadable count.
 	CpuScope Scope
 
+	// Virtualized reports whether this host is a virtual machine. It is resolved
+	// once and cached across ticks, not re-read every tick. On x86 the evidence
+	// is the "hypervisor" flag in /proc/cpuinfo's flags line; an ARM64 cpuinfo
+	// has no flags line at all, so the distinct ARM64 route is the DMI fallback
+	// of /sys/class/dmi/id/product_name naming a known hypervisor. An unreadable
+	// cpuinfo is no evidence and reads false.
+	Virtualized bool
+
 	// Timestamp is the time of this read. Every field off the same read carries
 	// the same Timestamp.
 	Timestamp time.Time
@@ -145,6 +153,13 @@ type cgroupSampler struct {
 	prevHostDenom float64
 	prevHostTime  time.Time
 	haveHost      bool
+
+	// virtualized is the sticky virtualisation fact, resolved on the first
+	// successful /proc/cpuinfo read and re-published without re-reading. An
+	// unreadable cpuinfo resolves false but is not cached, so a later readable
+	// one is still considered.
+	virtualized  bool
+	virtResolved bool
 }
 
 // userHz matches the kernel's USER_HZ: the tick rate dividing /proc/stat jiffies
@@ -259,6 +274,87 @@ func (s *cgroupSampler) readPSI(ctx context.Context) (float64, bool) {
 		}
 	}
 	return 0, false
+}
+
+// resolveVirtualized returns the sticky virtualisation fact. On the first call
+// it reads /proc/cpuinfo and, when the flags line carries "hypervisor", caches
+// and returns true for every later read. The distinct ARM64 route is the DMI
+// fallback: an ARM64 cpuinfo has a Features line and no flags line, so the
+// primary path can never succeed there and only the DMI product_name match can
+// mark it a guest. The DMI route is consulted whenever the cpuinfo route did
+// not already prove virtualization — including when cpuinfo is unreadable — and
+// a read failure on either source leaves the fact unresolved so the next tick
+// retries rather than permanently caching Virtualized=false.
+func (s *cgroupSampler) resolveVirtualized(ctx context.Context) bool {
+	if s.virtResolved {
+		return s.virtualized
+	}
+	data, err := s.fs.ReadFile(ctx, "/proc/cpuinfo")
+	if err == nil && cpuinfoHasHypervisorFlag(data) {
+		s.virtualized = true
+		s.virtResolved = true
+		return true
+	}
+	// ARM64 route. A successful DMI read resolves the fact either way; a failed
+	// DMI read leaves it unresolved so the next tick retries.
+	v, ok := s.dmiVirtualized(ctx)
+	if !ok {
+		return false
+	}
+	s.virtualized = v
+	s.virtResolved = true
+	return v
+}
+
+// cpuinfoHasHypervisorFlag reports whether /proc/cpuinfo's flags line carries
+// the "hypervisor" flag, the x86 evidence of a guest.
+func cpuinfoHasHypervisorFlag(data []byte) bool {
+	for _, line := range strings.Split(string(data), "\n") {
+		if i := strings.IndexByte(line, ':'); i >= 0 {
+			if strings.TrimSpace(line[:i]) == "flags" {
+				for _, f := range strings.Fields(line[i+1:]) {
+					if f == "hypervisor" {
+						return true
+					}
+				}
+			}
+		}
+	}
+	return false
+}
+
+// dmiHypervisorTokens are the vendor substrings (lowercased) that indicate a
+// hypervisor in /sys/class/dmi/id/product_name. Matched case-insensitively,
+// because SMBIOS product_name casing is firmware-controlled and not reliably
+// Title Case. The set matches the range reported by the major hypervisors — an
+// ARM64 VM under any of them would otherwise never be marked Virtualized and
+// the steal instrument's HasVirtualization capability would stay shut.
+var dmiHypervisorTokens = []string{
+	"vmware",
+	"kvm",
+	"xen",
+	"hyper-v",
+	"virtualbox",
+	"qemu",
+}
+
+// dmiVirtualized is the distinct ARM64 fallback. It reports whether
+// /sys/class/dmi/id/product_name names a known hypervisor. The second return is
+// false when the DMI read itself failed: an unreadable product_name is no
+// evidence, and leaving it unresolved lets the caller (and a later tick) retry
+// rather than caching Virtualized=false forever.
+func (s *cgroupSampler) dmiVirtualized(ctx context.Context) (virtualized, resolved bool) {
+	data, err := s.fs.ReadFile(ctx, "/sys/class/dmi/id/product_name")
+	if err != nil {
+		return false, false
+	}
+	lower := strings.ToLower(strings.TrimSpace(string(data)))
+	for _, tok := range dmiHypervisorTokens {
+		if strings.Contains(lower, tok) {
+			return true, true
+		}
+	}
+	return false, true
 }
 
 // parseCounter reads one key's numeric value out of cpu.stat bytes. An absent
@@ -386,6 +482,8 @@ func (s *cgroupSampler) Read(ctx context.Context) (Sample, error) {
 		// machine's count could not be read to populate it.
 		smp.CpuScope = ScopeUnknown
 	}
+
+	smp.Virtualized = s.resolveVirtualized(ctx)
 
 	data, err := s.fs.ReadFile(ctx, s.base+"/cpu.max")
 	if err != nil {
