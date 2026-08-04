@@ -2,15 +2,15 @@
 
 ## Unreleased
 
+### Improvements
+
+- The Historian preview is now documented at [docs.umh.app/usage/historian](https://docs.umh.app/usage/historian): setting up the TimescaleDB connection on an instance, creating a bridge that saves a data contract, and reading the data back from Grafana or psql. The TimescaleDB Historian output reference is published alongside it
+
 ## [0.44.32]
 
 ### New Features
 
 - Node-RED JavaScript processor can return an array of message objects to publish one output message per array element
-
-### Improvements
-
-- The Historian preview is now documented at [docs.umh.app/usage/historian](https://docs.umh.app/usage/historian): setting up the TimescaleDB connection on an instance, creating a bridge that saves a data contract, and reading the data back from Grafana or psql. The TimescaleDB Historian output reference is published alongside it
 
 ### Fixes
 

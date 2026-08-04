@@ -34,8 +34,10 @@ Three steps get you from a running UNS to a dashboard:
 ## Prerequisites
 
 - **A TimescaleDB database reachable from the umh-core instance.** If you don't have one,
-  [Docker Compose Setup](../../production/deployment/docker-compose/setup.md#adding-timescaledb-and-grafana)
-  brings up umh-core, PgBouncer, TimescaleDB, and Grafana together.
+  [Recommended UMH Stack](../../production/deployment/docker-compose/additional-services/recommended-umh-stack.md)
+  brings up umh-core, PgBouncer, TimescaleDB, and Grafana together. To add just the database to a
+  running instance, see
+  [TimescaleDB](../../production/deployment/docker-compose/additional-services/timescaledb.md).
 - **PostgreSQL 16 or newer**, with the `timescaledb` and `ltree` extensions available. Version 16 is
   the floor because older `ltree` labels reject hyphens, and location paths such as `line-1` contain
   them.
@@ -87,7 +89,7 @@ The overview card shows the connection settings plus three live fields, refreshe
 
 The check is a single `SELECT 1` over one pooled connection. It tells you the database is reachable
 and the credentials work; it says nothing about whether a particular bridge is writing. Per-bridge
-throughput, health, and errors stay in the **Data Flow** bridge list.
+throughput, health, and errors stay in the **Data Flows** bridge list.
 
 Connections are recycled every five minutes, so a password rotated on the server surfaces as an
 authentication failure within that window rather than being masked by a long-lived session.

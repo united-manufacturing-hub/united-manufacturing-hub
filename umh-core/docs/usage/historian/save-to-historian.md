@@ -13,13 +13,17 @@ bridge has nothing to connect to and deployment fails with an error saying so.
 
 ## Create the bridge
 
-1. Go to **Data Flow** → **Add Bridge**.
-2. Pick the card **TimescaleDB (PostgreSQL, auto-connect) — Historian**.
+1. Go to **Data Flows** → **Add Bridge**, and choose **From Scratch**.
+2. In the template list, pick **TimescaleDB (PostgreSQL, auto-connect) — Historian**. The **Vendor**
+   filter narrows the list to the TimescaleDB templates.
 3. Select the instance. The connection host and port are prefilled read-only from that instance's
    Historian connection, so the bridge's health check always targets the configured database.
 4. In the write flow's output, set `data_contract_name` to the contract you want to store, written
    **without the version suffix**: `pump`, not `pump_v1`.
 5. Deploy.
+
+There is no read flow to configure and no address table to map, so the protocol and address steps of
+the general [bridge walkthrough](../data-flows/bridges.md) don't apply.
 
 {% hint style="warning" %}
 **Drop the version, and no dashes.** `data_contract_name` is the bare contract name: no leading
@@ -63,12 +67,12 @@ you want to stop unrelated messages from reaching the output at all.
 
 ## Connecting to a different database
 
-The **TimescaleDB (PostgreSQL) — Historian** card is the same output without the shared connection:
-you enter host and port in the connection step and set the username, password, and SSL mode in the
-output config yourself. Use it for a database that isn't the instance's Historian, such as a second
-archive or a customer-managed database with its own role.
+The **TimescaleDB (PostgreSQL) — Historian** template is the same output without the shared
+connection: you enter host and port in the connection step and set the username, password, and SSL
+mode in the output config yourself. Use it for a database that isn't the instance's Historian, such
+as a second archive or a customer-managed database with its own role.
 
-Everything below applies to both cards; only where the connection details come from differs.
+Everything below applies to both templates; only where the connection details come from differs.
 
 ## Advanced options
 

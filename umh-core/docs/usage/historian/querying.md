@@ -95,8 +95,8 @@ dashboard that refreshes it often, back it with a continuous aggregate holding
 
 Add the database as a PostgreSQL data source, paste the Grafana-flavored query into a panel, and the
 dashboard's time picker drives `$__timeFilter(ts)`. If you don't have Grafana yet,
-[Docker Compose Setup](../../production/deployment/docker-compose/setup.md#grafana) brings it up
-alongside TimescaleDB.
+[Grafana](../../production/deployment/docker-compose/additional-services/grafana.md) covers adding it
+to a running stack.
 
 Point the data source at PgBouncer rather than TimescaleDB directly if your deployment has one.
 
