@@ -74,6 +74,10 @@ type StateVocabulary struct {
 // must satisfy StateConfig so the manager can always read its desired state.
 // TStatus is the worker's stored status type (e.g. simple.Status[Raw]).
 type WorkerManagerSpec[TConfig StateConfig, TStatus any] struct {
+
+	// Log is the FSMLogger; optional, defaults to a no-op logger.
+	Log deps.FSMLogger
+
 	// ExtractConfigs pulls the relevant config slice from a SystemSnapshot.
 	// Required.
 	ExtractConfigs func(snapshot publicfsm.SystemSnapshot) []TConfig
@@ -104,15 +108,6 @@ type WorkerManagerSpec[TConfig StateConfig, TStatus any] struct {
 	// Optional; defaults to GetDesiredFSMState() != States.Stopped => enabled.
 	IsEnabled func(cfg TConfig) bool
 
-	// Log is the FSMLogger; optional, defaults to a no-op logger.
-	Log deps.FSMLogger
-
-	// WorkerType builds the ref and names the manager. Required.
-	WorkerType string
-
-	// MinRequiredTime is passed to each built instance. Optional; defaults to 0.
-	MinRequiredTime time.Duration
-
 	// States declares this worker's four fsmv1 state words. The manager uses
 	// them for its adapter-decided exits (bootstrap, unknown, degraded verdict,
 	// stale), for the default disable gate (Stopped), and as the empty-config
@@ -120,6 +115,12 @@ type WorkerManagerSpec[TConfig StateConfig, TStatus any] struct {
 	// fails at construction. See StateVocabulary for the contract with the
 	// consumer's predicate table.
 	States StateVocabulary
+
+	// WorkerType builds the ref and names the manager. Required.
+	WorkerType string
+
+	// MinRequiredTime is passed to each built instance. Optional; defaults to 0.
+	MinRequiredTime time.Duration
 }
 
 // WorkerManager is a generic fsmv1-compatible manager that drives a fleet of
