@@ -2,10 +2,6 @@
 
 ## Unreleased
 
-### Improvements
-
-- The [Bridges](https://docs.umh.app/usage/data-flows/bridges) documentation now matches the current creation flow, from choosing a template or an existing bridge as the starting point through the address mapping table, where a custom data contract turns Virtual Path and Tag Name into a single dropdown of the fields its data model defines
-
 ## [0.44.32]
 
 ### New Features
