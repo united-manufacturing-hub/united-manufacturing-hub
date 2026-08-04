@@ -29,15 +29,18 @@
 // resolves in this precedence; the developer only ever touches the last case:
 //
 //  1. disabled (desired state stopped)          -> the desired state, no store read
-//  2. Unknown (nil client / read hiccup)        -> hold the last known state ("starting" if none)
-//  3. degraded verdict (poll error or Health)   -> "degraded"
-//  4. Unregistered / NeverObserved (bootstrap)  -> "starting"
-//  5. Stale (~3 missed polls)                    -> "degraded"
+//  2. Unknown (nil client / read hiccup)        -> hold the last known state (the declared Starting word if none)
+//  3. degraded verdict (poll error or Health)   -> the declared Degraded word
+//  4. Unregistered / NeverObserved (bootstrap)  -> the declared Starting word
+//  5. Stale (~3 missed polls)                    -> the declared Degraded word
 //  6. Fresh and healthy                          -> the developer's MapFresh
 //
-// The non-Fresh literals ("starting"/"degraded") are the fleet-wide fsmv1
-// lifecycle states every consuming FSM understands; they are the adapter's
-// output vocabulary, distinct from a simple worker's own state machine.
+// Every managed worker declares its own fsmv1 state words via
+// WorkerManagerSpec.States for the exits the adapter decides (2-5); there are no
+// framework defaults, so a worker that does not declare its vocabulary reads as
+// an empty state. Each declared word must be one the consuming FSM's
+// Is<State>State predicates recognize. This output vocabulary is distinct from a
+// simple worker's own state machine.
 //
 // The verdict is read off the stored status through the HealthReporter interface,
 // so the adapter imports nothing from the worker package and stays generic over
@@ -48,7 +51,7 @@
 //
 // # The Spec
 //
-// Five functions are required; four fields default:
+// Five functions and the state vocabulary are required; three fields default:
 //
 //	WorkerManagerSpec[TConfig, TStatus]{
 //	    WorkerType     string                                                    // required
@@ -56,6 +59,7 @@
 //	    NameOf         func(cfg TConfig) string                                  // required
 //	    MapFresh       func(cfg TConfig, status TStatus) string                  // required (Fresh case only)
 //	    MapObserved    func(cfg TConfig, status TStatus) publicfsm.ObservedState // required
+//	    States         StateVocabulary{Starting, Degraded, Stopped, DesiredRunning string} // required
 //	    ConfigEqual    func(a, b TConfig) bool                    // default reflect.DeepEqual
 //	    CfgFor         func(cfg TConfig) (map[string]any, error)  // default JSON round-trip
 //	    IsEnabled      func(cfg TConfig) bool                     // default from the desired state

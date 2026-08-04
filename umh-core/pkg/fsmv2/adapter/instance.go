@@ -39,19 +39,10 @@ const (
 	// the supervisor's DefaultObservationInterval) to keep the adapter cycle-free.
 	unregisteredStaleFallback = 1 * time.Second
 
-	// startingState and degradedState are the fsmv1 state literals the resolution
-	// ladder returns outside the Fresh+healthy leaf. They are the fleet-wide
-	// fsmv1 lifecycle literals every consuming FSM understands (e.g. the
-	// connection FSM's IsStartingState/IsRunningState, nmap's OperationalState*):
-	// a not-yet-observed worker reads as "starting" and a degraded/stale one as
-	// "degraded". This is the adapter's fsmv1 output vocabulary, distinct from the
-	// simple worker's own {running, degraded, stopped} state machine.
-	startingState = "starting"
-	degradedState = "degraded"
-
 	// defaultDesiredState is the desired fsmv1 state used when a config exposes no
 	// desired state of its own. It is a lifecycle target ("running"), distinct
-	// from the observed-ladder literals above.
+	// from the observed-state literals above. Workers that require a different
+	// empty-config target declare it via StateVocabulary.DesiredRunning.
 	defaultDesiredState = "running"
 )
 
@@ -69,7 +60,7 @@ type HealthReporter interface {
 // All lifecycle methods (CreateInstance, RemoveInstance, etc.) are no-ops: an
 // fsmv2 worker manages its own lifecycle through the shared global runtime. The
 // instance reads state via GetFresh and resolves it through a fixed
-// framework-owned ladder; the developer supplies only mapFresh (the Fresh +
+// framework-owned resolution; the developer supplies only mapFresh (the Fresh +
 // healthy leaf) and mapObserved (the full ObservedState).
 //
 // TConfig is the domain config type flowing through the fsmv1 control loop.
@@ -78,6 +69,15 @@ type AdaptedInstance[TConfig, TStatus any] struct {
 	mapFresh    func(cfg TConfig, status TStatus) string
 	mapObserved func(cfg TConfig, status TStatus) publicfsm.ObservedState
 	log         deps.FSMLogger
+
+	// states carries the worker's declared fsmv1 state words for the
+	// adapter-decided exits (bootstrap, unknown, degraded verdict, stale). It
+	// comes from WorkerManagerSpec.States; every field it uses is required there,
+	// so the worker always declares the words a consuming fsmv1 FSM recognizes.
+	// The isDisabled exit (returns desiredState) and the Fresh+healthy leaf
+	// (returns mapFresh) are developer-owned and deliberately outside this
+	// vocabulary.
+	states StateVocabulary
 
 	cfg TConfig
 
@@ -169,11 +169,14 @@ func (i *AdaptedInstance[TConfig, TStatus]) getFreshStatus() (TStatus, fsmv2clie
 
 // --- publicfsm.FSMInstance implementation ---
 
-// GetCurrentFSMState resolves the fsmv1 state via the framework-owned ladder.
-// Output ∈ {running, degraded, stopped} ∪ mapFresh domain states. Every resolved
-// state (except the isDisabled shortcut) is cached into lastState.
+// GetCurrentFSMState resolves the fsmv1 state via the framework-owned resolution.
+// The isDisabled exit returns desiredState; the adapter-decided Starting and
+// Degraded exits return the declared StateVocabulary word when set, defaulting
+// to "starting"/"degraded"; and the Fresh+healthy leaf returns the developer's
+// mapFresh output. Every resolved state (except the isDisabled shortcut) is
+// cached into lastState.
 func (i *AdaptedInstance[TConfig, TStatus]) GetCurrentFSMState() string {
-	// Rung 1: disabled → desired state directly, without reading the client.
+	// Step 1: disabled → desired state directly, without reading the client.
 	if i.isDisabled {
 		return i.desiredState
 	}
@@ -197,37 +200,37 @@ func (i *AdaptedInstance[TConfig, TStatus]) GetCurrentFSMState() string {
 	return resolved
 }
 
-// resolve implements rungs 2–6 of the ladder. mu is held by the caller.
+// resolve classifies a (status, freshness) pair into an fsmv1 state. mu is held by the caller.
 func (i *AdaptedInstance[TConfig, TStatus]) resolve(status TStatus, freshness fsmv2client.Freshness) string {
-	// Rung 2: Unknown (nil client / read error) → hold last known state.
+	// Step 2: Unknown (nil client / read error) → hold last known state.
 	if freshness == fsmv2client.Unknown {
 		if i.lastState == "" {
-			return startingState
+			return i.states.Starting
 		}
 
 		return i.lastState
 	}
 
-	// Rung 3: degraded verdict on the stored status → degraded.
+	// Step 3: degraded verdict on the stored status → degraded.
 	if hr, ok := any(status).(HealthReporter); ok {
 		if degraded, _ := hr.HealthVerdict(); degraded {
-			return degradedState
+			return i.states.Degraded
 		}
 	}
 
-	// Rung 4: bootstrap (no observation yet) → starting. The consuming fsmv1 FSM
+	// Step 4: bootstrap (no observation yet) → starting. The consuming fsmv1 FSM
 	// reads this as "coming up" (e.g. nmap's IsStartingState) until the first
 	// observation lands.
 	if freshness == fsmv2client.Unregistered || freshness == fsmv2client.NeverObserved {
-		return startingState
+		return i.states.Starting
 	}
 
-	// Rung 5: stale (missed polls) → degraded.
+	// Step 5: stale (missed polls) → degraded.
 	if freshness == fsmv2client.Stale {
-		return degradedState
+		return i.states.Degraded
 	}
 
-	// Rung 6: Fresh + not degraded → developer's Fresh-case mapping.
+	// Step 6: Fresh + not degraded → developer's Fresh-case mapping.
 	return i.mapFresh(i.cfg, status)
 }
 
