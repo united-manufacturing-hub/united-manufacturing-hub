@@ -68,6 +68,9 @@ func pooledBy(h *poolHolder) *pgxpool.Pool {
 func closedPort() uint16 {
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	Expect(err).NotTo(HaveOccurred(), "a loopback listener is available")
+	if ln == nil {
+		Fail("net.Listen returned a nil listener")
+	}
 
 	addr, ok := ln.Addr().(*net.TCPAddr)
 	Expect(ok).To(BeTrue(), "a tcp listener reports a *net.TCPAddr")
