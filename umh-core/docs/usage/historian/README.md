@@ -1,13 +1,12 @@
 # Historian
 
 A historian is the standard industrial term for the system that records process data over time, so
-operators can go back and ask what a machine was doing last Tuesday. Products like AVEVA PI and GE
-Proficy fill that role in a classic plant. This is our version of it, built on TimescaleDB and
-PostgreSQL instead of a proprietary store, so the data stays queryable with ordinary SQL.
+operators can go back and ask what a machine was doing last Tuesday. AVEVA PI and GE Proficy fill
+that role in a classic plant.
 
-The Historian stores data from the Unified Namespace in a TimescaleDB database, so you can query
-history with SQL and build Grafana dashboards on it. The UNS keeps the live value of every tag; the
-Historian keeps the past.
+Ours stores data from the Unified Namespace in TimescaleDB rather than a proprietary store, so you
+can read history back with ordinary SQL and build Grafana dashboards on it. The UNS keeps the live
+value of every tag; the Historian keeps the past.
 
 {% hint style="info" %}
 **Early access.** The Historian is not switched on by default. If you want to use it, get in touch
@@ -31,14 +30,14 @@ and changing the connection updates the bridges that reference it.
 
 Three steps get you from a running UNS to a dashboard:
 
-1. **Set up the connection** (this page). Tell the instance where its database is.
-2. **[Save data to the Historian](save-to-historian.md).** Create one bridge per data contract you
-   want to keep.
-3. **[Query the data](querying.md).** Copy queries out of the topic browser into Grafana or psql.
+1. Set up the connection (this page). Tell the instance where its database is.
+2. [Save data to the Historian](save-to-historian.md). Create one bridge per data contract you want
+   to keep.
+3. [Query the data](querying.md). Copy queries out of the topic browser into Grafana or psql.
 
 ## Prerequisites
 
-- **A TimescaleDB database reachable from the umh-core instance.** If you don't have one,
+- **A TimescaleDB database**, reachable from the umh-core instance. If you don't have one,
   [Recommended UMH Stack](../../production/deployment/docker-compose/additional-services/recommended-umh-stack.md)
   brings up umh-core, PgBouncer, TimescaleDB, and Grafana together. To add just the database to a
   running instance, see
@@ -46,7 +45,7 @@ Three steps get you from a running UNS to a dashboard:
 - **PostgreSQL 16 or newer**, with the `timescaledb` and `ltree` extensions available. Version 16 is
   the floor because older `ltree` labels reject hyphens, and location paths such as `line-1` contain
   them.
-- **A login role, created before the first bridge starts.** The bridge logs in as this role and
+- **A login role**, created before the first bridge starts. The bridge logs in as this role and
   creates the `umh` schema it owns; it cannot create the role itself. A database-level grant is
   enough, so no privileges on `public` are needed:
 
@@ -55,7 +54,7 @@ Three steps get you from a running UNS to a dashboard:
   GRANT CREATE, CONNECT ON DATABASE umh TO umh_owner;
   ```
 
-- **Data flowing in the UNS.** The Historian archives what is already in the namespace; it does not
+- **Data in the UNS**, already flowing. The Historian archives what is in the namespace; it does not
   read from devices itself.
 
 ## Set up the connection

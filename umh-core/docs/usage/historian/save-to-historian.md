@@ -81,13 +81,11 @@ plain YAML fields you add to the output config in the bridge editor. See the
 [Historian output reference](https://docs.umh.app/benthos-umh/output/historian) for the full field
 list and defaults.
 
-Two of them behave differently from the rest:
-
-- `compress_after` and `retention` are applied **once, when the tables are first created**. Editing
-  them afterwards has no effect on an existing database. A config edit must not silently change how
-  production history is compressed or deleted. To change them, update the TimescaleDB policies
-  directly on both hypertables, then set the same value in the bridge config so the drift warning
-  stops.
+`compress_after` and `retention` are the exceptions. Both are applied once, when the tables are
+first created, so editing them later has no effect on an existing database: a config edit must not
+silently change how production history is compressed or deleted. To change them, update the
+TimescaleDB policies directly on both hypertables, then set the same value in the bridge config so
+the drift warning stops.
 
 ## Troubleshooting
 

@@ -1,8 +1,8 @@
 # Query the Historian
 
 Once a [Historian bridge](save-to-historian.md) is storing a contract, the data is ordinary
-TimescaleDB, and any SQL client or Grafana can read it. This page covers the fastest route, copying
-a query out of the topic browser, and the schema behind it for when you write your own.
+TimescaleDB, and any SQL client or Grafana can read it. The fastest route is to copy a query out of
+the topic browser; the schema further down is for when you write your own.
 
 The Management Console never runs these queries. It generates the SQL and you paste it into Grafana
 or psql.
@@ -27,10 +27,10 @@ or psql.
 
 4. Copy it.
 
-The panel is generated from the topic name, not from the database. It appears for every tag, and a
-note says so: a tag that no Historian bridge has stored yet produces a valid query that returns no
-rows. When the tag's datatype isn't known yet, the query defaults to the numeric column. Switch it
-to `value_text` if the tag holds strings.
+The panel is generated from the topic name, not from the database, so it appears for every tag,
+including ones no Historian bridge has stored yet. The panel says as much. Those queries are valid
+and return no rows. When the tag's datatype isn't known yet, the query defaults to the numeric
+column. Switch it to `value_text` if the tag holds strings.
 
 ## Schema
 
@@ -115,9 +115,9 @@ JOIN   umh.location l ON l.location_id = t.location_id
 ORDER  BY v.topic_id, v.ts DESC;
 ```
 
-This scans each topic's history to find its newest row. That is fine for hundreds of tags. For a
-dashboard that refreshes it often, back it with a continuous aggregate holding
-`last(value_num, ts)` per `topic_id` and query that instead.
+This scans each topic's history to find its newest row, which is fine for hundreds of tags. For a
+dashboard that refreshes often, back the query with a continuous aggregate holding
+`last(value_num, ts)` per `topic_id` and read that instead.
 
 ## Using it from Grafana
 
