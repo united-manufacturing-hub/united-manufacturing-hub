@@ -15,6 +15,7 @@
 package diagnosis
 
 import (
+	"fmt"
 	"math"
 	"time"
 )
@@ -65,11 +66,15 @@ type Window struct {
 // derivable here: a window sees floats, and a ratio that legitimately falls and
 // a counter that reset look identical.
 //
-// Span and demote span validation is the engine constructor's concern, not the
-// window's: refusing inside NewWindow would make a window unwritable as a
-// literal value, so NewWindow does not return an error.
-func NewWindow(span, demote time.Duration, red Reduction, counter bool) *Window {
-	return &Window{span: span, demote: demote, red: red, counter: counter}
+// It refuses a span or a demote span that is zero or negative (S1 R8).
+func NewWindow(span, demote time.Duration, red Reduction, counter bool) (*Window, error) {
+	if span <= 0 {
+		return nil, fmt.Errorf("window: span %v is not positive", span)
+	}
+	if demote <= 0 {
+		return nil, fmt.Errorf("window: demote span %v is not positive", demote)
+	}
+	return &Window{span: span, demote: demote, red: red, counter: counter}, nil
 }
 
 // Age prunes entries older than the span. Called on EVERY tick, including ticks

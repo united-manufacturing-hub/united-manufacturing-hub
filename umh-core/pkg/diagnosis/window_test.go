@@ -40,7 +40,7 @@ import (
 var _ = Describe("Window", func() {
 	It("should append a reading and prune entries older than the span", func() {
 		const span = 10 * time.Second
-		w := NewWindow(span, 60*time.Second, Last, false)
+		w, _ := NewWindow(span, 60*time.Second, Last, false)
 
 		t0 := time.Unix(1_000_000, 0)
 		w.Append(Known(5), Unknown(), t0)
@@ -63,7 +63,7 @@ var _ = Describe("Window", func() {
 	})
 
 	It("should not append a reading whose read failed", func() {
-		w := NewWindow(10*time.Second, 60*time.Second, Last, false)
+		w, _ := NewWindow(10*time.Second, 60*time.Second, Last, false)
 
 		t0 := time.Unix(2_000_000, 0)
 		w.Append(Unknown(), Unknown(), t0)
@@ -76,7 +76,7 @@ var _ = Describe("Window", func() {
 
 	It("should not append a value that is not a number — NaN, +Inf or -Inf — and append nothing rather than a zero", func() {
 		const span = 10 * time.Second
-		refused := NewWindow(span, 60*time.Second, Last, false)
+		refused, _ := NewWindow(span, 60*time.Second, Last, false)
 
 		t0 := time.Unix(3_000_000, 0)
 		refused.Append(Known(math.NaN()), Unknown(), t0)
@@ -89,7 +89,7 @@ var _ = Describe("Window", func() {
 			"NaN and the infinities are not numbers and append nothing; the window stays empty")
 
 		// A negative number IS a value and IS appended; the window must not range-check it.
-		neg := NewWindow(span, 60*time.Second, Last, false)
+		neg, _ := NewWindow(span, 60*time.Second, Last, false)
 		neg.Append(Known(-5), Unknown(), t0)
 		neg.Age(t0)
 
@@ -104,7 +104,7 @@ var _ = Describe("Window", func() {
 
 		// Arm A: a COUNTER window discards stored entries on a backwards step and
 		// starts over from the new one. Mean (Min 2): one entry -> Untrusted.
-		counter := NewWindow(span, 60*time.Second, Mean, true)
+		counter, _ := NewWindow(span, 60*time.Second, Mean, true)
 		counter.Append(Known(10), Unknown(), t0)
 		counter.Age(t0)
 		counter.Append(Known(5), Unknown(), t0.Add(time.Second)) // a fall: 5 < 10
@@ -115,7 +115,7 @@ var _ = Describe("Window", func() {
 
 		// Arm B: a NON-counter window over the same falling series KEEPS its
 		// entries. Two entries -> Value under Mean (Min 2).
-		noncounter := NewWindow(span, 60*time.Second, Mean, false)
+		noncounter, _ := NewWindow(span, 60*time.Second, Mean, false)
 		noncounter.Append(Known(10), Unknown(), t0)
 		noncounter.Age(t0)
 		noncounter.Append(Known(5), Unknown(), t0.Add(time.Second)) // an ordinary fall
@@ -129,7 +129,7 @@ var _ = Describe("Window", func() {
 		// span=1s, demote=60s. Two readable ticks one second apart reach a
 		// trustworthy (Value) state and span the full window.
 		const span = 1 * time.Second
-		w := NewWindow(span, 60*time.Second, Mean, false)
+		w, _ := NewWindow(span, 60*time.Second, Mean, false)
 
 		t0 := time.Unix(5_000_000, 0)
 		w.Append(Known(5), Unknown(), t0)
@@ -161,7 +161,7 @@ var _ = Describe("Window", func() {
 		// span and demote span DIFFER: span=10s, demote=60s. A single reading is
 		// appended, then no successful reads follow.
 		const span = 10 * time.Second
-		w := NewWindow(span, 60*time.Second, Mean, false)
+		w, _ := NewWindow(span, 60*time.Second, Mean, false)
 
 		t0 := time.Unix(6_000_000, 0)
 		w.Append(Known(5), Unknown(), t0)
@@ -195,7 +195,7 @@ var _ = Describe("Window", func() {
 
 		// Arm A: a DeltaRatio window (against=true) stores NOTHING when against
 		// is absent -> empty -> StateAbsent.
-		ratio := NewWindow(span, 60*time.Second, DeltaRatio, false)
+		ratio, _ := NewWindow(span, 60*time.Second, DeltaRatio, false)
 		ratio.Append(Known(5), Unknown(), t0)
 		ratio.Age(t0)
 		_, ratioState := ratio.Reduce().Get()
@@ -205,7 +205,7 @@ var _ = Describe("Window", func() {
 		// Arm B: a Mean window (against=false) STORES the point — an absent
 		// Against is the ordinary single-series case. One entry -> Untrusted
 		// (below Mean Min 2).
-		mean := NewWindow(span, 60*time.Second, Mean, false)
+		mean, _ := NewWindow(span, 60*time.Second, Mean, false)
 		mean.Append(Known(5), Unknown(), t0)
 		mean.Age(t0)
 		_, meanState := mean.Reduce().Get()
@@ -215,7 +215,7 @@ var _ = Describe("Window", func() {
 
 	It("should keep a sample landing exactly on the cutoff", func() {
 		const span = 10 * time.Second
-		w := NewWindow(span, 60*time.Second, Mean, false)
+		w, _ := NewWindow(span, 60*time.Second, Mean, false)
 
 		t0 := time.Unix(8_000_000, 0)
 		w.Append(Known(5), Unknown(), t0)
@@ -242,7 +242,7 @@ var _ = Describe("Window", func() {
 		// denominator stores its points; two of them meet Min 2 -> StateValue.
 		// Removing the store-when-present path would drop these and leave the
 		// window empty.
-		ratio := NewWindow(span, 60*time.Second, DeltaRatio, false)
+		ratio, _ := NewWindow(span, 60*time.Second, DeltaRatio, false)
 		ratio.Append(Known(5), Known(10), t0)
 		ratio.Age(t0)
 		ratio.Append(Known(6), Known(12), t0.Add(time.Second))
@@ -253,14 +253,14 @@ var _ = Describe("Window", func() {
 
 		// A non-finite denominator — NaN or Inf — is not a number and is dropped,
 		// mirroring the numerator guard. The window stays empty -> StateAbsent.
-		nan := NewWindow(span, 60*time.Second, DeltaRatio, false)
+		nan, _ := NewWindow(span, 60*time.Second, DeltaRatio, false)
 		nan.Append(Known(5), Known(math.NaN()), t0)
 		nan.Age(t0)
 		_, nanState := nan.Reduce().Get()
 		Expect(nanState).To(Equal(StateAbsent),
 			"a NaN denominator is not a number; the point is dropped and the window is empty")
 
-		inf := NewWindow(span, 60*time.Second, DeltaRatio, false)
+		inf, _ := NewWindow(span, 60*time.Second, DeltaRatio, false)
 		inf.Append(Known(5), Known(math.Inf(1)), t0)
 		inf.Age(t0)
 		_, infState := inf.Reduce().Get()
@@ -270,7 +270,7 @@ var _ = Describe("Window", func() {
 
 	It("should return to a value after a freeze once a successful append lands", func() {
 		const span = 10 * time.Second
-		w := NewWindow(span, 60*time.Second, Mean, false)
+		w, _ := NewWindow(span, 60*time.Second, Mean, false)
 
 		t0 := time.Unix(10_000_000, 0)
 		w.Append(Known(5), Unknown(), t0)
@@ -300,7 +300,7 @@ var _ = Describe("Window", func() {
 
 	It("should re-accumulate to a value after a counter restart", func() {
 		const span = 10 * time.Second
-		w := NewWindow(span, 60*time.Second, Mean, true)
+		w, _ := NewWindow(span, 60*time.Second, Mean, true)
 
 		t0 := time.Unix(11_000_000, 0)
 		w.Append(Known(10), Unknown(), t0)
@@ -329,7 +329,7 @@ var _ = Describe("Window", func() {
 
 	It("should treat the first post-demote point as Untrusted below the minimum", func() {
 		const span = 10 * time.Second
-		w := NewWindow(span, 60*time.Second, Mean, false)
+		w, _ := NewWindow(span, 60*time.Second, Mean, false)
 
 		t0 := time.Unix(12_000_000, 0)
 		w.Append(Known(5), Unknown(), t0)
@@ -361,7 +361,7 @@ var _ = Describe("Window", func() {
 
 	It("should not restart a counter window on an equal value — only a strict fall resets", func() {
 		const span = 10 * time.Second
-		w := NewWindow(span, 60*time.Second, Mean, true)
+		w, _ := NewWindow(span, 60*time.Second, Mean, true)
 
 		t0 := time.Unix(20_000_000, 0)
 		w.Append(Known(10), Unknown(), t0)
@@ -380,7 +380,7 @@ var _ = Describe("Window", func() {
 	It("should not demote at exactly the demote span — only strictly past it", func() {
 		const span = 10 * time.Second
 		const demote = 60 * time.Second
-		w := NewWindow(span, demote, Mean, false)
+		w, _ := NewWindow(span, demote, Mean, false)
 
 		t0 := time.Unix(21_000_000, 0)
 		w.Append(Known(5), Unknown(), t0)

@@ -156,7 +156,7 @@ func (l *Latch) Update(r Reduced, c Coverage, m Marks, now time.Time) {
 	// Fire arm: crossing the fire mark fires, unless the re-fire arm still
 	// blocks — one full window must elapse since the last release.
 	if crossedFire(r.v, m) {
-		if !l.fired && !now.Before(l.lastRelease.Add(c.span)) {
+		if !l.fired && (l.lastRelease.IsZero() || !now.Before(l.lastRelease.Add(c.span))) {
 			l.fired = true
 			l.value = r.v
 			l.since = now
@@ -179,13 +179,14 @@ func (l *Latch) Update(r Reduced, c Coverage, m Marks, now time.Time) {
 // The latch has no ReleaseOnAbsent field and no Signal: whether to call this is
 // Observe's decision, and S1 R7b spec 6 is where the condition is asserted,
 // against two signals that declare it differently.
-func (l *Latch) Reset(now time.Time) {
+func (l *Latch) Reset() {
 	if l.fired {
-		// Reset is an immediate release and deliberately does not touch the demote
-		// clock: the re-fire window measures from this release, but ReleaseAfter
-		// still ages from the last Update. A clear-via-Update sets both; a Reset
-		// must not.
-		l.release(now)
+		// Reset is an immediate release. With no timestamp to stamp the re-fire
+		// bar, anchor it at the last trusted Update (the demote-ish clock); an
+		// AllAbsent reset has a stale lastUpdate, so re-fire is effectively
+		// immediate, which is the point.
+		l.fired = false
+		l.lastRelease = l.lastUpdate
 	}
 }
 

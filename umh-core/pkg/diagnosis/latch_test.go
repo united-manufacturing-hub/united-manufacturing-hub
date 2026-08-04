@@ -167,15 +167,15 @@ var _ = Describe("Latch", func() {
 
 		// Reset must release immediately even though coverage is not full. A Reset
 		// routed through the coverage-gated clear arm would refuse and never
-		// release. Reset takes the same injected clock as every sibling arm, so the
-		// re-fire window it opens is measured in test time, never the real wall
-		// clock.
-		l.Reset(t0.Add(time.Second))
+		// release. Reset takes no clock — it anchors the re-fire window at the last
+		// trusted Update — and that does not affect this release, which is
+		// immediate whatever the re-fire bar.
+		l.Reset()
 		_, fired = l.Fired()
 		Expect(fired).To(BeFalse(), "Reset releases a fired latch whatever its coverage")
 	})
 
-	It("should measure the re-fire window from the injected reset time, so a reset never permanently blocks re-firing", func() {
+	It("should re-fire from the last trusted update after a reset, so a reset never permanently blocks re-firing", func() {
 		t0 := time.Unix(1_000_000, 0)
 		l := NewLatch(Identity{})
 
@@ -183,23 +183,23 @@ var _ = Describe("Latch", func() {
 		_, fired := l.Fired()
 		Expect(fired).To(BeTrue(), "a value above the fire mark fires")
 
-		// Reset at an injected now rather than the wall clock, so the re-fire
-		// window that follows is visible to the test clock.
-		tReset := t0.Add(time.Second)
-		l.Reset(tReset)
+		// Reset() takes no clock. With no timestamp to stamp the re-fire bar, the
+		// reset anchors it at the last trusted Update — the firing Update at t0 —
+		// so the re-fire window runs from lastUpdate, never the real wall clock.
+		l.Reset()
 		_, fired = l.Fired()
-		Expect(fired).To(BeFalse(), "Reset releases the fired latch at the injected time")
+		Expect(fired).To(BeFalse(), "Reset releases the fired latch")
 
-		// Before one full window has elapsed since the reset, the same above-fire
-		// value must not re-fire.
-		l.Update(Reduced{v: 0.20, state: StateValue}, full(), march(), tReset.Add(latchSpan-time.Second))
+		// Before one full window has elapsed since the last trusted Update (the
+		// anchor), the same above-fire value must not re-fire.
+		l.Update(Reduced{v: 0.20, state: StateValue}, full(), march(), t0.Add(latchSpan-time.Second))
 		_, fired = l.Fired()
-		Expect(fired).To(BeFalse(), "a reset latch does not re-fire before one full window has elapsed since the reset")
+		Expect(fired).To(BeFalse(), "a reset latch does not re-fire before one full window has elapsed since the last update")
 
-		// Once one full window has elapsed since the reset, it fires again.
-		l.Update(Reduced{v: 0.20, state: StateValue}, full(), march(), tReset.Add(latchSpan))
+		// Once one full window has elapsed since the anchor, it fires again.
+		l.Update(Reduced{v: 0.20, state: StateValue}, full(), march(), t0.Add(latchSpan))
 		_, fired = l.Fired()
-		Expect(fired).To(BeTrue(), "a reset latch re-fires once one full window has elapsed since the reset")
+		Expect(fired).To(BeTrue(), "a reset latch re-fires once one full window has elapsed since the last update")
 	})
 
 	It("should not fire again until one full window has elapsed since the release", func() {

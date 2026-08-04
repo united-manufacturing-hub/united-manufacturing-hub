@@ -129,12 +129,19 @@ func NewEngine[S any](t Table[S]) (*Engine[S], error) {
 	}
 	for _, s := range t.Signals {
 		for _, inst := range s.Instruments {
-			e.windows[key{Signal: s.Name, Instrument: inst.Name}] =
-				NewWindow(inst.Span, s.DemoteSpan, inst.Red, inst.Counter)
+			w, err := NewWindow(inst.Span, s.DemoteSpan, inst.Red, inst.Counter)
+			if err != nil {
+				return nil, err
+			}
+			e.windows[key{Signal: s.Name, Instrument: inst.Name}] = w
 		}
 	}
 	for _, tr := range t.Tracks {
-		e.tracked[tr.Name] = NewWindow(tr.Span, tr.Span, tr.Red, false)
+		w, err := NewWindow(tr.Span, tr.Span, tr.Red, false)
+		if err != nil {
+			return nil, err
+		}
+		e.tracked[tr.Name] = w
 	}
 	for i, s := range t.Signals {
 		e.latches[s.Name] = NewLatch(Identity{
@@ -347,7 +354,7 @@ func (e *Engine[S]) Observe(sample S, env Environment, at time.Time) ([]Fired, [
 			l.Update(red, cov, inst.Marks, at)
 		case AllAbsent:
 			if s.ReleaseOnAbsent {
-				l.Reset(at)
+				l.Reset()
 			} else {
 				l.ReleaseAfter(s.DemoteSpan, at)
 			}

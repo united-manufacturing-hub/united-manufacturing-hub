@@ -47,7 +47,7 @@ var _ = Describe("DeltaRatio", func() {
 		// new origin. The forward append after the reset re-accumulates to a
 		// value; a window that never restarted would still fold the negative-delta
 		// pair and hold StateUntrusted.
-		denomReset := NewWindow(span, 60*time.Second, DeltaRatio, true)
+		denomReset, _ := NewWindow(span, 60*time.Second, DeltaRatio, true)
 		denomReset.Append(Known(5), Known(100), t0)
 		denomReset.Age(t0)
 		denomReset.Append(Known(11), Known(50), t0.Add(time.Second)) // denominator 100 -> 50 fell, restart
@@ -62,7 +62,7 @@ var _ = Describe("DeltaRatio", func() {
 		// Arm B: the NUMERATOR falls across the edge (5 -> 3) while the
 		// denominator rises. The numerator restart (already the window's rule)
 		// fires; the forward append after the reset re-accumulates to a value.
-		numReset := NewWindow(span, 60*time.Second, DeltaRatio, true)
+		numReset, _ := NewWindow(span, 60*time.Second, DeltaRatio, true)
 		numReset.Append(Known(5), Known(100), t0)
 		numReset.Age(t0)
 		numReset.Append(Known(3), Known(200), t0.Add(time.Second)) // value 5 -> 3 fell, restart
@@ -79,7 +79,7 @@ var _ = Describe("DeltaRatio", func() {
 		// restart — it accumulates to a value directly. A restart rule that fired
 		// on any window, or on every fall regardless of which series, would empty
 		// the window and destroy DeltaRatio.
-		forward := NewWindow(span, 60*time.Second, DeltaRatio, true)
+		forward, _ := NewWindow(span, 60*time.Second, DeltaRatio, true)
 		forward.Append(Known(5), Known(100), t0)
 		forward.Age(t0)
 		forward.Append(Known(11), Known(300), t0.Add(time.Second))
@@ -94,7 +94,7 @@ var _ = Describe("DeltaRatio", func() {
 		// denominator. Mean (Min 2) keeps both points -> StateValue. A build that
 		// ran the denominator restart for every counter window would empty this
 		// window on the dip.
-		noDenom := NewWindow(span, 60*time.Second, Mean, true)
+		noDenom, _ := NewWindow(span, 60*time.Second, Mean, true)
 		noDenom.Append(Known(5), Known(100), t0)
 		noDenom.Age(t0)
 		noDenom.Append(Known(6), Known(50), t0.Add(time.Second)) // denominator 100 -> 50 fell, but Mean does not divide by it
@@ -107,7 +107,7 @@ var _ = Describe("DeltaRatio", func() {
 		// backwards step, mirroring the value-equality rule. Two kept entries
 		// spanning the full span read Full; a build using <= on the denominator
 		// would restart here, wipe to one entry and read not-Full.
-		eqDenom := NewWindow(span, 60*time.Second, DeltaRatio, true)
+		eqDenom, _ := NewWindow(span, 60*time.Second, DeltaRatio, true)
 		eqDenom.Append(Known(5), Known(100), t0)
 		eqDenom.Age(t0)
 		eqDenom.Append(Known(11), Known(100), t0.Add(span)) // denominator equal, not a fall
@@ -126,7 +126,7 @@ var _ = Describe("DeltaRatio", func() {
 		const span = 10 * time.Second
 		// counter=false: the restart rule does NOT apply. A build that weakens the
 		// w.counter gate on the DENOMINATOR arm would wipe this window on the dip.
-		w := NewWindow(span, 60*time.Second, DeltaRatio, false)
+		w, _ := NewWindow(span, 60*time.Second, DeltaRatio, false)
 		t0 := time.Unix(40_000_000, 0)
 		w.Append(Known(5), Known(100), t0)
 		w.Age(t0)
@@ -142,7 +142,7 @@ var _ = Describe("DeltaRatio", func() {
 		const span = 10 * time.Second
 		// Full cgroup death/recreate drops BOTH counters at once. The OR fires and
 		// the window restarts exactly once, then re-accumulates to a value.
-		w := NewWindow(span, 60*time.Second, DeltaRatio, true)
+		w, _ := NewWindow(span, 60*time.Second, DeltaRatio, true)
 		t0 := time.Unix(41_000_000, 0)
 		w.Append(Known(5), Known(100), t0)
 		w.Age(t0)
