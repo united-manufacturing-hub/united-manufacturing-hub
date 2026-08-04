@@ -25,6 +25,21 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 )
 
+// Scope reports whether a sampler's logical CPU count describes every CPU on
+// the machine or only the ones its container may run on.
+type Scope int
+
+const (
+	// ScopeUnknown means the machine's CPU count could not be read, so the
+	// scope cannot be known. It is never a silent ScopeHost on a failing read.
+	ScopeUnknown Scope = iota
+	// ScopeHost means the container's allowed set covers every machine CPU.
+	ScopeHost
+	// ScopeAffinity means the container is pinned to a strict subset of the
+	// machine's CPUs, so the logical count describes only those.
+	ScopeAffinity
+)
+
 // Sampler reads a cgroup's CPU health signals.
 type Sampler interface {
 	Read(ctx context.Context) (Sample, error)
@@ -84,6 +99,17 @@ type Sample struct {
 	// advance (nothing measured, not a NaN/Inf reading).
 	Steal diagnosis.Reading
 
+	// HostCpus is the machine's CPU count: the number of per-CPU (cpu0, cpu1, …)
+	// lines in /proc/stat. It is present when that file is readable, and unknown
+	// when it is not.
+	HostCpus diagnosis.Reading
+
+	// CpuScope reports whether the sampler's logical CPU count describes every
+	// CPU on the machine (ScopeHost), only the ones its container may run on
+	// (ScopeAffinity), or ScopeUnknown when the machine's CPU count cannot be
+	// read. It is never ScopeHost on an unreadable count.
+	CpuScope Scope
+
 	// Timestamp is the time of this read. Every field off the same read carries
 	// the same Timestamp.
 	Timestamp time.Time
@@ -130,12 +156,20 @@ const userHz = 100.0
 // irq and softirq jiffies (idle, iowait, steal, guest and guest_nice excluded).
 // The steal denominator is the sum of fields 0..7 only, since the kernel folds
 // guest and guest_nice into user and nice. Both totals are kept raw so the
-// caller can derive interval deltas. The trailing space in "cpu " keeps the
-// aggregate line from matching cpu0/cpu1.
-func (s *cgroupSampler) readHost(ctx context.Context) (busy, steal, denom float64, ok bool) {
+// caller can derive interval deltas. machine is the number of per-CPU (cpu0,
+// cpu1, …) lines in the same file, the machine's CPU count. The trailing space
+// in "cpu " keeps the aggregate line from matching cpu0/cpu1.
+func (s *cgroupSampler) readHost(ctx context.Context) (busy, steal, denom, machine float64, ok bool) {
 	data, err := s.fs.ReadFile(ctx, "/proc/stat")
 	if err != nil {
-		return 0, 0, 0, false
+		return 0, 0, 0, 0, false
+	}
+	for _, line := range strings.Split(string(data), "\n") {
+		// A per-CPU line is "cpu" followed by a digit; the aggregate "cpu " line
+		// (space, not digit) is not one of them.
+		if len(line) > 3 && strings.HasPrefix(line, "cpu") && line[3] >= '0' && line[3] <= '9' {
+			machine++
+		}
 	}
 	for _, line := range strings.Split(string(data), "\n") {
 		if !strings.HasPrefix(line, "cpu ") {
@@ -143,21 +177,61 @@ func (s *cgroupSampler) readHost(ctx context.Context) (busy, steal, denom float6
 		}
 		fields := strings.Fields(line) // fields[0] == "cpu"
 		if len(fields) < 9 {
-			return 0, 0, 0, false
+			return 0, 0, 0, machine, false
 		}
 		vals := make([]float64, len(fields))
 		for i := 1; i < len(fields); i++ {
 			v, err := strconv.ParseFloat(fields[i], 64)
 			if err != nil {
-				return 0, 0, 0, false
+				return 0, 0, 0, machine, false
 			}
 			vals[i] = v
 		}
 		busy := vals[1] + vals[2] + vals[3] + vals[6] + vals[7]
 		denom := vals[1] + vals[2] + vals[3] + vals[4] + vals[5] + vals[6] + vals[7] + vals[8]
-		return busy, vals[8], denom, true
+		return busy, vals[8], denom, machine, true
 	}
-	return 0, 0, 0, false
+	return 0, 0, 0, machine, false
+}
+
+// readCpuset counts the CPUs in the cgroup's effective cpuset when it is a
+// single inclusive range such as "0-3". The second value reports whether the
+// set was readable and parsed as such a range.
+func (s *cgroupSampler) readCpuset(ctx context.Context) (int, bool) {
+	data, err := s.fs.ReadFile(ctx, s.base+"/cpuset.cpus.effective")
+	if err != nil {
+		return 0, false
+	}
+	text := strings.TrimSpace(string(data))
+	if text == "" {
+		return 0, false
+	}
+	// The cpuset is a comma-separated list of ranges and single ids — "0-3",
+	// "0,2,4", "0-1,4-5" — the shapes the scheduler emits when it pins a pod
+	// to non-contiguous CPUs, which is F6's primary target. Count every id it
+	// names, so any shape collapses to the size of the allowed set.
+	var count int
+	for _, part := range strings.Split(text, ",") {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			return 0, false
+		}
+		if strings.Contains(part, "-") {
+			bounds := strings.SplitN(part, "-", 2)
+			lo, err1 := strconv.Atoi(bounds[0])
+			hi, err2 := strconv.Atoi(bounds[1])
+			if err1 != nil || err2 != nil || hi < lo {
+				return 0, false
+			}
+			count += hi - lo + 1
+		} else {
+			if _, err := strconv.Atoi(part); err != nil {
+				return 0, false
+			}
+			count++
+		}
+	}
+	return count, true
 }
 
 // readPSI reads cpu.pressure's "some" avg60 as a 0..1 fraction. The second
@@ -264,7 +338,22 @@ func (s *cgroupSampler) Read(ctx context.Context) (Sample, error) {
 	// rate and per-interval steal fraction, each derived from the delta of two
 	// consecutive reads. A falling cumulative counter (a host restart) is a
 	// reset: the baseline is re-established and nothing is published this tick.
-	if busy, steal, denom, ok := s.readHost(ctx); ok {
+	// The same read carries the machine's CPU count, from which the snapshots'
+	// CPU scope is derived.
+	if busy, steal, denom, machine, ok := s.readHost(ctx); ok {
+		// CPU scope: the machine's count is kept on the snapshot, and the scope
+		// compares the container's allowed cpuset against it. A readable machine
+		// count whose allowed set covers it reads ScopeHost; a pinned subset
+		// reads ScopeAffinity; a failed cpuset read on a known machine count is
+		// likewise unknown (never a silent host).
+		smp.HostCpus = diagnosis.Known(machine)
+		// A failed cpuset read leaves the fresh sample's CpuScope as its zero
+		// value, ScopeUnknown: never a silent ScopeHost on a known machine count.
+		if allowed, aok := s.readCpuset(ctx); aok && allowed == int(machine) {
+			smp.CpuScope = ScopeHost
+		} else if aok {
+			smp.CpuScope = ScopeAffinity
+		}
 		if s.haveHost {
 			// Busy cores over the interval is the busy-jiffy delta divided by
 			// USER_HZ into seconds; the interval's elapsed time turns that into
@@ -290,6 +379,12 @@ func (s *cgroupSampler) Read(ctx context.Context) (Sample, error) {
 		s.prevHostDenom = denom
 		s.prevHostTime = smp.Timestamp
 		s.haveHost = true
+	} else {
+		// An unreadable machine CPU count reads ScopeUnknown — never a silent
+		// ScopeHost, since a pinned idle container misread as host is F6 by
+		// another route. HostCpus stays absent (its zero value) here, as the
+		// machine's count could not be read to populate it.
+		smp.CpuScope = ScopeUnknown
 	}
 
 	data, err := s.fs.ReadFile(ctx, s.base+"/cpu.max")
