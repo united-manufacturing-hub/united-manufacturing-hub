@@ -100,12 +100,12 @@ var _ = Describe("WorkerManager", func() {
 		return dynamicchildren.Ref{WorkerType: workerType, Name: name}
 	}
 
-	// baseSpec supplies only the required fields plus a no-op logger, leaving the
-	// optional fields (ConfigEqual/CfgFor/IsEnabled/MinRequiredTime) nil so the
-	// states are today's four fsmv1 literals, declared so the resolution returns them.
-	// Inlined (not the package constants) so the specs see stable words independent
-	// of any constant the implementation may later delete. baseSpec supplies only
-	// the required fields plus the vocabulary and a no-op logger.
+	// baseSpec supplies the required fields, today's four fsmv1 literals declared
+	// as the vocabulary, and a no-op logger. The optional fields
+	// (ConfigEqual/CfgFor/IsEnabled/MinRequiredTime) are left nil to apply their
+	// defaults. The vocabulary words are inlined, not the package constants, so
+	// the specs see stable values independent of any constant the implementation
+	// may later delete.
 	baseSpec := func() WorkerManagerSpec[mgrConfig, probeStatus] {
 		return WorkerManagerSpec[mgrConfig, probeStatus]{
 			WorkerType:     workerType,

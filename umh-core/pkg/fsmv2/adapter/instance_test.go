@@ -40,6 +40,8 @@ import (
 //	    mapFresh        func(cfg TConfig, status TStatus) string,
 //	    mapObserved     func(cfg TConfig, status TStatus) publicfsm.ObservedState,
 //	    isDisabled      bool,
+//	    log             deps.FSMLogger,
+//	    states          StateVocabulary,
 //	) *AdaptedInstance[TConfig, TStatus]
 //
 // Type param ORDER is [TConfig, TStatus] (matches the brief's
@@ -120,24 +122,21 @@ var _ = Describe("AdaptedInstance", func() {
 		return probeObserved{State: s.PortState}
 	}
 
-	// newInstance builds the instance under test with the assumed constructor.
-	// newInstance builds the instance under test with the assumed constructor and
-	// today's four fsmv1 literals declared as its vocabulary, so the resolution exits
-	// return them. Inlined (not the package constants) so the pre-C0 workflow and
-	// the post-C0 workflow both see the same words, independent of any constant
-	// the implementation may later delete.
+	// newInstance builds the instance under test with today's four fsmv1 literals
+	// as its declared vocabulary, so the adapter-decided resolution exits return
+	// them. The words are inlined (not the package constants) so the specs see
+	// stable values independent of any constant the implementation may later
+	// delete.
 	newInstance := func(desiredState string, isDisabled bool) *AdaptedInstance[testConfig, probeStatus] {
-		inst := newAdaptedInstance(
+		return newAdaptedInstance(
 			ref, cfg, desiredState, 0, mapFresh, mapObserved, isDisabled, nil,
+			StateVocabulary{
+				Starting:       "starting",
+				Degraded:       "degraded",
+				Stopped:        "stopped",
+				DesiredRunning: "running",
+			},
 		)
-		inst.states = StateVocabulary{
-			Starting:       "starting",
-			Degraded:       "degraded",
-			Stopped:        "stopped",
-			DesiredRunning: "running",
-		}
-
-		return inst
 	}
 
 	// stageClient publishes a global client whose store returns the given
