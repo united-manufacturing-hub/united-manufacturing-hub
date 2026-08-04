@@ -88,16 +88,14 @@ var _ = Describe("throttle counters", func() {
 		Expect(ok).To(BeTrue(), "the present counter must still read when its pair is absent")
 		Expect(throttled).To(Equal(0.0))
 
-		// A counter that FAILS TO PARSE is unavailable too — the same "no
-		// 1.0" family as an absent key, never a trusted 0.
+		// A counter that FAILS TO PARSE now fails the WHOLE sample, per S2 R5:
+		// an unparseable cpu.stat is a hard failure, not an absent no-signal. The
+		// ABSENT-key case above stays unavailable (a no-quota container has no
+		// nr_periods line), but a present value that cannot be read as a number is
+		// a corrupt cpu.stat.
 		sampler, _ = newSampler([]byte("usage_usec 1000\nnr_periods not-a-number\nnr_throttled 3\n"), nil)
-		s, err = sampler.Read(ctx)
-		Expect(err).NotTo(HaveOccurred())
-		_, ok = s.NrPeriods.Get()
-		Expect(ok).To(BeFalse(), "an unparsable nr_periods must be unavailable, not a trusted 0")
-		throttled, ok = s.NrThrottled.Get()
-		Expect(ok).To(BeTrue(), "the unparsable counter's pair must still read")
-		Expect(throttled).To(Equal(3.0))
+		_, err = sampler.Read(ctx)
+		Expect(err).To(HaveOccurred(), "an unparsable cpu.stat value must fail the whole sample")
 
 		// cpu.stat is PRIMARY: a read failure there fails the WHOLE sample — the
 		// first time Read's error is live — rather than silently dropping the
