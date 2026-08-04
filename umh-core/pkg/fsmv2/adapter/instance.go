@@ -38,12 +38,6 @@ const (
 	// type has no registered observation interval. Hardcoded (rather than reading
 	// the supervisor's DefaultObservationInterval) to keep the adapter cycle-free.
 	unregisteredStaleFallback = 1 * time.Second
-
-	// defaultDesiredState is the desired fsmv1 state used when a config exposes no
-	// desired state of its own. It is a lifecycle target ("running"), distinct
-	// from the observed-state literals above. Workers that require a different
-	// empty-config target declare it via StateVocabulary.DesiredRunning.
-	defaultDesiredState = "running"
 )
 
 // HealthReporter is the verdict-reading seam the adapter owns. The stored status

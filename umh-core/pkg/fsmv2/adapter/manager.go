@@ -29,10 +29,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
 
-// stoppedState is the desired-state literal that disables a config: a config
-// whose desired state is this is not Upserted into the fsmv2 runtime.
-const stoppedState = "stopped"
-
 // StateConfig is the compile-time desired-state seam every managed config must
 // satisfy. It replaces an optional duck-typed accessor whose absence silently
 // fell back to "running": a stopped worker was reported running and its fsmv1
@@ -118,10 +114,12 @@ type WorkerManagerSpec[TConfig StateConfig, TStatus any] struct {
 	// MinRequiredTime is passed to each built instance. Optional; defaults to 0.
 	MinRequiredTime time.Duration
 
-	// States overrides the fsmv1 state words the resolution returns for its
-	// adapter-decided exits (bootstrap, unknown, degraded verdict, stale).
-	// Optional; an empty word falls back to the adapter's default literals. See
-	// StateVocabulary for the contract with the consumer's predicate table.
+	// States declares this worker's four fsmv1 state words. The manager uses
+	// them for its adapter-decided exits (bootstrap, unknown, degraded verdict,
+	// stale), for the default disable gate (Stopped), and as the empty-config
+	// desired-state fallback (DesiredRunning). Required; an incomplete vocabulary
+	// fails at construction. See StateVocabulary for the contract with the
+	// consumer's predicate table.
 	States StateVocabulary
 }
 
@@ -162,7 +160,9 @@ func NewWorkerManager[TConfig StateConfig, TStatus any](spec WorkerManagerSpec[T
 	}
 
 	if spec.IsEnabled == nil {
-		spec.IsEnabled = defaultIsEnabled[TConfig]
+		spec.IsEnabled = func(cfg TConfig) bool {
+			return cfg.GetDesiredFSMState() != spec.States.Stopped
+		}
 	}
 
 	if spec.Log == nil {
@@ -192,20 +192,14 @@ func defaultCfgFor[TConfig any](cfg TConfig) (map[string]any, error) {
 	return out, nil
 }
 
-// defaultIsEnabled reads the config's desired state: a config whose
-// GetDesiredFSMState() returns "stopped" is disabled, otherwise it is enabled.
-func defaultIsEnabled[TConfig StateConfig](cfg TConfig) bool {
-	return cfg.GetDesiredFSMState() != stoppedState
-}
-
-// desiredStateOf returns the config's desired state, falling back to
-// defaultDesiredState ("running") only when the config leaves it empty.
-func desiredStateOf[TConfig StateConfig](cfg TConfig) string {
+// desiredStateOf returns the config's desired state, falling back to the
+// worker's declared DesiredRunning word only when the config leaves it empty.
+func (m *WorkerManager[TConfig, TStatus]) desiredStateOf(cfg TConfig) string {
 	if s := cfg.GetDesiredFSMState(); s != "" {
 		return s
 	}
 
-	return defaultDesiredState
+	return m.spec.States.DesiredRunning
 }
 
 // refFor builds the ref for a config entry from the worker type and its name.
@@ -218,7 +212,7 @@ func (m *WorkerManager[TConfig, TStatus]) buildInstance(cfg TConfig, enabled boo
 	inst := newAdaptedInstance(
 		m.refFor(cfg),
 		cfg,
-		desiredStateOf(cfg),
+		m.desiredStateOf(cfg),
 		m.spec.MinRequiredTime,
 		m.spec.MapFresh,
 		m.spec.MapObserved,
