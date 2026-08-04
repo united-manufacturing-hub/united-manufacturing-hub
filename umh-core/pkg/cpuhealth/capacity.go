@@ -40,6 +40,30 @@ const (
 	ScopeAffinity
 )
 
+// Environment capabilities. They are startup facts about this host, distinct
+// from per-tick readability, and are folded into the Environment the engine
+// selects instruments with.
+const (
+	// HasVirtualization means the host is a virtual machine.
+	HasVirtualization diagnosis.Capability = "cpuhealth.HasVirtualization"
+	// HasLimit means the cgroup names a positive CPU quota.
+	HasLimit diagnosis.Capability = "cpuhealth.HasLimit"
+)
+
+// DeriveEnvironment reads exactly two facts off Sample — whether the host is
+// Virtualized, and whether Quota names a POSITIVE number — and builds the
+// Environment the engine selects instruments with.
+func DeriveEnvironment(s Sample) diagnosis.Environment {
+	caps := make([]diagnosis.Capability, 0, 2)
+	if s.Virtualized {
+		caps = append(caps, HasVirtualization)
+	}
+	if q, ok := s.Quota.Get(); ok && q > 0 {
+		caps = append(caps, HasLimit)
+	}
+	return diagnosis.NewEnvironment(caps...)
+}
+
 // Sampler reads a cgroup's CPU health signals.
 type Sampler interface {
 	Read(ctx context.Context) (Sample, error)
@@ -420,34 +444,42 @@ func dmiTokenMatch(data []byte, err error, tokens []string) (virtualized, resolv
 }
 
 // parseCounter reads one key's numeric value out of cpu.stat bytes. An absent
-// key or an unparsable value yields an unavailable Reading — never a trusted 0.
-func parseCounter(data []byte, key string) diagnosis.Reading {
+// key yields an unavailable Reading — never a trusted 0 — while an unparsable
+// value for a present key returns a non-nil error, which fails the whole sample.
+func parseCounter(data []byte, key string) (diagnosis.Reading, error) {
 	for _, line := range strings.Split(string(data), "\n") {
 		fields := strings.Fields(line)
 		if len(fields) >= 2 && fields[0] == key {
 			v, err := strconv.ParseFloat(fields[1], 64)
 			if err != nil {
-				return diagnosis.Unknown()
+				return diagnosis.Unknown(), fmt.Errorf("unparsable %s value %q: %w", key, fields[1], err)
 			}
-			return diagnosis.Known(v)
+			return diagnosis.Known(v), nil
 		}
 	}
-	return diagnosis.Unknown()
+	return diagnosis.Unknown(), nil
 }
 
 // readStat reads cpu.stat once and yields the raw usage total and both throttle
-// counters. A non-nil error reports a READ failure, which fails the whole
-// sample; each value's Reading is independently present or unavailable on
-// success.
+// counters. A non-nil error reports a read OR parse failure of cpu.stat, either
+// of which fails the whole sample; each value's Reading is independently present
+// or unavailable on success.
 func (s *cgroupSampler) readStat(ctx context.Context) (usage, periods, throttled diagnosis.Reading, err error) {
 	var data []byte
 	data, err = s.fs.ReadFile(ctx, s.base+"/cpu.stat")
 	if err != nil {
 		return diagnosis.Unknown(), diagnosis.Unknown(), diagnosis.Unknown(), err
 	}
-	return parseCounter(data, "usage_usec"),
-		parseCounter(data, "nr_periods"),
-		parseCounter(data, "nr_throttled"), nil
+	if usage, err = parseCounter(data, "usage_usec"); err != nil {
+		return diagnosis.Unknown(), diagnosis.Unknown(), diagnosis.Unknown(), err
+	}
+	if periods, err = parseCounter(data, "nr_periods"); err != nil {
+		return diagnosis.Unknown(), diagnosis.Unknown(), diagnosis.Unknown(), err
+	}
+	if throttled, err = parseCounter(data, "nr_throttled"); err != nil {
+		return diagnosis.Unknown(), diagnosis.Unknown(), diagnosis.Unknown(), err
+	}
+	return usage, periods, throttled, nil
 }
 
 // Read samples the cgroup at base from cpu.max: a positive limit reads as a
