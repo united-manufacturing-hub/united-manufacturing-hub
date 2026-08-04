@@ -359,6 +359,43 @@ var _ = Describe("Window", func() {
 			"the first post-demote point is a single entry (below Mean Min 2)")
 	})
 
+	It("should prune stale pre-outage points on the recovery tick under the production Age-before-Append order, so a recovered window does not fold them as trusted", func() {
+		const span = 10 * time.Second
+		w, _ := NewWindow(span, 60*time.Second, Mean, false)
+		t0 := time.Unix(30_000_000, 0)
+
+		// Production order is Age THEN Append, each tick (not the reversed
+		// order the other window specs use, which masks this).
+		w.Age(t0)
+		w.Append(Known(5), Unknown(), t0)
+		w.Age(t0.Add(time.Second))
+		w.Append(Known(6), Unknown(), t0.Add(time.Second))
+
+		// An outage: Age then a failed Append on each tick. The window holds.
+		for i := 2; i <= 6; i++ {
+			at := t0.Add(time.Duration(i) * time.Second)
+			w.Age(at)
+			w.Append(Unknown(), Unknown(), at)
+		}
+
+		// Recovery at 20s: Age runs first (freezes on the prior tick's failure and
+		// does not prune), then a successful Append(100) lands. The fresh point
+		// must prune the stale out-of-span 5 and 6, so the window reports 100,
+		// not the folded mean 37.
+		rec := t0.Add(20 * time.Second)
+		w.Age(rec)
+		w.Append(Known(100), Unknown(), rec)
+
+		v, st := w.Reduce().Get()
+		// The stale 5 and 6 are pruned, so the mean is 100 — not the folded 37 the
+		// bug produced. One recovered point is still below Mean's minimum of 2
+		// (honest-Untrusted), whereas the bug reported a wrong TRUSTED 37.
+		Expect(v).To(Equal(100.0),
+			"the recovery append prunes the stale out-of-span points; a build that folds them reports a wrong mean of 37")
+		Expect(st).To(Equal(StateUntrusted),
+			"one recovered point is below Mean's minimum of 2: honest-Untrusted, not a folded trusted value")
+	})
+
 	It("should not restart a counter window on an equal value — only a strict fall resets", func() {
 		const span = 10 * time.Second
 		w, _ := NewWindow(span, 60*time.Second, Mean, true)

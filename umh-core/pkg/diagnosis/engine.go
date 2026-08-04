@@ -168,11 +168,17 @@ func NewEngine[S any](t Table[S]) (*Engine[S], error) {
 // its fire mark under its polarity; a dividing reduction with no Against to
 // feed it; and a reduction whose minimum exceeds what its span can hold at the
 // table's interval — a p99 min of 100 over a 60s span at 1s holds 61 entries
-// and would sit at StateUntrusted forever. On a signal: a duplicate name.
-// Within a signal: a duplicate
+// and would sit at StateUntrusted forever. On a signal: a duplicate name; an
+// empty instrument list (no route to a verdict, resolve reports NoInstrument
+// forever); a non-positive demote span; and a demote span below the table's
+// interval — the tick count Suite drives is int(DemoteSpan/Interval), and a
+// demote below the interval would make that count zero. Within a signal: a
+// duplicate
 // instrument name. On a track: the instrument refusals that apply to it — a
 // nil Extract, a non-positive span, a minimum below one, span-at-interval — plus
-// a dividing reduction, which a track declares no denominator series for.
+// a dividing reduction, which a track declares no denominator series for; and a
+// duplicate track name, which would let one track silently overwrite another in
+// the tracked map.
 func validate[S any](t Table[S]) error {
 	seenSignal := make(map[string]bool, len(t.Signals))
 	for _, s := range t.Signals {
@@ -180,6 +186,16 @@ func validate[S any](t Table[S]) error {
 			return fmt.Errorf("duplicate signal name %q", s.Name)
 		}
 		seenSignal[s.Name] = true
+
+		if len(s.Instruments) == 0 {
+			return fmt.Errorf("signal %q: no instruments", s.Name)
+		}
+		if s.DemoteSpan <= 0 {
+			return fmt.Errorf("signal %q: demote span %v is zero or negative", s.Name, s.DemoteSpan)
+		}
+		if t.Interval > 0 && s.DemoteSpan < t.Interval {
+			return fmt.Errorf("signal %q: demote span %v is below the table interval %v", s.Name, s.DemoteSpan, t.Interval)
+		}
 
 		seenInstrument := make(map[string]bool, len(s.Instruments))
 		for _, inst := range s.Instruments {
@@ -206,13 +222,35 @@ func validate[S any](t Table[S]) error {
 			if worse(inst.Marks.Clear.At, inst.Marks) >= worse(inst.Marks.Fire.At, inst.Marks) {
 				return fmt.Errorf("signal %q instrument %q: clear mark is not on the holding side of its fire mark under its polarity", s.Name, inst.Name)
 			}
+			// Capacity is the value at which severity reaches 1, stated positively.
+			// A negative capacity is a meaningless scale; a capacity at or below the
+			// fire mark under HigherIsWorse leaves no positive headroom and
+			// collapses severity to 0; a capacity equal to minus the fire mark under
+			// LowerIsWorse zeroes the severity denominator. An unset capacity (0)
+			// is the deliberate default — it says no cross-instrument normalisation
+			// is declared — so only an explicitly non-zero capacity is judged.
+			if inst.Marks.Capacity < 0 {
+				return fmt.Errorf("signal %q instrument %q: mark capacity %v is negative", s.Name, inst.Name, inst.Marks.Capacity)
+			}
+			if inst.Marks.Polarity == HigherIsWorse && inst.Marks.Capacity != 0 && inst.Marks.Capacity <= inst.Marks.Fire.At {
+				return fmt.Errorf("signal %q instrument %q: mark capacity %v leaves no positive headroom over fire mark %v", s.Name, inst.Name, inst.Marks.Capacity, inst.Marks.Fire.At)
+			}
+			if inst.Marks.Polarity == LowerIsWorse && inst.Marks.Capacity != 0 && inst.Marks.Capacity == -inst.Marks.Fire.At {
+				return fmt.Errorf("signal %q instrument %q: mark capacity %v equals minus the fire mark, zeroing the severity denominator", s.Name, inst.Name, inst.Marks.Capacity)
+			}
 			if t.Interval > 0 && int(inst.Span/t.Interval)+1 < inst.Red.Min {
 				return fmt.Errorf("signal %q instrument %q: reduction %q minimum sample count %d exceeds what its window span %v can hold at table interval %v", s.Name, inst.Name, inst.Red.Name, inst.Red.Min, inst.Span, t.Interval)
 			}
 		}
 	}
 
+	seenTrack := make(map[string]bool, len(t.Tracks))
 	for _, tr := range t.Tracks {
+		if seenTrack[tr.Name] {
+			return fmt.Errorf("duplicate track name %q", tr.Name)
+		}
+		seenTrack[tr.Name] = true
+
 		if tr.Extract == nil {
 			return fmt.Errorf("track %q: nil extract", tr.Name)
 		}

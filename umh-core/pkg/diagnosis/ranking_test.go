@@ -147,6 +147,30 @@ var _ = Describe("Ranking", func() {
 			"the degenerate cause is still ranked deterministically")
 	})
 
+	It("should keep a degenerate falling mark with capacity equal to minus the fire mark finite and total-ordered", func() {
+		// capacity == -fire zeroes the falling denominator (fire - (-capacity)).
+		// A value below the fire mark then gives a non-zero / 0 = +Inf, which must
+		// clamp to the top of the scale; a value sitting exactly at the fire mark
+		// gives 0/0 = NaN, which must fall back to the bottom — the rising-arm
+		// degenerate handling, on the other polarity. Rank stays a total order.
+		below := falls(1, 0, 4, 8, -8, false) // (8-4)/(8-8) = 4/0 = +Inf
+		at := falls(1, 1, 8, 8, -8, false)    // (8-8)/(8-8) = 0/0 = NaN
+		for _, f := range []Fired{below, at} {
+			s := f.Severity()
+			Expect(math.IsNaN(s)).To(BeFalse(), "a degenerate falling mark must not leak NaN into the comparator")
+			Expect(math.IsInf(s, 0)).To(BeFalse(), "a degenerate falling mark must not leak ±Inf into the comparator")
+			Expect(s).To(BeNumerically(">=", 0))
+			Expect(s).To(BeNumerically("<=", 1))
+		}
+		Expect(below.Severity()).To(Equal(1.0), "the overshooting arm clamps to the top of the severity scale")
+		Expect(at.Severity()).To(Equal(0.0), "the 0/0 arm falls back to the bottom of the severity scale")
+
+		set := []Fired{below, falls(1, 2, -2, 0, 4, false)}
+		want := indexes(Rank(append([]Fired{}, set...)))
+		Expect(indexes(Rank([]Fired{set[1], set[0]}))).To(Equal(want),
+			"the degenerate falling cause is still ranked deterministically")
+	})
+
 	It("should clamp severity to the [0,1] scale when the value overshoots or undershoots", func() {
 		above := rises(1, 0, 2.0, 0.5, 1.0)   // (2.0-0.5)/0.5 = 3.0 -> clamped 1
 		beneath := rises(1, 1, 0.0, 0.5, 1.0) // (0.0-0.5)/0.5 = -1.0 -> clamped 0

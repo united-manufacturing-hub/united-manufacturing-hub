@@ -257,19 +257,19 @@ var _ = Describe("Engine", func() {
 		Expect(fired[0].Identity.Signal).To(Equal("F"), "a Ready-but-quiet signal contributes nothing to the fired set")
 	})
 
-	It("should reset a fired latch when every capable instrument's window is absent and the signal declares release-on-absent", func() {
+	It("should reset a fired latch the moment its window is AllAbsent when the signal declares release-on-absent, while a non-release signal holds until its own demote clock elapses", func() {
 		type s6 struct{ v float64 }
 
-		// The extractor is readability-switched: readable returns a value over the
-		// fire mark, unreadable returns an absence on every tick.
-		on := true
-		mkElem := func(name string, release bool) Signal[s6] {
+		// Readability-switched extractors: when a signal's switch is on, its
+		// window stores an over-fire value; when off, an absence on every tick.
+		onT, onF := true, true
+		mkElem := func(name string, on *bool, release bool) Signal[s6] {
 			return Signal[s6]{
 				Name: name, DemoteSpan: 60 * time.Second, ReleaseOnAbsent: release,
 				Instruments: []Instrument[s6]{{
 					Name: "I", Requires: []Capability{"c"},
 					Extract: func(s s6) Reading {
-						if !on {
+						if !*on {
 							return Unknown()
 						}
 						return Known(5.0)
@@ -280,31 +280,46 @@ var _ = Describe("Engine", func() {
 			}
 		}
 
-		tbl := Table[s6]{Signals: []Signal[s6]{mkElem("T", true), mkElem("F", false)}, Interval: time.Second}
+		tbl := Table[s6]{Signals: []Signal[s6]{mkElem("T", &onT, true), mkElem("F", &onF, false)}, Interval: time.Second}
 		env := NewEnvironment("c")
 		e, err := NewEngine(tbl)
 		Expect(err).ToNot(HaveOccurred())
 
 		base := time.Unix(7_000_000, 0)
-		e.Observe(s6{}, env, base) // readable: both fire
+		e.Observe(s6{}, env, base) // both readable: both fire
 
-		// Past the demote span with the source silent, both windows empty (AllAbsent).
-		on = false
+		// Give F one more trusted (Ready) tick just inside its demote boundary so
+		// its latch clock restarts from a recent update. The Reset arm and the
+		// ReleaseAfter arm are keyed by the SAME DemoteSpan, so at a tick where
+		// BOTH windows have already emptied the two are indistinguishable — F would
+		// release on the clock there, exactly as T does on the AllAbsent reset. To
+		// make the arms observable, F's clock must still be running on the AllAbsent
+		// tick, which means F's window must not yet be empty.
+		onT = false
+		e.Observe(s6{}, env, base.Add(55*time.Second)) // F still readable -> Ready; T freezes, holds
+
+		// Silence both and advance past T's demote boundary. T's window (fired at
+		// base, never re-updated) demotes -> AllAbsent -> Reset: released
+		// immediately. F's window (fired at base+55s) is still populated and
+		// frozen, so F is NoneReady and its ReleaseAfter — keyed off the base+55s
+		// update — has NOT elapsed: F stays fired. T's Reset is what distinguishes
+		// the two on this tick.
+		onF = false
 		fired, readiness := e.Observe(s6{}, env, base.Add(61*time.Second))
 
 		byName := make(map[string]bool, len(fired))
 		for _, f := range fired {
 			byName[f.Identity.Signal] = true
 		}
-		// T (release-on-absent) is Reset -> gone immediately. F (no release-on-
-		// absent) is NOT reset by AllAbsent — its release rides the demote clock,
-		// which on this same tick has simply also elapsed, so the two reach the
-		// same outward state through different arms. What distinguishes them is the
-		// arm: T is guaranteed gone the instant all windows are absent, F is
-		// clock-bound. Assert the engine emitted a readiness row for each.
-		Expect(byName["T"]).To(BeFalse(), "release-on-absent resets the fired latch on AllAbsent")
+		Expect(byName["T"]).To(BeFalse(), "release-on-absent resets the fired latch the instant its window is AllAbsent")
+		Expect(byName["F"]).To(BeTrue(), "a non-release signal stays fired while its demote clock has not elapsed")
 		Expect(readiness).To(HaveLen(2), "one readiness row per signal")
-		_ = byName["F"] // F's release is demote-clock-bound (coupled at this boundary)
+
+		// Once F's own demote boundary passes (base+55s + 60s) F, too, releases on
+		// the clock, so the two converge with the clock alone.
+		onT, onF = false, false
+		firedAfter, _ := e.Observe(s6{}, env, base.Add(116*time.Second))
+		Expect(firedAfter).To(BeEmpty(), "F releases once its own demote boundary passes")
 	})
 
 	It("should release a fired latch on the demote-span clock when no instrument can answer the question at all", func() {
@@ -334,5 +349,34 @@ var _ = Describe("Engine", func() {
 
 		firedAfter, _ := e.Observe(nsnap{v: 3.0}, blind, base.Add(62*time.Second))
 		Expect(firedAfter).To(BeEmpty(), "a latch releases once the demote clock elapses with nothing able to answer")
+	})
+
+	It("should NOT reset a NoInstrument signal on release-on-absent — that flag applies to AllAbsent only, so the latch holds on the demote clock", func() {
+		type rsnap struct{ v float64 }
+		sig := Signal[rsnap]{
+			Name: "R", DemoteSpan: 60 * time.Second, ReleaseOnAbsent: true,
+			Instruments: []Instrument[rsnap]{{
+				Name: "I", Requires: []Capability{"c"},
+				Extract: func(s rsnap) Reading { return Known(s.v) },
+				Red:     Last, Span: 60 * time.Second,
+				Marks: Marks{Unit: "u", Fire: Mark{At: 2, Inclusive: true}, Clear: Mark{At: 0, Inclusive: false}, Polarity: HigherIsWorse},
+			}},
+		}
+		tbl := Table[rsnap]{Signals: []Signal[rsnap]{sig}, Interval: time.Second}
+		capable := NewEnvironment("c")
+		e, err := NewEngine(tbl)
+		Expect(err).ToNot(HaveOccurred())
+
+		base := time.Unix(9_000_000, 0)
+		e.Observe(rsnap{v: 3.0}, capable, base) // fires
+		e.Observe(rsnap{v: 3.0}, capable, base.Add(time.Second))
+
+		blind := NewEnvironment() // no capabilities -> NoInstrument
+		fired, readiness := e.Observe(rsnap{v: 3.0}, blind, base.Add(2*time.Second))
+		Expect(readiness[0].Availability).To(Equal(NoInstrument))
+		Expect(fired).To(HaveLen(1), "even with release-on-absent, a NoInstrument signal is NOT reset immediately — it holds until its demote clock elapses")
+
+		firedAfter, _ := e.Observe(rsnap{v: 3.0}, blind, base.Add(62*time.Second))
+		Expect(firedAfter).To(BeEmpty(), "a NoInstrument signal releases once its demote clock elapses, not on the absent flag")
 	})
 })

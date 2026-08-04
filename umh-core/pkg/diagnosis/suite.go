@@ -150,6 +150,14 @@ func runScenario[S any](t Table[S], sc Scenario, env Environment, f Feed[S]) Out
 		interval = time.Second
 	}
 	demoteTicks := int(sig.DemoteSpan / interval)
+	// Belt-and-suspenders with validate: a demote span below the interval gives a
+	// zero tick count, and CaseBriefOutage would then drive bools(-1) into a
+	// makeslice panic. validate refuses such a table, but the generator must not
+	// be able to panic on a table an engine could accept, so floor the count at
+	// one tick.
+	if demoteTicks < 1 {
+		demoteTicks = 1
+	}
 
 	var seq []bool
 	driveEnv := env

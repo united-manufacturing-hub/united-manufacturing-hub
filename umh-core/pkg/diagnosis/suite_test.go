@@ -220,4 +220,23 @@ var _ = Describe("Suite", func() {
 		// mutant is indistinguishable from the correct feed there.
 		Expect(mutantBy[sc("B", CaseBelowFloor)]).To(Equal(correctBy[sc("B", CaseBelowFloor)]))
 	})
+
+	It("should reach Ready in CaseUnsupported for a signal whose instrument requires nothing, since an empty requirement is satisfied by any environment", func() {
+		tbl := Table[snap]{
+			Signals: []Signal[snap]{
+				{Name: "N", DemoteSpan: 60 * time.Second, Instruments: []Instrument[snap]{
+					{Name: "I", Requires: []Capability{}, Extract: extract, Red: Last, Span: 60 * time.Second, Marks: marks()},
+				}},
+			},
+			Interval: time.Second,
+		}
+		env := NewEnvironment("source-1")
+		outcomes := Run(tbl, env, feed{})
+		byScenario := make(map[Scenario]Availability, len(outcomes))
+		for _, o := range outcomes {
+			byScenario[o.Scenario] = o.Availability
+		}
+		Expect(byScenario[Scenario{Signal: "N", Case: CaseUnsupported}]).To(Equal(Ready),
+			"an instrument that requires nothing is satisfied even by the empty CaseUnsupported environment, so the signal is Ready rather than NoInstrument")
+	})
 })

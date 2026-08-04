@@ -95,14 +95,17 @@ func (w *Window) Age(now time.Time) {
 		return
 	}
 	// Prune entries older than the span, keeping a sample landing exactly on
-	// the cutoff. Entries are appended in time order, so prune from the front.
-	cutoff := now.Add(-w.span)
+	// the cutoff.
+	w.prune(now.Add(-w.span))
+}
 
+// prune drops entries older than the cutoff, keeping a sample landing exactly on
+// it. Entries are appended in time order, so it drops from the front.
+func (w *Window) prune(cutoff time.Time) {
 	i := 0
 	for i < len(w.points) && w.points[i].At.Before(cutoff) {
 		i++
 	}
-
 	w.points = w.points[i:]
 }
 
@@ -187,6 +190,12 @@ func (w *Window) Append(value, against Reading, at time.Time) {
 	w.points = append(w.points, Point{At: at, Value: v, Against: against})
 	w.lastSuccess = at
 	w.lastAppendStored = true
+	// A successful store prunes to the span even when this tick began frozen.
+	// Production order is Age-then-Append: through an outage Age froze on the
+	// prior tick's failed append and did not prune, so without this the stale
+	// >span points would fold into the first post-recovery reduction as if
+	// trusted.
+	w.prune(at.Add(-w.span))
 }
 
 // Reduce folds the window under its own reduction. It takes no argument: a

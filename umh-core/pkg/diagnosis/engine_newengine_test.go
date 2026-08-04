@@ -189,4 +189,81 @@ var _ = Describe("NewEngine", func() {
 		_, err := NewEngine(validTable([]Signal[snap]{sig}))
 		Expect(err).ToNot(HaveOccurred(), "a non-nil against under a non-dividing reduction is a redundant declaration, not a refusal")
 	})
+
+	It("refuses duplicate track names, which would make one track silently overwrite another in the tracked map", func() {
+		tbl := validTable([]Signal[snap]{validSignal("A")})
+		tbl.Tracks = []Track[snap]{
+			{Name: "T", Extract: extract, Span: 60 * time.Second, Red: Mean},
+			{Name: "T", Extract: extract, Span: 60 * time.Second, Red: Mean},
+		}
+		_, err := NewEngine(tbl)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("T"))
+	})
+
+	It("refuses a signal whose demote span is zero or negative", func() {
+		sig := validSignal("A")
+		sig.DemoteSpan = 0
+		_, err := NewEngine(validTable([]Signal[snap]{sig}))
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("A"))
+	})
+
+	It("refuses a signal whose demote span is below the table interval, which the suite generator would turn into a zero tick count", func() {
+		sig := validSignal("A")
+		sig.DemoteSpan = 500 * time.Millisecond
+		_, err := NewEngine(validTable([]Signal[snap]{sig}))
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("A"))
+	})
+
+	It("refuses a signal with no instruments, which resolve would report as NoInstrument forever", func() {
+		sig := validSignal("A")
+		sig.Instruments = nil
+		_, err := NewEngine(validTable([]Signal[snap]{sig}))
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("A"))
+	})
+
+	It("refuses a negative mark capacity, a meaningless severity scale", func() {
+		sig := validSignal("A")
+		m := validMarks()
+		m.Capacity = -1
+		sig.Instruments[0].Marks = m
+		_, err := NewEngine(validTable([]Signal[snap]{sig}))
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("A"))
+		Expect(err.Error()).To(ContainSubstring("I1"))
+	})
+
+	It("refuses a HigherIsWorse mark whose capacity is at or below the fire mark, leaving no positive headroom", func() {
+		sig := validSignal("A")
+		m := validMarks()
+		m.Capacity = m.Fire.At // capacity == fire: zero denominator, severity collapses
+		sig.Instruments[0].Marks = m
+		_, err := NewEngine(validTable([]Signal[snap]{sig}))
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("A"))
+		Expect(err.Error()).To(ContainSubstring("I1"))
+	})
+
+	It("refuses a LowerIsWorse mark whose capacity equals minus the fire mark, zeroing the severity denominator", func() {
+		sig := validSignal("A")
+		m := validMarks()
+		m.Polarity = LowerIsWorse
+		m.Fire = Mark{At: 8, Inclusive: true}
+		m.Clear = Mark{At: 12, Inclusive: true}
+		m.Capacity = -m.Fire.At // capacity == -fire: denominator fire-(-capacity) is zero
+		sig.Instruments[0].Marks = m
+		_, err := NewEngine(validTable([]Signal[snap]{sig}))
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("A"))
+		Expect(err.Error()).To(ContainSubstring("I1"))
+	})
+
+	It("does not refuse an unset (zero) capacity, the deliberate no-normalisation default", func() {
+		sig := validSignal("A")
+		_, err := NewEngine(validTable([]Signal[snap]{sig}))
+		Expect(err).ToNot(HaveOccurred(), "an unset capacity is not a refusal because every test's marks and the existing tables declare none")
+	})
 })
