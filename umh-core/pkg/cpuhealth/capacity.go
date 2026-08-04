@@ -296,14 +296,43 @@ func (s *cgroupSampler) resolveVirtualized(ctx context.Context) bool {
 		return true
 	}
 	// ARM64 route. A successful DMI read resolves the fact either way; a failed
-	// DMI read leaves it unresolved so the next tick retries.
-	v, ok := s.dmiVirtualized(ctx)
-	if !ok {
+	// DMI read leaves it unresolved so the next tick retries. The DMI identity
+	// spans two independent sources: product_name and sys_vendor (the cloud
+	// hypervisor an ARM64 product_name like "m6g.medium" never names), each read
+	// separately so a failure or absence on one never breaks the other.
+	pv, pok := s.dmiProductVirtualized(ctx)
+	vv, vok := s.dmiVendorVirtualized(ctx)
+	if (pok && pv) || (vok && vv) {
+		s.virtualized = true
+		s.virtResolved = true
+		return true
+	}
+	// product_name read resolved the fact. On a platform whose /proc/cpuinfo
+	// has a flags line (x86) product_name alone is authoritative and the result
+	// is cached. ARM64 has no flags line and sys_vendor is part of its identity,
+	// so a still-unresolved sys_vendor keeps the fact open on the next tick
+	// rather than permanently caching false.
+	if err == nil && !cpuinfoHasFlagsLine(data) && !vok {
 		return false
 	}
-	s.virtualized = v
+	s.virtualized = false
 	s.virtResolved = true
-	return v
+	return false
+}
+
+// cpuinfoHasFlagsLine reports whether /proc/cpuinfo carries a "flags" line at
+// all. Its presence marks an x86 kernel, where the DMI product_name alone is an
+// authoritative bare-metal identity; an ARM64 cpuinfo has a Features line and
+// no flags line, and there sys_vendor is part of the DMI identity.
+func cpuinfoHasFlagsLine(data []byte) bool {
+	for _, line := range strings.Split(string(data), "\n") {
+		if i := strings.IndexByte(line, ':'); i >= 0 {
+			if strings.TrimSpace(line[:i]) == "flags" {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // cpuinfoHasHypervisorFlag reports whether /proc/cpuinfo's flags line carries
@@ -338,18 +367,51 @@ var dmiHypervisorTokens = []string{
 	"qemu",
 }
 
-// dmiVirtualized is the distinct ARM64 fallback. It reports whether
+// dmiProductVirtualized is the first ARM64 DMI source. It reports whether
 // /sys/class/dmi/id/product_name names a known hypervisor. The second return is
-// false when the DMI read itself failed: an unreadable product_name is no
-// evidence, and leaving it unresolved lets the caller (and a later tick) retry
-// rather than caching Virtualized=false forever.
-func (s *cgroupSampler) dmiVirtualized(ctx context.Context) (virtualized, resolved bool) {
+// false when the read failed: an unreadable product_name is no evidence, and
+// leaving it unresolved lets the caller (and a later tick) retry rather than
+// caching Virtualized=false forever.
+func (s *cgroupSampler) dmiProductVirtualized(ctx context.Context) (virtualized, resolved bool) {
 	data, err := s.fs.ReadFile(ctx, "/sys/class/dmi/id/product_name")
+	return dmiTokenMatch(data, err, dmiHypervisorTokens)
+}
+
+// dmiVendorHypervisorTokens are the cloud-vendor substrings (lowercased) that
+// indicate a hypervisor in /sys/class/dmi/id/sys_vendor. AWS Graviton/Nitro
+// puts its instance type in product_name ("m6g.medium") and the hypervisor
+// identity in sys_vendor ("Amazon EC2"); GCP Tau T2A likewise, and QEMU/KVM
+// guests report sys_vendor "QEMU" with a "Standard PC" product_name that the
+// product tokens never catch. sys_vendor is the second DMI source, read and
+// cached independently of product_name.
+//
+// "microsoft" is deliberately NOT here: sys_vendor "Microsoft Corporation" is
+// ambiguous between Azure ARM guests (a VM) and Microsoft Surface machines
+// (bare-metal OEM hardware), and a bare-metal Surface misread as a VM is the
+// worse error. Azure ARM therefore stays an undetected known-limitation.
+var dmiVendorHypervisorTokens = []string{
+	"amazon",
+	"google compute engine",
+	"qemu",
+}
+
+// dmiVendorVirtualized is the second ARM64 DMI source. It reports whether
+// /sys/class/dmi/id/sys_vendor names a cloud hypervisor, with the same
+// read-failure contract as dmiProductVirtualized.
+func (s *cgroupSampler) dmiVendorVirtualized(ctx context.Context) (virtualized, resolved bool) {
+	data, err := s.fs.ReadFile(ctx, "/sys/class/dmi/id/sys_vendor")
+	return dmiTokenMatch(data, err, dmiVendorHypervisorTokens)
+}
+
+// dmiTokenMatch reports whether a (possibly failed) DMI source read names a
+// known hypervisor token. The second return is false when the read itself
+// failed, so the caller leaves the fact unresolved and retries next tick.
+func dmiTokenMatch(data []byte, err error, tokens []string) (virtualized, resolved bool) {
 	if err != nil {
 		return false, false
 	}
 	lower := strings.ToLower(strings.TrimSpace(string(data)))
-	for _, tok := range dmiHypervisorTokens {
+	for _, tok := range tokens {
 		if strings.Contains(lower, tok) {
 			return true, true
 		}

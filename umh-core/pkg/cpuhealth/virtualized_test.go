@@ -239,4 +239,156 @@ var _ = Describe("CPU virtualisation", func() {
 		Expect(second.Virtualized).To(BeTrue(),
 			"once the DMI read succeeds, the ARM64 VM must recover and resolve Virtualized=true")
 	})
+
+	// S2 R4d — The DMI vendor, which is ARM64's only working source [F9]. AWS
+	// Graviton/Nitro puts its instance type (m6g.medium) in /sys/class/dmi/id/
+	// product_name, GCP Tau T2A and Azure ARM put no hypervisor token there at
+	// all — so lengthening the product_name token list cannot fix any of them.
+	// The cloud hypervisor identity lives in a second DMI source the sampler
+	// never reads today: /sys/class/dmi/id/sys_vendor. This rung reads it as a
+	// DISTINCT source — its own read failure case and its own read-once cache,
+	// not an extended product_name list.
+	It("resolves an ARM64 cloud VM from a second DMI source, sys_vendor, which product_name cannot catch, with its own failure handling", func() {
+		ctx := context.Background()
+
+		// newVendorSampler is R4c's harness plus a separately-controlled
+		// /sys/class/dmi/id/sys_vendor. product and vendor err flags keep the
+		// two DMI sources independent, so the test can prove sys_vendor's
+		// distinctness (an unreadable one must not break the other) and its own
+		// read-once cache.
+		newVendorSampler := func(cpuinfo []byte, product string, productErr bool, vendor string, vendorErr bool) (cpuhealth.Sampler, *int) {
+			vendorReads := 0
+			fs := filesystem.NewMockFileSystem()
+			fs.ReadFileFunc = func(ctx context.Context, path string) ([]byte, error) {
+				switch path {
+				case base + "/cpu.stat":
+					return []byte("usage_usec 5000000\nnr_periods 0\nnr_throttled 0\n"), nil
+				case base + "/cpu.max":
+					return []byte("max 100000\n"), nil
+				case "/proc/cpuinfo":
+					return cpuinfo, nil
+				case "/sys/class/dmi/id/product_name":
+					if productErr {
+						return nil, errors.New("unreadable")
+					}
+					return []byte(product), nil
+				case "/sys/class/dmi/id/sys_vendor":
+					vendorReads++
+					if vendorErr {
+						return nil, errors.New("unreadable")
+					}
+					return []byte(vendor), nil
+				default:
+					return nil, errors.New("unreadable")
+				}
+			}
+			return cpuhealth.NewCgroupSampler(fs, base), &vendorReads
+		}
+
+		// F9's core: an ARM64 cpuinfo (no hypervisor flag) whose product_name
+		// names NO hypervisor token — AWS Graviton reports "m6g.medium" — but
+		// whose sys_vendor names the cloud hypervisor "Amazon EC2". The guest is
+		// provable only because sys_vendor is read at all; product_name alone
+		// leaves steal dead on the exact box this rung exists to detect.
+		s, _ := newVendorSampler(armCpuinfo, "m6g.medium", false, "Amazon EC2", false)
+		r, err := s.Read(ctx)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(r.Virtualized).To(BeTrue(),
+			"an ARM64 host whose DMI sys_vendor names a cloud hypervisor ('Amazon EC2') must resolve Virtualized=true even when product_name ('m6g.medium') carries no hypervisor token")
+
+		// GCP Tau T2A and QEMU/KVM carry their vendor in sys_vendor, which no
+		// product_name token list can reach; each must resolve through the same
+		// second source, not just Amazon EC2. ("Microsoft Corporation" is NOT a
+		// token — see the bare-metal Surface case just below.)
+		for _, vendor := range []string{"Google Compute Engine", "QEMU", "Amazon EC2"} {
+			s, _ = newVendorSampler(armCpuinfo, "Virtual Machine", false, vendor, false)
+			r, err = s.Read(ctx)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(r.Virtualized).To(BeTrue(),
+				"an ARM64 cloud host whose DMI sys_vendor names %s must resolve Virtualized=true via the second DMI source, which product_name cannot catch", vendor)
+		}
+
+		// "Microsoft Corporation" as a sys_vendor must NOT imply a VM: it is also
+		// the sys_vendor of bare-metal Microsoft Surface hardware, which is
+		// indistinguishable from an Azure ARM guest by this token alone. A
+		// Surface-class machine must stay Virtualized=false, not be misread as a
+		// VM (which would turn the steal signal's HasVirtualization capability on
+		// for bare metal). Dropping the token means Azure ARM is a documented
+		// known-limitation; the bare-metal false-positive is the worse error.
+		s, _ = newVendorSampler(bareMetalCpuinfo, "Surface Pro 8", false, "Microsoft Corporation", false)
+		r, err = s.Read(ctx)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(r.Virtualized).To(BeFalse(),
+			"a bare-metal Microsoft Surface (sys_vendor 'Microsoft Corporation') must resolve Virtualized=false, never a VM")
+
+		// sys_vendor is a DISTINCT source with its own failure handling. An
+		// unreadable sys_vendor must not break the product_name path ...
+		s, _ = newVendorSampler(armCpuinfo, "KVM", false, "", true)
+		r, err = s.Read(ctx)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(r.Virtualized).To(BeTrue(),
+			"an unreadable sys_vendor must not break the product_name DMI path")
+
+		// ... and, conversely, an unreadable product_name must not break the
+		// sys_vendor path: each source stands alone.
+		s, _ = newVendorSampler(armCpuinfo, "m6g.medium", true, "Amazon EC2", false)
+		r, err = s.Read(ctx)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(r.Virtualized).To(BeTrue(),
+			"an unreadable product_name must not break the sys_vendor path — sys_vendor is a distinct source with its own read")
+
+		// A bare-metal sys_vendor that names no hypervisor stays not-virtualized.
+		s, _ = newVendorSampler(bareMetalCpuinfo, "PowerEdge R750", false, "Dell Inc.", false)
+		r, err = s.Read(ctx)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(r.Virtualized).To(BeFalse(),
+			"a bare-metal sys_vendor ('Dell Inc.') naming no hypervisor must resolve Virtualized=false")
+
+		// Sticky, like R4c: sys_vendor is read once and cached, and the resolved
+		// fact is re-published unchanged on the next tick.
+		s, vendorReads := newVendorSampler(armCpuinfo, "m6g.medium", false, "Amazon EC2", false)
+		first, err := s.Read(ctx)
+		Expect(err).NotTo(HaveOccurred())
+		second, err := s.Read(ctx)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(first.Virtualized).To(BeTrue())
+		Expect(second.Virtualized).To(Equal(first.Virtualized),
+			"a sys_vendor-resolved fact must be cached and re-published unchanged on the next tick")
+		Expect(*vendorReads).To(Equal(1),
+			"sys_vendor must be read once and cached, not re-read every tick")
+
+		// A transient sys_vendor read failure is retried, not permanently
+		// cached as false.
+		retryReads := 0
+		fs := filesystem.NewMockFileSystem()
+		fs.ReadFileFunc = func(ctx context.Context, path string) ([]byte, error) {
+			switch path {
+			case base + "/cpu.stat":
+				return []byte("usage_usec 5000000\nnr_periods 0\nnr_throttled 0\n"), nil
+			case base + "/cpu.max":
+				return []byte("max 100000\n"), nil
+			case "/proc/cpuinfo":
+				return armCpuinfo, nil
+			case "/sys/class/dmi/id/product_name":
+				return []byte("m6g.medium"), nil
+			case "/sys/class/dmi/id/sys_vendor":
+				retryReads++
+				if retryReads == 1 {
+					return nil, errors.New("transient sys_vendor failure")
+				}
+				return []byte("Amazon EC2"), nil
+			default:
+				return nil, errors.New("unreadable")
+			}
+		}
+		s = cpuhealth.NewCgroupSampler(fs, base)
+		first, err = s.Read(ctx)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(first.Virtualized).To(BeFalse(),
+			"a sys_vendor read failure on tick 1 must leave the fact unresolved so the next tick retries")
+		second, err = s.Read(ctx)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(second.Virtualized).To(BeTrue(),
+			"once the sys_vendor read succeeds, the ARM64 cloud VM must recover and resolve Virtualized=true")
+	})
 })
