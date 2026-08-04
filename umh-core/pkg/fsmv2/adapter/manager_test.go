@@ -161,6 +161,25 @@ var _ = Describe("WorkerManager", func() {
 		Expect(func() { NewWorkerManager(spec) }).To(PanicWith(ContainSubstring("requires ExtractConfigs")))
 	})
 
+	It("NewWorkerManager panics when the StateVocabulary is incomplete, for each of the four fields", func() {
+		fields := []struct {
+			name  string
+			blank func(*StateVocabulary)
+		}{
+			{"Starting", func(v *StateVocabulary) { v.Starting = "" }},
+			{"Degraded", func(v *StateVocabulary) { v.Degraded = "" }},
+			{"Stopped", func(v *StateVocabulary) { v.Stopped = "" }},
+			{"DesiredRunning", func(v *StateVocabulary) { v.DesiredRunning = "" }},
+		}
+
+		for _, f := range fields {
+			spec := baseSpec()
+			f.blank(&spec.States)
+
+			Expect(func() { NewWorkerManager(spec) }).To(PanicWith(ContainSubstring("StateVocabulary")), "field: %s", f.name)
+		}
+	})
+
 	It("Reconcile adds a new worker: instance registered and ref Upserted", func() {
 		w := setupClient(&stubReader{})
 		mgr := NewWorkerManager(baseSpec())
@@ -399,10 +418,8 @@ var _ = Describe("WorkerManager", func() {
 		// literals ("starting"/"degraded"), so the bare constant returning values
 		// cannot satisfy any assertion here.
 		spec := baseSpec()
-		spec.States = StateVocabulary{
-			Starting: "benthos_monitoring_starting",
-			Degraded: "benthos_monitoring_degraded",
-		}
+		spec.States.Starting = "benthos_monitoring_starting"
+		spec.States.Degraded = "benthos_monitoring_degraded"
 		mgr := NewWorkerManager(spec)
 
 		reconcile := func(name string) {
