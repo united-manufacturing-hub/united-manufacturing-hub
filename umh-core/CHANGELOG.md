@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Improvements
+
+- The log viewer's and the metrics views' own polling messages are now DEBUG instead of INFO, which makes it easier to spot actual errors and warnings
+
 ## [0.44.32]
 
 ### New Features
