@@ -6,6 +6,10 @@
 
 - The log viewer's and the metrics views' own polling messages are now DEBUG instead of INFO, which makes it easier to spot actual errors and warnings
 
+### Fixes
+
+- When the host is CPU-starved, reconciliation deadlines get exceeded and umh-core was logging "context deadline exceeded" and "not enough time to reconcile" once per instance per tick, flooding the log. These are now throttled to at most one warning per minute (with the suppressed count folded in) and escalate to an error when the overload persists, so a genuinely stuck host gets louder instead of drowning in noise
+
 ## [0.44.32]
 
 ### New Features

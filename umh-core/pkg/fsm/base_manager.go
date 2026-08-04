@@ -651,7 +651,7 @@ func (m *BaseFSMManager[C]) Reconcile(
 			return fmt.Errorf("failed to get minimum required time for instance %s: %w", name, execTimeErr), false
 		}
 
-		remaining, sufficient, timeErr := ctxutil.HasSufficientTime(innerCtx, minimumRequiredTime)
+		_, sufficient, timeErr := ctxutil.HasSufficientTime(innerCtx, minimumRequiredTime)
 		if timeErr != nil {
 			if errors.Is(timeErr, ctxutil.ErrNoDeadline) {
 				return errors.New("no deadline set in context"), false
@@ -663,8 +663,8 @@ func (m *BaseFSMManager[C]) Reconcile(
 		}
 
 		if !sufficient {
-			m.logger.Warnf("not enough time left to reconcile instance %s (only %v remaining, needed %v), skipping",
-				name, remaining, minimumRequiredTime)
+			logger.EscalatingWarn("reconcile-time-budget-exceeded",
+				"not enough time left to reconcile one or more instances (host may be CPU-starved)")
 			hasAnyReconcilesMutex.Lock()
 
 			hasAnyReconciles = true
