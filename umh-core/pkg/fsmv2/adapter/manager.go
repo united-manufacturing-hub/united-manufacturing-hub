@@ -151,6 +151,10 @@ func NewWorkerManager[TConfig StateConfig, TStatus any](spec WorkerManagerSpec[T
 		panic("adapter: WorkerManagerSpec requires ExtractConfigs, NameOf, MapFresh, and MapObserved")
 	}
 
+	if spec.States.Starting == "" || spec.States.Degraded == "" || spec.States.Stopped == "" || spec.States.DesiredRunning == "" {
+		panic("adapter: WorkerManagerSpec.StateVocabulary requires Starting, Degraded, Stopped, and DesiredRunning")
+	}
+
 	if spec.ConfigEqual == nil {
 		spec.ConfigEqual = func(a, b TConfig) bool { return reflect.DeepEqual(a, b) }
 	}
