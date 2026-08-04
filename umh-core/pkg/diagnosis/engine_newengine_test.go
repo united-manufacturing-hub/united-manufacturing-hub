@@ -23,7 +23,7 @@ import (
 
 // NewEngine is the single choke point that refuses a malformed table. Each spec
 // builds a table that is valid except for exactly one defect and asserts that
-// construction fails, naming the row that is malformed — so a bad state cannot
+// construction fails, naming the row that is malformed, so a bad state cannot
 // be built, and a caller finds out once, at construction, whether the whole
 // table is buildable.
 var _ = Describe("NewEngine", func() {
@@ -105,6 +105,23 @@ var _ = Describe("NewEngine", func() {
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("A"))
 		Expect(err.Error()).To(ContainSubstring("I1"))
+	})
+
+	It("refuses an instrument whose reduction has nil fold, which a caller can leave nil by writing a Reduction literal", func() {
+		sig := validSignal("A")
+		sig.Instruments[0].Red = Reduction{Name: "x", Min: 2}
+		_, err := NewEngine(validTable([]Signal[snap]{sig}))
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("A"))
+		Expect(err.Error()).To(ContainSubstring("I1"))
+	})
+
+	It("refuses a track whose reduction has nil fold, which a caller can leave nil by writing a Reduction literal", func() {
+		tbl := validTable([]Signal[snap]{validSignal("A")})
+		tbl.Tracks = []Track[snap]{{Name: "T", Extract: extract, Span: 60 * time.Second, Red: Reduction{Name: "x", Min: 2}}}
+		_, err := NewEngine(tbl)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("T"))
 	})
 
 	It("refuses an instrument whose reduction minimum sample count is below one", func() {

@@ -19,7 +19,7 @@ import "time"
 // Track is a window with no verdict: a named quantity the engine folds every
 // tick so the caller can read the reduction back, with no latch, no marks and no
 // selection. It exists because the caller needs means of quantities no
-// instrument judges — an instrument's window holds whatever its extractor
+// instrument judges. An instrument's window holds whatever its extractor
 // computed, which for a derived instrument is a difference and not the term
 // underneath it.
 //

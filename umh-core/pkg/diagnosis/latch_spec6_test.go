@@ -22,19 +22,20 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-// SPEC 6 is the structural one: it is what makes F1 and F5 unwritable, and it
-// is written BY HAND rather than driven red-green, because a flag-driven latch
-// passes every other spec here — breaking it fails silently. The guarantee is
-// by signature: there is no readability argument, no readability field, and no
-// route by which one reaches the latch. If a bool ever joins Coverage, or a
-// readability parameter ever joins Update, this spec has been broken.
+// This is the structural spec: it makes a readability fact or flag unwritable
+// in the latch, and it is written BY HAND rather than driven red-green, because
+// a flag-driven latch passes every other spec here and a break of the
+// structural guarantee fails silently. The guarantee is by signature: there is
+// no readability argument, no readability field, and no route by which one
+// reaches the latch. If a bool ever joins Coverage, or a readability parameter
+// ever joins Update, this spec has been broken.
 var _ = Describe("Latch signature", func() {
 	It("should derive its state from the reduction and the window's extent, and from no readability fact of any kind", func() {
 		// Coverage is exactly two time.Duration fields (span, spanned) and
-		// nothing else — no bool, no Reading. The clear arm and re-fire arm are
-		// gated on these; a window frozen through an outage still spans its full
-		// duration, which is why the fields carry no fact about whether THIS
-		// tick's read succeeded (the fact F1 collapsed).
+		// nothing else, no bool, no Reading. The clear arm and re-fire arm are
+		// gated on these; a window that has already engaged its freeze (a second
+		// consecutive failed read) still spans its full duration, which is why
+		// the fields carry no fact about whether THIS tick's read succeeded.
 		ct := reflect.TypeOf(Coverage{})
 		Expect(ct.NumField()).To(Equal(2),
 			"Coverage must carry exactly two durations — a readability field smuggled in here is F1 rebuilt")
@@ -44,7 +45,7 @@ var _ = Describe("Latch signature", func() {
 		}
 
 		// Update's parameter list is fixed, checked as a function value so it
-		// fails at COMPILE time the day a readability parameter is added — a
+		// fails at COMPILE time the day a readability parameter is added: a
 		// signature outranks any generated test.
 		var _ func(Reduced, Coverage, Marks, time.Time) = (&Latch{}).Update
 	})

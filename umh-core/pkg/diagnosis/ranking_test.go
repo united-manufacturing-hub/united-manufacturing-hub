@@ -24,7 +24,7 @@ import (
 // Rank is the only producer of the total order over causes; Severity is the
 // normaliser that lets a falling mark in cores compare against a rising one in
 // a ratio. Identity.Tier is the rank class a latch cannot learn from a
-// reduction — the engine stamps it at construction — and lower tiers outrank
+// reduction, the engine stamps it at construction, and lower tiers outrank
 // higher ones regardless of severity. Tests use bare tier numbers, because the
 // vocabulary (which tier means what) lives with the caller, not here.
 var _ = Describe("Ranking", func() {
@@ -151,7 +151,7 @@ var _ = Describe("Ranking", func() {
 		// capacity == -fire zeroes the falling denominator (fire - (-capacity)).
 		// A value below the fire mark then gives a non-zero / 0 = +Inf, which must
 		// clamp to the top of the scale; a value sitting exactly at the fire mark
-		// gives 0/0 = NaN, which must fall back to the bottom — the rising-arm
+		// gives 0/0 = NaN, which must fall back to the bottom, the rising-arm
 		// degenerate handling, on the other polarity. Rank stays a total order.
 		below := falls(1, 0, 4, 8, -8, false) // (8-4)/(8-8) = 4/0 = +Inf
 		at := falls(1, 1, 8, 8, -8, false)    // (8-8)/(8-8) = 0/0 = NaN
@@ -178,13 +178,17 @@ var _ = Describe("Ranking", func() {
 		Expect(beneath.Severity()).To(Equal(0.0))
 	})
 
-	It("should order two falling causes within a tier by their declared table position at a non-zero fire mark", func() {
+	It("should order two falling causes within a tier by their severity at a non-zero fire mark", func() {
 		// A non-zero fire mark exercises the falling denominator
+
 		// (fire - (-capacity)), which degenerates to just capacity when fire==0.
+		// The two causes carry different severities (0.333 vs 0.111), so it is the
+		// severity level, not the Index tie-break, that decides which ranks first
+		// within the tier.
 		worse := falls(1, 0, 2, 5, 4, false) // (5-2)/(5-(-4)) = 3/9 -> 0.333
 		less := falls(1, 1, 4, 5, 4, false)  // (5-4)/(5-(-4)) = 1/9 -> 0.111
 		sorted := Rank([]Fired{less, worse})
 		Expect(indexes(sorted)).To(Equal([]int{0, 1}),
-			"the cause with the lower declared table position ranks first")
+			"the higher-severity falling cause ranks first within the tier")
 	})
 })

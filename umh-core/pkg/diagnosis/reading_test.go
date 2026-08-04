@@ -39,13 +39,13 @@ var _ = Describe("Reading", func() {
 		Expect(v).To(Equal(0.0))
 	})
 
-	// The construction-encapsulation half of this spec — that a Reading is
-	// reachable only through Known and Unknown — is unobservable from inside
+	// The construction-encapsulation half of this spec, that a Reading is
+	// reachable only through Known and Unknown, is unobservable from inside
 	// the package (an internal test can reach the unexported fields directly),
-	// and SPEC §9 R1 defers it to S2 R5, where a consumer package crosses the
-	// boundary. What S1 can observe is the return contract: the value and its
-	// presence arrive together for a known reading, and an absence arrives as
-	// presence-false with no usable value.
+	// so it is deferred to an external consumer package that crosses the
+	// boundary. What this package can observe is the return contract: the
+	// value and its presence arrive together for a known reading, and an
+	// absence arrives as presence-false with no usable value.
 	It("should build a reading only through Known and Unknown, and return the value and its presence together or not at all", func() {
 		v, ok := Known(7).Get()
 		Expect(v).To(Equal(7.0))

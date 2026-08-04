@@ -28,10 +28,12 @@ import (
 // handed only a number cannot implement either.
 //
 // Coverage is NOT a readability fact and must never be made into one. It says
-// how much time the stored entries span; a window frozen through an outage still
-// spans its full 60s. The latch derives its state only from the reduction,
-// never from a readability flag, which is why Coverage is two durations and
-// nothing else.
+// how much time the stored entries span. Under the production Age-then-Append
+// order the freeze engages on a second consecutive failed read, so pruning
+// stops only once it has; coverage is preserved across an outage that has
+// already engaged the freeze, not from the very first failed tick. The latch
+// derives its state only from the reduction, never from a readability flag,
+// which is why Coverage is two durations and nothing else.
 type Coverage struct {
 	span    time.Duration
 	spanned time.Duration
@@ -58,15 +60,15 @@ type Window struct {
 // at the same boundary, so a window that is not told it cannot report absence at
 // all. A window whose span is six hours and whose demote span is 60s must empty
 // after 60s. Both are 60s for every consumer signal, so a build that passes one
-// value twice is green across all 33 scenarios — the test that proves they are
+// value twice is green across all 33 scenarios; the test that proves they are
 // distinct needs spans that differ.
 //
 // counter is Instrument.Counter, carried through because the restart rule is
-// the window's to apply — only the window holds the previous Point. It is NOT
+// the window's to apply; only the window holds the previous Point. It is NOT
 // derivable here: a window sees floats, and a ratio that legitimately falls and
 // a counter that reset look identical.
 //
-// It refuses a span or a demote span that is zero or negative (S1 R8).
+// It refuses a span or a demote span that is zero or negative at construction.
 func NewWindow(span, demote time.Duration, red Reduction, counter bool) (*Window, error) {
 	if span <= 0 {
 		return nil, fmt.Errorf("window: span %v is not positive", span)
@@ -78,7 +80,7 @@ func NewWindow(span, demote time.Duration, red Reduction, counter bool) (*Window
 }
 
 // Age prunes entries older than the span. Called on EVERY tick, including ticks
-// where the read failed — a failed read appends nothing, a failed tick still
+// where the read failed: a failed read appends nothing, a failed tick still
 // ages. A full ring holds span+1 entries: the prune keeps a sample landing
 // exactly on the cutoff.
 func (w *Window) Age(now time.Time) {
@@ -110,7 +112,7 @@ func (w *Window) prune(cutoff time.Time) {
 }
 
 // Append stores one instant's value, and gates on the denominator reading for a
-// delta-ratio reduction. It gates on the Readings internally — an absent value
+// delta-ratio reduction. It gates on the Readings internally: an absent value
 // appends nothing, and an absent or non-finite denominator appends nothing when
 // the window's own reduction declares against. Callers must NOT pre-filter, or
 // "absent is not zero" becomes every caller's responsibility again.
@@ -122,17 +124,18 @@ func (w *Window) prune(cutoff time.Time) {
 // window silently reports stale state.
 //
 // The denominator gate reads the window's reduction and nothing else. Under
-// Mean an absent Against is the ordinary case — six of the seven instruments
-// fold a single series and pass Unknown() — and the point is stored. Under DeltaRatio the same absence makes the point unusable and it is
-// dropped. Same two arguments, opposite outcome, and Reduction.against is the
-// only thing that separates them.
+// Mean an absent Against is the ordinary case: six of the seven instruments
+// fold a single series and pass Unknown(), and the point is stored. Under
+// DeltaRatio the same absence makes the point unusable and it is dropped. Same
+// two arguments, opposite outcome, and Reduction.against is the only thing that
+// separates them.
 //
 // One call carries both counters and one timestamp, so a delta ratio can never
 // be built from two counters read at two different moments.
 //
 // On a COUNTER window only, a backwards step discards the stored entries and
 // starts over from this one. A backwards step is a value below the previous
-// entry's, or — when the window also holds a denominator — a denominator below
+// entry's, or, when the window also holds a denominator, a denominator below
 // the previous entry's: a monotone counter that fell was reset at the source,
 // so a delta taken across the reset is arithmetic on two different origins. On
 // a window that is not a counter the same fall is the quantity doing what it is
@@ -153,14 +156,14 @@ func (w *Window) Append(value, against Reading, at time.Time) {
 	if w.red.against {
 		a, aok := against.Get()
 		// A denominator that is absent, or a value that is not a number,
-		// appends nothing — mirroring the numerator guard.
+		// appends nothing, mirroring the numerator guard.
 		if !aok || math.IsNaN(a) || math.IsInf(a, 0) {
 			return
 		}
 	}
 
 	// Counter restart: a backwards step in either series discards the stored
-	// entries and starts over from this one — a source reset moves both counters
+	// entries and starts over from this one. A source reset moves both counters
 	// at once, so a fall in either means the prior entries belong to a different
 	// origin and a delta across the reset is arithmetic on two. A window whose
 	// denominator is absent has no second series, so only the value fall matters.
@@ -168,8 +171,8 @@ func (w *Window) Append(value, against Reading, at time.Time) {
 	// The denominator fall is examined only when the window's own reduction
 	// divides by the denominator; on any other counter window the argument is
 	// absent or meaningless, and a fall in it must not wipe the window. Both
-	// readings must be present — an absent denominator, which stores as zero,
-	// must never order or restart the window.
+	// readings must be present, because an absent denominator, which stores as
+	// zero, must never order or restart the window.
 	if w.counter && len(w.points) > 0 {
 		prev := w.points[len(w.points)-1]
 
@@ -206,28 +209,29 @@ func (w *Window) Append(value, against Reading, at time.Time) {
 // The reduced number v is computed by the window's own fold and is carried under
 // StateValue; a below-minimum or stale StateUntrusted also carries the folded
 // number. Only an empty window (StateAbsent) and an against reduction whose
-// denominator delta is zero (StateUntrusted) void it — both carry v as zero. The
-// outcome — StateAbsent, StateUntrusted, or StateValue — is returned with the
+// denominator delta is zero (StateUntrusted) void it: both carry v as zero. The
+// outcome, StateAbsent, StateUntrusted, or StateValue, is returned with the
 // number, never alone.
 //
 // Reduce must be called only after Age on the same tick. The window does not
 // verify recency itself; a Reduce without a preceding Age reports stale entries
 // as trusted.
 func (w *Window) Reduce() Reduced {
-	// Empty — or demoted, which Age already turned into empty — is absence.
+	// Empty, or demoted (which Age already turned into empty), is absence.
 	if len(w.points) == 0 {
 		return Reduced{state: StateAbsent}
 	}
-	// The fold divides by a denominator whose delta is zero or negative — the
-	// counter did not move, or it reset backwards — so the number cannot be
-	// computed: the outcome is untrusted and the number carries zero.
+	// The fold divides by a denominator whose delta is zero or negative: the
+	// counter did not move, or it reset backwards, so the number cannot be
+	// computed, the outcome is untrusted, and the number carries zero.
 	if w.red.against && denominatorDelta(w.points) <= 0 {
 		return Reduced{v: 0, state: StateUntrusted}
 	}
-	// A window whose reduction has no fold — a bare Reduction{} literal handed
-	// to NewWindow directly — cannot compute a number. Treat it as untrusted
-	// rather than panicking; NewEngine refuses this shape at construction so
-	// this is a defensive backstop, not a supported route.
+	// A window whose reduction has no fold, a bare Reduction{} literal handed to
+	// NewWindow directly, cannot compute a number. NewEngine refuses a nil fold
+	// at construction, so this is a defensive backstop for a window built
+	// directly through NewWindow, not a supported route; treat it as untrusted
+	// rather than panicking.
 	if w.red.fold == nil {
 		return Reduced{v: 0, state: StateUntrusted}
 	}

@@ -21,7 +21,7 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-// Across a DeltaRatio counter pair the two counters move together — one series
+// Across a DeltaRatio counter pair the two counters move together: one series
 // is the numerator, the other the denominator, and a reset at the source moves
 // both at once. A monotone pair that falls is therefore a source reset, and a
 // backwards step in either series discards the stored entries and starts over
@@ -32,7 +32,7 @@ import (
 // denominator restart would hold a negative denominator delta, which Reduce's
 // divisor gate catches as StateUntrusted, so the immediate state cannot tell a
 // restarted window from one that did not. The numerator arm (Arm B) enjoys no
-// such mask — the denominator delta stays positive, and without the restart a
+// such mask: the denominator delta stays positive, and without the restart a
 // negative numerator delta folds to a trusted negative ratio under StateValue,
 // which the divisor gate cannot catch. Assert the re-accumulated state and
 // value after the reset rather than the reset-state alone.
@@ -76,7 +76,7 @@ var _ = Describe("DeltaRatio", func() {
 			"a numerator reset re-accumulates to a ratio from the two surviving points")
 
 		// Positive control: a fully FORWARD pair on a counter window does NOT
-		// restart — it accumulates to a value directly. A restart rule that fired
+		// restart; it accumulates to a value directly. A restart rule that fired
 		// on any window, or on every fall regardless of which series, would empty
 		// the window and destroy DeltaRatio.
 		forward, _ := NewWindow(span, 60*time.Second, DeltaRatio, true)
@@ -115,8 +115,8 @@ var _ = Describe("DeltaRatio", func() {
 		Expect(eqDenom.Coverage().Full()).To(BeTrue(),
 			"an equal denominator is not a backwards step; both entries are kept (no restart)")
 		// The two gates are layered: append keeps both edges (no restart), but the
-		// denominator delta is zero, so Reduce voids the window to StateUntrusted —
-		// no delta-ratio can be formed across an unmoved denominator.
+		// denominator delta is zero, so Reduce voids the window to StateUntrusted,
+		// and no delta-ratio can be formed across an unmoved denominator.
 		_, eqState := eqDenom.Reduce().Get()
 		Expect(eqState).To(Equal(StateUntrusted),
 			"an equal denominator delta is zero; the window cannot form a delta-ratio and reduces to StateUntrusted")

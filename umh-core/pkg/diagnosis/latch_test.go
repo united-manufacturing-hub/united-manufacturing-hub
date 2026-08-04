@@ -26,8 +26,8 @@ import (
 // clear arm, a span-based re-fire arm, an immediate Reset, and a demote clock
 // that measures ReleaseAfter from the last Update.
 //
-// These specs drive the latch through its exported surface only — Update,
-// Reset, ReleaseAfter, Fired — and hand it Reduced and Coverage values built
+// These specs drive the latch through its exported surface only: Update,
+// Reset, ReleaseAfter, Fired, and hand it Reduced and Coverage values built
 // directly, because the latch must derive everything from those two and must
 // never see a readability fact. Reduced.v/.state and Coverage.span/.spanned
 // are reachable here because this file lives in package diagnosis; the
@@ -122,8 +122,8 @@ var _ = Describe("Latch", func() {
 		_, fired := l.Fired()
 		Expect(fired).To(BeTrue(), "a value above the fire mark fires")
 
-		// An untrustworthy reduction — even one carrying a number below the clear
-		// mark — must not clear a fired latch: the clear arm requires a
+		// An untrustworthy reduction, even one carrying a number below the clear
+		// mark, must not clear a fired latch: the clear arm requires a
 		// trustworthy (StateValue) reduction.
 		l.Update(Reduced{v: 0.02, state: StateUntrusted}, full(), march(), t0.Add(time.Second))
 		_, fired = l.Fired()
@@ -167,8 +167,8 @@ var _ = Describe("Latch", func() {
 
 		// Reset must release immediately even though coverage is not full. A Reset
 		// routed through the coverage-gated clear arm would refuse and never
-		// release. Reset takes no clock — it anchors the re-fire window at the last
-		// trusted Update — and that does not affect this release, which is
+		// release. Reset takes no clock; it anchors the re-fire window at the last
+		// trusted Update, and that does not affect this release, which is
 		// immediate whatever the re-fire bar.
 		l.Reset()
 		_, fired = l.Fired()
@@ -184,7 +184,7 @@ var _ = Describe("Latch", func() {
 		Expect(fired).To(BeTrue(), "a value above the fire mark fires")
 
 		// Reset() takes no clock. With no timestamp to stamp the re-fire bar, the
-		// reset anchors it at the last trusted Update — the firing Update at t0 —
+		// reset anchors it at the last trusted Update, the firing Update at t0,
 		// so the re-fire window runs from lastUpdate, never the real wall clock.
 		l.Reset()
 		_, fired = l.Fired()
@@ -206,7 +206,7 @@ var _ = Describe("Latch", func() {
 		t0 := time.Unix(1_000_000, 0)
 		l := NewLatch(Identity{})
 
-		// Fire, then clear with full coverage — the release happens on the
+		// Fire, then clear with full coverage: the release happens on the
 		// clearing Update at tClear, and the re-fire bar counts one full window
 		// (Coverage.Span) from that release.
 		l.Update(Reduced{v: 0.20, state: StateValue}, full(), march(), t0)
@@ -262,8 +262,8 @@ var _ = Describe("Latch", func() {
 		Expect(f.Marks).To(Equal(cores), "the fired latch reports the current mark pair, not the one it fired under")
 
 		// The structural backstop, because a behaviour can be re-broken and a
-		// method set cannot. The method set is exactly four — Fired, ReleaseAfter,
-		// Reset, Update — and the moment a method is added that lets the latch act
+		// method set cannot. The method set is exactly four: Fired, ReleaseAfter,
+		// Reset, Update, and the moment a method is added that lets the latch act
 		// on a changed instrument (one that would reset a held latch) this goes
 		// red.
 		lt := reflect.TypeOf(&Latch{})
@@ -358,7 +358,7 @@ var _ = Describe("Latch", func() {
 	It("should fire and clear under LowerIsWorse, where a LOWER value is the worse side", func() {
 		t0 := time.Unix(1_000_000, 0)
 		// LowerIsWorse maps worse(v) = -v, so a value below the fire mark fires and
-		// one above the clear mark clears — the sign-flipped arm. This positively
+		// one above the clear mark clears, the sign-flipped arm. This positively
 		// controls the worse() fire and clear paths the ratio-only specs never touch.
 		m := Marks{
 			Fire:     Mark{At: 0.5, Inclusive: false},
@@ -424,8 +424,8 @@ var _ = Describe("Latch", func() {
 		// stays anchored at the StateValue tick.
 		l.Update(Reduced{v: 0.02, state: StateUntrusted}, full(), march(), t0.Add(time.Second))
 
-		// At one full window after the StateValue tick — which is before one full
-		// window after the untrusted tick, had it advanced the clock — the latch
+		// At one full window after the StateValue tick, which is before one full
+		// window after the untrusted tick, had it advanced the clock, the latch
 		// still holds.
 		l.ReleaseAfter(latchSpan, t0.Add(latchSpan-time.Second))
 		_, fired = l.Fired()

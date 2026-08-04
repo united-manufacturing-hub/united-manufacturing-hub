@@ -23,7 +23,9 @@ const (
 	// CaseLive is a signal that is readable every tick.
 	CaseLive Case = iota
 	// CaseBriefOutage is a signal that fills and then stops filling for less than
-	// its demote span, so its window freezes and holds.
+	// its demote span, so its window freezes and holds. It always drives at least
+	// one unreadable tick, so even at the legal boundary where DemoteSpan equals
+	// the interval the window freezes and holds rather than reaching Ready.
 	CaseBriefOutage
 	// CaseLongOutage is a signal that stops filling long enough that its window
 	// demotes and empties.
@@ -47,7 +49,7 @@ type Scenario struct {
 // over t.Signals and never over t.Tracks: a suite drives signals, and a track
 // has no availability for a scenario to assert. A table that declares tracks
 // still emits 6 × len(t.Signals) scenarios, one per signal per case, in case
-// order — so adding a row to the table adds six scenarios, and a signal that
+// order, so adding a row to the table adds six scenarios, and a signal that
 // skips the readability path has nowhere to hide.
 func Suite[S any](t Table[S]) []Scenario {
 	cases := []Case{CaseLive, CaseBriefOutage, CaseLongOutage, CaseUnsupported, CasePostOutageDip, CaseBelowFloor}
@@ -62,7 +64,7 @@ func Suite[S any](t Table[S]) []Scenario {
 
 // Feed is the caller's half of a generated suite. Readable returns a snapshot in
 // which every source the table reads answers; Unreadable returns one in which
-// none of them does — every Reading an extractor touches is Unknown().
+// none of them does: every Reading an extractor touches is Unknown().
 //
 // The feed is SIGNAL-BLIND: two methods, no signal argument. A feed that could
 // answer per signal would let a new table row supply its own definition of
@@ -88,21 +90,21 @@ type Outcome struct {
 	Availability Availability
 }
 
-// Run drives every Scenario that Suite generates through Observe — the
-// production entry point, not a reimplementation of it — and reports what each
+// Run drives every Scenario that Suite generates through Observe, the
+// production entry point, not a reimplementation of it, and reports what each
 // one reached. It builds one Engine per scenario, so no scenario inherits
 // another's windows.
 //
 // env is the fully-capable environment. Each case is a tick sequence at
 // t.Interval, and m is the SMALLEST Reduction.Min among the signal's capable
-// instruments under env — the tick on which the signal first becomes Ready. m is
+// instruments under env, the tick on which the signal first becomes Ready. m is
 // always computed under env, even for CaseUnsupported, which ignores it and
 // drives the tick under NewEnvironment() with no capabilities at all.
 //
 //	CaseLive          m readable                             -> Ready
-//	CaseBriefOutage   m readable, then DemoteSpan/Interval-1  -> NoneReady
-//	                  unreadable                                (the window froze,
-//	                                                            so it holds)
+//	CaseBriefOutage   m readable, then at least one             -> NoneReady
+//	                  DemoteSpan/Interval-1 unreadable            (the window froze,
+//	                                                                so it holds)
 //	CaseLongOutage    m readable, then DemoteSpan/Interval+1  -> AllAbsent
 //	                  unreadable
 //	CaseUnsupported   m readable, no capabilities            -> NoInstrument, or
@@ -165,7 +167,7 @@ func runScenario[S any](t Table[S], sc Scenario, env Environment, f Feed[S]) Out
 	case CaseLive:
 		seq = bools(m, true)
 	case CaseBriefOutage:
-		seq = append(bools(m, true), bools(demoteTicks-1, false)...)
+		seq = append(bools(m, true), bools(max(demoteTicks-1, 1), false)...)
 	case CaseLongOutage:
 		seq = append(bools(m, true), bools(demoteTicks+1, false)...)
 	case CaseUnsupported:
@@ -182,7 +184,7 @@ func runScenario[S any](t Table[S], sc Scenario, env Environment, f Feed[S]) Out
 
 // drive runs the engine through seq readability ticks at interval and returns
 // the signal's availability on the last tick, read from the engine's Readiness
-// row. An empty sequence — a below-floor m == 1 — is driven once unreadable so
+// row. An empty sequence, a below-floor m == 1, is driven once unreadable so
 // there is a readiness row to read: the empty window is AllAbsent.
 func drive[S any](e *Engine[S], interval time.Duration, env Environment, seq []bool, f Feed[S]) Availability {
 	if len(seq) == 0 {

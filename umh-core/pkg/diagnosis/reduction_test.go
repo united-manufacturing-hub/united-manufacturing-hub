@@ -26,7 +26,7 @@ const reduceHour = time.Hour
 
 // The six folds and the three State outcomes. Reduce computes v from the
 // window's own reduction fold. These specs drive a window to a Reduced and
-// observe the (v, State) tuple through Get() — never through an exported field
+// observe the (v, State) tuple through Get(), never through an exported field
 // on Reduced, which none exists.
 var _ = Describe("Reduction", func() {
 	It("should reduce under the reduction it was given at construction, so two windows fed the same points under different reductions return different numbers", func() {

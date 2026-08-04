@@ -35,7 +35,7 @@ type Mark struct {
 }
 
 // Marks is a two-mark Schmitt pair. Clear must be strictly less severe than
-// Fire, judged under Polarity — NewEngine refuses a pair that is not.
+// Fire, judged under Polarity. NewEngine refuses a pair that is not.
 type Marks struct {
 	Unit     string
 	Fire     Mark
@@ -47,8 +47,8 @@ type Marks struct {
 	Capacity float64
 }
 
-// Identity is what a signal is called and where it ranks — the facts S1 R6 needs
-// and a latch cannot learn from a reduction. The engine stamps it at
+// Identity is what a signal is called and where it ranks, the ranking facts a
+// latch cannot learn from a reduction. The engine stamps it at
 // construction from the table, so a Fired carries a tier, an external flag and a
 // table position without the latch ever consulting the table.
 type Identity struct {
@@ -56,13 +56,14 @@ type Identity struct {
 	Signal string
 	// Tier is the rank class; lower ranks first, and every cause in a lower tier
 	// outranks every cause in a higher one regardless of severity. The numbers
-	// are the caller's vocabulary, as Marks.Unit is — this package holds
+	// are the caller's vocabulary, as Marks.Unit is; this package holds
 	// machinery, not words.
 	Tier int
-	// External marks a cause attributed outside this box. It is R6's third
+	// External marks a cause attributed outside this box. It is the third ranking
 	// tie-break.
 	External bool
-	// Index is the signal's position in the table, and R6's last tie-break. It
+	// Index is the signal's position in the table, and the last ranking tie-break.
+	// It
 	// is declared rather than incidental, because Causes[0] picks the customer's
 	// refusal string and sort.SliceStable would otherwise decide it.
 	Index int
@@ -83,10 +84,11 @@ type Fired struct {
 
 // Latch is a two-mark Schmitt latch, keyed per SIGNAL, not per instrument. A
 // per-instrument latch is by construction never fired on the tick its instrument
-// is selected, which makes F7 unimplementable.
+// is selected, so it could not keep a fired state across a change of the
+// selected instrument.
 //
-// Latch is not synchronized: it must be owned by exactly one goroutine — the
-// observe loop that drives Update — and never shared with a reader that calls
+// Latch is not synchronized: it must be owned by exactly one goroutine, the
+// observe loop that drives Update, and never shared with a reader that calls
 // Fired concurrently. Serial ownership is the contract; a mutex is deliberately
 // absent because sharing is a wiring bug, not a latch property.
 type Latch struct {
@@ -112,7 +114,7 @@ func worse(v float64, m Marks) float64 {
 }
 
 // crossedFire reports whether a trustworthy value crosses the fire mark under
-// its declared inclusivity — the "bad" side that arms the latch.
+// its declared inclusivity, the "bad" side that arms the latch.
 func crossedFire(v float64, m Marks) bool {
 	x, fx := worse(v, m), worse(m.Fire.At, m)
 	if m.Fire.Inclusive {
@@ -122,7 +124,7 @@ func crossedFire(v float64, m Marks) bool {
 }
 
 // crossedClear reports whether a trustworthy value crosses the clear mark under
-// its declared inclusivity — the "good" side that releases a fired latch.
+// its declared inclusivity, the "good" side that releases a fired latch.
 func crossedClear(v float64, m Marks) bool {
 	x, cx := worse(v, m), worse(m.Clear.At, m)
 	if m.Clear.Inclusive {
@@ -134,9 +136,9 @@ func crossedClear(v float64, m Marks) bool {
 // Update judges a trustworthy reduction against the marks.
 //
 // Coverage is the window's extent and it is what the clear arm and the re-fire
-// arm are gated on. ⚠️ There is no readability parameter here and there must
-// never be one: that absence is how S1 R5 spec 6 closes F1's reintroduction site
-// by signature, which outranks any generated test.
+// arm are gated on. ⚠️ There is no readability parameter here, and there must
+// never be one: keeping it out by signature is what closes the reintroduction
+// site, and no generated test outranks that.
 func (l *Latch) Update(r Reduced, c Coverage, m Marks, now time.Time) {
 	// Only a trustworthy reduction drives the arms and the marks. An untrusted
 	// or absent reduction holds whatever state the latch is in, keeps the marks
@@ -154,7 +156,7 @@ func (l *Latch) Update(r Reduced, c Coverage, m Marks, now time.Time) {
 	}
 
 	// Fire arm: crossing the fire mark fires, unless the re-fire arm still
-	// blocks — one full window must elapse since the last release.
+	// blocks: one full window must elapse since the last release.
 	if crossedFire(r.v, m) {
 		if !l.fired && (l.lastRelease.IsZero() || !now.Before(l.lastRelease.Add(c.span))) {
 			l.fired = true
@@ -172,19 +174,21 @@ func (l *Latch) Update(r Reduced, c Coverage, m Marks, now time.Time) {
 // release-on-absent.
 //
 // ⚠️ The coverage gate on the CLEAR arm does not apply here. An emptied window
-// never reports full coverage, so a Reset routed through the clear arm can
-// never release — and every AllAbsent release in the design stops working,
-// silently. That is S1 R5 spec 4.
+// never reports full coverage, so a Reset routed through the clear arm could
+// never release, and every AllAbsent release in the design would silently stop
+// working. Immediate release is the route that works for that case.
 //
 // The latch has no ReleaseOnAbsent field and no Signal: whether to call this is
-// Observe's decision, and S1 R7b spec 6 is where the condition is asserted,
-// against two signals that declare it differently.
+// Observe's decision, read from each signal's own ReleaseOnAbsent flag, so two
+// signals can declare it differently.
 func (l *Latch) Reset() {
 	if l.fired {
 		// Reset is an immediate release. With no timestamp to stamp the re-fire
-		// bar, anchor it at the last trusted Update (the demote-ish clock); an
-		// AllAbsent reset has a stale lastUpdate, so re-fire is effectively
-		// immediate, which is the point.
+		// bar, anchor it at the last trusted Update. Re-fire measures one full
+		// window from that anchor, so after an AllAbsent reset it is immediate
+		// only when the last trusted update is at least a full window in the
+		// past, which is a long outage; a brief outage leaves a recent anchor
+		// that blocks re-fire until the window elapses.
 		l.fired = false
 		l.lastRelease = l.lastUpdate
 	}
@@ -194,7 +198,7 @@ func (l *Latch) Reset() {
 // answer the question. This is the time bound that stops a held latch outliving
 // its evidence forever.
 //
-// The clock runs from the last Update — the most recent trustworthy value this
+// The clock runs from the last Update, the most recent trustworthy value this
 // latch was handed. A fired latch demotes only once that much time has passed
 // since the last trustworthy tick. ⚠️ NOT from the first ReleaseAfter call: a
 // signal alternating between this arm and any other would restart the clock on

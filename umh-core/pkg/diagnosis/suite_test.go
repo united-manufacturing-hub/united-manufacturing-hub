@@ -21,22 +21,23 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-// Suite is S1 R9. S1 has no consumers, so the generator is exercised over a fake
-// table whose two signals are generic — never a domain vocabulary.
+// Suite is the generator spec. This package has no consumers, so the generator
+// is exercised over a fake table whose two signals are generic, never a domain
+// vocabulary.
 //
-// Spec 1 is a structural property and is held by construction: window map, latch
-// map and the key that indexes them are unexported, NewEngine is the only thing
-// that reads a Table, and Observe is the only thing that drives a window or a
-// latch. There is no second route to a signal to close — the route does not
-// type-check. Nothing here restates that as "every stage ranges over the table";
-// the gin is reachability, not iteration.
+// Its structural property is held by construction: window map, latch map and the
+// key that indexes them are unexported, NewEngine is the only thing that reads a
+// Table, and Observe is the only thing that drives a window or a latch. There is
+// no second route to a signal to close, the route does not type-check. Nothing
+// here restates that as "every stage ranges over the table"; the gist is
+// reachability, not iteration.
 // snap is the fake snapshot the suite ranges over: a single Reading that a
 // one-series instrument extracts. Its value is set by the feed's two methods.
 type snap struct{ r Reading }
 
 // feed is the suite's other half. Readable returns a strictly increasing value
 // derived from at, as the Feed contract requires; Unreadable returns an
-// all-absent snapshot, or — under the F1 mutant — Known(0) so the window keeps
+// all-absent snapshot, or, under the mutant feed, Known(0) so the window keeps
 // filling through the outage.
 type feed struct{ mutant bool }
 
@@ -195,8 +196,8 @@ var _ = Describe("Suite", func() {
 
 		sc := func(sig string, c Case) Scenario { return Scenario{Signal: sig, Case: c} }
 
-		// The F1 mutant returns Known(0) where the correct feed returns Unknown,
-		// so the window never freezes and never empties. On signal B (m == 2) all
+		// The mutant returns Known(0) where the correct feed returns Unknown, so
+		// the window never freezes and never empties. On signal B (m == 2) all
 		// three outage cases must regress to Ready, each differing from what the
 		// correct feed reached.
 		Expect(mutantBy[sc("B", CaseBriefOutage)]).To(Equal(Ready))
@@ -216,9 +217,26 @@ var _ = Describe("Suite", func() {
 		Expect(mutantBy[sc("A", CasePostOutageDip)]).To(Equal(correctBy[sc("A", CasePostOutageDip)]),
 			"at m == 1 the dip already expects Ready, so the mutant is indistinguishable")
 
-		// CaseBelowFloor never calls Unreadable — every tick is readable — so the
+		// CaseBelowFloor never calls Unreadable, every tick is readable, so the
 		// mutant is indistinguishable from the correct feed there.
 		Expect(mutantBy[sc("B", CaseBelowFloor)]).To(Equal(correctBy[sc("B", CaseBelowFloor)]))
+	})
+
+	It("yields NoneReady for CaseBriefOutage even at the DemoteSpan == Interval boundary, because a brief outage always drives at least one unreadable tick", func() {
+		// DemoteSpan == Interval is legal (validate refuses only a demote BELOW the
+		// interval), so demoteTicks == 1. A brief outage must still drive one
+		// unreadable tick; without it the window would report Ready instead of the
+		// documented NoneReady.
+		sig := Signal[snap]{Name: "A", DemoteSpan: time.Second, Instruments: []Instrument[snap]{instrument(Last)}}
+		tbl := Table[snap]{Signals: []Signal[snap]{sig}, Interval: time.Second}
+		env := NewEnvironment("source-1")
+		outcomes := Run(tbl, env, feed{})
+		byScenario := make(map[Scenario]Availability, len(outcomes))
+		for _, o := range outcomes {
+			byScenario[o.Scenario] = o.Availability
+		}
+		Expect(byScenario[Scenario{Signal: "A", Case: CaseBriefOutage}]).To(Equal(NoneReady),
+			"a one-interval DemoteSpan is not refused, but the brief outage still freezes the window into NoneReady rather than Ready")
 	})
 
 	It("should reach Ready in CaseUnsupported for a signal whose instrument requires nothing, since an empty requirement is satisfied by any environment", func() {

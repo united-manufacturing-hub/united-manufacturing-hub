@@ -291,7 +291,7 @@ var _ = Describe("Engine", func() {
 		// Give F one more trusted (Ready) tick just inside its demote boundary so
 		// its latch clock restarts from a recent update. The Reset arm and the
 		// ReleaseAfter arm are keyed by the SAME DemoteSpan, so at a tick where
-		// BOTH windows have already emptied the two are indistinguishable — F would
+		// BOTH windows have already emptied the two are indistinguishable: F would
 		// release on the clock there, exactly as T does on the AllAbsent reset. To
 		// make the arms observable, F's clock must still be running on the AllAbsent
 		// tick, which means F's window must not yet be empty.
@@ -301,8 +301,8 @@ var _ = Describe("Engine", func() {
 		// Silence both and advance past T's demote boundary. T's window (fired at
 		// base, never re-updated) demotes -> AllAbsent -> Reset: released
 		// immediately. F's window (fired at base+55s) is still populated and
-		// frozen, so F is NoneReady and its ReleaseAfter — keyed off the base+55s
-		// update — has NOT elapsed: F stays fired. T's Reset is what distinguishes
+		// frozen, so F is NoneReady and its ReleaseAfter, keyed off the base+55s
+		// update, has NOT elapsed: F stays fired. T's Reset is what distinguishes
 		// the two on this tick.
 		onF = false
 		fired, readiness := e.Observe(s6{}, env, base.Add(61*time.Second))

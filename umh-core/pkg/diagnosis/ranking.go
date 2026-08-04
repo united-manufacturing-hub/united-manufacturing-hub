@@ -42,7 +42,7 @@ func clamp01(v float64) float64 {
 //	falling:  clamp01( (fire − value) / (fire − (−capacity)) )
 //
 // The falling scale is MINUS the capacity. With a positive one a 4-core box two
-// cores past its mark gives 2/−4, which clamps to zero — the lowest severity for
+// cores past its mark gives 2/−4, which clamps to zero, the lowest severity for
 // the worst case, so the dominant cause ranks last and every saturation cause
 // ties.
 //
@@ -59,7 +59,7 @@ func (f Fired) Severity() float64 {
 // Rank sorts causes in place and returns the same backing slice, so a caller
 // that holds another reference to that slice sees the reordered data. Order is
 // by tier (lower first), then by severity descending within the tier, then by
-// the externally-attributed cause, then by declared table position — four
+// the externally-attributed cause, then by declared table position. Four
 // levels, because three are not total (held causes all clamp to severity 0 and
 // External is true for one signal, so a two-cause tie would otherwise be
 // resolved by the order of appends).

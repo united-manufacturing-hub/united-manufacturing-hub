@@ -31,13 +31,13 @@ type Instrument[S any] struct {
 	Marks    Marks
 	Span     time.Duration
 	// Boolean says the series is zero or one and nothing between. NewEngine
-	// refuses an ordered reduction — a percentile — on such a series.
+	// refuses an ordered reduction, a percentile, on such a series.
 	Boolean bool
 	// Counter says both series this instrument reads are monotone counters, so
 	// a fall means the source reset rather than the quantity dropping. It is
 	// what gates the window's restart rule, and it is a declaration because
 	// nothing downstream can infer it: a falling ratio and a reset counter are
-	// the same two floats. One flag covers Extract and Against together — a
+	// the same two floats. One flag covers Extract and Against together: a
 	// cgroup that resets resets both counters of a pair at once.
 	Counter bool
 }
@@ -66,7 +66,7 @@ type Signal[S any] struct {
 // Capable returns the instruments whose required capabilities the environment
 // has, in table order.
 //
-// ⚠️ This is the CAPABILITY gate and nothing more — a startup fact about whether
+// ⚠️ This is the CAPABILITY gate and nothing more, a startup fact about whether
 // a source exists on this box at all. It deliberately does not pick a winner:
 // two instruments may declare the SAME capability, so a filter that returned the
 // first match would return the percentile arm on every capable box forever and

@@ -64,7 +64,7 @@ type Reduced struct {
 }
 
 // Get returns the reduced value and its outcome. There is no way to obtain the
-// number alone — the tuple return is the only access, so a caller cannot read
+// number alone: the tuple return is the only access, so a caller cannot read
 // the value without also reading its state.
 func (r Reduced) Get() (float64, State) { return r.v, r.state }
 
@@ -77,7 +77,7 @@ func (r Reduced) Get() (float64, State) { return r.v, r.state }
 //
 // against says the window's denominator is load-bearing, and it is the ONLY
 // route by which a window learns that. Without it Append is handed the same
-// two arguments — a value and an absent denominator — in the two cases that
+// two arguments, a value and an absent denominator, in the two cases that
 // must behave oppositely: a single-series reduction stores the point, a ratio
 // reduction stores nothing. It is unexported for the same reason ordered is:
 // the package's own reductions set it, and a caller who could set it could lie
@@ -99,7 +99,7 @@ var (
 	Last = Reduction{Name: "last", Min: 1, fold: foldLast}
 	// Mean is the arithmetic mean. Two points, or there is no average.
 	Mean = Reduction{Name: "mean", Min: 2, fold: foldMean}
-	// Slope is (v_last − v_first) / (t_last − t_first) in seconds — the
+	// Slope is (v_last − v_first) / (t_last − t_first) in seconds, the
 	// gradient over the window's own first and last timestamps. Two endpoints,
 	// never a least-squares fit.
 	Slope = Reduction{Name: "slope", Min: 2, fold: foldSlope}
@@ -117,8 +117,8 @@ var (
 )
 
 // NewReduction builds a seventh reduction. It refuses a minimum below one and
-// a nil fold — the same two checks NewEngine re-runs on every reduction in
-// the table, so both are checked twice on purpose.
+// a nil fold. NewEngine re-runs the same two checks on every reduction in the
+// table, so a reduction written as a literal cannot slip past either site.
 //
 // A reduction built here folds a SINGLE series: against stays false, so a
 // window under it stores points whose Against is absent.
