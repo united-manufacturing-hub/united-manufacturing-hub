@@ -96,6 +96,10 @@ Track performance and throughput:
 
 ![Bridge Metrics](./images/bridges-metrics.png)
 
+Write throughput counts the messages the bridge wrote to its destination, not the messages it read.
+A bridge that discards what it receives, such as a historian bridge subscribed to topics outside its
+data contract, therefore reports zero write throughput. Read throughput counts messages received.
+
 ### Enable Debug Logging
 
 When troubleshooting connection or data issues, enable debug logging in your bridge configuration:

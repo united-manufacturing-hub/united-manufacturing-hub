@@ -80,6 +80,7 @@ type OutputInstance struct {
 	Error            int64   `json:"error"`
 	LatencyNS        Latency `json:"latency_ns"`
 	Sent             int64   `json:"sent"`
+	Dropped          int64   `json:"dropped"`
 }
 
 // ProcessMetrics contains processor-specific metrics.
@@ -142,6 +143,24 @@ func (m Metrics) OutputSentTotal() int64 {
 	var total int64
 	for _, out := range m.Outputs {
 		total += out.Sent
+	}
+
+	return total
+}
+
+func (m Metrics) OutputWrittenTotal() int64 {
+	written := m.OutputSentTotal() - m.OutputDroppedTotal()
+	if written < 0 {
+		return 0
+	}
+
+	return written
+}
+
+func (m Metrics) OutputDroppedTotal() int64 {
+	var total int64
+	for _, out := range m.Outputs {
+		total += out.Dropped
 	}
 
 	return total
@@ -1062,6 +1081,8 @@ func ParseMetricsFromBytes(raw []byte) (Metrics, error) {
 	m.Inputs = make(map[string]InputInstance, 1)
 	m.Outputs = make(map[string]OutputInstance, 1)
 
+	drops := make(map[string]int64, 1)
+
 	lineStart := 0
 
 	for i, b := range raw {
@@ -1286,6 +1307,19 @@ func ParseMetricsFromBytes(raw []byte) (Metrics, error) {
 
 			m.Outputs[path] = out
 
+		case name == "messages_dropped":
+			path := extractLabel(labelsRegion, "path")
+			if path == "" {
+				continue
+			}
+
+			count, err := TailInt(line)
+			if err != nil {
+				return Metrics{}, fmt.Errorf("failed to parse messages dropped: %w", err)
+			}
+
+			drops[path] += count
+
 		default:
 			if !bytes.HasPrefix(line, []byte("processor_")) {
 				continue
@@ -1378,6 +1412,13 @@ func ParseMetricsFromBytes(raw []byte) (Metrics, error) {
 			}
 
 			m.Process.Processors[path] = pm
+		}
+	}
+
+	for path, count := range drops {
+		if out, ok := m.Outputs[path]; ok {
+			out.Dropped = count
+			m.Outputs[path] = out
 		}
 	}
 

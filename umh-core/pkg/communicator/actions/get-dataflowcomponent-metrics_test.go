@@ -407,8 +407,8 @@ var _ = Describe("GetDataflowcomponentMetricsAction", func() {
 			metricsResult, ok := result.(actions.DfcMetrics)
 			Expect(ok).To(BeTrue())
 
-			// Check number of metrics (9 for input, 11 for output, 11*2=22 for processors)
-			Expect(metricsResult.Metrics).To(HaveLen(9 + 11 + 22))
+			// Check number of metrics (9 for input, 12 for output, 11*2=22 for processors)
+			Expect(metricsResult.Metrics).To(HaveLen(9 + 12 + 22))
 
 			// Check some specific metrics values
 			var inputReceivedMetric *actions.DfcMetric

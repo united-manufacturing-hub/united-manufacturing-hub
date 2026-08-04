@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Fixes
+
+- Write throughput for a bridge no longer counts messages the bridge accepted and then discarded, so a historian bridge subscribed to topics outside its data contract reports zero throughput instead of a healthy figure
+
 ## [0.44.32]
 
 ### New Features

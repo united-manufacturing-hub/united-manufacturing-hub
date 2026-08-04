@@ -75,7 +75,7 @@ func (s *BenthosMetricsState) UpdateFromMetrics(metrics Metrics, tick uint64) {
 	// Sum across per-path maps so switch / broker / fallback configs
 	// report the correct total, not last-wins.
 	s.updateComponentThroughput(&s.Input, metrics.InputReceivedTotal(), 0, tick)
-	s.updateComponentThroughput(&s.Output, metrics.OutputSentTotal(), metrics.OutputBatchSentTotal(), tick)
+	s.updateComponentThroughput(&s.Output, metrics.OutputWrittenTotal(), metrics.OutputBatchSentTotal(), tick)
 
 	// Update processor throughput
 	newProcessors := make(map[string]ComponentThroughput)

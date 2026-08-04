@@ -129,6 +129,7 @@ func (a *GetDataflowcomponentMetricsAction) Execute() (interface{}, map[string]i
 			DfcMetric{ValueType: DfcMetricTypeNumber, Value: out.ConnectionUp, ComponentType: DfcMetricComponentTypeOutput, Path: outputPath, Name: "connection_up"},
 			DfcMetric{ValueType: DfcMetricTypeNumber, Value: out.Error, ComponentType: DfcMetricComponentTypeOutput, Path: outputPath, Name: "error"},
 			DfcMetric{ValueType: DfcMetricTypeNumber, Value: out.Sent, ComponentType: DfcMetricComponentTypeOutput, Path: outputPath, Name: "sent"},
+			DfcMetric{ValueType: DfcMetricTypeNumber, Value: out.Dropped, ComponentType: DfcMetricComponentTypeOutput, Path: outputPath, Name: "dropped"},
 			DfcMetric{ValueType: DfcMetricTypeNumber, Value: out.LatencyNS.P50, ComponentType: DfcMetricComponentTypeOutput, Path: outputPath, Name: "latency_ns_p50"},
 			DfcMetric{ValueType: DfcMetricTypeNumber, Value: out.LatencyNS.P90, ComponentType: DfcMetricComponentTypeOutput, Path: outputPath, Name: "latency_ns_p90"},
 			DfcMetric{ValueType: DfcMetricTypeNumber, Value: out.LatencyNS.P99, ComponentType: DfcMetricComponentTypeOutput, Path: outputPath, Name: "latency_ns_p99"},
