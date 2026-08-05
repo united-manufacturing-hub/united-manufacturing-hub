@@ -2,6 +2,8 @@
 
 Let's get some data flowing! We'll start with simulated data, then you can connect real devices later.
 
+This guide walks you through connecting your first data source step by step. If you're looking for the complete bridge reference, see [Bridges](../usage/data-flows/bridges.md).
+
 ## Navigate to Data Flows
 
 1. Click **"Data Flows"** in the left menu
@@ -23,7 +25,9 @@ For this tutorial, pick **"From Scratch"**.
 
 ## Select the `generate` Template
 
-You'll land on a list of curated templates. Type `generate` in the search bar and one template remains: **"Generic via Generate"** (Benthos `generate` input). Select it. 
+You'll land on a list of curated templates. 
+
+For this tutorial, type `generate` in the search bar and one template remains: **"Generic via Generate"** (Benthos `generate` input). Select it. 
 
 > 💡 **`generate`** is one of the inputs that Redpanda provides out of the box.
 >
@@ -156,6 +160,8 @@ Bridge → Processing → Unified Namespace → Topic Browser
 - **Modbus** for older equipment
 - **MQTT Subscribe** for existing MQTT devices
 - [See all 50+ supported protocols →](https://docs.umh.app/benthos-umh/input)
+
+Real hardware uses the address-mapping table instead of the generator. The [Bridges reference](../usage/data-flows/bridges.md) covers that, along with logs, metrics, and debug logging.
 
 ## Concepts Learned
 
