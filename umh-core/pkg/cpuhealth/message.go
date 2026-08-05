@@ -71,7 +71,125 @@ const (
 	// Entry 18 — the healthy separator; byte-identical to the degraded one
 	// (entry 6). The literal "\nTechnical Details: ".
 	technicalDetails = "\nTechnical Details: "
+
+	// Entries 21-25 — the degraded headlines, one per CauseKind. Entry 25 is
+	// the default arm, unreachable through today's five kinds but still written
+	// so the enum can grow.
+	headlineThrottling = "CPU limited"
+	headlinePressure   = "CPU contention"
+	headlineSteal      = "CPU taken by the server"
+	headlineSaturation = "CPU running near full"
+	headlineGeneric    = "CPU degraded"
+
+	// Entries 26-28 — the degradation detail paragraphs. Throttling reads the
+	// ratio from Signals; pressure and steal read Cause.Value (the raw PSI /
+	// steal figure never reaches Signals).
+	detailThrottling = "This instance hit its CPU limit and was paused until the next cycle, in %d%% of CPU scheduling periods over the last minute. Work is being delayed. Raise this instance's CPU limit, or reduce the load on it."
+	detailPressure   = "Tasks in this instance spent %d%% of the last minute waiting for a free CPU core. Reduce the load on this instance, or give it more CPU. If other workloads share this server they may be competing for it."
+	detailSteal      = "Other virtual machines on the same physical server took CPU this instance needed, up to %d%% at peak over the last minute. This is outside UMH's control. On your virtualization platform, give this VM more guaranteed CPU, or reduce the other VMs sharing the server."
+
+	// Entries 29-37 — the saturation-family paragraphs. 34 and 37 are clauses,
+	// not paragraphs: each has a leading space and is appended to the paragraph
+	// above it, never a replacement.
+	detailSatBothAtLimit    = "The machine is full and this instance's CPU limit cannot help. Add CPU to the machine, or reduce other software running on it. (This instance is also at its %s-core limit.)"
+	detailSatHostFull       = "The machine is full. Add CPU to the machine, or reduce other software running on it."
+	detailSatNoStatsPSI     = "CPU averaged %d%% of the machine over the last minute and this instance has little headroom left. Host contention is not visible here (host CPU usage is not readable). Consider adding CPU capacity."
+	detailSatNoStatsNoPSI   = "CPU averaged %d%% of the machine over the last minute and this instance has little headroom left. Host contention is not visible here (host CPU usage is not readable). Enable Linux pressure stats (boot with psi=1) for richer detail. Consider adding CPU capacity."
+	detailSatLimit          = "CPU averaged %d%% of its limit over the last minute and this instance has little headroom left. Raise its CPU limit, or reduce the load on it."
+	detailSatHostUnavail    = " Host stats are unavailable, so host-side contention is not visible."
+	detailSatNoLimitUnavail = "CPU is degraded. Host CPU usage is not readable right now (host stats temporarily unavailable), so the host-busy percentage cannot be shown. Add CPU capacity, or reduce the load on it."
+	detailSatNoLimitRead    = "CPU averaged %d%% of the machine over the last minute and this instance has little headroom left. Add CPU capacity, or reduce the load on it."
+	detailSatNoLimitClause  = " Pressure stats are unavailable; enable Linux pressure stats (boot with psi=1) for richer detail."
+
+	// Entry 38 — the generic degraded paragraph.
+	detailGeneric = "CPU is degraded."
 )
+
+// ComposeMessage turns a Verdict and its derived Signals into the two-layer
+// message: a one-line headline naming the dominant cause, then the literal
+// Technical Details separator and the curated per-cause copy (dominant first,
+// joined by a blank line). A healthy verdict yields the budget dashboard from
+// composeHealthy.
+func ComposeMessage(verdict Verdict, signals Signals) string {
+	if verdict.State != StateDegraded || len(verdict.Causes) == 0 {
+		return composeHealthy(signals)
+	}
+
+	dominant := verdict.Causes[0]
+	headline := causeHeadline(dominant.Kind)
+
+	parts := make([]string, 0, len(verdict.Causes))
+	for _, c := range verdict.Causes {
+		parts = append(parts, causeDetails(c, signals))
+	}
+	details := strings.Join(parts, "\n\n")
+
+	return headline + technicalDetails + details
+}
+
+// causeHeadline returns the one-line headline naming a cause kind.
+func causeHeadline(kind CauseKind) string {
+	switch kind {
+	case CauseKindThrottling:
+		return headlineThrottling
+	case CauseKindPressure:
+		return headlinePressure
+	case CauseKindSteal:
+		return headlineSteal
+	case CauseKindSaturation:
+		return headlineSaturation
+	default:
+		return headlineGeneric
+	}
+}
+
+// causeDetails returns the curated Technical-Details copy for one cause,
+// interpolating the live number from the cause's Value or the derived Signals.
+// The saturation switch reads the sub-latch flags directly, in the fold's own
+// order; arm 6 is compound (NoLimitHostFired with host unreadable) and a
+// readable no-limit full host falls to arm 7.
+func causeDetails(c Cause, signals Signals) string {
+	switch c.Kind {
+	case CauseKindThrottling:
+		return fmt.Sprintf(detailThrottling, pctOf(signals.ThrottleRatio))
+	case CauseKindPressure:
+		return fmt.Sprintf(detailPressure, pctOf(c.Value))
+	case CauseKindSteal:
+		return fmt.Sprintf(detailSteal, pctOf(c.Value))
+	case CauseKindSaturation:
+		switch {
+		case signals.HostFullFired && signals.LimitSaturationFired:
+			limitStr := fmtCoresTotal(round1(signals.CapacityCores))
+			return fmt.Sprintf(detailSatBothAtLimit, limitStr)
+		case signals.HostFullFired:
+			return detailSatHostFull
+		case signals.NoHostStatsSaturationFired:
+			pct := pctOf(c.Value)
+			if signals.PsiApplies {
+				return fmt.Sprintf(detailSatNoStatsPSI, pct)
+			}
+			return fmt.Sprintf(detailSatNoStatsNoPSI, pct)
+		case signals.LimitSaturationFired:
+			pct := pctOf(signals.AvgUsageCores / signals.CapacityCores)
+			detail := fmt.Sprintf(detailSatLimit, pct)
+			if !signals.HostBusyCoresAvailable {
+				detail += detailSatHostUnavail
+			}
+			return detail
+		case signals.NoLimitHostFired && !signals.HostBusyCoresAvailable:
+			return detailSatNoLimitUnavail
+		default:
+			pct := pctOf(signals.HostBusyCores60sMean / signals.CapacityCores)
+			detail := fmt.Sprintf(detailSatNoLimitRead, pct)
+			if signals.LimitedVisibility {
+				detail += detailSatNoLimitClause
+			}
+			return detail
+		}
+	default:
+		return detailGeneric
+	}
+}
 
 // composeHealthy renders the two-layer healthy budget message. The displayed
 // components are rounded first, then headroom is derived as
