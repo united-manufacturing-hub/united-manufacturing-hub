@@ -311,3 +311,64 @@ rung DOES change one of these scenarios, its tag must be added at that point.
   - **Conductor decision:** spec 2's window must drive BOTH host-headroom and usage-fraction absent, or
     the fallback's clear arm (not the AllAbsent route) releases the latch — the spec-2 release is the
     AllAbsent/demote route.
+- [x] **S3 R7 — The fallback metric set** · tdd-commit · commit `be8a478b2` · 39 specs.
+  - When host stats are absent, host-headroom's window empties past the demote span, selection walks to
+    usage-fraction and JUDGES the saturation question on our own usage against the logical CPU count
+    (verified the fallback fires at 0.75 on a no-limit box). NoHostStatsSaturationFraction is
+    usage-fraction's OWN reduction, filled independent of latch state. The dead zone — quota nil or
+    non-positive AND PSI absent — is an annotation on a healthy verdict carried by Signals.
+    LimitedVisibility, never a state. Mutation-positive-controlled on the dead-zone annotation.
+  - Note: the track-vs-instrument distinction for NoHostStatsSaturationFraction is unobservable while
+    cores is constant (they agree by linearity); the spec acknowledges only a mid-run core-count change
+    separates them, which a rebuilt table cannot express. Asserted the value, not the route.
+- [x] **S3 R8 — Verdict assembly** · tdd-commit · commit `bf24c044b` · 43 specs.
+  - Decide derives Attribution from the dominant cause (steal-dominant → host), orders Causes through
+    diagnosis.Rank (the sort grep gate in pkg/cpuhealth is EMPTY; control in pkg/diagnosis shows Rank),
+    returns healthy with no causes when nothing fired. From the same pass it fills the observable metrics
+    (ThrottleRatio, PressureAvg60Out, StealP95, HostHeadroomCores, AvgUsageCores, HostBusyCores60sMean),
+    the two track floors (UsageRingActive, HostBusyRingActive) and the per-signal readiness trio
+    (= Ready), independent of latch state — a quiet throttle latch publishes its 0.02, not a confident 0,
+    and a bare-metal steal box reports StealSignalReady false. Mutation-positive-controlled on the
+    quiet-latch metric fill.
+- [x] **S3 R9b — Bind the generated suite to the real CPU table** · subagent+review-equivalent (implemented
+  directly + mutant drive) · commit `9797a2465` · 45 specs.
+  - RunSuite drives the six-scenario suite from cpuTable itself: 30 scenarios with a positive quota, 24
+    without (6×5 and 6×4). cpuFeed's Readable advances the cumulative throttle counters (NrPeriods =
+    100×elapsed, NrThrottled = 0.02×NrPeriods, ratio steady under its mark) so DeltaRatio has a
+    denominator and CaseLive reaches Ready; Unreadable leaves every Reading absent while holding
+    Virtualized/CpuScope fixed. A mutant sixth row whose Extract returns Known(0) on absent reaches Ready
+    on the brief outage, long outage and post-outage dip (the suite exposes it) while CaseBelowFloor stays
+    green — the "cannot be made green" proof.
+- [x] **S3 R10 — Do not flicker** · tdd-commit · commit `cd6d20d65` · 47 specs.
+  - The two-mark latch is what stops a signal between its marks from alternating endpoint states.
+    throttle/hold-between-marks fires at 0.20, decays and settles at 0.04 (inside the 0.03-0.05 band), and
+    the state changes exactly once (healthy at tick 0, degraded at tick 1, held) — asserted as a transition
+    count, not the final state. A signal entering the band from below (0 → 0.04) never fires (strict fire
+    mark), zero transitions. Mutation-positive-controlled on the throttle fire mark.
+
+---
+
+## S3 COMPLETE — all 11 rungs (R1..R10, R9b) green on `p2/cpuhealth`. 47 cpuhealth specs (16 S2 + 31 S3).
+NEXT: pre-S4 R2 F3-tag pass, then S4 (wording).
+
+## Recording-gate passability after S3 (SPEC §8)
+- The gate needs ComposeMessage (S4) to render messages, so it is not runnable at the S3 boundary — the
+  S3 rungs build Verdict + Signals only. Assessment below is by mechanism, flagged for the S4 end-of-run.
+- **F8-tagged `steal/spike-below-minsamples`:** the rebuild's steal mean fires from tick 3 and the p95
+  takes over at n=20 with value 0.90 — matches the F8 row's ticks 3-18/19-59 as analyzed in R1/R1b.
+  Latch-held value: R1b spec 1 verified the fired latch survives the handover (F7). PASSABLE.
+- **F1-tagged `pressure/nan-inf-negative` (+Inf tag `throttle/counter-outage`):** my R2 finding — the SPEC
+  R2 scenario table says the rebuild is healthy at ticks 45-59 (negative clears at tick 45), but the
+  engine's F4 coverage-gated clear arm cannot clear until the window has full 60s coverage, so the
+  rebuild holds degraded through ~tick 60 and the healthy boundary moves 45→60. The F1 row's stated diff
+  (15-44) will differ (15-~59) at the recording gate. SPEC R2 explicitly says "if a build disagrees on a
+  tick, trust the engine and say which boundary moved" — this is that case. **FLAG for Jeremy: the F1
+  tag's expected after needs its 45-59 block reconciled (healthy-at-60). Do NOT change engine behavior.**
+- **Untagged F6/F7/D4/D5** (S2 conductor's pre-S3 decision, awaiting Jeremy's sign-off): the S3 rungs
+  confirmed none of the 33 recorded scenarios differs under them. R5's LogicalCpus/F6 fields add no
+  Decide-output change to a recorded scenario; F7 is the handover; D4/D5 are Sample-shape. Consistent
+  with the "no-diff → don't tag" rule.
+- **No S3 rung moved a Tier-1 (hard-locked) scenario untagged:** the Tier-1 scenarios (healthy/*,
+  throttle/fire-then-clear, steal/fire-after-minsamples, saturation/*, attribution/*, multi/*) are either
+  unaffected by S3's judgement (all keyed Decide behavior is covered by an F-tag) or behave as their rows
+  require. The only flagged boundary is the tagged Tier-2 `pressure/nan-inf-negative`.
