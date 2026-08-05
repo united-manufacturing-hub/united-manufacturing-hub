@@ -217,3 +217,27 @@ into PR #2679. One continuous build (no section checkpoints, per Jeremy).
 ---
 
 ## S2 COMPLETE — all 9 rungs (R1..R5) green on `p2/cpuhealth` (base 9454a65, 9 commits). NEXT: pre-S3 tag+regenerate pass (SPEC §8, writes at e642457f5 in cpu-rerecord scratch) before S3's recording gate becomes meetable.
+
+## PRE-S3 tag+regenerate pass (SPEC §8) — DONE (5 rows), F6/F7/D4/D5 deliberately NOT tagged → SPEC-reconciliation for Jeremy
+
+Ran in `.worktrees/cpu-rerecord` (detached e642457f5) via subagent. Recorder reproduced the untagged
+baseline byte-identically (two runs). Tagged baseline saved to
+`artifacts/.../RECORDING_behaviour.txt` (backup `RECORDING_behaviour_untagged.bak`); tagged-vs-untagged
+diff is tag-lines-only (programmatically confirmed).
+
+**Tagged (5 rows → 8 scenario-tags):** D2 → throttle/fire-then-clear, throttle/hold-between-marks,
+throttle/counter-outage, pressure/fire-then-clear, multi/throttle-pressure-saturation (per DEPARTURES —
+D2 changes 5 scenarios, all tagged) · D3 → saturation/nolimit/host-outage-held · F8 →
+steal/spike-below-minsamples (§8 explicit) · F1 → pressure/nan-inf-negative (§9 S3 R2) · F1 →
+throttle/counter-outage alongside F5 (§9 S4 R3).
+
+**NOT tagged — F6, F7, D4, D5 — a genuine SPEC conflict, surfaced for Jeremy (not silently tagged):**
+SPEC §8's blanket "all seven must be tagged" conflicts with its own primary rule "a tag on a scenario
+that does not differ is a gate failure." Verified by mechanism that **none of the 33 recorded scenarios
+differs under them**: F6 (no scenario drives CpuScope/pinning; all are effectively host/unknown) · F7
+(swap scenarios post-outage-recovery + first-readable-tick-dip already F4-tagged; no authoritative F7
+assignment) · D4/D5 (sampler-level Sample-shape changes; no Decide-output change in a recorded scenario).
+DEPARTURES covers only D1-D3,F1-F5; §5 captures F6/F7/D4/D5/F8 with NO scenario name (F8's is the sole
+§8 exception). **Decision recorded:** leave F6/F7/D4/D5 untagged (per the no-diff rule) and get Jeremy's
+sign-off that §8's "all seven" wording should be reconciled to "the rows that differ"; if a later S3/S4
+rung DOES change one of these scenarios, its tag must be added at that point.
