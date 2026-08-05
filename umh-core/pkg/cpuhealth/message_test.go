@@ -221,3 +221,51 @@ var _ = Describe("S4 R2 — the healthy message reports only what it measured", 
 		Expect(composeHealthy(limitOK)).To(ContainSubstring("CPU healthy."))
 	})
 })
+
+var _ = Describe("S4 R3 — the budget lines", func() {
+	It("should list the headroom budget always, and each of throttle, pressure and steal only when this tick's reading is usable", func() {
+		all := healthySig()
+		all.ThrottleRatio = 0.02
+		all.PressureAvg60Out = 0.05
+		all.StealP95 = 0.30
+		msg := composeHealthy(all)
+		// Headroom is the only unconditional line.
+		Expect(msg).To(ContainSubstring("Headroom 1.8 cores = 2 total - 0.0 used - 0.2 reserved (degraded below 0)."))
+		Expect(msg).To(ContainSubstring("Throttling 2% (degraded above 5%)."))
+		Expect(msg).To(ContainSubstring("Pressure 5% (degraded above 20%)."))
+		Expect(msg).To(ContainSubstring("Steal 30% (degraded above 10%)."))
+	})
+
+	It("should print each budget line from its signal's readiness, never from the capability flag", func() {
+		// A virtualized box (StealApplies true) whose steal window has no usable
+		// value this tick must not print a confident 0% steal line.
+		vm := healthySig()
+		vm.StealApplies = true
+		vm.StealSignalReady = false
+		msg := composeHealthy(vm)
+		Expect(msg).NotTo(ContainSubstring("Steal"))
+		Expect(msg).To(ContainSubstring("Pressure"))
+		Expect(msg).To(ContainSubstring("Headroom"))
+
+		// The throttle gate is readiness, not LimitApplies.
+		noThrottle := healthySig()
+		noThrottle.LimitApplies = true
+		noThrottle.ThrottleSignalReady = false
+		Expect(composeHealthy(noThrottle)).NotTo(ContainSubstring("Throttling"))
+
+		// The pressure gate is readiness, not PsiApplies.
+		noPressure := healthySig()
+		noPressure.PsiApplies = true
+		noPressure.PressureSignalReady = false
+		Expect(composeHealthy(noPressure)).NotTo(ContainSubstring("Pressure"))
+
+		// Readiness is the gate, not capability: a ready steal signal prints
+		// even when StealApplies is false (they agree on bare metal, but this
+		// pins the rung to the readiness trio).
+		ready := healthySig()
+		ready.StealApplies = false
+		ready.StealSignalReady = true
+		ready.StealP95 = 0.30
+		Expect(composeHealthy(ready)).To(ContainSubstring("Steal 30% (degraded above 10%)."))
+	})
+})
