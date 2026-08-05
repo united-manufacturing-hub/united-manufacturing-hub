@@ -128,11 +128,19 @@ type CPUDeps struct {
 // construction yields a healthy first verdict from a permanently thinned
 // table, which is why the startup read error is logged.
 func NewDeps(id deps.Identity, bd *deps.BaseDependencies) *CPUDeps {
-	s := cpuhealth.NewCgroupSampler(filesystem.NewDefaultService(), "/sys/fs/cgroup")
+	return NewDepsWithSampler(id, bd, cpuhealth.NewCgroupSampler(filesystem.NewDefaultService(), "/sys/fs/cgroup"))
+}
 
+// NewDepsWithSampler builds CPU's per-instance deps around an explicit sampler.
+// Production NewDeps uses a real cgroup sampler; the dev scenario and tests pass
+// a sampler backed by a mock filesystem, which is the only way a Poll can be
+// driven without touching a real /sys. The table and engine are built once from
+// a startup snapshot, exactly as NewDeps does — the two constructors share this
+// path so a mock-backed deps behaves identically to a real one.
+func NewDepsWithSampler(id deps.Identity, bd *deps.BaseDependencies, sampler cpuhealth.Sampler) *CPUDeps {
 	d := &CPUDeps{
 		BaseDependencies: bd,
-		sampler:          s,
+		sampler:          sampler,
 	}
 
 	// The table and engine are built once, at construction, from the startup
@@ -142,7 +150,7 @@ func NewDeps(id deps.Identity, bd *deps.BaseDependencies) *CPUDeps {
 	// reports as could-not-measure rather than letting Decide panic on a nil
 	// engine (simple has no recover around Poll; recovery is at the collector).
 	// The table is held so R4 can walk table.Signals for per-signal Availability.
-	cores, quota := startupCapacity(context.Background(), s, bd)
+	cores, quota := startupCapacity(context.Background(), sampler, bd)
 	d.table = cpuhealth.Table(cores, quota)
 	d.engine, d.engineErr = diagnosis.NewEngine(d.table)
 	d.firstFilled = make(map[string]bool)
