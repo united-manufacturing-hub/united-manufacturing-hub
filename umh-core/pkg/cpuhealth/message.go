@@ -103,6 +103,21 @@ const (
 
 	// Entry 38 — the generic degraded paragraph.
 	detailGeneric = "CPU is degraded."
+
+	// Entries 39-47 — the bridge-refusal (block) reasons, one per cause kind,
+	// saturation dispatched on the sub-latch arm in BlockReason's own order.
+	// Entries 42 and 45 are byte-identical and the collision is deliberate:
+	// the remediation for a full machine is the same with or without a limit,
+	// and giving each arm its own wording is a behaviour change.
+	blockThrottling      = "Can't add another bridge: this instance is already hitting its CPU limit. Raise the limit or reduce load first."
+	blockPressure        = "Can't add another bridge: tasks on this instance are already waiting for a free CPU core. Reduce load, or give this instance more CPU, first."
+	blockSteal           = "Can't add another bridge: the server isn't giving this instance enough CPU (other VMs are using it). Free up CPU on the server first."
+	blockHostFull        = "Can't add another bridge: the machine is full. Add CPU to the machine, or reduce other software running on it, first."
+	blockLimitSaturation = "Can't add another bridge: this instance is at its CPU limit. Raise the limit, or reduce the load, first."
+	blockNoHostStats     = "Can't add another bridge: CPU is running near full and host stats are unavailable. Add CPU capacity, or set a CPU limit, first."
+	blockNoLimitHost     = "Can't add another bridge: the machine is full. Add CPU to the machine, or reduce other software running on it, first."
+	blockSaturationOther = "Can't add another bridge: CPU is running near full. Add CPU capacity, or set a CPU limit, first."
+	blockGeneric         = "Can't add another bridge: CPU is degraded."
 )
 
 // ComposeMessage turns a Verdict and its derived Signals into the two-layer
@@ -188,6 +203,39 @@ func causeDetails(c Cause, signals Signals) string {
 		}
 	default:
 		return detailGeneric
+	}
+}
+
+// BlockReason returns the per-cause bridge-refusal message shown when bridge
+// creation is refused because the instance's CPU is degraded. The dominant
+// cause kind selects the message; the saturation kind further dispatches on
+// which sub-latch arm survived the fold, in BlockReason's own order (host-full,
+// then limit, then no-host-stats, then no-limit-host) — which is not
+// causeDetails' order, and the swap is unobservable today because the arms
+// never co-fire. An unknown kind falls back to the generic degraded message.
+func BlockReason(dominantKind CauseKind, signals Signals) string {
+	switch dominantKind {
+	case CauseKindThrottling:
+		return blockThrottling
+	case CauseKindPressure:
+		return blockPressure
+	case CauseKindSteal:
+		return blockSteal
+	case CauseKindSaturation:
+		switch {
+		case signals.HostFullFired:
+			return blockHostFull
+		case signals.LimitSaturationFired:
+			return blockLimitSaturation
+		case signals.NoHostStatsSaturationFired:
+			return blockNoHostStats
+		case signals.NoLimitHostFired:
+			return blockNoLimitHost
+		default:
+			return blockSaturationOther
+		}
+	default:
+		return blockGeneric
 	}
 }
 

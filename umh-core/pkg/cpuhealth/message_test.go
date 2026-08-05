@@ -379,3 +379,63 @@ var _ = Describe("S4 R4 — degraded copy", func() {
 		Expect(msg).To(ContainSubstring("CPU is degraded."))
 	})
 })
+
+var _ = Describe("S4 R5 — block reasons", func() {
+	It("should render one block reason per cause kind, dispatching saturation on which member of its family survived the fold", func() {
+		Expect(BlockReason(CauseKindThrottling, degradedSig())).To(Equal("Can't add another bridge: this instance is already hitting its CPU limit. Raise the limit or reduce load first."))
+		Expect(BlockReason(CauseKindPressure, degradedSig())).To(Equal("Can't add another bridge: tasks on this instance are already waiting for a free CPU core. Reduce load, or give this instance more CPU, first."))
+		Expect(BlockReason(CauseKindSteal, degradedSig())).To(Equal("Can't add another bridge: the server isn't giving this instance enough CPU (other VMs are using it). Free up CPU on the server first."))
+		// Entry 47: the default kind arm.
+		Expect(BlockReason(CauseKind("future-kind"), degradedSig())).To(Equal("Can't add another bridge: CPU is degraded."))
+
+		hf := degradedSig()
+		hf.HostFullFired = true
+		nl := degradedSig()
+		nl.NoLimitHostFired = true
+		ls := degradedSig()
+		ls.LimitSaturationFired = true
+		ns := degradedSig()
+		ns.NoHostStatsSaturationFired = true
+
+		Expect(BlockReason(CauseKindSaturation, hf)).To(Equal("Can't add another bridge: the machine is full. Add CPU to the machine, or reduce other software running on it, first."))
+		Expect(BlockReason(CauseKindSaturation, ls)).To(Equal("Can't add another bridge: this instance is at its CPU limit. Raise the limit, or reduce the load, first."))
+		Expect(BlockReason(CauseKindSaturation, ns)).To(Equal("Can't add another bridge: CPU is running near full and host stats are unavailable. Add CPU capacity, or set a CPU limit, first."))
+		Expect(BlockReason(CauseKindSaturation, nl)).To(Equal("Can't add another bridge: the machine is full. Add CPU to the machine, or reduce other software running on it, first."))
+		// The saturation default arm (entry 46), reachable only if a saturation
+		// latch fired with none of the four arm flags.
+		impossible := degradedSig()
+		impossible.SaturationFired = true
+		Expect(BlockReason(CauseKindSaturation, impossible)).To(Equal("Can't add another bridge: CPU is running near full. Add CPU capacity, or set a CPU limit, first."))
+
+		// Entries 42 and 45 are byte-identical and the collision is intentional
+		// and must survive (the remediation for a full machine is the same with
+		// or without a limit).
+		Expect(BlockReason(CauseKindSaturation, hf)).To(Equal(BlockReason(CauseKindSaturation, nl)))
+	})
+
+	It("conformance: Decide sets NoLimitHostFired for a full host in no-limit mode and HostFullFired in limit mode", func() {
+		// No-limit mode: a full host with our own load filling it (D1: the
+		// attribution is unknown, but the host-headroom arm still fires and is
+		// reported as NoLimitHostFired, not HostFullFired).
+		engine, err := NewEngine(4, 0)
+		Expect(err).NotTo(HaveOccurred())
+		env := diagnosis.NewEnvironment()
+		base := time.Now()
+		for i := 0; i < 3; i++ {
+			smp := Sample{
+				Timestamp:   base.Add(time.Duration(i) * time.Second),
+				CpuScope:    ScopeHost,
+				Quota:       diagnosis.Known(0),
+				HostBusy:    diagnosis.Known(3.8),
+				LogicalCpus: diagnosis.Known(4),
+				HostCpus:    diagnosis.Known(4),
+				UsageCores:  diagnosis.Known(3.6),
+			}
+			_, sig := Decide(engine, smp, env)
+			if i == 2 {
+				Expect(sig.NoLimitHostFired).To(BeTrue(), "no-limit full host fires the no-limit-host arm")
+				Expect(sig.HostFullFired).To(BeFalse(), "HostFullFired is the limit-mode name")
+			}
+		}
+	})
+})
