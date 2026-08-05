@@ -88,7 +88,7 @@ type ConfigworkerWorker struct {
 	// FF-off paths and in unit tests. TODO(ENG-4400): drops out when the worker
 	// reads config.yaml directly (see package doc and ConfigManagerDepsKey).
 	configManager config.ConfigManager
-	// cpuEnabled gates whether the fsdsv2 CPU monitor child is upserted. It is
+	// cpuEnabled gates whether the fsmv2 CPU monitor child is upserted. It is
 	// set once at construction from CPUEnabledDepsKey (the USE_FSMV2_CPU env
 	// flag, read in cmd/main.go and never persisted).
 	cpuEnabled bool
@@ -175,9 +175,14 @@ func (w *ConfigworkerWorker) reconcileCPU(ctx context.Context) {
 }
 
 // syncCPU upserts exactly one CPU monitor child (with an empty config) when the
-// flag is on, or deletes it when off. Gating on the flag means an upserted CPU
-// child gets its own collector goroutine and ticker only when the flag is on;
-// no flag, no child. It returns the upsert error so the caller can log it.
+// flag is on. The flag is read once at construction and cannot change mid-run,
+// so the disabled arm below is not a live "turn the flag off and tear it down"
+// behaviour: a disabled worker's registry never contained the CPU child in the
+// first place (each process start builds a fresh registry). The Delete is kept
+// as the total gating invariant — a disabled worker must never leave a CPU
+// child behind, whatever a future registry-persistence or default-flip change
+// does — not because this process can observe the state it removes. It returns
+// the upsert error so the caller can log it.
 func syncCPU(client *fsmv2client.FSMv2Client, enabled bool) error {
 	if !enabled {
 		client.Delete(fsmv2cpu.Ref)
