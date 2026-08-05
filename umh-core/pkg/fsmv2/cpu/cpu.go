@@ -27,6 +27,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/diagnosis"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/simple"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker/dynamicchildren"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 )
 
@@ -34,10 +35,19 @@ const (
 	// WorkerType is the canonical worker-type name used in config and CSE storage.
 	WorkerType = "cpu"
 
+	// InstanceName is the fixed dynamic-child name for the single per-instance
+	// CPU monitor, matching how the configworker reconciles a singleton child.
+	InstanceName = "cpu"
+
 	// pollInterval is the poll cadence. It sets both the poll cadence and, at
 	// 3x, the seam's maxAge downstream; the two are one decision (SPEC §9 P3 R1).
 	pollInterval = 1 * time.Second
 )
+
+// Ref is the (WorkerType, Name) pair identifying the CPU monitor child, shared
+// by the configworker that upserts it (gated behind USE_FSMV2_CPU) and the seam
+// that reads it back.
+var Ref = dynamicchildren.Ref{WorkerType: WorkerType, Name: InstanceName}
 
 // CPUConfig is the worker's config: the CPU child is upserted with an empty
 // config, so this is a deliberately empty struct. A config that carried values

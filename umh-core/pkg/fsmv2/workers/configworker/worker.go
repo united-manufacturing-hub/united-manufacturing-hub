@@ -42,6 +42,7 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	fsmv2cpu "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/cpu"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/fsmv2client"
 	fsmv2timescale "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/historian"
@@ -71,6 +72,13 @@ const WorkerTypeName = "configworker"
 // cmd/main.go go away.
 const ConfigManagerDepsKey = WorkerTypeName + ".configmanager"
 
+// CPUEnabledDepsKey is the register.SetDeps key under which parent wiring
+// publishes whether the fsmv2 CPU monitor child should run (USE_FSMV2_CPU). It
+// is a bool, distinct from ConfigManagerDepsKey, so the config worker can gate
+// its CPU child's upsert on a value that is read from the environment in
+// cmd/main.go and never persisted to config.yaml.
+const CPUEnabledDepsKey = WorkerTypeName + ".cpuenabled"
+
 // ConfigworkerWorker implements the FSMv2 Worker interface and holds a handle
 // to the shared dynamicchildren registry. See the package doc for why it does
 // nothing else yet.
@@ -80,6 +88,10 @@ type ConfigworkerWorker struct {
 	// FF-off paths and in unit tests. TODO(ENG-4400): drops out when the worker
 	// reads config.yaml directly (see package doc and ConfigManagerDepsKey).
 	configManager config.ConfigManager
+	// cpuEnabled gates whether the fsdsv2 CPU monitor child is upserted. It is
+	// set once at construction from CPUEnabledDepsKey (the USE_FSMV2_CPU env
+	// flag, read in cmd/main.go and never persisted).
+	cpuEnabled bool
 
 	fsmv2.WorkerBase[snapshot.ConfigworkerConfig, snapshot.ConfigworkerStatus, register.NoDeps]
 }
@@ -102,10 +114,12 @@ func NewConfigworkerWorker(
 	// one, and the historian reconcile in CollectObservedState no-ops when it is
 	// nil (mirroring the fsmv2client.GetClient nil guard).
 	configManager := register.GetDeps[config.ConfigManager](ConfigManagerDepsKey)
+	cpuEnabled := register.GetDeps[bool](CPUEnabledDepsKey)
 
 	w := &ConfigworkerWorker{
 		registry:      shared,
 		configManager: configManager,
+		cpuEnabled:    cpuEnabled,
 	}
 	w.InitBase(identity, logger, stateReader)
 
@@ -137,8 +151,41 @@ func (w *ConfigworkerWorker) CollectObservedState(ctx context.Context, desired f
 	}
 
 	w.reconcileHistorian(ctx)
+	w.reconcileCPU(ctx)
 
 	return fsmv2.NewObservation(snapshot.ConfigworkerStatus{}), nil
+}
+
+// reconcileCPU upserts or deletes the CPU monitor child based on the flag the
+// worker was constructed with. It no-ops when the client is not yet set, and
+// logs (rather than returns) the upsert error so a transient failure never
+// fails the tick.
+func (w *ConfigworkerWorker) reconcileCPU(ctx context.Context) {
+	_ = ctx
+
+	client := fsmv2client.GetClient()
+	if client == nil {
+		return
+	}
+
+	if err := syncCPU(client, w.cpuEnabled); err != nil {
+		w.Logger().SentryWarn(deps.FeatureSupportCPU, w.Identity().HierarchyPath,
+			"cpu watch: upsert failed", deps.Err(err))
+	}
+}
+
+// syncCPU upserts exactly one CPU monitor child (with an empty config) when the
+// flag is on, or deletes it when off. Gating on the flag means an upserted CPU
+// child gets its own collector goroutine and ticker only when the flag is on;
+// no flag, no child. It returns the upsert error so the caller can log it.
+func syncCPU(client *fsmv2client.FSMv2Client, enabled bool) error {
+	if !enabled {
+		client.Delete(fsmv2cpu.Ref)
+
+		return nil
+	}
+
+	return client.Upsert(fsmv2cpu.Ref, nil)
 }
 
 // reconcileHistorian reads the live config and syncs the historian monitor
