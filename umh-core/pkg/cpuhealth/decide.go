@@ -139,7 +139,16 @@ func Decide(engine *diagnosis.Engine[Sample], s Sample, env diagnosis.Environmen
 			}
 			sig.SaturationFired = true
 			if arm == hostFullArm {
-				sig.HostFullFired = true
+				// HostFullFired and NoLimitHostFired are ONE instrument (the
+				// host-headroom arm) under two names, and the mode is what
+				// separates them (SPEC 2.6's arm table): limit mode reports the
+				// host-full fallback as HostFullFired, no-limit as
+				// NoLimitHostFired.
+				if env.Has(HasLimit) {
+					sig.HostFullFired = true
+				} else {
+					sig.NoLimitHostFired = true
+				}
 			} else {
 				sig.NoHostStatsSaturationFired = true
 			}
