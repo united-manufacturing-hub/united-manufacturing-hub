@@ -49,6 +49,8 @@ func newDeps(s cpuhealth.Sampler, cores, quota float64) *CPUDeps {
 		BaseDependencies: deps.NewBaseDependencies(deps.NewNopFSMLogger(), nil, deps.Identity{ID: "cpu-test", WorkerType: WorkerType}),
 		sampler:          s,
 		engine:           engine,
+		table:            table,
+		firstFilled:      make(map[string]bool),
 	}
 }
 
