@@ -241,3 +241,73 @@ DEPARTURES covers only D1-D3,F1-F5; §5 captures F6/F7/D4/D5/F8 with NO scenario
 §8 exception). **Decision recorded:** leave F6/F7/D4/D5 untagged (per the no-diff rule) and get Jeremy's
 sign-off that §8's "all seven" wording should be reconciled to "the rows that differ"; if a later S3/S4
 rung DOES change one of these scenarios, its tag must be added at that point.
+
+## S3 — judgement
+
+- [x] **S3 R1 — The table, throttle and steal** · tdd-commit · commit `a6bbe36ff` (amended) · 20 specs.
+  - Built `cpuTable(cores, quota)` (5 signals / 7 instruments / 2 tracks, all marks per SPEC 2.4 &
+    Appendix A), the sig*/inst*/track*/tier* constants, shared stealMarks/throttleMarks, and
+    `NewEngine(cores, quota)` as a thin pkg/diagnosis wrapper. No-quota table omits limit-saturation
+    entirely (Fire{0}/Clear{0} refuses construction); throttling stays with Requires HasLimit.
+    Throttle fires >0.05 and clears <0.03; steal judged on the mean below 20 samples and p95 from 20,
+    the below-minimum p95 never selected (F8).
+  - **Conductor conformance fix:** the workflow exported `CpuTable`; the skeleton declares unexported
+    `cpuTable`. Renamed and moved the R1 specs to a white-box (in-package `package cpuhealth`) test file
+    so the unexported builder is reachable, registered into the single Ginkgo suite (a second RunSpecs
+    in one test binary is illegal). Black-box S2 specs stay where they are.
+  - Mutation-positive-controlled by the workflow agent (throttle clear at 0.03, steal handover at n=20,
+    removing the mean arm) — all bite.
+- [x] **S3 R1b — The handover at twenty samples** · test-only (binds S1 R7b latch) · commit `c6c3884ba` · 23 specs.
+  - The swap from the mean to the p95 at n=20 moves the instrument, not the latch: a fired latch stays
+    fired, the published value steps to the p95's own 0.90 (not the mean's 0.18), and on a window whose
+    mean sits below the mark nothing fires at the handover.
+  - **Conductor decision (SPECT-vs-engine, recorded):** spec 3's "one sample at 0.90, nineteen at 0"
+    window, built with the spike at sample 0, FIRES the mean at n=2 (0.45) and then HOLDS through the
+    handover, because F4's clear arm is gated on full window coverage (not full at n=20) — "nothing fires"
+    would be unobservable. Built the spike at the LAST sample so the mean stays below the fire mark the
+    whole run, which is the faithful reading of "a window whose mean sits below the mark". The spec says
+    "build the window by hand", which this is.
+- [x] **S3 R2 — Pressure [F1]** · tdd-commit · commit `a982c25eb` · 26 specs.
+  - Pressure is Last over its window (min 1), fires on tick 0. NaN/Inf refused at the window append →
+    the reduction is StateUntrusted and the latch HOLDS (no clamp-to-0). A negative is finite, enters the
+    window, is judged as the number it is, and clears a fired latch below 0.12 once coverage is full.
+  - **Mutation-positive-controlled:** a clamp-to-0 in the pressure extractor fails both the hold spec and
+    the negative spec.
+  - **Genuine find (write-up for Jeremy):** the SPEC R2 scenario table says the rebuild is healthy at
+    ticks 45-59 (the negative clears at tick 45), but the engine's F4 coverage-gated clear arm cannot
+    clear until the window has full 60s coverage, so the rebuild holds degraded through ~tick 60. SPEC
+    R2 explicitly says "if a build disagrees on a tick, trust the engine and say which boundary moved" —
+    the healthy boundary moves from tick 45 to tick 60. The F1 tag's stated diff (15-44) will differ
+    (15-59) at the recording gate; flag for Jeremy, do NOT change engine behavior.
+- [x] **S3 R3 — Limit-mode saturation** · tdd-commit · commit `90670a48e` (amended) · 27 specs.
+  - limit-headroom = quota - usage - 0.10 x quota, Mean over 60s. Fire at headroom < 0 (usage > 0.90 x
+    quota), clear at headroom > 0.05 x quota. saturation/limit/fire: usage 0.2 -> 1.95 at tick 40 fires
+    at tick 95 with value -0.0066, settles at -0.15 at tick 100. Asserted value AND state from the right
+    tick. Mutation-positive-controlled (0.10 reserve change fails the spec).
+- [x] **S3 R4 — Decide, attribution consults its evidence [D1, D2, D3]** · tdd-commit · commit `79b660f97` · 31 specs.
+  - Built `decide.go`: State/Attribution/CauseKind/Unit/Cause/Verdict types + the full 38-field Signals
+    struct (skeleton shape) + `Decide`. Observe → saturation fold (host-full > no-host-stats > limit) →
+    diagnosis.Rank → Verdict + Signals. Attribution from dominant cause and the host/container split
+    read back from Engine.Track("host-busy")/Track("usage-cores"): host only when hbm > 2 x oum (strict);
+    internal causes (throttling, pressure, limit-saturation) always unknown; host-full by the split.
+  - **Conductor find:** the cause VALUE must be the CURRENT windowed reduction read through
+    Engine.Reduction, NOT Fired.Value (which is the latch's firing-tick value, constant while held) — the
+    recording's cause values move per tick (throttling ratio decays, settled headroom deepens to -0.8).
+  - **Equality boundary pinned:** hbm == 2 x oum is unknown (strict >), mutation-positive-controlled
+    (changing > to >= fails the equality spec).
+- [x] **S3 R5 — The missing guard, and the wrong subtraction [F2, F6]** · tdd-commit · commit `4a02e326b` · 34 specs.
+  - host-headroom's Extract carries BOTH guards (Unknown on cores<=0 [F2], Unknown unless CpuScope==
+    ScopeHost [F6]) in the EXTRACTOR, not Decide — a Decide-side guard leaves the invalid subtraction in
+    the window and re-fires F6. Both mutation-positive-controlled.
+  - **Skeleton-conformance gap closed:** Sample was missing `LogicalCpus` (F6's "2"). Added the field and
+    filled it from the cpuset read (the CPUs this process may use) — this resolves the S2-flagged design
+    fork (cpuset is the source for LogicalCpus). Added a sampler assertion to scope_test.go.
+  - Decide fills the three withheld-headroom Signals fields: HostHeadroomAvailable dispatched on the
+    scope (withheld, not failed), LogicalCpus, HostCpus.
+- [x] **S3 R6 — Hold and demote [F1, F4, F5]** · test-only (binds engine) · commit `b90ee2ca0` · 37 specs.
+  - A fired latch holds while its input is stale (window freezes, reduction StateUntrusted); the hold is
+    bounded — once BOTH saturation arms go absent past the demote span, AllAbsent releases the latch,
+    and the first readable sub-mark tick does not re-fire it; a failed read is not stored as a real zero.
+  - **Conductor decision:** spec 2's window must drive BOTH host-headroom and usage-fraction absent, or
+    the fallback's clear arm (not the AllAbsent route) releases the latch — the spec-2 release is the
+    AllAbsent/demote route.
