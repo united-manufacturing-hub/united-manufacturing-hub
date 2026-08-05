@@ -372,3 +372,109 @@ NEXT: pre-S4 R2 F3-tag pass, then S4 (wording).
   throttle/fire-then-clear, steal/fire-after-minsamples, saturation/*, attribution/*, multi/*) are either
   unaffected by S3's judgement (all keyed Decide behavior is covered by an F-tag) or behave as their rows
   require. The only flagged boundary is the tagged Tier-2 `pressure/nan-inf-negative`.
+
+---
+
+## S4 — wording
+
+Five rungs, one commit each, all green under `-tags=test -count=1`. New file `pkg/cpuhealth/message.go`
+(ComposeMessage + composeHealthy + causeHeadline + causeDetails + BlockReason); all strings copied
+verbatim from STRING_INVENTORY.md by entry number, plus the two §5 sentences (`F3` "CPU: starting up." and
+the `F6` host-headroom sentence). 67 cpuhealth specs (S2+S3 47, S4 +20), 106 diagnosis specs.
+
+- [x] **S4 R1 — The healthy headline** · tdd-commit ladder (manual, Workflow tool unavailable) · commit `875388636` · +8 specs.
+  - `composeHealthy`: the two-by-two headline dispatch over (LimitApplies && rounded total > 0) x
+    (displayed headroom < 0.05); subject follows MODE not column (a tiny quota reads "This instance"
+    entry 12/11); total/used/reserve round1'd then headroom = round1(total-used-reserve); total prints
+    integer-when-whole; negative zero → "0.0". Zero-capacity (entry 7) is an early return, never a prefix.
+    Limited-visibility (entry 5) and the F6 host-headroom sentence sit in the advisory slot.
+  - **S3-gap closed here (spec-reconciliation):** `Signals.CapacityCores`, `ReserveCores`,
+    `HostBusyCoresAvailable` were DECLARED but never populated by S3's Decide, and `cpuReserveCores` was
+    never defined. R1 populates them (capacity = quota-if-positive else LogicalCpus; reserve = 0.10×quota
+    limit / 1.0 no-limit; HostBusyCoresAvailable = sample's HostBusy ok bit) and defines
+    `cpuReserveCores = 1.0` (D-08 provenance). Pinned by the conformance spec. Not a judgement-change.
+- [x] **S4 R2 — The healthy message reports only what it measured [F3]** · manual ladder · commit `8e06c4f5b` · +4 specs.
+  - The withholding: limit headline gated on `UsageRingActive`; no-limit on `HostBusyRingActive` OR
+    `HostBusyCoresAvailable`. A withheld usage figure renders the WHOLE message as `"CPU: starting up."`
+    alone (D-19/D-20, §5 F3), through the same single-line early return as zero-capacity — one tick after
+    each start/respawn. The floors are per-track (cross-track assertion in spec 4).
+- [x] **S4 R3 — The budget lines [F1, F3]** · manual ladder · commit `8cd2981a0` · +2 specs.
+  - Headroom (entry 14) unconditional; throttle/pressure/steal (entries 15-17) gated on
+    `ThrottleSignalReady`/`PressureSignalReady`/`StealSignalReady` — NOT the capability flags
+    (LimitApplies/PsiApplies/StealApplies), which are F1. Asserted the difference: StealApplies true +
+    StealSignalReady false prints no "Steal 0%".
+- [x] **S4 R4 — The degraded copy** · manual ladder · commit `939546216` · +4 specs.
+  - `ComposeMessage` routes healthy→composeHealthy, degraded→headline (entries 21-25, one per CauseKind,
+    entry 25 default) + one detail paragraph per fired cause (entries 26-38), dominant first, joined by a
+    blank line. `causeDetails` reads throttling from Signals.ThrottleRatio and pressure/steal from
+    Cause.Value; saturation dispatched on which sub-latch arm fired (fold order), appending clauses 34/37
+    (leading-space) rather than replacing paragraphs. Arm 6 compound; readable no-limit full host → arm 7.
+- [x] **S4 R5 — Block reasons [D1]** · manual ladder · commit `35c399ede` · +2 specs.
+  - `BlockReason` per kind (39-47), saturation dispatched on the arm in BlockReason's OWN order
+    (host-full, limit, no-host-stats, no-limit-host); entries 42/45 byte-identical (intentional collision).
+  - **S3-gap closed here (spec-reconciliation):** `Signals.NoLimitHostFired` was declared but never
+    populated by S3's Decide (host-headroom set HostFullFired in BOTH modes). R5 splits the host-full arm
+    by mode (SPEC §2.6 arm table): limit→HostFullFired, no-limit→NoLimitHostFired. Pinned by conformance.
+- **Conductor note — Workflow tool absent:** this environment exposes no `Workflow` tool (the S2/S3 pattern
+  invoked `tdd-commit.js` via it, then the Skill harness). The ladder was run MANUALLY preserving tdd-commit
+  discipline per rung: RED (test fails for the missing behavior) → GREEN (minimal prod code, full suite
+  green) → verified (gofmt/vet/no-focused/strings-vs-inventory) → one commit each. No workflow COMMIT agent
+  existed, so commits are conductor-made with `--no-verify` after manual gofmt/vet/license checks (the
+  lefthook gofmt pre-commit hook is broken for conductor-side commits in this worktree per P2 brief §5).
+  Each rung's tests assert the FULL exact strings (not substrings where the format is load-bearing), so the
+  inventory conformance is pinned by the assertions themselves.
+
+## P2 GATE ASSESSMENT
+
+**Spec totals:** cpuhealth 67 specs green (S2 16 + S3 31 + S4 20); diagnosis 106 green; build/fmt/vet clean,
+no focused specs. 5 S4 commits on `p2/cpuhealth` (base `9454a65` via p1/diagnosis): R1 `875388636`,
+R2 `8e06c4f5b`, R3 `8cd2981a0`, R4 `939546216`, R5 `35c399ede`.
+
+**Recording gate (SPEC §8) — outcome: PARTIAL, honestly reported.** The shipped recoder harness
+(`recorder/recorder.go.txt`) targets the OLD cpuhealth API (`DefaultThresholds`, `WindowState`, old
+`Decide(st, sample, th)`, old Sample fields) and cannot be run against the rebuilt signatures without the
+§8 re-record protocol, which is a WRITE at `e642457f5` in the `cpu-rerecord` scratch worktree — outside S4's
+per-rung scope. I ran a focused throwaway adapter instead (engine + DeriveEnvironment + Decide +
+ComposeMessage + BlockReason) over a representative subset and diffed against `RECORDING_behaviour.txt`:
+
+- **VERIFIED (healthy layer):** `healthy/limit/idle`, `healthy/nolimit/idle`, `healthy/deadzone`,
+  `healthy/tiny-quota`, `healthy/zero-capacity`, `healthy/close-to-degraded/limit` all reproduce the
+  baseline's steady-state (ticks 1+) MESSAGE strings EXACTLY (headline arithmetic, headroom body, budget
+  lines, limited-visibility note, zero-capacity = entry 7 alone). Tick 0 renders `"CPU: starting up."`
+  (the F3-expected withholding; healthy/zero-capacity is not F3-tagged and correctly stays entry 7 at tick 0).
+- **VERIFIED (degraded layer):** the saturation/limit/degraded cases render the correct arm paragraphs and
+  block reasons (limit-saturation → entries 33/43; host-full → entry 30/42) matching the inventory; the F6
+  byte-identical 42=45 collision survives; Decide attributes `unknown` at steady state when the split says
+  our load filled the machine (D1).
+- **NOT mechanically re-run:** the full 33-scenario run-length diff (the recorder targets the old API; a
+  faithful re-run is the §8 re-record protocol, a separate scratch-worktree write). So the Tier-1/Tier-2
+  HALT/REPORT verdicts are NOT certified end-to-end here; that gate remains for the independent verifier
+  (or P3), which is the §4a-signed closeout.
+
+**Reconcile-open for Jeremy (this build's write-ups):**
+1. 🔴 **D1 spec-2 ("not told to reduce other software" when own instance filled the machine) is NOT
+   satisfiable by `BlockReason` as frozen.** `BlockReason(dominantKind, signals)` receives no attribution,
+   `Signals` carries none, and the departure set has no blame-aware block-reason string; the authoritative
+   R5 arm table ships `NoLimitHostFired` → entry 45 ("reduce other software") for BOTH host-dominant and
+   container-dominant. The D1 attribution change (host→unknown) IS delivered by S3 R4's split and was
+   verified; the sentence-level clause needs Jeremy's ruling (attribution input to the message functions,
+   or a new §5 row — both outside current frozen scope). **P1-worthy: it is a customer-visible wording
+   question surface.**
+2. 🔴 **D1 attribution transient at host-full-AND-limit:** at the early degraded ticks the host-busy / ours
+   means are still window-ramping, so the split transiently reads `host` before the full-60s window settles
+   it to `unknown` (matches the S3 scenario table's steady-state ticks 100-149). The scenario is D1-tagged;
+   the early-tick transient is a real behavior a full gate must reconcile with the D1 row's expected after.
+3. **S3 R2 carryover (flagged in S3 handoff):** the `pressure/nan-inf-negative` healthy boundary moves
+   45→60 (F4 coverage-gated clear), so the F1 tag's stated diff (15-44) differs (≈15-59) at the gate. Do not
+   change engine behavior; reconcile the F1 row's expected-after.
+4. **Untagged F6/F7/D4/D5** (S2 conductor's no-diff decision): still awaiting Jeremy's sign-off; S3 and S4
+   confirmed no recorded scenario differs under them.
+5. **R1b spec-3 window** (S3 handoff): the "nothing fires" unobservable spike placement made buildable by
+   placing the spike at the last sample; recorded in S3 STATUS.
+
+**P1/pkg/diagnosis defects found: none.** The three S3-gaps S4 closed (CapacityCores/ReserveCores/
+HostBusyCoresAvailable/NoLimitHostFired population + cpuReserveCores constant) are within `pkg/cpuhealth`
+(P2), not P1.
+
+**Next actions:** independent verify re-runs the gates w/ positive controls; PR #2680 (P2 → p1/diagnosis /
+staging); P3. Do NOT mark P2 done (per brief §7 — a separate session certifies).
