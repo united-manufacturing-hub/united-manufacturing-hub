@@ -58,6 +58,12 @@ const (
 // that judged it so the message layer can render "cores" vs "ratio".
 type Unit string
 
+// cpuReserveCores is the no-limit headroom reserve: one core set aside for
+// Redpanda. It is Redpanda's default maxCores (--smp), not a calibration guess
+// (DECISIONS.md D-08); Decide stamps it onto Signals.ReserveCores so the
+// message reads the same number the verdict subtracted.
+const cpuReserveCores = 1.0
+
 // Cause is one entry in a degraded verdict, ordered by diagnosis.Rank.
 type Cause struct {
 	Kind  CauseKind
@@ -223,6 +229,25 @@ func Decide(engine *diagnosis.Engine[Sample], s Sample, env diagnosis.Environmen
 	sig.HostBusyCores60sMean = hostBusyMean
 	sig.UsageRingActive = ourUsageState == diagnosis.StateValue
 	sig.HostBusyRingActive = hostBusyState == diagnosis.StateValue
+
+	// The headroom ceiling and the reserve the verdict subtracted, stamped so
+	// the message's headline and headroom line read exactly the number the
+	// verdict used (S4 R1): capacity is the quota when set and positive, else
+	// the logical CPU count; the reserve is 10% of the quota in limit mode and
+	// cpuReserveCores in no-limit mode.
+	if q, ok := s.Quota.Get(); ok && q > 0 {
+		sig.CapacityCores = q
+		sig.ReserveCores = 0.10 * q
+	} else {
+		sig.CapacityCores = sig.LogicalCpus
+		sig.ReserveCores = cpuReserveCores
+	}
+	// HostBusyCoresAvailable mirrors the sample's own readability: a raw
+	// HostBusyCores60sMean == 0 proxy cannot tell an unreadable /proc/stat from
+	// an idle host (S4 R2's readability gate).
+	if _, ok := s.HostBusy.Get(); ok {
+		sig.HostBusyCoresAvailable = true
+	}
 
 	// The per-signal readiness trio, out of the same pass that judged them.
 	// Ready and nothing else: NoInstrument on a bare-metal box and NoneReady on
