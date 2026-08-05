@@ -187,6 +187,19 @@ func Decide(engine *diagnosis.Engine[Sample], s Sample, env diagnosis.Environmen
 		sig.HostCpus = hc
 	}
 
+	// S3 R7 spec 1: the no-host-stats saturation fraction is usage-fraction's
+	// own reduction — the number the latch was judged on, not the usage track
+	// divided by anything, so a mid-run core-count change cannot split them.
+	sig.NoHostStatsSaturationFraction, _ = engine.Reduction(sigSaturation, instUsageFraction).Get()
+
+	// S3 R7 spec 2: the dead-zone annotation. Appendix A defines the dead zone
+	// as quota nil or non-positive AND PSI absent, and it is an annotation on a
+	// healthy verdict, never a state. LimitedVisibility is where ComposeMessage
+	// reads it.
+	if q, ok := s.Quota.Get(); !ok || q <= 0 {
+		sig.LimitedVisibility = !s.PsiAvailable
+	}
+
 	return verdict, sig
 }
 
