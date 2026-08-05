@@ -28,6 +28,16 @@ import (
 // starts.
 
 const (
+	// §5 F3 (D-20) — the one line rendered on a tick whose usage figure is
+	// withheld (window below its floor, or the host reading absent): no
+	// headline, no advisory, no technical details. It is one of the two stack
+	// sentences not in the inventory, copied from §5.
+	//
+	// Not entry 7 ("cgroup read failed"): on this tick the read succeeded and
+	// there is simply one sample, so claiming a read failure is F1 in
+	// customer-facing prose.
+	cpuStartingUp = "CPU: starting up."
+
 	// Entry 7 — rendered alone when CapacityCores is 0; an early return, never
 	// a prefix.
 	cpuMonitoringUnavailable = "CPU monitoring unavailable: cgroup read failed. Defaulting to healthy."
@@ -80,6 +90,22 @@ func composeHealthy(signals Signals) string {
 	// healthy per the binary contract. It is an early return, not a prefix.
 	if signals.CapacityCores == 0 {
 		return cpuMonitoringUnavailable
+	}
+
+	// R2: the healthy message reports only what it measured. Two track floors
+	// (one per mode) and one readability gate; when any withholds the usage
+	// figure the message has no headline sentence left, so render the single
+	// "CPU: starting up." line alone. It lasts one tick after each start and
+	// respawn, and it is not the zero-capacity case (a standing state) — they
+	// share a rendering path and nothing else.
+	if signals.LimitApplies {
+		if !signals.UsageRingActive {
+			return cpuStartingUp
+		}
+	} else {
+		if !signals.HostBusyRingActive || !signals.HostBusyCoresAvailable {
+			return cpuStartingUp
+		}
 	}
 
 	// The display figures. total/used/reserve are each rounded once; headroom

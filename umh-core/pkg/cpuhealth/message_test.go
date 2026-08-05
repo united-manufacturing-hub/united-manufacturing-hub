@@ -176,3 +176,48 @@ var _ = Describe("S4 R1 — the healthy headline", func() {
 		Expect(sigNL.ReserveCores).To(Equal(1.0), "no-limit mode: reserve is cpuReserveCores")
 	})
 })
+
+var _ = Describe("S4 R2 — the healthy message reports only what it measured", func() {
+	It("should not report host usage or headroom when the host reading is absent", func() {
+		sig := healthySig()
+		sig.LimitApplies = false
+		sig.CapacityCores = 8
+		sig.HostBusyCores60sMean = 0.0
+		sig.ReserveCores = 1.0
+		sig.HostBusyCoresAvailable = false // read failed, window still full
+		Expect(composeHealthy(sig)).To(Equal("CPU: starting up."))
+	})
+
+	It("should not report the limit-mode usage figure when the container's own window holds too few samples to reduce, even though the reading succeeded", func() {
+		sig := healthySig()
+		sig.UsageRingActive = false
+		Expect(composeHealthy(sig)).To(Equal("CPU: starting up."))
+	})
+
+	It("should not report the no-limit usage figure when the host window holds too few samples to reduce, even though the reading succeeded", func() {
+		sig := healthySig()
+		sig.LimitApplies = false
+		sig.CapacityCores = 8
+		sig.HostBusyCores60sMean = 0.0
+		sig.ReserveCores = 1.0
+		sig.HostBusyCoresAvailable = true
+		sig.HostBusyRingActive = false
+		Expect(composeHealthy(sig)).To(Equal("CPU: starting up."))
+	})
+
+	It("should render no headline at all on a tick whose usage figure is withheld, returning through the same single-line path the zero-capacity guard uses rather than a headline with a hole in it", func() {
+		sig := healthySig()
+		sig.UsageRingActive = false
+		msg := composeHealthy(sig)
+		Expect(msg).To(Equal("CPU: starting up."))
+		Expect(msg).NotTo(ContainSubstring("CPU healthy."))
+		Expect(msg).NotTo(ContainSubstring("Technical Details:"))
+
+		// The floors are per track, not one flag: a limit-mode headline uses
+		// the container's usage-cores, so a thin host-busy window must NOT
+		// withhold it.
+		limitOK := healthySig()
+		limitOK.HostBusyRingActive = false
+		Expect(composeHealthy(limitOK)).To(ContainSubstring("CPU healthy."))
+	})
+})
