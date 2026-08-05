@@ -269,3 +269,113 @@ var _ = Describe("S4 R3 — the budget lines", func() {
 		Expect(composeHealthy(ready)).To(ContainSubstring("Steal 30% (degraded above 10%)."))
 	})
 })
+
+// degradedSig returns a Signals with the headroom family populated and no
+// saturation arm fired, so a single arm can be set per assertion.
+func degradedSig() Signals {
+	return Signals{
+		CapacityCores:          4.0,
+		AvgUsageCores:          0.5,
+		HostBusyCores60sMean:   1.0,
+		HostBusyCoresAvailable: true,
+		ReserveCores:           1.0,
+		LimitApplies:           true,
+		PsiApplies:             true,
+	}
+}
+
+// degradedVerdict builds a one-cause degraded verdict.
+func degradedVerdict(kind CauseKind, value float64) Verdict {
+	return Verdict{State: StateDegraded, Attribution: AttributionHost, Causes: []Cause{{Kind: kind, Value: value}}}
+}
+
+var _ = Describe("S4 R4 — degraded copy", func() {
+	It("should render one headline per cause kind", func() {
+		Expect(causeHeadline(CauseKindThrottling)).To(Equal("CPU limited"))
+		Expect(causeHeadline(CauseKindPressure)).To(Equal("CPU contention"))
+		Expect(causeHeadline(CauseKindSteal)).To(Equal("CPU taken by the server"))
+		Expect(causeHeadline(CauseKindSaturation)).To(Equal("CPU running near full"))
+		// Entry 25: the default arm, unreachable through today's five kinds but
+		// still written so the enum can grow.
+		Expect(causeHeadline(CauseKind("future-kind"))).To(Equal("CPU degraded"))
+	})
+
+	It("should render the curated detail paragraph for each fired cause, dominant first", func() {
+		verdict := Verdict{State: StateDegraded, Attribution: AttributionHost, Causes: []Cause{
+			{Kind: CauseKindPressure, Value: 0.40},
+			{Kind: CauseKindThrottling},
+		}}
+		msg := ComposeMessage(verdict, degradedSig())
+		head := strings.Index(msg, "CPU contention")
+		p1 := strings.Index(msg, "Tasks in this instance spent 40% of the last minute waiting for a free CPU core.")
+		Expect(head).To(BeNumerically(">=", 0))
+		Expect(p1).To(BeNumerically(">", head), "the dominant (pressure) paragraph comes first")
+		Expect(msg).To(ContainSubstring("This instance hit its CPU limit and was paused until the next cycle"))
+		// Two detail paragraphs are joined by a blank line, not a space.
+		Expect(msg).To(ContainSubstring("\n\n"))
+	})
+
+	It("should dispatch the saturation paragraph on which arm fired, in the fold's order, and append the two clauses rather than replacing their paragraphs", func() {
+		// Arm 2 — HostFullFired alone, entry 30.
+		msg := ComposeMessage(degradedVerdict(CauseKindSaturation, 0.5), func() Signals { s := degradedSig(); s.HostFullFired = true; return s }())
+		Expect(msg).To(ContainSubstring("The machine is full. Add CPU to the machine, or reduce other software running on it."))
+
+		// Arm 1 — HostFullFired AND LimitSaturationFired, entry 29 with the limit.
+		hfl := degradedSig()
+		hfl.HostFullFired = true
+		hfl.LimitSaturationFired = true
+		hfl.CapacityCores = 2
+		msg = ComposeMessage(degradedVerdict(CauseKindSaturation, 0.5), hfl)
+		Expect(msg).To(ContainSubstring("The machine is full and this instance's CPU limit cannot help. Add CPU to the machine, or reduce other software running on it. (This instance is also at its 2-core limit.)"))
+
+		// Arm 5 — LimitSaturationFired, entry 33, with entry 34 appended when
+		// host stats are unreadable (the clause is appended, not a replacement).
+		ls := degradedSig()
+		ls.LimitSaturationFired = true
+		ls.AvgUsageCores = 1.9
+		ls.CapacityCores = 2.0
+		ls.HostBusyCoresAvailable = false
+		msg = ComposeMessage(degradedVerdict(CauseKindSaturation, 0.5), ls)
+		Expect(msg).To(ContainSubstring("CPU averaged 95% of its limit over the last minute and this instance has little headroom left. Raise its CPU limit, or reduce the load on it."))
+		Expect(msg).To(ContainSubstring(" Host stats are unavailable, so host-side contention is not visible."))
+
+		// Arm 6 — NoLimitHostFired with host unreadable, entry 35.
+		nl6 := degradedSig()
+		nl6.LimitApplies = false
+		nl6.NoLimitHostFired = true
+		nl6.HostBusyCoresAvailable = false
+		msg = ComposeMessage(degradedVerdict(CauseKindSaturation, 0.5), nl6)
+		Expect(msg).To(ContainSubstring("CPU is degraded. Host CPU usage is not readable right now (host stats temporarily unavailable), so the host-busy percentage cannot be shown. Add CPU capacity, or reduce the load on it."))
+
+		// Arm 7 — a readable no-limit full host, entry 36 with entry 37 appended
+		// when LimitedVisibility.
+		arm7 := degradedSig()
+		arm7.LimitApplies = false
+		arm7.NoLimitHostFired = true
+		arm7.HostBusyCores60sMean = 3.8
+		arm7.CapacityCores = 4.0
+		arm7.LimitedVisibility = true
+		msg = ComposeMessage(degradedVerdict(CauseKindSaturation, 0.5), arm7)
+		Expect(msg).To(ContainSubstring("CPU averaged 95% of the machine over the last minute and this instance has little headroom left. Add CPU capacity, or reduce the load on it."))
+		Expect(msg).To(ContainSubstring(" Pressure stats are unavailable; enable Linux pressure stats (boot with psi=1) for richer detail."))
+
+		// Arm 3 & 4 — no-host-stats with and without PSI. The PsiApplies-false
+		// arm is the one that EARNS the psi advice.
+		on := degradedSig()
+		on.NoHostStatsSaturationFired = true
+		msg = ComposeMessage(degradedVerdict(CauseKindSaturation, 0.8), on)
+		Expect(msg).To(ContainSubstring("CPU averaged 80% of the machine over the last minute and this instance has little headroom left. Host contention is not visible here (host CPU usage is not readable). Consider adding CPU capacity."))
+		Expect(msg).NotTo(ContainSubstring("Enable Linux pressure stats"))
+
+		off := degradedSig()
+		off.NoHostStatsSaturationFired = true
+		off.PsiApplies = false
+		msg = ComposeMessage(degradedVerdict(CauseKindSaturation, 0.8), off)
+		Expect(msg).To(ContainSubstring("Enable Linux pressure stats (boot with psi=1) for richer detail. Consider adding CPU capacity."))
+	})
+
+	It("should render the generic degraded paragraph for an unknown cause kind", func() {
+		msg := ComposeMessage(degradedVerdict(CauseKind("future-kind"), 0.5), degradedSig())
+		Expect(msg).To(ContainSubstring("CPU is degraded."))
+	})
+})
