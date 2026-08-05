@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -40,6 +41,7 @@ import (
 
 	benthos_monitor_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos_monitor"
 	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
+	fsmv2benthosmonitor "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/benthos_monitor"
 	"gopkg.in/yaml.v3"
 
 	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
@@ -65,6 +67,12 @@ const (
 	// Reference: https://github.com/gopcua/opcua/blob/main/debug/debug.go
 	OPCDebugEnvVar = "OPC_DEBUG"
 )
+
+// envUseFsmv2BenthosMonitor names the environment variable that selects the
+// fsmv2 benthos monitor backend in NewDefaultBenthosService. An unset, empty,
+// or false-y value (as defined by strconv.ParseBool) selects the byte-identical
+// fsmv1 backend; a true-y value selects the fsmv2 adapter manager.
+const envUseFsmv2BenthosMonitor = "USE_FSMV2_BENTHOS_MONITOR"
 
 // IBenthosService is the interface for managing Benthos services.
 type IBenthosService interface {
@@ -194,6 +202,17 @@ func (bs *BenthosStatus) CopyBenthosLogs(src []s6service.LogEntry) error {
 	return nil
 }
 
+// benthosMonitorManagerIface is the seam between the fsmv1 and fsmv2 benthos
+// monitor backends. The BenthosService only depends on the three methods its
+// reconciliation and status paths call, so the field can hold either the
+// fsmv1 BenthosMonitorManager or the fsmv2 adapter WorkerManager depending on
+// the USE_FSMV2_BENTHOS_MONITOR flag.
+type benthosMonitorManagerIface interface {
+	GetLastObservedState(serviceName string) (fsm.ObservedState, error)
+	GetInstance(name string) (fsm.FSMInstance, bool)
+	Reconcile(ctx context.Context, snapshot fsm.SystemSnapshot, services serviceregistry.Provider) (error, bool)
+}
+
 // BenthosService is the default implementation of the IBenthosService interface.
 type BenthosService struct {
 	s6Service s6service.Service // S6 service for direct S6 operations
@@ -201,7 +220,7 @@ type BenthosService struct {
 
 	s6Manager *s6fsm.S6Manager
 
-	benthosMonitorManager *benthos_monitor_fsm.BenthosMonitorManager
+	benthosMonitorManager benthosMonitorManagerIface
 
 	// -----------------------------------------------------------------------------
 	// 🌶️  Hot-path YAML-parsing cache
@@ -260,7 +279,13 @@ func WithS6Service(s6Service s6service.Service) BenthosServiceOption {
 }
 
 // WithMonitorManager sets a custom monitor manager for the BenthosService.
-func WithMonitorManager(monitorManager *benthos_monitor_fsm.BenthosMonitorManager) BenthosServiceOption {
+//
+// It overrides the backend selected by envUseFsmv2BenthosMonitor inside
+// NewDefaultBenthosService: NewDefaultBenthosService applies options before it
+// selects the flag-selected default, so a manager passed here always wins and
+// the default backend is never allocated. Passing nil is equivalent to not
+// passing the option; the flag-selected default is used instead.
+func WithMonitorManager(monitorManager benthosMonitorManagerIface) BenthosServiceOption {
 	return func(s *BenthosService) {
 		s.benthosMonitorManager = monitorManager
 	}
@@ -277,16 +302,45 @@ func WithS6Manager(s6Manager *s6fsm.S6Manager) BenthosServiceOption {
 // name is the name of the Benthos service as defined in the UMH config.
 func NewDefaultBenthosService(benthosName string, opts ...BenthosServiceOption) *BenthosService {
 	managerName := fmt.Sprintf("%s%s", logger.ComponentBenthosService, benthosName)
+	log := logger.For(managerName)
+
 	service := &BenthosService{
-		logger:                logger.For(managerName),
-		s6Manager:             s6fsm.NewS6Manager(managerName),
-		s6Service:             s6service.NewDefaultService(),
-		benthosMonitorManager: benthos_monitor_fsm.NewBenthosMonitorManager(benthosName),
+		logger:    log,
+		s6Manager: s6fsm.NewS6Manager(managerName),
+		s6Service: s6service.NewDefaultService(),
 	}
 
-	// Apply options
+	// Apply options before selecting the default backend so a caller-supplied
+	// manager always wins, the flag-selected default is never allocated or
+	// logged when overridden, and WithMonitorManager(nil) falls back to the
+	// default instead of nil-poisoning the service.
 	for _, opt := range opts {
 		opt(service)
+	}
+
+	if service.benthosMonitorManager == nil {
+		useFsmv2 := false
+		if envValue := os.Getenv(envUseFsmv2BenthosMonitor); envValue != "" {
+			var err error
+			useFsmv2, err = strconv.ParseBool(envValue)
+			if err != nil {
+				// A value ParseBool rejects is silently inverted by a naive
+				// flag flip, so surface it instead of treating it as off.
+				log.Warnf("%s=%q is not a recognized boolean; treating as off (fsmv1)", envUseFsmv2BenthosMonitor, envValue)
+			}
+		}
+		if useFsmv2 {
+			log.Warnf("%s is on: selecting the fsmv2 benthos monitor, whose observed-state mapping is not implemented yet; health and metrics reporting is disabled until then", envUseFsmv2BenthosMonitor)
+			service.benthosMonitorManager = fsmv2benthosmonitor.NewFsmv2BenthosMonitorManager(
+				// Match the fsmv1 backend's monitor log prefix so an operator
+				// grepping logs sees the same labels across a flag flip.
+				fmt.Sprintf("%s_%s", logger.ComponentBenthosMonitorManager, benthosName),
+			)
+		} else {
+			// Flag-off default constructs the same fsmv1 manager as before the
+			// seam and emits no log line, so the default stays byte-identical.
+			service.benthosMonitorManager = benthos_monitor_fsm.NewBenthosMonitorManager(benthosName)
+		}
 	}
 
 	return service
