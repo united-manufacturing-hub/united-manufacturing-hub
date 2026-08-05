@@ -238,9 +238,10 @@ differs under them**: F6 (no scenario drives CpuScope/pinning; all are effective
 (swap scenarios post-outage-recovery + first-readable-tick-dip already F4-tagged; no authoritative F7
 assignment) · D4/D5 (sampler-level Sample-shape changes; no Decide-output change in a recorded scenario).
 DEPARTURES covers only D1-D3,F1-F5; §5 captures F6/F7/D4/D5/F8 with NO scenario name (F8's is the sole
-§8 exception). **Decision recorded:** leave F6/F7/D4/D5 untagged (per the no-diff rule) and get Jeremy's
-sign-off that §8's "all seven" wording should be reconciled to "the rows that differ"; if a later S3/S4
-rung DOES change one of these scenarios, its tag must be added at that point.
+§8 exception). **✅ CONFIRMED by Jeremy 2026-08-05:** §8's "all seven" is reconciled to "the rows that actually
+differ" — F6/F7/D4/D5 stay untagged (none changes a recorded scenario; force-tagging a non-differing
+scenario is itself a gate failure). Record in the #2680 PR body. If a later rung DOES change one of
+these scenarios, its tag must be added then.
 
 ## S3 — judgement
 
