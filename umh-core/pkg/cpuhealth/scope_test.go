@@ -100,6 +100,13 @@ var _ = Describe("CPU scope", func() {
 		Expect(ok).To(BeTrue(), "the machine's CPU count must be kept on the snapshot")
 		Expect(machine).To(Equal(4.0), "four per-CPU lines are four machine CPUs")
 
+		// The container's logical CPU count — F6's "2" in "pinned to 2 of 8" —
+		// is kept beside the scope, from the same cpuset read, so the withheld
+		// headroom sentence can name it (S3 R5 spec 3).
+		logical, ok := affS.LogicalCpus.Get()
+		Expect(ok).To(BeTrue(), "the logical CPU count must be kept on the snapshot")
+		Expect(logical).To(Equal(2.0), "an allowed set of two CPUs is a logical count of two")
+
 		// When the machine's CPU count cannot be read, the scope is unknown —
 		// NOT a silent ScopeHost. Defaulting a failed read to host would reinstate
 		// F6 by another route: the container is still pinned, we have just

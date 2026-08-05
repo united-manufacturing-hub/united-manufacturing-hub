@@ -128,6 +128,12 @@ type Sample struct {
 	// when it is not.
 	HostCpus diagnosis.Reading
 
+	// LogicalCpus is the CPUs this process may use: the size of the container's
+	// allowed cpuset, which under --cpuset-cpus is a strict subset of the
+	// machine's count. It is F6's "2" in "pinned to 2 of 8 CPUs". It is present
+	// when the cpuset is readable, and unknown when it is not.
+	LogicalCpus diagnosis.Reading
+
 	// CpuScope reports whether the sampler's logical CPU count describes every
 	// CPU on the machine (ScopeHost), only the ones its container may run on
 	// (ScopeAffinity), or ScopeUnknown when the machine's CPU count cannot be
@@ -537,12 +543,17 @@ func (s *cgroupSampler) Read(ctx context.Context) (Sample, error) {
 		// reads ScopeAffinity; a failed cpuset read on a known machine count is
 		// likewise unknown (never a silent host).
 		smp.HostCpus = diagnosis.Known(machine)
-		// A failed cpuset read leaves the fresh sample's CpuScope as its zero
-		// value, ScopeUnknown: never a silent ScopeHost on a known machine count.
-		if allowed, aok := s.readCpuset(ctx); aok && allowed == int(machine) {
-			smp.CpuScope = ScopeHost
-		} else if aok {
-			smp.CpuScope = ScopeAffinity
+		// The cpuset read carries the logical CPU count this process may use —
+		// F6's "2" — beside the scope. A failed cpuset read leaves the fresh
+		// sample's CpuScope as its zero value, ScopeUnknown, and LogicalCpus
+		// absent: never a silent ScopeHost on a known machine count.
+		if allowed, aok := s.readCpuset(ctx); aok {
+			smp.LogicalCpus = diagnosis.Known(float64(allowed))
+			if allowed == int(machine) {
+				smp.CpuScope = ScopeHost
+			} else {
+				smp.CpuScope = ScopeAffinity
+			}
 		}
 		if s.haveHost {
 			// Busy cores over the interval is the busy-jiffy delta divided by
