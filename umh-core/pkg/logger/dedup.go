@@ -29,10 +29,16 @@ const DefaultErrorSuppressionSummaryInterval = 60 * time.Second
 // called before treating the next call as a fresh error cycle.
 const DefaultErrorDedupResetInterval = 5 * time.Minute
 
-// DedupLogger is a *zap.SugaredLogger that also deduplicates repeating error
-// logs from a hot loop (such as an FSM reconcile loop)
+// DedupLogger wraps a *zap.SugaredLogger to keep one repeating error out of a
+// hot loop: it logs the error once, then demotes repeats to Debug until the
+// error changes or clears.
 //
-// It is not safe for concurrent use.
+// Use it when a caller owns a single error stream and has a success signal to
+// clear it (see Reset) — typically an FSM reconcile loop. For transient
+// conditions in shared code with no owner, use the package-level ThrottledX /
+// EscalatingX helpers instead.
+//
+// Not safe for concurrent use.
 type DedupLogger struct {
 	*zap.SugaredLogger
 
@@ -46,6 +52,13 @@ type DedupLogger struct {
 	// cycle after the error has been quiet for resetInterval.
 	lastLogTime time.Time
 
+	// lastLoggedKey is the format string of the active cycle. Dedup identity is
+	// the format, not the fully-formatted message, so a single call site whose
+	// arguments vary every tick (such as alternating context-deadline errors)
+	// still collapses into one cycle instead of thrashing.
+	lastLoggedKey string
+
+	// lastLoggedErrorMsg is the most recent formatted message, shown in summaries.
 	lastLoggedErrorMsg string
 
 	summaryInterval time.Duration
@@ -72,9 +85,13 @@ func NewDedupLogger(l *zap.SugaredLogger) *DedupLogger {
 }
 
 // LogErrorDedup logs an error without spamming: first occurrence and first
-// repeat at Error (the latter with a suppression note), further repeats at Debug
-// plus a periodic Error summary of the suppressed count. A changed message or a
-// quiet period of resetInterval ends the cycle with a final summary.
+// repeat at Error, further repeats at Debug with a periodic Error summary of the
+// suppressed count. The cycle ends, with a final summary, when the format string
+// changes, Reset is called, or the error stays quiet for resetInterval.
+//
+// Identity is the format string, not the formatted message, so a call site whose
+// arguments vary each tick still collapses into one cycle. Use a distinct format
+// per logical error.
 func (d *DedupLogger) LogErrorDedup(format string, args ...any) {
 	msg := fmt.Sprintf(format, args...)
 	now := time.Now()
@@ -84,10 +101,10 @@ func (d *DedupLogger) LogErrorDedup(format string, args ...any) {
 		d.endCycle()
 	}
 
-	// Honor a pending Reset only when the message changed; a repeat of the same
-	// message means the success signal was spurious.
+	// Honor a pending Reset only when the format changed; a repeat of the same
+	// format means the success signal was spurious.
 	if d.resetPending {
-		if msg != d.lastLoggedErrorMsg {
+		if format != d.lastLoggedKey {
 			d.endCycle()
 		}
 		d.resetPending = false
@@ -96,19 +113,24 @@ func (d *DedupLogger) LogErrorDedup(format string, args ...any) {
 	d.lastLogTime = now
 
 	switch {
-	case msg != d.lastLoggedErrorMsg:
+	case format != d.lastLoggedKey:
+		// emitSuppressionSummary still needs the previous cycle's message, so
+		// update lastLoggedErrorMsg only after it runs.
 		d.emitSuppressionSummary()
 		d.dedupSugar.Errorf("%s", msg)
+		d.lastLoggedKey = format
 		d.lastLoggedErrorMsg = msg
 		d.errorSuppressionAnnounced = false
 		d.suppressedErrorCount = 0
 		d.lastSuppressionSummary = now
 	case !d.errorSuppressionAnnounced:
 		d.dedupSugar.Errorf("%s (further repeats suppressed to debug until it changes or clears)", msg)
+		d.lastLoggedErrorMsg = msg
 		d.errorSuppressionAnnounced = true
 		d.lastSuppressionSummary = now
 	default:
 		d.dedupSugar.Debugf("%s", msg)
+		d.lastLoggedErrorMsg = msg
 		d.suppressedErrorCount++
 		if now.Sub(d.lastSuppressionSummary) >= d.summaryInterval {
 			d.dedupSugar.Errorf("repeated error suppressed %d times in the last %s (still failing): %s",
@@ -130,11 +152,11 @@ func (d *DedupLogger) emitSuppressionSummary() {
 	d.suppressedErrorCount = 0
 }
 
-// Reset signals that the caller considers the current error cleared (e.g. a
-// reconcile loop that just succeeded). Applied lazily on the next LogErrorDedup
-// call, and only if the message changed, so an unreliable success signal
-// reported every tick while the same error keeps firing does not restart the
-// cycle. A genuinely cleared error is also ended by the quiet resetInterval.
+// Reset signals the current error is cleared (e.g. a reconcile that just
+// succeeded). Applied lazily on the next LogErrorDedup call and only if the
+// format changed, so a success signal firing every tick while the same error
+// persists does not restart the cycle. A truly cleared error is also ended by
+// the quiet resetInterval.
 func (d *DedupLogger) Reset() {
 	d.resetPending = true
 }
@@ -143,6 +165,7 @@ func (d *DedupLogger) Reset() {
 // starts a fresh cycle.
 func (d *DedupLogger) endCycle() {
 	d.emitSuppressionSummary()
+	d.lastLoggedKey = ""
 	d.lastLoggedErrorMsg = ""
 	d.errorSuppressionAnnounced = false
 	d.resetPending = false

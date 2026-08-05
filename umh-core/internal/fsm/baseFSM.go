@@ -588,7 +588,8 @@ func (s *BaseFSMInstance) IsDeadlineExceededAndHandle(err error, tick uint64, lo
 	if errors.Is(err, context.DeadlineExceeded) {
 		// Context deadline exceeded should be retried with backoff, not ignored
 		s.SetError(err, tick)
-		s.Logger.Warnf("Context deadline exceeded in %s, will retry with backoff", location)
+		umhlogger.EscalatingWarn("reconcile-deadline-exceeded",
+			"Context deadline exceeded during reconciliation, will retry with backoff (host may be CPU-starved)")
 
 		return true // handled, return early
 	}

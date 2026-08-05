@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+## [0.44.33]
+
+### Improvements
+
+- The log viewer's and the metrics views' own polling messages are now DEBUG instead of INFO, which makes it easier to spot actual errors and warnings
+- Stopping an EtherNet/IP input no longer waits out the current poll interval
+- Connection and session diagnostics from the EtherNet/IP protocol library now surface in the input logs, including failures it previously swallowed
+
+### Fixes
+
+- When the host is CPU-starved, reconciliation deadlines get exceeded and umh-core was logging "context deadline exceeded" and "not enough time to reconcile" once per instance per tick, flooding the log. These are now throttled to at most one warning per minute (with the suppressed count folded in) and escalate to an error when the overload persists, so a genuinely stuck host gets louder instead of drowning in noise
+- The EtherNet/IP input now reconnects after losing the connection to the controller; it previously kept reporting a healthy connection while delivering no data
+- A single unreadable tag or attribute no longer stops the rest of an EtherNet/IP poll; only a poll where nothing at all can be read triggers a reconnect
+- `word`, `dword`, `uint8` and `uint64` values from the EtherNet/IP input are now labelled `eip_tag_type` `number` instead of `string`, and `word` and `dword` attributes decode to a number instead of a stringified byte slice
+
 ## [0.44.32]
 
 ### New Features
