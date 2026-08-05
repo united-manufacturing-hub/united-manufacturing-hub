@@ -49,8 +49,8 @@ const (
 
 	// monitorClientTimeout bounds each scrape request so one hung connection
 	// cannot consume the whole observation frame and starve the remaining
-	// endpoints. Four endpoints at ~400ms each fit the ~2.2s observation budget
-	// (D10); the fsmv1 curl bound of 1s would let a single poll run past it.
+	// endpoints. Four endpoints at ~400ms each fit the ~2.2s observation budget;
+	// the fsmv1 curl bound of 1s would let a single poll run past it.
 	monitorClientTimeout = 400 * time.Millisecond
 
 	// maxScrapeBody caps the response bodies Poll reads, so a misbehaving
@@ -59,10 +59,13 @@ const (
 )
 
 // benthosMonitorDeps holds the HTTP client used to scrape the benthos monitor's
-// endpoints. Poll receives a pointer to the deps, so the same *http.Client is
-// shared across polls.
+// endpoints and the throughput window that accumulates counter samples across
+// polls. Poll receives a pointer to the deps, so the same *http.Client is
+// shared across polls. window is a value field: its zero value is a valid empty
+// window, so no constructor is needed and a nil window cannot be built.
 type benthosMonitorDeps struct {
 	client *http.Client
+	window throughputWindow
 }
 
 // BenthosMetrics carries the counter values scraped from the benthos monitor's
