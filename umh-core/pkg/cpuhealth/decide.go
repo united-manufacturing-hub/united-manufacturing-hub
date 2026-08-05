@@ -104,7 +104,6 @@ const (
 // the host's non-container share exceeds our own sustained usage.
 func Decide(engine *diagnosis.Engine[Sample], s Sample, env diagnosis.Environment) (Verdict, Signals) {
 	fired, readiness := engine.Observe(s, env, s.Timestamp)
-	_ = readiness // S3 R8 spec 4 fills the per-signal readiness trio from this second return
 
 	var sig Signals
 
@@ -149,11 +148,21 @@ func Decide(engine *diagnosis.Engine[Sample], s Sample, env diagnosis.Environmen
 			}
 		default:
 			rest = append(rest, *f)
+			switch f.Identity.Signal {
+			case sigThrottling:
+				sig.ThrottleFired = true
+			case sigPressure:
+				sig.PressureFired = true
+			case sigSteal:
+				sig.StealFired = true
+			}
 		}
 	}
 	if survivor != nil {
 		rest = append(rest, *survivor)
 	}
+	// HostContentionFired is reserved; Decide sets it false unconditionally.
+	sig.HostContentionFired = false
 
 	// Rank the folded set; the result IS the order of Verdict.Causes, and there
 	// is no local sort anywhere in this package (S3 R8). Then build the verdict
@@ -199,6 +208,44 @@ func Decide(engine *diagnosis.Engine[Sample], s Sample, env diagnosis.Environmen
 	if q, ok := s.Quota.Get(); !ok || q <= 0 {
 		sig.LimitedVisibility = !s.PsiAvailable
 	}
+
+	// S3 R8 spec 4: the observable metrics, the two track floors and each
+	// signal's readiness are filled from the same pass, independent of latch
+	// state, so a signal sitting below its mark still reaches Signals. This is
+	// the route a no-latch tick's numbers take: Observe returns fired latches
+	// only, so without these reads a confident 0 would be published on every
+	// healthy tick.
+	sig.ThrottleRatio, _ = engine.Reduction(sigThrottling, instThrottleRatio).Get()
+	sig.PressureAvg60Out, _ = engine.Reduction(sigPressure, instPressureAvg60).Get()
+	sig.StealP95, _ = engine.Reduction(sigSteal, instStealP95).Get()
+	sig.HostHeadroomCores, _ = engine.Reduction(sigSaturation, instHostHeadroom).Get()
+	sig.AvgUsageCores = ourUsageMean
+	sig.HostBusyCores60sMean = hostBusyMean
+	sig.UsageRingActive = ourUsageState == diagnosis.StateValue
+	sig.HostBusyRingActive = hostBusyState == diagnosis.StateValue
+
+	// The per-signal readiness trio, out of the same pass that judged them.
+	// Ready and nothing else: NoInstrument on a bare-metal box and NoneReady on
+	// a thin window both mean this tick has no usable reading, and printing a
+	// confident number for either is F1.
+	for _, r := range readiness {
+		usable := r.Availability == diagnosis.Ready
+		switch r.Signal {
+		case sigThrottling:
+			sig.ThrottleSignalReady = usable
+		case sigPressure:
+			sig.PressureSignalReady = usable
+		case sigSteal:
+			sig.StealSignalReady = usable
+		}
+	}
+
+	// Capability, not readability: F1 is that distinction, and S4 R3 must not
+	// read these as "the reading succeeded". The *SignalReady trio is the
+	// readability half.
+	sig.LimitApplies = env.Has(HasLimit)
+	sig.PsiApplies = s.PsiAvailable
+	sig.StealApplies = env.Has(HasVirtualization)
 
 	return verdict, sig
 }
