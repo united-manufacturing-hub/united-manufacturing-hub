@@ -177,6 +177,9 @@ func main() {
 	protocolConverterEnabled, _ := env.GetAsBool("USE_FSMV2_PROTOCOL_CONVERTER", false, false)
 	configData.Agent.UseFSMv2ProtocolConverter = protocolConverterEnabled
 
+	cpuMonitorEnabled, _ := env.GetAsBool("USE_FSMV2_CPU", false, false)
+	configData.Agent.UseFSMv2CPU = cpuMonitorEnabled
+
 	featureUsage := &models.FeatureUsage{
 		ConfigBackupEnabled:           configBackupEnabled,
 		FSMv2TransportEnabled:         configData.Agent.UseFSMv2Transport,
@@ -787,6 +790,11 @@ children:
 	// config.yaml directly instead of polling the manager.
 	register.SetDeps[config.ConfigManager](configworker.ConfigManagerDepsKey, communicationState.ConfigManager)
 
+	// Publish whether the fsmv2 CPU monitor child should run (USE_FSMV2_CPU,
+	// read in main.go from the environment and never persisted). The config
+	// worker reads it at construction so it can gate its CPU child's upsert.
+	register.SetDeps[bool](configworker.CPUEnabledDepsKey, configData.Agent.UseFSMv2CPU)
+
 	appSup, err = application.NewApplicationSupervisor(application.SupervisorConfig{
 		ID:           "application-fsmv2",
 		Name:         "Application FSMv2",
@@ -811,6 +819,7 @@ children:
 		fsmv2client.SetClient(nil)
 		register.ClearDeps(configworker.WorkerTypeName)
 		register.ClearDeps(configworker.ConfigManagerDepsKey)
+		register.ClearDeps(configworker.CPUEnabledDepsKey)
 		fsmv2Hook.Stop()
 
 		return nil, nil, nil, "", func() {}, fmt.Errorf("failed to create FSMv2 supervisor: %w", err)
@@ -825,6 +834,7 @@ children:
 		fsmv2client.SetClient(nil)
 		register.ClearDeps(configworker.WorkerTypeName)
 		register.ClearDeps(configworker.ConfigManagerDepsKey)
+		register.ClearDeps(configworker.CPUEnabledDepsKey)
 		fsmv2Hook.Stop()
 	}
 
