@@ -169,17 +169,21 @@ func composeHealthy(signals Signals) string {
 			fmtCoresTotal(signals.LogicalCpus), fmtCoresTotal(signals.HostCpus))
 	}
 
-	// The budget body. Headroom is unconditional.
+	// The budget body. Headroom is unconditional; each of throttle, pressure
+	// and steal prints only when THIS TICK'S reading is usable (R3). The gates
+	// are the per-signal readiness trio, never the capability flags — a
+	// LimitApplies/PsiApplies/StealApplies build prints a confident 0% for a
+	// reading that never happened, which is F1.
 	details := []string{
 		fmt.Sprintf(headroomLine, headroomStr, totalStr, usedStr, reserveStr),
 	}
-	if signals.LimitApplies {
+	if signals.ThrottleSignalReady {
 		details = append(details, fmt.Sprintf(throttleLine, pctOf(signals.ThrottleRatio)))
 	}
-	if signals.PsiApplies {
+	if signals.PressureSignalReady {
 		details = append(details, fmt.Sprintf(pressureLine, pctOf(signals.PressureAvg60Out)))
 	}
-	if signals.StealApplies {
+	if signals.StealSignalReady {
 		details = append(details, fmt.Sprintf(stealLine, pctOf(signals.StealP95)))
 	}
 
