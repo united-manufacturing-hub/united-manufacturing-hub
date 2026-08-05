@@ -108,7 +108,11 @@ const (
 	// saturation dispatched on the sub-latch arm in BlockReason's own order.
 	// Entries 42 and 45 are byte-identical and the collision is deliberate:
 	// the remediation for a full machine is the same with or without a limit,
-	// and giving each arm its own wording is a behaviour change.
+	// and giving each arm its own wording is a behaviour change. blockNoLimitHost
+	// (45) does NOT distinguish "this instance itself filled the machine" from
+	// "other software on the host did": that finer attribution needs per-process
+	// (/proc/[pid]/stat) reads and is deferred to ENG-5264. Do not split 45's
+	// wording now — it would pre-empt ENG-5264's clean divorce.
 	blockThrottling      = "Can't add another bridge: this instance is already hitting its CPU limit. Raise the limit or reduce load first."
 	blockPressure        = "Can't add another bridge: tasks on this instance are already waiting for a free CPU core. Reduce load, or give this instance more CPU, first."
 	blockSteal           = "Can't add another bridge: the server isn't giving this instance enough CPU (other VMs are using it). Free up CPU on the server first."
