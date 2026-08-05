@@ -120,8 +120,13 @@ type CPUDeps struct {
 // NewDeps builds CPU's per-instance deps. It constructs a real cgroup sampler
 // (precedent: pkg/fsm/container/machine.go), takes one startup snapshot through
 // it, and builds the table and engine. NewDeps cannot fail — it returns TDeps
-// and nothing else — so a startup snapshot that fails yields quota=0, which is
-// the no-limit table, and the first Poll reports that it could not measure (R2).
+// and nothing else — so a startup snapshot whose read fails yields cores=0,
+// quota=0, which silently drops the quota-dependent signals (throttling,
+// limit-saturation) from the table for this instance's whole lifetime; a later
+// read that succeeds does NOT restore them. Only a table that will not build
+// (engineErr) makes Poll report it could not measure — a read failure at
+// construction yields a healthy first verdict from a permanently thinned
+// table, which is why the startup read error is logged.
 func NewDeps(id deps.Identity, bd *deps.BaseDependencies) *CPUDeps {
 	s := cpuhealth.NewCgroupSampler(filesystem.NewDefaultService(), "/sys/fs/cgroup")
 
@@ -137,7 +142,7 @@ func NewDeps(id deps.Identity, bd *deps.BaseDependencies) *CPUDeps {
 	// reports as could-not-measure rather than letting Decide panic on a nil
 	// engine (simple has no recover around Poll; recovery is at the collector).
 	// The table is held so R4 can walk table.Signals for per-signal Availability.
-	cores, quota := startupCapacity(context.Background(), s)
+	cores, quota := startupCapacity(context.Background(), s, bd)
 	d.table = cpuhealth.Table(cores, quota)
 	d.engine, d.engineErr = diagnosis.NewEngine(d.table)
 	d.firstFilled = make(map[string]bool)
@@ -199,8 +204,16 @@ func Poll(ctx context.Context, d *CPUDeps, _ CPUConfig) (CPUStatus, error) {
 // startupCapacity derives the two startup facts NewEngine consumes — the number
 // of cores the cgroup may use and its positive quota — from a startup snapshot.
 // On failure both are zero: no cores, no quota, which is the no-limit table.
-func startupCapacity(ctx context.Context, s cpuhealth.Sampler) (cores, quota float64) {
-	smp, _ := s.Read(ctx)
+func startupCapacity(ctx context.Context, s cpuhealth.Sampler, bd *deps.BaseDependencies) (cores, quota float64) {
+	smp, err := s.Read(ctx)
+	if err != nil {
+		// A startup read failure pins cores=0/quota=0 for the instance's whole
+		// lifetime (the quota signals drop from the table and are never
+		// restored). This is silent otherwise — the first Poll would report
+		// healthy from the thinned table — so log it. (See NewDeps.)
+		bd.GetLogger().SentryWarn(deps.FeatureSupportCPU, bd.GetHierarchyPath(),
+			"cpu: startup cgroup snapshot failed; quota signals omitted", deps.Err(err))
+	}
 
 	if lc, ok := smp.LogicalCpus.Get(); ok {
 		cores = lc
