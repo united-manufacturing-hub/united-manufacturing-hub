@@ -171,6 +171,22 @@ func Decide(engine *diagnosis.Engine[Sample], s Sample, env diagnosis.Environmen
 		verdict.Attribution = attributeFor(causes[0], survivor, splitHost)
 	}
 
+	// S3 R5 (F6): the withheld-headroom facts ride Signals, not Verdict — three
+	// fields, none of the parked 31 can stand in for them. HostHeadroomAvailable
+	// is dispatched on the sample's scope, NOT on the window's state: an
+	// affinity box or an unestablished scope is a withholding ("we read it and
+	// it means something else"), while a plain /proc/stat read failure leaves
+	// the bit set and the window absent, so a read failure is not rendered as a
+	// withholding. The two counts ride the snapshot so the F6 sentence can name
+	// them without Decide doing any I/O.
+	sig.HostHeadroomAvailable = s.CpuScope == ScopeHost
+	if lc, ok := s.LogicalCpus.Get(); ok {
+		sig.LogicalCpus = lc
+	}
+	if hc, ok := s.HostCpus.Get(); ok {
+		sig.HostCpus = hc
+	}
+
 	return verdict, sig
 }
 
