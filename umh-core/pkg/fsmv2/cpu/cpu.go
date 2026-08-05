@@ -94,6 +94,9 @@ type CPUDeps struct {
 	// engine owns every (signal, instrument) window and per-signal latch. It is
 	// nil when NewEngine failed at construction (engineErr is then set).
 	engine *diagnosis.Engine[cpuhealth.Sample]
+	// table is the declaration R4 walks: engine.Select needs the Signal values,
+	// which are only reachable through the table the engine was built from.
+	table diagnosis.Table[cpuhealth.Sample]
 	// engineErr records a NewEngine failure from NewDeps. NewDeps cannot fail, so
 	// a table that will not build is reported through Poll: the worker stores no
 	// verdict and reports it could not measure, instead of calling Decide on a
@@ -104,6 +107,14 @@ type CPUDeps struct {
 	// polls counts completed observations. It is the non-pointer mutation the
 	// R1 two-tick spec guards.
 	polls uint64
+
+	// firstFilled records, per signal name, whether it has ever reduced to a
+	// Ready value since this worker started. Set the first tick that signal's
+	// Availability is Ready; never cleared while the worker lives. A respawn
+	// builds a new worker and a new engine, so it clears exactly when F10 says
+	// it should. This bit is what keeps a signal that already measured counting
+	// as measured through a later read outage (R4 spec 4).
+	firstFilled map[string]bool
 }
 
 // NewDeps builds CPU's per-instance deps. It constructs a real cgroup sampler
@@ -125,8 +136,11 @@ func NewDeps(id deps.Identity, bd *deps.BaseDependencies) *CPUDeps {
 	// will not build leaves the engine nil and sets engineErr, which Poll
 	// reports as could-not-measure rather than letting Decide panic on a nil
 	// engine (simple has no recover around Poll; recovery is at the collector).
+	// The table is held so R4 can walk table.Signals for per-signal Availability.
 	cores, quota := startupCapacity(context.Background(), s)
-	d.engine, d.engineErr = diagnosis.NewEngine(cpuhealth.Table(cores, quota))
+	d.table = cpuhealth.Table(cores, quota)
+	d.engine, d.engineErr = diagnosis.NewEngine(d.table)
+	d.firstFilled = make(map[string]bool)
 
 	return d
 }
@@ -150,12 +164,35 @@ func Poll(ctx context.Context, d *CPUDeps, _ CPUConfig) (CPUStatus, error) {
 	env := cpuhealth.DeriveEnvironment(sample)
 	verdict, signals := cpuhealth.Decide(d.engine, sample, env)
 
+	// The absence-of-evidence counts (R4), from the same walk Decide used: the
+	// SAME env, the same tick, after Decide returns. engine.Select returns each
+	// signal's Availability; capable means not NoInstrument (something on this
+	// box can answer it), measured means its first-fill bit is set. The bit is
+	// set the first tick that signal is Ready and never cleared, so a signal
+	// that has measured keeps counting as measured through a later read outage.
+	capable, measured := 0, 0
+	for _, s := range d.table.Signals {
+		_, _, _, availability := d.engine.Select(s, env)
+		if availability == diagnosis.NoInstrument {
+			continue // no instrument on this box: not capable, cannot refuse
+		}
+		if availability == diagnosis.Ready {
+			d.firstFilled[s.Name] = true
+		}
+		if d.firstFilled[s.Name] {
+			measured++
+		}
+		capable++
+	}
+
 	d.polls++
 
 	return CPUStatus{
-		Verdict: string(verdict.State),
-		Message: cpuhealth.ComposeMessage(verdict, signals),
-		Polls:   d.polls,
+		Verdict:         string(verdict.State),
+		Message:         cpuhealth.ComposeMessage(verdict, signals),
+		SignalsCapable:  capable,
+		SignalsMeasured: measured,
+		Polls:           d.polls,
 	}, nil
 }
 
