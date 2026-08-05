@@ -1,0 +1,175 @@
+// Copyright 2025 UMH Systems GmbH
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+// Package fsmv2cpu is the fsmv2 simple monitor that polls a cgroup's CPU health
+// with the pkg/cpuhealth library. It owns the sampler, because the sampler
+// holds per-tick baselines and the worker owns the tick. Decide stays a pure
+// library function in pkg/cpuhealth, so the recording gate keeps driving it
+// directly rather than through the worker.
+package fsmv2cpu
+
+import (
+	"context"
+	"time"
+
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cpuhealth"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/diagnosis"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/simple"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
+)
+
+const (
+	// WorkerType is the canonical worker-type name used in config and CSE storage.
+	WorkerType = "cpu"
+
+	// pollInterval is the poll cadence. It sets both the poll cadence and, at
+	// 3x, the seam's maxAge downstream; the two are one decision (SPEC §9 P3 R1).
+	pollInterval = 1 * time.Second
+)
+
+// CPUConfig is the worker's config: the CPU child is upserted with an empty
+// config, so this is a deliberately empty struct. A config that carried values
+// would make the configworker re-upsert and respawn the child on every tick,
+// dropping every 60s window.
+type CPUConfig struct{}
+
+// CPUStatus is the result of one CPU-health observation.
+//
+// R1 settles the field set. It reports the verdict (not a raw measurement) and
+// the customer-visible message; the two counts stay zero until R4 fills them.
+type CPUStatus struct {
+	// Verdict is the ranked judgement Decide produced this tick, as the
+	// cpuhealth.State string ("healthy" or "degraded"). Empty when the tick
+	// could not measure.
+	Verdict string `json:"verdict"`
+
+	// Message is ComposeMessage's output for this tick's verdict and signals.
+	Message string `json:"message"`
+
+	// SignalsCapable is how many CPU signals this box can answer (not
+	// NoInstrument). Filled by R4; zero until then.
+	SignalsCapable int `json:"signalsCapable"`
+	// SignalsMeasured is how many capable signals have produced a first
+	// measurement since this worker started. Filled by R4; zero until then.
+	SignalsMeasured int `json:"signalsMeasured"`
+
+	// Polls is how many observations this worker has completed.
+	Polls uint64 `json:"polls"`
+}
+
+// CPUDeps is the per-instance state Poll reads and mutates.
+//
+// TDeps must be *CPUDeps, never the value: Poll takes d by value, and copying a
+// value CPUDeps would silently lose every non-pointer field's mutation on the
+// copy (the engine is a pointer and would survive, but nothing else is). The
+// pointer keeps every field shared across ticks.
+type CPUDeps struct {
+	*deps.BaseDependencies
+
+	// sampler reads the cgroup. The sampler holds the per-tick baselines; it is
+	// a *cgroupSampler behind the interface, so it is shared across ticks.
+	sampler cpuhealth.Sampler
+	// engine owns every (signal, instrument) window and per-signal latch. It is
+	// nil when NewEngine failed at construction (engineErr is then set).
+	engine *diagnosis.Engine[cpuhealth.Sample]
+	// engineErr records a NewEngine failure from NewDeps. NewDeps cannot fail, so
+	// a table that will not build is reported through Poll: the worker stores no
+	// verdict and reports it could not measure, instead of calling Decide on a
+	// nil engine, which panics at the supervisor (simple has no recover around
+	// Poll).
+	engineErr error
+
+	// polls counts completed observations. It is the non-pointer mutation the
+	// R1 two-tick spec guards.
+	polls uint64
+}
+
+// NewDeps builds CPU's per-instance deps. It constructs a real cgroup sampler
+// (precedent: pkg/fsm/container/machine.go), takes one startup snapshot through
+// it, and builds the table and engine. NewDeps cannot fail — it returns TDeps
+// and nothing else — so a startup snapshot that fails yields quota=0, which is
+// the no-limit table, and the first Poll reports that it could not measure (R2).
+func NewDeps(id deps.Identity, bd *deps.BaseDependencies) *CPUDeps {
+	s := cpuhealth.NewCgroupSampler(filesystem.NewDefaultService(), "/sys/fs/cgroup")
+
+	d := &CPUDeps{
+		BaseDependencies: bd,
+		sampler:          s,
+	}
+
+	// The table and engine are built once, at construction, from the startup
+	// snapshot. Both cores and quota are startup facts; a quota change at
+	// runtime needs a rebuilt table, which is out of P3 scope. A table that
+	// will not build leaves the engine nil and sets engineErr, which Poll
+	// reports as could-not-measure rather than letting Decide panic on a nil
+	// engine (simple has no recover around Poll; recovery is at the collector).
+	cores, quota := startupCapacity(context.Background(), s)
+	d.engine, d.engineErr = diagnosis.NewEngine(cpuhealth.Table(cores, quota))
+
+	return d
+}
+
+// Poll samples the cgroup once and reports the verdict Decide judged. On any
+// failure — a NewEngine construction error, or a non-nil Read error — the
+// worker stores no verdict and reports it could not measure, never a healthy
+// zero. On a nil error with one field absent (e.g. Pressure) it reports the
+// verdict Decide produced, because a signal that cannot be read is the
+// readability path working rather than a failure.
+func Poll(ctx context.Context, d *CPUDeps, _ CPUConfig) (CPUStatus, error) {
+	if d.engineErr != nil {
+		return CPUStatus{}, d.engineErr
+	}
+
+	sample, err := d.sampler.Read(ctx)
+	if err != nil {
+		return CPUStatus{}, err
+	}
+
+	env := cpuhealth.DeriveEnvironment(sample)
+	verdict, signals := cpuhealth.Decide(d.engine, sample, env)
+
+	d.polls++
+
+	return CPUStatus{
+		Verdict: string(verdict.State),
+		Message: cpuhealth.ComposeMessage(verdict, signals),
+		Polls:   d.polls,
+	}, nil
+}
+
+// startupCapacity derives the two startup facts NewEngine consumes — the number
+// of cores the cgroup may use and its positive quota — from a startup snapshot.
+// On failure both are zero: no cores, no quota, which is the no-limit table.
+func startupCapacity(ctx context.Context, s cpuhealth.Sampler) (cores, quota float64) {
+	smp, _ := s.Read(ctx)
+
+	if lc, ok := smp.LogicalCpus.Get(); ok {
+		cores = lc
+	}
+	if q, ok := smp.Quota.Get(); ok && q > 0 {
+		quota = q
+	}
+
+	return cores, quota
+}
+
+func init() {
+	simple.Register(simple.MonitorSpec[CPUConfig, CPUStatus, *CPUDeps]{
+		WorkerType: WorkerType,
+		Interval:   pollInterval,
+		NewDeps:    NewDeps,
+		Poll:       Poll,
+	})
+}
