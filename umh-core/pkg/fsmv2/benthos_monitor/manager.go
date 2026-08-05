@@ -23,6 +23,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"strconv"
 	"strings"
@@ -46,10 +47,11 @@ const (
 	// pollInterval is the cadence at which the framework calls Poll.
 	pollInterval = 1 * time.Second
 
-	// monitorClientTimeout bounds each scrape request, matching the fsmv1
-	// baseline's 1s curl --max-time bound so one hung connection cannot consume
-	// the whole observation frame and starve the remaining endpoints.
-	monitorClientTimeout = 1 * time.Second
+	// monitorClientTimeout bounds each scrape request so one hung connection
+	// cannot consume the whole observation frame and starve the remaining
+	// endpoints. Four endpoints at ~400ms each fit the ~2.2s observation budget
+	// (D10); the fsmv1 curl bound of 1s would let a single poll run past it.
+	monitorClientTimeout = 400 * time.Millisecond
 
 	// maxScrapeBody caps the response bodies Poll reads, so a misbehaving
 	// monitor cannot be buffered without bound on each poll.
@@ -71,18 +73,20 @@ type BenthosMetrics struct {
 }
 
 // BenthosMonitorStatus is the result of one scrape of the benthos monitor: the
-// time it happened, the /metrics counters, /ping liveness, and the /version
-// string.
+// time it happened, the /metrics counters, /ping liveness, /ready readiness, and
+// the /version string.
 type BenthosMonitorStatus struct {
 	ScrapedAt      time.Time
 	BenthosMetrics BenthosMetrics
 	PingAlive      bool
+	Ready          bool
 	Version        string
 }
 
-// Poll scrapes the configured benthos monitor's /ping, /version, and /metrics
-// endpoints once. The client comes from d (a nil deps falls back to the default
-// client). All requests carry ctx, so cancellation surfaces as a request error.
+// Poll scrapes the configured benthos monitor's /ping, /ready, /version, and
+// /metrics endpoints once. The client comes from d (a nil deps falls back to the
+// default client). All requests carry ctx, so cancellation surfaces as a request
+// error.
 func Poll(ctx context.Context, d *benthosMonitorDeps, cfg config.BenthosMonitorConfig) (BenthosMonitorStatus, error) {
 	client := http.DefaultClient
 	if d != nil && d.client != nil {
@@ -95,6 +99,21 @@ func Poll(ctx context.Context, d *benthosMonitorDeps, cfg config.BenthosMonitorC
 	_, _, err := get(ctx, client, base+"/ping")
 	if err == nil {
 		status.PingAlive = true
+	}
+
+	readyBody, _, err := get(ctx, client, base+"/ready")
+	if err == nil {
+		// The /ready endpoint reports readiness by returning JSON whose error
+		// field is empty when every input/output connection is up (fsmv1
+		// ParseReadyData: readyResp.Error == ""). A benthos that answers but is
+		// not ready (e.g. a broken pipeline that still answers /ping) reports
+		// Ready=false while PingAlive=true.
+		var r struct {
+			Error string `json:"error"`
+		}
+		if err := json.Unmarshal(readyBody, &r); err == nil {
+			status.Ready = r.Error == ""
+		}
 	}
 
 	versionBody, _, err := get(ctx, client, base+"/version")
@@ -152,16 +171,28 @@ func get(ctx context.Context, client *http.Client, url string) ([]byte, int, err
 // scrapeMetrics parses the /metrics text into the two benthos counters of
 // interest. benthos emits name{label="...",path="..."} value lines, so each
 // name is matched after stripping its `{...}` label block; lines it does not
-// recognize are ignored. Counter values may be rendered in scientific notation
-// by prometheus text exposition, so a value that carries an exponent is parsed
-// as a float (the same branch fsmv1's TailInt uses). A counter line whose value
-// is malformed returns an error rather than silently zeroing, so a long-scale
-// or format-drifted scrape is reported instead of being read as no traffic.
+// recognize are ignored. A benthos with switch/broker/fallback outputs emits one
+// series per leaf path with no top-level aggregate, so each counter is the SUM
+// across every matching line (the same aggregation fsmv1's InputReceivedTotal
+// / OutputSentTotal provide). Counter values may be rendered in scientific
+// notation or as bare fractions by prometheus text exposition and are parsed
+// accordingly (fsmv1's TailInt tolerates the same shapes). A counter line whose
+// value is malformed returns an error rather than silently zeroing, so a
+// long-scale or format-drifted scrape is reported instead of being read as no
+// traffic.
 func scrapeMetrics(body []byte) (BenthosMetrics, error) {
 	var m BenthosMetrics
 	sc := bufio.NewScanner(strings.NewReader(string(body)))
+	// The body budget is maxScrapeBody (4MiB); a single /metrics line (long
+	// path/label set or HELP text) can exceed the scanner's 64KiB default token,
+	// so size the buffer to match the budget instead of failing the scrape.
+	sc.Buffer(make([]byte, 0, 64*1024), maxScrapeBody)
 	for sc.Scan() {
-		name, value, ok := counterLine(sc.Text())
+		line := sc.Text()
+		if strings.HasPrefix(line, "#") {
+			continue
+		}
+		name, value, ok := counterLine(line)
 		if !ok {
 			continue
 		}
@@ -171,9 +202,9 @@ func scrapeMetrics(body []byte) (BenthosMetrics, error) {
 		}
 		switch name {
 		case "input_received":
-			m.InputReceived = n
+			m.InputReceived += n
 		case "output_sent":
-			m.OutputSent = n
+			m.OutputSent += n
 		}
 	}
 	if err := sc.Err(); err != nil {
@@ -200,14 +231,21 @@ func counterLine(line string) (string, string, bool) {
 }
 
 // parseCounterValue parses a prometheus counter value into an int. Large whole
-// counters are rendered in scientific notation by prometheus text exposition,
-// so a value that carries an exponent is parsed as a float first; anything else
-// is parsed as a bare integer.
+// counters are rendered in scientific notation and small ones as bare integers,
+// but prometheus text exposition may also render a value as a bare fraction
+// (e.g. "0.5"), which fsmv1's TailInt tolerates by truncating. Any value that
+// carries an exponent, a decimal point, or an Inf/NaN marker is parsed as a
+// float first (the same branch fsmv1's TailInt uses), then truncated to int;
+// the conversion is guarded so an out-of-range or non-finite float errors rather
+// than silently producing a garbage value.
 func parseCounterValue(s string) (int, error) {
-	if strings.ContainsAny(s, "eE") {
+	if strings.ContainsAny(s, "eE.") {
 		f, err := strconv.ParseFloat(s, 64)
 		if err != nil {
 			return 0, err
+		}
+		if math.IsInf(f, 0) || math.IsNaN(f) || f < math.MinInt64 || f > math.MaxInt64 {
+			return 0, fmt.Errorf("counter %q is not a finite int64 value", s)
 		}
 		return int(f), nil
 	}
