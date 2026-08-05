@@ -23,6 +23,8 @@
 package cpuhealth
 
 import (
+	"fmt"
+	"strings"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -333,6 +335,92 @@ var _ = Describe("S3 R1 — the CPU table, throttle and steal", func() {
 		}
 	})
 })
+
+// A worker outside this package cannot reach cpuTable, so it walks Table for the
+// Signal values it hands to Engine.Select. These specs hold Table to what
+// cpuTable declares and to the engine NewEngine builds: were Table ever to
+// answer from a parallel declaration, a worker would poll signals the engine
+// keyed no windows under, and every Availability would read NoInstrument
+// forever.
+var _ = Describe("Table — the exported route to the CPU declaration", func() {
+	It("declares what cpuTable declares, and omits limit-saturation when there is no positive quota", func() {
+		Expect(tableFingerprint(Table(4, 2.0))).To(Equal(tableFingerprint(cpuTable(4, 2.0))),
+			"Table must answer from cpuTable, not a parallel declaration")
+
+		// The no-quota arm, which the fingerprint comparison alone would not
+		// pin: both sides could omit the same wrong row and still match.
+		noLimit := signalNames(Table(4, 0))
+		Expect(noLimit).To(Equal([]string{"throttling", "pressure", "steal", "saturation"}))
+		Expect(noLimit).NotTo(ContainElement("limit-saturation"), "a box with no positive quota declares no limit row")
+	})
+
+	It("returns a table the real engine accepts on a box with no quota", func() {
+		// The quota case is covered where the engine is then observed through;
+		// this is the arm no other spec builds an engine from Table for.
+		_, err := diagnosis.NewEngine(Table(4, 0))
+		Expect(err).NotTo(HaveOccurred(), "a no-limit box must still construct an engine from Table")
+	})
+
+	It("hands out signals the engine NewEngine built holds windows for", func() {
+		env := diagnosis.NewEnvironment(HasVirtualization, HasLimit)
+		engine, err := NewEngine(4, 2.0)
+		Expect(err).NotTo(HaveOccurred())
+
+		// One tick of an all-absent sample. Every instrument is capable under this
+		// environment, so a signal the engine keyed windows under reduces to
+		// AllAbsent; a signal it did not know reports NoInstrument, because
+		// resolve saw no window to reduce. That difference is the drift guard.
+		smp := Sample{Timestamp: time.Now(), CpuScope: ScopeHost, Virtualized: true}
+		engine.Observe(smp, env, smp.Timestamp)
+
+		table := Table(4, 2.0)
+		Expect(table.Signals).NotTo(BeEmpty())
+		for _, s := range table.Signals {
+			_, _, _, avail := engine.Select(s, env)
+			Expect(avail).To(Equal(diagnosis.AllAbsent),
+				"%s must be a signal the engine keyed windows under", s.Name)
+		}
+	})
+})
+
+// signalNames lists a table's signal names in declaration order, so a spec can
+// compare two tables' identity without reaching into their func fields.
+func signalNames(t diagnosis.Table[Sample]) []string {
+	out := make([]string, 0, len(t.Signals))
+	for _, s := range t.Signals {
+		out = append(out, s.Name)
+	}
+	return out
+}
+
+// tableFingerprint renders every declared field of a table that is comparable —
+// names, tiers, spans, instrument names, reductions and both marks — in
+// declaration order.
+//
+// Names alone are too weak for the drift question. A second declaration that
+// listed the same five signal names but hung different instruments, marks or
+// reductions off them would read identical by name and behave nothing alike, so
+// the fingerprint carries the instrument identity and its thresholds too. The
+// func fields (Extract, Against) stay out: Go cannot compare them, and a table
+// that matches on all of this while differing only in an extractor is a
+// different defect than the one this guards.
+func tableFingerprint(t diagnosis.Table[Sample]) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "interval=%s\n", t.Interval)
+	for _, tr := range t.Tracks {
+		fmt.Fprintf(&b, "track %s red=%s/%d span=%s\n", tr.Name, tr.Red.Name, tr.Red.Min, tr.Span)
+	}
+	for _, s := range t.Signals {
+		fmt.Fprintf(&b, "signal %s tier=%d external=%t releaseOnAbsent=%t demote=%s\n",
+			s.Name, s.Tier, s.External, s.ReleaseOnAbsent, s.DemoteSpan)
+		for _, inst := range s.Instruments {
+			fmt.Fprintf(&b, "  inst %s requires=%v red=%s/%d span=%s counter=%t boolean=%t hasAgainst=%t marks=%+v\n",
+				inst.Name, inst.Requires, inst.Red.Name, inst.Red.Min, inst.Span,
+				inst.Counter, inst.Boolean, inst.Against != nil, inst.Marks)
+		}
+	}
+	return b.String()
+}
 
 // throttled returns the nr_throttled counter for tick i: 0 at the first sample,
 // 200 at the second (a 0.20 ratio over the first two), then +1 per tick so the
