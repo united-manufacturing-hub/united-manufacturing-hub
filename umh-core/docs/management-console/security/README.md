@@ -1,14 +1,11 @@
 # Management Console Security
 
-> **Placeholder.** Structure only. Content follows in a separate PR.
+Access to the Management Console is decided in two layers: identity and company access first, then permissions within that company. [Authentication](../authentication/README.md) and [Users and Permissions](../users-and-permissions/README.md) cover how you set both up. This section covers the design behind them, for readers who have to sign off on it.
 
-Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.
+| Page | Answers |
+| --- | --- |
+| [Threat Model](threat-model.md) | Who this is designed to keep out, what it accepts as a risk, and what it does not cover |
+| [Shared Responsibility](shared-responsibility.md) | Which parts of security are ours and which are yours |
+| [Compliance](compliance.md) | How the controls map to OWASP, NIST and IEC 62443, including where they fall short |
 
-## Scope of this section
-
-Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.
-
-## Related documentation
-
-Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.
-
+Security on the instance itself is separate, because the instance runs on your hardware and inside your network. See [umh-core Security](../../production/security/umh-core/deployment-security.md).

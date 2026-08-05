@@ -1,33 +1,33 @@
 # Roles Reference
 
-> **Placeholder.** Structure only. Content follows in a separate PR.
+Roles are not the same in every account. Work out which setup you have in [Users and Permissions](README.md) first, then read the matching section below. There is deliberately no combined table.
 
-Roles are not the same across all setups. Each section below covers one of the three permission models described in [Users and Permissions](README.md). Identify yours there first, then read the matching section. There is deliberately no single combined table.
+## Roles per location
 
-## Roles for ENTER_UI_SIGNAL_HERE
+Three roles apply at the locations a user or instance is assigned to.
 
-Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.
+| Role | What it allows |
+| --- | --- |
+| Admin | Everything Editor allows, plus inviting users at the locations where they are an admin. Any admin can add an instance at any location, see [Managing users](README.md#managing-users) |
+| Editor | Create and modify resources, such as bridges, data models and instance configuration. Cannot manage users |
+| Viewer | Read-only. See resources and their state, change nothing |
 
-| Role | Can do | Cannot do |
-| --- | --- | --- |
-| Lorem | Ipsum | Dolor |
+A role applies to the location it was granted at and everything below it. Exceptions set at a lower location override what is inherited, see [Permission inheritance](README.md#permission-inheritance).
 
-## Roles for ENTER_UI_SIGNAL_HERE
+These capabilities apply in the Management Console. They do not apply on an instance, which does not check the role behind a request, see [What roles do not cover](README.md#what-roles-do-not-cover).
 
-Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.
+## One role for the whole company
 
-| Role | Can do | Cannot do |
-| --- | --- | --- |
-| Lorem | Ipsum | Dolor |
+Here your role is not tied to a location. **Current Role** on the **Permissions** tab names it, and the permission matrix underneath shows which groups of actions it covers:
 
-## Roles for ENTER_UI_SIGNAL_HERE
+| Permission group | Covers |
+| --- | --- |
+| Get actions | Read-only operations for viewing resources and states |
+| Edit actions | Operations that modify existing resources |
+| Delete actions | Operations that remove resources |
+| Deploy actions | Operations for deploying new resources |
+| Test actions | Operations for testing configurations |
+| System actions | System-level operations |
+| Company actions | Company-level operations |
 
-Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.
-
-| Role | Can do | Cannot do |
-| --- | --- | --- |
-| Lorem | Ipsum | Dolor |
-
-## Inheritance rules
-
-Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.
+Expand a group in the matrix to see the individual actions in it. The matrix is generated from the role you hold, so it is the list for your own account rather than a general one. Like the roles above, it covers the console only, see [What roles do not cover](README.md#what-roles-do-not-cover).

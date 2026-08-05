@@ -1,28 +1,37 @@
 # Fallback Access
 
-> **Placeholder.** Structure only. Content follows in a separate PR.
+Admins lose access. People leave, addresses get disabled, permissions get set wrong. Fallback access is what you arrange in advance so that a company is never locked out of its own instances.
 
-Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.
+Two things to arrange: choose the Account Owner deliberately, and nominate someone who can get you back in.
 
-## Why nominate emergency access
+## The Account Owner
 
-Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.
+Some companies have an **Account Owner**. It is the first account that created the company, it has Admin access everywhere in the company, and it cannot be transferred or demoted. That is deliberate: it guarantees one account always has full control, whatever happens to the others. Ask your account executive if you are not sure whether your company has one.
 
-## Who to nominate
+You cannot recover it either, so decide before you register which account it will be.
 
-We recommend nominating UMH staff. Those accounts are always on an `@umh.app` address and always authenticate through UMH's own single sign-on, which keeps them under central control, ends access when someone leaves UMH, and lets access be revoked immediately if UMH is ever compromised. Do not name the identity provider on this page.
+- Use an address your organization owns and can keep, such as `ot-team@example.com`. Not the personal account of an employee who may leave.
+- Keep its credentials in your team's password manager rather than passing them around.
+- Switch on multi-factor authentication for it.
+- Do not work with it day to day. Invite ordinary admin accounts from it and use those.
 
-Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.
+## Nominating UMH staff as emergency access
 
-## Choosing an Account Owner
+We recommend keeping at least one UMH team member in your company, so there is someone who can restore your access if your own admins cannot. The same access lets us do longer pieces of setup work for you, such as building bridges or data models, which a call cannot cover.
 
-Applies to one permission model only. Gate this section on what the reader sees in the Management Console, as on [Users and Permissions](README.md), rather than naming the model.
+To nominate someone:
 
-The Account Owner cannot be recovered, so it should never be a natural person. Use a shared address such as `ot-team@example.com`.
+1. Ask your account executive which UMH team member to invite.
+2. Invite them through the normal invitation flow, using their `@umh.app` address. Grant Admin at your enterprise location, because permissions inherit downward and access granted lower down will not help if the problem is lower down.
+3. Remove them when you no longer want the access in place.
 
-Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.
+Those invitations are issued against UMH's own single sign-on rather than your default connection, because UMH staff do not have accounts in your identity provider.
 
-## Reviewing fallback access
+Control stays on both sides:
 
-Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.
+- UMH staff reach your company only through an invitation you issue, and only for as long as you leave it in place.
+- UMH manages `@umh.app` identities centrally, so access is tied to employment. When someone leaves UMH, their identity is disabled and their access to your company goes with it. If UMH is ever compromised, the same central control lets us cut all of those accounts at once.
 
+## Reviewing it
+
+Check your fallback access when you review permissions. Two things drift: the address on the Account Owner stops being monitored, and UMH staff invited for one piece of work stay invited afterwards. Decide each time whether the access should stay.
