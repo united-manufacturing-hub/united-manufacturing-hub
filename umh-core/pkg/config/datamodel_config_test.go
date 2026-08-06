@@ -216,10 +216,51 @@ dataModels:
 		)
 
 		Context("when adding a data model to an empty config", func() {
-			var writtenData []byte
+			var (
+				dataMu         sync.Mutex
+				currentData    []byte
+				writeCallCount int
+			)
+
+			// getCurrentData and setCurrentData serialize access to currentData
+			// and writeCallCount: FileConfigManager.GetConfig can leave a
+			// backgroundRefresh goroutine in flight that calls ReadFile
+			// concurrently with the foreground goroutine's later WriteFile, so
+			// the mock's closures must not touch shared state unguarded.
+			getCurrentData := func() []byte {
+				dataMu.Lock()
+				defer dataMu.Unlock()
+
+				return currentData
+			}
+
+			setCurrentData := func(data []byte) {
+				dataMu.Lock()
+				defer dataMu.Unlock()
+
+				currentData = data
+				writeCallCount++
+			}
+
+			resetWriteCallCount := func() {
+				dataMu.Lock()
+				defer dataMu.Unlock()
+
+				writeCallCount = 0
+			}
+
+			getWriteCallCount := func() int {
+				dataMu.Lock()
+				defer dataMu.Unlock()
+
+				return writeCallCount
+			}
 
 			BeforeEach(func() {
-				writtenData = nil // Reset for each test
+				dataMu.Lock()
+				currentData = []byte(validYAMLWithoutDataModels)
+				writeCallCount = 0
+				dataMu.Unlock()
 
 				mockFS.WithEnsureDirectoryFunc(func(ctx context.Context, path string) error {
 					return nil
@@ -230,21 +271,21 @@ dataModels:
 				})
 
 				mockFS.WithReadFileFunc(func(ctx context.Context, path string) ([]byte, error) {
-					return []byte(validYAMLWithoutDataModels), nil
+					return getCurrentData(), nil
 				})
 
 				mockFS.WithWriteFileFunc(func(ctx context.Context, path string, data []byte, perm os.FileMode) error {
-					writtenData = data
+					setCurrentData(data)
 
 					return nil
 				})
 
 				mockFS.WithStatFunc(func(ctx context.Context, path string) (os.FileInfo, error) {
-					return mockFS.NewMockFileInfo("config.yaml", int64(len(writtenData)), 0644, time.Now(), false), nil
+					return mockFS.NewMockFileInfo("config.yaml", int64(len(getCurrentData())), 0644, time.Now(), false), nil
 				})
 			})
 
-			It("should add the data model successfully", func() {
+			It("should add the data model and its contract in a single write", func() {
 				dmVersion := DataModelVersion{
 					Structure: map[string]Field{
 						"temperature": {
@@ -256,16 +297,30 @@ dataModels:
 					},
 				}
 
-				Eventually(func() error {
-					err := configManager.AtomicAddDataModel(ctx, "temperature", dmVersion, "test description")
+				_, _ = configManager.GetConfig(ctx, 0) // get the config to trigger the background refresh
+				time.Sleep(100 * time.Millisecond)     // wait for the background refresh to finish
 
-					return err
-				}, TimeToWaitForConfigRefresh*2, "10ms").Should(Succeed())
+				// The background refresh above may itself trigger a write-free
+				// read cycle, but it never calls WriteFile; reset the counter
+				// right before the call under test so it only measures the
+				// atomic operation itself.
+				resetWriteCallCount()
 
-				// Verify the written data
+				err := configManager.AtomicAddDataModel(ctx, "temperature", dmVersion, "test description")
+				Expect(err).NotTo(HaveOccurred())
+
+				// A model written in one write and its contract written in a
+				// second, both-succeeding write would leave the exact same
+				// final bytes behind. Only counting WriteFile invocations
+				// distinguishes a genuinely atomic write from that split.
+				Expect(getWriteCallCount()).To(Equal(1))
+
+				// Verify the bytes actually written, rather than GetConfig,
+				// which can race a background refresh started by an earlier
+				// call and briefly return a stale cache.
+				writtenData := getCurrentData()
 				Expect(writtenData).NotTo(BeEmpty())
 
-				// Parse the written data to verify it contains the data model
 				writtenConfig, err := ParseConfig(writtenData, ctx, false)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(writtenConfig.DataModels).To(HaveLen(1))
@@ -276,6 +331,57 @@ dataModels:
 					HaveField("Model.Name", "temperature"),
 					HaveField("Model.Version", "v1_0"),
 				)))
+			})
+		})
+
+		Context("when the write fails", func() {
+			var currentData []byte
+
+			BeforeEach(func() {
+				currentData = []byte(validYAMLWithoutDataModels)
+
+				mockFS.WithEnsureDirectoryFunc(func(ctx context.Context, path string) error {
+					return nil
+				})
+
+				mockFS.WithFileExistsFunc(func(ctx context.Context, path string) (bool, error) {
+					return true, nil
+				})
+
+				mockFS.WithReadFileFunc(func(ctx context.Context, path string) ([]byte, error) {
+					return currentData, nil
+				})
+
+				mockFS.WithStatFunc(func(ctx context.Context, path string) (os.FileInfo, error) {
+					return mockFS.NewMockFileInfo("config.yaml", int64(len(currentData)), 0644, time.Now(), false), nil
+				})
+			})
+
+			It("leaves neither the model nor its contract behind when the write fails", func() {
+				dmVersion := DataModelVersion{
+					Structure: map[string]Field{
+						"field": {
+							PayloadShape: "timeseries-string",
+						},
+					},
+				}
+
+				_, _ = configManager.GetConfig(ctx, 0) // get the config to trigger the background refresh
+				time.Sleep(100 * time.Millisecond)     // wait for the background refresh to finish
+
+				// Only now start failing writes, so the duplicate checks
+				// above already ran against a primed cache.
+				mockFS.WithWriteFileFunc(func(ctx context.Context, path string, data []byte, perm os.FileMode) error {
+					return errors.New("mock write failure")
+				})
+
+				err := configManager.AtomicAddDataModel(ctx, "temperature", dmVersion, "test description")
+				Expect(err).To(HaveOccurred())
+
+				cfg, err := configManager.GetConfig(ctx, 0)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(cfg.DataModels).To(BeEmpty())
+				Expect(cfg.DataContracts).NotTo(ContainElement(HaveField("Name", "_temperature_v1_0")))
 			})
 		})
 

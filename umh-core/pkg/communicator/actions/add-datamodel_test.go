@@ -18,6 +18,7 @@ import (
 	"context"
 	"encoding/base64"
 	"errors"
+	"sync"
 
 	"github.com/google/uuid"
 	. "github.com/onsi/ginkgo/v2"
@@ -547,6 +548,73 @@ var _ = Describe("AddDataModelAction", func() {
 				Expect(response).To(BeNil())
 
 				Expect(mockConfigMgr.AtomicAddDataModelCalled).To(BeTrue())
+			})
+		})
+
+		Context("when the derived contract name is already taken", func() {
+			BeforeEach(func() {
+				payload := models.AddDataModelPayload{
+					Name:        "test-model",
+					Description: "Test data model",
+					Structure: map[string]models.Field{
+						"field1": {
+							PayloadShape: "timeseries-string",
+						},
+					},
+				}
+				err := action.Parse(structToEncodedMap(payload))
+				Expect(err).ToNot(HaveOccurred())
+
+				// Seed the contract the action will derive for "test-model" at
+				// v1_0, so AtomicAddDataModel's own duplicate check - not a
+				// stubbed error - is what fails this call.
+				mockConfigMgr.WithConfig(config.FullConfig{
+					DataContracts: []config.DataContractsConfig{
+						{
+							Name: "_test-model_v1_0",
+							Model: &config.ModelRef{
+								Name:    "test-model",
+								Version: "v1_0",
+							},
+						},
+					},
+				})
+			})
+
+			It("fails cleanly instead of leaking a half-done success and orphaning a model", func() {
+				response, metadata, err := action.Execute()
+
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("data contract \"_test-model_v1_0\" already exists"))
+				Expect(metadata).To(BeNil())
+				Expect(response).To(BeNil())
+
+				cfg, getErr := mockConfigMgr.GetConfig(context.Background(), 0)
+				Expect(getErr).ToNot(HaveOccurred())
+				Expect(cfg.DataModels).To(BeEmpty())
+				Expect(cfg.DataContracts).To(HaveLen(1))
+
+				var (
+					messages []*models.UMHMessage
+					mu       sync.Mutex
+				)
+
+			drain:
+				for {
+					select {
+					case msg := <-outboundChannel:
+						messages = append(messages, msg)
+					default:
+						break drain
+					}
+				}
+
+				// Execute must not self-send a success-shaped reply for a
+				// contract-side failure: the only replies on the channel are
+				// progress and the terminal failure.
+				Expect(historianReplyStates(&messages, &mu)).To(Equal([]models.ActionReplyState{
+					models.ActionConfirmed, models.ActionExecuting, models.ActionFinishedWithFailure,
+				}))
 			})
 		})
 
