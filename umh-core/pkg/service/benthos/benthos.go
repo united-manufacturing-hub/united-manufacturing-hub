@@ -330,7 +330,7 @@ func NewDefaultBenthosService(benthosName string, opts ...BenthosServiceOption) 
 			}
 		}
 		if useFsmv2 {
-			log.Warnf("%s is on: selecting the fsmv2 benthos monitor, whose observed-state mapping is not implemented yet; health and metrics reporting is disabled until then", envUseFsmv2BenthosMonitor)
+			log.Infof("%s is on: this benthos instance is monitored by the fsmv2 benthos_monitor worker (in-process scrape, no S6 monitor service)", envUseFsmv2BenthosMonitor)
 			service.benthosMonitorManager = fsmv2benthosmonitor.NewFsmv2BenthosMonitorManager(
 				// Match the fsmv1 backend's monitor log prefix so an operator
 				// grepping logs sees the same labels across a flag flip.
