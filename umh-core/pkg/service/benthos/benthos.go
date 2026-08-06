@@ -18,7 +18,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -30,6 +29,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/benthosserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/s6serviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/env"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
@@ -69,9 +69,11 @@ const (
 )
 
 // envUseFsmv2BenthosMonitor names the environment variable that selects the
-// fsmv2 benthos monitor backend in NewDefaultBenthosService. An unset, empty,
-// or false-y value (as defined by strconv.ParseBool) selects the byte-identical
-// fsmv1 backend; a true-y value selects the fsmv2 adapter manager.
+// fsmv2 benthos monitor backend in NewDefaultBenthosService. It is read with
+// env.GetAsBool, the same helper every other FSMv2 flag uses, so it honours
+// on/off, yes/no, y/n, 1/0 and true/false case-insensitively. Unset, empty or
+// false-y selects the byte-identical fsmv1 backend; true-y selects the fsmv2
+// adapter manager.
 const envUseFsmv2BenthosMonitor = "USE_FSMV2_BENTHOS_MONITOR"
 
 // IBenthosService is the interface for managing Benthos services.
@@ -319,16 +321,19 @@ func NewDefaultBenthosService(benthosName string, opts ...BenthosServiceOption) 
 	}
 
 	if service.benthosMonitorManager == nil {
-		useFsmv2 := false
-		if envValue := os.Getenv(envUseFsmv2BenthosMonitor); envValue != "" {
-			var err error
-			useFsmv2, err = strconv.ParseBool(envValue)
-			if err != nil {
-				// A value ParseBool rejects is silently inverted by a naive
-				// flag flip, so surface it instead of treating it as off.
-				log.Warnf("%s=%q is not a recognized boolean; treating as off (fsmv1)", envUseFsmv2BenthosMonitor, envValue)
-			}
+		// env.GetAsBool is the repo convention for every other FSMv2 flag
+		// (USE_FSMV2_TRANSPORT and friends, cmd/main.go), and it accepts the
+		// spellings operators actually use: on/off, yes/no, y/n, 1/0, true/false,
+		// case-insensitively. strconv.ParseBool rejects "ON", so reading this flag
+		// directly made USE_FSMV2_BENTHOS_MONITOR=ON silently select fsmv1 while
+		// every sibling flag honoured it.
+		useFsmv2, err := env.GetAsBool(envUseFsmv2BenthosMonitor, false, false)
+		if err != nil {
+			log.Warnf("%s could not be read as a boolean; treating as off (fsmv1): %v", envUseFsmv2BenthosMonitor, err)
+
+			useFsmv2 = false
 		}
+
 		if useFsmv2 {
 			log.Infof("%s is on: this benthos instance is monitored by the fsmv2 benthos_monitor worker (in-process scrape, no S6 monitor service)", envUseFsmv2BenthosMonitor)
 			service.benthosMonitorManager = fsmv2benthosmonitor.NewFsmv2BenthosMonitorManager(
