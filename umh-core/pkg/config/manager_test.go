@@ -29,6 +29,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/redpandaserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 )
@@ -833,6 +834,91 @@ agent:
 
 					return nil
 				}, TimeToWaitForConfigRefresh*2, "10ms").Should(Succeed())
+			})
+		})
+	})
+
+	Describe("Redpanda topic retention defaults", func() {
+		var writtenConfig []byte
+
+		BeforeEach(func() {
+			writtenConfig = nil
+
+			mockFS.WithEnsureDirectoryFunc(func(ctx context.Context, path string) error {
+				return nil
+			})
+
+			mockFS.WithWriteFileFunc(func(ctx context.Context, path string, data []byte, perm os.FileMode) error {
+				writtenConfig = data
+
+				return nil
+			})
+		})
+
+		Context("when the config file does not exist yet (new instance)", func() {
+			BeforeEach(func() {
+				mockFS.WithFileExistsFunc(func(ctx context.Context, path string) (bool, error) {
+					return false, nil
+				})
+			})
+
+			It("pins cleanup policy delete with a 7 day retention", func() {
+				config, err := configManager.GetConfigWithOverwritesOrCreateNew(ctx, FullConfig{})
+				Expect(err).NotTo(HaveOccurred())
+
+				topic := config.Internal.Redpanda.RedpandaServiceConfig.Topic
+				Expect(topic.DefaultTopicCleanupPolicy).To(Equal("delete"))
+				Expect(topic.DefaultTopicRetentionMs).To(Equal(int64(604800000)))
+
+				// The values must land in the persisted file, not just the returned struct,
+				// so a later boot does not fall back to the compact default.
+				Expect(string(writtenConfig)).To(ContainSubstring("defaultTopicCleanupPolicy: delete"))
+				Expect(string(writtenConfig)).To(ContainSubstring("defaultTopicRetentionMs: 604800000"))
+			})
+		})
+
+		Context("when the config file already exists without topic settings (upgraded instance)", func() {
+			BeforeEach(func() {
+				existingYAML := []byte("agent:\n  metricsPort: 8080\ninternal:\n  redpanda:\n    desiredState: active\n")
+
+				mockFS.WithFileExistsFunc(func(ctx context.Context, path string) (bool, error) {
+					return true, nil
+				})
+
+				mockFS.WithReadFileFunc(func(ctx context.Context, path string) ([]byte, error) {
+					return existingYAML, nil
+				})
+
+				mockFS.WithStatFunc(func(ctx context.Context, path string) (os.FileInfo, error) {
+					return mockFS.NewMockFileInfo(
+						DefaultConfigPath,
+						int64(len(existingYAML)),
+						0644,
+						time.Now(),
+						false,
+					), nil
+				})
+			})
+
+			It("leaves the topic settings untouched so retention behaviour does not change", func() {
+				// The first call returns the error the manager cached during construction,
+				// before the mock filesystem was installed; the background refresh clears it.
+				var topic redpandaserviceconfig.TopicConfig
+
+				Eventually(func() error {
+					config, err := configManager.GetConfigWithOverwritesOrCreateNew(ctx, FullConfig{})
+					if err != nil {
+						return err
+					}
+
+					topic = config.Internal.Redpanda.RedpandaServiceConfig.Topic
+
+					return nil
+				}, TimeToWaitForConfigRefresh*2, "10ms").Should(Succeed())
+
+				Expect(topic.DefaultTopicCleanupPolicy).To(BeEmpty())
+				Expect(topic.DefaultTopicRetentionMs).To(BeZero())
+				Expect(string(writtenConfig)).NotTo(ContainSubstring("defaultTopicCleanupPolicy"))
 			})
 		})
 	})

@@ -289,14 +289,40 @@ internal:
   redpanda:
     desiredState: active
     redpandaServiceConfig:
-      defaultTopicRetentionMs: 604800000   # 7 days
-      maxCores: 1
-      memoryPerCoreInBytes: 2147483648
+      topic:
+        defaultTopicRetentionMs: 604800000   # 7 days
+        defaultTopicCleanupPolicy: delete    # keep 7 days of raw records
+      resources:
+        maxCores: 1
+        memoryPerCoreInBytes: 2147483648
   topicBrowser:
     desiredState: active  # Topic Browser service (auto-enabled)
 ```
 
 > **Do not edit** unless instructed by UMH support; invalid settings can brick the stack.
+
+#### Topic retention on new instances
+
+On its very first boot — when there is no `config.yaml` in `/data` yet — an instance writes
+`defaultTopicCleanupPolicy: delete` and `defaultTopicRetentionMs: 604800000` into the file
+it creates. Together these keep seven days of raw records in `umh.messages`, so a new
+consumer group can replay the full history; the Historian and any other late-joining
+consumer depend on this.
+
+Two consequences to be aware of:
+
+* **Disk usage scales with throughput, not tag count.** Seven days of raw records is far
+  more than a compacted snapshot. See the [Sizing Guide](../production/sizing-guide.md)
+  before running a high-throughput instance, and cap the topic with
+  `defaultTopicRetentionBytes` if disk is tighter than the retention window.
+* **The Topic Browser tree is rebuilt from the retained window.** After a restart, a tag
+  that has not published for more than seven days is missing from the tree until it
+  publishes again.
+
+Instances that already have a `config.yaml` keep the policy they run on today, which is
+`compact` unless it was set explicitly — upgrading never changes their retention. To move
+an existing instance to seven-day replay, set `defaultTopicCleanupPolicy: delete` yourself.
+Records that compaction already collapsed cannot be recovered.
 
 ### Validation & tips
 
