@@ -20,7 +20,6 @@ import (
 	"encoding/hex"
 	"hash"
 	"sort"
-	"strconv"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
@@ -42,27 +41,18 @@ func DataModelsFromConfig(ctx context.Context, configManager config.ConfigManage
 
 	for i, dataModel := range dataModels {
 		// Extract the latest version from the versions map
+		var highest config.Version
+
 		latestVersion := ""
 
-		if len(dataModel.Versions) > 0 {
-			// Find the highest version number
-			highestVersion := 0
-
-			for versionKey := range dataModel.Versions {
-				if len(versionKey) > 1 && versionKey[0] == 'v' {
-					if versionNum := parseVersionNumber(versionKey); versionNum > highestVersion {
-						highestVersion = versionNum
-						latestVersion = versionKey
-					}
-				}
+		for versionKey := range dataModel.Versions {
+			parsed, err := config.ParseVersion(versionKey)
+			if err != nil {
+				continue
 			}
-			// If no versioned keys found, use the first available key
-			if latestVersion == "" {
-				for versionKey := range dataModel.Versions {
-					latestVersion = versionKey
 
-					break
-				}
+			if latestVersion == "" || parsed.Compare(highest) > 0 {
+				highest, latestVersion = parsed, versionKey
 			}
 		}
 
@@ -109,16 +99,6 @@ func DataContractsFromConfig(ctx context.Context, configManager config.ConfigMan
 	}
 
 	return dataContractData, nil
-}
-
-// parseVersionNumber parses a version string (e.g., "v1", "v2") to an integer.
-func parseVersionNumber(versionStr string) int {
-	versionNum, err := strconv.Atoi(versionStr[1:])
-	if err != nil {
-		return 0
-	}
-
-	return versionNum
 }
 
 // generateDataModelHash generates a simple hash from the data model structure.
