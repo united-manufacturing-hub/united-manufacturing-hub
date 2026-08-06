@@ -17,8 +17,6 @@ package config
 import (
 	"context"
 	"fmt"
-	"strconv"
-	"strings"
 )
 
 // AtomicAddDataModel adds a new data model to the config
@@ -49,7 +47,7 @@ func (m *FileConfigManager) AtomicAddDataModel(ctx context.Context, name string,
 		Name:        name,
 		Description: description,
 		Versions: map[string]DataModelVersion{
-			"v1": dmVersion,
+			Version{Major: 1, Minor: 0}.String(): dmVersion,
 		},
 	})
 
@@ -104,22 +102,17 @@ func (m *FileConfigManager) AtomicEditDataModel(ctx context.Context, name string
 	// get the current data model
 	currentDataModel := config.DataModels[targetIndex]
 
-	// Find the highest version number to ensure we don't overwrite existing versions
-	var maxVersion = 0
-
+	keys := make([]string, 0, len(currentDataModel.Versions))
 	for versionKey := range currentDataModel.Versions {
-		if strings.HasPrefix(versionKey, "v") {
-			if versionNum, err := strconv.Atoi(versionKey[1:]); err == nil {
-				if versionNum > maxVersion {
-					maxVersion = versionNum
-				}
-			}
-		}
+		keys = append(keys, versionKey)
 	}
 
-	// append the new version to the data model
-	nextVersion := maxVersion + 1
-	currentDataModel.Versions[fmt.Sprintf("v%d", nextVersion)] = dmVersion
+	next, err := NextMinor(keys)
+	if err != nil {
+		return fmt.Errorf("failed to determine the next version of data model %q: %w", name, err)
+	}
+
+	currentDataModel.Versions[next.String()] = dmVersion
 
 	// update the description
 	currentDataModel.Description = description

@@ -269,7 +269,7 @@ dataModels:
 				Expect(err).NotTo(HaveOccurred())
 				Expect(writtenConfig.DataModels).To(HaveLen(1))
 				Expect(writtenConfig.DataModels[0].Name).To(Equal("temperature"))
-				Expect(writtenConfig.DataModels[0].Versions).To(HaveKey("v1"))
+				Expect(writtenConfig.DataModels[0].Versions).To(HaveKey("v1_0"))
 			})
 		})
 
@@ -408,14 +408,171 @@ dataModels:
 				Expect(writtenConfig.DataModels[0].Name).To(Equal("temperature"))
 				Expect(writtenConfig.DataModels[0].Versions).To(HaveLen(2))
 				Expect(writtenConfig.DataModels[0].Versions).To(HaveKey("v1"))
-				Expect(writtenConfig.DataModels[0].Versions).To(HaveKey("v2"))
+				Expect(writtenConfig.DataModels[0].Versions).To(HaveKey("v1_1"))
 				Expect(writtenConfig.DataModels[0].Description).To(Equal("test description"))
 
-				// Verify v2 has the new structure
-				v2 := writtenConfig.DataModels[0].Versions["v2"]
-				Expect(v2.Structure).To(HaveLen(3))
-				Expect(v2.Structure).To(HaveKey("humidity"))
-				Expect(v2.Structure).To(HaveKey("unit"))
+				// Verify v1_1 has the new structure
+				v1_1 := writtenConfig.DataModels[0].Versions["v1_1"]
+				Expect(v1_1.Structure).To(HaveLen(3))
+				Expect(v1_1.Structure).To(HaveKey("humidity"))
+				Expect(v1_1.Structure).To(HaveKey("unit"))
+			})
+		})
+
+		Context("when editing a legacy model with a single unversioned key", func() {
+			var (
+				legacySingleVersionYAML = `
+internal:
+  services:
+    - name: service1
+      desiredState: running
+agent:
+  metricsPort: 8080
+dataModels:
+  - name: legacy-model
+    version:
+      v1:
+        structure:
+          field1:
+            _payloadshape: timeseries-string
+`
+				writtenData []byte
+			)
+
+			BeforeEach(func() {
+				writtenData = nil // Reset for each test
+
+				mockFS.WithEnsureDirectoryFunc(func(ctx context.Context, path string) error {
+					return nil
+				})
+
+				mockFS.WithFileExistsFunc(func(ctx context.Context, path string) (bool, error) {
+					return true, nil
+				})
+
+				mockFS.WithReadFileFunc(func(ctx context.Context, path string) ([]byte, error) {
+					return []byte(legacySingleVersionYAML), nil
+				})
+
+				mockFS.WithWriteFileFunc(func(ctx context.Context, path string, data []byte, perm os.FileMode) error {
+					writtenData = data
+
+					return nil
+				})
+
+				mockFS.WithStatFunc(func(ctx context.Context, path string) (os.FileInfo, error) {
+					return mockFS.NewMockFileInfo("config.yaml", int64(len(writtenData)), 0644, time.Now(), false), nil
+				})
+			})
+
+			It("appends a minor to a legacy single-version model", func() {
+				dmVersion := DataModelVersion{
+					Structure: map[string]Field{
+						"field2": {
+							PayloadShape: "timeseries-string",
+						},
+					},
+				}
+
+				_, _ = configManager.GetConfig(ctx, 0) // get the config to trigger the background refresh
+				time.Sleep(100 * time.Millisecond)     // wait for the background refresh to finish
+				err := configManager.AtomicEditDataModel(ctx, "legacy-model", dmVersion, "legacy upgrade")
+
+				Expect(err).NotTo(HaveOccurred())
+				Expect(writtenData).NotTo(BeEmpty())
+
+				writtenConfig, err := ParseConfig(writtenData, ctx, false)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(writtenConfig.DataModels).To(HaveLen(1))
+
+				versions := writtenConfig.DataModels[0].Versions
+				Expect(versions).To(HaveLen(2))
+				Expect(versions).To(HaveKey("v1"))
+				Expect(versions).To(HaveKey("v1_1"))
+				Expect(versions["v1_1"].Structure).To(HaveKey("field2"))
+			})
+		})
+
+		Context("when editing a legacy model with multiple unversioned keys", func() {
+			var (
+				legacyMultiVersionYAML = `
+internal:
+  services:
+    - name: service1
+      desiredState: running
+agent:
+  metricsPort: 8080
+dataModels:
+  - name: legacy-model
+    version:
+      v1:
+        structure:
+          field1:
+            _payloadshape: timeseries-string
+      v2:
+        structure:
+          field1:
+            _payloadshape: timeseries-string
+          field2:
+            _payloadshape: timeseries-string
+`
+				writtenData []byte
+			)
+
+			BeforeEach(func() {
+				writtenData = nil // Reset for each test
+
+				mockFS.WithEnsureDirectoryFunc(func(ctx context.Context, path string) error {
+					return nil
+				})
+
+				mockFS.WithFileExistsFunc(func(ctx context.Context, path string) (bool, error) {
+					return true, nil
+				})
+
+				mockFS.WithReadFileFunc(func(ctx context.Context, path string) ([]byte, error) {
+					return []byte(legacyMultiVersionYAML), nil
+				})
+
+				mockFS.WithWriteFileFunc(func(ctx context.Context, path string, data []byte, perm os.FileMode) error {
+					writtenData = data
+
+					return nil
+				})
+
+				mockFS.WithStatFunc(func(ctx context.Context, path string) (os.FileInfo, error) {
+					return mockFS.NewMockFileInfo("config.yaml", int64(len(writtenData)), 0644, time.Now(), false), nil
+				})
+			})
+
+			It("appends to the highest major of a legacy multi-version model", func() {
+				dmVersion := DataModelVersion{
+					Structure: map[string]Field{
+						"field3": {
+							PayloadShape: "timeseries-string",
+						},
+					},
+				}
+
+				_, _ = configManager.GetConfig(ctx, 0) // get the config to trigger the background refresh
+				time.Sleep(100 * time.Millisecond)     // wait for the background refresh to finish
+				err := configManager.AtomicEditDataModel(ctx, "legacy-model", dmVersion, "legacy upgrade")
+
+				Expect(err).NotTo(HaveOccurred())
+				Expect(writtenData).NotTo(BeEmpty())
+
+				writtenConfig, err := ParseConfig(writtenData, ctx, false)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(writtenConfig.DataModels).To(HaveLen(1))
+
+				versions := writtenConfig.DataModels[0].Versions
+				Expect(versions).To(HaveLen(3))
+				Expect(versions).To(HaveKey("v1"))
+				Expect(versions).To(HaveKey("v2"))
+				Expect(versions).To(HaveKey("v2_1"))
+				Expect(versions["v1"].Structure).To(HaveLen(1))
+				Expect(versions["v2"].Structure).To(HaveLen(2))
+				Expect(versions["v2_1"].Structure).To(HaveKey("field3"))
 			})
 		})
 
