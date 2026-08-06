@@ -28,7 +28,7 @@ The Management Console provides full control over data models:
 | View model list | ✅ | Shows all models with versions |
 | Create models | ✅ | Visual editor with YAML preview |
 | View model details | ✅ | Inspect structure and configuration |
-| Create new versions | ✅ | Models are immutable, edit by versioning |
+| Create new versions | ✅ | Models are immutable; a new version can only add tags and becomes the next minor (see [Version Keys](../../reference/data-model-type-definitions.md#version-keys)) |
 | Reference sub-models | ✅ | Link to other models via `_refModel` |
 | Delete models | ✅ | Remove unused model versions |
 | Direct editing | ❌ | Use "New Version" to modify |
@@ -39,7 +39,7 @@ The Management Console provides full control over data models:
 - **Name**: Model identifier (e.g., `cnc`, `pump`, `temperature-sensor`)
 - **Instance**: Which UMH Core instance owns the model
 - **Description**: Optional description of the model's purpose
-- **Latest**: Current version number (v1, v2, etc.)
+- **Latest**: Current version key (`v1_0`, `v1_1`, etc. — or a legacy bare `v2` for a model created before minor versions existed)
 
 ### Model Actions
 
@@ -48,7 +48,7 @@ Click the three-dot menu (⋮) on any model to access actions:
 ![Data Model Actions](./images/data-models-context-menu.png)
 
 - **Data Model**: View the model's structure and YAML configuration
-- **New Version**: Create a new version with modifications (since models are immutable)
+- **New Version**: Add fields as the next minor version — a new version can only add tags, never remove, rename, or retype one (see [Data Model Type Definitions](../../reference/data-model-type-definitions.md#a-new-version-may-only-add-tags))
 - **Delete**: Remove the model (only if not in use by contracts or bridges)
 
 ![Data Model Creation](./images/data-models-add.png)
@@ -77,14 +77,14 @@ Model structure directly maps to UNS topics:
 
 ```yaml
 structure:
-  vibration:        # Creates: .../_pump_v1.vibration
-    x-axis:         # Creates: .../_pump_v1.vibration.x-axis
+  vibration:        # Creates: .../_pump_v1_0.vibration
+    x-axis:         # Creates: .../_pump_v1_0.vibration.x-axis
 ```
 
 **Complete topic path:**
 ```text
-umh.v1.enterprise.site._pump_v1.vibration.x-axis
-       └─ fixed ─┘     └contract┘└─from model─┘
+umh.v1.enterprise.site._pump_v1_0.vibration.x-axis
+       └─ fixed ─┘     └─contract─┘└─from model─┘
 ```
 
 ## The Three Building Blocks
@@ -146,13 +146,13 @@ datamodels:
           motor:           # Include the motor model
             _refModel:
               name: motor
-              version: v1
+              version: v1_0
 ```
 
 Topics created:
-- `_pump_v1.pressure.inlet`
-- `_pump_v1.motor.rpm`
-- `_pump_v1.motor.temperature`
+- `_pump_v1_0.pressure.inlet`
+- `_pump_v1_0.motor.rpm`
+- `_pump_v1_0.motor.temperature`
 
 **Benefits:**
 - Single source of truth
@@ -172,32 +172,57 @@ From the [README](README.md#why-are-models-immutable):
 
 ### Evolution Pattern
 
-**Version 1 - Basic:**
+Adding a field appends the next **minor** version — it does not bump the major version. A model at
+`v1` (that is, `v1_0`) gains `v1_1`, not `v2`. The new version repeats everything the previous version
+had and adds the new field on top, because a new version may only add tags. See
+[Version Keys](../../reference/data-model-type-definitions.md#version-keys) in the type definitions
+reference for the full grammar.
+
+**v1_0 - Basic:**
 ```yaml
-version:
-  v1:
-    structure:
-      temperature:
-        _payloadshape: timeseries-number
+dataModels:
+  - name: pump
+    version:
+      v1_0:
+        structure:
+          temperature:
+            _payloadshape: timeseries-number
 ```
 
-**Version 2 - Add pressure:**
+**v1_1 - Add pressure:**
 ```yaml
-version:
-  v2:
-    structure:
-      temperature:
-        _payloadshape: timeseries-number
-      pressure:                          # New field
-        _payloadshape: timeseries-number
+dataModels:
+  - name: pump
+    version:
+      v1_0:
+        structure:
+          temperature:
+            _payloadshape: timeseries-number
+      v1_1:
+        structure:
+          temperature:
+            _payloadshape: timeseries-number
+          pressure:                          # New field
+            _payloadshape: timeseries-number
 ```
+
+This produces contract `_pump_v1_1` alongside the existing `_pump_v1_0`.
 
 **Migration steps:**
-1. Create v2 with additions
-2. Deploy new bridges using v2
-3. Update dashboards to v2
-4. Keep v1 running during transition
-5. Deprecate v1 when safe
+1. Create `v1_1` with the addition
+2. Deploy new bridges using contract `_pump_v1_1`
+3. Update dashboards to `_pump_v1_1`
+4. Keep bridges on `_pump_v1_0` running during the transition — it keeps validating `v1_0`'s tags and
+   doesn't gain `pressure` automatically
+5. Retire `_pump_v1_0` bridges when safe
+
+Removing, renaming, or retyping a tag is a different situation: it's refused before anything is
+written, and major bumps aren't supported, so there's no version number a breaking change could
+occupy. A genuinely breaking change needs a separate data model, not a new version of this one — see
+[A new version may only add tags](../../reference/data-model-type-definitions.md#a-new-version-may-only-add-tags)
+for the exact rule and refusal error. Don't delete and recreate this model to force the change
+through instead: the Historian keeps tag history keyed to the old contract name, and a recreated
+model that reuses a tag name with a different type will have that tag's data silently dropped.
 
 ## Relationship to Contracts
 
@@ -206,12 +231,15 @@ Models define structure, but don't enforce it. That's where [data contracts](dat
 | Component | Purpose | Example |
 |-----------|---------|----------|
 | **Model** | Defines structure | `pump` model with fields |
-| **Contract** | Enforces structure | `_pump_v1` validates messages |
+| **Contract** | Enforces structure | `_pump_v1_0` validates messages |
 
 When you create a model in the UI:
-1. Model `pump` version `v1` is created
-2. Contract `_pump_v1` is auto-generated
+1. Model `pump` version `v1_0` is created
+2. Contract `_pump_v1_0` is auto-generated
 3. Contract becomes available in bridges
+
+Adding a version later gets its own contract too — see
+[Contract naming](../../reference/data-model-type-definitions.md#contract-naming) for the full rule.
 
 Without a contract, a model is just documentation. With a contract, it becomes validation.
 

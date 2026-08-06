@@ -42,9 +42,13 @@ The Management Console provides read-only access to contracts:
 
 When you create a model in the UI, it automatically generates a matching contract:
 
-1. Create model `pump` version `v1` in UI
-2. System auto-creates contract `_pump_v1`
+1. Create model `pump` version `v1_0` in UI
+2. System auto-creates contract `_pump_v1_0`
 3. Contract immediately available for use in bridges
+
+Adding a version to the model later — say `v1_1` — auto-creates its own contract, `_pump_v1_1`,
+alongside the existing one. See
+[Contract naming](../../reference/data-model-type-definitions.md#contract-naming) for the full rule.
 
 ## Configuration
 
@@ -62,11 +66,15 @@ datacontracts:
 
 ### Naming Convention
 
-Contracts follow the pattern `_modelname_version`:
+Contracts follow the pattern `_modelname_versionKey`:
 - Always start with underscore
 - Include model name
-- End with version number
+- End with the version key
 - Examples: `_pump_v1`, `_temperature_sensor_v2`, `_workorder_v1`
+
+The version key can carry a minor version too (`_pump_v1_0`, `_pump_v1_1`) — see
+[Version Keys](../../reference/data-model-type-definitions.md#version-keys) for the full grammar and
+how new contract names are built.
 
 ## Enforcement Mechanism
 
@@ -157,13 +165,13 @@ datamodels:
 
 # Contract (auto-created or manual)
 datacontracts:
-  - name: _temperature-sensor_v1
+  - name: _temperature-sensor_v1_0
     model:
       name: temperature-sensor
-      version: v1
+      version: v1_0
 
 # Usage in bridge
-msg.meta.data_contract = "_temperature-sensor_v1";
+msg.meta.data_contract = "_temperature-sensor_v1_0";
 msg.meta.tag_name = "celsius";
 msg.payload = 23.5;
 ```

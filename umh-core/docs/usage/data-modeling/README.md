@@ -132,7 +132,7 @@ Organizational folders within your data model:
 ### Data Contract vs Data Model
 - **Data Model**: Defines structure (template)
 - **Data Contract**: Enforces structure (runtime validation)
-- **Example**: Creating `pump` model auto-creates `_pump_v1` contract
+- **Example**: Creating `pump` model auto-creates `_pump_v1_0` contract
 
 ### Time-Series vs Relational
 - **Time-Series**: Single value with timestamp
@@ -210,20 +210,25 @@ Unknown PLC → Bridge + tag_processor → _raw → Topic Browser
 
 ## Why Models Are Immutable
 
-**The scenario**: A data scientist builds a dashboard using `_pump_v1` for 500 pumps across 10 sites.
+**The scenario**: A data scientist builds a dashboard using `_pump_v1_0` for 500 pumps across 10 sites.
 
-**Without immutability**: Someone modifies `_pump_v1`:
+**Without immutability**: Someone modifies `_pump_v1_0` in place:
 - Dashboard breaks - fields renamed
 - Historical queries fail - structure changed
 - Other sites stop working
 - Weekend ruined
 
-**With immutability**:
-1. Create `_pump_v2` with changes
-2. Test thoroughly
-3. Migrate gradually
-4. Deprecate v1 when safe
-5. Dashboard keeps working throughout
+**With immutability**: renaming, retyping, or removing a tag is refused outright - a new version may
+only add tags, and major bumps aren't supported, so there's no version number a breaking change could
+land on:
+1. If the change only adds something (a new sensor, say), it becomes the next minor version, `v1_1`,
+   alongside the existing `v1_0`
+2. If the change is breaking, it goes into a separate data model instead
+3. Either way, test thoroughly, migrate gradually, and deprecate the old one when safe
+4. The `_pump_v1_0` dashboard keeps working throughout
+
+See [Version Keys](../../reference/data-model-type-definitions.md#version-keys) for the full rule and
+the exact refusal error.
 
 ## Common Questions
 
@@ -237,10 +242,13 @@ Start with `_raw` for exploration. Add models when:
 
 ### How do I handle different equipment versions?
 
-Create separate models:
-- `_pump_v1` for older pumps
-- `_pump_v2` for newer pumps with more sensors
-- Stream processors can aggregate both
+Depends on how the equipment differs:
+- **Newer pumps only add sensors**: add a minor version to the same model — `pump` gains `v1_1`
+  alongside `v1_0`, and older pumps keep publishing to `_pump_v1_0` unchanged.
+- **Newer pumps have a genuinely different sensor layout** (a tag removed, renamed, or retyped):
+  create a separate model instead. A new version can only add tags, and major bumps aren't supported —
+  see [A new version may only add tags](../../reference/data-model-type-definitions.md#a-new-version-may-only-add-tags).
+- Stream processors can aggregate across either approach.
 
 ### What about equipment-specific data?
 

@@ -135,9 +135,9 @@ dataModels:
 ```
 
 This creates topics like:
-- `enterprise.site._work_order_v1.create` - New work orders
-- `enterprise.site._work_order_v1.update` - Update existing orders
-- `enterprise.site._work_order_v1.delete` - Delete orders
+- `enterprise.site._work_order_v1_0.create` - New work orders
+- `enterprise.site._work_order_v1_0.update` - Update existing orders
+- `enterprise.site._work_order_v1_0.delete` - Delete orders
 
 ## Processing Relational Data
 
@@ -145,7 +145,7 @@ This creates topics like:
 
 ```javascript
 // In nodered_js processor for work order creation
-msg.meta.data_contract = "_work_order_v1";
+msg.meta.data_contract = "_work_order_v1_0";
 msg.meta.tag_name = "create";  // Maps to the 'create' endpoint
 
 // Build work order record
@@ -161,7 +161,7 @@ msg.payload = {
 return msg;
 ```
 
-This creates a message at `enterprise.site._work_order_v1.create` with the complete work order data.
+This creates a message at `enterprise.site._work_order_v1_0.create` with the complete work order data.
 
 
 ## Relationship to Other Components

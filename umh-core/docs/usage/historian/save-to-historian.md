@@ -39,7 +39,7 @@ and follow the connection if you later change it.
 
 ### Naming the data contract
 
-Every version of a contract shares one set of tables, so `pump` stores `_pump_v1` and `_pump_v2`
+Every version of a contract shares one set of tables, so `pump` stores `_pump_v1_0` and `_pump_v1_1`
 alike. That is why the version is left off: the tables hold the contract, not one version of it.
 
 The Management Console rejects dashes in new data model names for the table-identifier reason above.
