@@ -40,3 +40,12 @@ func FlattenResolvedForTest(
 func ShapesEqualForTest(a, b config.PayloadShape) bool {
 	return shapesEqual(a, b)
 }
+
+// GenerateSubjectNameForTest exposes generateSubjectName to the external test
+// package. benthos-umh's UNS schema validator finds a contract's schemas by
+// prefix-matching subject names against the contract name read off the
+// topic, so this function's output is a cross-repo contract that only this
+// package's tests can pin.
+func GenerateSubjectNameForTest(contractName, version, payloadShape string) string {
+	return generateSubjectName(contractName, version, payloadShape)
+}

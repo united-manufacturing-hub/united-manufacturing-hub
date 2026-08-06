@@ -726,4 +726,68 @@ var _ = Describe("SchemaRegistry translation", func() {
 			Expect(registry.inRegistryButUnknownLocally).To(HaveKey(SubjectName("_orphan_v1-timeseries-number")))
 		})
 	})
+
+	// This is the integration-shaped half of the cross-repo subject-prefix
+	// invariant pinned in pkg/datamodel: every contract name umh-core
+	// creates must round-trip through Reconcile into a registry subject
+	// beginning with that contract name plus a dash, because that is the
+	// prefix benthos-umh's UNS schema validator uses to find the contract's
+	// schemas. A mismatch here means a contract's schemas are never found,
+	// SchemaCheckBypassed comes back true, and messages flow unvalidated,
+	// with no failure anywhere in either repo's test suite.
+	Context("the product's contract-naming invariant with benthos-umh's subject-prefix lookup", func() {
+		It("registers every subject under a prefix matching its own contract name", func() {
+			mockSchemaRegistry := NewMockSchemaRegistry()
+			defer mockSchemaRegistry.Close()
+
+			liveRegistry := NewSchemaRegistry(WithSchemaRegistryAddress(mockSchemaRegistry.URL()))
+
+			dataModels := []config.DataModelsConfig{
+				{
+					Name: "pump",
+					Versions: map[string]config.DataModelVersion{
+						"v1_0":  {Structure: map[string]config.Field{"count": {PayloadShape: "timeseries-number"}}},
+						"v1_1":  {Structure: map[string]config.Field{"count": {PayloadShape: "timeseries-number"}}},
+						"v10_3": {Structure: map[string]config.Field{"count": {PayloadShape: "timeseries-number"}}},
+					},
+				},
+				{
+					Name: "line_2",
+					Versions: map[string]config.DataModelVersion{
+						"v1_1": {Structure: map[string]config.Field{"count": {PayloadShape: "timeseries-number"}}},
+					},
+				},
+			}
+
+			dataContracts := []config.DataContractsConfig{
+				{Name: config.DataContractNameFor("pump", "v1_0"), Model: &config.ModelRef{Name: "pump", Version: "v1_0"}},
+				{Name: config.DataContractNameFor("pump", "v1_1"), Model: &config.ModelRef{Name: "pump", Version: "v1_1"}},
+				{Name: config.DataContractNameFor("pump", "v10_3"), Model: &config.ModelRef{Name: "pump", Version: "v10_3"}},
+				{Name: config.DataContractNameFor("line_2", "v1_1"), Model: &config.ModelRef{Name: "line_2", Version: "v1_1"}},
+			}
+
+			ctx, cancel := newTimeoutContext()
+			defer cancel()
+
+			err := liveRegistry.Reconcile(ctx, dataModels, dataContracts, map[string]config.PayloadShape{})
+			Expect(err).ToNot(HaveOccurred())
+
+			registeredSubjects := mockSchemaRegistry.GetRegisteredSubjects()
+
+			// The whole subject is asserted via ConsistOf, not a prefix
+			// check: a prefix check would still pass if an extra version
+			// segment were inserted between the contract name and the
+			// payload shape.
+			Expect(registeredSubjects).To(ConsistOf(
+				"_pump_v1_0-timeseries-number",
+				"_pump_v1_1-timeseries-number",
+				"_pump_v10_3-timeseries-number",
+				"_line_2_v1_1-timeseries-number",
+			))
+
+			for _, contract := range dataContracts {
+				Expect(registeredSubjects).To(ContainElement(contract.Name + "-timeseries-number"))
+			}
+		})
+	})
 })
