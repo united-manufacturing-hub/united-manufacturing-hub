@@ -40,7 +40,7 @@ var _ = Describe("S3 R2 — pressure", func() {
 			CpuScope:  ScopeHost,
 			Pressure:  diagnosis.Known(p),
 		}
-		fired, _ := engine.Observe(smp, diagnosis.NewEnvironment(HasLimit), smp.Timestamp)
+		fired, _ := engine.Observe(smp, diagnosis.NewEnvironment(HasLimit, HasPressureStats), smp.Timestamp)
 		v, st := engine.Reduction("pressure", "pressure-avg60").Get()
 		return firedSignalNames(fired), v, st
 	}
@@ -98,7 +98,7 @@ var _ = Describe("S3 R2 — pressure", func() {
 					CpuScope:  ScopeHost,
 					Pressure:  diagnosis.Known(nf.v),
 				}
-				fired, _ := engine.Observe(smp, diagnosis.NewEnvironment(HasLimit), smp.Timestamp)
+				fired, _ := engine.Observe(smp, diagnosis.NewEnvironment(HasLimit, HasPressureStats), smp.Timestamp)
 				Expect(firedSignalNames(fired)).To(ContainElement("pressure"), "the latch must hold through %s", nf.name)
 				v, st := engine.Reduction("pressure", "pressure-avg60").Get()
 				Expect(st).To(Equal(diagnosis.StateUntrusted), "%s must leave the window untrusted, not cleared", nf.name)

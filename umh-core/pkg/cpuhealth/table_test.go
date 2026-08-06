@@ -362,7 +362,7 @@ var _ = Describe("Table — the exported route to the CPU declaration", func() {
 	})
 
 	It("hands out signals the engine NewEngine built holds windows for", func() {
-		env := diagnosis.NewEnvironment(HasVirtualization, HasLimit)
+		env := diagnosis.NewEnvironment(HasVirtualization, HasLimit, HasPressureStats)
 		engine, err := NewEngine(4, 2.0)
 		Expect(err).NotTo(HaveOccurred())
 
