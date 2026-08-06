@@ -187,6 +187,8 @@ func (a *AddDataModelAction) Execute() (interface{}, map[string]interface{}, err
 	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
 		"Adding data model to configuration...", a.outboundChannel, models.AddDataModel)
 
+	firstVersion := config.Version{Major: 1, Minor: 0}.String()
+
 	// Use shared context for execution
 	err := a.configManager.AtomicAddDataModel(a.ctx, a.payload.Name, dmVersion, a.payload.Description)
 	if err != nil {
@@ -197,47 +199,21 @@ func (a *AddDataModelAction) Execute() (interface{}, map[string]interface{}, err
 		return nil, nil, fmt.Errorf("%s", errorMsg)
 	}
 
+	dataContractName := config.DataContractNameFor(a.payload.Name, firstVersion)
+
+	a.actionLogger.Infof("Successfully created data contract %s for data model %s", dataContractName, a.payload.Name)
 	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
-		"Creating data contract for data model...", a.outboundChannel, models.AddDataModel)
-
-	// Automatically create a data contract for the newly added data model
-	dataContractName := "_" + a.payload.Name + "_v1" // Data contract names start with underscore, first version is always v1
-	dataContract := config.DataContractsConfig{
-		Name: dataContractName,
-		Model: &config.ModelRef{
-			Name:    a.payload.Name,
-			Version: "v1", // First version is always v1
-		},
-	}
-
-	dataContractErr := a.configManager.AtomicAddDataContract(a.ctx, dataContract)
-	if dataContractErr != nil {
-		// Log the error but don't fail the entire operation since the data model was successfully added
-		a.actionLogger.Warnf("Failed to automatically create data contract for data model %s: %v", a.payload.Name, dataContractErr)
-		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
-			fmt.Sprintf("Data model added successfully, but failed to create data contract: %v", dataContractErr), a.outboundChannel, models.AddDataModel)
-	} else {
-		a.actionLogger.Infof("Successfully created data contract %s for data model %s", dataContractName, a.payload.Name)
-		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
-			"Data contract created successfully", a.outboundChannel, models.AddDataModel)
-	}
+		"Data contract created successfully", a.outboundChannel, models.AddDataModel)
 
 	// Create response with the data model information
 	response := map[string]interface{}{
 		"name":        a.payload.Name,
 		"description": a.payload.Description,
 		"structure":   a.payload.Structure,
-		"version":     "v1_0", // First version is always v1_0
+		"version":     firstVersion,
 		"dataContract": map[string]interface{}{
 			"name":  dataContractName,
-			"model": a.payload.Name + ":v1",
-			"status": func() string {
-				if dataContractErr != nil {
-					return "failed"
-				}
-
-				return "created"
-			}(),
+			"model": a.payload.Name + ":" + firstVersion,
 		},
 	}
 
