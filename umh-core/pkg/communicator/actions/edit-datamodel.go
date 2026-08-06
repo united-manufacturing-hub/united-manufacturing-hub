@@ -153,7 +153,73 @@ func (a *EditDataModelAction) Validate() error {
 		return fmt.Errorf("data model validation failed: %w", err)
 	}
 
+	existing, exists := allDataModels[a.payload.Name]
+	if !exists {
+		return fmt.Errorf("data model %q not found", a.payload.Name)
+	}
+
+	if err := validator.ValidateVersionKeys(existing.Versions); err != nil {
+		return err
+	}
+
+	keys := make([]string, 0, len(existing.Versions))
+	for versionKey := range existing.Versions {
+		keys = append(keys, versionKey)
+	}
+
+	next, err := config.NextMinor(keys)
+	if err != nil {
+		return err
+	}
+
+	predecessor, err := previousMinorOf(existing.Versions, next)
+	if err != nil {
+		return err
+	}
+
+	changes, err := datamodel.CheckAdditive(a.ctx, predecessor, dmVersion, allDataModels, currentConfig.PayloadShapes)
+	if err != nil {
+		return fmt.Errorf("cannot check version %s of data model %q: %w", next, a.payload.Name, err)
+	}
+
+	if len(changes) > 0 {
+		return errors.New(datamodel.FormatBreakingChanges(a.payload.Name, next.String(), changes))
+	}
+
 	return nil
+}
+
+// previousMinorOf returns the version the candidate must be additive over: the
+// highest existing minor of the candidate's major. Versions are immutable and
+// additivity is transitive, so comparing against the immediate predecessor is
+// equivalent to comparing against all of them.
+func previousMinorOf(versions map[string]config.DataModelVersion, next config.Version) (config.DataModelVersion, error) {
+	var (
+		best      config.Version
+		bestKey   string
+		haveMatch bool
+	)
+
+	for key := range versions {
+		parsed, err := config.ParseVersion(key)
+		if err != nil {
+			return config.DataModelVersion{}, err
+		}
+
+		if parsed.Major != next.Major {
+			continue
+		}
+
+		if !haveMatch || parsed.Compare(best) > 0 {
+			best, bestKey, haveMatch = parsed, key, true
+		}
+	}
+
+	if !haveMatch {
+		return config.DataModelVersion{}, fmt.Errorf("no existing version of major %d to compare against", next.Major)
+	}
+
+	return versions[bestKey], nil
 }
 
 // Execute implements the Action interface by creating a new version of the data model configuration.

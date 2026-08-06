@@ -15,6 +15,7 @@
 package actions_test
 
 import (
+	"context"
 	"encoding/base64"
 	"errors"
 
@@ -144,9 +145,23 @@ var _ = Describe("EditDataModelAction", func() {
 				err := action.Parse(structToEncodedMapForEdit(payload))
 				Expect(err).ToNot(HaveOccurred())
 
-				// Set up mock config to provide empty data models and payload shapes for validation
+				// Set up mock config with a matching existing data model, so the
+				// additive check has a predecessor to compare against.
 				mockConfig := config.FullConfig{
-					DataModels: []config.DataModelsConfig{},
+					DataModels: []config.DataModelsConfig{
+						{
+							Name: "test-model",
+							Versions: map[string]config.DataModelVersion{
+								"v1": {
+									Structure: map[string]config.Field{
+										"field1": {
+											PayloadShape: "timeseries-string",
+										},
+									},
+								},
+							},
+						},
+					},
 					PayloadShapes: map[string]config.PayloadShape{
 						"timeseries-string": {
 							Description: "Time series string data",
@@ -245,9 +260,19 @@ var _ = Describe("EditDataModelAction", func() {
 				err := action.Parse(structToEncodedMapForEdit(payload))
 				Expect(err).ToNot(HaveOccurred())
 
-				// Set up mock config with the referenced data model and payload shapes
+				// Set up mock config with the referenced data model and payload shapes.
+				// test-model itself starts with an empty version, so any structure
+				// added here is additive by construction.
 				mockConfig := config.FullConfig{
 					DataModels: []config.DataModelsConfig{
+						{
+							Name: "test-model",
+							Versions: map[string]config.DataModelVersion{
+								"v1": {
+									Structure: map[string]config.Field{},
+								},
+							},
+						},
 						{
 							Name: "external-model",
 							Versions: map[string]config.DataModelVersion{
@@ -493,6 +518,172 @@ var _ = Describe("EditDataModelAction", func() {
 				Expect(errorMsg).To(ContainSubstring("field cannot have both _payloadshape and _refModel"))
 			})
 		})
+
+		Context("with a data model that does not exist", func() {
+			BeforeEach(func() {
+				payload := models.EditDataModelPayload{
+					Name: "missing-model",
+					Structure: map[string]models.Field{
+						"field1": {
+							PayloadShape: "timeseries-string",
+						},
+					},
+				}
+				err := action.Parse(structToEncodedMapForEdit(payload))
+				Expect(err).ToNot(HaveOccurred())
+			})
+
+			It("returns a clear not-found error", func() {
+				err := action.Validate()
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring(`data model "missing-model" not found`))
+			})
+		})
+
+		Context("with the additive rule", func() {
+			var pumpConfig config.FullConfig
+
+			BeforeEach(func() {
+				pumpConfig = config.FullConfig{
+					DataModels: []config.DataModelsConfig{
+						{
+							Name: "pump",
+							Versions: map[string]config.DataModelVersion{
+								"v1_0": {
+									Structure: map[string]config.Field{
+										"temperature": {PayloadShape: "timeseries-number"},
+										"rpm":         {PayloadShape: "timeseries-number"},
+									},
+								},
+							},
+						},
+					},
+					DataContracts: []config.DataContractsConfig{
+						{
+							Name:  "_pump_v1_0",
+							Model: &config.ModelRef{Name: "pump", Version: "v1_0"},
+						},
+					},
+					PayloadShapes: map[string]config.PayloadShape{
+						"timeseries-number": {
+							Fields: map[string]config.PayloadField{
+								"value": {Type: "number"},
+							},
+						},
+						"timeseries-string": {
+							Fields: map[string]config.PayloadField{
+								"value": {Type: "string"},
+							},
+						},
+					},
+				}
+			})
+
+			It("refuses a removal and writes nothing", func() {
+				// prev has temperature and rpm; the payload has only temperature
+				payload := models.EditDataModelPayload{
+					Name: "pump",
+					Structure: map[string]models.Field{
+						"temperature": {PayloadShape: "timeseries-number"},
+					},
+				}
+				err := action.Parse(structToEncodedMapForEdit(payload))
+				Expect(err).ToNot(HaveOccurred())
+				mockConfigMgr.WithConfig(pumpConfig)
+
+				err = action.Validate()
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("rpm"))
+				Expect(err.Error()).To(ContainSubstring("removed"))
+				Expect(mockConfigMgr.AtomicAddDataModelVersionWithContractCalled).To(BeFalse())
+			})
+
+			It("refuses a retype and names both shapes", func() {
+				payload := models.EditDataModelPayload{
+					Name: "pump",
+					Structure: map[string]models.Field{
+						"temperature": {PayloadShape: "timeseries-string"},
+						"rpm":         {PayloadShape: "timeseries-number"},
+					},
+				}
+				err := action.Parse(structToEncodedMapForEdit(payload))
+				Expect(err).ToNot(HaveOccurred())
+				mockConfigMgr.WithConfig(pumpConfig)
+
+				err = action.Validate()
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("timeseries-number -> timeseries-string"))
+				Expect(mockConfigMgr.AtomicAddDataModelVersionWithContractCalled).To(BeFalse())
+			})
+
+			It("refuses a retype when the config has no payloadShapes section (P7)", func() {
+				// Same as above, with currentConfig.PayloadShapes left nil.
+				// This is the case a unit test with a hand-built shape map would miss.
+				payload := models.EditDataModelPayload{
+					Name: "pump",
+					Structure: map[string]models.Field{
+						"temperature": {PayloadShape: "timeseries-string"},
+						"rpm":         {PayloadShape: "timeseries-number"},
+					},
+				}
+				err := action.Parse(structToEncodedMapForEdit(payload))
+				Expect(err).ToNot(HaveOccurred())
+
+				pumpConfig.PayloadShapes = nil
+				mockConfigMgr.WithConfig(pumpConfig)
+
+				err = action.Validate()
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("timeseries-number -> timeseries-string"))
+				Expect(mockConfigMgr.AtomicAddDataModelVersionWithContractCalled).To(BeFalse())
+			})
+
+			It("allows an addition and mints the next contract", func() {
+				payload := models.EditDataModelPayload{
+					Name:        "pump",
+					Description: "adds vibration",
+					Structure: map[string]models.Field{
+						"temperature": {PayloadShape: "timeseries-number"},
+						"rpm":         {PayloadShape: "timeseries-number"},
+						"vibration":   {PayloadShape: "timeseries-number"},
+					},
+				}
+				err := action.Parse(structToEncodedMapForEdit(payload))
+				Expect(err).ToNot(HaveOccurred())
+				mockConfigMgr.WithConfig(pumpConfig)
+
+				Expect(action.Validate()).To(Succeed())
+
+				_, _, err = action.Execute()
+				Expect(err).NotTo(HaveOccurred())
+
+				cfg, err := mockConfigMgr.GetConfig(context.Background(), 0)
+				Expect(err).ToNot(HaveOccurred())
+
+				Expect(cfg.DataContracts).To(ContainElement(SatisfyAll(
+					HaveField("Name", "_pump_v1_1"),
+					HaveField("Model.Version", "v1_1"),
+				)))
+				Expect(cfg.DataContracts).To(ContainElement(HaveField("Name", "_pump_v1_0")),
+					"the previous contract must survive the bump")
+			})
+
+			It("reports every violation at once", func() {
+				payload := models.EditDataModelPayload{
+					Name: "pump",
+					Structure: map[string]models.Field{
+						"unrelated": {PayloadShape: "timeseries-number"},
+					},
+				}
+				err := action.Parse(structToEncodedMapForEdit(payload))
+				Expect(err).ToNot(HaveOccurred())
+				mockConfigMgr.WithConfig(pumpConfig)
+
+				err = action.Validate()
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("2 breaking changes"))
+			})
+		})
 	})
 
 	Describe("Execute", func() {
@@ -677,18 +868,16 @@ var _ = Describe("EditDataModelAction", func() {
 			err := action.Parse(structToEncodedMapForEdit(payload))
 			Expect(err).ToNot(HaveOccurred())
 
-			// Set up mock config with existing data model and referenced model and payload shapes
+			// Set up mock config with existing data model and referenced model and payload shapes.
+			// complex-model starts with an empty version, so any structure added here
+			// is additive by construction.
 			existingConfig := config.FullConfig{
 				DataModels: []config.DataModelsConfig{
 					{
 						Name: "complex-model",
 						Versions: map[string]config.DataModelVersion{
 							"v1": {
-								Structure: map[string]config.Field{
-									"oldField": {
-										PayloadShape: "timeseries-string",
-									},
-								},
+								Structure: map[string]config.Field{},
 							},
 						},
 					},

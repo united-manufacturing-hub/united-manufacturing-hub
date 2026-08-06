@@ -189,6 +189,16 @@ func CheckAdditive(
 	return changes, nil
 }
 
+// isRelationalSyntheticShapeName reports whether name is the synthetic
+// payload shape name a _relational field is given, derived from its path
+// (see extractVirtualPathsWithReferences in translator.go). Two relational
+// fields at the same path always carry the same synthetic name, even when
+// their definitions differ, so a Retyped change with equal names still needs
+// its own message.
+func isRelationalSyntheticShapeName(name string) bool {
+	return strings.HasPrefix(name, "__relational_") && strings.HasSuffix(name, "__")
+}
+
 // FormatBreakingChanges renders a refusal that names the rule and says the
 // escape hatch does not exist, so the reader does not go looking for one.
 func FormatBreakingChanges(modelName, versionKey string, changes []BreakingChange) string {
@@ -207,7 +217,11 @@ func FormatBreakingChanges(modelName, versionKey string, changes []BreakingChang
 		case Removed:
 			fmt.Fprintf(&b, "  %s  removed (was %s)\n", change.Path, change.OldShape)
 		case Retyped:
-			fmt.Fprintf(&b, "  %s  payload shape changed: %s -> %s\n", change.Path, change.OldShape, change.NewShape)
+			if change.OldShape == change.NewShape && isRelationalSyntheticShapeName(change.OldShape) {
+				fmt.Fprintf(&b, "  %s  relational field definition changed\n", change.Path)
+			} else {
+				fmt.Fprintf(&b, "  %s  payload shape changed: %s -> %s\n", change.Path, change.OldShape, change.NewShape)
+			}
 		}
 	}
 

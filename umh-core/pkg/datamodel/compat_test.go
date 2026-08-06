@@ -321,4 +321,12 @@ var _ = Describe("FormatBreakingChanges", func() {
 		Expect(msg).To(ContainSubstring("timeseries-number -> timeseries-string"))
 		Expect(msg).To(ContainSubstring("not supported yet"))
 	})
+
+	It("says the relational field's definition changed instead of printing the same shape name twice", func() {
+		msg := datamodel.FormatBreakingChanges("pump", "v1_1", []datamodel.BreakingChange{
+			{Path: "r", Kind: datamodel.Retyped, OldShape: "__relational_r__", NewShape: "__relational_r__"},
+		})
+		Expect(msg).To(ContainSubstring("r  relational field definition changed"))
+		Expect(msg).NotTo(ContainSubstring("__relational_r__ -> __relational_r__"))
+	})
 })
