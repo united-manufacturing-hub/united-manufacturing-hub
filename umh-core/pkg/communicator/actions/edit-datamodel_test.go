@@ -540,6 +540,46 @@ var _ = Describe("EditDataModelAction", func() {
 			})
 		})
 
+		Context("with a data model that has no versions yet (I2)", func() {
+			BeforeEach(func() {
+				payload := models.EditDataModelPayload{
+					Name: "pump",
+					Structure: map[string]models.Field{
+						"field1": {
+							PayloadShape: "timeseries-string",
+						},
+					},
+				}
+				err := action.Parse(structToEncodedMapForEdit(payload))
+				Expect(err).ToNot(HaveOccurred())
+
+				mockConfigMgr.WithConfig(config.FullConfig{
+					DataModels: []config.DataModelsConfig{
+						{
+							Name:     "pump",
+							Versions: map[string]config.DataModelVersion{},
+						},
+					},
+				})
+			})
+
+			It("skips the additive check and validates successfully", func() {
+				Expect(action.Validate()).To(Succeed())
+			})
+
+			It("writes v1_0", func() {
+				Expect(action.Validate()).To(Succeed())
+
+				_, _, err := action.Execute()
+				Expect(err).ToNot(HaveOccurred())
+
+				cfg, err := mockConfigMgr.GetConfig(context.Background(), 0)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(cfg.DataModels[0].Versions).To(HaveKey("v1_0"))
+				Expect(cfg.DataContracts).To(ContainElement(HaveField("Name", "_pump_v1_0")))
+			})
+		})
+
 		Context("with the additive rule", func() {
 			var pumpConfig config.FullConfig
 

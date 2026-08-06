@@ -179,18 +179,22 @@ func (a *EditDataModelAction) Validate() error {
 		return err
 	}
 
-	predecessor, err := previousMinorOf(existing.Versions, next)
-	if err != nil {
-		return err
-	}
+	// A model with no versions yet has nothing to be additive over: skip the
+	// check and let the write proceed to v1_0.
+	if len(keys) > 0 {
+		predecessor, err := previousMinorOf(existing.Versions, next)
+		if err != nil {
+			return err
+		}
 
-	changes, err := datamodel.CheckAdditive(a.ctx, predecessor, dmVersion, allDataModels, currentConfig.PayloadShapes)
-	if err != nil {
-		return fmt.Errorf("cannot check version %s of data model %q: %w", next, a.payload.Name, err)
-	}
+		changes, err := datamodel.CheckAdditive(a.ctx, predecessor, dmVersion, allDataModels, currentConfig.PayloadShapes)
+		if err != nil {
+			return fmt.Errorf("cannot check version %s of data model %q: %w", next, a.payload.Name, err)
+		}
 
-	if len(changes) > 0 {
-		return errors.New(datamodel.FormatBreakingChanges(a.payload.Name, next.String(), changes))
+		if len(changes) > 0 {
+			return errors.New(datamodel.FormatBreakingChanges(a.payload.Name, next.String(), changes))
+		}
 	}
 
 	a.expectedVersionKey = next.String()
