@@ -99,6 +99,48 @@ func TestMapObservedBuildsFullNestedStructure(t *testing.T) {
 	}
 }
 
+// TestMapObservedSetsIsRunning pins the field that gates every consumer.
+// GetHealthCheckAndMetrics (pkg/service/benthos/benthos.go) copies HealthCheck out
+// of LastScan and then returns a ZERO BenthosStatus when
+// ServiceInfo.BenthosStatus.IsRunning is false — throwing away the health it just
+// read. So a scan with correct IsLive/IsReady but IsRunning=false reads as
+// live=false, ready=false at the FSM, holding every bridge in starting forever.
+// That is what happened in a live container: the worker polled correctly and every
+// DataFlowComponent still reported "healthchecks did not pass".
+//
+// FSMv1 set IsRunning from the S6 FSM state of the monitor service
+// (service/benthos_monitor/benthos_monitor.go:1486). Under this flag there is no S6
+// monitor service — the worker is the monitor — so a scan carrying a real timestamp
+// is the evidence that it ran.
+func TestMapObservedSetsIsRunning(t *testing.T) {
+	// A real scrape: ScrapedAt set, both probes true.
+	live := mapObserved(testConfig(), simple.Status[BenthosMonitorStatus]{
+		Result: BenthosMonitorStatus{
+			ScrapedAt: time.Now(),
+			PingAlive: true,
+			Ready:     true,
+		},
+	})
+	bm, ok := live.(benthosmonitorfsm.BenthosMonitorObservedState)
+	if !ok {
+		t.Fatalf("mapObserved returned %T", live)
+	}
+	if !bm.ServiceInfo.BenthosStatus.IsRunning {
+		t.Error("IsRunning is false after a real scrape: GetHealthCheckAndMetrics will discard the HealthCheck and every bridge stays in starting")
+	}
+
+	// A zero status (the adapter passes one on a non-Fresh read) has no scrape
+	// behind it, so it must NOT claim the monitor is running.
+	empty := mapObserved(testConfig(), simple.Status[BenthosMonitorStatus]{})
+	bmEmpty, ok := empty.(benthosmonitorfsm.BenthosMonitorObservedState)
+	if !ok {
+		t.Fatalf("mapObserved returned %T", empty)
+	}
+	if bmEmpty.ServiceInfo.BenthosStatus.IsRunning {
+		t.Error("IsRunning is true for a zero status: an unobserved worker must not report itself running")
+	}
+}
+
 // TestMapObservedToleratesZeroStatus pins the other control-loop hazard: on a
 // non-Fresh read the adapter passes a zero status to mapObserved, which must
 // still produce the full non-nil nested structure (empty content) rather than

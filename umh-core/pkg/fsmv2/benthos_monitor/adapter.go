@@ -77,6 +77,16 @@ func mapObserved(cfg config.BenthosMonitorConfig, s simple.Status[BenthosMonitor
 		ServiceInfo: &benthosmonitorservice.ServiceInfo{
 			BenthosStatus: benthosmonitorservice.BenthosMonitorStatus{
 				LastScan: scan,
+				// IsRunning means "the monitor itself is running", and it is not
+				// cosmetic: GetHealthCheckAndMetrics (benthos.go) copies the
+				// HealthCheck out of LastScan and then returns a ZERO BenthosStatus
+				// when this is false, discarding it. FSMv1 set it from the S6 FSM
+				// state of the monitor service (service/benthos_monitor:1486); under
+				// this flag there is no S6 monitor service, the worker IS the
+				// monitor, so a scan that produced a timestamp is the evidence it
+				// ran. Leaving it false made every consumer read live=false,
+				// ready=false and held every bridge in starting forever.
+				IsRunning: !status.ScrapedAt.IsZero(),
 			},
 		},
 	}
