@@ -17,6 +17,9 @@
 
 - When the host is CPU-starved, reconciliation deadlines get exceeded and umh-core was logging "context deadline exceeded" and "not enough time to reconcile" once per instance per tick, flooding the log. These are now throttled to at most one warning per minute (with the suppressed count folded in) and escalate to an error when the overload persists, so a genuinely stuck host gets louder instead of drowning in noise
 - Creating or versioning a data model that also needs a new data contract no longer reports success when the contract write fails. Previously the action logged a warning and still returned success, leaving a model or version with no working contract; now the model and its contract are written together, and a failure fails the whole operation cleanly instead of leaving either behind
+- Two overlapping edits to the same data model can no longer both write a version that was never checked against each other. Each edit now carries the version it validated against into the write, and the write is refused if another edit landed a version in between, so the Historian can no longer end up with a column that silently changed type
+- A data model with no versions at all (for example `dataModels: [{name: pump}]`, written before any version existed) can now have its first version added from the console. It previously errored with "no existing version of major 1 to compare against" because there was nothing yet to compare against
+- The data model version the Management Console reports no longer flips between status pushes for a model whose only version was written by an older umh-core as bare `v1` and then reappears as `v1_0`; the two are recognized as the same version and reported consistently as `v1_0`
 
 ## [0.44.32]
 

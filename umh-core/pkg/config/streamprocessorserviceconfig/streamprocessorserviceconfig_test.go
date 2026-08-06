@@ -19,6 +19,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/streamprocessorserviceconfig"
 )
@@ -191,6 +192,29 @@ var _ = Describe("StreamProcessorServiceConfig", func() {
 			Expect(runtime.Mapping["temperature"]).To(Equal("tF*69/31"))
 			Expect(runtime.Mapping["motor"].(map[string]any)["rpm"]).To(Equal("press/4"))
 			Expect(runtime.Mapping["serialNumber"]).To(Equal(`"SN-P42-008"`))
+		})
+	})
+
+	Describe("NormalizeConfig model version default", func() {
+		// Pending: normalizer.go defaults an omitted Model.Version to the bare
+		// "v1". For a model created at v1_0 (only key is two-part, no bare
+		// "v1" alias), that derives contract name "_pump_v1", which does not
+		// exist; only "_pump_v1_0" does. Confirmed failing below. Whether the
+		// default should become "v1_0" or an omitted version should be an
+		// error is a product decision, not something this fix wave resolves.
+		PIt("resolves the omitted version's contract for a model created at v1_0", func() {
+			spec := streamprocessorserviceconfig.StreamProcessorServiceConfigSpec{
+				Config: streamprocessorserviceconfig.StreamProcessorServiceConfigTemplate{
+					Model: streamprocessorserviceconfig.ModelRef{
+						Name: "pump",
+					},
+				},
+			}
+
+			normalized := streamprocessorserviceconfig.NewNormalizer().NormalizeConfig(spec)
+			contractName := config.DataContractNameFor("pump", normalized.Config.Model.Version)
+
+			Expect(contractName).To(Equal("_pump_v1_0"))
 		})
 	})
 })
