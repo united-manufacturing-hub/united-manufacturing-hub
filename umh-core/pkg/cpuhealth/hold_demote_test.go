@@ -131,7 +131,7 @@ var _ = Describe("S3 R6 — hold and demote", func() {
 		// fabricated zero that would clear the latch.
 		engine, err := NewEngine(4, 2.0)
 		Expect(err).NotTo(HaveOccurred())
-		env := diagnosis.NewEnvironment(HasLimit)
+		env := diagnosis.NewEnvironment(HasLimit, HasPressureStats)
 		base := time.Now()
 
 		for i := 0; i < 30; i++ {

@@ -73,5 +73,5 @@ func (f cpuFeed) Unreadable(at time.Time) Sample {
 // required, and there is no way to make that scenario green.
 func RunSuite(cores, quota float64) []diagnosis.Outcome {
 	t := cpuTable(cores, quota)
-	return diagnosis.Run(t, diagnosis.NewEnvironment(HasLimit, HasVirtualization), cpuFeed{cores: cores})
+	return diagnosis.Run(t, diagnosis.NewEnvironment(HasLimit, HasVirtualization, HasPressureStats), cpuFeed{cores: cores})
 }
