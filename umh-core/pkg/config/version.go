@@ -35,7 +35,11 @@ type Version struct {
 func ParseVersion(key string) (Version, error) {
 	m := VersionKeyPattern.FindStringSubmatch(key)
 	if m == nil {
-		return Version{}, fmt.Errorf("version key %q must match ^v[1-9]\\d*(_(0|[1-9]\\d*))?$", key)
+		return Version{}, fmt.Errorf(
+			"version key %q is invalid: expected a form like \"v1\" or \"v1_2\", "+
+				"where the major version starts at 1 and neither part may have a leading zero",
+			key,
+		)
 	}
 
 	major, err := strconv.Atoi(m[1])

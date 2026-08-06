@@ -56,6 +56,22 @@ var _ = Describe("ParseVersion", func() {
 		Entry("leading zero major, multi-digit", "v007"),
 	)
 
+	DescribeTable("rejects with an actionable message",
+		func(key string) {
+			_, err := config.ParseVersion(key)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring(key))
+			Expect(err.Error()).To(ContainSubstring(`"v1"`))
+			Expect(err.Error()).To(ContainSubstring(`"v1_2"`))
+			Expect(err.Error()).To(ContainSubstring("major version starts at 1"))
+			Expect(err.Error()).To(ContainSubstring("leading zero"))
+		},
+		Entry("major zero", "v0"),
+		Entry("leading zero major", "v01"),
+		Entry("empty minor", "v1_"),
+		Entry("non-numeric", "vx"),
+	)
+
 	It("round-trips through String, canonical two-part (P1)", func() {
 		for major := 1; major <= 12; major++ {
 			for minor := range 13 {
