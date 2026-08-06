@@ -481,7 +481,7 @@ var _ = Describe("AddDataModelAction", func() {
 				Expect(ok).To(BeTrue())
 				Expect(responseMap["name"]).To(Equal("test-model"))
 				Expect(responseMap["description"]).To(Equal("Test data model"))
-				Expect(responseMap["version"]).To(Equal(1))
+				Expect(responseMap["version"]).To(Equal("v1_0"))
 				Expect(responseMap["structure"]).ToNot(BeNil())
 
 				// Verify data contract was included in response
@@ -529,7 +529,7 @@ var _ = Describe("AddDataModelAction", func() {
 				Expect(ok).To(BeTrue())
 				Expect(responseMap["name"]).To(Equal("test-model"))
 				Expect(responseMap["description"]).To(Equal("Test data model"))
-				Expect(responseMap["version"]).To(Equal(1))
+				Expect(responseMap["version"]).To(Equal("v1_0"))
 
 				// Verify data contract was included in response with failed status
 				dataContract, exists := responseMap["dataContract"]

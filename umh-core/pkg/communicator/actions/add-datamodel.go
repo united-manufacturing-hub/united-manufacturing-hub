@@ -227,7 +227,7 @@ func (a *AddDataModelAction) Execute() (interface{}, map[string]interface{}, err
 		"name":        a.payload.Name,
 		"description": a.payload.Description,
 		"structure":   a.payload.Structure,
-		"version":     1, // First version is always 1
+		"version":     "v1_0", // First version is always v1_0
 		"dataContract": map[string]interface{}{
 			"name":  dataContractName,
 			"model": a.payload.Name + ":v1",

@@ -35,8 +35,6 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
-	"strconv"
-	"strings"
 
 	"github.com/google/uuid"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
@@ -184,10 +182,31 @@ func (a *EditDataModelAction) Execute() (interface{}, map[string]interface{}, er
 		return nil, nil, fmt.Errorf("%s", errorMsg)
 	}
 
-	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
-		"Adding new version to data model configuration...", a.outboundChannel, models.EditDataModel)
+	// Determine the version this edit will append, from the model's keys as they
+	// stand before the edit — the same keys AtomicEditDataModel itself will read.
+	currentConfig, err := a.configManager.GetConfig(a.ctx, 0)
+	if err != nil {
+		errorMsg := fmt.Sprintf("Failed to get config to determine the next version: %v", err)
+		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
+			errorMsg, a.outboundChannel, models.EditDataModel)
 
-	err := a.configManager.AtomicEditDataModel(a.ctx, a.payload.Name, dmVersion, a.payload.Description)
+		return nil, nil, fmt.Errorf("%s", errorMsg)
+	}
+
+	var existingKeys []string
+
+	for _, dmc := range currentConfig.DataModels {
+		if dmc.Name == a.payload.Name {
+			existingKeys = make([]string, 0, len(dmc.Versions))
+			for versionKey := range dmc.Versions {
+				existingKeys = append(existingKeys, versionKey)
+			}
+
+			break
+		}
+	}
+
+	nextVersion, err := config.NextMinor(existingKeys)
 	if err != nil {
 		errorMsg := fmt.Sprintf("Failed to edit data model: %v", err)
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
@@ -196,40 +215,13 @@ func (a *EditDataModelAction) Execute() (interface{}, map[string]interface{}, er
 		return nil, nil, fmt.Errorf("%s", errorMsg)
 	}
 
-	// Get the updated configuration to determine the new version number
-	fullConfig, err := a.configManager.GetConfig(a.ctx, 0)
-	if err != nil {
-		a.actionLogger.Warnf("Failed to get config to determine new version number: %v", err)
-		// Continue with execution, just use a placeholder version
-	}
+	versionStr := nextVersion.String()
 
-	// Find the new version number
-	newVersion := uint64(0)
+	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
+		"Adding new version to data model configuration...", a.outboundChannel, models.EditDataModel)
 
-	if err == nil {
-		for _, dmc := range fullConfig.DataModels {
-			if dmc.Name == a.payload.Name {
-				var maxVersion uint64 = 0
-
-				for versionKey := range dmc.Versions {
-					if strings.HasPrefix(versionKey, "v") {
-						if versionNum, err := strconv.Atoi(versionKey[1:]); err == nil {
-							if uint64(versionNum) > maxVersion {
-								maxVersion = uint64(versionNum)
-							}
-						}
-					}
-				}
-
-				newVersion = maxVersion
-
-				break
-			}
-		}
-	}
-
-	if newVersion == 0 {
-		errorMsg := "Failed to edit data model: new version number not found"
+	if err := a.configManager.AtomicEditDataModel(a.ctx, a.payload.Name, dmVersion, a.payload.Description); err != nil {
+		errorMsg := fmt.Sprintf("Failed to edit data model: %v", err)
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
 			errorMsg, a.outboundChannel, models.EditDataModel)
 
@@ -240,7 +232,6 @@ func (a *EditDataModelAction) Execute() (interface{}, map[string]interface{}, er
 		"Creating data contract for new data model version...", a.outboundChannel, models.EditDataModel)
 
 	// Automatically create a data contract for the new version of the data model
-	versionStr := fmt.Sprintf("v%d", newVersion)
 	dataContractName := fmt.Sprintf("_%s_%s", a.payload.Name, versionStr) // Include version in contract name
 	dataContract := config.DataContractsConfig{
 		Name: dataContractName,
@@ -267,7 +258,7 @@ func (a *EditDataModelAction) Execute() (interface{}, map[string]interface{}, er
 		"name":        a.payload.Name,
 		"description": a.payload.Description,
 		"structure":   a.payload.Structure,
-		"version":     newVersion,
+		"version":     versionStr,
 		"dataContract": map[string]interface{}{
 			"name":  dataContractName,
 			"model": fmt.Sprintf("%s:%s", a.payload.Name, versionStr),

@@ -571,7 +571,7 @@ var _ = Describe("EditDataModelAction", func() {
 				Expect(ok).To(BeTrue())
 				Expect(responseMap["name"]).To(Equal("existing-model"))
 				Expect(responseMap["description"]).To(Equal("Updated version of existing model"))
-				Expect(responseMap["version"]).To(BeNumerically(">", 1)) // Should be a higher version
+				Expect(responseMap["version"]).To(Equal("v1_1")) // Existing model is at v1, so the edit appends v1_1
 				Expect(responseMap["structure"]).ToNot(BeNil())
 
 				// Verify config manager was called
