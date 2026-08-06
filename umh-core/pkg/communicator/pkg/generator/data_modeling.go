@@ -51,8 +51,16 @@ func DataModelsFromConfig(ctx context.Context, configManager config.ConfigManage
 				continue
 			}
 
-			if latestVersion == "" || parsed.Compare(highest) > 0 {
+			switch {
+			case latestVersion == "" || parsed.Compare(highest) > 0:
 				highest, latestVersion = parsed, versionKey
+			case parsed.Compare(highest) == 0 && versionKey == parsed.String() && latestVersion != parsed.String():
+				// A tie is only possible between a bare "vN" and its canonical
+				// two-part spelling "vN_0", since the grammar has no other way
+				// to spell the same (major, minor) pair. Map iteration order is
+				// randomized, so resolve deterministically: whichever key is
+				// visited first, the canonical spelling always wins.
+				latestVersion = versionKey
 			}
 		}
 

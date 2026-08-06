@@ -51,6 +51,7 @@ var _ = Describe("DataModelsFromConfig latest version", func() {
 			Expect(out[0].LatestVersion).To(Equal(want))
 		},
 		Entry("legacy only", []string{"v1"}, "v1"),
+		Entry("legacy alias of the same version resolves to the canonical spelling", []string{"v1", "v1_0"}, "v1_0"),
 		Entry("legacy plus minor", []string{"v1", "v1_1"}, "v1_1"),
 		Entry("all two-part", []string{"v1_0", "v1_1"}, "v1_1"),
 		Entry("two majors", []string{"v1", "v2"}, "v2"),
@@ -83,6 +84,16 @@ var _ = Describe("DataModelsFromConfig latest version", func() {
 			out, err := DataModelsFromConfig(ctx, manager, logger)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(out[0].LatestVersion).To(Equal("v1_7"))
+		}
+	})
+
+	It("resolves the {v1, v1_0} tie to the canonical spelling regardless of map iteration order", func() {
+		manager := buildConfigManager([]string{"v1", "v1_0"})
+
+		for range 200 {
+			out, err := DataModelsFromConfig(ctx, manager, logger)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(out[0].LatestVersion).To(Equal("v1_0"))
 		}
 	})
 })
