@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"sync"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -657,10 +658,51 @@ dataContracts:
 		)
 
 		Context("when the write succeeds", func() {
-			var currentData []byte
+			var (
+				dataMu         sync.Mutex
+				currentData    []byte
+				writeCallCount int
+			)
+
+			// getCurrentData and setCurrentData serialize access to currentData
+			// and writeCallCount: FileConfigManager.GetConfig can leave a
+			// backgroundRefresh goroutine in flight that calls ReadFile
+			// concurrently with the foreground goroutine's later WriteFile, so
+			// the mock's closures must not touch shared state unguarded.
+			getCurrentData := func() []byte {
+				dataMu.Lock()
+				defer dataMu.Unlock()
+
+				return currentData
+			}
+
+			setCurrentData := func(data []byte) {
+				dataMu.Lock()
+				defer dataMu.Unlock()
+
+				currentData = data
+				writeCallCount++
+			}
+
+			resetWriteCallCount := func() {
+				dataMu.Lock()
+				defer dataMu.Unlock()
+
+				writeCallCount = 0
+			}
+
+			getWriteCallCount := func() int {
+				dataMu.Lock()
+				defer dataMu.Unlock()
+
+				return writeCallCount
+			}
 
 			BeforeEach(func() {
+				dataMu.Lock()
 				currentData = []byte(validYAMLWithPumpV1)
+				writeCallCount = 0
+				dataMu.Unlock()
 
 				mockFS.WithEnsureDirectoryFunc(func(ctx context.Context, path string) error {
 					return nil
@@ -671,17 +713,17 @@ dataContracts:
 				})
 
 				mockFS.WithReadFileFunc(func(ctx context.Context, path string) ([]byte, error) {
-					return currentData, nil
+					return getCurrentData(), nil
 				})
 
 				mockFS.WithWriteFileFunc(func(ctx context.Context, path string, data []byte, perm os.FileMode) error {
-					currentData = data
+					setCurrentData(data)
 
 					return nil
 				})
 
 				mockFS.WithStatFunc(func(ctx context.Context, path string) (os.FileInfo, error) {
-					return mockFS.NewMockFileInfo("config.yaml", int64(len(currentData)), 0644, time.Now(), false), nil
+					return mockFS.NewMockFileInfo("config.yaml", int64(len(getCurrentData())), 0644, time.Now(), false), nil
 				})
 			})
 
@@ -689,16 +731,30 @@ dataContracts:
 				_, _ = configManager.GetConfig(ctx, 0) // get the config to trigger the background refresh
 				time.Sleep(100 * time.Millisecond)     // wait for the background refresh to finish
 
+				// The background refresh above may itself trigger a write-free
+				// read cycle, but it never calls WriteFile; reset the counter
+				// right before the call under test so it only measures the
+				// atomic operation itself.
+				resetWriteCallCount()
+
 				key, err := configManager.AtomicAddDataModelVersionWithContract(ctx, "pump", newVersion, "desc")
 				Expect(err).NotTo(HaveOccurred())
 				Expect(key).To(Equal("v1_1"))
 
+				// P16 requires the version and its contract to land in a single
+				// config write. Asserting on the final bytes alone cannot tell
+				// a one-write implementation from a two-write one where the
+				// first write commits and the second fails after the first
+				// already landed; only counting WriteFile invocations does.
+				Expect(getWriteCallCount()).To(Equal(1))
+
 				// Verify the bytes actually written, rather than GetConfig, which
 				// can race a background refresh started by an earlier call and
 				// briefly return a stale cache.
-				Expect(currentData).NotTo(BeEmpty())
+				writtenData := getCurrentData()
+				Expect(writtenData).NotTo(BeEmpty())
 
-				writtenConfig, err := ParseConfig(currentData, ctx, false)
+				writtenConfig, err := ParseConfig(writtenData, ctx, false)
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(writtenConfig.DataModels).To(HaveLen(1))
