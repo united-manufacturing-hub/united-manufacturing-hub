@@ -35,10 +35,10 @@ import (
 // oldest in-window sample to the newest, (latest.count - oldest.count) /
 // elapsedSeconds. LastCount is the newest sample's count. With a single sample
 // (no second in-window sample) the rate is 0 — and IsActive derives from
-// Input.MessagesPerSecond > 0, so a zero rate means inactive. A counter reset
-// (process restart zeroes the Prometheus counter) makes the newest count lower
-// than the oldest; the rate then reads 0 until the pre-restart samples age out
-// of the span.
+// Input.MessagesPerSecond > 0, so a zero rate means inactive. A process restart
+// zeroes both Prometheus counters, so a both-counter drop wipes the window and
+// leaves a single post-restart sample; the newest-vs-oldest guard covers the
+// one-sided drop that does not wipe.
 //
 // Every sample time is injected so the test is deterministic: no real 1s
 // real-time sleeps and no fake clock. The window's Add accepts the explicit
@@ -98,15 +98,16 @@ func TestThroughputWindowIsTimeBased(t *testing.T) {
 		t.Errorf("mid-window gap: Input MessagesPerSecond = %v, want ~1.5 (real-time delta 90/60, not a count-window 2.0)", r)
 	}
 
-	// (e) a decreasing counter spanning a restart: benthos' input_received is a
-	// Prometheus counter that zeroes when the process restarts, so a reset
-	// landing inside the window yields a negative delta. The rate must be clamped
-	// to 0, never negative.
+	// (e) a both-counter drop spanning a restart: benthos' counters zero when the
+	// process restarts, so a reset landing inside the window drops BOTH counters
+	// and wipes the window. The post-wipe single sample cannot compute a rate, so
+	// the rate is 0 — never negative, and never the FSMv1 cumulative count as a
+	// rate.
 	restart := &benthosMonitorDeps{}
 	restart.window.Add(t0, 100, 100)
 	restart.window.Add(t0.Add(10*time.Second), 5, 5)
 	if r := restart.window.inputRate(); r != 0 {
-		t.Errorf("after counter reset: Input MessagesPerSecond = %v, want 0 (a negative delta is clamped)", r)
+		t.Errorf("after both-counter drop: Input MessagesPerSecond = %v, want 0 (wipe leaves a single sample)", r)
 	}
 }
 
@@ -203,5 +204,69 @@ func TestPollComputesThroughput(t *testing.T) {
 	}
 	if status.Output.LastCount != 6 {
 		t.Errorf("second poll Output.LastCount = %d, want 6", status.Output.LastCount)
+	}
+}
+
+// TestPollResetTickReportsIsActiveFalse pins that the status layer reflects a
+// counter-drop tick through the Poll seam: when both counters drop (a restart),
+// Poll wipes the window to a single sample, so the reset-tick status must read
+// IsActive=false — never the cumulative count as a rate — with LastCount carrying
+// the post-restart counter. This test pins the Poll->status wiring and LastCount
+// propagation; the window-level wipe itself (len(samples)==1) is the
+// discriminating assertion, pinned by TestThroughputWindowWipesOnCounterReset. A
+// single post-wipe sample yields a zero rate regardless of the wipe, so reaching
+// it through Poll does not itself decide the wipe.
+func TestPollResetTickReportsIsActiveFalse(t *testing.T) {
+	if testing.Short() {
+		t.Skip("integration-style poll test")
+	}
+	inputCounter := 100
+	outputCounter := 100
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/ping":
+			_, _ = w.Write([]byte("pong"))
+		case "/ready":
+			_, _ = w.Write([]byte(`{"error":""}`))
+		case "/version":
+			_, _ = w.Write([]byte(`{"version":"1.2.3"}`))
+		case "/metrics":
+			fmt.Fprintf(w, "input_received{label=\"\",path=\"root.input\"} %d\n", inputCounter)
+			fmt.Fprintf(w, "output_sent{label=\"\",path=\"root.output\"} %d\n", outputCounter)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+
+	cfg := config.BenthosMonitorConfig{
+		FSMInstanceConfig: config.FSMInstanceConfig{Name: "benthos-1", DesiredFSMState: "active"},
+		MetricsPort:       uint16(srv.Listener.Addr().(*net.TCPAddr).Port),
+	}
+	deps := &benthosMonitorDeps{client: &http.Client{Timeout: 400 * time.Millisecond}}
+
+	// Cold baseline poll: a single sample cannot compute a rate.
+	status, err := Poll(context.Background(), deps, cfg)
+	if err != nil {
+		t.Fatalf("baseline Poll errored: %v", err)
+	}
+	if status.IsActive {
+		t.Errorf("baseline poll IsActive = true, want false (single sample)")
+	}
+
+	// Both counters drop: a restart. Poll wipes the window to a single sample,
+	// so the reset-tick status must read IsActive=false.
+	inputCounter = 5
+	outputCounter = 5
+	status, err = Poll(context.Background(), deps, cfg)
+	if err != nil {
+		t.Fatalf("reset-tick Poll errored: %v", err)
+	}
+	if status.IsActive {
+		t.Errorf("reset tick after both-counter drop: IsActive = true, want false (window wiped to a single sample)")
+	}
+	if status.Input.LastCount != 5 {
+		t.Errorf("reset tick Input.LastCount = %d, want 5 (post-restart counter)", status.Input.LastCount)
 	}
 }

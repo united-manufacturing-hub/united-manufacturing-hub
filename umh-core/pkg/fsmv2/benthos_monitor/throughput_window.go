@@ -46,6 +46,9 @@ type throughputWindow struct {
 // normally all that is removed), but the scan also drops an out-of-order aged
 // sample, keeping the window bounded to the span regardless of arrival order.
 func (w *throughputWindow) Add(at time.Time, input, output int) {
+	if n := len(w.samples); n > 0 && wipeOnRestart(at, input, output, w.newest()) {
+		w.samples = w.samples[:0]
+	}
 	w.samples = append(w.samples, throughputSample{at: at, input: input, output: output})
 	if len(w.samples) < 2 {
 		return
@@ -77,14 +80,29 @@ func (w *throughputWindow) newest() throughputSample {
 	return newest
 }
 
+// wipeOnRestart reports whether the process restarted between prev and the new
+// sample at at, zeroing both Prometheus counters. A restart stays resident inside
+// windowSpan, so a drop in both counters against the immediately preceding newest
+// sample is the signal that the old by-time series ended and must be wiped.
+// A drop in only ONE counter (a config reload that removes one aggregate, or a
+// transient scrape gap) is not a restart and must not wipe either direction.
+// A non-newer sample (an aged, out-of-order arrival) is a pruning case, not a
+// restart, so it is skipped. A restart where one counter was already zero is not
+// caught here (that counter does not decrease); the rate methods' newest-vs-oldest
+// guards then clamp the residual window rather than wipe.
+func wipeOnRestart(at time.Time, input, output int, prev throughputSample) bool {
+	return at.After(prev.at) && input < prev.input && output < prev.output
+}
+
 // inputRate returns the input rate in messages per second over the in-window
 // span: (newest.count - oldest-in-window.count) / elapsedSeconds, where
 // elapsedSeconds is the real time between those two samples. With fewer than two
-// in-window samples the rate is 0, because a single sample cannot be delta-ed.
-// A counter reset makes the newest count lower than the oldest in-window count
-// (benthos' input_received is a Prometheus counter that zeroes when the process
-// restarts); the rate is undefined there, so it reads 0 until the pre-restart
-// samples age out of the span.
+// in-window samples the rate is 0, because a single sample cannot be delta-ed. A
+// genuine restart wipes the window in Add, so the newest sample is already the
+// post-restart baseline. The newest-vs-oldest guards below cover the mixed cases
+// the wipe does not (a one-sided drop, an equal-timestamp arrival, or a restart
+// where one counter was already zero), reading 0 instead of a negative delta; an
+// elapsed span of zero reads 0 rather than dividing by zero.
 func (w *throughputWindow) inputRate() float64 {
 	if len(w.samples) < 2 {
 		return 0
@@ -104,6 +122,9 @@ func (w *throughputWindow) inputRate() float64 {
 	}
 
 	elapsed := newest.at.Sub(oldest.at).Seconds()
+	if elapsed <= 0 {
+		return 0
+	}
 	return float64(newest.input-oldest.input) / elapsed
 }
 
@@ -127,6 +148,9 @@ func (w *throughputWindow) outputRate() float64 {
 	}
 
 	elapsed := newest.at.Sub(oldest.at).Seconds()
+	if elapsed <= 0 {
+		return 0
+	}
 	return float64(newest.output-oldest.output) / elapsed
 }
 
