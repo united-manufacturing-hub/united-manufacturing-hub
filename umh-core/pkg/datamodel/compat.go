@@ -41,9 +41,11 @@ type resolvedTag struct {
 // enrichment is an error rather than the zero shape, for the same reason: two
 // unresolvable names must never compare equal.
 //
-// allModels is only consulted when non-nil, so a version with a dangling
-// _refModel reference is an error even when the caller passes an empty (but
-// non-nil) model set rather than omitting it.
+// allModels is always resolved through, even when nil: a nil map lookup
+// returns the zero value and false, so a version with a _refModel field
+// errors instead of silently vanishing from the output when no model set is
+// supplied. That vanishing is otherwise indistinguishable from a genuine tag
+// removal to a caller comparing two flattened versions.
 //
 // Each call enriches its own copy of payloadShapes, so two versions flattened
 // from the same caller-supplied map cannot overwrite each other's synthetic
@@ -58,18 +60,8 @@ func flattenResolved(
 
 	translator := NewTranslator()
 
-	var (
-		pathsByShape map[string][]string
-		err          error
-	)
-
-	if allModels != nil {
-		pathsByShape, err = translator.extractVirtualPathsWithReferences(
-			ctx, version.Structure, "", allModels, shapes, make(map[string]bool), 0)
-	} else {
-		pathsByShape, err = translator.extractVirtualPaths(ctx, version.Structure, "", shapes)
-	}
-
+	pathsByShape, err := translator.extractVirtualPathsWithReferences(
+		ctx, version.Structure, "", allModels, shapes, make(map[string]bool), 0)
 	if err != nil {
 		return nil, fmt.Errorf("failed to flatten data model version: %w", err)
 	}

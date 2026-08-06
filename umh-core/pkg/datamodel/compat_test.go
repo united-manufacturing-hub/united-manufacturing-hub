@@ -61,6 +61,15 @@ var _ = Describe("flattenResolved", func() {
 		Expect(err).To(HaveOccurred())
 	})
 
+	It("errors on a _refModel field when allModels is nil rather than dropping it silently", func() {
+		_, err := datamodel.FlattenResolvedForTest(context.Background(),
+			config.DataModelVersion{Structure: map[string]config.Field{
+				"motor": {ModelRef: &config.ModelRef{Name: "motor", Version: "v1_0"}},
+			}}, nil, nil)
+		Expect(err).To(HaveOccurred(),
+			"a _refModel field must never vanish from the flattened output without a tag or an error, or CheckAdditive sees a false removal")
+	})
+
 	It("does not mutate the payloadShapes argument (P8)", func() {
 		shapes := map[string]config.PayloadShape{}
 		_, err := datamodel.FlattenResolvedForTest(context.Background(),
