@@ -37,7 +37,7 @@ func (n *Normalizer) NormalizeConfig(cfg StreamProcessorServiceConfigSpec) Strea
 
 	// Normalize the model reference - ensure version is set
 	if normalized.Config.Model.Version == "" {
-		normalized.Config.Model.Version = "v1"
+		normalized.Config.Model.Version = "v1_0"
 	}
 
 	// Normalize sources - ensure they exist even if empty

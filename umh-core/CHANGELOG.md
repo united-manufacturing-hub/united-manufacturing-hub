@@ -20,6 +20,7 @@
 - Two overlapping edits to the same data model can no longer both write a version that was never checked against each other. Each edit now carries the version it validated against into the write, and the write is refused if another edit landed a version in between, so the Historian can no longer end up with a column that silently changed type
 - A data model with no versions at all (for example `dataModels: [{name: pump}]`, written before any version existed) can now have its first version added from the console. It previously errored with "no existing version of major 1 to compare against" because there was nothing yet to compare against
 - The data model version the Management Console reports no longer flips between status pushes for a model whose only version was written by an older umh-core as bare `v1` and then reappears as `v1_0`; the two are recognized as the same version and reported consistently as `v1_0`
+- A stream processor whose config omits the data model version now resolves to that model's `v1_0` contract (for example `_pump_v1_0`) instead of the bare `v1`, which no data model produces anymore
 
 ## [0.44.32]
 

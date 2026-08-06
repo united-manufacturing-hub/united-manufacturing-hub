@@ -196,13 +196,9 @@ var _ = Describe("StreamProcessorServiceConfig", func() {
 	})
 
 	Describe("NormalizeConfig model version default", func() {
-		// Pending: normalizer.go defaults an omitted Model.Version to the bare
-		// "v1". For a model created at v1_0 (only key is two-part, no bare
-		// "v1" alias), that derives contract name "_pump_v1", which does not
-		// exist; only "_pump_v1_0" does. Confirmed failing below. Whether the
-		// default should become "v1_0" or an omitted version should be an
-		// error is a product decision, not something this fix wave resolves.
-		PIt("resolves the omitted version's contract for a model created at v1_0", func() {
+		// An omitted Model.Version defaults to "v1_0", the first minor
+		// version of a data model.
+		It("resolves the omitted version's contract for a model created at v1_0", func() {
 			spec := streamprocessorserviceconfig.StreamProcessorServiceConfigSpec{
 				Config: streamprocessorserviceconfig.StreamProcessorServiceConfigTemplate{
 					Model: streamprocessorserviceconfig.ModelRef{
