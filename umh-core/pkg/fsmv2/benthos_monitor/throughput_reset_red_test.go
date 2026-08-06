@@ -20,114 +20,107 @@ import (
 	"time"
 )
 
-// TestThroughputWindowWipesOnCounterReset pins the window-reset behaviour. When
-// the process restarts, both Prometheus counters zero, so a drop in BOTH counters
-// against the immediately preceding sample is the restart signal: the window must
-// FULL-WIPE and re-seed with only the new sample. The window persists across a
-// child restart, so a both-counter drop is the signal the by-time series changed
-// and the old span is no longer comparable. A drop in only ONE counter (a config
-// reload or transient scrape gap) is not a restart and must not wipe — pinned by
-// TestThroughputWindowDoesNotWipeOnOneSidedDrop.
-//
-// The rate is computed from the post-restart baseline alone. Without the wipe, a
-// newest-vs-oldest-in-window comparison would let a restarted counter that climbs
-// BACK ABOVE the pre-restart count within the span misreport the
-// recovered-above-baseline rate for up to 60s; wiping at the drop tick reads only
-// the post-restart baseline, so the recovered rate is not diluted by the
-// pre-restart count.
-//
-// After a full-wipe the window holds a single sample, so the rate reads 0 and,
-// by extension, IsActive is false on the reset tick — never FSMv1's cumulative-
-// count-as-rate spike. The status-level IsActive=false on the reset tick is
-// pinned by TestPollResetTickReportsIsActiveFalse.
+const testPort = 4195
+
+// TestThroughputWindowWipesOnCounterReset pins the counter-reset wipe (D5a).
+// The reset detector is the INPUT counter only (fsmv1 metrics_state.go:110-117:
+// 'count < throughput.LastCount' on input; re-sweep finding 1): benthos'
+// input_received is a monotonic Prometheus counter that resets to 0 on a process
+// restart, so a drop against the immediately preceding sample is the signal the
+// series ended and the window must full-wipe and re-seed with only the new
+// sample. The wipe must drop the pre-restart baseline so the post-restart rate is
+// not diluted by the pre-restart count.
 func TestThroughputWindowWipesOnCounterReset(t *testing.T) {
 	t0 := time.Now().Truncate(time.Second)
 
-	// (a) Counter-drop full-wipe: baseline 100 @ t0, restart drops it to 5 @
-	// t0+10s. The wipe must leave the window holding ONLY the new sample, not
-	// append it alongside the old.
+	// A restart drops input 100 -> 5 while output holds 100 -> 5. The input drop
+	// is the reset signal: the window wipes and holds ONLY the new sample.
 	w := &throughputWindow{}
-	w.Add(t0, 100, 100)
-	w.Add(t0.Add(10*time.Second), 5, 5)
+	w.Add(t0, testPort, 100, 100)
+	w.Add(t0.Add(10*time.Second), testPort, 5, 5)
 	if got := len(w.samples); got != 1 {
-		t.Errorf("after counter drop the window holds %d samples, want 1 (a both-counter drop wipes and re-seeds)", got)
+		t.Errorf("after input drop the window holds %d samples, want 1 (an input counter drop wipes and re-seeds)", got)
 	}
 
-	// (d) First tick after the wipe: a single sample cannot compute a rate, so
-	// MessagesPerSecond must be 0 (never the cumulative count as a rate). This is
-	// documentation-intent only. The discriminating assertion is len(samples)==1
-	// above: a revert that appends instead of wiping leaves two samples and fails
-	// there.
+	// First tick after the wipe: a single sample cannot compute a rate, so
+	// MessagesPerSecond must be 0 (never the cumulative count as a rate).
 	if r := w.inputRate(); r != 0 {
-		t.Errorf("first tick after counter-drop wipe: Input MessagesPerSecond = %v, want 0", r)
-	}
-	if r := w.outputRate(); r != 0 {
-		t.Errorf("first tick after counter-drop wipe: Output MessagesPerSecond = %v, want 0", r)
+		t.Errorf("first tick after counter-drop wipe: MessagesPerSecond = %v, want 0", r)
 	}
 
-	// Post-restart clean second sample 1s later: the rate is computed from the
-	// post-restart baseline only (5 -> 12 over ~1s ~= 7/s), not diluted by the
-	// pre-restart 100.
-	w.Add(t0.Add(11*time.Second), 12, 12)
+	// Post-restart clean second sample 1s later: the rate is ~7/s from the
+	// post-restart baseline only (5 -> 12), not diluted by the pre-restart 100.
+	w.Add(t0.Add(11*time.Second), testPort, 12, 12)
 	if r := w.inputRate(); r < 6 || r > 8 {
 		t.Errorf("post-restart input rate = %v, want ~7/s (5->12 over 1s, not diluted by pre-restart 100)", r)
 	}
+}
 
-	// (b) Recovered above the pre-restart baseline: {100 @ t0, 0 @ t0+15s,
-	// 150 @ t0+30s}. The 0 tick is a both-counter drop so it wipes the 100; the
-	// true post-restart rate is 0 -> 150 over 15s = 10/s. A newest-vs-oldest
-	// comparison without the wipe would read (150-100)/30 ~= 1.67/s, diluting the
-	// recovered rate by the pre-restart count.
-	w2 := &throughputWindow{}
-	w2.Add(t0, 100, 100)
-	w2.Add(t0.Add(15*time.Second), 0, 0) // restart: both counters dropped -> wipe
-	w2.Add(t0.Add(30*time.Second), 150, 150)
-	if r := w2.inputRate(); r < 9 || r > 11 {
+// TestThroughputWindowWipesOnOneCounterZeroRestart pins the input-only detector:
+// a restart where the OUTPUT counter was already ~0 (e.g. a backed-up broker)
+// must still wipe, because requiring BOTH counters to drop would let a
+// pre-restart high input baseline survive and misreport the recovered rate.
+func TestThroughputWindowWipesOnOneCounterZeroRestart(t *testing.T) {
+	t0 := time.Now().Truncate(time.Second)
+
+	// Input 100 -> 5 (reset) while output was already 0 and stays 0. The input
+	// drop must wipe; a strict both-drop condition (input<prev && output<prev)
+	// would see 0<0 false and never wipe, leaving the 100 baseline in-window.
+	w := &throughputWindow{}
+	w.Add(t0, testPort, 100, 0)
+	w.Add(t0.Add(10*time.Second), testPort, 5, 0)
+	if got := len(w.samples); got != 1 {
+		t.Errorf("after a one-counter-zero restart the window holds %d samples, want 1 (input drop wipes even when output was already 0)", got)
+	}
+}
+
+// TestThroughputWindowWipesOnPortChange pins the port-change wipe (D5a): an
+// in-place config update re-points the child at a different MetricsPort without
+// a worker restart, and a new endpoint is a new counter series. A sample with a
+// different port than the previous poll wipes the window and re-seeds with only
+// the new-port sample.
+func TestThroughputWindowWipesOnPortChange(t *testing.T) {
+	t0 := time.Now().Truncate(time.Second)
+
+	w := &throughputWindow{}
+	w.Add(t0, 4195, 100, 100)
+	w.Add(t0.Add(10*time.Second), 4196, 5, 5)
+	if got := len(w.samples); got != 1 {
+		t.Errorf("after a port change the window holds %d samples, want 1 (the window re-seeds on a new scrape port)", got)
+	}
+	if w.port != 4196 {
+		t.Errorf("window port = %d, want 4196 (the new port becomes the window's key)", w.port)
+	}
+	if r := w.inputRate(); r != 0 {
+		t.Errorf("first tick after port-change wipe: MessagesPerSecond = %v, want 0", r)
+	}
+}
+
+// TestThroughputWindowRecoveredAboveBaseline pins that wiping at the drop tick,
+// instead of clamping newest-vs-oldest in-window, reads the true post-restart
+// rate. {100, 0, 150} over 30s with the 0 tick dropping the 100: the true rate is
+// 0->150 over 15s = 10/s. A newest-vs-oldest clamp would read (150-100)/30 ≈ 1.67/s.
+func TestThroughputWindowRecoveredAboveBaseline(t *testing.T) {
+	t0 := time.Now().Truncate(time.Second)
+
+	w := &throughputWindow{}
+	w.Add(t0, testPort, 100, 100)
+	w.Add(t0.Add(15*time.Second), testPort, 0, 0) // restart: input drop wipes 100
+	w.Add(t0.Add(30*time.Second), testPort, 150, 150)
+	if r := w.inputRate(); r < 9 || r > 11 {
 		t.Errorf("recovered-above-baseline input rate = %v, want ~10/s (0->150 over 15s, not diluted by pre-restart 100)", r)
 	}
 }
 
-// TestThroughputWindowDoesNotWipeOnOneSidedDrop pins the && wipe condition: a
-// drop in only ONE counter (an aggregate one-sided drop on a config reload or a
-// transient scrape gap) is not a restart and must not wipe the window. The
-// both-direction baseline must survive; the failing direction is handled by the
-// rate methods' newest-vs-oldest fallback, not by destroying both baselines.
-func TestThroughputWindowDoesNotWipeOnOneSidedDrop(t *testing.T) {
-	t0 := time.Now().Truncate(time.Second)
-
-	// Input drops 100 -> 5 while output holds 100 -> 110. Only input fell, so
-	// this is a one-sided aggregate drop, not a restart: the window keeps both
-	// samples and does NOT wipe.
-	w := &throughputWindow{}
-	w.Add(t0, 100, 100)
-	w.Add(t0.Add(10*time.Second), 5, 110)
-	if got := len(w.samples); got != 2 {
-		t.Errorf("after a one-sided input drop the window holds %d samples, want 2 (a single-sided drop must not wipe)", got)
-	}
-	// Input's newest is below its oldest -> rate clamps to 0 (never negative).
-	if r := w.inputRate(); r != 0 {
-		t.Errorf("one-sided input drop: Input MessagesPerSecond = %v, want 0 (negative delta clamped, window kept)", r)
-	}
-	// Output's baseline must survive the input drop: 100 -> 110 over 10s ~= 1/s.
-	if r := w.outputRate(); r < 0.9 || r > 1.1 {
-		t.Errorf("one-sided input drop: Output MessagesPerSecond = %v, want ~1.0 (output baseline must NOT be wiped)", r)
-	}
-}
-
 // TestThroughputWindowEqualTimestampsNeverDivideByZero pins that two samples with
-// the same observed time cannot yield a NaN or infinite rate. When a wipe re-seed
-// (a single sample) is immediately re-appended at the same instant, the window
-// holds two equal-timestamp samples, so newest == oldest, the in-window span is 0
-// seconds, and the rate division would be 0/0 (NaN for an equal counter) or
-// nonzero/0 (Inf for a raised counter) without a guard. Both must read 0 and
-// IsActive false — never a non-finite float that a later json.Marshal rejects.
+// the same observed time cannot yield a NaN or infinite rate. The window guards
+// an elapsed span of zero, reading 0 instead of dividing by zero.
 func TestThroughputWindowEqualTimestampsNeverDivideByZero(t *testing.T) {
 	t0 := time.Now().Truncate(time.Second)
 
-	// Equal counter at the same instant: 0/0 would be NaN.
 	w := &throughputWindow{}
-	w.Add(t0, 100, 100)
-	w.Add(t0, 100, 100) // same timestamp: not newer, so no wipe; two in-window samples
+	w.Add(t0, testPort, 100, 100)
+	w.Add(t0, testPort, 100, 100) // same timestamp: not newer, so no wipe; two in-window samples
 	if r := w.inputRate(); r != 0 || math.IsNaN(r) || math.IsInf(r, 0) {
 		t.Errorf("equal-timestamp equal-input rate = %v, want 0 (never NaN)", r)
 	}
@@ -135,14 +128,10 @@ func TestThroughputWindowEqualTimestampsNeverDivideByZero(t *testing.T) {
 		t.Errorf("equal-timestamp equal-output rate = %v, want 0 (never NaN)", r)
 	}
 
-	// Raised counter at the same instant: nonzero/0 would be +Inf.
 	w2 := &throughputWindow{}
-	w2.Add(t0, 100, 100)
-	w2.Add(t0, 150, 150)
+	w2.Add(t0, testPort, 100, 100)
+	w2.Add(t0, testPort, 150, 150)
 	if r := w2.inputRate(); r != 0 || math.IsNaN(r) || math.IsInf(r, 0) {
 		t.Errorf("equal-timestamp raised-input rate = %v, want 0 (never Inf)", r)
-	}
-	if r := w2.outputRate(); r != 0 || math.IsNaN(r) || math.IsInf(r, 0) {
-		t.Errorf("equal-timestamp raised-output rate = %v, want 0 (never Inf)", r)
 	}
 }
