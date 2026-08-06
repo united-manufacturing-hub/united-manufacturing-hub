@@ -79,10 +79,10 @@ Translation performance is suitable for:
 **Problem**: `regexp.MustCompile()` called on every `_refModel` validation
 ```go
 // Before: Compiled on every validation
-versionRegex := regexp.MustCompile(`^v\d+$`)
+versionKeyPattern := regexp.MustCompile(`^v([1-9]\d*)(?:_(0|[1-9]\d*))?$`)
 
-// After: Pre-compiled at package level
-var versionRegex = regexp.MustCompile(`^v\d+$`)
+// After: Pre-compiled at package level (pkg/config.VersionKeyPattern, used via config.ParseVersion)
+var VersionKeyPattern = regexp.MustCompile(`^v([1-9]\d*)(?:_(0|[1-9]\d*))?$`)
 ```
 **Impact**: Eliminated 7.4GB of regex compilation allocations, achieved 9.1x performance improvement
 

@@ -54,6 +54,8 @@ var _ = Describe("ParseVersion", func() {
 		Entry("leading zero major", "v01"),
 		Entry("leading zero minor", "v1_01"),
 		Entry("leading zero major, multi-digit", "v007"),
+		Entry("oversized major", "v99999999999999999999"),
+		Entry("oversized minor", "v1_99999999999999999999"),
 	)
 
 	DescribeTable("rejects with an actionable message",

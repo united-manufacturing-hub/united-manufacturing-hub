@@ -266,7 +266,7 @@ var _ = Describe("Validator", func() {
 
 			err := validator.ValidateStructureOnly(ctx, dataModel)
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("version 'invalidversion' does not match pattern"))
+			Expect(err.Error()).To(ContainSubstring(`expected a form like "v1" or "v1_2"`))
 		})
 
 		It("should validate nested structures recursively", func() {
@@ -506,5 +506,82 @@ var _ = Describe("Validator", func() {
 			err := validator.ValidateWithReferences(ctx, dataModel, dataModels, map[string]config.PayloadShape{})
 			Expect(err).ToNot(HaveOccurred())
 		})
+	})
+})
+
+var _ = Describe("ValidateVersionKeys", func() {
+	v := datamodel.NewValidator()
+
+	It("accepts a mix of legacy and two-part keys", func() {
+		err := v.ValidateVersionKeys(map[string]config.DataModelVersion{
+			"v1": {}, "v1_1": {}, "v2": {},
+		})
+		Expect(err).NotTo(HaveOccurred())
+	})
+
+	It("rejects a key that parses to the same Version as another", func() {
+		err := v.ValidateVersionKeys(map[string]config.DataModelVersion{
+			"v1": {}, "v1_0": {},
+		})
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("v1"))
+		Expect(err.Error()).To(ContainSubstring("v1_0"))
+	})
+
+	It("rejects major zero", func() {
+		Expect(v.ValidateVersionKeys(map[string]config.DataModelVersion{"v0": {}})).To(HaveOccurred())
+		Expect(v.ValidateVersionKeys(map[string]config.DataModelVersion{"v0_0": {}})).To(HaveOccurred())
+	})
+
+	It("rejects a malformed key", func() {
+		Expect(v.ValidateVersionKeys(map[string]config.DataModelVersion{"v1_": {}})).To(HaveOccurred())
+	})
+})
+
+var _ = Describe("refModel version pattern", func() {
+	It("accepts a two-part refModel version", func() {
+		motorModel := config.DataModelVersion{
+			Structure: map[string]config.Field{
+				"rpm": {
+					PayloadShape: "timeseries-number",
+				},
+			},
+		}
+
+		pumpModel := config.DataModelVersion{
+			Structure: map[string]config.Field{
+				"motor": {
+					ModelRef: &config.ModelRef{
+						Name:    "motor",
+						Version: "v1_1",
+					},
+				},
+			},
+		}
+
+		allDataModels := map[string]config.DataModelsConfig{
+			"motor": {
+				Name: "motor",
+				Versions: map[string]config.DataModelVersion{
+					"v1_1": motorModel,
+				},
+			},
+			"pump": {
+				Name: "pump",
+				Versions: map[string]config.DataModelVersion{
+					"v1": pumpModel,
+				},
+			},
+		}
+
+		validator := datamodel.NewValidator()
+		err := validator.ValidateWithReferences(context.Background(), pumpModel, allDataModels, map[string]config.PayloadShape{
+			"timeseries-number": {
+				Fields: map[string]config.PayloadField{
+					"value": {Type: "number"},
+				},
+			},
+		})
+		Expect(err).ToNot(HaveOccurred())
 	})
 })

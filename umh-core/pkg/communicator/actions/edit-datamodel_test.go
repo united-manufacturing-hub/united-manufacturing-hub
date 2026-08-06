@@ -345,7 +345,7 @@ var _ = Describe("EditDataModelAction", func() {
 		})
 
 		Context("with invalid version format", func() {
-			It("should fail with version not matching v\\d+", func() {
+			It("should fail with a malformed version", func() {
 				payload := models.EditDataModelPayload{
 					Name: "test-model",
 					Structure: map[string]models.Field{
@@ -362,7 +362,7 @@ var _ = Describe("EditDataModelAction", func() {
 
 				err = action.Validate()
 				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("does not match pattern ^v\\d+$"))
+				Expect(err.Error()).To(ContainSubstring(`expected a form like "v1" or "v1_2"`))
 			})
 		})
 
@@ -488,7 +488,7 @@ var _ = Describe("EditDataModelAction", func() {
 				errorMsg := err.Error()
 				Expect(errorMsg).To(ContainSubstring("data model structure validation failed:"))
 				Expect(errorMsg).To(ContainSubstring("_refModel must have a version specified"))
-				Expect(errorMsg).To(ContainSubstring("does not match pattern ^v\\d+$"))
+				Expect(errorMsg).To(ContainSubstring(`expected a form like "v1" or "v1_2"`))
 				Expect(errorMsg).To(ContainSubstring("leaf nodes must contain _payloadshape"))
 				Expect(errorMsg).To(ContainSubstring("field cannot have both _payloadshape and _refModel"))
 			})

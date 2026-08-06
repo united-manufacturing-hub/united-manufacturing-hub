@@ -45,14 +45,11 @@ package datamodel
 import (
 	"context"
 	"fmt"
-	"regexp"
+	"sort"
 	"strings"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 )
-
-// Pre-compiled regex for version validation to avoid repeated compilation.
-var versionRegex = regexp.MustCompile(`^v\d+$`)
 
 // ensureDefaultPayloadShapes creates a copy of the payload shapes map with default payload shapes injected if not present.
 // This ensures that the three fundamental payload shapes (timeseries-number, timeseries-string, and timeseries-boolean) are always available.
@@ -321,21 +318,41 @@ func (v *Validator) validateRefModelFormat(modelRef *config.ModelRef, path strin
 			Path:    path,
 			Message: "_refModel must have a version specified",
 		})
-	} else {
-		// Validate version pattern ^v\d+$ using pre-compiled regex
-		if !versionRegex.MatchString(modelRef.Version) {
-			*errors = append(*errors, ValidationError{
-				Path:    path,
-				Message: fmt.Sprintf("version '%s' does not match pattern ^v\\d+$", modelRef.Version),
-			})
-		} else if modelRef.Version == "v0" {
-			// Check that version starts at v1, not v0
-			*errors = append(*errors, ValidationError{
-				Path:    path,
-				Message: "version must start at v1, v0 is not allowed",
-			})
-		}
+	} else if _, err := config.ParseVersion(modelRef.Version); err != nil {
+		*errors = append(*errors, ValidationError{
+			Path:    path,
+			Message: err.Error(),
+		})
 	}
+}
+
+// ValidateVersionKeys checks a data model's version map keys. Two keys that
+// parse to the same Version (for example "v1" and "v1_0") are ambiguous and
+// rejected, because callers key contracts and comparisons off the parsed value.
+func (v *Validator) ValidateVersionKeys(versions map[string]config.DataModelVersion) error {
+	seen := make(map[config.Version]string, len(versions))
+
+	keys := make([]string, 0, len(versions))
+	for key := range versions {
+		keys = append(keys, key)
+	}
+
+	sort.Strings(keys)
+
+	for _, key := range keys {
+		parsed, err := config.ParseVersion(key)
+		if err != nil {
+			return err
+		}
+
+		if other, exists := seen[parsed]; exists {
+			return fmt.Errorf("version keys %q and %q both mean %s: use one spelling", other, key, parsed)
+		}
+
+		seen[parsed] = key
+	}
+
+	return nil
 }
 
 // validateFieldCombinations validates invalid field combinations.
