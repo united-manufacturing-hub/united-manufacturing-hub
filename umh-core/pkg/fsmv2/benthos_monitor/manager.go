@@ -320,7 +320,8 @@ func init() {
 		NewDeps: func(_ deps.Identity, _ *deps.BaseDependencies) *benthosMonitorDeps {
 			return &benthosMonitorDeps{client: &http.Client{Timeout: monitorClientTimeout}}
 		},
-		Poll: Poll,
+		Poll:   Poll,
+		Health: health,
 	})
 }
 
@@ -358,11 +359,4 @@ func NewFsmv2BenthosMonitorManager(managerName string) *adapter.WorkerManager[co
 // classifies the healthy leaf.
 func mapFresh(_ config.BenthosMonitorConfig, _ simple.Status[BenthosMonitorStatus]) string {
 	return benthosmonitorfsm.OperationalStateActive
-}
-
-// mapObserved holds the place of the later mapping from a stored status to a
-// benthosmonitorfsm.BenthosMonitorObservedState; it returns an empty state
-// until the adapter path that consumes observed states is added.
-func mapObserved(_ config.BenthosMonitorConfig, _ simple.Status[BenthosMonitorStatus]) publicfsm.ObservedState {
-	return benthosmonitorfsm.BenthosMonitorObservedState{}
 }
