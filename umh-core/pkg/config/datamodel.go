@@ -138,6 +138,96 @@ func (m *FileConfigManagerWithBackoff) AtomicEditDataModel(ctx context.Context, 
 	return m.configManager.AtomicEditDataModel(ctx, name, dmVersion, description)
 }
 
+// DataContractNameFor builds the data contract name for a data model version.
+// The name always carries the version key, with no exception for minor 0,
+// because stream processors rebuild it from the model version and any
+// divergence yields a contract that exists nowhere.
+func DataContractNameFor(modelName, versionKey string) string {
+	return "_" + modelName + "_" + versionKey
+}
+
+// AtomicAddDataModelVersionWithContract appends a version to a data model and
+// creates the matching data contract in a single config write, then returns the
+// version key it wrote. Both land or neither does: the contract is the only way
+// to publish a version, and the next-version rule takes the highest minor plus
+// one, so a version written without its contract could never be published and
+// never be retried into place.
+func (m *FileConfigManager) AtomicAddDataModelVersionWithContract(
+	ctx context.Context, name string, dmVersion DataModelVersion, description string,
+) (string, error) {
+	err := m.mutexAtomicUpdate.Lock(ctx)
+	if err != nil {
+		return "", fmt.Errorf("failed to lock config file: %w", err)
+	}
+	defer m.mutexAtomicUpdate.Unlock()
+
+	config, err := m.GetConfig(ctx, 0)
+	if err != nil {
+		return "", fmt.Errorf("failed to get config: %w", err)
+	}
+
+	targetIndex := -1
+
+	for i, dmc := range config.DataModels {
+		if dmc.Name == name {
+			targetIndex = i
+
+			break
+		}
+	}
+
+	if targetIndex == -1 {
+		return "", fmt.Errorf("data model with name %q not found", name)
+	}
+
+	target := config.DataModels[targetIndex]
+
+	keys := make([]string, 0, len(target.Versions))
+	for versionKey := range target.Versions {
+		keys = append(keys, versionKey)
+	}
+
+	next, err := NextMinor(keys)
+	if err != nil {
+		return "", fmt.Errorf("failed to determine the next version of data model %q: %w", name, err)
+	}
+
+	versionKey := next.String()
+	contractName := DataContractNameFor(name, versionKey)
+
+	for _, dcc := range config.DataContracts {
+		if dcc.Name == contractName {
+			return "", fmt.Errorf("data contract %q already exists, so version %s cannot be added to data model %q", contractName, versionKey, name)
+		}
+	}
+
+	target.Versions[versionKey] = dmVersion
+	target.Description = description
+	config.DataModels[targetIndex] = target
+
+	config.DataContracts = append(config.DataContracts, DataContractsConfig{
+		Name:  contractName,
+		Model: &ModelRef{Name: name, Version: versionKey},
+	})
+
+	if err := m.writeConfig(ctx, config); err != nil {
+		return "", fmt.Errorf("failed to write config: %w", err)
+	}
+
+	return versionKey, nil
+}
+
+func (m *FileConfigManagerWithBackoff) AtomicAddDataModelVersionWithContract(
+	ctx context.Context, name string, dmVersion DataModelVersion, description string,
+) (string, error) {
+	// Check if context is already cancelled
+	if ctx.Err() != nil {
+		return "", ctx.Err()
+	}
+
+	return m.configManager.AtomicAddDataModelVersionWithContract(ctx, name, dmVersion, description)
+}
+
 func (m *FileConfigManager) AtomicDeleteDataModel(ctx context.Context, name string) error {
 	err := m.mutexAtomicUpdate.Lock(ctx)
 	if err != nil {

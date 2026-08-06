@@ -182,45 +182,12 @@ func (a *EditDataModelAction) Execute() (interface{}, map[string]interface{}, er
 		return nil, nil, fmt.Errorf("%s", errorMsg)
 	}
 
-	// Determine the version this edit will append, from the model's keys as they
-	// stand before the edit — the same keys AtomicEditDataModel itself will read.
-	currentConfig, err := a.configManager.GetConfig(a.ctx, 0)
-	if err != nil {
-		errorMsg := fmt.Sprintf("Failed to get config to determine the next version: %v", err)
-		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
-			errorMsg, a.outboundChannel, models.EditDataModel)
-
-		return nil, nil, fmt.Errorf("%s", errorMsg)
-	}
-
-	var existingKeys []string
-
-	for _, dmc := range currentConfig.DataModels {
-		if dmc.Name == a.payload.Name {
-			existingKeys = make([]string, 0, len(dmc.Versions))
-			for versionKey := range dmc.Versions {
-				existingKeys = append(existingKeys, versionKey)
-			}
-
-			break
-		}
-	}
-
-	nextVersion, err := config.NextMinor(existingKeys)
-	if err != nil {
-		errorMsg := fmt.Sprintf("Failed to edit data model: %v", err)
-		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
-			errorMsg, a.outboundChannel, models.EditDataModel)
-
-		return nil, nil, fmt.Errorf("%s", errorMsg)
-	}
-
-	versionStr := nextVersion.String()
-
 	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
 		"Adding new version to data model configuration...", a.outboundChannel, models.EditDataModel)
 
-	if err := a.configManager.AtomicEditDataModel(a.ctx, a.payload.Name, dmVersion, a.payload.Description); err != nil {
+	versionStr, err := a.configManager.AtomicAddDataModelVersionWithContract(
+		a.ctx, a.payload.Name, dmVersion, a.payload.Description)
+	if err != nil {
 		errorMsg := fmt.Sprintf("Failed to edit data model: %v", err)
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
 			errorMsg, a.outboundChannel, models.EditDataModel)
@@ -228,30 +195,11 @@ func (a *EditDataModelAction) Execute() (interface{}, map[string]interface{}, er
 		return nil, nil, fmt.Errorf("%s", errorMsg)
 	}
 
+	dataContractName := config.DataContractNameFor(a.payload.Name, versionStr)
+
+	a.actionLogger.Infof("Successfully created data contract %s for data model %s version %s", dataContractName, a.payload.Name, versionStr)
 	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
-		"Creating data contract for new data model version...", a.outboundChannel, models.EditDataModel)
-
-	// Automatically create a data contract for the new version of the data model
-	dataContractName := fmt.Sprintf("_%s_%s", a.payload.Name, versionStr) // Include version in contract name
-	dataContract := config.DataContractsConfig{
-		Name: dataContractName,
-		Model: &config.ModelRef{
-			Name:    a.payload.Name,
-			Version: versionStr,
-		},
-	}
-
-	dataContractErr := a.configManager.AtomicAddDataContract(a.ctx, dataContract)
-	if dataContractErr != nil {
-		// Log the error but don't fail the entire operation since the data model was successfully edited
-		a.actionLogger.Warnf("Failed to automatically create data contract for data model %s version %s: %v", a.payload.Name, versionStr, dataContractErr)
-		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
-			fmt.Sprintf("Data model edited successfully, but failed to create data contract: %v", dataContractErr), a.outboundChannel, models.EditDataModel)
-	} else {
-		a.actionLogger.Infof("Successfully created data contract %s for data model %s version %s", dataContractName, a.payload.Name, versionStr)
-		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
-			"Data contract created successfully", a.outboundChannel, models.EditDataModel)
-	}
+		"Data contract created successfully", a.outboundChannel, models.EditDataModel)
 
 	// Create response with the data model information
 	response := map[string]interface{}{
@@ -262,13 +210,6 @@ func (a *EditDataModelAction) Execute() (interface{}, map[string]interface{}, er
 		"dataContract": map[string]interface{}{
 			"name":  dataContractName,
 			"model": fmt.Sprintf("%s:%s", a.payload.Name, versionStr),
-			"status": func() string {
-				if dataContractErr != nil {
-					return "failed"
-				}
-
-				return "created"
-			}(),
 		},
 	}
 

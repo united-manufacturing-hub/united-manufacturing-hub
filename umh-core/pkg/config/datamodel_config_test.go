@@ -610,6 +610,179 @@ dataModels:
 		})
 	})
 
+	Describe("AtomicAddDataModelVersionWithContract", func() {
+		var (
+			validYAMLWithPumpV1 = `
+internal:
+  services:
+    - name: service1
+      desiredState: running
+agent:
+  metricsPort: 8080
+dataModels:
+  - name: pump
+    version:
+      v1:
+        structure:
+          field1:
+            _payloadshape: timeseries-string
+`
+			validYAMLWithPumpV1AndTakenContract = `
+internal:
+  services:
+    - name: service1
+      desiredState: running
+agent:
+  metricsPort: 8080
+dataModels:
+  - name: pump
+    version:
+      v1:
+        structure:
+          field1:
+            _payloadshape: timeseries-string
+dataContracts:
+  - name: _pump_v1_1
+    model:
+      name: pump
+      version: v1_1
+`
+			newVersion = DataModelVersion{
+				Structure: map[string]Field{
+					"field2": {
+						PayloadShape: "timeseries-string",
+					},
+				},
+			}
+		)
+
+		Context("when the write succeeds", func() {
+			var currentData []byte
+
+			BeforeEach(func() {
+				currentData = []byte(validYAMLWithPumpV1)
+
+				mockFS.WithEnsureDirectoryFunc(func(ctx context.Context, path string) error {
+					return nil
+				})
+
+				mockFS.WithFileExistsFunc(func(ctx context.Context, path string) (bool, error) {
+					return true, nil
+				})
+
+				mockFS.WithReadFileFunc(func(ctx context.Context, path string) ([]byte, error) {
+					return currentData, nil
+				})
+
+				mockFS.WithWriteFileFunc(func(ctx context.Context, path string, data []byte, perm os.FileMode) error {
+					currentData = data
+
+					return nil
+				})
+
+				mockFS.WithStatFunc(func(ctx context.Context, path string) (os.FileInfo, error) {
+					return mockFS.NewMockFileInfo("config.yaml", int64(len(currentData)), 0644, time.Now(), false), nil
+				})
+			})
+
+			It("writes the version and its contract in one config write (P16)", func() {
+				_, _ = configManager.GetConfig(ctx, 0) // get the config to trigger the background refresh
+				time.Sleep(100 * time.Millisecond)     // wait for the background refresh to finish
+
+				key, err := configManager.AtomicAddDataModelVersionWithContract(ctx, "pump", newVersion, "desc")
+				Expect(err).NotTo(HaveOccurred())
+				Expect(key).To(Equal("v1_1"))
+
+				// Verify the bytes actually written, rather than GetConfig, which
+				// can race a background refresh started by an earlier call and
+				// briefly return a stale cache.
+				Expect(currentData).NotTo(BeEmpty())
+
+				writtenConfig, err := ParseConfig(currentData, ctx, false)
+				Expect(err).NotTo(HaveOccurred())
+
+				Expect(writtenConfig.DataModels).To(HaveLen(1))
+				Expect(writtenConfig.DataModels[0].Versions).To(HaveKey("v1_1"))
+				Expect(writtenConfig.DataModels[0].Description).To(Equal("desc"))
+				Expect(writtenConfig.DataContracts).To(ContainElement(HaveField("Name", "_pump_v1_1")))
+			})
+		})
+
+		Context("when the write fails", func() {
+			var currentData []byte
+
+			BeforeEach(func() {
+				currentData = []byte(validYAMLWithPumpV1)
+
+				mockFS.WithEnsureDirectoryFunc(func(ctx context.Context, path string) error {
+					return nil
+				})
+
+				mockFS.WithFileExistsFunc(func(ctx context.Context, path string) (bool, error) {
+					return true, nil
+				})
+
+				mockFS.WithReadFileFunc(func(ctx context.Context, path string) ([]byte, error) {
+					return currentData, nil
+				})
+
+				mockFS.WithStatFunc(func(ctx context.Context, path string) (os.FileInfo, error) {
+					return mockFS.NewMockFileInfo("config.yaml", int64(len(currentData)), 0644, time.Now(), false), nil
+				})
+			})
+
+			It("leaves neither the version nor a contract behind when the write fails (P16)", func() {
+				_, _ = configManager.GetConfig(ctx, 0) // get the config to trigger the background refresh
+				time.Sleep(100 * time.Millisecond)     // wait for the background refresh to finish
+
+				// Only now start failing writes, so the data model above was
+				// already readable through the primed cache.
+				mockFS.WithWriteFileFunc(func(ctx context.Context, path string, data []byte, perm os.FileMode) error {
+					return errors.New("mock write failure")
+				})
+
+				_, err := configManager.AtomicAddDataModelVersionWithContract(ctx, "pump", newVersion, "desc")
+				Expect(err).To(HaveOccurred())
+
+				cfg, err := configManager.GetConfig(ctx, 0)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(cfg.DataModels[0].Versions).NotTo(HaveKey("v1_1"))
+				Expect(cfg.DataContracts).NotTo(ContainElement(HaveField("Name", "_pump_v1_1")))
+			})
+		})
+
+		Context("when the contract name is already taken", func() {
+			BeforeEach(func() {
+				mockFS.WithEnsureDirectoryFunc(func(ctx context.Context, path string) error {
+					return nil
+				})
+
+				mockFS.WithFileExistsFunc(func(ctx context.Context, path string) (bool, error) {
+					return true, nil
+				})
+
+				mockFS.WithReadFileFunc(func(ctx context.Context, path string) ([]byte, error) {
+					return []byte(validYAMLWithPumpV1AndTakenContract), nil
+				})
+			})
+
+			It("refuses and leaves the version map unchanged", func() {
+				_, _ = configManager.GetConfig(ctx, 0) // get the config to trigger the background refresh
+				time.Sleep(100 * time.Millisecond)     // wait for the background refresh to finish
+
+				_, err := configManager.AtomicAddDataModelVersionWithContract(ctx, "pump", newVersion, "desc")
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("data contract \"_pump_v1_1\" already exists"))
+
+				cfg, err := configManager.GetConfig(ctx, 0)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(cfg.DataModels[0].Versions).To(HaveLen(1))
+				Expect(cfg.DataModels[0].Versions).To(HaveKey("v1"))
+				Expect(cfg.DataModels[0].Versions).NotTo(HaveKey("v1_1"))
+			})
+		})
+	})
+
 	Describe("AtomicDeleteDataModel", func() {
 		var (
 			validYAMLWithMultipleDataModels = `

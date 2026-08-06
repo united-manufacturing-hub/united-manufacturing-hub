@@ -575,7 +575,7 @@ var _ = Describe("EditDataModelAction", func() {
 				Expect(responseMap["structure"]).ToNot(BeNil())
 
 				// Verify config manager was called
-				Expect(mockConfigMgr.AtomicEditDataModelCalled).To(BeTrue())
+				Expect(mockConfigMgr.AtomicAddDataModelVersionWithContractCalled).To(BeTrue())
 			})
 
 		})
@@ -594,7 +594,7 @@ var _ = Describe("EditDataModelAction", func() {
 				Expect(err).ToNot(HaveOccurred())
 
 				// Configure mock to return error
-				mockConfigMgr.WithAtomicEditDataModelError(errors.New("mock edit error"))
+				mockConfigMgr.WithAtomicAddDataModelVersionWithContractError(errors.New("mock edit error"))
 			})
 
 			It("should return error", func() {
@@ -606,7 +606,7 @@ var _ = Describe("EditDataModelAction", func() {
 				Expect(metadata).To(BeNil())
 
 				// Verify config manager was called
-				Expect(mockConfigMgr.AtomicEditDataModelCalled).To(BeTrue())
+				Expect(mockConfigMgr.AtomicAddDataModelVersionWithContractCalled).To(BeTrue())
 			})
 		})
 	})
@@ -737,7 +737,7 @@ var _ = Describe("EditDataModelAction", func() {
 			Expect(metadata).To(BeNil())
 
 			// Verify config manager was called
-			Expect(mockConfigMgr.AtomicEditDataModelCalled).To(BeTrue())
+			Expect(mockConfigMgr.AtomicAddDataModelVersionWithContractCalled).To(BeTrue())
 		})
 	})
 })

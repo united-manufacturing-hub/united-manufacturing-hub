@@ -34,28 +34,29 @@ import (
 
 // MockConfigManager is a mock implementation of ConfigManager for testing.
 type MockConfigManager struct {
-	CacheModTime                       time.Time
-	ConfigError                        error
-	AddDataflowcomponentError          error
-	DeleteDataflowcomponentError       error
-	EditDataflowcomponentError         error
-	AtomicAddProtocolConverterError    error
-	AtomicEditProtocolConverterError   error
-	AtomicDeleteProtocolConverterError error
-	AtomicAddStreamProcessorError      error
-	AtomicEditStreamProcessorError     error
-	AtomicDeleteStreamProcessorError   error
-	AtomicAddDataModelError            error
-	AtomicEditDataModelError           error
-	AtomicDeleteDataModelError         error
-	AtomicAddDataContractError         error
-	AtomicSetHistorianError            error
-	AtomicEditHistorianError           error
-	AtomicDeleteHistorianError         error
-	GetConfigAsStringError             error
-	MockFileSystem                     *filesystem.MockFileSystem
-	logger                             *zap.SugaredLogger
-	ConfigAsString                     string
+	CacheModTime                               time.Time
+	ConfigError                                error
+	AddDataflowcomponentError                  error
+	DeleteDataflowcomponentError               error
+	EditDataflowcomponentError                 error
+	AtomicAddProtocolConverterError            error
+	AtomicEditProtocolConverterError           error
+	AtomicDeleteProtocolConverterError         error
+	AtomicAddStreamProcessorError              error
+	AtomicEditStreamProcessorError             error
+	AtomicDeleteStreamProcessorError           error
+	AtomicAddDataModelError                    error
+	AtomicEditDataModelError                   error
+	AtomicAddDataModelVersionWithContractError error
+	AtomicDeleteDataModelError                 error
+	AtomicAddDataContractError                 error
+	AtomicSetHistorianError                    error
+	AtomicEditHistorianError                   error
+	AtomicDeleteHistorianError                 error
+	GetConfigAsStringError                     error
+	MockFileSystem                             *filesystem.MockFileSystem
+	logger                                     *zap.SugaredLogger
+	ConfigAsString                             string
 
 	// AtomicEditProtocolConverterLastConfig records the config passed to the
 	// most recent AtomicEditProtocolConverter call. It is captured before the
@@ -82,24 +83,25 @@ type MockConfigManager struct {
 	// AtomicEditProtocolConverterLastUUID records the component UUID passed to
 	// the most recent AtomicEditProtocolConverter call. It is captured before the
 	// failure-injection check, so it reflects the arguments of a failed call too.
-	AtomicEditProtocolConverterLastUUID uuid.UUID
-	AddDataflowcomponentCalled          bool
-	DeleteDataflowcomponentCalled       bool
-	EditDataflowcomponentCalled         bool
-	AtomicAddProtocolConverterCalled    bool
-	AtomicEditProtocolConverterCalled   bool
-	AtomicDeleteProtocolConverterCalled bool
-	AtomicAddStreamProcessorCalled      bool
-	AtomicEditStreamProcessorCalled     bool
-	AtomicDeleteStreamProcessorCalled   bool
-	AtomicAddDataModelCalled            bool
-	AtomicEditDataModelCalled           bool
-	AtomicDeleteDataModelCalled         bool
-	AtomicAddDataContractCalled         bool
-	AtomicSetHistorianCalled            bool
-	AtomicEditHistorianCalled           bool
-	AtomicDeleteHistorianCalled         bool
-	GetConfigAsStringCalled             bool
+	AtomicEditProtocolConverterLastUUID         uuid.UUID
+	AddDataflowcomponentCalled                  bool
+	DeleteDataflowcomponentCalled               bool
+	EditDataflowcomponentCalled                 bool
+	AtomicAddProtocolConverterCalled            bool
+	AtomicEditProtocolConverterCalled           bool
+	AtomicDeleteProtocolConverterCalled         bool
+	AtomicAddStreamProcessorCalled              bool
+	AtomicEditStreamProcessorCalled             bool
+	AtomicDeleteStreamProcessorCalled           bool
+	AtomicAddDataModelCalled                    bool
+	AtomicEditDataModelCalled                   bool
+	AtomicAddDataModelVersionWithContractCalled bool
+	AtomicDeleteDataModelCalled                 bool
+	AtomicAddDataContractCalled                 bool
+	AtomicSetHistorianCalled                    bool
+	AtomicEditHistorianCalled                   bool
+	AtomicDeleteHistorianCalled                 bool
+	GetConfigAsStringCalled                     bool
 }
 
 // NewMockConfigManager creates a new MockConfigManager instance.
@@ -344,6 +346,17 @@ func (m *MockConfigManager) WithAtomicEditDataModelError(err error) *MockConfigM
 	return m
 }
 
+// WithAtomicAddDataModelVersionWithContractError configures the mock to return the
+// given error when AtomicAddDataModelVersionWithContract is called.
+func (m *MockConfigManager) WithAtomicAddDataModelVersionWithContractError(err error) *MockConfigManager {
+	m.mutexReadAndWrite.Lock()
+	defer m.mutexReadAndWrite.Unlock()
+
+	m.AtomicAddDataModelVersionWithContractError = err
+
+	return m
+}
+
 // WithAtomicDeleteDataModelError configures the mock to return the given error when AtomicDeleteDataModel is called.
 func (m *MockConfigManager) WithAtomicDeleteDataModelError(err error) *MockConfigManager {
 	m.mutexReadAndWrite.Lock()
@@ -412,6 +425,7 @@ func (m *MockConfigManager) ResetCalls() {
 	m.AtomicDeleteStreamProcessorCalled = false
 	m.AtomicAddDataModelCalled = false
 	m.AtomicEditDataModelCalled = false
+	m.AtomicAddDataModelVersionWithContractCalled = false
 	m.AtomicDeleteDataModelCalled = false
 	m.AtomicAddDataContractCalled = false
 	m.AtomicSetHistorianCalled = false
@@ -1127,6 +1141,75 @@ func (m *MockConfigManager) AtomicEditDataModel(ctx context.Context, name string
 	}
 
 	return nil
+}
+
+// AtomicAddDataModelVersionWithContract implements the ConfigManager interface.
+func (m *MockConfigManager) AtomicAddDataModelVersionWithContract(
+	ctx context.Context, name string, dmVersion DataModelVersion, description string,
+) (string, error) {
+	m.mutexReadAndWrite.Lock()
+	defer m.mutexReadAndWrite.Unlock()
+
+	m.AtomicAddDataModelVersionWithContractCalled = true
+
+	if m.AtomicAddDataModelVersionWithContractError != nil {
+		return "", m.AtomicAddDataModelVersionWithContractError
+	}
+
+	config, err := m.getConfigInternal(ctx, 0)
+	if err != nil {
+		return "", fmt.Errorf("failed to get config: %w", err)
+	}
+
+	targetIndex := -1
+
+	for i, dmc := range config.DataModels {
+		if dmc.Name == name {
+			targetIndex = i
+
+			break
+		}
+	}
+
+	if targetIndex == -1 {
+		return "", fmt.Errorf("data model with name %q not found", name)
+	}
+
+	target := config.DataModels[targetIndex]
+
+	keys := make([]string, 0, len(target.Versions))
+	for versionKey := range target.Versions {
+		keys = append(keys, versionKey)
+	}
+
+	next, err := NextMinor(keys)
+	if err != nil {
+		return "", fmt.Errorf("failed to determine the next version of data model %q: %w", name, err)
+	}
+
+	versionKey := next.String()
+	contractName := DataContractNameFor(name, versionKey)
+
+	for _, dcc := range config.DataContracts {
+		if dcc.Name == contractName {
+			return "", fmt.Errorf("data contract %q already exists, so version %s cannot be added to data model %q", contractName, versionKey, name)
+		}
+	}
+
+	target.Versions[versionKey] = dmVersion
+	target.Description = description
+	config.DataModels[targetIndex] = target
+
+	config.DataContracts = append(config.DataContracts, DataContractsConfig{
+		Name:  contractName,
+		Model: &ModelRef{Name: name, Version: versionKey},
+	})
+
+	if err := m.writeConfig(ctx, config); err != nil {
+		return "", fmt.Errorf("failed to write config: %w", err)
+	}
+
+	return versionKey, nil
 }
 
 // AtomicDeleteDataModel implements the ConfigManager interface.
