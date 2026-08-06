@@ -19,9 +19,10 @@ import (
 	"fmt"
 )
 
-// AtomicAddDataModel adds a new data model to the config
-// the data model is added with the given name and version
-// the version is appended to the data model and the config is written back to the file.
+// AtomicAddDataModel creates a new data model and its v1_0 data contract in a
+// single config write, under one lock. Both land or neither does: the
+// contract is the only way to publish a version, so a model written without
+// one would be unusable while reported to the caller as a success.
 func (m *FileConfigManager) AtomicAddDataModel(ctx context.Context, name string, dmVersion DataModelVersion, description string) error {
 	err := m.mutexAtomicUpdate.Lock(ctx)
 	if err != nil {
@@ -42,13 +43,27 @@ func (m *FileConfigManager) AtomicAddDataModel(ctx context.Context, name string,
 		}
 	}
 
+	versionKey := Version{Major: 1, Minor: 0}.String()
+	contractName := DataContractNameFor(name, versionKey)
+
+	for _, dcc := range config.DataContracts {
+		if dcc.Name == contractName {
+			return fmt.Errorf("data contract %q already exists, so data model %q cannot be added", contractName, name)
+		}
+	}
+
 	// add the data model to the config
 	config.DataModels = append(config.DataModels, DataModelsConfig{
 		Name:        name,
 		Description: description,
 		Versions: map[string]DataModelVersion{
-			Version{Major: 1, Minor: 0}.String(): dmVersion,
+			versionKey: dmVersion,
 		},
+	})
+
+	config.DataContracts = append(config.DataContracts, DataContractsConfig{
+		Name:  contractName,
+		Model: &ModelRef{Name: name, Version: versionKey},
 	})
 
 	// write the config back to the file

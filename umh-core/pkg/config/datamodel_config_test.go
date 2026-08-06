@@ -271,6 +271,61 @@ dataModels:
 				Expect(writtenConfig.DataModels).To(HaveLen(1))
 				Expect(writtenConfig.DataModels[0].Name).To(Equal("temperature"))
 				Expect(writtenConfig.DataModels[0].Versions).To(HaveKey("v1_0"))
+				Expect(writtenConfig.DataContracts).To(ContainElement(SatisfyAll(
+					HaveField("Name", "_temperature_v1_0"),
+					HaveField("Model.Name", "temperature"),
+					HaveField("Model.Version", "v1_0"),
+				)))
+			})
+		})
+
+		Context("when adding a data model whose v1_0 contract name is already taken", func() {
+			BeforeEach(func() {
+				mockFS.WithEnsureDirectoryFunc(func(ctx context.Context, path string) error {
+					return nil
+				})
+
+				mockFS.WithFileExistsFunc(func(ctx context.Context, path string) (bool, error) {
+					return true, nil
+				})
+
+				mockFS.WithReadFileFunc(func(ctx context.Context, path string) ([]byte, error) {
+					return []byte(`
+internal:
+  services:
+    - name: service1
+      desiredState: running
+agent:
+  metricsPort: 8080
+dataContracts:
+  - name: _temperature_v1_0
+    model:
+      name: temperature
+      version: v1_0
+`), nil
+				})
+			})
+
+			It("refuses and adds neither the data model nor a second contract", func() {
+				dmVersion := DataModelVersion{
+					Structure: map[string]Field{
+						"field": {
+							PayloadShape: "timeseries-string",
+						},
+					},
+				}
+
+				_, _ = configManager.GetConfig(ctx, 0) // get the config to trigger the background refresh
+				time.Sleep(100 * time.Millisecond)     // wait for the background refresh to finish
+
+				err := configManager.AtomicAddDataModel(ctx, "temperature", dmVersion, "test description")
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("data contract \"_temperature_v1_0\" already exists"))
+
+				cfg, err := configManager.GetConfig(ctx, 0)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(cfg.DataModels).To(BeEmpty())
+				Expect(cfg.DataContracts).To(HaveLen(1))
 			})
 		})
 

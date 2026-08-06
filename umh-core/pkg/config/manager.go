@@ -91,7 +91,10 @@ type ConfigManager interface {
 	AtomicEditStreamProcessor(ctx context.Context, sp StreamProcessorConfig) (StreamProcessorConfig, error)
 	// AtomicDeleteStreamProcessor deletes a stream processor from the config atomically
 	AtomicDeleteStreamProcessor(ctx context.Context, name string) error
-	// AtomicAddDataModel adds a data model to the config atomically
+	// AtomicAddDataModel creates a new data model and its v1_0 data contract in
+	// a single config write. Both land or neither does: the contract is the
+	// only way to publish a version, so a model written without one would be
+	// unusable.
 	AtomicAddDataModel(ctx context.Context, name string, dmVersion DataModelVersion, description string) error
 	// AtomicEditDataModel edits (append-only) a data model by adding a new version
 	AtomicEditDataModel(ctx context.Context, name string, dmVersion DataModelVersion, description string) error

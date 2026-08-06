@@ -1066,13 +1066,27 @@ func (m *MockConfigManager) AtomicAddDataModel(ctx context.Context, name string,
 		}
 	}
 
+	versionKey := Version{Major: 1, Minor: 0}.String()
+	contractName := DataContractNameFor(name, versionKey)
+
+	for _, dcc := range config.DataContracts {
+		if dcc.Name == contractName {
+			return fmt.Errorf("data contract %q already exists, so data model %q cannot be added", contractName, name)
+		}
+	}
+
 	// add the data model to the config
 	config.DataModels = append(config.DataModels, DataModelsConfig{
 		Name:        name,
 		Description: description,
 		Versions: map[string]DataModelVersion{
-			Version{Major: 1, Minor: 0}.String(): dmVersion,
+			versionKey: dmVersion,
 		},
+	})
+
+	config.DataContracts = append(config.DataContracts, DataContractsConfig{
+		Name:  contractName,
+		Model: &ModelRef{Name: name, Version: versionKey},
 	})
 
 	// write the config
