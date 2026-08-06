@@ -17,6 +17,8 @@ package datamodel
 import (
 	"context"
 	"fmt"
+	"sort"
+	"strings"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 )
@@ -111,4 +113,106 @@ func payloadFieldsEqual(a, b map[string]config.PayloadField) bool {
 	}
 
 	return true
+}
+
+// BreakingKind is why a change is not additive.
+type BreakingKind int
+
+const (
+	// Removed means a tag path present in the previous version is gone.
+	Removed BreakingKind = iota
+	// Retyped means a tag path survived but its payload shape changed.
+	Retyped
+)
+
+// BreakingChange is one reason a candidate version is not additive.
+type BreakingChange struct {
+	Path     string
+	OldShape string
+	NewShape string
+	Kind     BreakingKind
+}
+
+// CheckAdditive reports every way in which next fails to be a purely additive
+// successor of prev. An empty result means every tag in prev survives in next
+// with the same resolved payload shape, which is what the Historian's fixed
+// column types depend on.
+func CheckAdditive(
+	ctx context.Context,
+	prev, next config.DataModelVersion,
+	allModels map[string]config.DataModelsConfig,
+	payloadShapes map[string]config.PayloadShape,
+) ([]BreakingChange, error) {
+	prevTags, err := flattenResolved(ctx, prev, allModels, payloadShapes)
+	if err != nil {
+		return nil, fmt.Errorf("cannot read the previous version: %w", err)
+	}
+
+	nextTags, err := flattenResolved(ctx, next, allModels, payloadShapes)
+	if err != nil {
+		return nil, fmt.Errorf("cannot read the candidate version: %w", err)
+	}
+
+	paths := make([]string, 0, len(prevTags))
+	for path := range prevTags {
+		paths = append(paths, path)
+	}
+
+	sort.Strings(paths)
+
+	changes := make([]BreakingChange, 0)
+
+	for _, path := range paths {
+		before := prevTags[path]
+
+		after, survives := nextTags[path]
+		if !survives {
+			changes = append(changes, BreakingChange{
+				Path:     path,
+				Kind:     Removed,
+				OldShape: before.ShapeName,
+			})
+
+			continue
+		}
+
+		if !shapesEqual(before.Shape, after.Shape) {
+			changes = append(changes, BreakingChange{
+				Path:     path,
+				Kind:     Retyped,
+				OldShape: before.ShapeName,
+				NewShape: after.ShapeName,
+			})
+		}
+	}
+
+	return changes, nil
+}
+
+// FormatBreakingChanges renders a refusal that names the rule and says the
+// escape hatch does not exist, so the reader does not go looking for one.
+func FormatBreakingChanges(modelName, versionKey string, changes []BreakingChange) string {
+	var b strings.Builder
+
+	fmt.Fprintf(&b, "cannot add version %s to data model %q: %d breaking change", versionKey, modelName, len(changes))
+
+	if len(changes) != 1 {
+		b.WriteString("s")
+	}
+
+	b.WriteString("\n\n")
+
+	for _, change := range changes {
+		switch change.Kind {
+		case Removed:
+			fmt.Fprintf(&b, "  %s  removed (was %s)\n", change.Path, change.OldShape)
+		case Retyped:
+			fmt.Fprintf(&b, "  %s  payload shape changed: %s -> %s\n", change.Path, change.OldShape, change.NewShape)
+		}
+	}
+
+	b.WriteString("\nA new minor version may only add tags. Changing or removing an existing tag\n")
+	b.WriteString("requires a new major version, which is not supported yet.")
+
+	return b.String()
 }
