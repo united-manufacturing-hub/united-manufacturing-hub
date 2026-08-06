@@ -96,8 +96,6 @@ type ConfigManager interface {
 	// only way to publish a version, so a model written without one would be
 	// unusable.
 	AtomicAddDataModel(ctx context.Context, name string, dmVersion DataModelVersion, description string) error
-	// AtomicEditDataModel edits (append-only) a data model by adding a new version
-	AtomicEditDataModel(ctx context.Context, name string, dmVersion DataModelVersion, description string) error
 	// AtomicAddDataModelVersionWithContract appends a version to a data model and
 	// creates its data contract in a single config write, returning the version key
 	// it wrote. This is the only way to add a version to an existing data model,

@@ -46,7 +46,6 @@ type MockConfigManager struct {
 	AtomicEditStreamProcessorError             error
 	AtomicDeleteStreamProcessorError           error
 	AtomicAddDataModelError                    error
-	AtomicEditDataModelError                   error
 	AtomicAddDataModelVersionWithContractError error
 	AtomicDeleteDataModelError                 error
 	AtomicAddDataContractError                 error
@@ -94,7 +93,6 @@ type MockConfigManager struct {
 	AtomicEditStreamProcessorCalled             bool
 	AtomicDeleteStreamProcessorCalled           bool
 	AtomicAddDataModelCalled                    bool
-	AtomicEditDataModelCalled                   bool
 	AtomicAddDataModelVersionWithContractCalled bool
 	AtomicDeleteDataModelCalled                 bool
 	AtomicAddDataContractCalled                 bool
@@ -336,16 +334,6 @@ func (m *MockConfigManager) WithAtomicAddDataModelError(err error) *MockConfigMa
 	return m
 }
 
-// WithAtomicEditDataModelError configures the mock to return the given error when AtomicEditDataModel is called.
-func (m *MockConfigManager) WithAtomicEditDataModelError(err error) *MockConfigManager {
-	m.mutexReadAndWrite.Lock()
-	defer m.mutexReadAndWrite.Unlock()
-
-	m.AtomicEditDataModelError = err
-
-	return m
-}
-
 // WithAtomicAddDataModelVersionWithContractError configures the mock to return the
 // given error when AtomicAddDataModelVersionWithContract is called.
 func (m *MockConfigManager) WithAtomicAddDataModelVersionWithContractError(err error) *MockConfigManager {
@@ -424,7 +412,6 @@ func (m *MockConfigManager) ResetCalls() {
 	m.AtomicEditStreamProcessorCalled = false
 	m.AtomicDeleteStreamProcessorCalled = false
 	m.AtomicAddDataModelCalled = false
-	m.AtomicEditDataModelCalled = false
 	m.AtomicAddDataModelVersionWithContractCalled = false
 	m.AtomicDeleteDataModelCalled = false
 	m.AtomicAddDataContractCalled = false
@@ -1088,66 +1075,6 @@ func (m *MockConfigManager) AtomicAddDataModel(ctx context.Context, name string,
 		Name:  contractName,
 		Model: &ModelRef{Name: name, Version: versionKey},
 	})
-
-	// write the config
-	if err := m.writeConfig(ctx, config); err != nil {
-		return fmt.Errorf("failed to write config: %w", err)
-	}
-
-	return nil
-}
-
-// AtomicEditDataModel implements the ConfigManager interface.
-func (m *MockConfigManager) AtomicEditDataModel(ctx context.Context, name string, dmVersion DataModelVersion, description string) error {
-	m.mutexReadAndWrite.Lock()
-	defer m.mutexReadAndWrite.Unlock()
-
-	m.AtomicEditDataModelCalled = true
-
-	if m.AtomicEditDataModelError != nil {
-		return m.AtomicEditDataModelError
-	}
-
-	// get the current config
-	config, err := m.getConfigInternal(ctx, 0)
-	if err != nil {
-		return fmt.Errorf("failed to get config: %w", err)
-	}
-
-	targetIndex := -1
-	// find the data model to edit
-	for i, dmc := range config.DataModels {
-		if dmc.Name == name {
-			targetIndex = i
-
-			break
-		}
-	}
-
-	if targetIndex == -1 {
-		return fmt.Errorf("data model with name %q not found", name)
-	}
-
-	// get the current data model
-	currentDataModel := config.DataModels[targetIndex]
-
-	keys := make([]string, 0, len(currentDataModel.Versions))
-	for versionKey := range currentDataModel.Versions {
-		keys = append(keys, versionKey)
-	}
-
-	next, err := NextMinor(keys)
-	if err != nil {
-		return fmt.Errorf("failed to determine the next version of data model %q: %w", name, err)
-	}
-
-	currentDataModel.Versions[next.String()] = dmVersion
-
-	// update the description
-	currentDataModel.Description = description
-
-	// edit the data model in the config
-	config.DataModels[targetIndex] = currentDataModel
 
 	// write the config
 	if err := m.writeConfig(ctx, config); err != nil {
