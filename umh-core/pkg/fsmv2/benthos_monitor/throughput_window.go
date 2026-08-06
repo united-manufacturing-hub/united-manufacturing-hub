@@ -37,18 +37,29 @@ type throughputSample struct {
 // newest sample. Its zero value is a valid empty window: every method is safe on
 // an empty window, so no constructor is needed and a nil window cannot be built.
 type throughputWindow struct {
+	// port is the scrape port this window's samples belong to. Add full-wipes
+	// on a port change (a new endpoint is a new counter series), so the window
+	// never delta-ticks across two different benthos monitors. Zero means no
+	// sample has been recorded yet.
+	port    int
 	samples []throughputSample
 }
 
-// Add records a sample at the given observed time with the given input and
-// output counter values, then drops any sample older than windowSpan of the
-// newest. Production samples arrive in time order (so the aged prefix is
-// normally all that is removed), but the scan also drops an out-of-order aged
-// sample, keeping the window bounded to the span regardless of arrival order.
-func (w *throughputWindow) Add(at time.Time, input, output int) {
-	if n := len(w.samples); n > 0 && wipeOnRestart(at, input, output, w.newest()) {
+// Add records a sample at the given observed time with the given port and input
+// and output counter values, then drops any sample older than windowSpan of the
+// newest. The window keys on the scrape port: a different port from the previous
+// poll is a new counter series (the child was re-pointed at a different endpoint)
+// and full-wipes the window. A restart of the same benthos zeroes the monotonic
+// input_received counter, so a drop against the immediately preceding sample
+// also full-wipes (D5a's counter-reset detector is the input counter only).
+// Production samples arrive in time order (so the aged prefix is normally all
+// that is removed), but the scan also drops an out-of-order aged sample, keeping
+// the window bounded to the span regardless of arrival order.
+func (w *throughputWindow) Add(at time.Time, port, input, output int) {
+	if n := len(w.samples); n > 0 && (port != w.port || wipeOnRestart(at, input, w.newest())) {
 		w.samples = w.samples[:0]
 	}
+	w.port = port
 	w.samples = append(w.samples, throughputSample{at: at, input: input, output: output})
 	if len(w.samples) < 2 {
 		return
@@ -65,6 +76,19 @@ func (w *throughputWindow) Add(at time.Time, input, output int) {
 	w.samples = kept
 }
 
+// wipeOnRestart reports whether the process restarted between prev and the new
+// sample at at, as seen through benthos' monotonic input_received counter. That
+// counter resets to 0 on a process restart, so a drop against the immediately
+// preceding sample (D5a's counter-reset detector, input-only) is the signal that
+// the old by-time series ended and must be wiped. It deliberately does not also
+// require the output counter to drop: a restart where output was already ~0
+// (e.g. a backed-up broker) would otherwise never wipe and would keep a stale
+// pre-restart baseline in the window. A non-newer sample (an aged, out-of-order
+// arrival) is a pruning case, not a restart, so it is skipped.
+func wipeOnRestart(at time.Time, input int, prev throughputSample) bool {
+	return at.After(prev.at) && input < prev.input
+}
+
 // newest returns the sample with the latest observed time. It returns the zero
 // sample when the window is empty, so it never panics on an un-populated window.
 func (w *throughputWindow) newest() throughputSample {
@@ -78,20 +102,6 @@ func (w *throughputWindow) newest() throughputSample {
 		}
 	}
 	return newest
-}
-
-// wipeOnRestart reports whether the process restarted between prev and the new
-// sample at at, zeroing both Prometheus counters. A restart stays resident inside
-// windowSpan, so a drop in both counters against the immediately preceding newest
-// sample is the signal that the old by-time series ended and must be wiped.
-// A drop in only ONE counter (a config reload that removes one aggregate, or a
-// transient scrape gap) is not a restart and must not wipe either direction.
-// A non-newer sample (an aged, out-of-order arrival) is a pruning case, not a
-// restart, so it is skipped. A restart where one counter was already zero is not
-// caught here (that counter does not decrease); the rate methods' newest-vs-oldest
-// guards then clamp the residual window rather than wipe.
-func wipeOnRestart(at time.Time, input, output int, prev throughputSample) bool {
-	return at.After(prev.at) && input < prev.input && output < prev.output
 }
 
 // inputRate returns the input rate in messages per second over the in-window

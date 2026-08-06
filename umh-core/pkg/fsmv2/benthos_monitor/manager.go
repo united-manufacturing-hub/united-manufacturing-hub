@@ -158,9 +158,11 @@ func Poll(ctx context.Context, d *benthosMonitorDeps, cfg config.BenthosMonitorC
 
 	// Feed this poll's counter snapshot into the by-time window and read back the
 	// real-time rates. The window lives in the deps and survives across polls
-	// (D5); a nil deps falls back to a one-off window whose rate is always 0.
+	// (D5); a nil deps falls back to a one-off window whose rate is always 0. The
+	// window is keyed to the scrape port so an in-place port change (no worker
+	// restart, D5a) wipes the old series instead of delta-ticking across it.
 	if d != nil {
-		d.window.Add(status.ScrapedAt, m.InputReceived, m.OutputSent)
+		d.window.Add(status.ScrapedAt, int(cfg.MetricsPort), m.InputReceived, m.OutputSent)
 		status.Input = ComponentThroughput{
 			MessagesPerSecond: d.window.inputRate(),
 			LastCount:         d.window.inputCount(),

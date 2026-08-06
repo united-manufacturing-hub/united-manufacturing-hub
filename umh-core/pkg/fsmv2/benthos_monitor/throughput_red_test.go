@@ -50,7 +50,7 @@ func TestThroughputWindowIsTimeBased(t *testing.T) {
 	// (b) single sample: MessagesPerSecond must be 0 (and, by extension,
 	// IsActive false), not the cumulative counter-as-rate FSMv1 publishes on its
 	// first/reset tick.
-	deps.window.Add(t0, 10, 5)
+	deps.window.Add(t0, 4195, 10, 5)
 	if inRate := deps.window.inputRate(); inRate != 0 {
 		t.Errorf("single-sample window: Input MessagesPerSecond = %v, want 0 (one sample cannot compute a rate)", inRate)
 	}
@@ -60,7 +60,7 @@ func TestThroughputWindowIsTimeBased(t *testing.T) {
 
 	// (a) second sample exactly 1s later, input +2, output +1: real rate in
 	// seconds ~2.0 input / ~1.0 output.
-	deps.window.Add(t0.Add(1*time.Second), 12, 6)
+	deps.window.Add(t0.Add(1*time.Second), 4195, 12, 6)
 	if inRate := deps.window.inputRate(); inRate < 1.5 || inRate > 2.5 {
 		t.Errorf("1s-apart +2 input: Input MessagesPerSecond = %v, want ~2.0 (within tolerance)", inRate)
 	}
@@ -78,7 +78,7 @@ func TestThroughputWindowIsTimeBased(t *testing.T) {
 	// and must be dropped: the rate must be unchanged. This is the by-time
 	// discriminator — a count-based window of 3 entries would include the aged
 	// sample and change the rate.
-	deps.window.Add(t0.Add(-61*time.Second), 5, 5)
+	deps.window.Add(t0.Add(-61*time.Second), 4195, 5, 5)
 	if inRate2 := deps.window.inputRate(); inRate2 < 1.5 || inRate2 > 2.5 {
 		t.Errorf("after adding a 61s-old sample: Input MessagesPerSecond = %v, want ~2.0 (an aged sample must be dropped)", inRate2)
 	}
@@ -91,9 +91,9 @@ func TestThroughputWindowIsTimeBased(t *testing.T) {
 	// t0..t0+60s (oldest in-window to newest), so the rate is the real-time delta
 	// 90/60 = 1.5/s — not a two-newest count-window rate of 60/30 = 2/s.
 	gap := &benthosMonitorDeps{}
-	gap.window.Add(t0, 0, 0)
-	gap.window.Add(t0.Add(30*time.Second), 30, 30)
-	gap.window.Add(t0.Add(60*time.Second), 90, 90)
+	gap.window.Add(t0, 4195, 0, 0)
+	gap.window.Add(t0.Add(30*time.Second), 4195, 30, 30)
+	gap.window.Add(t0.Add(60*time.Second), 4195, 90, 90)
 	if r := gap.window.inputRate(); r < 1.4 || r > 1.6 {
 		t.Errorf("mid-window gap: Input MessagesPerSecond = %v, want ~1.5 (real-time delta 90/60, not a count-window 2.0)", r)
 	}
@@ -104,8 +104,8 @@ func TestThroughputWindowIsTimeBased(t *testing.T) {
 	// the rate is 0 — never negative, and never the FSMv1 cumulative count as a
 	// rate.
 	restart := &benthosMonitorDeps{}
-	restart.window.Add(t0, 100, 100)
-	restart.window.Add(t0.Add(10*time.Second), 5, 5)
+	restart.window.Add(t0, 4195, 100, 100)
+	restart.window.Add(t0.Add(10*time.Second), 4195, 5, 5)
 	if r := restart.window.inputRate(); r != 0 {
 		t.Errorf("after both-counter drop: Input MessagesPerSecond = %v, want 0 (wipe leaves a single sample)", r)
 	}
@@ -130,7 +130,7 @@ func TestThroughputWindowZeroValueIsSafe(t *testing.T) {
 		t.Errorf("outputCount on empty window = %d, want 0", out)
 	}
 	// A single sample is still not two, so rates stay 0 but nothing panics.
-	w.Add(time.Now(), 7, 3)
+	w.Add(time.Now(), 4195, 7, 3)
 	if in := w.inputRate(); in != 0 {
 		t.Errorf("inputRate on single-sample window = %v, want 0", in)
 	}
@@ -147,9 +147,6 @@ func TestThroughputWindowZeroValueIsSafe(t *testing.T) {
 // wall-clock sensitive, so the deterministic assertions are the single-sample 0
 // and the LastCount progression.)
 func TestPollComputesThroughput(t *testing.T) {
-	if testing.Short() {
-		t.Skip("integration-style poll test")
-	}
 	var inputCounter int64 = 10
 	var outputCounter int64 = 5
 
@@ -217,9 +214,6 @@ func TestPollComputesThroughput(t *testing.T) {
 // single post-wipe sample yields a zero rate regardless of the wipe, so reaching
 // it through Poll does not itself decide the wipe.
 func TestPollResetTickReportsIsActiveFalse(t *testing.T) {
-	if testing.Short() {
-		t.Skip("integration-style poll test")
-	}
 	inputCounter := 100
 	outputCounter := 100
 
