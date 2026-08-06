@@ -1,10 +1,14 @@
 # Topic Browser GraphQL API
 
+{% hint style="info" %}
+**Early Access.** We built the GraphQL API for developers who want to query the Unified Namespace programmatically. It's experimental, so it's off by default. Switch it on with `graphql.enabled: true` and give it a try. Tell us what you think.
+{% endhint %}
+
 ## Overview
 Query Unified Namespace topics and metadata in real-time.
 
 - **Endpoint:** `http://localhost:8090/graphql`
-- **Default:** Enabled (`graphql.enabled: true`)
+- **Default:** Disabled; opt in with `graphql.enabled: true`
 - **Authentication:** None (open by default)
 
 ## Schema
