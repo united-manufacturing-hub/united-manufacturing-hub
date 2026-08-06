@@ -617,7 +617,7 @@ dataContracts:
 				// atomic operation itself.
 				resetWriteCallCount()
 
-				key, err := configManager.AtomicAddDataModelVersionWithContract(ctx, "pump", newVersion, "desc")
+				key, err := configManager.AtomicAddDataModelVersionWithContract(ctx, "pump", newVersion, "desc", "v1_1")
 				Expect(err).NotTo(HaveOccurred())
 				Expect(key).To(Equal("v1_1"))
 
@@ -677,7 +677,7 @@ dataContracts:
 					return errors.New("mock write failure")
 				})
 
-				_, err := configManager.AtomicAddDataModelVersionWithContract(ctx, "pump", newVersion, "desc")
+				_, err := configManager.AtomicAddDataModelVersionWithContract(ctx, "pump", newVersion, "desc", "v1_1")
 				Expect(err).To(HaveOccurred())
 
 				cfg, err := configManager.GetConfig(ctx, 0)
@@ -706,7 +706,7 @@ dataContracts:
 				_, _ = configManager.GetConfig(ctx, 0) // get the config to trigger the background refresh
 				time.Sleep(100 * time.Millisecond)     // wait for the background refresh to finish
 
-				_, err := configManager.AtomicAddDataModelVersionWithContract(ctx, "pump", newVersion, "desc")
+				_, err := configManager.AtomicAddDataModelVersionWithContract(ctx, "pump", newVersion, "desc", "v1_1")
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("data contract \"_pump_v1_1\" already exists"))
 
@@ -715,6 +715,116 @@ dataContracts:
 				Expect(cfg.DataModels[0].Versions).To(HaveLen(1))
 				Expect(cfg.DataModels[0].Versions).To(HaveKey("v1"))
 				Expect(cfg.DataModels[0].Versions).NotTo(HaveKey("v1_1"))
+			})
+		})
+
+		Context("when the expected version key disagrees with the version this call would write (C2)", func() {
+			var (
+				dataMu         sync.Mutex
+				currentData    []byte
+				writeCallCount int
+			)
+
+			getCurrentData := func() []byte {
+				dataMu.Lock()
+				defer dataMu.Unlock()
+
+				return currentData
+			}
+
+			setCurrentData := func(data []byte) {
+				dataMu.Lock()
+				defer dataMu.Unlock()
+
+				currentData = data
+				writeCallCount++
+			}
+
+			resetWriteCallCount := func() {
+				dataMu.Lock()
+				defer dataMu.Unlock()
+
+				writeCallCount = 0
+			}
+
+			getWriteCallCount := func() int {
+				dataMu.Lock()
+				defer dataMu.Unlock()
+
+				return writeCallCount
+			}
+
+			BeforeEach(func() {
+				// Simulates a second writer having already landed v1_1 between
+				// the caller's CheckAdditive run (against v1_0) and this call:
+				// the caller still expects to write v1_1, but the data model now
+				// computes v1_2 as its true next version.
+				dataMu.Lock()
+				currentData = []byte(`
+internal:
+  services:
+    - name: service1
+      desiredState: running
+agent:
+  metricsPort: 8080
+dataModels:
+  - name: pump
+    version:
+      v1_0:
+        structure:
+          field1:
+            _payloadshape: timeseries-string
+      v1_1:
+        structure:
+          field1:
+            _payloadshape: timeseries-string
+          field2:
+            _payloadshape: timeseries-string
+`)
+				writeCallCount = 0
+				dataMu.Unlock()
+
+				mockFS.WithEnsureDirectoryFunc(func(ctx context.Context, path string) error {
+					return nil
+				})
+
+				mockFS.WithFileExistsFunc(func(ctx context.Context, path string) (bool, error) {
+					return true, nil
+				})
+
+				mockFS.WithReadFileFunc(func(ctx context.Context, path string) ([]byte, error) {
+					return getCurrentData(), nil
+				})
+
+				mockFS.WithWriteFileFunc(func(ctx context.Context, path string, data []byte, perm os.FileMode) error {
+					setCurrentData(data)
+
+					return nil
+				})
+
+				mockFS.WithStatFunc(func(ctx context.Context, path string) (os.FileInfo, error) {
+					return mockFS.NewMockFileInfo("config.yaml", int64(len(getCurrentData())), 0644, time.Now(), false), nil
+				})
+			})
+
+			It("refuses without writing and reports the mismatch", func() {
+				_, _ = configManager.GetConfig(ctx, 0) // get the config to trigger the background refresh
+				time.Sleep(100 * time.Millisecond)     // wait for the background refresh to finish
+
+				resetWriteCallCount()
+
+				_, err := configManager.AtomicAddDataModelVersionWithContract(ctx, "pump", newVersion, "desc", "v1_1")
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("changed while this edit was being validated"))
+				Expect(err.Error()).To(ContainSubstring("v1_1"))
+				Expect(err.Error()).To(ContainSubstring("v1_2"))
+
+				Expect(getWriteCallCount()).To(Equal(0))
+
+				cfg, err := configManager.GetConfig(ctx, 0)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(cfg.DataModels[0].Versions).To(HaveLen(2))
+				Expect(cfg.DataModels[0].Versions).NotTo(HaveKey("v1_2"))
 			})
 		})
 	})

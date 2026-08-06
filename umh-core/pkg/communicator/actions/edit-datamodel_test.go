@@ -711,18 +711,16 @@ var _ = Describe("EditDataModelAction", func() {
 				err := action.Parse(structToEncodedMapForEdit(payload))
 				Expect(err).ToNot(HaveOccurred())
 
-				// Set up mock config with existing data model and payload shapes
+				// Set up mock config with existing data model and payload shapes.
+				// existing-model starts with an empty version, so any structure
+				// added here is additive by construction.
 				existingConfig := config.FullConfig{
 					DataModels: []config.DataModelsConfig{
 						{
 							Name: "existing-model",
 							Versions: map[string]config.DataModelVersion{
 								"v1": {
-									Structure: map[string]config.Field{
-										"originalField": {
-											PayloadShape: "timeseries-string",
-										},
-									},
+									Structure: map[string]config.Field{},
 								},
 							},
 						},
@@ -752,6 +750,8 @@ var _ = Describe("EditDataModelAction", func() {
 			})
 
 			It("should execute successfully", func() {
+				Expect(action.Validate()).To(Succeed())
+
 				response, metadata, err := action.Execute()
 
 				Expect(err).ToNot(HaveOccurred())
@@ -784,11 +784,29 @@ var _ = Describe("EditDataModelAction", func() {
 				err := action.Parse(structToEncodedMapForEdit(payload))
 				Expect(err).ToNot(HaveOccurred())
 
+				// failing-model starts with an empty version, so the payload
+				// above validates as additive and Validate can populate the
+				// expected version key Execute needs.
+				mockConfigMgr.WithConfig(config.FullConfig{
+					DataModels: []config.DataModelsConfig{
+						{
+							Name: "failing-model",
+							Versions: map[string]config.DataModelVersion{
+								"v1": {
+									Structure: map[string]config.Field{},
+								},
+							},
+						},
+					},
+				})
+
 				// Configure mock to return error
 				mockConfigMgr.WithAtomicAddDataModelVersionWithContractError(errors.New("mock edit error"))
 			})
 
 			It("should return error", func() {
+				Expect(action.Validate()).To(Succeed())
+
 				response, metadata, err := action.Execute()
 
 				Expect(err).To(HaveOccurred())

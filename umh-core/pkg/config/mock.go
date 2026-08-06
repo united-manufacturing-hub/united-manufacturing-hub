@@ -1086,7 +1086,7 @@ func (m *MockConfigManager) AtomicAddDataModel(ctx context.Context, name string,
 
 // AtomicAddDataModelVersionWithContract implements the ConfigManager interface.
 func (m *MockConfigManager) AtomicAddDataModelVersionWithContract(
-	ctx context.Context, name string, dmVersion DataModelVersion, description string,
+	ctx context.Context, name string, dmVersion DataModelVersion, description string, expectedVersionKey string,
 ) (string, error) {
 	m.mutexReadAndWrite.Lock()
 	defer m.mutexReadAndWrite.Unlock()
@@ -1129,6 +1129,14 @@ func (m *MockConfigManager) AtomicAddDataModelVersionWithContract(
 	}
 
 	versionKey := next.String()
+
+	if versionKey != expectedVersionKey {
+		return "", fmt.Errorf(
+			"data model %q changed while this edit was being validated: expected to write version %s but the data model is now at a point where %s would be written; reload the data model and retry",
+			name, expectedVersionKey, versionKey,
+		)
+	}
+
 	contractName := DataContractNameFor(name, versionKey)
 
 	for _, dcc := range config.DataContracts {

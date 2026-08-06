@@ -98,8 +98,17 @@ func DataContractNameFor(modelName, versionKey string) string {
 // to publish a version, and the next-version rule takes the highest minor plus
 // one, so a version written without its contract could never be published and
 // never be retried into place.
+//
+// expectedVersionKey is a compare-and-swap guard: the caller's additive check
+// (CheckAdditive, in pkg/datamodel) runs unlocked against a config snapshot it
+// read earlier, so a second write can land between that check and this call.
+// The caller passes the version key it expects to write; if the version this
+// call is about to write under the lock differs, another writer got there
+// first and the candidate was never checked against the version it would
+// actually follow, so the write is refused instead of silently corrupting a
+// Historian column's type.
 func (m *FileConfigManager) AtomicAddDataModelVersionWithContract(
-	ctx context.Context, name string, dmVersion DataModelVersion, description string,
+	ctx context.Context, name string, dmVersion DataModelVersion, description string, expectedVersionKey string,
 ) (string, error) {
 	err := m.mutexAtomicUpdate.Lock(ctx)
 	if err != nil {
@@ -139,6 +148,14 @@ func (m *FileConfigManager) AtomicAddDataModelVersionWithContract(
 	}
 
 	versionKey := next.String()
+
+	if versionKey != expectedVersionKey {
+		return "", fmt.Errorf(
+			"data model %q changed while this edit was being validated: expected to write version %s but the data model is now at a point where %s would be written; reload the data model and retry",
+			name, expectedVersionKey, versionKey,
+		)
+	}
+
 	contractName := DataContractNameFor(name, versionKey)
 
 	for _, dcc := range config.DataContracts {
@@ -164,14 +181,14 @@ func (m *FileConfigManager) AtomicAddDataModelVersionWithContract(
 }
 
 func (m *FileConfigManagerWithBackoff) AtomicAddDataModelVersionWithContract(
-	ctx context.Context, name string, dmVersion DataModelVersion, description string,
+	ctx context.Context, name string, dmVersion DataModelVersion, description string, expectedVersionKey string,
 ) (string, error) {
 	// Check if context is already cancelled
 	if ctx.Err() != nil {
 		return "", ctx.Err()
 	}
 
-	return m.configManager.AtomicAddDataModelVersionWithContract(ctx, name, dmVersion, description)
+	return m.configManager.AtomicAddDataModelVersionWithContract(ctx, name, dmVersion, description, expectedVersionKey)
 }
 
 func (m *FileConfigManager) AtomicDeleteDataModel(ctx context.Context, name string) error {

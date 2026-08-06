@@ -49,10 +49,6 @@ import (
 // EditDataModelAction implements the Action interface for editing an existing Data Model.
 // All fields are immutable after construction to avoid race conditions.
 type EditDataModelAction struct {
-
-	// Parsed request payload (only populated after Parse)
-	payload models.EditDataModelPayload
-
 	configManager config.ConfigManager
 
 	// Shared context for the entire action lifecycle (validate + execute)
@@ -62,10 +58,21 @@ type EditDataModelAction struct {
 
 	actionLogger *zap.SugaredLogger
 
-	cancel       context.CancelFunc
-	userEmail    string
-	actionUUID   uuid.UUID
-	instanceUUID uuid.UUID
+	cancel context.CancelFunc
+
+	// Parsed request payload (only populated after Parse)
+	payload models.EditDataModelPayload
+
+	userEmail string
+
+	// expectedVersionKey is the version key Validate computed and ran
+	// CheckAdditive against. Execute passes it back to the config manager as
+	// a compare-and-swap guard, so a version that another concurrent edit
+	// wrote in between gets caught instead of silently becoming the
+	// unchecked predecessor of this one.
+	expectedVersionKey string
+	actionUUID         uuid.UUID
+	instanceUUID       uuid.UUID
 }
 
 // NewEditDataModelAction returns an un-parsed action instance.
@@ -186,6 +193,8 @@ func (a *EditDataModelAction) Validate() error {
 		return errors.New(datamodel.FormatBreakingChanges(a.payload.Name, next.String(), changes))
 	}
 
+	a.expectedVersionKey = next.String()
+
 	return nil
 }
 
@@ -252,7 +261,7 @@ func (a *EditDataModelAction) Execute() (interface{}, map[string]interface{}, er
 		"Adding new version to data model configuration...", a.outboundChannel, models.EditDataModel)
 
 	versionStr, err := a.configManager.AtomicAddDataModelVersionWithContract(
-		a.ctx, a.payload.Name, dmVersion, a.payload.Description)
+		a.ctx, a.payload.Name, dmVersion, a.payload.Description, a.expectedVersionKey)
 	if err != nil {
 		errorMsg := fmt.Sprintf("Failed to edit data model: %v", err)
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
