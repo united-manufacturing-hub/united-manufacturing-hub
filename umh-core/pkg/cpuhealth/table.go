@@ -161,10 +161,11 @@ func pressureSignal() diagnosis.Signal[Sample] {
 		DemoteSpan:      60 * time.Second,
 		ReleaseOnAbsent: true,
 		Instruments: []diagnosis.Instrument[Sample]{{
-			Name:    instPressureAvg60,
-			Extract: func(s Sample) diagnosis.Reading { return s.Pressure },
-			Span:    60 * time.Second,
-			Red:     diagnosis.Last,
+			Name:     instPressureAvg60,
+			Requires: []diagnosis.Capability{HasPressureStats},
+			Extract:  func(s Sample) diagnosis.Reading { return s.Pressure },
+			Span:     60 * time.Second,
+			Red:      diagnosis.Last,
 			Marks: diagnosis.Marks{
 				Fire:     diagnosis.Mark{At: 0.20},
 				Clear:    diagnosis.Mark{At: 0.12},

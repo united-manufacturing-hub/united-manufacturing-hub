@@ -48,18 +48,26 @@ const (
 	HasVirtualization diagnosis.Capability = "cpuhealth.HasVirtualization"
 	// HasLimit means the cgroup names a positive CPU quota.
 	HasLimit diagnosis.Capability = "cpuhealth.HasLimit"
+	// HasPressureStats means the kernel ever published PSI (the sticky
+	// PsiAvailable). The pressure instrument Requires it, so selection resolves
+	// a host whose kernel never reported PSI to NoInstrument, never AllAbsent.
+	HasPressureStats diagnosis.Capability = "cpuhealth.HasPressureStats"
 )
 
-// DeriveEnvironment reads exactly two facts off Sample — whether the host is
-// Virtualized, and whether Quota names a POSITIVE number — and builds the
-// Environment the engine selects instruments with.
+// DeriveEnvironment reads three facts off Sample — whether the host is
+// Virtualized, whether Quota names a POSITIVE number, and whether the kernel
+// has ever reported PSI — and builds the Environment the engine selects
+// instruments with.
 func DeriveEnvironment(s Sample) diagnosis.Environment {
-	caps := make([]diagnosis.Capability, 0, 2)
+	caps := make([]diagnosis.Capability, 0, 3)
 	if s.Virtualized {
 		caps = append(caps, HasVirtualization)
 	}
 	if q, ok := s.Quota.Get(); ok && q > 0 {
 		caps = append(caps, HasLimit)
+	}
+	if s.PsiAvailable {
+		caps = append(caps, HasPressureStats)
 	}
 	return diagnosis.NewEnvironment(caps...)
 }

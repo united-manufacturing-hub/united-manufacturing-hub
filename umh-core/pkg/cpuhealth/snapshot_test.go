@@ -15,8 +15,9 @@
 // One snapshot per tick: Read stamps a single Timestamp and takes every field
 // off the same read; the whole snapshot is built from OUTSIDE pkg/diagnosis
 // through Known and Unknown (so a Reading with no constructor cannot satisfy
-// this file); DeriveEnvironment turns exactly two facts — Virtualized, and
-// whether Quota names a POSITIVE number — into an Environment via NewEnvironment;
+// this file); DeriveEnvironment turns exactly three facts — Virtualized,
+// whether Quota names a POSITIVE number, and the sticky PsiAvailable — into an
+// Environment via NewEnvironment;
 // and only an unreadable or unparseable cpu.stat fails the whole snapshot, every
 // other source failing leaves one field Unknown() and returns the snapshot.
 package cpuhealth_test
@@ -79,12 +80,13 @@ var _ = Describe("one snapshot per tick", func() {
 		Expect(smp.Quota).To(Equal(diagnosis.Known(2)))
 		Expect(smp.Pressure).To(Equal(diagnosis.Known(0.02)))
 
-		// Spec 3: DeriveEnvironment reads exactly two facts and calls
+		// Spec 3: DeriveEnvironment reads exactly three facts and calls
 		// NewEnvironment. A snapshot with Virtualized true and Quota at
 		// Known(2) satisfies both capabilities; one with neither satisfies
 		// neither; and the load-bearing third case — Quota at Known(0), a
 		// PRESENT uncapped read — must NOT satisfy HasLimit (positivity, not
-		// presence).
+		// presence). The fourth case: PsiAvailable true satisfies
+		// HasPressureStats, and its absence (the zero value) does not.
 		both := diagnosis.Environment{}
 		both = cpuhealth.DeriveEnvironment(cpuhealth.Sample{Timestamp: smp.Timestamp, Virtualized: true, Quota: diagnosis.Known(2)})
 		Expect(both.Has(cpuhealth.HasVirtualization)).To(BeTrue())
@@ -97,6 +99,11 @@ var _ = Describe("one snapshot per tick", func() {
 		uncapped := cpuhealth.DeriveEnvironment(cpuhealth.Sample{Timestamp: smp.Timestamp, Virtualized: true, Quota: diagnosis.Known(0)})
 		Expect(uncapped.Has(cpuhealth.HasVirtualization)).To(BeTrue())
 		Expect(uncapped.Has(cpuhealth.HasLimit)).To(BeFalse())
+
+		psiless := cpuhealth.DeriveEnvironment(cpuhealth.Sample{Timestamp: smp.Timestamp})
+		Expect(psiless.Has(cpuhealth.HasPressureStats)).To(BeFalse())
+		withPsi := cpuhealth.DeriveEnvironment(cpuhealth.Sample{Timestamp: smp.Timestamp, PsiAvailable: true})
+		Expect(withPsi.Has(cpuhealth.HasPressureStats)).To(BeTrue())
 
 		// Spec 4: a fake filesystem whose cpu.pressure alone is missing returns
 		// err == nil with Sample.Pressure absent and the cpu.stat fields still

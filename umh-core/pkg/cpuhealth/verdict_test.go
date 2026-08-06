@@ -35,7 +35,7 @@ var _ = Describe("S3 R8 — verdict assembly", func() {
 		// steal's higher severity make it dominant.
 		engine, err := NewEngine(4, 2.0)
 		Expect(err).NotTo(HaveOccurred())
-		env := diagnosis.NewEnvironment(HasVirtualization, HasLimit)
+		env := diagnosis.NewEnvironment(HasVirtualization, HasLimit, HasPressureStats)
 		base := time.Now()
 
 		for i := 0; i < 5; i++ {
@@ -66,7 +66,7 @@ var _ = Describe("S3 R8 — verdict assembly", func() {
 		// reproduced today's five signals could diverge on the sixth.
 		engine, err := NewEngine(4, 2.0)
 		Expect(err).NotTo(HaveOccurred())
-		env := diagnosis.NewEnvironment(HasVirtualization, HasLimit)
+		env := diagnosis.NewEnvironment(HasVirtualization, HasLimit, HasPressureStats)
 		base := time.Now()
 
 		for i := 0; i < 5; i++ {
@@ -92,7 +92,7 @@ var _ = Describe("S3 R8 — verdict assembly", func() {
 	It("should return healthy with no causes when nothing is fired, rather than degraded with an empty list", func() {
 		engine, err := NewEngine(4, 2.0)
 		Expect(err).NotTo(HaveOccurred())
-		env := diagnosis.NewEnvironment(HasVirtualization, HasLimit)
+		env := diagnosis.NewEnvironment(HasVirtualization, HasLimit, HasPressureStats)
 		base := time.Now()
 
 		for i := 0; i < 5; i++ {
@@ -124,7 +124,7 @@ var _ = Describe("S3 R8 — verdict assembly", func() {
 		// StealSignalReady must be false.
 		engine, err := NewEngine(4, 2.0)
 		Expect(err).NotTo(HaveOccurred())
-		env := diagnosis.NewEnvironment(HasLimit) // bare metal: no HasVirtualization
+		env := diagnosis.NewEnvironment(HasLimit, HasPressureStats) // bare-metal: has PSI, no HasVirtualization
 		base := time.Now()
 
 		for i := 0; i <= 65; i++ {
