@@ -75,15 +75,30 @@ type BenthosMetrics struct {
 	OutputSent    int
 }
 
+// ComponentThroughput carries the real-time rate for one direction of the benthos
+// pipeline. MessagesPerSecond is the by-time rate the worker computes (never the
+// FSMv1 MessagesPerTick, which adapter.go converts on the way out); LastCount is
+// the newest counter value seen.
+type ComponentThroughput struct {
+	MessagesPerSecond float64
+	LastCount         int
+}
+
 // BenthosMonitorStatus is the result of one scrape of the benthos monitor: the
-// time it happened, the /metrics counters, /ping liveness, /ready readiness, and
-// the /version string.
+// time it happened, the /metrics counters, /ping liveness, /ready readiness, the
+// /version string, and the per-direction throughput computed over the 60s window.
 type BenthosMonitorStatus struct {
 	ScrapedAt      time.Time
 	BenthosMetrics BenthosMetrics
-	PingAlive      bool
-	Ready          bool
-	Version        string
+	Input          ComponentThroughput
+	Output         ComponentThroughput
+	// IsActive is true when input traffic was observed in the window. It is
+	// input-only (FSMv1: s.IsActive = s.Input.MessagesPerTick > 0) and tick-free,
+	// with no hysteresis.
+	IsActive  bool
+	PingAlive bool
+	Ready     bool
+	Version   string
 }
 
 // Poll scrapes the configured benthos monitor's /ping, /ready, /version, and
@@ -140,6 +155,22 @@ func Poll(ctx context.Context, d *benthosMonitorDeps, cfg config.BenthosMonitorC
 		return status, fmt.Errorf("parse /metrics: %w", err)
 	}
 	status.BenthosMetrics = m
+
+	// Feed this poll's counter snapshot into the by-time window and read back the
+	// real-time rates. The window lives in the deps and survives across polls
+	// (D5); a nil deps falls back to a one-off window whose rate is always 0.
+	if d != nil {
+		d.window.Add(status.ScrapedAt, m.InputReceived, m.OutputSent)
+		status.Input = ComponentThroughput{
+			MessagesPerSecond: d.window.inputRate(),
+			LastCount:         d.window.inputCount(),
+		}
+		status.Output = ComponentThroughput{
+			MessagesPerSecond: d.window.outputRate(),
+			LastCount:         d.window.outputCount(),
+		}
+		status.IsActive = status.Input.MessagesPerSecond > 0
+	}
 
 	return status, nil
 }
