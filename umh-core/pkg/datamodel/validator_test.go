@@ -519,13 +519,12 @@ var _ = Describe("ValidateVersionKeys", func() {
 		Expect(err).NotTo(HaveOccurred())
 	})
 
-	It("rejects a key that parses to the same Version as another", func() {
+	It("rejects a key that parses to the same Version as another, naming them in sorted order", func() {
 		err := v.ValidateVersionKeys(map[string]config.DataModelVersion{
-			"v1": {}, "v1_0": {},
+			"v1_0": {}, "v1": {},
 		})
 		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(ContainSubstring("v1"))
-		Expect(err.Error()).To(ContainSubstring("v1_0"))
+		Expect(err.Error()).To(Equal(`version keys "v1" and "v1_0" both mean v1_0: use one spelling`))
 	})
 
 	It("rejects major zero", func() {

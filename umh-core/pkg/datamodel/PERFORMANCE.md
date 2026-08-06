@@ -79,12 +79,19 @@ Translation performance is suitable for:
 **Problem**: `regexp.MustCompile()` called on every `_refModel` validation
 ```go
 // Before: Compiled on every validation
-versionKeyPattern := regexp.MustCompile(`^v([1-9]\d*)(?:_(0|[1-9]\d*))?$`)
+versionRegex := regexp.MustCompile(`^v\d+$`)
 
-// After: Pre-compiled at package level (pkg/config.VersionKeyPattern, used via config.ParseVersion)
-var VersionKeyPattern = regexp.MustCompile(`^v([1-9]\d*)(?:_(0|[1-9]\d*))?$`)
+// After: Pre-compiled at package level
+var versionRegex = regexp.MustCompile(`^v\d+$`)
 ```
 **Impact**: Eliminated 7.4GB of regex compilation allocations, achieved 9.1x performance improvement
+
+`versionRegex` has since moved out of this package: version-key parsing now lives in
+`pkg/config` as `config.VersionKeyPattern`, used via `config.ParseVersion`, which this
+package's validator calls instead of matching its own regex. `VersionKeyPattern` has
+been package-level from the moment it was introduced, so it never had the per-call
+compilation problem described above — that problem, and its fix, happened here, to
+`versionRegex`, before the pattern moved.
 
 ### Phase 2: String Operations (Medium Impact)
 **Problem**: Inefficient string parsing and building
