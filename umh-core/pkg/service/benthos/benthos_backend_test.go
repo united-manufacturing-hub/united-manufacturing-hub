@@ -16,7 +16,8 @@ package benthos
 
 // These specs pin the backend NewDefaultBenthosService stores based on
 // envUseFsmv2BenthosMonitor: unset or false keeps the byte-identical fsmv1
-// BenthosMonitorManager; a true value (as accepted by strconv.ParseBool)
+// BenthosMonitorManager; a true value (as accepted by env.GetAsBool, which
+// honours on/off, yes/no, y/n, 1/0 and true/false case-insensitively)
 // stores the fsmv2 adapter WorkerManager. The two backends are
 // distinguished by their concrete runtime type, which is why the specs
 // assert that type directly rather than via a helper.
@@ -75,16 +76,41 @@ var _ = Describe("USE_FSMV2_BENTHOS_MONITOR flag wiring", func() {
 				"USE_FSMV2_BENTHOS_MONITOR=true must select the fsmv2 adapter manager")
 		})
 
-		It("treats any strconv.ParseBool truthy value as the fsmv2 backend", func() {
-			_ = os.Setenv(envUseFsmv2BenthosMonitor, "1")
-			defer func() { _ = os.Unsetenv(envUseFsmv2BenthosMonitor) }()
+		// Every spelling env.GetAsBool accepts must select the fsmv2 backend. "ON"
+		// is the one that matters most: it is what the CPU measurement rig and
+		// every sibling flag (USE_FSMV2_TRANSPORT=ON, cmd/main.go) use. Reading
+		// this flag with strconv.ParseBool instead of env.GetAsBool rejected "ON",
+		// so a benchmark run set the flag on, silently got fsmv1 on both arms, and
+		// measured no difference. Unit tests using only "true" could not see it.
+		for _, truthy := range []string{"true", "TRUE", "1", "on", "ON", "On", "yes", "y"} {
+			value := truthy
 
-			svc := NewDefaultBenthosService("flag-numeric-benthos")
+			It("selects the fsmv2 backend for the truthy value "+value, func() {
+				_ = os.Setenv(envUseFsmv2BenthosMonitor, value)
+				defer func() { _ = os.Unsetenv(envUseFsmv2BenthosMonitor) }()
 
-			_, ok := svc.benthosMonitorManager.(*adapter.WorkerManager[config.BenthosMonitorConfig, simple.Status[fsmv2benthosmonitor.BenthosMonitorStatus]])
-			Expect(ok).To(BeTrue(),
-				"a true-y value accepted by strconv.ParseBool must select the fsmv2 backend")
-		})
+				svc := NewDefaultBenthosService("flag-truthy-" + value)
+
+				_, ok := svc.benthosMonitorManager.(*adapter.WorkerManager[config.BenthosMonitorConfig, simple.Status[fsmv2benthosmonitor.BenthosMonitorStatus]])
+				Expect(ok).To(BeTrue(),
+					"USE_FSMV2_BENTHOS_MONITOR=%s must select the fsmv2 adapter manager (env.GetAsBool convention)", value)
+			})
+		}
+
+		for _, falsy := range []string{"false", "FALSE", "0", "off", "OFF", "no", "n"} {
+			value := falsy
+
+			It("keeps the fsmv1 backend for the falsy value "+value, func() {
+				_ = os.Setenv(envUseFsmv2BenthosMonitor, value)
+				defer func() { _ = os.Unsetenv(envUseFsmv2BenthosMonitor) }()
+
+				svc := NewDefaultBenthosService("flag-falsy-" + value)
+
+				_, ok := svc.benthosMonitorManager.(*benthos_monitor_fsm.BenthosMonitorManager)
+				Expect(ok).To(BeTrue(),
+					"USE_FSMV2_BENTHOS_MONITOR=%s must keep the fsmv1 manager", value)
+			})
+		}
 
 		It("keeps the fsmv1 manager for an explicit false value", func() {
 			_ = os.Setenv(envUseFsmv2BenthosMonitor, "false")
@@ -97,7 +123,7 @@ var _ = Describe("USE_FSMV2_BENTHOS_MONITOR flag wiring", func() {
 				"an explicit false must behave like unset (fsmv1 manager)")
 		})
 
-		It("treats a value ParseBool rejects as off (fsmv1), not as on", func() {
+		It("treats an unrecognized value as off (fsmv1), not as on", func() {
 			_ = os.Setenv(envUseFsmv2BenthosMonitor, "ture")
 			defer func() { _ = os.Unsetenv(envUseFsmv2BenthosMonitor) }()
 
