@@ -47,7 +47,8 @@ import (
 )
 
 // EditDataModelAction implements the Action interface for editing an existing Data Model.
-// All fields are immutable after construction to avoid race conditions.
+// Parse and Validate populate fields that Execute reads; one action instance is
+// only ever handled by a single goroutine, which runs the three in sequence.
 type EditDataModelAction struct {
 	configManager config.ConfigManager
 
