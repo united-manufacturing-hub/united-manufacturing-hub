@@ -2,13 +2,21 @@
 
 ## Unreleased
 
+### New Features
+
+- Data model versions now carry a minor part alongside the major, so a version reads as `v1_0` or `v1_1` rather than a single number. Adding a version appends the next minor of the model's highest major — a model at `v1` gains `v1_1`, and a model that already has both `v1` and `v2` gains `v2_1` — while a bare `vN` from an older config still reads as major N, minor 0, and nothing gets rewritten. Bumping the major isn't supported yet, so a genuinely breaking change still means creating a separate data model.
+- A new data model version can now only add tags. Removing an existing tag, renaming one (which reads as removing the old tag and adding a new one), or changing its payload shape is refused before anything is written, and the error names every offending tag. This is what lets the Historian keep writing each tag to the same fixed-type database column for the life of the model — a tag that changed type would otherwise break anything already reading that column.
+- Each data model version now gets its own data contract, named with the full version — for example `_pump_v1_1`. Existing contracts for earlier versions keep working; to publish the tags added by a new version, point a bridge or stream processor at its new contract, the same migration a version bump has always required.
+
 ### Improvements
 
 - The log viewer's and the metrics views' own polling messages are now DEBUG instead of INFO, which makes it easier to spot actual errors and warnings
+- The `version` field in `add-datamodel` and `edit-datamodel` action responses is now a string (for example `"v1_0"`) instead of a number, since a number can't express a two-part version. The Management Console doesn't read this field today, but it's a response-shape change for anything else that does.
 
 ### Fixes
 
 - When the host is CPU-starved, reconciliation deadlines get exceeded and umh-core was logging "context deadline exceeded" and "not enough time to reconcile" once per instance per tick, flooding the log. These are now throttled to at most one warning per minute (with the suppressed count folded in) and escalate to an error when the overload persists, so a genuinely stuck host gets louder instead of drowning in noise
+- Creating or versioning a data model that also needs a new data contract no longer reports success when the contract write fails. Previously the action logged a warning and still returned success, leaving a model or version with no working contract; now the model and its contract are written together, and a failure fails the whole operation cleanly instead of leaving either behind
 
 ## [0.44.32]
 

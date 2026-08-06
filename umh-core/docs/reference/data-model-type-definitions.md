@@ -37,6 +37,44 @@ status:
   _payloadshape: timeseries-string
 ```
 
+## Version Keys
+
+A data model version key is `v<major>` or `v<major>_<minor>`. `v1` and `v1_0` are the same version: a bare `vN` always means major N, minor 0. Major numbering starts at 1 (major `0` is invalid), and neither part takes a leading zero, except that the minor alone may be the literal `0`.
+
+Creating a new version appends the next minor of the model's highest major. A model at `v1` (that is, `v1_0`) gains `v1_1`. A model that already has both `v1` and `v2` gains `v2_1`, not `v1_2` or `v3_0`. Bumping the major is not supported yet, so a genuinely breaking change (see below) needs a new data model, not a new major version.
+
+### A new version may only add tags
+
+A new version can add a tag but cannot remove one, rename one, or change its payload shape. Renaming a tag is seen as removing the old name and adding a new one, so it is refused for the same reason a removal is. The check compares the new version's tags against the highest existing minor of the same major and refuses the write, before anything is saved, if any tag was removed or changed shape. The error names every offending tag.
+
+A removed tag:
+
+```
+cannot add version v1_1 to data model "pump": 1 breaking change
+
+  rpm  removed (was timeseries-number)
+
+A new minor version may only add tags. Changing or removing an existing tag
+requires a new major version, which is not supported yet.
+```
+
+A tag whose payload shape changed:
+
+```
+cannot add version v1_1 to data model "pump": 1 breaking change
+
+  temperature  payload shape changed: timeseries-number -> timeseries-string
+
+A new minor version may only add tags. Changing or removing an existing tag
+requires a new major version, which is not supported yet.
+```
+
+Do not work around a refusal by deleting the model and recreating it with the change already made. The Historian writes each tag to its own database column, and deleting a data model does not delete that column's data — recreating the model from scratch does not give you a clean slate, it silently orphans the history already written under the old tag.
+
+### Contract naming
+
+Each version gets its own data contract. The name is always `_<model>_<versionKey>`, with the version key spelled in full, including the `_0` of a first minor: a model named `pump` at `v1_0` gets contract `_pump_v1_0`; at `v1_1`, `_pump_v1_1`. A bridge or stream processor must reference the specific contract for the version whose tags it needs — the contract for an earlier version keeps validating that version's tags and does not gain a later version's additions automatically.
+
 ## Examples
 
 Data model with several timeseries fields:
@@ -67,30 +105,32 @@ dataModels:
             temp_unit:
               _refModel:
                 name: temperature
-                version: v1
+                version: v1_0
           metadata:
             _refModel:
               name: device-info
-              version: v1
+              version: v1_0
 ```
 
-Multiple versions of one model:
+Adding a version to a model, `status` added in `v1_1` alongside everything `v1_0` already had (see [Version Keys](#version-keys)):
 
 ```yaml
 dataModels:
   - name: sensor-data
     version:
-      v1:
+      v1_0:
         structure:
           value:
             _payloadshape: timeseries-number
-      v2:
+      v1_1:
         structure:
           value:
             _payloadshape: timeseries-number
           status:
             _payloadshape: timeseries-string
 ```
+
+This produces contract `_sensor-data_v1_1` alongside the existing `_sensor-data_v1_0`.
 
 Define a custom [payload shape](payload-shapes.md) (top-level `payloadShapes:`), then reference it:
 
