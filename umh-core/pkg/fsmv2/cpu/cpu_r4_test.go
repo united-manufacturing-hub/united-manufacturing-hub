@@ -52,6 +52,14 @@ var _ = Describe("R4 — absence of evidence is not health", func() {
 			Expect(status.SignalsMeasured).To(Equal(1), "pressure judged on its first sample; saturation has not")
 			Expect(status.SignalsMeasured).To(BeNumerically("<=", status.SignalsCapable),
 				"measured is never greater than capable")
+			// One signal first-measured and another capable one still has not, so
+			// measured (1) is below capable (2): the refusal holds on this partial
+			// box too, not only on the measured==0 case. Pins the `measured <
+			// capable` term: a regression to `measured == 0` would pass the other
+			// specs yet wrongly admit this box inside the window. This single Poll
+			// anchors the window at its own sample (delta 0s), so it is inside it.
+			Expect(status.RefusingAdmission).To(BeTrue(),
+				"a box with one measured and one capable-but-unmeasured signal refuses admission inside the window")
 		})
 	})
 
@@ -69,7 +77,7 @@ var _ = Describe("R4 — absence of evidence is not health", func() {
 					// Pressure absent (Unknown), not a failed sample. The box
 					// still has PSI (sticky PsiAvailable is true) — this tick's
 					// read is just not landing.
-					Pressure:    diagnosis.Unknown(),
+					Pressure:     diagnosis.Unknown(),
 					PsiAvailable: true,
 				}, nil
 			}}, 4, 0)
@@ -144,7 +152,7 @@ var _ = Describe("R4 — absence of evidence is not health", func() {
 					// Pressure unreadable during the outage. PsiAvailable stays
 					// true (sticky, F17 rung 1) — an outage removes the reading,
 					// not the box's pressurability, so pressure stays capable.
-					Pressure:    diagnosis.Unknown(),
+					Pressure:     diagnosis.Unknown(),
 					PsiAvailable: true,
 				}, nil
 			}}
