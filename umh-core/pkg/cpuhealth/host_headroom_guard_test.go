@@ -12,13 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// S3 R5 (F2, F6): the missing guard and the wrong subtraction. host-headroom's
-// Extract carries BOTH guards — Unknown on cores <= 0 (F2) and Unknown unless
-// CpuScope == ScopeHost (F6) — and both live in the extractor, not in Decide,
-// so nothing enters the window, the reduction is StateAbsent, and the saturation
-// latch has nothing to judge. The three Signals fields carry the withholding to
-// the message layer: HostHeadroomAvailable (dispatched on the scope, not the
-// window state) plus the two core counts.
+// S3 R5 (F6): the wrong subtraction. host-headroom's Extract carries the scope
+// guard — Unknown unless CpuScope == ScopeHost — in the extractor, not in
+// Decide, so nothing enters the window, the reduction is StateAbsent, and the
+// saturation latch has nothing to judge. A box whose core count was never
+// readable declares no saturation row at all (see cpuTable). The three Signals
+// fields carry the withholding to the message layer: HostHeadroomAvailable
+// (dispatched on the scope, not the window state) plus the two core counts.
 package cpuhealth
 
 import (
@@ -48,12 +48,17 @@ var _ = Describe("S3 R5 — the missing guard, and the wrong subtraction", func(
 		}
 	}
 
-	It("should treat a non-positive logical CPU count as no signal on the host-headroom arm, as usage-fraction already does", func() {
-		// cores = 0 in the table: host-headroom's subtraction would be from
-		// nothing and usage-fraction's division would be by zero. Both Extract
-		// arms return Unknown, so the saturation window receives nothing and the
-		// signal reaches AllAbsent — the latch cannot fire. F2 has three sites
-		// and a guard in the extractor closes all three at once.
+	It("should declare no saturation signal on a box whose core count was never readable, and stay healthy", func() {
+		// The omission is the gate, so assert it directly: a cores<=0 box declares
+		// no saturation row at all. The message-field checks that used to sit in
+		// this loop are gone because they do not discriminate — engine.Reduction on
+		// a missing signal returns the same (0.0, StateAbsent) as a
+		// present-but-withholding row, so they passed under both designs.
+		Expect(hasSignal(cpuTable(0, 2.0), sigSaturation)).To(BeFalse(),
+			"a box with no readable core count must declare no saturation signal")
+
+		// Never-readable is not capability: the box still builds and reads healthy
+		// on every tick, because there is no window to fill and no latch to fire.
 		engine, err := NewEngine(0, 2.0)
 		Expect(err).NotTo(HaveOccurred())
 		env := diagnosis.NewEnvironment(HasLimit)
@@ -61,12 +66,7 @@ var _ = Describe("S3 R5 — the missing guard, and the wrong subtraction", func(
 
 		for i := 0; i < 5; i++ {
 			verdict, _ := Decide(engine, headroomSample(base, i, ScopeHost, 0, 8), env)
-			red, st := engine.Reduction(sigSaturation, instHostHeadroom).Get()
-			Expect(st).To(Equal(diagnosis.StateAbsent), "a non-positive core count must append nothing to host-headroom")
-			Expect(red).To(Equal(0.0))
-			_, ufst := engine.Reduction(sigSaturation, instUsageFraction).Get()
-			Expect(ufst).To(Equal(diagnosis.StateAbsent), "usage-fraction must refuse the same count")
-			Expect(verdict.State).To(Equal(StateHealthy), "an unjudgeable saturation signal must not fire the latch")
+			Expect(verdict.State).To(Equal(StateHealthy), "a box with no declared saturation signal must not fire the latch")
 		}
 	})
 

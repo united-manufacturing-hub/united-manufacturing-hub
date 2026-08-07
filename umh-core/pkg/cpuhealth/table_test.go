@@ -47,6 +47,19 @@ func signalNamed(t diagnosis.Table[Sample], name string) diagnosis.Signal[Sample
 	return diagnosis.Signal[Sample]{}
 }
 
+// hasSignal reports whether the table declares a signal with the given name,
+// without failing when it does not. It is the absence-asserting counterpart to
+// signalNamed: F2-R3's contract is that a box with no readable core count
+// carries no saturation row at all, not a row that is merely never filled.
+func hasSignal(t diagnosis.Table[Sample], name string) bool {
+	for _, s := range t.Signals {
+		if s.Name == name {
+			return true
+		}
+	}
+	return false
+}
+
 var _ = Describe("S3 R1 — the CPU table, throttle and steal", func() {
 	It("declares every CPU signal in one table built by cpuTable, and omits limit-saturation when there is no positive quota", func() {
 		t := cpuTable(4, 2.0)
@@ -228,16 +241,6 @@ var _ = Describe("S3 R1 — the CPU table, throttle and steal", func() {
 		Expect(err).NotTo(HaveOccurred(), "a no-limit box must still construct an engine")
 		_, err = NewEngine(4, 2.0)
 		Expect(err).NotTo(HaveOccurred())
-
-		// The cores<=0 guards refuse a headroom that was never measured: a count
-		// of zero is F2, not an idle box.
-		zeroCores := cpuTable(0, 2.0)
-		hh := signalNamed(zeroCores, "saturation").Instruments[0]
-		Expect(hh.Name).To(Equal("host-headroom"))
-		Expect(hh.Extract(Sample{CpuScope: ScopeHost, HostBusy: diagnosis.Known(0.5)})).To(Equal(diagnosis.Unknown()))
-		uf := signalNamed(zeroCores, "saturation").Instruments[1]
-		Expect(uf.Name).To(Equal("usage-fraction"))
-		Expect(uf.Extract(Sample{UsageCores: diagnosis.Known(1.0)})).To(Equal(diagnosis.Unknown()))
 	})
 
 	It("fires the throttle latch above a 0.05 sixty-second ratio and clears it below 0.03", func() {
@@ -334,6 +337,29 @@ var _ = Describe("S3 R1 — the CPU table, throttle and steal", func() {
 			}
 		}
 	})
+
+	It("should not declare a saturation signal on a box whose core count was never readable", func() {
+		// A never-readable core count is not a "capable but never fillable"
+		// machine — it is a machine that has not declared saturation at all.
+		// The readable core count is a construction-time fact, so nothing
+		// per-tick adds the capability back. The row must be absent, not
+		// present-but-withholding: no signal, no instruments, no window.
+		t := cpuTable(0, 2.0)
+		Expect(hasSignal(t, sigSaturation)).To(BeFalse(),
+			"a box with no readable core count must declare no saturation signal")
+	})
+
+	It("withholds both saturation arms when the core count is not positive", func() {
+		// The belt-and-braces guard: even a direct call to saturationSignal with
+		// a non-positive count must not divide by it — both Extract arms return
+		// Unknown, never a Known(+Inf) that would latch a permanent saturation.
+		sig := saturationSignal(0)
+		Expect(sig.Instruments).To(HaveLen(2))
+		host := sig.Instruments[0]
+		Expect(host.Extract(Sample{CpuScope: ScopeHost, HostBusy: diagnosis.Known(0.5)})).To(Equal(diagnosis.Unknown()))
+		usage := sig.Instruments[1]
+		Expect(usage.Extract(Sample{UsageCores: diagnosis.Known(1.4)})).To(Equal(diagnosis.Unknown()))
+	})
 })
 
 // A worker outside this package cannot reach cpuTable, so it walks Table for the
@@ -352,6 +378,25 @@ var _ = Describe("Table — the exported route to the CPU declaration", func() {
 		noLimit := signalNames(Table(4, 0))
 		Expect(noLimit).To(Equal([]string{"throttling", "pressure", "steal", "saturation"}))
 		Expect(noLimit).NotTo(ContainElement("limit-saturation"), "a box with no positive quota declares no limit row")
+	})
+
+	It("omits the saturation signals through the exact route a worker polls", func() {
+		// A worker polls Table, not cpuTable, so the cores<=0 omission has to hold
+		// at the exported boundary too: the engine NewEngine builds comes from
+		// this same call, and a signal Table advertised while the engine keyed no
+		// window under it would read NoInstrument forever. Table(0, 2.0) must drop
+		// saturation; Table(0, 0) must drop both saturation rows.
+		noCores := signalNames(Table(0, 2.0))
+		Expect(noCores).NotTo(ContainElement("saturation"),
+			"a cores<=0 box must declare no saturation signal through Table")
+		Expect(noCores).To(ContainElement("limit-saturation"),
+			"a positive quota keeps the limit row even when the core count was never readable")
+
+		noCoresNoLimit := signalNames(Table(0, 0))
+		Expect(noCoresNoLimit).NotTo(ContainElement("saturation"),
+			"a cores<=0 no-quota box must declare no saturation signal through Table")
+		Expect(noCoresNoLimit).NotTo(ContainElement("limit-saturation"),
+			"a cores<=0 no-quota box must declare no limit-saturation signal through Table")
 	})
 
 	It("returns a table the real engine accepts on a box with no quota", func() {
