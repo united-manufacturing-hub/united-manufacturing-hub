@@ -152,6 +152,7 @@ func (h *CertHandler) SetSubHandler(sh SubHandler) {
 func (h *CertHandler) HasSubHandler() bool {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
+
 	return h.subHandler != nil
 }
 
@@ -224,8 +225,6 @@ func (h *CertHandler) fetchAndStore(ctx context.Context, email string) error {
 		return fmt.Errorf("parse certificate chain for %s: %w", email, err)
 	}
 
-	h.setCertificate(strings.ToLower(resp.UserEmail), cert, chain)
-
 	h.mu.RLock()
 	encryptedRootCA := h.encryptedRootCA
 	authToken := h.authToken
@@ -233,11 +232,8 @@ func (h *CertHandler) fetchAndStore(ctx context.Context, email string) error {
 	h.mu.RUnlock()
 
 	if resp.RootCA != "" && resp.RootCA != encryptedRootCA {
-		h.setEncryptedRootCA(resp.RootCA)
-
-		hasher := sha3.New256()
-		hasher.Write([]byte(authToken))
-		keyMaterial := hex.EncodeToString(hasher.Sum(nil))
+		sum := sha3.Sum256([]byte(authToken))
+		keyMaterial := hex.EncodeToString(sum[:])
 
 		decrypted, err := h.validator.DecryptRootCA(resp.RootCA, keyMaterial, instanceUUID)
 		if err != nil {
@@ -250,7 +246,10 @@ func (h *CertHandler) fetchAndStore(ctx context.Context, email string) error {
 		}
 
 		h.setRootCA(rootCert)
+		h.setEncryptedRootCA(resp.RootCA)
 	}
+
+	h.setCertificate(strings.ToLower(resp.UserEmail), cert, chain)
 
 	return nil
 }
