@@ -42,6 +42,13 @@ const (
 	// pollInterval is the poll cadence. It sets both the poll cadence and, at
 	// 3x, the seam's maxAge downstream; the two are one decision (SPEC §9 P3 R1).
 	pollInterval = 1 * time.Second
+
+	// f16AdmissionWindow is how long a fresh worker may refuse admission while
+	// a capable signal has still not first-measured. Once this much sample time
+	// has passed since the worker's first sample, admission opens even if the
+	// counts are unchanged. The synthetic-clock tests step the sample clock in
+	// whole seconds, so the window is a whole number of them.
+	f16AdmissionWindow = 10 * time.Second
 )
 
 // Ref is the (WorkerType, Name) pair identifying the CPU monitor child, shared
@@ -74,6 +81,14 @@ type CPUStatus struct {
 	// SignalsMeasured is how many capable signals have produced a first
 	// measurement since this worker started. Filled by R4; zero until then.
 	SignalsMeasured int `json:"signalsMeasured"`
+
+	// RefusingAdmission reports whether admission is currently refused: a
+	// capable signal has not first-measured (measured < capable) within the
+	// 10s admission window. Consume the flag; do not re-derive the count
+	// comparison, which drops the window bound. It is meaningful only on a
+	// successful read — an errored/empty Poll yields this false ('no
+	// determination'), which F18 must not read as 'admission open'.
+	RefusingAdmission bool `json:"refusingAdmission"`
 
 	// Polls is how many observations this worker has completed.
 	Polls uint64 `json:"polls"`
@@ -115,6 +130,11 @@ type CPUDeps struct {
 	// it should. This bit is what keeps a signal that already measured counting
 	// as measured through a later read outage (R4 spec 4).
 	firstFilled map[string]bool
+
+	// startedAt anchors the 10s admission window: the first sample timestamp
+	// the worker ever sees. Elapsed sample time is measured from it, so the
+	// window is driven by the sample clock, not the wall clock.
+	startedAt time.Time
 }
 
 // NewDeps builds CPU's per-instance deps. It constructs a real cgroup sampler
@@ -174,6 +194,12 @@ func Poll(ctx context.Context, d *CPUDeps, _ CPUConfig) (CPUStatus, error) {
 		return CPUStatus{}, err
 	}
 
+	// Anchor the 10s admission window on the first sample timestamp the worker
+	// ever sees. The refusal is bounded by sample time, not wall time.
+	if d.startedAt.IsZero() {
+		d.startedAt = sample.Timestamp
+	}
+
 	env := cpuhealth.DeriveEnvironment(sample)
 	verdict, signals := cpuhealth.Decide(d.engine, sample, env)
 
@@ -200,12 +226,21 @@ func Poll(ctx context.Context, d *CPUDeps, _ CPUConfig) (CPUStatus, error) {
 
 	d.polls++
 
+	// The refusal is bounded: it holds only while a capable signal has not
+	// first-measured AND the admission window has not elapsed. Past the window,
+	// admission opens even if counts are unchanged. Elapsed is the sample-time
+	// delta from the anchor; production sample timestamps come from monotonic
+	// time.Now(), so it is never negative.
+	elapsed := sample.Timestamp.Sub(d.startedAt)
+	refusing := measured < capable && elapsed < f16AdmissionWindow
+
 	return CPUStatus{
-		Verdict:         string(verdict.State),
-		Message:         cpuhealth.ComposeMessage(verdict, signals),
-		SignalsCapable:  capable,
-		SignalsMeasured: measured,
-		Polls:           d.polls,
+		Verdict:           string(verdict.State),
+		Message:           cpuhealth.ComposeMessage(verdict, signals),
+		SignalsCapable:    capable,
+		SignalsMeasured:   measured,
+		RefusingAdmission: refusing,
+		Polls:             d.polls,
 	}, nil
 }
 
