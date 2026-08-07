@@ -84,6 +84,10 @@ var (
 // a table at all. Omitting the row is the only arrangement that constructs.
 // throttling stays, Requires: HasLimit and all, because its marks are ratios
 // and do not scale with the quota.
+//
+// The same conditional omission applies to the core count: a box whose core
+// count was never readable (cores <= 0) declares no saturation row at all —
+// there is no capacity to be full, only a count that was never taken.
 func cpuTable(cores, quota float64) diagnosis.Table[Sample] {
 	t := diagnosis.Table[Sample]{
 		Interval: time.Second,
@@ -117,8 +121,10 @@ func cpuTable(cores, quota float64) diagnosis.Table[Sample] {
 			throttlingSignal(),
 			pressureSignal(),
 			stealSignal(),
-			saturationSignal(cores),
 		},
+	}
+	if cores > 0 {
+		t.Signals = append(t.Signals, saturationSignal(cores))
 	}
 	if quota > 0 {
 		t.Signals = append(t.Signals, limitSaturationSignal(quota))
@@ -233,13 +239,23 @@ func saturationSignal(cores float64) diagnosis.Signal[Sample] {
 		Instruments: []diagnosis.Instrument[Sample]{
 			{
 				Name: instHostHeadroom,
-				// cores − hostBusy − 1.0. The F6 guard: off a host-scoped sample
-				// the count means something else, so there is no headroom to
-				// read. The cores <= 0 guard is F2 — a subtraction from a
-				// non-positive core count publishes a headroom that was never
-				// measured.
+				// cores − hostBusy − 1.0. This arm exists only on a box whose
+				// core count was readable, so cores > 0 here; the scope guard stays
+				// because off a host-scoped sample the count means something else
+				// and there is no headroom to read.
 				Extract: func(s Sample) diagnosis.Reading {
-					if s.CpuScope != ScopeHost || cores <= 0 {
+					// Defense-in-depth, not the gate. The rung's gate is the
+					// omission: cpuTable appends no saturation signal when cores
+					// <= 0, so this Extract is unreachable through production, and
+					// the absence is pinned by the RED test's hasSignal assertion.
+					// This guard only matters if that append gate is re-removed or
+					// saturationSignal is called directly with a non-positive
+					// count — the subtraction below must never run on such a
+					// count, so the arm withholds here too.
+					if cores <= 0 {
+						return diagnosis.Unknown()
+					}
+					if s.CpuScope != ScopeHost {
 						return diagnosis.Unknown()
 					}
 					hb, ok := s.HostBusy.Get()
@@ -261,8 +277,10 @@ func saturationSignal(cores float64) diagnosis.Signal[Sample] {
 			{
 				Name: instUsageFraction,
 				Extract: func(s Sample) diagnosis.Reading {
-					// A division-by-zero refusal: the fraction of zero cores is
-					// not a fraction of anything.
+					// Same defense-in-depth for the division below: unreachable
+					// through production while the append gate holds, but must
+					// never divide by a non-positive count if that gate is
+					// re-removed — so the arm withholds here too.
 					if cores <= 0 {
 						return diagnosis.Unknown()
 					}
@@ -336,6 +354,7 @@ func limitSaturationSignal(quota float64) diagnosis.Signal[Sample] {
 // keyed windows under. It is not a package-wide guarantee: RunSuite still builds
 // its own table from cpuTable directly, so "nothing in cpuhealth can drift" is
 // not a claim this function is in a position to make.
+//
 func Table(cores, quota float64) diagnosis.Table[Sample] {
 	return cpuTable(cores, quota)
 }
