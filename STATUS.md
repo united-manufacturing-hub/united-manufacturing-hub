@@ -479,3 +479,23 @@ HostBusyCoresAvailable/NoLimitHostFired population + cpuReserveCores constant) a
 
 **Next actions:** independent verify re-runs the gates w/ positive controls; PR #2680 (P2 → p1/diagnosis /
 staging); P3. Do NOT mark P2 done (per brief §7 — a separate session certifies).
+
+## F16 / F17 / F18 — the answerability ladder (layered on S4)
+
+Policy rows added 2026-08-06 (SPEC §5): F16 bounds F10's refusal at 10s; F17 declares
+permanently-unanswerable signals unanswerable rather than waited on; F18 (P4-only constraint) forces every
+CPU-refusal path through `enableResourceLimitBlocking`. VSDD intensity **FULL** (Jeremy: recovery = "no,
+and it's already too late"). Baseline before this ladder: 70 cpuhealth specs green.
+
+- [x] **Rung 1 — `HasPressureStats` (pressure half of F17)** · tdd-commit + conductor closure · commit `b689a3cf0` (amended) · **72/72 green**.
+  - What shipped: `HasPressureStats` capability (positive `Requires` on the pressure instrument, `table.go`), derived in `DeriveEnvironment` from the sticky `Sample.PsiAvailable` ALONE (`capacity.go`), recorder env gained it (`suite.go:76`). A no-PSI host now resolves pressure → `NoInstrument`, never `AllAbsent`-forever.
+  - **Reason this rung needed a conductor, twice.** The automatic TDD pass produced a HALF-WIRED commit: `Requires` landed but `DeriveEnvironment` never derived the capability and the recorder env never gained it — so pressure was `NoInstrument` on EVERY host, including the recorder, and the suite stayed green because the RED test was tautological (built env through `DeriveEnvironment`, which ignored `PsiAvailable` for both values) and `suite_bind_test` never asserts pressure availability. The 15-agent FULL review caught it unanimously; the workflow's fix loop could not converge (its `git commit --amend` hit the harness git-destructive guard). **Lesson (the handoff's): forbid the goal, not the form — a construction that needs no fixture/recorder edits is the sign the capability isn't gating; and for the canonical producer, a negative-only test cannot discriminate wired from no-op.**
+  - Conductor closure (via implementation subagent + independent reviewer subagent, both passing):
+    1. Wired `DeriveEnvironment` (append `HasPressureStats` on `PsiAvailable`), bumped doc "two→three facts".
+    2. Recorder env in `suite.go:76` gained `HasPressureStats`.
+    3. Added the POSITIVE-path spec (`PsiAvailable:true` → `Has(HasPressureStats)` true, Select ≠ NoInstrument) — the assertion that breaks first if the append is removed. Reviewer break-tested it (removed append → 2 failures → restored).
+    4. `snapshot_test.go` spec 3 extended: `PsiAvailable` → `HasPressureStats` true, absent → false.
+  - Recording gate: **byte-identical on all recorder boxes** (Live Ready, BriefOutage NoneReady, LongOutage AllAbsent, PostOutageDip Ready, BelowFloor AllAbsent). Only `CaseUnsupported` flips Ready→NoInstrument — the designed F17 consequence, matching the Requires-gated contract already asserted for throttling at `suite_bind_test.go:44-52`.
+  - Fixture edits were REQUIRED (not zero), confirming the capability genuinely gates: hand-built envs in `hold_demote_test`, `pressure_latch_test`, `verdict_test`, `table_test` gained `HasPressureStats`.
+  - Out-of-scope: **none.** `pkg/diagnosis` untouched (the prior wrong attempt's `Excludes` primitive is gone). No saturation/LogicalCpus/cores changes (rung 2).
+  - Unsure / carry:`DeriveEnvironment` is now a third producer vs the hand-built envs — kept consistent by adding the capability to each hand-built site; noted as a maintenance surface a future helper could unify.
