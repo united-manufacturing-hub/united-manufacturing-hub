@@ -21,6 +21,9 @@ package fsmv2cpu
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"strings"
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cpuhealth"
@@ -135,6 +138,11 @@ type CPUDeps struct {
 	// the worker ever sees. Elapsed sample time is measured from it, so the
 	// window is driven by the sample clock, not the wall clock.
 	startedAt time.Time
+
+	// admissionReported records whether a capable signal that never first-measured
+	// has already been reported at the 10s window deadline. The report fires once
+	// per worker, never once per tick.
+	admissionReported bool
 }
 
 // NewDeps builds CPU's per-instance deps. It constructs a real cgroup sampler
@@ -210,6 +218,7 @@ func Poll(ctx context.Context, d *CPUDeps, _ CPUConfig) (CPUStatus, error) {
 	// set the first tick that signal is Ready and never cleared, so a signal
 	// that has measured keeps counting as measured through a later read outage.
 	capable, measured := 0, 0
+	unmeasured := []string{}
 	for _, s := range d.table.Signals {
 		_, _, _, availability := d.engine.Select(s, env)
 		if availability == diagnosis.NoInstrument {
@@ -220,6 +229,8 @@ func Poll(ctx context.Context, d *CPUDeps, _ CPUConfig) (CPUStatus, error) {
 		}
 		if d.firstFilled[s.Name] {
 			measured++
+		} else {
+			unmeasured = append(unmeasured, s.Name)
 		}
 		capable++
 	}
@@ -232,7 +243,29 @@ func Poll(ctx context.Context, d *CPUDeps, _ CPUConfig) (CPUStatus, error) {
 	// delta from the anchor; production sample timestamps come from monotonic
 	// time.Now(), so it is never negative.
 	elapsed := sample.Timestamp.Sub(d.startedAt)
+	overDeadline := elapsed >= f16AdmissionWindow
 	refusing := measured < capable && elapsed < f16AdmissionWindow
+
+	// Once the 10s window has elapsed and a capable signal has still never
+	// first-measured, admission opens even though a source that should answer
+	// has stayed silent. Raise exactly one SentryError naming every signal that
+	// never measured — never once per tick (the admissionReported latch), and
+	// never on a box no instrument can answer (capable==0 keeps it silent). The
+	// error string is fixed so Sentry groups every occurrence together; the
+	// signal names and the measured/capable shortfall are queryable as
+	// structured deps.Field values, while the message keeps a human-readable
+	// summary.
+	if overDeadline && measured < capable && !d.admissionReported {
+		d.admissionReported = true
+		d.GetLogger().SentryError(deps.FeatureSupportCPU, d.GetHierarchyPath(),
+			errors.New("never-measured capable signal at admission deadline"),
+			fmt.Sprintf("cpu: admission opened; never-measured capable signal(s): %s (measured %d of %d capable)",
+				strings.Join(unmeasured, ", "), measured, capable),
+			deps.String("never_measured_signals", strings.Join(unmeasured, ", ")),
+			deps.Int("signals_measured", measured),
+			deps.Int("signals_capable", capable),
+			deps.Duration("admission_window", f16AdmissionWindow))
+	}
 
 	return CPUStatus{
 		Verdict:           string(verdict.State),
