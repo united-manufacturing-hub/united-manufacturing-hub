@@ -124,9 +124,11 @@ var _ = Describe("CPU monitor worker", func() {
 					NrPeriods: diagnosis.Known(1),
 					// Pressure fires above the mark on the FIRST sample, so a
 					// no-quota tick has a degraded verdict without window warm-up.
+					// PsiAvailable true (F17 rung 1) so pressure is offered at all.
 					Pressure:    diagnosis.Known(0.9),
 					HostBusy:    diagnosis.Known(0.5),
 					Virtualized: true,
+					PsiAvailable: true,
 				}, nil
 			}}, 4, 0)
 
