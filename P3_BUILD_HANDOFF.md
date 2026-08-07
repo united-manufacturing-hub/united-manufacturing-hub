@@ -112,3 +112,16 @@ go run pkg/fsmv2/cmd/runner/main.go --scenario cpuhealth
 ```
 
 Do NOT push, open a PR, run `gh stack`, or touch Linear/Slack — a human does that.
+
+## F16 / F17 ladder (on top of P3 R1-R4, added 2026-08-06/07)
+
+VSDD intensity **FULL** (Jeremy: recovery = "no, and it's already too late" — bridge blocking must
+ship behind `enableResourceLimitBlocking`, F18). P2 shipped F17 rungs 1-3 (HasPressureStats from
+sticky `PsiAvailable`; saturation omitted when `cores<=0`; byte-identical guard). P3 re-pointed onto
+P2's new head + fixtures gained `PsiAvailable` (11/11). Rungs below start at HEAD 1210c5fec.
+
+- [ ] **R4 — 10s bound (`F16`)** · tdd-commit + conductor closure · commit `1210c5fec` · 15/15 green · **reviewed GO**.
+  - `CPUStatus.RefusingAdmission bool` = `measured<capable` AND `elapsed < f16AdmissionWindow(10s)` from the FIRST sample's Timestamp (synthetic clock, no wall clock). Counts+verdict unchanged at deadline; no Poll error. P4 (deferred) consumes the boolean, not the counts.
+  - Three review findings hardened (each break-restore-verified): window width pinned to a literal; partial-measurement branch (measured=1/capable=2) asserted; inert-flag/read-error trap documented for F18 (empty Poll = "no determination", not "admission open").
+- [ ] **R5 — Sentry-once at deadline (`F16`)** · in flight.
+  - `FSMLogger.SentryError` naming never-measured signals, once per worker, never per tick, never via a Poll error; no-PSI boxes fire nothing.
