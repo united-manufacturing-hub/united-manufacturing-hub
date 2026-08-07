@@ -37,6 +37,9 @@ var _ = Describe("R4 — absence of evidence is not health", func() {
 					Quota:     diagnosis.Known(0),
 					NrPeriods: diagnosis.Known(1),
 					Pressure:  diagnosis.Known(0.2),
+					// PSI present: the box is pressurable (F17 rung 1 derives
+					// HasPressureStats from the sticky PsiAvailable).
+					PsiAvailable: true,
 				}, nil
 			}}, 4, 0)
 
@@ -63,8 +66,11 @@ var _ = Describe("R4 — absence of evidence is not health", func() {
 					Timestamp: time.Now(),
 					Quota:     diagnosis.Known(0),
 					NrPeriods: diagnosis.Known(1),
-					// Pressure absent (Unknown), not a failed sample.
-					Pressure: diagnosis.Unknown(),
+					// Pressure absent (Unknown), not a failed sample. The box
+					// still has PSI (sticky PsiAvailable is true) — this tick's
+					// read is just not landing.
+					Pressure:    diagnosis.Unknown(),
+					PsiAvailable: true,
 				}, nil
 			}}, 4, 0)
 
@@ -91,6 +97,9 @@ var _ = Describe("R4 — absence of evidence is not health", func() {
 					Quota:     diagnosis.Known(0),
 					NrPeriods: diagnosis.Known(1),
 					Pressure:  diagnosis.Known(0.2),
+					// PSI present: the box is pressurable (F17 rung 1 derives
+					// HasPressureStats from the sticky PsiAvailable).
+					PsiAvailable: true,
 				}, nil
 			}}, 4, 0)
 
@@ -113,6 +122,9 @@ var _ = Describe("R4 — absence of evidence is not health", func() {
 					Quota:     diagnosis.Known(0),
 					NrPeriods: diagnosis.Known(1),
 					Pressure:  diagnosis.Known(0.2),
+					// PSI present: the box is pressurable (F17 rung 1 derives
+					// HasPressureStats from the sticky PsiAvailable).
+					PsiAvailable: true,
 				}, nil
 			}}, 4, 0)
 
@@ -129,8 +141,11 @@ var _ = Describe("R4 — absence of evidence is not health", func() {
 					Timestamp: time.Now(),
 					Quota:     diagnosis.Known(0),
 					NrPeriods: diagnosis.Known(1),
-					// Pressure unreadable during the outage.
-					Pressure: diagnosis.Unknown(),
+					// Pressure unreadable during the outage. PsiAvailable stays
+					// true (sticky, F17 rung 1) — an outage removes the reading,
+					// not the box's pressurability, so pressure stays capable.
+					Pressure:    diagnosis.Unknown(),
+					PsiAvailable: true,
 				}, nil
 			}}
 
