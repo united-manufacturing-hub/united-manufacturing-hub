@@ -4,13 +4,18 @@
 
 Bridges move data into and out of the Unified Namespace, providing connection monitoring and automatic data organization. While read flows work with any protocol, write flows are not yet implemented - use [stand-alone flows](stand-alone-flow.md) for writing to external systems.
 
+> **New to UMH?** This page is the reference for setting up real bridges. If you just want to get mock data flowing and learn the basics first, start with [Step 2: Connect Your First Data Source](../../getting-started/1-connect-data.md).
+
 ## UI Capabilities
 
 | Action | Available | Notes |
 |--------|-----------|-------|
 | Create bridges | ✅ | Visual protocol configuration |
+| Create from existing bridge | ✅ | Copy a healthy bridge's configuration |
+| Start from a template | ✅ | 84 pre-configured templates, filtered by vendor and protocol |
 | Select protocols | ✅ | OPC UA, Modbus, S7, MQTT, 50+ more |
 | Configure location path | ✅ | ISA-95 levels (0-4) |
+| Map addresses to topics | ✅ | Dropdown of data model fields for custom data contracts |
 | Monitor connection health | ✅ | Real-time status |
 | View logs | ✅ | Live log streaming |
 | View metrics | ✅ | Throughput monitoring |
@@ -26,28 +31,22 @@ Go to **Data Flows** and click **Add Bridge**:
 
 ![Data Flows Overview](./images/bridges-overview.png)
 
-### Step 2: Configure General Settings
+### Step 2: Choose How to Start
 
-Fill in the basic information and press **Save & Deploy**. A popup will appear. Only then you can proceed with Step 3.
+![Create a New Bridge](./images/bridges-create-from-scratch-or-existing.png)
 
-![Bridge General Configuration](./images/bridge-general-good-conenction-no-read-flow.png)
+- **From Scratch**: start from a pre-configured protocol template, which is functional out of the box, or customize the template to fit your needs.
+- **From Existing Bridge**: pick a healthy bridge from any instance and start with a copy of its configuration. Adapt the bridges name, connection, and addresses.
 
-**General Information:**
-- **Name**: Unique identifier for your bridge
-- **Instance**: Select your UMH instance
-- **Level 0-4**: Location path (e.g., enterprise → site → area → line → machine)
+The remaining steps describe the from-scratch path. Starting from an existing bridge skips the template list and lands on the same screens with the fields already filled in.
 
-**Connection:**
-- **IP Address**: Device IP (becomes `{{ .IP }}` variable)
-- **Port**: Connection port (becomes `{{ .PORT }}` variable)
+### Step 3: Select a Template
 
-### Step 3: Select Protocol
+![Select a Template](./images/bridges-template-selection.png)
 
-Click the **Read** tab and select your protocol:
+Templates carry a working protocol configuration. Search by name, or narrow the list with the **Vendor** and **Protocol** filters.
 
-![Protocol Selection](./images/bridges-read-no-dfc-protocol-selection.png)
-
-We support **50+ industrial protocols** through [Benthos-UMH](https://docs.umh.app/benthos-umh/input) plus everything from [Redpanda Connect](https://docs.redpanda.com/redpanda-connect/components/inputs/about/):
+Behind the templates we support **50+ industrial protocols** through [Benthos-UMH](https://docs.umh.app/benthos-umh/input) plus everything from [Redpanda Connect](https://docs.redpanda.com/redpanda-connect/components/inputs/about/):
 
 Common industrial protocols:
 - **Modbus**: For PLCs and RTUs
@@ -56,13 +55,40 @@ Common industrial protocols:
 - **Ethernet/IP**: For Allen-Bradley
 - **And many more**: See full list at [Benthos-UMH Inputs](https://docs.umh.app/benthos-umh/input)
 
-### Step 4: Configure Protocol Settings
+### Step 4: Configure General Settings
+
+Fill in the basic information and proceed with Step 5.
+
+![General Information](./images/bridges-general-information.png)
+
+**General Information:**
+- **Name**: Unique identifier for your bridge
+- **Instance**: Select your UMH instance
+- **Level**: Location path (e.g., enterprise → site → area → line → machine)
+
+![Connection Configuration](./images/bridges-connection-configuration.png)
+
+**Connection:**
+- **IP Address**: Device IP (becomes `{{ .IP }}` variable)
+- **Port**: Connection port (becomes `{{ .PORT }}` variable)
+
+The protocol itself needs no selection here. It comes from the template you picked in Step 3, and the **Read** tab opens on that protocol's settings.
+
+### Step 5: Configure Protocol Settings
 
 Each protocol has specific settings. For example, S7:
 
 ![Siemens S7 Configuration](./images/bridges-read-no-dfc-data-type-selector-for-siemens.png)
 
-### Step 5: Deploy
+### Step 6: Map Addresses
+
+Each row in the address mapping table becomes one UNS topic: the protocol address, followed by the data contract, virtual path, and tag name that build the topic.
+
+![Address Mapping Table](./images/bridges-read-address-table-model-dropdown.png)
+
+With `_historian` or `_raw`, Virtual Path and Tag Name are free-text fields. Selecting a custom data contract merges both columns into a single dropdown listing every field the contract's [data model](../data-modeling/data-models.md) defines, so you pick a valid path instead of typing one. A value the model rejects, for example after switching contracts, stays in the row, is flagged red, and blocks deploy until you correct it. Contracts whose data model references other models keep free-text input.
+
+### Step 7: Deploy
 
 Click **Save & Deploy**. The bridge will start connecting to your device.
 

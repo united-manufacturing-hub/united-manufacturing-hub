@@ -56,6 +56,22 @@ var _ = Describe("DedupLogger", func() {
 		}))
 	})
 
+	It("collapses one call site whose arguments alternate every call", func() {
+		// Same format string, different args each time (as when an error's text
+		// alternates while the condition persists). Must dedup, not thrash.
+		errs := []string{"deadline exceeded", "insufficient time", "deadline exceeded", "insufficient time"}
+		for _, e := range errs {
+			dedup.LogErrorDedup("failed to reconcile: %s", e)
+		}
+
+		Expect(levels()).To(Equal([]zapcore.Level{
+			zapcore.ErrorLevel, // first occurrence
+			zapcore.ErrorLevel, // first repeat (suppression notice)
+			zapcore.DebugLevel, // further repeats, despite changing args
+			zapcore.DebugLevel,
+		}))
+	})
+
 	It("does not restart the cycle when Reset is called between identical messages", func() {
 		// Simulates an FSM reconcile loop that reports success (Reset) every tick
 		// while the same error keeps being logged from a swallowed path.

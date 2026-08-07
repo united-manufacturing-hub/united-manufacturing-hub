@@ -2,8 +2,36 @@
 
 ## Unreleased
 
+## [0.44.33]
+
+### Improvements
+
+- The log viewer's and the metrics views' own polling messages are now DEBUG instead of INFO, which makes it easier to spot actual errors and warnings
+- Stopping an EtherNet/IP input no longer waits out the current poll interval
+- Connection and session diagnostics from the EtherNet/IP protocol library now surface in the input logs, including failures it previously swallowed
+
 ### Fixes
 
+- When the host is CPU-starved, reconciliation deadlines get exceeded and umh-core was logging "context deadline exceeded" and "not enough time to reconcile" once per instance per tick, flooding the log. These are now throttled to at most one warning per minute (with the suppressed count folded in) and escalate to an error when the overload persists, so a genuinely stuck host gets louder instead of drowning in noise
+- The EtherNet/IP input now reconnects after losing the connection to the controller; it previously kept reporting a healthy connection while delivering no data
+- A single unreadable tag or attribute no longer stops the rest of an EtherNet/IP poll; only a poll where nothing at all can be read triggers a reconnect
+- `word`, `dword`, `uint8` and `uint64` values from the EtherNet/IP input are now labelled `eip_tag_type` `number` instead of `string`, and `word` and `dword` attributes decode to a number instead of a stringified byte slice
+
+## [0.44.32]
+
+### New Features
+
+- Node-RED JavaScript processor can return an array of message objects to publish one output message per array element
+
+### Fixes
+
+- A Node-RED JavaScript processor function or tag processor condition that throws now drops only the failing message (warn-logged) and lets the rest of the batch continue, instead of the whole batch failing and retrying
+- Node-RED JavaScript and tag processor counters now report throws accurately: messages_errored is gone, throws count in messages_dropped{reason=js_throw}, and messages_processed counts produced outputs instead of every input attempt
+- Metadata values in Kafka headers are now serialized consistently across the Node-RED JavaScript and tag processors; non-scalar and nested-null values serialize as JSON so a nested null no longer appears as the literal string <nil>, and in the Node-RED JavaScript processor numeric and boolean metadata values that were previously silently dropped now appear as strings
+- UNS schema validation now reports a clear datatype mismatch (e.g. sent timeseries-number, tag registered as timeseries-string) instead of a confusing error that listed the tag as both valid and invalid
+- Sparkplug B input derives `spb_timestamp` from each metric's own timestamp when present, falling back to the payload timestamp; multi-metric NDATA/DDATA no longer collapse to one timestamp
+- The TimescaleDB historian output no longer warns when a batch holds only other contracts' data; it logs once when it stores its first message, and once if data arrives but none matches the configured data contract
+- The tag processor no longer converts numeric-looking string values to numbers; a string read from the source stays a string in the UNS, and msg.meta.datatype = "number" remains available for explicit coercion
 - A misconfigured data contract no longer stops your other data contracts from being set up. Valid contracts are now registered and validated as usual, while the misconfigured one is skipped and reported as a warning
 
 ## [0.44.31]

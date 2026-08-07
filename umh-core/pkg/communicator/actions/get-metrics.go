@@ -73,9 +73,9 @@ func NewGetMetricsActionWithProvider(userEmail string, actionUUID uuid.UUID, ins
 // Parse extracts the business fields from the raw JSON payload.
 // Shape errors are detected here, while semantic validation is done in Validate.
 func (a *GetMetricsAction) Parse(payload interface{}) (err error) {
-	a.actionLogger.Info("Parsing the payload")
+	a.actionLogger.Debug("Parsing the payload")
 	a.payload, err = ParseActionPayload[models.GetMetricsRequest](payload)
-	a.actionLogger.Infow("Payload parsed", "payload", a.payload)
+	a.actionLogger.Debugw("Payload parsed", "payload", a.payload)
 
 	return err
 }
@@ -83,7 +83,7 @@ func (a *GetMetricsAction) Parse(payload interface{}) (err error) {
 // Validate performs semantic validation of the parsed payload.
 // This verifies that the metric type is allowed and that the UUID is valid for DFC metrics.
 func (a *GetMetricsAction) Validate() (err error) {
-	a.actionLogger.Info("Validating the payload")
+	a.actionLogger.Debug("Validating the payload")
 
 	allowedMetricTypes := []models.MetricResourceType{models.DFCMetricResourceType, models.RedpandaMetricResourceType, models.TopicBrowserMetricResourceType, models.StreamProcessorMetricResourceType, models.ProtocolConverterMetricResourceType}
 	if !slices.Contains(allowedMetricTypes, a.payload.Type) {
