@@ -6,9 +6,9 @@ Securing the account layer is split between UMH and you. The instance has its ow
 
 | Area | What we do |
 | --- | --- |
-| Authentication | Run the Auth0 integration, issue sessions, store instance credentials so that we cannot read them |
+| Authentication | Run the identity-provider integration, issue sessions, store instance credentials so that we cannot read them |
 | Authorization | Provide the role system, permission inheritance and location-based access |
-| Secure defaults | The password policy we configure in Auth0, invitations that need two separate pieces, credential storage the console itself cannot decrypt |
+| Secure defaults | The password policy we configure with our identity provider, invitations that need two separate pieces, credential storage the console itself cannot decrypt |
 | Platform | Security of the Management Console application and its API |
 | Audit logging | Record sign-ins and permission changes |
 | UMH staff accounts | Identity, authentication and offboarding of the `@umh.app` accounts you invite. UMH staff reach your company only through an invitation you issue |
@@ -21,7 +21,7 @@ Audit logging is recorded but not yet available to you. Logs with retention sett
 
 | Area | What you do |
 | --- | --- |
-| The Account Owner | Protect the account that cannot be demoted, see [Fallback Access](../users-and-permissions/fallback-access.md) |
+| The Account Owner | Protect the account that cannot be demoted, see [Emergency Access](../users-and-permissions/fallback-access.md) |
 | Instance tokens | Store and transmit each instance's `AUTH_TOKEN` safely |
 | Invitations | Send invite keys through a channel other than the invitation email |
 | Joiners and leavers | Remove people when they leave your organization |

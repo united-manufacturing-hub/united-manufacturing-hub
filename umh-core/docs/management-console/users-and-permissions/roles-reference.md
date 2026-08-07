@@ -8,11 +8,11 @@ Three roles apply at the locations a user or instance is assigned to.
 
 | Role | What it allows |
 | --- | --- |
-| Admin | Everything Editor allows, plus inviting users at the locations where they are an admin. Any admin can add an instance at any location, see [Managing users](README.md#managing-users) |
+| Admin | Everything Editor allows, plus inviting users at the locations where they are an admin. Any admin can add an instance at any location, see [Managing users](managing-access.md#managing-users) |
 | Editor | Create and modify resources, such as bridges, data models and instance configuration. Cannot manage users |
 | Viewer | Read-only. See resources and their state, change nothing |
 
-A role applies to the location it was granted at and everything below it. Exceptions set at a lower location override what is inherited, see [Permission inheritance](README.md#permission-inheritance).
+A role applies to the location it was granted at and everything below it. Exceptions set at a lower location override what is inherited, see [Permission inheritance](location-based-permissions.md#permission-inheritance).
 
 These capabilities apply in the Management Console. They do not apply on an instance, which does not check the role behind a request, see [What roles do not cover](README.md#what-roles-do-not-cover).
 

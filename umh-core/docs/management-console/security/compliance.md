@@ -8,11 +8,11 @@ Relevant standards: NIST SP 800-63B, IEC 62443-3-3 SR 1.1, OWASP Authentication 
 
 | Standard | Requirement | How it is met |
 | --- | --- | --- |
-| OWASP Authentication | Multi-factor, brute force protection, secure session management | Auth0 provides brute force protection and multi-factor. Session management is ours, see [Sessions](#sessions) |
-| NIST SP 800-63B AAL2 | Multi-factor authentication | Available through Auth0 risk-based challenges, and enforceable for every user through your own identity provider once single sign-on is configured |
+| OWASP Authentication | Multi-factor, brute force protection, secure session management | Our identity provider provides brute force protection and multi-factor. Session management is ours, see [Sessions](#sessions) |
+| NIST SP 800-63B AAL2 | Multi-factor authentication | Available through our identity provider's risk-based challenges, and enforceable for every user through your own identity provider once single sign-on is configured |
 | NIST SP 800-63B AAL2 | Session timeout of 24 hours or less | **Not met**, see [Where we fall short](#where-we-fall-short) |
-| IEC 62443-3-3 SR 1.1 | Identify and authenticate human users | Auth0 issues a unique identity per user |
-| IEC 62443-3-3 SR 1.1 RE 2 | Multi-factor on untrusted networks, SL2 and above | Available through Auth0, and enforced by your own identity provider when single sign-on is configured. The default email one-time code is a single factor |
+| IEC 62443-3-3 SR 1.1 | Identify and authenticate human users | Our identity provider issues a unique identity per user |
+| IEC 62443-3-3 SR 1.1 RE 2 | Multi-factor on untrusted networks, SL2 and above | Available through our identity provider, and enforced by your own identity provider when single sign-on is configured. The default email one-time code is a single factor |
 
 ## Authorization
 
@@ -34,7 +34,7 @@ Relevant standards: OWASP Session Management Cheat Sheet, NIST SP 800-63B sessio
 | OWASP Session | Token rotation, secure cookies, sign-out | Sessions are held in cookies JavaScript cannot read, rotating on a 14 day sliding window with a 30 day hard limit |
 | NIST SP 800-63B | Idle timeout of 1 hour or less at AAL2 | **Not met**, see [Where we fall short](#where-we-fall-short) |
 
-Auth0 authenticates. Everything after that, including the session rules above, is managed by the Management Console itself. See [Sessions](../authentication/README.md#sessions).
+Our identity provider authenticates. Everything after that, including the session rules above, is managed by the Management Console itself. See [Sessions](../authentication/sessions.md).
 
 ## Where we fall short
 

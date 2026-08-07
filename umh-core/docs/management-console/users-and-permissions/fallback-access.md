@@ -1,4 +1,4 @@
-# Fallback Access
+# Emergency Access
 
 Admins lose access. People leave, addresses get disabled, permissions get set wrong. Fallback access is what you arrange in advance so that a company is never locked out of its own instances.
 
