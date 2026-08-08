@@ -31,7 +31,6 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/pprof"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions"
-	v2 "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/api/v2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/communication_state"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/fsmv2_adapter"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/graphql"
@@ -275,38 +274,30 @@ func main() {
 
 	// fsmv2Done is closed when the FSMv2 supervisor has fully stopped.
 	// main() waits on it at the bottom so the process does not exit before
-	// the supervisor drains.  When FSMv2 transport is disabled (or the
-	// API URL / token are absent), the channel is closed immediately so
-	// the <-fsmv2Done below is a no-op.
+	// the supervisor drains.  When backend credentials are absent, the
+	// channel is closed immediately so the <-fsmv2Done below is a no-op.
 	fsmv2Done := make(chan struct{})
 
-	if configData.Agent.APIURL != "" && configData.Agent.AuthToken != "" {
-		if configData.Agent.UseFSMv2Transport {
-			log.Info("Using FSMv2 communicator (feature flag enabled)")
+	if bringUpFSMv2(&configData) {
+		log.Info("Using FSMv2 communicator (the only bring-up path)")
 
-			appSup, channelAdapter, fsmv2Store, placeholderUUID, cleanup, buildErr := buildFSMv2Supervisor(ctx, &configData, communicationState, log, forceExit)
-			if buildErr != nil {
-				log.Errorw("Failed to build FSMv2 supervisor", "error", buildErr)
-				close(fsmv2Done)
-			} else {
-				defer cleanup()
-
-				go func() {
-					defer close(fsmv2Done)
-
-					if runErr := appSup.Run(ctx); runErr != nil {
-						log.Errorw("FSMv2 supervisor Run error", "error", runErr)
-					}
-				}()
-
-				sentry.SafeGoWithContext(ctx, func(ctx context.Context) {
-					wireFSMv2Communicator(ctx, appSup, channelAdapter, fsmv2Store, placeholderUUID, &configData, communicationState, log)
-				})
-			}
-		} else {
+		appSup, channelAdapter, fsmv2Store, placeholderUUID, cleanup, buildErr := buildFSMv2Supervisor(ctx, &configData, communicationState, log, forceExit)
+		if buildErr != nil {
+			log.Errorw("Failed to build FSMv2 supervisor", "error", buildErr)
 			close(fsmv2Done)
+		} else {
+			defer cleanup()
+
+			go func() {
+				defer close(fsmv2Done)
+
+				if runErr := appSup.Run(ctx); runErr != nil {
+					log.Errorw("FSMv2 supervisor Run error", "error", runErr)
+				}
+			}()
+
 			sentry.SafeGoWithContext(ctx, func(ctx context.Context) {
-				enableBackendConnection(ctx, &configData, communicationState, controlLoop, communicationState.Logger)
+				wireFSMv2Communicator(ctx, appSup, channelAdapter, fsmv2Store, placeholderUUID, &configData, communicationState, log)
 			})
 		}
 	} else {
@@ -331,6 +322,14 @@ func main() {
 	<-fsmv2Done
 
 	log.Info("umh-core completed")
+}
+
+// bringUpFSMv2 reports whether the FSMv2 runtime should be brought up for the
+// given backend configuration. It is the single bring-up decision in main():
+// the FSMv2 runtime is constructed whenever backend credentials are present.
+// The legacy backend path is gone, so there is no alternative path to route to.
+func bringUpFSMv2(cfg *config.FullConfig) bool {
+	return cfg.Agent.APIURL != "" && cfg.Agent.AuthToken != ""
 }
 
 // countHistorianBridges returns the number of bridges whose write DFC targets the historian output.
@@ -542,68 +541,6 @@ func SystemSnapshotLogger(ctx context.Context, controlLoop *control.ControlLoop)
 			}
 		}
 	}
-}
-
-func enableBackendConnection(ctx context.Context, config *config.FullConfig, communicationState *communication_state.CommunicationState, controlLoop *control.ControlLoop, logger *zap.SugaredLogger) {
-	logger.Info("Enabling backend connection")
-	// directly log the config to console, not to the logger
-	if config == nil {
-		logger.Warn("Config is nil, cannot enable backend connection")
-
-		return
-	}
-
-	if config.Agent.APIURL != "" && config.Agent.AuthToken != "" {
-		// This can temporarely deactivated, e.g., during integration tests where just the mgmtcompanion-config is changed directly
-		// Call NewLogin in a goroutine since it blocks with retry logic
-		loginChan := make(chan *v2.LoginResponse, 1)
-
-		go func() {
-			login := v2.NewLogin(ctx, config.Agent.AuthToken, config.Agent.AllowInsecureTLS, config.Agent.APIURL, logger)
-			select {
-			case loginChan <- login:
-			case <-ctx.Done():
-			}
-		}()
-
-		var login *v2.LoginResponse
-		select {
-		case login = <-loginChan:
-			// Login completed
-		case <-ctx.Done():
-			// Context cancelled before login completed
-			logger.Info("Backend connection context cancelled before login completed")
-
-			return
-		}
-
-		if login == nil {
-			sentry.ReportIssuef(sentry.IssueTypeError, logger, "[v2.NewLogin] Failed to create login object")
-
-			return
-		}
-
-		communicationState.LoginResponseMu.Lock()
-		communicationState.LoginResponse = login
-		communicationState.LoginResponseMu.Unlock()
-		logger.Info("Backend connection enabled, login response: ", zap.Any("login_name", login.Name))
-
-		// Get the config manager from the control loop
-		configManager := controlLoop.GetConfigManager()
-		snapshotManager := controlLoop.GetSnapshotManager()
-
-		communicationState.InitialiseAndStartPuller()
-		communicationState.InitialiseAndStartPusher()
-		communicationState.InitialiseAndStartSubscriberHandler(time.Minute*5, time.Minute, config, snapshotManager, configManager, nil) // nil = legacy mode uses Pusher
-		communicationState.InitialiseAndStartRouter()
-		communicationState.InitialiseReAuthHandler(config.Agent.AuthToken, config.Agent.AllowInsecureTLS)
-
-		// Wait for context cancellation
-		<-ctx.Done()
-		logger.Info("Backend connection context cancelled, shutting down")
-	}
-
-	logger.Info("Backend connection enabled")
 }
 
 // fsmv2Supervisor is the minimal interface required from the ApplicationSupervisor
