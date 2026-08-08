@@ -16,7 +16,6 @@ package fsmv2cpu
 
 import (
 	"context"
-	"strings"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -121,9 +120,12 @@ var _ = Describe("admission is refused while a capable signal has not first-meas
 			Expect(counts[len(all)-1]).To(Equal(1),
 				"the SentryWarn fires once per worker, never once per tick")
 
-			// (c) It names the never-measured capable signal.
-			Expect(strings.Join(spy.sentryWarnMsgs, " ")).To(ContainSubstring("pressure"),
-				"the SentryWarn names the capable signal that never measured")
+			// (c) The event name is a FIXED literal — never interpolated. sentry's
+			// BuildFingerprint groups on the log message verbatim, so a Sprintf
+			// carrying the signal names would give every distinct combination its
+			// own Sentry issue. A regression that interpolates must fail here.
+			Expect(spy.sentryWarnMsgs[0]).To(Equal("cpu_admission_deadline_never_measured_signal"),
+				"the event name is a fixed grouping key, never instance-varying")
 
 			// (e) FIX A: the queryable data rides in the structured fields — never in
 			// the message prose — so the grouped warning is findable and queryable. A
@@ -244,30 +246,24 @@ var _ = Describe("admission is refused while a capable signal has not first-meas
 			Expect(len(spy.sentryWarnMsgs)).To(Equal(1),
 				"the many-capable box raises exactly one SentryWarn, never per tick")
 
-			// (2) The message names EVERY never-measured signal and never the measured
-			// one. If the join dropped all-but-the-first name, throttling would appear
-			// and limit-saturation/saturation would be missing — this asserts the
-			// full set, not just the first.
-			msg := strings.Join(spy.sentryWarnMsgs, " ")
-			for _, name := range []string{"throttling", "saturation", "limit-saturation"} {
-				Expect(msg).To(ContainSubstring(name),
-					"the SentryWarn names %q, a capable signal that never first-measured", name)
-			}
-			Expect(msg).NotTo(ContainSubstring("pressure"),
-				"the SentryWarn never names the measured capable signal")
+			// (2) The event name stays a FIXED literal even on the plural path — the
+			// names must never reach the message, because sentry fingerprints on it
+			// and a per-instance message fragments the issue into noise.
+			Expect(spy.sentryWarnMsgs[0]).To(Equal("cpu_admission_deadline_never_measured_signal"),
+				"the event name is a fixed grouping key on the plural path too")
 
-			// (3) The measured/capable shortfall is in the message and surfaced on the
-			// status — a regression that drops the shortfall must fail here.
-			Expect(msg).To(ContainSubstring("measured 1 of 4 capable"),
-				"the message reports the measured/capable shortfall")
+			// (3) The measured/capable shortfall is surfaced on the status.
 			Expect(last.SignalsMeasured).To(Equal(1), "the status reports measured==1")
 			Expect(last.SignalsCapable).To(Equal(4), "the status reports capable==4")
 
-			// (4) FIX A: the full plural name set rides in the structured field, so all
-			// three never-measured names are queryable — not just the first.
+			// (4) The full plural name set rides in the structured field — EVERY
+			// never-measured signal, never the measured one. If the join dropped
+			// all-but-the-first name this fails; this is the plural-path guard.
 			Expect(len(spy.sentryWarns)).To(Equal(1))
 			Expect(spy.sentryWarns[0].fields["never_measured_signals"]).To(Equal("throttling, saturation, limit-saturation"),
 				"all three never-measured names are queryable, not just the first")
+			Expect(spy.sentryWarns[0].fields["never_measured_signals"]).NotTo(ContainSubstring("pressure"),
+				"the measured capable signal is never named")
 			Expect(spy.sentryWarns[0].fields["signals_measured"]).To(Equal(1))
 			Expect(spy.sentryWarns[0].fields["signals_capable"]).To(Equal(4))
 		})
