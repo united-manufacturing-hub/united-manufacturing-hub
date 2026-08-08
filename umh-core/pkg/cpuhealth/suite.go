@@ -73,5 +73,19 @@ func (f cpuFeed) Unreadable(at time.Time) Sample {
 // required, and there is no way to make that scenario green.
 func RunSuite(cores, quota float64) []diagnosis.Outcome {
 	t := cpuTable(cores, quota)
-	return diagnosis.Run(t, diagnosis.NewEnvironment(HasLimit, HasVirtualization, HasPressureStats), cpuFeed{cores: cores})
+	return diagnosis.Run(t, suiteEnvironment(), cpuFeed{cores: cores})
+}
+
+// suiteEnvironment is the environment the suite runs every scenario in: every
+// capability the CPU table's instruments require, so the suite exercises the
+// whole table rather than the part this box happens to support.
+//
+// It is a named function rather than a literal inside RunSuite so the spec that
+// checks it against the table's Requires reads the SAME value the suite runs
+// on. A capability missing here does not fail loudly: the signal that requires
+// it resolves NoInstrument in all six scenarios — skipped, not tested — and the
+// asserted scenario count does not move, because outcomes are emitted per
+// signal x case whatever they conclude.
+func suiteEnvironment() diagnosis.Environment {
+	return diagnosis.NewEnvironment(HasLimit, HasVirtualization, HasPressureStats)
 }
