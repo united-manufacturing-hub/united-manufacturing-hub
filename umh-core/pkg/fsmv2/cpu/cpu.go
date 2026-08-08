@@ -21,7 +21,6 @@ package fsmv2cpu
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -248,17 +247,17 @@ func Poll(ctx context.Context, d *CPUDeps, _ CPUConfig) (CPUStatus, error) {
 
 	// Once the 10s window has elapsed and a capable signal has still never
 	// first-measured, admission opens even though a source that should answer
-	// has stayed silent. Raise exactly one SentryError naming every signal that
+	// has stayed silent. Raise exactly one SentryWarn naming every signal that
 	// never measured — never once per tick (the admissionReported latch), and
-	// never on a box no instrument can answer (capable==0 keeps it silent). The
-	// error string is fixed so Sentry groups every occurrence together; the
-	// signal names and the measured/capable shortfall are queryable as
+	// never on a box no instrument can answer (capable==0 keeps it silent). A
+	// WARN, not an error: there is nothing for an operator to act on — the box
+	// simply cannot fully see its own CPU, so paging on-call would be noise.
+	// The signal names and the measured/capable shortfall are queryable as
 	// structured deps.Field values, while the message keeps a human-readable
 	// summary.
 	if overDeadline && measured < capable && !d.admissionReported {
 		d.admissionReported = true
-		d.GetLogger().SentryError(deps.FeatureSupportCPU, d.GetHierarchyPath(),
-			errors.New("never-measured capable signal at admission deadline"),
+		d.GetLogger().SentryWarn(deps.FeatureSupportCPU, d.GetHierarchyPath(),
 			fmt.Sprintf("cpu: admission opened; never-measured capable signal(s): %s (measured %d of %d capable)",
 				strings.Join(unmeasured, ", "), measured, capable),
 			deps.String("never_measured_signals", strings.Join(unmeasured, ", ")),
