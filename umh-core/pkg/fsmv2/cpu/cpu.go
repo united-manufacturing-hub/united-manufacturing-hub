@@ -21,7 +21,6 @@ package fsmv2cpu
 
 import (
 	"context"
-	"fmt"
 	"strings"
 	"time"
 
@@ -252,14 +251,17 @@ func Poll(ctx context.Context, d *CPUDeps, _ CPUConfig) (CPUStatus, error) {
 	// never on a box no instrument can answer (capable==0 keeps it silent). A
 	// WARN, not an error: there is nothing for an operator to act on — the box
 	// simply cannot fully see its own CPU, so paging on-call would be noise.
-	// The signal names and the measured/capable shortfall are queryable as
-	// structured deps.Field values, while the message keeps a human-readable
-	// summary.
+	//
+	// The message is a FIXED event name, never interpolated: sentry's
+	// BuildFingerprint groups on the log entry's message verbatim, so a
+	// Sprintf carrying signal names and counts would give every distinct
+	// combination its own Sentry issue. Every dynamic value rides in the
+	// structured fields, which is also how every other worker reports
+	// (transport's "persistent_auth_failure", pull's "pending_buffer_overflow").
 	if overDeadline && measured < capable && !d.admissionReported {
 		d.admissionReported = true
 		d.GetLogger().SentryWarn(deps.FeatureSupportCPU, d.GetHierarchyPath(),
-			fmt.Sprintf("cpu: admission opened; never-measured capable signal(s): %s (measured %d of %d capable)",
-				strings.Join(unmeasured, ", "), measured, capable),
+			"cpu_admission_deadline_never_measured_signal",
 			deps.String("never_measured_signals", strings.Join(unmeasured, ", ")),
 			deps.Int("signals_measured", measured),
 			deps.Int("signals_capable", capable),
