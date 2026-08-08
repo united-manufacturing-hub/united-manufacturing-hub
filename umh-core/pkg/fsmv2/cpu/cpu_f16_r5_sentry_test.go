@@ -28,8 +28,8 @@ import (
 
 // sentryWarnRecord captures one actual SentryWarn invocation: its structured
 // fields plus the two routing arguments. (The worker logs a SentryWarn, not an
-// error — there is no error value to capture, and the queryable fields carry the
-// data.) The feature and hierarchy path are what deps/logger.go documents as
+// error — there is no error value to capture, and the structured fields carry
+// the data.) The feature and hierarchy path are what deps/logger.go documents as
 // required for Sentry routing — which alert bucket the warning lands in and
 // which worker instance raised it — so they are captured, not discarded.
 type sentryWarnRecord struct {
@@ -146,18 +146,23 @@ var _ = Describe("admission is refused while a capable signal has not first-meas
 			Expect(spy.sentryWarnMsgs[0]).To(Equal("cpu_admission_deadline_never_measured_signal"),
 				"the event name is a fixed grouping key, never instance-varying")
 
-			// (e) FIX A: the queryable data rides in the structured fields — never in
-			// the message prose — so the grouped warning is findable and queryable. A
+			// (e) The varying data rides in the structured fields — never in the
+			// message prose. sentry/hook.go promotes only a fixed tag set; these
+			// fields land in Contexts["umh_context"], which the Sentry issue page
+			// shows per event but does not index for search (sentry/doc.go). What
+			// keeps the occurrences together is the fixed event name asserted in
+			// (c); the fields are what an operator reads once inside that one
+			// issue, and what the structured log line carries locally. A
 			// regression that stops emitting the structured fields must fail here.
 			Expect(len(spy.sentryWarns)).To(Equal(1), "the warning is recorded once, like the call")
 			Expect(spy.sentryWarns[0].fields["never_measured_signals"]).To(Equal("pressure"),
-				"the never-measured signal name is a queryable structured field")
+				"the never-measured signal name rides in a structured field")
 			Expect(spy.sentryWarns[0].fields["signals_measured"]).To(Equal(0),
-				"the measured shortfall is a queryable structured field")
+				"the measured shortfall rides in a structured field")
 			Expect(spy.sentryWarns[0].fields["signals_capable"]).To(Equal(1),
-				"the capable count is a queryable structured field")
+				"the capable count rides in a structured field")
 			Expect(spy.sentryWarns[0].fields["admission_window"]).To(Equal(10*time.Second),
-				"the admission window is a queryable structured field")
+				"the admission window rides in a structured field")
 
 			// (f) The two ROUTING arguments — the ones deps/logger.go requires and
 			// logger_impl.go emits as the `feature` and `hierarchy_path` fields.
@@ -248,7 +253,7 @@ var _ = Describe("admission is refused while a capable signal has not first-meas
 			// THREE names — the plural name-assembly path a single-capable box never
 			// exercises. Past the 10s window exactly one SentryWarn must name all
 			// three, name none of the measured signal, and carry the shortfall
-			// (measured %d of %d capable) plus queryable structured fields.
+			// (measured %d of %d capable) in structured fields.
 			start := time.Unix(1_700_000_000, 0).UTC()
 
 			spy := &sentrySpyLogger{FSMLogger: deps.NewNopFSMLogger()}
@@ -297,7 +302,7 @@ var _ = Describe("admission is refused while a capable signal has not first-meas
 			// all-but-the-first name this fails; this is the plural-path guard.
 			Expect(len(spy.sentryWarns)).To(Equal(1))
 			Expect(spy.sentryWarns[0].fields["never_measured_signals"]).To(Equal("throttling, saturation, limit-saturation"),
-				"all three never-measured names are queryable, not just the first")
+				"all three never-measured names ride in the field, not just the first")
 			Expect(spy.sentryWarns[0].fields["never_measured_signals"]).NotTo(ContainSubstring("pressure"),
 				"the measured capable signal is never named")
 			Expect(spy.sentryWarns[0].fields["signals_measured"]).To(Equal(1))
