@@ -157,16 +157,9 @@ func main() {
 	// GetAsBool with required=false never returns an error (silently falls back
 	// to the default on parse failure); see ENG-4809 for the signature fix.
 	transportEnabled, _ := env.GetAsBool("USE_FSMV2_TRANSPORT", false, true)
-	memoryCleanupEnabled, _ := env.GetAsBool("USE_FSMV2_MEMORY_CLEANUP", false, true)
-
-	// Memory cleanup is required whenever transport is on; running transport
-	// without cleanup reintroduces the unbounded state-growth risk (ENG-4292).
-	if transportEnabled {
-		memoryCleanupEnabled = true
-	}
-
+	// Persistence runs unconditionally (ENG-5545 R2): the persistence child and
+	// its deps registration are not gated by any feature flag.
 	configData.Agent.UseFSMv2Transport = transportEnabled
-	configData.Agent.UseFSMv2MemoryCleanup = memoryCleanupEnabled
 
 	protocolConverterEnabled, _ := env.GetAsBool("USE_FSMV2_PROTOCOL_CONVERTER", false, false)
 	configData.Agent.UseFSMv2ProtocolConverter = protocolConverterEnabled
@@ -174,7 +167,7 @@ func main() {
 	featureUsage := &models.FeatureUsage{
 		ConfigBackupEnabled:           configBackupEnabled,
 		FSMv2TransportEnabled:         configData.Agent.UseFSMv2Transport,
-		FSMv2MemoryCleanupEnabled:     configData.Agent.UseFSMv2MemoryCleanup,
+		FSMv2MemoryCleanupEnabled:     true,
 		FSMv2ProtocolConverterEnabled: configData.Agent.UseFSMv2ProtocolConverter,
 		ResourceLimitBlockingEnabled:  configData.Agent.EnableResourceLimitBlocking,
 		HistorianConfigured:           configData.Historian != nil,
@@ -274,35 +267,33 @@ func main() {
 
 	// fsmv2Done is closed when the FSMv2 supervisor has fully stopped.
 	// main() waits on it at the bottom so the process does not exit before
-	// the supervisor drains.  When backend credentials are absent, the
-	// channel is closed immediately so the <-fsmv2Done below is a no-op.
+	// the supervisor drains.  If the supervisor fails to build, the channel is
+	// closed immediately so the <-fsmv2Done below is a no-op.
 	fsmv2Done := make(chan struct{})
 
-	if bringUpFSMv2(&configData) {
-		log.Info("Using FSMv2 communicator (the only bring-up path)")
+	appSup, channelAdapter, fsmv2Store, placeholderUUID, cleanup, buildErr := buildFSMv2Supervisor(ctx, &configData, communicationState, log, forceExit)
+	if buildErr != nil {
+		log.Errorw("Failed to build FSMv2 supervisor", "error", buildErr)
+		close(fsmv2Done)
+	} else {
+		defer cleanup()
 
-		appSup, channelAdapter, fsmv2Store, placeholderUUID, cleanup, buildErr := buildFSMv2Supervisor(ctx, &configData, communicationState, log, forceExit)
-		if buildErr != nil {
-			log.Errorw("Failed to build FSMv2 supervisor", "error", buildErr)
-			close(fsmv2Done)
-		} else {
-			defer cleanup()
+		go func() {
+			defer close(fsmv2Done)
 
-			go func() {
-				defer close(fsmv2Done)
+			if runErr := appSup.Run(ctx); runErr != nil {
+				log.Errorw("FSMv2 supervisor Run error", "error", runErr)
+			}
+		}()
 
-				if runErr := appSup.Run(ctx); runErr != nil {
-					log.Errorw("FSMv2 supervisor Run error", "error", runErr)
-				}
-			}()
-
+		if bringUpFSMv2(&configData) {
+			log.Info("Using FSMv2 communicator (the only bring-up path)")
 			sentry.SafeGoWithContext(ctx, func(ctx context.Context) {
 				wireFSMv2Communicator(ctx, appSup, channelAdapter, fsmv2Store, placeholderUUID, &configData, communicationState, log)
 			})
+		} else {
+			log.Info("No backend credentials configured; running FSMv2 runtime without communicator")
 		}
-	} else {
-		log.Warnf("No backend connection enabled, please set API_URL and AUTH_TOKEN")
-		close(fsmv2Done)
 	}
 
 	// Start the system snapshot logger with automatic panic recovery
@@ -607,24 +598,7 @@ func buildFSMv2Supervisor(
 	// instanceUUID is a placeholder — the real UUID is returned by the backend
 	// and picked up by polling TransportWorker.ObservedState.AuthenticatedUUID below (Bug #6 fix).
 	placeholderUUID = uuid.New().String()
-	yamlConfig := fmt.Sprintf(`
-children:
-  - name: "communicator"
-    workerType: "communicator"
-    userSpec:
-      config: |
-        relayURL: "%s"
-        instanceUUID: "%s"
-        authToken: "%s"
-        timeout: "10s"
-        state: "running"
-`, configData.Agent.APIURL, placeholderUUID, configData.Agent.AuthToken)
-
-	if configData.Agent.UseFSMv2MemoryCleanup {
-		yamlConfig += `  - name: "persistence"
-    workerType: "persistence"
-`
-	}
+	yamlConfig := renderSupervisorChildrenYAML(configData.Agent, placeholderUUID)
 
 	// The historian monitor is a dynamic child, upserted and deleted at runtime
 	// by the config worker's per-tick reconcile so live config edits apply
@@ -651,9 +625,7 @@ children:
 
 	fsmv2Deps := map[string]any{}
 
-	if configData.Agent.UseFSMv2MemoryCleanup {
-		register.SetDeps[*persistenceWorker.PersistenceDependencies](persistenceWorker.WorkerTypeName, persistenceWorker.NewStoreOnlyDependencies(store))
-	}
+	register.SetDeps[*persistenceWorker.PersistenceDependencies](persistenceWorker.WorkerTypeName, persistenceWorker.NewStoreOnlyDependencies(store))
 
 	// Publish the dynamicchildren registry under the configworker deps key and
 	// the process-scoped fsmv2client before constructing the supervisor, so the
