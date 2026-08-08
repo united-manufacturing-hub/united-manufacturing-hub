@@ -26,11 +26,16 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 )
 
-// sentryWarnRecord captures one actual SentryWarn invocation's structured
-// fields. (The worker logs a SentryWarn, not an error — there is no error value to
-// capture, and the queryable fields carry the data.)
+// sentryWarnRecord captures one actual SentryWarn invocation: its structured
+// fields plus the two routing arguments. (The worker logs a SentryWarn, not an
+// error — there is no error value to capture, and the queryable fields carry the
+// data.) The feature and hierarchy path are what deps/logger.go documents as
+// required for Sentry routing — which alert bucket the warning lands in and
+// which worker instance raised it — so they are captured, not discarded.
 type sentryWarnRecord struct {
-	fields map[string]any
+	fields        map[string]any
+	feature       deps.Feature
+	hierarchyPath string
 }
 
 // sentrySpyLogger wraps NopFSMLogger and records every actual SentryWarn
@@ -43,9 +48,13 @@ type sentrySpyLogger struct {
 	sentryWarns    []sentryWarnRecord
 }
 
-func (s *sentrySpyLogger) SentryWarn(_ deps.Feature, _ string, msg string, fields ...deps.Field) {
+func (s *sentrySpyLogger) SentryWarn(feature deps.Feature, hierarchyPath string, msg string, fields ...deps.Field) {
 	s.sentryWarnMsgs = append(s.sentryWarnMsgs, msg)
-	rec := sentryWarnRecord{fields: make(map[string]any, len(fields))}
+	rec := sentryWarnRecord{
+		fields:        make(map[string]any, len(fields)),
+		feature:       feature,
+		hierarchyPath: hierarchyPath,
+	}
 	for _, f := range fields {
 		rec.fields[f.Key] = f.Value
 	}
@@ -54,11 +63,21 @@ func (s *sentrySpyLogger) SentryWarn(_ deps.Feature, _ string, msg string, field
 
 func (s *sentrySpyLogger) With(_ ...deps.Field) deps.FSMLogger { return s }
 
+// testHierarchyPath is the hierarchy path the test worker is given. It is
+// deliberately non-empty and instance-shaped: the worker must route its warning
+// with its OWN path, and an empty-string regression would be invisible against
+// an identity that carried no path.
+const testHierarchyPath = "scenario-test(application)/cpu-test(" + WorkerType + ")"
+
 // newDepsWithLogger is newDeps with an explicit logger, so a test can observe
 // SentryWarn calls (newDeps always binds a Nop logger).
 func newDepsWithLogger(log deps.FSMLogger, s cpuhealth.Sampler, cores, quota float64) *CPUDeps {
 	d := newDeps(s, cores, quota)
-	d.BaseDependencies = deps.NewBaseDependencies(log, nil, deps.Identity{ID: "cpu-test", WorkerType: WorkerType})
+	d.BaseDependencies = deps.NewBaseDependencies(log, nil, deps.Identity{
+		ID:            "cpu-test",
+		WorkerType:    WorkerType,
+		HierarchyPath: testHierarchyPath,
+	})
 	return d
 }
 
@@ -139,6 +158,23 @@ var _ = Describe("admission is refused while a capable signal has not first-meas
 				"the capable count is a queryable structured field")
 			Expect(spy.sentryWarns[0].fields["admission_window"]).To(Equal(10*time.Second),
 				"the admission window is a queryable structured field")
+
+			// (f) The two ROUTING arguments — the ones deps/logger.go requires and
+			// logger_impl.go emits as the `feature` and `hierarchy_path` fields.
+			// The event name and the payload can be perfect while the warning
+			// lands in another team's alert bucket, or names no instance at all,
+			// and an operator would never find it. This is the same argument list
+			// a defect already slipped through once (the interpolated event name):
+			// the previous hardening pinned the message and the fields, leaving
+			// the first two arguments unasserted.
+			Expect(spy.sentryWarns[0].feature).To(Equal(deps.FeatureSupportCPU),
+				"the warning routes to the CPU feature, not some other worker's bucket")
+			Expect(spy.sentryWarns[0].hierarchyPath).NotTo(BeEmpty(),
+				"the warning names the instance that raised it")
+			Expect(spy.sentryWarns[0].hierarchyPath).To(Equal(testHierarchyPath),
+				"the path is this worker's own, the one its identity carries")
+			Expect(spy.sentryWarns[0].hierarchyPath).To(Equal(d.GetHierarchyPath()),
+				"and it is read from the deps rather than hardcoded at the call site")
 
 			// (d) A box no instrument can answer fires none at all: on a no-PSI,
 			// no-limit, non-virtualized box pressure is NoInstrument (not capable),

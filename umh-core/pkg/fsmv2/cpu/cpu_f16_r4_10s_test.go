@@ -55,12 +55,15 @@ var _ = Describe("R4 — absence of evidence is not health", func() {
 
 			var refusing []bool
 			var capable, measured []int
+			var verdict, message []string
 			for range int(wantWindow/time.Second) + 2 {
 				st, err := Poll(context.Background(), d, CPUConfig{})
 				Expect(err).NotTo(HaveOccurred())
 				refusing = append(refusing, st.RefusingAdmission)
 				capable = append(capable, st.SignalsCapable)
 				measured = append(measured, st.SignalsMeasured)
+				verdict = append(verdict, st.Verdict)
+				message = append(message, st.Message)
 			}
 
 			// (a) Inside the 10s window the worker refuses while a capable
@@ -89,6 +92,24 @@ var _ = Describe("R4 — absence of evidence is not health", func() {
 			// (tick 2, delta 1s) vs past the window (tick boundary+1, delta 10s).
 			Expect(capable[boundary]).To(Equal(capable[1]), "capable count unchanged across the 10s window boundary")
 			Expect(measured[boundary]).To(Equal(measured[1]), "measured count unchanged across the 10s window boundary")
+
+			// (d) The reported health is unchanged across the boundary too. The
+			// deadline releases admission and nothing else: it must not turn the
+			// never-measured signal into a bad verdict. Downstream (F18/P4) a
+			// degraded verdict becomes a BLOCKED BRIDGE, so "the window expired
+			// and the signal still never measured, surely that is degraded"
+			// would reinstate exactly the permanent blocking F16 exists to end —
+			// and it would do so silently, because every other spec that reads
+			// Verdict uses time.Now() timestamps and never crosses the deadline.
+			// The inside-window value (index 1) is the reference on both sides.
+			Expect(verdict[1]).NotTo(Equal(string(cpuhealth.StateDegraded)),
+				"the reference tick inside the window is not already degraded, so the comparison below can discriminate")
+			Expect(message[1]).NotTo(BeEmpty(),
+				"the reference tick inside the window reports a message, so the comparison below can discriminate")
+			Expect(verdict[boundary]).To(Equal(verdict[1]), "verdict unchanged at the 10s window boundary")
+			Expect(verdict[len(verdict)-1]).To(Equal(verdict[1]), "verdict unchanged past the window")
+			Expect(message[boundary]).To(Equal(message[1]), "message unchanged at the 10s window boundary")
+			Expect(message[len(message)-1]).To(Equal(message[1]), "message unchanged past the window")
 		})
 
 		It("ends the refusal the moment measured reaches capable, without waiting for the 10s deadline", func() {
