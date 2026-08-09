@@ -35,6 +35,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/env"
 	fsmv2cpu "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/cpu"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/fsmv2client"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/simple"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
@@ -294,10 +295,14 @@ const cpuWorkerMaxAge = 3 * time.Second
 // real verdict to a models.Health. The second return is false when the caller
 // must keep the legacy getCPUMetrics health: no client is reachable (warned
 // once per service lifetime, never per tick), the observation is not Fresh (the
-// freshness direction is a later rung's own), or the tick left no verdict or
-// one this rung does not recognise. A healthy verdict maps to Active and is
-// still the worker's judgement: it does not silence the legacy CPU-usage rule
-// that re-judges status.CPUHealth later.
+// freshness direction is a later rung's own), or the tick left no determination
+// and no framework degraded declaration. The stored observation is
+// simple.Status[CPUStatus] — the developer's poll result plus the framework
+// Degraded/Reason verdict — and the framework verdict maps first: a Degraded
+// observation is the worker declaring it cannot measure (SPEC §2.7), and its
+// Reason is the health message. A healthy verdict maps to Active and is still
+// the worker's judgement: it does not silence the legacy CPU-usage rule that
+// re-judges status.CPUHealth later.
 func (c *ContainerMonitorService) readWorkerCPUHealth(ctx context.Context) (*models.Health, bool) {
 	client := fsmv2client.GetClient()
 	if client == nil {
@@ -309,34 +314,52 @@ func (c *ContainerMonitorService) readWorkerCPUHealth(ctx context.Context) (*mod
 		return nil, false
 	}
 
-	workerStatus, freshness, err := fsmv2client.GetFresh[fsmv2cpu.CPUStatus](ctx, client, fsmv2cpu.Ref, cpuWorkerMaxAge)
+	// Read the simple.Status wrapper, never the bare CPUStatus: a Poll error
+	// does not surface as a GetFresh error. The simple worker persists
+	// Status{Degraded: true, Reason: "poll error: ..."} with a nil error and a
+	// zero result verdict, and decoding that flat JSON into CPUStatus alone
+	// drops the Degraded/Reason keys, so the worker's "cannot measure"
+	// declaration would never reach the verdict mapping.
+	workerStatus, freshness, err := fsmv2client.GetFresh[simple.Status[fsmv2cpu.CPUStatus]](ctx, client, fsmv2cpu.Ref, cpuWorkerMaxAge)
 	if err != nil || freshness != fsmv2client.Fresh {
 		return nil, false
 	}
 
-	// A Fresh observation can still carry no verdict: on a poll error the simple
-	// worker persists its degraded/reason verdict in the framework Status fields,
-	// which are not part of the CPUStatus shape decoded down to here, so Verdict
-	// is empty. "No verdict this tick" must not overwrite the legacy health with
-	// a fabricated Active one; nor may an unrecognised verdict value. The switch
-	// maps only the two spelled-out states, so a rename of either fails the seam
-	// tests too.
-	switch cpuhealth.State(workerStatus.Verdict) {
+	// The framework verdict wins: Degraded means the worker could not measure
+	// (the poll-error case arrives Fresh with a nil error), so the result
+	// verdict — empty when the poll failed — is meaningless. Map to Degraded
+	// with Status.Reason as the message.
+	if workerStatus.Degraded {
+		return &models.Health{
+			Message:       workerStatus.Reason,
+			ObservedState: models.Degraded.String(),
+			DesiredState:  models.Active.String(),
+			Category:      models.Degraded,
+		}, true
+	}
+
+	// A Fresh observation whose framework verdict is not degraded carries the
+	// developer's judgement in Result. The switch maps only the two spelled-out
+	// states, so a rename of either fails the seam tests too.
+	switch cpuhealth.State(workerStatus.Result.Verdict) {
 	case cpuhealth.StateHealthy:
 		return &models.Health{
-			Message:       workerStatus.Message,
+			Message:       workerStatus.Result.Message,
 			ObservedState: models.Active.String(),
 			DesiredState:  models.Active.String(),
 			Category:      models.Active,
 		}, true
 	case cpuhealth.StateDegraded:
 		return &models.Health{
-			Message:       workerStatus.Message,
+			Message:       workerStatus.Result.Message,
 			ObservedState: models.Degraded.String(),
 			DesiredState:  models.Active.String(),
 			Category:      models.Degraded,
 		}, true
 	default:
+		// Empty result verdict AND Degraded == false is a genuine "no
+		// determination" — a successful poll produced no verdict. Keep the
+		// legacy health; do not read it as healthy.
 		return nil, false
 	}
 }
