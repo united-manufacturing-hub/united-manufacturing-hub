@@ -19,6 +19,7 @@ import (
 	"crypto/rand"
 	"crypto/sha3"
 	"fmt"
+	"os"
 	"runtime"
 	"time"
 
@@ -30,6 +31,10 @@ import (
 	"github.com/shirou/gopsutil/v4/disk"
 	"github.com/shirou/gopsutil/v4/mem"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cpuhealth"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/env"
+	fsmv2cpu "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/cpu"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/fsmv2client"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
@@ -77,6 +82,8 @@ type ContainerMonitorService struct {
 	dataPath          string                       // Path to check for disk metrics and HWID file
 	throttleSnapshots []cgroupSnapshot             // Sliding window of cgroup counter snapshots
 	wasThrottled      bool                         // Previous throttle state for transition logging
+	useFSMv2CPU       bool                         // USE_FSMV2_CPU read once at construction; gates the fsmv2 CPU worker seam
+	cpuWorkerWarned   bool                         // One-time latch: the flag-on-but-no-client warning fires once, never per tick
 }
 
 // NewContainerMonitorService creates a new container monitor service instance.
@@ -88,11 +95,14 @@ func NewContainerMonitorService(fs filesystem.Service) *ContainerMonitorService 
 func NewContainerMonitorServiceWithPath(fs filesystem.Service, dataPath string) *ContainerMonitorService {
 	log := logger.For(logger.ComponentContainerMonitorService)
 
+	useFSMv2CPU, _ := env.GetAsBool("USE_FSMV2_CPU", false, false)
+
 	return &ContainerMonitorService{
 		fs:           fs,
 		logger:       log,
 		instanceName: constants.CoreInstanceName, // Single container instance name
 		dataPath:     dataPath,
+		useFSMv2CPU:  useFSMv2CPU,
 	}
 }
 
@@ -125,6 +135,28 @@ func (c *ContainerMonitorService) GetStatus(ctx context.Context) (*ServiceInfo, 
 	}
 
 	status.CPU = cpuStat
+
+	// CPU seam: with USE_FSMV2_CPU on at construction and a Fresh, non-empty
+	// verdict from the fsmv2 CPU worker, that verdict fills status.CPU.Health.
+	// The override is skipped only for a box the legacy path has judged
+	// throttle-degraded this tick: that throttle record is what the aggregate
+	// check below reads, and the usage-% rule below does not recompute it, so a
+	// healthy worker verdict must not erase it (a genuinely throttled box would
+	// otherwise fall through to the usage rule and can report Active). A
+	// usage-degraded legacy record is safe to override: the usage-% rule
+	// recomputes the same verdict from the raw numbers, so no degraded report
+	// is masked there. A Fresh observation carrying no recognisable verdict, or
+	// one that is not Fresh, does not reach the verdict mapping this rung (the
+	// freshness direction is the next rung's own, not pinned here). A healthy
+	// verdict does not stop the legacy CPU-usage rule below from re-judging
+	// status.CPUHealth (over-degrading is the known, fail-safe interim until
+	// that rule is gated). The flag is read once at construction, so a later
+	// toggle does not move the seam.
+	if c.useFSMv2CPU {
+		if workerHealth, ok := c.readWorkerCPUHealth(ctx); ok && !cpuStat.IsThrottled {
+			status.CPU.Health = workerHealth
+		}
+	}
 
 	// Get memory stats
 	memStat, err := c.getMemoryMetrics(ctx)
@@ -250,6 +282,81 @@ func (c *ContainerMonitorService) GetHealth(ctx context.Context) (*models.Health
 	}
 
 	return health, nil
+}
+
+// cpuWorkerMaxAge is how old the fsmv2 CPU worker's observation may be and still
+// count as Fresh for the seam. It is 3x the worker's 1s poll interval
+// (pollInterval in pkg/fsmv2/cpu), so one slow or missed poll cannot flip the
+// seam to the legacy path.
+const cpuWorkerMaxAge = 3 * time.Second
+
+// readWorkerCPUHealth reads the fsmv2 CPU worker's Fresh observation and maps a
+// real verdict to a models.Health. The second return is false when the caller
+// must keep the legacy getCPUMetrics health: no client is reachable (warned
+// once per service lifetime, never per tick), the observation is not Fresh (the
+// freshness direction is a later rung's own), or the tick left no verdict or
+// one this rung does not recognise. A healthy verdict maps to Active and is
+// still the worker's judgement: it does not silence the legacy CPU-usage rule
+// that re-judges status.CPUHealth later.
+func (c *ContainerMonitorService) readWorkerCPUHealth(ctx context.Context) (*models.Health, bool) {
+	client := fsmv2client.GetClient()
+	if client == nil {
+		if !c.cpuWorkerWarned {
+			c.cpuWorkerWarned = true
+			c.logger.Warn(c.cpuSeamClientUnavailableMessage())
+		}
+
+		return nil, false
+	}
+
+	workerStatus, freshness, err := fsmv2client.GetFresh[fsmv2cpu.CPUStatus](ctx, client, fsmv2cpu.Ref, cpuWorkerMaxAge)
+	if err != nil || freshness != fsmv2client.Fresh {
+		return nil, false
+	}
+
+	// A Fresh observation can still carry no verdict: on a poll error the simple
+	// worker persists its degraded/reason verdict in the framework Status fields,
+	// which are not part of the CPUStatus shape decoded down to here, so Verdict
+	// is empty. "No verdict this tick" must not overwrite the legacy health with
+	// a fabricated Active one; nor may an unrecognised verdict value. The switch
+	// maps only the two spelled-out states, so a rename of either fails the seam
+	// tests too.
+	switch cpuhealth.State(workerStatus.Verdict) {
+	case cpuhealth.StateHealthy:
+		return &models.Health{
+			Message:       workerStatus.Message,
+			ObservedState: models.Active.String(),
+			DesiredState:  models.Active.String(),
+			Category:      models.Active,
+		}, true
+	case cpuhealth.StateDegraded:
+		return &models.Health{
+			Message:       workerStatus.Message,
+			ObservedState: models.Degraded.String(),
+			DesiredState:  models.Active.String(),
+			Category:      models.Degraded,
+		}, true
+	default:
+		return nil, false
+	}
+}
+
+// cpuSeamClientUnavailableMessage names the prerequisite that stopped the fsmv2
+// supervisor from publishing the CPU worker client, so the once-per-lifetime
+// warning reads as a diagnosis rather than "no client". The CPU monitor child
+// only exists inside the fsmv2 supervisor tree (gated by USE_FSMV2_TRANSPORT),
+// which is never built without backend credentials (API_URL and AUTH_TOKEN).
+func (c *ContainerMonitorService) cpuSeamClientUnavailableMessage() string {
+	transportOn, _ := env.GetAsBool("USE_FSMV2_TRANSPORT", false, true)
+	if !transportOn {
+		return "USE_FSMV2_CPU is enabled but USE_FSMV2_TRANSPORT is off, so the fsmv2 supervisor never runs and no CPU worker client is published; falling back to legacy CPU metrics"
+	}
+
+	if os.Getenv("API_URL") == "" || os.Getenv("AUTH_TOKEN") == "" {
+		return "USE_FSMV2_CPU is enabled but API_URL or AUTH_TOKEN is unset, so the fsmv2 supervisor never runs and no CPU worker client is published; falling back to legacy CPU metrics"
+	}
+
+	return "USE_FSMV2_CPU is enabled but no fsmv2 client is reachable yet (the fsmv2 supervisor may still be starting); falling back to legacy CPU metrics"
 }
 
 // getCPUMetrics collects CPU metrics using gopsutil.
