@@ -26,9 +26,11 @@ import (
 	"go.uber.org/zap/zapcore"
 	"go.uber.org/zap/zaptest/observer"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cpuhealth"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	fsmv2cpu "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/cpu"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/fsmv2client"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/simple"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker/dynamicchildren"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
@@ -40,15 +42,35 @@ import (
 // to the fsmv2 CPU worker at construction exactly when this flag is set.
 const usefsmv2CPUEnv = "USE_FSMV2_CPU"
 
-// workerVerdictMessage is the CPU worker's ComposeMessage output for a degraded
-// verdict. It is a value the legacy getCPUMetrics path can never emit (legacy
-// emits "CPU utilization normal|warning|critical" or "CPU throttled (...)"),
-// which makes it the discriminator between the two paths.
-const workerVerdictMessage = "cpu worker: degraded (pressure never first-measured)"
+// workerVerdictMessage is cpuhealth.ComposeMessage's output for a degraded
+// throttling verdict — the value the CPU worker stages into CPUStatus.Message
+// on a degraded tick. It is sourced from ComposeMessage, never invented: a real
+// message-format regression moves the staged value and the assertion together,
+// so a drift cannot sail the suite. It discriminates the two paths because the
+// legacy getCPUMetrics path can never emit it (legacy emits "CPU utilization
+// normal|warning|critical" or "CPU throttled (...)").
+var workerVerdictMessage = cpuhealth.ComposeMessage(
+	cpuhealth.Verdict{
+		State:  cpuhealth.StateDegraded,
+		Causes: []cpuhealth.Cause{{Kind: cpuhealth.CauseKindThrottling, Value: 0.5}},
+	},
+	cpuhealth.Signals{ThrottleRatio: 0.5},
+)
 
-// workerHealthyMessage is the CPU worker's ComposeMessage output for a healthy
-// verdict. It discriminates the two paths exactly like workerVerdictMessage.
-const workerHealthyMessage = "cpu worker: healthy (all signals normal)"
+// workerHealthyMessage is cpuhealth.ComposeMessage's output for a healthy
+// verdict on the no-limit budget dashboard, staged from the same source and
+// discriminating the two paths exactly like workerVerdictMessage.
+var workerHealthyMessage = cpuhealth.ComposeMessage(
+	cpuhealth.Verdict{State: cpuhealth.StateHealthy},
+	cpuhealth.Signals{
+		CapacityCores:          8,
+		LimitApplies:           false,
+		HostBusyRingActive:     true,
+		HostBusyCoresAvailable: true,
+		HostBusyCores60sMean:   2,
+		ReserveCores:           1,
+	},
+)
 
 // seamTransportOffWarning, seamCredentialsWarning, and seamStillStartingWarning
 // mirror the three diagnostic warnings readWorkerCPUHealth emits when the flag
@@ -63,20 +85,23 @@ const seamStillStartingWarning = "USE_FSMV2_CPU is enabled but no fsmv2 client i
 
 // cpuStubStateReader is the cpuStubReader harness pattern from
 // pkg/fsmv2/fsmv2client/freshness_test.go: a deps.StateReader that serves a
-// staged fsmv2.Observation[fsmv2cpu.CPUStatus] verbatim, letting the test
-// drive a REAL fsmv2 client's read side without a storage engine.
+// staged fsmv2.Observation[simple.Status[fsmv2cpu.CPUStatus]] verbatim, letting
+// the test drive a REAL fsmv2 client's read side without a storage engine. The
+// framework wraps the worker's CPUStatus in simple.Status — the developer
+// result plus the Degraded/Reason verdict — and the seam reads that wrapper, so
+// the stub stages the wrapper, never the bare result.
 type cpuStubStateReader struct {
-	obs *fsmv2.Observation[fsmv2cpu.CPUStatus]
+	obs *fsmv2.Observation[simple.Status[fsmv2cpu.CPUStatus]]
 }
 
 func (s *cpuStubStateReader) LoadObservedTyped(_ context.Context, _, _ string, result interface{}) error {
 	if s.obs == nil {
-		return nil
+		return errors.New("cpuStubStateReader: no staged observation")
 	}
 
-	out, ok := result.(*fsmv2.Observation[fsmv2cpu.CPUStatus])
+	out, ok := result.(*fsmv2.Observation[simple.Status[fsmv2cpu.CPUStatus]])
 	if !ok {
-		return nil
+		return errors.New("cpuStubStateReader: result is not *fsmv2.Observation[simple.Status[fsmv2cpu.CPUStatus]]")
 	}
 
 	*out = *s.obs
@@ -111,7 +136,7 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 	// and publishes a REAL fsmv2 client (NewFSMv2Client + SetClient) whose read
 	// side serves the staged observation verbatim. DeferCleanup restores the
 	// process globals, so a leak can never bleed into another spec.
-	publishWorkerClient := func(obs *fsmv2.Observation[fsmv2cpu.CPUStatus]) *fsmv2client.FSMv2Client {
+	publishWorkerClient := func(obs *fsmv2.Observation[simple.Status[fsmv2cpu.CPUStatus]]) *fsmv2client.FSMv2Client {
 		writer := dynamicchildren.NewWriter()
 		Expect(writer.Upsert(fsmv2cpu.Ref, map[string]any{})).To(Succeed())
 
@@ -152,13 +177,43 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 	}
 
 	Context("[worker-on]", func() {
+		It("should degrade CPU health, carrying the worker's reason as the message, from a Fresh observation whose framework Degraded flag is set (a Poll error arrives with a nil error and a zero result verdict)", func() {
+			setFlag("true")
+			const pollErrReason = "poll error: cgroup cpu.stat read failed"
+			publishWorkerClient(&fsmv2.Observation[simple.Status[fsmv2cpu.CPUStatus]]{
+				CollectedAt: time.Now().Add(-500 * time.Millisecond), // Fresh: well inside the seam's 3s maxAge
+				Status: simple.Status[fsmv2cpu.CPUStatus]{
+					Result:   fsmv2cpu.CPUStatus{}, // zero result verdict: the failed Poll preserved no verdict
+					Degraded: true,
+					Reason:   pollErrReason,
+				},
+			})
+
+			service = container_monitor.NewContainerMonitorServiceWithPath(mockFS, testDataPath)
+
+			status, err := service.GetStatus(ctx)
+			Expect(err).NotTo(HaveOccurred())
+
+			// The worker's "cannot measure" declaration must degrade the
+			// instance, not fall through to the legacy Active judgement...
+			Expect(status.CPUHealth).To(Equal(models.Degraded))
+			// ...and the framework reason must land where the admission gate
+			// reads the block message.
+			Expect(status.CPU.Health.Message).To(Equal(pollErrReason))
+			Expect(status.CPU.Health.Category).To(Equal(models.Degraded))
+			Expect(status.CPU.Health.ObservedState).To(Equal("degraded"))
+			Expect(status.CPU.Health.DesiredState).To(Equal("active"))
+		})
+
 		It("should fill status.CPUHealth and status.CPU.Health from the worker's Fresh degraded verdict when USE_FSMV2_CPU is on, and read the flag once at construction", func() {
 			setFlag("true")
-			publishWorkerClient(&fsmv2.Observation[fsmv2cpu.CPUStatus]{
+			publishWorkerClient(&fsmv2.Observation[simple.Status[fsmv2cpu.CPUStatus]]{
 				CollectedAt: time.Now().Add(-500 * time.Millisecond), // Fresh: well inside the seam's 3s maxAge
-				Status: fsmv2cpu.CPUStatus{
-					Verdict: "degraded",
-					Message: workerVerdictMessage,
+				Status: simple.Status[fsmv2cpu.CPUStatus]{
+					Result: fsmv2cpu.CPUStatus{
+						Verdict: "degraded",
+						Message: workerVerdictMessage,
+					},
 				},
 			})
 
@@ -193,11 +248,13 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 
 		It("should fill status.CPU.Health from a Fresh healthy worker verdict with the Active category", func() {
 			setFlag("true")
-			publishWorkerClient(&fsmv2.Observation[fsmv2cpu.CPUStatus]{
+			publishWorkerClient(&fsmv2.Observation[simple.Status[fsmv2cpu.CPUStatus]]{
 				CollectedAt: time.Now().Add(-500 * time.Millisecond),
-				Status: fsmv2cpu.CPUStatus{
-					Verdict: "healthy",
-					Message: workerHealthyMessage,
+				Status: simple.Status[fsmv2cpu.CPUStatus]{
+					Result: fsmv2cpu.CPUStatus{
+						Verdict: "healthy",
+						Message: workerHealthyMessage,
+					},
 				},
 			})
 
@@ -216,11 +273,16 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 			Expect(status.CPU.Health.DesiredState).To(Equal("active"))
 		})
 
-		It("should keep the legacy throttled health when the worker's Fresh observation carries no verdict (an errored tick must not masquerade as healthy)", func() {
+		It("should keep the legacy throttled health when the worker's Fresh observation carries no determination (an empty result verdict with the framework not degraded must not erase legacy health)", func() {
 			setFlag("true")
-			publishWorkerClient(&fsmv2.Observation[fsmv2cpu.CPUStatus]{
+			publishWorkerClient(&fsmv2.Observation[simple.Status[fsmv2cpu.CPUStatus]]{
 				CollectedAt: time.Now().Add(-500 * time.Millisecond),
-				Status:      fsmv2cpu.CPUStatus{}, // poll error shape: the inner status has an empty verdict
+				// Genuine "no determination": an empty result verdict and no
+				// framework degraded declaration. A poll error is NOT this shape —
+				// the worker sets Degraded with a reason for that. This is a
+				// successful poll that produced no verdict, and an empty result
+				// must not be read as healthy.
+				Status: simple.Status[fsmv2cpu.CPUStatus]{Result: fsmv2cpu.CPUStatus{}},
 			})
 
 			// Stage a throttled cgroup so the legacy path judges the box degraded:
@@ -259,11 +321,13 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 
 		It("should keep the legacy throttled health when a Fresh healthy verdict cannot erase it (the seam supersedes legacy only in the degraded direction)", func() {
 			setFlag("true")
-			publishWorkerClient(&fsmv2.Observation[fsmv2cpu.CPUStatus]{
+			publishWorkerClient(&fsmv2.Observation[simple.Status[fsmv2cpu.CPUStatus]]{
 				CollectedAt: time.Now().Add(-500 * time.Millisecond),
-				Status: fsmv2cpu.CPUStatus{
-					Verdict: "healthy",
-					Message: workerHealthyMessage,
+				Status: simple.Status[fsmv2cpu.CPUStatus]{
+					Result: fsmv2cpu.CPUStatus{
+						Verdict: "healthy",
+						Message: workerHealthyMessage,
+					},
 				},
 			})
 
@@ -308,11 +372,13 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 	Context("[legacy-off]", func() {
 		It("should keep filling status.CPU through the legacy getCPUMetrics path when USE_FSMV2_CPU is off, even though a worker observation exists", func() {
 			setFlag("false")
-			publishWorkerClient(&fsmv2.Observation[fsmv2cpu.CPUStatus]{
+			publishWorkerClient(&fsmv2.Observation[simple.Status[fsmv2cpu.CPUStatus]]{
 				CollectedAt: time.Now().Add(-500 * time.Millisecond),
-				Status: fsmv2cpu.CPUStatus{
-					Verdict: "degraded",
-					Message: workerVerdictMessage,
+				Status: simple.Status[fsmv2cpu.CPUStatus]{
+					Result: fsmv2cpu.CPUStatus{
+						Verdict: "degraded",
+						Message: workerVerdictMessage,
+					},
 				},
 			})
 
