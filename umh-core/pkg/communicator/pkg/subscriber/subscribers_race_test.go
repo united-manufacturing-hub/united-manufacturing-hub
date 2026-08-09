@@ -24,6 +24,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/subscriber"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/watchdog"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/types"
 	"go.uber.org/zap"
 )
 
@@ -46,11 +47,10 @@ var _ = Describe("SubscriberHandler Race Condition", func() {
 		zapLogger, _ := zap.NewDevelopment()
 		logger = zapLogger.Sugar()
 
-		// Create handler with minimal dependencies - pusher can be nil for this test
-		// since we're only testing the instanceUUID race condition
+		// Create handler with minimal dependencies - the FSMv2 channel is required
+		// (NewHandler rejects nil) but unused by the instanceUUID race tests.
 		handler = subscriber.NewHandler(
 			&mockWatchdog{},
-			nil, // pusher not needed for race condition test
 			uuid.New(),
 			time.Minute,
 			time.Minute,
@@ -60,7 +60,7 @@ var _ = Describe("SubscriberHandler Race Condition", func() {
 			nil, // configManager
 			logger,
 			nil, // topicBrowserCommunicator
-			nil, // fsmOutboundChannel - nil for legacy mode test
+			make(chan *types.UMHMessage, 10),
 			nil, // featureUsage
 		)
 	})

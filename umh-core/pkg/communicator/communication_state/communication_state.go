@@ -144,9 +144,6 @@ func (c *CommunicationState) InitialiseAndStartPusher() {
 	}
 
 	c.Pusher = push.NewPusher(c.LoginResponse.UUID, c.LoginResponse.JWT, c.Watchdog, c.OutboundChannel, push.DefaultDeadLetterChanBuffer(), push.DefaultBackoffPolicy(), c.InsecureTLS, c.ApiUrl, c.Logger)
-	if c.Pusher == nil {
-		sentry.ReportIssuef(sentry.IssueTypeError, c.Logger, "Failed to create pusher")
-	}
 
 	c.Pusher.Start()
 }
@@ -155,12 +152,6 @@ func (c *CommunicationState) InitialiseAndStartPusher() {
 func (c *CommunicationState) InitialiseAndStartRouter() {
 	if c.Puller == nil {
 		sentry.ReportIssuef(sentry.IssueTypeError, c.Logger, "Puller is nil, cannot start router")
-
-		return
-	}
-
-	if c.Pusher == nil {
-		sentry.ReportIssuef(sentry.IssueTypeError, c.Logger, "Pusher is nil, cannot start router")
 
 		return
 	}
@@ -259,12 +250,6 @@ func (c *CommunicationState) InitialiseAndStartSubscriberHandler(ttl time.Durati
 		return
 	}
 
-	if c.Pusher == nil {
-		sentry.ReportIssuef(sentry.IssueTypeError, c.Logger, "Pusher is nil, cannot start subscriber handler")
-
-		return
-	}
-
 	if c.LoginResponse == nil {
 		sentry.ReportIssuef(sentry.IssueTypeError, c.Logger, "LoginResponse is nil, cannot start subscriber handler")
 
@@ -287,7 +272,6 @@ func (c *CommunicationState) InitialiseAndStartSubscriberHandler(ttl time.Durati
 
 	c.SubscriberHandler = subscriber.NewHandler(
 		c.Watchdog,
-		c.Pusher,
 		c.LoginResponse.UUID,
 		ttl,
 		cull,
@@ -297,7 +281,7 @@ func (c *CommunicationState) InitialiseAndStartSubscriberHandler(ttl time.Durati
 		configManager,
 		c.Logger,
 		topicBrowserCommunicator,
-		fsmOutboundChannel, // FSMv2 direct channel (nil for legacy mode)
+		fsmOutboundChannel, // FSMv2 direct channel for status delivery
 		c.FeatureUsage,
 	)
 	if c.SubscriberHandler == nil {
@@ -351,7 +335,6 @@ func (c *CommunicationState) InitialiseReAuthHandler(authToken string, insecureT
 
 // InitializeWriteOnlyPusher creates a Pusher that only writes to OutboundChannel without starting
 // the HTTP push goroutine. This is used for FSMv2 mode where FSMv2 handles the HTTP transport.
-// The Pusher.Push() method will write messages to OutboundChannel, which FSMv2 reads and pushes via HTTP.
 func (c *CommunicationState) InitializeWriteOnlyPusher(instanceUUID string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -434,12 +417,6 @@ func (c *CommunicationState) SetLoginResponseForFSMv2(instanceUUID string) {
 // InitializeRouterForFSMv2 initializes the Router for FSMv2 mode.
 // Unlike InitialiseAndStartRouter, this does not require a Puller (FSMv2 handles pulling).
 func (c *CommunicationState) InitializeRouterForFSMv2() {
-	if c.Pusher == nil {
-		sentry.ReportIssuef(sentry.IssueTypeError, c.Logger, "Pusher is nil, cannot start router for FSMv2")
-
-		return
-	}
-
 	if c.LoginResponse == nil {
 		sentry.ReportIssuef(sentry.IssueTypeError, c.Logger, "LoginResponse is nil, cannot start router for FSMv2")
 

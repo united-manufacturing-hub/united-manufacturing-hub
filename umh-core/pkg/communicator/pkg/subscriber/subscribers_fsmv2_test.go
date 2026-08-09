@@ -58,7 +58,6 @@ var _ = Describe("FSMv2 Direct Channel Mode", func() {
 
 			handler = subscriber.NewHandler(
 				&mockWatchdog{},
-				nil, // pusher not used in FSMv2 mode
 				uuid.New(),
 				time.Minute,
 				time.Minute,
@@ -89,94 +88,7 @@ var _ = Describe("FSMv2 Direct Channel Mode", func() {
 		})
 	})
 
-	Describe("Legacy mode (fsmOutboundChannel == nil)", func() {
-		BeforeEach(func() {
-			fsmOutboundChannel = nil
-
-			handler = subscriber.NewHandler(
-				&mockWatchdog{},
-				nil, // pusher would normally be required, but we're just testing initialization
-				uuid.New(),
-				time.Minute,
-				time.Minute,
-				config.ReleaseChannelStable,
-				false,
-				nil, // systemSnapshotManager
-				nil, // configManager
-				logger,
-				nil, // topicBrowserCommunicator
-				nil, // fsmOutboundChannel - nil for legacy mode
-				nil, // featureUsage
-			)
-		})
-
-		It("should handle legacy mode with nil fsmOutboundChannel", func() {
-			// Verify handler was created successfully
-			Expect(handler).NotTo(BeNil())
-		})
-
-		It("should still support instanceUUID operations in legacy mode", func() {
-			expectedUUID := uuid.New()
-			handler.SetInstanceUUID(expectedUUID)
-			Expect(handler.GetInstanceUUID()).To(Equal(expectedUUID))
-		})
 	})
-
-	Describe("Backward compatibility", func() {
-		It("should allow both legacy and FSMv2 mode handlers to coexist", func() {
-			// Create legacy handler (nil channel)
-			legacyHandler := subscriber.NewHandler(
-				&mockWatchdog{},
-				nil,
-				uuid.New(),
-				time.Minute,
-				time.Minute,
-				config.ReleaseChannelStable,
-				false,
-				nil,
-				nil,
-				logger,
-				nil,
-				nil, // legacy mode
-				nil, // featureUsage
-			)
-
-			// Create FSMv2 handler (with channel)
-			fsmv2Channel := make(chan *types.UMHMessage, 10)
-			defer close(fsmv2Channel)
-
-			fsmv2Handler := subscriber.NewHandler(
-				&mockWatchdog{},
-				nil,
-				uuid.New(),
-				time.Minute,
-				time.Minute,
-				config.ReleaseChannelStable,
-				false,
-				nil,
-				nil,
-				logger,
-				nil,
-				fsmv2Channel, // FSMv2 mode
-				nil,          // featureUsage
-			)
-
-			// Both handlers should work independently
-			Expect(legacyHandler).NotTo(BeNil())
-			Expect(fsmv2Handler).NotTo(BeNil())
-
-			// Both should support UUID operations
-			legacyUUID := uuid.New()
-			fsmv2UUID := uuid.New()
-
-			legacyHandler.SetInstanceUUID(legacyUUID)
-			fsmv2Handler.SetInstanceUUID(fsmv2UUID)
-
-			Expect(legacyHandler.GetInstanceUUID()).To(Equal(legacyUUID))
-			Expect(fsmv2Handler.GetInstanceUUID()).To(Equal(fsmv2UUID))
-		})
-	})
-})
 
 var _ = Describe("Status delivery on the FSMv2 outbound channel", func() {
 	// The guard for the FSMv2 status path: a subscriber registers, the notifier
@@ -219,7 +131,6 @@ var _ = Describe("Status delivery on the FSMv2 outbound channel", func() {
 
 		handler := subscriber.NewHandler(
 			&mockWatchdog{},
-			nil, // pusher: the FSMv2 path must not need one
 			instanceUUID,
 			time.Minute, // ttl
 			time.Minute, // cull
