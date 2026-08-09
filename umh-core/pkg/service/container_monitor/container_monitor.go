@@ -139,16 +139,30 @@ func (c *ContainerMonitorService) GetStatus(ctx context.Context) (*ServiceInfo, 
 
 	// CPU seam: with USE_FSMV2_CPU on at construction and a Fresh, non-empty
 	// verdict from the fsmv2 CPU worker, that verdict fills status.CPU.Health.
-	// The override is skipped only for a box the legacy path has judged
+	// status.CPU aliases cpuStat, so the write lands on the record the
+	// aggregate check below reads: a degraded worker judgement — a fresh
+	// degraded verdict, or the fail-closed freshness degrade — reaches
+	// status.CPUHealth and status.OverallHealth through that aggregate. The
+	// override is skipped only for a box the legacy path has judged
 	// throttle-degraded this tick: that throttle record is what the aggregate
 	// check below reads, and the usage-% rule below does not recompute it, so a
 	// healthy worker verdict must not erase it (a genuinely throttled box would
 	// otherwise fall through to the usage rule and can report Active). A
-	// usage-degraded legacy record is safe to override: the usage-% rule
-	// recomputes the same verdict from the raw numbers, so no degraded report
-	// is masked there. A Fresh observation carrying no recognisable verdict, or
-	// one that is not Fresh, does not reach the verdict mapping this rung (the
-	// freshness direction is the next rung's own, not pinned here). A healthy
+	// usage-degraded legacy record is overridden in the nested health, and the
+	// usage-% rule below re-derives the verdict from the raw numbers — but via
+	// a different derivation (strict > on TotalUsageMCpu/effectiveCores vs the
+	// legacy >= on gopsutil usagePercent, and skipped entirely when
+	// effectiveCores is not positive), so a boundary or an asymmetric cgroup
+	// read can mask that verdict for a tick. A Fresh observation whose
+	// framework verdict is not degraded maps its result verdict in the switch
+	// below; an errored poll is not a no-verdict case — the worker persists it
+	// as simple.Status with Degraded and its poll-error reason, and the
+	// framework-verdict branch maps that to Degraded. Only a successful poll
+	// that declared no verdict keeps the legacy health through the switch's
+	// default arm; that legacy health may be Active on a low-usage box, but it
+	// is a legacy judgement, never a fabricated healthy report. An observation
+	// that is stale, never-observed, or unreadable fails closed to Degraded
+	// rather than falling back to the legacy Active judgement. A healthy
 	// verdict does not stop the legacy CPU-usage rule below from re-judging
 	// status.CPUHealth (over-degrading is the known, fail-safe interim until
 	// that rule is gated). The flag is read once at construction, so a later
@@ -291,18 +305,22 @@ func (c *ContainerMonitorService) GetHealth(ctx context.Context) (*models.Health
 // seam to the legacy path.
 const cpuWorkerMaxAge = 3 * time.Second
 
-// readWorkerCPUHealth reads the fsmv2 CPU worker's Fresh observation and maps a
-// real verdict to a models.Health. The second return is false when the caller
-// must keep the legacy getCPUMetrics health: no client is reachable (warned
-// once per service lifetime, never per tick), the observation is not Fresh (the
-// freshness direction is a later rung's own), or the tick left no determination
-// and no framework degraded declaration. The stored observation is
-// simple.Status[CPUStatus] — the developer's poll result plus the framework
-// Degraded/Reason verdict — and the framework verdict maps first: a Degraded
-// observation is the worker declaring it cannot measure (SPEC §2.7), and its
-// Reason is the health message. A healthy verdict maps to Active and is still
-// the worker's judgement: it does not silence the legacy CPU-usage rule that
-// re-judges status.CPUHealth later.
+// readWorkerCPUHealth reads the fsmv2 CPU worker's observation and maps it to a
+// models.Health. Freshness is judged first: a Fresh observation maps its
+// verdict; a Stale, NeverObserved, or unreadable (Unknown) one fails closed to
+// Degraded, because an old or absent measurement is not a healthy one and the
+// protocol-converter resource-limit check (IsResourceLimited) reads the message
+// as its bridge-block reason. The second return is
+// false when the caller must keep the legacy getCPUMetrics health: no client is
+// reachable (warned once per service lifetime, never per tick), the ref is not
+// registered (Unregistered is the absence-of-worker fallback, not a degrade),
+// or the Fresh tick left no determination and no framework degraded
+// declaration. The stored observation is simple.Status[CPUStatus] — the
+// developer's poll result plus the framework Degraded/Reason verdict — and the
+// framework verdict maps first: a Degraded observation is the worker declaring
+// it cannot measure (SPEC §2.7), and its Reason is the health message. A
+// healthy verdict maps to Active and is still the worker's judgement: it does
+// not silence the legacy CPU-usage rule that re-judges status.CPUHealth later.
 func (c *ContainerMonitorService) readWorkerCPUHealth(ctx context.Context) (*models.Health, bool) {
 	client := fsmv2client.GetClient()
 	if client == nil {
@@ -319,10 +337,46 @@ func (c *ContainerMonitorService) readWorkerCPUHealth(ctx context.Context) (*mod
 	// Status{Degraded: true, Reason: "poll error: ..."} with a nil error and a
 	// zero result verdict, and decoding that flat JSON into CPUStatus alone
 	// drops the Degraded/Reason keys, so the worker's "cannot measure"
-	// declaration would never reach the verdict mapping.
+	// declaration would never reach the verdict mapping. GetFresh maps the
+	// stored observation to a Freshness reason; a read error returns Unknown
+	// alongside the verbatim error, so check err before reading Freshness or
+	// the status, which are only meaningful when err is nil.
 	workerStatus, freshness, err := fsmv2client.GetFresh[simple.Status[fsmv2cpu.CPUStatus]](ctx, client, fsmv2cpu.Ref, cpuWorkerMaxAge)
-	if err != nil || freshness != fsmv2client.Fresh {
-		return nil, false
+	if err != nil {
+		// Unknown: the read failure prevented the observation from being
+		// classified, so it cannot be called healthy. Fail closed with the
+		// verbatim store error as the message.
+		return &models.Health{
+			Message:       fmt.Sprintf("CPU worker observation could not be read: %v", err),
+			ObservedState: models.Degraded.String(),
+			DesiredState:  models.Active.String(),
+			Category:      models.Degraded,
+		}, true
+	}
+
+	// A non-Fresh observation without a read error is Stale, NeverObserved, or
+	// Unregistered. Stale and NeverObserved are absences of a usable measurement
+	// and fail closed; Unregistered (the ref was never Upserted) is the
+	// absence-of-worker row and falls back to legacy, not a degrade.
+	if freshness != fsmv2client.Fresh {
+		switch freshness {
+		case fsmv2client.Stale:
+			return &models.Health{
+				Message:       fmt.Sprintf("CPU worker observation is stale (older than %s); cannot trust the verdict it carries", cpuWorkerMaxAge),
+				ObservedState: models.Degraded.String(),
+				DesiredState:  models.Active.String(),
+				Category:      models.Degraded,
+			}, true
+		case fsmv2client.NeverObserved:
+			return &models.Health{
+				Message:       "CPU worker has never observed; no measurement to judge",
+				ObservedState: models.Degraded.String(),
+				DesiredState:  models.Active.String(),
+				Category:      models.Degraded,
+			}, true
+		default:
+			return nil, false
+		}
 	}
 
 	// The framework verdict wins: Degraded means the worker could not measure
