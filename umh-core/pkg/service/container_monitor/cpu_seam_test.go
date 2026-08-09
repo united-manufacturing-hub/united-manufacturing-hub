@@ -34,6 +34,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker/dynamicchildren"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/container_monitor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 )
@@ -92,9 +93,14 @@ const seamStillStartingWarning = "USE_FSMV2_CPU is enabled but no fsmv2 client i
 // the stub stages the wrapper, never the bare result.
 type cpuStubStateReader struct {
 	obs *fsmv2.Observation[simple.Status[fsmv2cpu.CPUStatus]]
+	err error
 }
 
 func (s *cpuStubStateReader) LoadObservedTyped(_ context.Context, _, _ string, result interface{}) error {
+	if s.err != nil {
+		return s.err
+	}
+
 	if s.obs == nil {
 		return errors.New("cpuStubStateReader: no staged observation")
 	}
@@ -132,17 +138,37 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 		Expect(err).NotTo(HaveOccurred())
 	})
 
-	// publishWorkerClient registers the single CPU monitor ref in a real writer
-	// and publishes a REAL fsmv2 client (NewFSMv2Client + SetClient) whose read
-	// side serves the staged observation verbatim. DeferCleanup restores the
-	// process globals, so a leak can never bleed into another spec.
-	publishWorkerClient := func(obs *fsmv2.Observation[simple.Status[fsmv2cpu.CPUStatus]]) *fsmv2client.FSMv2Client {
+	// publishWorkerClientWithStub registers the single CPU monitor ref in a real
+	// writer and publishes a REAL fsmv2 client (NewFSMv2Client + SetClient) whose
+	// read side serves the staged stub verbatim — an observation, an
+	// ErrNotFound, or a generic read error. DeferCleanup restores the process
+	// globals, so a leak can never bleed into another spec.
+	publishWorkerClientWithStub := func(stub *cpuStubStateReader) *fsmv2client.FSMv2Client {
 		writer := dynamicchildren.NewWriter()
 		Expect(writer.Upsert(fsmv2cpu.Ref, map[string]any{})).To(Succeed())
 
-		stub := &cpuStubStateReader{obs: obs}
-
 		client := fsmv2client.NewFSMv2Client(writer, stub)
+		previous := fsmv2client.GetClient()
+		fsmv2client.SetClient(client)
+		DeferCleanup(func() { fsmv2client.SetClient(previous) })
+
+		return client
+	}
+
+	publishWorkerClient := func(obs *fsmv2.Observation[simple.Status[fsmv2cpu.CPUStatus]]) *fsmv2client.FSMv2Client {
+		return publishWorkerClientWithStub(&cpuStubStateReader{obs: obs})
+	}
+
+	// publishUnregisteredClient publishes a fsmv2 client exactly like
+	// publishWorkerClient except that cpu.Ref is never Upserted into its writer,
+	// so GetFresh maps the ref to Unregistered — the absence-of-worker row of
+	// the seam table. The staged observation is served verbatim if a caller
+	// ever does reach the reader, so a Spec can prove the worker was not
+	// consulted at all.
+	publishUnregisteredClient := func(obs *fsmv2.Observation[simple.Status[fsmv2cpu.CPUStatus]]) *fsmv2client.FSMv2Client {
+		writer := dynamicchildren.NewWriter()
+
+		client := fsmv2client.NewFSMv2Client(writer, &cpuStubStateReader{obs: obs})
 		previous := fsmv2client.GetClient()
 		fsmv2client.SetClient(client)
 		DeferCleanup(func() { fsmv2client.SetClient(previous) })
@@ -197,8 +223,8 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 			// The worker's "cannot measure" declaration must degrade the
 			// instance, not fall through to the legacy Active judgement...
 			Expect(status.CPUHealth).To(Equal(models.Degraded))
-			// ...and the framework reason must land where the admission gate
-			// reads the block message.
+			// ...and the framework reason must land where the protocol-converter
+			// resource-limit check (IsResourceLimited) reads the block message.
 			Expect(status.CPU.Health.Message).To(Equal(pollErrReason))
 			Expect(status.CPU.Health.Category).To(Equal(models.Degraded))
 			Expect(status.CPU.Health.ObservedState).To(Equal("degraded"))
@@ -230,7 +256,8 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 
 			// The worker's verdict drives the service-level CPU health...
 			Expect(status.CPUHealth).To(Equal(models.Degraded))
-			// ...the worker's message lands where the admission gate reads it...
+			// ...the worker's message lands where the protocol-converter
+			// resource-limit check (IsResourceLimited) reads it...
 			Expect(status.CPU.Health.Message).To(Equal(workerVerdictMessage))
 			// ...the nested category follows the verdict...
 			Expect(status.CPU.Health.Category).To(Equal(models.Degraded))
@@ -366,6 +393,150 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 			Expect(status.CPU.Health.Message).NotTo(Equal(workerHealthyMessage))
 			Expect(status.CPU.Health.ObservedState).To(Equal("degraded"))
 			Expect(status.CPU.Health.DesiredState).To(Equal("active"))
+		})
+	})
+
+	Context("[freshness]", func() {
+		It("should degrade CPU health when the worker's observation is stale, even though the verdict it carries is healthy", func() {
+			setFlag("true")
+			publishWorkerClient(&fsmv2.Observation[simple.Status[fsmv2cpu.CPUStatus]]{
+				// Older than the seam's 3s maxAge: GetFresh maps this to
+				// Stale even though the verdict it wraps is a healthy one.
+				CollectedAt: time.Now().Add(-4 * time.Second),
+				Status: simple.Status[fsmv2cpu.CPUStatus]{
+					Result: fsmv2cpu.CPUStatus{
+						Verdict: "healthy",
+						Message: workerHealthyMessage,
+					},
+				},
+			})
+
+			service = container_monitor.NewContainerMonitorServiceWithPath(mockFS, testDataPath)
+
+			status, err := service.GetStatus(ctx)
+			Expect(err).NotTo(HaveOccurred())
+
+			// A stale observation is not a healthy one: the seam must fail
+			// closed and drive the service-level CPU health to degraded...
+			Expect(status.CPUHealth).To(Equal(models.Degraded))
+			// ...and the degrade must say so in words, because the
+			// protocol-converter resource-limit check (IsResourceLimited) reads
+			// CPU.Health.Message as its block reason — the healthy verdict must
+			// also not sail through.
+			Expect(status.CPU.Health.Category).To(Equal(models.Degraded))
+			Expect(status.CPU.Health.Message).To(ContainSubstring("stale"))
+			Expect(status.CPU.Health.Message).NotTo(Equal(workerHealthyMessage))
+			Expect(status.CPU.Health.ObservedState).To(Equal("degraded"))
+			Expect(status.CPU.Health.DesiredState).To(Equal("active"))
+		})
+
+		It("should degrade CPU health when the worker is running but has never observed (the store returns ErrNotFound)", func() {
+			setFlag("true")
+			publishWorkerClientWithStub(&cpuStubStateReader{err: persistence.ErrNotFound})
+
+			// Stage host-independent cgroup data so the cgroup read succeeds
+			// and the throttle path stays benign. What pins the branch is the
+			// message assertions: the legacy path and the read-error branch can
+			// never emit "never observed", so the spec discriminates on any host
+			// (without them, a busy CI host's legacy usage rule alone would
+			// satisfy the degraded assertions on the legacy fallback).
+			mockFS.WithReadFileFunc(func(_ context.Context, path string) ([]byte, error) {
+				switch path {
+				case "/sys/fs/cgroup/cpu.max":
+					return []byte("200000 100000\n"), nil
+				case "/sys/fs/cgroup/cpu.stat":
+					return []byte("nr_periods 2000\nnr_throttled 0\nthrottled_usec 0\n"), nil
+				}
+
+				return nil, errors.New("file not found")
+			})
+
+			service = container_monitor.NewContainerMonitorServiceWithPath(mockFS, testDataPath)
+
+			status, err := service.GetStatus(ctx)
+			Expect(err).NotTo(HaveOccurred())
+
+			// NeverObserved is an absence of measurement, and an absent
+			// measurement is not a healthy one: it must fail closed, not fall
+			// back to the legacy Active judgement, and the message must name the
+			// never-observed cause (the protocol-converter resource-limit check
+			// reads it as the bridge-block reason).
+			Expect(status.CPUHealth).To(Equal(models.Degraded))
+			Expect(status.CPU.Health.Category).To(Equal(models.Degraded))
+			Expect(status.CPU.Health.Message).To(ContainSubstring("never observed"))
+			Expect(status.CPU.Health.Message).NotTo(ContainSubstring("could not be read"))
+			Expect(status.CPU.Health.ObservedState).To(Equal("degraded"))
+			Expect(status.CPU.Health.DesiredState).To(Equal("active"))
+		})
+
+		It("should degrade CPU health when the worker's observation cannot be read (a generic store error maps Unknown to degraded, not a fall-through)", func() {
+			setFlag("true")
+			publishWorkerClientWithStub(&cpuStubStateReader{err: errors.New("cpu store read failed")})
+
+			// Stage host-independent cgroup data so the cgroup read succeeds
+			// and the throttle path stays benign. What pins the branch is the
+			// message assertions: the legacy path and the never-observed branch
+			// can never emit the read-error message, so the spec discriminates
+			// on any host.
+			mockFS.WithReadFileFunc(func(_ context.Context, path string) ([]byte, error) {
+				switch path {
+				case "/sys/fs/cgroup/cpu.max":
+					return []byte("200000 100000\n"), nil
+				case "/sys/fs/cgroup/cpu.stat":
+					return []byte("nr_periods 2000\nnr_throttled 0\nthrottled_usec 0\n"), nil
+				}
+
+				return nil, errors.New("file not found")
+			})
+
+			service = container_monitor.NewContainerMonitorServiceWithPath(mockFS, testDataPath)
+
+			status, err := service.GetStatus(ctx)
+			Expect(err).NotTo(HaveOccurred())
+
+			// GetFresh maps the read error to Unknown plus a verbatim error. A
+			// switch over Freshness that omits the Unknown branch would leave
+			// it Neutral and the box Active, so the assertion is Degraded
+			// specifically — a fall-through passes only by accident on a box
+			// the legacy 70% rule happened to judge degraded. The message must
+			// also carry the read error verbatim, so this branch cannot
+			// collapse into the never-observed branch.
+			Expect(status.CPUHealth).To(Equal(models.Degraded))
+			Expect(status.CPU.Health.Category).To(Equal(models.Degraded))
+			Expect(status.CPU.Health.Message).To(ContainSubstring("could not be read"))
+			Expect(status.CPU.Health.Message).To(ContainSubstring("cpu store read failed"))
+			Expect(status.CPU.Health.Message).NotTo(ContainSubstring("never observed"))
+			Expect(status.CPU.Health.ObservedState).To(Equal("degraded"))
+			Expect(status.CPU.Health.DesiredState).To(Equal("active"))
+		})
+
+		It("should keep the legacy CPU health when the worker ref is not registered, falling back rather than degrading", func() {
+			setFlag("true")
+			// A client exists but cpu.Ref was never Upserted into its writer,
+			// so GetFresh maps the ref to Unregistered before it ever reads.
+			// The staged observation is one the worker path would serve as
+			// degraded, so any seam that consulted the worker at all for an
+			// unregistered ref fails these assertions.
+			publishUnregisteredClient(&fsmv2.Observation[simple.Status[fsmv2cpu.CPUStatus]]{
+				CollectedAt: time.Now().Add(-500 * time.Millisecond),
+				Status: simple.Status[fsmv2cpu.CPUStatus]{
+					Result: fsmv2cpu.CPUStatus{
+						Verdict: "degraded",
+						Message: workerVerdictMessage,
+					},
+				},
+			})
+
+			service = container_monitor.NewContainerMonitorServiceWithPath(mockFS, testDataPath)
+
+			status, err := service.GetStatus(ctx)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Absence of the worker is a legacy fallback, not a degrade: the
+			// health record comes from getCPUMetrics, whose message only the
+			// legacy path can emit and the worker-degraded path cannot.
+			Expect(status.CPU.Health.Message).To(ContainSubstring("CPU utilization"))
+			Expect(status.CPU.Health.Message).NotTo(Equal(workerVerdictMessage))
 		})
 	})
 
