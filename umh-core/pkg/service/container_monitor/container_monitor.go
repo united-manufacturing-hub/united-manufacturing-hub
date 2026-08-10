@@ -85,6 +85,7 @@ type ContainerMonitorService struct {
 	wasThrottled      bool                         // Previous throttle state for transition logging
 	useFSMv2CPU       bool                         // USE_FSMV2_CPU read once at construction; gates the fsmv2 CPU worker seam
 	cpuWorkerWarned   bool                         // One-time latch: the flag-on-but-no-client warning fires once, never per tick
+	cpuUsageProvider  func(ctx context.Context) (float64, error) // CPU usage source, overridable for tests; defaults to the gopsutil provider
 }
 
 // NewContainerMonitorService creates a new container monitor service instance.
@@ -99,12 +100,37 @@ func NewContainerMonitorServiceWithPath(fs filesystem.Service, dataPath string) 
 	useFSMv2CPU, _ := env.GetAsBool("USE_FSMV2_CPU", false, false)
 
 	return &ContainerMonitorService{
-		fs:           fs,
-		logger:       log,
-		instanceName: constants.CoreInstanceName, // Single container instance name
-		dataPath:     dataPath,
-		useFSMv2CPU:  useFSMv2CPU,
+		fs:                fs,
+		logger:            log,
+		instanceName:      constants.CoreInstanceName, // Single container instance name
+		dataPath:          dataPath,
+		useFSMv2CPU:       useFSMv2CPU,
+		cpuUsageProvider:  defaultCPUUsagePercent,
 	}
+}
+
+// defaultCPUUsagePercent reads the host CPU usage through gopsutil, matching
+// the legacy source: the first element of the non-per-CPU percentage slice.
+func defaultCPUUsagePercent(ctx context.Context) (float64, error) {
+	usagePercentages, err := cpu.PercentWithContext(ctx, 0, false)
+	if err != nil {
+		return 0, err
+	}
+
+	if len(usagePercentages) > 0 {
+		return usagePercentages[0], nil
+	}
+
+	return 0, nil
+}
+
+// SetCPUUsageProvider overrides the CPU usage source the aggregate health
+// judgement reads. It is a test seam: the legacy 70% rule fires on the usage
+// percent (derived through getRawCPUMetrics), so a test can stage a >70%
+// reading without a busy host. Defaults to the gopsutil provider; the legacy
+// path is byte-identical when unset.
+func (c *ContainerMonitorService) SetCPUUsageProvider(fn func(ctx context.Context) (float64, error)) {
+	c.cpuUsageProvider = fn
 }
 
 // GetFilesystemService returns the filesystem service - used for testing only.
@@ -162,14 +188,27 @@ func (c *ContainerMonitorService) GetStatus(ctx context.Context) (*ServiceInfo, 
 	// default arm; that legacy health may be Active on a low-usage box, but it
 	// is a legacy judgement, never a fabricated healthy report. An observation
 	// that is stale, never-observed, or unreadable fails closed to Degraded
-	// rather than falling back to the legacy Active judgement. A healthy
-	// verdict does not stop the legacy CPU-usage rule below from re-judging
-	// status.CPUHealth (over-degrading is the known, fail-safe interim until
-	// that rule is gated). The flag is read once at construction, so a later
-	// toggle does not move the seam.
+	// rather than falling back to the legacy Active judgement. A consumed
+	// healthy verdict is authoritative: the legacy CPU-usage rule below does
+	// not re-judge the worker's numbers (a busy host the worker assessed healthy
+	// must not be flipped by the legacy >= rule), so the over-degrading
+	// fail-safe interim is retired. The accepted residual is a busy box the
+	// worker cannot see — the throttle early-window (<2 snapshots) and the
+	// worker's own measurement warm-up — which now reports Active where the
+	// legacy rule used to degrade it. A consumed degraded verdict still degrades
+	// the instance through the aggregate check below. The flag is read once at
+	// construction, so a later toggle does not move the seam.
+	workerVerdictAuthoritative := false
 	if c.useFSMv2CPU {
 		if workerHealth, ok := c.readWorkerCPUHealth(ctx); ok && !cpuStat.IsThrottled {
 			status.CPU.Health = workerHealth
+			// Only a genuinely healthy verdict is authoritative over the legacy
+			// rule. A degraded verdict (read-error, stale, never-observed,
+			// framework-Degraded, worker-Degraded) is caught by the aggregate
+			// check below before the else-if runs, so gating on Category keeps
+			// the flag name truthful: it means "the worker assessed the box
+			// healthy", never "the worker was consulted".
+			workerVerdictAuthoritative = workerHealth.Category != models.Degraded
 		}
 	}
 
@@ -207,7 +246,9 @@ func (c *ContainerMonitorService) GetStatus(ctx context.Context) (*ServiceInfo, 
 	if cpuStat.Health != nil && cpuStat.Health.Category == models.Degraded {
 		status.CPUHealth = models.Degraded
 		status.OverallHealth = models.Degraded
-	} else {
+	} else if !workerVerdictAuthoritative {
+		// A consumed worker verdict is authoritative: skip the legacy CPU-usage
+		// rule, which would otherwise re-judge a busy host the worker assessed.
 		// Calculate CPU percentage against effective cores (cgroup limit if available)
 		//
 		// NOTE: CPU percentage is fundamentally misleading for understanding performance:
@@ -319,8 +360,8 @@ const cpuWorkerMaxAge = 3 * time.Second
 // developer's poll result plus the framework Degraded/Reason verdict — and the
 // framework verdict maps first: a Degraded observation is the worker declaring
 // it cannot measure (SPEC §2.7), and its Reason is the health message. A
-// healthy verdict maps to Active and is still the worker's judgement: it does
-// not silence the legacy CPU-usage rule that re-judges status.CPUHealth later.
+// healthy verdict maps to Active; when the caller consumes it, the verdict
+// is authoritative and the legacy CPU-usage re-judgement is skipped.
 func (c *ContainerMonitorService) readWorkerCPUHealth(ctx context.Context) (*models.Health, bool) {
 	client := fsmv2client.GetClient()
 	if client == nil {
@@ -574,14 +615,12 @@ func (c *ContainerMonitorService) getRawCPUMetrics(ctx context.Context) (usageMC
 		return 0, 0, 0, ctx.Err()
 	}
 
-	// Get actual CPU usage
-	usagePercentages, err := cpu.PercentWithContext(ctx, 0, false)
+	// Get actual CPU usage through the injectable source (gopsutil by default).
+	// The constructor always initializes cpuUsageProvider, so it is never nil
+	// on a service built through the public constructors.
+	usagePercent, err = c.cpuUsageProvider(ctx)
 	if err != nil {
 		return 0, 0, 0, err
-	}
-
-	if len(usagePercentages) > 0 {
-		usagePercent = usagePercentages[0]
 	}
 
 	// Determine effective core count (keep as float64 to preserve fractional quotas)

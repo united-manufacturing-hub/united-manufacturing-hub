@@ -291,13 +291,157 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// A real healthy verdict fills the nested health record. status.CPUHealth
-			// is deliberately NOT asserted here: until the follow-up rung gates the
-			// legacy CPU-usage rule, a high-usage tick can still re-judge the
-			// aggregate below (over-degrading is the known, fail-safe interim).
+			// is deliberately NOT asserted here: the authoritative-rule sibling below
+			// pins that a consumed healthy verdict skips the legacy 70% re-judgement,
+			// so this spec stays limited to the nested record.
 			Expect(status.CPU.Health.Message).To(Equal(workerHealthyMessage))
 			Expect(status.CPU.Health.Category).To(Equal(models.Active))
 			Expect(status.CPU.Health.ObservedState).To(Equal("active"))
 			Expect(status.CPU.Health.DesiredState).To(Equal("active"))
+		})
+
+		It("should not let the legacy 70% CPU-usage rule re-judge a fresh healthy worker verdict when USE_FSMV2_CPU is on (the consumed verdict is authoritative on a busy host)", func() {
+			setFlag("true")
+			publishWorkerClient(&fsmv2.Observation[simple.Status[fsmv2cpu.CPUStatus]]{
+				CollectedAt: time.Now().Add(-500 * time.Millisecond),
+				Status: simple.Status[fsmv2cpu.CPUStatus]{
+					Result: fsmv2cpu.CPUStatus{
+						Verdict: "healthy",
+						Message: workerHealthyMessage,
+					},
+				},
+			})
+
+			// Stage host-independent cgroup data: a benign memory usage so the
+			// memory arm cannot degrade the aggregate, and a throttle-free
+			// cpu.stat + a 2-core quota so the throttle path stays benign and the
+			// CPU-percentage maths below is deterministic. The injected usage
+			// provider is what trips the legacy 70% rule.
+			mockFS.WithReadFileFunc(func(_ context.Context, path string) ([]byte, error) {
+				switch path {
+				case "/sys/fs/cgroup/cpu.max":
+					return []byte("200000 100000\n"), nil
+				case "/sys/fs/cgroup/cpu.stat":
+					return []byte("nr_periods 2000\nnr_throttled 0\nthrottled_usec 0\n"), nil
+				case "/sys/fs/cgroup/memory.max":
+					return []byte("4294967296\n"), nil
+				case "/sys/fs/cgroup/memory.current":
+					return []byte("1073741824\n"), nil
+				}
+
+				return nil, errors.New("file not found")
+			})
+
+			service = container_monitor.NewContainerMonitorServiceWithPath(mockFS, testDataPath)
+			// Inject a synthetic 90% usage: a host the legacy rule WOULD judge
+			// degraded. The worker's fresh healthy verdict is authoritative under
+			// flag-on, so neither the aggregate CPU health nor the overall health
+			// may be flipped to Degraded by the legacy 70% re-judgement.
+			service.SetCPUUsageProvider(func(_ context.Context) (float64, error) {
+				return 90.0, nil
+			})
+
+			status, err := service.GetStatus(ctx)
+			Expect(err).NotTo(HaveOccurred())
+
+			// The verdict was consumed by the seam...
+			Expect(status.CPU.Health.Message).To(Equal(workerHealthyMessage))
+			// ...and it is authoritative: the legacy 70% rule must NOT re-judge
+			// the worker's numbers and flip a busy host to Degraded. Only
+			// status.CPUHealth is asserted here (not status.OverallHealth): the
+			// disk arm below reads the real host disk through gopsutil, which the
+			// mock filesystem cannot stage, so OverallHealth would depend on the
+			// CI host's disk state. The CPUHealth assertion is the discriminator —
+			// the legacy rule sets it too, so any firing of the rule fails here.
+			// This single-tick spec also exercises the throttle early-window (<2
+			// snapshots): isThrottled cannot fire on the first tick, so a 90% host
+			// with a healthy verdict is judged purely by the authoritative rule —
+			// the accepted residual for a just-restarted host.
+			Expect(status.CPUHealth).To(Equal(models.Active))
+		})
+
+		It("should keep the healthy verdict authoritative once the throttle window is armed, not only during the cold-start tick (a 2nd-tick window with a sub-threshold ratio must not let the legacy 70% rule flip the busy host)", func() {
+			setFlag("true")
+			publishWorkerClient(&fsmv2.Observation[simple.Status[fsmv2cpu.CPUStatus]]{
+				CollectedAt: time.Now().Add(-500 * time.Millisecond),
+				Status: simple.Status[fsmv2cpu.CPUStatus]{
+					Result: fsmv2cpu.CPUStatus{
+						Verdict: "healthy",
+						Message: workerHealthyMessage,
+					},
+				},
+			})
+
+			// Same benign cgroup staging as the cold-start spec, plus a cpu.stat
+			// the test advances across the 2nd tick so the throttle window is
+			// armed with a real 2-snapshot delta — not the <2-snapshot warm-up.
+			cpuStat := []byte("nr_periods 1000\nnr_throttled 75\nthrottled_usec 5000000\n")
+			mockFS.WithReadFileFunc(func(_ context.Context, path string) ([]byte, error) {
+				switch path {
+				case "/sys/fs/cgroup/cpu.max":
+					return []byte("200000 100000\n"), nil
+				case "/sys/fs/cgroup/cpu.stat":
+					return cpuStat, nil
+				case "/sys/fs/cgroup/memory.max":
+					return []byte("4294967296\n"), nil
+				case "/sys/fs/cgroup/memory.current":
+					return []byte("1073741824\n"), nil
+				}
+
+				return nil, errors.New("file not found")
+			})
+
+			service = container_monitor.NewContainerMonitorServiceWithPath(mockFS, testDataPath)
+			service.SetCPUUsageProvider(func(_ context.Context) (float64, error) {
+				return 90.0, nil
+			})
+
+			// Tick 1 seeds the throttle window.
+			_, err := service.GetStatus(ctx)
+			Expect(err).NotTo(HaveOccurred())
+			// Tick 2 computes a real delta (1000 periods, 25 throttled = 2.5%) —
+			// above the 2-snapshot arming threshold but below
+			// CPUThrottleRatioThreshold, so isThrottled stays false and the
+			// healthy verdict remains authoritative. The 90% injection would trip
+			// the legacy 70% rule if it ran, so CPUHealth staying Active pins that
+			// the authoritative skip is deliberate on an armed window too, not an
+			// accident of the cold-start tick.
+			cpuStat = []byte("nr_periods 2000\nnr_throttled 100\nthrottled_usec 5000000\n")
+			status, err := service.GetStatus(ctx)
+			Expect(err).NotTo(HaveOccurred())
+
+			// The verdict was consumed... and it is still authoritative: the armed
+			// (but sub-threshold) throttle window must not hand the 90% host back
+			// to the legacy rule. Only status.CPUHealth is asserted, for the same
+			// real-host-disk reason as the cold-start spec.
+			Expect(status.CPU.Health.Message).To(Equal(workerHealthyMessage))
+			Expect(status.CPUHealth).To(Equal(models.Active))
+		})
+
+		It("should fail GetStatus with the usage provider's error rather than swallow it as a 0% reading (a broken usage source must not report Active)", func() {
+			setFlag("true")
+			publishWorkerClient(&fsmv2.Observation[simple.Status[fsmv2cpu.CPUStatus]]{
+				CollectedAt: time.Now().Add(-500 * time.Millisecond),
+				Status: simple.Status[fsmv2cpu.CPUStatus]{
+					Result: fsmv2cpu.CPUStatus{
+						Verdict: "healthy",
+						Message: workerHealthyMessage,
+					},
+				},
+			})
+
+			service = container_monitor.NewContainerMonitorServiceWithPath(mockFS, testDataPath)
+			service.SetCPUUsageProvider(func(_ context.Context) (float64, error) {
+				return 0, errors.New("usage source failed")
+			})
+
+			// The usage source fails before the seam runs: the error must
+			// propagate as the "failed to get CPU metrics" wrapper — even over a
+			// Fresh healthy worker verdict — so a broken source can never be
+			// swallowed as a 0% usage that reads as a healthy box.
+			_, err := service.GetStatus(ctx)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("failed to get CPU metrics"))
 		})
 
 		It("should keep the legacy throttled health when the worker's Fresh observation carries no determination (an empty result verdict with the framework not degraded must not erase legacy health)", func() {
@@ -344,6 +488,58 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 			Expect(status.CPU.Health.Message).To(ContainSubstring("CPU throttled"))
 			Expect(status.CPU.Health.ObservedState).To(Equal("degraded"))
 			Expect(status.CPU.Health.DesiredState).To(Equal("active"))
+		})
+
+		It("should let the legacy usage rule degrade CPU health when the worker's Fresh observation carries no determination (a no-verdict tick is not authoritative, so a hot host the rule sees stays degraded)", func() {
+			setFlag("true")
+			publishWorkerClient(&fsmv2.Observation[simple.Status[fsmv2cpu.CPUStatus]]{
+				CollectedAt: time.Now().Add(-500 * time.Millisecond),
+				// Genuine "no determination": an empty result verdict and no framework
+				// degraded declaration. The worker made no judgement, so the tick is
+				// not authoritative and the legacy usage rule below still runs.
+				Status: simple.Status[fsmv2cpu.CPUStatus]{Result: fsmv2cpu.CPUStatus{}},
+			})
+
+			// Stage a fractional cgroup quota (cpu.max 5000/100000 = 0.05 cores) so the
+			// legacy usage rule fires on the mCpu math while the nested health record
+			// stays Active: getRawCPUMetrics clamps the quota to 0.1 for TotalUsageMCpu,
+			// but the rule below divides by the raw 0.05 quota (CgroupCores), so a 40%
+			// host reads as 80% to the rule. The rule is therefore the ONLY degradation
+			// source, pinning the else-if body against the worker verdict path.
+			mockFS.WithReadFileFunc(func(_ context.Context, path string) ([]byte, error) {
+				switch path {
+				case "/sys/fs/cgroup/cpu.max":
+					return []byte("5000 100000\n"), nil
+				case "/sys/fs/cgroup/cpu.stat":
+					return []byte("nr_periods 2000\nnr_throttled 0\nthrottled_usec 0\n"), nil
+				case "/sys/fs/cgroup/memory.max":
+					return []byte("4294967296\n"), nil
+				case "/sys/fs/cgroup/memory.current":
+					return []byte("1073741824\n"), nil
+				}
+
+				return nil, errors.New("file not found")
+			})
+
+			service = container_monitor.NewContainerMonitorServiceWithPath(mockFS, testDataPath)
+			// Inject a 40% host: the nested record reads Active, but the quota-divergence
+			// math makes the legacy rule judge it 80% and degrade the aggregates.
+			service.SetCPUUsageProvider(func(_ context.Context) (float64, error) {
+				return 40.0, nil
+			})
+
+			status, err := service.GetStatus(ctx)
+			Expect(err).NotTo(HaveOccurred())
+
+			// A no-determination tick is not authoritative: the legacy usage rule still
+			// runs and degrades a host it computes as >70% effective usage.
+			Expect(status.CPUHealth).To(Equal(models.Degraded))
+			Expect(status.OverallHealth).To(Equal(models.Degraded))
+			// The rule only drives the service-level aggregates, not the nested record:
+			// the 40% host read stays Active there, proving the else-if body — not the
+			// nested health — did the degradation.
+			Expect(status.CPU.Health.Category).To(Equal(models.Active))
+			Expect(status.CPU.Health.Message).To(Equal("CPU utilization normal"))
 		})
 
 		It("should keep the legacy throttled health when a Fresh healthy verdict cannot erase it (the seam supersedes legacy only in the degraded direction)", func() {
@@ -567,6 +763,56 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 			// to lose.
 			Expect(status.CPU.Health.Message).To(ContainSubstring("CPU utilization"))
 			Expect(status.CPU.Health.Message).NotTo(Equal(workerVerdictMessage))
+		})
+
+		It("should still degrade CPU health through the legacy usage rule on a hot host when USE_FSMV2_CPU is off, even though a healthy worker observation exists", func() {
+			setFlag("false")
+			// A Fresh healthy worker observation the off path must ignore: if the
+			// seam wrongly consulted the worker at flag-off it would consume this
+			// and report Active, so the Degraded assertion below is the discriminator.
+			publishWorkerClient(&fsmv2.Observation[simple.Status[fsmv2cpu.CPUStatus]]{
+				CollectedAt: time.Now().Add(-500 * time.Millisecond),
+				Status: simple.Status[fsmv2cpu.CPUStatus]{
+					Result: fsmv2cpu.CPUStatus{
+						Verdict: "healthy",
+						Message: workerHealthyMessage,
+					},
+				},
+			})
+
+			// Same fractional-quota staging as the no-determination positive control:
+			// the legacy rule fires on the mCpu math while the nested record stays
+			// Active, making the rule the ONLY degradation source.
+			mockFS.WithReadFileFunc(func(_ context.Context, path string) ([]byte, error) {
+				switch path {
+				case "/sys/fs/cgroup/cpu.max":
+					return []byte("5000 100000\n"), nil
+				case "/sys/fs/cgroup/cpu.stat":
+					return []byte("nr_periods 2000\nnr_throttled 0\nthrottled_usec 0\n"), nil
+				case "/sys/fs/cgroup/memory.max":
+					return []byte("4294967296\n"), nil
+				case "/sys/fs/cgroup/memory.current":
+					return []byte("1073741824\n"), nil
+				}
+
+				return nil, errors.New("file not found")
+			})
+
+			service = container_monitor.NewContainerMonitorServiceWithPath(mockFS, testDataPath)
+			service.SetCPUUsageProvider(func(_ context.Context) (float64, error) {
+				return 40.0, nil
+			})
+
+			status, err := service.GetStatus(ctx)
+			Expect(err).NotTo(HaveOccurred())
+
+			// The worker observation is ignored at flag-off, so the legacy usage rule
+			// still degrades a host it computes as >70% effective usage, in the CPU
+			// health and the overall health.
+			Expect(status.CPUHealth).To(Equal(models.Degraded))
+			Expect(status.OverallHealth).To(Equal(models.Degraded))
+			Expect(status.CPU.Health.Category).To(Equal(models.Active))
+			Expect(status.CPU.Health.Message).To(Equal("CPU utilization normal"))
 		})
 	})
 
