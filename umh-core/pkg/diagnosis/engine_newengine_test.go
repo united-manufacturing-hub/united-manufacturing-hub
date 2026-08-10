@@ -244,7 +244,7 @@ var _ = Describe("NewEngine", func() {
 		Expect(err).ToNot(HaveOccurred(), "a non-nil against under a non-dividing reduction is a redundant declaration, not a refusal")
 	})
 
-	It("refuses duplicate track names, which would make one track silently overwrite another in the tracked map", func() {
+	It("refuses duplicate track names, which would leave Track returning whichever one it reached first", func() {
 		tbl := validTable([]Signal[snap]{validSignal("A")})
 		tbl.Tracks = []Track[snap]{
 			{Name: "T", Extract: extract, Span: 60 * time.Second, Red: Mean},

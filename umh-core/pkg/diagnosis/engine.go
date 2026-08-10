@@ -82,8 +82,8 @@ type key struct{ Signal, Instrument string }
 // calling Select, Reduction or Track from another races on points and latches.
 type Engine[S any] struct {
 	windows map[key]*Window
-	tracked map[string]*Window
-	latches []Latch // one per signal, same order
+	tracked []Window // one per track, same order
+	latches []Latch  // one per signal, same order
 	signals []Signal[S]
 	tracks  []Track[S]
 }
@@ -104,7 +104,7 @@ func NewEngine[S any](t Table[S]) (*Engine[S], error) {
 		signals: t.Signals,
 		tracks:  t.Tracks,
 		windows: make(map[key]*Window),
-		tracked: make(map[string]*Window),
+		tracked: make([]Window, 0, len(t.Tracks)),
 		latches: make([]Latch, 0, len(t.Signals)),
 	}
 	for _, s := range t.Signals {
@@ -121,7 +121,7 @@ func NewEngine[S any](t Table[S]) (*Engine[S], error) {
 		if err != nil {
 			return nil, err
 		}
-		e.tracked[tr.Name] = w
+		e.tracked = append(e.tracked, *w)
 	}
 	for i, s := range t.Signals {
 		e.latches = append(e.latches, Latch{identity: Identity{
@@ -335,8 +335,8 @@ func (e *Engine[S]) resolve(s Signal[S], capable []Instrument[S]) (Instrument[S]
 //	  the engine          resolves  Availability  what one signal can say now
 //	  Latch.Update        judges    Fired         a signal that crossed its mark
 func (e *Engine[S]) Observe(sample S, env Environment, at time.Time) ([]Fired, []Readiness) {
-	for _, tr := range e.tracks { // reduced, never judged
-		w := e.tracked[tr.Name]
+	for i, tr := range e.tracks { // reduced, never judged
+		w := &e.tracked[i]
 		w.Observe(tr.Extract(sample), Unknown(), at) // same clock as every window below
 	}
 
@@ -395,9 +395,10 @@ func (e *Engine[S]) Reduction(signal, instrument string) Reduced {
 // returns the zero Reduced, StateAbsent. Same contract as Reduction, on the
 // windows that belong to no signal: it must follow an Observe on the same tick.
 func (e *Engine[S]) Track(name string) Reduced {
-	w := e.tracked[name]
-	if w == nil {
-		return Reduced{}
+	for i, tr := range e.tracks {
+		if tr.Name == name {
+			return e.tracked[i].Reduce()
+		}
 	}
-	return w.Reduce()
+	return Reduced{}
 }
