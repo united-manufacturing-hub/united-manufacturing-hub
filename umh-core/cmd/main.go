@@ -210,9 +210,7 @@ func main() {
 		configData.Agent.ReleaseChannel,
 		systemSnapshotManager,
 		configManager,
-		configData.Agent.APIURL,
 		logger.For(logger.ComponentCommunicator),
-		configData.Agent.AllowInsecureTLS,
 		topicbrowser.NewCache(),
 		featureUsage,
 	)
@@ -710,11 +708,9 @@ func wireFSMv2Communicator(
 	_ = appSup // kept for future per-supervisor introspection
 
 	// Initialize Router for FSMv2 mode:
-	// 1. Create write-only Pusher (writes to channel, FSMv2 handles HTTP)
-	// 2. Set LoginResponse with placeholder UUID (replaced when TransportWorker.ObservedState.AuthenticatedUUID is observed below)
-	// 3. Initialize SubscriberHandler (generates status messages)
-	// 4. Start Router (processes inbound messages, generates status via Subscriber)
-	communicationState.InitializeWriteOnlyPusher(placeholderUUID)
+	// 1. Set LoginResponse with placeholder UUID (replaced when TransportWorker.ObservedState.AuthenticatedUUID is observed below)
+	// 2. Initialize SubscriberHandler (generates status messages)
+	// 3. Start Router (processes inbound messages, generates status via Subscriber)
 	communicationState.SetLoginResponseForFSMv2(placeholderUUID)
 	communicationState.InitialiseAndStartSubscriberHandler(
 		5*time.Minute, // TTL: time until subscriber considered dead

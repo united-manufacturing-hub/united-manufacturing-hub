@@ -209,7 +209,8 @@ type HTTPTransport struct {
 // If timeout is 0, defaults to LongPollingDuration (30 seconds).
 // Transport settings match legacy communicator to avoid Cloudflare issues.
 // Connection pooling replaces the legacy DisableKeepAlives setting.
-func NewHTTPTransport(relayURL string, timeout time.Duration) *HTTPTransport {
+// If insecure is true, TLS certificate verification is skipped.
+func NewHTTPTransport(relayURL string, timeout time.Duration, insecure bool) *HTTPTransport {
 	if timeout == 0 {
 		timeout = LongPollingDuration
 	}
@@ -217,7 +218,7 @@ func NewHTTPTransport(relayURL string, timeout time.Duration) *HTTPTransport {
 	t := &HTTPTransport{
 		RelayURL: relayURL,
 	}
-	t.httpClient.Store(buildHTTPClient(timeout))
+	t.httpClient.Store(buildHTTPClient(timeout, insecure))
 
 	return t
 }
@@ -225,32 +226,38 @@ func NewHTTPTransport(relayURL string, timeout time.Duration) *HTTPTransport {
 // buildHTTPClient constructs the *http.Client used by NewHTTPTransport and
 // Reset. Both call paths produce a client with identical settings, so this
 // function centralizes the configuration.
-func buildHTTPClient(timeout time.Duration) *http.Client {
+func buildHTTPClient(timeout time.Duration, insecure bool) *http.Client {
+	transport := &http.Transport{
+		// Disable HTTP/2 to match Cloudflare behavior
+		ForceAttemptHTTP2: false,
+		TLSNextProto:      make(map[string]func(authority string, c *tls.Conn) http.RoundTripper),
+		Proxy:             http.ProxyFromEnvironment,
+
+		// Connection pooling (minimal for low-traffic FSMv2)
+		MaxIdleConns:        5, // Total idle connections
+		MaxIdleConnsPerHost: 1, // 1 idle connection to relay endpoint
+		MaxConnsPerHost:     2, // Up to 2 concurrent (auth + pull/push)
+
+		// Dial settings
+		DialContext: (&net.Dialer{
+			Timeout:   30 * time.Second,
+			KeepAlive: 30 * time.Second,
+		}).DialContext,
+
+		// Timeouts
+		IdleConnTimeout:       30 * time.Second, // Match legacy keepAliveTimeout
+		TLSHandshakeTimeout:   10 * time.Second,
+		ResponseHeaderTimeout: 30 * time.Second,
+		ExpectContinueTimeout: 1 * time.Second,
+	}
+
+	if insecure {
+		transport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
+	}
+
 	return &http.Client{
-		Timeout: timeout,
-		Transport: &http.Transport{
-			// Disable HTTP/2 to match Cloudflare behavior
-			ForceAttemptHTTP2: false,
-			TLSNextProto:      make(map[string]func(authority string, c *tls.Conn) http.RoundTripper),
-			Proxy:             http.ProxyFromEnvironment,
-
-			// Connection pooling (minimal for low-traffic FSMv2)
-			MaxIdleConns:        5, // Total idle connections
-			MaxIdleConnsPerHost: 1, // 1 idle connection to relay endpoint
-			MaxConnsPerHost:     2, // Up to 2 concurrent (auth + pull/push)
-
-			// Dial settings
-			DialContext: (&net.Dialer{
-				Timeout:   30 * time.Second,
-				KeepAlive: 30 * time.Second,
-			}).DialContext,
-
-			// Timeouts
-			IdleConnTimeout:       30 * time.Second, // Match legacy keepAliveTimeout
-			TLSHandshakeTimeout:   10 * time.Second,
-			ResponseHeaderTimeout: 30 * time.Second,
-			ExpectContinueTimeout: 1 * time.Second,
-		},
+		Timeout:   timeout,
+		Transport: transport,
 	}
 }
 
@@ -483,7 +490,7 @@ func (t *HTTPTransport) Reset() {
 		timeout = old.Timeout
 	}
 
-	t.httpClient.Store(buildHTTPClient(timeout))
+	t.httpClient.Store(buildHTTPClient(timeout, false))
 
 	if old != nil {
 		// If Transport is not *http.Transport, idle-connection draining is skipped.

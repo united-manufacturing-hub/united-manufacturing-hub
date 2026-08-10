@@ -47,9 +47,7 @@ var _ = Describe("CommunicationState Lock Ordering", func() {
 			config.ReleaseChannelStable,
 			nil, // systemSnapshotManager
 			nil, // configManager
-			"http://localhost",
 			logger,
-			false,
 			nil, // topicBrowserCache
 			nil, // featureUsage
 		)
