@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Improvements
+
+- Instances with large bridge configurations no longer starve their reconcile loop. Checking whether a bridge's running configuration still matches the desired one re-serialized it to YAML text and parsed it back, on both sides of every comparison and several times per bridge per tick. This could under the wrong circumstances push the control loop past its tick budget, so bridges stopped being reconciled and could show up as inactive. The comparison now works directly on the values and falls back to the old path only for the rare shapes it cannot reproduce exactly, which roughly halves the control loop's cycle time in every configuration measured.
+
 ## [0.44.33]
 
 ### Improvements
