@@ -48,6 +48,7 @@ var _ = Describe("Engine", func() {
 					Marks: Marks{
 						Unit:     "ratio",
 						Fire:     Mark{At: 2.0, Inclusive: true},
+						Worst:    4.0,
 						Clear:    Mark{At: 1.0, Inclusive: true},
 						Polarity: HigherIsWorse,
 					},
@@ -61,6 +62,7 @@ var _ = Describe("Engine", func() {
 					Marks: Marks{
 						Unit:     "ratio",
 						Fire:     Mark{At: 2.0, Inclusive: true},
+						Worst:    4.0,
 						Clear:    Mark{At: 1.0, Inclusive: true},
 						Polarity: HigherIsWorse,
 					},
@@ -106,6 +108,7 @@ var _ = Describe("Engine", func() {
 					Marks: Marks{
 						Unit:     "u",
 						Fire:     Mark{At: 2, Inclusive: true},
+						Worst:    4,
 						Clear:    Mark{At: 1, Inclusive: true},
 						Polarity: HigherIsWorse,
 					},
@@ -144,6 +147,7 @@ var _ = Describe("Engine", func() {
 					Marks: Marks{
 						Unit:     "u",
 						Fire:     Mark{At: 2, Inclusive: true},
+						Worst:    4,
 						Clear:    Mark{At: 1, Inclusive: true},
 						Polarity: HigherIsWorse,
 					},
@@ -183,6 +187,7 @@ var _ = Describe("Engine", func() {
 				Marks: Marks{
 					Unit:     "u",
 					Fire:     Mark{At: 100, Inclusive: true},
+					Worst:    200,
 					Clear:    Mark{At: 0, Inclusive: false},
 					Polarity: HigherIsWorse,
 				},
@@ -220,21 +225,21 @@ var _ = Describe("Engine", func() {
 			Name: "F", DemoteSpan: 60 * time.Second,
 			Instruments: []Instrument[s9]{{
 				Name: "I", Requires: []Capability{"c"}, Extract: ext, Red: Last, Span: 60 * time.Second,
-				Marks: Marks{Unit: "u", Fire: Mark{At: 2, Inclusive: true}, Clear: Mark{At: 0, Inclusive: false}, Polarity: HigherIsWorse},
+				Marks: Marks{Unit: "u", Fire: Mark{At: 2, Inclusive: true}, Worst: 4, Clear: Mark{At: 0, Inclusive: false}, Polarity: HigherIsWorse},
 			}},
 		}
 		quiet := Signal[s9]{
 			Name: "Q", DemoteSpan: 60 * time.Second,
 			Instruments: []Instrument[s9]{{
 				Name: "I", Requires: []Capability{"c"}, Extract: ext, Red: Last, Span: 60 * time.Second,
-				Marks: Marks{Unit: "u", Fire: Mark{At: 100, Inclusive: true}, Clear: Mark{At: 0, Inclusive: false}, Polarity: HigherIsWorse},
+				Marks: Marks{Unit: "u", Fire: Mark{At: 100, Inclusive: true}, Worst: 200, Clear: Mark{At: 0, Inclusive: false}, Polarity: HigherIsWorse},
 			}},
 		}
 		incapable := Signal[s9]{
 			Name: "N", DemoteSpan: 60 * time.Second,
 			Instruments: []Instrument[s9]{{
 				Name: "I", Requires: []Capability{"missing"}, Extract: ext, Red: Last, Span: 60 * time.Second,
-				Marks: Marks{Unit: "u", Fire: Mark{At: 2, Inclusive: true}, Clear: Mark{At: 1, Inclusive: true}, Polarity: HigherIsWorse},
+				Marks: Marks{Unit: "u", Fire: Mark{At: 2, Inclusive: true}, Worst: 4, Clear: Mark{At: 1, Inclusive: true}, Polarity: HigherIsWorse},
 			}},
 		}
 
@@ -275,7 +280,7 @@ var _ = Describe("Engine", func() {
 						return Known(5.0)
 					},
 					Red: Last, Span: 60 * time.Second,
-					Marks: Marks{Unit: "u", Fire: Mark{At: 2, Inclusive: true}, Clear: Mark{At: 0, Inclusive: false}, Polarity: HigherIsWorse},
+					Marks: Marks{Unit: "u", Fire: Mark{At: 2, Inclusive: true}, Worst: 4, Clear: Mark{At: 0, Inclusive: false}, Polarity: HigherIsWorse},
 				}},
 			}
 		}
@@ -330,7 +335,7 @@ var _ = Describe("Engine", func() {
 				Name: "I", Requires: []Capability{"c"},
 				Extract: func(s nsnap) Reading { return Known(s.v) },
 				Red:     Last, Span: 60 * time.Second,
-				Marks: Marks{Unit: "u", Fire: Mark{At: 2, Inclusive: true}, Clear: Mark{At: 0, Inclusive: false}, Polarity: HigherIsWorse},
+				Marks: Marks{Unit: "u", Fire: Mark{At: 2, Inclusive: true}, Worst: 4, Clear: Mark{At: 0, Inclusive: false}, Polarity: HigherIsWorse},
 			}},
 		}
 		tbl := Table[nsnap]{Signals: []Signal[nsnap]{sig}, Interval: time.Second}
@@ -359,7 +364,7 @@ var _ = Describe("Engine", func() {
 				Name: "I", Requires: []Capability{"c"},
 				Extract: func(s rsnap) Reading { return Known(s.v) },
 				Red:     Last, Span: 60 * time.Second,
-				Marks: Marks{Unit: "u", Fire: Mark{At: 2, Inclusive: true}, Clear: Mark{At: 0, Inclusive: false}, Polarity: HigherIsWorse},
+				Marks: Marks{Unit: "u", Fire: Mark{At: 2, Inclusive: true}, Worst: 4, Clear: Mark{At: 0, Inclusive: false}, Polarity: HigherIsWorse},
 			}},
 		}
 		tbl := Table[rsnap]{Signals: []Signal[rsnap]{sig}, Interval: time.Second}

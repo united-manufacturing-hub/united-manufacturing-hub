@@ -22,18 +22,12 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-// The latch: a two-mark Schmitt pair keyed per signal, with a coverage-gated
-// clear arm, a span-based re-fire arm, an immediate Reset, and a demote clock
-// that measures ReleaseAfter from the last Update.
-//
-// These specs drive the latch through its exported surface only: Update,
-// Reset, ReleaseAfter, Fired, and hand it Reduced and Coverage values built
-// directly, because the latch must derive everything from those two and must
-// never see a readability fact. Reduced.v/.state and Coverage.span/.spanned
-// are reachable here because this file lives in package diagnosis; the
-// external access spec (reduced_access_test.go) proves they are not reachable
-// from outside. The structural shape of Reduced, Coverage and Update is pinned
-// independently in latch_spec6_test.go and must stay green.
+// These specs drive the latch through Update, Reset, ReleaseAfter and Fired,
+// handing it Reduced and Coverage values built here, because the latch must
+// derive everything from those two and must never see a readability fact.
+// Their unexported fields are reachable from inside the package;
+// reduced_access_test.go proves they are not from outside, and
+// latch_spec6_test.go pins the shape of Reduced, Coverage and Update.
 var _ = Describe("Latch", func() {
 	const latchSpan = 60 * time.Second
 
@@ -51,27 +45,22 @@ var _ = Describe("Latch", func() {
 		t0 := time.Unix(1_000_000, 0)
 		l := NewLatch(Identity{})
 
-		// An exclusive fire mark is not crossed by a value exactly at it.
 		l.Update(Reduced{v: 0.10, state: StateValue}, full(), march(), t0)
 		_, fired := l.Fired()
 		Expect(fired).To(BeFalse(), "an exclusive fire mark is not crossed by a value exactly at it")
 
-		// A value strictly above the fire mark fires.
 		l.Update(Reduced{v: 0.20, state: StateValue}, full(), march(), t0.Add(time.Second))
 		_, fired = l.Fired()
 		Expect(fired).To(BeTrue(), "a value strictly above the fire mark fires the latch")
 
-		// A value between the clear and fire marks holds a fired latch.
 		l.Update(Reduced{v: 0.08, state: StateValue}, full(), march(), t0.Add(2*time.Second))
 		_, fired = l.Fired()
 		Expect(fired).To(BeTrue(), "a value between the marks holds the fired latch")
 
-		// An exclusive clear mark is not crossed by a value exactly at it.
 		l.Update(Reduced{v: 0.06, state: StateValue}, full(), march(), t0.Add(3*time.Second))
 		_, fired = l.Fired()
 		Expect(fired).To(BeTrue(), "an exclusive clear mark is not crossed by a value exactly at it")
 
-		// A value strictly below the clear mark, with full coverage, clears.
 		l.Update(Reduced{v: 0.02, state: StateValue}, full(), march(), t0.Add(4*time.Second))
 		_, fired = l.Fired()
 		Expect(fired).To(BeFalse(), "a value strictly below the clear mark clears the fired latch")
@@ -81,9 +70,8 @@ var _ = Describe("Latch", func() {
 		t0 := time.Unix(1_000_000, 0)
 		l := NewLatch(Identity{})
 
-		// 0.08 is strictly between clear (0.06) and fire (0.10): it crosses neither
-		// mark, so an unfired latch must stay unfired. The fire arm must be gated on
-		// crossing the fire mark, not on any trustworthy value at all.
+		// 0.08 lies strictly between clear (0.06) and fire (0.10), so the fire arm
+		// must be gated on crossing the fire mark, not on any trustworthy value.
 		l.Update(Reduced{v: 0.08, state: StateValue}, full(), march(), t0)
 		_, fired := l.Fired()
 		Expect(fired).To(BeFalse(), "a value strictly between the marks does not fire an unfired latch")
@@ -122,9 +110,8 @@ var _ = Describe("Latch", func() {
 		_, fired := l.Fired()
 		Expect(fired).To(BeTrue(), "a value above the fire mark fires")
 
-		// An untrustworthy reduction, even one carrying a number below the clear
-		// mark, must not clear a fired latch: the clear arm requires a
-		// trustworthy (StateValue) reduction.
+		// 0.02 is below the clear mark, so only its untrustworthiness can stop the
+		// clear arm.
 		l.Update(Reduced{v: 0.02, state: StateUntrusted}, full(), march(), t0.Add(time.Second))
 		_, fired = l.Fired()
 		Expect(fired).To(BeTrue(), "an untrustworthy reduction holds the fired latch rather than clearing it")
@@ -138,14 +125,11 @@ var _ = Describe("Latch", func() {
 		_, fired := l.Fired()
 		Expect(fired).To(BeTrue(), "a value above the fire mark fires")
 
-		// A below-clear value with NON-full coverage holds: the clear arm is gated
-		// on Coverage.Full(), and a window ageing without appending reports short
-		// coverage.
+		// short() is what a window ageing without appending reports.
 		l.Update(Reduced{v: 0.02, state: StateValue}, short(), march(), t0.Add(time.Second))
 		_, fired = l.Fired()
 		Expect(fired).To(BeTrue(), "a below-clear value does not clear a latch whose window does not span the full duration")
 
-		// Once the window spans the full duration, the same below-clear value clears.
 		l.Update(Reduced{v: 0.02, state: StateValue}, full(), march(), t0.Add(2*time.Second))
 		_, fired = l.Fired()
 		Expect(fired).To(BeFalse(), "a below-clear value clears once coverage is full")
@@ -159,17 +143,13 @@ var _ = Describe("Latch", func() {
 		_, fired := l.Fired()
 		Expect(fired).To(BeTrue(), "a value above the fire mark fires")
 
-		// The clear arm is otherwise holding the latch: a below-clear value on
-		// NON-full coverage does not release.
+		// Establish that the clear arm is otherwise holding the latch.
 		l.Update(Reduced{v: 0.02, state: StateValue}, short(), march(), t0.Add(time.Second))
 		_, fired = l.Fired()
 		Expect(fired).To(BeTrue(), "the additional below-clear value on non-full coverage holds the latch")
 
-		// Reset must release immediately even though coverage is not full. A Reset
-		// routed through the coverage-gated clear arm would refuse and never
-		// release. Reset takes no clock; it anchors the re-fire window at the last
-		// trusted Update, and that does not affect this release, which is
-		// immediate whatever the re-fire bar.
+		// A Reset routed through the coverage-gated clear arm would refuse here
+		// and never release.
 		l.Reset()
 		_, fired = l.Fired()
 		Expect(fired).To(BeFalse(), "Reset releases a fired latch whatever its coverage")
@@ -183,20 +163,16 @@ var _ = Describe("Latch", func() {
 		_, fired := l.Fired()
 		Expect(fired).To(BeTrue(), "a value above the fire mark fires")
 
-		// Reset() takes no clock. With no timestamp to stamp the re-fire bar, the
-		// reset anchors it at the last trusted Update, the firing Update at t0,
-		// so the re-fire window runs from lastUpdate, never the real wall clock.
+		// Reset takes no clock, so it anchors the re-fire bar at the last trusted
+		// Update (the firing one at t0), never at the wall clock.
 		l.Reset()
 		_, fired = l.Fired()
 		Expect(fired).To(BeFalse(), "Reset releases the fired latch")
 
-		// Before one full window has elapsed since the last trusted Update (the
-		// anchor), the same above-fire value must not re-fire.
 		l.Update(Reduced{v: 0.20, state: StateValue}, full(), march(), t0.Add(latchSpan-time.Second))
 		_, fired = l.Fired()
 		Expect(fired).To(BeFalse(), "a reset latch does not re-fire before one full window has elapsed since the last update")
 
-		// Once one full window has elapsed since the anchor, it fires again.
 		l.Update(Reduced{v: 0.20, state: StateValue}, full(), march(), t0.Add(latchSpan))
 		_, fired = l.Fired()
 		Expect(fired).To(BeTrue(), "a reset latch re-fires once one full window has elapsed since the last update")
@@ -206,22 +182,18 @@ var _ = Describe("Latch", func() {
 		t0 := time.Unix(1_000_000, 0)
 		l := NewLatch(Identity{})
 
-		// Fire, then clear with full coverage: the release happens on the
-		// clearing Update at tClear, and the re-fire bar counts one full window
-		// (Coverage.Span) from that release.
+		// Here the release happens on the clearing Update at tClear, and the
+		// re-fire bar counts one Coverage.Span from that release.
 		l.Update(Reduced{v: 0.20, state: StateValue}, full(), march(), t0)
 		tClear := t0.Add(time.Second)
 		l.Update(Reduced{v: 0.02, state: StateValue}, full(), march(), tClear)
 		_, fired := l.Fired()
 		Expect(fired).To(BeFalse(), "a below-clear value with full coverage clears the fired latch")
 
-		// Before one full window has elapsed since the release, the same above-fire
-		// value must not re-fire.
 		l.Update(Reduced{v: 0.20, state: StateValue}, full(), march(), tClear.Add(latchSpan-time.Second))
 		_, fired = l.Fired()
 		Expect(fired).To(BeFalse(), "a value above the fire mark does not re-fire before one full window has elapsed since the release")
 
-		// Once one full window has elapsed (now >= release + span), it fires again.
 		l.Update(Reduced{v: 0.20, state: StateValue}, full(), march(), tClear.Add(latchSpan))
 		_, fired = l.Fired()
 		Expect(fired).To(BeTrue(), "a value above the fire mark re-fires once one full window has elapsed since the release")
@@ -234,38 +206,33 @@ var _ = Describe("Latch", func() {
 			Clear:    Mark{At: 0.06, Inclusive: false},
 			Polarity: HigherIsWorse,
 			Unit:     "ratio",
-			Capacity: 1.0,
+			Worst:    1.0,
 		}
 		cores := Marks{
 			Fire:     Mark{At: 0, Inclusive: false},
 			Clear:    Mark{At: 0.5, Inclusive: false},
 			Polarity: LowerIsWorse,
 			Unit:     "cores",
-			Capacity: 4.0,
+			Worst:    -4.0,
 		}
 		l := NewLatch(Identity{})
 
-		// Fire under the first pair with a value above its fire mark.
 		l.Update(Reduced{v: 0.20, state: StateValue}, full(), ratio, t0)
 		_, fired := l.Fired()
 		Expect(fired).To(BeTrue(), "a value above the first mark pair's fire mark fires")
 
-		// The mark pair changes on the next Update (a different instrument became
-		// usable). Under cores (LowerIsWorse, Fire At 0, Clear At 0.5), worse(0.3)
-		// = -0.3 is not above worse(Fire.At) = 0 (so 0.3 does not fire) and not
-		// below worse(Clear.At) = -0.5 (so it does not clear): 0.3 falls in the
-		// between-marks hold band, and the new pair says HOLD. The latch must
-		// hold, not reset, and the Fired it returns carries the new marks.
+		// The marks change because a different instrument became usable. Under
+		// cores, worse(0.3) = -0.3 is neither above worse(Fire.At) = 0 nor below
+		// worse(Clear.At) = -0.5, so 0.3 lands in the hold band and the new pair
+		// says HOLD.
 		l.Update(Reduced{v: 0.3, state: StateValue}, full(), cores, t0.Add(time.Second))
 		f, fired := l.Fired()
 		Expect(fired).To(BeTrue(), "a changed mark pair holds the fired latch rather than resetting it")
 		Expect(f.Marks).To(Equal(cores), "the fired latch reports the current mark pair, not the one it fired under")
 
-		// The structural backstop, because a behaviour can be re-broken and a
-		// method set cannot. The method set is exactly four: Fired, ReleaseAfter,
-		// Reset, Update, and the moment a method is added that lets the latch act
-		// on a changed instrument (one that would reset a held latch) this goes
-		// red.
+		// A structural backstop, because a behaviour can be re-broken and a method
+		// set cannot: adding a method that lets the latch act on an instrument
+		// change turns this red.
 		lt := reflect.TypeOf(&Latch{})
 		Expect(lt.NumMethod()).To(Equal(4),
 			"the method set is exactly four; a method that resets a held latch on an instrument change would add a fifth")
@@ -282,14 +249,14 @@ var _ = Describe("Latch", func() {
 			Clear:    Mark{At: 0.06, Inclusive: false},
 			Polarity: HigherIsWorse,
 			Unit:     "ratio",
-			Capacity: 1.0,
+			Worst:    1.0,
 		}
 		cores := Marks{
 			Fire:     Mark{At: 0, Inclusive: false},
 			Clear:    Mark{At: 0.5, Inclusive: false},
 			Polarity: LowerIsWorse,
 			Unit:     "cores",
-			Capacity: 4.0,
+			Worst:    -4.0,
 		}
 		l := NewLatch(Identity{})
 
@@ -297,9 +264,8 @@ var _ = Describe("Latch", func() {
 		_, fired := l.Fired()
 		Expect(fired).To(BeTrue(), "a value above the first mark pair's fire mark fires")
 
-		// An untrusted reduction carrying the other instrument's marks must not
-		// repaint the reported pair: marks and value are gated on trustworthiness
-		// together, so the Fired still reports ratio's pair, not cores'.
+		// Marks and value are gated on trustworthiness together, so an untrusted
+		// tick carrying the other instrument's marks changes neither.
 		l.Update(Reduced{v: 0.3, state: StateUntrusted}, full(), cores, t0.Add(time.Second))
 		f, fired := l.Fired()
 		Expect(fired).To(BeTrue(), "an untrusted reduction holds the fired latch")
@@ -308,9 +274,8 @@ var _ = Describe("Latch", func() {
 
 	It("should include an inclusive mark at the exact boundary", func() {
 		t0 := time.Unix(1_000_000, 0)
-		// Inclusivity is part of the mark: whether the boundary is crossed at
-		// exactly the threshold is a property of the mark itself. These drive both
-		// operators at the exact point.
+		// Inclusivity is a property of the mark itself, so both operators are
+		// driven at exactly the threshold.
 		m := Marks{
 			Fire:     Mark{At: 0.10, Inclusive: true},
 			Clear:    Mark{At: 0.06, Inclusive: true},
@@ -318,13 +283,10 @@ var _ = Describe("Latch", func() {
 		}
 		l := NewLatch(Identity{})
 
-		// The inclusive fire mark is crossed by a value exactly at it.
 		l.Update(Reduced{v: 0.10, state: StateValue}, full(), m, t0)
 		_, fired := l.Fired()
 		Expect(fired).To(BeTrue(), "an inclusive fire mark is crossed by a value exactly at it")
 
-		// The inclusive clear mark is crossed by a value exactly at it, with full
-		// coverage.
 		l.Update(Reduced{v: 0.06, state: StateValue}, full(), m, t0.Add(time.Second))
 		_, fired = l.Fired()
 		Expect(fired).To(BeFalse(), "an inclusive clear mark is crossed by a value exactly at it")
@@ -332,10 +294,9 @@ var _ = Describe("Latch", func() {
 
 	It("should include an inclusive mark at the exact boundary under LowerIsWorse too", func() {
 		t0 := time.Unix(1_000_000, 0)
-		// Under LowerIsWorse worse(v) = -v, so the inclusive arms are sign-flipped
-		// as well: fire when -v >= -Fire.At and clear when -v <= -Clear.At. The
-		// HigherIsWorse inclusive spec above never drives the sign-flipped
-		// operators, so pin them here at the exact marks.
+		// Under LowerIsWorse worse(v) = -v, so the inclusive arms are sign-flipped:
+		// fire when -v >= -Fire.At, clear when -v <= -Clear.At. The HigherIsWorse
+		// inclusive spec above never drives those.
 		m := Marks{
 			Fire:     Mark{At: 0.5, Inclusive: true},
 			Clear:    Mark{At: 0.9, Inclusive: true},
@@ -343,13 +304,10 @@ var _ = Describe("Latch", func() {
 		}
 		l := NewLatch(Identity{})
 
-		// The inclusive LowerIsWorse fire mark is crossed by a value exactly at it.
 		l.Update(Reduced{v: 0.5, state: StateValue}, full(), m, t0)
 		_, fired := l.Fired()
 		Expect(fired).To(BeTrue(), "an inclusive LowerIsWorse fire mark is crossed by a value exactly at it")
 
-		// The inclusive LowerIsWorse clear mark is crossed by a value exactly at
-		// it, with full coverage.
 		l.Update(Reduced{v: 0.9, state: StateValue}, full(), m, t0.Add(time.Second))
 		_, fired = l.Fired()
 		Expect(fired).To(BeFalse(), "an inclusive LowerIsWorse clear mark is crossed by a value exactly at it")
@@ -357,9 +315,8 @@ var _ = Describe("Latch", func() {
 
 	It("should fire and clear under LowerIsWorse, where a LOWER value is the worse side", func() {
 		t0 := time.Unix(1_000_000, 0)
-		// LowerIsWorse maps worse(v) = -v, so a value below the fire mark fires and
-		// one above the clear mark clears, the sign-flipped arm. This positively
-		// controls the worse() fire and clear paths the ratio-only specs never touch.
+		// The positive control for the sign-flipped fire and clear paths the
+		// ratio-only specs never touch.
 		m := Marks{
 			Fire:     Mark{At: 0.5, Inclusive: false},
 			Clear:    Mark{At: 0.9, Inclusive: false},
@@ -367,17 +324,14 @@ var _ = Describe("Latch", func() {
 		}
 		l := NewLatch(Identity{})
 
-		// A value below the fire mark (lower is worse) fires.
 		l.Update(Reduced{v: 0.4, state: StateValue}, full(), m, t0)
 		_, fired := l.Fired()
 		Expect(fired).To(BeTrue(), "a value below a LowerIsWorse fire mark fires")
 
-		// A value between the marks holds.
 		l.Update(Reduced{v: 0.7, state: StateValue}, full(), m, t0.Add(time.Second))
 		_, fired = l.Fired()
 		Expect(fired).To(BeTrue(), "a value between LowerIsWorse marks holds the fired latch")
 
-		// A value above the clear mark (away from the worse side) clears.
 		l.Update(Reduced{v: 1.0, state: StateValue}, full(), m, t0.Add(2*time.Second))
 		_, fired = l.Fired()
 		Expect(fired).To(BeFalse(), "a value above a LowerIsWorse clear mark clears the fired latch")
@@ -387,15 +341,14 @@ var _ = Describe("Latch", func() {
 		t0 := time.Unix(1_000_000, 0)
 		l := NewLatch(Identity{})
 
-		// Fire on a single Update at t0. That Update is the latch's only clock
-		// origin; the demote clock runs from it.
+		// The Update at t0 is the only clock origin in this spec.
 		l.Update(Reduced{v: 0.20, state: StateValue}, full(), march(), t0)
 		_, fired := l.Fired()
 		Expect(fired).To(BeTrue(), "a value above the fire mark fires")
 
-		// Alternating ticks: ReleaseAfter on odd seconds, nothing on even ones,
-		// and never another Update. A latch that restarts its clock per
-		// ReleaseAfter call never reaches the bar and never releases.
+		// ReleaseAfter on odd seconds, nothing on even ones, and never another
+		// Update: a latch that restarted its clock per ReleaseAfter call would
+		// never reach the bar.
 		for i := 1; i < 60; i++ {
 			if i%2 == 1 {
 				l.ReleaseAfter(latchSpan, t0.Add(time.Duration(i)*time.Second))
@@ -404,8 +357,8 @@ var _ = Describe("Latch", func() {
 		_, fired = l.Fired()
 		Expect(fired).To(BeTrue(), "the latch still holds this side of one full window")
 
-		// The clock runs from the last Update at t0, so at t0+span the latch
-		// releases even though the most recent ReleaseAfter call was only at t0+59.
+		// t0+span is one window after the Update, though the previous call was at
+		// t0+59s.
 		l.ReleaseAfter(latchSpan, t0.Add(latchSpan))
 		_, fired = l.Fired()
 		Expect(fired).To(BeFalse(), "the latch releases when now reaches one full window after the last Update")
@@ -415,18 +368,15 @@ var _ = Describe("Latch", func() {
 		t0 := time.Unix(1_000_000, 0)
 		l := NewLatch(Identity{})
 
-		// Fire on a trustworthy Update at t0; that tick anchors the demote clock.
 		l.Update(Reduced{v: 0.20, state: StateValue}, full(), march(), t0)
 		_, fired := l.Fired()
 		Expect(fired).To(BeTrue(), "a value above the fire mark fires")
 
-		// An untrusted tick returns before the clock write, so the demote clock
-		// stays anchored at the StateValue tick.
+		// An untrusted tick returns before the clock write.
 		l.Update(Reduced{v: 0.02, state: StateUntrusted}, full(), march(), t0.Add(time.Second))
 
-		// At one full window after the StateValue tick, which is before one full
-		// window after the untrusted tick, had it advanced the clock, the latch
-		// still holds.
+		// One second short of a window after t0, but a full window after the
+		// untrusted tick, had that advanced the clock.
 		l.ReleaseAfter(latchSpan, t0.Add(latchSpan-time.Second))
 		_, fired = l.Fired()
 		Expect(fired).To(BeTrue(),
@@ -445,20 +395,19 @@ var _ = Describe("Latch", func() {
 		_, fired := l.Fired()
 		Expect(fired).To(BeTrue(), "a value above the fire mark fires")
 
-		// A trustworthy between-marks value at t0+1s is an Update and so re-anchors
-		// the demote clock, even though it only holds the fired latch.
+		// A trustworthy between-marks value is still an Update, so it re-anchors
+		// the clock even though it only holds the latch.
 		l.Update(Reduced{v: 0.08, state: StateValue}, full(), march(), t0.Add(time.Second))
 		_, fired = l.Fired()
 		Expect(fired).To(BeTrue(), "a trustworthy between-marks value holds the fired latch")
 
-		// At t0+span the latch still holds: the clock runs from the hold tick at
-		// t0+1s, not from the firing tick at t0.
+		// t0+span is a full window after the FIRING tick but not after the hold
+		// tick at t0+1s.
 		l.ReleaseAfter(latchSpan, t0.Add(latchSpan))
 		_, fired = l.Fired()
 		Expect(fired).To(BeTrue(),
 			"a trustworthy between-marks hold advances the demote clock, so the latch still holds before one full window after the hold tick")
 
-		// One full window after the hold tick it releases.
 		l.ReleaseAfter(latchSpan, t0.Add(time.Second).Add(latchSpan))
 		_, fired = l.Fired()
 		Expect(fired).To(BeFalse(), "the latch releases one full window after the last trustworthy between-marks tick")

@@ -48,9 +48,12 @@ type Marks struct {
 	Fire     Mark
 	Clear    Mark
 	Polarity Polarity
-	// Capacity is the value at which severity reaches 1, stated positively
-	// whatever the polarity. Zero leaves it undeclared; see Severity.
-	Capacity float64
+	// Worst is the value at which severity reaches 1, in the quantity's own unit
+	// and on the worse side of Fire. A cpu fraction rising past 0.70 reaches 1 at
+	// 1.0; headroom firing at 0 after a one-core reserve reaches 1 at -1.0, where
+	// the reserve is gone. NewEngine refuses a Worst that is not strictly worse
+	// than Fire.
+	Worst float64
 }
 
 // Identity is the four sort keys Rank needs, copied onto every Fired so ranking
@@ -181,7 +184,10 @@ func (l *Latch) Fired() (Fired, bool) {
 }
 
 // clamp01 bounds a ratio to 0..1 and maps NaN to 0, so Rank stays a total order.
-// The only NaN is a 0/0: no headroom, read exactly on the fire mark.
+// A table NewEngine accepted cannot reach the NaN arm: it refuses a Worst equal
+// to Fire and a Fire-to-Worst span that overflows, which are the two ways the
+// division goes 0/0 or Inf/Inf. The arm is for a Fired assembled by hand, which
+// Fired and Marks being exported allows: the zero Marks divide 0 by 0.
 func clamp01(v float64) float64 {
 	if math.IsNaN(v) {
 		return 0
@@ -195,24 +201,20 @@ func clamp01(v float64) float64 {
 	return v
 }
 
-// Severity normalises a fired cause onto 0..1 against its own marks, so causes in
-// different units and directions compare. It is frozen at the firing value.
+// Severity puts a fired signal on one 0..1 scale, so causes measured in different
+// units and directions compare: 0 at its fire mark, 1 at its Worst. Rank orders
+// by it.
 //
-//	rising:   clamp01( (value − fire) / (capacity − fire) )
-//	falling:  clamp01( (fire − value) / (fire + capacity) )
+//	clamp01( (value − fire) / (worst − fire) ), each term signed by polarity
 //
-// Capacity zero leaves the fire mark as the whole denominator, negated for a
-// rising pair; where that is negative every cause clamps to 0 and ties at the
-// bottom (a rising pair over a positive fire mark, a falling pair over a negative
-// one). Both are declarable. A falling cause reaches 1 only at value == −capacity,
-// so where the quantity cannot go negative the worst reachable score is
-// fire/(fire+capacity), at value 0.
+// worse signs the three terms, so one expression serves both polarities. The
+// value is the one frozen at the firing tick; Severity does not follow the signal
+// afterwards.
 func (f Fired) Severity() float64 {
 	m := f.Marks
-	if m.Polarity == LowerIsWorse {
-		return clamp01((m.Fire.At - f.Value) / (m.Fire.At - (-m.Capacity)))
-	}
-	return clamp01((f.Value - m.Fire.At) / (m.Capacity - m.Fire.At))
+	fire := worse(m.Fire.At, m)
+
+	return clamp01((worse(f.Value, m) - fire) / (worse(m.Worst, m) - fire))
 }
 
 // Rank orders the signals that fired so the caller can show the main reason

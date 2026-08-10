@@ -34,6 +34,7 @@ package diagnosis
 
 import (
 	"fmt"
+	"math"
 	"time"
 )
 
@@ -80,12 +81,11 @@ type key struct{ Signal, Instrument string }
 // It is not synchronized: the goroutine that calls Observe owns it, and a reader
 // calling Select, Reduction or Track from another races on points and latches.
 type Engine[S any] struct {
-	windows  map[key]*Window
-	tracked  map[string]*Window
-	latches  map[string]*Latch
-	signals  []Signal[S]
-	tracks   []Track[S]
-	interval time.Duration
+	windows map[key]*Window
+	tracked map[string]*Window
+	latches map[string]*Latch
+	signals []Signal[S]
+	tracks  []Track[S]
 }
 
 // NewEngine validates the table, then builds one window per (signal, instrument)
@@ -101,12 +101,11 @@ func NewEngine[S any](t Table[S]) (*Engine[S], error) {
 	}
 
 	e := &Engine[S]{
-		signals:  t.Signals,
-		tracks:   t.Tracks,
-		interval: t.Interval,
-		windows:  make(map[key]*Window),
-		tracked:  make(map[string]*Window),
-		latches:  make(map[string]*Latch),
+		signals: t.Signals,
+		tracks:  t.Tracks,
+		windows: make(map[key]*Window),
+		tracked: make(map[string]*Window),
+		latches: make(map[string]*Latch),
 	}
 	for _, s := range t.Signals {
 		for _, inst := range s.Instruments {
@@ -139,16 +138,18 @@ func NewEngine[S any](t Table[S]) (*Engine[S], error) {
 // validate walks a table once and stops at the first row that could never
 // produce a verdict, could never hold a point, or names itself twice: a
 // reduction with no calculation to apply, a percentile over a boolean series, a
-// clear mark not on the holding side of its fire mark, a nil extractor, a zero
-// span, a duplicate name. The error names the row. Two rules need more than an
-// error string:
+// non-finite mark, a clear mark not on the holding side of its fire mark, a nil
+// extractor, a zero span, a duplicate name. The error names the row. Two rules
+// need more than an error string:
 //
-//   - Capacity is the value at which severity reaches 1, stated positively. Both
-//     capacity checks skip a zero, so an unset capacity passes under either
-//     polarity, leaving the fire mark as the whole severity denominator. A
-//     non-zero capacity must clear the fire mark under HigherIsWorse, or severity
-//     collapses to 0, and must not equal minus it under LowerIsWorse, which
-//     zeroes the severity denominator.
+//   - Marks must be finite, Worst, the value where severity reaches 1, must be
+//     strictly worse than Fire under the pair's own polarity, and the span from
+//     Fire to Worst must not overflow. Otherwise the severity denominator is zero,
+//     points the wrong way, or is infinite despite two finite marks, and every
+//     cause on that instrument scores 0 and ties at the bottom. Finiteness comes
+//     first, since NaN compares false against every ordering test. There is no
+//     unset case: a Worst left at zero is refused unless zero really is the worse
+//     side of Fire.
 //   - A minimum sample count must fit the span at the table interval: a p99 min
 //     of 100 over a 60s span at 1s holds 61 entries, so the window would sit at
 //     StateUntrusted forever.
@@ -192,20 +193,29 @@ func validate[S any](t Table[S]) error {
 			if inst.Red.ordered && inst.Boolean {
 				return fmt.Errorf("signal %q instrument %q: ordered reduction %q on a boolean series", s.Name, inst.Name, inst.Red.Name)
 			}
-			if inst.Red.against && inst.Against == nil {
+			if inst.Red.divides && inst.Against == nil {
 				return fmt.Errorf("signal %q instrument %q: reduction %q divides but the instrument declares no against extractor", s.Name, inst.Name, inst.Red.Name)
+			}
+			for _, mark := range []struct {
+				name  string
+				value float64
+			}{
+				{name: "fire mark", value: inst.Marks.Fire.At},
+				{name: "clear mark", value: inst.Marks.Clear.At},
+				{name: "worst value", value: inst.Marks.Worst},
+			} {
+				if math.IsNaN(mark.value) || math.IsInf(mark.value, 0) {
+					return fmt.Errorf("signal %q instrument %q: %s %v is not finite", s.Name, inst.Name, mark.name, mark.value)
+				}
 			}
 			if worse(inst.Marks.Clear.At, inst.Marks) >= worse(inst.Marks.Fire.At, inst.Marks) {
 				return fmt.Errorf("signal %q instrument %q: clear mark is not on the holding side of its fire mark under its polarity", s.Name, inst.Name)
 			}
-			if inst.Marks.Capacity < 0 {
-				return fmt.Errorf("signal %q instrument %q: mark capacity %v is negative", s.Name, inst.Name, inst.Marks.Capacity)
+			if worse(inst.Marks.Worst, inst.Marks) <= worse(inst.Marks.Fire.At, inst.Marks) {
+				return fmt.Errorf("signal %q instrument %q: worst value %v is not strictly worse than fire mark %v under its polarity", s.Name, inst.Name, inst.Marks.Worst, inst.Marks.Fire.At)
 			}
-			if inst.Marks.Polarity == HigherIsWorse && inst.Marks.Capacity != 0 && inst.Marks.Capacity <= inst.Marks.Fire.At {
-				return fmt.Errorf("signal %q instrument %q: mark capacity %v leaves no positive headroom over fire mark %v", s.Name, inst.Name, inst.Marks.Capacity, inst.Marks.Fire.At)
-			}
-			if inst.Marks.Polarity == LowerIsWorse && inst.Marks.Capacity != 0 && inst.Marks.Capacity == -inst.Marks.Fire.At {
-				return fmt.Errorf("signal %q instrument %q: mark capacity %v equals minus the fire mark, zeroing the severity denominator", s.Name, inst.Name, inst.Marks.Capacity)
+			if span := worse(inst.Marks.Worst, inst.Marks) - worse(inst.Marks.Fire.At, inst.Marks); math.IsInf(span, 0) {
+				return fmt.Errorf("signal %q instrument %q: the distance from fire mark %v to worst value %v overflows, so the severity denominator is not finite", s.Name, inst.Name, inst.Marks.Fire.At, inst.Marks.Worst)
 			}
 			if t.Interval > 0 && int(inst.Span/t.Interval)+1 < inst.Red.Min {
 				return fmt.Errorf("signal %q instrument %q: reduction %q minimum sample count %d exceeds what its window span %v can hold at table interval %v", s.Name, inst.Name, inst.Red.Name, inst.Red.Min, inst.Span, t.Interval)
@@ -232,7 +242,7 @@ func validate[S any](t Table[S]) error {
 		if tr.Red.fold == nil {
 			return fmt.Errorf("track %q: reduction %q has no fold", tr.Name, tr.Red.Name)
 		}
-		if tr.Red.against {
+		if tr.Red.divides {
 			return fmt.Errorf("track %q: reduction %q divides but a track declares no denominator series", tr.Name, tr.Red.Name)
 		}
 		if t.Interval > 0 && int(tr.Span/t.Interval)+1 < tr.Red.Min {

@@ -24,13 +24,7 @@ import (
 // Suite is the generator spec. This package has no consumers, so the generator
 // is exercised over a fake table whose two signals are generic, never a domain
 // vocabulary.
-//
-// Its structural property is held by construction: window map, latch map and the
-// key that indexes them are unexported, NewEngine is the only thing that reads a
-// Table, and Observe is the only thing that drives a window or a latch. There is
-// no second route to a signal to close, the route does not type-check. Nothing
-// here restates that as "every stage ranges over the table"; the gist is
-// reachability, not iteration.
+
 // snap is the fake snapshot the suite ranges over: a single Reading that a
 // one-series instrument extracts. Its value is set by the feed's two methods.
 type snap struct{ r Reading }
@@ -54,14 +48,14 @@ var _ = Describe("Suite", func() {
 	extract := func(s snap) Reading { return s.r }
 
 	marks := func() Marks {
-		return Marks{Unit: "ratio", Fire: Mark{At: 2.0, Inclusive: true}, Clear: Mark{At: 1.0, Inclusive: true}, Polarity: HigherIsWorse}
+		return Marks{Unit: "ratio", Fire: Mark{At: 2.0, Inclusive: true}, Worst: 4.0, Clear: Mark{At: 1.0, Inclusive: true}, Polarity: HigherIsWorse}
 	}
 
 	instrument := func(red Reduction) Instrument[snap] {
 		return Instrument[snap]{Name: "I", Requires: []Capability{"source-1"}, Extract: extract, Red: red, Span: 60 * time.Second, Marks: marks()}
 	}
 
-	// Signal A folds Last (m == 1); signal B folds Mean (m == 2). Both require
+	// Signal A reduces by Last (m == 1), signal B by Mean (m == 2). Both require
 	// the same capability, so m for each is defined under the fully capable env.
 	table := func() Table[snap] {
 		return Table[snap]{

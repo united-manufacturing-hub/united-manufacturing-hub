@@ -83,8 +83,10 @@ type Reduction struct {
 	Min  int
 	// ordered is true for a calculation that sorts its input: only a percentile does.
 	ordered bool
-	// against is true for a calculation that divides by Point.Against.
-	against bool
+	// divides is true for a calculation that divides by Point.Against, which is
+	// what makes an absent denominator mean opposite things: under Mean the
+	// reading is stored, under DeltaRatio it is dropped.
+	divides bool
 }
 
 var (
@@ -97,7 +99,7 @@ var (
 	Slope = Reduction{Name: "slope", Min: 2, fold: foldSlope}
 	// DeltaRatio divides the numerator's delta by the denominator's delta, both
 	// oldest to newest. Min is 2: over one reading both deltas are zero.
-	DeltaRatio = Reduction{Name: "deltaRatio", Min: 2, fold: foldDeltaRatio, against: true}
+	DeltaRatio = Reduction{Name: "deltaRatio", Min: 2, fold: foldDeltaRatio, divides: true}
 	// P95 is the nearest-rank 95th percentile. Min is 20: below twenty readings
 	// the rank ceil(0.95n) equals n, so the percentile IS the maximum.
 	P95 = Reduction{Name: "p95", Min: 20, fold: foldP95, ordered: true}
@@ -105,7 +107,7 @@ var (
 	P99 = Reduction{Name: "p99", Min: 100, fold: foldP99, ordered: true}
 )
 
-// NewReduction builds a seventh calculation over a single series: against stays
+// NewReduction builds a seventh calculation over a single series: divides stays
 // false. It refuses a minimum below one and a nil function.
 func NewReduction(name string, min int, fold func([]Point) float64) (Reduction, error) {
 	if min < 1 {

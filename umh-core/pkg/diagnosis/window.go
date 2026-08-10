@@ -120,7 +120,7 @@ func (w *Window) appendPoint(value, against Reading, at time.Time) {
 		return
 	}
 	// Under an against reduction an absent or non-finite denominator appends nothing.
-	if w.red.against {
+	if w.red.divides {
 		a, aok := against.Get()
 		if !aok || math.IsNaN(a) || math.IsInf(a, 0) {
 			return
@@ -135,7 +135,7 @@ func (w *Window) appendPoint(value, against Reading, at time.Time) {
 		prev := w.points[len(w.points)-1]
 
 		restart := v < prev.Value
-		if w.red.against {
+		if w.red.divides {
 			a, aok := against.Get()
 			pa, paok := prev.Against.Get()
 			if aok && paok && a < pa {
@@ -162,7 +162,7 @@ func (w *Window) Reduce() Reduced {
 		return Reduced{state: StateAbsent}
 	}
 	// A denominator delta of zero or less: the counter did not move, or it reset.
-	if w.red.against && denominatorDelta(w.points) <= 0 {
+	if w.red.divides && denominatorDelta(w.points) <= 0 {
 		return Reduced{v: 0, state: StateUntrusted}
 	}
 	// Backstop for a bare Reduction{}, which carries no calculation to apply.
