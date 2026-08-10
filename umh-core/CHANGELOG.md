@@ -4,9 +4,7 @@
 
 ### Improvements
 
-- New instances now buffer seven days of raw messages instead of one hour, so late-joining consumers like the Historian can replay the full window
-- Existing instances are unaffected; to switch one over, set `internal.redpanda.redpandaServiceConfig.topic.defaultTopicCleanupPolicy` to `delete`
-- Seven days of raw data scales with message rate, roughly 40–55 GB for `umh.messages` at 700 msg/s; check the sizing guide before running a high-throughput instance
+- New instances now buffer seven days of raw messages instead of one hour. Existing instances are unaffected, and to switch one over set `internal.redpanda.redpandaServiceConfig.topic.defaultTopicCleanupPolicy` to `delete`. Note that seven days scales with message rate, roughly 40–55 GB for `umh.messages` at 700 msg/s, so check the sizing guide before running a high-throughput instance
 
 ## [0.44.33]
 
