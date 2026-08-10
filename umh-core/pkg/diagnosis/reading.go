@@ -14,7 +14,9 @@
 
 package diagnosis
 
-// Reading is a value or an absence.
+// Reading is an optional float64: either a value or an absence. Get returns it
+// in Go's comma-ok shape, the number and whether the number means anything.
+// The zero Reading is an absence; a known zero is a value.
 type Reading struct {
 	v  float64
 	ok bool
@@ -23,8 +25,10 @@ type Reading struct {
 // Known returns a Reading carrying a value.
 func Known(f float64) Reading { return Reading{v: f, ok: true} }
 
-// Unknown returns a Reading carrying an absence.
+// Unknown returns a Reading carrying an absence. It is the zero Reading, so an
+// unset Reading field is already an absence and needs no initialisation.
 func Unknown() Reading { return Reading{} }
 
-// Get returns the value and whether it is present.
+// Get returns the value and whether it is present. An absent Reading returns a
+// 0 that is not a measurement.
 func (r Reading) Get() (float64, bool) { return r.v, r.ok }

@@ -17,15 +17,8 @@ package diagnosis
 import "time"
 
 // Track is a window with no verdict: a named quantity the engine folds every
-// tick so the caller can read the reduction back, with no latch, no marks and no
-// selection. It exists because the caller needs means of quantities no
-// instrument judges. An instrument's window holds whatever its extractor
-// computed, which for a derived instrument is a difference and not the term
-// underneath it.
-//
-// It declares no Requires, and that is the point: a track whose source is missing
-// folds nothing and reduces to absence, which is the answer. A capability gate
-// here would be a second selector.
+// tick, with no latch, no marks and no selection. Use it for a number the caller
+// must publish though no instrument judges it; read it back with Engine.Track.
 type Track[S any] struct {
 	Extract func(S) Reading
 	Name    string
@@ -34,16 +27,11 @@ type Track[S any] struct {
 }
 
 // Table is the whole declaration for one resource: every signal, in the order
-// that breaks Rank's last tie, every track, and the interval at which the caller
-// ticks it.
-//
-// Giving the stages the table rather than a loose slice is what makes "declare
-// every signal in one table" checkable: there is no other route to a signal, and
+// that breaks Rank's last tie, every track, and the interval the caller ticks at.
 // NewEngine is the only thing that reads it.
 type Table[S any] struct {
 	Signals []Signal[S]
-	// Tracks are folded every tick and judged never; a track has no marks, no
-	// latch and no selection.
+	// Tracks are folded every tick and judged never.
 	Tracks []Track[S]
 	// Interval is the cadence the caller ticks at.
 	Interval time.Duration

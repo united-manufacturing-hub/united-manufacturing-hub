@@ -14,12 +14,10 @@
 
 package diagnosis
 
-// Capability is a startup fact about the environment: whether a source exists
-// here at all. It is NOT whether this tick's read succeeded; that is
-// readability, a per-tick fact that must never be folded into a capability or a
-// verdict, and a window left unselected that freezes is not a capability either.
-// It is also not whether a window can supply a value right now; that is
-// readiness, and it lives on the engine.
+// Capability is a startup fact about the environment: whether a source exists on
+// this box at all. An instrument names the capabilities it needs in Requires,
+// and Signal.Capable keeps the instruments the environment satisfies. It is the
+// first of the three gates the package doc lists; the other two are per-tick.
 type Capability string
 
 // Environment is the set of capabilities present.
@@ -27,10 +25,8 @@ type Environment struct {
 	caps map[Capability]bool
 }
 
-// NewEnvironment builds an Environment from a set of capabilities. Capabilities
-// are startup facts the caller owns, whether the box is virtualized or a quota
-// is set, so without this the caller cannot build one and therefore cannot call
-// Observe at all.
+// NewEnvironment builds an Environment holding the given capabilities. The set
+// is fixed once built: every tick sees the set declared at start.
 func NewEnvironment(caps ...Capability) Environment {
 	set := make(map[Capability]bool, len(caps))
 	for _, c := range caps {

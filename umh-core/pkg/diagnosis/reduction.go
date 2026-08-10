@@ -12,6 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// A reduction is the aggregation applied to a window's stored points to fold
+// them into one number, as a SQL aggregate does over a time window. This file
+// declares the fold's vocabulary: Point, Reduction, Reduced and State.
+
 package diagnosis
 
 import (
@@ -21,107 +25,80 @@ import (
 	"time"
 )
 
-// Point is one stored entry, as a reduction sees it: the instant it was read,
-// the value, and the counter the value is divided by when the reduction is a
-// delta ratio.
-//
-// A reduction folds Points and not floats because a []float64 carries neither
-// the timestamps the slope-reduction measures against nor the second counter a
-// delta ratio divides by.
-//
-// Against is a Reading rather than a float: an instrument that folds a single
-// series has no denominator, and an absent denominator must not arrive as a
-// zero one.
+// Point is one stored entry as the fold reads it: the instant of the reading,
+// its value, and the counter whose delta a delta ratio divides by.
 type Point struct {
 	At      time.Time
 	Value   float64
 	Against Reading
 }
 
-// State is the outcome of reducing a window. Three outcomes, not two: empty is
-// not a special case of below-minimum.
+// State is how far the evidence behind a folded number got.
 type State int
 
+// The iota order is an ordered ladder of evidence strength: StateAbsent <
+// StateUntrusted < StateValue, the middle rung holding something but not enough.
 const (
-	// StateAbsent means the window is empty, or its newest entry is older than
-	// the demote span. The latch is released if the signal declares it.
+	// StateAbsent means the window is empty, whether nothing was ever stored or
+	// the demote span emptied it.
 	StateAbsent State = iota
-	// StateUntrusted means non-empty and recent, but below the reduction's
-	// minimum, nothing appended this tick, or the fold's divisor is zero. The
-	// latch HOLDS.
+	// StateUntrusted means the window holds entries but the folded number is not
+	// worth acting on: fewer entries than the reduction's Min, nothing stored
+	// this tick, a delta-ratio denominator whose delta is zero or negative, a
+	// fold that produced NaN or an infinity, or a reduction carrying no fold.
 	StateUntrusted
-	// StateValue means at least the reduction's minimum, newest entry recent.
+	// StateValue means a finite number folded over at least Min entries, one of
+	// them stored this tick.
 	StateValue
 )
 
-// Reduced is a reduced number bound to its outcome.
-//
-// There is no exported field beside the number, so `switch v := w.Reduce();
-// v.State` does not compile. The number cannot be read without its outcome.
+// Reduced is a folded number bound to the State that says whether to trust it.
 type Reduced struct {
 	v     float64
 	state State
 }
 
-// Get returns the reduced value and its outcome. There is no way to obtain the
-// number alone: the tuple return is the only access, so a caller cannot read
-// the value without also reading its state.
+// Get returns the folded number and its outcome, together and only together.
 func (r Reduced) Get() (float64, State) { return r.v, r.state }
 
-// Reduction declares a window's minimum sample count and whether the window
-// must gate on a denominator. The floor belongs to the reduction and only to
-// the reduction.
-//
-// ordered says the fold sorts its input, which only a percentile does. It is
-// unexported because it is the package's own six reductions that set it.
-//
-// against says the window's denominator is load-bearing, and it is the ONLY
-// route by which a window learns that. Without it Append is handed the same
-// two arguments, a value and an absent denominator, in the two cases that
-// must behave oppositely: a single-series reduction stores the point, a ratio
-// reduction stores nothing. It is unexported for the same reason ordered is:
-// the package's own reductions set it, and a caller who could set it could lie
-// about it.
+// Reduction is one aggregation over a window's points, a fold, plus the minimum
+// sample count below which its result is untrusted.
 type Reduction struct {
-	fold    func([]Point) float64
-	Name    string
-	Min     int
+	fold func([]Point) float64
+	Name string
+	Min  int
+	// ordered marks a fold that sorts its input, which only a percentile does;
+	// NewEngine refuses one over a boolean series.
 	ordered bool
+	// against marks a fold that divides by Point.Against, and is what makes an
+	// absent denominator mean opposite things: under Mean the window stores the
+	// point, under DeltaRatio it drops it.
 	against bool
 }
 
-// The six reductions, each carrying the minimum sample count Appendix A gives
-// it. A caller picks one of these rather than restating a floor at every
-// instrument, so the floors live in one place.
 var (
-	// Last is the newest entry. One reading is the answer, so pressure can fire
-	// on tick 0.
+	// Last is the newest entry. Min is 1: one entry is the whole answer.
 	Last = Reduction{Name: "last", Min: 1, fold: foldLast}
-	// Mean is the arithmetic mean. Two points, or there is no average.
+	// Mean is the arithmetic mean of the stored values. Min is 2: the mean of a
+	// single entry is that entry, which is Last.
 	Mean = Reduction{Name: "mean", Min: 2, fold: foldMean}
-	// Slope is (v_last − v_first) / (t_last − t_first) in seconds, the
-	// gradient over the window's own first and last timestamps. Two endpoints,
-	// never a least-squares fit.
+	// Slope is (v_last − v_first) / (t_last − t_first) in seconds over the two
+	// window endpoints, never a least-squares fit. Min is 2: one entry gives a
+	// zero time base.
 	Slope = Reduction{Name: "slope", Min: 2, fold: foldSlope}
-	// DeltaRatio divides the numerator counter's delta by the denominator
-	// counter's delta, both taken at both window edges. It is the only
-	// reduction that reads Point.Against, and therefore the only one that
-	// declares against.
+	// DeltaRatio divides the numerator's delta by the denominator's delta, both
+	// across the window edges. Min is 2: over one entry both deltas are zero.
 	DeltaRatio = Reduction{Name: "deltaRatio", Min: 2, fold: foldDeltaRatio, against: true}
-	// P95 is the nearest-rank 95th percentile. Below twenty samples the rank
-	// ceil(0.95n) equals n, so the percentile IS the maximum.
+	// P95 is the nearest-rank 95th percentile. Min is 20: below twenty samples
+	// the rank ceil(0.95n) equals n, so the percentile IS the maximum.
 	P95 = Reduction{Name: "p95", Min: 20, fold: foldP95, ordered: true}
-	// P99 is the nearest-rank 99th percentile. Its minimum of 100 exceeds what
-	// a 60s window at 1s can hold, so NewEngine refuses it at that cadence.
+	// P99 is the nearest-rank 99th percentile, Min 100 for the same reason. A 60s
+	// window at a 1s interval holds 61 entries, so NewEngine refuses that pairing.
 	P99 = Reduction{Name: "p99", Min: 100, fold: foldP99, ordered: true}
 )
 
-// NewReduction builds a seventh reduction. It refuses a minimum below one and
-// a nil fold. NewEngine re-runs the same two checks on every reduction in the
-// table, so a reduction written as a literal cannot slip past either site.
-//
-// A reduction built here folds a SINGLE series: against stays false, so a
-// window under it stores points whose Against is absent.
+// NewReduction builds a seventh reduction, folding a single series: against
+// stays false. It refuses a minimum below one and a nil fold.
 func NewReduction(name string, min int, fold func([]Point) float64) (Reduction, error) {
 	if min < 1 {
 		return Reduction{}, fmt.Errorf("reduction %q: minimum sample count %d is below one", name, min)
@@ -133,10 +110,8 @@ func NewReduction(name string, min int, fold func([]Point) float64) (Reduction, 
 	return Reduction{Name: name, Min: min, fold: fold}, nil
 }
 
-// foldLast is the newest entry.
 func foldLast(points []Point) float64 { return points[len(points)-1].Value }
 
-// foldMean is the arithmetic mean of the stored values.
 func foldMean(points []Point) float64 {
 	var sum float64
 	for _, p := range points {
@@ -145,8 +120,6 @@ func foldMean(points []Point) float64 {
 	return sum / float64(len(points))
 }
 
-// foldSlope is (last value − first value) over (last time − first time) in
-// seconds, using the window's own first and last timestamps.
 func foldSlope(points []Point) float64 {
 	first, last := points[0], points[len(points)-1]
 	dt := last.At.Sub(first.At).Seconds()
@@ -154,10 +127,7 @@ func foldSlope(points []Point) float64 {
 	return (last.Value - first.Value) / dt
 }
 
-// foldDeltaRatio is (numerator_last − numerator_first) over
-// (denominator_last − denominator_first), both counters at both window edges.
-// The denominator delta is well-defined because Reduce gates on a zero or
-// negative delta before folding.
+// foldDeltaRatio needs a positive denominator delta; Reduce gates on that.
 func foldDeltaRatio(points []Point) float64 {
 	first, last := points[0], points[len(points)-1]
 	firstD, _ := first.Against.Get()
@@ -166,8 +136,8 @@ func foldDeltaRatio(points []Point) float64 {
 	return (last.Value - first.Value) / (lastD - firstD)
 }
 
-// nearestRank folds to the nearest-rank percentile: the value at the
-// 1-indexed rank ceil(p·n), sorted ascending.
+// nearestRank builds a nearest-rank percentile fold: the value at 1-indexed rank
+// ceil(p·n) of the sorted values. It sorts a copy, leaving the points in time order.
 func nearestRank(p float64) func([]Point) float64 {
 	return func(points []Point) float64 {
 		values := make([]float64, len(points))
@@ -181,8 +151,6 @@ func nearestRank(p float64) func([]Point) float64 {
 	}
 }
 
-// foldP95 is the nearest-rank 95th percentile.
 var foldP95 = nearestRank(0.95)
 
-// foldP99 is the nearest-rank 99th percentile.
 var foldP99 = nearestRank(0.99)

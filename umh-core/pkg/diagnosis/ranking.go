@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// This file scores and orders what the latches fired: Severity puts every fired
+// cause on one 0..1 scale whatever its unit and direction, and Rank orders them.
+
 package diagnosis
 
 import (
@@ -19,9 +22,8 @@ import (
 	"sort"
 )
 
-// clamp01 bounds a ratio to the severity scale. A NaN can reach it when a
-// degenerate mark has no headroom and the value sits exactly at the fire mark
-// (0/0); it falls back to the lowest severity so Rank stays a total order.
+// clamp01 bounds a ratio to 0..1, mapping NaN to 0 so Rank stays a total order.
+// NaN arrives only from a 0/0: no headroom, read exactly on the fire mark.
 func clamp01(v float64) float64 {
 	if math.IsNaN(v) {
 		return 0
@@ -35,19 +37,18 @@ func clamp01(v float64) float64 {
 	return v
 }
 
-// Severity normalises a fired cause against its own marks and scale, so a
-// falling mark in cores compares against a rising one in a ratio:
+// Severity normalises a fired cause onto a 0..1 scale against its own marks, so
+// causes in different units and directions compare. The value is frozen at fire.
 //
 //	rising:   clamp01( (value − fire) / (capacity − fire) )
-//	falling:  clamp01( (fire − value) / (fire − (−capacity)) )
+//	falling:  clamp01( (fire − value) / (fire + capacity) )
 //
-// The falling scale is MINUS the capacity. With a positive one a 4-core box two
-// cores past its mark gives 2/−4, which clamps to zero, the lowest severity for
-// the worst case, so the dominant cause ranks last and every saturation cause
-// ties.
-//
-// Severity is a snapshot of the value frozen at the fire transition: it does not
-// track post-fire deterioration, and Rank compares these frozen severities.
+// Capacity left at zero leaves the fire mark as the whole denominator, negated
+// for a rising pair. Wherever that is negative every cause clamps to 0 and ties
+// at the bottom: a rising pair over a positive fire mark, a falling pair over a
+// negative one. validate accepts both. A falling cause reaches 1 only at
+// value == −capacity, so for a quantity that cannot go negative the worst
+// reachable score is fire/(fire+capacity), at value 0.
 func (f Fired) Severity() float64 {
 	m := f.Marks
 	if m.Polarity == LowerIsWorse {
@@ -56,13 +57,13 @@ func (f Fired) Severity() float64 {
 	return clamp01((f.Value - m.Fire.At) / (m.Capacity - m.Fire.At))
 }
 
-// Rank sorts causes in place and returns the same backing slice, so a caller
-// that holds another reference to that slice sees the reordered data. Order is
-// by tier (lower first), then by severity descending within the tier, then by
-// the externally-attributed cause, then by declared table position. Four
-// levels, because three are not total (held causes all clamp to severity 0 and
-// External is true for one signal, so a two-cause tie would otherwise be
-// resolved by the order of appends).
+// Rank orders fired causes lexicographically on four keys, sorting in place and
+// returning the same backing slice:
+//
+//	tier ascending, so a lower tier outranks a higher one
+//	severity descending within the tier
+//	external attribution first
+//	table index ascending
 func Rank(fired []Fired) []Fired {
 	sort.Slice(fired, func(i, j int) bool {
 		a, b := fired[i], fired[j]

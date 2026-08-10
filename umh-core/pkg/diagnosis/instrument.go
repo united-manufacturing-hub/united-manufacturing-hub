@@ -16,14 +16,15 @@ package diagnosis
 
 import "time"
 
-// Instrument is one way of measuring a signal. S is the caller's snapshot type;
-// pkg/diagnosis holds machinery, never a domain vocabulary.
+// Instrument is one way of MEASURING a signal: an extractor, a window span, a
+// reduction to fold it and marks to judge it. Tried in the order declared.
 type Instrument[S any] struct {
-	// Extract reads the value, or a delta ratio's numerator counter.
+	// Extract reads the value from a snapshot. Under DeltaRatio it reads the
+	// numerator counter.
 	Extract func(S) Reading
-	// Against reads the denominator counter. It is nil for every instrument
-	// that folds a single series, and a nil Against yields an absence rather
-	// than a zero denominator.
+	// Against reads the DENOMINATOR of a ratio: DeltaRatio divides the delta of
+	// Extract's counter by the delta of this one. Nil for a single series, where
+	// Read hands back an absence; NewEngine refuses a dividing reduction with nil.
 	Against  func(S) Reading
 	Name     string
 	Requires []Capability
@@ -33,12 +34,8 @@ type Instrument[S any] struct {
 	// Boolean says the series is zero or one and nothing between. NewEngine
 	// refuses an ordered reduction, a percentile, on such a series.
 	Boolean bool
-	// Counter says both series this instrument reads are monotone counters, so
-	// a fall means the source reset rather than the quantity dropping. It is
-	// what gates the window's restart rule, and it is a declaration because
-	// nothing downstream can infer it: a falling ratio and a reset counter are
-	// the same two floats. One flag covers Extract and Against together: a
-	// cgroup that resets resets both counters of a pair at once.
+	// Counter says both series are monotone counters, so a fall means the source
+	// reset rather than the quantity dropping. It gates the window's restart rule.
 	Counter bool
 }
 
@@ -51,28 +48,28 @@ func (i Instrument[S]) Read(s S) (value, against Reading) {
 	return i.Extract(s), i.Against(s)
 }
 
-// Signal is a question, with one or more instruments that can answer it.
+// Signal is a QUESTION about the resource, such as whether the CPU is saturated.
+// Its Instruments each measure it differently; one latch per signal, one verdict.
 type Signal[S any] struct {
 	Name        string
 	Instruments []Instrument[S]
-	DemoteSpan  time.Duration
-	// Tier and External are the signal's ranking facts; the engine copies them
-	// onto every Fired it produces.
-	Tier            int
+	// DemoteSpan is how long a signal may go unread before its evidence expires:
+	// it empties the window, releases the latch, and sizes Suite's outage cases.
+	DemoteSpan time.Duration
+	// Tier is the signal's rank class, copied onto every Fired. Rank sorts it
+	// ascending, so a lower tier outranks a higher one whatever their
+	// severities; the numbers themselves are the caller's vocabulary.
+	Tier int
+	// ReleaseOnAbsent drops the verdict the moment nothing can answer the signal
+	// at all, rather than waiting out DemoteSpan.
 	ReleaseOnAbsent bool
-	External        bool
+	// External marks a cause attributed outside this box, and is Rank's third
+	// tie-break.
+	External bool
 }
 
-// Capable returns the instruments whose required capabilities the environment
-// has, in table order.
-//
-// ⚠️ This is the CAPABILITY gate and nothing more, a startup fact about whether
-// a source exists on this box at all. It deliberately does not pick a winner:
-// two instruments may declare the SAME capability, so a filter that returned the
-// first match would return the percentile arm on every capable box forever and
-// the fallback arm could never be selected. The second gate is readiness, it is
-// per-tick, and it lives on the engine because only the engine holds the
-// windows.
+// Capable returns every instrument whose required capabilities the environment
+// has, in table order. It does not pick a winner; Engine.Select does.
 func (s Signal[S]) Capable(env Environment) []Instrument[S] {
 	capable := make([]Instrument[S], 0, len(s.Instruments))
 	for _, inst := range s.Instruments {
