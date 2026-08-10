@@ -63,7 +63,13 @@ func mapObserved(cfg config.BenthosMonitorConfig, s simple.Status[BenthosMonitor
 				},
 				IsActive: status.IsActive,
 			},
-			Metrics: benthosmonitorservice.Metrics{},
+			// The per-path counters, carried through untouched. Bridge health is
+			// decided from these: protocolconverter and streamprocessor both read
+			// connection up/lost off this struct and judge a direction connected
+			// when up exceeds lost. A zero status maps to a zero Metrics, whose
+			// maps are nil — safe, because every consumer reads it through the
+			// summing accessors, which range over a nil map without dereferencing.
+			Metrics: status.BenthosMetrics,
 		},
 		HealthCheck: benthosmonitorservice.HealthCheck{
 			Version: status.Version,
