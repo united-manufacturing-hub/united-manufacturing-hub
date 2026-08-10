@@ -18,15 +18,11 @@
 package fsmv2benthosmonitor
 
 import (
-	"bufio"
 	"context"
 	"encoding/json"
 	"fmt"
 	"io"
-	"math"
 	"net/http"
-	"strconv"
-	"strings"
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
@@ -36,6 +32,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/simple"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
+	benthosmonitorservice "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos_monitor"
 
 	"gopkg.in/yaml.v3"
 )
@@ -68,13 +65,6 @@ type benthosMonitorDeps struct {
 	window throughputWindow
 }
 
-// BenthosMetrics carries the counter values scraped from the benthos monitor's
-// /metrics endpoint.
-type BenthosMetrics struct {
-	InputReceived int
-	OutputSent    int
-}
-
 // ComponentThroughput carries the real-time rate for one direction of the benthos
 // pipeline. MessagesPerSecond is the by-time rate the worker computes (never the
 // FSMv1 MessagesPerTick, which adapter.go converts on the way out); LastCount is
@@ -87,9 +77,14 @@ type ComponentThroughput struct {
 // BenthosMonitorStatus is the result of one scrape of the benthos monitor: the
 // time it happened, the /metrics counters, /ping liveness, /ready readiness, the
 // /version string, and the per-direction throughput computed over the 60s window.
+//
+// BenthosMetrics is the per-path struct the fsmv1 parser produces, carried
+// whole. Reducing it to a couple of scalars here is what left every consumer of
+// the connection counters reading zero: the counters were never scraped at all,
+// so no amount of mapping downstream could recover them.
 type BenthosMonitorStatus struct {
 	ScrapedAt      time.Time
-	BenthosMetrics BenthosMetrics
+	BenthosMetrics benthosmonitorservice.Metrics
 	Input          ComponentThroughput
 	Output         ComponentThroughput
 	// IsActive is true when input traffic was observed in the window. It is
@@ -150,7 +145,13 @@ func Poll(ctx context.Context, d *benthosMonitorDeps, cfg config.BenthosMonitorC
 	if err != nil {
 		return status, fmt.Errorf("scrape /metrics: %w", err)
 	}
-	m, err := scrapeMetrics(metricsBody)
+	// The fsmv1 parser is the only parser: one implementation cannot disagree
+	// with itself about the same prometheus text, and every consumer already
+	// reads the per-path struct it returns. A parse failure is returned, never
+	// swallowed into an empty struct — simple's collector turns it into a
+	// degraded worker carrying the reason, which is what makes a format drift
+	// visible instead of looking like idle traffic.
+	m, err := benthosmonitorservice.ParseMetricsFromBytes(metricsBody)
 	if err != nil {
 		return status, fmt.Errorf("parse /metrics: %w", err)
 	}
@@ -161,8 +162,12 @@ func Poll(ctx context.Context, d *benthosMonitorDeps, cfg config.BenthosMonitorC
 	// (D5); a nil deps falls back to a one-off window whose rate is always 0. The
 	// window is keyed to the scrape port so an in-place port change (no worker
 	// restart, D5a) wipes the old series instead of delta-ticking across it.
+	//
+	// The window takes the totals summed across every leaf path, which is what
+	// the counters mean for throughput: a switch or broker emits one series per
+	// leaf with no top-level aggregate, so the sum is the pipeline's traffic.
 	if d != nil {
-		d.window.Add(status.ScrapedAt, int(cfg.MetricsPort), m.InputReceived, m.OutputSent)
+		d.window.Add(status.ScrapedAt, int(cfg.MetricsPort), int(m.InputReceivedTotal()), int(m.OutputSentTotal()))
 		status.Input = ComponentThroughput{
 			MessagesPerSecond: d.window.inputRate(),
 			LastCount:         d.window.inputCount(),
@@ -208,94 +213,6 @@ func get(ctx context.Context, client *http.Client, url string) ([]byte, int, err
 		return nil, resp.StatusCode, fmt.Errorf("GET %s: response body exceeds %d bytes", url, maxScrapeBody)
 	}
 	return body, resp.StatusCode, nil
-}
-
-// scrapeMetrics parses the /metrics text into the two benthos counters of
-// interest. benthos emits name{label="...",path="..."} value lines, so each
-// name is matched after stripping its `{...}` label block; lines it does not
-// recognize are ignored. A benthos with switch/broker/fallback outputs emits one
-// series per leaf path with no top-level aggregate, so each counter is the SUM
-// across every matching line (the same aggregation fsmv1's InputReceivedTotal
-// / OutputSentTotal provide). Counter values may be rendered in scientific
-// notation or as bare fractions by prometheus text exposition and are parsed
-// accordingly (fsmv1's TailInt tolerates the same shapes). A counter line whose
-// value is malformed returns an error rather than silently zeroing, so a
-// long-scale or format-drifted scrape is reported instead of being read as no
-// traffic.
-func scrapeMetrics(body []byte) (BenthosMetrics, error) {
-	var m BenthosMetrics
-	sc := bufio.NewScanner(strings.NewReader(string(body)))
-	// The body budget is maxScrapeBody (4MiB); a single /metrics line (long
-	// path/label set or HELP text) can exceed the scanner's 64KiB default token,
-	// so size the buffer to match the budget instead of failing the scrape.
-	sc.Buffer(make([]byte, 0, 64*1024), maxScrapeBody)
-	for sc.Scan() {
-		line := sc.Text()
-		if strings.HasPrefix(line, "#") {
-			continue
-		}
-		name, value, ok := counterLine(line)
-		if !ok {
-			continue
-		}
-		n, err := parseCounterValue(value)
-		if err != nil {
-			return m, fmt.Errorf("parse %s counter %q: %w", name, value, err)
-		}
-		switch name {
-		case "input_received":
-			m.InputReceived += n
-		case "output_sent":
-			m.OutputSent += n
-		}
-	}
-	if err := sc.Err(); err != nil {
-		return m, fmt.Errorf("read /metrics body: %w", err)
-	}
-	return m, nil
-}
-
-// counterLine splits one /metrics line into its bare metric name (with any
-// `{...}` label block removed) and its value. Prometheus text exposition emits
-// `name{label="...",path="..."} value`; matching the bare name after the label
-// block keeps the parser aligned with the real payload. Lines without exactly a
-// name and one value are ignored.
-func counterLine(line string) (string, string, bool) {
-	parts := strings.Fields(line)
-	if len(parts) != 2 {
-		return "", "", false
-	}
-	field := parts[0]
-	if i := strings.IndexByte(field, '{'); i != -1 {
-		field = field[:i]
-	}
-	return field, parts[1], true
-}
-
-// parseCounterValue parses a prometheus counter value into an int. Large whole
-// counters are rendered in scientific notation and small ones as bare integers,
-// but prometheus text exposition may also render a value as a bare fraction
-// (e.g. "0.5"), which fsmv1's TailInt tolerates by truncating. Any value that
-// carries an exponent, a decimal point, or an Inf/NaN marker is parsed as a
-// float first (the same branch fsmv1's TailInt uses), then truncated to int;
-// the conversion is guarded so an out-of-range or non-finite float errors rather
-// than silently producing a garbage value.
-func parseCounterValue(s string) (int, error) {
-	if strings.ContainsAny(s, "eE.") {
-		f, err := strconv.ParseFloat(s, 64)
-		if err != nil {
-			return 0, err
-		}
-		if math.IsInf(f, 0) || math.IsNaN(f) || f < math.MinInt64 || f > math.MaxInt64 {
-			return 0, fmt.Errorf("counter %q is not a finite int64 value", s)
-		}
-		return int(f), nil
-	}
-	v, err := strconv.Atoi(s)
-	if err != nil {
-		return 0, err
-	}
-	return v, nil
 }
 
 // cfgFor renders a BenthosMonitorConfig into the Upsert payload map through

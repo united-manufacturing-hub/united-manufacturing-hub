@@ -20,7 +20,6 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
 	"time"
 
@@ -82,11 +81,11 @@ output_sent{label="",path="root.output"} 7
 	if status.ScrapedAt.IsZero() {
 		t.Errorf("ScrapedAt is zero; Poll did not record a real scrape time")
 	}
-	if status.BenthosMetrics.InputReceived != 42 {
-		t.Errorf("InputReceived = %d, want 42 (from served /metrics counter)", status.BenthosMetrics.InputReceived)
+	if status.BenthosMetrics.InputReceivedTotal() != 42 {
+		t.Errorf("InputReceivedTotal() = %d, want 42 (from served /metrics counter)", status.BenthosMetrics.InputReceivedTotal())
 	}
-	if status.BenthosMetrics.OutputSent != 7 {
-		t.Errorf("OutputSent = %d, want 7 (from served /metrics counter)", status.BenthosMetrics.OutputSent)
+	if status.BenthosMetrics.OutputSentTotal() != 7 {
+		t.Errorf("OutputSentTotal() = %d, want 7 (from served /metrics counter)", status.BenthosMetrics.OutputSentTotal())
 	}
 	if !status.PingAlive {
 		t.Errorf("PingAlive = false, want true (/ping returned 200)")
@@ -172,120 +171,4 @@ func TestPollRejectsNon2xxScrapes(t *testing.T) {
 			t.Errorf("PingAlive = true, want false (/ping returned 503)")
 		}
 	})
-}
-
-// TestScrapeMetricsRejectsMalformedCounter pins the counter parse error path:
-// scrapeMetrics must not silently zero a counter whose value it cannot parse,
-// because a silent zero is indistinguishable from genuine no-traffic in the
-// downstream health verdict.
-func TestScrapeMetricsRejectsMalformedCounter(t *testing.T) {
-	if _, err := scrapeMetrics([]byte("input_received{label=\"\",path=\"root.input\"} not-a-number\n")); err == nil {
-		t.Errorf("scrapeMetrics accepted a malformed input_received value; want an error")
-	}
-}
-
-// TestScrapeMetricsAggregatesPerPath pins the ENG-5006 regression the fsmv1
-// parser already fixed: benthos emits one output_sent / input_received series
-// per leaf (switch, broker, fallback), each with its own path label and no
-// top-level aggregate. scrapeMetrics must SUM across every matching line, not
-// keep only the last one seen — a last-wins implementation reports the final
-// route's value (often 0) where real throughput is the sum. The fixture mirrors
-// pkg/service/benthos_monitor/switch_output_repro_test.go.
-func TestScrapeMetricsAggregatesPerPath(t *testing.T) {
-	body := `# HELP input_received Benthos Counter metric
-# TYPE input_received counter
-input_received{label="",path="root.input"} 20
-# HELP output_sent Benthos Counter metric
-# TYPE output_sent counter
-output_sent{label="",path="root.output.switch.cases.0.output.fallback.0"} 10
-output_sent{label="",path="root.output.switch.cases.0.output.fallback.1"} 0
-output_sent{label="",path="root.output.switch.cases.1.output.fallback.0"} 7
-output_sent{label="",path="root.output.switch.cases.1.output.fallback.1"} 0
-output_sent{label="",path="root.output.switch.cases.2.output.fallback.0"} 3
-output_sent{label="",path="root.output.switch.cases.2.output.fallback.1"} 0
-`
-
-	m, err := scrapeMetrics([]byte(body))
-	if err != nil {
-		t.Fatalf("scrapeMetrics errored: %v", err)
-	}
-	if m.InputReceived != 20 {
-		t.Errorf("InputReceived = %d, want 20 (sum across input paths)", m.InputReceived)
-	}
-	if m.OutputSent != 20 {
-		t.Errorf("OutputSent = %d, want 20 (sum across switch routes: 10+7+3)", m.OutputSent)
-	}
-}
-
-// TestScrapeMetricsIgnoresCommentLines pins that prometheus comment lines are
-// skipped rather than parsed. The standard '#' HELP/TYPE lines are >=3 tokens
-// and already skipped by the name/value split, but the format's terminating
-// '# EOF' line is exactly 2 tokens and must not be parsed as name='#' value='EOF'.
-func TestScrapeMetricsIgnoresCommentLines(t *testing.T) {
-	body := `# HELP output_sent Benthos Counter metric
-# TYPE output_sent counter
-output_sent{label="",path="root.output"} 7
-# EOF
-`
-
-	m, err := scrapeMetrics([]byte(body))
-	if err != nil {
-		t.Fatalf("scrapeMetrics errored on a comment-terminated body: %v", err)
-	}
-	if m.OutputSent != 7 {
-		t.Errorf("OutputSent = %d, want 7 (comment lines must not break the scrape)", m.OutputSent)
-	}
-}
-
-// TestScrapeMetricsReadsLongLines pins the scanner buffer: a single /metrics
-// line longer than bufio.Scanner's default 64KB token limit (a long path/label
-// set or HELP text) must not fail the scrape. The body budget is maxScrapeBody
-// (4MiB), so the scanner must be sized to match rather than reverting to the
-// 64KB default.
-func TestScrapeMetricsReadsLongLines(t *testing.T) {
-	// A path label long enough to exceed 64KiB on a single output_sent line.
-	var b strings.Builder
-	b.WriteString("# HELP output_sent Benthos Counter metric\n")
-	b.WriteString("# TYPE output_sent counter\n")
-	b.WriteString(`output_sent{label="`)
-	b.WriteString(strings.Repeat("x", 70*1024))
-	b.WriteString(`",path="root.output"} 7` + "\n")
-
-	m, err := scrapeMetrics([]byte(b.String()))
-	if err != nil {
-		t.Fatalf("scrapeMetrics errored on a >64KiB line: %v", err)
-	}
-	if m.OutputSent != 7 {
-		t.Errorf("OutputSent = %d, want 7 (long line must still be parsed)", m.OutputSent)
-	}
-}
-
-// TestScrapeMetricsToleratesFractionalValue pins that an exponent-less
-// fractional counter value (e.g. '0.5') does not fail the whole scrape. fsmv1's
-// TailInt deliberately tolerates a bare fraction by truncating at the first
-// non-digit, so the worker must not error out and permanently degrade the
-// monitor over a single render of this shape.
-func TestScrapeMetricsToleratesFractionalValue(t *testing.T) {
-	body := "output_sent{label=\"\",path=\"root.output\"} 4.5\n"
-
-	m, err := scrapeMetrics([]byte(body))
-	if err != nil {
-		t.Fatalf("scrapeMetrics errored on a fractional value: %v", err)
-	}
-	if m.OutputSent != 4 {
-		t.Errorf("OutputSent = %d, want 4 (fractional value truncated, not an error)", m.OutputSent)
-	}
-}
-
-// TestScrapeMetricsRejectsInfiniteCounter pins the range guard on the
-// scientific-notation branch: a counter rendered as '+Inf' or 'NaN' must error
-// rather than be silently converted to a garbage negative (Go's float->int
-// conversion of Inf/NaN is implementation-defined and returns min-int).
-func TestScrapeMetricsRejectsInfiniteCounter(t *testing.T) {
-	if _, err := scrapeMetrics([]byte("input_received{label=\"\",path=\"root.input\"} +Inf\n")); err == nil {
-		t.Errorf("scrapeMetrics accepted '+Inf'; want an error")
-	}
-	if _, err := scrapeMetrics([]byte("input_received{label=\"\",path=\"root.input\"} NaN\n")); err == nil {
-		t.Errorf("scrapeMetrics accepted 'NaN'; want an error")
-	}
 }

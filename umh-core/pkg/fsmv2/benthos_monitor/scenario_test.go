@@ -202,11 +202,11 @@ func TestScenarioWorkerObservedThroughFramework(t *testing.T) {
 		t.Errorf("Version = %q, want %q: /version did not reach the status", first.Result.Version, "4.95.0")
 	}
 	// 100 input, and output summed across the two broker legs (40 + 40).
-	if first.Result.BenthosMetrics.InputReceived != 100 {
-		t.Errorf("InputReceived = %d, want 100", first.Result.BenthosMetrics.InputReceived)
+	if first.Result.BenthosMetrics.InputReceivedTotal() != 100 {
+		t.Errorf("InputReceivedTotal() = %d, want 100", first.Result.BenthosMetrics.InputReceivedTotal())
 	}
-	if first.Result.BenthosMetrics.OutputSent != 80 {
-		t.Errorf("OutputSent = %d, want 80 (summed across both broker legs, not last-wins)", first.Result.BenthosMetrics.OutputSent)
+	if first.Result.BenthosMetrics.OutputSentTotal() != 80 {
+		t.Errorf("OutputSentTotal() = %d, want 80 (summed across both broker legs, not last-wins)", first.Result.BenthosMetrics.OutputSentTotal())
 	}
 	if first.Result.Input.MessagesPerSecond != 0 {
 		t.Errorf("cold Input.MessagesPerSecond = %v, want 0 (one sample cannot be delta-ed)", first.Result.Input.MessagesPerSecond)
