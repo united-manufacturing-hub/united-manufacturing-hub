@@ -635,4 +635,106 @@ var _ = Describe("BuildRuntimeConfig", func() {
 			Expect(firstProc).To(HaveKey("nodered_js"))
 		})
 	})
+
+	// The memo is only sound while BuildRuntimeConfig stays a pure function of its
+	// arguments and its guard compares every one of them. Nothing enforces either: a
+	// later argument, or a read of some global, would make the cache serve a stale
+	// config indefinitely — a wrong config, not a slow one. These specs are the
+	// guard; add a case whenever an argument is added.
+	Describe("memoisation", func() {
+		// pcName reaches the rendered output through bridged_by, so a comparison is
+		// only meaningful under one and the same name.
+		var userVars func(port string) map[string]any
+
+		BeforeEach(func() {
+			userVars = func(port string) map[string]any {
+				out := map[string]any{}
+				for k, v := range spec.Variables.User {
+					out[k] = v
+				}
+
+				out["PORT"] = port
+
+				return out
+			}
+		})
+
+		It("replays an answer indistinguishable from the rendered one", func() {
+			name := "memo-guard-replay"
+
+			rendered, err := runtime_config.BuildRuntimeConfig(
+				spec, agentLocation, globalVars, nil, nodeName, name)
+			Expect(err).NotTo(HaveOccurred())
+
+			replayed, err := runtime_config.BuildRuntimeConfig(
+				spec, agentLocation, globalVars, nil, nodeName, name)
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(replayed).To(Equal(rendered))
+		})
+
+		It("renders again after an argument changes back", func() {
+			name := "memo-guard-roundtrip"
+
+			original, err := runtime_config.BuildRuntimeConfig(
+				spec, agentLocation, globalVars, nil, nodeName, name)
+			Expect(err).NotTo(HaveOccurred())
+
+			changed := spec
+			changed.Variables.User = userVars("9999")
+
+			_, err = runtime_config.BuildRuntimeConfig(
+				changed, agentLocation, globalVars, nil, nodeName, name)
+			Expect(err).NotTo(HaveOccurred())
+
+			back, err := runtime_config.BuildRuntimeConfig(
+				spec, agentLocation, globalVars, nil, nodeName, name)
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(back).To(Equal(original),
+				"the cache must re-render, not keep serving the intermediate answer")
+		})
+
+		DescribeTable("notices a changed argument",
+			func(label string, mutate func() (protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec,
+				map[string]string, map[string]any, *config.HistorianConfig, string)) {
+				name := "memo-guard-" + label
+
+				before, err := runtime_config.BuildRuntimeConfig(
+					spec, agentLocation, globalVars, nil, nodeName, name)
+				Expect(err).NotTo(HaveOccurred())
+
+				mSpec, mLoc, mVars, mHist, mNode := mutate()
+
+				after, err := runtime_config.BuildRuntimeConfig(
+					mSpec, mLoc, mVars, mHist, mNode, name)
+				Expect(err).NotTo(HaveOccurred())
+
+				Expect(after).NotTo(Equal(before),
+					"the cache replayed its entry although %s changed", label)
+			},
+			Entry("spec", "spec", func() (protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec,
+				map[string]string, map[string]any, *config.HistorianConfig, string) {
+				changed := spec
+				changed.Variables.User = userVars("9999")
+
+				return changed, agentLocation, globalVars, nil, nodeName
+			}),
+			Entry("agentLocation", "agentLocation", func() (protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec,
+				map[string]string, map[string]any, *config.HistorianConfig, string) {
+				changed := map[string]string{}
+				for k, v := range agentLocation {
+					changed[k] = v
+				}
+
+				changed["0"] = "somewhere-else"
+
+				return spec, changed, globalVars, nil, nodeName
+			}),
+			Entry("nodeName", "nodeName", func() (protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec,
+				map[string]string, map[string]any, *config.HistorianConfig, string) {
+				return spec, agentLocation, globalVars, nil, "a-different-node"
+			}),
+		)
+	})
 })

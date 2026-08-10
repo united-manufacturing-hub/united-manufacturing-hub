@@ -20,6 +20,8 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+	"sync"
+	"sync/atomic"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/connectionserviceconfig"
@@ -77,6 +79,72 @@ const BridgedByPlaceholder = "unimplemented"
 //     Protocol-Converter FSM.
 //
 // It does NOT belong to the service.
+
+// renderMemoEntry is one bridge's last render plus every input that produced it,
+// so a hit can be proven by comparison rather than assumed.
+type renderMemoEntry struct {
+	historian     *config.HistorianConfig
+	agentLocation map[string]string
+	globalVars    map[string]any
+	nodeName      string
+	spec          protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec
+	result        protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime
+}
+
+// renderMemo caches the last render per bridge, keyed by pcName. BuildRuntimeConfig
+// runs for every bridge on every tick and is a pure function of its arguments, which
+// only change when the config file does. A profile attributed 12.9% of all CPU to the
+// render it repeats.
+//
+// Two preconditions hold today, neither of them enforced by the compiler.
+//
+// BuildRuntimeConfig must stay pure, and the guard must compare every argument. Specs
+// in runtime_config_test.go cover each one. A new argument needs a new case.
+//
+// The result must be treated as read-only. Its nested maps (BenthosConfig.Input,
+// Output, Pipeline) are shared with the cached value, so mutating one poisons later
+// ticks for that bridge. Callers that need to mutate must deep-copy first.
+
+// renderMemoMaxEntries bounds the map. Keys are bridge names, entries are never
+// removed on their own, and each one holds a fully rendered config. Live bridges stay
+// far below this, so reaching it means stale names have accumulated.
+const renderMemoMaxEntries = 512
+
+var (
+	renderMemo    sync.Map // map[string]renderMemoEntry
+	renderMemoLen atomic.Int64
+)
+
+// storeRenderMemo adds an entry and evicts once the map exceeds its bound. Order is
+// unspecified and may drop a live bridge, which then pays one render and is cached
+// again.
+func storeRenderMemo(pcName string, entry renderMemoEntry) {
+	if _, existed := renderMemo.Swap(pcName, entry); !existed {
+		renderMemoLen.Add(1)
+	}
+
+	if renderMemoLen.Load() <= renderMemoMaxEntries {
+		return
+	}
+
+	// Down to half, so eviction stays rare instead of running on nearly every store.
+	renderMemo.Range(func(key, _ any) bool {
+		if renderMemoLen.Load() <= renderMemoMaxEntries/2 {
+			return false
+		}
+
+		if key == pcName {
+			return true
+		}
+
+		if _, existed := renderMemo.LoadAndDelete(key); existed {
+			renderMemoLen.Add(-1)
+		}
+
+		return true
+	})
+}
+
 func BuildRuntimeConfig(
 	spec protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec,
 	agentLocation map[string]string,
@@ -88,6 +156,17 @@ func BuildRuntimeConfig(
 	if reflect.DeepEqual(spec, protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{}) {
 		return protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime{},
 			errors.New("nil spec")
+	}
+
+	if cached, found := renderMemo.Load(pcName); found {
+		if entry, ok := cached.(renderMemoEntry); ok &&
+			entry.nodeName == nodeName &&
+			reflect.DeepEqual(entry.spec, spec) &&
+			reflect.DeepEqual(entry.agentLocation, agentLocation) &&
+			reflect.DeepEqual(entry.globalVars, globalVars) &&
+			reflect.DeepEqual(entry.historian, historian) {
+			return entry.result, nil
+		}
 	}
 
 	pcLocation := make(map[string]string, len(spec.Location))
@@ -234,6 +313,20 @@ func BuildRuntimeConfig(
 	if err != nil && !historianUsable && referencesMissingHistorian(err) {
 		return runtime, fmt.Errorf(
 			"this bridge references {{ .historian.* }} but no valid historian: section is configured in config.yaml; add or fix it: %w", err)
+	}
+
+	// Only successful renders are memoised. Caching a failure would pin the error
+	// until the config changed, hiding a recovery (e.g. the historian section being
+	// fixed), and errors are the rare path anyway.
+	if err == nil {
+		storeRenderMemo(pcName, renderMemoEntry{
+			spec:          spec,
+			agentLocation: agentLocation,
+			globalVars:    globalVars,
+			historian:     historian,
+			nodeName:      nodeName,
+			result:        runtime,
+		})
 	}
 
 	return runtime, err
