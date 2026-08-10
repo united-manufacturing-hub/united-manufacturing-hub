@@ -73,7 +73,8 @@ type Fired struct {
 	// loses it, so it dates this process's observation, not the condition.
 	Since time.Time
 	Identity
-	// Marks is the pair from the most recent trusted update, not the pair at fire.
+	// Marks is the pair Value fired against, stamped with it: Severity scores the
+	// one against the other, so a later instrument's pair would not measure it.
 	Marks Marks
 	// Value is the number that fired, untransformed by polarity.
 	Value float64
@@ -131,7 +132,6 @@ func (l *Latch) Update(r Reduced, c Coverage, m Marks, now time.Time) {
 	if r.state != StateValue {
 		return
 	}
-	l.marks = m
 	l.lastUpdate = now
 
 	if l.fired && crossedClear(r.v, m) && c.Full() {
@@ -143,6 +143,7 @@ func (l *Latch) Update(r Reduced, c Coverage, m Marks, now time.Time) {
 		if !l.fired && (l.lastRelease.IsZero() || !now.Before(l.lastRelease.Add(c.span))) {
 			l.fired = true
 			l.value = r.v
+			l.marks = m
 			l.since = now
 		}
 		return
@@ -208,9 +209,9 @@ func clamp01(v float64) float64 {
 //
 //	clamp01( (value − fire) / (worst − fire) ), each term signed by polarity
 //
-// worse signs the three terms, so one expression serves both polarities. The
-// value is the one frozen at the firing tick; Severity does not follow the signal
-// afterwards.
+// worse signs the three terms, so one expression serves both polarities. Value
+// and marks are both frozen at the firing tick; Severity does not follow the
+// signal afterwards.
 func (f Fired) Severity() float64 {
 	m := f.Marks
 	fire := worse(m.Fire.At, m)

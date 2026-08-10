@@ -93,6 +93,63 @@ var _ = Describe("Engine", func() {
 		Expect(avail).To(Equal(Ready), "a selected arm at StateValue reports Ready")
 	})
 
+	It("should keep a held latch's severity on the instrument it fired under when the capability behind that instrument disappears", func() {
+		// Both instruments answer one question, in different units and opposite
+		// directions: stall share rising is bad, spare cores falling is bad.
+		type cpuSnap struct{ stall, headroom float64 }
+
+		sig := Signal[cpuSnap]{
+			Name:       "saturation",
+			DemoteSpan: 60 * time.Second,
+			Instruments: []Instrument[cpuSnap]{
+				{
+					Name:     "pressure",
+					Requires: []Capability{"psi"},
+					Extract:  func(s cpuSnap) Reading { return Known(s.stall) },
+					Red:      Last,
+					Span:     60 * time.Second,
+					Marks: Marks{
+						Unit:     "ratio",
+						Fire:     Mark{At: 0.10},
+						Clear:    Mark{At: 0.06},
+						Worst:    1.0,
+						Polarity: HigherIsWorse,
+					},
+				},
+				{
+					Name:    "headroom",
+					Extract: func(s cpuSnap) Reading { return Known(s.headroom) },
+					Red:     Last,
+					Span:    60 * time.Second,
+					Marks: Marks{
+						Unit:     "cores",
+						Fire:     Mark{At: 0},
+						Clear:    Mark{At: 0.5},
+						Worst:    -4.0,
+						Polarity: LowerIsWorse,
+					},
+				},
+			},
+		}
+
+		e, err := NewEngine(Table[cpuSnap]{Signals: []Signal[cpuSnap]{sig}, Interval: time.Second})
+		Expect(err).ToNot(HaveOccurred())
+
+		base := time.Now()
+		fired, _ := e.Observe(cpuSnap{stall: 0.20, headroom: 0.3}, NewEnvironment("psi"), base)
+		Expect(fired).To(HaveLen(1), "a stall share of 0.20 crosses the pressure instrument's fire mark of 0.10")
+		Expect(fired[0].Severity()).To(BeNumerically("~", 1.0/9.0, 1e-12),
+			"0.20 stands a tenth of the way from the 0.10 fire mark to the 1.0 worst value")
+
+		// PSI goes away, so this tick the capability gate leaves only headroom, and
+		// 0.3 spare cores is between its clear mark of 0.5 and its fire mark of 0:
+		// the latch holds on evidence it can no longer re-read.
+		fired, _ = e.Observe(cpuSnap{stall: 0.20, headroom: 0.3}, NewEnvironment(), base.Add(time.Second))
+		Expect(fired).To(HaveLen(1), "the latch holds when the instrument that fired it drops out")
+		Expect(fired[0].Severity()).To(BeNumerically("~", 1.0/9.0, 1e-12),
+			"the held verdict keeps the severity it fired with; the cores pair never measured this value")
+	})
+
 	It("runs the tick: drives the per-signal latch and hands back the fired set and a readiness row per signal", func() {
 		type snap struct{ v float64 }
 		sig := Signal[snap]{

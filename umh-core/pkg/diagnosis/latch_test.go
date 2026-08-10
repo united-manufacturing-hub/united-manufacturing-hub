@@ -41,6 +41,27 @@ var _ = Describe("Latch", func() {
 	full := func() Coverage { return Coverage{span: latchSpan, spanned: latchSpan} }
 	short := func() Coverage { return Coverage{span: latchSpan, spanned: 30 * time.Second} }
 
+	// Two mark pairs for one signal, in different units and opposite polarities:
+	// what an instrument change hands the latch.
+	ratio := func() Marks {
+		return Marks{
+			Fire:     Mark{At: 0.10, Inclusive: false},
+			Clear:    Mark{At: 0.06, Inclusive: false},
+			Polarity: HigherIsWorse,
+			Unit:     "ratio",
+			Worst:    1.0,
+		}
+	}
+	cores := func() Marks {
+		return Marks{
+			Fire:     Mark{At: 0, Inclusive: false},
+			Clear:    Mark{At: 0.5, Inclusive: false},
+			Polarity: LowerIsWorse,
+			Unit:     "cores",
+			Worst:    -4.0,
+		}
+	}
+
 	It("should fire and clear at the marks with the inclusivity each mark declares, and hold between them", func() {
 		t0 := time.Unix(1_000_000, 0)
 		l := NewLatch(Identity{})
@@ -201,23 +222,9 @@ var _ = Describe("Latch", func() {
 
 	It("should not discard a fired latch merely because a different instrument became usable", func() {
 		t0 := time.Unix(1_000_000, 0)
-		ratio := Marks{
-			Fire:     Mark{At: 0.10, Inclusive: false},
-			Clear:    Mark{At: 0.06, Inclusive: false},
-			Polarity: HigherIsWorse,
-			Unit:     "ratio",
-			Worst:    1.0,
-		}
-		cores := Marks{
-			Fire:     Mark{At: 0, Inclusive: false},
-			Clear:    Mark{At: 0.5, Inclusive: false},
-			Polarity: LowerIsWorse,
-			Unit:     "cores",
-			Worst:    -4.0,
-		}
 		l := NewLatch(Identity{})
 
-		l.Update(Reduced{v: 0.20, state: StateValue}, full(), ratio, t0)
+		l.Update(Reduced{v: 0.20, state: StateValue}, full(), ratio(), t0)
 		_, fired := l.Fired()
 		Expect(fired).To(BeTrue(), "a value above the first mark pair's fire mark fires")
 
@@ -225,10 +232,10 @@ var _ = Describe("Latch", func() {
 		// cores, worse(0.3) = -0.3 is neither above worse(Fire.At) = 0 nor below
 		// worse(Clear.At) = -0.5, so 0.3 lands in the hold band and the new pair
 		// says HOLD.
-		l.Update(Reduced{v: 0.3, state: StateValue}, full(), cores, t0.Add(time.Second))
+		l.Update(Reduced{v: 0.3, state: StateValue}, full(), cores(), t0.Add(time.Second))
 		f, fired := l.Fired()
 		Expect(fired).To(BeTrue(), "a changed mark pair holds the fired latch rather than resetting it")
-		Expect(f.Marks).To(Equal(cores), "the fired latch reports the current mark pair, not the one it fired under")
+		Expect(f.Marks).To(Equal(ratio()), "the held verdict keeps the pair its value fired against, not the pair of an instrument that never measured it")
 
 		// A structural backstop, because a behaviour can be re-broken and a method
 		// set cannot: adding a method that lets the latch act on an instrument
@@ -242,34 +249,37 @@ var _ = Describe("Latch", func() {
 		}
 	})
 
-	It("should not repaint the reported mark pair on an untrusted reduction", func() {
+	It("should score a held latch against the mark pair it fired under, not a later instrument's", func() {
 		t0 := time.Unix(1_000_000, 0)
-		ratio := Marks{
-			Fire:     Mark{At: 0.10, Inclusive: false},
-			Clear:    Mark{At: 0.06, Inclusive: false},
-			Polarity: HigherIsWorse,
-			Unit:     "ratio",
-			Worst:    1.0,
-		}
-		cores := Marks{
-			Fire:     Mark{At: 0, Inclusive: false},
-			Clear:    Mark{At: 0.5, Inclusive: false},
-			Polarity: LowerIsWorse,
-			Unit:     "cores",
-			Worst:    -4.0,
-		}
 		l := NewLatch(Identity{})
 
-		l.Update(Reduced{v: 0.20, state: StateValue}, full(), ratio, t0)
+		l.Update(Reduced{v: 0.20, state: StateValue}, full(), ratio(), t0)
+		l.Update(Reduced{v: 0.3, state: StateValue}, full(), cores(), t0.Add(time.Second))
+
+		f, fired := l.Fired()
+		Expect(fired).To(BeTrue(), "the changed mark pair holds the fired latch")
+		// 0.20 fired a tenth of the way up the ratio pair's 0.10-to-1.0 span. Scored
+		// against the cores pair instead, a ratio of 0.20 sits on the safe side of a
+		// fire mark of 0 cores and clamps to 0, sinking the cause to the bottom of
+		// its tier.
+		Expect(f.Severity()).To(BeNumerically("~", 1.0/9.0, 1e-12),
+			"severity divides the value that fired by the span it fired across, both from the same instrument")
+	})
+
+	It("should not repaint the reported mark pair on an untrusted reduction", func() {
+		t0 := time.Unix(1_000_000, 0)
+		l := NewLatch(Identity{})
+
+		l.Update(Reduced{v: 0.20, state: StateValue}, full(), ratio(), t0)
 		_, fired := l.Fired()
 		Expect(fired).To(BeTrue(), "a value above the first mark pair's fire mark fires")
 
-		// Marks and value are gated on trustworthiness together, so an untrusted
-		// tick carrying the other instrument's marks changes neither.
-		l.Update(Reduced{v: 0.3, state: StateUntrusted}, full(), cores, t0.Add(time.Second))
+		// The untrusted half of the same invariant: a tick that cannot move the
+		// latch cannot move the pair it reports either.
+		l.Update(Reduced{v: 0.3, state: StateUntrusted}, full(), cores(), t0.Add(time.Second))
 		f, fired := l.Fired()
 		Expect(fired).To(BeTrue(), "an untrusted reduction holds the fired latch")
-		Expect(f.Marks).To(Equal(ratio), "an untrusted reduction does not repaint the reported mark pair")
+		Expect(f.Marks).To(Equal(ratio()), "an untrusted reduction does not repaint the reported mark pair")
 	})
 
 	It("should include an inclusive mark at the exact boundary", func() {
