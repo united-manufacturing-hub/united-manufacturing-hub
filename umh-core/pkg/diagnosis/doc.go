@@ -14,10 +14,10 @@
 
 // Package diagnosis turns a stream of snapshots into a ranked list of causes.
 //
-// It is machinery with no vocabulary of its own: it never learns what a CPU or
-// a queue is. A caller declares a [Table] saying what to measure and where the
-// thresholds sit, ticks an [Engine] with its own snapshot type, and gets back
-// the causes that crossed a threshold, in report order.
+// A caller declares a table saying what to measure and where the thresholds
+// sit, ticks the engine with its own snapshot type, and gets back whatever
+// crossed a threshold, worst first. The package holds machinery and no
+// vocabulary of its own: it never learns what a CPU or a queue is.
 //
 // # One tick
 //
@@ -27,80 +27,33 @@
 //	snapshot S
 //	  Instrument.Extract  reads     Reading       a float64, or an absence
 //	  Window.Observe      stores    Point         into a sliding window
-//	  Window.Reduce       folds     Reduced       a number, and whether to trust it
+//	  Window.Reduce       reduces   Reduced       a number, and whether to trust it
 //	  the engine          resolves  Availability  what one signal can say now
-//	  Latch.Update        judges    Fired         a cause that crossed its mark
-//	  Rank                orders    []Fired       report order
+//	  Latch.Update        judges    Fired         a signal that crossed its mark
+//	  Rank                orders    []Fired       worst first
 //
-// # Vocabulary
+// # Reading order
 //
-// Each term is defined once, in the file named:
+// The files build in one direction. Each assumes the ones above it and nothing
+// below, so reading them in this order never needs a term that has not been
+// introduced yet.
 //
-//	Reading       a float64 that may be absent                    reading.go
-//	Point         one stored reading: instant, value, denominator reduction.go
-//	Window        a sliding window of Points, one per instrument  window.go
-//	Reduction     how a window folds: last, mean, slope, p95, ... reduction.go
-//	Reduced       a folded number bound to the State to trust it  reduction.go
-//	State         one window's outcome                            reduction.go
-//	Coverage      how much of its span a window actually covers   window.go
-//	Capability    a startup fact: does this source exist here     environment.go
-//	Instrument    one way of measuring a signal, with its Marks   instrument.go
-//	Signal        a question one or more Instruments can answer   instrument.go
-//	Availability  one signal's outcome, across all its windows    engine.go
-//	Marks         a hysteresis pair: Fire, Clear, polarity, scale latch.go
-//	Latch         a Schmitt trigger over one signal               latch.go
-//	Fired         what a fired latch contributes to a verdict     latch.go
-//	Severity      a fired cause normalised to one 0..1 scale      ranking.go
-//	Track         a window with no verdict: folded, never judged  table.go
-//	Table         the whole declaration for one resource          table.go
-//
-// # How much is known
-//
-// The same idea recurs at two altitudes, and the two ladders line up. Both are
-// ordered by strength of evidence, not by severity: further down is more known,
-// never worse.
-//
-//	one window (State)      one signal (Availability)
-//	------------------      -------------------------
-//	-                       NoInstrument    no capable instrument at all
-//	StateAbsent             AllAbsent       capable, but every window is empty
-//	StateUntrusted          NoneReady       something, but not enough to trust
-//	StateValue              Ready           a number worth judging
-//
-// A signal's Availability is the maximum State across its capable windows, with
-// NoInstrument standing in for the maximum over an empty set.
-//
-// # Three gates, easily confused
-//
-//	capability   a startup fact:  does this source exist on this box
-//	readability  a per-tick fact: did this tick's read succeed
-//	readiness    a per-tick fact: can this window supply a number now
-//
-// Readability is never a verdict input. A failed read makes a window hold its
-// contents, and the latch sees only the resulting State.
+//	measure.go   a reading, and the calculations that summarise a series of them
+//	window.go    where readings accumulate and age out
+//	declare.go   what a caller writes: capabilities, instruments, signals, the table
+//	judge.go     thresholds, the latch that fires on them, and how causes are ordered
+//	engine.go    builds all of it from the table, and runs one tick
+//	suite.go     generates a conformance suite for a caller's table
 //
 // # Using it
 //
-//	table := diagnosis.Table[Snapshot]{
-//		Interval: time.Second,
-//		Signals:  []diagnosis.Signal[Snapshot]{ ... },
-//	}
-//	engine, err := diagnosis.NewEngine(table) // the one place a bad table is refused
+//	engine, err := diagnosis.NewEngine(table)
 //	env := diagnosis.NewEnvironment(caps...)
 //
-//	// once per Interval:
+//	// once per interval:
 //	fired, readiness := engine.Observe(snapshot, env, now)
 //	causes := diagnosis.Rank(fired)
 //
-// The two returns answer different questions: what fired, and whether each
-// signal could be read at all, which is how a caller tells "measured, and fine"
-// from "could not measure". For a number to publish whether or not it fired,
-// use [Engine.Reduction] or [Engine.Track].
-//
-// An Engine owns its windows and latches and is driven by one goroutine.
-// Nothing here is synchronized.
-//
-// [Suite] and [Run] generate a conformance suite from a table: six tick shapes
-// per signal, driven through the real [Engine.Observe], so a new signal cannot
-// quietly skip the unreadable path.
+// Observe returns two things: what fired, and one readiness row per signal, so
+// a caller can tell "measured, and fine" from "could not measure at all".
 package diagnosis

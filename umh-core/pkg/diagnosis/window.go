@@ -12,14 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// This file holds the sliding Window that accumulates one instrument's readings,
-// and the Coverage it reports about its own extent. Using one:
+// This file holds the sliding Window that accumulates readings for one measured
+// series, and the Coverage it reports about its own extent. Using one:
 //
 //	w, err := NewWindow(60*time.Second, 60*time.Second, Mean, false)
 //	// then, once per tick, in this order:
 //	w.Observe(value, against, now) // age out, then store this tick's reading
-//	v, state := w.Reduce().Get()   // the folded number, and whether to trust it
-//	cov := w.Coverage()            // how much of the span the entries cover
+//	v, state := w.Reduce().Get()   // the reduced number, and whether to trust it
+//	full := w.Coverage().Full()    // has it filled its whole span, or just started?
 
 package diagnosis
 
@@ -29,22 +29,19 @@ import (
 	"time"
 )
 
-// Coverage is how much of its span a window's entries cover: the span it was
-// built with, and oldest-to-newest of what it holds. The latch's clear arm
-// releases only on Full, and its re-fire arm bars one whole span after that.
+// Coverage is how much of its span a window's readings cover: the span it was
+// built with, and oldest-to-newest of what it holds.
 type Coverage struct {
 	span    time.Duration
 	spanned time.Duration
 }
 
-// Full reports whether the stored entries span the whole window duration.
+// Full reports whether the stored readings span the window's whole duration: it
+// separates a filled window from one that has only just started.
 func (c Coverage) Full() bool { return c.span > 0 && c.spanned >= c.span }
 
-// Window is a sliding window of readings for one (signal, instrument) pair: a
-// time-ordered slice of Points, pruned from the front once they age past the
-// span. Two rules, both in age: a tick whose read failed does not prune, so the
-// contents survive a short outage (the freeze); and once no read has succeeded
-// for the demote span the window empties in one step (the demote).
+// Window is a sliding window of readings for one measured series: a time-ordered
+// slice of Points, pruned from the front once they age past the span.
 type Window struct {
 	// lastSuccess is the instant of the last STORED reading, not of the last
 	// call; the demote rule measures from it.
@@ -62,11 +59,10 @@ type Window struct {
 // NewWindow builds an empty window, refusing a non-positive span or demote span.
 //
 //	span    how far back the window reaches; entries older than this are pruned
-//	demote  how long without a successful read before the window empties outright
-//	red     the reduction Reduce folds the stored points under
-//	counter whether the series is a monotone counter, arming the restart rule
-//
-// An emptied window reduces to StateAbsent, so demote is when it stops answering.
+//	demote  how long without a successful read before the window empties; once a
+//	        source goes silent that long, Reduce says StateAbsent, not a stale number
+//	red     the reduction Reduce applies to the stored points
+//	counter whether the series is a monotone counter, so a backwards step is a reset
 func NewWindow(span, demote time.Duration, red Reduction, counter bool) (*Window, error) {
 	if span <= 0 {
 		return nil, fmt.Errorf("window: span %v is not positive", span)
@@ -79,9 +75,8 @@ func NewWindow(span, demote time.Duration, red Reduction, counter bool) (*Window
 
 // Observe advances the window by one tick, ageing out entries past the span
 // before storing this tick's reading. It is the only call that moves a window
-// forward: skip a tick and the previous tick's entries report as current.
-//
-// Call it once per tick, passing Unknown() when the read failed.
+// forward: skip a tick and the previous tick's entries count as current. Pass
+// Unknown() when the read failed.
 func (w *Window) Observe(value, against Reading, at time.Time) {
 	w.age(at)
 	w.appendPoint(value, against, at)
@@ -97,6 +92,7 @@ func (w *Window) age(now time.Time) {
 		return
 	}
 	// Freeze: the previous tick stored nothing, so hold the contents through it.
+	// A short outage must not shrink the window one tick at a time.
 	if !w.lastAppendStored {
 		return
 	}
@@ -116,9 +112,6 @@ func (w *Window) prune(cutoff time.Time) {
 
 // appendPoint stores one instant's reading; an absent or non-finite value stores
 // nothing, and callers must not pre-filter.
-//
-// against is the DENOMINATOR: under a reduction with against the fold divides by
-// its delta across the window edges, and every other reduction ignores it.
 func (w *Window) appendPoint(value, against Reading, at time.Time) {
 	w.lastAppendStored = false
 
@@ -134,10 +127,10 @@ func (w *Window) appendPoint(value, against Reading, at time.Time) {
 		}
 	}
 
-	// Counter restart: a source reset moves both counters at once, so a fall in
-	// the value (or, under an against reduction, the denominator) means the
-	// stored entries came from a different origin. Discard them. Counter windows
-	// only: elsewhere a fall is the quantity doing its job.
+	// A source reset moves both counters at once, so on a counter window a backwards
+	// step in the value (or, under an against reduction, in the denominator) means
+	// the stored entries came from a different origin. Discard them. On any other
+	// window a fall is normal.
 	if w.counter && len(w.points) > 0 {
 		prev := w.points[len(w.points)-1]
 
@@ -162,12 +155,8 @@ func (w *Window) appendPoint(value, against Reading, at time.Time) {
 	w.prune(at.Add(-w.span))
 }
 
-// Reduce folds the window's stored points into one number under the window's own
-// reduction, bound to a State: StateValue carries the number, StateUntrusted
-// carries it when still meaningful (below the reduction's minimum, or stale by
-// one tick) and zero otherwise, StateAbsent means the window is empty.
-//
-// Reduce does not age; it reports whatever the last Observe left.
+// Reduce applies the window's reduction to the stored points and returns one
+// number: a mean, a p95, whatever the window was built with, bound to a State.
 func (w *Window) Reduce() Reduced {
 	if len(w.points) == 0 {
 		return Reduced{state: StateAbsent}
@@ -176,14 +165,14 @@ func (w *Window) Reduce() Reduced {
 	if w.red.against && denominatorDelta(w.points) <= 0 {
 		return Reduced{v: 0, state: StateUntrusted}
 	}
-	// Backstop for a bare Reduction{}; NewEngine already refuses a nil fold.
+	// Backstop for a bare Reduction{}, which carries no calculation to apply.
 	if w.red.fold == nil {
 		return Reduced{v: 0, state: StateUntrusted}
 	}
 
 	v := w.red.fold(w.points)
 
-	// A fold can emit NaN or ±Inf on finite inputs: a slope over equal timestamps.
+	// A reduction can emit NaN or ±Inf on finite inputs: a slope over equal timestamps.
 	if math.IsNaN(v) || math.IsInf(v, 0) {
 		return Reduced{v: 0, state: StateUntrusted}
 	}
@@ -208,7 +197,7 @@ func denominatorDelta(points []Point) float64 {
 	return last - first
 }
 
-// Coverage reports the window's extent, for the two latch arms gated on it.
+// Coverage reports how much of its span the stored readings cover.
 func (w *Window) Coverage() Coverage {
 	var spanned time.Duration
 	if len(w.points) >= 2 {

@@ -12,11 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// This file drives the package. NewEngine turns a Table into windows and
-// latches; Observe runs a tick: update every window, work out what each signal's
-// windows can collectively say, then drive that signal's latch on the answer.
-// That collective answer is Availability, where the measuring half in window.go
-// meets the judging half in latch.go.
+// This file is the engine. A caller declares a Table; NewEngine reads it once
+// and builds one Window per (signal, instrument) pair, one Window per track and
+// one Latch per signal, refusing a malformed table. Observe then appends the
+// snapshot to every window, resolves what each signal's windows can collectively
+// say, an Availability, and drives that signal's latch with it.
+//
+// The environment is not checked while building: NewEngine takes no Environment
+// and builds a window for every instrument, capable or not. Signal.Capable runs
+// inside Observe, every tick, so one table runs unchanged on boxes with
+// different capabilities and a capability that appears or disappears takes
+// effect on the next tick.
+//
+// Using it:
+//
+//	engine, err := NewEngine(table)                         // once
+//	fired, readiness := engine.Observe(snapshot, env, now)  // every tick
+//	causes := Rank(fired)                                   // report order
 
 package diagnosis
 
@@ -25,43 +37,37 @@ import (
 	"time"
 )
 
-// Availability is the MAXIMUM State across a signal's capable windows, plus a
-// value for having none. It is the only thing the latch arm switches on.
-//
-// resolve implements that correspondence exactly:
+// Availability is what one signal can say this tick: the MAXIMUM State across
+// its capable windows, plus a value for having no capable window at all.
+type Availability int
+
+const (
+	// NoInstrument: this environment satisfies no instrument, so there is no
+	// capable window to take a maximum over. The latch runs its demote clock,
+	// releasing once DemoteSpan has passed since the last trusted update.
+	NoInstrument Availability = iota
+	// AllAbsent: every capable window is empty. The latch resets at once if the
+	// signal sets ReleaseOnAbsent, and otherwise runs the demote clock.
+	AllAbsent
+	// NoneReady: no capable window reduced to StateValue and at least one reduced
+	// to StateUntrusted, whether below its minimum sample count or frozen by a
+	// read outage. The latch holds, bounded by the same demote clock.
+	NoneReady
+	// Ready: a capable window reduced to StateValue. Its instrument, reduction
+	// and coverage go to the latch.
+	Ready
+)
+
+// The four ascend by how much is known, and follow one window's State exactly:
 //
 //	no capable window   -> NoInstrument   (0)
 //	StateAbsent    (0)  -> AllAbsent      (1)
 //	StateUntrusted (1)  -> NoneReady      (2)
 //	StateValue     (2)  -> Ready          (3)
-type Availability int
-
-const (
-	// NoInstrument: no instrument's required capabilities are present, so there
-	// is no capable window to take a maximum over. The latch releases on the
-	// demote clock rather than holding.
-	NoInstrument Availability = iota
-	// AllAbsent: every capable window reduced to StateAbsent. The latch resets
-	// if the signal declares release-on-absent, and otherwise runs the demote
-	// clock.
-	AllAbsent
-	// NoneReady: NO capable window reduced to StateValue, and at least one
-	// reduced to StateUntrusted; the latch holds, bounded by the demote clock.
-	// Covers both a window that never reached its minimum and one that reached
-	// it and then froze through a read outage.
-	NoneReady
-	// Ready: a capable window reduced to StateValue. The engine selects that
-	// window's instrument and hands its reduction to the latch.
-	Ready
-)
 
 // Readiness is one signal's Availability, handed back by Observe beside the
-// fired set. There is one row per signal, in table order, ALWAYS: a signal that
-// fired and a signal that could not be read both appear.
-//
-// []Fired reports what fired, not what could have, so this is the only route to
-// "is this reading usable this tick". The Availability comes from the same walk
-// the latch arm switched on, so the two cannot drift.
+// fired set: one row per signal, in table order, always. []Fired reports only
+// what fired, so this is the only route to "was this signal readable at all".
 type Readiness struct {
 	Signal       string
 	Availability Availability
@@ -70,11 +76,9 @@ type Readiness struct {
 // key indexes the engine's window map by (signal, instrument) pair.
 type key struct{ Signal, Instrument string }
 
-// Engine owns every window, every track and one latch per signal for one table.
-//
-// Engine is not synchronized: it is owned by exactly one goroutine, the observe
-// loop, exactly as Latch is. Sharing it with a reader that calls Select,
-// Reduction or Track concurrently races on the window points and latch state.
+// Engine owns every window, every track and one latch per signal, for one table.
+// It is not synchronized: the goroutine that calls Observe owns it, and a reader
+// calling Select, Reduction or Track from another races on points and latches.
 type Engine[S any] struct {
 	windows  map[key]*Window
 	tracked  map[string]*Window
@@ -133,14 +137,18 @@ func NewEngine[S any](t Table[S]) (*Engine[S], error) {
 }
 
 // validate walks a table once and stops at the first row that could never
-// produce a verdict, could never hold a point, or names itself twice. The error
-// names the row and says what failed. Two rules it cannot say in a string:
+// produce a verdict, could never hold a point, or names itself twice: a
+// reduction with no calculation to apply, a percentile over a boolean series, a
+// clear mark not on the holding side of its fire mark, a nil extractor, a zero
+// span, a duplicate name. The error names the row. Two rules need more than an
+// error string:
 //
-//   - Capacity is the value at which severity reaches 1, stated positively. Zero
-//     is unset, declares no cross-instrument normalisation, and is the one value
-//     not judged. A non-zero capacity must clear the fire mark under
-//     HigherIsWorse, or severity collapses to 0, and must not equal minus it
-//     under LowerIsWorse, which zeroes the severity denominator.
+//   - Capacity is the value at which severity reaches 1, stated positively. Both
+//     capacity checks skip a zero, so an unset capacity passes under either
+//     polarity, leaving the fire mark as the whole severity denominator. A
+//     non-zero capacity must clear the fire mark under HigherIsWorse, or severity
+//     collapses to 0, and must not equal minus it under LowerIsWorse, which
+//     zeroes the severity denominator.
 //   - A minimum sample count must fit the span at the table interval: a p99 min
 //     of 100 over a 60s span at 1s holds 61 entries, so the window would sit at
 //     StateUntrusted forever.
@@ -234,17 +242,17 @@ func validate[S any](t Table[S]) error {
 	return nil
 }
 
-// Select applies the two gates, in order, and returns the instrument that won,
-// its reduction, its window's extent and the Availability that justifies them.
-// It takes the first capable instrument whose window reduces to StateValue.
+// Select applies the two gates, in order, and returns the first capable
+// instrument whose window reduces to StateValue, its reduction, that window's
+// extent and the Availability that justifies them. It is caller-facing API:
+// nothing in the package calls it, and Observe applies the same two gates itself.
 //
-// Gate one is CAPABILITY, Signal.Capable, a startup fact: does this source exist
-// on this box at all. Gate two is READINESS, a per-tick fact: can this
-// instrument's window supply a trustworthy value right now. They stay separate
-// because the percentile arm and the fallback arm declare the SAME capability: a
-// capability-only selector returns the percentile arm forever, its window reports
-// StateUntrusted below twenty samples, the latch holds, and the fallback arm, the
-// reason the series is judgeable at two seconds instead of twenty, is dead code.
+// Gate one is CAPABILITY, Signal.Capable, re-evaluated every tick against the
+// Environment handed in. Gate two is READINESS: can this instrument's window
+// supply a trustworthy value right now. They stay separate because a percentile
+// instrument and the cheap fallback behind it usually declare the SAME
+// capability: a capability-only selector would return the percentile forever,
+// leave it untrusted below twenty samples, and never reach the fallback.
 //
 // Select must follow an Observe on the same tick. Only Observe ages the windows,
 // so a window reduced without a preceding Observe reports entries left over from
@@ -253,13 +261,11 @@ func (e *Engine[S]) Select(s Signal[S], env Environment) (Instrument[S], Reduced
 	return e.resolve(s, s.Capable(env))
 }
 
-// resolve applies the readiness gate to a signal's already-capable instruments
-// and returns the first whose window reduces to StateValue, with Ready. Absent
-// one, it returns the zero instrument and NoneReady if any capable window is
-// untrusted, AllAbsent if every one is absent, NoInstrument if there was no
-// capable window to judge at all. That fan-out is the maximum State over the
-// capable windows, which is why StateValue returns immediately: no later window
-// can beat it.
+// resolve applies the readiness gate to a signal's already-capable instruments:
+// the first window reducing to StateValue wins, with Ready; otherwise the zero
+// instrument, and whichever Availability the State table above names. That is
+// the maximum State over those windows, so StateValue returns at once, no later
+// window being able to beat it. Select and Observe both call it.
 func (e *Engine[S]) resolve(s Signal[S], capable []Instrument[S]) (Instrument[S], Reduced, Coverage, Availability) {
 	if len(capable) == 0 {
 		return Instrument[S]{}, Reduced{}, Coverage{}, NoInstrument
@@ -295,18 +301,19 @@ func (e *Engine[S]) resolve(s Signal[S], capable []Instrument[S]) (Instrument[S]
 }
 
 // Observe runs one tick against a snapshot and returns the fired set, unranked,
-// and every signal's Readiness, both in table order.
+// and every signal's Readiness, both in table order. In order: append to every
+// track's and every instrument's window; then, per signal, resolve its
+// Availability over the instruments Signal.Capable allows this tick, drive its
+// single latch, collect whatever fired, and emit a Readiness row whether or not
+// it did.
 //
-// One tick, in order: update every track's and every instrument's window; then,
-// per signal, resolve the signal's Availability, drive its single latch, collect
-// whatever fired, and emit a Readiness row whether or not it did.
-//
-// The update pass covers every instrument's window unconditionally, including
-// instruments not selected this tick, because a window that freezes while
-// unselected is the freeze-via-read-outage shape. No arm leaves a held latch
-// unbounded: everything but Ready either resets it or runs the demote clock.
+// The append pass is unconditional, instruments this environment cannot satisfy
+// included, because Observe is the only call that ages a window: skip it once
+// and its stale entries count as current when it is next selected. No held latch
+// is left unbounded: AllAbsent on a signal setting ReleaseOnAbsent calls
+// Latch.Reset, and every other branch short of Ready runs the demote clock.
 func (e *Engine[S]) Observe(sample S, env Environment, at time.Time) ([]Fired, []Readiness) {
-	for _, tr := range e.tracks { // folded, never judged
+	for _, tr := range e.tracks { // reduced, never judged
 		w := e.tracked[tr.Name]
 		w.Observe(tr.Extract(sample), Unknown(), at) // same clock as every window below
 	}
@@ -348,15 +355,12 @@ func (e *Engine[S]) Observe(sample S, env Environment, at time.Time) ([]Fired, [
 	return fired, readiness
 }
 
-// Reduction returns one named instrument's window folded as it stands right now,
-// the only route to a number the caller must publish whether or not the latch
-// fired. An unnamed pair returns the zero Reduced, which is StateAbsent and is
-// indistinguishable from an existing window that is empty: name windows through
-// the SAME constants the table declares them with, not string literals, where a
-// typo reads as a permanent absence instead of failing.
-//
-// It selects nothing and reduces without ageing, so it must follow an Observe on
-// the same tick, for the same reason Select does.
+// Reduction returns one named instrument's window reduced as it stands, the only
+// route to a number the caller must publish whether or not the latch fired. Like
+// Select it reduces without ageing, so it too must follow an Observe. An unnamed
+// pair returns the zero Reduced, StateAbsent, indistinguishable from a window
+// that exists and is empty: name windows through the SAME constants the table
+// declares them with, since a typo in a literal reads as a permanent absence.
 func (e *Engine[S]) Reduction(signal, instrument string) Reduced {
 	w := e.windows[key{Signal: signal, Instrument: instrument}]
 	if w == nil {
@@ -365,12 +369,9 @@ func (e *Engine[S]) Reduction(signal, instrument string) Reduced {
 	return w.Reduce()
 }
 
-// Track returns one named track's window folded as it stands right now. An
-// unnamed track returns the zero Reduced, StateAbsent.
-//
-// Same contract as Reduction, on the folds that belong to no signal: it selects
-// nothing, reduces what Observe has already appended this tick, and must
-// therefore follow an Observe.
+// Track returns one named track's window reduced as it stands; an unnamed track
+// returns the zero Reduced, StateAbsent. Same contract as Reduction, on the
+// windows that belong to no signal: it must follow an Observe on the same tick.
 func (e *Engine[S]) Track(name string) Reduced {
 	w := e.tracked[name]
 	if w == nil {

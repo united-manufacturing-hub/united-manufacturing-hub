@@ -61,16 +61,15 @@ func Suite[S any](t Table[S]) []Scenario {
 	return scenarios
 }
 
-// Feed is the caller's half of a generated suite: one snapshot builder for a
-// tick on which every source the table reads answers, one for a tick on which
-// none of them does.
+// Feed is the caller's half: one snapshot builder for a tick on which every
+// source the table reads answers, one for a tick on which none does.
 //
-// Readable MUST return strictly increasing values, derived from at, for every
-// series an instrument declares through Against or Counter. A constant snapshot
-// gives a delta ratio a zero denominator delta, which reduces to StateUntrusted
-// and never reaches Ready. Single-series instruments fold rates and may repeat a
-// value freely. Unreadable must return Unknown() for every Reading an extractor
-// touches, so the window stops filling and eventually demotes.
+// Readable MUST return values derived from at that strictly increase for every
+// series an instrument reads through Against: a constant denominator gives a
+// zero denominator delta, which reduces to StateUntrusted and never reaches
+// Ready. Elsewhere a repeat is fine, though a Counter series must never fall.
+// Unreadable must return Unknown() for every Reading an extractor touches, so
+// the window stops filling and eventually demotes.
 type Feed[S any] interface {
 	Readable(at time.Time) S
 	Unreadable(at time.Time) S
@@ -84,6 +83,12 @@ type Outcome struct {
 
 // Run drives every Scenario Suite generates and reports the Availability each
 // reached on its last tick, one Outcome per Scenario in Suite's order.
+//
+// env is the fully-capable environment, and each case is a tick sequence at
+// t.Interval, or at one second when it is unset. m is the smallest
+// Reduction.Min among the signal's instruments capable under env, the tick on
+// which the signal first becomes Ready. It is always computed under env, even
+// for CaseUnsupported, which drives its ticks under NewEnvironment() instead.
 //
 //	CaseLive          m readable                            -> Ready
 //	CaseBriefOutage   m readable, then                      -> NoneReady
@@ -101,19 +106,12 @@ type Outcome struct {
 //     window reached in m ticks: Ready if that instrument's own Reduction.Min is
 //     m, else NoneReady.
 //   - CasePostOutageDip reaches Ready when m == 1.
-//   - CaseBelowFloor reaches AllAbsent when m == 1, which drives no readable tick
-//     at all.
+//   - CaseBelowFloor reaches AllAbsent when m == 1, driving no readable tick.
 //
-// env is the fully-capable environment. Each case is a tick sequence at
-// t.Interval, and m is the SMALLEST Reduction.Min among the signal's capable
-// instruments under env, the tick on which the signal first becomes Ready. m is
-// always computed under env, even for CaseUnsupported, which drives its ticks
-// under NewEnvironment() with no capabilities at all.
-//
-// The rows hold for a table whose instrument spans, and whose demote span, are at
-// least the interval Run drives at: t.Interval, or one second when it is unset.
-// Below that the window empties on the first unreadable tick and CaseBriefOutage
-// reads AllAbsent instead; validate refuses neither table.
+// The rows hold for a table whose instrument spans, and whose demote span, are
+// at least the interval Run drives at. Below that the window empties on the
+// first unreadable tick and CaseBriefOutage reads AllAbsent instead; validate
+// refuses neither table.
 func Run[S any](t Table[S], env Environment, f Feed[S]) []Outcome {
 	outcomes := make([]Outcome, 0, len(t.Signals)*6)
 	for _, sc := range Suite(t) {
@@ -189,6 +187,7 @@ func drive[S any](e *Engine[S], interval time.Duration, env Environment, seq []b
 			sample = f.Unreadable(at)
 		}
 		_, readiness := e.Observe(sample, env, at)
+		// One row, because runScenario builds this engine over a single signal.
 		availability = readiness[0].Availability
 		at = at.Add(interval)
 	}
