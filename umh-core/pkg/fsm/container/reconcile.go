@@ -184,7 +184,11 @@ func (c *ContainerInstance) printSystemState(instanceName string, tick uint64) {
 	)
 
 	if status.CPU != nil {
-		kv = append(kv, "cpu_mcpu", status.CPU.TotalUsageMCpu, "cpu_cores", status.CPU.CoreCount)
+		if status.CPU.TotalUsageMCpu != nil && status.CPU.CoreCount != nil {
+			kv = append(kv, "cpu_mcpu", *status.CPU.TotalUsageMCpu, "cpu_cores", *status.CPU.CoreCount)
+		} else {
+			kv = append(kv, "cpu_mcpu", "unmeasured", "cpu_cores", "unmeasured")
+		}
 		if status.CPU.CgroupCores > 0 {
 			kv = append(kv,
 				"cgroup_cores", status.CPU.CgroupCores,

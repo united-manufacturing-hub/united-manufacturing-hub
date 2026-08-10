@@ -137,12 +137,19 @@ func RecordContainerStatus(status *ServiceInfo, instanceName string) {
 
 	// CPU metrics
 	if status.CPU != nil {
-		containerCPUUsageMCores.WithLabelValues(instanceName).Set(status.CPU.TotalUsageMCpu)
-		containerCPUCoreCount.WithLabelValues(instanceName).Set(float64(status.CPU.CoreCount))
+		// A nil measurement (an unmeasured tick) leaves each gauge untouched:
+		// the previous value stays, and no fabricated number is recorded.
+		if status.CPU.TotalUsageMCpu != nil {
+			containerCPUUsageMCores.WithLabelValues(instanceName).Set(*status.CPU.TotalUsageMCpu)
+		}
 
-		// CPU load percent is calculated during metrics collection
-		if status.CPU.TotalUsageMCpu > 0 && status.CPU.CoreCount > 0 {
-			cpuLoadPercent := (status.CPU.TotalUsageMCpu / 1000.0) / float64(status.CPU.CoreCount) * 100.0
+		if status.CPU.CoreCount != nil {
+			containerCPUCoreCount.WithLabelValues(instanceName).Set(float64(*status.CPU.CoreCount))
+		}
+
+		// CPU load percent is only computed from a real measurement pair.
+		if status.CPU.TotalUsageMCpu != nil && status.CPU.CoreCount != nil {
+			cpuLoadPercent := (*status.CPU.TotalUsageMCpu / 1000.0) / float64(*status.CPU.CoreCount) * 100.0
 			containerCPULoadPercent.WithLabelValues(instanceName).Set(cpuLoadPercent)
 		}
 	}

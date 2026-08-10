@@ -79,12 +79,12 @@ type ContainerMonitorService struct {
 	instanceName      string
 	lastCollectedAt   time.Time
 	hwid              string
-	architecture      models.ContainerArchitecture //nolint:unused // will be used in the future
-	dataPath          string                       // Path to check for disk metrics and HWID file
-	throttleSnapshots []cgroupSnapshot             // Sliding window of cgroup counter snapshots
-	wasThrottled      bool                         // Previous throttle state for transition logging
-	useFSMv2CPU       bool                         // USE_FSMV2_CPU read once at construction; gates the fsmv2 CPU worker seam
-	cpuWorkerWarned   bool                         // One-time latch: the flag-on-but-no-client warning fires once, never per tick
+	architecture      models.ContainerArchitecture               //nolint:unused // will be used in the future
+	dataPath          string                                     // Path to check for disk metrics and HWID file
+	throttleSnapshots []cgroupSnapshot                           // Sliding window of cgroup counter snapshots
+	wasThrottled      bool                                       // Previous throttle state for transition logging
+	useFSMv2CPU       bool                                       // USE_FSMV2_CPU read once at construction; gates the fsmv2 CPU worker seam
+	cpuWorkerWarned   bool                                       // One-time latch: the flag-on-but-no-client warning fires once, never per tick
 	cpuUsageProvider  func(ctx context.Context) (float64, error) // CPU usage source, overridable for tests; defaults to the gopsutil provider
 }
 
@@ -100,12 +100,12 @@ func NewContainerMonitorServiceWithPath(fs filesystem.Service, dataPath string) 
 	useFSMv2CPU, _ := env.GetAsBool("USE_FSMV2_CPU", false, false)
 
 	return &ContainerMonitorService{
-		fs:                fs,
-		logger:            log,
-		instanceName:      constants.CoreInstanceName, // Single container instance name
-		dataPath:          dataPath,
-		useFSMv2CPU:       useFSMv2CPU,
-		cpuUsageProvider:  defaultCPUUsagePercent,
+		fs:               fs,
+		logger:           log,
+		instanceName:     constants.CoreInstanceName, // Single container instance name
+		dataPath:         dataPath,
+		useFSMv2CPU:      useFSMv2CPU,
+		cpuUsageProvider: defaultCPUUsagePercent,
 	}
 }
 
@@ -200,18 +200,23 @@ func (c *ContainerMonitorService) GetStatus(ctx context.Context) (*ServiceInfo, 
 	// construction, so a later toggle does not move the seam.
 	workerVerdictAuthoritative := false
 	if c.useFSMv2CPU {
-		if workerHealth, ok := c.readWorkerCPUHealth(ctx); ok && !cpuStat.IsThrottled {
+		if workerHealth, measured, ok := c.readWorkerCPUHealth(ctx); ok && !cpuStat.IsThrottled {
 			status.CPU.Health = workerHealth
-			// A degraded worker verdict writes the absent markers (0) for
-			// TotalUsageMCpu and CoreCount beside the Degraded category, so a
-			// degraded record never carries a legacy real number. status.CPU
-			// aliases cpuStat, so the write lands on the record the
-			// cpuStat.Health==Degraded aggregate check below reads. The legacy
-			// throttle arm (cpuStat.IsThrottled) bypasses this block and keeps
-			// its real numbers; every other worker-degraded verdict is zeroed.
-			if workerHealth.Category == models.Degraded {
-				status.CPU.TotalUsageMCpu = 0
-				status.CPU.CoreCount = 0
+			// A degraded verdict that rests on a real measurement (the worker
+			// measured fine and judged the box degraded) keeps the real numbers
+			// getCPUMetrics produced — a busy box carries its genuine usage
+			// beside the verdict. The genuinely-unmeasured arms — a read error,
+			// a stale or never-observed observation, or the framework Degraded
+			// "could not measure" declaration — nil both fields, so the wire
+			// omits totalUsageMCpu and coreCount instead of shipping a
+			// fabricated 0. status.CPU aliases cpuStat, so the write lands on
+			// the record the cpuStat.Health==Degraded aggregate check below
+			// reads. The legacy throttle arm (cpuStat.IsThrottled) bypasses
+			// this block and keeps its real numbers; every other
+			// worker-degraded verdict is nil-ed.
+			if workerHealth.Category == models.Degraded && !measured {
+				status.CPU.TotalUsageMCpu = nil
+				status.CPU.CoreCount = nil
 			}
 			// Only a genuinely healthy verdict is authoritative over the legacy
 			// rule. A degraded verdict (read-error, stale, never-observed,
@@ -273,13 +278,16 @@ func (c *ContainerMonitorService) GetStatus(ctx context.Context) (*ServiceInfo, 
 		// We maintain percentage calculation for API compatibility, but throttling
 		// detection (handled elsewhere) is the more important health signal.
 		effectiveCores := cpuStat.CgroupCores
-		if effectiveCores <= 0 {
+		if effectiveCores <= 0 && cpuStat.CoreCount != nil {
 			// Fall back to host cores if cgroup info unavailable
-			effectiveCores = float64(cpuStat.CoreCount)
+			effectiveCores = float64(*cpuStat.CoreCount)
 		}
 
-		if effectiveCores > 0 {
-			cpuPercent := (cpuStat.TotalUsageMCpu / 1000.0) / effectiveCores * 100.0
+		// A nil TotalUsageMCpu/CoreCount records an unmeasured tick, whose
+		// degraded verdict already failed closed in the seam above — the
+		// usage rule must not fabricate a percentage from absent numbers.
+		if effectiveCores > 0 && cpuStat.TotalUsageMCpu != nil {
+			cpuPercent := (*cpuStat.TotalUsageMCpu / 1000.0) / effectiveCores * 100.0
 
 			if cpuPercent > constants.CPUHighThresholdPercent {
 				status.CPUHealth = models.Degraded
@@ -362,18 +370,24 @@ const cpuWorkerMaxAge = 3 * time.Second
 // verdict; a Stale, NeverObserved, or unreadable (Unknown) one fails closed to
 // Degraded, because an old or absent measurement is not a healthy one and the
 // protocol-converter resource-limit check (IsResourceLimited) reads the message
-// as its bridge-block reason. The second return is
-// false when the caller must keep the legacy getCPUMetrics health: no client is
-// reachable (warned once per service lifetime, never per tick), the ref is not
-// registered (Unregistered is the absence-of-worker fallback, not a degrade),
-// or the Fresh tick left no determination and no framework degraded
+// as its bridge-block reason. The second return, measured, reports whether the
+// mapped health rests on a genuinely-measured Result verdict: it is true only
+// on the Fresh healthy-verdict and Fresh degraded-verdict arms, and false on
+// every fail-closed Degraded arm (read error, Stale, NeverObserved, and the
+// framework Degraded "could not measure" declaration) — the caller uses it to
+// decide whether the legacy numeric fields describe the same measurement the
+// verdict judged (keep them) or an absent measurement it must omit. The third
+// return is false when the caller must keep the legacy getCPUMetrics health: no
+// client is reachable (warned once per service lifetime, never per tick), the
+// ref is not registered (Unregistered is the absence-of-worker fallback, not a
+// degrade), or the Fresh tick left no determination and no framework degraded
 // declaration. The stored observation is simple.Status[CPUStatus] — the
 // developer's poll result plus the framework Degraded/Reason verdict — and the
 // framework verdict maps first: a Degraded observation is the worker declaring
 // it cannot measure (SPEC §2.7), and its Reason is the health message. A
 // healthy verdict maps to Active; when the caller consumes it, the verdict
 // is authoritative and the legacy CPU-usage re-judgement is skipped.
-func (c *ContainerMonitorService) readWorkerCPUHealth(ctx context.Context) (*models.Health, bool) {
+func (c *ContainerMonitorService) readWorkerCPUHealth(ctx context.Context) (health *models.Health, measured bool, ok bool) {
 	client := fsmv2client.GetClient()
 	if client == nil {
 		if !c.cpuWorkerWarned {
@@ -381,7 +395,7 @@ func (c *ContainerMonitorService) readWorkerCPUHealth(ctx context.Context) (*mod
 			c.logger.Warn(c.cpuSeamClientUnavailableMessage())
 		}
 
-		return nil, false
+		return nil, false, false
 	}
 
 	// Read the simple.Status wrapper, never the bare CPUStatus: a Poll error
@@ -403,7 +417,7 @@ func (c *ContainerMonitorService) readWorkerCPUHealth(ctx context.Context) (*mod
 			ObservedState: models.Degraded.String(),
 			DesiredState:  models.Active.String(),
 			Category:      models.Degraded,
-		}, true
+		}, false, true
 	}
 
 	// A non-Fresh observation without a read error is Stale, NeverObserved, or
@@ -418,16 +432,16 @@ func (c *ContainerMonitorService) readWorkerCPUHealth(ctx context.Context) (*mod
 				ObservedState: models.Degraded.String(),
 				DesiredState:  models.Active.String(),
 				Category:      models.Degraded,
-			}, true
+			}, false, true
 		case fsmv2client.NeverObserved:
 			return &models.Health{
 				Message:       "CPU worker has never observed; no measurement to judge",
 				ObservedState: models.Degraded.String(),
 				DesiredState:  models.Active.String(),
 				Category:      models.Degraded,
-			}, true
+			}, false, true
 		default:
-			return nil, false
+			return nil, false, false
 		}
 	}
 
@@ -441,7 +455,7 @@ func (c *ContainerMonitorService) readWorkerCPUHealth(ctx context.Context) (*mod
 			ObservedState: models.Degraded.String(),
 			DesiredState:  models.Active.String(),
 			Category:      models.Degraded,
-		}, true
+		}, false, true
 	}
 
 	// A Fresh observation whose framework verdict is not degraded carries the
@@ -454,19 +468,19 @@ func (c *ContainerMonitorService) readWorkerCPUHealth(ctx context.Context) (*mod
 			ObservedState: models.Active.String(),
 			DesiredState:  models.Active.String(),
 			Category:      models.Active,
-		}, true
+		}, true, true
 	case cpuhealth.StateDegraded:
 		return &models.Health{
 			Message:       workerStatus.Result.Message,
 			ObservedState: models.Degraded.String(),
 			DesiredState:  models.Active.String(),
 			Category:      models.Degraded,
-		}, true
+		}, true, true
 	default:
 		// Empty result verdict AND Degraded == false is a genuine "no
 		// determination" — a successful poll produced no verdict. Keep the
 		// legacy health; do not read it as healthy.
-		return nil, false
+		return nil, false, false
 	}
 }
 
@@ -544,8 +558,8 @@ func (c *ContainerMonitorService) getCPUMetrics(ctx context.Context) (*models.CP
 			DesiredState:  models.Active.String(),
 			Category:      category,
 		},
-		TotalUsageMCpu: usageMCores,
-		CoreCount:      coreCount,
+		TotalUsageMCpu: &usageMCores,
+		CoreCount:      &coreCount,
 	}
 
 	// Add cgroup info if available
