@@ -301,12 +301,19 @@ func (b *BenthosInstance) logS6DirectoryStateAsync(
 	}
 
 	sentry.ReportIssueWithContext(
-		fmt.Errorf("S6 directory health issue: service=%s, state='%s', trigger=%s",
-			serviceName, s6State, trigger),
+		s6DirectoryHealthError(trigger),
 		sentry.IssueTypeWarning,
 		logger,
 		diagnosticContext,
 	)
+}
+
+// s6DirectoryHealthError builds the error Sentry groups the S6 directory health
+// diagnostics by. Sentry fingerprints on the message, so it carries only the
+// trigger, which has five bounded literals; the service name and S6 state travel
+// as tags in the diagnostic context instead.
+func s6DirectoryHealthError(trigger string) error {
+	return fmt.Errorf("S6 directory health issue: trigger=%s", trigger)
 }
 
 // CreateInstance attempts to add the Benthos to the S6 manager.
