@@ -24,10 +24,9 @@ import (
 
 const reduceHour = time.Hour
 
-// The six folds and the three State outcomes. Reduce computes v from the
-// window's own reduction fold. These specs drive a window to a Reduced and
-// observe the (v, State) tuple through Get(), never through an exported field
-// on Reduced, which none exists.
+// The six reductions and the three States. These specs drive a window, then
+// read the (v, State) pair back through Reduced.Get(); Reduced exposes no field
+// to read it from directly.
 var _ = Describe("Reduction", func() {
 	It("should reduce under the reduction it was given at construction, so two windows fed the same points under different reductions return different numbers", func() {
 		meanW, _ := NewWindow(reduceHour, 60*time.Second, Mean, false)
@@ -168,14 +167,14 @@ var _ = Describe("Reduction", func() {
 	It("should still carry the reduced number when it reports StateUntrusted, and carry none when it reports StateAbsent", func() {
 		t0 := time.Unix(1_000_000, 0)
 
-		// Below-min under Mean: the thin series still folds to its own value.
+		// Below-min under Mean: the thin series still reduces to its own value.
 		belowW, _ := NewWindow(reduceHour, 60*time.Second, Mean, false)
 		belowW.appendPoint(Known(7), Unknown(), t0)
 		n, s := belowW.Reduce().Get()
 		Expect(s).To(Equal(StateUntrusted))
 		Expect(n).To(Equal(7.0), "a StateUntrusted window carries its folded number")
 
-		// Divisor-zero: the fold cannot compute, so it carries zero.
+		// Divisor-zero: the reduction cannot compute, so it carries zero.
 		divW, _ := NewWindow(reduceHour, 60*time.Second, DeltaRatio, false)
 		divW.appendPoint(Known(5), Known(100), t0)
 		divW.appendPoint(Known(11), Known(100), t0.Add(10*time.Second))
@@ -193,14 +192,14 @@ var _ = Describe("Reduction", func() {
 	It("should not report a slope over a single instant or equal timestamps, nor a ratio over a resetting denominator, as a finite trusted value", func() {
 		t0 := time.Unix(1_000_000, 0)
 
-		// Slope over a single point: dt is zero, the fold cannot divide.
+		// Slope over a single point: dt is zero, the reduction cannot divide.
 		single, _ := NewWindow(reduceHour, 60*time.Second, Slope, false)
 		single.appendPoint(Known(10), Unknown(), t0)
 		n, s := single.Reduce().Get()
 		Expect(s).To(Equal(StateUntrusted), "a slope needs two endpoints")
 		Expect(n).To(Equal(0.0), "a non-computable slope carries zero, not NaN")
 
-		// Same edge timestamp: dt is zero and the fold divides by it.
+		// Same edge timestamp: dt is zero and the reduction divides by it.
 		equal, _ := NewWindow(reduceHour, 60*time.Second, Slope, false)
 		equal.appendPoint(Known(10), Unknown(), t0)
 		equal.appendPoint(Known(30), Unknown(), t0)
