@@ -21,6 +21,9 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
+	"go.uber.org/zap/zaptest/observer"
 	"gopkg.in/yaml.v3"
 )
 
@@ -368,6 +371,35 @@ var _ = Describe("canonicalize fast path", func() {
 			expectAccepted("map[string]string", map[string]interface{}{
 				"m": map[string]string{"ttl": "5m"},
 			})
+		})
+	})
+
+	Describe("fallback reporting", func() {
+		// The observer is set to WarnLevel, so this fails if the report is ever
+		// lowered back to DEBUG: the default level is Info and the line would not
+		// reach an operator at all.
+		It("logs once per type at a level the default configuration keeps", func() {
+			core, logs := observer.New(zapcore.WarnLevel)
+			defer zap.ReplaceGlobals(zap.New(core))()
+
+			const shape = "test-only-shape"
+
+			reportFallback(shape)
+			reportFallback(shape)
+
+			Expect(logs.FilterMessageSnippet("fell back to the YAML round-trip").Len()).
+				To(Equal(1), "expected exactly one visible warning for a repeated shape")
+			Expect(logs.FilterMessageSnippet(shape).Len()).
+				To(BeNumerically(">=", 1), "the report must name the shape that was declined")
+		})
+
+		It("says nothing when there is nothing to report", func() {
+			core, logs := observer.New(zapcore.WarnLevel)
+			defer zap.ReplaceGlobals(zap.New(core))()
+
+			reportFallback("")
+
+			Expect(logs.Len()).To(BeZero())
 		})
 	})
 

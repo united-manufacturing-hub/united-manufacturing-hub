@@ -243,9 +243,13 @@ var reportedFallbackTypes sync.Map // map[string]struct{}, one report per type
 // value makes its whole config section fall back, so this is the only signal that
 // the optimization has stopped applying somewhere.
 //
-// KNOWN LIMITATION: ReportIssueWithContext shares one process-wide two-hour debounce
-// across every warning, and the type is marked before the send, so a dropped report
-// is never retried. The log line is the reliable signal.
+// WARN, not DEBUG: the default level is Info, so a DEBUG line is invisible exactly
+// where this matters. It fires at most once per type per process and means a whole
+// config section went back to the slow path, which is a reconcile budget concern.
+//
+// Sentry is best-effort on top: its warning path shares one process-wide two-hour
+// debounce across every warning, and the type is marked before the send, so a
+// debounced report is never retried. The log line is the dependable signal.
 func reportFallback(unsupported string) {
 	if unsupported == "" {
 		return
@@ -255,13 +259,17 @@ func reportFallback(unsupported string) {
 		return
 	}
 
-	zap.S().Debugf(
+	log := zap.S()
+
+	log.Warnf(
 		"benthos config canonicalization fell back to the YAML round-trip: unsupported type %q. "+
-			"Correct but slow; add the case to normalizeValue in canonicalize_fast.go.",
+			"Correct but slower; add the case to normalizeValue in canonicalize_fast.go.",
 		unsupported)
 
+	// Passing log rather than nil: ReportIssueWithContext swaps nil for a no-op
+	// logger, which silently drops its own half of the report.
 	sentry.ReportIssueWithContext(
 		fmt.Errorf("canonicalize fast path unsupported type: %s", unsupported),
-		sentry.IssueTypeWarning, nil,
+		sentry.IssueTypeWarning, log,
 		map[string]interface{}{"trigger": "canonicalize_fallback_" + unsupported})
 }
