@@ -155,6 +155,32 @@ main.second()
 			}
 			Expect(sentry.IsInternalFrame(frame)).To(BeFalse())
 		})
+
+		// The FSMLogger lives in pkg/fsmv2/deps, so without these two specs every
+		// fsmv2 Sentry issue attributes its culprit to (*zapLogger).SentryError
+		// rather than to the code that raised it.
+		It("should filter the fsmv2 deps logger frames", func() {
+			for _, fn := range []string{"(*zapLogger).SentryError", "(*zapLogger).SentryWarn"} {
+				frame := sentrygo.Frame{
+					Module:   "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps",
+					Function: fn,
+				}
+				Expect(sentry.IsInternalFrame(frame)).To(BeTrue(), "expected %s to be filtered", fn)
+			}
+		})
+
+		// Guards the tempting-but-wrong fix. Adding pkg/fsmv2/deps to
+		// internalPackagePrefixes would satisfy the spec above while erasing
+		// scheduler, history and metrics frames from every stack trace.
+		It("should NOT filter non-logger frames in the same deps package", func() {
+			for _, fn := range []string{"(*scheduler).Next", "(*history).Append", "RecordTick"} {
+				frame := sentrygo.Frame{
+					Module:   "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps",
+					Function: fn,
+				}
+				Expect(sentry.IsInternalFrame(frame)).To(BeFalse(), "expected %s to survive", fn)
+			}
+		})
 	})
 
 	Describe("extractErrorTypes", func() {
