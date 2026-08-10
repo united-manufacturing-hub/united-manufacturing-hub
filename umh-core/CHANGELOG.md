@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Changed
+
+- umh-core always runs the FSMv2 runtime now. The legacy backend communicator path and its `USE_FSMV2_TRANSPORT` flag are removed; FSMv2 is the only bring-up path, so you can run umh-core without an `AUTH_TOKEN`/`API_URL` and it stays fully functional (it just cannot reach the Management Console). The `useFSMv2Transport` and `useFSMv2MemoryCleanup` config settings no longer have an effect and can be left in place.
+
 ## [0.44.34]
 
 ### Improvements

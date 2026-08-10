@@ -28,7 +28,8 @@ type FeatureUsage struct {
 	HistorianBridgeCount int `json:"historianBridgeCount"`
 	// ConfigBackupEnabled reports whether ENABLE_CONFIG_BACKUP is set.
 	ConfigBackupEnabled bool `json:"configBackupEnabled"`
-	// FSMv2TransportEnabled reports whether USE_FSMV2_TRANSPORT is set.
+	// FSMv2TransportEnabled reports whether the FSMv2 transport is active. It is
+	// always true: FSMv2 is the only bring-up path.
 	FSMv2TransportEnabled bool `json:"fsmv2TransportEnabled"`
 	// FSMv2MemoryCleanupEnabled reports whether USE_FSMV2_MEMORY_CLEANUP is set.
 	FSMv2MemoryCleanupEnabled bool `json:"fsmv2MemoryCleanupEnabled"`

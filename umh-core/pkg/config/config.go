@@ -102,7 +102,6 @@ type AgentConfig struct {
 	EnableResourceLimitBlocking bool          `yaml:"enableResourceLimitBlocking"` // Feature flag for resource-based bridge blocking
 
 	// FSMv2 feature flags for incremental migration
-	EnableFSMv2               bool `yaml:"enableFSMv2,omitempty"`               // Master switch: starts ApplicationSupervisor
 	UseFSMv2ProtocolConverter bool `yaml:"useFSMv2ProtocolConverter,omitempty"` // Migrate Protocol Converter to FSMv2
 	UseFSMv2MemoryCleanup     bool `yaml:"useFSMv2MemoryCleanup,omitempty"`     // Enable PersistenceWorker for delta compaction
 }
@@ -111,7 +110,7 @@ type CommunicatorConfig struct {
 	APIURL            string `yaml:"apiUrl,omitempty"`
 	AuthToken         string `yaml:"authToken,omitempty"`
 	AllowInsecureTLS  bool   `yaml:"allowInsecureTLS,omitempty"`  // Allow TLS connections without verifying the certificate.
-	UseFSMv2Transport bool   `yaml:"useFSMv2Transport,omitempty"` // Feature flag: use FSMv2 communicator instead of legacy Puller/Pusher.
+	UseFSMv2Transport bool `yaml:"useFSMv2Transport,omitempty"` // Deprecated: no longer read; FSMv2 is the only bring-up path.
 }
 
 // FSMInstanceConfig is the config for a FSM instance.

@@ -333,7 +333,6 @@ FSMv2 features are controlled via environment variables:
 docker run -d \
   -e AUTH_TOKEN=your-auth-token \
   -e API_URL=https://management.umh.app \
-  -e USE_FSMV2_TRANSPORT=true \
   -e USE_FSMV2_MEMORY_CLEANUP=true \
   -e USE_FSMV2_PROTOCOL_CONVERTER=true \
   umh-core:latest
@@ -343,7 +342,6 @@ docker run -d \
 |----------|----------|-------------|
 | `AUTH_TOKEN` | Yes | Authentication token from Management Console |
 | `API_URL` | Yes | Backend relay server URL (e.g., `https://management.umh.app`) |
-| `USE_FSMV2_TRANSPORT` | No | FSMv2 communicator; defaults to `true` (enabled). Set to `false` to revert to legacy. |
 | `USE_FSMV2_MEMORY_CLEANUP` | No | FSMv2 memory cleanup (persistence worker); defaults to `true` (enabled). Set to `false` to revert. |
 | `USE_FSMV2_PROTOCOL_CONVERTER` | No | Set to `true` to enable FSMv2 protocol converter |
 
@@ -352,7 +350,7 @@ docker run -d \
 To revert to the legacy behavior, set the corresponding flag to `false`:
 
 ```bash
--e USE_FSMV2_TRANSPORT=false
+-e USE_FSMV2_MEMORY_CLEANUP=false
 ```
 
 ### Verifying FSMv2 Communicator

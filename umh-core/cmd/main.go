@@ -156,18 +156,13 @@ func main() {
 	// that will be replaced when the config manager becomes an FSMv2 worker.
 	// GetAsBool with required=false never returns an error (silently falls back
 	// to the default on parse failure); see ENG-4809 for the signature fix.
-	transportEnabled, _ := env.GetAsBool("USE_FSMV2_TRANSPORT", false, true)
-	// Persistence runs unconditionally (ENG-5545 R2): the persistence child and
-	// its deps registration are not gated by any feature flag.
-	configData.Agent.UseFSMv2Transport = transportEnabled
-
 	protocolConverterEnabled, _ := env.GetAsBool("USE_FSMV2_PROTOCOL_CONVERTER", false, false)
 	configData.Agent.UseFSMv2ProtocolConverter = protocolConverterEnabled
 
 	featureUsage := &models.FeatureUsage{
 		ConfigBackupEnabled:           configBackupEnabled,
-		FSMv2TransportEnabled:         configData.Agent.UseFSMv2Transport,
-		FSMv2MemoryCleanupEnabled:     true,
+		FSMv2TransportEnabled:         true, // FSMv2 is the only bring-up path
+		FSMv2MemoryCleanupEnabled:     true, // persistence runs unconditionally
 		FSMv2ProtocolConverterEnabled: configData.Agent.UseFSMv2ProtocolConverter,
 		ResourceLimitBlockingEnabled:  configData.Agent.EnableResourceLimitBlocking,
 		HistorianConfigured:           configData.Historian != nil,
@@ -656,9 +651,9 @@ func buildFSMv2Supervisor(
 		YAMLConfig:   yamlConfig,
 		Dependencies: fsmv2Deps,
 		ForceExit:    forceExit,
-		// The production tree under USE_FSMV2_TRANSPORT is 4 levels
-		// (application -> communicator -> transport -> push/pull). The drain
-		// budget cascades base x subtree height (see pkg/fsmv2/CLAUDE.md
+		// The production tree is 4 levels (application -> communicator ->
+		// transport -> push/pull). The drain budget cascades base x subtree
+		// height (see pkg/fsmv2/CLAUDE.md
 		// "Graceful Shutdown Cascading"), so a base of 2s bounds the worst-case
 		// chain drain at 8s -- inside docker's default 10s SIGTERM grace, with
 		// headroom for s6 teardown and redpanda disk sync. Healthy drains

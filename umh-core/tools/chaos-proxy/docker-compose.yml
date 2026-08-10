@@ -56,7 +56,6 @@ services:
       - API_URL=http://chaos-proxy:8090/api
       - RELEASE_CHANNEL=stable
       - LOCATION_0=${LOCATION_0:-CHAOSTEST}
-      - USE_FSMV2_TRANSPORT=true
       - LOGGING_LEVEL=DEBUG
     ports:
       - "127.0.0.1:8080:8080"
