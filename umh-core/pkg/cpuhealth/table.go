@@ -68,9 +68,10 @@ var (
 )
 
 // cpuTable is the CPU declaration, built by a function because two marks and
-// two capacities are denominated in quantities that vary per box: the quota and
+// one capacity are denominated in quantities that vary per box: the quota and
 // the logical CPU count. Both arguments are startup facts, cached across ticks,
-// exactly as a Capability is.
+// exactly as a Capability is. host-headroom's capacity is the fixed reserve
+// rather than the core count, so only the limit arm's capacity scales.
 //
 // 🔥 quota is a float64 and not a Reading. Marks.Capacity and Mark.At are both
 // float64, so a table cannot be built from an absence — and it does not need to
@@ -271,7 +272,14 @@ func saturationSignal(cores float64) diagnosis.Signal[Sample] {
 					Clear:    diagnosis.Mark{At: 0.5},
 					Polarity: diagnosis.LowerIsWorse,
 					Unit:     "cores",
-					Capacity: cores,
+					// Severity 1 at −Capacity, so Capacity is the reserve, not
+					// the core count. Headroom is cores − hostBusy − reserve and
+					// hostBusy cannot exceed cores, so the quantity bottoms out
+					// at −cpuReserveCores: a wholly consumed box. Capacity: cores
+					// put severity 1 at −cores, four times past anything
+					// reachable, and scored that box 0.25 — below a merely busy
+					// one at 1.00 in the same tier.
+					Capacity: cpuReserveCores,
 				},
 			},
 			{
@@ -338,7 +346,11 @@ func limitSaturationSignal(quota float64) diagnosis.Signal[Sample] {
 				Clear:    diagnosis.Mark{At: 0.05 * quota},
 				Polarity: diagnosis.LowerIsWorse,
 				Unit:     "cores",
-				Capacity: quota,
+				// Same reasoning as host-headroom: usage cannot exceed the quota
+				// the kernel throttles it to, so quota − usage − 0.10 × quota
+				// bottoms out at −0.10 × quota. Capacity: quota scored a
+				// container wholly out of its budget 0.10.
+				Capacity: 0.10 * quota,
 			},
 		}},
 	}
@@ -354,7 +366,6 @@ func limitSaturationSignal(quota float64) diagnosis.Signal[Sample] {
 // keyed windows under. It is not a package-wide guarantee: RunSuite still builds
 // its own table from cpuTable directly, so "nothing in cpuhealth can drift" is
 // not a claim this function is in a position to make.
-//
 func Table(cores, quota float64) diagnosis.Table[Sample] {
 	return cpuTable(cores, quota)
 }
