@@ -257,7 +257,7 @@ GraphQL API for querying Unified Namespace topics.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `enabled` | `bool` | `true` | Enable GraphQL API |
+| `enabled` | `bool` | `false` | Enable GraphQL API (Early Access; opt in) |
 | `port` | `int` | `8090` | HTTP port for GraphQL endpoint |
 | `debug` | `bool` | `false` | Enable GraphiQL playground at `/` |
 | `corsOrigins` | `[]string` | `[]` | CORS origins (empty = allow all) |
@@ -265,7 +265,7 @@ GraphQL API for querying Unified Namespace topics.
 ```yaml
 agent:
   graphql:
-    enabled: true
+    enabled: false   # Default: false; set true to opt in (Early Access)
     port: 8090
     debug: false
     corsOrigins: 
