@@ -594,6 +594,12 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 			})
 
 			service = container_monitor.NewContainerMonitorServiceWithPath(mockFS, testDataPath)
+			// Inject a deterministic non-zero usage so the preservation
+			// assertions discriminate the throttle bypass from an idle host that
+			// naturally reads 0 mCPU.
+			service.SetCPUUsageProvider(func(_ context.Context) (float64, error) {
+				return 50.0, nil
+			})
 
 			// Tick 1 seeds the throttle window; tick 2 sees the throttled delta.
 			_, err := service.GetStatus(ctx)
@@ -612,6 +618,70 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 			Expect(status.CPU.Health.Message).NotTo(Equal(workerHealthyMessage))
 			Expect(status.CPU.Health.ObservedState).To(Equal("degraded"))
 			Expect(status.CPU.Health.DesiredState).To(Equal("active"))
+			// The legacy throttle bypass preserves the real numerics: the worker
+			// block is skipped on a legacy-throttled tick, so TotalUsageMCpu and
+			// CoreCount keep the legacy getCPUMetrics readings instead of being
+			// zeroed as absent markers (a build that zeroes under the throttle
+			// gate fails here).
+			Expect(status.CPU.TotalUsageMCpu).To(BeNumerically(">", 0))
+			Expect(status.CPU.CoreCount).To(BeNumerically(">", 0))
+		})
+	})
+
+	Context("[absent-markers]", func() {
+		It("should write the absent-marker numbers and the Degraded verdict in the SAME write on a worker tick that stored no measurement (a legacy real CoreCount/TotalUsageMCpu beside a degraded verdict is the defect)", func() {
+			setFlag("true")
+			// An unmeasurable tick: the worker stored a Degraded framework
+			// verdict with an empty result (zero numeric measurements), because
+			// it could not measure. This is the poll-error / unreadable-cgroup
+			// shape, which arrives Fresh with a nil error.
+			publishWorkerClient(&fsmv2.Observation[simple.Status[fsmv2cpu.CPUStatus]]{
+				CollectedAt: time.Now().Add(-500 * time.Millisecond), // Fresh: inside the seam's 3s maxAge
+				Status: simple.Status[fsmv2cpu.CPUStatus]{
+					Result:   fsmv2cpu.CPUStatus{},
+					Degraded: true,
+					Reason:   "cpu.stat unreadable",
+				},
+			})
+
+			// Stage benign cgroup + memory files so the legacy getCPUMetrics
+			// path SUCCEEDS (GetStatus must not early-return) and would
+			// otherwise fill a real usage number. The injected 50% usage provider
+			// makes that real number deterministic: 0.5 * effectiveCores * 1000
+			// > 0, and CoreCount is runtime.NumCPU() from the legacy path.
+			mockFS.WithReadFileFunc(func(_ context.Context, path string) ([]byte, error) {
+				switch path {
+				case "/sys/fs/cgroup/cpu.max":
+					return []byte("200000 100000\n"), nil
+				case "/sys/fs/cgroup/cpu.stat":
+					return []byte("nr_periods 2000\nnr_throttled 0\nthrottled_usec 0\n"), nil
+				case "/sys/fs/cgroup/memory.max":
+					return []byte("4294967296\n"), nil
+				case "/sys/fs/cgroup/memory.current":
+					return []byte("1073741824\n"), nil
+				}
+
+				return nil, errors.New("file not found")
+			})
+
+			service = container_monitor.NewContainerMonitorServiceWithPath(mockFS, testDataPath)
+			service.SetCPUUsageProvider(func(_ context.Context) (float64, error) {
+				return 50.0, nil
+			})
+
+			status, err := service.GetStatus(ctx)
+			Expect(err).NotTo(HaveOccurred())
+
+			// The seam writes the Degraded category and the absent markers (0) for
+			// TotalUsageMCpu and CoreCount in the same GetStatus, so a degraded
+			// record never ships a legacy real number beside the verdict. A
+			// build that leaves the legacy real CoreCount/TotalUsageMCpu (or a
+			// runtime.NumCPU() fabrication) beside the degraded verdict fails
+			// here.
+			Expect(status.CPU.TotalUsageMCpu).To(Equal(0.0))
+			Expect(status.CPU.CoreCount).To(Equal(0))
+			Expect(status.CPU.Health.Category).To(Equal(models.Degraded))
+			Expect(status.CPU.Health.Message).NotTo(BeEmpty())
 		})
 	})
 
@@ -631,6 +701,12 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 			})
 
 			service = container_monitor.NewContainerMonitorServiceWithPath(mockFS, testDataPath)
+			// Inject a deterministic non-zero usage so the zeroing assertion
+			// discriminates the absent-marker write from an idle host that
+			// naturally reads 0 mCPU.
+			service.SetCPUUsageProvider(func(_ context.Context) (float64, error) {
+				return 50.0, nil
+			})
 
 			status, err := service.GetStatus(ctx)
 			Expect(err).NotTo(HaveOccurred())
@@ -647,6 +723,12 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 			Expect(status.CPU.Health.Message).NotTo(Equal(workerHealthyMessage))
 			Expect(status.CPU.Health.ObservedState).To(Equal("degraded"))
 			Expect(status.CPU.Health.DesiredState).To(Equal("active"))
+			// The freshness fail-closed verdict zeroes the numerics in the same
+			// write as the Degraded category, exactly like the framework-Degraded
+			// arm: a stale record must not ship a legacy real number beside its
+			// verdict (the injected 50% usage would otherwise read non-zero here).
+			Expect(status.CPU.TotalUsageMCpu).To(Equal(0.0))
+			Expect(status.CPU.CoreCount).To(Equal(0))
 		})
 
 		It("should degrade CPU health when the worker is running but has never observed (the store returns ErrNotFound)", func() {
