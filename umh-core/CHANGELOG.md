@@ -4,7 +4,11 @@
 
 ### Improvements
 
-- New instances now start with a topic cleanup policy of `delete` and a 7-day retention, so a new consumer group can replay the full seven days of `umh.messages`. Until now new instances inherited `compact`, which collapsed every closed segment to the latest value per tag — retention was set to seven days but there was no raw history left to replay, which blocked the Historian and any other late-joining consumer. Two things to plan for: seven days of raw records scales with message rate rather than tag count (roughly 40–55 GB for `umh.messages` alone at 700 messages/second, so check the sizing guide before running a high-throughput instance), and after a restart the Topic Browser tree only lists tags that published inside the retention window. Upgrading does not change existing instances; to move one over, set `internal.redpanda.redpandaServiceConfig.topic.defaultTopicCleanupPolicy: delete` in its config
+### Improvements
+
+- New instances now buffer seven days of raw messages instead of one hour, so late-joining consumers like the Historian can replay the full window
+- Existing instances are unaffected; to switch one over, set `internal.redpanda.redpandaServiceConfig.topic.defaultTopicCleanupPolicy` to `delete`
+- Seven days of raw data scales with message rate, roughly 40–55 GB for `umh.messages` at 700 msg/s; check the sizing guide before running a high-throughput instance
 
 ## [0.44.33]
 
