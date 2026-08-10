@@ -13,8 +13,9 @@
 // limitations under the License.
 
 // This file holds the Latch, which turns one signal's readings into a
-// fired-or-not verdict against a fire and a clear threshold, and Rank, which
-// puts the signals that did fire in the order to show them, main reason first.
+// fired-or-not verdict against a fire and a clear threshold (hysteresis), and
+// Rank, which puts the signals that did fire in the order to show them, main
+// reason first.
 
 package diagnosis
 

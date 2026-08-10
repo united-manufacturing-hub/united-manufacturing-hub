@@ -310,18 +310,30 @@ func (e *Engine[S]) resolve(s Signal[S], capable []Instrument[S]) (Instrument[S]
 	return Instrument[S]{}, Reduced{}, Coverage{}, NoInstrument
 }
 
-// Observe runs one tick against a snapshot and returns the fired set, unranked,
-// and every signal's Readiness, both in table order. In order: append to every
-// track's and every instrument's window; then, per signal, resolve its
-// Availability over the instruments Signal.Capable allows this tick, drive its
-// single latch, collect whatever fired, and emit a Readiness row whether or not
-// it did.
+// Observe runs one tick against a snapshot and returns the fired set, unranked
+// (Rank puts it worst first), and every signal's Readiness, both in table
+// order. In order: append to every track's and every instrument's window; then,
+// per signal, resolve its Availability over the instruments Signal.Capable
+// allows this tick, drive its single latch, collect whatever fired, and emit a
+// Readiness row whether or not it did.
 //
 // The append pass is unconditional, instruments this environment cannot satisfy
 // included, because Observe is the only call that ages a window: skip it once
 // and its stale entries count as current when it is next selected. No held latch
 // is left unbounded: AllAbsent on a signal setting ReleaseOnAbsent calls
 // Latch.Reset, and every other branch short of Ready runs the demote clock.
+//
+// # One tick
+//
+// Each stage narrows what is known. The name on the left performs the step; it
+// is not a return type.
+//
+//	snapshot S
+//	  Instrument.Extract  reads     Reading       a float64, or an absence
+//	  Window.Observe      stores    Point         into a sliding window
+//	  Window.Reduce       reduces   Reduced       a number, and whether to trust it
+//	  the engine          resolves  Availability  what one signal can say now
+//	  Latch.Update        judges    Fired         a signal that crossed its mark
 func (e *Engine[S]) Observe(sample S, env Environment, at time.Time) ([]Fired, []Readiness) {
 	for _, tr := range e.tracks { // reduced, never judged
 		w := e.tracked[tr.Name]

@@ -19,32 +19,6 @@
 // crossed a threshold, worst first. The package holds machinery and no
 // vocabulary of its own: it never learns what a CPU or a queue is.
 //
-// # One tick
-//
-// Each stage narrows what is known. The name on the left performs the step; it
-// is not a return type.
-//
-//	snapshot S
-//	  Instrument.Extract  reads     Reading       a float64, or an absence
-//	  Window.Observe      stores    Point         into a sliding window
-//	  Window.Reduce       reduces   Reduced       a number, and whether to trust it
-//	  the engine          resolves  Availability  what one signal can say now
-//	  Latch.Update        judges    Fired         a signal that crossed its mark
-//	  Rank                orders    []Fired       worst first
-//
-// # Reading order
-//
-// The files build in one direction. Each assumes the ones above it and nothing
-// below, so reading them in this order never needs a term that has not been
-// introduced yet.
-//
-//	measure.go   a reading, and the calculations that summarise a series of them
-//	window.go    where readings accumulate and age out
-//	declare.go   what a caller writes: capabilities, instruments, signals, the table
-//	judge.go     thresholds, the latch that fires on them, and how causes are ordered
-//	engine.go    builds all of it from the table, and runs one tick
-//	suite.go     generates a conformance suite for a caller's table
-//
 // # Using it
 //
 //	engine, err := diagnosis.NewEngine(table)
