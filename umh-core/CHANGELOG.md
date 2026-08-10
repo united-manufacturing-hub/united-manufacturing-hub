@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### New Features
+
+- CPU health, usage, and core-count readings in the Management Console now come from the new CPU monitor when the feature is enabled (for users testing this preview)
+- A CPU reading that cannot be measured no longer shows as 0; it is instead reported as not measured (for users testing this preview)
+
 ### Fixes
 
 - Topics no longer go missing from the Topic Browser when several updates arrive in quick succession
