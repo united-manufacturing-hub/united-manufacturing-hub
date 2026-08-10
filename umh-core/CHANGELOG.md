@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### New Features
+
+- CPU health, usage, and core-count readings in the Management Console now come from the new CPU monitor when the feature is enabled (for users testing this preview)
+- A CPU reading that cannot be measured no longer shows as 0; it is instead reported as not measured (for users testing this preview)
+
 ## [0.44.34]
 
 ### Improvements

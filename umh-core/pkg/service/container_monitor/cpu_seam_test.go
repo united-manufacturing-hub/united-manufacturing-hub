@@ -929,6 +929,137 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 		})
 	})
 
+	Context("[flicker]", func() {
+		// flickerRun stages one observation age per GetStatus tick and returns
+		// the sequence of CPUHealth categories the run produced. The observation
+		// ALWAYS carries the same Fresh healthy verdict: only CollectedAt moves
+		// between ticks, so a CPUHealth transition recorded here is a freshness
+		// transition at the seam — exactly what SPEC §9 P4 R5's flicker gate
+		// measures — never a verdict change.
+		flickerRun := func(ages ...time.Duration) []models.HealthCategory {
+			setFlag("true")
+			obs := &fsmv2.Observation[simple.Status[fsmv2cpu.CPUStatus]]{
+				CollectedAt: time.Now(),
+				Status: simple.Status[fsmv2cpu.CPUStatus]{
+					Result: fsmv2cpu.CPUStatus{
+						Verdict: "healthy",
+						Message: workerHealthyMessage,
+					},
+				},
+			}
+			publishWorkerClient(obs)
+
+			// Benign cgroup and memory staging plus a pinned 50% usage provider,
+			// so the legacy getCPUMetrics path never adds a degradation of its
+			// own across the run: usagePercent 50 < 70 reads Active, the throttle
+			// window stays quiet, and every transition below is a seam freshness
+			// effect and nothing else.
+			mockFS.WithReadFileFunc(func(_ context.Context, path string) ([]byte, error) {
+				switch path {
+				case "/sys/fs/cgroup/cpu.max":
+					return []byte("200000 100000\n"), nil
+				case "/sys/fs/cgroup/cpu.stat":
+					return []byte("nr_periods 2000\nnr_throttled 0\nthrottled_usec 0\n"), nil
+				case "/sys/fs/cgroup/memory.max":
+					return []byte("4294967296\n"), nil
+				case "/sys/fs/cgroup/memory.current":
+					return []byte("1073741824\n"), nil
+				}
+
+				return nil, errors.New("file not found")
+			})
+
+			service = container_monitor.NewContainerMonitorServiceWithPath(mockFS, testDataPath)
+			service.SetCPUUsageProvider(func(_ context.Context) (float64, error) {
+				return 50.0, nil
+			})
+
+			categories := make([]models.HealthCategory, 0, len(ages))
+			for _, age := range ages {
+				obs.CollectedAt = time.Now().Add(age)
+				status, err := service.GetStatus(ctx)
+				Expect(err).NotTo(HaveOccurred())
+				categories = append(categories, status.CPUHealth)
+			}
+
+			return categories
+		}
+
+		// transitions counts the adjacent CPUHealth pairs that differ: the
+		// flicker the gate counts. A-then-A and D-then-D are 0; A-then-D and
+		// D-then-A are 1.
+		transitions := func(categories []models.HealthCategory) int {
+			count := 0
+			for i := 1; i < len(categories); i++ {
+				if categories[i] != categories[i-1] {
+					count++
+				}
+			}
+
+			return count
+		}
+
+		It("should not flicker CPUHealth across a single missed poll (a one-interval-old observation stays Fresh inside the seam's 3s maxAge)", func() {
+			// The worker polls every 1s and the seam's maxAge is 3x that. A
+			// single missed poll leaves the observation one interval (1s) old —
+			// still inside maxAge, so GetFresh maps it Fresh and the healthy
+			// verdict stays authoritative. Alternating on-time and one-poll-behind
+			// observations must therefore hold CPUHealth Active for the whole
+			// run: zero transitions.
+			categories := flickerRun(
+				-500*time.Millisecond, // poll on time
+				-1*time.Second,        // one poll behind: the single missed poll
+				-500*time.Millisecond,
+				-1*time.Second,
+				-500*time.Millisecond,
+				-1*time.Second,
+			)
+
+			Expect(transitions(categories)).To(Equal(0))
+			for _, h := range categories {
+				Expect(h).To(Equal(models.Active))
+			}
+		})
+
+		It("should flip CPUHealth exactly once for an observation gap longer than maxAge, and hold the degraded state while the gap persists", func() {
+			// A 4s-old observation is older than the seam's 3s maxAge: GetFresh
+			// maps it Stale, the fail-closed verdict degrades CPUHealth, and a
+			// second stale tick holds the gap degraded — one transition in, none
+			// on the repeat.
+			categories := flickerRun(
+				-500*time.Millisecond, // Fresh: Active
+				-4*time.Second,        // gap > maxAge: Degraded — the one transition
+				-4*time.Second,        // gap persists: stays Degraded — no second transition
+			)
+
+			Expect(transitions(categories)).To(Equal(1))
+			Expect(categories[0]).To(Equal(models.Active))
+			Expect(categories[1]).To(Equal(models.Degraded))
+			Expect(categories[2]).To(Equal(models.Degraded))
+		})
+
+		It("positive control: the same Fresh/behind alternation flips CPUHealth on every tick once the behind observations cross the freshness boundary", func() {
+			// The SPEC's positive control narrows maxAge to the poll interval so
+			// the one-interval-lagged observation becomes not-Fresh and the
+			// missed-poll run flips. The seam reads maxAge as its package
+			// constant (3s), so this spec realizes the same boundary-crossing by
+			// pushing the behind observations past it (age 4s > 3s maxAge): the
+			// alternation now straddles the classification boundary and must flip
+			// CPUHealth on every tick. A gate that reported zero here AND zero in
+			// the missed-poll spec would be measuring nothing.
+			categories := flickerRun(
+				-500*time.Millisecond, // Fresh: Active
+				-4*time.Second,        // beyond maxAge: Degraded
+				-500*time.Millisecond, // Fresh again: Active
+				-4*time.Second,        // Degraded again
+				-500*time.Millisecond,
+				-4*time.Second,
+			)
+
+			Expect(transitions(categories)).To(Equal(5))
+		})
+	})
+
 	Context("[legacy-off]", func() {
 		It("should keep filling status.CPU through the legacy getCPUMetrics path when USE_FSMV2_CPU is off, even though a worker observation exists", func() {
 			setFlag("false")
