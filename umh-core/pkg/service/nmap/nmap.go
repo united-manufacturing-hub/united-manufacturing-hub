@@ -22,6 +22,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
@@ -37,6 +38,33 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/standarderrors"
 	"go.uber.org/zap"
 )
+
+// Compiled once. These used to be built inside parseScanLogs, which runs for every
+// bridge on every tick.
+var (
+	targetRegex    = regexp.MustCompile(`nmap -n -Pn -p \d+ ([^ ]+) -v`)
+	portRegex      = regexp.MustCompile(`-p (\d+)`)
+	timestampRegex = regexp.MustCompile(`NMAP_TIMESTAMP: (.+)`)
+	durationRegex  = regexp.MustCompile(`NMAP_DURATION: ([0-9.]+)`)
+	latencyRegex   = regexp.MustCompile(`Host is up \(([0-9.]+)s latency\).`)
+	errorRegex     = regexp.MustCompile(`(?im)^.*error.*$`)
+)
+
+// portStateRegexes caches the one pattern that depends on the port, so a bridge
+// compiles it once instead of on every tick.
+var portStateRegexes sync.Map // map[uint16]*regexp.Regexp
+
+func portStateRegex(port uint16) *regexp.Regexp {
+	if cached, found := portStateRegexes.Load(port); found {
+		return cached.(*regexp.Regexp)
+	}
+
+	re := regexp.MustCompile(`(?i)` + strconv.Itoa(int(port)) +
+		`/tcp\s+(open|closed|filtered|unfiltered|open\|filtered|closed\|filtered)`)
+	portStateRegexes.Store(port, re)
+
+	return re
+}
 
 // NmapService is the implementation of the INmapService interface.
 type NmapService struct {
@@ -151,13 +179,11 @@ func (s *NmapService) GetConfig(ctx context.Context, filesystemService filesyste
 	result := nmapserviceconfig.NmapServiceConfig{}
 
 	// Extract target
-	targetRegex := regexp.MustCompile(`nmap -n -Pn -p \d+ ([^ ]+) -v`)
 	if matches := targetRegex.FindStringSubmatch(string(scriptData)); len(matches) > 1 {
 		result.Target = matches[1]
 	}
 
 	// Extract port
-	portRegex := regexp.MustCompile(`-p (\d+)`)
 	if matches := portRegex.FindStringSubmatch(string(scriptData)); len(matches) > 1 {
 		port, err := strconv.Atoi(matches[1])
 		if err == nil {
@@ -174,39 +200,38 @@ func (s *NmapService) parseScanLogs(logs []s6service.LogEntry, port uint16) *Nma
 		return nil
 	}
 
-	// We'll reconstruct scan blocks from the logs
-	var (
-		currentScan []string
-		scanBlocks  [][]string
-	)
+	// Only the newest complete scan is used, so search from the end instead of
+	// collecting every block forward. The forward version touched all retained lines
+	// on every tick, and the buffer holds up to S6MaxLines of them.
+	//
+	// A block runs from a START to the first END after it. Searching from the last
+	// END instead would be wrong: after "START x END END" the forward version closed
+	// at the first END and ignored the second.
+	start, end := -1, -1
 
-	inScanBlock := false
-
-	// First, extract complete scan blocks from logs
-	for _, log := range logs {
-		switch {
-		case strings.Contains(log.Content, "NMAP_SCAN_START"):
-			inScanBlock = true
-			currentScan = []string{log.Content}
-		case strings.Contains(log.Content, "NMAP_SCAN_END"):
-			if inScanBlock {
-				currentScan = append(currentScan, log.Content)
-				scanBlocks = append(scanBlocks, currentScan)
-				currentScan = []string{}
-				inScanBlock = false
-			}
-		case inScanBlock:
-			currentScan = append(currentScan, log.Content)
+	for i := len(logs) - 1; i >= 0 && end < 0; i-- {
+		if !strings.Contains(logs[i].Content, "NMAP_SCAN_START") {
+			continue
 		}
+
+		for j := i + 1; j < len(logs); j++ {
+			if strings.Contains(logs[j].Content, "NMAP_SCAN_END") {
+				start, end = i, j
+				break
+			}
+		}
+		// No END after this START: it never closed, so keep looking further back.
 	}
 
-	// If no complete scans, return nil
-	if len(scanBlocks) == 0 {
+	if end < 0 {
 		return nil
 	}
 
-	// Parse the most recent complete scan
-	latestScan := scanBlocks[len(scanBlocks)-1]
+	latestScan := make([]string, 0, end-start+1)
+	for _, log := range logs[start : end+1] {
+		latestScan = append(latestScan, log.Content)
+	}
+
 	scanOutput := strings.Join(latestScan, "\n")
 
 	// Create the scan result
@@ -219,7 +244,6 @@ func (s *NmapService) parseScanLogs(logs []s6service.LogEntry, port uint16) *Nma
 	}
 
 	// Extract timestamp
-	timestampRegex := regexp.MustCompile(`NMAP_TIMESTAMP: (.+)`)
 	if matches := timestampRegex.FindStringSubmatch(scanOutput); len(matches) > 1 {
 		timestamp, err := time.Parse(time.RFC3339, matches[1])
 		if err == nil {
@@ -228,7 +252,6 @@ func (s *NmapService) parseScanLogs(logs []s6service.LogEntry, port uint16) *Nma
 	}
 
 	// Extract duration
-	durationRegex := regexp.MustCompile(`NMAP_DURATION: ([0-9.]+)`)
 	if matches := durationRegex.FindStringSubmatch(scanOutput); len(matches) > 1 {
 		duration, err := strconv.ParseFloat(matches[1], 64)
 		if err == nil {
@@ -237,15 +260,13 @@ func (s *NmapService) parseScanLogs(logs []s6service.LogEntry, port uint16) *Nma
 	}
 
 	// Extract port state
-	portStateRegex := regexp.MustCompile(`(?i)` + strconv.Itoa(int(port)) + `/tcp\s+(open|closed|filtered|unfiltered|open\|filtered|closed\|filtered)`)
-	if matches := portStateRegex.FindStringSubmatch(scanOutput); len(matches) > 1 {
+	if matches := portStateRegex(port).FindStringSubmatch(scanOutput); len(matches) > 1 {
 		result.PortResult.State = matches[1]
 	} else {
 		result.PortResult.State = "unknown"
 	}
 
 	// Extract latency (sample line: "Host is up (0.016s latency).")
-	latencyRegex := regexp.MustCompile(`Host is up \(([0-9.]+)s latency\).`)
 
 	matches := latencyRegex.FindStringSubmatch(scanOutput)
 	if len(matches) >= 2 {
@@ -258,7 +279,6 @@ func (s *NmapService) parseScanLogs(logs []s6service.LogEntry, port uint16) *Nma
 	}
 
 	// Extract errors if occurred (case-insensitive)
-	errorRegex := regexp.MustCompile(`(?im)^.*error.*$`)
 	if matches := errorRegex.FindString(scanOutput); matches != "" {
 		result.Error = matches
 	}
