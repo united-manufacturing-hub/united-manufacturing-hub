@@ -274,6 +274,38 @@ var _ = Describe("Engine", func() {
 		Expect(absent).To(Equal(StateAbsent), "an unnamed track reduces to absence")
 	})
 
+	It("should reduce a track whose extractor never reads to an absence, not to a zero the caller would publish as a measurement", func() {
+		type usnap struct{ v float64 }
+		// Two tracks over the same ticks: one reads, one never does. The reading
+		// one is the positive control, so an absence on the silent one is a fact
+		// about its extractor and not about a track that was never folded.
+		reads := Track[usnap]{Name: "reads", Extract: func(s usnap) Reading { return Known(s.v) }, Span: 60 * time.Second, Red: Mean}
+		silent := Track[usnap]{Name: "silent", Extract: func(usnap) Reading { return Unknown() }, Span: 60 * time.Second, Red: Mean}
+
+		sig := Signal[usnap]{
+			Name: "S", DemoteSpan: 60 * time.Second,
+			Instruments: []Instrument[usnap]{{
+				Name: "I", Extract: func(s usnap) Reading { return Known(s.v) }, Red: Last, Span: 60 * time.Second,
+				Marks: Marks{Unit: "u", Fire: Mark{At: 100, Inclusive: true}, Worst: 200, Clear: Mark{At: 0, Inclusive: false}, Polarity: HigherIsWorse},
+			}},
+		}
+		e, err := NewEngine(Table[usnap]{Signals: []Signal[usnap]{sig}, Tracks: []Track[usnap]{reads, silent}, Interval: time.Second})
+		Expect(err).ToNot(HaveOccurred())
+
+		base := time.Unix(4_000_000, 0)
+		env := NewEnvironment()
+		e.Observe(usnap{v: 2.0}, env, base)
+		e.Observe(usnap{v: 4.0}, env, base.Add(time.Second))
+
+		v, st := e.Track("reads").Get()
+		Expect(st).To(Equal(StateValue), "the reading track met its floor of two samples over these two ticks")
+		Expect(v).To(Equal(3.0), "the reading track folds the mean of its two ticks (2,4)")
+
+		sv, sst := e.Track("silent").Get()
+		Expect(sst).To(Equal(StateAbsent), "a track whose extractor answered Unknown on every tick stored nothing, so it has no number to reduce")
+		Expect(sv).To(Equal(0.0), "the absence carries the zero value, which Get hands back only alongside StateAbsent")
+	})
+
 	It("should return one readiness row per signal beside the fired set, carrying the same availability the latch arm acted on, for signals that fired and signals that could not be read alike", func() {
 		type s9 struct{ v float64 }
 		ext := func(s s9) Reading { return Known(s.v) }
@@ -440,5 +472,89 @@ var _ = Describe("Engine", func() {
 
 		firedAfter, _ := e.Observe(rsnap{v: 3.0}, blind, base.Add(62*time.Second))
 		Expect(firedAfter).To(BeEmpty(), "a NoInstrument signal releases once its demote clock elapses, not on the absent flag")
+	})
+
+	// The demote clock is anchored on Latch.lastUpdate, which only a trustworthy
+	// reduction writes, so neither not-ready arm can move it however often the
+	// signal flaps between them. Both arms are driven to the boundary tick here,
+	// one per run, because a single run only ever exercises the arm that lands
+	// there and would pass with the other arm's release deleted.
+	It("should release a signal alternating between AllAbsent and NoneReady on the demote clock, whichever arm lands on the boundary tick", func() {
+		type fsnap struct{}
+
+		// A fires on the first tick and then reads nothing, so its window freezes
+		// with one entry: untrusted, never empty, for the whole run. B reads
+		// nothing ever, so its window is empty from the start. Dropping "psi"
+		// leaves B alone and the tick reads AllAbsent; restoring it puts A's
+		// frozen window back in the capable set and the tick reads NoneReady.
+		firing := true
+		marks := Marks{Unit: "u", Fire: Mark{At: 2, Inclusive: true}, Worst: 4, Clear: Mark{At: 1, Inclusive: true}, Polarity: HigherIsWorse}
+		sig := Signal[fsnap]{
+			Name: "S", DemoteSpan: 60 * time.Second,
+			Instruments: []Instrument[fsnap]{
+				{
+					Name: "A", Requires: []Capability{"psi"}, Red: Last, Span: 60 * time.Second, Marks: marks,
+					Extract: func(fsnap) Reading {
+						if !firing {
+							return Unknown()
+						}
+						return Known(3.0)
+					},
+				},
+				{
+					Name: "B", Red: Last, Span: 60 * time.Second, Marks: marks,
+					Extract: func(fsnap) Reading { return Unknown() },
+				},
+			},
+		}
+		tbl := Table[fsnap]{Signals: []Signal[fsnap]{sig}, Interval: time.Second}
+		withPSI, blind := NewEnvironment("psi"), NewEnvironment()
+
+		// 60s of demote span at the table's 1s interval puts the release bar on
+		// tick 60 after the firing tick; tick 59 is the last one that still holds.
+		const bar = 60
+
+		for _, tc := range []struct {
+			arm    Availability
+			name   string
+			offset int
+		}{
+			{name: "AllAbsent", arm: AllAbsent, offset: 0},
+			{name: "NoneReady", arm: NoneReady, offset: 1},
+		} {
+			firing = true
+			e, err := NewEngine(tbl)
+			Expect(err).ToNot(HaveOccurred(), tc.name)
+
+			t0 := time.Unix(1_000_000, 0)
+			opening, _ := e.Observe(fsnap{}, withPSI, t0)
+			Expect(opening).To(HaveLen(1), tc.name+": the readable first tick fires the latch, anchoring the clock at t0")
+			firing = false
+
+			seen := map[Availability]int{}
+			var heldBeforeBar bool
+			var atBar Availability
+			var firedAtBar []Fired
+			for i := 1; i <= bar; i++ {
+				env := blind
+				if (i+tc.offset)%2 == 1 {
+					env = withPSI
+				}
+				f, r := e.Observe(fsnap{}, env, t0.Add(time.Duration(i)*time.Second))
+				seen[r[0].Availability]++
+				if i == bar-1 {
+					heldBeforeBar = len(f) == 1
+				}
+				if i == bar {
+					atBar, firedAtBar = r[0].Availability, f
+				}
+			}
+
+			Expect(seen[AllAbsent]).To(Equal(bar/2), tc.name+": half of the 60 post-fire ticks read AllAbsent, so the alternation this spec needs really happened")
+			Expect(seen[NoneReady]).To(Equal(bar/2), tc.name+": the other half read NoneReady")
+			Expect(atBar).To(Equal(tc.arm), tc.name+": the boundary tick lands on the arm this run drives")
+			Expect(heldBeforeBar).To(BeTrue(), tc.name+": the latch holds at tick 59, one tick short of the 60s demote span after the firing tick at t0")
+			Expect(firedAtBar).To(BeEmpty(), tc.name+": the latch releases at tick 60, exactly 60s after t0, however often the two not-ready arms alternated in between")
+		}
 	})
 })

@@ -136,6 +136,40 @@ var _ = Describe("NewEngine", func() {
 		Expect(err.Error()).To(ContainSubstring("I1"))
 	})
 
+	// A window reaches its floor only if its span can hold that many entries at
+	// the interval the caller ticks at; below that it sits at StateUntrusted for
+	// good and the row can never produce a verdict. suite_test.go covers the two
+	// refusals with minimums far from the capacity, which leaves where each rule
+	// cuts unpinned. Capacity counts both edges, span/interval + 1: a 60s span at
+	// 1s holds the entries at 0s and at 60s and the 59 between them, so 61.
+	It("cuts the capacity rule at exactly the entries a span holds, 61 over a 60s span at a 1s interval and not 60, for an instrument and a track alike", func() {
+		for _, count := range []int{61, 62} {
+			red, rerr := NewReduction("boundary", count, func([]Point) float64 { return 0 })
+			Expect(rerr).ToNot(HaveOccurred())
+
+			sig := validSignal("A")
+			sig.Instruments[0].Red = red // I1 spans 60s
+			byTrack := validTable([]Signal[snap]{validSignal("A")})
+			byTrack.Tracks = []Track[snap]{{Name: "T", Extract: extract, Span: 60 * time.Second, Red: red}}
+
+			for _, row := range []struct {
+				name string
+				tbl  Table[snap]
+			}{
+				{name: "instrument", tbl: validTable([]Signal[snap]{sig})},
+				{name: "track", tbl: byTrack},
+			} {
+				_, err := NewEngine(row.tbl)
+				if count <= 61 {
+					Expect(err).ToNot(HaveOccurred(), "%s: a minimum of %d is within the 61 entries a 60s span holds at a 1s interval", row.name, count)
+					continue
+				}
+				Expect(err).To(HaveOccurred(), "%s: a minimum of %d is one past the 61 entries a 60s span holds at a 1s interval", row.name, count)
+				Expect(err.Error()).To(ContainSubstring("exceeds"), row.name)
+			}
+		}
+	})
+
 	It("refuses an instrument that names a dividing reduction with a nil Against, because its window can never hold a point", func() {
 		sig := validSignal("A")
 		sig.Instruments[0].Red = DeltaRatio
