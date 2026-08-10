@@ -83,13 +83,13 @@ type key struct{ Signal, Instrument string }
 type Engine[S any] struct {
 	windows map[key]*Window
 	tracked map[string]*Window
-	latches map[string]*Latch
+	latches []Latch // one per signal, same order
 	signals []Signal[S]
 	tracks  []Track[S]
 }
 
 // NewEngine validates the table, then builds one window per (signal, instrument)
-// pair, one window per track, and one latch per signal keyed by signal name. It
+// pair, one window per track, and one latch per signal, in signal order. It
 // is the single place a malformed table is refused; validate holds the list.
 //
 // A track's demote span is its own span, because a track belongs to no signal
@@ -105,7 +105,7 @@ func NewEngine[S any](t Table[S]) (*Engine[S], error) {
 		tracks:  t.Tracks,
 		windows: make(map[key]*Window),
 		tracked: make(map[string]*Window),
-		latches: make(map[string]*Latch),
+		latches: make([]Latch, 0, len(t.Signals)),
 	}
 	for _, s := range t.Signals {
 		for _, inst := range s.Instruments {
@@ -124,12 +124,12 @@ func NewEngine[S any](t Table[S]) (*Engine[S], error) {
 		e.tracked[tr.Name] = w
 	}
 	for i, s := range t.Signals {
-		e.latches[s.Name] = NewLatch(Identity{
+		e.latches = append(e.latches, Latch{identity: Identity{
 			Signal:   s.Name,
 			Tier:     s.Tier,
 			External: s.External,
 			Index:    i,
-		})
+		}})
 	}
 
 	return e, nil
@@ -353,9 +353,9 @@ func (e *Engine[S]) Observe(sample S, env Environment, at time.Time) ([]Fired, [
 
 	var fired []Fired
 	readiness := make([]Readiness, 0, len(e.signals))
-	for _, s := range e.signals {
+	for i, s := range e.signals {
 		inst, red, cov, avail := e.resolve(s, s.Capable(env))
-		l := e.latches[s.Name] // NewEngine builds one latch per signal; never nil here
+		l := &e.latches[i]
 		switch avail {
 		case Ready:
 			l.Update(red, cov, inst.Marks, at)
