@@ -255,12 +255,9 @@ func canonicalizeResources(s []map[string]interface{}) []map[string]interface{} 
 
 // roundTrip marshals v to YAML and unmarshals it back into a generic value.
 //
-// A direct walk (normalizeValue) is tried first: it produces the same result for
-// every shape yaml.v3 can emit, and avoids serialising the whole config to text
-// and re-parsing it. It reports ok=false for anything it cannot reproduce exactly
-// — structs, float32, non-string map keys, and strings with a leading newline,
-// where yaml's block-scalar emitter drops a character — in which case we fall
-// through to the real round-trip, so behaviour is unchanged.
+// normalizeValue is tried first: it walks the value instead of serialising it, and
+// reports ok=false for anything it cannot reproduce exactly, in which case we fall
+// through to the round-trip below. See canonicalize_fast.go for what it declines.
 func roundTrip(v interface{}) (interface{}, error) {
 	out, ok, unsupported := normalizeValue(v)
 	if ok {

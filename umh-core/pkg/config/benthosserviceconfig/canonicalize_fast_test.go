@@ -24,8 +24,8 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// yamlRoundTrip is the original canonicalization: marshal to YAML text and parse
-// it back. fastNormalize must be indistinguishable from this whenever it accepts.
+// yamlRoundTrip is the original canonicalization. fastNormalize must be
+// indistinguishable from it whenever it accepts.
 func yamlRoundTrip(v interface{}) (interface{}, error) {
 	encoded, err := yaml.Marshal(v)
 	if err != nil {
@@ -40,9 +40,8 @@ func yamlRoundTrip(v interface{}) (interface{}, error) {
 	return decoded, nil
 }
 
-// bridgeConfig builds a config shaped like a real TimescaleDB sql_raw write bridge:
-// a large embedded JS body, a large SQL block, and an address list — the shape that
-// made canonicalization expensive in production. blocks scales its size.
+// bridgeConfig is shaped like a real TimescaleDB sql_raw write bridge: a large JS
+// body, a large SQL block, an address list. blocks scales its size.
 func bridgeConfig(blocks int) BenthosServiceConfig {
 	var js, sql strings.Builder
 
@@ -101,12 +100,9 @@ func marshalConfig(cfg BenthosServiceConfig) ([]byte, error) {
 	return yaml.Marshal(cfg)
 }
 
-// bridgeConfigDeclining is bridgeConfig plus a value the fast path must refuse: a
-// string with a leading newline, which yaml's block-scalar emitter drops.
-//
-// Kept separate from bridgeConfig on purpose: a single declining value makes the
-// WHOLE section fall back, so mixing it into the main fixture would silently turn
-// every timing measurement into a measurement of the slow path.
+// bridgeConfigDeclining adds a value the fast path must refuse. Kept separate from
+// bridgeConfig: one declining value makes the whole section fall back, which would
+// silently turn every timing measurement into a measurement of the slow path.
 func bridgeConfigDeclining(blocks int) BenthosServiceConfig {
 	cfg := bridgeConfig(blocks)
 	s7 := cfg.Input["s7comm"].(map[string]interface{})
@@ -131,9 +127,8 @@ func bridgeConfigOfBytes(target int) BenthosServiceConfig {
 	}
 }
 
-// slowCanonicalize is the original implementation: every free-form field through a
-// full YAML marshal/unmarshal. Kept here so the test can time both paths against
-// each other without reaching into production code.
+// slowCanonicalize is the original implementation, kept so the benchmark can time
+// both paths without reaching into production code.
 func slowCanonicalize(cfg BenthosServiceConfig) BenthosServiceConfig {
 	slowMap := func(m map[string]interface{}) map[string]interface{} {
 		if len(m) == 0 {
@@ -161,12 +156,26 @@ func slowCanonicalize(cfg BenthosServiceConfig) BenthosServiceConfig {
 	return cfg
 }
 
+// valuePositions wraps a value in each position where yaml makes a different
+// emitter decision. A multi-line string starting with a space survives as a nested
+// map value but loses its indentation inside a sequence element, so a table testing
+// only one position cannot see it.
+var valuePositions = []struct {
+	name string
+	wrap func(interface{}) interface{}
+}{
+	{"nested map value", func(v interface{}) interface{} {
+		return map[string]interface{}{"v": v}
+	}},
+	{"sequence element", func(v interface{}) interface{} {
+		return map[string]interface{}{"p": []interface{}{map[string]interface{}{"k": v}}}
+	}},
+}
+
 var _ = Describe("canonicalize fast path", func() {
-	// expectAccepted asserts BOTH halves of the contract: the fast path must be
-	// taken, and its result must equal the round-trip. Asserting acceptance matters
-	// as much as asserting equality — without it every spec below would still pass
-	// if fastNormalize declined unconditionally, leaving the performance property
-	// (the only reason this code exists) untested.
+	// Asserts both halves of the contract: the fast path must be taken, and its
+	// result must equal the round-trip. Without the acceptance check every spec here
+	// would still pass if fastNormalize declined unconditionally.
 	expectAccepted := func(label string, in interface{}) {
 		slow, err := yamlRoundTrip(in)
 		Expect(err).NotTo(HaveOccurred(), "%s: round-trip failed", label)
@@ -229,25 +238,23 @@ var _ = Describe("canonicalize fast path", func() {
 	})
 
 	Describe("type-representation drift", func() {
-		// Each case spells out the value the round-trip produces, rather than only
-		// asserting "both paths agree". Two paths agreeing says nothing about what
-		// they agree ON, and the type changes here are the whole point: a reader
-		// should be able to see that int64 collapses to int and that "0755" does not
-		// become a number, without running anything.
-		//
-		// The int/int64 split assumes a 64-bit build, which is what umh-core ships.
+		// Each case names the value the round-trip produces: two paths agreeing says
+		// nothing about what they agree on. The int/int64 split assumes a 64-bit build.
 		DescribeTable("matches the YAML round-trip",
 			func(value, expected interface{}) {
-				in := map[string]interface{}{"v": value}
-				want := map[string]interface{}{"v": expected}
+				for _, pos := range valuePositions {
+					in := pos.wrap(value)
+					want := pos.wrap(expected)
 
-				slow, err := yamlRoundTrip(in)
-				Expect(err).NotTo(HaveOccurred())
-				Expect(slow).To(Equal(want), "the round-trip does not produce the documented value")
+					slow, err := yamlRoundTrip(in)
+					Expect(err).NotTo(HaveOccurred(), pos.name)
+					Expect(slow).To(Equal(want),
+						"%s: the round-trip does not produce the documented value", pos.name)
 
-				fast, ok := fastNormalize(in)
-				Expect(ok).To(BeTrue(), "fast path declined; it must handle this shape")
-				Expect(fast).To(Equal(want), "fast path disagrees with the round-trip")
+					fast, ok := fastNormalize(in)
+					Expect(ok).To(BeTrue(), "%s: fast path declined; it must handle this shape", pos.name)
+					Expect(fast).To(Equal(want), "%s: fast path disagrees with the round-trip", pos.name)
+				}
 			},
 			Entry("[]string becomes []interface{}", []string{"a", "b"}, []interface{}{"a", "b"}),
 			Entry("map[string]string becomes map[string]interface{}",
@@ -298,15 +305,22 @@ var _ = Describe("canonicalize fast path", func() {
 				}),
 		)
 
-		// Asserted directly on fastNormalize so the spec name matches what is checked.
+		// Checked in every position, so a shape that is only unsafe inside a sequence
+		// element cannot pass by being tested somewhere harmless.
 		DescribeTable("declines rather than guessing",
 			func(value interface{}) {
-				_, ok := fastNormalize(map[string]interface{}{"v": value})
-				Expect(ok).To(BeFalse(), "expected the fast path to decline %T(%v)", value, value)
+				for _, pos := range valuePositions {
+					_, ok := fastNormalize(pos.wrap(value))
+					Expect(ok).To(BeFalse(),
+						"%s: expected the fast path to decline %T(%q)", pos.name, value, value)
+				}
 			},
 			Entry("float32", float32(1.1)),
 			Entry("string with a leading newline", "\nSELECT 1;\n"),
 			Entry("bare newline string", "\n"),
+			Entry("multiline string with a leading space", " a\nb\n"),
+			Entry("multiline string, later line indented deeper", "  a\n    b\n"),
+			Entry("multiline string indented four", "    a\n    b\n"),
 			Entry("struct", struct{ A int }{1}),
 			Entry("pointer", new(int)),
 		)

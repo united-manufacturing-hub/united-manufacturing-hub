@@ -29,27 +29,19 @@ import (
 // fastNormalize reproduces what a yaml.Marshal + yaml.Unmarshal round-trip does to
 // a generic value, without serialising to text.
 //
-// canonicalize exists so a config built in Go compares equal to the same config
-// decoded from benthos.yaml. The round-trip achieves that by re-encoding, which is
-// correct but serialises and re-parses the whole config on both sides of every
-// comparison: a CPU profile under a 1.2 MB config attributed 49.8% of all umh-core
-// CPU time to it.
-//
 // SAFETY: the result must be indistinguishable from the round-trip. A wrong answer
-// makes two equal configs look different and reintroduces the endless re-apply loop
-// canonicalization was added to fix (ENG-5357). Anything this cannot reproduce
-// exactly returns ok=false and the caller falls back to the real round-trip. Being
-// slow is acceptable; being wrong is not.
+// makes two equal configs look different and re-applies the config forever. Anything
+// this cannot reproduce exactly returns ok=false and the caller falls back to the
+// real round-trip. Being slow is acceptable; being wrong is not.
 func fastNormalize(v interface{}) (out interface{}, ok bool) {
 	out, ok, _ = normalizeValue(v)
 
 	return out, ok
 }
 
-// intFromInt64 and intFromUint64 pick the same Go type yaml.v3's resolver picks for
-// an integer scalar: ParseInt first, then ParseUint, kept as int when it fits. The
-// wider branches are unreachable on a 64-bit build and exist so a 32-bit one does
-// not truncate.
+// intFromInt64 and intFromUint64 pick the Go type yaml's resolver picks: int when
+// the value fits, otherwise int64 or uint64. The wider branches only matter on a
+// 32-bit build.
 func intFromInt64(v int64) interface{} {
 	if v > math.MaxInt || v < math.MinInt {
 		return v
@@ -63,8 +55,8 @@ func intFromUint64(v uint64) interface{} {
 		return int(v)
 	}
 
-	// Above MaxInt but still a valid int64: ParseInt accepts it, so yaml keeps it
-	// signed. Only values past MaxInt64 fall through to ParseUint and stay uint64.
+	// ParseInt still accepts it, so yaml keeps it signed; only past MaxInt64 does
+	// it fall through to ParseUint.
 	if v <= math.MaxInt64 {
 		return int64(v)
 	}
@@ -81,21 +73,26 @@ func normalizeValue(v interface{}) (out interface{}, ok bool, unsupported string
 	case bool, int:
 		return t, true, ""
 	case string:
-		// yaml's block-scalar emitter drops a leading newline, so "\nSELECT 1" comes
-		// back as "SELECT 1". Reproducing that loss would mean reimplementing the
-		// emitter's block-scalar decision, so decline instead. Being more faithful
-		// than the round-trip is still a mismatch.
+		// yaml's block-scalar emitter loses leading whitespace:
+		//   "\nSELECT 1"    -> "SELECT 1"    leading newline dropped
+		//   "  a\n    b\n"  -> "a\n  b\n"    in a sequence element, the common indent
+		//                                    is stripped from every line
+		// The second depends on position, which the walk cannot see, so decline every
+		// multi-line string starting with a space. Tabs are safe: YAML forbids them as
+		// indentation, so those strings get quoted instead of blocked.
 		if strings.HasPrefix(t, "\n") {
 			return nil, false, "string(leading newline)"
 		}
 
+		if strings.HasPrefix(t, " ") && strings.Contains(t, "\n") {
+			return nil, false, "string(multiline, leading space)"
+		}
+
 		return t, true, ""
 	case float64:
-		// yaml emits floats as a plain, untagged scalar via FormatFloat('g', -1, 64),
-		// so float64(1000) is written as "1000" and the resolver reads it back as
-		// int(1000). Resolve the emitted text the same way: ParseInt, then ParseUint,
-		// otherwise leave it a float. Forms carrying an exponent or a dot fail both
-		// parses and stay float64.
+		// yaml writes floats as a plain, untagged scalar, so float64(1000) becomes
+		// "1000" and reads back as int. Resolve the emitted text the way yaml does:
+		// ParseInt, then ParseUint, otherwise it stays a float.
 		text := strconv.FormatFloat(t, 'g', -1, 64)
 		if i, err := strconv.ParseInt(text, 10, 64); err == nil {
 			return intFromInt64(i), true, ""
@@ -125,10 +122,8 @@ func normalizeValue(v interface{}) (out interface{}, ok bool, unsupported string
 	case uint64:
 		return intFromUint64(t), true, ""
 	case float32:
-		// yaml writes float32 via its shortest 32-bit decimal form and resolves that
-		// text back, so the result is not float64(t). Replicable, but yaml.Unmarshal
-		// never produces a float32 and no config builder uses one, so leave it to the
-		// fallback until the telemetry below says otherwise.
+		// Round-trips through a 32-bit decimal form, so the result is not float64(t).
+		// Reproducible, but nothing in the config path produces a float32.
 		return nil, false, "float32"
 	case []interface{}:
 		res := make([]interface{}, len(t))
@@ -202,27 +197,21 @@ func normalizeValue(v interface{}) (out interface{}, ok bool, unsupported string
 
 		return res, true, ""
 	default:
-		// Structs, pointers, time.Time, custom types: yaml would encode these via
-		// their tags, and replicating that here would be a second marshaller.
+		// Structs, pointers, custom types: yaml encodes these via their tags, and
+		// replicating that would be a second marshaller.
 		return nil, false, fmt.Sprintf("%T", v)
 	}
 }
 
 var reportedFallbackTypes sync.Map // map[string]struct{}, one report per type
 
-// reportFallback surfaces a type the fast path cannot handle, so the missing case
-// can be added rather than silently costing a full round-trip forever. A single
-// declining value makes its whole config section fall back, so this is the only
-// signal that the fix has stopped applying somewhere.
+// reportFallback surfaces a type the fast path cannot handle. A single declining
+// value makes its whole config section fall back, so this is the only signal that
+// the optimization has stopped applying somewhere.
 //
-// Logged at DEBUG because it is a developer TODO, not something a customer can act
-// on: the fallback is correct, just slow.
-//
-// KNOWN LIMITATION: sentry.ReportIssueWithContext shares one process-wide two-hour
-// debounce across every IssueTypeWarning (pkg/sentry/report_internal.go). If an
-// unrelated warning fired recently this report is dropped, and since the type is
-// marked before we get here it is never retried. The log line is the reliable
-// signal; Sentry is best-effort.
+// KNOWN LIMITATION: ReportIssueWithContext shares one process-wide two-hour debounce
+// across every warning, and the type is marked before the send, so a dropped report
+// is never retried. The log line is the reliable signal.
 func reportFallback(unsupported string) {
 	if unsupported == "" {
 		return
