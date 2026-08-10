@@ -175,7 +175,7 @@ var _ = Describe("S3 R1 — the CPU table, throttle and steal", func() {
 		Expect(hostHeadroom.Marks.Clear.At).To(Equal(0.5))
 		Expect(hostHeadroom.Marks.Clear.Inclusive).To(BeFalse())
 		Expect(hostHeadroom.Marks.Unit).To(Equal("cores"))
-		Expect(hostHeadroom.Marks.Capacity).To(Equal(4.0))
+		Expect(hostHeadroom.Marks.Capacity).To(Equal(1.0), "the reserve, not the core count: severity 1 at −1.0 cores, the floor of cores−hostBusy−reserve")
 		// The F6 guard: headroom is only a number on a host-scoped sample, and
 		// only when both the count and the busy rate are present.
 		Expect(hostHeadroom.Extract(Sample{CpuScope: ScopeHost, HostBusy: diagnosis.Known(0.5)})).To(Equal(diagnosis.Known(2.5)))
@@ -208,7 +208,7 @@ var _ = Describe("S3 R1 — the CPU table, throttle and steal", func() {
 		Expect(limitHeadroom.Marks.Fire.At).To(Equal(0.0))
 		Expect(limitHeadroom.Marks.Clear.At).To(Equal(0.1))
 		Expect(limitHeadroom.Marks.Unit).To(Equal("cores"))
-		Expect(limitHeadroom.Marks.Capacity).To(Equal(2.0))
+		Expect(limitHeadroom.Marks.Capacity).To(Equal(0.2), "the reserve, not the quota: severity 1 at −0.2 cores, the floor of quota−usage−0.10×quota")
 		Expect(limitHeadroom.Extract(Sample{UsageCores: diagnosis.Known(0.8)})).To(Equal(diagnosis.Known(1.0)))
 		Expect(limitHeadroom.Extract(Sample{UsageCores: diagnosis.Unknown()})).To(Equal(diagnosis.Unknown()))
 
