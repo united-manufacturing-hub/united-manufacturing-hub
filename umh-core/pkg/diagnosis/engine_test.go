@@ -474,6 +474,45 @@ var _ = Describe("Engine", func() {
 		Expect(firedAfter).To(BeEmpty(), "a NoInstrument signal releases once its demote clock elapses, not on the absent flag")
 	})
 
+	// Observe takes the Reset arm on every AllAbsent tick of a release-on-absent
+	// signal, fired or not, and Reset stamps a release time. Stamping one on a
+	// latch that never fired would put the re-fire bar in front of a FIRST firing.
+	It("should not let an absent tick bar the first firing of a release-on-absent signal that has never fired", func() {
+		type qsnap struct{ v float64 }
+		marks := Marks{Unit: "u", Fire: Mark{At: 2, Inclusive: true}, Worst: 4, Clear: Mark{At: 1, Inclusive: false}, Polarity: HigherIsWorse}
+		sig := Signal[qsnap]{
+			Name: "S", DemoteSpan: 60 * time.Second, ReleaseOnAbsent: true,
+			Instruments: []Instrument[qsnap]{
+				{
+					Name: "A", Requires: []Capability{"psi"}, Red: Last, Span: 60 * time.Second, Marks: marks,
+					Extract: func(s qsnap) Reading { return Known(s.v) },
+				},
+				{
+					Name: "B", Red: Last, Span: 60 * time.Second, Marks: marks,
+					Extract: func(qsnap) Reading { return Unknown() },
+				},
+			},
+		}
+		e, err := NewEngine(Table[qsnap]{Signals: []Signal[qsnap]{sig}, Interval: time.Second})
+		Expect(err).ToNot(HaveOccurred())
+
+		withPSI, blind := NewEnvironment("psi"), NewEnvironment()
+		t0 := time.Unix(2_000_000, 0)
+
+		fired, readiness := e.Observe(qsnap{v: 1.0}, withPSI, t0)
+		Expect(readiness[0].Availability).To(Equal(Ready))
+		Expect(fired).To(BeEmpty(), "1.0 is below the fire mark of 2, so this trusted tick anchors the clock at t0 without firing")
+
+		// psi drops, leaving only B, whose window never stored anything.
+		fired, readiness = e.Observe(qsnap{v: 1.0}, blind, t0.Add(time.Second))
+		Expect(readiness[0].Availability).To(Equal(AllAbsent), "the one surviving instrument reads nothing, so the tick is AllAbsent and takes the Reset arm")
+		Expect(fired).To(BeEmpty())
+
+		fired, _ = e.Observe(qsnap{v: 3.0}, withPSI, t0.Add(2*time.Second))
+		Expect(fired).To(HaveLen(1), "3.0 crosses the fire mark 2s after t0, and a latch that never fired carries no release for the 60s re-fire bar to count from")
+		Expect(fired[0].Value).To(Equal(3.0))
+	})
+
 	// The demote clock is anchored on Latch.lastUpdate, which only a trustworthy
 	// reduction writes, so neither not-ready arm can move it however often the
 	// signal flaps between them. Both arms are driven to the boundary tick here,
