@@ -1,7 +1,7 @@
 # HTTP API Reference
 
 {% hint style="info" %}
-**Early Access.** We built the GraphQL API for developers who want to query the Unified Namespace programmatically. It's experimental, so it's off by default. Switch it on with `agent.graphql.enabled: true` and give it a try. Tell us what you think.
+**Early Access.** The GraphQL API lets developers query the Unified Namespace programmatically. It's experimental and off by default. To turn it on, set `agent.graphql.enabled: true` in the `agent:` block of your `umh-core` instance configuration. See [Configuration](topic-browser-graphql.md#configuration) for all options. Tell us what you think.
 {% endhint %}
 
 ## GraphQL API
