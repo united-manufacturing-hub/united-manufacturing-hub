@@ -331,4 +331,44 @@ var _ = Describe("canonicalize fast path", func() {
 		})
 	})
 
+	// []string and map[string]string used to copy their strings straight across, and
+	// map keys were never looked at, so a string the rules reject reached the output
+	// unchecked. []string is live: a write flow puts its topic list into the input.
+	Describe("strings inside container types", func() {
+		rejected := []string{"\nSELECT 1\n", " a\nb\n", "  a\n    b\n"}
+
+		DescribeTable("declines a rejected string wherever it sits",
+			func(build func(string) interface{}) {
+				for _, s := range rejected {
+					_, ok := fastNormalize(build(s))
+					Expect(ok).To(BeFalse(), "%q slipped through unchecked", s)
+				}
+			},
+			Entry("[]string element", func(s string) interface{} {
+				return map[string]interface{}{"umh_topics": []string{s}}
+			}),
+			Entry("map[string]string value", func(s string) interface{} {
+				return map[string]interface{}{"m": map[string]string{"k": s}}
+			}),
+			Entry("map[string]string key", func(s string) interface{} {
+				return map[string]interface{}{"m": map[string]string{s: "v"}}
+			}),
+			Entry("map[string]interface{} key", func(s string) interface{} {
+				return map[string]interface{}{s: "v"}
+			}),
+			Entry("map[interface{}]interface{} key", func(s string) interface{} {
+				return map[interface{}]interface{}{s: "v"}
+			}),
+		)
+
+		It("still accepts ordinary strings in those containers", func() {
+			expectAccepted("[]string", map[string]interface{}{
+				"umh_topics": []string{"umh.v1.a", "umh.v1.b"},
+			})
+			expectAccepted("map[string]string", map[string]interface{}{
+				"m": map[string]string{"ttl": "5m"},
+			})
+		})
+	})
+
 })

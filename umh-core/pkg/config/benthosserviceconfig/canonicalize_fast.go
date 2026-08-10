@@ -64,6 +64,31 @@ func intFromUint64(v uint64) interface{} {
 	return v
 }
 
+// checkString rejects the strings yaml's block-scalar emitter does not round-trip:
+//
+//	"\nSELECT 1"    -> "SELECT 1"    leading newline dropped
+//	"  a\n    b\n"  -> "a\n  b\n"    in a sequence element, the common indent is
+//	                                 stripped from every line
+//
+// The second depends on position, which the walk cannot see, so decline every
+// multi-line string starting with a space. Tabs are safe: YAML forbids them as
+// indentation, so those strings get quoted instead of blocked.
+//
+// Every string reaching the fast path must pass through here, including map keys
+// and the elements of []string and map[string]string. Those used to be copied
+// verbatim, which let the exact values this rejects through unchecked.
+func checkString(s string) (out interface{}, ok bool, unsupported string) {
+	if strings.HasPrefix(s, "\n") {
+		return nil, false, "string(leading newline)"
+	}
+
+	if strings.HasPrefix(s, " ") && strings.Contains(s, "\n") {
+		return nil, false, "string(multiline, leading space)"
+	}
+
+	return s, true, ""
+}
+
 // normalizeValue is fastNormalize plus the type that made it give up, so the
 // caller can report which shape is still missing.
 func normalizeValue(v interface{}) (out interface{}, ok bool, unsupported string) {
@@ -73,22 +98,7 @@ func normalizeValue(v interface{}) (out interface{}, ok bool, unsupported string
 	case bool, int:
 		return t, true, ""
 	case string:
-		// yaml's block-scalar emitter loses leading whitespace:
-		//   "\nSELECT 1"    -> "SELECT 1"    leading newline dropped
-		//   "  a\n    b\n"  -> "a\n  b\n"    in a sequence element, the common indent
-		//                                    is stripped from every line
-		// The second depends on position, which the walk cannot see, so decline every
-		// multi-line string starting with a space. Tabs are safe: YAML forbids them as
-		// indentation, so those strings get quoted instead of blocked.
-		if strings.HasPrefix(t, "\n") {
-			return nil, false, "string(leading newline)"
-		}
-
-		if strings.HasPrefix(t, " ") && strings.Contains(t, "\n") {
-			return nil, false, "string(multiline, leading space)"
-		}
-
-		return t, true, ""
+		return checkString(t)
 	case float64:
 		// yaml writes floats as a plain, untagged scalar, so float64(1000) becomes
 		// "1000" and reads back as int. Resolve the emitted text the way yaml does:
@@ -140,8 +150,14 @@ func normalizeValue(v interface{}) (out interface{}, ok bool, unsupported string
 		return res, true, ""
 	case []string:
 		res := make([]interface{}, len(t))
+
 		for i, e := range t {
-			res[i] = e
+			n, k, bad := checkString(e)
+			if !k {
+				return nil, false, bad
+			}
+
+			res[i] = n
 		}
 
 		return res, true, ""
@@ -162,6 +178,10 @@ func normalizeValue(v interface{}) (out interface{}, ok bool, unsupported string
 		res := make(map[string]interface{}, len(t))
 
 		for key, e := range t {
+			if _, k, bad := checkString(key); !k {
+				return nil, false, "map key " + bad
+			}
+
 			n, k, bad := normalizeValue(e)
 			if !k {
 				return nil, false, bad
@@ -173,8 +193,18 @@ func normalizeValue(v interface{}) (out interface{}, ok bool, unsupported string
 		return res, true, ""
 	case map[string]string:
 		res := make(map[string]interface{}, len(t))
+
 		for key, e := range t {
-			res[key] = e
+			if _, k, bad := checkString(key); !k {
+				return nil, false, "map key " + bad
+			}
+
+			n, k, bad := checkString(e)
+			if !k {
+				return nil, false, bad
+			}
+
+			res[key] = n
 		}
 
 		return res, true, ""
@@ -185,6 +215,10 @@ func normalizeValue(v interface{}) (out interface{}, ok bool, unsupported string
 			ks, isStr := key.(string)
 			if !isStr {
 				return nil, false, fmt.Sprintf("map key %T", key)
+			}
+
+			if _, k, bad := checkString(ks); !k {
+				return nil, false, "map key " + bad
 			}
 
 			n, k, bad := normalizeValue(e)
