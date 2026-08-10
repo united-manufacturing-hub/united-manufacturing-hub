@@ -254,7 +254,18 @@ func canonicalizeResources(s []map[string]interface{}) []map[string]interface{} 
 }
 
 // roundTrip marshals v to YAML and unmarshals it back into a generic value.
+//
+// normalizeValue is tried first: it walks the value instead of serialising it, and
+// reports ok=false for anything it cannot reproduce exactly, in which case we fall
+// through to the round-trip below. See canonicalize_fast.go for what it declines.
 func roundTrip(v interface{}) (interface{}, error) {
+	out, ok, unsupported := normalizeValue(v)
+	if ok {
+		return out, nil
+	}
+
+	reportFallback(unsupported)
+
 	encoded, err := yaml.Marshal(v)
 	if err != nil {
 		return nil, err
