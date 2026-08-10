@@ -208,7 +208,7 @@ func (c *ContainerMonitorService) GetStatus(ctx context.Context) (*ServiceInfo, 
 			// check below before the else-if runs, so gating on Category keeps
 			// the flag name truthful: it means "the worker assessed the box
 			// healthy", never "the worker was consulted".
-			workerVerdictAuthoritative = workerHealth.Category != models.Degraded
+			workerVerdictAuthoritative = workerHealth.Category == models.Active
 		}
 	}
 
@@ -616,9 +616,15 @@ func (c *ContainerMonitorService) getRawCPUMetrics(ctx context.Context) (usageMC
 	}
 
 	// Get actual CPU usage through the injectable source (gopsutil by default).
-	// The constructor always initializes cpuUsageProvider, so it is never nil
-	// on a service built through the public constructors.
-	usagePercent, err = c.cpuUsageProvider(ctx)
+	// The constructor initializes cpuUsageProvider, so it is non-nil on a service
+	// built through the public constructors; the nil-guard below still protects
+	// the read path against a nil installed through the SetCPUUsageProvider seam,
+	// falling back to the default source rather than panicking.
+	provider := c.cpuUsageProvider
+	if provider == nil {
+		provider = defaultCPUUsagePercent
+	}
+	usagePercent, err = provider(ctx)
 	if err != nil {
 		return 0, 0, 0, err
 	}

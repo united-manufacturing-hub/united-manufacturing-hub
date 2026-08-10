@@ -223,6 +223,11 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 			// The worker's "cannot measure" declaration must degrade the
 			// instance, not fall through to the legacy Active judgement...
 			Expect(status.CPUHealth).To(Equal(models.Degraded))
+			// ...and, as the CPU arm of OverallHealth, it must degrade the overall
+			// health too. The rung's headline property is that a degraded worker
+			// verdict drives OverallHealth, so it is pinned here explicitly: the
+			// memory/disk arms can only ADD Degraded, never remove it.
+			Expect(status.OverallHealth).To(Equal(models.Degraded))
 			// ...and the framework reason must land where the protocol-converter
 			// resource-limit check (IsResourceLimited) reads the block message.
 			Expect(status.CPU.Health.Message).To(Equal(pollErrReason))
@@ -256,6 +261,10 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 
 			// The worker's verdict drives the service-level CPU health...
 			Expect(status.CPUHealth).To(Equal(models.Degraded))
+			// ...and, as the CPU arm of OverallHealth, it drives the overall
+			// health too (the memory/disk arms can only add to a degraded
+			// CPU verdict, never pull it back to Active).
+			Expect(status.OverallHealth).To(Equal(models.Degraded))
 			// ...the worker's message lands where the protocol-converter
 			// resource-limit check (IsResourceLimited) reads it...
 			Expect(status.CPU.Health.Message).To(Equal(workerVerdictMessage))
@@ -406,6 +415,20 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 			// the legacy 70% rule if it ran, so CPUHealth staying Active pins that
 			// the authoritative skip is deliberate on an armed window too, not an
 			// accident of the cold-start tick.
+			// Re-publish the worker observation with a fresh CollectedAt so tick 2
+			// cannot age the -500ms observation past the seam's 3s maxAge on a slow
+			// host and fail closed to Stale, which would spuriously fail the Active
+			// assertions below. The healthy verdict is what pins the behaviour.
+			publishWorkerClient(&fsmv2.Observation[simple.Status[fsmv2cpu.CPUStatus]]{
+				CollectedAt: time.Now(),
+				Status: simple.Status[fsmv2cpu.CPUStatus]{
+					Result: fsmv2cpu.CPUStatus{
+						Verdict: "healthy",
+						Message: workerHealthyMessage,
+					},
+				},
+			})
+
 			cpuStat = []byte("nr_periods 2000\nnr_throttled 100\nthrottled_usec 5000000\n")
 			status, err := service.GetStatus(ctx)
 			Expect(err).NotTo(HaveOccurred())
