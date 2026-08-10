@@ -35,12 +35,17 @@ import (
 //   - nothing appended this tick             -> StateUntrusted
 //   - otherwise                              -> StateValue
 //
-// Every spec drives each tick in PRODUCTION order, Age BEFORE Append, the
-// order the engine's Observe loop calls them (w.Age(at), then w.Append). That
-// order is load-bearing: Age on tick N sees the previous tick's stored/failed
-// flag, so the first failed tick still prunes to span while the freeze that
-// holds contents only takes hold from the following tick. A spec written in the
-// reverse order (Append then Age) masks that and can hide a stale-fold bug.
+// Every spec drives each tick in PRODUCTION order, age BEFORE appendPoint,
+// which is what the exported Observe does in one call. That order is
+// load-bearing: age on tick N reads the PREVIOUS tick's stored/failed flag, so
+// the first failed tick still prunes to span while the freeze that holds
+// contents only takes hold from the tick after. A spec written in the reverse
+// order masks that and can hide a stale-fold bug.
+//
+// These specs call the two unexported halves directly so each half can be
+// exercised on its own. Callers outside the package cannot: Observe is the only
+// exported way to move a window forward, so the order is unbreakable there. The
+// last spec in this file drives Observe itself and pins that ordering.
 //
 // Only State and Coverage are asserted here; the fold-computed number v is
 // covered in the reduction specs.
@@ -50,13 +55,13 @@ var _ = Describe("Window", func() {
 		w, _ := NewWindow(span, 60*time.Second, Last, false)
 
 		t0 := time.Unix(1_000_000, 0)
-		w.Age(t0)
-		w.Append(Known(5), Unknown(), t0)
+		w.age(t0)
+		w.appendPoint(Known(5), Unknown(), t0)
 
 		// A second reading lands just past the span; the older entry is pruned.
 		later := t0.Add(span + time.Millisecond)
-		w.Age(later)
-		w.Append(Known(6), Unknown(), later)
+		w.age(later)
+		w.appendPoint(Known(6), Unknown(), later)
 
 		// One recent entry remains under Last (Min 1): a value.
 		_, state := w.Reduce().Get()
@@ -73,8 +78,8 @@ var _ = Describe("Window", func() {
 		w, _ := NewWindow(10*time.Second, 60*time.Second, Last, false)
 
 		t0 := time.Unix(2_000_000, 0)
-		w.Age(t0)
-		w.Append(Unknown(), Unknown(), t0)
+		w.age(t0)
+		w.appendPoint(Unknown(), Unknown(), t0)
 
 		_, state := w.Reduce().Get()
 		Expect(state).To(Equal(StateAbsent),
@@ -86,12 +91,12 @@ var _ = Describe("Window", func() {
 		refused, _ := NewWindow(span, 60*time.Second, Last, false)
 
 		t0 := time.Unix(3_000_000, 0)
-		refused.Age(t0)
-		refused.Append(Known(math.NaN()), Unknown(), t0)
-		refused.Age(t0.Add(time.Second))
-		refused.Append(Known(math.Inf(1)), Unknown(), t0.Add(time.Second))
-		refused.Age(t0.Add(2 * time.Second))
-		refused.Append(Known(math.Inf(-1)), Unknown(), t0.Add(2*time.Second))
+		refused.age(t0)
+		refused.appendPoint(Known(math.NaN()), Unknown(), t0)
+		refused.age(t0.Add(time.Second))
+		refused.appendPoint(Known(math.Inf(1)), Unknown(), t0.Add(time.Second))
+		refused.age(t0.Add(2 * time.Second))
+		refused.appendPoint(Known(math.Inf(-1)), Unknown(), t0.Add(2*time.Second))
 
 		_, state := refused.Reduce().Get()
 		Expect(state).To(Equal(StateAbsent),
@@ -99,8 +104,8 @@ var _ = Describe("Window", func() {
 
 		// A negative number IS a value and IS appended; the window must not range-check it.
 		neg, _ := NewWindow(span, 60*time.Second, Last, false)
-		neg.Age(t0)
-		neg.Append(Known(-5), Unknown(), t0)
+		neg.age(t0)
+		neg.appendPoint(Known(-5), Unknown(), t0)
 
 		_, state = neg.Reduce().Get()
 		Expect(state).To(Equal(StateValue),
@@ -114,10 +119,10 @@ var _ = Describe("Window", func() {
 		// Arm A: a COUNTER window discards stored entries on a backwards step and
 		// starts over from the new one. Mean (Min 2): one entry -> Untrusted.
 		counter, _ := NewWindow(span, 60*time.Second, Mean, true)
-		counter.Age(t0)
-		counter.Append(Known(10), Unknown(), t0)
-		counter.Age(t0.Add(time.Second))
-		counter.Append(Known(5), Unknown(), t0.Add(time.Second)) // a fall: 5 < 10
+		counter.age(t0)
+		counter.appendPoint(Known(10), Unknown(), t0)
+		counter.age(t0.Add(time.Second))
+		counter.appendPoint(Known(5), Unknown(), t0.Add(time.Second)) // a fall: 5 < 10
 		_, counterState := counter.Reduce().Get()
 		Expect(counterState).To(Equal(StateUntrusted),
 			"a counter window restarts on a backwards step, holding one entry (below Mean Min 2)")
@@ -125,10 +130,10 @@ var _ = Describe("Window", func() {
 		// Arm B: a NON-counter window over the same falling series KEEPS its
 		// entries. Two entries -> Value under Mean (Min 2).
 		noncounter, _ := NewWindow(span, 60*time.Second, Mean, false)
-		noncounter.Age(t0)
-		noncounter.Append(Known(10), Unknown(), t0)
-		noncounter.Age(t0.Add(time.Second))
-		noncounter.Append(Known(5), Unknown(), t0.Add(time.Second)) // an ordinary fall
+		noncounter.age(t0)
+		noncounter.appendPoint(Known(10), Unknown(), t0)
+		noncounter.age(t0.Add(time.Second))
+		noncounter.appendPoint(Known(5), Unknown(), t0.Add(time.Second)) // an ordinary fall
 		_, noncounterState := noncounter.Reduce().Get()
 		Expect(noncounterState).To(Equal(StateValue),
 			"a non-counter window keeps a falling series, holding two entries (meets Mean Min 2)")
@@ -141,10 +146,10 @@ var _ = Describe("Window", func() {
 		w, _ := NewWindow(span, 60*time.Second, Mean, false)
 
 		t0 := time.Unix(5_000_000, 0)
-		w.Age(t0)
-		w.Append(Known(5), Unknown(), t0)
-		w.Age(t0.Add(span))
-		w.Append(Known(6), Unknown(), t0.Add(span))
+		w.age(t0)
+		w.appendPoint(Known(5), Unknown(), t0)
+		w.age(t0.Add(span))
+		w.appendPoint(Known(6), Unknown(), t0.Add(span))
 		_, state := w.Reduce().Get()
 		Expect(state).To(Equal(StateValue), "the window first reaches a trustworthy state")
 
@@ -152,10 +157,10 @@ var _ = Describe("Window", func() {
 		// nothing: the held entry survives at 29s old because the freeze blocks the
 		// span-prune. A build that pruned during the outage would drop it to empty
 		// (Absent) instead.
-		w.Age(t0.Add(2 * time.Second))
-		w.Append(Unknown(), Unknown(), t0.Add(2*time.Second))
-		w.Age(t0.Add(30 * time.Second))
-		w.Append(Unknown(), Unknown(), t0.Add(30*time.Second))
+		w.age(t0.Add(2 * time.Second))
+		w.appendPoint(Unknown(), Unknown(), t0.Add(2*time.Second))
+		w.age(t0.Add(30 * time.Second))
+		w.appendPoint(Unknown(), Unknown(), t0.Add(30*time.Second))
 
 		_, heldState := w.Reduce().Get()
 		// Held, not Absent: the out-of-span entry survives the freeze. (The first
@@ -178,26 +183,26 @@ var _ = Describe("Window", func() {
 		w, _ := NewWindow(span, demote, Mean, false)
 
 		t0 := time.Unix(6_000_000, 0)
-		w.Age(t0)
-		w.Append(Known(5), Unknown(), t0)
-		w.Age(t0.Add(time.Second))
-		w.Append(Known(6), Unknown(), t0.Add(time.Second))
+		w.age(t0)
+		w.appendPoint(Known(5), Unknown(), t0)
+		w.age(t0.Add(time.Second))
+		w.appendPoint(Known(6), Unknown(), t0.Add(time.Second))
 		_, state := w.Reduce().Get()
 		Expect(state).To(Equal(StateValue), "two entries meet Mean Min 2")
 
 		// A failed read freezes pruning: the two entries are held, still present
 		// at 29s old, far past the 10s span, with no successful read meanwhile.
-		w.Age(t0.Add(2 * time.Second))
-		w.Append(Unknown(), Unknown(), t0.Add(2*time.Second))
-		w.Age(t0.Add(30 * time.Second))
-		w.Append(Unknown(), Unknown(), t0.Add(30*time.Second))
+		w.age(t0.Add(2 * time.Second))
+		w.appendPoint(Unknown(), Unknown(), t0.Add(2*time.Second))
+		w.age(t0.Add(30 * time.Second))
+		w.appendPoint(Unknown(), Unknown(), t0.Add(30*time.Second))
 		_, held := w.Reduce().Get()
 		Expect(held).To(Equal(StateUntrusted),
 			"within the demote span the frozen entries are held (not pruned nor emptied)")
 
 		// Past the demote span with no successful read, the window finally empties.
-		w.Age(t0.Add(70 * time.Second))
-		w.Append(Unknown(), Unknown(), t0.Add(70*time.Second))
+		w.age(t0.Add(70 * time.Second))
+		w.appendPoint(Unknown(), Unknown(), t0.Add(70*time.Second))
 		_, emptiedState := w.Reduce().Get()
 		Expect(emptiedState).To(Equal(StateAbsent),
 			"after the demote span with no successful read the window empties")
@@ -213,8 +218,8 @@ var _ = Describe("Window", func() {
 		// Arm A: a DeltaRatio window (against=true) stores NOTHING when against
 		// is absent -> empty -> StateAbsent.
 		ratio, _ := NewWindow(span, 60*time.Second, DeltaRatio, false)
-		ratio.Age(t0)
-		ratio.Append(Known(5), Unknown(), t0)
+		ratio.age(t0)
+		ratio.appendPoint(Known(5), Unknown(), t0)
 		_, ratioState := ratio.Reduce().Get()
 		Expect(ratioState).To(Equal(StateAbsent),
 			"under DeltaRatio an absent denominator drops the point; the window is empty")
@@ -223,8 +228,8 @@ var _ = Describe("Window", func() {
 		// Against is the ordinary single-series case. One entry -> Untrusted
 		// (below Mean Min 2).
 		mean, _ := NewWindow(span, 60*time.Second, Mean, false)
-		mean.Age(t0)
-		mean.Append(Known(5), Unknown(), t0)
+		mean.age(t0)
+		mean.appendPoint(Known(5), Unknown(), t0)
 		_, meanState := mean.Reduce().Get()
 		Expect(meanState).To(Equal(StateUntrusted),
 			"under Mean an absent denominator is ordinary; the point is stored (one entry, below Min 2)")
@@ -235,14 +240,14 @@ var _ = Describe("Window", func() {
 		w, _ := NewWindow(span, 60*time.Second, Mean, false)
 
 		t0 := time.Unix(8_000_000, 0)
-		w.Age(t0)
-		w.Append(Known(5), Unknown(), t0)
+		w.age(t0)
+		w.appendPoint(Known(5), Unknown(), t0)
 
 		// Advance exactly one span. The entry at t0 now lands on the cutoff
 		// (cutoff = now - span = t0); a strict-Before prune keeps it.
 		now := t0.Add(span)
-		w.Age(now)
-		w.Append(Known(6), Unknown(), now)
+		w.age(now)
+		w.appendPoint(Known(6), Unknown(), now)
 
 		_, state := w.Reduce().Get()
 		Expect(state).To(Equal(StateValue),
@@ -260,10 +265,10 @@ var _ = Describe("Window", func() {
 		// Removing the store-when-present path would drop these and leave the
 		// window empty.
 		ratio, _ := NewWindow(span, 60*time.Second, DeltaRatio, false)
-		ratio.Age(t0)
-		ratio.Append(Known(5), Known(10), t0)
-		ratio.Age(t0.Add(time.Second))
-		ratio.Append(Known(6), Known(12), t0.Add(time.Second))
+		ratio.age(t0)
+		ratio.appendPoint(Known(5), Known(10), t0)
+		ratio.age(t0.Add(time.Second))
+		ratio.appendPoint(Known(6), Known(12), t0.Add(time.Second))
 		_, presentState := ratio.Reduce().Get()
 		Expect(presentState).To(Equal(StateValue),
 			"a present denominator stores the point; two points meet DeltaRatio Min 2")
@@ -271,15 +276,15 @@ var _ = Describe("Window", func() {
 		// A non-finite denominator, NaN or Inf, is not a number and is dropped,
 		// mirroring the numerator guard. The window stays empty -> StateAbsent.
 		nan, _ := NewWindow(span, 60*time.Second, DeltaRatio, false)
-		nan.Age(t0)
-		nan.Append(Known(5), Known(math.NaN()), t0)
+		nan.age(t0)
+		nan.appendPoint(Known(5), Known(math.NaN()), t0)
 		_, nanState := nan.Reduce().Get()
 		Expect(nanState).To(Equal(StateAbsent),
 			"a NaN denominator is not a number; the point is dropped and the window is empty")
 
 		inf, _ := NewWindow(span, 60*time.Second, DeltaRatio, false)
-		inf.Age(t0)
-		inf.Append(Known(5), Known(math.Inf(1)), t0)
+		inf.age(t0)
+		inf.appendPoint(Known(5), Known(math.Inf(1)), t0)
 		_, infState := inf.Reduce().Get()
 		Expect(infState).To(Equal(StateAbsent),
 			"an Inf denominator is not a number; the point is dropped and the window is empty")
@@ -290,17 +295,17 @@ var _ = Describe("Window", func() {
 		w, _ := NewWindow(span, 60*time.Second, Mean, false)
 
 		t0 := time.Unix(10_000_000, 0)
-		w.Age(t0)
-		w.Append(Known(5), Unknown(), t0)
-		w.Age(t0.Add(time.Second))
-		w.Append(Known(6), Unknown(), t0.Add(time.Second))
+		w.age(t0)
+		w.appendPoint(Known(5), Unknown(), t0)
+		w.age(t0.Add(time.Second))
+		w.appendPoint(Known(6), Unknown(), t0.Add(time.Second))
 		_, state := w.Reduce().Get()
 		Expect(state).To(Equal(StateValue), "the window first reaches a trustworthy state")
 
 		// A failed read freezes the window: nothing appended this tick -> Untrusted,
 		// and pruning is held so the entries survive the outage.
-		w.Age(t0.Add(2 * time.Second))
-		w.Append(Unknown(), Unknown(), t0.Add(2*time.Second))
+		w.age(t0.Add(2 * time.Second))
+		w.appendPoint(Unknown(), Unknown(), t0.Add(2*time.Second))
 		_, frozen := w.Reduce().Get()
 		Expect(frozen).To(Equal(StateUntrusted), "a failed read leaves the window Untrusted, holding its contents")
 
@@ -308,8 +313,8 @@ var _ = Describe("Window", func() {
 		// regression that pins lastAppendStored false permanently would stay
 		// Untrusted here; the window must return to StateValue.
 		recover := t0.Add(3 * time.Second)
-		w.Age(recover)
-		w.Append(Known(7), Unknown(), recover)
+		w.age(recover)
+		w.appendPoint(Known(7), Unknown(), recover)
 		_, recovered := w.Reduce().Get()
 		Expect(recovered).To(Equal(StateValue),
 			"a successful append after a freeze returns the window to StateValue")
@@ -320,25 +325,25 @@ var _ = Describe("Window", func() {
 		w, _ := NewWindow(span, 60*time.Second, Mean, true)
 
 		t0 := time.Unix(11_000_000, 0)
-		w.Age(t0)
-		w.Append(Known(10), Unknown(), t0)
-		w.Age(t0.Add(time.Second))
-		w.Append(Known(12), Unknown(), t0.Add(time.Second))
+		w.age(t0)
+		w.appendPoint(Known(10), Unknown(), t0)
+		w.age(t0.Add(time.Second))
+		w.appendPoint(Known(12), Unknown(), t0.Add(time.Second))
 		_, state := w.Reduce().Get()
 		Expect(state).To(Equal(StateValue), "two forward samples meet Mean Min 2")
 
 		// A backwards step restarts the window: stored entries discarded, one
 		// entry held -> Untrusted.
-		w.Age(t0.Add(2 * time.Second))
-		w.Append(Known(5), Unknown(), t0.Add(2*time.Second)) // 5 < 12: reset
+		w.age(t0.Add(2 * time.Second))
+		w.appendPoint(Known(5), Unknown(), t0.Add(2*time.Second)) // 5 < 12: reset
 		_, restarted := w.Reduce().Get()
 		Expect(restarted).To(Equal(StateUntrusted), "a counter reset holds one entry (below Min 2)")
 
 		// A third FORWARD sample after the reset accumulates back to two entries
 		// -> StateValue. A regression that fails to re-accumulate after a reset
 		// (e.g. pinning the window empty) would stay Untrusted here.
-		w.Age(t0.Add(3 * time.Second))
-		w.Append(Known(8), Unknown(), t0.Add(3*time.Second)) // 8 > 5: forward
+		w.age(t0.Add(3 * time.Second))
+		w.appendPoint(Known(8), Unknown(), t0.Add(3*time.Second)) // 8 > 5: forward
 		_, recovered := w.Reduce().Get()
 		Expect(recovered).To(Equal(StateValue),
 			"a forward sample after a counter reset re-accumulates to StateValue")
@@ -349,10 +354,10 @@ var _ = Describe("Window", func() {
 		w, _ := NewWindow(span, 60*time.Second, Mean, false)
 
 		t0 := time.Unix(12_000_000, 0)
-		w.Age(t0)
-		w.Append(Known(5), Unknown(), t0)
-		w.Age(t0.Add(time.Second))
-		w.Append(Known(6), Unknown(), t0.Add(time.Second))
+		w.age(t0)
+		w.appendPoint(Known(5), Unknown(), t0)
+		w.age(t0.Add(time.Second))
+		w.appendPoint(Known(6), Unknown(), t0.Add(time.Second))
 		_, state := w.Reduce().Get()
 		Expect(state).To(Equal(StateValue), "two samples meet Mean Min 2")
 
@@ -360,8 +365,8 @@ var _ = Describe("Window", func() {
 		// last successful read was at t0+1s, so 61s after it (t0+62s) crosses the
 		// 60s demote boundary.
 		t62 := t0.Add(62 * time.Second)
-		w.Age(t62)
-		w.Append(Unknown(), Unknown(), t62)
+		w.age(t62)
+		w.appendPoint(Unknown(), Unknown(), t62)
 		_, emptied := w.Reduce().Get()
 		Expect(emptied).To(Equal(StateAbsent), "the demote span empties the window")
 
@@ -369,8 +374,8 @@ var _ = Describe("Window", func() {
 		// Mean Min 2 -> Untrusted, not Value. A regression that fails to reset
 		// accumulation after demote would report Value here.
 		t63 := t0.Add(63 * time.Second)
-		w.Age(t63)
-		w.Append(Known(7), Unknown(), t63)
+		w.age(t63)
+		w.appendPoint(Known(7), Unknown(), t63)
 		_, rebuilt := w.Reduce().Get()
 		Expect(rebuilt).To(Equal(StateUntrusted),
 			"the first post-demote point is a single entry (below Mean Min 2)")
@@ -383,16 +388,16 @@ var _ = Describe("Window", func() {
 
 		// Production order is Age THEN Append, each tick (not the reversed
 		// order the other window specs use, which masks this).
-		w.Age(t0)
-		w.Append(Known(5), Unknown(), t0)
-		w.Age(t0.Add(time.Second))
-		w.Append(Known(6), Unknown(), t0.Add(time.Second))
+		w.age(t0)
+		w.appendPoint(Known(5), Unknown(), t0)
+		w.age(t0.Add(time.Second))
+		w.appendPoint(Known(6), Unknown(), t0.Add(time.Second))
 
 		// An outage: Age then a failed Append on each tick. The window holds.
 		for i := 2; i <= 6; i++ {
 			at := t0.Add(time.Duration(i) * time.Second)
-			w.Age(at)
-			w.Append(Unknown(), Unknown(), at)
+			w.age(at)
+			w.appendPoint(Unknown(), Unknown(), at)
 		}
 
 		// Recovery at 20s: Age runs first (freezes on the prior tick's failure and
@@ -400,8 +405,8 @@ var _ = Describe("Window", func() {
 		// must prune the stale out-of-span 5 and 6, so the window reports 100,
 		// not the folded mean 37.
 		rec := t0.Add(20 * time.Second)
-		w.Age(rec)
-		w.Append(Known(100), Unknown(), rec)
+		w.age(rec)
+		w.appendPoint(Known(100), Unknown(), rec)
 
 		v, st := w.Reduce().Get()
 		// The stale 5 and 6 are pruned, so the mean is 100, not the folded 37 the
@@ -418,13 +423,13 @@ var _ = Describe("Window", func() {
 		w, _ := NewWindow(span, 60*time.Second, Mean, true)
 
 		t0 := time.Unix(20_000_000, 0)
-		w.Age(t0)
-		w.Append(Known(10), Unknown(), t0)
+		w.age(t0)
+		w.appendPoint(Known(10), Unknown(), t0)
 		// An EQUAL value is not a backwards step: a monotone counter reporting the
 		// same value twice must not reset. A build that uses <= would empty on
 		// every unchanged counter reading.
-		w.Age(t0.Add(time.Second))
-		w.Append(Known(10), Unknown(), t0.Add(time.Second))
+		w.age(t0.Add(time.Second))
+		w.appendPoint(Known(10), Unknown(), t0.Add(time.Second))
 
 		_, state := w.Reduce().Get()
 		Expect(state).To(Equal(StateValue),
@@ -437,32 +442,64 @@ var _ = Describe("Window", func() {
 		w, _ := NewWindow(span, demote, Mean, false)
 
 		t0 := time.Unix(21_000_000, 0)
-		w.Age(t0)
-		w.Append(Known(5), Unknown(), t0)
-		w.Age(t0.Add(time.Second))
-		w.Append(Known(6), Unknown(), t0.Add(time.Second))
+		w.age(t0)
+		w.appendPoint(Known(5), Unknown(), t0)
+		w.age(t0.Add(time.Second))
+		w.appendPoint(Known(6), Unknown(), t0.Add(time.Second))
 		_, state := w.Reduce().Get()
 		Expect(state).To(Equal(StateValue), "the window first reaches a trustworthy state")
 
 		// A failed read begins the freeze (no pruning from here), so the two
 		// entries survive past the span and the demote boundary becomes observable
 		// in its own right rather than being masked by span-pruning.
-		w.Age(t0.Add(2 * time.Second))
-		w.Append(Unknown(), Unknown(), t0.Add(2*time.Second))
+		w.age(t0.Add(2 * time.Second))
+		w.appendPoint(Unknown(), Unknown(), t0.Add(2*time.Second))
 
 		// Exactly one demote span after the last successful read (t0+1s), the window
 		// is frozen-HOLDING (not emptied): now.Sub(lastSuccess) == demote, and the
 		// demote empties only STRICTLY past the span.
 		exact := t0.Add(time.Second).Add(demote)
-		w.Age(exact)
+		w.age(exact)
 		_, atBoundary := w.Reduce().Get()
 		Expect(atBoundary).To(Equal(StateUntrusted),
 			"at exactly the demote span the frozen window holds (Untrusted), not emptied")
 
 		// One tick past the boundary, the window empties.
-		w.Age(exact.Add(time.Second))
+		w.age(exact.Add(time.Second))
 		_, pastBoundary := w.Reduce().Get()
 		Expect(pastBoundary).To(Equal(StateAbsent),
 			"just past the demote span the window empties")
+	})
+
+	It("should age before storing, so the first failed read still prunes", func() {
+		// Observe ages, then stores. Ageing reads whether the PREVIOUS tick
+		// stored a point, so on the first failed read the window is not yet
+		// frozen and still prunes to span; the freeze only takes hold from the
+		// tick after. Reversing the two halves would freeze on the first failed
+		// read instead, and entries older than the span would survive into the
+		// fold.
+		//
+		// The demote span is an hour so the demote arm cannot reach the window
+		// and confuse the two effects. Mean is the reduction because the number
+		// it folds is what distinguishes the orders: only the pruned window can
+		// answer 2.
+		const span = 10 * time.Second
+		w, err := NewWindow(span, time.Hour, Mean, false)
+		Expect(err).NotTo(HaveOccurred())
+
+		t0 := time.Unix(1_000_000, 0)
+		w.Observe(Known(1), Unknown(), t0)
+		w.Observe(Known(2), Unknown(), t0.Add(5*time.Second))
+
+		// First failed read, 12s in. The cutoff is t0+2s, so the t0 entry is
+		// older than the span and goes.
+		w.Observe(Unknown(), Unknown(), t0.Add(12*time.Second))
+
+		v, state := w.Reduce().Get()
+		Expect(v).To(Equal(2.0),
+			"the t0 entry aged out before the failed read froze the window; "+
+				"storing first would freeze immediately and fold 1 and 2 to 1.5")
+		Expect(state).To(Equal(StateUntrusted),
+			"nothing was stored this tick, so the number is not trustworthy")
 	})
 })
