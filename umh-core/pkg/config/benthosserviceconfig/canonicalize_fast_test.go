@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"math"
 	"strings"
+	"sync"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -27,7 +28,16 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// yamlRoundTrip is the original canonicalization. fastNormalize must be
+// fastNormalize drops the third return value of normalizeValue. It lives here
+// rather than in the production file because nothing in production wants the
+// two-value form, and an unused wrapper there would be dead code.
+func fastNormalize(v interface{}) (interface{}, bool) {
+	out, ok, _ := normalizeValue(v)
+
+	return out, ok
+}
+
+// yamlRoundTrip is the original canonicalization. normalizeValue must be
 // indistinguishable from it whenever it accepts.
 func yamlRoundTrip(v interface{}) (interface{}, error) {
 	encoded, err := yaml.Marshal(v)
@@ -231,6 +241,16 @@ var _ = Describe("canonicalize fast path", func() {
 				"the round-trip fallback must produce a correct comparison")
 		})
 
+		It("still spots a real difference inside a fallen-back section", func() {
+			a := bridgeConfigDeclining(10)
+			b := bridgeConfigDeclining(10)
+			b.Input["s7comm"].(map[string]interface{})["rack"] = 1
+
+			// Without this, "equal stays equal" would also hold for a comparator that
+			// always returns true once it has fallen back.
+			Expect(NewComparator().ConfigsEqual(a, b)).To(BeFalse())
+		})
+
 		It("still reports a genuine difference", func() {
 			a := bridgeConfig(10)
 			b := bridgeConfig(10)
@@ -400,6 +420,24 @@ var _ = Describe("canonicalize fast path", func() {
 			reportFallback("")
 
 			Expect(logs.Len()).To(BeZero())
+		})
+
+		// Proves the walk is actually wired into ConfigsEqual. Only the production
+		// path calls reportFallback, so if the fast path were dropped from roundTrip
+		// this warning would never appear — while every other spec here would still
+		// pass, because they call normalizeValue directly.
+		It("is reached through ConfigsEqual, not only in isolation", func() {
+			reportedFallbackTypes = sync.Map{}
+
+			core, logs := observer.New(zapcore.WarnLevel)
+			defer zap.ReplaceGlobals(zap.New(core))()
+
+			desired := bridgeConfigDeclining(5)
+			NewComparator().ConfigsEqual(desired, desired)
+
+			Expect(logs.FilterMessageSnippet("fell back to the YAML round-trip").Len()).
+				To(BeNumerically(">=", 1),
+					"ConfigsEqual never consulted the walk; is it still wired into roundTrip?")
 		})
 	})
 

@@ -26,19 +26,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
 )
 
-// fastNormalize reproduces what a yaml.Marshal + yaml.Unmarshal round-trip does to
-// a generic value, without serialising to text.
-//
-// SAFETY: the result must be indistinguishable from the round-trip. A wrong answer
-// makes two equal configs look different and re-applies the config forever. Anything
-// this cannot reproduce exactly returns ok=false and the caller falls back to the
-// real round-trip. Being slow is acceptable; being wrong is not.
-func fastNormalize(v interface{}) (out interface{}, ok bool) {
-	out, ok, _ = normalizeValue(v)
-
-	return out, ok
-}
-
 // intFromInt64 and intFromUint64 pick the Go type yaml's resolver picks: int when
 // the value fits, otherwise int64 or uint64. The wider branches only matter on a
 // 32-bit build.
@@ -89,8 +76,14 @@ func checkString(s string) (out interface{}, ok bool, unsupported string) {
 	return s, true, ""
 }
 
-// normalizeValue is fastNormalize plus the type that made it give up, so the
-// caller can report which shape is still missing.
+// normalizeValue reproduces what a yaml.Marshal + yaml.Unmarshal round-trip does to
+// a generic value, without serialising to text. The third return value names the
+// shape it gave up on, so the caller can report what is still missing.
+//
+// SAFETY: the result must be indistinguishable from the round-trip. A wrong answer
+// makes two equal configs look different and re-applies the config forever. Anything
+// this cannot reproduce exactly returns ok=false and the caller falls back to the
+// real round-trip. Being slow is acceptable; being wrong is not.
 func normalizeValue(v interface{}) (out interface{}, ok bool, unsupported string) {
 	switch t := v.(type) {
 	case nil:
