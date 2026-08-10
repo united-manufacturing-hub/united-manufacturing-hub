@@ -202,6 +202,17 @@ func (c *ContainerMonitorService) GetStatus(ctx context.Context) (*ServiceInfo, 
 	if c.useFSMv2CPU {
 		if workerHealth, ok := c.readWorkerCPUHealth(ctx); ok && !cpuStat.IsThrottled {
 			status.CPU.Health = workerHealth
+			// A degraded worker verdict writes the absent markers (0) for
+			// TotalUsageMCpu and CoreCount beside the Degraded category, so a
+			// degraded record never carries a legacy real number. status.CPU
+			// aliases cpuStat, so the write lands on the record the
+			// cpuStat.Health==Degraded aggregate check below reads. The legacy
+			// throttle arm (cpuStat.IsThrottled) bypasses this block and keeps
+			// its real numbers; every other worker-degraded verdict is zeroed.
+			if workerHealth.Category == models.Degraded {
+				status.CPU.TotalUsageMCpu = 0
+				status.CPU.CoreCount = 0
+			}
 			// Only a genuinely healthy verdict is authoritative over the legacy
 			// rule. A degraded verdict (read-error, stale, never-observed,
 			// framework-Degraded, worker-Degraded) is caught by the aggregate
