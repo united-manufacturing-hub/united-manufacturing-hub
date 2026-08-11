@@ -1,0 +1,25 @@
+agent:
+  metricsPort: 8080
+# motor has no contract of its own and is reachable only through _refModel.
+dataModels:
+  - name: motor
+    version:
+      v1:
+        structure:
+          rpm:
+            _payloadshape: timeseries-number
+  - name: pump
+    version:
+      v1:
+        structure:
+          pressure:
+            _payloadshape: timeseries-number
+          motor:
+            _refModel:
+              name: motor
+              version: v1
+dataContracts:
+  - name: _pump_v1
+    model:
+      name: pump
+      version: v1

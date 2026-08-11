@@ -1,0 +1,16 @@
+agent:
+  metricsPort: 8080
+# _valve contains "_v" without ending in a version. generateSubjectName
+# branches on Contains(name, "_v"), so this name exercises that branch.
+dataModels:
+  - name: valve
+    version:
+      v1:
+        structure:
+          position:
+            _payloadshape: timeseries-number
+dataContracts:
+  - name: _valve
+    model:
+      name: valve
+      version: v1

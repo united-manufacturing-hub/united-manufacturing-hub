@@ -1,0 +1,9 @@
+agent:
+  metricsPort: 8080
+# A contract whose model was deleted. Its Redpanda subjects are protected
+# today and must stay protected: ENG-5537.
+dataContracts:
+  - name: _gone_v1
+    model:
+      name: gone
+      version: v1

@@ -1,0 +1,22 @@
+agent:
+  metricsPort: 8080
+# motor has no contract, but a stream processor writes to _motor_v1 at
+# runtime because benthos composes the address from the model reference.
+dataModels:
+  - name: motor
+    version:
+      v1:
+        structure:
+          rpm:
+            _payloadshape: timeseries-number
+streamProcessor:
+  - name: motor-direct
+    desiredState: active
+    streamProcessorServiceConfig:
+      model:
+        name: motor
+        version: v1
+      sources:
+        rpm: umh.v1.plant._raw.rpm
+      mapping:
+        rpm: "rpm"

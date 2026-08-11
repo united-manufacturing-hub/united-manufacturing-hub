@@ -1,0 +1,14 @@
+agent:
+  metricsPort: 8080
+# A version whose structure is present but empty. Translates to zero
+# subjects without erroring.
+dataModels:
+  - name: pump
+    version:
+      v1:
+        structure: {}
+dataContracts:
+  - name: _pump_v1
+    model:
+      name: pump
+      version: v1

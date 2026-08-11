@@ -1,0 +1,18 @@
+agent:
+  metricsPort: 8080
+# default_bridges sits on the Addressed contract, not on _raw. Never
+# implemented, but it must survive a rewrite rather than be destroyed.
+dataModels:
+  - name: pump
+    version:
+      v1:
+        structure:
+          temperature:
+            _payloadshape: timeseries-number
+dataContracts:
+  - name: _pump_v1
+    model:
+      name: pump
+      version: v1
+    default_bridges:
+      - name: keep-me

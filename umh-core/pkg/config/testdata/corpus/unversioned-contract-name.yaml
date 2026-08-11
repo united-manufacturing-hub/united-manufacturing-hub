@@ -1,0 +1,16 @@
+agent:
+  metricsPort: 8080
+# benthos cannot parse a version out of _foo, so it bypasses validation
+# before looking up any subject.
+dataModels:
+  - name: bar
+    version:
+      v1:
+        structure:
+          temperature:
+            _payloadshape: timeseries-number
+dataContracts:
+  - name: _foo
+    model:
+      name: bar
+      version: v1

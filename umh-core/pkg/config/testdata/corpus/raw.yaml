@@ -1,0 +1,5 @@
+agent:
+  metricsPort: 8080
+# A bare address: no model, no structure, nothing to validate against.
+dataContracts:
+  - name: _raw

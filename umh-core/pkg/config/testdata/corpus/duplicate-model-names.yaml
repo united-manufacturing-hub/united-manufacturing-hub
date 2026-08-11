@@ -1,0 +1,17 @@
+agent:
+  metricsPort: 8080
+# Today the translator's map silently last-wins while the status
+# generator emits both rows.
+dataModels:
+  - name: pump
+    version:
+      v1:
+        structure:
+          temperature:
+            _payloadshape: timeseries-number
+  - name: pump
+    version:
+      v1:
+        structure:
+          pressure:
+            _payloadshape: timeseries-number

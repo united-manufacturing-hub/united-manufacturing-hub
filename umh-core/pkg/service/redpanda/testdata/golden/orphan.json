@@ -1,0 +1,7 @@
+{
+  "translateError": "data contract '_gone_v1' references unknown model 'gone'",
+  "subjects": [],
+  "skipPrefixes": [
+    "_gone_v1-"
+  ]
+}

@@ -1,0 +1,23 @@
+agent:
+  metricsPort: 8080
+# Only reachable by hand-editing; the actions reject duplicates.
+dataModels:
+  - name: pump
+    version:
+      v1:
+        structure:
+          temperature:
+            _payloadshape: timeseries-number
+      v2:
+        structure:
+          pressure:
+            _payloadshape: timeseries-number
+dataContracts:
+  - name: _pump_v1
+    model:
+      name: pump
+      version: v1
+  - name: _pump_v1
+    model:
+      name: pump
+      version: v2

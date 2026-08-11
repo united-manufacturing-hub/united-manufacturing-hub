@@ -1,0 +1,19 @@
+agent:
+  metricsPort: 8080
+# Two addresses enforcing one structure.
+dataModels:
+  - name: pump
+    version:
+      v1:
+        structure:
+          temperature:
+            _payloadshape: timeseries-number
+dataContracts:
+  - name: _pump_v1
+    model:
+      name: pump
+      version: v1
+  - name: _pumpalt_v1
+    model:
+      name: pump
+      version: v1

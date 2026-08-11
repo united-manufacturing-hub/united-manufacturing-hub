@@ -1,0 +1,8 @@
+agent:
+  metricsPort: 8080
+# A model with no versions at all. generateDataModelHash has an explicit
+# branch for this, so the shape occurs.
+dataModels:
+  - name: pump
+    description: No versions yet
+    version: {}

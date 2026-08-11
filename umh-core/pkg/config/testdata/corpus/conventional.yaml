@@ -1,0 +1,15 @@
+agent:
+  metricsPort: 8080
+dataModels:
+  - name: pump
+    description: Pump monitoring
+    version:
+      v1:
+        structure:
+          temperature:
+            _payloadshape: timeseries-number
+dataContracts:
+  - name: _pump_v1
+    model:
+      name: pump
+      version: v1
