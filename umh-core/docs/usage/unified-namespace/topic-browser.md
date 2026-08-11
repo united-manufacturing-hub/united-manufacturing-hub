@@ -33,7 +33,9 @@ When selecting a topic, view:
 
 Programmatic access at `http://localhost:8090/graphql` (per instance).
 
-> **Note:** The GraphQL API is disabled by default. You must enable it in your configuration before using the examples below.
+{% hint style="info" %}
+**Early Access.** We built the GraphQL API for developers who want to query the Unified Namespace programmatically. It's experimental, so it's off by default. See the instructions below and give it a try. Tell us what you think.
+{% endhint %}
 
 ### Configuration
 

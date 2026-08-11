@@ -18,7 +18,7 @@
 
 * **≈ 4 bridges instances** (e.g. OPC UA ➜ Redpanda) **plus one bridge instance** that forwards from the local Redpanda to an external MQTT broker
 * **≈ 900 tags at 1 message / second each**
-* Keeps **seven days** of history under the default cluster retention (`log_retention_ms = 7 days`)
+* Keeps **seven days** of replayable raw history under the defaults a new instance starts with (`log_retention_ms = 7 days`, `log_cleanup_policy = delete`)
 * Runs comfortably below 70% CPU (automatic throttling protection kicks in above this)
 
 #### Disk usage in practice
@@ -27,8 +27,13 @@ Redpanda writes **128 MiB segments**; a segment can be deleted only after it is 
 With Snappy compression, a typical 200 B JSON payload shrinks to ≈ 50–70 B (3–4× ratio).\
 Allowing a 5 GB safety buffer, a 40 GB SSD gives **≈ 35 GB usable history ≙ ~500–700 million messages**.
 
+Size the disk against your message rate, not your tag count: seven days of raw history is
+what makes replay possible, and time-based retention has no size ceiling of its own. At
+700 messages / second — ≈ 423 million records over seven days — `umh.messages` alone needs
+roughly **40–55 GB**. Measure the real figure on your instance, since payload size drives it.
+
 _Need more?_\
-Shorten retention (either during install with `internal.redpanda.redpandaServiceConfig.defaultTopicRetentionMs` or later on the topic level using `rpk`) or enlarge the disk.
+Shorten retention (either during install with `internal.redpanda.redpandaServiceConfig.topic.defaultTopicRetentionMs` or later on the topic level using `rpk`), cap the topic with `defaultTopicRetentionBytes`, or enlarge the disk. A byte cap protects the disk but can cut the replay window below seven days under heavy load.
 
 #### Memory
 

@@ -35,8 +35,11 @@ internal:
 
         # this corresponds to log_cleanup_policy (See also: https://docs.redpanda.com/current/manage/cluster-maintenance/compaction-settings/)
         # Options: "delete" (time/size-based deletion), "compact" (keep latest per key), "compact,delete" (both)
-        # Using "compact" ensures at least one message per key is retained
-        defaultTopicCleanupPolicy: "compact"
+        # "delete" is what new instances start with: it keeps the full defaultTopicRetentionMs
+        # window of raw records, so a new consumer group can replay all 7 days.
+        # "compact" instead collapses closed segments to the latest message per key, which
+        # keeps the topic small but makes replay impossible.
+        defaultTopicCleanupPolicy: "delete"
 
         # this corresponds to log_segment_ms (See also: https://docs.redpanda.com/current/manage/cluster-maintenance/disk-utilization/)
         # Controls when Redpanda creates new log segments. Lower values create more frequent segments but allow for more granular retention

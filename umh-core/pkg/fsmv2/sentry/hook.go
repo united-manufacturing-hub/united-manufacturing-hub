@@ -513,6 +513,8 @@ func IsInternalFrame(frame sentry.Frame) bool {
 
 	if strings.Contains(frame.Function, "captureToSentry") ||
 		strings.Contains(frame.Function, "SentryHook.Write") ||
+		strings.Contains(frame.Function, "SentryError") ||
+		strings.Contains(frame.Function, "SentryWarn") ||
 		strings.Contains(frame.Function, "zapcore.") {
 		return true
 	}
