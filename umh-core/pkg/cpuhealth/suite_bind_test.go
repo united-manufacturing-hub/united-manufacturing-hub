@@ -114,7 +114,7 @@ func badReadSignal() diagnosis.Signal[Sample] {
 				Clear:    diagnosis.Mark{At: 0.4},
 				Polarity: diagnosis.HigherIsWorse,
 				Unit:     "ratio",
-				Capacity: 1.0,
+				Worst: 1.0,
 			},
 		}},
 	}

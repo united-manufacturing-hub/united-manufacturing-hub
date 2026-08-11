@@ -115,7 +115,7 @@ var _ = Describe("S3 R1 — the CPU table, throttle and steal", func() {
 		Expect(throttleInst.Marks.Clear.Inclusive).To(BeFalse())
 		Expect(throttleInst.Marks.Polarity).To(Equal(diagnosis.HigherIsWorse))
 		Expect(throttleInst.Marks.Unit).To(Equal("ratio"))
-		Expect(throttleInst.Marks.Capacity).To(Equal(1.0))
+		Expect(throttleInst.Marks.Worst).To(Equal(1.0))
 		Expect(throttleInst.Extract(Sample{NrThrottled: diagnosis.Known(7)})).To(Equal(diagnosis.Known(7)))
 		Expect(throttleInst.Against(Sample{NrPeriods: diagnosis.Known(100)})).To(Equal(diagnosis.Known(100)))
 
@@ -129,7 +129,7 @@ var _ = Describe("S3 R1 — the CPU table, throttle and steal", func() {
 		Expect(pressureInst.Marks.Clear.At).To(Equal(0.12))
 		Expect(pressureInst.Marks.Polarity).To(Equal(diagnosis.HigherIsWorse))
 		Expect(pressureInst.Marks.Unit).To(Equal("ratio"))
-		Expect(pressureInst.Marks.Capacity).To(Equal(1.0))
+		Expect(pressureInst.Marks.Worst).To(Equal(1.0))
 		Expect(pressureInst.Extract(Sample{Pressure: diagnosis.Known(0.25)})).To(Equal(diagnosis.Known(0.25)))
 
 		// The two steal arms answer one question. The p95 is the primary arm and
@@ -147,7 +147,7 @@ var _ = Describe("S3 R1 — the CPU table, throttle and steal", func() {
 		Expect(stealP95.Marks.Clear.At).To(Equal(0.06))
 		Expect(stealP95.Marks.Polarity).To(Equal(diagnosis.HigherIsWorse))
 		Expect(stealP95.Marks.Unit).To(Equal("ratio"))
-		Expect(stealP95.Marks.Capacity).To(Equal(1.0))
+		Expect(stealP95.Marks.Worst).To(Equal(1.0))
 		stealMean := steal.Instruments[1]
 		Expect(stealMean.Name).To(Equal("steal-mean"))
 		Expect(stealMean.Requires).To(ConsistOf(HasVirtualization))
@@ -175,7 +175,7 @@ var _ = Describe("S3 R1 — the CPU table, throttle and steal", func() {
 		Expect(hostHeadroom.Marks.Clear.At).To(Equal(0.5))
 		Expect(hostHeadroom.Marks.Clear.Inclusive).To(BeFalse())
 		Expect(hostHeadroom.Marks.Unit).To(Equal("cores"))
-		Expect(hostHeadroom.Marks.Capacity).To(Equal(1.0), "the reserve, not the core count: severity 1 at −1.0 cores, the floor of cores−hostBusy−reserve")
+		Expect(hostHeadroom.Marks.Worst).To(Equal(-1.0), "the reserve, not the core count: severity 1 at −1.0 cores, the floor of cores−hostBusy−reserve")
 		// The F6 guard: headroom is only a number on a host-scoped sample, and
 		// only when both the count and the busy rate are present.
 		Expect(hostHeadroom.Extract(Sample{CpuScope: ScopeHost, HostBusy: diagnosis.Known(0.5)})).To(Equal(diagnosis.Known(2.5)))
@@ -191,7 +191,7 @@ var _ = Describe("S3 R1 — the CPU table, throttle and steal", func() {
 		Expect(usageFraction.Marks.Clear.At).To(Equal(0.60))
 		Expect(usageFraction.Marks.Clear.Inclusive).To(BeFalse())
 		Expect(usageFraction.Marks.Unit).To(Equal("fraction"))
-		Expect(usageFraction.Marks.Capacity).To(Equal(1.0))
+		Expect(usageFraction.Marks.Worst).To(Equal(1.0))
 		Expect(usageFraction.Extract(Sample{UsageCores: diagnosis.Known(1.4)})).To(Equal(diagnosis.Known(0.35)))
 		Expect(usageFraction.Extract(Sample{UsageCores: diagnosis.Unknown()})).To(Equal(diagnosis.Unknown()))
 
@@ -208,7 +208,7 @@ var _ = Describe("S3 R1 — the CPU table, throttle and steal", func() {
 		Expect(limitHeadroom.Marks.Fire.At).To(Equal(0.0))
 		Expect(limitHeadroom.Marks.Clear.At).To(Equal(0.1))
 		Expect(limitHeadroom.Marks.Unit).To(Equal("cores"))
-		Expect(limitHeadroom.Marks.Capacity).To(Equal(0.2), "the reserve, not the quota: severity 1 at −0.2 cores, the floor of quota−usage−0.10×quota")
+		Expect(limitHeadroom.Marks.Worst).To(Equal(-0.2), "the reserve, not the quota: severity 1 at −0.2 cores, the floor of quota−usage−0.10×quota")
 		Expect(limitHeadroom.Extract(Sample{UsageCores: diagnosis.Known(0.8)})).To(Equal(diagnosis.Known(1.0)))
 		Expect(limitHeadroom.Extract(Sample{UsageCores: diagnosis.Unknown()})).To(Equal(diagnosis.Unknown()))
 

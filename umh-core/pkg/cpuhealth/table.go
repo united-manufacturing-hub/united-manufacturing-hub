@@ -59,11 +59,11 @@ const (
 var (
 	stealMarks = diagnosis.Marks{
 		Fire: diagnosis.Mark{At: 0.10}, Clear: diagnosis.Mark{At: 0.06},
-		Polarity: diagnosis.HigherIsWorse, Unit: "ratio", Capacity: 1.0,
+		Polarity: diagnosis.HigherIsWorse, Unit: "ratio", Worst: 1.0,
 	}
 	throttleMarks = diagnosis.Marks{
 		Fire: diagnosis.Mark{At: 0.05}, Clear: diagnosis.Mark{At: 0.03},
-		Polarity: diagnosis.HigherIsWorse, Unit: "ratio", Capacity: 1.0,
+		Polarity: diagnosis.HigherIsWorse, Unit: "ratio", Worst: 1.0,
 	}
 )
 
@@ -73,7 +73,7 @@ var (
 // exactly as a Capability is. host-headroom's capacity is the fixed reserve
 // rather than the core count, so only the limit arm's capacity scales.
 //
-// 🔥 quota is a float64 and not a Reading. Marks.Capacity and Mark.At are both
+// 🔥 quota is a float64 and not a Reading. Marks.Worst and Mark.At are both
 // float64, so a table cannot be built from an absence — and it does not need to
 // be: HasLimit is present exactly when cpu.max names a positive quota, which is
 // the same read that supplies the number.
@@ -178,7 +178,7 @@ func pressureSignal() diagnosis.Signal[Sample] {
 				Clear:    diagnosis.Mark{At: 0.12},
 				Polarity: diagnosis.HigherIsWorse,
 				Unit:     "ratio",
-				Capacity: 1.0,
+				Worst: 1.0,
 			},
 		}},
 	}
@@ -272,14 +272,13 @@ func saturationSignal(cores float64) diagnosis.Signal[Sample] {
 					Clear:    diagnosis.Mark{At: 0.5},
 					Polarity: diagnosis.LowerIsWorse,
 					Unit:     "cores",
-					// Severity 1 at −Capacity, so Capacity is the reserve, not
+					// Severity 1 at −Reserve, so Worst is the reserve, not
 					// the core count. Headroom is cores − hostBusy − reserve and
 					// hostBusy cannot exceed cores, so the quantity bottoms out
-					// at −cpuReserveCores: a wholly consumed box. Capacity: cores
-					// put severity 1 at −cores, four times past anything
-					// reachable, and scored that box 0.25 — below a merely busy
-					// one at 1.00 in the same tier.
-					Capacity: cpuReserveCores,
+					// at −cpuReserveCores: a wholly consumed box. Worst is
+					// negative because it lives on the worse (lower) side of
+					// Fire, the same side as the value that reaches it.
+					Worst: -cpuReserveCores,
 				},
 			},
 			{
@@ -307,7 +306,7 @@ func saturationSignal(cores float64) diagnosis.Signal[Sample] {
 					Clear:    diagnosis.Mark{At: 0.60},
 					Polarity: diagnosis.HigherIsWorse,
 					Unit:     "fraction",
-					Capacity: 1.0,
+					Worst: 1.0,
 				},
 			},
 		},
@@ -317,7 +316,7 @@ func saturationSignal(cores float64) diagnosis.Signal[Sample] {
 // limitSaturationSignal is "are we out of our own budget?" It is the row whose
 // marks are denominated in the quota, and it is the reason quota is a float64:
 // it is the only place in the design where a Reading would have had to reach
-// Marks.Capacity, which is a float64, so it cannot. cpuTable omits it entirely
+// Marks.Worst, which is a float64, so it cannot. cpuTable omits it entirely
 // when quota is not positive, because Fire{At: 0} against Clear{At: 0.05 × 0}
 // is a pair NewEngine refuses.
 func limitSaturationSignal(quota float64) diagnosis.Signal[Sample] {
@@ -348,9 +347,11 @@ func limitSaturationSignal(quota float64) diagnosis.Signal[Sample] {
 				Unit:     "cores",
 				// Same reasoning as host-headroom: usage cannot exceed the quota
 				// the kernel throttles it to, so quota − usage − 0.10 × quota
-				// bottoms out at −0.10 × quota. Capacity: quota scored a
-				// container wholly out of its budget 0.10.
-				Capacity: 0.10 * quota,
+				// bottoms out at −0.10 × quota. Worst is negative because it
+				// lives on the worse (lower) side of Fire, the same side as the
+				// value that reaches it; a container wholly out of its budget
+				// scores 1.0.
+				Worst: -0.10 * quota,
 			},
 		}},
 	}
