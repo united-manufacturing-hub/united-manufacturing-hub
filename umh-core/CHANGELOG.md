@@ -6,7 +6,7 @@
 
 ### Improvements
 
-- New instances now buffer seven days of raw messages instead of one hour. Existing instances are unaffected, and to switch one over set `internal.redpanda.redpandaServiceConfig.topic.defaultTopicCleanupPolicy` to `delete`. Note that seven days scales with message rate, roughly 40–55 GB for `umh.messages` at 700 msg/s, so check the sizing guide before running a high-throughput instance
+- New instances now save 7 days of raw messages even in default settings. Existing instances are unaffected, and to switch one over set `internal.redpanda.redpandaServiceConfig.topic.defaultTopicCleanupPolicy` to `delete`. Note that seven days scales with message rate, roughly 40–55 GB for `umh.messages` at 700 msg/s, so check the sizing guide before running a high-throughput instance
 
 ## [0.44.33]
 
