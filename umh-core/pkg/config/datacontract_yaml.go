@@ -22,13 +22,61 @@ import (
 
 // DataContractVersion is one version inside a grouped dataContracts entry.
 //
-// Name is the address this version is published under in UNS topics. It is
-// optional: a version with no name is a definition — a structure that other
-// contracts can reference but that nothing publishes to.
+// Names are the addresses this version is published under in UNS topics.
+// It accepts a scalar or a list, and marshals back as whichever it needs:
+//
+//	name: _pump_v1                  # the ordinary case
+//	name: [_pump_v1, _pumpalt_v1]   # one structure, several addresses
+//
+// Empty means a definition — a structure other contracts can reference but that
+// nothing publishes to. A list is necessary rather than a nicety: two contracts
+// can share one model version, and with a single name the second address would be
+// silently dropped, which stops validating a topic that is still receiving data.
 type DataContractVersion struct {
 	Structure      map[string]Field         `yaml:"structure"`
-	Name           string                   `yaml:"name,omitempty"`
+	Names          []string                 `yaml:"name,omitempty"`
 	DefaultBridges []map[string]interface{} `yaml:"default_bridges,omitempty"`
+}
+
+// MarshalYAML writes a single address as a scalar so the ordinary case stays
+// readable, and several as a list.
+func (v DataContractVersion) MarshalYAML() (interface{}, error) {
+	out := map[string]interface{}{}
+
+	switch len(v.Names) {
+	case 0:
+	case 1:
+		out["name"] = v.Names[0]
+	default:
+		out["name"] = v.Names
+	}
+
+	if len(v.DefaultBridges) > 0 {
+		out["default_bridges"] = v.DefaultBridges
+	}
+
+	out["structure"] = v.Structure
+
+	return out, nil
+}
+
+// decodeNames accepts a scalar address or a list of them.
+func decodeNames(node *yaml.Node, into *[]string) error {
+	switch node.Kind {
+	case yaml.ScalarNode:
+		var one string
+		if err := node.Decode(&one); err != nil {
+			return fmt.Errorf("line %d: name: %w", node.Line, err)
+		}
+
+		*into = []string{one}
+
+		return nil
+	case yaml.SequenceNode:
+		return node.Decode(into)
+	default:
+		return fmt.Errorf("line %d: name must be an address or a list of addresses", node.Line)
+	}
 }
 
 // DataContractYAMLEntry is one entry of the dataContracts section.
@@ -190,8 +238,8 @@ func decodeVersions(node *yaml.Node) (map[string]DataContractVersion, error) {
 					return nil, fmt.Errorf("line %d: structure: %w", value.Line, err)
 				}
 			case "name":
-				if err := value.Decode(&version.Name); err != nil {
-					return nil, fmt.Errorf("line %d: name: %w", value.Line, err)
+				if err := decodeNames(value, &version.Names); err != nil {
+					return nil, err
 				}
 			case "default_bridges":
 				if err := value.Decode(&version.DefaultBridges); err != nil {

@@ -67,7 +67,7 @@ dataContracts:
 			Expect(entries[0].Description).To(Equal("Pump monitoring"))
 			Expect(entries[0].LegacyModelRef).To(BeNil())
 			Expect(entries[0].Versions).To(HaveKey("v1"))
-			Expect(entries[0].Versions["v1"].Name).To(Equal("_pump_v1"))
+			Expect(entries[0].Versions["v1"].Names).To(Equal([]string{"_pump_v1"}))
 			Expect(entries[0].Versions["v1"].Structure).To(HaveKey("temperature"))
 		})
 
@@ -83,8 +83,23 @@ dataContracts:
 `)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(entries[0].Model).To(Equal("motor"))
-			Expect(entries[0].Versions["v1"].Name).To(BeEmpty())
+			Expect(entries[0].Versions["v1"].Names).To(BeEmpty())
 			Expect(entries[0].Versions["v1"].Structure).To(HaveKey("rpm"))
+		})
+
+		It("reads several addresses on one version", func() {
+			entries, err := decode(`
+dataContracts:
+  - model: pump
+    versions:
+      v1:
+        name: [_pump_v1, _pumpalt_v1]
+        structure:
+          temperature:
+            _payloadshape: timeseries-number
+`)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(entries[0].Versions["v1"].Names).To(Equal([]string{"_pump_v1", "_pumpalt_v1"}))
 		})
 
 		It("carries default_bridges on the version, where it actually sits", func() {
