@@ -1,0 +1,207 @@
+// Copyright 2025 UMH Systems GmbH
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package config
+
+import (
+	"fmt"
+
+	"gopkg.in/yaml.v3"
+)
+
+// DataContractVersion is one version inside a grouped dataContracts entry.
+//
+// Name is the address this version is published under in UNS topics. It is
+// optional: a version with no name is a definition — a structure that other
+// contracts can reference but that nothing publishes to.
+type DataContractVersion struct {
+	Structure      map[string]Field         `yaml:"structure"`
+	Name           string                   `yaml:"name,omitempty"`
+	DefaultBridges []map[string]interface{} `yaml:"default_bridges,omitempty"`
+}
+
+// DataContractYAMLEntry is one entry of the dataContracts section.
+//
+// The section holds three forms and this type is the union of them:
+//
+//   - grouped: model + versions, each version optionally carrying its address
+//   - bare: name alone, with no model and no structure (_raw)
+//   - legacy: name plus a model *mapping* pointing at a dataModels version
+//
+// The legacy form is what every config in the field looks like today, so it has
+// to decode. `model` is a scalar in the grouped form and a mapping in the legacy
+// one, which is what makes struct tags insufficient.
+//
+// AbsorbConfig turns these into flat DataContract values; nothing outside this
+// package should read this type.
+type DataContractYAMLEntry struct {
+	Versions map[string]DataContractVersion `yaml:"versions,omitempty"`
+	// LegacyModelRef is set only by the pre-merge form. Never written back.
+	LegacyModelRef *ModelRef `yaml:"-"`
+	// DefaultBridges at entry level belongs to the legacy form; the grouped form
+	// carries it per version, which is where it actually sits.
+	DefaultBridges []map[string]interface{} `yaml:"default_bridges,omitempty"`
+	Model          string                   `yaml:"model,omitempty"`
+	Name           string                   `yaml:"name,omitempty"`
+	Description    string                   `yaml:"description,omitempty"`
+}
+
+// entryKeys and versionKeys are the only keys accepted on each mapping.
+//
+// They exist because a custom UnmarshalYAML silently disables the decoder's
+// KnownFields setting: yaml.Node.Decode constructs its own decoder with
+// knownFields false, so strictness cannot be inherited. Without checking keys
+// here, a typo'd `structrue:` would be accepted, the contract would lose its
+// structure, and its schema registry subjects would then be deleted as unknown.
+var (
+	entryKeys = map[string]bool{
+		"versions": true, "model": true, "name": true,
+		"description": true, "default_bridges": true,
+	}
+	versionKeys = map[string]bool{
+		"structure": true, "name": true, "default_bridges": true,
+	}
+)
+
+// mappingPairs returns the key/value node pairs of a mapping, rejecting anything
+// that is not a mapping.
+func mappingPairs(node *yaml.Node, what string) ([][2]*yaml.Node, error) {
+	if node.Kind != yaml.MappingNode {
+		return nil, fmt.Errorf("line %d: %s must be a mapping", node.Line, what)
+	}
+
+	pairs := make([][2]*yaml.Node, 0, len(node.Content)/2)
+
+	for i := 0; i+1 < len(node.Content); i += 2 {
+		pairs = append(pairs, [2]*yaml.Node{node.Content[i], node.Content[i+1]})
+	}
+
+	return pairs, nil
+}
+
+// UnmarshalYAML decodes any of the three entry forms.
+func (e *DataContractYAMLEntry) UnmarshalYAML(node *yaml.Node) error {
+	pairs, err := mappingPairs(node, "a dataContracts entry")
+	if err != nil {
+		return err
+	}
+
+	for _, pair := range pairs {
+		key, value := pair[0].Value, pair[1]
+
+		if !entryKeys[key] {
+			return fmt.Errorf("line %d: unknown field %q in a dataContracts entry", pair[0].Line, key)
+		}
+
+		switch key {
+		case "model":
+			// A scalar is the grouping label; a mapping is the pre-merge pointer.
+			switch value.Kind {
+			case yaml.ScalarNode:
+				if err := value.Decode(&e.Model); err != nil {
+					return fmt.Errorf("line %d: model: %w", value.Line, err)
+				}
+			case yaml.MappingNode:
+				ref := &ModelRef{}
+				if err := value.Decode(ref); err != nil {
+					return fmt.Errorf("line %d: model: %w", value.Line, err)
+				}
+
+				e.LegacyModelRef = ref
+			default:
+				return fmt.Errorf(
+					"line %d: model must be a name or a {name, version} reference", value.Line)
+			}
+		case "versions":
+			versions, err := decodeVersions(value)
+			if err != nil {
+				return err
+			}
+
+			e.Versions = versions
+		case "name":
+			if err := value.Decode(&e.Name); err != nil {
+				return fmt.Errorf("line %d: name: %w", value.Line, err)
+			}
+		case "description":
+			if err := value.Decode(&e.Description); err != nil {
+				return fmt.Errorf("line %d: description: %w", value.Line, err)
+			}
+		case "default_bridges":
+			if err := value.Decode(&e.DefaultBridges); err != nil {
+				return fmt.Errorf("line %d: default_bridges: %w", value.Line, err)
+			}
+		}
+	}
+
+	if e.LegacyModelRef != nil && len(e.Versions) > 0 {
+		return fmt.Errorf(
+			"line %d: a dataContracts entry has either a model reference or versions, not both",
+			node.Line)
+	}
+
+	return nil
+}
+
+// decodeVersions reads the versions map, checking each version's keys for the
+// same reason entryKeys exists.
+func decodeVersions(node *yaml.Node) (map[string]DataContractVersion, error) {
+	pairs, err := mappingPairs(node, "versions")
+	if err != nil {
+		return nil, err
+	}
+
+	versions := make(map[string]DataContractVersion, len(pairs))
+
+	for _, pair := range pairs {
+		versionKey, body := pair[0].Value, pair[1]
+
+		bodyPairs, err := mappingPairs(body, "version "+versionKey)
+		if err != nil {
+			return nil, err
+		}
+
+		var version DataContractVersion
+
+		for _, field := range bodyPairs {
+			key, value := field[0].Value, field[1]
+
+			if !versionKeys[key] {
+				return nil, fmt.Errorf(
+					"line %d: unknown field %q in version %q", field[0].Line, key, versionKey)
+			}
+
+			switch key {
+			case "structure":
+				// A structure's own keys are field names, so it stays permissive:
+				// an unrecognised key there is a subfield, not a typo.
+				if err := value.Decode(&version.Structure); err != nil {
+					return nil, fmt.Errorf("line %d: structure: %w", value.Line, err)
+				}
+			case "name":
+				if err := value.Decode(&version.Name); err != nil {
+					return nil, fmt.Errorf("line %d: name: %w", value.Line, err)
+				}
+			case "default_bridges":
+				if err := value.Decode(&version.DefaultBridges); err != nil {
+					return nil, fmt.Errorf("line %d: default_bridges: %w", value.Line, err)
+				}
+			}
+		}
+
+		versions[versionKey] = version
+	}
+
+	return versions, nil
+}
