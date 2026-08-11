@@ -321,12 +321,11 @@ func NewDefaultBenthosService(benthosName string, opts ...BenthosServiceOption) 
 	}
 
 	if service.benthosMonitorManager == nil {
-		// env.GetAsBool is the repo convention for every other FSMv2 flag
-		// (USE_FSMV2_PROTOCOL_CONVERTER, cmd/main.go), and it accepts the
-		// spellings operators actually use: on/off, yes/no, y/n, 1/0, true/false,
-		// case-insensitively. strconv.ParseBool rejects "ON", so reading this flag
-		// directly made USE_FSMV2_BENTHOS_MONITOR=ON silently select fsmv1 while
-		// every sibling flag honoured it.
+		// env.GetAsBool is the repo convention for reading boolean flags, and
+		// unlike strconv.ParseBool it accepts the spellings operators actually
+		// use: on/off, yes/no, y/n, 1/0, true/false, case-insensitively.
+		// strconv.ParseBool rejects "ON", so reading this flag directly made
+		// USE_FSMV2_BENTHOS_MONITOR=ON silently select fsmv1.
 		useFsmv2, err := env.GetAsBool(envUseFsmv2BenthosMonitor, false, false)
 		if err != nil {
 			log.Warnf("%s could not be read as a boolean; treating as off (fsmv1): %v", envUseFsmv2BenthosMonitor, err)
