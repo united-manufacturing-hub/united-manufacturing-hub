@@ -322,7 +322,7 @@ func NewDefaultBenthosService(benthosName string, opts ...BenthosServiceOption) 
 
 	if service.benthosMonitorManager == nil {
 		// env.GetAsBool is the repo convention for every other FSMv2 flag
-		// (USE_FSMV2_TRANSPORT and friends, cmd/main.go), and it accepts the
+		// (USE_FSMV2_PROTOCOL_CONVERTER, cmd/main.go), and it accepts the
 		// spellings operators actually use: on/off, yes/no, y/n, 1/0, true/false,
 		// case-insensitively. strconv.ParseBool rejects "ON", so reading this flag
 		// directly made USE_FSMV2_BENTHOS_MONITOR=ON silently select fsmv1 while
