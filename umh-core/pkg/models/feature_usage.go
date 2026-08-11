@@ -38,4 +38,13 @@ type FeatureUsage struct {
 	ResourceLimitBlockingEnabled bool `json:"resourceLimitBlockingEnabled"`
 	// HistorianConfigured reports whether a historian section exists in config.yaml.
 	HistorianConfigured bool `json:"historianConfigured"`
+	// DataContractDeleteGuardEnabled reports that this instance refuses to delete a
+	// data contract that something still references, and says what references it.
+	//
+	// The Console gates its delete control on this rather than on a version number.
+	// An instance either has the guard or it does not, and that is what the control
+	// needs to know; a version comparison would have to be revisited on every
+	// backport. Always true on this build -- it exists so an older instance, which
+	// omits the field, reads as false.
+	DataContractDeleteGuardEnabled bool `json:"dataContractDeleteGuardEnabled"`
 }

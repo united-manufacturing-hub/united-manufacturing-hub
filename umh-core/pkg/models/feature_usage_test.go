@@ -52,4 +52,27 @@ var _ = Describe("FeatureUsage", func() {
 		Expect(raw).To(HaveKeyWithValue("historianConfigured", true))
 		Expect(raw).To(HaveKeyWithValue("historianBridgeCount", float64(3)))
 	})
+
+	// The Console hides its delete control unless this arrives. Forgetting to send it
+	// would look exactly like an older instance -- the control stays disabled and
+	// nothing reports why -- so the key and its spelling are asserted directly.
+	It("serializes the data contract delete guard capability", func() {
+		usage := models.FeatureUsage{DataContractDeleteGuardEnabled: true}
+
+		data, err := json.Marshal(usage)
+		Expect(err).NotTo(HaveOccurred())
+
+		var raw map[string]interface{}
+		Expect(json.Unmarshal(data, &raw)).To(Succeed())
+
+		Expect(raw).To(HaveKeyWithValue("dataContractDeleteGuardEnabled", true))
+	})
+
+	It("reads as absent on an instance that does not report it", func() {
+		// An older instance omits the field entirely; the Console must read that as
+		// "no guard" rather than as a default of true.
+		var usage models.FeatureUsage
+		Expect(json.Unmarshal([]byte(`{"historianConfigured":true}`), &usage)).To(Succeed())
+		Expect(usage.DataContractDeleteGuardEnabled).To(BeFalse())
+	})
 })

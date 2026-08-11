@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+### Improvements
+
+- Data models and data contracts are now one thing, called a data contract. A contract owns its versions, and each version carries both the structure it enforces and the address it is published under. Nothing changes about the topics you publish to, the schemas that get registered, or what gets validated
+- `config.yaml` is rewritten to a single `dataContracts:` section the first time an instance writes it, with each structure nested under the contract it belongs to. Files in the previous two-section format are still read, so upgrading needs no action. **Run `umh-core downgrade-config` before moving an instance back to a release from before this change** — an older release cannot read the merged section, and rather than failing visibly it starts up with nothing configured and reports no error
+- Deleting a data contract is now refused while something still references it, and the refusal names the referrer and how it was found: a stream processor that declares the model, another contract pointing at it through `_refModel`, or a bridge whose configuration contains the address. Previously the model was deleted while its contract kept pointing at nothing, which silently stopped validating an address that might still have been receiving data
+- Adding a data model, or a new version of one, is now a single config write instead of two. The second write could fail on its own and leave a model with no contract — reported as a success with a warning, and invisible in the Console
+- A data contract whose model no longer exists is now kept as an address with no structure instead of being discarded. It keeps its registered schemas, appears in the Console as a contract with no definition, and can be deleted deliberately
+- Schemas registered under a data contract that has no structure are no longer deleted during reconciliation. Removing the contract from `config.yaml` is now the only thing that drops them
+
+### Fixes
+
+- Two data contracts published at the same address, or two data models declared under the same name, are now collapsed to one with a warning naming what was dropped, instead of the status view and the schema registry disagreeing about which one exists
+
 ## [0.44.33]
 
 ### Improvements

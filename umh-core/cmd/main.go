@@ -187,6 +187,11 @@ func main() {
 		ResourceLimitBlockingEnabled:  configData.Agent.EnableResourceLimitBlocking,
 		HistorianConfigured:           configData.Historian != nil,
 		HistorianBridgeCount:          countHistorianBridges(configData),
+
+		// Constant on this build. The Console needs to distinguish an instance that
+		// refuses unsafe contract deletions from one that silently allows them, and an
+		// older instance simply omits the field.
+		DataContractDeleteGuardEnabled: true,
 	}
 
 	// Ensure the S6 repository directory exists
