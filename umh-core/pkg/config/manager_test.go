@@ -552,7 +552,7 @@ internal:
 		})
 
 		Context("with templated stream processor example", func() {
-			It("should read, parse, and write the config preserving data models, contracts, and templates", func() {
+			It("should read, parse, and write the config preserving contracts and templates", func() {
 				// Read the original example file
 				originalData, err := fsService.ReadFile(ctx, "../../examples/example-config-streamprocessor-templated.yaml")
 				Expect(err).NotTo(HaveOccurred())
@@ -573,22 +573,31 @@ internal:
 				Expect(config.PayloadShapes).To(HaveKey("timeseries-string"))
 				Expect(config.PayloadShapes).To(HaveKey("vibration-data"))
 
-				// Verify data models
-				pumpModel := config.DataModels[0]
-				if pumpModel.Name != "pump" {
-					pumpModel = config.DataModels[1]
-				}
-				Expect(pumpModel.Name).To(Equal("pump"))
-				Expect(pumpModel.Description).To(Equal("pump from vendor ABC"))
-				Expect(pumpModel.Versions).To(HaveKey("v1"))
+				// Verify contracts. This fixture is in the pre-merge shape, so these
+				// assertions are also what shows absorbing it keeps the lineage, the
+				// custom address and the description that used to live on the model.
+				var pumpContract, rawContract *DataContract
 
-				// Verify data contracts
-				Expect(config.DataContracts[0].Name).To(Equal("_pump-contract_v1"))
-				Expect(config.DataContracts[0].Model.Name).To(Equal("pump"))
-				Expect(config.DataContracts[0].Model.Version).To(Equal("v1"))
-				Expect(config.DataContracts[1].Name).To(Equal("_raw"))
-				Expect(config.DataContracts[1].Model).To(BeNil())
-				Expect(config.DataContracts[1].DefaultBridges).To(BeEmpty())
+				for i := range config.Contracts {
+					switch config.Contracts[i].Name {
+					case "_pump-contract_v1":
+						pumpContract = &config.Contracts[i]
+					case "_raw":
+						rawContract = &config.Contracts[i]
+					}
+				}
+
+				Expect(pumpContract).NotTo(BeNil())
+				Expect(pumpContract.Model).To(Equal("pump"))
+				Expect(pumpContract.Version).To(Equal("v1"))
+				Expect(pumpContract.Description).To(Equal("pump from vendor ABC"))
+				Expect(pumpContract.Structure).NotTo(BeEmpty())
+
+				// A bare address: no lineage, nothing to enforce.
+				Expect(rawContract).NotTo(BeNil())
+				Expect(rawContract.Model).To(BeEmpty())
+				Expect(rawContract.Structure).To(BeEmpty())
+				Expect(rawContract.DefaultBridges).To(BeEmpty())
 
 				// Find the pump-processor-1 that uses the template
 				var pumpProcessor1 *StreamProcessorConfig
@@ -632,8 +641,15 @@ internal:
 				// Verify the structure is preserved
 				Expect(writtenConfig.StreamProcessor).To(HaveLen(3))
 				Expect(writtenConfig.PayloadShapes).To(HaveLen(3))
-				Expect(writtenConfig.DataModels).To(HaveLen(2))
-				Expect(writtenConfig.DataContracts).To(HaveLen(2))
+
+				// The write migrates the file to the single merged section, so the
+				// pre-merge models section is gone. What matters is that nothing was
+				// lost doing it, which is a stronger claim than the section lengths this
+				// used to assert.
+				Expect(writtenConfig.DataModels).To(BeEmpty())
+				Expect(ContractsEqual(config.Contracts, writtenConfig.Contracts)).To(BeTrue(),
+					"migration changed the contracts:\nbefore %+v\nafter  %+v",
+					config.Contracts, writtenConfig.Contracts)
 				Expect(writtenConfig.Agent.Location).To(HaveKeyWithValue(0, "factory-A"))
 				Expect(writtenConfig.Agent.Location).To(HaveKeyWithValue(1, "line-1"))
 

@@ -176,7 +176,7 @@ var _ = Describe("Machine State Data Contract", func() {
 						},
 					},
 				},
-				DataContracts: []config.DataContractsConfig{
+				DataContracts: config.LegacyEntries([]config.DataContractsConfig{
 					{
 						Name: "_machine-state",
 						Model: &config.ModelRef{
@@ -184,7 +184,7 @@ var _ = Describe("Machine State Data Contract", func() {
 							Version: "v1",
 						},
 					},
-				},
+				}),
 			}
 
 			dataModel := fullConfig.DataModels[0].Versions["v1"]
@@ -192,9 +192,9 @@ var _ = Describe("Machine State Data Contract", func() {
 			Expect(err).ToNot(HaveOccurred())
 
 			contract := fullConfig.DataContracts[0]
-			Expect(contract.Model).ToNot(BeNil())
-			Expect(contract.Model.Name).To(Equal("_machine-state"))
-			Expect(contract.Model.Version).To(Equal("v1"))
+			Expect(contract.LegacyModelRef).ToNot(BeNil())
+			Expect(contract.LegacyModelRef.Name).To(Equal("_machine-state"))
+			Expect(contract.LegacyModelRef.Version).To(Equal("v1"))
 		})
 	})
 })

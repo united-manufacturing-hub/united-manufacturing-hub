@@ -19,7 +19,6 @@ import (
 	"fmt"
 	"path/filepath"
 	"strconv"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -46,10 +45,10 @@ type MockConfigManager struct {
 	AtomicAddStreamProcessorError      error
 	AtomicEditStreamProcessorError     error
 	AtomicDeleteStreamProcessorError   error
-	AtomicAddDataModelError            error
-	AtomicEditDataModelError           error
-	AtomicDeleteDataModelError         error
 	AtomicAddDataContractError         error
+	AtomicAddDataContractVersionError  error
+	AtomicDeleteDataContractError      error
+	AtomicDeleteDataContractGroupError error
 	AtomicSetHistorianError            error
 	AtomicEditHistorianError           error
 	AtomicDeleteHistorianError         error
@@ -93,10 +92,10 @@ type MockConfigManager struct {
 	AtomicAddStreamProcessorCalled      bool
 	AtomicEditStreamProcessorCalled     bool
 	AtomicDeleteStreamProcessorCalled   bool
-	AtomicAddDataModelCalled            bool
-	AtomicEditDataModelCalled           bool
-	AtomicDeleteDataModelCalled         bool
 	AtomicAddDataContractCalled         bool
+	AtomicAddDataContractVersionCalled  bool
+	AtomicDeleteDataContractCalled      bool
+	AtomicDeleteDataContractGroupCalled bool
 	AtomicSetHistorianCalled            bool
 	AtomicEditHistorianCalled           bool
 	AtomicDeleteHistorianCalled         bool
@@ -162,6 +161,10 @@ func (m *MockConfigManager) writeConfig(ctx context.Context, cfg FullConfig) err
 		return ctx.Err()
 	}
 
+	// Same projection the real writeConfig does, so what a test reads back after a
+	// write is the merged shape rather than whatever it happened to seed.
+	cfg = cfg.withContractsProjected()
+
 	// Create the directory if it doesn't exist (using mock filesystem)
 	dir := filepath.Dir(DefaultConfigPath)
 	if err := m.MockFileSystem.EnsureDirectory(ctx, dir); err != nil {
@@ -195,13 +198,35 @@ func (m *MockConfigManager) writeConfig(ctx context.Context, cfg FullConfig) err
 }
 
 // WithConfig configures the mock to return the given config.
+//
+// Whichever on-disk shape the caller seeded is absorbed into Contracts, so the
+// mock behaves like a parsed file rather than a struct literal. Without this a test
+// that sets DataModels would hand every consumer an empty contract list, since
+// consumers read Contracts.
 func (m *MockConfigManager) WithConfig(cfg FullConfig) *MockConfigManager {
 	m.mutexReadAndWrite.Lock()
 	defer m.mutexReadAndWrite.Unlock()
 
-	m.Config = cfg
+	m.Config = absorbedForMock(cfg)
 
 	return m
+}
+
+// absorbedForMock fills in Contracts from the on-disk sections when a caller has
+// seeded those instead. An explicitly set Contracts is left alone, so a test can
+// still construct a contract set directly.
+func absorbedForMock(cfg FullConfig) FullConfig {
+	if cfg.Contracts != nil {
+		return cfg
+	}
+
+	if len(cfg.DataModels) == 0 && len(cfg.DataContracts) == 0 {
+		return cfg
+	}
+
+	cfg.Contracts, _ = AbsorbConfig(cfg.DataModels, cfg.DataContracts)
+
+	return cfg
 }
 
 // WithConfigError configures the mock to return the given error.
@@ -325,42 +350,42 @@ func (m *MockConfigManager) WithAtomicDeleteStreamProcessorError(err error) *Moc
 	return m
 }
 
-// WithAtomicAddDataModelError configures the mock to return the given error when AtomicAddDataModel is called.
-func (m *MockConfigManager) WithAtomicAddDataModelError(err error) *MockConfigManager {
-	m.mutexReadAndWrite.Lock()
-	defer m.mutexReadAndWrite.Unlock()
-
-	m.AtomicAddDataModelError = err
-
-	return m
-}
-
-// WithAtomicEditDataModelError configures the mock to return the given error when AtomicEditDataModel is called.
-func (m *MockConfigManager) WithAtomicEditDataModelError(err error) *MockConfigManager {
-	m.mutexReadAndWrite.Lock()
-	defer m.mutexReadAndWrite.Unlock()
-
-	m.AtomicEditDataModelError = err
-
-	return m
-}
-
-// WithAtomicDeleteDataModelError configures the mock to return the given error when AtomicDeleteDataModel is called.
-func (m *MockConfigManager) WithAtomicDeleteDataModelError(err error) *MockConfigManager {
-	m.mutexReadAndWrite.Lock()
-	defer m.mutexReadAndWrite.Unlock()
-
-	m.AtomicDeleteDataModelError = err
-
-	return m
-}
-
 // WithAtomicAddDataContractError configures the mock to return the given error when AtomicAddDataContract is called.
 func (m *MockConfigManager) WithAtomicAddDataContractError(err error) *MockConfigManager {
 	m.mutexReadAndWrite.Lock()
 	defer m.mutexReadAndWrite.Unlock()
 
 	m.AtomicAddDataContractError = err
+
+	return m
+}
+
+// WithAtomicAddDataContractVersionError configures the mock to return the given error when AtomicAddDataContractVersion is called.
+func (m *MockConfigManager) WithAtomicAddDataContractVersionError(err error) *MockConfigManager {
+	m.mutexReadAndWrite.Lock()
+	defer m.mutexReadAndWrite.Unlock()
+
+	m.AtomicAddDataContractVersionError = err
+
+	return m
+}
+
+// WithAtomicDeleteDataContractError configures the mock to return the given error when AtomicDeleteDataContract is called.
+func (m *MockConfigManager) WithAtomicDeleteDataContractError(err error) *MockConfigManager {
+	m.mutexReadAndWrite.Lock()
+	defer m.mutexReadAndWrite.Unlock()
+
+	m.AtomicDeleteDataContractError = err
+
+	return m
+}
+
+// WithAtomicDeleteDataContractGroupError configures the mock to return the given error when AtomicDeleteDataContractGroup is called.
+func (m *MockConfigManager) WithAtomicDeleteDataContractGroupError(err error) *MockConfigManager {
+	m.mutexReadAndWrite.Lock()
+	defer m.mutexReadAndWrite.Unlock()
+
+	m.AtomicDeleteDataContractGroupError = err
 
 	return m
 }
@@ -411,10 +436,10 @@ func (m *MockConfigManager) ResetCalls() {
 	m.AtomicAddStreamProcessorCalled = false
 	m.AtomicEditStreamProcessorCalled = false
 	m.AtomicDeleteStreamProcessorCalled = false
-	m.AtomicAddDataModelCalled = false
-	m.AtomicEditDataModelCalled = false
-	m.AtomicDeleteDataModelCalled = false
 	m.AtomicAddDataContractCalled = false
+	m.AtomicAddDataContractVersionCalled = false
+	m.AtomicDeleteDataContractCalled = false
+	m.AtomicDeleteDataContractGroupCalled = false
 	m.AtomicSetHistorianCalled = false
 	m.AtomicEditHistorianCalled = false
 	m.AtomicDeleteHistorianCalled = false
@@ -1029,157 +1054,8 @@ func (m *MockConfigManager) AtomicDeleteStreamProcessor(ctx context.Context, nam
 	return nil
 }
 
-// AtomicAddDataModel implements the ConfigManager interface.
-func (m *MockConfigManager) AtomicAddDataModel(ctx context.Context, name string, dmVersion DataModelVersion, description string) error {
-	m.mutexReadAndWrite.Lock()
-	defer m.mutexReadAndWrite.Unlock()
-
-	m.AtomicAddDataModelCalled = true
-
-	if m.AtomicAddDataModelError != nil {
-		return m.AtomicAddDataModelError
-	}
-
-	// get the current config
-	config, err := m.getConfigInternal(ctx, 0)
-	if err != nil {
-		return fmt.Errorf("failed to get config: %w", err)
-	}
-
-	// check for duplicate name before add
-	for _, dmc := range config.DataModels {
-		if dmc.Name == name {
-			return fmt.Errorf("another data model with name %q already exists – choose a unique name", name)
-		}
-	}
-
-	// add the data model to the config
-	config.DataModels = append(config.DataModels, DataModelsConfig{
-		Name:        name,
-		Description: description,
-		Versions: map[string]DataModelVersion{
-			"v1": dmVersion,
-		},
-	})
-
-	// write the config
-	if err := m.writeConfig(ctx, config); err != nil {
-		return fmt.Errorf("failed to write config: %w", err)
-	}
-
-	return nil
-}
-
-// AtomicEditDataModel implements the ConfigManager interface.
-func (m *MockConfigManager) AtomicEditDataModel(ctx context.Context, name string, dmVersion DataModelVersion, description string) error {
-	m.mutexReadAndWrite.Lock()
-	defer m.mutexReadAndWrite.Unlock()
-
-	m.AtomicEditDataModelCalled = true
-
-	if m.AtomicEditDataModelError != nil {
-		return m.AtomicEditDataModelError
-	}
-
-	// get the current config
-	config, err := m.getConfigInternal(ctx, 0)
-	if err != nil {
-		return fmt.Errorf("failed to get config: %w", err)
-	}
-
-	targetIndex := -1
-	// find the data model to edit
-	for i, dmc := range config.DataModels {
-		if dmc.Name == name {
-			targetIndex = i
-
-			break
-		}
-	}
-
-	if targetIndex == -1 {
-		return fmt.Errorf("data model with name %q not found", name)
-	}
-
-	// get the current data model
-	currentDataModel := config.DataModels[targetIndex]
-
-	// Find the highest version number to ensure we don't overwrite existing versions
-	var maxVersion = 0
-
-	for versionKey := range currentDataModel.Versions {
-		if strings.HasPrefix(versionKey, "v") {
-			if versionNum, err := strconv.Atoi(versionKey[1:]); err == nil {
-				if versionNum > maxVersion {
-					maxVersion = versionNum
-				}
-			}
-		}
-	}
-
-	// append the new version to the data model
-	nextVersion := maxVersion + 1
-	currentDataModel.Versions[fmt.Sprintf("v%d", nextVersion)] = dmVersion
-
-	// update the description
-	currentDataModel.Description = description
-
-	// edit the data model in the config
-	config.DataModels[targetIndex] = currentDataModel
-
-	// write the config
-	if err := m.writeConfig(ctx, config); err != nil {
-		return fmt.Errorf("failed to write config: %w", err)
-	}
-
-	return nil
-}
-
-// AtomicDeleteDataModel implements the ConfigManager interface.
-func (m *MockConfigManager) AtomicDeleteDataModel(ctx context.Context, name string) error {
-	m.mutexReadAndWrite.Lock()
-	defer m.mutexReadAndWrite.Unlock()
-
-	m.AtomicDeleteDataModelCalled = true
-
-	if m.AtomicDeleteDataModelError != nil {
-		return m.AtomicDeleteDataModelError
-	}
-
-	// get the current config
-	config, err := m.getConfigInternal(ctx, 0)
-	if err != nil {
-		return fmt.Errorf("failed to get config: %w", err)
-	}
-
-	// find the data model to delete
-	targetIndex := -1
-
-	for i, dmc := range config.DataModels {
-		if dmc.Name == name {
-			targetIndex = i
-
-			break
-		}
-	}
-
-	if targetIndex == -1 {
-		return fmt.Errorf("data model with name %q not found", name)
-	}
-
-	// delete the data model from the config
-	config.DataModels = append(config.DataModels[:targetIndex], config.DataModels[targetIndex+1:]...)
-
-	// write the config
-	if err := m.writeConfig(ctx, config); err != nil {
-		return fmt.Errorf("failed to write config: %w", err)
-	}
-
-	return nil
-}
-
 // AtomicAddDataContract implements the ConfigManager interface.
-func (m *MockConfigManager) AtomicAddDataContract(ctx context.Context, dataContract DataContractsConfig) error {
+func (m *MockConfigManager) AtomicAddDataContract(ctx context.Context, label string, structure map[string]Field, description string) error {
 	m.mutexReadAndWrite.Lock()
 	defer m.mutexReadAndWrite.Unlock()
 
@@ -1189,23 +1065,164 @@ func (m *MockConfigManager) AtomicAddDataContract(ctx context.Context, dataContr
 		return m.AtomicAddDataContractError
 	}
 
-	// get the current config
 	config, err := m.getConfigInternal(ctx, 0)
 	if err != nil {
 		return fmt.Errorf("failed to get config: %w", err)
 	}
 
-	// check for duplicate name before add
-	for _, dcc := range config.DataContracts {
-		if dcc.Name == dataContract.Name {
-			return fmt.Errorf("another data contract with name %q already exists – choose a unique name", dataContract.Name)
+	address := ContractAddress(label, "v1")
+
+	for _, contract := range config.Contracts {
+		if contract.Model == label {
+			return fmt.Errorf("another data contract with name %q already exists – choose a unique name", label)
+		}
+
+		if contract.Name == address {
+			return fmt.Errorf("the address %q is already in use – choose a unique name", address)
 		}
 	}
 
-	// add the data contract to the config
-	config.DataContracts = append(config.DataContracts, dataContract)
+	config.Contracts = append(config.Contracts, DataContract{
+		Name:        address,
+		Model:       label,
+		Version:     "v1",
+		Structure:   structure,
+		Description: description,
+	})
 
-	// write the config
+	if err := m.writeConfig(ctx, config); err != nil {
+		return fmt.Errorf("failed to write config: %w", err)
+	}
+
+	return nil
+}
+
+// AtomicAddDataContractVersion implements the ConfigManager interface.
+func (m *MockConfigManager) AtomicAddDataContractVersion(ctx context.Context, label string, structure map[string]Field, description string) (string, string, error) {
+	m.mutexReadAndWrite.Lock()
+	defer m.mutexReadAndWrite.Unlock()
+
+	m.AtomicAddDataContractVersionCalled = true
+
+	if m.AtomicAddDataContractVersionError != nil {
+		return "", "", m.AtomicAddDataContractVersionError
+	}
+
+	config, err := m.getConfigInternal(ctx, 0)
+	if err != nil {
+		return "", "", fmt.Errorf("failed to get config: %w", err)
+	}
+
+	if !hasGroup(config.Contracts, label) {
+		return "", "", fmt.Errorf("data model with name %q not found", label)
+	}
+
+	version := nextVersionKey(config.Contracts, label)
+	address := ContractAddress(label, version)
+
+	for i := range config.Contracts {
+		if config.Contracts[i].Model == label {
+			config.Contracts[i].Description = description
+		}
+	}
+
+	config.Contracts = append(config.Contracts, DataContract{
+		Name:        address,
+		Model:       label,
+		Version:     version,
+		Structure:   structure,
+		Description: description,
+	})
+
+	if err := m.writeConfig(ctx, config); err != nil {
+		return "", "", fmt.Errorf("failed to write config: %w", err)
+	}
+
+	return address, version, nil
+}
+
+// AtomicDeleteDataContract implements the ConfigManager interface.
+func (m *MockConfigManager) AtomicDeleteDataContract(ctx context.Context, name string) error {
+	m.mutexReadAndWrite.Lock()
+	defer m.mutexReadAndWrite.Unlock()
+
+	m.AtomicDeleteDataContractCalled = true
+
+	if m.AtomicDeleteDataContractError != nil {
+		return m.AtomicDeleteDataContractError
+	}
+
+	config, err := m.getConfigInternal(ctx, 0)
+	if err != nil {
+		return fmt.Errorf("failed to get config: %w", err)
+	}
+
+	target := -1
+
+	for i, contract := range config.Contracts {
+		if contract.Name == name {
+			target = i
+
+			break
+		}
+	}
+
+	if target == -1 {
+		return fmt.Errorf("data contract with name %q not found", name)
+	}
+
+	if refs := FindAddressReferences(config, name); len(refs) > 0 {
+		return fmt.Errorf("cannot delete data contract %q: still referenced by %s", name, describeReferences(refs))
+	}
+
+	if config.Contracts[target].Model == "" {
+		config.Contracts = append(config.Contracts[:target], config.Contracts[target+1:]...)
+	} else {
+		config.Contracts[target].Name = ""
+		config.Contracts[target].DefaultBridges = nil
+	}
+
+	if err := m.writeConfig(ctx, config); err != nil {
+		return fmt.Errorf("failed to write config: %w", err)
+	}
+
+	return nil
+}
+
+// AtomicDeleteDataContractGroup implements the ConfigManager interface.
+func (m *MockConfigManager) AtomicDeleteDataContractGroup(ctx context.Context, label string) error {
+	m.mutexReadAndWrite.Lock()
+	defer m.mutexReadAndWrite.Unlock()
+
+	m.AtomicDeleteDataContractGroupCalled = true
+
+	if m.AtomicDeleteDataContractGroupError != nil {
+		return m.AtomicDeleteDataContractGroupError
+	}
+
+	config, err := m.getConfigInternal(ctx, 0)
+	if err != nil {
+		return fmt.Errorf("failed to get config: %w", err)
+	}
+
+	if !hasGroup(config.Contracts, label) {
+		return fmt.Errorf("data model with name %q not found", label)
+	}
+
+	if refs := FindModelReferences(config, label); len(refs) > 0 {
+		return fmt.Errorf("cannot delete data contract %q: still referenced by %s", label, describeReferences(refs))
+	}
+
+	kept := make([]DataContract, 0, len(config.Contracts))
+
+	for _, contract := range config.Contracts {
+		if contract.Model != label {
+			kept = append(kept, contract)
+		}
+	}
+
+	config.Contracts = kept
+
 	if err := m.writeConfig(ctx, config); err != nil {
 		return fmt.Errorf("failed to write config: %w", err)
 	}

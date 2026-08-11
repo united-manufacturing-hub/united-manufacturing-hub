@@ -57,8 +57,9 @@ var _ = Describe("DeleteDataModelAction", func() {
 		mockConfigMgr = config.NewMockConfigManager()
 		outboundChannel = make(chan *models.UMHMessage, 10)
 
-		// Setup mock config with some existing data models
-		mockConfigMgr.Config = config.FullConfig{
+		// Seeded through WithConfig so the pre-merge sections get absorbed into
+		// contracts, which is what the action reads.
+		mockConfigMgr.WithConfig(config.FullConfig{
 			DataModels: []config.DataModelsConfig{
 				{
 					Name: "test-model",
@@ -85,7 +86,7 @@ var _ = Describe("DeleteDataModelAction", func() {
 					},
 				},
 			},
-		}
+		})
 
 		action = actions.NewDeleteDataModelAction(
 			userEmail,
@@ -198,7 +199,7 @@ var _ = Describe("DeleteDataModelAction", func() {
 				Expect(responseMap["deleted"]).To(BeTrue())
 
 				// Verify config manager was called
-				Expect(mockConfigMgr.AtomicDeleteDataModelCalled).To(BeTrue())
+				Expect(mockConfigMgr.AtomicDeleteDataContractGroupCalled).To(BeTrue())
 			})
 
 			It("should send correct action replies to outbound channel", func() {
@@ -239,7 +240,7 @@ var _ = Describe("DeleteDataModelAction", func() {
 
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("Failed to delete data model"))
-				Expect(mockConfigMgr.AtomicDeleteDataModelCalled).To(BeTrue())
+				Expect(mockConfigMgr.AtomicDeleteDataContractGroupCalled).To(BeTrue())
 			})
 		})
 
@@ -252,7 +253,7 @@ var _ = Describe("DeleteDataModelAction", func() {
 				Expect(err).ToNot(HaveOccurred())
 
 				// Configure mock to return error
-				mockConfigMgr.WithAtomicDeleteDataModelError(errors.New("mock delete error"))
+				mockConfigMgr.WithAtomicDeleteDataContractGroupError(errors.New("mock delete error"))
 			})
 
 			It("should return error", func() {
@@ -260,7 +261,7 @@ var _ = Describe("DeleteDataModelAction", func() {
 
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("Failed to delete data model"))
-				Expect(mockConfigMgr.AtomicDeleteDataModelCalled).To(BeTrue())
+				Expect(mockConfigMgr.AtomicDeleteDataContractGroupCalled).To(BeTrue())
 			})
 		})
 	})

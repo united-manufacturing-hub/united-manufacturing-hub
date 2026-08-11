@@ -491,16 +491,19 @@ var _ = Describe("AddDataModelAction", func() {
 				Expect(ok).To(BeTrue())
 				Expect(dataContractMap["name"]).To(Equal("_test-model_v1"))
 				Expect(dataContractMap["model"]).To(Equal("test-model:v1"))
-				Expect(dataContractMap["status"]).To(Equal("created"))
 
-				// Verify config manager was called for both data model and data contract
-				Expect(mockConfigMgr.AtomicAddDataModelCalled).To(BeTrue())
+				// No status field: with a single write there is no partial outcome to
+				// report. Its absence is the point, so it is asserted rather than assumed.
+				Expect(dataContractMap).NotTo(HaveKey("status"))
+
+				// Exactly one write, which is ENG-5541: the model and its contract used
+				// to be two, and a failure on the second left a model with no contract.
 				Expect(mockConfigMgr.AtomicAddDataContractCalled).To(BeTrue())
 			})
 
 		})
 
-		Context("when data contract creation fails", func() {
+		Context("when the write fails", func() {
 			BeforeEach(func() {
 				payload := models.AddDataModelPayload{
 					Name:        "test-model",
@@ -514,35 +517,20 @@ var _ = Describe("AddDataModelAction", func() {
 				err := action.Parse(structToEncodedMap(payload))
 				Expect(err).ToNot(HaveOccurred())
 
-				// Configure mock to fail data contract creation
 				mockConfigMgr.WithAtomicAddDataContractError(errors.New("data contract creation failed"))
 			})
 
-			It("should still succeed but indicate data contract creation failed", func() {
+			// This used to report success with a warning, leaving the instance with a
+			// data model and no contract -- invisible in the Console and impossible to
+			// fix from it. With one write there is no such state to land in, so the
+			// action fails outright.
+			It("should fail rather than report a partial success", func() {
 				response, metadata, err := action.Execute()
 
-				Expect(err).ToNot(HaveOccurred())
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("data contract creation failed"))
+				Expect(response).To(BeNil())
 				Expect(metadata).To(BeNil())
-				Expect(response).ToNot(BeNil())
-
-				responseMap, ok := response.(map[string]interface{})
-				Expect(ok).To(BeTrue())
-				Expect(responseMap["name"]).To(Equal("test-model"))
-				Expect(responseMap["description"]).To(Equal("Test data model"))
-				Expect(responseMap["version"]).To(Equal(1))
-
-				// Verify data contract was included in response with failed status
-				dataContract, exists := responseMap["dataContract"]
-				Expect(exists).To(BeTrue())
-				dataContractMap, ok := dataContract.(map[string]interface{})
-				Expect(ok).To(BeTrue())
-				Expect(dataContractMap["name"]).To(Equal("_test-model_v1"))
-				Expect(dataContractMap["model"]).To(Equal("test-model:v1"))
-				Expect(dataContractMap["status"]).To(Equal("failed"))
-
-				// Verify config manager was called for both operations
-				Expect(mockConfigMgr.AtomicAddDataModelCalled).To(BeTrue())
-				Expect(mockConfigMgr.AtomicAddDataContractCalled).To(BeTrue())
 			})
 		})
 
@@ -651,10 +639,9 @@ var _ = Describe("AddDataModelAction", func() {
 			Expect(ok).To(BeTrue())
 			Expect(dataContractMap["name"]).To(Equal("_complex-model_v1"))
 			Expect(dataContractMap["model"]).To(Equal("complex-model:v1"))
-			Expect(dataContractMap["status"]).To(Equal("created"))
+			Expect(dataContractMap).NotTo(HaveKey("status"))
 
-			// Verify config manager was called for both operations
-			Expect(mockConfigMgr.AtomicAddDataModelCalled).To(BeTrue())
+			// One write, not two.
 			Expect(mockConfigMgr.AtomicAddDataContractCalled).To(BeTrue())
 		})
 	})

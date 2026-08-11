@@ -1,4 +1,6 @@
 {
   "subjects": [],
-  "skipPrefixes": null
+  "skipPrefixes": [
+    "_raw-"
+  ]
 }

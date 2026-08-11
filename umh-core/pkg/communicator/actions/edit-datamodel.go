@@ -144,11 +144,10 @@ func (a *EditDataModelAction) Validate() error {
 		return fmt.Errorf("failed to get current config for validation: %w", err)
 	}
 
-	// Convert existing data models to the format expected by the validator
-	allDataModels := make(map[string]config.DataModelsConfig)
-	for _, dataModel := range currentConfig.DataModels {
-		allDataModels[dataModel.Name] = dataModel
-	}
+	// Derived from the merged contracts, not read from the config's own section: that
+	// section only holds what was last read from disk, so a contract added earlier in
+	// this same action would be invisible to the validator.
+	allDataModels := currentConfig.LegacyDataModelIndex()
 
 	// Validate with references and payload shapes (handles cases with no references gracefully)
 	if err := validator.ValidateWithReferences(a.ctx, dmVersion, allDataModels, currentConfig.PayloadShapes); err != nil {
@@ -187,7 +186,13 @@ func (a *EditDataModelAction) Execute() (interface{}, map[string]interface{}, er
 	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
 		"Adding new version to data model configuration...", a.outboundChannel, models.EditDataModel)
 
-	err := a.configManager.AtomicEditDataModel(a.ctx, a.payload.Name, dmVersion, a.payload.Description)
+	// One write, and it reports the version it minted. Previously this appended the
+	// version, re-read the config to work out which number it had been given, and
+	// then wrote again to add the contract -- so a concurrent edit between the two
+	// reads could attribute the wrong version, and a failure on the second write
+	// left a version no address pointed at.
+	dataContractName, versionStr, err := a.configManager.AtomicAddDataContractVersion(
+		a.ctx, a.payload.Name, dmVersion.Structure, a.payload.Description)
 	if err != nil {
 		errorMsg := fmt.Sprintf("Failed to edit data model: %v", err)
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
@@ -196,73 +201,17 @@ func (a *EditDataModelAction) Execute() (interface{}, map[string]interface{}, er
 		return nil, nil, fmt.Errorf("%s", errorMsg)
 	}
 
-	// Get the updated configuration to determine the new version number
-	fullConfig, err := a.configManager.GetConfig(a.ctx, 0)
+	newVersion, err := strconv.ParseUint(strings.TrimPrefix(versionStr, "v"), 10, 64)
 	if err != nil {
-		a.actionLogger.Warnf("Failed to get config to determine new version number: %v", err)
-		// Continue with execution, just use a placeholder version
-	}
-
-	// Find the new version number
-	newVersion := uint64(0)
-
-	if err == nil {
-		for _, dmc := range fullConfig.DataModels {
-			if dmc.Name == a.payload.Name {
-				var maxVersion uint64 = 0
-
-				for versionKey := range dmc.Versions {
-					if strings.HasPrefix(versionKey, "v") {
-						if versionNum, err := strconv.Atoi(versionKey[1:]); err == nil {
-							if uint64(versionNum) > maxVersion {
-								maxVersion = uint64(versionNum)
-							}
-						}
-					}
-				}
-
-				newVersion = maxVersion
-
-				break
-			}
-		}
-	}
-
-	if newVersion == 0 {
-		errorMsg := "Failed to edit data model: new version number not found"
+		errorMsg := fmt.Sprintf("Failed to edit data model: unexpected version %q", versionStr)
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
 			errorMsg, a.outboundChannel, models.EditDataModel)
 
 		return nil, nil, fmt.Errorf("%s", errorMsg)
 	}
 
-	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
-		"Creating data contract for new data model version...", a.outboundChannel, models.EditDataModel)
-
-	// Automatically create a data contract for the new version of the data model
-	versionStr := fmt.Sprintf("v%d", newVersion)
-	dataContractName := fmt.Sprintf("_%s_%s", a.payload.Name, versionStr) // Include version in contract name
-	dataContract := config.DataContractsConfig{
-		Name: dataContractName,
-		Model: &config.ModelRef{
-			Name:    a.payload.Name,
-			Version: versionStr,
-		},
-	}
-
-	dataContractErr := a.configManager.AtomicAddDataContract(a.ctx, dataContract)
-	if dataContractErr != nil {
-		// Log the error but don't fail the entire operation since the data model was successfully edited
-		a.actionLogger.Warnf("Failed to automatically create data contract for data model %s version %s: %v", a.payload.Name, versionStr, dataContractErr)
-		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
-			fmt.Sprintf("Data model edited successfully, but failed to create data contract: %v", dataContractErr), a.outboundChannel, models.EditDataModel)
-	} else {
-		a.actionLogger.Infof("Successfully created data contract %s for data model %s version %s", dataContractName, a.payload.Name, versionStr)
-		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
-			"Data contract created successfully", a.outboundChannel, models.EditDataModel)
-	}
-
-	// Create response with the data model information
+	// The response keeps its shape, minus dataContract.status: with one write there
+	// is no partial outcome left to report, and nothing in the Console read it.
 	response := map[string]interface{}{
 		"name":        a.payload.Name,
 		"description": a.payload.Description,
@@ -271,13 +220,6 @@ func (a *EditDataModelAction) Execute() (interface{}, map[string]interface{}, er
 		"dataContract": map[string]interface{}{
 			"name":  dataContractName,
 			"model": fmt.Sprintf("%s:%s", a.payload.Name, versionStr),
-			"status": func() string {
-				if dataContractErr != nil {
-					return "failed"
-				}
-
-				return "created"
-			}(),
 		},
 	}
 

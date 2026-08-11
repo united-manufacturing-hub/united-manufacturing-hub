@@ -938,8 +938,11 @@ func (s *RedpandaService) ReconcileManager(ctx context.Context, services service
 	if hasRunningRedpanda {
 		// Extract schema registry data from the SystemSnapshot
 		// This replaces the previous approach of using yaml:"-" tags in RedpandaConfig
-		dataModels := snapshot.CurrentConfig.DataModels
-		dataContracts := snapshot.CurrentConfig.DataContracts
+		// The registry still works in terms of the pre-merge pair, so the merged
+		// contracts are projected back into it here. Deriving the pair rather than
+		// reading the config's own sections is what keeps this correct after a
+		// mutation: those sections only hold what was last read from disk.
+		dataModels, dataContracts := config.ToLegacyConfig(snapshot.CurrentConfig.Contracts)
 		payloadShapes := snapshot.CurrentConfig.PayloadShapes
 
 		schemaRegistryErr := s.schemaRegistryManager.Reconcile(ctx, dataModels, dataContracts, payloadShapes)

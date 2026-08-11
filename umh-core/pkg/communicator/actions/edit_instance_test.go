@@ -514,8 +514,8 @@ func (w *writeFailingMockConfigManager) WriteYAMLConfigFromString(ctx context.Co
 	return w.mockConfigManager.WriteYAMLConfigFromString(ctx, config, expectedModTime)
 }
 
-// AtomicAddDataModel implements the required interface method but ensures the write fails.
-func (w *writeFailingMockConfigManager) AtomicAddDataModel(ctx context.Context, name string, dmVersion config.DataModelVersion, description string) error {
+// AtomicAddDataContract implements the required interface method but ensures the write fails.
+func (w *writeFailingMockConfigManager) AtomicAddDataContract(ctx context.Context, label string, structure map[string]config.Field, description string) error {
 	// Get the current config
 	configData, err := w.GetConfig(ctx, 0)
 	if err != nil {
@@ -532,26 +532,26 @@ func (w *writeFailingMockConfigManager) AtomicAddDataModel(ctx context.Context, 
 	return nil
 }
 
-// AtomicEditDataModel implements the required interface method but ensures the write fails.
-func (w *writeFailingMockConfigManager) AtomicEditDataModel(ctx context.Context, name string, dmVersion config.DataModelVersion, description string) error {
+// AtomicAddDataContractVersion implements the required interface method but ensures the write fails.
+func (w *writeFailingMockConfigManager) AtomicAddDataContractVersion(ctx context.Context, label string, structure map[string]config.Field, description string) (string, string, error) {
 	// Get the current config
 	configData, err := w.GetConfig(ctx, 0)
 	if err != nil {
-		return err
+		return "", "", err
 	}
 
-	// do not edit anything
+	// do not add anything
 
 	// Write config (will fail with this mock)
 	if err := w.writeConfig(ctx, configData); err != nil {
-		return err
+		return "", "", err
 	}
 
-	return nil
+	return "", "", nil
 }
 
-// AtomicDeleteDataModel implements the required interface method but ensures the write fails.
-func (w *writeFailingMockConfigManager) AtomicDeleteDataModel(ctx context.Context, name string) error {
+// AtomicDeleteDataContract implements the required interface method but ensures the write fails.
+func (w *writeFailingMockConfigManager) AtomicDeleteDataContract(ctx context.Context, name string) error {
 	// Get the current config
 	configData, err := w.GetConfig(ctx, 0)
 	if err != nil {
@@ -568,15 +568,15 @@ func (w *writeFailingMockConfigManager) AtomicDeleteDataModel(ctx context.Contex
 	return nil
 }
 
-// AtomicAddDataContract implements the required interface method but ensures the write fails.
-func (w *writeFailingMockConfigManager) AtomicAddDataContract(ctx context.Context, dataContract config.DataContractsConfig) error {
+// AtomicDeleteDataContractGroup implements the required interface method but ensures the write fails.
+func (w *writeFailingMockConfigManager) AtomicDeleteDataContractGroup(ctx context.Context, label string) error {
 	// Get the current config
 	configData, err := w.GetConfig(ctx, 0)
 	if err != nil {
 		return err
 	}
 
-	// do not add anything
+	// do not delete anything
 
 	// Write config (will fail with this mock)
 	if err := w.writeConfig(ctx, configData); err != nil {

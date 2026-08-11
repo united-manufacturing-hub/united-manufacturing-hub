@@ -37,7 +37,11 @@ func DataModelsFromConfig(ctx context.Context, configManager config.ConfigManage
 		return []models.DataModel{}, err
 	}
 
-	dataModels := fullConfig.DataModels
+	// Projected from the merged contracts rather than read from the config's own
+	// section, so a contract added this tick is visible before the file is re-read.
+	// The payload shape is unchanged; only the order can differ, since it now follows
+	// the contracts instead of the old dataModels section.
+	dataModels, _ := config.ToLegacyConfig(fullConfig.Contracts)
 	dataModelData := make([]models.DataModel, len(dataModels))
 
 	for i, dataModel := range dataModels {
@@ -89,7 +93,7 @@ func DataContractsFromConfig(ctx context.Context, configManager config.ConfigMan
 		return []models.DataContract{}, err
 	}
 
-	dataContracts := fullConfig.DataContracts
+	_, dataContracts := config.ToLegacyConfig(fullConfig.Contracts)
 	dataContractData := make([]models.DataContract, len(dataContracts))
 
 	for i, dataContract := range dataContracts {

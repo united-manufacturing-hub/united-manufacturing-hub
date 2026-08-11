@@ -91,14 +91,18 @@ type ConfigManager interface {
 	AtomicEditStreamProcessor(ctx context.Context, sp StreamProcessorConfig) (StreamProcessorConfig, error)
 	// AtomicDeleteStreamProcessor deletes a stream processor from the config atomically
 	AtomicDeleteStreamProcessor(ctx context.Context, name string) error
-	// AtomicAddDataModel adds a data model to the config atomically
-	AtomicAddDataModel(ctx context.Context, name string, dmVersion DataModelVersion, description string) error
-	// AtomicEditDataModel edits (append-only) a data model by adding a new version
-	AtomicEditDataModel(ctx context.Context, name string, dmVersion DataModelVersion, description string) error
-	// AtomicDeleteDataModel deletes a data model from the config atomically
-	AtomicDeleteDataModel(ctx context.Context, name string) error
-	// AtomicAddDataContract adds a data contract to the config atomically
-	AtomicAddDataContract(ctx context.Context, dataContract DataContractsConfig) error
+	// AtomicAddDataContract creates a contract group at version v1, addressed
+	// _<label>_v1. One write, where the pre-merge pair of calls took two.
+	AtomicAddDataContract(ctx context.Context, label string, structure map[string]Field, description string) error
+	// AtomicAddDataContractVersion appends the next version to a group and returns
+	// the address and version key it minted.
+	AtomicAddDataContractVersion(ctx context.Context, label string, structure map[string]Field, description string) (string, string, error)
+	// AtomicDeleteDataContract removes one address, leaving its structure behind as
+	// a definition so _refModel keeps resolving.
+	AtomicDeleteDataContract(ctx context.Context, name string) error
+	// AtomicDeleteDataContractGroup removes a whole group, refusing while anything
+	// still references it.
+	AtomicDeleteDataContractGroup(ctx context.Context, label string) error
 	// GetConfigAsString returns the current config as a string
 	// This function is used in the get-config-file action to retrieve the raw config file
 	// without any yaml parsing applied. This allows to display yaml anchors and change them
@@ -480,10 +484,12 @@ func (m *FileConfigManager) readAndParseConfig(ctx context.Context) (FullConfig,
 		return FullConfig{}, "", ctx.Err()
 	}
 
-	config, err := ParseConfig(data, ctx, false)
+	config, notices, err := ParseConfigWithNotices(data, ctx, false)
 	if err != nil {
 		return FullConfig{}, "", fmt.Errorf("failed to parse config file: %w", err)
 	}
+
+	m.logContractNotices(config, notices)
 
 	// Check if context is already cancelled
 	if ctx.Err() != nil {
@@ -516,6 +522,43 @@ func (m *FileConfigManager) readAndParseConfig(ctx context.Context) (FullConfig,
 
 	// Return both config and raw data for atomic cache update by caller
 	return config, string(data), nil
+}
+
+// logContractNotices surfaces what folding the two contract sections into one
+// decided about this file.
+//
+// Only two call sites do this -- here and WriteYAMLConfigFromString -- because
+// absorbing happens on every ParseConfig, and a single write parses three times.
+// Logging inside ParseConfig would report each decision three times per write and
+// train everyone to ignore it.
+func (m *FileConfigManager) logContractNotices(config FullConfig, notices []MigrationNotice) {
+	if config.ContractsDegraded {
+		// Loud, because the instance is now running in a mode nothing else reports:
+		// contracts are served from the file's own sections and mutations are
+		// refused until this is fixed.
+		m.logger.SentryError(deps.FeatureFSMv1ConfigManager, configManagerHierarchyPath,
+			errContractsNotLossless, "data_contract_conversion_not_lossless",
+			deps.String("path", m.configPath),
+			deps.Int("contracts", len(config.Contracts)))
+	}
+
+	for _, notice := range notices {
+		fields := []deps.Field{
+			deps.String("reason", notice.Reason),
+			deps.String("contract", notice.Contract),
+			deps.String("model", notice.Model),
+			deps.String("version", notice.Version),
+		}
+
+		if notice.Level == NoticeWarn {
+			m.logger.SentryWarn(deps.FeatureFSMv1ConfigManager, configManagerHierarchyPath,
+				"data_contract_migration_dropped", fields...)
+
+			continue
+		}
+
+		m.logger.Debug("data contract migration notice", fields...)
+	}
 }
 
 // FileConfigManagerWithBackoff wraps a FileConfigManager and implements backoff for GetConfig errors.
@@ -597,6 +640,13 @@ func (m *FileConfigManager) writeConfig(ctx context.Context, config FullConfig) 
 		return ctx.Err()
 	}
 
+	// Render contracts into the single merged section and drop the pre-merge models
+	// section. This is what migrates a config on its first write, and it must happen
+	// before the cache update at the end of this function -- caching the unprojected
+	// config would leave a view of the file that disagrees with the file itself for
+	// the rest of the process lifetime.
+	config = config.withContractsProjected()
+
 	// Create the directory if it doesn't exist
 	dir := filepath.Dir(m.configPath)
 	if err := m.fsService.EnsureDirectory(ctx, dir); err != nil {
@@ -665,6 +715,24 @@ func (m *FileConfigManager) WithConfigPath(configPath string) *FileConfigManager
 // Note: This function is exported primarily for use in runtime_config_test to provide
 // comprehensive test coverage of the configuration parsing functionality.
 func ParseConfig(data []byte, ctx context.Context, allowUnknownFields bool) (FullConfig, error) {
+	config, _, err := ParseConfigWithNotices(data, ctx, allowUnknownFields)
+
+	return config, err
+}
+
+// ParseConfigWithNotices is ParseConfig plus the record of what folding the two
+// contract sections into one decided. Callers that can surface those decisions to
+// the user should prefer it; ParseConfig discards them.
+//
+// Absorbing happens here rather than in readAndParseConfig because
+// WriteYAMLConfigFromString calls ParseConfig directly (see below) and caches the
+// result. Absorbing any higher up would leave that cache holding zero contracts
+// against a matching mtime, and the fast path would serve it with no error.
+func ParseConfigWithNotices(
+	data []byte,
+	ctx context.Context,
+	allowUnknownFields bool,
+) (FullConfig, []MigrationNotice, error) {
 	var rawConfig FullConfig
 
 	// First decode the YAML into the raw config structure using standard YAML functions
@@ -672,16 +740,27 @@ func ParseConfig(data []byte, ctx context.Context, allowUnknownFields bool) (Ful
 	dec.KnownFields(!allowUnknownFields) // Only reject unknown keys if allowUnknownFields is false
 
 	if err := dec.Decode(&rawConfig); err != nil {
-		return FullConfig{}, fmt.Errorf("failed to decode config: %w", err)
+		return FullConfig{}, nil, fmt.Errorf("failed to decode config: %w", err)
 	}
 
 	// Process templateRef resolution for protocol converters
 	processedConfig, err := convertYamlToSpec(rawConfig, ctx)
 	if err != nil {
-		return FullConfig{}, fmt.Errorf("failed to resolve protocol converter template references: %w", err)
+		return FullConfig{}, nil, fmt.Errorf(
+			"failed to resolve protocol converter template references: %w", err)
 	}
 
-	return processedConfig, nil
+	contracts, notices := AbsorbConfig(processedConfig.DataModels, processedConfig.DataContracts)
+	processedConfig.Contracts = contracts
+
+	// Verified before anything is allowed to rewrite the file. An unconvertible
+	// config keeps serving its own sections and refuses mutations, which is
+	// recoverable; a file overwritten with a shape we could not verify is not.
+	if len(contracts) > 0 && !ContractsAreLossless(contracts) {
+		processedConfig.ContractsDegraded = true
+	}
+
+	return processedConfig, notices, nil
 }
 
 // WithFileSystemService allows setting a custom filesystem service on the wrapped FileConfigManager
@@ -1177,7 +1256,7 @@ func (m *FileConfigManager) WriteYAMLConfigFromString(ctx context.Context, confi
 	// We already validated the config above, so this should succeed
 	// This parsing step is crucial as it converts the raw YAML to the proper spec config format,
 	// ensuring template references are resolved and the cache contains valid, usable config data
-	newConfig, err := ParseConfig([]byte(configStr), ctx, true) // Allow unknown fields for YAML anchors
+	newConfig, notices, err := ParseConfigWithNotices([]byte(configStr), ctx, true) // Allow unknown fields for YAML anchors
 	if err != nil {
 		// If parsing fails, invalidate cache to force fresh read later
 		m.cacheMu.Lock()
@@ -1189,6 +1268,10 @@ func (m *FileConfigManager) WriteYAMLConfigFromString(ctx context.Context, confi
 
 		return fmt.Errorf("failed to parse new config for cache update: %w", err)
 	}
+
+	// The two validation parses above deliberately discard their notices; logging
+	// them there would report every decision three times for one write.
+	m.logContractNotices(newConfig, notices)
 
 	// Update cache with the new config, raw data, and mod time
 	m.cacheMu.Lock()

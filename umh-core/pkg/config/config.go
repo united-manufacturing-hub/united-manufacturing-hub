@@ -34,13 +34,27 @@ type FullConfig struct {
 	Templates         TemplatesConfig           `yaml:"templates,omitempty"`         // Templates section with enforced structure for protocol converter
 	PayloadShapes     map[string]PayloadShape   `yaml:"payloadShapes,omitempty"`     // PayloadShapes section with enforced structure for payload shapes
 	Historian         *HistorianConfig          `yaml:"historian,omitempty"`         // Historian config; groups the timescale connection (and future backends) under historian:
-	DataModels        []DataModelsConfig        `yaml:"dataModels,omitempty"`        // DataModels section with enforced structure for data models
-	DataContracts     []DataContractsConfig     `yaml:"dataContracts,omitempty"`     // DataContracts section with enforced structure for data contracts
+	// Contracts is the merged view and the only contract field anything outside this
+	// package should read. Consumers wanting the pre-merge pair call ToLegacyConfig.
+	Contracts []DataContract `yaml:"-"`
+	// DataModels and DataContracts are the on-disk sections. DataModels exists only
+	// so files written before the merge still read; writeConfig clears it.
+	// DataContracts decodes both shapes -- see DataContractYAMLEntry.
+	//
+	// Read these directly only when serving a degraded config (see
+	// ContractsDegraded). Everywhere else they go stale the moment Contracts is
+	// mutated, which is what leak_test.go enforces.
+	DataModels        []DataModelsConfig        `yaml:"dataModels,omitempty"`        // pre-merge data models section
+	DataContracts     []DataContractYAMLEntry   `yaml:"dataContracts,omitempty"`     // data contracts section, either shape
 	DataFlow          []DataFlowComponentConfig `yaml:"dataFlow,omitempty"`          // DataFlow components to manage, can be updated while running
 	ProtocolConverter []ProtocolConverterConfig `yaml:"protocolConverter,omitempty"` // ProtocolConverter config, can be updated while runnnig
 	StreamProcessor   []StreamProcessorConfig   `yaml:"streamProcessor,omitempty"`   // StreamProcessor config, can be updated while running
 	Internal          InternalConfig            `yaml:"internal,omitempty"`          // Internal config, not to be used by the user, only to be used for testing internal components
 	Agent             AgentConfig               `yaml:"agent"`                       // Agent config, requires restart to take effect
+	// ContractsDegraded means absorbing this file's contracts was not provably
+	// lossless, so Contracts is not trustworthy enough to write back. Reads fall
+	// back to the two sections above and mutations are refused.
+	ContractsDegraded bool `yaml:"-"`
 }
 
 // TemplatesConfig defines the structure for the templates section.
@@ -310,9 +324,10 @@ type PayloadField struct {
 func (c FullConfig) Clone() FullConfig {
 	clone := FullConfig{
 		Agent:             c.Agent,
+		ContractsDegraded: c.ContractsDegraded,
 		PayloadShapes:     make(map[string]PayloadShape),
 		DataModels:        make([]DataModelsConfig, len(c.DataModels)),
-		DataContracts:     make([]DataContractsConfig, len(c.DataContracts)),
+		DataContracts:     make([]DataContractYAMLEntry, len(c.DataContracts)),
 		DataFlow:          make([]DataFlowComponentConfig, len(c.DataFlow)),
 		ProtocolConverter: make([]ProtocolConverterConfig, len(c.ProtocolConverter)),
 		StreamProcessor:   make([]StreamProcessorConfig, len(c.StreamProcessor)),
@@ -345,6 +360,18 @@ func (c FullConfig) Clone() FullConfig {
 	err = deepcopy.Copy(&clone.DataContracts, &c.DataContracts)
 	if err != nil {
 		return FullConfig{}
+	}
+
+	// Nil-ness is preserved deliberately: manager.go compares a cached config
+	// against FullConfig{} with reflect.DeepEqual to detect "nothing loaded yet",
+	// and a non-nil empty slice would defeat that check.
+	if c.Contracts != nil {
+		clone.Contracts = make([]DataContract, len(c.Contracts))
+
+		err = deepcopy.Copy(&clone.Contracts, &c.Contracts)
+		if err != nil {
+			return FullConfig{}
+		}
 	}
 
 	err = deepcopy.Copy(&clone.DataFlow, &c.DataFlow)

@@ -123,7 +123,7 @@ func (a *GetDataModelAction) Execute() (interface{}, map[string]interface{}, err
 	// Find the data model by name
 	var foundDataModel *config.DataModelsConfig
 
-	for _, dmc := range fullConfig.DataModels {
+	for _, dmc := range fullConfig.LegacyDataModels() {
 		if dmc.Name == a.payload.Name {
 			foundDataModel = &dmc
 
@@ -200,7 +200,7 @@ func (a *GetDataModelAction) convertConfigFieldsToModelsFields(configFields map[
 				visited[refKey] = true
 
 				// Find the referenced model in the full configuration
-				for _, dataModel := range fullConfig.DataModels {
+				for _, dataModel := range fullConfig.LegacyDataModels() {
 					if dataModel.Name == modelsModelRef.Name {
 						if modelVersion, exists := dataModel.Versions[modelsModelRef.Version]; exists {
 							// Recursively convert the referenced model's structure

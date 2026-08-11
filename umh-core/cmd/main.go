@@ -71,6 +71,13 @@ import (
 )
 
 func main() {
+	// Handled before anything is initialized: this is a one-shot file conversion, run
+	// against a stopped instance, so it must not start a supervisor, open Sentry or
+	// touch anything beyond the config file.
+	if len(os.Args) > 1 && os.Args[1] == downgradeConfigCommand {
+		os.Exit(runDowngradeConfig(os.Args[2:]))
+	}
+
 	// Initialize the global logger first thing
 	logger.Initialize()
 
@@ -381,10 +388,12 @@ func ensureS6RepositoryDirectory(log *zap.SugaredLogger) error {
 // state. Two fingerprints that are equal mean no meaningful change occurred.
 func snapshotFingerprint(snapshot *fsm.SystemSnapshot, extractStatusReason func(managerName string, instance *fsm.FSMInstanceSnapshot) string) string {
 	lines := make([]string, 0, 32)
+
 	managerNames := make([]string, 0, len(snapshot.Managers))
 	for name := range snapshot.Managers {
 		managerNames = append(managerNames, name)
 	}
+
 	sort.Strings(managerNames)
 
 	for _, managerName := range managerNames {
@@ -392,12 +401,14 @@ func snapshotFingerprint(snapshot *fsm.SystemSnapshot, extractStatusReason func(
 		if manager == nil {
 			continue
 		}
+
 		instances := manager.GetInstances()
 
 		instanceNames := make([]string, 0, len(instances))
 		for name := range instances {
 			instanceNames = append(instanceNames, name)
 		}
+
 		sort.Strings(instanceNames)
 
 		for _, instanceName := range instanceNames {
@@ -405,6 +416,7 @@ func snapshotFingerprint(snapshot *fsm.SystemSnapshot, extractStatusReason func(
 			if inst == nil {
 				continue
 			}
+
 			reason := extractStatusReason(managerName, inst)
 			lines = append(lines, fmt.Sprintf("%s|%s|%s|%s|%s",
 				managerName, instanceName, inst.CurrentState, inst.DesiredState, reason))
@@ -412,6 +424,7 @@ func snapshotFingerprint(snapshot *fsm.SystemSnapshot, extractStatusReason func(
 
 		lines = append(lines, fmt.Sprintf("%s|count|%d", managerName, len(instances)))
 	}
+
 	return strings.Join(lines, "\n")
 }
 
@@ -434,6 +447,7 @@ func SystemSnapshotLogger(ctx context.Context, controlLoop *control.ControlLoop)
 		if instance.LastObservedState == nil {
 			return ""
 		}
+
 		switch managerName {
 		case "BenthosManagerCore":
 			if s, ok := instance.LastObservedState.(*benthos.BenthosObservedStateSnapshot); ok {
@@ -460,6 +474,7 @@ func SystemSnapshotLogger(ctx context.Context, controlLoop *control.ControlLoop)
 				return s.ServiceInfoSnapshot.StatusReason
 			}
 		}
+
 		return ""
 	}
 
@@ -481,6 +496,7 @@ func SystemSnapshotLogger(ctx context.Context, controlLoop *control.ControlLoop)
 			if fingerprint == lastFingerprint {
 				continue
 			}
+
 			lastFingerprint = fingerprint
 
 			snap_logger.Infof("=== System Snapshot (Tick %d) - %d Managers ===",
@@ -491,6 +507,7 @@ func SystemSnapshotLogger(ctx context.Context, controlLoop *control.ControlLoop)
 			for name := range snapshot.Managers {
 				managerNames = append(managerNames, name)
 			}
+
 			sort.Strings(managerNames)
 
 			for _, managerName := range managerNames {
@@ -498,6 +515,7 @@ func SystemSnapshotLogger(ctx context.Context, controlLoop *control.ControlLoop)
 				if manager == nil {
 					continue
 				}
+
 				instances := manager.GetInstances()
 
 				if len(instances) == 0 {
@@ -511,6 +529,7 @@ func SystemSnapshotLogger(ctx context.Context, controlLoop *control.ControlLoop)
 					for name := range instances {
 						instanceNames = append(instanceNames, name)
 					}
+
 					sort.Strings(instanceNames)
 
 					for _, instanceName := range instanceNames {
@@ -518,9 +537,11 @@ func SystemSnapshotLogger(ctx context.Context, controlLoop *control.ControlLoop)
 						if instance == nil {
 							continue
 						}
+
 						statusReason := extractStatusReason(managerName, instance)
 
 						stateIcon := "⚠"
+
 						switch instance.CurrentState {
 						case "active":
 							stateIcon = "✅"

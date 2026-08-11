@@ -144,11 +144,10 @@ func (a *AddDataModelAction) Validate() error {
 		return fmt.Errorf("failed to get current config for validation: %w", err)
 	}
 
-	// Convert existing data models to the format expected by the validator
-	allDataModels := make(map[string]config.DataModelsConfig)
-	for _, dataModel := range currentConfig.DataModels {
-		allDataModels[dataModel.Name] = dataModel
-	}
+	// Derived from the merged contracts, not read from the config's own section: that
+	// section only holds what was last read from disk, so a contract added earlier in
+	// this same action would be invisible to the validator.
+	allDataModels := currentConfig.LegacyDataModelIndex()
 
 	// Validate with references and payload shapes (handles cases with no references gracefully)
 	if err := validator.ValidateWithReferences(a.ctx, dmVersion, allDataModels, currentConfig.PayloadShapes); err != nil {
@@ -185,10 +184,14 @@ func (a *AddDataModelAction) Execute() (interface{}, map[string]interface{}, err
 	}
 
 	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
-		"Adding data model to configuration...", a.outboundChannel, models.AddDataModel)
+		"Adding data contract to configuration...", a.outboundChannel, models.AddDataModel)
 
-	// Use shared context for execution
-	err := a.configManager.AtomicAddDataModel(a.ctx, a.payload.Name, dmVersion, a.payload.Description)
+	// One write, where this used to be two: a data model followed by its data
+	// contract. When the second failed the instance was left with a model and no
+	// contract -- reported as a success with a warning, and invisible in the Console
+	// (ENG-5541). There is now nothing to leave half-done.
+	err := a.configManager.AtomicAddDataContract(
+		a.ctx, a.payload.Name, dmVersion.Structure, a.payload.Description)
 	if err != nil {
 		errorMsg := fmt.Sprintf("Failed to add data model: %v", err)
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
@@ -197,32 +200,10 @@ func (a *AddDataModelAction) Execute() (interface{}, map[string]interface{}, err
 		return nil, nil, fmt.Errorf("%s", errorMsg)
 	}
 
-	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
-		"Creating data contract for data model...", a.outboundChannel, models.AddDataModel)
+	dataContractName := config.ContractAddress(a.payload.Name, "v1")
 
-	// Automatically create a data contract for the newly added data model
-	dataContractName := "_" + a.payload.Name + "_v1" // Data contract names start with underscore, first version is always v1
-	dataContract := config.DataContractsConfig{
-		Name: dataContractName,
-		Model: &config.ModelRef{
-			Name:    a.payload.Name,
-			Version: "v1", // First version is always v1
-		},
-	}
-
-	dataContractErr := a.configManager.AtomicAddDataContract(a.ctx, dataContract)
-	if dataContractErr != nil {
-		// Log the error but don't fail the entire operation since the data model was successfully added
-		a.actionLogger.Warnf("Failed to automatically create data contract for data model %s: %v", a.payload.Name, dataContractErr)
-		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
-			fmt.Sprintf("Data model added successfully, but failed to create data contract: %v", dataContractErr), a.outboundChannel, models.AddDataModel)
-	} else {
-		a.actionLogger.Infof("Successfully created data contract %s for data model %s", dataContractName, a.payload.Name)
-		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
-			"Data contract created successfully", a.outboundChannel, models.AddDataModel)
-	}
-
-	// Create response with the data model information
+	// The response keeps its shape, minus dataContract.status: with one write there
+	// is no partial outcome left to report, and nothing in the Console read it.
 	response := map[string]interface{}{
 		"name":        a.payload.Name,
 		"description": a.payload.Description,
@@ -231,13 +212,6 @@ func (a *AddDataModelAction) Execute() (interface{}, map[string]interface{}, err
 		"dataContract": map[string]interface{}{
 			"name":  dataContractName,
 			"model": a.payload.Name + ":v1",
-			"status": func() string {
-				if dataContractErr != nil {
-					return "failed"
-				}
-
-				return "created"
-			}(),
 		},
 	}
 

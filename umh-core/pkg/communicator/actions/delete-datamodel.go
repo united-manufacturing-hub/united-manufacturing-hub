@@ -108,7 +108,11 @@ func (a *DeleteDataModelAction) Execute() (interface{}, map[string]interface{}, 
 	SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionExecuting,
 		"Removing data model from configuration...", a.outboundChannel, models.DeleteDataModel)
 
-	err := a.configManager.AtomicDeleteDataModel(ctx, a.payload.Name)
+	// Refuses while anything still references the group, naming the referrer and how
+	// it was found. The pre-merge delete removed the model and left its contract
+	// pointing at nothing, which silently stopped validating an address that may
+	// still have been receiving data.
+	err := a.configManager.AtomicDeleteDataContractGroup(ctx, a.payload.Name)
 	if err != nil {
 		errorMsg := fmt.Sprintf("Failed to delete data model: %v", err)
 		SendActionReply(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,

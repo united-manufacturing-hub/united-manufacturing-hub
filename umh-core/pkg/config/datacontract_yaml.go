@@ -40,24 +40,59 @@ type DataContractVersion struct {
 
 // MarshalYAML writes a single address as a scalar so the ordinary case stays
 // readable, and several as a list.
+//
+// Built as a node rather than a map or a struct because the key order is
+// deliberate -- the address first, the structure last, since the structure is the
+// long part -- and neither a map (yaml.v3 sorts its keys) nor a struct (the
+// alignment linter reorders its fields) can express that.
 func (v DataContractVersion) MarshalYAML() (interface{}, error) {
-	out := map[string]interface{}{}
+	out := newMappingNode()
 
 	switch len(v.Names) {
 	case 0:
 	case 1:
-		out["name"] = v.Names[0]
+		if err := out.add("name", v.Names[0]); err != nil {
+			return nil, err
+		}
 	default:
-		out["name"] = v.Names
+		if err := out.add("name", v.Names); err != nil {
+			return nil, err
+		}
 	}
 
 	if len(v.DefaultBridges) > 0 {
-		out["default_bridges"] = v.DefaultBridges
+		if err := out.add("default_bridges", v.DefaultBridges); err != nil {
+			return nil, err
+		}
 	}
 
-	out["structure"] = v.Structure
+	if err := out.add("structure", v.Structure); err != nil {
+		return nil, err
+	}
 
-	return out, nil
+	return out.node, nil
+}
+
+// orderedMapping builds a YAML mapping whose key order is what it was written in.
+type orderedMapping struct {
+	node *yaml.Node
+}
+
+func newMappingNode() orderedMapping {
+	return orderedMapping{node: &yaml.Node{Kind: yaml.MappingNode}}
+}
+
+func (m orderedMapping) add(key string, value interface{}) error {
+	encoded := &yaml.Node{}
+	if err := encoded.Encode(value); err != nil {
+		return fmt.Errorf("encoding %s: %w", key, err)
+	}
+
+	m.node.Content = append(m.node.Content,
+		&yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: key},
+		encoded)
+
+	return nil
 }
 
 // decodeNames accepts a scalar address or a list of them.
@@ -97,12 +132,69 @@ type DataContractYAMLEntry struct {
 	Versions map[string]DataContractVersion `yaml:"versions,omitempty"`
 	// LegacyModelRef is set only by the pre-merge form. Never written back.
 	LegacyModelRef *ModelRef `yaml:"-"`
+	Model          string    `yaml:"model,omitempty"`
+	Name           string    `yaml:"name,omitempty"`
+	Description    string    `yaml:"description,omitempty"`
 	// DefaultBridges at entry level belongs to the legacy form; the grouped form
 	// carries it per version, which is where it actually sits.
 	DefaultBridges []map[string]interface{} `yaml:"default_bridges,omitempty"`
-	Model          string                   `yaml:"model,omitempty"`
-	Name           string                   `yaml:"name,omitempty"`
-	Description    string                   `yaml:"description,omitempty"`
+}
+
+// dataContractEntryOut is the marshalling form of an entry.
+//
+// A struct rather than a map so the field order is stable and readable -- yaml.v3
+// sorts map keys, which would put default_bridges above the model it belongs to.
+// Model is typed loosely because it is a label in the merged shape and a
+// {name, version} mapping in the pre-merge one, and downgrade-config has to emit
+// the latter.
+//
+// MarshalYAML writes whichever of the three forms this entry holds.
+//
+// LegacyModelRef would otherwise be dropped: it is tagged `yaml:"-"` so a normal
+// write can never emit the pre-merge shape by accident. downgrade-config is the one
+// caller that wants it, so it is spelled out here rather than made reachable through
+// a struct tag.
+func (e DataContractYAMLEntry) MarshalYAML() (interface{}, error) {
+	out := newMappingNode()
+
+	if e.Name != "" {
+		if err := out.add("name", e.Name); err != nil {
+			return nil, err
+		}
+	}
+
+	// A label in the merged shape, a {name, version} mapping in the pre-merge one.
+	switch {
+	case e.LegacyModelRef != nil:
+		if err := out.add("model", e.LegacyModelRef); err != nil {
+			return nil, err
+		}
+	case e.Model != "":
+		if err := out.add("model", e.Model); err != nil {
+			return nil, err
+		}
+	}
+
+	if e.Description != "" {
+		if err := out.add("description", e.Description); err != nil {
+			return nil, err
+		}
+	}
+
+	if len(e.DefaultBridges) > 0 {
+		if err := out.add("default_bridges", e.DefaultBridges); err != nil {
+			return nil, err
+		}
+	}
+
+	// Last, because it is the long part.
+	if len(e.Versions) > 0 {
+		if err := out.add("versions", e.Versions); err != nil {
+			return nil, err
+		}
+	}
+
+	return out.node, nil
 }
 
 // entryKeys and versionKeys are the only keys accepted on each mapping.

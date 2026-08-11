@@ -31,11 +31,11 @@ import (
 //     as _raw, with nothing to validate against
 type DataContract struct {
 	Structure      map[string]Field
-	DefaultBridges []map[string]interface{}
 	Name           string
 	Model          string
 	Version        string
 	Description    string
+	DefaultBridges []map[string]interface{}
 }
 
 // MigrationNoticeLevel separates "this changed and you should look" from "this is
@@ -58,6 +58,12 @@ type MigrationNotice struct {
 	Model    string
 	Version  string
 	Reason   string
+	// Dropped separates "something is gone" from "something is wrong".
+	//
+	// Both are worth a warning, but only the first is information loss, and the
+	// round-trip property is about loss alone. An orphaned contract warns loudly and
+	// is kept; a duplicate address warns and is not.
+	Dropped bool
 }
 
 // AbsorbConfig folds the two on-disk sections into one flat contract list.
@@ -94,6 +100,7 @@ func AbsorbConfig(
 					Version:  c.Version,
 					Reason: fmt.Sprintf(
 						"dropped: another contract is already published at %q", c.Name),
+					Dropped: true,
 				})
 
 				return
@@ -118,6 +125,7 @@ func AbsorbConfig(
 					Model:   ref.Name,
 					Version: ref.Version,
 					Reason:  "dropped: a data contract with no name has no address to enforce",
+					Dropped: true,
 				})
 
 				continue
@@ -125,14 +133,25 @@ func AbsorbConfig(
 
 			version, ok := modelIndex[modelKey(ref.Name, ref.Version)]
 			if !ok {
+				// Kept as a bare address, not dropped. The address exists and may still
+				// be receiving data; dropping it here would remove its schema registry
+				// subjects on the next reconcile, silently ending enforcement on a live
+				// topic. As a bare address it keeps its subjects, shows up in the
+				// Console as a contract with no definition, and can be deleted
+				// deliberately.
 				notices = append(notices, MigrationNotice{
 					Level:    NoticeWarn,
 					Contract: entry.Name,
 					Model:    ref.Name,
 					Version:  ref.Version,
 					Reason: fmt.Sprintf(
-						"dropped: it points at data model %q version %q, which does not exist",
-						ref.Name, ref.Version),
+						"kept as an address with no structure: it points at data model %q "+
+							"version %q, which does not exist", ref.Name, ref.Version),
+				})
+
+				addNamed(DataContract{
+					Name:           entry.Name,
+					DefaultBridges: entry.DefaultBridges,
 				})
 
 				continue
@@ -151,8 +170,9 @@ func AbsorbConfig(
 
 		case entry.Model == "" && len(entry.Versions) > 0:
 			notices = append(notices, MigrationNotice{
-				Level:  NoticeWarn,
-				Reason: "dropped: versions were given without a model to group them under",
+				Level:   NoticeWarn,
+				Reason:  "dropped: versions were given without a model to group them under",
+				Dropped: true,
 			})
 
 		case len(entry.Versions) > 0:
@@ -167,6 +187,7 @@ func AbsorbConfig(
 						Model:   entry.Model,
 						Version: versionKey,
 						Reason:  "default_bridges dropped: a version with no address cannot carry it",
+						Dropped: true,
 					})
 				}
 
@@ -204,8 +225,9 @@ func AbsorbConfig(
 
 		default:
 			notices = append(notices, MigrationNotice{
-				Level:  NoticeWarn,
-				Reason: "dropped: an entry with no name, no model and no versions describes nothing",
+				Level:   NoticeWarn,
+				Reason:  "dropped: an entry with no name, no model and no versions describes nothing",
+				Dropped: true,
 			})
 		}
 	}
@@ -213,30 +235,53 @@ func AbsorbConfig(
 	// Every model version no contract claimed becomes a definition. Nothing
 	// changes for it: it publishes no subject and is addressable by nothing,
 	// which is what it did before. Giving it an address is a separate decision.
+	emitted := make(map[string]bool, len(models))
+
 	for _, model := range models {
 		if model.Name == "" {
 			// A structure with no lineage and no address describes nothing, and
 			// cannot be written back in either shape.
 			notices = append(notices, MigrationNotice{
-				Level:  NoticeWarn,
-				Reason: "dropped: a data model with no name cannot be addressed or referenced",
+				Level:   NoticeWarn,
+				Reason:  "dropped: a data model with no name cannot be addressed or referenced",
+				Dropped: true,
 			})
 
 			continue
 		}
 
 		for _, versionKey := range sortedLegacyVersionKeys(model.Versions) {
-			if claimed[modelKey(model.Name, versionKey)] {
+			key := modelKey(model.Name, versionKey)
+
+			// emitted, not only claimed: two models can share a name, and emitting one
+			// definition per declaration would put two contracts on one
+			// (model, version). The merged shape keys versions by name, so the second
+			// would silently overwrite the first on write, losing a structure.
+			if claimed[key] || emitted[key] {
 				continue
 			}
+
+			emitted[key] = true
+
+			// Taken from the index rather than from this declaration, so a duplicate
+			// name resolves last-wins here exactly as it does in the schema registry's
+			// own map. The two agreeing is what makes the choice invisible.
+			version := modelIndex[key]
 
 			contracts = append(contracts, DataContract{
 				Model:       model.Name,
 				Version:     versionKey,
-				Structure:   model.Versions[versionKey].Structure,
-				Description: model.Description,
+				Structure:   version.structure,
+				Description: version.description,
 			})
 		}
+	}
+
+	// Nil rather than an empty slice: manager.go compares a cached config against
+	// FullConfig{} with reflect.DeepEqual to mean "nothing loaded yet", and a
+	// non-nil empty slice would make a genuinely empty config look loaded.
+	if len(contracts) == 0 {
+		return nil, notices
 	}
 
 	return contracts, notices
@@ -246,10 +291,13 @@ func AbsorbConfig(
 // pre-merge sections. This is what `downgrade-config` uses, and what consumers
 // that still expect the old views are handed.
 func ToLegacyConfig(contracts []DataContract) ([]DataModelsConfig, []DataContractsConfig) {
+	// Allocated rather than declared so that indexing models[idx] below is provably
+	// in range; the nil-analysis pass cannot see that idx always came from a preceding
+	// append.
 	var (
-		models      []DataModelsConfig
+		models      = make([]DataModelsConfig, 0, len(contracts))
 		modelAt     = map[string]int{}
-		legacyConts []DataContractsConfig
+		legacyConts = make([]DataContractsConfig, 0, len(contracts))
 	)
 
 	for _, c := range contracts {
@@ -289,8 +337,9 @@ func ToLegacyConfig(contracts []DataContract) ([]DataModelsConfig, []DataContrac
 // ToYAMLEntries writes the flat contracts back as the merged section, grouped by
 // model label. This is what gets marshalled to disk.
 func ToYAMLEntries(contracts []DataContract) []DataContractYAMLEntry {
+	// Allocated for the same reason as in ToLegacyConfig.
 	var (
-		entries []DataContractYAMLEntry
+		entries = make([]DataContractYAMLEntry, 0, len(contracts))
 		groupAt = map[string]int{}
 	)
 
@@ -383,9 +432,10 @@ func indexModels(models []DataModelsConfig) (map[string]modelVersionEntry, []Mig
 
 		if seen[model.Name] {
 			notices = append(notices, MigrationNotice{
-				Level:  NoticeWarn,
-				Model:  model.Name,
-				Reason: fmt.Sprintf("data model %q is declared more than once; the last one wins", model.Name),
+				Level:   NoticeWarn,
+				Model:   model.Name,
+				Reason:  fmt.Sprintf("data model %q is declared more than once; the last one wins", model.Name),
+				Dropped: true,
 			})
 		}
 

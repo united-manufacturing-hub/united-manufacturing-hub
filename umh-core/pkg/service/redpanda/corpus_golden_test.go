@@ -77,8 +77,14 @@ func snapshotOf(name string) corpusSnapshot {
 
 	registry := NewSchemaRegistry()
 
+	// Through the merged path, exactly as redpanda.go does it. Before the merge this
+	// read the two sections straight off the config; that it now goes contracts ->
+	// ToLegacyConfig -> translate and produces byte-identical goldens is the evidence
+	// that the merge changed no subject name.
+	dataModels, dataContracts := config.ToLegacyConfig(cfg.Contracts)
+
 	subjects, skipPrefixes, translateErr := registry.translateToSchemas(
-		ctx, cfg.DataModels, cfg.DataContracts, cfg.PayloadShapes,
+		ctx, dataModels, dataContracts, cfg.PayloadShapes,
 	)
 
 	snap := corpusSnapshot{

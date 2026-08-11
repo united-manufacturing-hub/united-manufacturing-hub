@@ -469,8 +469,16 @@ func (s *SchemaRegistry) translateToSchemas(ctx context.Context, dataModels []co
 		default:
 		}
 
-		// Skip contracts without model references (invalid but non-fatal)
+		// A contract with no model has no structure, so it produces no subjects -- but
+		// its prefix is still protected from deletion.
+		//
+		// Deleting those subjects would silently stop validating an address that may
+		// still be published to: the messages keep flowing and the enforcement is
+		// simply gone, with nothing reporting it. Removing the contract from
+		// config.yaml is the explicit way to drop them.
 		if contract.Model == nil {
+			skipPrefixes = append(skipPrefixes, contract.Name+"-")
+
 			continue
 		}
 
