@@ -51,11 +51,28 @@ const (
 )
 
 const (
-	DefaultRedpandaTopicDefaultTopicRetentionMs          = 604800000 // 7 days
-	DefaultRedpandaTopicDefaultTopicRetentionBytes       = 0
+	DefaultRedpandaTopicDefaultTopicRetentionMs    = 604800000 // 7 days
+	DefaultRedpandaTopicDefaultTopicRetentionBytes = 0
+	// DefaultRedpandaTopicDefaultTopicCompressionAlgorithm is snappy, which shrinks a
+	// typical 200 B JSON payload to roughly 50-70 B.
 	DefaultRedpandaTopicDefaultTopicCompressionAlgorithm = "snappy"
-	DefaultRedpandaTopicDefaultTopicCleanupPolicy        = "compact"
-	DefaultRedpandaTopicDefaultTopicSegmentMs            = 3600000 // 1 hour in milliseconds
+	// DefaultRedpandaTopicDefaultTopicCleanupPolicy is the fallback applied when a
+	// config.yaml omits defaultTopicCleanupPolicy. It stays "compact" so upgrading an
+	// existing instance never silently changes how that instance retains data. New
+	// instances get NewInstanceRedpandaTopicCleanupPolicy written into their config
+	// instead.
+	DefaultRedpandaTopicDefaultTopicCleanupPolicy = "compact"
+	DefaultRedpandaTopicDefaultTopicSegmentMs     = 3600000 // 1 hour in milliseconds
+)
+
+// Topic retention defaults written into the config.yaml that an instance creates on
+// its first boot. "delete" with a 7-day retention keeps 7 days of raw records, so a
+// new consumer group can replay the full history of umh.messages; under "compact",
+// closed segments collapse to the latest value per umh_topic key and that history is
+// gone. Existing instances keep whatever policy their config already resolves to.
+const (
+	NewInstanceRedpandaTopicCleanupPolicy = "delete"
+	NewInstanceRedpandaTopicRetentionMs   = 604800000 // 7 days
 )
 
 const (

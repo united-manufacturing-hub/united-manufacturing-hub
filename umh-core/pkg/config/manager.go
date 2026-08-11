@@ -278,6 +278,13 @@ func (m *FileConfigManager) GetConfigWithOverwritesOrCreateNew(ctx context.Conte
 		if err != nil {
 			return FullConfig{}, fmt.Errorf("failed to get config that exists: %w", err)
 		}
+	default:
+		// First boot of this instance: there is no config.yaml yet, so write the topic
+		// retention defaults we want new instances to start with. These are pinned in
+		// the file rather than left to the normalizer defaults so that upgrading an
+		// existing instance keeps whatever retention behaviour it already has.
+		config.Internal.Redpanda.RedpandaServiceConfig.Topic.DefaultTopicCleanupPolicy = constants.NewInstanceRedpandaTopicCleanupPolicy
+		config.Internal.Redpanda.RedpandaServiceConfig.Topic.DefaultTopicRetentionMs = constants.NewInstanceRedpandaTopicRetentionMs
 	}
 
 	// Apply overrides
