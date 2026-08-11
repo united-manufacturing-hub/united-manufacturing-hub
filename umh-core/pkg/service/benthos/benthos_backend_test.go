@@ -77,8 +77,9 @@ var _ = Describe("USE_FSMV2_BENTHOS_MONITOR flag wiring", func() {
 		})
 
 		// Every spelling env.GetAsBool accepts must select the fsmv2 backend. "ON"
-		// is the one that matters most: it is what the CPU measurement rig and
-		// every sibling flag (USE_FSMV2_TRANSPORT=ON, cmd/main.go) use. Reading
+		// is the one that matters most: it is what the CPU measurement rig uses,
+		// and every sibling flag reads through env.GetAsBool the same way
+		// (USE_FSMV2_PROTOCOL_CONVERTER, cmd/main.go). Reading
 		// this flag with strconv.ParseBool instead of env.GetAsBool rejected "ON",
 		// so a benchmark run set the flag on, silently got fsmv1 on both arms, and
 		// measured no difference. Unit tests using only "true" could not see it.
