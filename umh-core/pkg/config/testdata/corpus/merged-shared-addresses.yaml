@@ -1,0 +1,12 @@
+agent:
+  metricsPort: 8080
+# One structure, several addresses. A single `name` would silently drop the second,
+# which would stop validating a topic that is still receiving data.
+dataContracts:
+  - model: pump
+    versions:
+      v1:
+        name: [_pump_v1, _pumpalt_v1]
+        structure:
+          temperature:
+            _payloadshape: timeseries-number

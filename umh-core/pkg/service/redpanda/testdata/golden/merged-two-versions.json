@@ -1,0 +1,7 @@
+{
+  "subjects": [
+    "_pump_v1-timeseries-number",
+    "_pump_v2-timeseries-number"
+  ],
+  "skipPrefixes": null
+}

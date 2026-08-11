@@ -1,0 +1,19 @@
+agent:
+  metricsPort: 8080
+# What adding a version produces: both versions addressed, one group description.
+dataContracts:
+  - model: pump
+    description: Pump monitoring
+    versions:
+      v1:
+        name: _pump_v1
+        structure:
+          temperature:
+            _payloadshape: timeseries-number
+      v2:
+        name: _pump_v2
+        structure:
+          temperature:
+            _payloadshape: timeseries-number
+          pressure:
+            _payloadshape: timeseries-number

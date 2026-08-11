@@ -1,0 +1,20 @@
+agent:
+  metricsPort: 8080
+# What deleting the last address of a version leaves behind: the structure stays as
+# a definition so _refModel keeps resolving, and _plant_v1 still validates.
+dataContracts:
+  - model: pump
+    versions:
+      v1:
+        structure:
+          temperature:
+            _payloadshape: timeseries-number
+  - model: plant
+    versions:
+      v1:
+        name: _plant_v1
+        structure:
+          mainPump:
+            _refModel:
+              name: pump
+              version: v1

@@ -1,0 +1,13 @@
+agent:
+  metricsPort: 8080
+# What conventional.yaml becomes after one write. Every instance looks like this
+# after upgrading, so it is the shape most configs will actually be in.
+dataContracts:
+  - model: pump
+    description: Pump monitoring
+    versions:
+      v1:
+        name: _pump_v1
+        structure:
+          temperature:
+            _payloadshape: timeseries-number
