@@ -295,7 +295,7 @@ internal:
       resources:
         maxCores: 1
         memoryPerCoreInBytes: 2147483648
-  topicBrowser:
+  topicbrowser:
     desiredState: active  # Topic Browser service (auto-enabled)
 ```
 
