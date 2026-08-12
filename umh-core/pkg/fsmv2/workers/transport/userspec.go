@@ -28,4 +28,7 @@ type TransportUserSpec struct {
 	InstanceUUID        string        `json:"instanceUUID" yaml:"instanceUUID"`
 	AuthToken           string        `json:"authToken"    yaml:"authToken"`
 	Timeout             time.Duration `json:"timeout"      yaml:"timeout"`
+	// AllowInsecureTLS is agent.allowInsecureTLS, forwarded by the communicator
+	// parent. Absent means verify, which is the safe default.
+	AllowInsecureTLS bool `json:"allowInsecureTLS" yaml:"allowInsecureTLS"`
 }

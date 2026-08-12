@@ -41,6 +41,11 @@ type communicatorSpec struct {
 	AuthToken    string `yaml:"authToken"`
 	Timeout      string `yaml:"timeout"`
 	State        string `yaml:"state"`
+	// AllowInsecureTLS forwards agent.allowInsecureTLS to the communicator,
+	// which passes it to its transport child. The legacy communicator read the
+	// config field directly; with that path deleted, this is the only route
+	// from config.yaml to the HTTP client that honours it.
+	AllowInsecureTLS bool `yaml:"allowInsecureTLS"`
 }
 
 // renderSupervisorChildrenYAML renders the FSMv2 supervisor children document.
@@ -60,11 +65,12 @@ func renderSupervisorChildrenYAML(cfg config.AgentConfig, instanceUUID string) (
 
 	if cfg.APIURL != "" && cfg.AuthToken != "" {
 		specBytes, err := yaml.Marshal(communicatorSpec{
-			RelayURL:     cfg.APIURL,
-			InstanceUUID: instanceUUID,
-			AuthToken:    cfg.AuthToken,
-			Timeout:      "10s",
-			State:        "running",
+			RelayURL:         cfg.APIURL,
+			InstanceUUID:     instanceUUID,
+			AuthToken:        cfg.AuthToken,
+			Timeout:          "10s",
+			State:            "running",
+			AllowInsecureTLS: cfg.AllowInsecureTLS,
 		})
 		if err != nil {
 			return "", fmt.Errorf("marshal communicator userSpec config: %w", err)

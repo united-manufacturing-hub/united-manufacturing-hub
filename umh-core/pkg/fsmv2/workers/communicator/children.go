@@ -28,11 +28,12 @@ import (
 // The child is never removed because it holds connection buffers and retry state.
 func RenderChildren(cfg CommunicatorConfig, enabled bool) ([]config.ChildSpec, error) {
 	childCfg := transport.TransportUserSpec{
-		BaseUserSpec: cfg.BaseUserSpec,
-		RelayURL:     cfg.RelayURL,
-		InstanceUUID: cfg.InstanceUUID,
-		AuthToken:    cfg.AuthToken,
-		Timeout:      cfg.Timeout,
+		BaseUserSpec:     cfg.BaseUserSpec,
+		RelayURL:         cfg.RelayURL,
+		InstanceUUID:     cfg.InstanceUUID,
+		AuthToken:        cfg.AuthToken,
+		Timeout:          cfg.Timeout,
+		AllowInsecureTLS: cfg.AllowInsecureTLS,
 	}
 
 	spec, err := config.NewChildSpec("transport", "transport", childCfg, enabled)

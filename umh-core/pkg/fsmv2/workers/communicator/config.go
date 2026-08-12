@@ -29,6 +29,10 @@ type CommunicatorConfig struct {
 	InstanceUUID string        `json:"instanceUUID" yaml:"instanceUUID"`
 	AuthToken    string        `json:"authToken"    yaml:"authToken"`
 	Timeout      time.Duration `json:"timeout"      yaml:"timeout"`
+	// AllowInsecureTLS is agent.allowInsecureTLS. The communicator does not use
+	// it itself; it forwards it to the transport child, which owns the HTTP
+	// client that either verifies the certificate or does not.
+	AllowInsecureTLS bool `json:"allowInsecureTLS" yaml:"allowInsecureTLS"`
 }
 
 // CommunicatorStatus holds the runtime observation data for the communicator worker.

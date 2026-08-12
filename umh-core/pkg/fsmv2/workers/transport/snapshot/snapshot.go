@@ -82,6 +82,10 @@ type TransportDesiredState struct {
 	// adding a CSE secret tier to persist locally but exclude from delta sync.
 	AuthToken string `json:"authToken"`
 	RelayURL  string `json:"relayURL"`
+	// AllowInsecureTLS mirrors agent.allowInsecureTLS so the transport this
+	// worker builds can skip certificate verification when an operator has
+	// deliberately asked for it (self-signed Management Console certificate).
+	AllowInsecureTLS bool `json:"allowInsecureTLS"`
 
 	// State is the desired lifecycle state ("stopped" or "running").
 	//
