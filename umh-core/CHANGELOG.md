@@ -2,9 +2,13 @@
 
 ## Unreleased
 
-### Changed
+### Breaking Changes
 
-- umh-core always runs the FSMv2 runtime now. The legacy backend communicator path and its `USE_FSMV2_TRANSPORT` flag are removed; FSMv2 is the only bring-up path, so you can run umh-core without an `AUTH_TOKEN`/`API_URL` and it stays fully functional (it just cannot reach the Management Console). The `useFSMv2Transport` and `useFSMv2MemoryCleanup` config settings no longer have an effect and can be left in place.
+- The legacy backend communicator and its `USE_FSMV2_TRANSPORT` environment variable are removed, so the documented rollback to the legacy communicator no longer exists. If you set `USE_FSMV2_TRANSPORT=false` to stay on the legacy path, that variable is now ignored and umh-core runs the FSMv2 communicator regardless. The `useFSMv2Transport` and `useFSMv2MemoryCleanup` settings in `config.yaml` likewise have no effect; they are still accepted, so you can leave them in place rather than editing your config
+
+### Improvements
+
+- umh-core now starts and runs without `AUTH_TOKEN` or `API_URL`. Previously an instance with no Management Console credentials brought up no runtime at all: its components reported `starting` indefinitely, with no error and no exit, so a missing or mistyped token looked like a hung container. Such an instance now runs fully — it simply cannot reach the Management Console
 
 ## [0.44.34]
 
