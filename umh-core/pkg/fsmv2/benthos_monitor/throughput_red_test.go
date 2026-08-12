@@ -159,8 +159,8 @@ func TestPollComputesThroughput(t *testing.T) {
 		case "/version":
 			_, _ = w.Write([]byte(`{"version":"1.2.3"}`))
 		case "/metrics":
-			fmt.Fprintf(w, "input_received{label=\"\",path=\"root.input\"} %d\n", inputCounter)
-			fmt.Fprintf(w, "output_sent{label=\"\",path=\"root.output\"} %d\n", outputCounter)
+			_, _ = fmt.Fprintf(w, "input_received{label=\"\",path=\"root.input\"} %d\n", inputCounter)
+			_, _ = fmt.Fprintf(w, "output_sent{label=\"\",path=\"root.output\"} %d\n", outputCounter)
 		default:
 			http.NotFound(w, r)
 		}
@@ -226,8 +226,8 @@ func TestPollResetTickReportsIsActiveFalse(t *testing.T) {
 		case "/version":
 			_, _ = w.Write([]byte(`{"version":"1.2.3"}`))
 		case "/metrics":
-			fmt.Fprintf(w, "input_received{label=\"\",path=\"root.input\"} %d\n", inputCounter)
-			fmt.Fprintf(w, "output_sent{label=\"\",path=\"root.output\"} %d\n", outputCounter)
+			_, _ = fmt.Fprintf(w, "input_received{label=\"\",path=\"root.input\"} %d\n", inputCounter)
+			_, _ = fmt.Fprintf(w, "output_sent{label=\"\",path=\"root.output\"} %d\n", outputCounter)
 		default:
 			http.NotFound(w, r)
 		}

@@ -201,7 +201,8 @@ func get(ctx context.Context, client *http.Client, url string) ([]byte, int, err
 	if resp == nil {
 		return nil, 0, fmt.Errorf("GET %s: nil response", url)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
+
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return nil, resp.StatusCode, fmt.Errorf("GET %s: unexpected status %d", url, resp.StatusCode)
 	}
