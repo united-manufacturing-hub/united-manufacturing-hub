@@ -162,6 +162,7 @@ var _ = Describe("benthos_monitor worker registered in production (D8)", func() 
 		for _, wt := range factory.ListRegisteredTypes() {
 			if wt == fsmv2benthosmonitor.WorkerType {
 				registered = true
+
 				break
 			}
 		}
