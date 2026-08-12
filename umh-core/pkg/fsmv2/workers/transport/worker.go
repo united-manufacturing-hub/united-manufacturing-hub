@@ -203,10 +203,11 @@ func (w *TransportWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredSta
 
 	return &fsmv2.WrappedDesiredState[snapshot.TransportDesiredState]{
 		Config: snapshot.TransportDesiredState{
-			RelayURL:     transportSpec.RelayURL,
-			InstanceUUID: transportSpec.InstanceUUID,
-			AuthToken:    transportSpec.AuthToken,
-			Timeout:      transportSpec.Timeout,
+			RelayURL:         transportSpec.RelayURL,
+			InstanceUUID:     transportSpec.InstanceUUID,
+			AuthToken:        transportSpec.AuthToken,
+			Timeout:          transportSpec.Timeout,
+			AllowInsecureTLS: transportSpec.AllowInsecureTLS,
 		},
 	}, nil
 }

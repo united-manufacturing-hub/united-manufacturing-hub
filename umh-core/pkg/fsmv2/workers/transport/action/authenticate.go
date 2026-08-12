@@ -53,20 +53,26 @@ type AuthenticateAction struct {
 	InstanceUUID string
 	AuthToken    string
 	Timeout      time.Duration
+	// AllowInsecureTLS carries agent.allowInsecureTLS through to the transport
+	// this action constructs. It exists so an operator pointing umh-core at a
+	// Management Console with a self-signed certificate can still connect;
+	// without it the transport always verifies and there is no way to opt out.
+	AllowInsecureTLS bool
 }
 
 // NewAuthenticateAction creates a new authentication action.
 // Timeout defaults to DefaultAuthenticateTimeout if 0. Dependencies injected via Execute().
-func NewAuthenticateAction(relayURL, instanceUUID, authToken string, timeout time.Duration) *AuthenticateAction {
+func NewAuthenticateAction(relayURL, instanceUUID, authToken string, timeout time.Duration, allowInsecureTLS bool) *AuthenticateAction {
 	if timeout == 0 {
 		timeout = DefaultAuthenticateTimeout
 	}
 
 	return &AuthenticateAction{
-		RelayURL:     relayURL,
-		InstanceUUID: instanceUUID,
-		AuthToken:    authToken,
-		Timeout:      timeout,
+		RelayURL:         relayURL,
+		InstanceUUID:     instanceUUID,
+		AuthToken:        authToken,
+		Timeout:          timeout,
+		AllowInsecureTLS: allowInsecureTLS,
 	}
 }
 
@@ -87,7 +93,7 @@ func (a *AuthenticateAction) Execute(ctx context.Context, depsAny any) error {
 	}
 
 	if deps.GetTransport() == nil {
-		newTransport := httpTransport.NewHTTPTransport(a.RelayURL, a.Timeout, false)
+		newTransport := httpTransport.NewHTTPTransport(a.RelayURL, a.Timeout, a.AllowInsecureTLS)
 		deps.SetTransport(newTransport)
 	}
 

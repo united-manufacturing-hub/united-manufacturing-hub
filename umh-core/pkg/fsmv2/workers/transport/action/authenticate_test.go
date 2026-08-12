@@ -48,6 +48,7 @@ var _ = Describe("AuthenticateAction", func() {
 			"test-uuid",
 			"test-token",
 			10*time.Second,
+			false,
 		)
 	})
 
@@ -62,8 +63,8 @@ var _ = Describe("AuthenticateAction", func() {
 			// AuthenticateAction should only have config fields, no mutable state
 			// This is verified by the architecture test, but we confirm the constructor
 			// sets fields correctly without any runtime state
-			act1 := action.NewAuthenticateAction("url1", "uuid1", "token1", 5*time.Second)
-			act2 := action.NewAuthenticateAction("url2", "uuid2", "token2", 15*time.Second)
+			act1 := action.NewAuthenticateAction("url1", "uuid1", "token1", 5*time.Second, false)
+			act2 := action.NewAuthenticateAction("url2", "uuid2", "token2", 15*time.Second, false)
 
 			// Different instances should have different config
 			Expect(act1.RelayURL).To(Equal("url1"))
@@ -71,8 +72,22 @@ var _ = Describe("AuthenticateAction", func() {
 		})
 
 		It("should default timeout to 10s if zero", func() {
-			act := action.NewAuthenticateAction("url", "uuid", "token", 0)
+			act := action.NewAuthenticateAction("url", "uuid", "token", 0, false)
 			Expect(act.Timeout).To(Equal(10 * time.Second))
+		})
+
+		// The transport this action builds is the only place certificate
+		// verification can be relaxed, and it was previously constructed with a
+		// hardcoded false. If the flag stops arriving here, an operator with a
+		// self-signed Management Console certificate silently cannot connect.
+		It("carries allowInsecureTLS through to the transport it constructs", func() {
+			secure := action.NewAuthenticateAction("url", "uuid", "token", 0, false)
+			Expect(secure.AllowInsecureTLS).To(BeFalse(),
+				"the safe default must stay false when not asked for")
+
+			insecure := action.NewAuthenticateAction("url", "uuid", "token", 0, true)
+			Expect(insecure.AllowInsecureTLS).To(BeTrue(),
+				"agent.allowInsecureTLS must reach the action that builds the HTTP transport")
 		})
 	})
 
@@ -109,6 +124,7 @@ var _ = Describe("AuthenticateAction", func() {
 				"test-uuid",
 				"test-token",
 				10*time.Second,
+				false,
 			)
 
 			ctx := context.Background()

@@ -38,10 +38,11 @@ var _ = Describe("communicator RenderChildren 4-field round-trip", func() {
 
 	BeforeEach(func() {
 		cfg = communicator.CommunicatorConfig{
-			RelayURL:     "https://relay.example.com:8080",
-			InstanceUUID: "test-uuid-1234",
-			AuthToken:    "secret-auth-token-xyz",
-			Timeout:      42 * time.Second,
+			RelayURL:         "https://relay.example.com:8080",
+			InstanceUUID:     "test-uuid-1234",
+			AuthToken:        "secret-auth-token-xyz",
+			Timeout:          42 * time.Second,
+			AllowInsecureTLS: true,
 		}
 	})
 
@@ -69,6 +70,10 @@ var _ = Describe("communicator RenderChildren 4-field round-trip", func() {
 			"AuthToken missing = unauthenticated transport child after the cutover")
 		Expect(recovered.Timeout).To(Equal(42*time.Second),
 			"Timeout must survive the round-trip")
+		Expect(recovered.AllowInsecureTLS).To(BeTrue(),
+			"AllowInsecureTLS dropped here means an operator with a self-signed "+
+				"Management Console certificate silently cannot connect: the transport "+
+				"child owns the HTTP client, and this is the only route to it")
 	})
 
 	It("sets Enabled=true when enabled=true", func() {

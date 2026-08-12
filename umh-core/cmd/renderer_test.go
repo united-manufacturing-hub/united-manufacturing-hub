@@ -43,9 +43,10 @@ var _ = Describe("renderSupervisorChildrenYAML", func() {
 		Children []decodedChild `yaml:"children"`
 	}
 	type decodedUserConfig struct {
-		RelayURL     string `yaml:"relayURL"`
-		InstanceUUID string `yaml:"instanceUUID"`
-		AuthToken    string `yaml:"authToken"`
+		RelayURL         string `yaml:"relayURL"`
+		InstanceUUID     string `yaml:"instanceUUID"`
+		AuthToken        string `yaml:"authToken"`
+		AllowInsecureTLS bool   `yaml:"allowInsecureTLS"`
 	}
 
 	childNames := func(doc string) []string {
@@ -97,10 +98,13 @@ var _ = Describe("renderSupervisorChildrenYAML", func() {
 			authToken       = "token\"with\\backslash\nand-newline"
 			placeholderUUID = "placeholder-1234"
 		)
-		credentialed := config.AgentConfig{CommunicatorConfig: config.CommunicatorConfig{
-			APIURL:    relayURL,
-			AuthToken: authToken,
-		}}
+		credentialed := config.AgentConfig{
+			CommunicatorConfig: config.CommunicatorConfig{
+				APIURL:           relayURL,
+				AuthToken:        authToken,
+				AllowInsecureTLS: true,
+			},
+		}
 		doc := render(credentialed, placeholderUUID)
 		Expect(childNames(doc)).To(ContainElement("persistence"))
 		Expect(childNames(doc)).To(ContainElement("communicator"))
@@ -121,6 +125,11 @@ var _ = Describe("renderSupervisorChildrenYAML", func() {
 		Expect(userCfg.RelayURL).To(Equal(relayURL))
 		Expect(userCfg.AuthToken).To(Equal(authToken))
 		Expect(userCfg.InstanceUUID).To(Equal(placeholderUUID))
+		// agent.allowInsecureTLS has no other route to the HTTP client since the
+		// legacy communicator that read it directly was deleted. If it stops
+		// being emitted here, the flag goes quietly dead again.
+		Expect(userCfg.AllowInsecureTLS).To(BeTrue(),
+			"allowInsecureTLS must be rendered into the communicator's userSpec")
 
 		// Partial credentials (only API URL) are treated as no credentials
 		// (E2): the existing && contract must be preserved in the renderer.
