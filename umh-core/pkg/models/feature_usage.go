@@ -31,7 +31,9 @@ type FeatureUsage struct {
 	// FSMv2TransportEnabled reports whether the FSMv2 transport is active. It is
 	// always true: FSMv2 is the only bring-up path.
 	FSMv2TransportEnabled bool `json:"fsmv2TransportEnabled"`
-	// FSMv2MemoryCleanupEnabled reports whether USE_FSMV2_MEMORY_CLEANUP is set.
+	// FSMv2MemoryCleanupEnabled reports whether the persistence worker's memory
+	// cleanup is active. It is always true: persistence runs unconditionally and
+	// the USE_FSMV2_MEMORY_CLEANUP flag that used to gate it no longer exists.
 	FSMv2MemoryCleanupEnabled bool `json:"fsmv2MemoryCleanupEnabled"`
 	// FSMv2ProtocolConverterEnabled reports whether USE_FSMV2_PROTOCOL_CONVERTER is set.
 	FSMv2ProtocolConverterEnabled bool `json:"fsmv2ProtocolConverterEnabled"`

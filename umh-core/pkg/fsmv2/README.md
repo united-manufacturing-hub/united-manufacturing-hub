@@ -333,7 +333,6 @@ FSMv2 features are controlled via environment variables:
 docker run -d \
   -e AUTH_TOKEN=your-auth-token \
   -e API_URL=https://management.umh.app \
-  -e USE_FSMV2_MEMORY_CLEANUP=true \
   -e USE_FSMV2_PROTOCOL_CONVERTER=true \
   umh-core:latest
 ```
@@ -342,16 +341,13 @@ docker run -d \
 |----------|----------|-------------|
 | `AUTH_TOKEN` | Yes | Authentication token from Management Console |
 | `API_URL` | Yes | Backend relay server URL (e.g., `https://management.umh.app`) |
-| `USE_FSMV2_MEMORY_CLEANUP` | No | FSMv2 memory cleanup (persistence worker); defaults to `true` (enabled). Set to `false` to revert. |
 | `USE_FSMV2_PROTOCOL_CONVERTER` | No | Set to `true` to enable FSMv2 protocol converter |
 
 ### Disabling FSMv2 Features
 
-To revert to the legacy behavior, set the corresponding flag to `false`:
-
-```bash
--e USE_FSMV2_MEMORY_CLEANUP=false
-```
+There is no legacy runtime to revert to: FSMv2 is the only bring-up path. The
+persistence worker's memory cleanup now runs unconditionally, and the
+`USE_FSMV2_MEMORY_CLEANUP` flag that used to gate it no longer exists.
 
 ### Verifying FSMv2 Communicator
 

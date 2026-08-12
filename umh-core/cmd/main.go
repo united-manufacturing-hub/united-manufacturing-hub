@@ -591,7 +591,11 @@ func buildFSMv2Supervisor(
 	// instanceUUID is a placeholder — the real UUID is returned by the backend
 	// and picked up by polling TransportWorker.ObservedState.AuthenticatedUUID below (Bug #6 fix).
 	placeholderUUID = uuid.New().String()
-	yamlConfig := renderSupervisorChildrenYAML(configData.Agent, placeholderUUID)
+
+	yamlConfig, err := renderSupervisorChildrenYAML(configData.Agent, placeholderUUID)
+	if err != nil {
+		return nil, nil, nil, "", func() {}, fmt.Errorf("failed to render FSMv2 supervisor children: %w", err)
+	}
 
 	// The historian monitor is a dynamic child, upserted and deleted at runtime
 	// by the config worker's per-tick reconcile so live config edits apply

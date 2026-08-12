@@ -55,7 +55,18 @@ var _ = Describe("renderSupervisorChildrenYAML", func() {
 		for _, c := range parsed.Children {
 			out = append(out, c.Name)
 		}
+
 		return out
+	}
+
+	// render fails the spec on a render error rather than asserting against an
+	// empty document: an empty document means a supervisor with no children at
+	// all, which no assertion below would distinguish from a correct render.
+	render := func(cfg config.AgentConfig, instanceUUID string) string {
+		doc, err := renderSupervisorChildrenYAML(cfg, instanceUUID)
+		Expect(err).To(Succeed(), "rendering the supervisor children must not fail")
+
+		return doc
 	}
 
 	It("always renders persistence and communicator only with credentials, round-tripping byte-for-byte", func() {
@@ -72,9 +83,9 @@ var _ = Describe("renderSupervisorChildrenYAML", func() {
 
 		// Zero AgentConfig: no credentials, no memory-cleanup. Persistence must
 		// appear regardless; communicator must not (there is no runtime to wire it to).
-		Expect(childNames(renderSupervisorChildrenYAML(config.AgentConfig{}, "uuid-0"))).
+		Expect(childNames(render(config.AgentConfig{}, "uuid-0"))).
 			To(ContainElement("persistence"))
-		Expect(childNames(renderSupervisorChildrenYAML(config.AgentConfig{}, "uuid-0"))).
+		Expect(childNames(render(config.AgentConfig{}, "uuid-0"))).
 			NotTo(ContainElement("communicator"))
 
 		// Credentials present: communicator appears, and its nested userSpec
@@ -82,15 +93,15 @@ var _ = Describe("renderSupervisorChildrenYAML", func() {
 		// hostile token (E14/E15), which disqualifies fmt.Sprintf inline
 		// building and forces yaml.Marshal.
 		const (
-			relayURL         = `http://fsmv2.invalid:9999`
-			authToken        = "token\"with\\backslash\nand-newline"
-			placeholderUUID  = "placeholder-1234"
+			relayURL        = `http://fsmv2.invalid:9999`
+			authToken       = "token\"with\\backslash\nand-newline"
+			placeholderUUID = "placeholder-1234"
 		)
 		credentialed := config.AgentConfig{CommunicatorConfig: config.CommunicatorConfig{
 			APIURL:    relayURL,
 			AuthToken: authToken,
 		}}
-		doc := renderSupervisorChildrenYAML(credentialed, placeholderUUID)
+		doc := render(credentialed, placeholderUUID)
 		Expect(childNames(doc)).To(ContainElement("persistence"))
 		Expect(childNames(doc)).To(ContainElement("communicator"))
 
@@ -100,6 +111,7 @@ var _ = Describe("renderSupervisorChildrenYAML", func() {
 		for i := range parsed.Children {
 			if parsed.Children[i].Name == "communicator" {
 				comm = &parsed.Children[i]
+
 				break
 			}
 		}
@@ -113,7 +125,7 @@ var _ = Describe("renderSupervisorChildrenYAML", func() {
 		// Partial credentials (only API URL) are treated as no credentials
 		// (E2): the existing && contract must be preserved in the renderer.
 		partial := config.AgentConfig{CommunicatorConfig: config.CommunicatorConfig{APIURL: relayURL}}
-		Expect(childNames(renderSupervisorChildrenYAML(partial, "uuid-1"))).
+		Expect(childNames(render(partial, "uuid-1"))).
 			NotTo(ContainElement("communicator"))
 	})
 })

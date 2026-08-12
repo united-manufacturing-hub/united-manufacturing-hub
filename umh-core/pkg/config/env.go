@@ -48,8 +48,8 @@ import (
 //
 // 2. Environment variable processing:
 //   - Environment variables are collected: AUTH_TOKEN, API_URL, RELEASE_CHANNEL, ALLOW_INSECURE_TLS, LOCATION_0..6
-//   - Note: remaining FSMv2 feature flags (USE_FSMV2_MEMORY_CLEANUP, USE_FSMV2_PROTOCOL_CONVERTER)
-//     are handled separately in cmd/main.go as env-var-only flags (not persisted to config.yaml)
+//   - Note: the remaining FSMv2 feature flag (USE_FSMV2_PROTOCOL_CONVERTER) is
+//     handled separately in cmd/main.go as an env-var-only flag (not persisted to config.yaml)
 //   - Only non-empty variables will override existing config values
 //   - For example, if AUTH_TOKEN is set in the environment, it will replace any existing value
 //     in the config file

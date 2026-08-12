@@ -15,6 +15,8 @@
 package main
 
 import (
+	"fmt"
+
 	"gopkg.in/yaml.v3"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
@@ -45,7 +47,13 @@ type communicatorSpec struct {
 // The persistence child is always present; the communicator child appears only
 // when both APIURL and AuthToken are set (E2 contract). The instanceUUID is
 // interpolated into the communicator's userSpec config.
-func renderSupervisorChildrenYAML(cfg config.AgentConfig, instanceUUID string) string {
+//
+// A marshal failure is returned rather than swallowed. Both structs hold only
+// strings, so yaml.Marshal has no reachable failure mode today -- but an empty
+// document is not a degraded result, it is a supervisor with no children at
+// all, persistence included. That is the silent bring-up stall this package
+// exists to prevent, so the error travels up to the caller instead.
+func renderSupervisorChildrenYAML(cfg config.AgentConfig, instanceUUID string) (string, error) {
 	children := []childNode{
 		{Name: "persistence", WorkerType: "persistence"},
 	}
@@ -59,12 +67,13 @@ func renderSupervisorChildrenYAML(cfg config.AgentConfig, instanceUUID string) s
 			State:        "running",
 		})
 		if err != nil {
-			return ""
+			return "", fmt.Errorf("marshal communicator userSpec config: %w", err)
 		}
+
 		children = append(children, childNode{
 			Name:       "communicator",
 			WorkerType: "communicator",
-			UserSpec:   &struct {
+			UserSpec: &struct {
 				Config string `yaml:"config"`
 			}{Config: string(specBytes)},
 		})
@@ -72,7 +81,8 @@ func renderSupervisorChildrenYAML(cfg config.AgentConfig, instanceUUID string) s
 
 	doc, err := yaml.Marshal(map[string]any{"children": children})
 	if err != nil {
-		return ""
+		return "", fmt.Errorf("marshal supervisor children document: %w", err)
 	}
-	return string(doc)
+
+	return string(doc), nil
 }
