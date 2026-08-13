@@ -53,6 +53,13 @@ import (
 //   - A panic on missing credentials: loud, so not this defect.
 //   - main.go is read by relative path, so these pass only from the package's
 //     own directory, as renderer_test.go already requires.
+//
+// Credentials conditionals are recognised by matching the communicatorEnabled
+// name as a string literal in two places, bringUpInvariantIsCredentialsValue
+// and bringUpInvariantMentionsCredentials. If main()'s one credentials
+// conditional ever stops being recognised, the branch walker visits nothing,
+// and the two specs that iterate its branches pass vacuously instead of
+// failing. The first spec below guards against exactly that.
 var _ = Describe("FSMv2 runtime bring-up invariant", func() {
 	var (
 		fset   *token.FileSet
@@ -67,6 +74,22 @@ var _ = Describe("FSMv2 runtime bring-up invariant", func() {
 
 		mainFn = bringUpInvariantFindFunc(file, "main")
 		Expect(mainFn).NotTo(BeNil(), "main() not found in main.go")
+	})
+
+	It("finds at least one credentials conditional in main()", func() {
+		visited := 0
+
+		bringUpInvariantEachCredentialsBranch(fset, mainFn, func(branch ast.Node, line int, ifPos token.Pos) {
+			visited++
+		})
+
+		Expect(visited).To(BeNumerically(">", 0),
+			"bringUpInvariantEachCredentialsBranch found no credentials conditional in main(), which makes the "+
+				"next two specs pass vacuously: they iterate its branches, and an empty set means they check nothing. "+
+				"main() is known to contain exactly one, the communicatorEnabled check. The likely cause is that the "+
+				"predicate was renamed without updating the string literals that recognise it by name, in "+
+				"bringUpInvariantMentionsCredentials for a direct call, and bringUpInvariantIsCredentialsValue "+
+				"for a local that aliases one. Which one applies depends on how main() writes the check.")
 	})
 
 	It("builds the supervisor as a top-level statement of main()", func() {
