@@ -45,7 +45,7 @@ var _ = Describe("HTTPTransport concurrency", func() {
 		}))
 		defer server.Close()
 
-		transport := httpTransport.NewHTTPTransport(server.URL, 5*time.Second, false)
+		transport := httpTransport.NewHTTPTransport(server.URL, 5*time.Second)
 		defer transport.Close()
 
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)

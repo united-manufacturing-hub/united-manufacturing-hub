@@ -15,8 +15,9 @@
 // R6 RED: the secure-rejection half of the TLS matrix is re-homed onto the
 // FSMv2 transport client. The legacy communicator requester (deleted in R6)
 // carried this test; it must now run against HTTPTransport. A self-signed /
-// untrusted certificate MUST be rejected by default and MUST be accepted only
-// when the insecure override is requested.
+// untrusted certificate MUST be rejected by default. The insecure-override
+// half of this matrix is restored by a separate stacked PR alongside the
+// override itself.
 package transport_test
 
 import (
@@ -50,7 +51,7 @@ var _ = Describe("TLS secure rejection on the FSMv2 transport client", func() {
 	})
 
 	It("rejects the self-signed certificate by default (secure mode)", func() {
-		transport := httptransport.NewHTTPTransport(server.URL, 30*time.Second, false)
+		transport := httptransport.NewHTTPTransport(server.URL, 30*time.Second)
 
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
@@ -59,17 +60,5 @@ var _ = Describe("TLS secure rejection on the FSMv2 transport client", func() {
 
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("certificate"))
-	})
-
-	It("accepts the self-signed certificate only with the insecure override", func() {
-		transport := httptransport.NewHTTPTransport(server.URL, 30*time.Second, true)
-
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-
-		messages, err := transport.Pull(ctx, "jwt-token")
-
-		Expect(err).ToNot(HaveOccurred())
-		Expect(messages).To(BeEmpty())
 	})
 })
