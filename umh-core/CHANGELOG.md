@@ -4,7 +4,7 @@
 
 ### Fixes
 
-- Bridge connection edits to an unreachable port no longer report the deployment as successful and skip the rollback, on instances running the FSMv2 connection probe (`NMAP_BACKEND=fsmv2`, off by default). The check compared the requested port against itself instead of against the port that was actually probed, so it passed on the first attempt
+- Bridge connection edits to an unreachable port no longer report the deployment as successful and skip the rollback, on instances running the FSMv2 connection probe (`NMAP_BACKEND=fsmv2`, off by default). The rollout now keeps waiting until a scan finds the new port open, not merely until the requested port number has been probed
 
 ## [0.44.34]
 

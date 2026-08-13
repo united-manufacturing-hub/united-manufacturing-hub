@@ -71,7 +71,7 @@ var _ = Describe("Nmap Poll", func() {
 		Expect(status.LatencyMs).To(BeNumerically(">=", 0))
 	})
 
-	It("records the target and port it dialled", func() {
+	It("records the target and port it dialed", func() {
 		ln, err := net.Listen("tcp", "127.0.0.1:0")
 		Expect(err).NotTo(HaveOccurred())
 
@@ -86,8 +86,8 @@ var _ = Describe("Nmap Poll", func() {
 		st, err := fsmv2nmap.Poll(ctx, struct{}{}, cfg)
 		Expect(err).NotTo(HaveOccurred())
 
-		Expect(st.Target).To(Equal(host), "Poll must record the target it dialled")
-		Expect(st.Port).To(Equal(uint16(p)), "Poll must record the port it dialled") //nolint:unconvert // verbatim rung assertion: choose only uint16 to spell the port type
+		Expect(st.Target).To(Equal(host), "Poll must record the target it dialed")
+		Expect(st.Port).To(Equal(uint16(p)), "Poll must record the port it dialed") //nolint:unconvert // keep the explicit uint16 to match the scan's port type
 	})
 
 	It("reports a closed port without an error when the connection is refused", func() {
