@@ -45,7 +45,7 @@ const (
 
 // NmapStatus is the result of one TCP-dial observation of the target port.
 type NmapStatus struct {
-	// Target is the hostname or IP address the scan dialled.
+	// Target is the hostname or IP address the scan dialed.
 	Target string `json:"target"`
 	// PortState is one of nmapfsm.PortStateOpen or nmapfsm.PortStateClosed.
 	PortState string `json:"port_state"`

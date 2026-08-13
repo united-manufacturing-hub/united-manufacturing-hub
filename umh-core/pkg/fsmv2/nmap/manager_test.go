@@ -168,9 +168,9 @@ var _ = Describe("NewFsmv2NmapManager", func() {
 		Expect(nmapObserved.ServiceInfo.NmapStatus.LastScan.PortResult.Port).To(Equal(port))
 	})
 
-	It("reports the config the scan actually dialled, not the requested config", func() {
+	It("reports the config the scan actually dialed, not the requested config", func() {
 		// Stage a scan reported at 10.0.0.1:502 while the snapshot asks for
-		// 10.0.0.2:445. mapObserved must reflect what the scan dialled, so a
+		// 10.0.0.2:445. mapObserved must reflect what the scan dialed, so a
 		// consumer (the deploy gate) can see that a requested edit has not yet
 		// taken effect.
 		stageClient(freshStatus(NmapStatus{
@@ -196,8 +196,8 @@ var _ = Describe("NewFsmv2NmapManager", func() {
 		nmapObserved, ok := observed.(nmapfsm.NmapObservedState)
 		Expect(ok).To(BeTrue(), "expected a nmapfsm.NmapObservedState")
 
-		Expect(nmapObserved.ObservedNmapServiceConfig.Port).To(Equal(uint16(502)), "observed port must be the port the scan dialled, not the requested one")
-		Expect(nmapObserved.ObservedNmapServiceConfig.Target).To(Equal("10.0.0.1"), "observed target must be the target the scan dialled, not the requested one")
+		Expect(nmapObserved.ObservedNmapServiceConfig.Port).To(Equal(uint16(502)), "observed port must be the port the scan dialed, not the requested one")
+		Expect(nmapObserved.ObservedNmapServiceConfig.Target).To(Equal("10.0.0.1"), "observed target must be the target the scan dialed, not the requested one")
 	})
 
 	It("extracts configs from the snapshot and Upserts the enabled worker's ref", func() {

@@ -94,9 +94,9 @@ func mapFresh(_ config.NmapConfig, s simple.Status[NmapStatus]) string {
 }
 
 // mapObserved builds a nmapfsm.NmapObservedState from the stored status. Both
-// Target and Port come from the status — what the scan actually dialled — with
+// Target and Port come from the status (what the scan actually dialed), with
 // no echo of the requested config. A requested edit that has not yet been
-// dialled therefore reads as unobserved, so a target-diffing consumer (the
+// dialed therefore reads as unobserved, so a target-diffing consumer (the
 // deploy gate) keeps waiting for a genuine scan. The ServiceInfo mirrors the
 // last scan (port state, port, latency, running).
 func mapObserved(_ config.NmapConfig, s simple.Status[NmapStatus]) publicfsm.ObservedState {
