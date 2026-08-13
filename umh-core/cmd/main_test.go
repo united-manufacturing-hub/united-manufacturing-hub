@@ -29,14 +29,15 @@ func TestMain(t *testing.T) {
 	RunSpecs(t, "Main Suite")
 }
 
-var _ = Describe("bringUpFSMv2", func() {
-	// bringUpFSMv2 is the bring-up decision main() consults. It is a pure
-	// function of the backend configuration, so it is asserted directly here
-	// rather than by running main(). The keep-the-legacy knob
-	// (UseFSMv2Transport) no longer routes anywhere: the legacy backend path
-	// was deleted, so FSMv2 is the only bring-up path.
+var _ = Describe("communicatorEnabled", func() {
+	// communicatorEnabled is the decision main() consults to gate the FSMv2
+	// communicator. It is a pure function of the backend configuration, so it
+	// is asserted directly here rather than by running main(). The
+	// keep-the-legacy knob (UseFSMv2Transport) no longer routes anywhere: the
+	// legacy backend path was deleted, so the communicator is the only path it
+	// gates.
 
-	It("brings up FSMv2 when credentials are present, even with the legacy transport switch off", func() {
+	It("enables the communicator when credentials are present, even with the legacy transport switch off", func() {
 		cfg := config.FullConfig{
 			Agent: config.AgentConfig{
 				CommunicatorConfig: config.CommunicatorConfig{
@@ -47,16 +48,16 @@ var _ = Describe("bringUpFSMv2", func() {
 			},
 		}
 
-		Expect(bringUpFSMv2(&cfg)).To(BeTrue())
+		Expect(communicatorEnabled(&cfg)).To(BeTrue())
 	})
 
-	It("does not bring up FSMv2 when credentials are absent", func() {
+	It("does not enable the communicator when credentials are absent", func() {
 		cfg := config.FullConfig{}
 
-		Expect(bringUpFSMv2(&cfg)).To(BeFalse())
+		Expect(communicatorEnabled(&cfg)).To(BeFalse())
 	})
 
-	It("does not bring up FSMv2 when only API_URL is set", func() {
+	It("does not enable the communicator when only API_URL is set", func() {
 		cfg := config.FullConfig{
 			Agent: config.AgentConfig{
 				CommunicatorConfig: config.CommunicatorConfig{
@@ -67,10 +68,10 @@ var _ = Describe("bringUpFSMv2", func() {
 
 		// The && credential contract must reject partial state; an operator with
 		// one field empty should not run without a token.
-		Expect(bringUpFSMv2(&cfg)).To(BeFalse())
+		Expect(communicatorEnabled(&cfg)).To(BeFalse())
 	})
 
-	It("does not bring up FSMv2 when only AUTH_TOKEN is set", func() {
+	It("does not enable the communicator when only AUTH_TOKEN is set", func() {
 		cfg := config.FullConfig{
 			Agent: config.AgentConfig{
 				CommunicatorConfig: config.CommunicatorConfig{
@@ -79,7 +80,7 @@ var _ = Describe("bringUpFSMv2", func() {
 			},
 		}
 
-		Expect(bringUpFSMv2(&cfg)).To(BeFalse())
+		Expect(communicatorEnabled(&cfg)).To(BeFalse())
 	})
 })
 

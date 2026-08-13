@@ -241,7 +241,7 @@ func bringUpInvariantIsCredentialsValue(expr ast.Expr, derived map[string]bool) 
 			return false
 		}
 	case *ast.CallExpr:
-		return bringUpInvariantCalleeName(node) == "bringUpFSMv2"
+		return bringUpInvariantCalleeName(node) == "communicatorEnabled"
 	case *ast.SelectorExpr:
 		return bringUpInvariantIsCredentialField(node)
 	case *ast.Ident:
@@ -258,15 +258,15 @@ func bringUpInvariantIsCredentialField(sel *ast.SelectorExpr) bool {
 }
 
 // bringUpInvariantMentionsCredentials reports whether an expression tests
-// backend credentials, through the bringUpFSMv2 seam, the credential fields,
-// their environment names, or a local already known to carry one.
+// backend credentials, through the communicatorEnabled seam, the credential
+// fields, their environment names, or a local already known to carry one.
 func bringUpInvariantMentionsCredentials(expr ast.Expr, derived map[string]bool) bool {
 	found := false
 
 	ast.Inspect(expr, func(n ast.Node) bool {
 		switch node := n.(type) {
 		case *ast.Ident:
-			if node.Name == "bringUpFSMv2" || derived[node.Name] {
+			if node.Name == "communicatorEnabled" || derived[node.Name] {
 				found = true
 			}
 		case *ast.SelectorExpr:
