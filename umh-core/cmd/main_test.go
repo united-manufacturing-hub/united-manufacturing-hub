@@ -15,13 +15,17 @@
 package main
 
 import (
+	"context"
 	"testing"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/communication_state"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/protocolconverterserviceconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 )
 
 func TestMain(t *testing.T) {
@@ -133,5 +137,64 @@ var _ = Describe("counting historian bridges", func() {
 		}
 
 		Expect(countHistorianBridges(cfg)).To(Equal(0))
+	})
+})
+
+var _ = Describe("buildFSMv2Supervisor", func() {
+	// With no Management Console credentials, the FSMv2 runtime used to be
+	// skipped entirely: buildFSMv2Supervisor was only called when APIURL and
+	// AuthToken were both set, so with no credentials no runtime existed and
+	// every adapter-driven worker reported "starting" forever with no error,
+	// no Sentry event and no exit. bringup_invariant_test.go pins main()'s
+	// control flow so it can no longer skip the call; this spec pins the
+	// constructor itself, which that structural guard cannot reach. Asserting
+	// only a nil error would pass for a constructor that returns a nil
+	// supervisor alongside it, leaving the runtime just as absent, so both
+	// are checked.
+	//
+	// The constructor reads neither credential today, so what this spec pins is
+	// their absence: it starts failing the moment either one is consulted here.
+	// It does not exercise credential handling, which lives in
+	// communicatorEnabled.
+	//
+	// The nil arguments below are unread on this path. Four of them panic if
+	// that ever changes, which a spec reports as a failure. The nil
+	// SystemSnapshotManager is the exception: every method on it returns early
+	// on a nil receiver, so a future read is silently skipped rather than
+	// reported. Pass a real one before asserting anything that depends on it.
+	It("succeeds and returns a non-nil supervisor with empty credentials", func() {
+		cfg := &config.FullConfig{
+			Agent: config.AgentConfig{
+				CommunicatorConfig: config.CommunicatorConfig{
+					APIURL:    "",
+					AuthToken: "",
+				},
+			},
+		}
+
+		commState := communication_state.NewCommunicationState(
+			nil,
+			make(chan *models.UMHMessage, 1),
+			make(chan *models.UMHMessage, 1),
+			"",
+			nil,
+			nil,
+			logger.For(logger.ComponentCore),
+			nil,
+			nil,
+		)
+
+		// The channel bridge this builds starts two goroutines that exit only on
+		// ctx.Done(), and cleanup cannot reap them, so the context has to be
+		// cancellable. context.Background() would leak both for the life of the
+		// test binary.
+		ctx, cancel := context.WithCancel(context.Background())
+		DeferCleanup(cancel)
+
+		appSup, _, _, _, cleanup, err := buildFSMv2Supervisor(ctx, cfg, commState, logger.For(logger.ComponentCore), nil)
+		DeferCleanup(cleanup)
+
+		Expect(err).NotTo(HaveOccurred())
+		Expect(appSup).NotTo(BeNil())
 	})
 })
