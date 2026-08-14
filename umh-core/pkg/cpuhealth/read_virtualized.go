@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Deciding whether this machine is a virtual machine, which is the fact that
+// makes stolen CPU time worth measuring at all.
+
 package cpuhealth
 
 import (

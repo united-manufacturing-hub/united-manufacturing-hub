@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// The CPU declaration: which signals exist, what each one measures, where its
+// thresholds sit, and the constructor that builds an engine from it.
+
 package cpuhealth
 
 import (

@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Pressure Stall Information is the kernel's own measure of how long runnable
+// tasks waited for a core; this reads the cgroup's figure.
+
 package cpuhealth
 
 import (

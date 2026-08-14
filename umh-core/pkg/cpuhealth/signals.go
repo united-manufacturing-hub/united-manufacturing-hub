@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// The per-tick fact bag: the numbers and flags the message layer needs that a
+// ranked cause list cannot carry.
+
 package cpuhealth
 
 // Signals is the per-tick fact bag ComposeMessage and BlockReason read to render
