@@ -87,7 +87,7 @@ var _ = Describe("CPU virtualisation", func() {
 				return nil, errors.New("unreadable")
 			}
 		}
-		return cpuhealth.NewCgroupSampler(fs, base), &cpuinfoReads
+		return cpuhealth.NewLinuxSampler(fs, base), &cpuinfoReads
 	}
 
 	It("resolves virtualisation from the hypervisor flag on x86, via the distinct DMI fallback on ARM64, caches it sticky without re-reading cpuinfo, and reads false on an unreadable cpuinfo", func() {
@@ -227,7 +227,7 @@ var _ = Describe("CPU virtualisation", func() {
 				return nil, errors.New("unreadable")
 			}
 		}
-		s := cpuhealth.NewCgroupSampler(fs, base)
+		s := cpuhealth.NewLinuxSampler(fs, base)
 
 		first, err := s.Read(ctx)
 		Expect(err).NotTo(HaveOccurred())
@@ -282,7 +282,7 @@ var _ = Describe("CPU virtualisation", func() {
 					return nil, errors.New("unreadable")
 				}
 			}
-			return cpuhealth.NewCgroupSampler(fs, base), &vendorReads
+			return cpuhealth.NewLinuxSampler(fs, base), &vendorReads
 		}
 
 		// F9's core: an ARM64 cpuinfo (no hypervisor flag) whose product_name
@@ -381,7 +381,7 @@ var _ = Describe("CPU virtualisation", func() {
 				return nil, errors.New("unreadable")
 			}
 		}
-		s = cpuhealth.NewCgroupSampler(fs, base)
+		s = cpuhealth.NewLinuxSampler(fs, base)
 		first, err = s.Read(ctx)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(first.Virtualized).To(BeFalse(),

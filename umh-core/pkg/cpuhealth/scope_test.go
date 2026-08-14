@@ -72,7 +72,7 @@ var _ = Describe("CPU scope", func() {
 				return nil, errors.New("unreadable")
 			}
 		}
-		return cpuhealth.NewCgroupSampler(fs, base)
+		return cpuhealth.NewLinuxSampler(fs, base)
 	}
 
 	It("reports the CPU scope as host, affinity, or unknown against the machine's CPU count, and never assumes host on an unreadable count", func() {

@@ -55,7 +55,7 @@ var _ = Describe("throttle counters", func() {
 				return nil, errors.New("unreadable")
 			}
 		}
-		return cpuhealth.NewCgroupSampler(fs, base), &reads
+		return cpuhealth.NewLinuxSampler(fs, base), &reads
 	}
 
 	It("reads both throttle counters from the same cpu.stat, marks either unavailable when absent or unparsable, and fails the whole sample when cpu.stat cannot be read", func() {

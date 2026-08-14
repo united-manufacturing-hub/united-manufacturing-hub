@@ -68,7 +68,7 @@ var _ = Describe("usage as a rate", func() {
 				return nil, errors.New("unreadable")
 			}
 		}
-		return cpuhealth.NewCgroupSampler(fs, base)
+		return cpuhealth.NewLinuxSampler(fs, base)
 	}
 
 	It("publishes UsageCores as the usage_usec delta over elapsed time, Unknown on the first read and on a reset, and keeps the raw UsageUsec", func() {

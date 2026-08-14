@@ -23,7 +23,7 @@ import (
 // readCpuset counts the CPUs in the cgroup's effective cpuset when it is a
 // single inclusive range such as "0-3". The second value reports whether the
 // set was readable and parsed as such a range.
-func (s *cgroupSampler) readCpuset(ctx context.Context) (int, bool) {
+func (s *linuxSampler) readCpuset(ctx context.Context) (int, bool) {
 	data, err := s.fs.ReadFile(ctx, s.base+"/cpuset.cpus.effective")
 	if err != nil {
 		return 0, false

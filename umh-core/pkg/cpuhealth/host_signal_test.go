@@ -91,7 +91,7 @@ var _ = Describe("host signals", func() {
 				return nil, errors.New("unreadable")
 			}
 		}
-		return cpuhealth.NewCgroupSampler(fs, base)
+		return cpuhealth.NewLinuxSampler(fs, base)
 	}
 
 	// Each aggregate line keeps the cpu0/cpu1 trap and a guest/guest_nice pair
