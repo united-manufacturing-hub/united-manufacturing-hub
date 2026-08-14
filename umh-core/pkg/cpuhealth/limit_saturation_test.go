@@ -32,7 +32,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/diagnosis"
 )
 
-var _ = Describe("S3 R3 — limit-mode saturation", func() {
+var _ = Describe("limit-mode saturation", func() {
 	It("should fire limit-mode saturation when the container's sustained usage enters the quota reserve band", func() {
 		engine, err := NewEngine(4, 2.0)
 		Expect(err).NotTo(HaveOccurred())

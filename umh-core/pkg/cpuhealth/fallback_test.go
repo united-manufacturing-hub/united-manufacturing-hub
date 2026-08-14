@@ -29,7 +29,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/diagnosis"
 )
 
-var _ = Describe("S3 R7 — the fallback metric set", func() {
+var _ = Describe("the fallback metric set", func() {
 	It("should fall back to usage against logical CPUs when host stats are absent", func() {
 		engine, err := NewEngine(4, 2.0)
 		Expect(err).NotTo(HaveOccurred())

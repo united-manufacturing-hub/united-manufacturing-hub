@@ -29,7 +29,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/diagnosis"
 )
 
-var _ = Describe("S3 R4 — attribution consults its evidence", func() {
+var _ = Describe("attribution consults its evidence", func() {
 	It("should fire host-full as its own check that stacks on limit saturation, because a limit is a ceiling and not a reservation", func() {
 		// saturation/host-full-AND-limit: quota 2.0, 4 cores, usage 0.2 -> 1.95
 		// and host busy 0.1 -> 3.8 at tick 40. Both arms over their marks, one

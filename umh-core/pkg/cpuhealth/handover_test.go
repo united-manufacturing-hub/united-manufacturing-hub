@@ -30,7 +30,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/diagnosis"
 )
 
-var _ = Describe("S3 R1b — the handover at twenty samples", func() {
+var _ = Describe("the handover at twenty samples", func() {
 	// spikeBurst drives steal/spike-below-minsamples' own shape: four samples
 	// at 0.90 on ticks 3..6, the rest 0. From n=7 the window holds all four
 	// spikes, so the mean is 3.6/n and the p95 is 0.90 at every window size

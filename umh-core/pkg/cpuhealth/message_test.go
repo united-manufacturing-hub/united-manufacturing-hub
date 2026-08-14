@@ -52,7 +52,7 @@ func healthySig() Signals {
 	}
 }
 
-var _ = Describe("S4 R1 — the healthy headline", func() {
+var _ = Describe("the healthy headline", func() {
 	It("should render the headline in limit mode with a percentage, and in no-limit mode with 'The machine' as subject", func() {
 		// Limit mode: entry 9 "CPU healthy. This instance is using %s of %s cores (%d%% of its limit) and can use %s more before it is marked degraded."
 		limit := healthySig()
@@ -178,7 +178,7 @@ var _ = Describe("S4 R1 — the healthy headline", func() {
 	})
 })
 
-var _ = Describe("S4 R2 — the healthy message reports only what it measured", func() {
+var _ = Describe("the healthy message reports only what it measured", func() {
 	It("should not report host usage or headroom when the host reading is absent", func() {
 		sig := healthySig()
 		sig.LimitApplies = false
@@ -223,7 +223,7 @@ var _ = Describe("S4 R2 — the healthy message reports only what it measured", 
 	})
 })
 
-var _ = Describe("S4 R3 — the budget lines", func() {
+var _ = Describe("the budget lines", func() {
 	It("should list the headroom budget always, and each of throttle, pressure and steal only when this tick's reading is usable", func() {
 		all := healthySig()
 		all.ThrottleRatio = 0.02
@@ -290,7 +290,7 @@ func degradedVerdict(kind CauseKind, value float64) Verdict {
 	return Verdict{State: StateDegraded, Attribution: AttributionHost, Causes: []Cause{{Kind: kind, Value: value}}}
 }
 
-var _ = Describe("S4 R4 — degraded copy", func() {
+var _ = Describe("degraded copy", func() {
 	It("should render one headline per cause kind", func() {
 		Expect(causeHeadline(CauseKindThrottling)).To(Equal("CPU limited"))
 		Expect(causeHeadline(CauseKindPressure)).To(Equal("CPU contention"))
@@ -381,7 +381,7 @@ var _ = Describe("S4 R4 — degraded copy", func() {
 	})
 })
 
-var _ = Describe("S4 R5 — block reasons", func() {
+var _ = Describe("block reasons", func() {
 	It("should render one block reason per cause kind, dispatching saturation on which member of its family survived the fold", func() {
 		Expect(BlockReason(CauseKindThrottling, degradedSig())).To(Equal("Can't add another bridge: this instance is already hitting its CPU limit. Raise the limit or reduce load first."))
 		Expect(BlockReason(CauseKindPressure, degradedSig())).To(Equal("Can't add another bridge: tasks on this instance are already waiting for a free CPU core. Reduce load, or give this instance more CPU, first."))
