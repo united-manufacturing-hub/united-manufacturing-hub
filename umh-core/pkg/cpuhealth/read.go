@@ -44,79 +44,6 @@ func NewLinuxSampler(fs filesystem.Service, base string) Sampler {
 	return &linuxSampler{fs: fs, base: base}
 }
 
-type linuxSampler struct {
-	fs           filesystem.Service
-	base         string
-	psiAvailable bool
-
-	// prevUsage and prevTime are the usage_usec edge and its read timestamp from
-	// the previous Read, used to derive the instantaneous usage rate. haveUsage
-	// reports whether the previous edge exists at all (false before the first
-	// successful usage read).
-	prevUsage float64
-	prevTime  time.Time
-	haveUsage bool
-
-	// prevHostBusy, prevHostSteal and prevHostDenom are the raw jiffy totals of
-	// the previous /proc/stat read, and prevHostTime its timestamp. These give
-	// the interval edges from which the instantaneous host-busy rate and the
-	// per-interval steal fraction are derived. haveHost reports whether a
-	// previous Read has fixed the /proc/stat baseline; only a read after that
-	// publishes host signals, and a falling counter (a host restart) re-baselines
-	// instead of publishing a nonsense value.
-	prevHostBusy  float64
-	prevHostSteal float64
-	prevHostDenom float64
-	prevHostTime  time.Time
-	haveHost      bool
-
-	// virtualized is the sticky virtualisation fact, resolved on the first
-	// successful /proc/cpuinfo read and re-published without re-reading. An
-	// unreadable cpuinfo resolves false but is not cached, so a later readable
-	// one is still considered.
-	virtualized  bool
-	virtResolved bool
-}
-
-// parseCounter reads one key's numeric value out of cpu.stat bytes. An absent
-// key yields an unavailable Reading — never a trusted 0 — while an unparsable
-// value for a present key returns a non-nil error, which fails the whole sample.
-func parseCounter(data []byte, key string) (diagnosis.Reading, error) {
-	for _, line := range strings.Split(string(data), "\n") {
-		fields := strings.Fields(line)
-		if len(fields) >= 2 && fields[0] == key {
-			v, err := strconv.ParseFloat(fields[1], 64)
-			if err != nil {
-				return diagnosis.Unknown(), fmt.Errorf("unparsable %s value %q: %w", key, fields[1], err)
-			}
-			return diagnosis.Known(v), nil
-		}
-	}
-	return diagnosis.Unknown(), nil
-}
-
-// readStat reads cpu.stat once and yields the raw usage total and both throttle
-// counters. A non-nil error reports a read OR parse failure of cpu.stat, either
-// of which fails the whole sample; each value's Reading is independently present
-// or unavailable on success.
-func (s *linuxSampler) readStat(ctx context.Context) (usage, periods, throttled diagnosis.Reading, err error) {
-	var data []byte
-	data, err = s.fs.ReadFile(ctx, s.base+"/cpu.stat")
-	if err != nil {
-		return diagnosis.Unknown(), diagnosis.Unknown(), diagnosis.Unknown(), err
-	}
-	if usage, err = parseCounter(data, "usage_usec"); err != nil {
-		return diagnosis.Unknown(), diagnosis.Unknown(), diagnosis.Unknown(), err
-	}
-	if periods, err = parseCounter(data, "nr_periods"); err != nil {
-		return diagnosis.Unknown(), diagnosis.Unknown(), diagnosis.Unknown(), err
-	}
-	if throttled, err = parseCounter(data, "nr_throttled"); err != nil {
-		return diagnosis.Unknown(), diagnosis.Unknown(), diagnosis.Unknown(), err
-	}
-	return usage, periods, throttled, nil
-}
-
 // Read samples the cgroup at base from cpu.max: a positive limit reads as a
 // capacity, "max" and non-positive limits as a present no-limit, and an
 // unreadable or unparsable cpu.max as absent no-signal.
@@ -255,4 +182,77 @@ func (s *linuxSampler) Read(ctx context.Context) (Sample, error) {
 		smp.Quota = diagnosis.Known(0.0)
 	}
 	return smp, nil
+}
+
+// readStat reads cpu.stat once and yields the raw usage total and both throttle
+// counters. A non-nil error reports a read OR parse failure of cpu.stat, either
+// of which fails the whole sample; each value's Reading is independently present
+// or unavailable on success.
+func (s *linuxSampler) readStat(ctx context.Context) (usage, periods, throttled diagnosis.Reading, err error) {
+	var data []byte
+	data, err = s.fs.ReadFile(ctx, s.base+"/cpu.stat")
+	if err != nil {
+		return diagnosis.Unknown(), diagnosis.Unknown(), diagnosis.Unknown(), err
+	}
+	if usage, err = parseCounter(data, "usage_usec"); err != nil {
+		return diagnosis.Unknown(), diagnosis.Unknown(), diagnosis.Unknown(), err
+	}
+	if periods, err = parseCounter(data, "nr_periods"); err != nil {
+		return diagnosis.Unknown(), diagnosis.Unknown(), diagnosis.Unknown(), err
+	}
+	if throttled, err = parseCounter(data, "nr_throttled"); err != nil {
+		return diagnosis.Unknown(), diagnosis.Unknown(), diagnosis.Unknown(), err
+	}
+	return usage, periods, throttled, nil
+}
+
+// parseCounter reads one key's numeric value out of cpu.stat bytes. An absent
+// key yields an unavailable Reading — never a trusted 0 — while an unparsable
+// value for a present key returns a non-nil error, which fails the whole sample.
+func parseCounter(data []byte, key string) (diagnosis.Reading, error) {
+	for _, line := range strings.Split(string(data), "\n") {
+		fields := strings.Fields(line)
+		if len(fields) >= 2 && fields[0] == key {
+			v, err := strconv.ParseFloat(fields[1], 64)
+			if err != nil {
+				return diagnosis.Unknown(), fmt.Errorf("unparsable %s value %q: %w", key, fields[1], err)
+			}
+			return diagnosis.Known(v), nil
+		}
+	}
+	return diagnosis.Unknown(), nil
+}
+
+type linuxSampler struct {
+	fs           filesystem.Service
+	base         string
+	psiAvailable bool
+
+	// prevUsage and prevTime are the usage_usec edge and its read timestamp from
+	// the previous Read, used to derive the instantaneous usage rate. haveUsage
+	// reports whether the previous edge exists at all (false before the first
+	// successful usage read).
+	prevUsage float64
+	prevTime  time.Time
+	haveUsage bool
+
+	// prevHostBusy, prevHostSteal and prevHostDenom are the raw jiffy totals of
+	// the previous /proc/stat read, and prevHostTime its timestamp. These give
+	// the interval edges from which the instantaneous host-busy rate and the
+	// per-interval steal fraction are derived. haveHost reports whether a
+	// previous Read has fixed the /proc/stat baseline; only a read after that
+	// publishes host signals, and a falling counter (a host restart) re-baselines
+	// instead of publishing a nonsense value.
+	prevHostBusy  float64
+	prevHostSteal float64
+	prevHostDenom float64
+	prevHostTime  time.Time
+	haveHost      bool
+
+	// virtualized is the sticky virtualisation fact, resolved on the first
+	// successful /proc/cpuinfo read and re-published without re-reading. An
+	// unreadable cpuinfo resolves false but is not cached, so a later readable
+	// one is still considered.
+	virtualized  bool
+	virtResolved bool
 }
