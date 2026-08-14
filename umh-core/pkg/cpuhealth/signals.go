@@ -26,6 +26,12 @@ package cpuhealth
 // HostHeadroomAvailable — and that is the cap this package allows before a
 // family of near-duplicate booleans has to be modelled as a set instead, which
 // is why the readiness trio below is named for what it holds.
+//
+// Flat for the same reasons as Sample, plus one of its own: a single signal
+// already spans three of the groups below — throttle appears as ThrottleRatio,
+// as ThrottleFired and as ThrottleSignalReady — so a per-signal type splinters
+// the groups and a per-group type splinters the signals. Grouping would also
+// multiply the value-beside-its-own-bool pairs the cap above holds to two.
 type Signals struct {
 	// The metrics. Each is populated independent of its latch state, so the
 	// number stays observable when the latch has not fired.
