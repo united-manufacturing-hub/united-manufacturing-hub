@@ -143,10 +143,11 @@ func Decide(engine *diagnosis.Engine[Sample], s Sample, env diagnosis.Environmen
 		sig.HostCpus = hc
 	}
 
-	// The no-host-stats saturation fraction is usage-fraction's
+	// The average usage fraction is usage-fraction's
 	// own reduction — the number the latch was judged on, not the usage track
-	// divided by anything, so a mid-run core-count change cannot split them.
-	sig.NoHostStatsSaturationFraction, _ = engine.Reduction(sigSaturation, instUsageFraction).Get()
+	// divided by anything, so a mid-run core-count change cannot split them. It
+	// is filled on every tick, not only when the no-host-stats arm fires.
+	sig.AvgUsageFraction, _ = engine.Reduction(sigSaturation, instUsageFraction).Get()
 
 	// The dead-zone annotation. The dead zone is quota nil or non-positive AND
 	// PSI absent, and it is an annotation on a healthy verdict, never a state.

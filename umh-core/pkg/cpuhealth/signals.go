@@ -17,6 +17,10 @@
 
 package cpuhealth
 
+import (
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/diagnosis"
+)
+
 // Signals is the per-tick fact bag ComposeMessage and BlockReason read to render
 // a sentence the ranked cause list alone cannot carry. The first 31 fields are
 // the parked shape in declaration order; everything after them is appended. Two
@@ -33,20 +37,22 @@ package cpuhealth
 // the groups and a per-group type splinters the signals. Grouping would also
 // multiply the value-beside-its-own-bool pairs the cap above holds to two.
 type Signals struct {
-	// The metrics. Each is populated independent of its latch state, so the
-	// number stays observable when the latch has not fired.
-	UsageFraction float64 // quota-relative; collapses to 0 in no-limit mode
-	ThrottleRatio float64 // 60s nr_throttled/nr_periods delta; negatives clamped to 0
-	PressureAvg60 float64 // PSI avg60; NaN/negative/+Inf clamped to 0
-	StealP95      float64 // 60s p95; 0 on bare metal and below 2 samples
+	// The metrics. ThrottleRatio, PressureAvg60 and StealP95 are populated
+	// independent of their latch state, so the number stays observable when the
+	// latch has not fired.
+	UsageFraction diagnosis.Reading // absent in every mode; declared for a future frontend projection
+	ThrottleRatio float64           // 60s nr_throttled/nr_periods delta; negatives clamped to 0
+	PressureAvg60 float64           // PSI avg60; NaN/negative/+Inf clamped to 0
+	StealP95      float64           // 60s p95; 0 on bare metal and below 2 samples
 
-	// Observability only: none of the six changes a verdict.
-	AvgUsageFraction float64
-	P95UsageFraction float64
-	P99UsageFraction float64
+	// Observability only: none of the six changes a verdict. The four Readings
+	// are declared for a future frontend projection and nothing fills them.
+	AvgUsageFraction float64 // 60s mean of usage against the logical CPU count
+	P95UsageFraction diagnosis.Reading
+	P99UsageFraction diagnosis.Reading
 	AvgUsageCores    float64 // ABSOLUTE cores; limit-mode headroom and the wire's avgMCpu read this one value
-	P95UsageCores    float64
-	P99UsageCores    float64
+	P95UsageCores    diagnosis.Reading
+	P99UsageCores    diagnosis.Reading
 	UsageRingActive  bool // usage-cores reduced to StateValue — the healthy headline's LIMIT-mode floor gate
 	// HostBusyRingActive: host-busy reduced to StateValue — the healthy
 	// headline's NO-LIMIT floor gate. Two tracks, two floors: an outage can
@@ -64,20 +70,19 @@ type Signals struct {
 	// are what causeDetails and BlockReason dispatch on. Fired.Identity carries
 	// the signal name only, so Decide recovers the instrument from
 	// Fired.Marks.Unit: "cores" is host-headroom, "fraction" is usage-fraction.
-	SaturationFired               bool
-	LimitSaturationFired          bool
-	HostFullFired                 bool
-	NoHostStatsSaturationFired    bool
-	NoLimitHostFired              bool
-	NoHostStatsSaturationFraction float64
+	SaturationFired            bool
+	LimitSaturationFired       bool
+	HostFullFired              bool
+	NoHostStatsSaturationFired bool
+	NoLimitHostFired           bool
 
 	// The headroom arithmetic. Neither headroom is clamped: a full box yields a
 	// negative number, not a 0.
 	HostHeadroomCores      float64
 	HostBusyCoresAvailable bool // the sample's own readability flag; a ==0 proxy cannot tell unreadable from idle
 	AvgHostBusyCores       float64
-	HeadroomCores          float64 // the saturation decision variable
-	CapacityCores          float64 // the quota when set and positive, else LogicalCpus
+	HeadroomCores          diagnosis.Reading // declared for a future frontend projection; nothing fills it
+	CapacityCores          float64           // the quota when set and positive, else LogicalCpus
 	ReserveCores           float64
 
 	// Capability, NOT readability. The healthy message's budget lines are
