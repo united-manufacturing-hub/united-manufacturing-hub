@@ -316,7 +316,7 @@ var _ = Describe("degraded copy", func() {
 		Expect(msg).To(ContainSubstring("\n\n"))
 	})
 
-	It("should dispatch the saturation paragraph on which arm fired, in the fold's order, and append the two clauses rather than replacing their paragraphs", func() {
+	It("should dispatch the saturation paragraph on which arm fired and append the two clauses rather than replacing their paragraphs", func() {
 		// Arm 2 — HostFullFired alone, entry 30.
 		msg := ComposeMessage(degradedVerdict(CauseKindSaturation, 0.5), func() Signals { s := degradedSig(); s.HostFullFired = true; return s }())
 		Expect(msg).To(ContainSubstring("The machine is full. Add CPU to the machine, or reduce other software running on it."))
@@ -438,5 +438,73 @@ var _ = Describe("block reasons", func() {
 				Expect(sig.HostFullFired).To(BeFalse(), "HostFullFired is the limit-mode name")
 			}
 		}
+	})
+
+	It("should name the same saturation cause on both customer-facing surfaces when a container at its limit cannot read host stats", func() {
+		// 4 cores, a 3.5-core quota, 3.5 cores used, /proc/stat unreadable.
+		// usage-fraction reduces to 3.5/4 = 0.875, above its 0.70 fire mark;
+		// limit-headroom reduces to 3.5 - 3.5 - 0.35 = -0.35, below zero. Both
+		// latches hold on the same tick, and the absent host reading is what
+		// keeps the host-headroom arm out of it.
+		engine, err := NewEngine(4, 3.5)
+		Expect(err).NotTo(HaveOccurred())
+		env := diagnosis.NewEnvironment(HasLimit)
+
+		base := time.Now()
+		var verdict Verdict
+		var sig Signals
+		for i := 0; i <= 5; i++ {
+			smp := Sample{
+				Timestamp:   base.Add(time.Duration(i) * time.Second),
+				CpuScope:    ScopeHost,
+				Quota:       diagnosis.Known(3.5),
+				HostBusy:    diagnosis.Unknown(),
+				UsageCores:  diagnosis.Known(3.5),
+				LogicalCpus: diagnosis.Known(4),
+				HostCpus:    diagnosis.Known(4),
+			}
+			verdict, sig = Decide(engine, smp, env)
+		}
+
+		Expect(sig.NoHostStatsSaturationFired).To(BeTrue(), "the no-host-stats arm must fire for this spec to mean anything")
+		Expect(sig.LimitSaturationFired).To(BeTrue(), "the limit arm must fire for this spec to mean anything")
+		Expect(sig.HostFullFired).To(BeFalse(), "an unreadable host cannot raise the host-full arm")
+		Expect(verdict.Causes).To(HaveLen(1))
+		Expect(verdict.Causes[0].Kind).To(Equal(CauseKindSaturation))
+
+		// Recover the arm each surface chose without naming a sentence:
+		// re-render that surface with exactly one arm flag raised and every
+		// other fact left as this tick produced it, then match against what the
+		// surface actually printed. Both sides read the same constants, so
+		// editing a literal moves them together and cannot silence a
+		// disagreement.
+		arms := []string{"host-full", "limit", "no-host-stats", "no-limit-host"}
+		withArm := func(s Signals, arm string) Signals {
+			s.HostFullFired = arm == "host-full"
+			s.LimitSaturationFired = arm == "limit"
+			s.NoHostStatsSaturationFired = arm == "no-host-stats"
+			s.NoLimitHostFired = arm == "no-limit-host"
+			return s
+		}
+		armOf := func(surface string, render func(Signals) string) string {
+			printed := render(sig)
+			var matched []string
+			for _, arm := range arms {
+				if render(withArm(sig, arm)) == printed {
+					matched = append(matched, arm)
+				}
+			}
+			Expect(matched).To(HaveLen(1),
+				"%s printed %q, which %d of the four arms render, so the arm it chose cannot be recovered",
+				surface, printed, len(matched))
+			return matched[0]
+		}
+
+		details := armOf("the technical details", func(s Signals) string { return causeDetails(verdict.Causes[0], s) })
+		block := armOf("the bridge-refusal reason", func(s Signals) string { return BlockReason(CauseKindSaturation, s) })
+
+		Expect(details).To(Equal(block),
+			"the two surfaces disagree on one tick: the technical details blame the %s arm while the bridge refusal blames the %s arm, so a customer is given two contradictory remedies",
+			details, block)
 	})
 })

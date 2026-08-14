@@ -180,8 +180,10 @@ func causeHeadline(kind CauseKind) string {
 
 // causeDetails returns the curated Technical-Details copy for one cause,
 // interpolating the live number from the cause's Value or the derived Signals.
-// The saturation switch reads the sub-latch flags directly, in the fold's own
-// order; arm 6 is compound (NoLimitHostFired with host unreadable) and a
+// The saturation switch reads the sub-latch flags directly. Its compound
+// host-full-and-limit case comes first and has no counterpart in BlockReason;
+// the four single-arm cases under it run in the precedence the two functions
+// share. Arm 6 is compound (NoLimitHostFired with host unreadable) and a
 // readable no-limit full host falls to arm 7.
 func causeDetails(c Cause, signals Signals) string {
 	switch c.Kind {
@@ -198,12 +200,6 @@ func causeDetails(c Cause, signals Signals) string {
 			return fmt.Sprintf(detailSatBothAtLimit, limitStr)
 		case signals.HostFullFired:
 			return detailSatHostFull
-		case signals.NoHostStatsSaturationFired:
-			pct := pctOf(c.Value)
-			if signals.PsiApplies {
-				return fmt.Sprintf(detailSatNoStatsPSI, pct)
-			}
-			return fmt.Sprintf(detailSatNoStatsNoPSI, pct)
 		case signals.LimitSaturationFired:
 			pct := pctOf(signals.AvgUsageCores / signals.CapacityCores)
 			detail := fmt.Sprintf(detailSatLimit, pct)
@@ -211,6 +207,12 @@ func causeDetails(c Cause, signals Signals) string {
 				detail += detailSatHostUnavail
 			}
 			return detail
+		case signals.NoHostStatsSaturationFired:
+			pct := pctOf(c.Value)
+			if signals.PsiApplies {
+				return fmt.Sprintf(detailSatNoStatsPSI, pct)
+			}
+			return fmt.Sprintf(detailSatNoStatsNoPSI, pct)
 		case signals.NoLimitHostFired && !signals.HostBusyCoresAvailable:
 			return detailSatNoLimitUnavail
 		default:
@@ -229,10 +231,12 @@ func causeDetails(c Cause, signals Signals) string {
 // BlockReason returns the per-cause bridge-refusal message shown when bridge
 // creation is refused because the instance's CPU is degraded. The dominant
 // cause kind selects the message; the saturation kind further dispatches on
-// which sub-latch arm survived the fold, in BlockReason's own order (host-full,
-// then limit, then no-host-stats, then no-limit-host) — which is not
-// causeDetails' order, and the swap is unobservable today because the arms
-// never co-fire. An unknown kind falls back to the generic degraded message.
+// which sub-latch arm survived the fold, in the precedence this function shares
+// with causeDetails: host-full, then limit, then no-host-stats, then
+// no-limit-host. The two are one tick's two customer-facing views and must stay
+// in step — the limit arm and the no-host-stats arm do co-fire, and an order
+// that differs between them hands one customer two contradictory remedies at
+// once. An unknown kind falls back to the generic degraded message.
 func BlockReason(dominantKind CauseKind, signals Signals) string {
 	switch dominantKind {
 	case CauseKindThrottling:
