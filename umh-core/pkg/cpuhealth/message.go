@@ -88,7 +88,7 @@ func composeHealthy(signals Signals) string {
 	if signals.LimitApplies {
 		usedDisp = round1(signals.AvgUsageCores)
 	} else {
-		usedDisp = round1(signals.HostBusyCores60sMean)
+		usedDisp = round1(signals.AvgHostBusyCores)
 	}
 	reserveDisp = round1(signals.ReserveCores)
 	totalDisp := round1(signals.CapacityCores)
@@ -144,7 +144,7 @@ func composeHealthy(signals Signals) string {
 	// The budget body. Headroom is unconditional; each of throttle, pressure
 	// and steal prints only when THIS TICK'S reading is usable. The gates
 	// are the per-signal readiness trio, never the capability flags — a
-	// LimitApplies/PsiApplies/StealApplies build prints a confident 0% for a
+	// LimitApplies/PressureApplies/StealApplies build prints a confident 0% for a
 	// reading that never happened.
 	details := []string{
 		fmt.Sprintf(headroomLine, headroomStr, totalStr, usedStr, reserveStr),
@@ -153,7 +153,7 @@ func composeHealthy(signals Signals) string {
 		details = append(details, fmt.Sprintf(throttleLine, pctOf(signals.ThrottleRatio)))
 	}
 	if signals.PressureSignalReady {
-		details = append(details, fmt.Sprintf(pressureLine, pctOf(signals.PressureAvg60Out)))
+		details = append(details, fmt.Sprintf(pressureLine, pctOf(signals.PressureAvg60)))
 	}
 	if signals.StealSignalReady {
 		details = append(details, fmt.Sprintf(stealLine, pctOf(signals.StealP95)))
@@ -209,14 +209,14 @@ func causeDetails(c Cause, signals Signals) string {
 			return detail
 		case signals.NoHostStatsSaturationFired:
 			pct := pctOf(c.Value)
-			if signals.PsiApplies {
+			if signals.PressureApplies {
 				return fmt.Sprintf(detailSatNoStatsPSI, pct)
 			}
 			return fmt.Sprintf(detailSatNoStatsNoPSI, pct)
 		case signals.NoLimitHostFired && !signals.HostBusyCoresAvailable:
 			return detailSatNoLimitUnavail
 		default:
-			pct := pctOf(signals.HostBusyCores60sMean / signals.CapacityCores)
+			pct := pctOf(signals.AvgHostBusyCores / signals.CapacityCores)
 			detail := fmt.Sprintf(detailSatNoLimitRead, pct)
 			if signals.LimitedVisibility {
 				detail += detailSatNoLimitClause

@@ -146,9 +146,9 @@ var _ = Describe("verdict assembly", func() {
 
 				// Metrics, from the same pass, below their marks.
 				Expect(sig.ThrottleRatio).To(BeNumerically("~", 0.02, 1e-9), "a quiet throttle latch must not publish 0")
-				Expect(sig.PressureAvg60Out).To(BeNumerically("~", 0.1, 1e-9))
+				Expect(sig.PressureAvg60).To(BeNumerically("~", 0.1, 1e-9))
 				Expect(sig.AvgUsageCores).To(BeNumerically("~", 0.2, 1e-9))
-				Expect(sig.HostBusyCores60sMean).To(BeNumerically("~", 0.5, 1e-9))
+				Expect(sig.AvgHostBusyCores).To(BeNumerically("~", 0.5, 1e-9))
 
 				// The two track floors.
 				Expect(sig.UsageRingActive).To(BeTrue())

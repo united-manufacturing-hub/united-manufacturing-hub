@@ -162,11 +162,11 @@ func Decide(engine *diagnosis.Engine[Sample], s Sample, env diagnosis.Environmen
 	// only, so without these reads a confident 0 would be published on every
 	// healthy tick.
 	sig.ThrottleRatio, _ = engine.Reduction(sigThrottling, instThrottleRatio).Get()
-	sig.PressureAvg60Out, _ = engine.Reduction(sigPressure, instPressureAvg60).Get()
+	sig.PressureAvg60, _ = engine.Reduction(sigPressure, instPressureAvg60).Get()
 	sig.StealP95, _ = engine.Reduction(sigSteal, instStealP95).Get()
 	sig.HostHeadroomCores, _ = engine.Reduction(sigSaturation, instHostHeadroom).Get()
 	sig.AvgUsageCores = ourUsageMean
-	sig.HostBusyCores60sMean = hostBusyMean
+	sig.AvgHostBusyCores = hostBusyMean
 	sig.UsageRingActive = ourUsageState == diagnosis.StateValue
 	sig.HostBusyRingActive = hostBusyState == diagnosis.StateValue
 
@@ -183,7 +183,7 @@ func Decide(engine *diagnosis.Engine[Sample], s Sample, env diagnosis.Environmen
 		sig.ReserveCores = cpuReserveCores
 	}
 	// HostBusyCoresAvailable mirrors the sample's own readability: a raw
-	// HostBusyCores60sMean == 0 proxy cannot tell an unreadable /proc/stat from
+	// AvgHostBusyCores == 0 proxy cannot tell an unreadable /proc/stat from
 	// an idle host.
 	if _, ok := s.HostBusy.Get(); ok {
 		sig.HostBusyCoresAvailable = true
@@ -209,7 +209,7 @@ func Decide(engine *diagnosis.Engine[Sample], s Sample, env diagnosis.Environmen
 	// read these as "the reading succeeded". The *SignalReady trio is the
 	// readability half.
 	sig.LimitApplies = env.Has(HasLimit)
-	sig.PsiApplies = s.PsiAvailable
+	sig.PressureApplies = s.PsiAvailable
 	sig.StealApplies = env.Has(HasVirtualization)
 
 	return verdict, sig
