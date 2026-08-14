@@ -15,7 +15,7 @@
 // The fallback metric set. When host stats are absent, the saturation
 // signal falls back to usage-fraction: host-headroom's window empties past the
 // demote span, selection walks to usage-fraction and JUDGES on it, and the
-// number it judged on reaches Signals as NoHostStatsSaturationFraction. The
+// number it judged on reaches Signals as AvgUsageFraction. The
 // dead zone — quota nil or non-positive AND PSI absent — is an annotation on a
 // healthy verdict, carried by Signals.LimitedVisibility, never a state.
 package cpuhealth
@@ -67,7 +67,7 @@ var _ = Describe("the fallback metric set", func() {
 				Expect(v).To(BeNumerically("~", 0.1, 1e-9))
 				// The metric is usage-fraction's OWN reduction — not the usage
 				// track divided by anything.
-				Expect(sig.NoHostStatsSaturationFraction).To(BeNumerically("~", 0.1, 1e-9))
+				Expect(sig.AvgUsageFraction).To(BeNumerically("~", 0.1, 1e-9))
 			}
 		}
 

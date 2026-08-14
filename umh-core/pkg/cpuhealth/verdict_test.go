@@ -16,7 +16,8 @@
 // dominant cause, orders Verdict.Causes through diagnosis.Rank (no local sort),
 // returns healthy with no causes when nothing is fired, and fills the
 // observable metrics, the two track floors and each signal's readiness from the
-// same pass even when no latch has fired.
+// same pass even when no latch has fired — and leaves the fields it does not
+// fill reporting absent rather than a measured zero.
 package cpuhealth
 
 import (
@@ -161,5 +162,43 @@ var _ = Describe("verdict assembly", func() {
 				Expect(sig.StealSignalReady).To(BeFalse(), "a bare-metal box has no steal answer, whatever its window holds")
 			}
 		}
+	})
+
+	It("should report the six fields nothing fills as absent rather than as a measured zero", func() {
+		// Six fields are declared for a future frontend projection and Decide has
+		// no assignment for any of them. A float64 could not say so: 0 is a
+		// legitimate usage figure, so an unfilled field read as a measurement.
+		// Each must answer through Reading's second return, which a Known(0)
+		// would fail — the distinction is the whole point of the type.
+		engine, err := NewEngine(4, 2.0)
+		Expect(err).NotTo(HaveOccurred())
+		env := diagnosis.NewEnvironment(HasLimit, HasPressureStats)
+		base := time.Now()
+
+		var sig Signals
+		for i := 0; i <= 65; i++ {
+			_, sig = Decide(engine, Sample{
+				Timestamp:   base.Add(time.Duration(i) * time.Second),
+				CpuScope:    ScopeHost,
+				Pressure:    diagnosis.Known(0.1),
+				Steal:       diagnosis.Known(0),
+				HostBusy:    diagnosis.Known(0.5),
+				UsageCores:  diagnosis.Known(0.2),
+				NrPeriods:   diagnosis.Known(0),
+				NrThrottled: diagnosis.Known(0),
+			}, env)
+		}
+
+		// A sibling the same pass DOES fill. Without it this spec would also pass
+		// on a Decide that filled nothing at all.
+		Expect(sig.AvgUsageCores).To(BeNumerically("~", 0.2, 1e-9), "the pass must have run for the absences below to mean anything")
+
+		absent := func(r diagnosis.Reading) bool { _, ok := r.Get(); return !ok }
+		Expect(absent(sig.UsageFraction)).To(BeTrue(), "UsageFraction")
+		Expect(absent(sig.P95UsageFraction)).To(BeTrue(), "P95UsageFraction")
+		Expect(absent(sig.P99UsageFraction)).To(BeTrue(), "P99UsageFraction")
+		Expect(absent(sig.P95UsageCores)).To(BeTrue(), "P95UsageCores")
+		Expect(absent(sig.P99UsageCores)).To(BeTrue(), "P99UsageCores")
+		Expect(absent(sig.HeadroomCores)).To(BeTrue(), "HeadroomCores")
 	})
 })
