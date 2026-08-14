@@ -77,15 +77,33 @@ type Readiness struct {
 // key indexes the engine's window map by (signal, instrument) pair.
 type key struct{ Signal, Instrument string }
 
+// signalState is one signal and the single latch that judges it. 7e8301485 took
+// these out of name-keyed maps into slices held in the same order; pairing them
+// finishes that move, because "one latch per signal" is now the type rather than
+// two slices agreeing about their length and their order.
+type signalState[S any] struct {
+	signal Signal[S]
+	latch  Latch
+}
+
+// trackState is one track and the single window it reduces through, paired for
+// the same reason. Track no longer walks one slice while indexing another.
+type trackState[S any] struct {
+	track  Track[S]
+	window Window
+}
+
 // Engine owns every window, every track and one latch per signal, for one table.
 // It is not synchronized: the goroutine that calls Observe owns it, and a reader
 // calling Select, Reduction or Track from another races on points and latches.
 type Engine[S any] struct {
+	// windows is the last name-keyed map in here, and it stays one: Select
+	// resolves against the CALLER'S Signal, so a lookup can legitimately miss
+	// and resolve's nil arms are reachable. The two below are built by
+	// NewEngine and cannot miss, which is why they are pairs instead.
 	windows map[key]*Window
-	tracked []Window // one per track, same order
-	latches []Latch  // one per signal, same order
-	signals []Signal[S]
-	tracks  []Track[S]
+	signals []signalState[S]
+	tracks  []trackState[S]
 }
 
 // NewEngine validates the table, then builds one window per (signal, instrument)
@@ -101,11 +119,9 @@ func NewEngine[S any](t Table[S]) (*Engine[S], error) {
 	}
 
 	e := &Engine[S]{
-		signals: t.Signals,
-		tracks:  t.Tracks,
 		windows: make(map[key]*Window),
-		tracked: make([]Window, 0, len(t.Tracks)),
-		latches: make([]Latch, 0, len(t.Signals)),
+		signals: make([]signalState[S], 0, len(t.Signals)),
+		tracks:  make([]trackState[S], 0, len(t.Tracks)),
 	}
 	for _, s := range t.Signals {
 		for _, inst := range s.Instruments {
@@ -121,15 +137,18 @@ func NewEngine[S any](t Table[S]) (*Engine[S], error) {
 		if err != nil {
 			return nil, err
 		}
-		e.tracked = append(e.tracked, *w)
+		e.tracks = append(e.tracks, trackState[S]{track: tr, window: *w})
 	}
 	for i, s := range t.Signals {
-		e.latches = append(e.latches, Latch{identity: Identity{
-			Signal:   s.Name,
-			Tier:     s.Tier,
-			External: s.External,
-			Index:    i,
-		}})
+		e.signals = append(e.signals, signalState[S]{
+			signal: s,
+			latch: Latch{identity: Identity{
+				Signal:   s.Name,
+				Tier:     s.Tier,
+				External: s.External,
+				Index:    i,
+			}},
+		})
 	}
 
 	return e, nil
@@ -335,14 +354,14 @@ func (e *Engine[S]) resolve(s Signal[S], capable []Instrument[S]) (Instrument[S]
 //	  the engine          resolves  Availability  what one signal can say now
 //	  Latch.Update        judges    Fired         a signal that crossed its mark
 func (e *Engine[S]) Observe(sample S, env Environment, at time.Time) ([]Fired, []Readiness) {
-	for i, tr := range e.tracks { // reduced, never judged
-		w := &e.tracked[i]
-		w.Observe(tr.Extract(sample), Unknown(), at) // same clock as every window below
+	for i := range e.tracks { // reduced, never judged
+		ts := &e.tracks[i]
+		ts.window.Observe(ts.track.Extract(sample), Unknown(), at) // same clock as every window below
 	}
 
-	for _, s := range e.signals {
-		for _, inst := range s.Instruments {
-			w := e.windows[key{Signal: s.Name, Instrument: inst.Name}]
+	for _, st := range e.signals {
+		for _, inst := range st.signal.Instruments {
+			w := e.windows[key{Signal: st.signal.Name, Instrument: inst.Name}]
 			if w == nil { // NewEngine builds a window for every pair; never nil here
 				continue
 			}
@@ -353,9 +372,11 @@ func (e *Engine[S]) Observe(sample S, env Environment, at time.Time) ([]Fired, [
 
 	var fired []Fired
 	readiness := make([]Readiness, 0, len(e.signals))
-	for i, s := range e.signals {
+	for i := range e.signals {
+		st := &e.signals[i]
+		s := st.signal
 		inst, red, cov, avail := e.resolve(s, s.Capable(env))
-		l := &e.latches[i]
+		l := &st.latch
 		switch avail {
 		case Ready:
 			l.Update(red, cov, inst.Marks, at)
@@ -395,9 +416,9 @@ func (e *Engine[S]) Reduction(signal, instrument string) Reduced {
 // returns the zero Reduced, StateAbsent. Same contract as Reduction, on the
 // windows that belong to no signal: it must follow an Observe on the same tick.
 func (e *Engine[S]) Track(name string) Reduced {
-	for i, tr := range e.tracks {
-		if tr.Name == name {
-			return e.tracked[i].Reduce()
+	for i := range e.tracks {
+		if e.tracks[i].track.Name == name {
+			return e.tracks[i].window.Reduce()
 		}
 	}
 	return Reduced{}
