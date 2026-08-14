@@ -12,15 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// S2 R4b — The CPU scope (F6). The sampler reports whether its logical CPU
+// The CPU scope. The sampler reports whether its logical CPU
 // count describes EVERY CPU on the machine (ScopeHost) or only the ones this
 // container may run on (ScopeAffinity), and ScopeUnknown when the machine's CPU
 // count cannot be read — never a silent ScopeHost on a failing read, since a
-// pinned idle container misread as host is F6 re-firing. The machine's count is
-// the number of per-CPU (cpu0, cpu1, …) lines in /proc/stat, the same bytes R4
-// already reads; the container's allowed set is read from the cgroup's
-// effective cpuset, so both sides of the comparison ride the injectable
-// filesystem and the rung is unit-testable without hardware.
+// pinned idle container misread as host makes the host-headroom subtraction
+// invalid. The machine's count is
+// the number of per-CPU (cpu0, cpu1, …) lines in /proc/stat, the same bytes the
+// host-signal read already consumes; the container's allowed set is read from
+// the cgroup's effective cpuset, so both sides of the comparison ride the
+// injectable filesystem and the scope is unit-testable without hardware.
 package cpuhealth_test
 
 import (
@@ -38,7 +39,8 @@ var _ = Describe("CPU scope", func() {
 	const base = "/sys/fs/cgroup"
 
 	// A machine with four per-CPU lines: cpu0..cpu3, alongside the aggregate
-	// "cpu " line R4 reads. The count of these lines is the machine's CPU count.
+	// "cpu " line the host signals come from. The count of these lines is the
+	// machine's CPU count.
 	fourCPUProcStat := []byte("cpu  100 20 80 250 55 0 0 10 1000 200\n" +
 		"cpu0 0 0 0 0 0 0 0 0 0 0\n" +
 		"cpu1 0 0 0 0 0 0 0 0 0 0\n" +
@@ -86,7 +88,7 @@ var _ = Describe("CPU scope", func() {
 			"an allowed set covering all machine CPUs must read ScopeHost")
 
 		// When the container is pinned to a strict subset, the logical count
-		// describes only those CPUs: ScopeAffinity. This is F6's shape — an idle
+		// describes only those CPUs: ScopeAffinity. This is the shape that matters — an idle
 		// pinned container must not be misread as host.
 		affS, err := newScopeSampler(fourCPUProcStat, false, "0-1").Read(ctx)
 		Expect(err).NotTo(HaveOccurred())
@@ -94,22 +96,22 @@ var _ = Describe("CPU scope", func() {
 			"an allowed set pinning the container to 2 of 4 CPUs must read ScopeAffinity, not ScopeHost")
 
 		// The machine count is kept on the snapshot, not only the comparison's
-		// outcome (R4b spec 3): HostCpus is present and equals the four per-CPU
-		// lines R4's /proc/stat read.
+		// outcome: HostCpus is present and equals the four per-CPU
+		// lines of the same /proc/stat read.
 		machine, ok := affS.HostCpus.Get()
 		Expect(ok).To(BeTrue(), "the machine's CPU count must be kept on the snapshot")
 		Expect(machine).To(Equal(4.0), "four per-CPU lines are four machine CPUs")
 
-		// The container's logical CPU count — F6's "2" in "pinned to 2 of 8" —
+		// The container's logical CPU count — the "2" in "pinned to 2 of 8" —
 		// is kept beside the scope, from the same cpuset read, so the withheld
-		// headroom sentence can name it (S3 R5 spec 3).
+		// headroom sentence can name it.
 		logical, ok := affS.LogicalCpus.Get()
 		Expect(ok).To(BeTrue(), "the logical CPU count must be kept on the snapshot")
 		Expect(logical).To(Equal(2.0), "an allowed set of two CPUs is a logical count of two")
 
 		// When the machine's CPU count cannot be read, the scope is unknown —
 		// NOT a silent ScopeHost. Defaulting a failed read to host would reinstate
-		// F6 by another route: the container is still pinned, we have just
+		// the invalid subtraction by another route: the container is still pinned, we have just
 		// stopped being able to say so.
 		unkS, err := newScopeSampler(nil, true, "0-1").Read(ctx)
 		Expect(err).NotTo(HaveOccurred())
@@ -123,7 +125,7 @@ var _ = Describe("CPU scope", func() {
 		Expect(again.CpuScope).To(Equal(affS.CpuScope),
 			"the scope must be stable across reads of the same configuration")
 
-		// A NON-CONTIGUOUS allowed set names the CPU count F6 exists for: static
+		// A NON-CONTIGUOUS allowed set names the CPU count the scope exists for: static
 		// CPU manager pins a pod to scattered CPUs, e.g. "0,2". A build that
 		// parses only a single contiguous "lo-hi" range would drop these to
 		// ScopeUnknown and lose the pinned-signal entirely.
@@ -148,7 +150,7 @@ var _ = Describe("CPU scope", func() {
 		// enabled, or a transient failure). We can see the machine has 4 CPUs but
 		// not how many this container may run on, so the scope must be unknown —
 		// a regression that defaulted this to ScopeHost would pass every earlier
-		// case and reinstate F6.
+		// case and reinstate the invalid subtraction.
 		s, err := newScopeSampler(fourCPUProcStat, false, "").Read(ctx)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(s.CpuScope).To(Equal(cpuhealth.ScopeUnknown),

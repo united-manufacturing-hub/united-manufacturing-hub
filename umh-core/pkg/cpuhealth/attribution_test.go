@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// S3 R4 (D1, D2, D3): attribution consults its evidence. A verdict field is not
+// Attribution consults its evidence. A verdict field is not
 // asserted without the evidence for it. The host/container split reads both 60s
 // means back from the engine's tracks and is STRICTLY greater (hbm > 2 x oum);
 // an internal cause (throttling, pressure, the container's own limit budget)
@@ -70,7 +70,7 @@ var _ = Describe("S3 R4 — attribution consults its evidence", func() {
 		// The same scenario at ticks 100+: our usage mean 1.95, the host's
 		// non-container share 3.80 - 1.95 = 1.85, which is NOT greater than our
 		// 1.95 — the split says it is not the host's fault. Today it says host;
-		// D1 makes it unknown.
+		// the rebuilt attribution makes it unknown.
 		engine, err := NewEngine(4, 2.0)
 		Expect(err).NotTo(HaveOccurred())
 		env := diagnosis.NewEnvironment(HasVirtualization, HasLimit)
@@ -102,7 +102,7 @@ var _ = Describe("S3 R4 — attribution consults its evidence", func() {
 		// The equality boundary: the comparison is STRICTLY greater, matching
 		// the parked branch, so hostBusyMean == 2 x ourUsageMean is unknown, not
 		// host. The difference is measure-zero and the recording cannot see it,
-		// so a rung that asserts only the two recorded rows leaves it to whoever
+		// so a spec that asserts only the two recorded rows leaves it to whoever
 		// types the operator. Drive hbm 3.2 against oum 1.6 (host-headroom -0.2
 		// fires, 3.2 == 2 x 1.6) and require unknown.
 		engine2, err := NewEngine(4, 2.0)

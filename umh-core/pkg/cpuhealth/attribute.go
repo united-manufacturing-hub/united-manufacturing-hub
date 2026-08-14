@@ -36,7 +36,7 @@ func causeOf(engine *diagnosis.Engine[Sample], f diagnosis.Fired) Cause {
 	case sigSteal:
 		// Selection prefers the p95 whenever its window can supply a value, so
 		// the cause value follows the same preference: p95 when it is
-		// StateValue, the mean before that (F8).
+		// StateValue, the mean before that.
 		v, st := engine.Reduction(sigSteal, instStealP95).Get()
 		if st != diagnosis.StateValue {
 			v, _ = engine.Reduction(sigSteal, instStealMean).Get()

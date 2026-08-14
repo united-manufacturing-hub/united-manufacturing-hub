@@ -99,7 +99,7 @@ func cpuTable(cores, quota float64) diagnosis.Table[Sample] {
 		//
 		// host-busy: host-headroom's window holds cores − hostBusy − reserve AND
 		// is Unknown() off ScopeHost, so inverting it loses the term on exactly
-		// the affinity boxes S3 R4 says still have a valid split.
+		// the affinity boxes whose host/container split is still valid.
 		//
 		// usage-cores: limit-headroom's window holds quota − usage − 0.10 × quota
 		// and does not exist at all when cpuTable omits limit-saturation, which
@@ -219,7 +219,7 @@ func stealSignal() diagnosis.Signal[Sample] {
 				// Counter stays false, on both steal arms. A steal fraction that
 				// falls has fallen. Declare it a counter and the window restarts
 				// on the first dip, never reaches p95's twenty samples, and the
-				// handover, F8 and D-03's two-second readiness all die silently
+				// handover, the mean fallback and the two-second readiness all die silently
 				// green — steal simply never fires.
 			},
 		},
@@ -245,7 +245,7 @@ func saturationSignal(cores float64) diagnosis.Signal[Sample] {
 				// because off a host-scoped sample the count means something else
 				// and there is no headroom to read.
 				Extract: func(s Sample) diagnosis.Reading {
-					// Defense-in-depth, not the gate. The rung's gate is the
+					// Defense-in-depth, not the gate. The real gate is the
 					// omission: cpuTable appends no saturation signal when cores
 					// <= 0, so this Extract is unreachable through production, and
 					// the absence is pinned by the RED test's hasSignal assertion.
@@ -329,7 +329,7 @@ func limitSaturationSignal(quota float64) diagnosis.Signal[Sample] {
 			Name:     instLimitHeadroom,
 			Requires: []diagnosis.Capability{HasLimit},
 			// quota − usage − 0.10 × quota, in cores. The usage term is the
-			// SAMPLER's rate (D-14), never the cumulative counter beside it:
+			// SAMPLER's rate, never the cumulative counter beside it:
 			// nothing can subtract a counter from a quota.
 			Extract: func(s Sample) diagnosis.Reading {
 				u, ok := s.UsageCores.Get()

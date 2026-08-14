@@ -120,7 +120,7 @@ type Sample struct {
 
 	// LogicalCpus is the CPUs this process may use: the size of the container's
 	// allowed cpuset, which under --cpuset-cpus is a strict subset of the
-	// machine's count. It is F6's "2" in "pinned to 2 of 8 CPUs". It is present
+	// machine's count. It is the "2" in "pinned to 2 of 8 CPUs". It is present
 	// when the cpuset is readable, and unknown when it is not.
 	LogicalCpus diagnosis.Reading
 

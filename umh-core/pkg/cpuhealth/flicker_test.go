@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// S3 R10 — do not flicker. The two-mark latch is what stops a signal that sits
+// Do not flicker. The two-mark latch is what stops a signal that sits
 // between its fire and clear marks from alternating endpoint states tick to
 // tick: a fired latch between the marks HOLDS, and a signal that enters the band
 // from below does not fire at all because the fire mark is strict. The
@@ -91,7 +91,7 @@ var _ = Describe("S3 R10 — do not flicker", func() {
 	})
 
 	It("should not fire at all on a reading that enters the band from below, because the fire mark is strict", func() {
-		// The other side of the same band, derived from Appendix A's marks (no
+		// The other side of the same band, derived from the throttle marks (no
 		// recorded scenario covers it): a signal that rises from 0 and holds at
 		// 0.04 — below the 0.05 fire mark — must stay healthy for the whole run,
 		// with ZERO state changes, because the fire mark is strict and 0.04 never

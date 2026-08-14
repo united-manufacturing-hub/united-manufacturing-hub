@@ -178,8 +178,8 @@ var _ = Describe("one snapshot per tick", func() {
 		Expect(err).NotTo(BeNil())
 
 		// A present-but-unparsable COUNTER value is equally an unparsable
-		// cpu.stat and must fail the whole snapshot (R3's stale "unavailable on
-		// parse-failure" is superseded by R5 spec 4). The nr_throttled branch
+		// cpu.stat and must fail the whole snapshot: an earlier "unavailable on
+		// parse-failure" reading is superseded. The nr_throttled branch
 		// was untested before this pin — a guard that silently treated a corrupt
 		// counter as an unavailable field would reintroduce the corrupted-cpu.stat
 		// ships-as-trusted defect.

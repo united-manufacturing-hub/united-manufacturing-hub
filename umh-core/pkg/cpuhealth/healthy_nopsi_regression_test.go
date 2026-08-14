@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// F17 R3 — the guard. A healthy no-PSI box sits in the dead zone (no positive
+// The guard. A healthy no-PSI box sits in the dead zone (no positive
 // quota AND no PSI), so its customer-visible output must be byte-identical
 // however the answerability mechanisms (LimitedVisibility, PsiApplies) evolve:
 // verdict healthy, no causes, PsiApplies false, LimitedVisibility true, and the

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// S3 R4 (D1, D2, D3): Decide, the judgement entry point. It is ONE function —
+// Decide, the judgement entry point. It is ONE function —
 // Observe, then the saturation fold, then diagnosis.Rank, then the Signals fill,
 // all in a single pass over one fired set. A verdict field is not asserted
 // without the evidence for it: attribution consults the host/container split
@@ -72,7 +72,7 @@ func Decide(engine *diagnosis.Engine[Sample], s Sample, env diagnosis.Environmen
 			if arm == hostFullArm {
 				// HostFullFired and NoLimitHostFired are ONE instrument (the
 				// host-headroom arm) under two names, and the mode is what
-				// separates them (SPEC 2.6's arm table): limit mode reports the
+				// separates them: limit mode reports the
 				// host-full fallback as HostFullFired, no-limit as
 				// NoLimitHostFired.
 				if env.Has(HasLimit) {
@@ -111,7 +111,7 @@ func Decide(engine *diagnosis.Engine[Sample], s Sample, env diagnosis.Environmen
 	sig.HostContentionFired = false
 
 	// Rank the folded set; the result IS the order of Verdict.Causes, and there
-	// is no local sort anywhere in this package (S3 R8). Then build the verdict
+	// is no local sort anywhere in this package. Then build the verdict
 	// and the attribution from the dominant cause.
 	ranked := diagnosis.Rank(rest)
 	causes := make([]Cause, len(ranked))
@@ -126,14 +126,14 @@ func Decide(engine *diagnosis.Engine[Sample], s Sample, env diagnosis.Environmen
 		verdict.Attribution = attributeFor(causes[0], survivor, splitHost)
 	}
 
-	// S3 R5 (F6): the withheld-headroom facts ride Signals, not Verdict — three
+	// The withheld-headroom facts ride Signals, not Verdict — three
 	// fields, none of the parked 31 can stand in for them. HostHeadroomAvailable
 	// is dispatched on the sample's scope, NOT on the window's state: an
 	// affinity box or an unestablished scope is a withholding ("we read it and
 	// it means something else"), while a plain /proc/stat read failure leaves
 	// the bit set and the window absent, so a read failure is not rendered as a
-	// withholding. The two counts ride the snapshot so the F6 sentence can name
-	// them without Decide doing any I/O.
+	// withholding. The two counts ride the snapshot so the "pinned to 2 of 8
+	// CPUs" sentence can name them without Decide doing any I/O.
 	sig.HostHeadroomAvailable = s.CpuScope == ScopeHost
 	if lc, ok := s.LogicalCpus.Get(); ok {
 		sig.LogicalCpus = lc
@@ -142,20 +142,19 @@ func Decide(engine *diagnosis.Engine[Sample], s Sample, env diagnosis.Environmen
 		sig.HostCpus = hc
 	}
 
-	// S3 R7 spec 1: the no-host-stats saturation fraction is usage-fraction's
+	// The no-host-stats saturation fraction is usage-fraction's
 	// own reduction — the number the latch was judged on, not the usage track
 	// divided by anything, so a mid-run core-count change cannot split them.
 	sig.NoHostStatsSaturationFraction, _ = engine.Reduction(sigSaturation, instUsageFraction).Get()
 
-	// S3 R7 spec 2: the dead-zone annotation. Appendix A defines the dead zone
-	// as quota nil or non-positive AND PSI absent, and it is an annotation on a
-	// healthy verdict, never a state. LimitedVisibility is where ComposeMessage
-	// reads it.
+	// The dead-zone annotation. The dead zone is quota nil or non-positive AND
+	// PSI absent, and it is an annotation on a healthy verdict, never a state.
+	// LimitedVisibility is where ComposeMessage reads it.
 	if q, ok := s.Quota.Get(); !ok || q <= 0 {
 		sig.LimitedVisibility = !s.PsiAvailable
 	}
 
-	// S3 R8 spec 4: the observable metrics, the two track floors and each
+	// The observable metrics, the two track floors and each
 	// signal's readiness are filled from the same pass, independent of latch
 	// state, so a signal sitting below its mark still reaches Signals. This is
 	// the route a no-latch tick's numbers take: Observe returns fired latches
@@ -172,7 +171,7 @@ func Decide(engine *diagnosis.Engine[Sample], s Sample, env diagnosis.Environmen
 
 	// The headroom ceiling and the reserve the verdict subtracted, stamped so
 	// the message's headline and headroom line read exactly the number the
-	// verdict used (S4 R1): capacity is the quota when set and positive, else
+	// verdict used: capacity is the quota when set and positive, else
 	// the logical CPU count; the reserve is 10% of the quota in limit mode and
 	// cpuReserveCores in no-limit mode.
 	if q, ok := s.Quota.Get(); ok && q > 0 {
@@ -184,7 +183,7 @@ func Decide(engine *diagnosis.Engine[Sample], s Sample, env diagnosis.Environmen
 	}
 	// HostBusyCoresAvailable mirrors the sample's own readability: a raw
 	// HostBusyCores60sMean == 0 proxy cannot tell an unreadable /proc/stat from
-	// an idle host (S4 R2's readability gate).
+	// an idle host.
 	if _, ok := s.HostBusy.Get(); ok {
 		sig.HostBusyCoresAvailable = true
 	}
@@ -192,7 +191,7 @@ func Decide(engine *diagnosis.Engine[Sample], s Sample, env diagnosis.Environmen
 	// The per-signal readiness trio, out of the same pass that judged them.
 	// Ready and nothing else: NoInstrument on a bare-metal box and NoneReady on
 	// a thin window both mean this tick has no usable reading, and printing a
-	// confident number for either is F1.
+	// confident number for either states a figure that was never measured.
 	for _, r := range readiness {
 		usable := r.Availability == diagnosis.Ready
 		switch r.Signal {
@@ -205,7 +204,7 @@ func Decide(engine *diagnosis.Engine[Sample], s Sample, env diagnosis.Environmen
 		}
 	}
 
-	// Capability, not readability: F1 is that distinction, and S4 R3 must not
+	// Capability, not readability: the healthy message's budget lines must not
 	// read these as "the reading succeeded". The *SignalReady trio is the
 	// readability half.
 	sig.LimitApplies = env.Has(HasLimit)

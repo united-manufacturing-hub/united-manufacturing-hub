@@ -19,9 +19,10 @@ package cpuhealth
 // the parked shape in declaration order; everything after them is appended. Two
 // of the three frozen signatures take a Signals, so Decide is its sole producer.
 //
-// ⚠️ C1 scores this struct at exactly 2 (*Available fields: HostBusyCoresAvailable
-// and HostHeadroomAvailable) against a cap of 2 — a third fails the gate, which
-// is why the readiness trio below is named for what it holds instead.
+// ⚠️ Exactly two fields here end in "Available" — HostBusyCoresAvailable and
+// HostHeadroomAvailable — and that is the cap this package allows before a
+// family of near-duplicate booleans has to be modelled as a set instead, which
+// is why the readiness trio below is named for what it holds.
 type Signals struct {
 	// The metrics. Each is populated independent of its latch state, so the
 	// number stays observable when the latch has not fired.
@@ -37,10 +38,10 @@ type Signals struct {
 	AvgUsageCores    float64 // ABSOLUTE cores; limit-mode headroom and the wire's avgMCpu read this one value
 	P95UsageCores    float64
 	P99UsageCores    float64
-	UsageRingActive  bool // usage-cores reduced to StateValue — S4 R2's LIMIT-mode floor gate
-	// HostBusyRingActive: host-busy reduced to StateValue — S4 R2's NO-LIMIT
-	// floor gate. Two tracks, two floors: an outage can leave one thin while
-	// the other fills.
+	UsageRingActive  bool // usage-cores reduced to StateValue — the healthy headline's LIMIT-mode floor gate
+	// HostBusyRingActive: host-busy reduced to StateValue — the healthy
+	// headline's NO-LIMIT floor gate. Two tracks, two floors: an outage can
+	// leave one thin while the other fills.
 	HostBusyRingActive bool
 
 	// The latches.
@@ -51,9 +52,9 @@ type Signals struct {
 	LimitedVisibility   bool // the dead-zone annotation, never a State
 
 	// The saturation family. SaturationFired is the OR of the arms; the four
-	// are what S4 R5 dispatches on. Fired.Identity carries the signal name only,
-	// so Decide recovers the instrument from Fired.Marks.Unit: "cores" is
-	// host-headroom, "fraction" is usage-fraction.
+	// are what causeDetails and BlockReason dispatch on. Fired.Identity carries
+	// the signal name only, so Decide recovers the instrument from
+	// Fired.Marks.Unit: "cores" is host-headroom, "fraction" is usage-fraction.
 	SaturationFired               bool
 	LimitSaturationFired          bool
 	HostFullFired                 bool
@@ -70,7 +71,7 @@ type Signals struct {
 	CapacityCores          float64 // the quota when set and positive, else LogicalCpus
 	ReserveCores           float64
 
-	// Capability, NOT readability. F1 is that distinction, and S4 R3 is the rung
+	// Capability, NOT readability. The healthy message's budget lines are
 	// forbidden from reading these three as "the reading succeeded". The three
 	// *SignalReady fields below are the readability half, and the two families
 	// are never interchangeable.
@@ -78,15 +79,15 @@ type Signals struct {
 	PsiApplies   bool
 	StealApplies bool
 
-	// ---- past the parked 31. S3 R5 fills all three. ----
+	// ---- past the parked 31. Decide fills all three. ----
 	//
-	// HostHeadroomAvailable is the SECOND field matching C1's pattern and it
-	// puts this struct AT the cap of two.
+	// HostHeadroomAvailable is the SECOND field ending "Available" and it puts
+	// this struct AT the cap of two.
 	HostHeadroomAvailable bool    // false when the scope is not ScopeHost: withheld, not failed
 	LogicalCpus           float64 // the "2" — the CPUs this process may use
-	HostCpus              float64 // the "8" — the machine's count, from S2 R4b
+	HostCpus              float64 // the "8" — the machine's count, from the per-CPU lines of /proc/stat
 
-	// ---- per-signal readiness. S3 R8 spec 4 fills all three from Observe's
+	// ---- per-signal readiness. Decide fills all three from Observe's
 	// second return. Each is Availability == Ready for that signal. ----
 	ThrottleSignalReady bool
 	PressureSignalReady bool

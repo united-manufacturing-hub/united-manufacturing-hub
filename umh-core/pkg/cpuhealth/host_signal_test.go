@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// S2 R4 — Host signals. The sampler reads the host-busy cores and the CPU-steal
+// Host signals. The sampler reads the host-busy cores and the CPU-steal
 // fraction off the FIRST aggregate /proc/stat "cpu " line, then publishes
 // neither on the first read (that read only fixes a baseline). Busy cores are an
 // instantaneous rate derived from the busy-jiffy delta across two reads divided
@@ -108,8 +108,8 @@ var _ = Describe("host signals", func() {
 
 		// The FIRST /proc/stat read publishes no host signal: it only fixes a
 		// baseline, so HostBusy and Steal are both absent rather than a 0. A 0
-		// would read as "host is idle" — F1's readability half says the first
-		// tick after every restart has no host reading at all.
+		// would read as "host is idle", and the first tick after every restart
+		// has no host reading at all.
 		first, err := s.Read(ctx)
 		Expect(err).NotTo(HaveOccurred())
 		_, ok := first.HostBusy.Get()

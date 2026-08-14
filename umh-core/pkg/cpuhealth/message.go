@@ -21,76 +21,72 @@ import (
 	"strings"
 )
 
-// Every customer-visible string in this file is a numbered entry in
-// STRING_INVENTORY.md, by entry number (never retyped), plus the two §5
-// sentences (F6, F3) that are not inventory entries and are copied from §5.
-// The inventory is normative on the text; a second full copy is where drift
-// starts.
+// Every customer-visible string in this file is written down exactly once —
+// the constants below, plus the host-headroom sentence composeHealthy formats
+// inline. A second copy of a sentence is where drift starts.
 
 const (
-	// §5 F3 (D-20) — the one line rendered on a tick whose usage figure is
-	// withheld (window below its floor, or the host reading absent): no
-	// headline, no advisory, no technical details. It is one of the two stack
-	// sentences not in the inventory, copied from §5.
+	// The one line rendered on a tick whose usage figure is withheld (window
+	// below its floor, or the host reading absent): no headline, no advisory,
+	// no technical details.
 	//
-	// Not entry 7 ("cgroup read failed"): on this tick the read succeeded and
-	// there is simply one sample, so claiming a read failure is F1 in
-	// customer-facing prose.
+	// Not cpuMonitoringUnavailable ("cgroup read failed"): on this tick the
+	// read succeeded and there is simply one sample, so claiming a read failure
+	// tells the customer a specific untrue thing.
 	cpuStartingUp = "CPU: starting up."
 
-	// Entry 7 — rendered alone when CapacityCores is 0; an early return, never
-	// a prefix.
+	// Rendered alone when CapacityCores is 0; an early return, never a prefix.
 	cpuMonitoringUnavailable = "CPU monitoring unavailable: cgroup read failed. Defaulting to healthy."
 
-	// Entry 5 — the limited-visibility advisory, an annotation on a healthy
-	// verdict in the dead-zone, never a state.
+	// The limited-visibility advisory, an annotation on a healthy verdict in
+	// the dead-zone, never a state.
 	limitedVisibilityNote = "Limited visibility: this instance has no CPU limit set and its operating system is not reporting CPU-pressure stats, so UMH cannot fully tell when work is waiting for a free core. Set a CPU limit or enable Linux pressure stats (boot with psi=1) to turn on full monitoring."
 
-	// Entry 11 / Entry 10 — the headline subjects in no-limit mode ("The
-	// machine") and limit mode ("This instance").
+	// The headline subjects in no-limit mode ("The machine") and limit mode
+	// ("This instance").
 	subjectThisInstance = "This instance"
 	subjectTheMachine   = "The machine"
 
-	// Entries 8 and 9 — the limit-mode headlines.
+	// The limit-mode headlines.
 	headlineLimitClose = "CPU healthy. This instance is using %s of %s cores (%d%% of its limit) and is close to being marked degraded."
 	headlineLimitMore  = "CPU healthy. This instance is using %s of %s cores (%d%% of its limit) and can use %s more before it is marked degraded."
 
-	// Entries 12 and 13 — the no-percentage headlines, subject substituted.
+	// The no-percentage headlines, subject substituted.
 	headlineClose = "CPU healthy. %s is using %s of %s cores and is close to being marked degraded."
 	headlineMore  = "CPU healthy. %s is using %s of %s cores and can use %s more before it is marked degraded."
 
-	// Entry 14 — the unconditional headroom budget line.
+	// The unconditional headroom budget line.
 	headroomLine = "Headroom %s cores = %s total - %s used - %s reserved (degraded below 0)."
 
-	// Entries 15–17 — the throttle/pressure/steal budget lines (R3 gates
-	// these on per-signal readiness; R1 uses the capability flags).
+	// The throttle/pressure/steal budget lines, each gated on that signal's
+	// per-tick readiness.
 	throttleLine = "Throttling %d%% (degraded above 5%%)."
 	pressureLine = "Pressure %d%% (degraded above 20%%)."
 	stealLine    = "Steal %d%% (degraded above 10%%)."
 
-	// Entry 18 — the healthy separator; byte-identical to the degraded one
-	// (entry 6). The literal "\nTechnical Details: ".
+	// The separator, byte-identical on the healthy and the degraded path. The
+	// literal "\nTechnical Details: ".
 	technicalDetails = "\nTechnical Details: "
 
-	// Entries 21-25 — the degraded headlines, one per CauseKind. Entry 25 is
-	// the default arm, unreachable through today's five kinds but still written
-	// so the enum can grow.
+	// The degraded headlines, one per CauseKind. headlineGeneric is the default
+	// arm, unreachable through today's five kinds but still written so the enum
+	// can grow.
 	headlineThrottling = "CPU limited"
 	headlinePressure   = "CPU contention"
 	headlineSteal      = "CPU taken by the server"
 	headlineSaturation = "CPU running near full"
 	headlineGeneric    = "CPU degraded"
 
-	// Entries 26-28 — the degradation detail paragraphs. Throttling reads the
+	// The degradation detail paragraphs. Throttling reads the
 	// ratio from Signals; pressure and steal read Cause.Value (the raw PSI /
 	// steal figure never reaches Signals).
 	detailThrottling = "This instance hit its CPU limit and was paused until the next cycle, in %d%% of CPU scheduling periods over the last minute. Work is being delayed. Raise this instance's CPU limit, or reduce the load on it."
 	detailPressure   = "Tasks in this instance spent %d%% of the last minute waiting for a free CPU core. Reduce the load on this instance, or give it more CPU. If other workloads share this server they may be competing for it."
 	detailSteal      = "Other virtual machines on the same physical server took CPU this instance needed, up to %d%% at peak over the last minute. This is outside UMH's control. On your virtualization platform, give this VM more guaranteed CPU, or reduce the other VMs sharing the server."
 
-	// Entries 29-37 — the saturation-family paragraphs. 34 and 37 are clauses,
-	// not paragraphs: each has a leading space and is appended to the paragraph
-	// above it, never a replacement.
+	// The saturation-family paragraphs. detailSatHostUnavail and
+	// detailSatNoLimitClause are clauses, not paragraphs: each has a leading
+	// space and is appended to the paragraph above it, never a replacement.
 	detailSatBothAtLimit    = "The machine is full and this instance's CPU limit cannot help. Add CPU to the machine, or reduce other software running on it. (This instance is also at its %s-core limit.)"
 	detailSatHostFull       = "The machine is full. Add CPU to the machine, or reduce other software running on it."
 	detailSatNoStatsPSI     = "CPU averaged %d%% of the machine over the last minute and this instance has little headroom left. Host contention is not visible here (host CPU usage is not readable). Consider adding CPU capacity."
@@ -101,17 +97,17 @@ const (
 	detailSatNoLimitRead    = "CPU averaged %d%% of the machine over the last minute and this instance has little headroom left. Add CPU capacity, or reduce the load on it."
 	detailSatNoLimitClause  = " Pressure stats are unavailable; enable Linux pressure stats (boot with psi=1) for richer detail."
 
-	// Entry 38 — the generic degraded paragraph.
+	// The generic degraded paragraph.
 	detailGeneric = "CPU is degraded."
 
-	// Entries 39-47 — the bridge-refusal (block) reasons, one per cause kind,
-	// saturation dispatched on the sub-latch arm in BlockReason's own order.
-	// Entries 42 and 45 are byte-identical and the collision is deliberate:
-	// the remediation for a full machine is the same with or without a limit,
-	// and giving each arm its own wording is a behaviour change. blockNoLimitHost
-	// (45) does NOT distinguish "this instance itself filled the machine" from
+	// The bridge-refusal (block) reasons, one per cause kind, saturation
+	// dispatched on the sub-latch arm in BlockReason's own order.
+	// blockHostFull and blockNoLimitHost are byte-identical and the collision is
+	// deliberate: the remediation for a full machine is the same with or without
+	// a limit, and giving each arm its own wording is a behaviour change.
+	// blockNoLimitHost does NOT distinguish "this instance itself filled the machine" from
 	// "other software on the host did": that finer attribution needs per-process
-	// (/proc/[pid]/stat) reads and is deferred to ENG-5264. Do not split 45's
+	// (/proc/[pid]/stat) reads and is deferred to ENG-5264. Do not split its
 	// wording now — it would pre-empt ENG-5264's clean divorce.
 	blockThrottling      = "Can't add another bridge: this instance is already hitting its CPU limit. Raise the limit or reduce load first."
 	blockPressure        = "Can't add another bridge: tasks on this instance are already waiting for a free CPU core. Reduce load, or give this instance more CPU, first."
@@ -251,8 +247,7 @@ func BlockReason(dominantKind CauseKind, signals Signals) string {
 // print with one decimal; total prints as an integer when whole. The
 // Technical Details dashboard lists only the applicable alert-rule budgets:
 // headroom always, then throttle/pressure/steal each only when its rule
-// applies. R2 adds the below-floor withholding; R3 flips the budget gates to
-// per-signal readiness.
+// applies.
 func composeHealthy(signals Signals) string {
 	// Zero-capacity guard: when CapacityCores is 0, do not compose the garbled
 	// "0.0 of 0 cores, -1.0 headroom" budget dashboard. Return a safe string
@@ -262,7 +257,7 @@ func composeHealthy(signals Signals) string {
 		return cpuMonitoringUnavailable
 	}
 
-	// R2: the healthy message reports only what it measured. Two track floors
+	// The healthy message reports only what it measured. Two track floors
 	// (one per mode) and one readability gate; when any withholds the usage
 	// figure the message has no headline sentence left, so render the single
 	// "CPU: starting up." line alone. It lasts one tick after each start and
@@ -280,7 +275,7 @@ func composeHealthy(signals Signals) string {
 
 	// The display figures. total/used/reserve are each rounded once; headroom
 	// is derived from those rounded values. ReserveCores is read from Signals
-	// in both modes (R1) — Decide filled it from the verdict's own reserve —
+	// in both modes — Decide filled it from the verdict's own reserve —
 	// never from the constant.
 	var usedDisp, reserveDisp float64
 	if signals.LimitApplies {
@@ -326,13 +321,13 @@ func composeHealthy(signals Signals) string {
 	msg := headline
 
 	// The advisory slot, between the headline and Technical Details. The
-	// limited-visibility note comes first; the F6 host-headroom sentence
-	// second. Both may appear on one tick.
+	// limited-visibility note comes first; the host-headroom-unavailable
+	// sentence second. Both may appear on one tick.
 	if signals.LimitedVisibility {
 		msg += "\n" + limitedVisibilityNote
 	}
 	if !signals.HostHeadroomAvailable && signals.HostCpus > 0 {
-		// §5 F6 verbatim, with the two core counts substituted. The HostCpus >
+		// The host-headroom sentence, with the two core counts substituted. The HostCpus >
 		// 0 half is the ScopeUnknown case: on an unknown machine count the
 		// bare float64 stays 0 and the sentence is withheld silently.
 		msg += "\n" + fmt.Sprintf("host headroom unavailable: this container is pinned to %s of %s CPUs",
@@ -340,10 +335,10 @@ func composeHealthy(signals Signals) string {
 	}
 
 	// The budget body. Headroom is unconditional; each of throttle, pressure
-	// and steal prints only when THIS TICK'S reading is usable (R3). The gates
+	// and steal prints only when THIS TICK'S reading is usable. The gates
 	// are the per-signal readiness trio, never the capability flags — a
 	// LimitApplies/PsiApplies/StealApplies build prints a confident 0% for a
-	// reading that never happened, which is F1.
+	// reading that never happened.
 	details := []string{
 		fmt.Sprintf(headroomLine, headroomStr, totalStr, usedStr, reserveStr),
 	}

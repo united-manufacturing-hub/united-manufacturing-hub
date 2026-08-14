@@ -12,14 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// S3 R1 (F8): the CPU table, throttle and steal. cpuTable builds the whole
+// The CPU table, throttle and steal. cpuTable builds the whole
 // declaration — five signals, seven instruments, both tracks — as a function,
 // not a package-level variable, because two marks and two capacities are
 // denominated in the quota. A no-quota table omits limit-saturation entirely,
 // since Fire{At:0}/Clear{At:0.05×0} is a pair NewEngine refuses. Throttle fires
 // above a 0.05 sixty-second ratio and clears below 0.03; steal is judged on the
 // p95 once the ring holds twenty entries and on the mean before that; the p95
-// is never selected below its twenty-sample minimum — the whole of F8.
+// is never selected below its twenty-sample minimum.
 package cpuhealth
 
 import (
@@ -49,7 +49,7 @@ func signalNamed(t diagnosis.Table[Sample], name string) diagnosis.Signal[Sample
 
 // hasSignal reports whether the table declares a signal with the given name,
 // without failing when it does not. It is the absence-asserting counterpart to
-// signalNamed: F2-R3's contract is that a box with no readable core count
+// signalNamed: the contract is that a box with no readable core count
 // carries no saturation row at all, not a row that is merely never filled.
 func hasSignal(t diagnosis.Table[Sample], name string) bool {
 	for _, s := range t.Signals {
@@ -176,7 +176,7 @@ var _ = Describe("S3 R1 — the CPU table, throttle and steal", func() {
 		Expect(hostHeadroom.Marks.Clear.Inclusive).To(BeFalse())
 		Expect(hostHeadroom.Marks.Unit).To(Equal("cores"))
 		Expect(hostHeadroom.Marks.Worst).To(Equal(-1.0), "the reserve, not the core count: severity 1 at −1.0 cores, the floor of cores−hostBusy−reserve")
-		// The F6 guard: headroom is only a number on a host-scoped sample, and
+		// The scope guard: headroom is only a number on a host-scoped sample, and
 		// only when both the count and the busy rate are present.
 		Expect(hostHeadroom.Extract(Sample{CpuScope: ScopeHost, HostBusy: diagnosis.Known(0.5)})).To(Equal(diagnosis.Known(2.5)))
 		Expect(hostHeadroom.Extract(Sample{CpuScope: ScopeAffinity, HostBusy: diagnosis.Known(0.5)})).To(Equal(diagnosis.Unknown()))

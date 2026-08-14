@@ -173,7 +173,8 @@ func (s *linuxSampler) Read(ctx context.Context) (Sample, error) {
 		// likewise unknown (never a silent host).
 		smp.HostCpus = diagnosis.Known(machine)
 		// The cpuset read carries the logical CPU count this process may use —
-		// F6's "2" — beside the scope. A failed cpuset read leaves the fresh
+		// the "2" in "pinned to 2 of 8 CPUs" — beside the scope. A failed cpuset
+		// read leaves the fresh
 		// sample's CpuScope as its zero value, ScopeUnknown, and LogicalCpus
 		// absent: never a silent ScopeHost on a known machine count.
 		if allowed, aok := s.readCpuset(ctx); aok {
@@ -211,8 +212,10 @@ func (s *linuxSampler) Read(ctx context.Context) (Sample, error) {
 		s.haveHost = true
 	} else {
 		// An unreadable machine CPU count reads ScopeUnknown — never a silent
-		// ScopeHost, since a pinned idle container misread as host is F6 by
-		// another route. HostCpus stays absent (its zero value) here, as the
+		// ScopeHost, since a pinned idle container misread as host would have
+		// its host headroom computed by subtracting a host-scoped busy figure
+		// from an affinity-scoped count, the invalid subtraction the scope
+		// exists to prevent. HostCpus stays absent (its zero value) here, as the
 		// machine's count could not be read to populate it.
 		smp.CpuScope = ScopeUnknown
 	}

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// S3 R5 (F6): the wrong subtraction. host-headroom's Extract carries the scope
+// The wrong subtraction. host-headroom's Extract carries the scope
 // guard — Unknown unless CpuScope == ScopeHost — in the extractor, not in
 // Decide, so nothing enters the window, the reduction is StateAbsent, and the
 // saturation latch has nothing to judge. A box whose core count was never
@@ -118,7 +118,7 @@ var _ = Describe("S3 R5 — the missing guard, and the wrong subtraction", func(
 
 		// ScopeHost keeps the bit set even when the window is absent on a read
 		// failure — the bit dispatches on the scope, so a plain /proc/stat
-		// outage is a failed read, not a withholding (the F1 conflation inverted).
+		// outage is a failed read, not a withholding (the conflation inverted).
 		engine2, err := NewEngine(4, 2.0)
 		Expect(err).NotTo(HaveOccurred())
 		smp2 := headroomSample(base, 0, ScopeHost, 4, 8)
