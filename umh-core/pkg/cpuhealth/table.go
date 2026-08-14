@@ -202,7 +202,7 @@ func pressureSignal() diagnosis.Signal[Sample] {
 				Clear:    diagnosis.Mark{At: 0.12},
 				Polarity: diagnosis.HigherIsWorse,
 				Unit:     "ratio",
-				Worst: 1.0,
+				Worst:    1.0,
 			},
 		}},
 	}
@@ -330,7 +330,7 @@ func saturationSignal(cores float64) diagnosis.Signal[Sample] {
 					Clear:    diagnosis.Mark{At: 0.60},
 					Polarity: diagnosis.HigherIsWorse,
 					Unit:     "fraction",
-					Worst: 1.0,
+					Worst:    1.0,
 				},
 			},
 		},
