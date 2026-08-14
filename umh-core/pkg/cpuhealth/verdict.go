@@ -49,9 +49,9 @@ const (
 type Unit string
 
 // cpuReserveCores is the no-limit headroom reserve: one core set aside for
-// Redpanda. It is Redpanda's default maxCores (--smp), not a calibration guess
-// (DECISIONS.md D-08); Decide stamps it onto Signals.ReserveCores so the
-// message reads the same number the verdict subtracted.
+// Redpanda. It is Redpanda's default maxCores (--smp), not a calibration
+// guess. Decide stamps it onto Signals.ReserveCores so the message reads the
+// same number the verdict subtracted.
 const cpuReserveCores = 1.0
 
 // Cause is one entry in a degraded verdict, ordered by diagnosis.Rank.

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// S2 R3b: usage as a rate. The sampler derives UsageCores as an instantaneous
+// Usage as a rate. The sampler derives UsageCores as an instantaneous
 // rate from the change in cpu.stat's cumulative usage_usec across two
 // consecutive reads, divided by the elapsed time — the same edge-delta the
 // parked sampler computes at sampler.go:333 with the 1e6 microsecond divisor.
@@ -25,7 +25,7 @@
 // filesystem serving changing cpu.stat bytes, so the statefulness across Read
 // calls — the previous usage_usec edge and its timestamp — is exercised, not
 // mocked. Elapsed time is taken from the returned snapshots' own Timestamps
-// (S2 R5: every field off the same read carries the same Timestamp), which makes
+// (every field off the same read carries the same Timestamp), which makes
 // the delta/elapsed arithmetic exact whether the sampler reads the real clock
 // or an injected one.
 package cpuhealth_test

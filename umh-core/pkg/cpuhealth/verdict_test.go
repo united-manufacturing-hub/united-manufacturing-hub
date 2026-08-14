@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// S3 R8 — verdict assembly. Decide derives Verdict.Attribution from the
+// Verdict assembly. Decide derives Verdict.Attribution from the
 // dominant cause, orders Verdict.Causes through diagnosis.Rank (no local sort),
 // returns healthy with no causes when nothing is fired, and fills the
 // observable metrics, the two track floors and each signal's readiness from the

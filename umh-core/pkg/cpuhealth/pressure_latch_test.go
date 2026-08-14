@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// S3 R2 (F1): pressure. The kernel already averaged PSI over 60s, so the
+// Pressure. The kernel already averaged PSI over 60s, so the
 // pressure instrument is Last over its window, minimum 1, and can fire on tick
 // 0. The window refuses NaN and infinite readings at append, so a run of them
 // freezes the window on its last real contents and the latch HOLDS rather than
@@ -81,7 +81,7 @@ var _ = Describe("S3 R2 — pressure", func() {
 		// lands, the window freezes on its last real contents (0.40), the
 		// reduction is StateUntrusted (nothing appended this tick), and the
 		// latch HOLDS. A clamp-to-zero would turn the refusal into a healthy
-		// zero and clear — the defect F1 exists to remove.
+		// zero and clear — the defect the append refusal exists to remove.
 		nonFinite := []struct {
 			name string
 			v    float64

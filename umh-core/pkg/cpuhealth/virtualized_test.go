@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// S2 R4c — Virtualisation, including the ARM64 path. The sampler resolves a
+// Virtualisation, including the ARM64 path. The sampler resolves a
 // capability fact — is this host a VM? — once and caches it across ticks; it is
 // NOT a per-tick re-read. On x86 the evidence is the "hypervisor" flag in
 // /proc/cpuinfo's flags line. ARM64 /proc/cpuinfo has a Features line and no
@@ -120,7 +120,7 @@ var _ = Describe("CPU virtualisation", func() {
 
 		// SMBIOS product_name casing is firmware-controlled, not reliably Title
 		// Case; a real ARM64 guest can report it any casing, so a lowercase value
-		// must still match or steal stays dead on exactly the VM this rung
+		// must still match or steal stays dead on exactly the VM this fallback
 		// exists to detect.
 		s, _ = newVirtSampler(armCpuinfo, false, "kvm", false)
 		r, err = s.Read(ctx)
@@ -240,18 +240,18 @@ var _ = Describe("CPU virtualisation", func() {
 			"once the DMI read succeeds, the ARM64 VM must recover and resolve Virtualized=true")
 	})
 
-	// S2 R4d — The DMI vendor, which is ARM64's only working source [F9]. AWS
+	// The DMI vendor, which is ARM64's only working source. AWS
 	// Graviton/Nitro puts its instance type (m6g.medium) in /sys/class/dmi/id/
 	// product_name, GCP Tau T2A and Azure ARM put no hypervisor token there at
 	// all — so lengthening the product_name token list cannot fix any of them.
 	// The cloud hypervisor identity lives in a second DMI source the sampler
-	// never reads today: /sys/class/dmi/id/sys_vendor. This rung reads it as a
+	// never reads today: /sys/class/dmi/id/sys_vendor. The sampler reads it as a
 	// DISTINCT source — its own read failure case and its own read-once cache,
 	// not an extended product_name list.
 	It("resolves an ARM64 cloud VM from a second DMI source, sys_vendor, which product_name cannot catch, with its own failure handling", func() {
 		ctx := context.Background()
 
-		// newVendorSampler is R4c's harness plus a separately-controlled
+		// newVendorSampler is the product_name harness plus a separately-controlled
 		// /sys/class/dmi/id/sys_vendor. product and vendor err flags keep the
 		// two DMI sources independent, so the test can prove sys_vendor's
 		// distinctness (an unreadable one must not break the other) and its own
@@ -285,11 +285,11 @@ var _ = Describe("CPU virtualisation", func() {
 			return cpuhealth.NewLinuxSampler(fs, base), &vendorReads
 		}
 
-		// F9's core: an ARM64 cpuinfo (no hypervisor flag) whose product_name
+		// The core case: an ARM64 cpuinfo (no hypervisor flag) whose product_name
 		// names NO hypervisor token — AWS Graviton reports "m6g.medium" — but
 		// whose sys_vendor names the cloud hypervisor "Amazon EC2". The guest is
 		// provable only because sys_vendor is read at all; product_name alone
-		// leaves steal dead on the exact box this rung exists to detect.
+		// leaves steal dead on the exact box this source exists to detect.
 		s, _ := newVendorSampler(armCpuinfo, "m6g.medium", false, "Amazon EC2", false)
 		r, err := s.Read(ctx)
 		Expect(err).NotTo(HaveOccurred())
@@ -344,7 +344,7 @@ var _ = Describe("CPU virtualisation", func() {
 		Expect(r.Virtualized).To(BeFalse(),
 			"a bare-metal sys_vendor ('Dell Inc.') naming no hypervisor must resolve Virtualized=false")
 
-		// Sticky, like R4c: sys_vendor is read once and cached, and the resolved
+		// Sticky, like product_name: sys_vendor is read once and cached, and the resolved
 		// fact is re-published unchanged on the next tick.
 		s, vendorReads := newVendorSampler(armCpuinfo, "m6g.medium", false, "Amazon EC2", false)
 		first, err := s.Read(ctx)

@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// S3 R3 — limit-mode saturation. limit-headroom extracts quota - usage - 0.10 x
+// Limit-mode saturation. limit-headroom extracts quota - usage - 0.10 x
 // quota and is reduced as a Mean over the 60s window, so a per-sample headroom
-// folds to Appendix A's windowed one by linearity. The fire mark is headroom < 0
+// folds to the windowed one by linearity. The fire mark is headroom < 0
 // (usage above 0.90 x quota); the clear mark is headroom > 0.05 x quota (usage
 // below 0.85 x quota). The worked case saturation/limit/fire steps usage from
 // 0.2 to 1.95 at tick 40: the windowed mean crosses zero at tick 95

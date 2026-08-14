@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// S3 R9b: bind the generated suite to the real CPU table. The six-scenario
+// Bind the generated suite to the real CPU table. The six-scenario
 // suite is generated from cpuTable itself, not from a fixture, so a signal
 // added to the CPU table without going through the readability path has nowhere
 // to hide. Readable advances the cumulative throttle counters so the ratio
@@ -40,7 +40,7 @@ var _ = Describe("S3 R9b — bind the generated suite to the real CPU table", fu
 		out24 := RunSuite(4, 0)
 		Expect(out24).To(HaveLen(24), "6 x 4 signals without a quota")
 
-		// The readability path lands where §8/R9 expects: a live, fully-readable
+		// The readability path lands where it should: a live, fully-readable
 		// capable signal reaches Ready; a Requires-gated signal reaches
 		// NoInstrument on the unsupported case; a no-Requires signal stays Ready
 		// there.
@@ -93,7 +93,7 @@ func outcome(out []diagnosis.Outcome, signal string, c diagnosis.Case) diagnosis
 	return diagnosis.NoInstrument
 }
 
-// badReadSignal is the S3 R9b mutant: a CPU row whose Extract returns Known(0)
+// badReadSignal is the suite's mutant: a CPU row whose Extract returns Known(0)
 // even on an absent reading, skipping the readability path. It is only used to
 // prove the suite catches such a row, never part of the live table.
 func badReadSignal() diagnosis.Signal[Sample] {

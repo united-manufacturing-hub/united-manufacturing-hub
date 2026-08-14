@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// S2 R3 (D5): the sampler reads both throttle counters (nr_periods,
+// The sampler reads both throttle counters (nr_periods,
 // nr_throttled) out of the SAME cpu.stat bytes it reads for usage — never a
 // second cpu.stat read — and marks either counter unavailable when it is absent
 // from cpu.stat or fails to parse, never a trusted 0. cpu.stat is primary: a
@@ -76,7 +76,7 @@ var _ = Describe("throttle counters", func() {
 		Expect(ok).To(BeTrue(), "a present nr_throttled must be a readable counter")
 		Expect(throttled).To(Equal(50.0))
 
-		// D5: an ABSENT counter is unavailable — never a trusted 0. A no-quota
+		// An ABSENT counter is unavailable — never a trusted 0. A no-quota
 		// container's cpu.stat has no nr_periods line at all, so it must not
 		// ship as "0 periods, trusted". The present counter still reads.
 		sampler, _ = newSampler([]byte("usage_usec 1000\nnr_throttled 0\n"), nil)
@@ -88,7 +88,7 @@ var _ = Describe("throttle counters", func() {
 		Expect(ok).To(BeTrue(), "the present counter must still read when its pair is absent")
 		Expect(throttled).To(Equal(0.0))
 
-		// A counter that FAILS TO PARSE now fails the WHOLE sample, per S2 R5:
+		// A counter that FAILS TO PARSE now fails the WHOLE sample:
 		// an unparseable cpu.stat is a hard failure, not an absent no-signal. The
 		// ABSENT-key case above stays unavailable (a no-quota container has no
 		// nr_periods line), but a present value that cannot be read as a number is

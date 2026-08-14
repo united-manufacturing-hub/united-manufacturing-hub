@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// S3 R6 (F1, F4, F5): hold and demote. Do not split per defect — F1, F4 and F5
+// Hold and demote. Do not split per defect — the three behaviours below
 // are one mechanism: a failed read is not stored as a real zero (the window
 // refuses it, so the reduction is StateUntrusted and the latch HOLDS), a fired
 // latch does not clear on evidence younger than the window it fired on, and a
@@ -54,7 +54,7 @@ var _ = Describe("S3 R6 — hold and demote", func() {
 		// then host stats go stale: the failed read appends nothing, the window
 		// freezes on its last real contents, the reduction is StateUntrusted,
 		// and the latch HOLDS — it does not clear on evidence younger than the
-		// window it fired on (F4).
+		// window it fired on.
 		engine, err := NewEngine(4, 2.0)
 		Expect(err).NotTo(HaveOccurred())
 		env := diagnosis.NewEnvironment(HasLimit)
@@ -81,9 +81,9 @@ var _ = Describe("S3 R6 — hold and demote", func() {
 		// arms must go absent for the signal to report AllAbsent — if usage-fraction
 		// stayed ready it would clear the latch on its own clear arm instead, which
 		// is the fallback-clear route, not this one. The first readable tick after
-		// the outage does not re-fire it when the value is below the mark (F5: no
-		// verdict outlives its evidence; F4: no re-fire on the first readable tick
-		// without crossing the mark).
+		// the outage does not re-fire it when the value is below the mark: no
+		// verdict outlives its evidence, and there is no re-fire on the first
+		// readable tick without crossing the mark.
 		engine, err := NewEngine(4, 2.0)
 		Expect(err).NotTo(HaveOccurred())
 		env := diagnosis.NewEnvironment(HasLimit)
@@ -125,7 +125,7 @@ var _ = Describe("S3 R6 — hold and demote", func() {
 	})
 
 	It("should not store a failed read as a real zero", func() {
-		// F1 on the pressure signal: a fired latch held through a FAILED read
+		// The pressure signal: a fired latch held through a FAILED read
 		// (Unknown, not NaN) — the window refuses it, so the reduction keeps
 		// returning the last real value (0.40) as StateUntrusted, never a
 		// fabricated zero that would clear the latch.

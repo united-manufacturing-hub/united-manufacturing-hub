@@ -12,11 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// S3 R1b (F7, F8): the handover at twenty samples. The twentieth sample always
+// The handover at twenty samples. The twentieth sample always
 // arrives on a virtualized box, so the swap from the mean arm to the p95 arm
 // happens on every start. The p95 is the second-highest of twenty ascending
 // entries, and that one fact gives all three specs their numbers. These specs
-// bind the engine's per-signal latch (S1 R7b) to the CPU table's two steal arms
+// bind the engine's per-signal latch to the CPU table's two steal arms
 // sharing one mark pair: the swap must move the instrument, not the latch, and
 // must judge on the p95's own value from the tick it becomes usable.
 package cpuhealth
@@ -115,7 +115,7 @@ var _ = Describe("S3 R1b — the handover at twenty samples", func() {
 		// steal/spike-below-minsamples holds four spikes and fires on both arms.
 		// The spike sits at the LAST sample so the mean is below the fire mark
 		// for the whole run: a spike at sample 0 would fire the mean at n=2
-		// (0.45) and then HOLD through the handover, because F4's clear arm is
+		// (0.45) and then HOLD through the handover, because the clear arm is
 		// gated on full window coverage and the window is not full at n=20 —
 		// "nothing fires" would be unobservable. With the spike last, the mean
 		// peaks at 0.047 and the twenty-sample p95 is the second-highest, 0.

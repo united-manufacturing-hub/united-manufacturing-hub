@@ -12,14 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// S4 R1 — the healthy headline. composeHealthy renders the two-layer healthy
+// The healthy headline. composeHealthy renders the two-layer healthy
 // budget dashboard. The headline is a two-by-two dispatch over
 // (LimitApplies && rounded total > 0) and (displayed headroom < 0.05); the
 // subject follows the mode and not the column; the displayed headroom is
-// derived from the already-rounded total/used/reserve. The R2 withholding
-// ("CPU: starting up.") and the R3 readiness-gated budget lines are later
-// rungs, so their fields (UsageRingActive/HostBusyRingActive/proc-readability)
-// are set true here to keep the assertions stable across the ladder.
+// derived from the already-rounded total/used/reserve. The withholding
+// ("CPU: starting up.") and the readiness-gated budget lines are covered
+// separately, so their fields (UsageRingActive/HostBusyRingActive/
+// proc-readability) are set true here to keep these assertions on the headline.
 package cpuhealth
 
 import (
@@ -85,7 +85,8 @@ var _ = Describe("S4 R1 — the healthy headline", func() {
 		sig.AvgUsageCores = 0.01
 		sig.ReserveCores = 0.0
 		msg := composeHealthy(sig)
-		// Entry 12 with subject 11: no "(N% of its limit)" suffix, "This instance".
+		// The no-percentage close headline with the limit-mode subject: no
+		// "(N% of its limit)" suffix, "This instance".
 		Expect(msg).To(ContainSubstring("CPU healthy. This instance is using 0.0 of 0 cores and is close to being marked degraded."))
 		Expect(msg).NotTo(ContainSubstring("% of its limit"))
 	})
@@ -261,7 +262,7 @@ var _ = Describe("S4 R3 — the budget lines", func() {
 
 		// Readiness is the gate, not capability: a ready steal signal prints
 		// even when StealApplies is false (they agree on bare metal, but this
-		// pins the rung to the readiness trio).
+		// pins the gate to the readiness trio).
 		ready := healthySig()
 		ready.StealApplies = false
 		ready.StealSignalReady = true
@@ -295,7 +296,7 @@ var _ = Describe("S4 R4 — degraded copy", func() {
 		Expect(causeHeadline(CauseKindPressure)).To(Equal("CPU contention"))
 		Expect(causeHeadline(CauseKindSteal)).To(Equal("CPU taken by the server"))
 		Expect(causeHeadline(CauseKindSaturation)).To(Equal("CPU running near full"))
-		// Entry 25: the default arm, unreachable through today's five kinds but
+		// headlineGeneric: the default arm, unreachable through today's five kinds but
 		// still written so the enum can grow.
 		Expect(causeHeadline(CauseKind("future-kind"))).To(Equal("CPU degraded"))
 	})
@@ -385,7 +386,7 @@ var _ = Describe("S4 R5 — block reasons", func() {
 		Expect(BlockReason(CauseKindThrottling, degradedSig())).To(Equal("Can't add another bridge: this instance is already hitting its CPU limit. Raise the limit or reduce load first."))
 		Expect(BlockReason(CauseKindPressure, degradedSig())).To(Equal("Can't add another bridge: tasks on this instance are already waiting for a free CPU core. Reduce load, or give this instance more CPU, first."))
 		Expect(BlockReason(CauseKindSteal, degradedSig())).To(Equal("Can't add another bridge: the server isn't giving this instance enough CPU (other VMs are using it). Free up CPU on the server first."))
-		// Entry 47: the default kind arm.
+		// blockGeneric: the default kind arm.
 		Expect(BlockReason(CauseKind("future-kind"), degradedSig())).To(Equal("Can't add another bridge: CPU is degraded."))
 
 		hf := degradedSig()
@@ -407,14 +408,14 @@ var _ = Describe("S4 R5 — block reasons", func() {
 		impossible.SaturationFired = true
 		Expect(BlockReason(CauseKindSaturation, impossible)).To(Equal("Can't add another bridge: CPU is running near full. Add CPU capacity, or set a CPU limit, first."))
 
-		// Entries 42 and 45 are byte-identical and the collision is intentional
+		// blockHostFull and blockNoLimitHost are byte-identical and the collision is intentional
 		// and must survive (the remediation for a full machine is the same with
 		// or without a limit).
 		Expect(BlockReason(CauseKindSaturation, hf)).To(Equal(BlockReason(CauseKindSaturation, nl)))
 	})
 
 	It("conformance: Decide sets NoLimitHostFired for a full host in no-limit mode and HostFullFired in limit mode", func() {
-		// No-limit mode: a full host with our own load filling it (D1: the
+		// No-limit mode: a full host with our own load filling it (the
 		// attribution is unknown, but the host-headroom arm still fires and is
 		// reported as NoLimitHostFired, not HostFullFired).
 		engine, err := NewEngine(4, 0)

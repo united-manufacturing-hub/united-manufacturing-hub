@@ -15,7 +15,8 @@
 // The per-signal readiness gate is Ready and nothing else. NoInstrument (a
 // bare-metal box has no steal instrument at all) and NoneReady (the window is
 // too thin to trust) are different reasons for the same fact: this tick has no
-// usable reading, and printing a confident number for either is F1.
+// usable reading, and printing a confident number for either states a figure
+// that was never measured.
 //
 // The bare-metal half is covered by the verdict spec's StealSignalReady
 // assertion. This file covers the thin-window half, which nothing else sees: on

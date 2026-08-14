@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// S3 R7 — the fallback metric set. When host stats are absent, the saturation
+// The fallback metric set. When host stats are absent, the saturation
 // signal falls back to usage-fraction: host-headroom's window empties past the
 // demote span, selection walks to usage-fraction and JUDGES on it, and the
 // number it judged on reaches Signals as NoHostStatsSaturationFraction. The
