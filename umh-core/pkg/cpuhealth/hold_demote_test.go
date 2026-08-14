@@ -29,7 +29,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/diagnosis"
 )
 
-var _ = Describe("S3 R6 — hold and demote", func() {
+var _ = Describe("hold and demote", func() {
 	// hostSample drives one tick of the host-full shape: a known host-busy value
 	// when hbKnown is true, a failed read (Unknown) when it is false.
 	hostSample := func(base time.Time, i int, hb float64, hbKnown bool) Sample {

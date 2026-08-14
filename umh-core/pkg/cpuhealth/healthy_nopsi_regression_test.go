@@ -32,7 +32,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/diagnosis"
 )
 
-var _ = Describe("F17 R3 — byte-identical output on a healthy no-PSI box", func() {
+var _ = Describe("byte-identical output on a healthy no-PSI box", func() {
 	It("should leave verdict healthy, no causes, PsiApplies false, LimitedVisibility true, and the advisory present", func() {
 		// A dead-zone box: cores=4 so the saturation instrument IS present, but
 		// Quota present 0 (no positive quota -> no HasLimit) and PsiAvailable

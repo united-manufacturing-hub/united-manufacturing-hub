@@ -29,7 +29,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/diagnosis"
 )
 
-var _ = Describe("S3 R9b — bind the generated suite to the real CPU table", func() {
+var _ = Describe("bind the generated suite to the real CPU table", func() {
 	It("should generate the six-scenario suite from the CPU signal table itself, not from a fixture", func() {
 		// 30 scenarios on a box with a positive quota, 24 on one without:
 		// 6 x 5 and 6 x 4, because cpuTable omits limit-saturation entirely at

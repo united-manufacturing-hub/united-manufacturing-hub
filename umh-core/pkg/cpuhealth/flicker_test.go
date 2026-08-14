@@ -66,7 +66,7 @@ func transitions(states []State) int {
 	return count
 }
 
-var _ = Describe("S3 R10 — do not flicker", func() {
+var _ = Describe("do not flicker", func() {
 	It("should not alternate between healthy and degraded while the underlying reading sits between the marks", func() {
 		// throttle/hold-between-marks: the ratio fires at tick 1 (0.20), decays,
 		// and settles at 0.04 — inside the band between the 0.03 clear and 0.05

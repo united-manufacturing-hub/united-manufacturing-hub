@@ -31,7 +31,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/diagnosis"
 )
 
-var _ = Describe("S3 R2 — pressure", func() {
+var _ = Describe("pressure", func() {
 	// pressureObserve drives one pressure tick through a fresh engine and
 	// returns the fired signal names plus the pressure reduction and state.
 	pressureObserve := func(engine *diagnosis.Engine[Sample], base time.Time, i int, p float64) ([]string, float64, diagnosis.State) {

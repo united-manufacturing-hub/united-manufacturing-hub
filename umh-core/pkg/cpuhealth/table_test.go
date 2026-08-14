@@ -60,7 +60,7 @@ func hasSignal(t diagnosis.Table[Sample], name string) bool {
 	return false
 }
 
-var _ = Describe("S3 R1 — the CPU table, throttle and steal", func() {
+var _ = Describe("the CPU table, throttle and steal", func() {
 	It("declares every CPU signal in one table built by cpuTable, and omits limit-saturation when there is no positive quota", func() {
 		t := cpuTable(4, 2.0)
 

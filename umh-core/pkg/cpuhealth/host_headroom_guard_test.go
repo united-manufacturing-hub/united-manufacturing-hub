@@ -30,7 +30,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/diagnosis"
 )
 
-var _ = Describe("S3 R5 — the missing guard, and the wrong subtraction", func() {
+var _ = Describe("the missing guard, and the wrong subtraction", func() {
 	// headroomSample builds a sample for the host-headroom guards, with every
 	// other signal parked below its mark so only saturation is exercised.
 	headroomSample := func(base time.Time, i int, scope Scope, logical, host float64) Sample {

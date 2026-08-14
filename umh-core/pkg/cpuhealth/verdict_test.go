@@ -28,7 +28,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/diagnosis"
 )
 
-var _ = Describe("S3 R8 — verdict assembly", func() {
+var _ = Describe("verdict assembly", func() {
 	It("should derive Verdict.Attribution from the dominant cause", func() {
 		// Steal is external, so when steal is the dominant cause the attribution
 		// is host. Pressure and steal are the same tier; drive both and let

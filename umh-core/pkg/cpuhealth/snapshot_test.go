@@ -67,7 +67,7 @@ var _ = Describe("one snapshot per tick", func() {
 	}
 
 	It("stamps one timestamp, builds the environment from two facts, and fails the whole snapshot only on cpu.stat", func() {
-		// Spec 1 + 2: a real Read builds every field off one read, and the
+		// a real Read builds every field off one read, and the
 		// snapshot is constructible from OUTSIDE pkg/diagnosis through Known and
 		// Unknown. The single Timestamp is set once per tick.
 		ctx := context.Background()
@@ -80,7 +80,7 @@ var _ = Describe("one snapshot per tick", func() {
 		Expect(smp.Quota).To(Equal(diagnosis.Known(2)))
 		Expect(smp.Pressure).To(Equal(diagnosis.Known(0.02)))
 
-		// Spec 3: DeriveEnvironment reads exactly three facts and calls
+		// DeriveEnvironment reads exactly three facts and calls
 		// NewEnvironment. A snapshot with Virtualized true and Quota at
 		// Known(2) satisfies both capabilities; one with neither satisfies
 		// neither; and the load-bearing third case — Quota at Known(0), a
@@ -105,7 +105,7 @@ var _ = Describe("one snapshot per tick", func() {
 		withPsi := cpuhealth.DeriveEnvironment(cpuhealth.Sample{Timestamp: smp.Timestamp, PsiAvailable: true})
 		Expect(withPsi.Has(cpuhealth.HasPressureStats)).To(BeTrue())
 
-		// Spec 4: a fake filesystem whose cpu.pressure alone is missing returns
+		// a fake filesystem whose cpu.pressure alone is missing returns
 		// err == nil with Sample.Pressure absent and the cpu.stat fields still
 		// present.
 		noPressure := sampler(func(fs *filesystem.MockFileSystem) {
@@ -136,7 +136,7 @@ var _ = Describe("one snapshot per tick", func() {
 		Expect(smp2.NrPeriods).To(Equal(diagnosis.Known(10)))
 		Expect(smp2.NrThrottled).To(Equal(diagnosis.Known(2)))
 
-		// Spec 4: a fake filesystem whose cpu.stat is missing returns a non-nil
+		// a fake filesystem whose cpu.stat is missing returns a non-nil
 		// error and no usable snapshot.
 		noStat := sampler(func(fs *filesystem.MockFileSystem) {
 			fs.ReadFileFunc = func(ctx context.Context, path string) ([]byte, error) {
@@ -153,7 +153,7 @@ var _ = Describe("one snapshot per tick", func() {
 		_, err = noStat.Read(ctx)
 		Expect(err).NotTo(BeNil())
 
-		// Spec 4: a fake filesystem whose cpu.stat is readable but whose
+		// a fake filesystem whose cpu.stat is readable but whose
 		// value cannot be parsed (non-numeric usage_usec) also fails the
 		// whole snapshot — a parse failure is not a silent no-signal tick.
 		malformedStat := sampler(func(fs *filesystem.MockFileSystem) {
