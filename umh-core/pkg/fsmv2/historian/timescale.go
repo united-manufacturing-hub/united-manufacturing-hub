@@ -26,9 +26,9 @@
 // and whether the credentials and database name are accepted. Its per-tick cost
 // is a single `SELECT 1` over one pooled, long-lived connection.
 //
-// Database metrics — long-running queries, compression ratios, background job
-// state (especially aborted compression jobs), and the rest of the operational
-// signals from Daniel's Grafana dashboard — are deliberately NOT collected here.
+// Database metrics (long-running queries, compression ratios, background job
+// state, especially aborted compression jobs, and the rest of the operational
+// signals on the Timescale Grafana dashboard) are deliberately NOT collected here.
 // They belong to a separate future worker (TODO(ENG-5320): the timescale metrics
 // monitor), for two reasons:
 //
@@ -59,7 +59,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/simple"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker/dynamicchildren"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 )
 
@@ -112,12 +111,44 @@ type TimescaleStatus struct {
 	Reachable bool `json:"reachable"`
 }
 
-// Deps carries the poll dependencies, shared across ticks. The pool holder
-// lazily builds and caches a pgx pool keyed by DSN, so Poll reuses pooled
-// connections instead of dialing every tick.
+// sharedPool is the one holder every worker instance polls through. The
+// framework never closes a pool a worker owns: fsmv2.GracefulShutdowner is
+// declared but never invoked, so a worker is never called at a point where it
+// could close one (ENG-5375). One holder bounds the process to a single pool,
+// because get closes the previous one when the DSN changes; a per-instance
+// holder would orphan a pgxpool health-check goroutine on every despawn that
+// followed a poll, with nothing able to close it. A child despawned before its
+// first poll orphans nothing, because only Poll reaches poolHolder.get.
+//
+// Historian is a singleton today, one Ref under one writer. Every instance polls
+// through this holder and it caches a single pool, so two instances on different
+// DSNs would rebuild each other's pool on every poll; going multi-instance needs
+// a holder per instance, and that needs a teardown path first (ENG-5375).
+//
+// Removing the historian config block despawns the child without closing the
+// pool, so the health-check goroutine runs for the life of the process and up to
+// maxConns server sessions stay open until connMaxLifetime recycles them. A
+// respawn with an identical DSN then gets the cached pool.
+var sharedPool = &poolHolder{}
+
+// Deps carries what Poll needs: this instance's BaseDependencies, whose logger
+// Poll writes to, and the holder it queries through.
 type Deps struct {
-	Logger deps.FSMLogger
-	pool   *poolHolder
+	*deps.BaseDependencies
+
+	pool *poolHolder
+}
+
+// newDeps builds one worker instance's poll dependencies. It keeps the
+// BaseDependencies the framework built for this instance, whose logger already
+// names the worker, and hands out sharedPool rather than building a holder,
+// because the framework never releases what a worker holds. The identity is
+// unused: nothing else here varies per instance.
+func newDeps(_ deps.Identity, bd *deps.BaseDependencies) Deps {
+	return Deps{
+		BaseDependencies: bd,
+		pool:             sharedPool,
+	}
 }
 
 // poolHolder caches a single pgx pool, rebuilding it when the DSN changes (for
@@ -130,7 +161,9 @@ type poolHolder struct {
 
 // get returns a pool for dsn, creating it on first use and rebuilding it if the
 // DSN changed since the last call. Pool creation does not open a connection;
-// authentication happens on first acquire (in Poll).
+// authentication happens on first acquire (in Poll). The DSN is parsed only when
+// a pool is built, so TLS material at the sslrootcert and sslcert paths is
+// re-read only on a DSN change (ENG-5593).
 func (h *poolHolder) get(dsn string) (*pgxpool.Pool, error) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -225,7 +258,7 @@ func Poll(ctx context.Context, d Deps, cfg config.HistorianConfig) (TimescaleSta
 
 	pool, err := d.pool.get(cfg.Timescale.ToDSN())
 	if err != nil {
-		d.Logger.Debug("timescale connection check",
+		d.GetLogger().Debug("timescale connection check",
 			deps.String("host", host),
 			deps.Bool("reachable", false),
 			deps.Err(err))
@@ -246,7 +279,7 @@ func Poll(ctx context.Context, d Deps, cfg config.HistorianConfig) (TimescaleSta
 		if authRejected(err) {
 			auth = models.TimescaleAuthInvalid
 		}
-		d.Logger.Debug("timescale connection check",
+		d.GetLogger().Debug("timescale connection check",
 			deps.String("host", host),
 			deps.Bool("reachable", reachable),
 			deps.String("auth", string(auth)),
@@ -256,7 +289,7 @@ func Poll(ctx context.Context, d Deps, cfg config.HistorianConfig) (TimescaleSta
 	}
 
 	elapsedMs := float64(time.Since(start).Microseconds()) / 1000.0
-	d.Logger.Debug("timescale connection check",
+	d.GetLogger().Debug("timescale connection check",
 		deps.String("host", host),
 		deps.Bool("reachable", true),
 		deps.String("auth", string(models.TimescaleAuthValid)),
@@ -276,9 +309,6 @@ func init() {
 		WorkerType: WorkerType,
 		Interval:   pollInterval,
 		Poll:       Poll,
-		Deps: Deps{
-			Logger: deps.NewFSMLogger(logger.For(WorkerType)),
-			pool:   &poolHolder{},
-		},
+		NewDeps:    newDeps,
 	})
 }

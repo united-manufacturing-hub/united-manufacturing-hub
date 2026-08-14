@@ -33,13 +33,47 @@ import (
 // TConfig is the developer's config type, TStatus the polled status type, and
 // TDeps the poll dependencies (use struct{} when the poll needs none).
 type MonitorSpec[TConfig, TStatus, TDeps any] struct {
-	// Deps is the dependency value passed to every Poll. Optional: use struct{}
-	// when the poll needs none. It is shared across ticks and instances, so it
-	// must be stateless (e.g. an *http.Client, not a per-tick buffer).
-	Deps TDeps
-	// Poll observes the target once and returns the status. A non-nil error
-	// drives the worker degraded with reason "poll error: <err>"; any status
-	// returned alongside the error is still preserved as the Result. Required.
+	// NewDeps builds the value Poll receives, once per worker instance at
+	// construction. Optional: when unset, Poll receives TDeps' zero value (use
+	// struct{} when the poll needs no dependencies).
+	//
+	// The worker keeps the returned value for its lifetime, so it may carry
+	// per-instance mutable state. Poll receives it by value, so state Poll
+	// mutates must sit behind a pointer (use *TDeps, or a pointer field), or the
+	// mutation dies with the copy. Poll is never called concurrently with itself
+	// for one instance (the observation collector serializes it under a mutex),
+	// so that state needs no locking.
+	//
+	// bd is this instance's framework dependencies: the logger the framework
+	// already enriched with this worker's identity, the state reader, and the
+	// metrics recorder. Take the logger from there rather than building one, so
+	// every line names the instance that wrote it. bd also exposes
+	// SetFrameworkState and SetActionHistory, which belong to the framework
+	// alone: calling either from author code overwrites what the collector reads
+	// back on the next tick. Return bd inside TDeps to keep framework telemetry:
+	// the collector reads the framework fields off the deps value NewDeps handed
+	// back, so dropping bd here drops this worker's framework metrics with it.
+	//
+	// Do not declare a TDeps embedding *deps.BaseDependencies without also
+	// declaring NewDeps. Nothing binds the zero value, its embedded pointer stays
+	// nil, and a nil pointer still satisfies the accessor check the collector
+	// gates on, so the first framework read dereferences nil. The collector
+	// recovers it as a collector_panic every tick instead of skipping the worker.
+	// Either declare NewDeps, or keep BaseDependencies out of TDeps.
+	//
+	// NewDeps has no error return, so anything fallible belongs behind Poll. A
+	// panic escapes into the parent supervisor's tick rather than being reported
+	// against this child, because construction runs inside that tick.
+	//
+	// The framework never releases the returned value. Read "Resources in the
+	// deps value" in the package doc before holding a connection pool or
+	// anything else with a background goroutine.
+	NewDeps func(id deps.Identity, bd *deps.BaseDependencies) TDeps
+	// Poll observes the target once and returns the status. d is a copy: TDeps is
+	// passed by value, so a resource assigned to a non-pointer field of d is
+	// discarded when Poll returns. A non-nil error drives the worker degraded
+	// with reason "poll error: <err>"; any status returned alongside the error is
+	// still preserved as the Result. Required.
 	Poll func(ctx context.Context, d TDeps, cfg TConfig) (TStatus, error)
 	// Health turns a good poll's status into a health verdict. Optional: when
 	// nil, a good poll is healthy with reason "running (no health check)". Never
@@ -73,7 +107,7 @@ func Register[TConfig, TStatus, TDeps any](spec MonitorSpec[TConfig, TStatus, TD
 		panic(fmt.Sprintf("simple.Register(%q): TStatus must be a struct, got %s", spec.WorkerType, k))
 	}
 
-	register.Worker[TConfig, Status[TStatus], register.NoDeps](spec.WorkerType,
+	register.Worker[TConfig, Status[TStatus], TDeps](spec.WorkerType,
 		func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader) (fsmv2.Worker, error) {
 			return newSimpleWorker(spec, id, logger, sr)
 		})
