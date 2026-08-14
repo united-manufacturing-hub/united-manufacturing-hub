@@ -80,10 +80,12 @@ func (m *MockService) GetHealth(ctx context.Context) (*models.Health, error) {
 
 // CreateDefaultContainerStatus returns a default container status with healthy metrics for testing.
 func CreateDefaultContainerStatus() *ServiceInfo {
+	usage := 350.0
+	cores := 4
 	return &ServiceInfo{
 		CPU: &models.CPU{
-			TotalUsageMCpu: 350.0,
-			CoreCount:      4,
+			TotalUsageMCpu: &usage,
+			CoreCount:      &cores,
 		},
 		Memory: &models.Memory{
 			CGroupUsedBytes:  1073741824, // 1 GB
@@ -104,10 +106,12 @@ func CreateDefaultContainerStatus() *ServiceInfo {
 
 // CreateDegradedContainerStatus creates a container status with degraded health.
 func CreateDegradedContainerStatus() *ServiceInfo {
+	usage := 950.0
+	cores := 4
 	return &ServiceInfo{
 		CPU: &models.CPU{
-			TotalUsageMCpu: 950.0,
-			CoreCount:      4,
+			TotalUsageMCpu: &usage,
+			CoreCount:      &cores,
 		},
 		Memory: &models.Memory{
 			CGroupUsedBytes:  4000000000, // Almost full memory
