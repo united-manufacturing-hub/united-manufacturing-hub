@@ -240,6 +240,48 @@ var _ = Describe("CPU virtualisation", func() {
 			"once the DMI read succeeds, the ARM64 VM must recover and resolve Virtualized=true")
 	})
 
+	It("retries an unreadable /proc/cpuinfo instead of permanently caching Virtualized=false", func() {
+		ctx := context.Background()
+		base := "/sys/fs/cgroup"
+
+		// Every source is unreadable on the first tick, /proc/cpuinfo included,
+		// and cpuinfo becomes readable on the second. An unreadable cpuinfo is
+		// the case with the LEAST evidence of anything — it cannot even tell x86
+		// from ARM64 — so it must leave the fact open, exactly as a failed DMI
+		// read does. Caching false here costs the host steal attribution for the
+		// whole process lifetime over a momentary read failure at startup, and
+		// nothing short of a restart brings it back.
+		cpuinfoReads := 0
+		fs := filesystem.NewMockFileSystem()
+		fs.ReadFileFunc = func(ctx context.Context, path string) ([]byte, error) {
+			switch path {
+			case base + "/cpu.stat":
+				return []byte("usage_usec 5000000\nnr_periods 0\nnr_throttled 0\n"), nil
+			case base + "/cpu.max":
+				return []byte("max 100000\n"), nil
+			case "/proc/cpuinfo":
+				cpuinfoReads++
+				if cpuinfoReads == 1 {
+					return nil, errors.New("transient cpuinfo failure")
+				}
+				return x86VMCpuinfo, nil
+			default:
+				return nil, errors.New("unreadable")
+			}
+		}
+		s := cpuhealth.NewLinuxSampler(fs, base)
+
+		first, err := s.Read(ctx)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(first.Virtualized).To(BeFalse(),
+			"an unreadable /proc/cpuinfo is no evidence of virtualisation, so tick 1 reads false")
+
+		second, err := s.Read(ctx)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(second.Virtualized).To(BeTrue(),
+			"once /proc/cpuinfo becomes readable its hypervisor flag must be seen; a tick-1 read failure must not cache false for the process lifetime")
+	})
+
 	// The DMI vendor, which is ARM64's only working source. AWS
 	// Graviton/Nitro puts its instance type (m6g.medium) in /sys/class/dmi/id/
 	// product_name, GCP Tau T2A and Azure ARM put no hypervisor token there at
