@@ -596,4 +596,56 @@ var _ = Describe("Engine", func() {
 			Expect(firedAtBar).To(BeEmpty(), tc.name+": the latch releases at tick 60, exactly 60s after t0, however often the two not-ready arms alternated in between")
 		}
 	})
+
+	// NewEngine reads the caller's Table once, so the caller must be free to
+	// keep editing that table afterwards. The positive control runs the same
+	// table, same two ticks, unedited: the window reaches StateValue at two
+	// samples (Mean needs two) and the signal reads Ready. Only then does the
+	// failing half mutate the caller's own instrument name after construction.
+	It("keeps the engine's windows reachable when the caller edits their own table after NewEngine returns", func() {
+		type snap struct{ v float64 }
+
+		mk := func() Table[snap] {
+			sig := Signal[snap]{
+				Name:       "s",
+				DemoteSpan: 60 * time.Second,
+				Instruments: []Instrument[snap]{{
+					Name:    "i",
+					Extract: func(s snap) Reading { return Known(s.v) },
+					Red:     Mean,
+					Span:    3 * time.Second,
+					Marks: Marks{
+						Unit:     "u",
+						Fire:     Mark{At: 100, Inclusive: true},
+						Worst:    200,
+						Clear:    Mark{At: 0, Inclusive: false},
+						Polarity: HigherIsWorse,
+					},
+				}},
+			}
+			return Table[snap]{Signals: []Signal[snap]{sig}, Interval: time.Second}
+		}
+
+		drive := func(e *Engine[snap], base time.Time) []Readiness {
+			e.Observe(snap{v: 1.0}, NewEnvironment(), base)
+			_, readiness := e.Observe(snap{v: 2.0}, NewEnvironment(), base.Add(time.Second))
+			return readiness
+		}
+
+		control, err := NewEngine(mk())
+		Expect(err).ToNot(HaveOccurred())
+		Expect(drive(control, time.Unix(10_000_000, 0))[0].Availability).To(Equal(Ready))
+
+		// The caller renames their own instrument after construction. The
+		// windows were keyed by the names as they stood at construction; an
+		// engine holding a shallow copy of Instruments looks every tick under
+		// the new name, finds no window, and reports NoInstrument forever.
+		tbl := mk()
+		e, err := NewEngine(tbl)
+		Expect(err).ToNot(HaveOccurred())
+		tbl.Signals[0].Instruments[0].Name = "renamed"
+		readiness := drive(e, time.Unix(10_000_001, 0))
+		Expect(readiness[0].Availability).To(Equal(Ready),
+			"a caller's later edit to their own table must not detach the engine from its windows")
+	})
 })

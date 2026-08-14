@@ -140,6 +140,17 @@ func NewEngine[S any](t Table[S]) (*Engine[S], error) {
 		e.tracks = append(e.tracks, trackState[S]{track: tr, window: *w})
 	}
 	for i, s := range t.Signals {
+		// The caller keeps the table they passed, so the engine must own the
+		// instruments it stores: a copy of the Signal would still share the
+		// Instruments backing array, and a later edit to the caller's own table
+		// would rename the engine's instruments while the windows above stay
+		// keyed by the names as they were at construction. Deep-copy the
+		// instruments and, one level down, each instrument's capability list,
+		// which is a second slice header into the same table.
+		s.Instruments = append([]Instrument[S](nil), s.Instruments...)
+		for j := range s.Instruments {
+			s.Instruments[j].Requires = append([]Capability(nil), s.Instruments[j].Requires...)
+		}
 		e.signals = append(e.signals, signalState[S]{
 			signal: s,
 			latch: Latch{identity: Identity{
