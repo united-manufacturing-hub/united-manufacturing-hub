@@ -57,8 +57,11 @@ func (s *linuxSampler) readVirtualized(ctx context.Context) bool {
 	// has a flags line (x86) product_name alone is authoritative and the result
 	// is cached. ARM64 has no flags line and sys_vendor is part of its identity,
 	// so a still-unresolved sys_vendor keeps the fact open on the next tick
-	// rather than permanently caching false.
-	if err == nil && !cpuinfoHasFlagsLine(data) && !vok {
+	// rather than permanently caching false. An unreadable cpuinfo cannot even
+	// tell the two platforms apart, so it is treated as the weaker one and also
+	// waits for sys_vendor: caching false off a momentary read failure would
+	// cost this host steal attribution until the process restarts.
+	if (err != nil || !cpuinfoHasFlagsLine(data)) && !vok {
 		return false
 	}
 	s.virtualized = false
