@@ -40,6 +40,13 @@ const (
 )
 
 // Sample holds the CPU health readings for one cgroup.
+//
+// Flat by decision. A type per concept would pair a Reading with its own
+// presence bool — the shape cadvisor deprecated as DeprecatedContainerStats,
+// Has=false being indistinguishable from a measured zero — which Reading.Get
+// prevents. It splits reads too: one cpu.stat open yields usage and both
+// throttle counters; CpuScope needs /proc/stat and the cpuset. And all fields
+// share one Timestamp a split would fork — prometheus/procfs keeps Stat flat.
 type Sample struct {
 	// Quota is present when cpu.max names a positive limit (the capacity in
 	// cores), the literal "max" (a present 0.0, a definite no-limit), or a

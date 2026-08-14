@@ -71,6 +71,8 @@
 // rule — a source that could not be read yields an absent Reading, never a
 // confident zero.
 //
+// Why Sample and Signals are flat structs: see the note above each declaration.
+//
 // # What the sampler reads
 //
 // The Linux sampler reads eight paths. Four are under the cgroup base it was
