@@ -18,6 +18,7 @@
 // every Reading is Unknown(), so the six-scenario suite is generated from
 // cpuTable itself and proves the readability path on the declaration that will
 // actually run.
+
 package cpuhealth
 
 import (

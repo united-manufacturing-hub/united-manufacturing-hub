@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Sample, the readings one tick produces, and the capabilities derived from
+// them.
+
 package cpuhealth
 
 import (

@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Turning a fired signal into the cause a customer is shown, and deciding
+// whether to blame the host or leave the blame unknown.
+
 package cpuhealth
 
 import (

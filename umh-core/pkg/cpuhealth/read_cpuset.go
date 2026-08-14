@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// How many CPUs the cgroup is allowed to run on, counted from the kernel's
+// cpuset list.
+
 package cpuhealth
 
 import (

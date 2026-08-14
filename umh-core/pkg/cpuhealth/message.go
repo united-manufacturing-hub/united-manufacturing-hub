@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// The customer-facing text: every sentence this package can print, and the
+// rules that pick which one.
+
 package cpuhealth
 
 import (

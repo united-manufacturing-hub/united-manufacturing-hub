@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// The vocabulary a verdict is written in: its states, its attributions, and
+// the kinds of cause it can name.
+
 package cpuhealth
 
 // State is the customer-visible health state of the CPU verdict. Two values and

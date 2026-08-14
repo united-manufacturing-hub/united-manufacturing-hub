@@ -12,6 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// The Linux sampler: one tick's read of the cgroup and the machine, the
+// capability constants that read establishes, and the rate arithmetic that
+// needs the previous tick to exist.
+
 package cpuhealth
 
 import (

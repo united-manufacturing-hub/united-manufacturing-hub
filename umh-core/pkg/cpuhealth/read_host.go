@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// The machine-wide totals from /proc/stat: how busy the whole machine is, how
+// much of its time was stolen, and how many CPUs it has.
+
 package cpuhealth
 
 import (
