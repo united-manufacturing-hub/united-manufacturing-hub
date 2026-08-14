@@ -35,10 +35,10 @@ package cpuhealth
 type Signals struct {
 	// The metrics. Each is populated independent of its latch state, so the
 	// number stays observable when the latch has not fired.
-	UsageFraction    float64 // quota-relative; collapses to 0 in no-limit mode
-	ThrottleRatio    float64 // 60s nr_throttled/nr_periods delta; negatives clamped to 0
-	PressureAvg60Out float64 // PSI avg60; NaN/negative/+Inf clamped to 0
-	StealP95         float64 // 60s p95; 0 on bare metal and below 2 samples
+	UsageFraction float64 // quota-relative; collapses to 0 in no-limit mode
+	ThrottleRatio float64 // 60s nr_throttled/nr_periods delta; negatives clamped to 0
+	PressureAvg60 float64 // PSI avg60; NaN/negative/+Inf clamped to 0
+	StealP95      float64 // 60s p95; 0 on bare metal and below 2 samples
 
 	// Observability only: none of the six changes a verdict.
 	AvgUsageFraction float64
@@ -75,7 +75,7 @@ type Signals struct {
 	// negative number, not a 0.
 	HostHeadroomCores      float64
 	HostBusyCoresAvailable bool // the sample's own readability flag; a ==0 proxy cannot tell unreadable from idle
-	HostBusyCores60sMean   float64
+	AvgHostBusyCores       float64
 	HeadroomCores          float64 // the saturation decision variable
 	CapacityCores          float64 // the quota when set and positive, else LogicalCpus
 	ReserveCores           float64
@@ -84,9 +84,9 @@ type Signals struct {
 	// forbidden from reading these three as "the reading succeeded". The three
 	// *SignalReady fields below are the readability half, and the two families
 	// are never interchangeable.
-	LimitApplies bool
-	PsiApplies   bool
-	StealApplies bool
+	LimitApplies    bool
+	PressureApplies bool
+	StealApplies    bool
 
 	// ---- past the parked 31. Decide fills all three. ----
 	//

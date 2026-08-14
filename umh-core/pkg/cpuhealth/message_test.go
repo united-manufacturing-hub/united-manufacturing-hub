@@ -64,7 +64,7 @@ var _ = Describe("the healthy headline", func() {
 		nolimit.LimitApplies = false
 		nolimit.CapacityCores = 8
 		nolimit.AvgUsageCores = 0
-		nolimit.HostBusyCores60sMean = 0.0
+		nolimit.AvgHostBusyCores = 0.0
 		nolimit.ReserveCores = 1.0
 		Expect(composeHealthy(nolimit)).To(ContainSubstring(
 			"CPU healthy. The machine is using 0.0 of 8 cores and can use 7.0 more before it is marked degraded."))
@@ -183,7 +183,7 @@ var _ = Describe("the healthy message reports only what it measured", func() {
 		sig := healthySig()
 		sig.LimitApplies = false
 		sig.CapacityCores = 8
-		sig.HostBusyCores60sMean = 0.0
+		sig.AvgHostBusyCores = 0.0
 		sig.ReserveCores = 1.0
 		sig.HostBusyCoresAvailable = false // read failed, window still full
 		Expect(composeHealthy(sig)).To(Equal("CPU: starting up."))
@@ -199,7 +199,7 @@ var _ = Describe("the healthy message reports only what it measured", func() {
 		sig := healthySig()
 		sig.LimitApplies = false
 		sig.CapacityCores = 8
-		sig.HostBusyCores60sMean = 0.0
+		sig.AvgHostBusyCores = 0.0
 		sig.ReserveCores = 1.0
 		sig.HostBusyCoresAvailable = true
 		sig.HostBusyRingActive = false
@@ -227,7 +227,7 @@ var _ = Describe("the budget lines", func() {
 	It("should list the headroom budget always, and each of throttle, pressure and steal only when this tick's reading is usable", func() {
 		all := healthySig()
 		all.ThrottleRatio = 0.02
-		all.PressureAvg60Out = 0.05
+		all.PressureAvg60 = 0.05
 		all.StealP95 = 0.30
 		msg := composeHealthy(all)
 		// Headroom is the only unconditional line.
@@ -254,9 +254,9 @@ var _ = Describe("the budget lines", func() {
 		noThrottle.ThrottleSignalReady = false
 		Expect(composeHealthy(noThrottle)).NotTo(ContainSubstring("Throttling"))
 
-		// The pressure gate is readiness, not PsiApplies.
+		// The pressure gate is readiness, not PressureApplies.
 		noPressure := healthySig()
-		noPressure.PsiApplies = true
+		noPressure.PressureApplies = true
 		noPressure.PressureSignalReady = false
 		Expect(composeHealthy(noPressure)).NotTo(ContainSubstring("Pressure"))
 
@@ -277,11 +277,11 @@ func degradedSig() Signals {
 	return Signals{
 		CapacityCores:          4.0,
 		AvgUsageCores:          0.5,
-		HostBusyCores60sMean:   1.0,
+		AvgHostBusyCores:       1.0,
 		HostBusyCoresAvailable: true,
 		ReserveCores:           1.0,
 		LimitApplies:           true,
-		PsiApplies:             true,
+		PressureApplies:        true,
 	}
 }
 
@@ -353,14 +353,14 @@ var _ = Describe("degraded copy", func() {
 		arm7 := degradedSig()
 		arm7.LimitApplies = false
 		arm7.NoLimitHostFired = true
-		arm7.HostBusyCores60sMean = 3.8
+		arm7.AvgHostBusyCores = 3.8
 		arm7.CapacityCores = 4.0
 		arm7.LimitedVisibility = true
 		msg = ComposeMessage(degradedVerdict(CauseKindSaturation, 0.5), arm7)
 		Expect(msg).To(ContainSubstring("CPU averaged 95% of the machine over the last minute and this instance has little headroom left. Add CPU capacity, or reduce the load on it."))
 		Expect(msg).To(ContainSubstring(" Pressure stats are unavailable; enable Linux pressure stats (boot with psi=1) for richer detail."))
 
-		// Arm 3 & 4 — no-host-stats with and without PSI. The PsiApplies-false
+		// Arm 3 & 4 — no-host-stats with and without PSI. The PressureApplies-false
 		// arm is the one that EARNS the psi advice.
 		on := degradedSig()
 		on.NoHostStatsSaturationFired = true
@@ -370,7 +370,7 @@ var _ = Describe("degraded copy", func() {
 
 		off := degradedSig()
 		off.NoHostStatsSaturationFired = true
-		off.PsiApplies = false
+		off.PressureApplies = false
 		msg = ComposeMessage(degradedVerdict(CauseKindSaturation, 0.8), off)
 		Expect(msg).To(ContainSubstring("Enable Linux pressure stats (boot with psi=1) for richer detail. Consider adding CPU capacity."))
 	})

@@ -14,8 +14,8 @@
 
 // The guard. A healthy no-PSI box sits in the dead zone (no positive
 // quota AND no PSI), so its customer-visible output must be byte-identical
-// however the answerability mechanisms (LimitedVisibility, PsiApplies) evolve:
-// verdict healthy, no causes, PsiApplies false, LimitedVisibility true, and the
+// however the answerability mechanisms (LimitedVisibility, PressureApplies) evolve:
+// verdict healthy, no causes, PressureApplies false, LimitedVisibility true, and the
 // limited-visibility advisory present in the message. The whole point is the
 // REAL chain — DeriveEnvironment, Decide and ComposeMessage run back to back on
 // one sample stream, not a hand-assembled Signals bag — so the spec breaks the
@@ -33,7 +33,7 @@ import (
 )
 
 var _ = Describe("byte-identical output on a healthy no-PSI box", func() {
-	It("should leave verdict healthy, no causes, PsiApplies false, LimitedVisibility true, and the advisory present", func() {
+	It("should leave verdict healthy, no causes, PressureApplies false, LimitedVisibility true, and the advisory present", func() {
 		// A dead-zone box: cores=4 so the saturation instrument IS present, but
 		// Quota present 0 (no positive quota -> no HasLimit) and PsiAvailable
 		// false (no HasPressureStats). Virtualized false keeps it bare metal so
@@ -70,7 +70,7 @@ var _ = Describe("byte-identical output on a healthy no-PSI box", func() {
 		// The full invariant, asserted together on the genuinely no-PSI chain.
 		Expect(verdict.State).To(Equal(StateHealthy), "a benign dead-zone box stays healthy")
 		Expect(verdict.Causes).To(BeEmpty(), "no cause may fire on a healthy box")
-		Expect(sig.PsiApplies).To(BeFalse(), "a no-PSI host must not claim PSI applies")
+		Expect(sig.PressureApplies).To(BeFalse(), "a no-PSI host must not claim PSI applies")
 		Expect(sig.LimitedVisibility).To(BeTrue(), "the dead zone (no limit AND no PSI) must set LimitedVisibility")
 		// The healthy dashboard rendered, not the below-floor "CPU: starting up."
 		// single-liner — proving the real chain produced the full message.
