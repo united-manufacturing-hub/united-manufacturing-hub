@@ -36,29 +36,6 @@ const (
 	ScopeAffinity
 )
 
-// DeriveEnvironment reads three facts off Sample — whether the host is
-// Virtualized, whether Quota names a POSITIVE number, and whether the kernel
-// has ever reported PSI — and builds the Environment the engine selects
-// instruments with.
-func DeriveEnvironment(s Sample) diagnosis.Environment {
-	caps := make([]diagnosis.Capability, 0, 3)
-	if s.Virtualized {
-		caps = append(caps, HasVirtualization)
-	}
-	if q, ok := s.Quota.Get(); ok && q > 0 {
-		caps = append(caps, HasLimit)
-	}
-	if s.PsiAvailable {
-		caps = append(caps, HasPressureStats)
-	}
-	return diagnosis.NewEnvironment(caps...)
-}
-
-// Sampler reads a cgroup's CPU health signals.
-type Sampler interface {
-	Read(ctx context.Context) (Sample, error)
-}
-
 // Sample holds the CPU health readings for one cgroup.
 type Sample struct {
 	// Quota is present when cpu.max names a positive limit (the capacity in
@@ -141,4 +118,27 @@ type Sample struct {
 	// Timestamp is the time of this read. Every field off the same read carries
 	// the same Timestamp.
 	Timestamp time.Time
+}
+
+// Sampler reads a cgroup's CPU health signals.
+type Sampler interface {
+	Read(ctx context.Context) (Sample, error)
+}
+
+// DeriveEnvironment reads three facts off Sample — whether the host is
+// Virtualized, whether Quota names a POSITIVE number, and whether the kernel
+// has ever reported PSI — and builds the Environment the engine selects
+// instruments with.
+func DeriveEnvironment(s Sample) diagnosis.Environment {
+	caps := make([]diagnosis.Capability, 0, 3)
+	if s.Virtualized {
+		caps = append(caps, HasVirtualization)
+	}
+	if q, ok := s.Quota.Get(); ok && q > 0 {
+		caps = append(caps, HasLimit)
+	}
+	if s.PsiAvailable {
+		caps = append(caps, HasPressureStats)
+	}
+	return diagnosis.NewEnvironment(caps...)
 }

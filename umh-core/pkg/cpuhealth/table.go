@@ -67,6 +67,27 @@ var (
 	}
 )
 
+// NewEngine builds the engine once, at construction. Both arguments are startup
+// facts, cached across ticks, exactly as a Capability is; a quota that changes
+// at runtime needs a rebuilt table, and rebuilding drops every window.
+func NewEngine(cores, quota float64) (*diagnosis.Engine[Sample], error) {
+	return diagnosis.NewEngine(Table(cores, quota))
+}
+
+// Table builds the CPU signal table for a caller that needs the Signal values
+// themselves: a worker outside this package walks them to ask Engine.Select for
+// per-signal Availability, and cpuTable is unexported.
+//
+// What this guarantees is narrow and exact. NewEngine delegates through Table,
+// so the table a caller walks and the table that caller's engine was built from
+// come from the same call — a signal the worker polls is a signal the engine
+// keyed windows under. It is not a package-wide guarantee: RunSuite still builds
+// its own table from cpuTable directly, so "nothing in cpuhealth can drift" is
+// not a claim this function is in a position to make.
+func Table(cores, quota float64) diagnosis.Table[Sample] {
+	return cpuTable(cores, quota)
+}
+
 // cpuTable is the CPU declaration, built by a function because two marks and
 // one capacity are denominated in quantities that vary per box: the quota and
 // the logical CPU count. Both arguments are startup facts, cached across ticks,
@@ -355,25 +376,4 @@ func limitSaturationSignal(quota float64) diagnosis.Signal[Sample] {
 			},
 		}},
 	}
-}
-
-// Table builds the CPU signal table for a caller that needs the Signal values
-// themselves: a worker outside this package walks them to ask Engine.Select for
-// per-signal Availability, and cpuTable is unexported.
-//
-// What this guarantees is narrow and exact. NewEngine delegates through Table,
-// so the table a caller walks and the table that caller's engine was built from
-// come from the same call — a signal the worker polls is a signal the engine
-// keyed windows under. It is not a package-wide guarantee: RunSuite still builds
-// its own table from cpuTable directly, so "nothing in cpuhealth can drift" is
-// not a claim this function is in a position to make.
-func Table(cores, quota float64) diagnosis.Table[Sample] {
-	return cpuTable(cores, quota)
-}
-
-// NewEngine builds the engine once, at construction. Both arguments are startup
-// facts, cached across ticks, exactly as a Capability is; a quota that changes
-// at runtime needs a rebuilt table, and rebuilding drops every window.
-func NewEngine(cores, quota float64) (*diagnosis.Engine[Sample], error) {
-	return diagnosis.NewEngine(Table(cores, quota))
 }
