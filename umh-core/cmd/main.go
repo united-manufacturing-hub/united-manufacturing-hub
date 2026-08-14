@@ -154,19 +154,13 @@ func main() {
 	// FSMv2 feature flags: read directly from env vars, not persisted to config.yaml.
 	// These bypass the config manager intentionally — they are temporary migration flags
 	// that will be replaced when the config manager becomes an FSMv2 worker.
-	// GetAsBool with required=false never returns an error (silently falls back
-	// to the default on parse failure); see ENG-4809 for the signature fix.
-	protocolConverterEnabled, _ := env.GetAsBool("USE_FSMV2_PROTOCOL_CONVERTER", false, false)
-	configData.Agent.UseFSMv2ProtocolConverter = protocolConverterEnabled
-
 	featureUsage := &models.FeatureUsage{
-		ConfigBackupEnabled:           configBackupEnabled,
-		FSMv2TransportEnabled:         true, // FSMv2 is the only bring-up path
-		FSMv2MemoryCleanupEnabled:     true, // persistence runs unconditionally
-		FSMv2ProtocolConverterEnabled: configData.Agent.UseFSMv2ProtocolConverter,
-		ResourceLimitBlockingEnabled:  configData.Agent.EnableResourceLimitBlocking,
-		HistorianConfigured:           configData.Historian != nil,
-		HistorianBridgeCount:          countHistorianBridges(configData),
+		ConfigBackupEnabled:          configBackupEnabled,
+		FSMv2TransportEnabled:        true, // FSMv2 is the only bring-up path
+		FSMv2MemoryCleanupEnabled:    true, // persistence runs unconditionally
+		ResourceLimitBlockingEnabled: configData.Agent.EnableResourceLimitBlocking,
+		HistorianConfigured:          configData.Historian != nil,
+		HistorianBridgeCount:         countHistorianBridges(configData),
 	}
 
 	// Ensure the S6 repository directory exists

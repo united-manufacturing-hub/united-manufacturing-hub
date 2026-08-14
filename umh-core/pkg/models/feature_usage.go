@@ -35,8 +35,6 @@ type FeatureUsage struct {
 	// cleanup is active. It is always true: persistence runs unconditionally and
 	// the USE_FSMV2_MEMORY_CLEANUP flag that used to gate it no longer exists.
 	FSMv2MemoryCleanupEnabled bool `json:"fsmv2MemoryCleanupEnabled"`
-	// FSMv2ProtocolConverterEnabled reports whether USE_FSMV2_PROTOCOL_CONVERTER is set.
-	FSMv2ProtocolConverterEnabled bool `json:"fsmv2ProtocolConverterEnabled"`
 	// ResourceLimitBlockingEnabled reports the value of agent.enableResourceLimitBlocking in config.yaml (defaults to true).
 	ResourceLimitBlockingEnabled bool `json:"resourceLimitBlockingEnabled"`
 	// HistorianConfigured reports whether a historian section exists in config.yaml.
