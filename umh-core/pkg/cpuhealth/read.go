@@ -39,12 +39,12 @@ const (
 	HasPressureStats diagnosis.Capability = "cpuhealth.HasPressureStats"
 )
 
-// NewCgroupSampler returns a Sampler reading via fs from base.
-func NewCgroupSampler(fs filesystem.Service, base string) Sampler {
-	return &cgroupSampler{fs: fs, base: base}
+// NewLinuxSampler returns a Sampler reading via fs from base.
+func NewLinuxSampler(fs filesystem.Service, base string) Sampler {
+	return &linuxSampler{fs: fs, base: base}
 }
 
-type cgroupSampler struct {
+type linuxSampler struct {
 	fs           filesystem.Service
 	base         string
 	psiAvailable bool
@@ -99,7 +99,7 @@ func parseCounter(data []byte, key string) (diagnosis.Reading, error) {
 // counters. A non-nil error reports a read OR parse failure of cpu.stat, either
 // of which fails the whole sample; each value's Reading is independently present
 // or unavailable on success.
-func (s *cgroupSampler) readStat(ctx context.Context) (usage, periods, throttled diagnosis.Reading, err error) {
+func (s *linuxSampler) readStat(ctx context.Context) (usage, periods, throttled diagnosis.Reading, err error) {
 	var data []byte
 	data, err = s.fs.ReadFile(ctx, s.base+"/cpu.stat")
 	if err != nil {
@@ -120,7 +120,7 @@ func (s *cgroupSampler) readStat(ctx context.Context) (usage, periods, throttled
 // Read samples the cgroup at base from cpu.max: a positive limit reads as a
 // capacity, "max" and non-positive limits as a present no-limit, and an
 // unreadable or unparsable cpu.max as absent no-signal.
-func (s *cgroupSampler) Read(ctx context.Context) (Sample, error) {
+func (s *linuxSampler) Read(ctx context.Context) (Sample, error) {
 	var smp Sample
 	smp.Timestamp = time.Now()
 
@@ -217,7 +217,7 @@ func (s *cgroupSampler) Read(ctx context.Context) (Sample, error) {
 		smp.CpuScope = ScopeUnknown
 	}
 
-	smp.Virtualized = s.resolveVirtualized(ctx)
+	smp.Virtualized = s.readVirtualized(ctx)
 
 	data, err := s.fs.ReadFile(ctx, s.base+"/cpu.max")
 	if err != nil {

@@ -60,7 +60,7 @@ var _ = Describe("pressure", func() {
 			}
 		}
 
-		s := cpuhealth.NewCgroupSampler(fs, base)
+		s := cpuhealth.NewLinuxSampler(fs, base)
 
 		// First snapshot: cpu.pressure reads. The some avg60 lands as a 0..1
 		// fraction — the kernel reports 0..100 and the marks are fractions.
@@ -102,7 +102,7 @@ var _ = Describe("pressure", func() {
 			}
 		}
 
-		s := cpuhealth.NewCgroupSampler(fs, base)
+		s := cpuhealth.NewLinuxSampler(fs, base)
 
 		snapshot, err := s.Read(ctx)
 		Expect(err).NotTo(HaveOccurred())
@@ -130,7 +130,7 @@ var _ = Describe("pressure", func() {
 			}
 		}
 
-		s := cpuhealth.NewCgroupSampler(fs, base)
+		s := cpuhealth.NewLinuxSampler(fs, base)
 
 		snapshot, err := s.Read(ctx)
 		Expect(err).NotTo(HaveOccurred())
@@ -162,7 +162,7 @@ var _ = Describe("pressure", func() {
 			}
 		}
 
-		s := cpuhealth.NewCgroupSampler(fs, base)
+		s := cpuhealth.NewLinuxSampler(fs, base)
 
 		snapshot, err := s.Read(ctx)
 		Expect(err).NotTo(HaveOccurred())

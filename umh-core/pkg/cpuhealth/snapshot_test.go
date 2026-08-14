@@ -63,7 +63,7 @@ var _ = Describe("one snapshot per tick", func() {
 		if mutate != nil {
 			mutate(fs)
 		}
-		return cpuhealth.NewCgroupSampler(fs, base)
+		return cpuhealth.NewLinuxSampler(fs, base)
 	}
 
 	It("stamps one timestamp, builds the environment from two facts, and fails the whole snapshot only on cpu.stat", func() {

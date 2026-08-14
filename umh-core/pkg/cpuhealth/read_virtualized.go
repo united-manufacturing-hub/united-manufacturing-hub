@@ -19,7 +19,7 @@ import (
 	"strings"
 )
 
-// resolveVirtualized returns the sticky virtualisation fact. On the first call
+// readVirtualized returns the sticky virtualisation fact. On the first call
 // it reads /proc/cpuinfo and, when the flags line carries "hypervisor", caches
 // and returns true for every later read. The distinct ARM64 route is the DMI
 // fallback: an ARM64 cpuinfo has a Features line and no flags line, so the
@@ -28,7 +28,7 @@ import (
 // not already prove virtualization — including when cpuinfo is unreadable — and
 // a read failure on either source leaves the fact unresolved so the next tick
 // retries rather than permanently caching Virtualized=false.
-func (s *cgroupSampler) resolveVirtualized(ctx context.Context) bool {
+func (s *linuxSampler) readVirtualized(ctx context.Context) bool {
 	if s.virtResolved {
 		return s.virtualized
 	}
@@ -115,7 +115,7 @@ var dmiHypervisorTokens = []string{
 // false when the read failed: an unreadable product_name is no evidence, and
 // leaving it unresolved lets the caller (and a later tick) retry rather than
 // caching Virtualized=false forever.
-func (s *cgroupSampler) dmiProductVirtualized(ctx context.Context) (virtualized, resolved bool) {
+func (s *linuxSampler) dmiProductVirtualized(ctx context.Context) (virtualized, resolved bool) {
 	data, err := s.fs.ReadFile(ctx, "/sys/class/dmi/id/product_name")
 	return dmiTokenMatch(data, err, dmiHypervisorTokens)
 }
@@ -141,7 +141,7 @@ var dmiVendorHypervisorTokens = []string{
 // dmiVendorVirtualized is the second ARM64 DMI source. It reports whether
 // /sys/class/dmi/id/sys_vendor names a cloud hypervisor, with the same
 // read-failure contract as dmiProductVirtualized.
-func (s *cgroupSampler) dmiVendorVirtualized(ctx context.Context) (virtualized, resolved bool) {
+func (s *linuxSampler) dmiVendorVirtualized(ctx context.Context) (virtualized, resolved bool) {
 	data, err := s.fs.ReadFile(ctx, "/sys/class/dmi/id/sys_vendor")
 	return dmiTokenMatch(data, err, dmiVendorHypervisorTokens)
 }

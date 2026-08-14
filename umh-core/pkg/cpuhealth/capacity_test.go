@@ -54,7 +54,7 @@ var _ = Describe("capacity", func() {
 			}
 		}
 
-		return cpuhealth.NewCgroupSampler(fs, base)
+		return cpuhealth.NewLinuxSampler(fs, base)
 	}
 
 	It("distinguishes the three cpu.max outcomes and never reads a non-positive limit as a capacity", func() {

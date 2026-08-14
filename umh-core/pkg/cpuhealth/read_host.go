@@ -32,7 +32,7 @@ const userHz = 100.0
 // caller can derive interval deltas. machine is the number of per-CPU (cpu0,
 // cpu1, …) lines in the same file, the machine's CPU count. The trailing space
 // in "cpu " keeps the aggregate line from matching cpu0/cpu1.
-func (s *cgroupSampler) readHost(ctx context.Context) (busy, steal, denom, machine float64, ok bool) {
+func (s *linuxSampler) readHost(ctx context.Context) (busy, steal, denom, machine float64, ok bool) {
 	data, err := s.fs.ReadFile(ctx, "/proc/stat")
 	if err != nil {
 		return 0, 0, 0, 0, false
