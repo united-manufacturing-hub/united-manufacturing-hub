@@ -49,6 +49,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/protocolconverterserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
+	nmapfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/nmap"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/protocolconverter"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
@@ -632,13 +633,45 @@ func (a *EditProtocolConverterAction) awaitRollout(pcConfig config.ProtocolConve
 					// Only check the nmap port when activating; when stopping, nmap is also
 					// stopped so it will never update to the new port.
 					if desiredPCState != protocolconverter.OperationalStateStopped {
+						nmapObs := pcSnapshot.ServiceInfo.ConnectionObservedState.ServiceInfo.NmapObservedState
 						nmapPort := strconv.FormatUint(
-							uint64(pcSnapshot.ServiceInfo.ConnectionObservedState.ServiceInfo.NmapObservedState.ObservedNmapServiceConfig.Port),
+							uint64(nmapObs.ObservedNmapServiceConfig.Port),
 							10,
 						)
 
+						// A scanned-and-open port is the only guarantee that the
+						// edit converged. The observed config merely echoes what
+						// the scan was asked to dial, so port equality alone
+						// cannot tell a live port from a refused one. Requiring
+						// open matches the connection FSM, which defines up as
+						// open and counts every other state as down. Do NOT use
+						// IsRunning: it is overloaded across backends (open on
+						// fsmv2, "scanner process up" on fsmv1).
+						portIsOpen := nmapObs.ServiceInfo.NmapStatus.LastScan != nil &&
+							nmapObs.ServiceInfo.NmapStatus.LastScan.PortResult.State == string(nmapfsm.PortStateOpen)
+
 						if nmapPort != a.connectionPort {
 							currentStateReason = "waiting for nmap to connect to port " + a.connectionPort
+							SendActionReply(
+								a.instanceUUID,
+								a.userEmail,
+								a.actionUUID,
+								models.ActionExecuting,
+								RemainingPrefixSec(remainingSeconds)+currentStateReason,
+								a.outboundChannel,
+								models.EditProtocolConverter,
+							)
+
+							continue
+						}
+
+						if !portIsOpen {
+							lastState := "no scan yet"
+							if nmapObs.ServiceInfo.NmapStatus.LastScan != nil {
+								lastState = nmapObs.ServiceInfo.NmapStatus.LastScan.PortResult.State
+							}
+
+							currentStateReason = "waiting for nmap to report port " + a.connectionPort + " open (last scan: " + lastState + ")"
 							SendActionReply(
 								a.instanceUUID,
 								a.userEmail,

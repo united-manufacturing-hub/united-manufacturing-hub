@@ -45,6 +45,8 @@ const (
 
 // NmapStatus is the result of one TCP-dial observation of the target port.
 type NmapStatus struct {
+	// Target is the hostname or IP address the scan dialed.
+	Target string `json:"target"`
 	// PortState is one of nmapfsm.PortStateOpen or nmapfsm.PortStateClosed.
 	PortState string `json:"port_state"`
 	// LatencyMs is the dial round-trip time in milliseconds. Zero unless the
@@ -77,10 +79,11 @@ func Poll(ctx context.Context, _ struct{}, cfg config.NmapConfig) (NmapStatus, e
 		// as shutdown reports cancelled, not closed. A deadline
 		// (ObservationTimeout) is not a shutdown: it falls through to closed.
 		if errors.Is(ctx.Err(), context.Canceled) {
-			return NmapStatus{Port: cfg.NmapServiceConfig.Port}, fmt.Errorf("scan cancelled: %w", ctx.Err())
+			return NmapStatus{Target: cfg.NmapServiceConfig.Target, Port: cfg.NmapServiceConfig.Port}, fmt.Errorf("scan cancelled: %w", ctx.Err())
 		}
 
 		return NmapStatus{
+			Target:    cfg.NmapServiceConfig.Target,
 			PortState: string(nmapfsm.PortStateClosed),
 			Port:      cfg.NmapServiceConfig.Port,
 		}, nil
@@ -90,6 +93,7 @@ func Poll(ctx context.Context, _ struct{}, cfg config.NmapConfig) (NmapStatus, e
 	_ = conn.Close()
 
 	return NmapStatus{
+		Target:    cfg.NmapServiceConfig.Target,
 		PortState: string(nmapfsm.PortStateOpen),
 		LatencyMs: elapsedMs,
 		Port:      cfg.NmapServiceConfig.Port,

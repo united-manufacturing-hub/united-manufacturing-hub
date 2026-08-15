@@ -71,6 +71,25 @@ var _ = Describe("Nmap Poll", func() {
 		Expect(status.LatencyMs).To(BeNumerically(">=", 0))
 	})
 
+	It("records the target and port it dialed", func() {
+		ln, err := net.Listen("tcp", "127.0.0.1:0")
+		Expect(err).NotTo(HaveOccurred())
+
+		defer func() { _ = ln.Close() }()
+
+		host, p := hostPort(ln.Addr().String())
+		cfg := newNmapConfig(host, p)
+
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+
+		st, err := fsmv2nmap.Poll(ctx, struct{}{}, cfg)
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(st.Target).To(Equal(host), "Poll must record the target it dialed")
+		Expect(st.Port).To(Equal(uint16(p)), "Poll must record the port it dialed") //nolint:unconvert // keep the explicit uint16 to match the scan's port type
+	})
+
 	It("reports a closed port without an error when the connection is refused", func() {
 		// Bind a listener to grab a free loopback port, then close it so the
 		// kernel answers the dial with a TCP RST (connection refused). A refused

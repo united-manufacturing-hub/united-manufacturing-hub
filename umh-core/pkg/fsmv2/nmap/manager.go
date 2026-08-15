@@ -21,6 +21,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/nmapserviceconfig"
 	publicfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	nmapfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/nmap"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/adapter"
@@ -92,12 +93,18 @@ func mapFresh(_ config.NmapConfig, s simple.Status[NmapStatus]) string {
 	}
 }
 
-// mapObserved builds a nmapfsm.NmapObservedState from the config and the stored
-// status: the observed service config comes from the config entry, and the
-// ServiceInfo mirrors the last scan (port state, port, latency, running).
-func mapObserved(cfg config.NmapConfig, s simple.Status[NmapStatus]) publicfsm.ObservedState {
+// mapObserved builds a nmapfsm.NmapObservedState from the stored status. Both
+// Target and Port come from the status (what the scan actually dialed), with
+// no echo of the requested config. A requested edit that has not yet been
+// dialed therefore reads as unobserved, so a target-diffing consumer (the
+// deploy gate) keeps waiting for a genuine scan. The ServiceInfo mirrors the
+// last scan (port state, port, latency, running).
+func mapObserved(_ config.NmapConfig, s simple.Status[NmapStatus]) publicfsm.ObservedState {
 	return nmapfsm.NmapObservedState{
-		ObservedNmapServiceConfig: cfg.NmapServiceConfig,
+		ObservedNmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
+			Target: s.Result.Target,
+			Port:   s.Result.Port,
+		},
 		ServiceInfo: nmapservice.ServiceInfo{
 			NmapStatus: nmapservice.NmapServiceInfo{
 				IsRunning: s.Result.IsRunning,
