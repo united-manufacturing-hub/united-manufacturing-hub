@@ -49,6 +49,12 @@ func tickSeconds() float64 {
 func mapObserved(cfg config.BenthosMonitorConfig, s simple.Status[BenthosMonitorStatus]) publicfsm.ObservedState {
 	status := s.Result
 
+	// Read the verdict through the accessor the framework publishes for the fsmv1
+	// side rather than off the field, so this reads as the sanctioned translation
+	// it is. See the IsRunning comment below for why the verdict is the right
+	// source.
+	degraded, _ := s.HealthVerdict()
+
 	scan := &benthosmonitorservice.BenthosMetricsScan{
 		LastUpdatedAt: status.ScrapedAt,
 		BenthosMetrics: &benthosmonitorservice.BenthosMetrics{
@@ -86,13 +92,45 @@ func mapObserved(cfg config.BenthosMonitorConfig, s simple.Status[BenthosMonitor
 				// IsRunning means "the monitor itself is running", and it is not
 				// cosmetic: GetHealthCheckAndMetrics (benthos.go) copies the
 				// HealthCheck out of LastScan and then returns a ZERO BenthosStatus
-				// when this is false, discarding it. FSMv1 set it from the S6 FSM
-				// state of the monitor service (service/benthos_monitor:1486); under
-				// this flag there is no S6 monitor service, the worker IS the
-				// monitor, so a scan that produced a timestamp is the evidence it
-				// ran. Leaving it false made every consumer read live=false,
-				// ready=false and held every bridge in starting forever.
-				IsRunning: !status.ScrapedAt.IsZero(),
+				// plus ErrBenthosMonitorNotRunning when this is false, discarding it.
+				//
+				// FSMv1 read it off the S6 FSM state of the monitor service
+				// (service/benthos_monitor:1486) — a fact about a process. Under this
+				// flag there is no S6 monitor service: the worker IS the monitor, so
+				// that fact has no referent and the nearest true statement has to be
+				// chosen. The framework already computes it. simple.Status.Degraded is
+				// documented as "the polled target is unhealthy OR the poll failed",
+				// and HealthVerdict is published precisely so the fsmv1 side can read
+				// that verdict; Poll's error path sets it before health() is consulted,
+				// which is why health() only has to decide freshness.
+				//
+				// So: running == the observation is trustworthy. Deriving it from
+				// ScrapedAt instead cannot work — Poll stamps ScrapedAt before its
+				// first request (manager.go), returns that partial status on every
+				// error path, and simple.CollectObservedState persists a failed poll's
+				// status deliberately, so the timestamp is always fresh and IsRunning
+				// was permanently true. The gate above could never fire and a dead
+				// monitor's stale HealthCheck was copied out as if live.
+				//
+				// Both conjuncts are load-bearing and neither implies the other:
+				//
+				//   ScrapedAt != zero  — an observation exists at all. Degraded's zero
+				//     value is false, i.e. "healthy", so a zero Status (nothing stored
+				//     yet, or an empty read) would otherwise report a never-polled
+				//     worker as running. TestMapObservedSetsIsRunning pins this.
+				//   !degraded          — the observation is trustworthy. A failed poll
+				//     carries a fresh ScrapedAt by construction, so the timestamp alone
+				//     cannot tell a dead monitor from a live one.
+				//
+				// A successful poll is not degraded (health() sees a fresh scan), so
+				// this does NOT resurrect the regression where an unconditional false
+				// held every bridge in starting forever with live=false, ready=false.
+				//
+				// One deliberate collapse: a STALE scan now also reports not-running,
+				// where FSMv1 could say running-but-unhealthy. With no process to be
+				// running, that distinction has nowhere to live, and "no trustworthy
+				// data" is the honest thing to tell fsmv1's consumers.
+				IsRunning: !status.ScrapedAt.IsZero() && !degraded,
 			},
 		},
 	}
