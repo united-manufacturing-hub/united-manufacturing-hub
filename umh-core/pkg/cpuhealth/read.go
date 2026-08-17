@@ -12,9 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// The Linux sampler: one tick's read of the cgroup and the machine, the
-// capability constants that read establishes, and the rate arithmetic that
-// needs the previous tick to exist.
+// The Linux sampler: one tick's cgroup-plus-machine read, built from the
+// previous tick's numbers wherever a rate is derived.
 
 package cpuhealth
 
@@ -98,17 +97,13 @@ func (s *linuxSampler) Read(ctx context.Context) (Sample, error) {
 	// The same read carries the machine's CPU count, from which the snapshots'
 	// CPU scope is derived.
 	if busy, steal, denom, machine, ok := s.readHost(ctx); ok {
-		// CPU scope: the machine's count is kept on the snapshot, and the scope
-		// compares the container's allowed cpuset against it. A readable machine
-		// count whose allowed set covers it reads ScopeHost; a pinned subset
-		// reads ScopeAffinity; a failed cpuset read on a known machine count is
-		// likewise unknown (never a silent host).
 		smp.HostCpus = diagnosis.Known(machine)
-		// The cpuset read carries the logical CPU count this process may use —
-		// the "2" in "pinned to 2 of 8 CPUs" — beside the scope. A failed cpuset
-		// read leaves the fresh
-		// sample's CpuScope as its zero value, ScopeUnknown, and LogicalCpus
-		// absent: never a silent ScopeHost on a known machine count.
+		// CPU scope compares the container's allowed cpuset against the machine's
+		// count (kept on the snapshot as HostCpus): a readable, covering cpuset
+		// reads ScopeHost, a pinned subset reads ScopeAffinity. The cpuset read
+		// also carries LogicalCpus — the "2" in "pinned to 2 of 8 CPUs". A failed
+		// cpuset read leaves CpuScope at its zero value, ScopeUnknown, and
+		// LogicalCpus absent: never a silent ScopeHost on a known machine count.
 		if allowed, aok := s.readCpuset(ctx); aok {
 			smp.LogicalCpus = diagnosis.Known(float64(allowed))
 			if allowed == int(machine) {
@@ -118,10 +113,8 @@ func (s *linuxSampler) Read(ctx context.Context) (Sample, error) {
 			}
 		}
 		if s.hostBase.have {
-			// Busy cores over the interval is the busy-jiffy delta divided by
-			// USER_HZ into seconds; the interval's elapsed time turns that into
-			// a per-second rate. A falling busy counter (a reset) and a zero
-			// elapsed time each publish nothing.
+			// HostBusy: busy-jiffy delta ÷ USER_HZ ÷ elapsed seconds; skipped on
+			// a counter reset or zero elapsed time.
 			if busy >= s.hostBase.busy {
 				if elapsed := smp.Timestamp.Sub(s.hostBase.time).Seconds(); elapsed > 0 {
 					smp.HostBusy = diagnosis.Known((busy - s.hostBase.busy) / userHz / elapsed)
