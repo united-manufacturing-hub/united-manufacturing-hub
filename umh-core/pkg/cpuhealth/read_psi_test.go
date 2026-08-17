@@ -68,7 +68,7 @@ var _ = Describe("pressure", func() {
 		Expect(err).NotTo(HaveOccurred())
 		frac, present := first.Pressure.Get()
 		Expect(present).To(BeTrue(), "a readable cpu.pressure some avg60 must be a present Pressure Reading")
-		Expect(frac).To(Equal(20.41/100.0), "avg60 is 0..100; dividing by 100 gives the 0..1 fraction the marks use")
+		Expect(frac).To(BeNumerically("~", 20.41/100.0, 1e-9), "avg60 is 0..100; dividing by 100 gives the 0..1 fraction the marks use")
 		Expect(first.PsiAvailable).To(BeTrue(), "PsiAvailable is set the first tick cpu.pressure reads successfully")
 
 		// Second snapshot: the read FAILS, but PSI existence is sticky. The
