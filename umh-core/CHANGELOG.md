@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Improvements
+
+- Topic browser payloads sent to the Management Console no longer carry the per-topic metadata map, which duplicated the Kafka headers already attached to every event
+
 ## [0.44.35]
 
 ### Improvements

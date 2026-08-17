@@ -337,9 +337,13 @@ func (tbc *TopicBrowserCommunicator) updateInternalCache(buf *topicbrowserservic
 		}
 	}
 
-	// Update topic map
+	// Update topic map, stripping metadata before storing to both the internal
+	// cache and (via getCacheBundle) the bootstrap wire.
 	for _, entry := range ub.GetUnsMap().GetEntries() {
+		// entry aliases freshly unmarshaled ub; mutating in place is safe and
+		// avoids a deep copy per buffer on the hot ingest loop.
 		hash := HashUNSTableEntry(entry)
+		entry.Metadata = nil
 		tbc.unsMap.Entries[hash] = entry
 	}
 
