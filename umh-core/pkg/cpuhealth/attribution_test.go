@@ -100,11 +100,11 @@ var _ = Describe("attribution consults its evidence", func() {
 		}
 
 		// The equality boundary: the comparison is STRICTLY greater, matching
-		// the parked branch, so hostBusyMean == 2 x ourUsageMean is unknown, not
-		// host. The difference is measure-zero and the recording cannot see it,
-		// so a spec that asserts only the two recorded rows leaves it to whoever
-		// types the operator. Drive hbm 3.2 against oum 1.6 (host-headroom -0.2
-		// fires, 3.2 == 2 x 1.6) and require unknown.
+		// Decide's own splitHost check, so hostBusyMean == 2 x ourUsageMean is
+		// unknown, not host. The difference is measure-zero and the recording
+		// cannot see it, so a spec that asserts only the two recorded rows
+		// leaves it to whoever types the operator. Drive hbm 3.2 against oum
+		// 1.6 (host-headroom -0.2 fires, 3.2 == 2 x 1.6) and require unknown.
 		engine2, err := NewEngine(4, 2.0)
 		Expect(err).NotTo(HaveOccurred())
 		env2 := diagnosis.NewEnvironment(HasVirtualization, HasLimit)

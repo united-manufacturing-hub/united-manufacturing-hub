@@ -14,8 +14,8 @@
 
 // Usage as a rate. The sampler derives UsageCores as an instantaneous
 // rate from the change in cpu.stat's cumulative usage_usec across two
-// consecutive reads, divided by the elapsed time — the same edge-delta the
-// parked sampler computes at sampler.go:333 with the 1e6 microsecond divisor.
+// consecutive reads: the microsecond delta divided by 1e6 (the microsecond
+// divisor), divided by the elapsed time between the reads.
 // It publishes NO rate on the first read (no previous edge to subtract from) and
 // NO rate when usage_usec falls (a cumulative counter that falls has been
 // reset), and it keeps the raw cumulative UsageUsec on the snapshot beside the
@@ -92,8 +92,8 @@ var _ = Describe("usage as a rate", func() {
 
 		// Read 2: usage_usec has risen to 9s over a known elapsed time. The rate
 		// in cores is the microsecond delta divided by 1e6 (the microsecond
-		// divisor) divided by the elapsed seconds — exactly the parked arithmetic
-		// at sampler.go:333. Elapsed is read from the snapshots' own Timestamps.
+		// divisor) divided by the elapsed seconds. Elapsed is read from the
+		// snapshots' own Timestamps.
 		s2, err := sampler.Read(ctx)
 		Expect(err).NotTo(HaveOccurred())
 		u2, ok := s2.UsageUsec.Get()

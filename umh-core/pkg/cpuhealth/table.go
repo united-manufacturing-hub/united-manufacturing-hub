@@ -120,7 +120,7 @@ func cpuTable(cores, quota float64) diagnosis.Table[Sample] {
 				Name:    trackHostBusy,
 				Extract: func(s Sample) diagnosis.Reading { return s.HostBusy },
 				Span:    60 * time.Second,
-				Red:     diagnosis.Mean, // minimum 2 — the parked 2-sample ring floor
+				Red:     diagnosis.Mean, // minimum 2 — Mean's own sample floor
 			},
 			{
 				Name:    trackUsageCores,

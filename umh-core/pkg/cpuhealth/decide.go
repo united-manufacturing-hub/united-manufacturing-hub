@@ -130,7 +130,7 @@ func buildVerdict(engine *diagnosis.Engine[Sample], rest []diagnosis.Fired, surv
 // single Get serves both.
 func fillSignals(sig *Signals, engine *diagnosis.Engine[Sample], s Sample, env diagnosis.Environment, readiness []diagnosis.Readiness, hostBusyMean float64, hostBusyState diagnosis.State, ourUsageMean float64, ourUsageState diagnosis.State) {
 	// The withheld-headroom facts ride Signals, not Verdict — three
-	// fields, none of the parked 31 can stand in for them. HostHeadroomAvailable
+	// fields, none of the other 31 can stand in for them. HostHeadroomAvailable
 	// is dispatched on the sample's scope, NOT on the window's state: an
 	// affinity box or an unestablished scope is a withholding ("we read it and
 	// it means something else"), while a plain /proc/stat read failure leaves
