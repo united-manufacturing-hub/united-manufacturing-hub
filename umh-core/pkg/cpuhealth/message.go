@@ -84,10 +84,8 @@ func composeHealthy(signals Signals) string {
 		}
 	}
 
-	// The display figures. total/used/reserve are each rounded once; headroom
-	// is derived from those rounded values. ReserveCores is read from Signals
-	// in both modes — Decide filled it from the verdict's own reserve —
-	// never from the constant.
+	// The display figures. ReserveCores is read from Signals in both modes —
+	// Decide filled it from the verdict's own reserve — never from the constant.
 	var usedDisp, reserveDisp float64
 	if signals.LimitApplies {
 		usedDisp = round1(signals.AvgUsageCores)
@@ -131,9 +129,6 @@ func composeHealthy(signals Signals) string {
 
 	msg := headline
 
-	// The advisory slot, between the headline and Technical Details. The
-	// limited-visibility note comes first; the host-headroom-unavailable
-	// sentence second. Both may appear on one tick.
 	if signals.LimitedVisibility {
 		msg += "\n" + limitedVisibilityNote
 	}
@@ -294,9 +289,8 @@ func fmtCores1(v float64) string {
 	return fmt.Sprintf("%.1f", v)
 }
 
-// fmtCoresTotal formats a cores value as a whole integer when it has no
-// fractional part (so an 8-core box reads "8", not "8.0"), else with one
-// decimal. Its input is already round1'd.
+// fmtCoresTotal formats an already-round1'd value: a whole number prints as
+// an integer, else with one decimal.
 func fmtCoresTotal(v float64) string {
 	if v == math.Trunc(v) {
 		return strconv.FormatInt(int64(v), 10)
