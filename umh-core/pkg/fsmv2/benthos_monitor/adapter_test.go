@@ -32,11 +32,19 @@ func testConfig() config.BenthosMonitorConfig {
 }
 
 // TestMapObservedBuildsFullNestedStructure asserts mapObserved returns every inner
-// pointer non-nil. One consumer site is unguarded, and it is the one that panics:
-// pkg/service/benthos/benthos.go:699 dereferences LastScan.BenthosMetrics without a
-// nil check. (benthos.go:693 and :697 return an error for a nil ServiceInfo or
-// LastScan; benthos.go:1142 guards MetricsState.) It also asserts the conversion
-// mapObserved performs: MessagesPerSecond becomes MessagesPerTick.
+// pointer non-nil. One consumer dereference is unguarded, and it is the one that
+// panics: GetHealthCheckAndMetrics (pkg/service/benthos/benthos.go)
+// dereferences LastScan.BenthosMetrics without a nil check.
+//
+// The neighbouring cases return an error instead: a nil ServiceInfo, and a nil
+// LastScan at the guard in the same function. MetricsState is
+// guarded in BenthosService.HasProcessingActivity (benthos.go) but not in its
+// test double MockBenthosService.HasProcessingActivity
+// (pkg/service/benthos/mock.go), so the MetricsState assertion below still
+// earns its place.
+//
+// It also asserts the single conversion mapObserved performs: MessagesPerSecond
+// becomes MessagesPerTick, scaled by tickSeconds (adapter.go).
 func TestMapObservedBuildsFullNestedStructure(t *testing.T) {
 	status := simple.Status[BenthosMonitorStatus]{
 		Result: BenthosMonitorStatus{
@@ -101,10 +109,15 @@ func TestMapObservedBuildsFullNestedStructure(t *testing.T) {
 // TestMapObservedSetsIsRunning asserts the rule behind mapObserved's IsRunning
 // field (observationIsTrustworthy, adapter.go): when an observation exists
 // (ScrapedAt non-zero) and the framework's verdict is not degraded, IsRunning is
-// true; otherwise false. It matters because benthos.go:707 treats IsRunning=false
-// as no-data — discarding the HealthCheck it just copied out of LastScan and
-// returning ErrBenthosMonitorNotRunning — so IsRunning gates HealthCheck delivery
-// to every consumer.
+// true; otherwise false. It matters because GetHealthCheckAndMetrics
+// (pkg/service/benthos/benthos.go) treats IsRunning=false as no-data —
+// discarding the HealthCheck it just copied out of LastScan and returning
+// ErrBenthosMonitorNotRunning — so IsRunning gates HealthCheck delivery to every
+// consumer.
+//
+// This failure was observed, not hypothesised: in a live container the worker
+// polled correctly and every DataFlowComponent still reported "healthchecks did
+// not pass".
 func TestMapObservedSetsIsRunning(t *testing.T) {
 	// A real scrape: ScrapedAt set, both probes true.
 	live := mapObserved(testConfig(), simple.Status[BenthosMonitorStatus]{
@@ -122,9 +135,10 @@ func TestMapObservedSetsIsRunning(t *testing.T) {
 		t.Error("IsRunning is false after a real scrape: GetHealthCheckAndMetrics will discard the HealthCheck and every bridge stays in starting")
 	}
 
-	// A zero status (what adapter.GetLastObservedState passes on a non-Fresh read,
-	// pkg/fsmv2/adapter/instance.go) has no scrape behind it, so it must NOT claim
-	// the monitor is running.
+	// A zero status: what adapter.AdaptedInstance.GetLastObservedState
+	// (pkg/fsmv2/adapter/instance.go) passes whenever the store read is not
+	// Fresh — the non-Fresh exits are listed in pkg/fsmv2/adapter/doc.go. No
+	// scrape happened, so it must NOT claim the monitor is running.
 	empty := mapObserved(testConfig(), simple.Status[BenthosMonitorStatus]{})
 	bmEmpty, ok := empty.(benthosmonitorfsm.BenthosMonitorObservedState)
 	if !ok {
@@ -175,10 +189,12 @@ func TestMapObservedSetsIsRunning(t *testing.T) {
 	}
 }
 
-// TestMapObservedToleratesZeroStatus asserts the same non-nil guarantee for the
-// zero status adapter.GetLastObservedState (pkg/fsmv2/adapter/instance.go) passes
-// on a non-Fresh read: the full nested structure with empty content, not nil
-// pointers.
+// TestMapObservedToleratesZeroStatus asserts that a zero status also yields every
+// inner pointer non-nil: the full nested structure with empty content, never a nil
+// pointer for a consumer to dereference. A zero status is what
+// adapter.AdaptedInstance.GetLastObservedState (pkg/fsmv2/adapter/instance.go)
+// passes whenever the store read is not Fresh (exits listed in
+// pkg/fsmv2/adapter/doc.go), which is the common case during bootstrap.
 func TestMapObservedToleratesZeroStatus(t *testing.T) {
 	observed := mapObserved(testConfig(), simple.Status[BenthosMonitorStatus]{})
 	bmState, ok := observed.(benthosmonitorfsm.BenthosMonitorObservedState)

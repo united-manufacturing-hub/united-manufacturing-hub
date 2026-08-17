@@ -14,12 +14,17 @@
 
 package fsmv2benthosmonitor_test
 
-// Scenario test: drive the REAL worker through the REAL framework entry points,
-// against a real HTTP server on the four endpoints benthosStub serves.
+// Scenario test: drive the REAL worker through the three framework entry points
+// the supervisor uses on every tick — factory.NewWorkerByType, then
+// fsmv2.Worker's DeriveDesiredState and CollectObservedState — against a real
+// HTTP server on the four endpoints benthosStub serves.
 //
-// A wiring regression in any of those entry points fails here: a worker the
-// registry cannot build, a child-spec config that does not round-trip through
-// YAML, or a Poll the framework never reaches.
+// No other test in this package uses those entry points; the rest call Poll
+// (manager.go), throughputWindow (throughput_window.go) or mapObserved
+// (adapter.go) directly. A wiring regression therefore fails in this test and
+// nowhere else in the package: a worker the registry cannot build, a child-spec
+// config that does not round-trip through YAML (cfgFor, manager.go), or a Poll
+// the framework never reaches.
 
 import (
 	"context"
@@ -107,10 +112,13 @@ func userSpecFor(t *testing.T, name string, port uint16) fsmv2config.UserSpec {
 }
 
 // observe runs one full framework observation cycle — the Poll → Health cycle
-// documented on simple.CollectObservedState (simple/worker.go) — and returns the
-// worker's stored status. It marshals the worker's own return value: the
-// collector's post-COS wrapping (CollectedAt, framework metrics, action history,
-// accumulated worker metrics, in collector.go's wrapNewObservation) is not
+// documented on simple.CollectObservedState (simple/worker.go) — which is the
+// cycle the supervisor's collector drives against every worker on every tick.
+//
+// It returns the worker's own return value, marshalled. The collector adds
+// CollectedAt, framework metrics, action history and accumulated worker metrics
+// after the worker returns (wrapNewObservation,
+// pkg/fsmv2/supervisor/internal/collection/collector.go); that step is not
 // reproduced here.
 func observe(t *testing.T, w fsmv2.Worker, spec fsmv2config.UserSpec) simple.Status[fsmv2benthosmonitor.BenthosMonitorStatus] {
 	t.Helper()
@@ -204,6 +212,8 @@ func TestScenarioWorkerObservedThroughFramework(t *testing.T) {
 	if first.Result.IsActive {
 		t.Error("cold IsActive is true; a single sample must read inactive")
 	}
+	// Management Console throughput panels read this field through the fsmv1
+	// adapter, which copies it into BenthosMetrics (mapObserved, adapter.go).
 	if first.Result.Input.LastCount != 100 {
 		t.Errorf("cold Input.LastCount = %d, want 100 (it gates every MC throughput panel)", first.Result.Input.LastCount)
 	}

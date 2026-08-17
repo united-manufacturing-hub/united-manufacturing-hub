@@ -154,6 +154,12 @@ type BenthosStatus struct {
 	// StatusReason contains the reason for the status of the Benthos service
 	// If the service is degraded, this will contain the log entry that caused the degradation together with the information that it is degraded because of the log entry
 	// If the service is currently starting up, it will contain the s6 status of the service
+	//
+	// Nothing in this package writes this field. The prefixed strings
+	// ("starting: ", "start failed: ", "waiting for ...", "degraded: ") are
+	// composed by the benthos FSM one layer up, in reconcileStartingStates
+	// (pkg/fsm/benthos/reconcile.go) and reconcileRunningStates
+	// (same file).
 	StatusReason string
 	// BenthosLogs contains the structured s6 log entries emitted by the
 	// Benthos service.
@@ -206,6 +212,14 @@ func (bs *BenthosStatus) CopyBenthosLogs(src []s6service.LogEntry) error {
 // benthosMonitorManagerIface lets BenthosService hold either benthos monitor
 // backend: the fsmv1 BenthosMonitorManager or the fsmv2 adapter WorkerManager,
 // depending on the USE_FSMV2_BENTHOS_MONITOR flag.
+//
+// The method set is deliberately no wider than the three methods BenthosService
+// itself calls on the field: GetLastObservedState from GetHealthCheckAndMetrics,
+// GetInstance from RemoveBenthosFromS6Manager, Reconcile from ReconcileManager.
+// Any method added here must exist on both backends, and the fsmv2 side is a
+// generic adapter.WorkerManager whose method set this package does not control.
+// That is why GetCurrentFSMState is absent even though Status calls it on
+// s6Manager: no monitor backend has to provide it.
 type benthosMonitorManagerIface interface {
 	GetLastObservedState(serviceName string) (fsm.ObservedState, error)
 	GetInstance(name string) (fsm.FSMInstance, bool)
@@ -263,8 +277,12 @@ type configCacheEntry struct {
 // hash is a helper function for configCacheEntry.hash.
 func hash(buf []byte) uint64 { return xxhash.Sum64(buf) }
 
-// benthosLogRe is a helper function for BenthosService.IsLogsFine.
-// no ^ anchor since redpanda-connect logs may start with time= prefix.
+// benthosLogRe picks the severity and message out of one log line written by the
+// benthos process, i.e. the /usr/local/bin/benthos binary that
+// GenerateS6ConfigForBenthos starts. Used by BenthosService.IsLogsFine.
+//
+// There is deliberately no ^ anchor: those lines may begin with a time= field
+// before level=, so the match has to be allowed to start mid-line.
 var benthosLogRe = regexp.MustCompile(`level=(error|warning)\s+msg=(.+)`)
 
 // BenthosServiceOption is a function that modifies a BenthosService.
@@ -331,6 +349,11 @@ func NewDefaultBenthosService(benthosName string, opts ...BenthosServiceOption) 
 				fmt.Sprintf("%s_%s", logger.ComponentBenthosMonitorManager, benthosName),
 			)
 		} else {
+			// The missing counterpart to the Infof above is deliberate, not an
+			// oversight: this is the branch every container with
+			// USE_FSMV2_BENTHOS_MONITOR unset takes, and the flag-off default
+			// must keep the log output it had before the flag existed. No test
+			// pins that silence, so adding a log line here would pass CI.
 			service.benthosMonitorManager = benthos_monitor_fsm.NewBenthosMonitorManager(benthosName)
 		}
 	}
@@ -632,9 +655,15 @@ func (s *BenthosService) Status(ctx context.Context, services serviceregistry.Pr
 		BenthosStatus:   benthosStatus,
 	}
 
-	// set the logs to the service info
-	// TODO: this is a hack to get the logs to the service info
-	// we should find a better way to do this
+	// GetHealthCheckAndMetrics already copied logs out of the monitor's observed
+	// state; this replaces them with the ones Status read from s6 above, and is
+	// what Status returns on the success path.
+	//
+	// TODO: BenthosStatus.BenthosLogs has two writers and no owner:
+	// GetHealthCheckAndMetrics takes a logs argument it never reads, and then
+	// this line discards what it returned. Give the field one writer: either
+	// GetHealthCheckAndMetrics uses the logs it is passed, or it stops taking
+	// them and Status remains the only writer.
 	serviceInfo.BenthosStatus.BenthosLogs = logs
 
 	return serviceInfo, nil

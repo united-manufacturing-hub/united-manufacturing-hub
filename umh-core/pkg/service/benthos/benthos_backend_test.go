@@ -56,6 +56,12 @@ var _ = Describe("USE_FSMV2_BENTHOS_MONITOR flag wiring", func() {
 
 	Describe("backend selection", func() {
 		It("stores the fsmv1 manager when USE_FSMV2_BENTHOS_MONITOR is unset (FF-off default)", func() {
+			// The BeforeEach above unsets the var, so this is the flag-off default.
+			// "byte-identical" below means flag-off keeps constructing the same
+			// fsmv1 BenthosMonitorManager as before the fsmv2 seam existed, and
+			// logs no line of its own, so an operator sees no change: the else
+			// branch of NewDefaultBenthosService
+			// (pkg/service/benthos/benthos.go).
 			svc := NewDefaultBenthosService("flag-off-benthos")
 
 			_, ok := svc.benthosMonitorManager.(*benthos_monitor_fsm.BenthosMonitorManager)
@@ -75,10 +81,13 @@ var _ = Describe("USE_FSMV2_BENTHOS_MONITOR flag wiring", func() {
 		})
 
 		// Every value env.GetAsBool accepts must select the fsmv2 backend. "ON"
-		// matters most: it is the spelling the CPU measurement harness sets, and
-		// that harness lives outside this repo. Reading this flag with
-		// strconv.ParseBool instead of env.GetAsBool rejects "ON" and silently
-		// selects fsmv1, which a table holding only "true" cannot catch.
+		// matters most: it is the spelling the CPU measurement rig sets, and that
+		// rig is not in this repo. Reading this flag with strconv.ParseBool
+		// instead of env.GetAsBool rejected "ON", so a benchmark run set the flag
+		// on, silently got fsmv1 on both arms, and measured no CPU difference;
+		// specs that only ever set "true" could not see it. The incident in full:
+		// commit 194ea749d, "benthos_monitor: read the flag with env.GetAsBool so
+		// ON works".
 		for _, truthy := range []string{"true", "TRUE", "1", "on", "ON", "On", "yes", "y"} {
 			value := truthy
 
@@ -149,12 +158,14 @@ var _ = Describe("USE_FSMV2_BENTHOS_MONITOR flag wiring", func() {
 
 var _ = Describe("benthos_monitor worker registered in production (D8)", func() {
 	It("registers the benthos_monitor worker type through benthos.go's production import", func() {
-		// The fsmv2 worker self-registers on import; benthos.go imports it (line 44)
-		// and constructs the adapter manager under USE_FSMV2_BENTHOS_MONITOR. This
-		// spec lives in package benthos, so the production import graph — not a
-		// test file's own import — is what must have registered the worker. If a
-		// refactor removes the production constructor call (or the import), FF-on
-		// ships nothing while the CPU rig counts a fake win; this gate goes red.
+		// The fsmv2 worker self-registers on import; the fsmv2benthosmonitor
+		// import in benthos.go (pkg/service/benthos/benthos.go) pulls it in,
+		// and NewDefaultBenthosService constructs the adapter manager under
+		// USE_FSMV2_BENTHOS_MONITOR. This spec lives in package benthos, so the
+		// production import graph — not a test file's own import — is what must
+		// have registered the worker. If a refactor removes the production
+		// constructor call (or the import), FF-on ships nothing while the CPU
+		// measurement rig above counts a fake win; this gate goes red.
 		registered := false
 		for _, wt := range factory.ListRegisteredTypes() {
 			if wt == fsmv2benthosmonitor.WorkerType {

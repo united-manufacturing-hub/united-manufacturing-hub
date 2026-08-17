@@ -68,8 +68,8 @@ type benthosMonitorDeps struct {
 
 // ComponentThroughput carries the rate for one direction of the benthos
 // pipeline. MessagesPerSecond is the by-time rate the worker computes (never the
-// FSMv1 MessagesPerTick, which adapter.go converts on the way out); LastCount is
-// the newest counter value seen.
+// FSMv1 MessagesPerTick, which mapObserved in adapter.go converts on the way
+// out); LastCount is the newest counter value seen.
 type ComponentThroughput struct {
 	MessagesPerSecond float64
 	LastCount         int
@@ -80,14 +80,19 @@ type ComponentThroughput struct {
 // /version string, and the per-direction throughput computed over windowSpan.
 //
 // BenthosMetrics is the per-path struct the fsmv1 parser produces, carried
-// whole; consumers read the connection counters off it.
+// whole. Narrowing it to scalars breaks the four connection-counter reads that
+// decide whether a bridge is connected; those reads, their access path and their
+// two consumers are named in
+// TestMapObservedDeliversParsedConnectionCountersToBridgeHealth.
 type BenthosMonitorStatus struct {
 	ScrapedAt      time.Time
 	BenthosMetrics benthosmonitorservice.Metrics
 	Input          ComponentThroughput
 	Output         ComponentThroughput
-	// IsActive holds FSMv1 parity (s.IsActive = s.Input.MessagesPerTick > 0) but
-	// reads the by-time rate, not a tick delta.
+	// IsActive is true when input traffic was observed in the window: Poll sets it
+	// from Input.MessagesPerSecond > 0, input-only and with no hysteresis. FSMv1
+	// computed the same rule from a tick delta (s.IsActive =
+	// s.Input.MessagesPerTick > 0).
 	IsActive  bool
 	PingAlive bool
 	Ready     bool
@@ -116,9 +121,9 @@ func Poll(ctx context.Context, d *benthosMonitorDeps, cfg config.BenthosMonitorC
 	if err == nil {
 		// The /ready endpoint reports readiness by returning JSON whose error
 		// field is empty when every input/output connection is up (fsmv1
-		// ParseReadyData: readyResp.Error == ""). A benthos that answers but is
-		// not ready (e.g. a broken pipeline that still answers /ping) reports
-		// Ready=false while PingAlive=true.
+		// benthosmonitorservice.ParseReadyData: readyResp.Error == ""). A benthos
+		// that answers but is not ready (e.g. a broken pipeline that still answers
+		// /ping) reports Ready=false while PingAlive=true.
 		var r struct {
 			Error string `json:"error"`
 		}
@@ -145,7 +150,8 @@ func Poll(ctx context.Context, d *benthosMonitorDeps, cfg config.BenthosMonitorC
 	}
 	// The fsmv1 parser is the only parser: one implementation cannot disagree
 	// with itself about the same prometheus text, and every consumer already
-	// reads the per-path struct it returns. simple's collector turns the returned
+	// reads the per-path struct it returns. The simple framework's collector
+	// (simpleWorker.CollectObservedState in pkg/fsmv2/simple) turns the returned
 	// error into a degraded worker carrying the reason, which is what makes a
 	// format drift visible instead of looking like idle traffic.
 	m, err := benthosmonitorservice.ParseMetricsFromBytes(metricsBody)
@@ -154,14 +160,16 @@ func Poll(ctx context.Context, d *benthosMonitorDeps, cfg config.BenthosMonitorC
 	}
 	status.BenthosMetrics = m
 
-	// When the worker has deps, feed this poll's counter snapshot into the by-time
-	// window and read the rates back. Without deps there is no window, so Input,
-	// Output and IsActive stay at their zero values.
+	// The window lives in d and survives across polls, which is what makes a rate
+	// computable from per-poll counter snapshots; a nil d has no window, so Input,
+	// Output and IsActive stay zero.
 	//
-	// Add takes the totals summed across every leaf path (InputReceivedTotal,
-	// OutputSentTotal), which is what the counters mean for throughput: a switch
-	// or broker emits one series per leaf with no top-level aggregate, so the sum
-	// is the pipeline's traffic.
+	// Add is passed the scrape port because it keys the window on that port: an
+	// in-place config update can re-point this child at a new MetricsPort with no
+	// worker restart, and throughputWindow.port explains the wipe that follows.
+	// Its counter arguments are the totals summed across every leaf path, which is
+	// what the counters mean for throughput: a switch or broker emits one series
+	// per leaf with no top-level aggregate, so the sum is the pipeline's traffic.
 	if d != nil {
 		d.window.Add(status.ScrapedAt, int(cfg.MetricsPort), int(m.InputReceivedTotal()), int(m.OutputSentTotal()))
 		status.Input = ComponentThroughput{
@@ -217,9 +225,10 @@ func get(ctx context.Context, client *http.Client, url string) ([]byte, int, err
 // yaml tags.
 //
 // Upsert marshals that map into ChildSpec.UserSpec.Config as YAML (see
-// config.NewChildSpec) and the worker unmarshals it back. The adapter's default
-// CfgFor is a JSON round-trip; BenthosMonitorConfig carries no json tags, so it
-// would emit Go field names and lose Name, DesiredFSMState, and MetricsPort.
+// NewChildSpec in pkg/fsmv2/config) and the worker unmarshals it back. The
+// adapter's default CfgFor is a JSON round-trip; BenthosMonitorConfig carries no
+// json tags, so it would emit Go field names and lose Name, DesiredFSMState, and
+// MetricsPort.
 func cfgFor(cfg config.BenthosMonitorConfig) (map[string]any, error) {
 	data, err := yaml.Marshal(cfg)
 	if err != nil {
@@ -264,7 +273,8 @@ func NewFsmv2BenthosMonitorManager(managerName string) *adapter.WorkerManager[co
 		// DesiredRunning is the state reported when a config leaves desiredState
 		// empty. It is benthos_monitor's own "active", not the adapter default
 		// "running": benthos_monitor's FSM accepts only active/stopped as a
-		// desired state (fsm/benthos_monitor/machine.go).
+		// desired state — SetDesiredFSMState in pkg/fsm/benthos_monitor/machine.go
+		// rejects anything else.
 		States: adapter.StateVocabulary{
 			Starting:       benthosmonitorfsm.OperationalStateStarting,
 			Degraded:       benthosmonitorfsm.OperationalStateDegraded,
@@ -275,9 +285,9 @@ func NewFsmv2BenthosMonitorManager(managerName string) *adapter.WorkerManager[co
 }
 
 // mapFresh maps a Fresh, healthy observation to its fsmv1 operational state:
-// metrics are OK, so the monitor is active. Degraded, stale, and bootstrap
-// verdicts are framework-owned and handled by the adapter, so this only
-// classifies the healthy leaf.
+// metrics are OK, so the monitor is active. The Degraded, stale and bootstrap
+// verdicts are owned by adapter.WorkerManager (its verdict-to-state table is in
+// pkg/fsmv2/adapter/doc.go), so this only classifies the healthy leaf.
 func mapFresh(_ config.BenthosMonitorConfig, _ simple.Status[BenthosMonitorStatus]) string {
 	return benthosmonitorfsm.OperationalStateActive
 }

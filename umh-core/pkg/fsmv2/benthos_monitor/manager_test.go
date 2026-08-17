@@ -36,7 +36,7 @@ import (
 
 // stubManagerReader is a deps.StateReader that returns a fixed
 // Observation[simple.Status[BenthosMonitorStatus]] for every ref, mirroring the
-// stubReader harness in adapter/instance_test.go for the benthos status type.
+// stubReader harness (adapter/instance_test.go) for the benthos status type.
 type stubManagerReader struct {
 	obs *fsmv2.Observation[simple.Status[fsmv2benthosmonitor.BenthosMonitorStatus]]
 	err error
@@ -85,8 +85,8 @@ var _ = Describe("benthos_monitor registration and adapter vocabulary", func() {
 		}
 	}
 
-	// degradedFresh stamps CollectedAt inside the freshness window, so fsmv2client
-	// classifies the observation Fresh.
+	// degradedFresh stamps CollectedAt inside fsmv2client.GetFresh's maxAge window,
+	// so the observation reads Fresh, and carries a degraded verdict.
 	degradedFresh := func() *fsmv2.Observation[simple.Status[fsmv2benthosmonitor.BenthosMonitorStatus]] {
 		return &fsmv2.Observation[simple.Status[fsmv2benthosmonitor.BenthosMonitorStatus]]{
 			CollectedAt: time.Now().Add(-100 * time.Millisecond),
@@ -98,8 +98,8 @@ var _ = Describe("benthos_monitor registration and adapter vocabulary", func() {
 		}
 	}
 
-	// freshHealthy stamps CollectedAt inside the freshness window; with no degraded
-	// verdict, mapFresh maps the observation to benthos_monitor's own "active" word.
+	// freshHealthy is degradedFresh with no degraded verdict, so mapFresh maps it to
+	// benthos_monitor's own "active" word.
 	freshHealthy := func() *fsmv2.Observation[simple.Status[fsmv2benthosmonitor.BenthosMonitorStatus]] {
 		return &fsmv2.Observation[simple.Status[fsmv2benthosmonitor.BenthosMonitorStatus]]{
 			CollectedAt: time.Now().Add(-100 * time.Millisecond),
@@ -125,8 +125,10 @@ var _ = Describe("benthos_monitor registration and adapter vocabulary", func() {
 
 		// One registered client, held across the reads; only the reader's
 		// observation/error changes. The ref stays registered, so the first read
-		// takes the NeverObserved bootstrap exit rather than Unregistered, and the
-		// two later reads are classified by freshness.
+		// takes the NeverObserved bootstrap exit rather than Unregistered
+		// (fsmv2client.Freshness, fsmv2client/fsmv2client.go: Unregistered =
+		// the ref was never Upserted, NeverObserved = Upserted with nothing stored
+		// yet), and the two later reads are classified by freshness.
 		reader := &stubManagerReader{err: persistence.ErrNotFound}
 		writer := dynamicchildren.NewWriter()
 		fsmv2client.SetClient(fsmv2client.NewFSMv2Client(writer, reader))
@@ -135,15 +137,20 @@ var _ = Describe("benthos_monitor registration and adapter vocabulary", func() {
 		err, _ := mgr.Reconcile(context.Background(), snapshotWith(benthosConfig("active")), nil)
 		Expect(err).NotTo(HaveOccurred())
 
-		// BOOTSTRAP: no observation yet (NeverObserved) => benthos_monitor's OWN
-		// starting word, NOT the adapter default "starting".
+		// BOOTSTRAP: no observation yet (NeverObserved) => the Starting word this
+		// worker declared, benthosmonitorfsm.OperationalStateStarting
+		// ("benthos_monitoring_starting"). The adapter supplies no fallback word of
+		// its own: adapter.StateVocabulary (adapter/manager.go) requires a
+		// worker to declare all four.
 		state, gerr := mgr.GetCurrentFSMState(name)
 		Expect(gerr).NotTo(HaveOccurred())
 		Expect(state).To(Equal(benthosmonitorfsm.OperationalStateStarting))
 
-		// DEGRADED verdict on a Fresh observation => benthos_monitor's degraded
-		// word ("degraded"), which happens to equal the adapter default, so this
-		// assertion alone does not discriminate the two.
+		// DEGRADED verdict on a Fresh observation => the Degraded word this worker
+		// declared, benthosmonitorfsm.OperationalStateDegraded ("degraded"). The four
+		// declared words must be pairwise distinct, so this word cannot double as any
+		// other exit: adapter.StateVocabulary says why (adapter/manager.go) and
+		// adapter.NewWorkerManager panics otherwise (same file).
 		reader.err = nil
 		reader.obs = degradedFresh()
 
@@ -151,16 +158,19 @@ var _ = Describe("benthos_monitor registration and adapter vocabulary", func() {
 		Expect(gerr).NotTo(HaveOccurred())
 		Expect(state).To(Equal(benthosmonitorfsm.OperationalStateDegraded))
 
-		// FRESH + healthy verdict => the mapFresh leaf: benthos_monitor's own
-		// "active" word (its DesiredRunning).
+		// FRESH + healthy verdict => the mapFresh leaf, which returns
+		// benthosmonitorfsm.OperationalStateActive ("active"), the same word this
+		// worker declares as adapter.StateVocabulary.DesiredRunning.
 		reader.obs = freshHealthy()
 
 		state, gerr = mgr.GetCurrentFSMState(name)
 		Expect(gerr).NotTo(HaveOccurred())
 		Expect(state).To(Equal(benthosmonitorfsm.OperationalStateActive))
 
-		// EMPTY desired state on a config => the declared DesiredRunning word
-		// ("active"), benthos_monitor's own, NOT the adapter default "running".
+		// EMPTY desired state on a config => the declared DesiredRunning word,
+		// benthosmonitorfsm.OperationalStateActive ("active"). Why it has to be that
+		// word rather than a generic "running" is on the States field in
+		// NewFsmv2BenthosMonitorManager (manager.go).
 		mgr2 := fsmv2benthosmonitor.NewFsmv2BenthosMonitorManager("test")
 		err, _ = mgr2.Reconcile(context.Background(), snapshotWith(benthosConfig("")), nil)
 		Expect(err).NotTo(HaveOccurred())
@@ -171,7 +181,8 @@ var _ = Describe("benthos_monitor registration and adapter vocabulary", func() {
 	})
 
 	It("round-trips Name, DesiredFSMState, and MetricsPort through the child-spec YAML pipeline", func() {
-		// cfgFor's godoc explains why this round-trip needs yaml-tag keys.
+		// cfgFor's godoc (manager.go) explains why this round-trip needs
+		// yaml-tag keys.
 		reader := &stubManagerReader{err: persistence.ErrNotFound}
 		writer := dynamicchildren.NewWriter()
 		fsmv2client.SetClient(fsmv2client.NewFSMv2Client(writer, reader))

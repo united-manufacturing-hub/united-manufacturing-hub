@@ -18,7 +18,10 @@ import "time"
 
 // windowSpan is the width of the throughput window in seconds. Throughput is
 // held BY TIME over this span, not by FSMv1's count-based ThroughputWindowSize
-// of 600 entries, so a one-minute average does not drift when ticks are dropped.
+// of 600 entries (pkg/service/benthos_monitor/metrics_state.go). Poll
+// (manager.go) feeds this window one sample per poll, and a poll that is never
+// scheduled produces no sample at all, so a 600-entry window silently stretches
+// to cover more than a minute of real time; this one always covers 60s.
 const windowSpan = 60 * time.Second
 
 // throughputSample is one poll's counter snapshot, stamped with the time it was
@@ -36,7 +39,9 @@ type throughputSample struct {
 type throughputWindow struct {
 	// port is the scrape port this window's samples belong to. Add wipes the
 	// window on a port change (a new endpoint is a new counter series), so it
-	// never subtracts one poll's counter from a different endpoint's.
+	// never subtracts one poll's counter from a different endpoint's. Add
+	// compares this field only once the window holds a sample (its n > 0 guard),
+	// so the zero value it starts at is never read as a port.
 	port    int
 	samples []throughputSample
 }
@@ -44,9 +49,11 @@ type throughputWindow struct {
 // Add records a sample at the given observed time with the given port and input
 // and output counter values, then drops any sample older than windowSpan of the
 // newest. It wipes the window first when the port changed or when wipeOnRestart
-// reports true. Production samples arrive in time order (so the aged prefix is
-// normally all that is removed), but the scan also drops an out-of-order aged
-// sample, keeping the window bounded to the span regardless of arrival order.
+// reports true. In production the only caller is Poll (manager.go), one call per
+// poll passing that poll's status.ScrapedAt, so samples normally arrive in time
+// order and the aged prefix is all that is removed. Skew or a re-stamped scrape
+// breaks that order, so the scan also drops an out-of-order aged sample, keeping
+// the window bounded to the span regardless of arrival order.
 func (w *throughputWindow) Add(at time.Time, port, input, output int) {
 	if n := len(w.samples); n > 0 && (port != w.port || wipeOnRestart(at, input, w.newest())) {
 		w.samples = w.samples[:0]
@@ -73,10 +80,11 @@ func (w *throughputWindow) Add(at time.Time, port, input, output int) {
 // counter resets to 0 on a process restart, so a drop in it against the
 // immediately preceding sample is the signal that the old by-time series ended
 // and must be wiped. It deliberately does not also require the output counter to
-// drop. After a restart where output was already ~0, a backed-up broker for
-// instance, requiring both to drop would never wipe, and the window would keep a
-// stale pre-restart baseline. A non-newer sample (an aged, out-of-order arrival)
-// is a pruning case, not a restart, so it is skipped.
+// drop: a restart can leave output at ~0 (a backed-up broker does this). A
+// detector requiring both counters to drop would never wipe there, and the window
+// would keep a stale pre-restart baseline; that case is pinned by
+// TestThroughputWindowWipesOnOneCounterZeroRestart. A non-newer sample (an aged,
+// out-of-order arrival) is a pruning case, not a restart, so it is skipped.
 func wipeOnRestart(at time.Time, input int, prev throughputSample) bool {
 	return at.After(prev.at) && input < prev.input
 }
@@ -100,11 +108,16 @@ func (w *throughputWindow) newest() throughputSample {
 // span: (newest.count - oldest-in-window.count) / elapsedSeconds, where
 // elapsedSeconds is the real time between those two samples. With fewer than two
 // in-window samples the rate is 0, because one sample has nothing to subtract
-// from. A genuine restart wipes the window in Add, so the newest sample is the
-// post-restart baseline. When the newest counter is below the oldest in-window
-// one, the rate reads 0 instead of a negative delta; that covers the cases the
-// wipe misses (a one-sided drop, an equal-timestamp arrival, a restart where one
-// counter was already zero). A zero elapsed span reads 0, not a division by zero.
+// from. That is what the first poll after a wipe reads: a restart or a port
+// change makes Add re-seed the window with the new sample alone, so the newest
+// sample is the post-restart baseline. The two guards below cover the shapes the
+// wipe leaves behind. A sample whose observed time is older than the newest one's
+// can still carry a higher counter (a skewed or re-stamped ScrapedAt; a genuine
+// restart would have wiped instead), and the newest-below-oldest check reads 0
+// there rather than a negative delta. When no in-window sample is strictly older
+// than the newest, the span is zero and the elapsed check reads 0 rather than
+// dividing by it. Two samples stamped at the same instant are that case
+// (TestThroughputWindowEqualTimestampsNeverDivideByZero).
 func (w *throughputWindow) inputRate() float64 {
 	if len(w.samples) < 2 {
 		return 0
@@ -162,7 +175,7 @@ func (w *throughputWindow) inputCount() int {
 	return w.newest().input
 }
 
-// outputCount returns the newest sample's output counter value.
+// outputCount is inputCount but over the output counter.
 func (w *throughputWindow) outputCount() int {
 	return w.newest().output
 }

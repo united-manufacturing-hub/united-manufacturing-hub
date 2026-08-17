@@ -27,17 +27,19 @@ import (
 )
 
 // TestThroughputWindowIsTimeBased asserts that the throughput window is held by
-// time over a 60s span rather than by FSMv1's count-based
-// ThroughputWindowSize = 600 entries, so a one-minute average does not drift
-// when ticks are dropped.
+// time over the 60s windowSpan (throughput_window.go) rather than by FSMv1's
+// count-based ThroughputWindowSize of 600 entries
+// (pkg/service/benthos_monitor/metrics_state.go). windowSpan's doc is where
+// the reason for that choice is stated.
 //
-// Semantics under test: throughputWindow.inputRate / inputCount
-// (throughput_window.go), plus IsActive, which derives from
-// Input.MessagesPerSecond > 0, so a zero rate means inactive.
+// Semantics under test: throughputWindow.inputRate and inputCount
+// (throughput_window.go), plus BenthosMonitorStatus.IsActive, which
+// Poll derives from Input.MessagesPerSecond > 0 (manager.go), so a zero rate
+// means inactive.
 //
 // Every sample time is injected so the test is deterministic: no real 1s
-// real-time sleeps. The window's Add accepts the explicit sample time precisely
-// so an aged sample can be injected.
+// real-time sleeps. throughputWindow.Add (throughput_window.go) accepts the
+// explicit sample time precisely so an aged sample can be injected.
 func TestThroughputWindowIsTimeBased(t *testing.T) {
 	t0 := time.Now().Truncate(time.Second)
 	deps := &benthosMonitorDeps{}
@@ -99,9 +101,12 @@ func TestThroughputWindowIsTimeBased(t *testing.T) {
 	}
 }
 
-// TestThroughputWindowZeroValueIsSafe asserts that the window's zero value is a
-// valid empty window: every accessor returns the zero/0 result rather than
-// panicking on an un-populated window.
+// TestThroughputWindowZeroValueIsSafe asserts the contract stated on the
+// throughputWindow type (throughput_window.go): the zero value is a valid
+// empty window, so every accessor returns 0 rather than panicking and no
+// constructor is needed. The closing Add covers the next case up — one sample is
+// still not two, so the rates stay 0 while inputCount tracks that sample; the
+// fewer-than-two rule is stated on inputRate (throughput_window.go).
 func TestThroughputWindowZeroValueIsSafe(t *testing.T) {
 	var w throughputWindow
 
@@ -191,13 +196,18 @@ func TestPollComputesThroughput(t *testing.T) {
 
 // TestPollResetTickReportsIsActiveFalse asserts that the status layer reflects a
 // counter drop through Poll. Both counters drop when the process restarts, and
-// the input-counter drop alone makes Add wipe the window to a single sample. The
-// reset-tick status must then read IsActive=false, and LastCount must carry the
-// post-restart counter.
+// the input-counter drop alone makes Add wipe the window to a single sample
+// (wipeOnRestart, throughput_window.go). On the reset tick — the poll on which
+// that drop is first observed — the status must read IsActive=false, and
+// LastCount must carry the post-restart counter.
 //
 // This test covers the Poll->status wiring and how LastCount propagates; the
 // window-level wipe itself (len(samples)==1) is the discriminating assertion,
-// covered by TestThroughputWindowWipesOnCounterReset.
+// covered by TestThroughputWindowWipesOnCounterReset
+// (throughput_reset_red_test.go). The IsActive assertion below is vacuous with
+// respect to the wipe: drop the wipe and both samples remain, but inputRate's
+// newest-below-oldest guard (throughput_window.go) still returns 0, so
+// IsActive reads false either way.
 func TestPollResetTickReportsIsActiveFalse(t *testing.T) {
 	inputCounter := 100
 	outputCounter := 100
