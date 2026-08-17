@@ -65,11 +65,13 @@ func timeIt(f func()) time.Duration {
 	return time.Since(start) / time.Duration(runs)
 }
 
-// benchOne times both paths on the same normalized config.
+// benchOne times both paths on the same normalized config. The new path is timed as
+// the reconcile loop meets it, with its cache warm, because an unchanged config is
+// what it canonicalizes on nearly every tick.
 func benchOne(cfg BenthosServiceConfig) (slow, fast time.Duration) {
 	norm := NewNormalizer().NormalizeConfig(cfg)
 
-	slow = timeIt(func() { slowCanonicalize(norm) })
+	slow = timeIt(func() { sectionRoundTrip(norm) })
 	fast = timeIt(func() { _ = canonicalize(norm) })
 
 	return slow, fast
@@ -121,6 +123,68 @@ func BenchmarkCanonicalizeByConfigSize(b *testing.B) {
 				float64(slow)/float64(fast), budgetNote(slowTick), budgetNote(fastTick))
 		}
 	})
+}
+
+// BenchmarkConfigsEqualPerTick times what the reconcile loop actually pays: a
+// comparison that finds no difference, of a config against the config read back from
+// the file it renders to.
+//
+// The two desired-config variants are the two ways a component gets its config.
+// "templated" arrived parsed from rendered template text, which is what a bridge
+// has, and needs no canonicalization at all. "go-built" was assembled in Go, so it
+// has to be canonicalized before it can match the file. "old" is the comparison
+// this package did before: both sides re-serialized per section, every time.
+func BenchmarkConfigsEqualPerTick(b *testing.B) {
+	oldConfigsEqual := func(desired, observed BenthosServiceConfig) bool {
+		norm := NewNormalizer()
+
+		return configsEqualNormalized(
+			sectionRoundTrip(norm.NormalizeConfig(desired)),
+			sectionRoundTrip(norm.NormalizeConfig(observed)))
+	}
+
+	for _, blocks := range []int{10, 100, 500} {
+		goBuilt := bridgeConfig(blocks)
+
+		observed, err := renderAndParse(goBuilt)
+		if err != nil {
+			b.Fatal(err)
+		}
+
+		templated, err := templatedFrom(goBuilt)
+		if err != nil {
+			b.Fatal(err)
+		}
+
+		encoded, err := marshalConfig(goBuilt)
+		if err != nil {
+			b.Fatal(err)
+		}
+
+		cases := []struct {
+			name    string
+			desired BenthosServiceConfig
+			equal   func(desired, observed BenthosServiceConfig) bool
+		}{
+			{"old", goBuilt, oldConfigsEqual},
+			{"go-built", goBuilt, ConfigsEqual},
+			{"templated", templated, ConfigsEqual},
+		}
+
+		for _, c := range cases {
+			b.Run(fmt.Sprintf("bytes=%d/desired=%s", len(encoded), c.name), func(b *testing.B) {
+				if !c.equal(c.desired, observed) {
+					b.Fatal("fixture is not equal to its own file; this would time the difference path")
+				}
+
+				b.ReportAllocs()
+
+				for b.Loop() {
+					c.equal(c.desired, observed)
+				}
+			})
+		}
+	}
 }
 
 // BenchmarkCanonicalizeByBridgeCount holds the per-bridge config at customer size

@@ -20,7 +20,6 @@ import (
 	"strings"
 
 	"go.uber.org/zap"
-	"gopkg.in/yaml.v3"
 )
 
 // Comparator handles the comparison of Benthos configurations.
@@ -36,12 +35,17 @@ func NewComparator() *Comparator {
 }
 
 // ConfigsEqual compares two BenthosServiceConfigs after normalization.
+//
+// Canonicalization is what makes a config built in Go compare equal to the same
+// config read back from benthos.yaml (see canonicalize), and it is the expensive
+// part of a comparison, so it is done only when it is needed. Each step below proves
+// the two configs equal on its own; the later ones only widen what counts as equal,
+// which is the safe direction. Reporting a representational difference as a real one
+// would re-apply the config forever, and this runs for every component on every
+// tick.
 func (c *Comparator) ConfigsEqual(desired, observed BenthosServiceConfig) (isEqual bool) {
-	// First normalize both configs, then canonicalize their free-form maps so
-	// values built natively in Go compare equal to the same values read back
-	// from benthos.yaml (see canonicalize).
-	normDesired := canonicalize(c.normalizer.NormalizeConfig(desired))
-	normObserved := canonicalize(c.normalizer.NormalizeConfig(observed))
+	normDesired := c.normalizer.NormalizeConfig(desired)
+	normObserved := c.normalizer.NormalizeConfig(observed)
 
 	defer func(normDesired, normObserved *BenthosServiceConfig) {
 		if !isEqual {
@@ -50,6 +54,54 @@ func (c *Comparator) ConfigsEqual(desired, observed BenthosServiceConfig) (isEqu
 		}
 	}(&normDesired, &normObserved) // configs are passed as pointers to make the copy cheap
 
+	// Both sides as they stand. Configs rendered from a template arrive parsed from
+	// YAML text and are already in the shape a parse produces, so a steady state
+	// where nothing has changed usually stops here without serializing anything.
+	//
+	// This step demands plain equality rather than configsEqualNormalized, whose
+	// leniency about processors is only sound once both sides are canonicalized:
+	// getProcessors reports "no processors" for a list held as anything other than
+	// []interface{}, so two Go-built configs holding theirs as
+	// []map[string]interface{} would both look processor-less and their processors
+	// would never be compared.
+	if configsIdentical(normDesired, normObserved) {
+		zap.S().Info("Are Identical")
+		return true
+	}
+
+	// The desired config as it will look on disk, against the observed config, which
+	// was parsed from disk and so needs no canonicalization of its own.
+	normDesired = canonicalize(normDesired)
+	if configsEqualNormalized(normDesired, normObserved) {
+		zap.S().Error("Are Identical first normalize ")
+		return true
+	}
+
+	// Both sides canonicalized, for the callers that compare two configs built in Go
+	// rather than a desired config against an observed one - including the two in
+	// pkg/communicator/actions that pass the observed config as the first argument.
+	normObserved = canonicalize(normObserved)
+
+	zap.S().Error("In final compare")
+	return configsEqualNormalized(normDesired, normObserved)
+}
+
+// configsIdentical reports whether two normalized configs hold the same values, with
+// no allowance for how a value is spelled. MetricsPort is excluded, as everywhere
+// else, because the port manager allocates it.
+func configsIdentical(a, b BenthosServiceConfig) bool {
+	return a.DebugLevel == b.DebugLevel &&
+		reflect.DeepEqual(a.Input, b.Input) &&
+		reflect.DeepEqual(a.Output, b.Output) &&
+		reflect.DeepEqual(a.Pipeline, b.Pipeline) &&
+		reflect.DeepEqual(a.Buffer, b.Buffer) &&
+		isResourcesEqual(a.CacheResources, b.CacheResources) &&
+		isResourcesEqual(a.RateLimitResources, b.RateLimitResources)
+}
+
+// configsEqualNormalized compares two configs that are already normalized and
+// canonicalized.
+func configsEqualNormalized(normDesired, normObserved BenthosServiceConfig) bool {
 	// Compare essential fields that must match exactly
 	// Ignoring MetricsPort since it's allocated by the port manager
 	if normDesired.DebugLevel != normObserved.DebugLevel {
@@ -100,7 +152,10 @@ func (c *Comparator) ConfigsEqual(desired, observed BenthosServiceConfig) (isEqu
 func (c *Comparator) ConfigDiff(desired, observed BenthosServiceConfig) string {
 	var diff strings.Builder
 
-	// First normalize both configs, then canonicalize (see ConfigsEqual).
+	// First normalize both configs, then canonicalize (see ConfigsEqual). Both sides
+	// are canonicalized here: this runs only once a difference has been reported, so
+	// the work saved by leaving the observed side alone does not matter, and a diff
+	// listing a representational difference would send the reader after a phantom.
 	normDesired := canonicalize(c.normalizer.NormalizeConfig(desired))
 	normObserved := canonicalize(c.normalizer.NormalizeConfig(observed))
 
@@ -180,104 +235,6 @@ func (c *Comparator) ConfigDiff(desired, observed BenthosServiceConfig) string {
 }
 
 // Helper functions
-
-// canonicalize rewrites the free-form config maps through a YAML round-trip so
-// values built natively in Go take the same concrete types they would have
-// after being unmarshalled from benthos.yaml. For example a Go []string becomes
-// []interface{}, and a Go int stays an int the way yaml.v3 decodes it. Both
-// sides of a comparison are canonicalized, so a difference that is purely
-// representational (Go-built desired vs YAML-parsed observed) no longer
-// registers as a semantic config divergence and causes an endless re-apply loop.
-//
-// The round-trip is best-effort: on a marshal/unmarshal error the original map
-// is kept, so canonicalization can never make two equal configs look different.
-func canonicalize(cfg BenthosServiceConfig) BenthosServiceConfig {
-	cfg.Input = canonicalizeMap(cfg.Input)
-	cfg.Output = canonicalizeMap(cfg.Output)
-	cfg.Pipeline = canonicalizeMap(cfg.Pipeline)
-	cfg.Buffer = canonicalizeMap(cfg.Buffer)
-	cfg.CacheResources = canonicalizeResources(cfg.CacheResources)
-	cfg.RateLimitResources = canonicalizeResources(cfg.RateLimitResources)
-
-	return cfg
-}
-
-// canonicalizeMap returns m re-decoded from its YAML encoding. A nil or empty
-// map is returned unchanged.
-func canonicalizeMap(m map[string]interface{}) map[string]interface{} {
-	if len(m) == 0 {
-		return m
-	}
-
-	out, err := roundTrip(m)
-	if err != nil {
-		return m
-	}
-
-	result, ok := out.(map[string]interface{})
-	if !ok {
-		return m
-	}
-
-	return result
-}
-
-// canonicalizeResources returns the resource slice re-decoded from its YAML
-// encoding. A nil or empty slice is returned unchanged.
-func canonicalizeResources(s []map[string]interface{}) []map[string]interface{} {
-	if len(s) == 0 {
-		return s
-	}
-
-	out, err := roundTrip(s)
-	if err != nil {
-		return s
-	}
-
-	list, ok := out.([]interface{})
-	if !ok {
-		return s
-	}
-
-	result := make([]map[string]interface{}, 0, len(list))
-
-	for _, item := range list {
-		entry, ok := item.(map[string]interface{})
-		if !ok {
-			return s
-		}
-
-		result = append(result, entry)
-	}
-
-	return result
-}
-
-// roundTrip marshals v to YAML and unmarshals it back into a generic value.
-//
-// normalizeValue is tried first: it walks the value instead of serialising it, and
-// reports ok=false for anything it cannot reproduce exactly, in which case we fall
-// through to the round-trip below. See canonicalize_fast.go for what it declines.
-func roundTrip(v interface{}) (interface{}, error) {
-	out, ok, unsupported := normalizeValue(v)
-	if ok {
-		return out, nil
-	}
-
-	reportFallback(unsupported)
-
-	encoded, err := yaml.Marshal(v)
-	if err != nil {
-		return nil, err
-	}
-
-	var decoded interface{}
-	if err := yaml.Unmarshal(encoded, &decoded); err != nil {
-		return nil, err
-	}
-
-	return decoded, nil
-}
 
 // getProcessors extracts the processors array from a pipeline config.
 func getProcessors(pipeline map[string]interface{}) []interface{} {
