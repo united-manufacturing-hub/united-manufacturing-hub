@@ -245,6 +245,21 @@ var _ = Describe("RunningState", func() {
 		Expect(result.State).To(BeAssignableToTypeOf(&state.DegradedState{}))
 	})
 
+	It("appends the last error detail to the consecutive-error degrade reason", func() {
+		const detail = "HTTP 502 (server_error): <html>502 Bad Gateway nginx/1.27.5</html>"
+
+		snap := makeSnapshot(config.DesiredStateRunning, false, 3, true, true)
+		obs := snap.Observed.(fsmv2.Observation[snapshot.PullStatus])
+		obs.Status.LastErrorDetail = detail
+		snap.Observed = obs
+
+		result := s.Next(snap)
+
+		Expect(result.State).To(BeAssignableToTypeOf(&state.DegradedState{}))
+		Expect(result.Reason).To(ContainSubstring("degrading: 3 consecutive errors (threshold=3)"))
+		Expect(result.Reason).To(ContainSubstring("; last: " + detail))
+	})
+
 	It("should stay Running and emit PullAction when less than 3 errors", func() {
 		snap := makeSnapshot(config.DesiredStateRunning, false, 2, true, true)
 		result := s.Next(snap)
