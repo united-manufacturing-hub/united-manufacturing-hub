@@ -31,14 +31,14 @@ type snap struct{ r Reading }
 
 // feed is the suite's other half. Readable returns a strictly increasing value
 // derived from at, as the Feed contract requires; Unreadable returns an
-// all-absent snapshot, or, under the mutant feed, Known(0) so the window keeps
+// all-absent snapshot, or, under the zero-for-absent feed, Known(0) so the window keeps
 // filling through the outage.
-type feed struct{ mutant bool }
+type feed struct{ zeroForAbsent bool }
 
 func (f feed) Readable(at time.Time) snap { return snap{r: Known(float64(at.UnixNano()))} }
 
 func (f feed) Unreadable(at time.Time) snap {
-	if f.mutant {
+	if f.zeroForAbsent {
 		return snap{r: Known(0)}
 	}
 	return snap{r: Unknown()}
@@ -176,7 +176,7 @@ var _ = Describe("Suite", func() {
 		env := NewEnvironment("source-1")
 
 		correct := Run(tbl, env, feed{})
-		mutant := Run(tbl, env, feed{mutant: true})
+		zeroed := Run(tbl, env, feed{zeroForAbsent: true})
 
 		byScenario := func(outcomes []Outcome) map[Scenario]Availability {
 			m := make(map[Scenario]Availability, len(outcomes))
@@ -186,34 +186,34 @@ var _ = Describe("Suite", func() {
 			return m
 		}
 		correctBy := byScenario(correct)
-		mutantBy := byScenario(mutant)
+		zeroedBy := byScenario(zeroed)
 
 		sc := func(sig string, c Case) Scenario { return Scenario{Signal: sig, Case: c} }
 
-		// The mutant returns Known(0) where the correct feed returns Unknown, so
+		// The zero-for-absent feed returns Known(0) where the correct feed returns Unknown, so
 		// the window never freezes and never empties. On signal B (m == 2) all
 		// three outage cases must regress to Ready, each differing from what the
 		// correct feed reached.
-		Expect(mutantBy[sc("B", CaseBriefOutage)]).To(Equal(Ready))
-		Expect(mutantBy[sc("B", CaseBriefOutage)]).ToNot(Equal(correctBy[sc("B", CaseBriefOutage)]))
-		Expect(mutantBy[sc("B", CaseLongOutage)]).To(Equal(Ready))
-		Expect(mutantBy[sc("B", CaseLongOutage)]).ToNot(Equal(correctBy[sc("B", CaseLongOutage)]))
-		Expect(mutantBy[sc("B", CasePostOutageDip)]).To(Equal(Ready))
-		Expect(mutantBy[sc("B", CasePostOutageDip)]).ToNot(Equal(correctBy[sc("B", CasePostOutageDip)]))
+		Expect(zeroedBy[sc("B", CaseBriefOutage)]).To(Equal(Ready))
+		Expect(zeroedBy[sc("B", CaseBriefOutage)]).ToNot(Equal(correctBy[sc("B", CaseBriefOutage)]))
+		Expect(zeroedBy[sc("B", CaseLongOutage)]).To(Equal(Ready))
+		Expect(zeroedBy[sc("B", CaseLongOutage)]).ToNot(Equal(correctBy[sc("B", CaseLongOutage)]))
+		Expect(zeroedBy[sc("B", CasePostOutageDip)]).To(Equal(Ready))
+		Expect(zeroedBy[sc("B", CasePostOutageDip)]).ToNot(Equal(correctBy[sc("B", CasePostOutageDip)]))
 
 		// On signal A (m == 1) the brief and long outages regress; the post-outage
-		// dip already expects Ready at m == 1, so the mutant is indistinguishable
+		// dip already expects Ready at m == 1, so the zero-for-absent feed is indistinguishable
 		// there.
-		Expect(mutantBy[sc("A", CaseBriefOutage)]).To(Equal(Ready))
-		Expect(mutantBy[sc("A", CaseBriefOutage)]).ToNot(Equal(correctBy[sc("A", CaseBriefOutage)]))
-		Expect(mutantBy[sc("A", CaseLongOutage)]).To(Equal(Ready))
-		Expect(mutantBy[sc("A", CaseLongOutage)]).ToNot(Equal(correctBy[sc("A", CaseLongOutage)]))
-		Expect(mutantBy[sc("A", CasePostOutageDip)]).To(Equal(correctBy[sc("A", CasePostOutageDip)]),
-			"at m == 1 the dip already expects Ready, so the mutant is indistinguishable")
+		Expect(zeroedBy[sc("A", CaseBriefOutage)]).To(Equal(Ready))
+		Expect(zeroedBy[sc("A", CaseBriefOutage)]).ToNot(Equal(correctBy[sc("A", CaseBriefOutage)]))
+		Expect(zeroedBy[sc("A", CaseLongOutage)]).To(Equal(Ready))
+		Expect(zeroedBy[sc("A", CaseLongOutage)]).ToNot(Equal(correctBy[sc("A", CaseLongOutage)]))
+		Expect(zeroedBy[sc("A", CasePostOutageDip)]).To(Equal(correctBy[sc("A", CasePostOutageDip)]),
+			"at m == 1 the dip already expects Ready, so the zero-for-absent feed is indistinguishable")
 
 		// CaseBelowFloor never calls Unreadable, every tick is readable, so the
-		// mutant is indistinguishable from the correct feed there.
-		Expect(mutantBy[sc("B", CaseBelowFloor)]).To(Equal(correctBy[sc("B", CaseBelowFloor)]))
+		// zero-for-absent feed is indistinguishable from the correct feed there.
+		Expect(zeroedBy[sc("B", CaseBelowFloor)]).To(Equal(correctBy[sc("B", CaseBelowFloor)]))
 	})
 
 	It("yields NoneReady for CaseBriefOutage even at the DemoteSpan == Interval boundary, because a brief outage always drives at least one unreadable tick", func() {
