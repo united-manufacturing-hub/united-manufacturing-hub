@@ -22,9 +22,9 @@ import (
 )
 
 // Signals is the per-tick fact bag ComposeMessage and BlockReason read to render
-// a sentence the ranked cause list alone cannot carry. The first 31 fields are
-// the parked shape in declaration order; everything after them is appended. Two
-// of the three frozen signatures take a Signals, so Decide is its sole producer.
+// a sentence the ranked cause list alone cannot carry. The first 31 fields keep
+// their declaration order; everything after them is appended. Two of the three
+// frozen signatures take a Signals, so Decide is its sole producer.
 //
 // ⚠️ Exactly two fields here end in "Available" — HostBusyCoresAvailable and
 // HostHeadroomAvailable — and that is the cap this package allows before a
@@ -93,7 +93,7 @@ type Signals struct {
 	PressureApplies bool
 	StealApplies    bool
 
-	// ---- past the parked 31. Decide fills all three. ----
+	// ---- past the first 31. Decide fills all three. ----
 	//
 	// HostHeadroomAvailable is the SECOND field ending "Available" and it puts
 	// this struct AT the cap of two.
