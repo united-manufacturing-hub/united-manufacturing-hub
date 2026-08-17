@@ -14,7 +14,7 @@
 
 // Package fsmv2benthosmonitor is the benthos monitor built on the fsmv2 simple
 // framework. The worker registers itself on import. Poll scrapes the monitor's
-// /ping, /version, and /metrics endpoints into a BenthosMonitorStatus.
+// HTTP endpoints into a BenthosMonitorStatus; Poll's godoc names the set.
 package fsmv2benthosmonitor
 
 import (
@@ -38,16 +38,18 @@ import (
 )
 
 const (
-	// WorkerType is the canonical worker-type name used in config and CSE storage.
+	// WorkerType is the canonical worker-type name used in config and CSE
+	// (Convergent State Engine) storage.
 	WorkerType = "benthos_monitor"
 
 	// pollInterval is the cadence at which the framework calls Poll.
 	pollInterval = 1 * time.Second
 
 	// monitorClientTimeout bounds each scrape request so one hung connection
-	// cannot consume the whole observation frame and starve the remaining
-	// endpoints. Four endpoints at ~400ms each fit the ~2.2s observation budget;
-	// the fsmv1 curl bound of 1s would let a single poll run past it.
+	// cannot consume the whole observation budget and starve the remaining
+	// endpoints. Four endpoints at ~400ms each fit the ~2.2s budget
+	// (supervisor.DefaultObservationTimeout); the fsmv1 curl bound of 1s would
+	// let a single poll run past it.
 	monitorClientTimeout = 400 * time.Millisecond
 
 	// maxScrapeBody caps the response bodies Poll reads, so a misbehaving
@@ -58,14 +60,13 @@ const (
 // benthosMonitorDeps holds the HTTP client used to scrape the benthos monitor's
 // endpoints and the throughput window that accumulates counter samples across
 // polls. Poll receives a pointer to the deps, so the same *http.Client is
-// shared across polls. window is a value field: its zero value is a valid empty
-// window, so no constructor is needed and a nil window cannot be built.
+// shared across polls.
 type benthosMonitorDeps struct {
 	client *http.Client
 	window throughputWindow
 }
 
-// ComponentThroughput carries the real-time rate for one direction of the benthos
+// ComponentThroughput carries the rate for one direction of the benthos
 // pipeline. MessagesPerSecond is the by-time rate the worker computes (never the
 // FSMv1 MessagesPerTick, which adapter.go converts on the way out); LastCount is
 // the newest counter value seen.
@@ -76,20 +77,17 @@ type ComponentThroughput struct {
 
 // BenthosMonitorStatus is the result of one scrape of the benthos monitor: the
 // time it happened, the /metrics counters, /ping liveness, /ready readiness, the
-// /version string, and the per-direction throughput computed over the 60s window.
+// /version string, and the per-direction throughput computed over windowSpan.
 //
 // BenthosMetrics is the per-path struct the fsmv1 parser produces, carried
-// whole. Reducing it to a couple of scalars here is what left every consumer of
-// the connection counters reading zero: the counters were never scraped at all,
-// so no amount of mapping downstream could recover them.
+// whole; consumers read the connection counters off it.
 type BenthosMonitorStatus struct {
 	ScrapedAt      time.Time
 	BenthosMetrics benthosmonitorservice.Metrics
 	Input          ComponentThroughput
 	Output         ComponentThroughput
-	// IsActive is true when input traffic was observed in the window. It is
-	// input-only (FSMv1: s.IsActive = s.Input.MessagesPerTick > 0) and tick-free,
-	// with no hysteresis.
+	// IsActive holds FSMv1 parity (s.IsActive = s.Input.MessagesPerTick > 0) but
+	// reads the by-time rate, not a tick delta.
 	IsActive  bool
 	PingAlive bool
 	Ready     bool
@@ -147,25 +145,23 @@ func Poll(ctx context.Context, d *benthosMonitorDeps, cfg config.BenthosMonitorC
 	}
 	// The fsmv1 parser is the only parser: one implementation cannot disagree
 	// with itself about the same prometheus text, and every consumer already
-	// reads the per-path struct it returns. A parse failure is returned, never
-	// swallowed into an empty struct — simple's collector turns it into a
-	// degraded worker carrying the reason, which is what makes a format drift
-	// visible instead of looking like idle traffic.
+	// reads the per-path struct it returns. simple's collector turns the returned
+	// error into a degraded worker carrying the reason, which is what makes a
+	// format drift visible instead of looking like idle traffic.
 	m, err := benthosmonitorservice.ParseMetricsFromBytes(metricsBody)
 	if err != nil {
 		return status, fmt.Errorf("parse /metrics: %w", err)
 	}
 	status.BenthosMetrics = m
 
-	// Feed this poll's counter snapshot into the by-time window and read back the
-	// real-time rates. The window lives in the deps and survives across polls
-	// a nil deps falls back to a one-off window whose rate is always 0. The
-	// window is keyed to the scrape port so an in-place port change (no worker
-	// restart) wipes the old series instead of delta-ticking across it.
+	// When the worker has deps, feed this poll's counter snapshot into the by-time
+	// window and read the rates back. Without deps there is no window, so Input,
+	// Output and IsActive stay at their zero values.
 	//
-	// The window takes the totals summed across every leaf path, which is what
-	// the counters mean for throughput: a switch or broker emits one series per
-	// leaf with no top-level aggregate, so the sum is the pipeline's traffic.
+	// Add takes the totals summed across every leaf path (InputReceivedTotal,
+	// OutputSentTotal), which is what the counters mean for throughput: a switch
+	// or broker emits one series per leaf with no top-level aggregate, so the sum
+	// is the pipeline's traffic.
 	if d != nil {
 		d.window.Add(status.ScrapedAt, int(cfg.MetricsPort), int(m.InputReceivedTotal()), int(m.OutputSentTotal()))
 		status.Input = ComponentThroughput{
@@ -195,9 +191,9 @@ func get(ctx context.Context, client *http.Client, url string) ([]byte, int, err
 	if err != nil {
 		return nil, 0, err
 	}
-	// Defensive: http.Client.Do may return a nil resp alongside a non-nil error
-	// on some paths; the error check above normally covers it, but guard the
-	// dereferences that follow so a nil resp can never slip through.
+	// Unreachable via net/http: Do returns a non-nil error whenever resp is nil,
+	// so the check above already covers it. The guard stays as a cheap floor on
+	// the dereferences below.
 	if resp == nil {
 		return nil, 0, fmt.Errorf("GET %s: nil response", url)
 	}
@@ -216,13 +212,14 @@ func get(ctx context.Context, client *http.Client, url string) ([]byte, int, err
 	return body, resp.StatusCode, nil
 }
 
-// cfgFor renders a BenthosMonitorConfig into the Upsert payload map through
-// YAML, so the keys match BenthosMonitorConfig's yaml tags. This matters
-// because the child-spec pipeline YAML-marshals the map into UserSpec.Config
-// and the worker YAML-unmarshals it back into a BenthosMonitorConfig: the
-// adapter's default CfgFor (a JSON round-trip) would emit Go field names —
-// BenthosMonitorConfig carries no json tags — and lose Name,
-// DesiredFSMState, and MetricsPort on the way back.
+// cfgFor renders a BenthosMonitorConfig into the map the adapter hands to
+// dynamicchildren.Writer.Upsert, through YAML, so the keys match the config's
+// yaml tags.
+//
+// Upsert marshals that map into ChildSpec.UserSpec.Config as YAML (see
+// config.NewChildSpec) and the worker unmarshals it back. The adapter's default
+// CfgFor is a JSON round-trip; BenthosMonitorConfig carries no json tags, so it
+// would emit Go field names and lose Name, DesiredFSMState, and MetricsPort.
 func cfgFor(cfg config.BenthosMonitorConfig) (map[string]any, error) {
 	data, err := yaml.Marshal(cfg)
 	if err != nil {

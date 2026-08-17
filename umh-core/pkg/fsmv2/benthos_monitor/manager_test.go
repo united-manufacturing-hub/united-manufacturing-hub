@@ -36,7 +36,7 @@ import (
 
 // stubManagerReader is a deps.StateReader that returns a fixed
 // Observation[simple.Status[BenthosMonitorStatus]] for every ref, mirroring the
-// stubReader harness in nmap/manager_test.go for the benthos status type.
+// stubReader harness in adapter/instance_test.go for the benthos status type.
 type stubManagerReader struct {
 	obs *fsmv2.Observation[simple.Status[fsmv2benthosmonitor.BenthosMonitorStatus]]
 	err error
@@ -75,8 +75,8 @@ var _ = Describe("benthos_monitor registration and adapter vocabulary", func() {
 		}
 	}
 
-	// snapshotWith puts the given configs at the real snapshot path the manager
-	// reads: CurrentConfig.Internal.BenthosMonitor.
+	// snapshotWith puts the given configs at the real snapshot path the manager's
+	// ExtractConfigs reads.
 	snapshotWith := func(cfgs ...config.BenthosMonitorConfig) publicfsm.SystemSnapshot {
 		return publicfsm.SystemSnapshot{
 			CurrentConfig: config.FullConfig{
@@ -85,7 +85,8 @@ var _ = Describe("benthos_monitor registration and adapter vocabulary", func() {
 		}
 	}
 
-	// degradedFresh is a Fresh observation carrying a degraded verdict.
+	// degradedFresh stamps CollectedAt inside the freshness window, so fsmv2client
+	// classifies the observation Fresh.
 	degradedFresh := func() *fsmv2.Observation[simple.Status[fsmv2benthosmonitor.BenthosMonitorStatus]] {
 		return &fsmv2.Observation[simple.Status[fsmv2benthosmonitor.BenthosMonitorStatus]]{
 			CollectedAt: time.Now().Add(-100 * time.Millisecond),
@@ -97,8 +98,8 @@ var _ = Describe("benthos_monitor registration and adapter vocabulary", func() {
 		}
 	}
 
-	// freshHealthy is a Fresh observation with a non-degraded verdict: the
-	// healthy leaf mapFresh classifies as benthos_monitor's own "active" word.
+	// freshHealthy stamps CollectedAt inside the freshness window; with no degraded
+	// verdict, mapFresh maps the observation to benthos_monitor's own "active" word.
 	freshHealthy := func() *fsmv2.Observation[simple.Status[fsmv2benthosmonitor.BenthosMonitorStatus]] {
 		return &fsmv2.Observation[simple.Status[fsmv2benthosmonitor.BenthosMonitorStatus]]{
 			CollectedAt: time.Now().Add(-100 * time.Millisecond),
@@ -123,8 +124,9 @@ var _ = Describe("benthos_monitor registration and adapter vocabulary", func() {
 		Expect(fsmv2benthosmonitor.WorkerType).To(Equal("benthos_monitor"))
 
 		// One registered client, held across the reads; only the reader's
-		// observation/error changes, so the ref stays registered and each read is
-		// classified by freshness rather than as Unregistered bootstrap.
+		// observation/error changes. The ref stays registered, so the first read
+		// takes the NeverObserved bootstrap exit rather than Unregistered, and the
+		// two later reads are classified by freshness.
 		reader := &stubManagerReader{err: persistence.ErrNotFound}
 		writer := dynamicchildren.NewWriter()
 		fsmv2client.SetClient(fsmv2client.NewFSMv2Client(writer, reader))
@@ -140,8 +142,8 @@ var _ = Describe("benthos_monitor registration and adapter vocabulary", func() {
 		Expect(state).To(Equal(benthosmonitorfsm.OperationalStateStarting))
 
 		// DEGRADED verdict on a Fresh observation => benthos_monitor's degraded
-		// word ("degraded"), which happens to equal the default but must come from
-		// the declared vocabulary, distinct from the other three words.
+		// word ("degraded"), which happens to equal the adapter default, so this
+		// assertion alone does not discriminate the two.
 		reader.err = nil
 		reader.obs = degradedFresh()
 
@@ -149,9 +151,8 @@ var _ = Describe("benthos_monitor registration and adapter vocabulary", func() {
 		Expect(gerr).NotTo(HaveOccurred())
 		Expect(state).To(Equal(benthosmonitorfsm.OperationalStateDegraded))
 
-		// FRESH + healthy verdict => the mapFresh leaf, benthos_monitor's own
-		// "active" word (its DesiredRunning), distinct from the adapter default
-		// "running".
+		// FRESH + healthy verdict => the mapFresh leaf: benthos_monitor's own
+		// "active" word (its DesiredRunning).
 		reader.obs = freshHealthy()
 
 		state, gerr = mgr.GetCurrentFSMState(name)
@@ -170,10 +171,7 @@ var _ = Describe("benthos_monitor registration and adapter vocabulary", func() {
 	})
 
 	It("round-trips Name, DesiredFSMState, and MetricsPort through the child-spec YAML pipeline", func() {
-		// The Upsert payload is YAML-marshalled into UserSpec.Config and the
-		// worker YAML-unmarshals it back into a BenthosMonitorConfig. CfgFor must
-		// emit yaml-tag keys; the adapter's default JSON CfgFor would drop all
-		// three (BenthosMonitorConfig carries no json tags).
+		// cfgFor's godoc explains why this round-trip needs yaml-tag keys.
 		reader := &stubManagerReader{err: persistence.ErrNotFound}
 		writer := dynamicchildren.NewWriter()
 		fsmv2client.SetClient(fsmv2client.NewFSMv2Client(writer, reader))

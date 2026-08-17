@@ -14,13 +14,12 @@
 
 package benthos
 
-// These specs pin the backend NewDefaultBenthosService stores based on
-// envUseFsmv2BenthosMonitor: unset or false keeps the byte-identical fsmv1
-// BenthosMonitorManager; a true value (as accepted by env.GetAsBool, which
-// honours on/off, yes/no, y/n, 1/0 and true/false case-insensitively)
-// stores the fsmv2 adapter WorkerManager. The two backends are
-// distinguished by their concrete runtime type, which is why the specs
-// assert that type directly rather than via a helper.
+// These specs assert which backend NewDefaultBenthosService stores for a given
+// value of envUseFsmv2BenthosMonitor. Which values are accepted, and what each
+// one selects, is documented on that constant. The specs cover every value
+// env.GetAsBool treats as true or false, plus unset and an unparseable value.
+// They tell the two backends apart by the concrete runtime type stored in
+// svc.benthosMonitorManager.
 
 import (
 	"os"
@@ -57,7 +56,6 @@ var _ = Describe("USE_FSMV2_BENTHOS_MONITOR flag wiring", func() {
 
 	Describe("backend selection", func() {
 		It("stores the fsmv1 manager when USE_FSMV2_BENTHOS_MONITOR is unset (FF-off default)", func() {
-			// env intentionally unset in BeforeEach
 			svc := NewDefaultBenthosService("flag-off-benthos")
 
 			_, ok := svc.benthosMonitorManager.(*benthos_monitor_fsm.BenthosMonitorManager)
@@ -76,12 +74,11 @@ var _ = Describe("USE_FSMV2_BENTHOS_MONITOR flag wiring", func() {
 				"USE_FSMV2_BENTHOS_MONITOR=true must select the fsmv2 adapter manager")
 		})
 
-		// Every spelling env.GetAsBool accepts must select the fsmv2 backend. "ON"
-		// is the one that matters most: it is what the CPU measurement rig uses.
-		// Reading this flag with strconv.ParseBool instead of env.GetAsBool
-		// rejected "ON", so a benchmark run set the flag on, silently got fsmv1
-		// on both arms, and measured no difference. Unit tests using only "true"
-		// could not see it.
+		// Every value env.GetAsBool accepts must select the fsmv2 backend. "ON"
+		// matters most: it is the spelling the CPU measurement harness sets, and
+		// that harness lives outside this repo. Reading this flag with
+		// strconv.ParseBool instead of env.GetAsBool rejects "ON" and silently
+		// selects fsmv1, which a table holding only "true" cannot catch.
 		for _, truthy := range []string{"true", "TRUE", "1", "on", "ON", "On", "yes", "y"} {
 			value := truthy
 
