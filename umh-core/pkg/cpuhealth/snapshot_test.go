@@ -72,7 +72,7 @@ var _ = Describe("one snapshot per tick", func() {
 		// Unknown. The single Timestamp is set once per tick.
 		ctx := context.Background()
 		smp, err := sampler(nil).Read(ctx)
-		Expect(err).To(BeNil())
+		Expect(err).ToNot(HaveOccurred())
 		Expect(smp.Timestamp.IsZero()).To(BeFalse())
 		Expect(smp.UsageUsec).To(Equal(diagnosis.Known(5000000)))
 		Expect(smp.NrPeriods).To(Equal(diagnosis.Known(10)))
@@ -87,8 +87,7 @@ var _ = Describe("one snapshot per tick", func() {
 		// PRESENT uncapped read — must NOT satisfy HasLimit (positivity, not
 		// presence). The fourth case: PsiAvailable true satisfies
 		// HasPressureStats, and its absence (the zero value) does not.
-		both := diagnosis.Environment{}
-		both = cpuhealth.DeriveEnvironment(cpuhealth.Sample{Timestamp: smp.Timestamp, Virtualized: true, Quota: diagnosis.Known(2)})
+		both := cpuhealth.DeriveEnvironment(cpuhealth.Sample{Timestamp: smp.Timestamp, Virtualized: true, Quota: diagnosis.Known(2)})
 		Expect(both.Has(cpuhealth.HasVirtualization)).To(BeTrue())
 		Expect(both.Has(cpuhealth.HasLimit)).To(BeTrue())
 
@@ -113,7 +112,10 @@ var _ = Describe("one snapshot per tick", func() {
 				if path == base+"/cpu.pressure" {
 					return nil, errors.New("missing")
 				}
-				inner, err := stat, error(nil)
+				var inner []byte
+
+				var err error
+
 				switch path {
 				case base + "/cpu.stat":
 					inner, err = stat, nil
@@ -130,7 +132,7 @@ var _ = Describe("one snapshot per tick", func() {
 			}
 		})
 		smp2, err := noPressure.Read(ctx)
-		Expect(err).To(BeNil())
+		Expect(err).ToNot(HaveOccurred())
 		Expect(smp2.Pressure).To(Equal(diagnosis.Unknown()))
 		Expect(smp2.UsageUsec).To(Equal(diagnosis.Known(5000000)))
 		Expect(smp2.NrPeriods).To(Equal(diagnosis.Known(10)))
@@ -151,7 +153,7 @@ var _ = Describe("one snapshot per tick", func() {
 			}
 		})
 		_, err = noStat.Read(ctx)
-		Expect(err).NotTo(BeNil())
+		Expect(err).To(HaveOccurred())
 
 		// a fake filesystem whose cpu.stat is readable but whose
 		// value cannot be parsed (non-numeric usage_usec) also fails the
@@ -175,7 +177,7 @@ var _ = Describe("one snapshot per tick", func() {
 			}
 		})
 		_, err = malformedStat.Read(ctx)
-		Expect(err).NotTo(BeNil())
+		Expect(err).To(HaveOccurred())
 
 		// A present-but-unparsable COUNTER value is equally an unparsable
 		// cpu.stat and must fail the whole snapshot: an earlier "unavailable on
@@ -206,7 +208,7 @@ var _ = Describe("one snapshot per tick", func() {
 				}
 			})
 			_, err = cc.Read(ctx)
-			Expect(err).NotTo(BeNil(),
+			Expect(err).To(HaveOccurred(),
 				"a corrupt cpu.stat counter (%q) must fail the whole snapshot, not be read as unavailable", corrupt)
 		}
 	})
