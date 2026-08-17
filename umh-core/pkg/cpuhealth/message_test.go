@@ -390,6 +390,7 @@ var _ = Describe("degraded copy", func() {
 		msg := ComposeMessage(degradedVerdict(CauseKindSaturation, 0.5), limitArm)
 		Expect(msg).NotTo(ContainSubstring("9223372036854775807"))
 		Expect(msg).NotTo(ContainSubstring("%"))
+		Expect(msg).To(ContainSubstring("not currently readable"))
 
 		// The default (readable no-limit) arm: AvgHostBusyCores/CapacityCores
 		// with CapacityCores == 0 is 0/0 = NaN, and pctOf(NaN) happens to come
