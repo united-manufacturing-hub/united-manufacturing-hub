@@ -139,6 +139,47 @@ func TestMapObservedSetsIsRunning(t *testing.T) {
 	if bmEmpty.ServiceInfo.BenthosStatus.IsRunning {
 		t.Error("IsRunning is true for a zero status: an unobserved worker must not report itself running")
 	}
+
+	// A FAILED poll. This is the case the timestamp alone cannot express, and the
+	// one that made IsRunning permanently true: Poll stamps ScrapedAt before its
+	// first request and returns that partial status on every error path, and
+	// simple.CollectObservedState deliberately persists it (with Degraded set and
+	// the error in Reason) so partial detail survives. So a dead monitor arrives
+	// here with a FRESH ScrapedAt and must still map to not-running, otherwise
+	// GetHealthCheckAndMetrics copies a dead monitor's HealthCheck out as if live
+	// and its ErrBenthosMonitorNotRunning gate can never fire.
+	failed := mapObserved(testConfig(), simple.Status[BenthosMonitorStatus]{
+		Result: BenthosMonitorStatus{
+			ScrapedAt: time.Now(), // fresh, exactly as a failed poll leaves it
+			PingAlive: true,       // /ping answered before /metrics failed
+		},
+		Degraded: true,
+		Reason:   "poll error: scrape /metrics: connection refused",
+	})
+	bmFailed, ok := failed.(benthosmonitorfsm.BenthosMonitorObservedState)
+	if !ok {
+		t.Fatalf("mapObserved returned %T", failed)
+	}
+	if bmFailed.ServiceInfo.BenthosStatus.IsRunning {
+		t.Error("IsRunning is true for a failed poll: a dead monitor reports itself running and the not-running gate in GetHealthCheckAndMetrics can never fire")
+	}
+
+	// A stale-but-successful scan. health() drives this degraded, and under this
+	// flag there is no separate process that could be "running but unhealthy", so
+	// it maps to not-running too. Asserted so the collapse is a decision on the
+	// record rather than an accident.
+	stale := mapObserved(testConfig(), simple.Status[BenthosMonitorStatus]{
+		Result:   BenthosMonitorStatus{ScrapedAt: time.Now()},
+		Degraded: true,
+		Reason:   "benthos monitor scan is stale",
+	})
+	bmStale, ok := stale.(benthosmonitorfsm.BenthosMonitorObservedState)
+	if !ok {
+		t.Fatalf("mapObserved returned %T", stale)
+	}
+	if bmStale.ServiceInfo.BenthosStatus.IsRunning {
+		t.Error("IsRunning is true for a stale scan: consumers would treat untrustworthy data as live")
+	}
 }
 
 // TestMapObservedToleratesZeroStatus pins the other control-loop hazard: on a
