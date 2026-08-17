@@ -48,10 +48,12 @@ const (
 // throttle counters; CpuScope needs /proc/stat and the cpuset. And all fields
 // share one Timestamp a split would fork — prometheus/procfs keeps Stat flat.
 type Sample struct {
-	// Quota is present when cpu.max names a positive limit (the capacity in
-	// cores), the literal "max" (a present 0.0, a definite no-limit), or a
-	// non-positive numeric limit (a present 0.0, never a positive capacity).
-	// It is absent no-signal when cpu.max is unreadable or unparsable.
+	// Quota is the container's CPU limit in cores — the figure docker run
+	// --cpus, a Kubernetes CPU limit, or a Compose cpus: entry sets. It is
+	// present when cpu.max names a positive limit (the capacity in cores), the
+	// literal "max" (a present 0.0, a definite no-limit), or a non-positive
+	// numeric limit (a present 0.0, never a positive capacity). It is absent
+	// no-signal when cpu.max is unreadable or unparsable.
 	Quota diagnosis.Reading
 
 	// Pressure is present when cpu.pressure's "some" line yields a readable
