@@ -40,10 +40,11 @@ const (
 type CauseKind string
 
 const (
-	CauseKindSaturation     CauseKind = "saturation"
-	CauseKindThrottling     CauseKind = "throttling"
-	CauseKindPressure       CauseKind = "pressure"
-	CauseKindSteal          CauseKind = "steal"
+	CauseKindSaturation CauseKind = "saturation"
+	CauseKindThrottling CauseKind = "throttling"
+	CauseKindPressure   CauseKind = "pressure"
+	CauseKindSteal      CauseKind = "steal"
+	// CauseKindHostContention is declared but no signal produces it.
 	CauseKindHostContention CauseKind = "host-contention"
 )
 

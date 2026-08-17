@@ -58,7 +58,9 @@ func Decide(engine *diagnosis.Engine[Sample], s Sample, env diagnosis.Environmen
 }
 
 // foldSaturation folds the saturation family into a single survivor and
-// collects the rest. It owns every latch field of Signals: SaturationFired,
+// collects the rest. Saturation and limit-saturation both produce
+// CauseKindSaturation, so folding is what keeps Decide from printing the same
+// customer paragraph twice. It owns every latch field of Signals: SaturationFired,
 // LimitSaturationFired, HostFullFired, NoHostStatsSaturationFired,
 // NoLimitHostFired (all via saturationFlags), plus ThrottleFired,
 // PressureFired, StealFired and HostContentionFired. The fired set arrives
@@ -100,7 +102,9 @@ func foldSaturation(fired []diagnosis.Fired, sig *Signals, hasLimit bool) (rest 
 	return rest, survivor
 }
 
-// buildVerdict ranks the folded set and builds the Verdict. It owns no Signals
+// buildVerdict ranks the folded set and builds the Verdict. Exactly one rule
+// decides State: degraded when at least one signal fired this tick, healthy
+// when none did — no severity floor, no second condition. It owns no Signals
 // fields — it returns the Verdict only. Rank is the only thing that orders
 // Verdict.Causes; attribution derives from the dominant (ranked-first) cause.
 func buildVerdict(engine *diagnosis.Engine[Sample], rest []diagnosis.Fired, survivor *diagnosis.Fired, splitHost bool) Verdict {

@@ -78,6 +78,9 @@ func Table(cores, quota float64) diagnosis.Table[Sample] {
 	return cpuTable(cores, quota)
 }
 
+// cpuTable declares five signals — throttling, pressure, steal, saturation and
+// limit-saturation — and two tracks, host-busy and usage-cores.
+//
 // cpuTable is the CPU declaration, built by a function because two marks and
 // one capacity are denominated in quantities that vary per box: the quota and
 // the logical CPU count. Both arguments are startup facts, cached across ticks,
