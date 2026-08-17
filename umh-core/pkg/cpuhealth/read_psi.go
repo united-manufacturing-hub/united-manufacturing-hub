@@ -24,9 +24,8 @@ import (
 	"strings"
 )
 
-// readPSI reads cpu.pressure's "some" avg60 as a 0..1 fraction. The second
-// value reports whether a present Pressure Reading was produced this tick.
-func (s *linuxSampler) readPSI(ctx context.Context) (float64, bool) {
+// readPSI reads cpu.pressure's "some" avg60 as a 0..1 fraction.
+func (s *linuxSampler) readPSI(ctx context.Context) (frac float64, ok bool) {
 	data, err := s.fs.ReadFile(ctx, s.base+"/cpu.pressure")
 	if err != nil {
 		return 0, false
