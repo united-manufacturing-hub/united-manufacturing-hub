@@ -118,7 +118,7 @@ var _ = Describe("the handover at twenty samples", func() {
 		// (0.45) and then HOLD through the handover, because the clear arm is
 		// gated on full window coverage and the window is not full at n=20 —
 		// "nothing fires" would be unobservable. With the spike last, the mean
-		// peaks at 0.047 and the twenty-sample p95 is the second-highest, 0.
+		// peaks at 0.045 (0.90/20) and the twenty-sample p95 is the second-highest, 0.
 		engine, err := NewEngine(4, 2.0)
 		Expect(err).NotTo(HaveOccurred())
 		env := diagnosis.NewEnvironment(HasVirtualization, HasLimit)
