@@ -22,15 +22,16 @@ import (
 	"strings"
 )
 
-// readVirtualized returns the sticky virtualisation fact. On the first call
-// it reads /proc/cpuinfo and, when the flags line carries "hypervisor", caches
-// and returns true for every later read. The distinct ARM64 route is the DMI
-// fallback: an ARM64 cpuinfo has a Features line and no flags line, so the
-// primary path can never succeed there and only the DMI product_name match can
-// mark it a guest. The DMI route is consulted whenever the cpuinfo route did
-// not already prove virtualization — including when cpuinfo is unreadable — and
-// a read failure on either source leaves the fact unresolved so the next tick
-// retries rather than permanently caching Virtualized=false.
+// readVirtualized returns the sticky virtualisation fact. A "hypervisor" flag
+// in /proc/cpuinfo's flags line proves an x86 guest and caches true; a positive
+// token match on either DMI source — product_name, or sys_vendor for the cloud
+// hypervisors product_name never names — also caches true. The fact is cached
+// false only when a decisive source was read: on x86 (flags line present) a
+// readable product_name is authoritative, and on any platform a readable
+// product_name together with a readable sys_vendor (both naming no hypervisor)
+// is a conclusive bare-metal identity. It stays open for the next tick —
+// never a permanent Virtualized=false — when no DMI source was readable, or on
+// a platform without a flags line when sys_vendor is still unresolved.
 func (s *linuxSampler) readVirtualized(ctx context.Context) bool {
 	if s.virtResolved {
 		return s.virtualized
@@ -52,6 +53,13 @@ func (s *linuxSampler) readVirtualized(ctx context.Context) bool {
 		s.virtualized = true
 		s.virtResolved = true
 		return true
+	}
+	// Neither DMI source was readable — there is no evidence of a guest or of a
+	// bare-metal identity at all, so keep the fact open and let the next tick
+	// re-read rather than caching Virtualized=false for the process lifetime
+	// off a momentary read failure.
+	if !pok && !vok {
+		return false
 	}
 	// product_name read resolved the fact. On a platform whose /proc/cpuinfo
 	// has a flags line (x86) product_name alone is authoritative and the result
