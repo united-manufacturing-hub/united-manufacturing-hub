@@ -25,9 +25,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/diagnosis"
 )
 
-// Decide runs one tick: Observe through the engine, fold the saturation family
-// to a single cause, Rank, and fill the Signals that ride the verdict. The
-// rules each step applies live on foldSaturation, buildVerdict and fillSignals.
+// Decide runs one tick and returns the tick's Verdict and Signals.
 func Decide(engine *diagnosis.Engine[Sample], s Sample, env diagnosis.Environment) (Verdict, Signals) {
 	fired, readiness := engine.Observe(s, env, s.Timestamp)
 
@@ -58,14 +56,10 @@ func Decide(engine *diagnosis.Engine[Sample], s Sample, env diagnosis.Environmen
 }
 
 // foldSaturation folds the saturation family into a single survivor and
-// collects the rest. Saturation and limit-saturation both produce
-// CauseKindSaturation, so folding is what keeps Decide from printing the same
-// customer paragraph twice. It owns every latch field of Signals: SaturationFired,
-// LimitSaturationFired, HostFullFired, NoHostStatsSaturationFired,
-// NoLimitHostFired (all via saturationFlags), plus ThrottleFired,
-// PressureFired, StealFired and HostContentionFired. The fired set arrives
-// unranked and in table order; the fold's fixed precedence is the only rule
-// Decide applies before Rank, and the rank and latch flags are the table's.
+// collects the rest; see Signals in signals.go for which function owns each
+// field. The fired set arrives unranked and in table order; the fold's fixed
+// precedence is the only rule Decide applies before Rank, and the rank and
+// latch flags are the table's.
 func foldSaturation(fired []diagnosis.Fired, sig *Signals, hasLimit bool) (rest []diagnosis.Fired, survivor *diagnosis.Fired) {
 	rest = make([]diagnosis.Fired, 0, len(fired))
 	best := 0 // below every saturation-arm rank, so the first member wins a tie
@@ -123,15 +117,10 @@ func buildVerdict(engine *diagnosis.Engine[Sample], rest []diagnosis.Fired, surv
 	return verdict
 }
 
-// fillSignals fills the Signals that ride the verdict. It owns every remaining
-// Signals field: HostHeadroomAvailable, LogicalCpus, HostCpus,
-// AvgUsageFraction, LimitedVisibility, ThrottleRatio, PressureAvg60, StealP95,
-// HostHeadroomCores, AvgUsageCores, AvgHostBusyCores, UsageRingActive,
-// HostBusyRingActive, CapacityCores, ReserveCores, HostBusyCoresAvailable,
-// ThrottleSignalReady, PressureSignalReady, StealSignalReady, LimitApplies,
-// PressureApplies and StealApplies. The host and usage track means and states
-// are read once in Decide by the attribution split and shared here, so a
-// single Get serves both.
+// fillSignals fills every Signals field not already owned by foldSaturation
+// or buildVerdict — see Signals in signals.go for the full field-ownership
+// map. The host and usage track means and states are read once in Decide by
+// the attribution split and shared here, so a single Get serves both.
 func fillSignals(sig *Signals, engine *diagnosis.Engine[Sample], s Sample, env diagnosis.Environment, readiness []diagnosis.Readiness, hostBusyMean float64, hostBusyState diagnosis.State, ourUsageMean float64, ourUsageState diagnosis.State) {
 	// The withheld-headroom facts ride Signals, not Verdict — three
 	// fields, none of the other 31 can stand in for them. HostHeadroomAvailable
@@ -177,11 +166,8 @@ func fillSignals(sig *Signals, engine *diagnosis.Engine[Sample], s Sample, env d
 	sig.UsageRingActive = ourUsageState == diagnosis.StateValue
 	sig.HostBusyRingActive = hostBusyState == diagnosis.StateValue
 
-	// The headroom ceiling and the reserve the verdict subtracted, stamped so
-	// the message's headline and headroom line read exactly the number the
-	// verdict used: capacity is the quota when set and positive, else
-	// the logical CPU count; the reserve is 10% of the quota in limit mode and
-	// cpuReserveCores in no-limit mode.
+	// The headroom ceiling and reserve mirror exactly what the verdict used, so
+	// the message's headline and headroom line report the same number.
 	if q, ok := s.Quota.Get(); ok && q > 0 {
 		sig.CapacityCores = q
 		sig.ReserveCores = limitReserveFraction * q
