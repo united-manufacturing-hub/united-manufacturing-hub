@@ -78,6 +78,9 @@ type Fired struct {
 	Marks Marks
 	// Value is the number that fired, untransformed by polarity.
 	Value float64
+	// Instrument is the instrument that fired, stamped on the fire transition and
+	// never refreshed; a later live winner does not overwrite it.
+	Instrument string
 }
 
 // Latch holds one signal's fired-or-not verdict, one per signal and never one per
@@ -90,6 +93,7 @@ type Latch struct {
 	identity    Identity
 	marks       Marks
 	value       float64
+	instrument  string
 	fired       bool
 }
 
@@ -128,7 +132,12 @@ func crossedClear(v float64, m Marks) bool {
 //	clear: fired, past Clear, Coverage.Full() -> release.
 //	fire:  unfired, past Fire, no release yet or a whole Coverage span since one -> fire.
 //	hold:  anything else -> state unchanged.
-func (l *Latch) Update(r Reduced, c Coverage, m Marks, now time.Time) {
+//
+// instrument names the instrument the reduction came from. It is stamped beside
+// the marks and value when the latch fires, and never refreshed afterwards, so
+// a Fired names the instrument that fired, not whichever one a later tick
+// selected.
+func (l *Latch) Update(instrument string, r Reduced, c Coverage, m Marks, now time.Time) {
 	if r.state != StateValue {
 		return
 	}
@@ -144,6 +153,7 @@ func (l *Latch) Update(r Reduced, c Coverage, m Marks, now time.Time) {
 			l.fired = true
 			l.value = r.v
 			l.marks = m
+			l.instrument = instrument
 			l.since = now
 		}
 		return
@@ -178,10 +188,11 @@ func (l *Latch) Fired() (Fired, bool) {
 		return Fired{}, false
 	}
 	return Fired{
-		Identity: l.identity,
-		Value:    l.value,
-		Marks:    l.marks,
-		Since:    l.since,
+		Identity:   l.identity,
+		Value:      l.value,
+		Marks:      l.marks,
+		Since:      l.since,
+		Instrument: l.instrument,
 	}, true
 }
 

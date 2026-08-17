@@ -390,7 +390,7 @@ func (e *Engine[S]) Observe(sample S, env Environment, at time.Time) ([]Fired, [
 		l := &st.latch
 		switch avail {
 		case Ready:
-			l.Update(red, cov, inst.Marks, at)
+			l.Update(inst.Name, red, cov, inst.Marks, at)
 		case AllAbsent:
 			if s.ReleaseOnAbsent {
 				l.Reset()

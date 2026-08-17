@@ -648,4 +648,66 @@ var _ = Describe("Engine", func() {
 		Expect(readiness[0].Availability).To(Equal(Ready),
 			"a caller's later edit to their own table must not detach the engine from its windows")
 	})
+
+	// Fired must remember WHICH instrument crossed the fire mark, not which
+	// instrument is the live winner on any later tick: the latch stamps Marks and
+	// Value at the fire transition and never refreshes them, and Instrument must be
+	// stamped the same way. Two arms declaring no capability and the same marks
+	// differ only in reduction, so readiness alone picks the winner. The mean arm
+	// (Min 2) fires the signal on tick two while the p95 arm (Min 20) is still
+	// below its floor; once twenty samples accumulate, the declared-first p95 arm
+	// turns ready and becomes the live winner, but the stamped verdict stays on
+	// mean.
+	It("stamps Fired with the instrument that fired and keeps it when the live winner later changes", func() {
+		type armSnap struct{ v float64 }
+		extract := func(s armSnap) Reading { return Known(s.v) }
+		marks := Marks{
+			Unit:     "ratio",
+			Fire:     Mark{At: 2.0, Inclusive: true},
+			Worst:    4.0,
+			Clear:    Mark{At: 1.0, Inclusive: true},
+			Polarity: HigherIsWorse,
+		}
+		sig := Signal[armSnap]{
+			Name:       "S",
+			DemoteSpan: 60 * time.Second,
+			Instruments: []Instrument[armSnap]{
+				{Name: "p95", Extract: extract, Red: P95, Span: 60 * time.Second, Marks: marks},
+				{Name: "mean", Extract: extract, Red: Mean, Span: 60 * time.Second, Marks: marks},
+			},
+		}
+		tbl := Table[armSnap]{Signals: []Signal[armSnap]{sig}, Interval: time.Second}
+		env := NewEnvironment()
+		e, err := NewEngine(tbl)
+		Expect(err).ToNot(HaveOccurred())
+
+		base := time.Unix(11_000_000, 0)
+		e.Observe(armSnap{v: 3.0}, env, base)
+		fired, _ := e.Observe(armSnap{v: 3.0}, env, base.Add(time.Second))
+
+		Expect(fired).To(HaveLen(1), "a value past the fire mark arms the latch in the tick the mean arm turns trustworthy")
+		Expect(fired[0].Instrument).To(Equal("mean"),
+			"the mean arm (Min 2) is ready at two samples and fires the signal; the p95 arm is still untrusted at two")
+		Expect(fired[0].Marks).To(Equal(marks), "the verdict stamps the marks it fired against")
+
+		// Keep driving past the p95 arm's twenty-sample floor without letting the
+		// latch clear (3.0 never crosses the clear mark of 1.0), so the p95 arm
+		// turns ready and becomes the live winner. The stamped verdict must stay on
+		// mean.
+		var late []Fired
+		for i := 2; i <= 25; i++ {
+			late, _ = e.Observe(armSnap{v: 3.0}, env, base.Add(time.Duration(i)*time.Second))
+		}
+		Expect(late).To(HaveLen(1), "the latch never clears: every tick stays past the fire mark")
+		Expect(late[0].Instrument).To(Equal("mean"),
+			"the stamped instrument does not follow the live winner once the p95 arm turns ready")
+		Expect(late[0].Marks).To(Equal(marks), "the stamped marks are still the pair that fired, not refreshed by the later winner")
+
+		// Positive control: on this same tick the live winner HAS changed to the
+		// p95 arm, so a stamped Instrument equal to mean is a fact about the stamp,
+		// not about an unchanged selection.
+		live, _, _, _ := e.Select(sig, env)
+		Expect(live.Name).To(Equal("p95"),
+			"twenty samples turn the declared-first p95 arm ready, so Select now returns it")
+	})
 })

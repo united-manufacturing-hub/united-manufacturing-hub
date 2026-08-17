@@ -28,7 +28,9 @@ import (
 // structural guarantee fails silently. The guarantee is by signature: there is
 // no readability argument, no readability field, and no route by which one
 // reaches the latch. If a bool ever joins Coverage, or a readability parameter
-// ever joins Update, this spec has been broken.
+// ever joins Update, this spec has been broken. The leading string on Update
+// is not readability: it is the name of the instrument whose reduction is being
+// judged, stamped beside the marks when the latch fires.
 var _ = Describe("Latch signature", func() {
 	It("should derive its state from the reduction and the window's extent, and from no readability fact of any kind", func() {
 		// Coverage is exactly two time.Duration fields (span, spanned) and
@@ -47,6 +49,6 @@ var _ = Describe("Latch signature", func() {
 		// Update's parameter list is fixed, checked as a function value so it
 		// fails at COMPILE time the day a readability parameter is added: a
 		// signature outranks any generated test.
-		var _ func(Reduced, Coverage, Marks, time.Time) = (&Latch{}).Update
+		var _ func(string, Reduced, Coverage, Marks, time.Time) = (&Latch{}).Update
 	})
 })
