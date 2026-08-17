@@ -171,10 +171,12 @@ var _ = Describe("attribution consults its evidence", func() {
 	It("should report unknown attribution when the host-container split cannot be computed", func() {
 		// Host stats absent: the host-busy track has nothing to fold, so the
 		// split cannot run, and the saturation signal answers through the
-		// usage-fraction fallback (3.0 / 4 = 0.75 fires). The dominant cause is
+		// usage-fraction fallback (3.0 / 4 = 0.75 fires). The quota is large
+		// enough that the limit arm (8.0 - 3.0 - 0.8 = 4.2 headroom) does not
+		// fire, so the fallback is the fold's only member. The dominant cause is
 		// saturation, but the machine-full question has no host evidence, so
 		// attribution is unknown.
-		engine, err := NewEngine(4, 2.0)
+		engine, err := NewEngine(4, 8.0)
 		Expect(err).NotTo(HaveOccurred())
 		env := diagnosis.NewEnvironment(HasVirtualization, HasLimit)
 		base := time.Now()

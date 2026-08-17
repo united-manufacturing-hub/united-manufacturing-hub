@@ -30,8 +30,8 @@ import (
 // pass over one fired set.
 //
 // The saturation family folds into exactly one CauseKindSaturation before
-// ranking, in today's fixed precedence — host-full, then the no-host-stats
-// fallback, then the limit arm — so the two entries that would print the same
+// ranking, in the decided precedence — host-full, then the limit arm, then
+// the no-host-stats fallback — so the two entries that would print the same
 // paragraph twice reach the customer as one cause. Rank runs AFTER the fold and
 // is the only thing that orders Verdict.Causes.
 //
@@ -57,40 +57,23 @@ func Decide(engine *diagnosis.Engine[Sample], s Sample, env diagnosis.Environmen
 
 	// Fold the saturation family into one cause and collect the rest. The fired
 	// set arrives unranked and in table order; the fold's fixed precedence is
-	// the only rule Decide applies before Rank.
+	// the only rule Decide applies before Rank. Decide knows nothing about the
+	// saturation arms — the rank and the latch flags are the table's — so the
+	// fold keeps the highest-ranked member of the family and records the flags.
 	rest := make([]diagnosis.Fired, 0, len(fired))
 	var survivor *diagnosis.Fired
+	best := 0 // below every saturation-arm rank, so the first member wins a tie
 	for i := range fired {
 		f := &fired[i]
 		switch f.Identity.Signal {
-		case sigSaturation:
-			// host-headroom has Unit "cores"; usage-fraction has Unit "fraction".
-			arm := hostFullArm
-			if f.Marks.Unit == "fraction" {
-				arm = noHostStatsArm
-			}
+		case sigSaturation, sigLimitSaturation:
 			sig.SaturationFired = true
-			if arm == hostFullArm {
-				// HostFullFired and NoLimitHostFired are ONE instrument (the
-				// host-headroom arm) under two names, and the mode is what
-				// separates them: limit mode reports the
-				// host-full fallback as HostFullFired, no-limit as
-				// NoLimitHostFired.
-				if env.Has(HasLimit) {
-					sig.HostFullFired = true
-				} else {
-					sig.NoLimitHostFired = true
-				}
-			} else {
-				sig.NoHostStatsSaturationFired = true
-			}
-			if arm == hostFullArm || survivor == nil {
-				survivor = f
-			}
-		case sigLimitSaturation:
-			sig.SaturationFired = true
-			sig.LimitSaturationFired = true
-			if survivor == nil {
+			saturationFlags(*f, &sig, env.Has(HasLimit))
+			// The fold keeps the highest-ranked member of the saturation family.
+			// Ties cannot occur (the latch is per signal); if one somehow did,
+			// the strictly-greater compare keeps the first member.
+			if rank := saturationRank(*f); rank > best {
+				best = rank
 				survivor = f
 			}
 		default:

@@ -445,7 +445,8 @@ var _ = Describe("block reasons", func() {
 		// usage-fraction reduces to 3.5/4 = 0.875, above its 0.70 fire mark;
 		// limit-headroom reduces to 3.5 - 3.5 - 0.35 = -0.35, below zero. Both
 		// latches hold on the same tick, and the absent host reading is what
-		// keeps the host-headroom arm out of it.
+		// keeps the host-headroom arm out of it. The decided precedence keeps the
+		// limit arm as the fold's survivor.
 		engine, err := NewEngine(4, 3.5)
 		Expect(err).NotTo(HaveOccurred())
 		env := diagnosis.NewEnvironment(HasLimit)

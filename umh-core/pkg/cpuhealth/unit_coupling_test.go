@@ -53,7 +53,7 @@ func coupling(instrument, outcome string) string {
 		"%s\n\n"+
 			"The saturation signal carries two instruments and diagnosis.Identity has no field\n"+
 			"naming which one fired, so this package recovers the arm by matching Marks.Unit —\n"+
-			"a display label — against a literal spelled out in decide.go and attribute.go.\n"+
+			"a display label — against a literal spelled out in table.go and attribute.go.\n"+
 			"The table currently declares Unit %q for the %s arm. If that word was just renamed\n"+
 			"on one side, rename it on the other: the two sides are one decision, and only one\n"+
 			"of them is the word a customer reads.",
@@ -98,10 +98,12 @@ var _ = Describe("the saturation arms are told apart by a display string", func(
 			"the usage-fraction arm must be in the table for this spec to mean anything")
 
 		// Host stats unreadable, so saturation can only answer through
-		// usage-fraction: 3.0/4 = 0.75 fires. decide.go picks the arm by its unit,
-		// and the arm it picks decides both which signal bit is raised and which
-		// reduction the cause value is read from.
-		engine, err := NewEngine(4, 2.0)
+		// usage-fraction: 3.0/4 = 0.75 fires. The quota is large enough that the
+		// limit arm (8.0 - 3.0 - 0.8 = 4.2 headroom) does NOT fire, so the
+		// fallback is the fold's only member, and the table's arm mapping picks
+		// it by unit: that decision raises the signal bit and picks the reduction
+		// the cause value is read from.
+		engine, err := NewEngine(4, 8.0)
 		Expect(err).NotTo(HaveOccurred())
 		env := diagnosis.NewEnvironment(HasLimit)
 		base := time.Now()
