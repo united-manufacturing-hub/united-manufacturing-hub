@@ -39,10 +39,11 @@ import (
 // *_connection_lost series. A fixture whose lost counters were zero would let an
 // all-empty Metrics satisfy the "lost" half of the assertions by accident.
 //
-// Connections are up more often than they were lost, so the verdict the two
-// bridge-health consumers compute (connection up minus connection lost, greater
-// than zero — see isActive in pkg/fsm/protocolconverter/actions.go) is true for
-// both directions: this fixture describes a healthy bridge.
+// Connections are up more often than they were lost. Both bridge-health
+// consumers judge a direction connected when connection up minus connection
+// lost exceeds zero; that predicate is isActive
+// (pkg/fsm/protocolconverter/actions.go). It holds for both directions
+// here: this fixture describes a healthy bridge.
 const connectionCounterMetrics = `# HELP input_received Benthos Counter metric
 # TYPE input_received counter
 input_received{label="",path="root.input.broker.0"} 60
@@ -69,7 +70,8 @@ output_connection_lost{label="",path="root.output.fallback.0"} 2
 output_connection_lost{label="",path="root.output.fallback.1"} 0
 `
 
-// Written as sums so each total can be checked against the series it came from,
+// The expected totals: the per-child sums of connectionCounterMetrics above,
+// written as sums so each one can be checked against the series it came from
 // rather than against whatever the code happens to produce.
 const (
 	wantInputConnectionUp    int64 = 3 + 2
@@ -90,8 +92,8 @@ const (
 // OutputConnectionUpTotal and OutputConnectionLostTotal, called on
 // ServiceInfo.BenthosStatus.LastScan.BenthosMetrics.Metrics. Two consumers
 // perform them on exactly this object, reached through different outer nesting:
-// pkg/fsm/protocolconverter/actions.go (safeBenthosMetricsFrom) and
-// pkg/fsm/streamprocessor/actions.go (safeBenthosMetrics). Both then judge a
+// safeBenthosMetricsFrom (pkg/fsm/protocolconverter/actions.go) and
+// safeBenthosMetrics (pkg/fsm/streamprocessor/actions.go). Both then judge a
 // direction connected when connection-up exceeds connection-lost, which this
 // test mirrors on the same values.
 //
@@ -132,7 +134,10 @@ func TestMapObservedDeliversParsedConnectionCountersToBridgeHealth(t *testing.T)
 		t.Fatalf("Poll errored against the served endpoints: %v", err)
 	}
 
-	// LastCount is the newest counter the window recorded.
+	// Fixture check, before any claim about the mapping: LastCount is the newest
+	// counter the throughput window recorded, so a failure here means the served
+	// exposition or the scrape is wrong rather than the mapping — which is why
+	// these two abort instead of recording an error.
 	if status.Input.LastCount != wantInputReceived {
 		t.Fatalf("Input.LastCount = %d, want %d: the served /metrics was not scraped as expected, so this test cannot say anything about the mapping",
 			status.Input.LastCount, wantInputReceived)
@@ -162,8 +167,13 @@ func TestMapObservedDeliversParsedConnectionCountersToBridgeHealth(t *testing.T)
 	// The exact object both consumers read.
 	metrics := scan.BenthosMetrics.Metrics
 
-	// MetricsState is non-nil while the metrics behind it are empty, so the nil
-	// guard in both consumers does not fire.
+	// These four are value equalities on purpose. The nil guard in each of the two
+	// consumers named in this test's doc comment tests only
+	// BenthosMetrics.MetricsState, a pointer that stays non-nil when the counters
+	// behind it are all zero, so an empty Metrics would slip past both. A "not
+	// degraded" check would miss it too: a negation like that is also satisfied by
+	// a worker that never ran. Only specific non-zero values, traceable to
+	// specific input series, separate a working mapping from an empty one.
 	if got := metrics.InputConnectionUpTotal(); got != wantInputConnectionUp {
 		t.Errorf("InputConnectionUpTotal() = %d, want %d (input_connection_up summed over root.input.broker.0 and .1)",
 			got, wantInputConnectionUp)
@@ -185,7 +195,10 @@ func TestMapObservedDeliversParsedConnectionCountersToBridgeHealth(t *testing.T)
 	}
 
 	// The consumers' own verdict, computed the way they compute it. The fixture
-	// describes a healthy bridge, so both directions must read connected.
+	// describes a healthy bridge, so both directions must read connected. With an
+	// empty Metrics both sides would instead read 0 - 0, no direction would be
+	// connected, and the bridge would be reported degraded while data flowed
+	// correctly — the outcome these counters exist to prevent.
 	if metrics.InputConnectionUpTotal()-metrics.InputConnectionLostTotal() <= 0 {
 		t.Errorf("the input direction reads as not connected (up %d - lost %d), but the served scrape describes a connected input",
 			metrics.InputConnectionUpTotal(), metrics.InputConnectionLostTotal())

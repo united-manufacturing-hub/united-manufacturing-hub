@@ -22,12 +22,12 @@ import (
 
 const testPort = 4195
 
-// benthos' input_received is a monotonic Prometheus counter that resets to 0 on a
-// process restart, so a drop against the immediately preceding sample means the
-// old sample run ended and the window must full-wipe and re-seed with only the
-// new sample. The detector reads the INPUT counter only; wipeOnRestart states why
-// (throughput_window.go:79-87). fsmv1 keys on the same drop:
-// 'count < throughput.LastCount' (metrics_state.go:110-117).
+// A drop in benthos' input_received counter against the immediately preceding
+// sample means the process restarted, so the window must full-wipe and re-seed
+// with only the new sample; wipeOnRestart (throughput_window.go) states why
+// that drop is the restart signal and why the input counter alone decides it.
+// fsmv1 keys on the same drop: 'count < throughput.LastCount' in
+// updateComponentThroughput (pkg/service/benthos_monitor/metrics_state.go).
 func TestThroughputWindowWipesOnCounterReset(t *testing.T) {
 	t0 := time.Now().Truncate(time.Second)
 
@@ -39,9 +39,9 @@ func TestThroughputWindowWipesOnCounterReset(t *testing.T) {
 		t.Errorf("after input drop the window holds %d samples, want 1 (an input counter drop wipes and re-seeds)", got)
 	}
 
-	// First tick after the wipe: a single sample cannot be delta-ed, so inputRate()
-	// reads 0, never the cumulative count as a rate. inputRate() is the value
-	// reported as MessagesPerSecond (manager.go:73).
+	// First tick after the wipe: one sample has nothing to subtract from, so
+	// inputRate() reads 0, never the cumulative count as a rate. Its value is
+	// reported as ComponentThroughput.MessagesPerSecond (manager.go).
 	if r := w.inputRate(); r != 0 {
 		t.Errorf("first tick after counter-drop wipe: MessagesPerSecond = %v, want 0", r)
 	}
@@ -55,16 +55,16 @@ func TestThroughputWindowWipesOnCounterReset(t *testing.T) {
 }
 
 // TestThroughputWindowWipesOnOneCounterZeroRestart asserts the input-only
-// detector. A restart can leave the OUTPUT counter at ~0; a backed-up broker does
-// this. Such a restart must still wipe, and wipeOnRestart states why
-// (throughput_window.go:79-87).
+// detector: a restart can leave the OUTPUT counter at ~0, a backed-up broker for
+// instance, and such a restart must still wipe. wipeOnRestart
+// (throughput_window.go) states why it does not also require an output drop.
 func TestThroughputWindowWipesOnOneCounterZeroRestart(t *testing.T) {
 	t0 := time.Now().Truncate(time.Second)
 
 	// Input 100 -> 5 (reset) while output was already 0 and stays 0. The input
 	// drop must wipe; a strict both-drop condition (input<prev && output<prev)
 	// would see 0<0 false and never wipe, leaving the 100 baseline inside the
-	// window's 60s span (windowSpan, throughput_window.go:22).
+	// window's 60s span (windowSpan, throughput_window.go).
 	w := &throughputWindow{}
 	w.Add(t0, testPort, 100, 0)
 	w.Add(t0.Add(10*time.Second), testPort, 5, 0)
@@ -73,10 +73,11 @@ func TestThroughputWindowWipesOnOneCounterZeroRestart(t *testing.T) {
 	}
 }
 
-// An in-place config update re-points the child at a different MetricsPort
-// without a worker restart, and a new endpoint is a new counter series. A sample
-// with a different port than the previous poll wipes the window and re-seeds with
-// only the new-port sample.
+// A config update can change this monitor's MetricsPort (BenthosMonitorConfig,
+// pkg/config/config.go) while it keeps running, so the next poll scrapes a
+// different endpoint with no restart in between. A new endpoint is a new counter
+// series, so a sample whose port differs from the previous poll's wipes the
+// window and re-seeds with only the new-port sample.
 func TestThroughputWindowWipesOnPortChange(t *testing.T) {
 	t0 := time.Now().Truncate(time.Second)
 
@@ -96,9 +97,9 @@ func TestThroughputWindowWipesOnPortChange(t *testing.T) {
 
 // TestThroughputWindowRecoveredAboveBaseline asserts that the rate is read from
 // the post-restart baseline: {100, 0, 150} over 30s, with the 0 tick dropping the
-// 100, reads 10/s. The window wipes at the drop tick rather than clamping
-// newest-vs-oldest across the span (inputRate, throughput_window.go:130-132); such
-// a clamp would read (150-100)/30 ≈ 1.67/s.
+// 100, reads 10/s. The wipe happens at the drop tick (Add,
+// throughput_window.go); keeping the pre-restart sample and dividing across
+// the full span would instead read (150-100)/30 ≈ 1.67/s.
 func TestThroughputWindowRecoveredAboveBaseline(t *testing.T) {
 	t0 := time.Now().Truncate(time.Second)
 
@@ -111,8 +112,10 @@ func TestThroughputWindowRecoveredAboveBaseline(t *testing.T) {
 	}
 }
 
-// The window guards an elapsed span of zero (inputRate,
-// throughput_window.go:135-137), reading 0 instead of dividing by zero.
+// Two samples with the same observed time make the elapsed span zero, so
+// inputRate's `elapsed <= 0` guard (throughput_window.go) reads 0 instead
+// of dividing by it: an unchanged counter cannot yield NaN (window w below) and a
+// counter that rose between the two samples cannot yield +Inf (w2).
 func TestThroughputWindowEqualTimestampsNeverDivideByZero(t *testing.T) {
 	t0 := time.Now().Truncate(time.Second)
 

@@ -26,19 +26,28 @@ import (
 )
 
 // tickSeconds is the FSMv1 control-loop period in seconds (DefaultTickerTime,
-// constants/loop.go:24). It converts the worker's tick-free MessagesPerSecond
-// into FSMv1's MessagesPerTick at the two call sites below.
+// pkg/constants/loop.go). It converts the worker's tick-free
+// MessagesPerSecond — a rate in real seconds, not per tick — into FSMv1's
+// MessagesPerTick at the two call sites below.
+//
+// This is the only tick vocabulary on the fsmv2 path, and it is temporary: it
+// goes when benthos itself moves to fsmv2 and this adapter file is deleted, so
+// do not extend the vocabulary further.
 func tickSeconds() float64 {
 	return constants.DefaultTickerTime.Seconds()
 }
 
 // mapObserved builds a benthosmonitorfsm.BenthosMonitorObservedState from the
 // stored status and config, the shape every FSMv1 consumer reads. It must never
-// produce a nil BenthosMetrics: pkg/service/benthos/benthos.go:699 dereferences
-// LastScan.BenthosMetrics without a nil check, so a nil there is a control-loop
-// panic. (LastScan itself is guarded, at benthos.go:697.) A zero status, which
-// the adapter passes on a non-Fresh read, therefore maps to an all-non-nil empty
-// scan rather than to nil pointers.
+// produce a nil BenthosMetrics: GetHealthCheckAndMetrics
+// (pkg/service/benthos/benthos.go) dereferences LastScan.BenthosMetrics
+// without a nil check, so a nil there is a control-loop panic. (It does guard
+// LastScan itself, in the same function.) A zero status — which
+// adapter.AdaptedInstance.GetLastObservedState (pkg/fsmv2/adapter/instance.go)
+// passes whenever the store read is not Fresh (the precedence list under
+// "Framework-owned state resolution" in pkg/fsmv2/adapter/doc.go names every
+// exit, Fresh and otherwise) — therefore maps to an all-non-nil empty scan
+// rather than to nil pointers.
 //
 // MessagesPerTick is scaled out of MessagesPerSecond here; IsActive is copied
 // through unscaled, because the worker already computes it tick-free.
@@ -79,12 +88,15 @@ func mapObserved(cfg config.BenthosMonitorConfig, s simple.Status[BenthosMonitor
 		ServiceInfo: &benthosmonitorservice.ServiceInfo{
 			BenthosStatus: benthosmonitorservice.BenthosMonitorStatus{
 				LastScan: scan,
-				// IsRunning gates every consumer: benthos.go:707 discards the
-				// HealthCheck it just read and returns ErrBenthosMonitorNotRunning
-				// when this is false. FSMv1 sourced it from the monitor's own S6 FSM
-				// state (service/benthos_monitor/benthos_monitor.go:1486); under this
-				// flag no such process exists, so the nearest true statement is that
-				// the observation can be trusted.
+				// IsRunning gates every consumer: GetHealthCheckAndMetrics
+				// (pkg/service/benthos/benthos.go) discards the HealthCheck it
+				// just read and returns ErrBenthosMonitorNotRunning when this is false.
+				// FSMv1 sourced it from the monitor's own S6 FSM state
+				// (BenthosMonitorService.Status,
+				// pkg/service/benthos_monitor/benthos_monitor.go); under the
+				// USE_FSMV2_BENTHOS_MONITOR flag (envUseFsmv2BenthosMonitor,
+				// pkg/service/benthos/benthos.go) no such process exists, so the
+				// nearest true statement is that the observation can be trusted.
 				//
 				// This deliberately collapses FSMv1's running-but-unhealthy case: a
 				// stale scan reports not-running, because with no process there is
@@ -97,12 +109,17 @@ func mapObserved(cfg config.BenthosMonitorConfig, s simple.Status[BenthosMonitor
 
 // observationIsTrustworthy reports whether the stored status carries a scrape that
 // happened and whose data the framework has not marked degraded. Both conjuncts are
-// load-bearing and neither implies the other: Degraded's zero value is false, i.e.
-// "healthy", so a zero Status would otherwise report a never-polled worker as
-// running; and a failed poll carries a fresh ScrapedAt by construction, because Poll
-// stamps it before its first request and returns that partial status on every error
-// path, so the timestamp alone cannot tell a dead monitor from a live one.
-// TestMapObservedSetsIsRunning pins all four cases.
+// load-bearing and neither implies the other. simple.Status.Degraded
+// (pkg/fsmv2/simple/status.go) is set both when the polled target is unhealthy
+// and when the poll failed, and its zero value is false — i.e. "healthy" — so a zero
+// Status would otherwise report a never-polled worker as running. And a failed poll
+// carries a fresh ScrapedAt by construction, because Poll (manager.go) stamps it
+// before its first request and returns that partial status on every error path, so
+// the timestamp alone cannot tell a dead monitor from a live one.
+//
+// TestMapObservedSetsIsRunning asserts all four cases. Do not simplify this
+// predicate to a constant: an unconditional false here held every bridge in
+// starting, which is the failure that test's live case exists to catch.
 func observationIsTrustworthy(s simple.Status[BenthosMonitorStatus]) bool {
 	degraded, _ := s.HealthVerdict()
 
@@ -115,7 +132,7 @@ func observationIsTrustworthy(s simple.Status[BenthosMonitorStatus]) bool {
 // status here means the scrape happened and freshness is all that is left to judge.
 //
 // This is deliberately narrower than FSMv1's isMonitorHealthy
-// (pkg/fsm/benthos_monitor/actions.go:199), which also required a non-nil
+// (pkg/fsm/benthos_monitor/actions.go), which also required a non-nil
 // BenthosMetrics — a conjunct that cannot fail here, because mapObserved never
 // produces one. FSMv1 also measured age from the loop start time, not time.Now().
 func health(_ config.BenthosMonitorConfig, status BenthosMonitorStatus) simple.Health {
