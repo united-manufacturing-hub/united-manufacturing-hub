@@ -33,62 +33,97 @@ import (
 // with tickSeconds > 0, so the two >0 predicates are identical. What this guards
 // is the DERIVATION: a count-comparison or per-poll-delta rule, or a hysteresis
 // hold in the worker, would diverge from FSMv1's metrics_state.go:95.
-func TestIsActiveEquivalenceSteadyState(t *testing.T) {
-	t0 := time.Now().Truncate(time.Second)
+// The cadence is 100ms because the two windows are only comparable at that rate.
+// FSMv1's window is COUNT-based — metrics_state.go:122 trims to the last
+// ThroughputWindowSize=600 ENTRIES — and its comment at :60 states the 600 assumes
+// 100ms per tick, i.e. one minute. The worker's window is TIME-based over 60s
+// (throughput_window.go:138). At 100ms both span ~60s. At the 30s cadence an
+// earlier version of this test used, 600 entries span five hours, so FSMv1 could
+// not reach idle at all: both derivations were true at every asserted step and the
+// equality assertion held against a hardcoded `true`. The crossing below is what
+// makes the assertion bite.
+const (
+	isActiveTickInterval = 100 * time.Millisecond
+	// Flat samples needed before BOTH windows contain no counter movement: 600
+	// entries evicts FSMv1's window, and 600 x 100ms = 60s clears the worker's.
+	// The margin covers the boundary sample at exactly 60s.
+	isActiveFlatSamples = benthos_monitor.ThroughputWindowSize + 10
+)
 
-	// Poll events: (elapsed seconds, cumulative input messages). A 30s cadence
-	// keeps every sample inside the 60s window; the zero-delta step exercises an
-	// idle transition.
-	events := []struct {
-		sec int
-		in  int
-	}{
-		{0, 1},
-		{30, 2},
-		{60, 3},
-		{90, 3}, // idle: no new input, still within window
-		{120, 4},
-	}
+func TestIsActiveEquivalenceAcrossIdleCrossing(t *testing.T) {
+	t0 := time.Now().Truncate(time.Second)
 
 	var w throughputWindow
 	fsmState := benthos_monitor.NewBenthosMetricsState()
 
-	// Prime both derivations with the first sample WITHOUT asserting: the first
-	// tick is FSMv1's reset/cold-start branch (metrics_state.go:110-117 publishes
-	// the cumulative count as a rate => IsActive true) while the worker, holding a
-	// single sample, reads 0/false. That single-sample tick is the documented
-	// divergence (D5a) and is deliberately excluded. Compare steady-state only,
-	// from the second sample onward.
-	prime := events[0]
-	w.Add(t0.Add(time.Duration(prime.sec)*time.Second), testPort, prime.in, 0)
-	fsmState.UpdateFromMetrics(benthos_monitor.Metrics{Inputs: map[string]benthos_monitor.InputInstance{
-		"root.input": {Received: int64(prime.in)},
-	}}, uint64(prime.sec)/30)
+	tick := 0
+	in := 0
 
-	// Compare steady-state events from the second sample onward, asserting the
-	// two activations stay identical at every step. Iterate by index so the
-	// derivation arrays are exactly one element smaller than events and the
-	// worker/FSMv1 values at each index belong to the same event.
-	for i := 1; i < len(events); i++ {
-		e := events[i]
-		w.Add(t0.Add(time.Duration(e.sec)*time.Second), testPort, e.in, 0)
-		workerActive := w.inputRate() > 0
+	// step advances both derivations by one poll and returns their verdicts.
+	step := func(inputCount int) (workerActive, fsmActive bool) {
+		at := t0.Add(time.Duration(tick) * isActiveTickInterval)
+		w.Add(at, testPort, inputCount, 0)
+		fsmState.UpdateFromMetrics(benthos_monitor.Metrics{Inputs: map[string]benthos_monitor.InputInstance{
+			"root.input": {Received: int64(inputCount)},
+		}}, uint64(tick))
+		tick++
 
-		m := benthos_monitor.Metrics{Inputs: map[string]benthos_monitor.InputInstance{
-			"root.input": {Received: int64(e.in)},
-		}}
-		fsmState.UpdateFromMetrics(m, uint64(e.sec)/30)
+		return w.inputRate() > 0, fsmState.IsActive
+	}
 
-		if workerActive != fsmState.IsActive {
-			t.Errorf("event %d (in=%d): worker IsActive=%v, FSMv1 IsActive=%v",
-				i, e.in, workerActive, fsmState.IsActive)
+	// Phase 0 — prime with one sample, asserting nothing. The first tick is
+	// FSMv1's reset/cold-start branch (metrics_state.go:110-117 publishes the
+	// cumulative count as a rate, so IsActive is true) while the worker, holding a
+	// single sample, reads 0/false. That divergence is documented as D5a and is
+	// deliberately excluded.
+	in++
+	step(in)
+
+	// Phase 1 — sustained arrivals. Both must read active, and must agree.
+	for i := 0; i < 30; i++ {
+		in++
+
+		workerActive, fsmActive := step(in)
+		if workerActive != fsmActive {
+			t.Fatalf("active phase tick %d (in=%d): worker=%v FSMv1=%v", tick-1, in, workerActive, fsmActive)
 		}
-		if i == 1 {
-			// Sanity: the first steady-state step must read active in both, else
-			// the test asserts nothing but constant-false.
-			if !fsmState.IsActive {
-				t.Errorf("expected FSMv1 to read active at the first steady-state event")
-			}
+
+		if !workerActive {
+			t.Fatalf("active phase tick %d (in=%d): expected both to read active", tick-1, in)
 		}
+	}
+
+	// Phase 2 — the counter stops moving. Both windows must drain to idle. Equality
+	// is NOT asserted during the drain: the two windows have the same nominal span
+	// but different eviction rules, so they legitimately disagree for about one
+	// sample at the boundary. Measured here: at the tick where FSMv1's 600-entry
+	// window has just evicted the last rising sample, the worker's 60s time window
+	// still contains it, so worker reads active while FSMv1 reads idle. That is the
+	// "pathological window-length boundary" the steady-state comment above avoids,
+	// and it is a property of the two window shapes, not a defect in either. What
+	// must hold is the settled state at the end.
+	var lastWorker, lastFSM bool
+
+	for i := 0; i < isActiveFlatSamples; i++ {
+		lastWorker, lastFSM = step(in) // in unchanged: no new messages
+	}
+
+	if lastWorker || lastFSM {
+		t.Fatalf("after %d flat samples both derivations must read idle, got worker=%v FSMv1=%v",
+			isActiveFlatSamples, lastWorker, lastFSM)
+	}
+
+	// Phase 3 — one new message. Both must cross back to active on the same tick.
+	// Together with the idle assertion above, this is what a stuck-true or
+	// stuck-false derivation cannot satisfy.
+	in++
+
+	workerActive, fsmActive := step(in)
+	if workerActive != fsmActive {
+		t.Fatalf("crossing tick %d (in=%d): worker=%v FSMv1=%v", tick-1, in, workerActive, fsmActive)
+	}
+
+	if !workerActive {
+		t.Fatalf("crossing tick %d (in=%d): expected both to read active after a new message", tick-1, in)
 	}
 }
