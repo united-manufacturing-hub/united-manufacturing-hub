@@ -35,7 +35,8 @@ const (
 	// ScopeHost means the container's allowed set covers every machine CPU.
 	ScopeHost
 	// ScopeAffinity means the container is pinned to a strict subset of the
-	// machine's CPUs, so the logical count describes only those.
+	// machine's CPUs — e.g. docker run --cpuset-cpus, or a Kubernetes static
+	// CPU-manager pin — so the logical count describes only those.
 	ScopeAffinity
 )
 

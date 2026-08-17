@@ -25,9 +25,11 @@ import (
 
 // readCpuset counts the CPUs in the cgroup's effective cpuset, which the kernel
 // writes as a comma-separated list of inclusive ranges and single ids: "0-3",
-// "0,2,4", "0-1,4-5". The second value reports whether the list was readable and
-// wholly parsed; an unreadable file, or any entry that does not parse, yields
-// zero and false rather than a partial count.
+// "0,2,4", "0-1,4-5", documented at
+// https://www.kernel.org/doc/html/latest/admin-guide/cgroup-v2.html#cpuset-interface-files.
+// The second value reports whether the list was readable and wholly parsed; an
+// unreadable file, or any entry that does not parse, yields zero and false
+// rather than a partial count.
 func (s *linuxSampler) readCpuset(ctx context.Context) (int, bool) {
 	data, err := s.fs.ReadFile(ctx, s.base+"/cpuset.cpus.effective")
 	if err != nil {

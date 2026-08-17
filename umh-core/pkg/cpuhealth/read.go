@@ -33,7 +33,9 @@ import (
 const (
 	// HasVirtualization means the host is a virtual machine.
 	HasVirtualization diagnosis.Capability = "cpuhealth.HasVirtualization"
-	// HasLimit means the cgroup names a positive CPU quota.
+	// HasLimit means the cgroup names a positive CPU quota — see Sample.Quota
+	// for what sets it (docker run --cpus, a Kubernetes CPU limit, a Compose
+	// cpus: entry).
 	HasLimit diagnosis.Capability = "cpuhealth.HasLimit"
 	// HasPressureStats means the kernel ever published PSI (the sticky
 	// PsiAvailable). The pressure instrument Requires it, so selection resolves
