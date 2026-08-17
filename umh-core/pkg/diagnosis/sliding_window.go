@@ -126,6 +126,31 @@ func (w *SlidingWindow) prune(cutoff time.Time) {
 
 // appendPoint stores one instant's reading; an absent or non-finite value stores
 // nothing, and callers must not pre-filter.
+// appendPoint stores one reading, and REQUIRES at to be no earlier than the
+// newest instant already held. Every reader here assumes points is ascending by
+// At, and nothing enforces it: the caller owns the clock, and Engine.Observe
+// passes whatever instant it was handed.
+//
+// The assumption is load-bearing, so here is what a late reading actually does,
+// measured on a ten-second window holding +0s, +5s and +10s and then given a
+// reading at +1s:
+//
+//	points        [0s 5s 10s 1s]  -- no longer ascending
+//	lastStored()  +1s, not +10s   -- so age judges the demote clock on the
+//	                                 oldest-arriving instant, not the newest
+//	Coverage()    10s -> 1s, so Full() flips true -> false
+//	prune()       stops at the first entry not before its cutoff, so the late
+//	              entry outlives it, and the extent goes negative on the very
+//	              next prune: prune(+10s) leaves [10s 1s], reading -9s
+//
+// The Coverage consequence is the one that reaches behaviour: Latch's clear arm
+// is gated on Coverage.Full(), so a single late reading can withhold a release
+// that was due. ENG-5641 carries the fix; the choice between dropping the
+// reading, clamping it and inserting it in order is not obvious, because it
+// interacts with lastAppendStored, the freeze rule and the counter restart
+// below — which cannot currently tell a counter reset from a late arrival.
+// ENG-5638 removes the problem from the other end, by having the snapshot carry
+// its own instant so a caller cannot supply a clock at all.
 func (w *SlidingWindow) appendPoint(value, against Reading, at time.Time) {
 	w.lastAppendStored = false
 

@@ -238,7 +238,7 @@ var _ = Describe("NewEngine", func() {
 		Expect(err.Error()).To(ContainSubstring("T"))
 	})
 
-	It("refuses a valid instrument whose mark pair carries a valid but redundant non-dividing against extractor — and does not refuse it", func() {
+	It("accepts an instrument that declares an against extractor under a non-dividing reduction, because the declaration is redundant rather than invalid", func() {
 		sig := validSignal("A")
 		sig.Instruments[0].Against = against
 		_, err := NewEngine(validTable([]Signal[snap]{sig}))

@@ -393,7 +393,7 @@ func (e *Engine[S]) resolve(s Signal[S], capable []Instrument[S]) (Instrument[S]
 //	snapshot S
 //	  Instrument.Extract  reads     Reading       a float64, or an absence
 //	  SlidingWindow.Observe      stores    Point         into a sliding window
-//	  SlidingWindow.Reduce       reduces   Reduced       a number, and whether to trust it
+//	  SlidingWindow.Reduce       reduces   Reduced       one number, plus whether it is trustworthy
 //	  the engine          resolves  Availability  what one signal can say now
 //	  Latch.Update        judges    Fired         a signal that crossed its mark
 func (e *Engine[S]) Observe(sample S, env Environment, at time.Time) ([]Fired, []Readiness) {
