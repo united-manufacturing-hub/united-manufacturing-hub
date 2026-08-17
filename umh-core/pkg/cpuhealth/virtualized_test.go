@@ -433,4 +433,96 @@ var _ = Describe("CPU virtualisation", func() {
 		Expect(second.Virtualized).To(BeTrue(),
 			"once the sys_vendor read succeeds, the ARM64 cloud VM must recover and resolve Virtualized=true")
 	})
+
+	It("does not cache Virtualized=false on x86 when neither DMI source was readable; a later sys_vendor read recovers the guest", func() {
+		ctx := context.Background()
+		base := "/sys/fs/cgroup"
+
+		// The defect: on an x86 host (flags line present, no hypervisor flag)
+		// where BOTH DMI reads fail, readVirtualized used to fall through and
+		// cache Virtualized=false for the whole process having read no DMI
+		// evidence at all. The fact must instead stay unresolved so the next tick
+		// re-reads DMI.
+		vendorReads := 0
+		fs := filesystem.NewMockFileSystem()
+		fs.ReadFileFunc = func(ctx context.Context, path string) ([]byte, error) {
+			switch path {
+			case base + "/cpu.stat":
+				return []byte("usage_usec 5000000\nnr_periods 0\nnr_throttled 0\n"), nil
+			case base + "/cpu.max":
+				return []byte("max 100000\n"), nil
+			case "/proc/cpuinfo":
+				return bareMetalCpuinfo, nil
+			case "/sys/class/dmi/id/product_name":
+				return nil, errors.New("unreadable product_name")
+			case "/sys/class/dmi/id/sys_vendor":
+				vendorReads++
+				if vendorReads == 1 {
+					return nil, errors.New("transient vendor failure")
+				}
+				return []byte("QEMU"), nil
+			default:
+				return nil, errors.New("unreadable")
+			}
+		}
+		s := cpuhealth.NewLinuxSampler(fs, base)
+
+		first, err := s.Read(ctx)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(first.Virtualized).To(BeFalse(),
+			"an x86 host with no hypervisor flag and no readable DMI evidence must not resolve Virtualized on this tick")
+
+		// The retry must pay off: once sys_vendor becomes readable and names a
+		// hypervisor, the guest is recovered — this is what makes the fix worth
+		// anything, not just a deferred decision. A falsely cached tick-1 false
+		// would mask this and leave steal dead for the process lifetime.
+		second, err := s.Read(ctx)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(second.Virtualized).To(BeTrue(),
+			"a later readable sys_vendor naming QEMU must resolve the guest, not be masked by a cached false from tick 1")
+		Expect(vendorReads).To(Equal(2),
+			"tick 1 must not cache the fact: sys_vendor is read again on tick 2 rather than a cached answer being served")
+	})
+
+	It("still caches Virtualized=false on x86 when a readable product_name names no hypervisor", func() {
+		ctx := context.Background()
+		base := "/sys/fs/cgroup"
+
+		// Positive control: this is the documented x86 path the fix must NOT
+		// widen. A readable product_name naming no hypervisor is authoritative on
+		// x86, so the fact resolves false and is cached even though sys_vendor is
+		// unreadable. If the fix accidentally kept the fact open whenever vendor
+		// was unreadable, this would stop caching and the assertions below fail.
+		vendorReads := 0
+		fs := filesystem.NewMockFileSystem()
+		fs.ReadFileFunc = func(ctx context.Context, path string) ([]byte, error) {
+			switch path {
+			case base + "/cpu.stat":
+				return []byte("usage_usec 5000000\nnr_periods 0\nnr_throttled 0\n"), nil
+			case base + "/cpu.max":
+				return []byte("max 100000\n"), nil
+			case "/proc/cpuinfo":
+				return bareMetalCpuinfo, nil
+			case "/sys/class/dmi/id/product_name":
+				return []byte("PowerEdge R750"), nil
+			case "/sys/class/dmi/id/sys_vendor":
+				vendorReads++
+				return nil, errors.New("unreadable sys_vendor")
+			default:
+				return nil, errors.New("unreadable")
+			}
+		}
+		s := cpuhealth.NewLinuxSampler(fs, base)
+
+		first, err := s.Read(ctx)
+		Expect(err).NotTo(HaveOccurred())
+		second, err := s.Read(ctx)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(first.Virtualized).To(BeFalse(),
+			"a readable x86 product_name naming no hypervisor is authoritative and must resolve Virtualized=false")
+		Expect(second.Virtualized).To(Equal(first.Virtualized),
+			"a product_name-resolved false on x86 is still cached, not re-derived on the next tick")
+		Expect(vendorReads).To(Equal(1),
+			"the resolved false must cache: sys_vendor is not re-read on the next tick")
+	})
 })
