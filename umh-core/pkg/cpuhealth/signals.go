@@ -36,6 +36,12 @@ import (
 // as ThrottleFired and as ThrottleSignalReady — so a per-signal type splinters
 // the groups and a per-group type splinters the signals. Grouping would also
 // multiply the value-beside-its-own-bool pairs the cap above holds to two.
+//
+// Field ownership, by the Decide step that fills it: foldSaturation owns
+// every latch field (SaturationFired, LimitSaturationFired, HostFullFired,
+// NoHostStatsSaturationFired, NoLimitHostFired, ThrottleFired, PressureFired,
+// StealFired, HostContentionFired); fillSignals owns every other field Decide
+// fills; buildVerdict owns none.
 type Signals struct {
 	// The metrics. ThrottleRatio, PressureAvg60 and StealP95 are populated
 	// independent of their latch state, so the number stays observable when the
