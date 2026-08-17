@@ -34,7 +34,7 @@ import (
 // not move between Readable and Unreadable — the capability gate is
 // CaseUnsupported's subject, and driving it from the feed would test the feed
 // instead of the table.
-type cpuFeed struct{ cores float64 }
+type cpuFeed struct{ cores, quota float64 }
 
 // Readable returns a snapshot in which every source the table reads answers,
 // with values well inside every mark: the suite proves the readability path,
@@ -42,30 +42,36 @@ type cpuFeed struct{ cores float64 }
 // from at — NrPeriods climbs by 100 per elapsed second and NrThrottled holds a
 // steady 0.02 ratio well under the 0.05 fire mark; a constant snapshot would
 // give throttle-ratio a zero denominator delta and strand it below its floor
-// forever, failing CaseLive on a build with nothing wrong with it.
+// forever, failing CaseLive on a build with nothing wrong with it. Quota comes
+// from f.quota so the feed matches the table cpuTable(f.cores, f.quota) built
+// for it, rather than a limit no scenario asked for. A known Pressure reading
+// requires PsiAvailable true, per Sample's own sticky contract.
 func (f cpuFeed) Readable(at time.Time) Sample {
 	elapsed := at.Sub(time.Unix(0, 0)).Seconds()
 	return Sample{
-		Timestamp:   at,
-		UsageUsec:   diagnosis.Known(0),
-		UsageCores:  diagnosis.Known(0.1),
-		NrPeriods:   diagnosis.Known(100 * elapsed),
-		NrThrottled: diagnosis.Known(0.02 * 100 * elapsed),
-		Pressure:    diagnosis.Known(0),
-		Steal:       diagnosis.Known(0),
-		HostBusy:    diagnosis.Known(0.1),
-		Quota:       diagnosis.Known(2),
-		LogicalCpus: diagnosis.Known(f.cores),
-		HostCpus:    diagnosis.Known(f.cores),
-		CpuScope:    ScopeHost,
-		Virtualized: true,
+		Timestamp:    at,
+		UsageUsec:    diagnosis.Known(0),
+		UsageCores:   diagnosis.Known(0.1),
+		NrPeriods:    diagnosis.Known(100 * elapsed),
+		NrThrottled:  diagnosis.Known(0.02 * 100 * elapsed),
+		Pressure:     diagnosis.Known(0),
+		PsiAvailable: true,
+		Steal:        diagnosis.Known(0),
+		HostBusy:     diagnosis.Known(0.1),
+		Quota:        diagnosis.Known(f.quota),
+		LogicalCpus:  diagnosis.Known(f.cores),
+		HostCpus:     diagnosis.Known(f.cores),
+		CpuScope:     ScopeHost,
+		Virtualized:  true,
 	}
 }
 
 // Unreadable returns a snapshot in which every Reading is absent. Virtualized
-// and CpuScope are startup facts and do not move.
+// and CpuScope are startup facts and do not move. PsiAvailable stays true: this
+// feed always models a box whose kernel reports PSI, so an outage tick must
+// not un-latch it — Sample's own contract makes PsiAvailable sticky once set.
 func (f cpuFeed) Unreadable(at time.Time) Sample {
-	return Sample{Timestamp: at, CpuScope: ScopeHost, Virtualized: true}
+	return Sample{Timestamp: at, CpuScope: ScopeHost, Virtualized: true, PsiAvailable: true}
 }
 
 // RunSuite drives the six-scenario suite generated from the CPU table itself,
@@ -74,7 +80,7 @@ func (f cpuFeed) Unreadable(at time.Time) Sample {
 // required, and there is no way to make that scenario green.
 func RunSuite(cores, quota float64) []diagnosis.Outcome {
 	t := cpuTable(cores, quota)
-	return diagnosis.Run(t, suiteEnvironment(), cpuFeed{cores: cores})
+	return diagnosis.Run(t, suiteEnvironment(), cpuFeed{cores: cores, quota: quota})
 }
 
 // suiteEnvironment is the environment the suite runs every scenario in: every

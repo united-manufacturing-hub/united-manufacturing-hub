@@ -65,7 +65,7 @@ var _ = Describe("bind the generated suite to the real CPU table", func() {
 		// is to give the row a real absence.
 		t := cpuTable(4, 2.0)
 		t.Signals = append(t.Signals, badReadSignal())
-		out := diagnosis.Run(t, diagnosis.NewEnvironment(HasLimit, HasVirtualization), cpuFeed{cores: 4})
+		out := diagnosis.Run(t, diagnosis.NewEnvironment(HasLimit, HasVirtualization), cpuFeed{cores: 4, quota: 2.0})
 
 		Expect(outcome(out, "bad-read", diagnosis.CaseBriefOutage)).To(Equal(diagnosis.Ready),
 			"zeroForAbsent reaches Ready on the brief outage, where NoneReady is required")
