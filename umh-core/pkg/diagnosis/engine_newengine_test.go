@@ -44,10 +44,10 @@ var _ = Describe("NewEngine", func() {
 			DemoteSpan: 60 * time.Second,
 			Instruments: []Instrument[snap]{
 				{
-					Name: "I1", Requires: []Capability{"source-1"}, Extract: extract, Red: Last, Span: 60 * time.Second, Marks: validMarks(),
+					Name: "I1", Requires: []Capability{"source-1"}, Extract: extract, Reduction: Last, Span: 60 * time.Second, Marks: validMarks(),
 				},
 				{
-					Name: "I2", Requires: []Capability{"source-1"}, Extract: extract, Red: Mean, Span: 3 * time.Second,
+					Name: "I2", Requires: []Capability{"source-1"}, Extract: extract, Reduction: Mean, Span: 3 * time.Second,
 					Marks: Marks{Unit: "cores", Fire: Mark{At: 8, Inclusive: true}, Clear: Mark{At: 4, Inclusive: true}, Polarity: HigherIsWorse, Worst: 16},
 				},
 			},
@@ -102,7 +102,7 @@ var _ = Describe("NewEngine", func() {
 
 	It("refuses an ordered reduction on an instrument that declares a boolean series", func() {
 		sig := validSignal("A")
-		sig.Instruments[0].Red = P95
+		sig.Instruments[0].Reduction = P95
 		sig.Instruments[0].Boolean = true
 		_, err := NewEngine(validTable([]Signal[snap]{sig}))
 		Expect(err).To(HaveOccurred())
@@ -112,7 +112,7 @@ var _ = Describe("NewEngine", func() {
 
 	It("refuses an instrument whose reduction has nil fold, which a caller can leave nil by writing a Reduction literal", func() {
 		sig := validSignal("A")
-		sig.Instruments[0].Red = Reduction{Name: "x", Min: 2}
+		sig.Instruments[0].Reduction = Reduction{Name: "x", Min: 2}
 		_, err := NewEngine(validTable([]Signal[snap]{sig}))
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("A"))
@@ -121,7 +121,7 @@ var _ = Describe("NewEngine", func() {
 
 	It("refuses a track whose reduction has nil fold, which a caller can leave nil by writing a Reduction literal", func() {
 		tbl := validTable([]Signal[snap]{validSignal("A")})
-		tbl.Tracks = []Track[snap]{{Name: "T", Extract: extract, Span: 60 * time.Second, Red: Reduction{Name: "x", Min: 2}}}
+		tbl.Tracks = []Track[snap]{{Name: "T", Extract: extract, Span: 60 * time.Second, Reduction: Reduction{Name: "x", Min: 2}}}
 		_, err := NewEngine(tbl)
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("T"))
@@ -129,7 +129,7 @@ var _ = Describe("NewEngine", func() {
 
 	It("refuses an instrument whose reduction minimum sample count is below one", func() {
 		sig := validSignal("A")
-		sig.Instruments[0].Red = Reduction{Name: "low", Min: 0, fold: func([]Point) float64 { return 0 }}
+		sig.Instruments[0].Reduction = Reduction{Name: "low", Min: 0, fold: func([]Point) float64 { return 0 }}
 		_, err := NewEngine(validTable([]Signal[snap]{sig}))
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("A"))
@@ -144,13 +144,13 @@ var _ = Describe("NewEngine", func() {
 	// 1s holds the entries at 0s and at 60s and the 59 between them, so 61.
 	It("cuts the capacity rule at exactly the entries a span holds, 61 over a 60s span at a 1s interval and not 60, for an instrument and a track alike", func() {
 		for _, count := range []int{61, 62} {
-			red, rerr := NewReduction("boundary", count, func([]Point) float64 { return 0 })
+			reduction, rerr := NewReduction("boundary", count, func([]Point) float64 { return 0 })
 			Expect(rerr).ToNot(HaveOccurred())
 
 			sig := validSignal("A")
-			sig.Instruments[0].Red = red // I1 spans 60s
+			sig.Instruments[0].Reduction = reduction // I1 spans 60s
 			byTrack := validTable([]Signal[snap]{validSignal("A")})
-			byTrack.Tracks = []Track[snap]{{Name: "T", Extract: extract, Span: 60 * time.Second, Red: red}}
+			byTrack.Tracks = []Track[snap]{{Name: "T", Extract: extract, Span: 60 * time.Second, Reduction: reduction}}
 
 			for _, row := range []struct {
 				name string
@@ -172,7 +172,7 @@ var _ = Describe("NewEngine", func() {
 
 	It("refuses an instrument that names a dividing reduction with a nil Against, because its window can never hold a point", func() {
 		sig := validSignal("A")
-		sig.Instruments[0].Red = DeltaRatio
+		sig.Instruments[0].Reduction = DeltaRatio
 		sig.Instruments[0].Against = nil
 		_, err := NewEngine(validTable([]Signal[snap]{sig}))
 		Expect(err).To(HaveOccurred())
@@ -207,7 +207,7 @@ var _ = Describe("NewEngine", func() {
 
 	It("refuses a track whose span is zero or negative", func() {
 		tbl := validTable([]Signal[snap]{validSignal("A")})
-		tbl.Tracks = []Track[snap]{{Name: "T", Extract: extract, Span: 0, Red: Mean}}
+		tbl.Tracks = []Track[snap]{{Name: "T", Extract: extract, Span: 0, Reduction: Mean}}
 		_, err := NewEngine(tbl)
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("T"))
@@ -215,7 +215,7 @@ var _ = Describe("NewEngine", func() {
 
 	It("refuses a track whose reduction minimum sample count is below one", func() {
 		tbl := validTable([]Signal[snap]{validSignal("A")})
-		tbl.Tracks = []Track[snap]{{Name: "T", Extract: extract, Span: 60 * time.Second, Red: Reduction{Name: "low", Min: 0, fold: func([]Point) float64 { return 0 }}}}
+		tbl.Tracks = []Track[snap]{{Name: "T", Extract: extract, Span: 60 * time.Second, Reduction: Reduction{Name: "low", Min: 0, fold: func([]Point) float64 { return 0 }}}}
 		_, err := NewEngine(tbl)
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("T"))
@@ -223,7 +223,7 @@ var _ = Describe("NewEngine", func() {
 
 	It("refuses a track that names a dividing reduction, because a track declares no denominator series", func() {
 		tbl := validTable([]Signal[snap]{validSignal("A")})
-		tbl.Tracks = []Track[snap]{{Name: "T", Extract: extract, Span: 60 * time.Second, Red: DeltaRatio}}
+		tbl.Tracks = []Track[snap]{{Name: "T", Extract: extract, Span: 60 * time.Second, Reduction: DeltaRatio}}
 		_, err := NewEngine(tbl)
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("T"))
@@ -231,7 +231,7 @@ var _ = Describe("NewEngine", func() {
 
 	It("refuses a track whose Extract is nil, which would panic in the observe loop", func() {
 		tbl := validTable([]Signal[snap]{validSignal("A")})
-		tbl.Tracks = []Track[snap]{{Name: "T", Span: 60 * time.Second, Red: Mean}}
+		tbl.Tracks = []Track[snap]{{Name: "T", Span: 60 * time.Second, Reduction: Mean}}
 		_, err := NewEngine(tbl)
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("T"))
@@ -247,8 +247,8 @@ var _ = Describe("NewEngine", func() {
 	It("refuses duplicate track names, which would leave Track returning whichever one it reached first", func() {
 		tbl := validTable([]Signal[snap]{validSignal("A")})
 		tbl.Tracks = []Track[snap]{
-			{Name: "T", Extract: extract, Span: 60 * time.Second, Red: Mean},
-			{Name: "T", Extract: extract, Span: 60 * time.Second, Red: Mean},
+			{Name: "T", Extract: extract, Span: 60 * time.Second, Reduction: Mean},
+			{Name: "T", Extract: extract, Span: 60 * time.Second, Reduction: Mean},
 		}
 		_, err := NewEngine(tbl)
 		Expect(err).To(HaveOccurred())

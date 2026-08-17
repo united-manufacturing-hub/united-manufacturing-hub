@@ -40,11 +40,11 @@ var _ = Describe("Engine", func() {
 			DemoteSpan: 60 * time.Second,
 			Instruments: []Instrument[engSnap]{
 				{
-					Name:     "A-p95",
-					Requires: []Capability{"source-1"},
-					Extract:  extract,
-					Red:      P95,
-					Span:     60 * time.Second,
+					Name:      "A-p95",
+					Requires:  []Capability{"source-1"},
+					Extract:   extract,
+					Reduction: P95,
+					Span:      60 * time.Second,
 					Marks: Marks{
 						Unit:     "ratio",
 						Fire:     Mark{At: 2.0, Inclusive: true},
@@ -54,11 +54,11 @@ var _ = Describe("Engine", func() {
 					},
 				},
 				{
-					Name:     "A-mean",
-					Requires: []Capability{"source-1"},
-					Extract:  extract,
-					Red:      Mean,
-					Span:     3 * time.Second,
+					Name:      "A-mean",
+					Requires:  []Capability{"source-1"},
+					Extract:   extract,
+					Reduction: Mean,
+					Span:      3 * time.Second,
 					Marks: Marks{
 						Unit:     "ratio",
 						Fire:     Mark{At: 2.0, Inclusive: true},
@@ -85,9 +85,9 @@ var _ = Describe("Engine", func() {
 		e.Observe(engSnap{v: 1.0}, env, base)
 		e.Observe(engSnap{v: 1.0}, env, base.Add(time.Second))
 
-		inst, red, _, avail := e.Select(sig, env)
+		inst, reduced, _, avail := e.Select(sig, env)
 		Expect(inst.Name).To(Equal("A-mean"), "the engine skips the untrusted p95 arm and selects the ready mean arm")
-		v, st := red.Get()
+		v, st := reduced.Get()
 		Expect(st).To(Equal(StateValue), "the selected arm's reduction is trustworthy at two samples")
 		Expect(v).To(Equal(1.0), "the selected arm reduces to the mean of the two ticks")
 		Expect(avail).To(Equal(Ready), "a selected arm at StateValue reports Ready")
@@ -103,11 +103,11 @@ var _ = Describe("Engine", func() {
 			DemoteSpan: 60 * time.Second,
 			Instruments: []Instrument[cpuSnap]{
 				{
-					Name:     "pressure",
-					Requires: []Capability{"psi"},
-					Extract:  func(s cpuSnap) Reading { return Known(s.stall) },
-					Red:      Last,
-					Span:     60 * time.Second,
+					Name:      "pressure",
+					Requires:  []Capability{"psi"},
+					Extract:   func(s cpuSnap) Reading { return Known(s.stall) },
+					Reduction: Last,
+					Span:      60 * time.Second,
 					Marks: Marks{
 						Unit:     "ratio",
 						Fire:     Mark{At: 0.10},
@@ -117,10 +117,10 @@ var _ = Describe("Engine", func() {
 					},
 				},
 				{
-					Name:    "headroom",
-					Extract: func(s cpuSnap) Reading { return Known(s.headroom) },
-					Red:     Last,
-					Span:    60 * time.Second,
+					Name:      "headroom",
+					Extract:   func(s cpuSnap) Reading { return Known(s.headroom) },
+					Reduction: Last,
+					Span:      60 * time.Second,
 					Marks: Marks{
 						Unit:     "cores",
 						Fire:     Mark{At: 0},
@@ -157,11 +157,11 @@ var _ = Describe("Engine", func() {
 			DemoteSpan: 60 * time.Second,
 			Instruments: []Instrument[snap]{
 				{
-					Name:     "I",
-					Requires: []Capability{"rise"},
-					Extract:  func(s snap) Reading { return Known(s.v) },
-					Red:      Last,
-					Span:     60 * time.Second,
+					Name:      "I",
+					Requires:  []Capability{"rise"},
+					Extract:   func(s snap) Reading { return Known(s.v) },
+					Reduction: Last,
+					Span:      60 * time.Second,
 					Marks: Marks{
 						Unit:     "u",
 						Fire:     Mark{At: 2, Inclusive: true},
@@ -196,11 +196,11 @@ var _ = Describe("Engine", func() {
 			DemoteSpan: 60 * time.Second,
 			Instruments: []Instrument[snap]{
 				{
-					Name:     "I",
-					Requires: []Capability{"rise"},
-					Extract:  func(s snap) Reading { return Known(s.v) },
-					Red:      Last,
-					Span:     60 * time.Second,
+					Name:      "I",
+					Requires:  []Capability{"rise"},
+					Extract:   func(s snap) Reading { return Known(s.v) },
+					Reduction: Last,
+					Span:      60 * time.Second,
 					Marks: Marks{
 						Unit:     "u",
 						Fire:     Mark{At: 2, Inclusive: true},
@@ -221,8 +221,8 @@ var _ = Describe("Engine", func() {
 		e.Observe(snap{v: 2.0}, env, base)
 		e.Observe(snap{v: 4.0}, env, base.Add(time.Second))
 
-		red := e.Reduction("P", "I")
-		v, st := red.Get()
+		reduced := e.Reduction("P", "I")
+		v, st := reduced.Get()
 		Expect(st).To(Equal(StateValue), "a populated window reads back a trustworthy value")
 		Expect(v).To(Equal(4.0), "under a last-value reduction the newest entry is the answer")
 	})
@@ -236,11 +236,11 @@ var _ = Describe("Engine", func() {
 			Name:       "S",
 			DemoteSpan: 60 * time.Second,
 			Instruments: []Instrument[tsnap]{{
-				Name:     "I",
-				Requires: []Capability{"c"},
-				Extract:  func(s tsnap) Reading { return Known(s.v) },
-				Red:      Last,
-				Span:     60 * time.Second,
+				Name:      "I",
+				Requires:  []Capability{"c"},
+				Extract:   func(s tsnap) Reading { return Known(s.v) },
+				Reduction: Last,
+				Span:      60 * time.Second,
 				Marks: Marks{
 					Unit:     "u",
 					Fire:     Mark{At: 100, Inclusive: true},
@@ -250,7 +250,7 @@ var _ = Describe("Engine", func() {
 				},
 			}},
 		}
-		track := Track[tsnap]{Name: "T", Extract: func(s tsnap) Reading { return Known(s.v) }, Span: 60 * time.Second, Red: Mean}
+		track := Track[tsnap]{Name: "T", Extract: func(s tsnap) Reading { return Known(s.v) }, Span: 60 * time.Second, Reduction: Mean}
 
 		tbl := Table[tsnap]{Signals: []Signal[tsnap]{sig}, Tracks: []Track[tsnap]{track}, Interval: time.Second}
 		env := NewEnvironment("c")
@@ -279,13 +279,13 @@ var _ = Describe("Engine", func() {
 		// Two tracks over the same ticks: one reads, one never does. The reading
 		// one is the positive control, so an absence on the silent one is a fact
 		// about its extractor and not about a track that was never folded.
-		reads := Track[usnap]{Name: "reads", Extract: func(s usnap) Reading { return Known(s.v) }, Span: 60 * time.Second, Red: Mean}
-		silent := Track[usnap]{Name: "silent", Extract: func(usnap) Reading { return Unknown() }, Span: 60 * time.Second, Red: Mean}
+		reads := Track[usnap]{Name: "reads", Extract: func(s usnap) Reading { return Known(s.v) }, Span: 60 * time.Second, Reduction: Mean}
+		silent := Track[usnap]{Name: "silent", Extract: func(usnap) Reading { return Unknown() }, Span: 60 * time.Second, Reduction: Mean}
 
 		sig := Signal[usnap]{
 			Name: "S", DemoteSpan: 60 * time.Second,
 			Instruments: []Instrument[usnap]{{
-				Name: "I", Extract: func(s usnap) Reading { return Known(s.v) }, Red: Last, Span: 60 * time.Second,
+				Name: "I", Extract: func(s usnap) Reading { return Known(s.v) }, Reduction: Last, Span: 60 * time.Second,
 				Marks: Marks{Unit: "u", Fire: Mark{At: 100, Inclusive: true}, Worst: 200, Clear: Mark{At: 0, Inclusive: false}, Polarity: HigherIsWorse},
 			}},
 		}
@@ -313,21 +313,21 @@ var _ = Describe("Engine", func() {
 		fire := Signal[s9]{
 			Name: "F", DemoteSpan: 60 * time.Second,
 			Instruments: []Instrument[s9]{{
-				Name: "I", Requires: []Capability{"c"}, Extract: ext, Red: Last, Span: 60 * time.Second,
+				Name: "I", Requires: []Capability{"c"}, Extract: ext, Reduction: Last, Span: 60 * time.Second,
 				Marks: Marks{Unit: "u", Fire: Mark{At: 2, Inclusive: true}, Worst: 4, Clear: Mark{At: 0, Inclusive: false}, Polarity: HigherIsWorse},
 			}},
 		}
 		quiet := Signal[s9]{
 			Name: "Q", DemoteSpan: 60 * time.Second,
 			Instruments: []Instrument[s9]{{
-				Name: "I", Requires: []Capability{"c"}, Extract: ext, Red: Last, Span: 60 * time.Second,
+				Name: "I", Requires: []Capability{"c"}, Extract: ext, Reduction: Last, Span: 60 * time.Second,
 				Marks: Marks{Unit: "u", Fire: Mark{At: 100, Inclusive: true}, Worst: 200, Clear: Mark{At: 0, Inclusive: false}, Polarity: HigherIsWorse},
 			}},
 		}
 		incapable := Signal[s9]{
 			Name: "N", DemoteSpan: 60 * time.Second,
 			Instruments: []Instrument[s9]{{
-				Name: "I", Requires: []Capability{"missing"}, Extract: ext, Red: Last, Span: 60 * time.Second,
+				Name: "I", Requires: []Capability{"missing"}, Extract: ext, Reduction: Last, Span: 60 * time.Second,
 				Marks: Marks{Unit: "u", Fire: Mark{At: 2, Inclusive: true}, Worst: 4, Clear: Mark{At: 1, Inclusive: true}, Polarity: HigherIsWorse},
 			}},
 		}
@@ -368,7 +368,7 @@ var _ = Describe("Engine", func() {
 						}
 						return Known(5.0)
 					},
-					Red: Last, Span: 60 * time.Second,
+					Reduction: Last, Span: 60 * time.Second,
 					Marks: Marks{Unit: "u", Fire: Mark{At: 2, Inclusive: true}, Worst: 4, Clear: Mark{At: 0, Inclusive: false}, Polarity: HigherIsWorse},
 				}},
 			}
@@ -422,8 +422,8 @@ var _ = Describe("Engine", func() {
 			Name: "N", DemoteSpan: 60 * time.Second,
 			Instruments: []Instrument[nsnap]{{
 				Name: "I", Requires: []Capability{"c"},
-				Extract: func(s nsnap) Reading { return Known(s.v) },
-				Red:     Last, Span: 60 * time.Second,
+				Extract:   func(s nsnap) Reading { return Known(s.v) },
+				Reduction: Last, Span: 60 * time.Second,
 				Marks: Marks{Unit: "u", Fire: Mark{At: 2, Inclusive: true}, Worst: 4, Clear: Mark{At: 0, Inclusive: false}, Polarity: HigherIsWorse},
 			}},
 		}
@@ -451,8 +451,8 @@ var _ = Describe("Engine", func() {
 			Name: "R", DemoteSpan: 60 * time.Second, ReleaseOnAbsent: true,
 			Instruments: []Instrument[rsnap]{{
 				Name: "I", Requires: []Capability{"c"},
-				Extract: func(s rsnap) Reading { return Known(s.v) },
-				Red:     Last, Span: 60 * time.Second,
+				Extract:   func(s rsnap) Reading { return Known(s.v) },
+				Reduction: Last, Span: 60 * time.Second,
 				Marks: Marks{Unit: "u", Fire: Mark{At: 2, Inclusive: true}, Worst: 4, Clear: Mark{At: 0, Inclusive: false}, Polarity: HigherIsWorse},
 			}},
 		}
@@ -484,11 +484,11 @@ var _ = Describe("Engine", func() {
 			Name: "S", DemoteSpan: 60 * time.Second, ReleaseOnAbsent: true,
 			Instruments: []Instrument[qsnap]{
 				{
-					Name: "A", Requires: []Capability{"psi"}, Red: Last, Span: 60 * time.Second, Marks: marks,
+					Name: "A", Requires: []Capability{"psi"}, Reduction: Last, Span: 60 * time.Second, Marks: marks,
 					Extract: func(s qsnap) Reading { return Known(s.v) },
 				},
 				{
-					Name: "B", Red: Last, Span: 60 * time.Second, Marks: marks,
+					Name: "B", Reduction: Last, Span: 60 * time.Second, Marks: marks,
 					Extract: func(qsnap) Reading { return Unknown() },
 				},
 			},
@@ -532,7 +532,7 @@ var _ = Describe("Engine", func() {
 			Name: "S", DemoteSpan: 60 * time.Second,
 			Instruments: []Instrument[fsnap]{
 				{
-					Name: "A", Requires: []Capability{"psi"}, Red: Last, Span: 60 * time.Second, Marks: marks,
+					Name: "A", Requires: []Capability{"psi"}, Reduction: Last, Span: 60 * time.Second, Marks: marks,
 					Extract: func(fsnap) Reading {
 						if !firing {
 							return Unknown()
@@ -541,7 +541,7 @@ var _ = Describe("Engine", func() {
 					},
 				},
 				{
-					Name: "B", Red: Last, Span: 60 * time.Second, Marks: marks,
+					Name: "B", Reduction: Last, Span: 60 * time.Second, Marks: marks,
 					Extract: func(fsnap) Reading { return Unknown() },
 				},
 			},
@@ -610,10 +610,10 @@ var _ = Describe("Engine", func() {
 				Name:       "s",
 				DemoteSpan: 60 * time.Second,
 				Instruments: []Instrument[snap]{{
-					Name:    "i",
-					Extract: func(s snap) Reading { return Known(s.v) },
-					Red:     Mean,
-					Span:    3 * time.Second,
+					Name:      "i",
+					Extract:   func(s snap) Reading { return Known(s.v) },
+					Reduction: Mean,
+					Span:      3 * time.Second,
 					Marks: Marks{
 						Unit:     "u",
 						Fire:     Mark{At: 100, Inclusive: true},
@@ -672,8 +672,8 @@ var _ = Describe("Engine", func() {
 			Name:       "S",
 			DemoteSpan: 60 * time.Second,
 			Instruments: []Instrument[armSnap]{
-				{Name: "p95", Extract: extract, Red: P95, Span: 60 * time.Second, Marks: marks},
-				{Name: "mean", Extract: extract, Red: Mean, Span: 60 * time.Second, Marks: marks},
+				{Name: "p95", Extract: extract, Reduction: P95, Span: 60 * time.Second, Marks: marks},
+				{Name: "mean", Extract: extract, Reduction: Mean, Span: 60 * time.Second, Marks: marks},
 			},
 		}
 		tbl := Table[armSnap]{Signals: []Signal[armSnap]{sig}, Interval: time.Second}

@@ -227,8 +227,8 @@ var _ = Describe("Reduction", func() {
 		Expect(err).To(HaveOccurred(), "a nil fold is refused at construction")
 
 		// A reduction that passes both checks builds.
-		red, err := NewReduction("valid", 2, foldMean)
+		reduction, err := NewReduction("valid", 2, foldMean)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(red.Min).To(Equal(2))
+		Expect(reduction.Min).To(Equal(2))
 	})
 })

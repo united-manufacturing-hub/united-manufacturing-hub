@@ -125,7 +125,7 @@ func NewEngine[S any](t Table[S]) (*Engine[S], error) {
 	}
 	for _, s := range t.Signals {
 		for _, inst := range s.Instruments {
-			w, err := NewSlidingWindow(inst.Span, s.DemoteSpan, inst.Red, inst.Counter)
+			w, err := NewSlidingWindow(inst.Span, s.DemoteSpan, inst.Reduction, inst.Counter)
 			if err != nil {
 				return nil, err
 			}
@@ -133,7 +133,7 @@ func NewEngine[S any](t Table[S]) (*Engine[S], error) {
 		}
 	}
 	for _, tr := range t.Tracks {
-		w, err := NewSlidingWindow(tr.Span, tr.Span, tr.Red, false)
+		w, err := NewSlidingWindow(tr.Span, tr.Span, tr.Reduction, false)
 		if err != nil {
 			return nil, err
 		}
@@ -214,17 +214,17 @@ func validate[S any](t Table[S]) error {
 			if inst.Span <= 0 {
 				return fmt.Errorf("signal %q instrument %q: window span %v is zero or negative", s.Name, inst.Name, inst.Span)
 			}
-			if inst.Red.Min < 1 {
-				return fmt.Errorf("signal %q instrument %q: reduction %q minimum sample count %d is below one", s.Name, inst.Name, inst.Red.Name, inst.Red.Min)
+			if inst.Reduction.Min < 1 {
+				return fmt.Errorf("signal %q instrument %q: reduction %q minimum sample count %d is below one", s.Name, inst.Name, inst.Reduction.Name, inst.Reduction.Min)
 			}
-			if inst.Red.fold == nil {
-				return fmt.Errorf("signal %q instrument %q: reduction %q has no fold", s.Name, inst.Name, inst.Red.Name)
+			if inst.Reduction.fold == nil {
+				return fmt.Errorf("signal %q instrument %q: reduction %q has no fold", s.Name, inst.Name, inst.Reduction.Name)
 			}
-			if inst.Red.ordered && inst.Boolean {
-				return fmt.Errorf("signal %q instrument %q: ordered reduction %q on a boolean series", s.Name, inst.Name, inst.Red.Name)
+			if inst.Reduction.ordered && inst.Boolean {
+				return fmt.Errorf("signal %q instrument %q: ordered reduction %q on a boolean series", s.Name, inst.Name, inst.Reduction.Name)
 			}
-			if inst.Red.divides && inst.Against == nil {
-				return fmt.Errorf("signal %q instrument %q: reduction %q divides but the instrument declares no against extractor", s.Name, inst.Name, inst.Red.Name)
+			if inst.Reduction.divides && inst.Against == nil {
+				return fmt.Errorf("signal %q instrument %q: reduction %q divides but the instrument declares no against extractor", s.Name, inst.Name, inst.Reduction.Name)
 			}
 			for _, mark := range []struct {
 				name  string
@@ -247,8 +247,8 @@ func validate[S any](t Table[S]) error {
 			if span := worse(inst.Marks.Worst, inst.Marks) - worse(inst.Marks.Fire.At, inst.Marks); math.IsInf(span, 0) {
 				return fmt.Errorf("signal %q instrument %q: the distance from fire mark %v to worst value %v overflows, so the severity denominator is not finite", s.Name, inst.Name, inst.Marks.Fire.At, inst.Marks.Worst)
 			}
-			if t.Interval > 0 && int(inst.Span/t.Interval)+1 < inst.Red.Min {
-				return fmt.Errorf("signal %q instrument %q: reduction %q minimum sample count %d exceeds what its window span %v can hold at table interval %v", s.Name, inst.Name, inst.Red.Name, inst.Red.Min, inst.Span, t.Interval)
+			if t.Interval > 0 && int(inst.Span/t.Interval)+1 < inst.Reduction.Min {
+				return fmt.Errorf("signal %q instrument %q: reduction %q minimum sample count %d exceeds what its window span %v can hold at table interval %v", s.Name, inst.Name, inst.Reduction.Name, inst.Reduction.Min, inst.Span, t.Interval)
 			}
 		}
 	}
@@ -266,17 +266,17 @@ func validate[S any](t Table[S]) error {
 		if tr.Span <= 0 {
 			return fmt.Errorf("track %q: span %v is zero or negative", tr.Name, tr.Span)
 		}
-		if tr.Red.Min < 1 {
-			return fmt.Errorf("track %q: reduction %q minimum sample count %d is below one", tr.Name, tr.Red.Name, tr.Red.Min)
+		if tr.Reduction.Min < 1 {
+			return fmt.Errorf("track %q: reduction %q minimum sample count %d is below one", tr.Name, tr.Reduction.Name, tr.Reduction.Min)
 		}
-		if tr.Red.fold == nil {
-			return fmt.Errorf("track %q: reduction %q has no fold", tr.Name, tr.Red.Name)
+		if tr.Reduction.fold == nil {
+			return fmt.Errorf("track %q: reduction %q has no fold", tr.Name, tr.Reduction.Name)
 		}
-		if tr.Red.divides {
-			return fmt.Errorf("track %q: reduction %q divides but a track declares no denominator series", tr.Name, tr.Red.Name)
+		if tr.Reduction.divides {
+			return fmt.Errorf("track %q: reduction %q divides but a track declares no denominator series", tr.Name, tr.Reduction.Name)
 		}
-		if t.Interval > 0 && int(tr.Span/t.Interval)+1 < tr.Red.Min {
-			return fmt.Errorf("track %q: reduction %q minimum sample count %d exceeds what its window span %v can hold at table interval %v", tr.Name, tr.Red.Name, tr.Red.Min, tr.Span, t.Interval)
+		if t.Interval > 0 && int(tr.Span/t.Interval)+1 < tr.Reduction.Min {
+			return fmt.Errorf("track %q: reduction %q minimum sample count %d exceeds what its window span %v can hold at table interval %v", tr.Name, tr.Reduction.Name, tr.Reduction.Min, tr.Span, t.Interval)
 		}
 	}
 	return nil
@@ -319,11 +319,11 @@ func (e *Engine[S]) resolve(s Signal[S], capable []Instrument[S]) (Instrument[S]
 			continue
 		}
 		seen++
-		red := w.Reduce()
-		_, st := red.Get()
+		reduced := w.Reduce()
+		_, st := reduced.Get()
 		switch st {
 		case StateValue:
-			return inst, red, w.Coverage(), Ready
+			return inst, reduced, w.Coverage(), Ready
 		case StateUntrusted:
 			untrusted = true
 		case StateAbsent:
@@ -386,11 +386,11 @@ func (e *Engine[S]) Observe(sample S, env Environment, at time.Time) ([]Fired, [
 	for i := range e.signals {
 		st := &e.signals[i]
 		s := st.signal
-		inst, red, cov, avail := e.resolve(s, s.Capable(env))
+		inst, reduced, cov, avail := e.resolve(s, s.Capable(env))
 		l := &st.latch
 		switch avail {
 		case Ready:
-			l.Update(inst.Name, red, cov, inst.Marks, at)
+			l.Update(inst.Name, reduced, cov, inst.Marks, at)
 		case AllAbsent:
 			if s.ReleaseOnAbsent {
 				l.Reset()

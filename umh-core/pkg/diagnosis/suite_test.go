@@ -51,8 +51,8 @@ var _ = Describe("Suite", func() {
 		return Marks{Unit: "ratio", Fire: Mark{At: 2.0, Inclusive: true}, Worst: 4.0, Clear: Mark{At: 1.0, Inclusive: true}, Polarity: HigherIsWorse}
 	}
 
-	instrument := func(red Reduction) Instrument[snap] {
-		return Instrument[snap]{Name: "I", Requires: []Capability{"source-1"}, Extract: extract, Red: red, Span: 60 * time.Second, Marks: marks()}
+	instrument := func(reduction Reduction) Instrument[snap] {
+		return Instrument[snap]{Name: "I", Requires: []Capability{"source-1"}, Extract: extract, Reduction: reduction, Span: 60 * time.Second, Marks: marks()}
 	}
 
 	// Signal A reduces by Last (m == 1), signal B by Mean (m == 2). Both require
@@ -121,7 +121,7 @@ var _ = Describe("Suite", func() {
 
 		// A table that also declares tracks still emits 6 x len(signals): a
 		// track has no availability to assert, so no scenario may name one.
-		tbl.Tracks = []Track[snap]{{Name: "T", Extract: extract, Red: Mean, Span: 60 * time.Second}}
+		tbl.Tracks = []Track[snap]{{Name: "T", Extract: extract, Reduction: Mean, Span: 60 * time.Second}}
 		Expect(Suite(tbl)).To(HaveLen(6 * len(tbl.Signals)))
 
 		// A table with only tracks emits zero scenarios.
@@ -130,7 +130,7 @@ var _ = Describe("Suite", func() {
 
 	It("refuses a table whose instrument cannot reach its reduction's minimum within its span at the interval", func() {
 		sig := Signal[snap]{Name: "A", DemoteSpan: 60 * time.Second, Instruments: []Instrument[snap]{
-			{Name: "I", Requires: []Capability{"source-1"}, Extract: extract, Red: P99, Span: 60 * time.Second, Marks: marks()},
+			{Name: "I", Requires: []Capability{"source-1"}, Extract: extract, Reduction: P99, Span: 60 * time.Second, Marks: marks()},
 		}}
 		tbl := Table[snap]{Signals: []Signal[snap]{sig}, Interval: time.Second}
 		_, err := NewEngine(tbl)
@@ -140,7 +140,7 @@ var _ = Describe("Suite", func() {
 
 	It("does not refuse an instrument whose span can hold its reduction's minimum at the interval", func() {
 		sig := Signal[snap]{Name: "A", DemoteSpan: 60 * time.Second, Instruments: []Instrument[snap]{
-			{Name: "I", Requires: []Capability{"source-1"}, Extract: extract, Red: P95, Span: 60 * time.Second, Marks: marks()},
+			{Name: "I", Requires: []Capability{"source-1"}, Extract: extract, Reduction: P95, Span: 60 * time.Second, Marks: marks()},
 		}}
 		tbl := Table[snap]{Signals: []Signal[snap]{sig}, Interval: time.Second}
 		_, err := NewEngine(tbl)
@@ -149,7 +149,7 @@ var _ = Describe("Suite", func() {
 
 	It("refuses a track whose span cannot hold its reduction's minimum at the interval", func() {
 		tbl := Table[snap]{
-			Tracks:   []Track[snap]{{Name: "T", Extract: extract, Red: P99, Span: 60 * time.Second}},
+			Tracks:   []Track[snap]{{Name: "T", Extract: extract, Reduction: P99, Span: 60 * time.Second}},
 			Interval: time.Second,
 		}
 		_, err := NewEngine(tbl)
@@ -237,7 +237,7 @@ var _ = Describe("Suite", func() {
 		tbl := Table[snap]{
 			Signals: []Signal[snap]{
 				{Name: "N", DemoteSpan: 60 * time.Second, Instruments: []Instrument[snap]{
-					{Name: "I", Requires: []Capability{}, Extract: extract, Red: Last, Span: 60 * time.Second, Marks: marks()},
+					{Name: "I", Requires: []Capability{}, Extract: extract, Reduction: Last, Span: 60 * time.Second, Marks: marks()},
 				}},
 			},
 			Interval: time.Second,

@@ -44,7 +44,7 @@ func (c Coverage) Full() bool { return c.span > 0 && c.covered >= c.span }
 // slice of Points, pruned from the front once they age past the span.
 type SlidingWindow struct {
 	points     []Point
-	red        Reduction
+	reduction  Reduction
 	span       time.Duration
 	demoteSpan time.Duration
 	counter    bool
@@ -58,16 +58,16 @@ type SlidingWindow struct {
 //	span    how far back the window reaches; entries older than this are pruned
 //	demoteSpan  how long without a successful read before the window empties; once a
 //	        source goes silent that long, Reduce says StateAbsent, not a stale number
-//	red     the reduction Reduce applies to the stored points
+//	reduction  what Reduce applies to the stored points
 //	counter whether the series is a monotone counter, so a backwards step is a reset
-func NewSlidingWindow(span, demoteSpan time.Duration, red Reduction, counter bool) (*SlidingWindow, error) {
+func NewSlidingWindow(span, demoteSpan time.Duration, reduction Reduction, counter bool) (*SlidingWindow, error) {
 	if span <= 0 {
 		return nil, fmt.Errorf("window: span %v is not positive", span)
 	}
 	if demoteSpan <= 0 {
 		return nil, fmt.Errorf("window: demote span %v is not positive", demoteSpan)
 	}
-	return &SlidingWindow{span: span, demoteSpan: demoteSpan, red: red, counter: counter}, nil
+	return &SlidingWindow{span: span, demoteSpan: demoteSpan, reduction: reduction, counter: counter}, nil
 }
 
 // Observe advances the window by one tick, ageing out entries past the span
@@ -131,7 +131,7 @@ func (w *SlidingWindow) appendPoint(value, against Reading, at time.Time) {
 		return
 	}
 	// Under an against reduction an absent or non-finite denominator appends nothing.
-	if w.red.divides {
+	if w.reduction.divides {
 		a, aok := against.Get()
 		if !aok || math.IsNaN(a) || math.IsInf(a, 0) {
 			return
@@ -146,7 +146,7 @@ func (w *SlidingWindow) appendPoint(value, against Reading, at time.Time) {
 		prev := w.points[len(w.points)-1]
 
 		restart := v < prev.Value
-		if w.red.divides {
+		if w.reduction.divides {
 			a, aok := against.Get()
 			pa, paok := prev.Against.Get()
 			if aok && paok && a < pa {
@@ -172,15 +172,15 @@ func (w *SlidingWindow) Reduce() Reduced {
 		return Reduced{state: StateAbsent}
 	}
 	// A denominator delta of zero or less: the counter did not move, or it reset.
-	if w.red.divides && denominatorDelta(w.points) <= 0 {
+	if w.reduction.divides && denominatorDelta(w.points) <= 0 {
 		return Reduced{v: 0, state: StateUntrusted}
 	}
 	// Backstop for a bare Reduction{}, which carries no calculation to apply.
-	if w.red.fold == nil {
+	if w.reduction.fold == nil {
 		return Reduced{v: 0, state: StateUntrusted}
 	}
 
-	v := w.red.fold(w.points)
+	v := w.reduction.fold(w.points)
 
 	// A reduction can emit NaN or ±Inf on finite inputs: a slope over equal timestamps.
 	if math.IsNaN(v) || math.IsInf(v, 0) {
@@ -188,7 +188,7 @@ func (w *SlidingWindow) Reduce() Reduced {
 	}
 
 	state := StateValue
-	if len(w.points) < w.red.Min {
+	if len(w.points) < w.reduction.Min {
 		state = StateUntrusted
 	}
 	// Stale by one tick: the window holds its contents but nothing was stored.

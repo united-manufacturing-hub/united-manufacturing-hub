@@ -52,11 +52,11 @@ var _ = Describe("Engine.Select on a signal the engine was not built from", func
 			Name:       "declared",
 			DemoteSpan: 60 * time.Second,
 			Instruments: []Instrument[outSnap]{{
-				Name:    "mean",
-				Extract: extract,
-				Red:     Mean,
-				Span:    3 * time.Second,
-				Marks:   marks,
+				Name:      "mean",
+				Extract:   extract,
+				Reduction: Mean,
+				Span:      3 * time.Second,
+				Marks:     marks,
 			}},
 		}
 
@@ -95,23 +95,23 @@ var _ = Describe("Engine.Select on a signal the engine was not built from", func
 			Name:       "never-declared",
 			DemoteSpan: 60 * time.Second,
 			Instruments: []Instrument[outSnap]{{
-				Name:    "mean",
-				Extract: extract,
-				Red:     Mean,
-				Span:    3 * time.Second,
-				Marks:   marks,
+				Name:      "mean",
+				Extract:   extract,
+				Reduction: Mean,
+				Span:      3 * time.Second,
+				Marks:     marks,
 			}},
 		}
 		Expect(foreign.Capable(env)).To(HaveLen(1),
 			"resolve must enter its instrument loop; an empty capable set short-circuits before the missing-window arms and makes this spec vacuous")
 
-		inst, red, cov, avail := e.Select(foreign, env)
+		inst, reduced, cov, avail := e.Select(foreign, env)
 
 		Expect(avail).To(Equal(NoInstrument),
 			"a signal the engine holds no windows for is indistinguishable from one with no usable instrument")
 		Expect(inst.Name).To(BeEmpty(),
 			"no instrument was selected, so the zero Instrument comes back")
-		_, st := red.Get()
+		_, st := reduced.Get()
 		Expect(st).To(Equal(StateAbsent),
 			"nothing was reduced, so the reduction is absent rather than a trusted zero")
 		Expect(cov.Full()).To(BeFalse(),
@@ -127,9 +127,9 @@ var _ = Describe("Engine.Select on a signal the engine was not built from", func
 			Name:       "never-declared",
 			DemoteSpan: 60 * time.Second,
 			Instruments: []Instrument[outSnap]{
-				{Name: "a", Extract: extract, Red: Mean, Span: 3 * time.Second, Marks: marks},
-				{Name: "b", Extract: extract, Red: Mean, Span: 3 * time.Second, Marks: marks},
-				{Name: "c", Extract: extract, Red: Mean, Span: 3 * time.Second, Marks: marks},
+				{Name: "a", Extract: extract, Reduction: Mean, Span: 3 * time.Second, Marks: marks},
+				{Name: "b", Extract: extract, Reduction: Mean, Span: 3 * time.Second, Marks: marks},
+				{Name: "c", Extract: extract, Reduction: Mean, Span: 3 * time.Second, Marks: marks},
 			},
 		}
 		Expect(foreign.Capable(env)).To(HaveLen(3),

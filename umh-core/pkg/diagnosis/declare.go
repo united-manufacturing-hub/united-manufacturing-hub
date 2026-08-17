@@ -51,10 +51,10 @@ type Instrument[S any] struct {
 	Extract func(S) Reading
 	// Against reads the DENOMINATOR of a ratio: DeltaRatio divides the delta of
 	// Extract's counter by the delta of this one. Nil for a single series.
-	Against  func(S) Reading
-	Name     string
-	Requires []Capability
-	Red      Reduction
+	Against   func(S) Reading
+	Name      string
+	Requires  []Capability
+	Reduction Reduction
 	// Marks are the thresholds this instrument's number is judged against.
 	Marks Marks
 	Span  time.Duration
@@ -115,10 +115,10 @@ func (s Signal[S]) Capable(env Environment) []Instrument[S] {
 // Track is a quantity measured but never judged: reduced every tick like an
 // instrument, with no thresholds. Use it for a number the caller must publish.
 type Track[S any] struct {
-	Extract func(S) Reading
-	Name    string
-	Red     Reduction
-	Span    time.Duration
+	Extract   func(S) Reading
+	Name      string
+	Reduction Reduction
+	Span      time.Duration
 }
 
 // Table is the whole declaration for one resource: every signal, every track,
