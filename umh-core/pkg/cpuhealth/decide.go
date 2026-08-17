@@ -50,25 +50,40 @@ func Decide(engine *diagnosis.Engine[Sample], s Sample, env diagnosis.Environmen
 	// that touches the series holds the series. The comparison is STRICTLY
 	// greater (hbm - uc > uc), matching the parked branch, so exact equality is
 	// unknown. Do not run the split on an untrusted mean: one sample of host
-	// busy against one of ours is an attribution on a single instant.
+	// busy against one of ours is an attribution on a single instant. The two
+	// tracks are read once here and the means shared into fillSignals.
 	hostBusyMean, hostBusyState := engine.Track(trackHostBusy).Get()
 	ourUsageMean, ourUsageState := engine.Track(trackUsageCores).Get()
 	splitHost := hostBusyState == diagnosis.StateValue && ourUsageState == diagnosis.StateValue && hostBusyMean > 2*ourUsageMean
 
-	// Fold the saturation family into one cause and collect the rest. The fired
-	// set arrives unranked and in table order; the fold's fixed precedence is
-	// the only rule Decide applies before Rank. Decide knows nothing about the
-	// saturation arms — the rank and the latch flags are the table's — so the
-	// fold keeps the highest-ranked member of the family and records the flags.
-	rest := make([]diagnosis.Fired, 0, len(fired))
-	var survivor *diagnosis.Fired
+	// Fold the saturation family into one cause and collect the rest.
+	rest, survivor := foldSaturation(fired, &sig, env.Has(HasLimit))
+
+	// Rank the folded set, then build the verdict and the attribution.
+	verdict := buildVerdict(engine, rest, survivor, splitHost)
+
+	// Fill the Signals that ride the verdict.
+	fillSignals(&sig, engine, s, env, readiness, hostBusyMean, hostBusyState, ourUsageMean, ourUsageState)
+
+	return verdict, sig
+}
+
+// foldSaturation folds the saturation family into a single survivor and
+// collects the rest. It owns every latch field of Signals: SaturationFired,
+// LimitSaturationFired, HostFullFired, NoHostStatsSaturationFired,
+// NoLimitHostFired (all via saturationFlags), plus ThrottleFired,
+// PressureFired, StealFired and HostContentionFired. The fired set arrives
+// unranked and in table order; the fold's fixed precedence is the only rule
+// Decide applies before Rank, and the rank and latch flags are the table's.
+func foldSaturation(fired []diagnosis.Fired, sig *Signals, hasLimit bool) (rest []diagnosis.Fired, survivor *diagnosis.Fired) {
+	rest = make([]diagnosis.Fired, 0, len(fired))
 	best := 0 // below every saturation-arm rank, so the first member wins a tie
 	for i := range fired {
 		f := &fired[i]
 		switch f.Identity.Signal {
 		case sigSaturation, sigLimitSaturation:
 			sig.SaturationFired = true
-			saturationFlags(*f, &sig, env.Has(HasLimit))
+			saturationFlags(*f, sig, hasLimit)
 			// The fold keeps the highest-ranked member of the saturation family.
 			// Ties cannot occur (the latch is per signal); if one somehow did,
 			// the strictly-greater compare keeps the first member.
@@ -91,12 +106,15 @@ func Decide(engine *diagnosis.Engine[Sample], s Sample, env diagnosis.Environmen
 	if survivor != nil {
 		rest = append(rest, *survivor)
 	}
-	// HostContentionFired is reserved; Decide sets it false unconditionally.
+	// HostContentionFired is reserved; the fold sets it false unconditionally.
 	sig.HostContentionFired = false
+	return rest, survivor
+}
 
-	// Rank the folded set; the result IS the order of Verdict.Causes, and there
-	// is no local sort anywhere in this package. Then build the verdict
-	// and the attribution from the dominant cause.
+// buildVerdict ranks the folded set and builds the Verdict. It owns no Signals
+// fields — it returns the Verdict only. Rank is the only thing that orders
+// Verdict.Causes; attribution derives from the dominant (ranked-first) cause.
+func buildVerdict(engine *diagnosis.Engine[Sample], rest []diagnosis.Fired, survivor *diagnosis.Fired, splitHost bool) Verdict {
 	ranked := diagnosis.Rank(rest)
 	causes := make([]Cause, len(ranked))
 	for i, f := range ranked {
@@ -109,7 +127,19 @@ func Decide(engine *diagnosis.Engine[Sample], s Sample, env diagnosis.Environmen
 		verdict.State = StateDegraded
 		verdict.Attribution = attributeFor(causes[0], survivor, splitHost)
 	}
+	return verdict
+}
 
+// fillSignals fills the Signals that ride the verdict. It owns every remaining
+// Signals field: HostHeadroomAvailable, LogicalCpus, HostCpus,
+// AvgUsageFraction, LimitedVisibility, ThrottleRatio, PressureAvg60, StealP95,
+// HostHeadroomCores, AvgUsageCores, AvgHostBusyCores, UsageRingActive,
+// HostBusyRingActive, CapacityCores, ReserveCores, HostBusyCoresAvailable,
+// ThrottleSignalReady, PressureSignalReady, StealSignalReady, LimitApplies,
+// PressureApplies and StealApplies. The host and usage track means and states
+// are read once in Decide by the attribution split and shared here, so a
+// single Get serves both.
+func fillSignals(sig *Signals, engine *diagnosis.Engine[Sample], s Sample, env diagnosis.Environment, readiness []diagnosis.Readiness, hostBusyMean float64, hostBusyState diagnosis.State, ourUsageMean float64, ourUsageState diagnosis.State) {
 	// The withheld-headroom facts ride Signals, not Verdict — three
 	// fields, none of the parked 31 can stand in for them. HostHeadroomAvailable
 	// is dispatched on the sample's scope, NOT on the window's state: an
@@ -195,6 +225,4 @@ func Decide(engine *diagnosis.Engine[Sample], s Sample, env diagnosis.Environmen
 	sig.LimitApplies = env.Has(HasLimit)
 	sig.PressureApplies = s.PsiAvailable
 	sig.StealApplies = env.Has(HasVirtualization)
-
-	return verdict, sig
 }
