@@ -14,6 +14,10 @@
 
 // The customer-facing text: every sentence this package can print, and the
 // rules that pick which one.
+//
+// Every customer-visible string in this file is written down exactly once —
+// the constants below, plus the host-headroom sentence composeHealthy
+// formats inline. A second copy of a sentence is where drift starts.
 
 package cpuhealth
 
@@ -306,10 +310,6 @@ func fmtCoresTotal(v float64) string {
 func pctOf(fraction float64) int {
 	return int(math.Round(fraction * 100))
 }
-
-// Every customer-visible string in this file is written down exactly once —
-// the constants below, plus the host-headroom sentence composeHealthy formats
-// inline. A second copy of a sentence is where drift starts.
 
 const (
 	// The one line rendered on a tick whose usage figure is withheld (window
