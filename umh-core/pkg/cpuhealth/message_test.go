@@ -375,6 +375,37 @@ var _ = Describe("degraded copy", func() {
 		Expect(msg).To(ContainSubstring("Enable Linux pressure stats (boot with psi=1) for richer detail. Consider adding CPU capacity."))
 	})
 
+	It("should not render an unbounded or silently-wrong percentage when a saturation arm's capacity reads zero", func() {
+		// The limit arm: AvgUsageCores/CapacityCores with CapacityCores == 0 is
+		// +Inf, and pctOf's int(math.Round(...)) conversion of +Inf is
+		// implementation-defined — on this platform it comes out as
+		// math.MaxInt64, a 19-digit percentage. Reachable when the limit-mode
+		// quota-based signal fires from its own frozen quota while the sample's
+		// own Quota reads unknown/zero on the same tick and LogicalCpus is also
+		// unset, so fillSignals' fallback leaves CapacityCores at 0.
+		limitArm := degradedSig()
+		limitArm.LimitSaturationFired = true
+		limitArm.CapacityCores = 0
+		limitArm.AvgUsageCores = 2.0
+		msg := ComposeMessage(degradedVerdict(CauseKindSaturation, 0.5), limitArm)
+		Expect(msg).NotTo(ContainSubstring("9223372036854775807"))
+		Expect(msg).NotTo(ContainSubstring("%"))
+
+		// The default (readable no-limit) arm: AvgHostBusyCores/CapacityCores
+		// with CapacityCores == 0 is 0/0 = NaN, and pctOf(NaN) happens to come
+		// out as 0 on this platform — a silently wrong "0%" that looks
+		// plausible but was never measured.
+		defaultArm := degradedSig()
+		defaultArm.LimitApplies = false
+		defaultArm.NoLimitHostFired = true
+		defaultArm.HostBusyCoresAvailable = true
+		defaultArm.CapacityCores = 0
+		defaultArm.AvgHostBusyCores = 0.0
+		msg = ComposeMessage(degradedVerdict(CauseKindSaturation, 0.5), defaultArm)
+		Expect(msg).NotTo(ContainSubstring("CPU averaged 0% of the machine"))
+		Expect(msg).To(ContainSubstring("not currently readable"))
+	})
+
 	It("should render the generic degraded paragraph for an unknown cause kind", func() {
 		msg := ComposeMessage(degradedVerdict(CauseKind("future-kind"), 0.5), degradedSig())
 		Expect(msg).To(ContainSubstring("CPU is degraded."))

@@ -202,8 +202,13 @@ func causeDetails(c Cause, signals Signals) string {
 		case signals.HostFullFired:
 			return detailSatHostFull
 		case signals.LimitSaturationFired:
-			pct := pctOf(signals.AvgUsageCores / signals.CapacityCores)
-			detail := fmt.Sprintf(detailSatLimit, pct)
+			var detail string
+			if signals.CapacityCores == 0 {
+				detail = detailSatCapacityUnavailable
+			} else {
+				pct := pctOf(signals.AvgUsageCores / signals.CapacityCores)
+				detail = fmt.Sprintf(detailSatLimit, pct)
+			}
 			if !signals.HostBusyCoresAvailable {
 				detail += detailSatHostUnavail
 			}
@@ -217,8 +222,13 @@ func causeDetails(c Cause, signals Signals) string {
 		case signals.NoLimitHostFired && !signals.HostBusyCoresAvailable:
 			return detailSatNoLimitUnavail
 		default:
-			pct := pctOf(signals.AvgHostBusyCores / signals.CapacityCores)
-			detail := fmt.Sprintf(detailSatNoLimitRead, pct)
+			var detail string
+			if signals.CapacityCores == 0 {
+				detail = detailSatCapacityUnavailable
+			} else {
+				pct := pctOf(signals.AvgHostBusyCores / signals.CapacityCores)
+				detail = fmt.Sprintf(detailSatNoLimitRead, pct)
+			}
 			if signals.LimitedVisibility {
 				detail += detailSatNoLimitClause
 			}
@@ -372,6 +382,15 @@ const (
 	detailSatNoLimitUnavail = "CPU is degraded. Host CPU usage is not readable right now (host stats temporarily unavailable), so the host-busy percentage cannot be shown. Add CPU capacity, or reduce the load on it."
 	detailSatNoLimitRead    = "CPU averaged %d%% of the machine over the last minute and this instance has little headroom left. Add CPU capacity, or reduce the load on it."
 	detailSatNoLimitClause  = " Pressure stats are unavailable; enable Linux pressure stats (boot with psi=1) for richer detail."
+
+	// detailSatCapacityUnavailable replaces the percentage sentence — never
+	// prefixes it — on the limit arm and the default (readable no-limit) arm
+	// when CapacityCores itself reads 0, the one input both arms' percentage
+	// divides by. Shared byte-for-byte between the two arms deliberately: a
+	// customer cannot use a wrong percentage either way, and the remedy is the
+	// same. Its own clause (host-unavailable or no-pressure-stats) still
+	// appends afterward, unaffected by which sentence came before it.
+	detailSatCapacityUnavailable = "CPU is degraded, but its usage percentage cannot be shown right now because this instance's CPU capacity is not currently readable. Add CPU capacity, or reduce the load on it."
 
 	// The generic degraded paragraph.
 	detailGeneric = "CPU is degraded."
