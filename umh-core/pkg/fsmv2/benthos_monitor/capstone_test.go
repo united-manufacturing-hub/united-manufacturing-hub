@@ -25,7 +25,7 @@ import (
 // (input MessagesPerSecond > 0) means the same thing as FSMv1's (input
 // MessagesPerTick > 0) on the SAME count sequence — for steady-state arrivals
 // only. The reset tick is deliberately excluded: there the worker publishes
-// 0/false while FSMv1 publishes the cumulative counter as a rate (D5a). Activity
+// 0/false while FSMv1 publishes the cumulative counter as a rate. Activity
 // is asserted inside the window (30s cadence), never at the pathological
 // window-length boundary where FSMv1 flakes too.
 //
@@ -74,7 +74,8 @@ func TestIsActiveEquivalenceAcrossIdleCrossing(t *testing.T) {
 	// Phase 0 — prime with one sample, asserting nothing. The first tick is
 	// FSMv1's reset/cold-start branch (metrics_state.go:110-117 publishes the
 	// cumulative count as a rate, so IsActive is true) while the worker, holding a
-	// single sample, reads 0/false. That divergence is documented as D5a and is
+	// single sample, reads 0/false. That divergence is the documented reset-tick
+	// behaviour and is
 	// deliberately excluded.
 	in++
 	step(in)

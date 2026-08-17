@@ -22,7 +22,7 @@ import (
 
 const testPort = 4195
 
-// TestThroughputWindowWipesOnCounterReset pins the counter-reset wipe (D5a).
+// TestThroughputWindowWipesOnCounterReset pins the counter-reset wipe.
 // The reset detector is the INPUT counter only (fsmv1 metrics_state.go:110-117:
 // 'count < throughput.LastCount' on input; re-sweep finding 1): benthos'
 // input_received is a monotonic Prometheus counter that resets to 0 on a process
@@ -74,7 +74,7 @@ func TestThroughputWindowWipesOnOneCounterZeroRestart(t *testing.T) {
 	}
 }
 
-// TestThroughputWindowWipesOnPortChange pins the port-change wipe (D5a): an
+// TestThroughputWindowWipesOnPortChange pins the port-change wipe: an
 // in-place config update re-points the child at a different MetricsPort without
 // a worker restart, and a new endpoint is a new counter series. A sample with a
 // different port than the previous poll wipes the window and re-seeds with only
