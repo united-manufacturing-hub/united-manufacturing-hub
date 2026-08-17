@@ -76,12 +76,17 @@ type Verdict struct {
 // saturationArm identifies which instrument of the saturation family a folded
 // cause came from. The latch is per signal, so at most one of host-full,
 // no-host-stats and the limit arm survives the fold; attribution differs by
-// arm, so Decide keeps the identity beside the survivor.
+// arm, so the fold keeps the identity beside the survivor.
+//
+// The constants are declared in the fold's precedence order — no-host-stats,
+// then limit, then host-full — so the arm value IS the rank: host-full (3)
+// outranks limit (2), which outranks no-host-stats (1), and noSaturationArm (0)
+// is the unset value a non-saturation fired signal maps to.
 type saturationArm int
 
 const (
 	noSaturationArm saturationArm = iota
-	hostFullArm
 	noHostStatsArm
 	limitArm
+	hostFullArm
 )

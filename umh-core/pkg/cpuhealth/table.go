@@ -380,3 +380,57 @@ func limitSaturationSignal(quota float64) diagnosis.Signal[Sample] {
 		}},
 	}
 }
+
+// saturationArmOf identifies which arm of the saturation family a fired signal
+// came from, so the fold and the latch flags can agree without Decide knowing
+// the arms. The signal name alone cannot name the arm: sigSaturation carries
+// two instruments, and Marks.Unit is the only thing that tells them apart —
+// "cores" is host-headroom, "fraction" is usage-fraction. Marks reads the
+// FROZEN mark, so it names the instrument that actually fired; the live
+// per-tick winner would disagree with Marks from tick 3 onward, which is why
+// this frozen word is the arm's source of truth and not the tick's selected
+// instrument.
+func saturationArmOf(f diagnosis.Fired) saturationArm {
+	switch f.Identity.Signal {
+	case sigLimitSaturation:
+		return limitArm
+	case sigSaturation:
+		if f.Marks.Unit == "fraction" {
+			return noHostStatsArm
+		}
+		return hostFullArm
+	default:
+		return noSaturationArm
+	}
+}
+
+// saturationRank orders the saturation family for the fold: host-full outranks
+// the limit arm, the limit arm outranks the no-host-stats fallback. The arm IS
+// the rank — the constants in verdict.go are declared in that order — so the
+// fold compares one int and knows nothing about the arms. Ties cannot occur
+// (the latch is per signal, and this function is only called on a fired
+// saturation-family signal); if one somehow did, the fold's strictly-greater
+// compare keeps the first member.
+func saturationRank(f diagnosis.Fired) int {
+	return int(saturationArmOf(f))
+}
+
+// saturationFlags raises the Signals latch bits one fired saturation arm owns.
+// HostFullFired and NoLimitHostFired are ONE instrument (the host-headroom arm)
+// under two names, and the mode is what separates them: limit mode reports the
+// host-full fallback as HostFullFired, no-limit mode as NoLimitHostFired. The
+// limit arm and the no-host-stats fallback each own one bit.
+func saturationFlags(f diagnosis.Fired, sig *Signals, hasLimit bool) {
+	switch saturationArmOf(f) {
+	case hostFullArm:
+		if hasLimit {
+			sig.HostFullFired = true
+		} else {
+			sig.NoLimitHostFired = true
+		}
+	case limitArm:
+		sig.LimitSaturationFired = true
+	case noHostStatsArm:
+		sig.NoHostStatsSaturationFired = true
+	}
+}
