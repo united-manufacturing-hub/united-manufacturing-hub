@@ -47,8 +47,11 @@ func (s *RunningState) Next(snapAny any) fsmv2.NextResult[any, any] {
 	}
 
 	if snap.Status.ConsecutiveErrors >= errorDegradedThreshold {
-		reason := fmt.Sprintf("degrading: %d consecutive errors (threshold=%d); last: %s",
-			snap.Status.ConsecutiveErrors, errorDegradedThreshold, snap.Status.LastErrorDetail)
+		reason := fmt.Sprintf("degrading: %d consecutive errors (threshold=%d)",
+			snap.Status.ConsecutiveErrors, errorDegradedThreshold)
+		if snap.Status.LastErrorDetail != "" {
+			reason += "; last: " + snap.Status.LastErrorDetail
+		}
 
 		return fsmv2.Transition(&DegradedState{}, fsmv2.SignalNone, nil, reason, nil)
 	}

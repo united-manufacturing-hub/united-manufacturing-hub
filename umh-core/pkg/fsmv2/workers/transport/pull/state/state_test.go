@@ -260,6 +260,18 @@ var _ = Describe("RunningState", func() {
 		Expect(result.Reason).To(ContainSubstring("; last: " + detail))
 	})
 
+	It(`does not append "; last:" when the last error detail is empty`, func() {
+		snap := makeSnapshot(config.DesiredStateRunning, false, 3, true, true)
+		obs := snap.Observed.(fsmv2.Observation[snapshot.PullStatus])
+		obs.Status.LastErrorDetail = ""
+		snap.Observed = obs
+
+		result := s.Next(snap)
+
+		Expect(result.State).To(BeAssignableToTypeOf(&state.DegradedState{}))
+		Expect(result.Reason).To(Equal("degrading: 3 consecutive errors (threshold=3)"))
+	})
+
 	It("should stay Running and emit PullAction when less than 3 errors", func() {
 		snap := makeSnapshot(config.DesiredStateRunning, false, 2, true, true)
 		result := s.Next(snap)
