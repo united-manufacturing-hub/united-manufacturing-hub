@@ -62,14 +62,16 @@
 // resource per key ever configured. Package historian is a worked example of the
 // singleton case.
 //
-// # Framework telemetry is automatic
+// # Framework telemetry follows BaseDependencies
 //
-// The framework attaches its metrics to every simple worker's Observation,
-// whatever TDeps the spec declares and whether or not it declares NewDeps. It
-// stores the instance's BaseDependencies beside the author's poll value, so
-// nothing about the author's type earns or forfeits telemetry. Action history is
-// attached the same way, but a simple worker dispatches no actions, so it stays
-// empty.
+// The framework attaches its metrics to a simple worker's Observation only when
+// the deps value it bound carries the BaseDependencies accessors, so only when
+// TDeps embeds *deps.BaseDependencies and NewDeps supplies it. The collector
+// reads the framework fields off that value; a worker declaring
+// TDeps = struct{} gets no framework metrics, and no error saying so. Package
+// historian declares such a NewDeps and is injected; the port monitor in the
+// Example below declares none and is not. Action history travels the same path,
+// and a simple worker dispatches no actions, so it stays empty either way.
 //
 // Both stay in CSE: a status generator and the fsmv1 adapter see the Status
 // alone. Worker metrics are the exception that leaves the process. Counters and

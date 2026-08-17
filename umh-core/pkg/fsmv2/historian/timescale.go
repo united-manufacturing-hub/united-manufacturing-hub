@@ -111,37 +111,33 @@ type TimescaleStatus struct {
 	Reachable bool `json:"reachable"`
 }
 
-// Deps carries the poll dependencies: this instance's BaseDependencies (the
-// logger Poll writes to) plus sharedPool, which lazily builds and caches a pgx
-// pool keyed by DSN so Poll reuses pooled connections instead of dialing every
-// tick.
+// sharedPool is the one holder every worker instance polls through. The
+// framework never closes a pool a worker owns: fsmv2.GracefulShutdowner is
+// declared but never invoked, so a worker is never called at a point where it
+// could close one (ENG-5375). One holder bounds the process to a single pool,
+// because get closes the previous one when the DSN changes; a per-instance
+// holder would orphan a pgxpool health-check goroutine on every despawn that
+// followed a poll, with nothing able to close it. A child despawned before its
+// first poll orphans nothing, because only Poll reaches poolHolder.get.
 //
-// Only one historian worker can run on that holder. Every instance polls through
-// the same one, and it caches a single pool, so two instances on different DSNs
-// rebuild each other's pool on every poll. Historian is a singleton today, one
-// Ref under one writer; going multi-instance needs a holder per instance, and
-// that needs a teardown path first.
+// Historian is a singleton today, one Ref under one writer. Every instance polls
+// through this holder and it caches a single pool, so two instances on different
+// DSNs would rebuild each other's pool on every poll; going multi-instance needs
+// a holder per instance, and that needs a teardown path first (ENG-5375).
 //
-// Sharing has two consequences the config does not suggest. Removing the
-// historian config block despawns the child without closing the pool: only Close
-// stops the health-check goroutine, and nothing calls it, so the goroutine runs
-// for the life of the process and up to maxConns server sessions stay open until
-// connMaxLifetime recycles them. A respawn with an identical DSN then gets the
-// cached pool, and the DSN is parsed only when a pool is built, so the TLS
-// material at the sslrootcert and sslcert paths is never re-read.
+// Removing the historian config block despawns the child without closing the
+// pool, so the health-check goroutine runs for the life of the process and up to
+// maxConns server sessions stay open until connMaxLifetime recycles them. A
+// respawn with an identical DSN then gets the cached pool.
+var sharedPool = &poolHolder{}
+
+// Deps carries what Poll needs: this instance's BaseDependencies, whose logger
+// Poll writes to, and the holder it queries through.
 type Deps struct {
 	*deps.BaseDependencies
 
 	pool *poolHolder
 }
-
-// sharedPool is the process-wide holder every worker instance polls through. It
-// outlives any one instance deliberately: fsmv2.GracefulShutdowner is declared
-// but never invoked, so a worker is never called at a point where it could close
-// a pool it owned, and a per-instance holder would leak a pgxpool health-check
-// goroutine on every despawn that followed a poll. A child despawned before its
-// first poll leaks nothing, because only Poll reaches poolHolder.get.
-var sharedPool = &poolHolder{}
 
 // newDeps builds one worker instance's poll dependencies. It keeps the
 // BaseDependencies the framework built for this instance, whose logger already
@@ -165,7 +161,9 @@ type poolHolder struct {
 
 // get returns a pool for dsn, creating it on first use and rebuilding it if the
 // DSN changed since the last call. Pool creation does not open a connection;
-// authentication happens on first acquire (in Poll).
+// authentication happens on first acquire (in Poll). The DSN is parsed only when
+// a pool is built, so TLS material at the sslrootcert and sslcert paths is
+// re-read only on a DSN change (ENG-5593).
 func (h *poolHolder) get(dsn string) (*pgxpool.Pool, error) {
 	h.mu.Lock()
 	defer h.mu.Unlock()

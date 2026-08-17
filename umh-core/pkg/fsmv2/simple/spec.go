@@ -50,8 +50,16 @@ type MonitorSpec[TConfig, TStatus, TDeps any] struct {
 	// every line names the instance that wrote it. bd also exposes
 	// SetFrameworkState and SetActionHistory, which belong to the framework
 	// alone: calling either from author code overwrites what the collector reads
-	// back on the next tick. Ignoring bd costs no telemetry: the framework keeps
-	// its own copy.
+	// back on the next tick. Return bd inside TDeps to keep framework telemetry:
+	// the collector reads the framework fields off the deps value NewDeps handed
+	// back, so dropping bd here drops this worker's framework metrics with it.
+	//
+	// Do not declare a TDeps embedding *deps.BaseDependencies without also
+	// declaring NewDeps. Nothing binds the zero value, its embedded pointer stays
+	// nil, and a nil pointer still satisfies the accessor check the collector
+	// gates on, so the first framework read dereferences nil. The collector
+	// recovers it as a collector_panic every tick instead of skipping the worker.
+	// Either declare NewDeps, or keep BaseDependencies out of TDeps.
 	//
 	// NewDeps has no error return, so anything fallible belongs behind Poll. A
 	// panic escapes into the parent supervisor's tick rather than being reported
