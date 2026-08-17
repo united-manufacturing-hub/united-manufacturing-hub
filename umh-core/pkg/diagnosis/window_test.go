@@ -30,10 +30,10 @@ import (
 // tick still prunes to span and the freeze only holds from the tick after;
 // storing first would hide that. The two halves are unexported and are called
 // separately so each can be exercised alone. The last spec drives Observe.
-var _ = Describe("Window", func() {
+var _ = Describe("SlidingWindow", func() {
 	It("should append a reading and prune entries older than the span", func() {
 		const span = 10 * time.Second
-		w, _ := NewWindow(span, 60*time.Second, Last, false)
+		w, _ := NewSlidingWindow(span, 60*time.Second, Last, false)
 
 		t0 := time.Unix(1_000_000, 0)
 		w.age(t0)
@@ -54,7 +54,7 @@ var _ = Describe("Window", func() {
 	})
 
 	It("should not append a reading whose read failed", func() {
-		w, _ := NewWindow(10*time.Second, 60*time.Second, Last, false)
+		w, _ := NewSlidingWindow(10*time.Second, 60*time.Second, Last, false)
 
 		t0 := time.Unix(2_000_000, 0)
 		w.age(t0)
@@ -67,7 +67,7 @@ var _ = Describe("Window", func() {
 
 	It("should not append a value that is not a number — NaN, +Inf or -Inf — and append nothing rather than a zero", func() {
 		const span = 10 * time.Second
-		refused, _ := NewWindow(span, 60*time.Second, Last, false)
+		refused, _ := NewSlidingWindow(span, 60*time.Second, Last, false)
 
 		t0 := time.Unix(3_000_000, 0)
 		refused.age(t0)
@@ -82,7 +82,7 @@ var _ = Describe("Window", func() {
 			"NaN and the infinities are not numbers and append nothing; the window stays empty")
 
 		// The window must not range-check: a negative number is still a number.
-		neg, _ := NewWindow(span, 60*time.Second, Last, false)
+		neg, _ := NewSlidingWindow(span, 60*time.Second, Last, false)
 		neg.age(t0)
 		neg.appendPoint(Known(-5), Unknown(), t0)
 
@@ -96,7 +96,7 @@ var _ = Describe("Window", func() {
 		t0 := time.Unix(4_000_000, 0)
 
 		// Arm A: a counter window (the trailing true).
-		counter, _ := NewWindow(span, 60*time.Second, Mean, true)
+		counter, _ := NewSlidingWindow(span, 60*time.Second, Mean, true)
 		counter.age(t0)
 		counter.appendPoint(Known(10), Unknown(), t0)
 		counter.age(t0.Add(time.Second))
@@ -106,7 +106,7 @@ var _ = Describe("Window", func() {
 			"a counter window restarts on a backwards step, holding one entry (below Mean Min 2)")
 
 		// Arm B: the same falling series on a window that is not a counter.
-		noncounter, _ := NewWindow(span, 60*time.Second, Mean, false)
+		noncounter, _ := NewSlidingWindow(span, 60*time.Second, Mean, false)
 		noncounter.age(t0)
 		noncounter.appendPoint(Known(10), Unknown(), t0)
 		noncounter.age(t0.Add(time.Second))
@@ -120,7 +120,7 @@ var _ = Describe("Window", func() {
 		// span=1s so the held entry is far out of span by the end; demote=60s so
 		// the demote arm cannot reach it.
 		const span = 1 * time.Second
-		w, _ := NewWindow(span, 60*time.Second, Mean, false)
+		w, _ := NewSlidingWindow(span, 60*time.Second, Mean, false)
 
 		t0 := time.Unix(5_000_000, 0)
 		w.age(t0)
@@ -149,7 +149,7 @@ var _ = Describe("Window", func() {
 		// only the demote clock can empty the window.
 		const span = 10 * time.Second
 		const demoteSpan = 60 * time.Second
-		w, _ := NewWindow(span, demoteSpan, Mean, false)
+		w, _ := NewSlidingWindow(span, demoteSpan, Mean, false)
 
 		t0 := time.Unix(6_000_000, 0)
 		w.age(t0)
@@ -182,7 +182,7 @@ var _ = Describe("Window", func() {
 		// only whether the window's own reduction divides by a denominator.
 
 		// Arm A: DeltaRatio does.
-		ratio, _ := NewWindow(span, 60*time.Second, DeltaRatio, false)
+		ratio, _ := NewSlidingWindow(span, 60*time.Second, DeltaRatio, false)
 		ratio.age(t0)
 		ratio.appendPoint(Known(5), Unknown(), t0)
 		_, ratioState := ratio.Reduce().Get()
@@ -191,7 +191,7 @@ var _ = Describe("Window", func() {
 
 		// Arm B: Mean does not, so an absent denominator is the ordinary
 		// single-series case.
-		mean, _ := NewWindow(span, 60*time.Second, Mean, false)
+		mean, _ := NewSlidingWindow(span, 60*time.Second, Mean, false)
 		mean.age(t0)
 		mean.appendPoint(Known(5), Unknown(), t0)
 		_, meanState := mean.Reduce().Get()
@@ -201,7 +201,7 @@ var _ = Describe("Window", func() {
 
 	It("should keep a sample landing exactly on the cutoff", func() {
 		const span = 10 * time.Second
-		w, _ := NewWindow(span, 60*time.Second, Mean, false)
+		w, _ := NewSlidingWindow(span, 60*time.Second, Mean, false)
 
 		t0 := time.Unix(8_000_000, 0)
 		w.age(t0)
@@ -226,7 +226,7 @@ var _ = Describe("Window", func() {
 
 		// The permissive arm: without it these points would be dropped and the
 		// window left empty.
-		ratio, _ := NewWindow(span, 60*time.Second, DeltaRatio, false)
+		ratio, _ := NewSlidingWindow(span, 60*time.Second, DeltaRatio, false)
 		ratio.age(t0)
 		ratio.appendPoint(Known(5), Known(10), t0)
 		ratio.age(t0.Add(time.Second))
@@ -235,14 +235,14 @@ var _ = Describe("Window", func() {
 		Expect(presentState).To(Equal(StateValue),
 			"a present denominator stores the point; two points meet DeltaRatio Min 2")
 
-		nan, _ := NewWindow(span, 60*time.Second, DeltaRatio, false)
+		nan, _ := NewSlidingWindow(span, 60*time.Second, DeltaRatio, false)
 		nan.age(t0)
 		nan.appendPoint(Known(5), Known(math.NaN()), t0)
 		_, nanState := nan.Reduce().Get()
 		Expect(nanState).To(Equal(StateAbsent),
 			"a NaN denominator is not a number; the point is dropped and the window is empty")
 
-		inf, _ := NewWindow(span, 60*time.Second, DeltaRatio, false)
+		inf, _ := NewSlidingWindow(span, 60*time.Second, DeltaRatio, false)
 		inf.age(t0)
 		inf.appendPoint(Known(5), Known(math.Inf(1)), t0)
 		_, infState := inf.Reduce().Get()
@@ -252,7 +252,7 @@ var _ = Describe("Window", func() {
 
 	It("should return to a value after a freeze once a successful append lands", func() {
 		const span = 10 * time.Second
-		w, _ := NewWindow(span, 60*time.Second, Mean, false)
+		w, _ := NewSlidingWindow(span, 60*time.Second, Mean, false)
 
 		t0 := time.Unix(10_000_000, 0)
 		w.age(t0)
@@ -278,7 +278,7 @@ var _ = Describe("Window", func() {
 
 	It("should re-accumulate to a value after a counter restart", func() {
 		const span = 10 * time.Second
-		w, _ := NewWindow(span, 60*time.Second, Mean, true)
+		w, _ := NewSlidingWindow(span, 60*time.Second, Mean, true)
 
 		t0 := time.Unix(11_000_000, 0)
 		w.age(t0)
@@ -303,7 +303,7 @@ var _ = Describe("Window", func() {
 
 	It("should treat the first post-demote point as Untrusted below the minimum", func() {
 		const span = 10 * time.Second
-		w, _ := NewWindow(span, 60*time.Second, Mean, false)
+		w, _ := NewSlidingWindow(span, 60*time.Second, Mean, false)
 
 		t0 := time.Unix(12_000_000, 0)
 		w.age(t0)
@@ -333,7 +333,7 @@ var _ = Describe("Window", func() {
 
 	It("should prune stale pre-outage points on the recovery tick under the production Age-before-Append order, so a recovered window does not fold them as trusted", func() {
 		const span = 10 * time.Second
-		w, _ := NewWindow(span, 60*time.Second, Mean, false)
+		w, _ := NewSlidingWindow(span, 60*time.Second, Mean, false)
 		t0 := time.Unix(30_000_000, 0)
 
 		w.age(t0)
@@ -365,7 +365,7 @@ var _ = Describe("Window", func() {
 
 	It("should not restart a counter window on an equal value — only a strict fall resets", func() {
 		const span = 10 * time.Second
-		w, _ := NewWindow(span, 60*time.Second, Mean, true)
+		w, _ := NewSlidingWindow(span, 60*time.Second, Mean, true)
 
 		t0 := time.Unix(20_000_000, 0)
 		w.age(t0)
@@ -382,7 +382,7 @@ var _ = Describe("Window", func() {
 	It("should not demote at exactly the demote span — only strictly past it", func() {
 		const span = 10 * time.Second
 		const demoteSpan = 60 * time.Second
-		w, _ := NewWindow(span, demoteSpan, Mean, false)
+		w, _ := NewSlidingWindow(span, demoteSpan, Mean, false)
 
 		t0 := time.Unix(21_000_000, 0)
 		w.age(t0)
@@ -417,7 +417,7 @@ var _ = Describe("Window", func() {
 		// reduces to is what separates the two orders: only the pruned window
 		// answers 2.
 		const span = 10 * time.Second
-		w, err := NewWindow(span, time.Hour, Mean, false)
+		w, err := NewSlidingWindow(span, time.Hour, Mean, false)
 		Expect(err).NotTo(HaveOccurred())
 
 		t0 := time.Unix(1_000_000, 0)

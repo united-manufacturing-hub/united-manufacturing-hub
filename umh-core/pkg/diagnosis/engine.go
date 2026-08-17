@@ -13,7 +13,7 @@
 // limitations under the License.
 
 // This file is the engine. A caller declares a Table; NewEngine reads it once
-// and builds one Window per (signal, instrument) pair, one Window per track and
+// and builds one SlidingWindow per (signal, instrument) pair, one SlidingWindow per track and
 // one Latch per signal, refusing a malformed table. Observe then appends the
 // snapshot to every window, resolves what each signal's windows can collectively
 // say, an Availability, and drives that signal's latch with it.
@@ -90,7 +90,7 @@ type signalState[S any] struct {
 // the same reason. Track no longer walks one slice while indexing another.
 type trackState[S any] struct {
 	track  Track[S]
-	window Window
+	window SlidingWindow
 }
 
 // Engine owns every window, every track and one latch per signal, for one table.
@@ -101,7 +101,7 @@ type Engine[S any] struct {
 	// resolves against the CALLER'S Signal, so a lookup can legitimately miss
 	// and resolve's nil arms are reachable. The two below are built by
 	// NewEngine and cannot miss, which is why they are pairs instead.
-	windows map[key]*Window
+	windows map[key]*SlidingWindow
 	signals []signalState[S]
 	tracks  []trackState[S]
 }
@@ -119,13 +119,13 @@ func NewEngine[S any](t Table[S]) (*Engine[S], error) {
 	}
 
 	e := &Engine[S]{
-		windows: make(map[key]*Window),
+		windows: make(map[key]*SlidingWindow),
 		signals: make([]signalState[S], 0, len(t.Signals)),
 		tracks:  make([]trackState[S], 0, len(t.Tracks)),
 	}
 	for _, s := range t.Signals {
 		for _, inst := range s.Instruments {
-			w, err := NewWindow(inst.Span, s.DemoteSpan, inst.Red, inst.Counter)
+			w, err := NewSlidingWindow(inst.Span, s.DemoteSpan, inst.Red, inst.Counter)
 			if err != nil {
 				return nil, err
 			}
@@ -133,7 +133,7 @@ func NewEngine[S any](t Table[S]) (*Engine[S], error) {
 		}
 	}
 	for _, tr := range t.Tracks {
-		w, err := NewWindow(tr.Span, tr.Span, tr.Red, false)
+		w, err := NewSlidingWindow(tr.Span, tr.Span, tr.Red, false)
 		if err != nil {
 			return nil, err
 		}
@@ -360,8 +360,8 @@ func (e *Engine[S]) resolve(s Signal[S], capable []Instrument[S]) (Instrument[S]
 //
 //	snapshot S
 //	  Instrument.Extract  reads     Reading       a float64, or an absence
-//	  Window.Observe      stores    Point         into a sliding window
-//	  Window.Reduce       reduces   Reduced       a number, and whether to trust it
+//	  SlidingWindow.Observe      stores    Point         into a sliding window
+//	  SlidingWindow.Reduce       reduces   Reduced       a number, and whether to trust it
 //	  the engine          resolves  Availability  what one signal can say now
 //	  Latch.Update        judges    Fired         a signal that crossed its mark
 func (e *Engine[S]) Observe(sample S, env Environment, at time.Time) ([]Fired, []Readiness) {

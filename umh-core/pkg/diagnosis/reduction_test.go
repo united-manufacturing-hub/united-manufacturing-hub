@@ -29,8 +29,8 @@ const reduceHour = time.Hour
 // to read it from directly.
 var _ = Describe("Reduction", func() {
 	It("should reduce under the reduction it was given at construction, so two windows fed the same points under different reductions return different numbers", func() {
-		meanW, _ := NewWindow(reduceHour, 60*time.Second, Mean, false)
-		p95W, _ := NewWindow(reduceHour, 60*time.Second, P95, false)
+		meanW, _ := NewSlidingWindow(reduceHour, 60*time.Second, Mean, false)
+		p95W, _ := NewSlidingWindow(reduceHour, 60*time.Second, P95, false)
 
 		t0 := time.Unix(1_000_000, 0)
 		for i := 0; i < 20; i++ {
@@ -52,7 +52,7 @@ var _ = Describe("Reduction", func() {
 		t0 := time.Unix(1_000_000, 0)
 
 		// Last: the newest entry.
-		lastW, _ := NewWindow(reduceHour, 60*time.Second, Last, false)
+		lastW, _ := NewSlidingWindow(reduceHour, 60*time.Second, Last, false)
 		lastW.appendPoint(Known(4), Unknown(), t0)
 		lastW.appendPoint(Known(7), Unknown(), t0.Add(2*time.Second))
 		n, s := lastW.Reduce().Get()
@@ -60,7 +60,7 @@ var _ = Describe("Reduction", func() {
 		Expect(n).To(Equal(7.0), "last is the newest entry")
 
 		// Mean: the arithmetic mean.
-		meanW, _ := NewWindow(reduceHour, 60*time.Second, Mean, false)
+		meanW, _ := NewSlidingWindow(reduceHour, 60*time.Second, Mean, false)
 		for i := 0; i < 4; i++ {
 			meanW.appendPoint(Known(float64(i+1)), Unknown(), t0.Add(time.Duration(i)*time.Second))
 		}
@@ -69,7 +69,7 @@ var _ = Describe("Reduction", func() {
 		Expect(n).To(Equal(2.5), "mean of 1..4 is 2.5")
 
 		// Slope: two endpoints, not a least-squares fit.
-		slopeW, _ := NewWindow(reduceHour, 60*time.Second, Slope, false)
+		slopeW, _ := NewSlidingWindow(reduceHour, 60*time.Second, Slope, false)
 		slopeW.appendPoint(Known(10), Unknown(), t0)
 		slopeW.appendPoint(Known(30), Unknown(), t0.Add(10*time.Second))
 		n, s = slopeW.Reduce().Get()
@@ -77,7 +77,7 @@ var _ = Describe("Reduction", func() {
 		Expect(n).To(Equal(2.0), "(30-10)/(10s-0s) reduces to 2.0 per second")
 
 		// Delta ratio: (v_last-v_first)/(a_last-a_first), edges only.
-		drW, _ := NewWindow(reduceHour, 60*time.Second, DeltaRatio, false)
+		drW, _ := NewSlidingWindow(reduceHour, 60*time.Second, DeltaRatio, false)
 		drW.appendPoint(Known(5), Known(100), t0)
 		drW.appendPoint(Known(11), Known(300), t0.Add(10*time.Second))
 		n, s = drW.Reduce().Get()
@@ -86,7 +86,7 @@ var _ = Describe("Reduction", func() {
 			"(11-5)/(300-100) = 6/200 = 0.03")
 
 		// P95: nearest-rank, ceil(0.95*20)=19th order statistic of 0..19.
-		p95W, _ := NewWindow(reduceHour, 60*time.Second, P95, false)
+		p95W, _ := NewSlidingWindow(reduceHour, 60*time.Second, P95, false)
 		for i := 0; i < 20; i++ {
 			p95W.appendPoint(Known(float64(i)), Unknown(), t0.Add(time.Duration(i)*time.Second))
 		}
@@ -95,7 +95,7 @@ var _ = Describe("Reduction", func() {
 		Expect(n).To(Equal(18.0), "nearest-rank 95th percentile of 0..19 is 18")
 
 		// P99: nearest-rank, ceil(0.99*100)=99th order statistic of 0..99.
-		p99W, _ := NewWindow(reduceHour, 60*time.Second, P99, false)
+		p99W, _ := NewSlidingWindow(reduceHour, 60*time.Second, P99, false)
 		for i := 0; i < 100; i++ {
 			p99W.appendPoint(Known(float64(i)), Unknown(), t0.Add(time.Duration(i)*time.Second))
 		}
@@ -105,7 +105,7 @@ var _ = Describe("Reduction", func() {
 	})
 
 	It("should compute slope over the window's own first and last timestamps, never against wall-clock now", func() {
-		slopeW, _ := NewWindow(reduceHour, 60*time.Second, Slope, false)
+		slopeW, _ := NewSlidingWindow(reduceHour, 60*time.Second, Slope, false)
 
 		t0 := time.Unix(1_000_000, 0)
 		slopeW.appendPoint(Known(10), Unknown(), t0)
@@ -131,25 +131,25 @@ var _ = Describe("Reduction", func() {
 		t0 := time.Unix(1_000_000, 0)
 
 		// Below the minimum: one Mean entry is below Mean.Min of 2.
-		belowW, _ := NewWindow(reduceHour, 60*time.Second, Mean, false)
+		belowW, _ := NewSlidingWindow(reduceHour, 60*time.Second, Mean, false)
 		belowW.appendPoint(Known(7), Unknown(), t0)
 		_, s := belowW.Reduce().Get()
 		Expect(s).To(Equal(StateUntrusted), "one entry is below the mean's minimum of 2")
 
 		// Empty: nothing stored.
-		emptyW, _ := NewWindow(reduceHour, 60*time.Second, Mean, false)
+		emptyW, _ := NewSlidingWindow(reduceHour, 60*time.Second, Mean, false)
 		_, s = emptyW.Reduce().Get()
 		Expect(s).To(Equal(StateAbsent), "an empty window reports absence")
 
 		// Divisor zero: the denominator counter did not move.
-		divW, _ := NewWindow(reduceHour, 60*time.Second, DeltaRatio, false)
+		divW, _ := NewSlidingWindow(reduceHour, 60*time.Second, DeltaRatio, false)
 		divW.appendPoint(Known(5), Known(100), t0)
 		divW.appendPoint(Known(11), Known(100), t0.Add(10*time.Second))
 		_, s = divW.Reduce().Get()
 		Expect(s).To(Equal(StateUntrusted), "a zero denominator delta is untrusted, not a value")
 
 		// Nothing appended this tick: a frozen tick, not a value.
-		frozenW, _ := NewWindow(reduceHour, 60*time.Second, Last, false)
+		frozenW, _ := NewSlidingWindow(reduceHour, 60*time.Second, Last, false)
 		t1 := t0.Add(1 * time.Second)
 		frozenW.appendPoint(Known(9), Unknown(), t1)
 		frozenW.age(t1)
@@ -168,14 +168,14 @@ var _ = Describe("Reduction", func() {
 		t0 := time.Unix(1_000_000, 0)
 
 		// Below-min under Mean: the thin series still reduces to its own value.
-		belowW, _ := NewWindow(reduceHour, 60*time.Second, Mean, false)
+		belowW, _ := NewSlidingWindow(reduceHour, 60*time.Second, Mean, false)
 		belowW.appendPoint(Known(7), Unknown(), t0)
 		n, s := belowW.Reduce().Get()
 		Expect(s).To(Equal(StateUntrusted))
 		Expect(n).To(Equal(7.0), "a StateUntrusted window carries its folded number")
 
 		// Divisor-zero: the reduction cannot compute, so it carries zero.
-		divW, _ := NewWindow(reduceHour, 60*time.Second, DeltaRatio, false)
+		divW, _ := NewSlidingWindow(reduceHour, 60*time.Second, DeltaRatio, false)
 		divW.appendPoint(Known(5), Known(100), t0)
 		divW.appendPoint(Known(11), Known(100), t0.Add(10*time.Second))
 		n, s = divW.Reduce().Get()
@@ -183,7 +183,7 @@ var _ = Describe("Reduction", func() {
 		Expect(n).To(Equal(0.0), "a zero-divisor StateUntrusted window carries 0")
 
 		// Empty: absence carries no number.
-		emptyW, _ := NewWindow(reduceHour, 60*time.Second, Mean, false)
+		emptyW, _ := NewSlidingWindow(reduceHour, 60*time.Second, Mean, false)
 		n, s = emptyW.Reduce().Get()
 		Expect(s).To(Equal(StateAbsent))
 		Expect(n).To(Equal(0.0), "a StateAbsent window carries no number")
@@ -193,14 +193,14 @@ var _ = Describe("Reduction", func() {
 		t0 := time.Unix(1_000_000, 0)
 
 		// Slope over a single point: dt is zero, the reduction cannot divide.
-		single, _ := NewWindow(reduceHour, 60*time.Second, Slope, false)
+		single, _ := NewSlidingWindow(reduceHour, 60*time.Second, Slope, false)
 		single.appendPoint(Known(10), Unknown(), t0)
 		n, s := single.Reduce().Get()
 		Expect(s).To(Equal(StateUntrusted), "a slope needs two endpoints")
 		Expect(n).To(Equal(0.0), "a non-computable slope carries zero, not NaN")
 
 		// Same edge timestamp: dt is zero and the reduction divides by it.
-		equal, _ := NewWindow(reduceHour, 60*time.Second, Slope, false)
+		equal, _ := NewSlidingWindow(reduceHour, 60*time.Second, Slope, false)
 		equal.appendPoint(Known(10), Unknown(), t0)
 		equal.appendPoint(Known(30), Unknown(), t0)
 		n, s = equal.Reduce().Get()
@@ -211,7 +211,7 @@ var _ = Describe("Reduction", func() {
 
 		// A denominator that decreases across the edges is a reset, not a fall
 		// the ratio may trust.
-		reset, _ := NewWindow(reduceHour, 60*time.Second, DeltaRatio, false)
+		reset, _ := NewSlidingWindow(reduceHour, 60*time.Second, DeltaRatio, false)
 		reset.appendPoint(Known(5), Known(100), t0)
 		reset.appendPoint(Known(11), Known(5), t0.Add(10*time.Second))
 		n, s = reset.Reduce().Get()

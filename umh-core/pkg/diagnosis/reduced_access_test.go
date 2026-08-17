@@ -15,7 +15,7 @@
 // A test in package diagnosis can reach Reduced.v and Reduced.state, which
 // would make the "no number without its outcome" property vacuous. This file
 // stays in package diagnosis_test, where .v and .state are unexported and the
-// window is driven only through the exported interface (NewWindow, Known,
+// window is driven only through the exported interface (NewSlidingWindow, Known,
 // Observe, Reduce, Get).
 package diagnosis_test
 
@@ -29,7 +29,7 @@ import (
 
 var _ = Describe("Reduced access", func() {
 	It("should not expose the reduced number without its outcome", func() {
-		w, _ := diagnosis.NewWindow(time.Hour, 60*time.Second, diagnosis.Last, false)
+		w, _ := diagnosis.NewSlidingWindow(time.Hour, 60*time.Second, diagnosis.Last, false)
 		w.Observe(diagnosis.Known(5), diagnosis.Unknown(), time.Unix(1_000_000, 0))
 
 		n, s := w.Reduce().Get()

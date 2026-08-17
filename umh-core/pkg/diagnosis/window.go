@@ -12,10 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// This file holds the sliding Window that accumulates readings for one measured
+// This file holds the SlidingWindow that accumulates readings for one measured
 // series, and the Coverage it reports about its own extent. Using one:
 //
-//	w, err := NewWindow(60*time.Second, 60*time.Second, Mean, false)
+//	w, err := NewSlidingWindow(60*time.Second, 60*time.Second, Mean, false)
 //	// then, once per tick, in this order:
 //	w.Observe(value, against, now) // age out, then store this tick's reading
 //	v, state := w.Reduce().Get()   // the reduced number, and whether to trust it
@@ -40,9 +40,9 @@ type Coverage struct {
 // separates a filled window from one that has only just started.
 func (c Coverage) Full() bool { return c.span > 0 && c.covered >= c.span }
 
-// Window is a sliding window of readings for one measured series: a time-ordered
+// SlidingWindow accumulates readings for one measured series: a time-ordered
 // slice of Points, pruned from the front once they age past the span.
-type Window struct {
+type SlidingWindow struct {
 	points     []Point
 	red        Reduction
 	span       time.Duration
@@ -53,28 +53,28 @@ type Window struct {
 	lastAppendStored bool
 }
 
-// NewWindow builds an empty window, refusing a non-positive span or demote span.
+// NewSlidingWindow builds an empty window, refusing a non-positive span or demote span.
 //
 //	span    how far back the window reaches; entries older than this are pruned
 //	demoteSpan  how long without a successful read before the window empties; once a
 //	        source goes silent that long, Reduce says StateAbsent, not a stale number
 //	red     the reduction Reduce applies to the stored points
 //	counter whether the series is a monotone counter, so a backwards step is a reset
-func NewWindow(span, demoteSpan time.Duration, red Reduction, counter bool) (*Window, error) {
+func NewSlidingWindow(span, demoteSpan time.Duration, red Reduction, counter bool) (*SlidingWindow, error) {
 	if span <= 0 {
 		return nil, fmt.Errorf("window: span %v is not positive", span)
 	}
 	if demoteSpan <= 0 {
 		return nil, fmt.Errorf("window: demote span %v is not positive", demoteSpan)
 	}
-	return &Window{span: span, demoteSpan: demoteSpan, red: red, counter: counter}, nil
+	return &SlidingWindow{span: span, demoteSpan: demoteSpan, red: red, counter: counter}, nil
 }
 
 // Observe advances the window by one tick, ageing out entries past the span
 // before storing this tick's reading. It is the only call that moves a window
 // forward: skip a tick and the previous tick's entries count as current. Pass
 // Unknown() when the read failed.
-func (w *Window) Observe(value, against Reading, at time.Time) {
+func (w *SlidingWindow) Observe(value, against Reading, at time.Time) {
 	w.age(at)
 	w.appendPoint(value, against, at)
 }
@@ -85,7 +85,7 @@ func (w *Window) Observe(value, against Reading, at time.Time) {
 // and the zero time when the window holds nothing. Points are only ever pruned
 // from the front, so the newest one is the last success for as long as there is
 // one at all; keeping a separate field would be the same fact written twice.
-func (w *Window) lastStored() time.Time {
+func (w *SlidingWindow) lastStored() time.Time {
 	if len(w.points) == 0 {
 		return time.Time{}
 	}
@@ -93,7 +93,7 @@ func (w *Window) lastStored() time.Time {
 	return w.points[len(w.points)-1].At
 }
 
-func (w *Window) age(now time.Time) {
+func (w *SlidingWindow) age(now time.Time) {
 	// Demote: no successful read for the demote span empties the window, freeze or not.
 	// An already-empty window has nothing to demote and falls through to the rules
 	// below, which are no-ops on no points.
@@ -113,7 +113,7 @@ func (w *Window) age(now time.Time) {
 
 // prune drops entries older than the cutoff, keeping one landing exactly on it.
 // Entries are appended in time order, so it drops from the front.
-func (w *Window) prune(cutoff time.Time) {
+func (w *SlidingWindow) prune(cutoff time.Time) {
 	i := 0
 	for i < len(w.points) && w.points[i].At.Before(cutoff) {
 		i++
@@ -123,7 +123,7 @@ func (w *Window) prune(cutoff time.Time) {
 
 // appendPoint stores one instant's reading; an absent or non-finite value stores
 // nothing, and callers must not pre-filter.
-func (w *Window) appendPoint(value, against Reading, at time.Time) {
+func (w *SlidingWindow) appendPoint(value, against Reading, at time.Time) {
 	w.lastAppendStored = false
 
 	v, vok := value.Get()
@@ -167,7 +167,7 @@ func (w *Window) appendPoint(value, against Reading, at time.Time) {
 
 // Reduce applies the window's reduction to the stored points and returns one
 // number: a mean, a p95, whatever the window was built with, bound to a State.
-func (w *Window) Reduce() Reduced {
+func (w *SlidingWindow) Reduce() Reduced {
 	if len(w.points) == 0 {
 		return Reduced{state: StateAbsent}
 	}
@@ -208,7 +208,7 @@ func denominatorDelta(points []Point) float64 {
 }
 
 // Coverage reports how much of its span the stored readings cover.
-func (w *Window) Coverage() Coverage {
+func (w *SlidingWindow) Coverage() Coverage {
 	var covered time.Duration
 	if len(w.points) >= 2 {
 		covered = w.points[len(w.points)-1].At.Sub(w.points[0].At)
