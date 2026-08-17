@@ -55,7 +55,7 @@ var _ = Describe("bind the generated suite to the real CPU table", func() {
 	})
 
 	It("should fail when a signal is added to the CPU table without going through the readability path", func() {
-		// The mutant: a sixth CPU row whose Extract returns Known(0) on an
+		// zeroForAbsent: a sixth CPU row whose Extract returns Known(0) on an
 		// absent reading instead of Unknown() — the whole readability contract
 		// violated in one line. It reaches Ready wherever the reader is required
 		// to say the window is unusable: CaseBriefOutage (NoneReady required),
@@ -68,17 +68,17 @@ var _ = Describe("bind the generated suite to the real CPU table", func() {
 		out := diagnosis.Run(t, diagnosis.NewEnvironment(HasLimit, HasVirtualization), cpuFeed{cores: 4})
 
 		Expect(outcome(out, "bad-read", diagnosis.CaseBriefOutage)).To(Equal(diagnosis.Ready),
-			"the mutant reaches Ready on the brief outage, where NoneReady is required")
+			"zeroForAbsent reaches Ready on the brief outage, where NoneReady is required")
 		Expect(outcome(out, "bad-read", diagnosis.CaseLongOutage)).To(Equal(diagnosis.Ready),
-			"the mutant reaches Ready on the long outage, where AllAbsent is required")
+			"zeroForAbsent reaches Ready on the long outage, where AllAbsent is required")
 		Expect(outcome(out, "bad-read", diagnosis.CasePostOutageDip)).To(Equal(diagnosis.Ready),
-			"the mutant reaches Ready on the post-outage dip, where NoneReady is required")
+			"zeroForAbsent reaches Ready on the post-outage dip, where NoneReady is required")
 		Expect(outcome(out, "bad-read", diagnosis.CaseBelowFloor)).To(Equal(diagnosis.NoneReady),
-			"CaseBelowFloor never reaches the absent branch, so it stays green under the mutant")
+			"CaseBelowFloor never reaches the absent branch, so it stays green under zeroForAbsent")
 
 		// And the good rows in the SAME run still behave: the real table rows
-		// reach the correct availability, so it is the mutant row and only the
-		// mutant row that the suite exposes.
+		// reach the correct availability, so it is the zeroForAbsent row and
+		// only the zeroForAbsent row that the suite exposes.
 		Expect(outcome(out, "throttling", diagnosis.CaseLongOutage)).To(Equal(diagnosis.AllAbsent))
 	})
 })
@@ -93,9 +93,10 @@ func outcome(out []diagnosis.Outcome, signal string, c diagnosis.Case) diagnosis
 	return diagnosis.NoInstrument
 }
 
-// badReadSignal is the suite's mutant: a CPU row whose Extract returns Known(0)
-// even on an absent reading, skipping the readability path. It is only used to
-// prove the suite catches such a row, never part of the live table.
+// badReadSignal builds the suite's zeroForAbsent row: a CPU row whose Extract
+// returns Known(0) even on an absent reading, skipping the readability path. It
+// is only used to prove the suite catches such a row, never part of the live
+// table.
 func badReadSignal() diagnosis.Signal[Sample] {
 	return diagnosis.Signal[Sample]{
 		Name:            "bad-read",
