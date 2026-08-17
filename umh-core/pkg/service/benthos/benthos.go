@@ -70,10 +70,9 @@ const (
 
 // envUseFsmv2BenthosMonitor names the environment variable that selects the
 // fsmv2 benthos monitor backend in NewDefaultBenthosService. It is read with
-// env.GetAsBool, the same helper every other FSMv2 flag uses, so it honours
-// on/off, yes/no, y/n, 1/0 and true/false case-insensitively. Unset, empty or
-// false-y selects the byte-identical fsmv1 backend; true-y selects the fsmv2
-// adapter manager.
+// env.GetAsBool, which accepts on/off, yes/no, y/n, 1/0 and true/false
+// case-insensitively. Unset, empty or false-y selects the fsmv1 backend;
+// true-y selects the fsmv2 adapter manager.
 const envUseFsmv2BenthosMonitor = "USE_FSMV2_BENTHOS_MONITOR"
 
 // IBenthosService is the interface for managing Benthos services.
@@ -204,11 +203,9 @@ func (bs *BenthosStatus) CopyBenthosLogs(src []s6service.LogEntry) error {
 	return nil
 }
 
-// benthosMonitorManagerIface is the seam between the fsmv1 and fsmv2 benthos
-// monitor backends. The BenthosService only depends on the three methods its
-// reconciliation and status paths call, so the field can hold either the
-// fsmv1 BenthosMonitorManager or the fsmv2 adapter WorkerManager depending on
-// the USE_FSMV2_BENTHOS_MONITOR flag.
+// benthosMonitorManagerIface lets BenthosService hold either benthos monitor
+// backend: the fsmv1 BenthosMonitorManager or the fsmv2 adapter WorkerManager,
+// depending on the USE_FSMV2_BENTHOS_MONITOR flag.
 type benthosMonitorManagerIface interface {
 	GetLastObservedState(serviceName string) (fsm.ObservedState, error)
 	GetInstance(name string) (fsm.FSMInstance, bool)
@@ -282,11 +279,9 @@ func WithS6Service(s6Service s6service.Service) BenthosServiceOption {
 
 // WithMonitorManager sets a custom monitor manager for the BenthosService.
 //
-// It overrides the backend selected by envUseFsmv2BenthosMonitor inside
-// NewDefaultBenthosService: NewDefaultBenthosService applies options before it
-// selects the flag-selected default, so a manager passed here always wins and
-// the default backend is never allocated. Passing nil is equivalent to not
-// passing the option; the flag-selected default is used instead.
+// It overrides the backend selected by envUseFsmv2BenthosMonitor. Passing nil
+// is equivalent to not passing the option; the flag-selected default is used
+// instead.
 func WithMonitorManager(monitorManager benthosMonitorManagerIface) BenthosServiceOption {
 	return func(s *BenthosService) {
 		s.benthosMonitorManager = monitorManager
@@ -315,17 +310,12 @@ func NewDefaultBenthosService(benthosName string, opts ...BenthosServiceOption) 
 	// Apply options before selecting the default backend so a caller-supplied
 	// manager always wins, the flag-selected default is never allocated or
 	// logged when overridden, and WithMonitorManager(nil) falls back to the
-	// default instead of nil-poisoning the service.
+	// default instead of leaving the field nil.
 	for _, opt := range opts {
 		opt(service)
 	}
 
 	if service.benthosMonitorManager == nil {
-		// env.GetAsBool is the repo convention for reading boolean flags, and
-		// unlike strconv.ParseBool it accepts the spellings operators actually
-		// use: on/off, yes/no, y/n, 1/0, true/false, case-insensitively.
-		// strconv.ParseBool rejects "ON", so reading this flag directly made
-		// USE_FSMV2_BENTHOS_MONITOR=ON silently select fsmv1.
 		useFsmv2, err := env.GetAsBool(envUseFsmv2BenthosMonitor, false, false)
 		if err != nil {
 			log.Warnf("%s could not be read as a boolean; treating as off (fsmv1): %v", envUseFsmv2BenthosMonitor, err)
@@ -341,8 +331,6 @@ func NewDefaultBenthosService(benthosName string, opts ...BenthosServiceOption) 
 				fmt.Sprintf("%s_%s", logger.ComponentBenthosMonitorManager, benthosName),
 			)
 		} else {
-			// Flag-off default constructs the same fsmv1 manager as before the
-			// seam and emits no log line, so the default stays byte-identical.
 			service.benthosMonitorManager = benthos_monitor_fsm.NewBenthosMonitorManager(benthosName)
 		}
 	}

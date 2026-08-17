@@ -26,30 +26,22 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 )
 
-// TestThroughputWindowIsTimeBased pins the by-time throughput window. The
-// window is held BY TIME over a 60s span, not by FSMv1's count-based
-// ThroughputWindowSize = 600 entries, so it matches the intent of a one-minute
-// average without the drift FSMv1 gets from dropped ticks.
+// TestThroughputWindowIsTimeBased asserts that the throughput window is held by
+// time over a 60s span rather than by FSMv1's count-based
+// ThroughputWindowSize = 600 entries, so a one-minute average does not drift
+// when ticks are dropped.
 //
-// MessagesPerSecond is a real rate in seconds over the in-window span: the
-// oldest in-window sample to the newest, (latest.count - oldest.count) /
-// elapsedSeconds. LastCount is the newest sample's count. With a single sample
-// (no second in-window sample) the rate is 0 — and IsActive derives from
-// Input.MessagesPerSecond > 0, so a zero rate means inactive. A process restart
-// zeroes both Prometheus counters, so a both-counter drop wipes the window and
-// leaves a single post-restart sample; the newest-vs-oldest guard covers the
-// one-sided drop that does not wipe.
+// Semantics under test: throughputWindow.inputRate / inputCount
+// (throughput_window.go), plus IsActive, which derives from
+// Input.MessagesPerSecond > 0, so a zero rate means inactive.
 //
 // Every sample time is injected so the test is deterministic: no real 1s
-// real-time sleeps and no fake clock. The window's Add accepts the explicit
-// sample time precisely so an aged sample can be injected.
+// real-time sleeps. The window's Add accepts the explicit sample time precisely
+// so an aged sample can be injected.
 func TestThroughputWindowIsTimeBased(t *testing.T) {
 	t0 := time.Now().Truncate(time.Second)
 	deps := &benthosMonitorDeps{}
 
-	// (b) single sample: MessagesPerSecond must be 0 (and, by extension,
-	// IsActive false), not the cumulative counter-as-rate FSMv1 publishes on its
-	// first/reset tick.
 	deps.window.Add(t0, 4195, 10, 5)
 	if inRate := deps.window.inputRate(); inRate != 0 {
 		t.Errorf("single-sample window: Input MessagesPerSecond = %v, want 0 (one sample cannot compute a rate)", inRate)
@@ -58,8 +50,6 @@ func TestThroughputWindowIsTimeBased(t *testing.T) {
 		t.Errorf("single-sample window: Output MessagesPerSecond = %v, want 0", outRate)
 	}
 
-	// (a) second sample exactly 1s later, input +2, output +1: real rate in
-	// seconds ~2.0 input / ~1.0 output.
 	deps.window.Add(t0.Add(1*time.Second), 4195, 12, 6)
 	if inRate := deps.window.inputRate(); inRate < 1.5 || inRate > 2.5 {
 		t.Errorf("1s-apart +2 input: Input MessagesPerSecond = %v, want ~2.0 (within tolerance)", inRate)
@@ -74,10 +64,10 @@ func TestThroughputWindowIsTimeBased(t *testing.T) {
 		t.Errorf("outputCount = %d, want 6", out)
 	}
 
-	// (c) an injected sample 61s older than the newest is outside the 60s window
-	// and must be dropped: the rate must be unchanged. This is the by-time
-	// discriminator — a count-based window of 3 entries would include the aged
-	// sample and change the rate.
+	// A sample 61s older than the newest is outside the 60s window and must be
+	// dropped, leaving the rate unchanged. A count-based window of 3 entries would
+	// keep that sample and change the rate, so this is the assertion that
+	// separates the two designs.
 	deps.window.Add(t0.Add(-61*time.Second), 4195, 5, 5)
 	if inRate2 := deps.window.inputRate(); inRate2 < 1.5 || inRate2 > 2.5 {
 		t.Errorf("after adding a 61s-old sample: Input MessagesPerSecond = %v, want ~2.0 (an aged sample must be dropped)", inRate2)
@@ -86,7 +76,7 @@ func TestThroughputWindowIsTimeBased(t *testing.T) {
 		t.Errorf("after adding a 61s-old sample, window holds %d samples, want 2 (aged samples must be pruned)", got)
 	}
 
-	// (d) a mid-window dropped-tick gap must not drift the by-time rate. Samples
+	// A mid-window dropped-tick gap must not drift the by-time rate. Samples
 	// at t0, +30s, +60s with input 0, 30, 90: the in-window span is the full
 	// t0..t0+60s (oldest in-window to newest), so the rate is the real-time delta
 	// 90/60 = 1.5/s — not a two-newest count-window rate of 60/30 = 2/s.
@@ -98,11 +88,9 @@ func TestThroughputWindowIsTimeBased(t *testing.T) {
 		t.Errorf("mid-window gap: Input MessagesPerSecond = %v, want ~1.5 (real-time delta 90/60, not a count-window 2.0)", r)
 	}
 
-	// (e) a both-counter drop spanning a restart: benthos' counters zero when the
-	// process restarts, so a reset landing inside the window drops BOTH counters
-	// and wipes the window. The post-wipe single sample cannot compute a rate, so
-	// the rate is 0 — never negative, and never the FSMv1 cumulative count as a
-	// rate.
+	// A restart zeroes benthos' counters. Add keys the wipe on the input counter
+	// alone, so this drop wipes the window and re-seeds it with the new sample.
+	// The rate then reads 0 — never negative.
 	restart := &benthosMonitorDeps{}
 	restart.window.Add(t0, 4195, 100, 100)
 	restart.window.Add(t0.Add(10*time.Second), 4195, 5, 5)
@@ -111,9 +99,9 @@ func TestThroughputWindowIsTimeBased(t *testing.T) {
 	}
 }
 
-// TestThroughputWindowZeroValueIsSafe pins that the window's zero value is a
+// TestThroughputWindowZeroValueIsSafe asserts that the window's zero value is a
 // valid empty window: every accessor returns the zero/0 result rather than
-// panicking on an un-populated window. The deps doc guarantees this contract.
+// panicking on an un-populated window.
 func TestThroughputWindowZeroValueIsSafe(t *testing.T) {
 	var w throughputWindow
 
@@ -129,7 +117,6 @@ func TestThroughputWindowZeroValueIsSafe(t *testing.T) {
 	if out := w.outputCount(); out != 0 {
 		t.Errorf("outputCount on empty window = %d, want 0", out)
 	}
-	// A single sample is still not two, so rates stay 0 but nothing panics.
 	w.Add(time.Now(), 4195, 7, 3)
 	if in := w.inputRate(); in != 0 {
 		t.Errorf("inputRate on single-sample window = %v, want 0", in)
@@ -139,13 +126,14 @@ func TestThroughputWindowZeroValueIsSafe(t *testing.T) {
 	}
 }
 
-// TestPollComputesThroughput pins the end-to-end wiring: Poll feeds the scrape
-// of /metrics into the by-time window and returns Input/LastCount and IsActive on
-// the status. The first cold poll is a single sample, so its rate is 0 and
-// IsActive false; a second poll with a raised counter advances LastCount and flips
-// IsActive, proving Poll actually feeds the window. (The rate itself is
-// wall-clock sensitive, so the deterministic assertions are the single-sample 0
-// and the LastCount progression.)
+// TestPollComputesThroughput asserts the end-to-end wiring: Poll feeds the
+// scrape of /metrics into the by-time window and returns Input/LastCount and
+// IsActive on the status. The first cold poll is a single sample, so its rate is
+// 0 and IsActive false; a second poll with a raised counter advances LastCount,
+// which happens only if Poll fed the window. The rate itself is wall-clock
+// sensitive, so a rate assertion here would be flaky by construction: the
+// deterministic assertions are the single-sample 0 and the LastCount
+// progression.
 func TestPollComputesThroughput(t *testing.T) {
 	var inputCounter int64 = 10
 	var outputCounter int64 = 5
@@ -173,7 +161,6 @@ func TestPollComputesThroughput(t *testing.T) {
 	}
 	deps := &benthosMonitorDeps{client: &http.Client{Timeout: 400 * time.Millisecond}}
 
-	// Cold first poll: a single sample cannot compute a rate.
 	status, err := Poll(context.Background(), deps, cfg)
 	if err != nil {
 		t.Fatalf("first Poll errored: %v", err)
@@ -188,8 +175,6 @@ func TestPollComputesThroughput(t *testing.T) {
 		t.Errorf("cold poll Input.LastCount = %d, want 10", status.Input.LastCount)
 	}
 
-	// Second poll with a raised input counter: LastCount advances and IsActive
-	// flips on, proving Poll fed the window.
 	inputCounter = 12
 	outputCounter = 6
 	status, err = Poll(context.Background(), deps, cfg)
@@ -204,15 +189,15 @@ func TestPollComputesThroughput(t *testing.T) {
 	}
 }
 
-// TestPollResetTickReportsIsActiveFalse pins that the status layer reflects a
-// counter-drop tick through the Poll seam: when both counters drop (a restart),
-// Poll wipes the window to a single sample, so the reset-tick status must read
-// IsActive=false — never the cumulative count as a rate — with LastCount carrying
-// the post-restart counter. This test pins the Poll->status wiring and LastCount
-// propagation; the window-level wipe itself (len(samples)==1) is the
-// discriminating assertion, pinned by TestThroughputWindowWipesOnCounterReset. A
-// single post-wipe sample yields a zero rate regardless of the wipe, so reaching
-// it through Poll does not itself decide the wipe.
+// TestPollResetTickReportsIsActiveFalse asserts that the status layer reflects a
+// counter drop through Poll. Both counters drop when the process restarts, and
+// the input-counter drop alone makes Add wipe the window to a single sample. The
+// reset-tick status must then read IsActive=false, and LastCount must carry the
+// post-restart counter.
+//
+// This test covers the Poll->status wiring and how LastCount propagates; the
+// window-level wipe itself (len(samples)==1) is the discriminating assertion,
+// covered by TestThroughputWindowWipesOnCounterReset.
 func TestPollResetTickReportsIsActiveFalse(t *testing.T) {
 	inputCounter := 100
 	outputCounter := 100
@@ -240,7 +225,6 @@ func TestPollResetTickReportsIsActiveFalse(t *testing.T) {
 	}
 	deps := &benthosMonitorDeps{client: &http.Client{Timeout: 400 * time.Millisecond}}
 
-	// Cold baseline poll: a single sample cannot compute a rate.
 	status, err := Poll(context.Background(), deps, cfg)
 	if err != nil {
 		t.Fatalf("baseline Poll errored: %v", err)
@@ -249,8 +233,6 @@ func TestPollResetTickReportsIsActiveFalse(t *testing.T) {
 		t.Errorf("baseline poll IsActive = true, want false (single sample)")
 	}
 
-	// Both counters drop: a restart. Poll wipes the window to a single sample,
-	// so the reset-tick status must read IsActive=false.
 	inputCounter = 5
 	outputCounter = 5
 	status, err = Poll(context.Background(), deps, cfg)

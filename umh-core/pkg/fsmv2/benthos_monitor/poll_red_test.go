@@ -28,16 +28,11 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/simple"
 )
 
-// TestPollScrapesEndpoints forces the real three-endpoint scrape through Poll.
-// It serves /ping, /version, and /metrics locally, hands Poll a deps with a
-// real client pointed at the dev port, and asserts the returned status carries
-// a real scrape time, the served /metrics counters, ping liveness, and the
-// version string. The /metrics body uses the real benthos exposition format
-// (`name{label=...,path=...}` plus a scientific-notation value), so the parser
-// is exercised against the same shape production returns. It also pins that the
-// worker status marshals inside a real fsmv2.Observation without error, and
-// proves ctx routing: an already-cancelled context must surface an error from
-// http.NewRequestWithContext.
+// TestPollScrapesEndpoints forces the real four-endpoint scrape (/ping, /ready,
+// /version, /metrics) through Poll against a local server. The /metrics body
+// uses the real benthos exposition format (`name{label=...,path=...}` plus a
+// scientific-notation value), so this body exercises the same parser path
+// production takes (benthosmonitorservice.ParseMetricsFromBytes).
 func TestPollScrapesEndpoints(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
@@ -77,7 +72,7 @@ output_sent{label="",path="root.output"} 7
 		t.Fatalf("Poll errored: %v", err)
 	}
 
-	// (a) real scrape time + raw data populated from the served endpoints.
+	// Real scrape time + raw data populated from the served endpoints.
 	if status.ScrapedAt.IsZero() {
 		t.Errorf("ScrapedAt is zero; Poll did not record a real scrape time")
 	}
@@ -97,9 +92,9 @@ output_sent{label="",path="root.output"} 7
 		t.Errorf("Version = %q, want %q", status.Version, "1.2.3")
 	}
 
-	// (b) the status must marshal inside a real Observation without error. The
+	// The status must marshal inside a real Observation without error. The
 	// reserved-key collision guard lives at registration time (fsmv2
-	// DetectFieldCollisions), not here; this only pins that the status is
+	// DetectFieldCollisions), not here; this only asserts that the status is
 	// marshalable end-to-end.
 	obs := fsmv2.Observation[simple.Status[BenthosMonitorStatus]]{
 		CollectedAt: time.Now(),
@@ -109,7 +104,8 @@ output_sent{label="",path="root.output"} 7
 		t.Errorf("marshalling an Observation of the worker status failed: %v", err)
 	}
 
-	// (c) ctx routing: an already-cancelled context must surface an error.
+	// An already-cancelled context must surface an error; Poll passes ctx to
+	// http.NewRequestWithContext.
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	if _, err := Poll(ctx, deps, cfg); err == nil {
@@ -117,10 +113,10 @@ output_sent{label="",path="root.output"} 7
 	}
 }
 
-// TestPollRejectsNon2xxScrapes pins the status gating in get(): a non-2xx
-// /version or /metrics surfaces as a Poll error instead of silently scraping an
-// error page, and a non-2xx /ping leaves PingAlive false without aborting the
-// rest of the scrape.
+// TestPollRejectsNon2xxScrapes asserts that a non-2xx /version or /metrics
+// surfaces as a Poll error instead of silently scraping an error page, and that
+// a non-2xx /ping leaves PingAlive false without aborting the rest of the
+// scrape.
 func TestPollRejectsNon2xxScrapes(t *testing.T) {
 	newServer := func(failPaths map[string]int) *httptest.Server {
 		return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

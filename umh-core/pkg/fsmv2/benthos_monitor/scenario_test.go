@@ -15,24 +15,11 @@
 package fsmv2benthosmonitor_test
 
 // Scenario test: drive the REAL worker through the REAL framework entry points,
-// against a real HTTP server on the four scraped endpoints.
+// against a real HTTP server on the four endpoints benthosStub serves.
 //
-// Every other test in this package calls Poll, the window, or mapObserved
-// directly. None of them proves the worker can be built by the framework and
-// observed the way the supervisor observes it every tick. This test closes that
-// gap without a container:
-//
-//	factory.NewWorkerByType("benthos_monitor", …)  ← production instantiation
-//	  → worker.DeriveDesiredState(config.UserSpec{Config: <yaml>})
-//	      ← the same YAML the adapter's cfgFor emits into a child spec
-//	  → worker.CollectObservedState(ctx, desired)
-//	      ← what the observation collector calls on every tick: Poll → Health →
-//	        Observation
-//
-// A wiring regression anywhere on that path (worker not registered, config not
-// round-tripping through YAML, Poll not reached, Health not applied) fails here.
-// The container rig's liveness probe covers the same ground in production; this
-// is that assertion at CI speed.
+// A wiring regression in any of those entry points fails here: a worker the
+// registry cannot build, a child-spec config that does not round-trip through
+// YAML, or a Poll the framework never reaches.
 
 import (
 	"context"
@@ -101,10 +88,10 @@ func (s *benthosStub) port() uint16 {
 
 func (s *benthosStub) close() { s.server.Close() }
 
-// userSpecFor renders the child spec the adapter's cfgFor would produce: the
+// userSpecFor renders the child spec cfgFor (manager.go) would produce: the
 // config is YAML with the yaml-tag keys, which is what the worker unmarshals
-// back into a config.BenthosMonitorConfig. Using YAML here (not JSON) keeps this
-// test honest about the round-trip the adapter actually performs.
+// back into a config.BenthosMonitorConfig. cfgFor's godoc states why those keys
+// must come from the yaml tags.
 func userSpecFor(t *testing.T, name string, port uint16) fsmv2config.UserSpec {
 	t.Helper()
 
@@ -119,8 +106,12 @@ func userSpecFor(t *testing.T, name string, port uint16) fsmv2config.UserSpec {
 	return fsmv2config.UserSpec{Config: string(raw)}
 }
 
-// observe runs one full framework observation cycle and returns the worker's
-// stored status, exactly as the collector would persist it.
+// observe runs one full framework observation cycle — the Poll → Health cycle
+// documented on simple.CollectObservedState (simple/worker.go) — and returns the
+// worker's stored status. It marshals the worker's own return value: the
+// collector's post-COS wrapping (CollectedAt, framework metrics, action history,
+// accumulated worker metrics, in collector.go's wrapNewObservation) is not
+// reproduced here.
 func observe(t *testing.T, w fsmv2.Worker, spec fsmv2config.UserSpec) simple.Status[fsmv2benthosmonitor.BenthosMonitorStatus] {
 	t.Helper()
 
@@ -138,8 +129,9 @@ func observe(t *testing.T, w fsmv2.Worker, spec fsmv2config.UserSpec) simple.Sta
 	}
 
 	// The observation is generic to the framework; round-trip its JSON into the
-	// worker's stored status type, which is what the adapter reads back out of
-	// CSE. A field the worker fails to publish cannot survive this.
+	// worker's stored status type, which is what the fsmv1 adapter
+	// (pkg/fsmv2/adapter, getFreshStatus) reads back out of the CSE store. A
+	// field the worker fails to publish cannot survive this.
 	blob, err := json.Marshal(observed)
 	if err != nil {
 		t.Fatalf("marshal observation: %v", err)
@@ -153,8 +145,6 @@ func observe(t *testing.T, w fsmv2.Worker, spec fsmv2config.UserSpec) simple.Sta
 	return status
 }
 
-// TestScenarioWorkerObservedThroughFramework builds the worker the way production
-// builds it and observes it the way the supervisor observes it.
 func TestScenarioWorkerObservedThroughFramework(t *testing.T) {
 	stub := newBenthosStub()
 	defer stub.close()
@@ -182,7 +172,8 @@ func TestScenarioWorkerObservedThroughFramework(t *testing.T) {
 
 	// --- observation 1: the cold tick -------------------------------------
 	// The scrape must reach all four endpoints and land in the status. With a
-	// single window sample the rate is not yet computable, so the worker reports
+	// single sample in the throughput window (throughputWindow,
+	// throughput_window.go) the rate is not yet computable, so the worker reports
 	// no throughput and stays inactive — never FSMv1's cumulative-count-as-rate.
 	first := observe(t, worker, spec)
 
@@ -201,7 +192,6 @@ func TestScenarioWorkerObservedThroughFramework(t *testing.T) {
 	if first.Result.Version != "4.95.0" {
 		t.Errorf("Version = %q, want %q: /version did not reach the status", first.Result.Version, "4.95.0")
 	}
-	// 100 input, and output summed across the two broker legs (40 + 40).
 	if first.Result.BenthosMetrics.InputReceivedTotal() != 100 {
 		t.Errorf("InputReceivedTotal() = %d, want 100", first.Result.BenthosMetrics.InputReceivedTotal())
 	}
@@ -244,20 +234,20 @@ func TestScenarioWorkerObservedThroughFramework(t *testing.T) {
 	}
 }
 
-// TestScenarioUnreachableBenthosIsDegraded pins the other half of the contract:
-// when the scraped benthos is gone, the framework must drive the worker degraded
-// rather than publishing a healthy status with stale numbers. This is the
-// condition the adapter maps to the degraded operational state.
+// TestScenarioUnreachableBenthosIsDegraded covers the other half of the
+// contract: when the scraped benthos is gone, the framework must drive the
+// worker degraded rather than publishing a healthy status with stale numbers.
+// This is the condition the fsmv1 adapter maps to the degraded operational
+// state.
 //
-// Which layer produces the verdict matters, so it is stated here rather than
-// left to be rediscovered: a failed scrape makes Poll return an error, and the
-// framework marks the observation degraded on its poll-error path
-// (simple/worker.go) WITHOUT consulting the worker's Health function. Deleting
-// Health does not change this test's outcome — verified by mutation. Health is
-// exercised at the unit level (TestHealthReproducesIsMonitorHealthy), and
-// staleness of an otherwise-successful scrape is caught one layer up by the
-// adapter's freshness ladder (staleAfter = 3x the observation interval), which is
-// where the design places it.
+// The verdict comes from the framework, not from the worker: a failed scrape
+// makes Poll return an error, and the poll-error path degrades the observation
+// WITHOUT consulting the worker's Health function (see
+// simple.CollectObservedState's godoc, simple/worker.go). Deleting Health
+// therefore does not change this test's outcome; Health is exercised at the unit
+// level (TestHealthReproducesIsMonitorHealthy). Staleness of an
+// otherwise-successful scrape is caught one layer up, by staleAfterFor — 3x the
+// registered observation interval (adapter/instance.go).
 func TestScenarioUnreachableBenthosIsDegraded(t *testing.T) {
 	stub := newBenthosStub()
 	port := stub.port()

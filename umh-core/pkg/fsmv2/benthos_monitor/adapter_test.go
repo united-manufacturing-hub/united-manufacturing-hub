@@ -31,12 +31,12 @@ func testConfig() config.BenthosMonitorConfig {
 	}
 }
 
-// TestMapObservedBuildsFullNestedStructure pins the control-loop-panic trap: the
-// adapter dereferences ServiceInfo.BenthosStatus.LastScan.BenthosMetrics.MetricsState
-// unguarded, so mapObserved must return every inner pointer non-nil. It also pins
-// the single conversion: the worker's tick-free MessagesPerSecond becomes FSMv1's
-// MessagesPerTick via MessagesPerSecond x DefaultTickerTime, and IsActive is copied
-// through unchanged (never scaled).
+// TestMapObservedBuildsFullNestedStructure asserts mapObserved returns every inner
+// pointer non-nil. One consumer site is unguarded, and it is the one that panics:
+// pkg/service/benthos/benthos.go:699 dereferences LastScan.BenthosMetrics without a
+// nil check. (benthos.go:693 and :697 return an error for a nil ServiceInfo or
+// LastScan; benthos.go:1142 guards MetricsState.) It also asserts the conversion
+// mapObserved performs: MessagesPerSecond becomes MessagesPerTick.
 func TestMapObservedBuildsFullNestedStructure(t *testing.T) {
 	status := simple.Status[BenthosMonitorStatus]{
 		Result: BenthosMonitorStatus{
@@ -70,7 +70,6 @@ func TestMapObservedBuildsFullNestedStructure(t *testing.T) {
 		t.Fatal("MetricsState is nil; HasProcessingActivity dereferences it")
 	}
 
-	// MessagesPerTick = MessagesPerSecond x DefaultTickerTime (0.1): 20 -> 2, 10 -> 1.
 	wantIn := 20 * tickSeconds()
 	if ms.Input.MessagesPerTick != wantIn {
 		t.Errorf("Input.MessagesPerTick = %v, want %v (20 msg/s x 0.1s tick)", ms.Input.MessagesPerTick, wantIn)
@@ -99,22 +98,13 @@ func TestMapObservedBuildsFullNestedStructure(t *testing.T) {
 	}
 }
 
-// TestMapObservedSetsIsRunning pins the field that gates every consumer.
-// GetHealthCheckAndMetrics (pkg/service/benthos/benthos.go) copies HealthCheck out
-// of LastScan and then returns a ZERO BenthosStatus when
-// ServiceInfo.BenthosStatus.IsRunning is false — throwing away the health it just
-// read. So a scan with correct IsLive/IsReady but IsRunning=false reads as
-// live=false, ready=false at the FSM, holding every bridge in starting forever.
-// That is what happened in a live container: the worker polled correctly and every
-// DataFlowComponent still reported "healthchecks did not pass".
-//
-// FSMv1 set IsRunning from the S6 FSM state of the monitor service
-// (service/benthos_monitor/benthos_monitor.go:1486) — a fact about a process. Under
-// this flag there is no S6 monitor service (the worker is the monitor), so the
-// nearest true statement is that the observation is trustworthy: an observation
-// exists AND the framework's verdict is not degraded. A timestamp alone is NOT
-// evidence the scrape ran — Poll stamps it before its first request and a failed
-// poll keeps it — which is the case the third block below pins.
+// TestMapObservedSetsIsRunning asserts the rule behind mapObserved's IsRunning
+// field (observationIsTrustworthy, adapter.go): when an observation exists
+// (ScrapedAt non-zero) and the framework's verdict is not degraded, IsRunning is
+// true; otherwise false. It matters because benthos.go:707 treats IsRunning=false
+// as no-data — discarding the HealthCheck it just copied out of LastScan and
+// returning ErrBenthosMonitorNotRunning — so IsRunning gates HealthCheck delivery
+// to every consumer.
 func TestMapObservedSetsIsRunning(t *testing.T) {
 	// A real scrape: ScrapedAt set, both probes true.
 	live := mapObserved(testConfig(), simple.Status[BenthosMonitorStatus]{
@@ -132,8 +122,9 @@ func TestMapObservedSetsIsRunning(t *testing.T) {
 		t.Error("IsRunning is false after a real scrape: GetHealthCheckAndMetrics will discard the HealthCheck and every bridge stays in starting")
 	}
 
-	// A zero status (the adapter passes one on a non-Fresh read) has no scrape
-	// behind it, so it must NOT claim the monitor is running.
+	// A zero status (what adapter.GetLastObservedState passes on a non-Fresh read,
+	// pkg/fsmv2/adapter/instance.go) has no scrape behind it, so it must NOT claim
+	// the monitor is running.
 	empty := mapObserved(testConfig(), simple.Status[BenthosMonitorStatus]{})
 	bmEmpty, ok := empty.(benthosmonitorfsm.BenthosMonitorObservedState)
 	if !ok {
@@ -167,10 +158,9 @@ func TestMapObservedSetsIsRunning(t *testing.T) {
 		t.Error("IsRunning is true for a failed poll: a dead monitor reports itself running and the not-running gate in GetHealthCheckAndMetrics can never fire")
 	}
 
-	// A stale-but-successful scan. health() drives this degraded, and under this
-	// flag there is no separate process that could be "running but unhealthy", so
-	// it maps to not-running too. Asserted so the collapse is a decision on the
-	// record rather than an accident.
+	// A stale-but-successful scan. health() drives this degraded, and under
+	// USE_FSMV2_BENTHOS_MONITOR there is no separate process that could be
+	// "running but unhealthy", so it maps to not-running too.
 	stale := mapObserved(testConfig(), simple.Status[BenthosMonitorStatus]{
 		Result:   BenthosMonitorStatus{ScrapedAt: time.Now()},
 		Degraded: true,
@@ -185,10 +175,10 @@ func TestMapObservedSetsIsRunning(t *testing.T) {
 	}
 }
 
-// TestMapObservedToleratesZeroStatus pins the other control-loop hazard: on a
-// non-Fresh read the adapter passes a zero status to mapObserved, which must
-// still produce the full non-nil nested structure (empty content) rather than
-// panicking on nil pointers.
+// TestMapObservedToleratesZeroStatus asserts the same non-nil guarantee for the
+// zero status adapter.GetLastObservedState (pkg/fsmv2/adapter/instance.go) passes
+// on a non-Fresh read: the full nested structure with empty content, not nil
+// pointers.
 func TestMapObservedToleratesZeroStatus(t *testing.T) {
 	observed := mapObserved(testConfig(), simple.Status[BenthosMonitorStatus]{})
 	bmState, ok := observed.(benthosmonitorfsm.BenthosMonitorObservedState)
@@ -202,7 +192,7 @@ func TestMapObservedToleratesZeroStatus(t *testing.T) {
 	}
 }
 
-// TestHealthReproducesIsMonitorHealthy pins that the monitor is healthy iff its scan is fresh
+// TestHealthReproducesIsMonitorHealthy asserts the monitor is healthy iff its scan is fresh
 // (within BenthosMaxMetricsAndConfigAge). A stale scan is degraded.
 func TestHealthReproducesIsMonitorHealthy(t *testing.T) {
 	if h := health(testConfig(), BenthosMonitorStatus{ScrapedAt: time.Now()}); h.Degraded {
@@ -214,7 +204,6 @@ func TestHealthReproducesIsMonitorHealthy(t *testing.T) {
 		t.Errorf("stale scan reported healthy: %+v", h)
 	}
 
-	// Zero ScrapedAt (never scanned) -> degraded.
 	if h := health(testConfig(), BenthosMonitorStatus{}); !h.Degraded {
 		t.Errorf("empty ScrapedAt reported healthy: %+v", h)
 	}

@@ -22,39 +22,31 @@ import "time"
 const windowSpan = 60 * time.Second
 
 // throughputSample is one poll's counter snapshot, stamped with the time it was
-// observed. The time is injected (not obtained from a clock inside the window)
-// so callers can replay deterministic sample sequences.
+// observed. The time is injected so callers can replay deterministic sample
+// sequences.
 type throughputSample struct {
 	at     time.Time
 	input  int
 	output int
 }
 
-// throughputWindow holds a by-time window of counter samples. Add appends a
-// sample stamped with its observed time and prunes samples older than windowSpan
-// of the newest, so the window stays bounded to the span. The window computes
-// the input and output rates over only the samples inside windowSpan of the
-// newest sample. Its zero value is a valid empty window: every method is safe on
-// an empty window, so no constructor is needed and a nil window cannot be built.
+// throughputWindow holds a by-time window of counter samples. Its zero value is
+// a valid empty window: every method is safe on an empty window, so there is no
+// constructor; declare it by value.
 type throughputWindow struct {
-	// port is the scrape port this window's samples belong to. Add full-wipes
-	// on a port change (a new endpoint is a new counter series), so the window
-	// never delta-ticks across two different benthos monitors. Zero means no
-	// sample has been recorded yet.
+	// port is the scrape port this window's samples belong to. Add wipes the
+	// window on a port change (a new endpoint is a new counter series), so it
+	// never subtracts one poll's counter from a different endpoint's.
 	port    int
 	samples []throughputSample
 }
 
 // Add records a sample at the given observed time with the given port and input
 // and output counter values, then drops any sample older than windowSpan of the
-// newest. The window keys on the scrape port: a different port from the previous
-// poll is a new counter series (the child was re-pointed at a different endpoint)
-// and full-wipes the window. A restart of the same benthos zeroes the monotonic
-// input_received counter, so a drop against the immediately preceding sample
-// also full-wipes (the counter-reset detector keys on the input counter only).
-// Production samples arrive in time order (so the aged prefix is normally all
-// that is removed), but the scan also drops an out-of-order aged sample, keeping
-// the window bounded to the span regardless of arrival order.
+// newest. It wipes the window first when the port changed or when wipeOnRestart
+// reports true. Production samples arrive in time order (so the aged prefix is
+// normally all that is removed), but the scan also drops an out-of-order aged
+// sample, keeping the window bounded to the span regardless of arrival order.
 func (w *throughputWindow) Add(at time.Time, port, input, output int) {
 	if n := len(w.samples); n > 0 && (port != w.port || wipeOnRestart(at, input, w.newest())) {
 		w.samples = w.samples[:0]
@@ -78,13 +70,13 @@ func (w *throughputWindow) Add(at time.Time, port, input, output int) {
 
 // wipeOnRestart reports whether the process restarted between prev and the new
 // sample at at, as seen through benthos' monotonic input_received counter. That
-// counter resets to 0 on a process restart, so a drop against the immediately
-// preceding sample (the counter-reset detector, input-only) is the signal that
-// the old by-time series ended and must be wiped. It deliberately does not also
-// require the output counter to drop: a restart where output was already ~0
-// (e.g. a backed-up broker) would otherwise never wipe and would keep a stale
-// pre-restart baseline in the window. A non-newer sample (an aged, out-of-order
-// arrival) is a pruning case, not a restart, so it is skipped.
+// counter resets to 0 on a process restart, so a drop in it against the
+// immediately preceding sample is the signal that the old by-time series ended
+// and must be wiped. It deliberately does not also require the output counter to
+// drop. After a restart where output was already ~0, a backed-up broker for
+// instance, requiring both to drop would never wipe, and the window would keep a
+// stale pre-restart baseline. A non-newer sample (an aged, out-of-order arrival)
+// is a pruning case, not a restart, so it is skipped.
 func wipeOnRestart(at time.Time, input int, prev throughputSample) bool {
 	return at.After(prev.at) && input < prev.input
 }
@@ -107,12 +99,12 @@ func (w *throughputWindow) newest() throughputSample {
 // inputRate returns the input rate in messages per second over the in-window
 // span: (newest.count - oldest-in-window.count) / elapsedSeconds, where
 // elapsedSeconds is the real time between those two samples. With fewer than two
-// in-window samples the rate is 0, because a single sample cannot be delta-ed. A
-// genuine restart wipes the window in Add, so the newest sample is already the
-// post-restart baseline. The newest-vs-oldest guards below cover the mixed cases
-// the wipe does not (a one-sided drop, an equal-timestamp arrival, or a restart
-// where one counter was already zero), reading 0 instead of a negative delta; an
-// elapsed span of zero reads 0 rather than dividing by zero.
+// in-window samples the rate is 0, because one sample has nothing to subtract
+// from. A genuine restart wipes the window in Add, so the newest sample is the
+// post-restart baseline. When the newest counter is below the oldest in-window
+// one, the rate reads 0 instead of a negative delta; that covers the cases the
+// wipe misses (a one-sided drop, an equal-timestamp arrival, a restart where one
+// counter was already zero). A zero elapsed span reads 0, not a division by zero.
 func (w *throughputWindow) inputRate() float64 {
 	if len(w.samples) < 2 {
 		return 0
@@ -164,14 +156,13 @@ func (w *throughputWindow) outputRate() float64 {
 	return float64(newest.output-oldest.output) / elapsed
 }
 
-// inputCount returns the newest sample's input counter value. It returns 0 on an
-// empty window. Because Add prunes, the newest sample is always in-window.
+// inputCount returns the newest sample's input counter value. Because Add
+// prunes, the newest sample is always in-window.
 func (w *throughputWindow) inputCount() int {
 	return w.newest().input
 }
 
-// outputCount returns the newest sample's output counter value. It returns 0 on
-// an empty window.
+// outputCount returns the newest sample's output counter value.
 func (w *throughputWindow) outputCount() int {
 	return w.newest().output
 }
