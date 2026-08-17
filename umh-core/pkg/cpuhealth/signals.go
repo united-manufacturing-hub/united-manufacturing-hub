@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// The per-tick fact bag: the numbers and flags the message layer needs that a
-// ranked cause list cannot carry.
+// The per-tick values and flags the message layer interpolates; a ranked cause
+// list cannot carry them.
 
 package cpuhealth
 
@@ -21,12 +21,12 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/diagnosis"
 )
 
-// Signals is the per-tick fact bag ComposeMessage and BlockReason read to render
-// a sentence the ranked cause list alone cannot carry. The first 31 fields keep
+// Signals is the per-tick values and flags ComposeMessage and BlockReason read
+// to render a sentence a ranked cause list alone cannot carry. The first 31 fields keep
 // their declaration order; everything after them is appended. Two of the three
 // frozen signatures take a Signals, so Decide is its sole producer.
 //
-// ⚠️ Exactly two fields here end in "Available" — HostBusyCoresAvailable and
+// Exactly two fields here end in "Available" — HostBusyCoresAvailable and
 // HostHeadroomAvailable — and that is the cap this package allows before a
 // family of near-duplicate booleans has to be modelled as a set instead, which
 // is why the readiness trio below is named for what it holds.

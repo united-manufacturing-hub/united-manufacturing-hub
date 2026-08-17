@@ -183,8 +183,9 @@ func causeHeadline(kind CauseKind) string {
 // The saturation switch reads the sub-latch flags directly. Its compound
 // host-full-and-limit case comes first and has no counterpart in BlockReason;
 // the four single-arm cases under it run in the precedence the two functions
-// share. Arm 6 is compound (NoLimitHostFired with host unreadable) and a
-// readable no-limit full host falls to arm 7.
+// share. The compound NoLimitHostFired-with-host-busy-unreadable case runs
+// before the default branch, so a readable no-limit full host falls to that
+// default.
 func causeDetails(c Cause, signals Signals) string {
 	switch c.Kind {
 	case CauseKindThrottling:

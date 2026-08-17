@@ -47,8 +47,10 @@ func saturationSignal(cores float64) diagnosis.Signal[Sample] {
 					// Defense-in-depth, not the gate. The real gate is the
 					// omission: cpuTable appends no saturation signal when cores
 					// <= 0, so this Extract is unreachable through production, and
-					// the absence is pinned by the RED test's hasSignal assertion.
-					// This guard only matters if that append gate is re-removed or
+					// the absence is pinned by host_headroom_guard_test.go's "should
+					// declare no saturation signal on a box whose core count was
+					// never readable, and stay healthy". This guard only matters
+					// if that append gate is re-removed or
 					// saturationSignal is called directly with a non-positive
 					// count — the subtraction below must never run on such a
 					// count, so the arm withholds here too.
