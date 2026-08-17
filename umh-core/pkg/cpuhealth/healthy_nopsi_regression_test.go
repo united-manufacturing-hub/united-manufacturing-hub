@@ -52,7 +52,7 @@ var _ = Describe("byte-identical output on a healthy no-PSI box", func() {
 				Quota:        diagnosis.Known(0),
 				UsageCores:   diagnosis.Known(0.3),
 				HostBusy:     diagnosis.Known(1.0),
-				Pressure:     diagnosis.Known(0.0),
+				Pressure:     diagnosis.Unknown(),
 				Steal:        diagnosis.Known(0.0),
 				NrThrottled:  diagnosis.Known(0),
 				NrPeriods:    diagnosis.Known(100),
@@ -77,5 +77,53 @@ var _ = Describe("byte-identical output on a healthy no-PSI box", func() {
 		Expect(msg).To(ContainSubstring("CPU healthy."))
 		Expect(msg).To(ContainSubstring(limitedVisibilityNote),
 			"the limited-visibility advisory must reach the customer on a dead-zone box")
+	})
+})
+
+// The capability gate withholds pressure even when a reading is present. This
+// spec deliberately builds a Sample no real box can produce — PsiAvailable
+// false with a Pressure reading past the fire mark — because that is exactly
+// the point: it isolates the HasPressureStats Requires gate as the thing
+// holding the pressure signal back, on a reading that would otherwise fire.
+// PressureApplies and LimitedVisibility cannot stand in for this: both are set
+// straight from PsiAvailable in fillSignals, never through the engine's
+// capability selection, so they pass unchanged whether the gate is present or
+// not. Only a produced cause routes through the gate. Without this spec, a
+// future PsiAvailable regression that keeps handing out readings — for
+// example the sticky flag getting reset while cpu.pressure keeps succeeding —
+// has nothing checking that the gate still withholds the signal.
+var _ = Describe("the capability gate withholds pressure even when a reading is present", func() {
+	It("should produce no pressure cause though the reading sits above the fire mark", func() {
+		engine, err := NewEngine(4, 0)
+		Expect(err).NotTo(HaveOccurred())
+
+		base := time.Now()
+		var verdict Verdict
+		for i := 0; i < 3; i++ {
+			s := Sample{
+				Timestamp:  base.Add(time.Duration(i) * time.Second),
+				CpuScope:   ScopeHost,
+				Quota:      diagnosis.Known(0),
+				UsageCores: diagnosis.Known(0.3),
+				HostBusy:   diagnosis.Known(1.0),
+				// 0.5, well past the pressure signal's Fire{At: 0.20} — a value
+				// that would fire the instant the gate let it through.
+				Pressure:     diagnosis.Known(0.5),
+				Steal:        diagnosis.Known(0.0),
+				NrThrottled:  diagnosis.Known(0),
+				NrPeriods:    diagnosis.Known(100),
+				LogicalCpus:  diagnosis.Known(4),
+				HostCpus:     diagnosis.Known(4),
+				PsiAvailable: false,
+				Virtualized:  false,
+			}
+			env := DeriveEnvironment(s)
+			verdict, _ = Decide(engine, s, env)
+		}
+
+		for _, c := range verdict.Causes {
+			Expect(c.Kind).NotTo(Equal(CauseKindPressure),
+				"HasPressureStats is absent, so the gate must withhold the pressure signal regardless of the reading")
+		}
 	})
 })
