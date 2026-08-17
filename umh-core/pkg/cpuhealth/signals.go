@@ -41,9 +41,9 @@ type Signals struct {
 	// independent of their latch state, so the number stays observable when the
 	// latch has not fired.
 	UsageFraction diagnosis.Reading // absent in every mode; declared for a future frontend projection
-	ThrottleRatio float64           // 60s nr_throttled/nr_periods delta; negatives clamped to 0
-	PressureAvg60 float64           // PSI avg60; NaN/negative/+Inf clamped to 0
-	StealP95      float64           // 60s p95; 0 on bare metal and below 2 samples
+	ThrottleRatio float64           // 60s nr_throttled/nr_periods delta; fillSignals discards State, so absent or untrusted reads 0
+	PressureAvg60 float64           // PSI avg60; NaN/±Inf are never stored (rejected at window ingest), and fillSignals discards State, so absent reads 0
+	StealP95      float64           // 60s p95; fillSignals discards State, so bare metal or below the reduction's floor of 20 reads 0
 
 	// Observability only: none of the six changes a verdict. The four Readings
 	// are declared for a future frontend projection and nothing fills them.
