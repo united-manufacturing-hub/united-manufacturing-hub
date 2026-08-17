@@ -398,7 +398,7 @@ var _ = Describe("Window", func() {
 		w.appendPoint(Unknown(), Unknown(), t0.Add(2*time.Second))
 
 		// exact is one demote span after the last successful read at t0+1s, so
-		// now.Sub(lastSuccess) == demote to the nanosecond.
+		// now.Sub(lastStored()) == demote to the nanosecond.
 		exact := t0.Add(time.Second).Add(demote)
 		w.age(exact)
 		_, atBoundary := w.Reduce().Get()

@@ -43,14 +43,11 @@ func (c Coverage) Full() bool { return c.span > 0 && c.spanned >= c.span }
 // Window is a sliding window of readings for one measured series: a time-ordered
 // slice of Points, pruned from the front once they age past the span.
 type Window struct {
-	// lastSuccess is the instant of the last STORED reading, not of the last
-	// call; the demote rule measures from it.
-	lastSuccess time.Time
-	points      []Point
-	red         Reduction
-	span        time.Duration
-	demote      time.Duration
-	counter     bool
+	points  []Point
+	red     Reduction
+	span    time.Duration
+	demote  time.Duration
+	counter bool
 	// lastAppendStored is whether the most recent appendPoint stored a reading.
 	// age runs before this tick's store, so there it means the previous tick.
 	lastAppendStored bool
@@ -84,9 +81,23 @@ func (w *Window) Observe(value, against Reading, at time.Time) {
 
 // age drops entries that have aged out of the span, subject to the demote and
 // freeze rules below. Observe runs it on EVERY tick, failed reads included.
+// lastStored is the instant of the last STORED reading, not of the last call,
+// and the zero time when the window holds nothing. Points are only ever pruned
+// from the front, so the newest one is the last success for as long as there is
+// one at all; keeping a separate field would be the same fact written twice.
+func (w *Window) lastStored() time.Time {
+	if len(w.points) == 0 {
+		return time.Time{}
+	}
+
+	return w.points[len(w.points)-1].At
+}
+
 func (w *Window) age(now time.Time) {
 	// Demote: no successful read for the demote span empties the window, freeze or not.
-	if !w.lastSuccess.IsZero() && now.Sub(w.lastSuccess) > w.demote {
+	// An already-empty window has nothing to demote and falls through to the rules
+	// below, which are no-ops on no points.
+	if last := w.lastStored(); !last.IsZero() && now.Sub(last) > w.demote {
 		w.points = nil
 
 		return
@@ -149,7 +160,6 @@ func (w *Window) appendPoint(value, against Reading, at time.Time) {
 	}
 
 	w.points = append(w.points, Point{At: at, Value: v, Against: against})
-	w.lastSuccess = at
 	w.lastAppendStored = true
 	// A successful store prunes even when the tick began frozen and age skipped it.
 	w.prune(at.Add(-w.span))
