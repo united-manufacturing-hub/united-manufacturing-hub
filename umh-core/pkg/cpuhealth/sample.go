@@ -114,10 +114,8 @@ type Sample struct {
 	// when the cpuset is readable, and unknown when it is not.
 	LogicalCpus diagnosis.Reading
 
-	// CpuScope reports whether the sampler's logical CPU count describes every
-	// CPU on the machine (ScopeHost), only the ones its container may run on
-	// (ScopeAffinity), or ScopeUnknown when the machine's CPU count cannot be
-	// read. It is never ScopeHost on an unreadable count.
+	// CpuScope classifies this sample per the Scope type — see ScopeHost,
+	// ScopeAffinity, and ScopeUnknown for what each value means.
 	CpuScope Scope
 
 	// Virtualized reports whether this host is a virtual machine. It is resolved

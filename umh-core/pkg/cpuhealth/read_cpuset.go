@@ -38,11 +38,9 @@ func (s *linuxSampler) readCpuset(ctx context.Context) (count int, ok bool) {
 	if text == "" {
 		return 0, false
 	}
-	// The cpuset is a comma-separated list of ranges and single ids — "0-3",
-	// "0,2,4", "0-1,4-5" — the shapes the scheduler emits when it pins a pod
-	// to non-contiguous CPUs — the pinned container the scope check exists for.
-	// Count every id it names, so any shape collapses to the size of the
-	// allowed set.
+	// Non-contiguous ranges are the shapes the scheduler emits when pinning a
+	// pod to specific CPUs — the pinned-container case the scope check exists
+	// for; count every id so any shape collapses to the allowed set's size.
 	for _, part := range strings.Split(text, ",") {
 		part = strings.TrimSpace(part)
 		if part == "" {

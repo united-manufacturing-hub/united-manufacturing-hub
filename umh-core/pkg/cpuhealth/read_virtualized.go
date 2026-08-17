@@ -145,7 +145,8 @@ func (s *linuxSampler) dmiProductVirtualized(ctx context.Context) (virtualized, 
 // "microsoft" is deliberately NOT here: sys_vendor "Microsoft Corporation" is
 // ambiguous between Azure ARM guests (a VM) and Microsoft Surface machines
 // (bare-metal OEM hardware), and a bare-metal Surface misread as a VM is the
-// worse error. Azure ARM therefore stays an undetected known-limitation.
+// worse error. Azure ARM therefore stays an undetected known limitation,
+// tracked as ENG-5642.
 var dmiVendorHypervisorTokens = []string{
 	"amazon",
 	"google compute engine",

@@ -30,9 +30,8 @@ var throttleMarks = diagnosis.Marks{
 	Polarity: diagnosis.HigherIsWorse, Unit: "ratio", Worst: 1.0,
 }
 
-// throttlingSignal is "is the kernel capping us against our own quota?" It is
-// the one instrument reading running totals, hence the only Counter in the
-// table.
+// throttlingSignal declares the table's one Counter instrument — see below
+// for why.
 func throttlingSignal() diagnosis.Signal[Sample] {
 	return diagnosis.Signal[Sample]{
 		Name:            sigThrottling,
