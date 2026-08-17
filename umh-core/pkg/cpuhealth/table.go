@@ -87,7 +87,7 @@ func Table(cores, quota float64) diagnosis.Table[Sample] {
 // exactly as a Capability is. host-headroom's capacity is the fixed reserve
 // rather than the core count, so only the limit arm's capacity scales.
 //
-// 🔥 quota is a float64 and not a Reading. Marks.Worst and Mark.At are both
+// quota is a float64 and not a Reading. Marks.Worst and Mark.At are both
 // float64, so a table cannot be built from an absence — and it does not need to
 // be: HasLimit is present exactly when cpu.max names a positive quota, which is
 // the same read that supplies the number.
