@@ -12,7 +12,7 @@ Things to keep in mind when deploying umh-core:
 - Mount `/data` for persistent storage - mount extra paths only when you need them
 - Configure your firewall to only give the container access to the IP addresses it needs
 - Set `AUTH_TOKEN` for ManagementConsole connection
-- Only use `ALLOW_INSECURE_TLS=true` if you're behind a corporate firewall with TLS inspection
+- If you're behind a corporate firewall with TLS inspection, add your corporate CA certificate instead of disabling certificate validation
 
 **Network:**
 - Allow outbound HTTPS to `management.umh.app`

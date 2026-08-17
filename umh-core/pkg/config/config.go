@@ -101,16 +101,25 @@ type AgentConfig struct {
 	Simulator                   bool          `yaml:"simulator,omitempty"`
 	EnableResourceLimitBlocking bool          `yaml:"enableResourceLimitBlocking"` // Feature flag for resource-based bridge blocking
 
-	// FSMv2 feature flags for incremental migration
-	UseFSMv2ProtocolConverter bool `yaml:"useFSMv2ProtocolConverter,omitempty"` // Migrate Protocol Converter to FSMv2
-	UseFSMv2MemoryCleanup     bool `yaml:"useFSMv2MemoryCleanup,omitempty"`     // Enable PersistenceWorker for delta compaction
+	// Retired FSMv2 feature flags.
+	//
+	// These are accepted and ignored. Nothing reads them: FSMv2 and its
+	// persistence worker run unconditionally. They stay declared because config
+	// parsing rejects unknown keys (ParseConfig passes allowUnknownFields=false,
+	// so KnownFields is on), which means deleting a field stops an instance from
+	// loading a config.yaml that still carries it, at startup and on every
+	// refresh. Removing one is a breaking change, not a cleanup. retired_flags_test.go
+	// pins every key here.
+	EnableFSMv2               bool `yaml:"enableFSMv2,omitempty"`
+	UseFSMv2ProtocolConverter bool `yaml:"useFSMv2ProtocolConverter,omitempty"`
+	UseFSMv2MemoryCleanup     bool `yaml:"useFSMv2MemoryCleanup,omitempty"`
 }
 
 type CommunicatorConfig struct {
 	APIURL            string `yaml:"apiUrl,omitempty"`
 	AuthToken         string `yaml:"authToken,omitempty"`
 	AllowInsecureTLS  bool   `yaml:"allowInsecureTLS,omitempty"`  // Allow TLS connections without verifying the certificate.
-	UseFSMv2Transport bool `yaml:"useFSMv2Transport,omitempty"` // Deprecated: no longer read; FSMv2 is the only bring-up path.
+	UseFSMv2Transport bool   `yaml:"useFSMv2Transport,omitempty"` // Deprecated: no longer read; FSMv2 is the only bring-up path.
 }
 
 // FSMInstanceConfig is the config for a FSM instance.

@@ -87,7 +87,7 @@ func (a *AuthenticateAction) Execute(ctx context.Context, depsAny any) error {
 	}
 
 	if deps.GetTransport() == nil {
-		newTransport := httpTransport.NewHTTPTransport(a.RelayURL, a.Timeout, false)
+		newTransport := httpTransport.NewHTTPTransport(a.RelayURL, a.Timeout)
 		deps.SetTransport(newTransport)
 	}
 

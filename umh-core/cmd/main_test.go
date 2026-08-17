@@ -15,13 +15,17 @@
 package main
 
 import (
+	"context"
 	"testing"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/communication_state"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/protocolconverterserviceconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 )
 
 func TestMain(t *testing.T) {
@@ -29,14 +33,15 @@ func TestMain(t *testing.T) {
 	RunSpecs(t, "Main Suite")
 }
 
-var _ = Describe("bringUpFSMv2", func() {
-	// bringUpFSMv2 is the bring-up decision main() consults. It is a pure
-	// function of the backend configuration, so it is asserted directly here
-	// rather than by running main(). The keep-the-legacy knob
-	// (UseFSMv2Transport) no longer routes anywhere: the legacy backend path
-	// was deleted, so FSMv2 is the only bring-up path.
+var _ = Describe("communicatorEnabled", func() {
+	// communicatorEnabled is the decision main() consults to gate the FSMv2
+	// communicator. It is a pure function of the backend configuration, so it
+	// is asserted directly here rather than by running main(). The
+	// keep-the-legacy knob (UseFSMv2Transport) no longer routes anywhere: the
+	// legacy backend path was deleted, so the communicator is the only path it
+	// gates.
 
-	It("brings up FSMv2 when credentials are present, even with the legacy transport switch off", func() {
+	It("enables the communicator when credentials are present, even with the legacy transport switch off", func() {
 		cfg := config.FullConfig{
 			Agent: config.AgentConfig{
 				CommunicatorConfig: config.CommunicatorConfig{
@@ -47,16 +52,16 @@ var _ = Describe("bringUpFSMv2", func() {
 			},
 		}
 
-		Expect(bringUpFSMv2(&cfg)).To(BeTrue())
+		Expect(communicatorEnabled(&cfg)).To(BeTrue())
 	})
 
-	It("does not bring up FSMv2 when credentials are absent", func() {
+	It("does not enable the communicator when credentials are absent", func() {
 		cfg := config.FullConfig{}
 
-		Expect(bringUpFSMv2(&cfg)).To(BeFalse())
+		Expect(communicatorEnabled(&cfg)).To(BeFalse())
 	})
 
-	It("does not bring up FSMv2 when only API_URL is set", func() {
+	It("does not enable the communicator when only API_URL is set", func() {
 		cfg := config.FullConfig{
 			Agent: config.AgentConfig{
 				CommunicatorConfig: config.CommunicatorConfig{
@@ -67,10 +72,10 @@ var _ = Describe("bringUpFSMv2", func() {
 
 		// The && credential contract must reject partial state; an operator with
 		// one field empty should not run without a token.
-		Expect(bringUpFSMv2(&cfg)).To(BeFalse())
+		Expect(communicatorEnabled(&cfg)).To(BeFalse())
 	})
 
-	It("does not bring up FSMv2 when only AUTH_TOKEN is set", func() {
+	It("does not enable the communicator when only AUTH_TOKEN is set", func() {
 		cfg := config.FullConfig{
 			Agent: config.AgentConfig{
 				CommunicatorConfig: config.CommunicatorConfig{
@@ -79,7 +84,7 @@ var _ = Describe("bringUpFSMv2", func() {
 			},
 		}
 
-		Expect(bringUpFSMv2(&cfg)).To(BeFalse())
+		Expect(communicatorEnabled(&cfg)).To(BeFalse())
 	})
 })
 
@@ -132,5 +137,64 @@ var _ = Describe("counting historian bridges", func() {
 		}
 
 		Expect(countHistorianBridges(cfg)).To(Equal(0))
+	})
+})
+
+var _ = Describe("buildFSMv2Supervisor", func() {
+	// With no Management Console credentials, the FSMv2 runtime used to be
+	// skipped entirely: buildFSMv2Supervisor was only called when APIURL and
+	// AuthToken were both set, so with no credentials no runtime existed and
+	// every adapter-driven worker reported "starting" forever with no error,
+	// no Sentry event and no exit. bringup_invariant_test.go pins main()'s
+	// control flow so it can no longer skip the call; this spec pins the
+	// constructor itself, which that structural guard cannot reach. Asserting
+	// only a nil error would pass for a constructor that returns a nil
+	// supervisor alongside it, leaving the runtime just as absent, so both
+	// are checked.
+	//
+	// The constructor reads neither credential today, so what this spec pins is
+	// their absence: it starts failing the moment either one is consulted here.
+	// It does not exercise credential handling, which lives in
+	// communicatorEnabled.
+	//
+	// The nil arguments below are unread on this path. Four of them panic if
+	// that ever changes, which a spec reports as a failure. The nil
+	// SystemSnapshotManager is the exception: every method on it returns early
+	// on a nil receiver, so a future read is silently skipped rather than
+	// reported. Pass a real one before asserting anything that depends on it.
+	It("succeeds and returns a non-nil supervisor with empty credentials", func() {
+		cfg := &config.FullConfig{
+			Agent: config.AgentConfig{
+				CommunicatorConfig: config.CommunicatorConfig{
+					APIURL:    "",
+					AuthToken: "",
+				},
+			},
+		}
+
+		commState := communication_state.NewCommunicationState(
+			nil,
+			make(chan *models.UMHMessage, 1),
+			make(chan *models.UMHMessage, 1),
+			"",
+			nil,
+			nil,
+			logger.For(logger.ComponentCore),
+			nil,
+			nil,
+		)
+
+		// The channel bridge this builds starts two goroutines that exit only on
+		// ctx.Done(), and cleanup cannot reap them, so the context has to be
+		// cancellable. context.Background() would leak both for the life of the
+		// test binary.
+		ctx, cancel := context.WithCancel(context.Background())
+		DeferCleanup(cancel)
+
+		appSup, _, _, _, cleanup, err := buildFSMv2Supervisor(ctx, cfg, commState, logger.For(logger.ComponentCore), nil)
+		DeferCleanup(cleanup)
+
+		Expect(err).NotTo(HaveOccurred())
+		Expect(appSup).NotTo(BeNil())
 	})
 })

@@ -333,7 +333,6 @@ FSMv2 features are controlled via environment variables:
 docker run -d \
   -e AUTH_TOKEN=your-auth-token \
   -e API_URL=https://management.umh.app \
-  -e USE_FSMV2_PROTOCOL_CONVERTER=true \
   umh-core:latest
 ```
 
@@ -341,7 +340,6 @@ docker run -d \
 |----------|----------|-------------|
 | `AUTH_TOKEN` | Yes | Authentication token from Management Console |
 | `API_URL` | Yes | Backend relay server URL (e.g., `https://management.umh.app`) |
-| `USE_FSMV2_PROTOCOL_CONVERTER` | No | Set to `true` to enable FSMv2 protocol converter |
 
 ### Disabling FSMv2 Features
 

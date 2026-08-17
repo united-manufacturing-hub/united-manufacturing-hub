@@ -154,19 +154,13 @@ func main() {
 	// FSMv2 feature flags: read directly from env vars, not persisted to config.yaml.
 	// These bypass the config manager intentionally — they are temporary migration flags
 	// that will be replaced when the config manager becomes an FSMv2 worker.
-	// GetAsBool with required=false never returns an error (silently falls back
-	// to the default on parse failure); see ENG-4809 for the signature fix.
-	protocolConverterEnabled, _ := env.GetAsBool("USE_FSMV2_PROTOCOL_CONVERTER", false, false)
-	configData.Agent.UseFSMv2ProtocolConverter = protocolConverterEnabled
-
 	featureUsage := &models.FeatureUsage{
-		ConfigBackupEnabled:           configBackupEnabled,
-		FSMv2TransportEnabled:         true, // FSMv2 is the only bring-up path
-		FSMv2MemoryCleanupEnabled:     true, // persistence runs unconditionally
-		FSMv2ProtocolConverterEnabled: configData.Agent.UseFSMv2ProtocolConverter,
-		ResourceLimitBlockingEnabled:  configData.Agent.EnableResourceLimitBlocking,
-		HistorianConfigured:           configData.Historian != nil,
-		HistorianBridgeCount:          countHistorianBridges(configData),
+		ConfigBackupEnabled:          configBackupEnabled,
+		FSMv2TransportEnabled:        true, // FSMv2 is the only bring-up path
+		FSMv2MemoryCleanupEnabled:    true, // persistence runs unconditionally
+		ResourceLimitBlockingEnabled: configData.Agent.EnableResourceLimitBlocking,
+		HistorianConfigured:          configData.Historian != nil,
+		HistorianBridgeCount:         countHistorianBridges(configData),
 	}
 
 	// Ensure the S6 repository directory exists
@@ -279,8 +273,8 @@ func main() {
 			}
 		}()
 
-		if bringUpFSMv2(&configData) {
-			log.Info("Using FSMv2 communicator (the only bring-up path)")
+		if communicatorEnabled(&configData) {
+			log.Info("Starting FSMv2 communicator because backend credentials are present")
 			sentry.SafeGoWithContext(ctx, func(ctx context.Context) {
 				wireFSMv2Communicator(ctx, appSup, channelAdapter, fsmv2Store, placeholderUUID, &configData, communicationState, log)
 			})
@@ -308,11 +302,11 @@ func main() {
 	log.Info("umh-core completed")
 }
 
-// bringUpFSMv2 reports whether the FSMv2 runtime should be brought up for the
-// given backend configuration. It is the single bring-up decision in main():
-// the FSMv2 runtime is constructed whenever backend credentials are present.
-// The legacy backend path is gone, so there is no alternative path to route to.
-func bringUpFSMv2(cfg *config.FullConfig) bool {
+// communicatorEnabled reports whether the FSMv2 communicator can run, which
+// requires backend credentials. It gates only wireFSMv2Communicator: the FSMv2
+// runtime is built and run regardless of credentials, so this must never gate
+// its construction or its Run call.
+func communicatorEnabled(cfg *config.FullConfig) bool {
 	return cfg.Agent.APIURL != "" && cfg.Agent.AuthToken != ""
 }
 

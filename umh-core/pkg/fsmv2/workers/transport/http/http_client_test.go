@@ -43,7 +43,7 @@ var _ = Describe("HTTP Transport", func() {
 			defer server.Close()
 
 			// Note: Constructor accepts relayURL and timeout
-			transport := httptransport.NewHTTPTransport(server.URL, 30*time.Second, false)
+			transport := httptransport.NewHTTPTransport(server.URL, 30*time.Second)
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
 
@@ -71,7 +71,7 @@ var _ = Describe("HTTP Transport", func() {
 			}))
 			defer server.Close()
 
-			transport := httptransport.NewHTTPTransport(server.URL, 30*time.Second, false)
+			transport := httptransport.NewHTTPTransport(server.URL, 30*time.Second)
 
 			ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 			defer cancel()
@@ -88,7 +88,7 @@ var _ = Describe("HTTP Transport", func() {
 			}))
 			defer server.Close()
 
-			transport := httptransport.NewHTTPTransport(server.URL, 30*time.Second, false)
+			transport := httptransport.NewHTTPTransport(server.URL, 30*time.Second)
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
 
