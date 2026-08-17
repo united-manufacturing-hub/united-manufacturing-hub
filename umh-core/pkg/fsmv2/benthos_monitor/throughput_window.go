@@ -51,7 +51,7 @@ type throughputWindow struct {
 // poll is a new counter series (the child was re-pointed at a different endpoint)
 // and full-wipes the window. A restart of the same benthos zeroes the monotonic
 // input_received counter, so a drop against the immediately preceding sample
-// also full-wipes (D5a's counter-reset detector is the input counter only).
+// also full-wipes (the counter-reset detector keys on the input counter only).
 // Production samples arrive in time order (so the aged prefix is normally all
 // that is removed), but the scan also drops an out-of-order aged sample, keeping
 // the window bounded to the span regardless of arrival order.
@@ -79,7 +79,7 @@ func (w *throughputWindow) Add(at time.Time, port, input, output int) {
 // wipeOnRestart reports whether the process restarted between prev and the new
 // sample at at, as seen through benthos' monotonic input_received counter. That
 // counter resets to 0 on a process restart, so a drop against the immediately
-// preceding sample (D5a's counter-reset detector, input-only) is the signal that
+// preceding sample (the counter-reset detector, input-only) is the signal that
 // the old by-time series ended and must be wiped. It deliberately does not also
 // require the output counter to drop: a restart where output was already ~0
 // (e.g. a backed-up broker) would otherwise never wipe and would keep a stale

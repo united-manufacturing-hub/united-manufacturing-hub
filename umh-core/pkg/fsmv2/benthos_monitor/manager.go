@@ -159,9 +159,9 @@ func Poll(ctx context.Context, d *benthosMonitorDeps, cfg config.BenthosMonitorC
 
 	// Feed this poll's counter snapshot into the by-time window and read back the
 	// real-time rates. The window lives in the deps and survives across polls
-	// (D5); a nil deps falls back to a one-off window whose rate is always 0. The
+	// a nil deps falls back to a one-off window whose rate is always 0. The
 	// window is keyed to the scrape port so an in-place port change (no worker
-	// restart, D5a) wipes the old series instead of delta-ticking across it.
+	// restart) wipes the old series instead of delta-ticking across it.
 	//
 	// The window takes the totals summed across every leaf path, which is what
 	// the counters mean for throughput: a switch or broker emits one series per

@@ -109,9 +109,12 @@ func TestMapObservedBuildsFullNestedStructure(t *testing.T) {
 // DataFlowComponent still reported "healthchecks did not pass".
 //
 // FSMv1 set IsRunning from the S6 FSM state of the monitor service
-// (service/benthos_monitor/benthos_monitor.go:1486). Under this flag there is no S6
-// monitor service — the worker is the monitor — so a scan carrying a real timestamp
-// is the evidence that it ran.
+// (service/benthos_monitor/benthos_monitor.go:1486) — a fact about a process. Under
+// this flag there is no S6 monitor service (the worker is the monitor), so the
+// nearest true statement is that the observation is trustworthy: an observation
+// exists AND the framework's verdict is not degraded. A timestamp alone is NOT
+// evidence the scrape ran — Poll stamps it before its first request and a failed
+// poll keeps it — which is the case the third block below pins.
 func TestMapObservedSetsIsRunning(t *testing.T) {
 	// A real scrape: ScrapedAt set, both probes true.
 	live := mapObserved(testConfig(), simple.Status[BenthosMonitorStatus]{
@@ -199,7 +202,7 @@ func TestMapObservedToleratesZeroStatus(t *testing.T) {
 	}
 }
 
-// TestHealthReproducesIsMonitorHealthy pins D9: healthy iff the scan is fresh
+// TestHealthReproducesIsMonitorHealthy pins that the monitor is healthy iff its scan is fresh
 // (within BenthosMaxMetricsAndConfigAge). A stale scan is degraded.
 func TestHealthReproducesIsMonitorHealthy(t *testing.T) {
 	if h := health(testConfig(), BenthosMonitorStatus{ScrapedAt: time.Now()}); h.Degraded {
