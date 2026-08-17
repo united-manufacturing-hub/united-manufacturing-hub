@@ -129,21 +129,39 @@ func crossedClear(v float64, m Marks) bool {
 // Update judges one trustworthy reduction against the marks, the only way into
 // the fired state. An untrusted or absent reduction is ignored. Three arms:
 //
-//	clear: fired, past Clear, Coverage.Full() -> release.
+//	clear: fired, on the firing mark pair, past its Clear, Coverage.Full() -> release.
 //	fire:  unfired, past Fire, no release yet or a whole Coverage span since one -> fire.
 //	hold:  anything else -> state unchanged.
 //
+// The clear arm acts only on a reduction measured against the SAME mark pair the
+// episode fired under, which is the scale recovery has to be read on: a signal
+// answered in spare cores and in a usage fraction cannot have the cores episode
+// released by a fraction that happens to sit past a cores threshold.
+//
+// The gate is the pair, not the instrument, because arms that share a pair are by
+// construction answering one question in one unit and differ only in how they
+// reduce it — a p95 and the mean fallback behind it. Selection moves between
+// those on the tick the p95 reaches its minimum sample count, on every start, and
+// their values are interchangeable for judging recovery. Gating on the instrument
+// name instead strands such an episode fired: the arm that fired it is never
+// selected again, so nothing can ever release it.
+//
 // instrument names the instrument the reduction came from. It is stamped beside
-// the marks and value when the latch fires, and never refreshed afterwards, so
-// a Fired names the instrument that fired, not whichever one a later tick
-// selected.
+// the marks and value when the latch fires, and never refreshed afterwards, so a
+// Fired names the instrument that fired, not whichever one a later tick selected.
+// It is attribution only; the clear arm does not read it.
+//
+// Arms measuring genuinely different quantities are the remaining gap: while a
+// foreign pair keeps answering Ready, no tick can release the episode and every
+// tick refreshes lastUpdate, so the Signal.DemoteSpan fallback in Engine.Observe
+// never runs either. Such an episode holds until its own arm answers again.
 func (l *Latch) Update(instrument string, r Reduced, c Coverage, m Marks, now time.Time) {
 	if r.state != StateValue {
 		return
 	}
 	l.lastUpdate = now
 
-	if l.fired && crossedClear(r.v, m) && c.Full() {
+	if l.fired && m == l.marks && crossedClear(r.v, l.marks) && c.Full() {
 		l.release(now)
 		return
 	}
