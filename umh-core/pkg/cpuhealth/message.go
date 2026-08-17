@@ -238,29 +238,31 @@ func causeDetails(c Cause, signals Signals) string {
 // that differs between them hands one customer two contradictory remedies at
 // once. An unknown kind falls back to the generic degraded message.
 func BlockReason(dominantKind CauseKind, signals Signals) string {
+	var cause string
 	switch dominantKind {
 	case CauseKindThrottling:
-		return blockThrottling
+		cause = blockThrottling
 	case CauseKindPressure:
-		return blockPressure
+		cause = blockPressure
 	case CauseKindSteal:
-		return blockSteal
+		cause = blockSteal
 	case CauseKindSaturation:
 		switch {
 		case signals.HostFullFired:
-			return blockHostFull
+			cause = blockHostFull
 		case signals.LimitSaturationFired:
-			return blockLimitSaturation
+			cause = blockLimitSaturation
 		case signals.NoHostStatsSaturationFired:
-			return blockNoHostStats
+			cause = blockNoHostStats
 		case signals.NoLimitHostFired:
-			return blockNoLimitHost
+			cause = blockNoLimitHost
 		default:
-			return blockSaturationOther
+			cause = blockSaturationOther
 		}
 	default:
-		return blockGeneric
+		cause = blockGeneric
 	}
+	return blockPrefix + cause
 }
 
 // round1 rounds a cores value to one decimal place (half away from zero).
@@ -373,6 +375,10 @@ const (
 	// The generic degraded paragraph.
 	detailGeneric = "CPU is degraded."
 
+	// The shared refusal-prefix, composed once at the point BlockReason returns.
+	// Each block constant below carries only its own per-cause remainder.
+	blockPrefix = "Can't add another bridge: "
+
 	// The bridge-refusal (block) reasons, one per cause kind, saturation
 	// dispatched on the sub-latch arm in BlockReason's own order.
 	// blockHostFull and blockNoLimitHost are byte-identical and the collision is
@@ -382,13 +388,13 @@ const (
 	// "other software on the host did": that finer attribution needs per-process
 	// (/proc/[pid]/stat) reads and is deferred to ENG-5264. Do not split its
 	// wording now — it would pre-empt ENG-5264's clean divorce.
-	blockThrottling      = "Can't add another bridge: this instance is already hitting its CPU limit. Raise the limit or reduce load first."
-	blockPressure        = "Can't add another bridge: tasks on this instance are already waiting for a free CPU core. Reduce load, or give this instance more CPU, first."
-	blockSteal           = "Can't add another bridge: the server isn't giving this instance enough CPU (other VMs are using it). Free up CPU on the server first."
-	blockHostFull        = "Can't add another bridge: the machine is full. Add CPU to the machine, or reduce other software running on it, first."
-	blockLimitSaturation = "Can't add another bridge: this instance is at its CPU limit. Raise the limit, or reduce the load, first."
-	blockNoHostStats     = "Can't add another bridge: CPU is running near full and host stats are unavailable. Add CPU capacity, or set a CPU limit, first."
-	blockNoLimitHost     = "Can't add another bridge: the machine is full. Add CPU to the machine, or reduce other software running on it, first."
-	blockSaturationOther = "Can't add another bridge: CPU is running near full. Add CPU capacity, or set a CPU limit, first."
-	blockGeneric         = "Can't add another bridge: CPU is degraded."
+	blockThrottling      = "this instance is already hitting its CPU limit. Raise the limit or reduce load first."
+	blockPressure        = "tasks on this instance are already waiting for a free CPU core. Reduce load, or give this instance more CPU, first."
+	blockSteal           = "the server isn't giving this instance enough CPU (other VMs are using it). Free up CPU on the server first."
+	blockHostFull        = "the machine is full. Add CPU to the machine, or reduce other software running on it, first."
+	blockLimitSaturation = "this instance is at its CPU limit. Raise the limit, or reduce the load, first."
+	blockNoHostStats     = "CPU is running near full and host stats are unavailable. Add CPU capacity, or set a CPU limit, first."
+	blockNoLimitHost     = "the machine is full. Add CPU to the machine, or reduce other software running on it, first."
+	blockSaturationOther = "CPU is running near full. Add CPU capacity, or set a CPU limit, first."
+	blockGeneric         = "CPU is degraded."
 )
