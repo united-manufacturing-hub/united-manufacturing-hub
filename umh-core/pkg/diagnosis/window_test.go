@@ -148,8 +148,8 @@ var _ = Describe("Window", func() {
 		// span (10s) and demote (60s) differ, so the entries outlive the span and
 		// only the demote clock can empty the window.
 		const span = 10 * time.Second
-		const demote = 60 * time.Second
-		w, _ := NewWindow(span, demote, Mean, false)
+		const demoteSpan = 60 * time.Second
+		w, _ := NewWindow(span, demoteSpan, Mean, false)
 
 		t0 := time.Unix(6_000_000, 0)
 		w.age(t0)
@@ -381,8 +381,8 @@ var _ = Describe("Window", func() {
 
 	It("should not demote at exactly the demote span — only strictly past it", func() {
 		const span = 10 * time.Second
-		const demote = 60 * time.Second
-		w, _ := NewWindow(span, demote, Mean, false)
+		const demoteSpan = 60 * time.Second
+		w, _ := NewWindow(span, demoteSpan, Mean, false)
 
 		t0 := time.Unix(21_000_000, 0)
 		w.age(t0)
@@ -399,7 +399,7 @@ var _ = Describe("Window", func() {
 
 		// exact is one demote span after the last successful read at t0+1s, so
 		// now.Sub(lastStored()) == demote to the nanosecond.
-		exact := t0.Add(time.Second).Add(demote)
+		exact := t0.Add(time.Second).Add(demoteSpan)
 		w.age(exact)
 		_, atBoundary := w.Reduce().Get()
 		Expect(atBoundary).To(Equal(StateUntrusted),

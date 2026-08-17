@@ -38,8 +38,8 @@ var _ = Describe("Latch", func() {
 			Polarity: HigherIsWorse,
 		}
 	}
-	full := func() Coverage { return Coverage{span: latchSpan, spanned: latchSpan} }
-	short := func() Coverage { return Coverage{span: latchSpan, spanned: 30 * time.Second} }
+	full := func() Coverage { return Coverage{span: latchSpan, covered: latchSpan} }
+	short := func() Coverage { return Coverage{span: latchSpan, covered: 30 * time.Second} }
 
 	// Two mark pairs for one signal, in different units and opposite polarities:
 	// what an instrument change hands the latch.

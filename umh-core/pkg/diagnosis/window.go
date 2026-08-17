@@ -33,21 +33,21 @@ import (
 // built with, and oldest-to-newest of what it holds.
 type Coverage struct {
 	span    time.Duration
-	spanned time.Duration
+	covered time.Duration
 }
 
 // Full reports whether the stored readings span the window's whole duration: it
 // separates a filled window from one that has only just started.
-func (c Coverage) Full() bool { return c.span > 0 && c.spanned >= c.span }
+func (c Coverage) Full() bool { return c.span > 0 && c.covered >= c.span }
 
 // Window is a sliding window of readings for one measured series: a time-ordered
 // slice of Points, pruned from the front once they age past the span.
 type Window struct {
-	points  []Point
-	red     Reduction
-	span    time.Duration
-	demote  time.Duration
-	counter bool
+	points     []Point
+	red        Reduction
+	span       time.Duration
+	demoteSpan time.Duration
+	counter    bool
 	// lastAppendStored is whether the most recent appendPoint stored a reading.
 	// age runs before this tick's store, so there it means the previous tick.
 	lastAppendStored bool
@@ -56,18 +56,18 @@ type Window struct {
 // NewWindow builds an empty window, refusing a non-positive span or demote span.
 //
 //	span    how far back the window reaches; entries older than this are pruned
-//	demote  how long without a successful read before the window empties; once a
+//	demoteSpan  how long without a successful read before the window empties; once a
 //	        source goes silent that long, Reduce says StateAbsent, not a stale number
 //	red     the reduction Reduce applies to the stored points
 //	counter whether the series is a monotone counter, so a backwards step is a reset
-func NewWindow(span, demote time.Duration, red Reduction, counter bool) (*Window, error) {
+func NewWindow(span, demoteSpan time.Duration, red Reduction, counter bool) (*Window, error) {
 	if span <= 0 {
 		return nil, fmt.Errorf("window: span %v is not positive", span)
 	}
-	if demote <= 0 {
-		return nil, fmt.Errorf("window: demote span %v is not positive", demote)
+	if demoteSpan <= 0 {
+		return nil, fmt.Errorf("window: demote span %v is not positive", demoteSpan)
 	}
-	return &Window{span: span, demote: demote, red: red, counter: counter}, nil
+	return &Window{span: span, demoteSpan: demoteSpan, red: red, counter: counter}, nil
 }
 
 // Observe advances the window by one tick, ageing out entries past the span
@@ -97,7 +97,7 @@ func (w *Window) age(now time.Time) {
 	// Demote: no successful read for the demote span empties the window, freeze or not.
 	// An already-empty window has nothing to demote and falls through to the rules
 	// below, which are no-ops on no points.
-	if last := w.lastStored(); !last.IsZero() && now.Sub(last) > w.demote {
+	if last := w.lastStored(); !last.IsZero() && now.Sub(last) > w.demoteSpan {
 		w.points = nil
 
 		return
@@ -209,10 +209,10 @@ func denominatorDelta(points []Point) float64 {
 
 // Coverage reports how much of its span the stored readings cover.
 func (w *Window) Coverage() Coverage {
-	var spanned time.Duration
+	var covered time.Duration
 	if len(w.points) >= 2 {
-		spanned = w.points[len(w.points)-1].At.Sub(w.points[0].At)
+		covered = w.points[len(w.points)-1].At.Sub(w.points[0].At)
 	}
 
-	return Coverage{span: w.span, spanned: spanned}
+	return Coverage{span: w.span, covered: covered}
 }
