@@ -118,7 +118,7 @@ var _ = Describe("verdict assembly", func() {
 	It("should fill the observable metrics, the two track floors and each signal's readiness from the same pass, even when no latch has fired", func() {
 		// Drive throttle-ratio to a steady 0.02, below its 0.05 fire mark, for a
 		// full window: nothing fires and the verdict is healthy, yet
-		// Signals.ThrottleRatio reaches Signals as 0.02 — not a confident 0
+		// Details.ThrottleRatio reaches Details as 0.02 — not a confident 0
 		// published because the latch is quiet. The box is bare metal (no
 		// virtualisation), so steal's window fills with legitimate zeros and
 		// reduces to StateValue while Select still reports NoInstrument — and
@@ -175,7 +175,7 @@ var _ = Describe("verdict assembly", func() {
 		env := diagnosis.NewEnvironment(HasLimit, HasPressureStats)
 		base := time.Now()
 
-		var sig Signals
+		var sig Details
 		for i := 0; i <= 65; i++ {
 			_, sig = Decide(engine, Sample{
 				Timestamp:   base.Add(time.Duration(i) * time.Second),

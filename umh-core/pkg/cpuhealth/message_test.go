@@ -32,10 +32,10 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/diagnosis"
 )
 
-// healthySig builds a Signals bag with every healthy-message input in a
+// healthySig builds a Details bag with every healthy-message input in a
 // usable state, so individual fields can be overridden per assertion.
-func healthySig() Signals {
-	return Signals{
+func healthySig() Details {
+	return Details{
 		LimitApplies:           true,
 		CapacityCores:          2.0,
 		AvgUsageCores:          0.0,
@@ -271,10 +271,10 @@ var _ = Describe("the budget lines", func() {
 	})
 })
 
-// degradedSig returns a Signals with the headroom family populated and no
+// degradedSig returns a Details with the headroom family populated and no
 // saturation arm fired, so a single arm can be set per assertion.
-func degradedSig() Signals {
-	return Signals{
+func degradedSig() Details {
+	return Details{
 		CapacityCores:          4.0,
 		AvgUsageCores:          0.5,
 		AvgHostBusyCores:       1.0,
@@ -318,7 +318,7 @@ var _ = Describe("degraded copy", func() {
 
 	It("should dispatch the saturation paragraph on which arm fired and append the two clauses rather than replacing their paragraphs", func() {
 		// Arm 2 — HostFullFired alone, entry 30.
-		msg := ComposeMessage(degradedVerdict(CauseKindSaturation, 0.5), func() Signals { s := degradedSig(); s.HostFullFired = true; return s }())
+		msg := ComposeMessage(degradedVerdict(CauseKindSaturation, 0.5), func() Details { s := degradedSig(); s.HostFullFired = true; return s }())
 		Expect(msg).To(ContainSubstring("The machine is full. Add CPU to the machine, or reduce other software running on it."))
 
 		// Arm 1 — HostFullFired AND LimitSaturationFired, entry 29 with the limit.
@@ -382,7 +382,7 @@ var _ = Describe("degraded copy", func() {
 		// math.MaxInt64, a 19-digit percentage. Reachable when the limit-mode
 		// quota-based signal fires from its own frozen quota while the sample's
 		// own Quota reads unknown/zero on the same tick and LogicalCpus is also
-		// unset, so fillSignals' fallback leaves CapacityCores at 0.
+		// unset, so fillDetails' fallback leaves CapacityCores at 0.
 		limitArm := degradedSig()
 		limitArm.LimitSaturationFired = true
 		limitArm.CapacityCores = 0
@@ -485,7 +485,7 @@ var _ = Describe("block reasons", func() {
 
 		base := time.Now()
 		var verdict Verdict
-		var sig Signals
+		var sig Details
 		for i := 0; i <= 5; i++ {
 			smp := Sample{
 				Timestamp:   base.Add(time.Duration(i) * time.Second),
@@ -512,14 +512,14 @@ var _ = Describe("block reasons", func() {
 		// editing a literal moves them together and cannot silence a
 		// disagreement.
 		arms := []string{"host-full", "limit", "no-host-stats", "no-limit-host"}
-		withArm := func(s Signals, arm string) Signals {
+		withArm := func(s Details, arm string) Details {
 			s.HostFullFired = arm == "host-full"
 			s.LimitSaturationFired = arm == "limit"
 			s.NoHostStatsSaturationFired = arm == "no-host-stats"
 			s.NoLimitHostFired = arm == "no-limit-host"
 			return s
 		}
-		armOf := func(surface string, render func(Signals) string) string {
+		armOf := func(surface string, render func(Details) string) string {
 			printed := render(sig)
 			var matched []string
 			for _, arm := range arms {
@@ -533,8 +533,8 @@ var _ = Describe("block reasons", func() {
 			return matched[0]
 		}
 
-		details := armOf("the technical details", func(s Signals) string { return causeDetails(verdict.Causes[0], s) })
-		block := armOf("the bridge-refusal reason", func(s Signals) string { return BlockReason(CauseKindSaturation, s) })
+		details := armOf("the technical details", func(s Details) string { return causeDetails(verdict.Causes[0], s) })
+		block := armOf("the bridge-refusal reason", func(s Details) string { return BlockReason(CauseKindSaturation, s) })
 
 		Expect(details).To(Equal(block),
 			"the two surfaces disagree on one tick: the technical details blame the %s arm while the bridge refusal blames the %s arm, so a customer is given two contradictory remedies",

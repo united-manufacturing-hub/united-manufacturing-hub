@@ -21,10 +21,10 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/diagnosis"
 )
 
-// Signals is the per-tick values and flags ComposeMessage and BlockReason read
+// Details is the per-tick values and flags ComposeMessage and BlockReason read
 // to render a sentence a ranked cause list alone cannot carry. The first 31 fields keep
 // their declaration order; everything after them is appended. Two of the three
-// frozen signatures take a Signals, so Decide is its sole producer.
+// frozen signatures take a Details, so Decide is its sole producer.
 //
 // Exactly two fields here end in "Available" — HostBusyCoresAvailable and
 // HostHeadroomAvailable — and that is the cap this package allows before a
@@ -40,16 +40,16 @@ import (
 // Field ownership, by the Decide step that fills it: foldSaturation owns
 // every latch field (SaturationFired, LimitSaturationFired, HostFullFired,
 // NoHostStatsSaturationFired, NoLimitHostFired, ThrottleFired, PressureFired,
-// StealFired, HostContentionFired); fillSignals owns every other field Decide
+// StealFired, HostContentionFired); fillDetails owns every other field Decide
 // fills; buildVerdict owns none.
-type Signals struct {
+type Details struct {
 	// The metrics. ThrottleRatio, PressureAvg60 and StealP95 are populated
 	// independent of their latch state, so the number stays observable when the
 	// latch has not fired.
 	UsageFraction diagnosis.Reading // absent in every mode; declared for a future frontend projection
-	ThrottleRatio float64           // 60s nr_throttled/nr_periods delta; fillSignals discards State, so absent or untrusted reads 0
-	PressureAvg60 float64           // PSI avg60; NaN/±Inf are never stored (rejected at window ingest), and fillSignals discards State, so absent reads 0
-	StealP95      float64           // 60s p95; fillSignals discards State, so bare metal or below the reduction's floor of 20 reads 0
+	ThrottleRatio float64           // 60s nr_throttled/nr_periods delta; fillDetails discards State, so absent or untrusted reads 0
+	PressureAvg60 float64           // PSI avg60; NaN/±Inf are never stored (rejected at window ingest), and fillDetails discards State, so absent reads 0
+	StealP95      float64           // 60s p95; fillDetails discards State, so bare metal or below the reduction's floor of 20 reads 0
 
 	// Observability only: none of the six changes a verdict. The four Readings
 	// are declared for a future frontend projection and nothing fills them.

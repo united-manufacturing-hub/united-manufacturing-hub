@@ -26,7 +26,7 @@
 // "go doc ./pkg/diagnosis" for all of them. What this package declares for
 // itself is the CPU vocabulary those are built from: Sample and Scope (the
 // readings), Verdict, Cause, CauseKind, State, Attribution and Unit (the
-// judgement), and Signals (the facts the sentences interpolate).
+// judgement), and Details (the facts the sentences interpolate).
 //
 // # How it fits together
 //
@@ -37,7 +37,7 @@
 //	table     Table(cores, quota) declares the signals; NewEngine builds the
 //	          engine from that same table.
 //	verdict   Decide(engine, sample, env) calls Engine.Observe and returns a
-//	          Verdict and a Signals. DeriveEnvironment(sample) builds the env.
+//	          Verdict and a Details. DeriveEnvironment(sample) builds the env.
 //	message   ComposeMessage(verdict, signals) renders the customer-facing text;
 //	          BlockReason renders the line refusing a new bridge.
 //
@@ -51,5 +51,5 @@
 // rule — a source that could not be read yields an absent Reading, never a
 // confident zero.
 //
-// Why Sample and Signals are flat structs: see the note above each declaration.
+// Why Sample and Details are flat structs: see the note above each declaration.
 package cpuhealth

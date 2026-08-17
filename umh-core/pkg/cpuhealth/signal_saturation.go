@@ -192,12 +192,12 @@ func saturationRank(f diagnosis.Fired) int {
 	return int(saturationArmOf(f))
 }
 
-// saturationFlags raises the Signals latch bits one fired saturation arm owns.
+// saturationFlags raises the Details latch bits one fired saturation arm owns.
 // HostFullFired and NoLimitHostFired are ONE instrument (the host-headroom arm)
 // under two names, and the mode is what separates them: limit mode reports the
 // host-full fallback as HostFullFired, no-limit mode as NoLimitHostFired. The
 // limit arm and the no-host-stats fallback each own one bit.
-func saturationFlags(f diagnosis.Fired, sig *Signals, hasLimit bool) {
+func saturationFlags(f diagnosis.Fired, sig *Details, hasLimit bool) {
 	switch saturationArmOf(f) {
 	case hostFullArm:
 		if hasLimit {

@@ -18,7 +18,7 @@
 // verdict healthy, no causes, PressureApplies false, LimitedVisibility true, and the
 // limited-visibility advisory present in the message. The whole point is the
 // REAL chain — DeriveEnvironment, Decide and ComposeMessage run back to back on
-// one sample stream, not a hand-assembled Signals bag — so the spec breaks the
+// one sample stream, not a hand-assembled Details bag — so the spec breaks the
 // moment any load-bearing derivation is changed. This is a GUARD: it passes on
 // today's already-fixed code and exists to fail if the invariant is regressed.
 package cpuhealth
@@ -44,7 +44,7 @@ var _ = Describe("byte-identical output on a healthy no-PSI box", func() {
 
 		base := time.Now()
 		var verdict Verdict
-		var sig Signals
+		var sig Details
 		for i := 0; i < 3; i++ {
 			s := Sample{
 				Timestamp:    base.Add(time.Duration(i) * time.Second),
@@ -86,7 +86,7 @@ var _ = Describe("byte-identical output on a healthy no-PSI box", func() {
 // the point: it isolates the HasPressureStats Requires gate as the thing
 // holding the pressure signal back, on a reading that would otherwise fire.
 // PressureApplies and LimitedVisibility cannot stand in for this: both are set
-// straight from PsiAvailable in fillSignals, never through the engine's
+// straight from PsiAvailable in fillDetails, never through the engine's
 // capability selection, so they pass unchanged whether the gate is present or
 // not. Only a produced cause routes through the gate. Without this spec, a
 // future PsiAvailable regression that keeps handing out readings — for

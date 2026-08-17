@@ -28,12 +28,12 @@ import (
 	"strings"
 )
 
-// ComposeMessage turns a Verdict and its derived Signals into the two-layer
+// ComposeMessage turns a Verdict and its derived Details into the two-layer
 // message: a one-line headline naming the dominant cause, then the literal
 // Technical Details separator and the curated per-cause copy (dominant first,
 // joined by a blank line). A healthy verdict yields the budget dashboard from
 // composeHealthy.
-func ComposeMessage(verdict Verdict, signals Signals) string {
+func ComposeMessage(verdict Verdict, signals Details) string {
 	if verdict.State != StateDegraded || len(verdict.Causes) == 0 {
 		return composeHealthy(signals)
 	}
@@ -54,12 +54,12 @@ func ComposeMessage(verdict Verdict, signals Signals) string {
 // components are rounded first, then headroom is derived as
 // total - used - reserve on those ALREADY-ROUNDED values, so the printed
 // arithmetic in the Technical Details headroom line is exact by construction
-// (never independently rounds Signals.HeadroomCores). used/headroom/reserve
+// (never independently rounds Details.HeadroomCores). used/headroom/reserve
 // print with one decimal; total prints as an integer when whole. The
 // Technical Details dashboard lists only the applicable alert-rule budgets:
 // headroom always, then throttle/pressure/steal each only when its rule
 // applies.
-func composeHealthy(signals Signals) string {
+func composeHealthy(signals Details) string {
 	// Zero-capacity guard: when CapacityCores is 0, do not compose the garbled
 	// "0.0 of 0 cores, -1.0 headroom" budget dashboard. Return a safe string
 	// that conveys monitoring-unavailability; the State on the wire stays
@@ -84,7 +84,7 @@ func composeHealthy(signals Signals) string {
 		}
 	}
 
-	// The display figures. ReserveCores is read from Signals in both modes —
+	// The display figures. ReserveCores is read from Details in both modes —
 	// Decide filled it from the verdict's own reserve — never from the constant.
 	var usedDisp, reserveDisp float64
 	if signals.LimitApplies {
@@ -178,14 +178,14 @@ func causeHeadline(kind CauseKind) string {
 }
 
 // causeDetails returns the curated Technical-Details copy for one cause,
-// interpolating the live number from the cause's Value or the derived Signals.
+// interpolating the live number from the cause's Value or the derived Details.
 // The saturation switch reads the sub-latch flags directly. Its compound
 // host-full-and-limit case comes first and has no counterpart in BlockReason;
 // the four single-arm cases under it run in the precedence the two functions
 // share. The compound NoLimitHostFired-with-host-busy-unreadable case runs
 // before the default branch, so a readable no-limit full host falls to that
 // default.
-func causeDetails(c Cause, signals Signals) string {
+func causeDetails(c Cause, signals Details) string {
 	switch c.Kind {
 	case CauseKindThrottling:
 		return fmt.Sprintf(detailThrottling, pctOf(signals.ThrottleRatio))
@@ -247,7 +247,7 @@ func causeDetails(c Cause, signals Signals) string {
 // in step — the limit arm and the no-host-stats arm do co-fire, and an order
 // that differs between them hands one customer two contradictory remedies at
 // once. An unknown kind falls back to the generic degraded message.
-func BlockReason(dominantKind CauseKind, signals Signals) string {
+func BlockReason(dominantKind CauseKind, signals Details) string {
 	var cause string
 	switch dominantKind {
 	case CauseKindThrottling:
@@ -358,8 +358,8 @@ const (
 	headlineGeneric    = "CPU degraded"
 
 	// The degradation detail paragraphs. Throttling reads the
-	// ratio from Signals; pressure and steal read Cause.Value (the raw PSI /
-	// steal figure never reaches Signals).
+	// ratio from Details; pressure and steal read Cause.Value (the raw PSI /
+	// steal figure never reaches Details).
 	detailThrottling = "This instance hit its CPU limit and was paused until the next cycle, in %d%% of CPU scheduling periods over the last minute. Work is being delayed. Raise this instance's CPU limit, or reduce the load on it."
 	detailPressure   = "Tasks in this instance spent %d%% of the last minute waiting for a free CPU core. Reduce the load on this instance, or give it more CPU. If other workloads share this server they may be competing for it."
 	detailSteal      = "Other virtual machines on the same physical server took CPU this instance needed, up to %d%% at peak over the last minute. This is outside UMH's control. On your virtualization platform, give this VM more guaranteed CPU, or reduce the other VMs sharing the server."

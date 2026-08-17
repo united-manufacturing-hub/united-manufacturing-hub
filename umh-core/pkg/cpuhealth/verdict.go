@@ -54,13 +54,13 @@ type Unit string
 
 // cpuReserveCores is the no-limit headroom reserve: one core set aside for
 // Redpanda. It is Redpanda's default maxCores (--smp), not a calibration
-// guess. Decide stamps it onto Signals.ReserveCores so the message reads the
+// guess. Decide stamps it onto Details.ReserveCores so the message reads the
 // same number the verdict subtracted.
 const cpuReserveCores = 1.0
 
 // limitReserveFraction is the limit-mode headroom reserve: the fraction of a
 // container's own CPU quota held back as headroom, cpuReserveCores' pair for
-// limit mode. Decide stamps the product onto Signals.ReserveCores the same way.
+// limit mode. Decide stamps the product onto Details.ReserveCores the same way.
 const limitReserveFraction = 0.10
 
 // Cause is one entry in a degraded verdict, ordered by diagnosis.Rank.
@@ -72,7 +72,7 @@ type Cause struct {
 
 // Verdict is what Decide returns: the state, the attribution of the dominant
 // cause, and the ranked cause list. The message is NOT a field on it — the
-// message layer composes it from Verdict and Signals.
+// message layer composes it from Verdict and Details.
 type Verdict struct {
 	State       State
 	Attribution Attribution
