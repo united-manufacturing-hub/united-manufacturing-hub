@@ -25,27 +25,23 @@ import (
 	benthosmonitorservice "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos_monitor"
 )
 
-// tickSeconds is the FSMv1 control-loop period in seconds. It converts the
-// worker's tick-free MessagesPerSecond into FSMv1's MessagesPerTick on the way
-// out of mapObserved — the single conversion the design pins; constants/benthos.go:49.
+// tickSeconds is the FSMv1 control-loop period in seconds (DefaultTickerTime,
+// constants/loop.go:24). It converts the worker's tick-free MessagesPerSecond
+// into FSMv1's MessagesPerTick at the two call sites below.
 func tickSeconds() float64 {
 	return constants.DefaultTickerTime.Seconds()
 }
 
 // mapObserved builds a benthosmonitorfsm.BenthosMonitorObservedState from the
 // stored status and config, the shape every FSMv1 consumer reads. It must never
-// produce nil inner structs: benthos.go:657 + 669 dereference
-// ServiceInfo.BenthosStatus.LastScan.BenthosMetrics unguarded, so a nil here is
-// a control-loop panic. A zero status (the adapter passes one on a non-Fresh
-// read, instance.go GetLastObservedState) therefore maps to an all-non-nil
-// empty scan rather than to nil pointers.
+// produce a nil BenthosMetrics: pkg/service/benthos/benthos.go:699 dereferences
+// LastScan.BenthosMetrics without a nil check, so a nil there is a control-loop
+// panic. (LastScan itself is guarded, at benthos.go:697.) A zero status, which
+// the adapter passes on a non-Fresh read, therefore maps to an all-non-nil empty
+// scan rather than to nil pointers.
 //
-// The only tick vocabulary lives here, on the way out: the worker is tick-free
-// (MessagesPerSecond in real seconds), and adapter.go converts that to FSMv1's
-// MessagesPerTick on this single line (MessagesPerSecond x DefaultTickerTime).
-// It scales only the numeric MessagesPerTick field, never IsActive, which the
-// worker already computes tick-free. When benthos itself moves to fsmv2, this
-// file is deleted and the tick vocabulary dies with it.
+// MessagesPerTick is scaled out of MessagesPerSecond here; IsActive is copied
+// through unscaled, because the worker already computes it tick-free.
 func mapObserved(cfg config.BenthosMonitorConfig, s simple.Status[BenthosMonitorStatus]) publicfsm.ObservedState {
 	status := s.Result
 
@@ -136,11 +132,15 @@ func mapObserved(cfg config.BenthosMonitorConfig, s simple.Status[BenthosMonitor
 	}
 }
 
-// health reproduces FSMv1's isMonitorHealthy (pkg/fsm/benthos_monitor/actions.go): the
-// monitor is healthy iff its last scan is fresh (within BenthosMaxMetricsAndConfigAge)
-// and non-empty. A scrape failure drives the worker degraded through Poll's error
-// path before this is ever called, so a nil-error status here means the scan
-// happened; the residual decision is freshness. The reason stays coarse.
+// health decides freshness and nothing else: a scan older than
+// BenthosMaxMetricsAndConfigAge, or one that never happened, is degraded. Poll's
+// error path drives the worker degraded before this is called, so a nil-error
+// status here means the scrape happened and freshness is all that is left to judge.
+//
+// This is deliberately narrower than FSMv1's isMonitorHealthy
+// (pkg/fsm/benthos_monitor/actions.go:199), which also required a non-nil
+// BenthosMetrics — a conjunct that cannot fail here, because mapObserved never
+// produces one. FSMv1 also measured age from the loop start time, not time.Now().
 func health(_ config.BenthosMonitorConfig, status BenthosMonitorStatus) simple.Health {
 	if status.ScrapedAt.IsZero() || time.Since(status.ScrapedAt) > constants.BenthosMaxMetricsAndConfigAge {
 		return simple.Degraded("benthos monitor scan is stale")
