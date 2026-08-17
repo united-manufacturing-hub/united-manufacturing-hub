@@ -21,8 +21,6 @@ package cpuhealth
 import (
 	"context"
 	"fmt"
-	"strconv"
-	"strings"
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/diagnosis"
@@ -156,78 +154,8 @@ func (s *linuxSampler) Read(ctx context.Context) (Sample, error) {
 
 	smp.Virtualized = s.readVirtualized(ctx)
 
-	data, err := s.fs.ReadFile(ctx, s.base+"/cpu.max")
-	if err != nil {
-		// An unreadable cpu.max is no-signal: Quota stays absent.
-		return smp, nil
-	}
-
-	fields := strings.Fields(string(data))
-	if len(fields) < 2 {
-		return smp, nil
-	}
-
-	if fields[0] == "max" {
-		// Uncapped is a definite no-limit: present, but never a positive capacity.
-		smp.Quota = diagnosis.Known(0.0)
-		return smp, nil
-	}
-
-	quota, err := strconv.ParseInt(fields[0], 10, 64)
-	if err != nil {
-		return smp, nil
-	}
-	period, err := strconv.ParseInt(fields[1], 10, 64)
-	if err != nil || period <= 0 {
-		return smp, nil
-	}
-
-	if quota > 0 {
-		smp.Quota = diagnosis.Known(float64(quota) / float64(period))
-	} else {
-		// A non-positive limit is never a positive capacity/denominator.
-		smp.Quota = diagnosis.Known(0.0)
-	}
+	smp.Quota = s.readQuota(ctx)
 	return smp, nil
-}
-
-// readStat reads cpu.stat once and yields the raw usage total and both throttle
-// counters. A non-nil error reports a read OR parse failure of cpu.stat, either
-// of which fails the whole sample; each value's Reading is independently present
-// or unavailable on success.
-func (s *linuxSampler) readStat(ctx context.Context) (usage, periods, throttled diagnosis.Reading, err error) {
-	var data []byte
-	data, err = s.fs.ReadFile(ctx, s.base+"/cpu.stat")
-	if err != nil {
-		return diagnosis.Unknown(), diagnosis.Unknown(), diagnosis.Unknown(), err
-	}
-	if usage, err = parseCounter(data, "usage_usec"); err != nil {
-		return diagnosis.Unknown(), diagnosis.Unknown(), diagnosis.Unknown(), err
-	}
-	if periods, err = parseCounter(data, "nr_periods"); err != nil {
-		return diagnosis.Unknown(), diagnosis.Unknown(), diagnosis.Unknown(), err
-	}
-	if throttled, err = parseCounter(data, "nr_throttled"); err != nil {
-		return diagnosis.Unknown(), diagnosis.Unknown(), diagnosis.Unknown(), err
-	}
-	return usage, periods, throttled, nil
-}
-
-// parseCounter reads one key's numeric value out of cpu.stat bytes. An absent
-// key yields an unavailable Reading — never a trusted 0 — while an unparsable
-// value for a present key returns a non-nil error, which fails the whole sample.
-func parseCounter(data []byte, key string) (diagnosis.Reading, error) {
-	for _, line := range strings.Split(string(data), "\n") {
-		fields := strings.Fields(line)
-		if len(fields) >= 2 && fields[0] == key {
-			v, err := strconv.ParseFloat(fields[1], 64)
-			if err != nil {
-				return diagnosis.Unknown(), fmt.Errorf("unparsable %s value %q: %w", key, fields[1], err)
-			}
-			return diagnosis.Known(v), nil
-		}
-	}
-	return diagnosis.Unknown(), nil
 }
 
 type linuxSampler struct {

@@ -35,7 +35,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 )
 
-var _ = Describe("capacity", func() {
+var _ = Describe("CPU quota", func() {
 	const base = "/sys/fs/cgroup"
 
 	// A valid primary cpu.stat.
