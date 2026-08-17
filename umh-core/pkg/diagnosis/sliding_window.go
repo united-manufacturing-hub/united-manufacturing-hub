@@ -64,9 +64,11 @@ func NewSlidingWindow(span, demoteSpan time.Duration, reduction Reduction, count
 	if span <= 0 {
 		return nil, fmt.Errorf("window: span %v is not positive", span)
 	}
+
 	if demoteSpan <= 0 {
 		return nil, fmt.Errorf("window: demote span %v is not positive", demoteSpan)
 	}
+
 	return &SlidingWindow{span: span, demoteSpan: demoteSpan, reduction: reduction, counter: counter}, nil
 }
 
@@ -118,6 +120,7 @@ func (w *SlidingWindow) prune(cutoff time.Time) {
 	for i < len(w.points) && w.points[i].At.Before(cutoff) {
 		i++
 	}
+
 	w.points = w.points[i:]
 }
 
@@ -146,8 +149,10 @@ func (w *SlidingWindow) appendPoint(value, against Reading, at time.Time) {
 		prev := w.points[len(w.points)-1]
 
 		restart := v < prev.Value
+
 		if w.reduction.divides {
 			a, aok := against.Get()
+
 			pa, paok := prev.Against.Get()
 			if aok && paok && a < pa {
 				restart = true

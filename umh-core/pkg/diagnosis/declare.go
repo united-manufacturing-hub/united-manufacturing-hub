@@ -36,6 +36,7 @@ func NewEnvironment(caps ...Capability) Environment {
 	for _, c := range caps {
 		set[c] = true
 	}
+
 	return Environment{caps: set}
 }
 
@@ -72,6 +73,7 @@ func (i Instrument[S]) Read(s S) (value, against Reading) {
 	if i.Against == nil {
 		return i.Extract(s), Unknown()
 	}
+
 	return i.Extract(s), i.Against(s)
 }
 
@@ -99,16 +101,20 @@ func (s Signal[S]) Capable(env Environment) []Instrument[S] {
 	capable := make([]Instrument[S], 0, len(s.Instruments))
 	for _, inst := range s.Instruments {
 		satisfied := true
+
 		for _, req := range inst.Requires {
 			if !env.Has(req) {
 				satisfied = false
+
 				break
 			}
 		}
+
 		if satisfied {
 			capable = append(capable, inst)
 		}
 	}
+
 	return capable
 }
 

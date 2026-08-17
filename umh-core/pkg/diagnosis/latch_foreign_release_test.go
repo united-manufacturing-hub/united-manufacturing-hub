@@ -123,7 +123,7 @@ var _ = Describe("Latch release is judged on the pair the episode fired under", 
 		// (0.45); the p95 is still short of its twenty samples, so the mean is the
 		// arm that fires.
 		var fired []Fired
-		for i := 0; i <= 3; i++ {
+		for i := range 4 {
 			fired, _ = e.Observe(stealSnap{steal: 0.90}, env, base.Add(time.Duration(i)*time.Second))
 		}
 		Expect(fired).To(HaveLen(1), "the mean arm fires while the p95 is below its minimum sample count")
@@ -177,6 +177,7 @@ var _ = Describe("Latch release is judged on the pair the episode fired under", 
 				if !headroomReadable {
 					return Unknown()
 				}
+
 				return Known(s.headroom)
 			},
 			Reduction: Last,
@@ -205,7 +206,7 @@ var _ = Describe("Latch release is judged on the pair the episode fired under", 
 		// Drive the headroom arm below its fire mark until its 3s window is full, so
 		// a later release arm has full coverage to act on. The usage arm reads
 		// nothing on these ticks; resolve picks the ready headroom arm each time.
-		for i := 0; i <= 3; i++ {
+		for i := range 4 {
 			e.Observe(cpuSnap{headroom: -0.2}, env, base.Add(time.Duration(i)*time.Second))
 		}
 		fired, _ := e.Observe(cpuSnap{headroom: -0.2}, env, base.Add(4*time.Second))

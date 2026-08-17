@@ -162,6 +162,7 @@ var _ = Describe("NewEngine", func() {
 				_, err := NewEngine(row.tbl)
 				if count <= 61 {
 					Expect(err).ToNot(HaveOccurred(), "%s: a minimum of %d is within the 61 entries a 60s span holds at a 1s interval", row.name, count)
+
 					continue
 				}
 				Expect(err).To(HaveOccurred(), "%s: a minimum of %d is one past the 61 entries a 60s span holds at a 1s interval", row.name, count)

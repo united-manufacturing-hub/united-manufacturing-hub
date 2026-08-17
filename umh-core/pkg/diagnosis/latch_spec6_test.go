@@ -41,7 +41,7 @@ var _ = Describe("Latch signature", func() {
 		ct := reflect.TypeOf(Coverage{})
 		Expect(ct.NumField()).To(Equal(2),
 			"Coverage must carry exactly two durations — a readability field smuggled in here is F1 rebuilt")
-		for i := 0; i < ct.NumField(); i++ {
+		for i := range ct.NumField() {
 			Expect(ct.Field(i).Type).To(Equal(reflect.TypeOf(time.Duration(0))),
 				"every Coverage field must be a time.Duration, never a bool or a Reading")
 		}
@@ -49,6 +49,13 @@ var _ = Describe("Latch signature", func() {
 		// Update's parameter list is fixed, checked as a function value so it
 		// fails at COMPILE time the day a readability parameter is added: a
 		// signature outranks any generated test.
+		//
+		// The explicit type IS the assertion, so it must not be inlined away.
+		// staticcheck's QF1011 offers to drop it as redundant, and golangci-lint
+		// --fix took that offer once: the line became `var _ = (&Latch{}).Update`,
+		// which asserts only that the method exists. The suite stayed green,
+		// because deleting a compile-time guard cannot fail a run.
+		//nolint:staticcheck // QF1011: the written-out type is what this spec checks.
 		var _ func(string, Reduced, Coverage, Marks, time.Time) = (&Latch{}).Update
 	})
 })

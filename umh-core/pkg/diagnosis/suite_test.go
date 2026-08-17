@@ -41,6 +41,7 @@ func (f feed) Unreadable(at time.Time) snap {
 	if f.zeroForAbsent {
 		return snap{r: Known(0)}
 	}
+
 	return snap{r: Unknown()}
 }
 
@@ -73,6 +74,7 @@ var _ = Describe("Suite", func() {
 		if name == "B" {
 			return 2
 		}
+
 		return 1
 	}
 
@@ -90,13 +92,16 @@ var _ = Describe("Suite", func() {
 			if m == 1 {
 				return Ready
 			}
+
 			return NoneReady
 		case CaseBelowFloor:
 			if m == 1 {
 				return AllAbsent
 			}
+
 			return NoneReady
 		}
+
 		return NoInstrument
 	}
 
@@ -183,6 +188,7 @@ var _ = Describe("Suite", func() {
 			for _, o := range outcomes {
 				m[o.Scenario] = o.Availability
 			}
+
 			return m
 		}
 		correctBy := byScenario(correct)

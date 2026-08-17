@@ -352,7 +352,9 @@ var _ = Describe("Engine", func() {
 	})
 
 	It("should reset a fired latch the moment its window is AllAbsent when the signal declares release-on-absent, while a non-release signal holds until its own demote clock elapses", func() {
-		type s6 struct{ v float64 }
+		// Carries nothing: this spec switches readability through the closures
+		// below, not through the snapshot, so every Observe passes s6{}.
+		type s6 struct{}
 
 		// Readability-switched extractors: when a signal's switch is on, its
 		// window stores an over-fire value; when off, an absence on every tick.
@@ -366,6 +368,7 @@ var _ = Describe("Engine", func() {
 						if !*on {
 							return Unknown()
 						}
+
 						return Known(5.0)
 					},
 					Reduction: Last, Span: 60 * time.Second,
@@ -403,7 +406,7 @@ var _ = Describe("Engine", func() {
 
 		byName := make(map[string]bool, len(fired))
 		for _, f := range fired {
-			byName[f.Identity.Signal] = true
+			byName[f.Signal] = true
 		}
 		Expect(byName["T"]).To(BeFalse(), "release-on-absent resets the fired latch the instant its window is AllAbsent")
 		Expect(byName["F"]).To(BeTrue(), "a non-release signal stays fired while its demote clock has not elapsed")
@@ -537,6 +540,7 @@ var _ = Describe("Engine", func() {
 						if !firing {
 							return Unknown()
 						}
+
 						return Known(3.0)
 					},
 				},
@@ -623,12 +627,14 @@ var _ = Describe("Engine", func() {
 					},
 				}},
 			}
+
 			return Table[snap]{Signals: []Signal[snap]{sig}, Interval: time.Second}
 		}
 
 		drive := func(e *Engine[snap], base time.Time) []Readiness {
 			e.Observe(snap{v: 1.0}, NewEnvironment(), base)
 			_, readiness := e.Observe(snap{v: 2.0}, NewEnvironment(), base.Add(time.Second))
+
 			return readiness
 		}
 

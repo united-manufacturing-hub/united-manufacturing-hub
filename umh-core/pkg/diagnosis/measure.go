@@ -113,6 +113,7 @@ func NewReduction(name string, min int, fold func([]Point) float64) (Reduction, 
 	if min < 1 {
 		return Reduction{}, fmt.Errorf("reduction %q: minimum sample count %d is below one", name, min)
 	}
+
 	if fold == nil {
 		return Reduction{}, fmt.Errorf("reduction %q: nil fold", name)
 	}
@@ -127,6 +128,7 @@ func foldMean(points []Point) float64 {
 	for _, p := range points {
 		sum += p.Value
 	}
+
 	return sum / float64(len(points))
 }
 
@@ -154,6 +156,7 @@ func nearestRank(p float64) func([]Point) float64 {
 		for i, pt := range points {
 			values[i] = pt.Value
 		}
+
 		sort.Float64s(values)
 		rank := int(math.Ceil(p * float64(len(values))))
 

@@ -33,7 +33,7 @@ var _ = Describe("Reduction", func() {
 		p95W, _ := NewSlidingWindow(reduceHour, 60*time.Second, P95, false)
 
 		t0 := time.Unix(1_000_000, 0)
-		for i := 0; i < 20; i++ {
+		for i := range 20 {
 			at := t0.Add(time.Duration(i) * time.Second)
 			meanW.appendPoint(Known(float64(i)), Unknown(), at)
 			p95W.appendPoint(Known(float64(i)), Unknown(), at)
@@ -61,7 +61,7 @@ var _ = Describe("Reduction", func() {
 
 		// Mean: the arithmetic mean.
 		meanW, _ := NewSlidingWindow(reduceHour, 60*time.Second, Mean, false)
-		for i := 0; i < 4; i++ {
+		for i := range 4 {
 			meanW.appendPoint(Known(float64(i+1)), Unknown(), t0.Add(time.Duration(i)*time.Second))
 		}
 		n, s = meanW.Reduce().Get()
@@ -87,7 +87,7 @@ var _ = Describe("Reduction", func() {
 
 		// P95: nearest-rank, ceil(0.95*20)=19th order statistic of 0..19.
 		p95W, _ := NewSlidingWindow(reduceHour, 60*time.Second, P95, false)
-		for i := 0; i < 20; i++ {
+		for i := range 20 {
 			p95W.appendPoint(Known(float64(i)), Unknown(), t0.Add(time.Duration(i)*time.Second))
 		}
 		n, s = p95W.Reduce().Get()
@@ -96,7 +96,7 @@ var _ = Describe("Reduction", func() {
 
 		// P99: nearest-rank, ceil(0.99*100)=99th order statistic of 0..99.
 		p99W, _ := NewSlidingWindow(reduceHour, 60*time.Second, P99, false)
-		for i := 0; i < 100; i++ {
+		for i := range 100 {
 			p99W.appendPoint(Known(float64(i)), Unknown(), t0.Add(time.Duration(i)*time.Second))
 		}
 		n, s = p99W.Reduce().Get()

@@ -52,12 +52,14 @@ type Scenario struct {
 // Suite generates one Scenario per (signal, case) over t.Signals, never t.Tracks.
 func Suite[S any](t Table[S]) []Scenario {
 	cases := []Case{CaseLive, CaseBriefOutage, CaseLongOutage, CaseUnsupported, CasePostOutageDip, CaseBelowFloor}
+
 	scenarios := make([]Scenario, 0, len(t.Signals)*len(cases))
 	for _, s := range t.Signals {
 		for _, c := range cases {
 			scenarios = append(scenarios, Scenario{Signal: s.Name, Case: c})
 		}
 	}
+
 	return scenarios
 }
 
@@ -117,6 +119,7 @@ func Run[S any](t Table[S], env Environment, f Feed[S]) []Outcome {
 	for _, sc := range Suite(t) {
 		outcomes = append(outcomes, runScenario(t, sc, env, f))
 	}
+
 	return outcomes
 }
 
@@ -126,12 +129,14 @@ func runScenario[S any](t Table[S], sc Scenario, env Environment, f Feed[S]) Out
 	for _, s := range t.Signals {
 		if s.Name == sc.Signal {
 			sig = s
+
 			break
 		}
 	}
 
 	// One engine per scenario, so no scenario inherits another's windows.
 	one := Table[S]{Signals: []Signal[S]{sig}, Interval: t.Interval}
+
 	e, err := NewEngine(one)
 	if err != nil {
 		panic("diagnosis: suite scenario cannot build its engine: " + err.Error())
@@ -143,6 +148,7 @@ func runScenario[S any](t Table[S], sc Scenario, env Environment, f Feed[S]) Out
 	if interval <= 0 {
 		interval = time.Second
 	}
+
 	demoteTicks := int(sig.DemoteSpan / interval)
 	// Floor at one tick: a zero count would drive CaseLongOutage through the same
 	// sequence as CaseBriefOutage.
@@ -151,7 +157,9 @@ func runScenario[S any](t Table[S], sc Scenario, env Environment, f Feed[S]) Out
 	}
 
 	var seq []bool
+
 	driveEnv := env
+
 	switch sc.Case {
 	case CaseLive:
 		seq = bools(m, true)
@@ -177,8 +185,10 @@ func drive[S any](e *Engine[S], interval time.Duration, env Environment, seq []b
 	if len(seq) == 0 {
 		seq = []bool{false}
 	}
+
 	at := time.Unix(0, 0)
 	availability := NoInstrument
+
 	for _, readable := range seq {
 		var sample S
 		if readable {
@@ -186,11 +196,13 @@ func drive[S any](e *Engine[S], interval time.Duration, env Environment, seq []b
 		} else {
 			sample = f.Unreadable(at)
 		}
+
 		_, readiness := e.Observe(sample, env, at)
 		// One row, because runScenario builds this engine over a single signal.
 		availability = readiness[0].Availability
 		at = at.Add(interval)
 	}
+
 	return availability
 }
 
@@ -203,6 +215,7 @@ func minCapableMin[S any](s Signal[S], env Environment) int {
 			m = inst.Reduction.Min
 		}
 	}
+
 	if m == 0 {
 		for _, inst := range s.Instruments {
 			if m == 0 || inst.Reduction.Min < m {
@@ -210,9 +223,11 @@ func minCapableMin[S any](s Signal[S], env Environment) int {
 			}
 		}
 	}
+
 	if m == 0 {
 		m = 1
 	}
+
 	return m
 }
 
@@ -222,5 +237,6 @@ func bools(n int, v bool) []bool {
 	for i := range out {
 		out[i] = v
 	}
+
 	return out
 }

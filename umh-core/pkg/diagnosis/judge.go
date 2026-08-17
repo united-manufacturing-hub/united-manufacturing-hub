@@ -105,6 +105,7 @@ func worse(v float64, m Marks) float64 {
 	if m.Polarity == LowerIsWorse {
 		return -v
 	}
+
 	return v
 }
 
@@ -114,6 +115,7 @@ func crossedFire(v float64, m Marks) bool {
 	if m.Fire.Inclusive {
 		return x >= fx
 	}
+
 	return x > fx
 }
 
@@ -123,6 +125,7 @@ func crossedClear(v float64, m Marks) bool {
 	if m.Clear.Inclusive {
 		return x <= cx
 	}
+
 	return x < cx
 }
 
@@ -159,10 +162,12 @@ func (l *Latch) Update(instrument string, r Reduced, c Coverage, m Marks, now ti
 	if r.state != StateValue {
 		return
 	}
+
 	l.lastUpdate = now
 
 	if l.fired && m == l.marks && crossedClear(r.v, l.marks) && c.Full() {
 		l.release(now)
+
 		return
 	}
 
@@ -174,6 +179,7 @@ func (l *Latch) Update(instrument string, r Reduced, c Coverage, m Marks, now ti
 			l.instrument = instrument
 			l.since = now
 		}
+
 		return
 	}
 }
@@ -205,6 +211,7 @@ func (l *Latch) Fired() (Fired, bool) {
 	if !l.fired {
 		return Fired{}, false
 	}
+
 	return Fired{
 		Identity:   l.identity,
 		Value:      l.value,
@@ -223,12 +230,15 @@ func clamp01(v float64) float64 {
 	if math.IsNaN(v) {
 		return 0
 	}
+
 	if v < 0 {
 		return 0
 	}
+
 	if v > 1 {
 		return 1
 	}
+
 	return v
 }
 
@@ -255,16 +265,20 @@ func (f Fired) Severity() float64 {
 func Rank(fired []Fired) []Fired {
 	sort.Slice(fired, func(i, j int) bool {
 		a, b := fired[i], fired[j]
-		if a.Identity.Tier != b.Identity.Tier {
-			return a.Identity.Tier < b.Identity.Tier
+		if a.Tier != b.Tier {
+			return a.Tier < b.Tier
 		}
+
 		if sa, sb := a.Severity(), b.Severity(); sa != sb {
 			return sa > sb
 		}
-		if a.Identity.External != b.Identity.External {
-			return a.Identity.External
+
+		if a.External != b.External {
+			return a.External
 		}
-		return a.Identity.Index < b.Identity.Index
+
+		return a.Index < b.Index
 	})
+
 	return fired
 }

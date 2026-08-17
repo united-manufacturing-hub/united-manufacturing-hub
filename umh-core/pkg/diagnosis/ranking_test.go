@@ -37,6 +37,7 @@ var _ = Describe("Ranking", func() {
 		for i, f := range fired {
 			out[i] = f.Index
 		}
+
 		return out
 	}
 

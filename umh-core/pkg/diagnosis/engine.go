@@ -129,16 +129,20 @@ func NewEngine[S any](t Table[S]) (*Engine[S], error) {
 			if err != nil {
 				return nil, err
 			}
+
 			e.windows[key{Signal: s.Name, Instrument: inst.Name}] = w
 		}
 	}
+
 	for _, tr := range t.Tracks {
 		w, err := NewSlidingWindow(tr.Span, tr.Span, tr.Reduction, false)
 		if err != nil {
 			return nil, err
 		}
+
 		e.tracks = append(e.tracks, trackState[S]{track: tr, window: *w})
 	}
+
 	for i, s := range t.Signals {
 		// The caller keeps the table they passed, so the engine must own the
 		// instruments it stores: a copy of the Signal would still share the
@@ -151,6 +155,7 @@ func NewEngine[S any](t Table[S]) (*Engine[S], error) {
 		for j := range s.Instruments {
 			s.Instruments[j].Requires = append([]Capability(nil), s.Instruments[j].Requires...)
 		}
+
 		e.signals = append(e.signals, signalState[S]{
 			signal: s,
 			latch: Latch{identity: Identity{
@@ -189,14 +194,17 @@ func validate[S any](t Table[S]) error {
 		if seenSignal[s.Name] {
 			return fmt.Errorf("duplicate signal name %q", s.Name)
 		}
+
 		seenSignal[s.Name] = true
 
 		if len(s.Instruments) == 0 {
 			return fmt.Errorf("signal %q: no instruments", s.Name)
 		}
+
 		if s.DemoteSpan <= 0 {
 			return fmt.Errorf("signal %q: demote span %v is zero or negative", s.Name, s.DemoteSpan)
 		}
+
 		if t.Interval > 0 && s.DemoteSpan < t.Interval {
 			return fmt.Errorf("signal %q: demote span %v is below the table interval %v", s.Name, s.DemoteSpan, t.Interval)
 		}
@@ -206,26 +214,33 @@ func validate[S any](t Table[S]) error {
 			if inst.Extract == nil {
 				return fmt.Errorf("signal %q instrument %q: nil extract", s.Name, inst.Name)
 			}
+
 			if seenInstrument[inst.Name] {
 				return fmt.Errorf("signal %q: duplicate instrument name %q", s.Name, inst.Name)
 			}
+
 			seenInstrument[inst.Name] = true
 
 			if inst.Span <= 0 {
 				return fmt.Errorf("signal %q instrument %q: window span %v is zero or negative", s.Name, inst.Name, inst.Span)
 			}
+
 			if inst.Reduction.Min < 1 {
 				return fmt.Errorf("signal %q instrument %q: reduction %q minimum sample count %d is below one", s.Name, inst.Name, inst.Reduction.Name, inst.Reduction.Min)
 			}
+
 			if inst.Reduction.fold == nil {
 				return fmt.Errorf("signal %q instrument %q: reduction %q has no fold", s.Name, inst.Name, inst.Reduction.Name)
 			}
+
 			if inst.Reduction.ordered && inst.Boolean {
 				return fmt.Errorf("signal %q instrument %q: ordered reduction %q on a boolean series", s.Name, inst.Name, inst.Reduction.Name)
 			}
+
 			if inst.Reduction.divides && inst.Against == nil {
 				return fmt.Errorf("signal %q instrument %q: reduction %q divides but the instrument declares no against extractor", s.Name, inst.Name, inst.Reduction.Name)
 			}
+
 			for _, mark := range []struct {
 				name  string
 				value float64
@@ -238,15 +253,19 @@ func validate[S any](t Table[S]) error {
 					return fmt.Errorf("signal %q instrument %q: %s %v is not finite", s.Name, inst.Name, mark.name, mark.value)
 				}
 			}
+
 			if worse(inst.Marks.Clear.At, inst.Marks) >= worse(inst.Marks.Fire.At, inst.Marks) {
 				return fmt.Errorf("signal %q instrument %q: clear mark is not on the holding side of its fire mark under its polarity", s.Name, inst.Name)
 			}
+
 			if worse(inst.Marks.Worst, inst.Marks) <= worse(inst.Marks.Fire.At, inst.Marks) {
 				return fmt.Errorf("signal %q instrument %q: worst value %v is not strictly worse than fire mark %v under its polarity", s.Name, inst.Name, inst.Marks.Worst, inst.Marks.Fire.At)
 			}
+
 			if span := worse(inst.Marks.Worst, inst.Marks) - worse(inst.Marks.Fire.At, inst.Marks); math.IsInf(span, 0) {
 				return fmt.Errorf("signal %q instrument %q: the distance from fire mark %v to worst value %v overflows, so the severity denominator is not finite", s.Name, inst.Name, inst.Marks.Fire.At, inst.Marks.Worst)
 			}
+
 			if t.Interval > 0 && int(inst.Span/t.Interval)+1 < inst.Reduction.Min {
 				return fmt.Errorf("signal %q instrument %q: reduction %q minimum sample count %d exceeds what its window span %v can hold at table interval %v", s.Name, inst.Name, inst.Reduction.Name, inst.Reduction.Min, inst.Span, t.Interval)
 			}
@@ -258,27 +277,34 @@ func validate[S any](t Table[S]) error {
 		if seenTrack[tr.Name] {
 			return fmt.Errorf("duplicate track name %q", tr.Name)
 		}
+
 		seenTrack[tr.Name] = true
 
 		if tr.Extract == nil {
 			return fmt.Errorf("track %q: nil extract", tr.Name)
 		}
+
 		if tr.Span <= 0 {
 			return fmt.Errorf("track %q: span %v is zero or negative", tr.Name, tr.Span)
 		}
+
 		if tr.Reduction.Min < 1 {
 			return fmt.Errorf("track %q: reduction %q minimum sample count %d is below one", tr.Name, tr.Reduction.Name, tr.Reduction.Min)
 		}
+
 		if tr.Reduction.fold == nil {
 			return fmt.Errorf("track %q: reduction %q has no fold", tr.Name, tr.Reduction.Name)
 		}
+
 		if tr.Reduction.divides {
 			return fmt.Errorf("track %q: reduction %q divides but a track declares no denominator series", tr.Name, tr.Reduction.Name)
 		}
+
 		if t.Interval > 0 && int(tr.Span/t.Interval)+1 < tr.Reduction.Min {
 			return fmt.Errorf("track %q: reduction %q minimum sample count %d exceeds what its window span %v can hold at table interval %v", tr.Name, tr.Reduction.Name, tr.Reduction.Min, tr.Span, t.Interval)
 		}
 	}
+
 	return nil
 }
 
@@ -310,16 +336,20 @@ func (e *Engine[S]) resolve(s Signal[S], capable []Instrument[S]) (Instrument[S]
 	if len(capable) == 0 {
 		return Instrument[S]{}, Reduced{}, Coverage{}, NoInstrument
 	}
+
 	seen := 0
 	absent := 0
 	untrusted := false
+
 	for _, inst := range capable {
 		w := e.windows[key{Signal: s.Name, Instrument: inst.Name}]
 		if w == nil { // NewEngine builds a window for every pair; never nil here
 			continue
 		}
+
 		seen++
 		reduced := w.Reduce()
+
 		_, st := reduced.Get()
 		switch st {
 		case StateValue:
@@ -330,9 +360,11 @@ func (e *Engine[S]) resolve(s Signal[S], capable []Instrument[S]) (Instrument[S]
 			absent++
 		}
 	}
+
 	if untrusted {
 		return Instrument[S]{}, Reduced{}, Coverage{}, NoneReady
 	}
+
 	if seen > 0 && absent == seen {
 		return Instrument[S]{}, Reduced{}, Coverage{}, AllAbsent
 	}
@@ -376,18 +408,21 @@ func (e *Engine[S]) Observe(sample S, env Environment, at time.Time) ([]Fired, [
 			if w == nil { // NewEngine builds a window for every pair; never nil here
 				continue
 			}
+
 			value, against := inst.Read(sample)
 			w.Observe(value, against, at)
 		}
 	}
 
 	var fired []Fired
+
 	readiness := make([]Readiness, 0, len(e.signals))
 	for i := range e.signals {
 		st := &e.signals[i]
 		s := st.signal
 		inst, reduced, cov, avail := e.resolve(s, s.Capable(env))
 		l := &st.latch
+
 		switch avail {
 		case Ready:
 			l.Update(inst.Name, reduced, cov, inst.Marks, at)
@@ -400,9 +435,11 @@ func (e *Engine[S]) Observe(sample S, env Environment, at time.Time) ([]Fired, [
 		default: // NoInstrument, NoneReady: hold, then release on the demote clock.
 			l.ReleaseAfter(s.DemoteSpan, at)
 		}
+
 		if f, ok := l.Fired(); ok {
 			fired = append(fired, f)
 		}
+
 		readiness = append(readiness, Readiness{Signal: s.Name, Availability: avail})
 	}
 
@@ -420,6 +457,7 @@ func (e *Engine[S]) Reduction(signal, instrument string) Reduced {
 	if w == nil {
 		return Reduced{}
 	}
+
 	return w.Reduce()
 }
 
@@ -432,5 +470,6 @@ func (e *Engine[S]) Track(name string) Reduced {
 			return e.tracks[i].window.Reduce()
 		}
 	}
+
 	return Reduced{}
 }
