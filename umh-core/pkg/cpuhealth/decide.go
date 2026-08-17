@@ -184,7 +184,7 @@ func fillSignals(sig *Signals, engine *diagnosis.Engine[Sample], s Sample, env d
 	// cpuReserveCores in no-limit mode.
 	if q, ok := s.Quota.Get(); ok && q > 0 {
 		sig.CapacityCores = q
-		sig.ReserveCores = 0.10 * q
+		sig.ReserveCores = limitReserveFraction * q
 	} else {
 		sig.CapacityCores = sig.LogicalCpus
 		sig.ReserveCores = cpuReserveCores

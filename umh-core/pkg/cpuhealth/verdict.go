@@ -58,6 +58,11 @@ type Unit string
 // same number the verdict subtracted.
 const cpuReserveCores = 1.0
 
+// limitReserveFraction is the limit-mode headroom reserve: the fraction of a
+// container's own CPU quota held back as headroom, cpuReserveCores' pair for
+// limit mode. Decide stamps the product onto Signals.ReserveCores the same way.
+const limitReserveFraction = 0.10
+
 // Cause is one entry in a degraded verdict, ordered by diagnosis.Rank.
 type Cause struct {
 	Kind  CauseKind
