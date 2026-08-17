@@ -39,12 +39,12 @@ func throttlingSignal() diagnosis.Signal[Sample] {
 		DemoteSpan:      60 * time.Second,
 		ReleaseOnAbsent: true,
 		Instruments: []diagnosis.Instrument[Sample]{{
-			Name:     instThrottleRatio,
-			Requires: []diagnosis.Capability{HasLimit},
-			Extract:  func(s Sample) diagnosis.Reading { return s.NrThrottled },
-			Against:  func(s Sample) diagnosis.Reading { return s.NrPeriods },
-			Span:     60 * time.Second,
-			Red:      diagnosis.DeltaRatio,
+			Name:      instThrottleRatio,
+			Requires:  []diagnosis.Capability{HasLimit},
+			Extract:   func(s Sample) diagnosis.Reading { return s.NrThrottled },
+			Against:   func(s Sample) diagnosis.Reading { return s.NrPeriods },
+			Span:      60 * time.Second,
+			Reduction: diagnosis.DeltaRatio,
 			// Both cpu.stat counters are running totals: a fall is a cgroup
 			// reset, and a delta across it is arithmetic on two origins. This
 			// is the only CPU instrument that declares it.

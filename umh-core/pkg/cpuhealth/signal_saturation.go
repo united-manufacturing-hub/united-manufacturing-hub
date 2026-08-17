@@ -66,8 +66,8 @@ func saturationSignal(cores float64) diagnosis.Signal[Sample] {
 					}
 					return diagnosis.Known(cores - hb - 1.0)
 				},
-				Span: 60 * time.Second,
-				Red:  diagnosis.Mean,
+				Span:      60 * time.Second,
+				Reduction: diagnosis.Mean,
 				Marks: diagnosis.Marks{
 					Fire:     diagnosis.Mark{At: 0},
 					Clear:    diagnosis.Mark{At: 0.5},
@@ -98,8 +98,8 @@ func saturationSignal(cores float64) diagnosis.Signal[Sample] {
 					}
 					return diagnosis.Known(u / cores)
 				},
-				Span: 60 * time.Second,
-				Red:  diagnosis.Mean,
+				Span:      60 * time.Second,
+				Reduction: diagnosis.Mean,
 				Marks: diagnosis.Marks{
 					// 0.70 fires AT the mark: exactly 70% of the machine busy is
 					// a full machine, not a 69%-and-waiting one.
@@ -139,8 +139,8 @@ func limitSaturationSignal(quota float64) diagnosis.Signal[Sample] {
 				}
 				return diagnosis.Known(quota - u - 0.10*quota)
 			},
-			Span: 60 * time.Second,
-			Red:  diagnosis.Mean,
+			Span:      60 * time.Second,
+			Reduction: diagnosis.Mean,
 			Marks: diagnosis.Marks{
 				Fire:     diagnosis.Mark{At: 0},
 				Clear:    diagnosis.Mark{At: 0.05 * quota},

@@ -65,16 +65,16 @@ func cpuTable(cores, quota float64) diagnosis.Table[Sample] {
 		// is every box with no positive quota.
 		Tracks: []diagnosis.Track[Sample]{
 			{
-				Name:    trackHostBusy,
-				Extract: func(s Sample) diagnosis.Reading { return s.HostBusy },
-				Span:    60 * time.Second,
-				Red:     diagnosis.Mean, // minimum 2 — Mean's own sample floor
+				Name:      trackHostBusy,
+				Extract:   func(s Sample) diagnosis.Reading { return s.HostBusy },
+				Span:      60 * time.Second,
+				Reduction: diagnosis.Mean, // minimum 2 — Mean's own sample floor
 			},
 			{
-				Name:    trackUsageCores,
-				Extract: func(s Sample) diagnosis.Reading { return s.UsageCores },
-				Span:    60 * time.Second,
-				Red:     diagnosis.Mean,
+				Name:      trackUsageCores,
+				Extract:   func(s Sample) diagnosis.Reading { return s.UsageCores },
+				Span:      60 * time.Second,
+				Reduction: diagnosis.Mean,
 			},
 		},
 		Signals: []diagnosis.Signal[Sample]{

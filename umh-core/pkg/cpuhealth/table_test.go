@@ -106,8 +106,8 @@ var _ = Describe("the CPU table, throttle and steal", func() {
 		throttleInst := throttling.Instruments[0]
 		Expect(throttleInst.Name).To(Equal("throttle-ratio"))
 		Expect(throttleInst.Requires).To(ConsistOf(HasLimit))
-		Expect(throttleInst.Red.Name).To(Equal("deltaRatio"))
-		Expect(throttleInst.Red.Min).To(Equal(2))
+		Expect(throttleInst.Reduction.Name).To(Equal("deltaRatio"))
+		Expect(throttleInst.Reduction.Min).To(Equal(2))
 		Expect(throttleInst.Counter).To(BeTrue(), "throttle-ratio reads running totals")
 		Expect(throttleInst.Marks.Fire.At).To(Equal(0.05))
 		Expect(throttleInst.Marks.Fire.Inclusive).To(BeFalse())
@@ -123,8 +123,8 @@ var _ = Describe("the CPU table, throttle and steal", func() {
 		Expect(pressure.Instruments).To(HaveLen(1))
 		pressureInst := pressure.Instruments[0]
 		Expect(pressureInst.Name).To(Equal("pressure-avg60"))
-		Expect(pressureInst.Red.Name).To(Equal("last"))
-		Expect(pressureInst.Red.Min).To(Equal(1))
+		Expect(pressureInst.Reduction.Name).To(Equal("last"))
+		Expect(pressureInst.Reduction.Min).To(Equal(1))
 		Expect(pressureInst.Marks.Fire.At).To(Equal(0.20))
 		Expect(pressureInst.Marks.Clear.At).To(Equal(0.12))
 		Expect(pressureInst.Marks.Polarity).To(Equal(diagnosis.HigherIsWorse))
@@ -140,8 +140,8 @@ var _ = Describe("the CPU table, throttle and steal", func() {
 		stealP95 := steal.Instruments[0]
 		Expect(stealP95.Name).To(Equal("steal-p95"))
 		Expect(stealP95.Requires).To(ConsistOf(HasVirtualization))
-		Expect(stealP95.Red.Name).To(Equal("p95"))
-		Expect(stealP95.Red.Min).To(Equal(20))
+		Expect(stealP95.Reduction.Name).To(Equal("p95"))
+		Expect(stealP95.Reduction.Min).To(Equal(20))
 		Expect(stealP95.Counter).To(BeFalse())
 		Expect(stealP95.Marks.Fire.At).To(Equal(0.10))
 		Expect(stealP95.Marks.Clear.At).To(Equal(0.06))
@@ -151,8 +151,8 @@ var _ = Describe("the CPU table, throttle and steal", func() {
 		stealMean := steal.Instruments[1]
 		Expect(stealMean.Name).To(Equal("steal-mean"))
 		Expect(stealMean.Requires).To(ConsistOf(HasVirtualization))
-		Expect(stealMean.Red.Name).To(Equal("mean"))
-		Expect(stealMean.Red.Min).To(Equal(2))
+		Expect(stealMean.Reduction.Name).To(Equal("mean"))
+		Expect(stealMean.Reduction.Min).To(Equal(2))
 		Expect(stealMean.Counter).To(BeFalse())
 		Expect(stealMean.Marks).To(Equal(stealP95.Marks), "the mean fallback shares the p95 bar")
 		for _, inst := range steal.Instruments {
@@ -167,8 +167,8 @@ var _ = Describe("the CPU table, throttle and steal", func() {
 		Expect(saturation.Instruments).To(HaveLen(2))
 		hostHeadroom := saturation.Instruments[0]
 		Expect(hostHeadroom.Name).To(Equal("host-headroom"))
-		Expect(hostHeadroom.Red.Name).To(Equal("mean"))
-		Expect(hostHeadroom.Red.Min).To(Equal(2))
+		Expect(hostHeadroom.Reduction.Name).To(Equal("mean"))
+		Expect(hostHeadroom.Reduction.Min).To(Equal(2))
 		Expect(hostHeadroom.Marks.Polarity).To(Equal(diagnosis.LowerIsWorse))
 		Expect(hostHeadroom.Marks.Fire.At).To(Equal(0.0))
 		Expect(hostHeadroom.Marks.Fire.Inclusive).To(BeFalse())
@@ -183,8 +183,8 @@ var _ = Describe("the CPU table, throttle and steal", func() {
 		Expect(hostHeadroom.Extract(Sample{CpuScope: ScopeHost, HostBusy: diagnosis.Unknown()})).To(Equal(diagnosis.Unknown()))
 		usageFraction := saturation.Instruments[1]
 		Expect(usageFraction.Name).To(Equal("usage-fraction"))
-		Expect(usageFraction.Red.Name).To(Equal("mean"))
-		Expect(usageFraction.Red.Min).To(Equal(2))
+		Expect(usageFraction.Reduction.Name).To(Equal("mean"))
+		Expect(usageFraction.Reduction.Min).To(Equal(2))
 		Expect(usageFraction.Marks.Polarity).To(Equal(diagnosis.HigherIsWorse))
 		Expect(usageFraction.Marks.Fire.At).To(Equal(0.70))
 		Expect(usageFraction.Marks.Fire.Inclusive).To(BeTrue(), "0.70 fires AT the mark")
@@ -202,8 +202,8 @@ var _ = Describe("the CPU table, throttle and steal", func() {
 		limitHeadroom := limitSaturation.Instruments[0]
 		Expect(limitHeadroom.Name).To(Equal("limit-headroom"))
 		Expect(limitHeadroom.Requires).To(ConsistOf(HasLimit))
-		Expect(limitHeadroom.Red.Name).To(Equal("mean"))
-		Expect(limitHeadroom.Red.Min).To(Equal(2))
+		Expect(limitHeadroom.Reduction.Name).To(Equal("mean"))
+		Expect(limitHeadroom.Reduction.Min).To(Equal(2))
 		Expect(limitHeadroom.Marks.Polarity).To(Equal(diagnosis.LowerIsWorse))
 		Expect(limitHeadroom.Marks.Fire.At).To(Equal(0.0))
 		Expect(limitHeadroom.Marks.Clear.At).To(Equal(0.1))
@@ -216,13 +216,13 @@ var _ = Describe("the CPU table, throttle and steal", func() {
 		// usage-cores, each a 60s mean on every box.
 		Expect(t.Tracks).To(HaveLen(2))
 		Expect(t.Tracks[0].Name).To(Equal("host-busy"))
-		Expect(t.Tracks[0].Red.Name).To(Equal("mean"))
-		Expect(t.Tracks[0].Red.Min).To(Equal(2))
+		Expect(t.Tracks[0].Reduction.Name).To(Equal("mean"))
+		Expect(t.Tracks[0].Reduction.Min).To(Equal(2))
 		Expect(t.Tracks[0].Span).To(Equal(60 * time.Second))
 		Expect(t.Tracks[0].Extract(Sample{HostBusy: diagnosis.Known(0.3)})).To(Equal(diagnosis.Known(0.3)))
 		Expect(t.Tracks[1].Name).To(Equal("usage-cores"))
-		Expect(t.Tracks[1].Red.Name).To(Equal("mean"))
-		Expect(t.Tracks[1].Red.Min).To(Equal(2))
+		Expect(t.Tracks[1].Reduction.Name).To(Equal("mean"))
+		Expect(t.Tracks[1].Reduction.Min).To(Equal(2))
 		Expect(t.Tracks[1].Span).To(Equal(60 * time.Second))
 		Expect(t.Tracks[1].Extract(Sample{UsageCores: diagnosis.Known(0.7)})).To(Equal(diagnosis.Known(0.7)))
 
@@ -453,14 +453,14 @@ func tableFingerprint(t diagnosis.Table[Sample]) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "interval=%s\n", t.Interval)
 	for _, tr := range t.Tracks {
-		fmt.Fprintf(&b, "track %s red=%s/%d span=%s\n", tr.Name, tr.Red.Name, tr.Red.Min, tr.Span)
+		fmt.Fprintf(&b, "track %s red=%s/%d span=%s\n", tr.Name, tr.Reduction.Name, tr.Reduction.Min, tr.Span)
 	}
 	for _, s := range t.Signals {
 		fmt.Fprintf(&b, "signal %s tier=%d external=%t releaseOnAbsent=%t demote=%s\n",
 			s.Name, s.Tier, s.External, s.ReleaseOnAbsent, s.DemoteSpan)
 		for _, inst := range s.Instruments {
 			fmt.Fprintf(&b, "  inst %s requires=%v red=%s/%d span=%s counter=%t boolean=%t hasAgainst=%t marks=%+v\n",
-				inst.Name, inst.Requires, inst.Red.Name, inst.Red.Min, inst.Span,
+				inst.Name, inst.Requires, inst.Reduction.Name, inst.Reduction.Min, inst.Span,
 				inst.Counter, inst.Boolean, inst.Against != nil, inst.Marks)
 		}
 	}
