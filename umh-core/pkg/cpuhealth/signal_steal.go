@@ -44,20 +44,20 @@ func stealSignal() diagnosis.Signal[Sample] {
 		ReleaseOnAbsent: true,
 		Instruments: []diagnosis.Instrument[Sample]{
 			{
-				Name:     instStealP95,
-				Requires: []diagnosis.Capability{HasVirtualization},
-				Extract:  func(s Sample) diagnosis.Reading { return s.Steal },
-				Span:     60 * time.Second,
-				Red:      diagnosis.P95, // the reduction declares its own minimum: 20
-				Marks:    stealMarks,
+				Name:      instStealP95,
+				Requires:  []diagnosis.Capability{HasVirtualization},
+				Extract:   func(s Sample) diagnosis.Reading { return s.Steal },
+				Span:      60 * time.Second,
+				Reduction: diagnosis.P95, // the reduction declares its own minimum: 20
+				Marks:     stealMarks,
 			},
 			{
-				Name:     instStealMean,
-				Requires: []diagnosis.Capability{HasVirtualization},
-				Extract:  func(s Sample) diagnosis.Reading { return s.Steal },
-				Span:     60 * time.Second,
-				Red:      diagnosis.Mean, // minimum 2
-				Marks:    stealMarks,     // the mean fallback shares the p95 bar:
+				Name:      instStealMean,
+				Requires:  []diagnosis.Capability{HasVirtualization},
+				Extract:   func(s Sample) diagnosis.Reading { return s.Steal },
+				Span:      60 * time.Second,
+				Reduction: diagnosis.Mean, // minimum 2
+				Marks:     stealMarks,     // the mean fallback shares the p95 bar:
 				// the question and its unit are the same, only the minimum
 				// differs. Do not "fix" this arm back to p95, and do not add a
 				// second threshold: one 0.9 spike firing the mean at n=2 is the

@@ -108,8 +108,8 @@ func badReadSignal() diagnosis.Signal[Sample] {
 			Extract: func(s Sample) diagnosis.Reading {
 				return diagnosis.Known(0) // absent treated as a real zero: the defect
 			},
-			Span: 60 * time.Second,
-			Red:  diagnosis.Mean,
+			Span:      60 * time.Second,
+			Reduction: diagnosis.Mean,
 			Marks: diagnosis.Marks{
 				Fire:     diagnosis.Mark{At: 0.5},
 				Clear:    diagnosis.Mark{At: 0.4},
