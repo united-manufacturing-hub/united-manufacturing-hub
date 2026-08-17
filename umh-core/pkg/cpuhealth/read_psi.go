@@ -13,7 +13,8 @@
 // limitations under the License.
 
 // Pressure Stall Information is the kernel's own measure of how long runnable
-// tasks waited for a core; this reads the cgroup's figure.
+// tasks waited for a core; this reads the cgroup's figure. The interface is
+// documented at https://www.kernel.org/doc/html/latest/accounting/psi.html.
 
 package cpuhealth
 

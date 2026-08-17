@@ -66,7 +66,7 @@ var _ = Describe("one snapshot per tick", func() {
 		return cpuhealth.NewLinuxSampler(fs, base)
 	}
 
-	It("stamps one timestamp, builds the environment from two facts, and fails the whole snapshot only on cpu.stat", func() {
+	It("stamps one timestamp, builds the environment from three facts, and fails the whole snapshot only on cpu.stat", func() {
 		// a real Read builds every field off one read, and the
 		// snapshot is constructible from OUTSIDE pkg/diagnosis through Known and
 		// Unknown. The single Timestamp is set once per tick.

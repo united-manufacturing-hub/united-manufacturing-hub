@@ -48,9 +48,12 @@ func NewLinuxSampler(fs filesystem.Service, base string) Sampler {
 	return &linuxSampler{fs: fs, base: base}
 }
 
-// Read samples the cgroup at base from cpu.max: a positive limit reads as a
-// capacity, "max" and non-positive limits as a present no-limit, and an
-// unreadable or unparsable cpu.max as absent no-signal.
+// Read samples the cgroup at base from cpu.max, the container's CPU limit: a
+// positive limit reads as a capacity, "max" and non-positive limits as a
+// present no-limit, and an unreadable or unparsable cpu.max as absent
+// no-signal. cpu.max and cpu.stat are the cgroup v2 CPU controller's files,
+// documented at
+// https://www.kernel.org/doc/html/latest/admin-guide/cgroup-v2.html.
 func (s *linuxSampler) Read(ctx context.Context) (Sample, error) {
 	var smp Sample
 	smp.Timestamp = time.Now()

@@ -25,21 +25,9 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/diagnosis"
 )
 
-// Decide is the frozen entry point: zero I/O, no clock. Observe, then the
-// saturation fold, then diagnosis.Rank, then the Signals fill, all in a single
-// pass over one fired set.
-//
-// The saturation family folds into exactly one CauseKindSaturation before
-// ranking, in the decided precedence — host-full, then the limit arm, then
-// the no-host-stats fallback — so the two entries that would print the same
-// paragraph twice reach the customer as one cause. Rank runs AFTER the fold and
-// is the only thing that orders Verdict.Causes.
-//
-// Attribution is derived from the dominant (ranked-first) cause. External
-// causes (steal, host-contention) attribute host; internal causes (throttling,
-// pressure, the container's own limit budget) attribute unknown; host-full
-// saturation attributes by the host/container split, which is host only when
-// the host's non-container share exceeds our own sustained usage.
+// Decide runs one tick: Observe through the engine, fold the saturation family
+// to a single cause, Rank, and fill the Signals that ride the verdict. The
+// rules each step applies live on foldSaturation, buildVerdict and fillSignals.
 func Decide(engine *diagnosis.Engine[Sample], s Sample, env diagnosis.Environment) (Verdict, Signals) {
 	fired, readiness := engine.Observe(s, env, s.Timestamp)
 
@@ -48,10 +36,11 @@ func Decide(engine *diagnosis.Engine[Sample], s Sample, env diagnosis.Environmen
 	// The attribution split. Both terms are 60s means in cores, read back from
 	// the engine's tracks — never from an instrument, because neither instrument
 	// that touches the series holds the series. The comparison is STRICTLY
-	// greater (hbm - uc > uc), matching the parked branch, so exact equality is
-	// unknown. Do not run the split on an untrusted mean: one sample of host
-	// busy against one of ours is an attribution on a single instant. The two
-	// tracks are read once here and the means shared into fillSignals.
+	// greater (hostBusyMean > 2*ourUsageMean), so a host share exactly double
+	// our own is not attributed to the host. Do not run the split on an
+	// untrusted mean: one sample of host busy against one of ours is an
+	// attribution on a single instant. The two tracks are read once here and the
+	// means shared into fillSignals.
 	hostBusyMean, hostBusyState := engine.Track(trackHostBusy).Get()
 	ourUsageMean, ourUsageState := engine.Track(trackUsageCores).Get()
 	splitHost := hostBusyState == diagnosis.StateValue && ourUsageState == diagnosis.StateValue && hostBusyMean > 2*ourUsageMean
