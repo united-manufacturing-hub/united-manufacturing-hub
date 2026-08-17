@@ -15,9 +15,9 @@
 // The fallback metric set. When host stats are absent, the saturation
 // signal falls back to usage-fraction: host-headroom's window empties past the
 // demote span, selection walks to usage-fraction and JUDGES on it, and the
-// number it judged on reaches Signals as AvgUsageFraction. The
+// number it judged on reaches Details as AvgUsageFraction. The
 // dead zone — quota nil or non-positive AND PSI absent — is an annotation on a
-// healthy verdict, carried by Signals.LimitedVisibility, never a state.
+// healthy verdict, carried by Details.LimitedVisibility, never a state.
 package cpuhealth
 
 import (
@@ -107,7 +107,7 @@ var _ = Describe("the fallback metric set", func() {
 
 	It("should annotate the dead zone rather than treating it as a state", func() {
 		// The dead zone: no quota AND no PSI. Verdict.State has two values and
-		// neither is it, so the annotation lives on Signals and the verdict is
+		// neither is it, so the annotation lives on Details and the verdict is
 		// healthy. Nothing here fires.
 		engine, err := NewEngine(4, 0)
 		Expect(err).NotTo(HaveOccurred())

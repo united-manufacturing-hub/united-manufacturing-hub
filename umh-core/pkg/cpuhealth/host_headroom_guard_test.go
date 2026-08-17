@@ -16,7 +16,7 @@
 // guard — Unknown unless CpuScope == ScopeHost — in the extractor, not in
 // Decide, so nothing enters the window, the reduction is StateAbsent, and the
 // saturation latch has nothing to judge. A box whose core count was never
-// readable declares no saturation row at all (see cpuTable). The three Signals
+// readable declares no saturation row at all (see cpuTable). The three Details
 // fields carry the withholding to the message layer: HostHeadroomAvailable
 // (dispatched on the scope, not the window state) plus the two core counts.
 package cpuhealth
@@ -102,7 +102,7 @@ var _ = Describe("the missing guard, and the wrong subtraction", func() {
 
 	It("should report host headroom as unavailable with the two core counts, rather than as a reading that failed", func() {
 		// The customer sentence is "host headroom unavailable: this container is
-		// pinned to 2 of 8 CPUs". The three Signals fields carry the withholding
+		// pinned to 2 of 8 CPUs". The three Details fields carry the withholding
 		// and both counts; a verdict built from the scope alone cannot render the
 		// sentence and re-reading the count in Decide would break zero-I/O.
 		engine, err := NewEngine(4, 2.0)
