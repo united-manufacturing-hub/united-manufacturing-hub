@@ -5,6 +5,7 @@
 ### Fixes
 
 - Topics no longer go missing from the Topic Browser when several updates arrive in quick succession
+- The Topic Browser now updates as data arrives instead of in bursts roughly every 10 seconds. umh-core recorded the current time when it marked topic browser data as delivered, rather than the timestamp of the data it had actually sent. Because those timestamps are emission times that always trail the clock, every later update looked already-sent and was dropped, so no incremental update was ever delivered
 
 ## [0.44.36]
 

@@ -93,6 +93,11 @@ type queuedBundle struct {
 // It handles both the internal cache state and the communication/subscriber management.
 type TopicBrowserCommunicator struct {
 	lastSentTimestamp time.Time // Last timestamp sent to subscribers
+	// Highest buffer timestamp handed to any subscriber but not yet acknowledged.
+	// Delivery is acknowledged against this rather than against a clock: buffer
+	// timestamps are emission times and always trail wall clock, so a clock-based
+	// acknowledgement also marks buffers that were never sent.
+	lastOfferedTimestamp time.Time
 
 	// 📊 INTERNAL CACHE STATE: The actual topic browser data storage
 	eventMap map[string]*tbproto.EventTableEntry // Latest event per topic (key = UnsTreeId)
@@ -379,8 +384,10 @@ func (tbc *TopicBrowserCommunicator) ingestBuffer(buf *topicbrowserservice.Buffe
 // For new subscribers (isBootstrapped=false): includes complete cache + incremental data
 // For existing subscribers (isBootstrapped=true): includes only incremental data.
 func (tbc *TopicBrowserCommunicator) GetSubscriberData(isBootstrapped bool) (*SubscriberData, error) {
-	tbc.mu.RLock()
-	defer tbc.mu.RUnlock()
+	// A write lock, not a read lock: this records what it handed out so the
+	// acknowledgement does not have to be told.
+	tbc.mu.Lock()
+	defer tbc.mu.Unlock()
 
 	data := &SubscriberData{
 		UnsBundles: make(map[int][]byte),
@@ -414,22 +421,29 @@ func (tbc *TopicBrowserCommunicator) GetSubscriberData(isBootstrapped bool) (*Su
 		}
 	}
 
+	if data.LatestTimestamp.After(tbc.lastOfferedTimestamp) {
+		tbc.lastOfferedTimestamp = data.LatestTimestamp
+	}
+
 	data.Summary += fmt.Sprintf("%d incremental buffers", len(unsent))
 	tbc.logger.Debugf("TopicBrowserCommunicator: %s", data.Summary)
 
 	return data, nil
 }
 
-// MarkDataAsSent marks data as delivered to subscribers and updates the last sent timestamp
-// This is used for tracking what data has been successfully delivered.
-func (tbc *TopicBrowserCommunicator) MarkDataAsSent(timestamp time.Time) {
+// MarkDataAsSent marks everything handed to subscribers so far as delivered.
+//
+// The timestamp argument is ignored and is removed in the following commit. It
+// cannot be supplied correctly: the only caller is the notify loop, which builds
+// its messages through the status collector and never sees the SubscriberData
+// that knows which buffers went out.
+func (tbc *TopicBrowserCommunicator) MarkDataAsSent(_ time.Time) {
 	tbc.mu.Lock()
 	defer tbc.mu.Unlock()
 
-	// Update the last sent timestamp for tracking purposes
-	if timestamp.After(tbc.lastSentTimestamp) {
-		tbc.lastSentTimestamp = timestamp
-		tbc.logger.Debugf("Marked data as sent up to timestamp: %s", timestamp.Format(time.RFC3339))
+	if tbc.lastOfferedTimestamp.After(tbc.lastSentTimestamp) {
+		tbc.lastSentTimestamp = tbc.lastOfferedTimestamp
+		tbc.logger.Debugf("Marked data as sent up to timestamp: %s", tbc.lastSentTimestamp.Format(time.RFC3339))
 	}
 
 	// Cleanup old pending buffers to prevent memory growth
