@@ -246,7 +246,7 @@ func causeDetails(c Cause, signals Details) string {
 // BlockReason returns the per-cause bridge-refusal message shown when bridge
 // creation is refused because the instance's CPU is degraded. The dominant
 // cause kind selects the message; the saturation kind further dispatches on
-// which sub-latch arm survived the fold, in the precedence this function shares
+// which sub-latch arm was kept, in the precedence this function shares
 // with causeDetails: host-full, then limit, then no-host-stats, then
 // no-limit-host. The two are one tick's two customer-facing views and must stay
 // in step — the limit arm and the no-host-stats arm do co-fire, and an order

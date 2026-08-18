@@ -39,12 +39,20 @@ import (
 func cpuTable(cores, quota float64) diagnosis.Table[Sample] {
 	t := diagnosis.Table[Sample]{
 		Interval: time.Second,
-		// The two folds no instrument produces. Both are declared on every box,
-		// with no Requires and no quota in sight, which is the whole point:
-		// attribution needs both 60s means everywhere, and the instruments that
-		// touch these series hold something else. Decide reads the attribution
-		// split back from these two tracks for that reason, never from an
-		// instrument.
+		// A track is a plain 60-second average the table keeps for its own sake:
+		// no thresholds, no yes-or-no answer, just the last minute of one number.
+		//
+		// Signals answer questions, and their instruments hold DERIVED numbers —
+		// host-headroom holds cores − hostBusy − reserve, not hostBusy itself. To
+		// say whether the host is busier than we are, Decide needs the two raw
+		// averages, and no signal holds either of them. They cannot be recovered
+		// by inverting host-headroom, because that window is Unknown() off
+		// ScopeHost, which is exactly the affinity boxes where the comparison
+		// still means something.
+		//
+		// So these two exist only for that comparison. Both are declared on every
+		// box, with no Requires and no quota in sight, and Decide reads the
+		// attribution split back from them rather than from any instrument.
 		Tracks: []diagnosis.Track[Sample]{
 			{
 				// host-headroom's window holds cores − hostBusy − reserve AND is

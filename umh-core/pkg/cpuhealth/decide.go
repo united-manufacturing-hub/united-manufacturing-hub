@@ -64,10 +64,9 @@ type attributionSplit struct {
 // readAttributionSplit reads both 60s means and decides whether the host
 // dominates.
 //
-// A track is a rolling average the table keeps for its own sake: no
-// thresholds, no yes-or-no, just the last 60 seconds of one number. Signals
-// answer questions; tracks only remember. There are two, host-busy and
-// usage-cores, and this comparison is the only thing that reads them.
+// The two tracks are plain 60-second averages, declared in table_cpu.go
+// where they say why they exist. This comparison is the only thing that
+// reads them.
 //
 // An untrusted mean disqualifies the comparison: one sample of host busy
 // against one of ours is an attribution made on a single instant.
