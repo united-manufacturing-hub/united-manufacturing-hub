@@ -639,27 +639,32 @@ func (a *EditProtocolConverterAction) awaitRollout(previousConfig config.Protoco
 				found = true
 				currentStateReason = "current state: " + instance.CurrentState
 
-				if a.dfcType == DFCTypeEmpty {
-					// Unreachable while applyMutation forces the bridge active.
-					// Kept because a stopped bridge stops its nmap service and
-					// would never report the new port.
-					if desiredPCState != protocolconverter.OperationalStateStopped {
-						if waitingFor := a.connectionCheckWait(newConfig, pcSnapshot); waitingFor != "" {
-							currentStateReason = waitingFor
-							SendActionReply(
-								a.instanceUUID,
-								a.userEmail,
-								a.actionUUID,
-								models.ActionExecuting,
-								RemainingPrefixSec(remainingSeconds)+currentStateReason,
-								a.outboundChannel,
-								models.EditProtocolConverter,
-							)
+				// Runs before the DFC config comparison below, so a bridge whose target
+				// was never dialed is reported as a connection problem rather than a
+				// dataflow component one.
+				//
+				// An edit that carries no connection is exempt, so a bridge whose
+				// target is unreachable stays editable, including the edit that stops
+				// its flows. get-protocolconverter fills Connection.IP from the
+				// deployed spec, so a console edit may never hit that (ENG-5858).
+				if a.connectionIP != "" {
+					if waitingFor := a.connectionCheckWait(newConfig, pcSnapshot); waitingFor != "" {
+						currentStateReason = waitingFor
+						SendActionReply(
+							a.instanceUUID,
+							a.userEmail,
+							a.actionUUID,
+							models.ActionExecuting,
+							RemainingPrefixSec(remainingSeconds)+currentStateReason,
+							a.outboundChannel,
+							models.EditProtocolConverter,
+						)
 
-							continue
-						}
+						continue
 					}
+				}
 
+				if a.dfcType == DFCTypeEmpty {
 					// Check if the protocol converter has reached the desired state
 					hasReachedDesiredState := false
 
