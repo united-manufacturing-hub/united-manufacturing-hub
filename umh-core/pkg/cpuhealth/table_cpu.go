@@ -23,6 +23,11 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/diagnosis"
 )
 
+// NewEngine delegates through Table, so the table a caller walks and the table
+// that caller's engine was built from come from the same call — a signal the
+// worker polls is a signal the engine keyed windows under. RunSuite is the one
+// exception to this guarantee; see its own comment.
+//
 // cpuTable declares five signals — throttling, pressure, steal, saturation and
 // limit-saturation — and two tracks, host-busy and usage-cores.
 //
