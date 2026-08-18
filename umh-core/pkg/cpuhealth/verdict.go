@@ -79,11 +79,11 @@ type Verdict struct {
 	Causes      []Cause
 }
 
-// saturationArm identifies which instrument of the saturation family a folded
-// cause came from. The constants below are declared in the fold's precedence
+// saturationArm identifies which instrument of the saturation family a chosen
+// cause came from. The constants below are declared in that precedence
 // order — no-host-stats, then limit, then host-full — so the arm value IS the
 // rank: a later constant outranks every constant declared before it. Do not
-// reorder them: doing so silently changes which arm the fold picks.
+// reorder them: doing so silently changes which arm chooseSaturationCause picks.
 type saturationArm int
 
 const (

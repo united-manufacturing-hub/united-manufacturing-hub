@@ -21,7 +21,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/diagnosis"
 )
 
-// causeOf maps one folded Fired to a Cause. The saturation family always maps
+// causeOf maps one chosen Fired to a Cause. The saturation family always maps
 // to CauseKindSaturation. The value is the CURRENT reduction of the arm that
 // produced the latch, read back through Engine.Reduction — not Fired.Value,
 // which is stamped at the firing tick and stays constant while the latch holds;
@@ -59,7 +59,7 @@ func causeOf(engine *diagnosis.Engine[Sample], f diagnosis.Fired) Cause {
 }
 
 // attributeFor derives the attribution from the dominant cause. The saturation
-// kind is ambiguous — it is the fold's one cause — so Decide resolves it with
+// kind is ambiguous — it is the one cause kept for the whole family — so Decide resolves it with
 // the survivor's arm: host-full attributes by the split, the limit arm and the
 // no-host-stats fallback are internal (the split cannot run for them).
 func attributeFor(dominant Cause, survivor *diagnosis.Fired, splitHost bool) Attribution {
