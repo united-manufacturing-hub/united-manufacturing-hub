@@ -583,6 +583,11 @@ func (a *EditProtocolConverterAction) awaitRollout(previousConfig config.Protoco
 		// consecutive identical failures instead of burning the full timeout.
 		prevRenderErrMsg     string
 		identicalRenderFails int
+
+		// currentStateReason holds what the most recent tick was waiting for. The
+		// timeout branch reads it, so a rollback message names the half that never
+		// arrived instead of only saying the bridge did not become active.
+		currentStateReason string
 	)
 
 	const maxIdenticalRenderFails = 3
@@ -606,6 +611,10 @@ func (a *EditProtocolConverterAction) awaitRollout(previousConfig config.Protoco
 			}
 
 			stateMessage := fmt.Sprintf("Bridge '%s' edit timeout reached. It did not become %s in time. Rolled back to previous configuration", a.name, desiredPCState)
+			if currentStateReason != "" {
+				stateMessage += fmt.Sprintf(" (last check: %s)", currentStateReason)
+			}
+
 			if a.lastRenderErr != nil {
 				stateMessage += fmt.Sprintf(" (root cause: %v)", a.lastRenderErr)
 			}
@@ -662,7 +671,7 @@ func (a *EditProtocolConverterAction) awaitRollout(previousConfig config.Protoco
 				}
 
 				found = true
-				currentStateReason := "current state: " + instance.CurrentState
+				currentStateReason = "current state: " + instance.CurrentState
 
 				if a.dfcType == DFCTypeEmpty {
 					// Unreachable today: applyMutation forces the bridge to
