@@ -66,11 +66,6 @@ func NewEngine(cores, quota float64) (*diagnosis.Engine[Sample], error) {
 // Table builds the CPU signal table for a caller that needs the Signal values
 // themselves: a worker outside this package walks them to ask Engine.Select for
 // per-signal Availability, and cpuTable is unexported.
-//
-// NewEngine delegates through Table, so the table a caller walks and the table
-// that caller's engine was built from come from the same call — a signal the
-// worker polls is a signal the engine keyed windows under. RunSuite is the one
-// exception to this guarantee; see its own comment.
 func Table(cores, quota float64) diagnosis.Table[Sample] {
 	return cpuTable(cores, quota)
 }
