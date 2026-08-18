@@ -46,6 +46,7 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/nmapserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/protocolconverterserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
@@ -542,29 +543,34 @@ func (a *EditProtocolConverterAction) awaitRollout(previousConfig config.Protoco
 	startTime := time.Now()
 	timeoutDuration := timeoutInterval
 
-	// wantConnectionPort is the port the nmap gate below requires the scan to
-	// have dialed and found open. It is rendered from the spec this edit just
-	// persisted, not taken from the action payload: a bridge whose connection is
-	// templated resolves its endpoint only at render time. A historian bridge
-	// scans {{ .historian.timescale.host }}:{{ .historian.timescale.port }} and
-	// keeps no IP/PORT user variables, so its payload carries an unresolved
-	// target and port 0 while the scan dials the resolved port — comparing the
-	// two would never match, burn the whole timeout and roll back a healthy edit.
+	// wantTarget and wantPort are the host and port the nmap gate below requires
+	// the scan to have dialed and found open. They are rendered from the spec
+	// this edit just persisted, not taken from the action payload: a bridge whose
+	// connection is templated resolves its endpoint only at render time. A
+	// historian bridge scans {{ .historian.timescale.host }}:{{ .historian.timescale.port }}
+	// and keeps no IP/PORT user variables, so its payload carries an unresolved
+	// target and port 0 while the scan dials the resolved endpoint — comparing
+	// the two would never match, burn the whole timeout and roll back a healthy
+	// edit.
 	//
-	// A render failure falls back to the payload port and is recorded in
+	// A render failure falls back to the payload endpoint and is recorded in
 	// lastRenderErr so the timeout message names the real cause: the agent
 	// renders the same spec, so a spec that fails here cannot roll out either.
-	wantConnectionPort := a.connectionPort
+	wantTarget := a.connectionIP
+	wantPort := a.connectionPort
 
 	if a.dfcType == DFCTypeEmpty && desiredPCState != protocolconverter.OperationalStateStopped {
-		resolvedPort, renderErr := a.resolvedConnectionPort(newSpec)
+		resolved, renderErr := a.resolvedConnectionEndpoint(newSpec)
 		if renderErr != nil {
-			a.actionLogger.Warnf("Failed to resolve the connection endpoint for the rollout gate, falling back to the payload port %s: %v", a.connectionPort, renderErr)
+			a.actionLogger.Warnf("Failed to resolve the connection endpoint for the rollout gate, falling back to the payload endpoint %s:%s: %v", a.connectionIP, a.connectionPort, renderErr)
 			a.lastRenderErr = renderErr
 		} else {
-			wantConnectionPort = resolvedPort
+			wantTarget = resolved.Target
+			wantPort = strconv.FormatUint(uint64(resolved.Port), 10)
 		}
 	}
+
+	wantEndpoint := wantTarget + ":" + wantPort
 
 	var (
 		logs     []s6.LogEntry
@@ -663,10 +669,8 @@ func (a *EditProtocolConverterAction) awaitRollout(previousConfig config.Protoco
 					// would never report the new port.
 					if desiredPCState != protocolconverter.OperationalStateStopped {
 						nmapObs := pcSnapshot.ServiceInfo.ConnectionObservedState.ServiceInfo.NmapObservedState
-						nmapPort := strconv.FormatUint(
-							uint64(nmapObs.ObservedNmapServiceConfig.Port),
-							10,
-						)
+						scannedEndpoint := nmapObs.ObservedNmapServiceConfig.Target + ":" +
+							strconv.FormatUint(uint64(nmapObs.ObservedNmapServiceConfig.Port), 10)
 
 						// Port equality alone cannot tell a live port from a
 						// refused one, so require the scan to report open. Do not
@@ -676,8 +680,12 @@ func (a *EditProtocolConverterAction) awaitRollout(previousConfig config.Protoco
 						portIsOpen := nmapObs.ServiceInfo.NmapStatus.LastScan != nil &&
 							nmapObs.ServiceInfo.NmapStatus.LastScan.PortResult.State == string(nmapservice.PortStateOpen)
 
-						if nmapPort != wantConnectionPort {
-							currentStateReason = "waiting for nmap to connect to port " + wantConnectionPort
+						// Both halves must match. The port alone accepts a move
+						// to a different host on the same port: the number
+						// agrees, the old host's scan says that port is open,
+						// and nothing has dialed the new host (ENG-5586).
+						if scannedEndpoint != wantEndpoint {
+							currentStateReason = "waiting for nmap to scan " + wantEndpoint
 							SendActionReply(
 								a.instanceUUID,
 								a.userEmail,
@@ -697,7 +705,7 @@ func (a *EditProtocolConverterAction) awaitRollout(previousConfig config.Protoco
 								lastState = nmapObs.ServiceInfo.NmapStatus.LastScan.PortResult.State
 							}
 
-							currentStateReason = "waiting for nmap to report port " + wantConnectionPort + " open (last scan: " + lastState + ")"
+							currentStateReason = "waiting for nmap to report " + wantEndpoint + " open (last scan: " + lastState + ")"
 							SendActionReply(
 								a.instanceUUID,
 								a.userEmail,
@@ -1194,15 +1202,15 @@ func (a *EditProtocolConverterAction) mergeUserVariables(base map[string]any, in
 	return merged
 }
 
-// resolvedConnectionPort renders the connection template of the just-persisted
-// spec and returns the port the nmap scan is expected to dial, as the decimal
-// string the observed scan config is compared against.
+// resolvedConnectionEndpoint renders the connection template of the
+// just-persisted spec and returns the endpoint the nmap scan is expected to
+// dial, in the same type the observed scan config carries.
 //
 // It renders with the same inputs the agent uses — the persisted spec (which
 // already carries the edit's merged variables), the agent location and the
-// historian section read from the config manager — so the port returned here is
-// the port the control loop will make the scanner dial.
-func (a *EditProtocolConverterAction) resolvedConnectionPort(newSpec protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec) (string, error) {
+// historian section read from the config manager — so the endpoint returned
+// here is the endpoint the control loop will make the scanner dial.
+func (a *EditProtocolConverterAction) resolvedConnectionEndpoint(newSpec protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec) (nmapserviceconfig.NmapServiceConfig, error) {
 	systemSnapshot := a.systemSnapshotManager.GetDeepCopySnapshot()
 	agentLocation := convertIntMapToStringMap(systemSnapshot.CurrentConfig.Agent.Location)
 
@@ -1213,7 +1221,7 @@ func (a *EditProtocolConverterAction) resolvedConnectionPort(newSpec protocolcon
 
 	currentConfig, err := a.configManager.GetConfig(ctx, 0)
 	if err != nil {
-		return "", fmt.Errorf("failed to read current config for historian variables: %w", err)
+		return nmapserviceconfig.NmapServiceConfig{}, fmt.Errorf("failed to read current config for historian variables: %w", err)
 	}
 
 	runtimeConfig, err := runtime_config.BuildRuntimeConfig(
@@ -1225,13 +1233,10 @@ func (a *EditProtocolConverterAction) resolvedConnectionPort(newSpec protocolcon
 		a.name,
 	)
 	if err != nil {
-		return "", fmt.Errorf("failed to build runtime config: %w", err)
+		return nmapserviceconfig.NmapServiceConfig{}, fmt.Errorf("failed to build runtime config: %w", err)
 	}
 
-	return strconv.FormatUint(
-		uint64(runtimeConfig.ConnectionServiceConfig.NmapServiceConfig.Port),
-		10,
-	), nil
+	return runtimeConfig.ConnectionServiceConfig.NmapServiceConfig, nil
 }
 
 // renderDesiredDFCConfig renders the template variables in the desired DFC config
