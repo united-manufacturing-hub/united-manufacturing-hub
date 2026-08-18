@@ -4,7 +4,7 @@
 
 ### Fixes
 
-- A connection edit no longer completes on a stale reading of the old connection. The rollout waits for a scan of the new port that finds it open
+- A connection edit to a port that does not answer no longer completes. The rollout waits for a scan of the new port that finds it open
 
 ## [0.44.34]
 
