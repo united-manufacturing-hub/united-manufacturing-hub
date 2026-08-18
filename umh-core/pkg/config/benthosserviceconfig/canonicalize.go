@@ -16,7 +16,17 @@ package benthosserviceconfig
 
 import (
 	"gopkg.in/yaml.v3"
+
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/env"
 )
+
+// useCanonicalizeFast gates canonicalizeFast behind USE_CANONICALIZE_FAST.
+// Opt-out and on by default: canonicalizeFast is a hand-written reimplementation
+// of what yaml.Marshal/Unmarshal do (see the SAFETY note on normalizeValue in
+// canonicalize_fast.go), so a shape it gets wrong would make two equal configs
+// compare unequal on every tick. Flipping this env var lets it be disabled
+// instantly, without a rollback, if that ever happens in production.
+var useCanonicalizeFast, _ = env.GetAsBool("USE_CANONICALIZE_FAST", false, true)
 
 // canonicalize rewrites the free-form sections into the types they take once the
 // config has been written to benthos.yaml and read back, so a config built in Go
@@ -24,16 +34,19 @@ import (
 // representational difference - a Go []string against the []interface{} yaml decodes
 // - looks semantic and the config is re-applied on every tick.
 //
-// canonicalizeFast is tried first: it walks each section instead of serialising it,
-// and reports ok=false for anything it cannot reproduce exactly, in which case we
-// fall through to canonicalizeSlow. See canonicalize_fast.go for what it declines.
+// canonicalizeFast is tried first when useCanonicalizeFast is set: it walks each
+// section instead of serialising it, and reports ok=false for anything it cannot
+// reproduce exactly, in which case we fall through to canonicalizeSlow. See
+// canonicalize_fast.go for what it declines.
 //
 // MetricsPort and DebugLevel are left alone in both paths: scalars need no
 // canonicalization, and the document spells them as an http address and a log
 // level. The result shares unreplaced maps with cfg, which callers must not mutate.
 func canonicalize(cfg BenthosServiceConfig) BenthosServiceConfig {
-	if fast, ok := canonicalizeFast(cfg); ok {
-		return fast
+	if useCanonicalizeFast {
+		if fast, ok := canonicalizeFast(cfg); ok {
+			return fast
+		}
 	}
 
 	return canonicalizeSlow(cfg)

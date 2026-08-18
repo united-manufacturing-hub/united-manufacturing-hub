@@ -29,14 +29,12 @@ var _ = Describe("canonicalize", func() {
 		Expect(fast).To(Equal(canonicalizeSlow(cfg)))
 	})
 
-	It("falls back to the round trip for a value the walk declines, and still matches it", func() {
+	It("declines a value the walk cannot reproduce exactly", func() {
 		cfg := NewNormalizer().NormalizeConfig(bridgeConfig(10))
 		cfg.Input["s7comm"].(map[string]interface{})["preamble"] = "\nSELECT 1;\n"
 
 		_, ok := canonicalizeFast(cfg)
 		Expect(ok).To(BeFalse())
-
-		Expect(canonicalize(cfg)).To(Equal(canonicalizeSlow(cfg)))
 	})
 
 	It("leaves an empty section untouched instead of walking it", func() {
@@ -46,5 +44,44 @@ var _ = Describe("canonicalize", func() {
 		Expect(ok).To(BeTrue())
 		Expect(fast.Input).To(Equal(cfg.Input))
 		Expect(fast.Output).To(Equal(cfg.Output))
+	})
+
+	Describe("useCanonicalizeFast gate", func() {
+		var prev bool
+
+		BeforeEach(func() {
+			prev = useCanonicalizeFast
+		})
+
+		AfterEach(func() {
+			useCanonicalizeFast = prev
+		})
+
+		It("defaults to the round trip, ignoring canonicalizeFast, when unset", func() {
+			useCanonicalizeFast = false
+
+			cfg := NewNormalizer().NormalizeConfig(bridgeConfig(10))
+
+			Expect(canonicalize(cfg)).To(Equal(canonicalizeSlow(cfg)))
+		})
+
+		It("uses canonicalizeFast once enabled", func() {
+			useCanonicalizeFast = true
+
+			cfg := NewNormalizer().NormalizeConfig(bridgeConfig(10))
+
+			fast, ok := canonicalizeFast(cfg)
+			Expect(ok).To(BeTrue())
+			Expect(canonicalize(cfg)).To(Equal(fast))
+		})
+
+		It("still falls back to the round trip when enabled and a value declines", func() {
+			useCanonicalizeFast = true
+
+			cfg := NewNormalizer().NormalizeConfig(bridgeConfig(10))
+			cfg.Input["s7comm"].(map[string]interface{})["preamble"] = "\nSELECT 1;\n"
+
+			Expect(canonicalize(cfg)).To(Equal(canonicalizeSlow(cfg)))
+		})
 	})
 })
