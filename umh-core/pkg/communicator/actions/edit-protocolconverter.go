@@ -561,15 +561,12 @@ func (a *EditProtocolConverterAction) awaitRollout(pcConfig config.ProtocolConve
 	wantTarget := a.connectionIP
 	wantPort := a.connectionPort
 
-	if a.dfcType == DFCTypeEmpty && desiredPCState != protocolconverter.OperationalStateStopped {
-		resolved, renderErr := a.resolvedConnectionEndpoint(newSpec)
-		if renderErr != nil {
-			a.actionLogger.Warnf("Failed to resolve the connection endpoint for the rollout gate, falling back to the payload endpoint %s:%s: %v", a.connectionIP, a.connectionPort, renderErr)
-			a.lastRenderErr = renderErr
-		} else {
-			wantTarget = resolved.Target
-			wantPort = strconv.FormatUint(uint64(resolved.Port), 10)
-		}
+	if resolved, renderErr := a.resolvedConnectionEndpoint(newSpec); renderErr != nil {
+		a.actionLogger.Warnf("Failed to resolve the connection endpoint for the rollout gate, falling back to the payload endpoint %s:%s: %v", a.connectionIP, a.connectionPort, renderErr)
+		a.lastRenderErr = renderErr
+	} else {
+		wantTarget = resolved.Target
+		wantPort = strconv.FormatUint(uint64(resolved.Port), 10)
 	}
 
 	wantEndpoint := wantTarget + ":" + wantPort
@@ -673,66 +670,81 @@ func (a *EditProtocolConverterAction) awaitRollout(pcConfig config.ProtocolConve
 				found = true
 				currentStateReason = "current state: " + instance.CurrentState
 
-				if a.dfcType == DFCTypeEmpty {
-					// For empty DFC type (connection/location/state update only)
-					// Only check the nmap port when activating; when stopping, nmap is also
-					// stopped so it will never update to the new port.
-					if desiredPCState != protocolconverter.OperationalStateStopped {
-						nmapObs := pcSnapshot.ServiceInfo.ConnectionObservedState.ServiceInfo.NmapObservedState
-						scannedEndpoint := nmapObs.ObservedNmapServiceConfig.Target + ":" +
-							strconv.FormatUint(uint64(nmapObs.ObservedNmapServiceConfig.Port), 10)
+				// The connection check runs for every dfcType, not only for a bridge
+				// with no flows. It used to sit inside the empty-DFC branch, so a bridge
+				// with a read flow was accepted on its own pre-edit state without the
+				// requested endpoint ever being dialed (ENG-5580).
+				//
+				// It runs before the DFC config comparison below, so a bridge whose
+				// target was never dialed is reported as a connection problem rather
+				// than a dataflow component one.
+				//
+				// An edit that carries no connection is exempt: there is no new
+				// endpoint to verify, and waiting for a scan would make a bridge whose
+				// target is unreachable impossible to edit at all — including the edit
+				// that stops its flows. a.connectionIP is empty exactly when the
+				// payload omitted the connection block.
+				//
+				// No stopped-state exception is needed: applyMutation always sets the
+				// bridge active so its connection monitor stays alive, so desiredPCState
+				// is never stopped.
+				if a.connectionIP != "" {
+					nmapObs := pcSnapshot.ServiceInfo.ConnectionObservedState.ServiceInfo.NmapObservedState
+					scannedEndpoint := nmapObs.ObservedNmapServiceConfig.Target + ":" +
+						strconv.FormatUint(uint64(nmapObs.ObservedNmapServiceConfig.Port), 10)
 
-						// A scanned-and-open port is the only guarantee that the
-						// edit converged. The observed config merely echoes what
-						// the scan was asked to dial, so port equality alone
-						// cannot tell a live port from a refused one. Requiring
-						// open matches the connection FSM, which defines up as
-						// open and counts every other state as down. Do NOT use
-						// IsRunning: it is overloaded across backends (open on
-						// fsmv2, "scanner process up" on fsmv1).
-						portIsOpen := nmapObs.ServiceInfo.NmapStatus.LastScan != nil &&
-							nmapObs.ServiceInfo.NmapStatus.LastScan.PortResult.State == string(nmapfsm.PortStateOpen)
+					// A scanned-and-open port is the only guarantee that the
+					// edit converged. The observed config merely echoes what
+					// the scan was asked to dial, so port equality alone
+					// cannot tell a live port from a refused one. Requiring
+					// open matches the connection FSM, which defines up as
+					// open and counts every other state as down. Do NOT use
+					// IsRunning: it is overloaded across backends (open on
+					// fsmv2, "scanner process up" on fsmv1).
+					portIsOpen := nmapObs.ServiceInfo.NmapStatus.LastScan != nil &&
+						nmapObs.ServiceInfo.NmapStatus.LastScan.PortResult.State == string(nmapfsm.PortStateOpen)
 
-						// Both halves must match. The port alone accepts a move
-						// to a different host on the same port: the number
-						// agrees, the old host's scan says that port is open,
-						// and nothing has dialed the new host (ENG-5586).
-						if scannedEndpoint != wantEndpoint {
-							currentStateReason = "waiting for nmap to scan " + wantEndpoint
-							SendActionReply(
-								a.instanceUUID,
-								a.userEmail,
-								a.actionUUID,
-								models.ActionExecuting,
-								RemainingPrefixSec(remainingSeconds)+currentStateReason,
-								a.outboundChannel,
-								models.EditProtocolConverter,
-							)
+					// Both halves must match. The port alone accepts a move
+					// to a different host on the same port: the number
+					// agrees, the old host's scan says that port is open,
+					// and nothing has dialed the new host (ENG-5586).
+					if scannedEndpoint != wantEndpoint {
+						currentStateReason = "waiting for nmap to scan " + wantEndpoint
+						SendActionReply(
+							a.instanceUUID,
+							a.userEmail,
+							a.actionUUID,
+							models.ActionExecuting,
+							RemainingPrefixSec(remainingSeconds)+currentStateReason,
+							a.outboundChannel,
+							models.EditProtocolConverter,
+						)
 
-							continue
-						}
-
-						if !portIsOpen {
-							lastState := "no scan yet"
-							if nmapObs.ServiceInfo.NmapStatus.LastScan != nil {
-								lastState = nmapObs.ServiceInfo.NmapStatus.LastScan.PortResult.State
-							}
-
-							currentStateReason = "waiting for nmap to report " + wantEndpoint + " open (last scan: " + lastState + ")"
-							SendActionReply(
-								a.instanceUUID,
-								a.userEmail,
-								a.actionUUID,
-								models.ActionExecuting,
-								RemainingPrefixSec(remainingSeconds)+currentStateReason,
-								a.outboundChannel,
-								models.EditProtocolConverter,
-							)
-
-							continue
-						}
+						continue
 					}
 
+					if !portIsOpen {
+						lastState := "no scan yet"
+						if nmapObs.ServiceInfo.NmapStatus.LastScan != nil {
+							lastState = nmapObs.ServiceInfo.NmapStatus.LastScan.PortResult.State
+						}
+
+						currentStateReason = "waiting for nmap to report " + wantEndpoint + " open (last scan: " + lastState + ")"
+						SendActionReply(
+							a.instanceUUID,
+							a.userEmail,
+							a.actionUUID,
+							models.ActionExecuting,
+							RemainingPrefixSec(remainingSeconds)+currentStateReason,
+							a.outboundChannel,
+							models.EditProtocolConverter,
+						)
+
+						continue
+					}
+				}
+
+				if a.dfcType == DFCTypeEmpty {
 					// Check if the protocol converter has reached the desired state
 					hasReachedDesiredState := false
 

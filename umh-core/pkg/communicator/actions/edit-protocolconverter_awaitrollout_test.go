@@ -431,10 +431,6 @@ var _ = Describe("EditProtocolConverter awaitRollout (config-as-truth gate)", fu
 		payload := map[string]interface{}{
 			"name": probeName,
 			"uuid": probeUUID.String(),
-			"connection": map[string]interface{}{
-				"ip":   ip,
-				"port": port,
-			},
 			"readDFC": map[string]interface{}{
 				"state": "active",
 				"inputs": map[string]interface{}{
@@ -453,6 +449,12 @@ var _ = Describe("EditProtocolConverter awaitRollout (config-as-truth gate)", fu
 				},
 			},
 		}
+		// An empty ip stands for "the payload carried no connection block at all",
+		// which is what an edit that only changes a flow looks like.
+		if ip != "" {
+			payload["connection"] = map[string]interface{}{"ip": ip, "port": port}
+		}
+
 		Expect(a.Parse(payload)).To(Succeed())
 		Expect(a.Validate()).To(Succeed())
 		Expect(a.GetDFCType()).To(Equal("read"),
@@ -489,23 +491,17 @@ var _ = Describe("EditProtocolConverter awaitRollout (config-as-truth gate)", fu
 		// value: the observed nmap target.
 		stageReadDFCSnapshot("dest.example.com", "dest.example.com", protocolconverter.OperationalStateActive, string(nmapfsm.PortStateOpen))
 
-		_, err, replies := runAwaitRolloutRead("dest.example.com")
+		elapsed, err, replies := runAwaitRolloutRead("dest.example.com")
 
 		Expect(err).NotTo(HaveOccurred(), "a read-DFC edit whose scan agrees with the request must be accepted")
 		Expect(replies).To(ContainElement(ContainSubstring("read DFC configuration verified")),
 			"the read path's acceptance must be reachable in this harness, or the next spec proves nothing")
+		Expect(elapsed).To(BeNumerically("<", 4*time.Second),
+			"against a 6s budget: a gate that withholds acceptance from a healthy read-DFC edit is worse "+
+				"than the bug it replaces, so this must not creep towards the timeout")
 	})
 
-	// PENDING (XIt) because it reproduces ENG-5580 and therefore fails on today's
-	// code: it asserts the behaviour the fix must introduce, so it cannot be left
-	// enabled without a red suite. The fix that makes the read branch withhold
-	// acceptance until the requested target has been scanned must flip this back to
-	// It — a fix that leaves it pending has not been verified against the bug.
-	// Verified red before it was marked pending: the run reported the reply
-	// "bridge successfully activated with state 'active', read DFC configuration
-	// verified", i.e. it failed because the edit was ACCEPTED, not because of a
-	// timeout or a render failure.
-	XIt("does not accept a read-DFC edit while the scan still shows the previous target", func() {
+	It("does not accept a read-DFC edit while the scan still shows the previous target", func() {
 		// The reported bug (ENG-5580), in-process and deterministic. The bridge is
 		// edited to dest.example.com; the protocolconverter still carries its
 		// pre-edit CurrentState of active, and the scan still shows the OLD target
@@ -527,5 +523,65 @@ var _ = Describe("EditProtocolConverter awaitRollout (config-as-truth gate)", fu
 			"an edit must not report success before the requested target has been scanned")
 		Expect(elapsed).To(BeNumerically(">", time.Second),
 			"acceptance on the first tick means the pre-edit snapshot was taken as evidence about the new config")
+	})
+
+	It("names the stale scan, not the dataflow component, when neither has caught up", func() {
+		// PLACEMENT GUARD. The spec above cannot tell where the connection check
+		// sits: staged below the DFC config comparison it would still pass, because
+		// that comparison matches in that spec's case and the check then runs
+		// anyway. This spec stages the case that separates the two positions — the
+		// observed read DFC has not started (nil Input, which the comparison reads
+		// as "Benthos is still starting") AND the scan still shows the previous
+		// target.
+		//
+		// With the connection check above the comparison, the operator is told the
+		// scan has not caught up. Below it, the comparison's own wait returns first
+		// and the scan is never mentioned, so the reply blames the dataflow
+		// component for a connection that was never dialed.
+		publish(protocolconverter.OperationalStateActive, &protocolconverter.ProtocolConverterObservedStateSnapshot{
+			ObservedProtocolConverterSpecConfig: protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
+				Config: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
+					ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
+						NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
+							Target: "{{ .IP }}",
+							Port:   "{{ .PORT }}",
+						},
+					},
+				},
+				Variables: variables.VariableBundle{
+					User: map[string]interface{}{"IP": "src.example.com", "PORT": "443"},
+				},
+			},
+			ServiceInfo: protocolconvertersvc.ServiceInfo{
+				ConnectionObservedState:       observedConnection("dest.example.com", "src.example.com", string(nmapfsm.PortStateOpen), port),
+				DataflowComponentReadFSMState: protocolconverter.OperationalStateActive,
+			},
+		})
+
+		_, err, replies := runAwaitRolloutRead("dest.example.com")
+
+		Expect(err).To(HaveOccurred(), "neither the scan nor the dataflow component has caught up")
+		Expect(replies).To(ContainElement(ContainSubstring("waiting for nmap to scan dest.example.com")),
+			"the connection check must run before the dataflow component comparison, or a bridge whose "+
+				"target was never dialed is reported as a dataflow component problem")
+	})
+
+	It("does not wait for a scan when the edit carries no connection", func() {
+		// The exemption that keeps a broken bridge editable. An edit that changes
+		// only a flow has no new endpoint to verify, so it must not be held up by
+		// the connection: otherwise a bridge whose target is unreachable can never
+		// be edited at all, including the edit that stops its flows.
+		//
+		// The scan here still shows the PREVIOUS target — the same staging the
+		// ENG-5580 spec above rejects. The only difference is that this payload
+		// carries no connection.
+		stageReadDFCSnapshot("dest.example.com", "src.example.com", protocolconverter.OperationalStateActive, string(nmapfsm.PortStateOpen))
+
+		elapsed, err, replies := runAwaitRolloutRead("")
+
+		Expect(err).NotTo(HaveOccurred(), "an edit that does not touch the connection must not be blocked by it")
+		Expect(replies).To(ContainElement(ContainSubstring("read DFC configuration verified")))
+		Expect(elapsed).To(BeNumerically("<", 4*time.Second),
+			"against a 6s budget: this edit has nothing to wait for")
 	})
 })
