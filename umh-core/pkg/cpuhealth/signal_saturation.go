@@ -184,10 +184,7 @@ func saturationArmOf(f diagnosis.Fired) saturationArm {
 // saturationRank orders the saturation family for the fold: host-full outranks
 // the limit arm, the limit arm outranks the no-host-stats fallback. The arm IS
 // the rank — the constants in verdict.go are declared in that order — so the
-// fold compares one int and knows nothing about the arms. Ties cannot occur
-// (the latch is per signal, and this function is only called on a fired
-// saturation-family signal); if one somehow did, the fold's strictly-greater
-// compare keeps the first member.
+// fold compares one int and knows nothing about the arms.
 func saturationRank(f diagnosis.Fired) int {
 	return int(saturationArmOf(f))
 }

@@ -75,8 +75,11 @@ func (f cpuFeed) Unreadable(at time.Time) Sample {
 }
 
 // RunSuite drives the six-scenario suite generated from the CPU table itself,
-// through diagnosis.Run. A sixth row that reports a Known value on a failed
-// read instead of Unknown() reaches Ready on CaseLongOutage where AllAbsent is
+// through diagnosis.Run. It builds that table from cpuTable directly rather
+// than through Table(), so Table's same-call guarantee does not cover this
+// suite — "nothing in cpuhealth can drift" is not a claim RunSuite is in a
+// position to make. A sixth row that reports a Known value on a failed read
+// instead of Unknown() reaches Ready on CaseLongOutage where AllAbsent is
 // required, and there is no way to make that scenario green.
 func RunSuite(cores, quota float64) []diagnosis.Outcome {
 	t := cpuTable(cores, quota)

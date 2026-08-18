@@ -201,6 +201,10 @@ func causeDetails(c Cause, signals Details) string {
 		case signals.HostFullFired:
 			return detailSatHostFull
 		case signals.LimitSaturationFired:
+			// CapacityCores == 0 replaces the percentage sentence — never
+			// prefixes it — on this arm and on the no-limit default arm below.
+			// Its own clause still appends afterward, unaffected by which
+			// sentence came before it.
 			var detail string
 			if signals.CapacityCores == 0 {
 				detail = detailSatCapacityUnavailable
@@ -221,6 +225,7 @@ func causeDetails(c Cause, signals Details) string {
 		case signals.NoLimitHostFired && !signals.HostBusyCoresAvailable:
 			return detailSatNoLimitUnavail
 		default:
+			// Same 0-capacity fallback as the limit arm above.
 			var detail string
 			if signals.CapacityCores == 0 {
 				detail = detailSatCapacityUnavailable
@@ -377,13 +382,9 @@ const (
 	detailSatNoLimitRead    = "CPU averaged %d%% of the machine over the last minute and this instance has little headroom left. Add CPU capacity, or reduce the load on it."
 	detailSatNoLimitClause  = " Pressure stats are unavailable; enable Linux pressure stats (boot with psi=1) for richer detail."
 
-	// detailSatCapacityUnavailable replaces the percentage sentence — never
-	// prefixes it — on the limit arm and the default (readable no-limit) arm
-	// when CapacityCores itself reads 0, the one input both arms' percentage
-	// divides by. Shared byte-for-byte between the two arms deliberately: a
-	// customer cannot use a wrong percentage either way, and the remedy is the
-	// same. Its own clause (host-unavailable or no-pressure-stats) still
-	// appends afterward, unaffected by which sentence came before it.
+	// detailSatCapacityUnavailable is shared byte-for-byte between the limit
+	// arm and the no-limit arm deliberately: a customer cannot use a wrong
+	// percentage either way, and the remedy is the same.
 	detailSatCapacityUnavailable = "CPU is degraded, but its usage percentage cannot be shown right now because this instance's CPU capacity is not currently readable. Add CPU capacity, or reduce the load on it."
 
 	// The generic degraded paragraph.
