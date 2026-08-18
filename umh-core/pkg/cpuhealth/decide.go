@@ -55,10 +55,9 @@ func Decide(engine *diagnosis.Engine[Sample], s Sample, env diagnosis.Environmen
 }
 
 // foldSaturation folds the saturation family into a single survivor and
-// collects the rest; see Details in details.go for which function owns each
-// field. The fired set arrives unranked and in table order; the fold's fixed
-// precedence is the only rule Decide applies before Rank, and the rank and
-// latch flags are the table's.
+// collects the rest. The fired set arrives unranked and in table order; the
+// fold's fixed precedence is the only rule Decide applies before Rank, and the
+// rank and latch flags are the table's.
 func foldSaturation(fired []diagnosis.Fired, sig *Details, hasLimit bool) (rest []diagnosis.Fired, survivor *diagnosis.Fired) {
 	rest = make([]diagnosis.Fired, 0, len(fired))
 	best := 0 // below every saturation-arm rank, so the first member wins a tie
@@ -117,9 +116,9 @@ func buildVerdict(engine *diagnosis.Engine[Sample], rest []diagnosis.Fired, surv
 }
 
 // fillDetails fills every Details field not already owned by foldSaturation
-// or buildVerdict — see Details in details.go for the full field-ownership
-// map. The host and usage track means and states are read once in Decide by
-// the attribution split and shared here, so a single Get serves both.
+// or buildVerdict. The host and usage track means and states are read once in
+// Decide by the attribution split and shared here, so a single Get serves
+// both.
 func fillDetails(sig *Details, engine *diagnosis.Engine[Sample], s Sample, env diagnosis.Environment, readiness []diagnosis.Readiness, hostBusyMean float64, hostBusyState diagnosis.State, ourUsageMean float64, ourUsageState diagnosis.State) {
 	// The withheld-headroom facts ride Details, not Verdict — three
 	// fields, none of the other 31 can stand in for them. HostHeadroomAvailable
