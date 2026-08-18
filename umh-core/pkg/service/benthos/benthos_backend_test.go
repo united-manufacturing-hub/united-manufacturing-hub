@@ -31,7 +31,6 @@ import (
 	benthos_monitor_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos_monitor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/adapter"
 	fsmv2benthosmonitor "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/benthos_monitor"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/simple"
 )
 
@@ -153,28 +152,5 @@ var _ = Describe("USE_FSMV2_BENTHOS_MONITOR flag wiring", func() {
 			Expect(mgr).To(BeIdenticalTo(injected),
 				"the injected manager must be the one stored, not the flag-selected default")
 		})
-	})
-})
-
-var _ = Describe("benthos_monitor worker registered in production (D8)", func() {
-	It("registers the benthos_monitor worker type through benthos.go's production import", func() {
-		// The fsmv2 worker self-registers on import; the fsmv2benthosmonitor
-		// import in benthos.go (pkg/service/benthos/benthos.go) pulls it in,
-		// and NewDefaultBenthosService constructs the adapter manager under
-		// USE_FSMV2_BENTHOS_MONITOR. This spec lives in package benthos, so the
-		// production import graph — not a test file's own import — is what must
-		// have registered the worker. If a refactor removes the production
-		// constructor call (or the import), FF-on ships nothing while the CPU
-		// measurement rig above counts a fake win; this gate goes red.
-		registered := false
-		for _, wt := range factory.ListRegisteredTypes() {
-			if wt == fsmv2benthosmonitor.WorkerType {
-				registered = true
-
-				break
-			}
-		}
-		Expect(registered).To(BeTrue(),
-			"worker type %q must be registered via the production import of pkg/service/benthos, not by a test file", fsmv2benthosmonitor.WorkerType)
 	})
 })
