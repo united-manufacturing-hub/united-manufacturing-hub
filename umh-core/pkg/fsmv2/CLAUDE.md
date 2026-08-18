@@ -244,13 +244,20 @@ func (w *MyWorker) GetDependencies() *MyDependencies {
 | `DeriveDesiredState` | Custom children specs (application, communicator) or non-standard config parsing |
 | `GetInitialState` | Worker does NOT register via fsmv2.RegisterInitialState (e.g., push, pull) |
 
-Never override `GetDependenciesAny`. Framework metrics and action history are
-attached to the Observation by the collector from its own locals, before the deps
-guard, so every worker carries them on its Observation regardless of its `TDeps`
-and regardless of what `GetDependenciesAny` returns (`struct{}{}` and `nil` behave
-identically). The deps guard gates only worker-metric accumulation: a `TDeps`
-embedding `*deps.BaseDependencies` gives the collector a `MetricsRecorder` to drain
-for the worker's own counters; a `struct{}` deps worker simply records none.
+Never override `GetDependenciesAny`. **What the bound type decides is what reaches the
+deps, not what reaches the Observation.** The collector fetches framework metrics and
+action history into its own locals and injects them before the deps guard, so every
+worker carries both on its Observation whatever its `TDeps` is and whatever the
+accessor returns.
+
+Two separate paths write into the deps themselves, and they assert on different method
+sets. The supervisor wants `SetFrameworkState` / `SetActionHistory`, which is what lets
+a worker read `deps.GetFrameworkState()` or `deps.GetActionHistory()` during
+`CollectObservedState`. The collector wants `MetricsRecorder`, and that guard gates only
+worker-metric accumulation — a `struct{}` deps worker records none of its own counters.
+Only a `TDeps` embedding `*deps.BaseDependencies` has either set. Neither path checks
+the bound value for nil; both type-assert on it, and `struct{}{}` and `nil` satisfy
+neither, so overriding the accessor to return nil changes nothing.
 
 ## Worker Registration
 

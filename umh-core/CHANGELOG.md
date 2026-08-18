@@ -10,6 +10,10 @@
 - umh-core now starts and runs without `AUTH_TOKEN` or `API_URL`. Previously an instance with no Management Console credentials brought up no runtime at all: its components reported `starting` indefinitely, with no error and no exit, so a missing or mistyped token looked like a hung container. Such an instance now runs fully — it simply cannot reach the Management Console
 - Reduced the CPU cost of collecting bridge metrics by about 0.02 CPU cores per bridge, so a 50-bridge instance gets back roughly a full core. Set `USE_FSMV2_BENTHOS_MONITOR=true` and restart your container to enable it
 
+### Fixes
+
+- Renaming a bridge whose deployment then fails no longer leaves it impossible to edit or save. A failed deployment now undoes the rename along with the rest of the configuration, while Save Anyway keeps the new name as before
+
 ## [0.44.34]
 
 ### Improvements
