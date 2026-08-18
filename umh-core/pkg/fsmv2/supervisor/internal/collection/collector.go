@@ -426,14 +426,11 @@ func (c *Collector[TObserved]) collectAndSaveObservedState(ctx context.Context) 
 	c.logTrace("observation_collection_starting",
 		deps.String("collection_start_time", collectionStartTime.Format(time.RFC3339Nano)))
 
-	// Fetch framework metrics into a local so wrapNewObservation can inject them
-	// onto the Observation before the deps guard (a worker whose deps fail the
-	// baseDepsAccessor type assertion carries no framework state of its own). The
-	// Setter still runs when non-nil, so workers that read deps.GetFrameworkState()
-	// during CollectObservedState keep working. The Setter is nested inside the
-	// Provider guard, so it fires only when both are non-nil; fetching on the
-	// Provider alone keeps the provider called exactly once per tick even when the
-	// Setter is nil.
+	// A worker whose deps fail the baseDepsAccessor assertion (step 4 in
+	// wrapNewObservation) carries no framework state of its own. So fetch the metrics
+	// into a local here, ahead of that guard, and wrapNewObservation injects them
+	// whatever the deps shape. Fetching on the Provider alone calls the provider
+	// exactly once per tick even when the Setter is nil.
 	var frameworkMetrics *deps.FrameworkMetrics
 	if c.config.FrameworkMetricsProvider != nil {
 		frameworkMetrics = c.config.FrameworkMetricsProvider()
@@ -445,8 +442,7 @@ func (c *Collector[TObserved]) collectAndSaveObservedState(ctx context.Context) 
 	}
 
 	// Fetch action history into a local for the same reason and with the same
-	// split guard. Fetching on the Provider alone keeps the provider called exactly
-	// once per tick even when the Setter is nil.
+	// split guard.
 	var actionHistory []deps.ActionResult
 	if c.config.ActionHistoryProvider != nil {
 		actionHistory = c.config.ActionHistoryProvider()
@@ -619,8 +615,7 @@ func (c *Collector[TObserved]) collectAndSaveObservedState(ctx context.Context) 
 }
 
 // baseDepsAccessor accesses a worker's MetricsRecorder for step 5 (worker-metric
-// accumulation). Framework metrics and action history come from the collector's
-// own locals, so the deps guard needs only the recorder.
+// accumulation).
 type baseDepsAccessor interface {
 	MetricsRecorder() *deps.MetricsRecorder
 }
@@ -639,10 +634,8 @@ func (c *Collector[TObserved]) wrapNewObservation(ctx context.Context, observed 
 		observed = setter.SetCollectedAt(time.Now())
 	}
 
-	// Step 2: Inject framework metrics from the collector's local. This runs
-	// before the deps guard so a worker whose GetDependenciesAny returns a value
-	// that fails the baseDepsAccessor type assertion (nil or a non-accessor) still
-	// gets the metrics the supervisor captured.
+	// Step 2: Inject framework metrics from the collector's local, ahead of the deps
+	// guard at step 4.
 	if frameworkMetrics != nil {
 		if setter, ok := observed.(interface {
 			SetFrameworkMetrics(deps.FrameworkMetrics) fsmv2.ObservedState
