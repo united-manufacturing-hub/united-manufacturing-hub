@@ -75,18 +75,23 @@ func (w *throughputWindow) Add(at time.Time, port, input, output int) {
 	w.samples = kept
 }
 
-// wipeOnRestart reports whether the process restarted between prev and the new
-// sample at at, as seen through benthos' monotonic input_received counter. That
-// counter resets to 0 on a process restart, so a drop in it against the
-// immediately preceding sample is the signal that the old by-time series ended
-// and must be wiped. It deliberately does not also require the output counter to
-// drop: a restart can leave output at ~0 (a backed-up broker does this). A
-// detector requiring both counters to drop would never wipe there, and the window
-// would keep a stale pre-restart baseline; that case is pinned by
-// TestThroughputWindowWipesOnOneCounterZeroRestart. A non-newer sample (an aged,
-// out-of-order arrival) is a pruning case, not a restart, so it is skipped.
+// wipeOnRestart reports whether the benthos process restarted between prev and
+// the new sample at at, so the caller can discard the old by-time series.
 func wipeOnRestart(at time.Time, input int, prev throughputSample) bool {
-	return at.After(prev.at) && input < prev.input
+	// A sample no newer than prev is an aged, out-of-order arrival: a pruning
+	// case, not a restart.
+	isNewer := at.After(prev.at)
+
+	// benthos' input_received counter resets to 0 on a process restart, so a drop
+	// against the immediately preceding sample is the restart signal. The output
+	// counter is deliberately not consulted too: a restart can leave output at ~0
+	// (a backed-up broker does this), where a both-counters detector would never
+	// wipe and the window would keep a stale pre-restart baseline. That case is
+	// pinned by TestThroughputWindowWipesOnOneCounterZeroRestart.
+	counterDropped := input < prev.input
+
+	// Both are required: only a drop seen on a newer sample ends the old series.
+	return isNewer && counterDropped
 }
 
 // newest returns the sample with the latest observed time. It returns the zero
@@ -110,14 +115,7 @@ func (w *throughputWindow) newest() throughputSample {
 // in-window samples the rate is 0, because one sample has nothing to subtract
 // from. That is what the first poll after a wipe reads: a restart or a port
 // change makes Add re-seed the window with the new sample alone, so the newest
-// sample is the post-restart baseline. The two guards below cover the shapes the
-// wipe leaves behind. A sample whose observed time is older than the newest one's
-// can still carry a higher counter (a skewed or re-stamped ScrapedAt; a genuine
-// restart would have wiped instead), and the newest-below-oldest check reads 0
-// there rather than a negative delta. When no in-window sample is strictly older
-// than the newest, the span is zero and the elapsed check reads 0 rather than
-// dividing by it. Two samples stamped at the same instant are that case
-// (TestThroughputWindowEqualTimestampsNeverDivideByZero).
+// sample is the post-restart baseline.
 func (w *throughputWindow) inputRate() float64 {
 	if len(w.samples) < 2 {
 		return 0
@@ -132,18 +130,25 @@ func (w *throughputWindow) inputRate() float64 {
 		}
 	}
 
+	// A sample whose observed time is older than the newest one's can still carry
+	// a higher counter (a skewed or re-stamped ScrapedAt; a genuine restart would
+	// have wiped instead), so read 0 rather than a negative delta.
 	if newest.input < oldest.input {
 		return 0
 	}
 
 	elapsed := newest.at.Sub(oldest.at).Seconds()
+	// No in-window sample is strictly older than the newest, so the span is zero:
+	// read 0 rather than dividing by it. Two samples stamped at the same instant
+	// are that case (TestThroughputWindowEqualTimestampsNeverDivideByZero).
 	if elapsed <= 0 {
 		return 0
 	}
 	return float64(newest.input-oldest.input) / elapsed
 }
 
-// outputRate is inputRate but over the output counter.
+// outputRate is inputRate but over the output counter, with the same guards and
+// the same reasons for them; see inputRate.
 func (w *throughputWindow) outputRate() float64 {
 	if len(w.samples) < 2 {
 		return 0
