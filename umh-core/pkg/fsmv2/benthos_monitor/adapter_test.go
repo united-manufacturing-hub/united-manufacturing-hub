@@ -136,9 +136,9 @@ func TestMapObservedSetsIsRunning(t *testing.T) {
 	}
 
 	// A zero status: what adapter.AdaptedInstance.GetLastObservedState
-	// (pkg/fsmv2/adapter/instance.go) passes whenever the store read is not
-	// Fresh — the non-Fresh exits are listed in pkg/fsmv2/adapter/doc.go. No
-	// scrape happened, so it must NOT claim the monitor is running.
+	// (pkg/fsmv2/adapter/instance.go) passes on an Unknown, Unregistered or
+	// NeverObserved read. No scrape happened, so it must NOT claim the monitor
+	// is running.
 	empty := mapObserved(testConfig(), simple.Status[BenthosMonitorStatus]{})
 	bmEmpty, ok := empty.(benthosmonitorfsm.BenthosMonitorObservedState)
 	if !ok {
@@ -150,12 +150,12 @@ func TestMapObservedSetsIsRunning(t *testing.T) {
 
 	// A FAILED poll. This is the case the timestamp alone cannot express, and the
 	// one that made IsRunning permanently true: Poll stamps ScrapedAt before its
-	// first request and returns that partial status on every error path, and
-	// simple.CollectObservedState deliberately persists it (with Degraded set and
-	// the error in Reason) so partial detail survives. So a dead monitor arrives
-	// here with a FRESH ScrapedAt and must still map to not-running, otherwise
-	// GetHealthCheckAndMetrics copies a dead monitor's HealthCheck out as if live
-	// and its ErrBenthosMonitorNotRunning gate can never fire.
+	// first request and returns that partial status on every path below the stamp,
+	// and simple.CollectObservedState deliberately persists it (with Degraded set
+	// and the error in Reason) so partial detail survives. So a dead monitor
+	// arrives here with a FRESH ScrapedAt and must still map to not-running,
+	// otherwise GetHealthCheckAndMetrics copies a dead monitor's HealthCheck out
+	// as if live and its ErrBenthosMonitorNotRunning gate can never fire.
 	failed := mapObserved(testConfig(), simple.Status[BenthosMonitorStatus]{
 		Result: BenthosMonitorStatus{
 			ScrapedAt: time.Now(), // fresh, exactly as a failed poll leaves it
@@ -193,8 +193,8 @@ func TestMapObservedSetsIsRunning(t *testing.T) {
 // inner pointer non-nil: the full nested structure with empty content, never a nil
 // pointer for a consumer to dereference. A zero status is what
 // adapter.AdaptedInstance.GetLastObservedState (pkg/fsmv2/adapter/instance.go)
-// passes whenever the store read is not Fresh (exits listed in
-// pkg/fsmv2/adapter/doc.go), which is the common case during bootstrap.
+// passes on an Unknown, Unregistered or NeverObserved read, which is the common
+// case during bootstrap.
 func TestMapObservedToleratesZeroStatus(t *testing.T) {
 	observed := mapObserved(testConfig(), simple.Status[BenthosMonitorStatus]{})
 	bmState, ok := observed.(benthosmonitorfsm.BenthosMonitorObservedState)

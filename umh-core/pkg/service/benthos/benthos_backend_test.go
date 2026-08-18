@@ -15,11 +15,10 @@
 package benthos
 
 // These specs assert which backend NewDefaultBenthosService stores for a given
-// value of envUseFsmv2BenthosMonitor. Which values are accepted, and what each
-// one selects, is documented on that constant. The specs cover every value
-// env.GetAsBool treats as true or false, plus unset and an unparseable value.
-// They tell the two backends apart by the concrete runtime type stored in
-// svc.benthosMonitorManager.
+// value of envUseFsmv2BenthosMonitor. env.GetAsBool (pkg/env/env.go) decides
+// which spellings count as true or false; the specs cover every one of them,
+// plus unset and an unparseable value. They tell the two backends apart by the
+// concrete runtime type stored in svc.benthosMonitorManager.
 
 import (
 	"os"
@@ -80,13 +79,9 @@ var _ = Describe("USE_FSMV2_BENTHOS_MONITOR flag wiring", func() {
 		})
 
 		// Every value env.GetAsBool accepts must select the fsmv2 backend. "ON"
-		// matters most: it is the spelling the CPU measurement rig sets, and that
-		// rig is not in this repo. Reading this flag with strconv.ParseBool
-		// instead of env.GetAsBool rejected "ON", so a benchmark run set the flag
-		// on, silently got fsmv1 on both arms, and measured no CPU difference;
-		// specs that only ever set "true" could not see it. The incident in full:
-		// commit 194ea749d, "benthos_monitor: read the flag with env.GetAsBool so
-		// ON works".
+		// matters most: it is the spelling the CPU measurement rig sets, that rig
+		// is not in this repo, and a run that silently fell back to fsmv1 on both
+		// arms measured no CPU difference at all.
 		for _, truthy := range []string{"true", "TRUE", "1", "on", "ON", "On", "yes", "y"} {
 			value := truthy
 

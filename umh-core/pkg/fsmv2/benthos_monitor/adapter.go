@@ -30,7 +30,7 @@ import (
 // MessagesPerSecond — a rate in real seconds, not per tick — into FSMv1's
 // MessagesPerTick at the two call sites below.
 //
-// This is the only tick vocabulary on the fsmv2 path, and it is temporary: it
+// It is the only per-tick rate this package produces, and it is temporary: it
 // goes when benthos itself moves to fsmv2 and this adapter file is deleted, so
 // do not extend the vocabulary further.
 func tickSeconds() float64 {
@@ -42,12 +42,13 @@ func tickSeconds() float64 {
 // produce a nil BenthosMetrics: GetHealthCheckAndMetrics
 // (pkg/service/benthos/benthos.go) dereferences LastScan.BenthosMetrics
 // without a nil check, so a nil there is a control-loop panic. (It does guard
-// LastScan itself, in the same function.) A zero status — which
-// adapter.AdaptedInstance.GetLastObservedState (pkg/fsmv2/adapter/instance.go)
-// passes whenever the store read is not Fresh (the precedence list under
-// "Framework-owned state resolution" in pkg/fsmv2/adapter/doc.go names every
-// exit, Fresh and otherwise) — therefore maps to an all-non-nil empty scan
-// rather than to nil pointers.
+// LastScan itself, in the same function.)
+//
+// It must tolerate two inputs. A zero status arrives whenever
+// fsmv2client.GetFresh reports Unknown, Unregistered or NeverObserved, and maps
+// to an all-non-nil empty scan rather than to nil pointers. A Stale read
+// arrives carrying the last real status instead, so stale content reaches every
+// consumer with only the Degraded verdict to mark it.
 //
 // MessagesPerTick is scaled out of MessagesPerSecond here; IsActive is copied
 // through unscaled, because the worker already computes it tick-free.
@@ -112,10 +113,12 @@ func mapObserved(cfg config.BenthosMonitorConfig, s simple.Status[BenthosMonitor
 // load-bearing and neither implies the other. simple.Status.Degraded
 // (pkg/fsmv2/simple/status.go) is set both when the polled target is unhealthy
 // and when the poll failed, and its zero value is false — i.e. "healthy" — so a zero
-// Status would otherwise report a never-polled worker as running. And a failed poll
-// carries a fresh ScrapedAt by construction, because Poll (manager.go) stamps it
-// before its first request and returns that partial status on every error path, so
-// the timestamp alone cannot tell a dead monitor from a live one.
+// Status would otherwise report a never-polled worker as running. And a failed
+// scrape carries a fresh ScrapedAt by construction, because Poll (manager.go)
+// stamps it before its first request and returns that partial status on every
+// path below the stamp, so the timestamp alone cannot tell a dead monitor from a
+// live one. (Poll's deps-not-bound guard returns before the stamp, so a wiring
+// fault is the one failure the timestamp does catch.)
 //
 // TestMapObservedSetsIsRunning asserts all four cases. Do not simplify this
 // predicate to a constant: an unconditional false here held every bridge in

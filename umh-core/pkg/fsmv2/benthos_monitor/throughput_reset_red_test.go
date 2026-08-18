@@ -22,12 +22,10 @@ import (
 
 const testPort = 4195
 
-// A drop in benthos' input_received counter against the immediately preceding
-// sample means the process restarted, so the window must full-wipe and re-seed
-// with only the new sample; wipeOnRestart (throughput_window.go) states why
-// that drop is the restart signal and why the input counter alone decides it.
-// fsmv1 keys on the same drop: 'count < throughput.LastCount' in
-// updateComponentThroughput (pkg/service/benthos_monitor/metrics_state.go).
+// wipeOnRestart (throughput_window.go) states why an input-counter drop is the
+// restart signal and why the input counter alone decides it. fsmv1 keys on the
+// same drop: 'count < throughput.LastCount' in updateComponentThroughput
+// (pkg/service/benthos_monitor/metrics_state.go).
 func TestThroughputWindowWipesOnCounterReset(t *testing.T) {
 	t0 := time.Now().Truncate(time.Second)
 
@@ -61,10 +59,10 @@ func TestThroughputWindowWipesOnCounterReset(t *testing.T) {
 func TestThroughputWindowWipesOnOneCounterZeroRestart(t *testing.T) {
 	t0 := time.Now().Truncate(time.Second)
 
-	// Input 100 -> 5 (reset) while output was already 0 and stays 0. The input
-	// drop must wipe; a strict both-drop condition (input<prev && output<prev)
-	// would see 0<0 false and never wipe, leaving the 100 baseline inside the
-	// window's 60s span (windowSpan, throughput_window.go).
+	// Input 100 -> 5 (reset) while output was already 0 and stays 0. A strict
+	// both-drop condition would not wipe here; wipeOnRestart
+	// (throughput_window.go) says why, including what the surviving 100 baseline
+	// would then do inside the window's 60s span.
 	w := &throughputWindow{}
 	w.Add(t0, testPort, 100, 0)
 	w.Add(t0.Add(10*time.Second), testPort, 5, 0)
@@ -113,9 +111,12 @@ func TestThroughputWindowRecoveredAboveBaseline(t *testing.T) {
 }
 
 // Two samples with the same observed time make the elapsed span zero, so
-// inputRate's `elapsed <= 0` guard (throughput_window.go) reads 0 instead
-// of dividing by it: an unchanged counter cannot yield NaN (window w below) and a
-// counter that rose between the two samples cannot yield +Inf (w2).
+// inputRate's `elapsed <= 0` guard (throughput_window.go) reads 0 instead of
+// dividing by it. Zero elapsed always implies a zero delta, because newest()
+// breaks a timestamp tie in favour of the earlier sample and oldest then stays
+// equal to newest — so the unguarded expression is 0/0 = NaN, and +Inf is
+// unreachable. w2 covers the tie-break: a counter that rose between two
+// equally-stamped samples still reads 0, not (150-100)/0.
 func TestThroughputWindowEqualTimestampsNeverDivideByZero(t *testing.T) {
 	t0 := time.Now().Truncate(time.Second)
 
@@ -133,6 +134,6 @@ func TestThroughputWindowEqualTimestampsNeverDivideByZero(t *testing.T) {
 	w2.Add(t0, testPort, 100, 100)
 	w2.Add(t0, testPort, 150, 150)
 	if r := w2.inputRate(); r != 0 || math.IsNaN(r) || math.IsInf(r, 0) {
-		t.Errorf("equal-timestamp raised-input rate = %v, want 0 (never Inf)", r)
+		t.Errorf("equal-timestamp raised-input rate = %v, want 0 (a tie in observed time yields no rate, whatever the counter did)", r)
 	}
 }

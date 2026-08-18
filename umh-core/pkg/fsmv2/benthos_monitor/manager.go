@@ -67,9 +67,8 @@ type benthosMonitorDeps struct {
 }
 
 // ComponentThroughput carries the rate for one direction of the benthos
-// pipeline. MessagesPerSecond is the by-time rate the worker computes (never the
-// FSMv1 MessagesPerTick, which mapObserved in adapter.go converts on the way
-// out); LastCount is the newest counter value seen.
+// pipeline. MessagesPerSecond is the by-time rate the worker computes; LastCount
+// is the newest counter value seen.
 type ComponentThroughput struct {
 	MessagesPerSecond float64
 	LastCount         int
@@ -148,7 +147,6 @@ func Poll(ctx context.Context, d *benthosMonitorDeps, cfg config.BenthosMonitorC
 	if err != nil {
 		return status, fmt.Errorf("scrape /metrics: %w", err)
 	}
-	// Re-use the fsmv1 parser for full compatibility.
 	m, err := benthosmonitorservice.ParseMetricsFromBytes(metricsBody)
 	if err != nil {
 		return status, fmt.Errorf("parse /metrics: %w", err)
@@ -258,10 +256,9 @@ func NewFsmv2BenthosMonitorManager(managerName string) *adapter.WorkerManager[co
 		MapFresh:    mapFresh,
 		MapObserved: mapObserved,
 		// DesiredRunning is the state reported when a config leaves desiredState
-		// empty. It is benthos_monitor's own "active", not the adapter default
-		// "running": benthos_monitor's FSM accepts only active/stopped as a
-		// desired state — SetDesiredFSMState in pkg/fsm/benthos_monitor/machine.go
-		// rejects anything else.
+		// empty. benthos_monitor's FSM accepts only active/stopped as a desired
+		// state — SetDesiredFSMState in pkg/fsm/benthos_monitor/machine.go rejects
+		// anything else.
 		States: adapter.StateVocabulary{
 			Starting:       benthosmonitorfsm.OperationalStateStarting,
 			Degraded:       benthosmonitorfsm.OperationalStateDegraded,

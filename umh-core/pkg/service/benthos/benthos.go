@@ -294,9 +294,8 @@ func WithS6Service(s6Service s6service.Service) BenthosServiceOption {
 
 // WithMonitorManager sets a custom monitor manager for the BenthosService.
 //
-// It overrides the backend selected by envUseFsmv2BenthosMonitor. Passing nil
-// is equivalent to not passing the option; the flag-selected default is used
-// instead.
+// It overrides the backend selected by envUseFsmv2BenthosMonitor; passing nil
+// selects that default, exactly as omitting the option does.
 func WithMonitorManager(monitorManager benthosMonitorManagerIface) BenthosServiceOption {
 	return func(s *BenthosService) {
 		s.benthosMonitorManager = monitorManager
@@ -323,9 +322,8 @@ func NewDefaultBenthosService(benthosName string, opts ...BenthosServiceOption) 
 	}
 
 	// Apply options before selecting the default backend so a caller-supplied
-	// manager always wins, the flag-selected default is never allocated or
-	// logged when overridden, and WithMonitorManager(nil) falls back to the
-	// default instead of leaving the field nil.
+	// manager always wins, and the flag-selected default is never allocated or
+	// logged when overridden.
 	for _, opt := range opts {
 		opt(service)
 	}

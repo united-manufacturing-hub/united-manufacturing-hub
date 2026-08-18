@@ -19,10 +19,8 @@ package fsmv2benthosmonitor_test
 // fsmv2.Worker's DeriveDesiredState and CollectObservedState — against a real
 // HTTP server on the four endpoints benthosStub serves.
 //
-// No other test in this package uses those entry points; the rest call Poll
-// (manager.go), throughputWindow (throughput_window.go) or mapObserved
-// (adapter.go) directly. A wiring regression therefore fails in this test and
-// nowhere else in the package: a worker the registry cannot build, a child-spec
+// These entry points are exercised nowhere else here, so this file is where a
+// wiring regression surfaces: a worker the registry cannot build, a child-spec
 // config that does not round-trip through YAML (cfgFor, manager.go), or a Poll
 // the framework never reaches.
 
@@ -215,7 +213,7 @@ func TestScenarioWorkerObservedThroughFramework(t *testing.T) {
 	// Management Console throughput panels read this field through the fsmv1
 	// adapter, which copies it into BenthosMetrics (mapObserved, adapter.go).
 	if first.Result.Input.LastCount != 100 {
-		t.Errorf("cold Input.LastCount = %d, want 100 (it gates every MC throughput panel)", first.Result.Input.LastCount)
+		t.Errorf("cold Input.LastCount = %d, want 100", first.Result.Input.LastCount)
 	}
 
 	// --- observation 2: traffic arrives -----------------------------------
