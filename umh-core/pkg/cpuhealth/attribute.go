@@ -12,9 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Turning a fired signal into the cause a customer is shown, and attributing
-// it: today that means the host, or leaving the blame unknown, with more
-// attributions expected as the package grows.
+// Turning a fired signal into the cause a customer is shown, and attributing it.
+// Attribution in verdict.go names the classes and says why there are only two.
 
 package cpuhealth
 
