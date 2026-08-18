@@ -39,20 +39,13 @@ import (
 func cpuTable(cores, quota float64) diagnosis.Table[Sample] {
 	t := diagnosis.Table[Sample]{
 		Interval: time.Second,
-		// A track is a plain 60-second average the table keeps for its own sake:
-		// no thresholds, no yes-or-no answer, just the last minute of one number.
+		// A track is an instrument that never fires. It is there to report an extra
+		// number, not to judge one. It cannot be an instrument, because an instrument
+		// has to define what good and bad look like — NewEngine requires a fire mark,
+		// a clear mark and a worst value on every one.
 		//
-		// Signals answer questions, and their instruments hold DERIVED numbers —
-		// host-headroom holds cores − hostBusy − reserve, not hostBusy itself. To
-		// say whether the host is busier than we are, Decide needs the two raw
-		// averages, and no signal holds either of them. They cannot be recovered
-		// by inverting host-headroom, because that window is Unknown() off
-		// ScopeHost, which is exactly the affinity boxes where the comparison
-		// still means something.
-		//
-		// So these two exist only for that comparison. Both are declared on every
-		// box, with no Requires and no quota in sight, and Decide reads the
-		// attribution split back from them rather than from any instrument.
+		// These two are read only by readAttributionSplit. It compares them, and
+		// attributeFor uses the result to blame the host or leave the blame unknown.
 		Tracks: []diagnosis.Track[Sample]{
 			{
 				// host-headroom's window holds cores − hostBusy − reserve AND is
