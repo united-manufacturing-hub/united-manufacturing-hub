@@ -249,6 +249,11 @@ var _ = Describe("EditProtocolConverter awaitRollout (config-as-truth gate)", fu
 		_, err := runAwaitRollout("dest.example.com")
 		Expect(err).To(HaveOccurred(),
 			"an open port on the previous host must not be reported as a successful rollout of the new one")
+		// A bare HaveOccurred() would also be satisfied by a timeout for any other
+		// reason, so it cannot tell this spec passing from this spec passing by
+		// accident. The rollback message names what the last tick was waiting for.
+		Expect(err.Error()).To(ContainSubstring("waiting for nmap to scan dest.example.com"),
+			"the rollout must have timed out on the host comparison, not on something else")
 	})
 
 	Describe("a bridge whose connection is templated", func() {
