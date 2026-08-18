@@ -5,6 +5,7 @@
 ### Fixes
 
 - Editing a bridge's connection to a port that does not answer now fails and restores the previous configuration, instead of reporting a successful deploy. The deploy waits for a scan that finds the new port open, so a port that is closed or filtered is no longer accepted
+- Repointing a bridge to a different host on the same port is now checked too. The deploy waits for a scan taken after the change, so the previous host's scan can no longer satisfy it
 
 ## [0.44.34]
 
