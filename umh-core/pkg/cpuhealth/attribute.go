@@ -59,9 +59,10 @@ func causeOf(engine *diagnosis.Engine[Sample], f diagnosis.Fired) Cause {
 }
 
 // attributeFor derives the attribution from the dominant cause. The saturation
-// kind is ambiguous — it is the one cause kept for the whole family — so Decide resolves it with
-// the survivor's arm: host-full attributes by the split, the limit arm and the
-// no-host-stats fallback are internal (the split cannot run for them).
+// kind is ambiguous — it is the one cause kept for the whole family — so
+// Decide resolves it with the survivor's arm: host-full attributes by the
+// split, the limit arm and the no-host-stats fallback are internal (the split
+// cannot run for them).
 func attributeFor(dominant Cause, survivor *diagnosis.Fired, splitHost bool) Attribution {
 	switch dominant.Kind {
 	case CauseKindSteal, CauseKindHostContention:
