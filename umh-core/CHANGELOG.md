@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Fixes
+
+- Renaming a bridge whose deployment then fails no longer leaves it impossible to edit or save. A failed deployment now undoes the rename along with the rest of the configuration, while Save Anyway keeps the new name as before
+
 ## [0.44.34]
 
 ### Improvements
