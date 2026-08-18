@@ -26,9 +26,10 @@ const (
 	StateDegraded State = "degraded"
 )
 
-// Attribution names the dominant cause class when degraded. Two members:
-// unknown is the complement of host, and there is deliberately no internal
-// member — adding one is the answer ENG-3323 exists to measure.
+// Attribution names the dominant cause class when degraded. Two members
+// today: unknown is the complement of host. ENG-5264 widens this to
+// host, workload, software and unknown; until it lands, a cause inside
+// this container reads unknown rather than naming what caused it.
 type Attribution string
 
 const (
