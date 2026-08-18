@@ -148,27 +148,17 @@ func Poll(ctx context.Context, d *benthosMonitorDeps, cfg config.BenthosMonitorC
 	if err != nil {
 		return status, fmt.Errorf("scrape /metrics: %w", err)
 	}
-	// The fsmv1 parser is the only parser: one implementation cannot disagree
-	// with itself about the same prometheus text, and every consumer already
-	// reads the per-path struct it returns. The simple framework's collector
-	// (simpleWorker.CollectObservedState in pkg/fsmv2/simple) turns the returned
-	// error into a degraded worker carrying the reason, which is what makes a
-	// format drift visible instead of looking like idle traffic.
+	// Re-use the fsmv1 parser for full compatibility.
 	m, err := benthosmonitorservice.ParseMetricsFromBytes(metricsBody)
 	if err != nil {
 		return status, fmt.Errorf("parse /metrics: %w", err)
 	}
 	status.BenthosMetrics = m
 
-	// The window lives in d and survives across polls, which is what makes a rate
-	// computable from per-poll counter snapshots.
-	//
-	// Add is passed the scrape port because it keys the window on that port: an
+	// The window lives in d and survives across polls, so a rate is computable
+	// from per-poll counter snapshots. It is keyed on the scrape port: an
 	// in-place config update can re-point this child at a new MetricsPort with no
 	// worker restart, and throughputWindow.port explains the wipe that follows.
-	// Its counter arguments are the totals summed across every leaf path, which is
-	// what the counters mean for throughput: a switch or broker emits one series
-	// per leaf with no top-level aggregate, so the sum is the pipeline's traffic.
 	d.window.Add(status.ScrapedAt, int(cfg.MetricsPort), int(m.InputReceivedTotal()), int(m.OutputSentTotal()))
 	status.Input = ComponentThroughput{
 		MessagesPerSecond: d.window.inputRate(),

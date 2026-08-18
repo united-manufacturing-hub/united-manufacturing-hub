@@ -68,11 +68,8 @@ const (
 	OPCDebugEnvVar = "OPC_DEBUG"
 )
 
-// envUseFsmv2BenthosMonitor names the environment variable that selects the
-// fsmv2 benthos monitor backend in NewDefaultBenthosService. It is read with
-// env.GetAsBool, which accepts on/off, yes/no, y/n, 1/0 and true/false
-// case-insensitively. Unset, empty or false-y selects the fsmv1 backend;
-// true-y selects the fsmv2 adapter manager.
+// envUseFsmv2BenthosMonitor names the env var selecting the fsmv2 benthos
+// monitor backend in NewDefaultBenthosService; unset or false-y means fsmv1.
 const envUseFsmv2BenthosMonitor = "USE_FSMV2_BENTHOS_MONITOR"
 
 // IBenthosService is the interface for managing Benthos services.
@@ -349,11 +346,8 @@ func NewDefaultBenthosService(benthosName string, opts ...BenthosServiceOption) 
 				fmt.Sprintf("%s_%s", logger.ComponentBenthosMonitorManager, benthosName),
 			)
 		} else {
-			// The missing counterpart to the Infof above is deliberate, not an
-			// oversight: this is the branch every container with
-			// USE_FSMV2_BENTHOS_MONITOR unset takes, and the flag-off default
-			// must keep the log output it had before the flag existed. No test
-			// pins that silence, so adding a log line here would pass CI.
+			// No Infof counterpart on purpose: this flag-unset default must keep
+			// its pre-flag log output, and no test pins that silence.
 			service.benthosMonitorManager = benthos_monitor_fsm.NewBenthosMonitorManager(benthosName)
 		}
 	}
