@@ -134,11 +134,12 @@ func TestThroughputWindowZeroValueIsSafe(t *testing.T) {
 // TestPollComputesThroughput asserts the end-to-end wiring: Poll feeds the
 // scrape of /metrics into the by-time window and returns Input/LastCount and
 // IsActive on the status. The first cold poll is a single sample, so its rate is
-// 0 and IsActive false; a second poll with a raised counter advances LastCount,
-// which happens only if Poll fed the window. The rate itself is wall-clock
-// sensitive, so a rate assertion here would be flaky by construction: the
-// deterministic assertions are the single-sample 0 and the LastCount
-// progression.
+// 0 and IsActive false; a second poll with a raised counter advances LastCount
+// and flips IsActive on, both of which happen only if Poll fed the window. The
+// rate VALUE is wall-clock sensitive, so asserting a number would be flaky by
+// construction; its SIGN is not, which is what IsActive reads. The deterministic
+// assertions are therefore the single-sample 0, the LastCount progression, and
+// the IsActive flip.
 func TestPollComputesThroughput(t *testing.T) {
 	var inputCounter int64 = 10
 	var outputCounter int64 = 5
@@ -191,6 +192,9 @@ func TestPollComputesThroughput(t *testing.T) {
 	}
 	if status.Output.LastCount != 6 {
 		t.Errorf("second poll Output.LastCount = %d, want 6", status.Output.LastCount)
+	}
+	if !status.IsActive {
+		t.Errorf("second poll IsActive = false, want true (input rose by 2 over a positive elapsed span); this is the only assertion of the true case directly on Poll's return value, the framework-seam equivalent being TestScenarioWorkerObservedThroughFramework")
 	}
 }
 
