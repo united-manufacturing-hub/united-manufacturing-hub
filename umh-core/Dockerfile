@@ -104,7 +104,7 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
     -X github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants.BenthosVersion=${BENTHOS_UMH_VERSION} \
     -X github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants.RedpandaVersion=${REDPANDA_VERSION} \
     -X github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/version.AppVersion=${APP_VERSION}" \
-    -o /go/bin/umh-core cmd/main.go; \
+    -o /go/bin/umh-core ./cmd; \
     elif [ "$PPROF" = "true" ]; then \
     CGO_ENABLED=1 go build -mod=vendor -tags pprof \
     -ldflags "-s -w \
@@ -112,7 +112,7 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
     -X github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants.BenthosVersion=${BENTHOS_UMH_VERSION} \
     -X github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants.RedpandaVersion=${REDPANDA_VERSION} \
     -X github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/version.AppVersion=${APP_VERSION}" \
-    -o /go/bin/umh-core cmd/main.go; \
+    -o /go/bin/umh-core ./cmd; \
     else \
     CGO_ENABLED=0 go build -mod=vendor  \
     -ldflags "-s -w \
@@ -120,7 +120,7 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
     -X github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants.BenthosVersion=${BENTHOS_UMH_VERSION} \
     -X github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants.RedpandaVersion=${REDPANDA_VERSION} \
     -X github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/version.AppVersion=${APP_VERSION}" \
-    -o /go/bin/umh-core cmd/main.go; \
+    -o /go/bin/umh-core ./cmd; \
     fi
 
 # --- Final Stage ---

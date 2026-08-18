@@ -31,7 +31,6 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/pprof"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/actions"
-	v2 "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/api/v2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/communication_state"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/fsmv2_adapter"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/graphql"
@@ -155,31 +154,13 @@ func main() {
 	// FSMv2 feature flags: read directly from env vars, not persisted to config.yaml.
 	// These bypass the config manager intentionally — they are temporary migration flags
 	// that will be replaced when the config manager becomes an FSMv2 worker.
-	// GetAsBool with required=false never returns an error (silently falls back
-	// to the default on parse failure); see ENG-4809 for the signature fix.
-	transportEnabled, _ := env.GetAsBool("USE_FSMV2_TRANSPORT", false, true)
-	memoryCleanupEnabled, _ := env.GetAsBool("USE_FSMV2_MEMORY_CLEANUP", false, true)
-
-	// Memory cleanup is required whenever transport is on; running transport
-	// without cleanup reintroduces the unbounded state-growth risk (ENG-4292).
-	if transportEnabled {
-		memoryCleanupEnabled = true
-	}
-
-	configData.Agent.UseFSMv2Transport = transportEnabled
-	configData.Agent.UseFSMv2MemoryCleanup = memoryCleanupEnabled
-
-	protocolConverterEnabled, _ := env.GetAsBool("USE_FSMV2_PROTOCOL_CONVERTER", false, false)
-	configData.Agent.UseFSMv2ProtocolConverter = protocolConverterEnabled
-
 	featureUsage := &models.FeatureUsage{
-		ConfigBackupEnabled:           configBackupEnabled,
-		FSMv2TransportEnabled:         configData.Agent.UseFSMv2Transport,
-		FSMv2MemoryCleanupEnabled:     configData.Agent.UseFSMv2MemoryCleanup,
-		FSMv2ProtocolConverterEnabled: configData.Agent.UseFSMv2ProtocolConverter,
-		ResourceLimitBlockingEnabled:  configData.Agent.EnableResourceLimitBlocking,
-		HistorianConfigured:           configData.Historian != nil,
-		HistorianBridgeCount:          countHistorianBridges(configData),
+		ConfigBackupEnabled:          configBackupEnabled,
+		FSMv2TransportEnabled:        true, // FSMv2 is the only bring-up path
+		FSMv2MemoryCleanupEnabled:    true, // persistence runs unconditionally
+		ResourceLimitBlockingEnabled: configData.Agent.EnableResourceLimitBlocking,
+		HistorianConfigured:          configData.Historian != nil,
+		HistorianBridgeCount:         countHistorianBridges(configData),
 	}
 
 	// Ensure the S6 repository directory exists
@@ -218,9 +199,7 @@ func main() {
 		configData.Agent.ReleaseChannel,
 		systemSnapshotManager,
 		configManager,
-		configData.Agent.APIURL,
 		logger.For(logger.ComponentCommunicator),
-		configData.Agent.AllowInsecureTLS,
 		topicbrowser.NewCache(),
 		featureUsage,
 	)
@@ -275,43 +254,33 @@ func main() {
 
 	// fsmv2Done is closed when the FSMv2 supervisor has fully stopped.
 	// main() waits on it at the bottom so the process does not exit before
-	// the supervisor drains.  When FSMv2 transport is disabled (or the
-	// API URL / token are absent), the channel is closed immediately so
-	// the <-fsmv2Done below is a no-op.
+	// the supervisor drains.  If the supervisor fails to build, the channel is
+	// closed immediately so the <-fsmv2Done below is a no-op.
 	fsmv2Done := make(chan struct{})
 
-	if configData.Agent.APIURL != "" && configData.Agent.AuthToken != "" {
-		if configData.Agent.UseFSMv2Transport {
-			log.Info("Using FSMv2 communicator (feature flag enabled)")
-
-			appSup, channelAdapter, fsmv2Store, placeholderUUID, cleanup, buildErr := buildFSMv2Supervisor(ctx, &configData, communicationState, log, forceExit)
-			if buildErr != nil {
-				log.Errorw("Failed to build FSMv2 supervisor", "error", buildErr)
-				close(fsmv2Done)
-			} else {
-				defer cleanup()
-
-				go func() {
-					defer close(fsmv2Done)
-
-					if runErr := appSup.Run(ctx); runErr != nil {
-						log.Errorw("FSMv2 supervisor Run error", "error", runErr)
-					}
-				}()
-
-				sentry.SafeGoWithContext(ctx, func(ctx context.Context) {
-					wireFSMv2Communicator(ctx, appSup, channelAdapter, fsmv2Store, placeholderUUID, &configData, communicationState, log)
-				})
-			}
-		} else {
-			close(fsmv2Done)
-			sentry.SafeGoWithContext(ctx, func(ctx context.Context) {
-				enableBackendConnection(ctx, &configData, communicationState, controlLoop, communicationState.Logger)
-			})
-		}
-	} else {
-		log.Warnf("No backend connection enabled, please set API_URL and AUTH_TOKEN")
+	appSup, channelAdapter, fsmv2Store, placeholderUUID, cleanup, buildErr := buildFSMv2Supervisor(ctx, &configData, communicationState, log, forceExit)
+	if buildErr != nil {
+		log.Errorw("Failed to build FSMv2 supervisor", "error", buildErr)
 		close(fsmv2Done)
+	} else {
+		defer cleanup()
+
+		go func() {
+			defer close(fsmv2Done)
+
+			if runErr := appSup.Run(ctx); runErr != nil {
+				log.Errorw("FSMv2 supervisor Run error", "error", runErr)
+			}
+		}()
+
+		if communicatorEnabled(&configData) {
+			log.Info("Starting FSMv2 communicator because backend credentials are present")
+			sentry.SafeGoWithContext(ctx, func(ctx context.Context) {
+				wireFSMv2Communicator(ctx, appSup, channelAdapter, fsmv2Store, placeholderUUID, &configData, communicationState, log)
+			})
+		} else {
+			log.Info("No backend credentials configured; running FSMv2 runtime without communicator")
+		}
 	}
 
 	// Start the system snapshot logger with automatic panic recovery
@@ -331,6 +300,14 @@ func main() {
 	<-fsmv2Done
 
 	log.Info("umh-core completed")
+}
+
+// communicatorEnabled reports whether the FSMv2 communicator can run, which
+// requires backend credentials. It gates only wireFSMv2Communicator: the FSMv2
+// runtime is built and run regardless of credentials, so this must never gate
+// its construction or its Run call.
+func communicatorEnabled(cfg *config.FullConfig) bool {
+	return cfg.Agent.APIURL != "" && cfg.Agent.AuthToken != ""
 }
 
 // countHistorianBridges returns the number of bridges whose write DFC targets the historian output.
@@ -544,68 +521,6 @@ func SystemSnapshotLogger(ctx context.Context, controlLoop *control.ControlLoop)
 	}
 }
 
-func enableBackendConnection(ctx context.Context, config *config.FullConfig, communicationState *communication_state.CommunicationState, controlLoop *control.ControlLoop, logger *zap.SugaredLogger) {
-	logger.Info("Enabling backend connection")
-	// directly log the config to console, not to the logger
-	if config == nil {
-		logger.Warn("Config is nil, cannot enable backend connection")
-
-		return
-	}
-
-	if config.Agent.APIURL != "" && config.Agent.AuthToken != "" {
-		// This can temporarely deactivated, e.g., during integration tests where just the mgmtcompanion-config is changed directly
-		// Call NewLogin in a goroutine since it blocks with retry logic
-		loginChan := make(chan *v2.LoginResponse, 1)
-
-		go func() {
-			login := v2.NewLogin(ctx, config.Agent.AuthToken, config.Agent.AllowInsecureTLS, config.Agent.APIURL, logger)
-			select {
-			case loginChan <- login:
-			case <-ctx.Done():
-			}
-		}()
-
-		var login *v2.LoginResponse
-		select {
-		case login = <-loginChan:
-			// Login completed
-		case <-ctx.Done():
-			// Context cancelled before login completed
-			logger.Info("Backend connection context cancelled before login completed")
-
-			return
-		}
-
-		if login == nil {
-			sentry.ReportIssuef(sentry.IssueTypeError, logger, "[v2.NewLogin] Failed to create login object")
-
-			return
-		}
-
-		communicationState.LoginResponseMu.Lock()
-		communicationState.LoginResponse = login
-		communicationState.LoginResponseMu.Unlock()
-		logger.Info("Backend connection enabled, login response: ", zap.Any("login_name", login.Name))
-
-		// Get the config manager from the control loop
-		configManager := controlLoop.GetConfigManager()
-		snapshotManager := controlLoop.GetSnapshotManager()
-
-		communicationState.InitialiseAndStartPuller()
-		communicationState.InitialiseAndStartPusher()
-		communicationState.InitialiseAndStartSubscriberHandler(time.Minute*5, time.Minute, config, snapshotManager, configManager, nil) // nil = legacy mode uses Pusher
-		communicationState.InitialiseAndStartRouter()
-		communicationState.InitialiseReAuthHandler(config.Agent.AuthToken, config.Agent.AllowInsecureTLS)
-
-		// Wait for context cancellation
-		<-ctx.Done()
-		logger.Info("Backend connection context cancelled, shutting down")
-	}
-
-	logger.Info("Backend connection enabled")
-}
-
 // fsmv2Supervisor is the minimal interface required from the ApplicationSupervisor
 // by main().  Using an interface keeps buildFSMv2Supervisor decoupled from the
 // concrete generic type and avoids repeating the full type parameter list.
@@ -670,23 +585,10 @@ func buildFSMv2Supervisor(
 	// instanceUUID is a placeholder — the real UUID is returned by the backend
 	// and picked up by polling TransportWorker.ObservedState.AuthenticatedUUID below (Bug #6 fix).
 	placeholderUUID = uuid.New().String()
-	yamlConfig := fmt.Sprintf(`
-children:
-  - name: "communicator"
-    workerType: "communicator"
-    userSpec:
-      config: |
-        relayURL: "%s"
-        instanceUUID: "%s"
-        authToken: "%s"
-        timeout: "10s"
-        state: "running"
-`, configData.Agent.APIURL, placeholderUUID, configData.Agent.AuthToken)
 
-	if configData.Agent.UseFSMv2MemoryCleanup {
-		yamlConfig += `  - name: "persistence"
-    workerType: "persistence"
-`
+	yamlConfig, err := renderSupervisorChildrenYAML(configData.Agent, placeholderUUID)
+	if err != nil {
+		return nil, nil, nil, "", func() {}, fmt.Errorf("failed to render FSMv2 supervisor children: %w", err)
 	}
 
 	// The historian monitor is a dynamic child, upserted and deleted at runtime
@@ -714,9 +616,7 @@ children:
 
 	fsmv2Deps := map[string]any{}
 
-	if configData.Agent.UseFSMv2MemoryCleanup {
-		register.SetDeps[*persistenceWorker.PersistenceDependencies](persistenceWorker.WorkerTypeName, persistenceWorker.NewStoreOnlyDependencies(store))
-	}
+	register.SetDeps[*persistenceWorker.PersistenceDependencies](persistenceWorker.WorkerTypeName, persistenceWorker.NewStoreOnlyDependencies(store))
 
 	// Publish the dynamicchildren registry under the configworker deps key and
 	// the process-scoped fsmv2client before constructing the supervisor, so the
@@ -749,9 +649,9 @@ children:
 		YAMLConfig:   yamlConfig,
 		Dependencies: fsmv2Deps,
 		ForceExit:    forceExit,
-		// The production tree under USE_FSMV2_TRANSPORT is 4 levels
-		// (application -> communicator -> transport -> push/pull). The drain
-		// budget cascades base x subtree height (see pkg/fsmv2/CLAUDE.md
+		// The production tree is 4 levels (application -> communicator ->
+		// transport -> push/pull). The drain budget cascades base x subtree
+		// height (see pkg/fsmv2/CLAUDE.md
 		// "Graceful Shutdown Cascading"), so a base of 2s bounds the worst-case
 		// chain drain at 8s -- inside docker's default 10s SIGTERM grace, with
 		// headroom for s6 teardown and redpanda disk sync. Healthy drains
@@ -801,11 +701,9 @@ func wireFSMv2Communicator(
 	_ = appSup // kept for future per-supervisor introspection
 
 	// Initialize Router for FSMv2 mode:
-	// 1. Create write-only Pusher (writes to channel, FSMv2 handles HTTP)
-	// 2. Set LoginResponse with placeholder UUID (replaced when TransportWorker.ObservedState.AuthenticatedUUID is observed below)
-	// 3. Initialize SubscriberHandler (generates status messages)
-	// 4. Start Router (processes inbound messages, generates status via Subscriber)
-	communicationState.InitializeWriteOnlyPusher(placeholderUUID)
+	// 1. Set LoginResponse with placeholder UUID (replaced when TransportWorker.ObservedState.AuthenticatedUUID is observed below)
+	// 2. Initialize SubscriberHandler (generates status messages)
+	// 3. Start Router (processes inbound messages, generates status via Subscriber)
 	communicationState.SetLoginResponseForFSMv2(placeholderUUID)
 	communicationState.InitialiseAndStartSubscriberHandler(
 		5*time.Minute, // TTL: time until subscriber considered dead

@@ -18,7 +18,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/api/v2/push"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/encoding"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/topicbrowser"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/types"
@@ -40,8 +39,7 @@ type Handler struct {
 	dog                        watchdog.Iface
 	configManager              config.ConfigManager
 	subscriberRegistry         *subscribers.Registry
-	pusher                     *push.Pusher
-	fsmOutboundChannel         chan<- *types.UMHMessage // FSMv2 direct channel (nil for legacy mode)
+	fsmOutboundChannel         chan<- *types.UMHMessage // FSMv2 direct channel for status delivery
 	StatusCollector            *generator.StatusCollectorType
 	systemSnapshotManager      *fsm.SnapshotManager
 	topicBrowserCommunicator   *topicbrowser.TopicBrowserCommunicator
@@ -55,7 +53,6 @@ type Handler struct {
 // and coordinates status collection with the management console.
 func NewHandler(
 	dog watchdog.Iface,
-	pusher *push.Pusher,
 	instanceUUID uuid.UUID,
 	ttl time.Duration,
 	cull time.Duration,
@@ -65,13 +62,16 @@ func NewHandler(
 	configManager config.ConfigManager,
 	logger *zap.SugaredLogger,
 	topicBrowserCommunicator *topicbrowser.TopicBrowserCommunicator,
-	fsmOutboundChannel chan<- *types.UMHMessage, // FSMv2 direct channel (nil for legacy mode)
+	fsmOutboundChannel chan<- *types.UMHMessage, // FSMv2 direct channel for status delivery
 	featureUsage *models.FeatureUsage,
 ) *Handler {
+	if fsmOutboundChannel == nil {
+		panic("subscriber.NewHandler: fsmOutboundChannel must be non-nil (FSMv2 is the only status delivery path)")
+	}
+
 	s := &Handler{}
 	s.subscriberRegistry = subscribers.NewRegistry(cull, ttl)
 	s.dog = dog
-	s.pusher = pusher
 	s.fsmOutboundChannel = fsmOutboundChannel
 	s.instanceUUID = instanceUUID
 	s.systemSnapshotManager = systemSnapshotManager
@@ -192,28 +192,18 @@ func (s *Handler) notify() {
 			return
 		}
 
-		// FSMv2 mode: write directly to FSMv2 outbound channel (bypasses legacy Pusher)
-		// Legacy mode: use Pusher as before
-		if s.fsmOutboundChannel != nil {
-			msg := &types.UMHMessage{
-				InstanceUUID: s.GetInstanceUUID().String(),
-				Content:      message,
-				Email:        email,
-			}
-			select {
-			case s.fsmOutboundChannel <- msg:
-				// Successfully sent to FSMv2 transport
-			default:
-				s.logger.Warnf("FSMv2 outbound channel full, dropping message for subscriber %s", email)
+		msg := &types.UMHMessage{
+			InstanceUUID: s.GetInstanceUUID().String(),
+			Content:      message,
+			Email:        email,
+		}
+		select {
+		case s.fsmOutboundChannel <- msg:
+			// Successfully sent to FSMv2 transport
+		default:
+			s.logger.Warnf("FSMv2 outbound channel full, dropping message for subscriber %s", email)
 
-				return
-			}
-		} else {
-			s.pusher.Push(models.UMHMessage{
-				Content:      message,
-				Email:        email,
-				InstanceUUID: s.GetInstanceUUID(),
-			})
+			return
 		}
 
 		// Mark subscriber as bootstrapped after first message

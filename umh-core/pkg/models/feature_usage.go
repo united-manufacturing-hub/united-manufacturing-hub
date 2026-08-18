@@ -28,12 +28,13 @@ type FeatureUsage struct {
 	HistorianBridgeCount int `json:"historianBridgeCount"`
 	// ConfigBackupEnabled reports whether ENABLE_CONFIG_BACKUP is set.
 	ConfigBackupEnabled bool `json:"configBackupEnabled"`
-	// FSMv2TransportEnabled reports whether USE_FSMV2_TRANSPORT is set.
+	// FSMv2TransportEnabled reports whether the FSMv2 transport is active. It is
+	// always true: FSMv2 is the only bring-up path.
 	FSMv2TransportEnabled bool `json:"fsmv2TransportEnabled"`
-	// FSMv2MemoryCleanupEnabled reports whether USE_FSMV2_MEMORY_CLEANUP is set.
+	// FSMv2MemoryCleanupEnabled reports whether the persistence worker's memory
+	// cleanup is active. It is always true: persistence runs unconditionally and
+	// the USE_FSMV2_MEMORY_CLEANUP flag that used to gate it no longer exists.
 	FSMv2MemoryCleanupEnabled bool `json:"fsmv2MemoryCleanupEnabled"`
-	// FSMv2ProtocolConverterEnabled reports whether USE_FSMV2_PROTOCOL_CONVERTER is set.
-	FSMv2ProtocolConverterEnabled bool `json:"fsmv2ProtocolConverterEnabled"`
 	// ResourceLimitBlockingEnabled reports the value of agent.enableResourceLimitBlocking in config.yaml (defaults to true).
 	ResourceLimitBlockingEnabled bool `json:"resourceLimitBlockingEnabled"`
 	// HistorianConfigured reports whether a historian section exists in config.yaml.

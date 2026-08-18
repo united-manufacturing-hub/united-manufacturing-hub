@@ -15,15 +15,12 @@
 package communication_state
 
 import (
-	"context"
 	"sync"
 	"time"
 
 	"github.com/google/uuid"
 
 	v2 "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/api/v2"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/api/v2/pull"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/api/v2/push"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/subscriber"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/watchdog"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/router"
@@ -45,8 +42,6 @@ type CommunicationState struct {
 	mu                    *sync.RWMutex
 	Watchdog              *watchdog.Watchdog
 	InboundChannel        chan *models.UMHMessage
-	Puller                *pull.Puller
-	Pusher                *push.Pusher
 	SubscriberHandler     *subscriber.Handler
 	OutboundChannel       chan *models.UMHMessage
 	Router                *router.Router
@@ -58,8 +53,6 @@ type CommunicationState struct {
 	TopicBrowserSimulator *topicbrowser.Simulator
 	FeatureUsage          *models.FeatureUsage
 	ReleaseChannel        config.ReleaseChannel
-	ApiUrl                string
-	InsecureTLS           bool
 	// TopicBrowserSimulatorEnabled tracks whether simulator mode is enabled
 	TopicBrowserSimulatorEnabled bool
 }
@@ -72,9 +65,7 @@ func NewCommunicationState(
 	releaseChannel config.ReleaseChannel,
 	systemSnapshotManager *fsm.SnapshotManager,
 	configManager config.ConfigManager,
-	apiUrl string,
 	logger *zap.SugaredLogger,
-	insecureTLS bool,
 	topicBrowserCache *topicbrowser.Cache,
 	featureUsage *models.FeatureUsage,
 ) *CommunicationState {
@@ -87,101 +78,10 @@ func NewCommunicationState(
 		ReleaseChannel:        releaseChannel,
 		SystemSnapshotManager: systemSnapshotManager,
 		ConfigManager:         configManager,
-		ApiUrl:                apiUrl,
 		Logger:                logger,
-		InsecureTLS:           insecureTLS,
 		TopicBrowserCache:     topicBrowserCache,
 		FeatureUsage:          featureUsage,
 	}
-}
-
-// InitialiseAndStartPuller creates a new Puller and starts it.
-func (c *CommunicationState) InitialiseAndStartPuller() {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	c.LoginResponseMu.RLock()
-	defer c.LoginResponseMu.RUnlock()
-
-	if c.LoginResponse == nil {
-		sentry.ReportIssuef(sentry.IssueTypeError, c.Logger, "LoginResponse is nil, cannot start puller")
-
-		return
-	}
-
-	if c.Watchdog == nil {
-		sentry.ReportIssuef(sentry.IssueTypeError, c.Logger, "Watchdog is nil, cannot start puller")
-
-		return
-	}
-
-	c.Puller = pull.NewPuller(c.LoginResponse.JWT, c.Watchdog, c.InboundChannel, c.InsecureTLS, c.ApiUrl, c.Logger)
-	if c.Puller == nil {
-		sentry.ReportIssuef(sentry.IssueTypeError, c.Logger, "Failed to create puller")
-	}
-
-	c.Puller.Start()
-}
-
-// InitialiseAndStartPusher creates a new Pusher and starts it.
-func (c *CommunicationState) InitialiseAndStartPusher() {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	c.LoginResponseMu.RLock()
-	defer c.LoginResponseMu.RUnlock()
-
-	if c.LoginResponse == nil {
-		sentry.ReportIssuef(sentry.IssueTypeError, c.Logger, "LoginResponse is nil, cannot start pusher")
-
-		return
-	}
-
-	if c.Watchdog == nil {
-		sentry.ReportIssuef(sentry.IssueTypeError, c.Logger, "Watchdog is nil, cannot start pusher")
-
-		return
-	}
-
-	c.Pusher = push.NewPusher(c.LoginResponse.UUID, c.LoginResponse.JWT, c.Watchdog, c.OutboundChannel, push.DefaultDeadLetterChanBuffer(), push.DefaultBackoffPolicy(), c.InsecureTLS, c.ApiUrl, c.Logger)
-	if c.Pusher == nil {
-		sentry.ReportIssuef(sentry.IssueTypeError, c.Logger, "Failed to create pusher")
-	}
-
-	c.Pusher.Start()
-}
-
-// InitialiseAndStartRouter creates a new Router and starts it.
-func (c *CommunicationState) InitialiseAndStartRouter() {
-	if c.Puller == nil {
-		sentry.ReportIssuef(sentry.IssueTypeError, c.Logger, "Puller is nil, cannot start router")
-
-		return
-	}
-
-	if c.Pusher == nil {
-		sentry.ReportIssuef(sentry.IssueTypeError, c.Logger, "Pusher is nil, cannot start router")
-
-		return
-	}
-
-	if c.LoginResponse == nil {
-		sentry.ReportIssuef(sentry.IssueTypeError, c.Logger, "LoginResponse is nil, cannot start router")
-
-		return
-	}
-
-	c.mu.Lock()
-	c.LoginResponseMu.RLock()
-	c.Router = router.NewRouter(c.Watchdog, c.InboundChannel, c.LoginResponse.UUID, c.OutboundChannel, c.ReleaseChannel, c.SubscriberHandler, c.SystemSnapshotManager, c.ConfigManager, c.Logger)
-	c.LoginResponseMu.RUnlock()
-	c.mu.Unlock()
-
-	if c.Router == nil {
-		sentry.ReportIssuef(sentry.IssueTypeError, c.Logger, "Failed to create router")
-	}
-
-	c.Router.Start()
 }
 
 // InitializeTopicBrowserSimulator initializes the topic browser simulator
@@ -259,12 +159,6 @@ func (c *CommunicationState) InitialiseAndStartSubscriberHandler(ttl time.Durati
 		return
 	}
 
-	if c.Pusher == nil {
-		sentry.ReportIssuef(sentry.IssueTypeError, c.Logger, "Pusher is nil, cannot start subscriber handler")
-
-		return
-	}
-
 	if c.LoginResponse == nil {
 		sentry.ReportIssuef(sentry.IssueTypeError, c.Logger, "LoginResponse is nil, cannot start subscriber handler")
 
@@ -287,7 +181,6 @@ func (c *CommunicationState) InitialiseAndStartSubscriberHandler(ttl time.Durati
 
 	c.SubscriberHandler = subscriber.NewHandler(
 		c.Watchdog,
-		c.Pusher,
 		c.LoginResponse.UUID,
 		ttl,
 		cull,
@@ -297,7 +190,7 @@ func (c *CommunicationState) InitialiseAndStartSubscriberHandler(ttl time.Durati
 		configManager,
 		c.Logger,
 		topicBrowserCommunicator,
-		fsmOutboundChannel, // FSMv2 direct channel (nil for legacy mode)
+		fsmOutboundChannel, // FSMv2 direct channel for status delivery
 		c.FeatureUsage,
 	)
 	if c.SubscriberHandler == nil {
@@ -307,91 +200,12 @@ func (c *CommunicationState) InitialiseAndStartSubscriberHandler(ttl time.Durati
 	c.SubscriberHandler.StartNotifier()
 }
 
-func (c *CommunicationState) InitialiseReAuthHandler(authToken string, insecureTLS bool) {
-	sentry.SafeGo(func() {
-		ticker := time.NewTicker(1 * time.Hour)
-
-		// Register a watchdog with a timeout of 3 hours, allowing up to 3 ticks, before it fails.
-		watchUUID := c.Watchdog.RegisterHeartbeat("communicationstate-re-auth-handler", 0, uint64((3 * time.Hour).Seconds()), false)
-
-		for {
-			<-ticker.C
-			c.Logger.Debugf("Re-fetching login credentials")
-
-			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
-			credentials := v2.NewLogin(ctx, authToken, insecureTLS, c.ApiUrl, c.Logger)
-
-			cancel()
-
-			if credentials == nil {
-				continue
-			}
-
-			c.Watchdog.ReportHeartbeatStatus(watchUUID, watchdog.HEARTBEAT_STATUS_OK)
-
-			c.mu.Lock()
-			c.LoginResponseMu.Lock()
-			c.LoginResponse = credentials
-
-			if c.Puller != nil {
-				c.Puller.UpdateJWT(c.LoginResponse.JWT)
-			}
-
-			if c.Pusher != nil {
-				c.Pusher.UpdateJWT(c.LoginResponse.JWT)
-			}
-
-			c.LoginResponseMu.Unlock()
-			c.mu.Unlock()
-		}
-
-		// The ticker will run for the lifetime of our program, therefore no cleanup is required.
-	})
-}
-
-// InitializeWriteOnlyPusher creates a Pusher that only writes to OutboundChannel without starting
-// the HTTP push goroutine. This is used for FSMv2 mode where FSMv2 handles the HTTP transport.
-// The Pusher.Push() method will write messages to OutboundChannel, which FSMv2 reads and pushes via HTTP.
-func (c *CommunicationState) InitializeWriteOnlyPusher(instanceUUID string) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	if c.Watchdog == nil {
-		sentry.ReportIssuef(sentry.IssueTypeError, c.Logger, "Watchdog is nil, cannot create write-only pusher")
-
-		return
-	}
-
-	// Parse UUID (or use nil if invalid)
-	parsedUUID, err := parseUUIDForFSMv2(instanceUUID)
-	if err != nil {
-		c.Logger.Warnw("Failed to parse instance UUID for FSMv2, using nil UUID", "error", err)
-	}
-
-	// Create Pusher but do NOT call Start() - FSMv2 handles HTTP transport
-	c.Pusher = push.NewPusher(
-		parsedUUID,
-		"", // Empty JWT - FSMv2 handles auth
-		c.Watchdog,
-		c.OutboundChannel,
-		push.DefaultDeadLetterChanBuffer(),
-		push.DefaultBackoffPolicy(),
-		c.InsecureTLS,
-		c.ApiUrl,
-		c.Logger,
-	)
-
-	// NOTE: We intentionally do NOT call c.Pusher.Start() here.
-	// FSMv2 communicator handles the HTTP push via PushWorker.
-}
-
 // SetLoginResponseForFSMv2 sets a minimal LoginResponse needed by the Router for FSMv2 mode.
 // FSMv2 handles authentication separately, so we just need the instance UUID.
 // Also updates the SubscriberHandler's and Router's instanceUUID if they exist (Bug #6, #8 fix).
 //
 // Lock ordering: Acquires mu.RLock() FIRST, then LoginResponseMu.Lock() SECOND.
-// This is consistent with other methods (InitialiseAndStartPuller, InitialiseAndStartPusher, etc.)
-// to prevent deadlocks. Bug #7 fix.
+// This consistent ordering prevents deadlocks. Bug #7 fix.
 func (c *CommunicationState) SetLoginResponseForFSMv2(instanceUUID string) {
 	// Acquire mu first (consistent lock ordering with other methods)
 	c.mu.RLock()
@@ -432,14 +246,8 @@ func (c *CommunicationState) SetLoginResponseForFSMv2(instanceUUID string) {
 }
 
 // InitializeRouterForFSMv2 initializes the Router for FSMv2 mode.
-// Unlike InitialiseAndStartRouter, this does not require a Puller (FSMv2 handles pulling).
+// FSMv2 handles pulling via its own transport worker, so no Puller is required.
 func (c *CommunicationState) InitializeRouterForFSMv2() {
-	if c.Pusher == nil {
-		sentry.ReportIssuef(sentry.IssueTypeError, c.Logger, "Pusher is nil, cannot start router for FSMv2")
-
-		return
-	}
-
 	if c.LoginResponse == nil {
 		sentry.ReportIssuef(sentry.IssueTypeError, c.Logger, "LoginResponse is nil, cannot start router for FSMv2")
 

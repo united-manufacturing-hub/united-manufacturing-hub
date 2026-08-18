@@ -17,20 +17,15 @@ package main
 import (
 	"context"
 	"testing"
-	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/communication_state"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/tools/watchdog"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/topicbrowser"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/protocolconverterserviceconfig"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/control"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
-	"go.uber.org/zap"
 )
 
 func TestMain(t *testing.T) {
@@ -38,161 +33,168 @@ func TestMain(t *testing.T) {
 	RunSpecs(t, "Main Suite")
 }
 
-var _ = Describe("Backend Connection", Ordered, func() {
-	var (
-		configData         config.FullConfig
-		communicationState *communication_state.CommunicationState
-		controlLoop        *control.ControlLoop
-		log                *zap.SugaredLogger
-	)
+var _ = Describe("communicatorEnabled", func() {
+	// communicatorEnabled is the decision main() consults to gate the FSMv2
+	// communicator. It is a pure function of the backend configuration, so it
+	// is asserted directly here rather than by running main(). The
+	// keep-the-legacy knob (UseFSMv2Transport) no longer routes anywhere: the
+	// legacy backend path was deleted, so the communicator is the only path it
+	// gates.
 
-	BeforeAll(func() {
-		logger.Initialize()
-		log = logger.For(logger.ComponentCore)
-
-		// Setup minimal config with UNREACHABLE backend
-		configData = config.FullConfig{
+	It("enables the communicator when credentials are present, even with the legacy transport switch off", func() {
+		cfg := config.FullConfig{
 			Agent: config.AgentConfig{
 				CommunicatorConfig: config.CommunicatorConfig{
-					APIURL:           "http://unreachable-backend.invalid:9999",
-					AuthToken:        "test-token",
-					AllowInsecureTLS: false,
+					APIURL:            "http://fsmv2.invalid:9999",
+					AuthToken:         "test-token",
+					UseFSMv2Transport: false,
 				},
-				ReleaseChannel: "stable",
-				MetricsPort:    9091,
 			},
 		}
 
-		// Create minimal control loop (we don't need full functionality)
-		// Note: Only create once per suite to avoid registry singleton panic
-		configManager := &config.MockConfigManager{}
-		controlLoop = control.NewControlLoop(configManager)
-		systemSnapshotManager := controlLoop.GetSnapshotManager()
+		Expect(communicatorEnabled(&cfg)).To(BeTrue())
+	})
 
-		// Create communication state with a dummy context for initial setup
-		dummyCtx := context.Background()
-		communicationState = communication_state.NewCommunicationState(
-			watchdog.NewWatchdog(dummyCtx, time.NewTicker(time.Second*10), true, log),
-			make(chan *models.UMHMessage, 100),
-			make(chan *models.UMHMessage, 100),
-			configData.Agent.ReleaseChannel,
-			systemSnapshotManager,
-			configManager,
-			configData.Agent.APIURL,
-			log,
-			configData.Agent.AllowInsecureTLS,
-			topicbrowser.NewCache(),
-			nil, // featureUsage
+	It("does not enable the communicator when credentials are absent", func() {
+		cfg := config.FullConfig{}
+
+		Expect(communicatorEnabled(&cfg)).To(BeFalse())
+	})
+
+	It("does not enable the communicator when only API_URL is set", func() {
+		cfg := config.FullConfig{
+			Agent: config.AgentConfig{
+				CommunicatorConfig: config.CommunicatorConfig{
+					APIURL: "http://fsmv2.invalid:9999",
+				},
+			},
+		}
+
+		// The && credential contract must reject partial state; an operator with
+		// one field empty should not run without a token.
+		Expect(communicatorEnabled(&cfg)).To(BeFalse())
+	})
+
+	It("does not enable the communicator when only AUTH_TOKEN is set", func() {
+		cfg := config.FullConfig{
+			Agent: config.AgentConfig{
+				CommunicatorConfig: config.CommunicatorConfig{
+					AuthToken: "test-token",
+				},
+			},
+		}
+
+		Expect(communicatorEnabled(&cfg)).To(BeFalse())
+	})
+})
+
+var _ = Describe("counting historian bridges", func() {
+	historianBridge := func() config.ProtocolConverterConfig {
+		return config.ProtocolConverterConfig{
+			ProtocolConverterServiceConfig: protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
+				Config: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
+					DataflowComponentWriteServiceConfig: dataflowcomponentserviceconfig.DataflowComponentWriteConfigInput{
+						Destination: dataflowcomponentserviceconfig.WriteConfigDestination{
+							Protocol: dataflowcomponentserviceconfig.HistorianDestinationProtocol,
+						},
+					},
+				},
+			},
+		}
+	}
+
+	nonHistorianBridge := func() config.ProtocolConverterConfig {
+		return config.ProtocolConverterConfig{
+			ProtocolConverterServiceConfig: protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
+				Config: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
+					DataflowComponentWriteServiceConfig: dataflowcomponentserviceconfig.DataflowComponentWriteConfigInput{
+						Destination: dataflowcomponentserviceconfig.WriteConfigDestination{
+							Protocol: "kafka",
+						},
+					},
+				},
+			},
+		}
+	}
+
+	It("counts only bridges writing to the historian", func() {
+		cfg := config.FullConfig{
+			ProtocolConverter: []config.ProtocolConverterConfig{
+				historianBridge(),
+				nonHistorianBridge(),
+				historianBridge(),
+			},
+		}
+
+		Expect(countHistorianBridges(cfg)).To(Equal(2))
+	})
+
+	It("returns zero when no bridges write to the historian", func() {
+		cfg := config.FullConfig{
+			ProtocolConverter: []config.ProtocolConverterConfig{
+				nonHistorianBridge(),
+			},
+		}
+
+		Expect(countHistorianBridges(cfg)).To(Equal(0))
+	})
+})
+
+var _ = Describe("buildFSMv2Supervisor", func() {
+	// With no Management Console credentials, the FSMv2 runtime used to be
+	// skipped entirely: buildFSMv2Supervisor was only called when APIURL and
+	// AuthToken were both set, so with no credentials no runtime existed and
+	// every adapter-driven worker reported "starting" forever with no error,
+	// no Sentry event and no exit. bringup_invariant_test.go pins main()'s
+	// control flow so it can no longer skip the call; this spec pins the
+	// constructor itself, which that structural guard cannot reach. Asserting
+	// only a nil error would pass for a constructor that returns a nil
+	// supervisor alongside it, leaving the runtime just as absent, so both
+	// are checked.
+	//
+	// The constructor reads neither credential today, so what this spec pins is
+	// their absence: it starts failing the moment either one is consulted here.
+	// It does not exercise credential handling, which lives in
+	// communicatorEnabled.
+	//
+	// The nil arguments below are unread on this path. Four of them panic if
+	// that ever changes, which a spec reports as a failure. The nil
+	// SystemSnapshotManager is the exception: every method on it returns early
+	// on a nil receiver, so a future read is silently skipped rather than
+	// reported. Pass a real one before asserting anything that depends on it.
+	It("succeeds and returns a non-nil supervisor with empty credentials", func() {
+		cfg := &config.FullConfig{
+			Agent: config.AgentConfig{
+				CommunicatorConfig: config.CommunicatorConfig{
+					APIURL:    "",
+					AuthToken: "",
+				},
+			},
+		}
+
+		commState := communication_state.NewCommunicationState(
+			nil,
+			make(chan *models.UMHMessage, 1),
+			make(chan *models.UMHMessage, 1),
+			"",
+			nil,
+			nil,
+			logger.For(logger.ComponentCore),
+			nil,
+			nil,
 		)
-	})
 
-	Context("when Management Console is unreachable", func() {
-		It("should not block control loop startup", func() {
-			// This test proves that the main() flow doesn't block
-			// when backend is unreachable
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
+		// The channel bridge this builds starts two goroutines that exit only on
+		// ctx.Done(), and cleanup cannot reap them, so the context has to be
+		// cancellable. context.Background() would leak both for the life of the
+		// test binary.
+		ctx, cancel := context.WithCancel(context.Background())
+		DeferCleanup(cancel)
 
-			controlLoopReached := make(chan bool, 1)
+		appSup, _, _, _, cleanup, err := buildFSMv2Supervisor(ctx, cfg, commState, logger.For(logger.ComponentCore), nil)
+		DeferCleanup(cleanup)
 
-			// Simulate the EXACT flow from main() (lines 179-191):
-			// 1. Call enableBackendConnection (with 'go' keyword in production code)
-			// 2. Immediately try to reach the control loop startup line
-			go func() {
-				// Line 179-180 in main.go (with 'go' keyword)
-				if configData.Agent.APIURL != "" && configData.Agent.AuthToken != "" {
-					go enableBackendConnection(ctx, &configData, communicationState, controlLoop, log)
-				}
-
-				// Line 191 in main.go - we reach this immediately after line 180
-				// This should NOT be blocked by the backend connection attempt
-				controlLoopReached <- true
-			}()
-
-			// Control loop line (191) should be reached immediately
-			// even when backend is unreachable, because enableBackendConnection
-			// runs in a separate goroutine (via 'go' keyword)
-			Eventually(controlLoopReached, 500*time.Millisecond).Should(Receive(BeTrue()),
-				"Control loop should be reached immediately, but was blocked by synchronous backend connection")
-		})
-	})
-
-	Context("counting historian bridges", func() {
-		historianBridge := func() config.ProtocolConverterConfig {
-			return config.ProtocolConverterConfig{
-				ProtocolConverterServiceConfig: protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
-					Config: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
-						DataflowComponentWriteServiceConfig: dataflowcomponentserviceconfig.DataflowComponentWriteConfigInput{
-							Destination: dataflowcomponentserviceconfig.WriteConfigDestination{
-								Protocol: dataflowcomponentserviceconfig.HistorianDestinationProtocol,
-							},
-						},
-					},
-				},
-			}
-		}
-
-		nonHistorianBridge := func() config.ProtocolConverterConfig {
-			return config.ProtocolConverterConfig{
-				ProtocolConverterServiceConfig: protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
-					Config: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
-						DataflowComponentWriteServiceConfig: dataflowcomponentserviceconfig.DataflowComponentWriteConfigInput{
-							Destination: dataflowcomponentserviceconfig.WriteConfigDestination{
-								Protocol: "kafka",
-							},
-						},
-					},
-				},
-			}
-		}
-
-		It("counts only bridges writing to the historian", func() {
-			cfg := config.FullConfig{
-				ProtocolConverter: []config.ProtocolConverterConfig{
-					historianBridge(),
-					nonHistorianBridge(),
-					historianBridge(),
-				},
-			}
-
-			Expect(countHistorianBridges(cfg)).To(Equal(2))
-		})
-
-		It("returns zero when no bridges write to the historian", func() {
-			cfg := config.FullConfig{
-				ProtocolConverter: []config.ProtocolConverterConfig{
-					nonHistorianBridge(),
-				},
-			}
-
-			Expect(countHistorianBridges(cfg)).To(Equal(0))
-		})
-	})
-
-	Context("when context is cancelled", func() {
-		It("should respect context cancellation and return promptly", func() {
-			// This test verifies that enableBackendConnection respects context cancellation
-			// and returns promptly when the context is cancelled during shutdown
-			ctx, cancel := context.WithCancel(context.Background())
-
-			done := make(chan bool, 1)
-
-			// Start enableBackendConnection in a goroutine
-			go func() {
-				enableBackendConnection(ctx, &configData, communicationState, controlLoop, log)
-				done <- true
-			}()
-
-			// Give NewLogin enough time to fail at least once (it has 1s backoff)
-			// This ensures we test cancellation during the wait period
-			time.Sleep(1200 * time.Millisecond)
-
-			// Cancel the context (simulating shutdown)
-			cancel()
-
-			// Function should return within 500ms after context cancellation
-			Eventually(done, 500*time.Millisecond).Should(Receive(BeTrue()),
-				"enableBackendConnection should return promptly after context cancellation, but goroutine is still running")
-		})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(appSup).NotTo(BeNil())
 	})
 })
