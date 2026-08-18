@@ -57,11 +57,7 @@ func stealSignal() diagnosis.Signal[Sample] {
 				Extract:   func(s Sample) diagnosis.Reading { return s.Steal },
 				Span:      60 * time.Second,
 				Reduction: diagnosis.Mean, // minimum 2
-				Marks:     stealMarks,     // the mean fallback shares the p95 bar:
-				// the question and its unit are the same, only the minimum
-				// differs. Do not "fix" this arm back to p95, and do not add a
-				// second threshold: one 0.9 spike firing the mean at n=2 is the
-				// accepted design, not the defect.
+				Marks:     stealMarks,     // shares the p95 bar by design; see signal_steal_test.go.
 				//
 				// Counter stays false, on both steal arms. A steal fraction that
 				// falls has fallen. Declare it a counter and the window restarts
