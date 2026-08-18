@@ -422,9 +422,10 @@ var _ = Describe("WorkerBase", func() {
 	})
 })
 
-// NoDepsWorker embeds WorkerBase with struct{} as TDeps — the zero-value footgun.
-// A no-deps worker that needs true nil from GetDependenciesAny (e.g., so the
-// framework skips dependency injection) must override GetDependenciesAny.
+// NoDepsWorker embeds WorkerBase with struct{} as TDeps, so its GetDependenciesAny
+// returns a non-nil interface boxing struct{}{}. Returning nil instead changes
+// nothing: the collector attaches framework metrics and action history from its
+// own locals before the deps guard, so a no-deps worker has no reason to override.
 type NoDepsWorker struct {
 	fsmv2.WorkerBase[wbTestConfig, wbTestStatus, struct{}]
 }
@@ -438,13 +439,9 @@ var _ = Describe("WorkerBase no-deps footgun", func() {
 		It("returns non-nil any wrapping struct{}{} even without BindDeps", func() {
 			// WorkerBase[..., struct{}] zero-initialises typedDeps to struct{}{}.
 			// GetDependenciesAny boxes struct{}{} into a non-nil interface value.
-			// Any framework code that gates on `deps == nil` will NOT skip
-			// injection for no-deps workers — they see a non-nil interface
-			// pointing at an empty struct.
-			//
-			// Workers that genuinely have no dependencies and need true nil
-			// (so the framework skips injection) must override GetDependenciesAny
-			// to return nil, or use a pointer TDeps type instead of struct{}.
+			// This is inert now: the collector attaches framework metrics and action
+			// history from its own locals before the deps guard, so a worker no
+			// longer needs a nil override to opt out of injection.
 			id := wbMakeIdentity("noop-worker-type")
 			logger := deps.NewNopFSMLogger()
 			sr := wbMakeStateReader()
@@ -454,7 +451,7 @@ var _ = Describe("WorkerBase no-deps footgun", func() {
 
 			got := w.GetDependenciesAny()
 			Expect(got).NotTo(BeNil(),
-				"struct{}{} boxes to a non-nil interface; override GetDependenciesAny to return nil for no-deps workers")
+				"struct{}{} boxes to a non-nil interface value")
 		})
 	})
 })
