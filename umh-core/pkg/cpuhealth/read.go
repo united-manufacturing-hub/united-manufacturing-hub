@@ -13,7 +13,9 @@
 // limitations under the License.
 
 // The Linux sampler: one tick's cgroup-plus-machine read, built from the
-// previous tick's numbers wherever a rate is derived.
+// previous tick's numbers wherever a rate is derived. Read is a composer over
+// two sources — cgroupSource (cgroup_source.go) and hostSource
+// (host_source.go) — neither of which can see the other's files.
 
 package cpuhealth
 
@@ -44,7 +46,20 @@ const (
 
 // NewLinuxSampler returns a Sampler reading via fs from base.
 func NewLinuxSampler(fs filesystem.Service, base string) Sampler {
-	return &linuxSampler{fs: fs, base: base}
+	return &linuxSampler{
+		cgroup: newCgroupSource(fs, base),
+		host:   newHostSource(fs),
+	}
+}
+
+// linuxSampler composes cgroupSource and hostSource into one Sample per tick.
+// It holds no accounting state of its own — every sticky fact and baseline
+// belongs to whichever source reads the file it is derived from — because it
+// exists only to stamp the tick's single Timestamp and derive CPU scope, the
+// one fact that needs both sources' reads to compute.
+type linuxSampler struct {
+	cgroup *cgroupSource
+	host   *hostSource
 }
 
 // Read samples the cgroup at base from cpu.max, the container's CPU limit: a
@@ -55,39 +70,33 @@ func NewLinuxSampler(fs filesystem.Service, base string) Sampler {
 // https://www.kernel.org/doc/html/latest/admin-guide/cgroup-v2.html.
 func (s *linuxSampler) Read(ctx context.Context) (Sample, error) {
 	var smp Sample
-	smp.Timestamp = time.Now()
+	// Stamped once, here, and passed to both sources: neither cgroup nor host
+	// calls time.Now() itself, so both rate derivations divide by the same
+	// elapsed time and Decide never compares a machine-wide mean against a
+	// cgroup mean taken from a different instant.
+	ts := time.Now()
+	smp.Timestamp = ts
 
 	// cpu.pressure: PSI presence is sticky once seen; this tick's read success
 	// is Pressure's own Reading, absent when the read fails this tick.
-	if frac, ok := s.readPSI(ctx); ok {
-		s.psiAvailable = true
+	if frac, ok := s.cgroup.readPSI(ctx); ok {
+		s.cgroup.psiAvailable = true
 		smp.Pressure = diagnosis.Known(frac)
 	} else {
 		smp.Pressure = diagnosis.Unknown()
 	}
-	smp.PsiAvailable = s.psiAvailable
+	smp.PsiAvailable = s.cgroup.psiAvailable
 
-	usage, periods, throttled, statErr := s.readStat(ctx)
+	usage, periods, throttled, statErr := s.cgroup.readStat(ctx)
 	if statErr != nil {
 		// cpu.stat is primary: a read failure there fails the WHOLE sample,
 		// never a silent drop of the throttle counters as absent no-signal.
-		return smp, fmt.Errorf("read %s/cpu.stat: %w", s.base, statErr)
+		return smp, fmt.Errorf("read %s/cpu.stat: %w", s.cgroup.base, statErr)
 	}
 	smp.NrPeriods = periods
 	smp.NrThrottled = throttled
 	smp.UsageUsec = usage
-	if s.usageBase.have {
-		// A rising cumulative counter over a positive elapsed time derives an
-		// instantaneous rate; a falling one has been reset, so no rate.
-		if u, ok := usage.Get(); ok && u >= s.usageBase.usage {
-			if elapsed := smp.Timestamp.Sub(s.usageBase.time).Seconds(); elapsed > 0 {
-				smp.UsageCores = diagnosis.Known((u - s.usageBase.usage) / 1e6 / elapsed)
-			}
-		}
-	}
-	if u, ok := usage.Get(); ok {
-		s.usageBase = usageBaseline{usage: u, time: smp.Timestamp, have: true}
-	}
+	smp.UsageCores = s.cgroup.usageRate(ts, usage)
 
 	// Host signals: the first /proc/stat read fixes a baseline and publishes
 	// neither; a read after that publishes this tick's instantaneous host-busy
@@ -96,7 +105,7 @@ func (s *linuxSampler) Read(ctx context.Context) (Sample, error) {
 	// reset: the baseline is re-established and nothing is published this tick.
 	// The same read carries the machine's CPU count, from which the snapshots'
 	// CPU scope is derived.
-	if busy, steal, denom, machine, ok := s.readHost(ctx); ok {
+	if busy, steal, denom, machine, ok := s.host.readHost(ctx); ok {
 		smp.HostCpus = diagnosis.Known(machine)
 		// CPU scope compares the container's allowed cpuset against the machine's
 		// count (kept on the snapshot as HostCpus): a readable, covering cpuset
@@ -104,7 +113,9 @@ func (s *linuxSampler) Read(ctx context.Context) (Sample, error) {
 		// also carries LogicalCpus — the "2" in "pinned to 2 of 8 CPUs". A failed
 		// cpuset read leaves CpuScope at its zero value, ScopeUnknown, and
 		// LogicalCpus absent: never a silent ScopeHost on a known machine count.
-		if allowed, aok := s.readCpuset(ctx); aok {
+		// Comparing the two sources' reads is the composer's job — a cross-seam
+		// fact neither source can derive holding only its own read.
+		if allowed, aok := s.cgroup.readCpuset(ctx); aok {
 			smp.LogicalCpus = diagnosis.Known(float64(allowed))
 			if allowed == int(machine) {
 				smp.CpuScope = ScopeHost
@@ -112,25 +123,7 @@ func (s *linuxSampler) Read(ctx context.Context) (Sample, error) {
 				smp.CpuScope = ScopeAffinity
 			}
 		}
-		if s.hostBase.have {
-			// HostBusy: busy-jiffy delta ÷ USER_HZ ÷ elapsed seconds; skipped on
-			// a counter reset or zero elapsed time.
-			if busy >= s.hostBase.busy {
-				if elapsed := smp.Timestamp.Sub(s.hostBase.time).Seconds(); elapsed > 0 {
-					smp.HostBusy = diagnosis.Known((busy - s.hostBase.busy) / userHz / elapsed)
-				}
-			}
-			// The steal fraction is the interval's steal-jiffy delta over the
-			// interval's total-jiffy delta. A falling steal counter (a reset)
-			// and a non-positive denominator delta (proc/stat did not advance,
-			// or is all zeros) publish nothing, never a NaN/Inf reading.
-			dDenom := denom - s.hostBase.denom
-			if steal >= s.hostBase.steal && dDenom > 0 {
-				frac := (steal - s.hostBase.steal) / dDenom
-				smp.Steal = diagnosis.Known(frac)
-			}
-		}
-		s.hostBase = hostBaseline{busy: busy, steal: steal, denom: denom, time: smp.Timestamp, have: true}
+		smp.HostBusy, smp.Steal = s.host.hostRates(ts, busy, steal, denom)
 	} else {
 		// An unreadable machine CPU count reads ScopeUnknown — never a silent
 		// ScopeHost, since a pinned idle container misread as host would have
@@ -141,45 +134,8 @@ func (s *linuxSampler) Read(ctx context.Context) (Sample, error) {
 		smp.CpuScope = ScopeUnknown
 	}
 
-	smp.Virtualized = s.readVirtualized(ctx)
+	smp.Virtualized = s.host.readVirtualized(ctx)
 
-	smp.Quota = s.readQuota(ctx)
+	smp.Quota = s.cgroup.readQuota(ctx)
 	return smp, nil
-}
-
-// usageBaseline is the previous tick's usage_usec edge, from which Read derives
-// the instantaneous usage rate. have is false before the first successful read;
-// a falling edge (a counter reset) re-baselines instead of publishing a nonsense
-// rate.
-type usageBaseline struct {
-	usage float64
-	time  time.Time
-	have  bool
-}
-
-// hostBaseline is the previous tick's /proc/stat edges (busy, steal, denominator
-// jiffy totals) and its read timestamp, from which Read derives the instantaneous
-// host-busy rate and per-interval steal fraction. have is false until a first
-// successful read fixes the baseline; a falling counter (a host restart)
-// re-baselines instead of publishing a nonsense value.
-type hostBaseline struct {
-	busy, steal, denom float64
-	time               time.Time
-	have               bool
-}
-
-type linuxSampler struct {
-	fs           filesystem.Service
-	base         string
-	psiAvailable bool
-
-	usageBase usageBaseline
-	hostBase  hostBaseline
-
-	// virtualized is the sticky virtualisation fact, resolved on the first
-	// successful /proc/cpuinfo read and re-published without re-reading. An
-	// unreadable cpuinfo resolves false but is not cached, so a later readable
-	// one is still considered.
-	virtualized  bool
-	virtResolved bool
 }

@@ -131,7 +131,10 @@ type Sample struct {
 	Timestamp time.Time
 }
 
-// Sampler reads a cgroup's CPU health signals.
+// Sampler reads one tick of CPU health signals: a cgroup's own accounting
+// (cpu.max, cpu.stat, cpu.pressure, cpuset.cpus.effective) and the host's
+// machine-wide state (/proc/stat, /proc/cpuinfo, and the DMI identity files),
+// both stamped with the one Timestamp the tick was read at.
 type Sampler interface {
 	Read(ctx context.Context) (Sample, error)
 }
