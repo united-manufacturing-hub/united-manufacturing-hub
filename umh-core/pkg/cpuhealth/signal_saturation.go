@@ -26,11 +26,18 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/diagnosis"
 )
 
-// saturationSignal is "is the machine full?" It holds the question twice:
-// host-headroom answers it from /proc/stat, usage-fraction from our own usage
-// when /proc/stat is unreadable. Both sit under one signal so the latch
-// survives the swap, and host-headroom is listed first so selection prefers it
-// whenever its window can supply a value.
+// saturationSignal asks "is the machine full?".
+//
+// A signal is one question. An instrument is one way to measure the answer,
+// and a signal can hold more than one: whichever instrument has a usable
+// reading answers the question, so losing one source does not lose the
+// question. This signal has two instruments. host-headroom measures from
+// /proc/stat. usage-fraction measures from our own usage, for the case where
+// /proc/stat cannot be read. host-headroom is listed first, so it answers
+// whenever its window has a value.
+//
+// Both instruments sit under one signal so they share one latch: the machine
+// has not stopped being full because the measurement changed hands.
 func saturationSignal(cores float64) diagnosis.Signal[Sample] {
 	return diagnosis.Signal[Sample]{
 		Name:            sigSaturation,
@@ -45,16 +52,9 @@ func saturationSignal(cores float64) diagnosis.Signal[Sample] {
 				// because off a host-scoped sample the count means something else
 				// and there is no headroom to read.
 				Extract: func(s Sample) diagnosis.Reading {
-					// Defense-in-depth, not the gate. The real gate is the
-					// omission: cpuTable appends no saturation signal when cores
-					// <= 0, so this Extract is unreachable through production, and
-					// the absence is pinned by host_headroom_guard_test.go's "should
-					// declare no saturation signal on a box whose core count was
-					// never readable, and stay healthy". This guard only matters
-					// if that append gate is re-removed or
-					// saturationSignal is called directly with a non-positive
-					// count — the subtraction below must never run on such a
-					// count, so the arm withholds here too.
+					// Unreachable in production: cpuTable declares no saturation signal when
+					// cores <= 0, pinned by host_headroom_guard_test.go. The guard stays so
+					// the subtraction below can never run on a non-positive count.
 					if cores <= 0 {
 						return diagnosis.Unknown()
 					}
@@ -69,6 +69,10 @@ func saturationSignal(cores float64) diagnosis.Signal[Sample] {
 				},
 				Span:      60 * time.Second,
 				Reduction: diagnosis.Mean,
+				// Marks are the two thresholds that turn a number into a yes or no: the
+				// value at which this instrument starts saying yes, and the value at which
+				// it goes back to saying no. They differ on purpose, so a reading sitting
+				// on the boundary does not flap.
 				Marks: diagnosis.Marks{
 					Fire:     diagnosis.Mark{At: 0},
 					Clear:    diagnosis.Mark{At: 0.5},
@@ -120,7 +124,7 @@ func saturationSignal(cores float64) diagnosis.Signal[Sample] {
 // it is the only place in the design where a Reading would have had to reach
 // Marks.Worst, which is a float64, so it cannot. cpuTable omits it entirely
 // when quota is not positive, because Fire{At: 0} against Clear{At: 0.05 × 0}
-// is a pair NewEngine refuses.
+// is a pair NewEngine rejects.
 func limitSaturationSignal(quota float64) diagnosis.Signal[Sample] {
 	return diagnosis.Signal[Sample]{
 		Name:            sigLimitSaturation,
@@ -185,7 +189,7 @@ func saturationArmOf(f diagnosis.Fired) saturationArm {
 // saturationRank orders the saturation family for chooseSaturationCause:
 // host-full outranks the limit arm, the limit arm outranks the no-host-stats
 // fallback. The arm IS the rank — the constants in verdict.go are declared in
-// that order — so chooseSaturationCause compares one int and knows nothing
+// that order — so chooseSaturationCause compares one int and needs nothing
 // about the arms.
 func saturationRank(f diagnosis.Fired) int {
 	return int(saturationArmOf(f))
