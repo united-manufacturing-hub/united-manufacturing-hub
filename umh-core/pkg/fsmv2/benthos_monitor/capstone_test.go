@@ -81,9 +81,8 @@ func TestIsActiveEquivalenceAcrossIdleCrossing(t *testing.T) {
 	// (pkg/service/benthos_monitor/metrics_state.go), which publishes the
 	// cumulative count as MessagesPerTick, so IsActive is true. The worker holds one
 	// sample, and inputRate returns 0 below two samples (throughput_window.go),
-	// so it reads false. This is the reset-tick divergence this test's doc comment
-	// excludes; the worker's side of it is pinned by TestPollComputesThroughput
-	// (throughput_red_test.go), so it is behaviour, not an accident here.
+	// so it reads false. TestPollComputesThroughput (throughput_red_test.go)
+	// asserts the worker's side of it, so it is behaviour, not an accident here.
 	in++
 	step(in)
 
@@ -104,15 +103,14 @@ func TestIsActiveEquivalenceAcrossIdleCrossing(t *testing.T) {
 	// Phase 2 — the counter stops moving. Both windows must drain to idle. Equality
 	// is NOT asserted during the drain: the two windows have the same nominal span
 	// but different eviction rules, so they disagree for about one sample at the
-	// boundary. Measured here: at the tick where FSMv1's 600-entry window has just
+	// boundary. At that boundary, the tick where FSMv1's 600-entry window has just
 	// evicted the last rising sample, the worker's 60s time window still contains
-	// it, so worker reads active while FSMv1 reads idle. That window-length boundary
-	// is the second divergence that same doc comment excludes, after the reset tick
-	// at Phase 0. FSMv1 evicts by ENTRY COUNT, so which sample falls out at the
-	// boundary follows the number of polls rather than elapsed time, and its idle
-	// edge therefore moves with the poll cadence while the worker's stays at 60s.
-	// This test does not adjudicate which of the two readings is right at that tick;
-	// it asserts only the settled state at the end.
+	// it, so worker reads active while FSMv1 reads idle. FSMv1 evicts by ENTRY
+	// COUNT, so which sample falls out at the boundary follows the number of polls
+	// rather than elapsed time, and its idle edge therefore moves with the poll
+	// cadence while the worker's stays at 60s. This test does not adjudicate which
+	// of the two readings is right at that tick; it asserts only the settled state
+	// at the end.
 	var lastWorker, lastFSM bool
 
 	for i := 0; i < isActiveFlatSamples; i++ {

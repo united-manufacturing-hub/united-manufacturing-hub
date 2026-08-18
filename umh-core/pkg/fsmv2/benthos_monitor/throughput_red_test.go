@@ -90,9 +90,8 @@ func TestThroughputWindowIsTimeBased(t *testing.T) {
 		t.Errorf("mid-window gap: Input MessagesPerSecond = %v, want ~1.5 (real-time delta 90/60, not a count-window 2.0)", r)
 	}
 
-	// A restart zeroes benthos' counters. Add keys the wipe on the input counter
-	// alone, so this drop wipes the window and re-seeds it with the new sample.
-	// The rate then reads 0 — never negative.
+	// A restart drops the input counter, which is what Add keys the wipe on, so
+	// this sample re-seeds the window. The rate then reads 0 — never negative.
 	restart := &benthosMonitorDeps{}
 	restart.window.Add(t0, 4195, 100, 100)
 	restart.window.Add(t0.Add(10*time.Second), 4195, 5, 5)
@@ -194,7 +193,7 @@ func TestPollComputesThroughput(t *testing.T) {
 		t.Errorf("second poll Output.LastCount = %d, want 6", status.Output.LastCount)
 	}
 	if !status.IsActive {
-		t.Errorf("second poll IsActive = false, want true (input rose by 2 over a positive elapsed span); this is the only assertion of the true case directly on Poll's return value, the framework-seam equivalent being TestScenarioWorkerObservedThroughFramework")
+		t.Errorf("second poll IsActive = false, want true (input rose by 2 over a positive elapsed span)")
 	}
 }
 

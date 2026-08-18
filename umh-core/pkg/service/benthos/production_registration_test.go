@@ -32,9 +32,10 @@ import (
 // production import that registers the worker type. Drop it and
 // USE_FSMV2_BENTHOS_MONITOR selects a backend that registers nothing, while a CPU
 // measurement still reports a win because no monitor processes get spawned either
-// way. It does NOT guard the FF-on constructor call — removing that call leaves
-// this test green, because the import alone registers; the backend-selection
-// specs in benthos_backend_test.go cover the call.
+// way. It does NOT guard the FF-on constructor call: registration happens in the
+// worker package's init(), so a blank import would satisfy this test with no
+// constructor call at all. The backend-selection specs in benthos_backend_test.go
+// cover the call.
 func TestProductionImportRegistersBenthosMonitorWorker(t *testing.T) {
 	const workerType = "benthos_monitor"
 

@@ -16,12 +16,9 @@ package fsmv2benthosmonitor
 
 import "time"
 
-// windowSpan is the width of the throughput window in seconds. Throughput is
-// held BY TIME over this span, not by FSMv1's count-based ThroughputWindowSize
-// of 600 entries (pkg/service/benthos_monitor/metrics_state.go). Poll
-// (manager.go) feeds this window one sample per poll, and a poll that is never
-// scheduled produces no sample at all, so a 600-entry window silently stretches
-// to cover more than a minute of real time; this one always covers 60s.
+// windowSpan bounds the throughput window BY TIME, not by FSMv1's count-based
+// ThroughputWindowSize of 600 entries: the window takes one sample per poll and
+// an unscheduled poll produces none, so 600 entries can stretch past a minute.
 const windowSpan = 60 * time.Second
 
 // throughputSample is one poll's counter snapshot, stamped with the time it was
@@ -39,9 +36,7 @@ type throughputSample struct {
 type throughputWindow struct {
 	// port is the scrape port this window's samples belong to. Add wipes the
 	// window on a port change (a new endpoint is a new counter series), so it
-	// never subtracts one poll's counter from a different endpoint's. Add
-	// compares this field only once the window holds a sample (its n > 0 guard),
-	// so the zero value it starts at is never read as a port.
+	// never subtracts one poll's counter from a different endpoint's.
 	port    int
 	samples []throughputSample
 }
@@ -86,11 +81,9 @@ func wipeOnRestart(at time.Time, input int, prev throughputSample) bool {
 	// against the immediately preceding sample is the restart signal. The output
 	// counter is deliberately not consulted too: a restart can leave output at ~0
 	// (a backed-up broker does this), where a both-counters detector would never
-	// wipe and the window would keep a stale pre-restart baseline. That case is
-	// pinned by TestThroughputWindowWipesOnOneCounterZeroRestart.
+	// wipe and the window would keep a stale pre-restart baseline.
+	// TestThroughputWindowWipesOnOneCounterZeroRestart asserts that case.
 	counterDropped := input < prev.input
-
-	// Both are required: only a drop seen on a newer sample ends the old series.
 	return isNewer && counterDropped
 }
 

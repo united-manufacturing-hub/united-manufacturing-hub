@@ -125,10 +125,11 @@ var _ = Describe("benthos_monitor registration and adapter vocabulary", func() {
 
 		// One registered client, held across the reads; only the reader's
 		// observation/error changes. The ref stays registered, so the first read
-		// takes the NeverObserved bootstrap exit rather than Unregistered
-		// (fsmv2client.Freshness, fsmv2client/fsmv2client.go: Unregistered =
-		// the ref was never Upserted, NeverObserved = Upserted with nothing stored
-		// yet), and the two later reads are classified by freshness.
+		// takes the NeverObserved bootstrap exit rather than Unregistered. The two
+		// later reads are classified by freshness. fsmv2client.Freshness
+		// (fsmv2client/fsmv2client.go) defines both words: Unregistered means the
+		// ref was never Upserted, NeverObserved means Upserted with nothing stored
+		// yet.
 		reader := &stubManagerReader{err: persistence.ErrNotFound}
 		writer := dynamicchildren.NewWriter()
 		fsmv2client.SetClient(fsmv2client.NewFSMv2Client(writer, reader))
