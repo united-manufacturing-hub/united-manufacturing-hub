@@ -35,10 +35,11 @@ func Decide(engine *diagnosis.Engine[Sample], s Sample, env diagnosis.Environmen
 	return verdict, details
 }
 
-// A tick can produce several "the CPU is full" causes at once: the host has no
-// headroom, this container has spent its own quota, and the fallback used when
-// the host is unreadable. They describe one situation, so Decide keeps only the
-// highest-ranked one. This is the result of that choice.
+// saturationChoice is the result of picking one "the CPU is full" cause out of
+// several. A tick can produce several at once: the host has no headroom, this
+// container has spent its own quota, and the fallback used when the host is
+// unreadable. They describe one situation, so Decide keeps only the
+// highest-ranked one.
 type saturationChoice struct {
 	// Fired is every signal that fired this tick, with the surplus "CPU is
 	// full" causes removed — this is what Rank orders.
@@ -46,7 +47,8 @@ type saturationChoice struct {
 	// Winner is the "CPU is full" cause that was kept, nil if none fired.
 	// Blame depends on which one it was.
 	Winner *diagnosis.Fired
-	// Latched holds the nine Details fields set here and nowhere else.
+	// Latched holds the Details fields set here and nowhere else: the four
+	// family latches, and the four saturation arms saturationFlags sets.
 	Latched Details
 }
 
@@ -77,10 +79,10 @@ func readAttributionSplit(engine *diagnosis.Engine[Sample]) attributionSplit {
 	return split
 }
 
-// chooseSaturationCause folds the saturation family into a single choice and
-// collects the rest. The fired set arrives unranked and in table order;
-// chooseSaturationCause's fixed precedence is the only rule Decide applies
-// before Rank, and the rank and latch flags are the table's.
+// chooseSaturationCause picks the one "CPU is full" cause to report and
+// collects every other fired signal. The fired set arrives unranked and in
+// table order; this fixed precedence is the only rule Decide applies before
+// Rank, and the rank and latch flags are the table's.
 func chooseSaturationCause(fired []diagnosis.Fired, hasLimit bool) saturationChoice {
 	rest := make([]diagnosis.Fired, 0, len(fired))
 	var latched Details
@@ -92,7 +94,7 @@ func chooseSaturationCause(fired []diagnosis.Fired, hasLimit bool) saturationCho
 		case sigSaturation, sigLimitSaturation:
 			latched.SaturationFired = true
 			saturationFlags(*f, &latched, hasLimit)
-			// The fold keeps the highest-ranked member of the saturation family.
+			// Keep the highest-ranked member of the saturation family.
 			// Ties cannot occur (the latch is per signal); if one somehow did,
 			// the strictly-greater compare keeps the first member.
 			if rank := saturationRank(*f); rank > best {
@@ -117,11 +119,12 @@ func chooseSaturationCause(fired []diagnosis.Fired, hasLimit bool) saturationCho
 	return saturationChoice{Fired: rest, Winner: winner, Latched: latched}
 }
 
-// buildVerdict ranks the folded set and builds the Verdict. Exactly one rule
-// decides State: degraded when at least one signal fired this tick, healthy
-// when none did — no severity floor, no second condition. It owns no Details
-// fields — it returns the Verdict only. Rank is the only thing that orders
-// Verdict.Causes; attribution derives from the dominant (ranked-first) cause.
+// buildVerdict ranks what chooseSaturationCause left and builds the Verdict.
+// Exactly one rule decides State: degraded when at least one signal fired
+// this tick, healthy when none did — no severity floor, no second condition.
+// It owns no Details fields — it returns the Verdict only. Rank is the only
+// thing that orders Verdict.Causes; attribution derives from the dominant
+// (ranked-first) cause.
 func buildVerdict(engine *diagnosis.Engine[Sample], chosen saturationChoice, split attributionSplit) Verdict {
 	ranked := diagnosis.Rank(chosen.Fired)
 	causes := make([]Cause, len(ranked))
