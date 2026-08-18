@@ -238,6 +238,19 @@ var _ = Describe("EditProtocolConverter awaitRollout (config-as-truth gate)", fu
 			"a filtered port is down by the connection FSM's own definition and must not report success")
 	})
 
+	It("reports failure when the only open port on record belongs to the previous host", func() {
+		// ENG-5586. The gate compared the port number and nothing else. So
+		// repointing a bridge from one host to another on the same port was
+		// accepted by the OLD host's scan: the number matches, that port is
+		// open, and nothing has dialled the new host. If the new host refuses
+		// the connection the edit still reported success.
+		stageSnapshot("dest.example.com", "src.example.com", protocolconverter.OperationalStateStartingFailedDFCMissing, string(nmapfsm.PortStateOpen))
+
+		_, err := runAwaitRollout("dest.example.com")
+		Expect(err).To(HaveOccurred(),
+			"an open port on the previous host must not be reported as a successful rollout of the new one")
+	})
+
 	Describe("a bridge whose connection is templated", func() {
 		// A bridge that writes to the historian scans the shared
 		// historian.timescale endpoint, so its connection template carries no
