@@ -73,6 +73,8 @@ func attributeFor(dominant Cause, survivor *diagnosis.Fired, splitHost bool) Att
 		// host-full is the survivor from the "saturation" signal whose unit is
 		// "cores"; the limit arm and the no-host-stats fallback are internal.
 		hostFull := survivor != nil && survivor.Identity.Signal == sigSaturation && survivor.Marks.Unit == "cores"
+		// splitHost compares strictly greater — hostBusyMean > 2*ourUsageMean —
+		// so a host share exactly double our own is not attributed to the host.
 		if hostFull && splitHost {
 			return AttributionHost
 		}

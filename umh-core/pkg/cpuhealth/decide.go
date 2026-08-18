@@ -33,12 +33,9 @@ func Decide(engine *diagnosis.Engine[Sample], s Sample, env diagnosis.Environmen
 
 	// The attribution split. Both terms are 60s means in cores, read back from
 	// the engine's tracks — never from an instrument, because neither instrument
-	// that touches the series holds the series. The comparison is STRICTLY
-	// greater (hostBusyMean > 2*ourUsageMean), so a host share exactly double
-	// our own is not attributed to the host. Do not run the split on an
-	// untrusted mean: one sample of host busy against one of ours is an
-	// attribution on a single instant. The two tracks are read once here and the
-	// means shared into fillDetails.
+	// that touches the series holds the series. The StateValue guard on both
+	// tracks stops the split running on an untrusted mean: one sample of host
+	// busy against one of ours is an attribution on a single instant.
 	hostBusyMean, hostBusyState := engine.Track(trackHostBusy).Get()
 	ourUsageMean, ourUsageState := engine.Track(trackUsageCores).Get()
 	splitHost := hostBusyState == diagnosis.StateValue && ourUsageState == diagnosis.StateValue && hostBusyMean > 2*ourUsageMean
@@ -49,7 +46,9 @@ func Decide(engine *diagnosis.Engine[Sample], s Sample, env diagnosis.Environmen
 	// Rank the folded set, then build the verdict and the attribution.
 	verdict := buildVerdict(engine, rest, survivor, splitHost)
 
-	// Fill the Details that ride the verdict.
+	// Fill the Details that ride the verdict. hostBusyMean and ourUsageMean are
+	// the same read from the attribution split above, shared rather than
+	// re-derived.
 	fillDetails(&sig, engine, s, env, readiness, hostBusyMean, hostBusyState, ourUsageMean, ourUsageState)
 
 	return verdict, sig
