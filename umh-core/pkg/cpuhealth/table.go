@@ -48,9 +48,12 @@ const (
 	trackUsageCores = "usage-cores"
 )
 
-// The tiers. Starvation outranks saturation regardless of severity, because
-// "you are being throttled" is actionable and "you are busy" is not. The words
-// are CPU's; diagnosis only ever sees the number.
+// The tiers. Every signal declares one. Starvation means something outside
+// this container is taking CPU away from it: the throttling, pressure and
+// steal signals. Saturation means the CPU is being used up: the saturation
+// and limit-saturation signals. Starvation outranks saturation regardless of
+// severity, because "you are being throttled" is actionable and "you are
+// busy" is not. The words are CPU's; diagnosis only ever sees the number.
 const (
 	tierStarvation = 0
 	tierSaturation = 1

@@ -62,8 +62,15 @@ type attributionSplit struct {
 }
 
 // readAttributionSplit reads both 60s means and decides whether the host
-// dominates. An untrusted mean disqualifies the comparison: one sample of host
-// busy against one of ours is an attribution made on a single instant.
+// dominates.
+//
+// A track is a rolling average the table keeps for its own sake: no
+// thresholds, no yes-or-no, just the last 60 seconds of one number. Signals
+// answer questions; tracks only remember. There are two, host-busy and
+// usage-cores, and this comparison is the only thing that reads them.
+//
+// An untrusted mean disqualifies the comparison: one sample of host busy
+// against one of ours is an attribution made on a single instant.
 func readAttributionSplit(engine *diagnosis.Engine[Sample]) attributionSplit {
 	hostMean, hostState := engine.Track(trackHostBusy).Get()
 	ourMean, ourState := engine.Track(trackUsageCores).Get()
@@ -149,13 +156,13 @@ func buildVerdict(engine *diagnosis.Engine[Sample], chosen saturationChoice, spl
 func detailsFor(engine *diagnosis.Engine[Sample], s Sample, env diagnosis.Environment, readiness []diagnosis.Readiness, chosen saturationChoice, split attributionSplit) Details {
 	d := chosen.Latched
 
-	// The withheld-headroom facts ride Details, not Verdict — three
+	// The withheld-headroom facts belong on Details, not Verdict — three
 	// fields, none of the other 31 can stand in for them. HostHeadroomAvailable
 	// is dispatched on the sample's scope, NOT on the window's state: an
 	// affinity box or an unestablished scope is a withholding ("we read it and
 	// it means something else"), while a plain /proc/stat read failure leaves
 	// the bit set and the window absent, so a read failure is not rendered as a
-	// withholding. The two counts ride the snapshot so the "pinned to 2 of 8
+	// withholding. The two counts are on Details so the "pinned to 2 of 8
 	// CPUs" sentence can name them without Decide doing any I/O.
 	d.HostHeadroomAvailable = s.CpuScope == ScopeHost
 	if lc, ok := s.LogicalCpus.Get(); ok {

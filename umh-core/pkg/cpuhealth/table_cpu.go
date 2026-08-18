@@ -30,10 +30,6 @@ import (
 // one capacity are denominated in quantities that vary per box: the quota and
 // the logical CPU count.
 //
-// quota does not need to be a Reading: HasLimit is present exactly when
-// cpu.max names a positive quota, which is the same read that supplies the
-// number.
-//
 // cpuTable omits the limit-saturation signal entirely when quota is not
 // positive, and the saturation signal entirely when the core count was never
 // readable (cores <= 0) — appending each conditionally is the only
@@ -80,9 +76,12 @@ func cpuTable(cores, quota float64) diagnosis.Table[Sample] {
 			stealSignal(),
 		},
 	}
+	// Only when the core count was readable. cores <= 0 means both /proc/cpuinfo
+	// and the cpuset failed, so there is no capacity to be full against.
 	if cores > 0 {
 		t.Signals = append(t.Signals, saturationSignal(cores))
 	}
+	// Only when a positive quota exists; with no limit there is nothing to saturate.
 	if quota > 0 {
 		t.Signals = append(t.Signals, limitSaturationSignal(quota))
 	}
