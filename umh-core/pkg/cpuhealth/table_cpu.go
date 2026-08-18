@@ -28,26 +28,19 @@ import (
 //
 // cpuTable is the CPU declaration, built by a function because two marks and
 // one capacity are denominated in quantities that vary per box: the quota and
-// the logical CPU count. Both arguments are startup facts, cached across ticks,
-// exactly as a Capability is. host-headroom's capacity is the fixed reserve
-// rather than the core count, so only the limit arm's capacity scales.
+// the logical CPU count. Both arguments are startup facts, cached across
+// ticks, exactly as a Capability is.
 //
-// quota is a float64 and not a Reading. Marks.Worst and Mark.At are both
-// float64, so a table cannot be built from an absence — and it does not need to
-// be: HasLimit is present exactly when cpu.max names a positive quota, which is
-// the same read that supplies the number.
+// quota does not need to be a Reading: HasLimit is present exactly when
+// cpu.max names a positive quota, which is the same read that supplies the
+// number.
 //
-// When there is no positive quota, cpuTable omits the limit-saturation signal
-// entirely. It is not enough to leave the row unreachable through Requires: at
-// quota = 0 the pair is Fire{At: 0} against Clear{At: 0.05 × 0}, which
-// NewEngine refuses under LowerIsWorse — so a box with no limit could not build
-// a table at all. Omitting the row is the only arrangement that constructs.
-// throttling stays, Requires: HasLimit and all, because its marks are ratios
-// and do not scale with the quota.
-//
-// The same conditional omission applies to the core count: a box whose core
-// count was never readable (cores <= 0) declares no saturation row at all —
-// there is no capacity to be full, only a count that was never taken.
+// cpuTable omits the limit-saturation signal entirely when quota is not
+// positive, and the saturation signal entirely when the core count was never
+// readable (cores <= 0) — appending each conditionally is the only
+// arrangement that constructs, since leaving either row in place and
+// unreached through Requires is not enough (see limitSaturationSignal and
+// saturationSignal for why each row's own Marks force the omission).
 func cpuTable(cores, quota float64) diagnosis.Table[Sample] {
 	t := diagnosis.Table[Sample]{
 		Interval: time.Second,
@@ -55,22 +48,21 @@ func cpuTable(cores, quota float64) diagnosis.Table[Sample] {
 		// with no Requires and no quota in sight, which is the whole point:
 		// attribution needs both 60s means everywhere, and the instruments that
 		// touch these series hold something else.
-		//
-		// host-busy: host-headroom's window holds cores − hostBusy − reserve AND
-		// is Unknown() off ScopeHost, so inverting it loses the term on exactly
-		// the affinity boxes whose host/container split is still valid.
-		//
-		// usage-cores: limit-headroom's window holds quota − usage − 0.10 × quota
-		// and does not exist at all when cpuTable omits limit-saturation, which
-		// is every box with no positive quota.
 		Tracks: []diagnosis.Track[Sample]{
 			{
+				// host-headroom's window holds cores − hostBusy − reserve AND is
+				// Unknown() off ScopeHost, so inverting it loses the term on
+				// exactly the affinity boxes whose host/container split is still
+				// valid.
 				Name:      trackHostBusy,
 				Extract:   func(s Sample) diagnosis.Reading { return s.HostBusy },
 				Span:      60 * time.Second,
 				Reduction: diagnosis.Mean, // minimum 2 — Mean's own sample floor
 			},
 			{
+				// limit-headroom's window holds quota − usage − 0.10 × quota and
+				// does not exist at all when cpuTable omits limit-saturation,
+				// which is every box with no positive quota.
 				Name:      trackUsageCores,
 				Extract:   func(s Sample) diagnosis.Reading { return s.UsageCores },
 				Span:      60 * time.Second,
@@ -78,6 +70,10 @@ func cpuTable(cores, quota float64) diagnosis.Table[Sample] {
 			},
 		},
 		Signals: []diagnosis.Signal[Sample]{
+			// Requires: HasLimit, the same gate limitSaturationSignal has below —
+			// but throttling's marks (0.05/0.03) are fixed ratios that don't scale
+			// with the quota, so it can sit here unconditionally instead of
+			// needing the conditional append limitSaturationSignal gets.
 			throttlingSignal(),
 			pressureSignal(),
 			stealSignal(),
