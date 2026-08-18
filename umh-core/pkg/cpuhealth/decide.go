@@ -12,10 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Decide, the judgement entry point. It is ONE function — Observe, then the
-// saturation fold, then diagnosis.Rank, then the Details fill, all in a single
-// pass over one fired set. No verdict field is asserted without the evidence
-// for it; attributeFor derives the attribution.
+// Decide, the judgement entry point. Each stage takes the previous stage's
+// output — Observe, then chooseSaturationCause, then buildVerdict and
+// detailsFor off the same choice — so no verdict field is asserted without
+// the evidence for it; attributeFor derives the attribution.
 
 package cpuhealth
 
@@ -23,71 +23,98 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/diagnosis"
 )
 
-// Decide runs one tick and returns the tick's Verdict and Details.
+// Decide runs one tick and returns the tick's Verdict and Details. Each stage
+// takes the previous stage's output: only Observe touches state, because the
+// engine advances its windows as it reads them.
 func Decide(engine *diagnosis.Engine[Sample], s Sample, env diagnosis.Environment) (Verdict, Details) {
 	fired, readiness := engine.Observe(s, env, s.Timestamp)
-
-	var sig Details
-
-	// The attribution split. The StateValue guard stops it running on an untrusted
-	// mean: one sample of host busy against one of ours is an attribution on a
-	// single instant.
-	hostBusyMean, hostBusyState := engine.Track(trackHostBusy).Get()
-	ourUsageMean, ourUsageState := engine.Track(trackUsageCores).Get()
-	splitHost := hostBusyState == diagnosis.StateValue && ourUsageState == diagnosis.StateValue && hostBusyMean > 2*ourUsageMean
-
-	// Fold the saturation family into one cause and collect the rest.
-	rest, survivor := foldSaturation(fired, &sig, env.Has(HasLimit))
-
-	// Rank the folded set, then build the verdict and the attribution.
-	verdict := buildVerdict(engine, rest, survivor, splitHost)
-
-	// Fill the Details that ride the verdict. hostBusyMean and ourUsageMean are
-	// the same read from the attribution split above, shared rather than
-	// re-derived.
-	fillDetails(&sig, engine, s, env, readiness, hostBusyMean, hostBusyState, ourUsageMean, ourUsageState)
-
-	return verdict, sig
+	split := readAttributionSplit(engine)
+	chosen := chooseSaturationCause(fired, env.Has(HasLimit))
+	verdict := buildVerdict(engine, chosen, split)
+	details := detailsFor(engine, s, env, readiness, chosen, split)
+	return verdict, details
 }
 
-// foldSaturation folds the saturation family into a single survivor and
-// collects the rest. The fired set arrives unranked and in table order; the
-// fold's fixed precedence is the only rule Decide applies before Rank, and the
-// rank and latch flags are the table's.
-func foldSaturation(fired []diagnosis.Fired, sig *Details, hasLimit bool) (rest []diagnosis.Fired, survivor *diagnosis.Fired) {
-	rest = make([]diagnosis.Fired, 0, len(fired))
+// A tick can produce several "the CPU is full" causes at once: the host has no
+// headroom, this container has spent its own quota, and the fallback used when
+// the host is unreadable. They describe one situation, so Decide keeps only the
+// highest-ranked one. This is the result of that choice.
+type saturationChoice struct {
+	// Fired is every signal that fired this tick, with the surplus "CPU is
+	// full" causes removed — this is what Rank orders.
+	Fired []diagnosis.Fired
+	// Winner is the "CPU is full" cause that was kept, nil if none fired.
+	// Blame depends on which one it was.
+	Winner *diagnosis.Fired
+	// Latched holds the nine Details fields set here and nowhere else.
+	Latched Details
+}
+
+// attributionSplit is the host-versus-container comparison, read once per tick.
+type attributionSplit struct {
+	HostBusyMean  float64
+	HostBusyState diagnosis.State
+	OurUsageMean  float64
+	OurUsageState diagnosis.State
+	HostDominates bool // host's 60s mean is more than double ours, on two trusted means
+}
+
+// readAttributionSplit reads both 60s means and decides whether the host
+// dominates. An untrusted mean disqualifies the comparison: one sample of host
+// busy against one of ours is an attribution made on a single instant.
+func readAttributionSplit(engine *diagnosis.Engine[Sample]) attributionSplit {
+	hostMean, hostState := engine.Track(trackHostBusy).Get()
+	ourMean, ourState := engine.Track(trackUsageCores).Get()
+
+	split := attributionSplit{
+		HostBusyMean: hostMean, HostBusyState: hostState,
+		OurUsageMean: ourMean, OurUsageState: ourState,
+	}
+	if hostState != diagnosis.StateValue || ourState != diagnosis.StateValue {
+		return split // no trusted pair, so no attribution
+	}
+	split.HostDominates = hostMean > 2*ourMean
+	return split
+}
+
+// chooseSaturationCause folds the saturation family into a single choice and
+// collects the rest. The fired set arrives unranked and in table order;
+// chooseSaturationCause's fixed precedence is the only rule Decide applies
+// before Rank, and the rank and latch flags are the table's.
+func chooseSaturationCause(fired []diagnosis.Fired, hasLimit bool) saturationChoice {
+	rest := make([]diagnosis.Fired, 0, len(fired))
+	var latched Details
+	var winner *diagnosis.Fired
 	best := 0 // below every saturation-arm rank, so the first member wins a tie
 	for i := range fired {
 		f := &fired[i]
 		switch f.Identity.Signal {
 		case sigSaturation, sigLimitSaturation:
-			sig.SaturationFired = true
-			saturationFlags(*f, sig, hasLimit)
+			latched.SaturationFired = true
+			saturationFlags(*f, &latched, hasLimit)
 			// The fold keeps the highest-ranked member of the saturation family.
 			// Ties cannot occur (the latch is per signal); if one somehow did,
 			// the strictly-greater compare keeps the first member.
 			if rank := saturationRank(*f); rank > best {
 				best = rank
-				survivor = f
+				winner = f
 			}
 		default:
 			rest = append(rest, *f)
 			switch f.Identity.Signal {
 			case sigThrottling:
-				sig.ThrottleFired = true
+				latched.ThrottleFired = true
 			case sigPressure:
-				sig.PressureFired = true
+				latched.PressureFired = true
 			case sigSteal:
-				sig.StealFired = true
+				latched.StealFired = true
 			}
 		}
 	}
-	if survivor != nil {
-		rest = append(rest, *survivor)
+	if winner != nil {
+		rest = append(rest, *winner)
 	}
-	// HostContentionFired is reserved; the fold sets it false unconditionally.
-	sig.HostContentionFired = false
-	return rest, survivor
+	return saturationChoice{Fired: rest, Winner: winner, Latched: latched}
 }
 
 // buildVerdict ranks the folded set and builds the Verdict. Exactly one rule
@@ -95,8 +122,8 @@ func foldSaturation(fired []diagnosis.Fired, sig *Details, hasLimit bool) (rest 
 // when none did — no severity floor, no second condition. It owns no Details
 // fields — it returns the Verdict only. Rank is the only thing that orders
 // Verdict.Causes; attribution derives from the dominant (ranked-first) cause.
-func buildVerdict(engine *diagnosis.Engine[Sample], rest []diagnosis.Fired, survivor *diagnosis.Fired, splitHost bool) Verdict {
-	ranked := diagnosis.Rank(rest)
+func buildVerdict(engine *diagnosis.Engine[Sample], chosen saturationChoice, split attributionSplit) Verdict {
+	ranked := diagnosis.Rank(chosen.Fired)
 	causes := make([]Cause, len(ranked))
 	for i, f := range ranked {
 		causes[i] = causeOf(engine, f)
@@ -106,16 +133,19 @@ func buildVerdict(engine *diagnosis.Engine[Sample], rest []diagnosis.Fired, surv
 		verdict.State = StateHealthy
 	} else {
 		verdict.State = StateDegraded
-		verdict.Attribution = attributeFor(causes[0], survivor, splitHost)
+		verdict.Attribution = attributeFor(causes[0], chosen.Winner, split.HostDominates)
 	}
 	return verdict
 }
 
-// fillDetails fills every Details field not already owned by foldSaturation
-// or buildVerdict. The host and usage track means and states are read once in
-// Decide by the attribution split and shared here, so a single Get serves
-// both.
-func fillDetails(sig *Details, engine *diagnosis.Engine[Sample], s Sample, env diagnosis.Environment, readiness []diagnosis.Readiness, hostBusyMean float64, hostBusyState diagnosis.State, ourUsageMean float64, ourUsageState diagnosis.State) {
+// detailsFor fills every Details field not already set by chooseSaturationCause
+// or buildVerdict, starting from the saturation choice's own latched fields.
+// The host and usage track means and states are the same read
+// readAttributionSplit already took, shared here through split rather than
+// re-derived.
+func detailsFor(engine *diagnosis.Engine[Sample], s Sample, env diagnosis.Environment, readiness []diagnosis.Readiness, chosen saturationChoice, split attributionSplit) Details {
+	d := chosen.Latched
+
 	// The withheld-headroom facts ride Details, not Verdict — three
 	// fields, none of the other 31 can stand in for them. HostHeadroomAvailable
 	// is dispatched on the sample's scope, NOT on the window's state: an
@@ -124,25 +154,25 @@ func fillDetails(sig *Details, engine *diagnosis.Engine[Sample], s Sample, env d
 	// the bit set and the window absent, so a read failure is not rendered as a
 	// withholding. The two counts ride the snapshot so the "pinned to 2 of 8
 	// CPUs" sentence can name them without Decide doing any I/O.
-	sig.HostHeadroomAvailable = s.CpuScope == ScopeHost
+	d.HostHeadroomAvailable = s.CpuScope == ScopeHost
 	if lc, ok := s.LogicalCpus.Get(); ok {
-		sig.LogicalCpus = lc
+		d.LogicalCpus = lc
 	}
 	if hc, ok := s.HostCpus.Get(); ok {
-		sig.HostCpus = hc
+		d.HostCpus = hc
 	}
 
 	// The average usage fraction is usage-fraction's
 	// own reduction — the number the latch was judged on, not the usage track
 	// divided by anything, so a mid-run core-count change cannot split them. It
 	// is filled on every tick, not only when the no-host-stats arm fires.
-	sig.AvgUsageFraction, _ = engine.Reduction(sigSaturation, instUsageFraction).Get()
+	d.AvgUsageFraction, _ = engine.Reduction(sigSaturation, instUsageFraction).Get()
 
 	// The dead-zone annotation. The dead zone is quota nil or non-positive AND
 	// PSI absent, and it is an annotation on a healthy verdict, never a state.
 	// LimitedVisibility is where ComposeMessage reads it.
 	if q, ok := s.Quota.Get(); !ok || q <= 0 {
-		sig.LimitedVisibility = !s.PsiAvailable
+		d.LimitedVisibility = !s.PsiAvailable
 	}
 
 	// The observable metrics, the two track floors and each
@@ -151,29 +181,29 @@ func fillDetails(sig *Details, engine *diagnosis.Engine[Sample], s Sample, env d
 	// the route a no-latch tick's numbers take: Observe returns fired latches
 	// only, so without these reads a confident 0 would be published on every
 	// healthy tick.
-	sig.ThrottleRatio, _ = engine.Reduction(sigThrottling, instThrottleRatio).Get()
-	sig.PressureAvg60, _ = engine.Reduction(sigPressure, instPressureAvg60).Get()
-	sig.StealP95, _ = engine.Reduction(sigSteal, instStealP95).Get()
-	sig.HostHeadroomCores, _ = engine.Reduction(sigSaturation, instHostHeadroom).Get()
-	sig.AvgUsageCores = ourUsageMean
-	sig.AvgHostBusyCores = hostBusyMean
-	sig.UsageRingActive = ourUsageState == diagnosis.StateValue
-	sig.HostBusyRingActive = hostBusyState == diagnosis.StateValue
+	d.ThrottleRatio, _ = engine.Reduction(sigThrottling, instThrottleRatio).Get()
+	d.PressureAvg60, _ = engine.Reduction(sigPressure, instPressureAvg60).Get()
+	d.StealP95, _ = engine.Reduction(sigSteal, instStealP95).Get()
+	d.HostHeadroomCores, _ = engine.Reduction(sigSaturation, instHostHeadroom).Get()
+	d.AvgUsageCores = split.OurUsageMean
+	d.AvgHostBusyCores = split.HostBusyMean
+	d.UsageRingActive = split.OurUsageState == diagnosis.StateValue
+	d.HostBusyRingActive = split.HostBusyState == diagnosis.StateValue
 
 	// The headroom ceiling and reserve mirror exactly what the verdict used, so
 	// the message's headline and headroom line report the same number.
 	if q, ok := s.Quota.Get(); ok && q > 0 {
-		sig.CapacityCores = q
-		sig.ReserveCores = limitReserveFraction * q
+		d.CapacityCores = q
+		d.ReserveCores = limitReserveFraction * q
 	} else {
-		sig.CapacityCores = sig.LogicalCpus
-		sig.ReserveCores = cpuReserveCores
+		d.CapacityCores = d.LogicalCpus
+		d.ReserveCores = cpuReserveCores
 	}
 	// HostBusyCoresAvailable mirrors the sample's own readability: a raw
 	// AvgHostBusyCores == 0 proxy cannot tell an unreadable /proc/stat from
 	// an idle host.
 	if _, ok := s.HostBusy.Get(); ok {
-		sig.HostBusyCoresAvailable = true
+		d.HostBusyCoresAvailable = true
 	}
 
 	// The per-signal readiness trio, out of the same pass that judged them.
@@ -184,18 +214,20 @@ func fillDetails(sig *Details, engine *diagnosis.Engine[Sample], s Sample, env d
 		usable := r.Availability == diagnosis.Ready
 		switch r.Signal {
 		case sigThrottling:
-			sig.ThrottleSignalReady = usable
+			d.ThrottleSignalReady = usable
 		case sigPressure:
-			sig.PressureSignalReady = usable
+			d.PressureSignalReady = usable
 		case sigSteal:
-			sig.StealSignalReady = usable
+			d.StealSignalReady = usable
 		}
 	}
 
 	// Capability, not readability: the healthy message's budget lines must not
 	// read these as "the reading succeeded". The *SignalReady trio is the
 	// readability half.
-	sig.LimitApplies = env.Has(HasLimit)
-	sig.PressureApplies = s.PsiAvailable
-	sig.StealApplies = env.Has(HasVirtualization)
+	d.LimitApplies = env.Has(HasLimit)
+	d.PressureApplies = s.PsiAvailable
+	d.StealApplies = env.Has(HasVirtualization)
+
+	return d
 }

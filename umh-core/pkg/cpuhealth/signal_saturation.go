@@ -14,8 +14,9 @@
 
 // The saturation family answers whether the machine — or our own limit — is
 // full. It covers the host-full, usage-fraction, and limit arms of one
-// question, plus the fold helpers that order and flag them; the arms stay
-// together because saturationRank and saturationFlags describe both signals.
+// question, plus the helpers chooseSaturationCause uses to order and flag
+// them; the arms stay together because saturationRank and saturationFlags
+// describe both signals.
 
 package cpuhealth
 
@@ -159,14 +160,14 @@ func limitSaturationSignal(quota float64) diagnosis.Signal[Sample] {
 }
 
 // saturationArmOf identifies which arm of the saturation family a fired signal
-// came from, so the fold and the latch flags can agree without Decide knowing
-// the arms. The signal name alone cannot name the arm: sigSaturation carries
-// two instruments, and Marks.Unit is the only thing that tells them apart —
-// "cores" is host-headroom, "fraction" is usage-fraction. Marks reads the
-// FROZEN mark, so it names the instrument that actually fired; the live
-// per-tick winner would disagree with Marks from tick 3 onward, which is why
-// this frozen word is the arm's source of truth and not the tick's selected
-// instrument.
+// came from, so chooseSaturationCause and the latch flags can agree without
+// Decide knowing the arms. The signal name alone cannot name the arm:
+// sigSaturation carries two instruments, and Marks.Unit is the only thing that
+// tells them apart — "cores" is host-headroom, "fraction" is usage-fraction.
+// Marks reads the FROZEN mark, so it names the instrument that actually
+// fired; the live per-tick winner would disagree with Marks from tick 3
+// onward, which is why this frozen word is the arm's source of truth and not
+// the tick's selected instrument.
 func saturationArmOf(f diagnosis.Fired) saturationArm {
 	switch f.Identity.Signal {
 	case sigLimitSaturation:
@@ -181,10 +182,11 @@ func saturationArmOf(f diagnosis.Fired) saturationArm {
 	}
 }
 
-// saturationRank orders the saturation family for the fold: host-full outranks
-// the limit arm, the limit arm outranks the no-host-stats fallback. The arm IS
-// the rank — the constants in verdict.go are declared in that order — so the
-// fold compares one int and knows nothing about the arms.
+// saturationRank orders the saturation family for chooseSaturationCause:
+// host-full outranks the limit arm, the limit arm outranks the no-host-stats
+// fallback. The arm IS the rank — the constants in verdict.go are declared in
+// that order — so chooseSaturationCause compares one int and knows nothing
+// about the arms.
 func saturationRank(f diagnosis.Fired) int {
 	return int(saturationArmOf(f))
 }
