@@ -56,38 +56,40 @@ var _ = Describe("EditProtocolConverter awaitRollout (config-as-truth gate)", fu
 		mu        sync.Mutex
 	)
 
-	// stageSnapshot writes a protocol-converter snapshot with an explicit
+	// stageSnapshotOnPort writes a protocol-converter snapshot with an explicit
 	// desired connection config (the rendered config the bridge should be
 	// running, i.e. the "system of truth"), an explicit observed nmap config
-	// (what the scan has actually dialed), the port state the last scan
-	// reported (open/closed/filtered), and the PC FSM state. Giving the desired
-	// and observed sides independently is what lets a test stage the anomaly: a
-	// connection edited to a new target whose nmap scan has not yet caught up.
-	// Staging PortResult.State is what distinguishes "not yet scanned" from
-	// "scanned and found closed" — the two reasons awaitRollout must treat
-	// differently.
-	stageSnapshot := func(desiredTarget string, observedTarget string, pcState string, portState string) {
+	// (what the scan has actually dialed), the port the scan ran against, the
+	// port state the last scan reported (open/closed/filtered), and the PC FSM
+	// state. Giving the desired and observed sides independently is what lets a
+	// test stage the anomaly: a connection edited to a new target whose nmap
+	// scan has not yet caught up. Staging PortResult.State is what distinguishes
+	// "not yet scanned" from "scanned and found closed" — the two reasons
+	// awaitRollout must treat differently. Staging the scanned port separately
+	// from the payload port is what lets a test stage a templated connection,
+	// whose resolved port is not the one the payload carries.
+	stageSnapshotOnPort := func(desiredTarget string, observedTarget string, pcState string, portState string, scannedPort uint16) {
 		observed := &protocolconverter.ProtocolConverterObservedStateSnapshot{
 			ServiceInfo: protocolconvertersvc.ServiceInfo{
 				ConnectionObservedState: connfsm.ConnectionObservedState{
 					ObservedConnectionConfig: connectionserviceconfig.ConnectionServiceConfig{
 						NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
 							Target: desiredTarget,
-							Port:   port,
+							Port:   scannedPort,
 						},
 					},
 					ServiceInfo: connsvc.ServiceInfo{
 						NmapObservedState: nmapfsm.NmapObservedState{
 							ObservedNmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
 								Target: observedTarget,
-								Port:   port,
+								Port:   scannedPort,
 							},
 							ServiceInfo: nmapsvc.ServiceInfo{
 								NmapStatus: nmapsvc.NmapServiceInfo{
 									LastScan: &nmapsvc.NmapScanResult{
 										PortResult: nmapsvc.PortResult{
 											State: portState,
-											Port:  port,
+											Port:  scannedPort,
 										},
 									},
 								},
@@ -113,9 +115,16 @@ var _ = Describe("EditProtocolConverter awaitRollout (config-as-truth gate)", fu
 		})
 	}
 
-	// runAwaitRollout drives a real awaitRollout Execute in a goroutine and
-	// returns the resulting error and the wall-clock time it took.
-	runAwaitRollout := func(ip string) (time.Duration, error) {
+	// stageSnapshot stages a scan of the port the payload asks for, the case
+	// every non-templated connection is in.
+	stageSnapshot := func(desiredTarget string, observedTarget string, pcState string, portState string) {
+		stageSnapshotOnPort(desiredTarget, observedTarget, pcState, portState, port)
+	}
+
+	// runAwaitRolloutOnPort drives a real awaitRollout Execute in a goroutine
+	// with the given payload connection, and returns the resulting error and the
+	// wall-clock time it took.
+	runAwaitRolloutOnPort := func(ip string, payloadPort uint32) (time.Duration, error) {
 		a := actions.NewEditProtocolConverterAction(
 			"probe@example.com", uuid.New(), uuid.New(), outbound, mockCfg, snapMgr)
 		a.SetTickInterval(tickInterval)
@@ -126,7 +135,7 @@ var _ = Describe("EditProtocolConverter awaitRollout (config-as-truth gate)", fu
 			"uuid": probeUUID.String(),
 			"connection": map[string]interface{}{
 				"ip":   ip,
-				"port": port,
+				"port": payloadPort,
 			},
 		}
 		Expect(a.Parse(payload)).To(Succeed())
@@ -147,6 +156,12 @@ var _ = Describe("EditProtocolConverter awaitRollout (config-as-truth gate)", fu
 		Eventually(ch, "15s").Should(Receive(&got))
 
 		return got.elapsed, got.err
+	}
+
+	// runAwaitRollout edits a connection to ip on the payload port, the case
+	// every non-templated connection is in.
+	runAwaitRollout := func(ip string) (time.Duration, error) {
+		return runAwaitRolloutOnPort(ip, uint32(port))
 	}
 
 	BeforeEach(func() {
@@ -221,5 +236,69 @@ var _ = Describe("EditProtocolConverter awaitRollout (config-as-truth gate)", fu
 		_, err := runAwaitRollout("dest.example.com")
 		Expect(err).To(HaveOccurred(),
 			"a filtered port is down by the connection FSM's own definition and must not report success")
+	})
+
+	Describe("a bridge whose connection is templated", func() {
+		// A bridge that writes to the historian scans the shared
+		// historian.timescale endpoint, so its connection template carries no
+		// {{ .IP }}/{{ .PORT }} and its spec keeps no IP/PORT user variables.
+		// get-protocolconverter therefore hands the Management Console the raw
+		// template string as the connection IP and a port of 0 (a template
+		// string does not parse as a number), and that is what returns in the
+		// edit payload. The gate must compare the scan against the rendered
+		// endpoint; comparing it against the payload can never match.
+		const (
+			timescaleHost = "timescale.example.com"
+			// Deliberately not the 5432 default, so a port that only matches by
+			// coincidence cannot pass this spec.
+			timescalePort = uint16(5433)
+		)
+
+		BeforeEach(func() {
+			mockCfg = config.NewMockConfigManager().WithConfig(config.FullConfig{
+				Agent: config.AgentConfig{MetricsPort: 8080},
+				Historian: &config.HistorianConfig{
+					Timescale: config.TimescaleConfig{
+						Host:     timescaleHost,
+						Port:     timescalePort,
+						Password: "probe-password",
+					},
+				},
+				ProtocolConverter: []config.ProtocolConverterConfig{{
+					FSMInstanceConfig: config.FSMInstanceConfig{
+						Name:            probeName,
+						DesiredFSMState: "active",
+					},
+					ProtocolConverterServiceConfig: protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec{
+						Config: protocolconverterserviceconfig.ProtocolConverterServiceConfigTemplate{
+							ConnectionServiceConfig: connectionserviceconfig.ConnectionServiceConfigTemplate{
+								NmapTemplate: &connectionserviceconfig.NmapConfigTemplate{
+									Target: "{{ .historian.timescale.host }}",
+									Port:   "{{ .historian.timescale.port }}",
+								},
+							},
+							DataflowComponentWriteServiceConfig: dataflowcomponentserviceconfig.DataflowComponentWriteConfigInput{
+								Destination: dataflowcomponentserviceconfig.WriteConfigDestination{
+									Protocol: dataflowcomponentserviceconfig.HistorianDestinationProtocol,
+									Code:     "data_contract_name: pump",
+								},
+								Source: dataflowcomponentserviceconfig.WriteConfigSource{Topics: "umh.v1.*"},
+							},
+						},
+						Variables: variables.VariableBundle{User: map[string]interface{}{}},
+					},
+				}},
+			})
+		})
+
+		It("reports a scanned-and-open resolved endpoint as a successful rollout, promptly", func() {
+			stageSnapshotOnPort(timescaleHost, timescaleHost, protocolconverter.OperationalStateStartingFailedDFCMissing, string(nmapfsm.PortStateOpen), timescalePort)
+
+			elapsed, err := runAwaitRolloutOnPort("{{ .historian.timescale.host }}", 0)
+			Expect(err).NotTo(HaveOccurred(),
+				"the gate must compare the scan against the rendered endpoint, not the unresolved payload")
+			Expect(elapsed).To(BeNumerically("<", 5*time.Second),
+				"a healthy edit of a templated connection must not wait out the rollout timeout")
+		})
 	})
 })

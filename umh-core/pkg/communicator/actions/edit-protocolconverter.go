@@ -107,11 +107,13 @@ type EditProtocolConverterAction struct {
 	configManager config.ConfigManager
 
 	fsmLogger deps.FSMLogger
-	// lastRenderErr holds the most recent renderDesiredDFCConfig error so the
-	// awaitRollout timeout message can surface the real cause instead of just
-	// "did not become active in time". It is sticky: compareSingleDFCConfig
-	// clears it only when a later render succeeds, so ticks that never reach
-	// a render (for example while Benthos restarts) keep the captured cause.
+	// lastRenderErr holds the most recent render error — from
+	// renderDesiredDFCConfig, or from the connection render that resolves the
+	// nmap gate's expected port — so the awaitRollout timeout message can
+	// surface the real cause instead of just "did not become active in time".
+	// It is sticky: compareSingleDFCConfig clears it only when a later render
+	// succeeds, so ticks that never reach a render (for example while Benthos
+	// restarts) keep the captured cause.
 	lastRenderErr error
 
 	// lastFailedDFCType records which DFC (read/write) produced the most
@@ -347,7 +349,7 @@ func (a *EditProtocolConverterAction) Execute() (interface{}, map[string]interfa
 
 	// Await rollout and perform health checks
 	if a.systemSnapshotManager != nil && !a.ignoreHealthCheck {
-		errCode, err := a.awaitRollout(oldConfig, desiredPCState)
+		errCode, err := a.awaitRollout(oldConfig, newSpec.ProtocolConverterServiceConfig, desiredPCState)
 		if err != nil {
 			errorMsg := fmt.Sprintf("Failed during rollout: %v", err)
 			SendActionReplyV2(a.instanceUUID, a.userEmail, a.actionUUID, models.ActionFinishedWithFailure,
@@ -506,7 +508,11 @@ func (a *EditProtocolConverterAction) persistConfig(atomicEditUUID uuid.UUID, ne
 // The function returns the error code and the error message via an error object.
 // The error code is a string that is sent to the frontend to allow it to determine if the action can be retried or not.
 // The error message is sent to the frontend to allow the user to see the error message.
-func (a *EditProtocolConverterAction) awaitRollout(pcConfig config.ProtocolConverterConfig, desiredPCState string) (string, error) {
+//
+// pcConfig is the pre-edit configuration, used to roll back on failure. newSpec is
+// the specification this edit just persisted, used to resolve the endpoint the nmap
+// gate expects the scan to dial.
+func (a *EditProtocolConverterAction) awaitRollout(pcConfig config.ProtocolConverterConfig, newSpec protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec, desiredPCState string) (string, error) {
 	SendActionReply(
 		a.instanceUUID,
 		a.userEmail,
@@ -537,6 +543,30 @@ func (a *EditProtocolConverterAction) awaitRollout(pcConfig config.ProtocolConve
 	timeout := time.After(timeoutInterval)
 	startTime := time.Now()
 	timeoutDuration := timeoutInterval
+
+	// wantConnectionPort is the port the nmap gate below requires the scan to
+	// have dialed and found open. It is rendered from the spec this edit just
+	// persisted, not taken from the action payload: a bridge whose connection is
+	// templated resolves its endpoint only at render time. A historian bridge
+	// scans {{ .historian.timescale.host }}:{{ .historian.timescale.port }} and
+	// keeps no IP/PORT user variables, so its payload carries an unresolved
+	// target and port 0 while the scan dials the resolved port — comparing the
+	// two would never match, burn the whole timeout and roll back a healthy edit.
+	//
+	// A render failure falls back to the payload port and is recorded in
+	// lastRenderErr so the timeout message names the real cause: the agent
+	// renders the same spec, so a spec that fails here cannot roll out either.
+	wantConnectionPort := a.connectionPort
+
+	if a.dfcType == DFCTypeEmpty && desiredPCState != protocolconverter.OperationalStateStopped {
+		resolvedPort, renderErr := a.resolvedConnectionPort(newSpec)
+		if renderErr != nil {
+			a.actionLogger.Warnf("Failed to resolve the connection endpoint for the rollout gate, falling back to the payload port %s: %v", a.connectionPort, renderErr)
+			a.lastRenderErr = renderErr
+		} else {
+			wantConnectionPort = resolvedPort
+		}
+	}
 
 	var (
 		logs     []s6.LogEntry
@@ -650,8 +680,8 @@ func (a *EditProtocolConverterAction) awaitRollout(pcConfig config.ProtocolConve
 						portIsOpen := nmapObs.ServiceInfo.NmapStatus.LastScan != nil &&
 							nmapObs.ServiceInfo.NmapStatus.LastScan.PortResult.State == string(nmapfsm.PortStateOpen)
 
-						if nmapPort != a.connectionPort {
-							currentStateReason = "waiting for nmap to connect to port " + a.connectionPort
+						if nmapPort != wantConnectionPort {
+							currentStateReason = "waiting for nmap to connect to port " + wantConnectionPort
 							SendActionReply(
 								a.instanceUUID,
 								a.userEmail,
@@ -671,7 +701,7 @@ func (a *EditProtocolConverterAction) awaitRollout(pcConfig config.ProtocolConve
 								lastState = nmapObs.ServiceInfo.NmapStatus.LastScan.PortResult.State
 							}
 
-							currentStateReason = "waiting for nmap to report port " + a.connectionPort + " open (last scan: " + lastState + ")"
+							currentStateReason = "waiting for nmap to report port " + wantConnectionPort + " open (last scan: " + lastState + ")"
 							SendActionReply(
 								a.instanceUUID,
 								a.userEmail,
@@ -1166,6 +1196,46 @@ func (a *EditProtocolConverterAction) mergeUserVariables(base map[string]any, in
 	}
 
 	return merged
+}
+
+// resolvedConnectionPort renders the connection template of the just-persisted
+// spec and returns the port the nmap scan is expected to dial, as the decimal
+// string the observed scan config is compared against.
+//
+// It renders with the same inputs the agent uses — the persisted spec (which
+// already carries the edit's merged variables), the agent location and the
+// historian section read from the config manager — so the port returned here is
+// the port the control loop will make the scanner dial.
+func (a *EditProtocolConverterAction) resolvedConnectionPort(newSpec protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec) (string, error) {
+	systemSnapshot := a.systemSnapshotManager.GetDeepCopySnapshot()
+	agentLocation := convertIntMapToStringMap(systemSnapshot.CurrentConfig.Agent.Location)
+
+	// The stored system snapshot does not carry the top-level historian section,
+	// so read it straight from the config manager (see renderDesiredDFCConfig).
+	ctx, cancel := context.WithTimeout(context.Background(), constants.ActionTimeout)
+	defer cancel()
+
+	currentConfig, err := a.configManager.GetConfig(ctx, 0)
+	if err != nil {
+		return "", fmt.Errorf("failed to read current config for historian variables: %w", err)
+	}
+
+	runtimeConfig, err := runtime_config.BuildRuntimeConfig(
+		newSpec,
+		agentLocation,
+		nil, // TODO: add global vars
+		currentConfig.Historian,
+		runtime_config.BridgedByPlaceholder,
+		a.name,
+	)
+	if err != nil {
+		return "", fmt.Errorf("failed to build runtime config: %w", err)
+	}
+
+	return strconv.FormatUint(
+		uint64(runtimeConfig.ConnectionServiceConfig.NmapServiceConfig.Port),
+		10,
+	), nil
 }
 
 // renderDesiredDFCConfig renders the template variables in the desired DFC config
