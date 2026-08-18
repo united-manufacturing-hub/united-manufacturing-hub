@@ -100,24 +100,24 @@ type BenthosMonitorStatus struct {
 }
 
 // Poll scrapes the configured benthos monitor's /ping, /ready, /version, and
-// /metrics endpoints once. The client comes from d (a nil deps falls back to the
-// default client). All requests carry ctx, so cancellation surfaces as a request
-// error.
+// /metrics endpoints once, using the HTTP client d carries. All requests carry
+// ctx, so cancellation surfaces as a request error. Deps that were never bound
+// are rejected before any request goes out: substituting a client would report a
+// wiring fault as ordinary idle traffic.
 func Poll(ctx context.Context, d *benthosMonitorDeps, cfg config.BenthosMonitorConfig) (BenthosMonitorStatus, error) {
-	client := http.DefaultClient
-	if d != nil && d.client != nil {
-		client = d.client
+	if d == nil || d.client == nil {
+		return BenthosMonitorStatus{}, fmt.Errorf("benthos monitor dependencies not bound (deps present: %t, HTTP client present: %t): worker wiring fault, not a scrape failure", d != nil, d != nil && d.client != nil)
 	}
 
 	base := fmt.Sprintf("http://localhost:%d", cfg.MetricsPort)
 	status := BenthosMonitorStatus{ScrapedAt: time.Now()}
 
-	_, _, err := get(ctx, client, base+"/ping")
+	_, _, err := get(ctx, d.client, base+"/ping")
 	if err == nil {
 		status.PingAlive = true
 	}
 
-	readyBody, _, err := get(ctx, client, base+"/ready")
+	readyBody, _, err := get(ctx, d.client, base+"/ready")
 	if err == nil {
 		// The /ready endpoint reports readiness by returning JSON whose error
 		// field is empty when every input/output connection is up (fsmv1
@@ -132,7 +132,7 @@ func Poll(ctx context.Context, d *benthosMonitorDeps, cfg config.BenthosMonitorC
 		}
 	}
 
-	versionBody, _, err := get(ctx, client, base+"/version")
+	versionBody, _, err := get(ctx, d.client, base+"/version")
 	if err != nil {
 		return status, fmt.Errorf("scrape /version: %w", err)
 	}
@@ -144,7 +144,7 @@ func Poll(ctx context.Context, d *benthosMonitorDeps, cfg config.BenthosMonitorC
 	}
 	status.Version = v.Version
 
-	metricsBody, _, err := get(ctx, client, base+"/metrics")
+	metricsBody, _, err := get(ctx, d.client, base+"/metrics")
 	if err != nil {
 		return status, fmt.Errorf("scrape /metrics: %w", err)
 	}
@@ -161,8 +161,7 @@ func Poll(ctx context.Context, d *benthosMonitorDeps, cfg config.BenthosMonitorC
 	status.BenthosMetrics = m
 
 	// The window lives in d and survives across polls, which is what makes a rate
-	// computable from per-poll counter snapshots; a nil d has no window, so Input,
-	// Output and IsActive stay zero.
+	// computable from per-poll counter snapshots.
 	//
 	// Add is passed the scrape port because it keys the window on that port: an
 	// in-place config update can re-point this child at a new MetricsPort with no
@@ -170,18 +169,16 @@ func Poll(ctx context.Context, d *benthosMonitorDeps, cfg config.BenthosMonitorC
 	// Its counter arguments are the totals summed across every leaf path, which is
 	// what the counters mean for throughput: a switch or broker emits one series
 	// per leaf with no top-level aggregate, so the sum is the pipeline's traffic.
-	if d != nil {
-		d.window.Add(status.ScrapedAt, int(cfg.MetricsPort), int(m.InputReceivedTotal()), int(m.OutputSentTotal()))
-		status.Input = ComponentThroughput{
-			MessagesPerSecond: d.window.inputRate(),
-			LastCount:         d.window.inputCount(),
-		}
-		status.Output = ComponentThroughput{
-			MessagesPerSecond: d.window.outputRate(),
-			LastCount:         d.window.outputCount(),
-		}
-		status.IsActive = status.Input.MessagesPerSecond > 0
+	d.window.Add(status.ScrapedAt, int(cfg.MetricsPort), int(m.InputReceivedTotal()), int(m.OutputSentTotal()))
+	status.Input = ComponentThroughput{
+		MessagesPerSecond: d.window.inputRate(),
+		LastCount:         d.window.inputCount(),
 	}
+	status.Output = ComponentThroughput{
+		MessagesPerSecond: d.window.outputRate(),
+		LastCount:         d.window.outputCount(),
+	}
+	status.IsActive = status.Input.MessagesPerSecond > 0
 
 	return status, nil
 }
