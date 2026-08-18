@@ -65,7 +65,9 @@ func NewEngine(cores, quota float64) (*diagnosis.Engine[Sample], error) {
 
 // Table builds the CPU signal table for a caller that needs the Signal values
 // themselves: a worker outside this package walks them to ask Engine.Select for
-// per-signal Availability, and cpuTable is unexported.
+// per-signal Availability, and cpuTable is unexported. Build the engine from the
+// returned value rather than from a second Table call — two calls with different
+// cores or quota key their windows differently.
 func Table(cores, quota float64) diagnosis.Table[Sample] {
 	return cpuTable(cores, quota)
 }

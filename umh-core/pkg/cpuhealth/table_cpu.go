@@ -23,18 +23,12 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/diagnosis"
 )
 
-// NewEngine delegates through Table, so the table a caller walks and the table
-// that caller's engine was built from come from the same call — a signal the
-// worker polls is a signal the engine keyed windows under. RunSuite is the one
-// exception to this guarantee; see its own comment.
-//
 // cpuTable declares five signals — throttling, pressure, steal, saturation and
 // limit-saturation — and two tracks, host-busy and usage-cores.
 //
 // cpuTable is the CPU declaration, built by a function because two marks and
 // one capacity are denominated in quantities that vary per box: the quota and
-// the logical CPU count. Both arguments are startup facts, cached across
-// ticks, exactly as a Capability is.
+// the logical CPU count.
 //
 // quota does not need to be a Reading: HasLimit is present exactly when
 // cpu.max names a positive quota, which is the same read that supplies the
