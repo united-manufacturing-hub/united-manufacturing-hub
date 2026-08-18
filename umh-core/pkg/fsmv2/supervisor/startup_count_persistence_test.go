@@ -55,7 +55,7 @@ func (w *startupCountWorker) GetInitialState() fsmv2.State[any, any] {
 
 var _ = Describe("StartupCount persistence", func() {
 	It("advances across a worker respawn instead of resetting to 1", func() {
-		const workerType = "startupcount-rung4"
+		const workerType = "startupcount-recreate"
 		const workerID = "startup-count-worker"
 
 		// Collapse the observation cadence so the collector saves promptly; the

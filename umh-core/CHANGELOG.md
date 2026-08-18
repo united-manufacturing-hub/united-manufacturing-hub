@@ -9,6 +9,10 @@
 - `ALLOW_INSECURE_TLS` and `agent.communicator.allowInsecureTLS` no longer have any effect. The new FSMv2 communicator never implemented this option, and nothing indicated it was in use. For corporate networks that intercept TLS, add your corporate CA certificate instead; see the corporate firewalls guide. The config key is still accepted, so you do not need to edit your `config.yaml`
 - umh-core now starts and runs without `AUTH_TOKEN` or `API_URL`. Previously an instance with no Management Console credentials brought up no runtime at all: its components reported `starting` indefinitely, with no error and no exit, so a missing or mistyped token looked like a hung container. Such an instance now runs fully — it simply cannot reach the Management Console
 
+### Fixes
+
+- Renaming a bridge whose deployment then fails no longer leaves it impossible to edit or save. A failed deployment now undoes the rename along with the rest of the configuration, while Save Anyway keeps the new name as before
+
 ## [0.44.34]
 
 ### Improvements

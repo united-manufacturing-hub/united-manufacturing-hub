@@ -554,7 +554,7 @@ var _ = Describe("Collector post-COS wrapping", func() {
 		// FrameworkMetricsSetter is also asserted to fire exactly once per tick, so
 		// deleting the pre-COS Setter invocation silently redden this test.
 		It("(a) injects framework metrics from the collector local onto a struct{}-deps worker", func() {
-			id := wrappingTestIdentity("rung1-struct-deps-a")
+			id := wrappingTestIdentity("struct-deps-a")
 
 			var fmSetterCalls int
 
@@ -580,7 +580,7 @@ var _ = Describe("Collector post-COS wrapping", func() {
 		// from the collector's local even when the Setter is nil (split guard:
 		// fetch on Provider != nil alone).
 		It("(b) injects action history from the collector local onto a struct{}-deps worker", func() {
-			id := wrappingTestIdentity("rung1-struct-deps-b")
+			id := wrappingTestIdentity("struct-deps-b")
 
 			coll, store := newWrappingCollector(&wrappingTestWorkerStructDeps{observed: testWrappingObservedState{}}, id, deps.NewNopFSMLogger(), func(cfg *collection.CollectorConfig[testWrappingObservedState]) {
 				cfg.ActionHistoryProvider = func() []deps.ActionResult {
@@ -603,7 +603,7 @@ var _ = Describe("Collector post-COS wrapping", func() {
 		// tick guards against cross-tick fetch suppression (e.g. a misguided
 		// sync.Once that fetches only on tick 1).
 		It("(c) calls ActionHistoryProvider exactly once per tick when the Setter is nil", func() {
-			id := wrappingTestIdentity("rung1-struct-deps-c")
+			id := wrappingTestIdentity("struct-deps-c")
 
 			var ahCalls int
 
@@ -635,7 +635,7 @@ var _ = Describe("Collector post-COS wrapping", func() {
 		// FrameworkMetricsProvider is set but the Setter is nil (split guard:
 		// fetch on Provider != nil alone).
 		It("(d) puts framework metrics on the Observation when FrameworkMetricsSetter is nil", func() {
-			id := wrappingTestIdentity("rung1-split-guard")
+			id := wrappingTestIdentity("split-guard")
 
 			coll, store := newWrappingCollector(&wrappingTestWorkerStructDeps{observed: testWrappingObservedState{}}, id, deps.NewNopFSMLogger(), func(cfg *collection.CollectorConfig[testWrappingObservedState]) {
 				cfg.FrameworkMetricsProvider = func() *deps.FrameworkMetrics { return &deps.FrameworkMetrics{TimeInCurrentStateMs: 111222} }
@@ -657,7 +657,7 @@ var _ = Describe("Collector post-COS wrapping", func() {
 		It("(e) preserves both deps-guard debug keys", func() {
 			// key 1: worker without DependencyProvider emits no_dependency_provider.
 			noProvLogger := &severityCapturingLogger{}
-			noProvID := wrappingTestIdentity("rung1-no-provider")
+			noProvID := wrappingTestIdentity("no-provider")
 
 			noProvColl, _ := newWrappingCollector(&wrappingTestWorkerNoDeps{observed: testWrappingObservedState{}}, noProvID, noProvLogger, func(*collection.CollectorConfig[testWrappingObservedState]) {})
 			runSyncTick(ctx, noProvColl)
@@ -667,7 +667,7 @@ var _ = Describe("Collector post-COS wrapping", func() {
 
 			// key 2: struct{}-deps worker emits no_base_deps_accessor.
 			structDepsLogger := &severityCapturingLogger{}
-			structDepsID := wrappingTestIdentity("rung1-struct-deps-e")
+			structDepsID := wrappingTestIdentity("struct-deps-e")
 
 			structDepsColl, _ := newWrappingCollector(&wrappingTestWorkerStructDeps{observed: testWrappingObservedState{}}, structDepsID, structDepsLogger, func(cfg *collection.CollectorConfig[testWrappingObservedState]) {
 				cfg.StateProvider = func() string { return "running" }
@@ -681,7 +681,7 @@ var _ = Describe("Collector post-COS wrapping", func() {
 
 	Context("pre-COS write reaches a worker that reads deps during COS (GUARD)", func() {
 		It("makes deps.GetFrameworkState and deps.GetActionHistory readable as worker-authored state during CollectObservedState", func() {
-			id := wrappingTestIdentity("rung2-precos")
+			id := wrappingTestIdentity("precos")
 			store := supervisor.CreateTestTriangularStoreForWorkerType("testwrapping")
 
 			bd := deps.NewBaseDependencies(deps.NewNopFSMLogger(), nil, id)
@@ -698,7 +698,7 @@ var _ = Describe("Collector post-COS wrapping", func() {
 				FrameworkMetricsProvider: func() *deps.FrameworkMetrics { return &deps.FrameworkMetrics{TimeInCurrentStateMs: 987654} },
 				FrameworkMetricsSetter:   func(fm *deps.FrameworkMetrics) { bd.SetFrameworkState(fm) },
 				ActionHistoryProvider: func() []deps.ActionResult {
-					return []deps.ActionResult{{ActionType: "rung2-action", Success: true}}
+					return []deps.ActionResult{{ActionType: "precos-action", Success: true}}
 				},
 				ActionHistorySetter: func(ah []deps.ActionResult) { bd.SetActionHistory(ah) },
 			})
@@ -709,10 +709,10 @@ var _ = Describe("Collector post-COS wrapping", func() {
 			// from its locals, so it stays green even if the Setter were deleted).
 			// This is what makes a deleted Setter invocation visible.
 			Expect(worker.fmSeen).To(Equal(int64(987654)),
-				"(rung2) pre-COS FrameworkMetricsSetter write must be readable via deps.GetFrameworkState() during COS")
+				"pre-COS FrameworkMetricsSetter write must be readable via deps.GetFrameworkState() during COS")
 			Expect(worker.ahSeen).To(HaveLen(1))
-			Expect(worker.ahSeen[0].ActionType).To(Equal("rung2-action"),
-				"(rung2) pre-COS ActionHistorySetter write must be readable via deps.GetActionHistory() during COS")
+			Expect(worker.ahSeen[0].ActionType).To(Equal("precos-action"),
+				"pre-COS ActionHistorySetter write must be readable via deps.GetActionHistory() during COS")
 		})
 	})
 })

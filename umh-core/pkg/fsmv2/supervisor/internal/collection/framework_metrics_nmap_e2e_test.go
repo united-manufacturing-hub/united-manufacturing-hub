@@ -55,10 +55,10 @@ import (
 	_ "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/nmap"
 )
 
-// nmapCapstoneSentinel is the value injected through the collector's
+// nmapSentinel is the value injected through the collector's
 // FrameworkMetricsProvider. Recovering exactly this off the saved Observation
 // is the positive proof that framework metrics reached nmap's Observation.
-const nmapCapstoneSentinel int64 = 987654
+const nmapSentinel int64 = 987654
 
 // nmapObservedProbe mirrors the JSON shape the collector persists for a
 // framework-flattened Observation, so a generic LoadObservedTyped read can
@@ -67,11 +67,11 @@ type nmapObservedProbe struct {
 	Metrics deps.MetricsContainer `json:"metrics"`
 }
 
-var _ = Describe("Capstone: real nmap worker gets framework metrics through a real collector", func() {
+var _ = Describe("End-to-end: real nmap worker gets framework metrics through a real collector", func() {
 	It("persists framework metrics on the Observation of a real nmap worker carrying sentinel TimeInCurrentStateMs", func() {
 		const workerType = "nmap"
 
-		id := deps.Identity{ID: "nmap-capstone", WorkerType: workerType, Name: "nmap-capstone"}
+		id := deps.Identity{ID: "nmap-e2e", WorkerType: workerType, Name: "nmap-e2e"}
 
 		// Build a REAL nmap worker through its real registration. deps nil:
 		// nmap's MonitorSpec has no NewDeps, so it needs no dependency payload.
@@ -97,7 +97,7 @@ var _ = Describe("Capstone: real nmap worker gets framework metrics through a re
 			// Observation rather than something read back out of the worker's deps
 			// (nmap has a struct{} deps that cannot carry framework state).
 			FrameworkMetricsProvider: func() *deps.FrameworkMetrics {
-				return &deps.FrameworkMetrics{TimeInCurrentStateMs: nmapCapstoneSentinel}
+				return &deps.FrameworkMetrics{TimeInCurrentStateMs: nmapSentinel}
 			},
 		}
 
@@ -114,7 +114,7 @@ var _ = Describe("Capstone: real nmap worker gets framework metrics through a re
 		// The positive assertion: the sentinel is present after the full pipeline.
 		// If the guard sat in front of the framework-metrics injection,
 		// TimeInCurrentStateMs would be 0.
-		Expect(probe.Metrics.Framework.TimeInCurrentStateMs).To(Equal(nmapCapstoneSentinel),
+		Expect(probe.Metrics.Framework.TimeInCurrentStateMs).To(Equal(nmapSentinel),
 			"framework TimeInCurrentStateMs sentinel is not present on the real nmap worker's Observation")
 	})
 })
