@@ -12,12 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Decide, the judgement entry point. It is ONE function —
-// Observe, then the saturation fold, then diagnosis.Rank, then the Details fill,
-// all in a single pass over one fired set. A verdict field is not asserted
-// without the evidence for it: attribution consults the host/container split
-// read back from the engine's two tracks, and an internal cause (throttling,
-// pressure, the container's own limit budget) attributes unknown, never host.
+// Decide, the judgement entry point. It is ONE function — Observe, then the
+// saturation fold, then diagnosis.Rank, then the Details fill, all in a single
+// pass over one fired set. No verdict field is asserted without the evidence
+// for it; attributeFor derives the attribution.
 
 package cpuhealth
 

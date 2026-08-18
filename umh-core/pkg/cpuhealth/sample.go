@@ -148,6 +148,8 @@ func DeriveEnvironment(s Sample) diagnosis.Environment {
 	if s.Virtualized {
 		caps = append(caps, HasVirtualization)
 	}
+	// A present but non-positive quota is a read that succeeded and found no
+	// limit, so HasLimit needs the value, not just the presence.
 	if q, ok := s.Quota.Get(); ok && q > 0 {
 		caps = append(caps, HasLimit)
 	}
