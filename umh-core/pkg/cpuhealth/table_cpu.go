@@ -46,7 +46,9 @@ func cpuTable(cores, quota float64) diagnosis.Table[Sample] {
 		// The two folds no instrument produces. Both are declared on every box,
 		// with no Requires and no quota in sight, which is the whole point:
 		// attribution needs both 60s means everywhere, and the instruments that
-		// touch these series hold something else.
+		// touch these series hold something else. Decide reads the attribution
+		// split back from these two tracks for that reason, never from an
+		// instrument.
 		Tracks: []diagnosis.Track[Sample]{
 			{
 				// host-headroom's window holds cores − hostBusy − reserve AND is

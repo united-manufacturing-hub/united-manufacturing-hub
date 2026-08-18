@@ -31,11 +31,9 @@ func Decide(engine *diagnosis.Engine[Sample], s Sample, env diagnosis.Environmen
 
 	var sig Details
 
-	// The attribution split. Both terms are 60s means in cores, read back from
-	// the engine's tracks — never from an instrument, because neither instrument
-	// that touches the series holds the series. The StateValue guard on both
-	// tracks stops the split running on an untrusted mean: one sample of host
-	// busy against one of ours is an attribution on a single instant.
+	// The attribution split. The StateValue guard stops it running on an untrusted
+	// mean: one sample of host busy against one of ours is an attribution on a
+	// single instant.
 	hostBusyMean, hostBusyState := engine.Track(trackHostBusy).Get()
 	ourUsageMean, ourUsageState := engine.Track(trackUsageCores).Get()
 	splitHost := hostBusyState == diagnosis.StateValue && ourUsageState == diagnosis.StateValue && hostBusyMean > 2*ourUsageMean
