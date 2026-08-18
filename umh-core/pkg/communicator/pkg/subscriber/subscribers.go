@@ -255,6 +255,6 @@ func (s *Handler) notify() {
 
 	// Mark data as sent for tracking purposes
 	if notified > 0 && s.topicBrowserCommunicator != nil {
-		s.topicBrowserCommunicator.MarkDataAsSent(time.Now())
+		s.topicBrowserCommunicator.MarkDataAsSent()
 	}
 }

@@ -433,11 +433,12 @@ func (tbc *TopicBrowserCommunicator) GetSubscriberData(isBootstrapped bool) (*Su
 
 // MarkDataAsSent marks everything handed to subscribers so far as delivered.
 //
-// The timestamp argument is ignored and is removed in the following commit. It
-// cannot be supplied correctly: the only caller is the notify loop, which builds
-// its messages through the status collector and never sees the SubscriberData
-// that knows which buffers went out.
-func (tbc *TopicBrowserCommunicator) MarkDataAsSent(_ time.Time) {
+// It takes no timestamp on purpose. Only GetSubscriberData knows which buffers
+// went out, and the notify loop that acknowledges them builds its messages
+// through the status collector and never sees that answer. A caller-supplied
+// clock is therefore always wrong, and asking for one invited the bug this
+// replaced.
+func (tbc *TopicBrowserCommunicator) MarkDataAsSent() {
 	tbc.mu.Lock()
 	defer tbc.mu.Unlock()
 

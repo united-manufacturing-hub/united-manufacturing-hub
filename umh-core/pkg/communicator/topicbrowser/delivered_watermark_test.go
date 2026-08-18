@@ -91,10 +91,9 @@ var _ = Describe("Delivery acknowledgement", func() {
 			[]*topicbrowserservice.BufferItem{first, second}))
 		Expect(err).NotTo(HaveOccurred())
 
-		// Acknowledge exactly the way notify() does, with wall clock. The fix must
-		// make this harmless; passing the correct value here instead would let a
-		// broken implementation pass.
-		comm.MarkDataAsSent(time.Now())
+		// Acknowledge exactly the way notify() does. The call takes no timestamp,
+		// so this spec cannot accidentally hand it the right answer.
+		comm.MarkDataAsSent()
 
 		// Tick 2 must deliver the buffer that arrived in between...
 		sent, err = comm.GetSubscriberData(true)
