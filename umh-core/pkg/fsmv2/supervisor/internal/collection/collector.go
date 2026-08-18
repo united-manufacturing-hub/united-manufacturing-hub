@@ -473,9 +473,8 @@ func (c *Collector[TObserved]) collectAndSaveObservedState(ctx context.Context) 
 			// fire SentryError on every tick (~1/s/worker) and exhaust Sentry quota
 			// during brief store outages. Sentry escalation happens upstream in api.go's
 			// DesiredStateProvider closure, which fires SentryWarn at the source.
-			// (Sticky-error dedup at that layer is deferred to a follow-up ticket;
-			// FSMLogger lacks a Loki-only Warn method today, which is why Info is the
-			// current best fit.)
+			// (Sticky-error dedup at that layer is ENG-5658; FSMLogger lacks a
+			// Loki-only Warn method today, which is why Info is the current best fit.)
 			c.config.Logger.Info("collector_skipped_desired_state_error",
 				deps.Err(providerErr))
 
