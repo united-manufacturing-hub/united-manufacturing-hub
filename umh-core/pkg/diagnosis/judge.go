@@ -59,14 +59,13 @@ type Marks struct {
 
 // Identity is what a consumer needs to know about a fired signal, copied onto
 // every Fired so ranking and consumers never read the table: which Signal, its
-// Tier, who the caller blames (Attribution), whether the cause is External to
-// this box, and its table Index. Rank sorts on Tier, External and Index;
-// Attribution is payload it never reads, the caller's vocabulary.
+// Tier, who the caller blames (Attribution), and its table Index. Rank sorts
+// on Tier, severity and Index; Attribution is payload it never reads, the
+// caller's vocabulary.
 type Identity struct {
 	Signal      string
 	Tier        int
 	Attribution int
-	External    bool
 	Index       int
 }
 
@@ -263,8 +262,8 @@ func (f Fired) Severity() float64 {
 
 // Rank orders the signals that fired so the caller can show the main reason
 // first: tier ascending (a lower tier outranks a higher one), then severity
-// descending, then external attribution first, then the signal's table index.
-// It sorts in place and returns the same slice.
+// descending, then the signal's table index. It sorts in place and returns the
+// same slice.
 func Rank(fired []Fired) []Fired {
 	sort.Slice(fired, func(i, j int) bool {
 		a, b := fired[i], fired[j]
@@ -274,10 +273,6 @@ func Rank(fired []Fired) []Fired {
 
 		if sa, sb := a.Severity(), b.Severity(); sa != sb {
 			return sa > sb
-		}
-
-		if a.External != b.External {
-			return a.External
 		}
 
 		return a.Index < b.Index

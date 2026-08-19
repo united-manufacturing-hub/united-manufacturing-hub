@@ -164,7 +164,6 @@ func NewEngine[S any](t Table[S]) (*Engine[S], error) {
 				Signal:      s.Name,
 				Tier:        s.Tier,
 				Attribution: s.Attribution,
-				External:    s.External,
 				Index:       i,
 			}},
 		})
