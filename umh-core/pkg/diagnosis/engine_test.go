@@ -273,6 +273,34 @@ var _ = Describe("Engine", func() {
 		Expect(v).To(Equal(4.0), "under a last-value reduction the newest entry is the answer")
 	})
 
+	It("keys refinement windows by path, so two parents each carrying an X keep their own reduction", func() {
+		type snap struct{ a, b float64 }
+		arm := func(name string, read func(s snap) float64) Instrument[snap] {
+			return Instrument[snap]{
+				Measurement: Measurement[snap]{Name: name, Extract: func(s snap) Reading { return Known(read(s)) }, Reduction: Last, Span: 60 * time.Second},
+				Marks:       Marks{Unit: "u", Fire: Mark{At: 2, Inclusive: true}, Worst: 4, Clear: Mark{At: 1, Inclusive: true}, Polarity: HigherIsWorse},
+			}
+		}
+		sig := func(name string, arms ...Instrument[snap]) Signal[snap] {
+			return Signal[snap]{Name: name, DemoteSpan: 60 * time.Second, Instruments: arms}
+		}
+
+		a := sig("A", arm("I", func(s snap) float64 { return s.a }))
+		a.Refinements = []Signal[snap]{sig("X", arm("I", func(s snap) float64 { return s.a }))}
+		b := sig("B", arm("I", func(s snap) float64 { return s.b }))
+		b.Refinements = []Signal[snap]{sig("X", arm("I", func(s snap) float64 { return s.b }))}
+
+		e, err := NewEngine(Table[snap]{Signals: []Signal[snap]{a, b}, Interval: time.Second})
+		Expect(err).ToNot(HaveOccurred())
+
+		e.Observe(snap{a: 1.0, b: 5.0}, NewEnvironment(), time.Now())
+
+		va, _ := e.Reduction("A/X", "I").Get()
+		Expect(va).To(Equal(1.0), "A/X reduces its own 1.0 from the shared snapshot")
+		vb, _ := e.Reduction("B/X", "I").Get()
+		Expect(vb).To(Equal(5.0), "B/X keeps a separate window and reduces its own 5.0")
+	})
+
 	It("should fold every declared measurement on every tick and reduce it back by name, without selecting, judging or firing anything", func() {
 		type tsnap struct{ v float64 }
 		// The signal is quiet (fire mark far above any value), so the fired set is

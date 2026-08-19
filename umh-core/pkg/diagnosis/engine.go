@@ -74,8 +74,9 @@ type Readiness struct {
 	Availability Availability
 }
 
-// key indexes the engine's window map by (signal, instrument) pair.
-type key struct{ Signal, Instrument string }
+// key indexes the engine's window map by (path, instrument) pair, where a
+// refinement's path is its parent's path plus its own name, e.g. "A/X".
+type key struct{ Path, Instrument string }
 
 // signalState is one signal and the single latch that judges it. 7e8301485 took
 // these out of name-keyed maps into slices held in the same order; pairing them
@@ -126,13 +127,8 @@ func NewEngine[S any](t Table[S]) (*Engine[S], error) {
 		measurements: make([]measurementState[S], 0, len(t.Measurements)),
 	}
 	for _, s := range t.Signals {
-		for _, inst := range s.Instruments {
-			w, err := NewSlidingWindow(inst.Span, s.DemoteSpan, inst.Reduction, inst.Counter)
-			if err != nil {
-				return nil, err
-			}
-
-			e.windows[key{Signal: s.Name, Instrument: inst.Name}] = w
+		if err := buildWindows(e, s.Name, s); err != nil {
+			return nil, err
 		}
 	}
 
@@ -170,6 +166,28 @@ func NewEngine[S any](t Table[S]) (*Engine[S], error) {
 	}
 
 	return e, nil
+}
+
+// buildWindows opens one sliding window per (path, instrument) pair in a
+// signal's tree, recursing into refinements under their own paths, so A/X and
+// B/X keep separate windows even though both are named X.
+func buildWindows[S any](e *Engine[S], path string, s Signal[S]) error {
+	for _, inst := range s.Instruments {
+		w, err := NewSlidingWindow(inst.Span, s.DemoteSpan, inst.Reduction, inst.Counter)
+		if err != nil {
+			return err
+		}
+
+		e.windows[key{Path: path, Instrument: inst.Name}] = w
+	}
+
+	for _, r := range s.Refinements {
+		if err := buildWindows(e, path+"/"+r.Name, r); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 // validate walks a table once and stops at the first row that could never
@@ -388,7 +406,7 @@ func (e *Engine[S]) resolve(s Signal[S], capable []Instrument[S]) (Instrument[S]
 	untrusted := false
 
 	for _, inst := range capable {
-		w := e.windows[key{Signal: s.Name, Instrument: inst.Name}]
+		w := e.windows[key{Path: s.Name, Instrument: inst.Name}]
 		if w == nil { // NewEngine builds a window for every pair; never nil here
 			continue
 		}
@@ -416,6 +434,26 @@ func (e *Engine[S]) resolve(s Signal[S], capable []Instrument[S]) (Instrument[S]
 	}
 
 	return Instrument[S]{}, Reduced{}, Coverage{}, NoInstrument
+}
+
+// observeWindows appends the snapshot to every window in a signal's tree,
+// refinements included, keyed by path. It is unconditional: a refinement is
+// sampled every tick whether or not its parent fired, so its window fills like
+// any other.
+func observeWindows[S any](e *Engine[S], path string, s Signal[S], sample S, at time.Time) {
+	for _, inst := range s.Instruments {
+		w := e.windows[key{Path: path, Instrument: inst.Name}]
+		if w == nil { // NewEngine builds a window for every pair; never nil here
+			continue
+		}
+
+		value, against := inst.Read(sample)
+		w.Observe(value, against, at)
+	}
+
+	for _, r := range s.Refinements {
+		observeWindows(e, path+"/"+r.Name, r, sample, at)
+	}
 }
 
 // Observe runs one tick against a snapshot and returns the fired set, unranked
@@ -449,15 +487,7 @@ func (e *Engine[S]) Observe(sample S, env Environment, at time.Time) ([]Fired, [
 	}
 
 	for _, st := range e.signals {
-		for _, inst := range st.signal.Instruments {
-			w := e.windows[key{Signal: st.signal.Name, Instrument: inst.Name}]
-			if w == nil { // NewEngine builds a window for every pair; never nil here
-				continue
-			}
-
-			value, against := inst.Read(sample)
-			w.Observe(value, against, at)
-		}
+		observeWindows(e, st.signal.Name, st.signal, sample, at)
 	}
 
 	var fired []Fired
@@ -494,12 +524,14 @@ func (e *Engine[S]) Observe(sample S, env Environment, at time.Time) ([]Fired, [
 
 // Reduction returns one named instrument's window reduced as it stands, the only
 // route to a number the caller must publish whether or not the latch fired. Like
-// Select it reduces without ageing, so it too must follow an Observe. An unnamed
-// pair returns the zero Reduced, StateAbsent, indistinguishable from a window
-// that exists and is empty: name windows through the SAME constants the table
-// declares them with, since a typo in a literal reads as a permanent absence.
-func (e *Engine[S]) Reduction(signal, instrument string) Reduced {
-	w := e.windows[key{Signal: signal, Instrument: instrument}]
+// Select it reduces without ageing, so it too must follow an Observe. path names
+// the signal: a refinement's path such as "A/X", or a top-level signal's bare
+// name. An unnamed pair returns the zero Reduced, StateAbsent, indistinguishable
+// from a window that exists and is empty: name windows through the SAME
+// constants the table declares them with, since a typo reads as a permanent
+// absence.
+func (e *Engine[S]) Reduction(path, instrument string) Reduced {
+	w := e.windows[key{Path: path, Instrument: instrument}]
 	if w == nil {
 		return Reduced{}
 	}
