@@ -95,6 +95,9 @@ type Signal[S any] struct {
 	// Tier is a rank class the caller assigns, lower meaning more urgent. The
 	// numbers themselves are the caller's vocabulary.
 	Tier int
+	// Attribution is who the caller blames, an opaque int. The numbers are the
+	// caller's vocabulary, and this package never interprets them.
+	Attribution int
 	// ReleaseOnAbsent stops reporting the signal the moment nothing can answer
 	// it at all, rather than waiting out DemoteSpan.
 	ReleaseOnAbsent bool

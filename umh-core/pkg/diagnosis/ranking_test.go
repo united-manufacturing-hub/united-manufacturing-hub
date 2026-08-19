@@ -117,6 +117,25 @@ var _ = Describe("Ranking", func() {
 		Expect(indexes(sorted)).To(Equal([]int{0, 3}))
 	})
 
+	It("should not rank by Attribution, leaving it payload rather than a fifth sort key", func() {
+		// Two verdicts identical in every sort key (Tier, severity, External,
+		// Index), differing only in who the caller blames. If Rank read
+		// Attribution, the attribution ordering would force one outcome no
+		// matter the append order. Preserving BOTH declaration orders proves
+		// Attribution is not consulted: a consumer reads blame off the fired
+		// set, the caller's vocabulary uninterpreted by the machine pass. The
+		// two runs agree with their own input order, so they differ from each
+		// other, which is exactly what a fifth sort key would forbid.
+		low := rises(1, 0, 0.5, 0.5, 1.0)  // severity 0
+		high := rises(1, 0, 0.5, 0.5, 1.0) // severity 0, identical to low except Attribution
+		low.Attribution = 2
+		high.Attribution = 7
+		Expect(Rank([]Fired{low, high})).To(Equal([]Fired{low, high}),
+			"with Attribution not a key, the first declaration order is preserved")
+		Expect(Rank([]Fired{high, low})).To(Equal([]Fired{high, low}),
+			"with Attribution not a key, the reversed declaration order is also preserved")
+	})
+
 	It("should return a total order, so ranking the same set twice in different append orders gives the same sequence", func() {
 		// A set deliberately chosen to cluster on tier, severity and externality
 		// so that only the total order (all four keys) settles it.

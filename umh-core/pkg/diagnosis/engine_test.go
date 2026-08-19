@@ -199,6 +199,40 @@ var _ = Describe("Engine", func() {
 		Expect(readiness[0].Availability).To(Equal(Ready))
 	})
 
+	It("stamps the signal's Attribution, who the caller blames, onto the fired verdict", func() {
+		type snap struct{ v float64 }
+		sig := Signal[snap]{
+			Name:        "P",
+			DemoteSpan:  60 * time.Second,
+			Attribution: 7,
+			Instruments: []Instrument[snap]{
+				{
+					Measurement: Measurement[snap]{
+						Name:      "I",
+						Requires:  []Capability{"rise"},
+						Extract:   func(s snap) Reading { return Known(s.v) },
+						Reduction: Last,
+						Span:      60 * time.Second,
+					},
+					Marks: Marks{
+						Unit:     "u",
+						Fire:     Mark{At: 2, Inclusive: true},
+						Worst:    4,
+						Clear:    Mark{At: 1, Inclusive: true},
+						Polarity: HigherIsWorse,
+					},
+				},
+			},
+		}
+
+		e, err := NewEngine(Table[snap]{Signals: []Signal[snap]{sig}, Interval: time.Second})
+		Expect(err).ToNot(HaveOccurred())
+
+		fired, _ := e.Observe(snap{v: 3.0}, NewEnvironment("rise"), time.Now())
+		Expect(fired).To(HaveLen(1), "a value above the fire mark arms the signal")
+		Expect(fired[0].Identity.Attribution).To(Equal(7), "the verdict stamps who the caller said to blame")
+	})
+
 	It("reads back a populated window's reduction rather than reporting a permanent absence", func() {
 		type snap struct{ v float64 }
 		sig := Signal[snap]{
