@@ -199,62 +199,8 @@ func validate[S any](t Table[S]) error {
 
 		seenSignal[s.Name] = true
 
-		if len(s.Instruments) == 0 {
-			return fmt.Errorf("signal %q: no instruments", s.Name)
-		}
-
-		if s.DemoteSpan <= 0 {
-			return fmt.Errorf("signal %q: demote span %v is zero or negative", s.Name, s.DemoteSpan)
-		}
-
-		if t.Interval > 0 && s.DemoteSpan < t.Interval {
-			return fmt.Errorf("signal %q: demote span %v is below the table interval %v", s.Name, s.DemoteSpan, t.Interval)
-		}
-
-		seenInstrument := make(map[string]bool, len(s.Instruments))
-		for _, inst := range s.Instruments {
-			if err := validateMeasurement(fmt.Sprintf("signal %q instrument %q", s.Name, inst.Name), "window span", inst.Measurement, t.Interval); err != nil {
-				return err
-			}
-
-			if seenInstrument[inst.Name] {
-				return fmt.Errorf("signal %q: duplicate instrument name %q", s.Name, inst.Name)
-			}
-
-			seenInstrument[inst.Name] = true
-
-			if inst.Reduction.ordered && inst.Boolean {
-				return fmt.Errorf("signal %q instrument %q: ordered reduction %q on a boolean series", s.Name, inst.Name, inst.Reduction.Name)
-			}
-
-			if inst.Reduction.divides && inst.Against == nil {
-				return fmt.Errorf("signal %q instrument %q: reduction %q divides but the instrument declares no against extractor", s.Name, inst.Name, inst.Reduction.Name)
-			}
-
-			for _, mark := range []struct {
-				name  string
-				value float64
-			}{
-				{name: "fire mark", value: inst.Marks.Fire.At},
-				{name: "clear mark", value: inst.Marks.Clear.At},
-				{name: "worst value", value: inst.Marks.Worst},
-			} {
-				if math.IsNaN(mark.value) || math.IsInf(mark.value, 0) {
-					return fmt.Errorf("signal %q instrument %q: %s %v is not finite", s.Name, inst.Name, mark.name, mark.value)
-				}
-			}
-
-			if worse(inst.Marks.Clear.At, inst.Marks) >= worse(inst.Marks.Fire.At, inst.Marks) {
-				return fmt.Errorf("signal %q instrument %q: clear mark is not on the holding side of its fire mark under its polarity", s.Name, inst.Name)
-			}
-
-			if worse(inst.Marks.Worst, inst.Marks) <= worse(inst.Marks.Fire.At, inst.Marks) {
-				return fmt.Errorf("signal %q instrument %q: worst value %v is not strictly worse than fire mark %v under its polarity", s.Name, inst.Name, inst.Marks.Worst, inst.Marks.Fire.At)
-			}
-
-			if span := worse(inst.Marks.Worst, inst.Marks) - worse(inst.Marks.Fire.At, inst.Marks); math.IsInf(span, 0) {
-				return fmt.Errorf("signal %q instrument %q: the distance from fire mark %v to worst value %v overflows, so the severity denominator is not finite", s.Name, inst.Name, inst.Marks.Fire.At, inst.Marks.Worst)
-			}
+		if err := validateSignal(s.Name, s, t.Interval); err != nil {
+			return err
 		}
 	}
 
@@ -292,6 +238,85 @@ func validate[S any](t Table[S]) error {
 
 		if m.Reduction.divides {
 			return fmt.Errorf("measurement %q: reduction %q divides but a measurement declares no denominator series", m.Name, m.Reduction.Name)
+		}
+	}
+
+	return nil
+}
+
+// validateSignal applies every rule a Signal is held to, then recurses into its
+// refinements under the child's path, so an error names where in the tree the
+// row lives rather than the bare child. Instrument and refinement names are
+// unique among their siblings only.
+func validateSignal[S any](path string, s Signal[S], interval time.Duration) error {
+	if len(s.Instruments) == 0 {
+		return fmt.Errorf("signal %q: no instruments", path)
+	}
+
+	if s.DemoteSpan <= 0 {
+		return fmt.Errorf("signal %q: demote span %v is zero or negative", path, s.DemoteSpan)
+	}
+
+	if interval > 0 && s.DemoteSpan < interval {
+		return fmt.Errorf("signal %q: demote span %v is below the table interval %v", path, s.DemoteSpan, interval)
+	}
+
+	seenInstrument := make(map[string]bool, len(s.Instruments))
+	for _, inst := range s.Instruments {
+		if err := validateMeasurement(fmt.Sprintf("signal %q instrument %q", path, inst.Name), "window span", inst.Measurement, interval); err != nil {
+			return err
+		}
+
+		if seenInstrument[inst.Name] {
+			return fmt.Errorf("signal %q: duplicate instrument name %q", path, inst.Name)
+		}
+
+		seenInstrument[inst.Name] = true
+
+		if inst.Reduction.ordered && inst.Boolean {
+			return fmt.Errorf("signal %q instrument %q: ordered reduction %q on a boolean series", path, inst.Name, inst.Reduction.Name)
+		}
+
+		if inst.Reduction.divides && inst.Against == nil {
+			return fmt.Errorf("signal %q instrument %q: reduction %q divides but the instrument declares no against extractor", path, inst.Name, inst.Reduction.Name)
+		}
+
+		for _, mark := range []struct {
+			name  string
+			value float64
+		}{
+			{name: "fire mark", value: inst.Marks.Fire.At},
+			{name: "clear mark", value: inst.Marks.Clear.At},
+			{name: "worst value", value: inst.Marks.Worst},
+		} {
+			if math.IsNaN(mark.value) || math.IsInf(mark.value, 0) {
+				return fmt.Errorf("signal %q instrument %q: %s %v is not finite", path, inst.Name, mark.name, mark.value)
+			}
+		}
+
+		if worse(inst.Marks.Clear.At, inst.Marks) >= worse(inst.Marks.Fire.At, inst.Marks) {
+			return fmt.Errorf("signal %q instrument %q: clear mark is not on the holding side of its fire mark under its polarity", path, inst.Name)
+		}
+
+		if worse(inst.Marks.Worst, inst.Marks) <= worse(inst.Marks.Fire.At, inst.Marks) {
+			return fmt.Errorf("signal %q instrument %q: worst value %v is not strictly worse than fire mark %v under its polarity", path, inst.Name, inst.Marks.Worst, inst.Marks.Fire.At)
+		}
+
+		if span := worse(inst.Marks.Worst, inst.Marks) - worse(inst.Marks.Fire.At, inst.Marks); math.IsInf(span, 0) {
+			return fmt.Errorf("signal %q instrument %q: the distance from fire mark %v to worst value %v overflows, so the severity denominator is not finite", path, inst.Name, inst.Marks.Fire.At, inst.Marks.Worst)
+		}
+	}
+
+	seen := make(map[string]bool, len(s.Refinements))
+	for _, r := range s.Refinements {
+		if seen[r.Name] {
+			return fmt.Errorf("signal %q: duplicate refinement name %q", path, r.Name)
+		}
+
+		seen[r.Name] = true
+
+		if err := validateSignal(path+"/"+r.Name, r, interval); err != nil {
+			return err
 		}
 	}
 
