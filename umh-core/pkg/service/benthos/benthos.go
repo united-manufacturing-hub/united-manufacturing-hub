@@ -329,11 +329,14 @@ func NewDefaultBenthosService(benthosName string, opts ...BenthosServiceOption) 
 	}
 
 	if service.benthosMonitorManager == nil {
-		useFsmv2, err := env.GetAsBool(envUseFsmv2BenthosMonitor, false, false)
+		// GetAsBoolStrict rather than GetAsBool: a typo such as "ture" has to be
+		// visible. GetAsBool folds any unrecognised value into the default, so a
+		// misspelled flag would run on fsmv1 with nothing in the log to say so.
+		// The error already names the variable and quotes the value, and the
+		// value it returns alongside the error is the fsmv1 default.
+		useFsmv2, err := env.GetAsBoolStrict(envUseFsmv2BenthosMonitor, false)
 		if err != nil {
-			log.Warnf("%s could not be read as a boolean; treating as off (fsmv1): %v", envUseFsmv2BenthosMonitor, err)
-
-			useFsmv2 = false
+			log.Warnf("%v; treating the flag as off, so this benthos instance stays on the fsmv1 monitor", err)
 		}
 
 		if useFsmv2 {
@@ -345,7 +348,8 @@ func NewDefaultBenthosService(benthosName string, opts ...BenthosServiceOption) 
 			)
 		} else {
 			// No Infof counterpart on purpose: this flag-unset default must keep
-			// its pre-flag log output, and no test pins that silence.
+			// its pre-flag log output. The "logs nothing about the variable when
+			// it is unset" spec in benthos_backend_test.go pins that silence.
 			service.benthosMonitorManager = benthos_monitor_fsm.NewBenthosMonitorManager(benthosName)
 		}
 	}
