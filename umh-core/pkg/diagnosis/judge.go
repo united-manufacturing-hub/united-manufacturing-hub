@@ -58,15 +58,18 @@ type Marks struct {
 }
 
 // Identity is what a consumer needs to know about a fired signal, copied onto
-// every Fired so ranking and consumers never read the table: which Signal, its
-// Tier, who the caller blames (Attribution), and its table Index. Rank sorts
-// on Tier, severity and Index; Attribution is payload it never reads, the
-// caller's vocabulary.
+// every Fired so ranking and consumers never read the table. Rank sorts on
+// Tier, severity and Index.
 type Identity struct {
-	Signal      string
-	Tier        int
+	Signal string
+	// Tier is the rank class the caller gave the signal, lower meaning more
+	// urgent.
+	Tier int
+	// Attribution is who the caller blames, an opaque number in the caller's
+	// vocabulary. It is payload for the consumer; Rank never reads it.
 	Attribution int
-	Index       int
+	// Index is the signal's position in Table.Signals.
+	Index int
 }
 
 // Fired is one signal's verdict once it has fired: value, marks, and since when.

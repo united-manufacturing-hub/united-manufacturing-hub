@@ -437,9 +437,9 @@ func (e *Engine[S]) resolve(s Signal[S], capable []Instrument[S]) (Instrument[S]
 }
 
 // observeWindows appends the snapshot to every window in a signal's tree,
-// refinements included, keyed by path. It is unconditional: a refinement is
-// sampled every tick whether or not its parent fired, so its window fills like
-// any other.
+// refinements included, keyed by path. It reads no latch, so the recursion into
+// refinements is unconditional. Signal.Refinements states the contract that
+// follows for a caller.
 func observeWindows[S any](e *Engine[S], path string, s Signal[S], sample S, at time.Time) {
 	for _, inst := range s.Instruments {
 		w := e.windows[key{Path: path, Instrument: inst.Name}]

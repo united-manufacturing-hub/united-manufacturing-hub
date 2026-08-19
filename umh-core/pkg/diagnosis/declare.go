@@ -84,14 +84,15 @@ func (m Measurement[S]) Read(s S) (value, against Reading) {
 }
 
 // Signal is a QUESTION about the resource, such as whether the CPU is saturated.
-// Each of its Instruments answers it differently. The order is significant: the
-// first instrument that can supply a number is the one used.
 type Signal[S any] struct {
-	Name        string
+	Name string
+	// Instruments each answer the signal differently. The order is significant:
+	// the first instrument that can supply a number is the one used.
 	Instruments []Instrument[S]
-	// Refinements are signals asked only when this one fires, narrowing its
-	// answer: each is structurally a signal with the same instruments and
-	// marks, but it is never asked unless the parent fires.
+	// Refinements are signals that narrow this one's answer, with their own
+	// instruments and marks. A refinement is sampled every tick, whether or not
+	// this signal fired, so its window fills independently of when this signal
+	// fires.
 	Refinements []Signal[S]
 	// DemoteSpan is how long a signal may go unread before its window empties:
 	// stale detection, so an old number cannot stand forever.
@@ -129,13 +130,16 @@ func (s Signal[S]) Capable(env Environment) []Instrument[S] {
 	return capable
 }
 
-// Table is the whole declaration for one resource: every signal, every
-// measurement, and the interval the caller ticks at. A measurement in
-// Table.Measurements is one no signal judges: reduced every tick like an
-// instrument but with no thresholds, so use it for a number the caller must
-// publish. The order of Signals is significant.
+// Table is the whole declaration for one resource: every signal and every
+// measurement.
 type Table[S any] struct {
-	Signals      []Signal[S]
+	// The order is significant: see Identity.Index.
+	Signals []Signal[S]
+	// Measurements are the numbers no signal judges: each has a window sampled
+	// every tick like an instrument's, but no thresholds, and it is reduced only
+	// when the caller reads it through Engine.Measurement. Use one for a number
+	// the caller must publish without a verdict.
 	Measurements []Measurement[S]
-	Interval     time.Duration
+	// Interval is how often the caller ticks.
+	Interval time.Duration
 }
