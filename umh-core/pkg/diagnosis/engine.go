@@ -266,6 +266,26 @@ func validate[S any](t Table[S]) error {
 
 		seenMeasurement[m.Name] = true
 
+		// Against, Requires, Boolean and Counter are judging-only: an instrument
+		// uses them under the marks a signal judges by, but no signal judges a
+		// table-level measurement, so declaring one would build and then be
+		// silently ignored (the window is still created with Counter false).
+		if m.Against != nil {
+			return fmt.Errorf("measurement %q: Against is only meaningful inside a signal", m.Name)
+		}
+
+		if len(m.Requires) > 0 {
+			return fmt.Errorf("measurement %q: Requires is only meaningful inside a signal", m.Name)
+		}
+
+		if m.Boolean {
+			return fmt.Errorf("measurement %q: Boolean is only meaningful inside a signal", m.Name)
+		}
+
+		if m.Counter {
+			return fmt.Errorf("measurement %q: Counter is only meaningful inside a signal", m.Name)
+		}
+
 		if err := validateMeasurement(fmt.Sprintf("measurement %q", m.Name), "span", m, t.Interval); err != nil {
 			return err
 		}

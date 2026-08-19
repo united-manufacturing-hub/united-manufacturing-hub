@@ -132,6 +132,50 @@ var _ = Describe("NewEngine", func() {
 		Expect(err.Error()).To(ContainSubstring("T"))
 	})
 
+	It("refuses a table-level measurement that sets Against, which is only meaningful for an instrument", func() {
+		tbl := validTable([]Signal[snap]{validSignal("A")})
+		tbl.Measurements = []Measurement[snap]{{Name: "M-against", Extract: extract, Span: 60 * time.Second, Reduction: Last, Against: against}}
+		_, err := NewEngine(tbl)
+		if err == nil {
+			Fail("expected NewEngine to reject a table-level measurement that sets Against")
+		}
+		Expect(err.Error()).To(ContainSubstring("M-against"))
+		Expect(err.Error()).To(ContainSubstring("only meaningful inside a signal"))
+	})
+
+	It("refuses a table-level measurement that sets Requires, which is only meaningful for an instrument", func() {
+		tbl := validTable([]Signal[snap]{validSignal("A")})
+		tbl.Measurements = []Measurement[snap]{{Name: "M-requires", Extract: extract, Span: 60 * time.Second, Reduction: Last, Requires: []Capability{"psi"}}}
+		_, err := NewEngine(tbl)
+		if err == nil {
+			Fail("expected NewEngine to reject a table-level measurement that sets Requires")
+		}
+		Expect(err.Error()).To(ContainSubstring("M-requires"))
+		Expect(err.Error()).To(ContainSubstring("only meaningful inside a signal"))
+	})
+
+	It("refuses a table-level measurement that sets Boolean, which is only meaningful for an instrument", func() {
+		tbl := validTable([]Signal[snap]{validSignal("A")})
+		tbl.Measurements = []Measurement[snap]{{Name: "M-boolean", Extract: extract, Span: 60 * time.Second, Reduction: Last, Boolean: true}}
+		_, err := NewEngine(tbl)
+		if err == nil {
+			Fail("expected NewEngine to reject a table-level measurement that sets Boolean")
+		}
+		Expect(err.Error()).To(ContainSubstring("M-boolean"))
+		Expect(err.Error()).To(ContainSubstring("only meaningful inside a signal"))
+	})
+
+	It("refuses a table-level measurement that sets Counter, which is only meaningful for an instrument", func() {
+		tbl := validTable([]Signal[snap]{validSignal("A")})
+		tbl.Measurements = []Measurement[snap]{{Name: "M-counter", Extract: extract, Span: 60 * time.Second, Reduction: Last, Counter: true}}
+		_, err := NewEngine(tbl)
+		if err == nil {
+			Fail("expected NewEngine to reject a table-level measurement that sets Counter")
+		}
+		Expect(err.Error()).To(ContainSubstring("M-counter"))
+		Expect(err.Error()).To(ContainSubstring("only meaningful inside a signal"))
+	})
+
 	It("refuses an instrument whose reduction minimum sample count is below one", func() {
 		sig := validSignal("A")
 		sig.Instruments[0].Reduction = Reduction{Name: "low", Min: 0, fold: func([]Point) float64 { return 0 }}
