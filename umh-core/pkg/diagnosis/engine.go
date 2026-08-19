@@ -120,11 +120,15 @@ type measurementState[S any] struct {
 // It is not synchronized: the goroutine that calls Observe owns it, and a reader
 // calling Select, Reduction or Measurement from another races on points and latches.
 type Engine[S any] struct {
-	// windows is the last name-keyed map in here, and it stays one because
-	// Select resolves the CALLER'S Signal under its bare name: a caller holding
-	// a refinement looks under "X" while that refinement's windows are keyed
-	// "A/X", so every lookup misses and resolve's nil arms are reachable. The
-	// two below are built by NewEngine and cannot miss, which is why they are
+	// windows is keyed by path: "A/X" for a refinement X under A. Select looks
+	// up the bare name of the Signal handed to it, so a caller passing a
+	// refinement reads the key "X" rather than "A/X". That misses whenever no
+	// top-level signal is named X, which is what makes resolve's nil arm
+	// reachable. It does NOT miss when the table also declares a top-level X
+	// carrying an instrument the refinement names too: the lookup hits THAT
+	// signal's window, and the caller gets its number marked Ready. Select's
+	// doc carries the restriction this leaves on a caller. The two slices
+	// below are built by NewEngine and cannot miss, which is why they are
 	// pairs instead.
 	windows      map[key]*SlidingWindow
 	signals      []signalState[S]
@@ -137,9 +141,7 @@ type Engine[S any] struct {
 // validate holds the list.
 //
 // A measurement's demote span is its own span, because a measurement belongs to
-// no signal and so has no hold for the demote clock to bound, and its counter
-// flag is
-// false, because a counter measurement would need the restart rule declared.
+// no signal and so has no hold for the demote clock to bound.
 func NewEngine[S any](t Table[S]) (*Engine[S], error) {
 	if err := validate(t); err != nil {
 		return nil, err
@@ -402,8 +404,8 @@ func validateSignal[S any](path string, s Signal[S], interval time.Duration) err
 // Table.Measurements. row names the ownership for the error, e.g.
 // `signal "A" instrument "I1"`, and spanNoun is the word the loop uses for the
 // window's size, "window span" for an instrument as against "span" for a bare
-// table measurement: each loop's wording is part of the message the tests
-// assert on, so the two stay exact.
+// table measurement. NewEngine's two specs for a zero span pin one wording
+// each, so the pair cannot collapse to a single noun unnoticed.
 func validateMeasurement[S any](row string, spanNoun string, m Measurement[S], interval time.Duration) error {
 	if m.Extract == nil {
 		return fmt.Errorf("%s: nil extract", row)
@@ -439,6 +441,15 @@ func validateMeasurement[S any](row string, spanNoun string, m Measurement[S], i
 // instrument and the cheap fallback behind it usually declare the SAME
 // capability: a capability-only selector would return the percentile forever,
 // leave it untrusted below twenty samples, and never reach the fallback.
+//
+// Select takes a top-level signal of the table. Passing a refinement is not
+// supported: windows are keyed by path and Select keys on the bare name, so a
+// refinement named X under A reads the key a top-level X would hold. If the
+// table declares no top-level X the result is the zero instrument and
+// NoInstrument. If it declares one, and that X carries an instrument the
+// refinement names too, Select returns THAT signal's instrument and number,
+// marked Ready, with nothing to tell the caller it is the wrong signal's. Read
+// a refinement through Reduction, which takes the path.
 //
 // Select must follow an Observe on the same tick. Only Observe ages the windows,
 // so a window reduced without a preceding Observe reports entries left over from
