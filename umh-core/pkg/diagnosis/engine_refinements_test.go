@@ -24,9 +24,10 @@ import (
 // A refinement is a signal that narrows the answer of the signal it hangs
 // under. It is sampled every tick and judged every tick, whichever way its
 // parent went; only whether the parent REPORTS it turns on the parent having
-// fired. These specs read the reporting side on a tick where the parent HAS
+// fired. Most specs here read the reporting side on a tick where the parent HAS
 // fired: which refinements nest under it, and that a refinement is nested
-// rather than returned beside its parent.
+// rather than returned beside its parent. The last one reads the other side,
+// where the parent is silent and its fired refinement is reported nowhere.
 var _ = Describe("Engine.Observe on a signal's refinements", func() {
 
 	type snap struct {
@@ -176,5 +177,45 @@ var _ = Describe("Engine.Observe on a signal's refinements", func() {
 		Expect(first[0].Refinements[0].Since).To(Equal(base), "Since is the tick the refinement fired")
 		Expect(second[0].Refinements[0].Since).To(Equal(first[0].Refinements[0].Since),
 			"the second tick holds the same Since: a refinement's verdict is latched, not re-decided each tick")
+	})
+
+	// The three specs above all read a tick where the parent fired, so none of
+	// them can tell a build that suppresses a fired refinement from one that
+	// emits it beside its parent. This one drives the parent below its fire mark
+	// throughout and reads the whole returned slice.
+	It("reports nothing at all while the parent is silent, though its refinement has fired and stays warm", func() {
+		e := engineOver(parentOver(refinement("C", Mean, func(s snap) float64 { return s.first })))
+
+		// Tick 0 leaves the child below Mean's minimum of two. Tick 1 reaches it
+		// at a mean of 1.0, past the child's 0.6 fire mark, so the child fires
+		// here and this is the Since the later ticks must still carry.
+		e.Observe(snap{parent: 0.0, first: 1.0}, NewEnvironment(), base)
+		e.Observe(snap{parent: 0.0, first: 1.0}, NewEnvironment(), base.Add(time.Second))
+
+		// The tick after the child fired. The parent is still at 0.0, below its
+		// own 0.5 fire mark.
+		silent, _ := e.Observe(snap{parent: 0.0, first: 1.0}, NewEnvironment(), base.Add(2*time.Second))
+
+		Expect(silent).To(BeEmpty(),
+			"a fired refinement under a silent parent is reported nowhere: not nested, and not as a top-level entry of its own")
+
+		// Suppression is about reporting only, so the child's window keeps taking
+		// samples across the silent ticks and stays trustworthy.
+		value, state := e.Reduction("P/C", "I").Get()
+		Expect(state).To(Equal(StateValue), "the refinement's window is still warm while the parent is silent")
+		Expect(value).To(Equal(1.0), "and still reduces to the mean it fired on")
+
+		// Nothing about the child changes on this tick; only the parent crosses
+		// its mark. The child appearing now, with the Since it stamped on tick 1,
+		// is what shows its latch held across the two silent ticks rather than
+		// firing fresh here.
+		fired, _ := e.Observe(snap{parent: 1.0, first: 1.0}, NewEnvironment(), base.Add(3*time.Second))
+
+		Expect(fired).To(HaveLen(1))
+		Expect(fired[0].Identity.Signal).To(Equal("P"))
+		Expect(fired[0].Refinements).To(HaveLen(1))
+		Expect(fired[0].Refinements[0].Identity.Signal).To(Equal("C"))
+		Expect(fired[0].Refinements[0].Since).To(Equal(base.Add(time.Second)),
+			"the child fired on tick 1 and held: the empty slice above was suppression, not a child that had not fired")
 	})
 })
