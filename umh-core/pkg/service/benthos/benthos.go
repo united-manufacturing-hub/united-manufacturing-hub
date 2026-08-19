@@ -29,6 +29,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/benthosserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/s6serviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/env"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
@@ -40,6 +41,7 @@ import (
 
 	benthos_monitor_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos_monitor"
 	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
+	fsmv2benthosmonitor "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/benthos_monitor"
 	"gopkg.in/yaml.v3"
 
 	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
@@ -65,6 +67,10 @@ const (
 	// Reference: https://github.com/gopcua/opcua/blob/main/debug/debug.go
 	OPCDebugEnvVar = "OPC_DEBUG"
 )
+
+// envUseFsmv2BenthosMonitor names the env var selecting the fsmv2 benthos
+// monitor backend in NewDefaultBenthosService; unset or false-y means fsmv1.
+const envUseFsmv2BenthosMonitor = "USE_FSMV2_BENTHOS_MONITOR"
 
 // IBenthosService is the interface for managing Benthos services.
 type IBenthosService interface {
@@ -145,6 +151,12 @@ type BenthosStatus struct {
 	// StatusReason contains the reason for the status of the Benthos service
 	// If the service is degraded, this will contain the log entry that caused the degradation together with the information that it is degraded because of the log entry
 	// If the service is currently starting up, it will contain the s6 status of the service
+	//
+	// Nothing in this package writes this field. The prefixed strings
+	// ("starting: ", "start failed: ", "waiting for ...", "degraded: ") are
+	// composed by the benthos FSM one layer up, in reconcileStartingStates
+	// (pkg/fsm/benthos/reconcile.go) and reconcileRunningStates
+	// (same file).
 	StatusReason string
 	// BenthosLogs contains the structured s6 log entries emitted by the
 	// Benthos service.
@@ -194,6 +206,21 @@ func (bs *BenthosStatus) CopyBenthosLogs(src []s6service.LogEntry) error {
 	return nil
 }
 
+// benthosMonitorManagerIface lets BenthosService hold either benthos monitor
+// backend: the fsmv1 BenthosMonitorManager or the fsmv2 adapter WorkerManager,
+// depending on the USE_FSMV2_BENTHOS_MONITOR flag. A method added here must
+// exist on both backends, and the fsmv2 side is a generic
+// adapter.WorkerManager whose method set this package does not control — which
+// is why GetCurrentFSMState is absent even though Status calls it on s6Manager.
+type benthosMonitorManagerIface interface {
+	// GetLastObservedState is called from GetHealthCheckAndMetrics.
+	GetLastObservedState(serviceName string) (fsm.ObservedState, error)
+	// GetInstance is called from RemoveBenthosFromS6Manager.
+	GetInstance(name string) (fsm.FSMInstance, bool)
+	// Reconcile is called from ReconcileManager.
+	Reconcile(ctx context.Context, snapshot fsm.SystemSnapshot, services serviceregistry.Provider) (error, bool)
+}
+
 // BenthosService is the default implementation of the IBenthosService interface.
 type BenthosService struct {
 	s6Service s6service.Service // S6 service for direct S6 operations
@@ -201,7 +228,7 @@ type BenthosService struct {
 
 	s6Manager *s6fsm.S6Manager
 
-	benthosMonitorManager *benthos_monitor_fsm.BenthosMonitorManager
+	benthosMonitorManager benthosMonitorManagerIface
 
 	// -----------------------------------------------------------------------------
 	// 🌶️  Hot-path YAML-parsing cache
@@ -245,8 +272,12 @@ type configCacheEntry struct {
 // hash is a helper function for configCacheEntry.hash.
 func hash(buf []byte) uint64 { return xxhash.Sum64(buf) }
 
-// benthosLogRe is a helper function for BenthosService.IsLogsFine.
-// no ^ anchor since redpanda-connect logs may start with time= prefix.
+// benthosLogRe picks the severity and message out of one log line written by the
+// benthos process, i.e. the /usr/local/bin/benthos binary that
+// GenerateS6ConfigForBenthos starts. Used by BenthosService.IsLogsFine.
+//
+// There is deliberately no ^ anchor: those lines may begin with a time= field
+// before level=, so the match has to be allowed to start mid-line.
 var benthosLogRe = regexp.MustCompile(`level=(error|warning)\s+msg=(.+)`)
 
 // BenthosServiceOption is a function that modifies a BenthosService.
@@ -260,7 +291,10 @@ func WithS6Service(s6Service s6service.Service) BenthosServiceOption {
 }
 
 // WithMonitorManager sets a custom monitor manager for the BenthosService.
-func WithMonitorManager(monitorManager *benthos_monitor_fsm.BenthosMonitorManager) BenthosServiceOption {
+//
+// It overrides the backend selected by envUseFsmv2BenthosMonitor; passing nil
+// selects that default, exactly as omitting the option does.
+func WithMonitorManager(monitorManager benthosMonitorManagerIface) BenthosServiceOption {
 	return func(s *BenthosService) {
 		s.benthosMonitorManager = monitorManager
 	}
@@ -277,16 +311,45 @@ func WithS6Manager(s6Manager *s6fsm.S6Manager) BenthosServiceOption {
 // name is the name of the Benthos service as defined in the UMH config.
 func NewDefaultBenthosService(benthosName string, opts ...BenthosServiceOption) *BenthosService {
 	managerName := fmt.Sprintf("%s%s", logger.ComponentBenthosService, benthosName)
+	log := logger.For(managerName)
+
 	service := &BenthosService{
-		logger:                logger.For(managerName),
-		s6Manager:             s6fsm.NewS6Manager(managerName),
-		s6Service:             s6service.NewDefaultService(),
-		benthosMonitorManager: benthos_monitor_fsm.NewBenthosMonitorManager(benthosName),
+		logger:    log,
+		s6Manager: s6fsm.NewS6Manager(managerName),
+		s6Service: s6service.NewDefaultService(),
 	}
 
-	// Apply options
+	// Apply options before selecting the default backend so a caller-supplied
+	// manager always wins, and the flag-selected default is never allocated or
+	// logged when overridden.
 	for _, opt := range opts {
 		opt(service)
+	}
+
+	if service.benthosMonitorManager == nil {
+		// GetAsBoolStrict rather than GetAsBool: a typo such as "ture" has to be
+		// visible. GetAsBool folds any unrecognised value into the default, so a
+		// misspelled flag would run on fsmv1 with nothing in the log to say so.
+		// The error already names the variable and quotes the value, and the
+		// value it returns alongside the error is the fsmv1 default.
+		useFsmv2, err := env.GetAsBoolStrict(envUseFsmv2BenthosMonitor, false)
+		if err != nil {
+			log.Warnf("%v; treating the flag as off, so this benthos instance stays on the fsmv1 monitor", err)
+		}
+
+		if useFsmv2 {
+			log.Infof("%s is on: this benthos instance is monitored by the fsmv2 benthos_monitor worker (in-process scrape, no S6 monitor service)", envUseFsmv2BenthosMonitor)
+			service.benthosMonitorManager = fsmv2benthosmonitor.NewFsmv2BenthosMonitorManager(
+				// Match the fsmv1 backend's monitor log prefix so an operator
+				// grepping logs sees the same labels across a flag flip.
+				fmt.Sprintf("%s_%s", logger.ComponentBenthosMonitorManager, benthosName),
+			)
+		} else {
+			// No Infof counterpart on purpose: this flag-unset default must keep
+			// its pre-flag log output. The "logs nothing about the variable when
+			// it is unset" spec in benthos_backend_test.go pins that silence.
+			service.benthosMonitorManager = benthos_monitor_fsm.NewBenthosMonitorManager(benthosName)
+		}
 	}
 
 	return service
@@ -586,9 +649,15 @@ func (s *BenthosService) Status(ctx context.Context, services serviceregistry.Pr
 		BenthosStatus:   benthosStatus,
 	}
 
-	// set the logs to the service info
-	// TODO: this is a hack to get the logs to the service info
-	// we should find a better way to do this
+	// GetHealthCheckAndMetrics already copied logs out of the monitor's observed
+	// state; this replaces them with the ones Status read from s6 above, and is
+	// what Status returns on the success path.
+	//
+	// TODO: BenthosStatus.BenthosLogs has two writers and no owner:
+	// GetHealthCheckAndMetrics takes a logs argument it never reads, and then
+	// this line discards what it returned. Give the field one writer: either
+	// GetHealthCheckAndMetrics uses the logs it is passed, or it stops taking
+	// them and Status remains the only writer.
 	serviceInfo.BenthosStatus.BenthosLogs = logs
 
 	return serviceInfo, nil

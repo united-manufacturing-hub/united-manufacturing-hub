@@ -8,10 +8,12 @@
 - The `USE_FSMV2_PROTOCOL_CONVERTER` environment variable is removed. It never gated any behavior, so setting it did nothing. Its `useFSMv2ProtocolConverter` config key is still accepted and still has no effect, along with `enableFSMv2` and `useFSMv2MemoryCleanup`, so retired flags can stay in your `config.yaml` without changing anything
 - `ALLOW_INSECURE_TLS` and `agent.communicator.allowInsecureTLS` no longer have any effect. The new FSMv2 communicator never implemented this option, and nothing indicated it was in use. For corporate networks that intercept TLS, add your corporate CA certificate instead; see the corporate firewalls guide. The config key is still accepted, so you do not need to edit your `config.yaml`
 - umh-core now starts and runs without `AUTH_TOKEN` or `API_URL`. Previously an instance with no Management Console credentials brought up no runtime at all: its components reported `starting` indefinitely, with no error and no exit, so a missing or mistyped token looked like a hung container. Such an instance now runs fully — it simply cannot reach the Management Console
+- Reduced the CPU cost of collecting bridge metrics by about 0.02 CPU cores per bridge, so a 50-bridge instance gets back roughly a full core. Set `USE_FSMV2_BENTHOS_MONITOR=true` and restart your container to enable it
 
 ### Fixes
 
 - Renaming a bridge whose deployment then fails no longer leaves it impossible to edit or save. A failed deployment now undoes the rename along with the rest of the configuration, while Save Anyway keeps the new name as before
+- A typo in `USE_FSMV2_BENTHOS_MONITOR` no longer passes unnoticed. An unrecognised value now logs a warning naming the variable and the value it received, instead of silently leaving the instance on the previous bridge metrics collection
 
 ## [0.44.34]
 

@@ -1,0 +1,306 @@
+// Copyright 2025 UMH Systems GmbH
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package fsmv2benthosmonitor_test
+
+// Scenario test: drive the REAL worker through the three framework entry points
+// the supervisor uses on every tick — factory.NewWorkerByType, then
+// fsmv2.Worker's DeriveDesiredState and CollectObservedState — against a real
+// HTTP server on the four endpoints benthosStub serves.
+//
+// These entry points are exercised nowhere else here, so this file is where a
+// wiring regression surfaces: a worker the registry cannot build, a child-spec
+// config that does not round-trip through YAML (cfgFor, manager.go), or a Poll
+// the framework never reaches.
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"net"
+	"net/http"
+	"net/http/httptest"
+	"sync/atomic"
+	"testing"
+	"time"
+
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	fsmv2benthosmonitor "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/benthos_monitor"
+	fsmv2config "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/simple"
+	"gopkg.in/yaml.v3"
+)
+
+// benthosStub serves the four endpoints a real benthos exposes. The counters are
+// atomic so a test can raise them between observations, the way a live benthos
+// would as messages flow.
+type benthosStub struct {
+	server *httptest.Server
+	input  atomic.Int64
+	output atomic.Int64
+}
+
+func newBenthosStub() *benthosStub {
+	s := &benthosStub{}
+	s.server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/ping":
+			_, _ = w.Write([]byte("pong"))
+		case "/ready":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"error":"","statuses":[]}`))
+		case "/version":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"version":"4.95.0","built":"scenario"}`))
+		case "/metrics":
+			w.Header().Set("Content-Type", "text/plain")
+			// Real exposition shape: per-leaf series with a path label and no
+			// top-level aggregate, so the parser must sum across them.
+			fmt.Fprintf(w, "# HELP input_received Benthos Counter metric\n")
+			fmt.Fprintf(w, "# TYPE input_received counter\n")
+			fmt.Fprintf(w, "input_received{label=\"\",path=\"root.input\"} %d\n", s.input.Load())
+			fmt.Fprintf(w, "# HELP output_sent Benthos Counter metric\n")
+			fmt.Fprintf(w, "# TYPE output_sent counter\n")
+			fmt.Fprintf(w, "output_sent{label=\"\",path=\"root.output.broker.0\"} %d\n", s.output.Load()/2)
+			fmt.Fprintf(w, "output_sent{label=\"\",path=\"root.output.broker.1\"} %d\n", s.output.Load()-s.output.Load()/2)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+
+	return s
+}
+
+func (s *benthosStub) port() uint16 {
+	return uint16(s.server.Listener.Addr().(*net.TCPAddr).Port)
+}
+
+func (s *benthosStub) close() { s.server.Close() }
+
+// userSpecFor renders the child spec cfgFor (manager.go) would produce: the
+// config is YAML with the yaml-tag keys, which is what the worker unmarshals
+// back into a config.BenthosMonitorConfig. cfgFor's godoc states why those keys
+// must come from the yaml tags.
+func userSpecFor(t *testing.T, name string, port uint16) fsmv2config.UserSpec {
+	t.Helper()
+
+	raw, err := yaml.Marshal(config.BenthosMonitorConfig{
+		FSMInstanceConfig: config.FSMInstanceConfig{Name: name, DesiredFSMState: "active"},
+		MetricsPort:       port,
+	})
+	if err != nil {
+		t.Fatalf("marshal child config: %v", err)
+	}
+
+	return fsmv2config.UserSpec{Config: string(raw)}
+}
+
+// observe runs one full framework observation cycle — the Poll → Health cycle
+// documented on simple.CollectObservedState (simple/worker.go) — which is the
+// cycle the supervisor's collector drives against every worker on every tick.
+//
+// It returns the worker's own return value, marshalled. The collector adds
+// CollectedAt, framework metrics, action history and accumulated worker metrics
+// after the worker returns (wrapNewObservation,
+// pkg/fsmv2/supervisor/internal/collection/collector.go); that step is not
+// reproduced here.
+func observe(t *testing.T, w fsmv2.Worker, spec fsmv2config.UserSpec) simple.Status[fsmv2benthosmonitor.BenthosMonitorStatus] {
+	t.Helper()
+
+	desired, err := w.DeriveDesiredState(spec)
+	if err != nil {
+		t.Fatalf("DeriveDesiredState: %v", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	observed, err := w.CollectObservedState(ctx, desired)
+	if err != nil {
+		t.Fatalf("CollectObservedState: %v", err)
+	}
+
+	// The observation is generic to the framework; round-trip its JSON into the
+	// worker's stored status type, which is what the fsmv1 adapter
+	// (pkg/fsmv2/adapter, getFreshStatus) reads back out of the CSE store. A
+	// field the worker fails to publish cannot survive this.
+	blob, err := json.Marshal(observed)
+	if err != nil {
+		t.Fatalf("marshal observation: %v", err)
+	}
+
+	var status simple.Status[fsmv2benthosmonitor.BenthosMonitorStatus]
+	if err := json.Unmarshal(blob, &status); err != nil {
+		t.Fatalf("unmarshal observation into the worker status: %v", err)
+	}
+
+	return status
+}
+
+func TestScenarioWorkerObservedThroughFramework(t *testing.T) {
+	stub := newBenthosStub()
+	defer stub.close()
+
+	stub.input.Store(100)
+	stub.output.Store(80)
+
+	spec := userSpecFor(t, "scenario-benthos", stub.port())
+
+	// Production instantiation: the registry must know this worker type, and its
+	// factory must build a usable worker. A missing registration fails here.
+	worker, err := factory.NewWorkerByType(
+		fsmv2benthosmonitor.WorkerType,
+		deps.Identity{ID: "scenario-benthos", Name: "scenario-benthos", WorkerType: fsmv2benthosmonitor.WorkerType},
+		deps.NewNopFSMLogger(),
+		nil,
+		nil,
+	)
+	if err != nil {
+		t.Fatalf("factory.NewWorkerByType(%q): %v", fsmv2benthosmonitor.WorkerType, err)
+	}
+	if worker == nil {
+		t.Fatal("factory returned a nil worker")
+	}
+
+	// --- observation 1: the cold tick -------------------------------------
+	// The scrape must reach all four endpoints and land in the status. With a
+	// single sample in the throughput window (throughputWindow,
+	// throughput_window.go) the rate is not yet computable, so the worker reports
+	// no throughput and stays inactive — never FSMv1's cumulative-count-as-rate.
+	first := observe(t, worker, spec)
+
+	if first.Degraded {
+		t.Errorf("cold observation is degraded (%q); a reachable benthos must be healthy", first.Reason)
+	}
+	if first.Result.ScrapedAt.IsZero() {
+		t.Error("ScrapedAt is zero: Poll did not record a scrape time through the framework")
+	}
+	if !first.Result.PingAlive {
+		t.Error("PingAlive is false: /ping was not scraped through the framework")
+	}
+	if !first.Result.Ready {
+		t.Error("Ready is false: /ready was not scraped or its empty error field was misread")
+	}
+	if first.Result.Version != "4.95.0" {
+		t.Errorf("Version = %q, want %q: /version did not reach the status", first.Result.Version, "4.95.0")
+	}
+	if first.Result.BenthosMetrics.InputReceivedTotal() != 100 {
+		t.Errorf("InputReceivedTotal() = %d, want 100", first.Result.BenthosMetrics.InputReceivedTotal())
+	}
+	if first.Result.BenthosMetrics.OutputSentTotal() != 80 {
+		t.Errorf("OutputSentTotal() = %d, want 80 (summed across both broker legs, not last-wins)", first.Result.BenthosMetrics.OutputSentTotal())
+	}
+	if first.Result.Input.MessagesPerSecond != 0 {
+		t.Errorf("cold Input.MessagesPerSecond = %v, want 0 (one sample cannot be delta-ed)", first.Result.Input.MessagesPerSecond)
+	}
+	if first.Result.IsActive {
+		t.Error("cold IsActive is true; a single sample must read inactive")
+	}
+	// Management Console throughput panels read this field through the fsmv1
+	// adapter, which copies it into BenthosMetrics (mapObserved, adapter.go).
+	if first.Result.Input.LastCount != 100 {
+		t.Errorf("cold Input.LastCount = %d, want 100", first.Result.Input.LastCount)
+	}
+
+	// --- observation 2: traffic arrives -----------------------------------
+	// The window lives in the worker's deps and must survive across observations
+	// (it is built once per instance). Raising the counters and observing again
+	// must move LastCount and flip IsActive on.
+	stub.input.Store(140)
+	stub.output.Store(120)
+
+	second := observe(t, worker, spec)
+
+	if second.Degraded {
+		t.Errorf("second observation is degraded (%q)", second.Reason)
+	}
+	if second.Result.Input.LastCount != 140 {
+		t.Errorf("Input.LastCount = %d, want 140: the window did not survive the previous observation", second.Result.Input.LastCount)
+	}
+	if second.Result.Output.LastCount != 120 {
+		t.Errorf("Output.LastCount = %d, want 120", second.Result.Output.LastCount)
+	}
+	if second.Result.Input.MessagesPerSecond <= 0 {
+		t.Errorf("Input.MessagesPerSecond = %v, want > 0 after a 40-message rise", second.Result.Input.MessagesPerSecond)
+	}
+	if !second.Result.IsActive {
+		t.Error("IsActive is false after input rose: the tick-free derivation did not reach the status")
+	}
+}
+
+// TestScenarioUnreachableBenthosIsDegraded covers the other half of the
+// contract: when the scraped benthos is gone, the framework must drive the
+// worker degraded rather than publishing a healthy status with stale numbers.
+// This is the condition the fsmv1 adapter maps to the degraded operational
+// state.
+//
+// The verdict comes from the framework, not from the worker: a failed scrape
+// makes Poll return an error, and the poll-error path degrades the observation
+// WITHOUT consulting the worker's Health function (see
+// simple.CollectObservedState's godoc, simple/worker.go). Deleting Health
+// therefore does not change this test's outcome; Health is exercised at the unit
+// level (TestHealthReproducesIsMonitorHealthy). Staleness of an
+// otherwise-successful scrape is caught one layer up, by staleAfterFor — 3x the
+// registered observation interval (adapter/instance.go).
+func TestScenarioUnreachableBenthosIsDegraded(t *testing.T) {
+	stub := newBenthosStub()
+	port := stub.port()
+	stub.close() // nothing is listening now
+
+	spec := userSpecFor(t, "scenario-dead", port)
+
+	worker, err := factory.NewWorkerByType(
+		fsmv2benthosmonitor.WorkerType,
+		deps.Identity{ID: "scenario-dead", Name: "scenario-dead", WorkerType: fsmv2benthosmonitor.WorkerType},
+		deps.NewNopFSMLogger(),
+		nil,
+		nil,
+	)
+	if err != nil {
+		t.Fatalf("factory.NewWorkerByType: %v", err)
+	}
+
+	desired, err := worker.DeriveDesiredState(spec)
+	if err != nil {
+		t.Fatalf("DeriveDesiredState: %v", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	observed, err := worker.CollectObservedState(ctx, desired)
+	if err != nil {
+		t.Fatalf("CollectObservedState returned a hard error: %v", err)
+	}
+
+	blob, err := json.Marshal(observed)
+	if err != nil {
+		t.Fatalf("marshal observation: %v", err)
+	}
+
+	var status simple.Status[fsmv2benthosmonitor.BenthosMonitorStatus]
+	if err := json.Unmarshal(blob, &status); err != nil {
+		t.Fatalf("unmarshal observation: %v", err)
+	}
+
+	if !status.Degraded {
+		t.Error("an unreachable benthos produced a non-degraded observation: a dead scrape must not read healthy")
+	}
+	if status.Result.IsActive {
+		t.Error("an unreachable benthos reported IsActive")
+	}
+}
