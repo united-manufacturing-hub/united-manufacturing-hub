@@ -14,9 +14,9 @@
 
 // This file is the engine. A caller declares a Table; NewEngine reads it once
 // and builds one SlidingWindow per (signal, instrument) pair, one SlidingWindow per measurement and
-// one Latch per signal, refusing a malformed table. Observe then appends the
-// snapshot to every window, resolves what each signal's windows can collectively
-// say, an Availability, and drives that signal's latch with it.
+// one Latch per signal, refinements included, refusing a malformed table. Observe
+// then appends the snapshot to every window, resolves what each signal's windows
+// can collectively say, an Availability, and drives that signal's latch with it.
 //
 // The environment is not checked while building: NewEngine takes no Environment
 // and builds a window for every instrument, capable or not. Signal.Capable runs
@@ -67,8 +67,9 @@ const (
 //	StateValue     (2)  -> Ready          (3)
 
 // Readiness is one signal's Availability, handed back by Observe beside the
-// fired set: one row per signal, in table order, always. []Fired reports only
-// what fired, so this is the only route to "was this signal readable at all".
+// fired set: one row per TOP-LEVEL signal, in table order, always. []Fired reports
+// only what fired, so this is the only route to "was this signal readable at all".
+// A refinement gets no row of its own, though it is judged every tick.
 type Readiness struct {
 	Signal       string
 	Availability Availability
@@ -78,13 +79,25 @@ type Readiness struct {
 // refinement's path is its parent's path plus its own name, e.g. "A/X".
 type key struct{ Path, Instrument string }
 
-// signalState is one signal and the single latch that judges it. 7e8301485 took
-// these out of name-keyed maps into slices held in the same order; pairing them
-// finishes that move, because "one latch per signal" is now the type rather than
-// two slices agreeing about their length and their order.
+// signalState is one signal, the state the engine keeps for it, and the same
+// pairing for each of its refinements. 7e8301485 took these out of name-keyed
+// maps into slices held in the same order; pairing them finishes that move,
+// because "one latch per signal" is now the type rather than two slices agreeing
+// about their length and their order.
 type signalState[S any] struct {
 	signal Signal[S]
-	latch  Latch
+	// path is what this signal's windows are keyed under: its bare name at the
+	// top level, its parent's path plus its own name for a refinement.
+	path string
+	// latch is the single latch that judges this signal. Every node in the tree
+	// has its own, at every depth.
+	latch Latch
+	// refinements is the same pairing one level down, one entry per refinement
+	// this signal declares, in declared order. A refinement is a signal in every
+	// respect the engine judges by: its own instruments, its own marks, its own
+	// latch, so judge and observeWindows recurse into it with no child branch.
+	// Observe's own loop does not recurse: it runs over the top level only.
+	refinements []signalState[S]
 }
 
 // measurementState is one measurement and the single window it reduces through,
@@ -95,22 +108,26 @@ type measurementState[S any] struct {
 	window      SlidingWindow
 }
 
-// Engine owns every window, every measurement and one latch per signal, for one table.
+// Engine owns every window, every measurement and one latch per signal, refinements
+// included, for one table.
 // It is not synchronized: the goroutine that calls Observe owns it, and a reader
 // calling Select, Reduction or Measurement from another races on points and latches.
 type Engine[S any] struct {
-	// windows is the last name-keyed map in here, and it stays one: Select
-	// resolves against the CALLER'S Signal, so a lookup can legitimately miss
-	// and resolve's nil arms are reachable. The two below are built by
-	// NewEngine and cannot miss, which is why they are pairs instead.
+	// windows is the last name-keyed map in here, and it stays one because
+	// Select resolves the CALLER'S Signal under its bare name: a caller holding
+	// a refinement looks under "X" while that refinement's windows are keyed
+	// "A/X", so every lookup misses and resolve's nil arms are reachable. The
+	// two below are built by NewEngine and cannot miss, which is why they are
+	// pairs instead.
 	windows      map[key]*SlidingWindow
 	signals      []signalState[S]
 	measurements []measurementState[S]
 }
 
 // NewEngine validates the table, then builds one window per (signal, instrument)
-// pair, one window per measurement, and one latch per signal, in signal order. It
-// is the single place a malformed table is refused; validate holds the list.
+// pair, one window per measurement, and one latch per signal and per refinement,
+// in declared order. It is the single place a malformed table is refused;
+// validate holds the list.
 //
 // A measurement's demote span is its own span, because a measurement belongs to
 // no signal and so has no hold for the demote clock to bound, and its counter
@@ -142,30 +159,46 @@ func NewEngine[S any](t Table[S]) (*Engine[S], error) {
 	}
 
 	for i, s := range t.Signals {
-		// The caller keeps the table they passed, so the engine must own the
-		// instruments it stores: a copy of the Signal would still share the
-		// Instruments backing array, and a later edit to the caller's own table
-		// would rename the engine's instruments while the windows above stay
-		// keyed by the names as they were at construction. Deep-copy the
-		// instruments and, one level down, each instrument's capability list,
-		// which is a second slice header into the same table.
-		s.Instruments = append([]Instrument[S](nil), s.Instruments...)
-		for j := range s.Instruments {
-			s.Instruments[j].Requires = append([]Capability(nil), s.Instruments[j].Requires...)
-		}
-
-		e.signals = append(e.signals, signalState[S]{
-			signal: s,
-			latch: Latch{identity: Identity{
-				Signal:      s.Name,
-				Tier:        s.Tier,
-				Attribution: s.Attribution,
-				Index:       i,
-			}},
-		})
+		e.signals = append(e.signals, buildSignalState(s.Name, s, i))
 	}
 
 	return e, nil
+}
+
+// buildSignalState pairs one signal with the latch that judges it, then recurses
+// into its refinements under the same paths buildWindows keyed their windows
+// under. index is the signal's position among its siblings, which Identity.Index
+// carries.
+func buildSignalState[S any](path string, s Signal[S], index int) signalState[S] {
+	// The caller keeps the table they passed, so the engine must own the
+	// instruments it stores: a copy of the Signal would still share the
+	// Instruments backing array, and a later edit to the caller's own table
+	// would rename the engine's instruments while the windows above stay
+	// keyed by the names as they were at construction. Deep-copy the
+	// instruments and, one level down, each instrument's capability list,
+	// which is a second slice header into the same table.
+	s.Instruments = append([]Instrument[S](nil), s.Instruments...)
+	for j := range s.Instruments {
+		s.Instruments[j].Requires = append([]Capability(nil), s.Instruments[j].Requires...)
+	}
+
+	st := signalState[S]{
+		signal: s,
+		path:   path,
+		latch: Latch{identity: Identity{
+			Signal:      s.Name,
+			Tier:        s.Tier,
+			Attribution: s.Attribution,
+			Index:       index,
+		}},
+		refinements: make([]signalState[S], 0, len(s.Refinements)),
+	}
+
+	for i, r := range s.Refinements {
+		st.refinements = append(st.refinements, buildSignalState(path+"/"+r.Name, r, i))
+	}
+
+	return st
 }
 
 // buildWindows opens one sliding window per (path, instrument) pair in a
@@ -388,7 +421,7 @@ func validateMeasurement[S any](row string, spanNoun string, m Measurement[S], i
 // so a window reduced without a preceding Observe reports entries left over from
 // an earlier tick as trusted.
 func (e *Engine[S]) Select(s Signal[S], env Environment) (Instrument[S], Reduced, Coverage, Availability) {
-	return e.resolve(s, s.Capable(env))
+	return e.resolve(s.Name, s, s.Capable(env))
 }
 
 // resolve applies the readiness gate to a signal's already-capable instruments:
@@ -396,7 +429,10 @@ func (e *Engine[S]) Select(s Signal[S], env Environment) (Instrument[S], Reduced
 // instrument, and whichever Availability the State table above names. That is
 // the maximum State over those windows, so StateValue returns at once, no later
 // window being able to beat it. Select and Observe both call it.
-func (e *Engine[S]) resolve(s Signal[S], capable []Instrument[S]) (Instrument[S], Reduced, Coverage, Availability) {
+//
+// path names the windows to read, so a refinement resolves against its own,
+// "A/X" rather than the "X" a top-level signal of that name holds.
+func (e *Engine[S]) resolve(path string, s Signal[S], capable []Instrument[S]) (Instrument[S], Reduced, Coverage, Availability) {
 	if len(capable) == 0 {
 		return Instrument[S]{}, Reduced{}, Coverage{}, NoInstrument
 	}
@@ -406,8 +442,8 @@ func (e *Engine[S]) resolve(s Signal[S], capable []Instrument[S]) (Instrument[S]
 	untrusted := false
 
 	for _, inst := range capable {
-		w := e.windows[key{Path: s.Name, Instrument: inst.Name}]
-		if w == nil { // NewEngine builds a window for every pair; never nil here
+		w := e.windows[key{Path: path, Instrument: inst.Name}]
+		if w == nil { // reachable through Select; Engine.windows names the route
 			continue
 		}
 
@@ -440,9 +476,9 @@ func (e *Engine[S]) resolve(s Signal[S], capable []Instrument[S]) (Instrument[S]
 // refinements included, keyed by path. It reads no latch, so the recursion into
 // refinements is unconditional. Signal.Refinements states the contract that
 // follows for a caller.
-func observeWindows[S any](e *Engine[S], path string, s Signal[S], sample S, at time.Time) {
-	for _, inst := range s.Instruments {
-		w := e.windows[key{Path: path, Instrument: inst.Name}]
+func observeWindows[S any](e *Engine[S], st *signalState[S], sample S, at time.Time) {
+	for _, inst := range st.signal.Instruments {
+		w := e.windows[key{Path: st.path, Instrument: inst.Name}]
 		if w == nil { // NewEngine builds a window for every pair; never nil here
 			continue
 		}
@@ -451,23 +487,82 @@ func observeWindows[S any](e *Engine[S], path string, s Signal[S], sample S, at 
 		w.Observe(value, against, at)
 	}
 
-	for _, r := range s.Refinements {
-		observeWindows(e, path+"/"+r.Name, r, sample, at)
+	for i := range st.refinements {
+		observeWindows(e, &st.refinements[i], sample, at)
 	}
 }
 
+// judge drives one signal's latch from its own windows, then does the same for
+// each of its refinements, whichever way this signal went. A refinement is
+// judged every tick for the same reason its window is filled every tick: a
+// verdict reached only while the parent happened to be firing would be decided
+// on however much history the child had at that instant. Only REPORTING a
+// refinement waits on the parent, which firedTree does.
+//
+// It returns the Availability the latch was driven with, which is this signal's
+// Readiness row; a refinement's is not reported.
+func (e *Engine[S]) judge(st *signalState[S], env Environment, at time.Time) Availability {
+	s := st.signal
+
+	inst, reduced, cov, avail := e.resolve(st.path, s, s.Capable(env))
+	l := &st.latch
+
+	switch avail {
+	case Ready:
+		l.Update(inst.Name, reduced, cov, inst.Marks, at)
+	case AllAbsent:
+		if s.ReleaseOnAbsent {
+			l.Reset()
+		} else {
+			l.ReleaseAfter(s.DemoteSpan, at)
+		}
+	default: // NoInstrument, NoneReady: hold, then release on the demote clock.
+		l.ReleaseAfter(s.DemoteSpan, at)
+	}
+
+	for i := range st.refinements {
+		e.judge(&st.refinements[i], env, at)
+	}
+
+	return avail
+}
+
+// firedTree reports one signal's verdict with the verdicts of the refinements
+// under it nested inside, and nothing at all if this signal did not fire. Every
+// field of a nested entry comes off that refinement's own latch, so its Since is
+// the tick IT fired, not the tick its parent did.
+func firedTree[S any](st *signalState[S]) (Fired, bool) {
+	f, ok := st.latch.Fired()
+	if !ok {
+		return Fired{}, false
+	}
+
+	for i := range st.refinements {
+		if r, ok := firedTree(&st.refinements[i]); ok {
+			f.Refinements = append(f.Refinements, r)
+		}
+	}
+
+	return f, true
+}
+
 // Observe runs one tick against a snapshot and returns the fired set, unranked
-// (Rank puts it worst first), and every signal's Readiness, both in table
-// order. In order: append to every measurement's and every instrument's window;
-// then, per signal, resolve its Availability over the instruments Signal.Capable
-// allows this tick, drive its single latch, collect whatever fired, and emit a
-// Readiness row whether or not it did.
+// (Rank puts it worst first), and one Readiness row per TOP-LEVEL signal, both
+// in table order. In order: append to every measurement's and every instrument's
+// window; then, per top-level signal, resolve its Availability over the
+// instruments Signal.Capable allows this tick, drive its single latch, collect
+// whatever fired, and emit a Readiness row whether or not it did.
 //
 // The append pass is unconditional, instruments this environment cannot satisfy
 // included, because Observe is the only call that ages a window: skip it once
 // and its stale entries count as current when it is next selected. No held latch
 // is left unbounded: AllAbsent on a signal setting ReleaseOnAbsent calls
 // Latch.Reset, and every other branch short of Ready runs the demote clock.
+//
+// A refinement is judged on the same terms every tick, whether or not the signal
+// it hangs under fired. What the parent decides is only whether the refinement is
+// REPORTED: a fired signal carries the refinements whose own latch is fired in
+// Fired.Refinements, and a refinement never appears in the returned slice itself.
 //
 // # One tick
 //
@@ -486,8 +581,8 @@ func (e *Engine[S]) Observe(sample S, env Environment, at time.Time) ([]Fired, [
 		ts.window.Observe(ts.measurement.Extract(sample), Unknown(), at) // same clock as every window below
 	}
 
-	for _, st := range e.signals {
-		observeWindows(e, st.signal.Name, st.signal, sample, at)
+	for i := range e.signals {
+		observeWindows(e, &e.signals[i], sample, at)
 	}
 
 	var fired []Fired
@@ -495,28 +590,13 @@ func (e *Engine[S]) Observe(sample S, env Environment, at time.Time) ([]Fired, [
 	readiness := make([]Readiness, 0, len(e.signals))
 	for i := range e.signals {
 		st := &e.signals[i]
-		s := st.signal
-		inst, reduced, cov, avail := e.resolve(s, s.Capable(env))
-		l := &st.latch
 
-		switch avail {
-		case Ready:
-			l.Update(inst.Name, reduced, cov, inst.Marks, at)
-		case AllAbsent:
-			if s.ReleaseOnAbsent {
-				l.Reset()
-			} else {
-				l.ReleaseAfter(s.DemoteSpan, at)
-			}
-		default: // NoInstrument, NoneReady: hold, then release on the demote clock.
-			l.ReleaseAfter(s.DemoteSpan, at)
-		}
-
-		if f, ok := l.Fired(); ok {
+		avail := e.judge(st, env, at)
+		if f, ok := firedTree(st); ok {
 			fired = append(fired, f)
 		}
 
-		readiness = append(readiness, Readiness{Signal: s.Name, Availability: avail})
+		readiness = append(readiness, Readiness{Signal: st.signal.Name, Availability: avail})
 	}
 
 	return fired, readiness
