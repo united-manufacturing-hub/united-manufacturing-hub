@@ -35,6 +35,7 @@ package diagnosis
 import (
 	"fmt"
 	"math"
+	"sort"
 	"time"
 )
 
@@ -531,6 +532,10 @@ func (e *Engine[S]) judge(st *signalState[S], env Environment, at time.Time) Ava
 // under it nested inside, and nothing at all if this signal did not fire. Every
 // field of a nested entry comes off that refinement's own latch, so its Since is
 // the tick IT fired, not the tick its parent did.
+//
+// The nested entries come back lowest Tier first, then in the order the table
+// declared them. That ordering runs in every frame of the recursion, so a
+// refinement's own refinements are ordered among themselves the same way.
 func firedTree[S any](st *signalState[S]) (Fired, bool) {
 	f, ok := st.latch.Fired()
 	if !ok {
@@ -542,6 +547,20 @@ func firedTree[S any](st *signalState[S]) (Fired, bool) {
 			f.Refinements = append(f.Refinements, r)
 		}
 	}
+
+	// Index is the declaration position among these siblings and no two share
+	// one, so Tier and Index together are a total order that an unstable sort
+	// cannot disturb. Tier alone would not do: sort.Slice is explicitly not
+	// stable, and it leaves a short slice alone only because Go sorts twelve
+	// elements or fewer by insertion.
+	sort.Slice(f.Refinements, func(i, j int) bool {
+		a, b := f.Refinements[i], f.Refinements[j]
+		if a.Tier != b.Tier {
+			return a.Tier < b.Tier
+		}
+
+		return a.Index < b.Index
+	})
 
 	return f, true
 }
