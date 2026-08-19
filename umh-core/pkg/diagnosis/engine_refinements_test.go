@@ -27,17 +27,28 @@ import (
 // fired. Most specs here read the reporting side on a tick where the parent HAS
 // fired: which refinements nest under it, and that a refinement is nested
 // rather than returned beside its parent. One reads the other side, where the
-// parent is silent and its fired refinement is reported nowhere. The last one
-// hands the returned set to Rank, which orders top-level signals only.
+// parent is silent and its fired refinement is reported nowhere. One hands the
+// returned set to Rank, which orders top-level signals only. The last three
+// read the order the refinements under one signal come back in.
 var _ = Describe("Engine.Observe on a signal's refinements", func() {
 
 	type snap struct {
 		parent float64
 		first  float64
 		second float64
+		third  float64
 	}
 
 	base := time.Unix(1_000_000, 0)
+
+	names := func(fired []Fired) []string {
+		out := make([]string, len(fired))
+		for i, f := range fired {
+			out[i] = f.Identity.Signal
+		}
+
+		return out
+	}
 
 	// A top-level signal reads its newest sample, so it fires on the tick its own
 	// value crosses 0.5 and needs no warm-up: every spec below can put the firing
@@ -69,11 +80,15 @@ var _ = Describe("Engine.Observe on a signal's refinements", func() {
 	}
 
 	// A refinement fires past 0.6 on whichever field of the snapshot it is told
-	// to read, under whichever reduction the spec needs.
-	refinement := func(name string, reduction Reduction, read func(snap) float64) Signal[snap] {
+	// to read, under whichever reduction the spec needs. Tier is the caller's, as
+	// it is on topLevel, so two refinements under one parent can differ in
+	// urgency; refinements of its own let a spec hang a third level under it.
+	refinement := func(name string, tier int, reduction Reduction, read func(snap) float64, refinements ...Signal[snap]) Signal[snap] {
 		return Signal[snap]{
-			Name:       name,
-			DemoteSpan: 60 * time.Second,
+			Name:        name,
+			Tier:        tier,
+			DemoteSpan:  60 * time.Second,
+			Refinements: refinements,
 			Instruments: []Instrument[snap]{{
 				Measurement: Measurement[snap]{
 					Name:      "I",
@@ -104,7 +119,7 @@ var _ = Describe("Engine.Observe on a signal's refinements", func() {
 	// sample. And the 0.0 at tick 10 is what a build reducing the window at
 	// REPORT time would report, 10/11 rather than the 1.0 the child latched.
 	It("reports a fired parent's refinement nested under it, warm over ten ticks, not as a top-level entry beside it", func() {
-		e := engineOver(parentOver(refinement("C", Mean, func(s snap) float64 { return s.first })))
+		e := engineOver(parentOver(refinement("C", 0, Mean, func(s snap) float64 { return s.first })))
 
 		for i := 0; i < 10; i++ {
 			e.Observe(snap{parent: 0.0, first: 1.0}, NewEnvironment(), base.Add(time.Duration(i)*time.Second))
@@ -128,8 +143,8 @@ var _ = Describe("Engine.Observe on a signal's refinements", func() {
 
 	It("reports only the refinement past its own fire mark, naming it", func() {
 		e := engineOver(parentOver(
-			refinement("C1", Last, func(s snap) float64 { return s.first }),
-			refinement("C2", Last, func(s snap) float64 { return s.second }),
+			refinement("C1", 0, Last, func(s snap) float64 { return s.first }),
+			refinement("C2", 0, Last, func(s snap) float64 { return s.second }),
 		))
 
 		// One tick is enough: Last needs a single sample, so the parent and both
@@ -147,7 +162,7 @@ var _ = Describe("Engine.Observe on a signal's refinements", func() {
 
 	It("leaves out a refinement whose window cannot yet reduce", func() {
 		declaration := func() Signal[snap] {
-			return parentOver(refinement("C", Mean, func(s snap) float64 { return s.first }))
+			return parentOver(refinement("C", 0, Mean, func(s snap) float64 { return s.first }))
 		}
 
 		// The control: two samples reach Mean's minimum, so the same refinement
@@ -175,7 +190,7 @@ var _ = Describe("Engine.Observe on a signal's refinements", func() {
 	})
 
 	It("stamps a held refinement's Since once, on the tick it fired", func() {
-		e := engineOver(parentOver(refinement("C", Last, func(s snap) float64 { return s.first })))
+		e := engineOver(parentOver(refinement("C", 0, Last, func(s snap) float64 { return s.first })))
 
 		first, _ := e.Observe(snap{parent: 1.0, first: 1.0}, NewEnvironment(), base)
 		second, _ := e.Observe(snap{parent: 1.0, first: 1.0}, NewEnvironment(), base.Add(time.Second))
@@ -194,7 +209,7 @@ var _ = Describe("Engine.Observe on a signal's refinements", func() {
 	// emits it beside its parent. This one drives the parent below its fire mark
 	// throughout and reads the whole returned slice.
 	It("reports nothing at all while the parent is silent, though its refinement has fired and stays warm", func() {
-		e := engineOver(parentOver(refinement("C", Mean, func(s snap) float64 { return s.first })))
+		e := engineOver(parentOver(refinement("C", 0, Mean, func(s snap) float64 { return s.first })))
 
 		// Tick 0 leaves the child below Mean's minimum of two. Tick 1 reaches it
 		// at a mean of 1.0, past the child's 0.6 fire mark, so the child fires
@@ -237,21 +252,11 @@ var _ = Describe("Engine.Observe on a signal's refinements", func() {
 	// ranked it would put it first and fail loudly, rather than hiding at the
 	// end of the slice where a sorted-last refinement would pass either way.
 	It("ranks the top-level signals only, leaving a refinement more urgent than any of them nested and out of the ranked set", func() {
-		names := func(fired []Fired) []string {
-			out := make([]string, len(fired))
-			for i, f := range fired {
-				out[i] = f.Identity.Signal
-			}
-
-			return out
-		}
-
 		// Tier 0 is more urgent than either top-level signal, and Index 0 (its
 		// position among its siblings) is the value that wins the last tie-break,
 		// so no single field carries the fixture. Attribution differs from the
 		// parents' too, though Rank never reads it.
-		child := refinement("C", Last, func(s snap) float64 { return s.first })
-		child.Tier = 0
+		child := refinement("C", 0, Last, func(s snap) float64 { return s.first })
 		child.Attribution = 7
 
 		// Both fire on their first sample, both at tier 1, so only severity
@@ -285,6 +290,100 @@ var _ = Describe("Engine.Observe on a signal's refinements", func() {
 			"the nested entry keeps the urgent tier it was declared with; it is unranked, not demoted")
 		Expect(ranked[1].Refinements[0].Index).To(Equal(0),
 			"and the index that wins the last tie-break, so the absence above is not the refinement sorting last")
+	})
+
+	// Rank orders the top-level set. The three specs below are about the order
+	// INSIDE one signal's Refinements, which Rank never touches: lower tier
+	// first, so the caller can read the first nested entry as the most urgent
+	// narrowing without sorting anything itself.
+
+	// The two refinements are declared in the order a build that ignored Tier
+	// would return them, less urgent first. Declaring them already in the
+	// reported order would pass whether or not anything ordered them.
+	It("reports a parent's refinements lowest tier first, against the order they were declared in", func() {
+		e := engineOver(parentOver(
+			refinement("LessUrgent", 2, Last, func(s snap) float64 { return s.first }),
+			refinement("MoreUrgent", 1, Last, func(s snap) float64 { return s.second }),
+		))
+
+		// Last reduces off a single sample, so the parent and both refinements
+		// are judged on the first tick and all three cross their marks. The
+		// refinements read 0.7, just past their own 0.6, so it is that mark
+		// admitting them; a 1.0 would sit past whatever mark they carried.
+		fired, _ := e.Observe(snap{parent: 1.0, first: 0.7, second: 0.7}, NewEnvironment(), base)
+
+		Expect(fired).To(HaveLen(1))
+		Expect(fired[0].Refinements).To(HaveLen(2), "both refinements crossed their own fire mark")
+		Expect(names(fired[0].Refinements)).To(Equal([]string{"MoreUrgent", "LessUrgent"}),
+			"tier 1 is reported before tier 2 though it was declared second")
+	})
+
+	It("keeps refinements of one tier in the order they were declared", func() {
+		reported := func(refinements ...Signal[snap]) []string {
+			e := engineOver(parentOver(refinements...))
+			fired, _ := e.Observe(snap{parent: 1.0, first: 0.7, second: 0.7}, NewEnvironment(), base)
+
+			Expect(fired).To(HaveLen(1))
+			Expect(fired[0].Refinements).To(HaveLen(len(refinements)), "every refinement crossed its own fire mark")
+
+			return names(fired[0].Refinements)
+		}
+
+		// A pair, both directions, because either direction alone also holds on a
+		// build that emits whatever order it was handed.
+		a := refinement("A", 1, Last, func(s snap) float64 { return s.first })
+		b := refinement("B", 1, Last, func(s snap) float64 { return s.second })
+
+		Expect(reported(a, b)).To(Equal([]string{"A", "B"}))
+		Expect(reported(b, a)).To(Equal([]string{"B", "A"}))
+
+		// The pair above cannot tell a declared tie-break from a sort that
+		// happens to leave it alone: Go sorts twelve elements or fewer by
+		// insertion, which never moves two entries their comparator calls equal.
+		// Thirteen across two tiers is the smallest table where a sort comparing
+		// tier alone visibly scrambles each tier's declaration order.
+		const wide = 13
+
+		spread := make([]Signal[snap], 0, wide)
+		lower := make([]string, 0, wide)
+		upper := make([]string, 0, wide)
+
+		for i := range wide {
+			name := string(rune('A' + i))
+			tier := 1 + i%2
+
+			spread = append(spread, refinement(name, tier, Last, func(s snap) float64 { return s.first }))
+
+			if tier == 1 {
+				lower = append(lower, name)
+			} else {
+				upper = append(upper, name)
+			}
+		}
+
+		expected := make([]string, 0, wide)
+		expected = append(expected, lower...)
+		expected = append(expected, upper...)
+
+		Expect(reported(spread...)).To(Equal(expected),
+			"each tier comes back in declaration order, the lower tier first")
+	})
+
+	It("orders the refinements of a refinement by the same rule, so every level is ordered and not just the first", func() {
+		child := refinement("C", 0, Last, func(s snap) float64 { return s.first },
+			refinement("LessUrgent", 2, Last, func(s snap) float64 { return s.second }),
+			refinement("MoreUrgent", 1, Last, func(s snap) float64 { return s.third }),
+		)
+
+		e := engineOver(parentOver(child))
+
+		fired, _ := e.Observe(snap{parent: 1.0, first: 0.7, second: 0.7, third: 0.7}, NewEnvironment(), base)
+
+		Expect(fired).To(HaveLen(1))
+		Expect(fired[0].Refinements).To(HaveLen(1), "the child fired and nests under the parent")
+		Expect(fired[0].Refinements[0].Refinements).To(HaveLen(2), "both of its own refinements fired too")
+		Expect(names(fired[0].Refinements[0].Refinements)).To(Equal([]string{"MoreUrgent", "LessUrgent"}),
+			"two levels down the tiers still decide, though these were also declared less urgent first")
 	})
 
 })

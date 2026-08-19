@@ -91,6 +91,11 @@ type Fired struct {
 	// themselves, each judged against its own marks. A refinement is judged
 	// every tick, whether or not this signal fired, but it is reported only
 	// here, under a signal that did fire.
+	//
+	// They come lowest Tier first, ties going to the one the table declared
+	// first, at this and every deeper level: the entry at index 0 is the most
+	// urgent narrowing of this signal, with no sorting left to the caller. Rank
+	// does not reach in here; it orders the top-level set only.
 	Refinements []Fired
 }
 
