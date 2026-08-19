@@ -6,6 +6,7 @@
 
 - A connection edit to a port that does not answer no longer completes. The rollout waits for a scan of the new port that finds it open
 - A connection edit that repoints a bridge to a different host on the same port no longer completes on the previous host's scan. The rollout waits for a scan of the new host
+- A connection edit to a bridge that already has a read or write flow no longer completes before the new target has been scanned. Editing a flow without changing the connection is unaffected
 
 ## [0.44.34]
 
