@@ -44,10 +44,15 @@ var _ = Describe("NewEngine", func() {
 			DemoteSpan: 60 * time.Second,
 			Instruments: []Instrument[snap]{
 				{
-					Name: "I1", Requires: []Capability{"source-1"}, Extract: extract, Reduction: Last, Span: 60 * time.Second, Marks: validMarks(),
+					Measurement: Measurement[snap]{
+						Name: "I1", Requires: []Capability{"source-1"}, Extract: extract, Reduction: Last, Span: 60 * time.Second,
+					},
+					Marks: validMarks(),
 				},
 				{
-					Name: "I2", Requires: []Capability{"source-1"}, Extract: extract, Reduction: Mean, Span: 3 * time.Second,
+					Measurement: Measurement[snap]{
+						Name: "I2", Requires: []Capability{"source-1"}, Extract: extract, Reduction: Mean, Span: 3 * time.Second,
+					},
 					Marks: Marks{Unit: "cores", Fire: Mark{At: 8, Inclusive: true}, Clear: Mark{At: 4, Inclusive: true}, Polarity: HigherIsWorse, Worst: 16},
 				},
 			},

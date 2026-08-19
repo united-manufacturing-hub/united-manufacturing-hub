@@ -109,8 +109,8 @@ var _ = Describe("Latch release is judged on the pair the episode fired under", 
 			Name:       "steal",
 			DemoteSpan: 60 * time.Second,
 			Instruments: []Instrument[stealSnap]{
-				{Name: "steal-p95", Extract: read, Reduction: P95, Span: 60 * time.Second, Marks: shared},
-				{Name: "steal-mean", Extract: read, Reduction: Mean, Span: 60 * time.Second, Marks: shared},
+				{Measurement: Measurement[stealSnap]{Name: "steal-p95", Extract: read, Reduction: P95, Span: 60 * time.Second}, Marks: shared},
+				{Measurement: Measurement[stealSnap]{Name: "steal-mean", Extract: read, Reduction: Mean, Span: 60 * time.Second}, Marks: shared},
 			},
 		}
 		e, err := NewEngine(Table[stealSnap]{Signals: []Signal[stealSnap]{sig}, Interval: time.Second})
@@ -172,24 +172,28 @@ var _ = Describe("Latch release is judged on the pair the episode fired under", 
 
 		headroomReadable := true
 		headroomArm := Instrument[cpuSnap]{
-			Name: "host-headroom",
-			Extract: func(s cpuSnap) Reading {
-				if !headroomReadable {
-					return Unknown()
-				}
+			Measurement: Measurement[cpuSnap]{
+				Name: "host-headroom",
+				Extract: func(s cpuSnap) Reading {
+					if !headroomReadable {
+						return Unknown()
+					}
 
-				return Known(s.headroom)
+					return Known(s.headroom)
+				},
+				Reduction: Last,
+				Span:      3 * time.Second,
 			},
-			Reduction: Last,
-			Span:      3 * time.Second,
-			Marks:     headroom,
+			Marks: headroom,
 		}
 		usageArm := Instrument[cpuSnap]{
-			Name:      "usage-fraction",
-			Extract:   func(s cpuSnap) Reading { return Known(s.usage) },
-			Reduction: Last,
-			Span:      3 * time.Second,
-			Marks:     usage,
+			Measurement: Measurement[cpuSnap]{
+				Name:      "usage-fraction",
+				Extract:   func(s cpuSnap) Reading { return Known(s.usage) },
+				Reduction: Last,
+				Span:      3 * time.Second,
+			},
+			Marks: usage,
 		}
 		sig := Signal[cpuSnap]{
 			Name:        "saturation",

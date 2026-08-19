@@ -41,11 +41,13 @@ func Example() {
 			Name:       name,
 			DemoteSpan: time.Minute,
 			Instruments: []diagnosis.Instrument[mounts]{{
-				Name:      "spare",
-				Reduction: diagnosis.Last,
-				Span:      10 * time.Second,
-				Marks:     spare,
-				Extract:   func(m mounts) diagnosis.Reading { return diagnosis.Known(read(m)) },
+				Measurement: diagnosis.Measurement[mounts]{
+					Name:      "spare",
+					Reduction: diagnosis.Last,
+					Span:      10 * time.Second,
+					Extract:   func(m mounts) diagnosis.Reading { return diagnosis.Known(read(m)) },
+				},
+				Marks: spare,
 			}},
 		}
 	}
