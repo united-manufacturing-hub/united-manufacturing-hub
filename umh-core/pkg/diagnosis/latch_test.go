@@ -100,7 +100,7 @@ var _ = Describe("Latch", func() {
 
 	It("should carry the identity the engine stamped at construction into the Fired it reports", func() {
 		t0 := time.Unix(1_000_000, 0)
-		id := Identity{Signal: "sig", Tier: 2, External: true, Index: 7}
+		id := Identity{Signal: "sig", Tier: 2, Index: 7}
 		l := NewLatch(id)
 
 		l.Update("march", Reduced{v: 0.20, state: StateValue}, full(), march(), t0)

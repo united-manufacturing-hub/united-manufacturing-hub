@@ -101,8 +101,6 @@ type Signal[S any] struct {
 	// ReleaseOnAbsent stops reporting the signal the moment nothing can answer
 	// it at all, rather than waiting out DemoteSpan.
 	ReleaseOnAbsent bool
-	// External marks a cause attributed outside this box rather than to it.
-	External bool
 }
 
 // Capable returns the instruments the environment satisfies, in declared order.
