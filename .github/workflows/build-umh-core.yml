@@ -65,8 +65,8 @@ jobs:
         id: mc-token
         uses: actions/create-github-app-token@29824e69f54612133e76f7eaac726eef6c875baf # v2
         with:
-          app-id: ${{ secrets.CHECKOUT_APP_ID }}
-          private-key: ${{ secrets.CHECKOUT_APP_PK }}
+          app-id: ${{ secrets.PR_APP_ID }}
+          private-key: ${{ secrets.PR_APP_PK }}
           repositories: ManagementConsole
           permission-contents: read
 
