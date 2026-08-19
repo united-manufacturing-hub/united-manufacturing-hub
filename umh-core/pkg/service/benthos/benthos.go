@@ -208,18 +208,16 @@ func (bs *BenthosStatus) CopyBenthosLogs(src []s6service.LogEntry) error {
 
 // benthosMonitorManagerIface lets BenthosService hold either benthos monitor
 // backend: the fsmv1 BenthosMonitorManager or the fsmv2 adapter WorkerManager,
-// depending on the USE_FSMV2_BENTHOS_MONITOR flag.
-//
-// The method set is deliberately no wider than the three methods BenthosService
-// itself calls on the field: GetLastObservedState from GetHealthCheckAndMetrics,
-// GetInstance from RemoveBenthosFromS6Manager, Reconcile from ReconcileManager.
-// Any method added here must exist on both backends, and the fsmv2 side is a
-// generic adapter.WorkerManager whose method set this package does not control.
-// That is why GetCurrentFSMState is absent even though Status calls it on
-// s6Manager: no monitor backend has to provide it.
+// depending on the USE_FSMV2_BENTHOS_MONITOR flag. A method added here must
+// exist on both backends, and the fsmv2 side is a generic
+// adapter.WorkerManager whose method set this package does not control — which
+// is why GetCurrentFSMState is absent even though Status calls it on s6Manager.
 type benthosMonitorManagerIface interface {
+	// GetLastObservedState is called from GetHealthCheckAndMetrics.
 	GetLastObservedState(serviceName string) (fsm.ObservedState, error)
+	// GetInstance is called from RemoveBenthosFromS6Manager.
 	GetInstance(name string) (fsm.FSMInstance, bool)
+	// Reconcile is called from ReconcileManager.
 	Reconcile(ctx context.Context, snapshot fsm.SystemSnapshot, services serviceregistry.Provider) (error, bool)
 }
 
