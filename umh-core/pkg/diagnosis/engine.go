@@ -213,8 +213,8 @@ func validate[S any](t Table[S]) error {
 
 		seenInstrument := make(map[string]bool, len(s.Instruments))
 		for _, inst := range s.Instruments {
-			if inst.Extract == nil {
-				return fmt.Errorf("signal %q instrument %q: nil extract", s.Name, inst.Name)
+			if err := validateMeasurement(fmt.Sprintf("signal %q instrument %q", s.Name, inst.Name), "window span", inst.Measurement, t.Interval); err != nil {
+				return err
 			}
 
 			if seenInstrument[inst.Name] {
@@ -222,18 +222,6 @@ func validate[S any](t Table[S]) error {
 			}
 
 			seenInstrument[inst.Name] = true
-
-			if inst.Span <= 0 {
-				return fmt.Errorf("signal %q instrument %q: window span %v is zero or negative", s.Name, inst.Name, inst.Span)
-			}
-
-			if inst.Reduction.Min < 1 {
-				return fmt.Errorf("signal %q instrument %q: reduction %q minimum sample count %d is below one", s.Name, inst.Name, inst.Reduction.Name, inst.Reduction.Min)
-			}
-
-			if inst.Reduction.fold == nil {
-				return fmt.Errorf("signal %q instrument %q: reduction %q has no fold", s.Name, inst.Name, inst.Reduction.Name)
-			}
 
 			if inst.Reduction.ordered && inst.Boolean {
 				return fmt.Errorf("signal %q instrument %q: ordered reduction %q on a boolean series", s.Name, inst.Name, inst.Reduction.Name)
@@ -267,44 +255,55 @@ func validate[S any](t Table[S]) error {
 			if span := worse(inst.Marks.Worst, inst.Marks) - worse(inst.Marks.Fire.At, inst.Marks); math.IsInf(span, 0) {
 				return fmt.Errorf("signal %q instrument %q: the distance from fire mark %v to worst value %v overflows, so the severity denominator is not finite", s.Name, inst.Name, inst.Marks.Fire.At, inst.Marks.Worst)
 			}
-
-			if t.Interval > 0 && int(inst.Span/t.Interval)+1 < inst.Reduction.Min {
-				return fmt.Errorf("signal %q instrument %q: reduction %q minimum sample count %d exceeds what its window span %v can hold at table interval %v", s.Name, inst.Name, inst.Reduction.Name, inst.Reduction.Min, inst.Span, t.Interval)
-			}
 		}
 	}
 
 	seenMeasurement := make(map[string]bool, len(t.Measurements))
-	for _, tr := range t.Measurements {
-		if seenMeasurement[tr.Name] {
-			return fmt.Errorf("duplicate measurement name %q", tr.Name)
+	for _, m := range t.Measurements {
+		if seenMeasurement[m.Name] {
+			return fmt.Errorf("duplicate measurement name %q", m.Name)
 		}
 
-		seenMeasurement[tr.Name] = true
+		seenMeasurement[m.Name] = true
 
-		if tr.Extract == nil {
-			return fmt.Errorf("measurement %q: nil extract", tr.Name)
+		if err := validateMeasurement(fmt.Sprintf("measurement %q", m.Name), "span", m, t.Interval); err != nil {
+			return err
 		}
 
-		if tr.Span <= 0 {
-			return fmt.Errorf("measurement %q: span %v is zero or negative", tr.Name, tr.Span)
+		if m.Reduction.divides {
+			return fmt.Errorf("measurement %q: reduction %q divides but a measurement declares no denominator series", m.Name, m.Reduction.Name)
 		}
+	}
 
-		if tr.Reduction.Min < 1 {
-			return fmt.Errorf("measurement %q: reduction %q minimum sample count %d is below one", tr.Name, tr.Reduction.Name, tr.Reduction.Min)
-		}
+	return nil
+}
 
-		if tr.Reduction.fold == nil {
-			return fmt.Errorf("measurement %q: reduction %q has no fold", tr.Name, tr.Reduction.Name)
-		}
+// validateMeasurement applies the five rules every Measurement is held to,
+// whether it answers a signal (among a Signal's Instruments) or sits in
+// Table.Measurements. row names the ownership for the error, e.g.
+// `signal "A" instrument "I1"`, and spanNoun is the word the loop uses for the
+// window's size, "window span" for an instrument as against "span" for a bare
+// table measurement: each loop's wording is part of the message the tests
+// assert on, so the two stay exact.
+func validateMeasurement[S any](row string, spanNoun string, m Measurement[S], interval time.Duration) error {
+	if m.Extract == nil {
+		return fmt.Errorf("%s: nil extract", row)
+	}
 
-		if tr.Reduction.divides {
-			return fmt.Errorf("measurement %q: reduction %q divides but a measurement declares no denominator series", tr.Name, tr.Reduction.Name)
-		}
+	if m.Span <= 0 {
+		return fmt.Errorf("%s: %s %v is zero or negative", row, spanNoun, m.Span)
+	}
 
-		if t.Interval > 0 && int(tr.Span/t.Interval)+1 < tr.Reduction.Min {
-			return fmt.Errorf("measurement %q: reduction %q minimum sample count %d exceeds what its window span %v can hold at table interval %v", tr.Name, tr.Reduction.Name, tr.Reduction.Min, tr.Span, t.Interval)
-		}
+	if m.Reduction.Min < 1 {
+		return fmt.Errorf("%s: reduction %q minimum sample count %d is below one", row, m.Reduction.Name, m.Reduction.Min)
+	}
+
+	if m.Reduction.fold == nil {
+		return fmt.Errorf("%s: reduction %q has no fold", row, m.Reduction.Name)
+	}
+
+	if interval > 0 && int(m.Span/interval)+1 < m.Reduction.Min {
+		return fmt.Errorf("%s: reduction %q minimum sample count %d exceeds what its window span %v can hold at table interval %v", row, m.Reduction.Name, m.Reduction.Min, m.Span, interval)
 	}
 
 	return nil
