@@ -491,4 +491,65 @@ var _ = Describe("NewEngine", func() {
 		Expect(err).ToNot(HaveOccurred(),
 			"a refinement name is unique among its parent's refinements, not across the tree")
 	})
+
+	// A refinement's windows are keyed under its parent's path plus its own
+	// name, joined with "/", so a top-level signal named "A/X" is keyed under
+	// the same "A/X" as the refinement X of a signal A. The second one built
+	// overwrites the first, and from then on both signals judge whichever window
+	// survived. Refusing "/" inside any name makes that collision unreachable:
+	// no segment can hold the separator, so no composed path can equal a bare
+	// name.
+	It("refuses a top-level signal whose name holds the path separator", func() {
+		_, err := NewEngine(validTable([]Signal[snap]{validSignal("A/X")}))
+		if err == nil {
+			Fail("expected NewEngine to reject a top-level signal named A/X")
+		}
+		Expect(err.Error()).To(ContainSubstring("A/X"))
+		Expect(err.Error()).To(ContainSubstring(`may not contain "/"`))
+	})
+
+	It("refuses a refinement whose name holds the path separator, so the rule reaches below the top level", func() {
+		parent := validSignal("A")
+		parent.Refinements = []Signal[snap]{validSignal("B/C")}
+		_, err := NewEngine(validTable([]Signal[snap]{parent}))
+		if err == nil {
+			Fail("expected NewEngine to reject a refinement named B/C")
+		}
+		Expect(err.Error()).To(ContainSubstring("B/C"))
+		Expect(err.Error()).To(ContainSubstring(`may not contain "/"`))
+	})
+
+	// Two parents each declaring a refinement called X is the case paths exist
+	// for, and the refusal above must not reach it. Reading both reduced values
+	// is what pins that down: a rule that rejected this table, or one that let
+	// the two share a window, would leave the two refusals above green while the
+	// feature was broken. Each X reads the snapshot through its own extractor,
+	// so one shared window could not report both numbers.
+	It("keeps the windows of a refinement named X under A and one named X under B separate", func() {
+		refinementReading := func(read func(snap) float64) Signal[snap] {
+			r := validSignal("X")
+			r.Instruments[0].Extract = func(s snap) Reading { return Known(read(s)) }
+
+			return r
+		}
+
+		a := validSignal("A")
+		a.Refinements = []Signal[snap]{refinementReading(func(s snap) float64 { return s.v })}
+		b := validSignal("B")
+		b.Refinements = []Signal[snap]{refinementReading(func(s snap) float64 { return s.v * 3 })}
+
+		e, err := NewEngine(validTable([]Signal[snap]{a, b}))
+		Expect(err).ToNot(HaveOccurred(),
+			"two parents may each declare a refinement called X: the paths A/X and B/X keep them apart")
+
+		e.Observe(snap{v: 2}, NewEnvironment("source-1"), time.Unix(1_000_000, 0))
+
+		underA, stateA := e.Reduction("A/X", "I1").Get()
+		Expect(stateA).To(Equal(StateValue))
+		Expect(underA).To(Equal(2.0))
+
+		underB, stateB := e.Reduction("B/X", "I1").Get()
+		Expect(stateB).To(Equal(StateValue))
+		Expect(underB).To(Equal(6.0), "B/X reads three times what A/X does, so one shared window could not report both")
+	})
 })

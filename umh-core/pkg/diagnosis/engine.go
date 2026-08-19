@@ -36,6 +36,7 @@ import (
 	"fmt"
 	"math"
 	"sort"
+	"strings"
 	"time"
 )
 
@@ -238,8 +239,9 @@ func buildWindows[S any](e *Engine[S], path string, s Signal[S]) error {
 // produce a verdict, could never hold a point, or names itself twice: a
 // reduction with no calculation to apply, a percentile over a boolean series, a
 // non-finite mark, a clear mark not on the holding side of its fire mark, a nil
-// extractor, a zero span, a duplicate name. The error names the row. Two rules
-// need more than an error string:
+// extractor, a zero span, a duplicate name, a name holding the separator paths
+// are composed with. The error names the row. Two rules need more than an error
+// string:
 //
 //   - Marks must be finite, Worst, the value where severity reaches 1, must be
 //     strictly worse than Fire under the pair's own polarity, and the span from
@@ -311,6 +313,16 @@ func validate[S any](t Table[S]) error {
 // row lives rather than the bare child. Instrument and refinement names are
 // unique among their siblings only.
 func validateSignal[S any](path string, s Signal[S], interval time.Duration) error {
+	// A refinement's path is its parent's path plus "/" plus its own name, and
+	// that path keys its windows. A name holding the separator could therefore
+	// compose a path equal to another signal's, e.g. a top-level signal named
+	// "A/X" against the refinement X of a signal A, and the two would silently
+	// share one window. Refusing the separator in every segment makes that
+	// collision unreachable.
+	if strings.Contains(s.Name, "/") {
+		return fmt.Errorf("signal %q: a name may not contain %q", path, "/")
+	}
+
 	if len(s.Instruments) == 0 {
 		return fmt.Errorf("signal %q: no instruments", path)
 	}
