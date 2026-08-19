@@ -13,6 +13,7 @@
 ### Fixes
 
 - Renaming a bridge whose deployment then fails no longer leaves it impossible to edit or save. A failed deployment now undoes the rename along with the rest of the configuration, while Save Anyway keeps the new name as before
+- A typo in `USE_FSMV2_BENTHOS_MONITOR` no longer passes unnoticed. An unrecognised value now logs a warning naming the variable and the value it received, instead of silently leaving the instance on the previous bridge metrics collection
 
 ## [0.44.34]
 
