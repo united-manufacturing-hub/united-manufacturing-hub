@@ -256,7 +256,7 @@ func reportFallback(unsupported string) {
 
 	log.Warnf(
 		"benthos config canonicalization fell back to the YAML round-trip: unsupported type %q. "+
-			"Correct but slower; add the case to normalizeValue in canonicalize_fast.go.",
+			"Correct but slower; add the case to normalizeValue in canonicalize_walk.go.",
 		unsupported)
 
 	// Passing log rather than nil: ReportIssueWithContext swaps nil for a no-op

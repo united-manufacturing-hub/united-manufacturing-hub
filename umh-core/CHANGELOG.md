@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Fixes
+
+- Bridges on instances with large configurations no longer flicker between degraded and active, or show as inactive while they are still passing data. Checking whether a bridge still matched its desired configuration was slow enough that some bridges were skipped, then torn down and restarted as though they had got stuck
+
 ## [0.44.35]
 
 ### Improvements
@@ -25,9 +29,6 @@
 ### Improvements
 
 - New instances now save 7 days of raw messages even in default settings. Existing instances are unaffected, and to switch one over set `internal.redpanda.redpandaServiceConfig.topic.defaultTopicCleanupPolicy` to `delete`. Note that seven days scales with message rate, roughly 40–55 GB for `umh.messages` at 700 msg/s, so check the sizing guide before running a high-throughput instance
-### Improvements
-
-- Instances with large bridge configurations no longer starve their reconcile loop. Checking whether a bridge's running configuration still matches the desired one re-serialized it to YAML text and parsed it back, on both sides of every comparison and several times per bridge per tick. This could under the wrong circumstances push the control loop past its tick budget, so bridges stopped being reconciled and could show up as inactive. The comparison now works directly on the values and falls back to the old path only for the rare shapes it cannot reproduce exactly, which roughly halves the control loop's cycle time in every configuration measured.
 
 ## [0.44.33]
 

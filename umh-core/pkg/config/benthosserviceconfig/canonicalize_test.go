@@ -15,38 +15,73 @@
 package benthosserviceconfig
 
 import (
+	"os"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
 
 var _ = Describe("canonicalize", func() {
-	It("fast path matches the round trip for a representative config", func() {
-		cfg := NewNormalizer().NormalizeConfig(bridgeConfig(10))
+	// The gate is an opt-out kill switch, so the walk is what production runs and
+	// what every other spec here is about. A default flipped to false would leave
+	// the optimization shipped but never taken, and a misspelled variable name would
+	// leave it impossible to turn off.
+	//
+	// Asserted against the environment these specs set rather than against
+	// useCanonicalizeFast, which is fixed at process start: running the suite with
+	// USE_CANONICALIZE_FAST=false is a supported way to check the fallback, and must
+	// not fail the spec that describes the default.
+	Describe("USE_CANONICALIZE_FAST", func() {
+		var prev string
 
-		fast, ok := canonicalizeFast(cfg)
-		Expect(ok).To(BeTrue())
+		var hadPrev bool
 
-		Expect(fast).To(Equal(canonicalizeSlow(cfg)))
+		BeforeEach(func() {
+			prev, hadPrev = os.LookupEnv("USE_CANONICALIZE_FAST")
+		})
+
+		AfterEach(func() {
+			if hadPrev {
+				Expect(os.Setenv("USE_CANONICALIZE_FAST", prev)).To(Succeed())
+
+				return
+			}
+
+			Expect(os.Unsetenv("USE_CANONICALIZE_FAST")).To(Succeed())
+		})
+
+		It("takes the walk when unset", func() {
+			Expect(os.Unsetenv("USE_CANONICALIZE_FAST")).To(Succeed())
+
+			Expect(canonicalizeFastEnabled()).To(BeTrue(), "the gate must default to on")
+		})
+
+		It("takes the round-trip when set to false", func() {
+			Expect(os.Setenv("USE_CANONICALIZE_FAST", "false")).To(Succeed())
+
+			Expect(canonicalizeFastEnabled()).To(BeFalse(), "the kill switch must work")
+		})
 	})
 
-	It("declines a value the walk cannot reproduce exactly", func() {
-		cfg := NewNormalizer().NormalizeConfig(bridgeConfig(10))
-		cfg.Input["s7comm"].(map[string]interface{})["preamble"] = "\nSELECT 1;\n"
+	// An empty section renders as a sequence rather than a map, so round-tripping it
+	// would hand the comparator a shape it does not expect.
+	Describe("empty sections", func() {
+		It("returns an empty map untouched", func() {
+			empty := map[string]interface{}{}
 
-		_, ok := canonicalizeFast(cfg)
-		Expect(ok).To(BeFalse())
+			Expect(canonicalizeMap(empty)).To(Equal(empty))
+			Expect(canonicalizeMap(nil)).To(BeNil())
+		})
+
+		It("returns an empty resource list untouched", func() {
+			empty := []map[string]interface{}{}
+
+			Expect(canonicalizeResources(empty)).To(Equal(empty))
+			Expect(canonicalizeResources(nil)).To(BeNil())
+		})
 	})
 
-	It("leaves an empty section untouched instead of walking it", func() {
-		cfg := BenthosServiceConfig{Input: map[string]interface{}{}, Output: map[string]interface{}{}}
-
-		fast, ok := canonicalizeFast(cfg)
-		Expect(ok).To(BeTrue())
-		Expect(fast.Input).To(Equal(cfg.Input))
-		Expect(fast.Output).To(Equal(cfg.Output))
-	})
-
-	Describe("useCanonicalizeFast gate", func() {
+	Describe("USE_CANONICALIZE_FAST gate", func() {
 		var prev bool
 
 		BeforeEach(func() {
@@ -57,31 +92,32 @@ var _ = Describe("canonicalize", func() {
 			useCanonicalizeFast = prev
 		})
 
-		It("defaults to the round trip, ignoring canonicalizeFast, when unset", func() {
-			useCanonicalizeFast = false
+		withGate := func(on bool, cfg BenthosServiceConfig) BenthosServiceConfig {
+			useCanonicalizeFast = on
 
-			cfg := NewNormalizer().NormalizeConfig(bridgeConfig(10))
+			return canonicalize(cfg)
+		}
 
-			Expect(canonicalize(cfg)).To(Equal(canonicalizeSlow(cfg)))
+		It("produces the same config with the walk on as with it off", func() {
+			cfg := NewNormalizer().NormalizeConfig(bridgeConfig(50))
+
+			Expect(withGate(true, cfg)).To(Equal(withGate(false, cfg)),
+				"the walk must be indistinguishable from the round-trip it replaces")
 		})
 
-		It("uses canonicalizeFast once enabled", func() {
-			useCanonicalizeFast = true
+		It("stays correct when one section declines and the rest do not", func() {
+			cfg := NewNormalizer().NormalizeConfig(bridgeConfigDeclining(20))
 
-			cfg := NewNormalizer().NormalizeConfig(bridgeConfig(10))
+			// The fallback is per section: only Input holds the shape the walk
+			// refuses, so the other sections are still walked.
+			_, inputOK := fastNormalize(cfg.Input)
+			Expect(inputOK).To(BeFalse(), "fixture no longer triggers a fallback")
 
-			fast, ok := canonicalizeFast(cfg)
-			Expect(ok).To(BeTrue())
-			Expect(canonicalize(cfg)).To(Equal(fast))
-		})
+			_, outputOK := fastNormalize(cfg.Output)
+			Expect(outputOK).To(BeTrue(), "only Input should decline")
 
-		It("still falls back to the round trip when enabled and a value declines", func() {
-			useCanonicalizeFast = true
-
-			cfg := NewNormalizer().NormalizeConfig(bridgeConfig(10))
-			cfg.Input["s7comm"].(map[string]interface{})["preamble"] = "\nSELECT 1;\n"
-
-			Expect(canonicalize(cfg)).To(Equal(canonicalizeSlow(cfg)))
+			Expect(withGate(true, cfg)).To(Equal(withGate(false, cfg)),
+				"a mixed walked/round-tripped config must match the all-round-trip one")
 		})
 	})
 })

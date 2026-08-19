@@ -20,200 +20,84 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/env"
 )
 
-// useCanonicalizeFast gates canonicalizeFast behind USE_CANONICALIZE_FAST.
-// Opt-out and on by default: canonicalizeFast is a hand-written reimplementation
-// of what yaml.Marshal/Unmarshal do (see the SAFETY note on normalizeValue in
-// canonicalize_fast.go), so a shape it gets wrong would make two equal configs
-// compare unequal on every tick. Flipping this env var lets it be disabled
-// instantly, without a rollback, if that ever happens in production.
-var useCanonicalizeFast, _ = env.GetAsBool("USE_CANONICALIZE_FAST", false, true)
+// useCanonicalizeFast gates the walk in canonicalize_walk.go behind
+// USE_CANONICALIZE_FAST. Opt-out and on by default: normalizeValue is a
+// hand-written reimplementation of what yaml.Marshal/Unmarshal do (see the SAFETY
+// note there), so a shape it gets wrong would make two equal configs compare
+// unequal on every tick. Setting USE_CANONICALIZE_FAST=false turns it off in
+// place, without a rollback, if that ever happens in production; every section
+// then takes the YAML round-trip that predates it.
+var useCanonicalizeFast = canonicalizeFastEnabled()
 
-// canonicalize rewrites the free-form sections into the types they take once the
-// config has been written to benthos.yaml and read back, so a config built in Go
-// compares equal to the same config parsed from disk. Without it a purely
-// representational difference - a Go []string against the []interface{} yaml decodes
-// - looks semantic and the config is re-applied on every tick.
+// canonicalizeFastEnabled reads the gate. Separate from the variable so a test can
+// assert what an unset or explicitly disabled USE_CANONICALIZE_FAST resolves to;
+// the variable itself is fixed at process start and carries whatever the ambient
+// environment said.
+func canonicalizeFastEnabled() bool {
+	enabled, _ := env.GetAsBool("USE_CANONICALIZE_FAST", false, true)
+
+	return enabled
+}
+
+// canonicalize rewrites the free-form config maps into the types they take once
+// the config has been written to benthos.yaml and read back, so a config built in
+// Go compares equal to the same config parsed from disk. Without it a purely
+// representational difference - a Go []string against the []interface{} yaml
+// decodes - looks semantic and the config is re-applied on every tick.
 //
-// canonicalizeFast is tried first when useCanonicalizeFast is set: it walks each
-// section instead of serialising it, and reports ok=false for anything it cannot
-// reproduce exactly, in which case we fall through to canonicalizeSlow. See
-// canonicalize_fast.go for what it declines.
+// MetricsPort and DebugLevel are left alone: scalars need no canonicalization, and
+// the document spells them as an http address and a log level.
 //
-// MetricsPort and DebugLevel are left alone in both paths: scalars need no
-// canonicalization, and the document spells them as an http address and a log
-// level. The result shares unreplaced maps with cfg, which callers must not mutate.
+// Each section is canonicalized on its own, so a value the walk declines costs the
+// round-trip for its own section and no others. The result shares unreplaced maps
+// with cfg, which callers must not mutate.
 func canonicalize(cfg BenthosServiceConfig) BenthosServiceConfig {
-	if useCanonicalizeFast {
-		if fast, ok := canonicalizeFast(cfg); ok {
-			return fast
-		}
-	}
-
-	return canonicalizeSlow(cfg)
-}
-
-// canonicalizeFast reproduces canonicalizeSlow's result for every section by
-// walking the value in Go instead of rendering and reparsing the whole document.
-// A single section that normalizeValue cannot reproduce exactly - see
-// canonicalize_fast.go - fails the whole call, since canonicalizeSlow's single
-// render already computes every section at once and gives no reason to mix the
-// two paths within one call.
-func canonicalizeFast(cfg BenthosServiceConfig) (BenthosServiceConfig, bool) {
-	input, ok := fastSection(cfg.Input)
-	if !ok {
-		return cfg, false
-	}
-
-	output, ok := fastSection(cfg.Output)
-	if !ok {
-		return cfg, false
-	}
-
-	pipeline, ok := fastSection(cfg.Pipeline)
-	if !ok {
-		return cfg, false
-	}
-
-	buffer, ok := fastSection(cfg.Buffer)
-	if !ok {
-		return cfg, false
-	}
-
-	cacheResources, ok := fastResources(cfg.CacheResources)
-	if !ok {
-		return cfg, false
-	}
-
-	rateLimitResources, ok := fastResources(cfg.RateLimitResources)
-	if !ok {
-		return cfg, false
-	}
-
-	cfg.Input = input
-	cfg.Output = output
-	cfg.Pipeline = pipeline
-	cfg.Buffer = buffer
-	cfg.CacheResources = cacheResources
-	cfg.RateLimitResources = rateLimitResources
-
-	return cfg, true
-}
-
-// fastSection runs normalizeValue over a section map, matching canonicalSection's
-// rule that an empty section is returned untouched rather than walked.
-func fastSection(original map[string]interface{}) (map[string]interface{}, bool) {
-	if len(original) == 0 {
-		return original, true
-	}
-
-	out, ok, unsupported := normalizeValue(original)
-	if !ok {
-		reportFallback(unsupported)
-
-		return nil, false
-	}
-
-	result, ok := out.(map[string]interface{})
-	if !ok {
-		return nil, false
-	}
-
-	return result, true
-}
-
-// fastResources runs normalizeValue over a resource list, matching
-// canonicalResources's rule that an empty list is returned untouched.
-func fastResources(original []map[string]interface{}) ([]map[string]interface{}, bool) {
-	if len(original) == 0 {
-		return original, true
-	}
-
-	out, ok, unsupported := normalizeValue(original)
-	if !ok {
-		reportFallback(unsupported)
-
-		return nil, false
-	}
-
-	list, ok := out.([]interface{})
-	if !ok {
-		return nil, false
-	}
-
-	result := make([]map[string]interface{}, 0, len(list))
-
-	for _, item := range list {
-		entry, ok := item.(map[string]interface{})
-		if !ok {
-			return nil, false
-		}
-
-		result = append(result, entry)
-	}
-
-	return result, true
-}
-
-// canonicalizeSlow is the original implementation: the whole document is rendered
-// with the generator that writes benthos.yaml and parsed back, which leaves the
-// file as the single definition of the observed shape. An earlier version
-// reproduced yaml.v3's emitter decisions in Go instead and needed an ever-growing
-// table of value shapes to refuse - canonicalizeFast above is that table, kept as
-// a fast path rather than the only path since it still must decline shapes it
-// cannot prove correct.
-//
-// On a render or parse error cfg is returned unchanged, so canonicalization can
-// never make two equal configs look different.
-func canonicalizeSlow(cfg BenthosServiceConfig) BenthosServiceConfig {
-	text, err := defaultGenerator.RenderConfig(cfg)
-	if err != nil {
-		return cfg
-	}
-
-	doc, ok := parseCanonicalDoc(text)
-	if !ok {
-		return cfg
-	}
-
-	cfg.Input = canonicalSection(doc, "input", cfg.Input)
-	cfg.Output = canonicalSection(doc, "output", cfg.Output)
-	cfg.Pipeline = canonicalSection(doc, "pipeline", cfg.Pipeline)
-	cfg.Buffer = canonicalSection(doc, "buffer", cfg.Buffer)
-	cfg.CacheResources = canonicalResources(doc, "cache_resources", cfg.CacheResources)
-	cfg.RateLimitResources = canonicalResources(doc, "rate_limit_resources", cfg.RateLimitResources)
+	cfg.Input = canonicalizeMap(cfg.Input)
+	cfg.Output = canonicalizeMap(cfg.Output)
+	cfg.Pipeline = canonicalizeMap(cfg.Pipeline)
+	cfg.Buffer = canonicalizeMap(cfg.Buffer)
+	cfg.CacheResources = canonicalizeResources(cfg.CacheResources)
+	cfg.RateLimitResources = canonicalizeResources(cfg.RateLimitResources)
 
 	return cfg
 }
 
-// canonicalSection returns the named section as the rendered document parsed it, or
-// original when the document does not carry it as a map.
-//
-// An empty section is returned untouched: the generator renders an empty input or
-// output as a sequence rather than a map, and the comparator wants the normalizer's
-// empty map instead.
-func canonicalSection(doc map[string]interface{}, key string, original map[string]interface{}) map[string]interface{} {
-	if len(original) == 0 {
-		return original
+// canonicalizeMap returns m in the shape it takes after a YAML round-trip. A nil
+// or empty map is returned unchanged, since the comparator wants the normalizer's
+// empty map rather than the sequence an empty section renders as.
+func canonicalizeMap(m map[string]interface{}) map[string]interface{} {
+	if len(m) == 0 {
+		return m
 	}
 
-	section, ok := doc[key].(map[string]interface{})
+	out, err := roundTrip(m)
+	if err != nil {
+		return m
+	}
+
+	result, ok := out.(map[string]interface{})
 	if !ok {
-		return original
+		return m
 	}
 
-	return section
+	return result
 }
 
-// canonicalResources returns the named resource list as the rendered document
-// parsed it, or original when the document does not carry it as a list of maps.
-func canonicalResources(doc map[string]interface{}, key string, original []map[string]interface{}) []map[string]interface{} {
-	if len(original) == 0 {
-		return original
+// canonicalizeResources returns the resource slice in the shape it takes after a
+// YAML round-trip. A nil or empty slice is returned unchanged.
+func canonicalizeResources(s []map[string]interface{}) []map[string]interface{} {
+	if len(s) == 0 {
+		return s
 	}
 
-	list, ok := doc[key].([]interface{})
+	out, err := roundTrip(s)
+	if err != nil {
+		return s
+	}
+
+	list, ok := out.([]interface{})
 	if !ok {
-		return original
+		return s
 	}
 
 	result := make([]map[string]interface{}, 0, len(list))
@@ -221,7 +105,7 @@ func canonicalResources(doc map[string]interface{}, key string, original []map[s
 	for _, item := range list {
 		entry, ok := item.(map[string]interface{})
 		if !ok {
-			return original
+			return s
 		}
 
 		result = append(result, entry)
@@ -230,17 +114,34 @@ func canonicalResources(doc map[string]interface{}, key string, original []map[s
 	return result
 }
 
-// parseCanonicalDoc parses a rendered benthos document.
+// roundTrip marshals v to YAML and unmarshals it back into a generic value.
 //
-// Deliberately uncached: only Go-built configs reach here and they are small, so a
-// cache keyed on the rendered text measured 1.7x on this path and nothing on the
-// path that used to be slow - not worth a document and parse tree held per component
-// for the lifetime of the process.
-func parseCanonicalDoc(text string) (map[string]interface{}, bool) {
-	var doc map[string]interface{}
-	if err := yaml.Unmarshal([]byte(text), &doc); err != nil {
-		return nil, false
+// normalizeValue is tried first when useCanonicalizeFast is set: it walks the value
+// instead of serialising it, and reports ok=false for anything it cannot reproduce
+// exactly, in which case we fall through to the round-trip below. See
+// canonicalize_walk.go for what it declines.
+//
+// On a marshal or unmarshal error the caller keeps the original value, so
+// canonicalization can never make two equal configs look different.
+func roundTrip(v interface{}) (interface{}, error) {
+	if useCanonicalizeFast {
+		out, ok, unsupported := normalizeValue(v)
+		if ok {
+			return out, nil
+		}
+
+		reportFallback(unsupported)
 	}
 
-	return doc, true
+	encoded, err := yaml.Marshal(v)
+	if err != nil {
+		return nil, err
+	}
+
+	var decoded interface{}
+	if err := yaml.Unmarshal(encoded, &decoded); err != nil {
+		return nil, err
+	}
+
+	return decoded, nil
 }
