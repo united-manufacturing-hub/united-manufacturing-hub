@@ -13,7 +13,7 @@
 // limitations under the License.
 
 // This file is the engine. A caller declares a Table; NewEngine reads it once
-// and builds one SlidingWindow per (signal, instrument) pair, one SlidingWindow per track and
+// and builds one SlidingWindow per (signal, instrument) pair, one SlidingWindow per measurement and
 // one Latch per signal, refusing a malformed table. Observe then appends the
 // snapshot to every window, resolves what each signal's windows can collectively
 // say, an Availability, and drives that signal's latch with it.
@@ -86,42 +86,44 @@ type signalState[S any] struct {
 	latch  Latch
 }
 
-// trackState is one track and the single window it reduces through, paired for
-// the same reason. Track no longer walks one slice while indexing another.
-type trackState[S any] struct {
-	track  Track[S]
-	window SlidingWindow
+// measurementState is one measurement and the single window it reduces through,
+// paired for the same reason. Measurement no longer walks one slice while
+// indexing another.
+type measurementState[S any] struct {
+	measurement Measurement[S]
+	window      SlidingWindow
 }
 
-// Engine owns every window, every track and one latch per signal, for one table.
+// Engine owns every window, every measurement and one latch per signal, for one table.
 // It is not synchronized: the goroutine that calls Observe owns it, and a reader
-// calling Select, Reduction or Track from another races on points and latches.
+// calling Select, Reduction or Measurement from another races on points and latches.
 type Engine[S any] struct {
 	// windows is the last name-keyed map in here, and it stays one: Select
 	// resolves against the CALLER'S Signal, so a lookup can legitimately miss
 	// and resolve's nil arms are reachable. The two below are built by
 	// NewEngine and cannot miss, which is why they are pairs instead.
-	windows map[key]*SlidingWindow
-	signals []signalState[S]
-	tracks  []trackState[S]
+	windows      map[key]*SlidingWindow
+	signals      []signalState[S]
+	measurements []measurementState[S]
 }
 
 // NewEngine validates the table, then builds one window per (signal, instrument)
-// pair, one window per track, and one latch per signal, in signal order. It
+// pair, one window per measurement, and one latch per signal, in signal order. It
 // is the single place a malformed table is refused; validate holds the list.
 //
-// A track's demote span is its own span, because a track belongs to no signal
-// and so has no hold for the demote clock to bound, and its counter flag is
-// false, because a counter track would need the restart rule declared.
+// A measurement's demote span is its own span, because a measurement belongs to
+// no signal and so has no hold for the demote clock to bound, and its counter
+// flag is
+// false, because a counter measurement would need the restart rule declared.
 func NewEngine[S any](t Table[S]) (*Engine[S], error) {
 	if err := validate(t); err != nil {
 		return nil, err
 	}
 
 	e := &Engine[S]{
-		windows: make(map[key]*SlidingWindow),
-		signals: make([]signalState[S], 0, len(t.Signals)),
-		tracks:  make([]trackState[S], 0, len(t.Tracks)),
+		windows:      make(map[key]*SlidingWindow),
+		signals:      make([]signalState[S], 0, len(t.Signals)),
+		measurements: make([]measurementState[S], 0, len(t.Measurements)),
 	}
 	for _, s := range t.Signals {
 		for _, inst := range s.Instruments {
@@ -134,13 +136,13 @@ func NewEngine[S any](t Table[S]) (*Engine[S], error) {
 		}
 	}
 
-	for _, tr := range t.Tracks {
+	for _, tr := range t.Measurements {
 		w, err := NewSlidingWindow(tr.Span, tr.Span, tr.Reduction, false)
 		if err != nil {
 			return nil, err
 		}
 
-		e.tracks = append(e.tracks, trackState[S]{track: tr, window: *w})
+		e.measurements = append(e.measurements, measurementState[S]{measurement: tr, window: *w})
 	}
 
 	for i, s := range t.Signals {
@@ -272,36 +274,36 @@ func validate[S any](t Table[S]) error {
 		}
 	}
 
-	seenTrack := make(map[string]bool, len(t.Tracks))
-	for _, tr := range t.Tracks {
-		if seenTrack[tr.Name] {
-			return fmt.Errorf("duplicate track name %q", tr.Name)
+	seenMeasurement := make(map[string]bool, len(t.Measurements))
+	for _, tr := range t.Measurements {
+		if seenMeasurement[tr.Name] {
+			return fmt.Errorf("duplicate measurement name %q", tr.Name)
 		}
 
-		seenTrack[tr.Name] = true
+		seenMeasurement[tr.Name] = true
 
 		if tr.Extract == nil {
-			return fmt.Errorf("track %q: nil extract", tr.Name)
+			return fmt.Errorf("measurement %q: nil extract", tr.Name)
 		}
 
 		if tr.Span <= 0 {
-			return fmt.Errorf("track %q: span %v is zero or negative", tr.Name, tr.Span)
+			return fmt.Errorf("measurement %q: span %v is zero or negative", tr.Name, tr.Span)
 		}
 
 		if tr.Reduction.Min < 1 {
-			return fmt.Errorf("track %q: reduction %q minimum sample count %d is below one", tr.Name, tr.Reduction.Name, tr.Reduction.Min)
+			return fmt.Errorf("measurement %q: reduction %q minimum sample count %d is below one", tr.Name, tr.Reduction.Name, tr.Reduction.Min)
 		}
 
 		if tr.Reduction.fold == nil {
-			return fmt.Errorf("track %q: reduction %q has no fold", tr.Name, tr.Reduction.Name)
+			return fmt.Errorf("measurement %q: reduction %q has no fold", tr.Name, tr.Reduction.Name)
 		}
 
 		if tr.Reduction.divides {
-			return fmt.Errorf("track %q: reduction %q divides but a track declares no denominator series", tr.Name, tr.Reduction.Name)
+			return fmt.Errorf("measurement %q: reduction %q divides but a measurement declares no denominator series", tr.Name, tr.Reduction.Name)
 		}
 
 		if t.Interval > 0 && int(tr.Span/t.Interval)+1 < tr.Reduction.Min {
-			return fmt.Errorf("track %q: reduction %q minimum sample count %d exceeds what its window span %v can hold at table interval %v", tr.Name, tr.Reduction.Name, tr.Reduction.Min, tr.Span, t.Interval)
+			return fmt.Errorf("measurement %q: reduction %q minimum sample count %d exceeds what its window span %v can hold at table interval %v", tr.Name, tr.Reduction.Name, tr.Reduction.Min, tr.Span, t.Interval)
 		}
 	}
 
@@ -374,8 +376,8 @@ func (e *Engine[S]) resolve(s Signal[S], capable []Instrument[S]) (Instrument[S]
 
 // Observe runs one tick against a snapshot and returns the fired set, unranked
 // (Rank puts it worst first), and every signal's Readiness, both in table
-// order. In order: append to every track's and every instrument's window; then,
-// per signal, resolve its Availability over the instruments Signal.Capable
+// order. In order: append to every measurement's and every instrument's window;
+// then, per signal, resolve its Availability over the instruments Signal.Capable
 // allows this tick, drive its single latch, collect whatever fired, and emit a
 // Readiness row whether or not it did.
 //
@@ -397,9 +399,9 @@ func (e *Engine[S]) resolve(s Signal[S], capable []Instrument[S]) (Instrument[S]
 //	  the engine          resolves  Availability  what one signal can say now
 //	  Latch.Update        judges    Fired         a signal that crossed its mark
 func (e *Engine[S]) Observe(sample S, env Environment, at time.Time) ([]Fired, []Readiness) {
-	for i := range e.tracks { // reduced, never judged
-		ts := &e.tracks[i]
-		ts.window.Observe(ts.track.Extract(sample), Unknown(), at) // same clock as every window below
+	for i := range e.measurements { // reduced, never judged
+		ts := &e.measurements[i]
+		ts.window.Observe(ts.measurement.Extract(sample), Unknown(), at) // same clock as every window below
 	}
 
 	for _, st := range e.signals {
@@ -461,13 +463,14 @@ func (e *Engine[S]) Reduction(signal, instrument string) Reduced {
 	return w.Reduce()
 }
 
-// Track returns one named track's window reduced as it stands; an unnamed track
-// returns the zero Reduced, StateAbsent. Same contract as Reduction, on the
-// windows that belong to no signal: it must follow an Observe on the same tick.
-func (e *Engine[S]) Track(name string) Reduced {
-	for i := range e.tracks {
-		if e.tracks[i].track.Name == name {
-			return e.tracks[i].window.Reduce()
+// Measurement returns one named measurement's window reduced as it stands; an
+// unnamed measurement returns the zero Reduced, StateAbsent. Same contract as
+// Reduction, on the windows that belong to no signal: it must follow an Observe
+// on the same tick.
+func (e *Engine[S]) Measurement(name string) Reduced {
+	for i := range e.measurements {
+		if e.measurements[i].measurement.Name == name {
+			return e.measurements[i].window.Reduce()
 		}
 	}
 

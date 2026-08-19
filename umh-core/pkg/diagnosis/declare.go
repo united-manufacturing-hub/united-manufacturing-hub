@@ -124,19 +124,13 @@ func (s Signal[S]) Capable(env Environment) []Instrument[S] {
 	return capable
 }
 
-// Track is a quantity measured but never judged: reduced every tick like an
-// instrument, with no thresholds. Use it for a number the caller must publish.
-type Track[S any] struct {
-	Extract   func(S) Reading
-	Name      string
-	Reduction Reduction
-	Span      time.Duration
-}
-
-// Table is the whole declaration for one resource: every signal, every track,
-// and the interval the caller ticks at. The order of Signals is significant.
+// Table is the whole declaration for one resource: every signal, every
+// measurement, and the interval the caller ticks at. A measurement in
+// Table.Measurements is one no signal judges: reduced every tick like an
+// instrument but with no thresholds, so use it for a number the caller must
+// publish. The order of Signals is significant.
 type Table[S any] struct {
-	Signals  []Signal[S]
-	Tracks   []Track[S]
-	Interval time.Duration
+	Signals      []Signal[S]
+	Measurements []Measurement[S]
+	Interval     time.Duration
 }
