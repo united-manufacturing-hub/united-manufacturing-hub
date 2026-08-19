@@ -17,20 +17,29 @@ package benthos
 // These specs assert which backend NewDefaultBenthosService stores for a given
 // value of envUseFsmv2BenthosMonitor. env.GetAsBool (pkg/env/env.go) decides
 // which spellings count as true or false; the specs cover every one of them,
-// plus unset and an unparseable value. They tell the two backends apart by the
+// plus unset and an unrecognised value. They tell the two backends apart by the
 // concrete runtime type stored in svc.benthosMonitorManager.
+//
+// A second group of specs reads what the constructor logs, through an observer
+// core installed as the global zap logger: an unrecognised value has to warn,
+// and a recognised or unset value has to stay silent.
 
 import (
 	"os"
+	"strings"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
+	"go.uber.org/zap/zaptest/observer"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	benthos_monitor_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos_monitor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/adapter"
 	fsmv2benthosmonitor "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/benthos_monitor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/simple"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 )
 
 var _ = Describe("USE_FSMV2_BENTHOS_MONITOR flag wiring", func() {
@@ -147,5 +156,111 @@ var _ = Describe("USE_FSMV2_BENTHOS_MONITOR flag wiring", func() {
 			Expect(mgr).To(BeIdenticalTo(injected),
 				"the injected manager must be the one stored, not the flag-selected default")
 		})
+	})
+})
+
+// captureLogs redirects the global zap logger into an observer core and returns
+// the recorded lines plus a restore func. NewDefaultBenthosService takes its
+// logger from logger.For, which hands out zap.S().Named(...), so replacing the
+// global logger is what makes lines emitted *during construction* readable.
+func captureLogs() (*observer.ObservedLogs, func()) {
+	// logger.For initialises the global logger the first time it is called, and
+	// that initialisation would replace the observer installed below. Calling it
+	// once here burns the one-time initialisation before the swap.
+	logger.For("flag-spec-warm-up")
+
+	core, logs := observer.New(zapcore.DebugLevel)
+	restore := zap.ReplaceGlobals(zap.New(core))
+
+	return logs, restore
+}
+
+// linesNaming returns every recorded line whose message mentions the given
+// substring, regardless of level.
+func linesNaming(logs *observer.ObservedLogs, substring string) []observer.LoggedEntry {
+	var out []observer.LoggedEntry
+
+	for _, entry := range logs.All() {
+		if strings.Contains(entry.Message, substring) {
+			out = append(out, entry)
+		}
+	}
+
+	return out
+}
+
+var _ = Describe("USE_FSMV2_BENTHOS_MONITOR unrecognised-value logging", func() {
+	var envPrior string
+	var envPresent bool
+
+	BeforeEach(func() {
+		envPrior, envPresent = os.LookupEnv(envUseFsmv2BenthosMonitor)
+		_ = os.Unsetenv(envUseFsmv2BenthosMonitor)
+	})
+
+	AfterEach(func() {
+		if envPresent {
+			_ = os.Setenv(envUseFsmv2BenthosMonitor, envPrior)
+		} else {
+			_ = os.Unsetenv(envUseFsmv2BenthosMonitor)
+		}
+	})
+
+	It("warns and names both the variable and the offending value", func() {
+		_ = os.Setenv(envUseFsmv2BenthosMonitor, "maybe")
+		defer func() { _ = os.Unsetenv(envUseFsmv2BenthosMonitor) }()
+
+		logs, restore := captureLogs()
+		defer restore()
+
+		svc := NewDefaultBenthosService("flag-unrecognised-benthos")
+
+		_, ok := svc.benthosMonitorManager.(*benthos_monitor_fsm.BenthosMonitorManager)
+		Expect(ok).To(BeTrue(),
+			"an unrecognised value must fall back to the fsmv1 manager")
+
+		warnings := linesNaming(logs.FilterLevelExact(zapcore.WarnLevel), envUseFsmv2BenthosMonitor)
+		Expect(warnings).To(HaveLen(1),
+			"an unrecognised value must emit exactly one WARN naming the variable, not fall back silently")
+		Expect(warnings[0].Message).To(ContainSubstring("maybe"),
+			"the warning must quote the offending value so an operator can spot their own typo")
+	})
+
+	// Control for the spec above: it would also pass against an unconditional
+	// warning, which is the obvious wrong implementation. A recognised value
+	// must produce no warning at all.
+	It("stays silent for the recognised value on", func() {
+		_ = os.Setenv(envUseFsmv2BenthosMonitor, "on")
+		defer func() { _ = os.Unsetenv(envUseFsmv2BenthosMonitor) }()
+
+		logs, restore := captureLogs()
+		defer restore()
+
+		svc := NewDefaultBenthosService("flag-recognised-benthos")
+
+		_, ok := svc.benthosMonitorManager.(*adapter.WorkerManager[config.BenthosMonitorConfig, simple.Status[fsmv2benthosmonitor.BenthosMonitorStatus]])
+		Expect(ok).To(BeTrue(),
+			"on must select the fsmv2 adapter manager")
+		Expect(linesNaming(logs.FilterLevelExact(zapcore.WarnLevel), envUseFsmv2BenthosMonitor)).To(BeEmpty(),
+			"a recognised value must emit no warning; the warning is for unrecognised values only")
+		Expect(linesNaming(logs.FilterLevelExact(zapcore.InfoLevel), envUseFsmv2BenthosMonitor)).To(HaveLen(1),
+			"positive control on the capture itself: the flag-on path logs one INFO naming the variable, "+
+				"so an empty result above means silence rather than an observer that records nothing")
+	})
+
+	// The variable is unset in every existing container, so the unset case must
+	// log nothing of its own: no warning, and no INFO counterpart to the
+	// flag-on line either.
+	It("logs nothing about the variable when it is unset", func() {
+		logs, restore := captureLogs()
+		defer restore()
+
+		svc := NewDefaultBenthosService("flag-unset-benthos")
+
+		_, ok := svc.benthosMonitorManager.(*benthos_monitor_fsm.BenthosMonitorManager)
+		Expect(ok).To(BeTrue(),
+			"unset must keep the fsmv1 manager")
+		Expect(linesNaming(logs, envUseFsmv2BenthosMonitor)).To(BeEmpty(),
+			"the unset default must keep its pre-flag log output: no line may mention the variable")
 	})
 })
