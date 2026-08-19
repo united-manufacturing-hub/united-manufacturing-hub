@@ -198,7 +198,9 @@ func drive[S any](e *Engine[S], interval time.Duration, env Environment, seq []b
 		}
 
 		_, readiness := e.Observe(sample, env, at)
-		// One row, because runScenario builds this engine over a single signal.
+		// Row 0, because the rows come depth-first and runScenario builds this
+		// engine over one signal: that signal's own row is first, and the rows
+		// of any refinements under it follow.
 		availability = readiness[0].Availability
 		at = at.Add(interval)
 	}

@@ -61,6 +61,9 @@ type Marks struct {
 // every Fired so ranking and consumers never read the table. Rank sorts on
 // Tier, severity and Index.
 type Identity struct {
+	// Signal is the bare name the table declared, "X" for a refinement declared
+	// as X, and NOT the "A/X" path a Readiness row is named by: a Fired sits
+	// under the parent it narrows, which already says whose refinement it is.
 	Signal string
 	// Tier is the rank class the caller gave the signal, lower meaning more
 	// urgent.

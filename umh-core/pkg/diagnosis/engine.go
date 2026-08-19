@@ -68,10 +68,15 @@ const (
 //	StateValue     (2)  -> Ready          (3)
 
 // Readiness is one signal's Availability, handed back by Observe beside the
-// fired set: one row per TOP-LEVEL signal, in table order, always. []Fired reports
-// only what fired, so this is the only route to "was this signal readable at all".
-// A refinement gets no row of its own, though it is judged every tick.
+// fired set: one row per signal at every depth, refinements included, always.
+// []Fired reports only what fired, so this is the only route to "was this signal
+// readable at all".
 type Readiness struct {
+	// Signal is the path, not the bare name: "A/X" for a refinement, its own
+	// name for a top-level signal. Two parents may each declare a refinement
+	// called X, and a bare name would not say which of them this row is about.
+	// It is the path Reduction takes, and NOT the bare name Identity.Signal
+	// carries on a Fired.
 	Signal       string
 	Availability Availability
 }
@@ -500,9 +505,11 @@ func observeWindows[S any](e *Engine[S], st *signalState[S], sample S, at time.T
 // on however much history the child had at that instant. Only REPORTING a
 // refinement waits on the parent, which firedTree does.
 //
-// It returns the Availability the latch was driven with, which is this signal's
-// Readiness row; a refinement's is not reported.
-func (e *Engine[S]) judge(st *signalState[S], env Environment, at time.Time) Availability {
+// It appends one Readiness row per signal it drives, carrying the Availability
+// that signal's latch was driven with: this signal's row first, then its
+// refinements' as the recursion reaches them, so a parent's row comes
+// immediately before the rows of the subtree under it.
+func (e *Engine[S]) judge(st *signalState[S], env Environment, at time.Time, into []Readiness) []Readiness {
 	s := st.signal
 
 	inst, reduced, cov, avail := e.resolve(st.path, s, s.Capable(env))
@@ -521,11 +528,13 @@ func (e *Engine[S]) judge(st *signalState[S], env Environment, at time.Time) Ava
 		l.ReleaseAfter(s.DemoteSpan, at)
 	}
 
+	into = append(into, Readiness{Signal: st.path, Availability: avail})
+
 	for i := range st.refinements {
-		e.judge(&st.refinements[i], env, at)
+		into = e.judge(&st.refinements[i], env, at, into)
 	}
 
-	return avail
+	return into
 }
 
 // firedTree reports one signal's verdict with the verdicts of the refinements
@@ -566,11 +575,14 @@ func firedTree[S any](st *signalState[S]) (Fired, bool) {
 }
 
 // Observe runs one tick against a snapshot and returns the fired set, unranked
-// (Rank puts it worst first), and one Readiness row per TOP-LEVEL signal, both
-// in table order. In order: append to every measurement's and every instrument's
-// window; then, per top-level signal, resolve its Availability over the
-// instruments Signal.Capable allows this tick, drive its single latch, collect
-// whatever fired, and emit a Readiness row whether or not it did.
+// (Rank puts it worst first), and one Readiness row per signal at every depth,
+// refinements included. The fired set holds top-level signals in table order;
+// the readiness rows are depth-first, each signal immediately before the subtree
+// under it, and each named by its path. In order: append to every measurement's
+// and every instrument's window; then walk the signals, resolving each one's
+// Availability over the instruments Signal.Capable allows it this tick, driving
+// its single latch and emitting its Readiness row whether or not it fired, and
+// collecting each top-level signal whose latch is fired.
 //
 // The append pass is unconditional, instruments this environment cannot satisfy
 // included, because Observe is the only call that ages a window: skip it once
@@ -579,9 +591,10 @@ func firedTree[S any](st *signalState[S]) (Fired, bool) {
 // Latch.Reset, and every other branch short of Ready runs the demote clock.
 //
 // A refinement is judged on the same terms every tick, whether or not the signal
-// it hangs under fired. What the parent decides is only whether the refinement is
-// REPORTED: a fired signal carries the refinements whose own latch is fired in
-// Fired.Refinements, and a refinement never appears in the returned slice itself.
+// it hangs under fired, and it has a Readiness row of its own either way. What
+// the parent decides is only whether the refinement's VERDICT is reported: a
+// fired signal carries the refinements whose own latch is fired in
+// Fired.Refinements, and a refinement never appears in the fired set itself.
 //
 // # One tick
 //
@@ -606,16 +619,16 @@ func (e *Engine[S]) Observe(sample S, env Environment, at time.Time) ([]Fired, [
 
 	var fired []Fired
 
+	// One row per signal at every depth, so len(e.signals) is a floor on the
+	// count rather than the count itself; judge grows the slice past it.
 	readiness := make([]Readiness, 0, len(e.signals))
 	for i := range e.signals {
 		st := &e.signals[i]
 
-		avail := e.judge(st, env, at)
+		readiness = e.judge(st, env, at, readiness)
 		if f, ok := firedTree(st); ok {
 			fired = append(fired, f)
 		}
-
-		readiness = append(readiness, Readiness{Signal: st.signal.Name, Availability: avail})
 	}
 
 	return fired, readiness
