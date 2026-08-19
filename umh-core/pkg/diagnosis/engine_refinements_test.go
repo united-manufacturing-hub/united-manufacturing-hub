@@ -26,8 +26,9 @@ import (
 // parent went; only whether the parent REPORTS it turns on the parent having
 // fired. Most specs here read the reporting side on a tick where the parent HAS
 // fired: which refinements nest under it, and that a refinement is nested
-// rather than returned beside its parent. The last one reads the other side,
-// where the parent is silent and its fired refinement is reported nowhere.
+// rather than returned beside its parent. One reads the other side, where the
+// parent is silent and its fired refinement is reported nowhere. The last one
+// hands the returned set to Rank, which orders top-level signals only.
 var _ = Describe("Engine.Observe on a signal's refinements", func() {
 
 	type snap struct {
@@ -38,24 +39,33 @@ var _ = Describe("Engine.Observe on a signal's refinements", func() {
 
 	base := time.Unix(1_000_000, 0)
 
-	// The parent reads its newest sample, so it fires on the tick its own value
-	// crosses 0.5 and needs no warm-up: every spec below can put the parent's
-	// firing tick wherever it wants the child observed.
-	parentOver := func(refinements ...Signal[snap]) Signal[snap] {
+	// A top-level signal reads its newest sample, so it fires on the tick its own
+	// value crosses 0.5 and needs no warm-up: every spec below can put the firing
+	// tick wherever it wants the child observed. Name, tier and the field it
+	// reads are the caller's, so two of them can sit in one table and rank
+	// against each other.
+	topLevel := func(name string, tier int, read func(snap) float64, refinements ...Signal[snap]) Signal[snap] {
 		return Signal[snap]{
-			Name:        "P",
+			Name:        name,
+			Tier:        tier,
 			DemoteSpan:  60 * time.Second,
 			Refinements: refinements,
 			Instruments: []Instrument[snap]{{
 				Measurement: Measurement[snap]{
 					Name:      "I",
-					Extract:   func(s snap) Reading { return Known(s.parent) },
+					Extract:   func(s snap) Reading { return Known(read(s)) },
 					Reduction: Last,
 					Span:      10 * time.Second,
 				},
 				Marks: Marks{Unit: "ratio", Fire: Mark{At: 0.5}, Clear: Mark{At: 0.4}, Worst: 1.0, Polarity: HigherIsWorse},
 			}},
 		}
+	}
+
+	// The parent the reporting specs hang their refinements under: named "P", at
+	// tier 0, reading the snapshot's parent field.
+	parentOver := func(refinements ...Signal[snap]) Signal[snap] {
+		return topLevel("P", 0, func(s snap) float64 { return s.parent }, refinements...)
 	}
 
 	// A refinement fires past 0.6 on whichever field of the snapshot it is told
@@ -218,4 +228,63 @@ var _ = Describe("Engine.Observe on a signal's refinements", func() {
 		Expect(fired[0].Refinements[0].Since).To(Equal(base.Add(time.Second)),
 			"the child fired on tick 1 and held: the empty slice above was suppression, not a child that had not fired")
 	})
+	// Rank is asked a question about the top-level set: which of the signals the
+	// caller can act on comes first. A refinement's urgency is meaningful under
+	// its parent, not against its parent's peers, so it must not enter that
+	// comparison at any position. The fixture makes the refinement the entry
+	// that would win every key it could be ranked on -- the lowest tier in the
+	// table, and the index that wins the last tie-break -- so a build that
+	// ranked it would put it first and fail loudly, rather than hiding at the
+	// end of the slice where a sorted-last refinement would pass either way.
+	It("ranks the top-level signals only, leaving a refinement more urgent than any of them nested and out of the ranked set", func() {
+		names := func(fired []Fired) []string {
+			out := make([]string, len(fired))
+			for i, f := range fired {
+				out[i] = f.Identity.Signal
+			}
+
+			return out
+		}
+
+		// Tier 0 is more urgent than either top-level signal, and Index 0 (its
+		// position among its siblings) is the value that wins the last tie-break,
+		// so no single field carries the fixture. Attribution differs from the
+		// parents' too, though Rank never reads it.
+		child := refinement("C", Last, func(s snap) float64 { return s.first })
+		child.Tier = 0
+		child.Attribution = 7
+
+		// Both fire on their first sample, both at tier 1, so only severity
+		// separates them: Severe reads 1.0 against a fire mark of 0.5 and a worst
+		// of 1.0, scoring 1.0; Mild reads 0.6 and scores 0.2. The refinement hangs
+		// under Mild, the one that must stay second, so a comparator reaching into
+		// a nested tier to break the tier tie would hoist Mild and be caught.
+		severe := topLevel("Severe", 1, func(s snap) float64 { return s.parent })
+		mild := topLevel("Mild", 1, func(s snap) float64 { return s.second }, child)
+
+		e, err := NewEngine(Table[snap]{Signals: []Signal[snap]{severe, mild}, Interval: time.Second})
+		Expect(err).ToNot(HaveOccurred())
+
+		fired, _ := e.Observe(snap{parent: 1.0, second: 0.6, first: 1.0}, NewEnvironment(), base)
+
+		Expect(names(fired)).To(Equal([]string{"Severe", "Mild"}),
+			"Observe returns the two top-level signals that fired, in table order, and the refinement is not one of them")
+
+		ranked := Rank(fired)
+
+		Expect(names(ranked)).To(Equal([]string{"Severe", "Mild"}),
+			"the higher-severity top-level signal ranks first; the tier-0 refinement is not ranked at all")
+		Expect(names(ranked)).ToNot(ContainElement("C"),
+			"a refinement never competes with a top-level signal for rank, however urgent it is")
+
+		// Without this the spec would also pass on a build that simply dropped the
+		// refinement, which is a different defect, not the absence being asserted.
+		Expect(ranked[1].Refinements).To(HaveLen(1), "the refinement is still reported, nested under the parent it narrows")
+		Expect(ranked[1].Refinements[0].Identity.Signal).To(Equal("C"))
+		Expect(ranked[1].Refinements[0].Tier).To(Equal(0),
+			"the nested entry keeps the urgent tier it was declared with; it is unranked, not demoted")
+		Expect(ranked[1].Refinements[0].Index).To(Equal(0),
+			"and the index that wins the last tie-break, so the absence above is not the refinement sorting last")
+	})
+
 })
