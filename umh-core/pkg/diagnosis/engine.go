@@ -161,10 +161,11 @@ func NewEngine[S any](t Table[S]) (*Engine[S], error) {
 		e.signals = append(e.signals, signalState[S]{
 			signal: s,
 			latch: Latch{identity: Identity{
-				Signal:   s.Name,
-				Tier:     s.Tier,
-				External: s.External,
-				Index:    i,
+				Signal:      s.Name,
+				Tier:        s.Tier,
+				Attribution: s.Attribution,
+				External:    s.External,
+				Index:       i,
 			}},
 		})
 	}

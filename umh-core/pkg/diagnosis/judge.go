@@ -57,14 +57,17 @@ type Marks struct {
 	Worst float64
 }
 
-// Identity is the four sort keys Rank needs, copied onto every Fired so ranking
-// never reads the table: which Signal, its Tier (rank class, sorted ascending),
-// whether the cause is External to this box, and its table Index.
+// Identity is what a consumer needs to know about a fired signal, copied onto
+// every Fired so ranking and consumers never read the table: which Signal, its
+// Tier, who the caller blames (Attribution), whether the cause is External to
+// this box, and its table Index. Rank sorts on Tier, External and Index;
+// Attribution is payload it never reads, the caller's vocabulary.
 type Identity struct {
-	Signal   string
-	Tier     int
-	External bool
-	Index    int
+	Signal      string
+	Tier        int
+	Attribution int
+	External    bool
+	Index       int
 }
 
 // Fired is one signal's verdict once it has fired: value, marks, and since when.
